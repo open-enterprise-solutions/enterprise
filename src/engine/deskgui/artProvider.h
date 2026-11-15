@@ -1,10 +1,13 @@
 #ifndef _DESKGUI_ARTPROVIDER_H__
 #define _DESKGUI_ARTPROVIDER_H__
 
-// THE PICTURES THE THEME DRAWS, BY THEIR IDS — asked of wx's art provider (wxArtProvider::GetBitmap), answered by the
-// theme's (ibLunaArtProvider, theme/lunaTheme.cpp), which stands over wx's own and draws its stock ids too.
+// THE PICTURES THE DESKTOP DRAWS, BY THEIR IDS — asked of wx's art provider (wxArtProvider::GetBitmap): the product's
+// own below, answered by the theme's (ibLunaArtProvider, theme/lunaTheme.cpp); wx's stock ids by the core's pictures
+// (ibStockArtProvider). Both stand over wx's own.
 
 #include <wx/artprov.h>
+
+#include "deskgui/deskgui.h"   // DESKGUI_API
 
 // ----------------------------------------------------------------------------
 // Art clients
@@ -153,5 +156,23 @@
 #define wxART_DEBUG_STOP_DEBUGGING				wxART_MAKE_ART_ID(wxART_DEBUG_STOP_DEBUGGING)
 #define wxART_DEBUG_STOP_PROGRAM				wxART_MAKE_ART_ID(wxART_DEBUG_STOP_PROGRAM)
 #define wxART_DEBUG_REMOVE_ALL_BREAKPOINTS		wxART_MAKE_ART_ID(wxART_DEBUG_REMOVE_ALL_BREAKPOINTS)
+
+// ----------------------------------------------------------------------------
+// ibStockArtProvider
+// ----------------------------------------------------------------------------
+
+// WX'S STOCK IDS, DRAWN AS THE CORE DRAWS THEM (core/picturePredefined.h): wxART_NEW is g_picNewCLSID, wxART_FILE_SAVE
+// g_picSaveCLSID — one picture for a menu here, a server's command and a browser's. Pushed over wx's own as wx starts
+// (ibThemeModule), for every client, so not one call site changes; an id it does not know is wx's (wxART_GOTO_FIRST,
+// wxART_HARDDISK…). The master is the registry's PNG, scaled down to the size asked.
+class DESKGUI_API ibStockArtProvider : public wxArtProvider {
+public:
+	// A master scaled down to the size asked, and to twice and four times it — a display scaled to 150 or 200 % is
+	// handed a picture drawn for it — never larger than the master. The theme's pictures are made so too.
+	static wxBitmapBundle BundleOf(const wxImage& master, const wxSize& size);
+
+protected:
+	virtual wxBitmapBundle CreateBitmapBundle(const wxArtID& id, const wxArtClient& client, const wxSize& size) override;
+};
 
 #endif

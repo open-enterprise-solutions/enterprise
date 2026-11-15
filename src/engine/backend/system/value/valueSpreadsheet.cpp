@@ -1,5 +1,6 @@
 #include "valueSpreadsheet.h"
 #include "backend/backend_mainFrame.h"
+#include "backend/backend_localization.h"   // the session's language — what a document naming none is read in
 #include "backend/session/session.h"
 
 #pragma region __collection__h__
@@ -420,6 +421,15 @@ bool ibValueSpreadsheetDocument::GetPropVal(const long lPropNum, ibValue& pvarPr
 
 bool ibValueSpreadsheetDocument::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray)
 {
+	// ⭐ AN AREA CARRIES ITS TEMPLATE'S LANGUAGE — `Template.LanguageCode`, set once before the areas are taken, as the
+	// help says. An area is a document of its own, made from the template's description, and the language — the
+	// template's, not its description's — was left behind: setting it on the template changed nothing.
+	const auto area = [this](const ibSpreadsheetDescription& spreadsheetDesc) {
+		ibValueSpreadsheetDocument* valueArea = new ibValueSpreadsheetDocument(spreadsheetDesc);
+		valueArea->GetSpreadsheetDocument()->SetLangCode(m_spreadsheetDoc->GetLangCode());
+		return valueArea;
+	};
+
 	if (lMethodNum == eArea) {
 
 		// ⭐ A CELL, WHEREVER IT IS — a document has no edge: a cell past what is filled in reads empty and
@@ -442,7 +452,7 @@ bool ibValueSpreadsheetDocument::CallAsFunc(const long lMethodNum, ibValue& pvar
 		// against the number of COLUMNS.
 		const int rowEnd = std::min(paParams[1]->GetInteger(), m_spreadsheetDoc->GetNumberRows());
 		const int colEnd = lSizeArray > 3 ? std::min(paParams[3]->GetInteger(), m_spreadsheetDoc->GetNumberCols()) : -1;
-		pvarRetValue = new ibValueSpreadsheetDocument(m_spreadsheetDoc->GetArea(
+		pvarRetValue = area(m_spreadsheetDoc->GetArea(
 			paParams[0]->GetInteger(), rowEnd, lSizeArray > 2 ? paParams[2]->GetInteger() : -1, colEnd));
 
 		return true;
@@ -468,7 +478,7 @@ bool ibValueSpreadsheetDocument::CallAsFunc(const long lMethodNum, ibValue& pvar
 			if (!r)
 				return false;
 
-			pvarRetValue = new ibValueSpreadsheetDocument(m_spreadsheetDoc->GetAreaByName(r->m_label, c ? c->m_label : ibT("")));
+			pvarRetValue = area(m_spreadsheetDoc->GetAreaByName(r->m_label, c ? c->m_label : ibT("")));
 			return true;
 		}
 
@@ -479,7 +489,7 @@ bool ibValueSpreadsheetDocument::CallAsFunc(const long lMethodNum, ibValue& pvar
 		if (!r)
 			return false;
 
-		pvarRetValue = new ibValueSpreadsheetDocument(m_spreadsheetDoc->GetAreaByName(
+		pvarRetValue = area(m_spreadsheetDoc->GetAreaByName(
 			r->m_label, c ? c->m_label : ibT("")));
 
 		return true;
@@ -528,7 +538,8 @@ bool ibValueSpreadsheetDocument::CallAsProc(const long lMethodNum, ibValue** paP
 		const unsigned int groupLevel = (lSizeArray > 1)
 			? (unsigned int)std::max(0, paParams[1]->GetInteger()) : 0u;
 		if (valueSpreadsheet)
-			m_spreadsheetDoc->PutArea(valueSpreadsheet->GetSpreadsheetDocument(), groupLevel);
+			m_spreadsheetDoc->PutArea(valueSpreadsheet->GetSpreadsheetDocument(), groupLevel,
+				ibBackendLocalization::GetUserLanguage());
 		return true;
 	}
 	else if (lMethodNum == eJoin) {
@@ -537,7 +548,8 @@ bool ibValueSpreadsheetDocument::CallAsProc(const long lMethodNum, ibValue** paP
 		const unsigned int groupLevel = (lSizeArray > 1)
 			? (unsigned int)std::max(0, paParams[1]->GetInteger()) : 0u;
 		if (valueSpreadsheet)
-			m_spreadsheetDoc->JoinArea(valueSpreadsheet->GetSpreadsheetDocument(), groupLevel);
+			m_spreadsheetDoc->JoinArea(valueSpreadsheet->GetSpreadsheetDocument(), groupLevel,
+				ibBackendLocalization::GetUserLanguage());
 		return true;
 	}
 	else if (lMethodNum == eBeginRowGroup) { m_spreadsheetDoc->BeginRowGroup(); return true; }

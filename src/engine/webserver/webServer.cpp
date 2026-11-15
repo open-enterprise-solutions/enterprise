@@ -26,7 +26,7 @@
 #include "core/net/webSocketFrame.h"
 #include "core/net/webSocketRelay.h"
 #include "core/diagnostics/crashGuard.h"   // the stop, one fact: who asks, the serving loop that reads it
-#include "core/fileSystem.h"   // ibDirExists
+#include "core/fileSystem.h"   // ibDirExists, ibProgramFolder
 #include "core/startProcess.h" // ibProcessExists
 
 namespace {
@@ -425,6 +425,14 @@ int ibWebServer::Run()
 				m_http.Mount(prefix, Utf8(site));
 			else
 				m_http.Mount(prefix, packed);
+		}
+		// THE PAGE'S OWN WORDS — the catalogues the thin client says its own by (lang/<language>/open_es.mo in the program
+		// folder), read by the page in the language the login names (Locale): one dictionary for both clients, none in
+		// the site. The longer prefix is matched first, so lang/ is not looked for among the site's files.
+		const ibString catalogues = ibProgramFolder() + ibFILE_SEP_PATH + ibT("lang");
+		if (ibDirExists(catalogues)) {
+			for (const std::string& prefix : prefixes)
+				m_http.Mount(prefix + "lang/", Utf8(catalogues));
 		}
 		// A publication's address without its slash, sent on to it: the page names its files beside it.
 		for (const auto& entry : m_bases) {

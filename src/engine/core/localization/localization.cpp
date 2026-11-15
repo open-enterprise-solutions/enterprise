@@ -213,8 +213,8 @@ bool ibLocalization::IsEmptyLocalizationString(const ibString& strRawLocale)
 }
 
 // ⭐⭐ THE READING OF A TEXT — every caption, template, title and cell asks here: the language asked for,
-// else the configuration's own, else the first written (GetTranslateFromArray, the rule ibTranslateString
-// reads by too); and A TEXT IN NO FORMAT IS ITSELF. False only when there is nothing to say.
+// else the first written (GetTranslateFromArray, the rule ibTranslateString reads by too); and A TEXT IN
+// NO FORMAT IS ITSELF. False only when there is nothing to say.
 //
 // 🛑 A PLAIN TEXT READ AS NOTHING. It answered EMPTY for anything not written in every language — a
 // caption typed plainly, a value a template was filled with — so four callers wrote "…then the source"
@@ -225,23 +225,21 @@ bool ibLocalization::IsEmptyLocalizationString(const ibString& strRawLocale)
 // ⚠ HOT: every cell that lands (PutArea), every cell painted, every cell the content edge walks over — so
 // the array is a per-thread scratch, and a plain text, almost every cell of a composed report, is
 // answered without allocating anything but the answer (IsLocalizationString stops at the missing `=`).
-bool ibLocalization::GetTranslateGetRawLocText(const ibString& strLangCode, const ibString& strDefaultLangCode,
-	const ibString& strRawLocale, ibString& strResult)
+bool ibLocalization::GetTranslateGetRawLocText(const ibString& strLangCode, const ibString& strRawLocale, ibString& strResult)
 {
 	thread_local ibLocalizationEntryArray array;
 	if (CreateLocalizationArray(strRawLocale, array))
-		GetTranslateFromArray(strLangCode, strDefaultLangCode, array, strResult);
+		GetTranslateFromArray(strLangCode, array, strResult);
 	else
 		strResult = strRawLocale;   // ⭐ a text in no format is itself
 
 	return !strResult.IsEmpty();
 }
 
-ibString ibLocalization::GetTranslateGetRawLocText(const ibString& strLangCode, const ibString& strDefaultLangCode,
-	const ibString& strRawLocale)
+ibString ibLocalization::GetTranslateGetRawLocText(const ibString& strLangCode, const ibString& strRawLocale)
 {
 	ibString strResult;
-	GetTranslateGetRawLocText(strLangCode, strDefaultLangCode, strRawLocale, strResult);
+	GetTranslateGetRawLocText(strLangCode, strRawLocale, strResult);
 	return strResult;
 }
 
@@ -273,46 +271,25 @@ void ibLocalization::SetArrayTranslate(const ibString& strLangCode, ibLocalizati
 	array.push_back(ibLocalizationEntry{ strLangCode, strResult });
 }
 
-ibString ibLocalization::GetTranslateFromArray(const ibString& strLangCode, const ibString& strDefaultLangCode,
-	const ibLocalizationEntryArray& array)
+ibString ibLocalization::GetTranslateFromArray(const ibString& strLangCode, const ibLocalizationEntryArray& array)
 {
 	thread_local ibString result;
-	GetTranslateFromArray(strLangCode, strDefaultLangCode, array, result);
+	GetTranslateFromArray(strLangCode, array, result);
 	return std::move(result);
 }
 
-static const ibLocalizationEntry* FindEntry(const ibString& strLangCode, const ibLocalizationEntryArray& array)
+bool ibLocalization::GetTranslateFromArray(const ibString& strLangCode, const ibLocalizationEntryArray& array, ibString& strResult)
 {
 	const auto iterator = std::find_if(array.begin(), array.end(),
 		[&strLangCode](const ibLocalizationEntry& entry) {
 			return stringUtils::IsSameAs(entry.m_code, strLangCode); });
-	return iterator != array.end() ? &*iterator : nullptr;
-}
 
-bool ibLocalization::GetTranslateFromArray(const ibString& strLangCode, const ibString& strDefaultLangCode,
-	const ibLocalizationEntryArray& array, ibString& strResult)
-{
-	if (const ibLocalizationEntry* entry = FindEntry(strLangCode, array)) {
-		strResult = entry->m_data;
+	if (iterator != array.end()) {
+		strResult = iterator->m_data;
 		return true;
 	}
 
-	// ⭐ THE REQUESTED LANGUAGE IS NOT HERE: THE CONFIGURATION'S OWN SPEAKS FOR IT. It is the one the
-	// configuration declares as its own (DefaultLanguage) — what a user with no language of their own reads,
-	// and what the configuration is written for. The first written was answered here before it, and that is
-	// the language somebody happened to type first: under main `en`, a caption `ru = 'Tovary'; en = 'Goods';`
-	// showed a `uk` user Russian (#471).
-	//
-	// ⚠ An empty code is no language — a caller that has no configuration to ask passes one, and goes on to
-	// the first written.
-	if (!strDefaultLangCode.IsEmpty()) {
-		if (const ibLocalizationEntry* entry = FindEntry(strDefaultLangCode, array)) {
-			strResult = entry->m_data;
-			return true;
-		}
-	}
-
-	// ⭐ LAST RESORT: NEITHER LANGUAGE IS HERE, and a caption a person
+	// ⭐ LAST RESORT: THE REQUESTED LANGUAGE IS NOT HERE, and a caption a person
 	// can read beats an empty one. Returning blank made content authored in one set of languages
 	// INVISIBLE under another UI language — every notebook tab, every decoration, every group heading
 	// silently empty, with nothing on screen saying a translation was merely missing.

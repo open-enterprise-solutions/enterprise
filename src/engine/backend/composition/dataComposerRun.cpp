@@ -402,8 +402,7 @@ bool ibDataDBComposer::RunOutputPass(const Output& output, ibCompositionDriver& 
 				info.m_titles[i] = ibTitleFromName(schema[i].m_name);
 			// …AND A TITLE WRITTEN IN SEVERAL LANGUAGES IS READ IN THE READER'S, as a synonym is — and
 			// one written plainly is itself (the reading says so; it is no longer this caller's rule).
-			info.m_titles[i] = ibLocalization::GetTranslateGetRawLocText(ibBackendLocalization::GetUserLanguage(),
-				ibBackendLocalization::GetDefaultLanguage(), info.m_titles[i]);
+			info.m_titles[i] = ibBackendLocalization::GetTranslateGetRawLocText(info.m_titles[i]);
 			// ⭐⭐ …AND THE PATH FALLS BACK THE SAME WAY, which is the half that was missing. Over a
 			// PARSED QUERY a field's path IS its name — that is the identity the picker writes into a
 			// grouping line and the one `GetConstructorFields` hands a window — so a column whose
@@ -1101,13 +1100,21 @@ bool ibDataDBComposer::ReadsAsBranch(const Output& output) const
 // branch's keys; a branch prints its OWN — otherwise every table on the sheet would carry an empty
 // column for each of its neighbours' headings.
 //
-// Matched by NAME, which is how the composer already reads a schema everywhere else (a level's sort,
-// a level's filter): the settings speak paths, and a path is what the query named the column.
+// A figure or a field is matched by NAME, which is how the composer already reads a schema everywhere
+// else (a level's sort, a level's filter): the settings speak paths, and a path is what the query named
+// the column.
+//
+// 🛑 A KEY IS TAKEN BY ITS PLACE, NOT BY ITS NAME. A level's field the selection does not carry is read
+// one level down under a name nobody wrote (`q_carried0`, WithSelectOneLevelDown) — asked by the field's
+// name it matched nothing, and every table of a shared read lost its heading column and the caption of
+// its total (a report given a second output, 2026-11-15). The keys are published in the order the
+// render wrote them (RenderTextFor): branch after branch, rows then columns, a column per field — so
+// this branch's are the run after the branches before it, counted over the same list the render walked.
+// The reader's own grouping is written once, above every branch, and its keys are everybody's.
 std::vector<ibQueryLowering::ibQueryOutputColumn> ibDataDBComposer::SchemaFor(const Output& output,
 	const std::vector<ibQueryLowering::ibQueryOutputColumn>& shared) const
 {
-	// What this output names: its levels' fields, the resources (which every output rolls), and
-	// whatever it selected outright.
+	// What this output names: the resources (which every output rolls) and whatever it selected outright.
 	std::vector<ibString> mine;
 	const auto take = [&mine](const ibString& path) {
 		if (path.IsEmpty())
@@ -1117,10 +1124,6 @@ std::vector<ibQueryLowering::ibQueryOutputColumn> ibDataDBComposer::SchemaFor(co
 				return;
 		mine.push_back(path);
 	};
-	for (const std::vector<GroupNode>* axis : { &output.m_rowGroups, &output.m_columnGroups })
-		for (const GroupNode& level : *axis)
-			for (const TotalByItem& field : level.m_settings.m_group.m_lines)
-				take(field.m_path);
 	for (const ibResourceDescription& resource : m_resources) {
 		take(resource.m_path);
 		take(resource.m_alias);
@@ -1128,11 +1131,32 @@ std::vector<ibQueryLowering::ibQueryOutputColumn> ibDataDBComposer::SchemaFor(co
 	for (const ibString& name : ProjectionFor(output))
 		take(name);
 
+	// Which of the keys are its own: the run of them after the keys of the branches before it.
+	const auto keysOf = [](const Output& branch) {
+		size_t keys = 0;
+		for (const std::vector<GroupNode>* axis : { &branch.m_rowGroups, &branch.m_columnGroups })
+			for (const GroupNode& level : *axis)
+				keys += level.m_settings.m_group.m_lines.size();
+		return keys;
+	};
+	const bool everybodys = GetAvailableGroupDesc().IsOk();
+	size_t first = 0;
+	for (size_t at = 0; at < BranchIndexOf(output); ++at)
+		first += keysOf(*m_sharedBranches[at]);
+	const size_t last = first + keysOf(output);
+
 	std::vector<ibQueryLowering::ibQueryOutputColumn> schema;
+	size_t key = 0;
 	for (const ibQueryLowering::ibQueryOutputColumn& column : shared) {
 		bool wanted = false;
-		for (const ibString& path : mine)
-			if (column.m_name.IsSameAs(path, false) || column.m_alias.IsSameAs(path, false)) { wanted = true; break; }
+		if (column.m_role == ibQueryLowering::ibColumnRole::Dimension) {
+			wanted = everybodys || (key >= first && key < last);
+			++key;
+		}
+		else {
+			for (const ibString& path : mine)
+				if (column.m_name.IsSameAs(path, false) || column.m_alias.IsSameAs(path, false)) { wanted = true; break; }
+		}
 		if (wanted)
 			schema.push_back(column);
 	}

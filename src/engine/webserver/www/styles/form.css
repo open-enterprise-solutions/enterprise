@@ -6,9 +6,17 @@
 /* A control's height, the theme's taken down to a desktop form's: the padding around its text. A finger keeps the theme's. */
 @media (pointer: fine) {
 	:root {
-		--wa-form-control-padding-block: 0.45em;
+		--wa-form-control-padding-block: 0.35em;
 		--wa-form-control-padding-inline: 0.5em;
 	}
+}
+
+/* A form's field framed as the thin client's theme frames one: square, in the border tier, its value in the form's
+   text. */
+oes-clientform {
+	--wa-form-control-border-color: var(--oes-border);
+	--wa-form-control-border-radius: 0;
+	--wa-form-control-value-color: var(--oes-form-text);
 }
 
 /* The window a form just opened is drawn in, out of sight over the one on show, until it has settled (ClientWindow): it
@@ -313,6 +321,68 @@ oes-htmlbox iframe {
 	border: 1px solid var(--oes-border);
 }
 
+/* A text box: the desktop's text editor — its font (ibFontColorSettings: monospace, 10pt), its ink on the theme's
+   paper (a field's), the theme's highlight for a selection, whatever the control was saved with; the blank margin on
+   the left is Scintilla's symbol margin (16px) and its own pixel. Lines run on: no wrap. */
+oes-textbox {
+	position: relative;
+	display: flex;
+	min-width: 0;
+	min-height: 0;
+}
+
+oes-textbox textarea {
+	flex: 1 1 auto;
+	box-sizing: border-box;
+	margin: 0;
+	padding: 0 1px 0 17px;
+	border: 1px solid var(--oes-border);
+	border-radius: 0;
+	outline: none;
+	resize: none;
+	background: var(--oes-table-bg);
+}
+
+oes-textbox textarea,
+oes-textbox .printout {
+	font: 10pt/normal "Courier New", Menlo, monospace;
+	tab-size: 4;
+	color: var(--oes-editor-text);
+}
+
+/* …its text on paper: none on the screen. */
+oes-textbox .printout {
+	display: none;
+}
+
+oes-textbox textarea::selection,
+oes-textbox .find-mark mark {
+	background: var(--oes-table-cell-current-bg);
+	color: var(--oes-table-current-text);
+}
+
+/* What Find found, marked over the text while Find has the focus (window/find.js): a copy of the text laid over the
+   field's, its ink clear but the found part's. */
+oes-textbox .find-mark {
+	position: absolute;
+	box-sizing: border-box;
+	overflow: hidden;
+	color: transparent;
+	white-space: pre;
+	pointer-events: none;
+}
+
+/* …and a text document in a tab of its own, as a sheet: the tab's whole height. */
+.views > oes-textbox {
+	height: 100%;
+	box-sizing: border-box;
+	padding: 0.25rem 0.5rem 0.5rem;
+}
+
+oes-chartbox {
+	display: block;
+}
+
 oes-notebook.no-tabs wa-tab-group::part(nav) {
 	display: none;
 }
@@ -349,7 +419,7 @@ oes-tablebox .pager {
 	position: absolute;
 	right: 0;
 	width: var(--oes-pager);
-	background: var(--oes-table-header-bg);
+	background: var(--oes-scroll-track);
 	border-left: 1px solid var(--oes-table-border);
 	box-sizing: border-box;
 	touch-action: none;
@@ -364,14 +434,16 @@ oes-tablebox .pager .thumb {
 	left: 2px;
 	right: 2px;
 	border-radius: 4px;
-	background: var(--oes-muted);
-	opacity: 0.55;
+	background: var(--oes-scroll-thumb);
 	cursor: grab;
 }
 
-oes-tablebox .pager .thumb:hover,
+oes-tablebox .pager .thumb:hover {
+	background: var(--oes-scroll-thumb-hover);
+}
+
 oes-tablebox .pager .thumb:active {
-	opacity: 0.8;
+	background: var(--oes-scroll-thumb-pressed);
 }
 
 oes-tablebox .pager[data-thumb="top"] .thumb {
@@ -394,9 +466,17 @@ oes-tablebox .tabulator .tabulator-tableholder::-webkit-scrollbar {
 	height: 10px;
 }
 
+oes-tablebox .tabulator .tabulator-tableholder::-webkit-scrollbar-track {
+	background: var(--oes-scroll-track);
+}
+
 oes-tablebox .tabulator .tabulator-tableholder::-webkit-scrollbar-thumb {
 	border-radius: 5px;
-	background: var(--oes-border);
+	background: var(--oes-scroll-thumb);
+}
+
+oes-tablebox .tabulator .tabulator-tableholder::-webkit-scrollbar-thumb:hover {
+	background: var(--oes-scroll-thumb-hover);
 }
 
 @supports not selector(::-webkit-scrollbar) {
@@ -405,22 +485,42 @@ oes-tablebox .tabulator .tabulator-tableholder::-webkit-scrollbar-thumb {
 	}
 }
 
+/* The grid's own stylesheet rules it in greys and sets its header in bold; the thin client's theme rules a table in its
+   powder, the border round it and under its header and between the header's columns, the header's captions as the rows'
+   text (ibThemeRenderer::DrawHeaderButton). */
 oes-tablebox .tabulator {
 	font-size: inherit;
 	background: var(--oes-table-bg);
 	color: var(--oes-table-text);
-	border-color: var(--oes-table-border);
+	border-color: var(--oes-border);
 }
 
 oes-tablebox .tabulator .tabulator-header,
 oes-tablebox .tabulator .tabulator-header .tabulator-col {
 	background: var(--oes-table-header-bg);
 	color: var(--oes-table-header-text);
+	border-color: var(--oes-border);
+	font-weight: normal;
 }
 
+/* The row's own line is its cells' — a taller one stood under them and drew the row a fraction higher. */
 oes-tablebox .tabulator .tabulator-row {
 	background: var(--oes-table-bg);
 	min-height: var(--oes-touch);
+	border-bottom: 1px solid var(--oes-table-border);
+	line-height: calc(1rem + 3px);
+}
+
+oes-tablebox .tabulator .tabulator-row .tabulator-cell {
+	border-right-color: var(--oes-table-border);
+}
+
+oes-tablebox .tabulator .tabulator-row .tabulator-cell.tabulator-frozen {
+	border-color: var(--oes-border);
+}
+
+oes-tablebox .tabulator .tabulator-tableholder .tabulator-table .tabulator-row.tabulator-calcs {
+	border-color: var(--oes-border);
 }
 
 /* The grid's own stylesheet paints the rows' holder, the totals under them, the footer and a column being dragged in
@@ -445,21 +545,22 @@ oes-tablebox .tabulator .tabulator-col.tabulator-moving {
 	border-color: var(--oes-table-border);
 }
 
-/* A cell's text is not taken by a double click: a double click activates the row. */
+/* A cell's text is not taken by a double click: a double click activates the row. A row 22 pixels and its rule, as the
+   thin client's at the desktop's size. */
 oes-tablebox .tabulator .tabulator-cell {
-	padding: 0.35rem 0.3rem;
-	line-height: 1.25;
+	padding: 3px 0.3rem;
+	line-height: calc(1rem + 3px);
 	user-select: none;
 }
 
-/* The header takes the lines its table says (its HeaderHeight), a line a row's. */
+/* The header takes the lines its table says (its HeaderHeight), a line a row's — a row's 22 pixels for one. */
 oes-tablebox .tabulator .tabulator-header .tabulator-col .tabulator-col-content {
-	padding: 0.1rem 0.3rem;
+	padding: 3px 0.3rem;
 }
 
 oes-tablebox .tabulator .tabulator-header .tabulator-col-title {
-	min-height: calc(var(--oes-header-lines, 1) * 1.25em);
-	line-height: 1.25;
+	min-height: calc(var(--oes-header-lines, 1) * (1rem + 3px));
+	line-height: calc(1rem + 3px);
 }
 
 oes-tablebox .grid:focus,
@@ -471,31 +572,42 @@ oes-tablebox .tabulator .tabulator-row.tabulator-row-even {
 	background: var(--oes-table-row-alt-bg);
 }
 
-oes-tablebox .tabulator .tabulator-row:hover {
-	background: var(--oes-table-row-hover-bg);
-}
-
-/* The cursor (Tablebox.markCursor): on a row, the row in the strong fill; on a cell, the row tinted and the cell strong —
-   the thin client's two modes. */
-oes-tablebox .tabulator .tabulator-row.current-row,
-oes-tablebox .tabulator .tabulator-row.current-row:hover {
+/* The cursor (Tablebox.markCursor): on a row, the row in the highlight; on a cell, the row tinted and the cell in the
+   highlight — the thin client's two modes; the highlight lighter while the keys go elsewhere. No row lights up under the
+   mouse: the thin client's do not. */
+oes-tablebox .tabulator .tabulator-row.current-row {
 	background: var(--oes-table-row-current-bg);
-	box-shadow: inset 3px 0 0 var(--oes-table-row-selected-accent);
+	color: var(--oes-table-current-text);
 }
 
-oes-tablebox .grid.select-cell .tabulator-row.current-row,
-oes-tablebox .grid.select-cell .tabulator-row.current-row:hover {
+oes-tablebox .grid.select-cell .tabulator-row.current-row {
 	background: var(--oes-table-row-selected-bg);
+	color: var(--oes-table-text);
 }
 
 oes-tablebox .tabulator .current-cell {
 	background: var(--oes-table-cell-current-bg);
-	box-shadow: inset 0 0 0 1px var(--oes-accent);
+	color: var(--oes-table-current-text);
+}
+
+/* …and the grid's own lights a row under the mouse grey. */
+oes-tablebox .tabulator .tabulator-row.tabulator-selectable:hover:not(.current-row) {
+	background: var(--oes-table-bg);
+}
+
+oes-tablebox .tabulator .tabulator-row.tabulator-row-even.tabulator-selectable:hover:not(.current-row) {
+	background: var(--oes-table-row-alt-bg);
+}
+
+oes-tablebox .grid:not(:focus-within):not(.select-cell) .tabulator .tabulator-row.current-row,
+oes-tablebox .grid:not(:focus-within) .tabulator .current-cell {
+	background: var(--oes-table-current-idle-bg);
 }
 
 /* On a row selected whole, the cell the keys put the cursor on: the row's fill left off it, as the thin client's. */
 oes-tablebox .grid:not(.select-cell) .tabulator .current-cell {
 	background: var(--oes-table-bg);
+	color: var(--oes-table-text);
 }
 
 /* The folders the Hierarchical view stands in, frozen over the rows of the level. */
@@ -613,10 +725,19 @@ oes-tablebox .column-header img {
 	height: 16px;
 }
 
+/* The arrow at the header's right edge, in the header's text, whatever side the caption keeps — the thin client's. */
+oes-tablebox .column-header:has(.sort-arrow) {
+	padding-inline-end: 1.1em;
+	box-sizing: border-box;
+}
+
 oes-tablebox .column-header .sort-arrow {
-	flex: none;
+	position: absolute;
+	right: 0.3rem;
+	top: 50%;
+	translate: 0 -50%;
 	font-size: 0.7em;
-	color: var(--oes-muted);
+	color: var(--oes-table-header-text);
 }
 
 oes-tablebox .tabulator-col:has(.column-header.sortable) {
@@ -646,9 +767,10 @@ oes-tablebox .column-footer img {
 	height: 16px;
 }
 
-/* A cell's editor is a field's (controls/textEditor.js), filling its cell. */
+/* A cell's editor is a field's (controls/textEditor.js), filling its cell: the row's height — a cell's line and its 3
+   pixels above and below (.tabulator-cell), the thin client's 22 — no taller. */
 oes-tablebox .cell-editor {
-	--wa-form-control-height: 1.85rem;
+	--wa-form-control-height: calc(1rem + 9px);
 	width: 100%;
 }
 
@@ -688,8 +810,8 @@ oes-gridbox .sheet-host {
 	min-height: 8rem;
 	contain: size;   /* its height is the form's, as a table's is */
 	overflow: auto;
-	background: var(--oes-table-bg);
-	border: 1px solid var(--oes-table-border);
+	background: var(--oes-sheet-bg);
+	border: 1px solid var(--oes-border);
 }
 
 /* It takes the keys; where they go is the current cell's frame, not a ring round the sheet. */
@@ -729,21 +851,27 @@ oes-gridbox .selection-summary {
 	pointer-events: none;
 }
 
-/* A cell with no font of its own is in the desktop grid's — 9pt — and its row the font's height and 8px. A drag takes
-   cells, not the text in them (selection.js). */
+/* A cell with no font of its own is in the thin client's sheet font — 8pt (ibDefaultSpreadsheetFont) — and a row with
+   no height of its own is its 15 pixels, its line in them (s_defaultRowHeight): one line of that font; a larger one
+   grows it. Ink and paper the sheet's, in every theme. A drag takes cells, not the text in them (selection.js). */
 .sheet {
 	table-layout: fixed;
 	border-collapse: separate;   /* collapsed, the rows scrolled under a frozen head paint over it; see linesOf */
 	border-spacing: 0;
-	font-size: 9pt;
-	line-height: 1.25;
-	color: var(--oes-table-text);
-	background: var(--oes-table-bg);
+	font-size: 8pt;
+	line-height: 1.2;
+	color: var(--oes-sheet-text);
+	background: var(--oes-sheet-bg);
 	user-select: none;
 }
 
+.sheet tr {
+	height: 15px;
+}
+
+/* The text 2px off the cell's sides — the grid's margin and its renderer's pixel (gridEditorDoc.cpp, chromeWrapping). */
 .sheet td {
-	padding: 4px 3px;
+	padding: 1px 2px 0;
 	overflow: hidden;
 	white-space: pre;
 	vertical-align: top;
@@ -759,14 +887,79 @@ oes-gridbox .selection-summary {
 	cursor: pointer;
 }
 
-/* The cells taken tinted over their own fill; the current one framed. */
+/* The cells taken tinted over their own fill; the current one framed in the theme's highlight on its edges, a pixel
+   wide — the thin client's read-only sheet (ibGrid::DrawCellHighlight; an editable one's is two). */
 .sheet td.selected {
 	background-image: linear-gradient(var(--oes-sheet-cell-selected), var(--oes-sheet-cell-selected));
 }
 
 .sheet td.current {
-	outline: 2px solid var(--oes-accent);
+	outline: 1px solid var(--oes-table-cell-current-bg);
+	outline-offset: -1px;
+}
+
+.sheet.editable td.current {
+	outline-width: 2px;
 	outline-offset: -2px;
+}
+
+/* A cell's text typed in place, over its cell, in its font and ink, on the sheet's paper (cellEditor.js). */
+.sheet td.editing:not(.frozen) {
+	position: relative;
+}
+
+.sheet .cell-editor {
+	position: absolute;
+	inset: 0;
+	box-sizing: border-box;
+	width: 100%;
+	height: 100%;
+	margin: 0;
+	padding: 1px 2px 0;
+	border: 0;
+	outline: none;
+	resize: none;
+	overflow: hidden;
+	white-space: pre;
+	font: inherit;
+	line-height: inherit;
+	text-align: inherit;
+	color: inherit;
+	background: var(--oes-sheet-bg);
+}
+
+/* THE LABELS — the rows' numbers down the left, the columns' along the top, as the thin client's grid draws them: in
+   the theme's header, each ruled off on its far sides in the border tier, the strips' outer edges and the first row's
+   and column's near ones ruled too. The row labels and the corner stay at the left as the sheet scrolls, past the
+   outline pane; the column labels lead the head, which stays at the top. */
+.sheet th.label {
+	padding: 0 2px;
+	overflow: hidden;
+	white-space: nowrap;
+	font-weight: normal;
+	text-align: center;
+	vertical-align: middle;
+	color: var(--oes-text);
+	background: var(--oes-table-header-bg);
+	border-right: 1px solid var(--oes-border);
+	border-bottom: 1px solid var(--oes-border);
+	cursor: default;
+}
+
+.sheet th.label:not([data-col]) {
+	position: sticky;
+	left: var(--oes-sheet-pane, 0px);
+	z-index: 1;
+	border-left: 1px solid var(--oes-border);
+}
+
+.sheet tr.labels th,
+.sheet th.label[data-row="0"] {
+	border-top: 1px solid var(--oes-border);
+}
+
+.sheet th.label[data-col="0"] {
+	border-left: 1px solid var(--oes-border);
 }
 
 .sheet thead {
@@ -778,39 +971,113 @@ oes-gridbox .selection-summary {
 /* …and covers what scrolls under it: a cell with no fill of its own — the title, the empty lines under it — would let
    the rows beneath show through. */
 .sheet thead td {
-	background-color: var(--oes-table-bg);
+	background-color: var(--oes-sheet-bg);
 }
 
 .sheet td.frozen {
 	position: sticky;
 	z-index: 1;
-	background-color: var(--oes-table-bg);
+	background-color: var(--oes-sheet-bg);
 }
 
+/* THE OUTLINE PANE — the folds' chevrons and rails at the sheet's far left, the thin client's (ibGrid::DrawRowOutline):
+   chrome in the labels' colours, ruled off from them, running on beside the column labels; drawn in the theme's dark
+   shadow, as its tree buttons are. sheet.js places what is in it. */
 .sheet td.fold {
+	position: sticky;
+	left: 0;
+	z-index: 1;
 	padding: 0;
-	text-align: center;
-	vertical-align: middle;
+	background: var(--oes-table-header-bg);
+	border-right: 1px solid var(--oes-border);
 }
 
-.sheet td.fold button {
-	width: 16px;
-	height: 16px;
+.sheet tr.labels td.fold {
+	border-top: 1px solid var(--oes-border);
+}
+
+.sheet :is(td.fold, td.col-fold) button {
+	position: absolute;
 	padding: 0;
-	border: 1px solid var(--oes-border);
-	background: var(--oes-panel-bg);
-	color: var(--oes-muted);
-	font: 12px/1 var(--oes-font-ui);
+	border: 0;
+	background: none;
+	color: var(--oes-table-header-text);
 	cursor: pointer;
 }
 
-/* A sheet on paper: its frozen rows are its head, so they come again on every page; a row is not cut across two; a
-   row's print break ends its page; the fold buttons and the cells taken are the screen's. */
-@media print {
-	.sheet td.fold button {
-		visibility: hidden;
-	}
+.sheet :is(td.fold, td.col-fold) svg {
+	display: block;
+	width: 100%;
+	height: 100%;
+	overflow: visible;
+}
 
+.sheet :is(td.fold, td.col-fold) polyline {
+	fill: none;
+	stroke: currentColor;
+	stroke-width: 1.5px;
+	stroke-linecap: round;
+	stroke-linejoin: round;
+	vector-effect: non-scaling-stroke;
+}
+
+.sheet td.fold .rail {
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	width: 1px;
+	background: var(--oes-table-header-text);
+}
+
+.sheet td.fold .tick {
+	position: absolute;
+	right: 0;
+	bottom: 0;
+	height: 1px;
+	background: var(--oes-table-header-text);
+}
+
+/* A fold closed has no rail: its rows are away. */
+.sheet td.fold button[aria-expanded="false"] + .rail {
+	display: none;
+}
+
+/* …and the columns' over their labels (ibGrid::DrawColOutline): the same chrome, its marker in its level's lane, its
+   rail across to the fold's last column and a tick down from there; a column folded away collapses, its cells and its
+   label with it (sheet.js, drawColFolds). */
+.sheet tr.col-folds > * {
+	border-top: 1px solid var(--oes-border);
+}
+
+.sheet td.col-fold {
+	position: relative;
+	padding: 0;
+	background: var(--oes-table-header-bg);
+}
+
+.sheet td.col-fold .rail-across {
+	position: absolute;
+	right: 0;
+	height: 1px;
+	background: var(--oes-table-header-text);
+}
+
+.sheet td.col-fold .tick-down {
+	position: absolute;
+	right: 0;
+	bottom: 0;
+	width: 1px;
+	background: var(--oes-table-header-text);
+}
+
+.sheet col.folded {
+	visibility: collapse;
+}
+
+/* A sheet on paper: its frozen rows are its head, so they come again on every page; a row is not cut across two; a
+   row's print break ends its page; the cells taken, the labels, the outline and the empty cells it is filled out with
+   are the screen's. */
+@media print {
 	.sheet td.selected {
 		background-image: none;
 	}
@@ -845,9 +1112,41 @@ oes-gridbox .selection-summary {
 		display: none !important;
 	}
 
+	/* A text box on paper is its whole text, its lines wrapped at the page's width (as the thin client's text printout
+	   lays it); the box as it stands is the screen's. */
+	oes-textbox,
+	.views > oes-textbox {
+		display: block;
+		height: auto;
+		padding: 0;
+	}
+
+	oes-textbox textarea {
+		display: none;
+	}
+
+	oes-textbox .printout {
+		display: block;
+		margin: 0;
+		white-space: pre-wrap;
+		overflow-wrap: break-word;
+	}
+
 	.sheet thead,
 	.sheet td.frozen {
 		position: static;
+	}
+
+	.sheet tr.labels,
+	.sheet tr.col-folds,
+	.sheet tr.filler {
+		display: none;
+	}
+
+	.sheet col.fold,
+	.sheet col.label,
+	.sheet col.filler {
+		visibility: collapse;
 	}
 
 	.sheet tr {

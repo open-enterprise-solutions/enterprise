@@ -33,6 +33,7 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="artProvider.cpp" />
     <ClCompile Include="docview\docManager.cpp">
       <Filter>docview</Filter>
     </ClCompile>

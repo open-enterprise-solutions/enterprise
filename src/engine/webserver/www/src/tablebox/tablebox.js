@@ -137,6 +137,8 @@ class Tablebox extends Control {
 		/** the rows held reach the top, the bottom */
 		this.begin = true;
 		this.end = true;
+		/** the scrollbar over the window is shown — rows lie beyond it */
+		this.paged = false;
 		this.firstHandle = 0;
 		this.lastHandle = 0;
 		this.fetchingAhead = false;
@@ -801,7 +803,12 @@ class Tablebox extends Control {
 		const atBottom = holder.scrollTop + holder.clientHeight >= holder.scrollHeight - 1;
 		const ahead = !this.end || !atBottom;
 		const behind = !this.begin || !atTop;
-		this.frame.classList.toggle('paged', ahead || behind);
+		// The scrollbar takes its room from the grid, whose columns fit the width: the grid's own watch over its size misses
+		// the first time, as the first rows come in, and the columns stood a scrollbar wider than the grid.
+		if (this.frame.classList.toggle('paged', ahead || behind) !== this.paged) {
+			this.paged = ahead || behind;
+			this.table?.redraw();
+		}
 		this.pager.dataset.thumb = ahead && behind ? 'middle' : behind ? 'bottom' : 'top';
 		this.pager.style.top = `${holder.offsetTop}px`;
 		this.pager.style.height = `${holder.clientHeight}px`;
@@ -894,7 +901,8 @@ class Tablebox extends Control {
 
 	/**
 	 * The cursor's marks where it stands: its row and, when it stands on cells or the keys put a column, its cell — the
-	 * current column's, else the row's first; of a group drawn as one, that column's part.
+	 * current column's, else the row's first shown (the data view's, a hidden column has no cell to mark); of a group
+	 * drawn as one, that column's part.
 	 */
 	markCursor() {
 		const row = this.rowOf(this.currentRow);
@@ -908,7 +916,8 @@ class Tablebox extends Control {
 		let cell = null;
 		if ((this.cellMode || this.columnByKeys) && row !== null) {
 			const cells = row.getCells();
-			const found = cells.find((one) => columnsOf(one).includes(this.currentColumn)) ?? cells[0];
+			const found = cells.find((one) => columnsOf(one).includes(this.currentColumn))
+				?? cells.find((one) => one.getColumn().isVisible());
 			cell = found?.getElement().querySelector(`[data-column="${this.currentColumn}"]`) ?? found?.getElement() ?? null;
 		}
 		if (this.markedCell !== cell) {
@@ -1396,6 +1405,10 @@ class Tablebox extends Control {
 	 * @param {object} request
 	 */
 	async fetch(request) {
+		// None in the designer: its tables have no rows to show, the server reads none there (the thin client's
+		// tableBox, DesignerMode — a form tried out in it was refused, each of its tables).
+		if (this.context.designerMode())
+			return null;
 		try {
 			const page = await this.context.fetch(this.node.ControlId, { Parent: this.crumbs.at(-1)?.handle ?? 0, ...request });
 			await this.context.fetchPictures(page);

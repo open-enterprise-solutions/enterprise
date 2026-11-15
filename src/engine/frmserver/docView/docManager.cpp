@@ -332,19 +332,19 @@ ibDocManager::ibDocManager(long /*flags*/, bool initialize)
 	// The commands every document answers to — and the window's besides, Open, Exit and the edit commands — with the
 	// default keys the desktop's windows gave them (SetDefaultHotKeys) and the pictures its menu showed them with. A
 	// person's own keys are the client's to keep, over these.
-	RegisterCommand(ibDocCommand::Undo,      _("Undo"),       ibT("Ctrl+Z"), ibClientStockPicture::Undo);
-	RegisterCommand(ibDocCommand::Redo,      _("Redo"),       ibT("Ctrl+Y"), ibClientStockPicture::Redo);
-	RegisterCommand(ibDocCommand::Save,      _("Save"),       ibT("Ctrl+S"), ibClientStockPicture::Save);
-	RegisterCommand(ibDocCommand::Close,     _("Close"),      ibEmptyString, ibClientStockPicture::Close);
-	RegisterCommand(ibDocCommand::CloseAll,  _("Close All"),  ibEmptyString, ibClientStockPicture::None);
-	RegisterCommand(ibDocCommand::Open,      _("Open..."),    ibEmptyString, ibClientStockPicture::Open);
-	RegisterCommand(ibDocCommand::Exit,      _("Exit"),       ibEmptyString, ibClientStockPicture::Quit);
-	RegisterCommand(ibDocCommand::Cut,       _("Cut"),        ibT("Ctrl+X"), ibClientStockPicture::Cut);
-	RegisterCommand(ibDocCommand::Copy,      _("Copy"),       ibT("Ctrl+C"), ibClientStockPicture::Copy);
-	RegisterCommand(ibDocCommand::Paste,     _("Paste"),      ibT("Ctrl+V"), ibClientStockPicture::Paste);
-	RegisterCommand(ibDocCommand::Delete,    _("Delete"),     ibEmptyString, ibClientStockPicture::Delete);
-	RegisterCommand(ibDocCommand::SelectAll, _("Select all"), ibT("Ctrl+A"), ibClientStockPicture::None);
-	RegisterCommand(ibDocCommand::SaveAs,    _("Save as..."), ibEmptyString, ibClientStockPicture::SaveAs);
+	RegisterCommand(ibDocCommand::Undo,      _("Undo"),       ibT("Ctrl+Z"), g_picUndoCLSID);
+	RegisterCommand(ibDocCommand::Redo,      _("Redo"),       ibT("Ctrl+Y"), g_picRedoCLSID);
+	RegisterCommand(ibDocCommand::Save,      _("Save"),       ibT("Ctrl+S"), g_picSaveCLSID);
+	RegisterCommand(ibDocCommand::Close,     _("Close"),      ibEmptyString, g_picCloseFormCLSID);
+	RegisterCommand(ibDocCommand::CloseAll,  _("Close All"),  ibEmptyString, 0);
+	RegisterCommand(ibDocCommand::Open,      _("Open..."),    ibEmptyString, g_picOpenCLSID);
+	RegisterCommand(ibDocCommand::Exit,      _("Exit"),       ibEmptyString, g_picQuitCLSID);
+	RegisterCommand(ibDocCommand::Cut,       _("Cut"),        ibT("Ctrl+X"), g_picCutCLSID);
+	RegisterCommand(ibDocCommand::Copy,      _("Copy"),       ibT("Ctrl+C"), g_picClipboardCopyCLSID);
+	RegisterCommand(ibDocCommand::Paste,     _("Paste"),      ibT("Ctrl+V"), g_picPasteCLSID);
+	RegisterCommand(ibDocCommand::Delete,    _("Delete"),     ibEmptyString, g_picDeleteCLSID);
+	RegisterCommand(ibDocCommand::SelectAll, _("Select all"), ibT("Ctrl+A"), 0);
+	RegisterCommand(ibDocCommand::SaveAs,    _("Save as..."), ibEmptyString, g_picSaveAsCLSID);
 }
 
 void ibDocManager::RegisterSchema(ibProtocol::ibSchema::ibKind kind, std::unique_ptr<ibClientSchema> schema)
@@ -353,7 +353,7 @@ void ibDocManager::RegisterSchema(ibProtocol::ibSchema::ibKind kind, std::unique
 }
 
 void ibDocManager::RegisterCommand(ibDocCommand command, const ibString& title, const ibString& shortcut,
-	ibClientStockPicture picture)
+	ibPictureID picture)
 {
 	m_commands[command] = ibDocCommandInfo{ title, shortcut, picture };
 }

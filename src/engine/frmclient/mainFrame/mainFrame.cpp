@@ -110,29 +110,6 @@ wxFileName GetOptionsFile(ibProtocol::ibLogin::ibMode mode)
 // A file goes up in parts of at most this — what the server keeps one part as (ibTempStorage::kPartSize).
 constexpr std::size_t kUploadPartSize = 1024 * 1024;
 
-// The stock picture an item is shown with — the art provider's (artProvider/), by the number the server names it by.
-wxArtID ArtOf(long long picture)
-{
-	switch (static_cast<ibProtocol::ibFrame::ibMenu::ibStockPicture>(picture)) {
-	case ibProtocol::ibFrame::ibMenu::ibStockPicture::New:    return wxART_NEW;
-	case ibProtocol::ibFrame::ibMenu::ibStockPicture::Open:   return wxART_FILE_OPEN;
-	case ibProtocol::ibFrame::ibMenu::ibStockPicture::Save:   return wxART_FILE_SAVE;
-	case ibProtocol::ibFrame::ibMenu::ibStockPicture::SaveAs: return wxART_FILE_SAVE_AS;
-	case ibProtocol::ibFrame::ibMenu::ibStockPicture::Close:  return wxART_CLOSE;
-	case ibProtocol::ibFrame::ibMenu::ibStockPicture::Quit:   return wxART_QUIT;
-	case ibProtocol::ibFrame::ibMenu::ibStockPicture::Undo:   return wxART_UNDO;
-	case ibProtocol::ibFrame::ibMenu::ibStockPicture::Redo:   return wxART_REDO;
-	case ibProtocol::ibFrame::ibMenu::ibStockPicture::Cut:    return wxART_CUT;
-	case ibProtocol::ibFrame::ibMenu::ibStockPicture::Copy:   return wxART_COPY;
-	case ibProtocol::ibFrame::ibMenu::ibStockPicture::Paste:  return wxART_PASTE;
-	case ibProtocol::ibFrame::ibMenu::ibStockPicture::Delete: return wxART_DELETE;
-	case ibProtocol::ibFrame::ibMenu::ibStockPicture::Find:   return wxART_FIND;
-	case ibProtocol::ibFrame::ibMenu::ibStockPicture::Print:  return wxART_PRINT;
-	default:                             break;
-	}
-	return wxArtID();
-}
-
 // The wx command of an edit the server asks back. wxID_NONE: none.
 int EditCommandOf(long long command)
 {
@@ -181,7 +158,7 @@ void ShapeOf(const ibProtocolNode& menu, ibString& shape)
 			<< item.GetString(ibProtocol::ibFrame::ibMenu::Shortcut) << wxT('|')
 			<< item.GetInt(ibProtocol::ibFrame::ibMenu::Command, -1) << wxT('|')
 			<< item.GetInt(ibProtocol::ibFrame::ibMenu::Schema, -1) << wxT('|')
-			<< item.GetInt(ibProtocol::ibFrame::ibMenu::StockPicture);
+			<< item.GetString(ibProtocol::ibFrame::ibMenu::Picture);
 		ShapeOf(item, shape);
 		shape << wxT(']');
 	}
@@ -1084,8 +1061,6 @@ void ibFrontendMainFrame::Draw(const ibProtocolNode& answer)
 	// whole (a property's Synonym) reads in it, as the desktop's read in its configuration's.
 	if (whole || patch.Has(ibProtocol::ibFrame::Language))
 		ibBackendLocalization::SetUserLanguage(frame.GetString(ibProtocol::ibFrame::Language));
-	if (whole || patch.Has(ibProtocol::ibFrame::DefaultLanguage))
-		ibBackendLocalization::SetDefaultLanguage(frame.GetString(ibProtocol::ibFrame::DefaultLanguage));
 
 	if (whole || patch.Has(ibProtocol::ibFrame::Title)) {
 		const wxString title = frame.GetString(ibProtocol::ibFrame::Title);
@@ -1180,10 +1155,7 @@ void ibFrontendMainFrame::DrawMenu(const ibProtocolNode& menu)
 			if (item.Has(ibProtocol::ibFrame::ibMenu::Command) || item.Has(ibProtocol::ibFrame::ibMenu::Schema)) {
 				const int id = MenuIdOf(item);
 				wxMenuItem* const added = into->Append(id, title);
-				const wxArtID art = ArtOf(item.GetInt(ibProtocol::ibFrame::ibMenu::StockPicture));
-				if (!art.IsEmpty())
-					added->SetBitmap(wxArtProvider::GetBitmapBundle(art, wxART_MENU, wxSize(16, 16)));
-				else if (item.Has(ibProtocol::ibFrame::ibMenu::Picture)) {
+				if (item.Has(ibProtocol::ibFrame::ibMenu::Picture)) {
 					const wxBitmap picture = ibProtocolPicture(item, ibProtocol::ibFrame::ibMenu::Picture);
 					if (picture.IsOk())
 						added->SetBitmap(picture);

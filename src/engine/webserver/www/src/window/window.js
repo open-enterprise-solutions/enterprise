@@ -7,7 +7,12 @@
 
 import { componentsDrawn } from '../controls/control.js';
 import { Command, createDocument } from '../docView/tabDocument.js';
+import { _, format, labelText, setLanguage } from '../localization.js';
 import { Refusal } from '../protocol/connection.js';
+import { Picture } from '../protocol/pictures.js';
+import { editFocused, textFields } from './editFocused.js';
+import { acceptOf, uploadFile } from './files.js';
+import { showFind } from './find.js';
 import { Questions } from './questions.js';
 import { Sections } from './sections.js';
 import { showFunctions } from './functions.js';
@@ -22,6 +27,9 @@ import { showTheme, styleSchema } from './theme.js';
 // The schemas the window opens itself (ibSchema): All functions.
 const allFunctions = 1;
 const about = 4;
+// …and the registration journal, which shows nothing of its own: its command Open (ibSchema::ibCommand) opens its tab.
+const auditLog = 5;
+const schemaOpen = 1;
 
 // How long a call is waited on before the window says it waits: a quick answer shows nothing.
 const busyAfter = 800;
@@ -35,8 +43,11 @@ const startsWithin = 15000;
 // The keys of the document's commands, the thin client's defaults (SetDefaultHotKeys), with Ctrl or Cmd.
 /** @type {Record<string, number>} */
 const commandKeys = { s: Command.Save, z: Command.Undo, y: Command.Redo };
-// …and what keeps its own Undo and Redo: a field typed in.
-const textFields = 'input:not([type=radio]):not([type=checkbox]), textarea, [contenteditable]';
+
+// THE TOOLBAR — the thin client's under its menu (CreateGUI): New, Open, Save, Save as | Find | Redo, Undo, each with
+// its tooltip; a button is the File or Edit item of the same picture, done and enabled as that item. null: a separator.
+const toolbarItems = [[Picture.New, 'New'], [Picture.Open, 'Open'], [Picture.Save, 'Save'], [Picture.SaveAs, 'Save as'],
+	null, [Picture.Find, 'Find'], null, [Picture.Redo, 'Redo'], [Picture.Undo, 'Undo']];
 
 // A message's level (ibMessage::ibLevel), as its line is marked.
 const information = 1;
@@ -52,7 +63,7 @@ export class ClientWindow {
 	constructor(root, session, pictures) {
 		this.session = session;
 		this.pictures = pictures;
-		this.questions = new Questions(session);
+		this.questions = new Questions(session, pictures);
 		root.replaceChildren();
 		root.className = 'client-window';
 
@@ -65,6 +76,9 @@ export class ClientWindow {
 		this.menu = document.createElement('nav');
 		this.menu.className = 'menu';
 		this.header.append(logo, this.title, this.menu);
+		this.toolbar = document.createElement('div');
+		this.toolbar.className = 'command-bar toolbar';
+		this.toolbar.setAttribute('role', 'toolbar');
 
 		this.tabs = document.createElement('div');
 		this.tabs.className = 'tabs';
@@ -92,8 +106,8 @@ export class ClientWindow {
 		clear.type = 'button';
 		clear.className = 'clear';
 		clear.textContent = '×';
-		clear.title = 'Clear';
-		clear.setAttribute('aria-label', 'Clear the messages');
+		clear.title = _('Clear');
+		clear.setAttribute('aria-label', _('Clear the messages'));
 		clear.addEventListener('click', () => this.clearMessages());
 		this.messages.append(grip(this.messages), clear, this.lines);
 
@@ -114,15 +128,15 @@ export class ClientWindow {
 		this.offline = document.createElement('div');
 		this.offline.className = 'offline';
 		this.offline.setAttribute('role', 'status');
-		this.offline.textContent = 'No connection — reconnecting…';
+		this.offline.textContent = _('No connection - reconnecting...');
 		this.offline.hidden = true;
 		/** @type {number | undefined} */
 		this.busyTimer = undefined;
 		/** @type {number | undefined} */
 		this.offlineTimer = undefined;
 
-		root.append(this.header, this.sections.element, this.tabs, this.views, this.messages, this.status, this.busy,
-			this.offline);
+		root.append(this.header, this.toolbar, this.sections.element, this.tabs, this.views, this.messages, this.status,
+			this.busy, this.offline);
 
 		/** @type {Map<number, TabDocument>} each tab's document, by the tab's id (createDocument) */
 		this.documents = new Map();
@@ -131,6 +145,7 @@ export class ClientWindow {
 		/** @type {{id: number} | null} the tab whose form is being drawn, the one on show still up */
 		this.arrival = null;
 		this.drawnMenu = '';
+		this.drawnToolbar = '';
 		this.drawnTabs = '';
 
 		session.addEventListener('frame', (event) => this.draw(/** @type {CustomEvent} */ (event).detail));
@@ -190,12 +205,16 @@ export class ClientWindow {
 	 * @param {ProtocolNode} frame
 	 */
 	async draw(frame) {
-		await this.pictures.fetchFor({ Tabs: frame.Tabs, View: frame.View, Menu: frame.Menu }).catch(() => {});
+		// The language a translated text is read in — the session's, before anything is drawn (as the thin's frame).
+		setLanguage(String(frame.Language ?? ''));
+		await this.pictures.fetchFor({ Tabs: frame.Tabs, View: frame.View, Menu: frame.Menu, Own: Object.values(Picture)
+			.map((id) => ({ Picture: id })) }).catch(() => {});
 		this.title.textContent = frame.Title || document.title;
 		this.status.textContent = frame.Status ?? '';
 		// The view first: the menu's File and Edit are enabled by the document it is drawn by.
 		this.drawView(frame);
 		this.drawMenu(frame.Menu);
+		this.drawToolbar();
 		// A tab comes with its form, in one frame: the strip waits for the one arriving.
 		if (this.arrival === null)
 			this.drawTabs(frame);
@@ -203,11 +222,16 @@ export class ClientWindow {
 	}
 
 	/**
-	 * The menu: the client's own File and Edit, then the server's — drawn anew only when what it shows changed.
+	 * The menu: the client's own File and Edit, then the server's, its Window before Help as the thin client's tabbed
+	 * frame puts it (AddWindowMenu: before the menu titled as the stock Help, else last) — drawn anew only when what it
+	 * shows changed.
 	 * @param {ProtocolNode | undefined} menu the server's
 	 */
 	drawMenu(menu) {
-		const tops = [...this.documentMenu(), ...(menu?.NodeChildren ?? [])];
+		const server = menu?.NodeChildren ?? [];
+		const help = server.findIndex((top) => top.Title === _('Help'));
+		const at = help < 0 ? server.length : help;
+		const tops = [...this.documentMenu(), ...server.slice(0, at), this.windowMenu(), ...server.slice(at)];
 		const drawn = JSON.stringify(tops);
 		if (drawn === this.drawnMenu)
 			return;
@@ -230,6 +254,14 @@ export class ClientWindow {
 				}
 				const entry = document.createElement('wa-dropdown-item');
 				entry.textContent = item.Title ?? '';
+				const picture = this.pictures.url(item.Picture);
+				if (picture) {
+					const image = document.createElement('img');
+					image.src = picture;
+					image.alt = '';
+					image.slot = 'icon';
+					entry.append(image);
+				}
 				entry.style.paddingInlineStart = depth > 0 ? `${depth}em` : '';
 				entry.toggleAttribute('disabled', item.Enabled === false || (item.NodeChildren?.length ?? 0) > 0);
 				const value = String(items.size);
@@ -253,7 +285,12 @@ export class ClientWindow {
 	/**
 	 * THE CLIENT'S OWN FILE AND EDIT, as the thin client's (InitializeDefaultMenu): done on the active tab's document,
 	 * found as the item is chosen; enabled as its tab says — a command by its Commands, Close where its tab is not locked,
-	 * Print where there is a document at all. Cut, Copy and Paste are the browser's own.
+	 * Print where there is a document at all. Cut … Select All are the element's under the focus (editFocused), Find the
+	 * text's on show (findText) — always on, as the thin client's. Quit is the server's Exit (the thin's AllowClose): it
+	 * closes every tab but the start page, asking about what is unsaved, and says Exit once each one closed. Worded as
+	 * the thin's menu words them (labelText). Not here of its File: Revert (it reads a file on the person's disk again — a
+	 * server's tab has none), Print Setup and Print Preview (the browser's print dialog is both), the files opened last
+	 * (the page is told no path).
 	 * @returns {ProtocolNode[]}
 	 */
 	documentMenu() {
@@ -262,22 +299,122 @@ export class ClientWindow {
 		/**
 		 * @param {string} title
 		 * @param {number} command (Command)
+		 * @param {string} picture (Picture)
 		 */
-		const commandItem = (title, command) => ({ Title: title, Enabled: current?.isCommandEnabled(command) ?? false,
-			done: () => this.currentDocument()?.doCommand(command) });
+		const commandItem = (title, command, picture) => ({ Title: title, Picture: picture,
+			Enabled: current?.isCommandEnabled(command) ?? false, done: () => this.currentDocument()?.doCommand(command) });
+		const templates = this.session.frame?.Templates?.NodeChildren ?? [];
+		// The thin client's stock labels (wx's, in the one dictionary), as its menu takes them — with the mnemonic.
 		return [
-			{ Title: 'File', NodeChildren: [
-				commandItem('Save', Command.Save),
-				{ Title: 'Close', Enabled: tab !== undefined && !tab.Locked,
+			{ Title: labelText('&File'), NodeChildren: [
+				{ Title: labelText('&New'), Picture: Picture.New, Enabled: templates.some((one) => one.OnlyOpen !== true),
+					done: () => this.newDocument() },
+				{ Title: labelText('&Open...'), Picture: Picture.Open, Enabled: templates.length > 0,
+					done: () => this.openFile() },
+				{ Title: labelText('&Close'), Picture: Picture.CloseForm, Enabled: tab !== undefined && !tab.Locked,
 					done: () => this.closeTab(this.session.frame?.ActiveTab ?? 0) },
+				{ Title: labelText('&Save'), Picture: Picture.Save, Enabled: current?.isCommandEnabled(Command.Save) ?? false,
+					done: () => this.currentDocument()?.save() },
+				{ Title: labelText('Save &As...'), Picture: Picture.SaveAs,
+					Enabled: current?.isCommandEnabled(Command.SaveAs) ?? false, done: () => this.currentDocument()?.saveAs() },
 				{ Separator: true },
-				{ Title: 'Print', Enabled: current !== undefined, done: () => this.currentDocument()?.print() },
+				{ Title: labelText('&Print...'), Picture: Picture.Print, Enabled: current !== undefined,
+					done: () => this.currentDocument()?.print() },
+				{ Separator: true },
+				{ Title: labelText('&Quit'), Picture: Picture.Quit,
+					done: () => this.session.call('command', { Command: Command.Exit }) },
 			] },
-			{ Title: 'Edit', NodeChildren: [
-				commandItem('Undo', Command.Undo),
-				commandItem('Redo', Command.Redo),
+			{ Title: labelText('&Edit'), NodeChildren: [
+				commandItem(labelText('&Undo'), Command.Undo, Picture.Undo),
+				commandItem(labelText('&Redo'), Command.Redo, Picture.Redo),
+				{ Separator: true },
+				{ Title: labelText('Cu&t'), Picture: Picture.Cut, done: () => editFocused(Command.Cut) },
+				{ Title: labelText('&Copy'), Picture: Picture.ClipboardCopy, done: () => editFocused(Command.Copy) },
+				{ Title: labelText('&Paste'), Picture: Picture.Paste, done: () => editFocused(Command.Paste) },
+				{ Title: labelText('&Delete'), Picture: Picture.Delete, done: () => editFocused(Command.Delete) },
+				{ Title: labelText('Select &All'), done: () => editFocused(Command.SelectAll) },
+				{ Separator: true },
+				{ Title: labelText('&Find...'), Picture: Picture.Find, done: () => this.find() },
 			] },
 		];
+	}
+
+	/**
+	 * The toolbar (toolbarItems): each button File's or Edit's item of its picture — drawn anew only when what it shows
+	 * changed.
+	 */
+	drawToolbar() {
+		/** @type {Map<string, ProtocolNode>} */
+		const items = new Map();
+		for (const top of this.documentMenu()) {
+			for (const item of top.NodeChildren ?? []) {
+				if (item.Picture !== undefined)
+					items.set(item.Picture, item);
+			}
+		}
+		const drawn = JSON.stringify(toolbarItems.map((one) => one && [one[0], items.get(one[0])?.Enabled !== false,
+			this.pictures.url(one[0]) !== '']));
+		if (drawn === this.drawnToolbar)
+			return;
+		this.drawnToolbar = drawn;
+		this.toolbar.replaceChildren(...toolbarItems.map((one) => {
+			if (one === null) {
+				const separator = document.createElement('span');
+				separator.className = 'separator';
+				return separator;
+			}
+			const [picture, tooltip] = one;
+			const item = items.get(picture);
+			const button = document.createElement('wa-button');
+			button.setAttribute('size', 's');
+			button.setAttribute('appearance', 'plain');
+			button.toggleAttribute('disabled', item?.Enabled === false);
+			button.title = _(tooltip);
+			button.setAttribute('aria-label', _(tooltip));
+			const image = document.createElement('img');
+			image.src = this.pictures.url(picture);
+			image.alt = '';
+			button.append(image);
+			button.addEventListener('click', () => {
+				if (item !== undefined)
+					this.menuItem(item);
+			});
+			return button;
+		}));
+	}
+
+	/**
+	 * THE WINDOW MENU — the thin client's tabbed frame's own (ibAuiMDIParentFrame: Close, Close All | Next, Previous):
+	 * Close is File's; Close All the server's, in one call (CloseAll — the thin's OnCloseAll: the locked tabs stay, and
+	 * one the person keeps keeps the rest); Next and Previous the tab beside the active one, round the strip.
+	 * @returns {ProtocolNode}
+	 */
+	windowMenu() {
+		const tabs = this.session.frame?.Tabs?.NodeChildren ?? [];
+		const tab = tabs.find((one) => one.NodeId === this.session.frame?.ActiveTab);
+		return { Title: labelText('&Window'), NodeChildren: [
+			{ Title: labelText('Cl&ose'), Enabled: tab !== undefined && !tab.Locked,
+				done: () => this.closeTab(this.session.frame?.ActiveTab ?? 0) },
+			{ Title: labelText('Close All'), Enabled: tabs.some((one) => !one.Locked),
+				done: () => this.session.call('command', { Command: Command.CloseAll }) },
+			{ Separator: true },
+			{ Title: labelText('&Next'), Enabled: tabs.length > 1, done: () => this.advanceTab(1) },
+			{ Title: labelText('&Previous'), Enabled: tabs.length > 1, done: () => this.advanceTab(-1) },
+		] };
+	}
+
+	/**
+	 * The tab beside the active one made active — the next or the previous, round the strip (the thin's ActivateNext /
+	 * ActivatePrevious: its notebook's AdvanceSelection).
+	 * @param {number} step 1 the next, -1 the previous
+	 */
+	advanceTab(step) {
+		const frame = this.session.frame;
+		const tabs = frame?.Tabs?.NodeChildren ?? [];
+		if (tabs.length < 2)
+			return Promise.resolve();
+		const at = tabs.findIndex((one) => one.NodeId === frame?.ActiveTab);
+		return this.session.call('activate', { Tab: tabs[(at + step + tabs.length) % tabs.length].NodeId });
 	}
 
 	/**
@@ -297,14 +434,88 @@ export class ClientWindow {
 				await showAbout(this.session);
 			else if (item.Schema === styleSchema)
 				await showTheme(this.session);
+			else if (item.Schema === auditLog)
+				await this.session.call('schema', { Schema: auditLog, Command: schemaOpen });
 			else if (item.Schema !== undefined)
-				this.say(`${item.Title ?? ''}: not in the browser yet`);
+				this.say(format(_('%s: not in the browser yet'), item.Title ?? ''));
 			else if (item.Command !== undefined)
 				await this.session.call('command', { Command: item.Command });
 		}
 		catch (error) {
 			this.refused(/** @type {Error} */ (error));
 		}
+	}
+
+	/**
+	 * File → New, as the thin client's doc manager makes one over the server's templates: of the one template that makes
+	 * documents at once, else of the one chosen (the desktop's «Select a document template»), made by the server
+	 * (open {Extension}).
+	 */
+	newDocument() {
+		const templates = (this.session.frame?.Templates?.NodeChildren ?? []).filter((one) => one.OnlyOpen !== true);
+		/** @param {ProtocolNode} template */
+		const make = (template) => this.session.call('open', { Extension: template.Extension }).catch((error) => this.refused(error));
+		if (templates.length === 1) {
+			make(templates[0]);
+			return;
+		}
+		const dialog = this.questions.dialog(_('New'), '', [{ caption: _('Cancel'), answer: {} }], null);
+		const list = document.createElement('div');
+		list.className = 'choice-list';
+		for (const template of templates) {
+			const button = document.createElement('button');
+			button.type = 'button';
+			const url = this.pictures.url(template.Picture);
+			if (url) {
+				const image = document.createElement('img');
+				image.src = url;
+				image.alt = '';
+				button.append(image);
+			}
+			button.append(template.Title ?? '');
+			button.addEventListener('click', () => {
+				this.questions.answer(dialog, null, {});
+				make(template);
+			});
+			list.append(button);
+		}
+		dialog.querySelector('.text')?.replaceWith(list);
+	}
+
+	/**
+	 * File → Open, as the thin client's doc manager opens one: a file of the person's, chosen by the templates' masks in
+	 * the browser's own file dialog, put in the session's temporary storage and opened there by the template its name
+	 * says (open {File}).
+	 */
+	openFile() {
+		const input = document.createElement('input');
+		input.type = 'file';
+		input.accept = acceptOf((this.session.frame?.Templates?.NodeChildren ?? []).map((one) => one.Mask ?? ''));
+		input.addEventListener('change', async () => {
+			const chosen = input.files?.[0];
+			if (chosen === undefined)
+				return;
+			try {
+				await this.session.call('open', { File: await uploadFile(this.session, chosen) });
+			}
+			catch (error) {
+				this.refused(/** @type {Error} */ (error));
+			}
+		});
+		input.click();
+	}
+
+	/** Edit → Find..., over the text on show — as the thin client's doc manager finds in its document's view. */
+	find() {
+		showFind(() => this.textOnShow(), this.questions);
+	}
+
+	/**
+	 * The text of the tab on show — its first text box: a text document's — or none.
+	 * @returns {HTMLTextAreaElement | null}
+	 */
+	textOnShow() {
+		return this.currentDocument()?.element?.querySelector('oes-textbox textarea') ?? null;
 	}
 
 	/**
@@ -373,7 +584,7 @@ export class ClientWindow {
 		button.setAttribute('aria-selected', String(tab.NodeId === active));
 		button.title = tab.Title ?? '';
 		/** @type {HTMLElement} */ (button.querySelector('span')).textContent = tab.Title ?? '';
-		button.querySelector('.close')?.setAttribute('aria-label', `Close ${tab.Title ?? ''}`);
+		button.querySelector('.close')?.setAttribute('aria-label', `${_('Close')} ${tab.Title ?? ''}`);
 		const icon = this.pictures.url(tab.Icon);
 		let image = button.querySelector('img');
 		if (icon && image === null) {
@@ -437,7 +648,7 @@ export class ClientWindow {
 			return;
 		event.preventDefault();
 		commitField();
-		current.doCommand(command).catch((error) => this.refused(error));
+		(command === Command.Save ? current.save() : current.doCommand(command)).catch((error) => this.refused(error));
 	}
 
 	/**
@@ -522,8 +733,12 @@ export class ClientWindow {
 			this.clearMessages();
 		for (const message of events.Messages?.NodeChildren ?? [])
 			this.say(message.Text ?? '', message.Level);
-		if (events.Exit)
-			this.ended('Exit');
+		// The server let the client go (Quit, a script's Exit, a start refused): the session goes with the page's window,
+		// as the thin client's window closes and logs out.
+		if (events.Exit) {
+			this.ended(_('Exit'));
+			this.session.logout();
+		}
 	}
 
 	/**
@@ -557,8 +772,8 @@ export class ClientWindow {
 	refused(error) {
 		if (error instanceof Refusal && (error.code === 401 || error.code === 0))
 			return;
-		this.questions.dialog(this.title.textContent ?? '', error.message || 'The server refused it.',
-			[{ caption: 'OK', answer: {}, preferred: true }], null);
+		this.questions.dialog(this.title.textContent ?? '', error.message || _('The server refused it.'),
+			[{ caption: labelText('&OK'), answer: {}, preferred: true }], null);
 	}
 
 	/** @param {string} reason */
@@ -569,10 +784,10 @@ export class ClientWindow {
 		const shade = document.createElement('div');
 		shade.className = 'ended';
 		const text = document.createElement('p');
-		text.textContent = `The session has ended: ${reason}`;
+		text.textContent = format(_('The session has ended: %s'), reason);
 		const again = document.createElement('wa-button');
 		again.setAttribute('variant', 'brand');
-		again.textContent = 'Log in again';
+		again.textContent = _('Log in again');
 		again.addEventListener('click', () => location.reload());
 		shade.append(text, again);
 		document.body.append(shade);

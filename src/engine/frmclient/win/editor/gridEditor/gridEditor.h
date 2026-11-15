@@ -320,8 +320,7 @@ class FRMCLIENT_API ibGridEditor : public ibGrid {
 
 			const ibSpreadsheetFillType type = GetTypeString(row, col);
 			if (type == ibSpreadsheetFillType_StrText || type == ibSpreadsheetFillType_StrTemplate)
-				s = ibLocalization::GetTranslateGetRawLocText(ibBackendLocalization::GetUserLanguage(),
-					ibBackendLocalization::GetDefaultLanguage(), m_data[row][col]);
+				s = ibBackendLocalization::GetTranslateGetRawLocText(m_data[row][col]);
 			else if (type == ibSpreadsheetFillType_StrParameter)
 				s = m_data[row][col];
 		}
@@ -424,8 +423,7 @@ class FRMCLIENT_API ibGridEditor : public ibGrid {
 			}
 			else if (stringUtils::IsSameAs(typeName, s_strTypeParameter)) {
 				if (typeFill == ibSpreadsheetFillType::ibSpreadsheetFillType_StrText || typeFill == ibSpreadsheetFillType::ibSpreadsheetFillType_StrTemplate) {
-					return new wxString(ibLocalization::GetTranslateGetRawLocText(ibBackendLocalization::GetUserLanguage(),
-						ibBackendLocalization::GetDefaultLanguage(), m_data[row][col]));
+					return new wxString(ibBackendLocalization::GetTranslateGetRawLocText(m_data[row][col]));
 				}
 				return new wxString(m_data[row][col]);
 			}

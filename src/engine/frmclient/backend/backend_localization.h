@@ -37,10 +37,11 @@ public:
 	// no logic per call.
 	static const ibString& GetUserLanguage();
 
-	// …AND THE CONFIGURATION'S OWN (its DefaultLanguage), as the server says it beside the session's — what a text
-	// with no cell in the language above reads in before the first one written. Empty when the server said none.
-	static void SetDefaultLanguage(const ibString& strDefaultLanguage);
-	static const ibString& GetDefaultLanguage();
+	// ⭐ THE READING OF A STORED TEXT — in the session's language (the frame's), else the first written
+	// (ibLocalization::GetTranslateGetRawLocText); with a language named, in that one. Every reader on this side comes
+	// through here and says only the text.
+	static ibString GetTranslateGetRawLocText(const ibString& strRawLocale);
+	static ibString GetTranslateGetRawLocText(const ibString& strLangCode, const ibString& strRawLocale);
 };
 
 // ⭐ THE TRANSLATED TEXT ITSELF — what is passed, held and compared, the way ibNumber is what a
@@ -81,14 +82,13 @@ public:
 	// …AND THE SAME TEXT WRITTEN INTO `scratch`, which is what comes back — for a caller reading one text
 	// after another: a scratch reused call after call grows once and then stops allocating.
 	const ibString& GetString(ibString& scratch) const {
-		ibLocalization::GetTranslateFromArray(ibBackendLocalization::GetUserLanguage(),
-			ibBackendLocalization::GetDefaultLanguage(), m_translations, scratch);
+		ibLocalization::GetTranslateFromArray(ibBackendLocalization::GetUserLanguage(), m_translations, scratch);
 		return scratch;
 	}
 
 	// …AND THE TEXT OF ONE NAMED LANGUAGE.
 	ibString GetTranslate(const ibString& strLangCode) const {
-		return ibLocalization::GetTranslateFromArray(strLangCode, ibBackendLocalization::GetDefaultLanguage(), m_translations);
+		return ibLocalization::GetTranslateFromArray(strLangCode, m_translations);
 	}
 
 	// ⭐ AND EXACTLY THIS LANGUAGE, no substitute — the Find half of the pair. An editor showing one

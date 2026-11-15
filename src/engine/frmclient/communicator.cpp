@@ -590,9 +590,9 @@ void ibCommunicator::Take(const ibProtocolNode& answer)
 		// the login's own, the events (Messages, Clear, Exit, Properties — DrawFrame's `events`) and the method's own
 		// result beside it.
 		m_frame = answer.Clone({ ibProtocol::ibFrame::Title, ibProtocol::ibFrame::Status, ibProtocol::ibFrame::Language,
-			ibProtocol::ibFrame::DefaultLanguage, ibProtocol::ibFrame::ActiveTab, ibProtocol::ibFrame::Schemas,
-			ibProtocol::ibFrame::Templates, ibProtocol::ibFrame::Menu, ibProtocol::ibFrame::MetaData,
-			ibProtocol::ibFrame::View, ibProtocol::ibFrame::Tabs, ibProtocol::ibFrame::Request });
+			ibProtocol::ibFrame::ActiveTab, ibProtocol::ibFrame::Schemas, ibProtocol::ibFrame::Templates,
+			ibProtocol::ibFrame::Menu, ibProtocol::ibFrame::MetaData, ibProtocol::ibFrame::View, ibProtocol::ibFrame::Tabs,
+			ibProtocol::ibFrame::Request });
 		m_views.clear();
 	}
 	m_number = answer.GetInt(ibProtocol::ibFrame::Frame);

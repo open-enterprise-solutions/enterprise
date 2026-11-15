@@ -6643,6 +6643,12 @@ msgstr ""
 msgid "This configuration is stored in a format this build cannot read: it was written by an older or a different build. Nothing was loaded."
 msgstr ""
 
+#: src/engine/backend/metadataDataProcessor.cpp:411
+#: src/engine/backend/metadataReport.cpp:419
+#, c-format
+msgid "'%s' is stored in a format this build cannot read: it was written by an older or a different build. Nothing was loaded."
+msgstr ""
+
 #: src/engine/backend/metadataConfiguration.cpp:686
 #, c-format
 msgid "The data was saved by a newer build (date form %u) that this build cannot read. Nothing was loaded."
@@ -17183,4 +17189,87 @@ msgstr ""
 
 #: src/engine/appstudio/docManager/templates/docViewProfile.cpp:350
 msgid "Values"
+msgstr ""
+
+#: src/engine/webserver/www/src/controls/commandBar.js:117
+#: src/engine/webserver/www/src/controls/commandBar.js:118
+msgid "More"
+msgstr ""
+
+#: src/engine/webserver/www/src/docView/tabDocument.js:72
+msgid "This view is not in the browser yet."
+msgstr ""
+
+#: src/engine/webserver/www/src/main.js:26
+msgid "No publication in the address: open /<publication>/."
+msgstr ""
+
+#: src/engine/webserver/www/src/main.js:33
+msgid "Connecting to the base"
+msgstr ""
+
+#: src/engine/webserver/www/src/main.js:46
+msgid "Logging in"
+msgstr ""
+
+#: src/engine/webserver/www/src/main.js:49
+msgid "Opening the window"
+msgstr ""
+
+#: src/engine/webserver/www/src/window/functions.js:24
+msgid "All functions"
+msgstr ""
+
+#: src/engine/webserver/www/src/window/login.js:50
+msgid "Password"
+msgstr ""
+
+#: src/engine/webserver/www/src/window/login.js:63
+msgid "Log in"
+msgstr ""
+
+#: src/engine/webserver/www/src/window/questions.js:152
+msgid "Not in the browser yet"
+msgstr ""
+
+#: src/engine/webserver/www/src/window/questions.js:153
+#, c-format
+msgid "This question (%d) cannot be asked here yet; it is answered as cancelled."
+msgstr ""
+
+#: src/engine/webserver/www/src/window/window.js:101
+msgid "Clear the messages"
+msgstr ""
+
+#: src/engine/webserver/www/src/window/window.js:122
+msgid "No connection - reconnecting..."
+msgstr ""
+
+#: src/engine/webserver/www/src/window/window.js:315
+#, c-format
+msgid "%s: not in the browser yet"
+msgstr ""
+
+#: src/engine/webserver/www/src/window/window.js:645
+#, c-format
+msgid "The session has ended: %s"
+msgstr ""
+
+#: src/engine/webserver/www/src/window/window.js:648
+msgid "Log in again"
+msgstr ""
+
+#: src/engine/webserver/www/src/gridbox/selection.js:314
+#, c-format
+msgid "Count: %d"
+msgstr ""
+
+#: src/engine/webserver/www/src/gridbox/selection.js:315
+#, c-format
+msgid "Average: %s"
+msgstr ""
+
+#: src/engine/webserver/www/src/gridbox/selection.js:316
+#, c-format
+msgid "Sum: %s"
 msgstr ""

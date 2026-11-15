@@ -25,19 +25,13 @@ class DocumentCommands(PageTest):
         self.page.wait_for_timeout(200)
         self.assertEqual(self.commands(), [])
 
-    def item(self, menu, title):
-        self.page.locator('.menu wa-button', has_text=menu).click()
-        item = self.page.locator('wa-dropdown-item', has_text=title)
-        item.wait_for()
-        return item
-
     def disabled(self, item):
         return item.evaluate("(one) => one.hasAttribute('disabled')")
 
     def test_edit_is_enabled_by_the_tab_commands(self):
         self.start({'tabs': [form(commands=[UNDO])]})
         self.row('Item 1').wait_for()
-        undo = self.item('Edit', 'Undo')
+        undo = self.menu_item('Edit', 'Undo')
         self.assertFalse(self.disabled(undo))
         self.assertTrue(self.disabled(self.page.locator('wa-dropdown-item', has_text='Redo')))
         undo.click()
@@ -46,7 +40,7 @@ class DocumentCommands(PageTest):
     def test_save_is_not_offered_where_the_document_has_nothing_to_save(self):
         self.start({'tabs': [form()]})
         self.row('Item 1').wait_for()
-        self.assertTrue(self.disabled(self.item('File', 'Save')))
+        self.assertTrue(self.disabled(self.menu_item('File', 'Save')))
 
     def test_ctrl_s_saves_the_document(self):
         page = self.start({'tabs': [form(commands=[SAVE])]})
@@ -79,13 +73,13 @@ class DocumentCommands(PageTest):
     def test_file_close_closes_the_active_tab(self):
         page = self.start({'tabs': [form()]})
         self.row('Item 1').wait_for()
-        self.item('File', 'Close').click()
+        self.menu_item('File', 'Close').click()
         page.wait_for_function("document.querySelectorAll('.tab').length === 0")
 
     def test_a_locked_tab_is_not_closed_from_the_menu(self):
         self.start({'tabs': [form(locked=True)]})
         self.row('Item 1').wait_for()
-        self.assertTrue(self.disabled(self.item('File', 'Close')))
+        self.assertTrue(self.disabled(self.menu_item('File', 'Close')))
 
 
 if __name__ == '__main__':

@@ -1,7 +1,7 @@
 // A FIELD (Textctrl) — its caption beside it, the text it shows (State's Text), in the text editor a table's cell has
 // too (textEditor.js), with the buttons its node was saved with. The text is committed on change and on Enter — event
-// Change {Text}, which the server parses by the field's type — never by the key; typing begun is the state event Input,
-// the focus taken Focus.
+// Change {Text}, which the server parses by the field's type — never by the key; typing begun is the state event Input.
+// The focus taken is its form's to tell (form.js).
 //
 // Typing wins over the server. What the field shows is written from the node while nobody is in it, or while it still
 // shows what the page last wrote there and no older commit of it is unanswered; otherwise the server's text waits and
@@ -37,7 +37,6 @@ class Textctrl extends Control {
 		/** the label column's width it was given — a field with no caption keeps the column too */
 		this.labelWidth = 0;
 
-		this.field.addEventListener('focus', () => this.send(EventKind.Focus));
 		this.field.addEventListener('input', () => {
 			if (!this.typing) {
 				this.typing = true;

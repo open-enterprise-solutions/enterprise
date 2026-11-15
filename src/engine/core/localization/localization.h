@@ -33,18 +33,16 @@ public:
 
 	static void SetArrayTranslate(const ibString& strLangCode, ibLocalizationEntryArray& array, const ibString& strResult);
 
-	// The language asked for, else the configuration's own (its DefaultLanguage — empty when the caller has none to
-	// say), else the first written. False only when there is nothing to say.
-	static bool GetTranslateFromArray(const ibString& strLangCode, const ibString& strDefaultLangCode,
+	// The language asked for, else the first written. False only when there is nothing to say.
+	static bool GetTranslateFromArray(const ibString& strLangCode,
 		const ibLocalizationEntryArray& array, ibString& strResult);
-	static ibString GetTranslateFromArray(const ibString& strLangCode, const ibString& strDefaultLangCode,
+	static ibString GetTranslateFromArray(const ibString& strLangCode,
 		const ibLocalizationEntryArray& array);
 
 	// ⭐ THE READING OF A TEXT — its stored form and a language, that language's text; a text in no form is itself.
-	static bool GetTranslateGetRawLocText(const ibString& strLangCode, const ibString& strDefaultLangCode,
-		const ibString& strRawLocale, ibString& strResult);
-	static ibString GetTranslateGetRawLocText(const ibString& strLangCode, const ibString& strDefaultLangCode,
-		const ibString& strRawLocale);
+	static bool GetTranslateGetRawLocText(
+		const ibString& strLangCode, const ibString& strRawLocale, ibString& strResult);
+	static ibString GetTranslateGetRawLocText(const ibString& strLangCode, const ibString& strRawLocale);
 };
 
 #endif

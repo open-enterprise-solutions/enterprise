@@ -38,11 +38,14 @@
 
 #include <gtest/gtest.h>
 #include <wx/string.h>   // wxT, wxString - the engine's headers include no wx
+#include <functional>    // std::function — a written tree walked
+#include <set>
 
 #include "backend/composition/dataComposer.h"     // ibDataDBComposer — the two sections live on the base
 #include "core/composition/compositionTheme.h"    // ibCompositionThemes — the palettes a setting names
 #include "backend/system/value/valueColour.h"     // a conditional appearance's colour, packed and read back
 #include "backend/system/value/valueArray.h"      // …and the list an «in» condition reads
+#include "backend/system/value/valueSpreadsheet.h" // …and an alignment, an enumeration's member
 #include "backend/query/queryHierarchy.h"         // …and the subtree an «in hierarchy» one is handed
 #include "backend/backend_composition.h"         // the description + its Memory (read/write) pair, its values packed
 #include "backend/system/value/composition/valueComposerField.h"   // …a value the designer declared among them
@@ -433,6 +436,50 @@ TEST(CompositionDescription, RoundTrip_KeepsVariantStructure)
 		read.m_variants[0].m_settings.m_structure[0].m_rowGroups[0].m_settings.m_group.m_lines[0].m_path);
 	EXPECT_EQ(written.m_query, read.m_query);
 	EXPECT_EQ(written.m_selected, read.m_selected);
+}
+
+// ⭐ EVERY PART A COMPOSITION IS WRITTEN AS HAS A NAME THAT READS BACK INTO ITS ID (2026-11-15). A page reads a type it
+// has no word for as a NUMBER, and these ids are past 2^53: a conditional appearance's rule and an other-settings line
+// had no name, came back as another id, and the browser's OK lost them — nothing failing. The parts are the nodes of
+// no class kind; a value packed among them is typed by its own class.
+TEST(CompositionDescription, EveryPartWrittenHasAName)
+{
+	ibCompositionDescription written;
+	written.m_query = wxT("SELECT Code FROM Catalog.Products");
+	written.m_selected = Fields({ wxT("Code") });
+	ibSettingsDescription& settings = written.m_variants[0].m_settings;
+	ibConditionalAppearanceRuleDescription rule;
+	rule.m_fields.push_back(wxT("Code"));
+	rule.m_appearance.Say(ibAppearanceParameter::Text, true, ibStoreValue(ibValue(ibString(wxT("No.")))));
+	settings.m_conditionalAppearance.m_rules.push_back(rule);
+	settings.m_outputParameters.Say(ibOutputParameter::Theme, true, ibStoreValue(ibValue(ibString(wxT("Sea")))));
+	ibOutputDescription output;
+	ibLevelDescription level;
+	level.m_kind = ibCompositionLevelKind::Grouping;
+	level.m_settings.m_group.Append(wxT("Partner"));
+	output.m_rowGroups.push_back(level);
+	settings.m_structure.push_back(output);
+
+	ibDataNode node;
+	ASSERT_TRUE(ibCompositionDescriptionMemory::WriteNode(node, written));
+
+	std::set<ibClassID> parts;
+	const std::function<void(const ibDataNode&)> walk = [&](const ibDataNode& at) {
+		for (const ibDataNode& child : at.Children()) {
+			if (child.GetClsid() != 0 && clsid_kind(child.GetClsid()) == ibClassKind_None)
+				parts.insert(child.GetClsid());
+			walk(child);
+		}
+	};
+	walk(node);
+
+	EXPECT_TRUE(parts.contains(ibCompositionNodeClsid(wxT("CompositionAppearanceRule"))));
+	EXPECT_TRUE(parts.contains(ibCompositionNodeClsid(wxT("CompositionOutputParameter"))));
+	for (const ibClassID clsid : parts) {
+		const ibString name = ibCompositionNodeName(clsid);
+		EXPECT_FALSE(name.IsEmpty()) << "a part written with no name: " << clsid;
+		EXPECT_EQ(clsid, ibCompositionNodeClsid(name)) << name.ToStdString();
+	}
 }
 
 TEST(CompositionDescription, Equality_NoticesAChangedStructure)
@@ -1165,6 +1212,21 @@ TEST(CompositionConditionalAppearance, AFontIsSaidPartByPart)
 	EXPECT_EQ(static_cast<int>(ibFONTWEIGHT_BOLD), line.m_font.m_weight);
 	EXPECT_EQ(0, line.m_font.m_pointSize);     // not said — the cell's own size
 	EXPECT_TRUE(line.m_font.m_face.IsEmpty()); // …and its own face
+}
+
+// ⭐ A STORED ALIGNMENT IS ASKED AS WHAT IT COMES BACK AS (2026-11-15): a stored value is made again by its class
+// (ibStoredValue), an enumeration's member as the enumeration holding it — asked as a member, every list the rule
+// dressed was refused («does not support this operation»).
+TEST(CompositionConditionalAppearance, AStoredAlignmentIsReadBack)
+{
+	ibConditionalAppearanceDescription rules;
+	ibConditionalAppearanceRuleDescription& rule = rules.m_rules.emplace_back();
+	rule.m_appearance.Say(ibAppearanceParameter::HorizontalAlignment, true,
+		ibStoreValue(ibValue::CreateEnumObject<ibValueEnumSpreadsheetHorizontalAlignment>(ibAlignmentHorz_Center)));
+
+	const std::vector<ibCompositionRule> made = ibCompositionRulesOf(rules, nullptr);
+	ASSERT_EQ(1u, made.size());
+	EXPECT_EQ(static_cast<int>(ibAlignment_CenterHorizontal), made[0].m_attr.m_horizontalAlignment);
 }
 
 // ⭐ A FIELD IS READ AGAINST A FIELD OF THE SAME ROW, AND A SUBTREE AS THE CALLER READ IT — a table in memory has no

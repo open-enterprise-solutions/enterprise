@@ -114,4 +114,40 @@ constexpr ibPictureID g_picCommandGroupCreateCLSID = picture_to_clsid("PC_CMDGRP
 constexpr ibPictureID g_picCommandGroupReportsCLSID = picture_to_clsid("PC_CMDGRPREP");
 constexpr ibPictureID g_picCommandGroupServiceCLSID = picture_to_clsid("PC_CMDGRPSRV");
 
+// THE STOCK PICTURES — wx's stock ids (wxART_NEW, wxART_UNDO, …) as the desktop draws them: its menus, its toolbar, its
+// lists and message boxes ask wx (deskgui's ibStockArtProvider answers from here), a server names them by these ids
+// (a document command's, ibDocCommandInfo), a browser draws them by the same. One copy for every client. Those drawn
+// as a picture above are that one — Delete, Edit, Error, Save, MoveUp, MoveDown; a stock id of another meaning has
+// its own, though drawn alike today (ClipboardCopy is not Clone, TickMark is not Select, HelpBook is not HelpForm):
+// a borrowed picture cannot be repainted without repainting the other.
+constexpr ibPictureID g_picNewCLSID = picture_to_clsid("PC_NEW");
+constexpr ibPictureID g_picOpenCLSID = picture_to_clsid("PC_OPEN");
+constexpr ibPictureID g_picSaveAsCLSID = picture_to_clsid("PC_SAVEAS");
+constexpr ibPictureID g_picQuitCLSID = picture_to_clsid("PC_QUIT");
+constexpr ibPictureID g_picUndoCLSID = picture_to_clsid("PC_UNDO");
+constexpr ibPictureID g_picRedoCLSID = picture_to_clsid("PC_REDO");
+constexpr ibPictureID g_picCutCLSID = picture_to_clsid("PC_CUT");
+constexpr ibPictureID g_picClipboardCopyCLSID = picture_to_clsid("PC_CLPCOPY");
+constexpr ibPictureID g_picPasteCLSID = picture_to_clsid("PC_PASTE");
+constexpr ibPictureID g_picFindCLSID = picture_to_clsid("PC_FIND");
+constexpr ibPictureID g_picGoBackCLSID = picture_to_clsid("PC_GOBACK");
+constexpr ibPictureID g_picGoForwardCLSID = picture_to_clsid("PC_GOFWD");
+constexpr ibPictureID g_picGoDirUpCLSID = picture_to_clsid("PC_GODIRUP");
+constexpr ibPictureID g_picPlusCLSID = picture_to_clsid("PC_PLUS");
+constexpr ibPictureID g_picMinusCLSID = picture_to_clsid("PC_MINUS");
+constexpr ibPictureID g_picFileCLSID = picture_to_clsid("PC_FILE");
+constexpr ibPictureID g_picFolderCLSID = picture_to_clsid("PC_FOLDER");
+constexpr ibPictureID g_picListViewCLSID = picture_to_clsid("PC_LISTVIEW");
+constexpr ibPictureID g_picReportViewCLSID = picture_to_clsid("PC_REPORTVIEW");
+constexpr ibPictureID g_picFullScreenCLSID = picture_to_clsid("PC_FULLSCREEN");
+constexpr ibPictureID g_picHelpBookCLSID = picture_to_clsid("PC_HELPBOOK");
+constexpr ibPictureID g_picHelpSettingsCLSID = picture_to_clsid("PC_HELPSET");
+constexpr ibPictureID g_picTickMarkCLSID = picture_to_clsid("PC_TICK");
+constexpr ibPictureID g_picStopCLSID = picture_to_clsid("PC_STOP");
+constexpr ibPictureID g_picMissingImageCLSID = picture_to_clsid("PC_MISSING");
+constexpr ibPictureID g_picWarningCLSID = picture_to_clsid("PC_WARNING");
+constexpr ibPictureID g_picInformationCLSID = picture_to_clsid("PC_INFO");
+constexpr ibPictureID g_picQuestionCLSID = picture_to_clsid("PC_QUESTION");
+constexpr ibPictureID g_picTipCLSID = picture_to_clsid("PC_TIP");
+
 #endif 

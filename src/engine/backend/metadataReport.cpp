@@ -410,16 +410,22 @@ bool ibMetaDataReport::LoadCommonTree(ibValueMetaObjectReport* root, const ibCla
 	// Header (sign + version + guid) leads the tree blob in the same stream — read
 	// and validate it here so the common-tree blob stays self-describing (was the
 	// separate LoadHeader).
+	//
+	// 🛑 BYTES THIS BUILD CANNOT READ ARE REFUSED IN WORDS, as a configuration's are (ibMetaDataConfigurationFile::
+	// LoadCommonTree). A quiet false here was a file opened in the application with no tab and nothing said, and the
+	// designer's File → Open the same — a report saved before the kind-typed ids keeps its tree under an id this build
+	// does not look for (2026-11-15, ExternalReport1.orp of 2026-08-24).
+	const auto unreadable = [this]() {
+		ibBackendCoreException::Error(_("'%s' is stored in a format this build cannot read: it was written by an older or "
+			"a different build. Nothing was loaded."), ibString(ibPathOf(m_fullPath).filename().wstring()));
+	};
 	{
-		ibReaderMemory* headerReader = readerData.open_chunk(eHeaderBlock);
-		if (!headerReader)
-			return false;
-		if (headerReader->r_u64() != sign_dataReport)
-			return false;
+		std::shared_ptr<ibReaderMemory> headerReader(readerData.open_chunk(eHeaderBlock));
+		if (!headerReader || headerReader->r_u64() != sign_dataReport)
+			unreadable();
 		m_version = headerReader->r_u32();
 		ibString metaGuid;
 		headerReader->r_stringZ(metaGuid);
-		headerReader->close();
 	}
 
 	// The tree's data block is keyed by the root's GetClassType() AT SAVE TIME, which may be the
@@ -433,7 +439,7 @@ bool ibMetaDataReport::LoadCommonTree(ibValueMetaObjectReport* root, const ibCla
 		readerMemory.reset(readerData.open_chunk(g_metaReportCLSID));
 
 	if (!readerMemory)
-		return false;
+		unreadable();
 
 	std::uint64_t meta_id = 0;
 	std::shared_ptr<ibReaderMemory> readerMetaMemory(readerMemory->open_chunk_iterator(meta_id));

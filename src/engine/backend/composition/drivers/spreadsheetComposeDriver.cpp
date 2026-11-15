@@ -1434,7 +1434,7 @@ void ibSpreadsheetComposeDriver::WriteCrossTable()
 			// The level's value where the key reaches this deep; where it stops, this slot is the
 			// TOTAL of the level above — and that is the word its own line carries.
 			const ibString text = (depthAt < key.size()) ? HeadingText(key[depthAt], static_cast<int>(m_rowLevels + depthAt))
-				: (slots[runStart].m_subtotal && depthAt == key.size() ? ibString(ibT("Total")) : ibString());
+				: (slots[runStart].m_subtotal && depthAt == key.size() ? ibString(_("Total")) : ibString());
 
 			if (!text.IsEmpty()) {
 				header->SetCellValue(static_cast<int>(depthAt), first, text);
@@ -1504,9 +1504,10 @@ void ibSpreadsheetComposeDriver::WriteCrossTable()
 			static_cast<unsigned>(prefix.size()), /*collapsed*/false, /*head*/head);
 	}
 
-	// The measure names, when there is more than one — otherwise the key above says it all.
+	// The measure names, when there is more than one — otherwise the key above says it all. Over the row total
+	// too, the block after the last key: its word is merged over them and promises them underneath.
 	if (measures > 1) {
-		for (int k = 0; k < keys; ++k)
+		for (int k = 0; k <= keys; ++k)
 			for (int m = 0; m < measures; ++m) {
 				const int col = dimWidth + k * perKey + m;
 				const ibString name = ColumnTitle(m_measureAt[static_cast<size_t>(m)]);
@@ -1520,7 +1521,7 @@ void ibSpreadsheetComposeDriver::WriteCrossTable()
 	// up to — so it stands outside the key blocks and outside their folds.
 	if (measures > 0) {
 		const int first = dimWidth + keys * perKey;
-		header->SetCellValue(0, first, ibT("Total"));
+		header->SetCellValue(0, first, _("Total"));
 		if (measures > 1)
 			mergeAt(0, first, static_cast<int>(m_colLevels), measures);   // the measure names go underneath
 		else if (headerRows > 1) {
@@ -1767,7 +1768,8 @@ void ibSpreadsheetComposeDriver::WriteCrossTable()
 	// them would repeat the corner figure a row lower with nothing new to say.
 	if (!m_columnTotalCells.empty() || m_hasGrandTotal) {
 		std::shared_ptr<ibSpreadsheetObject> totals(std::make_shared<ibSpreadsheetObject>());
-		totals->SetCellValue(0, 0, ibT("Total"));
+		// The root's line, as the streaming layout's (WriteTotalLine) — one word for it in both, the person's.
+		totals->SetCellValue(0, 0, _("Grand total"));
 
 		// The caption stands where the root's heading would — the root's line draws it, as a row's draws its heading.
 		std::fill(cellAttr.begin(), cellAttr.end(), nullptr);

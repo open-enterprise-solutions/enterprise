@@ -288,7 +288,9 @@ private:
 	// The DEFAULT a new row starts from. The designer declares, the base holds (§ 8) — so a
 	// schedule edited here does not reach rows that already exist, which is correct for a default
 	// and is why the card can always be opened to change one row's own.
-	ibPropertySchedule* m_propertySchedule = ibPropertyObject::CreateProperty<ibPropertySchedule>(m_categoryJob, ibT("Schedule"), _("Schedule"), _("The schedule a NEW job row starts with. Each row keeps its own schedule after that, so changing this one does not move rows that already exist."));
+	// Named DefaultSchedule, not Schedule: the row's own requisite below is Schedule, both are written into one node,
+	// and a reader takes the first field of a name — the kind refused to save with its own name twice (2026-11-15).
+	ibPropertySchedule* m_propertySchedule = ibPropertyObject::CreateProperty<ibPropertySchedule>(m_categoryJob, ibT("DefaultSchedule"), _("Schedule"), _("The schedule a NEW job row starts with. Each row keeps its own schedule after that, so changing this one does not move rows that already exist."));
 
 	// Retry on failure — the pair the manager reads. Zero attempts (the default) is the honest
 	// setting for work that is not safe to repeat.

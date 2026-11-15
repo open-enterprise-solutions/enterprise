@@ -28,9 +28,14 @@ const ibString& ibBackendLocalization::GetUserLanguage()
 	return ms_strUserLanguage;
 }
 
-const ibString& ibBackendLocalization::GetDefaultLanguage()
+ibString ibBackendLocalization::GetTranslateGetRawLocText(const ibString& strRawLocale)
 {
-	return ibSession::GetTranslateState()->m_defLanguageCode;
+	return GetTranslateGetRawLocText(GetUserLanguage(), strRawLocale);
+}
+
+ibString ibBackendLocalization::GetTranslateGetRawLocText(const ibString& strLangCode, const ibString& strRawLocale)
+{
+	return ibLocalization::GetTranslateGetRawLocText(strLangCode, strRawLocale);
 }
 
 ////////////////////////////////////////////////////////////////////////

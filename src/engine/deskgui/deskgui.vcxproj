@@ -154,6 +154,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="artProvider.cpp" />
     <ClCompile Include="docview\docManager.cpp" />
     <ClCompile Include="docview\docView.cpp" />
     <ClCompile Include="docview\print\printPreview.cpp" />

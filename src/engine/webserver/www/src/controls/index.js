@@ -12,5 +12,7 @@ import './notebook.js';
 import './slider.js';
 import './gauge.js';
 import './htmlbox.js';
+import './textbox.js';
+import './chartbox.js';
 import '../tablebox/tablebox.js';
 import '../gridbox/gridbox.js';

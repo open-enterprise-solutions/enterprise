@@ -224,9 +224,7 @@ doubled (`en = 'the document''s date';`). A caption sent bare fills only the con
 own language, and a word of another language sent that way is stored as the English caption; the MCP tools
 refuse it while more than one language is declared. What a module builds — a message, a sheet
 title, a month name — goes through `Tstr` with the same form (`Tstr(text)` reads the user's
-language). A text that lacks the language asked for reads in the configuration's own, and only
-without it in the first one written — so the configuration's own language is the one never to
-leave out. Data (a person's name, a predefined item's description) is data, not a caption.
+language). Data (a person's name, a predefined item's description) is data, not a caption.
 
 ---
 

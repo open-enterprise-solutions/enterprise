@@ -238,9 +238,6 @@ namespace ibProtocol {
 		// reading them.
 		inline constexpr const char* Properties = "Properties";
 		inline constexpr const char* Language   = "Language";
-		// …and the configuration's own (its DefaultLanguage): a text with no cell in Language reads in it before the
-		// first one written. Absent from a server that does not send it — the client then reads as it did.
-		inline constexpr const char* DefaultLanguage = "DefaultLanguage";
 		inline constexpr const char* Tab        = "Tab";        // activate, close: the tab's id
 		inline constexpr const char* Command    = "Command";    // command: ibCommand
 		inline constexpr const char* Name       = "Name";       // …SaveAs: the file's name
@@ -254,27 +251,8 @@ namespace ibProtocol {
 			inline constexpr const char* Command      = "Command";        // …that schema's command
 			inline constexpr const char* Shortcut     = "Shortcut";       // its default key — the user's own go over it, client-side
 			inline constexpr const char* Enabled      = "Enabled";
-			inline constexpr const char* StockPicture = "StockPicture";   // ibStockPicture — or Picture, by its id
-			inline constexpr const char* Picture      = "Picture";
-
-			// The picture a menu item or a tool is shown with — one of the client's stock pictures, by number.
-			enum class ibStockPicture : int {
-				None   = 0,
-				New    = 1,
-				Open   = 2,
-				Save   = 3,
-				SaveAs = 4,
-				Close  = 5,
-				Quit   = 6,
-				Undo   = 7,
-				Redo   = 8,
-				Cut    = 9,
-				Copy   = 10,
-				Paste  = 11,
-				Delete = 12,
-				Find   = 13,
-				Print  = 14,
-			};
+			inline constexpr const char* Picture      = "Picture";        // a core picture, by its id — a command's its own
+			                                                              // (core/picturePredefined.h: Undo, Save, Quit…)
 
 		}
 

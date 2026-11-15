@@ -405,8 +405,7 @@ bool ibSheetFormatDocx::Write(std::ostream& output, const ibSpreadsheetDescripti
 			}
 
 			// the text, not the stored form — see the xlsx writer
-			const ibString text = cell != nullptr ? ibLocalization::GetTranslateGetRawLocText(ibBackendLocalization::GetUserLanguage(),
-				ibBackendLocalization::GetDefaultLanguage(), cell->GetValue()) : ibString();
+			const ibString text = cell != nullptr ? ibBackendLocalization::GetTranslateGetRawLocText(cell->GetValue()) : ibString();
 
 			ibString paragraph = ibT("<w:p>");
 			if (!paragraphProperties.IsEmpty())

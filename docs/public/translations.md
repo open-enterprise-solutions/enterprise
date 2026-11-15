@@ -66,3 +66,12 @@ table of languages and no machine default. `ForLanguage` and `SetProcessLanguage
   brings the engine's.
 - wx's `wxGetTranslation`, `wxPLURAL`, `wxGETTEXT_IN_CONTEXT` and `wxTRANSLATE` are not used. Their
   replacements are `ibGetTranslation`, `ibPLURAL`, `ibGETTEXT_IN_CONTEXT` and `ibTRANSLATE`.
+
+## The browser page
+
+- The page says its own words (menus of its own, windows, refusals) from the same catalog. The web server serves
+  the program folder's `lang/` beside the page, at `lang/` and `<publication>/lang/`.
+- `www/src/localization.js` reads `<language>/open_es.mo`, the language as named and then alone, as the engine does.
+  `_(text)` and `_(text, context)` are the engine's `_()` and `ibGETTEXT_IN_CONTEXT`.
+- The language is the browser's before the login, then the login's `Locale`. No catalog for it: English.
+- What the server sends (its menus, forms, messages) comes translated already.

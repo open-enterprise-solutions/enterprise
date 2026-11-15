@@ -3,21 +3,26 @@
 // registered by the module that defines it (defineDocument), as a control is (defineControl). The document draws its
 // view into its element and names it in the calls the view's controls make; the window shows one tab's and hides the
 // others'. What is done to the document — undo, redo, save — goes to the server's, taken as its tab's Commands say;
-// its view goes on paper here.
+// a document of files is saved as a file the server writes and the page takes down; its view goes on paper here.
 
 import { reconcile, dispose } from '../controls/control.js';
+import { _ } from '../localization.js';
+import { downloadFile, saveFile } from '../window/files.js';
 
 /** @typedef {import('../protocol/patch.js').ProtocolNode} ProtocolNode */
 /** @typedef {import('../controls/control.js').FormContext} FormContext */
 /** @typedef {import('../window/window.js').ClientWindow} ClientWindow */
 
-// The kinds of a tab's view drawn here (ibView::ibKind): a form — the kind no Kind is written for — and a spreadsheet
-// document.
+// The kinds of a tab's view drawn here (ibView::ibKind): a form — the kind no Kind is written for — a text document and
+// a spreadsheet document.
 const form = 1;
+const text = 2;
 const spreadsheet = 3;
 
-// The commands a tab's document takes (ibFrame::ibCommand) — its tab's Commands say which, now.
-export const Command = { Undo: 1, Redo: 2, Save: 3 };
+// The commands of the frame (ibFrame::ibCommand): those a tab's document takes — its tab's Commands say which, now —,
+// the edits the element under the focus does (editFocused.js), and the window's own: Exit, Close All.
+export const Command = { Undo: 1, Redo: 2, Save: 3, Exit: 6, Cut: 7, Copy: 8, Paste: 9, Delete: 10, SelectAll: 11,
+	SaveAs: 12, CloseAll: 13 };
 
 /** @type {Map<number, typeof TabDocument>} a tab's Kind → its document */
 const kinds = new Map();
@@ -66,7 +71,7 @@ export class TabDocument {
 			return;
 		this.element = document.createElement('div');
 		this.element.className = 'view-placeholder';
-		this.element.textContent = 'This view is not in the browser yet.';
+		this.element.textContent = _('This view is not in the browser yet.');
 		this.window.views.append(this.element);
 	}
 
@@ -88,6 +93,7 @@ export class TabDocument {
 			fetch: (control, request) => session.call('fetch', { Control: control, Request: request, ...of }),
 			picture: (picture) => pictures.url(picture),
 			fetchPictures: (node) => pictures.fetchFor(node).catch(() => {}),
+			designerMode: () => session.designerMode(),
 		};
 	}
 
@@ -101,8 +107,7 @@ export class TabDocument {
 	 * @param {number} command (Command)
 	 */
 	isCommandEnabled(command) {
-		const tab = this.window.session.frame?.Tabs?.NodeChildren?.find((one) => one.NodeId === this.tab);
-		return tab?.Commands?.includes(command) ?? false;
+		return this.tabNode()?.Commands?.includes(command) ?? false;
 	}
 
 	/**
@@ -111,6 +116,53 @@ export class TabDocument {
 	 */
 	doCommand(command) {
 		return this.window.session.call('command', { Command: command });
+	}
+
+	/**
+	 * Saved as the thin client's tab is (Save): a document of files — its tab names the Formats it is written in —
+	 * saved as a file, its place asked each time (the page keeps no place on the person's disk); another by the
+	 * server's own Save — a form's object written.
+	 * @returns {Promise<unknown>}
+	 */
+	save() {
+		if ((this.tabNode()?.Formats?.NodeChildren?.length ?? 0) === 0)
+			return this.doCommand(Command.Save);
+		return this.saveAs();
+	}
+
+	/**
+	 * Saved as a file (SaveAs): named as its tab is, without its «*», with its first format's extension when it has
+	 * none of theirs; its place chosen in the browser's save dialog — the server writes the document under the name
+	 * chosen (command SaveAs {Name}) and the page takes it down, the tab's File. False — the dialog closed.
+	 * @returns {Promise<boolean>}
+	 */
+	saveAs() {
+		const tab = this.tabNode();
+		// What no file name holds made «_», as the browser's download makes it — «Report: Sales» is a tab's title.
+		const title = String(tab?.Title ?? '').trim().replace(/\*$/, '').trim().replace(/[\\/:*?"<>|]/g, '_');
+		/** @type {ProtocolNode[]} */
+		const formats = tab?.Formats?.NodeChildren ?? [];
+		// «*.txt;*.text» → .txt, .text
+		const extensions = formats.flatMap((format) => String(format.Mask ?? '').split(';'))
+			.map((mask) => mask.trim().replace(/^\*/, '').toLowerCase())
+			.filter((extension) => /^\.[^.*]+$/.test(extension));
+		const named = extensions.length === 0
+			|| extensions.some((extension) => title.toLowerCase().endsWith(extension));
+		const { session } = this.window;
+		return saveFile(async (name) => {
+			await session.call('command', { Command: Command.SaveAs, Name: name });
+			const file = this.tabNode()?.File;
+			if (file === undefined)
+				throw new Error(`${name} was not saved.`);
+			return downloadFile(session, file);
+		}, named ? title : `${title}${extensions[0]}`);
+	}
+
+	/** Its tab, as the frame has it now. @returns {ProtocolNode | undefined} */
+	tabNode() {
+		/** @type {ProtocolNode[]} */
+		const tabs = this.window.session.frame?.Tabs?.NodeChildren ?? [];
+		return tabs.find((one) => one.NodeId === this.tab);
 	}
 
 	/** Its view on paper — the page printed, the print styles leaving the view on show alone (the view's printout). */
@@ -124,9 +176,9 @@ export class TabDocument {
 	}
 }
 
-// A FORM'S TAB, OR A SHEET'S — the view the server composes, drawn control by control, as the thin client draws both with
-// one host (ibFormVisualDocument): a form is named by its Key, a spreadsheet document (a list output, a sheet shown by
-// code) by its tab.
+// A FORM'S TAB, A TEXT'S OR A SHEET'S — the view the server composes, drawn control by control, as the thin client
+// draws them all with one host (ibFormVisualDocument): a form is named by its Key, a text document (its view a text
+// box's node) and a spreadsheet document (a list output, a sheet shown by code — a grid box's) by its tab.
 export class FormVisualDocument extends TabDocument {
 	/** @param {ProtocolNode} view */
 	drawView(view) {
@@ -138,4 +190,5 @@ export class FormVisualDocument extends TabDocument {
 	}
 }
 defineDocument(form, FormVisualDocument);
+defineDocument(text, FormVisualDocument);
 defineDocument(spreadsheet, FormVisualDocument);

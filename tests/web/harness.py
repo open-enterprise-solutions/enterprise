@@ -9,6 +9,7 @@ import functools
 import http.server
 import json
 import os
+import re
 import threading
 import time
 import unittest
@@ -149,6 +150,18 @@ class PageTest(unittest.TestCase):
         self.page.wait_for_timeout(50)
         return self.page.evaluate("""[...document.querySelectorAll('oes-clientform:not([hidden]) .tabulator-tableholder .tabulator-row')]
             .map((row) => [...row.querySelectorAll('.tabulator-cell')].map((cell) => cell.textContent.trim()).filter(Boolean).join('|'))""")
+
+    def menu_entry(self, menu, title):
+        """An item of one menu, by its whole title: File and Window both have a Close, File a Save and a Save As."""
+        dropdown = self.page.locator('.menu wa-dropdown').filter(has=self.page.locator('wa-button', has_text=menu))
+        return dropdown.locator('wa-dropdown-item').filter(has_text=re.compile(f'^\\s*{re.escape(title)}\\s*$'))
+
+    def menu_item(self, menu, title):
+        """The item, its menu opened."""
+        self.page.locator('.menu wa-button', has_text=menu).click()
+        item = self.menu_entry(menu, title)
+        item.wait_for()
+        return item
 
     def row(self, text):
         return self.page.locator('oes-clientform:not([hidden]) .tabulator-row', has_text=text).first

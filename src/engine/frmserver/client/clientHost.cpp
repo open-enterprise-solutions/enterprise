@@ -340,8 +340,8 @@ void DrawMenu(ibClientFrame* frame, const std::vector<ibClientMenu::Item>& items
 				child.SetValue(ibProtocol::ibFrame::ibMenu::Title, found->second.title);
 				if (!found->second.shortcut.IsEmpty())
 					child.SetValue(ibProtocol::ibFrame::ibMenu::Shortcut, found->second.shortcut);
-				if (found->second.picture != ibClientStockPicture::None)
-					child.SetValue(ibProtocol::ibFrame::ibMenu::StockPicture, static_cast<std::int32_t>(found->second.picture));
+				if (found->second.picture != 0)
+					child.SetValue(ibProtocol::ibFrame::ibMenu::Picture, ibBackendPicture::SendPicture(found->second.picture));
 			}
 			enabled = found != manager->GetCommands().end() && frame->IsCommandEnabled(item.command);
 		}
@@ -1978,13 +1978,24 @@ void ibClientHost::Settle(Client& client)
 		if (client.unsettled.wait_for(std::chrono::milliseconds(20)) == std::future_status::ready) {
 			const std::shared_future<void> work = client.unsettled;
 			client.unsettled = std::shared_future<void>();
+			// A FAILURE OF THE WORK IS TOLD TO THE PERSON ONCE, in the frame's messages, which the client receives with
+			// the frame: a script's told itself where it happened (ProcessError); the engine's own refusal under a
+			// command did not — a document posted while another session holds it (2026-11-15: Post pressed, nothing
+			// said) — nor did the core's.
+			const auto tell = [&client](const ibCoreException& err, bool reported) {
+				ibClientFrame* const frame = client.instance->GetFrame();
+				if (!reported && frame != nullptr)
+					frame->Message(err.GetErrorDescription(), ibStatusMessage_Error);
+				ibJournalInfo(ibT("client"), ibT("the client's work ended with an exception: %s"), err.GetErrorDescription());
+			};
 			try {
 				work.get();
 			}
+			catch (const ibBackendException& err) {
+				tell(err, err.IsErrorHandled());
+			}
 			catch (const ibCoreException& err) {
-				// A failure of the work reported itself where it happened — to the frame's messages, which the
-				// client receives with the frame.
-				ibJournalInfo(ibT("client"), ibT("the client's work ended with an exception: %s"), err.GetErrorDescription());
+				tell(err, false);
 			}
 			// …and anything else told nobody — the worker refused the task, and it never ran (no room for a stack,
 			// 2026-10-31): it goes to the caller, or the client is answered a frame as if the work were done.
@@ -2006,7 +2017,6 @@ void ibClientHost::DrawFrame(ibClientFrame* frame, ibDataNode& state, ibDataNode
 	// The language the session reads text in — drawn on its worker, so its own: a caption sent whole (an inspector's
 	// Synonym) is read by the client in it, as the desktop's grid read it in the configuration's.
 	state.SetValue(ibProtocol::ibFrame::Language, ibBackendLocalization::GetUserLanguage());
-	state.SetValue(ibProtocol::ibFrame::DefaultLanguage, ibBackendLocalization::GetDefaultLanguage());
 	// The active tab by its id, as every tab is named on the wire; 0 — none.
 	const ibClientChildFrame* const active = frame->Tab(frame->ActiveTab());
 	state.SetValue(ibProtocol::ibFrame::ActiveTab, active != nullptr ? active->GetId() : 0);

@@ -1,5 +1,8 @@
 // ABOUT (schema 4) — the thin client's window (frmclient/win/dlgs/about.cpp): the platform and its build, what this session
 // runs on, the plugins loaded, whom it thanks. All of it but the thanks is the server's answer. The text can be copied.
+// The build line and the thanks are not translated — the thin client's are not either.
+
+import { _, labelText } from '../localization.js';
 
 /** @typedef {import('../protocol/session.js').Session} Session */
 /** @typedef {import('../protocol/patch.js').ProtocolNode} ProtocolNode */
@@ -20,7 +23,7 @@ const thanks = [
 export async function showAbout(session) {
 	const answer = await session.call('schema', { Schema: schema });
 	const dialog = /** @type {any} */ (document.createElement('wa-dialog'));
-	dialog.label = 'About...';
+	dialog.label = _('About...');
 	dialog.className = 'about';
 
 	const logo = document.createElement('img');
@@ -39,8 +42,9 @@ export async function showAbout(session) {
 
 	const info = document.createElement('dl');
 	// No base, no line for it.
-	for (const [label, value] of [['Database', answer.Database], ['Application', answer.Application], ['User', answer.User], ['Locale', answer.Locale]]) {
-		if (label === 'Database' && !value)
+	for (const [label, value] of [[_('Database'), answer.Database], [_('Application'), answer.Application],
+		[_('User'), answer.User], [_('Locale'), answer.Locale]]) {
+		if (label === _('Database') && !value)
 			continue;
 		const term = document.createElement('dt');
 		term.textContent = `${label}:`;
@@ -48,18 +52,18 @@ export async function showAbout(session) {
 		description.textContent = value ?? '';
 		info.append(term, description);
 	}
-	dialog.append(logo, platform, community, block('Info', info));
+	dialog.append(logo, platform, community, block(_('Info'), info));
 
 	// Only if any are loaded.
 	const plugins = (answer.Plugins?.NodeChildren ?? []).map((/** @type {ProtocolNode} */ plugin) => `${plugin.Name ?? ''}  ${plugin.Version ?? ''}`);
 	if (plugins.length > 0)
-		dialog.append(block('Plugins', lines(plugins)));
-	dialog.append(block('Thanks', lines(thanks)));
+		dialog.append(block(_('Plugins'), lines(plugins)));
+	dialog.append(block(_('Thanks'), lines(thanks)));
 
 	const ok = document.createElement('wa-button');
 	ok.slot = 'footer';
 	ok.setAttribute('size', 's');
-	ok.textContent = 'OK';
+	ok.textContent = labelText('&OK');
 	ok.addEventListener('click', () => { dialog.open = false; });
 	dialog.append(ok);
 	dialog.addEventListener('wa-after-hide', () => dialog.remove());

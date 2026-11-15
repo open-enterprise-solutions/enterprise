@@ -24,7 +24,9 @@ inline script, no inline style. What the page does is in `src/`, how it looks in
 | Folder | Holds |
 |---|---|
 | `src/protocol/` | the socket (OES-RPC packets — `packet.js` reads and writes them — deflated answers), the session — login, one call at a time, the frame and its patches, coming back after a drop — and the pictures |
-| `src/window/` | the window: login, the section panel, the tabs, the messages, the questions, All functions |
+| `src/window/` | the window: login, the section panel, the tabs, the menus, the messages, the questions, All functions |
+| `src/settings/`, `src/properties/` | a list's and a report's settings — filter, sort, grouping, conditional appearance, output parameters, variants — and the property cells they and the form editor are edited in |
+| `src/localization.js` | the page's own words: the engine's catalogue for the person's language |
 | `src/docView/` | a tab's document, as the thin client's: each registered for its tab's Kind by the module that defines it (`defineDocument`, as a control is), made by that Kind (`createDocument`); it draws the tab's view and names it in its controls' calls — a form by its `Key`, a sheet by its tab; it takes the tab's commands — undo, redo, save as its `Commands` say — and puts its view on paper; the start page's is beside the page |
 | `src/controls/` | a form's controls, one file each, each its own element; the sizers; the label column |
 | `src/tablebox/` | the table: the grid fed with the server's pages |
@@ -94,18 +96,23 @@ by a patch is updated in place, so the focus and the caret stay where they were.
 - **Busy and offline are shown**: a call unanswered for 800 ms shows a spinner, a dropped connection a strip.
 - **Escape closes what stands on top**, one thing a press: a cell's editor, a menu, a dialog, then the active tab. The tab
   is closed as its × closes it: the text typed is sent first, and the server asks about what is left to save.
-- **File and Edit are the client's own**, as the thin client's, ahead of the server's menu: Save, Close, Print, Undo,
-  Redo, done on the active tab's document and enabled as its tab's `Commands` say. Ctrl+S, Ctrl+Z and Ctrl+Y are their
-  keys — the text typed is sent first; Undo and Redo pressed in a text field are the field's own.
+- **File, Edit and Window are the client's own**, as the thin client's, around the server's menu: File — New, Open,
+  Close, Save, Save as, Print, Quit; Edit — Undo, Redo, Cut, Copy, Paste, Delete, Select all, Find; Window — Close,
+  Close all, Next, Previous, before Help. Done on the active tab's document and enabled as its tab's `Commands` say.
+  Ctrl+S, Ctrl+Z and Ctrl+Y are their keys — the text typed is sent first; Undo and Redo pressed in a text field are the
+  field's own. Quit is the thin client's Exit: the server closes the tabs, asking, and the session ends.
+- **The page speaks the person's language**: its own words from the engine's catalogue (`lang/`, served beside it), a
+  stock word as the thin client takes it — with its mnemonic, so «OK» is the same word in both; the server's come
+  translated.
+- **Files go both ways**: a file asked for is chosen by the masks offered and put in the session's temporary storage; a
+  file the server hands — Save as among them — is saved where the person says.
 
 ## Where it stops
 
-- The questions drawn are the message box, the choice, the view mode, the menu, the calculator and the calendar, the
-  error and the print; the others are answered as cancelled.
+- Every question the application asks is drawn; the designer's three — a change applied, an object's kind, a
+  predefined selector — are answered as cancelled.
+- The main toolbar and the menu items have no pictures yet.
 - A tree's rows opened stay held: only its top level is paged, and a folder is read whole.
 - A column under a group is not dragged.
 - A printed sheet is answered as printed: the browser does not say whether its print dialog was cancelled.
 - A number goes back from the calculator exact to 15 digits.
-- No files: nothing is uploaded or saved from the page — no Save as.
-- A view that is no form — a text, a spreadsheet opened from a file — is not drawn.
-- The page's own captions are English; the server's texts come translated.

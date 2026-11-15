@@ -2,6 +2,8 @@
 // typeControl.cpp, ibTypeControlFactory::SimpleChoice), dropped under the field pressed. The server asks it from the
 // field's Select (question 12, SimpleChoice) and takes the value chosen; the page only draws it.
 
+import { _, labelText } from '../localization.js';
+
 /**
  * A date's calendar — the day and the time, and OK.
  * @param {string} value the field's date as the wire writes it, "yyyy-mm-dd hh:mm:ss"; "" — the empty date
@@ -21,7 +23,7 @@ export function calendar(value, take) {
 	input.value = /^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d$/.test(value) ? value.replace(' ', 'T') : day;
 	const ok = document.createElement('button');
 	ok.type = 'submit';
-	ok.textContent = 'OK';
+	ok.textContent = labelText('&OK');
 	form.append(input, ok);
 	form.addEventListener('submit', (event) => {
 		event.preventDefault();
@@ -151,7 +153,7 @@ export function calculator(value, take) {
 		take(text(accumulator));
 	};
 	const show = () => {
-		display.value = state === 'error' ? 'Error' : state === 'typing' ? (entry || '0') : text(accumulator);
+		display.value = state === 'error' ? _('Error') : state === 'typing' ? (entry || '0') : text(accumulator);
 		operation.textContent = pending === '' ? '\u00a0' : signs[pending];
 	};
 
@@ -187,7 +189,7 @@ export function calculator(value, take) {
 	key('0', () => digitKey(0));
 	key('.', point);
 	key('=', equals);
-	key('OK', ok).className = 'ok';
+	key(labelText('&OK'), ok).className = 'ok';
 
 	box.addEventListener('keydown', (event) => {
 		const pressed = event.key;

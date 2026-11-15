@@ -241,8 +241,9 @@ ibCompositionAttr AttrOfAppearance(const ibAppearanceDescription& appearance, co
 			if (stored.IsEmpty())
 				break;
 			// The sheet's word for it, as a HORIZONTAL ibAlignment — both drivers speak it: a grid's renderer, and a
-			// sheet whose centre also centres vertically, which a cell takes from its column.
-			const ibSpreadsheetAlignmentHorz horizontal = stored.ConvertToEnumValue<ibSpreadsheetAlignmentHorz>();
+			// sheet whose centre also centres vertically, which a cell takes from its column. What is stored is read back
+			// as the enumeration holding its member (ibStoredValue) — asked as one.
+			const ibSpreadsheetAlignmentHorz horizontal = stored.ConvertToEnumType<ibSpreadsheetAlignmentHorz>();
 			attr.m_horizontalAlignment = horizontal == ibAlignmentHorz_Right ? ibAlignment_Right
 				: horizontal == ibAlignmentHorz_Center ? ibAlignment_CenterHorizontal : ibAlignment_Left;
 			break;

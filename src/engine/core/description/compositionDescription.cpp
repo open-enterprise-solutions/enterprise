@@ -1274,6 +1274,11 @@ static const std::pair<ibClassID, const ibChar*>* ibCompositionNodeTable(size_t&
 		{ g_selectNodeClsid,    ibT("CompositionSelect")     },
 		{ g_fieldInfoNodeClsid, ibT("CompositionFieldInfo")  },
 		{ g_appearanceNodeClsid, ibT("CompositionAppearance") },
+		// …the two the table missed (2026-11-15): a page reads an unnamed type as a NUMBER, and these bodies are past
+		// 2^53 — the clsid came back another, and a list's appearance rules and a report's other settings were lost
+		// on the browser's OK, nothing failing.
+		{ g_outputParameterNodeClsid, ibT("CompositionOutputParameter") },
+		{ g_appearanceRuleNodeClsid,  ibT("CompositionAppearanceRule") },
 	};
 
 	count = sizeof(s_names) / sizeof(s_names[0]);

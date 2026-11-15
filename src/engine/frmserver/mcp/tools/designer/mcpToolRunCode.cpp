@@ -198,11 +198,11 @@ const ibArg& ArgProfile()
 	static const ibArg s_a(ibT("profile"), ibArg::Kind::Flag,
 		ibMcpText("Measure the code while it runs. Once it has finished, code_status answers with `profile` beside "
 			  "`result`: which lines of which modules - the code's own and everything it called - took how long, "
-			  "the slowest first, and the same added up by procedure; each with its own time (`self_ms`), its time "
-			  "with what it called (`total_ms`) and its `percent` of the time script ran. Under a line are the "
-			  "queries it ran (`queries`: `source`, `count`, `total_ms`, `database_ms`, `memory_ms`, `statements`) "
+			  "the slowest first, and the same added up by procedure; each with its own time (`selfMs`), its time "
+			  "with what it called (`totalMs`) and its `percent` of the time script ran. Under a line are the "
+			  "queries it ran (`queries`: `source`, `count`, `totalMs`, `databaseMs`, `memoryMs`, `statements`) "
 			  "and what it sent the database outside a query (`statements`: the `text` as sent, its `plan`, the "
-			  "`dbms`, `count`, `rows`, `run_ms`, `fetch_ms`, and its slowest run - `slowest_ms` and the `values` it "
+			  "`dbms`, `count`, `rows`, `runMs`, `fetchMs`, and its slowest run - `slowestMs` and the `values` it "
 			  "was sent with, as SQL writes them, in the order of its placeholders); a connection the pool opened is "
 			  "a statement `CONNECT`, a wait while every one was busy `WAIT FOR A FREE CONNECTION`; the platform's own "
 			  "work, done for no line, is a line marked `platform`. Use it instead of writing timings into the code. A "
@@ -464,9 +464,9 @@ void DescribeProfile(const ibProfileData& measured, std::size_t limit, ibDataNod
 			node->SetValue(ibT("dbms"), statement.m_dbms);
 			node->AddField(ibT("count"), ibDataValue::UInt(statement.m_count));
 			node->AddField(ibT("rows"), ibDataValue::UInt(statement.m_rows));
-			node->AddField(ibT("run_ms"), milliseconds(statement.m_run));
-			node->AddField(ibT("fetch_ms"), milliseconds(statement.m_fetch));
-			node->AddField(ibT("slowest_ms"), milliseconds(statement.m_slowest));
+			node->AddField(ibT("runMs"), milliseconds(statement.m_run));
+			node->AddField(ibT("fetchMs"), milliseconds(statement.m_fetch));
+			node->AddField(ibT("slowestMs"), milliseconds(statement.m_slowest));
 			if (!statement.m_values.empty()) {
 				std::vector<ibDataValue> values;
 				for (const ibString& value : statement.m_values)
@@ -484,9 +484,9 @@ void DescribeProfile(const ibProfileData& measured, std::size_t limit, ibDataNod
 			std::shared_ptr<ibDataNode> one = std::make_shared<ibDataNode>();
 			one->SetValue(ibT("source"), query.m_source);
 			one->AddField(ibT("count"), ibDataValue::UInt(query.m_count));
-			one->AddField(ibT("total_ms"), milliseconds(query.m_total));
-			one->AddField(ibT("database_ms"), milliseconds(query.m_database));
-			one->AddField(ibT("memory_ms"), milliseconds(std::max<std::int64_t>(query.m_total - query.m_database, 0)));
+			one->AddField(ibT("totalMs"), milliseconds(query.m_total));
+			one->AddField(ibT("databaseMs"), milliseconds(query.m_database));
+			one->AddField(ibT("memoryMs"), milliseconds(std::max<std::int64_t>(query.m_total - query.m_database, 0)));
 			if (!query.m_statements.empty())
 				one->AddField(ibT("statements"), ibDataValue::Array(statementsOf(query.m_statements)));
 			written.push_back(ibDataValue::Child(one));
@@ -511,8 +511,8 @@ void DescribeProfile(const ibProfileData& measured, std::size_t limit, ibDataNod
 				node->AddField(ibT("line"), ibDataValue::UInt(one.m_line));
 				node->AddField(ibT("count"), ibDataValue::UInt(one.m_count));
 			}
-			node->AddField(ibT("self_ms"), milliseconds(one.m_self));
-			node->AddField(ibT("total_ms"), milliseconds(one.m_total));
+			node->AddField(ibT("selfMs"), milliseconds(one.m_self));
+			node->AddField(ibT("totalMs"), milliseconds(one.m_total));
 			node->AddField(ibT("percent"), percent(one.m_self));
 			if (asLines)
 				queriesOf(one.m_queries, *node);
@@ -533,17 +533,17 @@ void DescribeProfile(const ibProfileData& measured, std::size_t limit, ibDataNod
 		std::shared_ptr<ibDataNode> node = std::make_shared<ibDataNode>();
 		node->SetValue(ibT("method"), call.m_method);
 		node->AddField(ibT("count"), ibDataValue::UInt(call.m_count));
-		node->AddField(ibT("total_ms"), milliseconds(call.m_total));
-		node->AddField(ibT("self_ms"), milliseconds(std::max<std::int64_t>(call.m_total - lines, 0)));
-		node->AddField(ibT("request_bytes"), ibDataValue::UInt(call.m_requestBytes));
-		node->AddField(ibT("answer_bytes"), ibDataValue::UInt(call.m_answerBytes));
+		node->AddField(ibT("totalMs"), milliseconds(call.m_total));
+		node->AddField(ibT("selfMs"), milliseconds(std::max<std::int64_t>(call.m_total - lines, 0)));
+		node->AddField(ibT("requestBytes"), ibDataValue::UInt(call.m_requestBytes));
+		node->AddField(ibT("answerBytes"), ibDataValue::UInt(call.m_answerBytes));
 		if (!call.m_rows.empty())
 			node->AddField(ibT("lines"), ibDataValue::Array(said(call.m_rows, true)));
 		calls.push_back(ibDataValue::Child(node));
 	}
 
-	into.AddField(ibT("duration_ms"), milliseconds(measured.m_duration));
-	into.AddField(ibT("measured_ms"), milliseconds(spent));
+	into.AddField(ibT("durationMs"), milliseconds(measured.m_duration));
+	into.AddField(ibT("measuredMs"), milliseconds(spent));
 	if (!calls.empty())
 		into.AddField(ibT("calls"), ibDataValue::Array(calls));
 	into.AddField(ibT("lines"), ibDataValue::Array(said(measured.m_rows, true)));
@@ -1216,17 +1216,17 @@ public:
 	ibString GetDescription() const override
 	{
 		return ibMcpText("End the measurement profile_start - or the person's Debug > Performance measurement - "
-			"began, and answer with what it measured: `duration_ms` from its start to now, `measured_ms` - the "
+			"began, and answer with what it measured: `durationMs` from its start to now, `measuredMs` - the "
 			"time script actually ran - then `calls`, `lines` and `procedures`, the slowest first.\n"
 			"`calls` are the clients' calls by method (`event`, `fetch`, `execute`...): how often (`count`), how "
-			"long (`total_ms`), how much of it their lines did not take (`self_ms` - the request read, the answer "
-			"written, the forms' own work), the bytes both ways (`request_bytes`, `answer_bytes`), and the `lines` "
+			"long (`totalMs`), how much of it their lines did not take (`selfMs` - the request read, the answer "
+			"written, the forms' own work), the bytes both ways (`requestBytes`, `answerBytes`), and the `lines` "
 			"the call ran. `lines` beside them are the lines of no call - a background job's, code_run's.\n"
-			"A line or a procedure has `self_ms` (its own time), `total_ms` (with what it called) and `percent` of "
+			"A line or a procedure has `selfMs` (its own time), `totalMs` (with what it called) and `percent` of "
 			"the measured time; a line also says how often it ran (`count`), the queries it ran (`queries`: "
-			"`source`, `count`, `total_ms`, `database_ms` - spent in the database, `memory_ms` - in memory, and "
+			"`source`, `count`, `totalMs`, `databaseMs` - spent in the database, `memoryMs` - in memory, and "
 			"their `statements`) and what it sent the database outside a query (`statements`: the `text` as sent, "
-			"its `plan`, the `dbms`, `count`, `rows`, `run_ms`, `fetch_ms`, and its slowest run - `slowest_ms` and "
+			"its `plan`, the `dbms`, `count`, `rows`, `runMs`, `fetchMs`, and its slowest run - `slowestMs` and "
 			"the `values` it was sent with, as SQL writes them, in the order of its placeholders: that run can be "
 			"sent again). A connection the pool opened is a statement `CONNECT`, a wait while every connection was "
 			"busy `WAIT FOR A FREE CONNECTION`, under the line or query that asked. The platform's own work, done "

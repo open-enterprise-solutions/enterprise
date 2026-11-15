@@ -388,9 +388,8 @@ short ibValueSystemFunction::Asc(const ibValue& cSource)
 ibString ibValueSystemFunction::TStr(const ibValue& cSource, const ibValue& cLanguage)
 {
 	const ibString& language = cLanguage.GetString();
-	return ibLocalization::GetTranslateGetRawLocText(
-		!language.IsEmpty() ? language : ibBackendLocalization::GetUserLanguage(),
-		ibBackendLocalization::GetDefaultLanguage(), cSource.GetString());
+	return ibBackendLocalization::GetTranslateGetRawLocText(
+		!language.IsEmpty() ? language : ibBackendLocalization::GetUserLanguage(), cSource.GetString());
 }
 
 //--- Date and time:

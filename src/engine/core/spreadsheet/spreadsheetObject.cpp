@@ -186,10 +186,16 @@ ibSpreadsheetDescription ibSpreadsheetObject::GetAreaByName(const ibString& strA
 	return spreadsheetDesc;
 }
 
-void ibSpreadsheetObject::PutArea(const std::shared_ptr<ibSpreadsheetObject>& doc, unsigned int groupLevel)
+void ibSpreadsheetObject::PutArea(const std::shared_ptr<ibSpreadsheetObject>& doc, unsigned int groupLevel,
+	const ibString& strReaderLangCode)
 {
 	const int maxRowBrake = GetNumberRows();
 	const int maxColBrake = GetNumberCols();
+
+	// 🛑 A DOCUMENT THAT NAMES NO LANGUAGE READ IN NONE — every user got the language written first, unless a script
+	// had set LanguageCode (#680). The order now: this document's, else the area's own, else its reader's.
+	const ibString& strLangCode = !m_docLangCode.IsEmpty() ? m_docLangCode
+		: !doc->m_docLangCode.IsEmpty() ? doc->m_docLangCode : strReaderLangCode;
 
 	spreadsheetNotify->PutArea(doc, groupLevel);
 
@@ -204,7 +210,7 @@ void ibSpreadsheetObject::PutArea(const std::shared_ptr<ibSpreadsheetObject>& do
 			// included, which used to arrive as it was written down, every language at once, and was
 			// printed that way. Rendered once here, so the grid, the printout, a script and an export all
 			// read the same text and none of them has to take a stored form apart.
-			cell->m_value = doc->ComputeStringValueFromParameters(cell->m_value, cell->m_fillSetType, m_docLangCode);
+			cell->m_value = doc->ComputeStringValueFromParameters(cell->m_value, cell->m_fillSetType, strLangCode);
 			cell->m_fillSetType = ibSpreadsheetFillType::ibSpreadsheetFillType_StrText;
 
 			const ibString& detailsParameter =
@@ -243,10 +249,15 @@ void ibSpreadsheetObject::PutArea(const std::shared_ptr<ibSpreadsheetObject>& do
 	}
 }
 
-void ibSpreadsheetObject::JoinArea(const std::shared_ptr<ibSpreadsheetObject>& doc, unsigned int groupLevel)
+void ibSpreadsheetObject::JoinArea(const std::shared_ptr<ibSpreadsheetObject>& doc, unsigned int groupLevel,
+	const ibString& strReaderLangCode)
 {
 	const int maxRowBrake = GetNumberRows();
 	const int maxColBrake = GetNumberCols();
+
+	// …in this document's language, else the area's, else its reader's — see PutArea
+	const ibString& strLangCode = !m_docLangCode.IsEmpty() ? m_docLangCode
+		: !doc->m_docLangCode.IsEmpty() ? doc->m_docLangCode : strReaderLangCode;
 
 	spreadsheetNotify->JoinArea(doc, groupLevel);
 
@@ -257,7 +268,7 @@ void ibSpreadsheetObject::JoinArea(const std::shared_ptr<ibSpreadsheetObject>& d
 				m_spreadsheetDesc.GetOrCreateCell(row, maxColBrake + col, doc->GetSpreadsheetDesc().GetCell(row, col));
 
 			// what lands is the text, in this document's language — see PutArea
-			cell->m_value = doc->ComputeStringValueFromParameters(cell->m_value, cell->m_fillSetType, m_docLangCode);
+			cell->m_value = doc->ComputeStringValueFromParameters(cell->m_value, cell->m_fillSetType, strLangCode);
 			cell->m_fillSetType = ibSpreadsheetFillType::ibSpreadsheetFillType_StrText;
 
 			const ibString& detailsParameter =
@@ -543,15 +554,10 @@ ibString ibSpreadsheetObject::ComputeStringValueFromParameters(const ibString& s
 {
 	const ibString& strLangCode = strAskedLangCode.IsEmpty() ? m_docLangCode : strAskedLangCode;
 
-	// ⚠ NO CONFIGURATION'S LANGUAGE HERE. A document knows its own language (LanguageCode) and the one it is
-	// asked in, not its configuration's, so a text it lacks in that language still reads in the first written —
-	// the rule every other reading kept until the configuration's own came between the two (#471).
-	const ibString strDefaultLangCode;
-
 	if (type == ibSpreadsheetFillType::ibSpreadsheetFillType_StrParameter) {
 		ibVariant cVal;//scratch for one call — see the template below
 		if (!strValue.IsEmpty() && GetParameter(strValue, cVal))
-			return ibLocalization::GetTranslateGetRawLocText(strLangCode, strDefaultLangCode, cVal.GetString());
+			return ibLocalization::GetTranslateGetRawLocText(strLangCode, cVal.GetString());
 		return ibString();
 	}
 
@@ -559,7 +565,7 @@ ibString ibSpreadsheetObject::ComputeStringValueFromParameters(const ibString& s
 
 		if (!strValue.IsEmpty()) {
 
-			ibString strTemplateValue = ibLocalization::GetTranslateGetRawLocText(strLangCode, strDefaultLangCode, strValue);
+			ibString strTemplateValue = ibLocalization::GetTranslateGetRawLocText(strLangCode, strValue);
 
 			size_t start_pos = 0, end_pos = 0;
 
@@ -584,7 +590,7 @@ ibString ibSpreadsheetObject::ComputeStringValueFromParameters(const ibString& s
 						// one is cheap; the static was not a win.
 						ibVariant cVal;
 						const ibString replacement = GetParameter(token, cVal)
-							? ibLocalization::GetTranslateGetRawLocText(strLangCode, strDefaultLangCode, cVal.GetString())
+							? ibLocalization::GetTranslateGetRawLocText(strLangCode, cVal.GetString())
 							: ibString();
 						strTemplateValue.replace(start_pos, end_pos - start_pos + 1, replacement);
 
@@ -617,7 +623,7 @@ ibString ibSpreadsheetObject::ComputeStringValueFromParameters(const ibString& s
 		return ibString();
 	}
 
-	return ibLocalization::GetTranslateGetRawLocText(strLangCode, strDefaultLangCode, strValue);
+	return ibLocalization::GetTranslateGetRawLocText(strLangCode, strValue);
 }
 
 #pragma endregion 

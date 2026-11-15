@@ -9,6 +9,9 @@
 
 	// The events (ibEvent::ibKind) and the questions (ibRequest::ibKind) this server knows of.
 	const Event = { Command: 2, Press: 3, Open: 7 };
+	// The frame's own commands (ibFrame::ibCommand), done whatever the active tab takes: Quit and Close All.
+	const exitCommand = 6;
+	const closeAllCommand = 13;
 	const messageRequest = 1;
 	const viewModeRequest = 7;
 	const viewModeCommand = 700;
@@ -48,8 +51,11 @@
 			/** @type {any[]} the forms open, a tab each */
 			this.tabs = (scenario.tabs ?? []).map((tab, place) => ({ id: place + 1, ...tab }));
 			this.active = this.tabs.length > 0 ? 1 : 0;
-			this.request = undefined;
+			// A question the scenario's server asks from the start: its Id, Kind and what the kind reads.
+			this.request = scenario.request;
 			this.nextRequest = 1;
+			/** @type {Map<string, number[]>} the files put in the session's temporary storage, by the id given them */
+			this.uploads = new Map();
 			/** @type {Map<string, any>} the forms drawn, by their Key */
 			this.forms = new Map();
 		}
@@ -91,6 +97,8 @@
 				Menu: scenario.menu ?? {},
 				// The schemas this server offers (ibFrame::Schemas): a scenario names them, when one is asked for by its number.
 				...(scenario.schemaKinds !== undefined ? { Schemas: scenario.schemaKinds } : {}),
+				// The documents File's New and Open make (ibFrame::Templates): a scenario's, each its Title and Extension.
+				...(scenario.templates !== undefined ? { Templates: { NodeChildren: scenario.templates } } : {}),
 				Tabs: { NodeChildren: this.tabs.map((one) => ({ NodeId: one.id, Title: one.title, Locked: one.locked === true,
 					...(one.columns !== undefined ? { Kind: homePageKind } : {}),
 					// The commands its document takes now (ibTab::Commands): a scenario's tab names them.
@@ -213,7 +221,9 @@
 			case 'login':
 				if (this.users.length > 0 && (!params.User || params.Password !== this.password))
 					throw { code: 401, message: 'The name or the password is wrong.' };
-				return { Client: 'test', Protocol: params.Protocol, ...this.answerFrame() };
+				// The language the client's own words are said in (the base's), when the scenario names one.
+				return { Client: 'test', Protocol: params.Protocol, ...(scenario.locale !== undefined ? { Locale: scenario.locale } : {}),
+					...this.answerFrame() };
 			case 'frame':
 			case 'activate':
 				if (params.Tab !== undefined)
@@ -226,6 +236,14 @@
 				}
 				return this.closed(params.Tab);
 			case 'command':
+				// Quit lets the client go; Close All closes every tab that is not locked — the frame's, not a document's.
+				if (params.Command === exitCommand)
+					return { ...this.answerFrame(), Exit: true };
+				if (params.Command === closeAllCommand) {
+					this.tabs = this.tabs.filter((tab) => tab.locked === true);
+					this.active = this.tabs.at(-1)?.id ?? 0;
+					return this.answerFrame();
+				}
 				// On the active tab's document — refused when it does not take the command now, as frmserver refuses it
 				// (ibClientHost::Call, NotNow).
 				if (!(this.tab()?.commands ?? []).includes(params.Command))
@@ -246,6 +264,22 @@
 				// The scenario's pictures, each its id and its PNG's bytes (an array of numbers in the scenario).
 				return { Pictures: { NodeChildren: (scenario.pictures ?? []).filter((one) => params.Pictures?.includes(String(one.id)))
 					.map((one) => ({ Id: String(one.id), Picture: Uint8Array.from(one.png) })) } };
+			case 'open':
+				// A document made of a template (Extension) or a file sent (File): what was asked stands in the calls.
+				return this.answerFrame();
+			case 'upload': {
+				// The first part names the file and is answered its id; each next one names the id (ibProtocol::ibFile).
+				const id = params.File ?? `upload${this.uploads.size + 1}`;
+				this.uploads.set(id, [...(this.uploads.get(id) ?? []), ...(params.Data ?? [])]);
+				return { File: id };
+			}
+			case 'download': {
+				// The scenario's files, by their id: its Name and its bytes (an array of numbers), in one part.
+				const file = scenario.files?.[params.File];
+				if (file === undefined)
+					throw { code: 404, message: 'no such file' };
+				return { Name: file.name, Part: params.Part, Parts: 1, Data: Uint8Array.from(file.bytes) };
+			}
 			case 'logout':
 				return {};
 			default:
