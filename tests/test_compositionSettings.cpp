@@ -463,13 +463,24 @@ TEST(CompositionDescription, EveryPartWrittenHasAName)
 	ibDataNode node;
 	ASSERT_TRUE(ibCompositionDescriptionMemory::WriteNode(node, written));
 
+	// Down every child, every sub-node under a name (a rule lies under ConditionalAppearance) and every node of a list.
 	std::set<ibClassID> parts;
-	const std::function<void(const ibDataNode&)> walk = [&](const ibDataNode& at) {
+	std::function<void(const ibDataNode&)> walk;
+	std::function<void(const ibDataValue&)> walkValue = [&](const ibDataValue& value) {
+		if (value.Kind() == ibDataKind::Child)
+			walk(*value.AsChild());
+		else if (value.Kind() == ibDataKind::Array)
+			for (const ibDataValue& item : value.AsArray())
+				walkValue(item);
+	};
+	walk = [&](const ibDataNode& at) {
 		for (const ibDataNode& child : at.Children()) {
 			if (child.GetClsid() != 0 && clsid_kind(child.GetClsid()) == ibClassKind_None)
 				parts.insert(child.GetClsid());
 			walk(child);
 		}
+		for (const auto& field : at.Fields())
+			walkValue(field.second);
 	};
 	walk(node);
 
