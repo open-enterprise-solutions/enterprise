@@ -397,8 +397,8 @@ TEST(QueryTotals, AFigureMadeOfFiguresIsWorkedOutAtEveryHeading)
 	const ibQueryColumnExprPtr difference = ibQueryColumnExpr::Arith(ibQueryColumnArithOp::Sub,
 		ibQueryColumnExpr::OutputRef(wxT("fig1")), ibQueryColumnExpr::OutputRef(wxT("fig2")));
 	const std::vector<ibDerivedAggregate> derived = {
-		{ toPay,   wxT("ToPay"), difference, {} },    // the selected field's column
-		{ nullptr, wxT("Net"),   difference, {} } };  // a slot of its own, read by name
+		{ toPay,   wxT("ToPay"), difference },    // the selected field's column
+		{ nullptr, wxT("Net"),   difference } };  // a slot of its own, read by name
 
 	std::vector<ibTotalLevel> levels;
 	levels.push_back(ibTotalLevel::One(employee, ibDimensionKind::Elements));

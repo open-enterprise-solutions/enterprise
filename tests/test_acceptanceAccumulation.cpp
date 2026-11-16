@@ -813,7 +813,7 @@ TEST_F(AcceptanceAccumulation, AFigureOverAProjectionIsFoldedByTheServer)
 	const std::shared_ptr<const ibBackendQueryColumn> whCol   = warehouse->GetQueryColumn();
 	const std::shared_ptr<const ibBackendQueryColumn> itemCol = item->GetQueryColumn();
 	const std::shared_ptr<const ibBackendQueryColumn> qtyCol  = reg->GetResourceArrayObject().front()->GetQueryColumn();
-	const ProjectionHandle twice(wxT("Twice"), 1);
+	const auto twice = std::make_shared<const ProjectionHandle>(wxT("Twice"), 1);
 
 	ibDataQueryBuilder q(ibConnectionPool::ThreadHolder());
 	q.From(reg->GetQueryable());
@@ -822,7 +822,7 @@ TEST_F(AcceptanceAccumulation, AFigureOverAProjectionIsFoldedByTheServer)
 	q.TotalBy(whCol, ibDimensionKind::Elements);
 	q.TotalBy(itemCol, ibDimensionKind::Elements);
 	q.Totals().Sum(qtyCol, wxT("Qty"));
-	q.Totals().Sum(&twice, wxT("TwiceQty"));
+	q.Totals().Sum(twice, wxT("TwiceQty"));
 	ibDataQueryResult pushed = ibMakeEmptyQueryResult(nullptr);
 	ASSERT_TRUE(q.TryTotalsPushdown(pushed)) << "a figure over a projection of the source's row is the server's";
 
@@ -830,7 +830,7 @@ TEST_F(AcceptanceAccumulation, AFigureOverAProjectionIsFoldedByTheServer)
 	size_t headings = 0;
 	const std::function<void(const ibSelectorTree::Node&)> check = [&](const ibSelectorTree::Node& node) {
 		const ibNumber qty = node.m_values.at(qtyCol->GetColumnId()).GetNumber();
-		EXPECT_EQ(0, node.m_values.at(twice.GetColumnId()).GetNumber().Compare(qty * ibNumber(2))) << "level " << node.m_level;
+		EXPECT_EQ(0, node.m_values.at(twice->GetColumnId()).GetNumber().Compare(qty * ibNumber(2))) << "level " << node.m_level;
 		++headings;
 		for (const std::unique_ptr<ibSelectorTree::Node>& child : node.m_children)
 			check(*child);
