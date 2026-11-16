@@ -43,8 +43,8 @@ class ibQueryConditionModel : public ibDataViewVirtualListModel
 public:
 	ibQueryConditionModel() = default;
 
-	// The select being edited — BORROWED. The rows are the top-level AND chain of its WHERE.
-	void SetContent(ibQuerySelect* select);
+	// The select being edited, held while it is shown. The rows are the top-level AND chain of its WHERE.
+	void SetContent(const ibQuerySelectPtr& select);
 
 	// The conditions as rows, and the inverse. Public because the dialog's add / edit / delete
 	// verbs work in these terms and then hand the result straight back.
@@ -83,7 +83,7 @@ public:
 	bool SetValueByRow(const ibVariant& variant, unsigned row, unsigned col) override;
 
 private:
-	ibQuerySelect*        m_select = nullptr;   // borrowed
+	ibQuerySelectPtr      m_select;
 	// The rows the author has asked to write by hand. Kept BY INDEX and only for rows whose condition
 	// is simple — a stored "yes" on a row that is arbitrary anyway would say nothing, and the
 	// observation is the answer there.

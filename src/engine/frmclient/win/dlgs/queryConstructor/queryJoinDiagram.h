@@ -48,7 +48,7 @@ public:
 	// Rebuild from the AST. `select` is BORROWED and edited in place; the diagram never owns it and
 	// never keeps a copy, which is what makes "both views show the same thing" true by construction
 	// rather than by a synchronisation step somebody has to remember.
-	void SetContent(ibQuerySelect* select, std::vector<Table> tables);
+	void SetContent(const ibQuerySelectPtr& select, std::vector<Table> tables);
 
 	void SetReadOnly(bool readOnly) { m_readOnly = readOnly; }
 
@@ -83,7 +83,7 @@ private:
 	// and parsed — the diagram states a comparison, the engine decides it is one.
 	void ConnectFields(size_t fromTable, size_t fromField, size_t toTable, size_t toField);
 
-	ibQuerySelect*     m_select = nullptr;   // borrowed
+	ibQuerySelectPtr   m_select;
 	std::vector<Table> m_tables;
 	std::vector<wxRect> m_boxes;             // parallel to m_tables
 	bool               m_readOnly = false;

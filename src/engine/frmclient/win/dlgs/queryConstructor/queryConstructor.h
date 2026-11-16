@@ -234,10 +234,10 @@ private:
 	// The dialog always edits ONE select — the statement selected in the package strip, or the
 	// union branch chosen on the Unions tab. Everything below reads and writes through here, which
 	// is what makes the same window work one level down over a nested table.
-	ibQuerySelect* Current() const;
+	ibQuerySelectPtr Current() const;
 	// The STATEMENT's own select — what owns the union branches, the INTO, the FOR UPDATE. Distinct
 	// from Current(), which is the BRANCH the tabs are showing when one is picked on the strip.
-	ibQuerySelect* StatementSelect() const;
+	ibQuerySelectPtr StatementSelect() const;
 
 	// ---- fill (AST -> tabs) / collect (tabs -> AST) ---------------------
 	// Filling is TOTAL: every tab is rebuilt from the AST, so there is never a pane showing
@@ -438,7 +438,7 @@ private:
 	// moved in, never after.
 	bool TotalsFieldAlreadyThere(int node, const wxString& name, const ibQueryTotalDim* except = nullptr) const;
 	// The levels of a node, whichever node it is — the hidden one's live on the select itself.
-	std::vector<ibQueryTotalDim>* LevelsOfNode(ibQuerySelect* select, int node) const;
+	std::vector<ibQueryTotalDim>* LevelsOfNode(const ibQuerySelectPtr& select, int node) const;
 	void ApplyTotalsPeriods();         // panel -> level
 	// Only a DATE can be read by periods (Max) — a period is a scale on the calendar, and a level
 	// keyed by anything else has none. Asked of the field's own type, which the model already

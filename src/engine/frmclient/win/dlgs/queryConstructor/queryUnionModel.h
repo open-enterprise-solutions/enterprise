@@ -38,14 +38,14 @@ class ibQueryUnionModel : public ibDataViewVirtualListModel
 public:
 	ibQueryUnionModel() = default;
 
-	// The select being edited — BORROWED. Row 0 IS this query (a union's first branch is the query
-	// itself); rows 1..n are m_unions.
-	void SetContent(ibQuerySelect* select);
+	// The select being edited, held while it is shown. Row 0 IS this query (a union's first branch is
+	// the query itself); rows 1..n are m_unions.
+	void SetContent(const ibQuerySelectPtr& select);
 
 	void SetOnChanged(std::function<void()> onChanged) { m_onChanged = std::move(onChanged); }
 
 	// The branch a row stands for: null for row 0 (that is the select itself).
-	ibQuerySelect* BranchAt(unsigned int row) const;
+	ibQuerySelectPtr BranchAt(unsigned int row) const;
 
 	void GetValueByRow(ibVariant& variant, unsigned row, unsigned col) const override;
 	bool SetValueByRow(const ibVariant& variant, unsigned row, unsigned col) override;
@@ -53,7 +53,7 @@ public:
 	bool IsEnabledByRow(unsigned row, unsigned col) const override;
 
 private:
-	ibQuerySelect*        m_select = nullptr;
+	ibQuerySelectPtr      m_select;
 	std::function<void()> m_onChanged;
 };
 
@@ -64,7 +64,7 @@ class ibQueryUnionFieldModel : public ibDataViewVirtualListModel
 public:
 	ibQueryUnionFieldModel() = default;
 
-	void SetContent(ibQuerySelect* select);
+	void SetContent(const ibQuerySelectPtr& select);
 
 	// The output field names — the first branch's, because that is what the union's result IS.
 	const std::vector<wxString>& FieldNames() const { return m_names; }
@@ -86,7 +86,7 @@ public:
 
 	// ⭐ WHICH BRANCH A COLUMN IS, and the branch itself. Column 0 is the alias; column N + 1 is
 	// branch N, where branch 0 is THIS query and the rest are the unions.
-	ibQuerySelect* BranchSelectAt(unsigned int branch) const;
+	ibQuerySelectPtr BranchSelectAt(unsigned int branch) const;
 
 	// The fields that branch could supply — asked of the host, which is the only one that can reach
 	// the metadata. Used to fill the branch cells' drop-downs: a union is LINED UP by hand here.
@@ -108,7 +108,7 @@ private:
 	// The wanted name if no branch is using it, else the same with a number — `Code`, `Code1`, …
 	wxString FreeOutputName(const wxString& wanted) const;
 
-	ibQuerySelect*        m_select = nullptr;
+	ibQuerySelectPtr      m_select;
 	std::vector<wxString> m_names;
 	unsigned int          m_branchCount = 0;
 	BranchFields          m_branchFields;

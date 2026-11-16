@@ -21,7 +21,7 @@ constexpr auto KindOf       = &ibJoinKindOf;
 
 } // namespace
 
-void ibQueryLinkModel::SetContent(ibQuerySelect* select, std::vector<wxString> tableNames)
+void ibQueryLinkModel::SetContent(const ibQuerySelectPtr& select, std::vector<wxString> tableNames)
 {
 	m_select = select;
 	m_tableNames = std::move(tableNames);

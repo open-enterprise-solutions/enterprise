@@ -234,7 +234,7 @@ void ibDialogQueryConstructor::OnOk(wxCommandEvent&)
 	// branch without it could mean.
 	for (ibQueryAstStatement& statement : m_package.m_statements)
 		if (statement.m_select)
-			queryctor::ibQueryPadUnionBranches(*statement.m_select);
+			queryctor::ibQueryPadUnionBranches(statement.m_select);
 
 	// The last word belongs to the engine: render, and hand the text to the parser. What comes back
 	// IS what leaves this dialog, so the caller can never receive text the engine has not read.

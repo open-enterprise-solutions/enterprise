@@ -1010,7 +1010,7 @@ ibDataQueryResult* ibDataDBComposer::SharedReadFor(const Output& output,
 		// construction — so without this line the branch road had no readable form anywhere.
 		ibJournalInfo(ibT("composer.text"), ibT("shared read rendered:\n%s"), text);
 		ibQueryPackage package;
-		std::map<ibString, const ibQuerySelect*> named;
+		std::map<ibString, ibQuerySelectPtr> named;
 		ibQuerySelectPtr ast = ParseComposed(text, package, named);
 		if (ast == nullptr)
 			ibBackendCoreException::Error(_("Composer: the rendered query of the shared read failed to parse"));
@@ -1175,7 +1175,7 @@ ibDataQueryResult ibDataDBComposer::ExecuteFor(const Output& output,
 
 	const ibString text = RenderTextFor(output);
 	ibQueryPackage package;
-	std::map<ibString, const ibQuerySelect*> named;
+	std::map<ibString, ibQuerySelectPtr> named;
 	ibQuerySelectPtr ast = ParseComposed(text, package, named);
 	if (ast == nullptr)
 		ibBackendCoreException::Error(_("Composer: the rendered query of an output failed to parse"));

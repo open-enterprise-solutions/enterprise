@@ -27,23 +27,23 @@
 // ==========================================================================
 
 ibDataQueryBuilder::ibDataQueryBuilder()
-	: 
-	m_holder(ibSession::Current() != nullptr ? ibSession::Current()->Holder() : nullptr),
-	// Pull the RLS policy from the SAME session the holder came from — no new
+	:
+	// Pull the RLS policy from the SAME session the holder comes from — no new
 	// runtime include; the door still sees only the ibAccessPolicy interface.
 	m_policy(ibSession::Current() != nullptr ? ibSession::Current()->GetAccessPolicy() : nullptr)
 {
+	m_spec.m_holder = ibSession::Current() != nullptr ? ibSession::Current()->Holder() : nullptr;
 }
 
 ibDataQueryBuilder::ibDataQueryBuilder(ibDatabaseConnectionHolder* holder)
-	: m_holder(holder)
 {
+	m_spec.m_holder = holder;
 }
 
 ibDataQueryBuilder& ibDataQueryBuilder::From(const std::shared_ptr<const ibBackendQueryable>& queryable, const ibString& alias)
 {
-	m_queryable = queryable;                              // primary source (single-source fast path)
-	m_root      = ibQueryNode::Source(queryable, alias); // the relational tree root
+	m_spec.m_queryable = queryable;                              // primary source (single-source fast path)
+	m_spec.m_root      = ibQueryNode::Source(queryable, alias); // the relational tree root
 	return *this;
 }
 
@@ -55,10 +55,10 @@ ibDataQueryBuilder& ibDataQueryBuilder::With(const ibString& name, const ibDataQ
 		return *this;   // a nameless declaration cannot be read back — nothing to say
 	// DECLARED ONCE. Two declarations of one name is a query the engine refuses, and the caller that
 	// mentions a result twice means one declaration, not two.
-	for (const ibNamedQuery& declared : m_with)
+	for (const ibNamedQuery& declared : m_spec.m_with)
 		if (declared.m_name.IsSameAs(name, false))
 			return *this;
-	m_with.push_back({ name, std::make_shared<ibDataQueryBuilder>(inner) });
+	m_spec.m_with.push_back({ name, std::make_shared<ibDataQueryBuilder>(inner) });
 	return *this;
 }
 
@@ -75,7 +75,7 @@ ibDataQueryBuilder& ibDataQueryBuilder::JoinNode(const std::shared_ptr<const ibB
 {
 	auto node = std::make_shared<ibQueryNode>();   // left-deep accumulation: (prior tree) joined with the new source
 	node->m_kind     = ibQueryNode::Kind::Join;
-	node->m_left     = m_root;
+	node->m_left     = m_spec.m_root;
 	node->m_right    = ibQueryNode::Source(queryable, alias);
 	node->m_joinKind = kind;
 	node->m_on       = on;
@@ -120,7 +120,7 @@ ibDataQueryBuilder& ibDataQueryBuilder::JoinNode(const std::shared_ptr<const ibB
 	for (auto& part : node->m_on.m_alsoOn)
 		putSidesRight(part.m_colL, part.m_colR, part.m_op);
 
-	m_root = node;
+	m_spec.m_root = node;
 	return *this;
 }
 
@@ -160,17 +160,17 @@ ibDataQueryBuilder& ibDataQueryBuilder::Union(const std::shared_ptr<const ibBack
 	// Stack vertically: extend an existing Union, else wrap the prior root + the new part.
 	// m_partAll rides parallel to m_parts (parts[0] = true — no operator precedes the first branch).
 	auto rhs = ibQueryNode::Source(queryable, alias);
-	if (m_root && m_root->m_kind == ibQueryNode::Kind::Union) {
-		m_root->m_parts.push_back(rhs);
-		m_root->m_partAll.push_back(keepDuplicates);
+	if (m_spec.m_root && m_spec.m_root->m_kind == ibQueryNode::Kind::Union) {
+		m_spec.m_root->m_parts.push_back(rhs);
+		m_spec.m_root->m_partAll.push_back(keepDuplicates);
 	}
 	else {
 		auto node = std::make_shared<ibQueryNode>();
 		node->m_kind = ibQueryNode::Kind::Union;
-		if (m_root) { node->m_parts.push_back(m_root); node->m_partAll.push_back(true); }
+		if (m_spec.m_root) { node->m_parts.push_back(m_spec.m_root); node->m_partAll.push_back(true); }
 		node->m_parts.push_back(rhs);
 		node->m_partAll.push_back(keepDuplicates);
-		m_root = node;
+		m_spec.m_root = node;
 	}
 	return *this;
 }
@@ -200,10 +200,10 @@ static void CollectQueryableSources(const std::shared_ptr<ibQueryNode>& node,
 bool ibDataQueryBuilder::GetSources(std::vector<std::shared_ptr<const ibBackendQueryable>>& sources) const
 {
 	sources.clear();
-	if (m_root)
-		CollectQueryableSources(m_root, sources);
-	else if (m_queryable != nullptr)
-		sources.push_back(m_queryable);   // single-source builder set via ctor, no tree yet
+	if (m_spec.m_root)
+		CollectQueryableSources(m_spec.m_root, sources);
+	else if (m_spec.m_queryable != nullptr)
+		sources.push_back(m_spec.m_queryable);   // single-source builder set via ctor, no tree yet
 	return !sources.empty();
 }
 
@@ -211,8 +211,8 @@ ibQueryPredicatePtr ibDataQueryBuilder::GetWherePredicate() const
 {
 	// The .Where(tree) predicate, then every .Where(col,op,val) condition AND-folded onto it — one tree
 	// (null = no WHERE at all). Mirrors how the SQL builder AND-combines m_predicate with m_conditions.
-	ibQueryPredicatePtr result = m_predicate;
-	for (const ibQueryCondition& c : m_conditions) {
+	ibQueryPredicatePtr result = m_spec.m_predicate;
+	for (const ibQueryCondition& c : m_spec.m_conditions) {
 		ibQueryPredicatePtr leaf = ibQueryPredicate::Leaf(c);
 		result = result ? ibQueryPredicate::Compose(ibQueryPredicateKind::And, result, leaf) : leaf;
 	}
@@ -223,13 +223,13 @@ ibQueryPredicatePtr ibDataQueryBuilder::GetWherePredicate() const
 ibDataQueryBuilder& ibDataQueryBuilder::Where(const std::shared_ptr<const ibBackendQueryColumn>& col,
                                               ibQueryFilterOp comparison, const ibValue& value)
 {
-	m_conditions.push_back(ibQueryCondition{ col, comparison, value });
+	m_spec.m_conditions.push_back(ibQueryCondition{ col, comparison, value });
 	return *this;
 }
 
 ibDataQueryBuilder& ibDataQueryBuilder::Where(const std::shared_ptr<const ibBackendQueryColumn>& col, const ibValue& value)
 {
-	m_conditions.push_back(ibQueryCondition{ col, ibQueryFilterOp::Equal, value });
+	m_spec.m_conditions.push_back(ibQueryCondition{ col, ibQueryFilterOp::Equal, value });
 	return *this;
 }
 
@@ -246,7 +246,7 @@ ibDataQueryBuilder& ibDataQueryBuilder::WhereLike(const std::shared_ptr<const ib
 
 ibDataQueryBuilder& ibDataQueryBuilder::Where(const ibQueryCondition& condition)
 {
-	m_conditions.push_back(condition);
+	m_spec.m_conditions.push_back(condition);
 	return *this;
 }
 
@@ -258,7 +258,7 @@ ibDataQueryBuilder& ibDataQueryBuilder::WhereIn(const std::shared_ptr<const ibBa
 	c.m_values.reserve(values.size());
 	for (const ibValue& v : values)
 		if (!v.IsNull()) c.m_values.push_back(v);   // a NULL key joins nothing; IN (…, NULL) misbehaves
-	m_conditions.push_back(std::move(c));
+	m_spec.m_conditions.push_back(std::move(c));
 	return *this;
 }
 
@@ -271,7 +271,7 @@ ibDataQueryBuilder& ibDataQueryBuilder::WhereExpr(const ibQueryColumnExprPtr& ex
 	c.m_op         = comparison;
 	c.m_value      = value;
 	c.m_expr       = expr;
-	m_conditions.push_back(std::move(c));
+	m_spec.m_conditions.push_back(std::move(c));
 	return *this;
 }
 
@@ -287,8 +287,8 @@ ibDataQueryBuilder& ibDataQueryBuilder::Where(const ibQueryPredicatePtr& predica
 	// adds a conjunct); the provider AND-folds it with the flat verb conditions / row-key filters.
 	if (!predicate)
 		return *this;
-	m_predicate = m_predicate
-		? ibQueryPredicate::Compose(ibQueryPredicateKind::And, m_predicate, predicate)
+	m_spec.m_predicate = m_spec.m_predicate
+		? ibQueryPredicate::Compose(ibQueryPredicateKind::And, m_spec.m_predicate, predicate)
 		: predicate;
 	return *this;
 }
@@ -303,7 +303,7 @@ ibDataQueryBuilder& ibDataQueryBuilder::Where(const std::vector<std::shared_ptr<
 	c.m_op         = comparison;
 	c.m_value      = value;
 	c.m_path       = path;
-	m_conditions.push_back(std::move(c));
+	m_spec.m_conditions.push_back(std::move(c));
 	return *this;
 }
 
@@ -329,22 +329,22 @@ ibDataQueryBuilder& ibDataQueryBuilder::WhereCompare(const std::vector<std::shar
 // since a sort may name only what it groups by — it decides nothing, the target's field being one per reference.
 ibDataQueryBuilder& ibDataQueryBuilder::OrderBy(const std::shared_ptr<const ibBackendQueryColumn>& col, bool ascending)
 {
-	const bool oneSource = m_root == nullptr || m_root->m_kind == ibQueryNode::Kind::Source;
+	const bool oneSource = m_spec.m_root == nullptr || m_spec.m_root->m_kind == ibQueryNode::Kind::Source;
 	if (col != nullptr && oneSource) {
-		const std::shared_ptr<const ibBackendQueryColumn> by = m_queryable != nullptr
-			? m_queryable->GetProvider().ResolveReferenceSortColumn(m_queryable, col) : nullptr;
-		const bool grouped = !m_groupBy.empty() || !m_aggregates.empty();
+		const std::shared_ptr<const ibBackendQueryColumn> by = m_spec.m_queryable != nullptr
+			? m_spec.m_queryable->GetProvider().ResolveReferenceSortColumn(m_spec.m_queryable, col) : nullptr;
+		const bool grouped = !m_spec.m_groupBy.empty() || !m_spec.m_aggregates.empty();
 		bool aKey = false;
-		for (size_t i = 0; i < m_groupBy.size() && !aKey; ++i)
-			aKey = m_groupBy[i] == col && m_groupPaths[i].empty() && !m_groupExprs[i];
+		for (size_t i = 0; i < m_spec.m_groupBy.size() && !aKey; ++i)
+			aKey = m_spec.m_groupBy[i] == col && m_spec.m_groupPaths[i].empty() && !m_spec.m_groupExprs[i];
 		if (by != nullptr && by != col && (!grouped || aKey)) {
 			// THE SOURCE'S OWN REFERENCE is sorted by its own fields, where they lie — a document by its moment,
 			// the date and the reference in its own row. Walked like a foreign one, it joined the table to itself.
-			const std::vector<std::shared_ptr<const ibBackendQueryColumn>> keys = m_queryable->GetPrimaryKeyColumns();
+			const std::vector<std::shared_ptr<const ibBackendQueryColumn>> keys = m_spec.m_queryable->GetPrimaryKeyColumns();
 			if (keys.size() == 1 && keys.front() == col) {
 				if (grouped)
 					GroupBy(by);
-				m_sorts.push_back(ibQuerySortItem{ by, ascending });
+				m_spec.m_sorts.push_back(ibQuerySortItem{ by, ascending });
 			}
 			else {
 				const std::vector<std::shared_ptr<const ibBackendQueryColumn>> walk{ col, by };
@@ -354,7 +354,7 @@ ibDataQueryBuilder& ibDataQueryBuilder::OrderBy(const std::shared_ptr<const ibBa
 			}
 		}
 	}
-	m_sorts.push_back(ibQuerySortItem{ col, ascending });
+	m_spec.m_sorts.push_back(ibQuerySortItem{ col, ascending });
 	return *this;
 }
 
@@ -363,9 +363,9 @@ ibDataQueryBuilder& ibDataQueryBuilder::OrderBy(const std::vector<std::shared_pt
 	if (path.empty())
 		return *this;
 	// …a walk that ENDS at a reference (`Doc.Counterparty`) sorts the same way, one step further on.
-	const bool oneSource = m_root == nullptr || m_root->m_kind == ibQueryNode::Kind::Source;
-	if (oneSource && m_groupBy.empty() && m_aggregates.empty() && m_queryable != nullptr)
-		if (std::shared_ptr<const ibBackendQueryColumn> by = m_queryable->GetProvider().ResolveReferenceSortColumn(m_queryable, path.back())) {
+	const bool oneSource = m_spec.m_root == nullptr || m_spec.m_root->m_kind == ibQueryNode::Kind::Source;
+	if (oneSource && m_spec.m_groupBy.empty() && m_spec.m_aggregates.empty() && m_spec.m_queryable != nullptr)
+		if (std::shared_ptr<const ibBackendQueryColumn> by = m_spec.m_queryable->GetProvider().ResolveReferenceSortColumn(m_spec.m_queryable, path.back())) {
 			std::vector<std::shared_ptr<const ibBackendQueryColumn>> further(path);
 			further.push_back(std::move(by));
 			OrderBy(further, ascending);
@@ -381,11 +381,11 @@ ibDataQueryBuilder& ibDataQueryBuilder::OrderBy(const std::vector<std::shared_pt
 	// key fixes, grouped by, splits the groups: `SUM(…)` sorted by `Doc.Date` would come back a row per document.
 	if (path.size() > 1) {
 		bool aKey = false, onFromAKey = false;
-		for (size_t i = 0; i < m_groupBy.size(); ++i) {
-			if (m_groupExprs[i])
+		for (size_t i = 0; i < m_spec.m_groupBy.size(); ++i) {
+			if (m_spec.m_groupExprs[i])
 				continue;
-			const std::vector<std::shared_ptr<const ibBackendQueryColumn>> key = m_groupPaths[i].empty()
-				? std::vector<std::shared_ptr<const ibBackendQueryColumn>>{ m_groupBy[i] } : m_groupPaths[i];
+			const std::vector<std::shared_ptr<const ibBackendQueryColumn>> key = m_spec.m_groupPaths[i].empty()
+				? std::vector<std::shared_ptr<const ibBackendQueryColumn>>{ m_spec.m_groupBy[i] } : m_spec.m_groupPaths[i];
 			bool walksOn = key.size() < path.size();
 			for (size_t k = 0; k < key.size() && walksOn; ++k)
 				walksOn = key[k] == path[k];
@@ -399,7 +399,7 @@ ibDataQueryBuilder& ibDataQueryBuilder::OrderBy(const std::vector<std::shared_pt
 	s.m_col       = path.back();
 	s.m_ascending = ascending;
 	s.m_path      = path;
-	m_sorts.push_back(std::move(s));
+	m_spec.m_sorts.push_back(std::move(s));
 	return *this;
 }
 
@@ -410,7 +410,7 @@ ibDataQueryBuilder& ibDataQueryBuilder::OrderByExpr(const ibQueryColumnExprPtr& 
 	ibQuerySortItem s;
 	s.m_ascending = ascending;
 	s.m_expr      = expr;   // computed sort — the provider lowers it (BuildColumnExpr) and orders on the expression
-	m_sorts.push_back(std::move(s));
+	m_spec.m_sorts.push_back(std::move(s));
 	return *this;
 }
 
@@ -421,7 +421,7 @@ ibDataQueryBuilder& ibDataQueryBuilder::OrderByOutput(const ibString& alias, boo
 	ibQuerySortItem s;
 	s.m_ascending   = ascending;
 	s.m_outputAlias = alias;   // sorted AFTER the fold, by the name the projection published
-	m_sorts.push_back(std::move(s));
+	m_spec.m_sorts.push_back(std::move(s));
 	return *this;
 }
 
@@ -433,14 +433,14 @@ ibDataQueryBuilder& ibDataQueryBuilder::OrderByOutput(const ibString& alias, boo
 // column collision in the row it hands back.
 ibDataQueryBuilder& ibDataQueryBuilder::GroupBy(const std::shared_ptr<const ibBackendQueryColumn>& col)
 {
-	for (size_t i = 0; i < m_groupBy.size(); ++i)
-		if (m_groupBy[i] == col && m_groupPaths[i].empty() && !m_groupExprs[i])
+	for (size_t i = 0; i < m_spec.m_groupBy.size(); ++i)
+		if (m_spec.m_groupBy[i] == col && m_spec.m_groupPaths[i].empty() && !m_spec.m_groupExprs[i])
 			return *this;
 	if (col) {   // plain key — empty parallel path / no expression
-		m_groupBy.push_back(col);
-		m_groupPaths.emplace_back();
-		m_groupExprs.emplace_back();
-		m_groupAliases.emplace_back();
+		m_spec.m_groupBy.push_back(col);
+		m_spec.m_groupPaths.emplace_back();
+		m_spec.m_groupExprs.emplace_back();
+		m_spec.m_groupAliases.emplace_back();
 	}
 	return *this;
 }
@@ -449,10 +449,10 @@ ibDataQueryBuilder& ibDataQueryBuilder::GroupBy(const std::vector<std::shared_pt
 {
 	if (path.empty()) return *this;
 	if (path.size() == 1) return GroupBy(path.front());                  // not a dot-walk — plain key
-	m_groupBy.push_back(path.back());                                    // leaf is the grouped column
-	m_groupPaths.push_back(path);                                        // its reference path (provider joins it)
-	m_groupExprs.emplace_back();
-	m_groupAliases.emplace_back();
+	m_spec.m_groupBy.push_back(path.back());                                    // leaf is the grouped column
+	m_spec.m_groupPaths.push_back(path);                                        // its reference path (provider joins it)
+	m_spec.m_groupExprs.emplace_back();
+	m_spec.m_groupAliases.emplace_back();
 	return *this;
 }
 
@@ -460,13 +460,13 @@ ibDataQueryBuilder& ibDataQueryBuilder::GroupBy(const std::vector<std::shared_pt
 {
 	if (path.size() < 2 || alias.IsEmpty())
 		return GroupBy(path);
-	for (size_t i = 0; i < m_groupBy.size(); ++i)
-		if (m_groupPaths[i] == path && m_groupAliases[i] == alias)
+	for (size_t i = 0; i < m_spec.m_groupBy.size(); ++i)
+		if (m_spec.m_groupPaths[i] == path && m_spec.m_groupAliases[i] == alias)
 			return *this;   // grouping by a key twice is grouping by it once — see GroupBy(col)
-	m_groupBy.push_back(path.back());
-	m_groupPaths.push_back(path);
-	m_groupExprs.emplace_back();
-	m_groupAliases.push_back(alias);
+	m_spec.m_groupBy.push_back(path.back());
+	m_spec.m_groupPaths.push_back(path);
+	m_spec.m_groupExprs.emplace_back();
+	m_spec.m_groupAliases.push_back(alias);
 	return *this;
 }
 
@@ -474,10 +474,10 @@ ibDataQueryBuilder& ibDataQueryBuilder::GroupByExpr(const ibQueryColumnExprPtr& 
 {
 	if (!expr || alias.IsEmpty())
 		return *this;   // an unnamed computed key could not be read back — refuse it rather than group blind
-	m_groupBy.push_back(nullptr);        // no column: the slot is the expression's
-	m_groupPaths.emplace_back();
-	m_groupExprs.push_back(expr);
-	m_groupAliases.push_back(alias);
+	m_spec.m_groupBy.push_back(nullptr);        // no column: the slot is the expression's
+	m_spec.m_groupPaths.emplace_back();
+	m_spec.m_groupExprs.push_back(expr);
+	m_spec.m_groupAliases.push_back(alias);
 	return *this;
 }
 
@@ -487,7 +487,7 @@ ibDataQueryBuilder& ibDataQueryBuilder::Aggregate(AggregateFn fn,
 	// Route to the current context: Totals() → the TotalBy common set, else the GroupBy set.
 	AggregateItem item{ fn, col, alias, {} };
 	item.m_distinct = distinct;
-	(m_aggInTotals ? m_totalAggregates : m_aggregates).push_back(std::move(item));
+	(m_aggInTotals ? m_spec.m_totalAggregates : m_spec.m_aggregates).push_back(std::move(item));
 	return *this;
 }
 
@@ -498,7 +498,7 @@ ibDataQueryBuilder& ibDataQueryBuilder::Aggregate(AggregateFn fn,
 ibDataQueryBuilder& ibDataQueryBuilder::AggregateOver(const ibString& alias,
 	std::shared_ptr<ibTotalBranch> branch, int depth)
 {
-	std::vector<AggregateItem>& into = m_aggInTotals ? m_totalAggregates : m_aggregates;
+	std::vector<AggregateItem>& into = m_aggInTotals ? m_spec.m_totalAggregates : m_spec.m_aggregates;
 	for (auto it = into.rbegin(); it != into.rend(); ++it)
 		if (it->m_alias.IsSameAs(alias, false)) {
 			it->m_scopeBranch = std::move(branch);
@@ -511,7 +511,7 @@ ibDataQueryBuilder& ibDataQueryBuilder::AggregateOver(const ibString& alias,
 ibDataQueryBuilder& ibDataQueryBuilder::AggregateAsBalance(const ibString& alias, ibBalanceRole edge,
 	std::vector<std::shared_ptr<const ibBackendQueryColumn>> moments, std::vector<std::shared_ptr<const ibBackendQueryColumn>> keys)
 {
-	std::vector<AggregateItem>& into = m_aggInTotals ? m_totalAggregates : m_aggregates;
+	std::vector<AggregateItem>& into = m_aggInTotals ? m_spec.m_totalAggregates : m_spec.m_aggregates;
 	for (auto it = into.rbegin(); it != into.rend(); ++it)
 		if (it->m_alias.IsSameAs(alias, false)) {
 			it->m_balance        = edge;
@@ -525,7 +525,7 @@ ibDataQueryBuilder& ibDataQueryBuilder::AggregateAsBalance(const ibString& alias
 ibDataQueryBuilder& ibDataQueryBuilder::AggregateReceiver(const ibString& alias,
 	const std::shared_ptr<const ibBackendQueryColumn>& receiver)
 {
-	std::vector<AggregateItem>& into = m_aggInTotals ? m_totalAggregates : m_aggregates;
+	std::vector<AggregateItem>& into = m_aggInTotals ? m_spec.m_totalAggregates : m_spec.m_aggregates;
 	for (auto it = into.rbegin(); it != into.rend(); ++it)
 		if (it->m_alias.IsSameAs(alias, false)) {
 			it->m_col      = receiver;
@@ -546,12 +546,12 @@ ibDataQueryBuilder& ibDataQueryBuilder::AggregateDerived(const std::shared_ptr<c
 // See the declaration: asked of THIS door's connection, never of the active database.
 bool ibDataQueryBuilder::CanPushWindow() const
 {
-	if (m_holder == nullptr)
+	if (m_spec.m_holder == nullptr)
 		return false;
 	// ⚠ ASKED OF THE LAYER ITSELF, not through L2-1's helper: this door deliberately does not include
 	// the SQL tier (see the file's includes). The fact wanted here is a property of the ENGINE, which
 	// the layer publishes, and the helper below is only the same read spelled once for the renderer.
-	const std::shared_ptr<ibDatabaseLayer> layer = m_holder->EnsureConnection();
+	const std::shared_ptr<ibDatabaseLayer> layer = m_spec.m_holder->EnsureConnection();
 	return layer != nullptr && layer->GetDialect().m_features.m_window;
 }
 
@@ -562,7 +562,7 @@ ibDataQueryBuilder& ibDataQueryBuilder::Aggregate(AggregateFn fn,
 	if (path.size() == 1) return Aggregate(fn, path.front(), alias, distinct);   // not a dot-walk — plain input
 	AggregateItem item{ fn, path.back(), alias, path };
 	item.m_distinct = distinct;
-	(m_aggInTotals ? m_totalAggregates : m_aggregates).push_back(std::move(item));
+	(m_aggInTotals ? m_spec.m_totalAggregates : m_spec.m_aggregates).push_back(std::move(item));
 	return *this;
 }
 
@@ -574,7 +574,7 @@ ibDataQueryBuilder& ibDataQueryBuilder::Aggregate(AggregateFn fn,
 	AggregateItem item{ fn, nullptr, alias, {} };
 	item.m_expr = expr;
 	item.m_distinct = distinct;
-	(m_aggInTotals ? m_totalAggregates : m_aggregates).push_back(std::move(item));
+	(m_aggInTotals ? m_spec.m_totalAggregates : m_spec.m_aggregates).push_back(std::move(item));
 	return *this;
 }
 
@@ -584,7 +584,7 @@ ibDataQueryBuilder& ibDataQueryBuilder::TotalByLevel(ibTotalLevel level)
 	// downstream, where a null column reads as "group everything into one" — the opposite answer.
 	std::erase_if(level.m_fields,
 		[](const ibTotalField& f) { return f.m_col == nullptr; });
-	if (!level.m_fields.empty()) m_totals.push_back(std::move(level));
+	if (!level.m_fields.empty()) m_spec.m_totals.push_back(std::move(level));
 	return *this;
 }
 
@@ -612,7 +612,7 @@ ibDataQueryBuilder& ibDataQueryBuilder::TotalsDetails(ibTotalsAxis axis, std::sh
 	ibTotalLevel level;
 	level.m_axis   = axis;
 	level.m_branch = std::move(branch);   // null = the common ladder, which is every report without SPLIT
-	m_totals.push_back(std::move(level));
+	m_spec.m_totals.push_back(std::move(level));
 	return *this;
 }
 
@@ -636,7 +636,7 @@ ibTotalField ibDataQueryBuilder::DeclareDimDotWalk(const std::vector<std::shared
 	const std::shared_ptr<const ibBackendQueryColumn>& dimCol, const ibString& alias, ibDimensionKind dim)
 {
 	if (path.size() < 2 || dimCol == nullptr) return ibTotalField{ nullptr, dim };
-	m_dimWalks.push_back(ibDotWalkColumn{ path, alias });    // provider projects the leaf under `alias`
+	m_spec.m_dimWalks.push_back(ibDotWalkColumn{ path, alias });    // provider projects the leaf under `alias`
 	// A NON-SCALAR leaf is projected as a SPREAD under that alias and reassembles on the read — the
 	// result has to be told, because only this call knows both halves (see StampResult).
 	if (!path.back()->IsRawColumn())
@@ -657,7 +657,7 @@ ibDataQueryBuilder& ibDataQueryBuilder::TotalByDotWalk(const std::vector<std::sh
 ibDataQueryBuilder& ibDataQueryBuilder::Having(AggregateFn fn,
 	const std::shared_ptr<const ibBackendQueryColumn>& col, ibQueryFilterOp op, const ibValue& value)
 {
-	m_having.push_back(HavingItem{ fn, col, op, value });
+	m_spec.m_having.push_back(HavingItem{ fn, col, op, value });
 	return *this;
 }
 
@@ -665,28 +665,28 @@ ibDataQueryBuilder& ibDataQueryBuilder::SelectPath(
 	const std::vector<std::shared_ptr<const ibBackendQueryColumn>>& path, const ibString& alias)
 {
 	if (!path.empty())
-		m_dotWalks.push_back(ibDotWalkColumn{ path, alias });
+		m_spec.m_dotWalks.push_back(ibDotWalkColumn{ path, alias });
 	return *this;
 }
 
 ibDataQueryBuilder& ibDataQueryBuilder::Select(const std::shared_ptr<const ibBackendQueryColumn>& col, const ibString& alias)
 {
 	if (col != nullptr)
-		m_selectCols.emplace_back(col, alias);
+		m_spec.m_selectCols.emplace_back(col, alias);
 	return *this;
 }
 
 ibDataQueryBuilder& ibDataQueryBuilder::SelectExpr(const ibQueryColumnExprPtr& expr, const ibString& alias)
 {
 	if (expr != nullptr)
-		m_selectExprs.push_back(ibQueryColumnSelect{ expr, alias });
+		m_spec.m_selectExprs.push_back(ibQueryColumnSelect{ expr, alias });
 	return *this;
 }
 
 ibDataQueryBuilder& ibDataQueryBuilder::WhereKey(const ibGuid& rowGuid)
 {
 	// Row-key equality — m_col == nullptr means the row-key column in the IR builder.
-	m_conditions.push_back(ibQueryCondition{
+	m_spec.m_conditions.push_back(ibQueryCondition{
 		nullptr, ibQueryFilterOp::Equal, ibValue(ibString(rowGuid)) });
 	return *this;
 }
@@ -694,27 +694,27 @@ ibDataQueryBuilder& ibDataQueryBuilder::WhereKey(const ibGuid& rowGuid)
 ibDataQueryBuilder& ibDataQueryBuilder::WhereKeyIn(const std::vector<ibGuid>& rowGuids)
 {
 	for (const ibGuid& g : rowGuids)
-		m_keyIn.push_back(ibValue(ibString(g)));
+		m_spec.m_keyIn.push_back(ibValue(ibString(g)));
 	return *this;
 }
 
 ibDataQueryBuilder& ibDataQueryBuilder::WhereKeyIn(const std::vector<ibValue>& rowKeys)
 {
-	m_keyIn.insert(m_keyIn.end(), rowKeys.begin(), rowKeys.end());
+	m_spec.m_keyIn.insert(m_spec.m_keyIn.end(), rowKeys.begin(), rowKeys.end());
 	return *this;
 }
 
 ibDataQueryBuilder& ibDataQueryBuilder::SetValue(const std::shared_ptr<const ibBackendQueryColumn>& column, const ibValue& value)
 {
-	m_writeRows.back().emplace_back(column, value);
-	m_writeAdditive.back().push_back(false);   // index-aligned with the row — always pushed, never sparse
+	m_spec.m_writeRows.back().emplace_back(column, value);
+	m_spec.m_writeAdditive.back().push_back(false);   // index-aligned with the row — always pushed, never sparse
 	return *this;
 }
 
 ibDataQueryBuilder& ibDataQueryBuilder::AddValue(const std::shared_ptr<const ibBackendQueryColumn>& column, const ibValue& delta)
 {
-	m_writeRows.back().emplace_back(column, delta);
-	m_writeAdditive.back().push_back(true);
+	m_spec.m_writeRows.back().emplace_back(column, delta);
+	m_spec.m_writeAdditive.back().push_back(true);
 	return *this;
 }
 
@@ -722,15 +722,15 @@ ibDataQueryBuilder& ibDataQueryBuilder::NextRow()
 {
 	// An empty current row is not a row. A caller whose loop ends with NextRow() — the natural way
 	// to write one — would otherwise stage a phantom line of nulls that the INSERT then wrote.
-	if (m_writeRows.back().empty())
+	if (m_spec.m_writeRows.back().empty())
 		return *this;
 
 	// Every staged row names the same columns as the one before it, so it is given that room up front: grown
 	// cell by cell, a payroll's 72 234 movements reallocated each row's cells several times over (MEASURED
 	// 2026-09-14: the largest single share of staging a set's lines, Debug).
-	const std::size_t width = m_writeRows.back().size();
-	m_writeRows.emplace_back().reserve(width);
-	m_writeAdditive.emplace_back().reserve(width);
+	const std::size_t width = m_spec.m_writeRows.back().size();
+	m_spec.m_writeRows.emplace_back().reserve(width);
+	m_spec.m_writeAdditive.emplace_back().reserve(width);
 	return *this;
 }
 
@@ -756,41 +756,11 @@ std::vector<ibQuerySortItem> ibDataQueryBuilder::EffectiveSort(
 }
 
 // ==========================================================================
-// Terminals — THIN delegators. The door builds the spec (a view of its accumulated
-// state) and runs it through the ibBackendQueryProvider it pulls from the queryable.
+// Terminals — THIN delegators. The door hands its spec (what it accumulated) to the
+// ibBackendQueryProvider it pulls from the queryable.
 // It names NO concrete provider and NO L2 type — the provider owns all of that, and a
 // computed source's provider realizes the read its own way. (docs §22.4)
 // ==========================================================================
-ibDataQuerySpec ibDataQueryBuilder::BuildSpec() const
-{
-	ibDataQuerySpec spec;
-	spec.m_holder      = m_holder;
-	spec.m_queryable   = m_queryable;       // current/primary source (single-source fast path)
-	spec.m_root        = m_root;            // the relational tree — the composer walks it
-	spec.m_conditions  = &m_conditions;
-	spec.m_predicate   = m_predicate;       // full boolean WHERE tree (null = none)
-	spec.m_keyIn       = &m_keyIn;
-	spec.m_sorts       = &m_sorts;
-	spec.m_groupBy      = &m_groupBy;
-	spec.m_totals       = &m_totals;        // the TOTALS levels — see the field's note; NOT the same list
-	spec.m_groupPaths   = &m_groupPaths;
-	spec.m_groupExprs   = &m_groupExprs;
-	spec.m_groupAliases = &m_groupAliases;
-	spec.m_aggregates  = &m_aggregates;
-	spec.m_totalAggregates = &m_totalAggregates;   // what the LEVELS roll — see the field's note
-	spec.m_having      = &m_having;
-	spec.m_writeRows   = &m_writeRows;
-	spec.m_writeAdditive = &m_writeAdditive;
-	spec.m_dotWalks    = &m_dotWalks;
-	spec.m_dimWalks    = &m_dimWalks;
-	spec.m_selectExprs = &m_selectExprs;
-	spec.m_selectCols  = &m_selectCols;
-	spec.m_with        = &m_with;       // the named queries this statement declares
-	spec.m_distinct    = m_distinct;
-	spec.m_distinctBy  = &m_distinctBy;   // what "duplicate" means here — see Distinct()
-	spec.m_topCount    = m_top;
-	return spec;
-}
 
 // The door runs the query through the COMPOSER (the tree executor) — never a concrete
 // provider. For a single source the composer delegates to that source's provider;
@@ -806,10 +776,10 @@ std::vector<std::shared_ptr<const ibBackendQueryColumn>> ibDataQueryBuilder::Mat
 		for (const std::shared_ptr<const ibBackendQueryColumn>& e : cols) if (e == c) return;
 		cols.push_back(c);
 	};
-	for (const auto& sc : m_selectCols)              add(sc.first);
-	for (const AggregateItem& a : m_aggregates)       add(a.m_col);
-	for (const AggregateItem& a : m_totalAggregates)  add(a.m_col);   // totals aggregates roll from the snapshot
-	for (const ibTotalLevel&  t : m_totals)                            // TotalBy dimension fields
+	for (const auto& sc : m_spec.m_selectCols)              add(sc.first);
+	for (const AggregateItem& a : m_spec.m_aggregates)       add(a.m_col);
+	for (const AggregateItem& a : m_spec.m_totalAggregates)  add(a.m_col);   // totals aggregates roll from the snapshot
+	for (const ibTotalLevel&  t : m_spec.m_totals)                            // TotalBy dimension fields
 		for (const ibTotalField& f : t.m_fields)      add(f.m_col);   // every field of every level
 	return cols;
 }
@@ -819,14 +789,14 @@ std::vector<std::shared_ptr<const ibBackendQueryColumn>> ibDataQueryBuilder::Mat
 void ibDataQueryBuilder::StampResult(ibDataQueryResult& r) const
 {
 	r.SetMaterialiseColumns(MaterialiseColumns());
-	r.SetTotals(m_totals, m_totalAggregates, m_totalsOverall, m_totalDerived);
+	r.SetTotals(m_spec.m_totals, m_spec.m_totalAggregates, m_totalsOverall, m_totalDerived);
 	// …and HOW a dot-walked object dimension is read back — see ibDataQueryResult::m_objectReads.
 	for (const ibDimObjectRead& read : m_dimObjectReads)
 		r.SetObjectRead(read.m_dimColumnId, read.m_alias, read.m_leaf);
 	// …and the source recipe, WITH the ownership of the sources built for this query: the result runs
 	// its lazy sub-selections against them after this builder is gone. (Max, 2026-08-19: "the two of
 	// them own it — the query dies, the result still holds the skeleton".)
-	r.SetSource(m_holder, m_queryable, m_selectCols, m_conditions);
+	r.SetSource(m_spec.m_holder, m_spec.m_queryable, m_spec.m_selectCols, m_spec.m_conditions);
 }
 
 // An empty temp table, as a result. Nothing here knows WHY the caller wants one — that
@@ -894,12 +864,12 @@ ibDataQueryResult ibDataQueryBuilder::Execute(const ibReadPageRequest& req) cons
 		// may see": the refusal then becomes an empty read and the query carries on.
 		if (!m_policy->CheckSelect(guarded, ibAccessStage::Table)) {
 			if (m_allowed)
-				return ibMakeEmptyQueryResult(m_queryable);
+				return ibMakeEmptyQueryResult(m_spec.m_queryable);
 			ibBackendAccessException::Error(_("reading"));
 		}
 		return guarded.Execute(req);                  // L4-1 + L4-2 both land here
 	}
-	ibDataQueryResult r = ibQueryComposer::ExecuteRead(BuildSpec(), req);
+	ibDataQueryResult r = ibQueryComposer::ExecuteRead(m_spec, req);
 	StampResult(r);
 	return r;
 }
@@ -909,14 +879,14 @@ ibQueryRelPtr ibDataQueryBuilder::BuildRelation() const
 	// A RESTRICTED read is not a relation somebody else composes: the policy folds its restriction
 	// into the query it guards, and a relation handed out unrestricted could be joined past it. The
 	// caller reads rows instead — same numbers, same restriction, one materialisation.
-	if (m_policy != nullptr || m_queryable == nullptr)
+	if (m_policy != nullptr || m_spec.m_queryable == nullptr)
 		return nullptr;
 
 	// …AND NEITHER IS A QUERY THAT STANDS ON ITS OWN DECLARATIONS. A relation goes INSIDE somebody
 	// else's FROM, and a `WITH` cannot travel there: it belongs to the top of a statement, and this
 	// one is not the top of anything. Handing the relation over regardless would render a name whose
 	// declaration stayed behind — a statement the engine cannot parse rather than a slower plan.
-	if (!m_with.empty())
+	if (!m_spec.m_with.empty())
 		return nullptr;
 
 	// ⭐ WHICH LOWERING, DECIDED BY THE SHAPE OF THE QUERY — the same way the terminal endings are
@@ -926,10 +896,9 @@ ibQueryRelPtr ibDataQueryBuilder::BuildRelation() const
 	//
 	// Asked of THIS source's provider. A computed / temp source answers null to both (the base
 	// default), which is the honest "cannot be composed with" rather than an empty relation.
-	const ibDataQuerySpec spec = BuildSpec();
-	const bool folds = !m_aggregates.empty() || !m_groupBy.empty();
-	return folds ? m_queryable->GetProvider().BuildAggregateRelation(spec)
-	             : m_queryable->GetProvider().BuildReadRelation(spec);
+	const bool folds = !m_spec.m_aggregates.empty() || !m_spec.m_groupBy.empty();
+	return folds ? m_spec.m_queryable->GetProvider().BuildAggregateRelation(m_spec)
+	             : m_spec.m_queryable->GetProvider().BuildReadRelation(m_spec);
 }
 
 ibDataQueryResult ibDataQueryBuilder::Execute(const ibReadPageRequest& req,
@@ -942,12 +911,12 @@ ibDataQueryResult ibDataQueryBuilder::Execute(const ibReadPageRequest& req,
 		guarded.m_policy = nullptr;
 		if (!m_policy->CheckSelect(guarded, ibAccessStage::Table)) {        // the list / paging path lands here too
 			if (m_allowed)
-				return ibMakeEmptyQueryResult(m_queryable);
+				return ibMakeEmptyQueryResult(m_spec.m_queryable);
 			ibBackendAccessException::Error(_("reading"));
 		}
 		return guarded.Execute(req, cache, signature);
 	}
-	ibDataQueryResult r = ibQueryComposer::ExecuteReadCached(BuildSpec(), req, cache, signature);
+	ibDataQueryResult r = ibQueryComposer::ExecuteReadCached(m_spec, req, cache, signature);
 	StampResult(r);
 	return r;
 }
@@ -976,7 +945,7 @@ static ibDataQueryResult MakeZeroAggregateResult(const std::vector<ibAggregateIt
 // only, which meant `SELECT Amount FROM X` was refused while `SELECT SUM(Amount) FROM X` answered —
 // an inference leak: totals and counts over rows the reader may not see, with SELECT ALLOWED
 // silently inert on that path too. (Found by Max, 2026-08-06, by reading; confirmed by the absence
-// of any policy mention in BuildSpec and in the whole composer.)
+// of any policy mention in the spec and in the whole composer.)
 //
 // A read that must NOT be filtered says so where it is written, with WithAccessPolicy(nullptr) —
 // the verb that already exists for the policy's own set computation. Totals regeneration is the
@@ -990,14 +959,14 @@ ibDataQueryResult ibDataQueryBuilder::SelectAggregate() const
 		guarded.m_policy = nullptr;
 		if (!m_policy->CheckSelect(guarded, ibAccessStage::Table)) {
 			if (m_allowed)
-				return m_groupBy.empty() && m_groupExprs.empty()
-					? MakeZeroAggregateResult(m_aggregates, m_queryable)
-					: ibMakeEmptyQueryResult(m_queryable);
+				return m_spec.m_groupBy.empty() && m_spec.m_groupExprs.empty()
+					? MakeZeroAggregateResult(m_spec.m_aggregates, m_spec.m_queryable)
+					: ibMakeEmptyQueryResult(m_spec.m_queryable);
 			ibBackendAccessException::Error(_("reading"));
 		}
 		return guarded.SelectAggregate();
 	}
-	return ibQueryComposer::ExecuteAggregate(BuildSpec());
+	return ibQueryComposer::ExecuteAggregate(m_spec);
 }
 
 // Paged single-level group read (docs: group-level paging) — GROUP BY dim ORDER BY dim [dim </> anchor]
@@ -1013,12 +982,12 @@ ibDataQueryResult ibDataQueryBuilder::SelectAggregatePage(const ibReadPageReques
 			// A PAGE OF GROUPS always groups — so an empty page is the right refusal here, and the
 			// zero row above would be a group that does not exist.
 			if (m_allowed)
-				return ibMakeEmptyQueryResult(m_queryable);
+				return ibMakeEmptyQueryResult(m_spec.m_queryable);
 			ibBackendAccessException::Error(_("reading"));
 		}
 		return guarded.SelectAggregatePage(page);
 	}
-	return ibQueryComposer::ExecuteGroupLevelPage(BuildSpec(), page);
+	return ibQueryComposer::ExecuteGroupLevelPage(m_spec, page);
 }
 
 // GUARDED TOO, though nothing calls it today. A read terminal with no policy on it is a loaded gun:
@@ -1065,11 +1034,11 @@ bool ibDataQueryBuilder::TryTotalsPushdown(ibDataQueryResult& out) const
 	// knows no L2 and no provider internals, and "can this dialect fold levels" is exactly such a
 	// question. The door asks; the tier that owns the answer answers.
 	ibSelectorTree folded;
-	if (!ibQueryComposer::TryFoldTotalsInDbms(BuildSpec(), folded))
+	if (!ibQueryComposer::TryFoldTotalsInDbms(m_spec, folded))
 		return false;
 
-	out = ibMakeEmptyQueryResult(m_queryable);
-	out.SetTotals(m_totals, m_totalAggregates, m_totalsOverall, m_totalDerived);
+	out = ibMakeEmptyQueryResult(m_spec.m_queryable);
+	out.SetTotals(m_spec.m_totals, m_spec.m_totalAggregates, m_totalsOverall, m_totalDerived);
 	out.SetReadyTree(std::move(folded));
 	return true;
 }
@@ -1088,8 +1057,8 @@ ibSelectorTree ibDataQueryBuilder::SelectTotals() const
 		}
 		return guarded.SelectTotals();
 	}
-	ibSelectorTree tree = ibQueryComposer::ExecuteTotals(BuildSpec());
-	ibQueryComposer::ApplyDerivedAggregates(tree, m_totalAggregates, m_totalDerived);   // as a selection's Build does
+	ibSelectorTree tree = ibQueryComposer::ExecuteTotals(m_spec);
+	ibQueryComposer::ApplyDerivedAggregates(tree, m_spec.m_totalAggregates, m_totalDerived);   // as a selection's Build does
 	return tree;
 }
 
@@ -1103,12 +1072,12 @@ bool ibDataQueryBuilder::Insert() const
 		guarded.m_policy = nullptr;
 		if (!m_policy->CheckCreate(guarded, ibAccessStage::Table))
 			ibBackendAccessException::Error(_("creating a record"));
-		const long affected = ibQueryComposer::ExecuteWrite(guarded.BuildSpec(), WriteKind::Insert);
+		const long affected = ibQueryComposer::ExecuteWrite(guarded.m_spec, WriteKind::Insert);
 		if (!m_policy->CheckCreate(guarded, ibAccessStage::Value, affected))
 			ibBackendAccessException::Error(_("creating a record"));
 		return affected >= 0;
 	}
-	return ibQueryComposer::ExecuteWrite(BuildSpec(), WriteKind::Insert) >= 0;
+	return ibQueryComposer::ExecuteWrite(m_spec, WriteKind::Insert) >= 0;
 }
 
 bool ibDataQueryBuilder::Upsert() const
@@ -1123,12 +1092,12 @@ bool ibDataQueryBuilder::Upsert() const
 		guarded.m_policy = nullptr;
 		if (!m_policy->CheckUpdate(guarded, ibAccessStage::Table))
 			ibBackendAccessException::Error(_("changing a record"));
-		const long affected = ibQueryComposer::ExecuteWrite(guarded.BuildSpec(), WriteKind::Upsert);
+		const long affected = ibQueryComposer::ExecuteWrite(guarded.m_spec, WriteKind::Upsert);
 		if (!m_policy->CheckUpdate(guarded, ibAccessStage::Value, affected))
 			ibBackendAccessException::Error(_("changing a record"));
 		return affected >= 0;
 	}
-	return ibQueryComposer::ExecuteWrite(BuildSpec(), WriteKind::Upsert) >= 0;
+	return ibQueryComposer::ExecuteWrite(m_spec, WriteKind::Upsert) >= 0;
 }
 
 // A REWRITE THAT HIT NOTHING IS A MISS ON THE KEY, NOT A WRITE OF ZERO ROWS — AND IT MUST SAY SO.
@@ -1152,7 +1121,7 @@ void ibDataQueryBuilder::RaiseIfKeyedRewriteMissed(long affected) const
 {
 	if (affected != 0)
 		return;                       // wrote something, or the driver reported failure (< 0) — not this question
-	if (!m_conditions.empty() || m_predicate)
+	if (!m_spec.m_conditions.empty() || m_spec.m_predicate)
 		return;                       // a narrowed rewrite: an empty set is an answer, not a miss
 
 	// ⭐ AND IT NAMES THE ROW. "Not found by its key" without the key is a sentence one can only
@@ -1162,10 +1131,10 @@ void ibDataQueryBuilder::RaiseIfKeyedRewriteMissed(long affected) const
 	// been inserted in the same session refused its own rewrite, and nothing on either side could
 	// say whether the two keys were the same key).
 	ibString strKey;
-	if (m_queryable != nullptr && !m_writeRows.empty()) {
-		for (const std::shared_ptr<const ibBackendQueryColumn>& keyCol : m_queryable->GetPrimaryKeyColumns()) {
+	if (m_spec.m_queryable != nullptr && !m_spec.m_writeRows.empty()) {
+		for (const std::shared_ptr<const ibBackendQueryColumn>& keyCol : m_spec.m_queryable->GetPrimaryKeyColumns()) {
 			if (keyCol == nullptr) continue;
-			for (const auto& assigned : m_writeRows.front()) {
+			for (const auto& assigned : m_spec.m_writeRows.front()) {
 				if (assigned.first != keyCol) continue;
 				if (!strKey.IsEmpty()) strKey += ibT(", ");
 				strKey += assigned.second.GetString();
@@ -1175,7 +1144,7 @@ void ibDataQueryBuilder::RaiseIfKeyedRewriteMissed(long affected) const
 
 	ibBackendCoreException::Error(
 		_("'%s': the row to rewrite was not found by its key%s - nothing was written"),
-		m_queryable != nullptr ? m_queryable->GetQueryName() : ibString(ibT("?")),
+		m_spec.m_queryable != nullptr ? m_spec.m_queryable->GetQueryName() : ibString(ibT("?")),
 		strKey.IsEmpty() ? ibString() : ibT(" ") + strKey);
 }
 
@@ -1191,7 +1160,7 @@ bool ibDataQueryBuilder::Update() const
 		guarded.m_policy = nullptr;
 		if (!m_policy->CheckUpdate(guarded, ibAccessStage::Table))   // the right on the table, plus the folded restriction
 			ibBackendAccessException::Error(_("changing a record"));
-		const long affected = ibQueryComposer::ExecuteWrite(guarded.BuildSpec(), WriteKind::Update);
+		const long affected = ibQueryComposer::ExecuteWrite(guarded.m_spec, WriteKind::Update);
 		// The SECOND question, the one only the result can answer: did the rewrite happen? Where
 		// the right controls a row, nothing rewritten means the filter kept the statement off a row
 		// that exists — the policy says so and this returns false or throws. Where it controls a
@@ -1201,7 +1170,7 @@ bool ibDataQueryBuilder::Update() const
 		RaiseIfKeyedRewriteMissed(affected);
 		return affected >= 0;
 	}
-	const long affected = ibQueryComposer::ExecuteWrite(BuildSpec(), WriteKind::Update);
+	const long affected = ibQueryComposer::ExecuteWrite(m_spec, WriteKind::Update);
 	RaiseIfKeyedRewriteMissed(affected);
 	return affected >= 0;
 }
@@ -1214,7 +1183,7 @@ bool ibDataQueryBuilder::Delete() const
 		guarded.m_policy = nullptr;
 		if (!m_policy->CheckDelete(guarded, ibAccessStage::Table))   // the right on the table, plus the folded restriction
 			ibBackendAccessException::Error(_("deleting a record"));
-		const long affected = ibQueryComposer::ExecuteWrite(guarded.BuildSpec(), WriteKind::Delete);
+		const long affected = ibQueryComposer::ExecuteWrite(guarded.m_spec, WriteKind::Delete);
 		// The door does not interpret this number — it hands it back. Deleting rows that are not
 		// there is ordinary for a register set; for a row-controlled record it is the filter having
 		// kept the statement off a row that exists. Which of the two it is, the policy knows.
@@ -1223,5 +1192,5 @@ bool ibDataQueryBuilder::Delete() const
 			ibBackendAccessException::Error(_("deleting a record"));
 		return affected >= 0;
 	}
-	return ibQueryComposer::ExecuteWrite(BuildSpec(), WriteKind::Delete) >= 0;
+	return ibQueryComposer::ExecuteWrite(m_spec, WriteKind::Delete) >= 0;
 }

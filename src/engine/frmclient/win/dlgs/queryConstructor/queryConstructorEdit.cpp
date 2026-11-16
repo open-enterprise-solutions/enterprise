@@ -345,7 +345,7 @@ void ibDialogQueryConstructor::ApplyQueryKind(bool focusName)
 // a legitimate thing to write.
 wxString ibDialogQueryConstructor::SuggestResultName() const
 {
-	const ibQuerySelect* select = Current();
+	const ibQuerySelectPtr select = Current();
 	if (select == nullptr)
 		return _("Result");
 
@@ -798,7 +798,7 @@ void ibDialogQueryConstructor::OnAddLink(wxCommandEvent&)
 	if (!CanEdit())
 		return;
 
-	ibQuerySelect* select = Current();
+	const ibQuerySelectPtr select = Current();
 	if (select == nullptr)
 		return;
 
@@ -1036,7 +1036,7 @@ bool ibPickGroupingScope(wxWindow* parent, const std::vector<wxString>& grouping
 
 bool ibDialogQueryConstructor::PickTotalsScope(wxString& text)
 {
-	const ibQuerySelect* select = Current();
+	const ibQuerySelectPtr select = Current();
 	if (select == nullptr)
 		return false;
 
@@ -1093,7 +1093,7 @@ wxArrayString ibDialogQueryConstructor::TotalsScopeChoices() const
 	wxArrayString out;
 	out.Add(wxEmptyString);   // the ladder — the ordinary case, and the way back to it
 
-	const ibQuerySelect* select = Current();
+	const ibQuerySelectPtr select = Current();
 	if (select == nullptr)
 		return out;
 
@@ -1126,7 +1126,7 @@ wxArrayString ibDialogQueryConstructor::TotalsScopeChoices() const
 wxArrayString ibDialogQueryConstructor::LinkTableChoices(bool leftSide) const
 {
 	wxArrayString out;
-	const ibQuerySelect* select = Current();
+	const ibQuerySelectPtr select = Current();
 	if (select == nullptr || m_links == nullptr || m_linkModel == nullptr)
 		return out;
 
@@ -1323,7 +1323,7 @@ wxArrayString ibDialogQueryConstructor::LinkConditionChoices() const
 	// read), so this helper is once again about one statement's joins and nothing else.
 	ibDataViewCtrl* grid = m_links;
 	ibQueryLinkModel* model = m_linkModel;
-	const ibQuerySelect* select = Current();
+	const ibQuerySelectPtr select = Current();
 	const size_t against = m_statement;
 	if (select == nullptr || grid == nullptr || model == nullptr)
 		return out;
@@ -1387,7 +1387,7 @@ wxArrayString ibDialogQueryConstructor::LinkConditionChoices() const
 // this cell and went to the text.
 bool ibDialogQueryConstructor::EditLinkCondition(wxString& text)
 {
-	const ibQuerySelect* select = Current();
+	const ibQuerySelectPtr select = Current();
 	if (select == nullptr)
 		return false;
 
@@ -1440,7 +1440,7 @@ void ibDialogQueryConstructor::OnTableParameters(wxCommandEvent&)
 	// table (a turnover read whole has no period column, and no recorder), and the fields written
 	// against the old shape would otherwise stay in the query naming columns their own source does
 	// not have. Following through on the author's own act — not tidying up after them.
-	if (ibQuerySelect* select = Current()) {
+	if (const ibQuerySelectPtr select = Current()) {
 		std::set<wxString> available;
 		for (const ibQueryConstructorField& field : m_model.GetFields(*source, m_package, m_statement))
 			available.insert(field.m_name);
@@ -1530,7 +1530,7 @@ void ibDialogQueryConstructor::RenameTable(ibQuerySource& source, wxString alias
 	// A NAME ALREADY TAKEN IS NUMBERED, the way a duplicate output column is — not refused. The
 	// author asked for a name; giving them `Products1` keeps the query valid and says what happened,
 	// while a refusal leaves them holding a rename that did nothing.
-	ibQuerySelect* select = Current();
+	const ibQuerySelectPtr select = Current();
 	if (!alias.IsEmpty() && select != nullptr)
 		alias = ibQueryUniqueSourceAlias(*select, alias, &source);
 
@@ -1614,7 +1614,7 @@ void ibDialogQueryConstructor::OnReplaceTable(wxCommandEvent&)
 	source->m_parameter = false;  // a table chosen from the catalogue is not handed in
 	source->m_alias = name;       // the name stays what it was, whatever the new table is called
 
-	if (ibQuerySelect* select = Current()) {
+	if (const ibQuerySelectPtr select = Current()) {
 		std::set<wxString> available;
 		for (const ibQueryConstructorField& field : m_model.GetFields(*source, m_package, m_statement))
 			available.insert(field.m_name);
@@ -1644,7 +1644,7 @@ bool ibDialogQueryConstructor::IsDescribedTable(const ibQuerySource& source) con
 // and as their query renamed (Max, 2026-09-28).
 void ibDialogQueryConstructor::OnDescribeTempTable(wxCommandEvent&)
 {
-	ibQuerySelect* select = CanEdit() ? Current() : nullptr;
+	const ibQuerySelectPtr select = CanEdit() ? Current() : nullptr;
 	if (select == nullptr)
 		return;
 
@@ -1742,7 +1742,7 @@ void ibDialogQueryConstructor::OnAddTable(wxCommandEvent&)
 	if (!CanEdit())
 		return;
 
-	ibQuerySelect* select = Current();
+	const ibQuerySelectPtr select = Current();
 	if (select == nullptr)
 		return;
 
@@ -1793,7 +1793,7 @@ void ibDialogQueryConstructor::OnAddTable(wxCommandEvent&)
 // this does it. Two verbs can share the second half; neither can call the other's first half.
 void ibDialogQueryConstructor::AddTableSources(const std::vector<std::vector<ibString>>& paths)
 {
-	ibQuerySelect* select = Current();
+	const ibQuerySelectPtr select = Current();
 	if (select == nullptr)
 		return;
 
@@ -1837,7 +1837,7 @@ void ibDialogQueryConstructor::OnAddNestedTable(wxCommandEvent&)
 	if (!CanEdit())
 		return;
 
-	ibQuerySelect* select = Current();
+	const ibQuerySelectPtr select = Current();
 	if (select == nullptr)
 		return;
 
@@ -1931,7 +1931,7 @@ void ibDialogQueryConstructor::OnRemoveTable(wxCommandEvent&)
 	if (!CanEdit())
 		return;
 
-	ibQuerySelect* select = Current();
+	const ibQuerySelectPtr select = Current();
 	if (select == nullptr)
 		return;
 
@@ -2001,7 +2001,7 @@ bool ibDialogQueryConstructor::AddCatalogueFieldToSelect()
 	if (!CanEdit() || m_sourceTree == nullptr)
 		return false;
 
-	ibQuerySelect* select = Current();
+	const ibQuerySelectPtr select = Current();
 	const wxTreeItemId item = m_sourceTree->GetSelection();
 	if (select == nullptr || !item.IsOk())
 		return false;
@@ -2072,7 +2072,7 @@ void ibDialogQueryConstructor::OnAddField(wxCommandEvent&)
 	if (!CanEdit())
 		return;
 
-	ibQuerySelect* select = Current();
+	const ibQuerySelectPtr select = Current();
 	if (select == nullptr)
 		return;
 
@@ -2129,7 +2129,7 @@ void ibDialogQueryConstructor::OnAddFieldExpression(wxCommandEvent&)
 {
 	if (!CanEdit())
 		return;
-	ibQuerySelect* select = Current();
+	const ibQuerySelectPtr select = Current();
 	if (select == nullptr)
 		return;
 
@@ -2154,7 +2154,7 @@ void ibDialogQueryConstructor::OnRemoveField(wxCommandEvent&)
 	if (!CanEdit())
 		return;
 
-	ibQuerySelect* select = Current();
+	const ibQuerySelectPtr select = Current();
 	if (select == nullptr)
 		return;
 	const long index = SelectedRow(m_fields, m_fieldModel);
@@ -2171,7 +2171,7 @@ void ibDialogQueryConstructor::OnMoveField(int delta)
 	if (!CanEdit())
 		return;
 
-	ibQuerySelect* select = Current();
+	const ibQuerySelectPtr select = Current();
 	if (select == nullptr)
 		return;
 	const long index = SelectedRow(m_fields, m_fieldModel);
@@ -2192,7 +2192,7 @@ void ibDialogQueryConstructor::OnEditFieldExpression(wxCommandEvent&)
 	if (!CanEdit())
 		return;
 
-	ibQuerySelect* select = Current();
+	const ibQuerySelectPtr select = Current();
 	if (select == nullptr)
 		return;
 	const long index = SelectedRow(m_fields, m_fieldModel);
@@ -2245,7 +2245,7 @@ void ibDialogQueryConstructor::EditJoinAt(size_t index)
 {
 	if (!CanEdit())
 		return;
-	ibQuerySelect* select = Current();
+	const ibQuerySelectPtr select = Current();
 	if (select == nullptr || index >= select->m_joins.size())
 		return;
 
@@ -2294,7 +2294,7 @@ void ibDialogQueryConstructor::OnRemoveLink(wxCommandEvent&)
 	if (!CanEdit())
 		return;
 
-	ibQuerySelect* select = Current();
+	const ibQuerySelectPtr select = Current();
 	if (select == nullptr || m_linkModel == nullptr || m_links == nullptr)
 		return;
 	// ⭐ A LINK IS A CONDITION, NOT THE TABLE. Deleting it takes the ROW away and leaves the table in
@@ -2314,7 +2314,7 @@ void ibDialogQueryConstructor::OnAddGrouping(wxCommandEvent&)
 	if (!CanEdit())
 		return;
 
-	ibQuerySelect* select = Current();
+	const ibQuerySelectPtr select = Current();
 	if (select == nullptr)
 		return;
 	// THE SCOPE RULE: a field is itself, a reference is everything behind it, a table is all of it.
@@ -2369,7 +2369,7 @@ void ibDialogQueryConstructor::OnRemoveGrouping(wxCommandEvent&)
 	if (!CanEdit())
 		return;
 
-	ibQuerySelect* select = Current();
+	const ibQuerySelectPtr select = Current();
 	if (select == nullptr)
 		return;
 	const long index = SelectedRow(m_grouping, m_groupingModel);
@@ -2384,7 +2384,7 @@ void ibDialogQueryConstructor::OnAddAggregate(wxCommandEvent&)
 	if (!CanEdit())
 		return;
 
-	ibQuerySelect* select = Current();
+	const ibQuerySelectPtr select = Current();
 	if (select == nullptr)
 		return;
 
@@ -2491,7 +2491,7 @@ void ibDialogQueryConstructor::OnRemoveAggregate(wxCommandEvent&)
 	if (!CanEdit())
 		return;
 
-	ibQuerySelect* select = Current();
+	const ibQuerySelectPtr select = Current();
 	if (select == nullptr)
 		return;
 	const long index = SelectedRow(m_aggregates, m_aggregateModel);
@@ -2612,7 +2612,7 @@ void ibDialogQueryConstructor::OnAddOrder(wxCommandEvent&)
 	if (!CanEdit())
 		return;
 
-	ibQuerySelect* select = Current();
+	const ibQuerySelectPtr select = Current();
 	if (select == nullptr)
 		return;
 	const std::vector<wxString> fields = SelectedFieldsOf(m_orderSource);
@@ -2632,7 +2632,7 @@ void ibDialogQueryConstructor::OnRemoveOrder(wxCommandEvent&)
 	if (!CanEdit())
 		return;
 
-	ibQuerySelect* select = Current();
+	const ibQuerySelectPtr select = Current();
 	if (select == nullptr)
 		return;
 	const long index = SelectedRow(m_order, m_orderModel);
@@ -2647,7 +2647,7 @@ void ibDialogQueryConstructor::OnToggleOrderDirection(wxCommandEvent&)
 	if (!CanEdit())
 		return;
 
-	ibQuerySelect* select = Current();
+	const ibQuerySelectPtr select = Current();
 	if (select == nullptr)
 		return;
 	const long index = SelectedRow(m_order, m_orderModel);
@@ -2663,7 +2663,7 @@ void ibDialogQueryConstructor::OnMoveOrder(int delta)
 	if (!CanEdit())
 		return;
 
-	ibQuerySelect* select = Current();
+	const ibQuerySelectPtr select = Current();
 	if (select == nullptr)
 		return;
 	const long index = SelectedRow(m_order, m_orderModel);
@@ -2685,7 +2685,7 @@ void ibDialogQueryConstructor::OnAddTotalsAggregate(wxCommandEvent&)
 	if (!CanEdit())
 		return;
 
-	ibQuerySelect* select = Current();
+	const ibQuerySelectPtr select = Current();
 	if (select == nullptr)
 		return;
 
@@ -2734,7 +2734,7 @@ void ibDialogQueryConstructor::OnEditTotalsAggregate(wxCommandEvent&)
 {
 	if (!CanEdit())
 		return;
-	ibQuerySelect* select = Current();
+	const ibQuerySelectPtr select = Current();
 	const long index = SelectedRow(m_totalsAggregates, m_totalsAggregateModel);
 	if (select == nullptr || index < 0 || static_cast<size_t>(index) >= select->m_totalsAggregates.size())
 		return;
@@ -2762,7 +2762,7 @@ void ibDialogQueryConstructor::OnRemoveTotalsAggregate(wxCommandEvent&)
 {
 	if (!CanEdit())
 		return;
-	ibQuerySelect* select = Current();
+	const ibQuerySelectPtr select = Current();
 	const long index = SelectedRow(m_totalsAggregates, m_totalsAggregateModel);
 	if (select == nullptr || index < 0 || static_cast<size_t>(index) >= select->m_totalsAggregates.size())
 		return;
@@ -2778,7 +2778,7 @@ void ibDialogQueryConstructor::OnAddTotalsDimension(wxCommandEvent&)
 	if (!CanEdit())
 		return;
 
-	ibQuerySelect* select = Current();
+	const ibQuerySelectPtr select = Current();
 	if (select == nullptr)
 		return;
 	// THE TREE BESIDE IT, like every other tab — and only if nothing is picked there does it fall
@@ -2815,7 +2815,7 @@ void ibDialogQueryConstructor::OnAddTotalsDimension(wxCommandEvent&)
 bool ibDialogQueryConstructor::TotalsFieldAlreadyThere(int node, const wxString& name,
 	const ibQueryTotalDim* except) const
 {
-	const ibQuerySelect* select = Current();
+	const ibQuerySelectPtr select = Current();
 	if (select == nullptr || name.IsEmpty())
 		return false;
 
@@ -2837,7 +2837,7 @@ void ibDialogQueryConstructor::AddTotalsFieldsTo(int node)
 {
 	if (!CanEdit())
 		return;
-	ibQuerySelect* select = Current();
+	const ibQuerySelectPtr select = Current();
 	if (select == nullptr)
 		return;
 
@@ -2878,7 +2878,7 @@ void ibDialogQueryConstructor::MoveTotalsLevelTo(const ibTotalsRow& from, const 
 {
 	if (!CanEdit() || !from.IsLevel())
 		return;
-	ibQuerySelect* select = Current();
+	const ibQuerySelectPtr select = Current();
 	std::vector<ibQueryTotalDim>* source = LevelsOfNode(select, from.m_node);
 	if (select == nullptr || source == nullptr || static_cast<size_t>(from.m_level) >= source->size())
 		return;
@@ -2947,7 +2947,7 @@ void ibDialogQueryConstructor::OnAddTotalsSplit(wxCommandEvent&)
 	if (!CanEdit())
 		return;
 
-	ibQuerySelect* select = Current();
+	const ibQuerySelectPtr select = Current();
 	if (select == nullptr)
 		return;
 
@@ -2983,7 +2983,7 @@ void ibDialogQueryConstructor::OnRemoveTotalsLine(wxCommandEvent&)
 	if (!CanEdit())
 		return;
 
-	ibQuerySelect* select = Current();
+	const ibQuerySelectPtr select = Current();
 	if (select == nullptr)
 		return;
 
@@ -3054,7 +3054,7 @@ void ibDialogQueryConstructor::OnMoveTotalsDimension(int delta)
 {
 	if (!CanEdit())
 		return;
-	ibQuerySelect* select = Current();
+	const ibQuerySelectPtr select = Current();
 	const ibTotalsRow at = SelectedTotalsAt();
 	if (select == nullptr)
 		return;
@@ -3148,7 +3148,7 @@ bool ibDialogQueryConstructor::LevelIsDated(const ibQueryTotalDim& dim) const
 	if (head->m_expr->m_kind != ibQueryAstExprKind::Column || head->m_expr->m_path.empty())
 		return false;
 
-	const ibQuerySelect* select = Current();
+	const ibQuerySelectPtr select = Current();
 	if (select == nullptr)
 		return false;
 
@@ -3168,7 +3168,7 @@ void ibDialogQueryConstructor::ApplyTotalsPeriods()
 	    || m_periodFrom == nullptr || m_periodTo == nullptr)
 		return;
 
-	ibQuerySelect* select = Current();
+	const ibQuerySelectPtr select = Current();
 	// THE LEVEL THE CARET IS ON — whichever node it hangs on. A periodicity is a property of a
 	// FIELD, so it applies to a level of a separator exactly as it does to one of the hidden node.
 	const ibTotalsRow at = SelectedTotalsAt();
@@ -3248,7 +3248,7 @@ void ibDialogQueryConstructor::OnEditTotalsDimension(wxCommandEvent&)
 {
 	if (!CanEdit())
 		return;
-	ibQuerySelect* select = Current();
+	const ibQuerySelectPtr select = Current();
 	const ibTotalsRow at = SelectedTotalsAt();
 	std::vector<ibQueryTotalDim>* levels = LevelsOfNode(select, at.m_node);
 	if (select == nullptr || !at.IsLevel() || levels == nullptr
@@ -3291,7 +3291,7 @@ void ibDialogQueryConstructor::OnAddUnionBranch(wxCommandEvent&)
 
 	// ⚠ THE STATEMENT OWNS THE BRANCHES, not the branch the tabs are on. Asked of Current(), a second
 	// "Add" — made while the first new branch was still selected — hung a union INSIDE that branch.
-	ibQuerySelect* select = StatementSelect();
+	const ibQuerySelectPtr select = StatementSelect();
 	if (select == nullptr)
 		return;
 
@@ -3313,7 +3313,7 @@ void ibDialogQueryConstructor::OnAddUnionBranch(wxCommandEvent&)
 
 void ibDialogQueryConstructor::OnEditUnionBranch(wxCommandEvent&)
 {
-	ibQuerySelect* select = StatementSelect();   // the rows of the grid are the statement's branches
+	const ibQuerySelectPtr select = StatementSelect();   // the rows of the grid are the statement's branches
 	if (select == nullptr)
 		return;
 	const long row = (m_unionModel != nullptr && m_unions != nullptr)
@@ -3340,7 +3340,7 @@ void ibDialogQueryConstructor::OnRemoveUnionBranch(wxCommandEvent&)
 	if (!CanEdit())
 		return;
 
-	ibQuerySelect* select = StatementSelect();   // the rows of the grid are the statement's branches
+	const ibQuerySelectPtr select = StatementSelect();   // the rows of the grid are the statement's branches
 	if (select == nullptr)
 		return;
 	const long row = (m_unionModel != nullptr && m_unions != nullptr)
@@ -3368,7 +3368,7 @@ void ibDialogQueryConstructor::OnCopyUnionBranch(wxCommandEvent&)
 	if (!CanEdit())
 		return;
 
-	ibQuerySelect* select = StatementSelect();
+	const ibQuerySelectPtr select = StatementSelect();
 	if (select == nullptr)
 		return;
 	const long row = (m_unionModel != nullptr && m_unions != nullptr)
@@ -3379,9 +3379,9 @@ void ibDialogQueryConstructor::OnCopyUnionBranch(wxCommandEvent&)
 	// Row 0 is THIS query, and copying it is the ordinary case: "another branch like the one I have
 	// already written". A DEEP clone, through the engine's own cloner — a shallow copy would share
 	// expression nodes between two branches and edit both at once.
-	const ibQuerySelect* source = row == 0
+	const ibQuerySelectPtr source = row == 0
 		? select
-		: (static_cast<size_t>(row) - 1 < select->m_unions.size() ? select->m_unions[row - 1].get() : nullptr);
+		: (static_cast<size_t>(row) - 1 < select->m_unions.size() ? select->m_unions[row - 1] : nullptr);
 	if (source == nullptr)
 		return;
 
@@ -3418,7 +3418,7 @@ void ibDialogQueryConstructor::OnMoveUnionBranch(int delta)
 	if (!CanEdit())
 		return;
 
-	ibQuerySelect* select = StatementSelect();
+	const ibQuerySelectPtr select = StatementSelect();
 	if (select == nullptr || m_unionModel == nullptr || m_unions == nullptr)
 		return;
 	const long row = static_cast<long>(m_unionModel->GetRow(m_unions->GetSelection()));
@@ -3458,7 +3458,7 @@ void ibDialogQueryConstructor::OnRemoveUnionField(wxCommandEvent&)
 	if (!CanEdit() || m_unionFieldModel == nullptr || m_unionFields == nullptr)
 		return;
 
-	ibQuerySelect* select = StatementSelect();
+	const ibQuerySelectPtr select = StatementSelect();
 	const long row = static_cast<long>(m_unionFieldModel->GetRow(m_unionFields->GetSelection()));
 	if (select == nullptr || row < 0 || static_cast<size_t>(row) >= select->m_projections.size())
 		return;
@@ -3474,7 +3474,7 @@ void ibDialogQueryConstructor::OnMoveUnionField(int delta)
 	if (!CanEdit() || m_unionFieldModel == nullptr || m_unionFields == nullptr)
 		return;
 
-	ibQuerySelect* select = StatementSelect();
+	const ibQuerySelectPtr select = StatementSelect();
 	const long row = static_cast<long>(m_unionFieldModel->GetRow(m_unionFields->GetSelection()));
 	const long target = row + delta;
 	if (select == nullptr || row < 0 || target < 0
@@ -3499,7 +3499,7 @@ void ibDialogQueryConstructor::OnAdvancedChanged(wxCommandEvent&)
 
 	if (m_filling)
 		return;
-	ibQuerySelect* select = Current();
+	const ibQuerySelectPtr select = Current();
 	if (select == nullptr)
 		return;
 

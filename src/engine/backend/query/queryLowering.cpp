@@ -70,9 +70,9 @@ std::shared_ptr<const ibBackendQueryable> ibTempSourceScope::Find(const ibString
 // Same shape and the same lifetime as the temp sources above, and separate from them for a reason:
 // a temp table HAS rows, a named result is a QUERY — and which of the two roads a reader takes
 // (declare it to the server, or take its rows) is decided by the reader's own lowering.
-static thread_local const std::map<ibString, const ibQuerySelect*>* t_namedResults = nullptr;
+static thread_local const std::map<ibString, ibQuerySelectPtr>* t_namedResults = nullptr;
 
-ibNamedResultScope::ibNamedResultScope(const std::map<ibString, const ibQuerySelect*>& results)
+ibNamedResultScope::ibNamedResultScope(const std::map<ibString, ibQuerySelectPtr>& results)
 	: m_prev(t_namedResults)
 {
 	t_namedResults = &results;
@@ -83,7 +83,7 @@ ibNamedResultScope::~ibNamedResultScope()
 	t_namedResults = m_prev;
 }
 
-const ibQuerySelect* ibNamedResultScope::Find(const ibString& name)
+ibQuerySelectPtr ibNamedResultScope::Find(const ibString& name)
 {
 	if (t_namedResults == nullptr || name.IsEmpty())
 		return nullptr;
@@ -3744,7 +3744,7 @@ std::shared_ptr<const ibBackendQueryable> ResolveFrom(const ibQuerySource& src,
 	// can read a named query and the reader has a door to declare it on, otherwise take its rows as
 	// a nested source, which is what this has always done.
 	if (!src.m_subquery && !src.m_parameter && src.m_name.size() == 1) {
-		if (const ibQuerySelect* named = ibNamedResultScope::Find(src.m_name.front())) {
+		if (const ibQuerySelectPtr named = ibNamedResultScope::Find(src.m_name.front())) {
 			if (declareOn != nullptr) {
 				std::shared_ptr<const ibBackendQueryable> cte =
 					DeclareNamedResultAsCte(*declareOn, src.m_name.front(), *named, params, owner);
@@ -5768,7 +5768,7 @@ void BuildSourceTree(const ibQuerySelect& ast, const std::map<ibString, ibValue>
 			if (src.m_subquery)
 				return foldsOrUnions(*src.m_subquery);
 			if (src.m_name.size() == 1)
-				if (const ibQuerySelect* named = ibNamedResultScope::Find(src.m_name.front()))
+				if (const ibQuerySelectPtr named = ibNamedResultScope::Find(src.m_name.front()))
 					return foldsOrUnions(*named);   // a selection this package named (ONTO)
 			return false;
 		};
@@ -7239,7 +7239,7 @@ void ibQueryLowering::PreparePackage(const ibQueryPackage& package,
 	const ibCastLeafScope castLeaves;   // one query's narrowed fields (ibCastLeafScope) — at every door
 	// The names declared SO FAR — a preparing statement may read a selection named above it, which
 	// is an ordinary thing to write and costs nothing here (the lowering resolves it).
-	std::map<ibString, const ibQuerySelect*> named;
+	std::map<ibString, ibQuerySelectPtr> named;
 	ibNamedResultScope namedScope(named);
 
 	for (const ibQueryAstStatement& statement : package.m_statements) {
@@ -7263,7 +7263,7 @@ void ibQueryLowering::PreparePackage(const ibQueryPackage& package,
 			//
 			// ⚠ Registered AFTER it is passed, for the reason ExecutePackage states at length: a
 			// name visible while its own statement is lowered resolves to itself, without end.
-			if (!ast.m_ontoName.IsEmpty() && !named.emplace(ast.m_ontoName.Lower(), statement.m_select.get()).second)
+			if (!ast.m_ontoName.IsEmpty() && !named.emplace(ast.m_ontoName.Lower(), statement.m_select).second)
 				ThrowQueryException(0, 0, ibString::Format(
 					_("two statements of this package name their result '%s'"), ast.m_ontoName));
 			continue;
@@ -7561,7 +7561,7 @@ std::vector<ibQueryLowering::ibQueryPackageResult> ibQueryLowering::ExecutePacka
 	// THE RESULTS THIS PACKAGE HAS NAMED so far, by their ONTO name (lower-cased: names in this
 	// language are matched without regard to case). A later statement may read one of them, and
 	// reading it is what a RESULT LINK is.
-	std::map<ibString, const ibQuerySelect*> named;
+	std::map<ibString, ibQuerySelectPtr> named;
 
 	for (const ibQueryAstStatement& statement : package.m_statements) {
 
@@ -7737,7 +7737,7 @@ std::vector<ibQueryLowering::ibQueryPackageResult> ibQueryLowering::ExecutePacka
 		// name a CYCLE (`… ONTO A; … FROM A ONTO B; … FROM B ONTO A`) whose resolution calls itself
 		// until the stack ends — a crash, not an error message. The window checks uniqueness as a
 		// name is typed; text written by hand and packages built by script come in through here.
-		if (!ast.m_ontoName.IsEmpty() && !named.emplace(ast.m_ontoName.Lower(), statement.m_select.get()).second)
+		if (!ast.m_ontoName.IsEmpty() && !named.emplace(ast.m_ontoName.Lower(), statement.m_select).second)
 			ThrowQueryException(0, 0, ibString::Format(
 				_("two statements of this package name their result '%s'"), ast.m_ontoName));
 
@@ -7859,7 +7859,7 @@ std::vector<ibQueryLowering::ibQueryPackageResult> ibQueryLowering::ExecutePacka
 		bool everyNameKnown = true;
 		for (const ibString& name : present) {
 			const auto found = named.find(name.Lower());
-			const ibQuerySelect* source = found != named.end() ? found->second : nullptr;
+			const ibQuerySelectPtr source = found != named.end() ? found->second : nullptr;
 			if (source == nullptr || source->m_selectAll || source->m_projections.empty()) {
 				everyNameKnown = false;   // `SELECT *` inside — its fields are not named here
 				break;

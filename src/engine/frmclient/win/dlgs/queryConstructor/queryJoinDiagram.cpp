@@ -48,7 +48,7 @@ ibQueryJoinDiagram::ibQueryJoinDiagram(wxWindow* parent)
 	Bind(wxEVT_SIZE, [this](wxSizeEvent& e) { LayoutBoxes(); Refresh(); e.Skip(); });
 }
 
-void ibQueryJoinDiagram::SetContent(ibQuerySelect* select, std::vector<Table> tables)
+void ibQueryJoinDiagram::SetContent(const ibQuerySelectPtr& select, std::vector<Table> tables)
 {
 	m_select = select;
 	m_tables = std::move(tables);

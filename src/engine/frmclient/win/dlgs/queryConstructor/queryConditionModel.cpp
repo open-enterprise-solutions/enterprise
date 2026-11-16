@@ -12,7 +12,7 @@
 #include "core/exception.h"   // ibCoreException — what a refused condition throws
 
 
-void ibQueryConditionModel::SetContent(ibQuerySelect* select)
+void ibQueryConditionModel::SetContent(const ibQuerySelectPtr& select)
 {
 	m_select = select;
 	const size_t count = Rows().size();

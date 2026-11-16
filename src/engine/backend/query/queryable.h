@@ -77,7 +77,7 @@ private:
 	const std::map<ibString, std::shared_ptr<const ibBackendQueryable>>* m_prev;
 };
 
-struct ibQuerySelect;   // an AST select — a named result IS one, kept by pointer only
+struct ibQuerySelect;   // an AST select — a named result IS one, held as its statement holds it
 
 // ==========================================================================
 // ibNamedResultScope — THE RESULTS THIS PACKAGE HAS NAMED, for the statements that read them.
@@ -97,17 +97,17 @@ struct ibQuerySelect;   // an AST select — a named result IS one, kept by poin
 class BACKEND_API ibNamedResultScope
 {
 public:
-	explicit ibNamedResultScope(const std::map<ibString, const ibQuerySelect*>& results);
+	explicit ibNamedResultScope(const std::map<ibString, std::shared_ptr<ibQuerySelect>>& results);
 	~ibNamedResultScope();
 
 	// The named result for `name` (matched without regard to case), or null.
-	static const ibQuerySelect* Find(const ibString& name);
+	static std::shared_ptr<ibQuerySelect> Find(const ibString& name);
 
 	ibNamedResultScope(const ibNamedResultScope&) = delete;
 	ibNamedResultScope& operator=(const ibNamedResultScope&) = delete;
 
 private:
-	const std::map<ibString, const ibQuerySelect*>* m_prev;
+	const std::map<ibString, std::shared_ptr<ibQuerySelect>>* m_prev;
 };
 
 class ibMetaData;   // the config a query runs on behalf of — its factory resolves by-name metaobject sources

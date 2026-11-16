@@ -17,33 +17,31 @@ using namespace queryctor;
 // ===========================================================================
 
 // THE STATEMENT'S OWN SELECT — the one that owns the union branches, the INTO, the FOR UPDATE.
-ibQuerySelect* ibDialogQueryConstructor::StatementSelect() const
+ibQuerySelectPtr ibDialogQueryConstructor::StatementSelect() const
 {
 	if (m_statement >= m_package.m_statements.size())
 		return nullptr;
-	const ibQueryAstStatement& statement = m_package.m_statements[m_statement];
-	if (!statement.m_select)
-		return nullptr;   // a DROP statement has no select — the tabs show nothing, correctly
-	return statement.m_select.get();
+	// A DROP statement has no select — the tabs show nothing, correctly.
+	return m_package.m_statements[m_statement].m_select;
 }
 
 // WHAT THE TABS EDIT. Normally the statement itself; when a union BRANCH is selected on the strip
 // down the right edge, that branch — because a branch is a query with its own tables, conditions
 // and ordering, and the only sane way to edit one is with the same tabs that edit any other query.
-ibQuerySelect* ibDialogQueryConstructor::Current() const
+ibQuerySelectPtr ibDialogQueryConstructor::Current() const
 {
-	ibQuerySelect* select = StatementSelect();
+	ibQuerySelectPtr select = StatementSelect();
 	if (select == nullptr || m_unionBranch < 0)
 		return select;
 	return static_cast<size_t>(m_unionBranch) < select->m_unions.size()
-		? select->m_unions[static_cast<size_t>(m_unionBranch)].get()
+		? select->m_unions[static_cast<size_t>(m_unionBranch)]
 		: select;
 }
 
 std::vector<ibQuerySource*> ibDialogQueryConstructor::CurrentSources() const
 {
 	std::vector<ibQuerySource*> out;
-	ibQuerySelect* select = Current();
+	const ibQuerySelectPtr select = Current();
 	if (select == nullptr)
 		return out;
 	out.push_back(&select->m_from);
@@ -86,7 +84,7 @@ std::vector<ibQueryConstructorField> ibDialogQueryConstructor::AvailableFields()
 std::vector<ibQueryConstructorField> ibDialogQueryConstructor::TotalsFields() const
 {
 	std::vector<ibQueryConstructorField> out;
-	const ibQuerySelect* select = Current();
+	const ibQuerySelectPtr select = Current();
 	if (select == nullptr)
 		return out;
 
@@ -497,7 +495,7 @@ wxIcon ibDialogQueryConstructor::IconOfExpr(const ibQueryAstExprPtr& expr) const
 	if (!expr || expr->m_kind != ibQueryAstExprKind::Column || expr->m_path.empty())
 		return wxNullIcon;
 
-	const ibQuerySelect* select = Current();
+	const ibQuerySelectPtr select = Current();
 	if (select == nullptr)
 		return wxNullIcon;
 
@@ -660,20 +658,20 @@ void queryctor::ibQuerySetTotalsExpression(ibQueryTotalAggregate& figure, ibQuer
 //
 // The engine refuses a ragged union with a clear message (queryLowering, LowerUnion). This is what
 // makes that message something an author sees only when they wrote the query by hand.
-void queryctor::ibQueryPadUnionBranches(ibQuerySelect& select)
+void queryctor::ibQueryPadUnionBranches(const ibQuerySelectPtr& select)
 {
-	if (select.m_unions.empty())
+	if (select->m_unions.empty())
 		return;
 
 	// Every branch, the query itself first.
-	std::vector<ibQuerySelect*> branches;
-	branches.push_back(&select);
-	for (const ibQuerySelectPtr& u : select.m_unions)
-		if (u) branches.push_back(u.get());
+	std::vector<ibQuerySelectPtr> branches;
+	branches.push_back(select);
+	for (const ibQuerySelectPtr& u : select->m_unions)
+		if (u) branches.push_back(u);
 
 	// A branch that selects * has no field list to line up — padding it would invent columns for a
 	// shape only the source knows. Left exactly as written.
-	for (const ibQuerySelect* b : branches)
+	for (const ibQuerySelectPtr& b : branches)
 		for (const ibQueryProjection& p : b->m_projections)
 			if (p.m_star)
 				return;
@@ -685,7 +683,7 @@ void queryctor::ibQueryPadUnionBranches(ibQuerySelect& select)
 			if (n.IsSameAs(name, false)) return true;
 		return false;
 	};
-	for (const ibQuerySelect* b : branches)
+	for (const ibQuerySelectPtr& b : branches)
 		for (const ibQueryProjection& p : b->m_projections) {
 			const wxString name = ibQueryOutputName(p);
 			if (!name.IsEmpty() && !known(name))
@@ -701,7 +699,7 @@ void queryctor::ibQueryPadUnionBranches(ibQuerySelect& select)
 	// What a branch already had keeps its expression — only its PLACE is decided here. What it
 	// lacked becomes an EMPTY value: not a zero and not a blank string (those are values somebody
 	// could mistake for data), but the query saying this branch has nothing here.
-	for (ibQuerySelect* b : branches) {
+	for (const ibQuerySelectPtr& b : branches) {
 		std::vector<ibQueryProjection> ordered;
 		ordered.reserve(names.size());
 
@@ -1147,7 +1145,7 @@ void ibDialogQueryConstructor::FillTables()
 	TreeIcons icons = PrepareIcons(m_tables);
 	const wxTreeItemId root = m_tables->AddRoot(wxEmptyString);
 
-	ibQuerySelect* select = Current();
+	const ibQuerySelectPtr select = Current();
 	if (m_fieldModel != nullptr)
 		m_fieldModel->SetRowCount(0);
 	if (select == nullptr)
@@ -1178,7 +1176,7 @@ void ibDialogQueryConstructor::FillTables()
 
 void ibDialogQueryConstructor::FillLinks()
 {
-	ibQuerySelect* select = Current();
+	const ibQuerySelectPtr select = Current();
 
 	// The names each source is known by, in the order the constructor indexes them — the grid and
 	// the diagram are handed the SAME list, so a table cannot be called one thing in one and
@@ -1302,7 +1300,7 @@ void ibDialogQueryConstructor::FillFieldSources()
 		// thing offered.
 		wxTreeItemId tablesUnder = root;
 		if (tree == m_totalsSource) {
-			const ibQuerySelect* select = Current();
+			const ibQuerySelectPtr select = Current();
 			// The result's own fields — those of no table (TotalsFields); the tables follow below, a
 			// heading each, as on the other tabs.
 			for (const ibQueryConstructorField& field : TotalsFields())
@@ -1412,7 +1410,7 @@ std::vector<wxString> ibDialogQueryConstructor::SelectedFieldsOf(ibTreeCtrl* tre
 std::vector<size_t> ibDialogQueryConstructor::AggregateRows() const
 {
 	std::vector<size_t> rows;
-	const ibQuerySelect* select = Current();
+	const ibQuerySelectPtr select = Current();
 	if (select == nullptr)
 		return rows;
 	for (size_t i = 0; i < select->m_projections.size(); ++i)
@@ -1433,7 +1431,7 @@ void ibDialogQueryConstructor::FillGrouping()
 {
 	// THE MODELS ARE THE FILL. Each reads the select on every paint, so a refresh is a row count —
 	// there is no second copy of the AST inside a control to fall out of step with it.
-	const ibQuerySelect* select = Current();
+	const ibQuerySelectPtr select = Current();
 	if (m_groupingModel != nullptr)
 		m_groupingModel->SetRowCount(select == nullptr ? 0u : static_cast<unsigned int>(select->m_groupBy.size()));
 	if (m_aggregateModel != nullptr)
@@ -1452,7 +1450,7 @@ void ibDialogQueryConstructor::FillIndex()
 {
 	if (m_indexModel == nullptr)
 		return;
-	const ibQuerySelect* select = Current();
+	const ibQuerySelectPtr select = Current();
 	m_indexModel->SetRowCount(select == nullptr ? 0u : static_cast<unsigned int>(select->m_indexBy.size()));
 }
 
@@ -1460,7 +1458,7 @@ void ibDialogQueryConstructor::OnAddIndexField(wxCommandEvent&)
 {
 	if (!CanEdit())
 		return;
-	ibQuerySelect* select = Current();
+	const ibQuerySelectPtr select = Current();
 	if (select == nullptr)
 		return;
 
@@ -1480,7 +1478,7 @@ void ibDialogQueryConstructor::OnRemoveIndexField(wxCommandEvent&)
 {
 	if (!CanEdit())
 		return;
-	ibQuerySelect* select = Current();
+	const ibQuerySelectPtr select = Current();
 	if (select == nullptr)
 		return;
 	const long index = SelectedRow(m_indexFields, m_indexModel);
@@ -1494,13 +1492,13 @@ void ibDialogQueryConstructor::FillOrder()
 {
 	if (m_orderModel == nullptr)
 		return;
-	const ibQuerySelect* select = Current();
+	const ibQuerySelectPtr select = Current();
 	m_orderModel->SetRowCount(select == nullptr ? 0u : static_cast<unsigned int>(select->m_orderBy.size()));
 }
 
 void ibDialogQueryConstructor::FillTotals()
 {
-	const ibQuerySelect* select = Current();
+	const ibQuerySelectPtr select = Current();
 	if (m_totalsAggregateModel != nullptr)
 		m_totalsAggregateModel->SetRowCount(select == nullptr ? 0u
 			: static_cast<unsigned int>(select->m_totalsAggregates.size()));
@@ -1543,12 +1541,12 @@ void ibDialogQueryConstructor::FillTotalsPeriods()
 	    || m_periodFrom == nullptr || m_periodTo == nullptr)
 		return;
 
-	const ibQuerySelect* select = Current();
+	const ibQuerySelectPtr select = Current();
 	// THE LEVEL THE CARET IS ON, whichever node it hangs on — a separator's levels have periodicity
 	// exactly as the hidden node's do. A separator itself has none: it is not keyed by a value.
 	const ibTotalsRow at = SelectedTotalsAt();
 	const std::vector<ibQueryTotalDim>* levels =
-		const_cast<ibDialogQueryConstructor*>(this)->LevelsOfNode(const_cast<ibQuerySelect*>(select), at.m_node);
+		const_cast<ibDialogQueryConstructor*>(this)->LevelsOfNode(select, at.m_node);
 	const ibQueryTotalDim* dim = select != nullptr && at.IsLevel() && levels != nullptr
 	                             && static_cast<size_t>(at.m_level) < levels->size()
 		? &(*levels)[static_cast<size_t>(at.m_level)] : nullptr;
@@ -1623,7 +1621,7 @@ void ibDialogQueryConstructor::FillUnions()
 	// THE BRANCH LIST BELONGS TO THE STATEMENT, not to the branch being edited — otherwise
 	// selecting branch 2 would show branch 2's own (empty) union list and the strip would vanish
 	// under the person using it.
-	ibQuerySelect* select = StatementSelect();
+	const ibQuerySelectPtr select = StatementSelect();
 
 	// The TABS down the right edge: one per branch, the first being this query. Rebuilt only when the
 	// count changed — a notebook re-made on every refill flickers, and its own selection event would
@@ -1700,7 +1698,7 @@ void ibDialogQueryConstructor::FillUnions()
 }
 void ibDialogQueryConstructor::FillAdvanced()
 {
-	ibQuerySelect* select = Current();
+	const ibQuerySelectPtr select = Current();
 	const bool has = select != nullptr;
 
 	m_distinct ->SetValue(has && select->m_distinct);
@@ -1839,7 +1837,7 @@ int ibDialogQueryConstructor::SelectedTotalsNode() const
 
 // THE LEVELS OF ONE NODE — the hidden node's live on the select itself, a separator's on the
 // separator. One accessor, so nothing below has to branch on which kind of node it is holding.
-std::vector<ibQueryTotalDim>* ibDialogQueryConstructor::LevelsOfNode(ibQuerySelect* select, int node) const
+std::vector<ibQueryTotalDim>* ibDialogQueryConstructor::LevelsOfNode(const ibQuerySelectPtr& select, int node) const
 {
 	if (select == nullptr)
 		return nullptr;

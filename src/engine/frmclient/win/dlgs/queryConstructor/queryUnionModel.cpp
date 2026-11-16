@@ -16,7 +16,7 @@
 //  The branches
 // ---------------------------------------------------------------------------
 
-void ibQueryUnionModel::SetContent(ibQuerySelect* select)
+void ibQueryUnionModel::SetContent(const ibQuerySelectPtr& select)
 {
 	m_select = select;
 	// Row 0 is THIS query. A union's first branch is the query itself, and hiding that would make
@@ -24,11 +24,11 @@ void ibQueryUnionModel::SetContent(ibQuerySelect* select)
 	Reset(m_select != nullptr ? static_cast<unsigned int>(m_select->m_unions.size() + 1) : 0u);
 }
 
-ibQuerySelect* ibQueryUnionModel::BranchAt(unsigned int row) const
+ibQuerySelectPtr ibQueryUnionModel::BranchAt(unsigned int row) const
 {
 	if (m_select == nullptr || row == 0 || row > m_select->m_unions.size())
 		return nullptr;
-	return m_select->m_unions[row - 1].get();
+	return m_select->m_unions[row - 1];
 }
 
 void ibQueryUnionModel::GetValueByRow(ibVariant& variant, unsigned row, unsigned col) const
@@ -47,7 +47,7 @@ void ibQueryUnionModel::GetValueByRow(ibVariant& variant, unsigned row, unsigned
 		//
 		// The flag belongs to the branch being ATTACHED (the operator sits between two branches),
 		// so row 0 has none — its box is off and disabled rather than pretending to be a setting.
-		const ibQuerySelect* branch = BranchAt(row);
+		const ibQuerySelectPtr branch = BranchAt(row);
 		variant = branch != nullptr && !branch->m_unionAll;
 		break;
 	}
@@ -60,7 +60,7 @@ bool ibQueryUnionModel::SetValueByRow(const ibVariant& variant, unsigned row, un
 {
 	if (col != kUnionColKeepDuplicates)
 		return false;
-	ibQuerySelect* branch = BranchAt(row);
+	const ibQuerySelectPtr branch = BranchAt(row);
 	if (branch == nullptr)
 		return false;
 
@@ -81,7 +81,7 @@ bool ibQueryUnionModel::IsEnabledByRow(unsigned row, unsigned col) const
 //  The field map
 // ---------------------------------------------------------------------------
 
-void ibQueryUnionFieldModel::SetContent(ibQuerySelect* select)
+void ibQueryUnionFieldModel::SetContent(const ibQuerySelectPtr& select)
 {
 	m_select = select;
 	m_names.clear();
@@ -174,14 +174,14 @@ wxString ibQueryUnionFieldModel::FreeOutputName(const wxString& wanted) const
 	}
 }
 
-ibQuerySelect* ibQueryUnionFieldModel::BranchSelectAt(unsigned int branch) const
+ibQuerySelectPtr ibQueryUnionFieldModel::BranchSelectAt(unsigned int branch) const
 {
 	if (m_select == nullptr)
 		return nullptr;
 	if (branch == 0)
 		return m_select;                       // branch 0 IS this query
 	const size_t index = static_cast<size_t>(branch) - 1;
-	return index < m_select->m_unions.size() ? m_select->m_unions[index].get() : nullptr;
+	return index < m_select->m_unions.size() ? m_select->m_unions[index] : nullptr;
 }
 
 wxString ibQueryUnionFieldModel::ColumnOf(const ibQuerySelect& branch, const wxString& name) const
@@ -267,8 +267,8 @@ void ibQueryUnionFieldModel::GetValueByRow(ibVariant& variant, unsigned row, uns
 		return;
 	}
 
-	const ibQuerySelect* branch = branchIndex - 1 < m_select->m_unions.size()
-		? m_select->m_unions[branchIndex - 1].get() : nullptr;
+	const ibQuerySelectPtr branch = branchIndex - 1 < m_select->m_unions.size()
+		? m_select->m_unions[branchIndex - 1] : nullptr;
 	if (branch == nullptr)
 		return;
 
@@ -310,7 +310,7 @@ void ibQueryUnionFieldModel::GetValueByRow(ibVariant& variant, unsigned row, uns
 //
 // (Selecting one column twice under two names is legitimate SQL and stays possible — on the FIELDS
 // tab, where adding a field is what the gesture means. Here it is not what anyone is asking for.)
-static void UnlineFieldElsewhere(ibQuerySelect* target, const wxString& field, size_t keep)
+static void UnlineFieldElsewhere(const ibQuerySelectPtr& target, const wxString& field, size_t keep)
 {
 	if (target == nullptr || field.IsEmpty())
 		return;
@@ -332,7 +332,7 @@ static void UnlineFieldElsewhere(ibQuerySelect* target, const wxString& field, s
 
 bool ibQueryUnionFieldModel::SetBranchColumn(unsigned int row, unsigned int branch, const wxString& field)
 {
-	ibQuerySelect* target = BranchSelectAt(branch);
+	const ibQuerySelectPtr target = BranchSelectAt(branch);
 	if (target == nullptr || row >= m_names.size())
 		return false;
 

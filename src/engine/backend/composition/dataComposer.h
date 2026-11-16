@@ -1586,9 +1586,9 @@ private:
 
 	// TEXT -> THE STATEMENT THAT CARRIES THE SETTINGS, with the package's own named results beside
 	// it. All three execution roads write text the same way, so they read it back the same way too.
-	// `package` owns the statements `named` points into — both must outlive the lowering call.
+	// `named` holds the selections as the package's statements hold them.
 	ibQuerySelectPtr ParseComposed(const ibString& text, ibQueryPackage& package,
-	                               std::map<ibString, const ibQuerySelect*>& named) const;
+	                               std::map<ibString, ibQuerySelectPtr>& named) const;
 
 	// ⭐⭐ THREE CACHES, AND EACH CARRIES ITS OWN KEY (Max, 2026-08-28: *"a great many mutables, which
 	// is worrying"*). There were SEVENTEEN `mutable` members here, and they were not seventeen
@@ -1634,7 +1634,7 @@ private:
 		// points at alive) and the scope the lowering resolves `FROM Sales` through.
 		ibQuerySelectPtr    m_ast;
 		ibQueryPackage      m_package;
-		std::map<ibString, const ibQuerySelect*> m_named;
+		std::map<ibString, ibQuerySelectPtr> m_named;
 		// The parameters the condition bound when it was built (BuildFilterAst — `__f<n>`, new at every build): this
 		// render's, and dropped with it. Left in m_params they outlived the condition, and a page's signature — the text
 		// and the parameters — answered for a condition that was gone: a list whose search was cleared went on showing

@@ -1786,10 +1786,10 @@ void ibDataDBComposer::SplitSourceText() const
 			ibString qualified;
 			bool everyNameKnown = true;
 			for (const ibString& name : placed) {
-				const ibQuerySelect* select = nullptr;
+				ibQuerySelectPtr select;
 				for (const ibQueryAstStatement& statement : package.m_statements)
 					if (statement.m_select && statement.m_select->m_ontoName.IsSameAs(name, false)) {
-						select = statement.m_select.get();
+						select = statement.m_select;
 						break;
 					}
 				if (select == nullptr || select->m_selectAll || select->m_projections.empty()) {
@@ -1876,7 +1876,7 @@ void ibDataDBComposer::EnsureTempTables() const
 
 // TEXT -> the statement that carries the settings, and the named results standing behind it.
 ibQuerySelectPtr ibDataDBComposer::ParseComposed(const ibString& text, ibQueryPackage& package,
-	std::map<ibString, const ibQuerySelect*>& named) const
+	std::map<ibString, ibQuerySelectPtr>& named) const
 {
 	// The engine's door: the core parser's refusal is raised as the engine's (ibBackendQuerySyntaxException).
 	try { package = ibQueryParser().ParsePackage(text); }
@@ -1891,7 +1891,7 @@ ibQuerySelectPtr ibDataDBComposer::ParseComposed(const ibString& text, ibQueryPa
 	for (size_t i = 0; i + 1 < package.m_statements.size(); ++i) {
 		const ibQuerySelectPtr select = package.m_statements[i].m_select;
 		if (select != nullptr && !select->m_ontoName.IsEmpty())
-			named.emplace(select->m_ontoName.Lower(), select.get());
+			named.emplace(select->m_ontoName.Lower(), select);
 	}
 	return package.m_statements.back().m_select;
 }

@@ -833,7 +833,7 @@ wxWindow* ibDialogQueryConstructor::BuildTablesPage(wxWindow* parent)
 	// place to type it would be two controls over one word.
 	m_fieldModel = new ibQueryGridModel();
 	m_fieldModel->SetReader([this](unsigned int row, unsigned int) -> wxString {
-		const ibQuerySelect* select = Current();
+		const ibQuerySelectPtr select = Current();
 		if (select == nullptr || row >= select->m_projections.size())
 			return wxEmptyString;
 		const ibQueryProjection& projection = select->m_projections[row];
@@ -850,7 +850,7 @@ wxWindow* ibDialogQueryConstructor::BuildTablesPage(wxWindow* parent)
 		return shown;
 	});
 	m_fieldModel->SetWriter([this](unsigned int row, unsigned int, const wxString& text) -> bool {
-		ibQuerySelect* select = Current();
+		const ibQuerySelectPtr select = Current();
 		if (!CanEdit() || select == nullptr || row >= select->m_projections.size())
 			return false;
 		// THE ENGINE READS IT, not us. An expression typed into the cell goes through the same parser
@@ -880,7 +880,7 @@ wxWindow* ibDialogQueryConstructor::BuildTablesPage(wxWindow* parent)
 	m_fieldModel->SetIconColumn(kGridCol1, ibValue::GetIconGroup());
 	// PER ROW: the column already said what it looks like; this only carries the answer.
 	m_fieldModel->SetIconReader([this](unsigned int row) -> wxIcon {
-		const ibQuerySelect* select = Current();
+		const ibQuerySelectPtr select = Current();
 		return select != nullptr && row < select->m_projections.size()
 			? IconOfExpr(select->m_projections[row].m_expr) : wxNullIcon;
 	});
@@ -1129,13 +1129,13 @@ wxWindow* ibDialogQueryConstructor::BuildGroupingPage(wxWindow* parent)
 	// goes through the engine's parser, and what the parser says is what the user is shown.
 	m_groupingModel = new ibQueryGridModel();
 	m_groupingModel->SetReader([this](unsigned int row, unsigned int) -> wxString {
-		const ibQuerySelect* select = Current();
+		const ibQuerySelectPtr select = Current();
 		if (select == nullptr || row >= select->m_groupBy.size() || !select->m_groupBy[row])
 			return wxEmptyString;
 		return ibRenderQueryExpr(*select->m_groupBy[row]);
 	});
 	m_groupingModel->SetWriter([this](unsigned int row, unsigned int, const wxString& text) -> bool {
-		ibQuerySelect* select = Current();
+		const ibQuerySelectPtr select = Current();
 		if (!CanEdit() || select == nullptr || row >= select->m_groupBy.size())
 			return false;
 		try {
@@ -1151,7 +1151,7 @@ wxWindow* ibDialogQueryConstructor::BuildGroupingPage(wxWindow* parent)
 	m_grouping = MakeGrid(keysPane, m_groupingModel, [this] { FillAll(); });
 	m_groupingModel->SetIconColumn(kGridCol1, ibValue::GetIconGroup());
 	m_groupingModel->SetIconReader([this](unsigned int row) -> wxIcon {
-		const ibQuerySelect* select = Current();
+		const ibQuerySelectPtr select = Current();
 		return select != nullptr && row < select->m_groupBy.size()
 			? IconOfExpr(select->m_groupBy[row]) : wxNullIcon;
 	});
@@ -1181,7 +1181,7 @@ wxWindow* ibDialogQueryConstructor::BuildGroupingPage(wxWindow* parent)
 	// projections those are.
 	m_aggregateModel = new ibQueryGridModel();
 	m_aggregateModel->SetReader([this](unsigned int row, unsigned int col) -> wxString {
-		const ibQuerySelect* select = Current();
+		const ibQuerySelectPtr select = Current();
 		const std::vector<size_t> rows = AggregateRows();
 		if (select == nullptr || row >= rows.size())
 			return wxEmptyString;
@@ -1216,7 +1216,7 @@ wxWindow* ibDialogQueryConstructor::BuildGroupingPage(wxWindow* parent)
 				? wxT(" (") + ibQueryKeywordText(ibQueryKeyword::Distinct) + wxT(")") : ibString());
 	});
 	m_aggregateModel->SetWriter([this](unsigned int row, unsigned int col, const wxString& text) -> bool {
-		ibQuerySelect* select = Current();
+		const ibQuerySelectPtr select = Current();
 		const std::vector<size_t> rows = AggregateRows();
 		if (!CanEdit() || select == nullptr || row >= rows.size())
 			return false;
@@ -1272,7 +1272,7 @@ wxWindow* ibDialogQueryConstructor::BuildGroupingPage(wxWindow* parent)
 	m_aggregateModel->SetIconColumn(kGridCol1, ibValue::GetIconGroup());
 	// AN AGGREGATE WEARS ITS ARGUMENT PICTURE: what SUM(x) is about is x.
 	m_aggregateModel->SetIconReader([this](unsigned int row) -> wxIcon {
-		const ibQuerySelect* select = Current();
+		const ibQuerySelectPtr select = Current();
 		const std::vector<size_t> rows = AggregateRows();
 		if (select == nullptr || row >= rows.size()) return wxNullIcon;
 		const ibQueryAstExprPtr& expr = select->m_projections[rows[row]].m_expr;
@@ -1285,7 +1285,7 @@ wxWindow* ibDialogQueryConstructor::BuildGroupingPage(wxWindow* parent)
 	m_aggregates->GetRootColumnGroup()->AppendColumn(new ibDataViewColumn(_("Function"),
 		new ibRowChoiceRenderer([this]() -> wxArrayString {
 			wxArrayString words;
-			const ibQuerySelect* select = Current();
+			const ibQuerySelectPtr select = Current();
 			const long row = SelectedRow(m_aggregates, m_aggregateModel);
 			const std::vector<size_t> rows = AggregateRows();
 
@@ -1481,13 +1481,13 @@ wxWindow* ibDialogQueryConstructor::BuildIndexPage(wxWindow* parent)
 	right->Add(new ibStaticText(rightPane, wxID_ANY, _("Index by")), 0, wxALL, FromDIP(3));
 	m_indexModel = new ibQueryGridModel();
 	m_indexModel->SetReader([this](unsigned int row, unsigned int) -> wxString {
-		const ibQuerySelect* select = Current();
+		const ibQuerySelectPtr select = Current();
 		if (select == nullptr || row >= select->m_indexBy.size() || !select->m_indexBy[row])
 			return wxEmptyString;
 		return ibRenderQueryExpr(*select->m_indexBy[row]);
 	});
 	m_indexModel->SetWriter([this](unsigned int row, unsigned int, const wxString& text) -> bool {
-		ibQuerySelect* select = Current();
+		const ibQuerySelectPtr select = Current();
 		if (!CanEdit() || select == nullptr || row >= select->m_indexBy.size())
 			return false;
 		try {
@@ -1503,7 +1503,7 @@ wxWindow* ibDialogQueryConstructor::BuildIndexPage(wxWindow* parent)
 	m_indexFields = MakeGrid(rightPane, m_indexModel, [this] { FillAll(); });
 	m_indexModel->SetIconColumn(kGridCol1, ibValue::GetIconGroup());
 	m_indexModel->SetIconReader([this](unsigned int row) -> wxIcon {
-		const ibQuerySelect* select = Current();
+		const ibQuerySelectPtr select = Current();
 		return select != nullptr && row < select->m_indexBy.size()
 			? IconOfExpr(select->m_indexBy[row]) : wxNullIcon;
 	});
@@ -1566,7 +1566,7 @@ wxWindow* ibDialogQueryConstructor::BuildOrderPage(wxWindow* parent)
 	// its own rather than a suffix on the field's name — and both are typed into where they stand.
 	m_orderModel = new ibQueryGridModel();
 	m_orderModel->SetReader([this](unsigned int row, unsigned int col) -> wxString {
-		const ibQuerySelect* select = Current();
+		const ibQuerySelectPtr select = Current();
 		if (select == nullptr || row >= select->m_orderBy.size())
 			return wxEmptyString;
 		const ibQueryOrderItem& item = select->m_orderBy[row];
@@ -1575,7 +1575,7 @@ wxWindow* ibDialogQueryConstructor::BuildOrderPage(wxWindow* parent)
 		return ibQueryKeywordText(item.m_ascending ? ibQueryKeyword::Asc : ibQueryKeyword::Desc);
 	});
 	m_orderModel->SetWriter([this](unsigned int row, unsigned int col, const wxString& text) -> bool {
-		ibQuerySelect* select = Current();
+		const ibQuerySelectPtr select = Current();
 		if (!CanEdit() || select == nullptr || row >= select->m_orderBy.size())
 			return false;
 		ibQueryOrderItem& item = select->m_orderBy[row];
@@ -1599,7 +1599,7 @@ wxWindow* ibDialogQueryConstructor::BuildOrderPage(wxWindow* parent)
 	AttachContextMenu(m_order, bar);
 	m_orderModel->SetIconColumn(kGridCol1, ibValue::GetIconGroup());
 	m_orderModel->SetIconReader([this](unsigned int row) -> wxIcon {
-		const ibQuerySelect* select = Current();
+		const ibQuerySelectPtr select = Current();
 		return select != nullptr && row < select->m_orderBy.size()
 			? IconOfExpr(select->m_orderBy[row].m_expr) : wxNullIcon;
 	});
@@ -1685,16 +1685,16 @@ wxWindow* ibDialogQueryConstructor::BuildTotalsPage(wxWindow* parent)
 	// HOW MANY ROWS HANG WHERE — the tree asks these two and builds itself; the dialog answers out of
 	// the AST, so there is no second copy of the ladder anywhere.
 	m_totalsDimensionModel->SetNodeCount([this]() -> int {
-		const ibQuerySelect* select = Current();
+		const ibQuerySelectPtr select = Current();
 		return select != nullptr ? static_cast<int>(select->m_totalsSplits.size()) : 0;
 	});
 	m_totalsDimensionModel->SetLevelsOf([this](int node) -> int {
 		const std::vector<ibQueryTotalDim>* levels =
-			LevelsOfNode(const_cast<ibQuerySelect*>(Current()), node);
+			LevelsOfNode(Current(), node);
 		return levels != nullptr ? static_cast<int>(levels->size()) : 0;
 	});
 	m_totalsDimensionModel->SetReader([this](const ibTotalsRow& at, unsigned int col) -> wxString {
-		const ibQuerySelect* select = Current();
+		const ibQuerySelectPtr select = Current();
 		if (select == nullptr)
 			return wxEmptyString;
 
@@ -1711,7 +1711,7 @@ wxWindow* ibDialogQueryConstructor::BuildTotalsPage(wxWindow* parent)
 		}
 
 		const std::vector<ibQueryTotalDim>* levels =
-			const_cast<ibDialogQueryConstructor*>(this)->LevelsOfNode(const_cast<ibQuerySelect*>(select), at.m_node);
+			const_cast<ibDialogQueryConstructor*>(this)->LevelsOfNode(select, at.m_node);
 		if (levels == nullptr || static_cast<size_t>(at.m_level) >= levels->size())
 			return wxEmptyString;
 		const ibQueryTotalDim& dim = (*levels)[at.m_level];
@@ -1742,7 +1742,7 @@ wxWindow* ibDialogQueryConstructor::BuildTotalsPage(wxWindow* parent)
 		return ibQueryDimensionName(dim);
 	});
 	m_totalsDimensionModel->SetWriter([this](const ibTotalsRow& at, unsigned int col, const wxString& text) -> bool {
-		ibQuerySelect* select = Current();
+		const ibQuerySelectPtr select = Current();
 		if (!CanEdit() || select == nullptr)
 			return false;
 
@@ -1914,9 +1914,9 @@ wxWindow* ibDialogQueryConstructor::BuildTotalsPage(wxWindow* parent)
 		// itself (`SPLIT`), and borrowing a field's icon would draw it as one more grouping.
 		if (!at.IsLevel())
 			return wxNullIcon;
-		const ibQuerySelect* select = Current();
+		const ibQuerySelectPtr select = Current();
 		const std::vector<ibQueryTotalDim>* levels =
-			const_cast<ibDialogQueryConstructor*>(this)->LevelsOfNode(const_cast<ibQuerySelect*>(select), at.m_node);
+			const_cast<ibDialogQueryConstructor*>(this)->LevelsOfNode(select, at.m_node);
 		// The icon is the HEAD field's — a level of several fields shows what it leads with.
 		const ibQueryTotalField* head = levels != nullptr && static_cast<size_t>(at.m_level) < levels->size()
 			? (*levels)[at.m_level].Head() : nullptr;
@@ -2074,7 +2074,7 @@ wxWindow* ibDialogQueryConstructor::BuildTotalsPage(wxWindow* parent)
 	m_grandTotals->SetToolTip(_("One row above every dimension, folding the whole result "
 	                            "(written as OVERALL, first in the BY list)."));
 	m_grandTotals->Bind(wxEVT_CHECKBOX, [this](wxCommandEvent& event) {
-		ibQuerySelect* select = Current();
+		const ibQuerySelectPtr select = Current();
 		if (!CanEdit() || select == nullptr) {
 			event.Skip();
 			return;
@@ -2186,7 +2186,7 @@ wxWindow* ibDialogQueryConstructor::BuildTotalsPage(wxWindow* parent)
 	// call, because that is what a totals line is, and it opens in the arbitrary-expression editor.
 	m_totalsAggregateModel = new ibQueryGridModel();
 	m_totalsAggregateModel->SetReader([this](unsigned int row, unsigned int col) -> wxString {
-		const ibQuerySelect* select = Current();
+		const ibQuerySelectPtr select = Current();
 		if (select == nullptr || row >= select->m_totalsAggregates.size() || !select->m_totalsAggregates[row].m_expr)
 			return wxEmptyString;
 		const ibQueryTotalAggregate& resource = select->m_totalsAggregates[row];
@@ -2204,7 +2204,7 @@ wxWindow* ibDialogQueryConstructor::BuildTotalsPage(wxWindow* parent)
 		return !resource.m_alias.IsEmpty() ? resource.m_alias : ibRenderQueryExpr(expr);
 	});
 	m_totalsAggregateModel->SetWriter([this](unsigned int row, unsigned int col, const wxString& text) -> bool {
-		ibQuerySelect* select = Current();
+		const ibQuerySelectPtr select = Current();
 		if (!CanEdit() || select == nullptr || row >= select->m_totalsAggregates.size())
 			return false;
 		// ⭐ THE AREA IS A NAME, NOT AN EXPRESSION — the level this figure is computed over. Stored as
@@ -2249,7 +2249,7 @@ wxWindow* ibDialogQueryConstructor::BuildTotalsPage(wxWindow* parent)
 	AttachContextMenu(m_totalsAggregates, aggBar);
 	m_totalsAggregateModel->SetIconColumn(kGridCol1, ibValue::GetIconGroup());
 	m_totalsAggregateModel->SetIconReader([this](unsigned int row) -> wxIcon {
-		const ibQuerySelect* select = Current();
+		const ibQuerySelectPtr select = Current();
 		if (select == nullptr || row >= select->m_totalsAggregates.size()) return wxNullIcon;
 		const ibQueryAstExprPtr& expr = select->m_totalsAggregates[row].m_expr;
 		return expr ? IconOfExpr(expr->m_arg) : wxNullIcon;
@@ -2268,7 +2268,7 @@ wxWindow* ibDialogQueryConstructor::BuildTotalsPage(wxWindow* parent)
 	m_totalsAggregates->GetRootColumnGroup()->AppendColumn(new ibDataViewColumn(_("Expression"),
 		new ibExpressionCellRenderer([this]() -> wxArrayString {
 			wxArrayString words;
-			const ibQuerySelect* select = Current();
+			const ibQuerySelectPtr select = Current();
 			const long row = SelectedRow(m_totalsAggregates, m_totalsAggregateModel);
 			if (select == nullptr || row < 0 || static_cast<size_t>(row) >= select->m_totalsAggregates.size())
 				return words;
@@ -2444,7 +2444,7 @@ wxWindow* ibDialogQueryConstructor::BuildUnionsPage(wxWindow* parent)
 	// list in this window asks. The model holds the AST; only the host reaches the metadata.
 	m_unionFieldModel->SetBranchFields([this](unsigned int branch) -> wxArrayString {
 		wxArrayString words;
-		const ibQuerySelect* select = m_unionFieldModel->BranchSelectAt(branch);
+		const ibQuerySelectPtr select = m_unionFieldModel->BranchSelectAt(branch);
 		if (select == nullptr)
 			return words;
 		const ibSourceMetaDataScope resolveAgainst(m_metaData);
@@ -2461,7 +2461,7 @@ wxWindow* ibDialogQueryConstructor::BuildUnionsPage(wxWindow* parent)
 	// THE OUTPUT FIELDS WEAR THEIR PICTURES, like the field list on every other tab: these rows are
 	// the union's result columns, and the first branch's projections are what they are made of.
 	m_unionFieldModel->SetIconReader([this](unsigned int row) -> wxIcon {
-		const ibQuerySelect* select = Current();
+		const ibQuerySelectPtr select = Current();
 		return select != nullptr && row < select->m_projections.size()
 			? IconOfExpr(select->m_projections[row].m_expr) : wxNullIcon;
 	});

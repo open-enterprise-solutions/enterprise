@@ -407,14 +407,14 @@ TEST(QueryL4Parser, AStatementCanReadANamedResult)
 		wxT("SELECT S.Partner FROM Sales AS S INNER JOIN Document.Plan AS P ON P.Partner = S.Partner"));
 	ASSERT_EQ(package.m_statements.size(), 2u);
 
-	const ibQuerySelect* first = package.m_statements[0].m_select.get();
+	const ibQuerySelectPtr first = package.m_statements[0].m_select;
 	ASSERT_TRUE(first != nullptr);
 	EXPECT_EQ(first->m_ontoName, wxT("Sales"));
 
 	// The reader keeps the NAME — resolving it into that statement's own select is the package's
 	// job at execution, not the parser's. A parser that resolved it would have to know what the
 	// statements around it are, which is exactly the coupling this language does not have.
-	const ibQuerySelect* second = package.m_statements[1].m_select.get();
+	const ibQuerySelectPtr second = package.m_statements[1].m_select;
 	ASSERT_TRUE(second != nullptr);
 	ASSERT_EQ(second->m_from.m_name.size(), 1u);
 	EXPECT_EQ(second->m_from.m_name.front(), wxT("Sales"));

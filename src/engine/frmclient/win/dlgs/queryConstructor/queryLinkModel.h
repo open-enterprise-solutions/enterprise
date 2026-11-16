@@ -77,7 +77,7 @@ public:
 	// The select being edited (BORROWED — the model never owns or copies it, which is what makes
 	// "the grid and the text say the same thing" true by construction) and the names its sources
 	// are known by, indexed as the constructor indexes them: 0 = FROM, 1..n = joins[i-1].
-	void SetContent(ibQuerySelect* select, std::vector<wxString> tableNames);
+	void SetContent(const ibQuerySelectPtr& select, std::vector<wxString> tableNames);
 
 	// Raised after a cell changed the AST, so the dialog refills everything and re-renders the text.
 	void SetOnChanged(std::function<void()> onChanged) { m_onChanged = std::move(onChanged); }
@@ -155,7 +155,7 @@ private:
 	wxString LeftName(unsigned int row) const;
 	wxString RightName(unsigned int row) const;
 
-	ibQuerySelect*        m_select = nullptr;   // borrowed
+	ibQuerySelectPtr      m_select;
 	std::vector<wxString> m_tableNames;
 	// row -> join index. Rebuilt on every fill; the two vectors below are indexed by JOIN, not by
 	// row, so they survive a row appearing or going away.

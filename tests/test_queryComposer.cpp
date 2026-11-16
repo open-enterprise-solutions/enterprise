@@ -140,8 +140,8 @@ ibQueryRamTable KeyRows(ibMetaID id, const ibString& name, const std::vector<lon
 	return t;
 }
 
-// Fill an ibDataQuerySpec with all the (empty) side-vectors + a root + select list. The vectors
-// must outlive the spec use, so the caller owns them.
+// Fill an ibDataQuerySpec with the side-vectors a test staged + a root + select list. The spec holds
+// them by value, so Make() copies what was staged by then.
 struct SpecBuf {
 	std::vector<ibQueryCondition> conds;
 	std::vector<ibValue> keyIn;
@@ -165,12 +165,12 @@ struct SpecBuf {
 	ibDataQuerySpec Make(const std::shared_ptr<ibQueryNode>& root, const std::shared_ptr<const ibBackendQueryable>& primary) {
 		ibDataQuerySpec s;
 		s.m_root = root; s.m_queryable = primary;
-		s.m_conditions = &conds; s.m_keyIn = &keyIn; s.m_sorts = &sorts;
-		s.m_groupBy = &groupBy; s.m_aggregates = &aggs; s.m_having = &having;
-		s.m_writeRows = &writeRows; s.m_dotWalks = &dots; s.m_selectCols = &sel;
-		s.m_groupPaths = &groupPaths; s.m_dimWalks = &dimWalks;
-		s.m_totals = &totals; s.m_totalAggregates = &totalAggs;
-		s.m_selectExprs = &computed;
+		s.m_conditions = conds; s.m_keyIn = keyIn; s.m_sorts = sorts;
+		s.m_groupBy = groupBy; s.m_aggregates = aggs; s.m_having = having;
+		s.m_writeRows = writeRows; s.m_dotWalks = dots; s.m_selectCols = sel;
+		s.m_groupPaths = groupPaths; s.m_dimWalks = dimWalks;
+		s.m_totals = totals; s.m_totalAggregates = totalAggs;
+		s.m_selectExprs = computed;
 		return s;
 	}
 };

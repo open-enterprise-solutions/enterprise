@@ -124,7 +124,7 @@ void ibQuerySetTotalsExpression(ibQueryTotalAggregate& figure, ibQueryAstExprPtr
 // ⭐⭐ A UNION IS PADDED, NOT REFUSED. Every branch ends up selecting the same fields, in the same
 // order; a branch that has no column for one of them selects an EMPTY value under that name.
 // Applied on the way out of the dialog, so the query it hands back is one the engine can read.
-void ibQueryPadUnionBranches(ibQuerySelect& select);
+void ibQueryPadUnionBranches(const ibQuerySelectPtr& select);
 
 // ⭐⭐ THE FIELDS A SOURCE NO LONGER HAS go with the change that removed them. `available` is what
 // the source offers NOW; everything this query wrote about that source and is not in it is dropped,
