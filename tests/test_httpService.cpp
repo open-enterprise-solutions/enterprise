@@ -281,7 +281,7 @@ struct HttpServiceFix : ::testing::Test {
 	void Keep(const ibString& password)
 	{
 		ibUserInfo keeper;
-		keeper.m_strUserGuid = wxNewUniqueGuid;
+		keeper.m_strUserGuid = ibNewUniqueGuid;
 		keeper.m_strUserName = wxT("keeper");
 		keeper.m_strUserFullName = wxT("Keeper");
 		keeper.m_strUserPassword = ibPasswordHash::Hash(password);
@@ -475,7 +475,33 @@ TEST_F(HttpServiceFix, ARegisteredServiceIsAnsweredThroughServe)
 // 8 - the save
 TEST(HttpService, AMethodNobodyAnswersIsNotSaved)
 {
-	ibMetaDataConfigurationFile cfg;
+	// A SAVE WRITES ITS REFUSALS INTO THE ACTIVE CONFIGURATION'S LEDGER (ibMetaDataConfigurationBase::GetRestructureInfo),
+	// so the configuration saved here is made the active one, and put back after — test_predefinedCells' steps. With
+	// none active the ledger was read through a null: an access violation on its first Clear, on every platform.
+	struct ActiveConfiguration {
+		std::shared_ptr<ibMetaDataConfigurationFile> m_cfg;
+		const short m_codeStyle = ibCompileCode::GetCodeStyle();
+		bool m_ok = false;
+		ActiveConfiguration()
+		{
+			if (!ibApplicationInstance::CreateAppDataEnv(ibRunMode::eFILE_MODE))
+				return;
+			m_cfg = ibMetaData::MakeShared<ibMetaDataConfigurationFile>();
+			ActiveMetaDataAccess::Replace(m_cfg);
+			m_ok = true;
+		}
+		~ActiveConfiguration()
+		{
+			if (!m_ok)
+				return;
+			ibCompileCode::SetCodeStyle(m_codeStyle);
+			ibApplicationInstance::DestroyAppDataEnv();
+		}
+	} active;
+	if (!active.m_ok)
+		GTEST_SKIP() << "appData env unavailable headless";
+	ibMetaDataConfigurationFile& cfg = *active.m_cfg;
+
 	ibValueMetaObjectHttpService* const service = MakeService(cfg, ibT("Desk"), {
 		{ ibT("/Transfer/{id}"), { { ibHttpMethod_Post, ibT("TransferPost") }, { ibHttpMethod_Get, ibT("Missing") } } },
 	});

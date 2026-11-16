@@ -24,10 +24,9 @@
 #include "core/net/httpServer.h"
 #include "protocol/protocol.h"
 
-#if defined(_WIN32) && !defined(_SSIZE_T_DEFINED)
-#	define _SSIZE_T_DEFINED
-#endif
-
+// (No `_SSIZE_T_DEFINED` guard here, unlike test_listener.cpp: that guard is for a file where wx has already aliased
+//  ssize_t. This one includes no wx — the engine's headers include none — so cpp-httplib must declare it itself; with
+//  the guard nobody did, and MSVC stopped at the first `ssize_t` of httplib.h.)
 #include <cpp-httplib/httplib.h>
 
 namespace {
@@ -258,7 +257,7 @@ TEST(ServedAddressRegistry, APathThatIsNotOneIsRefused)
 		ibString(ibT("es/d esk")), ibString(ibT("es?x")) }) {
 		const ibString refusal = Refusal([&]() { registry.Register(Owned(path, session)); });
 		EXPECT_FALSE(refusal.IsEmpty()) << path.ToUtf8();
-		EXPECT_NE(refusal.Find(ibT("is not registered")), wxNOT_FOUND) << refusal.ToUtf8();
+		EXPECT_NE(refusal.Find(ibT("is not registered")), ibNOT_FOUND) << refusal.ToUtf8();
 	}
 	EXPECT_TRUE(registry.GetServedAddressArray().empty());
 
@@ -267,7 +266,7 @@ TEST(ServedAddressRegistry, APathThatIsNotOneIsRefused)
 
 	registry.Register(Owned(ibT("es/Desk"), session));
 	const ibString taken = Refusal([&]() { registry.Register(Owned(ibT("ES/desk"), session)); });
-	EXPECT_NE(taken.Find(ibT("answers there already")), wxNOT_FOUND) << taken.ToUtf8();
+	EXPECT_NE(taken.Find(ibT("answers there already")), ibNOT_FOUND) << taken.ToUtf8();
 }
 
 // A kind nobody registered, and an entry its kind does not take, are refused before anything is listed.
@@ -278,10 +277,10 @@ TEST(ServedAddressRegistry, AKindAndItsCheckAreAsked)
 
 	ibServedAddress unknown = Owned(ibT("es/x"), session);
 	unknown.m_kind = ibT("no such kind");
-	EXPECT_NE(Refusal([&]() { registry.Register(unknown); }).Find(ibT("no kind of that name")), wxNOT_FOUND);
+	EXPECT_NE(Refusal([&]() { registry.Register(unknown); }).Find(ibT("no kind of that name")), ibNOT_FOUND);
 
 	EXPECT_NE(Refusal([&]() { registry.Register(Owned(ibT("es/refused"), session)); }).Find(ibT("the test kind refuses")),
-		wxNOT_FOUND);
+		ibNOT_FOUND);
 	EXPECT_TRUE(registry.GetServedAddressArray().empty());
 
 	// The kinds, by name, with what each offers.
@@ -328,7 +327,7 @@ TEST(ServedAddressRegistry, AKeptEntryNeedsTheBase)
 {
 	ibServedAddressRegistry registry{ ib::AppDataCtorToken{} };
 	EXPECT_NE(Refusal([&]() { registry.Register(Owned(ibT("es/kept"), ibGuid())); }).Find(ibT("the base is not open")),
-		wxNOT_FOUND);
+		ibNOT_FOUND);
 	EXPECT_FALSE(Refusal([&]() { registry.Unregister(ibGuid::newGuid()); }).IsEmpty());
 	EXPECT_TRUE(registry.GetServedAddressArray().empty());
 }
