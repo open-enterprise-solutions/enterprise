@@ -237,6 +237,9 @@
     <ClCompile Include="net\ioThreads.cpp">
       <Filter>net</Filter>
     </ClCompile>
+    <ClCompile Include="net\servedAddress.cpp">
+      <Filter>net</Filter>
+    </ClCompile>
     <ClCompile Include="net\tlsStream.cpp">
       <Filter>net</Filter>
     </ClCompile>
@@ -506,6 +509,9 @@
       <Filter>net</Filter>
     </ClInclude>
     <ClInclude Include="net\ports.h">
+      <Filter>net</Filter>
+    </ClInclude>
+    <ClInclude Include="net\servedAddress.h">
       <Filter>net</Filter>
     </ClInclude>
     <ClInclude Include="net\tlsStream.h">

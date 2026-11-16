@@ -53,6 +53,8 @@ export class Session extends EventTarget {
 		this.mode = mode;
 		/** @type {string | null} */
 		this.client = null;
+		/** the name the person logged in under — what the browser keeps of theirs is kept under it */
+		this.user = '';
 		/** the language the client's own words are said in — the login's Locale (the base's) */
 		this.locale = '';
 		/** @type {ProtocolNode | null} the frame held — its View the active tab's */
@@ -100,6 +102,7 @@ export class Session extends EventTarget {
 			const answer = await this.connection.call('login', { User: user, Password: password, Mode: this.mode,
 				Protocol: protocol, Features: [resumeFeature] });
 			this.client = answer.Client;
+			this.user = user;
 			this.locale = answer.Locale ?? '';
 			// The bearer comes once — and only from a server that offers to keep the session.
 			this.token = (answer.Features ?? []).includes(resumeFeature) ? answer.Token ?? null : null;

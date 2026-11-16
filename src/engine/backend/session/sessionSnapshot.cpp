@@ -52,6 +52,7 @@ ibString ibSessionSnapshot::GetApplication(unsigned int idx) const {
 	case static_cast<int>(ibSessionKind::Service):       return _("Application server");
 	case static_cast<int>(ibSessionKind::WebServer):     return _("Web server");
 	case static_cast<int>(ibSessionKind::WebClient):     return _("Web client");
+	case static_cast<int>(ibSessionKind::HttpService):   return _("HTTP service");
 	default: break;
 	}
 	return appData->GetRunModeDescr(row.m_runMode);
@@ -91,6 +92,9 @@ ibString ibSessionSnapshot::GetSessionKindDescr(unsigned int idx) const
 	case static_cast<int>(ibSessionKind::Service):
 	case static_cast<int>(ibSessionKind::WebServer):
 		return _("Server");
+	// …and a request to an HTTP service is a system's call, not a person's.
+	case static_cast<int>(ibSessionKind::HttpService):
+		return _("HTTP request");
 	default: break;
 	}
 	return _("Client");

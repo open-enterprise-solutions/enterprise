@@ -753,7 +753,7 @@ struct ibHttpClientState {
 		m_result = ibHttpClientError::None;
 		m_why.clear();
 		m_response = &response;
-		m_head = request.m_method == "HEAD";
+		m_head = request.m_method == ibHttp::Head;
 		m_field.clear();
 		m_value.clear();
 		m_hasValue = false;
@@ -786,7 +786,7 @@ struct ibHttpClientState {
 		// A body nobody named the type of goes as text, as it always went.
 		if (!request.m_body.empty() && !has("content-type"))
 			m_out += "Content-Type: text/plain\r\n";
-		if (!request.m_body.empty() || method == "POST" || method == "PUT" || method == "PATCH")
+		if (!request.m_body.empty() || method == ibHttp::Post || method == ibHttp::Put || method == ibHttp::Patch)
 			m_out += "Content-Length: " + std::to_string(request.m_body.size()) + "\r\n";
 		m_out += "\r\n";
 		m_out += request.m_body;

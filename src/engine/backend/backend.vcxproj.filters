@@ -703,6 +703,9 @@
     <ClInclude Include="metaCollection\metaScheduledJobObject.h">
       <Filter>metaCollection</Filter>
     </ClInclude>
+    <ClInclude Include="metaCollection\metaHttpServiceObject.h">
+      <Filter>metaCollection</Filter>
+    </ClInclude>
     <ClInclude Include="metaCollection\metaEventHandlerObject.h">
       <Filter>metaCollection</Filter>
     </ClInclude>
@@ -896,11 +899,20 @@
     <ClInclude Include="job\jobRunByteCode.h">
       <Filter>job</Filter>
     </ClInclude>
+    <ClInclude Include="httpService\httpServiceCall.h">
+      <Filter>httpService</Filter>
+    </ClInclude>
     <ClInclude Include="job\platformJobs.h">
       <Filter>job</Filter>
     </ClInclude>
     <ClInclude Include="settings\settingsStorage.h">
       <Filter>settings</Filter>
+    </ClInclude>
+    <ClInclude Include="served\servedAddressRegistry.h">
+      <Filter>served</Filter>
+    </ClInclude>
+    <ClInclude Include="served\servedKind.h">
+      <Filter>served</Filter>
     </ClInclude>
     <ClInclude Include="settings\settingsComposer.h">
       <Filter>settings</Filter>
@@ -1928,6 +1940,9 @@
     <ClCompile Include="metaCollection\metaScheduledJobObject.cpp">
       <Filter>metaCollection</Filter>
     </ClCompile>
+    <ClCompile Include="metaCollection\metaHttpServiceObject.cpp">
+      <Filter>metaCollection</Filter>
+    </ClCompile>
     <ClCompile Include="metaCollection\metaSessionParameterObject.cpp">
       <Filter>metaCollection</Filter>
     </ClCompile>
@@ -1976,7 +1991,13 @@
     <ClCompile Include="metaCollection\metaScheduledJobObjectMenu.cpp">
       <Filter>metaCollection</Filter>
     </ClCompile>
+    <ClCompile Include="metaCollection\metaHttpServiceObjectMenu.cpp">
+      <Filter>metaCollection</Filter>
+    </ClCompile>
     <ClCompile Include="metaCollection\metaScheduledJobObject_res.cpp">
+      <Filter>metaCollection</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\metaHttpServiceObject_res.cpp">
       <Filter>metaCollection</Filter>
     </ClCompile>
     <ClCompile Include="metaCollection\metaEventHandlerObject.cpp">
@@ -2186,6 +2207,9 @@
     <ClCompile Include="job\jobRunByteCode.cpp">
       <Filter>job</Filter>
     </ClCompile>
+    <ClCompile Include="httpService\httpServiceCall.cpp">
+      <Filter>httpService</Filter>
+    </ClCompile>
     <ClCompile Include="job\jobRegister.cpp">
       <Filter>job</Filter>
     </ClCompile>
@@ -2194,6 +2218,9 @@
     </ClCompile>
     <ClCompile Include="settings\settingsStorage.cpp">
       <Filter>settings</Filter>
+    </ClCompile>
+    <ClCompile Include="served\servedAddressRegistry.cpp">
+      <Filter>served</Filter>
     </ClCompile>
     <ClCompile Include="settings\settingsComposer.cpp">
       <Filter>settings</Filter>
@@ -2368,8 +2395,14 @@
     <Filter Include="lock">
       <UniqueIdentifier>{6c0f1d2a-7b3e-4d8a-9f1c-2e3b5a6c7d8e}</UniqueIdentifier>
     </Filter>
+    <Filter Include="httpService">
+      <UniqueIdentifier>{50b669a8-8b7c-4448-ab0c-15c9457be7ea}</UniqueIdentifier>
+    </Filter>
     <Filter Include="job">
       <UniqueIdentifier>{9a1e4c7b-2d6f-4a3e-b8c5-7d1f2a4e6b9c}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="served">
+      <UniqueIdentifier>{fcb51a64-8f8b-4d81-9f2d-b7ab58ef464d}</UniqueIdentifier>
     </Filter>
     <Filter Include="settings">
       <UniqueIdentifier>{3f7b2c5d-8e14-4a6b-9c02-5d8e7a1b3c4f}</UniqueIdentifier>

@@ -70,6 +70,14 @@ TEST(StringUtils, SynonymLeavesSingleWord) {
     EXPECT_EQ(GenerateSynonym(wxT("Product")), wxT("Product"));
 }
 
+TEST(StringUtils, SynonymKeepsARunOfCapitalsOneWord) {
+    EXPECT_EQ(GenerateSynonym(wxT("HTTPService1")), wxT("HTTP service1"));
+    EXPECT_EQ(GenerateSynonym(wxT("URLTemplate")), wxT("URL template"));
+    EXPECT_EQ(GenerateSynonym(wxT("MyHTTPService")), wxT("My HTTP service"));
+    EXPECT_EQ(GenerateSynonym(wxT("VAT")), wxT("VAT"));
+    EXPECT_EQ(GenerateSynonym(wxT("AName")), wxT("A name"));
+}
+
 TEST(StringUtils, SynonymSplitsCyrillicCamelCase) {
     // CamelCase split on a Cyrillic uppercase letter -> exercises the
     // upper->lower (+0x20) branch in GenerateSynonym.

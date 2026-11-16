@@ -30,6 +30,7 @@
 #include "backend/job/platformJobs.h"         // the engine's own jobs, declared when a database opens
 #include "backend/settings/settingsStorage.h" // ibSettingsStorage (owned via GetSettingsStorage)
 #include "backend/temp/tempStorage.h"         // ibTempStorage (owned via GetTempStorage)
+#include "backend/served/servedAddressRegistry.h" // ibServedAddressRegistry (owned via GetServedAddressRegistry)
 #include "core/server/serverConfig.h"      // a server reads where its base lives itself
 
 #include "backend/backend_exception.h"        // ibBackendCoreException — a build with no driver says so
@@ -179,6 +180,7 @@ ibString DescribeSessionKind(ibSessionKind k) {
 	case ibSessionKind::SystemJob:     return ibT("SystemJob");
 	case ibSessionKind::ThinClient:    return ibT("ThinClient");
 	case ibSessionKind::ThinDesigner:  return ibT("ThinDesigner");
+	case ibSessionKind::HttpService:   return ibT("HttpService");
 	case ibSessionKind::Unknown:       return ibT("Unknown");
 	}
 	return ibT("Unknown");
@@ -352,7 +354,8 @@ ibApplicationInstance::ibApplicationInstance(ibApplicationHost* host, ibRunMode 
 	m_sessionRegistry(std::unique_ptr<ibSessionRegistry>(new ibSessionRegistry(ib::AppDataCtorToken{ this }))),
 	m_jobManager(std::unique_ptr<ibJobManager>(new ibJobManager(ib::AppDataCtorToken{ this }))),
 	m_settingsStorage(std::unique_ptr<ibSettingsStorage>(new ibSettingsStorage(ib::AppDataCtorToken{ this }))),
-	m_tempStorage(std::unique_ptr<ibTempStorage>(new ibTempStorage(ib::AppDataCtorToken{ this })))
+	m_tempStorage(std::unique_ptr<ibTempStorage>(new ibTempStorage(ib::AppDataCtorToken{ this }))),
+	m_servedAddressRegistry(std::unique_ptr<ibServedAddressRegistry>(new ibServedAddressRegistry(ib::AppDataCtorToken{ this })))
 {
 	// (Plugins are the PROCESS's — loaded once by ibApplicationHost, not per base.)
 
@@ -500,6 +503,26 @@ void ibApplicationInstance::WireSessionEvents()
 	// taken down by the registry (ProcessRemove). UnbindSession (by pointer,
 	// not thread id) erases bindings regardless of which thread originally
 	// pinned them.
+	// A SESSION GONE TAKES ITS WEB ADDRESSES WITH IT — those it registered for itself (an assistant's channel); the
+	// administrator's stay. And every sweep reads the base's kept ones again: another server of the base may have
+	// changed them.
+	registry->OnDisconnect([this](ibSession* s) {
+		if (s != nullptr && m_servedAddressRegistry)
+			m_servedAddressRegistry->OnSessionEnd(s->Identity().m_guid);
+	});
+	registry->OnSweep([this]() {
+		if (!m_servedAddressRegistry)
+			return;
+		try {
+			// The registry thread is labelled with its base, not bound to it: the read is the base's, so it binds.
+			const ibApplicationInstanceScope working(this);
+			m_servedAddressRegistry->Refresh();
+		}
+		catch (const ibCoreException& err) {
+			ibJournalWarning(ibT("web"), ibT("the base's web addresses could not be read again: %s"), err.GetErrorDescription());
+		}
+	});
+
 	registry->OnDisconnect([this](ibSession* s) {
 		if (s == nullptr) return;
 		// Capture session.closed BEFORE UnbindSession + DestroyRoot —
@@ -611,6 +634,7 @@ void ibApplicationInstance::Close()
 	//    m_jobManager → m_sessionRegistry → m_logger → m_queryableFactory → m_lockManager →
 	//    m_connectionPool (m_activeMetaData, declared last, went first). (The job manager's own dtor calls
 	//    Stop() again; it is idempotent, so the explicit step above only fixes the ORDER.)
+	release(m_servedAddressRegistry);
 	release(m_tempStorage);
 	release(m_settingsStorage);
 	release(m_jobManager);
@@ -922,6 +946,8 @@ ibApplicationInstance* ibApplicationInstance::Open(std::unique_ptr<ibApplication
 		if (!SetLocaleAppDataEnv(request.m_locale))
 			return refuse();
 		applicationInstance->m_dictionary = ibDictionary::ForLanguage(ReadLocale(applicationInstance));
+		// What the base answers on a web server — its administrator's entries, a shared row beside the locale's.
+		applicationInstance->m_servedAddressRegistry->Load();
 
 		// Audit + trace logger — built after pool + tables so the
 		// first Audit row (session.opened) can fire on the next
@@ -1231,6 +1257,14 @@ bool ibApplicationInstance::AuthenticateUser(const ibString& strUserName,
 			} catch (...) {}
 			return true;
 		}
+
+		// No name, in a base with users — refused at once. The hashing below is for a NAME, so that an unknown one
+		// refuses no sooner than a wrong password; no name has nothing to hide, and hashing for it let anybody,
+		// knowing nothing, cost the base a password's check per request (an HTTP service's caller without credentials).
+		try {
+			if (ibLog) ibLog->Audit(ibT("auth"), ibT("login_failed"), ibT("reason=no_name"));
+		} catch (...) {}
+		return false;
 	}
 
 	outInfo = ibUserInfo::Read(strUserName);

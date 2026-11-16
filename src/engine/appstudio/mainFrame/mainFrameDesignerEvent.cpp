@@ -457,6 +457,7 @@ void ibFrontendMainFrameDesigner::OnUpdateDebugCommand(wxUpdateUIEvent& event)
 //********************************************************************************
 
 #include "frmclient/win/dlgs/userList.h"
+#include "appstudio/win/dlg/webAddress.h"
 
 void ibFrontendMainFrameDesigner::ShowSchema(ibProtocol::ibSchema::ibKind schema, const ibProtocolNode& shown)
 {
@@ -472,6 +473,13 @@ void ibFrontendMainFrameDesigner::ShowSchema(ibProtocol::ibSchema::ibKind schema
 	if (schema == ibProtocol::ibSchema::ibKind::UserList) {
 		ibWindowPtr<ibDialogUserList> dlg(new ibDialogUserList(this, wxID_ANY));
 		dlg->Show();
+		return;
+	}
+
+	// …and Web addresses — what the base answers on a web server: the designer's alone, as its schema is.
+	if (schema == ibProtocol::ibSchema::ibKind::WebAddress) {
+		ibDialogWebAddress dialog(this, shown);
+		dialog.ShowModal();
 		return;
 	}
 

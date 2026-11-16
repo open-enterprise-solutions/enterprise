@@ -327,6 +327,57 @@ html, body {
 	color: var(--oes-muted);
 }
 
+/* The assistant window (src/docView/assistant.js), as the thin client's: the transcript over what the person writes. */
+.assistant-window {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	height: 100%;
+	box-sizing: border-box;
+	padding: 4px;
+	color: var(--oes-form-text);
+}
+
+.assistant-transcript {
+	flex: 1;
+	min-height: 0;
+	overflow: auto;
+	padding: 4px;
+	border: 1px solid var(--oes-border);
+	background: var(--oes-form-bg);
+}
+
+.assistant-entry {
+	margin-bottom: 0.5rem;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}
+
+.assistant-waiting {
+	color: var(--oes-muted);
+}
+
+.assistant-waiting:empty {
+	display: none;
+}
+
+.assistant-input {
+	display: flex;
+	align-items: flex-end;
+	gap: 4px;
+}
+
+.assistant-input textarea {
+	flex: 1;
+	box-sizing: border-box;
+	padding: 4px;
+	border: 1px solid var(--oes-border);
+	background: var(--oes-form-bg);
+	color: var(--oes-form-text);
+	font: inherit;
+	resize: vertical;
+}
+
 /* The registration journal (src/docView/auditLog.js), as the thin client's: the filter strip, the tools — a command
    bar with the live refresh on it, at its right —, and the rows as the theme's table (a tablebox's: the powder header,
    every second row a step off white, the cursor in the highlight). */
@@ -1848,6 +1899,60 @@ wa-dialog.answered-only::part(close-button) {
 .about dd {
 	margin: 0;
 	min-width: 0;
+	overflow-wrap: anywhere;
+}
+
+/* Tools → Options... — the assistant access, as the thin client's page: the setting, Start now beside what is true, then
+   what is handed to the assistant — copied whole, so it is shown whole. */
+.assistant {
+	--width: 34rem;
+}
+
+.assistant p {
+	margin: 0.5rem 0 0.25rem;
+}
+
+.assistant .run {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+}
+
+.assistant .state {
+	margin: 0;
+	color: var(--oes-muted);
+	white-space: pre-line;
+}
+
+.assistant fieldset {
+	margin: 0.5rem 0 0;
+	padding: 0.25rem 0.5rem 0.5rem;
+	border: 1px solid var(--oes-border);
+	border-radius: 4px;
+}
+
+.assistant legend {
+	padding: 0 0.25rem;
+	color: var(--oes-muted);
+}
+
+.assistant textarea {
+	box-sizing: border-box;
+	width: 100%;
+	margin-bottom: 0.25rem;
+	padding: 0.25rem;
+	border: 1px solid var(--oes-border);
+	border-radius: 4px;
+	background: var(--oes-form-bg);
+	color: var(--oes-form-text);
+	font-family: ui-monospace, monospace;
+	font-size: 0.85rem;
+	resize: vertical;
+	white-space: pre;
+}
+
+.assistant textarea.wrapped {
+	white-space: pre-wrap;
 	overflow-wrap: anywhere;
 }
 

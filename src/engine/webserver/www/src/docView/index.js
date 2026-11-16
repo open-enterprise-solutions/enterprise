@@ -3,5 +3,6 @@
 // beside them, as appstudio does.
 
 import './tabDocument.js';
+import './assistant.js';
 import './auditLog.js';
 import '../window/homePage.js';

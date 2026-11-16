@@ -252,6 +252,7 @@
     <ClCompile Include="win\dlg\homePageEditor.cpp" />
     <ClCompile Include="win\dlg\predefinedEditor.cpp" />
     <ClCompile Include="win\dlg\textEditor.cpp" />
+    <ClCompile Include="win\dlg\webAddress.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="mainApp.h" />
@@ -306,6 +307,7 @@
     <ClInclude Include="win\dlg\homePageEditor.h" />
     <ClInclude Include="win\dlg\predefinedEditor.h" />
     <ClInclude Include="win\dlg\textEditor.h" />
+    <ClInclude Include="win\dlg\webAddress.h" />
   </ItemGroup>
   <ItemGroup>
     <Image Include="designer.ico" />

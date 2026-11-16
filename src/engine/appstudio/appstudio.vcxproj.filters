@@ -275,6 +275,9 @@
     <ClCompile Include="win\dlg\textEditor.cpp">
       <Filter>win\dlg</Filter>
     </ClCompile>
+    <ClCompile Include="win\dlg\webAddress.cpp">
+      <Filter>win\dlg</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="mainApp.h" />
@@ -429,6 +432,9 @@
       <Filter>win\dlg</Filter>
     </ClInclude>
     <ClInclude Include="win\dlg\textEditor.h">
+      <Filter>win\dlg</Filter>
+    </ClInclude>
+    <ClInclude Include="win\dlg\webAddress.h">
       <Filter>win\dlg</Filter>
     </ClInclude>
   </ItemGroup>

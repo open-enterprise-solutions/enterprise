@@ -40,12 +40,14 @@
 
 #define objectTablesName _("Tables")
 #define objectEnumerationsName _("Enums")
+#define objectUrlTemplatesName _("URL templates")
 
 namespace {
 
 // HOW A MEMBER OF THE GROUP IS PUT IN. Three shapes and no more: an ordinary row, a row that is itself a group (a
-// section holds sections), and a command (which nests its sub-commands).
-enum class ibMetaRow { Item, Group, Command };
+// section holds sections), and a command (which nests its sub-commands). …and a row that is no group at all: a FOLDER
+// (Integration), a title over the groups nested under it, as Common is — no member, nothing to add.
+enum class ibMetaRow { Item, Group, Command, Folder };
 
 // What this tree knows about a group: how a member of it is rendered, and which group it nests under. The caption,
 // the band and the place are the group's own answer (backend/metaCollection/metaGroups.h).
@@ -67,7 +69,6 @@ const ibMetaTreeGroupDef s_groups[] = {
 	{ g_metaParameterizedJobCLSID, 0, ibMetaRow::Item },
 	{ g_metaScheduledJobCLSID,     g_metaParameterizedJobCLSID, ibMetaRow::Item },
 	{ g_metaEventHandlerCLSID,     0, ibMetaRow::Item },
-
 	{ g_metaSessionParameterCLSID, 0, ibMetaRow::Item },
 	{ g_metaFunctionalOptionCLSID, 0, ibMetaRow::Item },
 	{ g_metaCommonAttributeCLSID,  0, ibMetaRow::Item },
@@ -77,7 +78,11 @@ const ibMetaTreeGroupDef s_groups[] = {
 	{ g_metaRoleCLSID,             0, ibMetaRow::Item },
 	{ g_metaLanguageCLSID,         0, ibMetaRow::Item },
 
-	{ g_metaConstantCLSID,                   0, ibMetaRow::Item },
+	// INTEGRATION: a folder in the root beside Common, the groups another system talks to the base through inside it.
+	{ g_metaIntegrationCLSID,                0, ibMetaRow::Folder },
+	{ g_metaHttpServiceCLSID,                g_metaIntegrationCLSID, ibMetaRow::Item },
+
+	{ g_metaConstantCLSID,                  0, ibMetaRow::Item },
 	{ g_metaCatalogCLSID,                    0, ibMetaRow::Item },
 	{ g_metaDocumentCLSID,                   0, ibMetaRow::Item },
 	{ g_metaEnumerationCLSID,                0, ibMetaRow::Item },
@@ -658,6 +663,23 @@ void ibConfigurationTree::AddDataProcessorItem(ibValueMetaObject* metaObject, ib
 		metaObjectValue->GetTemplateArrayObject());
 }
 
+// AN HTTP SERVICE — its URL templates, each one the group of its methods, as a table is of its columns.
+void ibConfigurationTree::AddHttpServiceItem(ibValueMetaObject* metaObject, ibDataNode& hParentID)
+{
+	ibDataNode& group = AppendGroupItem(hParentID, g_metaUrlTemplateCLSID, objectUrlTemplatesName);
+	for (unsigned int idx = 0; idx < metaObject->GetChildCount(); idx++) {
+		ibValueMetaObject* const urlTemplate = metaObject->GetChild(idx);
+		if (urlTemplate == nullptr || !urlTemplate->IsAcceptedByParent())
+			continue;
+		ibDataNode& hTemplate = AppendGroupItem(group, g_metaHttpServiceMethodCLSID, urlTemplate);
+		for (unsigned int at = 0; at < urlTemplate->GetChildCount(); at++) {
+			ibValueMetaObject* const method = urlTemplate->GetChild(at);
+			if (method != nullptr && method->IsAcceptedByParent())
+				AppendItem(hTemplate, method);
+		}
+	}
+}
+
 // A REGISTER — dimensions and resources where a reference object has tabular sections.
 void ibConfigurationTree::AddInformationRegisterItem(ibValueMetaObject* metaObject, ibDataNode& hParentID)
 {
@@ -726,6 +748,7 @@ void ibConfigurationTree::ExpandMetaItem(ibValueMetaObject* metaItem, ibDataNode
 	else if (clsid == g_metaCalculationRegisterCLSID)        AddCalculationRegisterItem(metaItem, item);
 	else if (clsid == g_metaSequenceCLSID)                   AddSequenceItem(metaItem, item);
 	else if (clsid == g_metaSectionCLSID)                    AddInterfaceItem(metaItem, item);
+	else if (clsid == g_metaHttpServiceCLSID)                AddHttpServiceItem(metaItem, item);
 
 	// A LANGUAGE SAYS ITS CODE — what a translated text is keyed by: the translation window's boxes are the languages',
 	// each by its code (ibDialogTranslateConstructor).
@@ -810,6 +833,17 @@ void ibConfigurationTree::FillData(ibDataNode& root)
 	// One group, its nested groups and its objects.
 	const std::function<void(ibDataNode&, const ibMetaTreeGroupDef*)> fillGroup =
 		[this, &rows, &fillGroup](ibDataNode& parent, const ibMetaTreeGroupDef* def) {
+
+		// A FOLDER — written as Common is: its title, by its place, and the groups nested under it.
+		if (def->m_row == ibMetaRow::Folder) {
+			ibDataNode& folder = parent.AddChild(0, -static_cast<ibMetaID>(parent.Children().size() + 1));
+			folder.SetValue(ibProtocol::ibSchema::ibMetaData::Title, ibMetaGroupCaption(def->m_clsid));
+			for (const ibMetaTreeGroupDef* nested : rows) {
+				if (nested->m_owner == def->m_clsid)
+					fillGroup(folder, nested);
+			}
+			return;
+		}
 
 		ibDataNode& group = AppendGroupItem(parent, def->m_clsid, ibMetaGroupCaption(def->m_clsid));
 		for (const ibMetaTreeGroupDef* nested : rows) {

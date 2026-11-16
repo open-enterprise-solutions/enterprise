@@ -57,6 +57,7 @@ Add a row to the group it belongs to when you add a document, so this folder can
 |---|---|
 | [date-model.md](date-model.md) | The date: a wall-clock reading in `ibDateTime`, its calendar, its doors, stored forms, where it stops |
 | [http-client.md](http-client.md) | HTTP and HTTPS from a script: the values, what they guarantee, where they stop |
+| [http-services.md](http-services.md) | HTTP services: a configuration answering a request — the three kinds, the match, the handler, the session, where it stops |
 | [json.md](json.md) | JSON from a script: what reading gives, what the writer guarantees, where it stops |
 | [number-model.md](number-model.md) | The number: an exact decimal in `ibNumber`, the one bounded step (division), the rounding rules, its doors |
 | [query-language.md](query-language.md) | The query language: sources, references, expressions, totals, the package; the one door under every front-end |
@@ -81,6 +82,7 @@ Add a row to the group it belongs to when you add a document, so this folder can
 | [browser-client.md](browser-client.md) | The browser client: a page with no build, its parts, who does what, what it guarantees, where it stops |
 | [client-protocol.md](client-protocol.md) | How a client works with a base: transports, methods, the frame, schemas, questions, files, the menu, what it guarantees |
 | [listeners.md](listeners.md) | The listeners and the ports: TLS when backend.conf names a certificate; where the clear is allowed, and where it is refused |
+| [web-addresses.md](web-addresses.md) | Web addresses: what a base answers on a web server beside its clients, kept in the base, mounted by every web server that publishes it |
 
 ### The engine's words
 

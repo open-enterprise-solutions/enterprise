@@ -26,7 +26,7 @@ The key is made once and kept, so a connected assistant stays connected. Whoever
 this designer what you can.
 The port opens on your own machine, `127.0.0.1:7374`, whatever server the base is on: the client carries it there. It does not listen off this machine.
 
-In the application the same access is in **Tools → Options… → Assistant access** and its window at the bottom of **Administration**, for a person whose role has the *Assistant* right, and for everyone in a base with no users. It shows the configuration and no record of it; the *Data assistant* right adds what works with the data under that person's roles: running a report, opening a list or a document in their window, adding or correcting a value.
+In the application the same access is in **Tools → Options… → Assistant access** and its window at the bottom of **Administration**, for a person whose role has the *Assistant* right, and for everyone in a base with no users. In the browser the page is **Tools → Options…**: started, the access answers at an address beside the page, `https://server/<publication>/mcp/<…>`, published on the web server while it runs, with a key of its own; that browser keeps both for the person. It shows the configuration and no record of it; the *Data assistant* right adds what works with the data under that person's roles: running a report, opening a list or a document in their window, adding or correcting a value.
 
 ## The first request
 

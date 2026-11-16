@@ -138,9 +138,15 @@ namespace stringUtils
 		return std::isdigit(c);
 	}
 
+	// A SYSTEM NAME READ AS WORDS — "MyName" "My name": a capital starts a word and is lowered. A run of capitals is
+	// ONE word, kept as written ("HTTPService1" "HTTP service1"), and its last capital starts the next word when a
+	// small letter follows it.
 	inline ibString GenerateSynonym(const ibString& strSystemName) {
+		const auto isUpper = [](ibChar c) { return (c >= ibT('A') && c <= ibT('Z')) || (c >= 0x0410 && c <= 0x042F); };
+		const auto isLower = [](ibChar c) { return (c >= ibT('a') && c <= ibT('z')) || (c >= 0x0430 && c <= 0x044F); };
+		const size_t length = strSystemName.length();
 		ibString strSynonym;
-		for (size_t i = 0; i < strSystemName.length(); i++) {
+		for (size_t i = 0; i < length; i++) {
 			const ibChar c = strSystemName[i];
 			if (strSynonym.IsEmpty()) {
 				if (c < 0x80) {
@@ -150,22 +156,24 @@ namespace stringUtils
 					strSynonym += c;
 				}
 			}
-			else if ((c >= ibT('A') && c <= ibT('Z')) ||
-				(c >= 0x0410 && c <= 0x042F)) {
+			else if (!isUpper(c)) {
+				strSynonym += c;
+			}
+			else if (isUpper(strSystemName[i - 1]) && !(i + 1 < length && isLower(strSystemName[i + 1]))) {
+				strSynonym += c;   // inside a run of capitals
+			}
+			else {
 				strSynonym += ibT(' ');
-				if (c < 0x80) {
+				if (i + 1 < length && isUpper(strSystemName[i + 1])) {
+					strSynonym += c;   // a run of capitals starts here
+				}
+				else if (c < 0x80) {
 					strSynonym += ibToLower(c);
 				}
-				else if (c >= 0x0410 && c <= 0x042F) {
+				else {
 					// Cyrillic uppercase to lowercase: add 0x20
 					strSynonym += ibChar(c + 0x20);
 				}
-				else {
-					strSynonym += c;
-				}
-			}
-			else {
-				strSynonym += c;
 			}
 		}
 		return strSynonym;

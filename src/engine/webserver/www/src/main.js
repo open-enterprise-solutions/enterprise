@@ -6,6 +6,7 @@ import './docView/index.js';
 // The application's property cells — a designer's page would import the designer's beside them (properties/index.js).
 import './properties/runtime.js';
 import { _, readDictionary } from './localization.js';
+import { startAssistant } from './window/assistantAccess.js';
 import { readLanguages } from './properties/translate.js';
 import { Connection } from './protocol/connection.js';
 import { Mode, Session } from './protocol/session.js';
@@ -58,6 +59,8 @@ async function start() {
 		await clientWindow.draw(session.frame);
 	await clientWindow.settled();
 	hideSplash();
+	// The person's assistant access, started by itself when they left it on — as the thin client starts its port at login.
+	await startAssistant(session);
 }
 
 start();

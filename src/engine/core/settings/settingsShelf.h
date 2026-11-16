@@ -44,6 +44,9 @@ enum class ibSettingsCategory : int {
 	// the next (frmserver/schema/style.cpp). A row per person under one well-known object key, the platform's look.
 	// Appended, as the rule above requires.
 	Style,
+	// ⭐ WHAT THE BASE ANSWERS ON A WEB SERVER — the administrator's web addresses (backend/served/servedAddressRegistry.h):
+	// one row, no user, under one well-known object key, as the locale's. Appended, as the rule above requires.
+	Web,
 };
 
 // ONE SAVED SETTING as a shelf shows it — the identity, the caption, and when it

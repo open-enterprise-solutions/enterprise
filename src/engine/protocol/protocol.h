@@ -71,6 +71,8 @@ namespace ibProtocol {
 		Picture,        // ibPicture
 		Debug,          // ibDebug — answered at once, never the frame
 		Mcp,            // ibMcp — never the frame
+		Addresses,      // ibServed: the base's web addresses, and the connection told each change — names no Client
+		Serve,          // ibServed: a request to one of them, answered — names no Client, never the frame
 	};
 
 	// The name a method goes by on the wire.
@@ -97,6 +99,8 @@ namespace ibProtocol {
 		case ibMethod::Picture:      return "picture";
 		case ibMethod::Debug:        return "debug";
 		case ibMethod::Mcp:          return "mcp";
+		case ibMethod::Addresses:    return "addresses";
+		case ibMethod::Serve:        return "serve";
 		}
 		return "";
 	}
@@ -104,7 +108,7 @@ namespace ibProtocol {
 	// …and the method a name means; Unknown for a name the protocol does not have.
 	inline ibMethod MethodFromName(const char* name)
 	{
-		for (int method = static_cast<int>(ibMethod::Login); method <= static_cast<int>(ibMethod::Mcp); ++method) {
+		for (int method = static_cast<int>(ibMethod::Login); method <= static_cast<int>(ibMethod::Serve); ++method) {
 			if (std::strcmp(name, MethodName(static_cast<ibMethod>(method))) == 0)
 				return static_cast<ibMethod>(method);
 		}
@@ -152,6 +156,9 @@ namespace ibProtocol {
 		inline constexpr const char* Debug   = "debug";
 		// …and what the assistant's server says unasked, to the client's MCP connection (params: Client, Message — ibMcp).
 		inline constexpr const char* Mcp     = "mcp";
+		// …and the base's web addresses, whole, each time they change, to every connection that asked for them (params:
+		// Addresses — ibServed).
+		inline constexpr const char* Addresses = "addresses";
 
 	}
 
@@ -379,6 +386,12 @@ namespace ibProtocol {
 	// Channel} on a second connection of the same client binds that one — from then on mcp {Command: Message} is answered
 	// on it and it is sent what the server says unasked, `mcp {Client, Message}`. Refused NoRight to a person whose roles
 	// do not give the assistant (ibSchema::ibMcpServer). The client's session answers: their rights, their configuration.
+	// …OR AT A WEB ADDRESS — the browser's way, having no port of its own: mcp {Command: Register} makes the session an
+	// entry among the base's web addresses (ibServed, the kind MCP), answered on every web server that publishes the base
+	// while the session lives, to a request presenting the token. What is not given is drawn; both are answered, for the
+	// person to keep and give again next time. One per client: a second replaces the first; Unregister takes it off.
+	// Registered, the person's server runs as it does with the client's port listening (the assistant window is there);
+	// taken off, it stops.
 	namespace ibMcp {
 
 		inline constexpr const char* Command         = "Command";
@@ -388,12 +401,42 @@ namespace ibProtocol {
 		inline constexpr const char* Method          = "Method";           // …Mcp-Method
 		inline constexpr const char* Name            = "Name";             // …Mcp-Name
 		inline constexpr const char* Status          = "Status";           // a Message's answer: the HTTP status to carry it with
+		inline constexpr const char* Path            = "Path";             // Register's: the address under the publication, mcp/<…>
+		inline constexpr const char* Token           = "Token";            // …and what a request to it presents, Authorization: Bearer — 64 hex
 
 		enum class ibCommand : int {
-			Channel = 1,    // → Channel
-			Listen  = 2,    // {Channel}
-			Message = 3,    // {Message, ProtocolVersion, Method, Name} → {Message, Status}
+			Channel    = 1,    // → Channel
+			Listen     = 2,    // {Channel}
+			Message    = 3,    // {Message, ProtocolVersion, Method, Name} → {Message, Status}
+			Register   = 4,    // {[Path, Token]} → {Path, Token}
+			Unregister = 5,    // {}
 		};
+
+	}
+
+	// THE ADDRESSES A BASE ANSWERS ON A WEB SERVER (core/net/servedAddress.h) — what the web server mounts under a
+	// publication, and the requests that come there. Neither method names a Client: the web server is the transport,
+	// and who is asking is the request's to say (its Authorization), the entry's kind decides.
+	//   addresses {} → Addresses, each {Id, Path} — and the connection is SUBSCRIBED by the call itself: it is sent the
+	//                  notification `addresses {Addresses}`, the whole list, each time the list changes; the list replaces
+	//                  the one it holds. A connection with no notifier (an HTTP POST) is only answered.
+	//   serve {Address, Prefix, Method, Path, Query, Headers, Body} → {Status, Headers, Body} — the request as it came,
+	//                  handed to the entry's kind; the answer as the kind made it. An Address that names nothing is a
+	//                  Status of 404, not a refusal: what a web server says.
+	namespace ibServed {
+
+		inline constexpr const char* Addresses = "Addresses";
+		inline constexpr const char* Id        = "Id";        // an entry's identity, a guid's text
+		inline constexpr const char* Path      = "Path";      // under the publication, no slash at either end: es/desk
+		inline constexpr const char* Address   = "Address";   // serve: the entry asked, its Id
+		inline constexpr const char* Prefix    = "Prefix";    // serve: the address up to the entry's path and the path (/trade/es/desk)
+		inline constexpr const char* Method    = "Method";    // serve: as written — GET, POST, PUT
+		inline constexpr const char* Query     = "Query";     // serve: as written, after the '?'
+		inline constexpr const char* Headers   = "Headers";   // serve and its answer: a child each, Name and Value
+		inline constexpr const char* Name      = "Name";
+		inline constexpr const char* Value     = "Value";
+		inline constexpr const char* Body      = "Body";      // serve and its answer: the bytes, as they are
+		inline constexpr const char* Status    = "Status";    // serve's answer: the HTTP status
 
 	}
 
@@ -813,6 +856,7 @@ namespace ibProtocol {
 			ConfigCompare = 18,  // ibConfigCompare — the walk of two configurations; command Merge applies the ops chosen
 			Types        = 19,   // ibTypes
 			Style        = 20,   // ibStyle — both modes': how the person's interface is painted; command Save {Theme}
+			WebAddress   = 21,   // ibWebAddress (protocolDesigner.h) — the designer's: what the base answers on a web server
 		};
 
 		// A schema's own commands — `schema {Schema, Command, Args}`. All functions and Sections take the one: Open
@@ -820,7 +864,7 @@ namespace ibProtocol {
 		// takes them and Save; Active users, the designer's, Kick, Reload and Release; the users Save and Remove; the
 		// designer's inspector (Properties) Save; its predefined values editor Create, Set and Remove; its texts
 		// (ObjectText) Save, and so the home page (HomePage); the base (Database) Load, Save and Clear; the assistant window
-		// (Assistant) Open; ConfigCompare Merge; the style (Style) Save. The designer's tree has its own (ibMetaData::ibCommand), and so its debugger's store.
+		// (Assistant) Open; ConfigCompare Merge; the style (Style) Save; the web addresses (WebAddress) Create and Remove. The designer's tree has its own (ibMetaData::ibCommand), and so its debugger's store.
 		enum class ibCommand : int {
 			Open    = 1,
 			Start   = 2,
@@ -940,6 +984,8 @@ namespace ibProtocol {
 		namespace ibMcpServer {
 
 			inline constexpr const char* Allowed  = "Allowed";
+			inline constexpr const char* Running  = "Running";   // the person's server runs: a transport listens — the
+			                                                     // client's port, or the browser's web address (ibMcp Register)
 
 		}
 

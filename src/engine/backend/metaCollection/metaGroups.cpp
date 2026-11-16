@@ -41,8 +41,11 @@ const ibMetaGroupRow s_groups[] = {
 	{ g_metaRoleCLSID,             ibTRANSLATE("Roles"),              ibMetaGroupBand::Common },
 	{ g_metaLanguageCLSID,         ibTRANSLATE("Languages"),          ibMetaGroupBand::Common },
 
-	// ——— the business objects a configuration is made of ———
-	{ g_metaConstantCLSID,                   ibTRANSLATE("Constants"),       ibMetaGroupBand::Metadata, ibTRANSLATE("Constant") },
+	// ——— straight under the configuration: first what another system talks to the base through — a folder of its own
+	// right after Common, its groups after it — then the business objects a configuration is made of ———
+	{ g_metaIntegrationCLSID,                ibTRANSLATE("Integration"),     ibMetaGroupBand::Metadata },
+	{ g_metaHttpServiceCLSID,                ibTRANSLATE("HTTP services"),   ibMetaGroupBand::Metadata },
+	{ g_metaConstantCLSID,                  ibTRANSLATE("Constants"),       ibMetaGroupBand::Metadata, ibTRANSLATE("Constant") },
 	{ g_metaCatalogCLSID,                    ibTRANSLATE("Catalogs"),        ibMetaGroupBand::Metadata, ibTRANSLATE("Catalog") },
 	{ g_metaDocumentCLSID,                   ibTRANSLATE("Documents"),       ibMetaGroupBand::Metadata, ibTRANSLATE("Document") },
 	{ g_metaEnumerationCLSID,                ibTRANSLATE("Enumerations"),    ibMetaGroupBand::Metadata, ibTRANSLATE("Enumeration") },
@@ -82,6 +85,9 @@ const ibMetaGroupRow s_groups[] = {
 	{ g_metaFormCLSID,                           ibTRANSLATE("Forms"),       ibMetaGroupBand::Inner },
 	{ g_metaCommandCLSID,                        ibTRANSLATE("Commands"),    ibMetaGroupBand::Inner },
 	{ g_metaTemplateCLSID,                       ibTRANSLATE("Templates"),   ibMetaGroupBand::Inner },
+	// …and a service's: its URL templates, each with its methods.
+	{ g_metaUrlTemplateCLSID,                    ibTRANSLATE("URL templates"), ibMetaGroupBand::Inner },
+	{ g_metaHttpServiceMethodCLSID,              ibTRANSLATE("Methods"),     ibMetaGroupBand::Inner },
 	{ g_metaModuleCLSID,                         ibTRANSLATE("Modules"),     ibMetaGroupBand::Inner },
 	{ g_metaManagerCLSID,                        ibTRANSLATE("Manager modules"), ibMetaGroupBand::Inner },
 };

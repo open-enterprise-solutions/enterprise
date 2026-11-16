@@ -25,6 +25,8 @@
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <set>
+#include <vector>
 #include <thread>
 
 #include "core/fstring.h"   // ibString
@@ -40,7 +42,10 @@ class ibClientInstance;
 class ibClientFrame;
 class ibMcpServer;
 class ibSession;
+struct ibHttpRequest;
+struct ibHttpResponse;
 struct ibRpcRequest;
+struct ibServedAddress;
 
 class FRMSERVER_API ibClientHost {
 public:
@@ -74,7 +79,8 @@ public:
 	// The connection closed: the clients logged in through it are logged out.
 	void Disconnect(const void* connection);
 
-	// True when a client has logged in through this connection, or its debugger listens on it (protocol 6). The
+	// True when a client has logged in through this connection, its debugger listens on it (protocol 6), or a web server
+	// listens on it to the base's addresses (`addresses`). The
 	// listener uses it to tell a socket that is only holding a thread from one the half-hour round already watches.
 	bool LoggedIn(const void* connection) const;
 
@@ -94,12 +100,19 @@ public:
 	// connection its transport listens on (ibProtocol::ibMcp). None listening — not told.
 	void NotifyMcp(const ibClientInstance* instance, const ibString& message);
 
+	// THE BASE'S WEB ADDRESSES CHANGED (backend/served/servedAddressRegistry.h): every connection that asked for them
+	// (protocol `addresses`) is sent `addresses {Addresses}`, the whole list.
+	void NotifyAddresses(const std::vector<ibServedAddress>& addresses);
+
 	// The host serving this base — what a door outside the library (an MCP tool) reaches the clients by.
 	static ibClientHost* Find(const ibApplicationInstance* applicationInstance);
 	// THE PERSON'S MCP SERVER — one per client, so what an assistant holds (the settings, the conversation, what it was told)
 	// is that person's and several work side by side; made when first asked for, and it goes before the client does. None —
 	// the session is no client's of this process.
 	static ibMcpServer* GetMcpServer(const ibSession* session);
+	// …ASKED AT ITS WEB ADDRESS (the kind MCP, backend/served/servedKind.h): the client whose session owns the entry, the
+	// token presented, its MCP server asked as the client's own transport asks it. What goes wrong is a status.
+	static ibHttpResponse AnswerMcp(const ibServedAddress& address, const ibHttpRequest& request);
 
 private:
 
@@ -160,6 +173,10 @@ private:
 		Channel                           mcpChannel;
 		std::mutex                        mcpMutex;
 		std::unique_ptr<ibMcpServer>      mcpServer;
+		// …AT A WEB ADDRESS (protocol 7, Register): SHA-256 of the token a request there presents. The entry itself is the
+		// registry's, owned by the client's session. Under m_mutex, with hasMcpToken.
+		bool                              hasMcpToken = false;
+		unsigned char                     mcpTokenDigest[32] = {};
 		// Armed when a thin client's connection has dropped: the moment the session ends if nobody returns.
 		// 0 — a connection is attached, or this client never had one (an HTTP call, `connectionless`). Stored before
 		// `connection` is cleared, so a call never observes a null connection together with a zero deadline.
@@ -210,6 +227,12 @@ private:
 
 	void RoundBody();
 
+	// protocol `addresses` — the list onto `result`, and the connection subscribed to it.
+	bool Addresses(const void* connection, ibDataNode& result, ibProtocol::ibRefusal& refusal, ibString& error);
+	// protocol `serve` — the request handed to its entry's kind, the answer onto `result`.
+	bool Serve(const ibDataNode& params, const ibString& address, ibDataNode& result, ibProtocol::ibRefusal& refusal,
+		ibString& error);
+
 	ibApplicationInstance* m_applicationInstance;
 	unsigned               m_route;
 
@@ -217,6 +240,10 @@ private:
 	std::map<ibString, std::shared_ptr<Client>>    m_clients;
 	// How each connection is told something (SetNotifier), under m_mutex.
 	std::map<const void*, std::function<void(const ibMemoryBuffer& packet)>> m_notifiers;
+	// The connections that asked for the web addresses (`addresses`), under m_mutex; Disconnect forgets one. The
+	// registry is listened to from the first of them until the host goes.
+	std::set<const void*>   m_addressConnections;
+	std::uint64_t           m_addressListening = 0;
 
 	std::mutex              m_roundMutex;
 	std::condition_variable m_roundSignal;

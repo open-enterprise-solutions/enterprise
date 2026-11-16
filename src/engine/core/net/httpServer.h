@@ -33,9 +33,22 @@ namespace asio { class io_context; }
 // What the server's threads share — its routes, its threads, its connections (httpServer.cpp).
 struct ibHttpServerState;
 
+// THE METHODS A REQUEST NAMES (RFC 9110 § 9), as they are written on the wire — what ibHttpRequest::m_method holds.
+namespace ibHttp {
+
+	inline constexpr const char* Get     = "GET";
+	inline constexpr const char* Head    = "HEAD";
+	inline constexpr const char* Post    = "POST";
+	inline constexpr const char* Put     = "PUT";
+	inline constexpr const char* Patch   = "PATCH";
+	inline constexpr const char* Delete  = "DELETE";
+	inline constexpr const char* Options = "OPTIONS";
+
+}
+
 // One request, whole — its head and its body.
 struct CORE_API ibHttpRequest {
-	std::string m_method;    // as written: GET, HEAD, POST
+	std::string m_method;    // as written (ibHttp): GET, HEAD, POST
 	std::string m_path;      // decoded, without the query: /trade/client
 	std::string m_query;     // as written, after the '?'
 	std::vector<std::pair<std::string, std::string>> m_headers;   // names lower-cased, in their order
@@ -47,6 +60,8 @@ struct CORE_API ibHttpRequest {
 	std::string GetHeader(const std::string& name) const;
 	// One parameter of the query, decoded; empty when there is none.
 	std::string GetParameter(const std::string& name) const;
+	// …and every one, decoded, in their order — a pair whose name does not decode is left out.
+	std::vector<std::pair<std::string, std::string>> GetParameters() const;
 	// The path escaped again and its query — what a request carried on to another server is written with
 	// (ibWebSocketClient::Open, ibHttpPost).
 	std::string GetTarget() const;
@@ -170,7 +185,7 @@ public:
 	ibHttpServer();
 	~ibHttpServer();
 
-	// THE ROUTES — by the exact decoded path; a request for none of them goes to the files mounted, and failing them
+	// THE ROUTES — by the exact decoded path; a request for none of them goes to what is mounted, and failing that
 	// is answered 404. Said before Start.
 	void Get(const std::string& path, ibHttpHandler handler);
 	void Post(const std::string& path, ibHttpHandler handler);
@@ -182,6 +197,15 @@ public:
 	// …and files held in memory, by their path under `prefix` (index.html, js/app.js) — a pack read whole: served as a
 	// directory's are.
 	void Mount(const std::string& prefix, std::map<std::string, std::string> files);
+	// …and a handler, for every method and every path under `prefix`: what it answers there — 404 and 405 included —
+	// is its own.
+	void Mount(const std::string& prefix, ibHttpHandler handler);
+	// What is mounted under `prefix` taken off, whichever of the three it is.
+	//
+	// ⭐ THE MOUNTS CHANGE AT ANY TIME, from any thread, before Start and while requests come — a list a base keeps
+	// changing is served as it changes. One mount per prefix: a second under the same prefix replaces the first. The
+	// longest prefix answers. A request already handed to a handler keeps it.
+	void Unmount(const std::string& prefix);
 
 	// Listening, with the threads up — or false, with why in `error`.
 	bool Start(const ibHttpServerOptions& options, std::string& error);

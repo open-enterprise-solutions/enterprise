@@ -17895,3 +17895,258 @@ msgstr "По точному совпадению"
 #: src/engine/frmclient/win/dlgs/search.cpp:83 src/engine/webserver/www/src/window/searchWindow.js:52
 msgid "By value"
 msgstr "По значению"
+
+#: src/engine/appstudio/win/dlg/webAddress.cpp
+msgid "A session's"
+msgstr "Сеанса"
+
+#: src/engine/appstudio/win/dlg/webAddress.cpp
+msgid "Add a web address"
+msgstr "Добавить веб-адрес"
+
+#: src/engine/appstudio/win/dlg/webAddress.cpp
+msgid "Add..."
+msgstr "Добавить..."
+
+#: src/engine/appstudio/win/dlg/webAddress.cpp
+msgid "Another path..."
+msgstr "Другой путь..."
+
+#: src/engine/appstudio/win/dlg/webAddress.cpp
+msgid "In the base"
+msgstr "В базе"
+
+#: src/engine/appstudio/win/dlg/webAddress.cpp
+msgid "Kept"
+msgstr "Хранится"
+
+#: src/engine/appstudio/win/dlg/webAddress.cpp
+msgid "No kind of web address is known to this platform."
+msgstr "Платформе не известен ни один вид веб-адреса."
+
+#: src/engine/appstudio/win/dlg/webAddress.cpp
+#, c-format
+msgid "Take the web address '%s' off?"
+msgstr "Снять веб-адрес '%s'?"
+
+#: src/engine/appstudio/win/dlg/webAddress.cpp
+msgid "The path under every publication of the base, without a slash at either end (es/desk):"
+msgstr "Путь под каждой публикацией базы, без косой черты в начале и в конце (es/desk):"
+
+#: src/engine/frmserver/client/clientFrameDesigner.cpp
+msgid "Web addresses"
+msgstr "Веб-адреса"
+
+#: src/engine/appstudio/win/dlg/webAddress.cpp
+msgid "What the base is to answer:"
+msgstr "Что база будет отвечать:"
+
+#: src/engine/appstudio/win/dlg/webAddress.cpp
+msgid "Which kind answers there:"
+msgstr "Какой вид отвечает по этому адресу:"
+
+#: src/engine/backend/served/servedAddressRegistry.cpp
+#, c-format
+msgid "The web address %s '%s' is not registered: %s answers there already."
+msgstr "Веб-адрес %s '%s' не зарегистрирован: по этому пути уже отвечает %s."
+
+#: src/engine/backend/served/servedAddressRegistry.cpp
+#, c-format
+msgid "The web address %s '%s' is not registered: %s."
+msgstr "Веб-адрес %s '%s' не зарегистрирован: %s."
+
+#: src/engine/backend/served/servedAddressRegistry.cpp
+#, c-format
+msgid "The web address %s '%s' is not registered: its id is registered already."
+msgstr "Веб-адрес %s '%s' не зарегистрирован: его идентификатор уже зарегистрирован."
+
+#: src/engine/backend/served/servedAddressRegistry.cpp
+#, c-format
+msgid "The web address %s '%s' is not registered: no kind of that name answers."
+msgstr "Веб-адрес %s '%s' не зарегистрирован: вида с таким именем нет."
+
+#: src/engine/backend/served/servedAddressRegistry.cpp
+#, c-format
+msgid "The web address %s '%s' is not registered: the base is not open."
+msgstr "Веб-адрес %s '%s' не зарегистрирован: база не открыта."
+
+#: src/engine/backend/served/servedAddressRegistry.cpp
+#, c-format
+msgid "The web address %s is not unregistered: no entry has that id."
+msgstr "Веб-адрес %s не снят: записи с таким идентификатором нет."
+
+#: src/engine/backend/served/servedAddressRegistry.cpp
+#, c-format
+msgid "The web address %s is not unregistered: the base is not open."
+msgstr "Веб-адрес %s не снят: база не открыта."
+
+#: src/engine/core/net/servedAddress.cpp
+msgid "a segment holds a character other than a letter, a digit or . _ ~ -"
+msgstr "в сегменте есть символ, отличный от буквы, цифры или . _ ~ -"
+
+#: src/engine/core/net/servedAddress.cpp
+msgid "a segment is . or .."
+msgstr "сегмент равен . или .."
+
+#: src/engine/backend/served/servedAddressRegistry.cpp
+msgid "the base has no settings storage"
+msgstr "у базы нет хранилища настроек"
+
+#: src/engine/backend/served/servedAddressRegistry.cpp
+msgid "the base's web addresses were not written"
+msgstr "веб-адреса базы не записаны"
+
+#: src/engine/core/net/servedAddress.cpp
+msgid "the first segment is client, the publication's own door"
+msgstr "первый сегмент — client, собственный вход публикации"
+
+#: src/engine/core/net/servedAddress.cpp
+msgid "the path has an empty segment"
+msgstr "в пути есть пустой сегмент"
+
+#: src/engine/core/net/servedAddress.cpp
+msgid "the path is empty"
+msgstr "путь пуст"
+
+#: src/engine/backend/metaCollection/metaGroups.cpp
+msgid "Integration"
+msgstr "Интеграция"
+
+#: src/engine/backend/httpService/httpServiceCall.cpp
+#, c-format
+msgid "The web address %s '%s' is not registered: the configuration has no HTTP service %s."
+msgstr "Веб-адрес %s '%s' не зарегистрирован: в конфигурации нет HTTP-сервиса %s."
+
+#: src/engine/frmserver/client/clientHost.cpp
+#, c-format
+msgid "The web address %s '%s' is not registered: an assistant's address is a person's, under mcp/, registered from their client's assistant access."
+msgstr "Веб-адрес %s '%s' не зарегистрирован: адрес ассистента принадлежит пользователю, лежит под mcp/ и регистрируется из доступа ассистента в его клиенте."
+
+#: src/engine/webserver/www/src/window/assistantAccess.js
+msgid "Any assistant that speaks MCP can connect at this address. Put this into its server configuration - it is the standard form and needs nothing else:"
+msgstr "По этому адресу может подключиться любой ассистент, поддерживающий MCP. Добавьте это в его конфигурацию серверов - это стандартный формат, больше ничего не нужно:"
+
+#: src/engine/backend/metaCollection/metaHttpServiceObject.cpp
+#, c-format
+msgid "%s.%s.%s: the service module has no function '%s' taking the request - Function %s(Request) answers this method"
+msgstr "%s.%s.%s: в модуле сервиса нет функции '%s', принимающей запрос, - на этот метод отвечает Function %s(Request)"
+
+#: src/engine/backend/metaCollection/metaGroups.cpp:32
+msgid "HTTP services"
+msgstr "HTTP-сервисы"
+
+#: src/engine/frmserver/metaTree/treeConfiguration.cpp:46 src/engine/backend/metaCollection/metaGroups.cpp:83
+msgid "URL templates"
+msgstr "Шаблоны URL"
+
+#: src/engine/backend/metaCollection/metaGroups.cpp:84
+msgid "Methods"
+msgstr "Методы"
+
+#: src/engine/backend/metaCollection/metaHttpServiceObject.h:107 src/engine/backend/session/sessionSnapshot.cpp:55
+msgid "HTTP service"
+msgstr "HTTP-сервис"
+
+#: src/engine/backend/metaCollection/metaHttpServiceObject.h:108
+msgid "Root URL"
+msgstr "Корневой URL"
+
+#: src/engine/backend/metaCollection/metaHttpServiceObject.h:109
+msgid "The service's address: one segment after /es/ in the address the web server publishes the base under - <publication>/es/<root URL>/... Unique in the configuration; it answers once registered among the base's web addresses."
+msgstr "Адрес сервиса: один сегмент после /es/ в адресе, под которым веб-сервер публикует базу, - <публикация>/es/<корневой URL>/... Уникален в конфигурации; отвечает, когда зарегистрирован среди веб-адресов базы."
+
+#: src/engine/backend/metaCollection/metaHttpServiceObject.h:114
+msgid "Service module"
+msgstr "Модуль сервиса"
+
+#: src/engine/backend/metaCollection/metaHttpServiceObject.h:114
+msgid "The service's code: a function for each method, named by its Handler, given the HTTPServiceRequest and returning an HTTPServiceResponse."
+msgstr "Код сервиса: функция для каждого метода, названная его обработчиком; получает HTTPServiceRequest и возвращает HTTPServiceResponse."
+
+#: src/engine/backend/metaCollection/metaHttpServiceObject.h:164
+msgid "URL template"
+msgstr "Шаблон URL"
+
+#: src/engine/backend/metaCollection/metaHttpServiceObject.h:166
+msgid "The paths this template answers, after the service's root: segments that are literal (/Transfer), a parameter in braces (/{id} - one segment, given to the handler in URLParameters), or * as the last one (the rest of the path). /Transfer/{id}/reset, /*. The most particular template a path matches answers it."
+msgstr "Пути, на которые отвечает шаблон, после корня сервиса: сегменты - буквальные (/Transfer), параметр в фигурных скобках (/{id} - один сегмент, передаётся обработчику в URLParameters) или * последним (остаток пути). /Transfer/{id}/reset, /*. Отвечает самый частный из шаблонов, подходящих к пути."
+
+#: src/engine/backend/metaCollection/metaHttpServiceObject.h:205
+msgid "HTTP service method"
+msgstr "Метод HTTP-сервиса"
+
+#: src/engine/backend/metaCollection/metaHttpServiceObject.h:206
+msgid "HTTP method"
+msgstr "HTTP-метод"
+
+#: src/engine/backend/metaCollection/metaHttpServiceObject.h:207
+msgid "The request method this answers on its template: Get, Post, Put, Patch, Delete, Head, Options - or Any, every method the template has no method of its own for."
+msgstr "Метод запроса, на который он отвечает в своём шаблоне: Get, Post, Put, Patch, Delete, Head, Options - или Any, любой метод, для которого у шаблона нет своего."
+
+#: src/engine/backend/metaCollection/metaHttpServiceObject.h:208
+msgid "Handler"
+msgstr "Обработчик"
+
+#: src/engine/backend/metaCollection/metaHttpServiceObject.h:209
+msgid "The function of the service module that answers: Function <Handler>(Request), given the HTTPServiceRequest and returning an HTTPServiceResponse."
+msgstr "Функция модуля сервиса, которая отвечает: Function <Обработчик>(Request); получает HTTPServiceRequest и возвращает HTTPServiceResponse."
+
+#: src/engine/backend/metaCollection/metaHttpServiceObjectMenu.cpp:11
+msgid "Open service module"
+msgstr "Открыть модуль сервиса"
+
+#: src/engine/backend/session/sessionSnapshot.cpp:96
+msgid "HTTP request"
+msgstr "HTTP-запрос"
+
+#: src/engine/backend/httpService/httpServiceCall.cpp:91
+#, c-format
+msgid "the module of the HTTP service '%s' is not registered in this session"
+msgstr "модуль HTTP-сервиса '%s' не зарегистрирован в этом сеансе"
+
+#: src/engine/backend/httpService/httpServiceCall.cpp:101
+#, c-format
+msgid "the handler '%s' of the HTTP service '%s' gave no HTTPServiceResponse - a function of that name in the service module returns one"
+msgstr "обработчик '%s' HTTP-сервиса '%s' не вернул HTTPServiceResponse - его возвращает функция с этим именем в модуле сервиса"
+
+#: src/engine/backend/httpService/httpServiceCall.cpp:143
+#, c-format
+msgid "HTTP service %s %s: %s"
+msgstr "HTTP-сервис %s %s: %s"
+
+#: src/engine/backend/system/value/valueHttp.cpp:830
+msgid "HTTPServiceResponse: a response says its status code - New HTTPServiceResponse(200)"
+msgstr "HTTPServiceResponse: у ответа есть код состояния - New HTTPServiceResponse(200)"
+
+#: src/engine/backend/system/value/valueHttp.cpp:835 src/engine/backend/system/value/valueHttp.cpp:896
+msgid "HTTPServiceResponse: the headers are a Structure - a name and its value"
+msgstr "HTTPServiceResponse: заголовки - это Structure: имя и значение"
+
+#: src/engine/backend/system/value/valueHttp.cpp:844
+#, c-format
+msgid "HTTPServiceResponse: a status code is from 100 to 599: %d was given"
+msgstr "HTTPServiceResponse: код состояния - от 100 до 599, передан %d"
+
+#: src/engine/backend/system/value/valueHttp.cpp:917
+msgid "HTTPServiceResponse: SetBodyFromBinaryData takes a BinaryData"
+msgstr "HTTPServiceResponse: SetBodyFromBinaryData принимает BinaryData"
+
+#: src/engine/backend/system/value/valueHttp.cpp:858
+#, c-format
+msgid "HTTPServiceResponse: '%s' is not a header name"
+msgstr "HTTPServiceResponse: '%s' - не имя заголовка"
+
+#: src/engine/backend/system/value/valueHttp.cpp:861
+#, c-format
+msgid "HTTPServiceResponse: the header '%s' says how the message is carried, and that is not a script's to set"
+msgstr "HTTPServiceResponse: заголовок '%s' говорит, как передаётся сообщение, и задавать его не скрипту"
+
+#: src/engine/backend/system/value/valueHttp.cpp:865
+#, c-format
+msgid "HTTPServiceResponse: the value of the header '%s' is a string or a number"
+msgstr "HTTPServiceResponse: значение заголовка '%s' - строка или число"
+
+#: src/engine/backend/system/value/valueHttp.cpp:868
+#, c-format
+msgid "HTTPServiceResponse: the value of the header '%s' holds a line break or a control character"
+msgstr "HTTPServiceResponse: в значении заголовка '%s' есть перевод строки или управляющий символ"

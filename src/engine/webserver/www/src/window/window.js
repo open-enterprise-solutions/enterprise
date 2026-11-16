@@ -17,6 +17,7 @@ import { Questions } from './questions.js';
 import { Sections } from './sections.js';
 import { showFunctions } from './functions.js';
 import { showAbout } from './about.js';
+import { assistantSchema, showAssistant } from './assistantAccess.js';
 import { showTheme, styleSchema } from './theme.js';
 
 /** @typedef {import('../protocol/session.js').Session} Session */
@@ -27,6 +28,9 @@ import { showTheme, styleSchema } from './theme.js';
 // The schemas the window opens itself (ibSchema): All functions.
 const allFunctions = 1;
 const about = 4;
+// Tools → Options... (Debugging): the thin client's pages are the debugging and the assistant access; the browser's, the
+// second — refused to a person whose roles do not give it.
+const debugging = 6;
 // …and the registration journal, which shows nothing of its own: its command Open (ibSchema::ibCommand) opens its tab.
 const auditLog = 5;
 const schemaOpen = 1;
@@ -445,6 +449,8 @@ export class ClientWindow {
 				await showAbout(this.session);
 			else if (item.Schema === styleSchema)
 				await showTheme(this.session);
+			else if (item.Schema === assistantSchema || item.Schema === debugging)
+				await showAssistant(this.session);
 			else if (item.Schema === auditLog)
 				await this.session.call('schema', { Schema: auditLog, Command: schemaOpen });
 			else if (item.Schema !== undefined)

@@ -13,7 +13,7 @@ public:
 	// (AccessRight_Assistant). The right a menu item asks and the right a channel to it asks (ibClientHost::Mcp).
 	virtual bool AccessRight(const ibSession& session) const override;
 
-	// Allowed.
+	// Allowed, Running.
 	virtual void Build(const ibSession& session, const ibDataNode& args, ibDataNode& result) const override;
 };
 

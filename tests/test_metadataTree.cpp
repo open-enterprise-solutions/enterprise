@@ -107,6 +107,7 @@ const ibMetaKindCandidate kMetaKindCandidates[] = {
 	{ g_metaCommonAttributeCLSID,              "CommonAttribute"              },
 	{ g_metaSessionParameterCLSID,             "SessionParameter"             },
 	{ g_metaScheduledJobCLSID,                 "ScheduledJob"                 },
+	{ g_metaHttpServiceCLSID,                  "HTTPService"                  },
 	{ g_metaRoleCLSID,                         "Role"                         },
 	{ g_metaLanguageCLSID,                     "Language"                     },
 	{ g_metaPictureCLSID,                      "Picture"                      },

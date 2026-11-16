@@ -2,6 +2,7 @@
 
 #include "backend/metadataConfiguration.h"   // AccessRight_Assistant
 #include "frmserver/client/clientHost.h"
+#include "frmserver/mcp/mcpServer.h"   // IsRunning — Running
 #include "backend/session/session.h"
 #include "core/serialize/dataBuilder.h"
 
@@ -16,5 +17,7 @@ bool ibSchemaMcpServer::AccessRight(const ibSession& session) const
 
 void ibSchemaMcpServer::Build(const ibSession& session, const ibDataNode& /*args*/, ibDataNode& result) const
 {
-	result.SetValue(ibProtocol::ibSchema::ibMcpServer::Allowed, ibClientHost::GetMcpServer(&session) != nullptr);
+	const ibMcpServer* const server = ibClientHost::GetMcpServer(&session);
+	result.SetValue(ibProtocol::ibSchema::ibMcpServer::Allowed, server != nullptr);
+	result.SetValue(ibProtocol::ibSchema::ibMcpServer::Running, server != nullptr && server->IsRunning());
 }

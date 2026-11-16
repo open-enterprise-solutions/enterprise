@@ -7,6 +7,7 @@
 #include <string>
 #include <vector>
 
+#include <cctype>
 #include <cstring>
 
 #include "backend/appData.h"
@@ -24,6 +25,7 @@
 #include "core/serialize/dataBuilder.h"
 #include "backend/session/session.h"
 #include "backend/session/sessionException.h"
+#include "backend/served/servedAddressRegistry.h"   // the base's web addresses — protocol `addresses` and `serve`
 #include "backend/temp/tempStorage.h"   // the client's files
 #include "backend/userInfo.h"           // users — the names the login window offers
 #include "core/crypto/sessionToken.h"
@@ -51,6 +53,9 @@ std::map<const ibApplicationInstance*, ibClientHost*>     s_hosts;
 // A connectionless instance (an HTTP login) nobody has heard from for this long is taken down. A client with a
 // connection is ended when its connection drops (Disconnect), not by this limit.
 constexpr std::chrono::minutes kIdleLimit(30);
+
+// The kind of web address a client's assistant is answered at (mcp {Command: Register}) — its name in the base's list.
+const ibString kMcpKind = ibT("MCP");
 
 std::int64_t NowMs()
 {
@@ -489,6 +494,12 @@ ibClientHost::~ibClientHost()
 	if (m_round.joinable())
 		m_round.join();
 
+	// No connection is told the web addresses any more.
+	if (m_addressListening != 0) {
+		if (ibServedAddressRegistry* const registry = ibApplicationInstance::GetServedAddressRegistry(m_applicationInstance))
+			registry->Forget(m_addressListening);
+	}
+
 	// Every client goes — each its own session's teardown (ibClientInstance::OnExit).
 	std::map<ibString, std::shared_ptr<Client>> clients;
 	{
@@ -699,6 +710,7 @@ void ibClientHost::Disconnect(const void* connection)
 	{
 		std::lock_guard<std::mutex> lock(m_mutex);
 		m_notifiers.erase(connection);
+		m_addressConnections.erase(connection);
 		for (const auto& entry : m_clients) {
 			if (entry.second->connection.load(std::memory_order_acquire) == connection)
 				matched.push_back(entry.second);
@@ -791,7 +803,8 @@ bool ibClientHost::LoggedIn(const void* connection) const
 			|| it.second->mcpChannel.connection == connection)
 			return true;
 	}
-	return false;
+	// …or a web server listens on it to the base's addresses: it logs nobody in, and stays.
+	return m_addressConnections.contains(connection);
 }
 
 void ibClientHost::SetNotifier(const void* connection, std::function<void(const ibMemoryBuffer& packet)> notify)
@@ -1246,6 +1259,13 @@ bool ibClientHost::Call(ibProtocol::ibMethod method, const ibDataNode& params, i
 				done = true;
 			}
 		}
+	}
+	else if (method == ibProtocol::ibMethod::Addresses) {
+		// The web server's — no client: it is the transport, and the list is the base's.
+		done = Addresses(connection, result, refusal, error);
+	}
+	else if (method == ibProtocol::ibMethod::Serve) {
+		done = Serve(params, address, result, refusal, error);
 	}
 	else if (method == ibProtocol::ibMethod::Debug) {
 		// ⭐ BESIDE THE CLIENT'S CALLS, NOT AFTER THEM (protocol 6): not under the client's lock and with no frame — a step
@@ -1736,6 +1756,99 @@ bool ibClientHost::Mcp(Client& client, const ibDataNode& params, ibDataNode& res
 		return DrawChannelKey(client.mcpChannel, result, refusal, error);
 	}
 
+	// ⭐ A WEB ADDRESS OF ITS OWN — the session's entry in the base's list, through the registry's one door: the one it had
+	// taken off first, so a second replaces it. The token's digest is kept here, the entry there. And THE SERVER RAISED
+	// with it, as the client's own transport raises it (Listen): it runs — the assistant window stands on that, the
+	// metadata is watched; what it says unasked has no stream to go by, a request is answered and nothing listens
+	// between them. Taken off, or refused, the server goes down with the address.
+	if (command == ibProtocol::ibMcp::ibCommand::Register || command == ibProtocol::ibMcp::ibCommand::Unregister) {
+		// Asked on the client's own connection, as Channel is: the Client id is no bearer.
+		if (!MayCall(client.connectionless, client.connection.load(std::memory_order_acquire),
+			client.resumeDeadlineMs.load(std::memory_order_acquire), connection)) {
+			refuse(ibProtocol::ibRefusal::NoSession, ibT("the client is not connected"));
+			return false;
+		}
+		ibServedAddressRegistry* const registry = ibApplicationInstance::GetServedAddressRegistry(m_applicationInstance);
+		if (registry == nullptr) {
+			refuse(ibProtocol::ibRefusal::NotNow, ibT("the base is not open"));
+			return false;
+		}
+		ibMcpServer* const server = GetMcpServer(client);
+		if (server == nullptr) {
+			refuse(ibProtocol::ibRefusal::NoSession, ibT("the client has no session"));
+			return false;
+		}
+		// Running or not: the assistant window's menu item stands on it (ibSchemaAssistant::AccessRight).
+		const auto raise = [this, &client, server](bool up) {
+			if (up)
+				server->Listen([](const ibString&) {});
+			else
+				server->Listen(nullptr);
+			NotifyChanged(client.instance.get());
+		};
+		// The token read, or drawn, before anything is taken off: a wrong one changes nothing.
+		ibString token = params.GetValue<ibString>(ibProtocol::ibMcp::Token);
+		unsigned char digest[ibSessionToken::kDigest] = {};
+		if (command == ibProtocol::ibMcp::ibCommand::Register) {
+			unsigned char raw[ibSessionToken::kBytes];
+			if (token.IsEmpty()) {
+				const std::vector<unsigned char> drawn = ibSessionToken::Generate();
+				if (drawn.size() != ibSessionToken::kBytes) {
+					refuse(ibProtocol::ibRefusal::Failed, ibT("the token could not be drawn"));
+					return false;
+				}
+				std::memcpy(raw, drawn.data(), ibSessionToken::kBytes);
+				token = ibSessionToken::Hex(raw, ibSessionToken::kBytes);
+			}
+			else if (!ibSessionToken::ParseHex(token, raw)) {
+				refuse(ibProtocol::ibRefusal::BadParameter, ibT("a token is 64 hex characters"));
+				return false;
+			}
+			if (!ibSessionToken::Hash(raw, ibSessionToken::kBytes, digest)) {
+				refuse(ibProtocol::ibRefusal::Failed, ibT("the token could not be hashed"));
+				return false;
+			}
+		}
+
+		const ibGuid owner = session->Identity().m_guid;
+		try {
+			{
+				std::lock_guard<std::mutex> lock(m_mutex);
+				client.hasMcpToken = false;
+			}
+			for (const ibServedAddress& entry : registry->GetServedAddressArray()) {
+				if (entry.m_owner == owner && entry.m_kind == kMcpKind)
+					registry->Unregister(entry.m_id);
+			}
+			if (command == ibProtocol::ibMcp::ibCommand::Unregister) {
+				raise(false);
+				return true;
+			}
+
+			ibServedAddress address;
+			address.m_kind = kMcpKind;
+			address.m_path = params.GetValue<ibString>(ibProtocol::ibMcp::Path);
+			if (address.m_path.IsEmpty())
+				address.m_path = ibT("mcp/") + ibGuid(ibGuid::newGuid()).str();
+			address.m_owner = owner;
+			registry->Register(address);
+			{
+				std::lock_guard<std::mutex> lock(m_mutex);
+				std::memcpy(client.mcpTokenDigest, digest, ibSessionToken::kDigest);
+				client.hasMcpToken = true;
+			}
+			raise(true);
+			result.SetValue(ibProtocol::ibMcp::Path, address.m_path);
+			result.SetValue(ibProtocol::ibMcp::Token, token);
+			return true;
+		}
+		catch (const ibCoreException& err) {
+			raise(false);
+			refuse(ibProtocol::ibRefusal::Failed, err.GetErrorDescription());
+			return false;
+		}
+	}
+
 	ibMcpServer* const server = GetMcpServer(client);
 	if (server == nullptr) {
 		refuse(ibProtocol::ibRefusal::NoSession, ibT("the client has no session"));
@@ -1769,6 +1882,264 @@ bool ibClientHost::Mcp(Client& client, const ibDataNode& params, ibDataNode& res
 		params.GetValue<ibString>(ibProtocol::ibMcp::Name), status);
 	result.SetValue(ibProtocol::ibMcp::Message, answer);
 	result.SetValue(ibProtocol::ibMcp::Status, status);
+	return true;
+}
+
+ibHttpResponse ibClientHost::AnswerMcp(const ibServedAddress& address, const ibHttpRequest& request)
+{
+	ibHttpResponse response;
+	const auto refuse = [&response](int status, const char* text) {
+		response.m_status = status;
+		response.SetContent(std::string("{\"jsonrpc\":\"2.0\",\"id\":null,\"error\":{\"code\":-32000,\"message\":\"")
+			+ text + "\"}}", "application/json");
+		return response;
+	};
+
+	// ⭐ WHO IS ASKING — the client whose session owns the entry, and the token compared as its digest, in constant time.
+	unsigned char raw[ibSessionToken::kBytes];
+	unsigned char digest[ibSessionToken::kDigest];
+	const ibString given = ibString::FromUTF8(request.GetHeader("authorization"));
+	const bool read = given.StartsWith(ibT("Bearer "))
+		&& ibSessionToken::ParseHex(given.Mid(7).Trim(true).Trim(false), raw)
+		&& ibSessionToken::Hash(raw, ibSessionToken::kBytes, digest);
+	ibClientHost* const host = Find(ibApplicationInstance::Get(false));
+	std::shared_ptr<Client> client;
+	bool authorised = false;
+	if (host != nullptr) {
+		std::lock_guard<std::mutex> lock(host->m_mutex);
+		for (const auto& entry : host->m_clients) {
+			const std::shared_ptr<ibSession> session = entry.second->instance->ShareSession();
+			if (session != nullptr && session->Identity().m_guid == address.m_owner) {
+				client = entry.second;
+				authorised = read && client->hasMcpToken && ibSessionToken::DigestEqual(client->mcpTokenDigest, digest);
+				break;
+			}
+		}
+	}
+	if (client == nullptr)
+		return refuse(404, "The assistant's session is gone.");
+	if (!authorised) {
+		response.m_headers.emplace_back("WWW-Authenticate", "Bearer realm=\"OES\"");
+		return refuse(401, "Unauthorized: this address requires an Authorization: Bearer <token> header - the token the "
+			"person's assistant access shows beside the address.");
+	}
+
+	// WHERE FROM — a page's request carries its Origin, a tool's none (frmclient/backend/mcp/mcpServer.cpp says why MCP
+	// asks it): a page is answered only on the site it came from.
+	// A host is ASCII on the wire (RFC 6454 § 6.1), and compared as the web server compares it, case aside.
+	const std::string origin = request.GetHeader("origin");
+	if (!origin.empty()) {
+		const std::string::size_type scheme = origin.find("://");
+		const std::string site = request.GetHeader("host");
+		const auto same = [](char a, char b) {
+			return std::tolower(static_cast<unsigned char>(a)) == std::tolower(static_cast<unsigned char>(b));
+		};
+		if (scheme == std::string::npos || site.empty()
+			|| !std::equal(origin.begin() + scheme + 3, origin.end(), site.begin(), site.end(), same))
+			return refuse(403, "Origin not allowed");
+	}
+
+	// A POST IS A QUESTION; nothing listens here — what the server says unasked has no stream to go by (MCP: 405).
+	if (request.m_method != ibHttp::Post) {
+		response.m_headers.emplace_back("Allow", ibHttp::Post);
+		return refuse(405, "Only POST: this address has no event stream.");
+	}
+	// The bytes are UTF-8, or the call is refused — the client's own transport says why.
+	if (!ibIsUtf8(request.m_body))
+		return refuse(400, "The request is not UTF-8.");
+
+	// ⭐ IN THE CLIENT'S SESSION, as Mcp asks it: the person's rights, asked again — roles change while a session lives.
+	const std::shared_ptr<ibSession> session = client->instance->ShareSession();
+	ibClientFrame* const frame = client->instance->GetFrame();
+	if (session == nullptr || frame == nullptr)
+		return refuse(404, "The assistant's session is gone.");
+	const ibSessionScope inThisSession(session.get());
+	if (!frame->IsSchemaAllowed(ibProtocol::ibSchema::ibKind::McpServer))
+		return refuse(403, "The person's roles do not give the assistant.");
+	ibMcpServer* const server = host->GetMcpServer(*client);
+	if (server == nullptr)
+		return refuse(404, "The assistant's session is gone.");
+	client->instance->Touch();
+
+	std::int32_t status = 0;
+	const ibString answer = server->Call(request.GetText(), ibString::FromUTF8(request.GetHeader("mcp-protocol-version")),
+		ibString::FromUTF8(request.GetHeader("mcp-method")), ibString::FromUTF8(request.GetHeader("mcp-name")), status);
+	response.m_status = status;
+	if (!answer.IsEmpty())
+		response.SetText(answer, "application/json");
+	return response;
+}
+
+namespace {
+
+// THE ASSISTANT'S WEB ADDRESS — a client's session's entry (mcp {Command: Register}), answered by that person's MCP server.
+class ibServedMcp : public ibServedKind {
+public:
+
+	virtual ibHttpResponse Answer(const ibServedAddress& address, const ibHttpRequest& request, const ibString& prefix) const override
+	{
+		return ibClientHost::AnswerMcp(address, request);
+	}
+
+	// A session's, never the base's — whose assistant answers is the person's, and the token is theirs — and under mcp/:
+	// a session does not take a path another kind is offered (an HTTP service's es/…).
+	virtual void Check(const ibServedAddress& address) const override
+	{
+		if (address.IsKept() || !address.m_path.StartsWith(ibT("mcp/")))
+			ibBackendCoreException::Error(_("The web address %s '%s' is not registered: an assistant's address is a "
+				"person's, under mcp/, registered from their client's assistant access."), address.m_kind, address.m_path);
+	}
+};
+
+} // namespace
+
+SERVED_KIND_REGISTER(ibServedMcp, "MCP");
+
+//*******************************************************************************************
+//*                                   The web addresses                                     *
+//*******************************************************************************************
+
+namespace {
+
+// The list as the protocol writes it — each {Id, Path}.
+ibDataValue AddressList(const std::vector<ibServedAddress>& addresses)
+{
+	std::vector<ibDataValue> items;
+	for (const ibServedAddress& address : addresses) {
+		auto item = std::make_shared<ibDataNode>();
+		item->SetValue(ibProtocol::ibServed::Id, address.m_id.str());
+		item->SetValue(ibProtocol::ibServed::Path, address.m_path);
+		items.push_back(ibDataValue::Child(item));
+	}
+	return ibDataValue::Array(std::move(items));
+}
+
+// A request's words and an answer's go as the bytes they are written in (`serve`) — never read as text on the way.
+std::string ReadBytes(const ibDataNode& node, const char* name)
+{
+	const ibMemoryBuffer bytes = node.GetValue<ibMemoryBuffer>(name);
+	return std::string(static_cast<const char*>(bytes.GetData()), bytes.GetDataLen());
+}
+
+// A list of headers as the protocol writes it — a child each, Name and Value.
+ibDataValue HeaderList(const std::vector<std::pair<std::string, std::string>>& headers)
+{
+	std::vector<ibDataValue> items;
+	for (const auto& header : headers) {
+		auto item = std::make_shared<ibDataNode>();
+		item->SetValue(ibProtocol::ibServed::Name, ibMemoryBuffer(header.first.data(), header.first.size()));
+		item->SetValue(ibProtocol::ibServed::Value, ibMemoryBuffer(header.second.data(), header.second.size()));
+		items.push_back(ibDataValue::Child(item));
+	}
+	return ibDataValue::Array(std::move(items));
+}
+
+std::vector<std::pair<std::string, std::string>> ReadHeaders(const ibDataNode& node)
+{
+	std::vector<std::pair<std::string, std::string>> headers;
+	if (const auto list = node.FindField(ibProtocol::ibServed::Headers)) {
+		for (const ibDataValue& item : list->AsArray()) {
+			if (const std::optional<ibDataNode> header = item.AsChild())
+				headers.emplace_back(ReadBytes(*header, ibProtocol::ibServed::Name), ReadBytes(*header, ibProtocol::ibServed::Value));
+		}
+	}
+	return headers;
+}
+
+} // namespace
+
+bool ibClientHost::Addresses(const void* connection, ibDataNode& result, ibProtocol::ibRefusal& refusal, ibString& error)
+{
+	ibServedAddressRegistry* const registry = ibApplicationInstance::GetServedAddressRegistry(m_applicationInstance);
+	if (registry == nullptr) {
+		refusal = ibProtocol::ibRefusal::NotNow;
+		error = ibT("the base is not open");
+		return false;
+	}
+	// ⭐ THE CALL SUBSCRIBES — a connection that keeps itself open is told every change from now on; the registry is
+	// listened to once, from the first such connection.
+	if (connection != nullptr) {
+		bool listen = false;
+		{
+			std::lock_guard<std::mutex> lock(m_mutex);
+			if (m_notifiers.contains(connection))
+				m_addressConnections.insert(connection);
+			listen = m_addressListening == 0;
+			if (listen)
+				m_addressListening = ~std::uint64_t(0);   // claimed: a second call here does not listen twice
+		}
+		if (listen) {
+			const std::uint64_t listening = registry->Listen([this](const std::vector<ibServedAddress>& addresses) {
+				NotifyAddresses(addresses);
+			});
+			std::lock_guard<std::mutex> lock(m_mutex);
+			m_addressListening = listening;
+		}
+	}
+	result.AddField(ibProtocol::ibServed::Addresses, AddressList(registry->GetServedAddressArray()));
+	return true;
+}
+
+void ibClientHost::NotifyAddresses(const std::vector<ibServedAddress>& addresses)
+{
+	std::vector<std::function<void(const ibMemoryBuffer& packet)>> notifiers;
+	{
+		std::lock_guard<std::mutex> lock(m_mutex);
+		for (const void* connection : m_addressConnections) {
+			const auto found = m_notifiers.find(connection);
+			if (found != m_notifiers.end())
+				notifiers.push_back(found->second);
+		}
+	}
+	if (notifiers.empty())
+		return;
+	// The envelope as Notification writes one, without a Client: the list is no client's.
+	ibDataNode note;
+	note.SetValue(ibProtocol::ibRpc::Method, ibString(ibProtocol::ibRpc::Addresses));
+	note.Child(ibProtocol::ibRpc::Params).AddField(ibProtocol::ibServed::Addresses, AddressList(addresses));
+	ibMemoryBuffer packet;
+	ibBinaryProvider().Write(note, packet);
+	for (const auto& notify : notifiers)
+		notify(packet);
+}
+
+bool ibClientHost::Serve(const ibDataNode& params, const ibString& address, ibDataNode& result,
+	ibProtocol::ibRefusal& refusal, ibString& error)
+{
+	ibServedAddressRegistry* const registry = ibApplicationInstance::GetServedAddressRegistry(m_applicationInstance);
+	if (registry == nullptr) {
+		refusal = ibProtocol::ibRefusal::NotNow;
+		error = ibT("the base is not open");
+		return false;
+	}
+	const ibString id = params.GetValue<ibString>(ibProtocol::ibServed::Address);
+	const ibGuid entry(id);
+	if (!entry.isValid()) {
+		refusal = ibProtocol::ibRefusal::BadParameter;
+		error = ibString::Format(ibT("'%s' is not an entry's id"), id);
+		return false;
+	}
+
+	ibHttpRequest request;
+	request.m_method = ReadBytes(params, ibProtocol::ibServed::Method);
+	request.m_path = ReadBytes(params, ibProtocol::ibServed::Path);
+	request.m_query = ReadBytes(params, ibProtocol::ibServed::Query);
+	request.m_headers = ReadHeaders(params);
+	request.m_body = ReadBytes(params, ibProtocol::ibServed::Body);
+	request.m_address = address;
+
+	// ⭐ ON THIS THREAD, WORKING FOR THE BASE — the kind makes what it needs of it (a session of its own for an HTTP
+	// service's request); the thread is the transport's, as Users' is.
+	ibHttpResponse response;
+	{
+		const ibApplicationInstanceScope working(m_applicationInstance);
+		response = registry->Serve(entry, request, params.GetValue<ibString>(ibProtocol::ibServed::Prefix));
+	}
+	result.SetValue(ibProtocol::ibServed::Status, static_cast<std::int32_t>(response.m_status));
+	result.AddField(ibProtocol::ibServed::Headers, HeaderList(response.m_headers));
+	ibMemoryBuffer body;
+	body.AppendData(response.m_body.data(), response.m_body.size());
+	result.SetValue(ibProtocol::ibServed::Body, body);
 	return true;
 }
 

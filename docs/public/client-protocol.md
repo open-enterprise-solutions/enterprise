@@ -61,6 +61,8 @@ browser's `DecompressionStream("deflate-raw")`); a packet begins `OES1`, a defla
 | `picture` | `Client`, `Pictures` — the ids: an engine picture's number, a configuration picture's `<guid>#<version>` (read by the guid) | `Pictures` — each `Id`, `Picture` (the PNG, a `Binary`; empty when there is none of that id) |
 | `debug` | `Client`, `Command` and its fields (protocol 6) | at once, never the frame — [The debugger](#the-debugger) |
 | `mcp` | `Client`, `Command` and its fields (protocol 7) | never the frame — [The assistant](#the-assistant) |
+| `addresses` | — (no `Client`) | `Addresses` — the base's web addresses, each `Id`, `Path`; the connection is told each change — [Web addresses](#web-addresses) |
+| `serve` | `Address` (an entry's `Id`), `Prefix`, `Method`, `Path`, `Query`, `Headers`, `Body` (no `Client`) | `Status`, `Headers`, `Body` — never the frame — [Web addresses](#web-addresses) |
 
 `login`'s `Read` saves the start's own reads: the designer names the debugger's store (`Schema` 15), which was a
 call of its own at every start. A schema the server does not know, the person has no right to, or that could not be
@@ -401,6 +403,7 @@ notification — a request with no id, which nothing answers:
 | Method | Params | The client |
 |---|---|---|
 | `changed` | `Client` | asks for its frame (`frame`, with `Since`) |
+| `addresses` | `Addresses` | the base's web addresses, whole — sent to a connection that called `addresses` |
 
 A connection that stays open (a WebSocket, a file base in the client's process) is told; an HTTP request is not — it
 asks.
@@ -421,6 +424,19 @@ left), 1 left, 2 right of its `Caption`, 3 a tile — its picture large over its
 — a price, a count) beside them in the state; a tile fills what its sizer item gives it. Its `View` says how it is
 drawn: 0 a button, 1 a hyperlink — no face and no frame, its caption underlined. A client before 8 draws a button
 with its picture on the left, and the note is not shown.
+
+## Web addresses
+
+What a base answers on a web server beside its clients ([web-addresses.md](web-addresses.md)). Both methods name no
+`Client`: they are the web server's, which carries requests a person did not log in for, and what a request may do is
+the kind's that answers it.
+
+- `addresses` answers the list, each entry its `Id` and `Path` (under the publication, no slash at either end). A
+  connection that stays open is told the whole list again each time it changes, as the notification `addresses`.
+- `serve` hands one request to an entry: `Address` its `Id`, `Prefix` the address up to and with the entry's path
+  (`/trade/es/desk`), `Method`, `Path` and `Query` as written, `Headers` a child each with `Name` and `Value`, `Body`.
+  The answer is the HTTP answer: `Status`, `Headers`, `Body`. Everything but `Address` and `Prefix` is binary — the
+  bytes as they were written, never read as text on the way.
 
 ## The debugger
 
@@ -463,6 +479,17 @@ What the server says unasked comes as `mcp {Client, Message}`. Its closing ends 
 the client opens another before its next message, by a new key. A message it took with it is not sent again: it may
 have been carried out. A person whose roles do not give the assistant is refused 403. Tools they are not given are not
 listed and not found.
+
+A browser has no port of its own. Its session is answered at a [web address](#web-addresses) instead:
+
+4. `mcp {Client, Command: 4, Path, Token}` on the client's connection → `Path`, `Token`. The session's entry among
+   the base's web addresses, of the kind `MCP`, answered on every web server that publishes the base. A request is
+   `POST <publication>/<Path>` with `Authorization: Bearer <Token>` and the MCP JSON, answered as `Message` and
+   `Status` above. A GET is 405: there is no event stream. A page from another site is 403. A path or token not
+   given is drawn; given again at the next login, the address stays the same. A second registration replaces the
+   first. While it is registered the person's server runs, as with the port: the assistant window is there, and
+   schema 7 answers `Running`.
+5. `mcp {Client, Command: 5}` takes it off and stops the server. The session's end does too.
 
 | Event | Fields |
 |---|---|

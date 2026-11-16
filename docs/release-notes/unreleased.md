@@ -77,6 +77,16 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
   `Quantity`, not `QuantityBalance`. A module that reads `QuantityBalance` from it raises "Table column not
   found": read `Quantity`. The query virtual table keeps `QuantityBalance` (#409).
 
+## Configuration
+
+- **HTTP services: a configuration answers an HTTP request.** A new kind, `HTTPService`,
+  with `URLTemplate`s (`/Transfer/{id}/reset`, `/*`) and their `HTTPServiceMethod`s (Get, Post, …
+  or Any), shown in the tree's new Integration folder, right after Common. Registered among the base's web addresses, a
+  request to `<publication>/es/<RootURL>/…` on the web server is answered by a function of the
+  service's own module, given an `HTTPServiceRequest` and returning an `HTTPServiceResponse`. Each
+  request is a session of its own, logged in by its `Authorization: Basic`, checked before the session
+  is made. See [http-services.md](../public/http-services.md).
+
 ## Script language
 
 - **What follows `new Class(…)` is read on.** `new Array(3).Count()`, `New Query(text).Execute().Select()`
@@ -273,6 +283,20 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
 - **Help → About** is drawn: the build, the base, the application, the user, the locale, the plugins.
 - **Output list works**: the columns are asked as in the thin client, each ticked or not, with OK and Cancel, and the list
   opens in a tab as a spreadsheet. A question that picks one of a list offers its items to choose, then OK.
+
+- **A base can answer more than its clients on a web server.** Its *web addresses* are a list kept in the base:
+  each a path under the publication and the code that answers there. Every web server that publishes the base
+  mounts them within seconds and hands each request to the base; **Administration → Web addresses...** in the
+  designer edits the list, and over MCP `address_list`, `address_register` and `address_unregister`. Two
+  kinds answer there: a configuration's HTTP service, and a person's assistant from the browser. `web.conf`
+  bounds the requests: `ServiceWorkers`, `ServiceCalls` (503 past it), `ServiceWait` (504 past it).
+- **An assistant works with the browser's session.** **Tools → Options…** in the browser is the thin client's
+  assistant access page: *Let an assistant reach this session* starts it by itself at login, **Start now** and
+  **Stop now** act at once. Running, the session answers MCP at an address beside the page,
+  `<publication>/mcp/<…>`, published on the web server for as long as it runs, with a key of its own; the page
+  shows the configuration block and the Claude Code command to copy. The browser keeps the setting, the address
+  and the key for that person, so a connected assistant stays connected. The assistant window is in the
+  browser too. Requests are POSTs: no event stream.
 
 ## Metadata
 

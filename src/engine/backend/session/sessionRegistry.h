@@ -390,6 +390,11 @@ public:
 	// Fires before a session is removed (ProcessRemove).
 	void OnDisconnect(SessionCallback cb);
 
+	// Fires on the registry thread after every sweep (kSweepInterval, ~3 s) — what other processes of the base wrote
+	// is read again on it (the web addresses, ibServedAddressRegistry::Refresh). Must not block long: the heartbeat
+	// waits for it.
+	void OnSweep(VoidCallback cb);
+
 	// Fires when the registry transitions from non-empty to empty.
 	// Use case: unload metadata when no users remain.
 	void OnLastDisconnect(VoidCallback cb);
@@ -671,6 +676,7 @@ private:
 	std::vector<SessionCallback>        m_listFirstConnect;
 	std::vector<SessionCallback>        m_listDisconnect;
 	std::vector<VoidCallback>           m_listLastDisconnect;
+	std::vector<VoidCallback>           m_listSweep;
 	std::vector<SessionCallback>        m_listAfterCompile;
 	std::vector<KeepAliveHook>          m_listKeepAlive;
 	std::vector<SessionCallback>        m_listForceExit;

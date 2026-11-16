@@ -68,6 +68,7 @@ set(DESIGNER_THIN_SOURCES
     win/dlg/homePageEditor.cpp
     win/dlg/predefinedEditor.cpp
     win/dlg/textEditor.cpp
+    win/dlg/webAddress.cpp
 )
 
 add_executable(appstudio ${DESIGNER_THIN_SOURCES})

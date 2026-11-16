@@ -51,6 +51,11 @@
 //   Inner     — the groups INSIDE one object: its attributes, its forms, its templates.
 enum class ibMetaGroupBand { Common, Metadata, Inner };
 
+// A FOLDER OF GROUPS, not a kind — Integration holds what another system talks to the base through (HTTP services, and
+// the web services and exchanges to come). It has a caption, a band and a place like a group, and no metaobject is of
+// it: a tree draws it as it draws Common, a title over the groups it holds.
+constexpr ibClassID g_metaIntegrationCLSID = make_clsid("MG_INTG", ibClassKind_None);
+
 // The caption of the group `clsid` is listed under, translated for the session's language.
 // Empty for a metatype this table does not name.
 BACKEND_API ibString ibMetaGroupCaption(const ibClassID& clsid);

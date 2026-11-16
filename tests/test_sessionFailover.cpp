@@ -15,6 +15,8 @@
 #include <memory>
 #include <string>
 #include <thread>
+#include <utility>
+#include <vector>
 
 #include "backend/compiler/cache/byteCodeCache.h"
 #include "backend/metadataConfiguration.h"
@@ -34,6 +36,7 @@
 #ifdef OES_USE_FIREBIRD
 #include "backend/databaseLayer/firebird/firebirdDatabaseLayer.h"
 #endif
+#include "backend/served/servedAddressRegistry.h"   // the browser's assistant at its web address
 #include "core/crypto/sessionToken.h"
 #include "core/exception.h"
 
@@ -233,6 +236,28 @@ ibProtocolNode PasswordLogin(bool resume = true)
 	return params;
 }
 
+// A request to a web address as the web server hands it on (protocol `serve`): the entry, the method, the headers.
+ibDataNode ServeCall(const ibGuid& entry, const char* method, const std::vector<std::pair<std::string, std::string>>& headers,
+	const std::string& body)
+{
+	ibDataNode params;
+	params.SetValue(ibProtocol::ibServed::Address, entry.str());
+	params.SetValue(ibProtocol::ibServed::Prefix, ibString(wxT("/failover/mcp")));
+	const std::string path = "/failover/mcp";
+	params.SetValue(ibProtocol::ibServed::Method, ibMemoryBuffer(method, std::strlen(method)));
+	params.SetValue(ibProtocol::ibServed::Path, ibMemoryBuffer(path.data(), path.size()));
+	std::vector<ibDataValue> items;
+	for (const auto& header : headers) {
+		auto item = std::make_shared<ibDataNode>();
+		item->SetValue(ibProtocol::ibServed::Name, ibMemoryBuffer(header.first.data(), header.first.size()));
+		item->SetValue(ibProtocol::ibServed::Value, ibMemoryBuffer(header.second.data(), header.second.size()));
+		items.push_back(ibDataValue::Child(item));
+	}
+	params.AddField(ibProtocol::ibServed::Headers, ibDataValue::Array(std::move(items)));
+	params.SetValue(ibProtocol::ibServed::Body, ibMemoryBuffer(body.data(), body.size()));
+	return params;
+}
+
 bool ListsResume(const ibProtocolNode& result)
 {
 	for (const ibProtocolNode& feature : result.GetList(ibProtocol::ibLogin::Features)) {
@@ -368,6 +393,103 @@ TEST_F(SessionFailover, APersonWhoseRolesDoNotGiveTheAssistantHasNoChannel)
 	const Rpc refused = g_base->Call(Request(2, "mcp", params), &connection);
 	EXPECT_FALSE(refused.ok);
 	EXPECT_EQ(refused.code, static_cast<long long>(ibProtocol::ibRefusal::NoRight));
+
+	g_base->host->Disconnect(&connection);
+}
+
+// THE BROWSER'S ASSISTANT — no port of its own: the session registers a web address (mcp Register) and is answered there
+// (protocol `serve`, the kind MCP) to a request presenting its token, and from no other site; taken off, nothing answers.
+TEST_F(SessionFailover, TheBrowsersAssistantIsAnsweredAtItsWebAddress)
+{
+	int connection = 0;
+	const Rpc login = g_base->Call(Request(1, "login", PasswordLogin()), &connection);
+	ASSERT_TRUE(login.ok) << login.message;
+	const ibString client = login.result.GetString(ibProtocol::ibLogin::Client);
+	const auto mcp = [&client](ibProtocol::ibMcp::ibCommand command, const void* on, ibDataNode& result) {
+		ibDataNode params;
+		params.SetValue(ibProtocol::ibLogin::Client, client);
+		params.SetValue(ibProtocol::ibMcp::Command, static_cast<std::int32_t>(command));
+		ibProtocol::ibRefusal refusal = ibProtocol::ibRefusal::None;
+		ibString error;
+		return g_base->host->Call(ibProtocol::ibMethod::Mcp, params, result, refusal, error, on) ? ibProtocol::ibRefusal::None : refusal;
+	};
+
+	// Whether the person's server runs, as the assistant access page asks it (schema McpServer, Running).
+	long long asked = 10;
+	const auto running = [&client, &connection, &asked]() {
+		ibProtocolNode params;
+		params.SetValue(ibProtocol::ibLogin::Client, client)
+			.SetValue(ibProtocol::ibSchema::Schema, static_cast<int>(ibProtocol::ibSchema::ibKind::McpServer));
+		const Rpc shown = g_base->Call(Request(++asked, "schema", params), &connection);
+		EXPECT_TRUE(shown.ok) << shown.message;
+		return shown.result.GetBool(ibProtocol::ibSchema::ibMcpServer::Running);
+	};
+	EXPECT_FALSE(running());
+
+	// The Client id is no bearer: another connection registers nothing for it.
+	int stranger = 0;
+	ibDataNode none;
+	EXPECT_EQ(mcp(ibProtocol::ibMcp::ibCommand::Register, &stranger, none), ibProtocol::ibRefusal::NoSession);
+
+	// Nothing given — the path and the token drawn, and the session's entry among the base's addresses.
+	ibDataNode registered;
+	ASSERT_EQ(mcp(ibProtocol::ibMcp::ibCommand::Register, &connection, registered), ibProtocol::ibRefusal::None);
+	const ibString path = registered.GetValue<ibString>(ibProtocol::ibMcp::Path);
+	const std::string token(registered.GetValue<ibString>(ibProtocol::ibMcp::Token).ToUtf8());
+	EXPECT_TRUE(path.StartsWith(ibT("mcp/"))) << path.ToStdString();
+	EXPECT_EQ(token.size(), 2 * ibSessionToken::kBytes);
+	EXPECT_TRUE(running()) << "the address raises the person's server, as the client's port does";
+	ibServedAddressRegistry* const registry = ibApplicationInstance::GetServedAddressRegistry(g_base->app);
+	ASSERT_NE(registry, nullptr);
+	ibGuid entry;
+	for (const ibServedAddress& address : registry->GetServedAddressArray()) {
+		if (address.m_path == path) {
+			EXPECT_EQ(address.m_kind, ibString(ibT("MCP")));
+			EXPECT_FALSE(address.IsKept());
+			entry = address.m_id;
+		}
+	}
+	ASSERT_TRUE(entry.isValid());
+
+	const auto serve = [&entry](const char* method, const std::vector<std::pair<std::string, std::string>>& headers) {
+		ibDataNode result;
+		ibProtocol::ibRefusal refusal = ibProtocol::ibRefusal::None;
+		ibString error;
+		EXPECT_TRUE(g_base->host->Call(ibProtocol::ibMethod::Serve, ServeCall(entry, method, headers,
+			R"({"jsonrpc":"2.0","id":1,"method":"ping"})"), result, refusal, error)) << error.ToStdString();
+		const ibMemoryBuffer body = result.GetValue<ibMemoryBuffer>(ibProtocol::ibServed::Body);
+		return std::make_pair(result.GetValue<std::int32_t>(ibProtocol::ibServed::Status),
+			std::string(static_cast<const char*>(body.GetData()), body.GetDataLen()));
+	};
+	const std::pair<std::string, std::string> bearer{ "authorization", "Bearer " + token };
+
+	const auto answered = serve(ibHttp::Post,{ bearer, { "content-type", "application/json" } });
+	EXPECT_EQ(answered.first, 200) << answered.second;
+	EXPECT_NE(answered.second.find("\"result\""), std::string::npos) << answered.second;
+	EXPECT_EQ(serve(ibHttp::Post,{ { "authorization", "Bearer " + std::string(token.size(), '0') } }).first, 401);
+	EXPECT_EQ(serve(ibHttp::Post,{}).first, 401);
+	EXPECT_EQ(serve(ibHttp::Get, { bearer }).first, 405);
+	EXPECT_EQ(serve(ibHttp::Post,{ bearer, { "host", "server" }, { "origin", "https://elsewhere" } }).first, 403);
+	EXPECT_EQ(serve(ibHttp::Post,{ bearer, { "host", "server" }, { "origin", "https://server" } }).first, 200);
+
+	// Registered again with what it was given — the same address; then taken off, and nothing answers there.
+	ibDataNode again;
+	{
+		ibDataNode params;
+		params.SetValue(ibProtocol::ibLogin::Client, client);
+		params.SetValue(ibProtocol::ibMcp::Command, static_cast<std::int32_t>(ibProtocol::ibMcp::ibCommand::Register));
+		params.SetValue(ibProtocol::ibMcp::Path, path);
+		params.SetValue(ibProtocol::ibMcp::Token, ibString::FromUTF8(token));
+		ibProtocol::ibRefusal refusal = ibProtocol::ibRefusal::None;
+		ibString error;
+		ASSERT_TRUE(g_base->host->Call(ibProtocol::ibMethod::Mcp, params, again, refusal, error, &connection)) << error.ToStdString();
+	}
+	EXPECT_EQ(again.GetValue<ibString>(ibProtocol::ibMcp::Path), path);
+	EXPECT_EQ(registry->GetServedAddressArray().size(), 1u) << "a second registration replaces the first";
+	ibDataNode off;
+	ASSERT_EQ(mcp(ibProtocol::ibMcp::ibCommand::Unregister, &connection, off), ibProtocol::ibRefusal::None);
+	EXPECT_TRUE(registry->GetServedAddressArray().empty());
+	EXPECT_FALSE(running()) << "and goes down with it";
 
 	g_base->host->Disconnect(&connection);
 }
