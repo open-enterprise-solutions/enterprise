@@ -52,8 +52,9 @@ TEST(QueryRenderer, Firebird_UsesFirstForPagination)
 	ibQueryRenderer renderer(FbDialect());
 	const ibRenderedQuery out = renderer.Render(SampleListQuery());
 
+	// A string compared is a string of its own length, not the column's (ibPinnedConst): "APPLE-01" is 8.
 	EXPECT_EQ(Sql(out),
-		"SELECT FIRST 50 * FROM Reference17 WHERE (Code_S = ?) ORDER BY Code_S ASC");
+		"SELECT FIRST 50 * FROM Reference17 WHERE (Code_S = CAST(? AS VARCHAR(8))) ORDER BY Code_S ASC");
 
 	ASSERT_EQ(out.m_params.size(), 1u);
 	EXPECT_FALSE(out.m_params[0].m_external);
@@ -66,7 +67,7 @@ TEST(QueryRenderer, Sqlite_UsesLimitForPagination)
 	const ibRenderedQuery out = renderer.Render(SampleListQuery());
 
 	EXPECT_EQ(Sql(out),
-		"SELECT * FROM Reference17 WHERE (Code_S = ?) ORDER BY Code_S ASC LIMIT 50");
+		"SELECT * FROM Reference17 WHERE (Code_S = CAST(? AS VARCHAR(8))) ORDER BY Code_S ASC LIMIT 50");
 }
 
 TEST(QueryRenderer, Postgres_UsesDollarPlaceholders)
@@ -75,7 +76,7 @@ TEST(QueryRenderer, Postgres_UsesDollarPlaceholders)
 	const ibRenderedQuery out = renderer.Render(SampleListQuery());
 
 	EXPECT_EQ(Sql(out),
-		"SELECT * FROM Reference17 WHERE (Code_S = $1) ORDER BY Code_S ASC LIMIT 50");
+		"SELECT * FROM Reference17 WHERE (Code_S = CAST($1 AS VARCHAR(8))) ORDER BY Code_S ASC LIMIT 50");
 }
 
 // Same IR, same bind plan regardless of dialect — only the SQL spelling differs.
@@ -189,7 +190,7 @@ TEST(QueryRenderer, In_ListBindsEachValue)
 		ibIn(ibCol(wxT("code_S")),
 			{ ibConst(ibValue(ibString(wxT("A")))), ibConst(ibValue(ibString(wxT("B")))), ibConst(ibValue(ibString(wxT("C")))) }));
 	const ibRenderedQuery out = ibQueryRenderer(SqliteDialect()).Render(ibQueryIR(rel));
-	EXPECT_EQ(Sql(out), "SELECT * FROM Reference9 WHERE (code_S IN (?, ?, ?))");
+	EXPECT_EQ(Sql(out), "SELECT * FROM Reference9 WHERE (code_S IN (CAST(? AS VARCHAR(1)), CAST(? AS VARCHAR(1)), CAST(? AS VARCHAR(1))))");
 	ASSERT_EQ(out.m_params.size(), 3u);
 }
 

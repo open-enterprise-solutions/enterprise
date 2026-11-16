@@ -69,6 +69,9 @@ class Textbox(PageTest):
         self.assertEqual(printout.text_content(), '')
 
     def find(self, sought):
+        # Find looks in the control the person was in (window.findOnShow), as the thin client's form hands it to its
+        # active one: the text, here — the form beside it has a table, which takes the focus as the form opens.
+        self.editor().focus()
         self.menu_item('Edit', 'Find...').click()
         field = self.page.locator('.find-dialog input[type=text]')
         field.fill(sought)
