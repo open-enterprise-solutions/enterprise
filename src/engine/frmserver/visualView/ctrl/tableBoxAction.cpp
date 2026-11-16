@@ -642,10 +642,10 @@ void ibValueModelTableBox::Command_OutputList()
 		const ibDataViewItem drilled = m_drillItem;
 		const ibComposerNode* const inside = m_tableModel->GetViewData<ibComposerNode>(drilled);
 		if (drilled.IsOk() && inside != nullptr && !inside->GetRowKey().empty())
-			if (const ibBackendQueryable* const queryable = m_tableModel->GetSourceQueryable()) {
+			if (const std::shared_ptr<const ibBackendQueryable> queryable = m_tableModel->GetSourceQueryable()) {
 				// …stated over the REFERENCE, like the hierarchy level above: "this row is inside that
 				// folder" is a fact about the row, and the engine walks the parent map to answer it.
-				const std::vector<const ibBackendQueryColumn*> key = queryable->GetPrimaryKeyColumns();
+				const std::vector<std::shared_ptr<const ibBackendQueryColumn>> key = queryable->GetPrimaryKeyColumns();
 				if (!key.empty() && key.front() != nullptr) {
 					ibValuePtr<ibValueModel::ibValueModelReturnLine> folder(m_tableModel->GetRowAt(drilled));
 					if (folder != nullptr)

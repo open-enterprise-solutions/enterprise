@@ -439,7 +439,7 @@ void ibLockManager::SweepOrphans(const std::vector<ibGuid>& liveSessionGuids)
 	}
 
 	// ⚠ HELD IS ALSO A HELD ROW, and that is not in sys_lock: an acquire holds its header by an UPDATE before its sys_lock
-	// row is written, and a compile holds its module's header the whole compile and writes none (ibByteCodeCache::ibRowLock).
+	// row is written, and a compile holds its module's header the whole compile and writes none (the row lock, byteCodeCache.cpp).
 	// So each header goes in a transaction of its own that does not wait, as OnSessionEnd's delete does on this thread, and a
 	// held one is left for the next tick while the rest are swept. The DELETE waited behind a starting client's compile, then
 	// gave up the whole sweep with "update conflicts with concurrent update" (2026-11-05).

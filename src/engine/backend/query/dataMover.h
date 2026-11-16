@@ -51,10 +51,10 @@ enum class DateForm : std::uint32_t {
 // WRITE — read the wire TYPE tag + the active value, bind the column's full physical spread into
 // `statement` from `position` (1-based), advancing it. `dates` - the form the wire's dates are in
 // (DateOfWire).
-BACKEND_API void BinaryToStatement(const ibBackendQueryColumn* col, const ibMetaData* metaData,
+BACKEND_API void BinaryToStatement(const ibBackendQueryColumn& col, const ibMetaData* metaData,
                                    const ibReaderMemory& reader, ibQueryStatement* statement, int& position,
                                    DateForm dates = DateForm::DateTime);
-BACKEND_API void BinaryToStatement(const ibBackendQueryColumn* col, const ibMetaData* metaData,
+BACKEND_API void BinaryToStatement(const ibBackendQueryColumn& col, const ibMetaData* metaData,
                                    const ibReaderMemory& reader, ibQueryStatement* statement);   // from position 1
 
 // A date off the wire as the date it is (fdatetime.h): the count itself; the first wall form moved
@@ -65,7 +65,7 @@ BACKEND_API ibDateTime DateOfWire(long long raw, DateForm form);
 
 // READ — write the column's compact wire form (tag + only the active type's value + reference pair)
 // off the row in `result`.
-BACKEND_API void BinaryFromResult(const ibBackendQueryColumn* col, const ibMetaData* metaData,
+BACKEND_API void BinaryFromResult(const ibBackendQueryColumn& col, const ibMetaData* metaData,
                                   ibWriterMemory& writer, ibQueryResult& result);
 
 // Dump every row of `table`'s physical table (SELECT * through the L2 door on db_query's holder)

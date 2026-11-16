@@ -145,7 +145,7 @@ bool ibValueRecordManagerObject::ReadData(const ibUniqueKeyPair& key)
 		return true;
 	}
 
-	m_recordSet->m_selected = false;
+	m_recordSet->m_selected = ibValueRecordSetObject::ibSelection::NotSelected;
 	PrepareEmptyObject(nullptr);
 	for (const auto& field : filled)
 		m_recordLine->SetValueByMetaID(field.first, field.second);
@@ -208,7 +208,7 @@ bool ibValueRecordManagerObject::SaveData(bool replace)
 // key, which is the whole register (see ReadData).
 bool ibValueRecordManagerObject::DeleteData()
 {
-	if (!m_recordSet->m_selected || m_recordSet->m_keyValues.empty())
+	if (!m_recordSet->Selected() || m_recordSet->m_keyValues.empty())
 		m_recordSet->m_keyValues = ibRecordKeyOf(m_metaObject, m_recordLine).GetKeyValues();
 	return m_recordSet->DeleteRecordSet();
 }

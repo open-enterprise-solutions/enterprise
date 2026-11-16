@@ -106,7 +106,7 @@ bool ibValueMetaObjectSequence::OnAfterRunMetaObject(int flags)
 	// …and the registrations answer through THIS kind's surface, which vends the moment beside the
 	// stored columns. The base has just registered its own under the same (namespace, name); a source
 	// is kept in a map by that pair, so registering here — after it — is what puts ours in its place.
-	m_metaData->RegisterSource(&m_ownQueryable);
+	m_metaData->RegisterSource(&m_sequenceSource);
 	if (HasBorders())
 		m_metaData->RegisterSource(&m_bordersSource);
 
@@ -119,7 +119,7 @@ bool ibValueMetaObjectSequence::OnAfterRunMetaObject(int flags)
 bool ibValueMetaObjectSequence::OnBeforeCloseMetaObject()
 {
 	m_metaData->UnregisterSource(&m_bordersSource);   // mirror of the run's RegisterSource
-	m_metaData->UnregisterSource(&m_ownQueryable);
+	m_metaData->UnregisterSource(&m_sequenceSource);
 
 	if (!(*m_propertyManagerModule)->OnBeforeCloseMetaObject()) return false;
 	if (!(*m_propertyObjectModule)->OnBeforeCloseMetaObject()) return false;

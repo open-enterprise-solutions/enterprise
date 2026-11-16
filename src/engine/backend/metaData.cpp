@@ -7,14 +7,18 @@
 
 #include "backend/appHost.h"                  // ibApplicationInstanceScope — the last holder works for the base
 #include "backend/backend_exception.h"
+#include "backend/compiler/byteCode.h"              // ibByteCode — a held row is read out into one
+#include "backend/compiler/cache/byteCodeCache.h"   // ibByteCodeCache — the table ibByteCodeStorage reads and saves through
 #include "backend/metaCollection/metaModuleObject.h"
 #include "backend/metaCollection/metaFormObject.h"
 #include "backend/query/queryableFactory.h"   // ibQueryableFactory::Register/Unregister — the per-config source registry
 #include "backend/query/schemaSnapshot.h"     // ibSchemaSnapshot — BuildSchemaSnapshot
 #include "core/serialize/dataBuilder.h"       // ibDataBuilder / ibBinaryProvider — a copied object's properties, as bytes
+#include "core/memory/memoryStream.h"         // ibReaderMemory / ibWriterMemory — a bytecode row to and from its blob
 
 #include <algorithm>
 #include <cwctype>
+#include <mutex>   // std::unique_lock — a bytecode row kept
 #include <optional>
 #include <string>
 #include <unordered_set>
@@ -124,6 +128,114 @@ bool ibModuleStorage::RemoveCommonModule(ibValueMetaObjectCommonModule* commonMo
 	if (it != m_initModules.end())
 		m_initModules.erase(it);
 	return true;
+}
+
+//**************************************************************************************************
+//*                                    ibByteCodeStorage                                           *
+//**************************************************************************************************
+
+// ⭐ READ AS THE CONFIGURATION OPENS — ONCE, IN ONE STATEMENT (Max, 2026-11-16). The image that holds this is made
+// when a configuration is run: after it was loaded, so its digest is known, and before any session compiles in it.
+//
+// WHAT THE BYTECODE IS COMPILED AGAINST, as one value. It is part of the row KEY, so a row saved under any
+// earlier state of the configuration is not found at all — see byteCodeCache.h.
+//
+// ⚠ THE KEY IS THE CONFIGURATION'S DIGEST, and it stays that. Mixing the module's own text into
+// it was tried on 2026-09-04 and taken back out: it patches the symptom at the reader's end,
+// while the cause is a WRITER that changes metadata without going through the save the rest of
+// the product goes through (Max: you change a form, you change objects, and you go PAST the
+// standard save). In the Designer, editing a module and closing the document saves the metadata —
+// the digest moves, the cache row retires by itself. A door that skips that has to be fixed at
+// the door.
+//
+// An external report or data processor has no digest: a row under an empty one would outlive its file's text, and
+// saving it weeds out every row of the base's configuration (byteCodeCache.cpp, WriteRow). It compiles when it is
+// opened, and nothing is read or held for it.
+ibByteCodeStorage::ibByteCodeStorage(const ibMetaData* owner)
+	: m_configMd5(owner != nullptr ? owner->GetConfigMD5() : ibString())
+{
+	if (!m_configMd5.IsEmpty())
+		m_rows = ibByteCodeCache::LoadAll(m_configMd5);
+}
+
+bool ibByteCodeStorage::Load(ibByteCode& outBc, const ibGuid& descId, const std::function<bool(ibByteCode&)>& compile)
+{
+	if (Load(outBc, descId))
+		return true;
+	if (m_configMd5.IsEmpty())
+		return compile(outBc);   // nothing is held for it — see the constructor
+
+	bool detached = false;
+	{
+		std::shared_lock<std::shared_mutex> lock(m_mutex);
+		detached = m_detached;
+	}
+
+	// ⭐ TWO PROCESSES ON ONE BASE MEET HERE. What is not held is asked of the cache, and the cache looks in the table
+	// again — another process may have saved the row since this configuration opened — and compiles only what is
+	// not there either, under the module's key: whoever misses with it, in this process or another, stands in the
+	// database until that compile has saved it, and reads it then.
+	//
+	// A DETACHED STORAGE asks the table nothing and saves nothing: the table is the new configuration's (Detach).
+	const bool ready = detached ? compile(outBc) : ibByteCodeCache::Load(outBc, descId, m_configMd5, compile);
+	if (!ready)
+		return false;
+
+	// Held from here as the blob the table holds. Bytecode the AOT writer rejects (a non-primitive constant pool
+	// entry like TYPE_REFFER) stays live with its module and is held nowhere: the next one compiles for itself.
+	ibWriterMemory writer;
+	if (outBc.SerializeAOT(writer)) {
+		std::unique_lock<std::shared_mutex> lock(m_mutex);
+		m_rows[descId] = writer.buffer();
+	}
+	return true;
+}
+
+bool ibByteCodeStorage::Load(ibByteCode& outBc, const ibGuid& descId)
+{
+	ibMemoryBuffer blob;
+	{
+		std::shared_lock<std::shared_mutex> lock(m_mutex);
+		const auto it = m_rows.find(descId);
+		if (it != m_rows.end())
+			blob = it->second;
+	}
+	if (blob.IsEmpty())
+		return false;
+
+	try {
+		ibReaderMemory reader(blob);
+		if (outBc.DeserializeAOT(reader) && outBc.ResolveAndVerifyDependencies())
+			return true;
+	}
+	catch (...) { /* a blob that cannot be read has parted as well — below */ }
+
+	// ⭐ A ROW THAT PARTED FROM WHAT IS LOADED IS MARKED HERE AND REBUILT BY WHOEVER FOUND IT (Max, 2026-11-16): a
+	// dependency missing from the registry, or its version moved, and the row is stale for this run. It goes, here and
+	// in the table, and the caller compiles — on the ordinary road that is the next step of Load with `compile`.
+	outBc.Reset();
+	Invalidate(descId);
+	return false;
+}
+
+void ibByteCodeStorage::Invalidate(const ibGuid& descId)
+{
+	bool detached = false;
+	{
+		std::unique_lock<std::shared_mutex> lock(m_mutex);
+		m_rows.erase(descId);
+		detached = m_detached;
+	}
+	if (!detached && !m_configMd5.IsEmpty())
+		ibByteCodeCache::Invalidate(descId);
+}
+
+// ⚠ A compile already under way when this is called still saves its row. That costs the new configuration one
+// recompile of that module and never a wrong answer: a row is found by its key.
+void ibByteCodeStorage::Detach()
+{
+	std::unique_lock<std::shared_mutex> lock(m_mutex);
+	m_detached = true;
 }
 
 //**************************************************************************************************

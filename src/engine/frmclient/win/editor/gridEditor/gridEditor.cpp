@@ -122,7 +122,7 @@ ibGridEditor::ibGridEditor(ibMetaDocument* document,
 
 	// Cell Defaults
 	ibGrid::SetDefaultCellAlignment(wxAlignment::wxALIGN_LEFT, wxAlignment::wxALIGN_BOTTOM);
-	ibGrid::SetTable(new ibGridEditorStringTable, true);
+	ibGrid::SetTable(new ibGridEditorTable(this), true);
 
 	ibGrid::SetLabelFont(typeConv::FontToWxFont(ibDefaultSpreadsheetFont()));
 	ibGrid::SetDefaultCellFont(typeConv::FontToWxFont(ibDefaultSpreadsheetFont()));
@@ -193,20 +193,18 @@ void ibGridEditor::MergeCells()
 // ask: a workbook opened from disk was cut down to the visible window the first time
 // somebody scrolled back up.
 //
-// ⭐ THE TABLE ANSWERS IT, not this walk. Trimming happens on every scroll EVENT — three
+// ⭐ THE DOCUMENT ANSWERS IT, not a walk. Trimming happens on every scroll EVENT — three
 // per wheel notch — and a walk over twenty thousand rows three times a notch is a visible
-// stall. The table is where the content is and where every door that changes it lives, so
-// it keeps the answer instead of the sheet re-deriving it (see ibGridEditorStringTable).
-int ibGridEditor::GetLastContentRow()
+// stall. The cells are the document's (ibGridEditorTable), and its description keeps where
+// they end as it makes them.
+int ibGridEditor::GetLastContentRow() const
 {
-	ibGridEditorStringTable* table = GetEditorTable();
-	return table != nullptr ? table->GetLastContentRow() : -1;
+	return m_spreadsheetObject != nullptr ? m_spreadsheetObject->GetSpreadsheetDesc().GetNumberRows() - 1 : -1;
 }
 
-int ibGridEditor::GetLastContentCol()
+int ibGridEditor::GetLastContentCol() const
 {
-	ibGridEditorStringTable* table = GetEditorTable();
-	return table != nullptr ? table->GetLastContentCol() : -1;
+	return m_spreadsheetObject != nullptr ? m_spreadsheetObject->GetSpreadsheetDesc().GetNumberCols() - 1 : -1;
 }
 
 void ibGridEditor::DockTable()
@@ -793,11 +791,7 @@ void ibGridEditor::OnGridTableModified(ibGridEvent& event)
 		m_document->Modify(true);
 	}
 
-	if (m_spreadsheetObject != nullptr) {
-		ibSpreadsheetDescription& spreadsheetDescription = m_spreadsheetObject->GetSpreadsheetDesc();
-		spreadsheetDescription.SetCellFillType(event.GetRow(), event.GetCol(), type);
-		spreadsheetDescription.SetCellValue(event.GetRow(), event.GetCol(), *value);
-	}
+	// (The document has it already: the table wrote it there — ibGridEditorTable::SetValue.)
 
 	// The text changed, and with it the height it needs (a row without a height of its own follows it).
 	FitAutoRowHeights(event.GetRow(), event.GetRow());
@@ -807,6 +801,11 @@ void ibGridEditor::OnGridTableModified(ibGridEvent& event)
 
 void ibGridEditor::OnGridTableAttrModified(ibGridEvent& event)
 {
+	// ⚠ THE LOOK KEPT FOR THE CELL ASKED LAST IS DROPPED FIRST. It is made for the cell (ibGridEditorAttrProvider), not
+	// held, so the change the grid has just made to what it holds of the cell is not in it — read below, it would hand
+	// the document the look from before the change (the setter asks for the old one to undo to just before).
+	RefreshAttr(event.GetRow(), event.GetCol());
+
 	int horiz, vert;
 	GetCellAlignment(event.GetRow(), event.GetCol(), &horiz, &vert);
 

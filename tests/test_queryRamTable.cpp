@@ -43,7 +43,7 @@ TEST(RamTableRekey, NamedCellsMoveAndRidersStay) {
     Put(src, r, kC, wxT("c"));
 
     ibQueryRamTable dst = Table({ kX, kY });
-    dst.AppendRowsRekeyed(src, { { kA, kX }, { kB, kY } });
+    dst.AppendRowsRekeyed(std::move(src), { { kA, kX }, { kB, kY } });
 
     ASSERT_EQ(dst.RowCount(), 1);
     EXPECT_EQ(Text(dst, 0, kX), wxT("a"));
@@ -61,7 +61,7 @@ TEST(RamTableRekey, PairsThatTradeIdsSwap) {
     Put(src, r, kB, wxT("b"));
 
     ibQueryRamTable dst = Table({ kA, kB });
-    dst.AppendRowsRekeyed(src, { { kA, kB }, { kB, kA } });
+    dst.AppendRowsRekeyed(std::move(src), { { kA, kB }, { kB, kA } });
 
     EXPECT_EQ(Text(dst, 0, kA), wxT("b"));
     EXPECT_EQ(Text(dst, 0, kB), wxT("a"));
@@ -78,7 +78,7 @@ TEST(RamTableRekey, AClaimedIdIsNeverARiders) {
     Put(src, r, kY, wxT("rider y"));
 
     ibQueryRamTable dst = Table({ kX, kY });
-    dst.AppendRowsRekeyed(src, { { kA, kX }, { kB, kY } });
+    dst.AppendRowsRekeyed(std::move(src), { { kA, kX }, { kB, kY } });
 
     EXPECT_EQ(dst.FindCell(0, kX), nullptr);
     EXPECT_EQ(Text(dst, 0, kY), wxT("b"));
@@ -94,7 +94,7 @@ TEST(RamTableRekey, TheLaterOfTwoPairsWinsAndARiderStaysInOrder) {
     Put(src, r, kY, wxT("rider y"));
 
     ibQueryRamTable dst = Table({ kX, kY });
-    dst.AppendRowsRekeyed(src, { { kA, kX }, { kB, kX } });
+    dst.AppendRowsRekeyed(std::move(src), { { kA, kX }, { kB, kX } });
 
     EXPECT_EQ(Text(dst, 0, kX), wxT("b"));
     EXPECT_EQ(Text(dst, 0, kY), wxT("rider y"));
@@ -110,7 +110,7 @@ TEST(RamTableRows, HandedOnAfterWhatIsThere) {
     Put(src, src.AppendRow(), kA, wxT("second"));
     Put(src, src.AppendRow(), kA, wxT("third"));
 
-    dst.AppendRowsFrom(src);
+    dst.AppendRowsFrom(std::move(src));
 
     ASSERT_EQ(dst.RowCount(), 3);
     EXPECT_EQ(Text(dst, 0, kA), wxT("first"));

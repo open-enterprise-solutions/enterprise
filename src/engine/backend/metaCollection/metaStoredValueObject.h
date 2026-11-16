@@ -27,11 +27,11 @@ class ibValueMetaObjectStoredValue;
 class BACKEND_API ibConstantQueryable : public ibBackendQueryable {
 public:
 	explicit ibConstantQueryable(const ibValueMetaObjectStoredValue* meta) : m_meta(meta) {}
-	virtual std::vector<const ibBackendQueryColumn*> GetQueryColumns() const override;            // { the value column } — SELECT *, the constructor, a name
+	virtual std::vector<std::shared_ptr<const ibBackendQueryColumn>> GetQueryColumns() const override;            // { the value column } — SELECT *, the constructor, a name
 	virtual ibString GetQueryTableName() const override;
 	virtual const ibMetaData* GetMetaData() const override;                      // metadata context for column-based value reads
 	virtual const ibValueMetaObjectGenericData* GetSourceMetaObject() const override;   // = m_meta — the guid / metaID are read off it
-	virtual std::vector<const ibBackendQueryColumn*> GetPrimaryKeyColumns() const override;   // { RECORD_KEY } — the single-row UPSERT match
+	virtual std::vector<std::shared_ptr<const ibBackendQueryColumn>> GetPrimaryKeyColumns() const override;   // { RECORD_KEY } — the single-row UPSERT match
 private:
 	const ibValueMetaObjectStoredValue* m_meta;
 };
@@ -108,7 +108,7 @@ class BACKEND_API ibValueMetaObjectStoredValue :
 	// owns the table navigation, built from the constant's primitives (GetName / GetMetaID /
 	// GetPhysicalTableName), and resolves the one column to the value column above. So
 	// From(constant->GetQueryable()) reads the one row.
-	virtual const ibBackendQueryable* GetQueryable() const override { return m_queryable.GetQueryable(); }
+	virtual std::shared_ptr<const ibBackendQueryable> GetQueryable() const override { return m_queryable.GetQueryable(); }
 	friend class ibConstantQueryable;
 
 	const ibValueMetaObjectConstantColumn* GetValueColumn() const { return m_column; }

@@ -2309,6 +2309,17 @@ public:
 		return ibGridCellAttrPtr(GetOrCreateCellAttr(row, col));
 	}
 
+	// …and the attribute the cell is DRAWN with — what it shows, whoever keeps it: the cell's own over
+	// its row's and column's, or a table's attribute provider of its own. Read it, do not change it.
+	ibGridCellAttrPtr GetCellAttrPtr(int row, int col) const
+	{
+		return ibGridCellAttrPtr(GetCellAttr(row, col));
+	}
+	ibGridCellAttrPtr GetCellAttrPtr(const ibGridCellCoords& coords) const
+	{
+		return ibGridCellAttrPtr(GetCellAttr(coords));
+	}
+
 
 	// shortcuts for setting the column parameters
 
@@ -3203,14 +3214,6 @@ protected:
 		return GetCellAttr(coords.GetRow(), coords.GetCol());
 	}
 
-	ibGridCellAttrPtr GetCellAttrPtr(int row, int col) const
-	{
-		return ibGridCellAttrPtr(GetCellAttr(row, col));
-	}
-	ibGridCellAttrPtr GetCellAttrPtr(const ibGridCellCoords& coords) const
-	{
-		return ibGridCellAttrPtr(GetCellAttr(coords));
-	}
 
 
 	// the default cell attr object for cells that don't have their own
@@ -3831,8 +3834,9 @@ public:
 		{
 			for (int col = coords.GetLeftCol(); col <= coords.GetRightCol(); col++)
 			{
+				// what the cell SHOWS is what undo puts back — a table may keep the look itself (its attribute provider)
 				AppendCommand<T1>(row, col, newValue,
-					T1::GetAttrValue(view->GetOrCreateCellAttrPtr(row, col)));
+					T1::GetAttrValue(view->GetCellAttrPtr(row, col)));
 			}
 		}
 	}

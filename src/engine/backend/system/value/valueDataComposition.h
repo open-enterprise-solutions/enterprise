@@ -83,7 +83,7 @@ class BACKEND_API ibValueDataComposition : public ibValueSpreadsheetModel, publi
 public:
 
 	// The source may be passed here — null means "set it later" (SetSource).
-	ibValueDataComposition(const ibBackendQueryable* queryable = nullptr);
+	ibValueDataComposition(const std::shared_ptr<const ibBackendQueryable>& queryable = nullptr);
 
 	// ⭐⭐ THE RUNNING COMPOSITION OVER A DESCRIPTION SOMEBODY ELSE HOLDS — and whoever wants one makes
 	// it, here, with the two things it needs: the data, and the configuration to resolve names in.
@@ -104,10 +104,10 @@ public:
 	// (see SeedQuery) — a composer with a source and no query would read nothing,
 	// and an empty text is not a query.
 	void SetSource(const ibString& ns, const ibString& name);
-	void SetSourceQueryable(const ibBackendQueryable* queryable);
+	void SetSourceQueryable(const std::shared_ptr<const ibBackendQueryable>& queryable);
 	// Not an override any more: it was the TABLE model's hook, and a composition is not one. The
 	// question is still this type's own — its property holds the queryable.
-	const ibBackendQueryable* GetSourceQueryable() const { return m_propertySource->GetQueryable(); }
+	std::shared_ptr<const ibBackendQueryable> GetSourceQueryable() const { return m_propertySource->GetQueryable(); }
 
 	// The query itself — what is READ. Always present once a source is picked; the
 	// settings dialog's first tab and the query constructor both edit this text.
@@ -347,7 +347,7 @@ public:
 
 	// --- ibSourceDataObject (the composer IS a form data source) -------------
 	virtual const ibValueMetaObjectGenericData* GetSourceMetaObject() const override {
-		const ibBackendQueryable* q = GetSourceQueryable();
+		const std::shared_ptr<const ibBackendQueryable> q = GetSourceQueryable();
 		return q != nullptr ? q->GetSourceMetaObject() : nullptr;
 	}
 	virtual ibClassID GetSourceClassType() const override { return g_valueDataCompositionCLSID; }

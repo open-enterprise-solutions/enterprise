@@ -25,7 +25,7 @@
 namespace {
 
 // The source an object vends, or nullptr: the kind member exists, and this object of it is no data source.
-const ibBackendQueryable* QueryableOf(const ibValueMetaObject* object)
+std::shared_ptr<const ibBackendQueryable> QueryableOf(const ibValueMetaObject* object)
 {
 	const ibBackendQueryableHolder* const holder = dynamic_cast<const ibBackendQueryableHolder*>(object);
 	return holder != nullptr ? holder->GetQueryable() : nullptr;
@@ -52,7 +52,7 @@ protected:
 
 	// The source is named by its script path ("Catalogs.Goods"), for a watch and a diagnostic.
 	virtual ibValue ElementValue(ibValueMetaObject* const& object) const override {
-		const ibBackendQueryable* const queryable = object != nullptr ? QueryableOf(object) : nullptr;
+		const std::shared_ptr<const ibBackendQueryable> queryable = object != nullptr ? QueryableOf(object) : nullptr;
 		if (queryable == nullptr)
 			return ibValue();
 		return new ibValueQueryable(queryable, m_kindName + ibT(".") + object->GetName());
@@ -133,7 +133,7 @@ bool ibValueModuleManager::ibValueDataUnit::CallAsFunc(const long lMethodNum, ib
 		if (!paParams[0]->ConvertToValue(rows) || rows == nullptr)
 			ibBackendCoreException::Error(_("Data.From: the argument must be a value table"));
 		// The wrapper copies the table reference (the held ibValue keeps it alive);
-		// the Queryable OWNS the wrapper and shares it across chain links.
+		// the Queryable holds the wrapper and shares it across chain links.
 		pvarRetValue = new ibValueQueryable(
 			std::make_shared<ibTempTableQueryable>(*paParams[0], m_metaData), ibT("From"));
 		return true;

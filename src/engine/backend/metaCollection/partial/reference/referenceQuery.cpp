@@ -108,7 +108,7 @@ void ibValueReferenceDataObject::ReadBatch()
 			tableAt = tableEnd;
 			continue;
 		}
-		const ibBackendQueryColumn* const keyColumn = metaObject->GetDataReference()->GetQueryColumn();
+		const std::shared_ptr<const ibBackendQueryColumn> keyColumn = metaObject->GetDataReference()->GetQueryColumn();
 		// The KEY travels as the value that names it: the statement spells it straight from the reference's
 		// bytes (WhereKeyIn over values), never through text.
 		std::vector<ibValue> keys;
@@ -289,8 +289,8 @@ bool ibValueReferenceDataObject::FindValue(const ibString& input, const ibChoice
 		// typed warehouse taken that its narrowed list did not hold). A pair naming a field this kind has not is another
 		// type's of a composite field, and narrows nothing here.
 		for (const std::pair<const ibString, ibValue>& parameter : condition.m_parameters) {
-			if (const ibBackendQueryColumn* column = m_metaObject->GetQueryable()->ResolveColumnByName(parameter.first))
-				q.Where(column, parameter.second);
+			if (std::shared_ptr<const ibBackendQueryColumn> column = m_metaObject->GetQueryable()->ResolveColumnByName(parameter.first))
+				q.Where(std::move(column), parameter.second);
 		}
 
 		// ⭐⭐ THE TEXT IS LOOKED FOR IN THE DATABASE, NOT AMONG THE FIRST HUNDRED ROWS. The read below
@@ -407,7 +407,7 @@ bool ibValueReferenceDataObject::FindValue(const ibString& input, const ibChoice
 		//
 		// The reference IS the identity of a reference object and the metaobject says so directly, so
 		// there is nothing to infer and nothing that a change of sort can move out from under this.
-		const ibBackendQueryColumn* const keyCol = m_metaObject->GetDataReference()->GetQueryColumn();
+		const std::shared_ptr<const ibBackendQueryColumn> keyCol = m_metaObject->GetDataReference()->GetQueryColumn();
 
 		// ⭐ HOW WELL A ROW ANSWERS, so the best comes first - the caller that types takes the FIRST
 		// (ibValueTextCtrl::TextProcessing). By the searched attributes in their order (a code before a

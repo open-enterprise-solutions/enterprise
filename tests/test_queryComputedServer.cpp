@@ -78,7 +78,7 @@ public:
 	ComputedQ(const ibString& name, ibMetaID id) : m_name(name), m_id(id) {
 		ibGuidImpl i{}; i.m_data1 = static_cast<unsigned long>(id); m_key = ibGuid(i);
 	}
-	void AddCol(const ibBackendQueryColumn* c) { m_cols.push_back(c); }
+	void AddCol(const std::shared_ptr<const ibBackendQueryColumn>& c) { m_cols.push_back(c); }
 	void SetBuilder(std::function<ibQueryRamTable()> b) { m_build = std::move(b); }
 
 	ibBackendQueryProvider& GetProvider() const override { return ibComputedProviderInstance(); }
@@ -86,9 +86,9 @@ public:
 	ibQueryRamTable ComputeRows(const std::vector<ibQueryCondition>& /*extra*/) const override {
 		return m_build ? m_build() : ibQueryRamTable();
 	}
-	std::vector<const ibBackendQueryColumn*> GetQueryColumns() const override { return m_cols; }
-	bool ContainColumn(const ibBackendQueryColumn* col) const override {
-		for (const ibBackendQueryColumn* c : m_cols) if (c == col) return true;
+	std::vector<std::shared_ptr<const ibBackendQueryColumn>> GetQueryColumns() const override { return m_cols; }
+	bool ContainColumn(const std::shared_ptr<const ibBackendQueryColumn>& col) const override {
+		for (const std::shared_ptr<const ibBackendQueryColumn>& c : m_cols) if (c == col) return true;
 		return false;
 	}
 	ibString GetQueryTableName() const override { return m_name; }
@@ -99,7 +99,7 @@ private:
 	ibString m_name;
 	ibMetaID m_id;
 	ibUniqueKey m_key;   // its table guid, the id in the first word
-	std::vector<const ibBackendQueryColumn*> m_cols;
+	std::vector<std::shared_ptr<const ibBackendQueryColumn>> m_cols;
 	std::function<ibQueryRamTable()> m_build;
 };
 
@@ -113,11 +113,11 @@ public:
 	PhysicalQ(const ibString& table, ibMetaID id) : m_table(table), m_id(id) {
 		ibGuidImpl i{}; i.m_data1 = static_cast<unsigned long>(id); m_key = ibGuid(i);
 	}
-	void AddCol(const ibBackendQueryColumn* c) { m_cols.push_back(c); }
+	void AddCol(const std::shared_ptr<const ibBackendQueryColumn>& c) { m_cols.push_back(c); }
 	bool     IsComputedInRam()   const override { return false; }
-	std::vector<const ibBackendQueryColumn*> GetQueryColumns() const override { return m_cols; }
-	bool ContainColumn(const ibBackendQueryColumn* col) const override {
-		for (const ibBackendQueryColumn* c : m_cols) if (c == col) return true;
+	std::vector<std::shared_ptr<const ibBackendQueryColumn>> GetQueryColumns() const override { return m_cols; }
+	bool ContainColumn(const std::shared_ptr<const ibBackendQueryColumn>& col) const override {
+		for (const std::shared_ptr<const ibBackendQueryColumn>& c : m_cols) if (c == col) return true;
 		return false;
 	}
 	ibString GetQueryTableName() const override { return m_table; }
@@ -128,7 +128,7 @@ private:
 	ibString m_table;
 	ibMetaID m_id;
 	ibUniqueKey m_key;   // its table guid, the id in the first word
-	std::vector<const ibBackendQueryColumn*> m_cols;
+	std::vector<std::shared_ptr<const ibBackendQueryColumn>> m_cols;
 };
 
 // Record a lambda BODY into the L4-2 query AST (compile -> recorder), as test_queryLINQExec does.
@@ -169,12 +169,12 @@ TEST_F(ComputedServerFix, Aggregate_PromotesToServer)
 {
 	if (!ready) return;
 
-	TypedCol item(wxT("item"), S_ITEM, ibTypeDescription(g_valueStringCLSID));
-	TypedCol qty(wxT("qty"),   S_QTY,  ibTypeDescription(g_valueNumberCLSID));
-	ComputedQ balance(wxT("balance"), 200);
-	balance.AddCol(&item);
-	balance.AddCol(&qty);
-	balance.SetBuilder([] {
+	const auto item = std::make_shared<TypedCol>(wxT("item"), S_ITEM, ibTypeDescription(g_valueStringCLSID));
+	const auto qty  = std::make_shared<TypedCol>(wxT("qty"),  S_QTY,  ibTypeDescription(g_valueNumberCLSID));
+	const auto balance = std::make_shared<ComputedQ>(wxT("balance"), 200);
+	balance->AddCol(item);
+	balance->AddCol(qty);
+	balance->SetBuilder([] {
 		ibQueryRamTable t;
 		t.AddColumn(S_ITEM, wxT("item"), ibTypeDescription(g_valueStringCLSID));
 		t.AddColumn(S_QTY,  wxT("qty"),  ibTypeDescription(g_valueNumberCLSID));
@@ -190,14 +190,14 @@ TEST_F(ComputedServerFix, Aggregate_PromotesToServer)
 	ASSERT_NE(holder, nullptr);
 
 	ibDataQueryBuilder q(holder);
-	q.From(&balance);
-	q.GroupBy(&item);
-	q.Aggregate(ibDataQueryBuilder::AggregateFn::Sum, &qty, wxT("total"));
+	q.From(balance);
+	q.GroupBy(item);
+	q.Aggregate(ibDataQueryBuilder::AggregateFn::Sum, qty, wxT("total"));
 	ibDataQueryResult res = q.SelectAggregate();   // -> ExecuteAggregate -> PromoteSingleComputed -> temp -> SQL
 
 	std::map<std::string, long> totals;
 	while (res.Next())
-		totals[res.GetValue(&item).GetString().ToStdString()] = res.GetColumn(wxT("total")).GetInteger();
+		totals[res.GetValue(item).GetString().ToStdString()] = res.GetColumn(wxT("total")).GetInteger();
 
 	EXPECT_EQ(totals.size(), 3u);
 	EXPECT_EQ(totals["K0"], 500);
@@ -217,24 +217,24 @@ TEST_F(ComputedServerFix, Linq_WherePushesToServer)
 	db->RunQuery(wxT("CREATE TABLE t (region TEXT, qty INTEGER)"));
 	db->RunQuery(wxT("INSERT INTO t (region, qty) VALUES ('North', 10), ('South', 5), ('North', 7), ('East', 3)"));
 
-	ibBackendColumnRawDB region = ibBackendColumnRawDB::String(wxT("region"));   // RAW scalar -> single physical field, matches the table column
-	ibBackendColumnRawDB qty    = ibBackendColumnRawDB::Number(wxT("qty"));
-	PhysicalQ src(wxT("t"), 300);
-	src.AddCol(&region);
-	src.AddCol(&qty);
+	const std::shared_ptr<const ibBackendColumnRawDB> region = ibBackendColumnRawDB::String(wxT("region"));   // RAW scalar -> single physical field, matches the table column
+	const std::shared_ptr<const ibBackendColumnRawDB> qty    = ibBackendColumnRawDB::Number(wxT("qty"));
+	const auto src = std::make_shared<PhysicalQ>(wxT("t"), 300);
+	src->AddCol(region);
+	src->AddCol(qty);
 
 	// `=`, not `==` — the language has no `==`; see the note on Record in test_lambdaRecorder.cpp.
 	auto expr = RecordLambda(wxT("{ return x.region = \"North\"; }"));
 	ASSERT_NE(expr, nullptr);
-	ibQueryPredicatePtr pred = ibQueryLowering::LowerLambdaPredicate(&src, *expr, {});
+	ibQueryPredicatePtr pred = ibQueryLowering::LowerLambdaPredicate(src, *expr, {});
 	ASSERT_NE(pred, nullptr) << "a translatable LINQ body must lower to a predicate";
 
 	ibDatabaseConnectionHolder* holder = ibConnectionPool::ThreadHolder();
 	ASSERT_NE(holder, nullptr);
 
 	ibDataQueryBuilder q(holder);
-	q.From(&src);
-	q.Select(&qty, wxT("qty"));
+	q.From(src);
+	q.Select(qty, wxT("qty"));
 	q.Where(pred);
 	ibReadPageRequest page;
 	ibDataQueryResult res = q.Execute(page);   // physical source -> ibDbTableProvider::ExecuteRead -> server SQL
@@ -261,19 +261,19 @@ TEST_F(ComputedServerFix, In_RawColumnRendersNativeIn)
 	db->RunQuery(wxT("CREATE TABLE t (region TEXT, qty INTEGER)"));
 	db->RunQuery(wxT("INSERT INTO t (region, qty) VALUES ('North', 10), ('South', 5), ('North', 7), ('East', 3)"));
 
-	ibBackendColumnRawDB region = ibBackendColumnRawDB::String(wxT("region"));
-	ibBackendColumnRawDB qty    = ibBackendColumnRawDB::Number(wxT("qty"));
-	PhysicalQ src(wxT("t"), 310);
-	src.AddCol(&region);
-	src.AddCol(&qty);
+	const std::shared_ptr<const ibBackendColumnRawDB> region = ibBackendColumnRawDB::String(wxT("region"));
+	const std::shared_ptr<const ibBackendColumnRawDB> qty    = ibBackendColumnRawDB::Number(wxT("qty"));
+	const auto src = std::make_shared<PhysicalQ>(wxT("t"), 310);
+	src->AddCol(region);
+	src->AddCol(qty);
 
 	ibDatabaseConnectionHolder* holder = ibConnectionPool::ThreadHolder();
 	ASSERT_NE(holder, nullptr);
 
 	ibDataQueryBuilder q(holder);
-	q.From(&src);
-	q.Select(&qty, wxT("qty"));
-	q.WhereIn(&region, { ibValue(ibString(wxT("North"))), ibValue(ibString(wxT("East"))) });
+	q.From(src);
+	q.Select(qty, wxT("qty"));
+	q.WhereIn(region, { ibValue(ibString(wxT("North"))), ibValue(ibString(wxT("East"))) });
 	ibReadPageRequest page;
 	ibDataQueryResult res = q.Execute(page);
 
@@ -291,19 +291,19 @@ TEST_F(ComputedServerFix, In_NullProbeDropped)
 	db->RunQuery(wxT("CREATE TABLE t (region TEXT, qty INTEGER)"));
 	db->RunQuery(wxT("INSERT INTO t (region, qty) VALUES ('North', 10), (NULL, 5), ('East', 3)"));
 
-	ibBackendColumnRawDB region = ibBackendColumnRawDB::String(wxT("region"));
-	ibBackendColumnRawDB qty    = ibBackendColumnRawDB::Number(wxT("qty"));
-	PhysicalQ src(wxT("t"), 311);
-	src.AddCol(&region);
-	src.AddCol(&qty);
+	const std::shared_ptr<const ibBackendColumnRawDB> region = ibBackendColumnRawDB::String(wxT("region"));
+	const std::shared_ptr<const ibBackendColumnRawDB> qty    = ibBackendColumnRawDB::Number(wxT("qty"));
+	const auto src = std::make_shared<PhysicalQ>(wxT("t"), 311);
+	src->AddCol(region);
+	src->AddCol(qty);
 
 	ibDatabaseConnectionHolder* holder = ibConnectionPool::ThreadHolder();
 	ASSERT_NE(holder, nullptr);
 
 	ibDataQueryBuilder q(holder);
-	q.From(&src);
-	q.Select(&qty, wxT("qty"));
-	q.WhereIn(&region, { ibValue(ibString(wxT("North"))), ibValue(ibString(wxT("East"))) });
+	q.From(src);
+	q.Select(qty, wxT("qty"));
+	q.WhereIn(region, { ibValue(ibString(wxT("North"))), ibValue(ibString(wxT("East"))) });
 	ibReadPageRequest page;
 	ibDataQueryResult res = q.Execute(page);
 
@@ -322,19 +322,19 @@ TEST_F(ComputedServerFix, In_EmptySetReturnsNoRows)
 	db->RunQuery(wxT("CREATE TABLE t (region TEXT, qty INTEGER)"));
 	db->RunQuery(wxT("INSERT INTO t (region, qty) VALUES ('North', 10), ('South', 5), ('East', 3)"));
 
-	ibBackendColumnRawDB region = ibBackendColumnRawDB::String(wxT("region"));
-	ibBackendColumnRawDB qty    = ibBackendColumnRawDB::Number(wxT("qty"));
-	PhysicalQ src(wxT("t"), 312);
-	src.AddCol(&region);
-	src.AddCol(&qty);
+	const std::shared_ptr<const ibBackendColumnRawDB> region = ibBackendColumnRawDB::String(wxT("region"));
+	const std::shared_ptr<const ibBackendColumnRawDB> qty    = ibBackendColumnRawDB::Number(wxT("qty"));
+	const auto src = std::make_shared<PhysicalQ>(wxT("t"), 312);
+	src->AddCol(region);
+	src->AddCol(qty);
 
 	ibDatabaseConnectionHolder* holder = ibConnectionPool::ThreadHolder();
 	ASSERT_NE(holder, nullptr);
 
 	ibDataQueryBuilder q(holder);
-	q.From(&src);
-	q.Select(&qty, wxT("qty"));
-	q.WhereIn(&region, {});             // no keys -> L2 renders the empty IN as 1 = 0
+	q.From(src);
+	q.Select(qty, wxT("qty"));
+	q.WhereIn(region, {});             // no keys -> L2 renders the empty IN as 1 = 0
 	ibReadPageRequest page;
 	ibDataQueryResult res = q.Execute(page);
 
@@ -353,19 +353,19 @@ TEST_F(ComputedServerFix, In_AllNullKeysStripToEmpty)
 	db->RunQuery(wxT("CREATE TABLE t (region TEXT, qty INTEGER)"));
 	db->RunQuery(wxT("INSERT INTO t (region, qty) VALUES ('North', 10), ('South', 5)"));
 
-	ibBackendColumnRawDB region = ibBackendColumnRawDB::String(wxT("region"));
-	ibBackendColumnRawDB qty    = ibBackendColumnRawDB::Number(wxT("qty"));
-	PhysicalQ src(wxT("t"), 313);
-	src.AddCol(&region);
-	src.AddCol(&qty);
+	const std::shared_ptr<const ibBackendColumnRawDB> region = ibBackendColumnRawDB::String(wxT("region"));
+	const std::shared_ptr<const ibBackendColumnRawDB> qty    = ibBackendColumnRawDB::Number(wxT("qty"));
+	const auto src = std::make_shared<PhysicalQ>(wxT("t"), 313);
+	src->AddCol(region);
+	src->AddCol(qty);
 
 	ibDatabaseConnectionHolder* holder = ibConnectionPool::ThreadHolder();
 	ASSERT_NE(holder, nullptr);
 
 	ibDataQueryBuilder q(holder);
-	q.From(&src);
-	q.Select(&qty, wxT("qty"));
-	q.WhereIn(&region, { ibValue(ibValueTypes::TYPE_NULL), ibValue(ibValueTypes::TYPE_NULL) });
+	q.From(src);
+	q.Select(qty, wxT("qty"));
+	q.WhereIn(region, { ibValue(ibValueTypes::TYPE_NULL), ibValue(ibValueTypes::TYPE_NULL) });
 	ibReadPageRequest page;
 	ibDataQueryResult res = q.Execute(page);
 
@@ -395,11 +395,11 @@ struct MetaColFixture {
 };
 
 MetaColFixture MakeMetaColTable(ibDatabaseLayerSQLite& db, const ibString& table,
-                                const ibBackendQueryColumn* col,
+                                const std::shared_ptr<const ibBackendQueryColumn>& col,
                                 const std::vector<std::pair<ibString, long>>& rows)
 {
 	MetaColFixture f;
-	f.fields = ColumnFieldNames(col);
+	f.fields = ColumnFieldNames(*col);
 	if (f.fields.size() != 2)
 		return f;                       // caller asserts — the layout changed shape
 	f.typeField = f.fields[0];
@@ -438,8 +438,8 @@ TEST_F(ComputedServerFix, Codec_ACellWhoseTagIsNotInTheResultReadsAsTheTypedEmpt
 {
 	if (!ready) return;
 
-	TypedCol region(wxT("region"), 370, ibTypeDescription(g_valueStringCLSID));
-	const MetaColFixture f = MakeMetaColTable(*db, wxT("m7"), &region, { { wxT("North"), 10 } });
+	const auto region = std::make_shared<TypedCol>(wxT("region"), 370, ibTypeDescription(g_valueStringCLSID));
+	const MetaColFixture f = MakeMetaColTable(*db, wxT("m7"), region, { { wxT("North"), 10 } });
 	ASSERT_EQ(f.fields.size(), 2u);
 
 	// One field of the column's two: the value, with no `_TYPE` beside it.
@@ -451,7 +451,7 @@ TEST_F(ComputedServerFix, Codec_ACellWhoseTagIsNotInTheResultReadsAsTheTypedEmpt
 
 	ibValue value(ibNumber(7));   // anything but what it must become
 	bool read = true;
-	ASSERT_NO_THROW(read = ibColumnCodec::ReadValue(region.GetPhysicalName(), &region, /*metaData*/ nullptr, value, rs));
+	ASSERT_NO_THROW(read = ibColumnCodec::ReadValue(region->GetPhysicalName(), *region, /*metaData*/ nullptr, value, rs));
 	EXPECT_FALSE(read) << "the cell was not read - the caller is told so";
 	EXPECT_EQ(value.GetType(), ibValueTypes::TYPE_STRING) << "the column's typed empty value, not what was there before";
 	EXPECT_TRUE(value.GetString().IsEmpty());
@@ -461,24 +461,24 @@ TEST_F(ComputedServerFix, In_MetadataColumnFoldsCompositeEquality)
 {
 	if (!ready) return;
 
-	TypedCol region(wxT("region"), 320, ibTypeDescription(g_valueStringCLSID));
-	const MetaColFixture f = MakeMetaColTable(*db, wxT("m1"), &region,
+	const auto region = std::make_shared<TypedCol>(wxT("region"), 320, ibTypeDescription(g_valueStringCLSID));
+	const MetaColFixture f = MakeMetaColTable(*db, wxT("m1"), region,
 		{ { wxT("North"), 10 }, { wxT("South"), 5 }, { wxT("East"), 3 } });
 	ASSERT_EQ(f.fields.size(), 2u) << "a string-only metadata column is expected to spread as _TYPE + _S; "
 	                                  "a different layout needs this fixture reworked";
 
-	ibBackendColumnRawDB qty = ibBackendColumnRawDB::Number(wxT("qty"));
-	PhysicalQ src(wxT("m1"), 321);
-	src.AddCol(&region);
-	src.AddCol(&qty);
+	const std::shared_ptr<const ibBackendColumnRawDB> qty = ibBackendColumnRawDB::Number(wxT("qty"));
+	const auto src = std::make_shared<PhysicalQ>(wxT("m1"), 321);
+	src->AddCol(region);
+	src->AddCol(qty);
 
 	ibDatabaseConnectionHolder* holder = ibConnectionPool::ThreadHolder();
 	ASSERT_NE(holder, nullptr);
 
 	ibDataQueryBuilder q(holder);
-	q.From(&src);
-	q.Select(&qty, wxT("qty"));
-	q.WhereIn(&region, { ibValue(ibString(wxT("North"))), ibValue(ibString(wxT("East"))) });
+	q.From(src);
+	q.Select(qty, wxT("qty"));
+	q.WhereIn(region, { ibValue(ibString(wxT("North"))), ibValue(ibString(wxT("East"))) });
 	ibReadPageRequest page;
 	ibDataQueryResult res = q.Execute(page);
 
@@ -492,20 +492,20 @@ TEST_F(ComputedServerFix, In_MetadataColumnValuesOfTwoKindsFoldPairByPair)
 {
 	if (!ready) return;
 
-	TypedCol region(wxT("region"), 322, ibTypeDescription(g_valueStringCLSID));
-	const MetaColFixture f = MakeMetaColTable(*db, wxT("m3"), &region,
+	const auto region = std::make_shared<TypedCol>(wxT("region"), 322, ibTypeDescription(g_valueStringCLSID));
+	const MetaColFixture f = MakeMetaColTable(*db, wxT("m3"), region,
 		{ { wxT("North"), 10 }, { wxT("South"), 5 } });
 	ASSERT_EQ(f.fields.size(), 2u);
 
-	ibBackendColumnRawDB qty = ibBackendColumnRawDB::Number(wxT("qty"));
-	PhysicalQ src(wxT("m3"), 323);
-	src.AddCol(&region);
-	src.AddCol(&qty);
+	const std::shared_ptr<const ibBackendColumnRawDB> qty = ibBackendColumnRawDB::Number(wxT("qty"));
+	const auto src = std::make_shared<PhysicalQ>(wxT("m3"), 323);
+	src->AddCol(region);
+	src->AddCol(qty);
 
 	ibDataQueryBuilder q(ibConnectionPool::ThreadHolder());
-	q.From(&src);
-	q.Select(&qty, wxT("qty"));
-	q.WhereIn(&region, { ibValue(ibString(wxT("North"))), ibValue(ibNumber(10)) });
+	q.From(src);
+	q.Select(qty, wxT("qty"));
+	q.WhereIn(region, { ibValue(ibString(wxT("North"))), ibValue(ibNumber(10)) });
 	ibReadPageRequest page;
 	ibDataQueryResult res = q.Execute(page);
 
@@ -521,23 +521,23 @@ TEST_F(ComputedServerFix, In_MetadataColumnEmptySetReturnsNoRows)
 {
 	if (!ready) return;
 
-	TypedCol region(wxT("region"), 330, ibTypeDescription(g_valueStringCLSID));
-	const MetaColFixture f = MakeMetaColTable(*db, wxT("m2"), &region,
+	const auto region = std::make_shared<TypedCol>(wxT("region"), 330, ibTypeDescription(g_valueStringCLSID));
+	const MetaColFixture f = MakeMetaColTable(*db, wxT("m2"), region,
 		{ { wxT("North"), 10 }, { wxT("South"), 5 } });
 	ASSERT_EQ(f.fields.size(), 2u);
 
-	ibBackendColumnRawDB qty = ibBackendColumnRawDB::Number(wxT("qty"));
-	PhysicalQ src(wxT("m2"), 331);
-	src.AddCol(&region);
-	src.AddCol(&qty);
+	const std::shared_ptr<const ibBackendColumnRawDB> qty = ibBackendColumnRawDB::Number(wxT("qty"));
+	const auto src = std::make_shared<PhysicalQ>(wxT("m2"), 331);
+	src->AddCol(region);
+	src->AddCol(qty);
 
 	ibDatabaseConnectionHolder* holder = ibConnectionPool::ThreadHolder();
 	ASSERT_NE(holder, nullptr);
 
 	ibDataQueryBuilder q(holder);
-	q.From(&src);
-	q.Select(&qty, wxT("qty"));
-	q.WhereIn(&region, {});
+	q.From(src);
+	q.Select(qty, wxT("qty"));
+	q.WhereIn(region, {});
 	ibReadPageRequest page;
 	ibDataQueryResult res = q.Execute(page);
 
@@ -582,14 +582,14 @@ struct ReferenceSetFix {
 		return ibValue(ibValueReferenceDataObject::Create(&cfg, catalog->GetMetaID(), ibGuid(ibGuid::newGuid())));
 	}
 	// `column IN (values)` over a table of this configuration, as the SQL the door writes for it.
-	ibString SqlOfSet(const ibBackendQueryColumn* column, ibMetaID tableId, const std::vector<ibValue>& values) const {
-		MetaPhysicalQ table(wxT("T"), tableId, &cfg);
-		table.AddCol(column);
+	ibString SqlOfSet(const std::shared_ptr<const ibBackendQueryColumn>& column, ibMetaID tableId, const std::vector<ibValue>& values) const {
+		const auto table = std::make_shared<MetaPhysicalQ>(wxT("T"), tableId, &cfg);
+		table->AddCol(column);
 		ibQueryCondition set;
 		set.m_col    = column;
 		set.m_op     = ibQueryFilterOp::In;
 		set.m_values = values;
-		const ibQueryExprPtr predicate = ibDbTableProvider::BuildPredicateIR(&table, ibQueryPredicate::Leaf(set));
+		const ibQueryExprPtr predicate = ibDbTableProvider::BuildPredicateIR(table, ibQueryPredicate::Leaf(set));
 		if (!predicate) return ibString();
 		ibDatabaseQueryBuilder q;
 		q.From(wxT("T")).Where(predicate);
@@ -610,15 +610,15 @@ TEST_F(ComputedServerFix, In_ReferencesOfOneTableSayTheTableOnce)
 	ReferenceSetFix f;
 	ASSERT_TRUE(f.Ready());
 
-	TypedCol item(wxT("item"), 340, ibTypeDescription(reference_to_clsid(f.items->GetMetaID(), clsid_metaclass(f.items->GetClassType()))));
-	const std::vector<ibString> fields = ColumnFieldNames(&item);
+	const auto item = std::make_shared<TypedCol>(wxT("item"), 340, ibTypeDescription(reference_to_clsid(f.items->GetMetaID(), clsid_metaclass(f.items->GetClassType()))));
+	const std::vector<ibString> fields = ColumnFieldNames(*item);
 	ASSERT_EQ(fields.size(), 3u) << "a single-target reference is expected to spread as _TYPE + _RTRef + _RRRef";
 
 	std::vector<ibValue> values;
 	for (int i = 0; i < 100; ++i)
 		values.push_back(f.RefTo(f.items));
 
-	const ibString sql = f.SqlOfSet(&item, 343, values);
+	const ibString sql = f.SqlOfSet(item, 343, values);
 	ASSERT_FALSE(sql.IsEmpty());
 	EXPECT_EQ(ReferenceSetFix::CountOf(sql, wxT(" IN (")), 1) << sql;
 	EXPECT_EQ(ReferenceSetFix::CountOf(sql, wxT(" OR ")), 0) << sql;
@@ -638,13 +638,13 @@ TEST_F(ComputedServerFix, In_ReferencesOfTwoTablesSayEachTableOnce)
 
 	ibTypeDescription both(reference_to_clsid(f.items->GetMetaID(), clsid_metaclass(f.items->GetClassType())));
 	both.AppendMetaType(reference_to_clsid(f.units->GetMetaID(), clsid_metaclass(f.units->GetClassType())));
-	TypedCol subject(wxT("subject"), 341, both);
+	const auto subject = std::make_shared<TypedCol>(wxT("subject"), 341, both);
 
 	std::vector<ibValue> values;
 	for (int i = 0; i < 1000; ++i)
 		values.push_back(f.RefTo(i % 2 ? f.items : f.units));
 
-	const ibString sql = f.SqlOfSet(&subject, 344, values);
+	const ibString sql = f.SqlOfSet(subject, 344, values);
 	ASSERT_FALSE(sql.IsEmpty());
 	EXPECT_EQ(ReferenceSetFix::CountOf(sql, wxT(" IN (")), 2) << "one IN per table: " << sql.Left(400);
 	EXPECT_EQ(ReferenceSetFix::CountOf(sql, wxT(" OR ")), 1) << "the two tables, ORed";
@@ -659,10 +659,10 @@ TEST_F(ComputedServerFix, In_AnEmptyReferenceAmongTheValuesGoesPairByPair)
 	ReferenceSetFix f;
 	ASSERT_TRUE(f.Ready());
 
-	TypedCol item(wxT("item"), 342, ibTypeDescription(reference_to_clsid(f.items->GetMetaID(), clsid_metaclass(f.items->GetClassType()))));
+	const auto item = std::make_shared<TypedCol>(wxT("item"), 342, ibTypeDescription(reference_to_clsid(f.items->GetMetaID(), clsid_metaclass(f.items->GetClassType()))));
 	const std::vector<ibValue> values{ f.RefTo(f.items), f.RefTo(f.items), ibValue(), f.RefTo(f.items) };
 
-	const ibString sql = f.SqlOfSet(&item, 345, values);
+	const ibString sql = f.SqlOfSet(item, 345, values);
 	ASSERT_FALSE(sql.IsEmpty());
 	EXPECT_EQ(ReferenceSetFix::CountOf(sql, wxT(" IN (")), 0) << sql;
 	EXPECT_EQ(ReferenceSetFix::CountOf(sql, wxT(" IS NULL")), 1) << sql;

@@ -45,8 +45,8 @@ namespace {
 // question while its two neighbours spelled it out in three other ways. The name was the right half;
 // the wrong half was that it was named here.)
 
-// Read one companion through the door and dress the result. The companion is built on the stack: a
-// runtime call owns its reading for exactly the length of the call.
+// Read one companion through the door and dress the result. The companion is born held, as every reading is:
+// a runtime call owns its reading for exactly the length of the call.
 template <typename TCompanion, typename... TArgs>
 ibValue ReadThrough(const ibValueMetaObjectAccountingRegister* meta, ibAcctShape shape,
                     const ibRegFold& fold, const std::vector<ibValue>& kindsDr,
@@ -54,8 +54,8 @@ ibValue ReadThrough(const ibValueMetaObjectAccountingRegister* meta, ibAcctShape
 {
 	ibRequireOpenBase();
 
-	TCompanion companion(meta, std::forward<TArgs>(args)...);
-	ibDataQueryResult selection = ibDataQueryBuilder().From(&companion).Execute(ibReadPageRequest{});
+	const auto companion = std::make_shared<TCompanion>(meta, std::forward<TArgs>(args)...);
+	ibDataQueryResult selection = ibDataQueryBuilder().From(companion).Execute(ibReadPageRequest{});
 	return ibRegSelectionToTable(selection, meta->GetShapeQueryable(shape, kindsDr, kindsCr, fold));
 }
 

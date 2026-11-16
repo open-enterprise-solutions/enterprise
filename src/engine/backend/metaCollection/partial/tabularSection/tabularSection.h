@@ -181,8 +181,9 @@ public:
 	virtual const ibTranslateString& GetFormat(const ibMetaID& id) const override;
 	virtual ibSelectMode GetSelectMode(const ibMetaID& id) const override;
 	virtual ibValue AdjustValue(const ibMetaID& id, const ibValue& value) const override;
+	virtual std::vector<ibMetaID> GetLinked(const ibMetaID& edited) const override;   // one walk over its column map
 
-#pragma endregion 
+#pragma endregion
 
 	ibValueTabularSectionDataObjectBase() :
 		m_readOnly(false), m_metaTable(nullptr),

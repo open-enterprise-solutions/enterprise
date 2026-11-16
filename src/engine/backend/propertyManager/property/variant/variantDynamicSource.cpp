@@ -2,11 +2,11 @@
 
 #include "backend/appData.h"                      // appData -> GetQueryableFactory (global fallback)
 #include "backend/metaData.h"                     // ibMetaData::GetSourceFactory — resolve THROUGH the owner's config
-#include "backend/query/queryableFactory.h"       // ResolveById (live re-resolve)
+#include "backend/query/queryableFactory.h"       // ResolveDescriptorById (live re-resolve)
 #include "backend/query/queryable.h"              // GetQueryTableId / GetQueryName
 #include "backend/propertyManager/propertyObject.h"   // ibPropertyObject::GetMetaData
 
-ibVariantDynamicSource::ibVariantDynamicSource(const ibBackendQueryable* queryable, const ibPropertyObject* owner)
+ibVariantDynamicSource::ibVariantDynamicSource(const std::shared_ptr<const ibBackendQueryable>& queryable, const ibPropertyObject* owner)
 	: ibVariant(ibValueTypes::TYPE_VALUE), m_tableId(queryable != nullptr ? (ibMetaID)queryable->GetQueryTableId() : ibNOT_FOUND),
 	// Resolve the owner's SPECIFIC config ONCE, here, and keep the metadata — NOT the owner pointer (which, for a
 	// form-attribute's transient dynamic list, dangles once the list is re-materialised). (CONST owner: the non-const
@@ -24,14 +24,15 @@ static ibQueryableFactory* ibVariantSourceFactory(const ibMetaData* md)
 	return factory != nullptr ? factory : ibApplicationInstance::GetQueryableFactory();
 }
 
-const ibBackendQueryable* ibVariantDynamicSource::GetQueryable() const
+std::shared_ptr<const ibBackendQueryable> ibVariantDynamicSource::GetQueryable() const
 {
-	// Re-resolve LIVE every time — never a cached pointer. Goes THROUGH the owner's metadata factory (per-config →
-	// global), which hands back the descriptor's own `&m_queryable`, or null if the source was deleted.
+	// Re-resolve LIVE every time — never a cached pointer. The descriptor by the id, THROUGH the owner's metadata
+	// factory (per-config → global), asked for its source as declared; null if the source was deleted.
 	if (m_tableId == ibNOT_FOUND)
 		return nullptr;
 	ibQueryableFactory* factory = ibVariantSourceFactory(m_metaData);
-	return factory != nullptr ? factory->ResolveById(m_tableId) : nullptr;
+	ibQueryableSourceDescriptor* const descriptor = factory != nullptr ? factory->ResolveDescriptorById(m_tableId) : nullptr;
+	return descriptor != nullptr ? descriptor->CreateQueryable(nullptr, 0) : nullptr;
 }
 
 const ibQueryableSourceDescriptor* ibVariantDynamicSource::GetDescriptor() const
@@ -44,13 +45,13 @@ const ibQueryableSourceDescriptor* ibVariantDynamicSource::GetDescriptor() const
 	return factory != nullptr ? factory->ResolveDescriptorById(m_tableId) : nullptr;
 }
 
-void ibVariantDynamicSource::SetQueryable(const ibBackendQueryable* queryable)
+void ibVariantDynamicSource::SetQueryable(const std::shared_ptr<const ibBackendQueryable>& queryable)
 {
 	m_tableId = queryable != nullptr ? (ibMetaID)queryable->GetQueryTableId() : ibNOT_FOUND;
 }
 
 ibString ibVariantDynamicSource::GetString() const
 {
-	const ibBackendQueryable* q = GetQueryable();
+	const std::shared_ptr<const ibBackendQueryable> q = GetQueryable();
 	return q != nullptr ? q->GetQueryName() : ibString();
 }

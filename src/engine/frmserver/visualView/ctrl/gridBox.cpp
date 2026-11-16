@@ -237,8 +237,10 @@ bool ibFetchSpreadsheet(const ibSpreadsheetObject& document, ibDataNode& respons
 			if (cell != nullptr && (text != cell->m_value || cell->m_fillSetType != ibSpreadsheetFillType::ibSpreadsheetFillType_StrText)) {
 				node.SetField(ibT("value"), ibDataValue::String(text));
 				node.SetField(ibT("fill"), ibDataValue::Int(static_cast<std::int64_t>(ibSpreadsheetFillType::ibSpreadsheetFillType_StrText)));
+				shown.push_back(ibDataValue::Child(std::make_shared<ibDataNode>(std::move(node))));
 			}
-			shown.push_back(ibDataValue::Child(std::make_shared<ibDataNode>(std::move(node))));
+			else
+				shown.push_back(entry);   // shown as it is stored: its entry as written, not a node made again and copied
 		}
 		written.SetField(ibT("cells"), ibDataValue::Array(std::move(shown)));
 	}

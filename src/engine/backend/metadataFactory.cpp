@@ -13,6 +13,10 @@ ibMetaImage::ibMetaImage(ibMetaData* owner)
 	// Every open snapshot gets its OWN source factory — metadata-backed queryables register into it, and resolve
 	// descends to the global factory on a miss. Dropping the image frees it (RAII), same lifecycle as the compile cache.
 	m_sourceFactory = std::make_unique<ibMetaQueryableFactory>();
+	// The bytecode of a configuration that RUNS is read here — once, as it opens — and held for every session's
+	// modules (ibByteCodeStorage). A designer's own copy has the compile cache above and runs none.
+	if (owner != nullptr && m_compileCache == nullptr)
+		m_byteCodeStorage = std::make_unique<ibByteCodeStorage>(owner);
 }
 
 // Out of line (see the header): m_sourceFactory's unique_ptr deleter needs the complete ibQueryableFactory, present here.

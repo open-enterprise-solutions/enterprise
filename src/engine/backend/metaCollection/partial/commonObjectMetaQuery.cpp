@@ -172,9 +172,9 @@ ibMetaID ibBackendColumnSortOrder::GetColumnId() const
 std::vector<ibColumnSlot> ibBackendColumnSortOrder::DescribeLayout() const
 {
 	std::vector<ibColumnSlot> slots;
-	for (const ibBackendQueryColumn* part : m_parts()) {
+	for (const std::shared_ptr<const ibBackendQueryColumn>& part : m_parts()) {
 		if (part == nullptr) continue;
-		for (const ibColumnSlot& slot : DescribeColumnLayout(part))
+		for (const ibColumnSlot& slot : DescribeColumnLayout(*part))
 			if (slot.m_role != ibColumnRole::Discriminator)
 				slots.push_back(slot);
 	}
@@ -188,14 +188,14 @@ bool ibBackendColumnSortOrder::ReadValue(const ibString& /*fieldName*/, const ib
 	ibValue& retValue, ibQueryResult& result, bool createData) const
 {
 	std::vector<ibValue> values;
-	for (const ibBackendQueryColumn* part : m_parts()) {
+	for (const std::shared_ptr<const ibBackendQueryColumn>& part : m_parts()) {
 		if (part == nullptr) continue;
-		const ibColumnSlot slot = FirstValueSlot(part);
+		const ibColumnSlot slot = FirstValueSlot(*part);
 		ibValue value;
 		if (slot.m_role == ibColumnRole::ReferenceId)   // a reference takes its own pair off its base name
-			ibColumnCodec::ReadField(part->GetPhysicalName(), ibFieldTypes_Reference, part, metaData, value, result, createData);
+			ibColumnCodec::ReadField(part->GetPhysicalName(), ibFieldTypes_Reference, *part, metaData, value, result, createData);
 		else
-			ibColumnCodec::ReadField(slot.m_name, ibPersistedTypeTag(slot.m_role), part, metaData, value, result, createData);
+			ibColumnCodec::ReadField(slot.m_name, ibPersistedTypeTag(slot.m_role), *part, metaData, value, result, createData);
 		values.push_back(value);
 	}
 	retValue = new ibValueArray(values);
@@ -206,7 +206,7 @@ bool ibBackendColumnSortOrder::ReadValue(const ibString& /*fieldName*/, const ib
 ibEnumQueryable::ibEnumQueryable(const ibValueMetaObjectRecordDataEnumRef* meta)
 	: ibRecordQueryable<ibValueMetaObjectRecordDataEnumRef>(meta) {}
 
-std::vector<const ibBackendQueryColumn*> ibEnumQueryable::GetSortParts() const
+std::vector<std::shared_ptr<const ibBackendQueryColumn>> ibEnumQueryable::GetSortParts() const
 {
 	return { m_meta->GetDataOrder()->GetQueryColumn(), m_meta->GetDataReference()->GetQueryColumn() };
 }
@@ -214,23 +214,23 @@ std::vector<const ibBackendQueryColumn*> ibEnumQueryable::GetSortParts() const
 // ⭐⭐ THE DOCUMENT'S READING CARRIES ITS MOMENT — its PointInTime, lying in its date and then in its reference.
 ibRecorderQueryable::ibRecorderQueryable(const ibValueMetaObjectRecordDataRecorderRef* meta)
 	: ibRecordQueryable<ibValueMetaObjectRecordDataRecorderRef>(meta),
-	  m_momentColumn(meta->GetPointInTime(), meta->GetDocumentDate(), meta->GetDataReference()) {}
+	  m_momentColumn(std::make_shared<ibBackendColumnPointInTime>(meta->GetPointInTime(), meta->GetDocumentDate(), meta->GetDataReference())) {}
 
 // …and it is a field of this source like any other, so `SELECT *` carries it and a query naming it resolves to
 // the column that knows how to build it — without it the field tree offered a name the query could not resolve,
 // a field that exists only on screen (the tabular section lists `Ref` the same way). Nothing stores it, so the
 // projection writes no field for it; the READ constructs it out of the date and the reference, which the same
 // select carries anyway.
-std::vector<const ibBackendQueryColumn*> ibRecorderQueryable::GetQueryColumns() const
+std::vector<std::shared_ptr<const ibBackendQueryColumn>> ibRecorderQueryable::GetQueryColumns() const
 {
-	std::vector<const ibBackendQueryColumn*> cols =
+	std::vector<std::shared_ptr<const ibBackendQueryColumn>> cols =
 		ibRecordQueryable<ibValueMetaObjectRecordDataRecorderRef>::GetQueryColumns();
-	cols.push_back(&m_momentColumn);
+	cols.push_back(m_momentColumn);
 	return cols;
 }
 
 // ⭐ A DOCUMENT IS ORDERED BY ITS MOMENT — the very two columns the moment lies in (DescribeLayout below).
-std::vector<const ibBackendQueryColumn*> ibRecorderQueryable::GetSortParts() const
+std::vector<std::shared_ptr<const ibBackendQueryColumn>> ibRecorderQueryable::GetSortParts() const
 {
 	return { m_meta->GetDocumentDate()->GetQueryColumn(), m_meta->GetDataReference()->GetQueryColumn() };
 }
@@ -262,9 +262,9 @@ bool     ibRecorderQueryable::ibBackendColumnPointInTime::IsAvailable()     cons
 std::vector<ibColumnSlot> ibRecorderQueryable::ibBackendColumnPointInTime::DescribeLayout() const
 {
 	std::vector<ibColumnSlot> slots;
-	for (const ibBackendQueryColumn* part : { m_date->GetQueryColumn(), m_reference->GetQueryColumn() }) {
+	for (const std::shared_ptr<const ibBackendQueryColumn>& part : { m_date->GetQueryColumn(), m_reference->GetQueryColumn() }) {
 		if (part == nullptr) continue;
-		for (const ibColumnSlot& slot : DescribeColumnLayout(part)) {
+		for (const ibColumnSlot& slot : DescribeColumnLayout(*part)) {
 			// ⚠ WITHOUT THE PARTS' TYPE TAGS. A `_TYPE` field says WHICH of a column's admissible types
 			// a row holds — a question the moment does not have: its date is always a date and its
 			// reference always a reference, chosen when the pair was named and not per row. Carried
@@ -281,8 +281,8 @@ std::vector<ibColumnSlot> ibRecorderQueryable::ibBackendColumnPointInTime::Descr
 bool ibRecorderQueryable::ibBackendColumnPointInTime::ReadValue(const ibString& fieldName,
 	const ibMetaData* metaData, ibValue& retValue, ibQueryResult& result, bool createData) const
 {
-	const ibBackendQueryColumn* date = m_date->GetQueryColumn();
-	const ibBackendQueryColumn* ref = m_reference->GetQueryColumn();
+	const std::shared_ptr<const ibBackendQueryColumn> date = m_date->GetQueryColumn();
+	const std::shared_ptr<const ibBackendQueryColumn> ref = m_reference->GetQueryColumn();
 	if (date == nullptr || ref == nullptr)
 		return false;
 
@@ -310,9 +310,9 @@ bool ibRecorderQueryable::ibBackendColumnPointInTime::ReadValue(const ibString& 
 
 	ibValue vDate, vReference;
 	ibColumnCodec::ReadField(dateBase + ibFieldSuffix(ibColumnRole::Date), ibFieldTypes_Date,
-	                         date, metaData, vDate, result, createData);
+	                         *date, metaData, vDate, result, createData);
 	ibColumnCodec::ReadField(refBase, ibFieldTypes_Reference,
-	                         ref, metaData, vReference, result, createData);
+	                         *ref, metaData, vReference, result, createData);
 
 	retValue = new ibValuePointInTime(vDate.GetDate(), vReference);
 	return true;
@@ -378,7 +378,7 @@ void ibRecorderQueryable::ibBackendColumnPointInTime::BindValue(ibQueryStatement
 // The hierarchy metaobject's own parent column (a predefined attribute IS-A ibBackendQueryColumn) — defined
 // out-of-line HERE where the attribute type is complete. The record queryable (above) forwards to it. (Folder
 // column removed — folders are a creation-time sort/filter setting, not a structural column.)
-const ibBackendQueryColumn* ibValueMetaObjectRecordDataHierarchyMutableRef::GetHierarchyColumn() const {
+std::shared_ptr<const ibBackendQueryColumn> ibValueMetaObjectRecordDataHierarchyMutableRef::GetHierarchyColumn() const {
 	// ⭐⭐ THE HIERARCHY IS THE PARENT. There is exactly ONE arrangement with no hierarchy — the one
 	// with no parent at all (`None`), where the field is gone rather than merely unused, and where
 	// "in hierarchy" can only ever answer with the value itself. Every other arrangement RECORDS a
@@ -413,12 +413,12 @@ const ibBackendQueryColumn* ibValueMetaObjectRecordDataHierarchyMutableRef::GetH
 // carried as real attributes; the consumer assembles the row identity. No reference.
 // ⭐ Answered with the attribute's QUERY FACE throughout this file: an attribute is not a query
 // column, it holds one (docs/private/ownership-authority.md). The signatures are untouched.
-std::vector<const ibBackendQueryColumn*> ibRegisterDataQueryable::GetQueryColumns() const {
+std::vector<std::shared_ptr<const ibBackendQueryColumn>> ibRegisterDataQueryable::GetQueryColumns() const {
 	// All generic attributes — the register's generic array ALREADY spans the
 	// predefineds (recorder / line / period), the dimensions, the resources and
 	// the plain attributes. Mirrors ibRecordQueryable. Drives the L5 composer's
 	// default projection and SELECT * of a nested subquery.
-	std::vector<const ibBackendQueryColumn*> cols;
+	std::vector<std::shared_ptr<const ibBackendQueryColumn>> cols;
 	for (const ibValueMetaObjectAttributeBase* a : m_meta->GetGenericAttributeArrayObject())
 		if (a != nullptr) cols.push_back(a->GetQueryColumn());
 	return cols;
@@ -430,8 +430,8 @@ const ibValueMetaObjectGenericData* ibRegisterDataQueryable::GetSourceMetaObject
 // Uniqueness key (UPSERT match): recorder + line number + period for a recorder-based register
 // (its dimensions are data); period + dimensions for an information register. The queryable is
 // the authority — no per-column / per-attribute flag. (docs/private/query-language-arc.md §22.1)
-std::vector<const ibBackendQueryColumn*> ibRegisterDataQueryable::GetPrimaryKeyColumns() const {
-	std::vector<const ibBackendQueryColumn*> cols;
+std::vector<std::shared_ptr<const ibBackendQueryColumn>> ibRegisterDataQueryable::GetPrimaryKeyColumns() const {
+	std::vector<std::shared_ptr<const ibBackendQueryColumn>> cols;
 	// The key's parts, each by its query face — asked in one place so a missing one cannot slip in
 	// as a null and be discovered by whoever hashes the key.
 	auto add = [&cols](const ibValueMetaObjectAttributeBase* a) {

@@ -56,7 +56,7 @@ ibCalcViewSpec ibCalcViewSpecOf(const ibValueMetaObjectCalculationRegister* reg)
 	fieldsOf(reg->GetActionPeriod(), v.m_actionPeriod);
 	v.m_start = ibRegFieldOfRole(reg->GetActionPeriodStart()->GetQueryColumn(), ibColumnRole::Date);
 	v.m_end = ibRegFieldOfRole(reg->GetActionPeriodEnd()->GetQueryColumn(), ibColumnRole::Date);
-	for (const ibColumnSlot& slot : DescribeColumnLayout(reg->GetActionPeriodStart()->GetQueryColumn()))
+	for (const ibColumnSlot& slot : DescribeColumnLayout(*reg->GetActionPeriodStart()->GetQueryColumn()))
 		if (slot.m_role == ibColumnRole::Date) {
 			v.m_dayType = slot.m_type;
 			v.m_typedDays = true;
@@ -65,17 +65,17 @@ ibCalcViewSpec ibCalcViewSpecOf(const ibValueMetaObjectCalculationRegister* reg)
 		v.m_resources.push_back(ibRegValueField(resource));
 
 	v.m_period = ibRegValueField(reg->GetRegistrationPeriod());
-	const ibBackendQueryColumn* type = reg->GetCalculationType()->GetQueryColumn();
+	const std::shared_ptr<const ibBackendQueryColumn> type = reg->GetCalculationType()->GetQueryColumn();
 	v.m_typeId = ibRegFieldOfRole(type, ibColumnRole::ReferenceId);
 
 	// The section is an ordinary query source — what `ChartOfCalculationTypes.<chart>.Displacing` names — so its
 	// fields are asked of it: the owner as a query names it (`Ref`), the displacer type as its own attribute.
 	const ibValueMetaObjectChartOfCalculationTypes* chart = reg->GetChartOfCalculationTypes();
 	const ibValueMetaObjectCalculationTypeRelationTable* displacing = chart != nullptr ? chart->GetDisplacingTable() : nullptr;
-	const ibBackendQueryColumn* owner = displacing != nullptr && displacing->IsAllowed() && displacing->GetCalculationType() != nullptr
+	const std::shared_ptr<const ibBackendQueryColumn> owner = displacing != nullptr && displacing->IsAllowed() && displacing->GetCalculationType() != nullptr
 		? displacing->GetQueryable()->ResolveColumnByName(ibT("Ref")) : nullptr;
 	if (const ibBackendColumnRawDB* rawOwner = owner != nullptr ? owner->AsRawColumn() : nullptr) {
-		const ibBackendQueryColumn* named = displacing->GetCalculationType()->GetQueryColumn();
+		const std::shared_ptr<const ibBackendQueryColumn> named = displacing->GetCalculationType()->GetQueryColumn();
 		for (const ibColumnRole role : { ibColumnRole::ReferenceType, ibColumnRole::ReferenceId }) {
 			const ibString held = ibRegFieldOfRole(type, role), names = ibRegFieldOfRole(named, role);
 			if (!held.IsEmpty() && !names.IsEmpty())
@@ -405,7 +405,7 @@ std::vector<const ibValueMetaObjectAttributeBase*> ibCalcRecordAttributes(const 
 // names, types and ids as on the register, laid out as the register lays a record out (ibCalcRecordLayout), then
 // the resources — so the fact is interchangeable with the register as a source. What it adds is numbered as a
 // derived column.
-const ibBackendQueryable* ibValueMetaObjectCalculationRegister::GetFactSurface() const
+std::shared_ptr<const ibBackendQueryable> ibValueMetaObjectCalculationRegister::GetFactSurface() const
 {
 	const std::vector<const ibValueMetaObjectAttributeBase*> record = ibCalcRecordLayout(this);
 	const std::vector<ibValueMetaObjectResource*> resources = GetResourceArrayObject();
@@ -440,14 +440,14 @@ const ibBackendQueryable* ibValueMetaObjectCalculationRegister::GetFactSurface()
 // ============================================================================
 
 // A piece of a record: the record, and where the piece begins.
-std::vector<const ibBackendQueryColumn*> ibCalcFactQueryable::GetPrimaryKeyColumns() const
+std::vector<std::shared_ptr<const ibBackendQueryColumn>> ibCalcFactQueryable::GetPrimaryKeyColumns() const
 {
 	const std::vector<ibString> names = { m_reg->GetRegisterRecorder()->GetName(), m_reg->GetRegisterLineNumber()->GetName(),
 		m_reg->GetActionPeriodStart()->GetName() };
-	std::vector<const ibBackendQueryColumn*> out;
-	const ibBackendQueryable* surface = NavigationSource();
+	std::vector<std::shared_ptr<const ibBackendQueryColumn>> out;
+	const std::shared_ptr<const ibBackendQueryable> surface = NavigationSource();
 	for (const ibString& name : names)
-		if (const ibBackendQueryColumn* column = surface != nullptr ? surface->ResolveColumnByName(name) : nullptr)
+		if (std::shared_ptr<const ibBackendQueryColumn> column = surface != nullptr ? surface->ResolveColumnByName(name) : nullptr)
 			out.push_back(column);
 	return out;
 }
@@ -489,7 +489,7 @@ ibCalcNarrowing ibCalcNarrowingOf(const ibValueMetaObjectCalculationRegister* re
 	narrows[reg->GetRegisterLineNumber()->GetMetaID()] = { reg->GetRegisterLineNumber(), Reach::Subject, false };
 	narrows[reg->GetRegistrationPeriod()->GetMetaID()] = { reg->GetRegistrationPeriod(), Reach::Subject, true };
 
-	struct Term { const ibBackendQueryColumn* m_col; ibValue m_value; ibQueryBinOp m_op; bool m_everywhere; };
+	struct Term { std::shared_ptr<const ibBackendQueryColumn> m_col; ibValue m_value; ibQueryBinOp m_op; bool m_everywhere; };
 	std::vector<Term> terms;
 	const auto binOp = [](ibQueryFilterOp op, ibQueryBinOp& as) {
 		switch (op) {
@@ -501,8 +501,8 @@ ibCalcNarrowing ibCalcNarrowingOf(const ibValueMetaObjectCalculationRegister* re
 		default:                            return false;
 		}
 	};
-	const ibBackendQueryColumn* recordStart = reg->GetActionPeriodStart()->GetQueryColumn();
-	const ibBackendQueryColumn* recordEnd = reg->GetActionPeriodEnd()->GetQueryColumn();
+	const std::shared_ptr<const ibBackendQueryColumn> recordStart = reg->GetActionPeriodStart()->GetQueryColumn();
+	const std::shared_ptr<const ibBackendQueryColumn> recordEnd = reg->GetActionPeriodEnd()->GetQueryColumn();
 
 	// FOR WHICH DAYS OF ACTION (ibCalcViewArg): the subject's own action period meets them — it ends on
 	// BeginOfActionPeriod or later and begins on EndOfActionPeriod or earlier.
@@ -585,11 +585,11 @@ ibCalcNarrowing ibCalcNarrowingOf(const ibValueMetaObjectCalculationRegister* re
 ibQueryRamTable ibCalcFactQueryable::ComputeRows(const std::vector<ibQueryCondition>& extra) const
 {
 	ibQueryRamTable out;
-	const ibBackendQueryable* surface = NavigationSource();
+	const std::shared_ptr<const ibBackendQueryable> surface = NavigationSource();
 	if (surface == nullptr)
 		return out;
-	const std::vector<const ibBackendQueryColumn*> columns = surface->GetQueryColumns();
-	for (const ibBackendQueryColumn* column : columns)
+	const std::vector<std::shared_ptr<const ibBackendQueryColumn>> columns = surface->GetQueryColumns();
+	for (const std::shared_ptr<const ibBackendQueryColumn>& column : columns)
 		out.AddColumn(column->GetColumnId(), column->GetName(), column->GetTypeDesc());
 	if (!m_reg->IsUseActionPeriod())
 		return out;
@@ -604,8 +604,8 @@ ibQueryRamTable ibCalcFactQueryable::ComputeRows(const std::vector<ibQueryCondit
 	// Every field the published columns read, once each.
 	std::vector<ibQueryProjItem> proj;
 	std::set<ibString> projected;
-	for (const ibBackendQueryColumn* column : columns)
-		for (const ibString& field : ColumnFieldNames(column))
+	for (const std::shared_ptr<const ibBackendQueryColumn>& column : columns)
+		for (const ibString& field : ColumnFieldNames(*column))
 			if (projected.insert(field).second)
 				proj.push_back(ibQueryProjItem{ ibCol(ibT("v"), field), field });
 
@@ -618,18 +618,18 @@ ibQueryRamTable ibCalcFactQueryable::ComputeRows(const std::vector<ibQueryCondit
 	// around the table: nothing puts it there any more.
 	if (m_condition)
 		if (const ibQueryExprPtr exact = ibDbTableProvider::BuildPredicateIR(surface,
-				ibRegConditionOn(surface, m_condition, [](const ibBackendQueryColumn*) { return true; }), ibT("v")))
+				ibRegConditionOn(surface, m_condition, [](const std::shared_ptr<const ibBackendQueryColumn>&) { return true; }), ibT("v")))
 			q.Where(exact);
 	// One buffer for every row, laid down whole (AppendRow, #646).
 	std::vector<ibMetaID> ids;
 	ids.reserve(columns.size());
-	for (const ibBackendQueryColumn* column : columns)
+	for (const std::shared_ptr<const ibBackendQueryColumn>& column : columns)
 		ids.push_back(column->GetColumnId());
 	std::vector<ibValue> cells;
 	ibQueryResult rs = q.Execute();
 	while (rs.Next()) {
 		cells.clear();
-		for (const ibBackendQueryColumn* column : columns)
+		for (const std::shared_ptr<const ibBackendQueryColumn>& column : columns)
 			column->ReadValue(column->GetPhysicalName(), metaData, cells.emplace_back(), rs);
 		out.AppendRow(ids, cells);
 	}
@@ -650,26 +650,20 @@ ibString ibCalcFactSourceDescriptor::GetName() const
 	return m_meta->GetName() + ibT(".") + ibCalcFactName;
 }
 
-const ibBackendQueryable* ibCalcFactSourceDescriptor::CreateQueryable(ibValue** paParams, long lSizeArray)
-{
-	return CreateQueryable(paParams, lSizeArray, {}, ibQueryReadColumns());
-}
-
 // What a query's condition is resolved against: the surface the reading publishes — `ActionPeriodStart` there is a
 // PIECE's first day, and the condition means what the table shows.
-const ibBackendQueryable* ibCalcFactSourceDescriptor::GetConditionScope() const
+std::shared_ptr<const ibBackendQueryable> ibCalcFactSourceDescriptor::GetConditionScope() const
 {
 	return m_meta != nullptr ? m_meta->GetFactSurface() : nullptr;
 }
 
-// Built and KEPT by the base — the same call gives the same object back (queryableFactory.h, MakeCompanion); the
-// condition is part of the call.
-const ibBackendQueryable* ibCalcFactSourceDescriptor::CreateQueryable(ibValue** paParams, long lSizeArray,
+// This call's own reading — its period and its condition are what it is; the asker holds it (queryableFactory.h).
+std::shared_ptr<const ibBackendQueryable> ibCalcFactSourceDescriptor::CreateQueryable(ibValue** paParams, long lSizeArray,
 	const std::vector<ibQueryPredicatePtr>& conditions, const ibQueryReadColumns& /*read*/)
 {
 	if (!m_meta->IsUseActionPeriod())
 		return nullptr;
-	return MakeCompanionFor<ibCalcFactQueryable>(conditions, paParams, lSizeArray, m_meta,
+	return std::make_shared<ibCalcFactQueryable>(m_meta,
 		ibRegArg(paParams, lSizeArray, ibCalcViewArg::Period),
 		ibRegArg(paParams, lSizeArray, ibCalcViewArg::BeginOfActionPeriod), ibRegArg(paParams, lSizeArray, ibCalcViewArg::EndOfActionPeriod),
 		ibRegConsumedCondition(conditions, ibCalcViewArg::Condition));
@@ -703,21 +697,21 @@ void ibCalcFactSourceDescriptor::DescribeParameters(std::vector<ibQuerySourcePar
 // WHAT THE SURFACE PUBLISHES IS WHAT IS SHOWN — the accumulation register's rule (ibRegisterViewColumns). A record's
 // column says what it is itself (ibRegAttributeColumn: the caption, the stored type, the attribute it stands for), so
 // no attribute is swapped in by id: the swap only took away what the surface knows — a section's own name with it.
-static std::vector<const ibBackendQueryColumn*> ibCalcSurfaceColumns(const ibBackendQueryable* surface)
+static std::vector<std::shared_ptr<const ibBackendQueryColumn>> ibCalcSurfaceColumns(const std::shared_ptr<const ibBackendQueryable>& surface)
 {
-	return surface != nullptr ? surface->GetQueryColumns() : std::vector<const ibBackendQueryColumn*>();
+	return surface != nullptr ? surface->GetQueryColumns() : std::vector<std::shared_ptr<const ibBackendQueryColumn>>();
 }
 
-std::vector<const ibBackendQueryColumn*> ibCalcFactSourceDescriptor::GetQueryColumns(const std::vector<ibValue>& /*args*/) const
+std::vector<std::shared_ptr<const ibBackendQueryColumn>> ibCalcFactSourceDescriptor::GetQueryColumns(const std::vector<ibValue>& /*args*/) const
 {
 	return ibCalcSurfaceColumns(m_meta->GetFactSurface());
 }
 
 // What the reading can narrow inside (ComputeRows): the dimensions — every table — and a record's type, month and
 // recorder — the records it produces. Any other condition is correct in the WHERE, applied over the rows once computed.
-std::vector<const ibBackendQueryColumn*> ibCalcFactSourceDescriptor::GetConditionColumns(const ibString& /*slot*/) const
+std::vector<std::shared_ptr<const ibBackendQueryColumn>> ibCalcFactSourceDescriptor::GetConditionColumns(const ibString& /*slot*/) const
 {
-	std::vector<const ibBackendQueryColumn*> out;
+	std::vector<std::shared_ptr<const ibBackendQueryColumn>> out;
 	for (const ibValueMetaObjectDimension* dimension : m_meta->GetDimensionArrayObject())
 		out.push_back(dimension->GetQueryColumn());
 	for (const ibValueMetaObjectAttributeBase* part : { static_cast<const ibValueMetaObjectAttributeBase*>(m_meta->GetCalculationType()),
@@ -985,7 +979,7 @@ void ibCalcReadBase(const ibValueMetaObjectCalculationRegister* reg, const ibCal
 
 			// A paired dimension every record holds the same value of narrows the read by it: one record reads its
 			// own employee, a payroll the history of nobody else.
-			std::vector<std::pair<const ibBackendQueryColumn*, ibValue>> fixed;
+			std::vector<std::pair<std::shared_ptr<const ibBackendQueryColumn>, ibValue>> fixed;
 			for (const auto& one : paired) {
 				bool same = true;
 				for (size_t i = 1; i < records.size() && same; ++i)
@@ -1192,13 +1186,13 @@ std::vector<std::vector<ibValue>> ibCalcReadRecords(const ibValueMetaObjectCalcu
 	if (condition)
 		also(ibDbTableProvider::BuildPredicateIR(reg->GetQueryable(),
 			ibRegConditionOn(reg->GetQueryable(), condition,
-				[reg](const ibBackendQueryColumn* column) { return reg->FindAnyAttributeObjectByFilter(column->GetColumnId()) != nullptr; }),
+				[reg](const std::shared_ptr<const ibBackendQueryColumn>& column) { return reg->FindAnyAttributeObjectByFilter(column->GetColumnId()) != nullptr; }),
 			r));
 
 	std::vector<ibQueryProjItem> proj;
 	std::set<ibString> projected;
 	for (const ibValueMetaObjectAttributeBase* attribute : record)
-		for (const ibString& field : ColumnFieldNames(attribute->GetQueryColumn()))
+		for (const ibString& field : ColumnFieldNames(*attribute->GetQueryColumn()))
 			if (projected.insert(field).second)
 				proj.push_back(ibQueryProjItem{ ibCol(r, field), field });
 
@@ -1215,7 +1209,7 @@ std::vector<std::vector<ibValue>> ibCalcReadRecords(const ibValueMetaObjectCalcu
 	while (rs.Next()) {
 		std::vector<ibValue> one(record.size());
 		for (size_t at = 0; at < record.size(); ++at) {
-			const ibBackendQueryColumn* column = record[at]->GetQueryColumn();
+			const std::shared_ptr<const ibBackendQueryColumn> column = record[at]->GetQueryColumn();
 			column->ReadValue(column->GetPhysicalName(), metaData, one[at], rs);
 		}
 		records.push_back(std::move(one));
@@ -1351,7 +1345,7 @@ ibCalcBaseAsked ibCalcBaseAskedOf(const ibValueMetaObjectCalculationRegister* re
 // register's names, types and ids); every numeric resource of the base register as `<Resource>Base`, a sum; every
 // field of it the base can be broken down by as `<Field>Section`, typed and laid out as the field. The last two are
 // numbered as derived columns of what they are of (ibCalcBaseColumn).
-const ibBackendQueryable* ibValueMetaObjectCalculationRegister::GetBaseSurface(const ibValueMetaObjectCalculationRegister* base) const
+std::shared_ptr<const ibBackendQueryable> ibValueMetaObjectCalculationRegister::GetBaseSurface(const ibValueMetaObjectCalculationRegister* base) const
 {
 	if (base == nullptr)
 		return nullptr;
@@ -1386,15 +1380,15 @@ const ibBackendQueryable* ibValueMetaObjectCalculationRegister::GetBaseSurface(c
 }
 
 // A record and its section: the recorder, the line, and every section asked for.
-std::vector<const ibBackendQueryColumn*> ibCalcBaseQueryable::GetPrimaryKeyColumns() const
+std::vector<std::shared_ptr<const ibBackendQueryColumn>> ibCalcBaseQueryable::GetPrimaryKeyColumns() const
 {
 	std::vector<ibString> names = { m_reg->GetRegisterRecorder()->GetName(), m_reg->GetRegisterLineNumber()->GetName() };
 	for (const auto& section : m_asked.m_sections)
 		names.push_back(section.second->GetName() + ibCalcBaseSectionName);
-	std::vector<const ibBackendQueryColumn*> out;
-	const ibBackendQueryable* surface = NavigationSource();
+	std::vector<std::shared_ptr<const ibBackendQueryColumn>> out;
+	const std::shared_ptr<const ibBackendQueryable> surface = NavigationSource();
 	for (const ibString& name : names)
-		if (const ibBackendQueryColumn* column = surface != nullptr ? surface->ResolveColumnByName(name) : nullptr)
+		if (std::shared_ptr<const ibBackendQueryColumn> column = surface != nullptr ? surface->ResolveColumnByName(name) : nullptr)
 			out.push_back(column);
 	return out;
 }
@@ -1406,10 +1400,10 @@ std::vector<const ibBackendQueryColumn*> ibCalcBaseQueryable::GetPrimaryKeyColum
 ibQueryRamTable ibCalcBaseQueryable::ComputeRows(const std::vector<ibQueryCondition>& extra) const
 {
 	ibQueryRamTable out;
-	const ibBackendQueryable* surface = NavigationSource();
+	const std::shared_ptr<const ibBackendQueryable> surface = NavigationSource();
 	if (surface == nullptr)
 		return out;
-	for (const ibBackendQueryColumn* column : surface->GetQueryColumns())
+	for (const std::shared_ptr<const ibBackendQueryColumn>& column : surface->GetQueryColumns())
 		out.AddColumn(column->GetColumnId(), column->GetName(), column->GetTypeDesc());
 
 	const std::vector<const ibValueMetaObjectAttributeBase*> record = ibCalcRecordAttributes(m_reg);
@@ -1472,20 +1466,15 @@ ibString ibCalcBaseSourceDescriptor::GetName() const
 	return m_meta->GetName() + ibT(".") + ibCalcBaseName + m_base->GetName();
 }
 
-const ibBackendQueryable* ibCalcBaseSourceDescriptor::CreateQueryable(ibValue** paParams, long lSizeArray)
-{
-	return CreateQueryable(paParams, lSizeArray, {}, ibQueryReadColumns());
-}
-
 // What a condition is resolved against: the surface the reading publishes.
-const ibBackendQueryable* ibCalcBaseSourceDescriptor::GetConditionScope() const
+std::shared_ptr<const ibBackendQueryable> ibCalcBaseSourceDescriptor::GetConditionScope() const
 {
 	return m_meta != nullptr ? m_meta->GetBaseSurface(m_base) : nullptr;
 }
 
-// Built and KEPT by the base — the same call gives the same object back (queryableFactory.h, MakeCompanion); the
-// question is asked of the arguments here, so a name the base register does not have is refused before a row is read.
-const ibBackendQueryable* ibCalcBaseSourceDescriptor::CreateQueryable(ibValue** paParams, long lSizeArray,
+// This call's own reading, held by the asker (queryableFactory.h); the question is asked of the arguments here, so a
+// name the base register does not have is refused before a row is read.
+std::shared_ptr<const ibBackendQueryable> ibCalcBaseSourceDescriptor::CreateQueryable(ibValue** paParams, long lSizeArray,
 	const std::vector<ibQueryPredicatePtr>& conditions, const ibQueryReadColumns& /*read*/)
 {
 	const ibValue actionFrom = ibRegArg(paParams, lSizeArray, ibCalcBaseArg::BeginOfActionPeriod);
@@ -1494,7 +1483,7 @@ const ibBackendQueryable* ibCalcBaseSourceDescriptor::CreateQueryable(ibValue** 
 	if (!m_meta->IsUseActionPeriod() && (!actionFrom.IsEmpty() || !actionTo.IsEmpty()))
 		ibBackendCoreException::Error(_("%s: register '%s' keeps no action periods - leave BeginOfActionPeriod and EndOfActionPeriod out"),
 			GetName(), m_meta->GetName());
-	return MakeCompanionFor<ibCalcBaseQueryable>(conditions, paParams, lSizeArray, m_meta, m_base,
+	return std::make_shared<ibCalcBaseQueryable>(m_meta, m_base,
 		ibCalcBaseAskedOf(m_meta, m_base, ibRegArg(paParams, lSizeArray, ibCalcBaseArg::Dimensions),
 			ibRegArg(paParams, lSizeArray, ibCalcBaseArg::BaseDimensions), ibRegArg(paParams, lSizeArray, ibCalcBaseArg::Sections)),
 		ibRegArg(paParams, lSizeArray, ibCalcBaseArg::Period), actionFrom, actionTo,
@@ -1536,15 +1525,15 @@ void ibCalcBaseSourceDescriptor::DescribeParameters(std::vector<ibQuerySourcePar
 }
 
 // What the base's surface publishes (ibCalcSurfaceColumns) — a record's columns, a figure and a section alike.
-std::vector<const ibBackendQueryColumn*> ibCalcBaseSourceDescriptor::GetQueryColumns(const std::vector<ibValue>& /*args*/) const
+std::vector<std::shared_ptr<const ibBackendQueryColumn>> ibCalcBaseSourceDescriptor::GetQueryColumns(const std::vector<ibValue>& /*args*/) const
 {
 	return ibCalcSurfaceColumns(m_meta->GetBaseSurface(m_base));
 }
 
 // What the records can be selected by inside: their own fields.
-std::vector<const ibBackendQueryColumn*> ibCalcBaseSourceDescriptor::GetConditionColumns(const ibString& /*slot*/) const
+std::vector<std::shared_ptr<const ibBackendQueryColumn>> ibCalcBaseSourceDescriptor::GetConditionColumns(const ibString& /*slot*/) const
 {
-	std::vector<const ibBackendQueryColumn*> out;
+	std::vector<std::shared_ptr<const ibBackendQueryColumn>> out;
 	const auto append = [&out](const ibValueMetaObjectAttributeBase* field) {
 		if (field != nullptr)
 			out.push_back(field->GetQueryColumn());
@@ -1656,7 +1645,7 @@ std::vector<ibString> ibCalcScheduleAskedSums(const ibValueMetaObjectCalculation
 // ⭐ THE SHAPE SCHEDULEDATA PUBLISHES — a record's own columns (ibRegAttributeColumn: the register's names, types
 // and ids) and, for every numeric resource of the schedule, a sum of it over each of the record's periods, named
 // `<Resource><Period>` and numbered as derived columns of that resource.
-const ibBackendQueryable* ibValueMetaObjectCalculationRegister::GetScheduleDataSurface() const
+std::shared_ptr<const ibBackendQueryable> ibValueMetaObjectCalculationRegister::GetScheduleDataSurface() const
 {
 	const std::vector<const ibValueMetaObjectAttributeBase*> record = ibCalcRecordAttributes(this);
 	const std::vector<const ibValueMetaObjectResource*> resources = ibCalcScheduleResources(ibCalcScheduleRegister(this));
@@ -1684,12 +1673,12 @@ const ibBackendQueryable* ibValueMetaObjectCalculationRegister::GetScheduleDataS
 	});
 }
 
-std::vector<const ibBackendQueryColumn*> ibCalcScheduleDataQueryable::GetPrimaryKeyColumns() const
+std::vector<std::shared_ptr<const ibBackendQueryColumn>> ibCalcScheduleDataQueryable::GetPrimaryKeyColumns() const
 {
-	std::vector<const ibBackendQueryColumn*> out;
-	const ibBackendQueryable* surface = NavigationSource();
+	std::vector<std::shared_ptr<const ibBackendQueryColumn>> out;
+	const std::shared_ptr<const ibBackendQueryable> surface = NavigationSource();
 	for (const ibString& name : { m_reg->GetRegisterRecorder()->GetName(), m_reg->GetRegisterLineNumber()->GetName() })
-		if (const ibBackendQueryColumn* column = surface != nullptr ? surface->ResolveColumnByName(name) : nullptr)
+		if (std::shared_ptr<const ibBackendQueryColumn> column = surface != nullptr ? surface->ResolveColumnByName(name) : nullptr)
 			out.push_back(column);
 	return out;
 }
@@ -1702,10 +1691,10 @@ std::vector<const ibBackendQueryColumn*> ibCalcScheduleDataQueryable::GetPrimary
 ibQueryRamTable ibCalcScheduleDataQueryable::ComputeRows(const std::vector<ibQueryCondition>& extra) const
 {
 	ibQueryRamTable out;
-	const ibBackendQueryable* surface = NavigationSource();
+	const std::shared_ptr<const ibBackendQueryable> surface = NavigationSource();
 	if (surface == nullptr)
 		return out;
-	for (const ibBackendQueryColumn* column : surface->GetQueryColumns())
+	for (const std::shared_ptr<const ibBackendQueryColumn>& column : surface->GetQueryColumns())
 		out.AddColumn(column->GetColumnId(), column->GetName(), column->GetTypeDesc());
 
 	const ibMetaData* metaData = m_reg->GetMetaData();
@@ -1764,7 +1753,7 @@ ibQueryRamTable ibCalcScheduleDataQueryable::ComputeRows(const std::vector<ibQue
 		if (m_condition)
 			if (const ibQueryExprPtr exact = ibDbTableProvider::BuildPredicateIR(m_reg->GetQueryable(),
 					ibRegConditionOn(m_reg->GetQueryable(), m_condition,
-						[this](const ibBackendQueryColumn* column) { return m_reg->FindAnyAttributeObjectByFilter(column->GetColumnId()) != nullptr; }),
+						[this](const std::shared_ptr<const ibBackendQueryColumn>& column) { return m_reg->FindAnyAttributeObjectByFilter(column->GetColumnId()) != nullptr; }),
 					alias))
 				where = ibBinOp(ibQueryBinOp::And, where, exact);
 		return where;
@@ -1810,7 +1799,7 @@ ibQueryRamTable ibCalcScheduleDataQueryable::ComputeRows(const std::vector<ibQue
 		std::set<ibString> projected;
 		for (size_t at = 0; at < record.size(); ++at)
 			if (needed[at])
-				for (const ibString& field : ColumnFieldNames(record[at]->GetQueryColumn()))
+				for (const ibString& field : ColumnFieldNames(*record[at]->GetQueryColumn()))
 					if (projected.insert(field).second)
 						proj.push_back(ibQueryProjItem{ ibCol(r, field), field });
 
@@ -1823,7 +1812,7 @@ ibQueryRamTable ibCalcScheduleDataQueryable::ComputeRows(const std::vector<ibQue
 			std::vector<ibValue> one(record.size());
 			for (size_t at = 0; at < record.size(); ++at)
 				if (needed[at]) {
-					const ibBackendQueryColumn* column = record[at]->GetQueryColumn();
+					const std::shared_ptr<const ibBackendQueryColumn> column = record[at]->GetQueryColumn();
 					column->ReadValue(column->GetPhysicalName(), metaData, one[at], rs);
 				}
 			records.push_back(std::move(one));
@@ -1842,7 +1831,7 @@ ibQueryRamTable ibCalcScheduleDataQueryable::ComputeRows(const std::vector<ibQue
 	// share is a plain equality the index rides.
 	ibCalcNarrowing narrowed = narrowing;
 	{
-		std::vector<std::pair<const ibBackendQueryColumn*, ibValue>> shared;
+		std::vector<std::pair<std::shared_ptr<const ibBackendQueryColumn>, ibValue>> shared;
 		for (const ibValueMetaObjectDimension* dimension : m_reg->GetDimensionArrayObject()) {
 			const size_t at = placeOf(dimension);
 			if (at >= record.size())
@@ -1877,7 +1866,7 @@ ibQueryRamTable ibCalcScheduleDataQueryable::ComputeRows(const std::vector<ibQue
 	std::vector<std::vector<ibNumber>> sums(records.size(), std::vector<ibNumber>(periods.size() * resources.size()));
 
 	// The links: a record's field and the schedule dimension it answers for.
-	std::vector<std::pair<const ibBackendQueryColumn*, const ibBackendQueryColumn*>> links;
+	std::vector<std::pair<std::shared_ptr<const ibBackendQueryColumn>, std::shared_ptr<const ibBackendQueryColumn>>> links;
 	for (const ibCalcScheduleLink& link : scheduleDesc.GetLinks()) {
 		const ibValueMetaObjectAttributeBase* dimension = metaData->FindAnyObjectByFilter<ibValueMetaObjectAttributeBase>(link.m_dimension, true);
 		const size_t at = std::find_if(record.begin(), record.end(),
@@ -1936,7 +1925,7 @@ ibQueryRamTable ibCalcScheduleDataQueryable::ComputeRows(const std::vector<ibQue
 	// record: a piece belongs to its record, and two records with the same pieces are not the same question — asking
 	// the walk twice would cost more than it saves.
 	const auto sumOver = [&](ibQueryRelPtr source, const ibString& alias, ibQueryExprPtr where, const std::vector<Span>& spans,
-			const std::vector<const ibBackendQueryColumn*>& by, bool fold,
+			const std::vector<std::shared_ptr<const ibBackendQueryColumn>>& by, bool fold,
 			const std::function<const std::vector<size_t>*(const std::vector<ibValue>&)>& whom) {
 		if (spans.empty() || by.empty() || std::find(by.begin(), by.end(), nullptr) != by.end())
 			return;
@@ -1962,8 +1951,8 @@ ibQueryRamTable ibCalcScheduleDataQueryable::ComputeRows(const std::vector<ibQue
 		// the fields the key is made of, once each — what the pass is grouped by, and what it is read back through
 		std::vector<ibQueryProjItem> proj;
 		std::set<ibString> projected;
-		for (const ibBackendQueryColumn* column : by)
-			for (const ibString& field : ColumnFieldNames(column))
+		for (const std::shared_ptr<const ibBackendQueryColumn>& column : by)
+			for (const ibString& field : ColumnFieldNames(*column))
 				if (projected.insert(field).second)
 					proj.push_back(ibQueryProjItem{ ibCol(alias, field), field });
 
@@ -1997,7 +1986,7 @@ ibQueryRamTable ibCalcScheduleDataQueryable::ComputeRows(const std::vector<ibQue
 			++sumRows;
 			++passRows;
 			std::vector<ibValue> key;
-			for (const ibBackendQueryColumn* column : by) {
+			for (const std::shared_ptr<const ibBackendQueryColumn>& column : by) {
 				ibValue value;
 				column->ReadValue(column->GetPhysicalName(), metaData, value, rs);
 				key.push_back(value);
@@ -2024,8 +2013,8 @@ ibQueryRamTable ibCalcScheduleDataQueryable::ComputeRows(const std::vector<ibQue
 			m_reg->GetName(), alias == r ? ibT("the records") : ibT("the pieces"), over, pass.Ms(), passRows);
 	};
 
-	const ibBackendQueryColumn* recorderColumn = m_reg->GetRegisterRecorder()->GetQueryColumn();
-	const ibBackendQueryColumn* lineColumn = m_reg->GetRegisterLineNumber()->GetQueryColumn();
+	const std::shared_ptr<const ibBackendQueryColumn> recorderColumn = m_reg->GetRegisterRecorder()->GetQueryColumn();
+	const std::shared_ptr<const ibBackendQueryColumn> lineColumn = m_reg->GetRegisterLineNumber()->GetQueryColumn();
 
 	// ⭐⭐ WHICH RECORDS CAN LOSE A DAY — the ones a displacer MEETS (MeetsDisplacer), asked of the database once, by
 	// the record's own key. Every other record keeps its action period whole, so its actual action period is the sum
@@ -2044,8 +2033,8 @@ ibQueryRamTable ibCalcScheduleDataQueryable::ComputeRows(const std::vector<ibQue
 			q.From(ibScan(spec.m_records, r));
 			std::vector<ibQueryProjItem> proj;
 			std::set<ibString> projected;
-			for (const ibBackendQueryColumn* column : { recorderColumn, lineColumn })
-				for (const ibString& field : ColumnFieldNames(column))
+			for (const std::shared_ptr<const ibBackendQueryColumn>& column : { recorderColumn, lineColumn })
+				for (const ibString& field : ColumnFieldNames(*column))
 					if (projected.insert(field).second)
 						proj.push_back(ibQueryProjItem{ ibCol(r, field), field });
 			q.Project(proj);
@@ -2114,7 +2103,7 @@ ibQueryRamTable ibCalcScheduleDataQueryable::ComputeRows(const std::vector<ibQue
 		// A field of the question the record does not carry leaves the pass grouped by the record, as it always was.
 		const bool answerable = !question.empty() && std::none_of(question.begin(), question.end(),
 			[&placeOf, &record](const ibValueMetaObjectAttributeBase* field) { return field == nullptr || placeOf(field) >= record.size(); });
-		std::vector<const ibBackendQueryColumn*> by;
+		std::vector<std::shared_ptr<const ibBackendQueryColumn>> by;
 		std::map<std::vector<ibValue>, std::vector<size_t>> askedBy;   // the records behind one question
 		if (answerable) {
 			for (const ibValueMetaObjectAttributeBase* field : question)
@@ -2155,7 +2144,7 @@ ibQueryRamTable ibCalcScheduleDataQueryable::ComputeRows(const std::vector<ibQue
 		// each field the way the fact publishes it, which is not the way the register's table stores it. Asked about
 		// the records a displacer meets, and no others — the same condition the copy above went by, so the two cannot
 		// come to different answers about one record.
-		const ibBackendQueryable* factSurface = m_reg->GetFactSurface();
+		const std::shared_ptr<const ibBackendQueryable> factSurface = m_reg->GetFactSurface();
 		if (anyMeets && factSurface != nullptr) {
 			const ibCalcNarrowing byMeeting = [narrowed, spec](const ibString& alias, bool subject) {
 				ibQueryExprPtr all = narrowed ? narrowed(alias, subject) : nullptr;
@@ -2228,40 +2217,21 @@ ibString ibCalcScheduleDataSourceDescriptor::GetName() const
 	return m_meta->GetName() + ibT(".") + ibCalcScheduleDataName;
 }
 
-const ibBackendQueryable* ibCalcScheduleDataSourceDescriptor::CreateQueryable(ibValue** paParams, long lSizeArray)
-{
-	return CreateQueryable(paParams, lSizeArray, {}, ibQueryReadColumns());
-}
-
 // What a condition is resolved against: the surface the reading publishes.
-const ibBackendQueryable* ibCalcScheduleDataSourceDescriptor::GetConditionScope() const
+std::shared_ptr<const ibBackendQueryable> ibCalcScheduleDataSourceDescriptor::GetConditionScope() const
 {
 	return m_meta != nullptr ? m_meta->GetScheduleDataSurface() : nullptr;
 }
 
-// Where the records keep action periods and a schedule is bound — the days and what they are counted against. Built
-// and kept by the base, the condition part of the call (queryableFactory.h, MakeCompanion).
-const ibBackendQueryable* ibCalcScheduleDataSourceDescriptor::CreateQueryable(ibValue** paParams, long lSizeArray,
+// Where the records keep action periods and a schedule is bound — the days and what they are counted against: this
+// call's own reading, held by the asker (queryableFactory.h). ⚠ WHICH SUMS ARE READ IS PART OF IT — the rows carry
+// them, so the reading is handed what the query reads (ibCalcScheduleAskedSums).
+std::shared_ptr<const ibBackendQueryable> ibCalcScheduleDataSourceDescriptor::CreateQueryable(ibValue** paParams, long lSizeArray,
 	const std::vector<ibQueryPredicatePtr>& conditions, const ibQueryReadColumns& read)
 {
 	if (!m_meta->IsUseActionPeriod() || !m_meta->GetScheduleDesc().IsOk())
 		return nullptr;
-	// ⚠ WHICH SUMS ARE READ IS PART OF THE CALL: the rows carry them, so two queries over the same arguments, one
-	// reading the base period's hours and one not, are two readings. Said to the companion store as one more
-	// argument after the ones the call wrote — a key of the arguments alone would hand the second query the first
-	// one's rows, with a column it asked for left at zero (MakeCompanionFor, queryableFactory.h).
-	ibString sums;
-	for (const ibString& name : ibCalcScheduleAskedSums(m_meta, read))
-		sums += name + ibT(";");
-	std::vector<ibValue> args;
-	for (long i = 0; i < lSizeArray; ++i)
-		args.push_back(paParams != nullptr && paParams[i] != nullptr ? *paParams[i] : ibValue());
-	args.push_back(ibValue(sums));
-	std::vector<ibValue*> keyed;
-	for (ibValue& arg : args)
-		keyed.push_back(&arg);
-
-	return MakeCompanionFor<ibCalcScheduleDataQueryable>(conditions, keyed.data(), static_cast<long>(keyed.size()), m_meta,
+	return std::make_shared<ibCalcScheduleDataQueryable>(m_meta,
 		ibRegArg(paParams, lSizeArray, ibCalcViewArg::Period),
 		ibRegArg(paParams, lSizeArray, ibCalcViewArg::BeginOfActionPeriod), ibRegArg(paParams, lSizeArray, ibCalcViewArg::EndOfActionPeriod),
 		ibRegConsumedCondition(conditions, ibCalcViewArg::Condition), read);
@@ -2290,9 +2260,9 @@ void ibCalcScheduleDataSourceDescriptor::DescribeParameters(std::vector<ibQueryS
 }
 
 // What the records can be selected by inside: their own fields.
-std::vector<const ibBackendQueryColumn*> ibCalcScheduleDataSourceDescriptor::GetConditionColumns(const ibString& /*slot*/) const
+std::vector<std::shared_ptr<const ibBackendQueryColumn>> ibCalcScheduleDataSourceDescriptor::GetConditionColumns(const ibString& /*slot*/) const
 {
-	std::vector<const ibBackendQueryColumn*> out;
+	std::vector<std::shared_ptr<const ibBackendQueryColumn>> out;
 	const auto append = [&out](const ibValueMetaObjectAttributeBase* field) {
 		if (field != nullptr)
 			out.push_back(field->GetQueryColumn());
@@ -2308,7 +2278,7 @@ std::vector<const ibBackendQueryColumn*> ibCalcScheduleDataSourceDescriptor::Get
 }
 
 // What the schedule's surface publishes (ibCalcSurfaceColumns) — a record's columns and its sums alike.
-std::vector<const ibBackendQueryColumn*> ibCalcScheduleDataSourceDescriptor::GetQueryColumns(const std::vector<ibValue>& /*args*/) const
+std::vector<std::shared_ptr<const ibBackendQueryColumn>> ibCalcScheduleDataSourceDescriptor::GetQueryColumns(const std::vector<ibValue>& /*args*/) const
 {
 	return ibCalcSurfaceColumns(m_meta->GetScheduleDataSurface());
 }

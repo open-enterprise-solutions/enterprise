@@ -127,23 +127,23 @@ int SqlCount(ibDatabaseLayerSQLite& db, const ibString& fromJoin)
 // Run the RAM join core and return its row count. outCols span both sides so the
 // result is the full joined row (id, name, amount); fromLeft tags each.
 int RamJoinCount(const ibQueryRamTable& cust, const ibQueryRamTable& sale,
-                 const TestCol& custId, const TestCol& saleCustId,
-                 const TestCol& custName, const TestCol& saleAmt,
+                 const std::shared_ptr<const TestCol>& custId, const std::shared_ptr<const TestCol>& saleCustId,
+                 const std::shared_ptr<const TestCol>& custName, const std::shared_ptr<const TestCol>& saleAmt,
                  ibQueryJoinKind kind)
 {
-	const std::vector<const ibBackendQueryColumn*> outCols = { &custId, &custName, &saleAmt };
-	const std::vector<bool>                        fromLeft = { true,    true,      false   };
-	return (int) ibQueryComposer::JoinRamTables(cust, sale, &custId, &saleCustId, outCols, fromLeft, kind).RowCount();
+	const std::vector<std::shared_ptr<const ibBackendQueryColumn>> outCols  = { custId, custName, saleAmt };
+	const std::vector<bool>                                        fromLeft = { true,   true,     false   };
+	return (int) ibQueryComposer::JoinRamTables(cust, sale, custId, saleCustId, outCols, fromLeft, kind).RowCount();
 }
 
 struct JoinParityFix : ::testing::Test {
-	TestCol               custId{ wxT("id"),     CUST_ID };
-	TestCol               custName{ wxT("name"), CUST_NAME };
-	TestCol               saleCustId{ wxT("custid"), SALE_CUSTID };
-	TestCol               saleAmt{ wxT("amount"),    SALE_AMT };
-	ibQueryRamTable       cust = MakeCustRam();
-	ibQueryRamTable       sale = MakeSaleRam();
-	ibDatabaseLayerSQLite db;
+	std::shared_ptr<const TestCol> custId     = std::make_shared<TestCol>(wxT("id"),     CUST_ID);
+	std::shared_ptr<const TestCol> custName   = std::make_shared<TestCol>(wxT("name"),   CUST_NAME);
+	std::shared_ptr<const TestCol> saleCustId = std::make_shared<TestCol>(wxT("custid"), SALE_CUSTID);
+	std::shared_ptr<const TestCol> saleAmt    = std::make_shared<TestCol>(wxT("amount"), SALE_AMT);
+	ibQueryRamTable                cust       = MakeCustRam();
+	ibQueryRamTable                sale       = MakeSaleRam();
+	ibDatabaseLayerSQLite          db;
 	void SetUp() override { ASSERT_TRUE(MakeSqlFixture(db)) << "SQLite in-memory fixture failed to open"; }
 };
 

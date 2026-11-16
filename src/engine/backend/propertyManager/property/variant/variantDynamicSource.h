@@ -4,17 +4,19 @@
 #include "backend/backend_core.h"
 #include "core/variant.h"
 
+#include <memory>
+
 class BACKEND_API ibBackendQueryable;
 class ibQueryableSourceDescriptor;
 class ibPropertyObject;   // the OWNING property object — its GetMetaData() gives the SPECIFIC config to resolve through
 class BACKEND_API ibMetaData;
 
 // The property value holding the chosen SOURCE — kept as the source's STABLE table id, NOT a cached
-// queryable pointer. The queryable is OWNED by the metaobject's source descriptor (the factory
-// vends `&m_queryable`); caching that pointer dangles the moment the source is deleted or the
-// metadata image is rebuilt (use-after-free — a freed descriptor's vtable is garbage). So we store
-// the id and RE-RESOLVE through the factory on demand: a live source resolves to its current
-// queryable, a deleted one resolves to null — never a stale pointer. Mirrors the property's own
+// queryable pointer. The queryable is asked of the source's descriptor (a table hands out its own
+// `m_queryable`, shared without owning); caching that pointer dangles the moment the source is deleted
+// or the metadata image is rebuilt (use-after-free — a freed descriptor's vtable is garbage). So we
+// store the id and RE-RESOLVE the descriptor through the factory on demand: a live source answers with
+// its current queryable, a deleted one with null — never a stale pointer. Mirrors the property's own
 // serialization, which already round-trips the source as its table id. Equality compares the id.
 class BACKEND_API ibVariantDynamicSource : public ibVariant {
 public:
@@ -24,14 +26,14 @@ public:
 	// it was created, never in a global/active one). We keep the METADATA, not the owner pointer: a form-attribute's
 	// dynamic list is TRANSIENT (re-materialised on a Type change) while the grid's display cell (a COPY) outlives
 	// it — storing the owner would then dangle and crash on the next paint. The config metadata outlives the list.
-	ibVariantDynamicSource(const ibBackendQueryable* queryable = nullptr, const ibPropertyObject* owner = nullptr);
+	ibVariantDynamicSource(const std::shared_ptr<const ibBackendQueryable>& queryable = nullptr, const ibPropertyObject* owner = nullptr);
 	ibVariantDynamicSource(const ibVariantDynamicSource& src)
 		: ibVariant(ibValueTypes::TYPE_VALUE), m_tableId(src.m_tableId), m_metaData(src.m_metaData) {}
 
 	// Resolve the chosen source LIVE through the factory — null when none is picked or the source
-	// was deleted (never a stale/dangling pointer).
-	const ibBackendQueryable* GetQueryable() const;
-	void SetQueryable(const ibBackendQueryable* queryable);
+	// was deleted (never a stale/dangling pointer). Held by the caller for as long as it reads.
+	std::shared_ptr<const ibBackendQueryable> GetQueryable() const;
+	void SetQueryable(const std::shared_ptr<const ibBackendQueryable>& queryable);
 
 	// ⭐⭐ THE ID, KEPT AS AN ID — what READING a stored source does.
 	//

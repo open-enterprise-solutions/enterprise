@@ -137,6 +137,7 @@ struct ibTraceRow {
 	ibString   m_app;
 	ibString   m_level;
 	ibString   m_thread;
+	ibString   m_base;      // the base the line is about, where its thread worked for one
 	ibString   m_source;
 	ibString   m_message;
 };
@@ -333,6 +334,16 @@ void TraceParseInto(const ibString& file, const ibString& app, std::vector<ibTra
 		rest = rest.AfterFirst(ibT(' ')).Trim(false);
 		row.m_thread = rest.BeforeFirst(ibT(' '));
 		rest = rest.AfterFirst(ibT(' ')).Trim(false);
+
+		// `(base) source` for a line about a base (ibTechJournal::Write). Read as the source it hid the real one:
+		// `source: query` matched no line of a process that had a base open.
+		if (rest.StartsWith(ibT("("))) {
+			const size_t closing = rest.find(ibString(ibT(") ")));
+			if (closing != ibString::npos) {
+				row.m_base = rest.Mid(1, closing - 1);
+				rest = rest.Mid(closing + 2).Trim(false);
+			}
+		}
 		row.m_source = rest.BeforeFirst(ibT(' '));
 		row.m_message = rest.AfterFirst(ibT(' ')).Trim(false);
 
@@ -720,6 +731,8 @@ public:
 			entry->SetValue(ibT("app"), row.m_app);
 			entry->SetValue(ibT("level"), row.m_level);
 			entry->SetValue(ibT("thread"), row.m_thread);
+			if (!row.m_base.IsEmpty())
+				entry->SetValue(ibT("base"), row.m_base);
 			entry->SetValue(ibT("source"), row.m_source);
 			entry->SetValue(ibT("message"), row.m_message);
 

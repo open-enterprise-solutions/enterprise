@@ -88,14 +88,14 @@ inline void BindAbsentPrimitive(ibQueryStatement* st, ibColumnRole role, int& po
 // answered in one pass over its classes, each answer the one DescribeColumnLayout gets from ContainType
 // and its reference test, so the field SET and ORDER are byte-identical to the layout (and thus to the DDL).
 template <class BindActive, class BindRef>
-void DriveSpread(const ibBackendQueryColumn* col, int tag,
+void DriveSpread(const ibBackendQueryColumn& col, int tag,
                  ibQueryStatement* st, int& pos, BindActive bindActive, BindRef bindRef)
 {
 	// The SAME description the layout used — what a value may BE, characteristic redirection included.
 	// This driver has to agree with DescribeColumnLayout slot for slot: the INSERT's column list comes
 	// from the layout, the parameters come from here, and a slot one of them knows about and the other
 	// does not shifts every parameter after it one position early (see the note further down).
-	const ibTypeDescription& td = col->GetTypeValueDesc();
+	const ibTypeDescription& td = col.GetTypeValueDesc();
 	st->SetParamInt(pos++, tag);   // _TYPE discriminator
 
 	// WHICH SLOTS THE COLUMN HAS, in ONE pass over the classes its type admits — each answer exactly the one

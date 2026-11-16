@@ -18,7 +18,7 @@ class ibDataNode;
 // activeMetaData — the configuration the calling thread's session works in: its own reference
 // (ibSession::GetMetaData), else its base's active one (ibApplicationInstance::m_activeMetaData, held for
 // the sessions to come); reached through the thin appEnv accessor. nullptr in modes that don't host
-// metadata (launcher, codeRunner). See backend/appEnv.h for the rationale on the namespace-fasad over
+// metadata (launcher, coderunner). See backend/appEnv.h for the rationale on the namespace-fasad over
 // appData's static getters.
 #define activeMetaData			(appEnv::ActiveMetaData())
 //////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -200,6 +200,12 @@ public:
 	// Construction itself stays gated on ib::AppDataCtorToken.
 	virtual bool OnInitialize(const int flag) { return true; }
 	virtual bool OnDestroy() { return true; }
+
+	// …and the base's configuration REPLACED (ibApplicationInstance::ReplaceActiveMetaData, under the lock that guards
+	// its holder): `metaData` put in `active`, the one before handed back. Its sessions keep it and work on; it is
+	// told here that the base no longer runs it — what it compiles from now it does not save (ibByteCodeStorage::Detach).
+	static std::shared_ptr<ibMetaDataConfigurationBase> Replace(
+		std::shared_ptr<ibMetaDataConfigurationBase>& active, std::shared_ptr<ibMetaDataConfigurationBase> metaData);
 };
 
 class BACKEND_API ibMetaDataConfigurationFile : public ibMetaDataConfigurationBase {

@@ -27,9 +27,9 @@
 // forty thousand records a month. So the records carry the dimensions and the type, in that order, as one
 // lookup index — as many leading columns as the engine's index holds (ibDeclareLookupIndex). The fact finds a
 // record's displacers by it too: the same dimension values, of a type the Displacing section names.
-static std::vector<const ibBackendQueryColumn*> ibCalcLookupKey(const ibValueMetaObjectCalculationRegister* reg)
+static std::vector<std::shared_ptr<const ibBackendQueryColumn>> ibCalcLookupKey(const ibValueMetaObjectCalculationRegister* reg)
 {
-	std::vector<const ibBackendQueryColumn*> key;
+	std::vector<std::shared_ptr<const ibBackendQueryColumn>> key;
 	for (const ibValueMetaObjectDimension* dimension : reg->GetDimensionArrayObject())
 		key.push_back(dimension->GetQueryColumn());
 	if (reg->GetCalculationType() != nullptr)
@@ -43,7 +43,7 @@ void ibValueMetaObjectCalculationRegister::ContributeTables(ibSchemaSnapshot& ou
 	// (Get(Period, Filter)), on the table the base has just declared.
 	ibValueMetaObjectRegisterData::ContributeTables(out);
 	{
-		const ibBackendQueryable* own = GetQueryable();
+		const std::shared_ptr<const ibBackendQueryable> own = GetQueryable();
 		ibSchemaTable& t = out.Shared(own->GetQueryTableId(), own->GetQueryTableName());
 		ibDeclareLookupIndex(t, t.m_name + ibT("_DIX"), ibCalcLookupKey(this));
 		ibDeclareLookupIndex(t, t.m_name + ibT("_RIX"), { GetRegistrationPeriod()->GetQueryColumn() });
@@ -56,9 +56,9 @@ void ibValueMetaObjectCalculationRegister::ContributeTables(ibSchemaSnapshot& ou
 	// once — each its own transaction, neither seeing the other's row — the second stands beside the first instead of
 	// failing its posting on a unique index. A reader lists positions once, and a clear takes every copy.
 	if (HasRecalculation()) {
-		const ibRecalculationQueryable* marks = GetRecalculationQueryable();
+		const std::shared_ptr<const ibRecalculationQueryable> marks = GetRecalculationQueryable();
 		ibSchemaTable& t = out.CreateSchemaTable(marks);
-		for (const ibBackendQueryColumn* column : marks->GetQueryColumns())
+		for (const std::shared_ptr<const ibBackendQueryColumn>& column : marks->GetQueryColumns())
 			t.Add(column);
 		ibDeclareLookupIndex(t, t.m_name + ibT("_LIX"), marks->GetPrimaryKeyColumns());
 	}

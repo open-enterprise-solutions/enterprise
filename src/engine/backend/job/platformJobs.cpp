@@ -27,23 +27,21 @@ namespace {
 //
 // Why this is safe to run unattended, and why the manager needs nothing extra
 // for it (docs/private/register-totals-strategy.md § 6a):
-//   - figures MOVE by arithmetic (col = col + delta, computed by the DB), so a
-//     posting landing mid-fold composes with the adjustment instead of being
-//     overwritten by it;
-//   - a drained row is deleted only when provably empty;
-//   - one transaction per KEY, so a row lock lives three statements;
-//   - the frontier is DERIVED, never stored — there is no "how far did we get"
-//     state to keep, and therefore none to get out of step;
+//   - the DATABASE folds, one slice (a unit and a period) per MERGE — nothing is
+//     read into the process, whatever the table holds;
+//   - a pass folds the period that closed LAST in each unit, never the history
+//     behind it, so its cost does not grow with the base;
+//   - one SNAPSHOT transaction per slice that never waits: a row a posting
+//     changed or holds is a conflict, the slice rolls back and folds next pass,
+//     so the posting never waits longer than one slice;
+//   - that period is DERIVED from the unit and the clock, never stored — there
+//     is no "how far did we get" state to keep, and none to get out of step;
 //   - not running is safe: shards read exactly right at any distribution, so a
 //     missed pass costs a slightly wider read and nothing else.
 //
-// The one hazard is TWO folds on the SAME table at once — both move the same
-// figure, one drains a row to zero and deletes it while the other still holds
-// its value, and the key's total grows. Serialising is free here: this is ONE
-// job walking every table, and the worker pool dispatches a session's tasks
-// strictly FIFO under a lease, so a second pass cannot start while the first
-// is running. Parallel-by-table would need a session per table and a lock per
-// table; it buys little, since the contention is rows rather than CPU.
+// Two folds on one table meet as a conflict too, so they need no lock of their
+// own; this is ONE job walking every table anyway, and the worker pool
+// dispatches a session's tasks strictly FIFO under a lease.
 bool FoldTotals(ibSession* session)
 {
 	if (session == nullptr || activeMetaData == nullptr)

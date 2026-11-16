@@ -40,40 +40,16 @@
 #define __IB_BYTECODE_CACHE_H__
 
 #include "backend/backend.h"
+#include "core/guid.h"                  // LoadAll's rows are keyed by descriptor…
+#include "core/memory/memoryBuffer.h"   // …and are the blobs as they were saved
 
-#include <memory>
+#include <functional>
+#include <map>
 
 struct ibByteCode;   // defined as struct in compiler/byteCode.h
-class ibGuid;
 
 class BACKEND_API ibByteCodeCache {
 public:
-	// ⭐ A MODULE NOBODY HAS COMPILED YET IS COMPILED ONCE, WHOEVER ELSE ASKS MEANWHILE. Ten sessions
-	// entering a base whose cache is empty all miss, and without this all ten compile the same module.
-	//
-	// The first to miss holds the module's key in sys_lock_key, the mutex for one key (lockManager.cpp):
-	// an UPDATE of its row, not committed, on a connection of its own, so it holds nothing of its session's.
-	// The others' updates stand behind that row in the database. Saved, the transaction commits with the
-	// cache row in it, the next one gets the key and reads what was saved. Not saved — the compile failed,
-	// the session died — the transaction goes back, and the next one finds no row in the cache and compiles.
-	//
-	// ⚠ HELD ACROSS THE COMPILE ONLY, in the scope of that compile. Its transaction takes the thread's
-	// db_query channel when that is free (ibConnectionPool::SetActiveTxConnection), so what this thread
-	// reads meanwhile goes through it. A compile writes nothing, which is what makes that harmless.
-	class ibRowLock {
-	public:
-		ibRowLock();
-		~ibRowLock();
-		// Waits for the key and holds it; if the database could not be asked, holds nothing. Either way
-		// read the cache again: somebody may have finished meanwhile, and a miss then compiles.
-		void Acquire(const ibGuid& descId, const ibString& configMd5);
-		// Writes the row and lets it go. false — nothing is held, or the write failed.
-		bool Save(const ibByteCode& bc);
-	private:
-		struct ibHeld;
-		std::unique_ptr<ibHeld> m_held;
-	};
-
 	// Persist a compiled bytecode. Identity (descriptor_id, bytecode
 	// version) is taken from `bc.m_id` / `bc.m_version`; the blob is
 	// produced by SerializeAOT. UPSERT semantics — re-saves overwrite
@@ -101,13 +77,26 @@ public:
 	static ibString EngineFingerprint();
 
 	// Try to populate `outBc` from cache. Returns:
-	//   true  — row found, blob deserialized successfully. outBc is
-	//           fully populated except for live pointers (m_parent,
-	//           m_dependencies) which the caller wires up.
-	//   false — no row, or DeserializeAOT rejected the blob (magic /
-	//           format-version mismatch). Caller treats as miss and
+	//   true  — row found, blob deserialized, its dependencies resolved
+	//           (ResolveAndVerifyDependencies). outBc is fully populated
+	//           except for m_parent, which the caller wires up.
+	//   false — no row, DeserializeAOT rejected the blob (magic /
+	//           format-version mismatch), or a dependency is missing or
+	//           moved — that row is invalidated. Caller treats as miss and
 	//           recompiles from source.
 	static bool Load(ibByteCode& outBc, const ibGuid& descId, const ibString& configMd5);
+
+	// ⭐ A MODULE NOBODY HAS COMPILED YET IS COMPILED ONCE, WHOEVER ELSE ASKS MEANWHILE. Ten sessions entering a base
+	// whose cache is empty all miss, and without this all ten compile the same module. A miss holds the module's key
+	// (the row lock, byteCodeCache.cpp), reads again, and only then has `compile` make the bytecode, saved under that
+	// key. false — `compile` failed.
+	static bool Load(ibByteCode& outBc, const ibGuid& descId, const ibString& configMd5,
+		const std::function<bool(ibByteCode&)>& compile);
+
+	// Every row of a configuration, in ONE statement: the blobs as they were saved, by descriptor. What the
+	// configuration's ibByteCodeStorage (metaData.h) reads as the configuration opens, so that a session coming up
+	// does not read its modules' rows one by one. Empty when there are none, or when the base could not be asked.
+	static std::map<ibGuid, ibMemoryBuffer> LoadAll(const ibString& configMd5);
 
 	// DELETE the cache row for one descriptor. Used by Designer's
 	// OnSaveMetaObject / OnDeleteMetaObject hooks to keep the cache

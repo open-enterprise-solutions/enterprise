@@ -148,8 +148,11 @@ struct ibMaterializeSpec
 	// The period key: which key column holds the truncated period, and the movement expression it
 	// is truncated FROM. Empty column = this table has no period dimension.
 	ibString       m_periodColumn;
+	ibString       m_periodUnitColumn;                  // the key column holding a row's unit; empty = one unit, no such column
 	ibString       m_periodSourceExpr;                  // SQL over {row}
-	ibTotalsPeriod m_periodUnit = ibTotalsPeriod::Month; // the STORED grain — the floor on what can be read back
+	// The STORED units, FINEST FIRST — each its own rows, every movement written into the row of each. front()
+	// is the stored grain: the floor on what can be read back. More than one only with m_periodUnitColumn.
+	std::vector<ibTotalsPeriod> m_periodUnits = { ibTotalsPeriod::Month };
 
 	std::vector<ibMaterializeDelta> m_deltas;
 
@@ -323,6 +326,15 @@ struct ibMaterializeReadSpec
 	ibQueryRelPtr m_storedRows;
 	ibQueryRelPtr m_movedRows;
 
+	// ⭐ THE UNITS THE STORED ROWS ARE KEPT IN (ibMaterializeSpec::m_periodUnits, finest first), and the column
+	// that says which unit a row is of. A movement stands once in each, so for any day a reading takes the row
+	// of ONE unit — the coarsest that fits what it asks (RenderMaterializedRead, the stored arm): a balance as
+	// of a date is the years behind it and a few rows more. Each unit's rows are a selection of their own —
+	// the unit an equality, the period a range, the filters beside them — so each rides an index whole.
+	// Empty = the rows are of one unit, no such column.
+	std::vector<ibTotalsPeriod> m_storedUnits;
+	ibString                    m_periodUnitColumn;
+
 	// What the statement calls either relation of rows — the qualifier m_filters were lowered with. The
 	// two halves are separate SELECTs, so one name serves both, and a filter walking a reference (a
 	// correlated EXISTS) finds its outer row under it in each.
@@ -368,7 +380,9 @@ struct ibMaterializeReadSpec
 
 	// Where the stored arm ENDS: the start of the grain holding the upper boundary. INVALID is not
 	// "no boundary" — it means the question does not reach below the stored grain, so the movement
-	// arm is excluded outright, which is also the cheapest way to say "sleep".
+	// arm is excluded outright, which is also the cheapest way to say "sleep". Invalid WITH a head
+	// split (below): there is no upper boundary, the stored arm runs to its last row and the movement
+	// arm answers the head alone.
 	ibValue m_floor;
 
 	// Where the stored arm BEGINS: the first WHOLE grain at or after the lower boundary. An interval
@@ -421,6 +435,9 @@ BACKEND_API ibQueryRelPtr RenderMaterializedRead(const ibMaterializeReadSpec& sp
 // Movements: the source, each figure the movement's contribution (ibMaterializeDelta::m_valueIR),
 // under the guard and m_periodIsDateIR. Null when the spec carries no read forms (ToReadSpec fills
 // them) — a reading has nothing to cut with then, and says so rather than counting without the guard.
+//
+// ⚠ A table that keeps several units (m_periodUnitColumn) gives the rows of EVERY unit, under that column: a
+// movement stands once in each, so they are read only with the unit said — ibMaterializeReadSpec::m_storedUnits.
 BACKEND_API ibQueryRelPtr RenderStoredRows(const ibMaterializeSpec& spec, const ibMaterializeView& view);
 BACKEND_API ibQueryRelPtr RenderMovementRows(const ibMaterializeSpec& spec, const ibMaterializeView& view);
 
@@ -501,6 +518,10 @@ BACKEND_API unsigned int EffectiveShardCount(const ibMaterializeSpec& spec,
 // detail the view absorbs, and nothing above L3 ever names it.
 BACKEND_API const ibChar* ShardColumnName();
 
+// Name of the unit column on a table that keeps several period units (m_periodUnitColumn). Fixed for the
+// shard column's reason: nothing above L3 names it.
+BACKEND_API const ibChar* PeriodUnitColumnName();
+
 // Name of the key-hash column. Fixed for the same reason as the shard column: nothing above L3 names
 // it, and a configurable name would be one more thing two layers could spell differently.
 BACKEND_API const ibChar* KeyHashColumnName();
@@ -551,5 +572,28 @@ BACKEND_API unsigned int ibIndexFieldCapacity(const ibDatabaseLayer& conn);
 // and a fill that could only read the driver's would be untestable on the engine the suite runs on.
 BACKEND_API bool ibFillKeyHashes(ibDatabaseLayer& conn, const ibMaterializeSpec& spec,
                                  const ibMaterializationDialect* mat = nullptr);
+
+// ⭐⭐ FOLD ONE SLICE OF A SPLIT TABLE — the rows of one stored unit and one period — to one row per key.
+//
+// THE DATABASE DOES IT, in one MERGE over the slice: grouped by key, a key spread over shards gets its whole
+// figure in its lowest shard present, and its other rows are deleted. Nothing is read out into the process, so
+// a slice costs the engine's work and no memory here, whatever it holds. The fold that read every (key, shard)
+// into a map died at 3.5 GB on a register of four million rows (2026-11-16); a year of that register folds
+// here in about a second, and a slice already folded is one grouping read.
+//
+// A key is matched as the trigger matches it, field by field (m_deltaKeyMatchItem), so rows the table keeps
+// apart stay apart. A key with two rows under one shard — a NULL the unique index does not guard — is left as
+// it is: no statement can tell those rows apart, and a split key reads exactly right anyway.
+//
+// THE CALLER OWNS THE TRANSACTION, and it must be a SNAPSHOT. The MERGE writes the sum it read: under
+// read-committed a figure a writer added to the absorber meanwhile would be overwritten by it, while a snapshot
+// makes that a conflict (thrown; the caller rolls the slice back). A row a writer inserted meanwhile is
+// invisible and stays.
+//
+// An engine that never splits (EffectiveShardCount 1 — SQLite) has nothing to fold: true at once, which also
+// spares it the MERGE it does not have. `unit` is ignored on a table that keeps one unit, `period` on a table
+// without a period. True when done or when nothing is split here; a refusal throws.
+BACKEND_API bool ibFoldShards(ibDatabaseLayer& conn, const ibMaterializeSpec& spec, ibTotalsPeriod unit,
+                              const ibDateTime& period);
 
 #endif // !__DATABASE_MATERIALIZE_BUILDER_H__

@@ -51,9 +51,9 @@ std::vector<const TField*> NamedAmong(const ibValue& list, const std::vector<TFi
 
 // A column of the reading by the name it publishes it under: a dimension by its own, a resource's figure as
 // `<Resource>Balance`.
-const ibBackendQueryColumn* PublishedAs(const ibBackendQueryable& reading, const ibString& name)
+std::shared_ptr<const ibBackendQueryColumn> PublishedAs(const ibBackendQueryable& reading, const ibString& name)
 {
-	for (const ibBackendQueryColumn* column : reading.GetQueryColumns())
+	for (const std::shared_ptr<const ibBackendQueryColumn>& column : reading.GetQueryColumns())
 		if (column != nullptr && column->GetName() == name)
 			return column;
 	return nullptr;
@@ -87,13 +87,13 @@ ibValue ibValueManagerDataObjectAccumulationRegister::Balance(const ibValue& cPe
 	// summed under its own name. The value table holds nothing but the balance, so `<Resource>Balance` — one figure
 	// among several in a query — is not what its column is called here. Nothing is folded or renamed after the read.
 	// The Structure a script passes becomes the condition — the same converter the query door uses.
-	ibBalanceQueryable balance(m_metaObject, cPeriod, ibRegFilterPredicate(m_metaObject, cFilter));
+	const auto balance = std::make_shared<ibBalanceQueryable>(m_metaObject, cPeriod, ibRegFilterPredicate(m_metaObject, cFilter));
 	ibDataQueryBuilder b;
-	b.From(&balance);
+	b.From(balance);
 	ibQueryRamTable rows;
-	std::vector<const ibBackendQueryColumn*> groups;
+	std::vector<std::shared_ptr<const ibBackendQueryColumn>> groups;
 	for (const ibValueMetaObjectDimension* dimension : dimensions) {
-		const ibBackendQueryColumn* const column = PublishedAs(balance, dimension->GetName());
+		const std::shared_ptr<const ibBackendQueryColumn> column = PublishedAs(*balance, dimension->GetName());
 		if (column == nullptr)
 			continue;
 		b.GroupBy(column);
@@ -102,7 +102,7 @@ ibValue ibValueManagerDataObjectAccumulationRegister::Balance(const ibValue& cPe
 	}
 	std::vector<ibString> sums;
 	for (const ibValueMetaObjectResource* resource : resources) {
-		const ibBackendQueryColumn* const column = PublishedAs(balance, resource->GetName() + ibRegFigure::Balance);
+		const std::shared_ptr<const ibBackendQueryColumn> column = PublishedAs(*balance, resource->GetName() + ibRegFigure::Balance);
 		if (column == nullptr)
 			continue;
 		b.Aggregate(ibDataQueryBuilder::AggregateFn::Sum, column, resource->GetName());
@@ -133,11 +133,12 @@ ibValue ibValueManagerDataObjectAccumulationRegister::Turnovers(const ibValue& c
 	// script and the same word written in a query mean the same thing.
 	const ibRegFold fold = ibReadRegisterFold(cPeriodicity);
 
-	ibTurnoverQueryable turnover(m_metaObject, cBeginOfPeriod, cEndOfPeriod, ibRegFilterPredicate(m_metaObject, cFilter), fold);
-	ibDataQueryResult selection = ibDataQueryBuilder().From(&turnover).Execute(ibReadPageRequest{});
+	const auto turnover = std::make_shared<ibTurnoverQueryable>(m_metaObject, cBeginOfPeriod, cEndOfPeriod,
+		ibRegFilterPredicate(m_metaObject, cFilter), fold);
+	ibDataQueryResult selection = ibDataQueryBuilder().From(turnover).Execute(ibReadPageRequest{});
 	// ⚠ AND THE PERIODICITY IS WHY THE LIST COULD NOT STAY HAND-WRITTEN. Asked for months, this
 	// reading publishes a `Period` column that the old list did not know about at all — it enumerated
 	// dimensions and figures and nothing else. The shape knows, because the shape is what produced it.
-	return ibRegSelectionToTable(selection, &turnover);
+	return ibRegSelectionToTable(selection, turnover);
 }
 

@@ -104,7 +104,7 @@ public:
 	// The projection (no Select = ALL the first source's columns). A name may be a dot-walk path; the typed
 	// overload pulls the name out of the column object.
 	ibDataComposer& Select(const ibString& nameOrPath);
-	ibDataComposer& Select(const ibBackendQueryColumn* col) {
+	ibDataComposer& Select(const std::shared_ptr<const ibBackendQueryColumn>& col) {
 		return col != nullptr ? Select(col->GetName()) : *this;
 	}
 
@@ -673,7 +673,7 @@ public:
 	// FROM, its JOINs and a map of transient tables in hand, "which of these is THE source" has no
 	// answer that is not a guess, and a guess in that shape is a defect waiting for the second
 	// source to arrive (Max, 2026-08-29: *"that primary source already looks like rubbish"*).
-	void BuildPrintLevels(bool tree, const class ibBackendQueryable* source = nullptr);
+	void BuildPrintLevels(bool tree, const std::shared_ptr<const class ibBackendQueryable>& source = nullptr);
 
 	// --- output -------------------------------------------------------------------
 
@@ -1349,7 +1349,8 @@ public:
 
 	// The queryable itself — registered through the auxiliary per-query temp registry, rendered as "FROM
 	// Temp.t0"; the lowering resolves the name straight back to the live queryable (NO metadata round-trip).
-	ibDataDBComposer& FromSource(const ibBackendQueryable* queryable);
+	// Held for as long as the composer reads it — it is the one reading.
+	ibDataDBComposer& FromSource(const std::shared_ptr<const ibBackendQueryable>& queryable);
 
 	// The author's verbatim L4-1 query — used as is, never edited. Mutually exclusive with FromSource.
 	ibDataDBComposer& FromText(const ibString& text);
@@ -1652,7 +1653,7 @@ private:
 	{
 		bool                  m_ready = false;
 		ibQueryTempTableStore m_store;
-		std::map<ibString, const ibBackendQueryable*> m_sources;
+		std::map<ibString, std::shared_ptr<const ibBackendQueryable>> m_sources;
 
 		// ⭐ ONE ACT, ONE NAME. "Let go of what was prepared" was written out as three lines in four
 		// places — and three lines repeated four times is a verb nobody named, which is how the day
@@ -1682,8 +1683,8 @@ private:
 	std::vector<Source> m_sources;      // factory sources (first = FROM, rest = JOIN)
 
 	// Transient (RAM / temp) sources registered via FromSource(queryable) without a metaobject identity —
-	// keyed by the unique local name rendered into the text (t0, t1, …). NON-OWNING.
-	std::map<ibString, const ibBackendQueryable*> m_directSources;
+	// keyed by the unique local name rendered into the text (t0, t1, …). Held: the composer reads them.
+	std::map<ibString, std::shared_ptr<const ibBackendQueryable>> m_directSources;
 
 	// ⭐ WHAT THE SOURCE'S FIELDS ARE, and what the source says of each — whether this base's functional options
 	// leave it available, what it is called, what it is in a balance. Worked out when the source is bound

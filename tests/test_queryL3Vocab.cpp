@@ -13,7 +13,7 @@
 
 namespace {
 
-// Minimal column — only identity is needed (the factories store the pointer; they call no methods).
+// Minimal column — only identity is needed (the factories store the share; they call no methods).
 class TestCol : public ibBackendQueryColumn {
 public:
 	TestCol(const ibString& name, ibMetaID id) : m_name(name), m_id(id) {}
@@ -31,14 +31,14 @@ private:
 
 TEST(QueryL3Vocab, PredicateTree_Factories)
 {
-	TestCol code(wxT("Code"), 1);
+	const auto code = std::make_shared<TestCol>(wxT("Code"), 1);
 
 	ibQueryCondition c;
-	c.m_col   = &code;
+	c.m_col   = code;
 	c.m_value = ibValue(ibT("A-01"));
 	const ibQueryPredicatePtr leaf = ibQueryPredicate::Leaf(c);
 	ASSERT_EQ(leaf->m_kind, ibQueryPredicateKind::Leaf);
-	EXPECT_EQ(leaf->m_leaf.m_col, &code);
+	EXPECT_EQ(leaf->m_leaf.m_col, code);
 
 	// (Code = 'A-01') OR NOT (Code = 'A-01')
 	const ibQueryPredicatePtr tree =
@@ -50,48 +50,49 @@ TEST(QueryL3Vocab, PredicateTree_Factories)
 	ASSERT_EQ(tree->m_children[1]->m_children.size(), 1u);
 
 	// IS NOT NULL
-	const ibQueryPredicatePtr nul = ibQueryPredicate::Null(&code, /*negated*/true);
+	const ibQueryPredicatePtr nul = ibQueryPredicate::Null(code, /*negated*/true);
 	EXPECT_EQ(nul->m_kind, ibQueryPredicateKind::IsNull);
-	EXPECT_EQ(nul->m_col, &code);
+	EXPECT_EQ(nul->m_col, code);
 	EXPECT_TRUE(nul->m_negated);
 	EXPECT_TRUE(nul->m_path.empty());   // plain column (size-1 path collapses to no path)
 }
 
 TEST(QueryL3Vocab, PredicateLeaf_CarriesDotWalkPath)
 {
-	TestCol producer(wxT("Producer"), 1), region(wxT("Region"), 2);
+	const auto producer = std::make_shared<TestCol>(wxT("Producer"), 1);
+	const auto region   = std::make_shared<TestCol>(wxT("Region"), 2);
 	ibQueryCondition c;
-	c.m_col  = &region;                                   // the leaf
-	c.m_path = { &producer, &region };                    // Producer.Region — a reference dot-walk
+	c.m_col  = region;                                    // the leaf
+	c.m_path = { producer, region };                      // Producer.Region — a reference dot-walk
 	const ibQueryPredicatePtr leaf = ibQueryPredicate::Leaf(c);
 	ASSERT_EQ(leaf->m_leaf.m_path.size(), 2u);
-	EXPECT_EQ(leaf->m_leaf.m_path.back(), &region);
+	EXPECT_EQ(leaf->m_leaf.m_path.back(), region);
 }
 
 TEST(QueryL3Vocab, ColumnExpr_ArithmeticTree)
 {
-	TestCol qty(wxT("Qty"), 1);
+	const auto qty = std::make_shared<TestCol>(wxT("Qty"), 1);
 
 	// Qty * 2
 	const ibQueryColumnExprPtr e = ibQueryColumnExpr::Arith(
 		ibQueryColumnArithOp::Mul,
-		ibQueryColumnExpr::Col(&qty),
+		ibQueryColumnExpr::Col(qty),
 		ibQueryColumnExpr::Const(ibValue(2.0)));
 
 	ASSERT_EQ(e->m_kind, ibQueryColumnExprKind::Arith);
 	EXPECT_EQ(e->m_arith, ibQueryColumnArithOp::Mul);
 	ASSERT_EQ(e->m_lhs->m_kind, ibQueryColumnExprKind::Column);
-	EXPECT_EQ(e->m_lhs->m_col, &qty);
+	EXPECT_EQ(e->m_lhs->m_col, qty);
 	EXPECT_EQ(e->m_rhs->m_kind, ibQueryColumnExprKind::Const);
 }
 
 TEST(QueryL3Vocab, ColumnExpr_CaseTree)
 {
-	TestCol qty(wxT("Qty"), 1);
+	const auto qty = std::make_shared<TestCol>(wxT("Qty"), 1);
 
 	// CASE WHEN (Qty IS NOT NULL) THEN Qty ELSE 0 END
-	auto when = ibQueryPredicate::Null(&qty, /*negated*/true);
-	auto then = ibQueryColumnExpr::Col(&qty);
+	auto when = ibQueryPredicate::Null(qty, /*negated*/true);
+	auto then = ibQueryColumnExpr::Col(qty);
 
 	auto e = std::make_shared<ibQueryColumnExpr>();
 	e->m_kind = ibQueryColumnExprKind::Case;
@@ -101,7 +102,7 @@ TEST(QueryL3Vocab, ColumnExpr_CaseTree)
 	ASSERT_EQ(e->m_kind, ibQueryColumnExprKind::Case);
 	ASSERT_EQ(e->m_cases.size(), 1u);
 	EXPECT_EQ(e->m_cases[0].first->m_kind, ibQueryPredicateKind::IsNull);
-	EXPECT_EQ(e->m_cases[0].second->m_col, &qty);
+	EXPECT_EQ(e->m_cases[0].second->m_col, qty);
 	ASSERT_TRUE(e->m_else != nullptr);
 	EXPECT_EQ(e->m_else->m_kind, ibQueryColumnExprKind::Const);
 }

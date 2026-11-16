@@ -20,19 +20,19 @@ class ibValueMetaObjectTableDataRef;    // DB-backed tabular section (reference 
 class BACKEND_API ibTabularQueryable : public ibBackendQueryable {
 public:
 	explicit ibTabularQueryable(const ibValueMetaObjectTableDataRef* meta) : m_meta(meta) {}
-	virtual std::vector<const ibBackendQueryColumn*> GetQueryColumns() const override;                   // the owner Ref + the section's own attributes
+	virtual std::vector<std::shared_ptr<const ibBackendQueryColumn>> GetQueryColumns() const override;                   // the owner Ref + the section's own attributes
 	virtual ibString GetQueryTableName() const override;
 	virtual ibString GetQueryName() const override;   // the section's user-facing name (change ledger)
 	virtual const ibMetaData* GetMetaData() const override;                  // metadata context for column-based value reads
 	virtual const ibUniqueKey& GetQueryTableGuid() const override;    // stated, not derived — see the body (its metaobject is a composite)
 	virtual ibMetaID GetQueryTableId() const override;
-	// The owner reference, as a field of the section — built on demand, kept because a queryable
-	// hands out column POINTERS.
-	const ibBackendQueryColumn* OwnerRefColumn() const;
+	// The owner reference, as a field of the section — built on demand, kept because a column is
+	// known by its identity: one built anew per call would be another column each time.
+	std::shared_ptr<const ibBackendQueryColumn> OwnerRefColumn() const;
 
 private:
 	const ibValueMetaObjectTableDataRef*    m_meta;
-	mutable std::unique_ptr<ibBackendColumnRawDB>  m_ownerRef;
+	mutable std::shared_ptr<const ibBackendColumnRawDB>  m_ownerRef;
 	mutable std::once_flag                         m_ownerRefOnce;   // every session of the base asks it
 };
 
@@ -47,19 +47,21 @@ public:
 	explicit ibTabularSourceDescriptor(ibValueMetaObjectTableDataRef* meta);
 	ibString GetNamespace() const override;
 	ibString GetName() const override;
-	const ibBackendQueryable* CreateQueryable(ibValue** paParams, long lSizeArray) override;
-	const ibBackendQueryable* GetQueryable() const { return &m_queryable; }   // the metaobject's GetQueryable() forwards here
+	std::shared_ptr<const ibBackendQueryable> CreateQueryable(ibValue** paParams, long lSizeArray,
+	                                                          const std::vector<ibQueryPredicatePtr>& conditions,
+	                                                          const ibQueryReadColumns& read) override;
+	std::shared_ptr<const ibBackendQueryable> GetQueryable() const { return m_queryable; }   // the metaobject's GetQueryable() forwards here
 	// WHAT COLUMNS THIS SECTION HAS, asked without reading a row — the query constructor's
 	// catalogue and every other reader of a source's shape. A tabular section answers with its own
 	// attributes (line number + the columns declared in it); left unanswered, the base filled
 	// nothing and a section stood in the tree as a leaf that could be joined and selected from.
-	std::vector<const ibBackendQueryColumn*> GetQueryColumns(const std::vector<ibValue>& args) const override;
+	std::vector<std::shared_ptr<const ibBackendQueryColumn>> GetQueryColumns(const std::vector<ibValue>& args) const override;
 	// …and the SOURCE's side — the section's real columns, its attributes as themselves, for a list or a report
 	// that binds to them.
 	void FillSourceExplorer(ibSourceDataObject::ibSourceExplorer& explorer) const override;
 private:
-	ibValueMetaObjectTableDataRef* m_meta;
-	ibTabularQueryable             m_queryable;
+	ibValueMetaObjectTableDataRef*      m_meta;
+	std::shared_ptr<ibTabularQueryable> m_queryable;
 };
 
 // ibValueMetaObjectTableData — the SHARED BASE for tabular sections (the generic "a tabular
@@ -73,7 +75,7 @@ class BACKEND_API ibValueMetaObjectTableData : public ibValueMetaObjectComposite
 public:
 
 	// base default vends NO queryable (no physical table); the DB leaf overrides this.
-	virtual const ibBackendQueryable* GetQueryable() const override { return nullptr; }
+	virtual std::shared_ptr<const ibBackendQueryable> GetQueryable() const override { return nullptr; }
 
 	// A tabular section a form binds a table to may belong to a functional option, and its fields with it.
 	virtual bool IsFunctionalOptionAllowed() const override { return true; }
@@ -235,7 +237,7 @@ class BACKEND_API ibValueMetaObjectTableDataRef : public ibValueMetaObjectTableD
 	virtual ~ibValueMetaObjectTableDataRef();
 
 	// the metaobject VENDS its queryable (via the L4 source descriptor it owns) — the common interface.
-	virtual const ibBackendQueryable* GetQueryable() const override { return m_queryable.GetQueryable(); }
+	virtual std::shared_ptr<const ibBackendQueryable> GetQueryable() const override { return m_queryable.GetQueryable(); }
 
 	//physical DB table — only the DB variant has one.
 	virtual ibString GetPhysicalTableName() const {

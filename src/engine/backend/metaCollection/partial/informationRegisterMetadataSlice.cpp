@@ -45,7 +45,7 @@ static ibString RecorderIdField(const ibValueMetaObjectInformationRegister* meta
 	if (recorder == nullptr)
 		return ibString();
 
-	for (const ibColumnSlot& slot : DescribeColumnLayout(recorder->GetQueryColumn()))
+	for (const ibColumnSlot& slot : DescribeColumnLayout(*recorder->GetQueryColumn()))
 		if (slot.m_role == ibColumnRole::ReferenceId)
 			return slot.m_name;
 	return ibString();
@@ -145,11 +145,12 @@ ibQueryRamTable ibValueMetaObjectInformationRegister::ComputeSlice(
 		//                   so it stands over the finished slice, where it means what it says.
 		//
 		// Each half is lowered by the door that writes every other WHERE (a walk is a correlated EXISTS).
-		const ibBackendQueryable* registerTable = meta->GetQueryable();
+		const std::shared_ptr<const ibBackendQueryable> registerTable = meta->GetQueryable();
 		ibQueryPredicatePtr byKey, overSlice;
 		{
-			const std::function<bool(const ibBackendQueryColumn*)> anyField = [](const ibBackendQueryColumn*) { return true; };
-			const std::function<bool(const ibBackendQueryColumn*)> isKey = ibRegSelectsByDimensions(meta);
+			const std::function<bool(const std::shared_ptr<const ibBackendQueryColumn>&)> anyField =
+				[](const std::shared_ptr<const ibBackendQueryColumn>&) { return true; };
+			const std::function<bool(const std::shared_ptr<const ibBackendQueryColumn>&)> isKey = ibRegSelectsByDimensions(meta);
 			std::function<void(const ibQueryPredicatePtr&)> split = [&](const ibQueryPredicatePtr& node) {
 				if (!node)
 					return;

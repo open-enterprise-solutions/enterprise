@@ -3039,7 +3039,7 @@ bool ibValueRecordDataObjectHierarchyRef::DeleteObject()
 // the GetRecordDescription virtual hook on RecorderRef.
 
 
-void ibValueRecordDataObjectRecorderRef::ibRecorderRegister::CreateRecordSet()
+void ibValueRecordDataObjectRecorderRef::ibRecorderRegister::CreateRecordSet(bool newRecorder)
 {
 	if (m_recorder == nullptr)
 		return;   // the registry's empty form (type_members): no recorder, no registers - `Write` alone (2026-11-14)
@@ -3059,6 +3059,8 @@ void ibValueRecordDataObjectRecorderRef::ibRecorderRegister::CreateRecordSet()
 		ibASSERT(registerRecord);
 		ibValuePtr<ibValueRecordSetObject> recordSet(metaObject->CreateRecordSetObjectValue());
 		recordSet->SetKeyValue(registerRecord->GetMetaID(), m_recorder->GetReference());
+		if (newRecorder)
+			recordSet->m_selected = ibValueRecordSetObject::ibSelection::NothingStored;
 		m_records.insert_or_assign(metaObject->GetMetaID(), recordSet);
 	}
 
@@ -3339,7 +3341,9 @@ bool ibValueRecordDataObjectRecorderRef::WriteObject(ibDocumentWriteMode writeMo
 		return refuse(_("%s: failed to save the object data"));
 
 	if (newObject) {
-		m_registerRecords->CreateRecordSet();
+		// No movement of it is stored yet: its sets write without locking and deleting what is not there (measured
+		// 2026-11-16: a SELECT … WITH LOCK and a DELETE per register per new document, a quarter of its posting's queries).
+		m_registerRecords->CreateRecordSet(/*newRecorder*/ true);
 		m_sequenceRecords->CreateRecordSet();
 	}
 
@@ -3619,7 +3623,7 @@ bool ibValueRecordManagerObject::InitializeObject(const ibUniqueKeyPair& key)
 
 	if (!appData->DesignerMode()) {
 		if (ReadData(key)) {
-			m_recordSet->m_selected = false; // is new 
+			m_recordSet->m_selected = ibValueRecordSetObject::ibSelection::NotSelected; // is new
 			m_recordSet->Modify(true); // and modify
 		}
 		else {
@@ -3664,7 +3668,7 @@ ibBackendValueForm* ibValueRecordManagerObject::GetForm() const
 	if (!m_objGuid.isValid())
 		return nullptr;
 	// Same as the object's own GetForm above — asked plainly, and a process with no forms says so.
-	if (m_recordSet->m_selected)
+	if (m_recordSet->Selected())
 		return ibBackendValueForm::FindFormBySourceUniqueKey(m_objGuid);
 	return nullptr;
 }
@@ -3902,7 +3906,7 @@ ibValuePtr<ibValueRecordSetObject> ibValueRecordSetObject::CopyRegisterValue()
 
 ibValueRecordSetObject::ibValueRecordSetObject(const ibValueMetaObjectRegisterData* metaObject, const ibUniqueKeyPair& uniqueKey) : ibValueModelStorage(),
 ibRuntimeModuleDataObject(m_members, this),
-m_objModified(false), m_selected(false),
+m_objModified(false), m_selected(ibSelection::NotSelected),
 // ⭐⭐ A SET MADE WITHOUT A KEY HAS NO FILTER AT ALL — not a filter of empty values.
 //
 // The filter's `Use` IS the key's PRESENCE here: setting Use = True inserts the entry, False erases
@@ -3924,7 +3928,7 @@ m_recordColumnCollection(new ibValueRecordSetObjectRegisterColumnCollection(this
 
 ibValueRecordSetObject::ibValueRecordSetObject(const ibValueRecordSetObject& source) : ibValueModelStorage(),
 ibRuntimeModuleDataObject(m_members, this),
-m_objModified(true), m_selected(false),
+m_objModified(true), m_selected(ibSelection::NotSelected),
 m_keyValues(source.m_keyValues), m_metaObject(source.m_metaObject),
 m_recordColumnCollection(new ibValueRecordSetObjectRegisterColumnCollection(this)), m_recordSetKeyValue(new ibValueRecordSetObjectRegisterKeyValue(this))
 {
@@ -4158,6 +4162,23 @@ ibValue ibValueRecordSetObject::AdjustValue(const ibMetaID& id, const ibValue& v
 {
 	const ibValueMetaObjectAttributeBase* attribute = m_recordColumnCollection->GetAttributeByID(id);
 	return attribute != nullptr ? attribute->AdjustValue(value) : ibTabularDataObject::AdjustValue(id, value);
+}
+
+// The columns linked to `edited`, in one walk over the set's own column map — each judged by its attribute's link
+// and parameters, as the record object judges its fields (ibValueRecordDataObject::GetLinked). The table's road
+// (ibValueModel::GetLinked) takes the columns by index, and an index into this map is a walk from its start: every
+// cell a posting pass wrote into a register line paid a square of map steps (2026-11-16, the sampler on a million
+// rows: 9 % of posting).
+std::vector<ibMetaID> ibValueRecordSetObject::GetLinked(const ibMetaID& edited) const
+{
+	std::vector<ibMetaID> linked;
+	const ibSourceDescription changed(edited);
+	for (const auto& [id, column] : m_recordColumnCollection->m_listColumnInfo) {
+		const ibValueMetaObjectAttributeBase* attribute = column->GetAttribute();
+		if (id != edited && ibChoiceLinkResolver::IsLinked(attribute->GetTypeLink(), attribute->GetChoiceParameters(), changed))
+			linked.push_back(id);
+	}
+	return linked;
 }
 
 bool ibValueRecordSetObject::SetValueByMetaID(const ibDataViewItem& item, const ibMetaID& id, const ibValue& varMetaVal)

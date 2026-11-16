@@ -42,10 +42,10 @@
 // Folded WHOLE the rows carry no date, so no period column at all; by a unit, `Period`, rolled to it; the
 // movement's own identity only where a row is a movement. That is ibRegisterViewColumns — the very list the
 // descriptor and the reading give, so what the catalogue offers and what the read returns cannot drift.
-static void SeedRamTableFromView(ibQueryRamTable& table, const ibBackendQueryable* view,
+static void SeedRamTableFromView(ibQueryRamTable& table, const std::shared_ptr<const ibBackendQueryable>& view,
                                  const ibValueMetaObjectAccumulationRegister* reg, const ibRegFold& fold)
 {
-	for (const ibBackendQueryColumn* col : ibRegisterViewColumns(reg, view, fold))
+	for (const std::shared_ptr<const ibBackendQueryColumn>& col : ibRegisterViewColumns(reg, view, fold))
 		table.AddColumn(col->GetColumnId(), col->GetName(), col->GetTypeDesc());
 }
 
@@ -61,7 +61,7 @@ static void SeedRamTableFromView(ibQueryRamTable& table, const ibBackendQueryabl
 // precision belongs to the boundary reads (FillArmCut), which is where the floor lives.
 static void RestrictToStoredArm(ibDataQueryBuilder& b,
                                 const ibValueMetaObjectAccumulationRegister* reg,
-                                const ibBackendQueryable* view)
+                                const std::shared_ptr<const ibBackendQueryable>& view)
 {
 	if (reg == nullptr || view == nullptr || !reg->HasRecorder() || reg->GetRegisterRecorder() == nullptr)
 		return;
@@ -91,14 +91,14 @@ ibQueryRamTable ibValueMetaObjectAccumulationRegister::ComputeBalance(const ibVa
 
 	// READ the turnovers surface, PUBLISH the balance shape: the two views differ, and that difference
 	// is the whole of what a balance is.
-	const ibBackendQueryable* source = GetViewQueryable(GetTurnoverViewName(), ibViewShape::Turnovers);
+	const std::shared_ptr<const ibBackendQueryable> source = GetViewQueryable(GetTurnoverViewName(), ibViewShape::Turnovers);
 	SeedRamTableFromView(retTable, GetViewQueryable(GetBalanceViewName(), ibViewShape::Balance),
 	                     this, ibRegFold());
 	if (source == nullptr)
 		return retTable;
 
 	const ibString periodName = GetRegisterPeriod() != nullptr ? GetRegisterPeriod()->GetName() : ibString();
-	const ibBackendQueryColumn* periodCol = source->ResolveColumnByName(periodName);
+	const std::shared_ptr<const ibBackendQueryColumn> periodCol = source->ResolveColumnByName(periodName);
 
 	ibDataQueryBuilder b;
 	b.From(source);
@@ -112,9 +112,9 @@ ibQueryRamTable ibValueMetaObjectAccumulationRegister::ComputeBalance(const ibVa
 	if (const ibQueryPredicatePtr condition = ibRegConditionOn(source, cFilter, ibRegSelectsByDimensions(this)))
 		b.Where(condition);
 
-	std::vector<const ibBackendQueryColumn*> keyCols;
+	std::vector<std::shared_ptr<const ibBackendQueryColumn>> keyCols;
 	for (const auto dimension : GetDimensionArrayObject())
-		if (const ibBackendQueryColumn* onView = dimension != nullptr
+		if (std::shared_ptr<const ibBackendQueryColumn> onView = dimension != nullptr
 				? source->ResolveColumnByName(dimension->GetName()) : nullptr) {
 			keyCols.push_back(onView);
 			b.GroupBy(onView);
@@ -127,7 +127,7 @@ ibQueryRamTable ibValueMetaObjectAccumulationRegister::ComputeBalance(const ibVa
 		if (res != nullptr)
 			figures.push_back({ res->GetName() + ibRegFigure::Turnover, res->GetName() + ibRegFigure::Balance });
 	for (const auto& figure : figures)
-		if (const ibBackendQueryColumn* col = source->ResolveColumnByName(figure.first))
+		if (std::shared_ptr<const ibBackendQueryColumn> col = source->ResolveColumnByName(figure.first))
 			b.Aggregate(ibDataQueryBuilder::AggregateFn::Sum, col, figure.first);
 
 	try {
@@ -136,7 +136,7 @@ ibQueryRamTable ibValueMetaObjectAccumulationRegister::ComputeBalance(const ibVa
 		const size_t keyCount = keyCols.size();
 		std::vector<ibMetaID> ids;
 		ids.reserve(keyCount + figures.size());
-		for (const ibBackendQueryColumn* key : keyCols)
+		for (const std::shared_ptr<const ibBackendQueryColumn>& key : keyCols)
 			ids.push_back(key->GetColumnId());
 		for (const auto& figure : figures)
 			ids.push_back(retTable.ColumnIdByName(figure.second));
@@ -213,6 +213,9 @@ bool ibTurnoverQueryable::IsComputedInRam() const
 	if (m_fold.FromMovements() && !m_reg->HasMovementArm())
 		return true;    // the surface carries no movement, and no rolled-up total carries a recorder
 
+	if (ibRegFinerThanStored(m_reg, m_fold))
+		return true;    // a unit finer than the stored grain is no projection of the surface — the movements answer it
+
 	return false;       // whole, periodised or by the movement: one GROUP BY, and the surface answers it
 }
 
@@ -231,6 +234,11 @@ bool ibBalanceAndTurnoverQueryable::IsComputedInRam() const
 	// along the movements, asked of the driver below like every periodised one (#646).
 	if (m_fold.FromMovements() && (!m_reg->HasMovementArm() || m_reg->GetRegisterType() != ibRegisterType::eBalances))
 		return true;    // no movement arm to read them from, or no balance to run along them
+
+	// A unit finer than the stored grain is no projection of the surface: its turnovers are the movements', and the
+	// balance carried in ends where they begin (ComputeBalanceAndTurnover).
+	if (ibRegFinerThanStored(m_reg, m_fold))
+		return true;
 
 	// A calendar over an interval with both ends reports EVERY period of it, and the server spells that
 	// calendar into the statement a row per period — past the limit of ibRegCalendarOf (a daily one over
@@ -260,7 +268,7 @@ bool ibBalanceAndTurnoverQueryable::IsComputedInRam() const
 ibQueryRamTable ibValueMetaObjectAccumulationRegister::ComputeTurnover(const ibValue& cBegin, const ibValue& cEnd, const ibQueryPredicatePtr& cFilter,
                                                                        const ibRegFold& cFold) const
 {
-	const ibBackendQueryable* view = GetViewQueryable(GetTurnoverViewName(), ibViewShape::Turnovers);
+	const std::shared_ptr<const ibBackendQueryable> view = GetViewQueryable(GetTurnoverViewName(), ibViewShape::Turnovers);
 	if (view == nullptr)
 		return ibQueryRamTable();   // no surface, no totals — the trigger is where they come from
 
@@ -294,22 +302,28 @@ ibQueryRamTable ibValueMetaObjectAccumulationRegister::ComputeTurnover(const ibV
 	// the key. The accounting register does the same thing on its own road
 	// (accountingRegisterMetadataTotals.cpp, `atMovementGrain`). This is the accumulation register's
 	// half of it, which was never written.
+	//
+	// ⭐ …AND A CALENDAR UNIT FINER THAN THE STORED GRAIN STANDS THERE TOO: a stored row holds its whole
+	// grain under the grain's first instant and cannot be cut to the unit (ibRegFinerThanStored). The SOURCE
+	// only — the movement's own identity joins the key at movement grain alone, and a reading by the day is
+	// still a row per day.
 	const bool atMovementGrain = cFold.FromMovements();
-	const ibBackendQueryable* const source = atMovementGrain ? GetQueryable() : view;
+	const bool fromMovements = atMovementGrain || ibRegFinerThanStored(this, cFold);
+	const std::shared_ptr<const ibBackendQueryable> source = fromMovements ? GetQueryable() : view;
 	if (source == nullptr)
 		return retTable;
 
 	const ibString periodName = GetRegisterPeriod() != nullptr ? GetRegisterPeriod()->GetName() : ibString();
-	const ibBackendQueryColumn* periodCol = source->ResolveColumnByName(periodName);
+	const std::shared_ptr<const ibBackendQueryColumn> periodCol = source->ResolveColumnByName(periodName);
 
 	ibDataQueryBuilder b;
 	b.From(source);
 	// ⚠ THE ARM QUESTION BELONGS TO THE SURFACE ONLY. The movements table has one arm - itself - and
 	// asking it for `Recorder IS NULL` would return nothing at all.
-	if (!atMovementGrain)
+	if (!fromMovements)
 		RestrictToStoredArm(b, this, view);
 	// …and the totals' guard is the movements' to say: a line out of force moved nothing (#646).
-	ibRegWhereActive(b, this, source, /*onMovements*/ atMovementGrain);
+	ibRegWhereActive(b, this, source, /*onMovements*/ fromMovements);
 	// ⚠ NOT FILTERED BY THE CALLER'S RIGHTS. Totals read through a right-limited view would report
 	// figures computed from the rows that caller happens to see, and a wrong total does not look
 	// like an error.
@@ -328,9 +342,9 @@ ibQueryRamTable ibValueMetaObjectAccumulationRegister::ComputeTurnover(const ibV
 
 	// GROUP BY the keys — and by the truncated period when a granularity was asked for, which is the
 	// whole of "the periodicity decides the fold".
-	std::vector<const ibBackendQueryColumn*> keyCols;
+	std::vector<std::shared_ptr<const ibBackendQueryColumn>> keyCols;
 	for (const auto dimension : GetDimensionArrayObject()) {
-		const ibBackendQueryColumn* onView = dimension != nullptr
+		const std::shared_ptr<const ibBackendQueryColumn> onView = dimension != nullptr
 			? source->ResolveColumnByName(dimension->GetName()) : nullptr;
 		if (onView != nullptr) { keyCols.push_back(onView); b.GroupBy(onView); }
 	}
@@ -341,13 +355,13 @@ ibQueryRamTable ibValueMetaObjectAccumulationRegister::ComputeTurnover(const ibV
 	// table it came from.
 	if (atMovementGrain) {
 		if (GetRegisterRecorder() != nullptr)
-			if (const ibBackendQueryColumn* rec = source->ResolveColumnByName(GetRegisterRecorder()->GetName())) {
+			if (const std::shared_ptr<const ibBackendQueryColumn> rec = source->ResolveColumnByName(GetRegisterRecorder()->GetName())) {
 				keyCols.push_back(rec);
 				b.GroupBy(rec);
 			}
 		// A `Record` reading is one row per LINE; a `Recorder` reading folds a document's lines together.
 		if (cFold.HasLineNumber() && GetRegisterLineNumber() != nullptr)
-			if (const ibBackendQueryColumn* line = source->ResolveColumnByName(GetRegisterLineNumber()->GetName())) {
+			if (const std::shared_ptr<const ibBackendQueryColumn> line = source->ResolveColumnByName(GetRegisterLineNumber()->GetName())) {
 				keyCols.push_back(line);
 				b.GroupBy(line);
 			}
@@ -379,10 +393,10 @@ ibQueryRamTable ibValueMetaObjectAccumulationRegister::ComputeTurnover(const ibV
 			figures.push_back(res->GetName() + ibRegFigure::Expense);
 		}
 	}
-	if (!atMovementGrain) {
+	if (!fromMovements) {
 		// The surface already holds each figure, computed and stored. Reading is all that is left.
 		for (const ibString& figure : figures)
-			if (const ibBackendQueryColumn* col = view->ResolveColumnByName(figure))
+			if (std::shared_ptr<const ibBackendQueryColumn> col = view->ResolveColumnByName(figure))
 				b.Aggregate(ibDataQueryBuilder::AggregateFn::Sum, col, figure);
 	}
 	else {
@@ -404,7 +418,7 @@ ibQueryRamTable ibValueMetaObjectAccumulationRegister::ComputeTurnover(const ibV
 		// Compared against a bare number nothing matched, every receipt fell to the ELSE branch, and
 		// three goods receipts reported as an expense of 116 with a turnover of -116.
 		const ibValueMetaObjectAttributePredefined* const typeAttr = GetRegisterRecordType();
-		const ibBackendQueryColumn* const typeCol = typeAttr != nullptr ? typeAttr->GetQueryColumn() : nullptr;
+		const std::shared_ptr<const ibBackendQueryColumn> typeCol = typeAttr != nullptr ? typeAttr->GetQueryColumn() : nullptr;
 
 		ibQueryPredicatePtr isReceipt;
 		if (withSign && typeCol != nullptr)
@@ -452,7 +466,7 @@ ibQueryRamTable ibValueMetaObjectAccumulationRegister::ComputeTurnover(const ibV
 		const size_t keyCount = keyCols.size();
 		std::vector<ibMetaID> ids;
 		ids.reserve(keyCount + 1 + figures.size());
-		for (const ibBackendQueryColumn* key : keyCols)
+		for (const std::shared_ptr<const ibBackendQueryColumn>& key : keyCols)
 			ids.push_back(key->GetColumnId());
 		ids.push_back(withPeriodOut ? retTable.ColumnIdByName(periodName) : 0);
 		for (const ibString& figure : figures)
@@ -514,7 +528,7 @@ ibQueryRamTable ibValueMetaObjectAccumulationRegister::ComputeBalanceAndTurnover
 	// READ the turnovers surface twice, PUBLISH the balance-and-turnovers shape. Both reads are
 	// ordinary reads of an ordinary relation; the only thing this function still computes itself is
 	// the forward roll, which is sequential by nature and cannot be a query.
-	const ibBackendQueryable* source = GetViewQueryable(GetTurnoverViewName(), ibViewShape::Turnovers);
+	const std::shared_ptr<const ibBackendQueryable> source = GetViewQueryable(GetTurnoverViewName(), ibViewShape::Turnovers);
 
 	ibQueryRamTable retTable;
 	SeedRamTableFromView(retTable,
@@ -541,11 +555,11 @@ ibQueryRamTable ibValueMetaObjectAccumulationRegister::ComputeBalanceAndTurnover
 		resources.push_back(object);
 	}
 
-	const ibBackendQueryColumn* periodCol = source->ResolveColumnByName(periodName);
+	const std::shared_ptr<const ibBackendQueryColumn> periodCol = source->ResolveColumnByName(periodName);
 
-	std::vector<const ibBackendQueryColumn*> keyOnView;
+	std::vector<std::shared_ptr<const ibBackendQueryColumn>> keyOnView;
 	for (const auto dimension : GetDimensionArrayObject())
-		if (const ibBackendQueryColumn* onView = dimension != nullptr
+		if (std::shared_ptr<const ibBackendQueryColumn> onView = dimension != nullptr
 				? source->ResolveColumnByName(dimension->GetName()) : nullptr)
 			keyOnView.push_back(onView);
 
@@ -558,7 +572,7 @@ ibQueryRamTable ibValueMetaObjectAccumulationRegister::ComputeBalanceAndTurnover
 		RestrictToStoredArm(b, this, source);
 		if (condition)
 			b.Where(condition);
-		for (const ibBackendQueryColumn* key : keyOnView)
+		for (const std::shared_ptr<const ibBackendQueryColumn>& key : keyOnView)
 			b.GroupBy(key);
 	};
 
@@ -568,24 +582,39 @@ ibQueryRamTable ibValueMetaObjectAccumulationRegister::ComputeBalanceAndTurnover
 	// value.h); what still matters is that they agree, or every opening balance would silently miss
 	// its key and the report would look like a fresh start.
 
+	// ⭐ WHICH ROWS STEP 2 READS is decided before the opening, because the opening has to end where they begin. At
+	// the movement's grain (see step 2) and by a calendar unit finer than the stored grain (ibRegFinerThanStored)
+	// they are the MOVEMENTS: no stored row carries a recorder, and none can be cut to a finer unit.
+	const bool fromMovements = cFold.FromMovements() || ibRegFinerThanStored(this, cFold);
+
 	// --- 1. OPENING — the turnovers strictly before the interval, per key ----------------------
 	// No beginning given, nothing stands before it: the reading starts at the first movement. Read anyway,
 	// with no bound, the whole history came back as the seed - every key opened at today's balance and
 	// rolled its own movements on top of it (2026-10-28, a report by recorder with no period given).
+	//
+	// ⭐ …AND WHERE STEP 2 READS THE MOVEMENTS, THE OPENING ENDS WHERE THEY BEGIN — cut at the grain the
+	// beginning falls into, as every server reading is (ibRegFillArmCut). A stored row holds its whole grain,
+	// so `< begin` took that grain whole, its movements after the beginning too, and step 2 read those a
+	// second time: kept by the month, a reading by the day from the 15th opened with the whole month. The
+	// stored rows answer the grains before it, the view's movement arm that grain up to the beginning.
 	ibBalanceOpening opening;
 	if (withSign && periodCol != nullptr && !cBegin.IsEmpty()) {
-		ibDataQueryBuilder b;
-		openRead(b);
-		b.WhereCompare(periodCol, ibQueryFilterOp::Less, cBegin);
-		for (const auto res : resources)
-			if (const ibBackendQueryColumn* col = source->ResolveColumnByName(res->GetName() + ibRegFigure::Turnover))
-				b.Aggregate(ibDataQueryBuilder::AggregateFn::Sum, col, res->GetName() + ibRegFigure::Turnover);
+		const ibValue openAt = ibReadRegisterBound(cBegin).m_date;
+		const ibValue grainStart = fromMovements && openAt.GetType() == TYPE_DATE
+			? ibValue(openAt.GetDate().BeginOfPeriod(GetTotalsPeriodUnit())) : ibValue();
+		// The movement arm, only where the beginning falls INSIDE a grain: on its edge the stored rows end there anyway.
+		const std::shared_ptr<const ibBackendQueryColumn> headArm = grainStart.GetType() == TYPE_DATE && grainStart.GetDate() != openAt.GetDate()
+			&& GetRegisterRecorder() != nullptr ? source->ResolveColumnByName(GetRegisterRecorder()->GetName()) : nullptr;
 
-		try {
+		// One half of the seed: the figures summed per key and ADDED to what the other half left — a key may stand in both.
+		const auto seed = [&](ibDataQueryBuilder& b) {
+			for (const auto res : resources)
+				if (std::shared_ptr<const ibBackendQueryColumn> col = source->ResolveColumnByName(res->GetName() + ibRegFigure::Turnover))
+					b.Aggregate(ibDataQueryBuilder::AggregateFn::Sum, col, res->GetName() + ibRegFigure::Turnover);
 			ibDataQueryResult sel = b.SelectAggregate();
 			while (sel.Next()) {
 				std::vector<ibValue> keyValues;
-				for (const ibBackendQueryColumn* key : keyOnView)
+				for (const std::shared_ptr<const ibBackendQueryColumn>& key : keyOnView)
 					keyValues.push_back(sel.GetValue(key));
 				std::map<ibMetaID, ibNumber>& row = opening[std::move(keyValues)];
 				// ⚠ KEYED BY THE SLOT THE FOLD CARRIES ITS RUNNING TOTAL UNDER — the TURNOVER column, which
@@ -593,7 +622,29 @@ ibQueryRamTable ibValueMetaObjectAccumulationRegister::ComputeBalanceAndTurnover
 				// the opening column instead, the seed was written where nothing ever looked: every key
 				// appeared to start at zero, which is exactly the failure the step above is here to avoid.
 				for (size_t i = 0; i < resources.size(); i++)
-					row[slots[i].m_turnover] = sel.GetColumn(resources[i]->GetName() + ibRegFigure::Turnover).GetNumber();
+					row[slots[i].m_turnover] += sel.GetColumn(resources[i]->GetName() + ibRegFigure::Turnover).GetNumber();
+			}
+		};
+
+		try {
+			ibDataQueryBuilder b;
+			openRead(b);
+			b.WhereCompare(periodCol, ibQueryFilterOp::Less, headArm != nullptr ? grainStart : cBegin);
+			seed(b);
+			if (headArm != nullptr) {
+				// The grain the beginning falls into, from its start up to the beginning — the rights left out and the
+				// condition and the keys taken as openRead takes them.
+				ibDataQueryBuilder head;
+				head.From(source);
+				head.WithAccessPolicy(nullptr);
+				head.Where(ibRegMovementArm(headArm));
+				if (condition)
+					head.Where(condition);
+				for (const std::shared_ptr<const ibBackendQueryColumn>& key : keyOnView)
+					head.GroupBy(key);
+				head.WhereCompare(periodCol, ibQueryFilterOp::GreaterEqual, grainStart);
+				head.WhereCompare(periodCol, ibQueryFilterOp::Less, cBegin);
+				seed(head);
 			}
 		}
 		// 🛑 THE WORST OF THE FOUR TO SWALLOW. This step is the seed the whole fold rolls forward
@@ -631,19 +682,21 @@ ibQueryRamTable ibValueMetaObjectAccumulationRegister::ComputeBalanceAndTurnover
 	// keeps periods, not documents: read there, every document of a key folded into one row with no period and
 	// no recorder, and a balance by document was one balance for the whole interval (2026-09-29, the ROLE
 	// battery: `Period`, `Recorder` and `LineNumber` empty on every row).
+	// …and by a unit finer than the stored grain the rows are the movements too (`fromMovements`, above), grouped by
+	// the unit and by no document: the movement's identity is the movement grain's alone.
 	const bool atMovementGrain = cFold.FromMovements();
-	const ibBackendQueryable* const reading = atMovementGrain ? GetQueryable() : source;
+	const std::shared_ptr<const ibBackendQueryable> reading = fromMovements ? GetQueryable() : source;
 	const ibString recorderName = GetRegisterRecorder()   != nullptr ? GetRegisterRecorder()->GetName()   : ibString();
 	const ibString lineName     = GetRegisterLineNumber() != nullptr ? GetRegisterLineNumber()->GetName() : ibString();
 	const ibMetaID recorderId   = !recorderName.IsEmpty() ? retTable.ColumnIdByName(recorderName) : 0;
 	const ibMetaID lineId       = !lineName.IsEmpty() ? retTable.ColumnIdByName(lineName) : 0;
 	if (reading != nullptr) {
 		ibDataQueryBuilder b;
-		const ibBackendQueryColumn* readPeriod = atMovementGrain ? reading->ResolveColumnByName(periodName) : periodCol;
-		std::vector<const ibBackendQueryColumn*> keyOnReading = keyOnView;
-		const ibBackendQueryColumn* recorderCol = nullptr;
-		const ibBackendQueryColumn* lineCol     = nullptr;
-		if (!atMovementGrain)
+		const std::shared_ptr<const ibBackendQueryColumn> readPeriod = fromMovements ? reading->ResolveColumnByName(periodName) : periodCol;
+		std::vector<std::shared_ptr<const ibBackendQueryColumn>> keyOnReading = keyOnView;
+		std::shared_ptr<const ibBackendQueryColumn> recorderCol;
+		std::shared_ptr<const ibBackendQueryColumn> lineCol;
+		if (!fromMovements)
 			openRead(b);
 		else {
 			// The movements table has one arm — itself — so no arm is asked for; the rights are left out for
@@ -655,11 +708,11 @@ ibQueryRamTable ibValueMetaObjectAccumulationRegister::ComputeBalanceAndTurnover
 				b.Where(onMoves);
 			keyOnReading.clear();
 			for (const auto dimension : GetDimensionArrayObject())
-				if (const ibBackendQueryColumn* onMoves = dimension != nullptr ? reading->ResolveColumnByName(dimension->GetName()) : nullptr) {
+				if (const std::shared_ptr<const ibBackendQueryColumn> onMoves = dimension != nullptr ? reading->ResolveColumnByName(dimension->GetName()) : nullptr) {
 					keyOnReading.push_back(onMoves);
 					b.GroupBy(onMoves);
 				}
-			if (!recorderName.IsEmpty() && (recorderCol = reading->ResolveColumnByName(recorderName)) != nullptr)
+			if (atMovementGrain && !recorderName.IsEmpty() && (recorderCol = reading->ResolveColumnByName(recorderName)) != nullptr)
 				b.GroupBy(recorderCol);
 			// A `Record` reading is one row per LINE; a `Recorder` reading folds a document's lines together.
 			if (cFold.HasLineNumber() && !lineName.IsEmpty() && (lineCol = reading->ResolveColumnByName(lineName)) != nullptr)
@@ -673,12 +726,12 @@ ibQueryRamTable ibValueMetaObjectAccumulationRegister::ComputeBalanceAndTurnover
 			else if (cFold.m_kind == ibRegGranularity::Period || atMovementGrain)
 				b.GroupBy(readPeriod);   // a movement's moment is its own
 		}
-		if (!atMovementGrain) {
+		if (!fromMovements) {
 			for (const auto res : resources) {
-				if (const ibBackendQueryColumn* col = source->ResolveColumnByName(res->GetName() + ibRegFigure::Receipt))
+				if (std::shared_ptr<const ibBackendQueryColumn> col = source->ResolveColumnByName(res->GetName() + ibRegFigure::Receipt))
 					b.Aggregate(ibDataQueryBuilder::AggregateFn::Sum, col, res->GetName() + ibRegFigure::Receipt);
 				if (withSign)
-					if (const ibBackendQueryColumn* col = source->ResolveColumnByName(res->GetName() + ibRegFigure::Expense))
+					if (std::shared_ptr<const ibBackendQueryColumn> col = source->ResolveColumnByName(res->GetName() + ibRegFigure::Expense))
 						b.Aggregate(ibDataQueryBuilder::AggregateFn::Sum, col, res->GetName() + ibRegFigure::Expense);
 			}
 		}
@@ -686,7 +739,7 @@ ibQueryRamTable ibValueMetaObjectAccumulationRegister::ComputeBalanceAndTurnover
 			// ON THE MOVEMENTS THE FIGURES DO NOT EXIST YET — one amount and a record type, read two ways as CASE
 			// sums, compared as the enum VALUE (see ComputeTurnover for why not its ordinal).
 			const ibValueMetaObjectAttributePredefined* const typeAttr = GetRegisterRecordType();
-			const ibBackendQueryColumn* const typeCol = typeAttr != nullptr ? typeAttr->GetQueryColumn() : nullptr;
+			const std::shared_ptr<const ibBackendQueryColumn> typeCol = typeAttr != nullptr ? typeAttr->GetQueryColumn() : nullptr;
 			ibQueryPredicatePtr isReceipt;
 			if (withSign && typeCol != nullptr)
 				isReceipt = ibQueryPredicate::Leaf(ibQueryCondition{
@@ -711,7 +764,7 @@ ibQueryRamTable ibValueMetaObjectAccumulationRegister::ComputeBalanceAndTurnover
 			ibDataQueryResult sel = b.SelectAggregate();
 			while (sel.Next()) {
 				std::vector<ibValue> keyValues;
-				for (const ibBackendQueryColumn* key : keyOnReading)
+				for (const std::shared_ptr<const ibBackendQueryColumn>& key : keyOnReading)
 					keyValues.push_back(sel.GetValue(key));
 				ibPeriodRow read;
 				// A grouped column is read by the column, a truncation by the name it was given - as they were grouped above.
@@ -770,6 +823,12 @@ ibQueryRamTable ibValueMetaObjectAccumulationRegister::ComputeBalanceAndTurnover
 	if (firstPeriodKnown && endDate.GetType() == TYPE_DATE) {
 		// The same calendar the server grid stands on, uncapped: the live path is where a long one goes.
 		const std::vector<ibDateTime> calendar = ibRegCalendarOf(ibValue(firstPeriod), endDate, cFold.m_unit, /*maxPeriods*/ 0);
+		// …to its ceiling (ibRegMaxLiveRows): every key in every period, counted before any of them is made.
+		if (!calendar.empty() && groups.size() > ibRegMaxLiveRows / calendar.size())
+			ibBackendCoreException::Error(_("%s: the balance and turnovers by period would make %llu rows (%zu keys over "
+				"%zu periods), more than a reading folded in memory may hold (%zu). Narrow the interval, read by a longer "
+				"period, or filter by the dimensions."), GetSynonym(),
+				static_cast<unsigned long long>(groups.size()) * calendar.size(), groups.size(), calendar.size(), ibRegMaxLiveRows);
 		for (auto& group : groups) {
 			std::unordered_set<ibValue, ibValueHash, ibValueEqual> present;
 			for (const ibPeriodRow& row : group.second)
@@ -915,7 +974,7 @@ ibBackendQueryProvider& ibAccumulationTotalsQueryable::GetProvider() const
 // FOLDS the turnovers surface, so its output is the dimensions plus one balance per resource — the
 // BALANCE view's set, not the turnover view's. That is why the shape is declared by the reading and
 // the read SOURCE stays each one's own business (GetSourceRelation).
-const ibBackendQueryable* ibAccumulationTotalsQueryable::NavigationSource() const
+std::shared_ptr<const ibBackendQueryable> ibAccumulationTotalsQueryable::NavigationSource() const
 {
 	switch (m_shape) {
 	case ibViewShape::Turnovers:
@@ -929,17 +988,17 @@ const ibBackendQueryable* ibAccumulationTotalsQueryable::NavigationSource() cons
 
 // What each reading LISTS — its shape, folded the way the reading folds (a balance: whole). The same list the
 // descriptor answers with (ibRegisterViewColumns), and through it what a name resolves to.
-std::vector<const ibBackendQueryColumn*> ibBalanceQueryable::GetQueryColumns() const
+std::vector<std::shared_ptr<const ibBackendQueryColumn>> ibBalanceQueryable::GetQueryColumns() const
 {
 	return ibRegisterViewColumns(m_reg, NavigationSource(), ibRegFold());
 }
 
-std::vector<const ibBackendQueryColumn*> ibTurnoverQueryable::GetQueryColumns() const
+std::vector<std::shared_ptr<const ibBackendQueryColumn>> ibTurnoverQueryable::GetQueryColumns() const
 {
 	return ibRegisterViewColumns(m_reg, NavigationSource(), m_fold);
 }
 
-std::vector<const ibBackendQueryColumn*> ibBalanceAndTurnoverQueryable::GetQueryColumns() const
+std::vector<std::shared_ptr<const ibBackendQueryColumn>> ibBalanceAndTurnoverQueryable::GetQueryColumns() const
 {
 	return ibRegisterViewColumns(m_reg, NavigationSource(), m_fold);
 }
@@ -972,7 +1031,7 @@ std::vector<ibQueryExprPtr> ReadFilters(
 	std::vector<ibQueryExprPtr> out;
 	if (reg == nullptr || !filter)
 		return out;
-	const ibBackendQueryable* view = reg->GetViewQueryable(reg->GetTurnoverViewName(),
+	const std::shared_ptr<const ibBackendQueryable> view = reg->GetViewQueryable(reg->GetTurnoverViewName(),
 		ibValueMetaObjectAccumulationRegister::ibViewShape::Turnovers);
 	if (const ibQueryPredicatePtr condition = ibRegConditionOn(view, filter, ibRegSelectsByDimensions(reg)))
 		if (const ibQueryExprPtr lowered = ibDbTableProvider::BuildPredicateIR(view, condition, rows))
@@ -981,13 +1040,13 @@ std::vector<ibQueryExprPtr> ReadFilters(
 }
 
 // ⭐ THE ROWS AS THEY STAND, handed to a reading that folds them (all three below): the totals and the
-// movements as relations rendered from the register's own declaration (GetTotalsRows), the filters lowered
+// movements as relations rendered from the register's own declaration (ibRegFillTotalsRows), the filters lowered
 // under the one name both are read by. False when the register declares no totals — the reading then has no
 // surface to be composed over, and answers as the live road does.
 bool ReadRowsAsTheyStand(const ibValueMetaObjectAccumulationRegister* reg, const ibQueryPredicatePtr& filter,
                          const ibString& alias, ibMaterializeReadSpec& r)
 {
-	if (!reg->GetTotalsRows(r.m_storedRows, r.m_movedRows))
+	if (!ibRegFillTotalsRows(r, reg))
 		return false;
 	r.m_rowsAlias = alias + ibT("_rows");
 	r.m_filters   = ReadFilters(reg, filter, r.m_rowsAlias);
@@ -1048,9 +1107,9 @@ ibQueryRelPtr ibBalanceQueryable::GetSourceRelation(const ibString& alias) const
 
 	// Names asked for, not spelled: the balance view knows what it publishes, the turnovers view knows
 	// what it stores.
-	const ibBackendQueryable* outView = m_reg->GetViewQueryable(m_reg->GetBalanceViewName(),
+	const std::shared_ptr<const ibBackendQueryable> outView = m_reg->GetViewQueryable(m_reg->GetBalanceViewName(),
 		ibValueMetaObjectAccumulationRegister::ibViewShape::Balance);
-	const ibBackendQueryable* srcView = m_reg->GetViewQueryable(m_reg->GetTurnoverViewName(),
+	const std::shared_ptr<const ibBackendQueryable> srcView = m_reg->GetViewQueryable(m_reg->GetTurnoverViewName(),
 		ibValueMetaObjectAccumulationRegister::ibViewShape::Turnovers);
 
 	for (const auto res : m_reg->GetResourceArrayObject())
@@ -1124,7 +1183,7 @@ ibQueryRelPtr ibTurnoverQueryable::GetSourceRelation(const ibString& alias) cons
 
 	// Straight through: what the view publishes IS what this reading reports, so both sides of every
 	// pair are the same column — and neither side is typed out.
-	const ibBackendQueryable* view = m_reg->GetViewQueryable(m_reg->GetTurnoverViewName(),
+	const std::shared_ptr<const ibBackendQueryable> view = m_reg->GetViewQueryable(m_reg->GetTurnoverViewName(),
 		ibValueMetaObjectAccumulationRegister::ibViewShape::Turnovers);
 
 	const bool withSign = (m_reg->GetRegisterType() == ibRegisterType::eBalances);
@@ -1204,9 +1263,9 @@ ibQueryRelPtr ibBalanceAndTurnoverQueryable::GetSourceRelation(const ibString& a
 	//
 	// So each figure is looked up ON THE VIEW and hands over its own physical name. The logical side
 	// is `ibRegFigure`; the physical side is the column's business, and nothing here spells either.
-	const ibBackendQueryable* out = m_reg->GetViewQueryable(m_reg->GetBalanceAndTurnoverViewName(),
+	const std::shared_ptr<const ibBackendQueryable> out = m_reg->GetViewQueryable(m_reg->GetBalanceAndTurnoverViewName(),
 		ibValueMetaObjectAccumulationRegister::ibViewShape::BalanceAndTurnovers);
-	const ibBackendQueryable* src = m_reg->GetViewQueryable(m_reg->GetTurnoverViewName(),
+	const std::shared_ptr<const ibBackendQueryable> src = m_reg->GetViewQueryable(m_reg->GetTurnoverViewName(),
 		ibValueMetaObjectAccumulationRegister::ibViewShape::Turnovers);
 	if (out == nullptr || src == nullptr)
 		return nullptr;
@@ -1231,9 +1290,9 @@ ibQueryRelPtr ibBalanceAndTurnoverQueryable::GetSourceRelation(const ibString& a
 		if (byMovement) {
 			t.m_grain        = ibMaterializeGrain::Movements;
 			t.m_dropZeroRows = false;   // a movement of nothing still stands between two balances; pruned below, after the run
-			movementFields = DescribeColumnLayout(m_reg->GetRegisterRecorder()->GetQueryColumn());
+			movementFields = DescribeColumnLayout(*m_reg->GetRegisterRecorder()->GetQueryColumn());
 			if (m_fold.HasLineNumber())
-				for (const ibColumnSlot& slot : DescribeColumnLayout(m_reg->GetRegisterLineNumber()->GetQueryColumn()))
+				for (const ibColumnSlot& slot : DescribeColumnLayout(*m_reg->GetRegisterLineNumber()->GetQueryColumn()))
 					movementFields.push_back(slot);
 			for (const ibColumnSlot& slot : movementFields)
 				t.m_keyColumns.push_back(slot.m_name);

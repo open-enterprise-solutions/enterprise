@@ -102,7 +102,7 @@ TEST_F(TempDbSqliteFix, MaterialiseScalarRoundTrip)
 	ASSERT_NE(mgr, nullptr)
 		<< "SQLite temp dialect should let Materialise create a server-side temp table";
 
-	const ibBackendQueryable* temp = mgr->Queryable();
+	const std::shared_ptr<const ibBackendQueryable> temp = mgr->Queryable();
 	ASSERT_NE(temp, nullptr);
 
 	// Read the temp table back through the L3 door (a server-side SELECT on the
@@ -164,17 +164,17 @@ TEST_F(TempDbSqliteFix, DoorReadsBackExactCellValues)
 	std::unique_ptr<ibTempTableManager> mgr =
 		ibTempTableManager::Materialise(holder, ram, /*metaData*/ nullptr);
 	ASSERT_NE(mgr, nullptr);
-	const ibBackendQueryable* temp = mgr->Queryable();
+	const std::shared_ptr<const ibBackendQueryable> temp = mgr->Queryable();
 	ASSERT_NE(temp, nullptr);
 
-	auto colById = [&](ibMetaID id) -> const ibBackendQueryColumn* {
-		for (const ibBackendQueryColumn* c : temp->GetQueryColumns())
+	auto colById = [&](ibMetaID id) -> std::shared_ptr<const ibBackendQueryColumn> {
+		for (const std::shared_ptr<const ibBackendQueryColumn>& c : temp->GetQueryColumns())
 			if (c->GetColumnId() == id) return c;
 		return nullptr;
 	};
-	const ibBackendQueryColumn* cId   = colById(ID);
-	const ibBackendQueryColumn* cName = colById(NAME);
-	const ibBackendQueryColumn* cAmt  = colById(AMT);
+	std::shared_ptr<const ibBackendQueryColumn> cId   = colById(ID);
+	std::shared_ptr<const ibBackendQueryColumn> cName = colById(NAME);
+	std::shared_ptr<const ibBackendQueryColumn> cAmt  = colById(AMT);
 	ASSERT_NE(cId,   nullptr);
 	ASSERT_NE(cName, nullptr);
 	ASSERT_NE(cAmt,  nullptr);
@@ -225,16 +225,16 @@ TEST_F(TempDbSqliteFix, WriteDoorInsertReadDeleteRoundTrip)
 	std::unique_ptr<ibTempTableManager> mgr =
 		ibTempTableManager::Materialise(holder, ram, /*metaData*/ nullptr);
 	ASSERT_NE(mgr, nullptr);
-	const ibBackendQueryable* temp = mgr->Queryable();
+	const std::shared_ptr<const ibBackendQueryable> temp = mgr->Queryable();
 	ASSERT_NE(temp, nullptr);
 
-	auto colById = [&](ibMetaID id) -> const ibBackendQueryColumn* {
-		for (const ibBackendQueryColumn* c : temp->GetQueryColumns())
+	auto colById = [&](ibMetaID id) -> std::shared_ptr<const ibBackendQueryColumn> {
+		for (const std::shared_ptr<const ibBackendQueryColumn>& c : temp->GetQueryColumns())
 			if (c->GetColumnId() == id) return c;
 		return nullptr;
 	};
-	const ibBackendQueryColumn* cId   = colById(ID);
-	const ibBackendQueryColumn* cName = colById(NAME);
+	std::shared_ptr<const ibBackendQueryColumn> cId   = colById(ID);
+	std::shared_ptr<const ibBackendQueryColumn> cName = colById(NAME);
 	ASSERT_NE(cId,   nullptr);
 	ASSERT_NE(cName, nullptr);
 
@@ -277,11 +277,11 @@ namespace {
 // (skip) if the driver vends no temp dialect.
 struct DoorRows {
 	const ibMetaID ID = 401, NAME = 402, AMT = 403;
-	std::unique_ptr<ibTempTableManager> mgr;
-	const ibBackendQueryable*   temp  = nullptr;
-	const ibBackendQueryColumn* cId   = nullptr;
-	const ibBackendQueryColumn* cName = nullptr;
-	const ibBackendQueryColumn* cAmt  = nullptr;
+	std::unique_ptr<ibTempTableManager>         mgr;
+	std::shared_ptr<const ibBackendQueryable>   temp;
+	std::shared_ptr<const ibBackendQueryColumn> cId;
+	std::shared_ptr<const ibBackendQueryColumn> cName;
+	std::shared_ptr<const ibBackendQueryColumn> cAmt;
 
 	bool Build(ibDatabaseConnectionHolder* holder) {
 		ibQueryRamTable ram;
@@ -301,7 +301,7 @@ struct DoorRows {
 		if (!mgr) return false;
 		temp = mgr->Queryable();
 		if (!temp) return false;
-		for (const ibBackendQueryColumn* c : temp->GetQueryColumns()) {
+		for (const std::shared_ptr<const ibBackendQueryColumn>& c : temp->GetQueryColumns()) {
 			if      (c->GetColumnId() == ID)   cId   = c;
 			else if (c->GetColumnId() == NAME) cName = c;
 			else if (c->GetColumnId() == AMT)  cAmt  = c;
@@ -424,9 +424,9 @@ namespace {
 // Materialise a one-column NUMBER-"k" temp table from a key list (DUPLICATES allowed — a
 // permission source can grant the same key more than once). false (skip) if no temp dialect.
 struct KeyTable {
-	std::unique_ptr<ibTempTableManager> mgr;
-	const ibBackendQueryable*   temp = nullptr;
-	const ibBackendQueryColumn* k    = nullptr;
+	std::unique_ptr<ibTempTableManager>         mgr;
+	std::shared_ptr<const ibBackendQueryable>   temp;
+	std::shared_ptr<const ibBackendQueryColumn> k;
 	bool Build(ibDatabaseConnectionHolder* holder, ibMetaID keyId, const std::vector<long>& keys) {
 		ibQueryRamTable ram;
 		ram.AddColumn(keyId, wxT("k"), ibTypeDescription(g_valueNumberCLSID));
@@ -435,7 +435,7 @@ struct KeyTable {
 		if (!mgr) return false;
 		temp = mgr->Queryable();
 		if (temp == nullptr) return false;
-		for (const ibBackendQueryColumn* c : temp->GetQueryColumns())
+		for (const std::shared_ptr<const ibBackendQueryColumn>& c : temp->GetQueryColumns())
 			if (c->GetColumnId() == keyId) k = c;
 		return k != nullptr;
 	}

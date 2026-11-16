@@ -43,7 +43,7 @@ using  ibQueryRelPtr = std::shared_ptr<ibQueryRel>;
 class ibBackendQueryProvider;   // the engine the queryable vends — defined in queryProvider.h; it IS the whole L3<->L2-1 layer
 class ibDataQueryBuilder;       // the inner query a system subquery-queryable wraps (defined below) — full type only in its .cpp
 class ibMetaData;               // the metadata context — the provider needs it to reconstruct reference / enum values column-based
-class ibBackendQueryable;       // defined below — ibTempSourceScope references it by pointer only
+class ibBackendQueryable;       // defined below — ibTempSourceScope shares it, no more
 
 // ==========================================================================
 // ibTempSourceScope — the AUXILIARY, per-query queryable registry (the L4 seam).
@@ -58,22 +58,23 @@ class ibBackendQueryable;       // defined below — ibTempSourceScope reference
 //
 // The registry is THREAD-LOCAL and RAII-scoped to ONE query execution: the composer
 // installs it around Execute, and it vanishes when the query finishes — no trace
-// left behind (the queryable stays owned by its model). This is the temp-table
-// feature: L5 registers at L4, L4 resolves directly, L3 needs nothing.
+// left behind (the queryable stays held by whoever registered it — the composer, the
+// package's store — and by whoever reads it). This is the temp-table feature: L5
+// registers at L4, L4 resolves directly, L3 needs nothing.
 class BACKEND_API ibTempSourceScope
 {
 public:
-	explicit ibTempSourceScope(const std::map<ibString, const ibBackendQueryable*>& sources);
+	explicit ibTempSourceScope(const std::map<ibString, std::shared_ptr<const ibBackendQueryable>>& sources);
 	~ibTempSourceScope();
 
-	// The active scope's queryable for `name`, or null (no scope / not a temp source).
-	static const ibBackendQueryable* Find(const ibString& name);
+	// The active scope's queryable for `name`, or null (no scope / not a temp source) — shared with the registry.
+	static std::shared_ptr<const ibBackendQueryable> Find(const ibString& name);
 
 	ibTempSourceScope(const ibTempSourceScope&) = delete;
 	ibTempSourceScope& operator=(const ibTempSourceScope&) = delete;
 
 private:
-	const std::map<ibString, const ibBackendQueryable*>* m_prev;
+	const std::map<ibString, std::shared_ptr<const ibBackendQueryable>>* m_prev;
 };
 
 struct ibQuerySelect;   // an AST select — a named result IS one, kept by pointer only
@@ -170,7 +171,7 @@ enum class ibQueryFilterOp { Equal, NotEqual, Like, Less, LessEqual, Greater, Gr
 
 struct ibQueryCondition
 {
-	const ibBackendQueryColumn* m_col = nullptr;   // null = the row-key column; with m_path = the path LEAF
+	std::shared_ptr<const ibBackendQueryColumn> m_col;   // null = the row-key column; with m_path = the path LEAF
 	// THE comparison/filter operator — ONE field now (the former m_comparison Eq/Ne + the m_explicitOp toggle
 	// + the m_op Like/Less/... are collapsed). Equal is the default; Where/WhereCompare/WhereLike all just set
 	// this. Providers read it directly (FilterOpToBinOp / the RAM switch); no branch.
@@ -203,7 +204,7 @@ struct ibQueryCondition
 	// path (Producer.Region -> {Producer, Region}). Every non-leaf segment is a single-target
 	// reference column the provider auto-joins (the SAME join SelectPath builds, deduped by prefix);
 	// the leaf (== m_col) is compared on the joined target. Empty = a plain column on the main source.
-	std::vector<const ibBackendQueryColumn*> m_path;
+	std::vector<std::shared_ptr<const ibBackendQueryColumn>> m_path;
 
 	// SEMI-JOIN render tag (behavioural, like m_path — NOT provenance): render this dot-walk condition as a
 	// correlated EXISTS instead of a projection JOIN, so it FILTERS (once/zero per row) without multiplying.
@@ -236,9 +237,9 @@ struct ibQueryCondition
 // reference dot-walk path (== m_col), joined like a dot-walk filter / projection.
 struct ibQuerySortItem
 {
-	const ibBackendQueryColumn* m_col = nullptr;   // null = row-key (reference/PK) sort; with m_path = the path LEAF
+	std::shared_ptr<const ibBackendQueryColumn> m_col;   // null = row-key (reference/PK) sort; with m_path = the path LEAF
 	bool                        m_ascending = true;
-	std::vector<const ibBackendQueryColumn*> m_path;     // reference dot-walk path (empty = plain column)
+	std::vector<std::shared_ptr<const ibBackendQueryColumn>> m_path;     // reference dot-walk path (empty = plain column)
 
 	// COMPUTED sort (ORDER BY <expression> — a CASE, arithmetic, or a bare value/&parameter): when set, the
 	// provider lowers it via BuildColumnExpr and sorts on the resulting expression — m_col stays null, m_path
@@ -290,9 +291,9 @@ struct ibQueryPredicate
 	ibQueryPredicateKind m_kind = ibQueryPredicateKind::Leaf;
 
 	ibQueryCondition            m_leaf;                 // Leaf — one col / op / value (Eq/Ne/ordered/LIKE)
-	const ibBackendQueryColumn* m_col = nullptr;    // IsNull — the column (the path LEAF when m_path set)
+	std::shared_ptr<const ibBackendQueryColumn> m_col;    // IsNull — the column (the path LEAF when m_path set)
 	bool                        m_negated = false;      // IsNull — IS NOT NULL
-	std::vector<const ibBackendQueryColumn*> m_path;    // IsNull / RefType — reference dot-walk path (empty = plain column)
+	std::vector<std::shared_ptr<const ibBackendQueryColumn>> m_path;    // IsNull / RefType — reference dot-walk path (empty = plain column)
 
 	// ⭐ IsNull — …OR AN EXPRESSION, when what is asked about is not a column. `ISNULL(MIN(x), y)`
 	// unfolds to `CASE WHEN MIN(x) IS NULL THEN y ELSE MIN(x) END`, and a FOLD is not a column: it is
@@ -323,8 +324,8 @@ struct ibQueryPredicate
 		auto p = std::make_shared<ibQueryPredicate>();
 		p->m_kind = ibQueryPredicateKind::Not; p->m_children = { a }; return p;
 	}
-	static ibQueryPredicatePtr Null(const ibBackendQueryColumn* col, bool negated,
-		const std::vector<const ibBackendQueryColumn*>& path = {}) {
+	static ibQueryPredicatePtr Null(const std::shared_ptr<const ibBackendQueryColumn>& col, bool negated,
+		const std::vector<std::shared_ptr<const ibBackendQueryColumn>>& path = {}) {
 		auto p = std::make_shared<ibQueryPredicate>();
 		p->m_kind = ibQueryPredicateKind::IsNull; p->m_col = col; p->m_negated = negated;
 		if (path.size() > 1) p->m_path = path;
@@ -338,8 +339,8 @@ struct ibQueryPredicate
 	}
 	// `<col> [NOT] REFS <type>` — the type test. The TARGET travels as its clsid, which is what both
 	// roads compare against: the stored `_RTRef` in SQL, the value's own class in RAM.
-	static ibQueryPredicatePtr RefType(const ibBackendQueryColumn* col, ibClassID target, bool negated,
-		const std::vector<const ibBackendQueryColumn*>& path = {}) {
+	static ibQueryPredicatePtr RefType(const std::shared_ptr<const ibBackendQueryColumn>& col, ibClassID target, bool negated,
+		const std::vector<std::shared_ptr<const ibBackendQueryColumn>>& path = {}) {
 		auto p = std::make_shared<ibQueryPredicate>();
 		p->m_kind = ibQueryPredicateKind::RefType; p->m_col = col; p->m_negated = negated;
 		p->m_refTypeClsid = target;
@@ -356,23 +357,23 @@ struct ibQueryPredicate
 // provider, so it goes SERVER-SIDE in the one main statement. (docs/private/access-policy-rls.md — semi-join.)
 struct ibSemiJoinExists
 {
-	const ibBackendQueryable*   m_inner    = nullptr;   // the permission source (a real register / table)
-	ibQueryPredicatePtr         m_where;                // the inner's OWN conditions, lowered vs m_inner (null = none)
-	const ibBackendQueryColumn* m_outerKey = nullptr;   // s.k — correlation column on the OUTER (main) source
-	const ibBackendQueryColumn* m_innerKey = nullptr;   // a.k — correlation column on the INNER
-	ibQueryFilterOp             m_op = ibQueryFilterOp::Equal;   // correlation comparison (Equal default; FilterOpToBinOp at render)
-	bool                        m_negated  = false;      // NOT EXISTS — `x NOT IN (SELECT k …)`; its form is the server's (ibSqlFeatures::m_antiJoin)
+	std::shared_ptr<const ibBackendQueryable>   m_inner;                // the permission source (a real register / table)
+	ibQueryPredicatePtr                         m_where;                // the inner's OWN conditions, lowered vs m_inner (null = none)
+	std::shared_ptr<const ibBackendQueryColumn> m_outerKey;             // s.k — correlation column on the OUTER (main) source
+	std::shared_ptr<const ibBackendQueryColumn> m_innerKey;             // a.k — correlation column on the INNER
+	ibQueryFilterOp                             m_op = ibQueryFilterOp::Equal;   // correlation comparison (Equal default; FilterOpToBinOp at render)
+	bool                                        m_negated = false;      // NOT EXISTS — `x NOT IN (SELECT k …)`; its form is the server's (ibSqlFeatures::m_antiJoin)
 	// An EMPTY key matches an empty one, in whichever spelling either side holds it (a NULL or zero key, an
 	// untagged row, the type's empty value), as an equality of values says (DecomposeEquality). Set by
 	// `x IN (SELECT k …)` when neither key is a row's own (and so both may be empty); a policy's restriction
 	// keeps the plain correlation.
-	bool                        m_emptyMatchesEmpty = false;
+	bool                                        m_emptyMatchesEmpty = false;
 	// ⭐ …AND THE REST OF A ROW — `(a, b) IN (SELECT x, y …)`: each further pair is one more equality of the
 	// correlation, held as the first pair is, the way a join holds its further key parts (ibJoinOn::m_alsoOn).
 	struct ibSemiJoinKeyPart {
-		const ibBackendQueryColumn* m_outerKey = nullptr;
-		const ibBackendQueryColumn* m_innerKey = nullptr;
-		bool                        m_emptyMatchesEmpty = false;
+		std::shared_ptr<const ibBackendQueryColumn> m_outerKey;
+		std::shared_ptr<const ibBackendQueryColumn> m_innerKey;
+		bool                                        m_emptyMatchesEmpty = false;
 	};
 	std::vector<ibSemiJoinKeyPart> m_alsoKeys;
 };
@@ -452,7 +453,7 @@ struct ibQueryColumnExpr
 {
 	ibQueryColumnExprKind       m_kind = ibQueryColumnExprKind::Column;
 
-	const ibBackendQueryColumn* m_col = nullptr;          // Column — the source column (its FIRST sql field)
+	std::shared_ptr<const ibBackendQueryColumn> m_col;    // Column — the source column (its FIRST sql field)
 	ibString                    m_field;                  // Column — ONE named physical field of it (empty = the first)
 	ibValue                     m_const;                  // Const — a literal value
 
@@ -512,11 +513,11 @@ struct ibQueryColumnExpr
 	// and nothing else — a column that plainly reports a reference and returns a number.
 	//
 	// Empty name = the first value field, i.e. exactly what Col() has always meant.
-	static ibQueryColumnExprPtr ColField(const ibBackendQueryColumn* col, const ibString& field) {
+	static ibQueryColumnExprPtr ColField(const std::shared_ptr<const ibBackendQueryColumn>& col, const ibString& field) {
 		auto e = std::make_shared<ibQueryColumnExpr>();
 		e->m_kind = ibQueryColumnExprKind::Column; e->m_col = col; e->m_field = field; return e;
 	}
-	static ibQueryColumnExprPtr Col(const ibBackendQueryColumn* col) {
+	static ibQueryColumnExprPtr Col(const std::shared_ptr<const ibBackendQueryColumn>& col) {
 		auto e = std::make_shared<ibQueryColumnExpr>();
 		e->m_kind = ibQueryColumnExprKind::Column; e->m_col = col; return e;
 	}
@@ -617,7 +618,7 @@ struct ibQueryColumnSelect
 	// `PRESENTATION(Currency)` returned seven blank cells and no complaint (measured 2026-09-06). The
 	// value was in the row under a name nobody had told the evaluator about.
 	struct Input {
-		const ibBackendQueryColumn* m_col    = nullptr;   // what the expression names
+		std::shared_ptr<const ibBackendQueryColumn> m_col;   // what the expression names
 		ibString                    m_prefix;             // …and what the statement called it
 		bool                        m_object = false;     // read as a whole value (reference / enum), not one field
 	};
@@ -637,7 +638,10 @@ struct ibQueryColumnSelect
 struct ibSubqueryOutput
 {
 	ibString                    m_name;            // what the outer query writes
-	const ibBackendQueryColumn* m_col = nullptr;   // read through this column…
+	// read through this column… Held: the inner SELECT's schema is a local of the function that builds this list, and
+	// a wrapper holding a bare pointer to a column it minted read through freed memory (2026-08-19: the row values
+	// came back EMPTY, which folded 56 rows into one group and printed a blank report).
+	std::shared_ptr<const ibBackendQueryColumn> m_col;
 	ibString                    m_alias;           // …or by this name, when the door has no column for it
 	
 	// …or, for a reference / enum / composite leaf, reassembled from the field spread projected under
@@ -646,16 +650,7 @@ struct ibSubqueryOutput
 	// schema is read, or the value arrives as one field of an object instead of the object.
 	ibString                    m_objectPrefix;
 	ibTypeDescription           m_type;            // empty = unknown (a computed expression)
-	
-	// ⭐ AND WHO KEEPS `m_col` ALIVE, when it is not the metadata. The inner SELECT's schema owns the
-	// columns IT minted (a dot-walk leaf, a synthetic measure) through ibQueryOutputColumn::m_ownedCol, and
-	// that schema is a LOCAL of the function that builds this list — so a wrapper holding the bare
-	// pointer outlived the storage and read through freed memory (2026-08-19: the row values came
-	// back EMPTY, which folded 56 rows into one group and printed a blank report).
-	//
-	// Carried as a share: empty for a metadata column (it outlives everything), set for a minted one.
-	std::shared_ptr<ibBackendQueryColumn> m_owned;
-	
+
 	// ⭐ WHETHER WHAT IT READS MAY BE SHOWN (functional options) — the inner schema's answer
 	// (ibQueryOutputColumn::m_available). `m_col` may be a walk's leaf, which answers for itself alone.
 	bool                                  m_available = true;
@@ -667,7 +662,9 @@ struct ibSubqueryOutput
 
 // ==========================================================================
 
-class BACKEND_API ibBackendQueryable
+// ⭐ A READING IS BORN HELD, so it can hand ITSELF to what it builds — shared_from_this(), the same share its
+// owner keeps — rather than a bare `this` the built thing would outlive.
+class BACKEND_API ibBackendQueryable : public std::enable_shared_from_this<ibBackendQueryable>
 {
 public:
 
@@ -693,13 +690,13 @@ public:
 	// Does THIS source contain the column? — column->leaf routing for multi-source composition
 	// (which leaf a Where / join-key / output column belongs to). Default: the column is one of
 	// OUR columns (by name, then the id), as a type description contains a type (ContainType). (docs §22.1)
-	virtual bool ContainColumn(const ibBackendQueryColumn* col) const {
+	virtual bool ContainColumn(const std::shared_ptr<const ibBackendQueryColumn>& col) const {
 		// Identity by model-id, NOT merely by name: two joined sources can each expose an attribute with
 		// the SAME name (e.g. "Reference"), and a name-only check would let BOTH claim the other's column —
 		// the RAM stitch would then read a foreign field off this leaf's own SELECT * (fld<id>_TYPE not
 		// found). The model-id (attribute metaID) is config-unique, so each column belongs to exactly one.
 		if (col == nullptr) return false;
-		const ibBackendQueryColumn* mine = ResolveColumnByName(col->GetName());
+		const std::shared_ptr<const ibBackendQueryColumn> mine = ResolveColumnByName(col->GetName());
 		return mine != nullptr && mine->GetColumnId() == col->GetColumnId();
 	}
 
@@ -711,19 +708,10 @@ public:
 	// ⚠ EVERY SOURCE ANSWERS — no default. It had one, `{}`, and a source that resolved its one
 	// column by name yet listed none (the constant) offered nothing to pick in the constructor, with
 	// nothing to say why (2026-11-11). A source that cannot list its columns has none.
-	virtual std::vector<const ibBackendQueryColumn*> GetQueryColumns() const = 0;
-
-	// ⭐ DID THIS SOURCE MINT THAT COLUMN — and if so, here is its STORAGE, so whoever still needs
-	// the column past the run keeps it by raising a refcount instead of copying it (a copy answers
-	// only the questions it copied; identity and everything the real column knows stop matching).
 	//
-	// Default EMPTY, which is the honest answer for a metadata-backed source: its columns are the
-	// configuration's and outlive every query, so there is nothing to keep. Only the sources built
-	// FOR one query — a nested subquery, a named query (`WITH`) — mint columns of their own and
-	// answer here. (docs/private/query-language-arc.md §22 / §24.4)
-	virtual std::shared_ptr<ibBackendQueryColumn> ShareColumn(const ibBackendQueryColumn* /*col*/) const {
-		return nullptr;
-	}
+	// ⭐ HANDED OUT AS THEY ARE HELD. Whoever keeps a column past the run keeps the share it was given; there is no
+	// second question ("did you mint it — then give me its storage", ShareColumn) to ask the source first.
+	virtual std::vector<std::shared_ptr<const ibBackendQueryColumn>> GetQueryColumns() const = 0;
 
 	// The source's UNIQUENESS-KEY COLUMNS — the ONE authority for the write UPSERT match AND the
 	// dot-walk self-reference key. The source owns its key: a record (catalog / document) returns
@@ -733,7 +721,7 @@ public:
 	// constant its single RECORD_KEY column. It is ALSO the read keyset and the DELETE key: those
 	// used to ask a second question (GetIdentitySort) that answered with a sort, and a sort stops
 	// being a key the moment something else sorts first. Default: none. (docs §22.1)
-	virtual std::vector<const ibBackendQueryColumn*> GetPrimaryKeyColumns() const { return {}; }
+	virtual std::vector<std::shared_ptr<const ibBackendQueryColumn>> GetPrimaryKeyColumns() const { return {}; }
 
 	// THIS source's own column with the given name — for UNION, where each branch supplies
 	// the shared output columns BY NAME (catalog ∪ temp: each has its own "Code" column
@@ -745,7 +733,7 @@ public:
 	// (SELECT * must not carry it; a walk through a reference finds it by name). It was a virtual with
 	// sixteen answers of its own, and the constant resolved a column it did not list: the constructor
 	// offered nothing to pick. What a source can be asked by name is what it lists.
-	const ibBackendQueryColumn* ResolveColumnByName(const ibString& name) const;
+	std::shared_ptr<const ibBackendQueryColumn> ResolveColumnByName(const ibString& name) const;
 
 	// --- physical layout -------------------------------------------------
 	// The real backing table for the main row scan.
@@ -815,7 +803,7 @@ public:
 	// GetPrimaryKeyColumns().front() (the self-reference) it gives the source's own parent-ref hierarchy.
 	// Null for a flat / non-record source. Used to unfold a TotalBy(refField, Hierarchy) dimension: the
 	// target catalog's parent-map is read through ITS GetHierarchyColumn. (docs/private/query-language-arc.md §22.1b)
-	virtual const ibBackendQueryColumn* GetHierarchyColumn() const { return nullptr; }
+	virtual std::shared_ptr<const ibBackendQueryColumn> GetHierarchyColumn() const { return nullptr; }
 
 	// ⭐⭐ THE ARRANGEMENT ITSELF — one value, four states (`ibHierarchyType`, backend_core.h), and
 	// every caller reads off it the distinction it actually needs:
@@ -895,7 +883,7 @@ public:
 	// the reference, an enumeration by its declared order and then the reference (ibBackendColumnSortOrder).
 	// Null (the default): no order of its own, and a reference to it sorts by its identity. (Appended after
 	// the one above, for the same reason.)
-	virtual const ibBackendQueryColumn* GetSortColumn() const { return nullptr; }
+	virtual std::shared_ptr<const ibBackendQueryColumn> GetSortColumn() const { return nullptr; }
 };
 
 // ==========================================================================
@@ -912,7 +900,7 @@ public:
 	virtual ~ibBackendQueryableHolder() = default;
 	// The MAIN TABLE — the source the dynamic list builds on (composer.FromSource,
 	// columns / identity / parent all come from it; family-blind, register ≡ ref).
-	virtual const ibBackendQueryable* GetQueryable() const = 0;
+	virtual std::shared_ptr<const ibBackendQueryable> GetQueryable() const = 0;
 
 	// (`UseCustomQuery` / `GetQueryText` / `GetKeyFields` REMOVED 2026-08-07 — never overridden,
 	// never called. They came from an earlier reading in which an arbitrary query REPLACED the main
@@ -950,38 +938,24 @@ public:
 	                    const std::vector<ibSubqueryOutput>& outputs);
 	~ibSubqueryQueryable() override;                                 // out-of-line — unique_ptr of an incomplete type
 
-	const ibBackendQueryColumn* Column(const ibString& name) const {
-		for (const ibBackendQueryColumn* c : m_columns)
+	std::shared_ptr<const ibBackendQueryColumn> Column(const ibString& name) const {
+		for (const std::shared_ptr<const ibBackendQueryColumn>& c : m_columns)
 			if (c != nullptr && c->GetName() == name) return c;
 		return nullptr;
 	}
 
-	bool ContainColumn(const ibBackendQueryColumn* col) const override {
-		for (const ibBackendQueryColumn* c : m_columns)
+	bool ContainColumn(const std::shared_ptr<const ibBackendQueryColumn>& col) const override {
+		for (const std::shared_ptr<const ibBackendQueryColumn>& c : m_columns)
 			if (c == col) return true;
 		return false;
 	}
-	// …and the narrower question — did this wrapper ALLOCATE the column, so that it DIES with the wrapper?
-	// A published column may equally be the inner source's own, owned by the metadata and outliving
-	// everything. Answered with the one thing that lets a consumer KEEP it: the storage itself, so holding
-	// on to a published column is a matter of raising its refcount rather than copying it. A wrapper dies at the end of
-	// the run; whoever still needs the column simply shares its ownership and the column lives on —
-	// the SAME column, same id, same type. Empty when this wrapper did not allocate it (a metadata
-	// column outlives everything and needs no keeping).
-	std::shared_ptr<ibBackendQueryColumn> ShareColumn(const ibBackendQueryColumn* col) const override {
-		for (const std::shared_ptr<ibBackendQueryColumn>& c : m_ownedColumns)
-			if (c.get() == col) return c;
-		return nullptr;
-	}
-	// Everything this wrapper allocated, for a consumer that keeps the WHOLE run alive rather than
-	// hand-picking (the query result: it holds columns in four separate lists, and a list added later
-	// would silently be the one nobody remembered to keep).
-	const std::vector<std::shared_ptr<ibBackendQueryColumn>>& SharedColumns() const { return m_ownedColumns; }
-	std::vector<const ibBackendQueryColumn*> GetQueryColumns() const override { return m_columns; }
+	// The wrapper dies at the end of the run; whoever still needs a column it published keeps the share it was
+	// handed, and the column lives on — the SAME column, same id, same type.
+	std::vector<std::shared_ptr<const ibBackendQueryColumn>> GetQueryColumns() const override { return m_columns; }
 	// ⭐ …AND WHICH OF THEM IS THE ROW — the inner source's key, republished as THIS wrapper's own
 	// columns. Same shape ibAliasQueryable answers with, for the same reason: a wrapper is the same
 	// rows under new column identities, so "which column is the row" has to travel with them.
-	std::vector<const ibBackendQueryColumn*> GetPrimaryKeyColumns() const override;   // out-of-line — needs the inner builder
+	std::vector<std::shared_ptr<const ibBackendQueryColumn>> GetPrimaryKeyColumns() const override;   // out-of-line — needs the inner builder
 
 	ibBackendQueryProvider& GetProvider() const override;            // out-of-line — vends the computed provider
 	bool IsComputedInRam() const override { return true; }
@@ -1007,20 +981,20 @@ public:
 
 private:
 	std::unique_ptr<ibDataQueryBuilder>      m_inner;     // the nested query (owned by value via the heap)
-	std::vector<const ibBackendQueryColumn*> m_columns;   // exposed columns (select list / SELECT * / group keys + agg aliases)
+	// exposed columns (select list / SELECT * / group keys + agg aliases) — the inner source's own and the ones this
+	// wrapper minted for its folds and walks alike
+	std::vector<std::shared_ptr<const ibBackendQueryColumn>> m_columns;
 	// WHERE EACH EXPOSED COLUMN'S VALUE COMES FROM — parallel to m_columns. They differ exactly where
 	// the inner query gave an ALIAS: the outer world sees the alias, the row is read through the real
 	// column. (Empty on the aggregate path, which reads by group key / alias itself.)
-	std::vector<const ibBackendQueryColumn*> m_readFrom;
+	std::vector<std::shared_ptr<const ibBackendQueryColumn>> m_readFrom;
 	// …and the ones read BY ALIAS instead: a dot-walked selection has no column of its own in the
 	// door, only an output name. Non-empty here means "ask the result for this name".
 	std::vector<ibString>                    m_readAlias;
 	// …and the ones REASSEMBLED from a field spread: a reference / enum / composite leaf is not one
 	// field but several, projected under this prefix. Non-empty wins over both of the above.
 	std::vector<ibString>                    m_readPrefix;
-	// AGGREGATE inner query support: owned synthetic columns for the aggregate aliases (raw numeric,
-	// unique model ids), the mode flag, and the optional row limit (SELECT TOP n in the branch).
-	std::vector<std::shared_ptr<ibBackendQueryColumn>> m_ownedColumns;
+	// AGGREGATE inner query support: the mode flag, and the optional row limit (SELECT TOP n in the branch).
 	bool m_aggregate = false;
 	long m_top = 0;
 	std::vector<ibQueryColumnSelect> m_computedOverRow;   // SetComputedOverRow
@@ -1058,10 +1032,10 @@ public:
 	// The twin takes the ORDINARY id — the one the column it stands for already has — and turns it
 	// into its own inside: the Alias kind stamped on, which makes it negative. Nobody outside hands
 	// it a number and nobody outside composes one; the class knows which kind it is.
-	explicit ibAliasColumn(const ibBackendQueryColumn* origin)
-		: m_origin(origin), m_id(SyntheticId(SyntheticKind::Alias, origin->GetColumnId())) {}
+	explicit ibAliasColumn(const std::shared_ptr<const ibBackendQueryColumn>& origin)
+		: m_origin(origin), m_id(SyntheticId(SyntheticKind::Alias, m_origin->GetColumnId())) {}
 
-	const ibBackendQueryColumn* Origin() const { return m_origin; }
+	const std::shared_ptr<const ibBackendQueryColumn>& Origin() const { return m_origin; }
 
 	// IDENTITY — the one thing that is this column's own. Everything below is the origin's.
 	ibMetaID GetColumnId() const override { return m_id; }
@@ -1094,7 +1068,7 @@ public:
 	}
 
 private:
-	const ibBackendQueryColumn* m_origin;
+	std::shared_ptr<const ibBackendQueryColumn> m_origin;
 	ibMetaID                    m_id;
 };
 
@@ -1102,46 +1076,38 @@ class BACKEND_API ibAliasQueryable : public ibBackendQueryable
 {
 public:
 	// Mints one twin per column the origin publishes. `sqlAlias` is what the statement calls this
-	// reading — the author's `AS B` — and it is what qualifies the twins in SQL.
-	ibAliasQueryable(const ibBackendQueryable* origin, const ibString& sqlAlias);
-	// …AND THE ORIGIN AS AN OWNING HANDLE, for a source that was built FOR this query (a subquery, a
-	// named result): the alias outlives the lowering that made it, so it must be a co-owner rather
-	// than hold a pointer into something the lowering was keeping. A metadata source's share is
-	// non-owning and this costs nothing — the same arrangement the builder's From already has.
-	ibAliasQueryable(std::shared_ptr<const ibBackendQueryable> origin, const ibString& sqlAlias)
-		: ibAliasQueryable(origin.get(), sqlAlias) { m_hold = std::move(origin); }
+	// reading — the author's `AS B` — and it is what qualifies the twins in SQL. The reading HOLDS its
+	// origin: it may outlive the lowering that made it (a subquery, a named result).
+	ibAliasQueryable(const std::shared_ptr<const ibBackendQueryable>& origin, const ibString& sqlAlias);
 
-	const ibBackendQueryable* Origin()   const { return m_origin; }
-	const ibString&                  SqlAlias() const { return m_sqlAlias; }
+	const std::shared_ptr<const ibBackendQueryable>& Origin()   const { return m_origin; }
+	const ibString&                                  SqlAlias() const { return m_sqlAlias; }
 
 	// WHERE A TWIN'S VALUE ACTUALLY LIVES — the origin's own column, or null if this is not ours.
 	// Asked by every road that has to READ rather than route: the leaf materialisation, the pushed
 	// condition, the SQL projection.
-	const ibBackendQueryColumn* OriginOf(const ibBackendQueryColumn* col) const {
-		for (const std::shared_ptr<ibAliasColumn>& c : m_owned)
-			if (c.get() == col) return c->Origin();
-		return nullptr;
+	std::shared_ptr<const ibBackendQueryColumn> OriginOf(const std::shared_ptr<const ibBackendQueryColumn>& col) const {
+		for (const std::shared_ptr<ibAliasColumn>& c : m_published)
+			if (c == col) return c->Origin();
+		return m_sort != nullptr && m_sort == col ? m_sort->Origin() : nullptr;
 	}
 
-	bool ContainColumn(const ibBackendQueryColumn* col) const override {
-		for (const std::shared_ptr<ibAliasColumn>& c : m_owned)
-			if (c.get() == col) return true;
-		return false;
-	}
-	std::shared_ptr<ibBackendQueryColumn> ShareColumn(const ibBackendQueryColumn* col) const override {
-		for (const std::shared_ptr<ibAliasColumn>& c : m_owned)
-			if (c.get() == col) return c;
-		return nullptr;
+	bool ContainColumn(const std::shared_ptr<const ibBackendQueryColumn>& col) const override {
+		for (const std::shared_ptr<ibAliasColumn>& c : m_published)
+			if (c == col) return true;
+		return m_sort != nullptr && m_sort == col;
 	}
 	// ⭐ EVERY TWIN IS MINTED WITH THE READING — one per column the origin lists, and one for its sort
 	// order, the column it answers to without listing it. A name is then found among them like on any
 	// source (ResolveColumnByName); the ORIGIN's column, which belongs to the other side of the join, is
 	// never handed out. (They were minted on demand while a source could resolve names it did not list;
 	// since what it resolves is what it lists, there is nothing left to mint later — and no `mutable`.)
-	std::vector<const ibBackendQueryColumn*> GetQueryColumns() const override { return m_published; }
-	std::vector<const ibBackendQueryColumn*> GetPrimaryKeyColumns() const override;
-	const ibBackendQueryColumn*              GetHierarchyColumn() const override;
-	const ibBackendQueryColumn*              GetSortColumn() const override { return m_sort; }
+	std::vector<std::shared_ptr<const ibBackendQueryColumn>> GetQueryColumns() const override {
+		return { m_published.begin(), m_published.end() };
+	}
+	std::vector<std::shared_ptr<const ibBackendQueryColumn>> GetPrimaryKeyColumns() const override;
+	std::shared_ptr<const ibBackendQueryColumn>              GetHierarchyColumn() const override;
+	std::shared_ptr<const ibBackendQueryColumn>              GetSortColumn() const override { return m_sort; }
 
 	// …AND EVERYTHING ELSE IS THE ORIGIN'S, because it is the same table.
 	ibBackendQueryProvider& GetProvider()      const override { return m_origin->GetProvider(); }
@@ -1161,12 +1127,10 @@ public:
 	ibQueryRamTable ComputeRows(const std::vector<ibQueryCondition>& extra) const override { return m_origin->ComputeRows(extra); }
 
 private:
-	const ibBackendQueryable*                m_origin;
-	std::shared_ptr<const ibBackendQueryable> m_hold;     // set only when the origin is query-scoped
-	ibString                                 m_sqlAlias;
-	std::vector<std::shared_ptr<ibAliasColumn>> m_owned;       // EVERY twin of this reading — the published ones and the sort order
-	std::vector<const ibBackendQueryColumn*>    m_published;   // the SELECT * face — the origin's, twinned
-	const ibBackendQueryColumn*                 m_sort = nullptr;   // the origin's sort order, twinned (not published)
+	std::shared_ptr<const ibBackendQueryable>   m_origin;
+	ibString                                    m_sqlAlias;
+	std::vector<std::shared_ptr<ibAliasColumn>> m_published;   // the SELECT * face — the origin's, twinned
+	std::shared_ptr<ibAliasColumn>              m_sort;        // the origin's sort order, twinned (not published)
 };
 
 // ⭐ WHAT THIS SOURCE / COLUMN STANDS FOR — one door, asked by every road that READS.
@@ -1178,19 +1142,23 @@ private:
 // this stand for" is a chain, not a hop. Answering after one hop would name another twin as the
 // origin: two readings of one table would stop looking like the same table, and a read would reach
 // the SQL road holding a column no table has.
-inline const ibBackendQueryable* ibOriginQueryable(const ibBackendQueryable* q) {
-	while (const ibAliasQueryable* a = dynamic_cast<const ibAliasQueryable*>(q))
-		q = a->Origin();
-	return q;
+inline std::shared_ptr<const ibBackendQueryable> ibOriginQueryable(const std::shared_ptr<const ibBackendQueryable>& q) {
+	std::shared_ptr<const ibBackendQueryable> at = q;
+	while (const std::shared_ptr<const ibAliasQueryable> a = std::dynamic_pointer_cast<const ibAliasQueryable>(at))
+		at = a->Origin();
+	return at;
 }
-inline const ibBackendQueryColumn* ibOriginColumn(const ibBackendQueryable* q, const ibBackendQueryColumn* col) {
-	while (const ibAliasQueryable* a = dynamic_cast<const ibAliasQueryable*>(q)) {
-		const ibBackendQueryColumn* const origin = a->OriginOf(col);
+inline std::shared_ptr<const ibBackendQueryColumn> ibOriginColumn(const std::shared_ptr<const ibBackendQueryable>& q,
+                                                                  const std::shared_ptr<const ibBackendQueryColumn>& col) {
+	std::shared_ptr<const ibBackendQueryable>   at     = q;
+	std::shared_ptr<const ibBackendQueryColumn> column = col;
+	while (const std::shared_ptr<const ibAliasQueryable> a = std::dynamic_pointer_cast<const ibAliasQueryable>(at)) {
+		std::shared_ptr<const ibBackendQueryColumn> origin = a->OriginOf(column);
 		if (origin == nullptr) break;   // not this reading's column — it is already the origin's own
-		col = origin;
-		q   = a->Origin();
+		column = std::move(origin);
+		at     = a->Origin();
 	}
-	return col;
+	return column;
 }
 
 // ==========================================================================
@@ -1228,13 +1196,13 @@ public:
 	// which is what its rows actually contain. Without one point of substitution each forward would
 	// have to be overridden separately, and the one missed would report the movement table's
 	// columns for a totals row.
-	virtual const ibBackendQueryable* NavigationSource() const { return m_reg->GetQueryable(); }
+	virtual std::shared_ptr<const ibBackendQueryable> NavigationSource() const { return m_reg->GetQueryable(); }
 
-	virtual std::vector<const ibBackendQueryColumn*> GetQueryColumns() const override { return NavigationSource()->GetQueryColumns(); }
+	virtual std::vector<std::shared_ptr<const ibBackendQueryColumn>> GetQueryColumns() const override { return NavigationSource()->GetQueryColumns(); }
 	virtual ibString GetQueryTableName() const override { return NavigationSource()->GetQueryTableName(); }
 	virtual ibString GetQueryName()       const override { return NavigationSource()->GetQueryName(); }
 	virtual const ibMetaData* GetMetaData() const override { return m_reg->GetQueryable()->GetMetaData(); }
-	virtual std::vector<const ibBackendQueryColumn*> GetPrimaryKeyColumns() const override { return NavigationSource()->GetPrimaryKeyColumns(); }
+	virtual std::vector<std::shared_ptr<const ibBackendQueryColumn>> GetPrimaryKeyColumns() const override { return NavigationSource()->GetPrimaryKeyColumns(); }
 
 protected:
 	const TReg* m_reg;

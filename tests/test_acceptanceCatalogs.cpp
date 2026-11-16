@@ -175,7 +175,7 @@ struct AcceptanceCatalogs : ::testing::Test {
 		for (const ibValueMetaObjectAttributeBase* attribute : catalog->GetGenericAttributeArrayObject()) {
 			if (attribute == nullptr || attribute->GetQueryColumn() == nullptr)
 				continue;
-			for (const ibString& field : ColumnFieldNames(attribute->GetQueryColumn())) {
+			for (const ibString& field : ColumnFieldNames(*attribute->GetQueryColumn())) {
 				if (!seen.insert(field).second)
 					continue;
 				list << (list.IsEmpty() ? wxT("") : wxT(", ")) << field << SqliteTypeOf(field);
@@ -186,11 +186,11 @@ struct AcceptanceCatalogs : ::testing::Test {
 			+ wxT(" (") + list + wxT(")"));
 	}
 
-	void Assign(std::vector<ibDmlAssign>& out, const ibBackendQueryColumn* column, const ibValue& value) const {
-		const std::vector<ibString> fields = ColumnFieldNames(column);
+	void Assign(std::vector<ibDmlAssign>& out, const std::shared_ptr<const ibBackendQueryColumn>& column, const ibValue& value) const {
+		const std::vector<ibString> fields = ColumnFieldNames(*column);
 		ibQueryStatement capture(ibQueryStatement::Kind::Delete, ibString(), fields);
 		int position = 1;
-		ibColumnCodec::WriteValue(column, cfg.get(), value, &capture, position);
+		ibColumnCodec::WriteValue(*column, cfg.get(), value, &capture, position);
 		const std::vector<ibQueryExprPtr>& consts = capture.CapturedValues();
 		for (size_t i = 0; i < fields.size(); ++i)
 			out.push_back(ibDmlAssign{ fields[i], (i < consts.size() && consts[i]) ? consts[i] : ibConst(ibValue()) });
@@ -277,7 +277,7 @@ struct AcceptanceCatalogs : ::testing::Test {
 		return codes;
 	}
 
-	std::set<ibString> CodesWhere(ibValueMetaObjectCatalog* catalog, const ibBackendQueryColumn* extra,
+	std::set<ibString> CodesWhere(ibValueMetaObjectCatalog* catalog, const std::shared_ptr<const ibBackendQueryColumn>& extra,
 		const ibValue& extraValue, bool unmarkedOnly) {
 		ibDataQueryBuilder q(ibConnectionPool::ThreadHolder());
 		q.From(catalog->GetQueryable());
@@ -311,8 +311,8 @@ struct AcceptanceCatalogs : ::testing::Test {
 	}
 
 	ibNumber RolledUnder(const ibString& root) {
-		const ibBackendQueryColumn* refCol = goods->GetDataReference()->GetQueryColumn();
-		const ibBackendQueryColumn* qtySlot = goods->GetDataCode()->GetQueryColumn();
+		std::shared_ptr<const ibBackendQueryColumn> refCol = goods->GetDataReference()->GetQueryColumn();
+		std::shared_ptr<const ibBackendQueryColumn> qtySlot = goods->GetDataCode()->GetQueryColumn();
 		ibQueryRamTable snap;
 		snap.AddColumn(refCol->GetColumnId(), refCol->GetName(), refCol->GetTypeDesc());
 		snap.AddColumn(qtySlot->GetColumnId(), wxT("qty"), ibTypeDescription());
@@ -346,7 +346,7 @@ struct AcceptanceCatalogs : ::testing::Test {
 	// contracts, the road a dynamic list takes, not a hand-built condition.
 	std::set<ibString> ContractsWhere(const ibString& path, ibComparisonKind comparison, const ibValue& value) {
 		ibDataDBComposer composer;
-		composer.FromSource(contracts->GetQueryable());
+		composer.FromSource(contracts->GetQueryable());   // as its descriptor hands it out
 		composer.Select(contracts->GetDataCode()->GetQueryColumn());
 		composer.UserSettings().m_filter.Append(path, comparison, ibStoreValue(value));
 		std::vector<ibQueryLowering::ibQueryOutputColumn> schema;
@@ -441,7 +441,7 @@ TEST_F(AcceptanceCatalogs, AQueryNarrowsASubordinateCatalogToItsOwner)
 	EXPECT_TRUE(partiesSeen.count(wxT("GLOBEX")));
 
 	const auto& block = fixture["contracts"];
-	const ibBackendQueryColumn* ownerCol = contracts->GetCatalogOwner()->GetQueryColumn();
+	std::shared_ptr<const ibBackendQueryColumn> ownerCol = contracts->GetCatalogOwner()->GetQueryColumn();
 	// Where(owner, ref) narrows on this tree. A tree that stops narrowing fails here, and that is
 	// the regression to fix, not a reason to edit the oracle.
 	for (auto it = block["of_owner_including_marked"].begin(); it != block["of_owner_including_marked"].end(); ++it)

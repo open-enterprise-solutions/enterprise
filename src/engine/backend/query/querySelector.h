@@ -37,7 +37,7 @@ class ibDatabaseConnectionHolder;   // sub-selection recipe holds it by pointer 
 // itself the same two ways: sorting a level by one of its own fields, and sorting it by a figure
 // ("the biggest customer first"), are one question with two spellings of the key.
 struct ibSelectorSort {
-	const ibBackendQueryColumn* m_col   = nullptr;   // a source column…
+	std::shared_ptr<const ibBackendQueryColumn> m_col;   // a source column…
 	ibString                    m_alias;             // …or an aggregate's alias
 	bool                        m_ascending = true;
 };
@@ -58,14 +58,14 @@ public:
 
 	// Fold by parent-ref (a reference dimension): rowKeyCol = the row's data-reference, parentKeyCol =
 	// its parent attribute (link by _RRRef identity). `dim` (AXIS 2) = how the dimension unfolds.
-	ibSelector& ByParentRef(const ibBackendQueryColumn* rowKeyCol, const ibBackendQueryColumn* parentKeyCol,
-		ibDimensionKind dim = ibDimensionKind::Hierarchy)
+	ibSelector& ByParentRef(const std::shared_ptr<const ibBackendQueryColumn>& rowKeyCol,
+		const std::shared_ptr<const ibBackendQueryColumn>& parentKeyCol, ibDimensionKind dim = ibDimensionKind::Hierarchy)
 	{
 		m_rowKeyCol = rowKeyCol; m_parentKeyCol = parentKeyCol; m_dimKind = dim; return *this;
 	}
 
 	// Fold by grouping levels (TotalBy / GroupBy): the columns in order (level 0 = first field).
-	ibSelector& ByGroups(const std::vector<const ibBackendQueryColumn*>& groupFields)
+	ibSelector& ByGroups(const std::vector<std::shared_ptr<const ibBackendQueryColumn>>& groupFields)
 	{
 		m_groupFields = groupFields; return *this;
 	}
@@ -80,8 +80,8 @@ public:
 	// Recipe for sub-selections (selection -> sub-selection): the source a sub-Select re-Executes for a
 	// node's child LEVEL, the columns that level materialises, AND the base FILTER (the original Where
 	// filter) — so a sub-selection shows the node's children WITH THE SAME filter. Inherited down.
-	ibSelector& WithSource(ibDatabaseConnectionHolder* holder, const ibBackendQueryable* queryable,
-		const std::vector<std::pair<const ibBackendQueryColumn*, ibString>>& selectCols,
+	ibSelector& WithSource(ibDatabaseConnectionHolder* holder, const std::shared_ptr<const ibBackendQueryable>& queryable,
+		const std::vector<std::pair<std::shared_ptr<const ibBackendQueryColumn>, ibString>>& selectCols,
 		const std::vector<ibQueryCondition>& conditions = {})
 	{
 		m_holder = holder; m_queryable = queryable; m_selectCols = selectCols; m_conditions = conditions; return *this;
@@ -213,7 +213,7 @@ public:
 	// Current visit's value for a column (s.<col>) / for an aggregate alias. A column NOT carried at
 	// this level (a detail field on an upper grouping node — not yet unfolded) yields the runtime's
 	// explicit NULL, not a default-empty value, so "no value at this level" reads as NULL.
-	ibValue GetValue(const ibBackendQueryColumn* col) const
+	ibValue GetValue(const std::shared_ptr<const ibBackendQueryColumn>& col) const
 	{
 		const ibSelectorTree::Node* n = Current();
 		if (n == nullptr || col == nullptr) return ibValue(ibValueTypes::TYPE_NULL);
@@ -252,7 +252,7 @@ public:
 
 	// GRAND TOTAL — lives IN the selection itself (the root of the folded tree), read without walking.
 	// A column / an aggregate alias rolled over the WHOLE result. Absent → runtime NULL.
-	ibValue GetTotal(const ibBackendQueryColumn* col) const
+	ibValue GetTotal(const std::shared_ptr<const ibBackendQueryColumn>& col) const
 	{
 		EnsureWalk();
 		if (col == nullptr) return ibValue(ibValueTypes::TYPE_NULL);
@@ -369,7 +369,7 @@ private:
 			// ROW-keyed (each catalog row is a node) — that is BuildHierarchyTree, rowKey from the
 			// queryable (already in the snapshot), NO extra query.
 			if (SelfHierarchyFold()) {
-				const std::vector<const ibBackendQueryColumn*> keys = m_queryable->GetPrimaryKeyColumns();
+				const std::vector<std::shared_ptr<const ibBackendQueryColumn>> keys = m_queryable->GetPrimaryKeyColumns();
 				if (!keys.empty() && keys.front() != nullptr)
 					return ibQueryComposer::BuildHierarchyTree(m_snapshot, keys.front(), m_totalLevels[0].HeadCol(),
 					                                           m_aggregates, m_totalLevels[0].HeadDim());
@@ -561,9 +561,9 @@ private:
 	mutable ibQueryRamTable m_snapshot;            // the raw snapshot this Selector traverses (drained on demand)
 	ibSelectKind    m_kind;                        // AXIS 1 — traversal
 	ibDimensionKind m_dimKind = ibDimensionKind::Hierarchy;  // AXIS 2 — dimension unfold (for ByGroupsHierarchy)
-	const ibBackendQueryColumn* m_rowKeyCol    = nullptr;   // parent-ref fold
-	const ibBackendQueryColumn* m_parentKeyCol = nullptr;
-	std::vector<const ibBackendQueryColumn*>       m_groupFields;   // grouping fold (manual ByGroups)
+	std::shared_ptr<const ibBackendQueryColumn> m_rowKeyCol;      // parent-ref fold
+	std::shared_ptr<const ibBackendQueryColumn> m_parentKeyCol;
+	std::vector<std::shared_ptr<const ibBackendQueryColumn>>       m_groupFields;   // grouping fold (manual ByGroups)
 	std::vector<ibTotalLevel>                      m_totalLevels;   // totals dimensions (from the door, via WithTotals)
 	bool                                           m_totalsOverall = false;  // walk the ROOT as a row (BY OVERALL)
 	std::vector<ibDataQueryBuilder::AggregateItem> m_aggregates;
@@ -573,9 +573,9 @@ private:
 	std::shared_ptr<ibSelectorTree>                m_readyTree;
 
 	// sub-selection recipe (Select(kind) only)
-	ibDatabaseConnectionHolder* m_holder    = nullptr;
-	const ibBackendQueryable*   m_queryable = nullptr;
-	std::vector<std::pair<const ibBackendQueryColumn*, ibString>> m_selectCols;
+	ibDatabaseConnectionHolder*               m_holder = nullptr;
+	std::shared_ptr<const ibBackendQueryable> m_queryable;
+	std::vector<std::pair<std::shared_ptr<const ibBackendQueryColumn>, ibString>> m_selectCols;
 	std::vector<ibQueryCondition>                                 m_conditions;   // inherited filter
 	int                                                           m_baseLevel = 0;  // Level() offset
 

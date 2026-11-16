@@ -33,7 +33,7 @@ class BACKEND_API ibStructureBatch
 public:
 	// Key the batch by the schema's QUERYABLE (the proper table handle) — it vends the table name AND
 	// the metadata, so the column-level AddColumn/DropColumn need no separate metaData argument.
-	explicit ibStructureBatch(const ibBackendQueryable* queryable);
+	explicit ibStructureBatch(const std::shared_ptr<const ibBackendQueryable>& queryable);
 
 	// Key by a bare table name — for tables that have no queryable yet (virtual register projections).
 	explicit ibStructureBatch(const ibString& table) : m_table(table) {}
@@ -44,8 +44,8 @@ public:
 	// --- column-level: expand a LOGICAL column (ibBackendQueryColumn) through the layout tier and
 	//     pour every physical field. The whole-column cases — a new attribute (ADD all its fields) or
 	//     a removed one (DROP all). Metadata comes from the queryable the batch is keyed by.
-	void AddColumn(const ibBackendQueryColumn* column);
-	void DropColumn(const ibBackendQueryColumn* column);
+	void AddColumn(const std::shared_ptr<const ibBackendQueryColumn>& column);
+	void DropColumn(const std::shared_ptr<const ibBackendQueryColumn>& column);
 
 	// --- field-level: one physical field (the variant type-set diff adds / drops / alters individual
 	//     slots of a column — that granularity is a metadata concern, so the caller hands us slots).
@@ -59,21 +59,21 @@ public:
 	// Create the table from LOGICAL columns (the uuid row-key / a register's rowData are ibBackendColumnRawDB
 	// scaffolds). Each expands through the layout tier; uniqueness/identity is enforced by indexes
 	// (CreateIndex), not a table-level PRIMARY KEY — so the structure speaks only columns.
-	void CreateTable(std::vector<const ibBackendQueryColumn*> columns);
+	void CreateTable(const std::vector<std::shared_ptr<const ibBackendQueryColumn>>& columns);
 	void DropTable();
 	// The drop that can be UNDONE: the table's own columns ride the statement, so the barrier's
 	// compensation ledger re-creates the table (empty) if the apply's second phase fails — the same
 	// reason DROP COLUMN takes the slot whole. Without them the drop is irreversible and the next
 	// apply meets a table the baseline still declares and the database no longer has.
-	void DropTable(std::vector<const ibBackendQueryColumn*> columns);
+	void DropTable(const std::vector<std::shared_ptr<const ibBackendQueryColumn>>& columns);
 	// Index over LOGICAL columns — each expands to its physical field names through the layout tier
 	// (a raw uuid column -> "uuid"; a reference attribute -> its _RTRef/_RRRef pair; a dimension -> its
 	// fields). The structure speaks columns, not bare field strings. `descending` — the twin an engine walks
 	// when a list reads backwards (ibDialectDictionary::m_descendingIndexWord).
-	void CreateIndex(const ibString& indexName, std::vector<const ibBackendQueryColumn*> columns, bool unique = false,
+	void CreateIndex(const ibString& indexName, const std::vector<std::shared_ptr<const ibBackendQueryColumn>>& columns, bool unique = false,
 		bool descending = false);
 	// Its mirror, carrying what CreateIndex was given — so a failed second phase can put the index back.
-	void DropIndex(const ibString& indexName, std::vector<const ibBackendQueryColumn*> columns, bool unique,
+	void DropIndex(const ibString& indexName, const std::vector<std::shared_ptr<const ibBackendQueryColumn>>& columns, bool unique,
 		bool descending = false);
 	void Ddl(const ibDdlStatement& ddl);                        // any other prebuilt statement, in order
 
@@ -90,10 +90,10 @@ public:
 	int Flush(ibSchemaBuilder& schema);
 
 private:
-	const ibBackendQueryable*         m_queryable = nullptr;   // the schema handle (null when keyed by bare name)
-	ibString                          m_table;
-	std::vector<ibDdlStatement>       m_steps;      // single-op DDL, in emission order
-	std::vector<std::function<bool()>> m_inserts;   // data seeds (deferred past the DDL commit by ibSchemaBuilder's barrier)
+	std::shared_ptr<const ibBackendQueryable> m_queryable;   // the schema handle (null when keyed by bare name)
+	ibString                                  m_table;
+	std::vector<ibDdlStatement>               m_steps;     // single-op DDL, in emission order
+	std::vector<std::function<bool()>>        m_inserts;   // data seeds (deferred past the DDL commit by ibSchemaBuilder's barrier)
 };
 
 // Diff one LOGICAL column into the batch — the structure tier's column-creation, lifted off the
@@ -109,7 +109,7 @@ private:
 // `cut`, when given, adds how many stored values a string of no limit given a length loses characters of — kept,
 // not emptied, so a number of its own (ibStructureBatch::AlterField cuts them).
 // 🛑 Not the place for a metadata case — see the banner in schemaSnapshot.h.
-BACKEND_API long long DiffColumnInto(ibStructureBatch& batch, const ibBackendQueryColumn* srcCol, const ibBackendQueryColumn* dstCol,
-	long long* cut = nullptr);
+BACKEND_API long long DiffColumnInto(ibStructureBatch& batch, const std::shared_ptr<const ibBackendQueryColumn>& srcCol,
+	const std::shared_ptr<const ibBackendQueryColumn>& dstCol, long long* cut = nullptr);
 
 #endif // !__STRUCTURE_BATCH_H__

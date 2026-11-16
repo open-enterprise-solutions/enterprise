@@ -64,7 +64,9 @@ public:
 		// put the second field of level 2 where level 3 belonged, and the last level fell off the
 		// page entirely. The level is stated here rather than counted there.
 		int                         m_level = -1;
-		const ibBackendQueryColumn* m_col   = nullptr;  // source column (GetValue) — null when by-alias
+		// source column (GetValue) — null when by-alias. Held: a synthetic one (a computed TOTALS measure) the
+		// lowering built outlives the door AND the result in this, since the schema travels with the selection.
+		std::shared_ptr<const ibBackendQueryColumn> m_col;
 		ibString                    m_alias;            // door alias (GetColumn) — dot-walk / aggregate / explicit
 		bool                        m_byAlias = false;  // read via GetColumn(alias) vs GetValue(col)
 
@@ -84,10 +86,6 @@ public:
 		// GetColumn(m_objectPrefix, m_col), which reassembles the object from its prefixed field spread
 		// (the provider projects it so). Empty => a plain scalar leaf / aggregate / column read by alias.
 		ibString                    m_objectPrefix;
-		// A SYNTHETIC source column (a computed TOTALS measure) the lowering built — owned HERE so it
-		// outlives the door AND the result: the schema travels with the selection, and m_col points into
-		// this. Null for a real metadata column (owned by the metadata) or a by-alias read.
-		std::shared_ptr<ibBackendQueryColumn> m_ownedCol;
 		// WHAT IT IS FOR — see ibColumnRole. Detail unless the totals path says otherwise.
 		ibColumnRole                m_role = ibColumnRole::Detail;
 		// ⭐ WHETHER WHAT IT READS MAY BE SHOWN (functional options) — every column its expression reads,
@@ -314,7 +312,7 @@ public:
 	static void PreparePackage(const ibQueryPackage& package,
 	                           const std::map<ibString, ibValue>& params,
 	                           class ibQueryTempTableStore& store,
-	                           std::map<ibString, const ibBackendQueryable*>& sources);
+	                           std::map<ibString, std::shared_ptr<const ibBackendQueryable>>& sources);
 
 	// The PAGED read — the same lowering with an external page ENVELOPE (anchor /
 	// direction / count) threaded into the door's terminal. This is how a paged
@@ -393,18 +391,18 @@ public:
 	// untranslatable: the fold then falls back to RAM (bail-out, not an error).
 	// BACKEND_API: exported so the L4-2 lowering is unit-testable across the DLL (like the
 	// ibDbTableProvider::Can* gates) — see tests/test_queryLINQExec.cpp.
-	static BACKEND_API ibQueryPredicatePtr LowerLambdaPredicate(const ibBackendQueryable* source,
+	static BACKEND_API ibQueryPredicatePtr LowerLambdaPredicate(const std::shared_ptr<const ibBackendQueryable>& source,
 	                                                const ibQueryAstExpr& expr,
 	                                                const std::map<ibString, ibValue>& captured);
 	// A pure column / dot-walk path lambda body (OrderBy / aggregate selectors).
-	static std::vector<const ibBackendQueryColumn*> LowerLambdaColumnPath(
-	                                                const ibBackendQueryable* source,
+	static std::vector<std::shared_ptr<const ibBackendQueryColumn>> LowerLambdaColumnPath(
+	                                                const std::shared_ptr<const ibBackendQueryable>& source,
 	                                                const ibQueryAstExpr& expr);
 	// A computed (arithmetic / CASE) projection lambda body (x => x.A * 2, x => IIF(c, a, b)) —
 	// lowered to a server-side output-column expr, read back by its alias. Returns null for a plain
 	// column / dot-walk path / structure / chained projection (the caller handles those / falls to RAM).
 	static BACKEND_API ibQueryColumnExprPtr LowerLambdaColumnExpr(
-	                                                const ibBackendQueryable* source,
+	                                                const std::shared_ptr<const ibBackendQueryable>& source,
 	                                                const ibQueryAstExpr& expr,
 	                                                const std::map<ibString, ibValue>& captured);
 };

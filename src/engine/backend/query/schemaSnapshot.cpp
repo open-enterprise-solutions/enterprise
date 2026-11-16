@@ -42,8 +42,9 @@ ibMaterializeSpec ibSchemaMaterialize::ToRenderSpec(const ibString& tableName) c
 	out.m_source           = SourceTable();
 	out.m_views            = m_views;   // already in L2-2's vocabulary — nothing to translate
 	out.m_periodColumn     = m_periodColumn;
+	out.m_periodUnitColumn = m_periodUnitColumn;
 	out.m_periodSourceExpr = m_periodSourceExpr;
-	out.m_periodUnit       = m_periodUnit;
+	out.m_periodUnits      = m_periodUnits;
 	out.m_guard            = m_guard;
 	out.m_shards           = m_shards;
 
@@ -52,8 +53,8 @@ ibMaterializeSpec ibSchemaMaterialize::ToRenderSpec(const ibString& tableName) c
 	// A logical column expands to its PHYSICAL fields — a reference dimension is a _RTRef/_RRRef
 	// pair, not one column. Reading the layout tier instead of assuming one field per column is
 	// what keeps reference dimensions working in the totals key.
-	for (const ibBackendQueryColumn* k : m_keys)
-		for (const ibString& f : ColumnFieldNames(k))
+	for (const std::shared_ptr<const ibBackendQueryColumn>& k : m_keys)
+		for (const ibString& f : ColumnFieldNames(*k))
 			out.m_keyColumns.push_back(f);
 
 	for (const ibSchemaDelta& d : m_deltas)
@@ -82,7 +83,7 @@ ibMaterializeSpec ibSchemaMaterialize::ToReadSpec(const ibString& tableName) con
 	// IS a date — the condition that lets a reading's floor ride the movements' period index, which opens
 	// with that tag.
 	if (m_periodSource != nullptr) {
-		const std::vector<ibColumnSlot> slots = DescribeColumnLayout(m_periodSource);
+		const std::vector<ibColumnSlot> slots = DescribeColumnLayout(*m_periodSource);
 		for (const ibColumnSlot& slot : slots) {
 			if (slot.m_role == ibColumnRole::Date)
 				out.m_periodSourceIR = ibCol(source, slot.m_name);
@@ -123,7 +124,7 @@ static size_t ibIndexFieldByteWidth(const ibColumnType& t)
 }
 
 void ibDeclareDerivedKey(ibSchemaTable& table, const ibString& tableName,
-                         const std::vector<const ibBackendQueryColumn*>& keyCols,
+                         const std::vector<std::shared_ptr<const ibBackendQueryColumn>>& keyCols,
                          ibMetaID hashColumnId)
 {
 	if (keyCols.empty())
@@ -134,8 +135,8 @@ void ibDeclareDerivedKey(ibSchemaTable& table, const ibString& tableName,
 	// How wide the key really is — in PHYSICAL fields, which is what an index counts. A reference
 	// column is three of them, so a key of seven columns can be an index of twenty-one segments.
 	size_t fieldCount = 0;
-	for (const ibBackendQueryColumn* col : keyCols)
-		fieldCount += ColumnFieldNames(col).size();
+	for (const std::shared_ptr<const ibBackendQueryColumn>& col : keyCols)
+		fieldCount += ColumnFieldNames(*col).size();
 
 	// …AND HOW WIDE IN BYTES, which the count cannot see. An index key has two ceilings and a string
 	// column is declared in CHARACTERS but indexed in BYTES, so a key of two columns overflows where
@@ -144,8 +145,8 @@ void ibDeclareDerivedKey(ibSchemaTable& table, const ibString& tableName,
 	// ⚠ DELIBERATELY GENEROUS. Overestimating moves a borderline key to the hashed identity sooner,
 	// which is always safe; underestimating lets CREATE INDEX overflow and takes the apply down.
 	size_t keyBytes = 0;
-	for (const ibBackendQueryColumn* col : keyCols)
-		for (const ibColumnSlot& field : DescribeColumnLayout(col))
+	for (const std::shared_ptr<const ibBackendQueryColumn>& col : keyCols)
+		for (const ibColumnSlot& field : DescribeColumnLayout(*col))
 			keyBytes += ibIndexFieldByteWidth(field.m_type);
 
 	// The key must be UNIQUE: it is what the delta upserts against, and a duplicate would let two rows
@@ -163,8 +164,7 @@ void ibDeclareDerivedKey(ibSchemaTable& table, const ibString& tableName,
 	// it created a VARCHAR(255), which in a UTF8 database is 1020 bytes of declared key and passes
 	// Firebird's ceiling (about page_size / 4) on its own: "key size exceeds implementation
 	// restriction", with the data never even reaching it.
-	const ibBackendQueryColumn* hash =
-		table.OwnRaw(ibBackendColumnRawDB::String(KeyHashColumnName(), hashColumnId, 32));
+	const std::shared_ptr<const ibBackendQueryColumn> hash = ibBackendColumnRawDB::String(KeyHashColumnName(), hashColumnId, 32);
 	table.Add(hash);
 	table.Index(indexName, { hash }, /*unique*/ true);
 	table.m_materialize.m_keyHashColumn = KeyHashColumnName();
@@ -181,11 +181,11 @@ void ibDeclareDerivedKey(ibSchemaTable& table, const ibString& tableName,
 	ibDeclareLookupIndex(table, tableName + ibT("_KL"), keyCols);
 }
 
-std::vector<const ibBackendQueryColumn*> ibFitLookupColumns(
-	const std::vector<const ibBackendQueryColumn*>& cols, const ibBackendQueryColumn* closing,
+std::vector<std::shared_ptr<const ibBackendQueryColumn>> ibFitLookupColumns(
+	const std::vector<std::shared_ptr<const ibBackendQueryColumn>>& cols, const std::shared_ptr<const ibBackendQueryColumn>& closingAsked,
 	const std::function<bool(size_t fields, size_t bytes)>& fits)
 {
-	const auto measure = [](const ibBackendQueryColumn* col, size_t& fields, size_t& bytes) {
+	const auto measure = [](const ibBackendQueryColumn& col, size_t& fields, size_t& bytes) {
 		const std::vector<ibColumnSlot> slots = DescribeColumnLayout(col);
 		fields = slots.size();
 		bytes = 0;
@@ -195,21 +195,22 @@ std::vector<const ibBackendQueryColumn*> ibFitLookupColumns(
 
 	// The closing column is paid for FIRST: what is cut to make room is a trailing column before it, never it.
 	// One that does not fit even alone closes nothing, and the leading columns are taken as they always were.
+	std::shared_ptr<const ibBackendQueryColumn> closing = closingAsked;
 	size_t fields = 0, bytes = 0;
 	if (closing != nullptr) {
-		measure(closing, fields, bytes);
+		measure(*closing, fields, bytes);
 		if (fits && !fits(fields, bytes)) {
 			closing = nullptr;
 			fields = bytes = 0;
 		}
 	}
 
-	std::vector<const ibBackendQueryColumn*> lookup;
-	for (const ibBackendQueryColumn* col : cols) {
+	std::vector<std::shared_ptr<const ibBackendQueryColumn>> lookup;
+	for (const std::shared_ptr<const ibBackendQueryColumn>& col : cols) {
 		if (col == closing)
 			continue;
 		size_t colFields = 0, colBytes = 0;
-		measure(col, colFields, colBytes);
+		measure(*col, colFields, colBytes);
 		if (fits && !fits(fields + colFields, bytes + colBytes))
 			break;
 		lookup.push_back(col);
@@ -222,8 +223,8 @@ std::vector<const ibBackendQueryColumn*> ibFitLookupColumns(
 }
 
 void ibDeclareLookupIndex(ibSchemaTable& table, const ibString& indexName,
-                          const std::vector<const ibBackendQueryColumn*>& cols,
-                          const ibBackendQueryColumn* closing)
+                          const std::vector<std::shared_ptr<const ibBackendQueryColumn>>& cols,
+                          const std::shared_ptr<const ibBackendQueryColumn>& closing)
 {
 	// ⚠ ASKED THROUGH L2-2, never read off a dialect from here. A dictionary is the level below's to
 	// read; this floor knows that it wants "as many leading columns as an index will hold" and nothing
@@ -233,7 +234,7 @@ void ibDeclareLookupIndex(ibSchemaTable& table, const ibString& indexName,
 	if (db_query != nullptr)
 		fits = [](size_t fields, size_t bytes) { return ibIndexKeyFits(*db_query, fields, bytes); };
 
-	const std::vector<const ibBackendQueryColumn*> lookup = ibFitLookupColumns(cols, closing, fits);
+	const std::vector<std::shared_ptr<const ibBackendQueryColumn>> lookup = ibFitLookupColumns(cols, closing, fits);
 	if (!lookup.empty())
 		table.Index(indexName, lookup, /*unique*/ false);
 }
@@ -246,7 +247,7 @@ const ibSchemaTable* ibSchemaSnapshot::Find(ibMetaID id) const
 	return nullptr;
 }
 
-ibSchemaTable& ibSchemaSnapshot::CreateSchemaTable(const ibBackendQueryable* queryable)
+ibSchemaTable& ibSchemaSnapshot::CreateSchemaTable(const std::shared_ptr<const ibBackendQueryable>& queryable)
 {
 	ibSchemaTable t;
 	t.m_id        = queryable->GetQueryTableId();
@@ -309,14 +310,14 @@ bool SameIndex(const ibSchemaIndex& a, const ibSchemaIndex& b)
 	if (a.m_descending != b.m_descending)     return false;
 	if (a.m_columns.size() != b.m_columns.size()) return false;
 	for (size_t k = 0; k < a.m_columns.size(); ++k) {
-		const ibBackendQueryColumn* const left = a.m_columns[k];
-		const ibBackendQueryColumn* const right = b.m_columns[k];
+		const std::shared_ptr<const ibBackendQueryColumn>& left = a.m_columns[k];
+		const std::shared_ptr<const ibBackendQueryColumn>& right = b.m_columns[k];
 		if (left == nullptr || right == nullptr)
 			return false;
 		if (left->GetColumnId() != right->GetColumnId())
 			return false;
-		const std::vector<ibColumnSlot> was = DescribeColumnLayout(left);
-		const std::vector<ibColumnSlot> now = DescribeColumnLayout(right);
+		const std::vector<ibColumnSlot> was = DescribeColumnLayout(*left);
+		const std::vector<ibColumnSlot> now = DescribeColumnLayout(*right);
 		if (was.size() != now.size())
 			return false;
 		for (size_t f = 0; f < was.size(); ++f)
@@ -341,14 +342,20 @@ ibString LedgerName(const ibSchemaTable& t)
 //
 // One lookup for both directions on purpose: a key found one way for the write and another for the
 // delete is a row that can be created and never removed, and nothing would report it.
-const ibBackendQueryColumn* SeedKeyColumn(const ibSchemaTable& t)
+//
+// ⭐ HELD, BECAUSE THE WRITE OUTLIVES THE SNAPSHOT. A scaffold key (a tabular section's row key) belongs
+// to the snapshot — built at save, diffed, dropped — while the write it feeds runs past the DDL commit on
+// Firebird. It was COPIED for that, and a declared key (a reference object's own reference, an attribute)
+// must not be copied, being no raw column; the copy had to ask which kind it held. A share keeps either
+// alive as it is, so the question is gone with the copy.
+std::shared_ptr<const ibBackendQueryColumn> SeedKeyColumn(const ibSchemaTable& t)
 {
 	// ⭐ THE KEY IS WHAT A UNIQUE INDEX COVERS — scaffold or declared column, asked of the SCHEMA.
 	// It used to look among the scaffolds only, which was true while every reference object carried a
 	// row-key column beside its reference. An object keyed by its REFERENCE has no such scaffold, and
 	// a lookup that found nothing did not fail: the upsert degraded to a plain insert, so every apply
 	// added the declared rows again instead of updating them.
-	const auto covered = [&t](const ibBackendQueryColumn* col) {
+	const auto covered = [&t](const std::shared_ptr<const ibBackendQueryColumn>& col) {
 		for (const ibSchemaIndex& idx : t.m_indexes) {
 			if (!idx.m_unique || idx.m_columns.size() != 1)
 				continue;   // a COMPOSITE unique key is not a single conflict target
@@ -358,7 +365,7 @@ const ibBackendQueryColumn* SeedKeyColumn(const ibSchemaTable& t)
 		return false;
 	};
 
-	for (const ibBackendQueryColumn* sc : t.m_scaffold)
+	for (const std::shared_ptr<const ibBackendQueryColumn>& sc : t.m_scaffold)
 		if (covered(sc))
 			return sc;
 	for (const ibSchemaColumn& c : t.m_columns)
@@ -401,40 +408,6 @@ bool SeedRowsEqual(const ibSchemaSeedRow& a, const ibSchemaSeedRow& b)
 	return true;
 }
 
-// The seed key IN A FORM THAT SURVIVES THE DEFERRED WRITE — and the two kinds of key are not carried
-// the same way.
-//
-// A SCAFFOLD key (a tabular section's row key) belongs to the SNAPSHOT, which is ephemeral: built at
-// save, diffed, dropped, while the write it feeds runs past the DDL commit on Firebird. It must be
-// COPIED, or the pointer dangles and the crash lands frames away from the capture that caused it.
-//
-// A DECLARED key is a different object entirely — a reference object is keyed by its own reference,
-// which is an ATTRIBUTE, and an attribute lives in the configuration, which outlives every apply. It
-// must NOT be copied: it is not an ibBackendColumnRawDB at all, so the cast that copies one reads its memory
-// as a class it never was. Both kinds arrive here as the same interface pointer, and the interface is
-// what tells them apart (IsRawColumn) — the question was already there to ask.
-struct SeedKey {
-	const ibBackendQueryColumn*    m_col = nullptr;   // bind through this
-	std::shared_ptr<ibBackendColumnRawDB> m_owned;           // non-null only for a copied scaffold column
-	bool IsOk() const { return m_col != nullptr; }
-};
-
-SeedKey SeedKeyFor(const ibSchemaTable& t)
-{
-	SeedKey key;
-	const ibBackendQueryColumn* const src = SeedKeyColumn(t);
-	if (src == nullptr)
-		return key;   // no key — the table carries no declared rows either
-	if (const ibBackendColumnRawDB* const raw = src->AsRawColumn()) {   // asked of the column — see queryColumn.h
-		key.m_owned = std::make_shared<ibBackendColumnRawDB>(*raw);
-		key.m_col   = key.m_owned.get();
-	}
-	else {
-		key.m_col = src;
-	}
-	return key;
-}
-
 // ⭐⭐ THE IDENTITY, IN THE FORM ITS KEY COLUMN ACCEPTS — and the two forms are not interchangeable.
 //
 // A SCAFFOLD key is a raw guid field: handed an ibValueGuid, it writes sixteen bytes and the row is
@@ -451,20 +424,19 @@ SeedKey SeedKeyFor(const ibSchemaTable& t)
 // The declaration already carries the right value — the row sets its own reference as a cell — so that
 // is what the key is written from, and the cell itself is dropped from the column list (a value named
 // twice is a column repeated in the INSERT, which Firebird refuses outright).
-ibValue SeedKeyValue(const ibSchemaTable& t, const SeedKey& key, const ibSchemaSeedRow& row)
+ibValue SeedKeyValue(const ibSchemaTable& t, const std::shared_ptr<const ibBackendQueryColumn>& key, const ibSchemaSeedRow& row)
 {
-	if (key.IsOk() && !key.m_col->IsRawColumn()) {
+	if (key != nullptr && !key->IsRawColumn()) {
 		for (const auto& cell : row.m_values)
 			if (const ibSchemaColumn* c = FindColumn(t.m_columns, cell.first))
-				if (c->m_column == key.m_col)
+				if (c->m_column == key)
 					return cell.second;
 	}
 	return ibValuePtr<ibValueGuid>(new ibValueGuid(row.m_id));
 }
 
 // Generic seed-row UPSERT — resolve each cell's column by id from the table's own m_columns and SetValue
-// it; the uuid is the row key. Captured BY VALUE (queryable + resolved column ptrs live in the config, the
-// cells copied) so the closure survives the FB barrier (a row into a just-created table runs post-commit,
+// it; the uuid is the row key. Captured BY VALUE (the columns held, the cells copied) so the closure survives the FB barrier (a row into a just-created table runs post-commit,
 // after the ephemeral snapshot is gone). No metadata-specific code — the row is pure data.
 void WriteSeedRow(ibStructureBatch& batch, const ibSchemaTable& t, const ibSchemaSeedRow& row, ibDatabaseConnectionHolder* holder)
 {
@@ -472,8 +444,7 @@ void WriteSeedRow(ibStructureBatch& batch, const ibSchemaTable& t, const ibSchem
 	const ibMetaData* metaData = t.m_queryable != nullptr ? t.m_queryable->GetMetaData() : nullptr;
 	ibDatabaseConnectionHolder* h = holder != nullptr ? holder : db_query->GetHolder();   // the builder's conn, or local
 
-	// The key, carried the way its KIND requires — see SeedKeyFor. (Cell columns are always live
-	// configuration pointers and need nothing.)
+	// The key, held — see SeedKeyColumn.
 	//
 	// ⭐⭐ AND IT IS AS MANY FIELDS AS ITS COLUMN SPREADS INTO — not one name.
 	//
@@ -484,9 +455,9 @@ void WriteSeedRow(ibStructureBatch& batch, const ibSchemaTable& t, const ibSchem
 	// values. Naming one produced a statement whose column list and parameter list did not describe the
 	// same row - "UPDATE OR INSERT INTO … (fld1622, fld1622_TYPE, fld1622_RTRef, fld1622_RRRef, …)" -
 	// and Firebird answered about the one name that is not a column at all.
-	const SeedKey key = SeedKeyFor(t);
-	const std::vector<ibString> keyFields = key.IsOk()
-		? ColumnFieldNames(key.m_col)
+	const std::shared_ptr<const ibBackendQueryColumn> key = SeedKeyColumn(t);
+	const std::vector<ibString> keyFields = key != nullptr
+		? ColumnFieldNames(*key)
 		: std::vector<ibString>();
 	const ibValue keyValue = SeedKeyValue(t, key, row);
 
@@ -498,10 +469,10 @@ void WriteSeedRow(ibStructureBatch& batch, const ibSchemaTable& t, const ibSchem
 	// what it holds. Both spread to the same physical fields, so the statement listed
 	// fld1622_TYPE twice and Firebird refused it ("column cannot be repeated in INSERT statement").
 	// The key wins: it carries the same value, and it is the one the MATCHING clause needs.
-	std::vector<std::pair<const ibBackendQueryColumn*, ibValue>> cells;
+	std::vector<std::pair<std::shared_ptr<const ibBackendQueryColumn>, ibValue>> cells;
 	for (const auto& cell : row.m_values)
 		if (const ibSchemaColumn* c = FindColumn(t.m_columns, cell.first))
-			if (c->m_column != key.m_col)
+			if (c->m_column != key)
 				cells.push_back({ c->m_column, cell.second });
 
 	batch.Insert([table, keyValue, keyFields, key, cells, metaData, h]() -> bool {
@@ -512,7 +483,7 @@ void WriteSeedRow(ibStructureBatch& batch, const ibSchemaTable& t, const ibSchem
 		const bool hasKey = !keyFields.empty();
 		std::vector<ibString> columns = keyFields;
 		for (const auto& cell : cells)
-			for (const ibString& f : ColumnFieldNames(cell.first))
+			for (const ibString& f : ColumnFieldNames(*cell.first))
 				columns.push_back(f);
 
 		ibQueryStatement stmt(ibQueryStatement::Kind::Upsert, table, columns, keyFields, h);
@@ -527,9 +498,9 @@ void WriteSeedRow(ibStructureBatch& batch, const ibSchemaTable& t, const ibSchem
 		// has no field for. BindWriteValue is the one that knows both kinds, and it is what the ordinary
 		// row write has always used — so the seed now writes a row exactly the way saving one does.
 		if (hasKey)
-			BindWriteValue(stmt, key.m_col, metaData, keyValue, position);
+			BindWriteValue(stmt, *key, metaData, keyValue, position);
 		for (const auto& cell : cells)
-			BindWriteValue(stmt, cell.first, metaData, cell.second, position);
+			BindWriteValue(stmt, *cell.first, metaData, cell.second, position);
 		stmt.RunQuery();   // a real failure THROWS; the affected-row count (0 = no change) is not an error
 		return true;
 	});
@@ -542,15 +513,15 @@ void EraseSeedRow(ibStructureBatch& batch, const ibSchemaTable& t, const ibSchem
 {
 	const ibString    table    = t.m_name;
 	const ibMetaData* metaData = t.m_queryable != nullptr ? t.m_queryable->GetMetaData() : nullptr;
-	const SeedKey key = SeedKeyFor(t);            // carried the same way the write carries it
+	const std::shared_ptr<const ibBackendQueryColumn> key = SeedKeyColumn(t);   // found the same way the write finds it
 	const ibValue keyValue = SeedKeyValue(t, key, row);   // and SPELLED the same way — see SeedKeyValue
 	ibDatabaseConnectionHolder* h = holder != nullptr ? holder : db_query->GetHolder();
 	batch.Insert([table, keyValue, key, metaData, h]() -> bool {
-		if (!key.IsOk())
+		if (key == nullptr)
 			return true;   // no key to delete by — the table carries no declared rows either
-		ibQueryStatement del(ibQueryStatement::Kind::Delete, table, ColumnFieldNames(key.m_col), {}, h);
+		ibQueryStatement del(ibQueryStatement::Kind::Delete, table, ColumnFieldNames(*key), {}, h);
 		int position = 1;
-		BindWriteValue(del, key.m_col, metaData, keyValue, position);
+		BindWriteValue(del, *key, metaData, keyValue, position);
 		del.RunQuery();    // a real failure THROWS; deleting a row that isn't there (0 rows) is not an error
 		return true;
 	});
@@ -568,25 +539,16 @@ int DiffSeedLinesInto(ibStructureBatch& batch, const ibSchemaTable* old, const i
 	const ibMetaData* metaData = cur.m_queryable != nullptr ? cur.m_queryable->GetMetaData() : nullptr;
 	ibDatabaseConnectionHolder* h = holder != nullptr ? holder : db_query->GetHolder();
 
-	// The key's columns, a scaffold among them copied — the write runs past the snapshot (see SeedKey).
-	std::vector<const ibBackendQueryColumn*> key;
-	std::vector<std::shared_ptr<ibBackendColumnRawDB>> owned;
+	// The key's columns, held — the write runs past the snapshot (see SeedKeyColumn).
+	const std::vector<std::shared_ptr<const ibBackendQueryColumn>>& key = cur.m_seedKey;
 	std::vector<ibString> keyFields;
-	for (const ibBackendQueryColumn* src : cur.m_seedKey) {
-		if (const ibBackendColumnRawDB* const raw = src->AsRawColumn()) {
-			owned.push_back(std::make_shared<ibBackendColumnRawDB>(*raw));
-			key.push_back(owned.back().get());
-		}
-		else {
-			key.push_back(src);
-		}
-		for (const ibString& f : ColumnFieldNames(key.back()))
+	for (const std::shared_ptr<const ibBackendQueryColumn>& col : key)
+		for (const ibString& f : ColumnFieldNames(*col))
 			keyFields.push_back(f);
-	}
 
 	// The same place: the same cells under the key, each asked by the id the row binds it by.
 	const auto samePlace = [&key](const ibSchemaSeedRow& a, const ibSchemaSeedRow& b) {
-		return std::all_of(key.begin(), key.end(), [&a, &b](const ibBackendQueryColumn* col) {
+		return std::all_of(key.begin(), key.end(), [&a, &b](const std::shared_ptr<const ibBackendQueryColumn>& col) {
 			const auto lhs = a.m_values.find(col->GetColumnId());
 			const auto rhs = b.m_values.find(col->GetColumnId());
 			return lhs != a.m_values.end() && rhs != b.m_values.end() && lhs->second.CompareValueLS(rhs->second) == 0;
@@ -605,11 +567,11 @@ int DiffSeedLinesInto(ibStructureBatch& batch, const ibSchemaTable* old, const i
 			report->AppendInfo((o != nullptr ? _("Change value ") : _("Add value ")) + row.m_name + _(" in ") + LedgerName(cur));
 
 		std::vector<ibValue> keyValues;
-		for (const ibBackendQueryColumn* col : key) {
+		for (const std::shared_ptr<const ibBackendQueryColumn>& col : key) {
 			const auto cell = row.m_values.find(col->GetColumnId());
 			keyValues.push_back(cell != row.m_values.end() ? cell->second : ibValue());
 		}
-		std::vector<std::pair<const ibBackendQueryColumn*, ibValue>> cells;
+		std::vector<std::pair<std::shared_ptr<const ibBackendQueryColumn>, ibValue>> cells;
 		for (const auto& cell : row.m_values)
 			if (const ibSchemaColumn* c = FindColumn(cur.m_columns, cell.first))
 				if (std::find(key.begin(), key.end(), c->m_column) == key.end())
@@ -619,10 +581,10 @@ int DiffSeedLinesInto(ibStructureBatch& batch, const ibSchemaTable* old, const i
 		if (stands && cells.empty())
 			continue;   // …and declares nothing to write into it
 
-		batch.Insert([table, key, owned, keyFields, keyValues, cells, stands, metaData, h]() -> bool {
+		batch.Insert([table, key, keyFields, keyValues, cells, stands, metaData, h]() -> bool {
 			std::vector<ibString> columns = keyFields;
 			for (const auto& cell : cells)
-				for (const ibString& f : ColumnFieldNames(cell.first))
+				for (const ibString& f : ColumnFieldNames(*cell.first))
 					columns.push_back(f);
 
 			// UPDATE … SET the cells WHERE the key, or INSERT the key and the cells — the key's fields are the match.
@@ -630,9 +592,9 @@ int DiffSeedLinesInto(ibStructureBatch& batch, const ibSchemaTable* old, const i
 				stands ? keyFields : std::vector<ibString>(), h);
 			int position = 1;
 			for (size_t idx = 0; idx < key.size(); idx++)
-				BindWriteValue(stmt, key[idx], metaData, keyValues[idx], position);
+				BindWriteValue(stmt, *key[idx], metaData, keyValues[idx], position);
 			for (const auto& cell : cells)
-				BindWriteValue(stmt, cell.first, metaData, cell.second, position);
+				BindWriteValue(stmt, *cell.first, metaData, cell.second, position);
 			stmt.RunQuery();   // a real failure THROWS
 			return true;
 		});
@@ -685,16 +647,16 @@ int DiffSeedInto(ibStructureBatch& batch, const ibSchemaTable* old, const ibSche
 
 // Every logical column a table stands on — the scaffold, then the declared columns. What a DROP carries
 // so the compensation ledger can put the table back (ibStructureBatch::DropTable).
-std::vector<const ibBackendQueryColumn*> TableColumnsOf(const ibSchemaTable& t)
+std::vector<std::shared_ptr<const ibBackendQueryColumn>> TableColumnsOf(const ibSchemaTable& t)
 {
-	std::vector<const ibBackendQueryColumn*> columns = t.m_scaffold;
+	std::vector<std::shared_ptr<const ibBackendQueryColumn>> columns = t.m_scaffold;
 	for (const ibSchemaColumn& c : t.m_columns)
 		columns.push_back(c.m_column);
 	return columns;
 }
 
 // A column's friendly name for the change ledger (falls back to the physical field if unnamed).
-ibString ColName(const ibBackendQueryColumn* col)
+ibString ColName(const std::shared_ptr<const ibBackendQueryColumn>& col)
 {
 	if (col == nullptr) return ibEmptyString;
 	const ibString name = col->GetName();
@@ -715,7 +677,7 @@ int CreateTable(ibStructureBatch& batch, const ibSchemaTable& t, ibRestructureIn
 	// ride the create instead of a follow-up ADD each. `CreateIndex` has guarded its empty case all along.
 	bool columnsRodeTheCreate = false;
 	if (!t.m_external) {
-		std::vector<const ibBackendQueryColumn*> createWith = t.m_scaffold;
+		std::vector<std::shared_ptr<const ibBackendQueryColumn>> createWith = t.m_scaffold;
 		if (createWith.empty()) {
 			for (const ibSchemaColumn& c : t.m_columns)
 				createWith.push_back(c.m_column);
@@ -830,9 +792,9 @@ bool IndexKeyFitsOrSay(const ibDatabaseLayer& conn, const ibSchemaTable& t, cons
 	size_t fieldCount = 0;
 	size_t keyBytes = 0;
 	ibString fields;
-	for (const ibBackendQueryColumn* col : i.m_columns) {
-		fieldCount += ColumnFieldNames(col).size();
-		for (const ibColumnSlot& field : DescribeColumnLayout(col))
+	for (const std::shared_ptr<const ibBackendQueryColumn>& col : i.m_columns) {
+		fieldCount += ColumnFieldNames(*col).size();
+		for (const ibColumnSlot& field : DescribeColumnLayout(*col))
 			keyBytes += ibIndexFieldByteWidth(field.m_type);
 		fields += (fields.IsEmpty() ? ibString() : ibString(ibT(", "))) + ColName(col);
 	}

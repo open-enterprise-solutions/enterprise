@@ -197,6 +197,7 @@ public:
 			m_stopping = true;
 		}
 		m_wake.notify_all();
+		m_stop.notify_all();
 		for (std::thread& thread : m_threads)
 			thread.join();
 		m_watch.join();
@@ -291,10 +292,16 @@ private:
 	}
 
 	// The waits past their time answered — a quarter of a second at most late.
+	//
+	// 🛑 ON A SIGNAL OF ITS OWN (m_stop), NOT THE WORKERS' — it waited on m_wake, and Post's notify_one wakes ONE
+	// waiter: when that one was this watch, it found no stop, went back to sleep with the signal spent, and the job
+	// lay in the queue with every worker asleep — until the next request's signal, or its 504. One caller at a time
+	// met it within ten requests: the tenth hung its whole 60 s, nothing reached the base (2026-11-16, the load run's
+	// HTTP service: `serve` journalled for nine and not for the tenth).
 	void WatchWaits()
 	{
 		std::unique_lock<std::mutex> lock(m_mutex);
-		while (!m_wake.wait_for(lock, std::chrono::milliseconds(250), [this]() { return m_stopping; })) {
+		while (!m_stop.wait_for(lock, std::chrono::milliseconds(250), [this]() { return m_stopping; })) {
 			const auto now = std::chrono::steady_clock::now();
 			std::vector<std::shared_ptr<ibAnswer>> late;
 			for (const std::shared_ptr<ibAnswer>& answer : m_waiting) {
@@ -314,7 +321,8 @@ private:
 	const std::chrono::seconds m_wait;
 
 	std::mutex                             m_mutex;
-	std::condition_variable                m_wake;
+	std::condition_variable                m_wake;          // a job queued — the workers
+	std::condition_variable                m_stop;          // the stop — the watch
 	bool                                   m_stopping = false;
 	std::size_t                            m_busy = 0;      // queued and running
 	std::deque<ibJob>                      m_jobs;

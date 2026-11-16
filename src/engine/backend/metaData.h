@@ -7,6 +7,7 @@
 #include <memory>
 #include <optional>
 #include <functional>
+#include <shared_mutex>   // ibByteCodeStorage — its rows are read by every session's thread
 #include <utility>   // std::forward — MakeShared
 #include <vector>
 
@@ -212,6 +213,59 @@ private:
 
 ///////////////////////////////////////////////////////////////////////////////
 
+// ⭐ Bytecode storage — the compiled bytecode of the configuration, held in memory (Max, 2026-11-16). One
+// instance per open configuration, on its image beside the module storage. It reads the configuration's rows of
+// the AOT cache as the configuration opens — one statement — and every module of every session takes its code
+// from here: a module knows of no table, no key and no lock. The table is ibByteCodeCache's
+// (compiler/cache/byteCodeCache.h), the interface every row is read and saved through; this holds what was read
+// and decides what is taken, what is rebuilt and what stays off the table.
+//
+// Before it a module read its own row every time it was compiled, and a session compiles its root and some
+// fifteen common modules as it comes up — an HTTP request being a session (docs/private/load-million-rows.md § 13).
+//
+// TWO PROCESSES ON ONE BASE meet in the table. A module this one does not hold is looked for there again before
+// it is compiled, and compiled under the module's key — once, whoever else asks meanwhile (ibByteCodeCache::Load
+// with `compile`). What it does hold it does not look for there again: its rows fit one another, which is all
+// the dependency check asks.
+class BACKEND_API ibByteCodeStorage {
+public:
+	// Reads the rows of `owner`'s configuration. An owner with no digest — an external report or data processor —
+	// has none, and nothing is held for it.
+	explicit ibByteCodeStorage(const ibMetaData* owner);
+
+	// The module's bytecode: what is held, else what the cache gives — read from the table, or made by `compile` and
+	// saved — and held from then on. `outBc` comes back whole except for m_parent, which the caller wires up.
+	// false — `compile` failed.
+	bool Load(struct ibByteCode& outBc, const ibGuid& descId, const std::function<bool(ibByteCode&)>& compile);
+
+	// What is held, and nothing more: false is a miss. What the caller then compiles is neither saved nor held
+	// (a compile under an eval, moduleInfo.cpp).
+	bool Load(struct ibByteCode& outBc, const ibGuid& descId);
+
+	// The row goes, here and in the table: the module's text moved under its bytecode, or the row no longer fits
+	// what is loaded.
+	void Invalidate(const ibGuid& descId);
+
+	// The configuration was replaced: the table is the new one's from here on. What this one's sessions still
+	// compile is held here and saved nowhere — the table holds one row a module, and theirs would take the new
+	// configuration's.
+	void Detach();
+
+private:
+	// The owner's digest (ibMetaData::GetConfigMD5) — what the cache is asked under. Empty — nothing is held.
+	const ibString m_configMd5;
+	// The two below: readers together, a row kept or the mark set alone. Held for the lookup, never across a
+	// compile or a statement.
+	std::shared_mutex m_mutex;
+	// The rows by descriptor, as the blobs they were saved as: those read as the configuration opened, then each
+	// one a miss made.
+	std::map<ibGuid, class ibMemoryBuffer> m_rows;
+	// Detach was called.
+	bool m_detached = false;
+};
+
+///////////////////////////////////////////////////////////////////////////////
+
 // ibDeferredForm (the lazy form-construction marker stored in the compile-value cache) now lives in
 // metaFormObject.h — it is only used there, and its constructor reads IsPasteMode off the complete form type.
 
@@ -373,6 +427,10 @@ public:
 	// Resolve*). See ibMetaData::GetSourceFactory facade.
 	ibQueryableFactory*    SourceFactory() const { return m_sourceFactory.get(); }
 
+	// This configuration's bytecode, read as it opens — where every module of every session takes its compiled code
+	// from. Null on a designer's own copy (it runs none) and on a bare image. See ibMetaData::GetByteCodeStorage facade.
+	ibByteCodeStorage*     ByteCodeStorage() const { return m_byteCodeStorage.get(); }
+
 private:
 
 	// clsid O(1); name / (metaValue,refType) linear (see ctorRegistry.h). type_info
@@ -388,6 +446,9 @@ private:
 	// Per-config source factory (ibMetaQueryableFactory) — this snapshot's OWN metadata-backed queryable descriptors;
 	// resolve descends to the global factory on a miss. Allocated in the image ctor (out of line).
 	std::unique_ptr<ibQueryableFactory> m_sourceFactory;
+	// The configuration's bytecode held in memory — the rows of sys_bytecode_cache read in one statement as the
+	// configuration opens. Allocated in the image ctor, for a configuration that runs; nullptr on a designer's copy.
+	std::unique_ptr<ibByteCodeStorage>  m_byteCodeStorage;
 };
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -465,6 +526,11 @@ public:
 	// (`if (auto* cc = metaData->GetCompileCache())`) instead of querying
 	// appData->DesignerMode().
 	ibCompileValueCache* GetCompileCache() const { return m_image ? m_image->CompileCache() : nullptr; }
+
+	// This configuration's bytecode storage (on the image; null when closed, and on a designer's own copy) — where a
+	// module takes its compiled code from (ibRuntimeModuleDataObject::Compile). It goes with the image: sessions that
+	// keep a replaced configuration keep its storage with it.
+	ibByteCodeStorage* GetByteCodeStorage() const { return m_image ? m_image->ByteCodeStorage() : nullptr; }
 
 	// This config's OWN source factory (on the snapshot; null when closed). ONLY metadata-backed sources register here
 	// now — the global (application-data) factory is empty and is a FUTURE plugin seam (the per-config factory descends

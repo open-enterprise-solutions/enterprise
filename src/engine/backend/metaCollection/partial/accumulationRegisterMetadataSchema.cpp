@@ -106,11 +106,22 @@ void ibValueMetaObjectAccumulationRegister::ContributeTables(ibSchemaSnapshot& o
 	ibSchemaTable& t = out.Shared(totals->GetMetaID(), totalsName);
 
 	// --- structure: the period, the dimensions, and a stored pair per resource -----------------
-	const ibBackendQueryColumn* periodCol = t.Scaffold(ibBackendColumnRawDB::Date(periodField));
+	const std::shared_ptr<const ibBackendQueryColumn> periodCol = t.Scaffold(ibBackendColumnRawDB::Date(periodField));
+	// The UNIT a row is kept at — the totals keep every unit of ibRegTotalsUnits, each its own rows. An IDENTITY
+	// rather than scaffold, for the shard column's reason (ibRegSplitIntoKey): a base built before it gets it by
+	// ALTER. Numbered over the period (ibRegDerivedColumnId), whose own number is free here: the period is scaffold.
+	const std::shared_ptr<const ibBackendQueryColumn> unitCol = ibBackendColumnRawDB::Number(PeriodUnitColumnName(),
+		ibRegDerivedColumnId(GetRegisterPeriod()->GetMetaID()), /*precision*/ 2);
+	t.Add(unitCol);
 	for (const auto dimension : GetDimensionArrayObject())
 		t.Add(dimension->GetQueryColumn());   // same physical fields as the movements, so a trigger reads NEW.<field> directly
 
-	std::vector<const ibBackendQueryColumn*> keyCols;
+	// ⭐ THE UNIT OPENS THE KEY, the period after it. A reading takes each unit's rows by the unit and a range of
+	// the period (ibMaterializeReadSpec::m_storedUnits): the years before a date are `unit = Year AND period < …`,
+	// one range of this index. Opened by the period, that range held every unit's rows — the years were found
+	// by walking the days. The upsert names every column of the key and rides it in either order.
+	std::vector<std::shared_ptr<const ibBackendQueryColumn>> keyCols;
+	keyCols.push_back(unitCol);
 	keyCols.push_back(periodCol);
 	for (const auto dimension : GetDimensionArrayObject())
 		keyCols.push_back(dimension->GetQueryColumn());
@@ -141,10 +152,10 @@ void ibValueMetaObjectAccumulationRegister::ContributeTables(ibSchemaSnapshot& o
 
 	// ⭐⭐ AND AN INDEX A READING CAN RIDE — the dimensions FIRST, the period after them.
 	//
-	// The key above opens with the period, which is right for what it is for: the upsert names every
-	// column of it. A READING names the other end — "the balance of THIS warehouse, of THESE items, up
-	// to a moment" is equalities on the dimensions and a range on the period — and an index that opens
-	// with the period cannot serve it: every balance of one warehouse walked the totals of all of them,
+	// The key above opens with the unit and the period, which is right for a reading of every key. A READING
+	// of one names the other end — "the balance of THIS warehouse, of THESE items, up to a moment" is
+	// equalities on the dimensions and a range on the period — and an index that opens with the period
+	// cannot serve it: every balance of one warehouse walked the totals of all of them,
 	// through the whole history, on every posting (measured 2026-09-19 on three months of a
 	// ten-warehouse base: 0.15 s for one warehouse's balances straight off this table, 0.06 s with this
 	// index — and with it the cost stops growing with the NUMBER of warehouses at all).
@@ -154,12 +165,19 @@ void ibValueMetaObjectAccumulationRegister::ContributeTables(ibSchemaSnapshot& o
 	// period CLOSES the index whatever is cut: cut from the end it was the period that went first, and a
 	// register with many dimensions got an index that narrowed by them and then walked the whole history.
 	//
-	// A register with NO dimensions has nothing to put first: the index would be the period alone, which is
-	// how the key above already opens - one more index for the trigger to keep, serving no reading.
+	// The UNIT stands between them: a reading asks for one unit's rows — an equality, as a dimension is.
+	//
+	// A register with NO dimensions has nothing to put first: the index would be the unit and the period, which
+	// is how the key above already opens - one more index for the trigger to keep, serving no reading.
+	//
+	// …and each dimension has an index of its own beside it (ibRegDeclareCutIndexes): `_DL` serves a reading of the
+	// leading dimensions, a reading by any other one rides its own.
 	if (!GetDimensionArrayObject().empty()) {
-		std::vector<const ibBackendQueryColumn*> readCols;
+		std::vector<std::shared_ptr<const ibBackendQueryColumn>> readCols;
 		for (const auto dimension : GetDimensionArrayObject())
 			readCols.push_back(dimension->GetQueryColumn());
+		ibRegDeclareCutIndexes(t, totalsName, readCols, unitCol, periodCol);
+		readCols.push_back(unitCol);
 		ibDeclareLookupIndex(t, totalsName + ibT("_DL"), readCols, /*closing*/ periodCol);
 	}
 
@@ -184,7 +202,11 @@ void ibValueMetaObjectAccumulationRegister::ContributeTables(ibSchemaSnapshot& o
 	// It wants to become a per-register property: a register posted once a month per key gains
 	// nothing from daily rows, and one that must answer hourly cannot use them. Introducing it later
 	// is a property plus a regeneration — the mechanism already reads this value rather than assuming.
-	m.Period(periodField, GetRegisterPeriod()->GetQueryColumn(), ibT("{row}.") + periodField, GetTotalsPeriodUnit());
+	//
+	// …AND THE COARSER UNITS ARE KEPT BESIDE IT (ibRegTotalsUnits, Day first), each a row of its own under the
+	// unit column, so a later reading takes a year as one row instead of folding its days.
+	m.Period(periodField, PeriodUnitColumnName(), GetRegisterPeriod()->GetQueryColumn(), ibT("{row}.") + periodField,
+		std::vector<ibTotalsPeriod>(std::begin(ibRegTotalsUnits), std::end(ibRegTotalsUnits)));
 
 	// ⭐⭐ AN INACTIVE MOVEMENT EXISTS AND COUNTS FOR NOTHING.
 	//
@@ -213,8 +235,8 @@ void ibValueMetaObjectAccumulationRegister::ContributeTables(ibSchemaSnapshot& o
 	// no shard column at all.
 	//
 	// So the three are held apart on purpose, and whoever needs the WHOLE key composes it in this
-	// order — period, dimensions, shard. `KeyColumnValues` (databaseMaterializeBuilder.cpp) does
-	// exactly that for the trigger, and the rebuild does the same for its upsert.
+	// order — period, its unit, dimensions, shard. `KeyColumnValues`
+	// (databaseMaterializeBuilder.cpp) does exactly that for the trigger, and the rebuild does the same for its upsert.
 	//
 	// 🛑 Handing `keyCols` here instead — the table's whole key, right for the unique index below —
 	// emitted each of those two twice: `NEW.shard_` (a column that does not exist, so CREATE TRIGGER
@@ -246,7 +268,7 @@ void ibValueMetaObjectAccumulationRegister::ContributeTables(ibSchemaSnapshot& o
 
 		if (!withSign) {
 			// No record type — nothing signs a movement, so there is no expense side to keep apart.
-			const ibBackendQueryColumn* c = ibRegAccumulatorColumn(t, inName, idIn, res);
+			const std::shared_ptr<const ibBackendQueryColumn> c = ibRegAccumulatorColumn(t, inName, idIn, res);
 			m.Accumulate(c, ibT("{row}.") + resField, ibQueryColumnExpr::Col(res->GetQueryColumn()));
 			// 🛑 THE THIRD FIELD IS THE PHYSICAL BASE OF THE VIEW'S COLUMNS (ibAccumFigureField), so
 			// it becomes a REAL SQL IDENTIFIER in CREATE VIEW and must be ASCII. Spelled from the
@@ -263,8 +285,8 @@ void ibValueMetaObjectAccumulationRegister::ContributeTables(ibSchemaSnapshot& o
 			continue;
 		}
 
-		const ibBackendQueryColumn* cIn  = ibRegAccumulatorColumn(t, inName,  idIn,  res);
-		const ibBackendQueryColumn* cOut = ibRegAccumulatorColumn(t, outName, idOut, res);
+		const std::shared_ptr<const ibBackendQueryColumn> cIn  = ibRegAccumulatorColumn(t, inName,  idIn,  res);
+		const std::shared_ptr<const ibBackendQueryColumn> cOut = ibRegAccumulatorColumn(t, outName, idOut, res);
 
 		// The record type splits one movement into the two sides. The accumulate stays
 		// UNCONDITIONAL — only the VALUE branches — so the trigger needs no procedural IF and the
@@ -325,7 +347,7 @@ void ibValueMetaObjectAccumulationRegister::ContributeTables(ibSchemaSnapshot& o
 	//
 	// ⭐ AND THE READINGS THAT FOLD (a balance, a turnover) read the same two arms AS THEY STAND — not
 	// through this view, whose coarser units and shard fold they would pay for per row and never name, and
-	// not through a second view either: GetTotalsRows renders the arms of THIS declaration as relations
+	// not through a second view either: ibRegFillTotalsRows renders the arms of THIS declaration as relations
 	// over the two tables, so nothing more has to exist in a base for them.
 	{
 		ibMaterializeView& v = m.View(GetTurnoverViewName(), /*withPeriod*/ true);
@@ -351,9 +373,9 @@ void ibValueMetaObjectAccumulationRegister::ContributeTables(ibSchemaSnapshot& o
 			v.m_withMovements = true;
 			// Name AND type — the stored arm stands a CAST null in their place (see the accounting
 			// register's twin of this block, and ibMaterializeView::m_movementColumns).
-			for (const ibColumnSlot& s : DescribeColumnLayout(GetRegisterRecorder()->GetQueryColumn()))
+			for (const ibColumnSlot& s : DescribeColumnLayout(*GetRegisterRecorder()->GetQueryColumn()))
 				v.m_movementColumns.push_back({ s.m_name, s.m_type });
-			for (const ibColumnSlot& s : DescribeColumnLayout(GetRegisterLineNumber()->GetQueryColumn()))
+			for (const ibColumnSlot& s : DescribeColumnLayout(*GetRegisterLineNumber()->GetQueryColumn()))
 				v.m_movementColumns.push_back({ s.m_name, s.m_type });
 		}
 
@@ -401,39 +423,6 @@ void ibValueMetaObjectAccumulationRegister::ContributeTables(ibSchemaSnapshot& o
 // numbers come from a trigger-maintained table split across shards.
 // ============================================================================
 
-bool ibValueMetaObjectAccumulationRegister::GetTotalsRows(ibQueryRelPtr& stored, ibQueryRelPtr& moved) const
-{
-	stored.reset();
-	moved.reset();
-
-	// No resources, no totals: ContributeTables declares none (and says so to the restructuring, which a
-	// reading must not be heard in).
-	if (GetResourceArrayObject().empty())
-		return false;
-
-	// ⭐ THE DECLARATION ITSELF, asked again — the one the apply rendered its triggers and view from, so the
-	// rows a reading takes are those arms and no second copy of them. ContributeTables DECLARES: it builds
-	// the shape in memory and touches no database.
-	ibSchemaSnapshot declared;
-	ContributeTables(declared);
-
-	const ibValueMetaObjectTotals* totals = GetTotalsObject();
-	const ibSchemaTable* table = (totals != nullptr) ? declared.Find(totals->GetMetaID()) : nullptr;
-	if (table == nullptr || !table->m_derived)
-		return false;
-
-	const ibMaterializeSpec spec = table->m_materialize.ToReadSpec(table->m_name);
-	for (const ibMaterializeView& view : spec.m_views) {
-		if (view.m_name != GetTurnoverViewName())
-			continue;
-		stored = RenderStoredRows(spec, view);
-		if (view.m_withMovements)
-			moved = RenderMovementRows(spec, view);
-		return stored != nullptr;
-	}
-	return false;
-}
-
 bool ibValueMetaObjectAccumulationRegister::HasMaterializedViews() const
 {
 	// Presence of the driver's materialization dialect IS the capability: without it no view was
@@ -442,7 +431,7 @@ bool ibValueMetaObjectAccumulationRegister::HasMaterializedViews() const
 	return db_query != nullptr && ibCanMaterialize(*db_query);
 }
 
-const ibBackendQueryable* ibValueMetaObjectAccumulationRegister::GetViewQueryable(
+std::shared_ptr<const ibBackendQueryable> ibValueMetaObjectAccumulationRegister::GetViewQueryable(
 	const ibString& viewName, ibViewShape shape) const
 {
 	// One question, asked once: the turnovers view carries the period column, the balance

@@ -19,7 +19,7 @@
 // source's columns from here — `SELECT *`, the query constructor's tree, a name (ResolveColumnByName searches
 // this list) — and no longer from its explorer, which is the form's (a source's column and a query's are two
 // worlds since #616). Unlisted, a constant offered no field to select.
-std::vector<const ibBackendQueryColumn*> ibConstantQueryable::GetQueryColumns() const
+std::vector<std::shared_ptr<const ibBackendQueryColumn>> ibConstantQueryable::GetQueryColumns() const
 {
 	const ibValueMetaObjectStoredValue::ibValueMetaObjectConstantColumn* column = m_meta->GetValueColumn();
 	if (column == nullptr)
@@ -32,10 +32,10 @@ const ibValueMetaObjectGenericData* ibConstantQueryable::GetSourceMetaObject() c
 
 ibString ibConstantQueryable::GetQueryTableName() const { return m_meta->GetPhysicalTableName(); }
 const ibMetaData* ibConstantQueryable::GetMetaData() const { return m_meta->GetMetaData(); }
-std::vector<const ibBackendQueryColumn*> ibConstantQueryable::GetPrimaryKeyColumns() const {
+std::vector<std::shared_ptr<const ibBackendQueryColumn>> ibConstantQueryable::GetPrimaryKeyColumns() const {
 	// The single-row sys_const key (UPSERT match) — a RAW column, no metadata translation.
-	static const ibBackendColumnRawDB s_recordKey(ibT("RECORD_KEY"), ibBackendColumnRawDB::RawType::String);
-	return { &s_recordKey };
+	static const std::shared_ptr<const ibBackendQueryColumn> s_recordKey = ibBackendColumnRawDB::String(ibT("RECORD_KEY"));
+	return { s_recordKey };
 }
 // (value materialisation moved to ibDbTableProvider — the queryable names no attribute / L1.)
 
@@ -311,8 +311,8 @@ ibValue ibValueMetaObjectStoredValue::ReadStoredValue() const
 			// arm) — a Boolean's False — so a never-switched functional option read as switched off
 			// (measured 2026-09-27: `FunctionalOptions.X.Get()` answered False with nothing ever written).
 			if (selection.Next()) {
-				const ibBackendColumnRawDB tag(GetValueColumn()->GetPhysicalName() + ibFieldSuffix(ibColumnRole::Discriminator),
-					ibBackendColumnRawDB::RawType::Number);
+				const std::shared_ptr<const ibBackendQueryColumn> tag =
+					ibBackendColumnRawDB::Number(GetValueColumn()->GetPhysicalName() + ibFieldSuffix(ibColumnRole::Discriminator));
 				const ibValue written = selection.GetValue(tag);
 				if (written.GetType() == ibValueTypes::TYPE_NUMBER && written.GetInteger() != 0)
 					return AdjustValue(selection.GetValue(GetValueColumn()->GetQueryColumn()));

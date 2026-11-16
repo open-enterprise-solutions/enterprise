@@ -37,10 +37,10 @@ TEST(QueryColumnExpr, DefaultKindIsColumn) {
 }
 
 TEST(QueryColumnExpr, ColCarriesColumn) {
-    Col c(wxT("qty"));
-    const ibQueryColumnExprPtr e = ibQueryColumnExpr::Col(&c);
+    const auto c = std::make_shared<Col>(wxT("qty"));
+    const ibQueryColumnExprPtr e = ibQueryColumnExpr::Col(c);
     EXPECT_TRUE(e->m_kind == ibQueryColumnExprKind::Column);
-    EXPECT_EQ(e->m_col, &c);
+    EXPECT_EQ(e->m_col, c);
 }
 
 TEST(QueryColumnExpr, ConstCarriesValue) {
@@ -50,8 +50,8 @@ TEST(QueryColumnExpr, ConstCarriesValue) {
 }
 
 TEST(QueryColumnExpr, ArithCarriesOpAndOperands) {
-    Col c(wxT("qty"));
-    const ibQueryColumnExprPtr lhs = ibQueryColumnExpr::Col(&c);
+    const auto c = std::make_shared<Col>(wxT("qty"));
+    const ibQueryColumnExprPtr lhs = ibQueryColumnExpr::Col(c);
     const ibQueryColumnExprPtr rhs = ibQueryColumnExpr::Const(ibValue(ibNumber(2)));
     const ibQueryColumnExprPtr e   = ibQueryColumnExpr::Arith(ibQueryColumnArithOp::Mul, lhs, rhs);
     EXPECT_TRUE(e->m_kind == ibQueryColumnExprKind::Arith);
@@ -61,7 +61,6 @@ TEST(QueryColumnExpr, ArithCarriesOpAndOperands) {
 }
 
 TEST(QueryColumnExpr, CaseBuildsWhenThenElse) {
-    Col c(wxT("qty"));
     auto e = std::make_shared<ibQueryColumnExpr>();
     e->m_kind  = ibQueryColumnExprKind::Case;
     e->m_else  = ibQueryColumnExpr::Const(ibValue(ibString(wxT("unit"))));

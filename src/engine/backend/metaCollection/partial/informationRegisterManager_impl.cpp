@@ -96,29 +96,29 @@ static ibValue SelectionToRecord(ibDataQueryResult& selection,
 // return the table; Get* the boundary row as a structure.
 ibValue ibValueManagerDataObjectInformationRegister::GetFirst(const ibValue& cPeriod, const ibValue& cFilter)
 {
-	ibSliceFirstQueryable slice(m_metaObject, cPeriod, ibRegFilterPredicate(m_metaObject, cFilter));
-	ibDataQueryResult selection = ibDataQueryBuilder().From(&slice).Execute(ibReadPageRequest{});
+	const auto slice = std::make_shared<ibSliceFirstQueryable>(m_metaObject, cPeriod, ibRegFilterPredicate(m_metaObject, cFilter));
+	ibDataQueryResult selection = ibDataQueryBuilder().From(slice).Execute(ibReadPageRequest{});
 	return SelectionToRecord(selection, m_metaObject);
 }
 
 ibValue ibValueManagerDataObjectInformationRegister::GetLast(const ibValue& cPeriod, const ibValue& cFilter)
 {
-	ibSliceLastQueryable slice(m_metaObject, cPeriod, ibRegFilterPredicate(m_metaObject, cFilter));
-	ibDataQueryResult selection = ibDataQueryBuilder().From(&slice).Execute(ibReadPageRequest{});
+	const auto slice = std::make_shared<ibSliceLastQueryable>(m_metaObject, cPeriod, ibRegFilterPredicate(m_metaObject, cFilter));
+	ibDataQueryResult selection = ibDataQueryBuilder().From(slice).Execute(ibReadPageRequest{});
 	return SelectionToRecord(selection, m_metaObject);
 }
 
 ibValue ibValueManagerDataObjectInformationRegister::SliceFirst(const ibValue& cPeriod, const ibValue& cFilter)
 {
-	ibSliceFirstQueryable slice(m_metaObject, cPeriod, ibRegFilterPredicate(m_metaObject, cFilter));
-	ibDataQueryResult selection = ibDataQueryBuilder().From(&slice).Execute(ibReadPageRequest{});
-	return ibRegSelectionToTable(selection, &slice);
+	const auto slice = std::make_shared<ibSliceFirstQueryable>(m_metaObject, cPeriod, ibRegFilterPredicate(m_metaObject, cFilter));
+	ibDataQueryResult selection = ibDataQueryBuilder().From(slice).Execute(ibReadPageRequest{});
+	return ibRegSelectionToTable(selection, slice);
 }
 
 ibValue ibValueManagerDataObjectInformationRegister::SliceLast(const ibValue& cPeriod, const ibValue& cFilter)
 {
-	ibSliceLastQueryable slice(m_metaObject, cPeriod, ibRegFilterPredicate(m_metaObject, cFilter));
-	ibDataQueryResult selection = ibDataQueryBuilder().From(&slice).Execute(ibReadPageRequest{});
-	return ibRegSelectionToTable(selection, &slice);
+	const auto slice = std::make_shared<ibSliceLastQueryable>(m_metaObject, cPeriod, ibRegFilterPredicate(m_metaObject, cFilter));
+	ibDataQueryResult selection = ibDataQueryBuilder().From(slice).Execute(ibReadPageRequest{});
+	return ibRegSelectionToTable(selection, slice);
 }
 

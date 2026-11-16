@@ -88,14 +88,15 @@ ibValue TableWith(std::initializer_list<const wxChar*> names)
 class Sales : public ibQueryableSourceDescriptor
 {
 public:
-	Sales() : m_rows(TableWith({ wxT("Region"), wxT("Period"), wxT("Amount") })) {}
+	Sales() : m_rows(std::make_shared<ibTempTableQueryable>(TableWith({ wxT("Region"), wxT("Period"), wxT("Amount") }))) {}
 
 	ibString GetNamespace() const override { return wxT("Document"); }
 	ibString GetName() const override { return wxT("Sales"); }
-	const ibBackendQueryable* CreateQueryable(ibValue**, long) override { return &m_rows; }
+	std::shared_ptr<const ibBackendQueryable> CreateQueryable(ibValue**, long, const std::vector<ibQueryPredicatePtr>&,
+		const ibQueryReadColumns&) override { return m_rows; }
 
 private:
-	ibTempTableQueryable m_rows;
+	std::shared_ptr<ibTempTableQueryable> m_rows;
 };
 
 // An OPEN configuration — only an open one has a source factory to register into.

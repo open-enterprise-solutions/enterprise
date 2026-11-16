@@ -40,7 +40,7 @@ ibDataQueryBuilder::ibDataQueryBuilder(ibDatabaseConnectionHolder* holder)
 {
 }
 
-ibDataQueryBuilder& ibDataQueryBuilder::From(const ibBackendQueryable* queryable, const ibString& alias)
+ibDataQueryBuilder& ibDataQueryBuilder::From(const std::shared_ptr<const ibBackendQueryable>& queryable, const ibString& alias)
 {
 	m_queryable = queryable;                              // primary source (single-source fast path)
 	m_root      = ibQueryNode::Source(queryable, alias); // the relational tree root
@@ -62,15 +62,15 @@ ibDataQueryBuilder& ibDataQueryBuilder::With(const ibString& name, const ibDataQ
 	return *this;
 }
 
-ibDataQueryBuilder& ibDataQueryBuilder::Join(const ibBackendQueryable* queryable,
-	const ibBackendQueryColumn* onLeft, const ibBackendQueryColumn* onRight,
+ibDataQueryBuilder& ibDataQueryBuilder::Join(const std::shared_ptr<const ibBackendQueryable>& queryable,
+	const std::shared_ptr<const ibBackendQueryColumn>& onLeft, const std::shared_ptr<const ibBackendQueryColumn>& onRight,
 	ibQueryJoinKind kind, const ibString& alias)
 {
 	return Join(queryable, onLeft, onRight, ibJoinCompareOp::Eq, kind, alias);   // equality -> hash-join fast path
 }
 
 // The single point that appends a left-deep JOIN node (new source on the right) carrying the ON condition.
-ibDataQueryBuilder& ibDataQueryBuilder::JoinNode(const ibBackendQueryable* queryable, ibQueryJoinKind kind,
+ibDataQueryBuilder& ibDataQueryBuilder::JoinNode(const std::shared_ptr<const ibBackendQueryable>& queryable, ibQueryJoinKind kind,
 	const ibString& alias, const ibJoinOn& on)
 {
 	auto node = std::make_shared<ibQueryNode>();   // left-deep accumulation: (prior tree) joined with the new source
@@ -104,8 +104,8 @@ ibDataQueryBuilder& ibDataQueryBuilder::JoinNode(const ibBackendQueryable* query
 	// source first, so the pair is turned round here — and `>` read from the other side is `<`. Left
 	// as written it says the opposite of what the author wrote, with the SAME number of rows, which
 	// is why it reads as correct: "the next rate of this currency" answers with the previous one.
-	auto putSidesRight = [queryable](const ibBackendQueryColumn*& left, const ibBackendQueryColumn*& right,
-	                                 ibJoinCompareOp& op) {
+	auto putSidesRight = [queryable](std::shared_ptr<const ibBackendQueryColumn>& left,
+	                                 std::shared_ptr<const ibBackendQueryColumn>& right, ibJoinCompareOp& op) {
 		if (left == nullptr || right == nullptr || queryable == nullptr)
 			return;
 		if (queryable->ContainColumn(left) && !queryable->ContainColumn(right)) {
@@ -124,8 +124,8 @@ ibDataQueryBuilder& ibDataQueryBuilder::JoinNode(const ibBackendQueryable* query
 	return *this;
 }
 
-ibDataQueryBuilder& ibDataQueryBuilder::Join(const ibBackendQueryable* queryable,
-	const ibBackendQueryColumn* onLeft, const ibBackendQueryColumn* onRight,
+ibDataQueryBuilder& ibDataQueryBuilder::Join(const std::shared_ptr<const ibBackendQueryable>& queryable,
+	const std::shared_ptr<const ibBackendQueryColumn>& onLeft, const std::shared_ptr<const ibBackendQueryColumn>& onRight,
 	ibJoinCompareOp onOp, ibQueryJoinKind kind, const ibString& alias,
 	const std::vector<ibJoinOn::ibJoinKeyPart>& alsoOn)
 {
@@ -134,7 +134,7 @@ ibDataQueryBuilder& ibDataQueryBuilder::Join(const ibBackendQueryable* queryable
 	return JoinNode(queryable, kind, alias, on);
 }
 
-ibDataQueryBuilder& ibDataQueryBuilder::Join(const ibBackendQueryable* queryable,
+ibDataQueryBuilder& ibDataQueryBuilder::Join(const std::shared_ptr<const ibBackendQueryable>& queryable,
 	const ibQueryColumnExprPtr& onExprL, const ibQueryColumnExprPtr& onExprR,
 	ibJoinCompareOp onOp, ibQueryJoinKind kind, const ibString& alias,
 	const std::vector<ibJoinOn::ibJoinKeyPart>& alsoOn)
@@ -147,14 +147,14 @@ ibDataQueryBuilder& ibDataQueryBuilder::Join(const ibBackendQueryable* queryable
 	return JoinNode(queryable, kind, alias, on);
 }
 
-ibDataQueryBuilder& ibDataQueryBuilder::CrossJoin(const ibBackendQueryable* queryable, ibQueryJoinKind kind, const ibString& alias)
+ibDataQueryBuilder& ibDataQueryBuilder::CrossJoin(const std::shared_ptr<const ibBackendQueryable>& queryable, ibQueryJoinKind kind, const ibString& alias)
 {
 	// CROSS / ON TRUE -- keyless cartesian; the composer's RAM stitch does the product on a null key.
 	ibJoinOn on; on.m_cross = true;
 	return JoinNode(queryable, kind, alias, on);
 }
 
-ibDataQueryBuilder& ibDataQueryBuilder::Union(const ibBackendQueryable* queryable, const ibString& alias,
+ibDataQueryBuilder& ibDataQueryBuilder::Union(const std::shared_ptr<const ibBackendQueryable>& queryable, const ibString& alias,
                                               bool keepDuplicates)
 {
 	// Stack vertically: extend an existing Union, else wrap the prior root + the new part.
@@ -177,7 +177,7 @@ ibDataQueryBuilder& ibDataQueryBuilder::Union(const ibBackendQueryable* queryabl
 
 // Depth-first collect of every Source leaf under a node (Join -> both sides; Union -> all parts).
 static void CollectQueryableSources(const std::shared_ptr<ibQueryNode>& node,
-                                    std::vector<const ibBackendQueryable*>& out)
+                                    std::vector<std::shared_ptr<const ibBackendQueryable>>& out)
 {
 	if (!node)
 		return;
@@ -197,7 +197,7 @@ static void CollectQueryableSources(const std::shared_ptr<ibQueryNode>& node,
 	}
 }
 
-bool ibDataQueryBuilder::GetSources(std::vector<const ibBackendQueryable*>& sources) const
+bool ibDataQueryBuilder::GetSources(std::vector<std::shared_ptr<const ibBackendQueryable>>& sources) const
 {
 	sources.clear();
 	if (m_root)
@@ -219,40 +219,27 @@ ibQueryPredicatePtr ibDataQueryBuilder::GetWherePredicate() const
 	return result;
 }
 
-const ibBackendQueryable* ibDataQueryBuilder::AdoptOwnedSource(std::shared_ptr<const ibBackendQueryable> src)
-{
-	const ibBackendQueryable* raw = src.get();
-	if (src) m_ownedSources.push_back(std::move(src));   // owned WITH the builder -> travels into any copy / subquery
-	return raw;
-}
 
-ibDataQueryBuilder& ibDataQueryBuilder::Where(const ibBackendQueryColumn* col,
+ibDataQueryBuilder& ibDataQueryBuilder::Where(const std::shared_ptr<const ibBackendQueryColumn>& col,
                                               ibQueryFilterOp comparison, const ibValue& value)
 {
 	m_conditions.push_back(ibQueryCondition{ col, comparison, value });
 	return *this;
 }
 
-ibDataQueryBuilder& ibDataQueryBuilder::Where(const ibBackendQueryColumn* col, const ibValue& value)
+ibDataQueryBuilder& ibDataQueryBuilder::Where(const std::shared_ptr<const ibBackendQueryColumn>& col, const ibValue& value)
 {
 	m_conditions.push_back(ibQueryCondition{ col, ibQueryFilterOp::Equal, value });
 	return *this;
 }
 
-ibDataQueryBuilder& ibDataQueryBuilder::Where(const ibBackendColumnRawDB& rawColumn, const ibValue& value)
-{
-	// Own a copy of the caller's temporary raw column; the condition holds a stable pointer.
-	m_conditions.push_back(ibQueryCondition{ m_ownedRawColumns.emplace_back(std::make_shared<ibBackendColumnRawDB>(rawColumn)).get(), ibQueryFilterOp::Equal, value });
-	return *this;
-}
-
-ibDataQueryBuilder& ibDataQueryBuilder::WhereCompare(const ibBackendQueryColumn* col,
+ibDataQueryBuilder& ibDataQueryBuilder::WhereCompare(const std::shared_ptr<const ibBackendQueryColumn>& col,
                                                      ibQueryFilterOp op, const ibValue& value)
 {
 	return Where(col, op, value);   // identical now (one m_op) — kept as a named alias for ordered/LIKE callers
 }
 
-ibDataQueryBuilder& ibDataQueryBuilder::WhereLike(const ibBackendQueryColumn* col, const ibValue& pattern)
+ibDataQueryBuilder& ibDataQueryBuilder::WhereLike(const std::shared_ptr<const ibBackendQueryColumn>& col, const ibValue& pattern)
 {
 	return WhereCompare(col, ibQueryFilterOp::Like, pattern);
 }
@@ -263,7 +250,7 @@ ibDataQueryBuilder& ibDataQueryBuilder::Where(const ibQueryCondition& condition)
 	return *this;
 }
 
-ibDataQueryBuilder& ibDataQueryBuilder::WhereIn(const ibBackendQueryColumn* col, const std::vector<ibValue>& values)
+ibDataQueryBuilder& ibDataQueryBuilder::WhereIn(const std::shared_ptr<const ibBackendQueryColumn>& col, const std::vector<ibValue>& values)
 {
 	ibQueryCondition c;
 	c.m_col = col;
@@ -306,7 +293,7 @@ ibDataQueryBuilder& ibDataQueryBuilder::Where(const ibQueryPredicatePtr& predica
 	return *this;
 }
 
-ibDataQueryBuilder& ibDataQueryBuilder::Where(const std::vector<const ibBackendQueryColumn*>& path,
+ibDataQueryBuilder& ibDataQueryBuilder::Where(const std::vector<std::shared_ptr<const ibBackendQueryColumn>>& path,
 	ibQueryFilterOp comparison, const ibValue& value)
 {
 	if (path.empty())
@@ -320,7 +307,7 @@ ibDataQueryBuilder& ibDataQueryBuilder::Where(const std::vector<const ibBackendQ
 	return *this;
 }
 
-ibDataQueryBuilder& ibDataQueryBuilder::WhereCompare(const std::vector<const ibBackendQueryColumn*>& path,
+ibDataQueryBuilder& ibDataQueryBuilder::WhereCompare(const std::vector<std::shared_ptr<const ibBackendQueryColumn>>& path,
 	ibQueryFilterOp op, const ibValue& value)
 {
 	return Where(path, op, value);   // identical now (one m_op) — kept as a named alias for ordered/LIKE callers
@@ -340,11 +327,11 @@ ibDataQueryBuilder& ibDataQueryBuilder::WhereCompare(const std::vector<const ibB
 // ⚠ ONE SOURCE. A statement of several reads a walk through the join the lowering makes for it
 // (ExpandDotWalkHere), and asks the provider itself there. And in a GROUPED statement the walk is a key as well,
 // since a sort may name only what it groups by — it decides nothing, the target's field being one per reference.
-ibDataQueryBuilder& ibDataQueryBuilder::OrderBy(const ibBackendQueryColumn* col, bool ascending)
+ibDataQueryBuilder& ibDataQueryBuilder::OrderBy(const std::shared_ptr<const ibBackendQueryColumn>& col, bool ascending)
 {
 	const bool oneSource = m_root == nullptr || m_root->m_kind == ibQueryNode::Kind::Source;
 	if (col != nullptr && oneSource) {
-		const ibBackendQueryColumn* by = m_queryable != nullptr
+		const std::shared_ptr<const ibBackendQueryColumn> by = m_queryable != nullptr
 			? m_queryable->GetProvider().ResolveReferenceSortColumn(m_queryable, col) : nullptr;
 		const bool grouped = !m_groupBy.empty() || !m_aggregates.empty();
 		bool aKey = false;
@@ -353,14 +340,14 @@ ibDataQueryBuilder& ibDataQueryBuilder::OrderBy(const ibBackendQueryColumn* col,
 		if (by != nullptr && by != col && (!grouped || aKey)) {
 			// THE SOURCE'S OWN REFERENCE is sorted by its own fields, where they lie — a document by its moment,
 			// the date and the reference in its own row. Walked like a foreign one, it joined the table to itself.
-			const std::vector<const ibBackendQueryColumn*> keys = m_queryable->GetPrimaryKeyColumns();
+			const std::vector<std::shared_ptr<const ibBackendQueryColumn>> keys = m_queryable->GetPrimaryKeyColumns();
 			if (keys.size() == 1 && keys.front() == col) {
 				if (grouped)
 					GroupBy(by);
 				m_sorts.push_back(ibQuerySortItem{ by, ascending });
 			}
 			else {
-				const std::vector<const ibBackendQueryColumn*> walk{ col, by };
+				const std::vector<std::shared_ptr<const ibBackendQueryColumn>> walk{ col, by };
 				if (grouped)
 					GroupBy(walk);
 				OrderBy(walk, ascending);
@@ -371,16 +358,16 @@ ibDataQueryBuilder& ibDataQueryBuilder::OrderBy(const ibBackendQueryColumn* col,
 	return *this;
 }
 
-ibDataQueryBuilder& ibDataQueryBuilder::OrderBy(const std::vector<const ibBackendQueryColumn*>& path, bool ascending)
+ibDataQueryBuilder& ibDataQueryBuilder::OrderBy(const std::vector<std::shared_ptr<const ibBackendQueryColumn>>& path, bool ascending)
 {
 	if (path.empty())
 		return *this;
 	// …a walk that ENDS at a reference (`Doc.Counterparty`) sorts the same way, one step further on.
 	const bool oneSource = m_root == nullptr || m_root->m_kind == ibQueryNode::Kind::Source;
 	if (oneSource && m_groupBy.empty() && m_aggregates.empty() && m_queryable != nullptr)
-		if (const ibBackendQueryColumn* by = m_queryable->GetProvider().ResolveReferenceSortColumn(m_queryable, path.back())) {
-			std::vector<const ibBackendQueryColumn*> further(path);
-			further.push_back(by);
+		if (std::shared_ptr<const ibBackendQueryColumn> by = m_queryable->GetProvider().ResolveReferenceSortColumn(m_queryable, path.back())) {
+			std::vector<std::shared_ptr<const ibBackendQueryColumn>> further(path);
+			further.push_back(std::move(by));
 			OrderBy(further, ascending);
 		}
 	// ⭐ …AND IN A GROUPED STATEMENT A WALK ON FROM A KEY IS A KEY AS WELL, as it is for the column overload above: the
@@ -397,8 +384,8 @@ ibDataQueryBuilder& ibDataQueryBuilder::OrderBy(const std::vector<const ibBacken
 		for (size_t i = 0; i < m_groupBy.size(); ++i) {
 			if (m_groupExprs[i])
 				continue;
-			const std::vector<const ibBackendQueryColumn*> key = m_groupPaths[i].empty()
-				? std::vector<const ibBackendQueryColumn*>{ m_groupBy[i] } : m_groupPaths[i];
+			const std::vector<std::shared_ptr<const ibBackendQueryColumn>> key = m_groupPaths[i].empty()
+				? std::vector<std::shared_ptr<const ibBackendQueryColumn>>{ m_groupBy[i] } : m_groupPaths[i];
 			bool walksOn = key.size() < path.size();
 			for (size_t k = 0; k < key.size() && walksOn; ++k)
 				walksOn = key[k] == path[k];
@@ -444,7 +431,7 @@ ibDataQueryBuilder& ibDataQueryBuilder::OrderByOutput(const ibString& alias, boo
 // reads so it has somewhere to read it from. A duplicate is not merely redundant downstream — the
 // fold builds its result by adding one column PER KEY, and the same column id added twice is a
 // column collision in the row it hands back.
-ibDataQueryBuilder& ibDataQueryBuilder::GroupBy(const ibBackendQueryColumn* col)
+ibDataQueryBuilder& ibDataQueryBuilder::GroupBy(const std::shared_ptr<const ibBackendQueryColumn>& col)
 {
 	for (size_t i = 0; i < m_groupBy.size(); ++i)
 		if (m_groupBy[i] == col && m_groupPaths[i].empty() && !m_groupExprs[i])
@@ -458,7 +445,7 @@ ibDataQueryBuilder& ibDataQueryBuilder::GroupBy(const ibBackendQueryColumn* col)
 	return *this;
 }
 
-ibDataQueryBuilder& ibDataQueryBuilder::GroupBy(const std::vector<const ibBackendQueryColumn*>& path)
+ibDataQueryBuilder& ibDataQueryBuilder::GroupBy(const std::vector<std::shared_ptr<const ibBackendQueryColumn>>& path)
 {
 	if (path.empty()) return *this;
 	if (path.size() == 1) return GroupBy(path.front());                  // not a dot-walk — plain key
@@ -469,7 +456,7 @@ ibDataQueryBuilder& ibDataQueryBuilder::GroupBy(const std::vector<const ibBacken
 	return *this;
 }
 
-ibDataQueryBuilder& ibDataQueryBuilder::GroupBy(const std::vector<const ibBackendQueryColumn*>& path, const ibString& alias)
+ibDataQueryBuilder& ibDataQueryBuilder::GroupBy(const std::vector<std::shared_ptr<const ibBackendQueryColumn>>& path, const ibString& alias)
 {
 	if (path.size() < 2 || alias.IsEmpty())
 		return GroupBy(path);
@@ -495,7 +482,7 @@ ibDataQueryBuilder& ibDataQueryBuilder::GroupByExpr(const ibQueryColumnExprPtr& 
 }
 
 ibDataQueryBuilder& ibDataQueryBuilder::Aggregate(AggregateFn fn,
-	const ibBackendQueryColumn* col, const ibString& alias, bool distinct)
+	const std::shared_ptr<const ibBackendQueryColumn>& col, const ibString& alias, bool distinct)
 {
 	// Route to the current context: Totals() → the TotalBy common set, else the GroupBy set.
 	AggregateItem item{ fn, col, alias, {} };
@@ -522,7 +509,7 @@ ibDataQueryBuilder& ibDataQueryBuilder::AggregateOver(const ibString& alias,
 }
 
 ibDataQueryBuilder& ibDataQueryBuilder::AggregateAsBalance(const ibString& alias, ibBalanceRole edge,
-	std::vector<const ibBackendQueryColumn*> moments, std::vector<const ibBackendQueryColumn*> keys)
+	std::vector<std::shared_ptr<const ibBackendQueryColumn>> moments, std::vector<std::shared_ptr<const ibBackendQueryColumn>> keys)
 {
 	std::vector<AggregateItem>& into = m_aggInTotals ? m_totalAggregates : m_aggregates;
 	for (auto it = into.rbegin(); it != into.rend(); ++it)
@@ -536,23 +523,23 @@ ibDataQueryBuilder& ibDataQueryBuilder::AggregateAsBalance(const ibString& alias
 }
 
 ibDataQueryBuilder& ibDataQueryBuilder::AggregateReceiver(const ibString& alias,
-	std::shared_ptr<ibBackendQueryColumn> receiver)
+	const std::shared_ptr<const ibBackendQueryColumn>& receiver)
 {
 	std::vector<AggregateItem>& into = m_aggInTotals ? m_totalAggregates : m_aggregates;
 	for (auto it = into.rbegin(); it != into.rend(); ++it)
 		if (it->m_alias.IsSameAs(alias, false)) {
-			it->m_ownedReceiver = receiver;      // the door keeps it alive for as long as the read
-			it->m_col           = receiver.get();
-			it->m_fn            = AggregateFn::Min;   // constant inside the area, so MIN of it IS it
+			it->m_col      = receiver;
+			it->m_receiver = receiver;
+			it->m_fn       = AggregateFn::Min;   // constant inside the area, so MIN of it IS it
 			break;
 		}
 	return *this;
 }
 
-ibDataQueryBuilder& ibDataQueryBuilder::AggregateDerived(const ibBackendQueryColumn* col, const ibString& alias,
-	ibQueryColumnExprPtr expr, std::vector<std::shared_ptr<ibBackendQueryColumn>> measures)
+ibDataQueryBuilder& ibDataQueryBuilder::AggregateDerived(const std::shared_ptr<const ibBackendQueryColumn>& col, const ibString& alias,
+	ibQueryColumnExprPtr expr)
 {
-	m_totalDerived.push_back({ col, alias, std::move(expr), std::move(measures) });
+	m_totalDerived.push_back({ col, alias, std::move(expr) });
 	return *this;
 }
 
@@ -569,7 +556,7 @@ bool ibDataQueryBuilder::CanPushWindow() const
 }
 
 ibDataQueryBuilder& ibDataQueryBuilder::Aggregate(AggregateFn fn,
-	const std::vector<const ibBackendQueryColumn*>& path, const ibString& alias, bool distinct)
+	const std::vector<std::shared_ptr<const ibBackendQueryColumn>>& path, const ibString& alias, bool distinct)
 {
 	if (path.empty()) return *this;
 	if (path.size() == 1) return Aggregate(fn, path.front(), alias, distinct);   // not a dot-walk — plain input
@@ -629,12 +616,12 @@ ibDataQueryBuilder& ibDataQueryBuilder::TotalsDetails(ibTotalsAxis axis, std::sh
 	return *this;
 }
 
-ibDataQueryBuilder& ibDataQueryBuilder::TotalBy(const ibBackendQueryColumn* col, ibDimensionKind dim)
+ibDataQueryBuilder& ibDataQueryBuilder::TotalBy(const std::shared_ptr<const ibBackendQueryColumn>& col, ibDimensionKind dim)
 {
 	return TotalByLevel(ibTotalLevel::One(col, dim));
 }
 
-ibDataQueryBuilder& ibDataQueryBuilder::TotalBy(const std::vector<const ibBackendQueryColumn*>& path, ibDimensionKind dim)
+ibDataQueryBuilder& ibDataQueryBuilder::TotalBy(const std::vector<std::shared_ptr<const ibBackendQueryColumn>>& path, ibDimensionKind dim)
 {
 	if (path.empty()) return *this;
 	if (path.size() == 1) return TotalBy(path.front(), dim);   // not a dot-walk — plain dimension column
@@ -645,8 +632,8 @@ ibDataQueryBuilder& ibDataQueryBuilder::TotalBy(const std::vector<const ibBacken
 	return *this;
 }
 
-ibTotalField ibDataQueryBuilder::DeclareDimDotWalk(const std::vector<const ibBackendQueryColumn*>& path,
-	const ibBackendQueryColumn* dimCol, const ibString& alias, ibDimensionKind dim)
+ibTotalField ibDataQueryBuilder::DeclareDimDotWalk(const std::vector<std::shared_ptr<const ibBackendQueryColumn>>& path,
+	const std::shared_ptr<const ibBackendQueryColumn>& dimCol, const ibString& alias, ibDimensionKind dim)
 {
 	if (path.size() < 2 || dimCol == nullptr) return ibTotalField{ nullptr, dim };
 	m_dimWalks.push_back(ibDotWalkColumn{ path, alias });    // provider projects the leaf under `alias`
@@ -659,8 +646,8 @@ ibTotalField ibDataQueryBuilder::DeclareDimDotWalk(const std::vector<const ibBac
 	return ibTotalField{ dimCol, dim, path };
 }
 
-ibDataQueryBuilder& ibDataQueryBuilder::TotalByDotWalk(const std::vector<const ibBackendQueryColumn*>& path,
-	const ibBackendQueryColumn* dimCol, const ibString& alias, ibDimensionKind dim)
+ibDataQueryBuilder& ibDataQueryBuilder::TotalByDotWalk(const std::vector<std::shared_ptr<const ibBackendQueryColumn>>& path,
+	const std::shared_ptr<const ibBackendQueryColumn>& dimCol, const ibString& alias, ibDimensionKind dim)
 {
 	const ibTotalField field = DeclareDimDotWalk(path, dimCol, alias, dim);
 	ibTotalLevel level; level.m_fields.push_back(field);
@@ -668,21 +655,21 @@ ibDataQueryBuilder& ibDataQueryBuilder::TotalByDotWalk(const std::vector<const i
 }
 
 ibDataQueryBuilder& ibDataQueryBuilder::Having(AggregateFn fn,
-	const ibBackendQueryColumn* col, ibQueryFilterOp op, const ibValue& value)
+	const std::shared_ptr<const ibBackendQueryColumn>& col, ibQueryFilterOp op, const ibValue& value)
 {
 	m_having.push_back(HavingItem{ fn, col, op, value });
 	return *this;
 }
 
 ibDataQueryBuilder& ibDataQueryBuilder::SelectPath(
-	const std::vector<const ibBackendQueryColumn*>& path, const ibString& alias)
+	const std::vector<std::shared_ptr<const ibBackendQueryColumn>>& path, const ibString& alias)
 {
 	if (!path.empty())
 		m_dotWalks.push_back(ibDotWalkColumn{ path, alias });
 	return *this;
 }
 
-ibDataQueryBuilder& ibDataQueryBuilder::Select(const ibBackendQueryColumn* col, const ibString& alias)
+ibDataQueryBuilder& ibDataQueryBuilder::Select(const std::shared_ptr<const ibBackendQueryColumn>& col, const ibString& alias)
 {
 	if (col != nullptr)
 		m_selectCols.emplace_back(col, alias);
@@ -717,31 +704,16 @@ ibDataQueryBuilder& ibDataQueryBuilder::WhereKeyIn(const std::vector<ibValue>& r
 	return *this;
 }
 
-ibDataQueryBuilder& ibDataQueryBuilder::SetValue(const ibBackendQueryColumn* column, const ibValue& value)
+ibDataQueryBuilder& ibDataQueryBuilder::SetValue(const std::shared_ptr<const ibBackendQueryColumn>& column, const ibValue& value)
 {
 	m_writeRows.back().emplace_back(column, value);
 	m_writeAdditive.back().push_back(false);   // index-aligned with the row — always pushed, never sparse
 	return *this;
 }
 
-ibDataQueryBuilder& ibDataQueryBuilder::SetValue(const ibBackendColumnRawDB& rawColumn, const ibValue& value)
-{
-	// Own a copy of the caller's temporary raw column; the assignment holds a stable pointer.
-	m_writeRows.back().emplace_back(m_ownedRawColumns.emplace_back(std::make_shared<ibBackendColumnRawDB>(rawColumn)).get(), value);
-	m_writeAdditive.back().push_back(false);
-	return *this;
-}
-
-ibDataQueryBuilder& ibDataQueryBuilder::AddValue(const ibBackendQueryColumn* column, const ibValue& delta)
+ibDataQueryBuilder& ibDataQueryBuilder::AddValue(const std::shared_ptr<const ibBackendQueryColumn>& column, const ibValue& delta)
 {
 	m_writeRows.back().emplace_back(column, delta);
-	m_writeAdditive.back().push_back(true);
-	return *this;
-}
-
-ibDataQueryBuilder& ibDataQueryBuilder::AddValue(const ibBackendColumnRawDB& rawColumn, const ibValue& delta)
-{
-	m_writeRows.back().emplace_back(m_ownedRawColumns.emplace_back(std::make_shared<ibBackendColumnRawDB>(rawColumn)).get(), delta);
 	m_writeAdditive.back().push_back(true);
 	return *this;
 }
@@ -763,7 +735,7 @@ ibDataQueryBuilder& ibDataQueryBuilder::NextRow()
 }
 
 std::vector<ibQuerySortItem> ibDataQueryBuilder::EffectiveSort(
-	const ibBackendQueryable* queryable, const std::vector<ibQuerySortItem>& userSorts)
+	const std::shared_ptr<const ibBackendQueryable>& queryable, const std::vector<ibQuerySortItem>& userSorts)
 {
 	// Effective order = user sort ++ the queryable's PRIMARY KEY (a catalog/document's data-reference; a
 	// register's recorder+line+period / period+dimensions). The primary key IS the cursor tie-breaker — the
@@ -773,7 +745,7 @@ std::vector<ibQuerySortItem> ibDataQueryBuilder::EffectiveSort(
 	// question beside the key: delete-by-key and key-IN read the SAME primary key (dbTableProvider's
 	// RowKeyColumn).
 	std::vector<ibQuerySortItem> effective = userSorts;
-	for (const ibBackendQueryColumn* pk : queryable->GetPrimaryKeyColumns()) {
+	for (const std::shared_ptr<const ibBackendQueryColumn>& pk : queryable->GetPrimaryKeyColumns()) {
 		if (pk == nullptr) continue;
 		bool dup = false;
 		for (const ibQuerySortItem& e : effective)
@@ -794,7 +766,7 @@ ibDataQuerySpec ibDataQueryBuilder::BuildSpec() const
 	ibDataQuerySpec spec;
 	spec.m_holder      = m_holder;
 	spec.m_queryable   = m_queryable;       // current/primary source (single-source fast path)
-	spec.m_root        = m_root.get();      // the relational tree — the composer walks it
+	spec.m_root        = m_root;            // the relational tree — the composer walks it
 	spec.m_conditions  = &m_conditions;
 	spec.m_predicate   = m_predicate;       // full boolean WHERE tree (null = none)
 	spec.m_keyIn       = &m_keyIn;
@@ -826,12 +798,12 @@ ibDataQuerySpec ibDataQueryBuilder::BuildSpec() const
 // Columns a later result.Select(mode) must drain into the snapshot = the Select() output list +
 // the aggregate inputs + the TotalBy dimension fields (deduped). The door knows them all; it stamps
 // them on the result so a fold reads exactly what it needs from one snapshot.
-std::vector<const ibBackendQueryColumn*> ibDataQueryBuilder::MaterialiseColumns() const
+std::vector<std::shared_ptr<const ibBackendQueryColumn>> ibDataQueryBuilder::MaterialiseColumns() const
 {
-	std::vector<const ibBackendQueryColumn*> cols;
-	auto add = [&](const ibBackendQueryColumn* c) {
+	std::vector<std::shared_ptr<const ibBackendQueryColumn>> cols;
+	auto add = [&](const std::shared_ptr<const ibBackendQueryColumn>& c) {
 		if (c == nullptr) return;
-		for (const ibBackendQueryColumn* e : cols) if (e == c) return;
+		for (const std::shared_ptr<const ibBackendQueryColumn>& e : cols) if (e == c) return;
 		cols.push_back(c);
 	};
 	for (const auto& sc : m_selectCols)              add(sc.first);
@@ -851,16 +823,15 @@ void ibDataQueryBuilder::StampResult(ibDataQueryResult& r) const
 	// …and HOW a dot-walked object dimension is read back — see ibDataQueryResult::m_objectReads.
 	for (const ibDimObjectRead& read : m_dimObjectReads)
 		r.SetObjectRead(read.m_dimColumnId, read.m_alias, read.m_leaf);
-	// …and the source recipe, WITH the ownership of the sources built for this query: everything
-	// stamped above is raw pointers into the columns those sources publish, and the result is read
-	// after this builder is gone. (Max, 2026-08-19: "the two of them own it — the query dies, the
-	// result still holds the skeleton".)
-	r.SetSource(m_holder, m_queryable, m_selectCols, m_conditions, m_ownedSources);
+	// …and the source recipe, WITH the ownership of the sources built for this query: the result runs
+	// its lazy sub-selections against them after this builder is gone. (Max, 2026-08-19: "the two of
+	// them own it — the query dies, the result still holds the skeleton".)
+	r.SetSource(m_holder, m_queryable, m_selectCols, m_conditions);
 }
 
 // An empty temp table, as a result. Nothing here knows WHY the caller wants one — that
 // judgement (a closed source under SELECT ALLOWED) belongs to the layer that read the flag.
-ibDataQueryResult ibMakeEmptyQueryResult(const ibBackendQueryable* queryable)
+ibDataQueryResult ibMakeEmptyQueryResult(const std::shared_ptr<const ibBackendQueryable>& queryable)
 {
 	return ibDataQueryResult(ibQueryRamTable{}, queryable);
 }
@@ -888,13 +859,13 @@ public:
 
 private:
 	static ibString SourceOf(const ibDataQueryBuilder& query, const ibChar* verb) {
-		std::vector<const ibBackendQueryable*> sources;
+		std::vector<std::shared_ptr<const ibBackendQueryable>> sources;
 		if (!query.GetSources(sources) && query.GetPrimarySource() != nullptr)
 			sources.push_back(query.GetPrimarySource());
 
 		ibString text(verb);
 		bool first = true;
-		for (const ibBackendQueryable* source : sources) {
+		for (const std::shared_ptr<const ibBackendQueryable>& source : sources) {
 			if (source == nullptr)
 				continue;
 			text += first ? ibT(" ") : ibT(", ");
@@ -986,7 +957,7 @@ ibDataQueryResult ibDataQueryBuilder::Execute(const ibReadPageRequest& req,
 // "there is no such question", while the honest answer to "sum of what you may see" over nothing you
 // may see is a sum of nothing: zero. (With a GROUP BY the empty result IS right — no groups.)
 static ibDataQueryResult MakeZeroAggregateResult(const std::vector<ibAggregateItem>& aggregates,
-                                                 const ibBackendQueryable* queryable)
+                                                 const std::shared_ptr<const ibBackendQueryable>& queryable)
 {
 	ibQueryRamTable table;
 	ibMetaID id = 1;
@@ -1192,7 +1163,7 @@ void ibDataQueryBuilder::RaiseIfKeyedRewriteMissed(long affected) const
 	// say whether the two keys were the same key).
 	ibString strKey;
 	if (m_queryable != nullptr && !m_writeRows.empty()) {
-		for (const ibBackendQueryColumn* keyCol : m_queryable->GetPrimaryKeyColumns()) {
+		for (const std::shared_ptr<const ibBackendQueryColumn>& keyCol : m_queryable->GetPrimaryKeyColumns()) {
 			if (keyCol == nullptr) continue;
 			for (const auto& assigned : m_writeRows.front()) {
 				if (assigned.first != keyCol) continue;

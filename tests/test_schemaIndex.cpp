@@ -19,7 +19,7 @@
 
 namespace {
 
-ibSchemaIndex IndexOver(const ibBackendQueryColumn* column)
+ibSchemaIndex IndexOver(const std::shared_ptr<const ibBackendQueryColumn>& column)
 {
     ibSchemaIndex index;
     index.m_name = wxT("INFORMATIONREGISTER_INDEX");
@@ -32,24 +32,22 @@ ibSchemaIndex IndexOver(const ibBackendQueryColumn* column)
 
 TEST(SchemaIndex, TheSameColumnAtTheSameTypeIsTheSameIndex)
 {
-    const ibBackendColumnRawDB was = ibBackendColumnRawDB::String(wxT("D"), 7, 10);
-    const ibBackendColumnRawDB now = ibBackendColumnRawDB::String(wxT("D"), 7, 10);
-    EXPECT_TRUE(ibSameSchemaIndex(IndexOver(&was), IndexOver(&now)));
+    EXPECT_TRUE(ibSameSchemaIndex(IndexOver(ibBackendColumnRawDB::String(wxT("D"), 7, 10)),
+                                  IndexOver(ibBackendColumnRawDB::String(wxT("D"), 7, 10))));
 }
 
 TEST(SchemaIndex, ARetypedColumnIsNotTheSameIndex)
 {
-    const ibBackendColumnRawDB text = ibBackendColumnRawDB::String(wxT("D"), 7, 10);
-    const ibBackendColumnRawDB number = ibBackendColumnRawDB::Number(wxT("D"), 7, 15, 2);
-    const ibBackendColumnRawDB reference = ibBackendColumnRawDB::Reference(wxT("D"), 0, wxEmptyString, 7);
+    const std::shared_ptr<const ibBackendColumnRawDB> text = ibBackendColumnRawDB::String(wxT("D"), 7, 10);
+    const std::shared_ptr<const ibBackendColumnRawDB> number = ibBackendColumnRawDB::Number(wxT("D"), 7, 15, 2);
+    const std::shared_ptr<const ibBackendColumnRawDB> reference = ibBackendColumnRawDB::Reference(wxT("D"), 0, wxEmptyString, 7);
 
-    EXPECT_FALSE(ibSameSchemaIndex(IndexOver(&text), IndexOver(&number)));
-    EXPECT_FALSE(ibSameSchemaIndex(IndexOver(&text), IndexOver(&reference)));
+    EXPECT_FALSE(ibSameSchemaIndex(IndexOver(text), IndexOver(number)));
+    EXPECT_FALSE(ibSameSchemaIndex(IndexOver(text), IndexOver(reference)));
 }
 
 TEST(SchemaIndex, AWiderStringIsNotTheSameIndex)
 {
-    const ibBackendColumnRawDB narrow = ibBackendColumnRawDB::String(wxT("D"), 7, 10);
-    const ibBackendColumnRawDB wide = ibBackendColumnRawDB::String(wxT("D"), 7, 50);
-    EXPECT_FALSE(ibSameSchemaIndex(IndexOver(&narrow), IndexOver(&wide)));
+    EXPECT_FALSE(ibSameSchemaIndex(IndexOver(ibBackendColumnRawDB::String(wxT("D"), 7, 10)),
+                                   IndexOver(ibBackendColumnRawDB::String(wxT("D"), 7, 50))));
 }

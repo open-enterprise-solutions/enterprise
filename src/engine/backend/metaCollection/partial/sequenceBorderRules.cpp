@@ -97,9 +97,9 @@ std::vector<ibQueryProjItem> MomentProjection(const ibValueMetaObjectSequence* s
 {
 	std::vector<ibQueryProjItem> proj;
 	std::set<ibString> projected;
-	for (const ibBackendQueryColumn* part : { seq->GetRegisterPeriod()->GetQueryColumn(),
-	                                          seq->GetRegisterRecorder()->GetQueryColumn() })
-		for (const ibString& field : ColumnFieldNames(part))
+	for (const std::shared_ptr<const ibBackendQueryColumn>& part : { seq->GetRegisterPeriod()->GetQueryColumn(),
+	                                                                seq->GetRegisterRecorder()->GetQueryColumn() })
+		for (const ibString& field : ColumnFieldNames(*part))
 			if (projected.insert(field).second)
 				proj.push_back(ibQueryProjItem{ ibCol(alias, field), field });
 	return proj;
@@ -116,7 +116,7 @@ std::vector<ibSequenceRegistration> RegistrationsWhere(const ibValueMetaObjectSe
 	for (const ibQueryProjItem& item : proj)
 		projected.insert(item.m_alias);
 	for (const ibValueMetaObjectDimension* dimension : seq->GetDimensionArrayObject())
-		for (const ibString& field : ColumnFieldNames(dimension->GetQueryColumn()))
+		for (const ibString& field : ColumnFieldNames(*dimension->GetQueryColumn()))
 			if (projected.insert(field).second)
 				proj.push_back(ibQueryProjItem{ ibCol(kRows, field), field });
 
@@ -129,7 +129,7 @@ std::vector<ibSequenceRegistration> RegistrationsWhere(const ibValueMetaObjectSe
 		ibSequenceRegistration one;
 		for (const ibValueMetaObjectDimension* dimension : seq->GetDimensionArrayObject()) {
 			ibValue value;
-			const ibBackendQueryColumn* column = dimension->GetQueryColumn();
+			const std::shared_ptr<const ibBackendQueryColumn> column = dimension->GetQueryColumn();
 			column->ReadValue(column->GetPhysicalName(), metaData, value, rs);
 			one.m_key.push_back(value);
 		}
@@ -196,7 +196,7 @@ ibValue PeriodBefore(const ibValueMetaObjectSequence* seq, const std::vector<ibV
 {
 	ibValue found;
 	const ibMetaData* metaData = seq->GetMetaData();
-	const ibBackendQueryColumn* column = seq->GetRegisterPeriod()->GetQueryColumn();
+	const std::shared_ptr<const ibBackendQueryColumn> column = seq->GetRegisterPeriod()->GetQueryColumn();
 	ibQueryExprPtr where = ibRegCompositeIR(column, metaData, period, ibQueryBinOp::Lt, kRows);
 	if (where == nullptr)
 		return found;
@@ -258,7 +258,7 @@ bool AnythingBetween(const ibValueMetaObjectSequence* seq, const std::vector<ibV
 	const ibValue& border, const ibValue& moment)
 {
 	const ibMetaData* metaData = seq->GetMetaData();
-	const ibBackendQueryColumn* column = seq->GetRegisterPeriod()->GetQueryColumn();
+	const std::shared_ptr<const ibBackendQueryColumn> column = seq->GetRegisterPeriod()->GetQueryColumn();
 	const ibValue period = PeriodOf(moment);
 
 	// Whole periods in between — counted in the database.
@@ -295,10 +295,10 @@ bool AnythingBetween(const ibValueMetaObjectSequence* seq, const std::vector<ibV
 
 // A value said as the fields that hold it — the write half of ibRegCompositeIR, through the same
 // codec: the caller names a column and a value, and the layout tier says which fields carry it.
-std::vector<ibDmlAssign> AssignmentsFor(const ibBackendQueryColumn* column, const ibMetaData* metaData, const ibValue& value)
+std::vector<ibDmlAssign> AssignmentsFor(const std::shared_ptr<const ibBackendQueryColumn>& column, const ibMetaData* metaData, const ibValue& value)
 {
 	std::vector<ibDmlAssign> out;
-	const std::vector<ibColumnSlot> slots = DescribeColumnLayout(column);
+	const std::vector<ibColumnSlot> slots = DescribeColumnLayout(*column);
 	std::vector<ibString> fields;
 	fields.reserve(slots.size());
 	for (const ibColumnSlot& slot : slots)
@@ -306,7 +306,7 @@ std::vector<ibDmlAssign> AssignmentsFor(const ibBackendQueryColumn* column, cons
 
 	ibQueryStatement capture(ibQueryStatement::Kind::Delete, ibString(), fields);
 	int pos = 1;
-	ibColumnCodec::WriteValue(column, metaData, value, &capture, pos);
+	ibColumnCodec::WriteValue(*column, metaData, value, &capture, pos);
 	const std::vector<ibQueryExprPtr>& consts = capture.CapturedValues();
 	for (size_t i = 0; i < fields.size(); ++i)
 		out.push_back(ibDmlAssign{ fields[i], (i < consts.size() && consts[i]) ? consts[i] : ibConst(ibValue()) });

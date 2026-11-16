@@ -45,17 +45,17 @@ namespace {
 // variant carries its descending twin (ListIndex) — the same as the register's period index.
 void ContributeAttributeIndexes(ibSchemaTable& t,
 	const std::vector<ibValueMetaObjectAttributeBase*>& attributes,
-	const std::vector<const ibBackendQueryColumn*>& order = {})
+	const std::vector<std::shared_ptr<const ibBackendQueryColumn>>& order = {})
 {
 	for (const auto attr : attributes) {
 		const ibIndexingMode mode = attr->GetIndexingMode();
 		if (mode == ibIndexingMode::ibIndexingMode_DontIndex)
 			continue;
 		const ibString name = ibString::Format(ibT("%s_%i_IX"), t.m_name, (int)attr->GetColumnId());
-		const ibBackendQueryColumn* own = attr->GetQueryColumn();
+		const std::shared_ptr<const ibBackendQueryColumn> own = attr->GetQueryColumn();
 		if (mode == ibIndexingMode::ibIndexingMode_IndexWithAdditionalOrder && !order.empty()
 		    && std::find(order.begin(), order.end(), own) == order.end()) {
-			std::vector<const ibBackendQueryColumn*> cols{ own };
+			std::vector<std::shared_ptr<const ibBackendQueryColumn>> cols{ own };
 			cols.insert(cols.end(), order.begin(), order.end());
 			t.ListIndex(name, std::move(cols));
 		}
@@ -111,9 +111,9 @@ void ibValueMetaObjectRecordDataMutableRef::ContributeTables(ibSchemaSnapshot& o
 				return true;
 			bool passed = true;
 			for (const ibValueMetaObjectAttributeBase* attribute : attributes) {
-				const ibBackendQueryColumn* const column = attribute->GetQueryColumn();
+				const std::shared_ptr<const ibBackendQueryColumn> column = attribute->GetQueryColumn();
 				const auto applied = std::find_if(baseline->m_columns.begin(), baseline->m_columns.end(),
-					[column](const ibSchemaColumn& c) { return c.m_id == column->GetColumnId() && c.m_column != nullptr; });
+					[&column](const ibSchemaColumn& c) { return c.m_id == column->GetColumnId() && c.m_column != nullptr; });
 				if (applied == baseline->m_columns.end())
 					continue;
 				const ibTypeDescription& was = applied->m_column->GetTypeDesc();
@@ -147,7 +147,7 @@ void ibValueMetaObjectRecordDataMutableRef::ContributeTables(ibSchemaSnapshot& o
 	// --- tabular sections — each its own table ---
 	for (const auto tab : GetTableArrayObject()) {
 		ibSchemaTable& tt = out.CreateSchemaTable(tab->GetQueryable());
-		const ibBackendQueryColumn* tabUuid = tt.Scaffold(ibOwnerRefColumn());
+		const std::shared_ptr<const ibBackendQueryColumn> tabUuid = tt.Scaffold(ibOwnerRefColumn());
 		for (const auto object : tab->GetGenericAttributeArrayObject())
 			tt.Add(object->GetQueryColumn());
 		tt.Index(tt.m_name + ibT("_INDEX"), { tabUuid });                     // tabular uuid index — NOT unique (repeats per owner)
@@ -230,7 +230,7 @@ void ibValueMetaObjectRegisterData::ContributeTables(ibSchemaSnapshot& out) cons
 	// UNIQUE — these columns ARE the register's key: at most one record per key, same as objects
 	// key on a unique uuid. It is the DB-level guarantee against duplicate rows; the app-level
 	// ExistData probe alone (a fragile string compare) let dimension-key duplicates slip in.
-	std::vector<const ibBackendQueryColumn*> idxCols;
+	std::vector<std::shared_ptr<const ibBackendQueryColumn>> idxCols;
 	if (HasRecorder()) {
 		idxCols.push_back(GetRegisterRecorder()->GetQueryColumn());
 		idxCols.push_back(GetRegisterLineNumber()->GetQueryColumn());
@@ -262,7 +262,7 @@ void ibValueMetaObjectRegisterData::ContributeTables(ibSchemaSnapshot& out) cons
 	// scrolling up, against 235 ms walked by the index (2026-10-01). Scrolling up reads the order
 	// backwards, which Firebird walks only on a descending twin (ListIndex).
 	// (Only where the register HAS a Period column — a calculation register is dated otherwise, HasPeriod.)
-	std::vector<const ibBackendQueryColumn*> listOrder;
+	std::vector<std::shared_ptr<const ibBackendQueryColumn>> listOrder;
 	if (HasRecorder() && HasPeriod() && GetRegisterPeriod() != nullptr && GetRegisterRecorder() != nullptr) {
 		listOrder = { GetRegisterPeriod()->GetQueryColumn(), GetRegisterRecorder()->GetQueryColumn(),
 			GetRegisterLineNumber()->GetQueryColumn() };
@@ -328,9 +328,9 @@ void ibValueMetaObjectRecordDataHierarchyMutableRef::ContributeTables(ibSchemaSn
 		const auto narrower = [](unsigned was, unsigned now) { return now != 0 && (was == 0 || now < was); };
 		bool passed = true;
 		for (const ibValueMetaObjectAttributeBase* attribute : { GetDataCode(), GetDataDescription() }) {
-			const ibBackendQueryColumn* const column = attribute->GetQueryColumn();
+			const std::shared_ptr<const ibBackendQueryColumn> column = attribute->GetQueryColumn();
 			const auto applied = std::find_if(baseline->m_columns.begin(), baseline->m_columns.end(),
-				[column](const ibSchemaColumn& c) { return c.m_id == column->GetColumnId() && c.m_column != nullptr; });
+				[&column](const ibSchemaColumn& c) { return c.m_id == column->GetColumnId() && c.m_column != nullptr; });
 			if (applied == baseline->m_columns.end())
 				continue;
 			const ibTypeDescription& was = applied->m_column->GetTypeDesc();
@@ -406,7 +406,7 @@ void ibValueMetaObjectRecordDataHierarchyMutableRef::ContributeTables(ibSchemaSn
 			const ibValueMetaObjectTableData* table = FindTableObjectByFilter(declared.first);
 			if (table == nullptr)
 				continue;
-			const ibBackendQueryable* const queryable = table->GetQueryable();   // the one the base declared the section by
+			const std::shared_ptr<const ibBackendQueryable> queryable = table->GetQueryable();   // the one the base declared the section by
 			ibSchemaTable& lines = out.Shared(queryable->GetQueryTableId(), queryable->GetQueryTableName());
 			if (lines.m_seedKey.empty())
 				ibBackendCoreException::Error(_("%s: the declared lines cannot be written - the table names no owner"),
@@ -441,7 +441,7 @@ void ibValueMetaObjectRecordDataHierarchyMutableRef::ContributeTables(ibSchemaSn
 	// seed writes 1..K): the places declared before are the first as many as the baseline declared for the owner, and the
 	// next one is taken when the base holds more lines than that.
 	for (const auto section : GetTableArrayObject()) {
-		const ibBackendQueryable* const queryable = section->GetQueryable();
+		const std::shared_ptr<const ibBackendQueryable> queryable = section->GetQueryable();
 		ibSchemaTable& lines = out.Shared(queryable->GetQueryTableId(), queryable->GetQueryTableName());
 		if (lines.m_seedKey.empty())
 			continue;
@@ -516,9 +516,9 @@ void ibValueMetaObjectRecordDataRecorderRef::ContributeTables(ibSchemaSnapshot& 
 		if (baseline == nullptr)
 			return true;
 		const ibValueMetaObjectAttributeBase* const attribute = GetDocumentNumber();
-		const ibBackendQueryColumn* const column = attribute->GetQueryColumn();
+		const std::shared_ptr<const ibBackendQueryColumn> column = attribute->GetQueryColumn();
 		const auto applied = std::find_if(baseline->m_columns.begin(), baseline->m_columns.end(),
-			[column](const ibSchemaColumn& c) { return c.m_id == column->GetColumnId() && c.m_column != nullptr; });
+			[&column](const ibSchemaColumn& c) { return c.m_id == column->GetColumnId() && c.m_column != nullptr; });
 		if (applied == baseline->m_columns.end())
 			return true;
 		const ibTypeDescription& was = applied->m_column->GetTypeDesc();

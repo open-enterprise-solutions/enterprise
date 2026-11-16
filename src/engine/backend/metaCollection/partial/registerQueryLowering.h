@@ -354,7 +354,7 @@ inline std::vector<std::pair<ibString, ibQueryExprPtr>> ibRegRecorderTuple(
 
 	ibQueryStatement capture(ibQueryStatement::Kind::Delete, ibString(), fields);
 	int pos = 1;
-	ibColumnCodec::WriteValue(reg->GetRegisterRecorder()->GetQueryColumn(), reg->GetMetaData(), recorder, &capture, pos);
+	ibColumnCodec::WriteValue(*reg->GetRegisterRecorder()->GetQueryColumn(), reg->GetMetaData(), recorder, &capture, pos);
 	const std::vector<ibQueryExprPtr>& consts = capture.CapturedValues();
 
 	for (size_t i = 0; i < slots.size() && i < consts.size(); i++) {
@@ -369,12 +369,12 @@ inline std::vector<std::pair<ibString, ibQueryExprPtr>> ibRegRecorderTuple(
 // that came after them, so a reader must SAY which arm it wants: silence counts every movement of the
 // current grain twice — once rolled into the total, once as itself — and the result looks plausible.
 // A stored row has no recorder, so the recorder column IS the row's answer to "which arm am I".
-inline ibQueryPredicatePtr ibRegStoredArm(const ibBackendQueryColumn* recorderCol)
+inline ibQueryPredicatePtr ibRegStoredArm(const std::shared_ptr<const ibBackendQueryColumn>& recorderCol)
 {
 	return recorderCol != nullptr ? ibQueryPredicate::Null(recorderCol, /*negated*/ false) : nullptr;
 }
 
-inline ibQueryPredicatePtr ibRegMovementArm(const ibBackendQueryColumn* recorderCol)
+inline ibQueryPredicatePtr ibRegMovementArm(const std::shared_ptr<const ibBackendQueryColumn>& recorderCol)
 {
 	return recorderCol != nullptr ? ibQueryPredicate::Null(recorderCol, /*negated*/ true) : nullptr;
 }
@@ -385,7 +385,7 @@ inline ibQueryPredicatePtr ibRegMovementArm(const ibBackendQueryColumn* recorder
 // before the column existed, no value at all. Neither is an account, and neither takes a row: left in, the
 // credit pass of the movements reported turnovers under an empty account in correspondence with 01
 // (measured 2026-09-17). The totals trigger says the same in its own words (accountingRegisterMetadataSchema.cpp).
-inline ibQueryPredicatePtr ibRegSideNamed(const ibBackendQueryColumn* account, const ibValue& emptyAccount)
+inline ibQueryPredicatePtr ibRegSideNamed(const std::shared_ptr<const ibBackendQueryColumn>& account, const ibValue& emptyAccount)
 {
 	if (account == nullptr)
 		return nullptr;
@@ -416,7 +416,7 @@ inline void ibRegFillArmCut(TSpec& read, const TReg* reg,
 	if (reg == nullptr || !reg->HasRecorder() || reg->GetRegisterRecorder() == nullptr)
 		return;   // this view has one arm; there is nothing to cut
 
-	const std::vector<ibColumnSlot> slots = DescribeColumnLayout(reg->GetRegisterRecorder()->GetQueryColumn());
+	const std::vector<ibColumnSlot> slots = DescribeColumnLayout(*reg->GetRegisterRecorder()->GetQueryColumn());
 	if (slots.empty())
 		return;
 
@@ -437,11 +437,21 @@ inline void ibRegFillArmCut(TSpec& read, const TReg* reg,
 	// rehearsal ledger, 107 where 100 stood — 09:59:59 read 100). An INCLUDED upper edge and an EXCLUDED
 	// lower edge are therefore partial grains too; an excluded upper edge and an included lower one take
 	// that grain wholly out or wholly in, and stay with the stored rows.
+	//
+	// ⭐ AND THE GRAIN'S LAST SECOND, TAKEN IN, IS THE GRAIN WHOLE. It is the end of the period by the calendar's own
+	// word (ibDateTime::EndOfPeriod - what EndOfDay, EndOfYear and ENDOFPERIOD hand out), so `<= 31.12 23:59:59`
+	// and `< 01.01 00:00:00` are one boundary and read alike. Taken as falling inside its day, it sent that day to
+	// the movements, and a year asked the way every report asks it could not be read as the year's row: three
+	// quarters, two months, thirty days and the last day's entries (load-million-rows.md § 16).
 	const auto reachesInside = [&](const ibRegBound& b, bool upperEnd, ibDateTime& moment) {
 		if (b.m_date.GetType() != TYPE_DATE)
 			return false;
 		moment = b.m_date.GetDate();
-		if (b.HasRecorder() || moment.BeginOfPeriod(grain) != moment)
+		if (b.HasRecorder())
+			return true;
+		if (upperEnd && !b.m_excluding && moment.EndOfPeriod(grain) == moment)
+			return false;
+		if (moment.BeginOfPeriod(grain) != moment)
 			return true;
 		return upperEnd ? !b.m_excluding : b.m_excluding;
 	};
@@ -453,10 +463,16 @@ inline void ibRegFillArmCut(TSpec& read, const TReg* reg,
 	if (!cutUpper && !cutLower)
 		return;
 
-	// The stored arm ends where the upper boundary's grain begins. With no upper boundary at all it
-	// still ends somewhere — at the LOWER boundary's grain — because the only reason the arm is cut at
-	// all is that one end of the interval is partial.
-	read.m_floor = ibValue((cutUpper ? upperMoment : lowerMoment).BeginOfPeriod(grain));
+	// The stored arm ends where the upper boundary's grain begins — at the boundary itself when it stands on a
+	// grain's edge and needs no cut of its own: the whole grains between a partial head and it are the stored
+	// rows' (they were the movements', the floor standing at the head: an interval begun at noon and ended on
+	// a month's edge read every movement of it). With NO upper boundary it does not end: the trigger keeps the
+	// current grain's row up to date, so the stored rows answer to the last of them and the movements the head
+	// alone. It ended at the lower boundary's grain, and an interval begun at noon and open above read every
+	// movement after it (load-million-rows.md, 6(e)). A grain taken in whole by its last second ends past itself.
+	if (upper.m_date.GetType() == TYPE_DATE)
+		read.m_floor = ibValue(cutUpper || upper.m_excluding ? upperMoment.BeginOfPeriod(grain)
+		                                                     : upperMoment.BeginOfNextPeriod(grain));
 	if (cutUpper && upper.HasRecorder())
 		read.m_boundaryTail = ibRegRecorderTuple(reg, slots, upper.m_recorder);
 
@@ -469,6 +485,80 @@ inline void ibRegFillArmCut(TSpec& read, const TReg* reg,
 			read.m_boundaryHead = ibRegRecorderTuple(reg, slots, lower.m_recorder);
 	}
 }
+
+// ⭐⭐ Fill a read spec's ROWS — the totals and the movements as two relations, for a reading that folds them
+// itself: `read.m_storedRows` / `m_movedRows`, and with them the units the stored rows are kept in
+// (`m_storedUnits`, `m_periodUnitColumn`) — a movement stands once in each, so the rows are never handed over
+// without the units a reading picks among. `side` is what a register tells its totals apart by: nothing for an
+// accumulation register, the credit side for an accounting one.
+//
+// THE DECLARATION ITSELF, asked again — the one the apply rendered its triggers and view from, so the rows a
+// reading takes are those arms (the turnovers view's columns over the two tables) and no second copy of them,
+// and nothing but those two tables has to exist in the base. ContributeTables DECLARES: it builds the shape in
+// memory and touches no database. `m_movedRows` is null when there is no movement arm; false when no totals
+// are declared at all.
+//
+// It was a function of each register, word for word but for the side — and the accounting one had lost the
+// first line, so a reading of a register with no resources spoke to the restructuring.
+//
+// TReg only has to vend GetResourceArrayObject / ContributeTables / GetTotalsObject / GetTurnoverViewName.
+template <typename TReg, typename... TSide>
+inline bool ibRegFillTotalsRows(ibMaterializeReadSpec& read, const TReg* reg, TSide... side)
+{
+	read.m_storedRows.reset();
+	read.m_movedRows.reset();
+
+	// No resources, no totals: ContributeTables declares none (and says so to the restructuring, which a
+	// reading must not be heard in).
+	if (reg == nullptr || reg->GetResourceArrayObject().empty())
+		return false;
+
+	ibSchemaSnapshot declared;
+	reg->ContributeTables(declared);
+
+	const ibValueMetaObjectRegisterTotals* totals = reg->GetTotalsObject(side...);
+	const ibSchemaTable* table = (totals != nullptr) ? declared.Find(totals->GetMetaID()) : nullptr;
+	if (table == nullptr || !table->m_derived)
+		return false;
+
+	const ibMaterializeSpec spec = table->m_materialize.ToReadSpec(table->m_name);
+	const ibString turnovers = reg->GetTurnoverViewName(side...);
+	for (const ibMaterializeView& view : spec.m_views) {
+		if (view.m_name != turnovers)
+			continue;
+		read.m_storedRows = RenderStoredRows(spec, view);
+		if (view.m_withMovements)
+			read.m_movedRows = RenderMovementRows(spec, view);
+		// The stored rows are of every unit the totals keep, and say so with them.
+		read.m_periodUnitColumn = spec.m_periodUnitColumn;
+		if (!spec.m_periodUnitColumn.IsEmpty())
+			read.m_storedUnits = spec.m_periodUnits;
+		return read.m_storedRows != nullptr;
+	}
+	return false;
+}
+
+// ⭐⭐ A UNIT FINER THAN THE GRAIN IS THE MOVEMENTS' — the same floor, asked of the fold instead of a boundary.
+//
+// A stored row holds its whole grain under the grain's first instant, so truncated to a finer unit it puts every
+// movement of that grain into the unit holding that instant: kept by the month, a reading by the day reported the
+// month's turnover on the 1st — a plausible wrong number, not an error. A reading by a calendar unit finer than the
+// grain therefore stands on the movements, which carry the real instant; a unit equal to the grain or coarser is a
+// projection of the stored rows and stays with them. Asked by every road that reads the totals by a unit, so the
+// two registers and their server and RAM roads cannot disagree about where the floor is.
+template <typename TReg>
+inline bool ibRegFinerThanStored(const TReg* reg, const ibRegFold& fold)
+{
+	return reg != nullptr && fold.IsCalendar() && fold.m_unit < reg->GetTotalsPeriodUnit();
+}
+
+// ⭐ THE UNITS A REGISTER'S TOTALS KEEP — each its own rows of the one table, told apart by a key column
+// (PeriodUnitColumnName), and every posting written into the row of each. FINEST FIRST: the first is the stored
+// grain a reading's cut stands at (GetTotalsPeriodUnit); which of them answers a run of days is the reading's to
+// say (RenderMaterializedRead) — the coarsest that fits.
+inline constexpr ibTotalsPeriod ibRegTotalsUnits[] = {
+	ibTotalsPeriod::Day, ibTotalsPeriod::Week, ibTotalsPeriod::Month, ibTotalsPeriod::Quarter, ibTotalsPeriod::Year,
+};
 
 // ⭐⭐ THE CALENDAR OF AN INTERVAL — every period a periodised reading reports, whether or not anything moved.
 //
@@ -505,6 +595,13 @@ inline std::vector<ibDateTime> ibRegCalendarOf(const ibValue& from, const ibValu
 	}
 	return periods;
 }
+
+// ⭐ AND THE LIVE PATH HAS A CEILING OF ITS OWN — in rows, not periods. It fills every period of the calendar for every
+// key (a key with a balance is a row in each period it stands in), so a daily reading over two years of a register
+// with thousands of keys was millions of rows folded in memory: the web server's whole 32-bit address space, an
+// "unknown exception", and a process that stayed short of memory until restarted (2026-11-16, load-million-rows.md
+// § 14). Past it the reading refuses, before a row is made, and says what to narrow.
+inline constexpr size_t ibRegMaxLiveRows = 500000;
 
 // The calendar as a RELATION — one row per period under `periodField`, laid one under the other; a one-row
 // select needs no table (the dialect supplies its own, RDB$DATABASE on Firebird). Joined to every key of a
@@ -750,20 +847,20 @@ inline ibQueryRelPtr ibRegRunningMovements(const ibQueryRelPtr& openRead, const 
 // wrappers derive the metadata from the attribute so register lowering reads cleanly — the SQL-field
 // machinery lives in the tier, NOT on the attribute. The structured ibSQLField is GONE: a register
 // builds the comma-joined field list with ibRegFieldList, or picks the _TYPE tag / first value field.
-inline ibString       ibRegFieldList (const ibValueMetaObjectAttributeBase* a, const ibString& aggr = ibEmptyString) { return ColumnFieldList(a->GetQueryColumn(), aggr); }
-inline ibString       ibRegComposite (const ibValueMetaObjectAttributeBase* a, const ibString& cmp = ibT("=")) { return ColumnComparePredicate(a->GetQueryColumn(), cmp); }
+inline ibString       ibRegFieldList (const ibValueMetaObjectAttributeBase* a, const ibString& aggr = ibEmptyString) { return ColumnFieldList(*a->GetQueryColumn(), aggr); }
+inline ibString       ibRegComposite (const ibValueMetaObjectAttributeBase* a, const ibString& cmp = ibT("=")) { return ColumnComparePredicate(*a->GetQueryColumn(), cmp); }
 
 // All physical fields of an attribute (the TYPE tag + per-type fields; a reference
 // expands to _RTRef + _RRRef), in the order SetValueAttribute binds them.
 inline std::vector<ibString> ibRegFieldsOf(const ibValueMetaObjectAttributeBase* a)
 {
-	return ColumnFieldNames(a->GetQueryColumn());
+	return ColumnFieldNames(*a->GetQueryColumn());
 }
 
 // The _TYPE discriminator field name (the first physical field of a composite column).
 inline ibString ibRegTypeField(const ibValueMetaObjectAttributeBase* a)
 {
-	const std::vector<ibString> fields = ColumnFieldNames(a->GetQueryColumn());
+	const std::vector<ibString> fields = ColumnFieldNames(*a->GetQueryColumn());
 	return fields.empty() ? ibString() : fields[0];   // [0] is always the _TYPE tag
 }
 
@@ -771,7 +868,7 @@ inline ibString ibRegTypeField(const ibValueMetaObjectAttributeBase* a)
 // register resource / record-type aggregate operates on (res_N, recordType_N / _E).
 inline ibString ibRegValueField(const ibValueMetaObjectAttributeBase* a)
 {
-	const std::vector<ibString> fields = ColumnFieldNames(a->GetQueryColumn());
+	const std::vector<ibString> fields = ColumnFieldNames(*a->GetQueryColumn());
 	return fields.size() > 1 ? fields[1] : ibString();   // [0] is the _TYPE tag; [1] is the first value field
 }
 
@@ -779,7 +876,7 @@ inline ibString ibRegValueField(const ibValueMetaObjectAttributeBase* a)
 // bodies are the attribute's own, minus the one hop it makes first.
 // The same signature a surface is cached by, taken from a COLUMN — see ibRegSignAttribute below, whose
 // body this is with the one hop removed.
-inline void ibRegSignColumn(ibString& signature, const ibBackendQueryColumn* c)
+inline void ibRegSignColumn(ibString& signature, const std::shared_ptr<const ibBackendQueryColumn>& c)
 {
 	if (c == nullptr)
 		return;
@@ -790,9 +887,9 @@ inline void ibRegSignColumn(ibString& signature, const ibBackendQueryColumn* c)
 	signature += ibT(";");
 }
 
-inline ibString ibRegValueField(const ibBackendQueryColumn* c)
+inline ibString ibRegValueField(const std::shared_ptr<const ibBackendQueryColumn>& c)
 {
-	const std::vector<ibString> fields = ColumnFieldNames(c);
+	const std::vector<ibString> fields = ColumnFieldNames(*c);
 	return fields.size() > 1 ? fields[1] : ibString();
 }
 
@@ -884,12 +981,12 @@ inline ibQueryPredicatePtr ibRegFilterPredicate(const TRegister* reg, const ibVa
 	if (reg == nullptr || !filter.ConvertToValue(structure) || structure == nullptr)
 		return nullptr;   // nothing was asked for — which is not an empty filter, but no filter at all
 
-	const ibBackendQueryable* const source = reg->GetQueryable();
+	const std::shared_ptr<const ibBackendQueryable> source = reg->GetQueryable();
 	ibQueryPredicatePtr folded;
 	for (long key = 0; key < structure->GetNProps(); ++key) {
 		const ibString name = structure->GetPropName(key);
 
-		const ibBackendQueryColumn* col = nullptr;
+		std::shared_ptr<const ibBackendQueryColumn> col;
 		if (over == ibRegFilterOver::Records) {
 			col = source != nullptr ? source->ResolveColumnByName(name) : nullptr;
 		}
@@ -950,7 +1047,7 @@ inline void ibRegWhereKeyValue(ibDataQueryBuilder& q, const TRegister* reg,
 // It yields the leaf's COLUMN as it stands — nothing narrows it back to a metaobject, because
 // nothing below needs one: ibRegCompositeIR spreads a column by asking the column.
 inline void ibRegFlatLeaves(const ibQueryPredicatePtr& predicate,
-                            std::vector<std::pair<const ibBackendQueryColumn*, ibValue>>& out)
+                            std::vector<std::pair<std::shared_ptr<const ibBackendQueryColumn>, ibValue>>& out)
 {
 	if (!predicate)
 		return;
@@ -978,7 +1075,7 @@ inline void ibRegFlatLeaves(const ibQueryPredicatePtr& predicate,
 // the column face. Demanding the metaobject made every caller holding a plain column narrow back to
 // one — a cast, which is the model saying it lost something on the way in. Now the metadata is
 // passed, the column is enough, and nothing casts.
-inline ibQueryExprPtr ibRegCompositeIR(const ibBackendQueryColumn* a, const ibMetaData* metaData,
+inline ibQueryExprPtr ibRegCompositeIR(const std::shared_ptr<const ibBackendQueryColumn>& a, const ibMetaData* metaData,
                                        const ibValue& v,
                                        ibQueryBinOp op, const ibString& qualifier = ibEmptyString)
 {
@@ -986,7 +1083,7 @@ inline ibQueryExprPtr ibRegCompositeIR(const ibBackendQueryColumn* a, const ibMe
 	// which CARRY it is a question about the field's ROLE, and the layout tier answers it — this used
 	// to guess from position (`i == 0`) and spelling (`EndsWith("_RTRef")`), i.e. re-derive the
 	// layout here, where a change to the lettering would never arrive.
-	const std::vector<ibColumnSlot> slots = DescribeColumnLayout(a);
+	const std::vector<ibColumnSlot> slots = DescribeColumnLayout(*a);
 
 	std::vector<ibString> fields;
 	fields.reserve(slots.size());
@@ -995,7 +1092,7 @@ inline ibQueryExprPtr ibRegCompositeIR(const ibBackendQueryColumn* a, const ibMe
 
 	ibQueryStatement capture(ibQueryStatement::Kind::Delete, ibString(), fields);
 	int pos = 1;
-	ibColumnCodec::WriteValue(a, metaData, v, &capture, pos);
+	ibColumnCodec::WriteValue(*a, metaData, v, &capture, pos);
 	const std::vector<ibQueryExprPtr>& consts = capture.CapturedValues();
 
 	ibQueryExprPtr pred;
@@ -1011,9 +1108,9 @@ inline ibQueryExprPtr ibRegCompositeIR(const ibBackendQueryColumn* a, const ibMe
 
 // The physical field of a column that plays `role` — empty when the column lays out no such field. The
 // question a join asks of a column it compares by one part only (a reference's id, a date's value).
-inline ibString ibRegFieldOfRole(const ibBackendQueryColumn* col, ibColumnRole role)
+inline ibString ibRegFieldOfRole(const std::shared_ptr<const ibBackendQueryColumn>& col, ibColumnRole role)
 {
-	for (const ibColumnSlot& slot : DescribeColumnLayout(col))
+	for (const ibColumnSlot& slot : DescribeColumnLayout(*col))
 		if (slot.m_role == role)
 			return slot.m_name;
 	return ibString();
@@ -1027,12 +1124,12 @@ inline ibString ibRegFieldOfRole(const ibBackendQueryColumn* col, ibColumnRole r
 // was written `a = b OR (a IS NULL AND b IS NULL)` first — and an OR in each field is a condition no
 // compound index can ride: a calculation register's lookup index (employee, type) was there and the base
 // read walked the pieces anyway (MEASURED 2026-09-10 at 1000 employees, debug: 4 s for one statement).
-inline ibQueryExprPtr ibRegSameValueIR(const ibBackendQueryColumn* a, const ibString& qa,
-	const ibBackendQueryColumn* b, const ibString& qb)
+inline ibQueryExprPtr ibRegSameValueIR(const std::shared_ptr<const ibBackendQueryColumn>& a, const ibString& qa,
+	const std::shared_ptr<const ibBackendQueryColumn>& b, const ibString& qb)
 {
 	ibQueryExprPtr pred;
-	const std::vector<ibColumnSlot> right = DescribeColumnLayout(b);
-	for (const ibColumnSlot& x : DescribeColumnLayout(a)) {
+	const std::vector<ibColumnSlot> right = DescribeColumnLayout(*b);
+	for (const ibColumnSlot& x : DescribeColumnLayout(*a)) {
 		for (const ibColumnSlot& y : right) {
 			if (x.m_role != y.m_role)
 				continue;
@@ -1054,9 +1151,9 @@ inline ibQueryPredicatePtr ibRegConsumedCondition(const std::vector<ibQueryPredi
 // Is this column one the rows of a register are KEPT by — a dimension? What a reading's condition selects by
 // before the fold (ibRegConditionOn), asked by the column's identity.
 template <typename TRegister>
-std::function<bool(const ibBackendQueryColumn*)> ibRegSelectsByDimensions(const TRegister* reg)
+std::function<bool(const std::shared_ptr<const ibBackendQueryColumn>&)> ibRegSelectsByDimensions(const TRegister* reg)
 {
-	return [reg](const ibBackendQueryColumn* column) {
+	return [reg](const std::shared_ptr<const ibBackendQueryColumn>& column) {
 		if (reg == nullptr || column == nullptr)
 			return false;
 		for (const auto dimension : reg->GetDimensionArrayObject())
@@ -1068,7 +1165,7 @@ std::function<bool(const ibBackendQueryColumn*)> ibRegSelectsByDimensions(const 
 
 // Does every field the condition names satisfy `names`? A computed side answers no — it is not a field.
 inline bool ibRegConditionOnlyNames(const ibQueryPredicatePtr& condition,
-                                    const std::function<bool(const ibBackendQueryColumn*)>& names)
+                                    const std::function<bool(const std::shared_ptr<const ibBackendQueryColumn>&)>& names)
 {
 	if (!condition)
 		return true;
@@ -1100,7 +1197,7 @@ inline ibQueryPredicatePtr ibRegBothConditions(const ibQueryPredicatePtr& a, con
 
 // A column a reading's condition named and the rows cannot be selected by. RAISES: dropped, the leaf would
 // widen the answer — more rows than were asked for, and nothing to say so.
-inline void ibRegRefuseConditionColumn(const ibBackendQueryColumn* named)
+inline void ibRegRefuseConditionColumn(const std::shared_ptr<const ibBackendQueryColumn>& named)
 {
 	ibBackendCoreException::Error(
 		_("'%s' cannot select the rows of this reading: a condition inside a virtual table narrows what is "
@@ -1123,20 +1220,20 @@ inline void ibRegRefuseConditionColumn(const ibBackendQueryColumn* named)
 // their fields under the fields' own names. (The accounting register finds its own by identity and per side —
 // `Account` is a different column on each — see ConditionOnPass.) `selects` says which columns the rows can
 // be selected by before the fold; any other is refused.
-inline ibQueryPredicatePtr ibRegConditionOn(const ibBackendQueryable* source, const ibQueryPredicatePtr& condition,
-                                            const std::function<bool(const ibBackendQueryColumn*)>& selects);
+inline ibQueryPredicatePtr ibRegConditionOn(const std::shared_ptr<const ibBackendQueryable>& source, const ibQueryPredicatePtr& condition,
+                                            const std::function<bool(const std::shared_ptr<const ibBackendQueryColumn>&)>& selects);
 
-inline ibQueryColumnExprPtr ibRegConditionExprOn(const ibBackendQueryable* source, const ibQueryColumnExprPtr& expr,
-                                                 const std::function<bool(const ibBackendQueryColumn*)>& selects)
+inline ibQueryColumnExprPtr ibRegConditionExprOn(const std::shared_ptr<const ibBackendQueryable>& source, const ibQueryColumnExprPtr& expr,
+                                                 const std::function<bool(const std::shared_ptr<const ibBackendQueryColumn>&)>& selects)
 {
 	if (!expr)
 		return expr;
 	auto here = std::make_shared<ibQueryColumnExpr>(*expr);
 	if (here->m_kind == ibQueryColumnExprKind::Column && here->m_col != nullptr) {
-		const ibBackendQueryColumn* found = selects(here->m_col) ? source->ResolveColumnByName(here->m_col->GetName()) : nullptr;
+		std::shared_ptr<const ibBackendQueryColumn> found = selects(here->m_col) ? source->ResolveColumnByName(here->m_col->GetName()) : nullptr;
 		if (found == nullptr)
 			ibRegRefuseConditionColumn(here->m_col);
-		here->m_col = found;
+		here->m_col = std::move(found);
 	}
 	const auto again = [&](const ibQueryColumnExprPtr& e) { return ibRegConditionExprOn(source, e, selects); };
 	here->m_lhs  = again(here->m_lhs);
@@ -1151,14 +1248,14 @@ inline ibQueryColumnExprPtr ibRegConditionExprOn(const ibBackendQueryable* sourc
 	return here;
 }
 
-inline ibQueryPredicatePtr ibRegConditionOn(const ibBackendQueryable* source, const ibQueryPredicatePtr& condition,
-                                            const std::function<bool(const ibBackendQueryColumn*)>& selects)
+inline ibQueryPredicatePtr ibRegConditionOn(const std::shared_ptr<const ibBackendQueryable>& source, const ibQueryPredicatePtr& condition,
+                                            const std::function<bool(const std::shared_ptr<const ibBackendQueryColumn>&)>& selects)
 {
 	if (!condition || source == nullptr)
 		return nullptr;
 
-	const auto find = [&](const ibBackendQueryColumn* named) {
-		const ibBackendQueryColumn* here = named != nullptr && selects(named)
+	const auto find = [&](const std::shared_ptr<const ibBackendQueryColumn>& named) {
+		std::shared_ptr<const ibBackendQueryColumn> here = named != nullptr && selects(named)
 			? source->ResolveColumnByName(named->GetName()) : nullptr;
 		if (here == nullptr)
 			ibRegRefuseConditionColumn(named);
@@ -1180,7 +1277,7 @@ inline ibQueryPredicatePtr ibRegConditionOn(const ibBackendQueryable* source, co
 			break;
 		}
 		const bool walks = !leaf.m_path.empty();
-		const ibBackendQueryColumn* column = find(walks ? leaf.m_path.front() : leaf.m_col);
+		std::shared_ptr<const ibBackendQueryColumn> column = find(walks ? leaf.m_path.front() : leaf.m_col);
 
 		// `IN HIERARCHY` goes down AS NAMED — a walked field too, which rides as the EXISTS below and reaches the
 		// provider on the table it ends at — and the side that filters the rows answers it: the database has the
@@ -1193,11 +1290,11 @@ inline ibQueryPredicatePtr ibRegConditionOn(const ibBackendQueryable* source, co
 		}
 
 		if (walks) {
-			leaf.m_path.front() = column;
+			leaf.m_path.front() = std::move(column);
 			leaf.m_asExists     = true;
 		}
 		else {
-			leaf.m_col = column;
+			leaf.m_col = std::move(column);
 		}
 		break;
 	}
@@ -1223,9 +1320,9 @@ inline ibQueryPredicatePtr ibRegConditionOn(const ibBackendQueryable* source, co
 // storage spelling out again at a reading is a second writing of one name, and this one drifts
 // SILENTLY: a read spec naming a column the view does not have returns NULLs, not an error. So the
 // reading asks the surface it stands on, and neither side spells the other's name.
-inline ibString ibRegPhysicalOf(const ibBackendQueryable* view, const ibString& logical)
+inline ibString ibRegPhysicalOf(const std::shared_ptr<const ibBackendQueryable>& view, const ibString& logical)
 {
-	const ibBackendQueryColumn* col = view != nullptr ? view->ResolveColumnByName(logical) : nullptr;
+	const std::shared_ptr<const ibBackendQueryColumn> col = view != nullptr ? view->ResolveColumnByName(logical) : nullptr;
 	return col != nullptr ? col->GetPhysicalName() : ibString();
 }
 
@@ -1504,9 +1601,9 @@ inline void ibRegSignAttribute(ibString& signature, const ibValueMetaObjectAttri
 class ibRegSurfaceCache
 {
 public:
-	const ibBackendQueryable* Obtain(const ibString& key, const ibString& builtFrom,
-	                                 const ibString& table, const ibMetaData* metaData,
-	                                 const std::function<void(std::vector<ibTempColumn>&)>& build) const
+	std::shared_ptr<const ibBackendQueryable> Obtain(const ibString& key, const ibString& builtFrom,
+	                                                 const ibString& table, const ibMetaData* metaData,
+	                                                 const std::function<void(std::vector<ibTempColumn>&)>& build) const
 	{
 		// ⭐ ONE REGISTER, EVERY SESSION OF THE BASE. The register is metadata, read by all the sessions of a
 		// base at once, so the cache is asked from as many threads; unguarded, two first queries corrupt the
@@ -1517,43 +1614,40 @@ public:
 			std::lock_guard<std::mutex> lock(m_mutex);
 			const auto cached = m_sources.find(key);
 			if (cached != m_sources.end() && cached->second.m_builtFrom == builtFrom)
-				return cached->second.m_surface.get();
+				return cached->second.m_surface;
 		}
 
 		std::vector<ibTempColumn> columns;
 		// Each builder numbers its columns over the metaIDs they are of (ibRegDerivedColumnId) — no counter
 		// is handed in, because none is needed.
 		build(columns);
-		auto surface = std::make_unique<ibDbTempTableQueryable>(table, std::move(columns), metaData);
+		const auto surface = std::make_shared<ibDbTempTableQueryable>(table, std::move(columns), metaData);
 
 		std::lock_guard<std::mutex> lock(m_mutex);
 		const auto cached = m_sources.find(key);
 		if (cached != m_sources.end()) {
 			if (cached->second.m_builtFrom == builtFrom)
-				return cached->second.m_surface.get();
-			// ⚠ RETIRED, NOT DESTROYED. Somebody may still be reading through a pointer handed out
-			// earlier; a surface that dies under a live reader is an access violation, and this
-			// subsystem has produced one of those before.
-			m_retired.push_back(std::move(cached->second.m_surface));
+				return cached->second.m_surface;
+			// ⚠ REPLACED, NOT DESTROYED UNDER A READER. Whoever read the old surface holds its share, and the
+			// surface lives until the last of them lets go — a surface that died under a live reader was an
+			// access violation, and this subsystem has produced one of those before.
 			m_sources.erase(cached);
 		}
-		const ibBackendQueryable* raw = surface.get();
-		m_sources.emplace(key, Entry{ std::move(surface), builtFrom });
-		return raw;
+		m_sources.emplace(key, Entry{ surface, builtFrom });
+		return surface;
 	}
 
 private:
 	struct Entry
 	{
-		std::unique_ptr<ibDbTempTableQueryable> m_surface;
-		ibString                                m_builtFrom;   // names + types, in order
+		std::shared_ptr<const ibDbTempTableQueryable> m_surface;
+		ibString                                      m_builtFrom;   // names + types, in order
 	};
 
 	// Mutable: a surface is DERIVED from metadata, so a const read may fill the cache without the
 	// register being logically modified.
-	mutable std::map<ibString, Entry>                            m_sources;
-	mutable std::vector<std::unique_ptr<ibDbTempTableQueryable>> m_retired;
-	mutable std::mutex                                           m_mutex;   // both of the above
+	mutable std::map<ibString, Entry> m_sources;
+	mutable std::mutex                m_mutex;   // the map — one register, every session of the base
 };
 
 // ⭐⭐ AN ATTRIBUTE PUBLISHED AS ITSELF, on a derived surface — its own name, its own storage field,
@@ -1597,7 +1691,7 @@ inline ibTempColumn ibRegAttributeColumn(const ibValueMetaObjectAttributeBase* a
 	const ibString synonym = publishedSynonym.IsEmpty() ? attribute->GetSynonym() : publishedSynonym;
 	const ibMetaID id      = columnId != 0 ? columnId : attribute->GetMetaID();
 	// [0] is the _TYPE tag; anything past [1] means the value itself needs more than one field.
-	const std::vector<ibString> fields = ColumnFieldNames(attribute->GetQueryColumn());
+	const std::vector<ibString> fields = ColumnFieldNames(*attribute->GetQueryColumn());
 	const bool spreads = fields.size() > 2;
 
 	// ⭐ THE TYPE A STORED COLUMN HOLDS, NOT THE ONE THE AUTHOR DECLARED (GetTypeValueDesc). They differ for
@@ -1647,14 +1741,35 @@ inline ibTempColumn ibRegAttributeColumn(const ibValueMetaObjectAttributeBase* a
 // Two conditions for one fact is the defect; this returns the fact so there can only be one.
 inline bool ibRegSplitIntoKey(ibSchemaTable& t, const ibValueMetaObjectRegisterTotals* totals,
                               const ibString& shardColumnName, bool split,
-                              std::vector<const ibBackendQueryColumn*>& keyCols)
+                              std::vector<std::shared_ptr<const ibBackendQueryColumn>>& keyCols)
 {
 	if (!split || totals == nullptr)
 		return false;
-	const ibBackendQueryColumn* shard = t.OwnRaw(ibBackendColumnRawDB::Number(shardColumnName, totals->GetMetaID()));
+	const std::shared_ptr<const ibBackendQueryColumn> shard = ibBackendColumnRawDB::Number(shardColumnName, totals->GetMetaID());
 	t.Add(shard);
 	keyCols.push_back(shard);
 	return true;
+}
+
+// ⭐⭐ AN INDEX PER CUT — the cut's own fields first, then the unit, then the period.
+//
+// Every dimension is a cut, and on an accounting register every account dimension's value is one too: a reading
+// may narrow by ANY of them, and it should reach that cut's rows straight. One index over all of them serves only
+// its leading column — the organisation sat past the account and its breakdown, outside Firebird's sixteen
+// segments, so a trial balance of one organisation walked the Year rows of all of them (measured 2026-11-16 on
+// three organisations: the selection 0.60 → 0.41 s and half the reads with this index; without it the cost
+// grows with the number of organisations, with it only with the organisation's own rows).
+//
+// Named after the cut's column (its id), so a cut added or removed leaves every other index as it is. Paid when
+// a totals ROW is made, not on each movement's update of one.
+inline void ibRegDeclareCutIndexes(ibSchemaTable& t, const ibString& totalsName,
+                                   const std::vector<std::shared_ptr<const ibBackendQueryColumn>>& cuts,
+                                   const std::shared_ptr<const ibBackendQueryColumn>& unitCol,
+                                   const std::shared_ptr<const ibBackendQueryColumn>& periodCol)
+{
+	for (const std::shared_ptr<const ibBackendQueryColumn>& cut : cuts)
+		ibDeclareLookupIndex(t, totalsName + ibString::Format(ibT("_CL%d"), cut->GetColumnId()), { cut, unitCol },
+		                     /*closing*/ periodCol);
 }
 
 // ⭐⭐ THE MOVEMENT IS IN FORCE — the delta's guard, and the ONE place that meaning belongs. Filtering
@@ -1683,14 +1798,14 @@ inline void ibRegGuardInForce(ibSchemaMaterialize& m, const ibValueMetaObjectAtt
 // recorder counted the lines out of force (#646). Nothing is said when the reading does not stand on the movements.
 // `TReg` is a register; taken as a template parameter, as ibRegFillArmCut is, so this header needs no register include.
 template <typename TReg>
-inline void ibRegWhereActive(ibDataQueryBuilder& b, const TReg* reg, const ibBackendQueryable* source, bool onMovements)
+inline void ibRegWhereActive(ibDataQueryBuilder& b, const TReg* reg, const std::shared_ptr<const ibBackendQueryable>& source, bool onMovements)
 {
 	if (!onMovements || reg == nullptr || source == nullptr)
 		return;
 	if (const ibValueMetaObjectAttributeBase* active = reg->GetRegisterActive()) {
 		// …the attribute's own face when this source does not name it — an attribute HOLDS a query column.
-		const ibBackendQueryColumn* here = source->ResolveColumnByName(active->GetName());
-		b.Where(here != nullptr ? here : active->GetQueryColumn(), ibValue(true));
+		std::shared_ptr<const ibBackendQueryColumn> here = source->ResolveColumnByName(active->GetName());
+		b.Where(here != nullptr ? std::move(here) : active->GetQueryColumn(), ibValue(true));
 	}
 }
 
@@ -1701,12 +1816,12 @@ inline void ibRegWhereActive(ibDataQueryBuilder& b, const TReg* reg, const ibBac
 //
 // The id is the caller's: the columns of one resource have to be told apart — the first takes the
 // resource's metaID, the second a virtual column's (ibRegDerivedColumnId).
-inline const ibBackendQueryColumn* ibRegAccumulatorColumn(ibSchemaTable& t, const ibString& name, ibMetaID id,
-                                                          const ibValueMetaObjectAttributeBase* resource)
+inline std::shared_ptr<const ibBackendQueryColumn> ibRegAccumulatorColumn(ibSchemaTable& t, const ibString& name, ibMetaID id,
+                                                                          const ibValueMetaObjectAttributeBase* resource)
 {
 	const ibTypeDescription& type = resource->GetTypeDesc();
-	const ibBackendQueryColumn* c = t.OwnRaw(ibBackendColumnRawDB::Number(name, id,
-		type.GetPrecision() > 0 ? type.GetPrecision() : 18u, type.GetScale()));
+	const std::shared_ptr<const ibBackendQueryColumn> c = ibBackendColumnRawDB::Number(name, id,
+		type.GetPrecision() > 0 ? type.GetPrecision() : 18u, type.GetScale());
 	t.Add(c);
 	return c;
 }
@@ -1723,9 +1838,9 @@ inline const ibBackendQueryColumn* ibRegAccumulatorColumn(ibSchemaTable& t, cons
 // so the unique index and every write that has to identify a row read one declaration. Passing it
 // here is why nothing downstream has to compose a key out of parts or look a column up by name.
 inline void ibRegSelfSourceFromDeclaration(ibSchemaTable& t, const ibMetaData* metaData,
-                                           std::vector<const ibBackendQueryColumn*> keyCols)
+                                           std::vector<std::shared_ptr<const ibBackendQueryColumn>> keyCols)
 {
-	std::vector<const ibBackendQueryColumn*> sourceColumns = t.m_scaffold;
+	std::vector<std::shared_ptr<const ibBackendQueryColumn>> sourceColumns = t.m_scaffold;
 	for (const ibSchemaColumn& c : t.m_columns)
 		sourceColumns.push_back(c.m_column);
 	t.SelfSource(std::make_shared<ibSchemaTableQueryable>(t.m_name, t.m_id, std::move(sourceColumns),
@@ -1747,7 +1862,7 @@ inline void ibRegSelfSourceFromDeclaration(ibSchemaTable& t, const ibMetaData* m
 //
 // The rows are read by the column, not by its name: GetColumn reads one scalar field under the read's own
 // alias, and a dimension is a reference of three. Every value used to come back empty.
-inline ibValue ibRegSelectionToTable(ibDataQueryResult& selection, const ibBackendQueryable* shape)
+inline ibValue ibRegSelectionToTable(ibDataQueryResult& selection, const std::shared_ptr<const ibBackendQueryable>& shape)
 {
 	if (shape != nullptr)
 		selection.SetMaterialiseColumns(shape->GetQueryColumns());

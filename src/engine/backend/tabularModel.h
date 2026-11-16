@@ -1506,13 +1506,14 @@ public:
 	// The source hook. A DB model overrides it to return its metaobject / register queryable (feeds keyset
 	// paging + HasKeyedRows). A RAM model does NOT override it — it has no queryable (the RAM composer reads
 	// ibRamValueStorage directly), so it inherits this null default (→ HasKeyedRows false → restore-by-index).
-	virtual const ibBackendQueryable* GetSourceQueryable() const { return nullptr; }
+	// Held by the caller for as long as it reads (ibQueryableSourceDescriptor::CreateQueryable).
+	virtual std::shared_ptr<const ibBackendQueryable> GetSourceQueryable() const { return nullptr; }
 
 	// The FOLDER-flag display column of a hierarchical LIST: folder rows render as drillable containers even when
 	// EMPTY (the folder convention). The DB level-fetch reports hasChildren=false for every row (dataComposer's flat
 	// path), so this is the ONLY folder signal the tree has. Handed to the LIST at creation (ibCreateHierarchyList)
 	// — a display concern of the hierarchical list, NOT a queryable accessor. Null = not a folder hierarchy.
-	virtual const ibBackendQueryColumn* GetFolderDisplayColumn() const { return nullptr; }
+	virtual std::shared_ptr<const ibBackendQueryColumn> GetFolderDisplayColumn() const { return nullptr; }
 
 	// Discard the rendered view and re-fetch everything (batch mutations wxDVC's incremental tracking can't follow).
 	// CONST (touches only the mutable view generation + the provider) so the RAM snapshot's Clear can run in a const fetch.

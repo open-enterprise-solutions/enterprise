@@ -276,13 +276,13 @@ struct QueryCompositeWalk : ::testing::Test {
 				return;
 			list << (list.IsEmpty() ? wxT("") : wxT(", ")) << field << sqlType;
 		};
-		auto addColumn = [&](const ibBackendQueryColumn* column) {
+		auto addColumn = [&](const std::shared_ptr<const ibBackendQueryColumn>& column) {
 			if (column == nullptr)
 				return;
-			for (const ibColumnSlot& slot : DescribeColumnLayout(column))
+			for (const ibColumnSlot& slot : DescribeColumnLayout(*column))
 				addNamed(slot.m_name, SqliteTypeOf(slot.m_type));
 		};
-		for (const ibBackendQueryColumn* column : table.m_scaffold)
+		for (const std::shared_ptr<const ibBackendQueryColumn>& column : table.m_scaffold)
 			addColumn(column);
 		for (const ibSchemaColumn& column : table.m_columns)
 			addColumn(column.m_column);
@@ -295,7 +295,7 @@ struct QueryCompositeWalk : ::testing::Test {
 			addNamed(table.m_materialize.m_keyHashColumn, wxT(" TEXT"));
 			if (table.m_materialize.m_shards > 1)
 				addNamed(ibString(ShardColumnName()), wxT(" INTEGER"));
-			for (const ibBackendQueryColumn* key : table.m_materialize.m_keys)
+			for (const std::shared_ptr<const ibBackendQueryColumn>& key : table.m_materialize.m_keys)
 				addColumn(key);
 			for (const ibSchemaDelta& delta : table.m_materialize.m_deltas)
 				addColumn(delta.m_column);
@@ -322,6 +322,7 @@ struct QueryCompositeWalk : ::testing::Test {
 			addKey(render.m_keyHashColumn);
 		else {
 			addKey(render.m_periodColumn);
+			addKey(render.m_periodUnitColumn);   // the trigger keys each unit's row by it
 			for (const ibString& field : render.m_keyColumns)
 				addKey(field);
 			// The declaration may ask for several shards. SQLite keeps one: the trigger's
@@ -512,10 +513,10 @@ TEST_F(QueryCompositeWalk, AGroupedQueryOrdersByTheDateOfItsReferenceKey)
 TEST_F(QueryCompositeWalk, ASortThatWalksOnFromNoKeyKeepsTheGroups)
 {
 	BuildSettlements();
-	const ibBackendQueryColumn* const doc = settled->GetQueryColumn();
-	const ibBackendQueryColumn* const recorder = settlements->GetRegisterRecorder()->GetQueryColumn();
-	const ibBackendQueryColumn* const amount = settlements->GetResourceArrayObject().front()->GetQueryColumn();
-	const std::vector<const ibBackendQueryColumn*> docDate{ doc, docA->GetDocumentDate()->GetQueryColumn() };
+	const std::shared_ptr<const ibBackendQueryColumn> doc = settled->GetQueryColumn();
+	const std::shared_ptr<const ibBackendQueryColumn> recorder = settlements->GetRegisterRecorder()->GetQueryColumn();
+	const std::shared_ptr<const ibBackendQueryColumn> amount = settlements->GetResourceArrayObject().front()->GetQueryColumn();
+	const std::vector<std::shared_ptr<const ibBackendQueryColumn>> docDate{ doc, docA->GetDocumentDate()->GetQueryColumn() };
 
 	ibDataQueryBuilder onFromTheKey;
 	onFromTheKey.From(settlements->GetQueryable());

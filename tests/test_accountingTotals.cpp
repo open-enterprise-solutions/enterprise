@@ -93,7 +93,7 @@ ibMaterializeSpec CorrespondenceSide(bool creditSide)
 	spec.m_keyColumns       = { side + wxT("_RTRef"), side + wxT("_RRRef") };
 	spec.m_periodColumn     = wxT("period_");
 	spec.m_periodSourceExpr = wxT("{row}.period_");
-	spec.m_periodUnit       = ibTotalsPeriod::Day;
+	spec.m_periodUnits      = { ibTotalsPeriod::Day };
 	spec.m_guard            = m.m_guard;
 	// The whole amount, on the side this table is keyed by — in correspondence mode
 	// the row IS a posting, so which side it lands on was decided by which account
@@ -116,7 +116,7 @@ ibMaterializeSpec OneSided()
 	spec.m_keyColumns       = { wxT("acc_RTRef"), wxT("acc_RRRef") };
 	spec.m_periodColumn     = wxT("period_");
 	spec.m_periodSourceExpr = wxT("{row}.period_");
-	spec.m_periodUnit       = ibTotalsPeriod::Day;
+	spec.m_periodUnits      = { ibTotalsPeriod::Day };
 	spec.m_guard            = m.m_guard;
 	// ⚠ THE TAG IS THE ENUM'S ORDINAL: ibAccountingRecordType declares Debit FIRST,
 	// so a debit movement stores 0. Spelled here as the literal the register renders

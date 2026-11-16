@@ -232,6 +232,7 @@ TEST(JsonProvider, ReadEntry_PlacesKeysAsTheTextReaderDoes) {
 	ibDataNode node;
 	EXPECT_TRUE(provider.ReadEntry(node, wxT("NodeType"), ibDataValue::UInt(1001)));
 	EXPECT_TRUE(provider.ReadEntry(node, wxT("NodeId"), ibDataValue::Int(7)));
+	EXPECT_TRUE(provider.ReadEntry(node, wxT("typeId"), ibDataValue::UInt(777)));
 	EXPECT_TRUE(provider.ReadEntry(node, wxT("TypeDesc"), ibDataValue::String(wxT("String"))));
 	EXPECT_TRUE(provider.ReadEntry(node, wxT("Name"), ibDataValue::String(wxT("Nomenclature"))));
 	EXPECT_TRUE(provider.ReadEntry(node, wxT("Type"), ibDataValue::Child(std::make_shared<ibDataNode>())));
@@ -296,6 +297,21 @@ TEST(JsonProvider, TypeDesc_IsDroppedNotMaterialised) {
 	auto typeId = back.FindField(ibT("typeId"));
 	ASSERT_TRUE(typeId);
 	EXPECT_EQ(typeId->AsUInt(), (std::uint64_t)777);
+}
+
+// …and only there: a TypeDesc with no id before it is how a caller names a type (metadata_set_type's
+// `{"Types": [{"TypeDesc": "CatalogRef.Goods"}]}`), and it reaches them (2026-11-16: it was dropped everywhere).
+TEST(JsonProvider, TypeDesc_WithoutAnId_IsAField) {
+	const ibDataNode back = Parse(Blob(R"({"Types":[{"TypeDesc":"CatalogRef.Goods"}]})"));
+	auto types = back.FindField(ibT("Types"));
+	ASSERT_TRUE(types);
+	ASSERT_EQ(types->Kind(), ibDataKind::Array);
+	ASSERT_EQ(types->AsArray().size(), 1u);
+	const std::optional<ibDataNode> entry = types->AsArray()[0].AsChild();
+	ASSERT_TRUE(entry);
+	auto name = entry->FindField(ibT("TypeDesc"));
+	ASSERT_TRUE(name);
+	EXPECT_EQ(name->AsString(), wxT("CatalogRef.Goods"));
 }
 
 // ---------------------------------------------------------------------------

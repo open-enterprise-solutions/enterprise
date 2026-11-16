@@ -208,7 +208,6 @@ void ibTechJournal::Write(ibJournalMark mark, const ibString& source, const ibSt
 
 	static const bool s_toStderr = ibDebugTraceEnabled("OES_JOURNAL_STDERR");   // see the console's echo below
 
-	ibString line;
 	bool forConsole = false;   // what a program that narrates (EchoToStderr) shows in its console — see below
 	bool kept = false;         // the file has it — and only then the debugger's echo and the error's dump, below
 	{
@@ -216,38 +215,49 @@ void ibTechJournal::Write(ibJournalMark mark, const ibString& source, const ibSt
 		kept = s_file.is_open();
 		forConsole = s_toStderr
 			|| ((mark != ibJournalMark::Info || source == s_program) && s_echoToStderr.load(std::memory_order_relaxed));
-		// ⭐ NO FILE IS NOT NO CONSOLE. A Release build keeps no file (Open), and the console went with it: a Release
-		// application server refused at its start said nothing and left with code 1 (2026-10-23). A line nobody
-		// keeps and nobody watches goes nowhere.
-		if (!kept && !forConsole)
-			return;
+	}
+	// ⭐ NO FILE IS NOT NO CONSOLE. A Release build keeps no file (Open), and the console went with it: a Release
+	// application server refused at its start said nothing and left with code 1 (2026-10-23). A line nobody
+	// keeps and nobody watches goes nowhere.
+	if (!kept && !forConsole)
+		return;
 
-		// THE LINE: kind, time, thread, event source, detail.
-		//
-		// The KIND is first, spelled out and bracketed, because it is what a person scans by and a
-		// word survives being read aloud, pasted into a ticket and searched for — a punctuation mark
-		// does none of those. INFO is the ordinary running commentary, which is most of the file and
-		// is exactly what used to go to the debug output. TIME to the millisecond, because ordering
-		// two events and measuring the gap between them is most of what this file is for. THREAD,
-		// because the same message from two threads is two different stories. Then who is speaking,
-		// then what they say.
-		//
-		// Padded to one width so the columns line up down the page: a reader's eye follows a column,
-		// and a ragged left edge costs more than the three spaces it saves.
-		const ibChar* kind =
-			  mark == ibJournalMark::Error   ? ibT("[error]  ")
-			: mark == ibJournalMark::Warning ? ibT("[warning]")
-			                                 : ibT("[info]   ");
+	// ⚠ THE LINE IS MADE OUTSIDE THE LOCK, which keeps the file's bytes and nothing else. Made under it — the format,
+	// the time's text, the UTF-8 — it was the one door every session of the process stood in a queue at: eight HTTP
+	// callers, a session each, ~120 lines a request (every statement prepared, every module's bytecode read), 98.5 % of
+	// the waits on a mutex were here and the web server stopped at ~90 requests a second whatever the callers
+	// (2026-11-16, load-million-rows.md § 13). The time is the event's, taken by its thread; across threads the file's
+	// order is the order the lock was had, as it always was.
+	//
+	// THE LINE: kind, time, thread, event source, detail.
+	//
+	// The KIND is first, spelled out and bracketed, because it is what a person scans by and a
+	// word survives being read aloud, pasted into a ticket and searched for — a punctuation mark
+	// does none of those. INFO is the ordinary running commentary, which is most of the file and
+	// is exactly what used to go to the debug output. TIME to the millisecond, because ordering
+	// two events and measuring the gap between them is most of what this file is for. THREAD,
+	// because the same message from two threads is two different stories. Then who is speaking,
+	// then what they say.
+	//
+	// Padded to one width so the columns line up down the page: a reader's eye follows a column,
+	// and a ragged left edge costs more than the three spaces it saves.
+	const ibChar* kind =
+		  mark == ibJournalMark::Error   ? ibT("[error]  ")
+		: mark == ibJournalMark::Warning ? ibT("[warning]")
+		                                 : ibT("[info]   ");
 
-		line = ibString::Format(ibT("%s %s  t%-5lu  %-14s  %s\n"),
-			kind,
-			ibDateTime::Now().Format(ibT("%H:%M:%S.%l")),
-			ibCrashGuard::CurrentTidPortable(),
-			about.IsEmpty() ? source : ibT("(") + about + ibT(") ") + source,
-			message);
+	const ibString line = ibString::Format(ibT("%s %s  t%-5lu  %-14s  %s\n"),
+		kind,
+		ibDateTime::Now().Format(ibT("%H:%M:%S.%l")),
+		ibCrashGuard::CurrentTidPortable(),
+		about.IsEmpty() ? source : ibT("(") + about + ibT(") ") + source,
+		message);
 
-		if (kept) {
-			s_file << line.ToUtf8();
+	if (kept) {
+		const auto bytes = line.ToUtf8();
+		std::lock_guard<std::recursive_mutex> lock(s_lock);
+		if (s_file.is_open()) {       // Close() may have come between the two
+			s_file << bytes;
 			s_file.flush();           // a crash must not cost the lines that explain it
 		}
 	}

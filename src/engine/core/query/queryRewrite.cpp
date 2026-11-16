@@ -56,13 +56,13 @@ bool IsComputedAst(const ibQueryAstExpr& e);   // computed where it stands — b
 // column nor a call, and a collector that looked only at what a projection IS held the columns inside it to no rule
 // at all — a free `Price` beside a folded `Qty` in one expression. An expression is a TREE; the rule reads it as one.
 void ibQueryCollectFoldedAndFree(const ibQueryAstExprPtr& e, bool insideAggregate,
-	std::vector<const ibQueryAstExpr*>& folded, std::vector<const ibQueryAstExpr*>& free,
+	std::vector<ibQueryAstExprPtr>& folded, std::vector<ibQueryAstExprPtr>& free,
 	const std::vector<ibString>* groupedExprs)
 {
 	if (!e)
 		return;
 	if (e->m_kind == ibQueryAstExprKind::Column) {
-		(insideAggregate ? folded : free).push_back(e.get());
+		(insideAggregate ? folded : free).push_back(e);
 		return;
 	}
 	// ⭐ A SUBTREE THAT IS ITSELF A GROUP KEY reads nothing free — the execution matches the two as TEXT (the GROUP BY
@@ -105,9 +105,9 @@ std::vector<ibQueryAstExprPtr> ibQueryAggregatedColumns(const ibQuerySelect& sel
 {
 	std::vector<ibQueryAstExprPtr> out;
 	for (const ibQueryProjection& projection : select.m_projections) {
-		std::vector<const ibQueryAstExpr*> folded, free;
+		std::vector<ibQueryAstExprPtr> folded, free;
 		ibQueryCollectFoldedAndFree(projection.m_expr, false, folded, free);
-		for (const ibQueryAstExpr* column : folded)
+		for (const ibQueryAstExprPtr& column : folded)
 			if (column != nullptr && !column->m_path.empty())
 				out.push_back(ibQueryColumnCopy(*column));
 	}

@@ -130,7 +130,7 @@ public:
 		// the insert did.
 		m_filedUnder.clear();
 		for (size_t i = 0; i < m_schema.size(); ++i) {
-			const ibBackendQueryColumn* col = m_schema[i].m_col;
+			const std::shared_ptr<const ibBackendQueryColumn>& col = m_schema[i].m_col;
 			if (col == nullptr)
 				continue;
 			ibMetaID id = col->GetColumnId();

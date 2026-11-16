@@ -149,7 +149,7 @@ TEST_F(FirebirdCodeLength, ALongerCodeAltersTheColumnAndKeepsTheCodes)
 	Settle();
 
 	ibString field;
-	for (const ibColumnSlot& slot : DescribeColumnLayout(now->GetDataCode()->GetQueryColumn()))
+	for (const ibColumnSlot& slot : DescribeColumnLayout(*now->GetDataCode()->GetQueryColumn()))
 		if (slot.m_role == ibColumnRole::String)
 			field = slot.m_name;
 	ASSERT_FALSE(field.IsEmpty());

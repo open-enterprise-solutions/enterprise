@@ -66,9 +66,19 @@ public:
 
 	// THE SAME FIELD — hop by hop, by id. A binding may pin a hop's type (a composite reference) and a path made in the
 	// designer does not, so the pin is not what tells two fields apart; a hop's own == compares it, for the walk's gate.
+	//
+	// ⚠ THE LENGTH FIRST, THEN BY POSITION — no iterators. Asked of every column of a line for every cell a posting
+	// writes (ibChoiceLinkResolver::IsLinked: is this column chosen within the one just written?), and nearly always
+	// answered by the length alone. std::equal over four iterators made them all the same: in a checked build each one
+	// is registered under the one global lock every session of the process shares — with eight sessions posting at
+	// once, a fifth of the time they spent waiting on it was here (2026-11-16, the load run through the HTTP service).
 	bool operator==(const ibSourceDescription& other) const {
-		return std::equal(m_listSource.begin(), m_listSource.end(), other.m_listSource.begin(), other.m_listSource.end(),
-			[](const ibSourceHop& one, const ibSourceHop& two) { return one.m_id == two.m_id; });
+		if (m_listSource.size() != other.m_listSource.size())
+			return false;
+		for (size_t idx = 0; idx < m_listSource.size(); ++idx)
+			if (m_listSource[idx].m_id != other.m_listSource[idx].m_id)
+				return false;
+		return true;
 	}
 };
 

@@ -103,12 +103,12 @@ int SqlCount(ibDatabaseLayerSQLite& db, const ibString& where)
 	return n;
 }
 
-int RamCount(const ibQueryRamTable& t, const ibQueryPredicate* pred)
+int RamCount(const ibQueryRamTable& t, const ibQueryPredicatePtr& pred)
 {
 	return (int) ibQueryComposer::FilterRows(t, pred).RowCount();
 }
 
-ibQueryPredicatePtr Eq(const ibBackendQueryColumn* c, const ibString& v)
+ibQueryPredicatePtr Eq(const std::shared_ptr<const ibBackendQueryColumn>& c, const ibString& v)
 {
 	ibQueryCondition cond;   // no explicit op = equality
 	cond.m_col = c;
@@ -116,7 +116,7 @@ ibQueryPredicatePtr Eq(const ibBackendQueryColumn* c, const ibString& v)
 	return ibQueryPredicate::Leaf(cond);
 }
 
-ibQueryPredicatePtr Ne(const ibBackendQueryColumn* c, const ibString& v)
+ibQueryPredicatePtr Ne(const std::shared_ptr<const ibBackendQueryColumn>& c, const ibString& v)
 {
 	ibQueryCondition cond;   // `<>` — the ONE op field (m_comparison/m_explicitOp collapsed into m_op)
 	cond.m_col = c;
@@ -125,7 +125,7 @@ ibQueryPredicatePtr Ne(const ibBackendQueryColumn* c, const ibString& v)
 	return ibQueryPredicate::Leaf(cond);
 }
 
-ibQueryPredicatePtr Like(const ibBackendQueryColumn* c, const ibString& pat)
+ibQueryPredicatePtr Like(const std::shared_ptr<const ibBackendQueryColumn>& c, const ibString& pat)
 {
 	ibQueryCondition cond;   // LIKE op
 	cond.m_col = c;
@@ -137,7 +137,7 @@ ibQueryPredicatePtr Like(const ibBackendQueryColumn* c, const ibString& pat)
 // IN — the ONE set-valued op: it fills m_values, never m_value. This is what the semi-join key
 // reduction pushes into a leaf, so its NULL behaviour has to match SQL exactly or a reduced read
 // silently returns a different row set than the unreduced one.
-ibQueryPredicatePtr In(const ibBackendQueryColumn* c, const std::vector<ibString>& vals)
+ibQueryPredicatePtr In(const std::shared_ptr<const ibBackendQueryColumn>& c, const std::vector<ibString>& vals)
 {
 	ibQueryCondition cond;
 	cond.m_col = c;
@@ -149,10 +149,10 @@ ibQueryPredicatePtr In(const ibBackendQueryColumn* c, const std::vector<ibString
 
 // A test holding the two fixtures side by side.
 struct ParityFix : ::testing::Test {
-	TestCol               region{ wxT("region"), REGION };
-	TestCol               qty{ wxT("qty"), QTY };
-	ibQueryRamTable       ram = MakeRamFixture();
-	ibDatabaseLayerSQLite db;
+	std::shared_ptr<const TestCol> region = std::make_shared<TestCol>(wxT("region"), REGION);
+	std::shared_ptr<const TestCol> qty    = std::make_shared<TestCol>(wxT("qty"), QTY);
+	ibQueryRamTable                ram    = MakeRamFixture();
+	ibDatabaseLayerSQLite          db;
 	void SetUp() override { ASSERT_TRUE(MakeSqlFixture(db)) << "SQLite in-memory fixture failed to open"; }
 };
 
@@ -168,27 +168,27 @@ TEST_F(ParityFix, Fixtures_SameCardinality)
 
 TEST_F(ParityFix, Eq_Match)
 {
-	EXPECT_EQ(RamCount(ram, Eq(&region, wxT("North")).get()),
+	EXPECT_EQ(RamCount(ram, Eq(region, wxT("North"))),
 	          SqlCount(db, wxT("region = 'North'")));            // 1 == 1
 }
 
 TEST_F(ParityFix, Or_Match)
 {
 	const ibQueryPredicatePtr orPred = ibQueryPredicate::Compose(
-		ibQueryPredicateKind::Or, Eq(&region, wxT("North")), Eq(&region, wxT("South")));
-	EXPECT_EQ(RamCount(ram, orPred.get()),
+		ibQueryPredicateKind::Or, Eq(region, wxT("North")), Eq(region, wxT("South")));
+	EXPECT_EQ(RamCount(ram, orPred),
 	          SqlCount(db, wxT("region = 'North' OR region = 'South'")));   // 2 == 2
 }
 
 TEST_F(ParityFix, IsNull_Match)
 {
-	EXPECT_EQ(RamCount(ram, ibQueryPredicate::Null(&region, /*negated*/ false).get()),
+	EXPECT_EQ(RamCount(ram, ibQueryPredicate::Null(region, /*negated*/ false)),
 	          SqlCount(db, wxT("region IS NULL")));              // 1 == 1
 }
 
 TEST_F(ParityFix, IsNotNull_Match)
 {
-	EXPECT_EQ(RamCount(ram, ibQueryPredicate::Null(&region, /*negated*/ true).get()),
+	EXPECT_EQ(RamCount(ram, ibQueryPredicate::Null(region, /*negated*/ true)),
 	          SqlCount(db, wxT("region IS NOT NULL")));          // 3 == 3
 }
 
@@ -200,8 +200,8 @@ TEST_F(ParityFix, IsNotNull_Match)
 // (ibQueryComposer / RamEvalPredicate), so it drops the NULL row too -> parity.
 TEST_F(ParityFix, NotEq_NullThreeValuedLogic)
 {
-	const ibQueryPredicatePtr notNorth = ibQueryPredicate::Not(Eq(&region, wxT("North")));
-	EXPECT_EQ(RamCount(ram, notNorth.get()),
+	const ibQueryPredicatePtr notNorth = ibQueryPredicate::Not(Eq(region, wxT("North")));
+	EXPECT_EQ(RamCount(ram, notNorth),
 	          SqlCount(db, wxT("NOT (region = 'North')")))
 		<< "RAM and SQL must agree on NOT over a NULL operand (three-valued logic).";
 }
@@ -209,7 +209,7 @@ TEST_F(ParityFix, NotEq_NullThreeValuedLogic)
 // `<>` (the m_comparison leaf path) over a NULL operand: SQL drops the NULL row -> 2.
 TEST_F(ParityFix, NotEqual_NullThreeValuedLogic)
 {
-	EXPECT_EQ(RamCount(ram, Ne(&region, wxT("North")).get()),
+	EXPECT_EQ(RamCount(ram, Ne(region, wxT("North"))),
 	          SqlCount(db, wxT("region <> 'North'")));          // South, East -> 2 == 2
 }
 
@@ -217,15 +217,15 @@ TEST_F(ParityFix, NotEqual_NullThreeValuedLogic)
 TEST_F(ParityFix, And_NullThreeValuedLogic)
 {
 	const ibQueryPredicatePtr andP = ibQueryPredicate::Compose(
-		ibQueryPredicateKind::And, Eq(&region, wxT("North")), Ne(&region, wxT("South")));
-	EXPECT_EQ(RamCount(ram, andP.get()),
+		ibQueryPredicateKind::And, Eq(region, wxT("North")), Ne(region, wxT("South")));
+	EXPECT_EQ(RamCount(ram, andP),
 	          SqlCount(db, wxT("region = 'North' AND region <> 'South'")));   // North -> 1 == 1
 }
 
 // LIKE over a NULL operand: UNKNOWN -> dropped, on both sides.
 TEST_F(ParityFix, Like_NullDropped)
 {
-	EXPECT_EQ(RamCount(ram, Like(&region, wxT("Nor%")).get()),
+	EXPECT_EQ(RamCount(ram, Like(region, wxT("Nor%"))),
 	          SqlCount(db, wxT("region LIKE 'Nor%'")));          // North -> 1 == 1
 }
 
@@ -236,16 +236,16 @@ TEST_F(ParityFix, Like_NullDropped)
 
 TEST_F(ParityFix, In_Match)
 {
-	EXPECT_EQ(RamCount(ram, In(&region, { wxT("North"), wxT("South") }).get()),
+	EXPECT_EQ(RamCount(ram, In(region, { wxT("North"), wxT("South") })),
 	          SqlCount(db, wxT("region IN ('North', 'South')")));   // 2 == 2
 }
 
 // A single-element IN must agree with plain equality — the degenerate key set.
 TEST_F(ParityFix, In_SingleValueEqualsEquality)
 {
-	EXPECT_EQ(RamCount(ram, In(&region, { wxT("North") }).get()),
-	          RamCount(ram, Eq(&region, wxT("North")).get()));      // 1 == 1
-	EXPECT_EQ(RamCount(ram, In(&region, { wxT("North") }).get()),
+	EXPECT_EQ(RamCount(ram, In(region, { wxT("North") })),
+	          RamCount(ram, Eq(region, wxT("North"))));      // 1 == 1
+	EXPECT_EQ(RamCount(ram, In(region, { wxT("North") })),
 	          SqlCount(db, wxT("region IN ('North')")));            // 1 == 1
 }
 
@@ -253,14 +253,14 @@ TEST_F(ParityFix, In_SingleValueEqualsEquality)
 // where a naive "cell equals any value, else false" RAM implementation diverges from SQL.
 TEST_F(ParityFix, In_NullProbeIsUnknown)
 {
-	EXPECT_EQ(RamCount(ram, In(&region, { wxT("North"), wxT("East") }).get()),
+	EXPECT_EQ(RamCount(ram, In(region, { wxT("North"), wxT("East") })),
 	          SqlCount(db, wxT("region IN ('North', 'East')")));    // 2 == 2, the NULL row excluded
 }
 
 // A value in the set that matches nothing must not widen the result.
 TEST_F(ParityFix, In_UnmatchedValueIgnored)
 {
-	EXPECT_EQ(RamCount(ram, In(&region, { wxT("North"), wxT("Nowhere") }).get()),
+	EXPECT_EQ(RamCount(ram, In(region, { wxT("North"), wxT("Nowhere") })),
 	          SqlCount(db, wxT("region IN ('North', 'Nowhere')")));  // 1 == 1
 }
 
@@ -270,7 +270,7 @@ TEST_F(ParityFix, In_UnmatchedValueIgnored)
 // constant (which is exactly how L2 renders an empty IN — QueryRenderer.In_EmptyListIsConstantFalse).
 TEST_F(ParityFix, In_EmptySetMatchesNothing)
 {
-	EXPECT_EQ(RamCount(ram, In(&region, {}).get()),
+	EXPECT_EQ(RamCount(ram, In(region, {})),
 	          SqlCount(db, wxT("1 = 0")));                          // 0 == 0
 }
 
@@ -283,7 +283,9 @@ TEST_F(ParityFix, In_EmptySetMatchesNothing)
 TEST(QueryParityAgg, AggregatesIgnoreNull)
 {
 	const ibMetaID KEY = 10, PARENT = 11, BONUS = 12;
-	TestCol key(wxT("k"), KEY), parent(wxT("p"), PARENT), bonus(wxT("bonus"), BONUS);
+	const auto key    = std::make_shared<TestCol>(wxT("k"), KEY);
+	const auto parent = std::make_shared<TestCol>(wxT("p"), PARENT);
+	const auto bonus  = std::make_shared<TestCol>(wxT("bonus"), BONUS);
 
 	// 4 rows, one with a NULL bonus; parent left empty -> flat (all under the root).
 	ibQueryRamTable ram;
@@ -307,9 +309,9 @@ TEST(QueryParityAgg, AggregatesIgnoreNull)
 
 	using Fn = ibDataQueryBuilder::AggregateFn;
 	auto ramAgg = [&](Fn fn) -> long {
-		ibDataQueryBuilder::AggregateItem a; a.m_fn = fn; a.m_col = &bonus; a.m_alias = wxT("agg");
+		ibDataQueryBuilder::AggregateItem a; a.m_fn = fn; a.m_col = bonus; a.m_alias = wxT("agg");
 		const ibSelectorTree tree = ibQueryComposer::BuildHierarchyTree(
-			ram, &key, &parent, { a }, ibDimensionKind::Elements);
+			ram, key, parent, { a }, ibDimensionKind::Elements);
 		return tree.Root().m_values.at(BONUS).GetInteger();   // grand aggregate rolls into the column id
 	};
 	auto sqlAgg = [&](const ibString& expr) -> long {

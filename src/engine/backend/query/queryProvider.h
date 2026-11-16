@@ -88,22 +88,22 @@ public:
 	// DB provider: clsid -> GetTypeCtor -> holder -> GetQueryable, read off queryable->GetMetaData);
 	// the computed provider FORWARDS to it, every other provider inherits null. This query-provider
 	// layer names NO metadata — only the signature. (docs/private/query-language-arc.md §22 dot-walk)
-	virtual const ibBackendQueryable* ResolveReferenceTarget(const ibBackendQueryable* /*queryable*/,
-	                                                         const ibBackendQueryColumn* /*refColumn*/) const { return nullptr; }
+	virtual std::shared_ptr<const ibBackendQueryable> ResolveReferenceTarget(const std::shared_ptr<const ibBackendQueryable>& /*queryable*/,
+	                                                                         const std::shared_ptr<const ibBackendQueryColumn>& /*refColumn*/) const { return nullptr; }
 	// ALL reference targets of a column — N for a COMPOSITE (multi-type) reference, 1 for a single
 	// reference, empty for a non-reference. Default wraps the single-target resolver. (docs §22)
-	virtual std::vector<const ibBackendQueryable*> ResolveReferenceTargets(const ibBackendQueryable* queryable,
-	                                                                        const ibBackendQueryColumn* refColumn) const {
-		const ibBackendQueryable* one = ResolveReferenceTarget(queryable, refColumn);
-		return one != nullptr ? std::vector<const ibBackendQueryable*>{ one }
-		                      : std::vector<const ibBackendQueryable*>{};
+	virtual std::vector<std::shared_ptr<const ibBackendQueryable>> ResolveReferenceTargets(const std::shared_ptr<const ibBackendQueryable>& queryable,
+	                                                                                        const std::shared_ptr<const ibBackendQueryColumn>& refColumn) const {
+		const std::shared_ptr<const ibBackendQueryable> one = ResolveReferenceTarget(queryable, refColumn);
+		return one != nullptr ? std::vector<std::shared_ptr<const ibBackendQueryable>>{ one }
+		                      : std::vector<std::shared_ptr<const ibBackendQueryable>>{};
 	}
 	// …and what a sort by that COLUMN sorts by — its target's order column (ibBackendQueryable::GetSortColumn). A
 	// reference of SEVERAL kinds sorts by the one every kind has under one name, which a walk through it finds in
 	// each. Null for a column that is no reference, or whose kind has no order of its own. Asked of the two above,
 	// so every provider answers it alike. (Body in queryProvider.cpp.)
-	const ibBackendQueryColumn* ResolveReferenceSortColumn(const ibBackendQueryable* queryable,
-	                                                       const ibBackendQueryColumn* refColumn) const;
+	std::shared_ptr<const ibBackendQueryColumn> ResolveReferenceSortColumn(const std::shared_ptr<const ibBackendQueryable>& queryable,
+	                                                                       const std::shared_ptr<const ibBackendQueryColumn>& refColumn) const;
 
 	// ⭐⭐ A FLAT LIST IS WHOLE, AND ITS REFERENCES ARE MADE — the event, raised by the one door every RAM
 	// road ends at (the RAM-backed ibDataQueryResult), of the provider of the source it was read from. It
@@ -127,8 +127,8 @@ public:
 	ibDataQueryResult ExecuteAggregate(const ibDataQuerySpec& spec) override;
 	// Reference dot-walk resolution over a COMPUTED source — FORWARDS to the DB provider (the one
 	// metadata owner); this layer names no metadata. Makes Balance.Item.Name resolve on the RAM path.
-	const ibBackendQueryable* ResolveReferenceTarget(const ibBackendQueryable* queryable, const ibBackendQueryColumn* refColumn) const override;
-	std::vector<const ibBackendQueryable*> ResolveReferenceTargets(const ibBackendQueryable* queryable, const ibBackendQueryColumn* refColumn) const override;
+	std::shared_ptr<const ibBackendQueryable> ResolveReferenceTarget(const std::shared_ptr<const ibBackendQueryable>& queryable, const std::shared_ptr<const ibBackendQueryColumn>& refColumn) const override;
+	std::vector<std::shared_ptr<const ibBackendQueryable>> ResolveReferenceTargets(const std::shared_ptr<const ibBackendQueryable>& queryable, const std::shared_ptr<const ibBackendQueryColumn>& refColumn) const override;
 	// …and the references in its rows are the DB provider's business too — forwarded, as above.
 	void ReadReferences() const override;
 };
@@ -183,10 +183,10 @@ public:
 	// Pure (no DB) — unit-testable. The snapshot overload is the same call with the table handed over
 	// as a cursor (ibRamTableCursor), for the callers that already hold their rows.
 	static ibSelectorTree    BuildTotalsTree(ibQueryRowCursor& rows,
-	                                         const std::vector<const ibBackendQueryColumn*>& groupFields,
+	                                         const std::vector<std::shared_ptr<const ibBackendQueryColumn>>& groupFields,
 	                                         const std::vector<ibDataQueryBuilder::AggregateItem>& aggregates);
 	static ibSelectorTree    BuildTotalsTree(const ibQueryRamTable& detail,
-	                                         const std::vector<const ibBackendQueryColumn*>& groupFields,
+	                                         const std::vector<std::shared_ptr<const ibBackendQueryColumn>>& groupFields,
 	                                         const std::vector<ibDataQueryBuilder::AggregateItem>& aggregates);
 	// RECURSIVE hierarchy fold (parent-ref, unbounded depth) — the sibling of BuildTotalsTree (fixed
 	// columns). From a WHOLE materialised detail SNAPSHOT: nests rows by parentKey == rowKey, sets each
@@ -195,8 +195,8 @@ public:
 	// placement: Elements (leaves only) / Hierarchy (folders + leaves) / HierarchyOnly (folders only).
 	// Pure (no DB) — unit-testable. (docs §22.1b)
 	static ibSelectorTree    BuildHierarchyTree(const ibQueryRamTable& detail,
-	                                             const ibBackendQueryColumn* rowKeyCol,
-	                                             const ibBackendQueryColumn* parentKeyCol,
+	                                             const std::shared_ptr<const ibBackendQueryColumn>& rowKeyCol,
+	                                             const std::shared_ptr<const ibBackendQueryColumn>& parentKeyCol,
 	                                             const std::vector<ibDataQueryBuilder::AggregateItem>& aggregates,
 	                                             ibDimensionKind mode);
 	// Cross-catalog reference-dimension hierarchy: group the snapshot rows by `refCol`'s VALUE, then
@@ -204,10 +204,10 @@ public:
 	// lives in the target catalog (not the snapshot) → materialised through the door from `source`'s
 	// ResolveReferenceTarget(refCol). Falls back to a flat group when no target / no holder. (docs §22.1b)
 	static ibSelectorTree    BuildReferenceHierarchy(const ibQueryRamTable& snapshot,
-	                                                  const ibBackendQueryColumn* refCol,
+	                                                  const std::shared_ptr<const ibBackendQueryColumn>& refCol,
 	                                                  const std::vector<ibDataQueryBuilder::AggregateItem>& aggregates,
 	                                                  ibDatabaseConnectionHolder* holder,
-	                                                  const ibBackendQueryable* source,
+	                                                  const std::shared_ptr<const ibBackendQueryable>& source,
 	                                                  ibDimensionKind dim);
 	// GENERAL combiner: fold the snapshot by N TotalBy levels IN ORDER. Each level groups its rows by
 	// the level field; a Hierarchy/HierarchyOnly level also unfolds the field's reference hierarchy
@@ -221,12 +221,12 @@ public:
 	                                             const std::vector<ibTotalLevel>& levels,
 	                                             const std::vector<ibDataQueryBuilder::AggregateItem>& aggregates,
 	                                             ibDatabaseConnectionHolder* holder,
-	                                             const ibBackendQueryable* source);
+	                                             const std::shared_ptr<const ibBackendQueryable>& source);
 	static ibSelectorTree    BuildDimensionTree(const ibQueryRamTable& snapshot,
 	                                             const std::vector<ibTotalLevel>& levels,
 	                                             const std::vector<ibDataQueryBuilder::AggregateItem>& aggregates,
 	                                             ibDatabaseConnectionHolder* holder,
-	                                             const ibBackendQueryable* source);
+	                                             const std::shared_ptr<const ibBackendQueryable>& source);
 	// ⭐ FILL IN THE PERIODS NOBODY REPORTED. `BY <field> PERIODS(Month, &From, &To)` asks for two
 	// things: group by the period containing the value (the folds do that), and give every period
 	// between the bounds a row whether or not anything happened in it (this does). No fold can — a
@@ -245,8 +245,9 @@ public:
 	// fromLeft). onOp == Eq is the hash-join fast path; any other op is a nested-loop theta join. The RAM
 	// JOIN core, pure (no DB) — unit-testable.
 	static ibQueryRamTable   JoinRamTables(const ibQueryRamTable& left, const ibQueryRamTable& right,
-	                                       const ibBackendQueryColumn* onLeft, const ibBackendQueryColumn* onRight,
-	                                       const std::vector<const ibBackendQueryColumn*>& outCols,
+	                                       const std::shared_ptr<const ibBackendQueryColumn>& onLeft,
+	                                       const std::shared_ptr<const ibBackendQueryColumn>& onRight,
+	                                       const std::vector<std::shared_ptr<const ibBackendQueryColumn>>& outCols,
 	                                       const std::vector<bool>& fromLeft,
 	                                       ibQueryJoinKind kind = ibQueryJoinKind::Inner,   // Inner / Left / Right / Full
 	                                       const ibJoinOn& on = {});                        // ON op + computed exprs (keys: onLeft/onRight)
@@ -264,27 +265,27 @@ public:
 	// same-named column (branchCols, by position; null = absent -> NULL cell). The RAM UNION
 	// stacking core, pure (no DB) — unit-testable.
 	static void              AppendUnionBranch(ibQueryRamTable& out, const ibQueryRamTable& branch,
-	                                           const std::vector<const ibBackendQueryColumn*>& outCols,
-	                                           const std::vector<const ibBackendQueryColumn*>& branchCols);
+	                                           const std::vector<std::shared_ptr<const ibBackendQueryColumn>>& outCols,
+	                                           const std::vector<std::shared_ptr<const ibBackendQueryColumn>>& branchCols);
 	// …from a branch nobody reads again: its cells moved, its rows moved whole where it keys them as `out` does.
 	static void              AppendUnionBranch(ibQueryRamTable& out, ibQueryRamTable&& branch,
-	                                           const std::vector<const ibBackendQueryColumn*>& outCols,
-	                                           const std::vector<const ibBackendQueryColumn*>& branchCols);
+	                                           const std::vector<std::shared_ptr<const ibBackendQueryColumn>>& outCols,
+	                                           const std::vector<std::shared_ptr<const ibBackendQueryColumn>>& branchCols);
 	// Drop duplicate rows, keyed by the IDENTITY hash (GetHashKey) of every `cols` cell — the RAM
 	// dedup core behind plain UNION (SQL semantics: dedupe the accumulated rows at each non-ALL
 	// operator) and a future RAM DISTINCT. First occurrence wins, order preserved. Pure — unit-testable.
 	static ibQueryRamTable   DedupeRows(const ibQueryRamTable& src,
-	                                    const std::vector<const ibBackendQueryColumn*>& cols);
+	                                    const std::vector<std::shared_ptr<const ibBackendQueryColumn>>& cols);
 	// Keep only the rows of `src` that satisfy the boolean WHERE TREE (And/Or/Not/IsNull/Leaf) — the
 	// post-compose RAM filter for an OR / IS NULL spanning a non-co-located JOIN. Pure — unit-testable.
-	static ibQueryRamTable   FilterRows(const ibQueryRamTable& src, const ibQueryPredicate* predicate);
+	static ibQueryRamTable   FilterRows(const ibQueryRamTable& src, const ibQueryPredicatePtr& predicate);
 	// Compare one ORDER BY key for the RAM sort floor: NULL = smallest (SQLite convention)
 	// -> NULLS FIRST on ASC, NULLS LAST on DESC, deterministically. <0: a before b; >0: b before a;
 	// 0: equal on this key. Pure — unit-testable; shared by both RAM ORDER BY comparators.
 	static int               RamSortCompareKey(const ibValue& a, const ibValue& b, bool ascending);
 	// Evaluate a computed output column (Column / Const / Arith / Case) against one composed row — the
 	// per-row eval for a computed column over a JOIN (single source pushes it to SQL). Pure — unit-testable.
-	static ibValue           EvalColumnExpr(const ibQueryColumnExpr* expr, const ibQueryRamTable& table, long row);
+	static ibValue           EvalColumnExpr(const ibQueryColumnExprPtr& expr, const ibQueryRamTable& table, long row);
 	static long ExecuteWrite(const ibDataQuerySpec& spec, ibDataQueryBuilder::WriteKind kind);   // rows affected; -1 = error
 };
 

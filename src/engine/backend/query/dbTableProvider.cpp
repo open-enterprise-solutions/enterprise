@@ -37,8 +37,7 @@
 #include <algorithm>    // std::find / std::remove — column-list housekeeping (the ROLLUP rows are no longer sorted here: the server orders them)
 #include <stdexcept>    // std::logic_error — the un-co-locatable WHERE-tree guard (BuildColocatedPredicate)
 #include <functional>   // std::function — the recursive dot-walk predicate-tree lowering in BuildPageIR
-#include <memory>       // CastLeaf — the narrowed fields, made once
-#include <mutex>        // …and made under a lock: queries run on several threads
+#include <memory>       // CastLeaf — the narrowed fields, made once per query
 #include <cstring>      // memcmp — two references agree on their table, byte for byte (DecomposeIn)
 
 // ==========================================================================
@@ -63,22 +62,22 @@ namespace {
 // second copy of the B/N/D/S/E/RRRef ordering that only agreed with the codec's bind order for as
 // long as nobody edited one of the two. Ask the slot; a caller that needs to know WHAT the field is
 // reads the role beside it rather than the tail of the name.
-ibColumnSlot FirstValueSlotOf(const ibBackendQueryColumn* col)
+ibColumnSlot FirstValueSlotOf(const std::shared_ptr<const ibBackendQueryColumn>& col)
 {
-	ibColumnSlot slot = FirstValueSlot(col);
+	ibColumnSlot slot = FirstValueSlot(*col);
 	if (slot.m_name.IsEmpty())
 		slot.m_name = col->GetPhysicalName();   // a column that spreads to nothing IS its own field
 	return slot;
 }
 
-ibString FirstSqlFieldOfColumn(const ibBackendQueryColumn* col)
+ibString FirstSqlFieldOfColumn(const std::shared_ptr<const ibBackendQueryColumn>& col)
 {
 	return FirstValueSlotOf(col).m_name;
 }
 
 // Whether the column's value is a REFERENCE — its identity is (guid, type), so an ordering or an
 // anchor over it needs the _RTRef clsid as a tiebreak.
-bool IsReferenceValued(const ibBackendQueryColumn* col)
+bool IsReferenceValued(const std::shared_ptr<const ibBackendQueryColumn>& col)
 {
 	return FirstValueSlotOf(col).m_role == ibColumnRole::ReferenceId;
 }
@@ -95,15 +94,15 @@ bool IsReferenceValued(const ibBackendQueryColumn* col)
 // sort can move it. A source with a COMPOSITE key (a register: recorder + line + period) has no single
 // row-key column, and answering nullptr is correct — those paths (row-key condition, key-IN) are
 // single-key by construction and a register never takes them.
-const ibBackendQueryColumn* RowKeyColumn(const ibBackendQueryable* queryable)
+std::shared_ptr<const ibBackendQueryColumn> RowKeyColumn(const std::shared_ptr<const ibBackendQueryable>& queryable)
 {
-	const std::vector<const ibBackendQueryColumn*> keys = queryable->GetPrimaryKeyColumns();
+	const std::vector<std::shared_ptr<const ibBackendQueryColumn>> keys = queryable->GetPrimaryKeyColumns();
 	return keys.size() == 1 ? keys.front() : nullptr;
 }
 
-ibString RowKeyField(const ibBackendQueryable* queryable)
+ibString RowKeyField(const std::shared_ptr<const ibBackendQueryable>& queryable)
 {
-	const ibBackendQueryColumn* key = RowKeyColumn(queryable);
+	std::shared_ptr<const ibBackendQueryColumn> key = RowKeyColumn(queryable);
 	return key == nullptr ? ibString() : FirstSqlFieldOfColumn(key);
 }
 
@@ -152,7 +151,7 @@ ibQueryExprPtr ReferenceKeyBlob(const ibValue& v)
 // ⚠ A FACT ABOUT THE COLUMN, asked once for however many values are spelled for it: it lays the column
 // out to find its first value slot, and a list of five hundred keys asked it five hundred times — a
 // statement's worth of layouts built and formatted per batch of references (2026-09-12, Debug).
-bool ColumnHoldsIdentity(const ibBackendQueryColumn* col)
+bool ColumnHoldsIdentity(const std::shared_ptr<const ibBackendQueryColumn>& col)
 {
 	if (col == nullptr)
 		return false;
@@ -175,7 +174,7 @@ ibQueryExprPtr IdentityConst(const ibValue& v)
 	return ibConstBlob(&key, sizeof(ibReference));
 }
 
-ibQueryExprPtr ColumnConst(const ibBackendQueryColumn* col, const ibValue& v)
+ibQueryExprPtr ColumnConst(const std::shared_ptr<const ibBackendQueryColumn>& col, const ibValue& v)
 {
 	return ColumnHoldsIdentity(col) ? IdentityConst(v) : ibConst(v);
 }
@@ -185,10 +184,10 @@ ibQueryExprPtr ColumnConst(const ibBackendQueryColumn* col, const ibValue& v)
 // dot-walk binds source.<ref>_RRRef = target.<this>_RRRef, byte-identical. Empty when the source is
 // not a reference target (register / constant). Replaces GetReferenceKeyColumn — same type-specific
 // field search, now off the one key authority.
-ibString ReferenceFieldOf(const ibBackendQueryColumn* refKeyColumn)
+ibString ReferenceFieldOf(const std::shared_ptr<const ibBackendQueryColumn>& refKeyColumn)
 {
 	// The reference's _RRRef field = the ReferenceId slot in the column's physical layout.
-	for (const ibColumnSlot& slot : DescribeColumnLayout(refKeyColumn))
+	for (const ibColumnSlot& slot : DescribeColumnLayout(*refKeyColumn))
 		if (slot.m_role == ibColumnRole::ReferenceId)
 			return slot.m_name;
 	return ibString();
@@ -198,9 +197,9 @@ ibString ReferenceFieldOf(const ibBackendQueryColumn* refKeyColumn)
 // data-reference, vended as the front of GetPrimaryKeyColumns for a record) reduced to its
 // Reference field. Empty when the source is not a reference target (register / constant). This is
 // what GetReferenceKeyColumn used to return, now derived from the single key authority.
-ibString SelfReferenceField(const ibBackendQueryable* queryable)
+ibString SelfReferenceField(const std::shared_ptr<const ibBackendQueryable>& queryable)
 {
-	const std::vector<const ibBackendQueryColumn*> keys = queryable->GetPrimaryKeyColumns();
+	const std::vector<std::shared_ptr<const ibBackendQueryColumn>> keys = queryable->GetPrimaryKeyColumns();
 	return keys.empty() ? ibString() : ReferenceFieldOf(keys.front());
 }
 
@@ -208,11 +207,12 @@ ibString SelfReferenceField(const ibBackendQueryable* queryable)
 // an arbitrary query reads the QUERY, whose columns are its outputs, and the table's field is not one of them (`-206
 // Column unknown FLD1013_RRREF` under `FROM q_sub0`, 2026-10-28). Found by name, as the list's sort already is; a query
 // that does not select it is refused in the author's words — the query is theirs, `q_sub0` is the wrapper's.
-static const ibBackendQueryColumn* HierarchyColumnOf(const ibBackendQueryable* queryable, const ibBackendQueryColumn* listed)
+static std::shared_ptr<const ibBackendQueryColumn> HierarchyColumnOf(const std::shared_ptr<const ibBackendQueryable>& queryable,
+                                                                     const std::shared_ptr<const ibBackendQueryColumn>& listed)
 {
 	if (listed == nullptr || queryable->ContainColumn(listed))
 		return listed;
-	if (const ibBackendQueryColumn* const read = queryable->ResolveColumnByName(listed->GetName()))
+	if (const std::shared_ptr<const ibBackendQueryColumn> read = queryable->ResolveColumnByName(listed->GetName()))
 		return read;
 	ibBackendQueryException::Throw(ibBackendQueryException::Kind::TranslationFailure,
 		ibString::Format(_("the list's query does not select '%s', and a hierarchical view needs it"), listed->GetName()));
@@ -243,7 +243,7 @@ ibQueryExprPtr ibColQ(const ibString& qualifier, const ibString& name)
 //
 // Returns the predicate, or NULL when the type asked about is one this column can never hold — the
 // caller then answers the whole test with a constant, which is what "it is not of that type" is.
-ibQueryExprPtr TypeTagTest(const ibBackendQueryColumn* col, ibClassID target, const ibString& qual)
+ibQueryExprPtr TypeTagTest(const std::shared_ptr<const ibBackendQueryColumn>& col, ibClassID target, const ibString& qual)
 {
 	if (col == nullptr || target == 0)
 		return nullptr;
@@ -289,7 +289,7 @@ ibQueryExprPtr TypeTagTest(const ibBackendQueryColumn* col, ibClassID target, co
 // together are the index's own key: the same predicate `WHERE Ref = &X` has always been lowered to
 // (DecomposeEquality). Null for a key that is not a single-target reference — a tabular line's raw uuid, a
 // register's composite key — where there is nothing to add.
-ibQueryExprPtr RowKeyIndexPrefix(const ibBackendQueryColumn* key, const ibString& qual)
+ibQueryExprPtr RowKeyIndexPrefix(const std::shared_ptr<const ibBackendQueryColumn>& key, const ibString& qual)
 {
 	if (key == nullptr || key->IsRawColumn())
 		return nullptr;
@@ -298,7 +298,7 @@ ibQueryExprPtr RowKeyIndexPrefix(const ibBackendQueryColumn* key, const ibString
 		return nullptr;
 	const ibClassID own = *clsids.begin();
 	ibString tagField, classField;
-	for (const ibColumnSlot& slot : DescribeColumnLayout(key)) {
+	for (const ibColumnSlot& slot : DescribeColumnLayout(*key)) {
 		if (slot.m_role == ibColumnRole::Discriminator)      tagField   = slot.m_name;
 		else if (slot.m_role == ibColumnRole::ReferenceType) classField = slot.m_name;
 	}
@@ -324,7 +324,7 @@ ibQueryExprPtr RowKeyIndexPrefix(const ibBackendQueryColumn* key, const ibString
 // NULL` (queryLowering). A contradiction over a FIELD needs no constant at all, types itself from the
 // column, and every dialect folds it away. The tautology is the same sentence with OR — true for
 // every row, NULL ones included.
-ibQueryExprPtr AlwaysPredicate(bool holds, const ibBackendQueryColumn* col, const ibString& qual)
+ibQueryExprPtr AlwaysPredicate(bool holds, const std::shared_ptr<const ibBackendQueryColumn>& col, const ibString& qual)
 {
 	if (col == nullptr)
 		return nullptr;   // nothing to say it about — the caller drops the branch
@@ -357,9 +357,9 @@ ibQueryExprPtr OrFold(ibQueryExprPtr a, ibQueryExprPtr b)
 // The prefix is said about the TARGET alone — its two constants hold for every row of the target's table —
 // and never about the column the walk comes from, whose rows may be empty or hold another type. So the join
 // matches exactly the rows it matched before (86 280 of 86 280 either way); it only reaches them by the index.
-ibQueryExprPtr SelfReferenceMatch(const ibBackendQueryable* target, const ibString& alias, const ibQueryExprPtr& value)
+ibQueryExprPtr SelfReferenceMatch(const std::shared_ptr<const ibBackendQueryable>& target, const ibString& alias, const ibQueryExprPtr& value)
 {
-	const std::vector<const ibBackendQueryColumn*> keys = target->GetPrimaryKeyColumns();
+	const std::vector<std::shared_ptr<const ibBackendQueryColumn>> keys = target->GetPrimaryKeyColumns();
 	return AndFold(RowKeyIndexPrefix(keys.empty() ? nullptr : keys.front(), alias),
 		ibBinOp(ibQueryBinOp::Eq, value, ibColQ(alias, SelfReferenceField(target))));
 }
@@ -381,7 +381,7 @@ ibQueryExprPtr SelfReferenceMatch(const ibBackendQueryable* target, const ibStri
 // the tag of a number and the number itself is bound nowhere. The count still matches the
 // placeholders, so nothing complains: the filter simply never matches, on a column a person is
 // perfectly entitled to filter by (Max, 2026-08-28, live).
-bool IsComputedColumn(const ibBackendQueryColumn* col)
+bool IsComputedColumn(const std::shared_ptr<const ibBackendQueryColumn>& col)
 {
 	return col != nullptr && col->GetColumnKind() == ibBackendQueryColumn::Kind::Computed;
 }
@@ -411,7 +411,7 @@ std::vector<bool> ComparedFields(const std::vector<ibColumnSlot>& layout, const 
 	return compared;
 }
 
-ibQueryExprPtr DecomposeEquality(const ibBackendQueryColumn* col, const ibMetaData* metaData, const ibValue& value,
+ibQueryExprPtr DecomposeEquality(const std::shared_ptr<const ibBackendQueryColumn>& col, const ibMetaData* metaData, const ibValue& value,
                                  const ibString& mainQual = ibEmptyString)
 {
 	// …so it is compared as what it is: one field against the value. ColumnConst rather than a bare
@@ -419,10 +419,10 @@ ibQueryExprPtr DecomposeEquality(const ibBackendQueryColumn* col, const ibMetaDa
 	if (IsComputedColumn(col))
 		return ibBinOp(ibQueryBinOp::Eq, ibColQ(mainQual, FirstSqlFieldOfColumn(col)), ColumnConst(col, value));
 
-	std::vector<ibString> fields = ColumnFieldNames(col);
+	std::vector<ibString> fields = ColumnFieldNames(*col);
 	ibQueryStatement capture(ibQueryStatement::Kind::Delete, ibString(), fields);
 	int position = 1;
-	BindWriteValue(capture, col, metaData, value, position);
+	BindWriteValue(capture, *col, metaData, value, position);
 	const std::vector<ibQueryExprPtr>& consts = capture.CapturedValues();
 
 	// ⭐⭐ AN EMPTY REFERENCE HAS TWO SPELLINGS IN A COLUMN, AND EQUALITY MUST ACCEPT BOTH — the same
@@ -459,7 +459,7 @@ ibQueryExprPtr DecomposeEquality(const ibBackendQueryColumn* col, const ibMetaDa
 	// — "a Catalogue.Goods, but no particular one" — and it names that type in the row; `UNDEFINED` names
 	// none. Asked together, as they were until this word existed, a query could not tell them apart at all.
 	if (value.GetType() == ibValueTypes::TYPE_EMPTY && value.GetClassType() == 0) {
-		const std::vector<ibColumnSlot> tagLayout = DescribeColumnLayout(col);
+		const std::vector<ibColumnSlot> tagLayout = DescribeColumnLayout(*col);
 		if (!fields.empty() && !tagLayout.empty() && tagLayout.front().m_role == ibColumnRole::Discriminator) {
 			// …and NULL counts as 0: a column a restructuring added arrives `DEFAULT 0 NOT NULL`, but one
 			// that came without the default leaves NULL in every row older than itself.
@@ -496,7 +496,7 @@ ibQueryExprPtr DecomposeEquality(const ibBackendQueryColumn* col, const ibMetaDa
 		}
 	}
 
-	const std::vector<ibColumnSlot> layout = DescribeColumnLayout(col);
+	const std::vector<ibColumnSlot> layout = DescribeColumnLayout(*col);
 	const std::vector<bool> compared = ComparedFields(layout, value);
 	ibQueryExprPtr pred;
 	for (size_t i = 0; i < fields.size(); ++i) {
@@ -532,17 +532,17 @@ ibQueryExprPtr DecomposeEquality(const ibBackendQueryColumn* col, const ibMetaDa
 // COALESCE(field, <that value>) is that one value, so `a = b OR (a empty AND b empty)` is said as ONE equality - and
 // an equality is what the server can turn into a hash semi-join, where the OR made it read the inner table once per
 // outer row (2026-11-14). Null where the empty value has no field value of its own: the caller keeps the OR.
-static ibQueryExprPtr EmptyFoldedField(const ibBackendQueryColumn* col, const ibMetaData* metaData, const ibString& qual)
+static ibQueryExprPtr EmptyFoldedField(const std::shared_ptr<const ibBackendQueryColumn>& col, const ibMetaData* metaData, const ibString& qual)
 {
 	const ibString field = FirstSqlFieldOfColumn(col);
 	if (IsReferenceValued(col)) {
 		const ibReference emptyKey{ ibGuidImpl{} };
 		return ibFunc(ibT("COALESCE"), { ibColQ(qual, field), ibConstBlob(&emptyKey, sizeof(ibReference)) });
 	}
-	const std::vector<ibString> fields = ColumnFieldNames(col);
+	const std::vector<ibString> fields = ColumnFieldNames(*col);
 	ibQueryStatement capture(ibQueryStatement::Kind::Delete, ibString(), fields);
 	int position = 1;
-	BindWriteValue(capture, col, metaData, ibValueTypeDescription::AdjustValue(col->GetTypeValueDesc(), metaData), position);
+	BindWriteValue(capture, *col, metaData, ibValueTypeDescription::AdjustValue(col->GetTypeValueDesc(), metaData), position);
 	const std::vector<ibQueryExprPtr>& consts = capture.CapturedValues();
 	const size_t at = std::find(fields.begin(), fields.end(), field) - fields.begin();
 	if (at >= consts.size() || !consts[at] || consts[at]->m_kind != ibQueryExprKind::Const)
@@ -560,11 +560,11 @@ static ibQueryExprPtr EmptyFoldedField(const ibBackendQueryColumn* col, const ib
 // every row weighed against as many branches as there were values — 500 line numbers a statement over a payroll
 // document's 72 234 lines took 3.7 s each (MEASURED 2026-09-14). Anything else — a reference, a variant, values of
 // several kinds — goes pair by pair, each value's equality as it says itself.
-ibQueryExprPtr DecomposeIn(const ibBackendQueryColumn* col, const ibMetaData* metaData, const std::vector<ibValue>& values,
+ibQueryExprPtr DecomposeIn(const std::shared_ptr<const ibBackendQueryColumn>& col, const ibMetaData* metaData, const std::vector<ibValue>& values,
                            const ibString& mainQual)
 {
-	const std::vector<ibString> fields = ColumnFieldNames(col);
-	const std::vector<ibColumnSlot> layout = DescribeColumnLayout(col);
+	const std::vector<ibString> fields = ColumnFieldNames(*col);
+	const std::vector<ibColumnSlot> layout = DescribeColumnLayout(*col);
 	const bool primitive = !IsComputedColumn(col) && fields.size() == 2 && layout.size() == 2
 		&& layout[0].m_role == ibColumnRole::Discriminator
 		&& (layout[1].m_role == ibColumnRole::Boolean || layout[1].m_role == ibColumnRole::Number
@@ -598,7 +598,7 @@ ibQueryExprPtr DecomposeIn(const ibBackendQueryColumn* col, const ibMetaData* me
 		for (const ibValue& v : values) {
 			ibQueryStatement capture(ibQueryStatement::Kind::Delete, ibString(), fields);
 			int position = 1;
-			BindWriteValue(capture, col, metaData, v, position);
+			BindWriteValue(capture, *col, metaData, v, position);
 			const std::vector<ibQueryExprPtr>& consts = capture.CapturedValues();
 			if (consts.size() != fields.size() || !consts.back()) { spelled = false; break; }
 			auto table = std::find_if(tables.begin(), tables.end(), [&](const Table& t) {
@@ -657,7 +657,7 @@ ibQueryExprPtr DecomposeIn(const ibBackendQueryColumn* col, const ibMetaData* me
 	for (const ibValue& v : values) {
 		ibQueryStatement capture(ibQueryStatement::Kind::Delete, ibString(), fields);
 		int position = 1;
-		BindWriteValue(capture, col, metaData, v, position);
+		BindWriteValue(capture, *col, metaData, v, position);
 		const std::vector<ibQueryExprPtr>& consts = capture.CapturedValues();
 		if (!tag)
 			tag = consts.size() > 0 && consts[0] ? consts[0] : ibConst(ibValue());
@@ -693,7 +693,7 @@ ibQueryExprPtr DecomposeIn(const ibBackendQueryColumn* col, const ibMetaData* me
 // Null when it cannot be said here, and the caller reads the subtree instead, as before: the driver walks no
 // trees, a named value names no table of a query, the table is not a plain one, or two values of one table are
 // spelled differently.
-ibQueryExprPtr BuildSubtreeIn(const ibBackendQueryable* queryable, const ibQueryCondition& c, const ibString& mainQual)
+ibQueryExprPtr BuildSubtreeIn(const std::shared_ptr<const ibBackendQueryable>& queryable, const ibQueryCondition& c, const ibString& mainQual)
 {
 	if (queryable == nullptr || c.m_col == nullptr || c.m_col->IsRawColumn() || c.m_expr || c.m_values.empty()
 	    || queryable->GetMetaData() == nullptr)
@@ -705,7 +705,7 @@ ibQueryExprPtr BuildSubtreeIn(const ibBackendQueryable* queryable, const ibQuery
 			return nullptr;
 		dropsRepeats = scope.get()->GetDialect().m_features.m_recursiveCteUnion;
 	}
-	const std::vector<ibString> fields = ColumnFieldNames(c.m_col);
+	const std::vector<ibString> fields = ColumnFieldNames(*c.m_col);
 	if (fields.size() < 2)
 		return nullptr;
 
@@ -715,21 +715,21 @@ ibQueryExprPtr BuildSubtreeIn(const ibBackendQueryable* queryable, const ibQuery
 	// passes it over.
 	struct Tree
 	{
-		const ibBackendQueryable*   m_target = nullptr;
-		std::vector<ibQueryExprPtr> m_leading, m_roots;
-		const ibValue*              m_first = nullptr;
+		std::shared_ptr<const ibBackendQueryable> m_target;
+		std::vector<ibQueryExprPtr>               m_leading, m_roots;
+		const ibValue*                            m_first = nullptr;
 	};
 	std::vector<Tree> trees;
 	for (const ibValue& v : c.m_values) {
 		if (v.IsEmpty())
 			continue;
 		const ibCtorMetaValueType* ctor = queryable->GetMetaData()->GetTypeCtor(v.GetClassType());
-		const ibBackendQueryable* target = ctor != nullptr ? ctor->GetQueryable() : nullptr;
+		std::shared_ptr<const ibBackendQueryable> target = ctor != nullptr ? ctor->GetQueryable() : nullptr;
 		if (target == nullptr)
 			return nullptr;
 		ibQueryStatement capture(ibQueryStatement::Kind::Delete, ibString(), fields);
 		int position = 1;
-		BindWriteValue(capture, c.m_col, queryable->GetMetaData(), v, position);
+		BindWriteValue(capture, *c.m_col, queryable->GetMetaData(), v, position);
 		const std::vector<ibQueryExprPtr>& consts = capture.CapturedValues();
 		if (consts.size() != fields.size() || !consts.back())
 			return nullptr;
@@ -755,14 +755,14 @@ ibQueryExprPtr BuildSubtreeIn(const ibBackendQueryable* queryable, const ibQuery
 		return nullptr;   // nothing named: the caller's empty IN matches nothing, as it always did
 
 	const bool belowOnly = c.m_unfold == ibQueryDimUnfold::HierarchyOnly;
-	const std::vector<ibColumnSlot> layout = DescribeColumnLayout(c.m_col);
+	const std::vector<ibColumnSlot> layout = DescribeColumnLayout(*c.m_col);
 	ibQueryExprPtr any;
 	for (Tree& tree : trees) {
-		const ibBackendQueryable* target = tree.m_target;
-		const ibBackendQueryColumn* rowKey = RowKeyColumn(target);
+		std::shared_ptr<const ibBackendQueryable> target = tree.m_target;
+		std::shared_ptr<const ibBackendQueryColumn> rowKey = RowKeyColumn(target);
 		if (target->GetSourceRelation(ibString()) != nullptr || target->GetQueryTableName().IsEmpty() || rowKey == nullptr)
 			return nullptr;
-		const ibBackendQueryColumn* parentCol = target->GetHierarchyColumn();
+		std::shared_ptr<const ibBackendQueryColumn> parentCol = target->GetHierarchyColumn();
 
 		ibQueryExprPtr pred;
 		const std::vector<bool> compared = ComparedFields(layout, *tree.m_first);
@@ -777,8 +777,8 @@ ibQueryExprPtr BuildSubtreeIn(const ibBackendQueryable* queryable, const ibQuery
 			continue;
 		}
 
-		const std::vector<ibString> keyFields = ColumnFieldNames(rowKey);
-		const std::vector<ibString> parentFields = ColumnFieldNames(parentCol);
+		const std::vector<ibString> keyFields = ColumnFieldNames(*rowKey);
+		const std::vector<ibString> parentFields = ColumnFieldNames(*parentCol);
 		if (keyFields.empty() || parentFields.empty())
 			return nullptr;
 		const ibString table  = target->GetQueryTableName();
@@ -831,7 +831,7 @@ ibQueryExprPtr BuildSubtreeIn(const ibBackendQueryable* queryable, const ibQuery
 // "up to this document" is exactly a lexicographic compare over the date's field and the reference's pair —
 // which its layout already names, in that order. Nothing here knows about moments: a column said what it is
 // made of and what its halves are worth, and the general rule read like the special one.
-ibQueryExprPtr DecomposeOrdered(const ibBackendQueryColumn* col, const ibMetaData* metaData, const ibValue& value,
+ibQueryExprPtr DecomposeOrdered(const std::shared_ptr<const ibBackendQueryColumn>& col, const ibMetaData* metaData, const ibValue& value,
                                 ibQueryBinOp op, const ibString& mainQual = ibEmptyString)
 {
 	// ONE FIELD, ONE COMPARISON — see the note over DecomposeEquality. There is no lexicographic
@@ -840,10 +840,10 @@ ibQueryExprPtr DecomposeOrdered(const ibBackendQueryColumn* col, const ibMetaDat
 	if (IsComputedColumn(col))
 		return ibBinOp(op, ibColQ(mainQual, FirstSqlFieldOfColumn(col)), ColumnConst(col, value));
 
-	std::vector<ibString> fields = ColumnFieldNames(col);
+	std::vector<ibString> fields = ColumnFieldNames(*col);
 	ibQueryStatement capture(ibQueryStatement::Kind::Delete, ibString(), fields);
 	int position = 1;
-	BindWriteValue(capture, col, metaData, value, position);
+	BindWriteValue(capture, *col, metaData, value, position);
 	const std::vector<ibQueryExprPtr>& consts = capture.CapturedValues();
 
 	auto constAt = [&](size_t i) -> ibQueryExprPtr {
@@ -858,7 +858,7 @@ ibQueryExprPtr DecomposeOrdered(const ibBackendQueryColumn* col, const ibMetaDat
 	// another kind is neither greater nor less — as a NULL is not, in SQL and in a filter on the RAM floor
 	// (LINQ_THREE_VALUED_NULL, procUnitLambda.h), so the three roads now answer alike.
 	// A key of several fields (a reference, a moment) keeps its lexicographic order — that IS what it means.
-	const std::vector<ibColumnSlot> layout = DescribeColumnLayout(col);
+	const std::vector<ibColumnSlot> layout = DescribeColumnLayout(*col);
 	const bool primitive = fields.size() == 2 && layout.size() == 2
 		&& layout[0].m_role == ibColumnRole::Discriminator
 		&& (layout[1].m_role == ibColumnRole::Boolean || layout[1].m_role == ibColumnRole::Number
@@ -955,72 +955,72 @@ class ibMetaIRBuilder {
 public:
 	// pathAsExists (WRITE path only): a dot-walk condition (m_path) becomes a correlated EXISTS instead of
 	// being skipped. Reads pre-resolve the path to a JOIN in BuildPageIR, so they leave it false.
-	static ibQueryExprPtr BuildFilterPredicate(const ibBackendQueryable* queryable,
+	static ibQueryExprPtr BuildFilterPredicate(const std::shared_ptr<const ibBackendQueryable>& queryable,
 	                                           const std::vector<ibQueryCondition>& conditions,
 	                                           const ibString& mainQual = ibEmptyString,
 	                                           bool pathAsExists = false);
 	// One door condition -> L2-1 expr (the per-leaf body shared by the AND-fold above and the tree below).
-	static ibQueryExprPtr BuildConditionExpr(const ibBackendQueryable* queryable,
+	static ibQueryExprPtr BuildConditionExpr(const std::shared_ptr<const ibBackendQueryable>& queryable,
 	                                         const ibQueryCondition& c,
 	                                         const ibString& mainQual = ibEmptyString,
 	                                         bool pathAsExists = false);
 	// The full boolean WHERE TREE -> L2-1 expr (And/Or/Not/IsNull; leaves via BuildConditionExpr).
-	static ibQueryExprPtr BuildPredicateExpr(const ibBackendQueryable* queryable,
+	static ibQueryExprPtr BuildPredicateExpr(const std::shared_ptr<const ibBackendQueryable>& queryable,
 	                                         const ibQueryPredicatePtr& predicate,
 	                                         const ibString& mainQual = ibEmptyString,
 	                                         bool pathAsExists = false);
 	// A dot-walk RLS condition on the WRITE path -> a CORRELATED EXISTS (a write cannot JOIN). Scans the
 	// reference-target chain, correlates the first hop back to the outer write row, and folds the leaf.
 	// `negated`: the condition is asked NOT to hold of the row the walk reaches — which still requires that row.
-	static ibQueryExprPtr BuildDotWalkExists(const ibBackendQueryable* queryable,
+	static ibQueryExprPtr BuildDotWalkExists(const std::shared_ptr<const ibBackendQueryable>& queryable,
 	                                         const ibQueryCondition& c,
 	                                         const ibString& mainQual,
 	                                         bool negated = false);
 	// NOT of a condition tree whose walks are EXISTS — pushed down to the walks, so the answer is SQL's own: a
 	// field reached through a reference that reaches nothing is NULL, and neither it nor its negation holds.
-	static ibQueryExprPtr BuildNegatedExpr(const ibBackendQueryable* queryable,
+	static ibQueryExprPtr BuildNegatedExpr(const std::shared_ptr<const ibBackendQueryable>& queryable,
 	                                       const ibQueryPredicatePtr& predicate,
 	                                       const ibString& mainQual,
 	                                       bool pathAsExists);
 	// The walk under it, for any test of the row the path ends at (IS NULL and REFS take it too): `test`
 	// is handed that row's queryable and alias.
-	static ibQueryExprPtr BuildPathExists(const ibBackendQueryable* queryable,
-	                                      const std::vector<const ibBackendQueryColumn*>& path,
+	static ibQueryExprPtr BuildPathExists(const std::shared_ptr<const ibBackendQueryable>& queryable,
+	                                      const std::vector<std::shared_ptr<const ibBackendQueryColumn>>& path,
 	                                      const ibString& mainQual,
-	                                      const std::function<ibQueryExprPtr(const ibBackendQueryable*, const ibString&)>& test);
+	                                      const std::function<ibQueryExprPtr(const std::shared_ptr<const ibBackendQueryable>&, const ibString&)>& test);
 	// An RLS `restrict … join …` SEMI-JOIN -> a CORRELATED EXISTS over the inner permission source: the outer
 	// row passes iff a permitting row exists. `EXISTS(SELECT * FROM <inner> sj WHERE <inner Where over sj>
 	// AND sj.<innerKey> <op> outer.<outerKey>)`. The inner's own conditions (incl. inner dot-walk -> nested
 	// EXISTS via pathAsExists) ride along; `outerQual` qualifies the main-source correlation column, and `queryable`
 	// is that source — a NOT IN on a server with no anti-join reads its keys (ibSqlFeatures::m_antiJoin).
-	static ibQueryExprPtr BuildSemiJoinExists(const ibBackendQueryable* queryable, const ibSemiJoinExists& sj,
+	static ibQueryExprPtr BuildSemiJoinExists(const std::shared_ptr<const ibBackendQueryable>& queryable, const ibSemiJoinExists& sj,
 	                                          const ibString& outerQual);
 	// A COMPUTED-COLUMN expression (arithmetic / CASE) -> L2-1 expr (ibBinOp / ibCase; columns qualified
 	// by mainQual, WHEN predicates via BuildPredicateExpr). For a projected computed column.
-	static ibQueryExprPtr BuildColumnExpr(const ibBackendQueryable* queryable,
+	static ibQueryExprPtr BuildColumnExpr(const std::shared_ptr<const ibBackendQueryable>& queryable,
 	                                      const ibQueryColumnExprPtr& expr,
 	                                      const ibString& mainQual = ibEmptyString);
 	// conditions AND predicate-tree, AND-folded — the one WHERE a provider site builds from a spec.
-	static ibQueryExprPtr BuildWhere(const ibBackendQueryable* queryable,
+	static ibQueryExprPtr BuildWhere(const std::shared_ptr<const ibBackendQueryable>& queryable,
 	                                 const std::vector<ibQueryCondition>& conditions,
 	                                 const ibQueryPredicatePtr& predicate,
 	                                 const ibString& mainQual = ibEmptyString,
 	                                 bool pathAsExists = false);
-	static std::vector<ibQuerySortKey> BuildSortKeys(const ibBackendQueryable* queryable,
+	static std::vector<ibQuerySortKey> BuildSortKeys(const std::shared_ptr<const ibBackendQueryable>& queryable,
 	                                                 const std::vector<ibQuerySortItem>& sorts,
 	                                                 bool reverse,
 	                                                 const ibString& mainQual = ibEmptyString);
-	static ibQueryExprPtr BuildAnchorPredicate(const ibBackendQueryable* queryable,
+	static ibQueryExprPtr BuildAnchorPredicate(const std::shared_ptr<const ibBackendQueryable>& queryable,
 	                                           const std::vector<ibQuerySortItem>& sorts,
 	                                           const std::vector<ibValue>& values,
 	                                           ibFetchDirection direction,
 	                                           const ibString& mainQual = ibEmptyString);
-	static ibQueryExprPtr BuildParentRefPredicate(const ibBackendQueryable* queryable,
+	static ibQueryExprPtr BuildParentRefPredicate(const std::shared_ptr<const ibBackendQueryable>& queryable,
 	                                              const ibString& refDataField,
 	                                              const ibValue& parentKey,
 	                                              bool isTopLevel,
 	                                              const ibString& mainQual = ibEmptyString);
-	static ibQueryExprPtr BuildKeyInPredicate(const ibBackendQueryable* queryable,
+	static ibQueryExprPtr BuildKeyInPredicate(const std::shared_ptr<const ibBackendQueryable>& queryable,
 	                                          const std::vector<ibValue>& keyValues,
 	                                          const ibString& mainQual = ibEmptyString);
 };
@@ -1039,7 +1039,7 @@ public:
 // The primitive branch below stays, and stays here: a metadata column projected by the co-located
 // path is ONE field under the alias, so asking the column would send it through the codec's full
 // spread and look for `<alias>_TYPE` fields the projection never wrote.
-ibValue ReadScalarByAlias(const ibBackendQueryColumn* col, const ibString& alias,
+ibValue ReadScalarByAlias(const std::shared_ptr<const ibBackendQueryColumn>& col, const ibString& alias,
                           const ibMetaData* metaData, ibQueryResult& cursor)
 {
 	ibValue v;
@@ -1080,26 +1080,26 @@ ibValue ReadScalarByAlias(const ibBackendQueryColumn* col, const ibString& alias
 
 // ONE join node's keys — explicit on-columns, and nothing else. False when they are not both there
 // (a cross join, or a computed ON), which the co-location gate reads as "not this fast path".
-bool ResolveNodeKeys(const ibQueryNode* node, const ibBackendQueryColumn*& onL, const ibBackendQueryColumn*& onR)
+bool ResolveNodeKeys(const std::shared_ptr<ibQueryNode>& node, std::shared_ptr<const ibBackendQueryColumn>& onL, std::shared_ptr<const ibBackendQueryColumn>& onR)
 {
 	onL = node->m_on.m_colL; onR = node->m_on.m_colR;
 	return onL != nullptr && onR != nullptr;
 }
 
 // Every JOIN node in the tree has resolvable keys?
-bool AllNodeKeysResolvable(const ibQueryNode* node)
+bool AllNodeKeysResolvable(const std::shared_ptr<ibQueryNode>& node)
 {
 	if (node == nullptr || node->m_kind != ibQueryNode::Kind::Join) return true;
-	const ibBackendQueryColumn* l = nullptr; const ibBackendQueryColumn* r = nullptr;
+	std::shared_ptr<const ibBackendQueryColumn> l, r;
 	return ResolveNodeKeys(node, l, r) &&
-	       AllNodeKeysResolvable(node->m_left.get()) && AllNodeKeysResolvable(node->m_right.get());
+	       AllNodeKeysResolvable(node->m_left) && AllNodeKeysResolvable(node->m_right);
 }
 
-using ColocatedLeaves = std::vector<const ibBackendQueryable*>;
+using ColocatedLeaves = std::vector<std::shared_ptr<const ibBackendQueryable>>;
 
 // Collect the Source-leaf queryables of a JOIN tree (DFS). False if any leaf is non-Source, null, or
 // COMPUTED (a Union subtree / a computed-temp source) — those are not SQL-co-locatable here.
-bool CollectColocatedLeaves(const ibQueryNode* node, ColocatedLeaves& out)
+bool CollectColocatedLeaves(const std::shared_ptr<ibQueryNode>& node, ColocatedLeaves& out)
 {
 	if (node == nullptr) return false;
 	if (node->m_kind == ibQueryNode::Kind::Source) {
@@ -1108,13 +1108,13 @@ bool CollectColocatedLeaves(const ibQueryNode* node, ColocatedLeaves& out)
 		return true;
 	}
 	if (node->m_kind == ibQueryNode::Kind::Join)
-		return CollectColocatedLeaves(node->m_left.get(), out) && CollectColocatedLeaves(node->m_right.get(), out);
+		return CollectColocatedLeaves(node->m_left, out) && CollectColocatedLeaves(node->m_right, out);
 	return false;
 }
 
 // The leaf owning a column (by name); null if none. Leaves are distinctly QUALIFIED (the gate below
 // requires it), so ownership is unambiguous for qualification.
-const ibBackendQueryable* ColocatedOwner(const ColocatedLeaves& leaves, const ibBackendQueryColumn* col)
+std::shared_ptr<const ibBackendQueryable> ColocatedOwner(const ColocatedLeaves& leaves, const std::shared_ptr<const ibBackendQueryColumn>& col)
 {
 	// 🛑⭐⭐ TWO LEAVES CAN BOTH CLAIM ONE COLUMN, AND THIS LOOP GIVES IT TO THE FIRST. A real defect,
 	// left standing on purpose after two attempts to fix it here were measured and reverted — the
@@ -1171,12 +1171,12 @@ const ibBackendQueryable* ColocatedOwner(const ColocatedLeaves& leaves, const ib
 	//
 	// The id road stays underneath for the callers that legitimately pass an equivalent column
 	// rather than the object itself (a locally-made twin — derivedStateBuilder).
-	for (const ibBackendQueryable* q : leaves)
+	for (const std::shared_ptr<const ibBackendQueryable>& q : leaves)
 		if (q != nullptr)
-			for (const ibBackendQueryColumn* c : q->GetQueryColumns())
+			for (const std::shared_ptr<const ibBackendQueryColumn>& c : q->GetQueryColumns())
 				if (c == col) return q;
 
-	for (const ibBackendQueryable* q : leaves)
+	for (const std::shared_ptr<const ibBackendQueryable>& q : leaves)
 		if (q != nullptr && q->ContainColumn(col)) return q;
 
 	return nullptr;
@@ -1188,7 +1188,7 @@ const ibBackendQueryable* ColocatedOwner(const ColocatedLeaves& leaves, const ib
 // no table could appear twice. A SECOND READING of one table cannot be qualified by the table name —
 // both readings answer to it — so it is scanned as `T AS b` and its columns say `b`. The source knows
 // which it is (GetQueryTableAlias); nobody else has to.
-ibString ColocatedQualOf(const ibBackendQueryable* q)
+ibString ColocatedQualOf(const std::shared_ptr<const ibBackendQueryable>& q)
 {
 	if (q == nullptr)
 		return ibString();
@@ -1202,7 +1202,7 @@ ibString ColocatedQualOf(const ibBackendQueryable* q)
 // leaf. Fills `leaves`. INNER and LEFT both co-locate (the L3 node carries only Inner/Left).
 bool ColocatableJoinTree(const ibDataQuerySpec& spec, ColocatedLeaves& leaves)
 {
-	const ibQueryNode* root = spec.m_root;
+	const std::shared_ptr<ibQueryNode>& root = spec.m_root;
 	if (root == nullptr || root->m_kind != ibQueryNode::Kind::Join)
 		return false;
 	leaves.clear();
@@ -1222,21 +1222,21 @@ bool ColocatableJoinTree(const ibDataQuerySpec& spec, ColocatedLeaves& leaves)
 			if (ColocatedQualOf(leaves[i]) == ColocatedQualOf(leaves[j])) return false;
 	if (!AllNodeKeysResolvable(root))          return false;
 	// Co-located SQL emits only INNER / LEFT; a RIGHT / FULL (or cross / ON TRUE) join folds in the RAM stitch.
-	std::function<bool(const ibQueryNode*)> innerOrLeftOnly = [&](const ibQueryNode* n) -> bool {
+	std::function<bool(const std::shared_ptr<ibQueryNode>&)> innerOrLeftOnly = [&](const std::shared_ptr<ibQueryNode>& n) -> bool {
 		if (n == nullptr || n->m_kind != ibQueryNode::Kind::Join) return true;
 		if (n->m_on.m_cross || n->m_joinKind == ibQueryJoinKind::Right || n->m_joinKind == ibQueryJoinKind::Full) return false;
-		return innerOrLeftOnly(n->m_left.get()) && innerOrLeftOnly(n->m_right.get());
+		return innerOrLeftOnly(n->m_left) && innerOrLeftOnly(n->m_right);
 	};
 	if (!innerOrLeftOnly(root))                return false;
 	// A COMPUTED ON (a.x+1 <op> b.y) has no column key to qualify, so it still folds in the RAM stitch. A plain
 	// column-to-column THETA (a.x > b.y) now renders server-side — BuildColocatedFrom emits the node's real op —
 	// so only computed ON forces RAM. EVERY co-located decider (join / aggregate / union) calls this gate.
-	std::function<bool(const ibQueryNode*)> allColumnKeyed = [&](const ibQueryNode* n) -> bool {
+	std::function<bool(const std::shared_ptr<ibQueryNode>&)> allColumnKeyed = [&](const std::shared_ptr<ibQueryNode>& n) -> bool {
 		if (n == nullptr || n->m_kind != ibQueryNode::Kind::Join) return true;
 		if (n->m_on.m_exprL != nullptr) return false;   // computed ON -> RAM (no column key to qualify)
 		for (const auto& part : n->m_on.m_alsoOn)
 			if (part.m_exprL != nullptr) return false;   // …and so does a computed part of a composite key
-		return allColumnKeyed(n->m_left.get()) && allColumnKeyed(n->m_right.get());
+		return allColumnKeyed(n->m_left) && allColumnKeyed(n->m_right);
 	};
 	if (!allColumnKeyed(root))                 return false;
 	for (const ibQueryCondition& c : *spec.m_conditions) {
@@ -1248,17 +1248,17 @@ bool ColocatableJoinTree(const ibDataQuerySpec& spec, ColocatedLeaves& leaves)
 
 // A column reads back as ONE scalar field (primitive / raw) — no _TYPE/_RRRef spread, so no
 // reference / enum (those need value rehydration the co-located fast path does not do).
-bool ScalarReadable(const ibBackendQueryColumn* col, const ColocatedLeaves& leaves)
+bool ScalarReadable(const std::shared_ptr<const ibBackendQueryColumn>& col, const ColocatedLeaves& leaves)
 {
 	if (col == nullptr)     return false;
 	if (col->IsRawColumn()) return true;
-	if (ibColumnCodec::HasReference(col))                            return false;   // reference -> rehydration needed
+	if (ibColumnCodec::HasReference(*col))                            return false;   // reference -> rehydration needed
 	if (col->GetTypeDesc().ContainType(ibValueTypes::TYPE_ENUM))     return false;   // enum -> variant reconstruction
 	return true;
 }
 
 // A column's qualifier = that of the leaf which owns it (leaves distinctly qualified -> unambiguous).
-ibString ColocatedQual(const ColocatedLeaves& leaves, const ibBackendQueryColumn* col)
+ibString ColocatedQual(const ColocatedLeaves& leaves, const std::shared_ptr<const ibBackendQueryColumn>& col)
 {
 	return ColocatedQualOf(ColocatedOwner(leaves, col));
 }
@@ -1269,7 +1269,7 @@ ibString ColocatedQual(const ColocatedLeaves& leaves, const ibBackendQueryColumn
 // _RRRef blob), or an enum (-> _E). A VARIANT / composite (>1 field) is rejected — comparing only the
 // first field would mismatch. Looser than ScalarReadable: a reference / enum KEY joins fine (the field
 // is compared, not rehydrated), so this gates KEYS while ScalarReadable still gates value OUTPUTS.
-bool SingleFieldJoinable(const ibBackendQueryColumn* col, const ColocatedLeaves& leaves)
+bool SingleFieldJoinable(const std::shared_ptr<const ibBackendQueryColumn>& col, const ColocatedLeaves& leaves)
 {
 	if (col == nullptr)     return false;
 	if (col->IsRawColumn()) return true;
@@ -1280,18 +1280,18 @@ bool SingleFieldJoinable(const ibBackendQueryColumn* col, const ColocatedLeaves&
 	if (td.ContainType(ibValueTypes::TYPE_DATE))    ++fields;
 	if (td.ContainType(ibValueTypes::TYPE_STRING))  ++fields;
 	if (td.ContainType(ibValueTypes::TYPE_ENUM))    ++fields;
-	if (ibColumnCodec::HasReference(col))           ++fields;
+	if (ibColumnCodec::HasReference(*col))           ++fields;
 	return fields == 1;
 }
 
 // Every JOIN node's keys are single-field (resolvable + each side single-field-joinable)?
-bool AllNodeKeysSingleField(const ibQueryNode* node, const ColocatedLeaves& leaves)
+bool AllNodeKeysSingleField(const std::shared_ptr<ibQueryNode>& node, const ColocatedLeaves& leaves)
 {
 	if (node == nullptr || node->m_kind != ibQueryNode::Kind::Join) return true;
-	const ibBackendQueryColumn* l = nullptr; const ibBackendQueryColumn* r = nullptr;
+	std::shared_ptr<const ibBackendQueryColumn> l, r;
 	if (!ResolveNodeKeys(node, l, r)) return false;
 	if (!SingleFieldJoinable(l, leaves) || !SingleFieldJoinable(r, leaves)) return false;
-	return AllNodeKeysSingleField(node->m_left.get(), leaves) && AllNodeKeysSingleField(node->m_right.get(), leaves);
+	return AllNodeKeysSingleField(node->m_left, leaves) && AllNodeKeysSingleField(node->m_right, leaves);
 }
 
 // ⭐⭐ WHAT A SOURCE IS READ FROM — asked of the SOURCE, in one place, by every road in this file.
@@ -1313,7 +1313,7 @@ bool AllNodeKeysSingleField(const ibQueryNode* node, const ColocatedLeaves& leav
 //
 // One question, one answer, four callers. A road that cannot ask is a road that will be wrong the
 // first time a source stops being a table.
-ibQueryRelPtr SourceRelationOf(const ibBackendQueryable* queryable, const ibString& table)
+ibQueryRelPtr SourceRelationOf(const std::shared_ptr<const ibBackendQueryable>& queryable, const ibString& table)
 {
 	if (queryable != nullptr)
 		if (ibQueryRelPtr rel = queryable->GetSourceRelation(table))
@@ -1324,7 +1324,7 @@ ibQueryRelPtr SourceRelationOf(const ibBackendQueryable* queryable, const ibStri
 // Build the L2-1 FROM tree (nested ibJoin) from the L3 join node — RECURSIVE, any depth. A Source ->
 // ibScan(table); a Join -> its two children joined on the node's resolved keys, qualified by the
 // owning leaf's table. INNER/LEFT per node. The shared co-located FROM both fast paths build over.
-ibQueryRelPtr BuildColocatedFrom(const ibQueryNode* node, const ColocatedLeaves& leaves)
+ibQueryRelPtr BuildColocatedFrom(const std::shared_ptr<ibQueryNode>& node, const ColocatedLeaves& leaves)
 {
 	if (node->m_kind == ibQueryNode::Kind::Source) {
 		// ⭐ A SECOND READING OF ONE TABLE IS SCANNED UNDER ITS OWN NAME — `T AS b`, which is what its
@@ -1339,10 +1339,10 @@ ibQueryRelPtr BuildColocatedFrom(const ibQueryNode* node, const ColocatedLeaves&
 		return SourceRelationOf(node->m_queryable, node->m_queryable->GetQueryTableName());
 	}
 
-	ibQueryRelPtr left  = BuildColocatedFrom(node->m_left.get(),  leaves);
-	ibQueryRelPtr right = BuildColocatedFrom(node->m_right.get(), leaves);
+	ibQueryRelPtr left  = BuildColocatedFrom(node->m_left,  leaves);
+	ibQueryRelPtr right = BuildColocatedFrom(node->m_right, leaves);
 
-	const ibBackendQueryColumn* onL = nullptr; const ibBackendQueryColumn* onR = nullptr;
+	std::shared_ptr<const ibBackendQueryColumn> onL, onR;
 	ResolveNodeKeys(node, onL, onR);   // the gate guaranteed every node resolves
 	const ibQueryJoinType jt = (node->m_joinKind == ibQueryJoinKind::Left) ? ibQueryJoinType::Left : ibQueryJoinType::Inner;
 	// The ON operator is the join's real compare op — Eq (the common case) OR a column-to-column theta
@@ -1360,18 +1360,18 @@ ibQueryRelPtr BuildColocatedFrom(const ibQueryNode* node, const ColocatedLeaves&
 	// The tables were distinct, which is what the co-location gate checks; the COLUMNS were not.
 	//
 	// The node knows what the owner search cannot: which subtree each key belongs to.
-	auto qualOfSide = [&leaves](const ibQueryNode* side, const ibBackendQueryColumn* col) -> ibString {
+	auto qualOfSide = [&leaves](const std::shared_ptr<ibQueryNode>& side, const std::shared_ptr<const ibBackendQueryColumn>& col) -> ibString {
 		ColocatedLeaves sideLeaves;
 		if (side != nullptr && CollectColocatedLeaves(side, sideLeaves))
-			for (const ibBackendQueryable* q : sideLeaves)
+			for (const std::shared_ptr<const ibBackendQueryable>& q : sideLeaves)
 				if (q != nullptr && q->ContainColumn(col))
 					return ColocatedQualOf(q);
 		return ColocatedQual(leaves, col);   // single-sided key: the old answer is the only one
 	};
 
 	ibQueryExprPtr on = ibBinOp(JoinOpToBinOp(node->m_on.m_op),
-		ibCol(qualOfSide(node->m_left.get(),  onL), FirstSqlFieldOfColumn(onL)),
-		ibCol(qualOfSide(node->m_right.get(), onR), FirstSqlFieldOfColumn(onR)));
+		ibCol(qualOfSide(node->m_left,  onL), FirstSqlFieldOfColumn(onL)),
+		ibCol(qualOfSide(node->m_right, onR), FirstSqlFieldOfColumn(onR)));
 
 	// ⭐ A SIDE THAT IS ITS OWN TABLE'S KEY IS SAID WHOLE, as the index holds it — the reason and the
 	// constants of SelfReferenceMatch. `JOIN Catalog.Employees AS E ON E.Ref = A.Employee` compared the guid
@@ -1379,15 +1379,15 @@ ibQueryRelPtr BuildColocatedFrom(const ibQueryNode* node, const ColocatedLeaves&
 	// about the key's own side: the constants hold for every row of THAT table and filter nothing, while
 	// the same two fields of an ordinary reference column may be empty in a row the join must still match.
 	if (JoinOpToBinOp(node->m_on.m_op) == ibQueryBinOp::Eq) {
-		auto keyPrefixOfSide = [](const ibQueryNode* side, const ibBackendQueryColumn* col) -> ibQueryExprPtr {
+		auto keyPrefixOfSide = [](const std::shared_ptr<ibQueryNode>& side, const std::shared_ptr<const ibBackendQueryColumn>& col) -> ibQueryExprPtr {
 			ColocatedLeaves sideLeaves;
 			if (side != nullptr && CollectColocatedLeaves(side, sideLeaves))
-				for (const ibBackendQueryable* q : sideLeaves)
+				for (const std::shared_ptr<const ibBackendQueryable>& q : sideLeaves)
 					if (q != nullptr && q->ContainColumn(col))
 						return RowKeyColumn(q) == col ? RowKeyIndexPrefix(col, ColocatedQualOf(q)) : nullptr;
 			return nullptr;
 		};
-		on = AndFold(AndFold(keyPrefixOfSide(node->m_left.get(), onL), keyPrefixOfSide(node->m_right.get(), onR)), on);
+		on = AndFold(AndFold(keyPrefixOfSide(node->m_left, onL), keyPrefixOfSide(node->m_right, onR)), on);
 	}
 
 	// …AND THE REST OF A COMPOSITE KEY, ANDed into the same ON. Two readings of one register meet on
@@ -1401,8 +1401,8 @@ ibQueryRelPtr BuildColocatedFrom(const ibQueryNode* node, const ColocatedLeaves&
 		// a question nobody asked, and silently.
 		on = ibBinOp(ibQueryBinOp::And, on,
 			ibBinOp(JoinOpToBinOp(part.m_op),
-				ibCol(qualOfSide(node->m_left.get(),  part.m_colL), FirstSqlFieldOfColumn(part.m_colL)),
-				ibCol(qualOfSide(node->m_right.get(), part.m_colR), FirstSqlFieldOfColumn(part.m_colR))));
+				ibCol(qualOfSide(node->m_left,  part.m_colL), FirstSqlFieldOfColumn(part.m_colL)),
+				ibCol(qualOfSide(node->m_right, part.m_colR), FirstSqlFieldOfColumn(part.m_colR))));
 	}
 	return ibJoin(left, right, on, jt);
 }
@@ -1423,12 +1423,12 @@ ibQueryRelPtr BuildColocatedFrom(const ibQueryNode* node, const ColocatedLeaves&
 //
 // Null for anything else, and then the single-field road stands exactly as before: a mixed CASE, an
 // arithmetic, a window. Nothing this walk does not fully understand is half-served.
-const ibBackendQueryColumn* ExprSpreadColumn(const ibQueryColumnExpr* e)
+std::shared_ptr<const ibBackendQueryColumn> ExprSpreadColumn(const ibQueryColumnExprPtr& e)
 {
 	if (e == nullptr || e->m_kind != ibQueryColumnExprKind::Case)
 		return nullptr;
 
-	const ibBackendQueryColumn* spread = nullptr;
+	std::shared_ptr<const ibBackendQueryColumn> spread;
 	const auto arm = [&](const ibQueryColumnExprPtr& a) -> bool {
 		if (!a)
 			return true;   // no ELSE at all — nothing to disagree with
@@ -1461,7 +1461,7 @@ const ibBackendQueryColumn* ExprSpreadColumn(const ibQueryColumnExpr* e)
 // read — so `TRUE AS Flag`, `CASE … THEN TRUE ELSE FALSE END` and every condition asked for its value came
 // back as 1 and 0, while a stored Boolean attribute, which reads itself (RawType::Boolean), came back as a
 // Boolean (compose_run, 2026-09-28). Told this, the result reads the field the way the attribute does.
-bool ExprAnswersBoolean(const ibQueryColumnExpr* e)
+bool ExprAnswersBoolean(const ibQueryColumnExprPtr& e)
 {
 	if (e == nullptr)
 		return false;
@@ -1482,7 +1482,7 @@ bool ExprAnswersBoolean(const ibQueryColumnExpr* e)
 				if (vt == ibValueTypes::TYPE_NULL || vt == ibValueTypes::TYPE_EMPTY)
 					return true;   // abstains, as it does for a spread
 			}
-			if (!ExprAnswersBoolean(a.get()))
+			if (!ExprAnswersBoolean(a))
 				return false;
 			any = true;
 			return true;
@@ -1499,10 +1499,10 @@ bool ExprAnswersBoolean(const ibQueryColumnExpr* e)
 
 // The one reader a Boolean output goes through: a raw Boolean column, which takes the field's name from
 // whoever asks, so a single one serves every alias.
-const ibBackendQueryColumn* BooleanOutputReader()
+std::shared_ptr<const ibBackendQueryColumn> BooleanOutputReader()
 {
-	static const ibBackendColumnRawDB s_reader = ibBackendColumnRawDB::Boolean(ibString());
-	return &s_reader;
+	static const std::shared_ptr<const ibBackendColumnRawDB> s_reader = ibBackendColumnRawDB::Boolean(ibString());
+	return s_reader;
 }
 
 // What each computed output of a statement is READ THROUGH when its one field cannot say it — a composite
@@ -1519,9 +1519,9 @@ std::vector<ibDataQueryResult::ibComputedSpread> ComputedReadsOf(const std::vect
 		// ⚠ THE PREFIX IS THE AUTHOR'S NAME, NOT THE STATEMENT'S. The reader spells the statement's alias
 		// itself (`ibSqlAliasOf(prefix)`, the cursor source below), so handing it one already spelled
 		// would spell it twice and find nothing.
-		if (const ibBackendQueryColumn* col = spreadsProjected ? ExprSpreadColumn(sc.m_expr.get()) : nullptr)
+		if (std::shared_ptr<const ibBackendQueryColumn> col = spreadsProjected ? ExprSpreadColumn(sc.m_expr) : nullptr)
 			reads.push_back({ sc.m_alias, sc.m_alias, col });
-		else if (ExprAnswersBoolean(sc.m_expr.get()))
+		else if (ExprAnswersBoolean(sc.m_expr))
 			reads.push_back({ sc.m_alias, sc.m_alias, BooleanOutputReader() });
 	}
 	return reads;
@@ -1535,7 +1535,7 @@ void ReadComputedOutputs(ibDataQueryResult& result, const ibDataQuerySpec& spec,
 	if (spec.m_groupExprs != nullptr && spec.m_groupAliases != nullptr)
 		for (size_t i = 0; i < spec.m_groupExprs->size() && i < spec.m_groupAliases->size(); ++i) {
 			const ibString& alias = (*spec.m_groupAliases)[i];
-			if (!alias.IsEmpty() && ExprAnswersBoolean((*spec.m_groupExprs)[i].get()))
+			if (!alias.IsEmpty() && ExprAnswersBoolean((*spec.m_groupExprs)[i]))
 				reads.push_back({ alias, alias, BooleanOutputReader() });
 		}
 	if (!reads.empty())
@@ -1565,12 +1565,12 @@ ibQueryExprPtr BuildColocatedPredicate(const ibQueryPredicatePtr& p, const Coloc
 		if (p->m_leaf.m_semiJoin) {
 			// RLS semi-join — a correlated EXISTS; the outer correlation column lives on the MAIN (protected)
 			// leaf, so qualify by whichever co-located leaf owns m_outerKey.
-			const ibBackendQueryable* outerOwner = ColocatedOwner(leaves, p->m_leaf.m_semiJoin->m_outerKey);
+			std::shared_ptr<const ibBackendQueryable> outerOwner = ColocatedOwner(leaves, p->m_leaf.m_semiJoin->m_outerKey);
 			return ibMetaIRBuilder::BuildSemiJoinExists(outerOwner, *p->m_leaf.m_semiJoin,
 				ColocatedQualOf(outerOwner));
 		}
-		const ibBackendQueryColumn* col = p->m_leaf.m_col;
-		const ibBackendQueryable* owner = col != nullptr ? ColocatedOwner(leaves, col) : nullptr;
+		std::shared_ptr<const ibBackendQueryColumn> col = p->m_leaf.m_col;
+		std::shared_ptr<const ibBackendQueryable> owner = col != nullptr ? ColocatedOwner(leaves, col) : nullptr;
 		if (owner == nullptr)
 			throw std::logic_error("ColocatedWhere: a WHERE-tree leaf references no joined leaf column");
 		return ibMetaIRBuilder::BuildConditionExpr(owner, p->m_leaf, ColocatedQualOf(owner));
@@ -1590,11 +1590,11 @@ ibQueryExprPtr BuildColocatedPredicate(const ibQueryPredicatePtr& p, const Coloc
 		return in ? ibNot(in) : nullptr;
 	}
 	case ibQueryPredicateKind::IsNull: {
-		const ibBackendQueryable* owner = p->m_col != nullptr ? ColocatedOwner(leaves, p->m_col) : nullptr;
+		std::shared_ptr<const ibBackendQueryable> owner = p->m_col != nullptr ? ColocatedOwner(leaves, p->m_col) : nullptr;
 		if (owner == nullptr)
 			throw std::logic_error("ColocatedWhere: an IS NULL references no joined leaf column");
 		ibQueryExprPtr allNull;
-		for (const ibString& f : ColumnValueFields(p->m_col))
+		for (const ibString& f : ColumnValueFields(*p->m_col))
 			allNull = AndFold(allNull, ibIsNull(ibColQ(ColocatedQualOf(owner), f), false));
 		if (!allNull) return nullptr;
 		return p->m_negated ? ibNot(allNull) : allNull;
@@ -1602,7 +1602,7 @@ ibQueryExprPtr BuildColocatedPredicate(const ibQueryPredicatePtr& p, const Coloc
 	// The type tag over a co-located join — the same one comparison as on a single source, qualified
 	// by the leaf that owns the column.
 	case ibQueryPredicateKind::RefType: {
-		const ibBackendQueryable* owner = p->m_col != nullptr ? ColocatedOwner(leaves, p->m_col) : nullptr;
+		std::shared_ptr<const ibBackendQueryable> owner = p->m_col != nullptr ? ColocatedOwner(leaves, p->m_col) : nullptr;
 		if (owner == nullptr)
 			throw std::logic_error("ColocatedWhere: a REFS references no joined leaf column");
 		const ibQueryExprPtr test = TypeTagTest(p->m_col, p->m_refTypeClsid, ColocatedQualOf(owner));
@@ -1620,7 +1620,7 @@ ibQueryExprPtr BuildColocatedPredicate(const ibQueryPredicatePtr& p, const Coloc
 ibQueryExprPtr ColocatedWhere(const ibDataQuerySpec& spec, const ColocatedLeaves& leaves)
 {
 	ibQueryExprPtr where;
-	for (const ibBackendQueryable* q : leaves) {
+	for (const std::shared_ptr<const ibBackendQueryable>& q : leaves) {
 		std::vector<ibQueryCondition> conds;
 		for (const ibQueryCondition& c : *spec.m_conditions)
 			if (c.m_col != nullptr && q->ContainColumn(c.m_col)) conds.push_back(c);
@@ -1676,7 +1676,7 @@ ibValue ibValueAsType(const ibValue& value, const ibTypeDescription& type)
 	return absent;
 }
 
-ibQueryExprPtr ibMetaIRBuilder::BuildConditionExpr(const ibBackendQueryable* queryable,
+ibQueryExprPtr ibMetaIRBuilder::BuildConditionExpr(const std::shared_ptr<const ibBackendQueryable>& queryable,
                                                    const ibQueryCondition& c,
                                                    const ibString& mainQual,
                                                    bool pathAsExists)
@@ -1727,7 +1727,7 @@ ibQueryExprPtr ibMetaIRBuilder::BuildConditionExpr(const ibBackendQueryable* que
 		// .WhereKeyIn(), one IN instead of an OR-chain), else the column's first physical field. An EMPTY set
 		// falls through here ON PURPOSE — L2-1 already renders `x IN ()` as `1 = 0`
 		// (QueryRenderer.In_EmptyListIsConstantFalse), so "matches nothing" stays decided in ONE place.
-		const ibBackendQueryColumn* inCol = c.m_col != nullptr ? c.m_col : RowKeyColumn(queryable);
+		std::shared_ptr<const ibBackendQueryColumn> inCol = c.m_col != nullptr ? c.m_col : RowKeyColumn(queryable);
 		std::vector<ibQueryExprPtr> vals;
 		vals.reserve(c.m_values.size());
 		for (const ibValue& v : c.m_values)
@@ -1755,7 +1755,7 @@ ibQueryExprPtr ibMetaIRBuilder::BuildConditionExpr(const ibBackendQueryable* que
 	if (c.m_col == nullptr) {
 		// Row-key condition — a lookup by the row's own key (uuid, the identity tail), never
 		// LIKE. No GetRowKeyColumn: the key field comes off the PRIMARY KEY like any column.
-		const ibBackendQueryColumn* key = RowKeyColumn(queryable);
+		std::shared_ptr<const ibBackendQueryColumn> key = RowKeyColumn(queryable);
 		const ibQueryExprPtr byKey = ibBinOp(op, ibColQ(mainQual, RowKeyField(queryable)), ColumnConst(key, c.m_value));
 		// …and an EQUALITY says the whole key the index holds, or the object is read by a scan
 		// (RowKeyIndexPrefix). An ordered compare is a keyset step over the guid order — left as it was.
@@ -1793,7 +1793,7 @@ ibQueryExprPtr ibMetaIRBuilder::BuildConditionExpr(const ibBackendQueryable* que
 	return ibBinOp(op, ibColQ(mainQual, FirstSqlFieldOfColumn(c.m_col)), ColumnConst(c.m_col, c.m_value));
 }
 
-ibQueryExprPtr ibMetaIRBuilder::BuildFilterPredicate(const ibBackendQueryable* queryable,
+ibQueryExprPtr ibMetaIRBuilder::BuildFilterPredicate(const std::shared_ptr<const ibBackendQueryable>& queryable,
                                                      const std::vector<ibQueryCondition>& conditions,
                                                      const ibString& mainQual,
                                                      bool pathAsExists)
@@ -1808,7 +1808,7 @@ ibQueryExprPtr ibMetaIRBuilder::BuildFilterPredicate(const ibBackendQueryable* q
 	return pred;
 }
 
-ibQueryExprPtr ibMetaIRBuilder::BuildPredicateExpr(const ibBackendQueryable* queryable,
+ibQueryExprPtr ibMetaIRBuilder::BuildPredicateExpr(const std::shared_ptr<const ibBackendQueryable>& queryable,
                                                    const ibQueryPredicatePtr& predicate,
                                                    const ibString& mainQual,
                                                    bool pathAsExists)
@@ -1842,12 +1842,12 @@ ibQueryExprPtr ibMetaIRBuilder::BuildPredicateExpr(const ibBackendQueryable* que
 		// wrong table and matched on whatever the reference itself held.
 		if (pathAsExists && predicate->m_path.size() > 1) {
 			const ibQueryExprPtr held = BuildPathExists(queryable, predicate->m_path, mainQual,
-				[&predicate](const ibBackendQueryable* owner, const ibString& alias) -> ibQueryExprPtr {
-					const ibBackendQueryColumn* col = owner->ResolveColumnByName(predicate->m_col->GetName());
+				[&predicate](const std::shared_ptr<const ibBackendQueryable>& owner, const ibString& alias) -> ibQueryExprPtr {
+					std::shared_ptr<const ibBackendQueryColumn> col = owner->ResolveColumnByName(predicate->m_col->GetName());
 					if (col == nullptr)
 						return nullptr;
 					ibQueryExprPtr allNull;
-					for (const ibString& f : ColumnValueFields(col))
+					for (const ibString& f : ColumnValueFields(*col))
 						allNull = AndFold(allNull, ibIsNull(ibColQ(alias, f), false));
 					return allNull ? ibNot(allNull) : nullptr;
 				});
@@ -1856,10 +1856,10 @@ ibQueryExprPtr ibMetaIRBuilder::BuildPredicateExpr(const ibBackendQueryable* que
 		// A metadata reference / composite column spans several physical fields; IS NULL holds only when
 		// they are ALL null (AND-fold), IS NOT NULL when ANY is set (NOT of that). For a raw / single-field
 		// column this collapses to one ibIsNull. Column-based: fields come off the column, no attribute.
-		const ibBackendQueryColumn* col = predicate->m_col;
+		std::shared_ptr<const ibBackendQueryColumn> col = predicate->m_col;
 		ibQueryExprPtr allNull;
 		if (col != nullptr) {
-			for (const ibString& f : ColumnValueFields(col))
+			for (const ibString& f : ColumnValueFields(*col))
 				allNull = AndFold(allNull, ibIsNull(ibColQ(mainQual, f), false));
 		}
 		if (!allNull)   // defensive: a column with no physical fields — no constraint
@@ -1877,8 +1877,8 @@ ibQueryExprPtr ibMetaIRBuilder::BuildPredicateExpr(const ibBackendQueryable* que
 		// NOT REFS is asked inside too: the row the walk reaches has to be there for its tag to be anything.
 		if (pathAsExists && predicate->m_path.size() > 1) {
 			return BuildPathExists(queryable, predicate->m_path, mainQual,
-				[&predicate](const ibBackendQueryable* owner, const ibString& alias) -> ibQueryExprPtr {
-					const ibBackendQueryColumn* col = owner->ResolveColumnByName(predicate->m_col->GetName());
+				[&predicate](const std::shared_ptr<const ibBackendQueryable>& owner, const ibString& alias) -> ibQueryExprPtr {
+					std::shared_ptr<const ibBackendQueryColumn> col = owner->ResolveColumnByName(predicate->m_col->GetName());
 					if (col == nullptr)
 						return nullptr;
 					const ibQueryExprPtr test = TypeTagTest(col, predicate->m_refTypeClsid, alias);
@@ -1903,7 +1903,7 @@ ibQueryExprPtr ibMetaIRBuilder::BuildPredicateExpr(const ibBackendQueryable* que
 // (2026-09-17). So NOT goes down by De Morgan until it meets a walk, and there it is asked INSIDE the EXISTS —
 // the reached row has to be there, and the condition must not hold of it. A leaf that does not walk is NOT of
 // itself, as it always was.
-ibQueryExprPtr ibMetaIRBuilder::BuildNegatedExpr(const ibBackendQueryable* queryable,
+ibQueryExprPtr ibMetaIRBuilder::BuildNegatedExpr(const std::shared_ptr<const ibBackendQueryable>& queryable,
                                                  const ibQueryPredicatePtr& predicate,
                                                  const ibString& mainQual,
                                                  bool pathAsExists)
@@ -1948,21 +1948,21 @@ ibQueryExprPtr ibMetaIRBuilder::BuildNegatedExpr(const ibBackendQueryable* query
 	return plainNot();
 }
 
-ibQueryExprPtr ibDbTableProvider::BuildPredicateIR(const ibBackendQueryable* queryable,
+ibQueryExprPtr ibDbTableProvider::BuildPredicateIR(const std::shared_ptr<const ibBackendQueryable>& queryable,
                                                    const ibQueryPredicatePtr& predicate,
                                                    const ibString& qualifier)
 {
 	return ibMetaIRBuilder::BuildPredicateExpr(queryable, predicate, qualifier, /*pathAsExists*/ true);
 }
 
-ibQueryExprPtr ibDbTableProvider::BuildColumnExprIR(const ibBackendQueryable* queryable,
+ibQueryExprPtr ibDbTableProvider::BuildColumnExprIR(const std::shared_ptr<const ibBackendQueryable>& queryable,
                                                     const ibQueryColumnExprPtr& expr,
                                                     const ibString& qualifier)
 {
 	return ibMetaIRBuilder::BuildColumnExpr(queryable, expr, qualifier);
 }
 
-ibQueryExprPtr ibMetaIRBuilder::BuildWhere(const ibBackendQueryable* queryable,
+ibQueryExprPtr ibMetaIRBuilder::BuildWhere(const std::shared_ptr<const ibBackendQueryable>& queryable,
                                            const std::vector<ibQueryCondition>& conditions,
                                            const ibQueryPredicatePtr& predicate,
                                            const ibString& mainQual,
@@ -1980,12 +1980,12 @@ ibQueryExprPtr ibMetaIRBuilder::BuildWhere(const ibBackendQueryable* queryable,
 //              AND <leaf condition on the last target> )
 // Single-hop (s.Ref.Field) is the common case: one Scan, one correlation, the leaf. A path that cannot
 // resolve a reference target / self-reference field THROWS (dropping it would widen the filter -> wrong rows).
-ibQueryExprPtr ibMetaIRBuilder::BuildDotWalkExists(const ibBackendQueryable* queryable,
+ibQueryExprPtr ibMetaIRBuilder::BuildDotWalkExists(const std::shared_ptr<const ibBackendQueryable>& queryable,
                                                    const ibQueryCondition& c,
                                                    const ibString& mainQual, bool negated)
 {
 	return BuildPathExists(queryable, c.m_path, mainQual,
-		[&c, negated](const ibBackendQueryable* owner, const ibString& alias) -> ibQueryExprPtr {
+		[&c, negated](const std::shared_ptr<const ibBackendQueryable>& owner, const ibString& alias) -> ibQueryExprPtr {
 			// Leaf condition on the last target — qualified by its alias, FLAT: the walk is this function's, so
 			// the copy carries neither the path nor the tag that asks for it. Handed over with them, a leaf
 			// marked m_asExists came straight back here, and back again. The leaf column is found again on the
@@ -2003,10 +2003,10 @@ ibQueryExprPtr ibMetaIRBuilder::BuildDotWalkExists(const ibBackendQueryable* que
 }
 
 // The walk itself, for any test put to the row it ends at — a comparison (above), IS NULL, REFS.
-ibQueryExprPtr ibMetaIRBuilder::BuildPathExists(const ibBackendQueryable* queryable,
-                                                const std::vector<const ibBackendQueryColumn*>& path,
+ibQueryExprPtr ibMetaIRBuilder::BuildPathExists(const std::shared_ptr<const ibBackendQueryable>& queryable,
+                                                const std::vector<std::shared_ptr<const ibBackendQueryColumn>>& path,
                                                 const ibString& mainQual,
-                                                const std::function<ibQueryExprPtr(const ibBackendQueryable*, const ibString&)>& test)
+                                                const std::function<ibQueryExprPtr(const std::shared_ptr<const ibBackendQueryable>&, const ibString&)>& test)
 {
 	if (path.size() < 2)
 		ibBackendQueryException::Throw(ibBackendQueryException::Kind::TranslationFailure,
@@ -2023,19 +2023,19 @@ ibQueryExprPtr ibMetaIRBuilder::BuildPathExists(const ibBackendQueryable* querya
 	// (CompositeLeaf). Nested EXISTS rather than a join chain inside one subquery: a hop is one row at most, so
 	// the two say the same, and nesting is what lets every hop fan out on its own.
 	int aliases = 0;
-	std::function<ibQueryExprPtr(const ibBackendQueryable*, const ibString&, size_t)> hop =
-		[&](const ibBackendQueryable* owner, const ibString& ownerQual, size_t seg) -> ibQueryExprPtr {
-			const ibBackendQueryColumn* ref = owner->ResolveColumnByName(path[seg]->GetName());
+	std::function<ibQueryExprPtr(const std::shared_ptr<const ibBackendQueryable>&, const ibString&, size_t)> hop =
+		[&](const std::shared_ptr<const ibBackendQueryable>& owner, const ibString& ownerQual, size_t seg) -> ibQueryExprPtr {
+			std::shared_ptr<const ibBackendQueryColumn> ref = owner->ResolveColumnByName(path[seg]->GetName());
 			if (ref == nullptr)
 				return nullptr;
-			std::vector<const ibBackendQueryable*> targets;
-			if (const ibBackendQueryable* single = owner->GetProvider().ResolveReferenceTarget(owner, ref))
+			std::vector<std::shared_ptr<const ibBackendQueryable>> targets;
+			if (const std::shared_ptr<const ibBackendQueryable> single = owner->GetProvider().ResolveReferenceTarget(owner, ref))
 				targets.push_back(single);
 			else
 				targets = owner->GetProvider().ResolveReferenceTargets(owner, ref);
 
 			ibQueryExprPtr any;
-			for (const ibBackendQueryable* target : targets) {
+			for (const std::shared_ptr<const ibBackendQueryable>& target : targets) {
 				if (target == nullptr || SelfReferenceField(target).empty()
 				    || target->ResolveColumnByName(path[seg + 1]->GetName()) == nullptr
 				    || !ibDbTableProvider::WalkEnters(target, path[seg + 1]))   // a CAST names the one type the walk goes into
@@ -2062,7 +2062,7 @@ ibQueryExprPtr ibMetaIRBuilder::BuildPathExists(const ibBackendQueryable* querya
 	return walked;
 }
 
-ibQueryExprPtr ibMetaIRBuilder::BuildSemiJoinExists(const ibBackendQueryable* queryable, const ibSemiJoinExists& sj,
+ibQueryExprPtr ibMetaIRBuilder::BuildSemiJoinExists(const std::shared_ptr<const ibBackendQueryable>& queryable, const ibSemiJoinExists& sj,
                                                     const ibString& outerQual)
 {
 	if (sj.m_inner == nullptr || sj.m_outerKey == nullptr || sj.m_innerKey == nullptr)
@@ -2083,7 +2083,8 @@ ibQueryExprPtr ibMetaIRBuilder::BuildSemiJoinExists(const ibBackendQueryable* qu
 	// the set — IN would lose it and NOT IN keep it, where the set road finds it. So "empty" is asked here in the
 	// set road's own words: its equality with the column's empty value (DecomposeEquality), on each side.
 	const ibMetaData* const metaData = sj.m_inner->GetMetaData();
-	const auto correlate = [&](const ibBackendQueryColumn* outerKey, const ibBackendQueryColumn* innerKey, ibQueryFilterOp op,
+	const auto correlate = [&](const std::shared_ptr<const ibBackendQueryColumn>& outerKey,
+	                           const std::shared_ptr<const ibBackendQueryColumn>& innerKey, ibQueryFilterOp op,
 		bool emptyMatchesEmpty) -> ibQueryExprPtr {
 		ibQueryExprPtr equal = ibBinOp(FilterOpToBinOp(op),
 			ibColQ(sjAlias,  FirstSqlFieldOfColumn(innerKey)),
@@ -2095,7 +2096,7 @@ ibQueryExprPtr ibMetaIRBuilder::BuildSemiJoinExists(const ibBackendQueryable* qu
 			if (ibQueryExprPtr inner = EmptyFoldedField(innerKey, metaData, sjAlias))
 				if (ibQueryExprPtr outer = EmptyFoldedField(outerKey, metaData, outerQual))
 					return ibBinOp(ibQueryBinOp::Eq, inner, outer);
-		const auto isEmpty = [metaData](const ibBackendQueryColumn* col, const ibString& qual) {
+		const auto isEmpty = [metaData](const std::shared_ptr<const ibBackendQueryColumn>& col, const ibString& qual) {
 			return DecomposeEquality(col, metaData, ibValueTypeDescription::AdjustValue(col->GetTypeValueDesc(), metaData), qual);
 		};
 		return OrFold(equal, AndFold(isEmpty(innerKey, sjAlias), isEmpty(outerKey, outerQual)));
@@ -2125,16 +2126,17 @@ ibQueryExprPtr ibMetaIRBuilder::BuildSemiJoinExists(const ibBackendQueryable* qu
 			antiJoin = !scope || scope.get()->GetDialect().m_features.m_antiJoin;
 		}
 		const ibString outerAlias = sjAlias + ibT("_o"), unionAlias = sjAlias + ibT("_u"), keysAlias = sjAlias + ibT("_k");
-		const std::vector<const ibBackendQueryColumn*> rowKeys = queryable->GetPrimaryKeyColumns();
-		const ibBackendQueryColumn* const outerRowKey = rowKeys.size() == 1 ? rowKeys.front() : nullptr;
+		const std::vector<std::shared_ptr<const ibBackendQueryColumn>> rowKeys = queryable->GetPrimaryKeyColumns();
+		const std::shared_ptr<const ibBackendQueryColumn> outerRowKey = rowKeys.size() == 1 ? rowKeys.front() : nullptr;
 		std::vector<ibQueryExprPtr> outerSide, innerSide, rowSide;   // per pair: the key among the outer's, the select's, the row's
 		bool sayable = !antiJoin;
-		const auto take = [&](const ibBackendQueryColumn* outerKey, const ibBackendQueryColumn* innerKey, bool emptyMatchesEmpty) {
+		const auto take = [&](const std::shared_ptr<const ibBackendQueryColumn>& outerKey,
+		                      const std::shared_ptr<const ibBackendQueryColumn>& innerKey, bool emptyMatchesEmpty) {
 			if (!sayable || (!emptyMatchesEmpty && outerKey != outerRowKey)) {
 				sayable = false;
 				return;
 			}
-			const auto key = [&](const ibBackendQueryColumn* col, const ibString& qual) {
+			const auto key = [&](const std::shared_ptr<const ibBackendQueryColumn>& col, const ibString& qual) {
 				return emptyMatchesEmpty ? EmptyFoldedField(col, metaData, qual) : ibColQ(qual, FirstSqlFieldOfColumn(col));
 			};
 			outerSide.push_back(key(outerKey, outerAlias));
@@ -2194,7 +2196,7 @@ static ibColumnType CastTypeForConst(const ibValue& v)
 	}
 }
 
-ibQueryExprPtr ibMetaIRBuilder::BuildColumnExpr(const ibBackendQueryable* queryable,
+ibQueryExprPtr ibMetaIRBuilder::BuildColumnExpr(const std::shared_ptr<const ibBackendQueryable>& queryable,
                                                 const ibQueryColumnExprPtr& expr,
                                                 const ibString& mainQual)
 {
@@ -2269,7 +2271,7 @@ ibQueryExprPtr ibMetaIRBuilder::BuildColumnExpr(const ibBackendQueryable* querya
 		// ⭐ …AND A CONSTANT LENGTH IS THE STRING'S. `SUBSTRING(Comment, 1, 100)` and `CAST(Comment AS String(100))` are one
 		// reading, a string of 100 — and so a string of no limit, which an engine keeps as a text it cannot order or group
 		// by (a BLOB on Firebird), comes back as one it can. Past the longest string a field declares it stays as it was.
-		const ibQueryColumnExpr* const length = expr->m_args.size() > 1 ? expr->m_args[1].get() : nullptr;
+		const ibQueryColumnExprPtr length = expr->m_args.size() > 1 ? expr->m_args[1] : nullptr;
 		if (length != nullptr && length->m_kind == ibQueryColumnExprKind::Const
 		    && length->m_const.GetType() == ibValueTypes::TYPE_NUMBER) {
 			const long n = static_cast<long>(length->m_const.GetNumber().ToInt());
@@ -2328,15 +2330,15 @@ ibQueryExprPtr ibMetaIRBuilder::BuildColumnExpr(const ibBackendQueryable* querya
 // BuildAnchorPredicate and CompareValueLS (reference clsids order by metaID). A single-type / self-reference column
 // has a constant _RTRef, so this is a harmless no-op there. The fields are ColumnSortFields — the same an index is
 // built over (ibStructureBatch::CreateIndex), so the engine can walk the index instead of sorting.
-static std::vector<ibQueryExprPtr> SortFieldsOf(const ibBackendQueryColumn* col, const ibString& qual)
+static std::vector<ibQueryExprPtr> SortFieldsOf(const std::shared_ptr<const ibBackendQueryColumn>& col, const ibString& qual)
 {
 	std::vector<ibQueryExprPtr> fields;
-	for (const ibString& name : ColumnSortFields(col))
+	for (const ibString& name : ColumnSortFields(*col))
 		fields.push_back(ibColQ(qual, name));
 	return fields;
 }
 
-std::vector<ibQuerySortKey> ibMetaIRBuilder::BuildSortKeys(const ibBackendQueryable* queryable,
+std::vector<ibQuerySortKey> ibMetaIRBuilder::BuildSortKeys(const std::shared_ptr<const ibBackendQueryable>& queryable,
                                                            const std::vector<ibQuerySortItem>& sorts,
                                                            bool reverse,
                                                            const ibString& mainQual)
@@ -2369,7 +2371,7 @@ std::vector<ibQuerySortKey> ibMetaIRBuilder::BuildSortKeys(const ibBackendQuerya
 	return keys;
 }
 
-ibQueryExprPtr ibMetaIRBuilder::BuildAnchorPredicate(const ibBackendQueryable* /*queryable*/,
+ibQueryExprPtr ibMetaIRBuilder::BuildAnchorPredicate(const std::shared_ptr<const ibBackendQueryable>& /*queryable*/,
                                                      const std::vector<ibQuerySortItem>& sorts,
                                                      const std::vector<ibValue>& values,
                                                      ibFetchDirection direction,
@@ -2380,7 +2382,7 @@ ibQueryExprPtr ibMetaIRBuilder::BuildAnchorPredicate(const ibBackendQueryable* /
 	const bool inclusiveTail = (direction == ibFetchDirection::Reset);
 
 	struct SortCol {
-		const ibBackendQueryColumn* col;
+		std::shared_ptr<const ibBackendQueryColumn> col;
 		bool asc;
 	};
 	// The keyset compares on the SAME fields BuildSortKeys drives the ORDER BY with, so keyset and sort agree
@@ -2398,7 +2400,7 @@ ibQueryExprPtr ibMetaIRBuilder::BuildAnchorPredicate(const ibBackendQueryable* /
 	auto inclusiveOp = [&](bool asc) { return (forward == asc) ? ibQueryBinOp::Ge : ibQueryBinOp::Le; };
 
 	auto valueAt = [&](size_t i) -> ibValue { return i < values.size() ? values[i] : ibValue(); };
-	auto operand = [&](const ibBackendQueryColumn* col, const ibValue& v) -> ibQueryExprPtr {
+	auto operand = [&](const std::shared_ptr<const ibBackendQueryColumn>& col, const ibValue& v) -> ibQueryExprPtr {
 		if (ibQueryExprPtr blob = ReferenceKeyBlob(v)) return blob;   // reference -> real _RRRef binary blob
 		return ColumnConst(col, v);                                   // the raw uuid key -> its bytes; else inline
 	};
@@ -2409,7 +2411,7 @@ ibQueryExprPtr ibMetaIRBuilder::BuildAnchorPredicate(const ibBackendQueryable* /
 	struct Term { ibQueryExprPtr field; ibQueryExprPtr operand; bool asc; };
 	std::vector<Term> terms;
 	for (size_t i = 0; i < cols.size(); ++i) {
-		const ibBackendQueryColumn* col = cols[i].col;
+		std::shared_ptr<const ibBackendQueryColumn> col = cols[i].col;
 		const bool     asc = cols[i].asc;
 		const ibValue  v   = valueAt(i);
 		terms.push_back({ ibColQ(mainQual, FirstSqlFieldOfColumn(col)), operand(col, v), asc });
@@ -2447,7 +2449,7 @@ ibQueryExprPtr ibMetaIRBuilder::BuildAnchorPredicate(const ibBackendQueryable* /
 	return predicate;
 }
 
-ibQueryExprPtr ibMetaIRBuilder::BuildParentRefPredicate(const ibBackendQueryable* queryable,
+ibQueryExprPtr ibMetaIRBuilder::BuildParentRefPredicate(const std::shared_ptr<const ibBackendQueryable>& queryable,
                                                         const ibString& refDataField,
                                                         const ibValue& parentKey,
                                                         bool isTopLevel,
@@ -2509,7 +2511,7 @@ ibQueryExprPtr ibMetaIRBuilder::BuildParentRefPredicate(const ibBackendQueryable
 	return rootTest;
 }
 
-ibQueryExprPtr ibMetaIRBuilder::BuildKeyInPredicate(const ibBackendQueryable* queryable,
+ibQueryExprPtr ibMetaIRBuilder::BuildKeyInPredicate(const std::shared_ptr<const ibBackendQueryable>& queryable,
                                                     const std::vector<ibValue>& keyValues,
                                                     const ibString& mainQual)
 {
@@ -2523,7 +2525,7 @@ ibQueryExprPtr ibMetaIRBuilder::BuildKeyInPredicate(const ibBackendQueryable* qu
 	// called WhereKeyIn, so nobody saw it; reading references together is its first caller.
 	//
 	// An empty set stays an answer: `x IN ()` renders `1 = 0` (QueryRenderer.In_EmptyListIsConstantFalse).
-	const ibBackendQueryColumn* key = RowKeyColumn(queryable);
+	std::shared_ptr<const ibBackendQueryColumn> key = RowKeyColumn(queryable);
 	const bool identity = ColumnHoldsIdentity(key);   // once for the list — see ColumnHoldsIdentity
 	std::vector<ibQueryExprPtr> vals;
 	vals.reserve(keyValues.size());
@@ -2640,7 +2642,7 @@ ibDataQueryResult ibDbTableProvider::ExecuteReadCached(const ibDataQuerySpec& sp
 // (string/number/date/bool, single type) — a reference / enum / composite leaf is a single-field read
 // already and stays NULL (multi-type dot-walk = a separate feature). The empty literal is the attribute
 // type's own AdjustValue() empty.
-static ibQueryExprPtr TypedScalarEmpty(const ibBackendQueryColumn* leaf)
+static ibQueryExprPtr TypedScalarEmpty(const std::shared_ptr<const ibBackendQueryColumn>& leaf)
 {
 	const ibTypeDescription& td = leaf->GetTypeDesc();
 	return ibIsPlainScalarType(td) ? ibConst(ibValueTypeDescription::AdjustValue(td))
@@ -2670,20 +2672,20 @@ public:
 	// deliberately never creates — asked Firebird for a table that does not exist.
 	// `rootRelation`, when given, stands where the root's own relation would — under the same name, so every
 	// join and every column qualified by `rootTable` reads it unchanged (BuildPageIR's windowed root).
-	ibRefJoinChain(const ibBackendQueryable* root, const ibString& rootTable, ibQueryRelPtr rootRelation = nullptr)
+	ibRefJoinChain(const std::shared_ptr<const ibBackendQueryable>& root, const ibString& rootTable, ibQueryRelPtr rootRelation = nullptr)
 		: m_root(root), m_rootTable(rootTable),
 		  m_from(rootRelation ? std::move(rootRelation) : SourceRelationOf(root, rootTable)) {}
 
 	// Resolve a reference path to its LEAF's join alias + target queryable, appending (deduped) joins.
 	// Returns false if a segment is not a single-target reference (an unresolvable / composite edge).
-	bool Resolve(const std::vector<const ibBackendQueryColumn*>& path,
-	             ibString& outAlias, const ibBackendQueryable*& outTarget)
+	bool Resolve(const std::vector<std::shared_ptr<const ibBackendQueryColumn>>& path,
+	             ibString& outAlias, std::shared_ptr<const ibBackendQueryable>& outTarget)
 	{
-		const ibBackendQueryable* curQ = m_root;
+		std::shared_ptr<const ibBackendQueryable> curQ = m_root;
 		ibString curQual = m_rootTable;
 		for (size_t i = 0; i + 1 < path.size(); ++i) {
-			const ibBackendQueryColumn* refCol = path[i];
-			const ibBackendQueryable* tgtQ = (curQ != nullptr) ? curQ->GetProvider().ResolveReferenceTarget(curQ, refCol) : nullptr;
+			std::shared_ptr<const ibBackendQueryColumn> refCol = path[i];
+			std::shared_ptr<const ibBackendQueryable> tgtQ = (curQ != nullptr) ? curQ->GetProvider().ResolveReferenceTarget(curQ, refCol) : nullptr;
 			if (tgtQ == nullptr)
 				tgtQ = ibDbTableProvider::CastTarget(path[i + 1]);   // a reference with several types, narrowed to one by a CAST
 			const ibString tgtRefField = (tgtQ != nullptr) ? SelfReferenceField(tgtQ) : ibString();
@@ -2702,7 +2704,7 @@ public:
 	// same row however many walks ask for it — and every walk through a composite hop asked again: a page filtered by
 	// `Recorder.Warehouse` and `Recorder.Counterparty` joined both recorder kinds twice, four joins over every register
 	// row where two say the same (2026-10-05). Keyed by what the join IS — the target and the field it hangs on.
-	ibString AddLeftJoin(const ibBackendQueryable* target, const ibString& leftQual, const ibString& leftField)
+	ibString AddLeftJoin(const std::shared_ptr<const ibBackendQueryable>& target, const ibString& leftQual, const ibString& leftField)
 	{
 		const ibString key = target->GetQueryTableName() + ibT("|") + leftQual + ibT("|") + leftField;
 		const auto it = m_joinAlias.find(key);
@@ -2729,29 +2731,29 @@ public:
 	//
 	// It stood written out twice — the scalar leaf below and the object leaf of a read's projection — and a third
 	// reader (a sort by a leaf of several fields) was about to copy it again.
-	struct LeafOccurrence { ibString m_alias; const ibBackendQueryColumn* m_col; const ibBackendQueryable* m_q; };
-	std::vector<LeafOccurrence> LeafOccurrences(const std::vector<const ibBackendQueryColumn*>& path, bool& sawComposite)
+	struct LeafOccurrence { ibString m_alias; std::shared_ptr<const ibBackendQueryColumn> m_col; std::shared_ptr<const ibBackendQueryable> m_q; };
+	std::vector<LeafOccurrence> LeafOccurrences(const std::vector<std::shared_ptr<const ibBackendQueryColumn>>& path, bool& sawComposite)
 	{
 		sawComposite = false;
 		std::vector<LeafOccurrence> out;
 		if (path.empty()) return out;
-		std::function<void(const ibString&, const ibBackendQueryable*, size_t)> walk =
-			[&](const ibString& ownerQual, const ibBackendQueryable* ownerQ, size_t seg) {
+		std::function<void(const ibString&, const std::shared_ptr<const ibBackendQueryable>&, size_t)> walk =
+			[&](const ibString& ownerQual, const std::shared_ptr<const ibBackendQueryable>& ownerQ, size_t seg) {
 				if (ownerQ == nullptr) return;
-				const ibBackendQueryColumn* col = ownerQ->ResolveColumnByName(path[seg]->GetName());
+				std::shared_ptr<const ibBackendQueryColumn> col = ownerQ->ResolveColumnByName(path[seg]->GetName());
 				if (col == nullptr) return;                           // this branch's type lacks the attribute — skip
 				if (seg + 1 == path.size()) {                         // LEAF (NULL on a non-matching join)
 					out.push_back(LeafOccurrence{ ownerQual, col, ownerQ });
 					return;
 				}
-				if (const ibBackendQueryable* single = ownerQ->GetProvider().ResolveReferenceTarget(ownerQ, col)) {
+				if (const std::shared_ptr<const ibBackendQueryable> single = ownerQ->GetProvider().ResolveReferenceTarget(ownerQ, col)) {
 					const ibString f = SelfReferenceField(single);
 					if (f.empty()) return;
 					walk(AddLeftJoin(single, ownerQual, FirstSqlFieldOfColumn(col)), single, seg + 1);
 					return;
 				}
 				sawComposite = true;
-				for (const ibBackendQueryable* tq : ownerQ->GetProvider().ResolveReferenceTargets(ownerQ, col)) {
+				for (const std::shared_ptr<const ibBackendQueryable>& tq : ownerQ->GetProvider().ResolveReferenceTargets(ownerQ, col)) {
 					if (tq->ResolveColumnByName(path[seg + 1]->GetName()) == nullptr) continue;
 					if (!ibDbTableProvider::WalkEnters(tq, path[seg + 1])) continue;   // a CAST names the one type the walk goes into
 					const ibString f = SelfReferenceField(tq);
@@ -2790,7 +2792,7 @@ public:
 	// not like "Test%" (measured 2026-09-17). A single-type walk and the in-memory road answer NULL there,
 	// and a NULL is neither like nor not like anything. So a comparison takes the walk unpadded — a SCALAR
 	// leaf only, as before: a reference leaf is compared through its target (Resolve).
-	ibQueryExprPtr CompositeComparand(const std::vector<const ibBackendQueryColumn*>& path)
+	ibQueryExprPtr CompositeComparand(const std::vector<std::shared_ptr<const ibBackendQueryColumn>>& path)
 	{
 		if (path.empty() || !TypedScalarEmpty(path.back()))
 			return nullptr;
@@ -2821,7 +2823,7 @@ public:
 		return any;
 	}
 
-	ibQueryExprPtr CompositeLeaf(const std::vector<const ibBackendQueryColumn*>& path, bool withTypedEmpty)
+	ibQueryExprPtr CompositeLeaf(const std::vector<std::shared_ptr<const ibBackendQueryColumn>>& path, bool withTypedEmpty)
 	{
 		if (path.size() < 2) return nullptr;
 		ibQueryExprPtr empty;
@@ -2849,7 +2851,7 @@ public:
 	// grouped by `Recorder.Warehouse` read a million rows into memory to group them (2026-10-05). Empty for a
 	// path with no composite hop — the caller's Resolve.
 	struct SpreadField { ibString m_suffix; ibQueryExprPtr m_expr; };
-	std::vector<SpreadField> MergedSpread(const std::vector<const ibBackendQueryColumn*>& path)
+	std::vector<SpreadField> MergedSpread(const std::vector<std::shared_ptr<const ibBackendQueryColumn>>& path)
 	{
 		bool sawComposite = false;
 		const std::vector<LeafOccurrence> occs = LeafOccurrences(path, sawComposite);
@@ -2860,7 +2862,7 @@ public:
 		std::vector<std::vector<ibString>> occFields;
 		occFields.reserve(occs.size());
 		for (const LeafOccurrence& o : occs)
-			occFields.push_back(ColumnFieldNames(o.m_col));
+			occFields.push_back(ColumnFieldNames(*o.m_col));
 
 		std::vector<SpreadField> merged;
 		const ibString repBase = occs.front().m_col->GetPhysicalName();
@@ -2884,7 +2886,7 @@ public:
 	// document sorts among the documents by its date, a catalog among the catalogs by its description, and a row
 	// whose kind has no field of a role is NULL there, which keeps the kinds apart. Empty for a single-target walk
 	// (the caller's Resolve).
-	std::vector<ibQueryExprPtr> CompositeSortFields(const std::vector<const ibBackendQueryColumn*>& path)
+	std::vector<ibQueryExprPtr> CompositeSortFields(const std::vector<std::shared_ptr<const ibBackendQueryColumn>>& path)
 	{
 		std::vector<ibQueryExprPtr> fields;
 		for (const RoleField& f : CompositeRoleFields(path))
@@ -2898,14 +2900,14 @@ public:
 	// which is the name the leaf column reads its value back by. What a GROUP BY through such a walk groups by and
 	// projects (BuildAggregateQuery); the sort takes the value roles of it (above). Empty for a single-target walk.
 	struct RoleField { ibColumnRole m_role; ibString m_name; ibQueryExprPtr m_expr; };
-	std::vector<RoleField> CompositeRoleFields(const std::vector<const ibBackendQueryColumn*>& path)
+	std::vector<RoleField> CompositeRoleFields(const std::vector<std::shared_ptr<const ibBackendQueryColumn>>& path)
 	{
 		bool sawComposite = false;
 		const std::vector<LeafOccurrence> leaves = LeafOccurrences(path, sawComposite);
 		if (!sawComposite || leaves.empty()) return {};
-		const auto slotsOf = [](const ibBackendQueryColumn* col) {
+		const auto slotsOf = [](const std::shared_ptr<const ibBackendQueryColumn>& col) {
 			std::vector<ibColumnSlot> slots;
-			for (const ibColumnSlot& slot : DescribeColumnLayout(col))
+			for (const ibColumnSlot& slot : DescribeColumnLayout(*col))
 				if (slot.m_role != ibColumnRole::Discriminator) slots.push_back(slot);
 			return slots;
 		};
@@ -2955,7 +2957,7 @@ public:
 				where = AndFold(where, ibBinOp(FilterOpToBinOp(c.m_op), lhs, ibConst(c.m_value)));
 				continue;
 			}
-			ibString a; const ibBackendQueryable* tq = nullptr;
+			ibString a; std::shared_ptr<const ibBackendQueryable> tq;
 			if (Resolve(c.m_path, a, tq) && tq != nullptr) {
 				where = AndFold(where, ibMetaIRBuilder::BuildConditionExpr(tq, c, a));
 				continue;
@@ -3021,7 +3023,7 @@ public:
 					return ibMetaIRBuilder::BuildConditionExpr(m_root, p->m_leaf, mainQual);
 				if (ibQueryExprPtr lhs = CompositeComparand(p->m_leaf.m_path))   // composite scalar leaf
 					return ibBinOp(FilterOpToBinOp(p->m_leaf.m_op), lhs, ibConst(p->m_leaf.m_value));
-				ibString a; const ibBackendQueryable* tq = nullptr;
+				ibString a; std::shared_ptr<const ibBackendQueryable> tq;
 				if (Resolve(p->m_leaf.m_path, a, tq) && tq != nullptr)
 					return ibMetaIRBuilder::BuildConditionExpr(tq, p->m_leaf, a);
 				if (ibQueryExprPtr branches = CompositeCondition(p->m_leaf))   // composite non-scalar leaf
@@ -3065,14 +3067,14 @@ public:
 
 			ibString qual = mainQual;   // a dot-walk IS NULL qualifies by its join alias, else main table
 			if (!p->m_path.empty()) {
-				ibString a; const ibBackendQueryable* tq = nullptr;
+				ibString a; std::shared_ptr<const ibBackendQueryable> tq;
 				if (!Resolve(p->m_path, a, tq) || tq == nullptr)
 					throw std::logic_error("a dot-walk IS NULL on a composite non-scalar leaf is not yet supported");
 				qual = a;
 			}
 			ibQueryExprPtr allNull;
 			if (p->m_col != nullptr)
-				for (const ibString& f : ColumnValueFields(p->m_col))
+				for (const ibString& f : ColumnValueFields(*p->m_col))
 					allNull = AndFold(allNull, ibIsNull(ibColQ(qual, f), false));
 			if (!allNull) return nullptr;
 			return p->m_negated ? ibNot(allNull) : allNull;
@@ -3083,7 +3085,7 @@ public:
 		case ibQueryPredicateKind::RefType: {
 			ibString qual = mainQual;
 			if (!p->m_path.empty()) {
-				ibString a; const ibBackendQueryable* tq = nullptr;
+				ibString a; std::shared_ptr<const ibBackendQueryable> tq;
 				if (!Resolve(p->m_path, a, tq) || tq == nullptr)
 					throw std::logic_error("a dot-walk REFS through a composite reference is not yet supported");
 				qual = a;
@@ -3098,17 +3100,17 @@ public:
 	}
 
 private:
-	const ibBackendQueryable*    m_root;
-	ibString                     m_rootTable;
-	ibQueryRelPtr                m_from;
-	std::map<ibString, ibString> m_joinAlias;     // target|left qualifier|left field -> join alias (AddLeftJoin)
-	int                          m_aliasSeq = 0;
+	std::shared_ptr<const ibBackendQueryable> m_root;
+	ibString                                  m_rootTable;
+	ibQueryRelPtr                             m_from;
+	std::map<ibString, ibString>              m_joinAlias;     // target|left qualifier|left field -> join alias (AddLeftJoin)
+	int                                       m_aliasSeq = 0;
 };
 
 // Does a walk reach its leaf in at least one table — through single-target hops and through a reference of several
 // kinds alike? Asked of the chain's one walker over a scratch chain, so a gate and the statement it admits cannot
 // disagree about which walks there are. Metadata only, no database.
-static bool WalkReaches(const ibBackendQueryable* root, const std::vector<const ibBackendQueryColumn*>& path)
+static bool WalkReaches(const std::shared_ptr<const ibBackendQueryable>& root, const std::vector<std::shared_ptr<const ibBackendQueryColumn>>& path)
 {
 	if (root == nullptr)
 		return false;
@@ -3121,14 +3123,14 @@ static bool WalkReaches(const ibBackendQueryable* root, const std::vector<const 
 	// AggregateItem / HavingItem are public on the door, so the provider lowers them.
 void ibDbTableProvider::BuildAggregateQuery(const ibDataQuerySpec& spec, ibDatabaseQueryBuilder& q)
 	{
-		const ibBackendQueryable* queryable = spec.m_queryable;
+		std::shared_ptr<const ibBackendQueryable> queryable = spec.m_queryable;
 		const ibString mainTable = queryable->GetQueryTableName();
 
 		// Reference dot-walk in a GROUP BY key (Producer.Region) or an aggregate input (SUM(Producer.Weight))
 		// rides the SAME join chain as the read path. With joins present, a PLAIN key / input qualifies by the
 		// main table (disambiguation) and a dot-walk leaf by its join alias.
-		static const std::vector<std::vector<const ibBackendQueryColumn*>> kNoGroupPaths;
-		const std::vector<std::vector<const ibBackendQueryColumn*>>& groupPaths =
+		static const std::vector<std::vector<std::shared_ptr<const ibBackendQueryColumn>>> kNoGroupPaths;
+		const std::vector<std::vector<std::shared_ptr<const ibBackendQueryColumn>>>& groupPaths =
 			spec.m_groupPaths ? *spec.m_groupPaths : kNoGroupPaths;
 		bool hasDotWalk = false;
 		for (const auto& p : groupPaths)            if (!p.empty())        { hasDotWalk = true; break; }
@@ -3142,8 +3144,8 @@ void ibDbTableProvider::BuildAggregateQuery(const ibDataQuerySpec& spec, ibDatab
 		const ibString mainQual = hasDotWalk ? mainTable : ibString();
 
 		ibRefJoinChain chain(queryable, mainTable);
-		auto joinLeaf = [&](const std::vector<const ibBackendQueryColumn*>& path) -> ibString {
-			ibString a; const ibBackendQueryable* tq = nullptr;
+		auto joinLeaf = [&](const std::vector<std::shared_ptr<const ibBackendQueryColumn>>& path) -> ibString {
+			ibString a; std::shared_ptr<const ibBackendQueryable> tq;
 			if (!chain.Resolve(path, a, tq) || tq == nullptr)
 				ibBackendQueryException::Throw(ibBackendQueryException::Kind::TranslationFailure,
 					_("a dot-walk GROUP BY / aggregate path did not resolve its reference join"));
@@ -3174,7 +3176,7 @@ void ibDbTableProvider::BuildAggregateQuery(const ibDataQuerySpec& spec, ibDatab
 		// is only true of names the projection published, and nothing was checking.
 		std::vector<ibString> projectedAliases;
 		// A walk grouped by through a reference of several kinds -> the fields it is sorted on (see below).
-		std::map<std::vector<const ibBackendQueryColumn*>, std::vector<ibQueryExprPtr>> compositeSorts;
+		std::map<std::vector<std::shared_ptr<const ibBackendQueryColumn>>, std::vector<ibQueryExprPtr>> compositeSorts;
 		for (size_t gi = 0; gi < spec.m_groupBy->size(); ++gi) {
 			// A COMPUTED key (GroupByExpr) occupies the same slot with a null column: lower the tree
 			// and project it under its alias. One GROUP BY item, not a field spread — an expression
@@ -3193,11 +3195,11 @@ void ibDbTableProvider::BuildAggregateQuery(const ibDataQuerySpec& spec, ibDatab
 				projectedAliases.push_back(ibSqlAliasOf((*spec.m_groupAliases)[gi]));
 				continue;
 			}
-			const ibBackendQueryColumn* gcol = (*spec.m_groupBy)[gi];
+			std::shared_ptr<const ibBackendQueryColumn> gcol = (*spec.m_groupBy)[gi];
 			if (gcol == nullptr)
 				continue;   // a null column with no expression is an empty slot — nothing to group by
-			const std::vector<const ibBackendQueryColumn*>& path = (gi < groupPaths.size()) ? groupPaths[gi]
-			                                                      : std::vector<const ibBackendQueryColumn*>{};
+			const std::vector<std::shared_ptr<const ibBackendQueryColumn>>& path = (gi < groupPaths.size()) ? groupPaths[gi]
+			                                                      : std::vector<std::shared_ptr<const ibBackendQueryColumn>>{};
 			// ⭐ A WALK THAT HAS A NAME OF ITS OWN IS PROJECTED UNDER IT — the way the flat read projects the same
 			// walk (a scalar leaf AS the alias, an object leaf as its spread under the alias prefix), and read back
 			// by that name. Under the leaf's own field names, `AccountDr.Code` and `AccountCr.Code` were both
@@ -3207,7 +3209,7 @@ void ibDbTableProvider::BuildAggregateQuery(const ibDataQuerySpec& spec, ibDatab
 				? (*spec.m_groupAliases)[gi] : ibString();
 			ibString qual = mainQual;   // dot-walk leaf -> join alias
 			if (!path.empty()) {
-				const ibBackendQueryable* tq = nullptr;
+				std::shared_ptr<const ibBackendQueryable> tq;
 				if (!chain.Resolve(path, qual, tq) || tq == nullptr) {
 					// ⭐ …AND A WALK THROUGH A REFERENCE OF SEVERAL KINDS — a register's recorder grouped by, sorted by
 					// its kind's order (ibDataQueryBuilder::OrderBy) — groups by each field of its leaf met across the
@@ -3261,7 +3263,7 @@ void ibDbTableProvider::BuildAggregateQuery(const ibDataQuerySpec& spec, ibDatab
 				// A SCALAR leaf is one field under the alias — the flat read's test (TypedScalarEmpty), so the
 				// lowering's by-alias read and this projection cannot disagree about what a scalar is.
 				const bool scalar = TypedScalarEmpty(gcol) != nullptr && ibReadsBackAsItself(gcol->GetTypeDesc());
-				for (const ibString& field : ColumnFieldNames(gcol)) {
+				for (const ibString& field : ColumnFieldNames(*gcol)) {
 					const ibQueryExprPtr gexpr = qualCol(qual, field);
 					q.GroupBy(gexpr);
 					if (!scalar)
@@ -3276,7 +3278,7 @@ void ibDbTableProvider::BuildAggregateQuery(const ibDataQuerySpec& spec, ibDatab
 			// carries its TYPE + _RTRef + _RRRef fields so the read side reconstructs the value via GetValue; a
 			// plain scalar's spread IS its one field, so this is uniform. The reference-typing stays HERE in the
 			// provider — the reader just calls GetValue, blind to whether the key is a reference.
-			for (const ibString& field : ColumnFieldNames(gcol)) {   // tier derives its fields — no ResolveAttribute
+			for (const ibString& field : ColumnFieldNames(*gcol)) {   // tier derives its fields — no ResolveAttribute
 				const ibQueryExprPtr gexpr = qualCol(qual, field);
 				q.GroupBy(gexpr);
 				projection.push_back(ibQueryProjItem{ gexpr, field });   // AS its physname -> GetValue(gcol) reads it back
@@ -3447,7 +3449,7 @@ ibQueryRelPtr ibDbTableProvider::BuildAggregateRelation(const ibDataQuerySpec& s
 // tree of real DB leaves, no dot-walk / key-in (their own paths), every join key a single field.
 // The terminal gates (CanColocateJoin / CanColocateAggregate) add their output / aggregate checks.
 // Defined below, beside the read that uses it — the gate and the execution ask the same question.
-static bool CollectExprColumns(const ibQueryColumnExpr* e, std::vector<const ibBackendQueryColumn*>& into);
+static bool CollectExprColumns(const ibQueryColumnExprPtr& e, std::vector<std::shared_ptr<const ibBackendQueryColumn>>& into);
 
 static bool CanColocateBase(const ibDataQuerySpec& spec, ColocatedLeaves& leaves)
 {
@@ -3481,9 +3483,9 @@ bool ibDbTableProvider::CanColocateJoin(const ibDataQuerySpec& spec)
 		// road rather than being half-served.
 		if (spec.m_selectExprs != nullptr)
 			for (const ibQueryColumnSelect& sc : *spec.m_selectExprs) {
-				std::vector<const ibBackendQueryColumn*> used;
-				if (!CollectExprColumns(sc.m_expr.get(), used)) return false;
-				for (const ibBackendQueryColumn* c : used)
+				std::vector<std::shared_ptr<const ibBackendQueryColumn>> used;
+				if (!CollectExprColumns(sc.m_expr, used)) return false;
+				for (const std::shared_ptr<const ibBackendQueryColumn>& c : used)
 					if (ColocatedOwner(leaves, c) == nullptr) return false;   // an input no leaf owns
 			}
 		if (spec.m_selectCols->empty())                              return false;
@@ -3493,7 +3495,7 @@ bool ibDbTableProvider::CanColocateJoin(const ibDataQuerySpec& spec)
 		// names name BOTH readings and the engine refuses the statement as ambiguous. Kept off this road
 		// rather than sent out ambiguous; the RAM stitch sorts it by column identity instead.
 		const bool anyAliased = std::any_of(leaves.begin(), leaves.end(),
-			[](const ibBackendQueryable* q) { return q != nullptr && !q->GetQueryTableAlias().IsEmpty(); });
+			[](const std::shared_ptr<const ibBackendQueryable>& q) { return q != nullptr && !q->GetQueryTableAlias().IsEmpty(); });
 		if (anyAliased)
 			for (const ibQuerySortItem& s : *spec.m_sorts)
 				if (s.m_expr) return false;
@@ -3517,7 +3519,7 @@ bool ibDbTableProvider::CanColocateJoin(const ibDataQuerySpec& spec)
 // predicate carries columns of its own. False means "do not co-locate", never "no columns": a walk
 // that quietly under-reports would project too little and evaluate against absent cells, which reads
 // as an empty value rather than as a refusal.
-static bool CollectExprColumns(const ibQueryColumnExpr* e, std::vector<const ibBackendQueryColumn*>& into)
+static bool CollectExprColumns(const ibQueryColumnExprPtr& e, std::vector<std::shared_ptr<const ibBackendQueryColumn>>& into)
 {
 	if (e == nullptr)
 		return true;
@@ -3533,9 +3535,9 @@ static bool CollectExprColumns(const ibQueryColumnExpr* e, std::vector<const ibB
 			into.push_back(e->m_col);
 		return true;
 	case ibQueryColumnExprKind::Arith:
-		return CollectExprColumns(e->m_lhs.get(), into) && CollectExprColumns(e->m_rhs.get(), into);
+		return CollectExprColumns(e->m_lhs, into) && CollectExprColumns(e->m_rhs, into);
 	case ibQueryColumnExprKind::PeriodTrunc:
-		return CollectExprColumns(e->m_lhs.get(), into);
+		return CollectExprColumns(e->m_lhs, into);
 	case ibQueryColumnExprKind::Case:
 		// The THEN / ELSE arms are expressions and walk; the WHEN predicates are a different tree, and
 		// this does not read them — so a CASE keeps the RAM road until somebody teaches it that half.
@@ -3572,13 +3574,13 @@ ibDataQueryResult ibDbTableProvider::ExecuteColocatedJoin(const ibDataQuerySpec&
 		// projects its FULL physical spread (TYPE + per-type data + _RTRef/_RRRef) under a UNIQUE prefix
 		// (ocol<i>), so a reference / enum / variant output reconstructs via GetValueColumn exactly like a
 		// single-source read — the unique prefix avoids cross-leaf field-name collisions.
-		struct OutPlan { const ibBackendQueryColumn* col; ibString alias; ibString prefix; const ibMetaData* meta; bool raw; };
+		struct OutPlan { std::shared_ptr<const ibBackendQueryColumn> col; ibString alias; ibString prefix; const ibMetaData* meta; bool raw; };
 		std::vector<OutPlan>         plans;
 		std::vector<ibQueryProjItem> projection;
 		int oi = 0;
 		for (const auto& sc : *spec.m_selectCols) {
-			const ibBackendQueryColumn* col = sc.first;
-			const ibBackendQueryable* owner = ColocatedOwner(leaves, col);
+			std::shared_ptr<const ibBackendQueryColumn> col = sc.first;
+			std::shared_ptr<const ibBackendQueryable> owner = ColocatedOwner(leaves, col);
 			const ibString    qual = ColocatedQualOf(owner);
 			const ibMetaData* meta = owner != nullptr ? owner->GetMetaData() : nullptr;
 			if (col->IsRawColumn()) {
@@ -3588,7 +3590,7 @@ ibDataQueryResult ibDbTableProvider::ExecuteColocatedJoin(const ibDataQuerySpec&
 			else {
 				const ibString prefix = ibString::Format(ibT("ocol%d"), oi);
 				const ibString base   = col->GetPhysicalName();
-				for (const ibString& f : ColumnFieldNames(col))
+				for (const ibString& f : ColumnFieldNames(*col))
 					projection.push_back(ibQueryProjItem{ ibCol(qual, f), prefix + f.Mid(base.length()) });   // <field> AS <prefix><suffix>
 				plans.push_back({ col, sc.second, prefix, meta, false });
 			}
@@ -3599,11 +3601,11 @@ ibDataQueryResult ibDbTableProvider::ExecuteColocatedJoin(const ibDataQuerySpec&
 		// expression is evaluated over the rows that come back, so they have to carry what it reads.
 		// Projected under their OWN model id (not an output alias) — that is the key the evaluator
 		// looks a cell up by — and skipped when the select list already carries them.
-		std::vector<const ibBackendQueryColumn*> exprInputs;
+		std::vector<std::shared_ptr<const ibBackendQueryColumn>> exprInputs;
 		if (spec.m_selectExprs != nullptr)
 			for (const ibQueryColumnSelect& sc : *spec.m_selectExprs)
-				CollectExprColumns(sc.m_expr.get(), exprInputs);   // the gate already vouched for the walk
-		for (const ibBackendQueryColumn* c : exprInputs) {
+				CollectExprColumns(sc.m_expr, exprInputs);   // the gate already vouched for the walk
+		for (const std::shared_ptr<const ibBackendQueryColumn>& c : exprInputs) {
 			const bool already = std::any_of(plans.begin(), plans.end(),
 				[&](const OutPlan& p) { return p.col == c; });
 			if (already)
@@ -3611,7 +3613,7 @@ ibDataQueryResult ibDbTableProvider::ExecuteColocatedJoin(const ibDataQuerySpec&
 			// Read back exactly as an ordinary output of the same column would be — a raw column is one
 			// scalar field, a metadata column its full spread under a unique prefix. Taking the raw
 			// shortcut for both would read a composite column's FIRST field, which is its type tag.
-			const ibBackendQueryable* owner = ColocatedOwner(leaves, c);
+			std::shared_ptr<const ibBackendQueryable> owner = ColocatedOwner(leaves, c);
 			const ibString    qual = ColocatedQualOf(owner);
 			const ibMetaData* meta = owner != nullptr ? owner->GetMetaData() : nullptr;
 			const ibString    alias = ibString::Format(ibT("xin%d"), oi);
@@ -3622,7 +3624,7 @@ ibDataQueryResult ibDbTableProvider::ExecuteColocatedJoin(const ibDataQuerySpec&
 			else {
 				const ibString prefix = ibString::Format(ibT("ocol%d"), oi);
 				const ibString base   = c->GetPhysicalName();
-				for (const ibString& f : ColumnFieldNames(c))
+				for (const ibString& f : ColumnFieldNames(*c))
 					projection.push_back(ibQueryProjItem{ ibCol(qual, f), prefix + f.Mid(base.length()) });
 				plans.push_back({ c, alias, prefix, meta, false });
 			}
@@ -3725,7 +3727,7 @@ ibDataQueryResult ibDbTableProvider::ExecuteColocatedJoin(const ibDataQuerySpec&
 					ibBackendQueryColumn::SyntheticKind::Stitch, static_cast<ibMetaID>(k));
 				out.AddColumn(id, sc.m_alias, ibTypeDescription());
 				for (long r = 0; r < out.RowCount(); ++r)
-					out.SetCell(r, id, ibQueryComposer::EvalColumnExpr(sc.m_expr.get(), out, r));
+					out.SetCell(r, id, ibQueryComposer::EvalColumnExpr(sc.m_expr, out, r));
 			}
 		}
 
@@ -3750,7 +3752,7 @@ bool ibDbTableProvider::CanColocateAggregate(const ibDataQuerySpec& spec)
 		// keys and figures alone, and the column came back empty. The fold in memory carries them (RamAggregate).
 		if (spec.m_selectExprs != nullptr && !spec.m_selectExprs->empty()) return false;
 
-		for (const ibBackendQueryColumn* g : *spec.m_groupBy)
+		for (const std::shared_ptr<const ibBackendQueryColumn>& g : *spec.m_groupBy)
 			if (g == nullptr || ColocatedOwner(leaves, g) == nullptr) return false;   // group key owned by a leaf (scalar OR reference spread)
 		for (const ibDataQueryBuilder::AggregateItem& a : *spec.m_aggregates) {
 			using Fn = ibDataQueryBuilder::AggregateFn;
@@ -3781,7 +3783,7 @@ bool ibDbTableProvider::CanPageGroupLevel(const ibDataQuerySpec& spec)
 		// projection (ColumnValueFields) would DROP the TYPE field GetValue reconstructs from -> "field
 		// _TYPE not found". Route it to the unpaged ExecuteAggregate (full-spread GROUP BY) -- grouping by a
 		// reference has no meaningful keyset order anyway (its id, not its presentation). Scalar = 1 field.
-		if (ColumnFieldNames((*spec.m_groupBy)[0]).size() > 1)
+		if (ColumnFieldNames(*(*spec.m_groupBy)[0]).size() > 1)
 			return false;
 		// SINGLE real DB source -- no relational tree, or a lone Source node. A JOIN / UNION group needs
 		// co-location (a later step). The common case: a catalog / register grouped by one of its own fields.
@@ -3806,10 +3808,10 @@ bool ibDbTableProvider::CanPageGroupLevel(const ibDataQuerySpec& spec)
 // browsed anchor group). Mirrors ExecuteAggregate (single-source GROUP BY) + the read path's keyset ORDER/anchor/LIMIT.
 ibDataQueryResult ibDbTableProvider::ExecuteGroupLevelPage(const ibDataQuerySpec& spec, const ibReadPageRequest& page)
 	{
-		const ibBackendQueryable* queryable = spec.m_queryable;
+		std::shared_ptr<const ibBackendQueryable> queryable = spec.m_queryable;
 		const ibString            mainTable  = queryable->GetQueryTableName();
 		const ibString            mainQual;   // single PLAIN source (the gate rejects dot-walk / joins) -> no qualifier
-		const ibBackendQueryColumn* dim = (*spec.m_groupBy)[0];
+		std::shared_ptr<const ibBackendQueryColumn> dim = (*spec.m_groupBy)[0];
 
 		ibDatabaseQueryBuilder q(spec.m_holder);
 
@@ -3820,7 +3822,7 @@ ibDataQueryResult ibDbTableProvider::ExecuteGroupLevelPage(const ibDataQuerySpec
 
 		// GROUP BY the dimension + project it back AS its physname, so GetValue(dim) reads the group's value.
 		std::vector<ibQueryProjItem> projection;
-		for (const ibString& field : ColumnValueFields(dim)) {
+		for (const ibString& field : ColumnValueFields(*dim)) {
 			const ibQueryExprPtr gexpr = ibCol(field);
 			q.GroupBy(gexpr);
 			projection.push_back(ibQueryProjItem{ gexpr, field });
@@ -3856,7 +3858,7 @@ ibDataQueryResult ibDbTableProvider::ExecuteColocatedAggregate(const ibDataQuery
 	{
 		ColocatedLeaves leaves;
 		ColocatableJoinTree(spec, leaves);
-		auto qual = [&](const ibBackendQueryColumn* c) { return ColocatedQual(leaves, c); };
+		auto qual = [&](const std::shared_ptr<const ibBackendQueryColumn>& c) { return ColocatedQual(leaves, c); };
 
 		ibDatabaseQueryBuilder q(spec.m_holder);
 		q.From(BuildColocatedFrom(spec.m_root, leaves));
@@ -3867,12 +3869,12 @@ ibDataQueryResult ibDbTableProvider::ExecuteColocatedAggregate(const ibDataQuery
 		// GROUP BY the group columns + project them. A SCALAR group key is one field (AS g<i>); a
 		// REFERENCE / variant key GROUP BYs its FULL spread and projects it under a unique prefix
 		// (gcol<i>), reconstructed via GetValueColumn on read — grouping by the reference identity.
-		struct GroupPlan { const ibBackendQueryColumn* col; ibString tag; const ibMetaData* meta; bool scalar; };
+		struct GroupPlan { std::shared_ptr<const ibBackendQueryColumn> col; ibString tag; const ibMetaData* meta; bool scalar; };
 		std::vector<GroupPlan>       groupPlans;
 		std::vector<ibQueryProjItem> projection;
 		int gi = 0;
-		for (const ibBackendQueryColumn* g : *spec.m_groupBy) {
-			const ibBackendQueryable* owner = ColocatedOwner(leaves, g);
+		for (const std::shared_ptr<const ibBackendQueryColumn>& g : *spec.m_groupBy) {
+			std::shared_ptr<const ibBackendQueryable> owner = ColocatedOwner(leaves, g);
 			const ibMetaData* meta = owner != nullptr ? owner->GetMetaData() : nullptr;
 			if (g->IsRawColumn() || ScalarReadable(g, leaves)) {
 				const ibString galias = ibString::Format(ibT("g%d"), gi);
@@ -3884,7 +3886,7 @@ ibDataQueryResult ibDbTableProvider::ExecuteColocatedAggregate(const ibDataQuery
 			else {
 				const ibString prefix = ibString::Format(ibT("gcol%d"), gi);
 				const ibString base   = g->GetPhysicalName();
-				for (const ibString& f : ColumnFieldNames(g)) {
+				for (const ibString& f : ColumnFieldNames(*g)) {
 					const ibQueryExprPtr fexpr = ibCol(qual(g), f);
 					q.GroupBy(fexpr);
 					projection.push_back(ibQueryProjItem{ fexpr, prefix + f.Mid(base.length()) });
@@ -3919,7 +3921,7 @@ ibDataQueryResult ibDbTableProvider::ExecuteColocatedAggregate(const ibDataQuery
 		// Materialise into the unified RAM table: group columns keyed by model id (read via the g<i>
 		// scalar alias), aggregates keyed by a synthetic id far from any metaID (read by their alias).
 		ibQueryRamTable out;
-		for (const ibBackendQueryColumn* g : *spec.m_groupBy)
+		for (const std::shared_ptr<const ibBackendQueryColumn>& g : *spec.m_groupBy)
 			out.AddColumn(g->GetColumnId(), g->GetName(), g->GetTypeDesc());
 		// ⭐ The aggregate's place in the list IS its number — the same index the read loop below walks
 		// by, and the same one the RAM fold uses, so the two roads number these columns alike.
@@ -3976,11 +3978,11 @@ static bool UnionPredicateColocatable(const ibQueryPredicatePtr& p,
 	const std::vector<std::shared_ptr<ibQueryNode>>& parts)
 {
 	if (!p) return true;
-	auto resolvesEveryBranch = [&](const ibBackendQueryColumn* c) -> bool {
+	auto resolvesEveryBranch = [&](const std::shared_ptr<const ibBackendQueryColumn>& c) -> bool {
 		if (c == nullptr) return false;
 		for (const auto& part : parts) {
-			const ibBackendQueryable* q = part != nullptr ? part->m_queryable : nullptr;
-			const ibBackendQueryColumn* bc = q != nullptr ? q->ResolveColumnByName(c->GetName()) : nullptr;
+			std::shared_ptr<const ibBackendQueryable> q = part != nullptr ? part->m_queryable : nullptr;
+			std::shared_ptr<const ibBackendQueryColumn> bc = q != nullptr ? q->ResolveColumnByName(c->GetName()) : nullptr;
 			if (bc == nullptr) return false;
 			ColocatedLeaves one; one.push_back(q);
 			if (!ScalarReadable(bc, one)) return false;
@@ -4017,7 +4019,7 @@ static bool UnionPredicateColocatable(const ibQueryPredicatePtr& p,
 // Render the predicate for ONE branch: columns resolved BY NAME against `q`, qualified by its table; an
 // RLS semi-join re-correlates its OUTER key to THIS branch. Mirrors BuildColocatedPredicate for a single
 // by-name-resolved source. The gate (UnionPredicateColocatable) guarantees every column resolves.
-static ibQueryExprPtr BuildBranchPredicate(const ibQueryPredicatePtr& p, const ibBackendQueryable* q)
+static ibQueryExprPtr BuildBranchPredicate(const ibQueryPredicatePtr& p, const std::shared_ptr<const ibBackendQueryable>& q)
 {
 	if (!p) return nullptr;
 	const ibString qual = q->GetQueryTableName();
@@ -4049,9 +4051,9 @@ static ibQueryExprPtr BuildBranchPredicate(const ibQueryPredicatePtr& p, const i
 		return in ? ibNot(in) : nullptr;
 	}
 	case ibQueryPredicateKind::IsNull: {
-		const ibBackendQueryColumn* bc = q->ResolveColumnByName(p->m_col->GetName());
+		std::shared_ptr<const ibBackendQueryColumn> bc = q->ResolveColumnByName(p->m_col->GetName());
 		ibQueryExprPtr allNull;
-		for (const ibString& f : ColumnValueFields(bc))
+		for (const ibString& f : ColumnValueFields(*bc))
 			allNull = AndFold(allNull, ibIsNull(ibColQ(qual, f), false));
 		if (!allNull) return nullptr;
 		return p->m_negated ? ibNot(allNull) : allNull;
@@ -4072,7 +4074,7 @@ static ibQueryExprPtr BuildBranchPredicate(const ibQueryPredicatePtr& p, const i
 // ==========================================================================
 bool ibDbTableProvider::CanColocateUnion(const ibDataQuerySpec& spec)
 	{
-		const ibQueryNode* root = spec.m_root;
+		const std::shared_ptr<ibQueryNode>& root = spec.m_root;
 		if (root == nullptr || root->m_kind != ibQueryNode::Kind::Union || root->m_parts.empty())
 			return false;
 		if (!spec.m_groupBy->empty() || !spec.m_aggregates->empty()) return false;
@@ -4080,7 +4082,7 @@ bool ibDbTableProvider::CanColocateUnion(const ibDataQuerySpec& spec)
 		if (spec.m_selectCols->empty())                              return false;
 
 		for (const auto& part : root->m_parts) {
-			const ibQueryNode* p = part.get();
+			const std::shared_ptr<ibQueryNode>& p = part;
 			if (p == nullptr || p->m_kind != ibQueryNode::Kind::Source)            return false;
 			if (p->m_queryable == nullptr || p->m_queryable->IsComputedInRam())     return false;
 		}
@@ -4088,8 +4090,8 @@ bool ibDbTableProvider::CanColocateUnion(const ibDataQuerySpec& spec)
 		for (const auto& sc : *spec.m_selectCols) {
 			if (sc.first == nullptr) return false;
 			for (const auto& part : root->m_parts) {
-				const ibBackendQueryable* q = part->m_queryable;
-				const ibBackendQueryColumn* bc = q->ResolveColumnByName(sc.first->GetName());
+				std::shared_ptr<const ibBackendQueryable> q = part->m_queryable;
+				std::shared_ptr<const ibBackendQueryColumn> bc = q->ResolveColumnByName(sc.first->GetName());
 				if (bc == nullptr) return false;
 				ColocatedLeaves one; one.push_back(q);
 				if (!ScalarReadable(bc, one)) return false;
@@ -4106,8 +4108,8 @@ bool ibDbTableProvider::CanColocateUnion(const ibDataQuerySpec& spec)
 
 ibDataQueryResult ibDbTableProvider::ExecuteColocatedUnion(const ibDataQuerySpec& spec, const ibReadPageRequest& page)
 	{
-		const ibQueryNode* root = spec.m_root;
-		const std::vector<std::pair<const ibBackendQueryColumn*, ibString>>& outs = *spec.m_selectCols;
+		const std::shared_ptr<ibQueryNode>& root = spec.m_root;
+		const std::vector<std::pair<std::shared_ptr<const ibBackendQueryColumn>, ibString>>& outs = *spec.m_selectCols;
 		auto uAlias = [](size_t i) { return ibString::Format(ibT("u%d"), static_cast<int>(i)); };
 
 		// Build each branch as SELECT <field AS u<i>> FROM table WHERE <branch conds>. The operator per
@@ -4115,7 +4117,7 @@ ibDataQueryResult ibDbTableProvider::ExecuteColocatedUnion(const ibDataQuerySpec
 		// the DBMS does it natively (the spelling lives in the L2-1 render: ibUnion vs ibUnionAll).
 		ibQueryRelPtr unionRel;
 		for (size_t pi = 0; pi < root->m_parts.size(); ++pi) {
-			const ibBackendQueryable* q = root->m_parts[pi]->m_queryable;
+			std::shared_ptr<const ibBackendQueryable> q = root->m_parts[pi]->m_queryable;
 			// A UNION branch is a source like any other, so it is ASKED what it is read from. The gate
 			// above only refuses a branch computed in RAM — a register's Balance backed by a stored
 			// surface is not that, and it is still not a table: its date lives in a derived read.
@@ -4132,7 +4134,7 @@ ibDataQueryResult ibDbTableProvider::ExecuteColocatedUnion(const ibDataQuerySpec
 			std::vector<ibQueryCondition> conds;
 			for (const ibQueryCondition& c : *spec.m_conditions) {
 				if (c.m_col == nullptr) continue;
-				const ibBackendQueryColumn* bc = q->ResolveColumnByName(c.m_col->GetName());
+				std::shared_ptr<const ibBackendQueryColumn> bc = q->ResolveColumnByName(c.m_col->GetName());
 				if (bc == nullptr) continue;
 				ibQueryCondition nc = c; nc.m_col = bc; conds.push_back(nc);
 			}
@@ -4146,7 +4148,7 @@ ibDataQueryResult ibDbTableProvider::ExecuteColocatedUnion(const ibDataQuerySpec
 
 			std::vector<ibQueryProjItem> proj;
 			for (size_t i = 0; i < outs.size(); ++i) {
-				const ibBackendQueryColumn* bc = q->ResolveColumnByName(outs[i].first->GetName());
+				std::shared_ptr<const ibBackendQueryColumn> bc = q->ResolveColumnByName(outs[i].first->GetName());
 				proj.push_back(ibQueryProjItem{ ibCol(FirstSqlFieldOfColumn(bc)), uAlias(i) });
 			}
 			rel = ibProject(rel, std::move(proj));
@@ -4209,7 +4211,7 @@ static std::vector<ibTotalLevel> RollupLevelsOf(const ibDataQuerySpec& spec)
 
 	std::vector<ibTotalLevel> levels;
 	if (spec.m_groupBy != nullptr)
-		for (const ibBackendQueryColumn* g : *spec.m_groupBy)
+		for (const std::shared_ptr<const ibBackendQueryColumn>& g : *spec.m_groupBy)
 			levels.push_back(ibTotalLevel::One(g, ibDimensionKind::Elements));
 	return levels;
 }
@@ -4228,7 +4230,7 @@ static const std::vector<ibDataQueryBuilder::AggregateItem>& RollupAggregatesOf(
 // …AND WHAT ONE OF THEM FOLDS, WHEN THE LOWERING PROJECTED IT — a second fold over one column, a computed field, an
 // expression written in place: each is projected under a name of its own and folded through a handle named by that
 // projection in the statement's spelling (ProjectionHandle, queryLowering.cpp). Null for a column of the source.
-static const ibQueryColumnSelect* SelectExprOf(const ibDataQuerySpec& spec, const ibBackendQueryColumn* col)
+static const ibQueryColumnSelect* SelectExprOf(const ibDataQuerySpec& spec, const std::shared_ptr<const ibBackendQueryColumn>& col)
 {
 	if (col == nullptr || spec.m_selectExprs == nullptr || !ibBackendQueryColumn::IsSyntheticId(col->GetColumnId()))
 		return nullptr;
@@ -4261,7 +4263,7 @@ static const ibQueryColumnSelect* SelectExprOf(const ibDataQuerySpec& spec, cons
 static ibTotalLevel PhantomLevel(const ibDataQuerySpec& spec)
 {
 	ibTotalLevel level;
-	auto add = [&level](const ibBackendQueryColumn* col) {
+	auto add = [&level](const std::shared_ptr<const ibBackendQueryColumn>& col) {
 		if (col == nullptr)
 			return;
 		for (const ibTotalField& have : level.m_fields)
@@ -4271,7 +4273,7 @@ static ibTotalLevel PhantomLevel(const ibDataQuerySpec& spec)
 	};
 
 	if (spec.m_queryable != nullptr)
-		for (const ibBackendQueryColumn* key : spec.m_queryable->GetPrimaryKeyColumns())
+		for (const std::shared_ptr<const ibBackendQueryColumn>& key : spec.m_queryable->GetPrimaryKeyColumns())
 			add(key);
 	if (spec.m_selectCols != nullptr)
 		for (const auto& sel : *spec.m_selectCols)
@@ -4321,8 +4323,8 @@ static int LevelKeyWalkedOnFrom(const ibTotalLevel& level, const ibQuerySortItem
 		return -1;
 	for (size_t i = 0; i < level.m_fields.size(); ++i) {
 		const ibTotalField& f = level.m_fields[i];
-		const std::vector<const ibBackendQueryColumn*> key = f.m_path.empty()
-			? std::vector<const ibBackendQueryColumn*>{ f.m_col } : f.m_path;
+		const std::vector<std::shared_ptr<const ibBackendQueryColumn>> key = f.m_path.empty()
+			? std::vector<std::shared_ptr<const ibBackendQueryColumn>>{ f.m_col } : f.m_path;
 		if (s.m_path.size() > key.size() && std::equal(key.begin(), key.end(), s.m_path.begin()))
 			return static_cast<int>(i);
 	}
@@ -4331,15 +4333,15 @@ static int LevelKeyWalkedOnFrom(const ibTotalLevel& level, const ibQuerySortItem
 
 // The one table a level key's reference points into — asked of the key's leaf in every table the key's walk reaches,
 // through each kind of a composite hop — or null when it points into several, or into none that can be joined.
-static const ibBackendQueryable* LevelKeyTarget(const ibBackendQueryable* q, const ibTotalField& f)
+static std::shared_ptr<const ibBackendQueryable> LevelKeyTarget(const std::shared_ptr<const ibBackendQueryable>& q, const ibTotalField& f)
 {
-	const std::vector<const ibBackendQueryColumn*> key = f.m_path.empty()
-		? std::vector<const ibBackendQueryColumn*>{ f.m_col } : f.m_path;
+	const std::vector<std::shared_ptr<const ibBackendQueryColumn>> key = f.m_path.empty()
+		? std::vector<std::shared_ptr<const ibBackendQueryColumn>>{ f.m_col } : f.m_path;
 	ibRefJoinChain probe(q, q->GetQueryTableName());
 	bool sawComposite = false;
-	const ibBackendQueryable* target = nullptr;
+	std::shared_ptr<const ibBackendQueryable> target;
 	for (const ibRefJoinChain::LeafOccurrence& at : probe.LeafOccurrences(key, sawComposite)) {
-		const ibBackendQueryable* t = at.m_q->GetProvider().ResolveReferenceTarget(at.m_q, at.m_col);
+		std::shared_ptr<const ibBackendQueryable> t = at.m_q->GetProvider().ResolveReferenceTarget(at.m_q, at.m_col);
 		if (t == nullptr || (target != nullptr && t != target))
 			return nullptr;
 		target = t;
@@ -4351,10 +4353,10 @@ static const ibBackendQueryable* LevelKeyTarget(const ibBackendQueryable* q, con
 // reaches is joined to every row before the grouping (`walked`); the key's own target — the one a kind's order asks
 // for — is looked up over the groups instead, once per group (`target`), on the key the group already holds.
 struct GroupOrderWalk {
-	std::vector<ibQueryExprPtr> walked;              // over the rows — the order takes MIN / MAX of each
-	size_t                      keyField = 0;        // …or: the level field the walk goes on from,
-	const ibBackendQueryable*   target   = nullptr;  // the one table its reference points into,
-	const ibBackendQueryColumn* column   = nullptr;  // and that table's column the sort names
+	std::vector<ibQueryExprPtr>                 walked;              // over the rows — the order takes MIN / MAX of each
+	size_t                                      keyField = 0;        // …or: the level field the walk goes on from,
+	std::shared_ptr<const ibBackendQueryable>   target;              // the one table its reference points into,
+	std::shared_ptr<const ibBackendQueryColumn> column;              // and that table's column the sort names
 };
 
 // The STRUCTURAL half of a fold on the server, for both of its roads: ROLLUP over a ladder (`rollup`), and a plain
@@ -4364,7 +4366,7 @@ static bool TotalsShapeFoldable(const ibDataQuerySpec& spec, bool rollup)
 		// Single-source DB queryable (a multi-source totals goes through the co-located / RAM paths).
 		if (spec.m_root != nullptr && spec.m_root->m_kind != ibQueryNode::Kind::Source)
 			RollupDecline(ibT("more than one source (co-located / RAM road)"));
-		const ibBackendQueryable* q = spec.m_queryable;
+		std::shared_ptr<const ibBackendQueryable> q = spec.m_queryable;
 		if (q == nullptr)                                         RollupDecline(ibT("no source"));
 		if (q->IsComputedInRam())
 			RollupDecline(ibT("source '%s' is computed in RAM"), q->GetQueryName());
@@ -4404,7 +4406,7 @@ static bool TotalsShapeFoldable(const ibDataQuerySpec& spec, bool rollup)
 			if (spec.m_dimWalks != nullptr && !spec.m_dimWalks->empty())
 				RollupDecline(ibT("a derived source cannot also carry a dot-walked dimension"));
 			if (spec.m_groupPaths != nullptr)
-				for (const std::vector<const ibBackendQueryColumn*>& gp : *spec.m_groupPaths)
+				for (const std::vector<std::shared_ptr<const ibBackendQueryColumn>>& gp : *spec.m_groupPaths)
 					if (!gp.empty())
 						RollupDecline(ibT("a derived source cannot also carry a dot-walked group key"));
 			for (const ibTotalLevel& level : levels)
@@ -4537,9 +4539,9 @@ static bool TotalsShapeFoldable(const ibDataQuerySpec& spec, bool rollup)
 			// ⭐ A FIGURE OVER A PROJECTION folds the expression the projection holds, written beside the source's row
 			// (FoldSingleSource) — as long as that row alone answers it: a CASE, a window or a walk keeps the RAM fold.
 			if (const ibQueryColumnSelect* projected = SelectExprOf(spec, a.m_col)) {
-				std::vector<const ibBackendQueryColumn*> reads;
-				if (!CollectExprColumns(projected->m_expr.get(), reads)
-				    || std::any_of(reads.begin(), reads.end(), [q](const ibBackendQueryColumn* c) { return !q->ContainColumn(c); }))
+				std::vector<std::shared_ptr<const ibBackendQueryColumn>> reads;
+				if (!CollectExprColumns(projected->m_expr, reads)
+				    || std::any_of(reads.begin(), reads.end(), [q](const std::shared_ptr<const ibBackendQueryColumn>& c) { return !q->ContainColumn(c); }))
 					RollupDecline(ibT("'%s' folds '%s', which the source's row does not answer alone"),
 					              a.m_alias, projected->m_alias);
 			}
@@ -4644,8 +4646,8 @@ static void AddUp(ibDataQueryBuilder::AggregateFn fn, ibValue& total, const ibVa
 // bottom group, the groups are ordered here (the query's sorts said over groups), and the groups above and the grand
 // total are made as they are first met and added up from the ones below.
 static ibSelectorTree RunRollupTotals(const ibDataQuerySpec& spec, ibQueryRelPtr from,
-	const std::function<ibQueryExprPtr(const ibBackendQueryColumn*)>& colExpr,
-	const std::function<RollupGroupKey(const ibBackendQueryColumn*)>& keyInfo,
+	const std::function<ibQueryExprPtr(const std::shared_ptr<const ibBackendQueryColumn>&)>& colExpr,
+	const std::function<RollupGroupKey(const std::shared_ptr<const ibBackendQueryColumn>&)>& keyInfo,
 	std::vector<ibQuerySortKey> orderKeys, bool rollup = true,
 	const std::vector<GroupOrderWalk>& sortWalks = {},   // one level: per sort, a walk on from the key
 	const std::vector<ibQueryExprPtr>& partials = {})    // one level over rows folded by a hop first: each aggregate's part
@@ -4672,7 +4674,7 @@ static ibSelectorTree RunRollupTotals(const ibDataQuerySpec& spec, ibQueryRelPtr
 	}
 
 	// `refAlias` — a reference field's id under the name the statement wrote it (one level looks its target up by it).
-	struct FieldPlan { const ibBackendQueryColumn* col; bool scalar; ibString tag; const ibMetaData* meta; ibString refAlias; };
+	struct FieldPlan { std::shared_ptr<const ibBackendQueryColumn> col; bool scalar; ibString tag; const ibMetaData* meta; ibString refAlias; };
 	// ⭐ …AND THE ALIAS OF THE LEVEL'S FIRST PROJECTED FIELD. It is what says whether this row is AT
 	// this level, on an engine with no GROUPING(): a level that the rollup folded away comes back
 	// SQL NULL in its own keys. Exact here — OES attributes hold typed empties and never SQL NULL, so
@@ -4713,7 +4715,7 @@ static ibSelectorTree RunRollupTotals(const ibDataQuerySpec& spec, ibQueryRelPtr
 			// the tree keys on, and the one the reader asks `GetValue(col)` for — while the SQL has to
 			// name the JOINED LEAF, which is where the value physically lives. For a plain field the
 			// two are the same column and nothing below notices the difference.
-			const ibBackendQueryColumn* g  = field.SqlCol();   // what the STATEMENT names
+			std::shared_ptr<const ibBackendQueryColumn> g  = field.SqlCol();   // what the STATEMENT names
 			const RollupGroupKey        ki = keyInfo(g);
 			auto fieldCol = [&](const ibString& f) { return ki.qualifier.empty() ? ibCol(f) : ibCol(ki.qualifier, f); };
 
@@ -4752,11 +4754,11 @@ static ibSelectorTree RunRollupTotals(const ibDataQuerySpec& spec, ibQueryRelPtr
 						add(sf.m_expr, sf.m_suffix);
 				else {
 					const ibString base = g->GetPhysicalName();
-					for (const ibString& f : ColumnFieldNames(g))
+					for (const ibString& f : ColumnFieldNames(*g))
 						add(fieldCol(f), f.Mid(base.length()));
 				}
 				ibString refAlias;
-				for (const ibColumnSlot& slot : DescribeColumnLayout(g))
+				for (const ibColumnSlot& slot : DescribeColumnLayout(*g))
 					if (slot.m_role == ibColumnRole::ReferenceId)
 						refAlias = prefix + slot.m_name.Mid(g->GetPhysicalName().length());
 				plan.fields.push_back({ g, false, prefix, ki.meta, refAlias });
@@ -4828,7 +4830,7 @@ static ibSelectorTree RunRollupTotals(const ibDataQuerySpec& spec, ibQueryRelPtr
 	// ONE LEVEL, A KEY'S TARGET LOOKED UP OVER THE GROUPS (GroupOrderWalk::target): the fold becomes `q_groups`, each
 	// target joins it on the key's id, and whatever else the order says over the groups — a key, a MIN — is written
 	// inside under a name of its own (`q_order<n>`) and read outside by it, since outside there are no rows to take a MIN of.
-	struct GroupLookup { const ibBackendQueryable* target; ibString alias; ibString keyRef; };
+	struct GroupLookup { std::shared_ptr<const ibBackendQueryable> target; ibString alias; ibString keyRef; };
 	const ibString               groups = ibT("q_groups");
 	std::vector<GroupLookup>     lookups;
 	std::vector<ibQueryProjItem> orderedInside;
@@ -4967,7 +4969,7 @@ static ibSelectorTree RunRollupTotals(const ibDataQuerySpec& spec, ibQueryRelPtr
 	const auto keysInto = [&levels](ibSelectorTree::Node& node, const RRow& rr, size_t depth) {
 		for (size_t i = 0; i < depth && i < levels.size(); ++i)
 			for (size_t f = 0; f < levels[i].m_fields.size() && f < rr.levelValues[i].size(); ++f)
-				if (const ibBackendQueryColumn* gc = levels[i].m_fields[f].m_col)
+				if (std::shared_ptr<const ibBackendQueryColumn> gc = levels[i].m_fields[f].m_col)
 					node.m_values[gc->GetColumnId()] = rr.levelValues[i][f];
 	};
 	// A plain GROUP BY returns only the bottom groups: the ones above and the grand total are what they add up to (the
@@ -5074,7 +5076,7 @@ static ibSelectorTree RunRollupTotals(const ibDataQuerySpec& spec, ibQueryRelPtr
 			}
 		}
 		for (size_t i = 0; i < rr.aggs.size() && i < aggregates.size(); ++i) {
-			const ibBackendQueryColumn* ac = aggregates[i].m_col;
+			std::shared_ptr<const ibBackendQueryColumn> ac = aggregates[i].m_col;
 			if (ac == nullptr)
 				continue;
 			// ⚠ AND NOTHING IS ROLLED OVER A DETAIL ROW THAT ALREADY HOLDS ITS VALUE. The figure
@@ -5096,7 +5098,7 @@ static ibSelectorTree RunRollupTotals(const ibDataQuerySpec& spec, ibQueryRelPtr
 		for (const auto& [up, sums] : above)
 			for (size_t i = 0; i < aggregates.size(); ++i) {
 				using Fn = ibDataQueryBuilder::AggregateFn;
-				const ibBackendQueryColumn* ac = aggregates[i].m_col;
+				std::shared_ptr<const ibBackendQueryColumn> ac = aggregates[i].m_col;
 				if (ac == nullptr)
 					continue;
 				if (sums.seen[i])
@@ -5120,7 +5122,7 @@ static ibSelectorTree RunRollupTotals(const ibDataQuerySpec& spec, ibQueryRelPtr
 // `partials`). The hop it folds by, or null: taken when the one level's one field is a walk of one hop, every aggregate
 // is read off the source's own column (a sum, a count, a minimum, a maximum — the one-level gate lets in no other),
 // nothing is asked of the groups (HAVING), no flat key says otherwise, and each plain sort names its column once.
-static const ibBackendQueryColumn* HopToFoldFirst(const ibDataQuerySpec& spec)
+static std::shared_ptr<const ibBackendQueryColumn> HopToFoldFirst(const ibDataQuerySpec& spec)
 {
 	const std::vector<ibTotalLevel> levels = RollupLevelsOf(spec);
 	if (levels.size() != 1 || levels.front().m_fields.size() != 1)
@@ -5140,7 +5142,7 @@ static const ibBackendQueryColumn* HopToFoldFirst(const ibDataQuerySpec& spec)
 			if (spec.m_groupPaths == nullptr || i >= spec.m_groupPaths->size() || (*spec.m_groupPaths)[i] != field.m_path)
 				return nullptr;
 	if (spec.m_sorts != nullptr) {
-		std::vector<const ibBackendQueryColumn*> sorted;
+		std::vector<std::shared_ptr<const ibBackendQueryColumn>> sorted;
 		for (const ibQuerySortItem& s : *spec.m_sorts) {
 			if (s.m_expr != nullptr || !s.m_path.empty() || s.m_col == nullptr || SortsByLevelKey(levels.front(), s))
 				continue;
@@ -5156,14 +5158,14 @@ static const ibBackendQueryColumn* HopToFoldFirst(const ibDataQuerySpec& spec)
 // over the levels' fields (ibDbTableProvider::CanFoldGroupByTotals).
 static ibSelectorTree FoldSingleSource(const ibDataQuerySpec& spec, bool rollup)
 	{
-		const ibBackendQueryable* q = spec.m_queryable;
+		std::shared_ptr<const ibBackendQueryable> q = spec.m_queryable;
 		const ibString mainTable = q->GetQueryTableName();
 
 		// ONE LEVEL BY A FIELD BEHIND A REFERENCE (HopToFoldFirst): the source folded by the reference first, filtered
 		// inside, under a name of its own — its rows one per referenced object, its columns the reference's own fields
 		// (under their own names, so the walk reads them as it would the source's), each aggregate's part and each plain
 		// sort's. The chain below walks it like any root (BuildPageIR's windowed root is the same move).
-		const ibBackendQueryColumn* hop = rollup ? nullptr : HopToFoldFirst(spec);
+		std::shared_ptr<const ibBackendQueryColumn> hop = rollup ? nullptr : HopToFoldFirst(spec);
 		const ibString rootTable = hop != nullptr ? ibString(ibT("q_hops")) : mainTable;
 		const ibQueryExprPtr where = ibMetaIRBuilder::BuildWhere(q, *spec.m_conditions, spec.m_predicate);
 
@@ -5175,7 +5177,7 @@ static ibSelectorTree FoldSingleSource(const ibDataQuerySpec& spec, bool rollup)
 		ibQueryRelPtr projectedRows;
 		{
 			std::vector<ibQueryProjItem>             row{ ibQueryProjItem{ ibCol(mainTable, ibT("*")), ibString() } };
-			std::vector<const ibBackendQueryColumn*> handles;
+			std::vector<std::shared_ptr<const ibBackendQueryColumn>> handles;
 			for (const ibDataQueryBuilder::AggregateItem& a : RollupAggregatesOf(spec))
 				if (const ibQueryColumnSelect* projected = SelectExprOf(spec, a.m_col))
 					if (std::find(handles.begin(), handles.end(), a.m_col) == handles.end()) {
@@ -5191,12 +5193,12 @@ static ibSelectorTree FoldSingleSource(const ibDataQuerySpec& spec, bool rollup)
 		}
 
 		std::vector<ibQueryExprPtr> partials;                         // each aggregate's part, as the level adds it up
-		std::map<const ibBackendQueryColumn*, ibString> sortParts;   // a plain sort's column -> its part's name
+		std::map<std::shared_ptr<const ibBackendQueryColumn>, ibString> sortParts;   // a plain sort's column -> its part's name
 		ibQueryRelPtr hopsRelation;
 		if (hop != nullptr) {
 			std::vector<ibQueryProjItem> inner;
 			std::vector<ibQueryExprPtr>  byHop;
-			for (const ibString& field : ColumnFieldNames(hop)) {
+			for (const ibString& field : ColumnFieldNames(*hop)) {
 				inner.push_back(ibQueryProjItem{ ibCol(field), field });
 				byHop.push_back(ibCol(field));
 			}
@@ -5234,14 +5236,14 @@ static ibSelectorTree FoldSingleSource(const ibDataQuerySpec& spec, bool rollup)
 		// non-ROLLUP aggregate: resolve each path to a join alias + its JOINED source (whose leaf-set / metaData
 		// drive the leaf's scalar test + a reference leaf's spread reassembly). A plain column keeps the main table.
 		ibRefJoinChain chain(q, rootTable, hop != nullptr ? hopsRelation : projectedRows);
-		std::map<const ibBackendQueryColumn*, std::pair<ibString, const ibBackendQueryable*>> dw;   // col -> (alias, joined source)
+		std::map<std::shared_ptr<const ibBackendQueryColumn>, std::pair<ibString, std::shared_ptr<const ibBackendQueryable>>> dw;   // col -> (alias, joined source)
 		// …and a walk through a reference of several kinds (`Recorder.Warehouse`) has no one alias: its leaf is the
 		// spread merged across the kinds, the one a walked output projects (ibRefJoinChain::MergedSpread).
-		std::map<const ibBackendQueryColumn*, std::vector<ibRefJoinChain::SpreadField>> merged;
+		std::map<std::shared_ptr<const ibBackendQueryColumn>, std::vector<ibRefJoinChain::SpreadField>> merged;
 		bool hasDotWalk = false;
-		auto resolveDot = [&](const ibBackendQueryColumn* col, const std::vector<const ibBackendQueryColumn*>& path) {
+		auto resolveDot = [&](const std::shared_ptr<const ibBackendQueryColumn>& col, const std::vector<std::shared_ptr<const ibBackendQueryColumn>>& path) {
 			if (col == nullptr || path.empty()) return;
-			ibString a; const ibBackendQueryable* tq = nullptr;
+			ibString a; std::shared_ptr<const ibBackendQueryable> tq;
 			if (chain.Resolve(path, a, tq) && tq != nullptr) { dw[col] = { a, tq }; hasDotWalk = true; return; }
 			std::vector<ibRefJoinChain::SpreadField> spread = chain.MergedSpread(path);   // the gate saw the walk reach (WalkReaches)
 			if (!spread.empty()) { merged[col] = std::move(spread); hasDotWalk = true; }
@@ -5249,7 +5251,7 @@ static ibSelectorTree FoldSingleSource(const ibDataQuerySpec& spec, bool rollup)
 		// The flat group keys and THEIR paths (parallel lists) — the plain GROUP BY road.
 		for (size_t i = 0; i < spec.m_groupBy->size(); ++i)
 			resolveDot((*spec.m_groupBy)[i], i < spec.m_groupPaths->size() ? (*spec.m_groupPaths)[i]
-			                                                               : std::vector<const ibBackendQueryColumn*>{});
+			                                                               : std::vector<std::shared_ptr<const ibBackendQueryColumn>>{});
 		// …AND THE TOTALS LEVELS' OWN FIELDS, which carry their paths themselves (ibTotalField). A
 		// dot-walked DIMENSION rides the very same reference JOIN chain a dot-walked flat key rides —
 		// it was refused outright only because nothing walked it through here. Keyed by the LEAF,
@@ -5278,12 +5280,12 @@ static ibSelectorTree FoldSingleSource(const ibDataQuerySpec& spec, bool rollup)
 					const ibTotalField& f = walkedFrom->m_fields[static_cast<size_t>(fi)];
 					const size_t keyLength = f.m_path.empty() ? 1 : f.m_path.size();
 					if (s.m_path.size() == keyLength + 1)
-						if (const ibBackendQueryable* target = LevelKeyTarget(q, f))
-							if (const ibBackendQueryColumn* col = target->ResolveColumnByName(s.m_path.back()->GetName()))
-								if (!ColumnSortFields(col).empty())
+						if (const std::shared_ptr<const ibBackendQueryable> target = LevelKeyTarget(q, f))
+							if (std::shared_ptr<const ibBackendQueryColumn> col = target->ResolveColumnByName(s.m_path.back()->GetName()))
+								if (!ColumnSortFields(*col).empty())
 									walk = GroupOrderWalk{ {}, static_cast<size_t>(fi), target, col };
 					if (walk.target == nullptr) {
-						ibString a; const ibBackendQueryable* tq = nullptr;
+						ibString a; std::shared_ptr<const ibBackendQueryable> tq;
 						if (ibQueryExprPtr e = chain.CompositeLeaf(s.m_path, /*withTypedEmpty*/ true)) walk.walked = { e };
 						else if (chain.Resolve(s.m_path, a, tq))                                    walk.walked = SortFieldsOf(s.m_col, a);
 						else                                                                        walk.walked = chain.CompositeSortFields(s.m_path);
@@ -5312,11 +5314,11 @@ static ibSelectorTree FoldSingleSource(const ibDataQuerySpec& spec, bool rollup)
 
 		// A plain column qualifies by the main table WHEN joins are present (disambiguation), else UNqualified.
 		const ibString mainQual = chained ? rootTable : ibString();
-		auto qualOf = [dw, mainQual](const ibBackendQueryColumn* c) {
+		auto qualOf = [dw, mainQual](const std::shared_ptr<const ibBackendQueryColumn>& c) {
 			const auto it = dw.find(c); return it != dw.end() ? it->second.first : mainQual;
 		};
 		return RunRollupTotals(spec, from,
-			[qualOf, merged, sortParts, rootTable](const ibBackendQueryColumn* c) -> ibQueryExprPtr {
+			[qualOf, merged, sortParts, rootTable](const std::shared_ptr<const ibBackendQueryColumn>& c) -> ibQueryExprPtr {
 				// Folded by a hop first, a plain sort's column is read off its part.
 				const auto p = sortParts.find(c);
 				if (p != sortParts.end())
@@ -5332,7 +5334,7 @@ static ibSelectorTree FoldSingleSource(const ibDataQuerySpec& spec, bool rollup)
 				const ibString ql = qualOf(c);
 				return ql.empty() ? ibCol(FirstSqlFieldOfColumn(c)) : ibCol(ql, FirstSqlFieldOfColumn(c));
 			},
-			[dw, merged, qualOf, q](const ibBackendQueryColumn* g) -> RollupGroupKey {
+			[dw, merged, qualOf, q](const std::shared_ptr<const ibBackendQueryColumn>& g) -> RollupGroupKey {
 				// scalar key -> one field; a reference / variant key -> its spread (composite ROLLUP element). A
 				// dot-walk key qualifies by its join alias + tests scalar / reassembles against the JOINED source;
 				// one through several kinds brings its spread merged.
@@ -5342,7 +5344,7 @@ static ibSelectorTree FoldSingleSource(const ibDataQuerySpec& spec, bool rollup)
 					return { g->IsRawColumn() || ScalarReadable(g, ls), ibString(), q->GetMetaData(), m->second };
 				}
 				const auto it = dw.find(g);
-				const ibBackendQueryable* owner = (it != dw.end()) ? it->second.second : q;
+				std::shared_ptr<const ibBackendQueryable> owner = (it != dw.end()) ? it->second.second : q;
 				ColocatedLeaves ls; ls.push_back(owner);
 				return { g->IsRawColumn() || ScalarReadable(g, ls), qualOf(g), owner->GetMetaData() };
 			},
@@ -5372,29 +5374,29 @@ ibSelectorTree ibDbTableProvider::ExecuteGroupByTotals(const ibDataQuerySpec& sp
 // its presence forces RAM (which applies it) — a co-located UNION totals is never an under-restricted read.
 static bool CanColocateUnionRollupShape(const ibDataQuerySpec& spec)
 {
-	const ibQueryNode* root = spec.m_root;
+	const std::shared_ptr<ibQueryNode>& root = spec.m_root;
 	if (root == nullptr || root->m_kind != ibQueryNode::Kind::Union || root->m_parts.empty()) return false;
 	if (!spec.m_keyIn->empty())      return false;   // a row-key IN is not a union-totals shape
 	if (spec.m_predicate != nullptr) return false;   // RLS / boolean tree -> RAM (branch path renders only flat conds)
 
 	for (const auto& part : root->m_parts) {
-		const ibQueryNode* p = part.get();
+		const std::shared_ptr<ibQueryNode>& p = part;
 		if (p == nullptr || p->m_kind != ibQueryNode::Kind::Source)         return false;
 		if (p->m_queryable == nullptr || p->m_queryable->IsComputedInRam())  return false;
 	}
 	// Resolve-by-name + SCALAR in EVERY branch (a reference / enum column is not co-located here).
-	auto okEveryBranch = [&](const ibBackendQueryColumn* c) -> bool {
+	auto okEveryBranch = [&](const std::shared_ptr<const ibBackendQueryColumn>& c) -> bool {
 		if (c == nullptr) return true;   // COUNT(*) — no input column
 		for (const auto& part : root->m_parts) {
-			const ibBackendQueryable* q = part->m_queryable;
-			const ibBackendQueryColumn* bc = q->ResolveColumnByName(c->GetName());
+			std::shared_ptr<const ibBackendQueryable> q = part->m_queryable;
+			std::shared_ptr<const ibBackendQueryColumn> bc = q->ResolveColumnByName(c->GetName());
 			if (bc == nullptr) return false;
 			ColocatedLeaves one; one.push_back(q);
 			if (!ScalarReadable(bc, one)) return false;
 		}
 		return true;
 	};
-	for (const ibBackendQueryColumn* g : *spec.m_groupBy)                  if (!okEveryBranch(g))      return false;
+	for (const std::shared_ptr<const ibBackendQueryColumn>& g : *spec.m_groupBy)                  if (!okEveryBranch(g))      return false;
 	for (const ibDataQueryBuilder::AggregateItem& a : *spec.m_aggregates)  if (!okEveryBranch(a.m_col)) return false;
 	for (const ibDataQueryBuilder::HavingItem& h : *spec.m_having)         if (!okEveryBranch(h.m_col)) return false;
 	for (const ibQueryCondition& c : *spec.m_conditions) {
@@ -5411,24 +5413,24 @@ static bool CanColocateUnionRollupShape(const ibDataQuerySpec& spec)
 // subquery "u". Fills `aliasOf` (referenced column -> inner alias) so the caller's colExpr references
 // u.<alias>. The gate (CanColocateUnionRollupShape) guarantees every column resolves in every branch.
 static ibQueryRelPtr BuildUnionRollupFrom(const ibDataQuerySpec& spec,
-	std::map<const ibBackendQueryColumn*, ibString>& aliasOf)
+	std::map<std::shared_ptr<const ibBackendQueryColumn>, ibString>& aliasOf)
 {
-	std::vector<const ibBackendQueryColumn*> cols;
-	auto addCol = [&](const ibBackendQueryColumn* c) {
+	std::vector<std::shared_ptr<const ibBackendQueryColumn>> cols;
+	auto addCol = [&](const std::shared_ptr<const ibBackendQueryColumn>& c) {
 		if (c == nullptr) return;
-		for (const ibBackendQueryColumn* e : cols) if (e == c) return;
+		for (const std::shared_ptr<const ibBackendQueryColumn>& e : cols) if (e == c) return;
 		cols.push_back(c);
 	};
-	for (const ibBackendQueryColumn* g : *spec.m_groupBy)                  addCol(g);
+	for (const std::shared_ptr<const ibBackendQueryColumn>& g : *spec.m_groupBy)                  addCol(g);
 	for (const ibDataQueryBuilder::AggregateItem& a : *spec.m_aggregates)  addCol(a.m_col);
 	for (const ibDataQueryBuilder::HavingItem& h : *spec.m_having)         addCol(h.m_col);
 	for (size_t i = 0; i < cols.size(); ++i)
 		aliasOf[cols[i]] = ibString::Format(ibT("k%d"), static_cast<int>(i));
 
-	const ibQueryNode* root = spec.m_root;
+	const std::shared_ptr<ibQueryNode>& root = spec.m_root;
 	ibQueryRelPtr unionRel;
 	for (size_t pi = 0; pi < root->m_parts.size(); ++pi) {
-		const ibBackendQueryable* q = root->m_parts[pi]->m_queryable;
+		std::shared_ptr<const ibBackendQueryable> q = root->m_parts[pi]->m_queryable;
 		// Asked, not assumed — the same one question the read path and the rollup ask (SourceRelationOf).
 		ibQueryRelPtr rel = SourceRelationOf(q, q->GetQueryTableName());
 
@@ -5448,8 +5450,8 @@ static ibQueryRelPtr BuildUnionRollupFrom(const ibDataQuerySpec& spec,
 			rel = ibFilter(rel, pred);
 
 		std::vector<ibQueryProjItem> proj;
-		for (const ibBackendQueryColumn* c : cols) {
-			const ibBackendQueryColumn* bc = q->ResolveColumnByName(c->GetName());   // gate-guaranteed non-null
+		for (const std::shared_ptr<const ibBackendQueryColumn>& c : cols) {
+			std::shared_ptr<const ibBackendQueryColumn> bc = q->ResolveColumnByName(c->GetName());   // gate-guaranteed non-null
 			proj.push_back(ibQueryProjItem{ ibCol(FirstSqlFieldOfColumn(bc)), aliasOf[c] });
 		}
 		rel = ibProject(rel, std::move(proj));
@@ -5474,7 +5476,7 @@ static ibQueryRelPtr BuildUnionRollupFrom(const ibDataQuerySpec& spec,
 // (docs/private/query-language-arc.md §22.1b)
 bool ibDbTableProvider::CanColocateRollupTotals(const ibDataQuerySpec& spec)
 	{
-		const ibQueryNode* root = spec.m_root;
+		const std::shared_ptr<ibQueryNode>& root = spec.m_root;
 		if (root == nullptr)         return false;   // single-source -> CanRollupTotalsShape, not this gate
 
 		// ⚠ DELIBERATE BOUNDARY, and it is what this line MEANS today. A door that folds TOTALS levels
@@ -5500,7 +5502,7 @@ bool ibDbTableProvider::CanColocateRollupTotals(const ibDataQuerySpec& spec)
 		if (!CanColocateBase(spec, leaves)) return false;   // colocatable JOIN tree, no dot-walk / key-in, single-field keys
 		// Group keys: SCALAR or a REFERENCE / variant (a reference groups by its full spread as ONE composite
 		// ROLLUP element, reassembled on read — RunRollupTotals handles it), each owned by a leaf.
-		for (const ibBackendQueryColumn* g : *spec.m_groupBy)
+		for (const std::shared_ptr<const ibBackendQueryColumn>& g : *spec.m_groupBy)
 			if (g == nullptr || ColocatedOwner(leaves, g) == nullptr) return false;
 		// SCALAR aggregate inputs.
 		for (const ibDataQueryBuilder::AggregateItem& a : *spec.m_aggregates)
@@ -5530,14 +5532,14 @@ ibSelectorTree ibDbTableProvider::ExecuteColocatedRollupTotals(const ibDataQuery
 		// UNION tree -> ROLLUP over the branch-union derived table; the group / aggregate columns
 		// reference its inner aliases (u.k<n>), the outer GROUP BY ROLLUP folds every subtotal level.
 		if (spec.m_root != nullptr && spec.m_root->m_kind == ibQueryNode::Kind::Union) {
-			std::map<const ibBackendQueryColumn*, ibString> aliasOf;
+			std::map<std::shared_ptr<const ibBackendQueryColumn>, ibString> aliasOf;
 			ibQueryRelPtr from = BuildUnionRollupFrom(spec, aliasOf);
 			return RunRollupTotals(spec, from,
-				[&aliasOf](const ibBackendQueryColumn* c) {
+				[&aliasOf](const std::shared_ptr<const ibBackendQueryColumn>& c) {
 					const auto it = aliasOf.find(c);
 					return ibCol(ibT("u"), it != aliasOf.end() ? it->second : FirstSqlFieldOfColumn(c));
 				},
-				[](const ibBackendQueryColumn*) -> RollupGroupKey { return { true, ibString(), nullptr }; },   // CanColocateRollupTotals guarantees SCALAR group keys (a co-located reference ROLLUP still RAM-folds)
+				[](const std::shared_ptr<const ibBackendQueryColumn>&) -> RollupGroupKey { return { true, ibString(), nullptr }; },   // CanColocateRollupTotals guarantees SCALAR group keys (a co-located reference ROLLUP still RAM-folds)
 				// No order here: the branch-union derived table renames every column to an inner alias,
 				// so the query's sort keys do not name anything this statement can order by. A co-located
 				// totals keeps whatever order the union produced — as it did before.
@@ -5551,11 +5553,11 @@ ibSelectorTree ibDbTableProvider::ExecuteColocatedRollupTotals(const ibDataQuery
 		if (ibQueryExprPtr where = ColocatedWhere(spec, leaves))
 			from = ibFilter(from, where);
 		return RunRollupTotals(spec, from,
-			[&leaves](const ibBackendQueryColumn* c) { return ibCol(ColocatedQual(leaves, c), FirstSqlFieldOfColumn(c)); },
-			[&leaves](const ibBackendQueryColumn* g) -> RollupGroupKey {
+			[&leaves](const std::shared_ptr<const ibBackendQueryColumn>& c) { return ibCol(ColocatedQual(leaves, c), FirstSqlFieldOfColumn(c)); },
+			[&leaves](const std::shared_ptr<const ibBackendQueryColumn>& g) -> RollupGroupKey {
 				// scalar key -> one field; a reference / variant key -> its spread under the leaf's qualifier,
 				// reassembled via the owning leaf's metaData.
-				const ibBackendQueryable* o = ColocatedOwner(leaves, g);
+				std::shared_ptr<const ibBackendQueryable> o = ColocatedOwner(leaves, g);
 				return { g->IsRawColumn() || ScalarReadable(g, leaves), ColocatedQual(leaves, g), o ? o->GetMetaData() : nullptr };
 			},
 			// The co-located JOIN qualifies every column by its own leaf's table, and the query's sort
@@ -5568,12 +5570,12 @@ ibSelectorTree ibDbTableProvider::ExecuteColocatedRollupTotals(const ibDataQuery
 // translation — the uuid guid just goes in as a string); a metadata column via the TYPE-tagged
 // SetValueColumn decomposition (over the column's type descriptor + the metadata context). The
 // ONLY place SetValueColumn is called.
-void BindWriteValue(ibQueryStatement& stmt, const ibBackendQueryColumn* col, const ibMetaData* metaData, const ibValue& v, int& pos)
+void BindWriteValue(ibQueryStatement& stmt, const ibBackendQueryColumn& col, const ibMetaData* metaData, const ibValue& v, int& pos)
 {
 	// The column decides — a raw one binds itself (ibBackendColumnRawDB::BindValue, below), everything
 	// else is the codec's decomposition. This door stays because callers hold a column and a statement
 	// and should not have to know which of the two applies.
-	col->BindValue(stmt, metaData, v, pos);
+	col.BindValue(stmt, metaData, v, pos);
 }
 
 // (A RAW COLUMN'S OWN READ AND BIND live in queryColumn.cpp, beside the defaults they override — what
@@ -5627,7 +5629,7 @@ long ibDbTableProvider::ExecuteWrite(const ibDataQuerySpec& spec, ibDataQueryBui
 		fieldsOf.reserve(firstRow.size());
 		std::vector<ibString> columns;
 		for (const auto& wv : firstRow) {
-			const auto& fields = fieldsOf.emplace_back(ColumnFieldNames(wv.first));
+			const auto& fields = fieldsOf.emplace_back(ColumnFieldNames(*wv.first));
 			columns.insert(columns.end(), fields.begin(), fields.end());
 		}
 
@@ -5653,7 +5655,7 @@ long ibDbTableProvider::ExecuteWrite(const ibDataQuerySpec& spec, ibDataQueryBui
 				for (std::size_t c = 0; c < row.size(); ++c) {
 					if (row[c].first == firstRow[c].first)
 						continue;
-					if (ColumnFieldNames(row[c].first) != fieldsOf[c])
+					if (ColumnFieldNames(*row[c].first) != fieldsOf[c])
 						ibBackendCoreException::Error(_("A batched write has rows naming different columns"));
 				}
 			}
@@ -5671,7 +5673,7 @@ long ibDbTableProvider::ExecuteWrite(const ibDataQuerySpec& spec, ibDataQueryBui
 		std::vector<ibString> matchKeys;
 		if (kind == WriteKind::Upsert || kind == WriteKind::Update) {
 
-			for (const ibBackendQueryColumn* col : spec.m_queryable->GetPrimaryKeyColumns()) {
+			for (const std::shared_ptr<const ibBackendQueryColumn>& col : spec.m_queryable->GetPrimaryKeyColumns()) {
 
 				// ⭐ AN UPDATE MATCHES ONLY ON WHAT IT WRITES. The match key becomes the statement's
 				// WHERE, and its values come from the assignment list — so naming a column the caller
@@ -5690,7 +5692,7 @@ long ibDbTableProvider::ExecuteWrite(const ibDataQuerySpec& spec, ibDataQueryBui
 						continue;
 				}
 
-				for (const ibString& f : ColumnFieldNames(col)) matchKeys.push_back(f);
+				for (const ibString& f : ColumnFieldNames(*col)) matchKeys.push_back(f);
 			}
 		}
 
@@ -5715,7 +5717,7 @@ long ibDbTableProvider::ExecuteWrite(const ibDataQuerySpec& spec, ibDataQueryBui
 				// in-statement addition composes with it — the same property that lets a totals
 				// trigger accumulate without coordinating with anyone.
 				if (additive) {
-					const std::vector<ibString> fields = ColumnFieldNames(wv.first);
+					const std::vector<ibString> fields = ColumnFieldNames(*wv.first);
 					// Arithmetic has no meaning on a spread column (a reference is two fields), so
 					// this is single-field only. Falls through to a plain assignment rather than
 					// emitting something wrong if that is ever violated.
@@ -5849,10 +5851,10 @@ long ibDbTableProvider::ExecuteWrite(const ibDataQuerySpec& spec, ibDataQueryBui
 		if (kind == WriteKind::Insert && spec.m_predicate) {
 			std::vector<ibQueryProjItem> projItems;
 			for (const auto& wv : firstRow) {
-				const std::vector<ibString> fields = ColumnFieldNames(wv.first);
+				const std::vector<ibString> fields = ColumnFieldNames(*wv.first);
 				ibQueryStatement capture(ibQueryStatement::Kind::Delete, ibString(), fields);
 				int cp = 1;
-				ibColumnCodec::WriteValue(wv.first, metaData, wv.second, &capture, cp);
+				ibColumnCodec::WriteValue(*wv.first, metaData, wv.second, &capture, cp);
 				const std::vector<ibQueryExprPtr>& consts = capture.CapturedValues();
 				for (size_t i = 0; i < fields.size(); ++i) {
 					ibQueryExprPtr c = (i < consts.size() && consts[i]) ? consts[i] : ibConst(ibValue());
@@ -5893,14 +5895,14 @@ static bool SortFollowsFromDistinct(const ibDataQuerySpec& spec, const ibQuerySo
 {
 	if (!spec.m_distinct || spec.m_distinctBy == nullptr || s.m_col == nullptr || s.m_expr)
 		return false;
-	const std::vector<const ibBackendQueryColumn*>& by = *spec.m_distinctBy;
-	const auto distinguishes = [&by](const ibBackendQueryColumn* c) {
+	const std::vector<std::shared_ptr<const ibBackendQueryColumn>>& by = *spec.m_distinctBy;
+	const auto distinguishes = [&by](const std::shared_ptr<const ibBackendQueryColumn>& c) {
 		return std::find(by.begin(), by.end(), c) != by.end();
 	};
-	const ibBackendQueryColumn* head = s.m_path.empty() ? s.m_col : s.m_path.front();
+	std::shared_ptr<const ibBackendQueryColumn> head = s.m_path.empty() ? s.m_col : s.m_path.front();
 	if (distinguishes(head))
 		return !s.m_path.empty();   // a distinguished column itself is selected already
-	const std::vector<const ibBackendQueryColumn*> keys = spec.m_queryable->GetPrimaryKeyColumns();
+	const std::vector<std::shared_ptr<const ibBackendQueryColumn>> keys = spec.m_queryable->GetPrimaryKeyColumns();
 	return spec.m_queryable->ContainColumn(head) && !keys.empty() && std::all_of(keys.begin(), keys.end(), distinguishes);
 }
 
@@ -5927,18 +5929,18 @@ static bool ReadWalks(const ibDataQuerySpec& spec, const std::vector<ibQuerySort
 
 // Does an expression compute a window anywhere in it? (A partition or an order key hangs off a window,
 // which has answered already.)
-static bool ExprHasWindow(const ibQueryColumnExpr* e)
+static bool ExprHasWindow(const ibQueryColumnExprPtr& e)
 {
 	if (e == nullptr)
 		return false;
 	if (e->m_kind == ibQueryColumnExprKind::WindowAgg)
 		return true;
-	if (ExprHasWindow(e->m_lhs.get()) || ExprHasWindow(e->m_rhs.get()) || ExprHasWindow(e->m_else.get()))
+	if (ExprHasWindow(e->m_lhs) || ExprHasWindow(e->m_rhs) || ExprHasWindow(e->m_else))
 		return true;
 	for (const ibQueryColumnExprPtr& a : e->m_args)
-		if (ExprHasWindow(a.get())) return true;
+		if (ExprHasWindow(a)) return true;
 	for (const auto& wt : e->m_cases)
-		if (ExprHasWindow(wt.second.get())) return true;
+		if (ExprHasWindow(wt.second)) return true;
 	return false;
 }
 
@@ -5962,7 +5964,7 @@ static bool WindowBeforeJoin(const ibDataQuerySpec& spec, const ibReadPageReques
 		|| (spec.m_dimWalks != nullptr && !spec.m_dimWalks->empty()))
 		return false;
 	if (std::none_of(spec.m_selectExprs->begin(), spec.m_selectExprs->end(),
-			[](const ibQueryColumnSelect& sc) { return ExprHasWindow(sc.m_expr.get()); }))
+			[](const ibQueryColumnSelect& sc) { return ExprHasWindow(sc.m_expr); }))
 		return false;
 	for (const ibQueryCondition& c : *spec.m_conditions)
 		if (!c.m_path.empty()) return false;
@@ -5970,7 +5972,7 @@ static bool WindowBeforeJoin(const ibDataQuerySpec& spec, const ibReadPageReques
 		return false;
 	bool joins = !spec.m_dotWalks->empty();
 	for (const ibQuerySortItem& s : effective) {
-		if (s.m_expr && ExprHasWindow(s.m_expr.get()))
+		if (s.m_expr && ExprHasWindow(s.m_expr))
 			return false;
 		joins = joins || !s.m_path.empty();
 	}
@@ -5983,7 +5985,7 @@ static bool WindowBeforeJoin(const ibDataQuerySpec& spec, const ibReadPageReques
 ibQueryIR ibDbTableProvider::BuildPageIR(const ibDataQuerySpec& spec, const ibReadPageRequest& req,
 	                             const std::vector<ibQuerySortItem>& effective)
 	{
-		const ibBackendQueryable* queryable = spec.m_queryable;
+		std::shared_ptr<const ibBackendQueryable> queryable = spec.m_queryable;
 		const bool hasAnchor  = req.m_hasAnchor && !effective.empty();
 		const ibString mainTable = queryable->GetQueryTableName();
 
@@ -6012,7 +6014,7 @@ ibQueryIR ibDbTableProvider::BuildPageIR(const ibDataQuerySpec& spec, const ibRe
 			if (windowFirst) {
 				std::vector<ibQueryProjItem> inner{ ibQueryProjItem{ ibCol(mainTable, ibT("*")), ibString() } };
 				for (const ibQueryColumnSelect& sc : *spec.m_selectExprs)
-					if (ExprSpreadColumn(sc.m_expr.get()) == nullptr)
+					if (ExprSpreadColumn(sc.m_expr) == nullptr)
 						inner.push_back(ibQueryProjItem{ ibMetaIRBuilder::BuildColumnExpr(queryable, sc.m_expr, mainTable),
 							ibSqlAliasOf(sc.m_alias) });
 				ibQueryExprPtr innerWhere = ibMetaIRBuilder::BuildFilterPredicate(queryable, *spec.m_conditions, mainTable);
@@ -6026,8 +6028,8 @@ ibQueryIR ibDbTableProvider::BuildPageIR(const ibDataQuerySpec& spec, const ibRe
 				windowedRoot = ibSubquery(ibProject(source, std::move(inner)), mainTable);
 			}
 			ibRefJoinChain chain(queryable, mainTable, windowedRoot);
-			auto resolvePath = [&chain](const std::vector<const ibBackendQueryColumn*>& path,
-			                            ibString& outAlias, const ibBackendQueryable*& outTarget) {
+			auto resolvePath = [&chain](const std::vector<std::shared_ptr<const ibBackendQueryColumn>>& path,
+			                            ibString& outAlias, std::shared_ptr<const ibBackendQueryable>& outTarget) {
 				return chain.Resolve(path, outAlias, outTarget);
 			};
 			// The typed empty (TypedScalarEmpty) and the composite walk (ibRefJoinChain::CompositeLeaf) live
@@ -6050,12 +6052,12 @@ ibQueryIR ibDbTableProvider::BuildPageIR(const ibDataQuerySpec& spec, const ibRe
 				projection.push_back(ibQueryProjItem{ ibCol(mainTable, ibT("*")), ibString() });
 			else if (spec.m_distinctBy != nullptr) {
 				std::vector<ibString> written;
-				for (const ibBackendQueryColumn* col : *spec.m_distinctBy) {
+				for (const std::shared_ptr<const ibBackendQueryColumn>& col : *spec.m_distinctBy) {
 					if (col == nullptr || col->IsSyntheticColumn())
 						continue;   // its parts are somebody else's fields — they project themselves
 					if (!queryable->ContainColumn(col))
 						continue;   // a walked leaf — appended below, qualified by its join alias
-					for (const ibString& field : ColumnFieldNames(col)) {
+					for (const ibString& field : ColumnFieldNames(*col)) {
 						if (std::find(written.begin(), written.end(), field) != written.end())
 							continue;
 						written.push_back(field);
@@ -6066,7 +6068,7 @@ ibQueryIR ibDbTableProvider::BuildPageIR(const ibDataQuerySpec& spec, const ibRe
 				for (const ibQuerySortItem& s : effective) {
 					if (!s.m_path.empty() || !SortFollowsFromDistinct(spec, s))
 						continue;
-					for (const ibString& field : ColumnFieldNames(s.m_col)) {
+					for (const ibString& field : ColumnFieldNames(*s.m_col)) {
 						if (std::find(written.begin(), written.end(), field) != written.end())
 							continue;
 						written.push_back(field);
@@ -6083,14 +6085,14 @@ ibQueryIR ibDbTableProvider::BuildPageIR(const ibDataQuerySpec& spec, const ibRe
 			// the single-target road and skipped the rest, so a list grouped by `Recorder.Counterparty` folded rows
 			// it could not read the key of (`out_dim0_TYPE not found`, 82 times per read — journal, 2026-09-29)
 			// and every heading came out empty.
-			auto projectCompositeSpread = [&](const std::vector<const ibBackendQueryColumn*>& fp, const ibString& alias) {
+			auto projectCompositeSpread = [&](const std::vector<std::shared_ptr<const ibBackendQueryColumn>>& fp, const ibString& alias) {
 				for (const ibRefJoinChain::SpreadField& f : chain.MergedSpread(fp))
 					projection.push_back(ibQueryProjItem{ f.m_expr, alias + f.m_suffix });
 			};
 			for (const ibDotWalkColumn& dw : *spec.m_dotWalks) {
-				const std::vector<const ibBackendQueryColumn*>& fp = dw.m_path;
+				const std::vector<std::shared_ptr<const ibBackendQueryColumn>>& fp = dw.m_path;
 				if (fp.size() < 2) continue;
-				const ibBackendQueryColumn* leaf = fp.back();
+				std::shared_ptr<const ibBackendQueryColumn> leaf = fp.back();
 
 				// The statement's own spelling of this output — the author's word stays the author's
 				// (dw.m_alias is what the query and the composition call it); this is what goes into the
@@ -6111,7 +6113,7 @@ ibQueryIR ibDbTableProvider::BuildPageIR(const ibDataQuerySpec& spec, const ibRe
 				// PURE single-target path: a scalar leaf (typed-empty coalesce) OR a reference / enum leaf
 				// (project its FULL field spread under the alias prefix, reassembled via GetValueColumn).
 				{
-					ibString a; const ibBackendQueryable* tq = nullptr;
+					ibString a; std::shared_ptr<const ibBackendQueryable> tq;
 					if (resolvePath(fp, a, tq) && tq != nullptr) {
 						if (ibQueryExprPtr empty = readsBack ? TypedScalarEmpty(leaf) : nullptr) {
 							ibQueryExprPtr colE = ibCol(a, FirstSqlFieldOfColumn(leaf));
@@ -6119,7 +6121,7 @@ ibQueryIR ibDbTableProvider::BuildPageIR(const ibDataQuerySpec& spec, const ibRe
 						}
 						else {
 							const ibString    base = leaf->GetPhysicalName();
-							for (const ibString& f : ColumnFieldNames(leaf))
+							for (const ibString& f : ColumnFieldNames(*leaf))
 								projection.push_back(ibQueryProjItem{ ibCol(a, f), alias + f.Mid(base.length()) });
 						}
 						continue;
@@ -6145,7 +6147,7 @@ ibQueryIR ibDbTableProvider::BuildPageIR(const ibDataQuerySpec& spec, const ibRe
 			if (hasComputed)
 				for (const ibQueryColumnSelect& sc : *spec.m_selectExprs) {
 					const ibString              alias  = ibSqlAliasOf(sc.m_alias);
-					const ibBackendQueryColumn* spread = ExprSpreadColumn(sc.m_expr.get());
+					std::shared_ptr<const ibBackendQueryColumn> spread = ExprSpreadColumn(sc.m_expr);
 					if (spread == nullptr) {
 						if (!windowFirst)   // …else computed in the windowed root, and read out of its star
 							projection.push_back(ibQueryProjItem{ ibMetaIRBuilder::BuildColumnExpr(queryable, sc.m_expr, mainQual),
@@ -6155,11 +6157,11 @@ ibQueryIR ibDbTableProvider::BuildPageIR(const ibDataQuerySpec& spec, const ibRe
 
 					const ibMetaData*           meta   = queryable != nullptr ? queryable->GetMetaData() : nullptr;
 					const ibString              base   = spread->GetPhysicalName();
-					const std::vector<ibString> fields = ColumnFieldNames(spread);
+					const std::vector<ibString> fields = ColumnFieldNames(*spread);
 
 					ibQueryStatement capture(ibQueryStatement::Kind::Delete, ibString(), fields);
 					int position = 1;
-					BindWriteValue(capture, spread, meta, ibValue(), position);
+					BindWriteValue(capture, *spread, meta, ibValue(), position);
 					const std::vector<ibQueryExprPtr>& absent = capture.CapturedValues();
 
 					for (size_t fi = 0; fi < fields.size(); ++fi) {
@@ -6184,12 +6186,12 @@ ibQueryIR ibDbTableProvider::BuildPageIR(const ibDataQuerySpec& spec, const ibRe
 			// fold groups by that column's own unique id. Scalar leaves only (the lowering rejects others).
 			if (hasDimWalk)
 				for (const ibDotWalkColumn& dw : *spec.m_dimWalks) {
-					const ibBackendQueryColumn* leaf = dw.m_path.back();
+					std::shared_ptr<const ibBackendQueryColumn> leaf = dw.m_path.back();
 					const ibString alias = ibSqlAliasOf(dw.m_alias);   // the statement's spelling — see above
 
 					// A composite hop (`Recorder.Counterparty`, a recorder of several document kinds) — the merged
 					// spread, the same projection a walked output gets.
-					ibString a; const ibBackendQueryable* tq = nullptr;
+					ibString a; std::shared_ptr<const ibBackendQueryable> tq;
 					if (!resolvePath(dw.m_path, a, tq) || tq == nullptr) {
 						if (!leaf->IsRawColumn())
 							projectCompositeSpread(dw.m_path, alias);
@@ -6203,7 +6205,7 @@ ibQueryIR ibDbTableProvider::BuildPageIR(const ibDataQuerySpec& spec, const ibRe
 					// gave the fold a key it could not read — every row landed in one empty group.
 					if (!leaf->IsRawColumn()) {
 						const ibString base = leaf->GetPhysicalName();
-						for (const ibString& f : ColumnFieldNames(leaf))
+						for (const ibString& f : ColumnFieldNames(*leaf))
 							projection.push_back(ibQueryProjItem{ ibCol(a, f), alias + f.Mid(base.length()) });
 						continue;
 					}
@@ -6225,7 +6227,7 @@ ibQueryIR ibDbTableProvider::BuildPageIR(const ibDataQuerySpec& spec, const ibRe
 			for (const ibQuerySortItem& s : effective) {
 				if (s.m_path.empty()) continue;
 				if (ibQueryExprPtr e = chain.CompositeLeaf(s.m_path, /*withTypedEmpty*/ true)) { sortFields[&s] = { e }; continue; }
-				ibString a; const ibBackendQueryable* tq = nullptr;
+				ibString a; std::shared_ptr<const ibBackendQueryable> tq;
 				if (resolvePath(s.m_path, a, tq)) { sortFields[&s] = SortFieldsOf(s.m_col, a); continue; }
 				std::vector<ibQueryExprPtr> fields = chain.CompositeSortFields(s.m_path);
 				if (fields.empty())
@@ -6271,7 +6273,7 @@ ibQueryIR ibDbTableProvider::BuildPageIR(const ibDataQuerySpec& spec, const ibRe
 					// fields of this very row, which its layout names, and its read asks for them by those names. It
 					// was skipped as "its parts project themselves", which holds only while the parts are selected
 					// beside it; a walk reading a kind's order selects the order alone (MaterialiseLeafToRam).
-					for (const ibString& field : ColumnFieldNames(sc.first)) {
+					for (const ibString& field : ColumnFieldNames(*sc.first)) {
 						if (std::find(written.begin(), written.end(), field) != written.end())
 							continue;   // one field, one place in the list
 						written.push_back(field);
@@ -6334,7 +6336,7 @@ ibQueryIR ibDbTableProvider::BuildPageIR(const ibDataQuerySpec& spec, const ibRe
 					}
 				}
 				else {
-					for (const ibString& name : ColumnValueFields(s.m_col)) {
+					for (const ibString& name : ColumnValueFields(*s.m_col)) {
 						ibQuerySortKey k;
 						k.m_expr = ibCol(mainQual, name);
 						k.m_dir  = asc ? ibQuerySortDir::Asc : ibQuerySortDir::Desc;
@@ -6390,10 +6392,10 @@ ibQueryIR ibDbTableProvider::BuildPageIR(const ibDataQuerySpec& spec, const ibRe
 			std::vector<ibQueryProjItem> distinctProj;
 			std::vector<ibString> written;
 			if (!alreadyProjected && spec.m_distinctBy != nullptr)
-				for (const ibBackendQueryColumn* col : *spec.m_distinctBy) {
+				for (const std::shared_ptr<const ibBackendQueryColumn>& col : *spec.m_distinctBy) {
 					if (col == nullptr || col->IsSyntheticColumn())
 						continue;   // its parts are somebody else's fields — they project themselves
-					for (const ibString& field : ColumnFieldNames(col)) {
+					for (const ibString& field : ColumnFieldNames(*col)) {
 						if (std::find(written.begin(), written.end(), field) != written.end())
 							continue;   // one field, one place in the list (two outputs may share a column)
 						written.push_back(field);
@@ -6406,7 +6408,7 @@ ibQueryIR ibDbTableProvider::BuildPageIR(const ibDataQuerySpec& spec, const ibRe
 				for (const ibQuerySortItem& s : effective) {
 					if (!s.m_path.empty() || !SortFollowsFromDistinct(spec, s))
 						continue;
-					for (const ibString& field : ColumnFieldNames(s.m_col)) {
+					for (const ibString& field : ColumnFieldNames(*s.m_col)) {
 						if (std::find(written.begin(), written.end(), field) != written.end())
 							continue;
 						written.push_back(field);
@@ -6552,11 +6554,11 @@ void ibDbTableProvider::AttachNamedQueries(const ibDataQuerySpec& spec, ibQueryI
 				? innerSpec.m_queryable->GetQueryTableName() : ibString();
 			if ((innerSpec.m_selectCols != nullptr && !innerSpec.m_selectCols->empty()) || hasExprs) {
 				std::vector<ibQueryProjItem> proj;
-				std::vector<const ibBackendQueryColumn*> projected;      // …once each — see below
+				std::vector<std::shared_ptr<const ibBackendQueryColumn>> projected;      // …once each — see below
 				std::vector<ibString>                    projectedNames;  // …under each NAME once — see below
-				const std::vector<std::pair<const ibBackendQueryColumn*, ibString>> noCols;
+				const std::vector<std::pair<std::shared_ptr<const ibBackendQueryColumn>, ibString>> noCols;
 				for (const auto& sc : (innerSpec.m_selectCols != nullptr ? *innerSpec.m_selectCols : noCols)) {
-					const ibBackendQueryColumn* col = sc.first;
+					std::shared_ptr<const ibBackendQueryColumn> col = sc.first;
 					if (sc.second.IsEmpty())
 						continue;   // an output with no name cannot be read by one
 
@@ -6665,7 +6667,7 @@ void ibDbTableProvider::AttachNamedQueries(const ibDataQuerySpec& spec, ibQueryI
 					const bool spelledByAlias = repeated || col->IsRawColumn() || !leaves.empty();
 					const ibString base = spelledByAlias ? ibSqlAliasOf(sc.second) : col->GetPhysicalName();
 					const ibString qual = leaves.empty() ? innerQual : ColocatedQual(leaves, col);
-					for (const ibColumnSlot& slot : DescribeColumnLayout(col))
+					for (const ibColumnSlot& slot : DescribeColumnLayout(*col))
 						proj.push_back(ibQueryProjItem{ ibColQ(qual, slot.m_name),
 							slot.m_role == ibColumnRole::Raw ? base
 							                                 : base + ibFieldSuffix(slot.m_role) });
@@ -6694,7 +6696,7 @@ void ibDbTableProvider::AttachNamedQueries(const ibDataQuerySpec& spec, ibQueryI
 						projectedNames.push_back(se.m_alias);
 						const ibString alias = ibSqlAliasOf(se.m_alias);
 						proj.push_back(ibQueryProjItem{
-							computedInBody && ExprSpreadColumn(se.m_expr.get()) == nullptr ? ibColQ(innerQual, alias)
+							computedInBody && ExprSpreadColumn(se.m_expr) == nullptr ? ibColQ(innerQual, alias)
 								: ibMetaIRBuilder::BuildColumnExpr(innerSpec.m_queryable, se.m_expr, innerQual),
 							alias });
 					}
@@ -6807,7 +6809,7 @@ std::vector<ibValue> ibDbTableProvider::BuildExternal(const ibReadPageRequest& /
 //     to ibColumnCodec::WriteValue / ReadValue at their call sites — no second name for the tier.
 void ibDbTableProvider::SetValueAttribute(const ibValueMetaObjectAttributeBase* attr, const ibValue& cValue, ibQueryStatement* statement, int& position)
 {
-	ibColumnCodec::WriteValue(attr->GetQueryColumn(), attr->GetMetaData(), cValue, statement, position);
+	ibColumnCodec::WriteValue(*attr->GetQueryColumn(), attr->GetMetaData(), cValue, statement, position);
 }
 
 bool ibDbTableProvider::GetValueAttribute(const ibValueMetaObjectAttributeBase* attr, ibValue& retValue, ibQueryResult& result, bool createData)
@@ -6818,7 +6820,7 @@ bool ibDbTableProvider::GetValueAttribute(const ibValueMetaObjectAttributeBase* 
 bool ibDbTableProvider::GetValueAttribute(const ibString& fieldName, ibFieldTypes fieldType,
 	const ibValueMetaObjectAttributeBase* attr, ibValue& retValue, ibQueryResult& result, bool createData)
 {
-	return ibColumnCodec::ReadField(fieldName, static_cast<int>(fieldType), attr->GetQueryColumn(), attr->GetMetaData(), retValue, result, createData);
+	return ibColumnCodec::ReadField(fieldName, static_cast<int>(fieldType), *attr->GetQueryColumn(), attr->GetMetaData(), retValue, result, createData);
 }
 
 // ==========================================================================
@@ -6829,8 +6831,8 @@ bool ibDbTableProvider::GetValueAttribute(const ibString& fieldName, ibFieldType
 // queryable by VIRTUAL dispatch — NO cast, no RTTI on this dot-walk hot path. The base provider returns
 // null; the computed provider forwards here. (docs/private/query-language-arc.md §22 dot-walk; kind-typing)
 // ==========================================================================
-const ibBackendQueryable* ibDbTableProvider::ResolveReferenceTarget(const ibBackendQueryable* queryable,
-                                                                    const ibBackendQueryColumn* refColumn) const
+std::shared_ptr<const ibBackendQueryable> ibDbTableProvider::ResolveReferenceTarget(const std::shared_ptr<const ibBackendQueryable>& queryable,
+                                                                                    const std::shared_ptr<const ibBackendQueryColumn>& refColumn) const
 {
 	if (queryable == nullptr || refColumn == nullptr)
 		return nullptr;
@@ -6858,18 +6860,18 @@ const ibBackendQueryable* ibDbTableProvider::ResolveReferenceTarget(const ibBack
 // through the stored register's analytics was refused ("'AccountDimensionDr1' is not a single-target
 // reference") while the same walk over its virtual tables, whose columns are typed by what they hold,
 // answered (2026-09-17).
-std::vector<const ibBackendQueryable*> ibDbTableProvider::ResolveReferenceTargets(const ibBackendQueryable* queryable,
-                                                                                  const ibBackendQueryColumn* refColumn) const
+std::vector<std::shared_ptr<const ibBackendQueryable>> ibDbTableProvider::ResolveReferenceTargets(const std::shared_ptr<const ibBackendQueryable>& queryable,
+                                                                                                  const std::shared_ptr<const ibBackendQueryColumn>& refColumn) const
 {
 	if (queryable == nullptr || refColumn == nullptr)
-		return std::vector<const ibBackendQueryable*>();
+		return std::vector<std::shared_ptr<const ibBackendQueryable>>();
 	return ReferenceTargetsOf(queryable->GetMetaData(), refColumn->GetTypeValueDesc());
 }
 
-std::vector<const ibBackendQueryable*> ibDbTableProvider::ReferenceTargetsOf(const ibMetaData* metaData,
+std::vector<std::shared_ptr<const ibBackendQueryable>> ibDbTableProvider::ReferenceTargetsOf(const ibMetaData* metaData,
                                                                              const ibTypeDescription& type)
 {
-	std::vector<const ibBackendQueryable*> targets;
+	std::vector<std::shared_ptr<const ibBackendQueryable>> targets;
 	if (metaData == nullptr)
 		return targets;
 	for (const ibClassID& clsid : type.GetClsidList()) {
@@ -6880,14 +6882,14 @@ std::vector<const ibBackendQueryable*> ibDbTableProvider::ReferenceTargetsOf(con
 		if (clsid_is_any(clsid)) {
 			for (const ibCtorMetaValueType* member : metaData->GetListCtorsByType(ibCtorObjectMetaType::ibCtorObjectMetaType_Reference))
 				if (clsid_admits(clsid, member->GetClassType()))
-					if (const ibBackendQueryable* q = member->GetQueryable())
+					if (const std::shared_ptr<const ibBackendQueryable> q = member->GetQueryable())
 						if (std::find(targets.begin(), targets.end(), q) == targets.end())
 							targets.push_back(q);
 			continue;
 		}
 		// A configuration's reference has its own table.
 		if (const ibCtorMetaValueType* ctor = metaData->GetTypeCtor(clsid))
-			if (const ibBackendQueryable* q = ctor->GetQueryable())
+			if (const std::shared_ptr<const ibBackendQueryable> q = ctor->GetQueryable())
 				targets.push_back(q);
 	}
 	return targets;
@@ -6900,42 +6902,59 @@ namespace {
 class ibCastLeafColumn final : public ibAliasColumn
 {
 public:
-	ibCastLeafColumn(const ibBackendQueryable* target, const ibBackendQueryColumn* leaf)
+	ibCastLeafColumn(const std::shared_ptr<const ibBackendQueryable>& target, const std::shared_ptr<const ibBackendQueryColumn>& leaf)
 		: ibAliasColumn(leaf), m_target(target) {}
 	ibMetaID GetColumnId() const override { return Origin()->GetColumnId(); }
-	const ibBackendQueryable* Target() const { return m_target; }
+	const std::shared_ptr<const ibBackendQueryable>& Target() const { return m_target; }
 private:
-	const ibBackendQueryable* m_target;
+	std::shared_ptr<const ibBackendQueryable> m_target;
 };
 } // namespace
 
-// Made once per (type, field) and kept: both belong to the configuration and outlive every query that
-// names them, and the column holds nothing of its own but the two pointers — whatever it is asked, it
-// asks them.
-const ibBackendQueryColumn* ibDbTableProvider::CastLeaf(const ibBackendQueryable* target, const ibBackendQueryColumn* leaf)
+// The query a thread is lowering, for the fields its CASTs narrowed (ibCastLeafScope) — null outside every door.
+static thread_local ibCastLeafScope* t_castLeafScope = nullptr;
+
+ibCastLeafScope::ibCastLeafScope()
+{
+	if (t_castLeafScope == nullptr) {
+		t_castLeafScope = this;
+		m_outermost     = true;
+	}
+}
+
+ibCastLeafScope::~ibCastLeafScope()
+{
+	if (m_outermost)
+		t_castLeafScope = nullptr;
+}
+
+// Made once per (type, field) in the query's scope (ibCastLeafScope), so a walk named twice in one query — grouped by
+// and sorted by — is one column, and the paths compare as one. The column holds nothing of its own but the two —
+// whatever it is asked, it asks them — and the field and the table it stands for are held by the column itself.
+std::shared_ptr<const ibBackendQueryColumn> ibDbTableProvider::CastLeaf(const std::shared_ptr<const ibBackendQueryable>& target,
+	const std::shared_ptr<const ibBackendQueryColumn>& leaf)
 {
 	if (target == nullptr || leaf == nullptr)
 		return leaf;
-	static std::mutex guard;
-	static std::map<std::pair<const ibBackendQueryable*, const ibBackendQueryColumn*>, std::unique_ptr<ibCastLeafColumn>> made;
-	const std::lock_guard<std::mutex> lock(guard);
-	std::unique_ptr<ibCastLeafColumn>& slot = made[{ target, leaf }];
-	if (!slot)
-		slot = std::make_unique<ibCastLeafColumn>(target, leaf);
-	return slot.get();
+	if (t_castLeafScope == nullptr)
+		return std::make_shared<ibCastLeafColumn>(target, leaf);
+	std::shared_ptr<const ibBackendQueryColumn>& slot = t_castLeafScope->m_leaves[{ target, leaf }];
+	if (slot == nullptr)
+		slot = std::make_shared<ibCastLeafColumn>(target, leaf);
+	return slot;
 }
 
-const ibBackendQueryable* ibDbTableProvider::CastTarget(const ibBackendQueryColumn* next)
+std::shared_ptr<const ibBackendQueryable> ibDbTableProvider::CastTarget(const std::shared_ptr<const ibBackendQueryColumn>& next)
 {
-	const ibCastLeafColumn* const cast = dynamic_cast<const ibCastLeafColumn*>(next);
+	const std::shared_ptr<const ibCastLeafColumn> cast = std::dynamic_pointer_cast<const ibCastLeafColumn>(next);
 	return cast != nullptr ? cast->Target() : nullptr;
 }
 
 // Compared by the metaobject behind the two, not by pointer alone: the type the CAST resolved and the
 // target a reference resolves may be two queryables over one table.
-bool ibDbTableProvider::WalkEnters(const ibBackendQueryable* target, const ibBackendQueryColumn* next)
+bool ibDbTableProvider::WalkEnters(const std::shared_ptr<const ibBackendQueryable>& target, const std::shared_ptr<const ibBackendQueryColumn>& next)
 {
-	const ibBackendQueryable* const named = CastTarget(next);
+	const std::shared_ptr<const ibBackendQueryable> named = CastTarget(next);
 	if (named == nullptr || named == target)
 		return true;
 	return target != nullptr && named->GetSourceMetaObject() != nullptr
@@ -6981,12 +7000,12 @@ namespace {
 // reconstruct its value without the attribute. The materialisation lives here, over the L2-1 result.
 class ibDbResultSource : public ibDataResultSource {
 public:
-	ibDbResultSource(ibQueryResult&& cursor, const ibBackendQueryable* queryable)
+	ibDbResultSource(ibQueryResult&& cursor, const std::shared_ptr<const ibBackendQueryable>& queryable)
 		: m_cursor(std::move(cursor)), m_metaData(queryable != nullptr ? queryable->GetMetaData() : nullptr) {}
 
 	bool Next() override { return m_cursor.Next(); }
 
-	ibValue Value(const ibBackendQueryColumn* col) const override {
+	ibValue Value(const std::shared_ptr<const ibBackendQueryColumn>& col) const override {
 		if (col == nullptr)
 			return ibValue();
 		// ONE ROAD FOR EVERY KIND — the column reads itself. This used to open with
@@ -7021,7 +7040,7 @@ public:
 	// ⭐ ONE DOOR, TWO SHAPES — and a CURSOR is where they really differ: a scalar output is one field read
 	// by its index, a composite one is the SPREAD below reassembled from `<alias>_TYPE` / `_RTRef` / … .
 	// Which it is, is what `col` says; nothing here guesses.
-	ibValue Column(const ibString& alias, const ibBackendQueryColumn* col = nullptr) const override {
+	ibValue Column(const ibString& alias, const std::shared_ptr<const ibBackendQueryColumn>& col = nullptr) const override {
 		if (col != nullptr)
 			return Spread(alias, col);
 
@@ -7036,7 +7055,7 @@ public:
 	// `prefix` (<prefix>_TYPE/_RTRef/_RRRef/…) — reassemble the object value off those fields, exactly as a
 	// normal metadata column reads. A non-matching join (empty / broken ref) leaves the fields null, so the
 	// reassembly yields the type's empty value on its own.
-	ibValue Spread(const ibString& prefix, const ibBackendQueryColumn* col) const {
+	ibValue Spread(const ibString& prefix, const std::shared_ptr<const ibBackendQueryColumn>& col) const {
 		if (col == nullptr)
 			return ibValue();
 		ibValue v;
@@ -7058,7 +7077,7 @@ public:
 private:
 	// Walked BY INDEX, and from the one after the last: a batch reads the same columns in the same order
 	// row after row, and a range-for makes two iterators per call — a lock each, in a checked build.
-	const ibString& PhysicalNameOf(const ibBackendQueryColumn* col) const {
+	const ibString& PhysicalNameOf(const std::shared_ptr<const ibBackendQueryColumn>& col) const {
 		const size_t count = m_physicalNames.size();
 		if (count > 0) {
 			const size_t next = m_lastPhysical + 1 < count ? m_lastPhysical + 1 : 0;
@@ -7080,16 +7099,16 @@ private:
 	// What each column this result was asked for is called in the statement — and, for an aliased
 	// output, where the statement put it. A DEQUE, so a name handed out stays where it is while the
 	// next column is added.
-	mutable std::deque<std::pair<const ibBackendQueryColumn*, ibString>> m_physicalNames;
-	mutable size_t                                                       m_lastPhysical = 0;
-	mutable std::vector<std::pair<ibString, int>>                        m_aliasColumns;
+	mutable std::deque<std::pair<std::shared_ptr<const ibBackendQueryColumn>, ibString>> m_physicalNames;
+	mutable size_t                                                                       m_lastPhysical = 0;
+	mutable std::vector<std::pair<ibString, int>>                                        m_aliasColumns;
 };
 
 } // namespace
 
 // ibDataQueryResult — the DB-cursor backing ctor (the RAM ctor + dtor / move / accessors live in
 // queryProvider.cpp, where the RAM source is). The selection hides which backing it holds.
-ibDataQueryResult::ibDataQueryResult(ibQueryResult&& cursor, const ibBackendQueryable* queryable)
+ibDataQueryResult::ibDataQueryResult(ibQueryResult&& cursor, const std::shared_ptr<const ibBackendQueryable>& queryable)
 	: m_source(std::make_shared<ibDbResultSource>(std::move(cursor), queryable))
 {
 }

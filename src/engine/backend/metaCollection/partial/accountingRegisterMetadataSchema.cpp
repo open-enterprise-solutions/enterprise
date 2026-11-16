@@ -181,10 +181,19 @@ void ibValueMetaObjectAccountingRegister::ContributeTables(ibSchemaSnapshot& out
 		ibSchemaTable& t = out.Shared(totals->GetMetaID(), totalsName);
 
 		// --- structure: the period, the account, its breakdown, the register's dimensions ----------
-		const ibBackendQueryColumn* periodCol = t.Scaffold(ibBackendColumnRawDB::Date(periodField));
+		const std::shared_ptr<const ibBackendQueryColumn> periodCol = t.Scaffold(ibBackendColumnRawDB::Date(periodField));
+		// The UNIT a row is kept at — the totals keep every unit of ibRegTotalsUnits, each its own rows. An
+		// IDENTITY, as the shard column's (ibRegSplitIntoKey): a base built before it gets it by ALTER. Numbered over
+		// the period (ibRegDerivedColumnId), whose own number is free here: the period is scaffold.
+		const std::shared_ptr<const ibBackendQueryColumn> unitCol = ibBackendColumnRawDB::Number(PeriodUnitColumnName(),
+			ibRegDerivedColumnId(GetRegisterPeriod()->GetMetaID()), /*precision*/ 2);
+		t.Add(unitCol);
 		t.Add(account->GetQueryColumn());   // same physical fields as the movements, so a trigger reads NEW.<field> directly
 
-		std::vector<const ibBackendQueryColumn*> keyCols;
+		// The unit opens the key, the period after it — a reading takes each unit's rows by the unit and a range
+		// of the period, which is then one range of this index (the accumulation register's key says the rest).
+		std::vector<std::shared_ptr<const ibBackendQueryColumn>> keyCols;
+		keyCols.push_back(unitCol);
 		keyCols.push_back(periodCol);
 		keyCols.push_back(account->GetQueryColumn());
 
@@ -192,6 +201,7 @@ void ibValueMetaObjectAccountingRegister::ContributeTables(ibSchemaSnapshot& out
 		// here: the same slot holds a counterparty on one account and an item on another, so a key made
 		// of values alone would merge two different breakdowns into one row. Storing the kind is also
 		// what lets a READING drop a turnovers-only cut later — it can see what it is dropping.
+		std::vector<std::shared_ptr<const ibBackendQueryColumn>> cuts;   // what a reading may narrow by — the indexes below
 		for (unsigned int idx = 0; idx < GetAccountDimensionCount(); idx++) {
 			const ibValueMetaObjectAttributeBase* kindSlot = GetAccountDimensionKindSlot(creditSide, idx);
 			const ibValueMetaObjectAttributeBase* slot     = GetAccountDimensionSlot(creditSide, idx);
@@ -201,6 +211,7 @@ void ibValueMetaObjectAccountingRegister::ContributeTables(ibSchemaSnapshot& out
 			t.Add(slot->GetQueryColumn());
 			keyCols.push_back(kindSlot->GetQueryColumn());
 			keyCols.push_back(slot->GetQueryColumn());
+			cuts.push_back(slot->GetQueryColumn());   // the value names its kind: a reading narrows by the value
 		}
 
 		// ⭐⭐ A NON-BALANCE DIMENSION KEYS EACH SIDE BY ITS OWN HALF. Balanced, it holds one value for the
@@ -209,12 +220,16 @@ void ibValueMetaObjectAccountingRegister::ContributeTables(ibSchemaSnapshot& out
 		// currency received is not the currency paid), so the credit totals must be keyed by the credit
 		// half; keyed by the debit one they would file a credit turnover under the other side's value.
 		for (const auto dimension : GetDimensionArrayObject()) {
-			const ibBackendQueryColumn* field = GetRegisterDimension(creditSide, dimension);
+			const std::shared_ptr<const ibBackendQueryColumn> field = GetRegisterDimension(creditSide, dimension);
 			if (field == nullptr)
 				continue;
 			t.Add(field);
 			keyCols.push_back(field);
+			cuts.push_back(field);
 		}
+
+		// The key past its unit and its period — what a reading of one account names (the indexes below).
+		std::vector<std::shared_ptr<const ibBackendQueryColumn>> readCols(keyCols.begin() + 2, keyCols.end());
 
 		// SPLIT TOTALS: the shard column joins the KEY, which is what makes several physical rows legal
 		// for one logical key. It exists only when the switch is on — turning the switch changes the key
@@ -242,6 +257,30 @@ void ibValueMetaObjectAccountingRegister::ContributeTables(ibSchemaSnapshot& out
 		// has to be ADDABLE to a table that already exists.
 		ibDeclareDerivedKey(t, totalsName, keyCols, ibRegDerivedColumnId(totals->GetMetaID()));
 
+		// ⭐⭐ AND THE INDEXES A READING OF ONE ACCOUNT RIDES — the account FIRST, the unit and the period after it.
+		//
+		// The key opens with the unit and the period, which is right for a reading of every account. A reading of ONE —
+		// "the balance of 62", the question this register is asked most — names the other end: an equality on the
+		// account and a range of the period in each unit's rows. Under the key that range held every account, so a
+		// balance of one account was bounded by the units and walked all the other accounts' rows in them. `_AL` is
+		// that reading's own: the account, the unit, the period.
+		//
+		// `_DL` goes on past the account into its breakdown and the register's dimensions, as the accumulation
+		// register's `_DL` does — "the balance of 62 with this counterparty". As many as the engine's index holds
+		// (ibDeclareLookupIndex), the period closing it whatever is cut. Only where there is something past the account:
+		// otherwise it is `_AL` again, one more index for the trigger and no reading of its own. A totals index is paid
+		// when a totals ROW is made, not on each movement's update of one.
+		//
+		// And every other cut — each account dimension's value, each of the register's dimensions — has an index of its
+		// own (ibRegDeclareCutIndexes): `_DL` reaches the organisation only if it fits behind the account and its
+		// breakdown, and on Firebird it did not.
+		ibDeclareLookupIndex(t, totalsName + ibT("_AL"), { account->GetQueryColumn(), unitCol }, /*closing*/ periodCol);
+		if (readCols.size() > 1) {
+			readCols.push_back(unitCol);
+			ibDeclareLookupIndex(t, totalsName + ibT("_DL"), readCols, /*closing*/ periodCol);
+		}
+		ibRegDeclareCutIndexes(t, totalsName, cuts, unitCol, periodCol);
+
 		// A SIDE IS DECLARED WHOLE — table, columns, triggers and all — or not at all: the credit side
 		// exists in correspondence mode only (see the declaration at the end). Which movements land in a
 		// side that exists is the delta's guard further down, and that guard reads the ROW.
@@ -251,7 +290,9 @@ void ibValueMetaObjectAccountingRegister::ContributeTables(ibSchemaSnapshot& out
 		// STORED GRANULARITY = DAY. It is the FLOOR on what can be read back — a projection is
 		// derivable only into a unit no finer than the stored one — and everything below it (an hour, a
 		// recorder, a line) is answered from the MOVEMENTS, which is where those questions belong.
-		m.Period(periodField, GetRegisterPeriod()->GetQueryColumn(), ibT("{row}.") + periodField, GetTotalsPeriodUnit());
+		// The coarser units are kept beside it (ibRegTotalsUnits, Day first), each a row of its own.
+		m.Period(periodField, PeriodUnitColumnName(), GetRegisterPeriod()->GetQueryColumn(), ibT("{row}.") + periodField,
+			std::vector<ibTotalsPeriod>(std::begin(ibRegTotalsUnits), std::end(ibRegTotalsUnits)));
 
 		// ⭐⭐ AN INACTIVE MOVEMENT EXISTS AND COUNTS FOR NOTHING. Active separates a record that is
 		// THERE from a record that is IN FORCE: an entry written but not in effect occupies its row and
@@ -321,8 +362,8 @@ void ibValueMetaObjectAccountingRegister::ContributeTables(ibSchemaSnapshot& out
 		// half of every non-balance dimension. The two must never disagree: the key the trigger writes
 		// by IS the key the table stores by.
 		for (const auto dimension : GetDimensionArrayObject()) {
-			if (const ibBackendQueryColumn* field = GetRegisterDimension(creditSide, dimension))
-				m.Key(field);
+			if (std::shared_ptr<const ibBackendQueryColumn> field = GetRegisterDimension(creditSide, dimension))
+				m.Key(std::move(field));
 		}
 
 		// --- the stored columns + what a movement contributes to each ------------------------------
@@ -360,7 +401,7 @@ void ibValueMetaObjectAccountingRegister::ContributeTables(ibSchemaSnapshot& out
 				// The figure is stored in the RESOURCE's own precision (ibRegAccumulatorColumn) — declared
 				// flat, the column was NUMERIC(18,0) and a resource carrying kopecks lost them on the way
 				// INTO the totals, whatever the movements held.
-				const ibBackendQueryColumn* c = ibRegAccumulatorColumn(t, name, id, res);
+				const std::shared_ptr<const ibBackendQueryColumn> c = ibRegAccumulatorColumn(t, name, id, res);
 				// 🛑 THE SECOND FIELD IS THE PHYSICAL BASE the view's columns are spelled from
 				// (`+ "TurnoverCr"` …), so it reaches CREATE VIEW as a real SQL identifier and must be
 				// ASCII. Taken from the resource's USER name, a Cyrillic resource made Firebird refuse
@@ -377,13 +418,13 @@ void ibValueMetaObjectAccountingRegister::ContributeTables(ibSchemaSnapshot& out
 			// half. The STORED column keeps the resource's name and id either way: the table is the
 			// side's already (that is what a side's totals table is), and the figure in it is the same
 			// figure, whichever field of the movement fed it.
-			const ibBackendQueryColumn* movField = GetRegisterResource(creditSide, res);
+			const std::shared_ptr<const ibBackendQueryColumn> movField = GetRegisterResource(creditSide, res);
 			const ibString movValueField = ibRegValueField(movField);
 
 			if (correspondence) {
 				// The row IS a posting: what it contributes to THIS table is the whole amount, and which
 				// side that is was decided by which account keyed the table.
-				const ibBackendQueryColumn* c = declareColumn(creditSide);
+				const std::shared_ptr<const ibBackendQueryColumn> c = declareColumn(creditSide);
 				m.Accumulate(c, ibT("{row}.") + movValueField, ibQueryColumnExpr::Col(movField));
 				continue;
 			}
@@ -408,14 +449,14 @@ void ibValueMetaObjectAccountingRegister::ContributeTables(ibSchemaSnapshot& out
 			// side on a rebuild). The neighbouring register measured it: accumulationRegisterMetadataSchema.
 			const ibValue debit = ibValue::CreateEnumObject<ibValueEnumAccountingRegisterRecordType>(ibAccountingRecordType::eDebit);
 
-			const ibBackendQueryColumn* cDr = declareColumn(/*credit*/ false);
-			const ibBackendQueryColumn* cCr = declareColumn(/*credit*/ true);
+			const std::shared_ptr<const ibBackendQueryColumn> cDr = declareColumn(/*credit*/ false);
+			const std::shared_ptr<const ibBackendQueryColumn> cCr = declareColumn(/*credit*/ true);
 
 			// One-sided, the SIDE is the record type rather than the table, so each branch reads the
 			// half that branch is about — the debit one from the debit field, the credit one from the
 			// credit field. Balanced, both halves are the same column and this reads as it always did.
-			const ibBackendQueryColumn* movDr = GetRegisterResource(/*creditSide*/ false, res);
-			const ibBackendQueryColumn* movCr = GetRegisterResource(/*creditSide*/ true,  res);
+			const std::shared_ptr<const ibBackendQueryColumn> movDr = GetRegisterResource(/*creditSide*/ false, res);
+			const std::shared_ptr<const ibBackendQueryColumn> movCr = GetRegisterResource(/*creditSide*/ true,  res);
 			const ibString movDrField = ibRegValueField(movDr);
 			const ibString movCrField = ibRegValueField(movCr);
 
@@ -461,9 +502,9 @@ void ibValueMetaObjectAccountingRegister::ContributeTables(ibSchemaSnapshot& out
 				// NAME AND TYPE TOGETHER — the stored arm has neither of these columns and stands a
 				// null in their place, and a null has to be CAST or the view will not compile.
 				// DescribeColumnLayout is the same spread ColumnFieldNames walks, carrying the type.
-				for (const ibColumnSlot& s : DescribeColumnLayout(GetRegisterRecorder()->GetQueryColumn()))
+				for (const ibColumnSlot& s : DescribeColumnLayout(*GetRegisterRecorder()->GetQueryColumn()))
 					v.m_movementColumns.push_back({ s.m_name, s.m_type });
-				for (const ibColumnSlot& s : DescribeColumnLayout(GetRegisterLineNumber()->GetQueryColumn()))
+				for (const ibColumnSlot& s : DescribeColumnLayout(*GetRegisterLineNumber()->GetQueryColumn()))
 					v.m_movementColumns.push_back({ s.m_name, s.m_type });
 			}
 
@@ -494,7 +535,7 @@ bool ibValueMetaObjectAccountingRegister::HasMaterializedViews() const
 	return db_query != nullptr && ibCanMaterialize(*db_query);
 }
 
-const ibBackendQueryable* ibValueMetaObjectAccountingRegister::GetTurnoverViewQueryable(bool creditSide) const
+std::shared_ptr<const ibBackendQueryable> ibValueMetaObjectAccountingRegister::GetTurnoverViewQueryable(bool creditSide) const
 {
 	const ibString viewName = GetTurnoverViewName(creditSide);
 

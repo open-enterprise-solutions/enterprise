@@ -32,7 +32,7 @@
 #include "backend/databaseLayer/columnType.h"     // ibColumnType — the canonical type a column's field declares
 
 #include <limits>   // numeric_limits — the ceiling a composed id may not pass (CanComposeSyntheticId)
-#include <memory>   // enable_shared_from_this — a column carries its own control block (see below)
+#include <memory>   // shared_ptr — a column is born held and handed out as it is held (see below)
 #include <vector>
 
 // The role a physical field plays in a logical column's spread (an L3 layout concept — L2 never sees
@@ -98,25 +98,16 @@ enum ibFieldTypes {
 //  column-layout tier: DescribeColumnLayout (slots) / ColumnFieldNames / ColumnFieldList. The enum
 //  ibFieldTypes above stays — it is the persisted _TYPE discriminator value, used by the codec.)
 
-// ⭐⭐ A COLUMN CARRIES ITS OWN CONTROL BLOCK, so nobody ever has to invent a second one.
+// ⭐⭐ A COLUMN IS BORN HELD — `std::make_shared` — AND IS HANDED OUT AS IT IS HELD:
+// `std::shared_ptr<const ibBackendQueryColumn>`, from the source that publishes it to whatever keeps it.
 //
-// A `shared_ptr` built from a raw pointer CANNOT tell that the object is already owned: it makes
-// its OWN control block, with its own count, and both of them delete at zero. There is no
-// diagnostic for that — not in the compiler, not at runtime. The only defence is to never need the
-// wrapping, and `enable_shared_from_this` is exactly that: the weak reference it keeps INSIDE the
-// object points at the control block that already exists.
-//
-//     col->weak_from_this().lock()   ->  the real holder, or empty
-//
-// Empty is a fact, not a failure: a column the configuration owns, or one that lives as a member,
-// has no shared owner and nothing to hand out. This is the same discriminator ibRunContext uses to
-// tell a heap-promoted frame from a stack one (compiler/procContext.h) — no second flag, no map of
-// who owns what.
-//
-// It also retires the question `ibBackendQueryable::ShareColumn` was invented to answer. That asks
-// every SOURCE in turn "did you mint this column, and if so give me its storage"; asking the column
-// itself needs no loop and no knowledge of where it came from. (docs/private/ownership-authority.md)
-class BACKEND_API ibBackendQueryColumn : public std::enable_shared_from_this<ibBackendQueryColumn>
+// A raw pointer to it is a holder somebody is missing (Max, 2026-11-16). Eight different owners stood behind one
+// `const ibBackendQueryColumn*` — the configuration, the run, a wrapper, a static cache — and the side doors grew
+// for each one that crashed: a source asked "did you mint this, then give me its storage" (ShareColumn), an
+// output column carried its owning twin beside the bare one (m_ownedCol), a column kept a weak reference to its
+// own control block for whoever had only the bare pointer. With nothing handed out bare, none of them is needed.
+// (docs/private/ownership-authority.md § 7)
+class BACKEND_API ibBackendQueryColumn
 {
 public:
 	virtual ~ibBackendQueryColumn() = default;
@@ -380,8 +371,8 @@ public:
 // behind it and no translation. Lets the door address a real column straight (the row-key
 // uuid; a balance's computed qty_balance) through the SAME ibBackendQueryColumn interface as
 // a metadata attribute. The PHYSICAL TYPE is carried by the column itself (its RawType), so
-// the provider binds it with no value-type guessing — use the typed factories below.
-// Slicing-safe — all state is on this base, so the door takes one by ref and owns a copy.
+// the provider binds it with no value-type guessing — use the typed factories below, which make
+// it held, as every column is born.
 // The uniqueness key is the queryable's concern, not the column's. (docs §22)
 // ==========================================================================
 class BACKEND_API ibBackendColumnRawDB : public ibBackendQueryColumn
@@ -427,18 +418,18 @@ public:
 	// sizes an index key from the DECLARED length times the charset's bytes-per-character, so a
 	// VARCHAR(255) in UTF8 is 1020 bytes and passes the key-size ceiling (≈ page_size / 4) on its own —
 	// "key size exceeds implementation restriction", with nothing wrong but the declaration.
-	static ibBackendColumnRawDB String   (const ibString& field, ibMetaID id = 0, unsigned int length = 0) {
-		ibBackendColumnRawDB col(field, RawType::String, id);
-		col.m_length = length;
+	static std::shared_ptr<const ibBackendColumnRawDB> String(const ibString& field, ibMetaID id = 0, unsigned int length = 0) {
+		const std::shared_ptr<ibBackendColumnRawDB> col = std::make_shared<ibBackendColumnRawDB>(field, RawType::String, id);
+		col->m_length = length;
 		return col;
 	}
 	// The same for a number: a totals column has to carry the RESOURCE's own precision and scale, or a
 	// figure with kopecks is stored in a column that has none and the fraction is lost on the way in.
-	static ibBackendColumnRawDB Number   (const ibString& field, ibMetaID id = 0,
-	                               unsigned int precision = 0, unsigned int scale = 0) {
-		ibBackendColumnRawDB col(field, RawType::Number, id);
-		col.m_length = precision;
-		col.m_scale  = scale;
+	static std::shared_ptr<const ibBackendColumnRawDB> Number(const ibString& field, ibMetaID id = 0,
+	                                                          unsigned int precision = 0, unsigned int scale = 0) {
+		const std::shared_ptr<ibBackendColumnRawDB> col = std::make_shared<ibBackendColumnRawDB>(field, RawType::Number, id);
+		col->m_length = precision;
+		col->m_scale  = scale;
 		return col;
 	}
 	// ⭐ A REFERENCE STORED AS ONE FIELD, WITH A CONSTANT TARGET.
@@ -448,13 +439,13 @@ public:
 	// exactly one owner, so the type is known from the metadata and storing it per row would be a
 	// column repeating one constant a million times. The target rides on the column instead, and the
 	// codec reads a real reference out of the sixteen bytes it finds.
-	static ibBackendColumnRawDB Reference(const ibString& field, const ibClassID& target = 0,
-	                               const ibString& name = ibEmptyString, ibMetaID modelId = 0)
+	static std::shared_ptr<const ibBackendColumnRawDB> Reference(const ibString& field, const ibClassID& target = 0,
+	                                                             const ibString& name = ibEmptyString, ibMetaID modelId = 0)
 	{
-		ibBackendColumnRawDB col(field, RawType::Reference, modelId);
-		col.m_name = name;
+		const std::shared_ptr<ibBackendColumnRawDB> col = std::make_shared<ibBackendColumnRawDB>(field, RawType::Reference, modelId);
+		col->m_name = name;
 		if (target != 0)
-			col.m_typeDesc.SetDefaultMetaType(target);
+			col->m_typeDesc.SetDefaultMetaType(target);
 		return col;
 	}
 
@@ -473,10 +464,10 @@ public:
 	               class ibValue& retValue, class ibQueryResult& result, bool createData = false) const override;
 	void BindValue(class ibQueryStatement& statement, const class ibMetaData* metaData,
 	               const class ibValue& value, int& position) const override;
-	static ibBackendColumnRawDB Date     (const ibString& field, ibMetaID id = 0) { return ibBackendColumnRawDB(field, RawType::Date, id);      }
-	static ibBackendColumnRawDB Boolean  (const ibString& field) { return ibBackendColumnRawDB(field, RawType::Boolean);   }
-	static ibBackendColumnRawDB Guid     (const ibString& field) { return ibBackendColumnRawDB(field, RawType::Guid);      }
-	static ibBackendColumnRawDB Blob     (const ibString& field) { return ibBackendColumnRawDB(field, RawType::Blob);      }
+	static std::shared_ptr<const ibBackendColumnRawDB> Date   (const ibString& field, ibMetaID id = 0) { return std::make_shared<ibBackendColumnRawDB>(field, RawType::Date, id); }
+	static std::shared_ptr<const ibBackendColumnRawDB> Boolean(const ibString& field) { return std::make_shared<ibBackendColumnRawDB>(field, RawType::Boolean); }
+	static std::shared_ptr<const ibBackendColumnRawDB> Guid   (const ibString& field) { return std::make_shared<ibBackendColumnRawDB>(field, RawType::Guid); }
+	static std::shared_ptr<const ibBackendColumnRawDB> Blob   (const ibString& field) { return std::make_shared<ibBackendColumnRawDB>(field, RawType::Blob); }
 
 private:
 	ibString                  m_field;

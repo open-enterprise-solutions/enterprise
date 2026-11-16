@@ -30,7 +30,7 @@ class ibValueDynamicListColumnCollection : public ibValueModelCursor::ibValueMod
 public:
 	class ibValueDynamicListColumnInfo : public ibValueModelColumnInfo, public ibBackendSourceColumn {
 	public:
-		ibValueDynamicListColumnInfo(ibString name, const ibBackendQueryColumn* col, ibMetaID id,
+		ibValueDynamicListColumnInfo(ibString name, const std::shared_ptr<const ibBackendQueryColumn>& col, ibMetaID id,
 			const ibTypeDescription& type = ibTypeDescription(), bool walkAvailable = true)
 			: m_name(std::move(name)), m_col(col), m_id(id), m_type(type), m_walkAvailable(walkAvailable) {}
 
@@ -67,21 +67,22 @@ public:
 		}
 
 	private:
-		ibString                    m_name;
-		const ibBackendQueryColumn* m_col;
-		ibMetaID                    m_id;
-		mutable ibTypeDescription   m_type;            // stated by the query; empty — its column's
-		bool                        m_walkAvailable;
+		ibString                                    m_name;
+		std::shared_ptr<const ibBackendQueryColumn> m_col;
+		ibMetaID                                    m_id;
+		mutable ibTypeDescription                   m_type;            // stated by the query; empty — its column's
+		bool                                        m_walkAvailable;
 	};
 
 	// A QUERYABLE's: ALL its columns — the runtime model collection must resolve any column a tablebox references
 	// (including a system one the user re-shows). The DEFAULT-vs-hidden split is on the SOURCE EXPLORER
 	// (GetSourceExplorer), which the tablebox column auto-creation reads to set each column's visibility.
-	explicit ibValueDynamicListColumnCollection(const ibBackendQueryable* queryable) {
-		if (queryable != nullptr)
-			for (const ibBackendQueryColumn* c : queryable->GetQueryColumns())
-				if (c != nullptr)
-					m_cols.push_back(new ibValueDynamicListColumnInfo(c->GetName(), c, c->GetColumnId()));
+	// …held for as long as the collection is: every column of it points into the reading.
+	explicit ibValueDynamicListColumnCollection(const std::shared_ptr<const ibBackendQueryable>& queryable)
+		: m_source(queryable) {
+		for (const std::shared_ptr<const ibBackendQueryColumn>& c : m_source->GetQueryColumns())
+			if (c != nullptr)
+				m_cols.push_back(new ibValueDynamicListColumnInfo(c->GetName(), c, c->GetColumnId()));
 	}
 
 	// ⭐⭐ AN OUTPUT IS KNOWN BY ITS NAME, AND ITS ID FOLLOWS THE NAME. A form's column is bound to the list by
@@ -127,6 +128,7 @@ private:
 		"a name's body must still take a kind");
 
 	std::vector<ibValueDynamicListColumnInfo*> m_cols;
+	std::shared_ptr<const ibBackendQueryable>  m_source;   // the reading the columns point into; none for a query's schema
 };
 
 namespace {
@@ -162,7 +164,7 @@ private:
 //  ibValueDynamicList
 // ===========================================================================
 
-ibValueDynamicList::ibValueDynamicList(const ibBackendQueryable* queryable, ibDynamicListView view)
+ibValueDynamicList::ibValueDynamicList(const std::shared_ptr<const ibBackendQueryable>& queryable, ibDynamicListView view)
 	: ibValueModelCursor(), ibSourceDataObject(),
 	  m_columns(nullptr), m_view(view)
 {
@@ -212,16 +214,17 @@ ibValueDynamicList::~ibValueDynamicList() { CancelFetch(); }
 
 void ibValueDynamicList::SetSource(const ibString& ns, const ibString& name)
 {
-	const ibBackendQueryable* before = GetSourceQueryable();
+	const ibMetaID before = m_propertySource->GetTableId();
 	m_propertySource->SetSource(ns, name);   // resolves the queryable INTO the property variant
-	if (GetSourceQueryable() != before)      // only on a REAL change — re-picking the SAME source keeps columns/settings
+	if (m_propertySource->GetTableId() != before)   // only on a REAL change — re-picking the SAME source keeps columns/settings
 		RebuildSource();
 }
 
-void ibValueDynamicList::SetSourceQueryable(const ibBackendQueryable* queryable)
+void ibValueDynamicList::SetSourceQueryable(const std::shared_ptr<const ibBackendQueryable>& queryable)
 {
-	if (queryable == GetSourceQueryable())   // same source — leave columns/composer/settings untouched
-		return;
+	// The same source is the same table, never the same pointer (queryableFactory.h).
+	if ((queryable != nullptr ? (ibMetaID)queryable->GetQueryTableId() : ibNOT_FOUND) == m_propertySource->GetTableId())
+		return;   // same source — leave columns/composer/settings untouched
 	m_propertySource->SetQueryable(queryable);   // the queryable lives in the property, not here
 	RebuildSource();
 }
@@ -233,7 +236,7 @@ void ibValueDynamicList::RebuildSource()
 	// GetSourceMetaData is terminal (it never re-resolves the queryable through m_owner->GetMetaData, which walks the
 	// form → recurses). A metaobject-less source (arbitrary query / register virtual table / not yet picked) leaves
 	// the variable as-is; GetSourceMetaData then falls back to the ACTIVE config.
-	const ibBackendQueryable* queryable = GetSourceQueryable();
+	const std::shared_ptr<const ibBackendQueryable> queryable = GetSourceQueryable();
 	if (queryable != nullptr) {
 		if (const ibValueMetaObjectGenericData* mo = queryable->GetSourceMetaObject())
 			m_sourceMetaData = mo->GetMetaData();
@@ -394,11 +397,11 @@ void ibValueDynamicList::AddSort(const ibString& path, bool ascending)
 // Asked of the queryable rather than fixed at the four call sites: the factory is the one place that holds
 // BOTH facts (the source and the column), so a metaobject cannot get this wrong again by passing a column
 // that used to exist.
-static bool ibSourceHasColumn(const ibBackendQueryable* queryable, const ibBackendQueryColumn* column)
+static bool ibSourceHasColumn(const std::shared_ptr<const ibBackendQueryable>& queryable, const std::shared_ptr<const ibBackendQueryColumn>& column)
 {
 	if (queryable == nullptr || column == nullptr || !column->IsAllowed())
 		return false;   // switched off — vended by the source, answered by no find (see the composer's SELECT)
-	for (const ibBackendQueryColumn* col : queryable->GetQueryColumns())
+	for (const std::shared_ptr<const ibBackendQueryColumn>& col : queryable->GetQueryColumns())
 		if (col == column)
 			return true;
 	return false;
@@ -410,7 +413,7 @@ static bool ibSourceHasColumn(const ibBackendQueryable* queryable, const ibBacke
 // is: it knows filters, the factory knows why there is one. Exactly the arrangement a folder-select list
 // already has — its `IsFolder = true` is a creation-time filter line set by its factory (Max, 2026-09-23:
 // "before creating the list you simply assign it this filter"). Empty request, no lines.
-static ibValueDynamicList* ibNewList(const ibCreateRequest& request, const ibBackendQueryable* queryable, ibDynamicListView view)
+static ibValueDynamicList* ibNewList(const ibCreateRequest& request, const std::shared_ptr<const ibBackendQueryable>& queryable, ibDynamicListView view)
 {
 	ibValueDynamicList* list = new ibValueDynamicList(queryable, view);
 	for (const std::pair<const ibString, ibValue>& parameter : request.m_condition.m_parameters)
@@ -420,7 +423,8 @@ static ibValueDynamicList* ibNewList(const ibCreateRequest& request, const ibBac
 
 // Create a list with a DEFAULT sort set at creation — the metaobject passes its presentation column. The sort lands
 // on the composer (the store) so the serializer saves it and the user can remove it; NOT re-applied at runtime.
-ibValueDynamicList* ibCreateList(const ibCreateRequest& request, const ibBackendQueryable* queryable, const ibBackendQueryColumn* defaultSort, ibDynamicListView view)
+ibValueDynamicList* ibCreateList(const ibCreateRequest& request, const std::shared_ptr<const ibBackendQueryable>& queryable,
+	const std::shared_ptr<const ibBackendQueryColumn>& defaultSort, ibDynamicListView view)
 {
 	ibValueDynamicList* list = ibNewList(request, queryable, view);
 	if (ibSourceHasColumn(queryable, defaultSort))
@@ -430,7 +434,9 @@ ibValueDynamicList* ibCreateList(const ibCreateRequest& request, const ibBackend
 
 // Hierarchy list — folder-first sort (folders on top) then presentation. Both are ordinary creation-time sorts on
 // the composer; the metaobject passes the columns. The TREE comes from the queryable's hierarchy (parent) column.
-ibValueDynamicList* ibCreateHierarchyList(const ibCreateRequest& request, const ibBackendQueryable* queryable, const ibBackendQueryColumn* folderCol, const ibBackendQueryColumn* presentationCol, ibDynamicListView view)
+ibValueDynamicList* ibCreateHierarchyList(const ibCreateRequest& request, const std::shared_ptr<const ibBackendQueryable>& queryable,
+	const std::shared_ptr<const ibBackendQueryColumn>& folderCol, const std::shared_ptr<const ibBackendQueryColumn>& presentationCol,
+	ibDynamicListView view)
 {
 	ibValueDynamicList* list = ibNewList(request, queryable, view);
 	// ⚠ A FOLDER COLUMN THE SOURCE DOES NOT HAVE IS NO FOLDER COLUMN. An arrangement without folders (a chart of
@@ -448,7 +454,9 @@ ibValueDynamicList* ibCreateHierarchyList(const ibCreateRequest& request, const 
 // Folder-select list — presentation sort + a fixed `IsFolder = true` filter (only folders). The metaobject passes
 // the columns (folder-select is a filter setting; no structural GetFolderColumn). `view` seeds the default view,
 // same as the sibling factories — the folder-select call site passes ibDynamicListView_Choice.
-ibValueDynamicList* ibCreateFolderList(const ibCreateRequest& request, const ibBackendQueryable* queryable, const ibBackendQueryColumn* folderCol, const ibBackendQueryColumn* presentationCol, ibDynamicListView view)
+ibValueDynamicList* ibCreateFolderList(const ibCreateRequest& request, const std::shared_ptr<const ibBackendQueryable>& queryable,
+	const std::shared_ptr<const ibBackendQueryColumn>& folderCol, const std::shared_ptr<const ibBackendQueryColumn>& presentationCol,
+	ibDynamicListView view)
 {
 	ibValueDynamicList* list = ibNewList(request, queryable, view);
 	if (ibSourceHasColumn(queryable, presentationCol))
@@ -502,7 +510,7 @@ ibValueModel::ibValueModelReturnLine* ibValueDynamicList::GetRowAt(const ibDataV
 
 const ibUniqueKey& ibValueDynamicList::GetGuid() const
 {
-	if (const ibBackendQueryable* q = GetSourceQueryable())
+	if (const std::shared_ptr<const ibBackendQueryable> q = GetSourceQueryable())
 		return q->GetQueryTableGuid();   // the key its source's metaobject keeps
 
 	static const ibUniqueKey none;   // no source picked yet
@@ -681,7 +689,7 @@ ibString ibValueDynamicList::GetSourceCaption() const
 	// Caption = the metaobject's "Type: Synonym" (Catalog: Products) when the source is metadata-backed; a custom-
 	// query source has no metaobject, so fall back to the queryable's own name. GetSourceMetaObject comes THROUGH
 	// the queryable (the same path the front reads the icon), so caption + icon stay consistent.
-	if (const ibBackendQueryable* q = GetSourceQueryable())
+	if (const std::shared_ptr<const ibBackendQueryable> q = GetSourceQueryable())
 		return GetSourceMetaObject() ?
 			ibMetaTypeCaption(GetSourceMetaObject()->GetClassType()) + ibT(": ") + GetSourceMetaObject()->GetSynonym() : q->GetQueryName();
 

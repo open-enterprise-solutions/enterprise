@@ -18,7 +18,7 @@
 #include <utility>
 #include <vector>
 
-#include "backend/compiler/cache/byteCodeCache.h"
+#include "backend/compiler/byteCode.h"
 #include "backend/metadataConfiguration.h"
 #include "backend/metaCollection/metaObjectMetadata.h"
 
@@ -885,17 +885,21 @@ TEST_F(SessionFailover, StartModuleThatAsksDoesNotHangTheLogin)
 	ibValueMetaObjectModule* const module = const_cast<ibValueMetaObjectModule*>(common->GetObjectModule());
 	ASSERT_NE(module, nullptr);
 	// The cache key is the configuration digest, not the module text. A login that already compiled
-	// the empty module would serve that bytecode again, and onStart would never ask. Drop the row
-	// whenever the text changes, the same way an apply retires it.
+	// the empty module would serve that bytecode again, and onStart would never ask. Drop the row —
+	// the one the configuration holds and the table's — whenever the text changes, the same way an
+	// apply retires it.
+	ibByteCodeStorage* const storage = meta->GetByteCodeStorage();
+	ASSERT_NE(storage, nullptr);
 	struct Restore {
 		ibValueMetaObjectModule* module;
+		ibByteCodeStorage*       storage;
 		ibString                 text;
 		~Restore()
 		{
 			module->SetModuleText(text);
-			ibByteCodeCache::Invalidate(module->GetGuid().GetGuid());
+			storage->Invalidate(module->GetGuid().GetGuid());
 		}
-	} restore{ module, module->GetModuleText() };
+	} restore{ module, storage, module->GetModuleText() };
 	const bool words = common->GetCompileSyntax() == ibProgramSyntax::syntax_ves;
 	module->SetModuleText(words
 		? wxT("Procedure onStart()\n")
@@ -904,7 +908,7 @@ TEST_F(SessionFailover, StartModuleThatAsksDoesNotHangTheLogin)
 		: wxT("Procedure onStart() {\n")
 		  wxT("\tQuestion(\"stay\", QuestionMode.Ok);\n")
 		  wxT("}\n"));
-	ibByteCodeCache::Invalidate(module->GetGuid().GetGuid());
+	storage->Invalidate(module->GetGuid().GetGuid());
 
 	int connection = 0;
 	auto pending = std::async(std::launch::async, [&]() {
@@ -929,6 +933,67 @@ TEST_F(SessionFailover, StartModuleThatAsksDoesNotHangTheLogin)
 	answer.SetValue("Response", response);
 	const Rpc responded = g_base->Call(Request(121, "respond", answer), &connection);
 	EXPECT_TRUE(responded.ok) << responded.message;
+}
+
+TEST_F(SessionFailover, ByteCodeStorageHoldsWhatItCompiledAndDetachedSavesNothing)
+{
+	ibMetaDataConfigurationBase* const meta = ibApplicationInstance::GetActiveMetaData(g_base->app);
+	ASSERT_NE(meta, nullptr);
+	ibByteCodeStorage* const storage = meta->GetByteCodeStorage();
+	ASSERT_NE(storage, nullptr) << "a configuration that runs holds its bytecode";
+
+	// A module nobody has: its row is this test's alone, and goes with it.
+	const ibGuid module = ibGuid::newGuid();
+	struct Restore {
+		ibByteCodeStorage* storage;
+		ibGuid             module;
+		~Restore() { storage->Invalidate(module); }
+	} restore{ storage, module };
+
+	int compiled = 0;
+	const auto compile = [&](ibByteCode& bc) {
+		++compiled;
+		bc.m_id = module;
+		bc.m_version = ibGuid::newGuid();
+		return true;
+	};
+
+	// A miss compiles, and what was compiled is held: the second asking compiles nothing.
+	ibByteCode first;
+	ASSERT_TRUE(storage->Load(first, module, compile));
+	EXPECT_EQ(compiled, 1);
+	ibByteCode second;
+	ASSERT_TRUE(storage->Load(second, module, compile));
+	EXPECT_EQ(compiled, 1);
+	EXPECT_TRUE(second.m_version == first.m_version);
+
+	// It was saved as well. A storage made now — another process opening the same configuration — reads the row with
+	// the configuration's others, before anything is asked of it.
+	{
+		ibByteCodeStorage opened(meta);
+		ibByteCode read;
+		EXPECT_TRUE(opened.Load(read, module));
+		EXPECT_TRUE(read.m_version == first.m_version);
+	}
+
+	// A detached one compiles for its own sessions and holds what it compiled, and the table does not see it.
+	const ibGuid other = ibGuid::newGuid();
+	const auto compileOther = [&](ibByteCode& bc) {
+		bc.m_id = other;
+		bc.m_version = ibGuid::newGuid();
+		return true;
+	};
+	ibByteCodeStorage detached(meta);
+	detached.Detach();
+	ibByteCode own;
+	ASSERT_TRUE(detached.Load(own, other, compileOther));
+	ibByteCode held;
+	EXPECT_TRUE(detached.Load(held, other));
+	EXPECT_TRUE(held.m_version == own.m_version);
+
+	ibByteCodeStorage after(meta);
+	ibByteCode none;
+	EXPECT_FALSE(after.Load(none, other)) << "a replaced configuration saved a row";
 }
 
 TEST_F(SessionFailover, DetachedSessionSaysUntilWhen)

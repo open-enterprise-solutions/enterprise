@@ -42,7 +42,7 @@ ibMaterializeSpec MakeSpec()
 	s.m_keyColumns       = { wxT("wh") };
 	s.m_periodColumn     = wxT("period_");
 	s.m_periodSourceExpr = wxT("{row}.period_");
-	s.m_periodUnit       = ibTotalsPeriod::Day;
+	s.m_periodUnits      = { ibTotalsPeriod::Day };
 	s.m_deltas = {
 		{ wxT("qty_in"),  wxT("CASE WHEN {row}.rectype_ = 0 THEN {row}.qty ELSE 0 END") },
 		{ wxT("qty_out"), wxT("CASE WHEN {row}.rectype_ = 0 THEN 0 ELSE {row}.qty END") },

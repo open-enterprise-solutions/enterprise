@@ -36,12 +36,12 @@ ibBackendQueryProvider& ibBackendQueryable::GetProvider() const
 // A column the source LISTS, by name — then its sort order. Listing and resolving were two answers to one
 // question, and a source that gave one without the other was half a source — the constant resolved `Value`
 // and listed nothing.
-const ibBackendQueryColumn* ibBackendQueryable::ResolveColumnByName(const ibString& name) const
+std::shared_ptr<const ibBackendQueryColumn> ibBackendQueryable::ResolveColumnByName(const ibString& name) const
 {
-	for (const ibBackendQueryColumn* column : GetQueryColumns())
+	for (std::shared_ptr<const ibBackendQueryColumn>& column : GetQueryColumns())
 		if (column != nullptr && column->GetName().IsSameAs(name, false))
-			return column;
-	const ibBackendQueryColumn* const sort = GetSortColumn();
+			return std::move(column);
+	std::shared_ptr<const ibBackendQueryColumn> sort = GetSortColumn();
 	return sort != nullptr && sort->GetName().IsSameAs(name, false) ? sort : nullptr;
 }
 
@@ -86,29 +86,29 @@ ibMetaID ibBackendQueryable::GetQueryTableId() const
 // bands in the positive space: bands have to be read before every addition, and nothing makes anyone
 // read them — I walked into an occupied one adding a sixth (2026-09-06).
 //
-ibAliasQueryable::ibAliasQueryable(const ibBackendQueryable* origin, const ibString& sqlAlias)
+ibAliasQueryable::ibAliasQueryable(const std::shared_ptr<const ibBackendQueryable>& origin, const ibString& sqlAlias)
 	: m_origin(origin), m_sqlAlias(sqlAlias)
 {
-	for (const ibBackendQueryColumn* c : origin->GetQueryColumns()) {
+	for (const std::shared_ptr<const ibBackendQueryColumn>& c : origin->GetQueryColumns()) {
 		if (c == nullptr)
 			continue;
-		m_published.push_back(m_owned.emplace_back(std::make_shared<ibAliasColumn>(c)).get());
+		m_published.push_back(std::make_shared<ibAliasColumn>(c));
 	}
 	// …and the sort order, which the origin answers to without listing it (see the header).
-	if (const ibBackendQueryColumn* const sort = origin->GetSortColumn())
-		m_sort = m_owned.emplace_back(std::make_shared<ibAliasColumn>(sort)).get();
+	if (const std::shared_ptr<const ibBackendQueryColumn> sort = origin->GetSortColumn())
+		m_sort = std::make_shared<ibAliasColumn>(sort);
 }
 
 // The key / hierarchy columns are the ORIGIN's answers, translated to OUR twins: they are read
 // through this reading of the table, so handing back the origin's objects would route them to the
 // other side of the join — the very confusion this class exists to end. A column the origin names
 // but does not publish (it is not in GetQueryColumns) is dropped rather than passed through untranslated.
-std::vector<const ibBackendQueryColumn*> ibAliasQueryable::GetPrimaryKeyColumns() const
+std::vector<std::shared_ptr<const ibBackendQueryColumn>> ibAliasQueryable::GetPrimaryKeyColumns() const
 {
-	std::vector<const ibBackendQueryColumn*> keys;
-	for (const ibBackendQueryColumn* k : m_origin->GetPrimaryKeyColumns())
-		for (const std::shared_ptr<ibAliasColumn>& c : m_owned)
-			if (c->Origin() == k) { keys.push_back(c.get()); break; }
+	std::vector<std::shared_ptr<const ibBackendQueryColumn>> keys;
+	for (const std::shared_ptr<const ibBackendQueryColumn>& k : m_origin->GetPrimaryKeyColumns())
+		for (const std::shared_ptr<ibAliasColumn>& c : m_published)
+			if (c->Origin() == k) { keys.push_back(c); break; }
 	return keys;
 }
 
@@ -125,35 +125,34 @@ std::vector<const ibBackendQueryColumn*> ibAliasQueryable::GetPrimaryKeyColumns(
 // ⚠ ALL OR NOTHING. A key half-projected is not a key: if any of the inner source's key columns is
 // not published here, this wrapper genuinely does not carry the identity, and saying so with an
 // empty answer beats handing back a partial key that reads exactly like a whole one.
-std::vector<const ibBackendQueryColumn*> ibSubqueryQueryable::GetPrimaryKeyColumns() const
+std::vector<std::shared_ptr<const ibBackendQueryColumn>> ibSubqueryQueryable::GetPrimaryKeyColumns() const
 {
-	std::vector<const ibBackendQueryColumn*> keys;
+	std::vector<std::shared_ptr<const ibBackendQueryColumn>> keys;
 	if (!m_inner)
 		return keys;
-	const ibBackendQueryable* const inner = m_inner->GetPrimarySource();
+	const std::shared_ptr<const ibBackendQueryable> inner = m_inner->GetPrimarySource();
 	if (inner == nullptr)
 		return keys;
-	for (const ibBackendQueryColumn* k : inner->GetPrimaryKeyColumns()) {
-		const ibBackendQueryColumn* published = nullptr;
+	for (const std::shared_ptr<const ibBackendQueryColumn>& k : inner->GetPrimaryKeyColumns()) {
+		std::shared_ptr<const ibBackendQueryColumn> published;
 		// The exposed column IS the inner one where nothing was renamed; where the inner query gave
 		// an alias, `m_readFrom` is what names the real column behind it (they run in parallel).
 		for (std::size_t i = 0; i < m_columns.size(); ++i) {
-			const ibBackendQueryColumn* const from = (i < m_readFrom.size()) ? m_readFrom[i] : nullptr;
-			if (m_columns[i] == k || from == k) { published = m_columns[i]; break; }
+			if (m_columns[i] == k || (i < m_readFrom.size() && m_readFrom[i] == k)) { published = m_columns[i]; break; }
 		}
 		if (published == nullptr)
-			return std::vector<const ibBackendQueryColumn*>();   // the key is not carried — say nothing
-		keys.push_back(published);
+			return {};   // the key is not carried — say nothing
+		keys.push_back(std::move(published));
 	}
 	return keys;
 }
 
-const ibBackendQueryColumn* ibAliasQueryable::GetHierarchyColumn() const
+std::shared_ptr<const ibBackendQueryColumn> ibAliasQueryable::GetHierarchyColumn() const
 {
-	const ibBackendQueryColumn* h = m_origin->GetHierarchyColumn();
+	const std::shared_ptr<const ibBackendQueryColumn> h = m_origin->GetHierarchyColumn();
 	if (h == nullptr)
 		return nullptr;
-	for (const std::shared_ptr<ibAliasColumn>& c : m_owned)
-		if (c->Origin() == h) return c.get();
+	for (const std::shared_ptr<ibAliasColumn>& c : m_published)
+		if (c->Origin() == h) return c;
 	return nullptr;
 }

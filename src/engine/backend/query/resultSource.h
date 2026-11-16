@@ -8,7 +8,10 @@
 // RAM table) in queryProvider.cpp — so this tiny shared header is the only thing both need. It
 // names no L2 / metaobject type: pure abstraction over columns + values. (docs §22.4d)
 
-#include "queryable.h"   // ibBackendQueryColumn (Value param) + ibValue / wxString
+#include "queryable.h"       // ibBackendQueryColumn (Value param) + ibValue / wxString
+#include "queryRamTable.h"   // ibQueryRamTable — what a backing that is a table shows and hands over
+
+#include <stdexcept>
 
 class ibDataResultSource {
 public:
@@ -17,7 +20,7 @@ public:
 	// A column of the current row. The row-key (uuid) is no special case — it is read as a RAW
 	// column here too (the DB source reads it straight off the cursor by RawType; a RAM source
 	// has no row-key, so it yields empty). No separate GuidString accessor. (docs §22.4d)
-	virtual ibValue  Value(const ibBackendQueryColumn* col) const = 0;
+	virtual ibValue  Value(const std::shared_ptr<const ibBackendQueryColumn>& col) const = 0;
 	// ⭐⭐ AN OUTPUT BY ITS NAME — ONE DOOR, AND THE COLUMN SAYS HOW IT WAS PUT THERE. `col` null means the
 	// output is one scalar field (an aggregate, an arithmetic); `col` given means it was projected as that
 	// column's FIELD SPREAD under this name as a prefix (`<name>_TYPE` / `_RTRef` / `_RRRef` / …), because a
@@ -29,11 +32,15 @@ public:
 	// a value on one road and an empty cell on the other, with nothing anywhere to say which road it took
 	// (measured 2026-09-24, a CASE over a reference). One door, no default, and every backing has to say
 	// what it does about both shapes.
-	virtual ibValue  Column(const ibString& name, const ibBackendQueryColumn* col = nullptr) const = 0;
-	// ⭐ A BACKING THAT ALREADY IS A TABLE hands the table over, to a caller that was about to copy every
-	// row of it cell by cell into a table of its own: the rows are moved out of it. Only before the first
-	// Next(); null — a cursor's answer, and the default — means the rows are read one by one.
-	virtual class ibQueryRamTable* Table() { return nullptr; }
+	virtual ibValue  Column(const ibString& name, const std::shared_ptr<const ibBackendQueryColumn>& col = nullptr) const = 0;
+	// ⭐ A BACKING THAT ALREADY IS A TABLE shows the table, and hands it over to a caller that was about to copy
+	// every row of it cell by cell into a table of its own: on a backing let go of (`std::move(source).Table()`)
+	// the rows move out. Only before the first Next(); null — a cursor's answer, and the default — means the
+	// rows are read one by one, and there is nothing to take.
+	virtual const ibQueryRamTable* Table() const & { return nullptr; }
+	virtual ibQueryRamTable        Table() && {
+		throw std::logic_error("ibDataResultSource::Table: this result is read row by row - there is no table to take");
+	}
 };
 
 #endif // __RESULT_SOURCE_H__

@@ -23,9 +23,9 @@
 
 // The recorder, the type, the month where the register keeps action periods, then the dimensions — every one the
 // register's own column.
-std::vector<const ibBackendQueryColumn*> ibRecalculationQueryable::GetQueryColumns() const
+std::vector<std::shared_ptr<const ibBackendQueryColumn>> ibRecalculationQueryable::GetQueryColumns() const
 {
-	std::vector<const ibBackendQueryColumn*> columns{ m_reg->GetRegisterRecorder()->GetQueryColumn(),
+	std::vector<std::shared_ptr<const ibBackendQueryColumn>> columns{ m_reg->GetRegisterRecorder()->GetQueryColumn(),
 		m_reg->GetCalculationType()->GetQueryColumn() };
 	if (m_reg->IsUseActionPeriod())
 		columns.push_back(m_reg->GetActionPeriod()->GetQueryColumn());
@@ -54,16 +54,17 @@ ibString ibRecalculationSourceDescriptor::GetName() const
 	return m_meta->GetName() + ibT(".") + m_meta->GetRecalculationObject()->GetName();
 }
 
-// A table: whatever it is called with, it is the register's own member.
-const ibBackendQueryable* ibRecalculationSourceDescriptor::CreateQueryable(ibValue** /*paParams*/, long /*lSizeArray*/)
+// A table: whatever it is called with, it is the register's own member — shared without owning.
+std::shared_ptr<const ibBackendQueryable> ibRecalculationSourceDescriptor::CreateQueryable(ibValue** /*paParams*/, long /*lSizeArray*/,
+	const std::vector<ibQueryPredicatePtr>& /*conditions*/, const ibQueryReadColumns& /*read*/)
 {
-	return &m_queryable;
+	return m_queryable;
 }
 
 // A column of the marks IS the register's attribute.
-std::vector<const ibBackendQueryColumn*> ibRecalculationSourceDescriptor::GetQueryColumns(const std::vector<ibValue>& /*args*/) const
+std::vector<std::shared_ptr<const ibBackendQueryColumn>> ibRecalculationSourceDescriptor::GetQueryColumns(const std::vector<ibValue>& /*args*/) const
 {
-	return m_queryable.GetQueryColumns();
+	return m_queryable->GetQueryColumns();
 }
 
 //***********************************************************************
@@ -130,11 +131,12 @@ std::vector<ibQueryProjItem> Carried(const ibString& q, const std::vector<ibStri
 
 // Every field of `a` with the field of `b` laid out for the same role — the pairing ibRegSameValueIR makes, kept
 // here as names: a leading register's fields are joined under aliases this file chooses.
-std::vector<std::pair<ibString, ibString>> PairedByRole(const ibBackendQueryColumn* a, const ibBackendQueryColumn* b)
+std::vector<std::pair<ibString, ibString>> PairedByRole(const std::shared_ptr<const ibBackendQueryColumn>& a,
+	const std::shared_ptr<const ibBackendQueryColumn>& b)
 {
 	std::vector<std::pair<ibString, ibString>> out;
-	const std::vector<ibColumnSlot> right = DescribeColumnLayout(b);
-	for (const ibColumnSlot& x : DescribeColumnLayout(a))
+	const std::vector<ibColumnSlot> right = DescribeColumnLayout(*b);
+	for (const ibColumnSlot& x : DescribeColumnLayout(*a))
 		for (const ibColumnSlot& y : right)
 			if (x.m_role == y.m_role) {
 				out.push_back({ x.m_name, y.m_name });
@@ -176,8 +178,8 @@ ibRecalculationSpec ibRecalculationSpecOf(const ibValueMetaObjectCalculationRegi
 
 	// The marks' own columns, which are the register's (ibRecalculationQueryable), in their order.
 	v.m_table = reg->GetPhysicalTableName();
-	for (const ibBackendQueryColumn* column : reg->GetRecalculationQueryable()->GetQueryColumns())
-		for (const ibString& field : ColumnFieldNames(column))
+	for (const std::shared_ptr<const ibBackendQueryColumn>& column : reg->GetRecalculationQueryable()->GetQueryColumns())
+		for (const ibString& field : ColumnFieldNames(*column))
 			v.m_mark.push_back(field);
 
 	if (reg->IsUseActionPeriod()) {
@@ -350,7 +352,7 @@ void ibRecalculationAnswerBy(const ibValueMetaObjectCalculationRegister* reg, co
 	// The mark's fields past the recorder — the type, the month, the dimensions — against the storno's. The marks
 	// carry the register's own field names, so the mark's side is qualified by its table: bare, it would read `s`'s.
 	const ibString marks = reg->GetRecalculationTableName();
-	const size_t objectFields = ColumnFieldNames(reg->GetRegisterRecorder()->GetQueryColumn()).size();
+	const size_t objectFields = ColumnFieldNames(*reg->GetRegisterRecorder()->GetQueryColumn()).size();
 	ibQueryExprPtr answering = And(And(ibRegCompositeIR(reg->GetRegisterRecorder()->GetQueryColumn(), metaData, recorder,
 		ibQueryBinOp::Eq, ibT("s")), ibBinOp(ibQueryBinOp::Ne, ibCol(ibT("s"), ibRegValueField(reg->GetStorno())), Int(0))),
 		Active(ibT("s"), ibRegValueField(reg->GetRegisterActive())));

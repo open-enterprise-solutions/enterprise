@@ -7,6 +7,7 @@
 #include "queryable.h"        // ibBackendQueryable + ibComputedProviderInstance
 #include "queryColumn.h"      // ibBackendQueryColumn
 
+#include <algorithm>
 #include <map>
 #include <unordered_map>   // per-column index — keyed by the value, see ibValueHash (value.h)
 
@@ -47,7 +48,7 @@ public:
 		: m_rows(std::move(rows)), m_metaData(metaData)
 	{
 		for (const ibQueryRamColumn& c : m_rows.Columns())
-			m_columns.push_back(std::make_unique<ibTempStoreColumn>(c.m_name, c.m_type, c.m_id, c.m_available));
+			m_columns.push_back(std::make_shared<ibTempStoreColumn>(c.m_name, c.m_type, c.m_id, c.m_available));
 
 		// THE INDEX, built once when the table is stored. A map from the value in an indexed column
 		// to the rows carrying it — which is the whole of what an index is, and the reason a read
@@ -75,27 +76,12 @@ public:
 		}
 	}
 
-	const ibBackendQueryColumn* Column(const ibString& name) const
+	bool ContainColumn(const std::shared_ptr<const ibBackendQueryColumn>& col) const override
 	{
-		for (const auto& c : m_columns)
-			if (c->GetName().IsSameAs(name, false)) return c.get();
-		return nullptr;
+		return std::find(m_columns.begin(), m_columns.end(), col) != m_columns.end();
 	}
 
-	bool ContainColumn(const ibBackendQueryColumn* col) const override
-	{
-		for (const auto& c : m_columns)
-			if (c.get() == col) return true;
-		return false;
-	}
-
-	std::vector<const ibBackendQueryColumn*> GetQueryColumns() const override
-	{
-		std::vector<const ibBackendQueryColumn*> out;
-		out.reserve(m_columns.size());
-		for (const auto& c : m_columns) out.push_back(c.get());
-		return out;
-	}
+	std::vector<std::shared_ptr<const ibBackendQueryColumn>> GetQueryColumns() const override { return m_columns; }
 
 	bool IsComputedInRam() const override { return true; }
 
@@ -157,9 +143,9 @@ public:
 	const ibMetaData* GetMetaData() const override { return m_metaData; }
 
 private:
-	ibQueryRamTable                                  m_rows;
-	const ibMetaData*                                m_metaData = nullptr;
-	std::vector<std::unique_ptr<ibTempStoreColumn>>  m_columns;
+	ibQueryRamTable                                          m_rows;
+	const ibMetaData*                                        m_metaData = nullptr;
+	std::vector<std::shared_ptr<const ibBackendQueryColumn>> m_columns;
 	// INDEXED BY: column id -> the value each row carries -> the rows carrying it.
 	std::map<ibMetaID, std::unordered_map<ibValue, std::vector<long>, ibValueHash, ibValueEqual>> m_indexes;
 	static const std::vector<long> s_noRows;   // an indexed value nothing has — no rows, not all rows
@@ -182,9 +168,7 @@ bool ibQueryTempTableStore::Has(const ibString& name) const
 void ibQueryTempTableStore::Put(const ibString& name, ibQueryRamTable&& rows,
                                 const std::vector<ibString>& indexedColumns, const ibMetaData* metaData)
 {
-	auto table = std::make_unique<ibTempStoreQueryable>(std::move(rows), indexedColumns, metaData);
-	m_sources[name] = table.get();
-	m_owned.push_back(std::move(table));
+	m_sources[name] = std::make_shared<ibTempStoreQueryable>(std::move(rows), indexedColumns, metaData);
 }
 
 bool ibQueryTempTableStore::Drop(const ibString& name)
@@ -193,20 +177,12 @@ bool ibQueryTempTableStore::Drop(const ibString& name)
 	if (it == m_sources.end())
 		return false;
 
-	// The NAME goes first, and the rows with it — a dropped table that stayed alive behind a
-	// removed name would be memory nobody can reach and nobody can free.
-	const ibBackendQueryable* dropped = it->second;
+	// The NAME goes, and the rows with it — unless a reader still holds them, and then with that reader.
 	m_sources.erase(it);
-	for (auto owned = m_owned.begin(); owned != m_owned.end(); ++owned) {
-		if (owned->get() != dropped) continue;
-		m_owned.erase(owned);
-		break;
-	}
 	return true;
 }
 
 void ibQueryTempTableStore::Close()
 {
 	m_sources.clear();
-	m_owned.clear();
 }

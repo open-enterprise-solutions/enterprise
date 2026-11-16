@@ -47,7 +47,7 @@ ibDataDBComposer& ibDataDBComposer::FromSource(const ibString& ns, const ibStrin
 	return *this;
 }
 
-ibDataDBComposer& ibDataDBComposer::FromSource(const ibBackendQueryable* queryable)
+ibDataDBComposer& ibDataDBComposer::FromSource(const std::shared_ptr<const ibBackendQueryable>& queryable)
 {
 	if (queryable == nullptr)
 		ibBackendCoreException::Error(_("Composer: a null queryable was given as the source"));
@@ -117,11 +117,11 @@ void ibDataDBComposer::RefreshSourceFields()
 	else {
 		// …THE SAME FIELDS THE CONSTRUCTOR OFFERS for these columns (ibQueryFieldsOfColumns), the synonym among them.
 		// Built here by hand they carried none, and a list output to a sheet was headed by the field names.
-		std::vector<const ibBackendQueryColumn*> columns;
+		std::vector<std::shared_ptr<const ibBackendQueryColumn>> columns;
 		for (const auto& direct : m_directSources) {
 			if (direct.second == nullptr)
 				continue;
-			for (const ibBackendQueryColumn* column : direct.second->GetQueryColumns())
+			for (const std::shared_ptr<const ibBackendQueryColumn>& column : direct.second->GetQueryColumns())
 				columns.push_back(column);
 		}
 
@@ -132,7 +132,7 @@ void ibDataDBComposer::RefreshSourceFields()
 				? factory->FindDescriptor(source.m_namespace, source.m_name) : nullptr;
 			if (descriptor == nullptr)
 				continue;   // a direct source (above), or a name nothing answers to
-			for (const ibBackendQueryColumn* column : descriptor->GetQueryColumns({}))
+			for (const std::shared_ptr<const ibBackendQueryColumn>& column : descriptor->GetQueryColumns({}))
 				columns.push_back(column);
 		}
 		fields = ibQueryFieldsOfColumns(columns, m_metaData);
@@ -794,7 +794,7 @@ std::vector<ibString> ibComposerRuleFieldsOf(const ibDataComposer::Output& outpu
 // one: the records are read regardless, and down the page is where a report puts them.
 // ⭐⭐ THE LADDER, DERIVED FROM THE SETTING — see the declaration for why it lives here and not in the
 // widget that used to build it.
-void ibDataComposer::BuildPrintLevels(bool tree, const ibBackendQueryable* source)
+void ibDataComposer::BuildPrintLevels(bool tree, const std::shared_ptr<const ibBackendQueryable>& source)
 {
 	if (!tree) {
 		// A FLAT VIEW IS A FLAT READ, and it wins over a stored grouping — the same rule the model's
@@ -817,7 +817,7 @@ void ibDataComposer::BuildPrintLevels(bool tree, const ibBackendQueryable* sourc
 	ibString identity;
 	bool     hasTree = false;
 	if (source != nullptr) {
-		const std::vector<const ibBackendQueryColumn*> key = source->GetPrimaryKeyColumns();
+		const std::vector<std::shared_ptr<const ibBackendQueryColumn>> key = source->GetPrimaryKeyColumns();
 		if (key.size() == 1 && key.front() != nullptr) {
 			identity = key.front()->GetName();
 			// ⚠ A LIST WALKS A TREE ONLY WHERE THE ARRANGEMENT IS ONE (queryable.h, GetHierarchyType): folders,
@@ -1280,7 +1280,7 @@ ibString ibDataDBComposer::RenderTextFor(const std::vector<const Output*>& outpu
 		// by something has already said what it reads.
 		if (proj.IsEmpty()) {
 		const auto dit = m_directSources.find(s0.m_name);
-		const ibBackendQueryable* const direct = dit != m_directSources.end() ? dit->second : nullptr;
+		const std::shared_ptr<const ibBackendQueryable> direct = dit != m_directSources.end() ? dit->second : nullptr;
 		const ibQueryableSourceDescriptor* descriptor = nullptr;
 		if (dit == m_directSources.end()) {
 			// Resolve through THIS query's OWN config factory (per-config sources); no config → the global base.
@@ -1298,7 +1298,7 @@ ibString ibDataDBComposer::RenderTextFor(const std::vector<const Output*>& outpu
 		// but the find by name does not answer it — so spelling it here refused the whole read: a chart of
 		// accounts has no IsFolder, and its list would not open. The same gate the query seed and the field
 		// catalogue ask.
-		for (const ibBackendQueryColumn* col : direct != nullptr ? direct->GetQueryColumns() : descriptor->GetQueryColumns({})) {
+		for (const std::shared_ptr<const ibBackendQueryColumn>& col : direct != nullptr ? direct->GetQueryColumns() : descriptor->GetQueryColumns({})) {
 			if (col == nullptr || col->GetName().IsEmpty() || !col->IsAllowed())
 				continue;
 			if (!proj.IsEmpty())

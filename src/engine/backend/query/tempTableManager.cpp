@@ -46,7 +46,7 @@ ibColumnType WidenForTemp(ibColumnRole role)
 
 // Decompose ONE cell into its per-field bound exprs (Const / Blob), in ColumnFieldNames order — REUSING
 // the DB write decomposition (a capture-only ibQueryStatement records each SetParam* as an IR node).
-std::vector<ibQueryExprPtr> DecomposeCell(const ibBackendQueryColumn* col, const ibMetaData* meta, const ibValue& cell)
+std::vector<ibQueryExprPtr> DecomposeCell(const ibBackendQueryColumn& col, const ibMetaData* meta, const ibValue& cell)
 {
 	const std::vector<ibString> fields = ColumnFieldNames(col);
 	ibQueryStatement capture(ibQueryStatement::Kind::Delete, ibString(), fields);
@@ -152,7 +152,7 @@ std::unique_ptr<ibTempTableManager> ibTempTableManager::Materialise(ibDatabaseCo
 
 	std::vector<ibColumnSlot> slots;   // flattened spread over all columns
 	for (const ibTempColumn& tc : tempCols)
-		for (const ibColumnSlot& s : DescribeColumnLayout(&tc))
+		for (const ibColumnSlot& s : DescribeColumnLayout(tc))
 			slots.push_back(s);
 
 	std::vector<ibString> allFields;   // slot names — the INSERT column order
@@ -166,7 +166,7 @@ std::unique_ptr<ibTempTableManager> ibTempTableManager::Materialise(ibDatabaseCo
 		vals.reserve(allFields.size());
 		size_t ci = 0;
 		for (const ibQueryRamColumn& c : rows.Columns()) {
-			std::vector<ibQueryExprPtr> fv = DecomposeCell(&tempCols[ci], metaData, rows.GetCell(r, c.m_id));
+			std::vector<ibQueryExprPtr> fv = DecomposeCell(tempCols[ci], metaData, rows.GetCell(r, c.m_id));
 			for (auto& e : fv) vals.push_back(std::move(e));
 			++ci;
 		}
@@ -222,19 +222,19 @@ std::unique_ptr<ibTempTableManager> ibTempTableManager::Materialise(ibDatabaseCo
 	try { ibDatabaseQueryBuilder qAnalyze(holder); qAnalyze.Execute(ibAnalyzeTable(tableName)); }
 	catch (...) {}
 
-	auto queryable = std::make_unique<ibDbTempTableQueryable>(tableName, std::move(tempCols), metaData);
+	const auto queryable = std::make_shared<ibDbTempTableQueryable>(tableName, std::move(tempCols), metaData);
 	return std::unique_ptr<ibTempTableManager>(
-		new ibTempTableManager(std::move(scope), holder, *dialect, tableName, std::move(queryable)));
+		new ibTempTableManager(std::move(scope), holder, *dialect, tableName, queryable));
 }
 
 ibTempTableManager::ibTempTableManager(ibConnectionScope scope, ibDatabaseConnectionHolder* holder,
                                        ibTempTableDialect dialect, ibString tableName,
-                                       std::unique_ptr<ibDbTempTableQueryable> queryable)
+                                       const std::shared_ptr<const ibDbTempTableQueryable>& queryable)
 	: m_scope(std::move(scope))
 	, m_holder(holder)
 	, m_dialect(std::move(dialect))
 	, m_tableName(std::move(tableName))
-	, m_queryable(std::move(queryable))
+	, m_queryable(queryable)
 {
 }
 

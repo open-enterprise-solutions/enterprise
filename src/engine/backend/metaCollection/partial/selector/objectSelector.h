@@ -47,7 +47,7 @@ protected:
 	bool FetchNext();
 
 	// --- per-metatype hooks (the only parts that differ) ---------------------
-	virtual const ibBackendQueryable* GetQueryable() const = 0;          // the source to page
+	virtual std::shared_ptr<const ibBackendQueryable> GetQueryable() const = 0;          // the source to page
 	virtual bool ApplyAnchor(ibReadPageRequest& page) const = 0;         // anchor -> page; false = no anchor (first row)
 	virtual void CaptureAnchor(const ibDataQueryResult& selection) = 0;  // current row -> anchor
 	virtual void MaterialiseRow(const ibDataQueryResult& selection) = 0; // current row -> value surface
@@ -82,7 +82,7 @@ protected:
 	virtual void Reset();
 
 	// The anchor IS m_objGuid (catalog row-key tiebreaker; invalid = from the start).
-	virtual const ibBackendQueryable* GetQueryable() const { return m_metaObject->GetQueryable(); }
+	virtual std::shared_ptr<const ibBackendQueryable> GetQueryable() const { return m_metaObject->GetQueryable(); }
 	virtual bool ApplyAnchor(ibReadPageRequest& page) const;
 	virtual void CaptureAnchor(const ibDataQueryResult& selection);
 	virtual void MaterialiseRow(const ibDataQueryResult& selection);
@@ -122,7 +122,7 @@ protected:
 
 	// A register has no single row-key, so the anchor is the row's value at every
 	// effective-sort column (m_anchorSort; empty = from the start).
-	virtual const ibBackendQueryable* GetQueryable() const { return m_metaObject->GetQueryable(); }
+	virtual std::shared_ptr<const ibBackendQueryable> GetQueryable() const { return m_metaObject->GetQueryable(); }
 	virtual bool ApplyAnchor(ibReadPageRequest& page) const;
 	virtual void CaptureAnchor(const ibDataQueryResult& selection);
 	virtual void MaterialiseRow(const ibDataQueryResult& selection);

@@ -5,7 +5,7 @@
 //	              ses_query (session's holder) so writes join the outer
 //	              document-save TX. Includes the GenerateNextIdentifier
 //	              static utility used by catalogs / documents to allocate
-//	              codes through sys_sequence.
+//	              codes through sys_sequence — on a transaction of its own.
 ////////////////////////////////////////////////////////////////////////////
 
 #include "commonObject.h"
@@ -13,6 +13,7 @@
 #include "backend/appData.h"
 #include "backend/session/session.h"
 #include "backend/databaseLayer/connectionPool.h"
+#include "backend/databaseLayer/connectionHolder.h"   // the numbering counter's own connection
 #include "backend/databaseLayer/connectionScope.h"
 #include "backend/databaseLayer/databaseErrorCodes.h"
 #include "backend/databaseLayer/databaseQueryBuilder.h"   // L2 door — the sequence bump is built here
@@ -555,20 +556,20 @@ ibValue ibValueRecordDataObjectRef::GenerateNextIdentifier(ibValueMetaObjectAttr
 {
 	ibASSERT(attribute);
 
-	// Connection comes from the active session (instance method = guaranteed
-	// session context); the increment shares its TX with the outer document
-	// save so rollback rolls back both — no orphan sequence values on
-	// failure. ses_query throws if there's no current session or its
-	// connection is closed.
-	// Everything below goes through L2. The builder's default ctor takes the connection the
-	// CURRENT SESSION is bound to, so the increment still shares the outer document-save TX —
-	// a rollback rolls back the sequence bump with it, no orphan values.
+	// ⭐⭐ THE COUNTER ON A CONNECTION OF ITS OWN, IN A TRANSACTION OF ITS OWN — committed the moment the number is
+	// taken. It was bumped in the writing transaction and held to its end, so every writer of one document type stood
+	// behind the one before it: ~28 documents a second for the whole base, whatever the number of users (2026-11-16,
+	// load-million-rows.md § 5). The price is the one a counter of its own has everywhere: a write rolled back leaves
+	// its number unused. The ROWS of the series are still read where the write is (q, the session's connection and
+	// transaction) — a number this very transaction has written is seen.
 	//
 	// Which engines this works on is no longer a driver list here: the atomicity rests on
 	// RETURNING, so the dialect that owns the clause owns the answer (m_returningClause).
 	// That admits SQLite as well now, and gives ODBC one honest error from the
 	// renderer instead of a hardcoded name check that drifts from the dialects.
 	ibDatabaseQueryBuilder q;
+	ibSingleConnectionHolder own;
+	ibDatabaseQueryBuilder counter(&own);
 
 	// The series. A catalog, and a document that is not periodic, stay on 20000101 — the bucket
 	// every number allocated before periodicity was a setting already lives in. A periodic document
@@ -586,7 +587,7 @@ ibValue ibValueRecordDataObjectRef::GenerateNextIdentifier(ibValueMetaObjectAttr
 	ibString field;
 	if (isNumber || isString) {
 		const ibColumnRole role = isNumber ? ibColumnRole::Number : ibColumnRole::String;
-		for (const ibColumnSlot& slot : DescribeColumnLayout(attribute->GetQueryColumn()))
+		for (const ibColumnSlot& slot : DescribeColumnLayout(*attribute->GetQueryColumn()))
 			if (slot.m_role == role) { field = slot.m_name; break; }
 	}
 
@@ -675,13 +676,14 @@ ibValue ibValueRecordDataObjectRef::GenerateNextIdentifier(ibValueMetaObjectAttr
 	ibNumber resultCode = 1;
 	bool gotCode = false;
 	bool counted = false;   // the row was there, and the number is the counter's
+	counter.BeginTransaction();
 	for (int attempt = 0; attempt < 2 && !gotCode; ++attempt) {
 		// UPDATE … SET number = number + 1 … RETURNING number. One statement, so the row is
 		// locked, incremented and read in a single shot — concurrent sessions (including
 		// cross-machine) sequentialise through the DB row lock, with no window between a
 		// SELECT and a write for anyone to slip into.
 		{
-			ibQueryResult rs = q.ExecuteReturning(
+			ibQueryResult rs = counter.ExecuteReturning(
 				ibReturning(
 					ibUpdate(sequence_table,
 						{ { ibT("number"), ibBinOp(ibQueryBinOp::Add, ibCol(ibT("number")), ibConst(ibValue(1))) } },
@@ -707,7 +709,7 @@ ibValue ibValueRecordDataObjectRef::GenerateNextIdentifier(ibValueMetaObjectAttr
 			// The bootstrap INSERT must land its one row. Asking for the count rather than
 			// comparing against DATABASE_LAYER_QUERY_RESULT_ERROR: that constant is 0, which
 			// is a row count, not a failure — see databaseErrorCodes.h.
-			if (q.Execute(ibInsert(sequence_table, {
+			if (counter.Execute(ibInsert(sequence_table, {
 					{ ibT("interval"),  ibConst(ibValue(interval)) },
 					{ ibT("meta_guid"), ibConst(ibValue(m_metaObject->GetDocPath())) },
 					{ ibT("prefix"),    ibConst(ibValue(strPrefix)) },
@@ -720,11 +722,17 @@ ibValue ibValueRecordDataObjectRef::GenerateNextIdentifier(ibValueMetaObjectAttr
 		catch (const ibCoreException&) {
 			// PK conflict from a racing session's bootstrap — the constraint violation now
 			// arrives as an exception (L1 signals failure by throwing), so it is caught here
-			// rather than read off a return code. Fall through to the retry.
+			// rather than read off a return code. Fall through to the retry — in a transaction begun again: on
+			// PostgreSQL a statement refused ends the one it was in.
+			counter.RollBack();
+			counter.BeginTransaction();
 		}
 	}
 
-	if (!gotCode) return attribute->CreateValue();
+	if (!gotCode) {
+		counter.RollBack();
+		return attribute->CreateValue();
+	}
 
 	// ⭐ A COUNTER BEHIND ITS OWN SERIES. The row is where the series stood when it was last counted, and
 	// the rows moved on without it: the document went periodic and back — the year's buckets numbered the
@@ -733,10 +741,11 @@ ibValue ibValueRecordDataObjectRef::GenerateNextIdentifier(ibValueMetaObjectAttr
 	// holds the row, so a concurrent writer waits for this one.
 	if (counted && taken(codeOf(resultCode))) {
 		resultCode = scanDataMax() + 1;
-		q.Execute(ibUpdate(sequence_table,
+		counter.Execute(ibUpdate(sequence_table,
 			{ { ibT("number"), ibConst(ibValue(resultCode)) } },
 			keyPredicate()));
 	}
 
+	counter.Commit();
 	return codeOf(resultCode);
 }

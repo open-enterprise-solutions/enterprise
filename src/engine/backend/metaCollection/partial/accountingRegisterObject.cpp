@@ -369,19 +369,19 @@ std::vector<std::pair<ibString, ibValue>> KindsOfAccount(const ibValue& account)
 	// whole table - for each account a record set met: four accounts a sale, four statements each, in every
 	// document posted (2026-11-14, 4000 sales into a ledger, the journal counted). Not filtered by rights, as the
 	// totals' reading is not: which analytics an account keeps is the chart's, not the writer's.
-	const ibBackendQueryable* const rows = table->GetQueryable();
+	const std::shared_ptr<const ibBackendQueryable> rows = table->GetQueryable();
 	if (rows == nullptr)
 		return kinds;
-	const auto columnOf = [rows](const ibValueMetaObjectAttributeBase* attribute) -> const ibBackendQueryColumn* {
+	const auto columnOf = [rows](const ibValueMetaObjectAttributeBase* attribute) -> std::shared_ptr<const ibBackendQueryColumn> {
 		if (attribute == nullptr)
 			return nullptr;
-		const ibBackendQueryColumn* const named = rows->ResolveColumnByName(attribute->GetName());
+		std::shared_ptr<const ibBackendQueryColumn> named = rows->ResolveColumnByName(attribute->GetName());
 		return named != nullptr ? named : attribute->GetQueryColumn();
 	};
-	const ibBackendQueryColumn* const ownerCol = chart->GetDataReference() != nullptr
+	const std::shared_ptr<const ibBackendQueryColumn> ownerCol = chart->GetDataReference() != nullptr
 		? rows->ResolveColumnByName(chart->GetDataReference()->GetName()) : nullptr;
-	const ibBackendQueryColumn* const kindCol = columnOf(table->GetAccountDimensionKind());
-	const ibBackendQueryColumn* const lineCol = columnOf(table->GetNumberLine());
+	const std::shared_ptr<const ibBackendQueryColumn> kindCol = columnOf(table->GetAccountDimensionKind());
+	const std::shared_ptr<const ibBackendQueryColumn> lineCol = columnOf(table->GetNumberLine());
 	if (ownerCol == nullptr || kindCol == nullptr)
 		return kinds;
 

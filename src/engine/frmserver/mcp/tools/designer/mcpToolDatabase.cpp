@@ -68,6 +68,7 @@ ibString StatusWord(ibMetaDiffStatus status)
 	case ibMetaDiffStatus::OnlyInRight: return ibT("added");     // in the configuration, not in the base
 	case ibMetaDiffStatus::OnlyInLeft:  return ibT("removed");   // in the base, gone from the configuration
 	case ibMetaDiffStatus::Changed:     return ibT("changed");
+	case ibMetaDiffStatus::Reordered:   return ibT("reordered"); // the same children in another order
 	default:                            return ibT("same");
 	}
 }

@@ -332,16 +332,91 @@ void WriteBorder(ibDataNode& into, const ibChar* name,
 	node.SetValue(ibT("colour"), border.m_colour.ToString());
 }
 
-void ReadBorder(const ibDataNode& from, const ibChar* name,
-	ibSpreadsheetBorderDescription& border)
+// …and read back from the field it was written as — a sub-node; anything else says nothing.
+void ReadBorder(const ibDataValue& value, ibSpreadsheetBorderDescription& border)
 {
-	auto node = from.FindChild(name);
-	if (!node)
+	if (value.Kind() != ibDataKind::Child)
 		return;
+	const auto node = value.AsChild();
 
 	border.m_style = (ibSpreadsheetPenStyle)node->GetValue<std::int32_t>(ibT("style"));
 	border.m_width = node->GetValue<std::int32_t>(ibT("width"));
 	border.m_colour.FromString(node->GetValue<ibString>(ibT("colour")));
+}
+
+// What a cell is, written into the node it is handed — the cell's own node, or a sheet's entry made once with the place
+// added after it (WritePlacedCell). The entry was the cell's node copied out and copied back again, every cell of a sheet
+// written (2026-11-16, load-million-rows.md § 12).
+void WriteCell(ibDataNode& node, const ibSpreadsheetCellDescription& cell)
+{
+	// ONLY WHAT DIFFERS FROM THE DEFAULT. A cell is mostly ordinary, and writing
+	// every field of every one would bury the two that were actually set.
+	//
+	// WHAT IS IN IT, first: the text a person sees and the parameter a report
+	// substitutes. Everything below is appearance.
+	if (!cell.m_value.IsEmpty())
+		node.SetValue(ibT("value"), cell.m_value);
+	if (!cell.m_detailsParameter.IsEmpty())
+		node.SetValue(ibT("parameter"), cell.m_detailsParameter);
+
+	if (cell.m_alignHorz != ibAlignmentHorz_Left)
+		node.AddField(ibT("alignHorz"), ibDataValue::Int((std::int64_t)cell.m_alignHorz));
+	if (cell.m_alignVert != ibAlignmentVert_Top)
+		node.AddField(ibT("alignVert"), ibDataValue::Int((std::int64_t)cell.m_alignVert));
+	if (cell.m_textOrient != ibOrient_Horizontal)
+		node.AddField(ibT("orient"), ibDataValue::Int((std::int64_t)cell.m_textOrient));
+
+	// An UNSET font is unset — the same rule as the colours below, and it replaced a comparison
+	// with the default that MEASURED both fonts through a wxScreenDC (see the member's note).
+	if (cell.m_font.IsOk())
+		node.SetValue(ibT("font"), cell.m_font.ToString());
+
+	// An UNSET colour is unset — see the note on the members. Writing the resolved
+	// one would freeze today's desktop theme into the file.
+	if (cell.m_backgroundColour.IsOk())
+		node.SetValue(ibT("background"), cell.m_backgroundColour.ToString());
+	if (cell.m_textColour.IsOk())
+		node.SetValue(ibT("textColour"), cell.m_textColour.ToString());
+
+	WriteBorder(node, ibT("left"),   cell.m_borderAt[0]);
+	WriteBorder(node, ibT("right"),  cell.m_borderAt[1]);
+	WriteBorder(node, ibT("top"),    cell.m_borderAt[2]);
+	WriteBorder(node, ibT("bottom"), cell.m_borderAt[3]);
+
+	if (cell.m_row_size != 1)
+		node.AddField(ibT("rowSpan"), ibDataValue::Int((std::int64_t)cell.m_row_size));
+	if (cell.m_col_size != 1)
+		node.AddField(ibT("colSpan"), ibDataValue::Int((std::int64_t)cell.m_col_size));
+
+	if (cell.m_fitMode != ibSpreadsheetCellDescription::Mode_Overflow)
+		node.AddField(ibT("fit"), ibDataValue::Int((std::int64_t)cell.m_fitMode));
+	if (cell.m_isReadOnly)
+		node.AddField(ibT("readOnly"), ibDataValue::Bool(true));
+	if (cell.m_fillSetType != ibSpreadsheetFillType::ibSpreadsheetFillType_StrText)
+		node.AddField(ibT("fill"), ibDataValue::Int((std::int64_t)cell.m_fillSetType));
+}
+
+// A sheet's entry: the cell says what it is; the sheet only says WHERE.
+ibDataValue WritePlacedCell(const ibSpreadsheetCellDescription& cell)
+{
+	std::shared_ptr<ibDataNode> node = std::make_shared<ibDataNode>();
+	WriteCell(*node, cell);
+	node->AddField(ibT("row"), ibDataValue::Int((std::int64_t)cell.m_row));
+	node->AddField(ibT("col"), ibDataValue::Int((std::int64_t)cell.m_col));
+	return ibDataValue::Child(node);
+}
+
+// …and read back: the place, for the cell to be made at — the cell then fills itself in (ReadNode). False for an entry
+// that is no node.
+bool ReadPlace(const ibDataValue& entry, int& row, int& col)
+{
+	const auto node = entry.AsChild();
+	if (!node)
+		return false;
+
+	row = node->GetValue<std::int32_t>(ibT("row"));
+	col = node->GetValue<std::int32_t>(ibT("col"));
+	return true;
 }
 
 } // namespace
@@ -356,37 +431,80 @@ bool ibSpreadsheetCellDescriptionMemory::ReadNode(const ibDataValue& value, ibSp
 	if (!node)
 		return false;
 
-	cell.m_value = node->GetValue<ibString>(ibT("value"));
-	cell.m_detailsParameter = node->GetValue<ibString>(ibT("parameter"));
+	// ⭐ ONE WALK OVER WHAT IS WRITTEN, each field taken as it comes. Asked for by name, every field a cell does not have —
+	// most of them: only what differs from the default is written — was a walk over all it does, seventeen walks a cell
+	// at the least: 25 % of an edit of the 100 000-line sheet, and the most of reading it at open (2026-11-16,
+	// load-million-rows.md § 12). A name is told by its LENGTH first, then from the few of that length: compared with
+	// every key in turn, the place's row and col — the sheet's, not the cell's — went through all seventeen, and the
+	// comparing was 13 % of the edit again. The keys as the engine's strings (ibJsonProvider::ReadEntry).
+	static const ibString kValue = ibT("value"), kParameter = ibT("parameter"),
+		kAlignHorz = ibT("alignHorz"), kAlignVert = ibT("alignVert"), kOrient = ibT("orient"),
+		kFont = ibT("font"), kBackground = ibT("background"), kTextColour = ibT("textColour"),
+		kLeft = ibT("left"), kRight = ibT("right"), kTop = ibT("top"), kBottom = ibT("bottom"),
+		kRowSpan = ibT("rowSpan"), kColSpan = ibT("colSpan"), kFit = ibT("fit"), kReadOnly = ibT("readOnly"),
+		kFill = ibT("fill");
 
-	if (node->Has(ibT("alignHorz")))
-		cell.m_alignHorz = node->GetValue<std::int32_t>(ibT("alignHorz"));
-	if (node->Has(ibT("alignVert")))
-		cell.m_alignVert = node->GetValue<std::int32_t>(ibT("alignVert"));
-	if (node->Has(ibT("orient")))
-		cell.m_textOrient = node->GetValue<std::int32_t>(ibT("orient"));
+	// What it holds is the node's — absent is empty, over a cell that held something too (a sheet's paste reads a cell
+	// over the one standing there); the look stays where the node says nothing of it.
+	cell.m_value = ibString();
+	cell.m_detailsParameter = ibString();
 
-	cell.m_font.FromString(node->GetValue<ibString>(ibT("font")));
-	cell.m_backgroundColour.FromString(node->GetValue<ibString>(ibT("background")));
-	cell.m_textColour.FromString(node->GetValue<ibString>(ibT("textColour")));
-
-	ReadBorder(*node, ibT("left"),   cell.m_borderAt[0]);
-	ReadBorder(*node, ibT("right"),  cell.m_borderAt[1]);
-	ReadBorder(*node, ibT("top"),    cell.m_borderAt[2]);
-	ReadBorder(*node, ibT("bottom"), cell.m_borderAt[3]);
-
-	if (node->Has(ibT("rowSpan")))
-		cell.m_row_size = node->GetValue<std::int32_t>(ibT("rowSpan"));
-	if (node->Has(ibT("colSpan")))
-		cell.m_col_size = node->GetValue<std::int32_t>(ibT("colSpan"));
-
-	if (node->Has(ibT("fit")))
-		cell.m_fitMode =
-			(ibSpreadsheetCellDescription::ibFitMode)node->GetValue<std::int32_t>(ibT("fit"));
-	if (node->Has(ibT("readOnly")))
-		cell.m_isReadOnly = node->GetValue<bool>(ibT("readOnly"));
-	if (node->Has(ibT("fill")))
-		cell.m_fillSetType = (ibSpreadsheetFillType)node->GetValue<std::int32_t>(ibT("fill"));
+	for (const auto& [name, field] : node->Fields()) {
+		switch (name.length()) {
+		case 3:
+			if (name == kFit)
+				cell.m_fitMode = (ibSpreadsheetCellDescription::ibFitMode)field.AsInt();
+			else if (name == kTop)
+				ReadBorder(field, cell.m_borderAt[2]);
+			break;
+		case 4:
+			if (name == kFont)
+				cell.m_font.FromString(field.AsString());
+			else if (name == kLeft)
+				ReadBorder(field, cell.m_borderAt[0]);
+			else if (name == kFill)
+				cell.m_fillSetType = (ibSpreadsheetFillType)field.AsInt();
+			break;
+		case 5:
+			if (name == kValue)
+				cell.m_value = field.AsString();
+			else if (name == kRight)
+				ReadBorder(field, cell.m_borderAt[1]);
+			break;
+		case 6:
+			if (name == kOrient)
+				cell.m_textOrient = (std::int32_t)field.AsInt();
+			else if (name == kBottom)
+				ReadBorder(field, cell.m_borderAt[3]);
+			break;
+		case 7:
+			if (name == kRowSpan)
+				cell.m_row_size = (std::int32_t)field.AsInt();
+			else if (name == kColSpan)
+				cell.m_col_size = (std::int32_t)field.AsInt();
+			break;
+		case 8:
+			if (name == kReadOnly)
+				cell.m_isReadOnly = field.AsBool();
+			break;
+		case 9:
+			if (name == kParameter)
+				cell.m_detailsParameter = field.AsString();
+			else if (name == kAlignHorz)
+				cell.m_alignHorz = (std::int32_t)field.AsInt();
+			else if (name == kAlignVert)
+				cell.m_alignVert = (std::int32_t)field.AsInt();
+			break;
+		case 10:
+			if (name == kBackground)
+				cell.m_backgroundColour.FromString(field.AsString());
+			else if (name == kTextColour)
+				cell.m_textColour.FromString(field.AsString());
+			break;
+		default:
+			break;
+		}
+	}
 
 	return true;
 }
@@ -394,53 +512,7 @@ bool ibSpreadsheetCellDescriptionMemory::ReadNode(const ibDataValue& value, ibSp
 bool ibSpreadsheetCellDescriptionMemory::WriteNode(ibDataValue& value, const ibSpreadsheetCellDescription& cell)
 {
 	std::shared_ptr<ibDataNode> node = std::make_shared<ibDataNode>();
-
-	// ONLY WHAT DIFFERS FROM THE DEFAULT. A cell is mostly ordinary, and writing
-	// every field of every one would bury the two that were actually set.
-	//
-	// WHAT IS IN IT, first: the text a person sees and the parameter a report
-	// substitutes. Everything below is appearance.
-	if (!cell.m_value.IsEmpty())
-		node->SetValue(ibT("value"), cell.m_value);
-	if (!cell.m_detailsParameter.IsEmpty())
-		node->SetValue(ibT("parameter"), cell.m_detailsParameter);
-
-	if (cell.m_alignHorz != ibAlignmentHorz_Left)
-		node->AddField(ibT("alignHorz"), ibDataValue::Int((std::int64_t)cell.m_alignHorz));
-	if (cell.m_alignVert != ibAlignmentVert_Top)
-		node->AddField(ibT("alignVert"), ibDataValue::Int((std::int64_t)cell.m_alignVert));
-	if (cell.m_textOrient != ibOrient_Horizontal)
-		node->AddField(ibT("orient"), ibDataValue::Int((std::int64_t)cell.m_textOrient));
-
-	// An UNSET font is unset — the same rule as the colours below, and it replaced a comparison
-	// with the default that MEASURED both fonts through a wxScreenDC (see the member's note).
-	if (cell.m_font.IsOk())
-		node->SetValue(ibT("font"), cell.m_font.ToString());
-
-	// An UNSET colour is unset — see the note on the members. Writing the resolved
-	// one would freeze today's desktop theme into the file.
-	if (cell.m_backgroundColour.IsOk())
-		node->SetValue(ibT("background"), cell.m_backgroundColour.ToString());
-	if (cell.m_textColour.IsOk())
-		node->SetValue(ibT("textColour"), cell.m_textColour.ToString());
-
-	WriteBorder(*node, ibT("left"),   cell.m_borderAt[0]);
-	WriteBorder(*node, ibT("right"),  cell.m_borderAt[1]);
-	WriteBorder(*node, ibT("top"),    cell.m_borderAt[2]);
-	WriteBorder(*node, ibT("bottom"), cell.m_borderAt[3]);
-
-	if (cell.m_row_size != 1)
-		node->AddField(ibT("rowSpan"), ibDataValue::Int((std::int64_t)cell.m_row_size));
-	if (cell.m_col_size != 1)
-		node->AddField(ibT("colSpan"), ibDataValue::Int((std::int64_t)cell.m_col_size));
-
-	if (cell.m_fitMode != ibSpreadsheetCellDescription::Mode_Overflow)
-		node->AddField(ibT("fit"), ibDataValue::Int((std::int64_t)cell.m_fitMode));
-	if (cell.m_isReadOnly)
-		node->AddField(ibT("readOnly"), ibDataValue::Bool(true));
-	if (cell.m_fillSetType != ibSpreadsheetFillType::ibSpreadsheetFillType_StrText)
-		node->AddField(ibT("fill"), ibDataValue::Int((std::int64_t)cell.m_fillSetType));
-
+	WriteCell(*node, cell);
 	value = ibDataValue::Child(node);
 	return true;
 }
@@ -458,13 +530,9 @@ bool ibSpreadsheetDescriptionMemory::ReadNode(const ibDataValue& value, ibSpread
 
 	if (auto cells = sheet->FindField(kSheetCells)) {
 		for (const ibDataValue& entry : cells->AsArray()) {
-
-			const auto node = entry.AsChild();
-			if (!node)
+			int row = 0, col = 0;
+			if (!ReadPlace(entry, row, col))
 				continue;
-
-			const int row = node->GetValue<std::int32_t>(ibT("row"));
-			const int col = node->GetValue<std::int32_t>(ibT("col"));
 
 			// The cell fills itself in; the sheet places it.
 			ibSpreadsheetCellDescription read(row, col);
@@ -559,25 +627,11 @@ bool ibSpreadsheetDescriptionMemory::WriteNode(ibDataValue& value, const ibSprea
 	std::shared_ptr<ibDataNode> sheet = std::make_shared<ibDataNode>();
 
 	std::vector<ibDataValue> cells;
+	cells.reserve(spreadsheetDesc.GetCellCount());
 	for (int idx = 0; idx < spreadsheetDesc.GetCellCount(); ++idx) {
-
 		const ibSpreadsheetCellDescription* cell = spreadsheetDesc.GetCellByIdx(idx);
-		if (cell == nullptr)
-			continue;
-
-		// The cell says what it is; the sheet only says WHERE.
-		ibDataValue entry;
-		if (!ibSpreadsheetCellDescriptionMemory::WriteNode(entry, *cell))
-			continue;
-
-		// A value is its bytes: the cell's node with its place added is the entry written again.
-		if (auto node = entry.AsChild()) {
-			node->AddField(ibT("row"), ibDataValue::Int((std::int64_t)cell->m_row));
-			node->AddField(ibT("col"), ibDataValue::Int((std::int64_t)cell->m_col));
-			entry = ibDataValue::Child(std::make_shared<ibDataNode>(std::move(*node)));
-		}
-
-		cells.push_back(entry);
+		if (cell != nullptr)
+			cells.push_back(WritePlacedCell(*cell));
 	}
 
 	sheet->AddField(kSheetCells, ibDataValue::Array(cells));

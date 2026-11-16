@@ -323,7 +323,9 @@ Two header-only helpers of the desktop library (`deskgui/app.h`, `deskgui/consol
 ```
   core/diagnostics/crashGuard.{h,cpp}     ─── CORE_API. Headless:
                                               SEH filter / signal handlers /
-                                              minidump writer / std::set_terminate /
+                                              minidump writer / SIGABRT (Win: every
+                                              terminate, any thread or fiber) /
+                                              std::set_terminate (POSIX) /
                                               <exe>_terminate.log + <exe>_startup.log /
                                               MessageBoxW (Win) | fprintf+stderr (POSIX)
                                               No wx UI, no main loop required.

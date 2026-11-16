@@ -223,8 +223,14 @@ an object, take a reference and pass `*holder`; keep a returned `shared_ptr` as 
 lives only inside the one getter.
 
 **Owned plain C++ objects are `std::shared_ptr<T>`,** in collections too, and `unique_ptr` only
-where single ownership is a real invariant. Take a sink parameter by value and `std::move` it into
-the member; observe a `shared_ptr` by `const&`; return a local by value, without `std::move`.
+where single ownership is a real invariant. Take a `shared_ptr` parameter by `const&`, a sink too —
+it copies into the member: the reference is the contract, and the copy costs the one count a
+by-value parameter would. Return a local by value, without `std::move`.
+
+**An `m_owned*` beside a pointer to the same thing is a missing holder.** `m_ownedCol` next to
+`m_col`, `m_hold` next to `m_origin`, an owned list beside a raw-taking verb: two answers to "who
+keeps it alive" behind one type, the second added where a crash taught it. Do not add the pair —
+make the pointer the holder from birth and delete the twin.
 
 **Whoever works with a counted object holds a reference for as long as the work lasts.** When
 something becomes counted, list every road that hands it out (the main one, the fallback, "nobody

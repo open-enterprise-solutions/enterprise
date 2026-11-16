@@ -393,6 +393,67 @@ TEST(RegisterArmCut, ADateInsideAGrainIsCutAtItsStartAndKeepsItsSide)
     EXPECT_TRUE(read.m_toExcluding);
 }
 
+// ⭐ THE GRAIN'S LAST SECOND, TAKEN IN, IS THE GRAIN WHOLE: `<= 05.03 23:59:59` is what EndOfDay hands out, and it
+// reads as `< 06.03` does - no cut, the day is the stored rows'. Taken as falling inside its day it sent the day to
+// the movements, and a year asked to its last second was never read as the year's row (load-million-rows.md § 16).
+TEST(RegisterArmCut, TheLastSecondOfAGrainTakenInIsTheGrainWhole)
+{
+    ArmCutFix f;
+    ASSERT_NE(f.reg, nullptr);
+    const ibMaterializeReadSpec read = f.CutAt(kMidnight.EndOfPeriod(ibTotalsPeriod::Day), /*excluding*/ false);
+
+    EXPECT_FALSE(read.m_markColumn.IsEmpty());
+    EXPECT_NE(read.m_floor.GetType(), TYPE_DATE) << "the day is wholly in - nothing to cut";
+    EXPECT_FALSE(read.m_toExcluding);
+}
+
+// ...left OUT, the same second is a boundary inside its day like any other.
+TEST(RegisterArmCut, TheLastSecondOfAGrainLeftOutIsCutAtTheGrainsStart)
+{
+    ArmCutFix f;
+    ASSERT_NE(f.reg, nullptr);
+    const ibMaterializeReadSpec read = f.CutAt(kMidnight.EndOfPeriod(ibTotalsPeriod::Day), /*excluding*/ true);
+
+    ASSERT_EQ(read.m_floor.GetType(), TYPE_DATE);
+    EXPECT_EQ(read.m_floor.GetDate(), kMidnight);
+}
+
+// ...and behind a partial head the stored arm runs to the end of that day: the floor stands where the next begins.
+TEST(RegisterArmCut, BehindAPartialHeadTheLastSecondEndsTheStoredArmPastItsDay)
+{
+    ArmCutFix f;
+    ASSERT_NE(f.reg, nullptr);
+    ibRegBound lower, upper;
+    lower.m_date = ibValue(kAfternoon);
+    upper.m_date = ibValue(kMidnight.AddDays(2).EndOfPeriod(ibTotalsPeriod::Day));
+    ibMaterializeReadSpec read;
+    ibRegFillArmCut(read, f.reg, upper, lower);
+
+    ASSERT_EQ(read.m_floor.GetType(), TYPE_DATE);
+    EXPECT_EQ(read.m_floor.GetDate(), kMidnight.AddDays(3));
+    ASSERT_EQ(read.m_headSplit.GetType(), TYPE_DATE);
+    EXPECT_EQ(read.m_headSplit.GetDate(), kMidnight.AddDays(1));
+}
+
+// ⭐ OPEN ABOVE AND BEGUN INSIDE A GRAIN: only the head is the movements'. The stored arm runs to its last row - the
+// trigger keeps the current grain's up to date - so there is no floor. It stood at the lower boundary's grain, and an
+// interval begun at noon and open above read every movement after it (load-million-rows.md, 6(e)).
+TEST(RegisterArmCut, AnIntervalOpenAboveIsCutAtItsHeadOnly)
+{
+    ArmCutFix f;
+    ASSERT_NE(f.reg, nullptr);
+    ibRegBound lower;
+    lower.m_date = ibValue(kAfternoon);
+    ibMaterializeReadSpec read;
+    ibRegFillArmCut(read, f.reg, ibRegBound(), lower);
+
+    EXPECT_NE(read.m_floor.GetType(), TYPE_DATE) << "nothing above to cut at";
+    ASSERT_EQ(read.m_headSplit.GetType(), TYPE_DATE);
+    EXPECT_EQ(read.m_headSplit.GetDate(), kMidnight.BeginOfNextPeriod(ibTotalsPeriod::Day));
+    ASSERT_EQ(read.m_headGrain.GetType(), TYPE_DATE);
+    EXPECT_EQ(read.m_headGrain.GetDate(), kMidnight);
+}
+
 // ⭐ AND THE NUMBERS, LIVE ON SQLITE: the cut the register fills, the reading the builder renders, the
 // totals its own triggers keep. 100 received on 03.03, 12 written off on 04.03 - and 30 received on 05.03 at
 // 09:00, which is the day the boundary stands at the start of. Before 05.03 there were 88; the defect said 118.
@@ -424,7 +485,7 @@ TEST(RegisterArmCut, TheBalanceBeforeMidnightLeavesOutTheDayThatStartsThere)
     spec.m_keyColumns       = { wxT("wh") };
     spec.m_periodColumn     = wxT("period_");
     spec.m_periodSourceExpr = wxT("{row}.period_");
-    spec.m_periodUnit       = ibTotalsPeriod::Day;
+    spec.m_periodUnits      = { ibTotalsPeriod::Day };
     spec.m_guard            = wxT("{row}.active_ <> 0");
     spec.m_deltas = {
         { wxT("qty_in"),  wxT("CASE WHEN {row}.rectype_ = 1 THEN {row}.qty ELSE 0 END") },
@@ -536,8 +597,8 @@ TEST(RegisterSurface, TheSameQuestionGetsTheSameSurface) {
         columns.push_back(ibTempColumn(wxT("A"), wxT("fldA"), type, ibRegDerivedColumnId(1001)));
     };
 
-    const ibBackendQueryable* first  = cache.Obtain(wxT("k"), wxT("sig-1"), wxT("T"), nullptr, build);
-    const ibBackendQueryable* second = cache.Obtain(wxT("k"), wxT("sig-1"), wxT("T"), nullptr, build);
+    const std::shared_ptr<const ibBackendQueryable> first  = cache.Obtain(wxT("k"), wxT("sig-1"), wxT("T"), nullptr, build);
+    const std::shared_ptr<const ibBackendQueryable> second = cache.Obtain(wxT("k"), wxT("sig-1"), wxT("T"), nullptr, build);
     ASSERT_NE(nullptr, first);
     EXPECT_EQ(first, second) << "same key, same signature — the surface is built once";
 }
@@ -553,21 +614,21 @@ TEST(RegisterSurface, AChangedShapeRebuildsAndTheOldPointerStaysAlive) {
         columns.push_back(ibTempColumn(wxT("B"), wxT("fldB"), type, ibRegDerivedColumnId(1002)));
     };
 
-    const ibBackendQueryable* before = cache.Obtain(wxT("k"), wxT("sig-1"), wxT("T"), nullptr, one);
+    const std::shared_ptr<const ibBackendQueryable> before = cache.Obtain(wxT("k"), wxT("sig-1"), wxT("T"), nullptr, one);
     ASSERT_NE(nullptr, before);
     EXPECT_EQ(1u, before->GetQueryColumns().size());
 
     // ⭐ THE SIGNATURE IS WHAT REBUILDS IT. Keyed by name alone, a surface asked for before the
     // register's attributes were read stays empty for the life of the session — that is the scar
     // this check exists for, and counting columns instead would miss a RE-TYPED one.
-    const ibBackendQueryable* after = cache.Obtain(wxT("k"), wxT("sig-2"), wxT("T"), nullptr, two);
+    const std::shared_ptr<const ibBackendQueryable> after = cache.Obtain(wxT("k"), wxT("sig-2"), wxT("T"), nullptr, two);
     ASSERT_NE(nullptr, after);
     EXPECT_NE(before, after);
     EXPECT_EQ(2u, after->GetQueryColumns().size());
 
-    // ⚠ AND THE OLD ONE IS RETIRED, NOT DESTROYED — a reader may still hold the pointer handed out
-    // earlier. Reading through it after the rebuild is the whole reason the retired list exists; if
-    // this ever becomes a use-after-free, it fails here rather than in somebody's report.
+    // ⚠ AND THE OLD ONE IS REPLACED, NOT DESTROYED UNDER ITS READER — the share handed out earlier
+    // keeps it alive. Reading through it after the rebuild is what that share is for; if this ever
+    // becomes a use-after-free, it fails here rather than in somebody's report.
     EXPECT_EQ(1u, before->GetQueryColumns().size());
 }
 
@@ -878,9 +939,9 @@ private:
 class ConditionSurface : public ibBackendQueryable {
 public:
 	explicit ConditionSurface(const ibString& name) : m_name(name) {}
-	void Add(const ibBackendQueryColumn* column) { m_columns.push_back(column); }
-	std::vector<const ibBackendQueryColumn*> GetQueryColumns() const override { return m_columns; }
-	bool ContainColumn(const ibBackendQueryColumn* column) const override {
+	void Add(const std::shared_ptr<const ibBackendQueryColumn>& column) { m_columns.push_back(column); }
+	std::vector<std::shared_ptr<const ibBackendQueryColumn>> GetQueryColumns() const override { return m_columns; }
+	bool ContainColumn(const std::shared_ptr<const ibBackendQueryColumn>& column) const override {
 		return std::find(m_columns.begin(), m_columns.end(), column) != m_columns.end();
 	}
 	ibString GetQueryTableName() const override { return m_name; }
@@ -890,13 +951,13 @@ public:
 private:
 	ibString m_name;
 	ibUniqueKey m_key;
-	std::vector<const ibBackendQueryColumn*> m_columns;
+	std::vector<std::shared_ptr<const ibBackendQueryColumn>> m_columns;
 };
 
 const ibMetaID kWarehouseId = 101, kItemId = 102, kQuantityId = 103, kCodeId = 201;
 
-ibQueryPredicatePtr Equal(const ibBackendQueryColumn* column, const ibValue& value,
-                          const std::vector<const ibBackendQueryColumn*>& path = {})
+ibQueryPredicatePtr Equal(const std::shared_ptr<const ibBackendQueryColumn>& column, const ibValue& value,
+                          const std::vector<std::shared_ptr<const ibBackendQueryColumn>>& path = {})
 {
 	ibQueryCondition leaf;
 	leaf.m_col   = column;
@@ -905,7 +966,7 @@ ibQueryPredicatePtr Equal(const ibBackendQueryColumn* column, const ibValue& val
 	return ibQueryPredicate::Leaf(leaf);
 }
 
-const auto kDimensionsOnly = [](const ibBackendQueryColumn* column) {
+const auto kDimensionsOnly = [](const std::shared_ptr<const ibBackendQueryColumn>& column) {
 	return column != nullptr && (column->GetColumnId() == kWarehouseId || column->GetColumnId() == kItemId);
 };
 
@@ -913,62 +974,66 @@ const auto kDimensionsOnly = [](const ibBackendQueryColumn* column) {
 
 TEST(VirtualTableCondition, TheWholeTreeIsFoundAgainOnTheSurfaceItReads) {
 	// Written against the movements, read on the totals view: same names, other columns.
-	ConditionColumn warehouse(wxT("Warehouse"), kWarehouseId), item(wxT("Item"), kItemId);
-	ConditionColumn viewWarehouse(wxT("Warehouse"), kWarehouseId), viewItem(wxT("Item"), kItemId);
-	ConditionSurface view(wxT("Turnovers"));
-	view.Add(&viewWarehouse);
-	view.Add(&viewItem);
+	const auto warehouse = std::make_shared<ConditionColumn>(wxT("Warehouse"), kWarehouseId);
+	const auto item = std::make_shared<ConditionColumn>(wxT("Item"), kItemId);
+	const auto viewWarehouse = std::make_shared<ConditionColumn>(wxT("Warehouse"), kWarehouseId);
+	const auto viewItem = std::make_shared<ConditionColumn>(wxT("Item"), kItemId);
+	const auto view = std::make_shared<ConditionSurface>(wxT("Turnovers"));
+	view->Add(viewWarehouse);
+	view->Add(viewItem);
 
 	const ibQueryPredicatePtr written = ibQueryPredicate::Compose(ibQueryPredicateKind::Or,
-		ibQueryPredicate::Not(Equal(&warehouse, ibValue(ibT("Main")))),
-		ibQueryPredicate::Null(&item, /*negated*/ false));
+		ibQueryPredicate::Not(Equal(warehouse, ibValue(ibT("Main")))),
+		ibQueryPredicate::Null(item, /*negated*/ false));
 
-	const ibQueryPredicatePtr onView = ibRegConditionOn(&view, written, kDimensionsOnly);
+	const ibQueryPredicatePtr onView = ibRegConditionOn(view, written, kDimensionsOnly);
 	ASSERT_TRUE(onView);
 	ASSERT_EQ(ibQueryPredicateKind::Or, onView->m_kind);
 	ASSERT_EQ(2u, onView->m_children.size());
 	ASSERT_EQ(ibQueryPredicateKind::Not, onView->m_children[0]->m_kind);
-	EXPECT_EQ(&viewWarehouse, onView->m_children[0]->m_children[0]->m_leaf.m_col);
-	EXPECT_EQ(&viewItem, onView->m_children[1]->m_col);
+	EXPECT_EQ(viewWarehouse, onView->m_children[0]->m_children[0]->m_leaf.m_col);
+	EXPECT_EQ(viewItem, onView->m_children[1]->m_col);
 
 	// …and the tree the author wrote is left as written.
-	EXPECT_EQ(&warehouse, written->m_children[0]->m_children[0]->m_leaf.m_col);
+	EXPECT_EQ(warehouse, written->m_children[0]->m_children[0]->m_leaf.m_col);
 }
 
 TEST(VirtualTableCondition, AWalkThroughAReferenceStaysAWalkAndIsAskedAsExists) {
-	ConditionColumn warehouse(wxT("Warehouse"), kWarehouseId), code(wxT("Code"), kCodeId);
-	ConditionColumn viewWarehouse(wxT("Warehouse"), kWarehouseId);
-	ConditionSurface view(wxT("Balance"));
-	view.Add(&viewWarehouse);
+	const auto warehouse = std::make_shared<ConditionColumn>(wxT("Warehouse"), kWarehouseId);
+	const auto code = std::make_shared<ConditionColumn>(wxT("Code"), kCodeId);
+	const auto viewWarehouse = std::make_shared<ConditionColumn>(wxT("Warehouse"), kWarehouseId);
+	const auto view = std::make_shared<ConditionSurface>(wxT("Balance"));
+	view->Add(viewWarehouse);
 
-	const ibQueryPredicatePtr onView = ibRegConditionOn(&view,
-		Equal(&code, ibValue(ibT("01")), { &warehouse, &code }), kDimensionsOnly);
+	const ibQueryPredicatePtr onView = ibRegConditionOn(view,
+		Equal(code, ibValue(ibT("01")), { warehouse, code }), kDimensionsOnly);
 	ASSERT_TRUE(onView);
 	ASSERT_EQ(2u, onView->m_leaf.m_path.size());
-	EXPECT_EQ(&viewWarehouse, onView->m_leaf.m_path.front());   // the head is the surface's own column
-	EXPECT_EQ(&code, onView->m_leaf.m_path.back());             // the leaf stays the target's
-	EXPECT_TRUE(onView->m_leaf.m_asExists);                     // a filter never multiplies a row
+	EXPECT_EQ(viewWarehouse, onView->m_leaf.m_path.front());   // the head is the surface's own column
+	EXPECT_EQ(code, onView->m_leaf.m_path.back());             // the leaf stays the target's
+	EXPECT_TRUE(onView->m_leaf.m_asExists);                    // a filter never multiplies a row
 }
 
 TEST(VirtualTableCondition, AColumnTheRowsCannotBeSelectedByIsRefusedNotDropped) {
 	// A figure exists only after the fold: dropped, the leaf would widen the answer without a word.
-	ConditionColumn quantity(wxT("Quantity"), kQuantityId);
-	ConditionColumn viewQuantity(wxT("Quantity"), kQuantityId);
-	ConditionSurface view(wxT("Balance"));
-	view.Add(&viewQuantity);
+	const auto quantity = std::make_shared<ConditionColumn>(wxT("Quantity"), kQuantityId);
+	const auto view = std::make_shared<ConditionSurface>(wxT("Balance"));
+	view->Add(std::make_shared<ConditionColumn>(wxT("Quantity"), kQuantityId));
 
-	EXPECT_THROW(ibRegConditionOn(&view, Equal(&quantity, ibValue(5)), kDimensionsOnly), ibBackendException);
+	EXPECT_THROW(ibRegConditionOn(view, Equal(quantity, ibValue(5)), kDimensionsOnly), ibBackendException);
 }
 
 TEST(VirtualTableCondition, WhatAConditionNamesDecidesWhereItMayStand) {
-	ConditionColumn warehouse(wxT("Warehouse"), kWarehouseId), item(wxT("Item"), kItemId), quantity(wxT("Quantity"), kQuantityId);
+	const auto warehouse = std::make_shared<ConditionColumn>(wxT("Warehouse"), kWarehouseId);
+	const auto item = std::make_shared<ConditionColumn>(wxT("Item"), kItemId);
+	const auto quantity = std::make_shared<ConditionColumn>(wxT("Quantity"), kQuantityId);
 
 	const ibQueryPredicatePtr keysOnly = ibQueryPredicate::Compose(ibQueryPredicateKind::And,
-		Equal(&warehouse, ibValue(ibT("Main"))), ibQueryPredicate::Not(Equal(&item, ibValue(ibT("Tea")))));
+		Equal(warehouse, ibValue(ibT("Main"))), ibQueryPredicate::Not(Equal(item, ibValue(ibT("Tea")))));
 	EXPECT_TRUE(ibRegConditionOnlyNames(keysOnly, kDimensionsOnly));
 
 	const ibQueryPredicatePtr withAFigure = ibQueryPredicate::Compose(ibQueryPredicateKind::Or,
-		Equal(&warehouse, ibValue(ibT("Main"))), Equal(&quantity, ibValue(0)));
+		Equal(warehouse, ibValue(ibT("Main"))), Equal(quantity, ibValue(0)));
 	EXPECT_FALSE(ibRegConditionOnlyNames(withAFigure, kDimensionsOnly));
 }
 

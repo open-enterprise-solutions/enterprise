@@ -17,14 +17,18 @@ template <typename TQueryable, typename TMeta>
 class ibMetaQueryDescriptor : public ibQueryableSourceDescriptor
 {
 public:
-	explicit ibMetaQueryDescriptor(TMeta* meta) : m_meta(meta), m_queryable(meta) {}
+	explicit ibMetaQueryDescriptor(TMeta* meta) : m_meta(meta), m_queryable(std::make_shared<TQueryable>(meta)) {}
 
 	ibString GetNamespace() const override { return ibValue::GetNameObjectFromID(m_meta->GetClassType()); }
 	ibString GetName() const override { return m_meta->GetName(); }
-	const ibBackendQueryable* CreateQueryable(ibValue** /*paParams*/, long /*lSizeArray*/) override { return &m_queryable; }
+	// A table takes no arguments: its own queryable, shared.
+	std::shared_ptr<const ibBackendQueryable> CreateQueryable(ibValue** /*paParams*/, long /*lSizeArray*/,
+		const std::vector<ibQueryPredicatePtr>& /*conditions*/, const ibQueryReadColumns& /*read*/) override {
+		return m_queryable;
+	}
 
-	// The contained queryable — the metaobject's GetQueryable() forwards here (stable for the object's life).
-	const ibBackendQueryable* GetQueryable() const { return &m_queryable; }
+	// The contained queryable — the metaobject's GetQueryable() forwards here (one for the object's life).
+	std::shared_ptr<const ibBackendQueryable> GetQueryable() const { return m_queryable; }
 
 	// WHAT COLUMNS THIS SOURCE HAS — forwarded to the metaobject, which is the only one that knows.
 	//
@@ -38,8 +42,8 @@ public:
 	}
 
 	// …and the same table as the QUERY reads it: the queryable's own columns (an attribute's through its bridge).
-	std::vector<const ibBackendQueryColumn*> GetQueryColumns(const std::vector<ibValue>& /*args*/) const override {
-		return m_queryable.GetQueryColumns();
+	std::vector<std::shared_ptr<const ibBackendQueryColumn>> GetQueryColumns(const std::vector<ibValue>& /*args*/) const override {
+		return m_queryable->GetQueryColumns();
 	}
 
 	// Restore ROW-KEY from a row's identity VALUE — read the source's PRIMARY-KEY columns off it (the SAME columns
@@ -51,7 +55,7 @@ public:
 		if (value.IsEmpty() || !value.ConvertToValue(src) || src == nullptr)
 			return ibQueryableSourceDescriptor::GetRowKeyByValue(value);
 		std::vector<ibValue> rowKey;
-		for (const ibBackendQueryColumn* kc : m_queryable.GetPrimaryKeyColumns()) {
+		for (const std::shared_ptr<const ibBackendQueryColumn>& kc : m_queryable->GetPrimaryKeyColumns()) {
 			if (kc == nullptr) continue;
 			ibValue v;
 			src->GetValueBySourceHop(ibSourceHop{ kc->GetColumnId() }, v);
@@ -61,8 +65,8 @@ public:
 	}
 
 protected:
-	TMeta*     m_meta;        // for name / clsid + to build the queryable (non-const, like the old `this`)
-	TQueryable m_queryable;   // the contained queryable (ibRecordQueryable / ibRegisterDataQueryable / ibConstantQueryable / …)
+	TMeta*                      m_meta;        // for name / clsid + to build the queryable (non-const, like the old `this`)
+	std::shared_ptr<TQueryable> m_queryable;   // the contained queryable, born held (ibRecordQueryable / ibRegisterDataQueryable / ibConstantQueryable / …)
 };
 
 #endif // !__META_QUERY_DESCRIPTOR_H__

@@ -122,9 +122,9 @@ public:
 // forbids one without forbidding the other. A private destructor is no better — every derived class
 // declares a public one of its own, so `delete derived*` sails past it.
 //
-// What remains is real and stands on the other side of the boundary: a query COLUMN carries its own
-// control block (ibBackendQueryColumn : enable_shared_from_this), so nobody needs to invent a second
-// owner for one, and a runtime value travels by ibValuePtr, which counts rather than deletes. The
+// What remains is real and stands on the other side of the boundary: a query COLUMN is born held and
+// handed out as it is held (std::shared_ptr), so nobody needs to invent a second owner for one, and a
+// runtime value travels by ibValuePtr, which counts rather than deletes. The
 // rule itself lives in docs/private/ownership-authority.md; on this side it is a rule people keep, not one
 // the compiler keeps for them.
 
@@ -1020,8 +1020,8 @@ public:
 	// refcounted type assumes the second WITHOUT the first. So on this side the rule is one people
 	// keep, not one the compiler keeps for them: release with DecrRef, travel by ibValuePtr, and
 	// never hand a runtime value to another owner. The QUERY side is a different matter and is
-	// closed by construction — a column carries its own control block, so no second owner is ever
-	// needed (query/queryColumn.h). (docs/private/ownership-authority.md)
+	// closed by construction — a column is born held and handed out as it is held, so no second owner
+	// is ever needed (query/queryColumn.h). (docs/private/ownership-authority.md)
 
 	//operators:
 	// THE ASSIGNMENTS ARE THE VARIANT'S, each straight through — declared here because the runtime's own (`ibValue*`,

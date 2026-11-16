@@ -128,16 +128,16 @@ struct InformationRegisterGet : ::testing::Test {
 			return;
 		ibString list;
 		std::set<ibString> seen;
-		auto addColumn = [&](const ibBackendQueryColumn* column) {
+		auto addColumn = [&](const std::shared_ptr<const ibBackendQueryColumn>& column) {
 			if (column == nullptr)
 				return;
-			for (const ibColumnSlot& slot : DescribeColumnLayout(column)) {
+			for (const ibColumnSlot& slot : DescribeColumnLayout(*column)) {
 				if (slot.m_name.IsEmpty() || !seen.insert(slot.m_name).second)
 					continue;
 				list << (list.IsEmpty() ? wxT("") : wxT(", ")) << slot.m_name << SqliteTypeOf(slot.m_type);
 			}
 		};
-		for (const ibBackendQueryColumn* column : table.m_scaffold)
+		for (const std::shared_ptr<const ibBackendQueryColumn>& column : table.m_scaffold)
 			addColumn(column);
 		for (const ibSchemaColumn& column : table.m_columns)
 			addColumn(column.m_column);

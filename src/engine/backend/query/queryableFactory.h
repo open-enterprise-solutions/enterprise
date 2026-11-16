@@ -31,8 +31,8 @@
 #include "queryable.h"                 // ibQueryPredicatePtr — a condition the source consumes itself
 #include "core/query/querySourceParameter.h"   // ibQuerySourceParameter — what DescribeParameters declares
 
-#include <algorithm>   // std::max — SameConditions
 #include <map>
+#include <memory>
 #include <vector>
 
 class ibBackendQueryable;
@@ -78,172 +78,35 @@ public:
 	ibQueryableSourceDescriptor& operator=(const ibQueryableSourceDescriptor&) = delete;
 	virtual ~ibQueryableSourceDescriptor() = default;
 
-private:
-	// The queryables this descriptor has built for parameterized calls — see MakeCompanion below.
-	// `shared_ptr<void>` so this header needs no complete type; the raw pointer is the same object,
-	// kept because a void one cannot be cast back without knowing what it was.
-	struct Companion
-	{
-		std::vector<ibValue>             m_call;
-		std::vector<ibQueryPredicatePtr> m_conditions;   // the conditions the source consumed — arguments too
-		std::shared_ptr<void>            m_owned;
-		const void*                      m_q = nullptr;
-	};
-	std::vector<Companion> m_companions;
-
-	// TWO CALLS ARE THE SAME CALL when they have the same arguments. Comparison goes through
-	// ibValue's own equality, and it is allowed to REFUSE (two values of unrelated types are not
-	// comparable) — a refusal means "not the same", never an exception out of a lifetime helper.
-	static bool SameCall(const std::vector<ibValue>& a, const std::vector<ibValue>& b)
-	{
-		if (a.size() != b.size())
-			return false;
-		for (size_t i = 0; i < a.size(); ++i) {
-			bool equal = false;
-			try { equal = (a[i] == b[i]); }
-			catch (...) { return false; }
-			if (!equal)
-				return false;
-		}
-		return true;
-	}
-
-	// …AND A CONDITION THE SOURCE CONSUMED IS AN ARGUMENT OF THE CALL. The lowering hands it over beside
-	// `paParams` and leaves its slot there EMPTY (queryLowering.cpp), so a key made of `paParams` alone
-	// said two calls were one call whatever their conditions: the second query got the first one's
-	// companion and read the rows of the first condition, quietly — an accounting balance «in hierarchy»
-	// of one account answered with another's, a calculation register's base for the records the last
-	// query chose (found 2026-09-11, writing the second). Compared by shape and values. CONSERVATIVE on
-	// purpose: a computed side or a semi-join makes two conditions different, since a condition wrongly
-	// taken for another is a wrong answer and one wrongly taken for new is only a companion more.
-	static bool SameCondition(const ibQueryPredicatePtr& a, const ibQueryPredicatePtr& b)
-	{
-		if (a == b)
-			return true;
-		if (a == nullptr || b == nullptr)
-			return false;
-		if (a->m_kind != b->m_kind || a->m_col != b->m_col || a->m_negated != b->m_negated
-		    || a->m_path != b->m_path || a->m_refTypeClsid != b->m_refTypeClsid
-		    || a->m_expr != nullptr || b->m_expr != nullptr
-		    || a->m_children.size() != b->m_children.size())
-			return false;
-		const ibQueryCondition& x = a->m_leaf;
-		const ibQueryCondition& y = b->m_leaf;
-		if (x.m_col != y.m_col || x.m_op != y.m_op || x.m_unfold != y.m_unfold || x.m_path != y.m_path
-		    || x.m_asExists != y.m_asExists
-		    || x.m_expr != nullptr || y.m_expr != nullptr || x.m_valueExpr != nullptr || y.m_valueExpr != nullptr
-		    || x.m_semiJoin != nullptr || y.m_semiJoin != nullptr
-		    || !SameCall({ x.m_value }, { y.m_value }) || !SameCall(x.m_values, y.m_values))
-			return false;
-		for (size_t i = 0; i < a->m_children.size(); ++i)
-			if (!SameCondition(a->m_children[i], b->m_children[i]))
-				return false;
-		return true;
-	}
-
-	static bool SameConditions(const std::vector<ibQueryPredicatePtr>& a, const std::vector<ibQueryPredicatePtr>& b)
-	{
-		// A call with no conditions and a call with a list of nulls are the same call.
-		const size_t n = std::max(a.size(), b.size());
-		for (size_t i = 0; i < n; ++i)
-			if (!SameCondition(i < a.size() ? a[i] : nullptr, i < b.size() ? b[i] : nullptr))
-				return false;
-		return true;
-	}
-
-public:
-
 	virtual ibString GetNamespace() const = 0;
 	virtual ibString GetName() const = 0;
 
-	// ⭐ THE COMPANIONS GO WHEN THE REGISTRATION GOES — said by the factory's Unregister, the door every
-	// source passes when its configuration closes. A companion holds the VALUES of its call: dates, a
-	// period that names a document, the accounts of a condition — references into the configuration. Kept
-	// until the descriptor itself was destroyed, they outlived the metaobjects they point into: the tree is
-	// removed child by child, the chart of accounts before the register that reads it, and a reference
-	// forgotten from the registry asked its already-freed chart for its id. An access violation at every
-	// exit of a client that had run an account condition (dump 2026-09-16, ibReferenceRegistry::Forget
-	// under ~ibAcctSourceDescriptor). A source registered again builds its companions afresh.
-	void ReleaseCompanions() { m_companions.clear(); }
-
-	// CREATE the queryable from the call-scoped params (count + pointer-to-pointer of ibValue —
-	// the ibValue::Init idiom). NON-const: a parameterized source (a register's balance / slice)
-	// builds + configures its call-scoped companion HERE from the params and OWNS the result; a
-	// standard source returns its stable contained member. The returned pointer is owned by the
-	// descriptor (borrowed by the caller) — valid for the descriptor's life.
-	virtual const ibBackendQueryable* CreateQueryable(ibValue** paParams, long lSizeArray) = 0;
-
-	// ⭐⭐ THE SAME CALL, WITH THE CONDITIONS THE SOURCE CONSUMES ITSELF.
+	// ⭐⭐ THE READING OF THIS SOURCE, MADE FROM THESE ARGUMENTS — the one entrance.
 	//
-	// `conditions` is parallel to the declared parameter list: an entry is non-null exactly where the
-	// declaration said `m_consumedBySource` and the author wrote a predicate there. Everything else is
-	// unchanged, which is why the default forwards — a source that consumes nothing never sees this.
+	// (The arguments are a count + pointer-to-pointer of ibValue — the ibValue::Init idiom.) A virtual table — a
+	// register's balance or turnovers, an information register's slice — first SELECTS, by its period and its
+	// conditions, and only then shares its rows, so every reading of it is its own: made here from ITS arguments
+	// (`std::make_shared`) and owned by whoever asked — the query reading it, whose builder and result keep it for
+	// as long as they name it; a list, for as long as it reads. Nothing of a reading stays in the descriptor, and
+	// the factory holds descriptors only. A source that takes no arguments — a catalog, a tabular section — hands
+	// out its own queryable, shared without owning. "The same source" is the same DESCRIPTOR, never the same
+	// pointer: two readings of one table are two objects.
 	//
-	// ⚠ The predicates are ALREADY LOWERED, against `GetConditionScope()`. They have to be: a
-	// condition names columns, and the companion this call is about does not exist yet — resolving
-	// against it would be resolving against the thing being built. The scope is the source's stable
-	// side (a register's movements table), where the account column lives in any case.
+	// `conditions` is parallel to the declared parameter list: an entry is non-null exactly where the declaration
+	// said `m_consumedBySource` and the author wrote a predicate there. ⚠ ALREADY LOWERED, against
+	// `GetConditionScope()`: a condition names columns, and the reading it is about does not exist yet. `read` is
+	// what the query reads of the table (ibQueryReadColumns) — for a source whose rows depend on it.
 	//
-	// `read` is what the query reads of the table (ibQueryReadColumns) — for a source whose rows depend on it.
-	virtual const ibBackendQueryable* CreateQueryable(ibValue** paParams, long lSizeArray,
-	                                                  const std::vector<ibQueryPredicatePtr>& conditions,
-	                                                  const ibQueryReadColumns& read)
-	{
-		(void)conditions;
-		(void)read;
-		return CreateQueryable(paParams, lSizeArray);
-	}
+	// (It was two entrances, a raw pointer the descriptor kept and one with the conditions, and the descriptor
+	// kept EVERY reading, keyed by its arguments, until the configuration closed. A sale's FIFO read has its own
+	// date and its own items: the web server kept two readings a sale — 8 017 after 4 000 sales — and four sales
+	// posting at once reallocated that list under each other (load-million-rows.md § 16).)
+	virtual std::shared_ptr<const ibBackendQueryable> CreateQueryable(ibValue** paParams, long lSizeArray,
+		const std::vector<ibQueryPredicatePtr>& conditions = {}, const ibQueryReadColumns& read = {}) = 0;
 
 	// WHAT A CONSUMED CONDITION IS RESOLVED AGAINST — null (the default) means this source consumes
 	// none, and the lowering leaves every condition where it was: in the WHERE around the reading.
-	virtual const ibBackendQueryable* GetConditionScope() const { return nullptr; }
-
-	// ⭐⭐ THE CALL-SCOPED COMPANION, AND ITS LIFETIME — here, once, so no descriptor has to remember.
-	//
-	// A parameterized source (a register's balance / turnovers, an information register's slice)
-	// BUILDS a queryable from the arguments of the call. Every one of them held it in a single
-	// `std::unique_ptr` member and assigned over it — which quietly means "the last call's object is
-	// the only one alive", and that is not what the contract two lines above promises.
-	//
-	// It is not a corner case. A query may read the SAME virtual table twice — two slices as of two
-	// dates is the ordinary way to compare them — and the lowering resolves each source in turn,
-	// keeping the pointers side by side while it walks the columns. The second resolve destroyed the
-	// first companion under the binding that already pointed at it, and the walk then read freed
-	// memory: an access violation at `0xdddddddd`, from a query that is perfectly legal.
-	//
-	// So: what is handed out STAYS handed out. `std::shared_ptr<void>` owns it without this header
-	// ever needing the complete type — the deleter is captured where T is known.
-	//
-	// AND THE SAME CALL GIVES BACK THE SAME OBJECT. Without that this would grow without bound: the
-	// query constructor re-asks the engine after every keystroke, always with the same arguments.
-	// With it, the store holds one entry per DISTINCT parameterisation — which is exactly what a
-	// query needs alive at once.
-	template <typename TCompanion, typename... TArgs>
-	const TCompanion* MakeCompanion(ibValue** paParams, long lSizeArray, TArgs&&... args)
-	{
-		return MakeCompanionFor<TCompanion>(std::vector<ibQueryPredicatePtr>(), paParams, lSizeArray,
-			std::forward<TArgs>(args)...);
-	}
-
-	// The same, for a call that carries conditions the source consumed (see SameCondition): they are part
-	// of what makes two calls one call. A source that consumes conditions builds through this one.
-	template <typename TCompanion, typename... TArgs>
-	const TCompanion* MakeCompanionFor(const std::vector<ibQueryPredicatePtr>& conditions,
-		ibValue** paParams, long lSizeArray, TArgs&&... args)
-	{
-		std::vector<ibValue> call;
-		for (long i = 0; i < lSizeArray; ++i)
-			call.push_back(paParams != nullptr && paParams[i] != nullptr ? *paParams[i] : ibValue());
-
-		for (const Companion& made : m_companions)
-			if (SameCall(made.m_call, call) && SameConditions(made.m_conditions, conditions))
-				return static_cast<const TCompanion*>(made.m_q);
-
-		std::shared_ptr<TCompanion> built = std::make_shared<TCompanion>(std::forward<TArgs>(args)...);
-		const TCompanion* borrowed = built.get();
-		m_companions.push_back({ std::move(call), conditions, std::move(built), borrowed });
-		return borrowed;
-	}
+	virtual std::shared_ptr<const ibBackendQueryable> GetConditionScope() const { return nullptr; }
 
 	// ---- The source's COMMAND surface, held PARALLEL to the queryable (queryable = data; these = how a LIST
 	// acts on a row). This is the SINGLE bridge a metadata-blind dynamic list talks to: it fills the columns,
@@ -289,7 +152,7 @@ public:
 	// ⚠ ONLY WHAT IS KNOWN AT DESIGN TIME reaches here. An argument written as `&Period` has no value
 	// until the query runs, and arrives empty — which is right: the shape is then whatever the table
 	// can offer, exactly as with no argument at all. (None → no columns.)
-	virtual std::vector<const ibBackendQueryColumn*> GetQueryColumns(const std::vector<ibValue>& /*args*/) const { return {}; }
+	virtual std::vector<std::shared_ptr<const ibBackendQueryColumn>> GetQueryColumns(const std::vector<ibValue>& /*args*/) const { return {}; }
 
 	// WHICH COLUMNS A CONDITION PARAMETER MAY NAME. Defaults to everything the source has, which is
 	// right for a slice — it carries its dimensions, resources and attributes, and any of them can
@@ -305,7 +168,7 @@ public:
 	// more than was asked for. The general `Condition` admits the ordinary fields — dimensions and the
 	// analytics slots — and offering it accounts instead hides everything a filter is normally written with.
 	// `slot` empty = the general condition.
-	virtual std::vector<const ibBackendQueryColumn*> GetConditionColumns(const ibString& /*slot*/) const {
+	virtual std::vector<std::shared_ptr<const ibBackendQueryColumn>> GetConditionColumns(const ibString& /*slot*/) const {
 		return GetQueryColumns({});
 	}
 
@@ -351,11 +214,8 @@ public:
 
 	bool HasNamespace(const ibString& ns) const;
 
-	// Resolve <ns>.<objectName> (+ call-scoped params) -> queryable: find the (ns,name)
-	// descriptor and ask it to CREATE the queryable. Null when unknown. VIRTUAL — the per-config subclass
-	// descends to the global factory on a local miss.
-	virtual const ibBackendQueryable* Resolve(const ibString& ns, const ibString& objectName,
-	                                  ibValue** paParams = nullptr, long lSizeArray = 0) const;
+	// ⭐ DESCRIPTORS, NEVER QUERYABLES. The factory maps names and table ids to descriptors and holds nothing else;
+	// a queryable is the asker's — asked of the descriptor (CreateQueryable) and held for as long as it is read.
 
 	// Enumerate registered source descriptors — the dynamic-list source picker lists
 	// them by GetNamespace()/GetName(). Non-owning pointers, valid for owners' life.
@@ -366,13 +226,11 @@ public:
 	// must not be evaluated as a value at all. Null when nothing answers to that name.
 	virtual ibQueryableSourceDescriptor* FindDescriptor(const ibString& ns, const ibString& objectName) const;
 
-	// Resolve a source by its table id (queryable->GetQueryTableId()) — the stable id the
-	// dynamic-source property serializes. Null when none matches. VIRTUAL (see Resolve).
-	virtual const ibBackendQueryable* ResolveById(ibMetaID tableId) const;
-
-	// Resolve the DESCRIPTOR by the same table id — the dynamic list re-resolves this LIVE to reach the
-	// source's COMMAND surface (GetCommandCollection / CallAsCommand / ShowValueByKey / GetSelectValue /
-	// FillSourceExplorer) parallel to its queryable. Non-owning, valid for the owner's life. Null when none.
+	// Resolve the DESCRIPTOR by its table id (queryable->GetQueryTableId()) — the stable id the dynamic-source
+	// property serializes; the dynamic list re-resolves this LIVE to reach the source's table (CreateQueryable) and
+	// its COMMAND surface (GetCommandCollection / CallAsCommand / ShowValueByKey / GetSelectValue / FillSourceExplorer).
+	// Non-owning, valid for the owner's life. Null when none — and 0 names none (a reading with no table answers it).
+	// VIRTUAL — the per-config subclass descends to the global factory on a local miss.
 	virtual ibQueryableSourceDescriptor* ResolveDescriptorById(ibMetaID tableId) const;
 
 protected:
@@ -404,11 +262,8 @@ class BACKEND_API ibMetaQueryableFactory : public ibQueryableFactory
 public:
 	ibMetaQueryableFactory() = default;   // owned by the snapshot; no appData token
 
-	const ibBackendQueryable* Resolve(const ibString& ns, const ibString& objectName,
-	                                  ibValue** paParams = nullptr, long lSizeArray = 0) const override;
-	const ibBackendQueryable* ResolveById(ibMetaID tableId) const override;
 	ibQueryableSourceDescriptor* ResolveDescriptorById(ibMetaID tableId) const override;
-	// Own registry first, then the global one — the same order Resolve keeps, for the same reason:
+	// Own registry first, then the global one — the same order ResolveDescriptorById keeps, for the same reason:
 	// a configuration's sources are its own, and a miss falls through to what the platform declares.
 	ibQueryableSourceDescriptor* FindDescriptor(const ibString& ns, const ibString& objectName) const override;
 };

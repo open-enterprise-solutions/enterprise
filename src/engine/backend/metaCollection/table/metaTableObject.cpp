@@ -20,7 +20,7 @@
 //***********************************************************************
 
 ibTabularSourceDescriptor::ibTabularSourceDescriptor(ibValueMetaObjectTableDataRef* meta)
-	: m_meta(meta), m_queryable(meta)
+	: m_meta(meta), m_queryable(std::make_shared<ibTabularQueryable>(meta))
 {
 }
 
@@ -38,15 +38,17 @@ ibString ibTabularSourceDescriptor::GetName() const
 	return parent != nullptr ? (parent->GetName() + ibT(".") + m_meta->GetName()) : m_meta->GetName();
 }
 
-const ibBackendQueryable* ibTabularSourceDescriptor::CreateQueryable(ibValue** /*paParams*/, long /*lSizeArray*/)
+// A table takes no arguments: its own queryable, shared without owning.
+std::shared_ptr<const ibBackendQueryable> ibTabularSourceDescriptor::CreateQueryable(ibValue** /*paParams*/, long /*lSizeArray*/,
+	const std::vector<ibQueryPredicatePtr>& /*conditions*/, const ibQueryReadColumns& /*read*/)
 {
-	return &m_queryable;
+	return m_queryable;
 }
 
-std::vector<const ibBackendQueryColumn*> ibTabularSourceDescriptor::GetQueryColumns(const std::vector<ibValue>& /*args*/) const
+std::vector<std::shared_ptr<const ibBackendQueryColumn>> ibTabularSourceDescriptor::GetQueryColumns(const std::vector<ibValue>& /*args*/) const
 {
 	// What its queryable reads — the owner first, then the section's own attributes (ibTabularQueryable::GetQueryColumns).
-	return m_meta != nullptr ? m_queryable.GetQueryColumns() : std::vector<const ibBackendQueryColumn*>();
+	return m_meta != nullptr ? m_queryable->GetQueryColumns() : std::vector<std::shared_ptr<const ibBackendQueryColumn>>();
 }
 
 void ibTabularSourceDescriptor::FillSourceExplorer(ibSourceDataObject::ibSourceExplorer& explorer) const

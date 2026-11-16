@@ -157,6 +157,13 @@ void Redact(ibProtocolNode& node)
 // (a Debug profile, 2026-10-20: 535 ms against 387) — its length is.
 ibString Redacted(const ibProtocolNode& request)
 {
+	// …and a big request by its length, as an answer is: a sheet handed back whole (a cell edited in a 100 000-line
+	// sheet) was walked for secrets and written out as JSON — a third of the edit's 47 s (2026-11-16,
+	// load-million-rows.md § 12).
+	constexpr std::size_t kWrittenWhole = 64 * 1024;
+	if (const ibDataNode* const body = request.GetBody(); body != nullptr && body->Weight() > kWrittenWhole)
+		return ibString::Format(ibT("<%llu bytes>"), static_cast<unsigned long long>(body->Weight()));
+
 	if (!NeedsRedacting(request.FindChild(ibProtocol::ibRpc::Params)))
 		return request.Write();
 

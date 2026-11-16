@@ -20,14 +20,14 @@ namespace {
 // against, and its parent column is the hierarchy. A source with no parent column is a FLAT list —
 // the one arrangement that records no parent — and it contributes nothing, which leaves every named
 // value standing for itself.
-void ReadChildrenMap(const ibBackendQueryable* target, std::unordered_map<ibValue, std::vector<ibValue>, ibValueHash, ibValueEqual>& childrenOf)
+void ReadChildrenMap(const std::shared_ptr<const ibBackendQueryable>& target, std::unordered_map<ibValue, std::vector<ibValue>, ibValueHash, ibValueEqual>& childrenOf)
 {
 	if (target == nullptr)
 		return;
 
-	const std::vector<const ibBackendQueryColumn*> keys = target->GetPrimaryKeyColumns();
-	const ibBackendQueryColumn* rowKey = keys.empty() ? nullptr : keys.front();
-	const ibBackendQueryColumn* parent = target->GetHierarchyColumn();
+	const std::vector<std::shared_ptr<const ibBackendQueryColumn>> keys = target->GetPrimaryKeyColumns();
+	const std::shared_ptr<const ibBackendQueryColumn> rowKey = keys.empty() ? nullptr : keys.front();
+	const std::shared_ptr<const ibBackendQueryColumn> parent = target->GetHierarchyColumn();
 	if (rowKey == nullptr || parent == nullptr)
 		return;
 
@@ -54,14 +54,15 @@ void ReadChildrenMap(const ibBackendQueryable* target, std::unordered_map<ibValu
 // would have to be cast to a reference and asked for its metaobject, which is metadata read in a
 // tier that owns none. A COMPOSITE reference names several targets and gets a map from each — the
 // keys carry their own type, so two charts cannot be confused for one another.
-std::vector<const ibBackendQueryable*> TargetsOfColumn(const ibBackendQueryable* source, const ibBackendQueryColumn* column,
-                                                       const std::vector<ibValue>& named, ibQueryDimUnfold unfold)
+std::vector<std::shared_ptr<const ibBackendQueryable>> TargetsOfColumn(const std::shared_ptr<const ibBackendQueryable>& source,
+                                                                       const std::shared_ptr<const ibBackendQueryColumn>& column,
+                                                                       const std::vector<ibValue>& named, ibQueryDimUnfold unfold)
 {
-	std::vector<const ibBackendQueryable*> targets;
+	std::vector<std::shared_ptr<const ibBackendQueryable>> targets;
 	if (unfold == ibQueryDimUnfold::Elements || source == nullptr || column == nullptr)
 		return targets;
 	const ibBackendQueryProvider& provider = source->GetProvider();
-	if (const ibBackendQueryable* single = provider.ResolveReferenceTarget(source, column))
+	if (const std::shared_ptr<const ibBackendQueryable> single = provider.ResolveReferenceTarget(source, column))
 		targets.push_back(single);
 	else
 		targets = provider.ResolveReferenceTargets(source, column);
@@ -81,7 +82,8 @@ std::vector<const ibBackendQueryable*> TargetsOfColumn(const ibBackendQueryable*
 
 } // namespace
 
-ibQueryHierarchyScope::ibQueryHierarchyScope(const ibBackendQueryable* source, const ibBackendQueryColumn* column,
+ibQueryHierarchyScope::ibQueryHierarchyScope(const std::shared_ptr<const ibBackendQueryable>& source,
+                                             const std::shared_ptr<const ibBackendQueryColumn>& column,
                                              const std::vector<ibValue>& named, ibQueryDimUnfold unfold)
 	: ibQueryHierarchyScope(TargetsOfColumn(source, column, named, unfold), named, unfold)
 {
@@ -89,12 +91,12 @@ ibQueryHierarchyScope::ibQueryHierarchyScope(const ibBackendQueryable* source, c
 
 ibQueryHierarchyScope::ibQueryHierarchyScope(const ibMetaData* metaData, const ibTypeDescription& type,
                                              const std::vector<ibValue>& named, ibQueryDimUnfold unfold)
-	: ibQueryHierarchyScope(unfold == ibQueryDimUnfold::Elements ? std::vector<const ibBackendQueryable*>()
+	: ibQueryHierarchyScope(unfold == ibQueryDimUnfold::Elements ? std::vector<std::shared_ptr<const ibBackendQueryable>>()
 	                        : ibDbTableProvider::ReferenceTargetsOf(metaData, type), named, unfold)
 {
 }
 
-ibQueryHierarchyScope::ibQueryHierarchyScope(const std::vector<const ibBackendQueryable*>& targets,
+ibQueryHierarchyScope::ibQueryHierarchyScope(const std::vector<std::shared_ptr<const ibBackendQueryable>>& targets,
                                              const std::vector<ibValue>& named, ibQueryDimUnfold unfold)
 	: m_unfold(unfold)
 {
@@ -108,7 +110,7 @@ ibQueryHierarchyScope::ibQueryHierarchyScope(const std::vector<const ibBackendQu
 	}
 
 	std::unordered_map<ibValue, std::vector<ibValue>, ibValueHash, ibValueEqual> childrenOf;
-	for (const ibBackendQueryable* target : targets)
+	for (const std::shared_ptr<const ibBackendQueryable>& target : targets)
 		ReadChildrenMap(target, childrenOf);
 
 	for (const ibValue& value : named) {

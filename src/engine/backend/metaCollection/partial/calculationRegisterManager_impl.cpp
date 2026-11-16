@@ -71,10 +71,10 @@ ibValue ibValueManagerDataObjectCalculationRegister::GetBase(const ibValue& cFil
 	ibRequireOpenBase();
 
 	const ibQueryPredicatePtr filter = ibRegFilterPredicate(m_metaObject, cFilter, ibRegFilterOver::Records);
-	std::vector<std::pair<const ibBackendQueryColumn*, ibValue>> leaves;
+	std::vector<std::pair<std::shared_ptr<const ibBackendQueryColumn>, ibValue>> leaves;
 	ibRegFlatLeaves(filter, leaves);
-	const ibBackendQueryColumn* recorder = m_metaObject->GetRegisterRecorder()->GetQueryColumn();
-	if (std::none_of(leaves.begin(), leaves.end(), [recorder](const auto& leaf) { return leaf.first == recorder; }))
+	const std::shared_ptr<const ibBackendQueryColumn> recorder = m_metaObject->GetRegisterRecorder()->GetQueryColumn();
+	if (std::none_of(leaves.begin(), leaves.end(), [&recorder](const auto& leaf) { return leaf.first == recorder; }))
 		ibBackendCoreException::Error(_("GetBase: the filter must name the recorder"));
 
 	return ibCalcReadBase(m_metaObject, ibCalcBaseAskedOf(m_metaObject, cResources, cDimensions, cSections), filter);

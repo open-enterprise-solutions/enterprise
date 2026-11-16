@@ -12,6 +12,8 @@
 #include "backend/databaseLayer/databaseQueryBuilder.h"             // ibQueryIR / ibQueryResult / ibQuerySortItem / ibRenderedQuery (L2)
 #include "backend/metaCollection/attribute/metaAttributeObject.h"   // ibValueMetaObjectAttributeBase::ibFieldTypes (the value-assembly's TYPE-tag enum)
 
+#include <map>   // ibCastLeafScope — the fields a CAST narrowed, by (table, field)
+
 class ibMetaData;   // the metadata context the column-based value-assembly threads through (reference / enum reconstruction)
 
 // ibRenderedPageCache — the build-once page cache (one scroll shape across ticks). OPAQUE at
@@ -44,11 +46,13 @@ public:
 	// metaData->GetTypeCtor -> holder -> GetQueryable, read off queryable->GetMetaData()). The base
 	// returns null and the computed provider forwards here, so the query-provider layer stays
 	// metadata-free while resolution has a single home. (docs/private/query-language-arc.md §22 dot-walk)
-	const ibBackendQueryable* ResolveReferenceTarget(const ibBackendQueryable* queryable, const ibBackendQueryColumn* refColumn) const override;
-	std::vector<const ibBackendQueryable*> ResolveReferenceTargets(const ibBackendQueryable* queryable, const ibBackendQueryColumn* refColumn) const override;
+	std::shared_ptr<const ibBackendQueryable> ResolveReferenceTarget(const std::shared_ptr<const ibBackendQueryable>& queryable,
+		const std::shared_ptr<const ibBackendQueryColumn>& refColumn) const override;
+	std::vector<std::shared_ptr<const ibBackendQueryable>> ResolveReferenceTargets(const std::shared_ptr<const ibBackendQueryable>& queryable,
+		const std::shared_ptr<const ibBackendQueryColumn>& refColumn) const override;
 	// …the same answer for a TYPE a holder of fields already has in hand, with no column behind it — a setting's
 	// field, walked by its type (ibQueryConstructorModel::WalkFrom). ResolveReferenceTargets is this over the column.
-	static BACKEND_API std::vector<const ibBackendQueryable*> ReferenceTargetsOf(const ibMetaData* metaData,
+	static BACKEND_API std::vector<std::shared_ptr<const ibBackendQueryable>> ReferenceTargetsOf(const ibMetaData* metaData,
 		const ibTypeDescription& type);
 
 	// ⭐⭐ A WALK NARROWED BY CAST. `CAST(Analytics AS Catalog.Goods).Description` walks into the goods and
@@ -59,9 +63,10 @@ public:
 	//   · WalkEnters — may a reference with several types be walked into `target` on its way to `next`.
 	// The column answers every other question as the field it stands for, its id included, so a row filed
 	// under it and a projection reading it cannot tell the two apart.
-	static BACKEND_API const ibBackendQueryColumn* CastLeaf(const ibBackendQueryable* target, const ibBackendQueryColumn* leaf);
-	static BACKEND_API const ibBackendQueryable*   CastTarget(const ibBackendQueryColumn* next);
-	static BACKEND_API bool                        WalkEnters(const ibBackendQueryable* target, const ibBackendQueryColumn* next);
+	static BACKEND_API std::shared_ptr<const ibBackendQueryColumn> CastLeaf(const std::shared_ptr<const ibBackendQueryable>& target,
+		const std::shared_ptr<const ibBackendQueryColumn>& leaf);
+	static BACKEND_API std::shared_ptr<const ibBackendQueryable> CastTarget(const std::shared_ptr<const ibBackendQueryColumn>& next);
+	static BACKEND_API bool WalkEnters(const std::shared_ptr<const ibBackendQueryable>& target, const std::shared_ptr<const ibBackendQueryColumn>& next);
 
 	// How many values one statement may bind on the connected engine (ibDialectDictionary::m_maxParameters) — what a
 	// road that would bind a long list asks first; 0 = none known.
@@ -195,14 +200,14 @@ public:
 	// rows before it folds them). The whole tree: AND / OR / NOT, IS NULL, REFS, a comparison; a walk
 	// through a reference is a correlated EXISTS, so the filter never multiplies a row. `qualifier` is
 	// what the statement calls the table (empty: its own name).
-	static BACKEND_API ibQueryExprPtr BuildPredicateIR(const ibBackendQueryable* queryable,
+	static BACKEND_API ibQueryExprPtr BuildPredicateIR(const std::shared_ptr<const ibBackendQueryable>& queryable,
 	                                                   const ibQueryPredicatePtr& predicate,
 	                                                   const ibString& qualifier = ibEmptyString);
 
 	// …AND A COMPUTED VALUE, the same way — arithmetic, a CASE, a column read field by field — for the same
 	// caller: one that writes its own SELECT over this table and needs the value in its projection (the rows
 	// of a register's movements, each one's contribution to the totals, ibSchemaMaterialize::ToReadSpec).
-	static BACKEND_API ibQueryExprPtr BuildColumnExprIR(const ibBackendQueryable* queryable,
+	static BACKEND_API ibQueryExprPtr BuildColumnExprIR(const std::shared_ptr<const ibBackendQueryable>& queryable,
 	                                                    const ibQueryColumnExprPtr& expr,
 	                                                    const ibString& qualifier = ibEmptyString);
 
@@ -217,6 +222,32 @@ private:
 	static ibQueryIR BuildPageIR(const ibDataQuerySpec& spec, const ibReadPageRequest& req,
 	                             const std::vector<ibQuerySortItem>& effective);
 	static std::vector<ibValue> BuildExternal(const ibReadPageRequest& req, const std::vector<ibQuerySortItem>& effective);
+};
+
+// ⭐ THE FIELDS A CAST NARROWED, KEPT FOR ONE QUERY. CastLeaf makes a (table, field) pair's column once in the open
+// scope and hands the same one on every later ask, so a walk named twice in one query — grouped by and sorted by —
+// is one column, and the paths compare as one. Every door of the lowering opens it (ibQueryLowering); a door
+// reached from inside another joins the scope already open, and the leaves go with the outermost one — from then
+// on they are held by whatever the query built of them. Outside a scope a leaf is made fresh on every ask.
+//
+// 🛑 It was a static map under a mutex, keyed by the table's ADDRESS and kept for the life of the process: a new
+// table born at a dead one's address got a leaf whose target dangled, and keyed by the share instead it would
+// have held every table it ever saw.
+class ibCastLeafScope
+{
+public:
+	ibCastLeafScope();
+	~ibCastLeafScope();
+
+	ibCastLeafScope(const ibCastLeafScope&) = delete;
+	ibCastLeafScope& operator=(const ibCastLeafScope&) = delete;
+
+private:
+	friend class ibDbTableProvider;   // CastLeaf reads and fills the open scope's leaves
+
+	std::map<std::pair<std::shared_ptr<const ibBackendQueryable>, std::shared_ptr<const ibBackendQueryColumn>>,
+	         std::shared_ptr<const ibBackendQueryColumn>> m_leaves;
+	bool                                                    m_outermost = false;
 };
 
 // ==========================================================================

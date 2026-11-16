@@ -5,7 +5,7 @@
 #include "queryableFactory.h"
 
 #include "backend/appData.h"             // ibApplicationInstance::GetQueryableFactory (the global fallback the per-config factory descends to)
-#include "backend/query/queryable.h"     // ibBackendQueryable::GetQueryTableId (ResolveById)
+#include "backend/query/queryable.h"     // ibBackendQueryable::GetQueryTableId (IndexById, ResolveDescriptorById)
 
 //////////////////////////////////////////////////////////////////////
 // ibQueryableFactory
@@ -42,26 +42,22 @@ void ibQueryableFactory::Unregister(ibQueryableSourceDescriptor* descriptor)
 	if (it != m_descriptors.end() && it->second == descriptor) {   // same pointer only
 		UnindexById(key);
 		m_descriptors.erase(it);
-		descriptor->ReleaseCompanions();   // while what they point into is still alive — see the declaration
 	}
 }
 
 void ibQueryableFactory::Clear()
 {
-	for (auto& entry : m_descriptors)
-		if (entry.second != nullptr)
-			entry.second->ReleaseCompanions();   // the same reason as in Unregister
 	m_descriptors.clear();   // non-owning: just drops references
 	m_byTableId.clear();
 	m_tableIdOfKey.clear();
 }
 
-// The id is the one the walk reads — the descriptor's own queryable, asked with no arguments.
+// The id is the one the walk reads — the descriptor's own queryable, asked with no arguments and held only to be asked.
 void ibQueryableFactory::IndexById(const ibString& key, ibQueryableSourceDescriptor* descriptor)
 {
-	const ibBackendQueryable* q = descriptor->CreateQueryable(nullptr, 0);
-	if (q == nullptr)
-		return;   // no queryable without arguments: the walk would not find it by id either
+	const std::shared_ptr<const ibBackendQueryable> q = descriptor->CreateQueryable(nullptr, 0);
+	if (q == nullptr || q->GetQueryTableId() == 0)
+		return;   // no queryable without arguments, or no table behind it: nothing is found by its id
 	const ibMetaID tableId = q->GetQueryTableId();
 	m_byTableId[tableId][key] = descriptor;
 	m_tableIdOfKey[key] = tableId;
@@ -90,13 +86,6 @@ bool ibQueryableFactory::HasNamespace(const ibString& ns) const
 	return false;
 }
 
-const ibBackendQueryable* ibQueryableFactory::Resolve(const ibString& ns, const ibString& objectName,
-                                                      ibValue** paParams, long lSizeArray) const
-{
-	auto it = m_descriptors.find(Key(ns, objectName));
-	return it != m_descriptors.end() ? it->second->CreateQueryable(paParams, lSizeArray) : nullptr;
-}
-
 ibQueryableSourceDescriptor* ibQueryableFactory::FindDescriptor(const ibString& ns, const ibString& objectName) const
 {
 	const auto it = m_descriptors.find(Key(ns, objectName));
@@ -117,42 +106,31 @@ std::vector<ibQueryableSourceDescriptor*> ibQueryableFactory::GetDescriptors() c
 // per visible row (2026-09-22). The index answers what the walk found first (the first key under that id); the
 // answer is checked before it is given — the same question the walk asks, of one descriptor — and an id the index
 // does not hold, or holds for a source whose id has moved since, still gets the walk, exactly as before.
+// ⚠ 0 IS NO TABLE'S ID — it is what a reading with no metaobject behind it answers (a virtual table's), so it would
+// find whichever of those came first, and hand a stored source a reading nobody keeps.
 ibQueryableSourceDescriptor* ibQueryableFactory::ResolveDescriptorById(ibMetaID tableId) const
 {
+	if (tableId == 0)
+		return nullptr;
 	const auto bucket = m_byTableId.find(tableId);
 	if (bucket != m_byTableId.end() && !bucket->second.empty()) {
 		ibQueryableSourceDescriptor* const candidate = bucket->second.begin()->second;
-		const ibBackendQueryable* q = candidate->CreateQueryable(nullptr, 0);
+		const std::shared_ptr<const ibBackendQueryable> q = candidate->CreateQueryable(nullptr, 0);
 		if (q != nullptr && q->GetQueryTableId() == tableId)
 			return candidate;
 	}
 
 	for (const std::pair<const ibString, ibQueryableSourceDescriptor*>& kv : m_descriptors) {
-		const ibBackendQueryable* q = kv.second->CreateQueryable(nullptr, 0);
+		const std::shared_ptr<const ibBackendQueryable> q = kv.second->CreateQueryable(nullptr, 0);
 		if (q != nullptr && q->GetQueryTableId() == tableId)
 			return kv.second;
 	}
 	return nullptr;
 }
 
-const ibBackendQueryable* ibQueryableFactory::ResolveById(ibMetaID tableId) const
-{
-	ibQueryableSourceDescriptor* descriptor = ResolveDescriptorById(tableId);
-	return descriptor != nullptr ? descriptor->CreateQueryable(nullptr, 0) : nullptr;
-}
-
 //////////////////////////////////////////////////////////////////////
 // ibMetaQueryableFactory — per-config: own registry FIRST, then DESCEND to the global factory on a miss.
 //////////////////////////////////////////////////////////////////////
-
-const ibBackendQueryable* ibMetaQueryableFactory::Resolve(const ibString& ns, const ibString& objectName,
-                                                          ibValue** paParams, long lSizeArray) const
-{
-	if (const ibBackendQueryable* q = ibQueryableFactory::Resolve(ns, objectName, paParams, lSizeArray))
-		return q;
-	const ibQueryableFactory* global = ibApplicationInstance::GetQueryableFactory();
-	return global != nullptr ? global->Resolve(ns, objectName, paParams, lSizeArray) : nullptr;
-}
 
 ibQueryableSourceDescriptor* ibMetaQueryableFactory::FindDescriptor(const ibString& ns, const ibString& objectName) const
 {
@@ -160,14 +138,6 @@ ibQueryableSourceDescriptor* ibMetaQueryableFactory::FindDescriptor(const ibStri
 		return own;
 	const ibQueryableFactory* global = ibApplicationInstance::GetQueryableFactory();
 	return global != nullptr ? global->FindDescriptor(ns, objectName) : nullptr;
-}
-
-const ibBackendQueryable* ibMetaQueryableFactory::ResolveById(ibMetaID tableId) const
-{
-	if (const ibBackendQueryable* q = ibQueryableFactory::ResolveById(tableId))
-		return q;
-	const ibQueryableFactory* global = ibApplicationInstance::GetQueryableFactory();
-	return global != nullptr ? global->ResolveById(tableId) : nullptr;
 }
 
 ibQueryableSourceDescriptor* ibMetaQueryableFactory::ResolveDescriptorById(ibMetaID tableId) const

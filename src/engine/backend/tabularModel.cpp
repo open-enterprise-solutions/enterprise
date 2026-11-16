@@ -544,7 +544,7 @@ void ibValueModel::GetValue(ibVariant& variant, const ibDataViewItem& item, unsi
 // index; a DB list / register has a PK → restore by key. Replaces the retired RamFetch flag, derived from source.
 bool ibValueModel::HasKeyedRows() const
 {
-	const ibBackendQueryable* q = GetSourceQueryable();
+	const std::shared_ptr<const ibBackendQueryable> q = GetSourceQueryable();
 	return q != nullptr && !q->GetPrimaryKeyColumns().empty();
 }
 

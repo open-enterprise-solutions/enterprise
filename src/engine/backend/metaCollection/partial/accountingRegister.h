@@ -242,54 +242,45 @@ class ibAcctConditionScope;
 class ibAcctSourceDescriptor : public ibQueryableSourceDescriptor
 {
 public:
-	ibAcctSourceDescriptor(ibValueMetaObjectAccountingRegister* reg, ibAcctShape shape)
-		: m_reg(reg), m_shape(shape) {}
+	ibAcctSourceDescriptor(ibValueMetaObjectAccountingRegister* reg, ibAcctShape shape);
 	~ibAcctSourceDescriptor() override;
 
 	ibString GetNamespace() const override;
 	ibString GetName() const override;
-	const ibBackendQueryable* CreateQueryable(ibValue** paParams, long lSizeArray) override;
 
-	// ⭐⭐ THE SAME CALL, WITH THE ACCOUNT CONDITIONS THIS SOURCE CONSUMES ITSELF. They do not reach a
-	// WHERE: a reading asked for accounts «in hierarchy» reports the subordinates UNDER the account
-	// that was named, and a filter applied around it can only remove rows, never fold them.
-	// …and with what the query reads of the table: the turnovers are cut by the correspondent only when one
+	// ⭐⭐ THE ACCOUNT CONDITIONS THIS SOURCE CONSUMES ITSELF. They do not reach a WHERE: a reading asked for
+	// accounts «in hierarchy» reports the subordinates UNDER the account that was named, and a filter applied
+	// around it can only remove rows, never fold them.
+	// …and what the query reads of the table: the turnovers are cut by the correspondent only when one
 	// of its columns is read.
-	const ibBackendQueryable* CreateQueryable(ibValue** paParams, long lSizeArray,
-	                                          const std::vector<ibQueryPredicatePtr>& conditions,
-	                                          const ibQueryReadColumns& read) override;
+	std::shared_ptr<const ibBackendQueryable> CreateQueryable(ibValue** paParams, long lSizeArray,
+	                                                          const std::vector<ibQueryPredicatePtr>& conditions,
+	                                                          const ibQueryReadColumns& read) override;
 
 	// …resolved against the columns this table PUBLISHES — the conditions are written in the names the
 	// table is selected by (Max, 2026-09-16: "the conditions must be written in the names the table is selected by").
-	const ibBackendQueryable* GetConditionScope() const override;
+	std::shared_ptr<const ibBackendQueryable> GetConditionScope() const override;
 
 	// WHAT COLUMNS THIS TABLE HAS, asked without running it — the query constructor's catalogue.
 	// Answered from the SHAPE, which is metadata plus the call's arguments and touches no database.
 	// WITH THE CALL'S ARGUMENTS, because the REQUESTED KINDS decide which columns exist. That is
 	// the structural difference from every other register in the tree: the output schema follows the
 	// arguments of the call, not the metaobject.
-	std::vector<const ibBackendQueryColumn*> GetQueryColumns(const std::vector<ibValue>& args) const override;
+	std::vector<std::shared_ptr<const ibBackendQueryColumn>> GetQueryColumns(const std::vector<ibValue>& args) const override;
 	void DescribeParameters(std::vector<ibQuerySourceParameter>& out) const override;
-	std::vector<const ibBackendQueryColumn*> GetConditionColumns(const ibString& slot) const override;
+	std::vector<std::shared_ptr<const ibBackendQueryColumn>> GetConditionColumns(const ibString& slot) const override;
 
 private:
 	ibValueMetaObjectAccountingRegister* m_reg;
 	ibAcctShape                          m_shape;
 
-	// ⚠ THE CONSUMED CONDITIONS, FOR THE LENGTH OF ONE CALL. The two entrances share one body — the
-	// plain `CreateQueryable` is what actually builds — so the predicates are handed across here and
-	// cleared immediately after. Not state: a descriptor holds no call between calls, and a value left
-	// behind would attach itself to the NEXT one, which is the quiet kind of wrong.
-	ibQueryPredicatePtr                  m_pendingAccountDr;
-	ibQueryPredicatePtr                  m_pendingAccountCr;
-	ibQueryPredicatePtr                  m_pendingCondition;
-	ibQueryReadColumns                   m_pendingRead;
-
-	// The scope conditions are resolved against — made on the first ask and kept, because a lowered
-	// predicate holds its columns for as long as the companion it was handed to.
+	// The scope conditions are resolved against — made with the descriptor and kept, because a lowered
+	// predicate holds its columns for as long as the companion it was handed to. Made in the constructor and
+	// not on the first ask: every session of the base asks one descriptor, and two first asks at once each
+	// made one and assigned it over the other's.
 	// (shared, not unique: the type is complete only in accountingRegisterMetadataTotals.cpp, and a shared
 	//  handle takes its deleter where it is made rather than wherever the descriptor is destroyed.)
-	mutable std::shared_ptr<ibAcctConditionScope> m_conditionScope;
+	std::shared_ptr<ibAcctConditionScope> m_conditionScope;
 };
 
 class ibValueMetaObjectAccountingRegister : public ibValueMetaObjectRegisterData {
@@ -553,10 +544,10 @@ public:
 	// and the compute seeds its RAM table from it (so the rows are findable by those very columns). A
 	// second derivation of "what columns does this table have" is how a source comes to publish one set
 	// and return another.
-	const ibBackendQueryable* GetShapeQueryable(ibAcctShape shape,
-	                                            const std::vector<ibValue>& kindsDr,
-	                                            const std::vector<ibValue>& kindsCr,
-	                                            const ibRegFold& fold = ibRegFold()) const;
+	std::shared_ptr<const ibBackendQueryable> GetShapeQueryable(ibAcctShape shape,
+	                                                            const std::vector<ibValue>& kindsDr,
+	                                                            const std::vector<ibValue>& kindsCr,
+	                                                            const ibRegFold& fold = ibRegFold()) const;
 
 	// ⭐ THE BREAKDOWN COLUMNS ARE POSITIONAL, ALWAYS — `AccountDimension1..N`, and in correspondence
 	// mode `AccountDimensionDr1..N` / `AccountDimensionCr1..N`. What the caller's list of kinds decides
@@ -701,12 +692,12 @@ public:
 	//
 	// ⭐ NO CORRESPONDENCE, NO CREDIT SIDE. A one-sided line IS one side — which one is said by the
 	// record type — so the field stands as the author declared it and there is no side to reach for.
-	const ibBackendQueryColumn* GetRegisterDimension(bool creditSide, const ibValueMetaObjectDimension* dimension) const {
+	std::shared_ptr<const ibBackendQueryColumn> GetRegisterDimension(bool creditSide, const ibValueMetaObjectDimension* dimension) const {
 		const ibValueMetaObjectAttributeBase* held = GetFieldOnSide(creditSide, dimension);
 		return held != nullptr ? held->GetQueryColumn() : nullptr;
 	}
 
-	const ibBackendQueryColumn* GetRegisterResource(bool creditSide, const ibValueMetaObjectResource* resource) const {
+	std::shared_ptr<const ibBackendQueryColumn> GetRegisterResource(bool creditSide, const ibValueMetaObjectResource* resource) const {
 		const ibValueMetaObjectAttributeBase* held = GetFieldOnSide(creditSide, resource);
 		return held != nullptr ? held->GetQueryColumn() : nullptr;
 	}
@@ -810,7 +801,7 @@ public:
 	// A read surface as an ORDINARY DB SOURCE, built on demand and cached. Same arrangement as the
 	// shape cache above, including the retired list: a reader may hold a pointer into one that has
 	// been rebuilt.
-	const ibBackendQueryable* GetTurnoverViewQueryable(bool creditSide) const;
+	std::shared_ptr<const ibBackendQueryable> GetTurnoverViewQueryable(bool creditSide) const;
 
 	// Is this register's totals row split across shards? A schema question, answered by the designer's
 	// switch — turning it on or off changes the totals KEY, so it takes effect through an Apply and the
@@ -1163,7 +1154,7 @@ public:
 	// own columns are the MOVEMENT columns — AccountDimension1, AccountDimension1Kind, RecordType — and
 	// reporting those for a balance row is the one answer that is never true of a virtual table: a query
 	// would be told this source has `AccountDimension1` and no `AmountBalanceDr` at all.
-	virtual const ibBackendQueryable* NavigationSource() const override {
+	virtual std::shared_ptr<const ibBackendQueryable> NavigationSource() const override {
 		return m_reg->GetShapeQueryable(m_shape, m_kindsDr, m_kindsCr, Fold());
 	}
 
@@ -1345,9 +1336,9 @@ public:
 	//
 	// The same three ibRegisterDataQueryable uses for a register with a recorder. Said here because
 	// the surface is asked, and this surface answers differently from the one above it.
-	virtual std::vector<const ibBackendQueryColumn*> GetPrimaryKeyColumns() const override
+	virtual std::vector<std::shared_ptr<const ibBackendQueryColumn>> GetPrimaryKeyColumns() const override
 	{
-		std::vector<const ibBackendQueryColumn*> cols;
+		std::vector<std::shared_ptr<const ibBackendQueryColumn>> cols;
 
 		if (m_reg == nullptr)
 			return cols;

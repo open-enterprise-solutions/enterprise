@@ -428,7 +428,7 @@ void ibApplicationInstance::ReplaceActiveMetaData(std::shared_ptr<ibMetaDataConf
 	std::shared_ptr<ibMetaDataConfigurationBase> previous;
 	{
 		std::lock_guard<std::mutex> lk(ibApplicationHost::s_mutex);
-		previous = std::exchange(m_activeMetaData, std::move(metaData));
+		previous = ibMetaDataConfigurationBase::Replace(m_activeMetaData, std::move(metaData));
 	}
 
 	// …and the base lets the old one go. The sessions working in it hold it, each by its own reference, and the

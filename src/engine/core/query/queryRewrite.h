@@ -95,7 +95,7 @@ CORE_API bool ibQueryMentionsAggregate(const ibQueryAstExprPtr& expr);
 //   · `groupedExprs` — the COMPUTED group keys, as the text the execution matches them by: a subtree that is one reads
 //     nothing free (`BEGINOFPERIOD(Date, Month)` grouped fixes `Date` for its group).
 CORE_API void ibQueryCollectFoldedAndFree(const ibQueryAstExprPtr& expr, bool insideAggregate,
-	std::vector<const ibQueryAstExpr*>& folded, std::vector<const ibQueryAstExpr*>& free,
+	std::vector<ibQueryAstExprPtr>& folded, std::vector<ibQueryAstExprPtr>& free,
 	const std::vector<ibString>* groupedExprs = nullptr);
 // A COLUMN NODE STANDING ON ITS OWN — a path the caller can resolve and report without holding the projection alive.
 CORE_API ibQueryAstExprPtr ibQueryColumnCopy(const ibQueryAstExpr& column);

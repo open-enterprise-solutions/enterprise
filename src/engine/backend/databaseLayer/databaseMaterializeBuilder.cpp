@@ -10,8 +10,10 @@
 #include "databaseQueryBuilder.h"           // ibRenderOverClause — the OVER (…) spelling is L2-1's, shared, not copied here
 #include "databaseErrorCodes.h"   // DATABASE_LAYER_QUERY_RESULT_ERROR — a failed CREATE is real
 #include "databaseResultSet.h"    // the existence probe reads a row
+#include "preparedStatement.h"    // the shard fold binds its slice's period
 
 #include <algorithm>   // std::find — the columns both halves of a cut carry, each named once
+#include <optional>    // a run of days open at either end (InStoredUnits)
 
 namespace {
 
@@ -104,10 +106,14 @@ ibString Truncate(const ibDialectDictionary& dialect, ibTotalsPeriod unit, const
 //
 // They walk one function because the digest below is an identity only while both walk the same parts
 // in the same order. Two copies of this list would compile, run, and hash the same row two ways.
+//
+// `unit` is the row's unit: the period is truncated by it, and a table that keeps several says it in its
+// unit column — a day and the month it opens share a period, and only that column tells their rows apart.
 std::vector<std::pair<ibString, ibString>> KeyColumnValues(const ibMaterializeSpec& spec,
                                                            const ibMaterializationDialect& mat,
                                                            const ibDialectDictionary& dialect,
                                                            const ibString& rowAlias,
+                                                           ibTotalsPeriod unit,
                                                            unsigned int shards)
 {
 	const bool overRow = !rowAlias.IsEmpty();
@@ -115,8 +121,13 @@ std::vector<std::pair<ibString, ibString>> KeyColumnValues(const ibMaterializeSp
 
 	if (!spec.m_periodColumn.IsEmpty()) {
 		out.push_back({ spec.m_periodColumn, overRow
-			? Truncate(dialect, spec.m_periodUnit, Fill(spec.m_periodSourceExpr, ibT("row"), rowAlias))
+			? Truncate(dialect, unit, Fill(spec.m_periodSourceExpr, ibT("row"), rowAlias))
 			: spec.m_periodColumn });
+	}
+	if (!spec.m_periodUnitColumn.IsEmpty()) {
+		out.push_back({ spec.m_periodUnitColumn, overRow
+			? ibString::Format(ibT("%i"), static_cast<int>(unit))
+			: spec.m_periodUnitColumn });
 	}
 	for (const ibString& k : spec.m_keyColumns)
 		out.push_back({ k, overRow ? (rowAlias + ibT(".") + k) : k });
@@ -134,13 +145,14 @@ std::vector<std::pair<ibString, ibString>> KeyColumnValues(const ibMaterializeSp
 // reference key or an unbounded string, and casting either into text to join it is a character-set
 // error or a silent truncation, while a hashed part is fixed-width ASCII whatever it holds.
 ibString RenderKeyHash(const ibMaterializeSpec& spec, const ibMaterializationDialect& mat,
-                       const ibDialectDictionary& dialect, const ibString& rowAlias, unsigned int shards)
+                       const ibDialectDictionary& dialect, const ibString& rowAlias, ibTotalsPeriod unit,
+                       unsigned int shards)
 {
 	if (spec.m_keyHashColumn.IsEmpty() || mat.m_keyHashDigest.IsEmpty())
 		return ibEmptyString;
 
 	std::vector<ibString> parts;
-	for (const auto& keyColumn : KeyColumnValues(spec, mat, dialect, rowAlias, shards))
+	for (const auto& keyColumn : KeyColumnValues(spec, mat, dialect, rowAlias, unit, shards))
 		parts.push_back(Fill(mat.m_keyHashItem, ibT("value"), keyColumn.second));
 	return Fill(mat.m_keyHashDigest, ibT("expr"), Join(parts, mat.m_keyHashJoin));
 }
@@ -153,12 +165,15 @@ ibString RenderKeyHash(const ibMaterializeSpec& spec, const ibMaterializationDia
 // value over OLD, update does both in sequence. The accumulate itself is ALWAYS '+' — the sign
 // rides in the VALUE, never in the operator — so no engine needs a second template and a delete
 // cannot accidentally be emitted as a replace.
+//
+// `unit` picks the row of ONE stored unit; a table that keeps several takes one statement per unit.
 // ---------------------------------------------------------------------------
 ibString RenderDelta(const ibMaterializeSpec& spec,
                      const ibMaterializationDialect& mat,
                      const ibDialectDictionary& dialect,
                      const ibString& rowAlias,
                      bool negate,
+                     ibTotalsPeriod unit,
                      unsigned int shards)
 {
 	auto overRow = [&](ibString e) { return Fill(std::move(e), ibT("row"), rowAlias); };
@@ -166,7 +181,7 @@ ibString RenderDelta(const ibMaterializeSpec& spec,
 	std::vector<ibString> columns, values, keyNames, keyMatch, update, selectItems;
 
 	// --- key columns ---
-	for (const auto& keyColumn : KeyColumnValues(spec, mat, dialect, rowAlias, shards)) {
+	for (const auto& keyColumn : KeyColumnValues(spec, mat, dialect, rowAlias, unit, shards)) {
 		columns.push_back(keyColumn.first);
 		values.push_back(keyColumn.second);
 		keyNames.push_back(keyColumn.first);
@@ -180,7 +195,7 @@ ibString RenderDelta(const ibMaterializeSpec& spec,
 	// (exact), and the digest only carries the UNIQUE index. It is also absent from {update} — a
 	// matched row keeps the key it was inserted with, so its digest is already right, and re-deriving
 	// one on every movement would be work with no answer to give.
-	const ibString keyHashValue = RenderKeyHash(spec, mat, dialect, rowAlias, shards);
+	const ibString keyHashValue = RenderKeyHash(spec, mat, dialect, rowAlias, unit, shards);
 	if (!keyHashValue.IsEmpty()) {
 		columns.push_back(spec.m_keyHashColumn);
 		values.push_back(keyHashValue);
@@ -321,7 +336,7 @@ void AppendPeriodColumns(const ibMaterializeSpec& spec, const ibDialectDictionar
 	select.push_back(base + (periodExpr.IsEmpty() ? ibString() : (ibT(" AS ") + spec.m_periodColumn)));
 	groupBy.push_back(base);
 	for (const ibTotalsPeriod unit : g_units) {
-		if (unit <= spec.m_periodUnit)
+		if (unit <= spec.m_periodUnits.front())
 			continue;
 		const ibString expr = Truncate(dialect, unit, base);
 		select.push_back(expr + ibT(" AS ") + spec.m_periodColumn + ibT("_") + UnitSuffix(unit));
@@ -483,12 +498,18 @@ ibString RenderView(const ibMaterializeSpec& spec,
 	// period-carrying view already holds one row per key, and grouping it would buy nothing while
 	// costing the engine a sort or a hash on every single read.
 	ibString body = ibT("SELECT ") + Join(select, ibT(", ")) + ibT(" FROM ") + spec.m_table;
+	// The FINEST unit's rows, when the table keeps several: the view means the stored grain, and a coarser
+	// unit's row read beside its days would count every movement twice.
+	const ibString unitRows = spec.m_periodUnitColumn.IsEmpty() ? ibString()
+		: spec.m_periodUnitColumn + ibT(" = ") + ibString::Format(ibT("%i"), static_cast<int>(spec.m_periodUnits.front()));
+	if (!unitRows.IsEmpty())
+		body += ibT(" WHERE ") + unitRows;
 	if (collapses && !groupBy.empty())
 		body += ibT(" GROUP BY ") + Join(groupBy, ibT(", "));
 	if (collapses && !nonZero.IsEmpty())
 		body += ibT(" HAVING ") + nonZero;
-	else if (!nonZero.IsEmpty())
-		body += ibT(" WHERE ") + nonZero;   // nothing was grouped, so the same test belongs in WHERE
+	else if (!nonZero.IsEmpty())   // nothing was grouped, so the same test belongs in WHERE
+		body += unitRows.IsEmpty() ? (ibT(" WHERE ") + nonZero) : (ibT(" AND (") + nonZero + ibT(")"));
 
 	if (view.m_withMovements)
 		body += ibT(" UNION ALL ") + RenderMovementArm(spec, view, mat, dialect);
@@ -519,8 +540,9 @@ void RenderDrops(ibMaterializeSql& out, const ibMaterializeSpec& spec, const ibM
 
 } // namespace
 
-const ibChar* ShardColumnName()   { return ibT("shard_"); }
-const ibChar* KeyHashColumnName() { return ibT("keyhash_"); }
+const ibChar* ShardColumnName()      { return ibT("shard_"); }
+const ibChar* PeriodUnitColumnName() { return ibT("unit_"); }
+const ibChar* KeyHashColumnName()    { return ibT("keyhash_"); }
 
 unsigned int ibIndexFieldCapacity(const ibDatabaseLayer& conn)
 {
@@ -567,7 +589,8 @@ bool ibFillKeyHashes(ibDatabaseLayer& conn, const ibMaterializeSpec& spec,
 	if (mat == nullptr || spec.m_table.IsEmpty() || spec.m_keyHashColumn.IsEmpty())
 		return true;   // nothing carries an identity here — not a failure
 
-	const ibString digest = RenderKeyHash(spec, *mat, conn.GetDialect(), ibEmptyString,
+	// Off the table, every part — the unit too — is read as stored, so the unit handed over truncates nothing.
+	const ibString digest = RenderKeyHash(spec, *mat, conn.GetDialect(), ibEmptyString, spec.m_periodUnits.front(),
 	                                      EffectiveShardCount(spec, mat));
 	if (digest.IsEmpty())
 		return true;
@@ -592,6 +615,87 @@ bool ibFillKeyHashes(ibDatabaseLayer& conn, const ibMaterializeSpec& spec,
 	               ibT(" = ") + digest +
 	               ibT(" WHERE ") + spec.m_keyHashColumn + ibT(" IS NULL"));
 	return fill.Apply(conn);
+}
+
+bool ibFoldShards(ibDatabaseLayer& conn, const ibMaterializeSpec& spec, ibTotalsPeriod unit, const ibDateTime& period)
+{
+	const ibMaterializationDialect* mat = conn.GetMaterializationDialect();
+	if (mat == nullptr || spec.m_table.IsEmpty() || spec.m_deltas.empty() || EffectiveShardCount(spec, mat) < 2)
+		return true;   // nothing split here: an engine that never splits (SQLite) keeps no shard column at all
+
+	const ibString& table = spec.m_table;
+	const ibString  shard = ShardColumnName();
+
+	// The period is BOUND — a date spelled into the text is a dialect question this level has no dictionary entry
+	// for. The unit is a literal, as the trigger writes it.
+	ibString periodValue = ibT("?");
+	if (conn.GetDialect().m_paramStyle == ibParamStyle::DollarN)
+		periodValue = ibT("$1");
+	else if (conn.GetDialect().m_paramStyle == ibParamStyle::Colon)
+		periodValue = ibT(":p1");
+
+	// ONE PASS OVER THE SLICE: group it by key, keep the keys spread over several shards, and match each back to
+	// its rows — the way the trigger matches a key, field by field (m_deltaKeyMatchItem), so rows the table keeps
+	// apart stay apart. The unit and the period ride the grouping too, so the match never reaches out of the slice.
+	std::vector<ibString> slice, group, columns, match;
+	const auto Grouped = [&](const ibString& col) {
+		group.push_back(ibT("s_.") + col);
+		columns.push_back(ibT("s_.") + col + ibT(" AS ") + col);
+	};
+	if (!spec.m_periodUnitColumn.IsEmpty()) {
+		slice.push_back(ibString::Format(ibT("s_.%s = %i"), spec.m_periodUnitColumn, static_cast<int>(unit)));
+		Grouped(spec.m_periodUnitColumn);
+		match.push_back(table + ibT(".") + spec.m_periodUnitColumn + ibT(" = g_.") + spec.m_periodUnitColumn);
+	}
+	if (!spec.m_periodColumn.IsEmpty()) {
+		slice.push_back(ibT("s_.") + spec.m_periodColumn + ibT(" = ") + periodValue);
+		Grouped(spec.m_periodColumn);
+		match.push_back(table + ibT(".") + spec.m_periodColumn + ibT(" = g_.") + spec.m_periodColumn);
+	}
+	for (const ibString& k : spec.m_keyColumns) {
+		Grouped(k);
+		match.push_back(Fill(Fill(Fill(mat->m_deltaKeyMatchItem, ibT("col"), k), ibT("target"), table), ibT("source"), ibT("g_")));
+	}
+	std::vector<ibString> select = columns, moved;
+	select.push_back(ibT("MIN(s_.") + shard + ibT(") AS lo_"));
+	for (size_t n = 0; n < spec.m_deltas.size(); n++) {
+		const ibString sum = ibString::Format(ibT("f%u_"), static_cast<unsigned>(n));
+		select.push_back(ibT("SUM(s_.") + spec.m_deltas[n].m_column + ibT(") AS ") + sum);
+		moved.push_back(spec.m_deltas[n].m_column + ibT(" = COALESCE(g_.") + sum + ibT(", 0)"));
+	}
+
+	// The ABSORBER is the lowest shard PRESENT, not shard 0 — the trigger hashes the connection, so a key may have no
+	// shard-0 row at all. It takes the key's whole figure; the key's other rows go.
+	//
+	// ⚠ ONE ROW UNDER EACH (KEY, SHARD), or the key is left as it is. A NULL in a key field is a row the unique index
+	// does not guard, so two rows may answer to one key and one shard, and no statement can tell them apart. A split
+	// key reads exactly right anyway.
+	const ibString sql = ibT("MERGE INTO ") + table +
+		ibT(" USING (SELECT ") + Join(select, ibT(", ")) + ibT(" FROM ") + table + ibT(" s_") +
+		(slice.empty() ? ibString() : ibT(" WHERE ") + Join(slice, ibT(" AND "))) +
+		(group.empty() ? ibString() : ibT(" GROUP BY ") + Join(group, ibT(", "))) +
+		ibT(" HAVING COUNT(DISTINCT s_.") + shard + ibT(") > 1 AND COUNT(*) = COUNT(DISTINCT s_.") + shard + ibT(")) g_") +
+		ibT(" ON ") + (match.empty() ? ibString(ibT("1 = 1")) : Join(match, ibT(" AND "))) +
+		ibT(" WHEN MATCHED AND ") + table + ibT(".") + shard + ibT(" = g_.lo_ THEN UPDATE SET ") + Join(moved, ibT(", ")) +
+		ibT(" WHEN MATCHED THEN DELETE");
+
+	// Run here, at the level that wrote the text (ExistsByProbe, Apply) — no SQL string leaves L2-2. A statement is
+	// data, not a format.
+	ibPreparedStatement* stmt = conn.PrepareStatement(ibT("%s"), sql);
+	if (stmt == nullptr)
+		ibBackendQueryException::Throw(ibBackendQueryException::Kind::TranslationFailure, sql);
+	try {
+		if (!spec.m_periodColumn.IsEmpty())
+			stmt->SetParamDate(1, period);
+		stmt->RunQuery();
+	}
+	catch (const ibCoreException&) {
+		conn.CloseStatement(stmt);
+		conn.ResetErrorCodes();   // a conflict is the caller's to handle — it must not resurface later as a stale error
+		throw;
+	}
+	conn.CloseStatement(stmt);
+	return true;
 }
 
 unsigned int EffectiveShardCount(const ibMaterializeSpec& spec, const ibMaterializationDialect* mat)
@@ -637,12 +741,20 @@ ibMaterializeSql RenderMaterialization(const ibMaterializeSpec& spec,
 
 	// --- CREATE. The three events differ ONLY in which row the delta reads and which sign it
 	// carries, which is why one declaration covers all of them.
-	const ibString plusNew  = RenderDelta(spec, *mat, dialect, mat->m_newRowAlias, false, shards);
-	const ibString minusOld = RenderDelta(spec, *mat, dialect, mat->m_oldRowAlias, true,  shards);
+	//
+	// …and a movement goes into the row of EVERY unit the table keeps — one delta per unit, an update's pair
+	// unit by unit. A table of one unit renders exactly the one delta it always did.
+	std::vector<ibString> plusNew, minusOld, minusOldPlusNew;
+	for (const ibTotalsPeriod unit : spec.m_periodUnits) {
+		plusNew.push_back(RenderDelta(spec, *mat, dialect, mat->m_newRowAlias, false, unit, shards));
+		minusOld.push_back(RenderDelta(spec, *mat, dialect, mat->m_oldRowAlias, true,  unit, shards));
+		minusOldPlusNew.push_back(minusOld.back());
+		minusOldPlusNew.push_back(plusNew.back());
+	}
 
-	RenderTrigger(out, *mat, nameAI, spec.m_source, mat->m_timingInsert, { plusNew });
-	RenderTrigger(out, *mat, nameAU, spec.m_source, mat->m_timingUpdate, { minusOld, plusNew });
-	RenderTrigger(out, *mat, nameAD, spec.m_source, mat->m_timingDelete, { minusOld });
+	RenderTrigger(out, *mat, nameAI, spec.m_source, mat->m_timingInsert, plusNew);
+	RenderTrigger(out, *mat, nameAU, spec.m_source, mat->m_timingUpdate, minusOldPlusNew);
+	RenderTrigger(out, *mat, nameAD, spec.m_source, mat->m_timingDelete, minusOld);
 
 	// The READ views — the BRIDGE. Above each one: an ordinary relation, joined and filtered by the
 	// engine's own machinery with no special case anywhere upstream. Below: the materialisation it
@@ -709,6 +821,138 @@ ibQueryExprPtr WhenPredicate(const ibMaterializeReadSpec& spec, ibMaterializeWhe
 		}
 	}
 	return nullptr;
+}
+
+// Does every period of `unit` lie inside one period of `within`? A week crosses every coarser edge, so it holds
+// days and nothing holds it.
+bool NestsIn(ibTotalsPeriod unit, ibTotalsPeriod within)
+{
+	if (unit == ibTotalsPeriod::Week || within == ibTotalsPeriod::Week)
+		return unit == within || (unit < within && unit <= ibTotalsPeriod::Day);
+	return unit <= within;
+}
+
+// A run of whole days, [first, second) over day starts; an end left empty is unbounded on that side.
+using ibDayRun = std::pair<std::optional<ibDateTime>, std::optional<ibDateTime>>;
+
+// ⭐⭐ THE STORED ARM, UNIT BY UNIT — which rows answer for `days`, the runs of whole days the arm takes.
+//
+// The totals keep a movement once per unit (ibMaterializeReadSpec::m_storedUnits), so a run is read as the
+// coarsest rows that fit it: the years, and at its ends the quarters, the months, the days. Whatever the date,
+// a balance costs the years behind it and a few rows more.
+//
+// Two rules keep a coarser row from saying what its days would not:
+//   - a row is taken whole, so each boundary falls BETWEEN rows — at the first day that begins inside the
+//     interval, and at the first that begins past it: the conditions around this one (WhenPredicate, the outer
+//     bounds) ask a row's first instant, and every day of the row then answers as that instant does;
+//   - from the first period a reading REPORTS, only the units that nest in its own are taken: a year's row
+//     truncated to a month is its January. Before it the rows only accumulate, and any unit does. A reading
+//     that hands the rows on as they stand (`asStored`) reports every one of them, so it takes the days.
+//
+// ⭐ ONE CONDITION PER UNIT TAKEN, NOT THEIR OR — `unit = u AND period >= a AND period < b`, for the reading to
+// make a selection of each. Under an OR no engine is bound to take the unit and the period to an index beside
+// the caller's own equalities, and this is the reading every posting makes: said apart, each is one range of
+// one index and reads the rows it answers with and no other. None at all = no whole day, nothing stored is read.
+std::vector<ibQueryExprPtr> InStoredUnits(const ibMaterializeReadSpec& spec, const std::vector<ibDayRun>& days, bool asStored)
+{
+	const ibTotalsPeriod day = spec.m_storedUnits.front();
+
+	// The first day beginning at `boundary` or after it — `strictly` after, where a day begun at it is not past it.
+	const auto firstDayPast = [day](const ibValue& boundary, bool strictly) {
+		const ibDateTime at = boundary.GetDate(), begun = at.BeginOfPeriod(day);
+		return begun == at && !strictly ? at : begun.BeginOfNextPeriod(day);
+	};
+	std::vector<ibDateTime> edges;
+	if (spec.m_from.GetType() == TYPE_DATE)
+		edges.push_back(firstDayPast(spec.m_from, /*strictly*/ spec.m_fromExcluding));
+	if (spec.m_to.GetType() == TYPE_DATE)
+		edges.push_back(firstDayPast(spec.m_to, /*strictly*/ !spec.m_toExcluding));
+	const bool periodised = spec.m_grain == ibMaterializeGrain::Calendar || spec.m_grain == ibMaterializeGrain::StoredPeriod;
+	const bool reportsFrom = periodised && spec.m_fromGrain.GetType() == TYPE_DATE;
+	if (reportsFrom)
+		edges.push_back(spec.m_fromGrain.GetDate());
+	std::sort(edges.begin(), edges.end());
+
+	// The units a run may be read in, coarsest first.
+	const auto unitsOf = [&](const ibDayRun& run) {
+		ibTotalsPeriod within = ibTotalsPeriod::Year;
+		const bool reported = periodised
+			&& (!reportsFrom || (run.first && !(*run.first < spec.m_fromGrain.GetDate())));
+		if (asStored)
+			within = day;
+		else if (reported)
+			within = spec.m_grain == ibMaterializeGrain::Calendar ? spec.m_periodUnit : day;
+		std::vector<ibTotalsPeriod> units;
+		for (auto unit = spec.m_storedUnits.rbegin(); unit != spec.m_storedUnits.rend(); ++unit)
+			if (*unit == day || NestsIn(*unit, within))
+				units.push_back(*unit);
+		return units;
+	};
+
+	struct ibUnitRows { ibTotalsPeriod m_unit; std::optional<ibDateTime> m_from, m_to; };
+	std::vector<ibUnitRows> taken;
+	const auto take = [&taken](ibTotalsPeriod unit, const std::optional<ibDateTime>& from, const std::optional<ibDateTime>& to) {
+		if (!taken.empty() && taken.back().m_unit == unit && from && taken.back().m_to && *taken.back().m_to == *from)
+			taken.back().m_to = to;   // the same unit, on from where it stopped
+		else
+			taken.push_back({ unit, from, to });
+	};
+
+	const auto read = [&](const ibDayRun& run) {
+		const std::vector<ibTotalsPeriod> units = unitsOf(run);
+		std::optional<ibDateTime> at = run.first;
+		if (!at) {
+			// From the first row there is: the coarsest unit, up to its last edge inside the run.
+			if (!run.second) {
+				take(units.front(), std::nullopt, std::nullopt);
+				return;
+			}
+			at = run.second->BeginOfPeriod(units.front());
+			take(units.front(), std::nullopt, at);
+		}
+		while (!run.second || *at < *run.second) {
+			ibTotalsPeriod unit = units.back();
+			for (const ibTotalsPeriod coarser : units)
+				if (at->BeginOfPeriod(coarser) == *at && (!run.second || at->BeginOfNextPeriod(coarser) <= *run.second)) {
+					unit = coarser;
+					break;
+				}
+			if (!run.second && unit == units.front()) {
+				take(unit, at, std::nullopt);   // to the last row there is
+				return;
+			}
+			const ibDateTime next = at->BeginOfNextPeriod(unit);
+			take(unit, at, next);
+			at = next;
+		}
+	};
+
+	for (ibDayRun run : days)
+		for (size_t i = 0; i <= edges.size(); ++i) {
+			// The run up to the next edge inside it, then on from that edge.
+			const bool inside = i < edges.size()
+				&& (!run.first || *run.first < edges[i]) && (!run.second || edges[i] < *run.second);
+			if (i < edges.size() && !inside)
+				continue;
+			if (run.first && run.second && !(*run.first < *run.second))
+				break;
+			read(inside ? ibDayRun{ run.first, edges[i] } : run);
+			if (inside)
+				run.first = edges[i];
+		}
+
+	const ibQueryExprPtr unitColumn = ibCol(spec.m_periodUnitColumn);
+	const ibQueryExprPtr period     = ibCol(spec.m_periodColumn);
+	std::vector<ibQueryExprPtr> units;
+	for (const ibUnitRows& rows : taken) {
+		ibQueryExprPtr one = ibBinOp(ibQueryBinOp::Eq, unitColumn, ibConst(ibValue(static_cast<int>(rows.m_unit))));
+		if (rows.m_from)
+			one = ibBinOp(ibQueryBinOp::And, one, ibBinOp(ibQueryBinOp::Ge, period, ibConst(ibValue(*rows.m_from))));
+		if (rows.m_to)
+			one = ibBinOp(ibQueryBinOp::And, one, ibBinOp(ibQueryBinOp::Lt, period, ibConst(ibValue(*rows.m_to))));
+		units.push_back(one);
+	}
+	return units;
 }
 
 } // namespace
@@ -784,6 +1028,10 @@ ibQueryRelPtr RenderStoredRows(const ibMaterializeSpec& spec, const ibMaterializ
 	std::vector<ibQueryProjItem> proj;
 	if (view.m_withPeriod && !spec.m_periodColumn.IsEmpty())
 		proj.push_back(ibQueryProjItem{ ibCol(spec.m_periodColumn), spec.m_periodColumn });   // as stored: no coarser unit
+	// The rows of EVERY unit, each saying its own: which of them answer is the reading's to say, per run of days
+	// (RenderMaterializedRead), and said here it would be one unit for the whole of it.
+	if (!spec.m_periodUnitColumn.IsEmpty())
+		proj.push_back(ibQueryProjItem{ ibCol(spec.m_periodUnitColumn), spec.m_periodUnitColumn });
 	for (const ibString& k : spec.m_keyColumns)
 		proj.push_back(ibQueryProjItem{ ibCol(k), k });
 
@@ -1014,6 +1262,89 @@ ibQueryRelPtr RenderMaterializedRead(const ibMaterializeReadSpec& spec, const ib
 		    || c.m_agg == ibMaterializeAgg::RunningSum || c.m_agg == ibMaterializeAgg::RunningSumExcludingCurrent)
 			readsHistory = true;
 
+	// A plain turnover reads nothing below its interval: every stored row before `from` adds a zero to its group,
+	// and with all-zero rows dropped anyway the group is the same without them. Rows handed on as they stand are
+	// bounded there outright (above).
+	const bool nothingBelowFrom = spec.m_from.GetType() == TYPE_DATE && !spec.m_periodColumn.IsEmpty()
+		&& (!anyAggregate || (!readsHistory && spec.m_dropZeroRows));
+
+	// ⭐ WHICH UNIT'S ROWS THE STORED ARM TAKES, where they are kept by several (InStoredUnits) — a condition per
+	// unit, each a selection of its own (`half`, below). Its whole days: everything below the floor — or up to the
+	// upper boundary's day where nothing is cut — less what the cut below leaves to the movements at the lower
+	// boundary, and less what a turnover never reads.
+	//
+	// These are the stored arm's WHOLE bounds, and the only ones said to it: a second, wider bound on the period
+	// beside a unit's own is one an engine may take to the index in its place, and the days of a ten-year interval
+	// are then walked for the sake of its first week.
+	const bool byUnits = !movements && spec.m_storedRows && !spec.m_storedUnits.empty()
+		&& !spec.m_periodUnitColumn.IsEmpty() && !spec.m_periodColumn.IsEmpty();
+	std::vector<ibQueryExprPtr> storedUnits;
+	if (byUnits) {
+		const ibTotalsPeriod day = spec.m_storedUnits.front();
+
+		// Up to the floor; with none and a head cut, to the last row there is (an interval open above).
+		std::optional<ibDateTime> upTo;
+		if (spec.m_floor.GetType() == TYPE_DATE)
+			upTo = spec.m_floor.GetDate();
+		else if (spec.m_to.GetType() == TYPE_DATE)
+			upTo = spec.m_to.GetDate().BeginOfPeriod(day).BeginOfNextPeriod(day);   // the outer bound: a day begun by then
+
+		std::vector<ibDayRun> days;
+		if (spec.m_headSplit.GetType() == TYPE_DATE) {
+			if (readsHistory && spec.m_headGrain.GetType() == TYPE_DATE)
+				days.push_back({ std::nullopt, spec.m_headGrain.GetDate() });
+			days.push_back({ spec.m_headSplit.GetDate(), upTo });
+		}
+		else if (nothingBelowFrom) {
+			const ibDateTime from = spec.m_from.GetDate(), begun = from.BeginOfPeriod(day);
+			days.push_back({ begun == from ? from : begun.BeginOfNextPeriod(day), upTo });   // a day begun at `from` or after
+		}
+		else
+			days.push_back({ std::nullopt, upTo });
+		storedUnits = InStoredUnits(spec, days, /*asStored*/ !anyAggregate);
+	}
+
+	// ⭐ A HALF OF THE ROWS, READ ON ITS OWN — the stored rows or the movements, under what narrows that half: its
+	// condition and the caller's filters, in its own WHERE, where an index can take them (the cut below says what
+	// this was measured against). Both halves read under ONE name (`rows`): they are separate SELECTs, and the
+	// filters were lowered against it — a walk through a reference finds its outer row under that name in either.
+	// Each hands up only what the reading names.
+	std::vector<ibString> carried;
+	const auto carry = [&carried](const ibString& name) {
+		if (!name.IsEmpty() && std::find(carried.begin(), carried.end(), name) == carried.end())
+			carried.push_back(name);
+	};
+	for (const ibString& k : spec.m_keyColumns) carry(k);
+	carry(spec.m_periodColumn);
+	carry(spec.m_markColumn);
+	for (const auto& b : spec.m_boundaryHead) carry(b.first);
+	for (const auto& b : spec.m_boundaryTail) carry(b.first);
+	for (const ibMaterializeReadColumn& c : spec.m_columns) { carry(c.m_columnA); carry(c.m_columnB); }
+
+	const auto half = [&](const ibQueryExprPtr& narrowed, const ibQueryRelPtr& relation) {
+		std::vector<ibQueryProjItem> columns;
+		for (const ibString& name : carried)
+			columns.push_back(ibQueryProjItem{ ibCol(name), ibString() });
+		ibDatabaseQueryBuilder arm;
+		arm.From(ibSubquery(relation, rows)).Project(columns);
+		arm.Where(narrowed);
+		for (const ibQueryExprPtr& f : spec.m_filters)
+			if (f) arm.Where(f);
+		return arm.Build().m_root;
+	};
+	// The stored rows unit by unit, and the movements' half after them where there is a cut. No whole day and no
+	// movements is a reading of nothing: no row is of no unit.
+	const auto storedByUnits = [&](const ibQueryRelPtr& movedHalf) {
+		ibQueryRelPtr all;
+		for (const ibQueryExprPtr& unit : storedUnits) {
+			const ibQueryRelPtr one = half(unit, spec.m_storedRows);
+			all = all ? ibUnionAll(all, one) : one;
+		}
+		if (movedHalf)
+			all = all ? ibUnionAll(all, movedHalf) : movedHalf;
+		return all ? all : half(ibIsNull(ibCol(spec.m_periodUnitColumn)), spec.m_storedRows);
+	};
+
 	// ⭐ BY THE MOVEMENT THERE IS NOTHING TO CUT. Every row is a movement and is counted by itself — the stored rows are
 	// not read at all — so only the boundaries are said: an instant, or an instant AND the document at it, exactly as
 	// the movement half of a cut says them.
@@ -1039,14 +1370,17 @@ ibQueryRelPtr RenderMaterializedRead(const ibMaterializeReadSpec& spec, const ib
 		const ibQueryExprPtr period    = ibCol(spec.m_periodColumn);
 		const ibQueryExprPtr fromTotal = ibIsNull(ibCol(spec.m_markColumn));
 
-		if (spec.m_floor.GetType() != TYPE_DATE) {
+		const bool floored   = spec.m_floor.GetType() == TYPE_DATE;
+		const bool headSplit = spec.m_headSplit.GetType() == TYPE_DATE;
+		if (!floored && !headSplit) {
 			// The question stops at the grain or above it. The movements have nothing to add that
 			// the totals do not already hold, so the arm is excluded — one predicate, and the
 			// planner never touches that side of the union.
 			q.Where(fromTotal);
 		}
 		else {
-			const bool headSplit = spec.m_headSplit.GetType() == TYPE_DATE;
+			// No floor with a head split: an interval open above. The stored arm runs to its last row and the
+			// movements answer the head alone.
 			const bool headGrain = readsHistory && headSplit && spec.m_headGrain.GetType() == TYPE_DATE;
 			const ibQueryExprPtr inHeadGrain = headGrain
 				? ibBinOp(ibQueryBinOp::And,
@@ -1058,8 +1392,8 @@ ibQueryRelPtr RenderMaterializedRead(const ibMaterializeReadSpec& spec, const ib
 			// either end is the movements' business, because a stored row cannot be asked for half of
 			// itself. Which whole grains BEFORE the lower boundary it takes is the question above: none
 			// for a turnover, all but the boundary's own grain for a balance.
-			ibQueryExprPtr stored = ibBinOp(ibQueryBinOp::And, fromTotal,
-				ibBinOp(ibQueryBinOp::Lt, period, ibConst(spec.m_floor)));
+			ibQueryExprPtr stored = !floored ? fromTotal
+				: ibBinOp(ibQueryBinOp::And, fromTotal, ibBinOp(ibQueryBinOp::Lt, period, ibConst(spec.m_floor)));
 			if (headGrain)
 				stored = ibBinOp(ibQueryBinOp::And, stored, ibNot(inHeadGrain));
 			else if (headSplit)
@@ -1071,12 +1405,11 @@ ibQueryRelPtr RenderMaterializedRead(const ibMaterializeReadSpec& spec, const ib
 			// fits inside a single grain, and an overlap here is a movement counted twice.
 			ibQueryExprPtr moved = ibIsNull(ibCol(spec.m_markColumn), /*negated*/ true);
 
-			ibQueryExprPtr ends = ibBinOp(ibQueryBinOp::Ge, period, ibConst(spec.m_floor));
-			if (headGrain)
-				ends = ibBinOp(ibQueryBinOp::Or, ends, inHeadGrain);
-			else if (headSplit)
-				ends = ibBinOp(ibQueryBinOp::Or, ends,
-					ibBinOp(ibQueryBinOp::Lt, period, ibConst(spec.m_headSplit)));
+			ibQueryExprPtr ends = floored ? ibBinOp(ibQueryBinOp::Ge, period, ibConst(spec.m_floor)) : nullptr;
+			const ibQueryExprPtr head = headGrain ? inHeadGrain
+				: headSplit ? ibBinOp(ibQueryBinOp::Lt, period, ibConst(spec.m_headSplit)) : nullptr;
+			if (head)
+				ends = ends ? ibBinOp(ibQueryBinOp::Or, ends, head) : head;
 			moved = ibBinOp(ibQueryBinOp::And, moved, ends);
 
 			// The boundaries themselves: an instant, or an instant AND the document at it. The lower
@@ -1105,8 +1438,8 @@ ibQueryRelPtr RenderMaterializedRead(const ibMaterializeReadSpec& spec, const ib
 			// The conditions above stay where they were; over rows already chosen by them they cost
 			// nothing and keep this a change of ROAD, not of meaning.
 			//
-			// ONLY WHERE THE READING HOLDS THE HALVES APART (m_storedRows / m_movedRows). A reading that names one
-			// dressed relation for both - the accounting register's - would have each half select from that same
+			// ONLY WHERE THE READING HOLDS THE HALVES APART (m_storedRows / m_movedRows) - both registers' readings do.
+			// One that names a dressed relation for both (m_view) would have each half select from that same
 			// union view: four arms expanded where there were two, the shard fold of the stored arm evaluated
 			// twice, and nothing gained, since neither half is any nearer an index than the OR was. It keeps
 			// the single selection above, exactly as it was.
@@ -1118,50 +1451,36 @@ ibQueryRelPtr RenderMaterializedRead(const ibMaterializeReadSpec& spec, const ib
 				ibBackendQueryException::Throw(ibBackendQueryException::Kind::UnsupportedNode,
 					_("A reading inside the stored grain was handed the stored rows without the movements to complete them"));
 			if (spec.m_movedRows) {
-				std::vector<ibString> carried;
-				const auto carry = [&carried](const ibString& name) {
-					if (!name.IsEmpty() && std::find(carried.begin(), carried.end(), name) == carried.end())
-						carried.push_back(name);
-				};
-				for (const ibString& k : spec.m_keyColumns) carry(k);
-				carry(spec.m_periodColumn);
-				carry(spec.m_markColumn);
-				for (const auto& b : spec.m_boundaryHead) carry(b.first);
-				for (const auto& b : spec.m_boundaryTail) carry(b.first);
-				for (const ibMaterializeReadColumn& c : spec.m_columns) { carry(c.m_columnA); carry(c.m_columnB); }
-
-				// A plain turnover reads nothing below its interval: every stored row before `from` adds a zero to
-				// its group, and with all-zero rows dropped anyway the group is the same without them. Said to the
-				// stored half, it lets the index bound the period on BOTH sides — a day's turnovers no longer walk
-				// the warehouse's whole history. (With a head split the stored half is already bounded below.)
-				const bool boundStoredBelow = !readsHistory && !headSplit && spec.m_dropZeroRows
-					&& spec.m_from.GetType() == TYPE_DATE;
-
-				// Both halves read under ONE name (`rows`): they are separate SELECTs, and the filters were lowered
-				// against it — a walk through a reference finds its outer row under that name in either.
-				const auto half = [&](const ibQueryExprPtr& cut, const ibQueryRelPtr& relation) {
-					std::vector<ibQueryProjItem> columns;
-					for (const ibString& name : carried)
-						columns.push_back(ibQueryProjItem{ ibCol(name), ibString() });
-					ibDatabaseQueryBuilder arm;
-					arm.From(ibSubquery(relation, rows)).Project(columns);
-					arm.Where(cut);
-					if (spec.m_to.GetType() == TYPE_DATE)
-						arm.Where(ibBinOp(ibQueryBinOp::Le, ibCol(spec.m_periodColumn), ibConst(spec.m_to)));
-					for (const ibQueryExprPtr& f : spec.m_filters)
-						if (f) arm.Where(f);
-					return arm.Build().m_root;
+				// The outer bound, said to a half as well.
+				const auto upToOuterBound = [&](const ibQueryExprPtr& narrowed) {
+					return spec.m_to.GetType() != TYPE_DATE ? narrowed
+						: ibBinOp(ibQueryBinOp::And, narrowed, ibBinOp(ibQueryBinOp::Le, period, ibConst(spec.m_to)));
 				};
 				// Each half of its OWN relation: asked of a union, the stored half still made the engine visit
 				// the movements to learn they hold no stored row, and the other way round (measured 2026-09-19:
 				// 0.15 s through the union against 0.05 s off the stored rows alone, for the same rows).
-				if (boundStoredBelow)
-					stored = ibBinOp(ibQueryBinOp::And, stored, ibBinOp(ibQueryBinOp::Ge, period, ibConst(spec.m_from)));
+				const ibQueryRelPtr movedHalf = half(upToOuterBound(moved), spec.m_movedRows);
 				filtersRideInside = true;
-				q.From(ibSubquery(ibUnionAll(half(stored, spec.m_storedRows),
-					half(moved, spec.m_movedRows)), alias + ibT("_cut")));
+				if (byUnits)
+					q.From(ibSubquery(storedByUnits(movedHalf), alias + ibT("_cut")));
+				else {
+					// A turnover's own start (nothingBelowFrom), said to the stored half: the index bounds the
+					// period on BOTH sides, and a day's turnovers no longer walk the warehouse's whole history.
+					// (With a head split the stored half is already bounded below.)
+					if (nothingBelowFrom && !headSplit)
+						stored = ibBinOp(ibQueryBinOp::And, stored, ibBinOp(ibQueryBinOp::Ge, period, ibConst(spec.m_from)));
+					q.From(ibSubquery(ibUnionAll(half(upToOuterBound(stored), spec.m_storedRows), movedHalf),
+						alias + ibT("_cut")));
+				}
 			}
 		}
+	}
+
+	// ⭐ NOTHING TO CUT, AND THE STORED ROWS ARE STILL OF SEVERAL UNITS — the reading that stops on a grain's edge
+	// or names no date at all, and the surface with one arm. The same selections, with no movements under them.
+	if (byUnits && !filtersRideInside) {
+		filtersRideInside = true;
+		q.From(ibSubquery(storedByUnits(nullptr), alias + ibT("_cut")));
 	}
 
 	// …unless both halves of a cut already carry them: the relation above then publishes only the columns

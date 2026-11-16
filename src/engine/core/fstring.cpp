@@ -168,13 +168,24 @@ IB_FORCEINLINE size_t TerminatedLength(const wchar_t* s) noexcept { return Termi
 size_t TerminatedLength(const wchar_t* s) noexcept { return std::wcslen(s); }
 #endif
 
+// A character as a case-insensitive comparison reads it — the three of this file (SameText, IsSameAs of a
+// character, CmpNoCase), so what one order calls a key the others call equal. ASCII is folded here: the C
+// library's towlower is a call through the process locale for every character, and the parameters index of a
+// composed sheet asked it on every insert — a fifth of putting 600 thousand cells (Debug, 2026-11-16). It also
+// answers a name the same under every locale (towlower of a Turkish one makes `I` a dotless ı).
+IB_FORCEINLINE ibChar FoldCase(ibChar c) noexcept {
+	if (c < 0x80)
+		return (c >= ibT('A') && c <= ibT('Z')) ? static_cast<ibChar>(c + (ibT('a') - ibT('A'))) : c;
+	return ibToLower(c);
+}
+
 // Two texts the same, a case-insensitive pair folded only where the characters differ — matching
 // characters need no folding, and names that are the same usually match exactly.
 bool SameText(const ibChar* a, size_t an, const ibChar* b, size_t bn, bool caseSensitive) noexcept {
 	if (an != bn) return false;
 	for (size_t i = 0; i < an; ++i) {
 		if (a[i] == b[i]) continue;
-		if (caseSensitive || ibToLower(a[i]) != ibToLower(b[i])) return false;
+		if (caseSensitive || FoldCase(a[i]) != FoldCase(b[i])) return false;
 	}
 	return true;
 }
@@ -870,19 +881,23 @@ bool ibString::IsSameAs(const wchar_t* s, bool caseSensitive) const
 bool ibString::IsSameAs(ibChar c, bool caseSensitive) const
 {
 	const std::u16string_view text = View();
-	return text.size() == 1 && (caseSensitive ? text[0] == c : ibToLower(text[0]) == ibToLower(c));
+	return text.size() == 1 && (caseSensitive ? text[0] == c : FoldCase(text[0]) == FoldCase(c));
 }
 
 // The order of a case-folded index (stringUtils' ibStringCaseFoldLess): folded only where the characters
 // differ, so names that share a long prefix compare at the price of the one character where they part.
+// ⚠ WALKED BY POINTER — a checked build checks every `view[i]`, and the shared prefix of two keys of one
+// index (`Cell_2_10304…`) is most of what a comparison reads (2026-11-16).
 int ibString::CmpNoCase(const ibString& o) const
 {
 	if (m_impl == o.m_impl) return 0;   // one text
 	const std::u16string_view a = View(), b = o.View();
 	const size_t n = a.size() < b.size() ? a.size() : b.size();
+	const ibChar* const pa = a.data();
+	const ibChar* const pb = b.data();
 	for (size_t i = 0; i < n; ++i) {
-		if (a[i] == b[i]) continue;
-		const ibChar x = ibToLower(a[i]), y = ibToLower(b[i]);
+		if (pa[i] == pb[i]) continue;
+		const ibChar x = FoldCase(pa[i]), y = FoldCase(pb[i]);
 		if (x != y) return x < y ? -1 : 1;
 	}
 	return a.size() == b.size() ? 0 : (a.size() < b.size() ? -1 : 1);

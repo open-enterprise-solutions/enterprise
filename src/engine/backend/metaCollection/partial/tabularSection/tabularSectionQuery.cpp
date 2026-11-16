@@ -23,10 +23,10 @@
 // second column to make that possible.
 //
 // The target type is CONSTANT — a section belongs to one owner — so it rides on the column and never
-// on the row. Built once and kept, because a queryable hands out column POINTERS and a temporary
-// would leave every caller holding a dangling one. ONCE across threads: the section is metadata, and every
+// on the row. Built once and kept, because a column is known by its identity: one built anew per call
+// would be another column each time. ONCE across threads: the section is metadata, and every
 // session of the base reads through it at the same time.
-const ibBackendQueryColumn* ibTabularQueryable::OwnerRefColumn() const
+std::shared_ptr<const ibBackendQueryColumn> ibTabularQueryable::OwnerRefColumn() const
 {
 	std::call_once(m_ownerRefOnce, [this]() {
 		// A DB-backed section belongs to a reference owner, and names its owner field as the owner names its own
@@ -45,20 +45,20 @@ const ibBackendQueryColumn* ibTabularQueryable::OwnerRefColumn() const
 		// table contributes `uuid` as a scaffold, so the schema differ never sees this one.
 		const ibMetaID identity = m_meta != nullptr ? (m_meta->GetMetaID() | 0x20000000) : 0;
 
-		m_ownerRef.reset(new ibBackendColumnRawDB(ibBackendColumnRawDB::Reference(ibOwnerRefField(),
+		m_ownerRef = ibBackendColumnRawDB::Reference(ibOwnerRefField(),
 			owner != nullptr ? reference_to_clsid(owner->GetMetaID(), clsid_metaclass(owner->GetClassType())) : 0,
-			ownerReference != nullptr ? ownerReference->GetName() : ibString(), identity)));
+			ownerReference != nullptr ? ownerReference->GetName() : ibString(), identity);
 	});
-	return m_ownerRef.get();
+	return m_ownerRef;
 }
 
 // What the section LISTS is what a name finds (ResolveColumnByName searches this list): the table's children
 // alone missed what its owner carries into it — the account's kinds table shows a tick-box per breakdown
 // accounting kind of its chart, and `K.Quantitative` was refused as an unknown attribute while `SELECT *`
 // returned it (2026-09-17).
-std::vector<const ibBackendQueryColumn*> ibTabularQueryable::GetQueryColumns() const
+std::vector<std::shared_ptr<const ibBackendQueryColumn>> ibTabularQueryable::GetQueryColumns() const
 {
-	std::vector<const ibBackendQueryColumn*> columns;
+	std::vector<std::shared_ptr<const ibBackendQueryColumn>> columns;
 	// ⭐⭐ THE OWNER, SHOWN AS A FIELD OF THE SECTION.
 	//
 	// A section's rows already carry their owner — the row key it stores IS the owner's reference

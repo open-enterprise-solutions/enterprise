@@ -234,7 +234,7 @@ struct AcceptanceAccumulation : ::testing::Test {
 		ASSERT_FALSE(turnoverAlias.IsEmpty());
 		ASSERT_FALSE(turnovers.m_movementColumns.empty());
 
-		const std::vector<ibString> periodFields = ColumnFieldNames(reg->GetRegisterPeriod()->GetQueryColumn());
+		const std::vector<ibString> periodFields = ColumnFieldNames(*reg->GetRegisterPeriod()->GetQueryColumn());
 		for (const ibString& field : readSpec.m_keyColumns)
 			if (std::find(periodFields.begin(), periodFields.end(), field) == periodFields.end())
 				keyColumns.push_back(field);
@@ -245,8 +245,8 @@ struct AcceptanceAccumulation : ::testing::Test {
 					kept.push_back(field);
 			return kept;
 		};
-		warehouseFields = keepKeyed(ColumnFieldNames(warehouse->GetQueryColumn()));
-		itemFields = keepKeyed(ColumnFieldNames(item->GetQueryColumn()));
+		warehouseFields = keepKeyed(ColumnFieldNames(*warehouse->GetQueryColumn()));
+		itemFields = keepKeyed(ColumnFieldNames(*item->GetQueryColumn()));
 		ASSERT_FALSE(warehouseFields.empty());
 		ASSERT_FALSE(itemFields.empty());
 		ready = true;
@@ -277,13 +277,13 @@ struct AcceptanceAccumulation : ::testing::Test {
 				return;
 			list << (list.IsEmpty() ? wxT("") : wxT(", ")) << field << sqlType;
 		};
-		auto addColumn = [&](const ibBackendQueryColumn* column) {
+		auto addColumn = [&](const std::shared_ptr<const ibBackendQueryColumn>& column) {
 			if (column == nullptr)
 				return;
-			for (const ibColumnSlot& slot : DescribeColumnLayout(column))
+			for (const ibColumnSlot& slot : DescribeColumnLayout(*column))
 				addNamed(slot.m_name, SqliteTypeOf(slot.m_type));
 		};
-		for (const ibBackendQueryColumn* column : table.m_scaffold)
+		for (const std::shared_ptr<const ibBackendQueryColumn>& column : table.m_scaffold)
 			addColumn(column);
 		for (const ibSchemaColumn& column : table.m_columns)
 			addColumn(column.m_column);
@@ -296,7 +296,7 @@ struct AcceptanceAccumulation : ::testing::Test {
 			addNamed(table.m_materialize.m_keyHashColumn, wxT(" TEXT"));
 			if (table.m_materialize.m_shards > 1)
 				addNamed(ibString(ShardColumnName()), wxT(" INTEGER"));
-			for (const ibBackendQueryColumn* key : table.m_materialize.m_keys)
+			for (const std::shared_ptr<const ibBackendQueryColumn>& key : table.m_materialize.m_keys)
 				addColumn(key);
 			for (const ibSchemaDelta& delta : table.m_materialize.m_deltas)
 				addColumn(delta.m_column);
@@ -323,6 +323,7 @@ struct AcceptanceAccumulation : ::testing::Test {
 			addKey(render.m_keyHashColumn);
 		else {
 			addKey(render.m_periodColumn);
+			addKey(render.m_periodUnitColumn);   // the trigger keys each unit's row by it
 			for (const ibString& field : render.m_keyColumns)
 				addKey(field);
 			// The declaration may ask for several shards. SQLite keeps one: the trigger's
@@ -336,11 +337,11 @@ struct AcceptanceAccumulation : ::testing::Test {
 				+ wxT("_PK ON ") + table.m_name + wxT(" (") + keys + wxT(")"));
 	}
 
-	void Assign(std::vector<ibDmlAssign>& out, const ibBackendQueryColumn* column, const ibValue& value) const {
-		const std::vector<ibString> fields = ColumnFieldNames(column);
+	void Assign(std::vector<ibDmlAssign>& out, const std::shared_ptr<const ibBackendQueryColumn>& column, const ibValue& value) const {
+		const std::vector<ibString> fields = ColumnFieldNames(*column);
 		ibQueryStatement capture(ibQueryStatement::Kind::Delete, ibString(), fields);
 		int position = 1;
-		ibColumnCodec::WriteValue(column, cfg.get(), value, &capture, position);
+		ibColumnCodec::WriteValue(*column, cfg.get(), value, &capture, position);
 		const std::vector<ibQueryExprPtr>& consts = capture.CapturedValues();
 		for (size_t i = 0; i < fields.size(); ++i)
 			out.push_back(ibDmlAssign{ fields[i], (i < consts.size() && consts[i]) ? consts[i] : ibConst(ibValue()) });
@@ -409,18 +410,19 @@ struct AcceptanceAccumulation : ::testing::Test {
 		return ibValue(new ibValueBoundary(ibValue(moment), kind));
 	}
 
-	const ibBackendQueryColumn* MustColumn(const ibBackendQueryable* source, const ibString& name) const {
-		const ibBackendQueryColumn* col = source != nullptr ? source->ResolveColumnByName(name) : nullptr;
+	std::shared_ptr<const ibBackendQueryColumn> MustColumn(const std::shared_ptr<const ibBackendQueryable>& source,
+		const ibString& name) const {
+		std::shared_ptr<const ibBackendQueryColumn> col = source != nullptr ? source->ResolveColumnByName(name) : nullptr;
 		EXPECT_NE(col, nullptr) << name;
 		return col;
 	}
 
-	ibNumber FigureOf(const ibBackendQueryable* source, const ibBackendQueryColumn* figure,
-		const ibString& wh, const ibString& itemCode) {
+	ibNumber FigureOf(const std::shared_ptr<const ibBackendQueryable>& source,
+		const std::shared_ptr<const ibBackendQueryColumn>& figure, const ibString& wh, const ibString& itemCode) {
 		if (source == nullptr || figure == nullptr)
 			return ibNumber();
-		const ibBackendQueryColumn* whCol = MustColumn(source, wxT("Warehouse"));
-		const ibBackendQueryColumn* itemCol = MustColumn(source, wxT("Item"));
+		std::shared_ptr<const ibBackendQueryColumn> whCol = MustColumn(source, wxT("Warehouse"));
+		std::shared_ptr<const ibBackendQueryColumn> itemCol = MustColumn(source, wxT("Item"));
 		if (whCol == nullptr || itemCol == nullptr)
 			return ibNumber();
 		ibDataQueryBuilder q(ibConnectionPool::ThreadHolder());
@@ -442,8 +444,8 @@ struct AcceptanceAccumulation : ::testing::Test {
 
 	ibNumber BalanceOf(const nlohmann::json& question) {
 		const std::string road = question["road"].get<std::string>();
-		ibBalanceQueryable view(reg, Position(At(question["at"]), road));
-		return FigureOf(&view, MustColumn(&view, wxT("QuantityBalance")),
+		const auto view = std::make_shared<ibBalanceQueryable>(reg, Position(At(question["at"]), road));
+		return FigureOf(view, MustColumn(view, wxT("QuantityBalance")),
 			AsWx(question["wh"]), AsWx(question["item"]));
 	}
 
@@ -457,17 +459,17 @@ struct AcceptanceAccumulation : ::testing::Test {
 	void ExpectBalanceAndTurnovers(const nlohmann::json& question) {
 		const ibValue from = Position(At(question["from"]), "excluding");
 		const ibValue to = Position(At(question["to"]), "excluding");
-		ibBalanceAndTurnoverQueryable view(reg, from, to);
+		const auto view = std::make_shared<ibBalanceAndTurnoverQueryable>(reg, from, to);
 		const ibString wh = AsWx(question["wh"]);
 		const ibString itemCode = AsWx(question["item"]);
 		const ibString where = wh + wxT(" ") + itemCode;
-		ExpectNear(FigureOf(&view, MustColumn(&view, wxT("QuantityOpeningBalance")), wh, itemCode),
+		ExpectNear(FigureOf(view, MustColumn(view, wxT("QuantityOpeningBalance")), wh, itemCode),
 			AsWx(question["opening"]), where + wxT(" opening"));
-		ExpectNear(FigureOf(&view, MustColumn(&view, wxT("QuantityReceipt")), wh, itemCode),
+		ExpectNear(FigureOf(view, MustColumn(view, wxT("QuantityReceipt")), wh, itemCode),
 			AsWx(question["receipt"]), where + wxT(" receipt"));
-		ExpectNear(FigureOf(&view, MustColumn(&view, wxT("QuantityExpense")), wh, itemCode),
+		ExpectNear(FigureOf(view, MustColumn(view, wxT("QuantityExpense")), wh, itemCode),
 			AsWx(question["expense"]), where + wxT(" expense"));
-		ExpectNear(FigureOf(&view, MustColumn(&view, wxT("QuantityClosingBalance")), wh, itemCode),
+		ExpectNear(FigureOf(view, MustColumn(view, wxT("QuantityClosingBalance")), wh, itemCode),
 			AsWx(question["closing"]), where + wxT(" closing"));
 	}
 
@@ -524,13 +526,13 @@ TEST_F(AcceptanceAccumulation, TurnoversRunFromMidnightUpToTheNext)
 	for (const auto& question : fixture["turnovers"]) {
 		const ibValue from = Position(At(question["from"]), "including");
 		const ibValue to = Position(At(question["to"]), "excluding");
-		ibTurnoverQueryable view(reg, from, to);
-		const ibBackendQueryColumn* receiptCol = MustColumn(&view, wxT("QuantityReceipt"));
-		const ibBackendQueryColumn* expenseCol = MustColumn(&view, wxT("QuantityExpense"));
+		const auto view = std::make_shared<ibTurnoverQueryable>(reg, from, to);
+		std::shared_ptr<const ibBackendQueryColumn> receiptCol = MustColumn(view, wxT("QuantityReceipt"));
+		std::shared_ptr<const ibBackendQueryColumn> expenseCol = MustColumn(view, wxT("QuantityExpense"));
 		const ibString wh = AsWx(question["wh"]);
 		const ibString itemCode = AsWx(question["item"]);
-		ExpectNear(FigureOf(&view, receiptCol, wh, itemCode), AsWx(question["receipt"]), wh + wxT(" receipt"));
-		ExpectNear(FigureOf(&view, expenseCol, wh, itemCode), AsWx(question["expense"]), wh + wxT(" expense"));
+		ExpectNear(FigureOf(view, receiptCol, wh, itemCode), AsWx(question["receipt"]), wh + wxT(" receipt"));
+		ExpectNear(FigureOf(view, expenseCol, wh, itemCode), AsWx(question["expense"]), wh + wxT(" expense"));
 	}
 }
 
@@ -556,11 +558,11 @@ TEST_F(AcceptanceAccumulation, DISABLED_TheOpeningLeavesOutThePointThePeriodStar
 			continue;
 		const ibValue from = Position(At(question["from"]), "excluding");
 		const ibValue to = Position(At(question["to"]), "excluding");
-		ibBalanceAndTurnoverQueryable view(reg, from, to);
+		const auto view = std::make_shared<ibBalanceAndTurnoverQueryable>(reg, from, to);
 		const ibString wh = AsWx(question["wh"]);
 		const ibString itemCode = AsWx(question["item"]);
-		const ibNumber opening = FigureOf(&view, MustColumn(&view, wxT("QuantityOpeningBalance")), wh, itemCode);
-		const ibNumber receipt = FigureOf(&view, MustColumn(&view, wxT("QuantityReceipt")), wh, itemCode);
+		const ibNumber opening = FigureOf(view, MustColumn(view, wxT("QuantityOpeningBalance")), wh, itemCode);
+		const ibNumber receipt = FigureOf(view, MustColumn(view, wxT("QuantityReceipt")), wh, itemCode);
 		const ibNumber wantOpening(AsWx(question["opening"]));
 		const ibNumber wantReceipt(AsWx(question["receipt"]));
 		EXPECT_EQ(0, opening.Compare(wantOpening)) << "opening got " << opening.ToString()
@@ -581,14 +583,14 @@ TEST_F(AcceptanceAccumulation, DayAndMonthReadingsSpanMarchIntoApril)
 		fold.m_unit = question["unit"] == "day" ? ibTotalsPeriod::Day : ibTotalsPeriod::Month;
 		const ibValue from = Position(At(question["from"]), "including");
 		const ibValue to = Position(At(question["to"]), "excluding");
-		ibTurnoverQueryable view(reg, from, to, nullptr, fold);
-		const ibBackendQueryColumn* receiptCol = MustColumn(&view, wxT("QuantityReceipt"));
-		const ibBackendQueryColumn* expenseCol = MustColumn(&view, wxT("QuantityExpense"));
-		const ibBackendQueryColumn* whCol = MustColumn(&view, wxT("Warehouse"));
-		const ibBackendQueryColumn* itemCol = MustColumn(&view, wxT("Item"));
+		const auto view = std::make_shared<ibTurnoverQueryable>(reg, from, to, nullptr, fold);
+		std::shared_ptr<const ibBackendQueryColumn> receiptCol = MustColumn(view, wxT("QuantityReceipt"));
+		std::shared_ptr<const ibBackendQueryColumn> expenseCol = MustColumn(view, wxT("QuantityExpense"));
+		std::shared_ptr<const ibBackendQueryColumn> whCol = MustColumn(view, wxT("Warehouse"));
+		std::shared_ptr<const ibBackendQueryColumn> itemCol = MustColumn(view, wxT("Item"));
 		ASSERT_NE(receiptCol, nullptr);
 		ibDataQueryBuilder q(ibConnectionPool::ThreadHolder());
-		q.From(&view);
+		q.From(view);
 		q.Select(receiptCol, wxT("in"));
 		q.Select(expenseCol, wxT("out"));
 		if (whCol != nullptr) q.Select(whCol, wxT("wh"));
@@ -642,26 +644,27 @@ TEST_F(AcceptanceAccumulation, ByTheRecorderTheServerAnswersAsTheRamRoad)
 		});
 		return rows;
 	};
-	const auto served = [&](const ibBackendQueryable& view, const std::vector<ibString>& keys, const std::vector<ibString>& figures) {
-		std::vector<const ibBackendQueryColumn*> keyCols, figureCols;
+	const auto served = [&](const std::shared_ptr<const ibBackendQueryable>& view, const std::vector<ibString>& keys,
+		const std::vector<ibString>& figures) {
+		std::vector<std::shared_ptr<const ibBackendQueryColumn>> keyCols, figureCols;
 		for (const ibString& name : keys)
-			keyCols.push_back(MustColumn(&view, name));
+			keyCols.push_back(MustColumn(view, name));
 		for (const ibString& name : figures)
-			figureCols.push_back(MustColumn(&view, name));
+			figureCols.push_back(MustColumn(view, name));
 		ibDataQueryBuilder q(ibConnectionPool::ThreadHolder());
-		q.From(&view);
+		q.From(view);
 		unsigned n = 0;
-		for (const ibBackendQueryColumn* column : keyCols)
+		for (const std::shared_ptr<const ibBackendQueryColumn>& column : keyCols)
 			if (column != nullptr) q.Select(column, ibString::Format(wxT("k%u"), n++));
-		for (const ibBackendQueryColumn* column : figureCols)
+		for (const std::shared_ptr<const ibBackendQueryColumn>& column : figureCols)
 			if (column != nullptr) q.Select(column, ibString::Format(wxT("f%u"), n++));
 		std::vector<Row> rows;
 		ibDataQueryResult got = q.Execute(ibReadPageRequest{});
 		while (got.Next()) {
 			Row row;
-			for (const ibBackendQueryColumn* column : keyCols)
+			for (const std::shared_ptr<const ibBackendQueryColumn>& column : keyCols)
 				row.key << (column != nullptr ? got.GetValue(column).GetString() : ibString()) << wxT("|");
-			for (const ibBackendQueryColumn* column : figureCols)
+			for (const std::shared_ptr<const ibBackendQueryColumn>& column : figureCols)
 				row.figures.push_back(column != nullptr ? got.GetValue(column).GetNumber() : ibNumber());
 			rows.push_back(std::move(row));
 		}
@@ -700,18 +703,18 @@ TEST_F(AcceptanceAccumulation, ByTheRecorderTheServerAnswersAsTheRamRoad)
 		const ibString what = (kind == ibRegGranularity::Record ? ibString(wxT("Record")) : ibString(wxT("Recorder")))
 			+ wxT(" from ") + from.GetString();
 
-		ibTurnoverQueryable turnovers(reg, from, to, nullptr, fold);
-		if (turnovers.IsComputedInRam())
+		const auto turnovers = std::make_shared<ibTurnoverQueryable>(reg, from, to, nullptr, fold);
+		if (turnovers->IsComputedInRam())
 			GTEST_SKIP() << "no totals on this driver - both roads are the RAM one";
 		const std::vector<ibString> moved = { wxT("QuantityReceipt"), wxT("QuantityExpense"), wxT("QuantityTurnover") };
 		// The RAM road through the reading's own door (ComputeRows) — the register's Compute* are not exported.
-		expectSame(served(turnovers, keys, moved), computed(turnovers.ComputeRows({}), keys, moved),
+		expectSame(served(turnovers, keys, moved), computed(turnovers->ComputeRows({}), keys, moved),
 			what + wxT(" turnovers"));
 
-		ibBalanceAndTurnoverQueryable both(reg, from, to, fold);
+		const auto both = std::make_shared<ibBalanceAndTurnoverQueryable>(reg, from, to, fold);
 		const std::vector<ibString> run = { wxT("QuantityOpeningBalance"), wxT("QuantityReceipt"), wxT("QuantityExpense"),
 			wxT("QuantityClosingBalance") };
-		expectSame(served(both, keys, run), computed(both.ComputeRows({}), keys, run),
+		expectSame(served(both, keys, run), computed(both->ComputeRows({}), keys, run),
 			what + wxT(" balance and turnovers"));
 	}
 }
@@ -725,9 +728,9 @@ TEST_F(AcceptanceAccumulation, ALadderOfTotalsIsFoldedByTheServerAsInMemory)
 {
 	if (!ready) return;
 	PostOpening();
-	const ibBackendQueryColumn* const whCol   = warehouse->GetQueryColumn();
-	const ibBackendQueryColumn* const itemCol = item->GetQueryColumn();
-	const ibBackendQueryColumn* const qtyCol  = reg->GetResourceArrayObject().front()->GetQueryColumn();
+	const std::shared_ptr<const ibBackendQueryColumn> whCol   = warehouse->GetQueryColumn();
+	const std::shared_ptr<const ibBackendQueryColumn> itemCol = item->GetQueryColumn();
+	const std::shared_ptr<const ibBackendQueryColumn> qtyCol  = reg->GetResourceArrayObject().front()->GetQueryColumn();
 
 	struct Figures { ibNumber sum; ibNumber largest; bool seen = false; };
 	std::map<ibString, Figures> byWarehouse;
@@ -807,9 +810,9 @@ TEST_F(AcceptanceAccumulation, AFigureOverAProjectionIsFoldedByTheServer)
 {
 	if (!ready) return;
 	PostOpening();
-	const ibBackendQueryColumn* const whCol   = warehouse->GetQueryColumn();
-	const ibBackendQueryColumn* const itemCol = item->GetQueryColumn();
-	const ibBackendQueryColumn* const qtyCol  = reg->GetResourceArrayObject().front()->GetQueryColumn();
+	const std::shared_ptr<const ibBackendQueryColumn> whCol   = warehouse->GetQueryColumn();
+	const std::shared_ptr<const ibBackendQueryColumn> itemCol = item->GetQueryColumn();
+	const std::shared_ptr<const ibBackendQueryColumn> qtyCol  = reg->GetResourceArrayObject().front()->GetQueryColumn();
 	const ProjectionHandle twice(wxT("Twice"), 1);
 
 	ibDataQueryBuilder q(ibConnectionPool::ThreadHolder());

@@ -53,7 +53,8 @@ class ComputedQ;   // fwd — the fake provider reads the reference map off it
 // tests exercise the SAME provider-side dot-walk path (queryable->GetProvider().ResolveReferenceTarget).
 class FakeComputedProvider : public ibComputedProvider {
 public:
-	const ibBackendQueryable* ResolveReferenceTarget(const ibBackendQueryable* q, const ibBackendQueryColumn* col) const override;   // out-of-line: needs ComputedQ complete
+	std::shared_ptr<const ibBackendQueryable> ResolveReferenceTarget(const std::shared_ptr<const ibBackendQueryable>& q,
+		const std::shared_ptr<const ibBackendQueryColumn>& col) const override;   // out-of-line: needs ComputedQ complete
 };
 
 // A COMPUTED (RAM) queryable. ComputeRows rebuilds its rows from a BUILDER each call (ibQueryRamTable is
@@ -64,27 +65,27 @@ public:
 	ComputedQ(const ibString& name, ibMetaID id) : m_name(name), m_id(id) {
 		ibGuidImpl impl{}; impl.m_data1 = static_cast<unsigned long>(id); m_key = ibGuid(impl);
 	}
-	void AddCol(const ibBackendQueryColumn* c) { m_cols.push_back(c); }
+	void AddCol(const std::shared_ptr<const ibBackendQueryColumn>& c) { m_cols.push_back(c); }
 	void SetBuilder(std::function<ibQueryRamTable()> b) { m_build = std::move(b); }
-	void SetRefTarget(const ibBackendQueryColumn* refCol, const ibBackendQueryable* tgt) { m_refs[refCol] = tgt; }
-	void SetPrimaryKey(const ibBackendQueryColumn* k) { m_pk = k; }
+	void SetRefTarget(const std::shared_ptr<const ibBackendQueryColumn>& refCol, const std::shared_ptr<const ibBackendQueryable>& tgt) { m_refs[refCol] = tgt; }
+	void SetPrimaryKey(const std::shared_ptr<const ibBackendQueryColumn>& k) { m_pk = k; }
 
 	ibBackendQueryProvider& GetProvider() const override { static FakeComputedProvider s_fake; return s_fake; }
 	bool     IsComputedInRam() const override { return true; }
 	ibQueryRamTable ComputeRows(const std::vector<ibQueryCondition>& /*extra*/) const override {
 		return m_build ? m_build() : ibQueryRamTable();
 	}
-	std::vector<const ibBackendQueryColumn*> GetQueryColumns() const override { return m_cols; }
-	std::vector<const ibBackendQueryColumn*> GetPrimaryKeyColumns() const override {
-		return m_pk != nullptr ? std::vector<const ibBackendQueryColumn*>{ m_pk }
-		                       : std::vector<const ibBackendQueryColumn*>{};
+	std::vector<std::shared_ptr<const ibBackendQueryColumn>> GetQueryColumns() const override { return m_cols; }
+	std::vector<std::shared_ptr<const ibBackendQueryColumn>> GetPrimaryKeyColumns() const override {
+		return m_pk != nullptr ? std::vector<std::shared_ptr<const ibBackendQueryColumn>>{ m_pk }
+		                       : std::vector<std::shared_ptr<const ibBackendQueryColumn>>{};
 	}
-	bool ContainColumn(const ibBackendQueryColumn* col) const override {
-		for (const ibBackendQueryColumn* c : m_cols) if (c == col) return true;
+	bool ContainColumn(const std::shared_ptr<const ibBackendQueryColumn>& col) const override {
+		for (const std::shared_ptr<const ibBackendQueryColumn>& c : m_cols) if (c == col) return true;
 		return false;
 	}
 	// The reference map, read by FakeComputedProvider::ResolveReferenceTarget (resolution is provider-side now).
-	const ibBackendQueryable* RefTarget(const ibBackendQueryColumn* c) const {
+	std::shared_ptr<const ibBackendQueryable> RefTarget(const std::shared_ptr<const ibBackendQueryColumn>& c) const {
 		auto it = m_refs.find(c);
 		return it != m_refs.end() ? it->second : nullptr;
 	}
@@ -96,15 +97,16 @@ private:
 	ibString m_name;
 	ibMetaID m_id;
 	ibUniqueKey m_key;   // its table guid, the id in the first word
-	std::vector<const ibBackendQueryColumn*> m_cols;
+	std::vector<std::shared_ptr<const ibBackendQueryColumn>> m_cols;
 	std::function<ibQueryRamTable()> m_build;
-	std::map<const ibBackendQueryColumn*, const ibBackendQueryable*> m_refs;
-	const ibBackendQueryColumn* m_pk = nullptr;
+	std::map<std::shared_ptr<const ibBackendQueryColumn>, std::shared_ptr<const ibBackendQueryable>> m_refs;
+	std::shared_ptr<const ibBackendQueryColumn> m_pk;
 };
 
 // Reference resolution over the fake computed source — reads the map injected into the ComputedQ.
-const ibBackendQueryable* FakeComputedProvider::ResolveReferenceTarget(const ibBackendQueryable* q, const ibBackendQueryColumn* col) const {
-	const ComputedQ* cq = dynamic_cast<const ComputedQ*>(q);
+std::shared_ptr<const ibBackendQueryable> FakeComputedProvider::ResolveReferenceTarget(const std::shared_ptr<const ibBackendQueryable>& q,
+	const std::shared_ptr<const ibBackendQueryColumn>& col) const {
+	const std::shared_ptr<const ComputedQ> cq = std::dynamic_pointer_cast<const ComputedQ>(q);
 	return cq != nullptr ? cq->RefTarget(col) : nullptr;
 }
 
@@ -150,27 +152,27 @@ ibQueryRamTable BuildBalance()
 }
 
 struct ComputedFix : ::testing::Test {
-	TestCol   itemKey{ wxT("itemKey"), ITEM_KEY };
-	TestCol   itemName{ wxT("name"),   ITEM_NAME };
-	TestCol   itemColour{ wxT("colour"), ITEM_COLOUR };
-	TestCol   balItem{ wxT("item"),    BAL_ITEM };
-	TestCol   balQty{ wxT("qty"),      BAL_QTY };
-	TestCol   balPrice{ wxT("price"),  BAL_PRICE };
-	ComputedQ items{ wxT("items"),   100 };
-	ComputedQ balance{ wxT("balance"), 200 };
+	std::shared_ptr<const TestCol> itemKey    = std::make_shared<TestCol>(wxT("itemKey"), ITEM_KEY);
+	std::shared_ptr<const TestCol> itemName   = std::make_shared<TestCol>(wxT("name"),    ITEM_NAME);
+	std::shared_ptr<const TestCol> itemColour = std::make_shared<TestCol>(wxT("colour"),  ITEM_COLOUR);
+	std::shared_ptr<const TestCol> balItem    = std::make_shared<TestCol>(wxT("item"),    BAL_ITEM);
+	std::shared_ptr<const TestCol> balQty     = std::make_shared<TestCol>(wxT("qty"),     BAL_QTY);
+	std::shared_ptr<const TestCol> balPrice   = std::make_shared<TestCol>(wxT("price"),   BAL_PRICE);
+	std::shared_ptr<ComputedQ>     items      = std::make_shared<ComputedQ>(wxT("items"),   100);
+	std::shared_ptr<ComputedQ>     balance    = std::make_shared<ComputedQ>(wxT("balance"), 200);
 
 	void SetUp() override {
-		items.AddCol(&itemKey);
-		items.AddCol(&itemName);
-		items.AddCol(&itemColour);
-		items.SetPrimaryKey(&itemKey);
-		items.SetBuilder(&BuildItems);
+		items->AddCol(itemKey);
+		items->AddCol(itemName);
+		items->AddCol(itemColour);
+		items->SetPrimaryKey(itemKey);
+		items->SetBuilder(&BuildItems);
 
-		balance.AddCol(&balItem);
-		balance.AddCol(&balQty);
-		balance.AddCol(&balPrice);
-		balance.SetRefTarget(&balItem, &items);
-		balance.SetBuilder(&BuildBalance);
+		balance->AddCol(balItem);
+		balance->AddCol(balQty);
+		balance->AddCol(balPrice);
+		balance->SetRefTarget(balItem, items);
+		balance->SetBuilder(&BuildBalance);
 	}
 };
 
@@ -182,14 +184,14 @@ struct ComputedFix : ::testing::Test {
 TEST_F(ComputedFix, DotWalk_Projection)
 {
 	ibDataQueryBuilder q(nullptr);
-	q.From(&balance);
-	q.SelectPath({ &balItem, &itemName }, wxT("itemName"));
+	q.From(balance);
+	q.SelectPath({ balItem, itemName }, wxT("itemName"));
 	ibReadPageRequest page;
 	ibDataQueryResult res = q.Execute(page);
 
 	std::vector<std::string> got;
 	while (res.Next())
-		got.push_back(res.GetValue(&itemName).GetString().ToStdString());
+		got.push_back(res.GetValue(itemName).GetString().ToStdString());
 	EXPECT_EQ(got, (std::vector<std::string>{ "Apple", "Pear", "Apple" }));
 }
 
@@ -200,16 +202,16 @@ TEST_F(ComputedFix, DotWalk_Projection)
 TEST_F(ComputedFix, DotWalk_TwoFieldsOfOneReference)
 {
 	ibDataQueryBuilder q(nullptr);
-	q.From(&balance);
-	q.SelectPath({ &balItem, &itemName }, wxT("itemName"));
-	q.SelectPath({ &balItem, &itemColour }, wxT("itemColour"));
+	q.From(balance);
+	q.SelectPath({ balItem, itemName }, wxT("itemName"));
+	q.SelectPath({ balItem, itemColour }, wxT("itemColour"));
 	ibReadPageRequest page;
 	ibDataQueryResult res = q.Execute(page);
 
 	std::vector<std::string> names, colours;
 	while (res.Next()) {
-		names.push_back(res.GetValue(&itemName).GetString().ToStdString());
-		colours.push_back(res.GetValue(&itemColour).GetString().ToStdString());
+		names.push_back(res.GetValue(itemName).GetString().ToStdString());
+		colours.push_back(res.GetValue(itemColour).GetString().ToStdString());
 	}
 	EXPECT_EQ(names,   (std::vector<std::string>{ "Apple", "Pear", "Apple" }));
 	EXPECT_EQ(colours, (std::vector<std::string>{ "red", "green", "red" }));
@@ -220,15 +222,15 @@ TEST_F(ComputedFix, DotWalk_TwoFieldsOfOneReference)
 TEST_F(ComputedFix, DotWalk_Where)
 {
 	ibDataQueryBuilder q(nullptr);
-	q.From(&balance);
-	q.Select(&balQty, wxT("qty"));
-	q.Where({ &balItem, &itemName }, ibQueryFilterOp::Equal, ibValue(ibString(wxT("Apple"))));
+	q.From(balance);
+	q.Select(balQty, wxT("qty"));
+	q.Where({ balItem, itemName }, ibQueryFilterOp::Equal, ibValue(ibString(wxT("Apple"))));
 	ibReadPageRequest page;
 	ibDataQueryResult res = q.Execute(page);
 
 	std::vector<long> qtys;
 	while (res.Next())
-		qtys.push_back(res.GetValue(&balQty).GetInteger());
+		qtys.push_back(res.GetValue(balQty).GetInteger());
 	EXPECT_EQ(qtys, (std::vector<long>{ 100, 30 }));
 }
 
@@ -236,15 +238,15 @@ TEST_F(ComputedFix, DotWalk_Where)
 TEST_F(ComputedFix, DotWalk_OrderBy)
 {
 	ibDataQueryBuilder q(nullptr);
-	q.From(&balance);
-	q.Select(&balQty, wxT("qty"));
-	q.OrderBy({ &balItem, &itemName }, /*ascending*/ true);
+	q.From(balance);
+	q.Select(balQty, wxT("qty"));
+	q.OrderBy({ balItem, itemName }, /*ascending*/ true);
 	ibReadPageRequest page;
 	ibDataQueryResult res = q.Execute(page);
 
 	std::vector<long> qtys;
 	while (res.Next())
-		qtys.push_back(res.GetValue(&balQty).GetInteger());
+		qtys.push_back(res.GetValue(balQty).GetInteger());
 	EXPECT_EQ(qtys, (std::vector<long>{ 100, 30, 50 }));
 }
 
@@ -254,8 +256,8 @@ TEST_F(ComputedFix, DotWalk_OrderBy)
 TEST_F(ComputedFix, ComputedColumn_Projection)
 {
 	ibDataQueryBuilder q(nullptr);
-	q.From(&balance);
-	q.SelectExpr(ibQueryColumnExpr::Arith(ibQueryColumnArithOp::Mul, ibQueryColumnExpr::Col(&balQty), ibQueryColumnExpr::Col(&balPrice)), wxT("amount"));
+	q.From(balance);
+	q.SelectExpr(ibQueryColumnExpr::Arith(ibQueryColumnArithOp::Mul, ibQueryColumnExpr::Col(balQty), ibQueryColumnExpr::Col(balPrice)), wxT("amount"));
 	ibReadPageRequest page;
 	ibDataQueryResult res = q.Execute(page);
 
@@ -269,16 +271,16 @@ TEST_F(ComputedFix, ComputedColumn_Projection)
 TEST_F(ComputedFix, ComputedExpr_Where)
 {
 	ibDataQueryBuilder q(nullptr);
-	q.From(&balance);
-	q.Select(&balQty, wxT("qty"));
-	q.WhereExprCompare(ibQueryColumnExpr::Arith(ibQueryColumnArithOp::Mul, ibQueryColumnExpr::Col(&balQty), ibQueryColumnExpr::Col(&balPrice)),
+	q.From(balance);
+	q.Select(balQty, wxT("qty"));
+	q.WhereExprCompare(ibQueryColumnExpr::Arith(ibQueryColumnArithOp::Mul, ibQueryColumnExpr::Col(balQty), ibQueryColumnExpr::Col(balPrice)),
 	                   ibQueryFilterOp::Greater, ibValue(ibNumber(100)));
 	ibReadPageRequest page;
 	ibDataQueryResult res = q.Execute(page);
 
 	std::vector<long> qtys;
 	while (res.Next())
-		qtys.push_back(res.GetValue(&balQty).GetInteger());
+		qtys.push_back(res.GetValue(balQty).GetInteger());
 	EXPECT_EQ(qtys, (std::vector<long>{ 100, 50 }));   // qty of the 200 and 150 rows
 }
 
@@ -288,12 +290,12 @@ TEST_F(ComputedFix, ComputedExpr_Where)
 TEST_F(ComputedFix, ComputedExpr_WhereComparesTwoFieldsOfTheRow)
 {
 	ibDataQueryBuilder q(nullptr);
-	q.From(&balance);
-	q.Select(&balQty, wxT("qty"));
+	q.From(balance);
+	q.Select(balQty, wxT("qty"));
 	ibQueryCondition c;
 	c.m_op        = ibQueryFilterOp::Greater;
-	c.m_expr      = ibQueryColumnExpr::Col(&balQty);
-	c.m_valueExpr = ibQueryColumnExpr::Arith(ibQueryColumnArithOp::Mul, ibQueryColumnExpr::Col(&balPrice),
+	c.m_expr      = ibQueryColumnExpr::Col(balQty);
+	c.m_valueExpr = ibQueryColumnExpr::Arith(ibQueryColumnArithOp::Mul, ibQueryColumnExpr::Col(balPrice),
 	                                         ibQueryColumnExpr::Const(ibValue(ibNumber(20))));
 	q.Where(c);
 	ibReadPageRequest page;
@@ -301,7 +303,7 @@ TEST_F(ComputedFix, ComputedExpr_WhereComparesTwoFieldsOfTheRow)
 
 	std::vector<long> qtys;
 	while (res.Next())
-		qtys.push_back(res.GetValue(&balQty).GetInteger());
+		qtys.push_back(res.GetValue(balQty).GetInteger());
 	EXPECT_EQ(qtys, (std::vector<long>{ 100 }));
 }
 
@@ -310,16 +312,16 @@ TEST_F(ComputedFix, ComputedExpr_WhereComparesTwoFieldsOfTheRow)
 TEST_F(ComputedFix, ComputedAggregate_GroupBy)
 {
 	ibDataQueryBuilder q(nullptr);
-	q.From(&balance);
-	q.GroupBy(&balItem);
+	q.From(balance);
+	q.GroupBy(balItem);
 	q.Aggregate(ibDataQueryBuilder::AggregateFn::Sum,
-	            ibQueryColumnExpr::Arith(ibQueryColumnArithOp::Mul, ibQueryColumnExpr::Col(&balQty), ibQueryColumnExpr::Col(&balPrice)),
+	            ibQueryColumnExpr::Arith(ibQueryColumnArithOp::Mul, ibQueryColumnExpr::Col(balQty), ibQueryColumnExpr::Col(balPrice)),
 	            wxT("total"));
 	ibDataQueryResult res = q.SelectAggregate();   // aggregate execute -> ExecuteAggregate -> RamAggregate
 
 	std::map<std::string, long> totals;
 	while (res.Next())
-		totals[res.GetValue(&balItem).GetString().ToStdString()] = res.GetColumn(wxT("total")).GetInteger();
+		totals[res.GetValue(balItem).GetString().ToStdString()] = res.GetColumn(wxT("total")).GetInteger();
 	EXPECT_EQ(totals["K1"], 260);
 	EXPECT_EQ(totals["K2"], 150);
 }
@@ -331,14 +333,14 @@ TEST_F(ComputedFix, ComputedAggregate_GroupBy)
 TEST_F(ComputedFix, DotWalk_GroupByReferenceField)
 {
 	ibDataQueryBuilder q(nullptr);
-	q.From(&balance);
-	q.GroupBy(std::vector<const ibBackendQueryColumn*>{ &balItem, &itemName });   // GROUP BY Item.Name (dot-walk key)
-	q.Aggregate(ibDataQueryBuilder::AggregateFn::Sum, &balQty, wxT("totalQty"));
+	q.From(balance);
+	q.GroupBy(std::vector<std::shared_ptr<const ibBackendQueryColumn>>{ balItem, itemName });   // GROUP BY Item.Name (dot-walk key)
+	q.Aggregate(ibDataQueryBuilder::AggregateFn::Sum, balQty, wxT("totalQty"));
 	ibDataQueryResult res = q.SelectAggregate();
 
 	std::map<std::string, long> totals;
 	while (res.Next())
-		totals[res.GetValue(&itemName).GetString().ToStdString()] = res.GetColumn(wxT("totalQty")).GetInteger();
+		totals[res.GetValue(itemName).GetString().ToStdString()] = res.GetColumn(wxT("totalQty")).GetInteger();
 	EXPECT_EQ(totals.size(), 2u);
 	EXPECT_EQ(totals["Apple"], 130);   // K1 rows: 100 + 30
 	EXPECT_EQ(totals["Pear"],  50);    // K2 row
@@ -349,15 +351,15 @@ TEST_F(ComputedFix, DotWalk_GroupByReferenceField)
 TEST_F(ComputedFix, Having_DropsGroupBelowThreshold)
 {
 	ibDataQueryBuilder q(nullptr);
-	q.From(&balance);
-	q.GroupBy(&balItem);
-	q.Aggregate(ibDataQueryBuilder::AggregateFn::Sum, &balQty, wxT("totalQty"));
-	q.Having(ibDataQueryBuilder::AggregateFn::Sum, &balQty, ibQueryFilterOp::Greater, ibValue(ibNumber(100)));
+	q.From(balance);
+	q.GroupBy(balItem);
+	q.Aggregate(ibDataQueryBuilder::AggregateFn::Sum, balQty, wxT("totalQty"));
+	q.Having(ibDataQueryBuilder::AggregateFn::Sum, balQty, ibQueryFilterOp::Greater, ibValue(ibNumber(100)));
 	ibDataQueryResult res = q.SelectAggregate();
 
 	std::map<std::string, long> totals;
 	while (res.Next())
-		totals[res.GetValue(&balItem).GetString().ToStdString()] = res.GetColumn(wxT("totalQty")).GetInteger();
+		totals[res.GetValue(balItem).GetString().ToStdString()] = res.GetColumn(wxT("totalQty")).GetInteger();
 	EXPECT_EQ(totals.size(), 1u);   // K2 (SUM qty = 50) dropped by HAVING
 	EXPECT_EQ(totals["K1"], 130);   // 100 + 30 > 100 -> kept
 }
@@ -368,18 +370,18 @@ TEST_F(ComputedFix, Having_DropsGroupBelowThreshold)
 TEST_F(ComputedFix, DotWalk_BooleanWhere)
 {
 	ibQueryCondition c1;
-	c1.m_col   = &itemName;
-	c1.m_path  = { &balItem, &itemName };
+	c1.m_col   = itemName;
+	c1.m_path  = { balItem, itemName };
 	c1.m_op    = ibQueryFilterOp::Equal;
 	c1.m_value = ibValue(ibString(wxT("Pear")));
 	ibQueryCondition c2;
-	c2.m_col   = &balQty;
+	c2.m_col   = balQty;
 	c2.m_op    = ibQueryFilterOp::Equal;
 	c2.m_value = ibValue(ibNumber(100));
 
 	ibDataQueryBuilder q(nullptr);
-	q.From(&balance);
-	q.Select(&balQty, wxT("qty"));
+	q.From(balance);
+	q.Select(balQty, wxT("qty"));
 	q.Where(ibQueryPredicate::Compose(ibQueryPredicateKind::Or,
 	                                  ibQueryPredicate::Leaf(c1), ibQueryPredicate::Leaf(c2)));
 	ibReadPageRequest page;
@@ -387,7 +389,7 @@ TEST_F(ComputedFix, DotWalk_BooleanWhere)
 
 	std::vector<long> qtys;
 	while (res.Next())
-		qtys.push_back(res.GetValue(&balQty).GetInteger());
+		qtys.push_back(res.GetValue(balQty).GetInteger());
 	EXPECT_EQ(qtys, (std::vector<long>{ 100, 50 }));
 }
 
@@ -402,12 +404,12 @@ public:
 // walks its inputs, so a switched-off field is not offered out here.
 TEST(NestedQueryAvailability, AnExpressionOfASwitchedOffFieldIsNotOffered)
 {
-	OptionOffCol field(wxT("Field"), 8);
+	const auto field = std::make_shared<OptionOffCol>(wxT("Field"), 8);
 	ibDataQueryBuilder inner(nullptr);
 	inner.SelectExpr(ibQueryColumnExpr::Arith(ibQueryColumnArithOp::Mul,
-		ibQueryColumnExpr::Col(&field), ibQueryColumnExpr::Col(&field)), wxT("Product"));
-	ibSubqueryQueryable nested(inner);
-	const ibBackendQueryColumn* product = nested.Column(wxT("Product"));
+		ibQueryColumnExpr::Col(field), ibQueryColumnExpr::Col(field)), wxT("Product"));
+	const auto nested = std::make_shared<ibSubqueryQueryable>(inner);
+	const std::shared_ptr<const ibBackendQueryColumn> product = nested->Column(wxT("Product"));
 	ASSERT_NE(product, nullptr);
 	EXPECT_FALSE(product->IsAvailable());
 }
@@ -415,24 +417,24 @@ TEST(NestedQueryAvailability, AnExpressionOfASwitchedOffFieldIsNotOffered)
 // PRESENTATION(Field) in the nested query. The column out here is offered only while Field is.
 TEST(NestedQueryAvailability, PresentationOfASwitchedOffFieldIsNotOffered)
 {
-	OptionOffCol field(wxT("Field"), 7);
+	const auto field = std::make_shared<OptionOffCol>(wxT("Field"), 7);
 	ibDataQueryBuilder inner(nullptr);
-	inner.SelectExpr(ibQueryColumnExpr::ValueAsk(ibQueryColumnExpr::Col(&field), ibQueryValueAsk::Presentation),
+	inner.SelectExpr(ibQueryColumnExpr::ValueAsk(ibQueryColumnExpr::Col(field), ibQueryValueAsk::Presentation),
 		wxT("Shown"));
-	ibSubqueryQueryable nested(inner);
-	const ibBackendQueryColumn* shown = nested.Column(wxT("Shown"));
+	const auto nested = std::make_shared<ibSubqueryQueryable>(inner);
+	const std::shared_ptr<const ibBackendQueryColumn> shown = nested->Column(wxT("Shown"));
 	ASSERT_NE(shown, nullptr);
 	EXPECT_FALSE(shown->IsAvailable());
 }
 
 TEST(NestedQueryAvailability, PresentationOfAnAvailableFieldIsOffered)
 {
-	TestCol field(wxT("Field"), 7);
+	const auto field = std::make_shared<TestCol>(wxT("Field"), 7);
 	ibDataQueryBuilder inner(nullptr);
-	inner.SelectExpr(ibQueryColumnExpr::ValueAsk(ibQueryColumnExpr::Col(&field), ibQueryValueAsk::Presentation),
+	inner.SelectExpr(ibQueryColumnExpr::ValueAsk(ibQueryColumnExpr::Col(field), ibQueryValueAsk::Presentation),
 		wxT("Shown"));
-	ibSubqueryQueryable nested(inner);
-	const ibBackendQueryColumn* shown = nested.Column(wxT("Shown"));
+	const auto nested = std::make_shared<ibSubqueryQueryable>(inner);
+	const std::shared_ptr<const ibBackendQueryColumn> shown = nested->Column(wxT("Shown"));
 	ASSERT_NE(shown, nullptr);
 	EXPECT_TRUE(shown->IsAvailable());
 }

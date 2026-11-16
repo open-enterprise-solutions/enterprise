@@ -27,9 +27,9 @@ class ibBalanceAndTurnoverQueryable;
 
 // L4 virtual-table source descriptors for the accumulation register — balances (as-of period +
 // dimension filter) and turnovers (begin/end range + filter). Owned by the register as fields;
-// registered under "<Register>.Balance" / ".Turnovers". CreateQueryable BUILDS the call-scoped
-// companion from the params and OWNS it. Method bodies are inline at the BOTTOM of this header
-// (where the companions are complete).
+// registered under "<Register>.Balance" / ".Turnovers". CreateQueryable MAKES the reading from the
+// params, and the one who asked owns it. Method bodies are inline at the BOTTOM of this header
+// (where the readings are complete).
 class ibAccumRegisterBalanceDescriptor : public ibQueryableSourceDescriptor
 {
 public:
@@ -37,25 +37,24 @@ public:
 	~ibAccumRegisterBalanceDescriptor() override;
 	ibString GetNamespace() const override;
 	ibString GetName() const override;
-	const ibBackendQueryable* CreateQueryable(ibValue** paParams, long lSizeArray) override;
 	// ⭐ THE CONDITION IS CONSUMED — resolved against the movements (GetConditionScope) and applied INSIDE the
 	// reading, before the fold, on whichever surface it stands (ibRegConditionOn). The same for all three tables.
-	const ibBackendQueryable* CreateQueryable(ibValue** paParams, long lSizeArray,
-	                                          const std::vector<ibQueryPredicatePtr>& conditions,
-	                                          const ibQueryReadColumns& read) override;
-	const ibBackendQueryable* GetConditionScope() const override;
+	std::shared_ptr<const ibBackendQueryable> CreateQueryable(ibValue** paParams, long lSizeArray,
+	                                                          const std::vector<ibQueryPredicatePtr>& conditions,
+	                                                          const ibQueryReadColumns& read) override;
+	std::shared_ptr<const ibBackendQueryable> GetConditionScope() const override;
 	// WHAT COLUMNS THIS TABLE HAS, asked without running it — the catalogue of a query
 	// constructor, and any other reader that wants the shape rather than the rows. Answered
 	// from the VIEW's shape, which is metadata-only, so no companion is built and no database
 	// is touched. (Left unimplemented, the base returns nothing, and a virtual table shows in
 	// the tree as a childless leaf — visible, addable, and with no field to select.)
-	std::vector<const ibBackendQueryColumn*> GetQueryColumns(const std::vector<ibValue>& args) const override;
+	std::vector<std::shared_ptr<const ibBackendQueryColumn>> GetQueryColumns(const std::vector<ibValue>& args) const override;
 	// Balance(moment, condition) — see the bodies at the bottom of this header.
 	void DescribeParameters(std::vector<ibQuerySourceParameter>& out) const override;
-	std::vector<const ibBackendQueryColumn*> GetConditionColumns(const ibString& slot) const override;
+	std::vector<std::shared_ptr<const ibBackendQueryColumn>> GetConditionColumns(const ibString& slot) const override;
 private:
 	ibValueMetaObjectAccumulationRegister* m_reg;
-	// (no companion member: the base owns what MakeCompanion builds — queryableFactory.h)
+	// (no reading member: the asker owns what CreateQueryable makes — queryableFactory.h)
 };
 
 class ibAccumRegisterTurnoverDescriptor : public ibQueryableSourceDescriptor
@@ -65,20 +64,19 @@ public:
 	~ibAccumRegisterTurnoverDescriptor() override;
 	ibString GetNamespace() const override;
 	ibString GetName() const override;
-	const ibBackendQueryable* CreateQueryable(ibValue** paParams, long lSizeArray) override;
-	const ibBackendQueryable* CreateQueryable(ibValue** paParams, long lSizeArray,
-	                                          const std::vector<ibQueryPredicatePtr>& conditions,
-	                                          const ibQueryReadColumns& read) override;
-	const ibBackendQueryable* GetConditionScope() const override;
+	std::shared_ptr<const ibBackendQueryable> CreateQueryable(ibValue** paParams, long lSizeArray,
+	                                                          const std::vector<ibQueryPredicatePtr>& conditions,
+	                                                          const ibQueryReadColumns& read) override;
+	std::shared_ptr<const ibBackendQueryable> GetConditionScope() const override;
 	// …WITH THE CALL'S ARGUMENTS, because the periodicity decides which columns exist.
-	std::vector<const ibBackendQueryColumn*> GetQueryColumns(const std::vector<ibValue>& args) const override;
+	std::vector<std::shared_ptr<const ibBackendQueryColumn>> GetQueryColumns(const std::vector<ibValue>& args) const override;
 	// Turnovers(<begin>, <end>, <periodicity>, <condition>) — the interval, how finely it is read,
 	// and what to fold over.
 	void DescribeParameters(std::vector<ibQuerySourceParameter>& out) const override;
-	std::vector<const ibBackendQueryColumn*> GetConditionColumns(const ibString& slot) const override;
+	std::vector<std::shared_ptr<const ibBackendQueryColumn>> GetConditionColumns(const ibString& slot) const override;
 private:
 	ibValueMetaObjectAccumulationRegister* m_reg;
-	// (no companion member — see the balance descriptor above)
+	// (no reading member — see the balance descriptor above)
 };
 
 // The THIRD virtual table: balance AND turnover, per period. Reported per resource as opening
@@ -91,16 +89,15 @@ public:
 	~ibAccumRegisterBalanceAndTurnoverDescriptor() override;
 	ibString GetNamespace() const override;
 	ibString GetName() const override;
-	const ibBackendQueryable* CreateQueryable(ibValue** paParams, long lSizeArray) override;
-	const ibBackendQueryable* CreateQueryable(ibValue** paParams, long lSizeArray,
-	                                          const std::vector<ibQueryPredicatePtr>& conditions,
-	                                          const ibQueryReadColumns& read) override;
-	const ibBackendQueryable* GetConditionScope() const override;
-	std::vector<const ibBackendQueryColumn*> GetQueryColumns(const std::vector<ibValue>& args) const override;
+	std::shared_ptr<const ibBackendQueryable> CreateQueryable(ibValue** paParams, long lSizeArray,
+	                                                          const std::vector<ibQueryPredicatePtr>& conditions,
+	                                                          const ibQueryReadColumns& read) override;
+	std::shared_ptr<const ibBackendQueryable> GetConditionScope() const override;
+	std::vector<std::shared_ptr<const ibBackendQueryColumn>> GetQueryColumns(const std::vector<ibValue>& args) const override;
 	// BalanceAndTurnovers(<begin>, <end>, <periodicity>, <condition>) — the interval, the granularity
 	// the rows roll up to, and what to fold over.
 	void DescribeParameters(std::vector<ibQuerySourceParameter>& out) const override;
-	std::vector<const ibBackendQueryColumn*> GetConditionColumns(const ibString& slot) const override;
+	std::vector<std::shared_ptr<const ibBackendQueryColumn>> GetConditionColumns(const ibString& slot) const override;
 private:
 	ibValueMetaObjectAccumulationRegister*          m_reg;
 	// (no companion member — see the balance descriptor above)
@@ -258,13 +255,6 @@ public:
 	bool HasMovementArm() const { return HasRecorder() && GetRegisterRecorder() != nullptr && GetRegisterLineNumber() != nullptr; }
 	ibString GetBalanceAndTurnoverViewName() const { return GetPhysicalTableName() + ibT("_BalanceAndTurnovers"); }
 
-	// ⭐⭐ THE ROWS AS THEY STAND — the totals and the movements as two relations, for a reading that folds
-	// them itself (ibMaterializeReadSpec::m_storedRows / m_movedRows). Rendered from the very declaration
-	// ContributeTables makes — the turnovers view's columns over the two tables — so nothing but those two
-	// tables has to exist in the base, and a base built before this reading answers it as it stands.
-	// `moved` is null when there is no movement arm. False when no totals are declared at all.
-	BACKEND_API bool GetTotalsRows(ibQueryRelPtr& stored, ibQueryRelPtr& moved) const;
-
 	// The granularity totals are STORED at — NOT the periodicity of a reading, which is a QUERY
 	// parameter (the caller asks for daily / weekly / monthly rows, or for none at all and gets the
 	// movements). This is the floor under those readings: a projection is derivable only into a unit
@@ -307,7 +297,7 @@ public:
 	// BalanceAndTurnovers has no VIEW behind it — it is a query over the turnovers view — but it
 	// still needs a column description, and it is the same kind of description. `viewName` is then
 	// only a cache key.
-	const ibBackendQueryable* GetViewQueryable(const ibString& viewName, ibViewShape shape) const;
+	std::shared_ptr<const ibBackendQueryable> GetViewQueryable(const ibString& viewName, ibViewShape shape) const;
 
 	// Is the materialised surface usable? False when the driver cannot maintain derived state
 	// (ODBC) — the register then answers from live aggregation, correct at any scale and only
@@ -538,7 +528,7 @@ public:
 	//
 	// Metadata only: the view queryable is built from the register's dimensions and resources without
 	// touching a database, so it is the right answer on the materialised road AND the live one.
-	virtual const ibBackendQueryable* NavigationSource() const override;
+	virtual std::shared_ptr<const ibBackendQueryable> NavigationSource() const override;
 	// Materialised => the ordinary PHYSICAL provider, so the source behaves like any relation.
 	virtual ibBackendQueryProvider& GetProvider() const override;
 
@@ -568,9 +558,9 @@ public:
 	// into units, so its surface carries no period column at all (accumulationRegisterMetadataSchema:
 	// `View(…, withPeriod: false)`) — the same rule GetViewQueryable asks, asked here too, because a
 	// key naming a column the surface does not publish is not a key.
-	virtual std::vector<const ibBackendQueryColumn*> GetPrimaryKeyColumns() const override
+	virtual std::vector<std::shared_ptr<const ibBackendQueryColumn>> GetPrimaryKeyColumns() const override
 	{
-		std::vector<const ibBackendQueryColumn*> cols;
+		std::vector<std::shared_ptr<const ibBackendQueryColumn>> cols;
 
 		if (m_reg == nullptr)
 			return cols;
@@ -597,9 +587,9 @@ protected:
 	// ResolveColumnByName — a different question again (what may be NAMED, not what makes a row the
 	// same row), a name lookup per column on every read, and it validated the SURFACE's column while
 	// putting the register's ATTRIBUTE in the key.
-	std::vector<const ibBackendQueryColumn*> KeyColumns(const ibRegFold& fold) const
+	std::vector<std::shared_ptr<const ibBackendQueryColumn>> KeyColumns(const ibRegFold& fold) const
 	{
-		std::vector<const ibBackendQueryColumn*> cols;
+		std::vector<std::shared_ptr<const ibBackendQueryColumn>> cols;
 
 		if (m_reg == nullptr)
 			return cols;
@@ -639,7 +629,7 @@ public:
 	// A balance is one moment, read WHOLE — the list the descriptor gives the constructor, given here too
 	// (ibRegisterViewColumns). It listed the view unfiltered, and the two could part over a field named after
 	// the movement's identity.
-	virtual std::vector<const ibBackendQueryColumn*> GetQueryColumns() const override;
+	virtual std::vector<std::shared_ptr<const ibBackendQueryColumn>> GetQueryColumns() const override;
 
 	// ⚠ NO KEY OF ITS OWN. A balance reads the SAME materialised table the totals surface keys —
 	// stored per period (the grain is a day), so a row there is period + dimensions and nothing
@@ -689,12 +679,12 @@ public:
 	// an author who changed the periodicity and left the old fields behind needs to be told. SELECT * asks
 	// the same list. (ibRegisterViewColumns — the descriptor's answer too, so the constructor and the run
 	// cannot list two shapes.)
-	virtual std::vector<const ibBackendQueryColumn*> GetQueryColumns() const override;
+	virtual std::vector<std::shared_ptr<const ibBackendQueryColumn>> GetQueryColumns() const override;
 
 	// …AND THE KEY FOLLOWS THE SAME FOLD. Read whole, this reports one row per key with no date on
 	// it, so a period in the key would order the answer by a column it does not project; folded by
 	// the recorder, the movement's own identity is part of what a row IS.
-	virtual std::vector<const ibBackendQueryColumn*> GetPrimaryKeyColumns() const override
+	virtual std::vector<std::shared_ptr<const ibBackendQueryColumn>> GetPrimaryKeyColumns() const override
 	{
 		return KeyColumns(m_fold);
 	}
@@ -737,11 +727,11 @@ public:
 	virtual ibQueryRelPtr GetSourceRelation(const ibString& alias) const override;
 
 	// Same rule as the turnover reading — see ibTurnoverQueryable::GetQueryColumns.
-	virtual std::vector<const ibBackendQueryColumn*> GetQueryColumns() const override;
+	virtual std::vector<std::shared_ptr<const ibBackendQueryColumn>> GetQueryColumns() const override;
 
 	// …and its key, for the same reason: the fold decides whether a row of this answer is per period,
 	// per movement, or one per key over the whole interval.
-	virtual std::vector<const ibBackendQueryColumn*> GetPrimaryKeyColumns() const override
+	virtual std::vector<std::shared_ptr<const ibBackendQueryColumn>> GetPrimaryKeyColumns() const override
 	{
 		return KeyColumns(m_fold);
 	}
@@ -763,10 +753,10 @@ private:
 // ⭐⭐ THE COLUMNS OF ONE READING OF A VIEW — the one loop around the rule, asked by the descriptor (by the view's
 // name, below), by the reading's own list (its NavigationSource) and by the RAM table a live reading seeds
 // (SeedRamTableFromView). Three copies of it were three answers to "which columns has this table".
-inline std::vector<const ibBackendQueryColumn*> ibRegisterViewColumns(const ibValueMetaObjectAccumulationRegister* reg,
-	const ibBackendQueryable* view, const ibRegFold& fold = ibRegFold())
+inline std::vector<std::shared_ptr<const ibBackendQueryColumn>> ibRegisterViewColumns(const ibValueMetaObjectAccumulationRegister* reg,
+	const std::shared_ptr<const ibBackendQueryable>& view, const ibRegFold& fold = ibRegFold())
 {
-	std::vector<const ibBackendQueryColumn*> out;
+	std::vector<std::shared_ptr<const ibBackendQueryColumn>> out;
 	if (view == nullptr)
 		return out;
 
@@ -782,25 +772,25 @@ inline std::vector<const ibBackendQueryColumn*> ibRegisterViewColumns(const ibVa
 	// offered a recorder that was no period and a dimension that was no key (Max, 2026-09-29: "you do not work
 	// with the attribute, you get a set of virtual tables"). The id still matches the attribute's, so a read
 	// reaches the column exactly as on the movements table.
-	for (const ibBackendQueryColumn* col : view->GetQueryColumns())
+	for (const std::shared_ptr<const ibBackendQueryColumn>& col : view->GetQueryColumns())
 		if (col != nullptr && ibRegisterFoldOffersColumn(reg, col->GetName(), fold))
 			out.push_back(col);
 	return out;
 }
 
-inline std::vector<const ibBackendQueryColumn*> ibRegisterViewColumns(const ibValueMetaObjectAccumulationRegister* reg,
+inline std::vector<std::shared_ptr<const ibBackendQueryColumn>> ibRegisterViewColumns(const ibValueMetaObjectAccumulationRegister* reg,
 	const ibString& viewName, ibValueMetaObjectAccumulationRegister::ibViewShape shape, const ibRegFold& fold = ibRegFold())
 {
 	return reg != nullptr ? ibRegisterViewColumns(reg, reg->GetViewQueryable(viewName, shape), fold)
-	                      : std::vector<const ibBackendQueryColumn*>();
+	                      : std::vector<std::shared_ptr<const ibBackendQueryColumn>>();
 }
 
 // A FOLDED TABLE IS FILTERED BY ITS DIMENSIONS, never by a resource — the rule of all three tables below:
 // the resource is what the table folded, and a condition over a fold belongs to the RESULT, not to an
 // argument of the source. Offered as the query sees them — each dimension's query face.
-inline std::vector<const ibBackendQueryColumn*> ibRegisterDimensionColumns(const ibValueMetaObjectAccumulationRegister* reg)
+inline std::vector<std::shared_ptr<const ibBackendQueryColumn>> ibRegisterDimensionColumns(const ibValueMetaObjectAccumulationRegister* reg)
 {
-	std::vector<const ibBackendQueryColumn*> out;
+	std::vector<std::shared_ptr<const ibBackendQueryColumn>> out;
 	if (reg == nullptr)
 		return out;
 	for (const ibValueMetaObjectAttributeBase* dimension : reg->GetDimensionArrayObject())
@@ -889,18 +879,13 @@ inline ibString ibAccumRegisterBalanceDescriptor::GetName() const
 	return m_reg->GetName() + ibT(".Balance");
 }
 
-inline const ibBackendQueryable* ibAccumRegisterBalanceDescriptor::CreateQueryable(ibValue** paParams, long lSizeArray)
-{
-	return CreateQueryable(paParams, lSizeArray, {}, ibQueryReadColumns());
-}
-
 // What a query's condition is resolved against: the movements, where every dimension is a column.
-inline const ibBackendQueryable* ibAccumRegisterBalanceDescriptor::GetConditionScope() const
+inline std::shared_ptr<const ibBackendQueryable> ibAccumRegisterBalanceDescriptor::GetConditionScope() const
 {
 	return m_reg != nullptr ? m_reg->GetQueryable() : nullptr;
 }
 
-inline const ibBackendQueryable* ibAccumRegisterBalanceDescriptor::CreateQueryable(ibValue** paParams, long lSizeArray,
+inline std::shared_ptr<const ibBackendQueryable> ibAccumRegisterBalanceDescriptor::CreateQueryable(ibValue** paParams, long lSizeArray,
 	const std::vector<ibQueryPredicatePtr>& conditions, const ibQueryReadColumns& /*read*/)
 {
 	const ibValue period = ibRegArg(paParams, lSizeArray, ibRegBalanceArg::Period);
@@ -909,12 +894,11 @@ inline const ibBackendQueryable* ibAccumRegisterBalanceDescriptor::CreateQueryab
 	const ibQueryPredicatePtr filter = ibRegBothConditions(
 		ibRegFilterPredicate(m_reg, ibRegArg(paParams, lSizeArray, ibRegBalanceArg::Filter)),
 		ibRegConsumedCondition(conditions, ibRegBalanceArg::Filter));
-	// Built and KEPT by the base — the same call gives the same object back, and a query that reads
-	// this table twice keeps both alive (queryableFactory.h, MakeCompanion). The condition is part of the call.
-	return MakeCompanionFor<ibBalanceQueryable>(conditions, paParams, lSizeArray, m_reg, period, filter);
+	// This call's own reading — its period and its condition are what it is; the asker holds it (queryableFactory.h).
+	return std::make_shared<ibBalanceQueryable>(m_reg, period, filter);
 }
 
-inline std::vector<const ibBackendQueryColumn*> ibAccumRegisterBalanceDescriptor::GetQueryColumns(const std::vector<ibValue>& /*args*/) const
+inline std::vector<std::shared_ptr<const ibBackendQueryColumn>> ibAccumRegisterBalanceDescriptor::GetQueryColumns(const std::vector<ibValue>& /*args*/) const
 {
 	return ibRegisterViewColumns(m_reg, m_reg->GetBalanceViewName(),
 		ibValueMetaObjectAccumulationRegister::ibViewShape::Balance);
@@ -942,7 +926,7 @@ inline void ibAccumRegisterBalanceDescriptor::DescribeParameters(std::vector<ibQ
 // A BALANCE IS FILTERED BY ITS DIMENSIONS, never by a resource. The resource is what the table
 // folded — filtering by it would ask the engine to select on a sum it has not computed yet, and the
 // honest place for that question is a condition over the RESULT, not an argument of the source.
-inline std::vector<const ibBackendQueryColumn*> ibAccumRegisterBalanceDescriptor::GetConditionColumns(const ibString& /*slot*/) const
+inline std::vector<std::shared_ptr<const ibBackendQueryColumn>> ibAccumRegisterBalanceDescriptor::GetConditionColumns(const ibString& /*slot*/) const
 {
 	return ibRegisterDimensionColumns(m_reg);
 }
@@ -959,17 +943,12 @@ inline ibString ibAccumRegisterTurnoverDescriptor::GetName() const
 	return m_reg->GetName() + ibT(".Turnovers");
 }
 
-inline const ibBackendQueryable* ibAccumRegisterTurnoverDescriptor::CreateQueryable(ibValue** paParams, long lSizeArray)
-{
-	return CreateQueryable(paParams, lSizeArray, {}, ibQueryReadColumns());
-}
-
-inline const ibBackendQueryable* ibAccumRegisterTurnoverDescriptor::GetConditionScope() const
+inline std::shared_ptr<const ibBackendQueryable> ibAccumRegisterTurnoverDescriptor::GetConditionScope() const
 {
 	return m_reg != nullptr ? m_reg->GetQueryable() : nullptr;
 }
 
-inline const ibBackendQueryable* ibAccumRegisterTurnoverDescriptor::CreateQueryable(ibValue** paParams, long lSizeArray,
+inline std::shared_ptr<const ibBackendQueryable> ibAccumRegisterTurnoverDescriptor::CreateQueryable(ibValue** paParams, long lSizeArray,
 	const std::vector<ibQueryPredicatePtr>& conditions, const ibQueryReadColumns& /*read*/)
 {
 	const ibValue begin  = ibRegArg(paParams, lSizeArray, ibRegTurnoverArg::Begin);
@@ -992,14 +971,14 @@ inline const ibBackendQueryable* ibAccumRegisterTurnoverDescriptor::CreateQuerya
 	// so an hour is as answerable as a month.
 	const ibRegFold fold = ibReadRegisterFold(period);
 
-	return MakeCompanionFor<ibTurnoverQueryable>(conditions, paParams, lSizeArray, m_reg, begin, end, filter, fold);
+	return std::make_shared<ibTurnoverQueryable>(m_reg, begin, end, filter, fold);
 }
 
 // THE PERIODICITY IS THE THIRD ARGUMENT — (begin, end, periodicity, condition). Read as the word the
 // constructor wrote; anything else (a parameter, nothing at all) leaves it empty, which means "not
 // decided" and shows every projection. `ibRegisterFoldOfArgs` reads it BY THE NAMED SLOT and lives in
 // registerQueryLowering.h with the other call helpers.
-inline std::vector<const ibBackendQueryColumn*> ibAccumRegisterTurnoverDescriptor::GetQueryColumns(const std::vector<ibValue>& args) const
+inline std::vector<std::shared_ptr<const ibBackendQueryColumn>> ibAccumRegisterTurnoverDescriptor::GetQueryColumns(const std::vector<ibValue>& args) const
 {
 	return ibRegisterViewColumns(m_reg, m_reg->GetTurnoverViewName(),
 		ibValueMetaObjectAccumulationRegister::ibViewShape::Turnovers,
@@ -1030,7 +1009,7 @@ inline void ibAccumRegisterTurnoverDescriptor::DescribeParameters(std::vector<ib
 // A TURNOVER IS FILTERED BY ITS DIMENSIONS, never by a resource — the same rule as the balance, and
 // for the same reason: the resource is what the table folded, and a condition over a fold belongs
 // to the RESULT, not to an argument of the source.
-inline std::vector<const ibBackendQueryColumn*> ibAccumRegisterTurnoverDescriptor::GetConditionColumns(const ibString& /*slot*/) const
+inline std::vector<std::shared_ptr<const ibBackendQueryColumn>> ibAccumRegisterTurnoverDescriptor::GetConditionColumns(const ibString& /*slot*/) const
 {
 	return ibRegisterDimensionColumns(m_reg);
 }
@@ -1047,17 +1026,12 @@ inline ibString ibAccumRegisterBalanceAndTurnoverDescriptor::GetName() const
 	return m_reg->GetName() + ibT(".BalanceAndTurnovers");
 }
 
-inline const ibBackendQueryable* ibAccumRegisterBalanceAndTurnoverDescriptor::CreateQueryable(ibValue** paParams, long lSizeArray)
-{
-	return CreateQueryable(paParams, lSizeArray, {}, ibQueryReadColumns());
-}
-
-inline const ibBackendQueryable* ibAccumRegisterBalanceAndTurnoverDescriptor::GetConditionScope() const
+inline std::shared_ptr<const ibBackendQueryable> ibAccumRegisterBalanceAndTurnoverDescriptor::GetConditionScope() const
 {
 	return m_reg != nullptr ? m_reg->GetQueryable() : nullptr;
 }
 
-inline const ibBackendQueryable* ibAccumRegisterBalanceAndTurnoverDescriptor::CreateQueryable(ibValue** paParams, long lSizeArray,
+inline std::shared_ptr<const ibBackendQueryable> ibAccumRegisterBalanceAndTurnoverDescriptor::CreateQueryable(ibValue** paParams, long lSizeArray,
 	const std::vector<ibQueryPredicatePtr>& conditions, const ibQueryReadColumns& /*read*/)
 {
 	// Periodicity is the READ granularity and rides here rather than on the metaobject — one register
@@ -1086,11 +1060,10 @@ inline const ibBackendQueryable* ibAccumRegisterBalanceAndTurnoverDescriptor::Cr
 	// over the whole interval", which is a different computation, not a default granularity.
 	const ibRegFold fold = ibReadRegisterFold(period);
 
-	return MakeCompanionFor<ibBalanceAndTurnoverQueryable>(conditions, paParams, lSizeArray,
-		m_reg, begin, end, fold, filter);
+	return std::make_shared<ibBalanceAndTurnoverQueryable>(m_reg, begin, end, fold, filter);
 }
 
-inline std::vector<const ibBackendQueryColumn*> ibAccumRegisterBalanceAndTurnoverDescriptor::GetQueryColumns(const std::vector<ibValue>& args) const
+inline std::vector<std::shared_ptr<const ibBackendQueryColumn>> ibAccumRegisterBalanceAndTurnoverDescriptor::GetQueryColumns(const std::vector<ibValue>& args) const
 {
 	return ibRegisterViewColumns(m_reg, m_reg->GetBalanceAndTurnoverViewName(),
 		ibValueMetaObjectAccumulationRegister::ibViewShape::BalanceAndTurnovers,
@@ -1140,7 +1113,7 @@ inline void ibAccumRegisterBalanceAndTurnoverDescriptor::DescribeParameters(std:
 	ibAppendRegisterConditionParameter(out);
 }
 
-inline std::vector<const ibBackendQueryColumn*> ibAccumRegisterBalanceAndTurnoverDescriptor::GetConditionColumns(const ibString& /*slot*/) const
+inline std::vector<std::shared_ptr<const ibBackendQueryColumn>> ibAccumRegisterBalanceAndTurnoverDescriptor::GetConditionColumns(const ibString& /*slot*/) const
 {
 	return ibRegisterDimensionColumns(m_reg);
 }

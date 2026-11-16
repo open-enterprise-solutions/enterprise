@@ -398,13 +398,15 @@ bool ibValueSystemFunction::CallAsFunc(const long lMethodNum, ibValue& pvarRetVa
 			//--- Window operations: 
 		case enActiveWindow: pvarRetValue = ActiveWindow(); return true;
 			//--- Special:
+			// A status left out in the middle (`WriteJournalEvent(text, , "load")`) arrives empty and means the default:
+			// asked of the empty value for an enum, it raised "Undefined does not support this operation" (2026-11-16).
 		case enMessage:
 			Message(paParams[0]->GetString(),
-				lSizeArray > 1 ? paParams[1]->ConvertToEnumValue<ibStatusMessage>() : ibStatusMessage::ibStatusMessage_Information);
+				lSizeArray > 1 && !paParams[1]->IsEmpty() ? paParams[1]->ConvertToEnumValue<ibStatusMessage>() : ibStatusMessage::ibStatusMessage_Information);
 			return true;
 		case enWriteJournalEvent:
 			WriteJournalEvent(paParams[0]->GetString(),
-				lSizeArray > 1 ? paParams[1]->ConvertToEnumValue<ibStatusMessage>() : ibStatusMessage::ibStatusMessage_Information,
+				lSizeArray > 1 && !paParams[1]->IsEmpty() ? paParams[1]->ConvertToEnumValue<ibStatusMessage>() : ibStatusMessage::ibStatusMessage_Information,
 				lSizeArray > 2 ? paParams[2]->GetString() : ibString(),
 				lSizeArray > 3 ? *paParams[3] : ibValue());
 			return true;
@@ -518,11 +520,11 @@ bool ibValueSystemFunction::CallAsProc(const long lMethodNum, ibValue** paParams
 			//--- Special:
 		case enMessage:
 			Message(paParams[0]->GetString(),
-				lSizeArray > 1 ? paParams[1]->ConvertToEnumValue<ibStatusMessage>() : ibStatusMessage::ibStatusMessage_Information);
+				lSizeArray > 1 && !paParams[1]->IsEmpty() ? paParams[1]->ConvertToEnumValue<ibStatusMessage>() : ibStatusMessage::ibStatusMessage_Information);
 			return true;
 		case enWriteJournalEvent:
 			WriteJournalEvent(paParams[0]->GetString(),
-				lSizeArray > 1 ? paParams[1]->ConvertToEnumValue<ibStatusMessage>() : ibStatusMessage::ibStatusMessage_Information,
+				lSizeArray > 1 && !paParams[1]->IsEmpty() ? paParams[1]->ConvertToEnumValue<ibStatusMessage>() : ibStatusMessage::ibStatusMessage_Information,
 				lSizeArray > 2 ? paParams[2]->GetString() : ibString(),
 				lSizeArray > 3 ? *paParams[3] : ibValue());
 			return true;

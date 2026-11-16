@@ -142,7 +142,7 @@ private:
 	bool TablesAllowed(const ibDataQueryBuilder& query, RightPredicate right) const
 	{
 		bool allowed = true;
-		Unwind(query, [&](const ibBackendQueryable*, const ibValueMetaObjectGenericData* srcMeta) {
+		Unwind(query, [&](const std::shared_ptr<const ibBackendQueryable>&, const ibValueMetaObjectGenericData* srcMeta) {
 			if ((srcMeta->*right)())
 				return true;
 			allowed = false;
@@ -162,13 +162,13 @@ private:
 	// learn from the rest — the query is not going to run either way, and the user gets the error
 	// and fixes it.
 	void Unwind(const ibDataQueryBuilder& query,
-	            const std::function<bool(const ibBackendQueryable*,
+	            const std::function<bool(const std::shared_ptr<const ibBackendQueryable>&,
 	                                     const ibValueMetaObjectGenericData*)>& visit) const
 	{
-		std::vector<const ibBackendQueryable*> sources;
+		std::vector<std::shared_ptr<const ibBackendQueryable>> sources;
 		query.GetSources(sources);
 		std::vector<ibMetaID> seen;
-		for (const ibBackendQueryable* source : sources) {
+		for (const std::shared_ptr<const ibBackendQueryable>& source : sources) {
 			const ibValueMetaObjectGenericData* srcMeta = FindSourceMetaObject(source);
 			if (srcMeta == nullptr)
 				continue;
@@ -206,7 +206,7 @@ private:
 			return true;                                  // Tier 0 — full access
 
 		bool allowed = true;
-		Unwind(query, [&](const ibBackendQueryable*, const ibValueMetaObjectGenericData* srcMeta) {
+		Unwind(query, [&](const std::shared_ptr<const ibBackendQueryable>&, const ibValueMetaObjectGenericData* srcMeta) {
 			if (!srcMeta->IsAccessPerRecord())
 				return true;                              // a set — its count says nothing; keep looking
 			allowed = false;
@@ -237,7 +237,7 @@ private:
 		// The modules run one at a time: they belong to the host session's runtime and keep their
 		// frame in the object, and a rented run borrows this very policy on another thread.
 		std::lock_guard<std::mutex> lk(m_applyMtx);
-		Unwind(query, [&](const ibBackendQueryable* source, const ibValueMetaObjectGenericData*) {
+		Unwind(query, [&](const std::shared_ptr<const ibBackendQueryable>& source, const ibValueMetaObjectGenericData*) {
 			ApplyToSource(query, source, operation);
 			return true;
 		});
@@ -254,7 +254,7 @@ private:
 
 	// The metaobject behind a source, or null for one that has none (temp / computed / subquery) —
 	// the only place a source is turned into metadata, which is why the door never has to.
-	const ibValueMetaObjectGenericData* FindSourceMetaObject(const ibBackendQueryable* source) const
+	const ibValueMetaObjectGenericData* FindSourceMetaObject(const std::shared_ptr<const ibBackendQueryable>& source) const
 	{
 		if (source == nullptr || m_metaData == nullptr)
 			return nullptr;
@@ -286,7 +286,7 @@ private:
 	// The order roles are assigned in never changes the answer (OR commutes among the unions, AND among
 	// the intersections, and the shape between the groups is fixed) — unlike an ACL with DENY.
 	// TODO(perf): the module is a per-query template — JIT-compile it (hot path); do NOT cache its RESULT.
-	void ApplyToSource(ibDataQueryBuilder& query, const ibBackendQueryable* source,
+	void ApplyToSource(ibDataQueryBuilder& query, const std::shared_ptr<const ibBackendQueryable>& source,
 	                   const ibString& operation) const
 	{
 		// The module identifies the source by its canonical FULL NAME ("Document.X" / "Catalog.X"),
@@ -373,7 +373,7 @@ private:
 			if (outcome != RoleOutcome::Succeeded)
 				return nullptr;
 
-			std::vector<const ibBackendQueryable*> scratchSources;
+			std::vector<std::shared_ptr<const ibBackendQueryable>> scratchSources;
 			scratch.GetSources(scratchSources);
 			if (scratchSources.size() <= 1)
 				return scratch.GetWherePredicate();       // WHERE-only role (null = folded nothing)
@@ -381,12 +381,12 @@ private:
 			// JOIN-based role — a join can't be OR-folded as SQL, so MATERIALISE the rows it admits:
 			// project the source key of the joined result and OR-fold `key = v` over those keys (mirrors
 			// the query language's `key IN (subquery)` lowering). No key to reduce onto -> fail closed.
-			const std::vector<const ibBackendQueryColumn*> keyCols = source->GetPrimaryKeyColumns();
+			const std::vector<std::shared_ptr<const ibBackendQueryColumn>> keyCols = source->GetPrimaryKeyColumns();
 			if (keyCols.empty() || keyCols.front() == nullptr)
 				ibBackendAccessException::Error(ibString::Format(
 					_("%s on '%s': the role restricts it through a join, but the source has no key to reduce onto"),
 					operation, sourceName));
-			const ibBackendQueryColumn* keyCol = keyCols.front();
+			const std::shared_ptr<const ibBackendQueryColumn>& keyCol = keyCols.front();
 			scratch.Select(keyCol, ibT("v"));
 			ibDataQueryResult r = scratch.Execute(ibReadPageRequest{});
 			ibQueryPredicatePtr admitted;

@@ -10,7 +10,7 @@
 #include <set>
 #include <algorithm>   // std::find — an index's value fields first, then the rest (CreateIndex)
 
-ibStructureBatch::ibStructureBatch(const ibBackendQueryable* queryable)
+ibStructureBatch::ibStructureBatch(const std::shared_ptr<const ibBackendQueryable>& queryable)
 	// Null-tolerant: not every table in a snapshot stands behind a metaobject. A DERIVED table
 	// (a register's totals) is declared by one but IS none, so it carries no queryable — and the
 	// name-keyed constructor is the right one for it. Dereferencing here crashed the apply.
@@ -38,15 +38,15 @@ ibDdlColumn ColumnOf(const ibColumnSlot& slot)
 
 } // namespace
 
-void ibStructureBatch::AddColumn(const ibBackendQueryColumn* column)
+void ibStructureBatch::AddColumn(const std::shared_ptr<const ibBackendQueryColumn>& column)
 {
-	for (const ibColumnSlot& slot : DescribeColumnLayout(column))
+	for (const ibColumnSlot& slot : DescribeColumnLayout(*column))
 		AddField(slot);
 }
 
-void ibStructureBatch::DropColumn(const ibBackendQueryColumn* column)
+void ibStructureBatch::DropColumn(const std::shared_ptr<const ibBackendQueryColumn>& column)
 {
-	for (const ibColumnSlot& slot : DescribeColumnLayout(column))
+	for (const ibColumnSlot& slot : DescribeColumnLayout(*column))
 		DropField(slot);
 }
 
@@ -90,13 +90,13 @@ void ibStructureBatch::AlterField(const ibColumnSlot& slot, const ibColumnSlot& 
 	});
 }
 
-void ibStructureBatch::CreateTable(std::vector<const ibBackendQueryColumn*> columns)
+void ibStructureBatch::CreateTable(const std::vector<std::shared_ptr<const ibBackendQueryColumn>>& columns)
 {
 	// Expand each logical column to its physical fields (a raw scaffold column = one typed field).
 	// No table-level PRIMARY KEY — identity is an index concern (see CreateIndex).
 	std::vector<ibDdlColumn> ddlCols;
-	for (const ibBackendQueryColumn* col : columns)
-		for (const ibColumnSlot& slot : DescribeColumnLayout(col))
+	for (const std::shared_ptr<const ibBackendQueryColumn>& col : columns)
+		for (const ibColumnSlot& slot : DescribeColumnLayout(*col))
 			ddlCols.push_back(ColumnOf(slot));
 	m_steps.push_back(ibCreateTable(m_table, std::move(ddlCols)));
 }
@@ -106,12 +106,12 @@ void ibStructureBatch::DropTable()
 	m_steps.push_back(ibDropTable(m_table));
 }
 
-void ibStructureBatch::DropTable(std::vector<const ibBackendQueryColumn*> columns)
+void ibStructureBatch::DropTable(const std::vector<std::shared_ptr<const ibBackendQueryColumn>>& columns)
 {
 	// The same expansion CreateTable makes — what the ledger re-creates is the table as it was declared.
 	std::vector<ibDdlColumn> ddlCols;
-	for (const ibBackendQueryColumn* col : columns)
-		for (const ibColumnSlot& slot : DescribeColumnLayout(col))
+	for (const std::shared_ptr<const ibBackendQueryColumn>& col : columns)
+		for (const ibColumnSlot& slot : DescribeColumnLayout(*col))
 			ddlCols.push_back(ColumnOf(slot));
 	m_steps.push_back(ibDropTable(m_table, std::move(ddlCols)));
 }
@@ -130,20 +130,20 @@ void ibStructureBatch::DropTable(std::vector<const ibBackendQueryColumn*> column
 // the tags beside their own columns the period's `_TYPE` stood between the date and the recorder, so a list
 // ordered by period, recorder and line was not the index's leading fields, and Firebird sorted a million
 // movements for every page of the register's list: 1100 ms a page, 235 ms walked by the index (2026-10-01).
-static std::vector<ibString> IndexFields(const std::vector<const ibBackendQueryColumn*>& columns)
+static std::vector<ibString> IndexFields(const std::vector<std::shared_ptr<const ibBackendQueryColumn>>& columns)
 {
 	std::vector<ibString> fields;
-	for (const ibBackendQueryColumn* col : columns)
-		for (const ibString& f : ColumnSortFields(col))
+	for (const std::shared_ptr<const ibBackendQueryColumn>& col : columns)
+		for (const ibString& f : ColumnSortFields(*col))
 			fields.push_back(f);
-	for (const ibBackendQueryColumn* col : columns)
-		for (const ibString& f : ColumnFieldNames(col))
+	for (const std::shared_ptr<const ibBackendQueryColumn>& col : columns)
+		for (const ibString& f : ColumnFieldNames(*col))
 			if (std::find(fields.begin(), fields.end(), f) == fields.end())
 				fields.push_back(f);
 	return fields;
 }
 
-void ibStructureBatch::CreateIndex(const ibString& indexName, std::vector<const ibBackendQueryColumn*> columns, bool unique,
+void ibStructureBatch::CreateIndex(const ibString& indexName, const std::vector<std::shared_ptr<const ibBackendQueryColumn>>& columns, bool unique,
 	bool descending)
 {
 	std::vector<ibString> fields = IndexFields(columns);
@@ -152,7 +152,7 @@ void ibStructureBatch::CreateIndex(const ibString& indexName, std::vector<const 
 	m_steps.push_back(ibCreateIndex(m_table, indexName, std::move(fields), unique, descending));
 }
 
-void ibStructureBatch::DropIndex(const ibString& indexName, std::vector<const ibBackendQueryColumn*> columns, bool unique,
+void ibStructureBatch::DropIndex(const ibString& indexName, const std::vector<std::shared_ptr<const ibBackendQueryColumn>>& columns, bool unique,
 	bool descending)
 {
 	m_steps.push_back(ibDropIndex(indexName, m_table, IndexFields(columns), unique, descending));
@@ -347,8 +347,8 @@ long long ClearRows(ibStructureBatch& batch, const ibString& fieldName, const ib
 
 } // namespace
 
-long long DiffColumnInto(ibStructureBatch& batch, const ibBackendQueryColumn* srcCol, const ibBackendQueryColumn* dstCol,
-	long long* cut)
+long long DiffColumnInto(ibStructureBatch& batch, const std::shared_ptr<const ibBackendQueryColumn>& srcCol,
+	const std::shared_ptr<const ibBackendQueryColumn>& dstCol, long long* cut)
 {
 	// CREATE — pour the whole new column (the batch expands its layout: TYPE + per-type data + ref pair).
 	if (dstCol == nullptr) {
@@ -373,8 +373,8 @@ long long DiffColumnInto(ibStructureBatch& batch, const ibBackendQueryColumn* sr
 
 	const ibString fieldName = srcCol->GetPhysicalName();
 	long long cleared = 0;
-	const std::vector<ibColumnSlot> srcLayout = DescribeColumnLayout(srcCol);
-	const std::vector<ibColumnSlot> dstLayout = DescribeColumnLayout(dstCol);
+	const std::vector<ibColumnSlot> srcLayout = DescribeColumnLayout(*srcCol);
+	const std::vector<ibColumnSlot> dstLayout = DescribeColumnLayout(*dstCol);
 
 	// Primitive / discriminator fields: a pure SLOT diff by name. _TYPE is always present, so it is
 	// never added/dropped; only the per-type data columns move. The reference pair is per-clsid below.

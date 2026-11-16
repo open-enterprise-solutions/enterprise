@@ -50,9 +50,9 @@ const ibMetaData* MetaOf(const ibSchemaTable& table)
 
 // The value columns to MOVE — the schema's logical columns (the same set the DDL differ diffs). The
 // owner-reference scaffold and the declared SEED are NOT data the mover writes.
-std::vector<const ibBackendQueryColumn*> ColumnsOf(const ibSchemaTable& table)
+std::vector<std::shared_ptr<const ibBackendQueryColumn>> ColumnsOf(const ibSchemaTable& table)
 {
-	std::vector<const ibBackendQueryColumn*> columns;
+	std::vector<std::shared_ptr<const ibBackendQueryColumn>> columns;
 	columns.reserve(table.m_columns.size());
 	for (const ibSchemaColumn& c : table.m_columns)
 		columns.push_back(c.m_column);
@@ -72,7 +72,7 @@ std::vector<const ibBackendQueryColumn*> ColumnsOf(const ibSchemaTable& table)
 // _RRRef) and its bare name is a field NOTHING has, so the very first dump of a catalog died on
 // "Field 'fld1009' not found in the resultset" — while the same three fields were being read
 // perfectly well one loop below, as an ordinary column.
-struct KeyInfo { const ibBackendQueryColumn* col = nullptr; bool unique = false; };
+struct KeyInfo { std::shared_ptr<const ibBackendQueryColumn> col; bool unique = false; };
 
 KeyInfo KeyOf(const ibSchemaTable& table)
 {
@@ -89,13 +89,13 @@ KeyInfo KeyOf(const ibSchemaTable& table)
 
 	// The tabular section's OWNER reference: present, repeated per owner, so NOT unique - it still names the
 	// column rows are matched by when one exists.
-	for (const ibBackendQueryColumn* s : table.m_scaffold)
+	for (const std::shared_ptr<const ibBackendQueryColumn>& s : table.m_scaffold)
 		if (s != nullptr && s->GetPhysicalName() == kOwnerRef)
 			return KeyInfo{ s, false };
 	// 2) an EXTERNAL single-row table (sys_const) keys on its primary-key column (RECORD_KEY) — a PK is
 	//    unique by definition, so the one row is UPSERTed in place (no Update mode, no pre-seeded row).
 	if (table.m_external && table.m_queryable != nullptr) {
-		const std::vector<const ibBackendQueryColumn*> pk = table.m_queryable->GetPrimaryKeyColumns();
+		const std::vector<std::shared_ptr<const ibBackendQueryColumn>> pk = table.m_queryable->GetPrimaryKeyColumns();
 		if (pk.size() == 1 && pk[0] != nullptr)
 			return { pk[0], true };
 	}
@@ -110,13 +110,15 @@ KeyInfo KeyOf(const ibSchemaTable& table)
 // value on the wire twice and, being written by a different mechanism than it is read by, differently.
 // A tabular section's owner reference and sys_const's RECORD_KEY are scaffold: they are NOT in the
 // column list, so they do need a chunk of their own.
-bool RidesAsColumn(const std::vector<const ibBackendQueryColumn*>& columns, const ibBackendQueryColumn* key)
+bool RidesAsColumn(const std::vector<std::shared_ptr<const ibBackendQueryColumn>>& columns,
+                   const std::shared_ptr<const ibBackendQueryColumn>& key)
 {
 	return key != nullptr && std::find(columns.begin(), columns.end(), key) != columns.end();
 }
 
 bool RunDump(const ibString& tableName, const ibMetaData* metaData,
-	const std::vector<const ibBackendQueryColumn*>& columns, const ibBackendQueryColumn* keyColumn, ibWriterMemory& out)
+	const std::vector<std::shared_ptr<const ibBackendQueryColumn>>& columns,
+	const std::shared_ptr<const ibBackendQueryColumn>& keyColumn, ibWriterMemory& out)
 {
 	// L2 read (ibQueryResult, RAII cursor) — SELECT * via the door on db_query's holder.
 	ibDatabaseQueryBuilder q(db_query->GetHolder());
@@ -133,14 +135,14 @@ bool RunDump(const ibString& tableName, const ibMetaData* metaData,
 		// blob read as characters on the way out and bound as characters on the way back in.
 		if (keyColumn != nullptr && !RidesAsColumn(columns, keyColumn)) {
 			ibWriterMemory keyWriter;
-			ibDataMover::BinaryFromResult(keyColumn, metaData, keyWriter, result);
+			ibDataMover::BinaryFromResult(*keyColumn, metaData, keyWriter, result);
 			rowWriter.w_chunk(0, keyWriter.buffer());
 		}
 
 		// Sub-chunk = column id — that column's codec output.
-		for (const ibBackendQueryColumn* col : columns) {
+		for (const std::shared_ptr<const ibBackendQueryColumn>& col : columns) {
 			ibWriterMemory cellWriter;
-			ibDataMover::BinaryFromResult(col, metaData, cellWriter, result);
+			ibDataMover::BinaryFromResult(*col, metaData, cellWriter, result);
 			rowWriter.w_chunk(col->GetColumnId(), cellWriter.buffer());
 		}
 
@@ -151,7 +153,8 @@ bool RunDump(const ibString& tableName, const ibMetaData* metaData,
 }
 
 bool RunRestore(const ibString& tableName, const ibMetaData* metaData,
-	const std::vector<const ibBackendQueryColumn*>& columns, const ibBackendQueryColumn* keyColumn, bool upsert,
+	const std::vector<std::shared_ptr<const ibBackendQueryColumn>>& columns,
+	const std::shared_ptr<const ibBackendQueryColumn>& keyColumn, bool upsert,
 	const ibReaderMemory& rows, ibDataMover::DateForm dates)
 {
 	// Build the bind layout once: the statement column list (the separate key first when there is one,
@@ -163,17 +166,17 @@ bool RunRestore(const ibString& tableName, const ibMetaData* metaData,
 	// statement listing a field the table does not have.
 	const bool withKey = keyColumn != nullptr && !RidesAsColumn(columns, keyColumn);
 	const std::vector<ibString> keyFields = keyColumn != nullptr
-		? ColumnFieldNames(keyColumn)
+		? ColumnFieldNames(*keyColumn)
 		: std::vector<ibString>();
 	std::vector<ibString> columnNames;
 	if (withKey)
 		columnNames = keyFields;
 
-	std::map<ibMetaID, int>                        positionOf;
-	std::map<ibMetaID, const ibBackendQueryColumn*> columnOf;
+	std::map<ibMetaID, int>                                         positionOf;
+	std::map<ibMetaID, std::shared_ptr<const ibBackendQueryColumn>> columnOf;
 	int position = withKey ? static_cast<int>(keyFields.size()) + 1 : 1;
-	for (const ibBackendQueryColumn* col : columns) {
-		const std::vector<ibString> fields = ColumnFieldNames(col);
+	for (const std::shared_ptr<const ibBackendQueryColumn>& col : columns) {
+		const std::vector<ibString> fields = ColumnFieldNames(*col);
 		positionOf.insert_or_assign(col->GetColumnId(), position);
 		columnOf.insert_or_assign(col->GetColumnId(), col);
 		position += static_cast<int>(fields.size());
@@ -213,7 +216,7 @@ bool RunRestore(const ibString& tableName, const ibMetaData* metaData,
 			// id and hands it on to be dereferenced. Its cell is skipped and said out loud instead: the
 			// row still restores, minus a column nothing here could hold anyway.
 			const auto known = (col > 0) ? columnOf.find(col) : columnOf.end();
-			const ibBackendQueryColumn* column = (known != columnOf.end()) ? known->second : nullptr;
+			const std::shared_ptr<const ibBackendQueryColumn> column = (known != columnOf.end()) ? known->second : nullptr;
 
 			// ⭐⭐ ONE CHUNK IS ONE CELL — read once, not "until the stream ends".
 			//
@@ -231,7 +234,7 @@ bool RunRestore(const ibString& tableName, const ibMetaData* metaData,
 				}
 				else {
 					int pos = positionOf[col];
-					ibDataMover::BinaryToStatement(column, metaData, *colReader, &statement, pos, dates);
+					ibDataMover::BinaryToStatement(*column, metaData, *colReader, &statement, pos, dates);
 				}
 			}
 			else if (keyColumn != nullptr) {
@@ -239,7 +242,7 @@ bool RunRestore(const ibString& tableName, const ibMetaData* metaData,
 				// written when the key rode BOTH ways carries this chunk for a table that no longer wants
 				// one — there is nothing to bind it to, and the row's own column already has the value.
 				int keyPosition = 1;
-				ibDataMover::BinaryToStatement(keyColumn, metaData, *colReader, &statement, keyPosition, dates);
+				ibDataMover::BinaryToStatement(*keyColumn, metaData, *colReader, &statement, keyPosition, dates);
 			}
 
 			colReaderPrev = colReader;
@@ -297,9 +300,9 @@ bool ibDataMover::Restore(const ibSchemaTable& table, const ibReaderMemory& rows
 //
 // So the codec answers the same question the WRITE door already answers (BindWriteValue): raw goes
 // straight by its declared RawType, metadata goes through the spread. One door, both kinds.
-static bool RawFromResult(const ibBackendQueryColumn* col, ibWriterMemory& writer, ibQueryResult& result)
+static bool RawFromResult(const ibBackendQueryColumn& col, ibWriterMemory& writer, ibQueryResult& result)
 {
-	const ibBackendColumnRawDB* const raw = col->AsRawColumn();   // asked of the column — see queryColumn.h
+	const ibBackendColumnRawDB* const raw = col.AsRawColumn();   // asked of the column — see queryColumn.h
 	if (raw == nullptr)
 		return false;
 	const ibString f = raw->GetPhysicalName();
@@ -339,10 +342,10 @@ ibDateTime ibDataMover::DateOfWire(long long raw, DateForm form)
 	return ibDateTime::OfInstant(raw);   // the instant's parts on this machine's clock
 }
 
-static bool RawToStatement(const ibBackendQueryColumn* col, const ibReaderMemory& reader,
+static bool RawToStatement(const ibBackendQueryColumn& col, const ibReaderMemory& reader,
 	ibQueryStatement* statement, int& position, ibDataMover::DateForm dates)
 {
-	const ibBackendColumnRawDB* const raw = col->AsRawColumn();   // asked of the column — see queryColumn.h
+	const ibBackendColumnRawDB* const raw = col.AsRawColumn();   // asked of the column — see queryColumn.h
 	if (raw == nullptr)
 		return false;
 	switch (raw->GetRawType()) {
@@ -366,7 +369,7 @@ static bool RawToStatement(const ibBackendQueryColumn* col, const ibReaderMemory
 	return true;
 }
 
-void ibDataMover::BinaryToStatement(const ibBackendQueryColumn* col, const ibMetaData* /*metaData*/,
+void ibDataMover::BinaryToStatement(const ibBackendQueryColumn& col, const ibMetaData* /*metaData*/,
 	const ibReaderMemory& reader, ibQueryStatement* statement, int& position, DateForm dates)
 {
 	if (RawToStatement(col, reader, statement, position, dates))
@@ -426,21 +429,21 @@ void ibDataMover::BinaryToStatement(const ibBackendQueryColumn* col, const ibMet
 		});
 }
 
-void ibDataMover::BinaryToStatement(const ibBackendQueryColumn* col, const ibMetaData* metaData,
+void ibDataMover::BinaryToStatement(const ibBackendQueryColumn& col, const ibMetaData* metaData,
 	const ibReaderMemory& reader, ibQueryStatement* statement)
 {
 	int position = 1;
 	BinaryToStatement(col, metaData, reader, statement, position);
 }
 
-void ibDataMover::BinaryFromResult(const ibBackendQueryColumn* col, const ibMetaData* /*metaData*/,
+void ibDataMover::BinaryFromResult(const ibBackendQueryColumn& col, const ibMetaData* /*metaData*/,
 	ibWriterMemory& writer, ibQueryResult& result)
 {
 	if (RawFromResult(col, writer, result))
 		return;   // one field, its own kind — see RawFromResult
 
-	const ibTypeDescription& td = col->GetTypeDesc();
-	const ibString f = col->GetPhysicalName();
+	const ibTypeDescription& td = col.GetTypeDesc();
+	const ibString f = col.GetPhysicalName();
 	const int tag = result.GetResultInt(f + ibFieldSuffix(ibColumnRole::Discriminator));
 
 	// COMPACT wire (the inverse of BinaryToStatement): the tag, then ONLY the active type's value —

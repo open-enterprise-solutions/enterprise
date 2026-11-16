@@ -664,6 +664,23 @@ std::shared_ptr<ibBackgroundRun> ibJobManager::Launch(ibBackgroundBody body, con
 			std::lock_guard<std::mutex> lk(run->m_mtx);
 			run->m_error = err.GetErrorDescription();
 		}
+		// ⚠ WHAT THE LIBRARY THREW SAYS WHAT IT WAS — the process out of memory above all: a query folded in memory took
+		// the web server's whole 32-bit address space and the run's status read "unknown exception" (2026-11-16,
+		// load-million-rows.md § 14).
+		catch (const std::bad_alloc&) {
+			Journal(ibString::Format(_("Background job FAILED: %s - not enough memory"), l.m_activity),
+				ibStatusMessage_Error);
+
+			std::lock_guard<std::mutex> lk(run->m_mtx);
+			run->m_error = _("not enough memory");
+		}
+		catch (const std::exception& err) {
+			const ibString said = ibString::FromUTF8(err.what());
+			Journal(ibString::Format(_("Background job FAILED: %s - %s"), l.m_activity, said), ibStatusMessage_Error);
+
+			std::lock_guard<std::mutex> lk(run->m_mtx);
+			run->m_error = said;
+		}
 		catch (...) {
 			Journal(ibString::Format(_("Background job FAILED: %s - unknown error"), l.m_activity),
 				ibStatusMessage_Error);

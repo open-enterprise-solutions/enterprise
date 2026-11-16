@@ -561,7 +561,10 @@ namespace {
 // not asked, for a reader's lookup may know no names at all (the thin client's requests are read before a base is
 // known) and answer for none, and asking would count every value as a type it did not know. No value writes a field
 // of that name after its type.
-bool IsTheNameBesideAType(const ibDataNode& node, const ibDataValue& value)
+// `id` — the key the courtesy follows: a value's `t` (its name goes as `type`), or a type description's `typeId` (its
+// name goes as `TypeDesc`). A `TypeDesc` with no id before it is the caller's own way of naming a type, and is a field:
+// dropped everywhere, `{"TypeDesc": "CatalogRef.Goods"}` reached metadata_set_type empty (2026-11-16).
+bool IsTheNameBesideAType(const ibDataNode& node, const ibDataValue& value, const ibString& id)
 {
 	if (value.Kind() != ibDataKind::String)
 		return false;
@@ -569,7 +572,7 @@ bool IsTheNameBesideAType(const ibDataNode& node, const ibDataValue& value)
 	if (fields.empty())
 		return false;
 	const std::pair<ibString, ibDataValue> last = fields.back();
-	if (!last.first.IsSameAs(kValueFieldClsid, false))
+	if (!last.first.IsSameAs(id, false))
 		return false;
 	if (last.second.Kind() == ibDataKind::Number)
 		return last.second.AsUInt() != 0;
@@ -584,7 +587,7 @@ bool ibJsonProvider::ReadEntry(ibDataNode& node, const ibString& key, ibDataValu
 	// The keys as the engine's strings: a key is told from one by its length first — against a literal each was measured
 	// and walked, every key of every node (ibString::operator==, 2026-10-22).
 	static const ibString kNodeType = ibT("NodeType"), kNodeId = ibT("NodeId"), kNodeRaw = ibT("NodeRaw"),
-		kTypeDesc = ibT("TypeDesc"), kType = ibT("type");
+		kTypeDesc = ibT("TypeDesc"), kTypeId = ibT("typeId"), kType = ibT("type");
 
 	// --- the structural keys EmitNode writes (see the emitter for each) ------------
 	if (key == kNodeType) {
@@ -611,13 +614,13 @@ bool ibJsonProvider::ReadEntry(ibDataNode& node, const ibString& key, ibDataValu
 		return true;
 	}
 	// SYNTHETIC — injected next to typeId purely so a reader sees "String" beside the
-	// number. There is no node entry behind it; dropped.
-	if (key == kTypeDesc)
+	// number. There is no node entry behind it; dropped there, and only there.
+	if (key == kTypeDesc && IsTheNameBesideAType(node, value, kTypeId))
 		return true;
 	// SYNTHETIC TOO — the name EmitNode writes right after a value's `t` (THE SAME COURTESY FOR A PACKED VALUE'S TYPE).
 	// Kept as a field, it was written again beside the courtesy the next Write adds, and every round grew the node
 	// by one more `type`. Dropped only there: a field called `type` anywhere else is a field.
-	if (key == kType && IsTheNameBesideAType(node, value))
+	if (key == kType && IsTheNameBesideAType(node, value, kValueFieldClsid))
 		return true;
 
 	// --- ordinary data — a node's one set of fields, as the text has it ----------------

@@ -49,8 +49,8 @@ private:
 const ibTypeDescription kNoType;
 
 // A minimal queryable for the routing gates: a named table over raw columns (raw -> scalar +
-// single-field-joinable, so no type-descriptor / metadata setup is needed). Ownership is by
-// pointer (each column belongs to exactly its table). Optionally COMPUTED (RAM) for the
+// single-field-joinable, so no type-descriptor / metadata setup is needed). The table holds a
+// share of each column (each column belongs to exactly its table). Optionally COMPUTED (RAM) for the
 // "computed leaf falls back to RAM" cases.
 class TestQueryable : public ibBackendQueryable {
 public:
@@ -58,10 +58,10 @@ public:
 		: m_table(table), m_metaId(metaId), m_computed(computed) {
 		ibGuidImpl impl{}; impl.m_data1 = static_cast<unsigned long>(metaId); m_key = ibGuid(impl);
 	}
-	void AddCol(const ibBackendQueryColumn* c) { m_cols.push_back(c); }
+	void AddCol(const std::shared_ptr<const ibBackendQueryColumn>& c) { m_cols.push_back(c); }
 	// ROW IDENTITY — what the phantom level groups by (a real source answers with its reference, or a
 	// register with recorder + line number). Absent by default: a source that has none.
-	void SetKey(const ibBackendQueryColumn* c) { m_keys.push_back(c); }
+	void SetKey(const std::shared_ptr<const ibBackendQueryColumn>& c) { m_keys.push_back(c); }
 
 	ibString GetQueryTableName() const override { return m_table; }
 	ibMetaID GetQueryTableId()    const override { return m_metaId; }
@@ -70,19 +70,19 @@ public:
 	const ibUniqueKey& GetQueryTableGuid() const override { return m_key; }
 	bool     IsComputedInRam()   const override { return m_computed; }
 	const ibMetaData* GetMetaData() const override { return nullptr; }
-	std::vector<const ibBackendQueryColumn*> GetQueryColumns() const override { return m_cols; }
-	bool ContainColumn(const ibBackendQueryColumn* col) const override {
-		for (const ibBackendQueryColumn* c : m_cols) if (c == col) return true;
+	std::vector<std::shared_ptr<const ibBackendQueryColumn>> GetQueryColumns() const override { return m_cols; }
+	bool ContainColumn(const std::shared_ptr<const ibBackendQueryColumn>& col) const override {
+		for (const std::shared_ptr<const ibBackendQueryColumn>& c : m_cols) if (c == col) return true;
 		return false;
 	}
-	std::vector<const ibBackendQueryColumn*> GetPrimaryKeyColumns() const override { return m_keys; }
+	std::vector<std::shared_ptr<const ibBackendQueryColumn>> GetPrimaryKeyColumns() const override { return m_keys; }
 private:
 	ibString m_table;
 	ibMetaID m_metaId;
 	bool     m_computed;
 	ibUniqueKey m_key;   // its table guid, the id in the first word
-	std::vector<const ibBackendQueryColumn*> m_cols;
-	std::vector<const ibBackendQueryColumn*> m_keys;
+	std::vector<std::shared_ptr<const ibBackendQueryColumn>> m_cols;
+	std::vector<std::shared_ptr<const ibBackendQueryColumn>> m_keys;
 };
 
 // A computed (RAM) queryable that RECORDS what the composer pushed into its ComputeRows, and then
@@ -99,7 +99,7 @@ public:
 	RecordingComputedQ(const ibString& table, ibMetaID metaId) : m_table(table), m_metaId(metaId) {
 		ibGuidImpl impl{}; impl.m_data1 = static_cast<unsigned long>(metaId); m_key = ibGuid(impl);
 	}
-	void AddCol(const ibBackendQueryColumn* c) { m_cols.push_back(c); }
+	void AddCol(const std::shared_ptr<const ibBackendQueryColumn>& c) { m_cols.push_back(c); }
 	void SetRows(std::function<ibQueryRamTable()> b) { m_build = std::move(b); }
 	const std::vector<ibQueryCondition>& Seen() const { return m_seen; }
 
@@ -114,18 +114,18 @@ public:
 	ibMetaID GetQueryTableId()   const override { return m_metaId; }
 	const ibUniqueKey& GetQueryTableGuid() const override { return m_key; }
 	const ibMetaData* GetMetaData() const override { return nullptr; }
-	std::vector<const ibBackendQueryColumn*> GetQueryColumns() const override { return m_cols; }
-	bool ContainColumn(const ibBackendQueryColumn* col) const override {
-		for (const ibBackendQueryColumn* c : m_cols) if (c == col) return true;
+	std::vector<std::shared_ptr<const ibBackendQueryColumn>> GetQueryColumns() const override { return m_cols; }
+	bool ContainColumn(const std::shared_ptr<const ibBackendQueryColumn>& col) const override {
+		for (const std::shared_ptr<const ibBackendQueryColumn>& c : m_cols) if (c == col) return true;
 		return false;
 	}
 private:
 	ibString m_table;
 	ibMetaID m_metaId;
 	ibUniqueKey m_key;   // its table guid, the id in the first word
-	std::vector<const ibBackendQueryColumn*> m_cols;
-	std::function<ibQueryRamTable()>         m_build;
-	mutable std::vector<ibQueryCondition>    m_seen;
+	std::vector<std::shared_ptr<const ibBackendQueryColumn>> m_cols;
+	std::function<ibQueryRamTable()>                         m_build;
+	mutable std::vector<ibQueryCondition>                    m_seen;
 };
 
 // One-column key table (model id `id`) holding `keys` — the driving side of the reductions below.
@@ -146,23 +146,23 @@ struct SpecBuf {
 	std::vector<ibQueryCondition> conds;
 	std::vector<ibValue> keyIn;
 	std::vector<ibQuerySortItem> sorts;
-	std::vector<const ibBackendQueryColumn*> groupBy;
+	std::vector<std::shared_ptr<const ibBackendQueryColumn>> groupBy;
 	std::vector<ibDataQueryBuilder::AggregateItem> aggs;
 	std::vector<ibDataQueryBuilder::HavingItem> having;
 	// A write is a SET of rows now (one row is the degenerate case), so the spec carries a vector
 	// of assignment lists and never an empty one — readers say front() without testing first.
 	std::vector<ibWriteRow> writeRows{ 1 };
 	std::vector<ibDotWalkColumn> dots;
-	std::vector<std::pair<const ibBackendQueryColumn*, ibString>> sel;
-	std::vector<std::vector<const ibBackendQueryColumn*>> groupPaths;   // parallel to groupBy (dot-walk keys)
-	std::vector<ibDotWalkColumn> dimWalks;                              // TotalByDotWalk dimensions
+	std::vector<std::pair<std::shared_ptr<const ibBackendQueryColumn>, ibString>> sel;
+	std::vector<std::vector<std::shared_ptr<const ibBackendQueryColumn>>> groupPaths;   // parallel to groupBy (dot-walk keys)
+	std::vector<ibDotWalkColumn> dimWalks;                                              // TotalByDotWalk dimensions
 	// The TOTALS door's own two lists. A door that folds hierarchical totals fills THESE and leaves
 	// groupBy / aggs empty — which is exactly what the gate used to be blind to.
 	std::vector<ibTotalLevel> totals;
 	std::vector<ibDataQueryBuilder::AggregateItem> totalAggs;
 	std::vector<ibQueryColumnSelect> computed;   // SelectExpr — a constant, a window beside the select list
 
-	ibDataQuerySpec Make(const ibQueryNode* root, const ibBackendQueryable* primary) {
+	ibDataQuerySpec Make(const std::shared_ptr<ibQueryNode>& root, const std::shared_ptr<const ibBackendQueryable>& primary) {
 		ibDataQuerySpec s;
 		s.m_root = root; s.m_queryable = primary;
 		s.m_conditions = &conds; s.m_keyIn = &keyIn; s.m_sorts = &sorts;
@@ -175,8 +175,9 @@ struct SpecBuf {
 	}
 };
 
-std::shared_ptr<ibQueryNode> Join2(const ibBackendQueryable* l, const ibBackendQueryable* r,
-                                   const ibBackendQueryColumn* onL, const ibBackendQueryColumn* onR)
+std::shared_ptr<ibQueryNode> Join2(const std::shared_ptr<const ibBackendQueryable>& l, const std::shared_ptr<const ibBackendQueryable>& r,
+                                   const std::shared_ptr<const ibBackendQueryColumn>& onL,
+                                   const std::shared_ptr<const ibBackendQueryColumn>& onR)
 {
 	auto root = std::make_shared<ibQueryNode>();
 	root->m_kind = ibQueryNode::Kind::Join;
@@ -194,8 +195,10 @@ std::shared_ptr<ibQueryNode> Join2(const ibBackendQueryable* l, const ibBackendQ
 TEST(QueryComposerCore, JoinRamTables_MatchesAndCardinality)
 {
 	const ibMetaID CUST_ID = 1, CUST_CODE = 2, ORD_ID = 3, ORD_CUST = 4;
-	TestCol custId(wxT("custId"), CUST_ID), custCode(wxT("custCode"), CUST_CODE);
-	TestCol ordId(wxT("ordId"), ORD_ID),     ordCust(wxT("ordCust"), ORD_CUST);
+	const auto custId   = std::make_shared<TestCol>(wxT("custId"), CUST_ID);
+	const auto custCode = std::make_shared<TestCol>(wxT("custCode"), CUST_CODE);
+	const auto ordId    = std::make_shared<TestCol>(wxT("ordId"), ORD_ID);
+	const auto ordCust  = std::make_shared<TestCol>(wxT("ordCust"), ORD_CUST);
 
 	ibQueryRamTable left;   // customers
 	left.AddColumn(CUST_ID, wxT("custId"), kNoType);
@@ -217,9 +220,9 @@ TEST(QueryComposerCore, JoinRamTables_MatchesAndCardinality)
 	};
 	ord(10, 1); ord(11, 1); ord(12, 2); ord(13, 99);   // 99 = no matching customer
 
-	const std::vector<const ibBackendQueryColumn*> outCols = { &custCode, &ordId };
+	const std::vector<std::shared_ptr<const ibBackendQueryColumn>> outCols = { custCode, ordId };
 	const std::vector<bool> fromLeft = { true, false };
-	const ibQueryRamTable out = ibQueryComposer::JoinRamTables(left, right, &custId, &ordCust, outCols, fromLeft);
+	const ibQueryRamTable out = ibQueryComposer::JoinRamTables(left, right, custId, ordCust, outCols, fromLeft);
 
 	ASSERT_EQ(out.RowCount(), 3);   // (A,10) (A,11) (B,12); ord 13 dropped
 	EXPECT_EQ(out.GetCell(0, CUST_CODE).GetString().ToStdString(), "A");
@@ -235,7 +238,8 @@ TEST(QueryComposerCore, JoinRamTables_MatchesAndCardinality)
 TEST(QueryComposerCore, AppendUnionBranch_MissingColumnIsNull)
 {
 	const ibMetaID CODE = 1, NAME = 2;
-	TestCol code(wxT("code"), CODE), name(wxT("name"), NAME);
+	const auto code = std::make_shared<TestCol>(wxT("code"), CODE);
+	const auto name = std::make_shared<TestCol>(wxT("name"), NAME);
 
 	ibQueryRamTable out;
 	out.AddColumn(CODE, wxT("code"), kNoType);
@@ -247,7 +251,7 @@ TEST(QueryComposerCore, AppendUnionBranch_MissingColumnIsNull)
 	branch.SetCell(br, CODE, ibValue(ibString(wxT("X"))));
 
 	// outCols [code, name]; this branch supplies [code, <absent>].
-	ibQueryComposer::AppendUnionBranch(out, branch, { &code, &name }, { &code, nullptr });
+	ibQueryComposer::AppendUnionBranch(out, branch, { code, name }, { code, nullptr });
 
 	ASSERT_EQ(out.RowCount(), 1);
 	EXPECT_EQ(out.GetCell(0, CODE).GetString().ToStdString(), "X");
@@ -261,7 +265,8 @@ TEST(QueryComposerCore, AppendUnionBranch_MissingColumnIsNull)
 TEST(QueryComposerCore, JoinRamTables_NullKeyIsCartesian)
 {
 	const ibMetaID A = 1, B = 2;
-	TestCol a(wxT("a"), A), b(wxT("b"), B);
+	const auto a = std::make_shared<TestCol>(wxT("a"), A);
+	const auto b = std::make_shared<TestCol>(wxT("b"), B);
 
 	ibQueryRamTable left;  left.AddColumn(A, wxT("a"), kNoType);
 	for (long v : { 1, 2 }) { const long r = left.AppendRow(); left.SetCell(r, A, ibValue(ibNumber(v))); }
@@ -270,14 +275,17 @@ TEST(QueryComposerCore, JoinRamTables_NullKeyIsCartesian)
 	for (long v : { 10, 20, 30 }) { const long r = right.AppendRow(); right.SetCell(r, B, ibValue(ibNumber(v))); }
 
 	// null join keys -> every left row pairs with every right row (2 x 3 = 6).
-	const ibQueryRamTable out = ibQueryComposer::JoinRamTables(left, right, nullptr, nullptr, { &a, &b }, { true, false });
+	const ibQueryRamTable out = ibQueryComposer::JoinRamTables(left, right, nullptr, nullptr, { a, b }, { true, false });
 	EXPECT_EQ(out.RowCount(), 6);
 }
 
 TEST(QueryComposerCore, JoinRamTables_OuterKinds)
 {
 	const ibMetaID LK = 1, LV = 2, RK = 4, RV = 3;
-	TestCol lk(wxT("lk"), LK), lv(wxT("lv"), LV), rk(wxT("rk"), RK), rv(wxT("rv"), RV);
+	const auto lk = std::make_shared<TestCol>(wxT("lk"), LK);
+	const auto lv = std::make_shared<TestCol>(wxT("lv"), LV);
+	const auto rk = std::make_shared<TestCol>(wxT("rk"), RK);
+	const auto rv = std::make_shared<TestCol>(wxT("rv"), RV);
 
 	ibQueryRamTable left;  left.AddColumn(LK, wxT("lk"), kNoType); left.AddColumn(LV, wxT("lv"), kNoType);
 	auto L = [&](long k, long v) { const long r = left.AppendRow();  left.SetCell(r, LK, ibValue(ibNumber(k))); left.SetCell(r, LV, ibValue(ibNumber(v))); };
@@ -287,13 +295,13 @@ TEST(QueryComposerCore, JoinRamTables_OuterKinds)
 	auto R = [&](long k, long v) { const long r = right.AppendRow(); right.SetCell(r, RK, ibValue(ibNumber(k))); right.SetCell(r, RV, ibValue(ibNumber(v))); };
 	R(2, 22); R(3, 23); R(4, 24);                       // keys 2,3,4  -> matched 2,3 ; left-only 1 ; right-only 4
 
-	const std::vector<const ibBackendQueryColumn*> outc = { &lv, &rv };
+	const std::vector<std::shared_ptr<const ibBackendQueryColumn>> outc = { lv, rv };
 	const std::vector<bool> side = { true, false };
 	using JK = ibQueryJoinKind;
-	EXPECT_EQ(ibQueryComposer::JoinRamTables(left, right, &lk, &rk, outc, side, JK::Inner).RowCount(), 2);   // 2,3
-	EXPECT_EQ(ibQueryComposer::JoinRamTables(left, right, &lk, &rk, outc, side, JK::Left ).RowCount(), 3);   // + left-only 1
-	EXPECT_EQ(ibQueryComposer::JoinRamTables(left, right, &lk, &rk, outc, side, JK::Right).RowCount(), 3);   // + right-only 4
-	EXPECT_EQ(ibQueryComposer::JoinRamTables(left, right, &lk, &rk, outc, side, JK::Full ).RowCount(), 4);   // + both
+	EXPECT_EQ(ibQueryComposer::JoinRamTables(left, right, lk, rk, outc, side, JK::Inner).RowCount(), 2);   // 2,3
+	EXPECT_EQ(ibQueryComposer::JoinRamTables(left, right, lk, rk, outc, side, JK::Left ).RowCount(), 3);   // + left-only 1
+	EXPECT_EQ(ibQueryComposer::JoinRamTables(left, right, lk, rk, outc, side, JK::Right).RowCount(), 3);   // + right-only 4
+	EXPECT_EQ(ibQueryComposer::JoinRamTables(left, right, lk, rk, outc, side, JK::Full ).RowCount(), 4);   // + both
 }
 
 // A NULL-VALUED join key (key column present, but the cell is unset/empty) is distinct from a
@@ -303,7 +311,10 @@ TEST(QueryComposerCore, JoinRamTables_OuterKinds)
 TEST(QueryComposerCore, JoinRamTables_NullKeyValueDoesNotMatch)
 {
 	const ibMetaID LK = 1, LV = 2, RK = 4, RV = 3;
-	TestCol lk(wxT("lk"), LK), lv(wxT("lv"), LV), rk(wxT("rk"), RK), rv(wxT("rv"), RV);
+	const auto lk = std::make_shared<TestCol>(wxT("lk"), LK);
+	const auto lv = std::make_shared<TestCol>(wxT("lv"), LV);
+	const auto rk = std::make_shared<TestCol>(wxT("rk"), RK);
+	const auto rv = std::make_shared<TestCol>(wxT("rv"), RV);
 
 	ibQueryRamTable left;  left.AddColumn(LK, wxT("lk"), kNoType); left.AddColumn(LV, wxT("lv"), kNoType);
 	auto L = [&](long k, long v, bool kNull = false) {
@@ -321,13 +332,13 @@ TEST(QueryComposerCore, JoinRamTables_NullKeyValueDoesNotMatch)
 	};
 	R(1, 21); R(0, 98, /*null key*/ true); R(2, 22);
 
-	const std::vector<const ibBackendQueryColumn*> outc = { &lv, &rv };
+	const std::vector<std::shared_ptr<const ibBackendQueryColumn>> outc = { lv, rv };
 	const std::vector<bool> side = { true, false };
 	using JK = ibQueryJoinKind;
-	EXPECT_EQ(ibQueryComposer::JoinRamTables(left, right, &lk, &rk, outc, side, JK::Inner).RowCount(), 2);   // 1-1, 2-2; NULLs unpaired
-	EXPECT_EQ(ibQueryComposer::JoinRamTables(left, right, &lk, &rk, outc, side, JK::Left ).RowCount(), 3);   // + NULL-key left, unmatched
-	EXPECT_EQ(ibQueryComposer::JoinRamTables(left, right, &lk, &rk, outc, side, JK::Right).RowCount(), 3);   // + NULL-key right, unmatched
-	EXPECT_EQ(ibQueryComposer::JoinRamTables(left, right, &lk, &rk, outc, side, JK::Full ).RowCount(), 4);   // matched 2 + both NULLs
+	EXPECT_EQ(ibQueryComposer::JoinRamTables(left, right, lk, rk, outc, side, JK::Inner).RowCount(), 2);   // 1-1, 2-2; NULLs unpaired
+	EXPECT_EQ(ibQueryComposer::JoinRamTables(left, right, lk, rk, outc, side, JK::Left ).RowCount(), 3);   // + NULL-key left, unmatched
+	EXPECT_EQ(ibQueryComposer::JoinRamTables(left, right, lk, rk, outc, side, JK::Right).RowCount(), 3);   // + NULL-key right, unmatched
+	EXPECT_EQ(ibQueryComposer::JoinRamTables(left, right, lk, rk, outc, side, JK::Full ).RowCount(), 4);   // matched 2 + both NULLs
 }
 
 // ===========================================================================
@@ -339,18 +350,19 @@ TEST(QueryComposerCore, JoinRamTables_NullKeyValueDoesNotMatch)
 TEST(QueryComposerCore, JoinRamTables_ThetaNonEqui)
 {
 	const ibMetaID LVAL = 1, RTHR = 2;
-	TestCol lval(wxT("lval"), LVAL), rthr(wxT("rthr"), RTHR);
+	const auto lval = std::make_shared<TestCol>(wxT("lval"), LVAL);
+	const auto rthr = std::make_shared<TestCol>(wxT("rthr"), RTHR);
 
 	ibQueryRamTable left;  left.AddColumn(LVAL, wxT("lval"), kNoType);
 	for (long v : { 10, 20, 30 }) { const long r = left.AppendRow();  left.SetCell(r, LVAL, ibValue(ibNumber(v))); }
 	ibQueryRamTable right; right.AddColumn(RTHR, wxT("rthr"), kNoType);
 	for (long v : { 15, 25 })     { const long r = right.AppendRow(); right.SetCell(r, RTHR, ibValue(ibNumber(v))); }
 
-	const std::vector<const ibBackendQueryColumn*> outc = { &lval, &rthr };
+	const std::vector<std::shared_ptr<const ibBackendQueryColumn>> outc = { lval, rthr };
 	const std::vector<bool> side = { true, false };
 	auto theta = [&](ibJoinCompareOp op) {
 		ibJoinOn on; on.m_op = op;
-		return ibQueryComposer::JoinRamTables(left, right, &lval, &rthr, outc, side, ibQueryJoinKind::Inner, on).RowCount();
+		return ibQueryComposer::JoinRamTables(left, right, lval, rthr, outc, side, ibQueryJoinKind::Inner, on).RowCount();
 	};
 	EXPECT_EQ(theta(ibJoinCompareOp::Gt), 3);   // 20>15 | 30>15 | 30>25
 	EXPECT_EQ(theta(ibJoinCompareOp::Ge), 3);   // same (no L equals a threshold)
@@ -361,17 +373,18 @@ TEST(QueryComposerCore, JoinRamTables_ThetaNonEqui)
 TEST(QueryComposerCore, JoinRamTables_ThetaOuterKeepsUnmatched)
 {
 	const ibMetaID LVAL = 1, RTHR = 2;
-	TestCol lval(wxT("lval"), LVAL), rthr(wxT("rthr"), RTHR);
+	const auto lval = std::make_shared<TestCol>(wxT("lval"), LVAL);
+	const auto rthr = std::make_shared<TestCol>(wxT("rthr"), RTHR);
 	ibQueryRamTable left;  left.AddColumn(LVAL, wxT("lval"), kNoType);
 	for (long v : { 5, 30 })  { const long r = left.AppendRow();  left.SetCell(r, LVAL, ibValue(ibNumber(v))); }   // 5 > nothing
 	ibQueryRamTable right; right.AddColumn(RTHR, wxT("rthr"), kNoType);
 	for (long v : { 15, 25 }) { const long r = right.AppendRow(); right.SetCell(r, RTHR, ibValue(ibNumber(v))); }
 
-	const std::vector<const ibBackendQueryColumn*> outc = { &lval, &rthr };
+	const std::vector<std::shared_ptr<const ibBackendQueryColumn>> outc = { lval, rthr };
 	const std::vector<bool> side = { true, false };
 	ibJoinOn gt; gt.m_op = ibJoinCompareOp::Gt;
-	EXPECT_EQ(ibQueryComposer::JoinRamTables(left, right, &lval, &rthr, outc, side, ibQueryJoinKind::Inner, gt).RowCount(), 2);  // (30,15)(30,25)
-	EXPECT_EQ(ibQueryComposer::JoinRamTables(left, right, &lval, &rthr, outc, side, ibQueryJoinKind::Left,  gt).RowCount(), 3);  // + unmatched 5
+	EXPECT_EQ(ibQueryComposer::JoinRamTables(left, right, lval, rthr, outc, side, ibQueryJoinKind::Inner, gt).RowCount(), 2);  // (30,15)(30,25)
+	EXPECT_EQ(ibQueryComposer::JoinRamTables(left, right, lval, rthr, outc, side, ibQueryJoinKind::Left,  gt).RowCount(), 3);  // + unmatched 5
 }
 
 // ===========================================================================
@@ -384,7 +397,10 @@ TEST(QueryComposerCore, JoinRamTables_ThetaOuterKeepsUnmatched)
 TEST(QueryComposerCore, JoinRamTables_ComputedKeyPartNarrowsTheMatch)
 {
 	const ibMetaID AI = 1, AP = 2, BI = 3, BP = 4;
-	TestCol ai(wxT("ai"), AI), ap(wxT("ap"), AP), bi(wxT("bi"), BI), bp(wxT("bp"), BP);
+	const auto ai = std::make_shared<TestCol>(wxT("ai"), AI);
+	const auto ap = std::make_shared<TestCol>(wxT("ap"), AP);
+	const auto bi = std::make_shared<TestCol>(wxT("bi"), BI);
+	const auto bp = std::make_shared<TestCol>(wxT("bp"), BP);
 
 	ibQueryRamTable left;  left.AddColumn(AI, wxT("ai"), kNoType);  left.AddColumn(AP, wxT("ap"), kNoType);
 	ibQueryRamTable right; right.AddColumn(BI, wxT("bi"), kNoType); right.AddColumn(BP, wxT("bp"), kNoType);
@@ -394,9 +410,9 @@ TEST(QueryComposerCore, JoinRamTables_ComputedKeyPartNarrowsTheMatch)
 		const long r = right.AppendRow(); right.SetCell(r, BI, ibValue(ibNumber(ip[0]))); right.SetCell(r, BP, ibValue(ibNumber(ip[1])));
 	}
 	const ibQueryColumnExprPtr periodBefore = ibQueryColumnExpr::Arith(ibQueryColumnArithOp::Sub,
-		ibQueryColumnExpr::Col(&ap), ibQueryColumnExpr::Const(ibValue(ibNumber(1))));
+		ibQueryColumnExpr::Col(ap), ibQueryColumnExpr::Const(ibValue(ibNumber(1))));
 
-	const std::vector<const ibBackendQueryColumn*> outc = { &ap, &bp };
+	const std::vector<std::shared_ptr<const ibBackendQueryColumn>> outc = { ap, bp };
 	const std::vector<bool> side = { true, false };
 	using JK = ibQueryJoinKind;
 
@@ -404,22 +420,22 @@ TEST(QueryComposerCore, JoinRamTables_ComputedKeyPartNarrowsTheMatch)
 	ibJoinOn itemKey;
 	ibJoinOn::ibJoinKeyPart before;
 	before.m_exprL = periodBefore;
-	before.m_exprR = ibQueryColumnExpr::Col(&bp);
+	before.m_exprR = ibQueryColumnExpr::Col(bp);
 	itemKey.m_alsoOn.push_back(before);
-	const ibQueryRamTable inner = ibQueryComposer::JoinRamTables(left, right, &ai, &bi, outc, side, JK::Inner, itemKey);
+	const ibQueryRamTable inner = ibQueryComposer::JoinRamTables(left, right, ai, bi, outc, side, JK::Inner, itemKey);
 	ASSERT_EQ(inner.RowCount(), 3);   // (1,2)-(1,1) (1,3)-(1,2) (2,2)-(2,1); 13 with the part dropped
 	for (long r = 0; r < inner.RowCount(); ++r)
 		EXPECT_EQ(std::stol(inner.GetCell(r, AP).GetString().ToStdString()),
 		          std::stol(inner.GetCell(r, BP).GetString().ToStdString()) + 1);
-	EXPECT_EQ(ibQueryComposer::JoinRamTables(left, right, &ai, &bi, outc, side, JK::Left, itemKey).RowCount(), 5);   // + (1,1) (2,1)
+	EXPECT_EQ(ibQueryComposer::JoinRamTables(left, right, ai, bi, outc, side, JK::Left, itemKey).RowCount(), 5);   // + (1,1) (2,1)
 
 	// The same ON with the computed pair first: no key column, and still a hash, not a product.
 	ibJoinOn periodKey;
 	periodKey.m_exprL = periodBefore;
-	periodKey.m_exprR = ibQueryColumnExpr::Col(&bp);
+	periodKey.m_exprR = ibQueryColumnExpr::Col(bp);
 	ibJoinOn::ibJoinKeyPart item;
-	item.m_colL = &ai;
-	item.m_colR = &bi;
+	item.m_colL = ai;
+	item.m_colR = bi;
 	periodKey.m_alsoOn.push_back(item);
 	EXPECT_EQ(ibQueryComposer::JoinRamTables(left, right, nullptr, nullptr, outc, side, JK::Inner, periodKey).RowCount(), 3);
 	EXPECT_EQ(ibQueryComposer::JoinRamTables(left, right, nullptr, nullptr, outc, side, JK::Full,  periodKey).RowCount(), 7);   // + (1,1) (2,1) left, (1,3) (2,2) right
@@ -433,12 +449,12 @@ TEST(QueryComposerCore, JoinRamTables_ComputedKeyPartNarrowsTheMatch)
 TEST(QueryComposerCore, DedupeRows_FirstOfEachInOrder)
 {
 	const ibMetaID REGION = 1;
-	TestCol region(wxT("region"), REGION);
+	const auto region = std::make_shared<TestCol>(wxT("region"), REGION);
 	ibQueryRamTable t; t.AddColumn(REGION, wxT("region"), kNoType);
 	for (const wxChar* v : { wxT("North"), wxT("South"), wxT("North"), wxT("North"), wxT("South") }) {
 		const long r = t.AppendRow(); t.SetCell(r, REGION, ibValue(ibString(v)));
 	}
-	const ibQueryRamTable out = ibQueryComposer::DedupeRows(t, { &region });
+	const ibQueryRamTable out = ibQueryComposer::DedupeRows(t, { region });
 	ASSERT_EQ(out.RowCount(), 2);
 	EXPECT_EQ(out.GetCell(0, REGION).GetString().ToStdString(), "North");
 	EXPECT_EQ(out.GetCell(1, REGION).GetString().ToStdString(), "South");
@@ -514,7 +530,8 @@ TEST(QueryComposerCore, ValueOrder_NoValueIsSmallest) {
 TEST(QueryComposerCore, FilterRows_OrIsNullNot)
 {
 	const ibMetaID REGION = 1, QTY = 2;
-	TestCol region(wxT("region"), REGION), qty(wxT("qty"), QTY);
+	const auto region = std::make_shared<TestCol>(wxT("region"), REGION);
+	const auto qty    = std::make_shared<TestCol>(wxT("qty"), QTY);
 
 	ibQueryRamTable t;
 	t.AddColumn(REGION, wxT("region"), kNoType);
@@ -526,25 +543,25 @@ TEST(QueryComposerCore, FilterRows_OrIsNullNot)
 	};
 	row(wxT("North"), 10); row(wxT("South"), 5); row(wxT("East"), 7); row(wxT(""), 3, /*null*/ true);
 
-	auto eq = [&](const ibBackendQueryColumn* c, const ibString& v) {
+	auto eq = [&](const std::shared_ptr<const ibBackendQueryColumn>& c, const ibString& v) {
 		ibQueryCondition cond; cond.m_col = c; cond.m_value = ibValue(v); return ibQueryPredicate::Leaf(cond);
 	};
 
 	// region = 'North' OR region = 'South'
 	const ibQueryRamTable f1 = ibQueryComposer::FilterRows(
-		t, ibQueryPredicate::Compose(ibQueryPredicateKind::Or, eq(&region, wxT("North")), eq(&region, wxT("South"))).get());
+		t, ibQueryPredicate::Compose(ibQueryPredicateKind::Or, eq(region, wxT("North")), eq(region, wxT("South"))));
 	ASSERT_EQ(f1.RowCount(), 2);
 	EXPECT_EQ(f1.GetCell(0, REGION).GetString().ToStdString(), "North");
 	EXPECT_EQ(f1.GetCell(1, REGION).GetString().ToStdString(), "South");
 
 	// region IS NULL  -> only the unset-region row
-	const ibQueryRamTable f2 = ibQueryComposer::FilterRows(t, ibQueryPredicate::Null(&region, /*negated*/ false).get());
+	const ibQueryRamTable f2 = ibQueryComposer::FilterRows(t, ibQueryPredicate::Null(region, /*negated*/ false));
 	ASSERT_EQ(f2.RowCount(), 1);
 	EXPECT_EQ(f2.GetCell(0, QTY).GetString().ToStdString(), "3");
 
 	// NOT (region = 'North')  -> South, East. The null-region row is UNKNOWN under SQL
 	// three-valued logic (NULL = 'North' is unknown, NOT unknown is unknown) -> dropped.
-	const ibQueryRamTable f3 = ibQueryComposer::FilterRows(t, ibQueryPredicate::Not(eq(&region, wxT("North"))).get());
+	const ibQueryRamTable f3 = ibQueryComposer::FilterRows(t, ibQueryPredicate::Not(eq(region, wxT("North"))));
 	EXPECT_EQ(f3.RowCount(), 2);
 }
 
@@ -555,7 +572,8 @@ TEST(QueryComposerCore, FilterRows_OrIsNullNot)
 TEST(QueryComposerCore, EvalColumnExpr_ArithAndCase)
 {
 	const ibMetaID QTY = 1, PRICE = 2;
-	TestCol qty(wxT("qty"), QTY), price(wxT("price"), PRICE);
+	const auto qty   = std::make_shared<TestCol>(wxT("qty"), QTY);
+	const auto price = std::make_shared<TestCol>(wxT("price"), PRICE);
 
 	ibQueryRamTable t;
 	t.AddColumn(QTY,   wxT("qty"),   kNoType);
@@ -566,16 +584,16 @@ TEST(QueryComposerCore, EvalColumnExpr_ArithAndCase)
 
 	// qty * price = 20
 	const ibQueryColumnExprPtr mul = ibQueryColumnExpr::Arith(
-		ibQueryColumnArithOp::Mul, ibQueryColumnExpr::Col(&qty), ibQueryColumnExpr::Col(&price));
-	EXPECT_EQ(ibQueryComposer::EvalColumnExpr(mul.get(), t, r).GetString().ToStdString(), "20");
+		ibQueryColumnArithOp::Mul, ibQueryColumnExpr::Col(qty), ibQueryColumnExpr::Col(price));
+	EXPECT_EQ(ibQueryComposer::EvalColumnExpr(mul, t, r).GetString().ToStdString(), "20");
 
 	// CASE WHEN qty > 3 THEN 'bulk' ELSE 'unit' END -> 'bulk'
-	ibQueryCondition gt; gt.m_col = &qty; gt.m_op = ibQueryFilterOp::Greater; gt.m_value = ibValue(ibNumber(3));
+	ibQueryCondition gt; gt.m_col = qty; gt.m_op = ibQueryFilterOp::Greater; gt.m_value = ibValue(ibNumber(3));
 	auto caseE = std::make_shared<ibQueryColumnExpr>();
 	caseE->m_kind  = ibQueryColumnExprKind::Case;
 	caseE->m_cases = { { ibQueryPredicate::Leaf(gt), ibQueryColumnExpr::Const(ibValue(ibString(wxT("bulk")))) } };
 	caseE->m_else  = ibQueryColumnExpr::Const(ibValue(ibString(wxT("unit"))));
-	EXPECT_EQ(ibQueryComposer::EvalColumnExpr(caseE.get(), t, r).GetString().ToStdString(), "bulk");
+	EXPECT_EQ(ibQueryComposer::EvalColumnExpr(caseE, t, r).GetString().ToStdString(), "bulk");
 }
 
 // ===========================================================================
@@ -584,47 +602,47 @@ TEST(QueryComposerCore, EvalColumnExpr_ArithAndCase)
 
 TEST(QueryComposerGate, Join_TwoDistinctDbTables_Colocatable)
 {
-	ibBackendColumnRawDB aKey = ibBackendColumnRawDB::Number(wxT("a_key"));
-	ibBackendColumnRawDB aOut = ibBackendColumnRawDB::String(wxT("a_out"));
-	ibBackendColumnRawDB bKey = ibBackendColumnRawDB::Number(wxT("b_key"));
-	ibBackendColumnRawDB bOut = ibBackendColumnRawDB::String(wxT("b_out"));
-	TestQueryable A(wxT("TableA"), 1); A.AddCol(&aKey); A.AddCol(&aOut);
-	TestQueryable B(wxT("TableB"), 2); B.AddCol(&bKey); B.AddCol(&bOut);
+	const std::shared_ptr<const ibBackendColumnRawDB> aKey = ibBackendColumnRawDB::Number(wxT("a_key"));
+	const std::shared_ptr<const ibBackendColumnRawDB> aOut = ibBackendColumnRawDB::String(wxT("a_out"));
+	const std::shared_ptr<const ibBackendColumnRawDB> bKey = ibBackendColumnRawDB::Number(wxT("b_key"));
+	const std::shared_ptr<const ibBackendColumnRawDB> bOut = ibBackendColumnRawDB::String(wxT("b_out"));
+	const auto A = std::make_shared<TestQueryable>(wxT("TableA"), 1); A->AddCol(aKey); A->AddCol(aOut);
+	const auto B = std::make_shared<TestQueryable>(wxT("TableB"), 2); B->AddCol(bKey); B->AddCol(bOut);
 
-	auto root = Join2(&A, &B, &aKey, &bKey);
+	auto root = Join2(A, B, aKey, bKey);
 	SpecBuf buf;
-	buf.sel = { { &aOut, wxT("ao") }, { &bOut, wxT("bo") } };
-	const ibDataQuerySpec spec = buf.Make(root.get(), &A);
+	buf.sel = { { aOut, wxT("ao") }, { bOut, wxT("bo") } };
+	const ibDataQuerySpec spec = buf.Make(root, A);
 
 	EXPECT_TRUE(ibDbTableProvider::CanColocateJoin(spec));
 }
 
 TEST(QueryComposerGate, Join_SelfJoinSameTable_NotColocatable)
 {
-	ibBackendColumnRawDB aKey = ibBackendColumnRawDB::Number(wxT("a_key"));
-	ibBackendColumnRawDB bKey = ibBackendColumnRawDB::Number(wxT("b_key"));
-	ibBackendColumnRawDB aOut = ibBackendColumnRawDB::String(wxT("a_out"));
-	TestQueryable A(wxT("Same"), 1); A.AddCol(&aKey); A.AddCol(&aOut);
-	TestQueryable B(wxT("Same"), 2); B.AddCol(&bKey);   // SAME table name -> ambiguous
+	const std::shared_ptr<const ibBackendColumnRawDB> aKey = ibBackendColumnRawDB::Number(wxT("a_key"));
+	const std::shared_ptr<const ibBackendColumnRawDB> bKey = ibBackendColumnRawDB::Number(wxT("b_key"));
+	const std::shared_ptr<const ibBackendColumnRawDB> aOut = ibBackendColumnRawDB::String(wxT("a_out"));
+	const auto A = std::make_shared<TestQueryable>(wxT("Same"), 1); A->AddCol(aKey); A->AddCol(aOut);
+	const auto B = std::make_shared<TestQueryable>(wxT("Same"), 2); B->AddCol(bKey);   // SAME table name -> ambiguous
 
-	auto root = Join2(&A, &B, &aKey, &bKey);
-	SpecBuf buf; buf.sel = { { &aOut, wxT("ao") } };
-	const ibDataQuerySpec spec = buf.Make(root.get(), &A);
+	auto root = Join2(A, B, aKey, bKey);
+	SpecBuf buf; buf.sel = { { aOut, wxT("ao") } };
+	const ibDataQuerySpec spec = buf.Make(root, A);
 
 	EXPECT_FALSE(ibDbTableProvider::CanColocateJoin(spec));   // self-join -> RAM
 }
 
 TEST(QueryComposerGate, Join_ComputedLeaf_NotColocatable)
 {
-	ibBackendColumnRawDB aKey = ibBackendColumnRawDB::Number(wxT("a_key"));
-	ibBackendColumnRawDB aOut = ibBackendColumnRawDB::String(wxT("a_out"));
-	ibBackendColumnRawDB cKey = ibBackendColumnRawDB::Number(wxT("c_key"));
-	TestQueryable A(wxT("TableA"), 1);             A.AddCol(&aKey); A.AddCol(&aOut);
-	TestQueryable C(wxT("Slice"), 2, /*computed*/true); C.AddCol(&cKey);   // RAM-computed leaf
+	const std::shared_ptr<const ibBackendColumnRawDB> aKey = ibBackendColumnRawDB::Number(wxT("a_key"));
+	const std::shared_ptr<const ibBackendColumnRawDB> aOut = ibBackendColumnRawDB::String(wxT("a_out"));
+	const std::shared_ptr<const ibBackendColumnRawDB> cKey = ibBackendColumnRawDB::Number(wxT("c_key"));
+	const auto A = std::make_shared<TestQueryable>(wxT("TableA"), 1);             A->AddCol(aKey); A->AddCol(aOut);
+	const auto C = std::make_shared<TestQueryable>(wxT("Slice"), 2, /*computed*/true); C->AddCol(cKey);   // RAM-computed leaf
 
-	auto root = Join2(&A, &C, &aKey, &cKey);
-	SpecBuf buf; buf.sel = { { &aOut, wxT("ao") } };
-	const ibDataQuerySpec spec = buf.Make(root.get(), &A);
+	auto root = Join2(A, C, aKey, cKey);
+	SpecBuf buf; buf.sel = { { aOut, wxT("ao") } };
+	const ibDataQuerySpec spec = buf.Make(root, A);
 
 	EXPECT_FALSE(ibDbTableProvider::CanColocateJoin(spec));   // a computed leaf -> RAM (or temp-promote, not this gate)
 }
@@ -634,17 +652,17 @@ TEST(QueryComposerGate, Join_ColumnTheta_Colocatable)
 	// A column-to-column theta join (a_key > b_key) over two DB tables renders server-side now — the ON
 	// carries its real op, not a forced Eq. Balance-on-date / range joins ride this instead of RAM-folding.
 	// (A COMPUTED ON — a.x+1 > b.y, m_exprL set — still falls to RAM; that path is the computed-leaf gate.)
-	ibBackendColumnRawDB aKey = ibBackendColumnRawDB::Number(wxT("a_key"));
-	ibBackendColumnRawDB aOut = ibBackendColumnRawDB::String(wxT("a_out"));
-	ibBackendColumnRawDB bKey = ibBackendColumnRawDB::Number(wxT("b_key"));
-	ibBackendColumnRawDB bOut = ibBackendColumnRawDB::String(wxT("b_out"));
-	TestQueryable A(wxT("TableA"), 1); A.AddCol(&aKey); A.AddCol(&aOut);
-	TestQueryable B(wxT("TableB"), 2); B.AddCol(&bKey); B.AddCol(&bOut);
+	const std::shared_ptr<const ibBackendColumnRawDB> aKey = ibBackendColumnRawDB::Number(wxT("a_key"));
+	const std::shared_ptr<const ibBackendColumnRawDB> aOut = ibBackendColumnRawDB::String(wxT("a_out"));
+	const std::shared_ptr<const ibBackendColumnRawDB> bKey = ibBackendColumnRawDB::Number(wxT("b_key"));
+	const std::shared_ptr<const ibBackendColumnRawDB> bOut = ibBackendColumnRawDB::String(wxT("b_out"));
+	const auto A = std::make_shared<TestQueryable>(wxT("TableA"), 1); A->AddCol(aKey); A->AddCol(aOut);
+	const auto B = std::make_shared<TestQueryable>(wxT("TableB"), 2); B->AddCol(bKey); B->AddCol(bOut);
 
-	auto root = Join2(&A, &B, &aKey, &bKey);
+	auto root = Join2(A, B, aKey, bKey);
 	root->m_on.m_op = ibJoinCompareOp::Gt;   // theta, not Eq
-	SpecBuf buf; buf.sel = { { &aOut, wxT("ao") }, { &bOut, wxT("bo") } };
-	const ibDataQuerySpec spec = buf.Make(root.get(), &A);
+	SpecBuf buf; buf.sel = { { aOut, wxT("ao") }, { bOut, wxT("bo") } };
+	const ibDataQuerySpec spec = buf.Make(root, A);
 
 	EXPECT_TRUE(ibDbTableProvider::CanColocateJoin(spec));   // column theta -> SQL push-down
 }
@@ -655,36 +673,36 @@ TEST(QueryComposerGate, Join_ColumnTheta_Colocatable)
 
 TEST(QueryComposerGate, Union_TwoDbBranchesScalar_Colocatable)
 {
-	ibBackendColumnRawDB aCode = ibBackendColumnRawDB::String(wxT("code"));
-	ibBackendColumnRawDB bCode = ibBackendColumnRawDB::String(wxT("code"));
-	TestQueryable A(wxT("TableA"), 1); A.AddCol(&aCode);
-	TestQueryable B(wxT("TableB"), 2); B.AddCol(&bCode);
+	const std::shared_ptr<const ibBackendColumnRawDB> aCode = ibBackendColumnRawDB::String(wxT("code"));
+	const std::shared_ptr<const ibBackendColumnRawDB> bCode = ibBackendColumnRawDB::String(wxT("code"));
+	const auto A = std::make_shared<TestQueryable>(wxT("TableA"), 1); A->AddCol(aCode);
+	const auto B = std::make_shared<TestQueryable>(wxT("TableB"), 2); B->AddCol(bCode);
 
 	auto root = std::make_shared<ibQueryNode>();
 	root->m_kind = ibQueryNode::Kind::Union;
-	root->m_parts.push_back(ibQueryNode::Source(&A));
-	root->m_parts.push_back(ibQueryNode::Source(&B));
+	root->m_parts.push_back(ibQueryNode::Source(A));
+	root->m_parts.push_back(ibQueryNode::Source(B));
 
-	SpecBuf buf; buf.sel = { { &aCode, wxT("code") } };   // resolved per-branch by NAME
-	const ibDataQuerySpec spec = buf.Make(root.get(), &A);
+	SpecBuf buf; buf.sel = { { aCode, wxT("code") } };   // resolved per-branch by NAME
+	const ibDataQuerySpec spec = buf.Make(root, A);
 
 	EXPECT_TRUE(ibDbTableProvider::CanColocateUnion(spec));
 }
 
 TEST(QueryComposerGate, Union_ComputedBranch_NotColocatableDirectly)
 {
-	ibBackendColumnRawDB aCode = ibBackendColumnRawDB::String(wxT("code"));
-	ibBackendColumnRawDB cCode = ibBackendColumnRawDB::String(wxT("code"));
-	TestQueryable A(wxT("TableA"), 1);             A.AddCol(&aCode);
-	TestQueryable C(wxT("Slice"), 2, /*computed*/true); C.AddCol(&cCode);
+	const std::shared_ptr<const ibBackendColumnRawDB> aCode = ibBackendColumnRawDB::String(wxT("code"));
+	const std::shared_ptr<const ibBackendColumnRawDB> cCode = ibBackendColumnRawDB::String(wxT("code"));
+	const auto A = std::make_shared<TestQueryable>(wxT("TableA"), 1);             A->AddCol(aCode);
+	const auto C = std::make_shared<TestQueryable>(wxT("Slice"), 2, /*computed*/true); C->AddCol(cCode);
 
 	auto root = std::make_shared<ibQueryNode>();
 	root->m_kind = ibQueryNode::Kind::Union;
-	root->m_parts.push_back(ibQueryNode::Source(&A));
-	root->m_parts.push_back(ibQueryNode::Source(&C));
+	root->m_parts.push_back(ibQueryNode::Source(A));
+	root->m_parts.push_back(ibQueryNode::Source(C));
 
-	SpecBuf buf; buf.sel = { { &aCode, wxT("code") } };
-	const ibDataQuerySpec spec = buf.Make(root.get(), &A);
+	SpecBuf buf; buf.sel = { { aCode, wxT("code") } };
+	const ibDataQuerySpec spec = buf.Make(root, A);
 
 	// A computed branch fails the DIRECT union gate (the composer's mixed-promote path handles it).
 	EXPECT_FALSE(ibDbTableProvider::CanColocateUnion(spec));
@@ -695,20 +713,20 @@ TEST(QueryComposerGate, Union_ComputedBranch_NotColocatableDirectly)
 // server-side union -> a boolean OR/NOT WHERE returned too many rows, and an RLS restriction leaked.
 TEST(QueryComposerGate, Union_BooleanPredicate_Colocatable)
 {
-	ibBackendColumnRawDB aReg = ibBackendColumnRawDB::String(wxT("region"));
-	ibBackendColumnRawDB bReg = ibBackendColumnRawDB::String(wxT("region"));
-	TestQueryable A(wxT("TableA"), 1); A.AddCol(&aReg);
-	TestQueryable B(wxT("TableB"), 2); B.AddCol(&bReg);
+	const std::shared_ptr<const ibBackendColumnRawDB> aReg = ibBackendColumnRawDB::String(wxT("region"));
+	const std::shared_ptr<const ibBackendColumnRawDB> bReg = ibBackendColumnRawDB::String(wxT("region"));
+	const auto A = std::make_shared<TestQueryable>(wxT("TableA"), 1); A->AddCol(aReg);
+	const auto B = std::make_shared<TestQueryable>(wxT("TableB"), 2); B->AddCol(bReg);
 
 	auto root = std::make_shared<ibQueryNode>();
 	root->m_kind = ibQueryNode::Kind::Union;
-	root->m_parts.push_back(ibQueryNode::Source(&A));
-	root->m_parts.push_back(ibQueryNode::Source(&B));
+	root->m_parts.push_back(ibQueryNode::Source(A));
+	root->m_parts.push_back(ibQueryNode::Source(B));
 
-	SpecBuf buf; buf.sel = { { &aReg, wxT("region") } };
-	ibDataQuerySpec spec = buf.Make(root.get(), &A);
+	SpecBuf buf; buf.sel = { { aReg, wxT("region") } };
+	ibDataQuerySpec spec = buf.Make(root, A);
 	auto leaf = [&](const ibString& v) {
-		ibQueryCondition c; c.m_col = &aReg; c.m_value = ibValue(v); return ibQueryPredicate::Leaf(c);
+		ibQueryCondition c; c.m_col = aReg; c.m_value = ibValue(v); return ibQueryPredicate::Leaf(c);
 	};
 	spec.m_predicate = ibQueryPredicate::Compose(ibQueryPredicateKind::Or, leaf(wxT("North")), leaf(wxT("South")));
 
@@ -719,21 +737,21 @@ TEST(QueryComposerGate, Union_SemiJoinPredicate_Colocatable)
 {
 	// An RLS restriction (semi-join on the region key) whose outer key resolves in every branch rides
 	// the co-located union server-side -- RLS on a UNION read, not just a JOIN.
-	ibBackendColumnRawDB aReg = ibBackendColumnRawDB::String(wxT("region"));
-	ibBackendColumnRawDB bReg = ibBackendColumnRawDB::String(wxT("region"));
-	ibBackendColumnRawDB permReg = ibBackendColumnRawDB::String(wxT("region"));
-	TestQueryable A(wxT("TableA"), 1);         A.AddCol(&aReg);
-	TestQueryable B(wxT("TableB"), 2);         B.AddCol(&bReg);
-	TestQueryable P(wxT("AllowedRegions"), 3); P.AddCol(&permReg);   // permission source
+	const std::shared_ptr<const ibBackendColumnRawDB> aReg = ibBackendColumnRawDB::String(wxT("region"));
+	const std::shared_ptr<const ibBackendColumnRawDB> bReg = ibBackendColumnRawDB::String(wxT("region"));
+	const std::shared_ptr<const ibBackendColumnRawDB> permReg = ibBackendColumnRawDB::String(wxT("region"));
+	const auto A = std::make_shared<TestQueryable>(wxT("TableA"), 1);         A->AddCol(aReg);
+	const auto B = std::make_shared<TestQueryable>(wxT("TableB"), 2);         B->AddCol(bReg);
+	const auto P = std::make_shared<TestQueryable>(wxT("AllowedRegions"), 3); P->AddCol(permReg);   // permission source
 
 	auto root = std::make_shared<ibQueryNode>();
 	root->m_kind = ibQueryNode::Kind::Union;
-	root->m_parts.push_back(ibQueryNode::Source(&A));
-	root->m_parts.push_back(ibQueryNode::Source(&B));
+	root->m_parts.push_back(ibQueryNode::Source(A));
+	root->m_parts.push_back(ibQueryNode::Source(B));
 
-	SpecBuf buf; buf.sel = { { &aReg, wxT("region") } };
-	ibDataQuerySpec spec = buf.Make(root.get(), &A);
-	ibSemiJoinExists sj; sj.m_inner = &P; sj.m_outerKey = &aReg; sj.m_innerKey = &permReg;
+	SpecBuf buf; buf.sel = { { aReg, wxT("region") } };
+	ibDataQuerySpec spec = buf.Make(root, A);
+	ibSemiJoinExists sj; sj.m_inner = P; sj.m_outerKey = aReg; sj.m_innerKey = permReg;
 	ibQueryCondition c; c.m_semiJoin = std::make_shared<ibSemiJoinExists>(sj);
 	spec.m_predicate = ibQueryPredicate::Leaf(c);
 
@@ -743,20 +761,20 @@ TEST(QueryComposerGate, Union_SemiJoinPredicate_Colocatable)
 TEST(QueryComposerGate, Union_PredicateColMissingInBranch_NotColocatable)
 {
 	// The predicate references a column present only in branch A -> can't render over B -> RAM (applies it).
-	ibBackendColumnRawDB aReg = ibBackendColumnRawDB::String(wxT("region"));
-	ibBackendColumnRawDB aExtra = ibBackendColumnRawDB::String(wxT("extra"));
-	ibBackendColumnRawDB bReg = ibBackendColumnRawDB::String(wxT("region"));
-	TestQueryable A(wxT("TableA"), 1); A.AddCol(&aReg); A.AddCol(&aExtra);
-	TestQueryable B(wxT("TableB"), 2); B.AddCol(&bReg);   // no "extra"
+	const std::shared_ptr<const ibBackendColumnRawDB> aReg = ibBackendColumnRawDB::String(wxT("region"));
+	const std::shared_ptr<const ibBackendColumnRawDB> aExtra = ibBackendColumnRawDB::String(wxT("extra"));
+	const std::shared_ptr<const ibBackendColumnRawDB> bReg = ibBackendColumnRawDB::String(wxT("region"));
+	const auto A = std::make_shared<TestQueryable>(wxT("TableA"), 1); A->AddCol(aReg); A->AddCol(aExtra);
+	const auto B = std::make_shared<TestQueryable>(wxT("TableB"), 2); B->AddCol(bReg);   // no "extra"
 
 	auto root = std::make_shared<ibQueryNode>();
 	root->m_kind = ibQueryNode::Kind::Union;
-	root->m_parts.push_back(ibQueryNode::Source(&A));
-	root->m_parts.push_back(ibQueryNode::Source(&B));
+	root->m_parts.push_back(ibQueryNode::Source(A));
+	root->m_parts.push_back(ibQueryNode::Source(B));
 
-	SpecBuf buf; buf.sel = { { &aReg, wxT("region") } };
-	ibDataQuerySpec spec = buf.Make(root.get(), &A);
-	ibQueryCondition c; c.m_col = &aExtra; c.m_value = ibValue(ibString(wxT("x")));
+	SpecBuf buf; buf.sel = { { aReg, wxT("region") } };
+	ibDataQuerySpec spec = buf.Make(root, A);
+	ibQueryCondition c; c.m_col = aExtra; c.m_value = ibValue(ibString(wxT("x")));
 	spec.m_predicate = ibQueryPredicate::Leaf(c);
 
 	EXPECT_FALSE(ibDbTableProvider::CanColocateUnion(spec));   // "extra" absent in branch B -> RAM
@@ -765,21 +783,21 @@ TEST(QueryComposerGate, Union_PredicateColMissingInBranch_NotColocatable)
 TEST(QueryComposerGate, Union_DotWalkPredicate_NotColocatable)
 {
 	// A dot-walk predicate leaf (a reference path) needs a join the branch scan lacks -> RAM.
-	ibBackendColumnRawDB aReg = ibBackendColumnRawDB::String(wxT("region"));
-	ibBackendColumnRawDB bReg = ibBackendColumnRawDB::String(wxT("region"));
-	ibBackendColumnRawDB refc = ibBackendColumnRawDB::String(wxT("owner"));
-	TestQueryable A(wxT("TableA"), 1); A.AddCol(&aReg);
-	TestQueryable B(wxT("TableB"), 2); B.AddCol(&bReg);
+	const std::shared_ptr<const ibBackendColumnRawDB> aReg = ibBackendColumnRawDB::String(wxT("region"));
+	const std::shared_ptr<const ibBackendColumnRawDB> bReg = ibBackendColumnRawDB::String(wxT("region"));
+	const std::shared_ptr<const ibBackendColumnRawDB> refc = ibBackendColumnRawDB::String(wxT("owner"));
+	const auto A = std::make_shared<TestQueryable>(wxT("TableA"), 1); A->AddCol(aReg);
+	const auto B = std::make_shared<TestQueryable>(wxT("TableB"), 2); B->AddCol(bReg);
 
 	auto root = std::make_shared<ibQueryNode>();
 	root->m_kind = ibQueryNode::Kind::Union;
-	root->m_parts.push_back(ibQueryNode::Source(&A));
-	root->m_parts.push_back(ibQueryNode::Source(&B));
+	root->m_parts.push_back(ibQueryNode::Source(A));
+	root->m_parts.push_back(ibQueryNode::Source(B));
 
-	SpecBuf buf; buf.sel = { { &aReg, wxT("region") } };
-	ibDataQuerySpec spec = buf.Make(root.get(), &A);
-	ibQueryCondition c; c.m_col = &aReg; c.m_value = ibValue(ibString(wxT("x")));
-	c.m_path = { &refc, &aReg };   // dot-walk path present -> not a plain branch column
+	SpecBuf buf; buf.sel = { { aReg, wxT("region") } };
+	ibDataQuerySpec spec = buf.Make(root, A);
+	ibQueryCondition c; c.m_col = aReg; c.m_value = ibValue(ibString(wxT("x")));
+	c.m_path = { refc, aReg };   // dot-walk path present -> not a plain branch column
 	spec.m_predicate = ibQueryPredicate::Leaf(c);
 
 	EXPECT_FALSE(ibDbTableProvider::CanColocateUnion(spec));   // dot-walk in predicate -> RAM
@@ -787,20 +805,20 @@ TEST(QueryComposerGate, Union_DotWalkPredicate_NotColocatable)
 
 TEST(QueryComposerGate, Aggregate_GroupBySum_Colocatable)
 {
-	ibBackendColumnRawDB aKey = ibBackendColumnRawDB::Number(wxT("a_key"));
-	ibBackendColumnRawDB aDim = ibBackendColumnRawDB::String(wxT("a_dim"));
-	ibBackendColumnRawDB bKey = ibBackendColumnRawDB::Number(wxT("b_key"));
-	ibBackendColumnRawDB bAmt = ibBackendColumnRawDB::Number(wxT("b_amt"));
-	TestQueryable A(wxT("TableA"), 1); A.AddCol(&aKey); A.AddCol(&aDim);
-	TestQueryable B(wxT("TableB"), 2); B.AddCol(&bKey); B.AddCol(&bAmt);
+	const std::shared_ptr<const ibBackendColumnRawDB> aKey = ibBackendColumnRawDB::Number(wxT("a_key"));
+	const std::shared_ptr<const ibBackendColumnRawDB> aDim = ibBackendColumnRawDB::String(wxT("a_dim"));
+	const std::shared_ptr<const ibBackendColumnRawDB> bKey = ibBackendColumnRawDB::Number(wxT("b_key"));
+	const std::shared_ptr<const ibBackendColumnRawDB> bAmt = ibBackendColumnRawDB::Number(wxT("b_amt"));
+	const auto A = std::make_shared<TestQueryable>(wxT("TableA"), 1); A->AddCol(aKey); A->AddCol(aDim);
+	const auto B = std::make_shared<TestQueryable>(wxT("TableB"), 2); B->AddCol(bKey); B->AddCol(bAmt);
 
-	auto root = Join2(&A, &B, &aKey, &bKey);
+	auto root = Join2(A, B, aKey, bKey);
 	SpecBuf buf;
-	buf.groupBy = { &aDim };
+	buf.groupBy = { aDim };
 	ibDataQueryBuilder::AggregateItem sum;
-	sum.m_fn = ibDataQueryBuilder::AggregateFn::Sum; sum.m_col = &bAmt; sum.m_alias = wxT("total");
+	sum.m_fn = ibDataQueryBuilder::AggregateFn::Sum; sum.m_col = bAmt; sum.m_alias = wxT("total");
 	buf.aggs = { sum };
-	const ibDataQuerySpec spec = buf.Make(root.get(), &A);
+	const ibDataQuerySpec spec = buf.Make(root, A);
 
 	EXPECT_TRUE(ibDbTableProvider::CanColocateAggregate(spec));
 }
@@ -810,21 +828,21 @@ TEST(QueryComposerGate, Aggregate_GroupBySum_Colocatable)
 // to the fold in memory, which carries it.
 TEST(QueryComposerGate, Aggregate_ConstantBesideTheGroups_NotColocatable)
 {
-	ibBackendColumnRawDB aKey = ibBackendColumnRawDB::Number(wxT("a_key"));
-	ibBackendColumnRawDB aDim = ibBackendColumnRawDB::String(wxT("a_dim"));
-	ibBackendColumnRawDB bKey = ibBackendColumnRawDB::Number(wxT("b_key"));
-	ibBackendColumnRawDB bAmt = ibBackendColumnRawDB::Number(wxT("b_amt"));
-	TestQueryable A(wxT("TableA"), 1); A.AddCol(&aKey); A.AddCol(&aDim);
-	TestQueryable B(wxT("TableB"), 2); B.AddCol(&bKey); B.AddCol(&bAmt);
+	const std::shared_ptr<const ibBackendColumnRawDB> aKey = ibBackendColumnRawDB::Number(wxT("a_key"));
+	const std::shared_ptr<const ibBackendColumnRawDB> aDim = ibBackendColumnRawDB::String(wxT("a_dim"));
+	const std::shared_ptr<const ibBackendColumnRawDB> bKey = ibBackendColumnRawDB::Number(wxT("b_key"));
+	const std::shared_ptr<const ibBackendColumnRawDB> bAmt = ibBackendColumnRawDB::Number(wxT("b_amt"));
+	const auto A = std::make_shared<TestQueryable>(wxT("TableA"), 1); A->AddCol(aKey); A->AddCol(aDim);
+	const auto B = std::make_shared<TestQueryable>(wxT("TableB"), 2); B->AddCol(bKey); B->AddCol(bAmt);
 
-	auto root = Join2(&A, &B, &aKey, &bKey);
+	auto root = Join2(A, B, aKey, bKey);
 	SpecBuf buf;
-	buf.groupBy = { &aDim };
+	buf.groupBy = { aDim };
 	ibDataQueryBuilder::AggregateItem sum;
-	sum.m_fn = ibDataQueryBuilder::AggregateFn::Sum; sum.m_col = &bAmt; sum.m_alias = wxT("total");
+	sum.m_fn = ibDataQueryBuilder::AggregateFn::Sum; sum.m_col = bAmt; sum.m_alias = wxT("total");
 	buf.aggs = { sum };
 	buf.computed = { ibQueryColumnSelect{ ibQueryColumnExpr::Const(ibValue(7)), wxT("seven") } };
-	const ibDataQuerySpec spec = buf.Make(root.get(), &A);
+	const ibDataQuerySpec spec = buf.Make(root, A);
 
 	EXPECT_FALSE(ibDbTableProvider::CanColocateAggregate(spec));
 }
@@ -840,20 +858,20 @@ TEST(QueryComposerGate, Aggregate_ConstantBesideTheGroups_NotColocatable)
 
 TEST(QueryComposerGate, RollupTotals_JoinScalarLevels_Colocatable)
 {
-	ibBackendColumnRawDB aKey = ibBackendColumnRawDB::Number(wxT("a_key"));
-	ibBackendColumnRawDB aDim = ibBackendColumnRawDB::String(wxT("a_dim"));
-	ibBackendColumnRawDB bKey = ibBackendColumnRawDB::Number(wxT("b_key"));
-	ibBackendColumnRawDB bAmt = ibBackendColumnRawDB::Number(wxT("b_amt"));
-	TestQueryable A(wxT("TableA"), 1); A.AddCol(&aKey); A.AddCol(&aDim);
-	TestQueryable B(wxT("TableB"), 2); B.AddCol(&bKey); B.AddCol(&bAmt);
+	const std::shared_ptr<const ibBackendColumnRawDB> aKey = ibBackendColumnRawDB::Number(wxT("a_key"));
+	const std::shared_ptr<const ibBackendColumnRawDB> aDim = ibBackendColumnRawDB::String(wxT("a_dim"));
+	const std::shared_ptr<const ibBackendColumnRawDB> bKey = ibBackendColumnRawDB::Number(wxT("b_key"));
+	const std::shared_ptr<const ibBackendColumnRawDB> bAmt = ibBackendColumnRawDB::Number(wxT("b_amt"));
+	const auto A = std::make_shared<TestQueryable>(wxT("TableA"), 1); A->AddCol(aKey); A->AddCol(aDim);
+	const auto B = std::make_shared<TestQueryable>(wxT("TableB"), 2); B->AddCol(bKey); B->AddCol(bAmt);
 
-	auto root = Join2(&A, &B, &aKey, &bKey);
+	auto root = Join2(A, B, aKey, bKey);
 	SpecBuf buf;
-	buf.groupBy = { &aDim };                                   // one scalar TOTALS level
+	buf.groupBy = { aDim };                                   // one scalar TOTALS level
 	ibDataQueryBuilder::AggregateItem sum;
-	sum.m_fn = ibDataQueryBuilder::AggregateFn::Sum; sum.m_col = &bAmt; sum.m_alias = wxT("total");
+	sum.m_fn = ibDataQueryBuilder::AggregateFn::Sum; sum.m_col = bAmt; sum.m_alias = wxT("total");
 	buf.aggs = { sum };
-	const ibDataQuerySpec spec = buf.Make(root.get(), &A);
+	const ibDataQuerySpec spec = buf.Make(root, A);
 
 	EXPECT_TRUE(ibDbTableProvider::CanColocateRollupTotals(spec));   // JOIN + scalar level + scalar SUM -> server-side ROLLUP
 }
@@ -867,17 +885,17 @@ TEST(QueryComposerGate, RollupTotals_JoinScalarLevels_Colocatable)
 
 TEST(QueryComposerGate, RollupTotals_LevelsFromTotalsList_ShapeAccepted)
 {
-	ibBackendColumnRawDB dim = ibBackendColumnRawDB::String(wxT("dim"));
-	ibBackendColumnRawDB amt = ibBackendColumnRawDB::Number(wxT("amt"));
-	TestQueryable A(wxT("TableA"), 1); A.AddCol(&dim); A.AddCol(&amt);
+	const std::shared_ptr<const ibBackendColumnRawDB> dim = ibBackendColumnRawDB::String(wxT("dim"));
+	const std::shared_ptr<const ibBackendColumnRawDB> amt = ibBackendColumnRawDB::Number(wxT("amt"));
+	const auto A = std::make_shared<TestQueryable>(wxT("TableA"), 1); A->AddCol(dim); A->AddCol(amt);
 
 	SpecBuf buf;
-	buf.totals.push_back(ibTotalLevel::One(&dim, ibDimensionKind::Elements));   // TOTALS … BY dim
+	buf.totals.push_back(ibTotalLevel::One(dim, ibDimensionKind::Elements));   // TOTALS … BY dim
 	ibDataQueryBuilder::AggregateItem sum;
-	sum.m_fn = ibDataQueryBuilder::AggregateFn::Sum; sum.m_col = &amt; sum.m_alias = wxT("total");
+	sum.m_fn = ibDataQueryBuilder::AggregateFn::Sum; sum.m_col = amt; sum.m_alias = wxT("total");
 	buf.totalAggs = { sum };                                                   // …and the figure it rolls
 	// groupBy / aggs stay EMPTY — that is the whole point.
-	const ibDataQuerySpec spec = buf.Make(nullptr, &A);
+	const ibDataQuerySpec spec = buf.Make(nullptr, A);
 
 	EXPECT_TRUE(ibDbTableProvider::CanRollupTotalsShape(spec));
 }
@@ -886,20 +904,20 @@ TEST(QueryComposerGate, RollupTotals_TupleLevel_ShapeAccepted)
 {
 	// ONE level over TWO fields — `BY (Partner, Contract)`. It is one heading, and the fold renders it
 	// as ONE composite ROLLUP element; the gate must not mistake it for two levels or refuse it.
-	ibBackendColumnRawDB partner  = ibBackendColumnRawDB::String(wxT("partner"));
-	ibBackendColumnRawDB contract = ibBackendColumnRawDB::String(wxT("contract"));
-	ibBackendColumnRawDB amt      = ibBackendColumnRawDB::Number(wxT("amt"));
-	TestQueryable A(wxT("TableA"), 1); A.AddCol(&partner); A.AddCol(&contract); A.AddCol(&amt);
+	const std::shared_ptr<const ibBackendColumnRawDB> partner  = ibBackendColumnRawDB::String(wxT("partner"));
+	const std::shared_ptr<const ibBackendColumnRawDB> contract = ibBackendColumnRawDB::String(wxT("contract"));
+	const std::shared_ptr<const ibBackendColumnRawDB> amt      = ibBackendColumnRawDB::Number(wxT("amt"));
+	const auto A = std::make_shared<TestQueryable>(wxT("TableA"), 1); A->AddCol(partner); A->AddCol(contract); A->AddCol(amt);
 
 	SpecBuf buf;
 	ibTotalLevel level;
-	level.m_fields.push_back(ibTotalField{ &partner,  ibDimensionKind::Elements });
-	level.m_fields.push_back(ibTotalField{ &contract, ibDimensionKind::Elements });
+	level.m_fields.push_back(ibTotalField{ partner,  ibDimensionKind::Elements });
+	level.m_fields.push_back(ibTotalField{ contract, ibDimensionKind::Elements });
 	buf.totals.push_back(level);
 	ibDataQueryBuilder::AggregateItem sum;
-	sum.m_fn = ibDataQueryBuilder::AggregateFn::Sum; sum.m_col = &amt; sum.m_alias = wxT("total");
+	sum.m_fn = ibDataQueryBuilder::AggregateFn::Sum; sum.m_col = amt; sum.m_alias = wxT("total");
 	buf.totalAggs = { sum };
-	const ibDataQuerySpec spec = buf.Make(nullptr, &A);
+	const ibDataQuerySpec spec = buf.Make(nullptr, A);
 
 	EXPECT_TRUE(ibDbTableProvider::CanRollupTotalsShape(spec));
 }
@@ -910,17 +928,17 @@ TEST(QueryComposerGate, RollupTotals_DetailLevelWithoutRowIdentity_Refused)
 	// own identity as the deepest group key. A source with no identity has nothing to group by, and
 	// grouping by "the row" without a key would fold equal rows into one: the RAM fold keeps them,
 	// where a row is a row because it was read as one.
-	ibBackendColumnRawDB dim = ibBackendColumnRawDB::String(wxT("dim"));
-	ibBackendColumnRawDB amt = ibBackendColumnRawDB::Number(wxT("amt"));
-	TestQueryable A(wxT("TableA"), 1); A.AddCol(&dim); A.AddCol(&amt);   // no SetKey — no identity
+	const std::shared_ptr<const ibBackendColumnRawDB> dim = ibBackendColumnRawDB::String(wxT("dim"));
+	const std::shared_ptr<const ibBackendColumnRawDB> amt = ibBackendColumnRawDB::Number(wxT("amt"));
+	const auto A = std::make_shared<TestQueryable>(wxT("TableA"), 1); A->AddCol(dim); A->AddCol(amt);   // no SetKey — no identity
 
 	SpecBuf buf;
-	buf.totals.push_back(ibTotalLevel::One(&dim, ibDimensionKind::Elements));
+	buf.totals.push_back(ibTotalLevel::One(dim, ibDimensionKind::Elements));
 	buf.totals.push_back(ibTotalLevel{});                                      // the detail level
 	ibDataQueryBuilder::AggregateItem sum;
-	sum.m_fn = ibDataQueryBuilder::AggregateFn::Sum; sum.m_col = &amt; sum.m_alias = wxT("total");
+	sum.m_fn = ibDataQueryBuilder::AggregateFn::Sum; sum.m_col = amt; sum.m_alias = wxT("total");
 	buf.totalAggs = { sum };
-	const ibDataQuerySpec spec = buf.Make(nullptr, &A);
+	const ibDataQuerySpec spec = buf.Make(nullptr, A);
 
 	EXPECT_FALSE(ibDbTableProvider::CanRollupTotalsShape(spec));
 }
@@ -930,19 +948,19 @@ TEST(QueryComposerGate, RollupTotals_DetailLevelOverKeyedSource_ShapeAccepted)
 	// THE PHANTOM LEVEL. The same report over a source that HAS a row identity goes to the server:
 	// ROLLUP(dim, <identity>) returns the grand total, the dim headings AND the rows themselves in
 	// one pass — which is the whole point of it, and what the RAM road pays detail-row memory for.
-	ibBackendColumnRawDB key = ibBackendColumnRawDB::String(wxT("rowkey"));
-	ibBackendColumnRawDB dim = ibBackendColumnRawDB::String(wxT("dim"));
-	ibBackendColumnRawDB amt = ibBackendColumnRawDB::Number(wxT("amt"));
-	TestQueryable A(wxT("TableA"), 1); A.AddCol(&key); A.AddCol(&dim); A.AddCol(&amt);
-	A.SetKey(&key);
+	const std::shared_ptr<const ibBackendColumnRawDB> key = ibBackendColumnRawDB::String(wxT("rowkey"));
+	const std::shared_ptr<const ibBackendColumnRawDB> dim = ibBackendColumnRawDB::String(wxT("dim"));
+	const std::shared_ptr<const ibBackendColumnRawDB> amt = ibBackendColumnRawDB::Number(wxT("amt"));
+	const auto A = std::make_shared<TestQueryable>(wxT("TableA"), 1); A->AddCol(key); A->AddCol(dim); A->AddCol(amt);
+	A->SetKey(key);
 
 	SpecBuf buf;
-	buf.totals.push_back(ibTotalLevel::One(&dim, ibDimensionKind::Elements));
+	buf.totals.push_back(ibTotalLevel::One(dim, ibDimensionKind::Elements));
 	buf.totals.push_back(ibTotalLevel{});                                      // the detail level
 	ibDataQueryBuilder::AggregateItem sum;
-	sum.m_fn = ibDataQueryBuilder::AggregateFn::Sum; sum.m_col = &amt; sum.m_alias = wxT("total");
+	sum.m_fn = ibDataQueryBuilder::AggregateFn::Sum; sum.m_col = amt; sum.m_alias = wxT("total");
 	buf.totalAggs = { sum };
-	const ibDataQuerySpec spec = buf.Make(nullptr, &A);
+	const ibDataQuerySpec spec = buf.Make(nullptr, A);
 
 	EXPECT_TRUE(ibDbTableProvider::CanRollupTotalsShape(spec));
 }
@@ -952,19 +970,19 @@ TEST(QueryComposerGate, RollupTotals_DetailLevelNotLast_Refused)
 	// The rows are the BOTTOM. A grouping BELOW a detail level would group rows by something they
 	// were already split by — the composition does not produce it and the phantom level cannot say
 	// it, so the gate refuses rather than lowering something else than what was asked.
-	ibBackendColumnRawDB key = ibBackendColumnRawDB::String(wxT("rowkey"));
-	ibBackendColumnRawDB dim = ibBackendColumnRawDB::String(wxT("dim"));
-	ibBackendColumnRawDB amt = ibBackendColumnRawDB::Number(wxT("amt"));
-	TestQueryable A(wxT("TableA"), 1); A.AddCol(&key); A.AddCol(&dim); A.AddCol(&amt);
-	A.SetKey(&key);
+	const std::shared_ptr<const ibBackendColumnRawDB> key = ibBackendColumnRawDB::String(wxT("rowkey"));
+	const std::shared_ptr<const ibBackendColumnRawDB> dim = ibBackendColumnRawDB::String(wxT("dim"));
+	const std::shared_ptr<const ibBackendColumnRawDB> amt = ibBackendColumnRawDB::Number(wxT("amt"));
+	const auto A = std::make_shared<TestQueryable>(wxT("TableA"), 1); A->AddCol(key); A->AddCol(dim); A->AddCol(amt);
+	A->SetKey(key);
 
 	SpecBuf buf;
 	buf.totals.push_back(ibTotalLevel{});                                      // detail level FIRST
-	buf.totals.push_back(ibTotalLevel::One(&dim, ibDimensionKind::Elements));
+	buf.totals.push_back(ibTotalLevel::One(dim, ibDimensionKind::Elements));
 	ibDataQueryBuilder::AggregateItem sum;
-	sum.m_fn = ibDataQueryBuilder::AggregateFn::Sum; sum.m_col = &amt; sum.m_alias = wxT("total");
+	sum.m_fn = ibDataQueryBuilder::AggregateFn::Sum; sum.m_col = amt; sum.m_alias = wxT("total");
 	buf.totalAggs = { sum };
-	const ibDataQuerySpec spec = buf.Make(nullptr, &A);
+	const ibDataQuerySpec spec = buf.Make(nullptr, A);
 
 	EXPECT_FALSE(ibDbTableProvider::CanRollupTotalsShape(spec));
 }
@@ -975,26 +993,26 @@ TEST(QueryComposerGate, RollupTotals_ColumnLevel_Refused)
 	// prefix of a ladder groups by a column's key alone: folded on the server, a cross table came back with its bottom
 	// line empty, «Total» over nothing (2026-11-15). Neither the ROLLUP road nor the GROUP BY one takes it; the RAM
 	// fold does (FoldAcross).
-	ibBackendColumnRawDB region = ibBackendColumnRawDB::String(wxT("region"));
-	ibBackendColumnRawDB product = ibBackendColumnRawDB::String(wxT("product"));
-	ibBackendColumnRawDB amt = ibBackendColumnRawDB::Number(wxT("amt"));
-	TestQueryable A(wxT("TableA"), 1); A.AddCol(&region); A.AddCol(&product); A.AddCol(&amt);
+	const std::shared_ptr<const ibBackendColumnRawDB> region = ibBackendColumnRawDB::String(wxT("region"));
+	const std::shared_ptr<const ibBackendColumnRawDB> product = ibBackendColumnRawDB::String(wxT("product"));
+	const std::shared_ptr<const ibBackendColumnRawDB> amt = ibBackendColumnRawDB::Number(wxT("amt"));
+	const auto A = std::make_shared<TestQueryable>(wxT("TableA"), 1); A->AddCol(region); A->AddCol(product); A->AddCol(amt);
 
 	SpecBuf buf;
-	buf.totals.push_back(ibTotalLevel::One(&region, ibDimensionKind::Elements));
-	buf.totals.push_back(ibTotalLevel::One(&product, ibDimensionKind::Elements));
+	buf.totals.push_back(ibTotalLevel::One(region, ibDimensionKind::Elements));
+	buf.totals.push_back(ibTotalLevel::One(product, ibDimensionKind::Elements));
 	buf.totals.back().m_axis = ibTotalsAxis::Columns;
 	ibDataQueryBuilder::AggregateItem sum;
-	sum.m_fn = ibDataQueryBuilder::AggregateFn::Sum; sum.m_col = &amt; sum.m_alias = wxT("total");
+	sum.m_fn = ibDataQueryBuilder::AggregateFn::Sum; sum.m_col = amt; sum.m_alias = wxT("total");
 	buf.totalAggs = { sum };
-	const ibDataQuerySpec spec = buf.Make(nullptr, &A);
+	const ibDataQuerySpec spec = buf.Make(nullptr, A);
 
 	EXPECT_FALSE(ibDbTableProvider::CanRollupTotalsShape(spec));
 	EXPECT_FALSE(ibDbTableProvider::CanFoldGroupByTotals(spec));
 
 	// …and the same two levels down the page are a ladder, which both roads take.
 	buf.totals.back().m_axis = ibTotalsAxis::Rows;
-	const ibDataQuerySpec ladder = buf.Make(nullptr, &A);
+	const ibDataQuerySpec ladder = buf.Make(nullptr, A);
 	EXPECT_TRUE(ibDbTableProvider::CanRollupTotalsShape(ladder));
 	EXPECT_TRUE(ibDbTableProvider::CanFoldGroupByTotals(ladder));
 }
@@ -1003,16 +1021,16 @@ TEST(QueryComposerGate, RollupTotals_HierarchyLevel_Refused)
 {
 	// A HIERARCHY unfold walks the reference's parent chain; no GROUP BY can do that, and folding it
 	// server-side would come back as a plain grouping under a word that asked for something else.
-	ibBackendColumnRawDB dim = ibBackendColumnRawDB::String(wxT("dim"));
-	ibBackendColumnRawDB amt = ibBackendColumnRawDB::Number(wxT("amt"));
-	TestQueryable A(wxT("TableA"), 1); A.AddCol(&dim); A.AddCol(&amt);
+	const std::shared_ptr<const ibBackendColumnRawDB> dim = ibBackendColumnRawDB::String(wxT("dim"));
+	const std::shared_ptr<const ibBackendColumnRawDB> amt = ibBackendColumnRawDB::Number(wxT("amt"));
+	const auto A = std::make_shared<TestQueryable>(wxT("TableA"), 1); A->AddCol(dim); A->AddCol(amt);
 
 	SpecBuf buf;
-	buf.totals.push_back(ibTotalLevel::One(&dim, ibDimensionKind::Hierarchy));
+	buf.totals.push_back(ibTotalLevel::One(dim, ibDimensionKind::Hierarchy));
 	ibDataQueryBuilder::AggregateItem sum;
-	sum.m_fn = ibDataQueryBuilder::AggregateFn::Sum; sum.m_col = &amt; sum.m_alias = wxT("total");
+	sum.m_fn = ibDataQueryBuilder::AggregateFn::Sum; sum.m_col = amt; sum.m_alias = wxT("total");
 	buf.totalAggs = { sum };
-	const ibDataQuerySpec spec = buf.Make(nullptr, &A);
+	const ibDataQuerySpec spec = buf.Make(nullptr, A);
 
 	EXPECT_FALSE(ibDbTableProvider::CanRollupTotalsShape(spec));
 }
@@ -1020,16 +1038,16 @@ TEST(QueryComposerGate, RollupTotals_HierarchyLevel_Refused)
 TEST(QueryComposerGate, RollupTotals_SingleSource_NotColocatable)
 {
 	// A single table is the single-source ROLLUP push (CanPushRollupTotals), NOT the co-located gate.
-	ibBackendColumnRawDB dim = ibBackendColumnRawDB::String(wxT("dim"));
-	ibBackendColumnRawDB amt = ibBackendColumnRawDB::Number(wxT("amt"));
-	TestQueryable A(wxT("TableA"), 1); A.AddCol(&dim); A.AddCol(&amt);
+	const std::shared_ptr<const ibBackendColumnRawDB> dim = ibBackendColumnRawDB::String(wxT("dim"));
+	const std::shared_ptr<const ibBackendColumnRawDB> amt = ibBackendColumnRawDB::Number(wxT("amt"));
+	const auto A = std::make_shared<TestQueryable>(wxT("TableA"), 1); A->AddCol(dim); A->AddCol(amt);
 
 	SpecBuf buf;
-	buf.groupBy = { &dim };
+	buf.groupBy = { dim };
 	ibDataQueryBuilder::AggregateItem sum;
-	sum.m_fn = ibDataQueryBuilder::AggregateFn::Sum; sum.m_col = &amt; sum.m_alias = wxT("total");
+	sum.m_fn = ibDataQueryBuilder::AggregateFn::Sum; sum.m_col = amt; sum.m_alias = wxT("total");
 	buf.aggs = { sum };
-	const ibDataQuerySpec spec = buf.Make(nullptr, &A);            // Source root (no join tree)
+	const ibDataQuerySpec spec = buf.Make(nullptr, A);            // Source root (no join tree)
 
 	EXPECT_FALSE(ibDbTableProvider::CanColocateRollupTotals(spec));
 }
@@ -1042,48 +1060,48 @@ TEST(QueryComposerGate, RollupTotals_SingleSource_NotColocatable)
 
 TEST(QueryComposerGate, GroupLevelPage_SingleScalarDim_Pageable)
 {
-	ibBackendColumnRawDB dim = ibBackendColumnRawDB::String(wxT("code"));
-	TestQueryable A(wxT("TableA"), 1); A.AddCol(&dim);
+	const std::shared_ptr<const ibBackendColumnRawDB> dim = ibBackendColumnRawDB::String(wxT("code"));
+	const auto A = std::make_shared<TestQueryable>(wxT("TableA"), 1); A->AddCol(dim);
 	SpecBuf buf;
-	buf.groupBy = { &dim };                                  // one plain scalar grouping level
-	const ibDataQuerySpec spec = buf.Make(nullptr, &A);      // single source (Source root)
+	buf.groupBy = { dim };                                  // one plain scalar grouping level
+	const ibDataQuerySpec spec = buf.Make(nullptr, A);      // single source (Source root)
 	EXPECT_TRUE(ibDbTableProvider::CanPageGroupLevel(spec));
 }
 
 TEST(QueryComposerGate, GroupLevelPage_TwoLevels_NotPageable)
 {
-	ibBackendColumnRawDB dim1 = ibBackendColumnRawDB::String(wxT("code"));
-	ibBackendColumnRawDB dim2 = ibBackendColumnRawDB::String(wxT("region"));
-	TestQueryable A(wxT("TableA"), 1); A.AddCol(&dim1); A.AddCol(&dim2);
+	const std::shared_ptr<const ibBackendColumnRawDB> dim1 = ibBackendColumnRawDB::String(wxT("code"));
+	const std::shared_ptr<const ibBackendColumnRawDB> dim2 = ibBackendColumnRawDB::String(wxT("region"));
+	const auto A = std::make_shared<TestQueryable>(wxT("TableA"), 1); A->AddCol(dim1); A->AddCol(dim2);
 	SpecBuf buf;
-	buf.groupBy = { &dim1, &dim2 };                          // two levels -> not a single-level drill
-	const ibDataQuerySpec spec = buf.Make(nullptr, &A);
+	buf.groupBy = { dim1, dim2 };                          // two levels -> not a single-level drill
+	const ibDataQuerySpec spec = buf.Make(nullptr, A);
 	EXPECT_FALSE(ibDbTableProvider::CanPageGroupLevel(spec));
 }
 
 TEST(QueryComposerGate, GroupLevelPage_DotWalkDim_NotPageable)
 {
-	ibBackendColumnRawDB owner = ibBackendColumnRawDB::Number(wxT("owner"));
-	ibBackendColumnRawDB name  = ibBackendColumnRawDB::String(wxT("name"));
-	TestQueryable A(wxT("TableA"), 1); A.AddCol(&owner); A.AddCol(&name);
+	const std::shared_ptr<const ibBackendColumnRawDB> owner = ibBackendColumnRawDB::Number(wxT("owner"));
+	const std::shared_ptr<const ibBackendColumnRawDB> name  = ibBackendColumnRawDB::String(wxT("name"));
+	const auto A = std::make_shared<TestQueryable>(wxT("TableA"), 1); A->AddCol(owner); A->AddCol(name);
 	SpecBuf buf;
-	buf.groupBy    = { &name };
-	buf.groupPaths = { { &owner, &name } };                 // dot-walk path (Owner.Name) -> not a single-column keyset
-	const ibDataQuerySpec spec = buf.Make(nullptr, &A);
+	buf.groupBy    = { name };
+	buf.groupPaths = { { owner, name } };                 // dot-walk path (Owner.Name) -> not a single-column keyset
+	const ibDataQuerySpec spec = buf.Make(nullptr, A);
 	EXPECT_FALSE(ibDbTableProvider::CanPageGroupLevel(spec));
 }
 
 TEST(QueryComposerGate, GroupLevelPage_JoinSource_NotPageable)
 {
-	ibBackendColumnRawDB aKey = ibBackendColumnRawDB::Number(wxT("a_key"));
-	ibBackendColumnRawDB aDim = ibBackendColumnRawDB::String(wxT("a_dim"));
-	ibBackendColumnRawDB bKey = ibBackendColumnRawDB::Number(wxT("b_key"));
-	TestQueryable A(wxT("TableA"), 1); A.AddCol(&aKey); A.AddCol(&aDim);
-	TestQueryable B(wxT("TableB"), 2); B.AddCol(&bKey);
-	auto root = Join2(&A, &B, &aKey, &bKey);                // multi-source join tree
+	const std::shared_ptr<const ibBackendColumnRawDB> aKey = ibBackendColumnRawDB::Number(wxT("a_key"));
+	const std::shared_ptr<const ibBackendColumnRawDB> aDim = ibBackendColumnRawDB::String(wxT("a_dim"));
+	const std::shared_ptr<const ibBackendColumnRawDB> bKey = ibBackendColumnRawDB::Number(wxT("b_key"));
+	const auto A = std::make_shared<TestQueryable>(wxT("TableA"), 1); A->AddCol(aKey); A->AddCol(aDim);
+	const auto B = std::make_shared<TestQueryable>(wxT("TableB"), 2); B->AddCol(bKey);
+	auto root = Join2(A, B, aKey, bKey);                // multi-source join tree
 	SpecBuf buf;
-	buf.groupBy = { &aDim };
-	const ibDataQuerySpec spec = buf.Make(root.get(), &A);
+	buf.groupBy = { aDim };
+	const ibDataQuerySpec spec = buf.Make(root, A);
 	EXPECT_FALSE(ibDbTableProvider::CanPageGroupLevel(spec));   // multi-source group -> RAM fold (co-location is a later step)
 }
 
@@ -1093,32 +1111,32 @@ TEST(QueryComposerGate, GroupLevelPage_ReferenceDim_NotPageable)
 	// Keyset-paging by it would drop the TYPE field the read reconstructs from ("field <col>_TYPE not found")
 	// and has no meaningful keyset order (its id, not its presentation) -> the gate rejects it, routing to the
 	// unpaged full-spread ExecuteAggregate. Regression guard for the "grouping a table by a reference crashes".
-	TestCol dim(wxT("counterparty"), 2);
-	dim.GetTypeDesc() = ibTypeDescription(reference_to_clsid(999));   // reference-typed dimension (spread > 1 field)
-	TestQueryable A(wxT("doc"), 1); A.AddCol(&dim);
+	const auto dim = std::make_shared<TestCol>(wxT("counterparty"), 2);
+	dim->GetTypeDesc() = ibTypeDescription(reference_to_clsid(999));   // reference-typed dimension (spread > 1 field)
+	const auto A = std::make_shared<TestQueryable>(wxT("doc"), 1); A->AddCol(dim);
 	SpecBuf buf;
-	buf.groupBy = { &dim };
-	const ibDataQuerySpec spec = buf.Make(nullptr, &A);
+	buf.groupBy = { dim };
+	const ibDataQuerySpec spec = buf.Make(nullptr, A);
 	EXPECT_FALSE(ibDbTableProvider::CanPageGroupLevel(spec));
 }
 
 TEST(QueryComposerGate, RollupTotals_ComputedLeaf_NotColocatable)
 {
 	// A computed (RAM) leaf in the join can't co-locate -> the composer RAM-folds the totals tree.
-	ibBackendColumnRawDB aKey = ibBackendColumnRawDB::Number(wxT("a_key"));
-	ibBackendColumnRawDB aDim = ibBackendColumnRawDB::String(wxT("a_dim"));
-	ibBackendColumnRawDB cKey = ibBackendColumnRawDB::Number(wxT("c_key"));
-	ibBackendColumnRawDB cAmt = ibBackendColumnRawDB::Number(wxT("c_amt"));
-	TestQueryable A(wxT("TableA"), 1);                   A.AddCol(&aKey); A.AddCol(&aDim);
-	TestQueryable C(wxT("Slice"), 2, /*computed*/ true); C.AddCol(&cKey); C.AddCol(&cAmt);
+	const std::shared_ptr<const ibBackendColumnRawDB> aKey = ibBackendColumnRawDB::Number(wxT("a_key"));
+	const std::shared_ptr<const ibBackendColumnRawDB> aDim = ibBackendColumnRawDB::String(wxT("a_dim"));
+	const std::shared_ptr<const ibBackendColumnRawDB> cKey = ibBackendColumnRawDB::Number(wxT("c_key"));
+	const std::shared_ptr<const ibBackendColumnRawDB> cAmt = ibBackendColumnRawDB::Number(wxT("c_amt"));
+	const auto A = std::make_shared<TestQueryable>(wxT("TableA"), 1);                   A->AddCol(aKey); A->AddCol(aDim);
+	const auto C = std::make_shared<TestQueryable>(wxT("Slice"), 2, /*computed*/ true); C->AddCol(cKey); C->AddCol(cAmt);
 
-	auto root = Join2(&A, &C, &aKey, &cKey);
+	auto root = Join2(A, C, aKey, cKey);
 	SpecBuf buf;
-	buf.groupBy = { &aDim };
+	buf.groupBy = { aDim };
 	ibDataQueryBuilder::AggregateItem sum;
-	sum.m_fn = ibDataQueryBuilder::AggregateFn::Sum; sum.m_col = &cAmt; sum.m_alias = wxT("total");
+	sum.m_fn = ibDataQueryBuilder::AggregateFn::Sum; sum.m_col = cAmt; sum.m_alias = wxT("total");
 	buf.aggs = { sum };
-	const ibDataQuerySpec spec = buf.Make(root.get(), &A);
+	const ibDataQuerySpec spec = buf.Make(root, A);
 
 	EXPECT_FALSE(ibDbTableProvider::CanColocateRollupTotals(spec));
 }
@@ -1126,19 +1144,19 @@ TEST(QueryComposerGate, RollupTotals_ComputedLeaf_NotColocatable)
 TEST(QueryComposerGate, RollupTotals_NoLevels_NotColocatable)
 {
 	// A totals query always has at least one level; an empty groupBy is not a totals shape.
-	ibBackendColumnRawDB aKey = ibBackendColumnRawDB::Number(wxT("a_key"));
-	ibBackendColumnRawDB aOut = ibBackendColumnRawDB::String(wxT("a_out"));
-	ibBackendColumnRawDB bKey = ibBackendColumnRawDB::Number(wxT("b_key"));
-	ibBackendColumnRawDB bAmt = ibBackendColumnRawDB::Number(wxT("b_amt"));
-	TestQueryable A(wxT("TableA"), 1); A.AddCol(&aKey); A.AddCol(&aOut);
-	TestQueryable B(wxT("TableB"), 2); B.AddCol(&bKey); B.AddCol(&bAmt);
+	const std::shared_ptr<const ibBackendColumnRawDB> aKey = ibBackendColumnRawDB::Number(wxT("a_key"));
+	const std::shared_ptr<const ibBackendColumnRawDB> aOut = ibBackendColumnRawDB::String(wxT("a_out"));
+	const std::shared_ptr<const ibBackendColumnRawDB> bKey = ibBackendColumnRawDB::Number(wxT("b_key"));
+	const std::shared_ptr<const ibBackendColumnRawDB> bAmt = ibBackendColumnRawDB::Number(wxT("b_amt"));
+	const auto A = std::make_shared<TestQueryable>(wxT("TableA"), 1); A->AddCol(aKey); A->AddCol(aOut);
+	const auto B = std::make_shared<TestQueryable>(wxT("TableB"), 2); B->AddCol(bKey); B->AddCol(bAmt);
 
-	auto root = Join2(&A, &B, &aKey, &bKey);
+	auto root = Join2(A, B, aKey, bKey);
 	SpecBuf buf;                                                   // groupBy empty -> not a totals shape
 	ibDataQueryBuilder::AggregateItem sum;
-	sum.m_fn = ibDataQueryBuilder::AggregateFn::Sum; sum.m_col = &bAmt; sum.m_alias = wxT("total");
+	sum.m_fn = ibDataQueryBuilder::AggregateFn::Sum; sum.m_col = bAmt; sum.m_alias = wxT("total");
 	buf.aggs = { sum };
-	const ibDataQuerySpec spec = buf.Make(root.get(), &A);
+	const ibDataQuerySpec spec = buf.Make(root, A);
 
 	EXPECT_FALSE(ibDbTableProvider::CanColocateRollupTotals(spec));
 }
@@ -1148,48 +1166,48 @@ TEST(QueryComposerGate, RollupTotals_NoLevels_NotColocatable)
 // group / aggregate columns BY NAME.
 TEST(QueryComposerGate, RollupTotals_UnionScalar_Colocatable)
 {
-	ibBackendColumnRawDB aDim = ibBackendColumnRawDB::String(wxT("dim"));
-	ibBackendColumnRawDB aAmt = ibBackendColumnRawDB::Number(wxT("amt"));
-	ibBackendColumnRawDB bDim = ibBackendColumnRawDB::String(wxT("dim"));
-	ibBackendColumnRawDB bAmt = ibBackendColumnRawDB::Number(wxT("amt"));
-	TestQueryable A(wxT("TableA"), 1); A.AddCol(&aDim); A.AddCol(&aAmt);
-	TestQueryable B(wxT("TableB"), 2); B.AddCol(&bDim); B.AddCol(&bAmt);
+	const std::shared_ptr<const ibBackendColumnRawDB> aDim = ibBackendColumnRawDB::String(wxT("dim"));
+	const std::shared_ptr<const ibBackendColumnRawDB> aAmt = ibBackendColumnRawDB::Number(wxT("amt"));
+	const std::shared_ptr<const ibBackendColumnRawDB> bDim = ibBackendColumnRawDB::String(wxT("dim"));
+	const std::shared_ptr<const ibBackendColumnRawDB> bAmt = ibBackendColumnRawDB::Number(wxT("amt"));
+	const auto A = std::make_shared<TestQueryable>(wxT("TableA"), 1); A->AddCol(aDim); A->AddCol(aAmt);
+	const auto B = std::make_shared<TestQueryable>(wxT("TableB"), 2); B->AddCol(bDim); B->AddCol(bAmt);
 
 	auto root = std::make_shared<ibQueryNode>();
 	root->m_kind = ibQueryNode::Kind::Union;
-	root->m_parts.push_back(ibQueryNode::Source(&A));
-	root->m_parts.push_back(ibQueryNode::Source(&B));
+	root->m_parts.push_back(ibQueryNode::Source(A));
+	root->m_parts.push_back(ibQueryNode::Source(B));
 
 	SpecBuf buf;
-	buf.groupBy = { &aDim };                                   // resolved per branch by NAME ("dim")
+	buf.groupBy = { aDim };                                   // resolved per branch by NAME ("dim")
 	ibDataQueryBuilder::AggregateItem sum;
-	sum.m_fn = ibDataQueryBuilder::AggregateFn::Sum; sum.m_col = &aAmt; sum.m_alias = wxT("total");
+	sum.m_fn = ibDataQueryBuilder::AggregateFn::Sum; sum.m_col = aAmt; sum.m_alias = wxT("total");
 	buf.aggs = { sum };
-	const ibDataQuerySpec spec = buf.Make(root.get(), &A);
+	const ibDataQuerySpec spec = buf.Make(root, A);
 
 	EXPECT_TRUE(ibDbTableProvider::CanColocateRollupTotals(spec));   // UNION + scalar level + scalar SUM -> server-side ROLLUP
 }
 
 TEST(QueryComposerGate, RollupTotals_UnionComputedBranch_NotColocatable)
 {
-	ibBackendColumnRawDB aDim = ibBackendColumnRawDB::String(wxT("dim"));
-	ibBackendColumnRawDB aAmt = ibBackendColumnRawDB::Number(wxT("amt"));
-	ibBackendColumnRawDB cDim = ibBackendColumnRawDB::String(wxT("dim"));
-	ibBackendColumnRawDB cAmt = ibBackendColumnRawDB::Number(wxT("amt"));
-	TestQueryable A(wxT("TableA"), 1);                   A.AddCol(&aDim); A.AddCol(&aAmt);
-	TestQueryable C(wxT("Slice"), 2, /*computed*/ true); C.AddCol(&cDim); C.AddCol(&cAmt);
+	const std::shared_ptr<const ibBackendColumnRawDB> aDim = ibBackendColumnRawDB::String(wxT("dim"));
+	const std::shared_ptr<const ibBackendColumnRawDB> aAmt = ibBackendColumnRawDB::Number(wxT("amt"));
+	const std::shared_ptr<const ibBackendColumnRawDB> cDim = ibBackendColumnRawDB::String(wxT("dim"));
+	const std::shared_ptr<const ibBackendColumnRawDB> cAmt = ibBackendColumnRawDB::Number(wxT("amt"));
+	const auto A = std::make_shared<TestQueryable>(wxT("TableA"), 1);                   A->AddCol(aDim); A->AddCol(aAmt);
+	const auto C = std::make_shared<TestQueryable>(wxT("Slice"), 2, /*computed*/ true); C->AddCol(cDim); C->AddCol(cAmt);
 
 	auto root = std::make_shared<ibQueryNode>();
 	root->m_kind = ibQueryNode::Kind::Union;
-	root->m_parts.push_back(ibQueryNode::Source(&A));
-	root->m_parts.push_back(ibQueryNode::Source(&C));
+	root->m_parts.push_back(ibQueryNode::Source(A));
+	root->m_parts.push_back(ibQueryNode::Source(C));
 
 	SpecBuf buf;
-	buf.groupBy = { &aDim };
+	buf.groupBy = { aDim };
 	ibDataQueryBuilder::AggregateItem sum;
-	sum.m_fn = ibDataQueryBuilder::AggregateFn::Sum; sum.m_col = &aAmt; sum.m_alias = wxT("total");
+	sum.m_fn = ibDataQueryBuilder::AggregateFn::Sum; sum.m_col = aAmt; sum.m_alias = wxT("total");
 	buf.aggs = { sum };
-	const ibDataQuerySpec spec = buf.Make(root.get(), &A);
+	const ibDataQuerySpec spec = buf.Make(root, A);
 
 	EXPECT_FALSE(ibDbTableProvider::CanColocateRollupTotals(spec));   // a computed branch -> RAM fold
 }
@@ -1198,25 +1216,25 @@ TEST(QueryComposerGate, RollupTotals_UnionWithPredicate_NotColocatable)
 {
 	// A boolean WHERE tree / RLS restriction is NOT rendered on the union-branch path, so its presence
 	// forces RAM (which applies it) — a co-located UNION totals never emits an under-restricted read.
-	ibBackendColumnRawDB aDim = ibBackendColumnRawDB::String(wxT("dim"));
-	ibBackendColumnRawDB aAmt = ibBackendColumnRawDB::Number(wxT("amt"));
-	ibBackendColumnRawDB bDim = ibBackendColumnRawDB::String(wxT("dim"));
-	ibBackendColumnRawDB bAmt = ibBackendColumnRawDB::Number(wxT("amt"));
-	TestQueryable A(wxT("TableA"), 1); A.AddCol(&aDim); A.AddCol(&aAmt);
-	TestQueryable B(wxT("TableB"), 2); B.AddCol(&bDim); B.AddCol(&bAmt);
+	const std::shared_ptr<const ibBackendColumnRawDB> aDim = ibBackendColumnRawDB::String(wxT("dim"));
+	const std::shared_ptr<const ibBackendColumnRawDB> aAmt = ibBackendColumnRawDB::Number(wxT("amt"));
+	const std::shared_ptr<const ibBackendColumnRawDB> bDim = ibBackendColumnRawDB::String(wxT("dim"));
+	const std::shared_ptr<const ibBackendColumnRawDB> bAmt = ibBackendColumnRawDB::Number(wxT("amt"));
+	const auto A = std::make_shared<TestQueryable>(wxT("TableA"), 1); A->AddCol(aDim); A->AddCol(aAmt);
+	const auto B = std::make_shared<TestQueryable>(wxT("TableB"), 2); B->AddCol(bDim); B->AddCol(bAmt);
 
 	auto root = std::make_shared<ibQueryNode>();
 	root->m_kind = ibQueryNode::Kind::Union;
-	root->m_parts.push_back(ibQueryNode::Source(&A));
-	root->m_parts.push_back(ibQueryNode::Source(&B));
+	root->m_parts.push_back(ibQueryNode::Source(A));
+	root->m_parts.push_back(ibQueryNode::Source(B));
 
 	SpecBuf buf;
-	buf.groupBy = { &aDim };
+	buf.groupBy = { aDim };
 	ibDataQueryBuilder::AggregateItem sum;
-	sum.m_fn = ibDataQueryBuilder::AggregateFn::Sum; sum.m_col = &aAmt; sum.m_alias = wxT("total");
+	sum.m_fn = ibDataQueryBuilder::AggregateFn::Sum; sum.m_col = aAmt; sum.m_alias = wxT("total");
 	buf.aggs = { sum };
-	ibDataQuerySpec spec = buf.Make(root.get(), &A);
-	ibQueryCondition leaf; leaf.m_col = &aDim; leaf.m_value = ibValue(ibString(wxT("North")));
+	ibDataQuerySpec spec = buf.Make(root, A);
+	ibQueryCondition leaf; leaf.m_col = aDim; leaf.m_value = ibValue(ibString(wxT("North")));
 	spec.m_predicate = ibQueryPredicate::Leaf(leaf);              // stand-in for a boolean WHERE / RLS tree
 
 	EXPECT_FALSE(ibDbTableProvider::CanColocateRollupTotals(spec));
@@ -1229,16 +1247,16 @@ TEST(QueryComposerGate, RollupTotals_UnionWithPredicate_NotColocatable)
 
 TEST(QueryComposerGate, RollupTotals_SingleSourceScalar_Shape)
 {
-	ibBackendColumnRawDB dim = ibBackendColumnRawDB::String(wxT("dim"));
-	ibBackendColumnRawDB amt = ibBackendColumnRawDB::Number(wxT("amt"));
-	TestQueryable A(wxT("TableA"), 1); A.AddCol(&dim); A.AddCol(&amt);
+	const std::shared_ptr<const ibBackendColumnRawDB> dim = ibBackendColumnRawDB::String(wxT("dim"));
+	const std::shared_ptr<const ibBackendColumnRawDB> amt = ibBackendColumnRawDB::Number(wxT("amt"));
+	const auto A = std::make_shared<TestQueryable>(wxT("TableA"), 1); A->AddCol(dim); A->AddCol(amt);
 
 	SpecBuf buf;
-	buf.groupBy = { &dim };
+	buf.groupBy = { dim };
 	ibDataQueryBuilder::AggregateItem sum;
-	sum.m_fn = ibDataQueryBuilder::AggregateFn::Sum; sum.m_col = &amt; sum.m_alias = wxT("total");
+	sum.m_fn = ibDataQueryBuilder::AggregateFn::Sum; sum.m_col = amt; sum.m_alias = wxT("total");
 	buf.aggs = { sum };
-	const ibDataQuerySpec spec = buf.Make(nullptr, &A);           // Source root (single source)
+	const ibDataQuerySpec spec = buf.Make(nullptr, A);           // Source root (single source)
 
 	EXPECT_TRUE(ibDbTableProvider::CanRollupTotalsShape(spec));
 }
@@ -1246,20 +1264,20 @@ TEST(QueryComposerGate, RollupTotals_SingleSourceScalar_Shape)
 TEST(QueryComposerGate, RollupTotals_MultiSource_NotSingleShape)
 {
 	// A join tree is NOT the single-source shape (it is the co-located gate's job).
-	ibBackendColumnRawDB aKey = ibBackendColumnRawDB::Number(wxT("a_key"));
-	ibBackendColumnRawDB aDim = ibBackendColumnRawDB::String(wxT("a_dim"));
-	ibBackendColumnRawDB bKey = ibBackendColumnRawDB::Number(wxT("b_key"));
-	ibBackendColumnRawDB bAmt = ibBackendColumnRawDB::Number(wxT("b_amt"));
-	TestQueryable A(wxT("TableA"), 1); A.AddCol(&aKey); A.AddCol(&aDim);
-	TestQueryable B(wxT("TableB"), 2); B.AddCol(&bKey); B.AddCol(&bAmt);
+	const std::shared_ptr<const ibBackendColumnRawDB> aKey = ibBackendColumnRawDB::Number(wxT("a_key"));
+	const std::shared_ptr<const ibBackendColumnRawDB> aDim = ibBackendColumnRawDB::String(wxT("a_dim"));
+	const std::shared_ptr<const ibBackendColumnRawDB> bKey = ibBackendColumnRawDB::Number(wxT("b_key"));
+	const std::shared_ptr<const ibBackendColumnRawDB> bAmt = ibBackendColumnRawDB::Number(wxT("b_amt"));
+	const auto A = std::make_shared<TestQueryable>(wxT("TableA"), 1); A->AddCol(aKey); A->AddCol(aDim);
+	const auto B = std::make_shared<TestQueryable>(wxT("TableB"), 2); B->AddCol(bKey); B->AddCol(bAmt);
 
-	auto root = Join2(&A, &B, &aKey, &bKey);
+	auto root = Join2(A, B, aKey, bKey);
 	SpecBuf buf;
-	buf.groupBy = { &aDim };
+	buf.groupBy = { aDim };
 	ibDataQueryBuilder::AggregateItem sum;
-	sum.m_fn = ibDataQueryBuilder::AggregateFn::Sum; sum.m_col = &bAmt; sum.m_alias = wxT("total");
+	sum.m_fn = ibDataQueryBuilder::AggregateFn::Sum; sum.m_col = bAmt; sum.m_alias = wxT("total");
 	buf.aggs = { sum };
-	const ibDataQuerySpec spec = buf.Make(root.get(), &A);
+	const ibDataQuerySpec spec = buf.Make(root, A);
 
 	EXPECT_FALSE(ibDbTableProvider::CanRollupTotalsShape(spec));   // join tree -> not single-source
 }
@@ -1267,16 +1285,16 @@ TEST(QueryComposerGate, RollupTotals_MultiSource_NotSingleShape)
 TEST(QueryComposerGate, RollupTotals_SingleComputed_NotShape)
 {
 	// A computed (RAM) single source (a register slice) can't push ROLLUP -> RAM fold.
-	ibBackendColumnRawDB dim = ibBackendColumnRawDB::String(wxT("dim"));
-	ibBackendColumnRawDB amt = ibBackendColumnRawDB::Number(wxT("amt"));
-	TestQueryable C(wxT("Slice"), 1, /*computed*/ true); C.AddCol(&dim); C.AddCol(&amt);
+	const std::shared_ptr<const ibBackendColumnRawDB> dim = ibBackendColumnRawDB::String(wxT("dim"));
+	const std::shared_ptr<const ibBackendColumnRawDB> amt = ibBackendColumnRawDB::Number(wxT("amt"));
+	const auto C = std::make_shared<TestQueryable>(wxT("Slice"), 1, /*computed*/ true); C->AddCol(dim); C->AddCol(amt);
 
 	SpecBuf buf;
-	buf.groupBy = { &dim };
+	buf.groupBy = { dim };
 	ibDataQueryBuilder::AggregateItem sum;
-	sum.m_fn = ibDataQueryBuilder::AggregateFn::Sum; sum.m_col = &amt; sum.m_alias = wxT("total");
+	sum.m_fn = ibDataQueryBuilder::AggregateFn::Sum; sum.m_col = amt; sum.m_alias = wxT("total");
 	buf.aggs = { sum };
-	const ibDataQuerySpec spec = buf.Make(nullptr, &C);
+	const ibDataQuerySpec spec = buf.Make(nullptr, C);
 
 	EXPECT_FALSE(ibDbTableProvider::CanRollupTotalsShape(spec));   // computed source -> RAM
 }
@@ -1311,7 +1329,7 @@ ibQueryRamTable HierDetail()
 	return d;
 }
 
-ibDataQueryBuilder::AggregateItem SumOf(const ibBackendQueryColumn* col)
+ibDataQueryBuilder::AggregateItem SumOf(const std::shared_ptr<const ibBackendQueryColumn>& col)
 {
 	ibDataQueryBuilder::AggregateItem a;
 	a.m_fn = ibDataQueryBuilder::AggregateFn::Sum; a.m_col = col; a.m_alias = wxT("total");
@@ -1322,10 +1340,12 @@ ibDataQueryBuilder::AggregateItem SumOf(const ibBackendQueryColumn* col)
 
 TEST(QueryHierarchy, Hierarchy_TreeSubtotalsHasChildren)
 {
-	TestCol keyCol(wxT("key"), KEY_ID), parentCol(wxT("parent"), HPARENT), amtCol(wxT("amount"), HAMT);
+	const auto keyCol    = std::make_shared<TestCol>(wxT("key"), KEY_ID);
+	const auto parentCol = std::make_shared<TestCol>(wxT("parent"), HPARENT);
+	const auto amtCol    = std::make_shared<TestCol>(wxT("amount"), HAMT);
 	const ibQueryRamTable d = HierDetail();
 	const ibSelectorTree tree = ibQueryComposer::BuildHierarchyTree(
-		d, &keyCol, &parentCol, { SumOf(&amtCol) }, ibDimensionKind::Hierarchy);
+		d, keyCol, parentCol, { SumOf(amtCol) }, ibDimensionKind::Hierarchy);
 
 	const ibSelectorTree::Node& root = tree.Root();
 	ASSERT_EQ(root.m_children.size(), 2u);                                   // F1, E3
@@ -1348,10 +1368,12 @@ TEST(QueryHierarchy, Hierarchy_TreeSubtotalsHasChildren)
 
 TEST(QueryHierarchy, HierarchyOnly_FoldersOnly)
 {
-	TestCol keyCol(wxT("key"), KEY_ID), parentCol(wxT("parent"), HPARENT), amtCol(wxT("amount"), HAMT);
+	const auto keyCol    = std::make_shared<TestCol>(wxT("key"), KEY_ID);
+	const auto parentCol = std::make_shared<TestCol>(wxT("parent"), HPARENT);
+	const auto amtCol    = std::make_shared<TestCol>(wxT("amount"), HAMT);
 	const ibQueryRamTable d = HierDetail();
 	const ibSelectorTree tree = ibQueryComposer::BuildHierarchyTree(
-		d, &keyCol, &parentCol, { SumOf(&amtCol) }, ibDimensionKind::HierarchyOnly);
+		d, keyCol, parentCol, { SumOf(amtCol) }, ibDimensionKind::HierarchyOnly);
 
 	const ibSelectorTree::Node& root = tree.Root();
 	ASSERT_EQ(root.m_children.size(), 1u);                                   // only F1 (E3 leaf omitted)
@@ -1365,10 +1387,12 @@ TEST(QueryHierarchy, HierarchyOnly_FoldersOnly)
 
 TEST(QueryHierarchy, Elements_LeafNodesWithGrandTotal)
 {
-	TestCol keyCol(wxT("key"), KEY_ID), parentCol(wxT("parent"), HPARENT), amtCol(wxT("amount"), HAMT);
+	const auto keyCol    = std::make_shared<TestCol>(wxT("key"), KEY_ID);
+	const auto parentCol = std::make_shared<TestCol>(wxT("parent"), HPARENT);
+	const auto amtCol    = std::make_shared<TestCol>(wxT("amount"), HAMT);
 	const ibQueryRamTable d = HierDetail();
 	const ibSelectorTree tree = ibQueryComposer::BuildHierarchyTree(
-		d, &keyCol, &parentCol, { SumOf(&amtCol) }, ibDimensionKind::Elements);
+		d, keyCol, parentCol, { SumOf(amtCol) }, ibDimensionKind::Elements);
 
 	ASSERT_EQ(tree.Root().m_children.size(), 5u);                            // every row a leaf node, no nesting
 	EXPECT_TRUE(tree.Root().m_children[0]->m_children.empty());             // leaves don't nest
@@ -1381,11 +1405,13 @@ TEST(QueryHierarchy, Elements_LeafNodesWithGrandTotal)
 
 TEST(QuerySelector, Hierarchy_FoldsSnapshot_SubtotalsFromOneSnapshot)
 {
-	TestCol keyCol(wxT("key"), KEY_ID), parentCol(wxT("parent"), HPARENT), amtCol(wxT("amount"), HAMT);
+	const auto keyCol    = std::make_shared<TestCol>(wxT("key"), KEY_ID);
+	const auto parentCol = std::make_shared<TestCol>(wxT("parent"), HPARENT);
+	const auto amtCol    = std::make_shared<TestCol>(wxT("amount"), HAMT);
 
 	// Snapshot moves INTO the Selector; the fold + traversal kind live on the Selector, not the query.
 	ibSelector sel(HierDetail(), ibSelectKind::ibSelectKind_ByGroupsHierarchy);
-	sel.ByParentRef(&keyCol, &parentCol).Aggregating({ SumOf(&amtCol) });
+	sel.ByParentRef(keyCol, parentCol).Aggregating({ SumOf(amtCol) });
 	const ibSelectorTree tree = sel.Build();
 
 	const ibSelectorTree::Node& root = tree.Root();
@@ -1400,10 +1426,12 @@ TEST(QuerySelector, Hierarchy_FoldsSnapshot_SubtotalsFromOneSnapshot)
 // The live sub-selection (a selector nested in a selector) runs at runtime over a real holder.
 TEST(QuerySelector, Select_NoSource_EmptyAndNoDbHit)
 {
-	TestCol keyCol(wxT("key"), KEY_ID), parentCol(wxT("parent"), HPARENT), amtCol(wxT("amount"), HAMT);
+	const auto keyCol    = std::make_shared<TestCol>(wxT("key"), KEY_ID);
+	const auto parentCol = std::make_shared<TestCol>(wxT("parent"), HPARENT);
+	const auto amtCol    = std::make_shared<TestCol>(wxT("amount"), HAMT);
 
 	ibSelector sel(HierDetail(), ibSelectKind::ibSelectKind_ByGroupsHierarchy);
-	sel.ByParentRef(&keyCol, &parentCol).Aggregating({ SumOf(&amtCol) });   // fold set, but NO WithSource
+	sel.ByParentRef(keyCol, parentCol).Aggregating({ SumOf(amtCol) });   // fold set, but NO WithSource
 
 	ASSERT_TRUE(sel.Next());                                                 // stand on the first node (F1)
 	const ibSelector child = sel.Select();                                  // no WithSource → guard → empty, no DB
@@ -1424,14 +1452,16 @@ TEST(QuerySelector, Select_NoSource_EmptyAndNoDbHit)
 // The tree here: F1 and E3 at the top, E1 and F2 under F1, E2 under F2.
 TEST(QuerySelector, Iterate_OneLevelPerSelection_DescendForChildren)
 {
-	TestCol keyCol(wxT("key"), KEY_ID), parentCol(wxT("parent"), HPARENT), amtCol(wxT("amount"), HAMT);
+	const auto keyCol    = std::make_shared<TestCol>(wxT("key"), KEY_ID);
+	const auto parentCol = std::make_shared<TestCol>(wxT("parent"), HPARENT);
+	const auto amtCol    = std::make_shared<TestCol>(wxT("amount"), HAMT);
 	ibSelector sel(HierDetail(), ibSelectKind::ibSelectKind_ByGroupsHierarchy);
-	sel.ByParentRef(&keyCol, &parentCol).Aggregating({ SumOf(&amtCol) });
+	sel.ByParentRef(keyCol, parentCol).Aggregating({ SumOf(amtCol) });
 
-	auto keysOf = [&keyCol](ibSelector& s, std::vector<int>* levels = nullptr) {
+	auto keysOf = [keyCol](ibSelector& s, std::vector<int>* levels = nullptr) {
 		std::vector<std::string> out;
 		while (s.Next()) {
-			out.push_back(s.GetValue(&keyCol).GetString().ToStdString());
+			out.push_back(s.GetValue(keyCol).GetString().ToStdString());
 			if (levels != nullptr) levels->push_back(s.Level());
 		}
 		return out;
@@ -1447,7 +1477,7 @@ TEST(QuerySelector, Iterate_OneLevelPerSelection_DescendForChildren)
 	// Descend into F1 — its own children, and LEVELS STAY ABSOLUTE across the descent.
 	sel.Reset();
 	ASSERT_TRUE(sel.Next());
-	ASSERT_EQ(sel.GetValue(&keyCol).GetString(), wxT("1"));
+	ASSERT_EQ(sel.GetValue(keyCol).GetString(), wxT("1"));
 	ibSelector underF1 = sel.Select(ibSelectKind::ibSelectKind_ByGroupsHierarchy);
 	std::vector<int> f1Levels;
 	const std::vector<std::string> f1 = keysOf(underF1, &f1Levels);
@@ -1459,7 +1489,7 @@ TEST(QuerySelector, Iterate_OneLevelPerSelection_DescendForChildren)
 	underF1.Reset();
 	ASSERT_TRUE(underF1.Next());
 	ASSERT_TRUE(underF1.Next());                            // F2
-	ASSERT_EQ(underF1.GetValue(&keyCol).GetString(), wxT("3"));
+	ASSERT_EQ(underF1.GetValue(keyCol).GetString(), wxT("3"));
 	ibSelector underF2 = underF1.Select(ibSelectKind::ibSelectKind_ByGroupsHierarchy);
 	std::vector<int> f2Levels;
 	const std::vector<std::string> f2 = keysOf(underF2, &f2Levels);
@@ -1476,13 +1506,15 @@ TEST(QuerySelector, Iterate_OneLevelPerSelection_DescendForChildren)
 // rather than a screenful of NULLs, which is indistinguishable from a real row made of nothing.
 TEST(QuerySelector, Exhausted_KeepsTheLastRow)
 {
-	TestCol keyCol(wxT("key"), KEY_ID), parentCol(wxT("parent"), HPARENT), amtCol(wxT("amount"), HAMT);
+	const auto keyCol    = std::make_shared<TestCol>(wxT("key"), KEY_ID);
+	const auto parentCol = std::make_shared<TestCol>(wxT("parent"), HPARENT);
+	const auto amtCol    = std::make_shared<TestCol>(wxT("amount"), HAMT);
 	ibSelector sel(HierDetail(), ibSelectKind::ibSelectKind_ByGroupsHierarchy);
-	sel.ByParentRef(&keyCol, &parentCol).Aggregating({ SumOf(&amtCol) });
+	sel.ByParentRef(keyCol, parentCol).Aggregating({ SumOf(amtCol) });
 
 	while (sel.Next()) {}
 	EXPECT_FALSE(sel.Next());                               // still refuses, idempotently
-	EXPECT_EQ(sel.GetValue(&keyCol).GetString(), wxT("5")); // …and still stands on E3
+	EXPECT_EQ(sel.GetValue(keyCol).GetString(), wxT("5")); // …and still stands on E3
 }
 
 // ===========================================================================
@@ -1571,27 +1603,29 @@ TEST(QuerySelector, ByGroupsWithoutAGroupingReadsTheRows)
 
 TEST(QuerySelector, WithNoOrderStatedALevelKeepsFoldOrder)
 {
-	TestCol regionCol(wxT("region"), REGION_ID), amtCol(wxT("amount"), GAMT_ID);
+	const auto regionCol = std::make_shared<TestCol>(wxT("region"), REGION_ID);
+	const auto amtCol    = std::make_shared<TestCol>(wxT("amount"), GAMT_ID);
 	ibSelector sel(GroupDetail(), ibSelectKind::ibSelectKind_ByGroups);
-	sel.ByGroups({ &regionCol }).Aggregating({ SumOf(&amtCol) });
+	sel.ByGroups({ regionCol }).Aggregating({ SumOf(amtCol) });
 
 	ASSERT_TRUE(sel.Next());
-	EXPECT_EQ(sel.GetValue(&regionCol).GetString(), wxT("North"));   // the order the rows arrived in
+	EXPECT_EQ(sel.GetValue(regionCol).GetString(), wxT("North"));   // the order the rows arrived in
 }
 
 // ⭐ SORTING A LEVEL BY ITS FIGURE — "the biggest customer first", the sort a report is most often
 // given. The key is the aggregate's own column, read exactly as the walk reads it.
 TEST(QuerySelector, ALevelHandsItsHeadingsOutInItsOwnOrder)
 {
-	TestCol regionCol(wxT("region"), REGION_ID), amtCol(wxT("amount"), GAMT_ID);
+	const auto regionCol = std::make_shared<TestCol>(wxT("region"), REGION_ID);
+	const auto amtCol    = std::make_shared<TestCol>(wxT("amount"), GAMT_ID);
 	ibSelector sel(GroupDetail(), ibSelectKind::ibSelectKind_ByGroups);
-	sel.ByGroups({ &regionCol }).Aggregating({ SumOf(&amtCol) });
-	sel.OrderBy({ { &amtCol, ibString(), /*ascending*/ false } });
+	sel.ByGroups({ regionCol }).Aggregating({ SumOf(amtCol) });
+	sel.OrderBy({ { amtCol, ibString(), /*ascending*/ false } });
 
 	ASSERT_TRUE(sel.Next());
-	EXPECT_EQ(sel.GetValue(&regionCol).GetString(), wxT("South"));   // 10 …
+	EXPECT_EQ(sel.GetValue(regionCol).GetString(), wxT("South"));   // 10 …
 	ASSERT_TRUE(sel.Next());
-	EXPECT_EQ(sel.GetValue(&regionCol).GetString(), wxT("North"));   // … before 8
+	EXPECT_EQ(sel.GetValue(regionCol).GetString(), wxT("North"));   // … before 8
 	EXPECT_FALSE(sel.Next());
 }
 
@@ -1602,39 +1636,41 @@ TEST(QuerySelector, ALevelHandsItsHeadingsOutInItsOwnOrder)
 // (dataComposer::AppendSettingsClauses). Pinned so the two roads cannot quietly both try.
 TEST(QuerySelector, AKeyNoHeadingCarriesLeavesTheOrderAlone)
 {
-	TestCol regionCol(wxT("region"), REGION_ID), productCol(wxT("product"), PRODUCT_ID),
-	        amtCol(wxT("amount"), GAMT_ID);
+	const auto regionCol  = std::make_shared<TestCol>(wxT("region"), REGION_ID);
+	const auto productCol = std::make_shared<TestCol>(wxT("product"), PRODUCT_ID);
+	const auto amtCol     = std::make_shared<TestCol>(wxT("amount"), GAMT_ID);
 	ibSelector sel(GroupDetail(), ibSelectKind::ibSelectKind_ByGroups);
-	sel.ByGroups({ &regionCol }).Aggregating({ SumOf(&amtCol) });
-	sel.OrderBy({ { &productCol, ibString(), /*ascending*/ false } });
+	sel.ByGroups({ regionCol }).Aggregating({ SumOf(amtCol) });
+	sel.OrderBy({ { productCol, ibString(), /*ascending*/ false } });
 
 	ASSERT_TRUE(sel.Next());
-	EXPECT_EQ(sel.GetValue(&regionCol).GetString(), wxT("North"));   // fold order, untouched
+	EXPECT_EQ(sel.GetValue(regionCol).GetString(), wxT("North"));   // fold order, untouched
 }
 
 // ⭐ …AND IT STOPS AT THE LEVEL THAT STATED IT. A descent is the NEXT level, which has an order of
 // its own or none — inheriting would arrange it by a key its author wrote one level up.
 TEST(QuerySelector, AnOrderIsNotInheritedByADescent)
 {
-	TestCol regionCol(wxT("region"), REGION_ID), productCol(wxT("product"), PRODUCT_ID),
-	        amtCol(wxT("amount"), GAMT_ID);
+	const auto regionCol  = std::make_shared<TestCol>(wxT("region"), REGION_ID);
+	const auto productCol = std::make_shared<TestCol>(wxT("product"), PRODUCT_ID);
+	const auto amtCol     = std::make_shared<TestCol>(wxT("amount"), GAMT_ID);
 	ibSelector sel(GroupDetail(), ibSelectKind::ibSelectKind_ByGroups);
-	sel.ByGroups({ &regionCol, &productCol }).Aggregating({ SumOf(&amtCol) });
-	sel.OrderBy({ { &amtCol, ibString(), /*ascending*/ false } });
+	sel.ByGroups({ regionCol, productCol }).Aggregating({ SumOf(amtCol) });
+	sel.OrderBy({ { amtCol, ibString(), /*ascending*/ false } });
 
 	ASSERT_TRUE(sel.Next());
-	EXPECT_EQ(sel.GetValue(&regionCol).GetString(), wxT("South"));   // the stated order holds here…
+	EXPECT_EQ(sel.GetValue(regionCol).GetString(), wxT("South"));   // the stated order holds here…
 
 	ASSERT_TRUE(sel.Next());
-	EXPECT_EQ(sel.GetValue(&regionCol).GetString(), wxT("North"));
+	EXPECT_EQ(sel.GetValue(regionCol).GetString(), wxT("North"));
 	ibSelector under = sel.Select(ibSelectKind::ibSelectKind_ByGroups);
 	// …and North's products come in FOLD order: Apple(3) arrived first, Pear(5) second. The parent's
 	// key would have put Pear first, so the two sequences genuinely disagree — which is the only way
 	// this test can tell inheriting from not inheriting.
 	ASSERT_TRUE(under.Next());
-	EXPECT_EQ(under.GetValue(&productCol).GetString(), wxT("Apple"));
+	EXPECT_EQ(under.GetValue(productCol).GetString(), wxT("Apple"));
 	ASSERT_TRUE(under.Next());
-	EXPECT_EQ(under.GetValue(&productCol).GetString(), wxT("Pear"));
+	EXPECT_EQ(under.GetValue(productCol).GetString(), wxT("Pear"));
 }
 
 // ===========================================================================
@@ -1727,12 +1763,14 @@ TEST(CteQueryable, MintsAFieldPerOutput)
 	fields[0].m_name     = wxT("Date");
 	fields[0].m_physical = wxT("fld1025");
 
-	const ibCteQueryable cte(wxT("q_sub0"), fields, 0);   // the ORDINAL — the kind is stamped on inside
-	ASSERT_EQ(cte.GetQueryColumns().size(), 1u);
-	const ibBackendQueryColumn* date = cte.ResolveColumnByName(wxT("Date"));
-	ASSERT_NE(date, nullptr);
+	std::shared_ptr<const ibBackendQueryColumn> date;
+	{
+		const ibCteQueryable cte(wxT("q_sub0"), fields, 0);   // the ORDINAL — the kind is stamped on inside
+		ASSERT_EQ(cte.GetQueryColumns().size(), 1u);
+		date = cte.ResolveColumnByName(wxT("Date"));
+	}
+	ASSERT_NE(date, nullptr);                         // handed out held, so it outlives the declaration that minted it
 	EXPECT_EQ(date->GetPhysicalName(), wxT("fld1025"));
-	EXPECT_NE(cte.ShareColumn(date), nullptr);        // minted here, so this wrapper can keep it alive
 	// …and the id it minted is SYNTHETIC — a declared attribute's metaID is positive, and a column
 	// nobody declared must never be mistaken for one (this is what `id++` over a composed base broke).
 	EXPECT_TRUE(ibBackendQueryColumn::IsSyntheticId(date->GetColumnId()));
@@ -1747,10 +1785,10 @@ TEST(CteQueryable, EveryMintedIdIsSyntheticAndDistinct)
 	for (size_t i = 0; i < fields.size(); ++i)
 		fields[i].m_name = ibString::Format(wxT("F%u"), static_cast<unsigned>(i));
 
-	const ibCteQueryable cte(wxT("q_sub0"), fields, 0);
-	ASSERT_EQ(cte.GetQueryColumns().size(), 10u);
+	const auto cte = std::make_shared<ibCteQueryable>(wxT("q_sub0"), fields, 0);
+	ASSERT_EQ(cte->GetQueryColumns().size(), 10u);
 	std::set<ibMetaID> ids;
-	for (const ibBackendQueryColumn* c : cte.GetQueryColumns()) {
+	for (const std::shared_ptr<const ibBackendQueryColumn>& c : cte->GetQueryColumns()) {
 		EXPECT_TRUE(ibBackendQueryColumn::IsSyntheticId(c->GetColumnId())) << c->GetName();
 		ids.insert(c->GetColumnId());
 	}
@@ -1762,20 +1800,16 @@ TEST(CteQueryable, EveryMintedIdIsSyntheticAndDistinct)
 // the reference's, already there), but it IS named from outside, which is what a report groups by.
 TEST(CteQueryable, PublishesABorrowedColumnAsItself)
 {
-	TestCol moment(wxT("PointInTime"), 77);
+	const auto moment = std::make_shared<TestCol>(wxT("PointInTime"), 77);
 	std::vector<ibCteQueryable::Field> fields(2);
 	fields[0].m_name     = wxT("Date");
 	fields[0].m_physical = wxT("fld1025");
 	fields[1].m_name     = wxT("PointInTime");
-	fields[1].m_borrowed = &moment;
+	fields[1].m_borrowed = moment;
 
-	const ibCteQueryable cte(wxT("q_sub0"), fields, 0);
-	ASSERT_EQ(cte.GetQueryColumns().size(), 2u);
-	const ibBackendQueryColumn* found = cte.ResolveColumnByName(wxT("PointInTime"));
-	ASSERT_EQ(found, &moment);                        // the very column, not a copy of its name
-	// …and NOT this wrapper's storage: it belongs to the metaobject and outlives the run, so the
-	// declaration must not offer to keep it alive.
-	EXPECT_EQ(cte.ShareColumn(found), nullptr);
+	const auto cte = std::make_shared<ibCteQueryable>(wxT("q_sub0"), fields, 0);
+	ASSERT_EQ(cte->GetQueryColumns().size(), 2u);
+	EXPECT_EQ(cte->ResolveColumnByName(wxT("PointInTime")), moment);   // the very column, not a copy of its name
 }
 
 // ===========================================================================
@@ -1849,8 +1883,9 @@ TEST(QueryComposerPlan, TieBreaks_AreDeterministic)
 TEST(QueryComposerCore, DedupeRows_KeepsFirstOccurrence_PreservesOrder)
 {
 	const ibMetaID C1 = 1, C2 = 2;
-	TestCol a(wxT("a"), C1), b(wxT("b"), C2);
-	const std::vector<const ibBackendQueryColumn*> cols = { &a, &b };
+	const auto a = std::make_shared<TestCol>(wxT("a"), C1);
+	const auto b = std::make_shared<TestCol>(wxT("b"), C2);
+	const std::vector<std::shared_ptr<const ibBackendQueryColumn>> cols = { a, b };
 
 	ibQueryRamTable t;
 	t.AddColumn(C1, wxT("a"), kNoType);
@@ -1877,8 +1912,8 @@ TEST(QueryComposerCore, DedupeRows_KeepsFirstOccurrence_PreservesOrder)
 TEST(QueryComposerCore, DedupeRows_EmptyAndAllUnique)
 {
 	const ibMetaID C1 = 1;
-	TestCol a(wxT("a"), C1);
-	const std::vector<const ibBackendQueryColumn*> cols = { &a };
+	const auto a = std::make_shared<TestCol>(wxT("a"), C1);
+	const std::vector<std::shared_ptr<const ibBackendQueryColumn>> cols = { a };
 
 	ibQueryRamTable empty;
 	empty.AddColumn(C1, wxT("a"), kNoType);
@@ -1904,12 +1939,14 @@ TEST(QueryComposerCore, DedupeRows_EmptyAndAllUnique)
 TEST(QuerySemiJoin, InnerJoin_PushesDistinctKeysToTheOtherSide)
 {
 	const ibMetaID AK = 1, BK = 2, BV = 3;
-	TestCol aKey(wxT("k"), AK), bKey(wxT("k"), BK), bVal(wxT("v"), BV);
+	const auto aKey = std::make_shared<TestCol>(wxT("k"), AK);
+	const auto bKey = std::make_shared<TestCol>(wxT("k"), BK);
+	const auto bVal = std::make_shared<TestCol>(wxT("v"), BV);
 
-	RecordingComputedQ A(wxT("a"), 100); A.AddCol(&aKey);
-	RecordingComputedQ B(wxT("b"), 101); B.AddCol(&bKey); B.AddCol(&bVal);
-	A.SetRows([&] { return KeyRows(AK, wxT("k"), { 1, 2, 3, 2 }); });   // 2 twice — the set must dedup
-	B.SetRows([&] {
+	const auto A = std::make_shared<RecordingComputedQ>(wxT("a"), 100); A->AddCol(aKey);
+	const auto B = std::make_shared<RecordingComputedQ>(wxT("b"), 101); B->AddCol(bKey); B->AddCol(bVal);
+	A->SetRows([&] { return KeyRows(AK, wxT("k"), { 1, 2, 3, 2 }); });   // 2 twice — the set must dedup
+	B->SetRows([&] {
 		ibQueryRamTable t;
 		t.AddColumn(BK, wxT("k"), kNoType);
 		t.AddColumn(BV, wxT("v"), kNoType);
@@ -1922,8 +1959,8 @@ TEST(QuerySemiJoin, InnerJoin_PushesDistinctKeysToTheOtherSide)
 	});
 
 	ibDataQueryBuilder q(nullptr);
-	q.From(&A).Join(&B, &aKey, &bKey);
-	q.Select(&bVal, wxT("v"));
+	q.From(A).Join(B, aKey, bKey);
+	q.Select(bVal, wxT("v"));
 	ibReadPageRequest page;
 	ibDataQueryResult res = q.Execute(page);
 
@@ -1931,11 +1968,11 @@ TEST(QuerySemiJoin, InnerJoin_PushesDistinctKeysToTheOtherSide)
 	while (res.Next()) ++rows;
 	EXPECT_EQ(rows, 3);   // A holds 1,2,3,2 and B holds 2,3,4 -> keys 2 (twice) and 3
 
-	ASSERT_EQ(B.Seen().size(), 1u) << "the right side should have been handed exactly one reduction";
-	EXPECT_TRUE(B.Seen()[0].m_op == ibQueryFilterOp::In);
-	EXPECT_EQ(B.Seen()[0].m_col, &bKey) << "the condition must name the RIGHT side's key column";
-	EXPECT_EQ(B.Seen()[0].m_values.size(), 3u) << "distinct keys of the left side: 1, 2, 3";
-	EXPECT_TRUE(A.Seen().empty()) << "the driving side is read first and receives nothing";
+	ASSERT_EQ(B->Seen().size(), 1u) << "the right side should have been handed exactly one reduction";
+	EXPECT_TRUE(B->Seen()[0].m_op == ibQueryFilterOp::In);
+	EXPECT_EQ(B->Seen()[0].m_col, bKey) << "the condition must name the RIGHT side's key column";
+	EXPECT_EQ(B->Seen()[0].m_values.size(), 3u) << "distinct keys of the left side: 1, 2, 3";
+	EXPECT_TRUE(A->Seen().empty()) << "the driving side is read first and receives nothing";
 }
 
 // THE correctness gate. `A LEFT JOIN B` preserves every A row, so the reduction may only ever travel
@@ -1943,12 +1980,14 @@ TEST(QuerySemiJoin, InnerJoin_PushesDistinctKeysToTheOtherSide)
 TEST(QuerySemiJoin, LeftJoin_KeepsUnmatchedLeftRows)
 {
 	const ibMetaID AK = 1, BK = 2, BV = 3;
-	TestCol aKey(wxT("k"), AK), bKey(wxT("k"), BK), bVal(wxT("v"), BV);
+	const auto aKey = std::make_shared<TestCol>(wxT("k"), AK);
+	const auto bKey = std::make_shared<TestCol>(wxT("k"), BK);
+	const auto bVal = std::make_shared<TestCol>(wxT("v"), BV);
 
-	RecordingComputedQ A(wxT("a"), 110); A.AddCol(&aKey);
-	RecordingComputedQ B(wxT("b"), 111); B.AddCol(&bKey); B.AddCol(&bVal);
-	A.SetRows([&] { return KeyRows(AK, wxT("k"), { 1, 2 }); });
-	B.SetRows([&] {
+	const auto A = std::make_shared<RecordingComputedQ>(wxT("a"), 110); A->AddCol(aKey);
+	const auto B = std::make_shared<RecordingComputedQ>(wxT("b"), 111); B->AddCol(bKey); B->AddCol(bVal);
+	A->SetRows([&] { return KeyRows(AK, wxT("k"), { 1, 2 }); });
+	B->SetRows([&] {
 		ibQueryRamTable t;
 		t.AddColumn(BK, wxT("k"), kNoType);
 		t.AddColumn(BV, wxT("v"), kNoType);
@@ -1959,8 +1998,8 @@ TEST(QuerySemiJoin, LeftJoin_KeepsUnmatchedLeftRows)
 	});
 
 	ibDataQueryBuilder q(nullptr);
-	q.From(&A).Join(&B, &aKey, &bKey, ibQueryJoinKind::Left);
-	q.Select(&aKey, wxT("k"));
+	q.From(A).Join(B, aKey, bKey, ibQueryJoinKind::Left);
+	q.Select(aKey, wxT("k"));
 	ibReadPageRequest page;
 	ibDataQueryResult res = q.Execute(page);
 
@@ -1968,8 +2007,8 @@ TEST(QuerySemiJoin, LeftJoin_KeepsUnmatchedLeftRows)
 	while (res.Next()) ++rows;
 	EXPECT_EQ(rows, 2) << "key 1 has no match and MUST survive a LEFT join";
 
-	ASSERT_EQ(B.Seen().size(), 1u) << "left -> right is the sound direction and stays enabled for LEFT";
-	EXPECT_TRUE(B.Seen()[0].m_op == ibQueryFilterOp::In);
+	ASSERT_EQ(B->Seen().size(), 1u) << "left -> right is the sound direction and stays enabled for LEFT";
+	EXPECT_TRUE(B->Seen()[0].m_op == ibQueryFilterOp::In);
 }
 
 // A THETA ON (a.k > b.k) cannot be reduced by an equality key set — knowing which keys the left holds
@@ -1977,16 +2016,17 @@ TEST(QuerySemiJoin, LeftJoin_KeepsUnmatchedLeftRows)
 TEST(QuerySemiJoin, ThetaJoin_IsNotReduced)
 {
 	const ibMetaID AK = 1, BK = 2;
-	TestCol aKey(wxT("k"), AK), bKey(wxT("k"), BK);
+	const auto aKey = std::make_shared<TestCol>(wxT("k"), AK);
+	const auto bKey = std::make_shared<TestCol>(wxT("k"), BK);
 
-	RecordingComputedQ A(wxT("a"), 120); A.AddCol(&aKey);
-	RecordingComputedQ B(wxT("b"), 121); B.AddCol(&bKey);
-	A.SetRows([&] { return KeyRows(AK, wxT("k"), { 5 }); });
-	B.SetRows([&] { return KeyRows(BK, wxT("k"), { 1, 2, 9 }); });
+	const auto A = std::make_shared<RecordingComputedQ>(wxT("a"), 120); A->AddCol(aKey);
+	const auto B = std::make_shared<RecordingComputedQ>(wxT("b"), 121); B->AddCol(bKey);
+	A->SetRows([&] { return KeyRows(AK, wxT("k"), { 5 }); });
+	B->SetRows([&] { return KeyRows(BK, wxT("k"), { 1, 2, 9 }); });
 
 	ibDataQueryBuilder q(nullptr);
-	q.From(&A).Join(&B, &aKey, &bKey, ibJoinCompareOp::Gt);
-	q.Select(&bKey, wxT("k"));
+	q.From(A).Join(B, aKey, bKey, ibJoinCompareOp::Gt);
+	q.Select(bKey, wxT("k"));
 	ibReadPageRequest page;
 	ibDataQueryResult res = q.Execute(page);
 
@@ -1994,7 +2034,7 @@ TEST(QuerySemiJoin, ThetaJoin_IsNotReduced)
 	while (res.Next()) ++rows;
 	EXPECT_EQ(rows, 2);   // 5 > 1 and 5 > 2, not 5 > 9
 
-	EXPECT_TRUE(B.Seen().empty()) << "an equality key set must not be pushed into a theta join";
+	EXPECT_TRUE(B->Seen().empty()) << "an equality key set must not be pushed into a theta join";
 }
 
 // An empty driving side yields no keys, so nothing is pushed — the join is empty anyway and the
@@ -2003,23 +2043,24 @@ TEST(QuerySemiJoin, ThetaJoin_IsNotReduced)
 TEST(QuerySemiJoin, EmptyDrivingSidePushesNothing)
 {
 	const ibMetaID AK = 1, BK = 2;
-	TestCol aKey(wxT("k"), AK), bKey(wxT("k"), BK);
+	const auto aKey = std::make_shared<TestCol>(wxT("k"), AK);
+	const auto bKey = std::make_shared<TestCol>(wxT("k"), BK);
 
-	RecordingComputedQ A(wxT("a"), 130); A.AddCol(&aKey);
-	RecordingComputedQ B(wxT("b"), 131); B.AddCol(&bKey);
-	A.SetRows([&] { return KeyRows(AK, wxT("k"), {}); });
-	B.SetRows([&] { return KeyRows(BK, wxT("k"), { 1, 2 }); });
+	const auto A = std::make_shared<RecordingComputedQ>(wxT("a"), 130); A->AddCol(aKey);
+	const auto B = std::make_shared<RecordingComputedQ>(wxT("b"), 131); B->AddCol(bKey);
+	A->SetRows([&] { return KeyRows(AK, wxT("k"), {}); });
+	B->SetRows([&] { return KeyRows(BK, wxT("k"), { 1, 2 }); });
 
 	ibDataQueryBuilder q(nullptr);
-	q.From(&A).Join(&B, &aKey, &bKey);
-	q.Select(&bKey, wxT("k"));
+	q.From(A).Join(B, aKey, bKey);
+	q.Select(bKey, wxT("k"));
 	ibReadPageRequest page;
 	ibDataQueryResult res = q.Execute(page);
 
 	int rows = 0;
 	while (res.Next()) ++rows;
 	EXPECT_EQ(rows, 0);
-	EXPECT_TRUE(B.Seen().empty());
+	EXPECT_TRUE(B->Seen().empty());
 }
 
 // A 3+ unit pure-INNER chain takes a DIFFERENT path (FlattenInnerChain + JoinUnitsSmallestFirst, which
@@ -2028,18 +2069,20 @@ TEST(QuerySemiJoin, EmptyDrivingSidePushesNothing)
 TEST(QuerySemiJoin, InnerChainOfThree_ReducesDownTheChain)
 {
 	const ibMetaID AK = 1, BK = 2, CK = 3;
-	TestCol aKey(wxT("k"), AK), bKey(wxT("k"), BK), cKey(wxT("k"), CK);
+	const auto aKey = std::make_shared<TestCol>(wxT("k"), AK);
+	const auto bKey = std::make_shared<TestCol>(wxT("k"), BK);
+	const auto cKey = std::make_shared<TestCol>(wxT("k"), CK);
 
-	RecordingComputedQ A(wxT("a"), 140); A.AddCol(&aKey);
-	RecordingComputedQ B(wxT("b"), 141); B.AddCol(&bKey);
-	RecordingComputedQ C(wxT("c"), 142); C.AddCol(&cKey);
-	A.SetRows([&] { return KeyRows(AK, wxT("k"), { 1, 2 }); });
-	B.SetRows([&] { return KeyRows(BK, wxT("k"), { 2, 3 }); });
-	C.SetRows([&] { return KeyRows(CK, wxT("k"), { 2, 3, 4 }); });
+	const auto A = std::make_shared<RecordingComputedQ>(wxT("a"), 140); A->AddCol(aKey);
+	const auto B = std::make_shared<RecordingComputedQ>(wxT("b"), 141); B->AddCol(bKey);
+	const auto C = std::make_shared<RecordingComputedQ>(wxT("c"), 142); C->AddCol(cKey);
+	A->SetRows([&] { return KeyRows(AK, wxT("k"), { 1, 2 }); });
+	B->SetRows([&] { return KeyRows(BK, wxT("k"), { 2, 3 }); });
+	C->SetRows([&] { return KeyRows(CK, wxT("k"), { 2, 3, 4 }); });
 
 	ibDataQueryBuilder q(nullptr);
-	q.From(&A).Join(&B, &aKey, &bKey).Join(&C, &bKey, &cKey);
-	q.Select(&cKey, wxT("k"));
+	q.From(A).Join(B, aKey, bKey).Join(C, bKey, cKey);
+	q.Select(cKey, wxT("k"));
 	ibReadPageRequest page;
 	ibDataQueryResult res = q.Execute(page);
 
@@ -2047,15 +2090,15 @@ TEST(QuerySemiJoin, InnerChainOfThree_ReducesDownTheChain)
 	while (res.Next()) ++rows;
 	EXPECT_EQ(rows, 1);   // only key 2 is in all three
 
-	ASSERT_EQ(B.Seen().size(), 1u);
-	EXPECT_TRUE(B.Seen()[0].m_op == ibQueryFilterOp::In);
-	EXPECT_EQ(B.Seen()[0].m_values.size(), 2u) << "A's keys 1, 2";
+	ASSERT_EQ(B->Seen().size(), 1u);
+	EXPECT_TRUE(B->Seen()[0].m_op == ibQueryFilterOp::In);
+	EXPECT_EQ(B->Seen()[0].m_values.size(), 2u) << "A's keys 1, 2";
 
-	ASSERT_EQ(C.Seen().size(), 1u) << "the second edge reduces C by what B holds";
-	EXPECT_TRUE(C.Seen()[0].m_op == ibQueryFilterOp::In);
-	EXPECT_EQ(C.Seen()[0].m_col, &cKey);
+	ASSERT_EQ(C->Seen().size(), 1u) << "the second edge reduces C by what B holds";
+	EXPECT_TRUE(C->Seen()[0].m_op == ibQueryFilterOp::In);
+	EXPECT_EQ(C->Seen()[0].m_col, cKey);
 
-	EXPECT_TRUE(A.Seen().empty()) << "the head of the chain is read first";
+	EXPECT_TRUE(A->Seen().empty()) << "the head of the chain is read first";
 }
 
 // ---- the advisory contract of ComputeRows(extra) --------------------------------------
@@ -2069,15 +2112,15 @@ TEST(QuerySemiJoin, InnerChainOfThree_ReducesDownTheChain)
 TEST(QueryComputedFilter, IgnoredConditionIsStillEnforced)
 {
 	const ibMetaID K = 1;
-	TestCol key(wxT("k"), K);
-	RecordingComputedQ src(wxT("s"), 150);
-	src.AddCol(&key);
-	src.SetRows([&] { return KeyRows(K, wxT("k"), { 1, 2, 3, 4 }); });   // ignores whatever it is handed
+	const auto key = std::make_shared<TestCol>(wxT("k"), K);
+	const auto src = std::make_shared<RecordingComputedQ>(wxT("s"), 150);
+	src->AddCol(key);
+	src->SetRows([&] { return KeyRows(K, wxT("k"), { 1, 2, 3, 4 }); });   // ignores whatever it is handed
 
 	ibDataQueryBuilder q(nullptr);
-	q.From(&src);
-	q.Select(&key, wxT("k"));
-	q.WhereIn(&key, { ibValue(ibNumber(2)), ibValue(ibNumber(4)) });
+	q.From(src);
+	q.Select(key, wxT("k"));
+	q.WhereIn(key, { ibValue(ibNumber(2)), ibValue(ibNumber(4)) });
 	ibReadPageRequest page;
 	ibDataQueryResult res = q.Execute(page);
 
@@ -2085,23 +2128,23 @@ TEST(QueryComputedFilter, IgnoredConditionIsStillEnforced)
 	while (res.Next()) ++rows;
 	EXPECT_EQ(rows, 2) << "the source returned all four rows; the provider must apply the filter it dropped";
 
-	ASSERT_EQ(src.Seen().size(), 1u) << "the condition is still HANDED down (a source may push it deeper)";
-	EXPECT_TRUE(src.Seen()[0].m_op == ibQueryFilterOp::In);
+	ASSERT_EQ(src->Seen().size(), 1u) << "the condition is still HANDED down (a source may push it deeper)";
+	EXPECT_TRUE(src->Seen()[0].m_op == ibQueryFilterOp::In);
 }
 
 // The scalar ops go through the same enforcement — this is not an `In`-only patch.
 TEST(QueryComputedFilter, IgnoredEqualityIsStillEnforced)
 {
 	const ibMetaID K = 1;
-	TestCol key(wxT("k"), K);
-	RecordingComputedQ src(wxT("s"), 151);
-	src.AddCol(&key);
-	src.SetRows([&] { return KeyRows(K, wxT("k"), { 1, 2, 3 }); });
+	const auto key = std::make_shared<TestCol>(wxT("k"), K);
+	const auto src = std::make_shared<RecordingComputedQ>(wxT("s"), 151);
+	src->AddCol(key);
+	src->SetRows([&] { return KeyRows(K, wxT("k"), { 1, 2, 3 }); });
 
 	ibDataQueryBuilder q(nullptr);
-	q.From(&src);
-	q.Select(&key, wxT("k"));
-	q.Where(&key, ibValue(ibNumber(2)));
+	q.From(src);
+	q.Select(key, wxT("k"));
+	q.Where(key, ibValue(ibNumber(2)));
 	ibReadPageRequest page;
 	ibDataQueryResult res = q.Execute(page);
 
@@ -2116,16 +2159,17 @@ TEST(QueryComputedFilter, IgnoredEqualityIsStillEnforced)
 TEST(QueryComputedFilter, ConditionOnUnvendedColumnDoesNotEmptyTheResult)
 {
 	const ibMetaID K = 1, OTHER = 99;
-	TestCol key(wxT("k"), K), absent(wxT("absent"), OTHER);
-	RecordingComputedQ src(wxT("s"), 152);
-	src.AddCol(&key);
-	src.AddCol(&absent);                                       // declared on the source...
-	src.SetRows([&] { return KeyRows(K, wxT("k"), { 1, 2 }); });   // ...but NOT in the rows it returns
+	const auto key    = std::make_shared<TestCol>(wxT("k"), K);
+	const auto absent = std::make_shared<TestCol>(wxT("absent"), OTHER);
+	const auto src = std::make_shared<RecordingComputedQ>(wxT("s"), 152);
+	src->AddCol(key);
+	src->AddCol(absent);                                       // declared on the source...
+	src->SetRows([&] { return KeyRows(K, wxT("k"), { 1, 2 }); });   // ...but NOT in the rows it returns
 
 	ibDataQueryBuilder q(nullptr);
-	q.From(&src);
-	q.Select(&key, wxT("k"));
-	q.Where(&absent, ibValue(ibNumber(7)));
+	q.From(src);
+	q.Select(key, wxT("k"));
+	q.Where(absent, ibValue(ibNumber(7)));
 	ibReadPageRequest page;
 	ibDataQueryResult res = q.Execute(page);
 
@@ -2143,16 +2187,16 @@ TEST(QueryComputedFilter, ConditionOnUnvendedColumnDoesNotEmptyTheResult)
 // with aggregates, the routing above it goes quietly back to reading everything.
 TEST(QueryComposerGate, GroupLevelPage_WithMeasures_StillPageable)
 {
-	ibBackendColumnRawDB dim = ibBackendColumnRawDB::String(wxT("code"));
-	ibBackendColumnRawDB amt = ibBackendColumnRawDB::Number(wxT("amt"));
-	TestQueryable A(wxT("TableA"), 1); A.AddCol(&dim); A.AddCol(&amt);
+	const std::shared_ptr<const ibBackendColumnRawDB> dim = ibBackendColumnRawDB::String(wxT("code"));
+	const std::shared_ptr<const ibBackendColumnRawDB> amt = ibBackendColumnRawDB::Number(wxT("amt"));
+	const auto A = std::make_shared<TestQueryable>(wxT("TableA"), 1); A->AddCol(dim); A->AddCol(amt);
 
 	SpecBuf buf;
-	buf.groupBy = { &dim };                                  // one plain scalar grouping level…
+	buf.groupBy = { dim };                                  // one plain scalar grouping level…
 	ibDataQueryBuilder::AggregateItem sum;
-	sum.m_fn = ibDataQueryBuilder::AggregateFn::Sum; sum.m_col = &amt; sum.m_alias = wxT("total");
+	sum.m_fn = ibDataQueryBuilder::AggregateFn::Sum; sum.m_col = amt; sum.m_alias = wxT("total");
 	buf.aggs = { sum };                                      // …and a figure on it
-	const ibDataQuerySpec spec = buf.Make(nullptr, &A);
+	const ibDataQuerySpec spec = buf.Make(nullptr, A);
 
 	EXPECT_TRUE(ibDbTableProvider::CanPageGroupLevel(spec));
 }
@@ -2190,23 +2234,24 @@ ibQueryRamTable MonthRows(ibMetaID month, ibMetaID amount)
 TEST(QueryComputedAggregate, GroupsComeInTheOrderAskedFor)
 {
 	const ibMetaID M = 1, A = 2;
-	TestCol month(wxT("m"), M), amount(wxT("a"), A);
-	RecordingComputedQ src(wxT("s"), 160);
-	src.AddCol(&month);
-	src.AddCol(&amount);
-	src.SetRows([&] { return MonthRows(M, A); });
+	const auto month  = std::make_shared<TestCol>(wxT("m"), M);
+	const auto amount = std::make_shared<TestCol>(wxT("a"), A);
+	const auto src = std::make_shared<RecordingComputedQ>(wxT("s"), 160);
+	src->AddCol(month);
+	src->AddCol(amount);
+	src->SetRows([&] { return MonthRows(M, A); });
 
 	for (const bool ascending : { true, false }) {
 		ibDataQueryBuilder q(nullptr);
-		q.From(&src);
-		q.GroupBy(&month);
-		q.Sum(&amount, wxT("total"));
-		q.OrderBy(&month, ascending);
+		q.From(src);
+		q.GroupBy(month);
+		q.Sum(amount, wxT("total"));
+		q.OrderBy(month, ascending);
 		ibDataQueryResult res = q.SelectAggregate();
 
 		std::vector<long> months;
 		while (res.Next())
-			months.push_back(res.GetValue(&month).GetInteger());
+			months.push_back(res.GetValue(month).GetInteger());
 		EXPECT_EQ(ascending ? std::vector<long>({ 1, 2, 3, 4 }) : std::vector<long>({ 4, 3, 2, 1 }), months);
 	}
 }
@@ -2214,16 +2259,17 @@ TEST(QueryComputedAggregate, GroupsComeInTheOrderAskedFor)
 TEST(QueryComputedAggregate, TopTakesTheFirstGroupsInTheirOrder)
 {
 	const ibMetaID M = 1, A = 2;
-	TestCol month(wxT("m"), M), amount(wxT("a"), A);
-	RecordingComputedQ src(wxT("s"), 161);
-	src.AddCol(&month);
-	src.AddCol(&amount);
-	src.SetRows([&] { return MonthRows(M, A); });   // totals: month 1 = 12, 2 = 40, 3 = 11, 4 = 2
+	const auto month  = std::make_shared<TestCol>(wxT("m"), M);
+	const auto amount = std::make_shared<TestCol>(wxT("a"), A);
+	const auto src = std::make_shared<RecordingComputedQ>(wxT("s"), 161);
+	src->AddCol(month);
+	src->AddCol(amount);
+	src->SetRows([&] { return MonthRows(M, A); });   // totals: month 1 = 12, 2 = 40, 3 = 11, 4 = 2
 
 	ibDataQueryBuilder q(nullptr);
-	q.From(&src);
-	q.GroupBy(&month);
-	q.Sum(&amount, wxT("total"));
+	q.From(src);
+	q.GroupBy(month);
+	q.Sum(amount, wxT("total"));
 	q.OrderByOutput(wxT("total"), /*ascending*/ false);
 	q.Top(2);
 	ibDataQueryResult res = q.SelectAggregate();
@@ -2231,7 +2277,7 @@ TEST(QueryComputedAggregate, TopTakesTheFirstGroupsInTheirOrder)
 	std::vector<long> months;
 	std::vector<ibNumber> totals;
 	while (res.Next()) {
-		months.push_back(res.GetValue(&month).GetInteger());
+		months.push_back(res.GetValue(month).GetInteger());
 		totals.push_back(res.GetColumn(wxT("total")).GetNumber());
 	}
 	EXPECT_EQ(std::vector<long>({ 2, 1 }), months) << "the two biggest months, biggest first — not the first two met";

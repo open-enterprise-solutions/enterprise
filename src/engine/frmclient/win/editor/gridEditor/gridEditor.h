@@ -73,7 +73,13 @@ class FRMCLIENT_API ibGridEditor : public ibGrid {
 	public:
 
 		ibGenericSpreadsheetNotifier(ibGridEditor* view) : m_view(view) {}
-		virtual void ClearSpreadsheet() { m_view->ClearGrid(); }
+		// ClearGrid takes the table's attribute provider with every attribute it holds (gridext.cpp): what the grid was
+		// told itself goes, and the look — the document's — is read through a provider again.
+		virtual void ClearSpreadsheet() {
+			m_view->ClearGrid();
+			if (m_view->GetTable() != nullptr)
+				m_view->GetTable()->SetAttrProvider(new ibGridEditorAttrProvider(m_view));
+		}
 		virtual void EnableEditing(bool edit) { m_view->EnableEditing(edit); }
 
 		//size 
@@ -86,20 +92,23 @@ class FRMCLIENT_API ibGridEditor : public ibGrid {
 
 		// ------ row and col formatting
 		//
+		// ⭐ THE CELL IS THE DOCUMENT'S and the grid reads it there (ibGridEditorTable, ibGridEditorAttrProvider). A change
+		// is told here BEFORE the document stores it, so the grid only grows to the cell and repaints it when it paints
+		// next — by then the document has it. A merge is the grid's own, and is still told to it.
 
-		virtual void SetCellBackgroundColour(int row, int col, const ibColour& colour) { GetOrCreateCell(row, col)->SetCellBackgroundColour(row, col, typeConv::ColourToWxColour(colour), false); }
-		virtual void SetCellTextColour(int row, int col, const ibColour& colour) { GetOrCreateCell(row, col)->SetCellTextColour(row, col, typeConv::ColourToWxColour(colour), false); }
+		virtual void SetCellBackgroundColour(int row, int col, const ibColour& colour) { RefreshCell(row, col); }
+		virtual void SetCellTextColour(int row, int col, const ibColour& colour) { RefreshCell(row, col); }
 		// What changes the height a row's text needs also marks the row for its automatic height.
-		virtual void SetCellTextOrient(int row, int col, const int orient) { GetOrCreateCell(row, col)->SetCellTextOrient(row, col, orient, false); m_view->RequestAutoRowHeights(row, row); }
-		virtual void SetCellFont(int row, int col, const ibFont& font) { GetOrCreateCell(row, col)->SetCellFont(row, col, typeConv::FontToWxFont(font), false); m_view->RequestAutoRowHeights(row, row); }
-		virtual void SetCellAlignment(int row, int col, const int horiz, const int vert) { GetOrCreateCell(row, col)->SetCellAlignment(row, col, horiz, vert, false); }
-		virtual void SetCellBorderLeft(int row, int col, const ibSpreadsheetBorderDescription& desc) {}
-		virtual void SetCellBorderRight(int row, int col, const ibSpreadsheetBorderDescription& desc) {}
-		virtual void SetCellBorderTop(int row, int col, const ibSpreadsheetBorderDescription& desc) {}
-		virtual void SetCellBorderBottom(int row, int col, const ibSpreadsheetBorderDescription& desc) {}
+		virtual void SetCellTextOrient(int row, int col, const int orient) { RefreshCell(row, col); m_view->RequestAutoRowHeights(row, row); }
+		virtual void SetCellFont(int row, int col, const ibFont& font) { RefreshCell(row, col); m_view->RequestAutoRowHeights(row, row); }
+		virtual void SetCellAlignment(int row, int col, const int horiz, const int vert) { RefreshCell(row, col); }
+		virtual void SetCellBorderLeft(int row, int col, const ibSpreadsheetBorderDescription& desc) { RefreshCell(row, col); }
+		virtual void SetCellBorderRight(int row, int col, const ibSpreadsheetBorderDescription& desc) { RefreshCell(row, col); }
+		virtual void SetCellBorderTop(int row, int col, const ibSpreadsheetBorderDescription& desc) { RefreshCell(row, col); }
+		virtual void SetCellBorderBottom(int row, int col, const ibSpreadsheetBorderDescription& desc) { RefreshCell(row, col); }
 		virtual void SetCellSize(int row, int col, int num_rows, int num_cols) { GetOrCreateCell(row, col)->SetCellSize(row, col, num_rows, num_cols, false); m_view->RequestAutoRowHeights(row, row + wxMax(num_rows, 1) - 1); }
-		virtual void SetCellFitMode(int row, int col, ibSpreadsheetCellDescription::ibFitMode fitMode) { GetOrCreateCell(row, col)->SetCellFitMode(row, col, ibToGridFitMode(fitMode), false); m_view->RequestAutoRowHeights(row, row); }
-		virtual void SetCellReadOnly(int row, int col, bool isReadOnly = true) { GetOrCreateCell(row, col)->SetCellReadOnly(row, col, isReadOnly, false); }
+		virtual void SetCellFitMode(int row, int col, ibSpreadsheetCellDescription::ibFitMode fitMode) { RefreshCell(row, col); m_view->RequestAutoRowHeights(row, row); }
+		virtual void SetCellReadOnly(int row, int col, bool isReadOnly = true) { RefreshCell(row, col); }
 
 		// ------ cell brake accessors
 		//
@@ -115,7 +124,7 @@ class FRMCLIENT_API ibGridEditor : public ibGrid {
 
 		// ------ cell value accessors
 		//
-		virtual void SetCellValue(int row, int col, const ibString& s) { GetOrCreateCell(row, col)->SetCellValue(row, col, s, false); m_view->RequestAutoRowHeights(row, row); }
+		virtual void SetCellValue(int row, int col, const ibString& s) { RefreshCell(row, col); m_view->RequestAutoRowHeights(row, row); }
 
 		// ------ area value accessors
 		//
@@ -152,6 +161,13 @@ class FRMCLIENT_API ibGridEditor : public ibGrid {
 			}
 
 			return m_view;
+		}
+
+		// A cell the document changes: the grid grown to it, the look it keeps for drawing the cell dropped, its place
+		// repainted.
+		void RefreshCell(int row, int col) const {
+			GetOrCreateCell(row, col)->RefreshAttr(row, col);
+			m_view->RefreshBlock(row, col, row, col);
 		}
 
 		ibGridEditor* m_view;
@@ -215,334 +231,75 @@ class FRMCLIENT_API ibGridEditor : public ibGrid {
 		wxString                 m_value;
 	};
 
-	class ibGridEditorStringTable : public ibGridStringTable {
-
-		struct ibGridEditorStringTableFillType {
-
-			ibGridEditorStringTableFillType(int row, int col, ibSpreadsheetFillType type) :
-				m_row(row), m_col(col), m_fillType(type) {
-			}
-
-			int m_row, m_col;
-			ibSpreadsheetFillType m_fillType;
-		};
-
+	// ⭐⭐ THE SHEET'S CELLS ARE THE DOCUMENT'S — read where the document keeps them, its description, not copied into
+	// the grid. The grid held the sheet a second time: a string per cell in a string table and an attribute object per
+	// cell, all made at load — a 100 000-line sheet took 40 s and 575 MB to come up (23 s and 284 MB read from the
+	// document), and a cell's fill type was looked for in a list of every typed cell at each question (2026-11-16,
+	// load-million-rows.md § 12).
+	// The table answers a cell's text from the description and writes an edit into it; the look comes from it the same
+	// way (ibGridEditorAttrProvider). What the grid keeps is its own: the extent it shows — the document's cells and the
+	// empty sheet grown around them.
+	//
+	// The text is the cell AS WRITTEN: a caption in the user's language, a template's text, a parameter's name — what a
+	// template's editor edits. A document shown on a form comes with every cell's text worked out by the server
+	// (ibFetchSpreadsheet), so there it is the text shown.
+	class ibGridEditorTable : public ibGridTableBase {
 	public:
 
-		ibGridEditorStringTable() : ibGridStringTable() {}
-		ibGridEditorStringTable(int numRows, int numCols) : ibGridStringTable(numRows, numCols) {}
+		ibGridEditorTable(ibGridEditor* view, int numRows = 0, int numCols = 0);
 
-		virtual bool IsEmptyCell(int row, int col) {
-			wxCHECK_MSG((row >= 0 && row < GetNumberRows()) &&
-				(col >= 0 && col < GetNumberCols()),
-				true,
-				wxT("invalid row or column index in ibGridEditorStringTable::IsEmptyCell"));
+		virtual int GetNumberRows() override { return m_numRows; }
+		virtual int GetNumberCols() override { return m_numCols; }
 
-			// 🛑 A ROW THE TABLE HAS IS NOT A ROW THAT HAS ITS COLUMNS. AppendRows leaves the new
-			// row an empty wxArrayString when m_numCols is 0, and the fill is deferred — so
-			// m_data[row] can hold fewer entries than the table reports columns. GetValue and
-			// SetValue both guard exactly this (see their bodies); IsEmptyCell did not, and it is
-			// the one the content scan walks over EVERY cell of the sheet with. A logical column
-			// with no entry behind it holds nothing, which is what "empty" means.
-			if (col >= static_cast<int>(m_data[row].GetCount()))
-				return true;
+		virtual bool IsEmptyCell(int row, int col) override;
 
-			const ibSpreadsheetFillType type = GetTypeString(row, col);
-			return type == ibSpreadsheetFillType_StrText || type == ibSpreadsheetFillType_StrTemplate ?
-				ibLocalization::IsEmptyLocalizationString(m_data[row][col]) : m_data[row][col].IsEmpty();
-		}
+		virtual bool CanGetValueAs(int row, int col, const wxString& typeName) override;
+		virtual bool CanSetValueAs(int row, int col, const wxString& typeName) override;
 
-		// ⭐ WHERE THE CONTENT ENDS — a question for the TABLE, because the table is where content
-		// lives. The endless sheet asks it before trimming itself back, i.e. on every scroll EVENT
-		// (three per wheel notch), so it cannot be a walk over the sheet: at twenty thousand rows
-		// the walk is a visible stall.
-		//
-		// 🛑 AND IT IS NOT INVALIDATED BY A LIST OF CALLERS. Everything that can move the edge —
-		// a value written, rows or columns inserted or deleted, the table cleared — passes through
-		// THIS class, so the answer is kept where the change happens and a door added later cannot
-		// forget to say so. Same arrangement as ibGridLineSizes in gridext.h.
-		//
-		// ⭐ MAINTAINED where the new answer is knowable, dropped only where it is not: writing
-		// into a row past the edge MOVES the edge (no walk), and growing the sheet does not move it
-		// at all — which matters, because the endless sheet grows on the very event that asks.
-		// Clearing the cell that IS the edge is the one case nothing short of a walk can answer.
-		int GetLastContentRow() {
-			if (m_lastContentRow == kExtentUnknown)
-				RebuildContentExtent();
-			return m_lastContentRow;
-		}
-
-		int GetLastContentCol() {
-			if (m_lastContentCol == kExtentUnknown)
-				RebuildContentExtent();
-			return m_lastContentCol;
-		}
-
-		virtual bool CanGetValueAs(int row, int col, const wxString& typeName)
-		{
-			const ibSpreadsheetFillType type = GetTypeString(row, col);
-
-			if (type == ibSpreadsheetFillType_StrText)
-				return typeName == s_strTypeTextOrString;
-			else if (type == ibSpreadsheetFillType_StrTemplate)
-				return typeName == s_strTypeTemplate;
-			else if (type == ibSpreadsheetFillType_StrParameter)
-				return typeName == s_strTypeParameter;
-
-			return typeName == wxT("string");
-		}
-
-		virtual bool CanSetValueAs(int row, int col, const wxString& typeName)
-		{
-			const ibSpreadsheetFillType type = GetTypeString(row, col);
-
-			if (type == ibSpreadsheetFillType_StrText)
-				return typeName == s_strTypeTextOrString;
-			else if (type == ibSpreadsheetFillType_StrTemplate)
-				return typeName == s_strTypeTemplate;
-			else if (type == ibSpreadsheetFillType_StrParameter)
-				return typeName == s_strTypeParameter;
-
-			return typeName == wxT("string");
-		}
-
-		virtual void GetValue(int row, int col, wxString& s) override {
-			// Paint passes on column scroll can request (row, col) pairs for
-			// cells that don't physically exist yet — the grid's visible-range
-			// cache is ahead of the table's actual storage when rows/cols are
-			// inserted. Base ibGridStringTable::GetValue already guards this
-			// via wxCHECK2_MSG; the override used to skip the check entirely
-			// and hit m_data[row][col] on a non-existing row, producing an
-			// assertion failure mid-scroll.
-			wxCHECK_RET((row >= 0 && row < GetNumberRows()) &&
-				(col >= 0 && col < GetNumberCols()),
-				wxT("invalid row or column index in ibGridEditorStringTable::GetValue"));
-			if (col >= static_cast<int>(m_data[row].GetCount()))
-				return; // logical column exists but this row isn't filled yet
-
-			const ibSpreadsheetFillType type = GetTypeString(row, col);
-			if (type == ibSpreadsheetFillType_StrText || type == ibSpreadsheetFillType_StrTemplate)
-				s = ibBackendLocalization::GetTranslateGetRawLocText(m_data[row][col]);
-			else if (type == ibSpreadsheetFillType_StrParameter)
-				s = m_data[row][col];
-		}
-
-		virtual void SetValue(int row, int col, const wxString& s) override {
-			wxCHECK_RET((row >= 0 && row < GetNumberRows()) &&
-				(col >= 0 && col < GetNumberCols()),
-				wxT("invalid row or column index in ibGridEditorStringTable::SetValue"));
-
-			// m_data[row] may not yet have this column entry (row appended
-			// but column fill deferred). Treat the current value as empty
-			// in that case — the subsequent ibGridStringTable::SetValue path
-			// will expand the row via the base class's storage logic.
-			const wxString emptyValue;
-			const wxString& value = (col < static_cast<int>(m_data[row].GetCount()))
-				? m_data[row][col]
-				: emptyValue;
-
-			if (s != value) {
-				const ibSpreadsheetFillType type = GetTypeString(row, col);
-				if (type == ibSpreadsheetFillType_StrText || type == ibSpreadsheetFillType_StrTemplate) {
-					if (ibLocalization::IsLocalizationString(s)) {
-						ibGridStringTable::SetValue(row, col, s);
-					}
-					else if (ibLocalization::IsLocalizationString(value)) {
-						static ibLocalizationEntryArray array;
-						if (ibLocalization::CreateLocalizationArray(value, array)) {
-							ibLocalization::SetArrayTranslate(ibBackendLocalization::GetUserLanguage(), array, s);
-							ibGridStringTable::SetValue(row, col,
-								ibLocalization::GetRawLocText(array));
-						}
-					}
-					else {
-						ibGridStringTable::SetValue(row, col, ibLocalization::CreateLocalizationRawLocText(ibBackendLocalization::GetUserLanguage(), s));
-					}
-				}
-				else if (type == ibSpreadsheetFillType_StrParameter) {
-					ibGridStringTable::SetValue(row, col, s);
-				}
-
-				// The cell now holds something else than it did — which is the only way a WRITE can
-				// move where the content ends. Asked of the cell rather than of `s`, because empty
-				// is not the same question for a localisation string as for a parameter.
-				NoteContentAt(row, col);
-			}
-		}
+		virtual void GetValue(int row, int col, wxString& s) override;
+		virtual void SetValue(int row, int col, const wxString& s) override;
 
 		// For user defined types
-		virtual void SetValueAsCustom(int row, int col, const wxString& typeName, void* value) {
+		virtual void SetValueAsCustom(int row, int col, const wxString& typeName, void* value) override;
+		virtual void* GetValueAsCustom(int row, int col, const wxString& typeName) override;
 
-			if (value && stringUtils::IsSameAs(typeName, s_strTypeTextOrString)) {
-				const wxString* s = static_cast<wxString*>(value);
-				auto iterator = std::find_if(m_setColRowType.begin(), m_setColRowType.end(),
-					[row, col](const auto& value) { return value.m_row == row && value.m_col == col; });
-				if (iterator != m_setColRowType.end())
-					m_setColRowType.erase(iterator);
-				ibGridEditorStringTable::SetValue(row, col, *s);
-			}
-			else if (value && stringUtils::IsSameAs(typeName, s_strTypeTemplate)) {
-				const wxString* s = static_cast<wxString*>(value);
-				auto iterator = std::find_if(m_setColRowType.begin(), m_setColRowType.end(),
-					[row, col](const auto& value) { return value.m_row == row && value.m_col == col; });
-				if (iterator == m_setColRowType.end())
-					m_setColRowType.emplace_back(row, col, ibSpreadsheetFillType_StrTemplate);
-				else
-					iterator->m_fillType = ibSpreadsheetFillType_StrTemplate;
-				ibGridEditorStringTable::SetValue(row, col, *s);
-			}
-			else if (value && stringUtils::IsSameAs(typeName, s_strTypeParameter)) {
-				const wxString* s = static_cast<wxString*>(value);
-				auto iterator = std::find_if(m_setColRowType.begin(), m_setColRowType.end(),
-					[row, col](const auto& value) { return value.m_row == row && value.m_col == col; });
-				if (iterator == m_setColRowType.end())
-					m_setColRowType.emplace_back(row, col, ibSpreadsheetFillType_StrParameter);
-				else
-					iterator->m_fillType = ibSpreadsheetFillType_StrParameter;
-				ibGridEditorStringTable::SetValue(row, col, *s);
-			}
-		}
+		// RD: Starting the rows at zero confuses users, no matter how much it makes sense to us geeks.
+		virtual wxString GetRowLabelValue(int row) override { return stringUtils::IntToStr(row + 1); }
+		virtual wxString GetColLabelValue(int col) override { return stringUtils::IntToStr(col + 1); }
 
-		virtual void* GetValueAsCustom(int row, int col, const wxString& typeName) {
-			// Same reasoning as GetValue/SetValue — renderer can hit this
-			// for cells that don't physically exist during an insert/scroll
-			// race. Return nullptr (empty string) instead of dereferencing
-			// out-of-bounds m_data[row][col].
-			wxCHECK_MSG((row >= 0 && row < GetNumberRows()) &&
-				(col >= 0 && col < GetNumberCols()),
-				nullptr,
-				wxT("invalid row or column index in ibGridEditorStringTable::GetValueAsCustom"));
-			if (col >= static_cast<int>(m_data[row].GetCount()))
-				return nullptr;
-
-			// A caption and a template are asked for AS WRITTEN — every language, for the editor that edits
-			// them. The stored form of a plain text is the language in force (CreateLocalizationRawLocText),
-			// which the text fills used to take apart by hand and lost: a cell holding plain text came back empty.
-			const ibSpreadsheetFillType typeFill = GetTypeString(row, col);
-			if (stringUtils::IsSameAs(typeName, s_strTypeTextOrString)
-				|| stringUtils::IsSameAs(typeName, s_strTypeTemplate)) {
-				return new wxString(ibLocalization::CreateLocalizationRawLocText(ibBackendLocalization::GetUserLanguage(), m_data[row][col]));
-			}
-			else if (stringUtils::IsSameAs(typeName, s_strTypeParameter)) {
-				if (typeFill == ibSpreadsheetFillType::ibSpreadsheetFillType_StrText || typeFill == ibSpreadsheetFillType::ibSpreadsheetFillType_StrTemplate) {
-					return new wxString(ibBackendLocalization::GetTranslateGetRawLocText(m_data[row][col]));
-				}
-				return new wxString(m_data[row][col]);
-			}
-
-			return nullptr;
-		}
-
-		// overridden functions from ibGridTableBase
-		//
-		wxString GetRowLabelValue(int row) {
-			// RD: Starting the rows at zero confuses users,
-			// no matter how much it makes sense to us geeks.
-			return stringUtils::IntToStr(row + 1);
-		}
-
-		virtual wxString GetColLabelValue(int col) override {
-			return stringUtils::IntToStr(col + 1);
-		}
-
-		// ------ the structural doors: everything below keeps the content edge honest ------
-		//
-		// Appending is NOT here on purpose. Rows and columns grown at the far end are empty, so
-		// the edge does not move — and the endless sheet grows exactly while it is asking, so
-		// dropping the answer there would put the walk back on every scroll.
-
-		void Clear() override {
-			ibGridStringTable::Clear();
-			m_lastContentRow = m_lastContentCol = -1;   // known, not unknown: there is nothing anywhere
-		}
-
-		bool InsertRows(size_t pos = 0, size_t numRows = 1) override {
-			if (!ibGridStringTable::InsertRows(pos, numRows))
-				return false;
-			// Everything at or below the insert point moved down by that much, the edge with it.
-			if (m_lastContentRow >= 0 && static_cast<int>(pos) <= m_lastContentRow)
-				m_lastContentRow += static_cast<int>(numRows);
-			return true;
-		}
-
-		bool InsertCols(size_t pos = 0, size_t numCols = 1) override {
-			if (!ibGridStringTable::InsertCols(pos, numCols))
-				return false;
-			if (m_lastContentCol >= 0 && static_cast<int>(pos) <= m_lastContentCol)
-				m_lastContentCol += static_cast<int>(numCols);
-			return true;
-		}
-
-		bool DeleteRows(size_t pos = 0, size_t numRows = 1) override {
-			// Reaching into content is the case nothing short of a walk can answer — what was cut
-			// may have BEEN the edge. Cutting the empty tail past it changes nothing.
-			const bool touchesContent = m_lastContentRow < 0 || static_cast<int>(pos) <= m_lastContentRow;
-			if (!ibGridStringTable::DeleteRows(pos, numRows))
-				return false;
-			if (touchesContent)
-				DropContentExtent();
-			return true;
-		}
-
-		bool DeleteCols(size_t pos = 0, size_t numCols = 1) override {
-			const bool touchesContent = m_lastContentCol < 0 || static_cast<int>(pos) <= m_lastContentCol;
-			if (!ibGridStringTable::DeleteCols(pos, numCols))
-				return false;
-			if (touchesContent)
-				DropContentExtent();
-			return true;
-		}
+		// ------ the extent — the grid's rows and columns, nothing of a cell. Grown and cut at its far end only: the cells
+		// are the document's and keep their places, so a line put or taken inside the sheet has nothing to move them with.
+		virtual bool InsertRows(size_t pos = 0, size_t numRows = 1) override;
+		virtual bool AppendRows(size_t numRows = 1) override;
+		virtual bool DeleteRows(size_t pos = 0, size_t numRows = 1) override;
+		virtual bool InsertCols(size_t pos = 0, size_t numCols = 1) override;
+		virtual bool AppendCols(size_t numCols = 1) override;
+		virtual bool DeleteCols(size_t pos = 0, size_t numCols = 1) override;
 
 	private:
 
-		// -2, because -1 is a real answer: "nothing anywhere, the sheet may shrink freely".
-		static const int kExtentUnknown = -2;
+		// the cell as the document keeps it, or none
+		const ibSpreadsheetCellDescription* GetCell(int row, int col) const;
+		ibSpreadsheetFillType GetFillType(int row, int col) const;
 
-		void DropContentExtent() { m_lastContentRow = m_lastContentCol = kExtentUnknown; }
+		ibGridEditor* m_view;
+		int m_numRows, m_numCols;
+	};
 
-		// A cell was written. Something put where nothing was moves the edge out; nothing put
-		// where the edge WAS is the one case that needs the walk back.
-		void NoteContentAt(int row, int col) {
-			if (!IsEmptyCell(row, col)) {
-				if (m_lastContentRow != kExtentUnknown && row > m_lastContentRow) m_lastContentRow = row;
-				if (m_lastContentCol != kExtentUnknown && col > m_lastContentCol) m_lastContentCol = col;
-			}
-			else if (row == m_lastContentRow || col == m_lastContentCol) {
-				DropContentExtent();
-			}
-		}
+	// ⭐ …AND ITS LOOK, THE SAME WAY: the font, the colours, the alignment, the borders and the placement read from the
+	// cell's description when the grid draws it — an attribute made for the cell in view, none kept for every cell. What
+	// the grid was told itself stands over it: a merge (the grid's own), and a look set through the grid, which the
+	// editor hands on to the document as it is set (OnGridTableAttrModified).
+	class ibGridEditorAttrProvider : public ibGridCellAttrProvider {
+	public:
 
-		// One pass answers BOTH edges — the caller asks for the row and the column together
-		// (trimming does), and a second walk for the second answer is the same walk twice.
-		void RebuildContentExtent() {
-			int lastRow = -1, lastCol = -1;
-			const int rows = GetNumberRows(), cols = GetNumberCols();
-			for (int row = 0; row < rows; row++) {
-				for (int col = 0; col < cols; col++) {
-					if (IsEmptyCell(row, col))
-						continue;
-					lastRow = row;
-					if (col > lastCol) lastCol = col;
-				}
-			}
-			m_lastContentRow = lastRow;
-			m_lastContentCol = lastCol;
-		}
+		ibGridEditorAttrProvider(ibGridEditor* view) : m_view(view) {}
 
-		int m_lastContentRow = kExtentUnknown;
-		int m_lastContentCol = kExtentUnknown;
+		virtual ibGridCellAttr* GetAttr(int row, int col, ibGridCellAttr::wxAttrKind kind) const override;
 
-		ibSpreadsheetFillType GetTypeString(int row, int col) const {
+	private:
 
-			for (const auto& value : m_setColRowType) {
-				if (value.m_row == row && value.m_col == col)
-					return value.m_fillType;
-			}
-
-			return ibSpreadsheetFillType_StrText;
-		}
-
-		std::vector<ibGridEditorStringTableFillType> m_setColRowType;
+		ibGridEditor* m_view;
 	};
 
 	// the property of grid 
@@ -752,20 +509,12 @@ public:
 	// somebody scrolled back up. What was added for the view may be taken away;
 	// what a person's file brought may not.
 	//
-	// The TABLE keeps this answer — it is asked three times per wheel notch, and it is the
-	// table that every write and every insert goes through. Not const, because the first
-	// question after a change is what re-derives it.
-	int GetLastContentRow();
-	int GetLastContentCol();
+	// The DOCUMENT answers it: its cells end where its description does — a cell holding a border
+	// and no text is the document's too.
+	int GetLastContentRow() const;
+	int GetLastContentCol() const;
 
 protected:
-
-	// The table is an ibGridEditorStringTable by construction: this editor sets its own in the
-	// constructor and at every load, and nothing else ever calls SetTable on it. One cast, in
-	// one place, rather than one at each question.
-	ibGridEditorStringTable* GetEditorTable() const {
-		return static_cast<ibGridEditorStringTable*>(ibGrid::GetTable());
-	}
 
 	void GetCellDetailsParameter(int row, int col, wxString& s) const;
 	void SetCellDetailsParameter(int row, int col, const wxString& s);
@@ -778,7 +527,6 @@ protected:
 
 	void SetCellDetailsParameter(const ibGridBlockCoords& coords, const wxString& s, bool sendUndoCommand = true);
 
-	bool LoadSpreadsheet(const ibSpreadsheetDescription& spreadsheetDesc);
 	bool SaveSpreadsheet(ibSpreadsheetDescription& spreadsheetDesc) const;
 
 	//events:

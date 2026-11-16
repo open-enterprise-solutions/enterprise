@@ -105,7 +105,9 @@ bool ibValueRecordSetObject::BeginRecordSetWriteScope(ibConnectionScope& scope)
 	}
 
 	scope.SafeBeginTransaction();
-	LockByKeys();
+	// A new recorder's lines are none, and its own row lock is taken (ibSelection::NothingStored).
+	if (m_selected != ibSelection::NothingStored)
+		LockByKeys();
 	return true;
 }
 
@@ -229,7 +231,7 @@ bool ibValueRecordSetObject::ReadData(const ibUniqueKeyPair& key)
 			for (const auto object : attributes)
 				rowData->AppendTableValue(object->GetMetaID()) = selection.GetValue(object->GetQueryColumn());
 			ibValueModelStorage::Append(rowData, !ibBackendException::IsEvalMode());
-			m_selected = true;
+			m_selected = ibSelection::Selected;
 		}
 	}
 	catch (...) { return false; }
@@ -262,7 +264,7 @@ bool ibValueRecordSetObject::ReadData()
 			for (const auto object : attributes)
 				rowData->AppendTableValue(object->GetMetaID()) = selection.GetValue(object->GetQueryColumn());
 			ibValueModelStorage::Append(rowData, !ibBackendException::IsEvalMode());
-			m_selected = true;
+			m_selected = ibSelection::Selected;
 		}
 	}
 	catch (...) { return false; }
@@ -323,8 +325,9 @@ bool ibValueRecordSetObject::SaveData(bool replace, bool clearTable)
 	//
 	// The existence question survives only where it is genuinely needed: appending to a stored set
 	// continues the stored numbering, and that needs MAX(line number), not existence.
+	// …and a new recorder's set has nothing stored to replace (ibSelection::NothingStored).
 	if (replace) {
-		if (!ibValueRecordSetObject::DeleteData())
+		if (m_selected != ibSelection::NothingStored && !ibValueRecordSetObject::DeleteData())
 			return false;
 	}
 	else if (m_metaObject->HasRecorder()) {
@@ -355,7 +358,7 @@ bool ibValueRecordSetObject::SaveData(bool replace, bool clearTable)
 		}
 	};
 
-	if (m_selected && !replace) {
+	if (Selected() && !replace) {
 		// APPENDED TO A SET THAT CAME FROM THE DATABASE: a line may already exist, so the write is an UPSERT,
 		// and the match is the dialect's own per-statement form — Firebird's UPDATE OR INSERT takes no SELECT
 		// source. Batching this needs a MERGE the L2 IR does not carry yet.
@@ -397,7 +400,7 @@ bool ibValueRecordSetObject::SaveData(bool replace, bool clearTable)
 		const long savedRows = GetRowCount();
 		if (clearTable)
 			ibValueModelStorage::Clear();
-		m_selected = (savedRows > 0) || (!replace && m_selected);
+		m_selected = savedRows > 0 || (!replace && Selected()) ? ibSelection::Selected : ibSelection::NotSelected;
 	}
 
 	return !hasError;
@@ -455,7 +458,7 @@ bool ibValueRecordSetObject::DeleteData()
 		ibBackendCoreException::Error(_("Register '%s': failed to clear the stored records"),
 			m_metaObject->GetSynonym());
 
-	m_selected = false; // the record set no longer exists in the DB
+	m_selected = ibSelection::NotSelected; // the record set no longer exists in the DB
 	return true;        // the delete trigger reversed the totals in this same transaction
 }
 

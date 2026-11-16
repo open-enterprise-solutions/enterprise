@@ -19,7 +19,9 @@
 #include <gtest/gtest.h>
 #include <wx/string.h>   // wxT, wxString - the engine's headers include no wx
 
+#include <algorithm>
 #include <memory>
+#include <string>
 #include <vector>
 
 #include <wx/init.h>
@@ -44,7 +46,7 @@ ibMaterializeSpec CutSpec()
 	spec.m_keyColumns       = { wxT("wh") };
 	spec.m_periodColumn     = wxT("period_");
 	spec.m_periodSourceExpr = wxT("{row}.period_");
-	spec.m_periodUnit       = ibTotalsPeriod::Day;
+	spec.m_periodUnits      = { ibTotalsPeriod::Day };
 	spec.m_guard            = wxT("{row}.active_ <> 0");
 
 	const ibQueryExprPtr receipt = ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("Reg9"), wxT("rectype_")), ibConst(ibValue(ibNumber(1))));
@@ -277,12 +279,18 @@ struct CutReadFix : ::testing::Test {
 		db->RunQuery(wxT("CREATE TABLE Reg9 (rec_ TEXT NOT NULL, line_ INTEGER NOT NULL, period_ TEXT NOT NULL, ")
 			wxT("active_ INTEGER NOT NULL, wh TEXT NOT NULL, rectype_ INTEGER NOT NULL, qty NUMERIC NOT NULL, ")
 			wxT("PRIMARY KEY (rec_, line_))"));
-		db->RunQuery(wxT("CREATE TABLE Reg9_T (period_ TEXT NOT NULL, wh TEXT NOT NULL, ")
-			wxT("qty_in NUMERIC NOT NULL DEFAULT 0, qty_out NUMERIC NOT NULL DEFAULT 0, PRIMARY KEY (period_, wh))"));
+		db->RunQuery(wxT("%s"), TotalsTable());
 
 		// The maintenance — the triggers that keep Reg9_T, and the dressed view the old road reads.
-		const ibMaterializeSql sql = RenderMaterialization(CutSpec(), &ibDatabaseLayerSQLite::MaterializationDialect(), SqliteQ());
+		const ibMaterializeSql sql = RenderMaterialization(Declared(), &ibDatabaseLayerSQLite::MaterializationDialect(), SqliteQ());
 		ASSERT_TRUE(sql.Apply(*db));
+	}
+
+	// The totals as this fixture keeps them: the declaration, and the table it maintains.
+	virtual ibMaterializeSpec Declared() const { return CutSpec(); }
+	virtual ibString TotalsTable() const {
+		return wxT("CREATE TABLE Reg9_T (period_ TEXT NOT NULL, wh TEXT NOT NULL, ")
+			wxT("qty_in NUMERIC NOT NULL DEFAULT 0, qty_out NUMERIC NOT NULL DEFAULT 0, PRIMARY KEY (period_, wh))");
 	}
 	void TearDown() override {
 		if (ibApplicationInstance::Get() != nullptr)
@@ -449,4 +457,377 @@ TEST_F(CutReadFix, ATurnoverBoundedBelowAnswersWhatTheMovementsSay) {
 	EXPECT_DOUBLE_EQ(hand, 3.0);
 	EXPECT_DOUBLE_EQ(read(/*rows*/ false), hand);
 	EXPECT_DOUBLE_EQ(read(/*rows*/ true), hand);
+}
+
+// =============================================================================
+// The units — the totals kept by the day, the week, the month, the quarter and the year at once
+//
+// A posting stands once in the row of each unit, and a reading takes every day from ONE of them: the years
+// behind a date, then the quarters, the months, the days, and the movements of the day it stops in. What these
+// pin is that it is the same NUMBER whichever rows answered — every figure below is compared with the
+// movements summed by hand, over boundaries on every kind of edge and inside a day.
+// =============================================================================
+
+namespace {
+
+ibMaterializeSpec UnitsSpec()
+{
+	ibMaterializeSpec spec = CutSpec();
+	spec.m_periodUnitColumn = PeriodUnitColumnName();
+	spec.m_periodUnits      = { ibTotalsPeriod::Day, ibTotalsPeriod::Week, ibTotalsPeriod::Month,
+	                            ibTotalsPeriod::Quarter, ibTotalsPeriod::Year };
+	return spec;
+}
+
+// A reading off the rows of every unit, cut the way a register cuts it (ibRegFillArmCut, no document at a
+// boundary): a boundary inside a day — or an included upper edge, an excluded lower one — is the movements'.
+ibMaterializeReadSpec UnitsRead(const ibValue& from, bool fromExcluding, const ibValue& to, bool toExcluding)
+{
+	const ibMaterializeSpec spec = UnitsSpec();
+	ibMaterializeReadSpec r;
+	r.m_storedRows       = RenderStoredRows(spec, spec.m_views.front());
+	r.m_movedRows        = RenderMovementRows(spec, spec.m_views.front());
+	r.m_storedUnits      = spec.m_periodUnits;
+	r.m_periodUnitColumn = spec.m_periodUnitColumn;
+	r.m_rowsAlias        = wxT("b_rows");
+	r.m_periodColumn     = wxT("period_");
+	r.m_keyColumns       = { wxT("wh") };
+	r.m_markColumn       = wxT("rec_");
+	r.m_dropZeroRows     = true;
+	r.m_from = from;  r.m_fromExcluding = fromExcluding;
+	r.m_to   = to;    r.m_toExcluding   = toExcluding;
+
+	const ibTotalsPeriod day = ibTotalsPeriod::Day;
+	const auto reachesInside = [day](const ibValue& at, bool upperEnd, bool excluding) {
+		if (at.GetType() != TYPE_DATE)
+			return false;
+		if (at.GetDate().BeginOfPeriod(day) != at.GetDate())
+			return true;
+		return upperEnd ? !excluding : excluding;
+	};
+	const bool cutUpper = reachesInside(to, /*upperEnd*/ true, toExcluding);
+	const bool cutLower = reachesInside(from, /*upperEnd*/ false, fromExcluding);
+	if (cutUpper || cutLower) {
+		// No upper boundary, no floor: the stored rows run to the last of them, the movements answer the head.
+		if (to.GetType() == TYPE_DATE)
+			r.m_floor = ibValue(to.GetDate().BeginOfPeriod(day));
+		if (cutLower) {
+			r.m_headSplit = ibValue(from.GetDate().BeginOfNextPeriod(day));
+			r.m_headGrain = ibValue(from.GetDate().BeginOfPeriod(day));
+		}
+	}
+	return r;
+}
+
+// A moment, and the same moment as the movements' text holds it.
+struct Moment { ibDateTime m_at; const wxChar* m_text; };
+
+// Before every posting and after the last, on the edge of a year, a quarter, a month, a week and a day, at a
+// posting's own instant and inside days with and without postings.
+const std::vector<Moment>& Moments()
+{
+	static const std::vector<Moment> moments = {
+		{ ibDateTime(2024, 1, 1),             wxT("2024-01-01 00:00:00") },
+		{ ibDateTime(2024, 11, 20, 10, 0, 0), wxT("2024-11-20 10:00:00") },
+		{ ibDateTime(2025, 1, 1),             wxT("2025-01-01 00:00:00") },
+		{ ibDateTime(2025, 4, 1),             wxT("2025-04-01 00:00:00") },
+		{ ibDateTime(2025, 7, 7),             wxT("2025-07-07 00:00:00") },
+		{ ibDateTime(2025, 7, 9, 13, 0, 0),   wxT("2025-07-09 13:00:00") },
+		{ ibDateTime(2025, 10, 1),            wxT("2025-10-01 00:00:00") },
+		{ ibDateTime(2026, 1, 1),             wxT("2026-01-01 00:00:00") },
+		{ ibDateTime(2026, 3, 1),             wxT("2026-03-01 00:00:00") },
+		{ ibDateTime(2026, 3, 5),             wxT("2026-03-05 00:00:00") },
+		{ ibDateTime(2026, 3, 5, 14, 0, 0),   wxT("2026-03-05 14:00:00") },
+		{ ibDateTime(2026, 3, 6),             wxT("2026-03-06 00:00:00") },
+		{ ibDateTime(2027, 1, 1),             wxT("2027-01-01 00:00:00") },
+	};
+	return moments;
+}
+
+int CountOf(const ibString& sql, const ibString& part)
+{
+	int seen = 0;
+	for (size_t at = 0; (at = sql.find(part, at)) != ibString::npos; at += part.length())
+		++seen;
+	return seen;
+}
+
+struct UnitReadFix : CutReadFix {
+	ibMaterializeSpec Declared() const override { return UnitsSpec(); }
+	ibString TotalsTable() const override {
+		return wxT("CREATE TABLE Reg9_T (unit_ INTEGER NOT NULL, period_ TEXT NOT NULL, wh TEXT NOT NULL, ")
+			wxT("qty_in NUMERIC NOT NULL DEFAULT 0, qty_out NUMERIC NOT NULL DEFAULT 0, PRIMARY KEY (unit_, period_, wh))");
+	}
+
+	// One period of a reading cut into periods: where it begins, what moved in it, what it closes with.
+	struct Period {
+		ibString m_at;
+		double   m_moved, m_closing;
+	};
+
+	// Two years and a half of postings: on the first instant of a year, a quarter, a month, a week and a day,
+	// on the last second of a year, at the moment asked about, one not in force, one warehouse seldom touched.
+	void FillYears() {
+		int n = 0;
+		const auto move = [&](const wxChar* when, const wxChar* wh, double qty, bool active = true) {
+			Move(ibString::Format(wxT("m%d"), ++n), 1, when, wh, qty > 0, qty > 0 ? qty : -qty, active);
+		};
+		move(wxT("2024-11-20 10:00:00"), wxT("kitchen"), 100);
+		move(wxT("2024-12-31 23:59:59"), wxT("kitchen"), -10);
+		move(wxT("2025-01-01 00:00:00"), wxT("kitchen"), 7);
+		move(wxT("2025-01-01 00:00:00"), wxT("bar"),     40);
+		move(wxT("2025-02-14 12:00:00"), wxT("kitchen"), 30);
+		move(wxT("2025-03-31 18:00:00"), wxT("kitchen"), -5);
+		move(wxT("2025-04-01 00:00:00"), wxT("kitchen"), 11);
+		move(wxT("2025-06-30 09:00:00"), wxT("kitchen"), 3);
+		move(wxT("2025-07-07 00:00:00"), wxT("kitchen"), -2);
+		move(wxT("2025-07-09 13:00:00"), wxT("kitchen"), 21);
+		move(wxT("2025-07-09 16:00:00"), wxT("kitchen"), 500, /*active*/ false);
+		move(wxT("2025-09-15 15:30:00"), wxT("bar"),     -15);
+		move(wxT("2025-10-01 08:00:00"), wxT("kitchen"), 50);
+		move(wxT("2025-12-31 12:00:00"), wxT("kitchen"), -20);
+		move(wxT("2026-01-01 09:00:00"), wxT("kitchen"), 8);
+		move(wxT("2026-02-28 23:00:00"), wxT("kitchen"), 13);
+		move(wxT("2026-03-01 00:00:00"), wxT("kitchen"), -4);
+		move(wxT("2026-03-04 09:00:00"), wxT("kitchen"), 30);
+		move(wxT("2026-03-05 00:00:00"), wxT("kitchen"), 6);
+		move(wxT("2026-03-05 09:00:00"), wxT("kitchen"), 7);
+		move(wxT("2026-03-05 14:00:00"), wxT("kitchen"), -9);
+		move(wxT("2026-03-05 23:00:00"), wxT("kitchen"), -50);
+		move(wxT("2026-03-06 09:00:00"), wxT("bar"),     1000);
+		move(wxT("2026-04-10 10:00:00"), wxT("kitchen"), 17);
+	}
+
+	// One figure of one warehouse off a rendered read; a warehouse with no row has nothing to its name.
+	double Figure(const ibMaterializeReadSpec& spec, const ibString& wh, const ibString& figure) {
+		ibDatabaseQueryBuilder q(ibConnectionPool::ThreadHolder());
+		q.From(RenderMaterializedRead(spec, wxT("b")));
+		q.Project({ ibQueryProjItem{ ibCol(wxT("b"), wxT("wh")), wxT("wh") },
+		            ibQueryProjItem{ ibCol(wxT("b"), figure), figure } });
+		ibQueryResult rs = q.Execute();
+		while (rs.Next())
+			if (rs.GetResultString(wxT("wh")) == wh)
+				return rs.GetResultDouble(figure);
+		return 0.0;
+	}
+
+	// The reading cut into periods of `unit`: the turnover inside the interval, and the running balance.
+	std::vector<Period> ReadPeriods(const ibString& wh, ibTotalsPeriod unit, const Moment& from, const Moment& to) {
+		ibMaterializeReadSpec r = UnitsRead(ibValue(from.m_at), false, ibValue(to.m_at), false);
+		r.m_grain      = ibMaterializeGrain::Calendar;
+		r.m_periodUnit = unit;
+		r.m_fromGrain  = ibValue(from.m_at.BeginOfPeriod(unit));
+		r.m_columns = {
+			{ wxT("Qty_Moved"),   wxT("Qty_Turnover"), ibString(), ibMaterializeAgg::Value,      ibMaterializeWhen::InRange, true },
+			{ wxT("Qty_Closing"), wxT("Qty_Turnover"), ibString(), ibMaterializeAgg::RunningSum, ibMaterializeWhen::Always,  true },
+		};
+
+		ibDatabaseQueryBuilder q(ibConnectionPool::ThreadHolder());
+		q.From(RenderMaterializedRead(r, wxT("b")));
+		q.Project({ ibQueryProjItem{ ibCol(wxT("b"), wxT("wh")), wxT("wh") },
+		            ibQueryProjItem{ ibCol(wxT("b"), wxT("period_")), wxT("period_") },
+		            ibQueryProjItem{ ibCol(wxT("b"), wxT("Qty_Moved")), wxT("Qty_Moved") },
+		            ibQueryProjItem{ ibCol(wxT("b"), wxT("Qty_Closing")), wxT("Qty_Closing") } });
+		std::vector<Period> periods;
+		ibQueryResult rs = q.Execute();
+		while (rs.Next())
+			if (rs.GetResultString(wxT("wh")) == wh)
+				periods.push_back({ rs.GetResultString(wxT("period_")), rs.GetResultDouble(wxT("Qty_Moved")),
+				                    rs.GetResultDouble(wxT("Qty_Closing")) });
+		std::sort(periods.begin(), periods.end(),
+			[](const Period& a, const Period& b) { return a.m_at.ToStdString() < b.m_at.ToStdString(); });
+		return periods;
+	}
+
+	// The same periods off the movements: each period something moved in up to `to`, its turnover inside the
+	// interval and the running sum of everything up to its end — from the period `from` falls in, and none of
+	// them a row where both are zero.
+	std::vector<Period> PeriodsByHand(const ibString& wh, ibTotalsPeriod unit, const Moment& from, const Moment& to) {
+		const auto truncated = [unit](const ibString& expr) {
+			ibString trunc = SqliteQ().m_periodTrunc.at(unit);
+			trunc.Replace(wxT("{expr}"), expr);
+			return trunc;
+		};
+		const ibString signedQty = wxT("CASE WHEN rectype_ = 1 THEN qty ELSE -qty END");
+		const ibString sql = ibString::Format(
+			wxT("SELECT %s AS p, SUM(CASE WHEN period_ >= '%s' THEN %s ELSE 0 END), SUM(%s), MAX(%s >= %s) ")
+			wxT("FROM Reg9 WHERE active_ <> 0 AND wh = '%s' AND period_ <= '%s' GROUP BY 1 ORDER BY 1"),
+			truncated(wxT("period_")), ibString(from.m_text), signedQty, signedQty,
+			truncated(wxT("period_")), truncated(ibString::Format(wxT("'%s'"), ibString(from.m_text))),
+			wh, ibString(to.m_text));
+
+		std::vector<Period> periods;
+		double closing = 0.0;
+		ibDatabaseResultSet* rs = db->RunQueryWithResults(wxT("%s"), sql);
+		if (rs != nullptr) {
+			while (rs->Next()) {
+				const double moved = rs->GetResultDouble(2);
+				closing += rs->GetResultDouble(3);
+				if (rs->GetResultInt(4) != 0 && (moved != 0.0 || closing != 0.0))
+					periods.push_back({ rs->GetResultString(1), moved, closing });
+			}
+			db->CloseResultSet(rs);
+		}
+		return periods;
+	}
+};
+
+} // namespace
+
+// ⭐ EACH UNIT IS A SELECTION OF ITS OWN. A balance inside 16.11.2026 is the years before 2026, the quarters up
+// to October, October itself, the days of November — four ranges of the totals, each with the unit as an
+// equality and the caller's filter beside it — and the movements of the day. A week holds days and nothing
+// holds it, so before a date no week is read.
+TEST(MaterializeUnitRead, ABalanceReadsEachUnitAsASelectionOfItsOwn) {
+	ibMaterializeReadSpec r = UnitsRead(ibValue(), false, ibValue(ibDateTime(2026, 11, 16, 14, 30, 0)), true);
+	r.m_columns = {
+		{ wxT("Qty_Balance"), wxT("Qty_Turnover"), ibString(), ibMaterializeAgg::Value, ibMaterializeWhen::UpToTo, true },
+	};
+	r.m_filters = { ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("b_rows"), wxT("wh")), ibConst(ibValue(ibString(wxT("kitchen"))))) };
+	const ibString sql = ReadSql(r);
+
+	EXPECT_EQ(CountOf(sql, wxT("unit_ = ")), 4) << sql;
+	EXPECT_EQ(CountOf(sql, wxT("UNION ALL")), 4) << sql;      // four of the totals, and the movements
+	EXPECT_EQ(CountOf(sql, wxT("b_rows.wh = ")), 5) << sql;    // the filter in each, and not around them
+	EXPECT_EQ(CountOf(sql, wxT("FROM Reg9 ")), 1) << sql;
+}
+
+// With no date at all the balance is the years, and nothing else: one selection, no movements.
+TEST(MaterializeUnitRead, WithNoDateTheBalanceIsTheYears) {
+	ibMaterializeReadSpec r = UnitsRead(ibValue(), false, ibValue(), false);
+	r.m_columns = {
+		{ wxT("Qty_Balance"), wxT("Qty_Turnover"), ibString(), ibMaterializeAgg::Value, ibMaterializeWhen::UpToTo, true },
+	};
+	const ibString sql = ReadSql(r);
+	EXPECT_EQ(CountOf(sql, wxT("unit_ = ")), 1) << sql;
+	EXPECT_FALSE(sql.Contains(wxT("UNION ALL"))) << sql;
+	EXPECT_FALSE(sql.Contains(wxT("FROM Reg9 "))) << sql;
+}
+
+// The posting stands once in the row of every unit — which is what a reading of one unit per day counts on.
+TEST_F(UnitReadFix, APostingStandsInTheRowOfEveryUnit) {
+	Move(wxT("r1"), 1, wxT("2026-03-05 09:00:00"), wxT("kitchen"), true, 7);
+	ibDatabaseResultSet* rs = db->RunQueryWithResults(wxT("%s"),
+		ibString(wxT("SELECT COUNT(*), COUNT(DISTINCT unit_), SUM(qty_in) FROM Reg9_T")));
+	ASSERT_NE(rs, nullptr);
+	ASSERT_TRUE(rs->Next());
+	EXPECT_EQ(rs->GetResultInt(1), 5);
+	EXPECT_EQ(rs->GetResultInt(2), 5);
+	EXPECT_DOUBLE_EQ(rs->GetResultDouble(3), 35.0);
+	db->CloseResultSet(rs);
+}
+
+// ⭐⭐ THE BALANCE AT EVERY MOMENT, INCLUDING IT AND NOT — the rows of whichever units against the movements.
+TEST_F(UnitReadFix, ABalanceIsWhatTheMovementsSayAtEveryMoment) {
+	FillYears();
+	const auto balance = [](const ibValue& to, bool excluding) {
+		ibMaterializeReadSpec r = UnitsRead(ibValue(), false, to, excluding);
+		r.m_columns = {
+			{ wxT("Qty_Balance"), wxT("Qty_Turnover"), ibString(), ibMaterializeAgg::Value, ibMaterializeWhen::UpToTo, true },
+		};
+		return r;
+	};
+	for (const Moment& to : Moments())
+		for (const bool excluding : { true, false })
+			for (const wxChar* wh : { wxT("kitchen"), wxT("bar") })
+				EXPECT_DOUBLE_EQ(Figure(balance(ibValue(to.m_at), excluding), wh, wxT("Qty_Balance")), ByHand(wh, to.m_text, excluding))
+					<< wxString(wh).ToStdString() << " up to " << wxString(to.m_text).ToStdString() << ", excluding = " << excluding;
+
+	// …and with no date at all: everything there is.
+	for (const wxChar* wh : { wxT("kitchen"), wxT("bar") })
+		EXPECT_DOUBLE_EQ(Figure(balance(ibValue(), false), wh, wxT("Qty_Balance")), ByHand(wh, wxT("2999-01-01 00:00:00"), false))
+			<< wxString(wh).ToStdString();
+}
+
+// ⭐⭐ EVERY INTERVAL BETWEEN THOSE MOMENTS, each end taken in and left out: the turnover read alone (nothing
+// below the interval is read), and the opening balance, the turnover and the closing balance read together
+// (the history is, and the day the interval begins in is the movements').
+TEST_F(UnitReadFix, AnIntervalIsWhatTheMovementsSayBetweenAnyTwoMoments) {
+	FillYears();
+	const std::vector<Moment>& moments = Moments();
+	for (size_t i = 0; i < moments.size(); ++i)
+		for (size_t j = i + 1; j < moments.size(); ++j)
+			for (const bool fromExcluding : { false, true })
+				for (const bool toExcluding : { false, true }) {
+					const Moment& from = moments[i];
+					const Moment& to = moments[j];
+					const std::string where = wxString(from.m_text).ToStdString() + (fromExcluding ? " (out) .. " : " (in) .. ")
+						+ wxString(to.m_text).ToStdString() + (toExcluding ? " (out)" : " (in)");
+
+					ibMaterializeReadSpec turnover = UnitsRead(ibValue(from.m_at), fromExcluding, ibValue(to.m_at), toExcluding);
+					turnover.m_columns = {
+						{ wxT("Qty_Moved"), wxT("Qty_Turnover"), ibString(), ibMaterializeAgg::Value, ibMaterializeWhen::InRange, true },
+					};
+					ibMaterializeReadSpec all = UnitsRead(ibValue(from.m_at), fromExcluding, ibValue(to.m_at), toExcluding);
+					all.m_columns = {
+						{ wxT("Qty_Opening"), wxT("Qty_Turnover"), ibString(), ibMaterializeAgg::Value, ibMaterializeWhen::BeforeFrom, true },
+						{ wxT("Qty_Moved"),   wxT("Qty_Turnover"), ibString(), ibMaterializeAgg::Value, ibMaterializeWhen::InRange,    true },
+						{ wxT("Qty_Closing"), wxT("Qty_Turnover"), ibString(), ibMaterializeAgg::Value, ibMaterializeWhen::UpToTo,     true },
+					};
+
+					for (const wxChar* wh : { wxT("kitchen"), wxT("bar") }) {
+						const double opening = ByHand(wh, from.m_text, /*excluding*/ !fromExcluding);
+						const double closing = ByHand(wh, to.m_text, toExcluding);
+						EXPECT_DOUBLE_EQ(Figure(turnover, wh, wxT("Qty_Moved")), closing - opening) << wxString(wh).ToStdString() << ", " << where;
+						EXPECT_DOUBLE_EQ(Figure(all, wh, wxT("Qty_Opening")), opening) << wxString(wh).ToStdString() << ", " << where;
+						EXPECT_DOUBLE_EQ(Figure(all, wh, wxT("Qty_Moved")), closing - opening) << wxString(wh).ToStdString() << ", " << where;
+						EXPECT_DOUBLE_EQ(Figure(all, wh, wxT("Qty_Closing")), closing) << wxString(wh).ToStdString() << ", " << where;
+					}
+				}
+}
+
+// ⭐ OPEN ABOVE — from every moment, taken in and left out, to the last row there is: the stored rows answer from the
+// first whole day on and the movements the head alone (they answered the whole length — load-million-rows.md, 6(e)).
+TEST_F(UnitReadFix, AnIntervalOpenAboveIsWhatTheMovementsSay) {
+	FillYears();
+	for (const Moment& from : Moments())
+		for (const bool fromExcluding : { false, true }) {
+			const std::string where = wxString(from.m_text).ToStdString() + (fromExcluding ? " (out) .." : " (in) ..");
+
+			ibMaterializeReadSpec turnover = UnitsRead(ibValue(from.m_at), fromExcluding, ibValue(), false);
+			turnover.m_columns = {
+				{ wxT("Qty_Moved"), wxT("Qty_Turnover"), ibString(), ibMaterializeAgg::Value, ibMaterializeWhen::InRange, true },
+			};
+			ibMaterializeReadSpec all = UnitsRead(ibValue(from.m_at), fromExcluding, ibValue(), false);
+			all.m_columns = {
+				{ wxT("Qty_Opening"), wxT("Qty_Turnover"), ibString(), ibMaterializeAgg::Value, ibMaterializeWhen::BeforeFrom, true },
+				{ wxT("Qty_Moved"),   wxT("Qty_Turnover"), ibString(), ibMaterializeAgg::Value, ibMaterializeWhen::InRange,    true },
+				{ wxT("Qty_Closing"), wxT("Qty_Turnover"), ibString(), ibMaterializeAgg::Value, ibMaterializeWhen::UpToTo,     true },
+			};
+
+			for (const wxChar* wh : { wxT("kitchen"), wxT("bar") }) {
+				const double opening = ByHand(wh, from.m_text, /*excluding*/ !fromExcluding);
+				const double closing = ByHand(wh, wxT("2999-01-01 00:00:00"), false);
+				EXPECT_DOUBLE_EQ(Figure(turnover, wh, wxT("Qty_Moved")), closing - opening) << wxString(wh).ToStdString() << ", " << where;
+				EXPECT_DOUBLE_EQ(Figure(all, wh, wxT("Qty_Opening")), opening) << wxString(wh).ToStdString() << ", " << where;
+				EXPECT_DOUBLE_EQ(Figure(all, wh, wxT("Qty_Moved")), closing - opening) << wxString(wh).ToStdString() << ", " << where;
+				EXPECT_DOUBLE_EQ(Figure(all, wh, wxT("Qty_Closing")), closing) << wxString(wh).ToStdString() << ", " << where;
+			}
+		}
+}
+
+// ⭐⭐ CUT INTO PERIODS — by the day, the week, the month, the quarter and the year. From the first period a
+// reading reports, only the units that nest in its own answer (a year's row truncated to a month is its
+// January); before it the coarsest do, and the running balance still closes each period with what the
+// movements say.
+TEST_F(UnitReadFix, PeriodsAreWhatTheMovementsSayInEveryUnit) {
+	FillYears();
+	const std::vector<Moment>& moments = Moments();
+	for (const ibTotalsPeriod unit : { ibTotalsPeriod::Day, ibTotalsPeriod::Week, ibTotalsPeriod::Month,
+	                                   ibTotalsPeriod::Quarter, ibTotalsPeriod::Year })
+		for (size_t i = 0; i < moments.size(); ++i)
+			for (size_t j = i + 1; j < moments.size(); ++j)
+				for (const wxChar* wh : { wxT("kitchen"), wxT("bar") }) {
+					const std::vector<Period> read = ReadPeriods(wh, unit, moments[i], moments[j]);
+					const std::vector<Period> hand = PeriodsByHand(wh, unit, moments[i], moments[j]);
+					const std::string where = wxString(wh).ToStdString() + " by unit " + std::to_string(static_cast<int>(unit)) + ", "
+						+ wxString(moments[i].m_text).ToStdString() + " .. " + wxString(moments[j].m_text).ToStdString();
+
+					ASSERT_EQ(read.size(), hand.size()) << where;
+					for (size_t p = 0; p < read.size(); ++p) {
+						EXPECT_EQ(read[p].m_at, hand[p].m_at) << where;
+						EXPECT_DOUBLE_EQ(read[p].m_moved, hand[p].m_moved) << where << ", " << hand[p].m_at.ToStdString();
+						EXPECT_DOUBLE_EQ(read[p].m_closing, hand[p].m_closing) << where << ", " << hand[p].m_at.ToStdString();
+					}
+				}
 }

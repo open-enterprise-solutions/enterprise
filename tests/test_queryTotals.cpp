@@ -67,12 +67,14 @@ TEST(QueryTotals, HierarchicalSubtotalsTree)
 	add(wxT("North"), wxT("Pear"),   3);
 	add(wxT("South"), wxT("Apple"),  7);
 
-	TestCol region(wxT("region"), REGION), product(wxT("product"), PRODUCT), amount(wxT("amount"), AMOUNT);
-	const std::vector<const ibBackendQueryColumn*> groups = { &region, &product };
+	const auto region  = std::make_shared<TestCol>(wxT("region"), REGION);
+	const auto product = std::make_shared<TestCol>(wxT("product"), PRODUCT);
+	const auto amount  = std::make_shared<TestCol>(wxT("amount"), AMOUNT);
+	const std::vector<std::shared_ptr<const ibBackendQueryColumn>> groups = { region, product };
 
 	ibDataQueryBuilder::AggregateItem sum;
 	sum.m_fn    = ibDataQueryBuilder::AggregateFn::Sum;
-	sum.m_col   = &amount;
+	sum.m_col   = amount;
 	sum.m_alias = wxT("total");
 	const std::vector<ibDataQueryBuilder::AggregateItem> aggs = { sum };
 
@@ -119,9 +121,9 @@ TEST(QueryTotals, GrandTotalOnlyWhenNoGroups)
 	detail.AddColumn(AMOUNT, wxT("amount"), ibTypeDescription());
 	for (long a : { 4, 6, 11 }) { const long row = detail.AppendRow(); detail.SetCell(row, AMOUNT, ibValue(ibNumber(a))); }
 
-	TestCol amount(wxT("amount"), AMOUNT);
+	const auto amount = std::make_shared<TestCol>(wxT("amount"), AMOUNT);
 	ibDataQueryBuilder::AggregateItem sum;
-	sum.m_fn = ibDataQueryBuilder::AggregateFn::Sum; sum.m_col = &amount; sum.m_alias = wxT("total");
+	sum.m_fn = ibDataQueryBuilder::AggregateFn::Sum; sum.m_col = amount; sum.m_alias = wxT("total");
 
 	const ibSelectorTree tree = ibQueryComposer::BuildTotalsTree(detail, {}, { sum });
 
@@ -156,18 +158,21 @@ TEST(QueryTotals, ABalanceIsTakenAtEachKeysFirstAndLastPeriod)
 	add(wxT("A"), wxT("W2"), 2,  5,  4);   // W2 moves only on day 2 — its opening stood from the start
 	add(wxT("B"), wxT("W1"), 1,  3,  3);
 
-	TestCol item(wxT("item"), ITEM), store(wxT("store"), STORE), day(wxT("day"), DAY),
-	        opening(wxT("opening"), OPENING), closing(wxT("closing"), CLOSING);
+	const auto item    = std::make_shared<TestCol>(wxT("item"), ITEM);
+	const auto store   = std::make_shared<TestCol>(wxT("store"), STORE);
+	const auto day     = std::make_shared<TestCol>(wxT("day"), DAY);
+	const auto opening = std::make_shared<TestCol>(wxT("opening"), OPENING);
+	const auto closing = std::make_shared<TestCol>(wxT("closing"), CLOSING);
 
-	auto balance = [&](const TestCol& column, ibBalanceRole edge) {
+	auto balance = [&](const std::shared_ptr<const TestCol>& column, ibBalanceRole edge) {
 		ibDataQueryBuilder::AggregateItem a;
-		a.m_fn = ibDataQueryBuilder::AggregateFn::Sum; a.m_col = &column; a.m_alias = column.GetName();
+		a.m_fn = ibDataQueryBuilder::AggregateFn::Sum; a.m_col = column; a.m_alias = column->GetName();
 		a.m_balance        = edge;
-		a.m_balanceMoments = { &day };
-		a.m_balanceKeys    = { &item, &store };
+		a.m_balanceMoments = { day };
+		a.m_balanceKeys    = { item, store };
 		return a;
 	};
-	const ibSelectorTree tree = ibQueryComposer::BuildTotalsTree(detail, { &item },
+	const ibSelectorTree tree = ibQueryComposer::BuildTotalsTree(detail, { item },
 		{ balance(opening, ibBalanceRole::Opening), balance(closing, ibBalanceRole::Closing) });
 
 	const ibSelectorTree::Node& root = tree.Root();
@@ -181,7 +186,7 @@ TEST(QueryTotals, ABalanceIsTakenAtEachKeysFirstAndLastPeriod)
 
 	// …and the same figures as ordinary sums add every day's reading up — the number a role exists to prevent.
 	ibDataQueryBuilder::AggregateItem plain;
-	plain.m_fn = ibDataQueryBuilder::AggregateFn::Sum; plain.m_col = &opening; plain.m_alias = wxT("opening");
+	plain.m_fn = ibDataQueryBuilder::AggregateFn::Sum; plain.m_col = opening; plain.m_alias = wxT("opening");
 	EXPECT_TRUE(NumEq(ibQueryComposer::BuildTotalsTree(detail, {}, { plain }).Root().m_values.at(OPENING), 30));
 }
 
@@ -217,12 +222,14 @@ TEST(QueryCompose, InnerJoinByKey)
 	addCust(200, wxT("Bob"));
 	addCust(300, wxT("Carol"));   // no orders — inner join drops it
 
-	TestCol custId(wxT("custId"), CUSTID), custKey(wxT("custKey"), CUSTKEY);
-	TestCol amount(wxT("amount"), AMOUNT), name(wxT("name"), NAME);
-	const std::vector<const ibBackendQueryColumn*> outCols = { &amount, &name };
+	const auto custId  = std::make_shared<TestCol>(wxT("custId"), CUSTID);
+	const auto custKey = std::make_shared<TestCol>(wxT("custKey"), CUSTKEY);
+	const auto amount  = std::make_shared<TestCol>(wxT("amount"), AMOUNT);
+	const auto name    = std::make_shared<TestCol>(wxT("name"), NAME);
+	const std::vector<std::shared_ptr<const ibBackendQueryColumn>> outCols = { amount, name };
 	const std::vector<bool> fromLeft = { true, false };
 
-	const ibQueryRamTable out = ibQueryComposer::JoinRamTables(orders, customers, &custId, &custKey, outCols, fromLeft);
+	const ibQueryRamTable out = ibQueryComposer::JoinRamTables(orders, customers, custId, custKey, outCols, fromLeft);
 
 	ASSERT_EQ(out.RowCount(), 3);   // order1+order2 -> Alice, order3 -> Bob; Carol dropped
 	EXPECT_TRUE(NumEq(out.GetCell(0, AMOUNT), 50));
@@ -238,11 +245,12 @@ TEST(QueryCompose, InnerJoinByKey)
 TEST(QueryCompose, UnionHeterogeneousBranches)
 {
 	const ibMetaID OUT_CODE = 1, OUT_NAME = 2;
-	TestCol outCode(wxT("code"), OUT_CODE), outName(wxT("name"), OUT_NAME);
-	const std::vector<const ibBackendQueryColumn*> outCols = { &outCode, &outName };
+	const auto outCode = std::make_shared<TestCol>(wxT("code"), OUT_CODE);
+	const auto outName = std::make_shared<TestCol>(wxT("name"), OUT_NAME);
+	const std::vector<std::shared_ptr<const ibBackendQueryColumn>> outCols = { outCode, outName };
 
 	ibQueryRamTable out;
-	for (const ibBackendQueryColumn* c : outCols)
+	for (const std::shared_ptr<const ibBackendQueryColumn>& c : outCols)
 		out.AddColumn(c->GetColumnId(), c->GetName(), ibTypeDescription());
 
 	// Branch A — full shape (its own column ids).
@@ -255,16 +263,17 @@ TEST(QueryCompose, UnionHeterogeneousBranches)
 	};
 	addA(wxT("A1"), wxT("Apple"));
 	addA(wxT("A2"), wxT("Pear"));
-	TestCol aCode(wxT("code"), A_CODE), aName(wxT("name"), A_NAME);
-	ibQueryComposer::AppendUnionBranch(out, a, outCols, { &aCode, &aName });
+	const auto aCode = std::make_shared<TestCol>(wxT("code"), A_CODE);
+	const auto aName = std::make_shared<TestCol>(wxT("name"), A_NAME);
+	ibQueryComposer::AppendUnionBranch(out, a, outCols, { aCode, aName });
 
 	// Branch B — no `name` column (heterogeneous): name resolves to null -> NULL cell.
 	const ibMetaID B_CODE = 20;
 	ibQueryRamTable b;
 	b.AddColumn(B_CODE, wxT("code"), ibTypeDescription());
 	{ const long row = b.AppendRow(); b.SetCell(row, B_CODE, ibValue(ibString(wxT("B1")))); }
-	TestCol bCode(wxT("code"), B_CODE);
-	ibQueryComposer::AppendUnionBranch(out, b, outCols, { &bCode, nullptr });
+	const auto bCode = std::make_shared<TestCol>(wxT("code"), B_CODE);
+	ibQueryComposer::AppendUnionBranch(out, b, outCols, { bCode, nullptr });
 
 	ASSERT_EQ(out.RowCount(), 3);
 	EXPECT_EQ(out.GetCell(0, OUT_CODE).GetString().ToStdString(), "A1");
@@ -302,16 +311,17 @@ TEST(QueryTotals, EmptyLevelHangsTheDetailRows)
 	add(wxT("North"), wxT("Pear"),   3);
 	add(wxT("South"), wxT("Apple"),  7);
 
-	TestCol region(wxT("region"), REGION), amount(wxT("amount"), AMOUNT);
+	const auto region = std::make_shared<TestCol>(wxT("region"), REGION);
+	const auto amount = std::make_shared<TestCol>(wxT("amount"), AMOUNT);
 
 	ibDataQueryBuilder::AggregateItem sum;
 	sum.m_fn    = ibDataQueryBuilder::AggregateFn::Sum;
-	sum.m_col   = &amount;
+	sum.m_col   = amount;
 	sum.m_alias = wxT("total");
 
 	// ONE grouping level, then the detail level — an ibTotalLevel with no fields at all.
 	std::vector<ibTotalLevel> levels;
-	levels.push_back(ibTotalLevel::One(&region, ibDimensionKind::Elements));
+	levels.push_back(ibTotalLevel::One(region, ibDimensionKind::Elements));
 	levels.push_back(ibTotalLevel{});
 
 	const ibSelectorTree tree = ibQueryComposer::BuildDimensionTree(detail, levels, { sum }, nullptr, nullptr);
@@ -372,24 +382,26 @@ TEST(QueryTotals, AFigureMadeOfFiguresIsWorkedOutAtEveryHeading)
 	add(wxT("Ann"),  50,  0, 52);
 	add(wxT("Bob"),  80, 20, 63);
 
-	TestCol employee(wxT("employee"), EMPLOYEE), accrued(wxT("accrued"), ACCRUED),
-	        deducted(wxT("deducted"), DEDUCTED), toPay(wxT("toPay"), TOPAY);
+	const auto employee = std::make_shared<TestCol>(wxT("employee"), EMPLOYEE);
+	const auto accrued  = std::make_shared<TestCol>(wxT("accrued"), ACCRUED);
+	const auto deducted = std::make_shared<TestCol>(wxT("deducted"), DEDUCTED);
+	const auto toPay    = std::make_shared<TestCol>(wxT("toPay"), TOPAY);
 
 	// The calls, each an ordinary figure under a name of its own — what the lowering declares them as.
 	ibDataQueryBuilder::AggregateItem sumAccrued;
-	sumAccrued.m_fn = ibDataQueryBuilder::AggregateFn::Sum; sumAccrued.m_col = &accrued; sumAccrued.m_alias = wxT("fig1");
+	sumAccrued.m_fn = ibDataQueryBuilder::AggregateFn::Sum; sumAccrued.m_col = accrued; sumAccrued.m_alias = wxT("fig1");
 	ibDataQueryBuilder::AggregateItem sumDeducted;
-	sumDeducted.m_fn = ibDataQueryBuilder::AggregateFn::Sum; sumDeducted.m_col = &deducted; sumDeducted.m_alias = wxT("fig2");
+	sumDeducted.m_fn = ibDataQueryBuilder::AggregateFn::Sum; sumDeducted.m_col = deducted; sumDeducted.m_alias = wxT("fig2");
 	const std::vector<ibDataQueryBuilder::AggregateItem> aggs = { sumAccrued, sumDeducted };
 
 	const ibQueryColumnExprPtr difference = ibQueryColumnExpr::Arith(ibQueryColumnArithOp::Sub,
 		ibQueryColumnExpr::OutputRef(wxT("fig1")), ibQueryColumnExpr::OutputRef(wxT("fig2")));
 	const std::vector<ibDerivedAggregate> derived = {
-		{ &toPay,  wxT("ToPay"), difference, {} },    // the selected field's column
+		{ toPay,   wxT("ToPay"), difference, {} },    // the selected field's column
 		{ nullptr, wxT("Net"),   difference, {} } };  // a slot of its own, read by name
 
 	std::vector<ibTotalLevel> levels;
-	levels.push_back(ibTotalLevel::One(&employee, ibDimensionKind::Elements));
+	levels.push_back(ibTotalLevel::One(employee, ibDimensionKind::Elements));
 	levels.push_back(ibTotalLevel{});   // …and the rows under each heading
 	ibSelectorTree tree = ibQueryComposer::BuildDimensionTree(detail, levels, aggs, nullptr, nullptr);
 	ibQueryComposer::ApplyDerivedAggregates(tree, aggs, derived);
@@ -446,14 +458,16 @@ TEST(QueryTotals, TupleLevelGroupsByEveryFieldTogether)
 	add(wxT("North"), wxT("Pear"),   3);   // same region, other product — its own heading
 	add(wxT("South"), wxT("Apple"),  7);
 
-	TestCol region(wxT("region"), REGION), product(wxT("product"), PRODUCT), amount(wxT("amount"), AMOUNT);
+	const auto region  = std::make_shared<TestCol>(wxT("region"), REGION);
+	const auto product = std::make_shared<TestCol>(wxT("product"), PRODUCT);
+	const auto amount  = std::make_shared<TestCol>(wxT("amount"), AMOUNT);
 
 	ibDataQueryBuilder::AggregateItem sum;
-	sum.m_fn = ibDataQueryBuilder::AggregateFn::Sum; sum.m_col = &amount; sum.m_alias = wxT("total");
+	sum.m_fn = ibDataQueryBuilder::AggregateFn::Sum; sum.m_col = amount; sum.m_alias = wxT("total");
 
 	ibTotalLevel pair;
-	pair.m_fields.push_back(ibTotalField{ &region,  ibDimensionKind::Elements });
-	pair.m_fields.push_back(ibTotalField{ &product, ibDimensionKind::Elements });
+	pair.m_fields.push_back(ibTotalField{ region,  ibDimensionKind::Elements });
+	pair.m_fields.push_back(ibTotalField{ product, ibDimensionKind::Elements });
 
 	const ibSelectorTree tree = ibQueryComposer::BuildDimensionTree(detail, { pair }, { sum }, nullptr, nullptr);
 
@@ -501,18 +515,20 @@ TEST(QueryTotals, TwoAggregatesOverOneColumnNeedTwoColumns)
 	add(wxT("North"),  5);
 	add(wxT("South"),  7);
 
-	TestCol region(wxT("region"), REGION), amount(wxT("amount"), AMOUNT), again(wxT("agg0"), AMOUNT_AGAIN);
-	const std::vector<ibTotalLevel> levels{ ibTotalLevel::One(&region, ibDimensionKind::Elements) };
+	const auto region = std::make_shared<TestCol>(wxT("region"), REGION);
+	const auto amount = std::make_shared<TestCol>(wxT("amount"), AMOUNT);
+	const auto again  = std::make_shared<TestCol>(wxT("agg0"), AMOUNT_AGAIN);
+	const std::vector<ibTotalLevel> levels{ ibTotalLevel::One(region, ibDimensionKind::Elements) };
 
 	ibDataQueryBuilder::AggregateItem sum;
-	sum.m_fn = ibDataQueryBuilder::AggregateFn::Sum;   sum.m_col = &amount; sum.m_alias = wxT("total");
+	sum.m_fn = ibDataQueryBuilder::AggregateFn::Sum;   sum.m_col = amount; sum.m_alias = wxT("total");
 
 	// THE TRAP: the same column twice. Both aggregates key on AMOUNT, so the tree holds ONE value —
 	// whichever ran last — and a report shows the count where the sum should be.
 	{
 		ibDataQueryBuilder::AggregateItem countSameCol;
 		countSameCol.m_fn = ibDataQueryBuilder::AggregateFn::Count;
-		countSameCol.m_col = &amount;   countSameCol.m_alias = wxT("rows");
+		countSameCol.m_col = amount;   countSameCol.m_alias = wxT("rows");
 
 		const ibSelectorTree tree =
 			ibQueryComposer::BuildDimensionTree(detail, levels, { sum, countSameCol }, nullptr, nullptr);
@@ -524,7 +540,7 @@ TEST(QueryTotals, TwoAggregatesOverOneColumnNeedTwoColumns)
 	{
 		ibDataQueryBuilder::AggregateItem countOwnCol;
 		countOwnCol.m_fn = ibDataQueryBuilder::AggregateFn::Count;
-		countOwnCol.m_col = &again;    countOwnCol.m_alias = wxT("rows");
+		countOwnCol.m_col = again;    countOwnCol.m_alias = wxT("rows");
 
 		const ibSelectorTree tree =
 			ibQueryComposer::BuildDimensionTree(detail, levels, { sum, countOwnCol }, nullptr, nullptr);
@@ -599,14 +615,16 @@ TEST(QueryTotals, StreamingFoldHoldsGroupsNotRows)
 	const long ROWS = 100000, REGIONS = 3, PRODUCTS = 4;
 
 	GeneratedRows rows(ROWS, REGIONS, PRODUCTS, REGION, PRODUCT, AMOUNT);
-	TestCol region(wxT("region"), REGION), product(wxT("product"), PRODUCT), amount(wxT("amount"), AMOUNT);
+	const auto region  = std::make_shared<TestCol>(wxT("region"), REGION);
+	const auto product = std::make_shared<TestCol>(wxT("product"), PRODUCT);
+	const auto amount  = std::make_shared<TestCol>(wxT("amount"), AMOUNT);
 
 	ibDataQueryBuilder::AggregateItem sum;
-	sum.m_fn = ibDataQueryBuilder::AggregateFn::Sum; sum.m_col = &amount; sum.m_alias = wxT("total");
+	sum.m_fn = ibDataQueryBuilder::AggregateFn::Sum; sum.m_col = amount; sum.m_alias = wxT("total");
 	ibDataQueryBuilder::AggregateItem rowCount;      // COUNT(*) — its receiver is synthetic
 	rowCount.m_fn = ibDataQueryBuilder::AggregateFn::Count; rowCount.m_col = nullptr; rowCount.m_alias = wxT("rows");
 
-	const std::vector<const ibBackendQueryColumn*> groups = { &region, &product };
+	const std::vector<std::shared_ptr<const ibBackendQueryColumn>> groups = { region, product };
 	const ibSelectorTree tree = ibQueryComposer::BuildTotalsTree(rows, groups, { sum, rowCount });
 
 	EXPECT_EQ(rows.Reads(), ROWS + 1);                      // every row once, plus the Next() that ended it
@@ -637,13 +655,14 @@ TEST(QueryTotals, StreamingFoldStampsDetailRowsFromACursor)
 {
 	const ibMetaID REGION = 1, PRODUCT = 2, AMOUNT = 3;
 	GeneratedRows rows(6, 2, 3, REGION, PRODUCT, AMOUNT);
-	TestCol region(wxT("region"), REGION), amount(wxT("amount"), AMOUNT);
+	const auto region = std::make_shared<TestCol>(wxT("region"), REGION);
+	const auto amount = std::make_shared<TestCol>(wxT("amount"), AMOUNT);
 
 	ibDataQueryBuilder::AggregateItem sum;
-	sum.m_fn = ibDataQueryBuilder::AggregateFn::Sum; sum.m_col = &amount; sum.m_alias = wxT("total");
+	sum.m_fn = ibDataQueryBuilder::AggregateFn::Sum; sum.m_col = amount; sum.m_alias = wxT("total");
 
 	std::vector<ibTotalLevel> levels;
-	levels.push_back(ibTotalLevel::One(&region, ibDimensionKind::Elements));
+	levels.push_back(ibTotalLevel::One(region, ibDimensionKind::Elements));
 	levels.push_back(ibTotalLevel{});                       // detail records — a level with no fields
 
 	const ibSelectorTree tree = ibQueryComposer::BuildDimensionTree(rows, levels, { sum }, nullptr, nullptr);
@@ -696,11 +715,12 @@ TEST(QueryTotals, PeriodsLevelGroupsByMonthAndPadsTheQuietOne)
 	add(Moment(2026, 1, 28),  5);
 	add(Moment(2026, 3, 9),   7);
 
-	TestCol period(wxT("period"), PERIOD), amount(wxT("amount"), AMOUNT);
+	const auto period = std::make_shared<TestCol>(wxT("period"), PERIOD);
+	const auto amount = std::make_shared<TestCol>(wxT("amount"), AMOUNT);
 	ibDataQueryBuilder::AggregateItem sum;
-	sum.m_fn = ibDataQueryBuilder::AggregateFn::Sum; sum.m_col = &amount; sum.m_alias = wxT("total");
+	sum.m_fn = ibDataQueryBuilder::AggregateFn::Sum; sum.m_col = amount; sum.m_alias = wxT("total");
 
-	ibTotalLevel level = ibTotalLevel::One(&period, ibDimensionKind::Elements);
+	ibTotalLevel level = ibTotalLevel::One(period, ibDimensionKind::Elements);
 	level.m_fields.front().m_periods = std::make_shared<ibTotalPeriods>();
 	level.m_fields.front().m_periods->m_unit = ibTotalsPeriod::Month;   // no bounds — pad between first and last
 
@@ -735,11 +755,12 @@ TEST(QueryTotals, PeriodsBoundsPadOutwardsAndNeverFilter)
 	detail.SetCell(row, PERIOD, Moment(2026, 5, 4));
 	detail.SetCell(row, AMOUNT, ibValue(ibNumber(9L)));
 
-	TestCol period(wxT("period"), PERIOD), amount(wxT("amount"), AMOUNT);
+	const auto period = std::make_shared<TestCol>(wxT("period"), PERIOD);
+	const auto amount = std::make_shared<TestCol>(wxT("amount"), AMOUNT);
 	ibDataQueryBuilder::AggregateItem sum;
-	sum.m_fn = ibDataQueryBuilder::AggregateFn::Sum; sum.m_col = &amount; sum.m_alias = wxT("total");
+	sum.m_fn = ibDataQueryBuilder::AggregateFn::Sum; sum.m_col = amount; sum.m_alias = wxT("total");
 
-	ibTotalLevel level = ibTotalLevel::One(&period, ibDimensionKind::Elements);
+	ibTotalLevel level = ibTotalLevel::One(period, ibDimensionKind::Elements);
 	level.m_fields.front().m_periods = std::make_shared<ibTotalPeriods>();
 	level.m_fields.front().m_periods->m_unit = ibTotalsPeriod::Month;
 	level.m_fields.front().m_periods->m_from = Moment(2026, 3, 1);   // BEFORE the only row
@@ -794,18 +815,20 @@ TEST(QueryTotals, CrossTableHangsTheColumnsUnderEveryRowHeading)
 	add(wxT("North"), wxT("S2"), wxT("Apple"),  5);
 	add(wxT("South"), wxT("S1"), wxT("Apple"),  7);
 
-	TestCol region(wxT("region"), REGION), store(wxT("store"), STORE),
-	        product(wxT("product"), PRODUCT), amount(wxT("amount"), AMOUNT);
+	const auto region  = std::make_shared<TestCol>(wxT("region"), REGION);
+	const auto store   = std::make_shared<TestCol>(wxT("store"), STORE);
+	const auto product = std::make_shared<TestCol>(wxT("product"), PRODUCT);
+	const auto amount  = std::make_shared<TestCol>(wxT("amount"), AMOUNT);
 
 	ibDataQueryBuilder::AggregateItem sum;
-	sum.m_fn = ibDataQueryBuilder::AggregateFn::Sum; sum.m_col = &amount; sum.m_alias = wxT("total");
+	sum.m_fn = ibDataQueryBuilder::AggregateFn::Sum; sum.m_col = amount; sum.m_alias = wxT("total");
 
 	// TWO ROW LEVELS AND ONE COLUMN LEVEL — the axis is stated ON the level, which is the only thing
 	// that tells this fold from an ordinary three-level grouping.
 	std::vector<ibTotalLevel> levels;
-	levels.push_back(ibTotalLevel::One(&region,  ibDimensionKind::Elements));
-	levels.push_back(ibTotalLevel::One(&store,   ibDimensionKind::Elements));
-	levels.push_back(ibTotalLevel::One(&product, ibDimensionKind::Elements));
+	levels.push_back(ibTotalLevel::One(region,  ibDimensionKind::Elements));
+	levels.push_back(ibTotalLevel::One(store,   ibDimensionKind::Elements));
+	levels.push_back(ibTotalLevel::One(product, ibDimensionKind::Elements));
 	levels.back().m_axis = ibTotalsAxis::Columns;
 
 	// THE STREAMING ROAD — the one every report travels (a cursor, one pass, no snapshot).
@@ -871,13 +894,15 @@ TEST(QueryTotals, CrossTableDetailRecordsHangUnderTheRowHeadingWithTheirOwnCells
 	add(wxT("North"), wxT("Apple"), 10);
 	add(wxT("North"), wxT("Pear"),   3);
 
-	TestCol region(wxT("region"), REGION), product(wxT("product"), PRODUCT), amount(wxT("amount"), AMOUNT);
+	const auto region  = std::make_shared<TestCol>(wxT("region"), REGION);
+	const auto product = std::make_shared<TestCol>(wxT("product"), PRODUCT);
+	const auto amount  = std::make_shared<TestCol>(wxT("amount"), AMOUNT);
 	ibDataQueryBuilder::AggregateItem sum;
-	sum.m_fn = ibDataQueryBuilder::AggregateFn::Sum; sum.m_col = &amount; sum.m_alias = wxT("total");
+	sum.m_fn = ibDataQueryBuilder::AggregateFn::Sum; sum.m_col = amount; sum.m_alias = wxT("total");
 
 	std::vector<ibTotalLevel> levels;
-	levels.push_back(ibTotalLevel::One(&region,  ibDimensionKind::Elements));
-	levels.push_back(ibTotalLevel::One(&product, ibDimensionKind::Elements));
+	levels.push_back(ibTotalLevel::One(region,  ibDimensionKind::Elements));
+	levels.push_back(ibTotalLevel::One(product, ibDimensionKind::Elements));
 	levels.back().m_axis = ibTotalsAxis::Columns;
 	levels.push_back(ibTotalLevel{});   // …and the rows themselves — LAST in the config, always
 
@@ -933,12 +958,14 @@ TEST(QueryTotals, SplitFoldsTheSameRowsDownEveryBranch)
 	add(wxT("Bolt"), wxT("M8"), wxT("B"),  5);
 	add(wxT("Bolt"), wxT("M6"), wxT("A"),  4);
 
-	TestCol item(wxT("item"), ITEM), charac(wxT("charac"), CHARACTERISTIC),
-	        series(wxT("series"), SERIES), amount(wxT("amount"), AMOUNT);
+	const auto item   = std::make_shared<TestCol>(wxT("item"), ITEM);
+	const auto charac = std::make_shared<TestCol>(wxT("charac"), CHARACTERISTIC);
+	const auto series = std::make_shared<TestCol>(wxT("series"), SERIES);
+	const auto amount = std::make_shared<TestCol>(wxT("amount"), AMOUNT);
 
 	ibDataQueryBuilder::AggregateItem sum;
 	sum.m_fn    = ibDataQueryBuilder::AggregateFn::Sum;
-	sum.m_col   = &amount;
+	sum.m_col   = amount;
 	sum.m_alias = wxT("total");
 
 	// BY item SPLIT charac ONTO ByCharacteristic SPLIT series ONTO BySeries
@@ -948,10 +975,10 @@ TEST(QueryTotals, SplitFoldsTheSameRowsDownEveryBranch)
 	bySeries->m_name = wxT("BySeries");
 
 	std::vector<ibTotalLevel> levels;
-	levels.push_back(ibTotalLevel::One(&item, ibDimensionKind::Elements));
-	levels.push_back(ibTotalLevel::One(&charac, ibDimensionKind::Elements));
+	levels.push_back(ibTotalLevel::One(item, ibDimensionKind::Elements));
+	levels.push_back(ibTotalLevel::One(charac, ibDimensionKind::Elements));
 	levels.back().m_branch = byCharacteristic;
-	levels.push_back(ibTotalLevel::One(&series, ibDimensionKind::Elements));
+	levels.push_back(ibTotalLevel::One(series, ibDimensionKind::Elements));
 	levels.back().m_branch = bySeries;
 
 	const ibSelectorTree tree = ibQueryComposer::BuildDimensionTree(detail, levels, { sum }, nullptr, nullptr);
@@ -1013,19 +1040,21 @@ TEST(QueryTotals, SplitWithNothingInCommonForksAtTheRoot)
 	add(wxT("Bolt"), wxT("Main"), 10);
 	add(wxT("Nut"),  wxT("Main"),  5);
 
-	TestCol item(wxT("item"), ITEM), store(wxT("store"), STORE), amount(wxT("amount"), AMOUNT);
+	const auto item   = std::make_shared<TestCol>(wxT("item"), ITEM);
+	const auto store  = std::make_shared<TestCol>(wxT("store"), STORE);
+	const auto amount = std::make_shared<TestCol>(wxT("amount"), AMOUNT);
 
 	ibDataQueryBuilder::AggregateItem sum;
 	sum.m_fn  = ibDataQueryBuilder::AggregateFn::Sum;
-	sum.m_col = &amount;
+	sum.m_col = amount;
 
 	auto byItem  = std::make_shared<ibTotalBranch>();
 	auto byStore = std::make_shared<ibTotalBranch>();
 
 	std::vector<ibTotalLevel> levels;
-	levels.push_back(ibTotalLevel::One(&item, ibDimensionKind::Elements));
+	levels.push_back(ibTotalLevel::One(item, ibDimensionKind::Elements));
 	levels.back().m_branch = byItem;
-	levels.push_back(ibTotalLevel::One(&store, ibDimensionKind::Elements));
+	levels.push_back(ibTotalLevel::One(store, ibDimensionKind::Elements));
 	levels.back().m_branch = byStore;
 
 	const ibSelectorTree tree = ibQueryComposer::BuildDimensionTree(detail, levels, { sum }, nullptr, nullptr);
@@ -1052,12 +1081,13 @@ TEST(QueryTotals, WithoutSplitTheTreeHasNoForks)
 	detail.SetCell(row, REGION, ibValue(ibT("North")));
 	detail.SetCell(row, AMOUNT, ibValue(ibNumber(7L)));
 
-	TestCol region(wxT("region"), REGION), amount(wxT("amount"), AMOUNT);
+	const auto region = std::make_shared<TestCol>(wxT("region"), REGION);
+	const auto amount = std::make_shared<TestCol>(wxT("amount"), AMOUNT);
 	ibDataQueryBuilder::AggregateItem sum;
 	sum.m_fn  = ibDataQueryBuilder::AggregateFn::Sum;
-	sum.m_col = &amount;
+	sum.m_col = amount;
 
-	const std::vector<ibTotalLevel> levels{ ibTotalLevel::One(&region, ibDimensionKind::Elements) };
+	const std::vector<ibTotalLevel> levels{ ibTotalLevel::One(region, ibDimensionKind::Elements) };
 	const ibSelectorTree tree = ibQueryComposer::BuildDimensionTree(detail, levels, { sum }, nullptr, nullptr);
 
 	ASSERT_EQ(tree.Root().m_children.size(), 1u);
@@ -1079,9 +1109,11 @@ TEST(QueryTotals, EveryBranchWalksOneFoldWithoutRereadingTheCursor)
 	const ibMetaID REGION = 1, PRODUCT = 2, AMOUNT = 3;
 	const long ROWS = 12, REGIONS = 2, PRODUCTS = 3;
 
-	TestCol region(wxT("region"), REGION), product(wxT("product"), PRODUCT), amount(wxT("amount"), AMOUNT);
+	const auto region  = std::make_shared<TestCol>(wxT("region"), REGION);
+	const auto product = std::make_shared<TestCol>(wxT("product"), PRODUCT);
+	const auto amount  = std::make_shared<TestCol>(wxT("amount"), AMOUNT);
 	ibDataQueryBuilder::AggregateItem sum;
-	sum.m_fn = ibDataQueryBuilder::AggregateFn::Sum; sum.m_col = &amount; sum.m_alias = wxT("total");
+	sum.m_fn = ibDataQueryBuilder::AggregateFn::Sum; sum.m_col = amount; sum.m_alias = wxT("total");
 
 	// BY <nothing common> SPLIT ByRegion BY region SPLIT ByProduct BY product
 	auto byRegion  = std::make_shared<ibTotalBranch>();
@@ -1090,9 +1122,9 @@ TEST(QueryTotals, EveryBranchWalksOneFoldWithoutRereadingTheCursor)
 	byProduct->m_name = wxT("ByProduct");
 
 	std::vector<ibTotalLevel> levels;
-	levels.push_back(ibTotalLevel::One(&region, ibDimensionKind::Elements));
+	levels.push_back(ibTotalLevel::One(region, ibDimensionKind::Elements));
 	levels.back().m_branch = byRegion;
-	levels.push_back(ibTotalLevel::One(&product, ibDimensionKind::Elements));
+	levels.push_back(ibTotalLevel::One(product, ibDimensionKind::Elements));
 	levels.back().m_branch = byProduct;
 
 	auto rows = std::make_unique<GeneratedRows>(ROWS, REGIONS, PRODUCTS, REGION, PRODUCT, AMOUNT);
@@ -1160,18 +1192,20 @@ TEST(QueryTotals, AggregateOverALevelStandsThereAndIsCarriedDown)
 	add(wxT("Bolt"), wxT("Central"),  5);
 	add(wxT("Nut"),  wxT("Central"), 20);
 
-	TestCol item(wxT("item"), ITEM), warehouse(wxT("warehouse"), WAREHOUSE), amount(wxT("amount"), AMOUNT);
+	const auto item      = std::make_shared<TestCol>(wxT("item"), ITEM);
+	const auto warehouse = std::make_shared<TestCol>(wxT("warehouse"), WAREHOUSE);
+	const auto amount    = std::make_shared<TestCol>(wxT("amount"), AMOUNT);
 
 	ibDataQueryBuilder::AggregateItem plain;   // area from the ladder — one figure per heading
-	plain.m_fn = ibDataQueryBuilder::AggregateFn::Sum; plain.m_col = &amount; plain.m_alias = wxT("total");
+	plain.m_fn = ibDataQueryBuilder::AggregateFn::Sum; plain.m_col = amount; plain.m_alias = wxT("total");
 	ibDataQueryBuilder::AggregateItem overItem;   // …and one that belongs to the item level
-	overItem.m_fn = ibDataQueryBuilder::AggregateFn::Sum; overItem.m_col = &amount;
+	overItem.m_fn = ibDataQueryBuilder::AggregateFn::Sum; overItem.m_col = amount;
 	overItem.m_alias = wxT("inItem");
 	overItem.m_scopeDepth = 1;                    // the first rung — Item
 
 	const std::vector<ibTotalLevel> levels{
-		ibTotalLevel::One(&item,      ibDimensionKind::Elements),
-		ibTotalLevel::One(&warehouse, ibDimensionKind::Elements),
+		ibTotalLevel::One(item,      ibDimensionKind::Elements),
+		ibTotalLevel::One(warehouse, ibDimensionKind::Elements),
 	};
 	const ibSelectorTree tree = ibQueryComposer::BuildDimensionTree(detail, levels, { plain, overItem },
 	                                                               nullptr, nullptr);

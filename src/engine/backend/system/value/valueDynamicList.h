@@ -62,7 +62,7 @@ public:
 
 	// The source may be passed here too — null means "set it later" (SetSource).
 	// `view` seeds the DEFAULT view (Normal / Choice) — see ibDynamicListView; it serialises and re-loads.
-	ibValueDynamicList(const ibBackendQueryable* queryable = nullptr, ibDynamicListView view = ibDynamicListView_Normal);
+	ibValueDynamicList(const std::shared_ptr<const ibBackendQueryable>& queryable = nullptr, ibDynamicListView view = ibDynamicListView_Normal);
 	virtual ~ibValueDynamicList();
 
 	// --- source & query (L5) ------------------------------------------------
@@ -70,9 +70,9 @@ public:
 	// SetCustomQuery an arbitrary query. The source variable itself lives in the
 	// Source property (read via the GetSourceQueryable facade), not on the list.
 	void SetSource(const ibString& ns, const ibString& name);
-	void SetSourceQueryable(const ibBackendQueryable* queryable);
+	void SetSourceQueryable(const std::shared_ptr<const ibBackendQueryable>& queryable);
 	void SetCustomQuery(const ibString& queryText);
-	const ibBackendQueryable* GetSourceQueryable() const { return m_propertySource->GetQueryable(); }
+	std::shared_ptr<const ibBackendQueryable> GetSourceQueryable() const { return m_propertySource->GetQueryable(); }
 
 	// --- the arbitrary query, ON TOP of the main table -------------------------
 	//
@@ -174,8 +174,8 @@ public:
 	// The FOLDER-flag column of a hierarchical list — set at creation (ibCreateHierarchyList) so folder rows render
 	// as drillable containers even when EMPTY (the DB level-fetch reports hasChildren=false for every row). The
 	// metaobject picked the column (GetDataIsFolder); the fetch reads the row's value for it. Null on a flat list.
-	void SetFolderColumn(const ibBackendQueryColumn* col) { m_folderColumn = col; }
-	const ibBackendQueryColumn* GetFolderDisplayColumn() const override { return m_folderColumn; }
+	void SetFolderColumn(const std::shared_ptr<const ibBackendQueryColumn>& col) { m_folderColumn = col; }
+	std::shared_ptr<const ibBackendQueryColumn> GetFolderDisplayColumn() const override { return m_folderColumn; }
 
 	// --- ibValueModel / ibValueModelCursor --------------------------------
 	virtual void GetValueByRow(ibVariant& variant, const ibDataViewItem& item, unsigned col) const override;
@@ -217,7 +217,7 @@ public:
 	// The source metaobject comes THROUGH the queryable (metadata-backed sources hold it; a custom-query source has
 	// none → null). The front reads the source's icon / presentation off it, exactly as every other source object.
 	virtual const ibValueMetaObjectGenericData* GetSourceMetaObject() const override {
-		const ibBackendQueryable* q = GetSourceQueryable();
+		const std::shared_ptr<const ibBackendQueryable> q = GetSourceQueryable();
 		return q != nullptr ? q->GetSourceMetaObject() : nullptr;
 	}
 	virtual ibClassID GetSourceClassType() const override { return g_valueDynamicListCLSID; }
@@ -313,16 +313,16 @@ private:
 	// RebuildSource — which is what makes the pickers follow the text: change the query, and the
 	// filters / sorts / groupings are offering the new fields the moment the change is applied.
 	//
-	// The schema OWNS its synthetic columns (ibQueryOutputColumn::m_ownedCol), so it outlives the door that
-	// resolved it — which it has to: nothing here reads rows, the columns are just being named.
+	// The schema HOLDS its columns (ibQueryOutputColumn::m_col), so it outlives the door that resolved it —
+	// which it has to: nothing here reads rows, the columns are just being named.
 	std::vector<ibQueryLowering::ibQueryOutputColumn> m_querySchema;
 	// (⛔ `m_queryError` STOOD HERE — the engine's verdict on the query, written in the catch and read
 	//  by an accessor that has gone with the flag. The settings window asks the same question of the
 	//  TEXT itself now (ibQueryFieldsOfText), which is where a person can act on the answer.)
 
-	// Folder-flag column for the hierarchical display (folder rows = drillable containers). Non-owning — points at
-	// the metaobject's queryable column, handed in by ibCreateHierarchyList. Null on a flat / non-folder list.
-	const ibBackendQueryColumn* m_folderColumn = nullptr;
+	// Folder-flag column for the hierarchical display (folder rows = drillable containers). Held — a share of the
+	// metaobject's queryable column, handed in by ibCreateHierarchyList. Null on a flat / non-folder list.
+	std::shared_ptr<const ibBackendQueryColumn> m_folderColumn;
 
 	// The list's SOURCE config, STORED (the metadata VARIABLE GetSourceMetaData returns) — captured from the picked
 	// queryable's metaobject in RebuildSource (fires on ctor / load / source-change / copy). Held so the READ never
@@ -374,17 +374,22 @@ private:
 // Number, an enum its Order, a register its Period). The sort becomes an ordinary serialised, user-editable setting
 // (removable), NOT a runtime re-applied default. null col → no sort. (Flat sources.) `view` seeds the default view —
 // a SELECT form passes ibDynamicListView_Choice so the generated form inherits choice mode (serialised, removable).
-BACKEND_API ibValueDynamicList* ibCreateList(const ibCreateRequest& request, const ibBackendQueryable* queryable, const ibBackendQueryColumn* defaultSort, ibDynamicListView view = ibDynamicListView_Normal);
+BACKEND_API ibValueDynamicList* ibCreateList(const ibCreateRequest& request, const std::shared_ptr<const ibBackendQueryable>& queryable,
+	const std::shared_ptr<const ibBackendQueryColumn>& defaultSort, ibDynamicListView view = ibDynamicListView_Normal);
 
 // Create a HIERARCHY list — folder-FIRST sort (folderCol DESC: folders on top) THEN presentation sort. The
 // metaobject passes its IsFolder + presentation (Description) columns. Folders are a SORT setting now, not a
 // structural GetFolderColumn; the tree itself comes from the queryable's hierarchy (parent) column. `view` seeds the
 // default view — a SELECT form passes ibDynamicListView_Choice (choice mode, serialised and user-removable).
-BACKEND_API ibValueDynamicList* ibCreateHierarchyList(const ibCreateRequest& request, const ibBackendQueryable* queryable, const ibBackendQueryColumn* folderCol, const ibBackendQueryColumn* presentationCol, ibDynamicListView view = ibDynamicListView_Normal);
+BACKEND_API ibValueDynamicList* ibCreateHierarchyList(const ibCreateRequest& request, const std::shared_ptr<const ibBackendQueryable>& queryable,
+	const std::shared_ptr<const ibBackendQueryColumn>& folderCol, const std::shared_ptr<const ibBackendQueryColumn>& presentationCol,
+	ibDynamicListView view = ibDynamicListView_Normal);
 
 // Create a FOLDER-SELECT list — presentation sort + a fixed `IsFolder = true` FILTER (only folders). The metaobject
 // passes its IsFolder + presentation columns (folder-select is a filter setting, no GetFolderColumn). `view` seeds the
 // default view — the folder-select call site passes ibDynamicListView_Choice (choice mode, serialised, user-removable).
-BACKEND_API ibValueDynamicList* ibCreateFolderList(const ibCreateRequest& request, const ibBackendQueryable* queryable, const ibBackendQueryColumn* folderCol, const ibBackendQueryColumn* presentationCol, ibDynamicListView view = ibDynamicListView_Normal);
+BACKEND_API ibValueDynamicList* ibCreateFolderList(const ibCreateRequest& request, const std::shared_ptr<const ibBackendQueryable>& queryable,
+	const std::shared_ptr<const ibBackendQueryColumn>& folderCol, const std::shared_ptr<const ibBackendQueryColumn>& presentationCol,
+	ibDynamicListView view = ibDynamicListView_Normal);
 
 #endif // __VALUE_DYNAMIC_LIST_H__

@@ -3117,6 +3117,28 @@ msgstr "Фонове завдання ЗАВЕРШИЛОСЯ ПОМИЛКОЮ: %
 msgid "Background job FAILED: %s - unknown error"
 msgstr "Фонове завдання ЗАВЕРШИЛОСЯ ПОМИЛКОЮ: %s - невідома помилка"
 
+#: src/engine/backend/job/jobBackground.cpp:671
+#, c-format
+msgid "Background job FAILED: %s - not enough memory"
+msgstr "Фонове завдання ЗАВЕРШИЛОСЯ ПОМИЛКОЮ: %s - недостатньо пам'яті"
+
+#: src/engine/backend/job/jobBackground.cpp:675
+#: src/engine/backend/job/jobManager.cpp:475
+msgid "not enough memory"
+msgstr "недостатньо пам'яті"
+
+#: src/engine/backend/metaCollection/partial/accountingRegisterMetadataTotals.cpp:3544
+#: src/engine/backend/metaCollection/partial/accumulationRegisterMetadataTotals.cpp:775
+#, c-format
+msgid ""
+"%s: the balance and turnovers by period would make %llu rows (%zu keys over "
+"%zu periods), more than a reading folded in memory may hold (%zu). Narrow the "
+"interval, read by a longer period, or filter by the dimensions."
+msgstr ""
+"%s: залишки та обороти за періодами дали б %llu рядків (%zu ключів на %zu "
+"періодів) - більше, ніж може втримати читання, згорнуте в пам'яті (%zu). "
+"Звузьте інтервал, читайте за довшим періодом або відберіть за вимірами."
+
 #: src/engine/backend/job/jobBackground.cpp:656
 #: src/engine/backend/job/jobManager.cpp:474
 #: src/engine/backend/metaCollection/partial/reference/referenceQuery.cpp:77
@@ -6529,6 +6551,11 @@ msgstr "відбір вказує '%s', що не є полем '%s'"
 #, c-format
 msgid "filter names '%s', which is not a dimension of '%s' - this reading folds the records and is filtered by dimensions only"
 msgstr "відбір вказує '%s', що не є виміром '%s' - це читання згортає записи, і відбирати його можна лише за вимірами"
+
+#: src/engine/backend/metaCollection/partial/accountingRegisterMetadataTotals.cpp:557
+#, c-format
+msgid "filter names '%s', which is not an account dimension kind of '%s' - a Map is keyed by the kinds, a dimension is named in a Structure"
+msgstr "відбір вказує '%s', що не є видом аналітики '%s' - ключі Map - це види аналітики, вимір називають у Structure"
 
 #: src/engine/backend/metaCollection/partial/registerQueryLowering.h:1106
 #, c-format

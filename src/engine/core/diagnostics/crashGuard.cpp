@@ -23,6 +23,7 @@
 #ifdef __IBMSW__
 #include <windows.h>
 #include <dbghelp.h>
+#include <intrin.h>     // _ReturnAddress — where abort handed over, the dump's exception address
 #pragma comment(lib, "dbghelp.lib")
 #else
 // POSIX backtrace — glibc + macOS libSystem. FreeBSD same header.
@@ -51,8 +52,14 @@ char s_exeName[64] = {};
 
 #ifdef __IBMSW__
 LPTOP_LEVEL_EXCEPTION_FILTER s_prevSehFilter = nullptr;
-#endif
+// ROOM FOR THE DUMP, kept from Install on. A 32-bit process dies of exhausted ADDRESS SPACE, and by then the helper
+// gets no stack and dbghelp no buffers: the guard wrote nothing (appworkspace, 2026-11-16, 3.46 GB). Reserved, never
+// committed — it costs address space, not memory — and given back as a crash's first act. Measured with the space
+// gone: a full dump was refused with 16 MB given back and written with 18, the helper's stack included.
+std::atomic<void*>           s_dumpReserve{ nullptr };
+#else
 std::terminate_handler       s_prevTerminate = nullptr;
+#endif
 std::atomic<bool>            s_installed{ false };
 std::atomic<bool>            s_stopRequested{ false };   // MarkStopRequested — lock-free, so a signal handler may set it
 std::atomic<void (*)(int)>   s_stopWake{ nullptr };      // InstallStopSignals — …and read this
@@ -80,13 +87,15 @@ void AppendLine(const ibString& path, const ibString& line)
 // The POSIX handler builds its path with snprintf into a stack buffer, because it runs in a signal
 // context where wxString is not allowed — so off MSW this function has no user at all.
 #ifdef __IBMSW__
-ibString MakeDumpPath(const ibString& kindSuffix, const ibString& extension)
+ibString MakeDumpPath(const ibString& kindSuffix, const ibString& extension, unsigned long tid)
 {
 	EnsureCrashDir();
 	// Stamp + pid + tid + counter — two threads crashing in the same
 	// second used to land on the same filename and the second overwrote
 	// the first. tid disambiguates the common case; the atomic counter
-	// handles two faults on the same thread within one second.
+	// handles two faults on the same thread within one second. The tid is
+	// the FAULTING thread's, passed in: a dump is written on a helper thread,
+	// whose own id named it until 2026-11-17.
 	static std::atomic<unsigned> s_seq{ 0 };
 	const ibString stamp = ibDateTime::Now().Format(ibT("%Y%m%dT%H%M%S"));
 	const unsigned seq = s_seq.fetch_add(1, std::memory_order_relaxed);
@@ -95,31 +104,54 @@ ibString MakeDumpPath(const ibString& kindSuffix, const ibString& extension)
 		ibString::FromUTF8(s_exeName),
 		kindSuffix,
 		CurrentPidPortable(),
-		CurrentTidPortable(),
+		tid,
 		stamp,
 		seq,
 		extension);
 }
 #endif // __IBMSW__
 
-void LogTerminateReason(const ibString& reason)
+// What was in flight when the process gave up — the exception's own words, or that there was none.
+//
+// Outer try / catch: if any step inside throws (bad_alloc on rethrow_exception, etc.) it MUST NOT re-enter
+// std::terminate — that's an infinite recursion on most platforms. Swallowed; the caller goes on to end the process.
+void LogTerminateReason()
 {
-	// Multiple background threads can hit terminate concurrently and
-	// each one's reason should land in the log, not clobber the previous.
-	// Mutex guards format-then-write — OS-level append-write is atomic
-	// but a format followed by a write is not.
-	static std::mutex s_logMtx;
-	std::lock_guard<std::mutex> lk(s_logMtx);
+	try {
+		ibString reason = ibT("no exception in flight");
+		try {
+			auto p = std::current_exception();
+			if (p) std::rethrow_exception(p);
+		}
+		catch (const ibCoreException& e) {
+			reason = ibT("ibCoreException: ") + e.GetErrorDescription();
+		}
+		catch (const std::exception& e) {
+			reason = ibT("std::exception: ") + ibString::FromUTF8(e.what());
+		}
+		catch (...) {
+			reason = ibT("unknown C++ exception");
+		}
 
-	EnsureCrashDir();
-	const ibString logPath = ibString::Format(ibT("%s%c%s_terminate_%u.log"),
-		ibString::FromUTF8(s_crashDir), ibFILE_SEP_PATH,
-		ibString::FromUTF8(s_exeName),
-		CurrentPidPortable());
-	AppendLine(logPath, ibString::Format(ibT("%s  tid=%lu  %s\n"),
-		ibDateTime::Now().Format(ibT("%Y-%m-%dT%H:%M:%S")),
-		CurrentTidPortable(),
-		reason));
+		// Multiple background threads can hit terminate concurrently and
+		// each one's reason should land in the log, not clobber the previous.
+		// Mutex guards format-then-write — OS-level append-write is atomic
+		// but a format followed by a write is not.
+		static std::mutex s_logMtx;
+		std::lock_guard<std::mutex> lk(s_logMtx);
+
+		EnsureCrashDir();
+		const ibString logPath = ibString::Format(ibT("%s%c%s_terminate_%u.log"),
+			ibString::FromUTF8(s_crashDir), ibFILE_SEP_PATH,
+			ibString::FromUTF8(s_exeName),
+			CurrentPidPortable());
+		AppendLine(logPath, ibString::Format(ibT("%s  tid=%lu  %s\n"),
+			ibDateTime::Now().Format(ibT("%Y-%m-%dT%H:%M:%S")),
+			CurrentTidPortable(),
+			reason));
+	}
+	catch (...) {
+	}
 }
 
 #ifdef __IBMSW__
@@ -134,7 +166,7 @@ struct ibDumpJob {
 DWORD WINAPI DumpOnFreshStack(void* raw)
 {
 	ibDumpJob* const job = static_cast<ibDumpJob*>(raw);
-	const ibString dumpPath = MakeDumpPath(ibEmptyString, ibT("dmp"));
+	const ibString dumpPath = MakeDumpPath(ibEmptyString, ibT("dmp"), job->tid);
 	HANDLE hFile = ::CreateFileW(dumpPath.wc_str(), GENERIC_WRITE, 0, nullptr,
 		CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
 	if (hFile == INVALID_HANDLE_VALUE)
@@ -158,18 +190,30 @@ DWORD WINAPI DumpOnFreshStack(void* raw)
 	return 0;
 }
 
-LONG WINAPI PersistentCrashDumpFilter(EXCEPTION_POINTERS* ep)
+// The dump of a fault, of the calling thread — the unhandled filter's and the abort's. The room kept for it is given
+// back first. The helper's stack is a reservation of its own: the image's default (8 MB in appworkspace) would take
+// a quarter of that room.
+void WriteCrashDump(EXCEPTION_POINTERS* ep)
 {
-	// Persistent minidump fires before any wx-level dialog. wx wipes
-	// its temp directory on dialog close; our dumps survive.
+	if (void* const reserve = s_dumpReserve.exchange(nullptr))
+		::VirtualFree(reserve, 0, MEM_RELEASE);
+
 	ibDumpJob job;
 	job.ep = ep;
 	job.tid = ::GetCurrentThreadId();
-	HANDLE helper = ::CreateThread(nullptr, 0, &DumpOnFreshStack, &job, 0, nullptr);
+	HANDLE helper = ::CreateThread(nullptr, 256u * 1024u, &DumpOnFreshStack, &job,
+		STACK_SIZE_PARAM_IS_A_RESERVATION, nullptr);
 	if (helper != nullptr) {
 		::WaitForSingleObject(helper, 60000);
 		::CloseHandle(helper);
 	}
+}
+
+LONG WINAPI PersistentCrashDumpFilter(EXCEPTION_POINTERS* ep)
+{
+	// Persistent minidump fires before any wx-level dialog. wx wipes
+	// its temp directory on dialog close; our dumps survive.
+	WriteCrashDump(ep);
 
 	// The guard page is restored after an unwind, never here. This filter
 	// runs before any unwind, and _resetstkoflw in that window is what the
@@ -217,55 +261,47 @@ void PosixCrashSignalHandler(int sig)
 #endif
 
 #ifdef __IBMSW__
-void __cdecl OesTerminateHandler()
+// ⭐ EVERY TERMINATE ENDS IN abort(), AND abort() RAISES SIGABRT — the one door on Windows. The CRT keeps the terminate
+// handler per FIBER (its thread data lives in fiber-local storage): std::set_terminate armed only the fiber that called
+// Install, and a throw out of a noexcept frame on a worker's fiber went to a bare abort — no line, no dump
+// (appworkspace, 2026-11-16). Where the handler did run, the CRT's terminate() wraps it in __except, and the fault it
+// raised for the filter was swallowed. The SIGABRT action is the process's: every thread, every fiber.
+//
+// An ordinary call on the failing fiber, not an asynchronous signal: the in-flight exception is still readable here,
+// and the throw's frames are still on this stack — the dump is of it as it stands. Then the process ends with abort's
+// own code. What the CRT would do next (_exit) unloads every module, and a debug layer reporting its leaks at unload
+// is what stood in WER as the crash: a breakpoint in KERNELBASE.
+void __cdecl OnAbortSignal(int)
+{
+	CONTEXT context = {};
+	::RtlCaptureContext(&context);
+	EXCEPTION_RECORD record = {};
+	record.ExceptionCode = 0xE0E50001;     // 'OE' magic + sub-code: the process gave up
+	record.ExceptionFlags = EXCEPTION_NONCONTINUABLE;
+	record.ExceptionAddress = _ReturnAddress();
+	EXCEPTION_POINTERS ep = { &record, &context };
+	WriteCrashDump(&ep);
+
+	LogTerminateReason();
+	TerminateProcessFast(3);
+}
 #else
 void OesTerminateHandler()
-#endif
 {
 	// Worker / registry / debug-listener threads bypass wxApp's
 	// OnUnhandledException — that only catches escapes from the wx
 	// main event loop. A C++ throw unwinding off any other thread
 	// hits std::terminate, which default-aborts without firing any
 	// of our diagnostic chains. We capture the in-flight exception
-	// text into a log, then raise an OS-level fault so the platform's
-	// crash-dump path produces an artefact against this thread.
-	//
-	// Outer try / catch: if any step inside the handler itself throws
-	// (bad_alloc on rethrow_exception, etc.) we MUST NOT let it
-	// re-enter std::terminate — that's an infinite recursion on most
-	// platforms. Swallow and fall through to the raise below.
-	try {
-		ibString reason = ibT("std::terminate (no in-flight exception)");
-		try {
-			auto p = std::current_exception();
-			if (p) std::rethrow_exception(p);
-		}
-		catch (const ibCoreException& e) {
-			reason = ibT("ibCoreException: ") + e.GetErrorDescription();
-		}
-		catch (const std::exception& e) {
-			reason = ibT("std::exception: ") + ibString::FromUTF8(e.what());
-		}
-		catch (...) {
-			reason = ibT("unknown C++ exception");
-		}
-
-		LogTerminateReason(reason);
-	}
-	catch (...) {
-	}
-
-#ifdef __IBMSW__
-	// Synthetic non-continuable SEH so PersistentCrashDumpFilter writes
-	// a dump on this thread. 0xE0E50001 — 'OE' magic + sub-code.
-	::RaiseException(0xE0E50001, EXCEPTION_NONCONTINUABLE, 0, nullptr);
-#else
+	// text into a log, then raise SIGABRT so the signal handler writes
+	// its backtrace against this thread.
+	LogTerminateReason();
 	std::raise(SIGABRT);
-#endif
 
 	if (s_prevTerminate) s_prevTerminate();
 	std::abort();
 }
+#endif
 
 } // namespace
 
@@ -381,17 +417,22 @@ void Install(const ibString& exeName)
 	// Opened in both all the same: Open decides the file, and the program's name is the console's too.
 	ibTechJournal::Open(exeName);
 
-	if (s_prevTerminate == nullptr)
-		s_prevTerminate = std::set_terminate(&OesTerminateHandler);
-
 	// Before the handlers, so a fault in the rest of Install can be logged.
 	// Worker threads arm themselves when they become fiber schedulers.
 	ArmCurrentThread();
 
 #ifdef __IBMSW__
+	s_dumpReserve = ::VirtualAlloc(nullptr, 32u * 1024u * 1024u, MEM_RESERVE, PAGE_NOACCESS);
 	if (s_prevSehFilter == nullptr)
 		s_prevSehFilter = ::SetUnhandledExceptionFilter(&PersistentCrashDumpFilter);
+	std::signal(SIGABRT, &OnAbortSignal);
+	// The Debug CRT's abort asks for a box (Abort / Retry / Ignore) BEFORE it raises SIGABRT: the dump waited on a click
+	// nobody sees on a server, and with the address space gone the box has nowhere to come up. Abort is ours now.
+	_set_abort_behavior(0, _WRITE_ABORT_MSG);
 #else
+	if (s_prevTerminate == nullptr)
+		s_prevTerminate = std::set_terminate(&OesTerminateHandler);
+
 	// The handler may only open a file: the folder and its path are made here, before it can run.
 	// Without this a fault wrote nowhere - appstudio on Linux, CI, 2026-11-12.
 	EnsureCrashDir();
@@ -526,7 +567,7 @@ int WrapStartup(const ibString& exeName, std::function<int()> body)
 void WriteDumpNow(const ibString& kindSuffix)
 {
 #ifdef __IBMSW__
-	const ibString dumpPath = MakeDumpPath(kindSuffix, ibT("dmp"));
+	const ibString dumpPath = MakeDumpPath(kindSuffix, ibT("dmp"), CurrentTidPortable());
 	HANDLE hFile = ::CreateFileW(dumpPath.wc_str(), GENERIC_WRITE, 0, nullptr,
 		CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
 	if (hFile == INVALID_HANDLE_VALUE)

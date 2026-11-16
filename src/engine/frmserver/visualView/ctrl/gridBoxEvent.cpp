@@ -24,14 +24,10 @@ bool ibValueGridBox::OnClientEvent(ibProtocol::ibEvent::ibKind event, const ibDa
 		return true;
 	}
 	case ibProtocol::ibEvent::ibKind::Change: {
-		// THE SHEET AS THE PERSON LEFT IT — edited on the client and handed over whole (Change {Sheet}): the sheet on
-		// show from then on, which is the model's own. Its version stays: the client holds that sheet already.
-		ibSpreadsheetDescription sheet;
-		if (!m_gridDocument->GetSpreadsheet().IsEditable()
-			|| !ibSpreadsheetDescriptionMemory::ReadNode(args.GetProperty(ibProtocol::ibForm::ibSpreadsheet::Sheet), sheet))
-			return false;
-		m_gridDocument->SetSpreadsheetDesc(std::move(sheet));
-		return true;
+		// THE SHEET AS THE PERSON LEFT IT — edited on the client and handed over, read by the view of the document the
+		// box holds as a sheet's tab reads it (ibSheetView): the sheet on show from then on, which is the model's own.
+		// The box only says whether it may be edited. Its version stays: the client holds that sheet already.
+		return m_gridDocument->GetSpreadsheet().IsEditable() && m_gridView->OnClientEvent(event, args);
 	}
 	default:
 		return ibValueWindowComposite::OnClientEvent(event, args);

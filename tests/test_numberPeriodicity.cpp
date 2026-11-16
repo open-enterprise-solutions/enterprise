@@ -160,9 +160,9 @@ struct NumberSeries : ::testing::Test {
 		ASSERT_NE(doc, nullptr);
 		ASSERT_TRUE(cfg->RunDatabase());
 
-		for (const ibColumnSlot& slot : DescribeColumnLayout(doc->GetDocumentNumber()->GetQueryColumn()))
+		for (const ibColumnSlot& slot : DescribeColumnLayout(*doc->GetDocumentNumber()->GetQueryColumn()))
 			if (slot.m_role == ibColumnRole::String) numberField = slot.m_name;
-		for (const ibColumnSlot& slot : DescribeColumnLayout(doc->GetDocumentDate()->GetQueryColumn()))
+		for (const ibColumnSlot& slot : DescribeColumnLayout(*doc->GetDocumentDate()->GetQueryColumn()))
 			if (slot.m_role == ibColumnRole::Date) dateField = slot.m_name;
 		ASSERT_FALSE(numberField.IsEmpty());
 		ASSERT_FALSE(dateField.IsEmpty());

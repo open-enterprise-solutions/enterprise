@@ -286,11 +286,11 @@ TEST(FiberTrust, ARoleHandlerThatAsksThroughTheGateDoesNotHang)
 		ASSERT_TRUE(Compile(*session, cfg, error)) << error.ToStdString();
 	}
 
-	const ibBackendQueryable* source = catalog->GetQueryable();
+	const std::shared_ptr<const ibBackendQueryable> source = catalog->GetQueryable();
 	ASSERT_NE(source, nullptr);
-	const std::vector<const ibBackendQueryColumn*> columns = source->GetQueryColumns();
+	const std::vector<std::shared_ptr<const ibBackendQueryColumn>> columns = source->GetQueryColumns();
 	ASSERT_FALSE(columns.empty());
-	const ibBackendQueryColumn* column = columns.front();
+	const std::shared_ptr<const ibBackendQueryColumn> column = columns.front();
 	ASSERT_NE(column, nullptr);
 
 	std::atomic<bool> asked { false };

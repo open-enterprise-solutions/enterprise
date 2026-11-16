@@ -17,9 +17,11 @@
 //
 // What this module DOES:
 //   - SetUnhandledExceptionFilter (Windows) for persistent minidumps.
+//   - SIGABRT (Windows): every terminate ends in abort — on any thread
+//     and any fiber — and abort writes the reason and a minidump.
 //   - sigaction for SIGSEGV/SIGABRT/SIGFPE/SIGILL/SIGBUS (POSIX) with
 //     async-signal-safe backtrace log.
-//   - std::set_terminate for background-thread C++ throws.
+//   - std::set_terminate (POSIX) for C++ throws nobody caught.
 //   - Process-native message-box (MessageBoxW on Win, stderr on POSIX) —
 //     usable from any thread, no main-loop dependency.
 //   - Headless WrapStartup: try/catch + log + native message.

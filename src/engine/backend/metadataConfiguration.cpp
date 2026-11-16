@@ -24,6 +24,7 @@
 
 #include <fstream>
 #include <filesystem>
+#include <utility>   // std::exchange — Replace
 
 #include "core/fileSystem.h"             // ibPathOf
 #include "backend/backend_exception.h"   // catch ibBackendException at the LoadCommonTree boundary
@@ -52,6 +53,20 @@ ibFileProvider ConfigurationFiles()
 }
 
 } // namespace
+
+std::shared_ptr<ibMetaDataConfigurationBase> ibMetaDataConfigurationBase::Replace(
+	std::shared_ptr<ibMetaDataConfigurationBase>& active, std::shared_ptr<ibMetaDataConfigurationBase> metaData)
+{
+	std::shared_ptr<ibMetaDataConfigurationBase> previous = std::exchange(active, std::move(metaData));
+
+	// The table of compiled bytecode is the new configuration's from here. It holds one row a module, so what the
+	// sessions still working in the one before compile stays with them and is not saved.
+	if (previous != nullptr && previous != active) {
+		if (ibByteCodeStorage* const storage = previous->GetByteCodeStorage())
+			storage->Detach();
+	}
+	return previous;
+}
 
 bool ibMetaDataConfigurationBase::SaveConfigToFiles(const ibString& directory)
 {

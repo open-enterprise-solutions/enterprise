@@ -488,8 +488,9 @@ void ibGridCellAttr::MergeWith(ibGridCellAttr* mergefrom)
 	if (!HasReadWriteMode() && mergefrom->HasReadWriteMode())
 		SetReadOnly(mergefrom->IsReadOnly());
 
+	// The mode itself, not its overflow flag: through the flag a Wrap or an ellipsis came out a Clip.
 	if (!HasOverflowMode() && mergefrom->HasOverflowMode())
-		SetOverflow(mergefrom->GetOverflow());
+		SetFitMode(mergefrom->m_fitMode);
 
 	SetDefAttr(mergefrom->m_defGridAttr);
 }
@@ -7842,6 +7843,13 @@ ibGrid::DoDrawGridNonClippingRegionLines(wxDC& dc,
 	for (int rowPos = topRow; rowPos < bottomRow; rowPos++)
 	{
 		int i = GetRowAt(rowPos);
+
+		// ⚠ ONLY THE ROWS IN VIEW. The caller hands every row from the first shown to the sheet's last, and DoDrawGridLines
+		// stops at the bottom — this went on: a 100 000-line sheet was walked whole at every paint, 70 % of a scroll step
+		// (2026-11-16, load-million-rows.md § 12). A row is in view while its TOP is, so an area's top line still comes.
+		if (GetRowTop(i, GetGridZoom()) > bottom)
+			break;
+
 		int bot = GetRowBottom(i, GetGridZoom()) - 1;
 
 		//draw col print brake
@@ -7875,6 +7883,10 @@ ibGrid::DoDrawGridNonClippingRegionLines(wxDC& dc,
 	for (int colPos = leftCol; colPos < rightCol; colPos++)
 	{
 		int i = GetColAt(colPos);
+
+		// …and only the columns in view, the same way
+		if (GetColLeft(i, GetGridZoom()) > right)
+			break;
 
 		int colRight = GetColRight(i, GetGridZoom());
 
@@ -11393,10 +11405,26 @@ void ibGrid::DrawRowOutline(wxDC& dc)
 {
 	const wxColour railColour = wxTHEME_COLOUR(SHADOW_DARK);   // the theme's wxSYS_COLOUR_3DSHADOW
 	dc.SetPen(wxPen(railColour));
+
+	// ⚠ ONLY THE GROUPS THE PANE SHOWS, AND THE PANE'S WIDTH ASKED ONCE. A report gives every detail line a group of
+	// its own (the compose driver's PrintRow), so a sheet of 100 000 lines carries 100 000 of them — and this drew
+	// every one at every paint of the strip, asking for the pane's width (GetRowOutlineSize — a walk over all the
+	// groups for the deepest level) inside the loop: a square of the groups per scroll step (2026-11-16, the load
+	// run's report). A group is outside when its rows — its heading to its last — do not reach the visible band.
+	const int outlineRight = GetRowOutlineSize();
+	const float zoom = GetGridZoom();
+	const int visibleTop = dc.DeviceToLogicalY(0);
+	const int visibleBottom = dc.DeviceToLogicalY(dc.GetSize().y);
+	const auto outside = [&](const ibGridCellGroup& g) {
+		const int heading = (g.m_head >= 0) ? g.m_head : wxMax(0, g.m_start - 1);   // as GetRowGroupButtonRect
+		return GetRowBottom(g.m_end, zoom) < visibleTop || GetRowTop(heading, zoom) > visibleBottom;
+	};
+
 	for (size_t i = 0; i < m_rowGroupAt.size(); ++i) {
 		const ibGridCellGroup& g = m_rowGroupAt[i];
 		if (g.m_collapsed) continue;
 		if (g.m_end >= GetNumberRows()) continue;   // stale range — see GetRowGroupButtonRect
+		if (outside(g)) continue;
 		const wxRect btn = GetRowGroupButtonRect((int)i);
 		if (btn.IsEmpty()) continue;
 		const int railX = btn.x + btn.width / 2;
@@ -11409,9 +11437,10 @@ void ibGrid::DrawRowOutline(wxDC& dc)
 		// group begins and never where it ends; the closing tick on the group's LAST row is what
 		// makes the span readable without counting rows, and it reaches the edge so the eye can
 		// follow it straight into the row it belongs to.
-		if (rowBottom >= railTop) dc.DrawLine(railX, rowBottom, GetRowOutlineSize(), rowBottom);
+		if (rowBottom >= railTop) dc.DrawLine(railX, rowBottom, outlineRight, rowBottom);
 	}
 	for (size_t i = 0; i < m_rowGroupAt.size(); ++i) {
+		if (m_rowGroupAt[i].m_end >= GetNumberRows() || outside(m_rowGroupAt[i])) continue;
 		const wxRect btn = GetRowGroupButtonRect((int)i);
 		if (!btn.IsEmpty())
 			ibThemeEngine::Get()->GetRenderer()->DrawTreeItemButton(this, dc, btn,
@@ -11423,10 +11452,22 @@ void ibGrid::DrawColOutline(wxDC& dc)
 {
 	const wxColour railColour = wxTHEME_COLOUR(SHADOW_DARK);   // the theme's wxSYS_COLOUR_3DSHADOW
 	dc.SetPen(wxPen(railColour));
+
+	// Only the groups the pane shows, and its height asked once — the same as DrawRowOutline, turned on its side.
+	const int outlineBottom = GetColOutlineSize();
+	const float zoom = GetGridZoom();
+	const int visibleLeft = dc.DeviceToLogicalX(0);
+	const int visibleRight = dc.DeviceToLogicalX(dc.GetSize().x);
+	const auto outside = [&](const ibGridCellGroup& g) {
+		const int heading = (g.m_head >= 0) ? g.m_head : wxMax(0, g.m_start - 1);   // as GetColGroupButtonRect
+		return GetColRight(g.m_end, zoom) < visibleLeft || GetColLeft(heading, zoom) > visibleRight;
+	};
+
 	for (size_t i = 0; i < m_colGroupAt.size(); ++i) {
 		const ibGridCellGroup& g = m_colGroupAt[i];
 		if (g.m_collapsed) continue;
 		if (g.m_end >= GetNumberCols()) continue;   // stale range — see GetColGroupButtonRect
+		if (outside(g)) continue;
 		const wxRect btn = GetColGroupButtonRect((int)i);
 		if (btn.IsEmpty()) continue;
 		const int railY = btn.y + btn.height / 2;
@@ -11435,9 +11476,10 @@ void ibGrid::DrawColOutline(wxDC& dc)
 			+ GetColWidth(g.m_end, GetGridZoom()) - 1;
 		if (colRight > railLeft) dc.DrawLine(railLeft, railY, colRight, railY);
 		// The same closing tick, turned on its side — see DrawRowOutline.
-		if (colRight >= railLeft) dc.DrawLine(colRight, railY, colRight, GetColOutlineSize());
+		if (colRight >= railLeft) dc.DrawLine(colRight, railY, colRight, outlineBottom);
 	}
 	for (size_t i = 0; i < m_colGroupAt.size(); ++i) {
+		if (m_colGroupAt[i].m_end >= GetNumberCols() || outside(m_colGroupAt[i])) continue;
 		const wxRect btn = GetColGroupButtonRect((int)i);
 		if (!btn.IsEmpty())
 			ibThemeEngine::Get()->GetRenderer()->DrawTreeItemButton(this, dc, btn,
@@ -11971,7 +12013,7 @@ void ibGrid::SetCellTextColour(int row, int col, const wxColour& colour, bool se
 		ibGridCellAttrPtr attr = GetOrCreateCellAttrPtr(row, col);
 
 		if (sendUndoCommand)
-			PushCommand<ibGridCommandAttrTextColour>(row, col, colour, attr->GetTextColour());
+			PushCommand<ibGridCommandAttrTextColour>(row, col, colour, GetCellTextColour(row, col));
 
 		attr->SetTextColour(colour);
 
@@ -12013,7 +12055,7 @@ void ibGrid::SetCellTextOrient(int row, int col, const int& orient, bool sendUnd
 		ibGridCellAttrPtr attr = GetOrCreateCellAttrPtr(row, col);
 
 		if (sendUndoCommand)
-			PushCommand<ibGridCommandAttrTextOrient>(row, col, orient, attr->GetTextOrient());
+			PushCommand<ibGridCommandAttrTextOrient>(row, col, orient, GetCellTextOrient(row, col));
 
 		attr->SetTextOrient(orient);
 
@@ -12055,7 +12097,7 @@ void ibGrid::SetCellFont(int row, int col, const wxFont& font, bool sendUndoComm
 		ibGridCellAttrPtr attr = GetOrCreateCellAttrPtr(row, col);
 
 		if (sendUndoCommand)
-			PushCommand<ibGridCommandAttrFont>(row, col, font, attr->GetFont());
+			PushCommand<ibGridCommandAttrFont>(row, col, font, GetCellFont(row, col));
 
 		attr->SetFont(font);
 
@@ -12096,7 +12138,7 @@ void ibGrid::SetCellAlignment(int row, int col, int horiz, int vert, bool sendUn
 	{
 		ibGridCellAttrPtr attr = GetOrCreateCellAttrPtr(row, col);
 
-		wxSize alignment; attr->GetAlignment(&alignment.x, &alignment.y);
+		wxSize alignment; GetCellAlignment(row, col, &alignment.x, &alignment.y);
 
 		if (sendUndoCommand)
 			PushCommand<ibGridCommandAttrAlignment>(row, col, wxSize{ horiz, vert }, alignment);
@@ -12141,7 +12183,7 @@ void ibGrid::SetCellBorderLeft(int row, int col, wxPenStyle style, const wxColou
 		ibGridCellAttrPtr attr = GetOrCreateCellAttrPtr(row, col);
 
 		if (sendUndoCommand)
-			PushCommand<ibGridCommandAttrBorderLeft>(row, col, ibGridCellBorder{ style, colour, width }, attr->GetBorderLeft());
+			PushCommand<ibGridCommandAttrBorderLeft>(row, col, ibGridCellBorder{ style, colour, width }, GetCellBorderLeft(row, col));
 
 		attr->SetBorderLeft(style, colour, width);
 
@@ -12183,7 +12225,7 @@ void ibGrid::SetCellBorderRight(int row, int col, wxPenStyle style, const wxColo
 		ibGridCellAttrPtr attr = GetOrCreateCellAttrPtr(row, col);
 
 		if (sendUndoCommand)
-			PushCommand<ibGridCommandAttrBorderRight>(row, col, ibGridCellBorder{ style, colour, width }, attr->GetBorderRight());
+			PushCommand<ibGridCommandAttrBorderRight>(row, col, ibGridCellBorder{ style, colour, width }, GetCellBorderRight(row, col));
 
 		attr->SetBorderRight(style, colour, width);
 
@@ -12225,7 +12267,7 @@ void ibGrid::SetCellBorderTop(int row, int col, wxPenStyle style, const wxColour
 		ibGridCellAttrPtr attr = GetOrCreateCellAttrPtr(row, col);
 
 		if (sendUndoCommand)
-			PushCommand<ibGridCommandAttrBorderTop>(row, col, ibGridCellBorder{ style, colour, width }, attr->GetBorderTop());
+			PushCommand<ibGridCommandAttrBorderTop>(row, col, ibGridCellBorder{ style, colour, width }, GetCellBorderTop(row, col));
 
 		attr->SetBorderTop(style, colour, width);
 
@@ -12267,7 +12309,7 @@ void ibGrid::SetCellBorderBottom(int row, int col, wxPenStyle style, const wxCol
 		ibGridCellAttrPtr attr = GetOrCreateCellAttrPtr(row, col);
 
 		if (sendUndoCommand)
-			PushCommand<ibGridCommandAttrBorderBottom>(row, col, ibGridCellBorder{ style, colour, width }, attr->GetBorderBottom());
+			PushCommand<ibGridCommandAttrBorderBottom>(row, col, ibGridCellBorder{ style, colour, width }, GetCellBorderBottom(row, col));
 
 		attr->SetBorderBottom(style, colour, width);
 
@@ -12309,7 +12351,7 @@ void ibGrid::SetCellFitMode(int row, int col, ibGridFitMode fitMode, bool sendUn
 		ibGridCellAttrPtr attr = GetOrCreateCellAttrPtr(row, col);
 
 		if (sendUndoCommand)
-			PushCommand<ibGridCommandAttrFitMode>(row, col, fitMode, attr->GetFitMode());
+			PushCommand<ibGridCommandAttrFitMode>(row, col, fitMode, GetCellFitMode(row, col));
 
 		attr->SetFitMode(fitMode);
 
@@ -12435,7 +12477,7 @@ void ibGrid::SetCellReadOnly(int row, int col, bool isReadOnly, bool sendUndoCom
 		ibGridCellAttrPtr attr = GetOrCreateCellAttrPtr(row, col);
 
 		if (sendUndoCommand)
-			PushCommand<ibGridCommandAttrReadOnly>(row, col, isReadOnly, attr->IsReadOnly());
+			PushCommand<ibGridCommandAttrReadOnly>(row, col, isReadOnly, IsCellReadOnly(row, col));
 
 		attr->SetReadOnly(isReadOnly);
 

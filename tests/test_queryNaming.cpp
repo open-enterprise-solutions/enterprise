@@ -209,9 +209,9 @@ TEST(QueryDescribeOutput, ASourcelessQueryIsDescribedByItsProjectionsAlone)
 	ASSERT_EQ(2u, schema.size());
 	EXPECT_EQ(wxT("One"), schema[0].m_name);
 	EXPECT_EQ(wxT("Two"), schema[1].m_name);
-	// The synthetic column is OWNED by the schema — it has to outlive the door that made it, because
+	// The synthetic column is HELD by the schema — it has to outlive the door that made it, because
 	// nothing here reads rows and the columns are only being named.
-	EXPECT_NE(nullptr, schema[0].m_ownedCol.get());
+	EXPECT_NE(nullptr, schema[0].m_col);
 }
 
 TEST(QueryDescribeOutput, AColumnWithNoTableToReadItFromIsRefusedWithTheReason)
@@ -247,13 +247,14 @@ class ConsumingBalance : public ibQueryableSourceDescriptor
 {
 public:
 	ConsumingBalance()
-		: m_rows(TableWith({ wxT("Item"), wxT("QuantityBalance"), wxT("Warehouse") }))
-		, m_scope(TableWith({ wxT("Warehouse") })) {}
+		: m_rows(std::make_shared<ibTempTableQueryable>(TableWith({ wxT("Item"), wxT("QuantityBalance"), wxT("Warehouse") })))
+		, m_scope(std::make_shared<ibTempTableQueryable>(TableWith({ wxT("Warehouse") }))) {}
 
 	ibString GetNamespace() const override { return wxT("AccumulationRegister"); }
 	ibString GetName() const override { return wxT("Stock.Balance"); }
-	const ibBackendQueryable* CreateQueryable(ibValue**, long) override { return &m_rows; }
-	const ibBackendQueryable* GetConditionScope() const override { return &m_scope; }
+	std::shared_ptr<const ibBackendQueryable> CreateQueryable(ibValue**, long, const std::vector<ibQueryPredicatePtr>&,
+		const ibQueryReadColumns&) override { return m_rows; }
+	std::shared_ptr<const ibBackendQueryable> GetConditionScope() const override { return m_scope; }
 	void DescribeParameters(std::vector<ibQuerySourceParameter>& out) const override {
 		ibQuerySourceParameter moment;
 		moment.m_name = wxT("Period");
@@ -266,21 +267,22 @@ public:
 	}
 
 private:
-	ibTempTableQueryable m_rows;
-	ibTempTableQueryable m_scope;
+	std::shared_ptr<ibTempTableQueryable> m_rows;
+	std::shared_ptr<ibTempTableQueryable> m_scope;
 };
 
 class WindowSales : public ibQueryableSourceDescriptor
 {
 public:
-	WindowSales() : m_rows(TableWith({ wxT("Region"), wxT("Period"), wxT("Amount") })) {}
+	WindowSales() : m_rows(std::make_shared<ibTempTableQueryable>(TableWith({ wxT("Region"), wxT("Period"), wxT("Amount") }))) {}
 
 	ibString GetNamespace() const override { return wxT("Document"); }
 	ibString GetName() const override { return wxT("Sales"); }
-	const ibBackendQueryable* CreateQueryable(ibValue**, long) override { return &m_rows; }
+	std::shared_ptr<const ibBackendQueryable> CreateQueryable(ibValue**, long, const std::vector<ibQueryPredicatePtr>&,
+		const ibQueryReadColumns&) override { return m_rows; }
 
 private:
-	ibTempTableQueryable m_rows;
+	std::shared_ptr<ibTempTableQueryable> m_rows;
 };
 
 // An OPEN configuration — only an open one has a source factory to register into.
@@ -1508,11 +1510,12 @@ class RowsInMemory : public ibQueryableSourceDescriptor
 public:
 	RowsInMemory(const ibString& name, std::initializer_list<std::pair<ibString, ibValueTypes>> columns,
 	             std::initializer_list<std::vector<ibValue>> rows)
-		: m_name(name), m_rows(Fill(columns, rows)) {}
+		: m_name(name), m_rows(std::make_shared<ibTempTableQueryable>(Fill(columns, rows))) {}
 
 	ibString GetNamespace() const override { return ibT("Document"); }
 	ibString GetName() const override { return m_name; }
-	const ibBackendQueryable* CreateQueryable(ibValue**, long) override { return &m_rows; }
+	std::shared_ptr<const ibBackendQueryable> CreateQueryable(ibValue**, long, const std::vector<ibQueryPredicatePtr>&,
+		const ibQueryReadColumns&) override { return m_rows; }
 
 private:
 	static ibValue Fill(std::initializer_list<std::pair<ibString, ibValueTypes>> columns,
@@ -1535,8 +1538,8 @@ private:
 		return held;
 	}
 
-	ibString             m_name;
-	ibTempTableQueryable m_rows;
+	ibString                              m_name;
+	std::shared_ptr<ibTempTableQueryable> m_rows;
 };
 
 } // namespace

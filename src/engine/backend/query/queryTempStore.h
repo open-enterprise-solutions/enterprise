@@ -42,8 +42,9 @@ public:
 	ibQueryTempTableStore() = default;
 	~ibQueryTempTableStore();
 
-	// Non-copyable: the store OWNS the tables, and a second owner of the same rows is a second
-	// answer to "when do these die".
+	// Non-copyable: the store holds the tables under their names, and a second store of the same names
+	// is a second answer to "which table does this statement read". (A reader shares a table while it
+	// reads it — the rows of a dropped one go with its last reader.)
 	ibQueryTempTableStore(const ibQueryTempTableStore&)            = delete;
 	ibQueryTempTableStore& operator=(const ibQueryTempTableStore&) = delete;
 
@@ -79,11 +80,10 @@ public:
 	// The map an ibTempSourceScope is installed over. The scope holds a POINTER to it, so tables
 	// added while the scope is active are visible to the statements that follow — which IS the
 	// contract a package rests on.
-	const std::map<ibString, const ibBackendQueryable*>& Sources() const { return m_sources; }
+	const std::map<ibString, std::shared_ptr<const ibBackendQueryable>>& Sources() const { return m_sources; }
 
 private:
-	std::map<ibString, const ibBackendQueryable*>          m_sources;   // by name (non-owning view)
-	std::vector<std::unique_ptr<ibBackendQueryable>>       m_owned;     // the tables themselves
+	std::map<ibString, std::shared_ptr<const ibBackendQueryable>> m_sources;   // the tables themselves, by name
 };
 
 #endif

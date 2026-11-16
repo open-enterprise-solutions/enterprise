@@ -7,6 +7,7 @@
 
 #include <mutex>
 #include <functional>
+#include <memory>
 
 #include "backend/appData.h"
 #include "backend/compiler/byteCode.h"
@@ -134,19 +135,36 @@ void WriteRow(ibDatabaseQueryBuilder& q, const ibByteCode& bc, const ibMemoryBuf
 		descIdStr, configMd5, bcVerStr, (unsigned)blob.GetDataLen());
 }
 
-} // namespace
-
-// The connection first: it outlives the builder on it, and the builder's going rolls back what is not committed.
-struct ibByteCodeCache::ibRowLock::ibHeld {
-	ibSingleConnectionHolder m_holder;
-	ibDatabaseQueryBuilder   m_query{ &m_holder };
-	ibString                 m_configMd5;
+// ⭐ A MODULE NOBODY HAS COMPILED YET IS COMPILED ONCE, WHOEVER ELSE ASKS MEANWHILE. Ten sessions
+// entering a base whose cache is empty all miss, and without this all ten compile the same module.
+//
+// The first to miss holds the module's key in sys_lock_key, the mutex for one key (lockManager.cpp):
+// an UPDATE of its row, not committed, on a connection of its own, so it holds nothing of its session's.
+// The others' updates stand behind that row in the database. Saved, the transaction commits with the
+// cache row in it, the next one gets the key and reads what was saved. Not saved — the compile failed,
+// the session died — the transaction goes back, and the next one finds no row in the cache and compiles.
+//
+// ⚠ HELD ACROSS THE COMPILE ONLY, in the scope of that compile (Load with `compile`). Its transaction takes the
+// thread's db_query channel when that is free (ibConnectionPool::SetActiveTxConnection), so what this thread
+// reads meanwhile goes through it. A compile writes nothing, which is what makes that harmless.
+class ibRowLock {
+public:
+	// Waits for the key and holds it; if the database could not be asked, holds nothing. Either way
+	// read the cache again: somebody may have finished meanwhile, and a miss then compiles.
+	void Acquire(const ibGuid& descId, const ibString& configDigest);
+	// Writes the row and lets it go. false — nothing is held, or the write failed.
+	bool Save(const ibByteCode& bc);
+private:
+	// The connection first: it outlives the builder on it, and the builder's going rolls back what is not committed.
+	struct ibHeld {
+		ibSingleConnectionHolder m_holder;
+		ibDatabaseQueryBuilder   m_query{ &m_holder };
+		ibString                 m_configMd5;
+	};
+	std::unique_ptr<ibHeld> m_held;
 };
 
-ibByteCodeCache::ibRowLock::ibRowLock() = default;
-ibByteCodeCache::ibRowLock::~ibRowLock() = default;
-
-void ibByteCodeCache::ibRowLock::Acquire(const ibGuid& descId, const ibString& configDigest)
+void ibRowLock::Acquire(const ibGuid& descId, const ibString& configDigest)
 {
 	if (db_query == nullptr) return;
 
@@ -154,7 +172,7 @@ void ibByteCodeCache::ibRowLock::Acquire(const ibGuid& descId, const ibString& c
 	const ibString key = descId;
 	try {
 		std::unique_ptr<ibHeld> held = std::make_unique<ibHeld>();
-		held->m_configMd5 = CacheKey(configDigest);
+		held->m_configMd5 = ibByteCodeCache::CacheKey(configDigest);
 		ibDatabaseQueryBuilder& q = held->m_query;
 		if (!q.IsOpen() || !q.TableExists(lock_key_table))
 			return;   // the same connection asks — see Load
@@ -198,7 +216,7 @@ void ibByteCodeCache::ibRowLock::Acquire(const ibGuid& descId, const ibString& c
 	catch (...) {}   // an expired wait, no database: this compile goes unheld, and the cache is disposable
 }
 
-bool ibByteCodeCache::ibRowLock::Save(const ibByteCode& bc)
+bool ibRowLock::Save(const ibByteCode& bc)
 {
 	// The row goes either way: committed with what was written, or back with the transaction.
 	const std::unique_ptr<ibHeld> held = std::move(m_held);
@@ -212,6 +230,63 @@ bool ibByteCodeCache::ibRowLock::Save(const ibByteCode& bc)
 	catch (...) { return false; }
 	return true;
 }
+
+// The row of `descId` under `configMd5`; empty when there is none, or when the base could not be asked — the cache is
+// disposable, and a miss compiles.
+ibMemoryBuffer ReadRow(const ibGuid& descId, const ibString& configMd5)
+{
+	try {
+		// SELECT bc_blob FROM <t> WHERE descriptor_id = <descId> AND config_md5 = <key>
+		//
+		// THE FINGERPRINT IS PART OF THE KEY, not a field somebody compares afterwards. A row written
+		// against an earlier configuration is not "found and rejected" — it is not found. That removes
+		// the whole class of "somebody forgot the check" and makes a save self-invalidating: saving
+		// recomputes the configuration's digest, so every previously cached row falls out of reach in
+		// the same instant, without a single DELETE having to run first.
+		// ⭐⭐ THE LOOKUP RIDES THIS BUILDER, NOT `db_query` (a table check rode it then). Both ask the same question, but of
+		// DIFFERENT CONNECTIONS: the builder opens a scope and gets one of its own, while `db_query`
+		// with no transaction and no scope falls back to the pool's PRIMARY connection — the one
+		// every other thread without a scope also lands on (connectionPool.cpp, GetDatabaseLayer).
+		// Two threads then drive one connection: this one preparing `SELECT COUNT(*) FROM
+		// RDB$RELATIONS` while the lock sweeper finishes its own statement on the same handle.
+		//
+		// Measured twice on 2026-09-08, at the same instant in the journal both times — the sweeper
+		// deleting a dead session's `sys_lock` rows one millisecond before the failure:
+		//     [error] db.firebird  Error retrieving Next record
+		//     [warning] module     Common module init failed … invalid request handle
+		// and earlier, the same collision arriving as `invalid transaction handle`. The startup is
+		// exactly when it happens: modules are being compiled while the sweeper cleans up after a
+		// runtime that was killed rather than closed.
+		//
+		// ⚠ AND THE TABLE IS NOT ASKED ABOUT FIRST. Every open of the base makes it (MigrateTableBytecodeCache), and
+		// a base where that failed answers this SELECT with a refusal, which the catch below takes for a miss — the
+		// answer the question gave. Asked, it was a statement prepared and run for every module of every session: an
+		// HTTP request is a session, and 16 % of a request that did nothing went on asking (2026-11-16,
+		// load-million-rows.md § 13).
+		ibDatabaseQueryBuilder q;
+		ibQueryIR ir(
+			ibProject(
+				ibFilter(
+					ibScan(bytecode_cache_table),
+					ibBinOp(ibQueryBinOp::And,
+					        ibBinOp(ibQueryBinOp::Eq, ibCol(ibT("descriptor_id")),
+					                ibConst(ibValue(ibString(descId)))),
+					        ibBinOp(ibQueryBinOp::Eq, ibCol(ibT("config_md5")),
+					                ibConst(ibValue(configMd5))))),
+				{ { ibCol(ibT("bc_blob")), ibEmptyString } }));
+
+		ibQueryResult res = q.ExecuteIR(ir);   // RAII: closes cursor + statement
+		// The blob is read through the RESULT's own typed accessor, BY NAME: the projection above is what decides
+		// which column that is, and a number here would go on compiling after somebody adds another.
+		ibMemoryBuffer blob;
+		if (res.Next())
+			res.GetResultBlob(ibT("bc_blob"), blob);
+		return blob;
+	}
+	catch (...) { return ibMemoryBuffer(); }
+}
+
+} // namespace
 
 bool ibByteCodeCache::Save(const ibByteCode& bc, const ibString& configDigest)
 {
@@ -267,75 +342,94 @@ bool ibByteCodeCache::Load(ibByteCode& outBc, const ibGuid& descId, const ibStri
 	// The same key the row was written under — the platform AND the configuration (see CacheKey).
 	const ibString configMd5 = CacheKey(configDigest);
 
-	try {
-		// SELECT bc_blob FROM <t> WHERE descriptor_id = <descId> AND config_md5 = <configMd5>
-		//
-		// THE FINGERPRINT IS PART OF THE KEY, not a field somebody compares afterwards. A row written
-		// against an earlier configuration is not "found and rejected" — it is not found. That removes
-		// the whole class of "somebody forgot the check" and makes a save self-invalidating: saving
-		// recomputes the configuration's digest, so every previously cached row falls out of reach in
-		// the same instant, without a single DELETE having to run first.
-		// ⭐⭐ THE TABLE CHECK RIDES THIS BUILDER, NOT `db_query`. Both ask the same question, but of
-		// DIFFERENT CONNECTIONS: the builder opens a scope and gets one of its own, while `db_query`
-		// with no transaction and no scope falls back to the pool's PRIMARY connection — the one
-		// every other thread without a scope also lands on (connectionPool.cpp, GetDatabaseLayer).
-		// Two threads then drive one connection: this one preparing `SELECT COUNT(*) FROM
-		// RDB$RELATIONS` while the lock sweeper finishes its own statement on the same handle.
-		//
-		// Measured twice on 2026-09-08, at the same instant in the journal both times — the sweeper
-		// deleting a dead session's `sys_lock` rows one millisecond before the failure:
-		//     [error] db.firebird  Error retrieving Next record
-		//     [warning] module     Common module init failed … invalid request handle
-		// and earlier, the same collision arriving as `invalid transaction handle`. The startup is
-		// exactly when it happens: modules are being compiled while the sweeper cleans up after a
-		// runtime that was killed rather than closed.
-		ibDatabaseQueryBuilder q;
-		if (!q.TableExists(bytecode_cache_table))
-			return false;
+	ibMemoryBuffer blob = ReadRow(descId, configMd5);
 
+	// WHY A ROW IS TAKEN. The key is meant to make a stale row unfindable: a save recomputes the
+	// configuration's digest, and every row written under the previous one falls out of reach.
+	// One got through anyway on 2026-09-01 — bytecode carrying a frame number this engine's
+	// chain never had, and emptying the table cured it — so the question worth being able to ask
+	// is not what the key GUARDS but why a lookup MATCHED.
+	//
+	// One line per lookup: the descriptor, the digest asked for, and whether it hit. Read beside
+	// the Save line it separates the three readings — the digest never changed, the two doors
+	// disagree about it, or a stale blob was written under a fresh one.
+	ibJournalInfo(ibT("bytecode.cache"), ibT("load %s md5=%s -> %s"),
+		ibString(descId), configMd5, blob.IsEmpty() ? ibT("miss") : ibT("HIT"));
+	if (blob.IsEmpty())
+		return false;
+
+	try {
+		ibReaderMemory reader(blob);
+		if (!outBc.DeserializeAOT(reader))
+			return false;
+	}
+	catch (...) { return false; }
+
+	// A DEPENDENCY MISSING FROM THE REGISTRY, OR ITS VERSION MOVED: the row is stale for this run. It goes, and the
+	// caller compiles.
+	if (outBc.ResolveAndVerifyDependencies())
+		return true;
+	Invalidate(descId);
+	outBc.Reset();
+	return false;
+}
+
+bool ibByteCodeCache::Load(ibByteCode& outBc, const ibGuid& descId, const ibString& configDigest,
+	const std::function<bool(ibByteCode&)>& compile)
+{
+	if (Load(outBc, descId, configDigest))
+		return true;
+
+	// A miss holds the module's key: whoever misses with it stands in the database until this compile has saved it,
+	// and reads it then. Let go on the way out if the compile did not get as far as the save, and the next one compiles.
+	ibRowLock rowLock;
+	rowLock.Acquire(descId, configDigest);
+	if (Load(outBc, descId, configDigest))
+		return true;
+	if (!compile(outBc))
+		return false;
+	if (!rowLock.Save(outBc))
+		Save(outBc, configDigest);
+	return true;
+}
+
+std::map<ibGuid, ibMemoryBuffer> ibByteCodeCache::LoadAll(const ibString& configDigest)
+{
+	std::map<ibGuid, ibMemoryBuffer> rows;
+
+	// The same key the rows were written under — the platform AND the configuration (see CacheKey).
+	const ibString configMd5 = CacheKey(configDigest);
+	try {
+		// Asked inside the try: this is called as a configuration opens, where the thread may have no base to ask.
+		if (db_query == nullptr)
+			return rows;
+
+		// SELECT descriptor_id, bc_blob FROM <t> WHERE config_md5 = <key> — on the builder's own connection, and the
+		// table not asked about first (see ReadRow).
+		ibDatabaseQueryBuilder q;
 		ibQueryIR ir(
 			ibProject(
 				ibFilter(
 					ibScan(bytecode_cache_table),
-					ibBinOp(ibQueryBinOp::And,
-					        ibBinOp(ibQueryBinOp::Eq, ibCol(ibT("descriptor_id")),
-					                ibConst(ibValue(ibString(descId)))),
-					        ibBinOp(ibQueryBinOp::Eq, ibCol(ibT("config_md5")),
-					                ibConst(ibValue(configMd5))))),
-				{ { ibCol(ibT("bc_blob")), ibEmptyString } }));
+					ibBinOp(ibQueryBinOp::Eq, ibCol(ibT("config_md5")), ibConst(ibValue(configMd5)))),
+				{ { ibCol(ibT("descriptor_id")), ibEmptyString },
+				  { ibCol(ibT("bc_blob")),       ibEmptyString } }));
 
 		ibQueryResult res = q.ExecuteIR(ir);   // RAII: closes cursor + statement
-
-		// WHY A ROW IS TAKEN. The key is meant to make a stale row unfindable: a save recomputes the
-		// configuration's digest, and every row written under the previous one falls out of reach.
-		// One got through anyway on 2026-09-01 — bytecode carrying a frame number this engine's
-		// chain never had, and emptying the table cured it — so the question worth being able to ask
-		// is not what the key GUARDS but why a lookup MATCHED.
-		//
-		// One line per lookup: the descriptor, the digest asked for, and whether it hit. Read beside
-		// the Save line it separates the three readings — the digest never changed, the two doors
-		// disagree about it, or a stale blob was written under a fresh one.
-		const bool hit = res.Next();
-
-		ibJournalInfo(ibT("bytecode.cache"), ibT("load %s md5=%s -> %s"),
-			ibString(descId), configMd5, hit ? ibT("HIT") : ibT("miss"));
-
-		if (hit) {
-			// The blob is read through the RESULT's own typed accessor, BY NAME. It used to borrow the
-			// raw driver cursor and read field 1 — an L2-1 leak by the header's own words, and the last
-			// caller of it, so the hatch is gone with this line. By name rather than by position for
-			// the ordinary reason: the projection above is what decides which column that is, and a
-			// number here would go on compiling after somebody adds a second one.
+		while (res.Next()) {
+			const ibGuid descId = res.GetResultString(ibT("descriptor_id"));
 			ibMemoryBuffer blob;
 			res.GetResultBlob(ibT("bc_blob"), blob);
-			if (blob.GetDataLen() > 0) {
-				ibReaderMemory reader(blob);
-				return outBc.DeserializeAOT(reader);
-			}
+			if (descId.isValid() && !blob.IsEmpty())
+				rows[descId] = blob;
 		}
 	}
-	catch (...) { return false; }
-	return false;
+	catch (...) { /* the cache is disposable: a row that was not read is a miss, and its module reads for itself */ }
+
+	// One line per reading, beside the per-row `load` and `save` lines: the digest asked for and how many rows
+	// answered — what a storage holds is accounted for from here.
+	ibJournalInfo(ibT("bytecode.cache"), ibT("load all md5=%s -> %u row(s)"), configMd5, (unsigned)rows.size());
+	return rows;
 }
 
 void ibByteCodeCache::Invalidate(const ibGuid& descId)

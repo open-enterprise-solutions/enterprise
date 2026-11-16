@@ -330,10 +330,10 @@ TEST(QueryTempStore, AStoredTableKeepsItsColumnsAndRows)
 	ibQueryTempTableStore store;
 	store.Put(wxT("Sales"), OneRow(wxT("Ref"), ibValue(ibString(wxT("A")))));
 
-	const ibBackendQueryable* source = store.Sources().at(wxT("Sales"));
+	const std::shared_ptr<const ibBackendQueryable> source = store.Sources().at(wxT("Sales"));
 	ASSERT_NE(nullptr, source);
 
-	const std::vector<const ibBackendQueryColumn*> columns = source->GetQueryColumns();
+	const std::vector<std::shared_ptr<const ibBackendQueryColumn>> columns = source->GetQueryColumns();
 	ASSERT_EQ(1u, columns.size());
 	EXPECT_EQ(wxT("Ref"), columns[0]->GetName());
 
@@ -363,9 +363,9 @@ TEST(QueryTempStore, AnIndexedEqualityReadsOnlyTheMatchingRows)
 	ibQueryTempTableStore store;
 	store.Put(wxT("Sales"), std::move(table), { wxT("Code") });
 
-	const ibBackendQueryable* source = store.Sources().at(wxT("Sales"));
+	const std::shared_ptr<const ibBackendQueryable> source = store.Sources().at(wxT("Sales"));
 	ASSERT_NE(nullptr, source);
-	const std::vector<const ibBackendQueryColumn*> columns = source->GetQueryColumns();
+	const std::vector<std::shared_ptr<const ibBackendQueryColumn>> columns = source->GetQueryColumns();
 	ASSERT_EQ(1u, columns.size());
 
 	ibQueryCondition equality;
@@ -391,7 +391,7 @@ TEST(QueryTempStore, AnIndexedValueNothingCarriesReadsNothing)
 	ibQueryTempTableStore store;
 	store.Put(wxT("Sales"), std::move(table), { wxT("Code") });
 
-	const ibBackendQueryable* source = store.Sources().at(wxT("Sales"));
+	const std::shared_ptr<const ibBackendQueryable> source = store.Sources().at(wxT("Sales"));
 	ibQueryCondition equality;
 	equality.m_col   = source->GetQueryColumns()[0];
 	equality.m_op    = ibQueryFilterOp::Equal;
@@ -413,7 +413,7 @@ TEST(QueryTempStore, WithoutAnIndexEveryRowIsStillReturned)
 	ibQueryTempTableStore store;
 	store.Put(wxT("Sales"), std::move(table));   // no indexed columns
 
-	const ibBackendQueryable* source = store.Sources().at(wxT("Sales"));
+	const std::shared_ptr<const ibBackendQueryable> source = store.Sources().at(wxT("Sales"));
 	ibQueryCondition equality;
 	equality.m_col   = source->GetQueryColumns()[0];
 	equality.m_op    = ibQueryFilterOp::Equal;

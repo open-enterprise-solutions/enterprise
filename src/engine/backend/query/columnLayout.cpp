@@ -107,7 +107,7 @@ const ibString& ibOwnerRefField()
 	return s_field;
 }
 
-ibBackendColumnRawDB ibOwnerRefColumn()
+std::shared_ptr<const ibBackendColumnRawDB> ibOwnerRefColumn()
 {
 	return ibBackendColumnRawDB::Guid(ibOwnerRefField());
 }
@@ -147,9 +147,9 @@ bool ibIsComparableType(const ibTypeDescription& typeDesc)
 // THE AUTHORITY, and it now asks the COLUMN — which answers with the derivation below unless it has
 // a reason not to. Kept as a free function because that is how every tier already spells the
 // question; what changed is who owns the answer.
-std::vector<ibColumnSlot> DescribeColumnLayout(const ibBackendQueryColumn* col)
+std::vector<ibColumnSlot> DescribeColumnLayout(const ibBackendQueryColumn& col)
 {
-	return col->DescribeLayout();
+	return col.DescribeLayout();
 }
 
 // (THE DEFAULT DERIVATION lives in queryColumn.cpp, with the other things a column DOES — together
@@ -167,7 +167,7 @@ bool ibIsValueRole(ibColumnRole role)
 	return role != ibColumnRole::Discriminator && role != ibColumnRole::ReferenceType;
 }
 
-std::vector<ibColumnSlot> ColumnValueSlots(const ibBackendQueryColumn* col)
+std::vector<ibColumnSlot> ColumnValueSlots(const ibBackendQueryColumn& col)
 {
 	std::vector<ibColumnSlot> out;
 	for (ibColumnSlot& slot : DescribeColumnLayout(col))
@@ -176,13 +176,13 @@ std::vector<ibColumnSlot> ColumnValueSlots(const ibBackendQueryColumn* col)
 	return out;
 }
 
-ibColumnSlot FirstValueSlot(const ibBackendQueryColumn* col)
+ibColumnSlot FirstValueSlot(const ibBackendQueryColumn& col)
 {
 	std::vector<ibColumnSlot> slots = ColumnValueSlots(col);
 	return slots.empty() ? ibColumnSlot() : std::move(slots.front());
 }
 
-std::vector<ibString> ColumnValueFields(const ibBackendQueryColumn* col)
+std::vector<ibString> ColumnValueFields(const ibBackendQueryColumn& col)
 {
 	std::vector<ibString> out;
 	for (const ibColumnSlot& slot : ColumnValueSlots(col))
@@ -190,11 +190,11 @@ std::vector<ibString> ColumnValueFields(const ibBackendQueryColumn* col)
 	return out;
 }
 
-std::vector<ibString> ColumnSortFields(const ibBackendQueryColumn* col)
+std::vector<ibString> ColumnSortFields(const ibBackendQueryColumn& col)
 {
 	std::vector<ibString> out = ColumnValueFields(col);
 	if (FirstValueSlot(col).m_role == ibColumnRole::ReferenceId)
-		out.push_back(col->GetPhysicalName() + ibFieldSuffix(ibColumnRole::ReferenceType));
+		out.push_back(col.GetPhysicalName() + ibFieldSuffix(ibColumnRole::ReferenceType));
 	return out;
 }
 
@@ -217,15 +217,15 @@ ibValue ReadSingleTargetReference(const ibMetaData* metaData, const ibClassID& t
 	return reference != nullptr ? ibValue(reference) : ibValue();
 }
 
-bool ibColumnCodec::HasReference(const ibBackendQueryColumn* col)
+bool ibColumnCodec::HasReference(const ibBackendQueryColumn& col)
 {
-	for (const auto& clsid : col->GetTypeValueDesc().GetClsidList())
+	for (const auto& clsid : col.GetTypeValueDesc().GetClsidList())
 		if (IsReference(clsid))
 			return true;
 	return false;
 }
 
-void ibColumnCodec::WriteValue(const ibBackendQueryColumn* col, const ibMetaData* /*metaData*/,
+void ibColumnCodec::WriteValue(const ibBackendQueryColumn& col, const ibMetaData* /*metaData*/,
 	const ibValue& cValue, ibQueryStatement* statement, int& position)
 {
 	// (the codec's variant tags are the global ibFieldTypes_* names — query/queryColumn.h)
@@ -293,13 +293,13 @@ void ibColumnCodec::WriteValue(const ibBackendQueryColumn* col, const ibMetaData
 		});
 }
 
-void ibColumnCodec::WriteValue(const ibBackendQueryColumn* col, const ibMetaData* metaData, const ibValue& cValue, ibQueryStatement* statement)
+void ibColumnCodec::WriteValue(const ibBackendQueryColumn& col, const ibMetaData* metaData, const ibValue& cValue, ibQueryStatement* statement)
 {
 	int position = 1;
 	WriteValue(col, metaData, cValue, statement, position);
 }
 
-static bool TagFitsColumn(const ibBackendQueryColumn* col, ibFieldTypes tag);   // below, beside the read it guards
+static bool TagFitsColumn(const ibBackendQueryColumn& col, ibFieldTypes tag);   // below, beside the read it guards
 
 namespace {
 
@@ -328,14 +328,14 @@ public:
 	// DOES THE STORED TAG NAME A FIELD THIS COLUMN HAS — TagFitsColumn's answer, asked of the column
 	// once per tag per result and kept beside the fields (FieldSlots::m_fits): the column's type does
 	// not change while a result is read, and every row asked it again.
-	bool TagFits(const ibBackendQueryColumn* col, ibFieldTypes tag) {
+	bool TagFits(const ibBackendQueryColumn& col, ibFieldTypes tag) {
 		const unsigned t = static_cast<unsigned>(tag);
 		if (t >= ibQueryResult::kFieldSlots)
 			return TagFitsColumn(col, tag);
-		if (m_slots.m_fitsFor != col) {
+		if (m_slots.m_fitsFor != &col) {
 			for (signed char& fits : m_slots.m_fits)
 				fits = 0;
-			m_slots.m_fitsFor = col;
+			m_slots.m_fitsFor = &col;
 		}
 		signed char& known = m_slots.m_fits[t];
 		if (known == 0)
@@ -353,7 +353,7 @@ private:
 // value's field is `valueRole` of the cell (Raw when the caller named the field whole); a reference is
 // its type and key, whatever the role says.
 bool ReadFieldOf(ibCellFields& cell, ibColumnRole valueRole, int fieldType,
-	const ibBackendQueryColumn* col, const ibMetaData* metaData, ibValue& retValue, bool createData)
+	const ibBackendQueryColumn& col, const ibMetaData* metaData, ibValue& retValue, bool createData)
 {
 	ibQueryResult& result = cell.Result();
 	switch (fieldType)
@@ -409,7 +409,7 @@ bool ReadFieldOf(ibCellFields& cell, ibColumnRole valueRole, int fieldType,
 		ibASSERT(metaData);
 		// The enum ctor is keyed by the ENUM clsid — taken from the column's type descriptor. The
 		// error fallback yields an empty value (an unreadable enum degrades to empty).
-		const ibClassID enumClsid = col->GetTypeDesc().GetFirstClsid();
+		const ibClassID enumClsid = col.GetTypeDesc().GetFirstClsid();
 		const ibCtorAbstractType* so = metaData != nullptr ? metaData->GetAvailableCtor(enumClsid) : nullptr;
 
 		if (so != nullptr) {
@@ -477,7 +477,7 @@ bool ReadFieldOf(ibCellFields& cell, ibColumnRole valueRole, int fieldType,
 
 		// Empty _RRRef and no refType — the reference is empty / its dot-walk join did not match: the
 		// column's TYPED EMPTY value, not UNDEFINED.
-		retValue = (col != nullptr) ? ibValueTypeDescription::AdjustValue(col->GetTypeDesc(), metaData) : ibValue();
+		retValue = ibValueTypeDescription::AdjustValue(col.GetTypeDesc(), metaData);
 		return true;
 	}
 	}
@@ -490,7 +490,7 @@ bool ReadFieldOf(ibCellFields& cell, ibColumnRole valueRole, int fieldType,
 // The leaf, for a caller that names the field WHOLE (a primitive's `fld12_D`) or, for a reference, the
 // base its type and key hang off — the Raw role is the name as given.
 bool ibColumnCodec::ReadField(const ibString& fieldName, int fieldType,
-	const ibBackendQueryColumn* col, const ibMetaData* metaData, ibValue& retValue, ibQueryResult& result, bool createData)
+	const ibBackendQueryColumn& col, const ibMetaData* metaData, ibValue& retValue, ibQueryResult& result, bool createData)
 {
 	ibCellFields cell(result, fieldName);
 	return ReadFieldOf(cell, ibColumnRole::Raw, fieldType, col, metaData, retValue, createData);
@@ -509,9 +509,9 @@ bool ibColumnCodec::ReadField(const ibString& fieldName, int fieldType,
 // column's TYPED EMPTY value — the same answer an untagged cell gets — which keeps rows already in the
 // database readable instead of requiring them to be rewritten. Asked through the same ContainType /
 // HasReference gates DescribeColumnLayout builds the slots from, so the two cannot drift apart.
-static bool TagFitsColumn(const ibBackendQueryColumn* col, ibFieldTypes tag)
+static bool TagFitsColumn(const ibBackendQueryColumn& col, ibFieldTypes tag)
 {
-	const ibTypeDescription& td = col->GetTypeValueDesc();
+	const ibTypeDescription& td = col.GetTypeValueDesc();
 	switch (tag) {
 	case ibFieldTypes_Boolean:         return td.ContainType(ibValueTypes::TYPE_BOOLEAN);
 	case ibFieldTypes_Number:          return td.ContainType(ibValueTypes::TYPE_NUMBER);
@@ -540,7 +540,7 @@ static bool TagFitsColumn(const ibBackendQueryColumn* col, ibFieldTypes tag)
 // ONLY this fault. A dropped connection or a driver failure is a fault of the READ, not of the cell,
 // and still travels: degrading those would paint blank rows over a database that stopped answering.
 bool ibColumnCodec::ReadValue(const ibString& fieldName,
-	const ibBackendQueryColumn* col, const ibMetaData* metaData, ibValue& retValue, ibQueryResult& result, bool createData)
+	const ibBackendQueryColumn& col, const ibMetaData* metaData, ibValue& retValue, ibQueryResult& result, bool createData)
 {
 	try {
 		return ReadTaggedValue(fieldName, col, metaData, retValue, result, createData);
@@ -548,13 +548,13 @@ bool ibColumnCodec::ReadValue(const ibString& fieldName,
 	catch (const ibDatabaseLayerException& err) {
 		if (err.GetDriverErrorCode() != DATABASE_LAYER_FIELD_NOT_IN_RESULTSET)
 			throw;
-		retValue = (col != nullptr) ? ibValueTypeDescription::AdjustValue(col->GetTypeDesc(), metaData) : ibValue();
+		retValue = ibValueTypeDescription::AdjustValue(col.GetTypeDesc(), metaData);
 		return false;
 	}
 }
 
 bool ibColumnCodec::ReadTaggedValue(const ibString& fieldName,
-	const ibBackendQueryColumn* col, const ibMetaData* metaData, ibValue& retValue, ibQueryResult& result, bool createData)
+	const ibBackendQueryColumn& col, const ibMetaData* metaData, ibValue& retValue, ibQueryResult& result, bool createData)
 {
 	// ⭐ A COMPUTED OUTPUT HAS ONE FIELD AND NO TAG BESIDE IT.
 	//
@@ -570,8 +570,7 @@ bool ibColumnCodec::ReadTaggedValue(const ibString& fieldName,
 	// Gated on the type being KNOWN: an output the lowering could not type yet keeps the old road
 	// rather than being read as a type nobody vouched for.
 	ibCellFields cell(result, fieldName);   // every field below is this cell's — see ibCellFields
-	if (col != nullptr && col->GetColumnKind() == ibBackendQueryColumn::Kind::Computed
-	    && col->GetTypeDesc().GetClsidCount() == 1) {
+	if (col.GetColumnKind() == ibBackendQueryColumn::Kind::Computed && col.GetTypeDesc().GetClsidCount() == 1) {
 		// ⭐ …AND A COMPUTED OUTPUT THAT CAME BACK NULL IS NULL — the rule the tagged read below states for
 		// a composite cell, and the answer the RAM road gives for the same expression (RamNullValue). Read
 		// through its declared type it came back as that type's empty, so an accounting figure the account
@@ -581,7 +580,7 @@ bool ibColumnCodec::ReadTaggedValue(const ibString& fieldName,
 			retValue = ibValue(ibValueTypes::TYPE_NULL);
 			return true;
 		}
-		const ibFieldTypes tag = ibColumnSpread::TagForValueType(ibValue::GetVTByID(col->GetTypeDesc().GetByIdx(0)));
+		const ibFieldTypes tag = ibColumnSpread::TagForValueType(ibValue::GetVTByID(col.GetTypeDesc().GetByIdx(0)));
 		return ReadFieldOf(cell, ibColumnRole::Raw, tag, col, metaData, retValue, createData);
 	}
 
@@ -606,8 +605,8 @@ bool ibColumnCodec::ReadTaggedValue(const ibString& fieldName,
 	}
 	ibFieldTypes fieldType = static_cast<ibFieldTypes>(result.GetResultInt(tagField));
 
-	if (col != nullptr && !cell.TagFits(col, fieldType)) {
-		retValue = ibValueTypeDescription::AdjustValue(col->GetTypeDesc(), metaData);
+	if (!cell.TagFits(col, fieldType)) {
+		retValue = ibValueTypeDescription::AdjustValue(col.GetTypeDesc(), metaData);
 		return true;
 	}
 
@@ -638,16 +637,16 @@ bool ibColumnCodec::ReadTaggedValue(const ibString& fieldName,
 		// empty value, never UNDEFINED, and NEVER read a sub-field the column lacks (a number column has no
 		// _RRRef). A real reference value tags _TYPE = Reference and takes the case above.
 		// (docs/private/query-language-arc.md §22.4b — typed-empty dot-walk)
-		retValue = (col != nullptr) ? ibValueTypeDescription::AdjustValue(col->GetTypeDesc(), metaData) : ibValue();
+		retValue = ibValueTypeDescription::AdjustValue(col.GetTypeDesc(), metaData);
 		return true;
 	}
 	// (No tail return: the `default` above answers every tag there is, so one here is unreachable —
 	//  and an unreachable `return false` reads as a failure mode this function does not have.)
 }
 
-bool ibColumnCodec::ReadValue(const ibBackendQueryColumn* col, const ibMetaData* metaData, ibValue& retValue, ibQueryResult& result, bool createData)
+bool ibColumnCodec::ReadValue(const ibBackendQueryColumn& col, const ibMetaData* metaData, ibValue& retValue, ibQueryResult& result, bool createData)
 {
-	return ReadValue(col->GetPhysicalName(), col, metaData, retValue, result, createData);
+	return ReadValue(col.GetPhysicalName(), col, metaData, retValue, result, createData);
 }
 
 // (THE DEFAULT READ / BIND live in queryColumn.cpp — what a column DOES is kept apart from the layout
@@ -665,7 +664,7 @@ bool ibSameFieldType(const ibColumnType& a, const ibColumnType& b)
 	    && a.m_scale == b.m_scale && a.m_datePrec == b.m_datePrec && a.m_fixed == b.m_fixed;
 }
 
-std::vector<ibString> ColumnFieldNames(const ibBackendQueryColumn* col)
+std::vector<ibString> ColumnFieldNames(const ibBackendQueryColumn& col)
 {
 	std::vector<ibString> out;
 	for (const ibColumnSlot& slot : DescribeColumnLayout(col))
@@ -673,7 +672,7 @@ std::vector<ibString> ColumnFieldNames(const ibBackendQueryColumn* col)
 	return out;
 }
 
-ibString ColumnFieldList(const ibBackendQueryColumn* col, const ibString& aggr)
+ibString ColumnFieldList(const ibBackendQueryColumn& col, const ibString& aggr)
 {
 	ibString out;
 	for (const ibColumnSlot& slot : DescribeColumnLayout(col)) {
@@ -688,7 +687,7 @@ ibString ColumnFieldList(const ibBackendQueryColumn* col, const ibString& aggr)
 	return out;
 }
 
-ibString ColumnComparePredicate(const ibBackendQueryColumn* col, const ibString& cmp)
+ibString ColumnComparePredicate(const ibBackendQueryColumn& col, const ibString& cmp)
 {
 	ibString out;
 	for (const ibColumnSlot& slot : DescribeColumnLayout(col)) {

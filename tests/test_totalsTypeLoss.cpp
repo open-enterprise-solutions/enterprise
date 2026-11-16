@@ -118,9 +118,9 @@ void Settle()
 		db_query->Commit();
 }
 
-bool FindSlot(const ibBackendQueryColumn* col, ibColumnRole role, ibColumnSlot& out)
+bool FindSlot(const std::shared_ptr<const ibBackendQueryColumn>& col, ibColumnRole role, ibColumnSlot& out)
 {
-	for (const ibColumnSlot& slot : DescribeColumnLayout(col))
+	for (const ibColumnSlot& slot : DescribeColumnLayout(*col))
 		if (slot.m_role == role) {
 			out = slot;
 			return true;
@@ -133,9 +133,9 @@ void Put(std::vector<ibDmlAssign>& row, const ibString& name, const ibValue& val
 	row.push_back({ name, ibConst(value) });
 }
 
-void PutRef(std::vector<ibDmlAssign>& row, const ibBackendQueryColumn* col, ibClassID clsid, const ibGuid& id)
+void PutRef(std::vector<ibDmlAssign>& row, const std::shared_ptr<const ibBackendQueryColumn>& col, ibClassID clsid, const ibGuid& id)
 {
-	for (const ibColumnSlot& slot : DescribeColumnLayout(col)) {
+	for (const ibColumnSlot& slot : DescribeColumnLayout(*col)) {
 		if (slot.m_role == ibColumnRole::Discriminator)
 			Put(row, slot.m_name, ibValue(static_cast<int>(ibFieldTypes_Reference)));
 		else if (slot.m_role == ibColumnRole::ReferenceType)
@@ -145,9 +145,9 @@ void PutRef(std::vector<ibDmlAssign>& row, const ibBackendQueryColumn* col, ibCl
 	}
 }
 
-void PutTagged(std::vector<ibDmlAssign>& row, const ibBackendQueryColumn* col, int tag, const ibValue& value)
+void PutTagged(std::vector<ibDmlAssign>& row, const std::shared_ptr<const ibBackendQueryColumn>& col, int tag, const ibValue& value)
 {
-	for (const ibColumnSlot& slot : DescribeColumnLayout(col)) {
+	for (const ibColumnSlot& slot : DescribeColumnLayout(*col)) {
 		if (slot.m_role == ibColumnRole::Discriminator)
 			Put(row, slot.m_name, ibValue(tag));
 		else if (slot.m_role == ibColumnRole::Number || slot.m_role == ibColumnRole::Raw
@@ -222,11 +222,14 @@ struct KeySum {
 	ibNumber m_out;
 };
 
+// `where` narrows the rows — the totals keep a row per unit, and only the stored grain's equal the movements.
 std::map<ibString, KeySum> ReadFigures(const ibString& table, const ibString& tag, const ibString& target,
-	const ibString& guid, const ibString& inColumn, const ibString& outColumn)
+	const ibString& guid, const ibString& inColumn, const ibString& outColumn, const ibQueryExprPtr& where = nullptr)
 {
 	ibDatabaseQueryBuilder query;
 	query.From(table);
+	if (where)
+		query.Where(where);
 	std::vector<ibQueryProjItem> projection{
 		{ ibCol(tag), wxT("tag_") },
 		{ ibCol(target), wxT("target_") },
@@ -333,7 +336,7 @@ TEST_P(TotalsTypeLossApply, ADimensionThatLosesATypeKeepsTotalsAtTheMovementSum)
 	const auto line = [&](int number, ibClassID kind, const ibGuid& id, long long qty) {
 		std::vector<ibDmlAssign> row;
 		for (const ibSchemaColumn& column : movements->m_columns) {
-			const ibBackendQueryColumn* field = column.m_column;
+			const std::shared_ptr<const ibBackendQueryColumn>& field = column.m_column;
 			if (field == nullptr)
 				continue;
 			const ibMetaID idOf = field->GetColumnId();
@@ -370,7 +373,9 @@ TEST_P(TotalsTypeLossApply, ADimensionThatLosesATypeKeepsTotalsAtTheMovementSum)
 	}
 	const std::map<ibString, KeySum> movement = ReadFigures(movements->m_name, tag.m_name, target.m_name, guidCol.m_name,
 		qtySlot.m_name, ibString());
-	const std::map<ibString, KeySum> total = ReadFigures(totals->m_name, tag.m_name, target.m_name, guidCol.m_name, inColumn, outColumn);
+	const std::map<ibString, KeySum> total = ReadFigures(totals->m_name, tag.m_name, target.m_name, guidCol.m_name, inColumn, outColumn,
+		ibBinOp(ibQueryBinOp::Eq, ibCol(totals->m_materialize.m_periodUnitColumn),
+			ibConst(ibValue(static_cast<int>(totals->m_materialize.m_periodUnits.front())))));
 
 	ASSERT_EQ(movement.size(), 2u);
 	ibNumber moved;

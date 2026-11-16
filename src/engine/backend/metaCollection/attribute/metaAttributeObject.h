@@ -101,10 +101,9 @@ class BACKEND_API ibValueMetaObjectAttributeBase :
 		const ibValueMetaObjectAttributeBase* m_owner;   // NON-OWNING; cleared on the owner's death
 	};
 
-	// The face to hand to anything that reads, joins or projects. Never `this` — see above.
-	const ibBackendQueryColumn* GetQueryColumn() const { return m_column.get(); }
-	// …and the same face as a co-owned handle, for a result that outlives the query that made it.
-	std::shared_ptr<ibBackendQueryColumn> ShareQueryColumn() const { return m_column; }
+	// The face to hand to anything that reads, joins or projects — as it is held, so a result that outlives the
+	// query keeps what it was given. Never `this` — see above.
+	std::shared_ptr<const ibBackendQueryColumn> GetQueryColumn() const { return m_column; }
 
 	~ibValueMetaObjectAttributeBase() override {
 		if (m_column) m_column->Detach();   // the whole interaction between the two ownerships

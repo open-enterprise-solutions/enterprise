@@ -52,7 +52,7 @@ void ibValueModelCursor::EnsureSnapshot() const
 
 	m_snapshot.Clear(this, false);                        // drop the previous materialisation (silent)
 
-	const ibBackendQueryable* q = GetSourceQueryable();
+	const std::shared_ptr<const ibBackendQueryable> q = GetSourceQueryable();
 	if (q != nullptr) {
 		// Read the WHOLE detail set in ONE unbounded flat SELECT (persistent filter + sort applied; grouping OUT).
 		ibReadPageRequest page;
@@ -84,15 +84,15 @@ void ibValueModelCursor::EnsureSnapshot() const
 		m_snapshotComposer.PutGroups(savedGroups);
 
 		// One DETAIL copy node per row (same shape as the DB detail fetch), adopted (silent) into the snapshot.
-		const std::vector<const ibBackendQueryColumn*> keyCols = q->GetPrimaryKeyColumns();
-		const ibBackendQueryColumn* folderCol = GetFolderDisplayColumn();
+		const std::vector<std::shared_ptr<const ibBackendQueryColumn>> keyCols = q->GetPrimaryKeyColumns();
+		std::shared_ptr<const ibBackendQueryColumn> folderCol = GetFolderDisplayColumn();
 		m_snapshot.Reserve(static_cast<long>(driver.Rows().size()));
 		for (ibListFetchDriver::Row& r : driver.Rows()) {
 			if (r.m_level != 0)
 				continue;                                 // a flat / detail read emits every row at level 0
 			std::vector<ibValue> rowKey;
 			rowKey.reserve(keyCols.size());
-			for (const ibBackendQueryColumn* kc : keyCols)
+			for (const std::shared_ptr<const ibBackendQueryColumn>& kc : keyCols)
 				if (kc != nullptr) rowKey.push_back(r.GetValue(kc->GetColumnId()));
 			// A container = a FOLDER, or ANY element when the source nests element in element, or a row already
 			// known to have children. The middle term is the hierarchy KIND, asked of the source.
@@ -137,7 +137,7 @@ unsigned int ibValueModelCursor::RunComposerPage(const ibDataViewItem& parent, c
 	if (!IsDynamicRead())
 		return fromSnapshot();
 
-	const ibBackendQueryable* q = GetSourceQueryable();
+	const std::shared_ptr<const ibBackendQueryable> q = GetSourceQueryable();   // held for the page
 	if (q == nullptr)
 		return 0;
 
@@ -229,7 +229,7 @@ unsigned int ibValueModelCursor::RunComposerPage(const ibDataViewItem& parent, c
 	// reference is not something it can serve — it stays an ordinary grouping rung.
 	ibString identity;
 	{
-		const std::vector<const ibBackendQueryColumn*> key = q->GetPrimaryKeyColumns();
+		const std::vector<std::shared_ptr<const ibBackendQueryColumn>> key = q->GetPrimaryKeyColumns();
 		if (key.size() == 1 && key.front() != nullptr)
 			identity = key.front()->GetName();
 	}
@@ -249,7 +249,7 @@ unsigned int ibValueModelCursor::RunComposerPage(const ibDataViewItem& parent, c
 	// a folder carries its group's scope the two are told apart by what the node IS.
 	if (hierarchy && parent.IsOk())
 		if (const ibComposerNode* pnode = GetViewData<ibComposerNode>(parent); pnode != nullptr && !pnode->IsGroup()) {
-			const std::vector<const ibBackendQueryColumn*> keyCols = q->GetPrimaryKeyColumns();
+			const std::vector<std::shared_ptr<const ibBackendQueryColumn>> keyCols = q->GetPrimaryKeyColumns();
 			if (!keyCols.empty() && keyCols.front() != nullptr) {
 				pnode->GetValue(keyCols.front()->GetColumnId(), hierParentKey);
 				hierHasParent = true;
@@ -373,7 +373,7 @@ unsigned int ibValueModelCursor::RunComposerPage(const ibDataViewItem& parent, c
 		// reference; a register = recorder+line+period / period+dimensions). No conversion, no stringifying: the
 		// keyset (BuildAnchorPredicate) encodes a reference value to its real _RRRef blob by itself. Skip a key
 		// column the user already sorts by (mirrors EffectiveSort's dedup).
-		for (const ibBackendQueryColumn* pk : q->GetPrimaryKeyColumns()) {
+		for (const std::shared_ptr<const ibBackendQueryColumn>& pk : q->GetPrimaryKeyColumns()) {
 			if (pk == nullptr) continue;
 			bool dup = false;
 			for (size_t j = 0; j < m_composer.SortCount(); ++j) {
@@ -486,9 +486,9 @@ unsigned int ibValueModelCursor::RunComposerPage(const ibDataViewItem& parent, c
 	// Resolve a possibly-dotted dimension field NAME to its leaf column id by walking the queryable's references;
 	// ibNOT_FOUND when it is not a resolvable dot-walk path. (A plain field is resolved by GetColumnIDByName.)
 	auto resolveDotWalkLeaf = [&](const ibString& field) -> ibMetaID {
-		const ibBackendQueryable* walk = q;
+		std::shared_ptr<const ibBackendQueryable> walk = q;
 		ibString rest = field;
-		const ibBackendQueryColumn* leaf = nullptr;
+		std::shared_ptr<const ibBackendQueryColumn> leaf;
 		while (walk != nullptr && !rest.IsEmpty()) {
 			leaf = walk->ResolveColumnByName(rest.BeforeFirst(ibT('.')));
 			rest = rest.AfterFirst(ibT('.'));
@@ -508,7 +508,7 @@ unsigned int ibValueModelCursor::RunComposerPage(const ibDataViewItem& parent, c
 	// The source's PRIMARY-KEY columns — stamp each DB-list DETAIL copy's stable identity (m_rowKey) so it
 	// survives re-fetch selection AND a guid-keyed FindRowValue stub matches a fetched row by it. (RAM never
 	// reaches here — its short-circuit above returns the LIVE storage rows, identified by their stable pointer.)
-	const std::vector<const ibBackendQueryColumn*> keyCols = q->GetPrimaryKeyColumns();
+	const std::vector<std::shared_ptr<const ibBackendQueryColumn>> keyCols = q->GetPrimaryKeyColumns();
 
 	// A DETAIL level read whole is cut to the window the anchor asks for by the rule a group level is windowed by
 	// (below) — but BEFORE a node is built, its anchor found by the row's key: the level may be a whole catalog, and a
@@ -522,7 +522,7 @@ unsigned int ibValueModelCursor::RunComposerPage(const ibDataViewItem& parent, c
 				detail.push_back(static_cast<long>(k));
 		const auto keyedBy = [&](const ibListFetchDriver::Row& r, const std::vector<ibValue>& key) {
 			size_t i = 0;
-			for (const ibBackendQueryColumn* kc : keyCols)
+			for (const std::shared_ptr<const ibBackendQueryColumn>& kc : keyCols)
 				if (kc != nullptr && (i >= key.size() || !(r.GetValue(kc->GetColumnId()) == key[i++])))
 					return false;
 			return i == key.size();
@@ -545,7 +545,7 @@ unsigned int ibValueModelCursor::RunComposerPage(const ibDataViewItem& parent, c
 	// OnRow(0,false,…)), so this is the ONLY folder signal the tree has. The column is the LIST's display column
 	// (GetDataIsFolder, handed in at ibCreateHierarchyList) — NOT a queryable accessor; folders are a display
 	// concern of the hierarchical list, ordering is the folder-first SORT. Null on a flat / non-folder list.
-	const ibBackendQueryColumn* folderCol = GetFolderDisplayColumn();
+	std::shared_ptr<const ibBackendQueryColumn> folderCol = GetFolderDisplayColumn();
 
 	// The hierarchy KIND, asked of the source once per fetch: where an element nests inside an element
 	// (items, a chart of accounts) EVERY row is enterable; where it nests inside a folder, only a folder is.
@@ -676,7 +676,7 @@ unsigned int ibValueModelCursor::RunComposerPage(const ibDataViewItem& parent, c
 			// provider flagged hasChildren. (Read-only — no write-back source; editing a DB list goes via the form.)
 			std::vector<ibValue> rowKey;
 			rowKey.reserve(keyCols.size());
-			for (const ibBackendQueryColumn* kc : keyCols)
+			for (const std::shared_ptr<const ibBackendQueryColumn>& kc : keyCols)
 				if (kc != nullptr) rowKey.push_back(r.GetValue(kc->GetColumnId()));
 			// A grouped DETAIL row is a LEAF: a folder that lands inside a grouping is a plain grouped item and
 			// is NOT drillable. Marking it a container by folderCol re-offered a folder expander whose drill
@@ -764,10 +764,10 @@ unsigned int ibValueModelCursor::RunComposerPage(const ibDataViewItem& parent, c
 ibRowMetaValues ibValueModel::ResolveAnchorByKey(const std::vector<ibValue>& rowKey) const
 {
 	ibRowMetaValues out;
-	const ibBackendQueryable* q = GetSourceQueryable();
+	const std::shared_ptr<const ibBackendQueryable> q = GetSourceQueryable();
 	if (q == nullptr || rowKey.empty())
 		return out;
-	const std::vector<const ibBackendQueryColumn*> pk = q->GetPrimaryKeyColumns();
+	const std::vector<std::shared_ptr<const ibBackendQueryColumn>> pk = q->GetPrimaryKeyColumns();
 	if (pk.size() != rowKey.size())
 		return out;   // shape mismatch — cannot position by this key (degrades to a top-of-list fetch)
 
@@ -820,9 +820,9 @@ void ibValueModelCursor::BuildAncestorBreadcrumb(const ibDataViewItem& fromRow, 
 	if (node == nullptr)
 		return;
 
-	const ibBackendQueryable* q = GetSourceQueryable();
-	const std::vector<const ibBackendQueryColumn*> keyCols =
-		q != nullptr ? q->GetPrimaryKeyColumns() : std::vector<const ibBackendQueryColumn*>();
+	const std::shared_ptr<const ibBackendQueryable> q = GetSourceQueryable();
+	const std::vector<std::shared_ptr<const ibBackendQueryColumn>> keyCols =
+		q != nullptr ? q->GetPrimaryKeyColumns() : std::vector<std::shared_ptr<const ibBackendQueryColumn>>();
 
 	// THE ROW'S OWN IDENTITY COLUMN, needed by BOTH shapes below — the folder walk keys its point
 	// lookups by it, and the grouped shape has to be able to RECOGNISE it (see there).
@@ -888,7 +888,7 @@ void ibValueModelCursor::BuildAncestorBreadcrumb(const ibDataViewItem& fromRow, 
 
 	if (q == nullptr)
 		return;
-	const ibBackendQueryColumn* hierCol = q->GetHierarchyColumn();
+	std::shared_ptr<const ibBackendQueryColumn> hierCol = q->GetHierarchyColumn();
 	if (hierCol == nullptr)
 		return;   // not a hierarchical source — no ancestors to walk
 	if (rowKeyCol == ibNOT_FOUND)

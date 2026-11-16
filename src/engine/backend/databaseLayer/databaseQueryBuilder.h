@@ -1106,14 +1106,14 @@ public:
 
 private:
 
-	ibString RenderSelect(const ibQueryRel* root);  // flatten a relation chain into one SELECT (appends binds)
+	ibString RenderSelect(const ibQueryRelPtr& root);  // flatten a relation chain into one SELECT (appends binds)
 	ibString RenderExpr(const ibQueryExprPtr& expr);
 	// Fill EVERY occurrence of a template placeholder, rendering the operand once PER occurrence — a
 	// dialect template may name its operand several times, and a bound operand has to bind as often
 	// as it is spelled. See the body for what a single render cost.
 	ibString FillRepeated(const ibString& tpl, const ibString& key, const ibQueryExprPtr& operand);
 	ibString RenderOver(const ibQueryWindow& window);  // renders the operands, spells the clause via ibRenderOverClause
-	ibString RenderSource(const ibQueryRel* rel);   // FROM source: Scan / Join-tree / Subquery (recursive)
+	ibString RenderSource(const ibQueryRelPtr& rel);   // FROM source: Scan / Join-tree / Subquery (recursive)
 	ibString RenderPlaceholder();              // spells the next placeholder, bumps the counter
 	ibString QuoteIdent(const ibString& name) const;
 	ibString AliasIdent(const ibString& alias) const;   // a relation alias, within the dialect's m_maxAliasLength

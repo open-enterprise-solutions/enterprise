@@ -113,14 +113,14 @@ BACKEND_API bool ibIsComparableType(const ibTypeDescription& typeDesc);
 // (A separate "is there any storage behind this type" question lived here for a day. It is gone: what
 //  a statement may WRITE is a fact about the COLUMN, not about a type — `ibBackendQueryColumn::Kind`
 //  answers it, and a Synthetic column is neither projected nor published.)
-BACKEND_API ibBackendColumnRawDB   ibOwnerRefColumn();
+BACKEND_API std::shared_ptr<const ibBackendColumnRawDB> ibOwnerRefColumn();
 
 
 // The authority. Decompose a logical column into its physical fields, derived purely
 // from (physical name, type descriptor) — NO metadata: the reference slot is gated by the
 // clsid KIND (IsReference), not a metadata lookup. Order: TYPE, B, N, D, S, E, RTRef, RRRef
 // — the same fixed order the write / read codec binds in. A raw column = one slot as-is.
-BACKEND_API std::vector<ibColumnSlot> DescribeColumnLayout(const ibBackendQueryColumn* col);
+BACKEND_API std::vector<ibColumnSlot> DescribeColumnLayout(const ibBackendQueryColumn& col);
 
 // Do two physical fields render to the SAME SQL type? The whole canonical L2 type, qualifiers
 // included — so it answers exactly "would a DDL writer have to touch this field", and nothing wider.
@@ -138,7 +138,7 @@ BACKEND_API bool ibIsValueRole(ibColumnRole role);
 // A column's VALUE field names — its layout slots minus the _TYPE discriminator and the reference
 // TYPE id (the value-carrying roles). Metadata-free, derived over DescribeColumnLayout. The DB
 // provider asks this for sort / group-by / key field expansion; the column stays a pure descriptor.
-BACKEND_API std::vector<ibString> ColumnValueFields(const ibBackendQueryColumn* col);
+BACKEND_API std::vector<ibString> ColumnValueFields(const ibBackendQueryColumn& col);
 
 // ⭐ THE SAME FIELDS, WITH THEIR ROLE STILL ATTACHED. A consumer that must know what a field IS —
 // a reference id needs its _RTRef tiebreak, a counter scan wants the number field — reads m_role.
@@ -146,17 +146,17 @@ BACKEND_API std::vector<ibString> ColumnValueFields(const ibBackendQueryColumn* 
 // left to ask the question except to match the tail of the string (`EndsWith("_RRRef")`), which is
 // the layout re-derived by spelling, in a place that cannot be told when the lettering changes.
 // Give the role alongside the name and the question is answerable where it is asked.
-BACKEND_API std::vector<ibColumnSlot> ColumnValueSlots(const ibBackendQueryColumn* col);
+BACKEND_API std::vector<ibColumnSlot> ColumnValueSlots(const ibBackendQueryColumn& col);
 
 // ⭐ WHAT A COLUMN IS SORTED ON, in order: its value fields, and a reference's _RTRef after its key (an
 // empty key of one type orders apart from an empty key of another). One answer for the ORDER BY a read
 // writes and for the fields an index is built over — an index whose leading fields are not the order's
 // own is one the engine cannot walk, and every page of a list sorts the whole table instead.
-BACKEND_API std::vector<ibString> ColumnSortFields(const ibBackendQueryColumn* col);
+BACKEND_API std::vector<ibString> ColumnSortFields(const ibBackendQueryColumn& col);
 
 // The column's FIRST value slot — the field a scalar comparison / sort / anchor rides. Empty name
 // and Raw role when the column spreads to nothing.
-BACKEND_API ibColumnSlot FirstValueSlot(const ibBackendQueryColumn* col);
+BACKEND_API ibColumnSlot FirstValueSlot(const ibBackendQueryColumn& col);
 
 // ⭐ A REFERENCE READ FROM ONE KEY FIELD, with the target type supplied by the COLUMN.
 //
@@ -182,9 +182,9 @@ BACKEND_API int ibPersistedTypeTag(ibColumnRole role);
 //   ColumnFieldNames        : the physical field NAMES in bind order (index columns / statement list)
 //   ColumnFieldList         : "f_TYPE,f_B,f_N,…"  (SELECT list; aggr wraps the N/D measures)
 //   ColumnComparePredicate  : "f_TYPE = ? AND f_B <cmp> ? AND …"  (WHERE by value)
-BACKEND_API std::vector<ibString> ColumnFieldNames(const ibBackendQueryColumn* col);
-BACKEND_API ibString       ColumnFieldList(const ibBackendQueryColumn* col, const ibString& aggr = ibEmptyString);
-BACKEND_API ibString       ColumnComparePredicate(const ibBackendQueryColumn* col, const ibString& cmp = ibT("="));
+BACKEND_API std::vector<ibString> ColumnFieldNames(const ibBackendQueryColumn& col);
+BACKEND_API ibString       ColumnFieldList(const ibBackendQueryColumn& col, const ibString& aggr = ibEmptyString);
+BACKEND_API ibString       ColumnComparePredicate(const ibBackendQueryColumn& col, const ibString& cmp = ibT("="));
 
 
 // ⭐⭐ BIND A VALUE INTO A COLUMN — THE ONE DOOR, and the thing to call instead of the codec.
@@ -197,7 +197,7 @@ BACKEND_API ibString       ColumnComparePredicate(const ibBackendQueryColumn* co
 //
 // The write path has always gone through here. The schema's seed phase used to bind its key by hand
 // beside it, which is how a declared row's guid reached a BINARY(16) column as text.
-BACKEND_API void BindWriteValue(class ibQueryStatement& statement, const ibBackendQueryColumn* col,
+BACKEND_API void BindWriteValue(class ibQueryStatement& statement, const ibBackendQueryColumn& col,
                                 const ibMetaData* metaData, const ibValue& value, int& position);
 
 // ==========================================================================
@@ -217,9 +217,9 @@ public:
 	// `statement` from `position` (1-based), advancing it. The physical order is exactly the
 	// one DescribeColumnLayout lays out. Binds into the L2 ibQueryStatement (a batch's rows too —
 	// ibBatchInsert is one), never a raw L1 statement. Column-based — no attribute.
-	static void WriteValue(const ibBackendQueryColumn* col, const ibMetaData* metaData,
+	static void WriteValue(const ibBackendQueryColumn& col, const ibMetaData* metaData,
 	                       const ibValue& value, ibQueryStatement* statement, int& position);
-	static void WriteValue(const ibBackendQueryColumn* col, const ibMetaData* metaData,
+	static void WriteValue(const ibBackendQueryColumn& col, const ibMetaData* metaData,
 	                       const ibValue& value, ibQueryStatement* statement);   // from position 1
 
 	// READ — reassemble the value off the column's physical fields in `result`. The col-only
@@ -243,21 +243,21 @@ public:
 	// save the STACK, not the database.
 	//
 	// A caller that truly needs the row NOW says so, in one word, at its own call site.
-	static bool ReadValue(const ibBackendQueryColumn* col, const ibMetaData* metaData,
+	static bool ReadValue(const ibBackendQueryColumn& col, const ibMetaData* metaData,
 	                      ibValue& retValue, ibQueryResult& result, bool createData = false);
-	static bool ReadValue(const ibString& fieldName, const ibBackendQueryColumn* col, const ibMetaData* metaData,
+	static bool ReadValue(const ibString& fieldName, const ibBackendQueryColumn& col, const ibMetaData* metaData,
 	                      ibValue& retValue, ibQueryResult& result, bool createData = false);
 
 	// READ ONE physical field of a KNOWN variant type (the read leaf). `fieldType` is the persisted
 	// variant tag (ibValueMetaObjectAttributeBase::ibFieldTypes) passed as a plain int, so this
 	// header need not pull the heavy attribute header in. Used directly by callers that already
 	// know a field's type (a register reading a numeric balance/turnover column).
-	static bool ReadField(const ibString& fieldName, int fieldType, const ibBackendQueryColumn* col,
+	static bool ReadField(const ibString& fieldName, int fieldType, const ibBackendQueryColumn& col,
 	                      const ibMetaData* metaData, ibValue& retValue, ibQueryResult& result, bool createData = false);
 
 	// Does the column's type admit a reference value — its spread carries _RTRef/_RRRef?
 	// Pure clsid-kind gate (IsReference), no metadata.
-	static bool HasReference(const ibBackendQueryColumn* col);
+	static bool HasReference(const ibBackendQueryColumn& col);
 
 	// (The BINARY-WIRE codec — BinaryToStatement / BinaryFromResult — is the L3-3 dump / restore
 	//  PRIMITIVE; it lives with its consumer in query/dataMover.h (ibDataMover), not here. It reuses
@@ -267,7 +267,7 @@ private:
 	// The tag switch itself, WITHOUT the "no such field" guard ReadValue wraps it in. The guard is
 	// what turns a missing field into an answer the caller can act on, so the unguarded shape is not
 	// offered: asking for it would be asking for the failure the guard exists to prevent.
-	static bool ReadTaggedValue(const ibString& fieldName, const ibBackendQueryColumn* col, const ibMetaData* metaData,
+	static bool ReadTaggedValue(const ibString& fieldName, const ibBackendQueryColumn& col, const ibMetaData* metaData,
 	                            ibValue& retValue, ibQueryResult& result, bool createData);
 };
 

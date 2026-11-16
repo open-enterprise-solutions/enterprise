@@ -186,59 +186,18 @@ ibMemoryBuffer Notification(const char* method, const ibDataNode& params, const 
 	return packet;
 }
 
-void FeedText(ibSHA256& sha, const ibString& text);
-void FeedValue(ibSHA256& sha, const ibDataValue& value);
-
-void FeedNode(ibSHA256& sha, const ibDataNode& node)
-{
-	for (const auto& field : node.Fields()) {
-		FeedText(sha, field.first);
-		FeedValue(sha, field.second);
-	}
-}
-
-// The characters as they lie: a digest is compared with one this process made, never with another's, so it needs no
-// encoding of its own — and the text no copy.
-void FeedText(ibSHA256& sha, const ibString& text)
-{
-	if (!text.IsEmpty())
-		sha.Update(reinterpret_cast<const unsigned char*>(text.c_str()), text.length() * sizeof(ibChar));
-}
-
-void FeedValue(ibSHA256& sha, const ibDataValue& value)
-{
-	const unsigned char kind = static_cast<unsigned char>(value.Kind());
-	sha.Update(&kind, 1);
-	switch (value.Kind()) {
-	case ibDataKind::Bool: {
-		const unsigned char bit = value.AsBool() ? 1 : 0;
-		sha.Update(&bit, 1);
-		break;
-	}
-	case ibDataKind::Number:
-		FeedText(sha, value.AsNumber().ToString());
-		break;
-	case ibDataKind::String:
-		FeedText(sha, value.AsString());
-		break;
-	case ibDataKind::Array:
-		for (const ibDataValue& item : value.AsArray())
-			FeedValue(sha, item);
-		break;
-	case ibDataKind::Child:
-		if (value.AsChild())
-			FeedNode(sha, *value.AsChild());
-		break;
-	default:
-		break;
-	}
-}
-
+// ⭐ A CALL IS ITS BYTES: two nodes are the same when their bytes are (ibDataNode::operator==), so the params are hashed
+// as they lie, in their packet. Walked field by field — every name made a text, every number printed — the digest of the
+// thin client's whole sheet was 18 % of an edit (2026-11-16, load-million-rows.md § 12); and the walk left a node's type,
+// its children, a date and a guid out of it. The method's characters as they lie: a digest is compared with one this
+// process made, never with another's, so it needs no encoding of its own.
 void CallDigest(const ibString& method, const ibDataNode& params, unsigned char out[32])
 {
 	ibSHA256 sha;
-	FeedText(sha, method);
-	FeedNode(sha, params);
+	sha.Update(reinterpret_cast<const unsigned char*>(method.c_str()), method.length() * sizeof(ibChar));
+	ibMemoryBuffer packet;
+	ibBinaryProvider().Write(params, packet);
+	sha.Update(static_cast<const unsigned char*>(packet.GetData()), packet.GetDataLen());
 	sha.Final(out);
 }
 

@@ -35,6 +35,7 @@
 #include "core/query/anyQueryConstructorModel.h"   // ibAnyQueryConstructorModel — what the model derives
 #include "queryableFactory.h"
 
+#include <memory>
 #include <vector>
 
 class ibMetaData;
@@ -110,7 +111,7 @@ BACKEND_API std::vector<ibQueryConstructorField> ibQueryFieldsOfText(const ibStr
 // a list's composition titles its columns as a report's does. It built its own with no synonym, and a list output to
 // a sheet was headed by the field names (Max, 2026-11-14).
 BACKEND_API std::vector<ibQueryConstructorField> ibQueryFieldsOfColumns(
-	const std::vector<const ibBackendQueryColumn*>& columns, const ibMetaData* metaData);
+	const std::vector<std::shared_ptr<const ibBackendQueryColumn>>& columns, const ibMetaData* metaData);
 
 // …AND THE OTHER WAY ROUND: THE QUERY A SOURCE WOULD WRITE FOR ITSELF — every field it lists spelled
 // out, `SELECT Products.Code, … FROM Catalog.Products AS Products`: what a list or a composition starts

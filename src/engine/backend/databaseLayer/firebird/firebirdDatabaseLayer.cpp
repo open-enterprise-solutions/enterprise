@@ -1064,6 +1064,13 @@ void ibDatabaseLayerFirebird::DoBeginTransaction(const ibTxOptions& opts)
 		isc_tpb_version3, isc_tpb_write, isc_tpb_wait, isc_tpb_concurrency,
 		(char)isc_tpb_lock_timeout, 4, 30, 0, 0, 0
 	};
+	// ...and the snapshot that never WAITS: a row another transaction holds is refused at once instead of
+	// after the lock timeout. Housekeeping that must yield to the people working asks for it — the totals
+	// fold (ibFoldShards) meets a posting's row, rolls its slice back and lets the posting through. The
+	// other drivers honour noWait beside snapshot; this choice took the snapshot and dropped the noWait.
+	static const std::string isc_tpb_snapshotNoWaitMode = {
+		isc_tpb_version3, isc_tpb_write, isc_tpb_nowait, isc_tpb_concurrency
+	};
 	// ...and the same snapshot for a caller that also promises not to write. THE LIGHTEST MODE THERE
 	// IS for reading: one committed state for the whole transaction, and no write-intent locks at all,
 	// so it does not contend with concurrent writers. This is what an ordinary query takes; the
@@ -1072,7 +1079,8 @@ void ibDatabaseLayerFirebird::DoBeginTransaction(const ibTxOptions& opts)
 		isc_tpb_version3, isc_tpb_read, isc_tpb_wait, isc_tpb_concurrency
 	};
 	const std::string& isc_tpb =
-		opts.snapshot ? (opts.readOnly ? isc_tpb_snapshotReadMode : isc_tpb_snapshotMode) :
+		opts.snapshot ? (opts.readOnly ? isc_tpb_snapshotReadMode :
+		                 opts.noWait   ? isc_tpb_snapshotNoWaitMode : isc_tpb_snapshotMode) :
 		opts.noWait   ? isc_tpb_nowaitMode :
 		opts.readOnly ? isc_tpb_readOnlyMode :
 		                isc_tpb_waitMode;

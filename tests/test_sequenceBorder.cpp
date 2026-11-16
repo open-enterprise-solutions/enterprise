@@ -96,10 +96,10 @@ struct SequenceBorderFix : ::testing::Test {
 		ASSERT_TRUE(cfg->RunDatabase()) << "the configuration in memory did not run";
 
 		// The two tables, made of exactly the fields the metaobject lays out - SQLite asks for no types.
-		std::vector<const ibBackendQueryColumn*> registration = {
+		std::vector<std::shared_ptr<const ibBackendQueryColumn>> registration = {
 			seq->GetRegisterActive()->GetQueryColumn(), seq->GetRegisterPeriod()->GetQueryColumn(),
 			seq->GetRegisterRecorder()->GetQueryColumn(), seq->GetRegisterLineNumber()->GetQueryColumn() };
-		std::vector<const ibBackendQueryColumn*> border = {
+		std::vector<std::shared_ptr<const ibBackendQueryColumn>> border = {
 			seq->GetRegisterPeriod()->GetQueryColumn(), seq->GetRegisterRecorder()->GetQueryColumn() };
 		if (keyed) {
 			registration.push_back(Dimension());
@@ -120,14 +120,14 @@ struct SequenceBorderFix : ::testing::Test {
 			ibApplicationInstance::DestroyAppDataEnv();
 	}
 
-	const ibBackendQueryColumn* Dimension() const {
+	std::shared_ptr<const ibBackendQueryColumn> Dimension() const {
 		return seq->GetDimensionArrayObject().front()->GetQueryColumn();
 	}
-	static ibString FieldList(const std::vector<const ibBackendQueryColumn*>& columns, bool typed = false) {
+	static ibString FieldList(const std::vector<std::shared_ptr<const ibBackendQueryColumn>>& columns, bool typed = false) {
 		ibString list;
 		std::set<ibString> seen;
-		for (const ibBackendQueryColumn* column : columns)
-			for (const ibString& field : ColumnFieldNames(column))
+		for (const std::shared_ptr<const ibBackendQueryColumn>& column : columns)
+			for (const ibString& field : ColumnFieldNames(*column))
 				if (seen.insert(field).second)
 					list << (list.IsEmpty() ? wxT("") : wxT(", ")) << field << (typed ? SqliteTypeOf(field) : ibString());
 		return list;
@@ -142,11 +142,11 @@ struct SequenceBorderFix : ::testing::Test {
 	}
 
 	// A value said as the fields that hold it - the same codec the rules write the border through.
-	void Assign(std::vector<ibDmlAssign>& out, const ibBackendQueryColumn* column, const ibValue& value) const {
-		const std::vector<ibString> fields = ColumnFieldNames(column);
+	void Assign(std::vector<ibDmlAssign>& out, const std::shared_ptr<const ibBackendQueryColumn>& column, const ibValue& value) const {
+		const std::vector<ibString> fields = ColumnFieldNames(*column);
 		ibQueryStatement capture(ibQueryStatement::Kind::Delete, ibString(), fields);
 		int position = 1;
-		ibColumnCodec::WriteValue(column, cfg.get(), value, &capture, position);
+		ibColumnCodec::WriteValue(*column, cfg.get(), value, &capture, position);
 		const std::vector<ibQueryExprPtr>& consts = capture.CapturedValues();
 		for (size_t i = 0; i < fields.size(); ++i)
 			out.push_back(ibDmlAssign{ fields[i], (i < consts.size() && consts[i]) ? consts[i] : ibConst(ibValue()) });

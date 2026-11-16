@@ -61,16 +61,15 @@ public:
 	explicit ibCalcFactSourceDescriptor(ibValueMetaObjectCalculationRegister* meta) : m_meta(meta) {}
 	ibString GetNamespace() const override;
 	ibString GetName() const override;
-	const ibBackendQueryable* CreateQueryable(ibValue** paParams, long lSizeArray) override;
 	// ⭐ THE CONDITION IS CONSUMED — resolved against the fact surface (GetConditionScope) and applied by the
 	// reading itself: narrowing every table read where it can, and over the pieces exactly (ComputeRows).
-	const ibBackendQueryable* CreateQueryable(ibValue** paParams, long lSizeArray,
-	                                          const std::vector<ibQueryPredicatePtr>& conditions,
-	                                          const ibQueryReadColumns& read) override;
-	const ibBackendQueryable* GetConditionScope() const override;
+	std::shared_ptr<const ibBackendQueryable> CreateQueryable(ibValue** paParams, long lSizeArray,
+	                                                          const std::vector<ibQueryPredicatePtr>& conditions,
+	                                                          const ibQueryReadColumns& read) override;
+	std::shared_ptr<const ibBackendQueryable> GetConditionScope() const override;
 	void DescribeParameters(std::vector<ibQuerySourceParameter>& out) const override;
-	std::vector<const ibBackendQueryColumn*> GetQueryColumns(const std::vector<ibValue>& args) const override;
-	std::vector<const ibBackendQueryColumn*> GetConditionColumns(const ibString& slot) const override;
+	std::vector<std::shared_ptr<const ibBackendQueryColumn>> GetQueryColumns(const std::vector<ibValue>& args) const override;
+	std::vector<std::shared_ptr<const ibBackendQueryColumn>> GetConditionColumns(const ibString& slot) const override;
 private:
 	ibValueMetaObjectCalculationRegister* m_meta;
 };
@@ -87,15 +86,14 @@ public:
 	explicit ibCalcScheduleDataSourceDescriptor(ibValueMetaObjectCalculationRegister* meta) : m_meta(meta) {}
 	ibString GetNamespace() const override;
 	ibString GetName() const override;
-	const ibBackendQueryable* CreateQueryable(ibValue** paParams, long lSizeArray) override;
 	// THE CONDITION IS CONSUMED — resolved against the schedule data's surface and applied to the records read.
-	const ibBackendQueryable* CreateQueryable(ibValue** paParams, long lSizeArray,
-	                                          const std::vector<ibQueryPredicatePtr>& conditions,
-	                                          const ibQueryReadColumns& read) override;
-	const ibBackendQueryable* GetConditionScope() const override;
+	std::shared_ptr<const ibBackendQueryable> CreateQueryable(ibValue** paParams, long lSizeArray,
+	                                                          const std::vector<ibQueryPredicatePtr>& conditions,
+	                                                          const ibQueryReadColumns& read) override;
+	std::shared_ptr<const ibBackendQueryable> GetConditionScope() const override;
 	void DescribeParameters(std::vector<ibQuerySourceParameter>& out) const override;
-	std::vector<const ibBackendQueryColumn*> GetQueryColumns(const std::vector<ibValue>& args) const override;
-	std::vector<const ibBackendQueryColumn*> GetConditionColumns(const ibString& slot) const override;
+	std::vector<std::shared_ptr<const ibBackendQueryColumn>> GetQueryColumns(const std::vector<ibValue>& args) const override;
+	std::vector<std::shared_ptr<const ibBackendQueryColumn>> GetConditionColumns(const ibString& slot) const override;
 private:
 	ibValueMetaObjectCalculationRegister* m_meta;
 };
@@ -112,15 +110,14 @@ public:
 		: m_meta(meta), m_base(base) {}
 	virtual ibString GetNamespace() const override;
 	virtual ibString GetName() const override;
-	virtual const ibBackendQueryable* CreateQueryable(ibValue** paParams, long lSizeArray) override;
 	// THE CONDITION IS CONSUMED — resolved against the base's surface and applied to the records read.
-	virtual const ibBackendQueryable* CreateQueryable(ibValue** paParams, long lSizeArray,
-	                                                  const std::vector<ibQueryPredicatePtr>& conditions,
-	                                                  const ibQueryReadColumns& read) override;
-	virtual const ibBackendQueryable* GetConditionScope() const override;
+	virtual std::shared_ptr<const ibBackendQueryable> CreateQueryable(ibValue** paParams, long lSizeArray,
+	                                                                  const std::vector<ibQueryPredicatePtr>& conditions,
+	                                                                  const ibQueryReadColumns& read) override;
+	virtual std::shared_ptr<const ibBackendQueryable> GetConditionScope() const override;
 	virtual void DescribeParameters(std::vector<ibQuerySourceParameter>& out) const override;
-	virtual std::vector<const ibBackendQueryColumn*> GetQueryColumns(const std::vector<ibValue>& args) const override;
-	virtual std::vector<const ibBackendQueryColumn*> GetConditionColumns(const ibString& slot) const override;
+	virtual std::vector<std::shared_ptr<const ibBackendQueryColumn>> GetQueryColumns(const std::vector<ibValue>& args) const override;
+	virtual std::vector<std::shared_ptr<const ibBackendQueryColumn>> GetConditionColumns(const ibString& slot) const override;
 private:
 	ibValueMetaObjectCalculationRegister*       m_meta;
 	const ibValueMetaObjectCalculationRegister* m_base;   // the register the base is read from
@@ -134,7 +131,7 @@ class BACKEND_API ibRecalculationQueryable : public ibBackendQueryable {
 public:
 	explicit ibRecalculationQueryable(const ibValueMetaObjectCalculationRegister* reg) : m_reg(reg) {}
 
-	virtual std::vector<const ibBackendQueryColumn*> GetQueryColumns() const override;
+	virtual std::vector<std::shared_ptr<const ibBackendQueryColumn>> GetQueryColumns() const override;
 	virtual ibString GetQueryTableName() const override;
 	virtual const ibUniqueKey& GetQueryTableGuid() const override;
 	virtual ibString GetQueryName() const override;
@@ -142,7 +139,7 @@ public:
 	virtual const ibMetaData* GetMetaData() const override;
 	// What a mark is found by, and a clear deletes by: the recorder, the type, the dimensions, the month. All of them
 	// — every column is the key.
-	virtual std::vector<const ibBackendQueryColumn*> GetPrimaryKeyColumns() const override { return GetQueryColumns(); }
+	virtual std::vector<std::shared_ptr<const ibBackendQueryColumn>> GetPrimaryKeyColumns() const override { return GetQueryColumns(); }
 
 private:
 	const ibValueMetaObjectCalculationRegister* m_reg;
@@ -150,15 +147,17 @@ private:
 
 class ibRecalculationSourceDescriptor : public ibQueryableSourceDescriptor {
 public:
-	explicit ibRecalculationSourceDescriptor(ibValueMetaObjectCalculationRegister* meta) : m_meta(meta), m_queryable(meta) {}
+	explicit ibRecalculationSourceDescriptor(ibValueMetaObjectCalculationRegister* meta) : m_meta(meta), m_queryable(std::make_shared<ibRecalculationQueryable>(meta)) {}
 	ibString GetNamespace() const override;
 	ibString GetName() const override;
-	const ibBackendQueryable* CreateQueryable(ibValue** paParams, long lSizeArray) override;
-	const ibRecalculationQueryable* GetQueryable() const { return &m_queryable; }
-	std::vector<const ibBackendQueryColumn*> GetQueryColumns(const std::vector<ibValue>& args) const override;
+	std::shared_ptr<const ibBackendQueryable> CreateQueryable(ibValue** paParams, long lSizeArray,
+	                                                          const std::vector<ibQueryPredicatePtr>& conditions,
+	                                                          const ibQueryReadColumns& read) override;
+	std::shared_ptr<const ibRecalculationQueryable> GetQueryable() const { return m_queryable; }
+	std::vector<std::shared_ptr<const ibBackendQueryColumn>> GetQueryColumns(const std::vector<ibValue>& args) const override;
 private:
-	ibValueMetaObjectCalculationRegister* m_meta;
-	ibRecalculationQueryable              m_queryable;
+	ibValueMetaObjectCalculationRegister*     m_meta;
+	std::shared_ptr<ibRecalculationQueryable> m_queryable;
 };
 
 class ibValueMetaObjectCalculationRegister : public ibValueMetaObjectRegisterData {
@@ -250,15 +249,15 @@ public:
 		return ibString::Format(ibT("%s%i_%s"), GetClassName(), GetMetaID(), m_recalculation->GetName());
 	}
 	const ibValueMetaObjectRegisterTotals* GetRecalculationObject() const { return m_recalculation; }
-	const ibRecalculationQueryable* GetRecalculationQueryable() const { return m_recalculationSource.GetQueryable(); }
+	std::shared_ptr<const ibRecalculationQueryable> GetRecalculationQueryable() const { return m_recalculationSource.GetQueryable(); }
 
 	// The shape the fact publishes — built from the register's own attributes, touching no database,
 	// so a query is drawn against it on a base never opened (the accumulation register's GetViewQueryable).
-	const ibBackendQueryable* GetFactSurface() const;
+	std::shared_ptr<const ibBackendQueryable> GetFactSurface() const;
 	// The shape ScheduleData publishes: the record's columns and the schedule's sums (ibCalcScheduleDataSourceDescriptor).
-	const ibBackendQueryable* GetScheduleDataSurface() const;
+	std::shared_ptr<const ibBackendQueryable> GetScheduleDataSurface() const;
 	// The shape `Base<base>` publishes: the record's columns, the base register's figures and sections (ibCalcBaseSourceDescriptor).
-	const ibBackendQueryable* GetBaseSurface(const ibValueMetaObjectCalculationRegister* base) const;
+	std::shared_ptr<const ibBackendQueryable> GetBaseSurface(const ibValueMetaObjectCalculationRegister* base) const;
 
 	// ⭐ CALCULATION TYPE — the standard attribute every calculation record carries: which calculation
 	// type of the bound chart this record is. The chart's relations over it (Displacing, Base, Leading)
@@ -777,9 +776,9 @@ public:
 		  m_condition(condition) {}
 
 	// The shape, on every road — metadata only.
-	virtual const ibBackendQueryable* NavigationSource() const override { return m_reg->GetFactSurface(); }
+	virtual std::shared_ptr<const ibBackendQueryable> NavigationSource() const override { return m_reg->GetFactSurface(); }
 	// A piece: its record, and its first day.
-	virtual std::vector<const ibBackendQueryColumn*> GetPrimaryKeyColumns() const override;
+	virtual std::vector<std::shared_ptr<const ibBackendQueryColumn>> GetPrimaryKeyColumns() const override;
 	virtual ibQueryRamTable ComputeRows(const std::vector<ibQueryCondition>& extra) const override;
 
 private:
@@ -798,9 +797,9 @@ public:
 		: ibComputedRegisterQueryable(reg), m_moment(moment), m_actionFrom(actionFrom), m_actionTo(actionTo),
 		  m_condition(condition), m_read(read) {}
 
-	virtual const ibBackendQueryable* NavigationSource() const override { return m_reg->GetScheduleDataSurface(); }
+	virtual std::shared_ptr<const ibBackendQueryable> NavigationSource() const override { return m_reg->GetScheduleDataSurface(); }
 	// A record: its recorder and its line.
-	virtual std::vector<const ibBackendQueryColumn*> GetPrimaryKeyColumns() const override;
+	virtual std::vector<std::shared_ptr<const ibBackendQueryColumn>> GetPrimaryKeyColumns() const override;
 	virtual ibQueryRamTable ComputeRows(const std::vector<ibQueryCondition>& extra) const override;
 
 private:
@@ -822,9 +821,9 @@ public:
 		: ibComputedRegisterQueryable(reg), m_base(base), m_asked(asked), m_moment(moment), m_actionFrom(actionFrom),
 		  m_actionTo(actionTo), m_condition(condition) {}
 
-	virtual const ibBackendQueryable* NavigationSource() const override { return m_reg->GetBaseSurface(m_base); }
+	virtual std::shared_ptr<const ibBackendQueryable> NavigationSource() const override { return m_reg->GetBaseSurface(m_base); }
 	// A record and its section: its recorder, its line, and the sections asked for.
-	virtual std::vector<const ibBackendQueryColumn*> GetPrimaryKeyColumns() const override;
+	virtual std::vector<std::shared_ptr<const ibBackendQueryColumn>> GetPrimaryKeyColumns() const override;
 	virtual ibQueryRamTable ComputeRows(const std::vector<ibQueryCondition>& extra) const override;
 
 private:

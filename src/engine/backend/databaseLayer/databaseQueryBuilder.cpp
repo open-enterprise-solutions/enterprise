@@ -968,7 +968,7 @@ bool       ibQueryResult::IsResultNull(const ibString& name)                    
 // the statement's WITH before the select is written (Render). A walk over the whole tree, operands and
 // subqueries included: a declaration left behind here would leave its name read and never declared. One name
 // is declared once — two conditions that need the same walk share it.
-static void CollectDeclared(const ibQueryRel* rel, std::vector<ibQueryCte>& out);
+static void CollectDeclared(const ibQueryRelPtr& rel, std::vector<ibQueryCte>& out);
 
 static void CollectDeclared(const ibQueryExprPtr& expr, std::vector<ibQueryCte>& out)
 {
@@ -976,7 +976,7 @@ static void CollectDeclared(const ibQueryExprPtr& expr, std::vector<ibQueryCte>&
 		return;
 	if (expr->m_with && expr->m_with->m_query
 	    && std::none_of(out.begin(), out.end(), [&expr](const ibQueryCte& c) { return c.m_name == expr->m_with->m_name; })) {
-		CollectDeclared(expr->m_with->m_query.get(), out);   // what it reads, first
+		CollectDeclared(expr->m_with->m_query, out);   // what it reads, first
 		out.push_back(*expr->m_with);
 	}
 	CollectDeclared(expr->m_lhs, out);
@@ -994,10 +994,10 @@ static void CollectDeclared(const ibQueryExprPtr& expr, std::vector<ibQueryCte>&
 		for (const ibQuerySortKey& key : expr->m_over->m_orderBy)
 			CollectDeclared(key.m_expr, out);
 	}
-	CollectDeclared(expr->m_subquery.get(), out);
+	CollectDeclared(expr->m_subquery, out);
 }
 
-static void CollectDeclared(const ibQueryRel* rel, std::vector<ibQueryCte>& out)
+static void CollectDeclared(const ibQueryRelPtr& rel, std::vector<ibQueryCte>& out)
 {
 	if (rel == nullptr)
 		return;
@@ -1010,8 +1010,8 @@ static void CollectDeclared(const ibQueryRel* rel, std::vector<ibQueryCte>& out)
 	for (const ibQueryExprPtr& key : rel->m_groupKeys)
 		CollectDeclared(key, out);
 	CollectDeclared(rel->m_having, out);
-	CollectDeclared(rel->m_input.get(), out);
-	CollectDeclared(rel->m_right.get(), out);
+	CollectDeclared(rel->m_input, out);
+	CollectDeclared(rel->m_right, out);
 }
 
 ibRenderedQuery ibQueryRenderer::Render(const ibQueryIR& ir)
@@ -1022,9 +1022,9 @@ ibRenderedQuery ibQueryRenderer::Render(const ibQueryIR& ir)
 	// ⭐ THE STATEMENT'S OWN NAMED QUERIES, AND THEN THOSE ITS CONDITIONS HANDED ALONG (ibQueryExpr::m_with) —
 	// declared together, ahead of the select, because an engine may not nest a WITH where it is used.
 	std::vector<ibQueryCte> declared(ir.m_with.begin(), ir.m_with.end());
-	CollectDeclared(ir.m_root.get(), declared);
+	CollectDeclared(ir.m_root, declared);
 	for (const ibQueryCte& cte : ir.m_with)
-		CollectDeclared(cte.m_query.get(), declared);
+		CollectDeclared(cte.m_query, declared);
 	const bool recursive = std::any_of(declared.begin(), declared.end(), [](const ibQueryCte& c) { return c.m_recursive; });
 	if (recursive && !m_dialect.m_features.m_recursiveCte)
 		ibBackendQueryException::Throw(ibBackendQueryException::Kind::UnsupportedNode,
@@ -1044,7 +1044,7 @@ ibRenderedQuery ibQueryRenderer::Render(const ibQueryIR& ir)
 			ibBackendQueryException::Throw(ibBackendQueryException::Kind::UnsupportedNode,
 				_("This database cannot read a named query (WITH ...): write it as a nested source instead"));
 		with += with.IsEmpty() ? ibT("WITH ") : ibT(", ");
-		with += QuoteIdent(cte.m_name) + ibT(" AS (") + RenderSelect(cte.m_query.get()) + ibT(")");
+		with += QuoteIdent(cte.m_name) + ibT(" AS (") + RenderSelect(cte.m_query) + ibT(")");
 	}
 	// ONE `RECURSIVE` FOR THE WHOLE LIST — said once, before the first name, and the ordinary named queries
 	// stand beside the recursive ones.
@@ -1053,7 +1053,7 @@ ibRenderedQuery ibQueryRenderer::Render(const ibQueryIR& ir)
 	if (!with.IsEmpty())
 		with += ibT(" ");
 
-	m_out.m_sql = with + RenderSelect(ir.m_root.get());
+	m_out.m_sql = with + RenderSelect(ir.m_root);
 	// Pessimistic row lock — appended to the TOP-level SELECT only (subqueries render through
 	// RenderSelect above and must NOT carry it). The dialect owns the clause + its emptiness.
 	if (ir.m_lockForUpdate && !m_dialect.m_rowLockSuffix.empty()) {
@@ -1076,19 +1076,19 @@ ibRenderedQuery ibQueryRenderer::Render(const ibQueryIR& ir)
 // Flatten a relation chain (Filter/Project/Sort/Limit/Aggregate over a Scan/Join/
 // Subquery source) into ONE SELECT, appending its bind params to m_out in placeholder
 // order. Recursive: a Subquery FROM source renders its own SELECT back through here.
-ibString ibQueryRenderer::RenderSelect(const ibQueryRel* root)
+ibString ibQueryRenderer::RenderSelect(const ibQueryRelPtr& root)
 {
 	// Set operations are a SELECT-level combinator, not a linear chain — render the
 	// two members and splice (left before right keeps the bind plan in order). For an
 	// ORDER BY / LIMIT over a union, wrap the union in ibSubquery (SQL needs it too).
 	if (root && (root->m_kind == ibQueryRelKind::Union || root->m_kind == ibQueryRelKind::UnionAll)) {
-		const ibString l = RenderSelect(root->m_input.get());
-		const ibString r = RenderSelect(root->m_right.get());
+		const ibString l = RenderSelect(root->m_input);
+		const ibString r = RenderSelect(root->m_right);
 		return l + (root->m_kind == ibQueryRelKind::UnionAll ? ibT(" UNION ALL ") : ibT(" UNION ")) + r;
 	}
 
 	// --- flatten the linear chain ----------------------------------------
-	const ibQueryRel*            source = nullptr;   // FROM source: Scan / Join / Subquery
+	ibQueryRelPtr                source;             // FROM source: Scan / Join / Subquery
 	std::vector<ibQueryExprPtr>  predicates;
 	std::vector<ibQueryProjItem> projection;
 	std::vector<ibQueryExprPtr>  groupKeys;
@@ -1097,7 +1097,7 @@ ibString ibQueryRenderer::RenderSelect(const ibQueryRel* root)
 	bool hasLimit = false, distinct = false, rollup = false;
 	long limitCount = -1, limitOffset = 0;
 
-	const ibQueryRel* node = root;
+	ibQueryRelPtr node = root;
 	while (node != nullptr) {
 		switch (node->m_kind) {
 		case ibQueryRelKind::Scan:
@@ -1108,33 +1108,33 @@ ibString ibQueryRenderer::RenderSelect(const ibQueryRel* root)
 			break;
 		case ibQueryRelKind::Filter:
 			if (node->m_predicate) predicates.push_back(node->m_predicate);
-			node = node->m_input.get();
+			node = node->m_input;
 			break;
 		case ibQueryRelKind::Aggregate:
 			if (projection.empty()) projection = node->m_projection;
 			if (groupKeys.empty())  groupKeys  = node->m_groupKeys;
 			if (!having)            having     = node->m_having;
 			rollup = rollup || node->m_rollup;
-			node = node->m_input.get();
+			node = node->m_input;
 			break;
 		case ibQueryRelKind::Project:
 			if (projection.empty()) projection = node->m_projection;
-			node = node->m_input.get();
+			node = node->m_input;
 			break;
 		case ibQueryRelKind::Sort:
 			if (sortKeys.empty()) sortKeys = node->m_sortKeys;
-			node = node->m_input.get();
+			node = node->m_input;
 			break;
 		case ibQueryRelKind::Limit:
 			if (!hasLimit) { hasLimit = true; limitCount = node->m_limitCount; limitOffset = node->m_limitOffset; }
-			node = node->m_input.get();
+			node = node->m_input;
 			break;
 		case ibQueryRelKind::Distinct:
 			distinct = true;
-			node = node->m_input.get();
+			node = node->m_input;
 			break;
 		default:
-			node = node->m_input.get();
+			node = node->m_input;
 			break;
 		}
 	}
@@ -1333,7 +1333,7 @@ ibString ibQueryRenderer::RenderExpr(const ibQueryExprPtr& expr)
 		if (expr->m_subquery) {
 			const ibString lhs = RenderExpr(expr->m_lhs);
 			return ibT("(") + lhs + (expr->m_negated ? ibT(" NOT IN (") : ibT(" IN ("))
-				+ RenderSelect(expr->m_subquery.get()) + ibT("))");
+				+ RenderSelect(expr->m_subquery) + ibT("))");
 		}
 		// Empty list = constant predicate; lhs not evaluated (so no stray bind).
 		if (expr->m_args.empty())
@@ -1367,7 +1367,7 @@ ibString ibQueryRenderer::RenderExpr(const ibQueryExprPtr& expr)
 		// A CORRELATED subquery test: the subquery renders its own SELECT (its binds land in placeholder
 		// order right here) and references the outer write row's columns. `[NOT] EXISTS ( … )`.
 		return (expr->m_negated ? ibT("(NOT EXISTS (") : ibT("(EXISTS ("))
-		     + RenderSelect(expr->m_subquery.get()) + ibT("))");
+		     + RenderSelect(expr->m_subquery) + ibT("))");
 
 	// ⭐ THE CALENDAR CALLS — one shape, four dictionaries. Each looks its unit up in the map that
 	// belongs to the operation and fills the template's NAMED placeholders. A unit the engine has no
@@ -1562,7 +1562,7 @@ ibString ibQueryRenderer::JoinTypeText(ibQueryJoinType type)
 // FROM source — a Scan (table name) or a Join-tree (rendered recursively). The
 // ON predicate's bind params are pushed here, before the WHERE's, matching
 // their left-to-right position in the finished SQL.
-ibString ibQueryRenderer::RenderSource(const ibQueryRel* rel)
+ibString ibQueryRenderer::RenderSource(const ibQueryRelPtr& rel)
 {
 	if (rel == nullptr) return ibString();
 
@@ -1574,15 +1574,15 @@ ibString ibQueryRenderer::RenderSource(const ibQueryRel* rel)
 	case ibQueryRelKind::Subquery:
 		// ( SELECT ... ) AS alias — the inner relation renders its own SELECT, its
 		// bind params landing in the plan at the FROM position (before the WHERE).
-		return ibT("(") + RenderSelect(rel->m_input.get()) + ibT(") AS ") + AliasIdent(rel->m_alias);
+		return ibT("(") + RenderSelect(rel->m_input) + ibT(") AS ") + AliasIdent(rel->m_alias);
 	case ibQueryRelKind::Join: {
 		// Same operand-sequencing rule as BinOp: RenderSource / RenderExpr push
 		// bind params as a side effect, so left source → right source → ON
 		// predicate must be rendered in that order (operator+ does not sequence
 		// its operands; MSVC evaluates right-to-left). Otherwise nested-join ON
 		// params land in the plan out of placeholder order.
-		const ibString left  = RenderSource(rel->m_input.get());
-		const ibString right = RenderSource(rel->m_right.get());
+		const ibString left  = RenderSource(rel->m_input);
+		const ibString right = RenderSource(rel->m_right);
 		const ibString on    = RenderExpr(rel->m_joinPredicate);
 		return left + ibT(" ") + JoinTypeText(rel->m_joinType) + ibT(" ")
 		     + right + ibT(" ON ") + on;
@@ -1590,7 +1590,7 @@ ibString ibQueryRenderer::RenderSource(const ibQueryRel* rel)
 	default:
 		// A wrapping rel (Filter/Project/...) is never a FROM source in
 		// well-formed IR; fall through to its input defensively.
-		return RenderSource(rel->m_input.get());
+		return RenderSource(rel->m_input);
 	}
 }
 
@@ -1864,7 +1864,7 @@ ibRenderedQuery ibQueryRenderer::RenderDML(const ibDmlStatement& dml)
 				}
 				sql += ibT(")");
 			}
-			sql += ibT(" ") + RenderSelect(dml.m_selectSource.get());
+			sql += ibT(" ") + RenderSelect(dml.m_selectSource);
 			break;
 		}
 		// SEVERAL ROWS ON AN ENGINE THAT HAS NO MULTI-ROW VALUES — the same rows, a different spelling.

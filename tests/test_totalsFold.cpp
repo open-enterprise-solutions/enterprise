@@ -1,5 +1,5 @@
 // =============================================================================
-// THE SHARD FOLD — ibDerivedState::Collapse, run against a live engine (in-memory SQLite).
+// THE SHARD FOLD — ibDerivedState::Collapse, run against a live Firebird.
 //
 // A split totals table keeps one key in several rows, one per writing connection, and the fold moves them
 // back into one. It moves figures between rows; it must never change one. On 2026-09-26 it did: a ledger
@@ -12,13 +12,22 @@
 // The table keeps the two spellings apart - the trigger matches a key field by field - and the fold now
 // works where the trigger works: on the physical fields, one row named by all of them. The register below
 // is declared by ContributeTables exactly as a configuration declares one; only the split is set here.
+//
+// Firebird, not SQLite: the fold is one MERGE (ibFoldShards), and an engine that never splits — SQLite has no
+// connection to hash — has nothing to fold and no MERGE to fold with. The rows sit in the period that closed
+// last, the one a pass folds. SKIPS when no Firebird client can be loaded; CI's Firebird job runs `Firebird*`
+// with the kit beside the binary, and fails on a skip.
 // =============================================================================
 
 #include <gtest/gtest.h>
 #include <wx/string.h>   // wxT, wxString - the engine's headers include no wx
 
+#include <wx/filefn.h>
+#include <wx/filename.h>
 #include <wx/init.h>
+#include <wx/stdpaths.h>
 
+#include <chrono>
 #include <vector>
 
 #include "backend/appData.h"
@@ -28,7 +37,7 @@
 #include "backend/databaseLayer/connectionHolder.h"
 #include "backend/databaseLayer/databaseMaterializeBuilder.h"   // ShardColumnName
 #include "backend/databaseLayer/databaseQueryBuilder.h"
-#include "backend/databaseLayer/sqllite/sqliteDatabaseLayer.h"
+#include "backend/databaseLayer/firebird/firebirdDatabaseLayer.h"
 #include "backend/metadataConfiguration.h"
 #include "backend/metaCollection/metaObject.h"
 #include "backend/metaCollection/dimension/metaDimensionObject.h"
@@ -41,9 +50,10 @@
 
 namespace {
 
-struct TotalsFoldFix : ::testing::Test {
-	wxInitializer                          m_wxInit;   // wxBase up before appData
-	std::shared_ptr<ibDatabaseLayerSQLite> db;
+struct FirebirdTotalsFold : ::testing::Test {
+	wxInitializer                            m_wxInit;   // wxBase up before appData
+	std::shared_ptr<ibDatabaseLayerFirebird> db;         // shared_ptr: a statement holds a weak_ptr back to its layer
+	ibString                                 dbPath;
 	bool ready = false;
 
 	// An accumulation register with one dimension - a reference to a catalog, the shape the ledger's currency
@@ -53,6 +63,7 @@ struct TotalsFoldFix : ::testing::Test {
 	ibSchemaSnapshot            snapshot;
 	ibSchemaTable               totals;
 	std::vector<ibColumnSlot>   keySlots;   // the dimension's physical fields: tag, table, key
+	ibDateTime                  period;     // the stored unit's period that closed last — the one a pass folds
 
 	void SetUp() override {
 		if (!m_wxInit.IsOk())
@@ -62,9 +73,21 @@ struct TotalsFoldFix : ::testing::Test {
 		ibConnectionPool* pool = ibApplicationInstance::GetConnectionPool();
 		if (pool == nullptr)
 			GTEST_SKIP() << "no connection pool after CreateAppDataEnv";
-		db = std::make_shared<ibDatabaseLayerSQLite>();
-		if (!db->Open(wxT(":memory:")))
-			GTEST_SKIP() << "in-memory SQLite open failed";
+		// The constructor loads fbclient and raises where there is none, so it is inside the guard — and only the
+		// question "can this machine reach a Firebird" is.
+		const auto now = std::chrono::steady_clock::now().time_since_epoch().count();
+		dbPath = wxFileName(wxStandardPaths::Get().GetTempDir(),
+			ibString::Format(ibT("oes_fb_fold_%lld.fdb"), (long long)now)).GetFullPath();
+		try {
+			db = std::make_shared<ibDatabaseLayerFirebird>();
+			db->SetUser(ibT("SYSDBA"));
+			db->SetPassword(ibT("masterkey"));
+			if (!db->Open(dbPath))
+				db.reset();
+		}
+		catch (...) { db.reset(); }
+		if (!db)
+			GTEST_SKIP() << "no Firebird client on this machine (" << dbPath.ToStdString() << ")";
 		pool->Init(db, /*maxSize=*/1, /*minIdle=*/0);
 
 		ibValueMetaObjectConfiguration* root = cfg.GetCommonMetaObject();
@@ -90,17 +113,20 @@ struct TotalsFoldFix : ::testing::Test {
 		ASSERT_NE(totals.m_queryable, nullptr);
 		ASSERT_EQ(totals.m_materialize.m_keys.size(), 1u) << "one dimension, one key column";
 		totals.m_materialize.Split(4);
+		const ibTotalsPeriod unit = totals.m_materialize.m_periodUnits.front();
+		period = ibDateTime::Now().BeginOfPeriod(unit).AddPeriods(unit, -1);
 
-		keySlots = DescribeColumnLayout(totals.m_materialize.m_keys.front());
+		keySlots = DescribeColumnLayout(*totals.m_materialize.m_keys.front());
 		ASSERT_EQ(keySlots.size(), 3u) << "a single-target reference spreads as _TYPE + _RTRef + _RRRef";
 
 		// The table itself, from the declaration's own fields.
 		std::vector<ibDdlColumn> columns;
-		const auto add = [&columns](const ibBackendQueryColumn* col) {
-			for (const ibColumnSlot& slot : DescribeColumnLayout(col))
+		const auto add = [&columns](const std::shared_ptr<const ibBackendQueryColumn>& col) {
+			for (const ibColumnSlot& slot : DescribeColumnLayout(*col))
 				columns.push_back(ibDdlColumn{ slot.m_name, slot.m_type });
 		};
 		add(totals.m_queryable->ResolveColumnByName(totals.m_materialize.m_periodColumn));
+		add(totals.m_queryable->ResolveColumnByName(totals.m_materialize.m_periodUnitColumn));   // a row names its unit too
 		add(totals.m_materialize.m_keys.front());
 		columns.push_back(ibDdlColumn{ ShardColumnName(), ibTypeInteger() });
 		for (const ibSchemaDelta& d : totals.m_materialize.m_deltas)
@@ -111,6 +137,9 @@ struct TotalsFoldFix : ::testing::Test {
 	void TearDown() override {
 		if (ibApplicationInstance::Get() != nullptr)
 			ibApplicationInstance::DestroyAppDataEnv();
+		if (db && db->IsOpen()) db->Close();
+		db.reset();
+		if (!dbPath.IsEmpty() && wxFileExists(dbPath)) wxRemoveFile(dbPath);
 	}
 
 	static ibDatabaseQueryBuilder Holder() { return ibDatabaseQueryBuilder(ibConnectionPool::ThreadHolder()); }
@@ -128,7 +157,9 @@ struct TotalsFoldFix : ::testing::Test {
 	void Put(bool typed, long long shard, long figure) {
 		static const unsigned char zeroKey[16] = {};
 		std::vector<ibDmlAssign> row;
-		row.push_back({ totals.m_materialize.m_periodColumn, ibConst(ibValue(ibDateTime(2020, 1, 1))) });
+		row.push_back({ totals.m_materialize.m_periodColumn, ibConst(ibValue(period)) });
+		row.push_back({ totals.m_materialize.m_periodUnitColumn,
+			ibConst(ibValue(static_cast<int>(totals.m_materialize.m_periodUnits.front()))) });
 		row.push_back({ Field(ibColumnRole::Discriminator),
 			ibConst(ibValue(static_cast<int>(typed ? ibFieldTypes_Reference : ibFieldTypes_Empty))) });
 		row.push_back({ Field(ibColumnRole::ReferenceType),
@@ -167,7 +198,7 @@ const ibFieldTypes kUntagged = ibFieldTypes_Empty;
 // The key of the 2026-09-26 journal, row for row: 5 600 in all, 0 under the untagged spelling and 5 600
 // under the empty reference. Folded, each spelling is ONE row holding its own figure, and the key still
 // holds 5 600.
-TEST_F(TotalsFoldFix, AnEmptyKeyStoredTwoWaysFoldsEachWayIntoOneRowAndKeepsItsFigure)
+TEST_F(FirebirdTotalsFold, AnEmptyKeyStoredTwoWaysFoldsEachWayIntoOneRowAndKeepsItsFigure)
 {
 	if (!ready) return;
 	Put(/*typed*/ false, 0, 5600);
@@ -188,7 +219,7 @@ TEST_F(TotalsFoldFix, AnEmptyKeyStoredTwoWaysFoldsEachWayIntoOneRowAndKeepsItsFi
 // Two physical rows under one key AND one shard - the trigger never makes that, but a NULL in the key is a row
 // a unique index does not guard - and no WHERE can name one of them. The key is left as it is: a split key
 // reads exactly right, and the next pass costs nothing more.
-TEST_F(TotalsFoldFix, TwoRowsUnderOneShardLeaveTheKeyAsItIs)
+TEST_F(FirebirdTotalsFold, TwoRowsUnderOneShardLeaveTheKeyAsItIs)
 {
 	if (!ready) return;
 	Put(/*typed*/ false, 1, 100);

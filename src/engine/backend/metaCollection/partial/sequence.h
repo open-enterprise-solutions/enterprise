@@ -90,7 +90,7 @@ class BACKEND_API ibSequenceQueryable : public ibRegisterDataQueryable {
 public:
 	explicit ibSequenceQueryable(const ibValueMetaObjectSequence* seq);
 
-	virtual std::vector<const ibBackendQueryColumn*> GetQueryColumns() const override;
+	virtual std::vector<std::shared_ptr<const ibBackendQueryColumn>> GetQueryColumns() const override;
 
 private:
 	const ibValueMetaObjectSequence* m_seq;
@@ -106,7 +106,7 @@ class BACKEND_API ibSequenceBordersQueryable : public ibBackendQueryable {
 public:
 	explicit ibSequenceBordersQueryable(const ibValueMetaObjectSequence* seq) : m_seq(seq) {}
 
-	virtual std::vector<const ibBackendQueryColumn*> GetQueryColumns() const override;
+	virtual std::vector<std::shared_ptr<const ibBackendQueryColumn>> GetQueryColumns() const override;
 	virtual ibString GetQueryTableName() const override;
 	virtual const ibUniqueKey& GetQueryTableGuid() const override;
 	virtual ibString GetQueryName() const override;
@@ -114,7 +114,7 @@ public:
 	virtual const ibMetaData* GetMetaData() const override;
 	// ONE BORDER PER KEY — the dimensions are the whole key, and the moment is what the row says
 	// about it. (A sequence with no dimensions has exactly one row.)
-	virtual std::vector<const ibBackendQueryColumn*> GetPrimaryKeyColumns() const override;
+	virtual std::vector<std::shared_ptr<const ibBackendQueryColumn>> GetPrimaryKeyColumns() const override;
 
 private:
 	const ibValueMetaObjectSequence* m_seq;
@@ -122,15 +122,17 @@ private:
 
 class ibSequenceBordersSourceDescriptor : public ibQueryableSourceDescriptor {
 public:
-	explicit ibSequenceBordersSourceDescriptor(ibValueMetaObjectSequence* meta) : m_meta(meta), m_queryable(meta) {}
+	explicit ibSequenceBordersSourceDescriptor(ibValueMetaObjectSequence* meta) : m_meta(meta), m_queryable(std::make_shared<ibSequenceBordersQueryable>(meta)) {}
 	ibString GetNamespace() const override;
 	ibString GetName() const override;
-	const ibBackendQueryable* CreateQueryable(ibValue** paParams, long lSizeArray) override;
-	const ibSequenceBordersQueryable* GetQueryable() const { return &m_queryable; }
-	std::vector<const ibBackendQueryColumn*> GetQueryColumns(const std::vector<ibValue>& args) const override;
+	std::shared_ptr<const ibBackendQueryable> CreateQueryable(ibValue** paParams, long lSizeArray,
+	                                                          const std::vector<ibQueryPredicatePtr>& conditions,
+	                                                          const ibQueryReadColumns& read) override;
+	std::shared_ptr<const ibSequenceBordersQueryable> GetQueryable() const { return m_queryable; }
+	std::vector<std::shared_ptr<const ibBackendQueryColumn>> GetQueryColumns(const std::vector<ibValue>& args) const override;
 private:
-	ibValueMetaObjectSequence* m_meta;
-	ibSequenceBordersQueryable m_queryable;
+	ibValueMetaObjectSequence*                  m_meta;
+	std::shared_ptr<ibSequenceBordersQueryable> m_queryable;
 };
 
 class BACKEND_API ibValueMetaObjectSequence : public ibValueMetaObjectRegisterData {
@@ -229,7 +231,7 @@ public:
 		return ibString::Format(ibT("%s%i_%s"), GetClassName(), GetMetaID(), m_borders->GetName());
 	}
 	const ibValueMetaObjectRegisterTotals* GetBordersObject() const { return m_borders; }
-	const ibSequenceBordersQueryable* GetBordersQueryable() const { return m_bordersSource.GetQueryable(); }
+	std::shared_ptr<const ibSequenceBordersQueryable> GetBordersQueryable() const { return m_bordersSource.GetQueryable(); }
 	bool HasBorders() const { return m_borders->GetMetaID() != 0; }
 
 	virtual void ContributeTables(class ibSchemaSnapshot& out) const override;
@@ -239,7 +241,7 @@ public:
 	virtual bool OnAfterCloseMetaObject() override;
 
 	// …and everything that reads the registrations meets the surface that knows about the moment.
-	virtual const ibBackendQueryable* GetQueryable() const override { return m_ownQueryable.GetQueryable(); }
+	virtual std::shared_ptr<const ibBackendQueryable> GetQueryable() const override { return m_sequenceSource.GetQueryable(); }
 
 	// ⭐ AND THE FIELD TREE OFFERS IT TOO. What a query can RESOLVE and what the tree SHOWS are two
 	// readers of one surface; taken from anywhere else they drift, and the moment was already
@@ -292,7 +294,7 @@ public:
 	// recorder by the document's moment column. Declared the way the document declares its own: a special
 	// type, registered like an attribute, stored nowhere.
 	ibValueMetaObjectAttributePredefined* GetPointInTime() const { return m_propertyAttributePointInTime->GetMetaObject(); }
-	const ibRecorderQueryable::ibBackendColumnPointInTime* GetMomentColumn() const { return &m_momentColumn; }
+	std::shared_ptr<const ibRecorderQueryable::ibBackendColumnPointInTime> GetMomentColumn() const { return m_momentColumn; }
 
 private:
 	ibPropertyCategory* m_categoryData = ibPropertyObject::CreatePropertyCategory(ibT("Data"), _("Data"));
@@ -326,13 +328,14 @@ private:
 	// caller (Max, 2026-09-18: "the moment has to be in the selection itself"). The document's own moment
 	// column, given the sequence's three attributes: the PointInTime that names and types it, and the
 	// period and the recorder it lies in.
-	ibRecorderQueryable::ibBackendColumnPointInTime m_momentColumn{ GetPointInTime(), GetRegisterPeriod(), GetRegisterRecorder() };
+	std::shared_ptr<ibRecorderQueryable::ibBackendColumnPointInTime> m_momentColumn =
+		std::make_shared<ibRecorderQueryable::ibBackendColumnPointInTime>(GetPointInTime(), GetRegisterPeriod(), GetRegisterRecorder());
 
 	// ⭐ THIS KIND'S OWN READING SURFACE, and the reason it exists: only the descriptor of the kind
 	// that BUILDS a column can hand it out. Registered in OnAfterRun after the register base has
 	// registered its own — sources are kept by (namespace, name), so the later registration is the
 	// one that answers, and every reader then meets the surface that knows about the moment.
-	ibMetaCommandDescriptor<ibSequenceQueryable, ibValueMetaObjectSequence> m_ownQueryable{ this };
+	ibMetaCommandDescriptor<ibSequenceQueryable, ibValueMetaObjectSequence> m_sequenceSource{ this };
 
 	ibValuePtr<ibValueMetaObjectRegisterTotals> m_borders{
 		CreateMetaObjectAndSetParent<ibValueMetaObjectRegisterTotals>(ibT("Borders"), _("Borders")) };

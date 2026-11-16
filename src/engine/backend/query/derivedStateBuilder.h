@@ -66,36 +66,29 @@ BACKEND_API int RegenerateAll(const ibSchemaSnapshot& target, ibDatabaseConnecti
 // what is already there: same numbers, fewer rows, source never touched. That is why it is cheap
 // enough to run on a schedule Regenerate could never afford.
 //
-// TAKES NO BOUNDARY, deliberately. It folds everything strictly before the CURRENT stored period,
-// and it works that frontier out itself from the two facts already in hand: the table's own stored
-// unit (declared beside it) and the clock. So there is no "how far have we folded" state to keep
-// anywhere, nothing for a caller to advance, and nothing to get out of step — a caller says "fold",
-// not "fold up to here". A table with no period dimension has no frontier and is folded whole.
+// TAKES NO BOUNDARY, deliberately. It folds, per stored unit, the period that closed LAST — yesterday,
+// last month, last year — and works it out itself from the unit and the clock. A period splits while it is
+// current; the first pass after it closes folds it, and later passes find it folded. So a pass costs one
+// period per unit and never the history behind it, there is no "how far have we folded" state to keep
+// anywhere, and a caller says "fold", not "fold up to here". A posting dated back into an older period may
+// split a key there again: it reads exactly right, one row wider, and the recompute packs it. A table with
+// no period dimension has no frontier and is folded whole.
 //
-// SAFE UNDER LIVE WRITERS — it moves figures with in-statement arithmetic (AddValue: `col = col +
-// delta`) instead of rewriting them, so a movement landing mid-fold COMPOSES with the adjustment
-// rather than being overwritten by it. A drained row is dropped only when it is provably empty
-// (every accumulating column = 0); one that took a delta mid-fold is left alone and the next pass
-// folds it. Nothing here needs a quiet range, a lock, or an exclusive window — which is what makes
-// it runnable in the background while people work.
+// THE DATABASE FOLDS, one SLICE (a unit and a period) in one MERGE (ibFoldShards): nothing is read into the
+// process, so a slice of any size costs the engine's work and no memory here. The fold that bucketed every
+// (key, shard) in a map died at 3.5 GB on four million rows (2026-11-16).
 //
-// ⚠ ONE FOLD PER TABLE AT A TIME. Concurrent WRITERS are fine — that is the point above — but two
-// folds racing on the SAME table are not, and the reason is worth stating because it nearly works:
-// both would move the same figure twice, which the sum survives (it only skews the distribution, and
-// the next pass straightens it), until one of them drains a row to zero and DELETES it. The other is
-// still holding that row's value: its addition to the absorber lands, its subtraction hits nothing,
-// and the key's total grows by exactly that amount. Silently, and only on that stray interleaving.
-// Different tables are fully independent; parallelism within one buys nothing anyway, since the
-// contention is the rows, not the CPU. Serialise at the JOB level (the lease primitive the cluster
-// already uses to pin background work to one node).
+// SAFE UNDER LIVE WRITERS — each slice is ONE SNAPSHOT TRANSACTION THAT NEVER WAITS. A row a writer changed
+// meanwhile, or holds, is a conflict, and the slice rolls back and folds on the next pass; a row a writer
+// inserted meanwhile is invisible and stays. So the cleanup always yields: a
+// posting waits on it at most one slice long, and it never waits on a posting. Nothing here needs a quiet
+// range or an exclusive window — which is what makes it runnable in the background while people work. Two
+// folds on one table meet the same way, as a conflict on the second.
 //
-// TRANSACTIONS ARE ITS OWN, one per KEY — the finest scope that is still atomic (the add / subtract
-// pair) and therefore the shortest a row lock can be held. Wider would mean a posting waiting on a
-// sweep that has nothing to do with it. A caller that already has a transaction open keeps its own
-// boundary: nested scopes collapse onto one.
+// A caller that already has a transaction open keeps its own boundary: nested scopes collapse onto one.
 //
 // What the caller still owes is DOSAGE — this reads and writes the same database everyone else is
-// using. Pace the passes; each key is self-contained, so stopping between them is always safe.
+// using. Pace the passes; each slice is self-contained, so stopping between them is always safe.
 //
 // Not running it at all is also safe: shards read exactly right at any distribution, so a skipped
 // fold costs a slightly wider read and nothing else. This is housekeeping, never correctness.
@@ -136,6 +129,9 @@ BACKEND_API int CollapseAll(const ibSchemaSnapshot& target, ibDatabaseConnection
 // grouping — so a full check is never the cheap half of a decision, it IS the expensive half. A
 // single elapsed period is a day's worth of movements, and a discrepancy anywhere usually shows up in
 // the recent ones first.
+//
+// A table that keeps several units checks each coarser one too: its last elapsed period against the stored
+// grain's rows of the same span — the rows it is the sum of, not the movements again.
 //
 // A non-zero answer does NOT say what to do: the fix is Regenerate, but deciding to run it against a
 // large register is a scheduling question, not this function's. It reports; the caller decides.

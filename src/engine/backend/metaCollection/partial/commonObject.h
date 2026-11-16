@@ -399,7 +399,7 @@ private:
 // ==========================================================================
 class BACKEND_API ibBackendColumnSortOrder : public ibBackendQueryColumn {
 public:
-	using Parts = std::function<std::vector<const ibBackendQueryColumn*>()>;
+	using Parts = std::function<std::vector<std::shared_ptr<const ibBackendQueryColumn>>()>;
 
 	ibBackendColumnSortOrder(const ibValueMetaObjectRecordDataRef* owner, Parts parts)
 		: m_owner(owner), m_parts(std::move(parts)) {}
@@ -448,15 +448,15 @@ template <typename TMeta>
 class ibRecordQueryable : public ibBackendQueryable {
 public:
 	explicit ibRecordQueryable(const TMeta* meta)
-		: m_meta(meta), m_sortOrder(meta, [this] { return GetSortParts(); }) {}
+		: m_meta(meta), m_sortOrder(std::make_shared<ibBackendColumnSortOrder>(meta, [this] { return GetSortParts(); })) {}
 
 	// All generic attributes (predefined + common + plain), each by its QUERY FACE — an attribute is not a query
 	// column, it HOLDS one, because the two live under different ownerships (docs/private/ownership-authority.md).
 	// Drives SELECT *, and a name (ResolveColumnByName searches this list, then the sort order). ⭐ THE OBJECT'S
 	// OWN LIST ANSWERS IT: a clsid list of its own drifted the moment a chart of accounts grew ACCOUNTING KINDS —
 	// in the schema, the form and `SELECT *`, and refused by name: "unknown attribute 'Quantitative'" (2026-09-16).
-	virtual std::vector<const ibBackendQueryColumn*> GetQueryColumns() const override {
-		std::vector<const ibBackendQueryColumn*> cols;
+	virtual std::vector<std::shared_ptr<const ibBackendQueryColumn>> GetQueryColumns() const override {
+		std::vector<std::shared_ptr<const ibBackendQueryColumn>> cols;
 		for (const ibValueMetaObjectAttributeBase* a : m_meta->GetGenericAttributeArrayObject())
 			if (a != nullptr) cols.push_back(a->GetQueryColumn());
 		return cols;
@@ -472,7 +472,7 @@ public:
 	// authority, and the last was retired for pretending to be a second: it answered with a SORT whose
 	// tail happened to be the key, so a source sorting by something else first handed a number to
 	// everyone who wanted identity. (docs/private/query-language-arc.md §22.1)
-	virtual std::vector<const ibBackendQueryColumn*> GetPrimaryKeyColumns() const override {
+	virtual std::vector<std::shared_ptr<const ibBackendQueryColumn>> GetPrimaryKeyColumns() const override {
 		const ibValueMetaObjectAttributeBase* refAttr = m_meta->GetDataReference();
 		if (refAttr == nullptr)
 			return {};
@@ -482,7 +482,7 @@ public:
 
 	// The metaobject knows whether it is hierarchical — its CLASS is the signal. Virtual dispatch down
 	// its own inheritance, no cast; null on a flat ref.
-	virtual const ibBackendQueryColumn* GetHierarchyColumn() const override { return m_meta->GetHierarchyColumn(); }
+	virtual std::shared_ptr<const ibBackendQueryColumn> GetHierarchyColumn() const override { return m_meta->GetHierarchyColumn(); }
 
 	// Same route: the ARRANGEMENT travels whole, and each caller reads off it the distinction it needs
 	// instead of being handed one boolean per question.
@@ -494,14 +494,14 @@ public:
 
 	// …and what its rows are ordered by — the column above (ibBackendColumnSortOrder), which a sort by a
 	// reference to this kind sorts by.
-	virtual const ibBackendQueryColumn* GetSortColumn() const override { return &m_sortOrder; }
+	virtual std::shared_ptr<const ibBackendQueryColumn> GetSortColumn() const override { return m_sortOrder; }
 
 	// ⭐ …LYING IN THESE COLUMNS, its parts — each kind's own statement of its order, and the only one. By default
 	// what a row is PRESENTED by, then its reference: the kind's template already says it (GenerateDataDesc), so a
 	// catalog sorts by its Description and a chart of accounts by its Code with nothing said of their own. A document
 	// and an enumeration are ordered otherwise and say so (ibRecorderQueryable, ibEnumQueryable).
-	virtual std::vector<const ibBackendQueryColumn*> GetSortParts() const {
-		std::vector<const ibBackendQueryColumn*> parts;
+	virtual std::vector<std::shared_ptr<const ibBackendQueryColumn>> GetSortParts() const {
+		std::vector<std::shared_ptr<const ibBackendQueryColumn>> parts;
 		typename TMeta::ibDataDescParameter presented;
 		if (m_meta->GenerateDataDesc(presented) && presented.m_first != nullptr)
 			parts.push_back(presented.m_first->GetQueryColumn());
@@ -512,7 +512,7 @@ public:
 
 protected:
 	const TMeta* m_meta;   // …already the type a specialisation needs — no second pointer beside it
-	ibBackendColumnSortOrder m_sortOrder;   // after m_meta: made with it
+	std::shared_ptr<ibBackendColumnSortOrder> m_sortOrder;   // after m_meta: made with it
 };
 
 // (NO ALIAS FOR ONE SPECIALISATION. Each KIND names the one it reads through, spelled out where it
@@ -560,7 +560,7 @@ public:
 	// and leaving an inherited implementation in place would let a kind forget to declare one and read
 	// through somebody else's without a word. Declared abstract, the compiler asks the question at the
 	// only moment it is cheap to answer.
-	virtual const ibBackendQueryable* GetQueryable() const override = 0;
+	virtual std::shared_ptr<const ibBackendQueryable> GetQueryable() const override = 0;
 
 	// ⚠ THE FRIEND IS THE TEMPLATE, not a class — `friend class ibRecordQueryable` would declare a NEW
 	// class of that name beside the template (C2371, and 2800 errors behind it).
@@ -597,7 +597,7 @@ public:
 	// through VIRTUAL dispatch (no cast: the metaobject's CLASS is the "hierarchical" indicator — a catalog / chart
 	// IS hierarchical by being one). Null on a flat reference; a HIERARCHY overrides it with its parent attribute.
 	// (Folder column removed — folders are a creation-time sort/filter setting, not a structural column.)
-	virtual const ibBackendQueryColumn* GetHierarchyColumn() const { return nullptr; }
+	virtual std::shared_ptr<const ibBackendQueryColumn> GetHierarchyColumn() const { return nullptr; }
 
 	// THE ARRANGEMENT — one value, four states (queryable.h). A metaobject that cannot have a parent
 	// answers `eNone`; the hierarchy class overrides with what its property says. The record queryable
@@ -791,7 +791,7 @@ class BACKEND_API ibValueMetaObjectRecordDataEnumRef;
 class BACKEND_API ibEnumQueryable : public ibRecordQueryable<ibValueMetaObjectRecordDataEnumRef> {
 public:
 	explicit ibEnumQueryable(const ibValueMetaObjectRecordDataEnumRef* meta);
-	virtual std::vector<const ibBackendQueryColumn*> GetSortParts() const override;
+	virtual std::vector<std::shared_ptr<const ibBackendQueryColumn>> GetSortParts() const override;
 };
 
 //meta object with reference - for enumeration
@@ -814,7 +814,7 @@ public:
 
 	// THE ENUMERATION'S PAIR — its own queryable, typed to this kind, registered by this kind
 	// (OnAfterRun / OnBeforeClose in the .cpp).
-	virtual const ibBackendQueryable* GetQueryable() const override { return m_queryable.GetQueryable(); }
+	virtual std::shared_ptr<const ibBackendQueryable> GetQueryable() const override { return m_queryable.GetQueryable(); }
 
 	//descriptions...
 	//
@@ -1098,11 +1098,11 @@ public:
 
 	// The attributes, then the moment — a query naming it resolves to the column that knows how to build
 	// it. (Bodies in commonObjectMetaQuery.cpp.)
-	virtual std::vector<const ibBackendQueryColumn*> GetQueryColumns() const override;
+	virtual std::vector<std::shared_ptr<const ibBackendQueryColumn>> GetQueryColumns() const override;
 
 	// ⭐ …AND ITS RECORDS ARE ORDERED BY THE MOMENT: the date, then the reference standing at it — the moment's own
 	// two columns (Max, 2026-09-29: "the reference takes all its sorting from the point in time").
-	virtual std::vector<const ibBackendQueryColumn*> GetSortParts() const override;
+	virtual std::vector<std::shared_ptr<const ibBackendQueryColumn>> GetSortParts() const override;
 
 	// ⭐⭐ THE MOMENT AS A COLUMN — and it reads ITSELF.
 	//
@@ -1157,7 +1157,7 @@ public:
 	};
 
 private:
-	ibBackendColumnPointInTime m_momentColumn;   // the document's: its PointInTime, in its Date and its Reference
+	std::shared_ptr<ibBackendColumnPointInTime> m_momentColumn;   // the document's: its PointInTime, in its Date and its Reference
 };
 
 // ==========================================================================
@@ -1310,7 +1310,7 @@ protected:
 	ibMetaCommandDescriptor<class ibRecorderQueryable, ibValueMetaObjectRecordDataRecorderRef> m_queryable{ this };
 
 public:
-	virtual const ibBackendQueryable* GetQueryable() const override { return m_queryable.GetQueryable(); }
+	virtual std::shared_ptr<const ibBackendQueryable> GetQueryable() const override { return m_queryable.GetQueryable(); }
 };
 
 //meta object with reference and deletion mark and group/object type and predefined values
@@ -1409,7 +1409,7 @@ class BACKEND_API ibValueMetaObjectRecordDataHierarchyMutableRef :
 
 	// A catalog / chart IS hierarchical by its class — it returns its parent attribute (the record queryable forwards
 	// here, no cast). Body in commonObjectMetaQuery.cpp (attribute→column upcast complete there).
-	virtual const ibBackendQueryColumn* GetHierarchyColumn() const override;
+	virtual std::shared_ptr<const ibBackendQueryColumn> GetHierarchyColumn() const override;
 
 	// CATALOG variant — reference / deletion mark / data version / predefined name / parent / is-folder hidden;
 	// code / description / attributes visible. Fills its columns directly. Body in commonObjectAction.cpp.
@@ -1621,7 +1621,7 @@ protected:
 	ibMetaCommandDescriptor<ibRecordQueryable<ibValueMetaObjectRecordDataHierarchyMutableRef>, ibValueMetaObjectRecordDataHierarchyMutableRef> m_queryable{ this };
 
 public:
-	virtual const ibBackendQueryable* GetQueryable() const override { return m_queryable.GetQueryable(); }
+	virtual std::shared_ptr<const ibBackendQueryable> GetQueryable() const override { return m_queryable.GetQueryable(); }
 };
 
 // ibRegisterDataQueryable — the L3 queryable for the register family (its main
@@ -1631,11 +1631,11 @@ public:
 class BACKEND_API ibRegisterDataQueryable : public ibBackendQueryable {
 public:
 	explicit ibRegisterDataQueryable(const ibValueMetaObjectRegisterData* meta) : m_meta(meta) {}
-	virtual std::vector<const ibBackendQueryColumn*> GetQueryColumns() const override;   // identity (recorder+line / period) ++ dims ++ generic attrs
+	virtual std::vector<std::shared_ptr<const ibBackendQueryColumn>> GetQueryColumns() const override;   // identity (recorder+line / period) ++ dims ++ generic attrs
 	virtual ibString GetQueryTableName() const override;
 	virtual ibString GetQueryName() const override;   // the metaobject's user-facing name (change ledger)
 	virtual const ibMetaData* GetMetaData() const override;                      // metadata context for column-based value reads
-	virtual std::vector<const ibBackendQueryColumn*> GetPrimaryKeyColumns() const override;   // recorder+line+period / period+dims
+	virtual std::vector<std::shared_ptr<const ibBackendQueryColumn>> GetPrimaryKeyColumns() const override;   // recorder+line+period / period+dims
 	virtual const ibValueMetaObjectGenericData* GetSourceMetaObject() const override;   // = m_meta (body in .cpp — the metaobject type is complete there)
 private:
 	const ibValueMetaObjectRegisterData* m_meta;
@@ -1671,7 +1671,7 @@ public:
 	// ibRegisterDataQueryable (a friend) owns the navigation, from this register's
 	// primitives (FindAnyAttributeObjectByFilter / GetPhysicalTableName / HasRecorder /
 	// HasPeriod / GetRegister* / GetGenericDimensionArrayObject). Slices are separate.
-	virtual const ibBackendQueryable* GetQueryable() const override { return m_queryable.GetQueryable(); }
+	virtual std::shared_ptr<const ibBackendQueryable> GetQueryable() const override { return m_queryable.GetQueryable(); }
 	friend class ibRegisterDataQueryable;
 
 	// L4 query-source registration — the register IS a queryable holder; it passes `this`.
@@ -2714,7 +2714,9 @@ class BACKEND_API ibValueRecordDataObjectRecorderRef : public ibValueRecordDataO
 	// fans Write/Delete across all of them.
 	class BACKEND_API ibRecorderRegister : public ibValueDynamicMembers {
 	public:
-		void CreateRecordSet();
+		// …made for a recorder written for the first time (`newRecorder`), its sets know nothing is stored under it
+		// (ibValueRecordSetObject::ibSelection::NothingStored): a posting of a new document asks the base nothing about its movements.
+		void CreateRecordSet(bool newRecorder = false);
 		bool WriteRecordSet();
 		// …every set's stored movements: the document is deleted, and they go with it whatever it says.
 		bool DeleteRecordSet();
@@ -3106,7 +3108,7 @@ public:
 	//copy new object — born owned (ibValueMetaObjectRecordData::CreateRecordDataObjectValue says why)
 	virtual ibValuePtr<ibValueRecordSetObject> CopyRegisterValue();
 
-	bool Selected() const { return m_selected; }
+	bool Selected() const { return m_selected == ibSelection::Selected; }
 	void Read() { ReadData(); }
 
 	// Helper + NVI DoGetPMethods come from ibValueDynamicMembers (via the table
@@ -3117,7 +3119,7 @@ public:
 	virtual void SourceDecrRef() { ibValue::DecrRef(); }
 
 	//check is empty object?
-	virtual bool IsEmpty() const override { return !m_selected; }
+	virtual bool IsEmpty() const override { return !Selected(); }
 
 	//set modify
 	virtual void Modify(bool mod) { m_objModified = mod; }
@@ -3158,6 +3160,7 @@ public:
 	virtual const ibTranslateString& GetFormat(const ibMetaID& id) const override;
 	virtual ibSelectMode GetSelectMode(const ibMetaID& id) const override;
 	virtual ibValue AdjustValue(const ibMetaID& id, const ibValue& value) const override;
+	virtual std::vector<ibMetaID> GetLinked(const ibMetaID& edited) const override;   // one walk over its column map
 #pragma endregion
 
 	virtual bool AutoCreateColumn() const { return false; }
@@ -3280,9 +3283,17 @@ protected:
 protected:
 
 	friend class ibValueRecordManagerObject;
+	friend class ibValueRecordDataObjectRecorderRef::ibRecorderRegister;   // says NothingStored for a new recorder
+
+	// WHAT THE BASE HOLDS UNDER THE KEY, as far as the set knows. NotSelected — a fresh set, or one deleted: its write
+	// locks the key and clears it. Selected — read, or written. ⭐ NothingStored — the set of a recorder written for the
+	// first time (ibRecorderRegister::CreateRecordSet): nothing is stored under the key, and the recorder's own row lock
+	// stands for its lines, so its write neither locks them (LockByKeys) nor deletes them; written, it knows Selected or
+	// NotSelected like any set.
+	enum class ibSelection { NotSelected, NothingStored, Selected };
 
 	bool m_objModified;
-	bool m_selected;
+	ibSelection m_selected;
 
 	ibRowMetaValues m_keyValues;
 
@@ -3317,7 +3328,7 @@ public:
 	bool InitializeObject(const ibValueRecordManagerObject* source = nullptr, bool newRecord = false);
 	bool InitializeObject(const ibUniqueKeyPair& key);
 
-	virtual bool IsNewObject() const override { return !m_recordSet->m_selected; }
+	virtual bool IsNewObject() const override { return !m_recordSet->Selected(); }
 
 	//get metaData from object
 	virtual const ibValueMetaObjectGenericData* GetSourceMetaObject() const final { return GetMetaObject(); }

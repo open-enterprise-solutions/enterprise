@@ -63,6 +63,20 @@ ibValue ibValueTabularSectionDataObjectBase::AdjustValue(const ibMetaID& id, con
 	return attribute != nullptr ? attribute->AdjustValue(value) : ibTabularDataObject::AdjustValue(id, value);
 }
 
+// The columns linked to `edited`, in one walk over the section's own column map — as the record set answers
+// (ibValueRecordSetObject::GetLinked): taken by index, every column was a walk of this map from its start.
+std::vector<ibMetaID> ibValueTabularSectionDataObjectBase::GetLinked(const ibMetaID& edited) const
+{
+	std::vector<ibMetaID> linked;
+	const ibSourceDescription changed(edited);
+	for (const auto& column : m_recordColumnCollection->m_listColumnInfo) {
+		const ibMetaID& id = column.first;
+		if (id != edited && ibChoiceLinkResolver::IsLinked(GetTypeLink(id), GetChoiceParameters(id), changed))
+			linked.push_back(id);
+	}
+	return linked;
+}
+
 ibDataViewItem ibValueTabularSectionDataObjectBase::FindRowValue(const ibValue& varValue, const ibString& colName) const
 {
 	ibValueModelColumnCollection::ibValueModelColumnInfo* colInfo = m_recordColumnCollection->GetColumnByName(colName);

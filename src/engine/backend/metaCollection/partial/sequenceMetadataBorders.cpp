@@ -21,11 +21,11 @@ ibSequenceQueryable::ibSequenceQueryable(const ibValueMetaObjectSequence* seq)
 // name carry it. Its name is the predefined attribute's — that attribute TYPES it and stores nothing,
 // and it is in no list (FillArrayObjectByPredefinedAttribute), so the name finds this column and not a
 // column over fields no table has.
-std::vector<const ibBackendQueryColumn*> ibSequenceQueryable::GetQueryColumns() const
+std::vector<std::shared_ptr<const ibBackendQueryColumn>> ibSequenceQueryable::GetQueryColumns() const
 {
-	std::vector<const ibBackendQueryColumn*> columns = ibRegisterDataQueryable::GetQueryColumns();
-	if (const ibBackendQueryColumn* moment = m_seq->GetMomentColumn())
-		columns.push_back(moment);
+	std::vector<std::shared_ptr<const ibBackendQueryColumn>> columns = ibRegisterDataQueryable::GetQueryColumns();
+	if (std::shared_ptr<const ibBackendQueryColumn> moment = m_seq->GetMomentColumn())
+		columns.push_back(std::move(moment));
 	return columns;
 }
 
@@ -56,9 +56,9 @@ void ibValueMetaObjectSequence::FillSourceExplorer(ibSourceDataObject::ibSourceE
 
 // The key, and what the key has got to. A border says the moment the way a registration says it: the
 // recorder and its date, because the border IS the last registration everything is done up to.
-std::vector<const ibBackendQueryColumn*> ibSequenceBordersQueryable::GetQueryColumns() const
+std::vector<std::shared_ptr<const ibBackendQueryColumn>> ibSequenceBordersQueryable::GetQueryColumns() const
 {
-	std::vector<const ibBackendQueryColumn*> columns;
+	std::vector<std::shared_ptr<const ibBackendQueryColumn>> columns;
 	for (const ibValueMetaObjectDimension* dimension : m_seq->GetDimensionArrayObject())
 		columns.push_back(dimension->GetQueryColumn());
 	columns.push_back(m_seq->GetRegisterRecorder()->GetQueryColumn());
@@ -69,9 +69,9 @@ std::vector<const ibBackendQueryColumn*> ibSequenceBordersQueryable::GetQueryCol
 	return columns;
 }
 
-std::vector<const ibBackendQueryColumn*> ibSequenceBordersQueryable::GetPrimaryKeyColumns() const
+std::vector<std::shared_ptr<const ibBackendQueryColumn>> ibSequenceBordersQueryable::GetPrimaryKeyColumns() const
 {
-	std::vector<const ibBackendQueryColumn*> key;
+	std::vector<std::shared_ptr<const ibBackendQueryColumn>> key;
 	for (const ibValueMetaObjectDimension* dimension : m_seq->GetDimensionArrayObject())
 		key.push_back(dimension->GetQueryColumn());
 	return key;   // a sequence with no dimensions keeps exactly one border
@@ -97,14 +97,16 @@ ibString ibSequenceBordersSourceDescriptor::GetName() const
 	return m_meta->GetName() + ibT(".") + m_meta->GetBordersObject()->GetName();
 }
 
-const ibBackendQueryable* ibSequenceBordersSourceDescriptor::CreateQueryable(ibValue** /*paParams*/, long /*lSizeArray*/)
+// No arguments: a border is a fact of the key, not a reading as of a moment — its own queryable, shared without owning.
+std::shared_ptr<const ibBackendQueryable> ibSequenceBordersSourceDescriptor::CreateQueryable(ibValue** /*paParams*/, long /*lSizeArray*/,
+	const std::vector<ibQueryPredicatePtr>& /*conditions*/, const ibQueryReadColumns& /*read*/)
 {
-	return &m_queryable;   // no arguments: a border is a fact of the key, not a reading as of a moment
+	return m_queryable;
 }
 
-std::vector<const ibBackendQueryColumn*> ibSequenceBordersSourceDescriptor::GetQueryColumns(const std::vector<ibValue>& /*args*/) const
+std::vector<std::shared_ptr<const ibBackendQueryColumn>> ibSequenceBordersSourceDescriptor::GetQueryColumns(const std::vector<ibValue>& /*args*/) const
 {
-	return m_queryable.GetQueryColumns();
+	return m_queryable->GetQueryColumns();
 }
 
 //***********************************************************************
@@ -118,9 +120,9 @@ void ibValueMetaObjectSequence::ContributeTables(ibSchemaSnapshot& out) const
 	// under, and what stands between the border and it).
 	ibValueMetaObjectRegisterData::ContributeTables(out);
 	{
-		const ibBackendQueryable* own = GetQueryable();
+		const std::shared_ptr<const ibBackendQueryable> own = GetQueryable();
 		ibSchemaTable& t = out.Shared(own->GetQueryTableId(), own->GetQueryTableName());
-		std::vector<const ibBackendQueryColumn*> byKey;
+		std::vector<std::shared_ptr<const ibBackendQueryColumn>> byKey;
 		for (const ibValueMetaObjectDimension* dimension : GetDimensionArrayObject())
 			byKey.push_back(dimension->GetQueryColumn());
 		// The period CLOSES the index whatever is cut: what stands between the border and a registration is a
@@ -130,9 +132,9 @@ void ibValueMetaObjectSequence::ContributeTables(ibSchemaSnapshot& out) const
 
 	// …and the borders, one row per key.
 	if (HasBorders()) {
-		const ibSequenceBordersQueryable* borders = GetBordersQueryable();
+		const std::shared_ptr<const ibSequenceBordersQueryable> borders = GetBordersQueryable();
 		ibSchemaTable& t = out.CreateSchemaTable(borders);
-		for (const ibBackendQueryColumn* column : borders->GetQueryColumns()) {
+		for (const std::shared_ptr<const ibBackendQueryColumn>& column : borders->GetQueryColumns()) {
 			// ⚠ A SYNTHETIC COLUMN IS STORED NOWHERE. The moment is the period and the recorder, and
 			// asking for a column of its own asks for their fields a second time — which Firebird says
 			// plainly: "violation of PRIMARY or UNIQUE KEY … FLD…_D on SEQUENCE…_BORDERS" (2026-09-18).

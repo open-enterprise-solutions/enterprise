@@ -226,10 +226,10 @@ TEST(QueryL4Parser, LikeInBetweenIsNull)
 TEST(QueryL4Parser, NotInAndNotLike)
 {
 	auto sel = Parse(wxT("SELECT * FROM Catalog.X WHERE Code NOT IN (\"1\") AND Name NOT LIKE \"Z%\""));
-	std::vector<const ibQueryAstExpr*> leaves;
+	std::vector<ibQueryAstExprPtr> leaves;
 	std::function<void(const ibQueryAstExprPtr&)> walk = [&](const ibQueryAstExprPtr& n) {
 		if (n->m_kind == ibQueryAstExprKind::Logical && !n->m_isOr) { walk(n->m_lhs); walk(n->m_rhs); }
-		else leaves.push_back(n.get());
+		else leaves.push_back(n);
 	};
 	walk(sel->m_where);
 	ASSERT_EQ(leaves.size(), 2u);

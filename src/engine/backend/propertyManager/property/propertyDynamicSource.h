@@ -27,8 +27,8 @@ public:
 		: ibProperty(cat, name, label, helpString, new ibVariantDynamicSource()) {}
 
 	// The selected source queryable — data lives in the variant; the dynamic list reads it
-	// through here (facade). The setter stores it into the variant.
-	const ibBackendQueryable* GetQueryable() const {
+	// through here (facade), and holds it for as long as it reads. The setter stores it into the variant.
+	std::shared_ptr<const ibBackendQueryable> GetQueryable() const {
 		return get_cell_variant<ibVariantDynamicSource>()->GetQueryable();
 	}
 
@@ -37,7 +37,7 @@ public:
 	const ibQueryableSourceDescriptor* GetDescriptor() const {
 		return get_cell_variant<ibVariantDynamicSource>()->GetDescriptor();
 	}
-	void SetQueryable(const ibBackendQueryable* queryable) {
+	void SetQueryable(const std::shared_ptr<const ibBackendQueryable>& queryable) {
 		m_propValue = new ibVariantDynamicSource(queryable, m_owner);   // owner → re-resolve through ITS config factory
 	}
 

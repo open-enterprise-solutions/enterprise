@@ -29,7 +29,7 @@ private:
     mutable ibTypeDescription m_t;
 };
 
-ibQueryCondition Eq(const ibBackendQueryColumn* c) {
+ibQueryCondition Eq(const std::shared_ptr<const ibBackendQueryColumn>& c) {
     ibQueryCondition cond;            // no explicit op = equality
     cond.m_col   = c;
     cond.m_value = ibValue(ibNumber(1));
@@ -44,17 +44,17 @@ TEST(QueryPredicate, DefaultKindIsLeaf) {
 }
 
 TEST(QueryPredicate, LeafCarriesCondition) {
-    Col c(wxT("x"));
-    const ibQueryPredicatePtr p = ibQueryPredicate::Leaf(Eq(&c));
+    const auto c = std::make_shared<Col>(wxT("x"));
+    const ibQueryPredicatePtr p = ibQueryPredicate::Leaf(Eq(c));
     ASSERT_NE(p, nullptr);
     EXPECT_TRUE(p->m_kind == ibQueryPredicateKind::Leaf);
-    EXPECT_EQ(p->m_leaf.m_col, &c);
+    EXPECT_EQ(p->m_leaf.m_col, c);
 }
 
 TEST(QueryPredicate, AndComposesTwoChildren) {
-    Col c(wxT("x"));
-    const ibQueryPredicatePtr a = ibQueryPredicate::Leaf(Eq(&c));
-    const ibQueryPredicatePtr b = ibQueryPredicate::Leaf(Eq(&c));
+    const auto c = std::make_shared<Col>(wxT("x"));
+    const ibQueryPredicatePtr a = ibQueryPredicate::Leaf(Eq(c));
+    const ibQueryPredicatePtr b = ibQueryPredicate::Leaf(Eq(c));
     const ibQueryPredicatePtr p = ibQueryPredicate::Compose(ibQueryPredicateKind::And, a, b);
     EXPECT_TRUE(p->m_kind == ibQueryPredicateKind::And);
     ASSERT_EQ(p->m_children.size(), 2u);
@@ -63,16 +63,16 @@ TEST(QueryPredicate, AndComposesTwoChildren) {
 }
 
 TEST(QueryPredicate, OrComposesTwoChildren) {
-    Col c(wxT("x"));
+    const auto c = std::make_shared<Col>(wxT("x"));
     const ibQueryPredicatePtr p = ibQueryPredicate::Compose(
-        ibQueryPredicateKind::Or, ibQueryPredicate::Leaf(Eq(&c)), ibQueryPredicate::Leaf(Eq(&c)));
+        ibQueryPredicateKind::Or, ibQueryPredicate::Leaf(Eq(c)), ibQueryPredicate::Leaf(Eq(c)));
     EXPECT_TRUE(p->m_kind == ibQueryPredicateKind::Or);
     EXPECT_EQ(p->m_children.size(), 2u);
 }
 
 TEST(QueryPredicate, NotWrapsExactlyOneChild) {
-    Col c(wxT("x"));
-    const ibQueryPredicatePtr inner = ibQueryPredicate::Leaf(Eq(&c));
+    const auto c = std::make_shared<Col>(wxT("x"));
+    const ibQueryPredicatePtr inner = ibQueryPredicate::Leaf(Eq(c));
     const ibQueryPredicatePtr p = ibQueryPredicate::Not(inner);
     EXPECT_TRUE(p->m_kind == ibQueryPredicateKind::Not);
     ASSERT_EQ(p->m_children.size(), 1u);
@@ -80,12 +80,12 @@ TEST(QueryPredicate, NotWrapsExactlyOneChild) {
 }
 
 TEST(QueryPredicate, IsNullCarriesColumnAndNegation) {
-    Col c(wxT("x"));
-    const ibQueryPredicatePtr isNull = ibQueryPredicate::Null(&c, /*negated*/ false);
+    const auto c = std::make_shared<Col>(wxT("x"));
+    const ibQueryPredicatePtr isNull = ibQueryPredicate::Null(c, /*negated*/ false);
     EXPECT_TRUE(isNull->m_kind == ibQueryPredicateKind::IsNull);
-    EXPECT_EQ(isNull->m_col, &c);
+    EXPECT_EQ(isNull->m_col, c);
     EXPECT_FALSE(isNull->m_negated);
 
-    const ibQueryPredicatePtr isNotNull = ibQueryPredicate::Null(&c, /*negated*/ true);
+    const ibQueryPredicatePtr isNotNull = ibQueryPredicate::Null(c, /*negated*/ true);
     EXPECT_TRUE(isNotNull->m_negated);   // IS NOT NULL
 }

@@ -83,14 +83,14 @@ TEST(ColumnLayout, PersistedTypeTag_RoleTable)
 // the scaffold path (uuid / rowData) and the seed key resolution depend on it.
 TEST(ColumnLayout, RawColumn_SingleSlot)
 {
-	const ibBackendColumnRawDB col = ibBackendColumnRawDB::Guid(wxT("uuid"));
+	const std::shared_ptr<const ibBackendColumnRawDB> col = ibBackendColumnRawDB::Guid(wxT("uuid"));
 
-	const std::vector<ibColumnSlot> layout = DescribeColumnLayout(&col);
+	const std::vector<ibColumnSlot> layout = DescribeColumnLayout(*col);
 	ASSERT_EQ(layout.size(), 1u);
 	EXPECT_EQ(layout[0].m_name, wxT("uuid"));
 	EXPECT_EQ(layout[0].m_role, ibColumnRole::Raw);
 
-	const std::vector<ibString> fields = ColumnFieldNames(&col);
+	const std::vector<ibString> fields = ColumnFieldNames(*col);
 	ASSERT_EQ(fields.size(), 1u);
 	EXPECT_EQ(fields[0], wxT("uuid"));
 }

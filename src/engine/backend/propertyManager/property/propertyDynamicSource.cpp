@@ -25,8 +25,11 @@ static ibQueryableFactory* ibDynamicSourceFactory(const ibPropertyObject* owner)
 
 void ibPropertyDynamicSource::SetSource(const ibString& ns, const ibString& name)
 {
-	if (ibQueryableFactory* factory = ibDynamicSourceFactory(m_owner))
-		SetQueryable(factory->Resolve(ns, name));
+	if (ibQueryableFactory* factory = ibDynamicSourceFactory(m_owner)) {
+		ibQueryableSourceDescriptor* const descriptor = factory->FindDescriptor(ns, name);
+		const std::shared_ptr<const ibBackendQueryable> source = descriptor != nullptr ? descriptor->CreateQueryable(nullptr, 0) : nullptr;
+		SetTableId(source != nullptr ? (ibMetaID)source->GetQueryTableId() : ibNOT_FOUND);
+	}
 }
 
 // Value = the source's table id (a stable variable id, NOT text).
@@ -35,13 +38,15 @@ bool ibPropertyDynamicSource::SetDataValue(const ibValue& varPropVal)
 	ibQueryableFactory* factory = ibDynamicSourceFactory(m_owner);
 	if (factory == nullptr)
 		return false;
-	SetQueryable(factory->ResolveById((ibMetaID)varPropVal.GetInteger()));
-	return GetQueryable() != nullptr;
+	const ibMetaID tableId = (ibMetaID)varPropVal.GetInteger();
+	const bool resolved = factory->ResolveDescriptorById(tableId) != nullptr;   // a source answering to this very id
+	SetTableId(resolved ? tableId : ibNOT_FOUND);
+	return resolved;
 }
 
 bool ibPropertyDynamicSource::GetDataValue(ibValue& pvarPropVal) const
 {
-	const ibBackendQueryable* q = GetQueryable();
+	const std::shared_ptr<const ibBackendQueryable> q = GetQueryable();
 	pvarPropVal = ibValue(q != nullptr ? q->GetQueryTableId() : 0);
 	return true;
 }
@@ -90,7 +95,7 @@ bool ibPropertyDynamicSource::GetProtocolValue(ibDataNode& row, ibReader reader)
 	for (ibQueryableSourceDescriptor* const descriptor : factory->GetDescriptors()) {
 		if (descriptor == nullptr)
 			continue;
-		const ibBackendQueryable* const queryable = factory->Resolve(descriptor->GetNamespace(), descriptor->GetName());
+		const std::shared_ptr<const ibBackendQueryable> queryable = descriptor->CreateQueryable(nullptr, 0);
 		const ibMetaID tableId = queryable != nullptr ? queryable->GetQueryTableId() : 0;
 		if (tableId == 0 || tableId == ibNOT_FOUND)
 			continue;   // a source with no table id (temp, computed) cannot be stored

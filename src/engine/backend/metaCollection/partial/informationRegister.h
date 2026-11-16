@@ -33,18 +33,17 @@ public:
 		: m_reg(reg), m_suffix(suffix) {}
 	ibString GetNamespace() const override;
 	ibString GetName() const override;
-	const ibBackendQueryable* CreateQueryable(ibValue** paParams, long lSizeArray) override;
 	// ⭐ THE CONDITION IS CONSUMED — resolved against the register's own table (GetConditionScope) and applied
 	// while the slice is taken (ComputeSlice), not ANDed around the finished slice.
-	const ibBackendQueryable* CreateQueryable(ibValue** paParams, long lSizeArray,
-	                                          const std::vector<ibQueryPredicatePtr>& conditions,
-	                                          const ibQueryReadColumns& read) override;
-	const ibBackendQueryable* GetConditionScope() const override;
+	std::shared_ptr<const ibBackendQueryable> CreateQueryable(ibValue** paParams, long lSizeArray,
+	                                                          const std::vector<ibQueryPredicatePtr>& conditions,
+	                                                          const ibQueryReadColumns& read) override;
+	std::shared_ptr<const ibBackendQueryable> GetConditionScope() const override;
 	// WHAT COLUMNS A SLICE HAS, without running it. A slice REPORTS the register's own columns —
 	// its companion does not redirect navigation, unlike the accumulation register's views — so the
 	// answer is the register's, asked once and not restated here. Without this the base answers
 	// nothing and the slice stands in a catalogue as a leaf with no fields to select.
-	std::vector<const ibBackendQueryColumn*> GetQueryColumns(const std::vector<ibValue>& args) const override;
+	std::vector<std::shared_ptr<const ibBackendQueryColumn>> GetQueryColumns(const std::vector<ibValue>& args) const override;
 	// Slice(moment, condition). The condition may name ANYTHING the slice carries — unlike a
 	// balance, a slice folds nothing: it picks one row per key, and every column of that row is
 	// still a column, attributes included. So GetConditionColumns is left at the base, which
@@ -53,7 +52,7 @@ public:
 private:
 	ibValueMetaObjectInformationRegister* m_reg;
 	ibString                              m_suffix;
-	// (no companion member: the base owns what MakeCompanion builds — queryableFactory.h)
+	// (no reading member: the asker owns what CreateQueryable makes — queryableFactory.h)
 };
 
 class ibValueMetaObjectInformationRegister : public ibValueMetaObjectRegisterData {
@@ -334,9 +333,9 @@ public:
 	// be any of these, and the key is a different list in each. Writing one of them flat is how two
 	// documents' rows fold into one, or how every moment of a periodic register collapses onto the
 	// last: valid SQL, wrong data, nothing to notice.
-	virtual std::vector<const ibBackendQueryColumn*> GetPrimaryKeyColumns() const override
+	virtual std::vector<std::shared_ptr<const ibBackendQueryColumn>> GetPrimaryKeyColumns() const override
 	{
-		std::vector<const ibBackendQueryColumn*> cols;
+		std::vector<std::shared_ptr<const ibBackendQueryColumn>> cols;
 
 		if (m_reg == nullptr)
 			return cols;
@@ -397,19 +396,13 @@ ibString ibInfoRegisterSliceDescriptor<TSlice>::GetName() const
 }
 
 template <typename TSlice>
-const ibBackendQueryable* ibInfoRegisterSliceDescriptor<TSlice>::CreateQueryable(ibValue** paParams, long lSizeArray)
-{
-	return CreateQueryable(paParams, lSizeArray, {}, ibQueryReadColumns());
-}
-
-template <typename TSlice>
-const ibBackendQueryable* ibInfoRegisterSliceDescriptor<TSlice>::GetConditionScope() const
+std::shared_ptr<const ibBackendQueryable> ibInfoRegisterSliceDescriptor<TSlice>::GetConditionScope() const
 {
 	return m_reg != nullptr ? m_reg->GetQueryable() : nullptr;
 }
 
 template <typename TSlice>
-const ibBackendQueryable* ibInfoRegisterSliceDescriptor<TSlice>::CreateQueryable(ibValue** paParams, long lSizeArray,
+std::shared_ptr<const ibBackendQueryable> ibInfoRegisterSliceDescriptor<TSlice>::CreateQueryable(ibValue** paParams, long lSizeArray,
 	const std::vector<ibQueryPredicatePtr>& conditions, const ibQueryReadColumns& /*read*/)
 {
 	// build the call-scoped slice companion from the params (as-of period, dimension filter) and own it
@@ -419,16 +412,16 @@ const ibBackendQueryable* ibInfoRegisterSliceDescriptor<TSlice>::CreateQueryable
 	const ibQueryPredicatePtr filter = ibRegBothConditions(
 		ibRegFilterPredicate(m_reg, (lSizeArray > 1 && paParams != nullptr && paParams[1] != nullptr) ? *paParams[1] : ibValue()),
 		ibRegConsumedCondition(conditions, 1));
-	// Built and KEPT by the base — the same call gives the same object back, and two slices as of two
-	// different dates in one query both stay alive (queryableFactory.h, MakeCompanion).
-	return this->template MakeCompanionFor<TSlice>(conditions, paParams, lSizeArray, m_reg, period, filter);
+	// This call's own reading — two slices as of two dates in one query are two readings, each held by the
+	// query that reads it (queryableFactory.h).
+	return std::make_shared<TSlice>(m_reg, period, filter);
 }
 
 template <typename TSlice>
-std::vector<const ibBackendQueryColumn*> ibInfoRegisterSliceDescriptor<TSlice>::GetQueryColumns(const std::vector<ibValue>& /*args*/) const
+std::vector<std::shared_ptr<const ibBackendQueryColumn>> ibInfoRegisterSliceDescriptor<TSlice>::GetQueryColumns(const std::vector<ibValue>& /*args*/) const
 {
-	const ibBackendQueryable* queryable = m_reg != nullptr ? m_reg->GetQueryable() : nullptr;
-	return queryable != nullptr ? queryable->GetQueryColumns() : std::vector<const ibBackendQueryColumn*>();
+	const std::shared_ptr<const ibBackendQueryable> queryable = m_reg != nullptr ? m_reg->GetQueryable() : nullptr;
+	return queryable != nullptr ? queryable->GetQueryColumns() : std::vector<std::shared_ptr<const ibBackendQueryColumn>>();
 }
 
 template <typename TSlice>

@@ -51,7 +51,7 @@ namespace {
 //  ibValueDataComposition
 // ===========================================================================
 
-ibValueDataComposition::ibValueDataComposition(const ibBackendQueryable* queryable)
+ibValueDataComposition::ibValueDataComposition(const std::shared_ptr<const ibBackendQueryable>& queryable)
 	: ibValueSpreadsheetModel(), ibSourceDataObject()
 {
 	// ⚠ THE SOURCE'S OWN CONFIGURATION FIRST, the ACTIVE one only if there is no source to ask. A
@@ -117,18 +117,19 @@ ibValueDataComposition::~ibValueDataComposition() { CancelFetch(); }
 
 void ibValueDataComposition::SetSource(const ibString& ns, const ibString& name)
 {
-	const ibBackendQueryable* before = GetSourceQueryable();
+	const ibMetaID before = m_propertySource->GetTableId();
 	m_propertySource->SetSource(ns, name);   // resolves the queryable INTO the property variant
-	if (GetSourceQueryable() != before) {    // only on a REAL change — re-picking the SAME source keeps the settings
+	if (m_propertySource->GetTableId() != before) {   // only on a REAL change — re-picking the SAME source keeps the settings
 		RebuildSource();
 		OnChildChanged();
 	}
 }
 
-void ibValueDataComposition::SetSourceQueryable(const ibBackendQueryable* queryable)
+void ibValueDataComposition::SetSourceQueryable(const std::shared_ptr<const ibBackendQueryable>& queryable)
 {
-	if (queryable == GetSourceQueryable())   // same source — leave columns / composer / settings untouched
-		return;
+	// The same source is the same table, never the same pointer (queryableFactory.h).
+	if ((queryable != nullptr ? (ibMetaID)queryable->GetQueryTableId() : ibNOT_FOUND) == m_propertySource->GetTableId())
+		return;   // same source — leave columns / composer / settings untouched
 	m_propertySource->SetQueryable(queryable);   // the queryable lives in the property, not here
 	RebuildSource();
 	OnChildChanged();
@@ -195,7 +196,7 @@ void ibValueDataComposition::RebuildSource()
 	// metaobject knows its config (the edited one in the designer, the copy's on a copy). Held so
 	// GetSourceMetaData stays TERMINAL: it never re-resolves the queryable through the attach owner,
 	// which walks the form and would come back here.
-	const ibBackendQueryable* queryable = GetSourceQueryable();
+	const std::shared_ptr<const ibBackendQueryable> queryable = GetSourceQueryable();
 	if (queryable != nullptr) {
 		if (const ibValueMetaObjectGenericData* mo = queryable->GetSourceMetaObject())
 			m_sourceMetaData = mo->GetMetaData();
@@ -919,7 +920,7 @@ void ibValueDataComposition::CancelFetch()
 
 const ibUniqueKey& ibValueDataComposition::GetGuid() const
 {
-	if (const ibBackendQueryable* q = GetSourceQueryable())
+	if (const std::shared_ptr<const ibBackendQueryable> q = GetSourceQueryable())
 		return q->GetQueryTableGuid();   // the key its source's metaobject keeps
 
 	static const ibUniqueKey none;   // no source picked yet
@@ -1033,7 +1034,7 @@ const ibSourceExplorer* ibValueDataComposition::GetSourceExplorer() const
 
 ibString ibValueDataComposition::GetSourceCaption() const
 {
-	if (const ibBackendQueryable* q = GetSourceQueryable())
+	if (const std::shared_ptr<const ibBackendQueryable> q = GetSourceQueryable())
 		return GetSourceMetaObject() ?
 			ibMetaTypeCaption(GetSourceMetaObject()->GetClassType()) + ibT(": ") + GetSourceMetaObject()->GetSynonym() : q->GetQueryName();
 

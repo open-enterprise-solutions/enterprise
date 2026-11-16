@@ -286,7 +286,7 @@ ibValueRecordDataObjectRef::ibNumberSeriesKey ibValueRecordDataObjectDocument::N
 
 	const ibValueMetaObjectAttributePredefined* dateAttribute = meta->GetDocumentDate();
 	if (dateAttribute != nullptr && dateAttribute->GetQueryColumn() != nullptr) {
-		for (const ibColumnSlot& slot : DescribeColumnLayout(dateAttribute->GetQueryColumn())) {
+		for (const ibColumnSlot& slot : DescribeColumnLayout(*dateAttribute->GetQueryColumn())) {
 			if (slot.m_role == ibColumnRole::Date) {
 				key.m_dateField = slot.m_name;
 				break;

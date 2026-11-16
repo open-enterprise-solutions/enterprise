@@ -72,7 +72,7 @@ public:
 	// A column that resolves to no target, or a target with no parent column (a FLAT list — the one
 	// arrangement that records no parent), leaves every named value standing for itself. That is a
 	// degradation and not a failure: «in hierarchy» over a flat list IS the list.
-	ibQueryHierarchyScope(const ibBackendQueryable* source, const ibBackendQueryColumn* column,
+	ibQueryHierarchyScope(const std::shared_ptr<const ibBackendQueryable>& source, const std::shared_ptr<const ibBackendQueryColumn>& column,
 	                      const std::vector<ibValue>& named, ibQueryDimUnfold unfold);
 	// …and by the field's TYPE, where a holder of fields has the type with no column behind it — a setting's field,
 	// walked by its type (ibQueryConstructorModel::WalkFrom) and read against rows in memory. The same metadata
@@ -99,7 +99,7 @@ public:
 
 private:
 	// Both doors land here once the targets are known — the column's, or the type's.
-	ibQueryHierarchyScope(const std::vector<const ibBackendQueryable*>& targets,
+	ibQueryHierarchyScope(const std::vector<std::shared_ptr<const ibBackendQueryable>>& targets,
 	                      const std::vector<ibValue>& named, ibQueryDimUnfold unfold);
 
 	ibQueryDimUnfold     m_unfold = ibQueryDimUnfold::Elements;   // the word it was asked with

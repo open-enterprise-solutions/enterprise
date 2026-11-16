@@ -39,9 +39,9 @@
 // without one (registers / Data.From collections) stream rows as STRUCTURES
 // of their columns — same chain, different row shape.
 //
-// Data.From(table) wraps an in-memory value table through ibTempTableQueryable;
-// the wrapper is OWNED by this value (m_ownedSource) — metaobject sources stay
-// non-owning (the metadata owns them).
+// Data.From(table) wraps an in-memory value table through ibTempTableQueryable. The
+// wrapper and a metaobject's own table are held alike (m_queryable) — every chain link
+// shares the one reading.
 //
 // See docs/private/query-language-arc.md §23.5 (L4-2) and the naming canon notes.
 
@@ -71,26 +71,23 @@ inline void ibBindLinqMethods(ibValue::ibMemberTable& helper, const ibValue*)
 
 class BACKEND_API ibValueQueryable : public ibValueStaticMembers<&ibBindLinqMethods>
 {
-	const ibBackendQueryable* m_queryable = nullptr;
-	ibString                  m_sourceName;          // "Catalogs.Goods" — watch / diagnostics
-	ibDataQueryBuilder        m_builder;             // accumulated door verbs (From set at vend)
-	long                      m_take = 0;            // Take(n) — page limit at execute (0 = all)
+	std::shared_ptr<const ibBackendQueryable>   m_queryable;
+	ibString                                    m_sourceName;   // "Catalogs.Goods" — watch / diagnostics
+	ibDataQueryBuilder                          m_builder;      // accumulated door verbs (From set at vend)
+	long                                        m_take = 0;     // Take(n) — page limit at execute (0 = all)
 	// Select(x => x.Field) — a single-column SCALAR projection: the read yields THIS column's
 	// value per row instead of the whole row. null = full row (reference / structure).
 	// A plain column reads by pointer (m_projectCol); a DOT-WALK leaf (x => x.Ref.Field) is
 	// projected onto the builder as SelectPath(...) AS m_projectAlias and read back by that name.
-	const ibBackendQueryColumn* m_projectCol = nullptr;
-	ibString                    m_projectAlias;
-	std::vector<ibString>     m_ops;                 // folded-op labels — the watch string only
-	// Owned wrapper for a NON-metaobject source (Data.From over a value table) —
-	// shared across chain links (every link reads the same materialised relation).
-	std::shared_ptr<const ibBackendQueryable> m_ownedSource;
+	std::shared_ptr<const ibBackendQueryColumn> m_projectCol;
+	ibString                                    m_projectAlias;
+	std::vector<ibString>                       m_ops;          // folded-op labels — the watch string only
 
 	// Fresh chain link: same source, the caller mutates the copy's builder/take.
 	ibValueQueryable* CloneLink() const;
 
 	// The row-reference column (single-key sources) — null for registers / constants.
-	const ibBackendQueryColumn* RowReferenceColumn() const;
+	std::shared_ptr<const ibBackendQueryColumn> RowReferenceColumn() const;
 
 	// Execute the accumulated query (honouring m_take) — the implicit execution
 	// every terminal / iteration funnels through.
@@ -121,12 +118,11 @@ class BACKEND_API ibValueQueryable : public ibValueStaticMembers<&ibBindLinqMeth
 
 public:
 	ibValueQueryable() : ibValueStaticMembers(ibValueTypes::TYPE_VALUE) {}
-	ibValueQueryable(const ibBackendQueryable* queryable, const ibString& sourceName);
-	// Data.From — an OWNED in-memory source (the wrapper dies with the last chain link).
-	ibValueQueryable(std::shared_ptr<const ibBackendQueryable> owned, const ibString& sourceName);
+	// A metaobject's table or Data.From's wrapper — held, so it lives while the last chain link does.
+	ibValueQueryable(const std::shared_ptr<const ibBackendQueryable>& queryable, const ibString& sourceName);
 
-	const ibBackendQueryable* GetQueryable()  const { return m_queryable; }
-	const ibString&           GetSourceName() const { return m_sourceName; }
+	std::shared_ptr<const ibBackendQueryable> GetQueryable()  const { return m_queryable; }
+	const ibString&                           GetSourceName() const { return m_sourceName; }
 
 	// RLS semi-join — the inner's ACCUMULATED WHERE (its own .Where() folds, incl. dot-walk + captured
 	// runtime Params). Lets `restrict s in Source join a in Data.Registers.X.Where(…) on …` render as a
@@ -139,7 +135,7 @@ public:
 	// own Join/Union is NOT in GetWherePredicate, so dropping to that path would WEAKEN the restriction (a
 	// leak). A multi-source inner must go the full-subquery / temp path instead. (GetSources walks the tree.)
 	bool IsSingleSource() const {
-		std::vector<const ibBackendQueryable*> s;
+		std::vector<std::shared_ptr<const ibBackendQueryable>> s;
 		m_builder.GetSources(s);
 		return s.size() <= 1;
 	}
@@ -211,13 +207,13 @@ public:
 // policy — unreachable elsewhere.
 class BACKEND_API ibValueQueryDecorator : public ibValue
 {
-	ibDataQueryBuilder*       m_target = nullptr;   // the query being decorated — Join/Where fold IN HERE
-	const ibBackendQueryable* m_source = nullptr;   // the table being decorated (the .From leaf)
-	ibString                  m_sourceName;
+	ibDataQueryBuilder*                       m_target = nullptr;   // the query being decorated — Join/Where fold IN HERE
+	std::shared_ptr<const ibBackendQueryable> m_source;             // the table being decorated (the .From leaf)
+	ibString                                  m_sourceName;
 
 public:
 	ibValueQueryDecorator() : ibValue(ibValueTypes::TYPE_VALUE) {}
-	ibValueQueryDecorator(ibDataQueryBuilder* target, const ibBackendQueryable* source, const ibString& sourceName);
+	ibValueQueryDecorator(ibDataQueryBuilder* target, const std::shared_ptr<const ibBackendQueryable>& source, const ibString& sourceName);
 
 	virtual bool     IsEmpty()   const override { return m_source == nullptr; }
 	virtual ibString GetString() const override;

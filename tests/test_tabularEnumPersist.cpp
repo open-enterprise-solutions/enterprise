@@ -136,7 +136,7 @@ struct TabularEnumPersist : ::testing::Test {
 		for (const ibValueMetaObjectAttributeBase* attribute : vatRates->GetGenericAttributeArrayObject()) {
 			if (attribute == nullptr || attribute->GetQueryColumn() == nullptr)
 				continue;
-			for (const ibString& field : ColumnFieldNames(attribute->GetQueryColumn())) {
+			for (const ibString& field : ColumnFieldNames(*attribute->GetQueryColumn())) {
 				if (!seen.insert(field).second)
 					continue;
 				list << (list.IsEmpty() ? wxT("") : wxT(", ")) << field << SqliteTypeOf(field);
@@ -147,11 +147,11 @@ struct TabularEnumPersist : ::testing::Test {
 			+ wxT(" (") + list + wxT(")"));
 	}
 
-	void Assign(std::vector<ibDmlAssign>& out, const ibBackendQueryColumn* column, const ibValue& value) const {
-		const std::vector<ibString> fields = ColumnFieldNames(column);
+	void Assign(std::vector<ibDmlAssign>& out, const std::shared_ptr<const ibBackendQueryColumn>& column, const ibValue& value) const {
+		const std::vector<ibString> fields = ColumnFieldNames(*column);
 		ibQueryStatement capture(ibQueryStatement::Kind::Delete, ibString(), fields);
 		int position = 1;
-		ibColumnCodec::WriteValue(column, cfg.get(), value, &capture, position);
+		ibColumnCodec::WriteValue(*column, cfg.get(), value, &capture, position);
 		const std::vector<ibQueryExprPtr>& consts = capture.CapturedValues();
 		for (size_t i = 0; i < fields.size(); ++i)
 			out.push_back(ibDmlAssign{ fields[i], (i < consts.size() && consts[i]) ? consts[i] : ibConst(ibValue()) });

@@ -22,6 +22,7 @@
 #include "backend/metadataConfiguration.h"
 #include "backend/metaCollection/metaObject.h"
 #include "backend/metaCollection/partial/accumulationRegister.h"
+#include "backend/metaCollection/partial/registerQueryLowering.h"   // ibRegFinerThanStored — which units the totals answer
 #include "backend/query/schemaSnapshot.h"
 #include "backend/query/columnLayout.h"
 #include "backend/databaseLayer/databaseMaterializeBuilder.h"
@@ -62,8 +63,8 @@ struct RegisterSurfaceFix {
 
 } // namespace
 
-// ⭐ THE INDEX A READING CAN RIDE: every dimension first, in declared order, the period last — and not
-// unique, because it is a read path and not the key.
+// ⭐ THE INDEX A READING CAN RIDE: every dimension first, in declared order, then the unit, the period last — and
+// not unique, because it is a read path and not the key.
 TEST(AccumulationRegisterSurface, TotalsCarryADimensionFirstIndex) {
 	RegisterSurfaceFix f;
 	ASSERT_NE(f.reg, nullptr);
@@ -79,18 +80,46 @@ TEST(AccumulationRegisterSurface, TotalsCarryADimensionFirstIndex) {
 	ASSERT_NE(read, nullptr) << "no dimension-first index on " << f.totals->m_name.ToStdString();
 
 	EXPECT_FALSE(read->m_unique);
-	ASSERT_EQ(read->m_columns.size(), 3u);
+	ASSERT_EQ(read->m_columns.size(), 4u);
 	EXPECT_EQ(read->m_columns[0], dimensions[0]->GetQueryColumn());
 	EXPECT_EQ(read->m_columns[1], dimensions[1]->GetQueryColumn());
-	EXPECT_EQ(read->m_columns[2]->GetPhysicalName(), f.totals->m_materialize.m_periodColumn)
+	EXPECT_EQ(read->m_columns[2]->GetPhysicalName(), f.totals->m_materialize.m_periodUnitColumn)
+		<< "the unit is an equality, as a dimension is";
+	EXPECT_EQ(read->m_columns[3]->GetPhysicalName(), f.totals->m_materialize.m_periodColumn)
 		<< "the period closes the index — the bound a balance is read up to";
 
-	// …and the key is still there, still unique, still opening with the period: the upsert names all of it.
-	bool keyKept = false;
+	// …and the key is still there, still unique — opening with the UNIT, the period after it: a reading of every
+	// key takes a unit's rows as one range of it (`unit = Year AND period < …`), and the upsert names all of it.
+	const ibSchemaIndex* key = nullptr;
 	for (const ibSchemaIndex& index : f.totals->m_indexes)
 		if (index.m_name.EndsWith(wxT("_PK")) && index.m_unique)
-			keyKept = true;
-	EXPECT_TRUE(keyKept);
+			key = &index;
+	ASSERT_NE(key, nullptr);
+	ASSERT_GE(key->m_columns.size(), 2u);
+	EXPECT_EQ(key->m_columns[0]->GetPhysicalName(), f.totals->m_materialize.m_periodUnitColumn);
+	EXPECT_EQ(key->m_columns[1]->GetPhysicalName(), f.totals->m_materialize.m_periodColumn);
+}
+
+// ⭐ EVERY DIMENSION IS A CUT, and each has its own index: the dimension, the unit, the period. `_DL` above serves a
+// reading of the leading dimensions only; a reading by the second one rides this.
+TEST(AccumulationRegisterSurface, TotalsCarryAnIndexPerDimension) {
+	RegisterSurfaceFix f;
+	ASSERT_NE(f.reg, nullptr);
+	ASSERT_NE(f.totals, nullptr);
+
+	for (const auto dimension : f.reg->GetDimensionArrayObject()) {
+		const ibString name = f.totals->m_name + ibString::Format(ibT("_CL%d"), dimension->GetQueryColumn()->GetColumnId());
+		const ibSchemaIndex* cut = nullptr;
+		for (const ibSchemaIndex& index : f.totals->m_indexes)
+			if (index.m_name == name)
+				cut = &index;
+		ASSERT_NE(cut, nullptr) << "no index of its own for the cut " << name.ToStdString();
+		EXPECT_FALSE(cut->m_unique);
+		ASSERT_EQ(cut->m_columns.size(), 3u);
+		EXPECT_EQ(cut->m_columns[0], dimension->GetQueryColumn());
+		EXPECT_EQ(cut->m_columns[1]->GetPhysicalName(), f.totals->m_materialize.m_periodUnitColumn);
+		EXPECT_EQ(cut->m_columns[2]->GetPhysicalName(), f.totals->m_materialize.m_periodColumn);
+	}
 }
 
 // 🛑 THE PERIOD CLOSES THE INDEX WHATEVER IS CUT. "Equalities on the dimensions, a RANGE on the period" is served
@@ -107,21 +136,21 @@ TEST(AccumulationRegisterSurface, WhenTheKeyIsTooWideTheDimensionsAreCutAndThePe
 		if (index.m_name.EndsWith(wxT("_DL")))
 			read = &index;
 	ASSERT_NE(read, nullptr);
-	ASSERT_EQ(read->m_columns.size(), 3u);
-	const ibBackendQueryColumn* first = read->m_columns[0];
-	const ibBackendQueryColumn* second = read->m_columns[1];
-	const ibBackendQueryColumn* period = read->m_columns[2];
+	ASSERT_EQ(read->m_columns.size(), 4u);   // two dimensions, the unit, the period
+	const std::shared_ptr<const ibBackendQueryColumn> first = read->m_columns[0];
+	const std::shared_ptr<const ibBackendQueryColumn> second = read->m_columns[1];
+	const std::shared_ptr<const ibBackendQueryColumn> period = read->m_columns[3];
 
-	const size_t room = DescribeColumnLayout(first).size() + DescribeColumnLayout(period).size();
+	const size_t room = DescribeColumnLayout(*first).size() + DescribeColumnLayout(*period).size();
 	const auto ceiling = [room](size_t fields, size_t) { return fields <= room; };   // the first dimension + the period, no more
 
-	const std::vector<const ibBackendQueryColumn*> fitted = ibFitLookupColumns({ first, second }, period, ceiling);
+	const std::vector<std::shared_ptr<const ibBackendQueryColumn>> fitted = ibFitLookupColumns({ first, second }, period, ceiling);
 	ASSERT_EQ(fitted.size(), 2u);
 	EXPECT_EQ(fitted[0], first);
 	EXPECT_EQ(fitted[1], period) << "the second dimension is what gives way, not the period";
 
 	// Without a closing column the cut is what it always was - the leading columns that fit…
-	const std::vector<const ibBackendQueryColumn*> leading = ibFitLookupColumns({ first, second, period }, nullptr, ceiling);
+	const std::vector<std::shared_ptr<const ibBackendQueryColumn>> leading = ibFitLookupColumns({ first, second, period }, nullptr, ceiling);
 	ASSERT_FALSE(leading.empty());
 	EXPECT_EQ(leading.front(), first);
 	EXPECT_NE(leading.back(), period) << "this is the defect the closing column is there for";
@@ -156,7 +185,7 @@ TEST(AccumulationRegisterSurface, ARegisterWithoutDimensionsGetsNoDimensionFirst
 
 // The dressed views stay what they were — what a query reads directly, the turnovers with both halves in
 // them — and they are ALL that is declared: the readings that fold take the arms as relations over the two
-// tables (GetTotalsRows), so no second view exists for a base to lack or a downgrade to leave standing.
+// tables (ibRegFillTotalsRows), so no second view exists for a base to lack or a downgrade to leave standing.
 TEST(AccumulationRegisterSurface, OnlyTheDressedViewsAreDeclared) {
 	RegisterSurfaceFix f;
 	ASSERT_NE(f.reg, nullptr);
@@ -166,6 +195,63 @@ TEST(AccumulationRegisterSurface, OnlyTheDressedViewsAreDeclared) {
 	EXPECT_TRUE(dressed->m_withMovements);
 	EXPECT_NE(f.View(f.reg->GetBalanceViewName()), nullptr);   // and the balance view beside it
 	EXPECT_EQ(f.totals->m_materialize.m_views.size(), 2u);
+}
+
+// ⭐ A UNIT FINER THAN THE DAY IS NO PROJECTION OF THE TOTALS: a stored row holds its whole day under its first
+// instant, so an hour, a minute, a second are answered by the movements — on every road (ibRegFinerThanStored).
+TEST(AccumulationRegisterSurface, AUnitFinerThanTheDayReadsTheMovements) {
+	RegisterSurfaceFix f;
+	ASSERT_NE(f.reg, nullptr);
+	ibRegFold fold;
+	fold.m_kind = ibRegGranularity::Calendar;
+	for (const ibTotalsPeriod finer : { ibTotalsPeriod::Second, ibTotalsPeriod::Minute, ibTotalsPeriod::Hour }) {
+		fold.m_unit = finer;
+		EXPECT_TRUE(ibRegFinerThanStored(f.reg, fold)) << ibRegisterUnitWord(finer).ToStdString();
+	}
+	for (const ibTotalsPeriod kept : { ibTotalsPeriod::Day, ibTotalsPeriod::Week, ibTotalsPeriod::Month, ibTotalsPeriod::Year }) {
+		fold.m_unit = kept;
+		EXPECT_FALSE(ibRegFinerThanStored(f.reg, fold)) << ibRegisterUnitWord(kept).ToStdString();
+	}
+	fold.m_kind = ibRegGranularity::Recorder;   // the movement grain has a road of its own, not this one
+	EXPECT_FALSE(ibRegFinerThanStored(f.reg, fold));
+}
+
+// ⭐ THE TOTALS KEEP EVERY UNIT OF ibRegTotalsUnits, each its own rows under the unit column, the day first — so one
+// posting is one delta per unit: the insert trigger writes the movement into the row of each, keyed by that unit's
+// truncation of the movement's instant.
+TEST(AccumulationRegisterSurface, ThePostingIsWrittenIntoTheRowOfEveryUnit) {
+	RegisterSurfaceFix f;
+	ASSERT_NE(f.reg, nullptr);
+	ASSERT_NE(f.totals, nullptr);
+
+	const ibSchemaMaterialize& m = f.totals->m_materialize;
+	const std::vector<ibTotalsPeriod> units(std::begin(ibRegTotalsUnits), std::end(ibRegTotalsUnits));
+	EXPECT_EQ(m.m_periodUnitColumn, ibString(PeriodUnitColumnName()));
+	EXPECT_EQ(m.m_periodUnits, units);
+	EXPECT_EQ(m.m_periodUnits.front(), f.reg->GetTotalsPeriodUnit()) << "the finest is the grain every reading means";
+
+	const ibMaterializeSpec render = m.ToRenderSpec(f.totals->m_name);
+	const ibMaterializeSql sql = RenderMaterialization(render,
+		&ibDatabaseLayerSQLite::MaterializationDialect(), ibDatabaseLayerSQLite::Dialect());
+	ibString onInsert;
+	for (size_t i = 0; !sql.CreateAt(i).IsEmpty(); ++i)
+		if (sql.CreateAt(i).Contains(f.totals->m_name + wxT("_AI")))
+			onInsert = sql.CreateAt(i);
+	ASSERT_FALSE(onInsert.IsEmpty());
+
+	const ibString upsert = wxT("INSERT INTO ") + f.totals->m_name + wxT(" (");
+	size_t deltas = 0;
+	for (size_t at = onInsert.find(upsert, 0); at != ibString::npos; at = onInsert.find(upsert, at + upsert.length()))
+		++deltas;
+	EXPECT_EQ(deltas, units.size()) << onInsert.ToStdString();
+
+	ibString instant = render.m_periodSourceExpr;
+	instant.Replace(wxT("{row}"), ibDatabaseLayerSQLite::MaterializationDialect().m_newRowAlias);
+	for (const ibTotalsPeriod unit : units) {
+		ibString truncated = ibDatabaseLayerSQLite::Dialect().m_periodTrunc.at(unit);
+		truncated.Replace(wxT("{expr}"), instant);
+		EXPECT_TRUE(onInsert.Contains(truncated)) << ibRegisterUnitWord(unit).ToStdString();
+	}
 }
 
 namespace {
@@ -193,14 +279,20 @@ TEST(AccumulationRegisterSurface, TheRowsAsTheyStandReadTheTwoTables) {
 	ASSERT_NE(f.reg, nullptr);
 	ASSERT_NE(f.totals, nullptr);
 
-	ibQueryRelPtr stored, moved;
-	ASSERT_TRUE(f.reg->GetTotalsRows(stored, moved));
-	ASSERT_TRUE(stored);
-	ASSERT_TRUE(moved) << "a register with a recorder has a movement arm";
+	ibMaterializeReadSpec read;
+	ASSERT_TRUE(ibRegFillTotalsRows(read, f.reg));
+	ASSERT_TRUE(read.m_storedRows);
+	ASSERT_TRUE(read.m_movedRows) << "a register with a recorder has a movement arm";
 
-	const ibString storedSql = SqlOf(stored);
-	const ibString movedSql  = SqlOf(moved);
+	// The stored rows are of every unit the totals keep, and are handed over with the units and their column.
+	EXPECT_EQ(read.m_storedUnits, std::vector<ibTotalsPeriod>(std::begin(ibRegTotalsUnits), std::end(ibRegTotalsUnits)));
+	EXPECT_EQ(read.m_periodUnitColumn, ibString(PeriodUnitColumnName()));
+
+	const ibString storedSql = SqlOf(read.m_storedRows);
+	const ibString movedSql  = SqlOf(read.m_movedRows);
 	EXPECT_TRUE(NamesRelation(storedSql, f.totals->m_name)) << storedSql;
+	EXPECT_TRUE(NamesRelation(storedSql, PeriodUnitColumnName())) << storedSql;
+	EXPECT_FALSE(storedSql.Contains(wxT("WHERE"))) << storedSql;   // no unit chosen here: the reading says which
 	EXPECT_FALSE(storedSql.Contains(wxT("GROUP BY"))) << storedSql;
 	EXPECT_TRUE(NamesRelation(movedSql, f.totals->m_materialize.SourceTable())) << movedSql;
 	EXPECT_FALSE(NamesRelation(movedSql, f.totals->m_name)) << movedSql;
@@ -239,13 +331,13 @@ TEST(AccumulationRegisterSurface, TheMovementRowsCarryTheReadForms) {
 	EXPECT_FALSE(render.m_periodIsDateIR);
 
 	ibString tagField;
-	for (const ibColumnSlot& slot : DescribeColumnLayout(f.reg->GetRegisterPeriod()->GetQueryColumn()))
+	for (const ibColumnSlot& slot : DescribeColumnLayout(*f.reg->GetRegisterPeriod()->GetQueryColumn()))
 		if (slot.m_role == ibColumnRole::Discriminator)
 			tagField = slot.m_name;
 	ASSERT_FALSE(tagField.IsEmpty());
 
-	ibQueryRelPtr stored, moved;
-	ASSERT_TRUE(f.reg->GetTotalsRows(stored, moved));
-	const ibString movedSql = SqlOf(moved);
+	ibMaterializeReadSpec read;
+	ASSERT_TRUE(ibRegFillTotalsRows(read, f.reg));
+	const ibString movedSql = SqlOf(read.m_movedRows);
 	EXPECT_TRUE(movedSql.Contains(tagField)) << movedSql;
 }

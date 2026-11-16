@@ -38,7 +38,7 @@ public:
 	// The dot-walk TARGET queryable of this metadata type — non-null only for a REFERENCE ctor (whose
 	// metaobject is a queryable holder). Lets the reference-target resolver reach the queryable by VIRTUAL
 	// dispatch, with NO cast on the dot-walk hot path (the concrete ctor already owns the typed metaobject).
-	virtual const ibBackendQueryable* GetQueryable() const { return nullptr; }
+	virtual std::shared_ptr<const ibBackendQueryable> GetQueryable() const { return nullptr; }
 
 	// Table trait for metadata types — derived from the meta-kind the metaobject already
 	// declares (no per-object flag): a TabularSection / RecordSet is a tabular source;
@@ -76,7 +76,7 @@ public:
 	virtual const ibValueMetaObject* GetMetaObject() const { return m_metaObject; }
 	virtual ibCtorObjectMetaType GetMetaTypeCtor() const { return ibCtorObjectMetaType::ibCtorObjectMetaType_Reference; }
 	// m_metaObject is the TYPED reference target (a queryable holder) — forward its queryable with no cast.
-	virtual const ibBackendQueryable* GetQueryable() const override { return m_metaObject != nullptr ? m_metaObject->GetQueryable() : nullptr; }
+	virtual std::shared_ptr<const ibBackendQueryable> GetQueryable() const override { return m_metaObject != nullptr ? m_metaObject->GetQueryable() : nullptr; }
 
 protected:
 	ibClassID m_classType;

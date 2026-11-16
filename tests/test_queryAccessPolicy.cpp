@@ -38,7 +38,7 @@ private:
 
 class PolicyTestQueryable : public ibBackendQueryable {
 public:
-	void AddCol(const ibBackendQueryColumn* c) { m_cols.push_back(c); }
+	void AddCol(const std::shared_ptr<const ibBackendQueryColumn>& c) { m_cols.push_back(c); }
 
 	ibString GetQueryTableName() const override { return wxT("T"); }
 	ibMetaID GetQueryTableId()   const override { return 1; }
@@ -47,13 +47,13 @@ public:
 		return key;
 	}
 	const ibMetaData* GetMetaData() const override { return nullptr; }
-	std::vector<const ibBackendQueryColumn*> GetQueryColumns() const override { return m_cols; }
-	bool ContainColumn(const ibBackendQueryColumn* col) const override {
-		for (const ibBackendQueryColumn* c : m_cols) if (c == col) return true;
+	std::vector<std::shared_ptr<const ibBackendQueryColumn>> GetQueryColumns() const override { return m_cols; }
+	bool ContainColumn(const std::shared_ptr<const ibBackendQueryColumn>& col) const override {
+		for (const std::shared_ptr<const ibBackendQueryColumn>& c : m_cols) if (c == col) return true;
 		return false;
 	}
 private:
-	std::vector<const ibBackendQueryColumn*> m_cols;
+	std::vector<std::shared_ptr<const ibBackendQueryColumn>> m_cols;
 };
 
 // A policy that REFUSES every read and records that it was asked. Refusing is what makes this test
@@ -73,11 +73,11 @@ private:
 // A query over one table with one summed column — the shape `SELECT SUM(Amount) FROM T`.
 struct Fixture
 {
-	PolicyTestCol       amount{ wxT("Amount"), 10 };
-	PolicyTestCol       owner { wxT("Owner"),  11 };
-	PolicyTestQueryable table;
+	std::shared_ptr<const PolicyTestCol> amount = std::make_shared<PolicyTestCol>(wxT("Amount"), 10);
+	std::shared_ptr<const PolicyTestCol> owner  = std::make_shared<PolicyTestCol>(wxT("Owner"),  11);
+	std::shared_ptr<PolicyTestQueryable> table  = std::make_shared<PolicyTestQueryable>();
 
-	Fixture() { table.AddCol(&amount); table.AddCol(&owner); }
+	Fixture() { table->AddCol(amount); table->AddCol(owner); }
 };
 
 } // namespace
@@ -92,8 +92,8 @@ TEST(QueryAccessPolicy, AggregateReadIsRefused)
 	RefusingPolicy policy;
 
 	ibDataQueryBuilder query;
-	query.WithAccessPolicy(&policy).From(&f.table);
-	query.Aggregate(ibDataQueryBuilder::AggregateFn::Sum, &f.amount, wxT("total"));
+	query.WithAccessPolicy(&policy).From(f.table);
+	query.Aggregate(ibDataQueryBuilder::AggregateFn::Sum, f.amount, wxT("total"));
 
 	// (void): the terminals are [[nodiscard]], and here the THROW is the subject, not the result.
 	EXPECT_THROW((void)query.SelectAggregate(), ibBackendException);
@@ -106,9 +106,9 @@ TEST(QueryAccessPolicy, AggregatePageReadIsRefused)
 	RefusingPolicy policy;
 
 	ibDataQueryBuilder query;
-	query.WithAccessPolicy(&policy).From(&f.table);
-	query.GroupBy(&f.owner);
-	query.Aggregate(ibDataQueryBuilder::AggregateFn::Sum, &f.amount, wxT("total"));
+	query.WithAccessPolicy(&policy).From(f.table);
+	query.GroupBy(f.owner);
+	query.Aggregate(ibDataQueryBuilder::AggregateFn::Sum, f.amount, wxT("total"));
 
 	ibReadPageRequest page;
 	EXPECT_THROW((void)query.SelectAggregatePage(page), ibBackendException);
@@ -123,8 +123,8 @@ TEST(QueryAccessPolicy, TotalsReadIsRefused)
 	RefusingPolicy policy;
 
 	ibDataQueryBuilder query;
-	query.WithAccessPolicy(&policy).From(&f.table);
-	query.TotalBy(&f.owner, ibDimensionKind::Elements);
+	query.WithAccessPolicy(&policy).From(f.table);
+	query.TotalBy(f.owner, ibDimensionKind::Elements);
 
 	EXPECT_THROW((void)query.SelectTotals(), ibBackendException);
 }
@@ -141,8 +141,8 @@ TEST(QueryAccessPolicy, AllowedAggregateWithoutGroupingYieldsOneZeroRow)
 	RefusingPolicy policy;
 
 	ibDataQueryBuilder query;
-	query.WithAccessPolicy(&policy).From(&f.table).Allowed();
-	query.Aggregate(ibDataQueryBuilder::AggregateFn::Sum, &f.amount, wxT("total"));
+	query.WithAccessPolicy(&policy).From(f.table).Allowed();
+	query.Aggregate(ibDataQueryBuilder::AggregateFn::Sum, f.amount, wxT("total"));
 
 	ibDataQueryResult result = query.SelectAggregate();
 	ASSERT_TRUE(result.Next());
@@ -157,9 +157,9 @@ TEST(QueryAccessPolicy, AllowedAggregateWithGroupingYieldsNoRows)
 	RefusingPolicy policy;
 
 	ibDataQueryBuilder query;
-	query.WithAccessPolicy(&policy).From(&f.table).Allowed();
-	query.GroupBy(&f.owner);
-	query.Aggregate(ibDataQueryBuilder::AggregateFn::Sum, &f.amount, wxT("total"));
+	query.WithAccessPolicy(&policy).From(f.table).Allowed();
+	query.GroupBy(f.owner);
+	query.Aggregate(ibDataQueryBuilder::AggregateFn::Sum, f.amount, wxT("total"));
 
 	ibDataQueryResult result = query.SelectAggregate();
 	EXPECT_FALSE(result.Next());
@@ -171,9 +171,9 @@ TEST(QueryAccessPolicy, AllowedAggregatePageYieldsNoRows)
 	RefusingPolicy policy;
 
 	ibDataQueryBuilder query;
-	query.WithAccessPolicy(&policy).From(&f.table).Allowed();
-	query.GroupBy(&f.owner);
-	query.Aggregate(ibDataQueryBuilder::AggregateFn::Sum, &f.amount, wxT("total"));
+	query.WithAccessPolicy(&policy).From(f.table).Allowed();
+	query.GroupBy(f.owner);
+	query.Aggregate(ibDataQueryBuilder::AggregateFn::Sum, f.amount, wxT("total"));
 
 	ibReadPageRequest page;
 	ibDataQueryResult result = query.SelectAggregatePage(page);
@@ -187,8 +187,8 @@ TEST(QueryAccessPolicy, AllowedDoesNotSoftenTotals)
 	RefusingPolicy policy;
 
 	ibDataQueryBuilder query;
-	query.WithAccessPolicy(&policy).From(&f.table).Allowed();
-	query.TotalBy(&f.owner, ibDimensionKind::Elements);
+	query.WithAccessPolicy(&policy).From(f.table).Allowed();
+	query.TotalBy(f.owner, ibDimensionKind::Elements);
 
 	EXPECT_THROW((void)query.SelectTotals(), ibBackendException);
 }
@@ -209,8 +209,8 @@ TEST(QueryAccessPolicy, ClearedPolicyIsNotAsked)
 	RefusingPolicy policy;
 
 	ibDataQueryBuilder query;
-	query.WithAccessPolicy(&policy).From(&f.table);
-	query.Aggregate(ibDataQueryBuilder::AggregateFn::Sum, &f.amount, wxT("total"));
+	query.WithAccessPolicy(&policy).From(f.table);
+	query.Aggregate(ibDataQueryBuilder::AggregateFn::Sum, f.amount, wxT("total"));
 	query.WithAccessPolicy(nullptr);   // the system read
 
 	// No access exception can come out of the door now: the guard is not there to raise one.

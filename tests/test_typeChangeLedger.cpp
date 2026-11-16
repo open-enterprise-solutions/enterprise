@@ -48,7 +48,7 @@ struct StoredColumn : ibBackendQueryColumn {
 
 ibString FieldOf(const StoredColumn& column, ibColumnRole role)
 {
-	for (const ibColumnSlot& slot : DescribeColumnLayout(&column))
+	for (const ibColumnSlot& slot : DescribeColumnLayout(column))
 		if (slot.m_role == role)
 			return slot.m_name;
 	return ibString();
@@ -138,7 +138,7 @@ protected:
 	static void Create(const StoredColumn& was)
 	{
 		ibSchemaSnapshot before;
-		before.Shared(kGoodsTable, wxT("goods")).Add(&was);
+		before.Shared(kGoodsTable, wxT("goods")).Add(std::make_shared<StoredColumn>(was));
 		ASSERT_EQ(DiffSnapshots(nullptr, before), 1);
 		Settle();
 	}
@@ -147,9 +147,9 @@ protected:
 	static std::vector<ibString> Apply(const StoredColumn& was, const StoredColumn& next)
 	{
 		ibSchemaSnapshot before;
-		before.Shared(kGoodsTable, wxT("goods")).Add(&was);
+		before.Shared(kGoodsTable, wxT("goods")).Add(std::make_shared<StoredColumn>(was));
 		ibSchemaSnapshot after;
-		after.Shared(kGoodsTable, wxT("goods")).Add(&next);
+		after.Shared(kGoodsTable, wxT("goods")).Add(std::make_shared<StoredColumn>(next));
 		ibRestructureInfo ledger;
 		EXPECT_EQ(DiffSnapshots(&before, after, nullptr, &ledger), 1);
 		Settle();

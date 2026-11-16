@@ -305,7 +305,7 @@ bool ibValueMetaObjectParameterizedJob::RegisterJobs()
 	if (ibApplicationInstance::GetJobManager() == nullptr)
 		return true;
 
-	const ibBackendQueryable* queryable = GetQueryable();
+	const std::shared_ptr<const ibBackendQueryable> queryable = GetQueryable();
 	if (queryable == nullptr)
 		return true;
 

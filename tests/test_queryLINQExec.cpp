@@ -70,23 +70,23 @@ public:
 	TestQueryable(const ibString& table, ibMetaID metaId) : m_table(table), m_metaId(metaId) {
 		ibGuidImpl impl{}; impl.m_data1 = static_cast<unsigned long>(metaId); m_key = ibGuid(impl);
 	}
-	void AddCol(const ibBackendQueryColumn* c) { m_cols.push_back(c); }
+	void AddCol(const std::shared_ptr<const ibBackendQueryColumn>& c) { m_cols.push_back(c); }
 
 	ibString GetQueryTableName() const override { return m_table; }
 	ibMetaID GetQueryTableId()   const override { return m_metaId; }
 	const ibUniqueKey& GetQueryTableGuid() const override { return m_key; }
 	bool     IsComputedInRam()   const override { return false; }   // physical source (dot-walk allowed; unused here)
 	const ibMetaData* GetMetaData() const override { return nullptr; }
-	std::vector<const ibBackendQueryColumn*> GetQueryColumns() const override { return m_cols; }
-	bool ContainColumn(const ibBackendQueryColumn* col) const override {
-		for (const ibBackendQueryColumn* c : m_cols) if (c == col) return true;
+	std::vector<std::shared_ptr<const ibBackendQueryColumn>> GetQueryColumns() const override { return m_cols; }
+	bool ContainColumn(const std::shared_ptr<const ibBackendQueryColumn>& col) const override {
+		for (const std::shared_ptr<const ibBackendQueryColumn>& c : m_cols) if (c == col) return true;
 		return false;
 	}
 private:
 	ibString m_table;
 	ibMetaID m_metaId;
 	ibUniqueKey m_key;   // its table guid, the id in the first word
-	std::vector<const ibBackendQueryColumn*> m_cols;
+	std::vector<std::shared_ptr<const ibBackendQueryColumn>> m_cols;
 };
 
 // The shared fixture: region { North, South, East, <NULL> } with qty — same as test_queryParity.
@@ -149,15 +149,13 @@ std::shared_ptr<ibQueryAstExpr> Record(const ibString& body, const ibString& row
 // A test holding the metadata-free source, the RAM fixture, and the SQLite twin side by side.
 struct LinqExecFix : ::testing::Test {
 	ibTestCodeStyle       style{ CODE_CES };   // the lambda bodies below are CES ('{ return … ; }')
-	TestCol               region{ wxT("region"), REGION };
-	TestCol               qty{ wxT("qty"), QTY };
-	TestQueryable         src{ wxT("t"), 100 };
+	std::shared_ptr<TestQueryable> src = std::make_shared<TestQueryable>(wxT("t"), 100);
 	ibQueryRamTable       ram = MakeRamFixture();
 	ibDatabaseLayerSQLite db;
 
 	void SetUp() override {
-		src.AddCol(&region);
-		src.AddCol(&qty);
+		src->AddCol(std::make_shared<TestCol>(wxT("region"), REGION));
+		src->AddCol(std::make_shared<TestCol>(wxT("qty"), QTY));
 		ASSERT_TRUE(MakeSqlFixture(db)) << "SQLite in-memory fixture failed to open";
 	}
 
@@ -173,9 +171,9 @@ struct LinqExecFix : ::testing::Test {
 
 		auto expr = Record(body, wxT("x"), outerNames);
 		if (expr == nullptr) return nullptr;
-		return ibQueryLowering::LowerLambdaPredicate(&src, *expr, captured);
+		return ibQueryLowering::LowerLambdaPredicate(src, *expr, captured);
 	}
-	int RamCount(const ibQueryPredicate* p) { return (int) ibQueryComposer::FilterRows(ram, p).RowCount(); }
+	int RamCount(const ibQueryPredicatePtr& p) { return (int) ibQueryComposer::FilterRows(ram, p).RowCount(); }
 };
 
 // ---- executable parity: a lambda-lowered predicate == the SAME filter run as SQL ----
@@ -187,14 +185,14 @@ TEST_F(LinqExecFix, Eq_ParityWithSql)
 	// test_lambdaRecorder.cpp. Compiling them for real is what surfaced it.
 	auto p = Lower(wxT("{ return x.region = \"North\"; }"));
 	ASSERT_TRUE(p != nullptr) << "a translatable lambda body must lower to a predicate";
-	EXPECT_EQ(RamCount(p.get()), SqlCount(db, wxT("region = 'North'")));   // 1 == 1
+	EXPECT_EQ(RamCount(p), SqlCount(db, wxT("region = 'North'")));   // 1 == 1
 }
 
 TEST_F(LinqExecFix, Or_ParityWithSql)
 {
 	auto p = Lower(wxT("{ return x.region = \"North\" Or x.region = \"South\"; }"));
 	ASSERT_TRUE(p != nullptr);
-	EXPECT_EQ(RamCount(p.get()),
+	EXPECT_EQ(RamCount(p),
 	          SqlCount(db, wxT("region = 'North' OR region = 'South'")));   // 2 == 2
 }
 
@@ -205,7 +203,7 @@ TEST_F(LinqExecFix, NotEq_NullThreeValued_ParityWithSql)
 {
 	auto p = Lower(wxT("{ return x.region <> \"North\"; }"));
 	ASSERT_TRUE(p != nullptr);
-	EXPECT_EQ(RamCount(p.get()), SqlCount(db, wxT("region <> 'North'")))   // South, East -> 2
+	EXPECT_EQ(RamCount(p), SqlCount(db, wxT("region <> 'North'")))   // South, East -> 2
 		<< "L4-2 lowered `<>` must drop the NULL-region row (three-valued), like SQL.";
 }
 
@@ -213,14 +211,14 @@ TEST_F(LinqExecFix, NumericGt_ParityWithSql)
 {
 	auto p = Lower(wxT("{ return x.qty > 6; }"));
 	ASSERT_TRUE(p != nullptr);
-	EXPECT_EQ(RamCount(p.get()), SqlCount(db, wxT("qty > 6")));   // North(10), East(7) -> 2 == 2
+	EXPECT_EQ(RamCount(p), SqlCount(db, wxT("qty > 6")));   // North(10), East(7) -> 2 == 2
 }
 
 TEST_F(LinqExecFix, AndLogic_ParityWithSql)
 {
 	auto p = Lower(wxT("{ return x.qty >= 5 And x.region <> \"South\"; }"));
 	ASSERT_TRUE(p != nullptr);
-	EXPECT_EQ(RamCount(p.get()),
+	EXPECT_EQ(RamCount(p),
 	          SqlCount(db, wxT("qty >= 5 AND region <> 'South'")));   // North, East -> 2 == 2
 }
 
@@ -230,7 +228,7 @@ TEST_F(LinqExecFix, CapturedParam_ParityWithSql)
 	std::map<ibString, ibValue> captured{ { wxT("minQty"), ibValue(ibNumber(6)) } };
 	auto p = Lower(wxT("{ return x.qty > minQty; }"), captured);
 	ASSERT_TRUE(p != nullptr) << "a captured identifier must lower via the captured map";
-	EXPECT_EQ(RamCount(p.get()), SqlCount(db, wxT("qty > 6")));   // 2 == 2
+	EXPECT_EQ(RamCount(p), SqlCount(db, wxT("qty > 6")));   // 2 == 2
 }
 
 // Bail at LOWERING (not recording): a well-formed AST naming a column the SOURCE cannot resolve.
@@ -240,7 +238,7 @@ TEST_F(LinqExecFix, Bail_UnresolvableColumn)
 {
 	auto expr = Record(wxT("{ return x.nosuchcol > 1; }"));
 	ASSERT_TRUE(expr != nullptr) << "the recorder accepts the shape; lowering is where an unknown column bails";
-	EXPECT_TRUE(ibQueryLowering::LowerLambdaPredicate(&src, *expr, {}) == nullptr);
+	EXPECT_TRUE(ibQueryLowering::LowerLambdaPredicate(src, *expr, {}) == nullptr);
 }
 
 // =============================================================================
@@ -287,32 +285,32 @@ TEST_F(LinqExecFix, In_AThousandValuesAreOneLeaf)
 	for (int i = 0; i < 1000; ++i)
 		values.push_back(ibVariant(ibString::Format(wxT("Nowhere%d"), i)));
 
-	const auto p = ibQueryLowering::LowerLambdaPredicate(&src, *InList(wxT("region"), values), {});
+	const auto p = ibQueryLowering::LowerLambdaPredicate(src, *InList(wxT("region"), values), {});
 	ASSERT_TRUE(p != nullptr);
 	EXPECT_EQ(p->m_kind, ibQueryPredicateKind::Leaf);
 	EXPECT_EQ(p->m_leaf.m_op, ibQueryFilterOp::In);
 	EXPECT_EQ(p->m_leaf.m_values.size(), values.size());
-	EXPECT_EQ(RamCount(p.get()), SqlCount(db, wxT("region IN ('North', 'East')")));   // 2 == 2, the NULL row excluded
+	EXPECT_EQ(RamCount(p), SqlCount(db, wxT("region IN ('North', 'East')")));   // 2 == 2, the NULL row excluded
 }
 
 // NOT IN is the same leaf under a Not — and keeps SQL's three-valued answer for the NULL row.
 TEST_F(LinqExecFix, NotIn_ParityWithSql)
 {
-	const auto p = ibQueryLowering::LowerLambdaPredicate(&src,
+	const auto p = ibQueryLowering::LowerLambdaPredicate(src,
 		*InList(wxT("region"), { ibVariant(ibT("North")), ibVariant(ibT("East")) }, /*negated*/ true), {});
 	ASSERT_TRUE(p != nullptr);
 	EXPECT_EQ(p->m_kind, ibQueryPredicateKind::Not);
-	EXPECT_EQ(RamCount(p.get()), SqlCount(db, wxT("region NOT IN ('North', 'East')")));   // South alone
+	EXPECT_EQ(RamCount(p), SqlCount(db, wxT("region NOT IN ('North', 'East')")));   // South alone
 }
 
 // One value is an equality, as it always was — nothing that rides an Equal leaf loses it to a set of one.
 TEST_F(LinqExecFix, In_ASingleValueStaysAnEquality)
 {
-	const auto p = ibQueryLowering::LowerLambdaPredicate(&src, *InList(wxT("region"), { ibVariant(ibT("North")) }), {});
+	const auto p = ibQueryLowering::LowerLambdaPredicate(src, *InList(wxT("region"), { ibVariant(ibT("North")) }), {});
 	ASSERT_TRUE(p != nullptr);
 	ASSERT_EQ(p->m_kind, ibQueryPredicateKind::Leaf);
 	EXPECT_EQ(p->m_leaf.m_op, ibQueryFilterOp::Equal);
-	EXPECT_EQ(RamCount(p.get()), 1);
+	EXPECT_EQ(RamCount(p), 1);
 }
 
 // 🛑 A list that cannot be one leaf (a NULL among the values) still folds pair by pair — as a BALANCED
@@ -324,9 +322,9 @@ TEST_F(LinqExecFix, In_APairwiseFoldIsBalancedNotChained)
 	for (int i = 0; i < 1000; ++i)
 		values.push_back(ibVariant(ibString::Format(wxT("Nowhere%d"), i)));
 
-	const auto p = ibQueryLowering::LowerLambdaPredicate(&src, *InList(wxT("region"), values), {});
+	const auto p = ibQueryLowering::LowerLambdaPredicate(src, *InList(wxT("region"), values), {});
 	ASSERT_TRUE(p != nullptr);
 	EXPECT_EQ(p->m_kind, ibQueryPredicateKind::Or);
 	EXPECT_LE(DepthOf(p), 12) << "an OR over " << values.size() << " values must be ~log2(N) deep";
-	EXPECT_EQ(RamCount(p.get()), 1);   // North; a NULL in the list matches nothing
+	EXPECT_EQ(RamCount(p), 1);   // North; a NULL in the list matches nothing
 }

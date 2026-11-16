@@ -144,9 +144,9 @@ std::shared_ptr<ibQueryAstExpr> AstOf(const ibValueFunction* fn)
 // single-reference key (catalogs / documents / charts / enums), otherwise a
 // STRUCTURE of every column (registers / Data.From collections) — same chain,
 // different row shape.
-ibValue RowValue(ibDataQueryResult& sel, const ibBackendQueryColumn* refCol,
-                 const std::vector<const ibBackendQueryColumn*>& cols,
-                 const ibBackendQueryColumn* projectCol = nullptr,
+ibValue RowValue(ibDataQueryResult& sel, const std::shared_ptr<const ibBackendQueryColumn>& refCol,
+                 const std::vector<std::shared_ptr<const ibBackendQueryColumn>>& cols,
+                 const std::shared_ptr<const ibBackendQueryColumn>& projectCol = nullptr,
                  const ibString& projectAlias = ibEmptyString)
 {
 	if (!projectAlias.IsEmpty())
@@ -156,7 +156,7 @@ ibValue RowValue(ibDataQueryResult& sel, const ibBackendQueryColumn* refCol,
 	if (refCol != nullptr)
 		return sel.GetValue(refCol);
 	ibValueStructure* row = new ibValueStructure();
-	for (const ibBackendQueryColumn* c : cols)
+	for (const std::shared_ptr<const ibBackendQueryColumn>& c : cols)
 		if (c != nullptr) row->Insert(c->GetName(), sel.GetValue(c));
 	return ibValue(row);
 }
@@ -166,14 +166,14 @@ ibValue RowValue(ibDataQueryResult& sel, const ibBackendQueryColumn* refCol,
 class ibQueryableIteratorState : public ibValueIteratorState
 {
 public:
+	// The builder holds its sources — a Data.From wrapper too — so its copy here keeps them for the loop.
 	ibQueryableIteratorState(const ibDataQueryBuilder& builder, long take,
-	                         const ibBackendQueryColumn* refCol,
-	                         std::vector<const ibBackendQueryColumn*> cols,
-	                         std::shared_ptr<const ibBackendQueryable> ownedSource,
-	                         const ibBackendQueryColumn* projectCol = nullptr,
+	                         const std::shared_ptr<const ibBackendQueryColumn>& refCol,
+	                         std::vector<std::shared_ptr<const ibBackendQueryColumn>> cols,
+	                         const std::shared_ptr<const ibBackendQueryColumn>& projectCol = nullptr,
 	                         const ibString& projectAlias = ibEmptyString)
 		: m_builder(builder), m_take(take), m_refCol(refCol), m_cols(std::move(cols)),
-		  m_ownedSource(std::move(ownedSource)), m_projectCol(projectCol), m_projectAlias(projectAlias)
+		  m_projectCol(projectCol), m_projectAlias(projectAlias)
 		  {}   // m_readState stays null — see queryReadState.h
 
 	bool MoveNext(ibValue& current) override {
@@ -218,7 +218,7 @@ public:
 
 		ibValueStructure* const row = new ibValueStructure();
 		current = ibValue(row);
-		for (const ibBackendQueryColumn* c : m_cols)
+		for (const std::shared_ptr<const ibBackendQueryColumn>& c : m_cols)
 			if (c != nullptr)
 				row->Insert(c->GetName(), ibValue());
 		return true;
@@ -230,13 +230,12 @@ private:
 		page.m_count = take;
 		return builder.Execute(page);
 	}
-	ibDataQueryBuilder          m_builder;
-	long                        m_take;
-	const ibBackendQueryColumn* m_refCol;
-	std::vector<const ibBackendQueryColumn*>  m_cols;          // structure-row column set
-	std::shared_ptr<const ibBackendQueryable> m_ownedSource;   // keeps a Data.From wrapper alive
-	const ibBackendQueryColumn* m_projectCol;                  // single-column scalar projection (null = full row)
-	ibString                    m_projectAlias;                // dot-walk scalar projection, read by alias
+	ibDataQueryBuilder                                       m_builder;
+	long                                                     m_take;
+	std::shared_ptr<const ibBackendQueryColumn>              m_refCol;
+	std::vector<std::shared_ptr<const ibBackendQueryColumn>> m_cols;          // structure-row column set
+	std::shared_ptr<const ibBackendQueryColumn>              m_projectCol;    // single-column scalar projection (null = full row)
+	ibString                                                 m_projectAlias;  // dot-walk scalar projection, read by alias
 
 	// ⭐ THE STATE THE ROWS ARE READ IN, held because THIS outlives the call that made it — a Foreach
 	// draws rows long after the pipeline returned, out of a live cursor. DECLARED BEFORE m_sel on
@@ -262,17 +261,10 @@ private:
 // ibValueQueryable
 //////////////////////////////////////////////////////////////////////
 
-ibValueQueryable::ibValueQueryable(const ibBackendQueryable* queryable, const ibString& sourceName)
+ibValueQueryable::ibValueQueryable(const std::shared_ptr<const ibBackendQueryable>& queryable, const ibString& sourceName)
 	: ibValueStaticMembers(ibValueTypes::TYPE_VALUE), m_queryable(queryable), m_sourceName(sourceName)
 {
 	m_builder.From(queryable);
-}
-
-ibValueQueryable::ibValueQueryable(std::shared_ptr<const ibBackendQueryable> owned, const ibString& sourceName)
-	: ibValueStaticMembers(ibValueTypes::TYPE_VALUE), m_queryable(owned.get()), m_sourceName(sourceName),
-	  m_ownedSource(std::move(owned))
-{
-	m_builder.From(m_queryable);
 }
 
 ibValueQueryable* ibValueQueryable::CloneLink() const
@@ -285,15 +277,14 @@ ibValueQueryable* ibValueQueryable::CloneLink() const
 	link->m_projectCol   = m_projectCol;
 	link->m_projectAlias = m_projectAlias;
 	link->m_ops          = m_ops;
-	link->m_ownedSource = m_ownedSource;   // shared — every chain link keeps the From wrapper alive
 	return link;
 }
 
-const ibBackendQueryColumn* ibValueQueryable::RowReferenceColumn() const
+std::shared_ptr<const ibBackendQueryColumn> ibValueQueryable::RowReferenceColumn() const
 {
 	if (m_queryable == nullptr)
 		return nullptr;
-	const std::vector<const ibBackendQueryColumn*> pk = m_queryable->GetPrimaryKeyColumns();
+	const std::vector<std::shared_ptr<const ibBackendQueryColumn>> pk = m_queryable->GetPrimaryKeyColumns();
 	return pk.size() == 1 ? pk.front() : nullptr;   // composite key (register) = no single row reference
 }
 
@@ -307,13 +298,9 @@ ibDataQueryResult ibValueQueryable::ExecuteAccumulated() const
 std::shared_ptr<const ibBackendQueryable> ibValueQueryable::AsSource() const
 {
 	// Wrap the accumulated builder (From / Join / Where — SELECT * over the restricted rows) as a
-	// subquery source the L3 door can read FROM. Copy the builder and let the COPY own the Data.From
-	// source (if any) so the subquery is SELF-CONTAINED: its control block manages everything it
-	// references — no raw pointer back into THIS value's m_ownedSource (which would dangle if the
-	// value died before the subquery). For a metadata source m_ownedSource is null (nothing to adopt).
+	// subquery source the L3 door can read FROM. The copy holds every source the builder does, a
+	// Data.From wrapper too, so the subquery is SELF-CONTAINED and outlives this value.
 	ibDataQueryBuilder inner = m_builder;
-	if (m_ownedSource)
-		inner.AdoptOwnedSource(m_ownedSource);
 	inner.WithAccessPolicy(nullptr);   // a subquery inside an already-enforced query — no RLS re-entry
 	return std::make_shared<ibSubqueryQueryable>(inner, m_take);
 }
@@ -347,8 +334,8 @@ void ibValueQueryable::MaterialiseThenRam(ibLinqMethod method, ibValue& ret, ibV
 	// The RAM floor: stream the ACCUMULATED query into an Array (references for
 	// single-key sources, structures otherwise — folded Where/OrderBy/Take stay
 	// server-side), then run the op there with the ordinary RAM machinery.
-	const ibBackendQueryColumn* refCol = RowReferenceColumn();
-	const std::vector<const ibBackendQueryColumn*> cols = m_queryable->GetQueryColumns();
+	std::shared_ptr<const ibBackendQueryColumn> refCol = RowReferenceColumn();
+	const std::vector<std::shared_ptr<const ibBackendQueryColumn>> cols = m_queryable->GetQueryColumns();
 	ibValueArray* arr = new ibValueArray();
 	ibValue host(arr);   // owns via TYPE_REFFER for the dispatch below
 	ibDataQueryResult sel = ExecuteAccumulated();
@@ -378,9 +365,8 @@ bool ibValueQueryable::JoinPushDown(ibValue& ret, ibValue** args, long n)
 	// we wrap as a computed leaf (ibTempTableQueryable, exactly like Data.From) so the
 	// composer temp-promotes it into a DB temp table and joins server-side. Anything else
 	// (an arbitrary collection / a folded queryable) -> the RAM floor (ibValueJoinState).
-	const ibBackendQueryable*                 innerQ   = nullptr;
-	const ibBackendQueryColumn*               innerRef = nullptr;   // single row reference, or null = structure rows
-	std::shared_ptr<const ibBackendQueryable> innerWrap;            // keeps a wrapped RAM table alive for this scope
+	std::shared_ptr<const ibBackendQueryable>   innerQ;
+	std::shared_ptr<const ibBackendQueryColumn> innerRef;              // single row reference, or null = structure rows
 	ibValueQueryable* iq = nullptr;
 	if (args[0]->ConvertToValue(iq)) {
 		if (iq->m_queryable == nullptr)            return false;
@@ -391,8 +377,7 @@ bool ibValueQueryable::JoinPushDown(ibValue& ret, ibValue** args, long n)
 		ibValueModelTable* tbl = nullptr;
 		if (!args[0]->ConvertToValue(tbl) || tbl == nullptr)
 			return false;                                          // not a queryable, not a value table -> RAM
-		innerWrap = std::make_shared<ibTempTableQueryable>(*args[0]);   // RAM table as a computed leaf
-		innerQ    = innerWrap.get();                               // innerRef stays null -> structure rows
+		innerQ = std::make_shared<ibTempTableQueryable>(*args[0]);   // RAM table as a computed leaf; innerRef stays null -> structure rows
 	}
 
 	// --- source gates ------------------------------------------------------------
@@ -416,9 +401,9 @@ bool ibValueQueryable::JoinPushDown(ibValue& ret, ibValue** args, long n)
 	std::shared_ptr<ibQueryAstExpr> leftAst  = AstOf(leftKeyFn);
 	std::shared_ptr<ibQueryAstExpr> rightAst = AstOf(rightKeyFn);
 	if (!leftAst || !rightAst) return false;
-	const std::vector<const ibBackendQueryColumn*> lcols =
+	const std::vector<std::shared_ptr<const ibBackendQueryColumn>> lcols =
 		ibQueryLowering::LowerLambdaColumnPath(m_queryable, *leftAst);
-	const std::vector<const ibBackendQueryColumn*> rcols =
+	const std::vector<std::shared_ptr<const ibBackendQueryColumn>> rcols =
 		ibQueryLowering::LowerLambdaColumnPath(innerQ, *rightAst);
 	if (lcols.size() != 1 || rcols.size() != 1 || lcols.front() == nullptr || rcols.front() == nullptr)
 		return false;
@@ -430,22 +415,22 @@ bool ibValueQueryable::JoinPushDown(ibValue& ret, ibValue** args, long n)
 	// an ibValueQueryable row takes (RowValue). Distinct alias prefixes ("o"/"i") keep the
 	// two sides apart in the select list; read back BY ALIAS, robust across the co-located,
 	// temp-promoted AND RAM-stitch paths.
-	const ibBackendQueryColumn* outerRef = RowReferenceColumn();
+	std::shared_ptr<const ibBackendQueryColumn> outerRef = RowReferenceColumn();
 
 	ibValueQueryable* link = CloneLink();          // carries outer From + folded Where
 	ibValue           linkOwner(link);             // own the transient link for this scope
 	link->m_builder.Join(innerQ, lcols.front(), rcols.front(), ibQueryJoinKind::Inner);
 
-	std::vector<const ibBackendQueryColumn*> outerCols, innerCols;
-	std::vector<ibString>                    outerAlias, innerAlias;
-	auto plan = [](const ibBackendQueryColumn* refCol, const ibBackendQueryable* q, const ibString& pfx,
-	               std::vector<const ibBackendQueryColumn*>& cols, std::vector<ibString>& alias) {
+	std::vector<std::shared_ptr<const ibBackendQueryColumn>> outerCols, innerCols;
+	std::vector<ibString>                                    outerAlias, innerAlias;
+	auto plan = [](const std::shared_ptr<const ibBackendQueryColumn>& refCol, const std::shared_ptr<const ibBackendQueryable>& q, const ibString& pfx,
+	               std::vector<std::shared_ptr<const ibBackendQueryColumn>>& cols, std::vector<ibString>& alias) {
 		if (refCol != nullptr) {
 			cols.push_back(refCol);
 			alias.push_back(pfx + ibT("ref"));
 			return;
 		}
-		const std::vector<const ibBackendQueryColumn*> all = q->GetQueryColumns();
+		const std::vector<std::shared_ptr<const ibBackendQueryColumn>> all = q->GetQueryColumns();
 		for (size_t i = 0; i < all.size(); ++i) {
 			if (all[i] == nullptr) continue;
 			cols.push_back(all[i]);
@@ -467,8 +452,8 @@ bool ibValueQueryable::JoinPushDown(ibValue& ret, ibValue** args, long n)
 	// One row per side: the rehydrated reference cell (reference-keyed source) OR a
 	// structure of the side's projected columns — matching RowValue, so the projection
 	// lambda sees the same shapes it would on the RAM floor.
-	auto rowOf = [&sel](const ibBackendQueryColumn* refCol,
-	                    const std::vector<const ibBackendQueryColumn*>& cols,
+	auto rowOf = [&sel](const std::shared_ptr<const ibBackendQueryColumn>& refCol,
+	                    const std::vector<std::shared_ptr<const ibBackendQueryColumn>>& cols,
 	                    const std::vector<ibString>& alias) -> ibValue {
 		if (refCol != nullptr)
 			return sel.GetColumn(alias.front());   // the rehydrated reference cell
@@ -571,7 +556,7 @@ void ibValueQueryable::DispatchLinqMethod(ibLinqMethod method, ibValue& ret, ibV
 		const bool ascending = (method == M::OrderBy);
 		if (fn != nullptr) {
 			if (std::shared_ptr<ibQueryAstExpr> ast = AstOf(fn)) {
-				const std::vector<const ibBackendQueryColumn*> cols =
+				const std::vector<std::shared_ptr<const ibBackendQueryColumn>> cols =
 					ibQueryLowering::LowerLambdaColumnPath(m_queryable, *ast);
 				if (!cols.empty()) {
 					ibValueQueryable* link = CloneLink();
@@ -633,8 +618,8 @@ void ibValueQueryable::DispatchLinqMethod(ibLinqMethod method, ibValue& ret, ibV
 	}
 
 	case M::ToArray: {
-		const ibBackendQueryColumn* refCol = RowReferenceColumn();
-		const std::vector<const ibBackendQueryColumn*> cols = m_queryable->GetQueryColumns();
+		std::shared_ptr<const ibBackendQueryColumn> refCol = RowReferenceColumn();
+		const std::vector<std::shared_ptr<const ibBackendQueryColumn>> cols = m_queryable->GetQueryColumns();
 		ibValueArray* arr = new ibValueArray();
 		ibDataQueryResult sel = ExecuteAccumulated();
 		while (sel.Next())
@@ -684,7 +669,7 @@ void ibValueQueryable::DispatchLinqMethod(ibLinqMethod method, ibValue& ret, ibV
 			ibValueFunction* fn = LambdaOf(args, n);
 			if (fn != nullptr) {
 				if (std::shared_ptr<ibQueryAstExpr> ast = AstOf(fn)) {
-					const std::vector<const ibBackendQueryColumn*> cols =
+					const std::vector<std::shared_ptr<const ibBackendQueryColumn>> cols =
 						ibQueryLowering::LowerLambdaColumnPath(m_queryable, *ast);
 					if (cols.size() == 1 && cols.front() != nullptr) {
 						ibValueQueryable* link = CloneLink();
@@ -814,7 +799,7 @@ std::shared_ptr<ibValueIteratorState> ibValueQueryable::CreateIterator()
 		return nullptr;
 	// References for single-key sources, structure rows otherwise (registers / Data.From).
 	return std::make_shared<ibQueryableIteratorState>(
-		m_builder, m_take, RowReferenceColumn(), m_queryable->GetQueryColumns(), m_ownedSource, m_projectCol, m_projectAlias);
+		m_builder, m_take, RowReferenceColumn(), m_queryable->GetQueryColumns(), m_projectCol, m_projectAlias);
 }
 
 //////////////////////////////////////////////////////////////////////
@@ -845,7 +830,7 @@ static ibJoinCompareOp JoinOpFromCompare(ibQueryCompareOp c)
 	}
 }
 
-ibValueQueryDecorator::ibValueQueryDecorator(ibDataQueryBuilder* target, const ibBackendQueryable* source, const ibString& sourceName)
+ibValueQueryDecorator::ibValueQueryDecorator(ibDataQueryBuilder* target, const std::shared_ptr<const ibBackendQueryable>& source, const ibString& sourceName)
 	: ibValue(ibValueTypes::TYPE_VALUE), m_target(target), m_source(source), m_sourceName(sourceName)
 {
 	// No own builder, no policy dance: the target IS the (already policy-nulled) main query, so folding
@@ -930,8 +915,8 @@ void ibValueQueryDecorator::DispatchLinqMethod(ibLinqMethod method, ibValue& ret
 		if (n < 2 || args == nullptr || args[0] == nullptr || args[1] == nullptr)
 			ibBackendCoreException::Error(_("QueryDecorator.Join: expects (source, onCond) or (source, leftKey, rightKey [, op])"));
 
-		const ibBackendQueryable*                 innerBase = nullptr;   // right-key lowers against this
-		std::shared_ptr<const ibBackendQueryable> innerSource;           // the source we join + own
+		std::shared_ptr<const ibBackendQueryable> innerBase;     // right-key lowers against this
+		std::shared_ptr<const ibBackendQueryable> innerSource;   // the source we join
 		ibValueQueryable* innerQ = nullptr;
 		if (args[0]->ConvertToValue(innerQ) && innerQ != nullptr && innerQ->GetQueryable() != nullptr) {
 			innerBase   = innerQ->GetQueryable();
@@ -941,7 +926,7 @@ void ibValueQueryDecorator::DispatchLinqMethod(ibLinqMethod method, ibValue& ret
 			if (!args[0]->ConvertToValue(tbl) || tbl == nullptr)
 				ibBackendCoreException::Error(_("QueryDecorator.Join: the first argument must be a Data source or a value table"));
 			innerSource = std::make_shared<ibTempTableQueryable>(*args[0]);   // computed set -> DB temp table
-			innerBase   = innerSource.get();
+			innerBase   = innerSource;
 		}
 
 		// Resolve the join to left key (vs source) + right key (vs inner) + op — from ONE ON predicate
@@ -969,8 +954,8 @@ void ibValueQueryDecorator::DispatchLinqMethod(ibLinqMethod method, ibValue& ret
 				? JoinOpFromString(args[3]->GetString()) : ibJoinCompareOp::Eq;
 		}
 
-		const std::vector<const ibBackendQueryColumn*> lcols = ibQueryLowering::LowerLambdaColumnPath(m_source, *leftAst);
-		const std::vector<const ibBackendQueryColumn*> rcols = ibQueryLowering::LowerLambdaColumnPath(innerBase, *rightAst);
+		const std::vector<std::shared_ptr<const ibBackendQueryColumn>> lcols = ibQueryLowering::LowerLambdaColumnPath(m_source, *leftAst);
+		const std::vector<std::shared_ptr<const ibBackendQueryColumn>> rcols = ibQueryLowering::LowerLambdaColumnPath(innerBase, *rightAst);
 		if (lcols.size() != 1 || rcols.size() != 1 || lcols.front() == nullptr || rcols.front() == nullptr)
 			ibBackendCoreException::Error(_("QueryDecorator.Join: each key must be exactly one column - for a multi-hop key restrict with Where(x => x.Ref.Field = ...) instead"));
 
@@ -1007,8 +992,8 @@ void ibValueQueryDecorator::DispatchLinqMethod(ibLinqMethod method, ibValue& ret
 			if (ibTempTableManager::CanMaterialise(m_target->GetHolder()))
 				mgr = ibTempTableManager::Materialise(m_target->GetHolder(), innerSource->ComputeRows({}),
 				                                      innerSource->GetMetaData());
-			const ibDbTempTableQueryable* temp     = mgr ? mgr->Queryable() : nullptr;
-			const ibBackendQueryColumn*   innerKey = temp ? temp->ResolveColumnByName(rcols.front()->GetName()) : nullptr;
+			const std::shared_ptr<const ibDbTempTableQueryable> temp     = mgr ? mgr->Queryable() : nullptr;
+			std::shared_ptr<const ibBackendQueryColumn>         innerKey = temp ? temp->ResolveColumnByName(rcols.front()->GetName()) : nullptr;
 			if (temp != nullptr && innerKey != nullptr) {
 				ibSemiJoinExists sj;
 				sj.m_inner    = temp;                          // the materialised permission rows (a real DB temp)
@@ -1019,8 +1004,7 @@ void ibValueQueryDecorator::DispatchLinqMethod(ibLinqMethod method, ibValue& ret
 				m_target->AddSemiJoin(sj);
 				m_target->AdoptTempManager(std::move(mgr));    // temp lives across Execute/pages; DROP on builder death
 			} else {
-				const ibBackendQueryable* raw = m_target->AdoptOwnedSource(std::move(innerSource));
-				m_target->Join(raw, lcols.front(), rcols.front(), op, ibQueryJoinKind::Inner);
+				m_target->Join(innerSource, lcols.front(), rcols.front(), op, ibQueryJoinKind::Inner);
 			}
 		}
 		ret = new ibValueQueryDecorator(m_target, m_source, m_sourceName);   // chain: same target

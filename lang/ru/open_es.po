@@ -3120,6 +3120,28 @@ msgstr "Фоновое задание ЗАВЕРШИЛОСЬ ОШИБКОЙ: %s 
 msgid "Background job FAILED: %s - unknown error"
 msgstr "Фоновое задание ЗАВЕРШИЛОСЬ ОШИБКОЙ: %s - неизвестная ошибка"
 
+#: src/engine/backend/job/jobBackground.cpp:671
+#, c-format
+msgid "Background job FAILED: %s - not enough memory"
+msgstr "Фоновое задание ЗАВЕРШИЛОСЬ ОШИБКОЙ: %s - недостаточно памяти"
+
+#: src/engine/backend/job/jobBackground.cpp:675
+#: src/engine/backend/job/jobManager.cpp:475
+msgid "not enough memory"
+msgstr "недостаточно памяти"
+
+#: src/engine/backend/metaCollection/partial/accountingRegisterMetadataTotals.cpp:3544
+#: src/engine/backend/metaCollection/partial/accumulationRegisterMetadataTotals.cpp:775
+#, c-format
+msgid ""
+"%s: the balance and turnovers by period would make %llu rows (%zu keys over "
+"%zu periods), more than a reading folded in memory may hold (%zu). Narrow the "
+"interval, read by a longer period, or filter by the dimensions."
+msgstr ""
+"%s: остатки и обороты по периодам дали бы %llu строк (%zu ключей на %zu "
+"периодов) - больше, чем может удержать чтение, свёрнутое в памяти (%zu). "
+"Сузьте интервал, читайте по более длинному периоду или отберите по измерениям."
+
 #: src/engine/backend/job/jobBackground.cpp:656
 #: src/engine/backend/job/jobManager.cpp:474
 #: src/engine/backend/metaCollection/partial/reference/referenceQuery.cpp:77
@@ -6532,6 +6554,11 @@ msgstr "отбор указывает '%s', который не является
 #, c-format
 msgid "filter names '%s', which is not a dimension of '%s' - this reading folds the records and is filtered by dimensions only"
 msgstr "отбор указывает '%s', который не является измерением '%s' - это чтение сворачивает записи, и отбирать его можно только по измерениям"
+
+#: src/engine/backend/metaCollection/partial/accountingRegisterMetadataTotals.cpp:557
+#, c-format
+msgid "filter names '%s', which is not an account dimension kind of '%s' - a Map is keyed by the kinds, a dimension is named in a Structure"
+msgstr "отбор указывает '%s', который не является видом аналитики '%s' - ключи Map - это виды аналитики, измерение называют в Structure"
 
 #: src/engine/backend/metaCollection/partial/registerQueryLowering.h:1106
 #, c-format

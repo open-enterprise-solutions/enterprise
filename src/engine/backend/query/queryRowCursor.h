@@ -33,7 +33,7 @@ class ibQueryRow
 public:
 	virtual ~ibQueryRow() = default;
 	virtual ibValue Get(ibMetaID id) const = 0;
-	ibValue Get(const ibBackendQueryColumn* col) const { return col != nullptr ? Get(col->GetColumnId()) : ibValue(); }
+	ibValue Get(const std::shared_ptr<const ibBackendQueryColumn>& col) const { return col != nullptr ? Get(col->GetColumnId()) : ibValue(); }
 
 	// ⭐⭐ …AND BY THE NAME A COLUMN WAS PUBLISHED UNDER. An aggregate's figure has no column object to
 	// ask for — both roads give it a synthetic id and a NAME — so a row that carries one answers for

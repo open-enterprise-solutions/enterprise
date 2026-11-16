@@ -23,40 +23,40 @@ private:
 	void AppendCellCommand(ibGrid* view, int row, int col, const ibSpreadsheetCellDescription& cell)
 	{
 		AppendCommand<ibGridCommandAttrBackgroundColour>(row, col, typeConv::ColourToWxColour(cell.m_backgroundColour),
-			ibGridCommandAttrBackgroundColour::GetAttrValue(view->GetOrCreateCellAttrPtr(row, col)));
+			ibGridCommandAttrBackgroundColour::GetAttrValue(view->GetCellAttrPtr(row, col)));
 
 		AppendCommand<ibGridCommandAttrTextColour>(row, col, typeConv::ColourToWxColour(cell.m_textColour),
-			ibGridCommandAttrTextColour::GetAttrValue(view->GetOrCreateCellAttrPtr(row, col)));
+			ibGridCommandAttrTextColour::GetAttrValue(view->GetCellAttrPtr(row, col)));
 
 		AppendCommand<ibGridCommandAttrTextOrient>(row, col, cell.m_textOrient,
-			ibGridCommandAttrTextOrient::GetAttrValue(view->GetOrCreateCellAttrPtr(row, col)));
+			ibGridCommandAttrTextOrient::GetAttrValue(view->GetCellAttrPtr(row, col)));
 
 		AppendCommand<ibGridCommandAttrFont>(row, col, typeConv::FontToWxFont(cell.m_font),
-			ibGridCommandAttrFont::GetAttrValue(view->GetOrCreateCellAttrPtr(row, col)));
+			ibGridCommandAttrFont::GetAttrValue(view->GetCellAttrPtr(row, col)));
 
 		AppendCommand<ibGridCommandAttrAlignment>(row, col, wxSize(cell.m_alignHorz, cell.m_alignVert),
-			ibGridCommandAttrAlignment::GetAttrValue(view->GetOrCreateCellAttrPtr(row, col)));
+			ibGridCommandAttrAlignment::GetAttrValue(view->GetCellAttrPtr(row, col)));
 
 		AppendCommand<ibGridCommandAttrBorderLeft>(row, col, GetCellGridBorder(cell.m_borderAt[0]),
-			ibGridCommandAttrBorderLeft::GetAttrValue(view->GetOrCreateCellAttrPtr(row, col)));
+			ibGridCommandAttrBorderLeft::GetAttrValue(view->GetCellAttrPtr(row, col)));
 
 		AppendCommand<ibGridCommandAttrBorderRight>(row, col, GetCellGridBorder(cell.m_borderAt[1]),
-			ibGridCommandAttrBorderRight::GetAttrValue(view->GetOrCreateCellAttrPtr(row, col)));
+			ibGridCommandAttrBorderRight::GetAttrValue(view->GetCellAttrPtr(row, col)));
 
 		AppendCommand<ibGridCommandAttrBorderTop>(row, col, GetCellGridBorder(cell.m_borderAt[2]),
-			ibGridCommandAttrBorderTop::GetAttrValue(view->GetOrCreateCellAttrPtr(row, col)));
+			ibGridCommandAttrBorderTop::GetAttrValue(view->GetCellAttrPtr(row, col)));
 
 		AppendCommand<ibGridCommandAttrBorderBottom>(row, col, GetCellGridBorder(cell.m_borderAt[3]),
-			ibGridCommandAttrBorderBottom::GetAttrValue(view->GetOrCreateCellAttrPtr(row, col)));
+			ibGridCommandAttrBorderBottom::GetAttrValue(view->GetCellAttrPtr(row, col)));
 
 		AppendCommand<ibGridCommandAttrFitMode>(row, col, ibToGridFitMode(cell.m_fitMode),
-			ibGridCommandAttrFitMode::GetAttrValue(view->GetOrCreateCellAttrPtr(row, col)));
+			ibGridCommandAttrFitMode::GetAttrValue(view->GetCellAttrPtr(row, col)));
 
 		AppendCommand<ibGridCommandAttrSize>(row, col, wxSize(cell.m_row_size, cell.m_col_size),
-			ibGridCommandAttrSize::GetAttrValue(view->GetOrCreateCellAttrPtr(row, col)));
+			ibGridCommandAttrSize::GetAttrValue(view->GetCellAttrPtr(row, col)));
 
 		AppendCommand<ibGridCommandAttrReadOnly>(row, col, cell.m_isReadOnly,
-			ibGridCommandAttrReadOnly::GetAttrValue(view->GetOrCreateCellAttrPtr(row, col)));
+			ibGridCommandAttrReadOnly::GetAttrValue(view->GetCellAttrPtr(row, col)));
 
 		AppendCommand<ibGridCommandCellValue>(row, col, cell.m_value,
 			view->GetCellValue(row, col));

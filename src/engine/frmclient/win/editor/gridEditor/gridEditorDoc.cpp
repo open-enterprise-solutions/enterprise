@@ -22,17 +22,26 @@ namespace {
 // cross-table's header is the first thing in the tree that merges INSIDE a wide area (dumps
 // 2026-08-25 22:26 and 22:44, both on cell 2,2).
 //
-// Asked HERE, at the point of failure and once for all four load paths: the loader is what knows the
+// Asked HERE, at the point of failure and once for every load path: the loader is what knows the
 // grid's state, and teaching every producer which of its cells not to touch would be the same rule
 // spelled out in as many places as there are producers.
 void GridApplyCellSpan(ibGrid& grid, int row, int col, int rowSpan, int colSpan)
 {
 	if (rowSpan < 0 || colSpan < 0)
 		return;   // the description's own "this one is covered", where a writer states it
+	// ⚠ THE ORDINARY CELL IS NOT ASKED, 1×1 onto a cell every loader has just made — a new table, rows and columns
+	// appended — which holds no merge. Set, it was an event and the printing brakes moved, each brake an event with the
+	// mouse's state read from the system: 13 % of a 100 000-line sheet's load (2026-11-16, load-million-rows.md § 12);
+	// asked, the grid makes the cell's look from the description (ibGridEditorAttrProvider).
+	if (rowSpan <= 1 && colSpan <= 1)
+		return;
 	int haveRows = 1, haveCols = 1;
 	grid.GetCellSize(row, col, &haveRows, &haveCols);
 	if (haveRows >= 1 && haveCols >= 1)
 		grid.SetCellSize(row, col, rowSpan, colSpan, false);
+	// The look asked for above is kept for this cell, made before the merge — and for an area being put, before the
+	// document holds the cell (it is told first): dropped, so the cell is drawn from what it is now.
+	grid.RefreshAttr(row, col);
 }
 
 } // namespace
@@ -51,10 +60,15 @@ int ibSpreadsheetRowHeight(const ibSpreadsheetObject& doc, int row, wxDC& dc, co
 	// in the default font never makes a row grow, whatever the platform's font metrics come to. It may come
 	// out below nothing (a scaled display, where that line is taller than the row): the row still does not
 	// grow for it, and a larger line grows it by what it adds.
-	const wxFont ordinary = typeConv::FontToWxFont(ibDefaultSpreadsheetFont());
-	dc.SetFont(ordinary);
-	const int padding = s_defaultRowHeight - dc.GetCharHeight();
-	const double defaultPoints = ordinary.GetFractionalPointSize();
+	//
+	// ⚠ AND NO wxFont UNTIL A CELL IS MEASURED. The quick answer below is asked of the core's font; a wxFont is a
+	// screen DC taken and given back to be made, and setting one on a DC compares face names through the system —
+	// two fonts a row made and set for every row of a sheet whose rows all take the quick answer (2026-11-16,
+	// load-million-rows.md § 12).
+	const ibFont ordinaryFont = ibDefaultSpreadsheetFont();
+	const double defaultPoints = ordinaryFont.m_pointSize;
+	wxFont ordinary;
+	int padding = 0;
 
 	// ⚠ BROKEN AGAINST THE WIDTH THE DRAWING BREAKS IT AGAINST, or the two count lines apart and the row
 	// comes out a line short. Of a column's width the cell keeps the grid line, the renderer's pixel on
@@ -78,17 +92,22 @@ int ibSpreadsheetRowHeight(const ibSpreadsheetObject& doc, int row, wxDC& dc, co
 			continue;
 
 		const bool wrap = cell->m_fitMode == ibSpreadsheetCellDescription::ibFitMode::Mode_Wrap;
-		const wxFont font = cell->m_font.IsOk() ? typeConv::FontToWxFont(cell->m_font) : ordinary;
+		const double points = cell->m_font.IsOk() ? cell->m_font.m_pointSize : defaultPoints;
 
 		// The quick answer, which is most cells of most sheets: one line in a font no larger than the
 		// default fits the default row. Nothing is measured for it.
 		const wxString text = doc.ComputeStringValueFromParameters(cell->m_value, cell->m_fillSetType, langCode);
 		if (text.IsEmpty())
 			continue;
-		if (!wrap && text.Find(wxT('\n')) == wxNOT_FOUND && font.GetFractionalPointSize() <= defaultPoints)
+		if (!wrap && text.Find(wxT('\n')) == wxNOT_FOUND && points <= defaultPoints)
 			continue;
 
-		dc.SetFont(font);
+		if (!ordinary.IsOk()) {
+			ordinary = typeConv::FontToWxFont(ordinaryFont);
+			dc.SetFont(ordinary);
+			padding = s_defaultRowHeight - dc.GetCharHeight();
+		}
+		dc.SetFont(cell->m_font.IsOk() ? typeConv::FontToWxFont(cell->m_font) : ordinary);
 
 		wxArrayString lines;
 		ibGrid::ParseLines(text, lines);
@@ -155,6 +174,253 @@ int ibSpreadsheetColWidth(const ibSpreadsheetObject& doc, int col, wxDC& dc, con
 	return width > 0 ? wxMax(width, WXGRID_MIN_COL_WIDTH) : desc.GetColSize(col);
 }
 
+#pragma region table
+
+ibGridEditor::ibGridEditorTable::ibGridEditorTable(ibGridEditor* view, int numRows, int numCols)
+	: m_view(view), m_numRows(numRows), m_numCols(numCols)
+{
+	// the look from the same cells the text comes from
+	SetAttrProvider(new ibGridEditorAttrProvider(view));
+}
+
+const ibSpreadsheetCellDescription* ibGridEditor::ibGridEditorTable::GetCell(int row, int col) const
+{
+	return m_view->m_spreadsheetObject != nullptr ? m_view->m_spreadsheetObject->GetSpreadsheetDesc().GetCell(row, col) : nullptr;
+}
+
+ibSpreadsheetFillType ibGridEditor::ibGridEditorTable::GetFillType(int row, int col) const
+{
+	const ibSpreadsheetCellDescription* const cell = GetCell(row, col);
+	return cell != nullptr ? cell->m_fillSetType : ibSpreadsheetFillType_StrText;
+}
+
+bool ibGridEditor::ibGridEditorTable::IsEmptyCell(int row, int col)
+{
+	const ibSpreadsheetCellDescription* const cell = GetCell(row, col);
+	if (cell == nullptr)
+		return true;
+	return cell->m_fillSetType == ibSpreadsheetFillType_StrText || cell->m_fillSetType == ibSpreadsheetFillType_StrTemplate
+		? ibLocalization::IsEmptyLocalizationString(cell->m_value) : cell->m_value.IsEmpty();
+}
+
+bool ibGridEditor::ibGridEditorTable::CanGetValueAs(int row, int col, const wxString& typeName)
+{
+	const ibSpreadsheetFillType type = GetFillType(row, col);
+
+	if (type == ibSpreadsheetFillType_StrText)
+		return typeName == s_strTypeTextOrString;
+	else if (type == ibSpreadsheetFillType_StrTemplate)
+		return typeName == s_strTypeTemplate;
+	else if (type == ibSpreadsheetFillType_StrParameter)
+		return typeName == s_strTypeParameter;
+
+	return typeName == wxT("string");
+}
+
+bool ibGridEditor::ibGridEditorTable::CanSetValueAs(int row, int col, const wxString& typeName)
+{
+	return CanGetValueAs(row, col, typeName);
+}
+
+void ibGridEditor::ibGridEditorTable::GetValue(int row, int col, wxString& s)
+{
+	const ibSpreadsheetCellDescription* const cell = GetCell(row, col);
+	if (cell == nullptr) {
+		s.clear();
+		return;
+	}
+
+	if (cell->m_fillSetType == ibSpreadsheetFillType_StrText || cell->m_fillSetType == ibSpreadsheetFillType_StrTemplate)
+		s = ibBackendLocalization::GetTranslateGetRawLocText(cell->m_value);
+	else if (cell->m_fillSetType == ibSpreadsheetFillType_StrParameter)
+		s = cell->m_value;
+}
+
+void ibGridEditor::ibGridEditorTable::SetValue(int row, int col, const wxString& s)
+{
+	if (m_view->m_spreadsheetObject == nullptr)
+		return;
+
+	ibSpreadsheetDescription& desc = m_view->m_spreadsheetObject->GetSpreadsheetDesc();
+	const ibSpreadsheetCellDescription* const cell = desc.GetCell(row, col);
+	const wxString value = cell != nullptr ? wxString(cell->m_value) : wxString();
+	if (s == value)
+		return;
+
+	// A caption and a template keep every language: what is typed is the user's language of it.
+	wxString written = s;
+	const ibSpreadsheetFillType type = cell != nullptr ? cell->m_fillSetType : ibSpreadsheetFillType_StrText;
+	if (type == ibSpreadsheetFillType_StrText || type == ibSpreadsheetFillType_StrTemplate) {
+		if (ibLocalization::IsLocalizationString(value) && !ibLocalization::IsLocalizationString(s)) {
+			ibLocalizationEntryArray array;
+			if (!ibLocalization::CreateLocalizationArray(value, array))
+				return;
+			ibLocalization::SetArrayTranslate(ibBackendLocalization::GetUserLanguage(), array, s);
+			written = ibLocalization::GetRawLocText(array);
+		}
+		else if (!ibLocalization::IsLocalizationString(s)) {
+			written = ibLocalization::CreateLocalizationRawLocText(ibBackendLocalization::GetUserLanguage(), s);
+		}
+	}
+
+	desc.SetCellValue(row, col, written);
+	OnGridTableNotify(row, col, written);   // the editor hands an edit on (OnGridTableModified)
+}
+
+void ibGridEditor::ibGridEditorTable::SetValueAsCustom(int row, int col, const wxString& typeName, void* value)
+{
+	if (value == nullptr || m_view->m_spreadsheetObject == nullptr)
+		return;
+
+	ibSpreadsheetFillType type = ibSpreadsheetFillType_StrText;
+	if (stringUtils::IsSameAs(typeName, s_strTypeTemplate))
+		type = ibSpreadsheetFillType_StrTemplate;
+	else if (stringUtils::IsSameAs(typeName, s_strTypeParameter))
+		type = ibSpreadsheetFillType_StrParameter;
+	else if (!stringUtils::IsSameAs(typeName, s_strTypeTextOrString))
+		return;
+
+	m_view->m_spreadsheetObject->GetSpreadsheetDesc().SetCellFillType(row, col, type);
+	SetValue(row, col, *static_cast<wxString*>(value));
+}
+
+void* ibGridEditor::ibGridEditorTable::GetValueAsCustom(int row, int col, const wxString& typeName)
+{
+	const ibSpreadsheetCellDescription* const cell = GetCell(row, col);
+	const wxString raw = cell != nullptr ? wxString(cell->m_value) : wxString();
+
+	// A caption and a template are asked for AS WRITTEN — every language, for the editor that edits
+	// them. The stored form of a plain text is the language in force (CreateLocalizationRawLocText),
+	// which the text fills used to take apart by hand and lost: a cell holding plain text came back empty.
+	if (stringUtils::IsSameAs(typeName, s_strTypeTextOrString) || stringUtils::IsSameAs(typeName, s_strTypeTemplate))
+		return new wxString(ibLocalization::CreateLocalizationRawLocText(ibBackendLocalization::GetUserLanguage(), raw));
+
+	if (stringUtils::IsSameAs(typeName, s_strTypeParameter)) {
+		const ibSpreadsheetFillType type = GetFillType(row, col);
+		if (type == ibSpreadsheetFillType_StrText || type == ibSpreadsheetFillType_StrTemplate)
+			return new wxString(ibBackendLocalization::GetTranslateGetRawLocText(raw));
+		return new wxString(raw);
+	}
+
+	return nullptr;
+}
+
+bool ibGridEditor::ibGridEditorTable::InsertRows(size_t pos, size_t numRows)
+{
+	if (pos >= static_cast<size_t>(m_numRows))
+		return AppendRows(numRows);
+	wxFAIL_MSG(wxT("ibGridEditorTable: rows are not put inside the sheet - its cells are the document's"));
+	return false;
+}
+
+bool ibGridEditor::ibGridEditorTable::AppendRows(size_t numRows)
+{
+	m_numRows += static_cast<int>(numRows);
+	if (GetView()) {
+		ibGridTableMessage msg(this, wxGRIDTABLE_NOTIFY_ROWS_APPENDED, static_cast<int>(numRows));
+		GetView()->ProcessTableMessage(msg);
+	}
+	return true;
+}
+
+bool ibGridEditor::ibGridEditorTable::DeleteRows(size_t pos, size_t numRows)
+{
+	if (pos >= static_cast<size_t>(m_numRows)) {
+		wxFAIL_MSG(wxT("ibGridEditorTable::DeleteRows: no such row"));
+		return false;
+	}
+	numRows = wxMin(numRows, static_cast<size_t>(m_numRows) - pos);
+	if (pos + numRows != static_cast<size_t>(m_numRows)) {
+		wxFAIL_MSG(wxT("ibGridEditorTable: rows are not taken from inside the sheet - its cells are the document's"));
+		return false;
+	}
+	m_numRows -= static_cast<int>(numRows);
+	if (GetView()) {
+		ibGridTableMessage msg(this, wxGRIDTABLE_NOTIFY_ROWS_DELETED, static_cast<int>(pos), static_cast<int>(numRows));
+		GetView()->ProcessTableMessage(msg);
+	}
+	return true;
+}
+
+bool ibGridEditor::ibGridEditorTable::InsertCols(size_t pos, size_t numCols)
+{
+	if (pos >= static_cast<size_t>(m_numCols))
+		return AppendCols(numCols);
+	wxFAIL_MSG(wxT("ibGridEditorTable: columns are not put inside the sheet - its cells are the document's"));
+	return false;
+}
+
+bool ibGridEditor::ibGridEditorTable::AppendCols(size_t numCols)
+{
+	m_numCols += static_cast<int>(numCols);
+	if (GetView()) {
+		ibGridTableMessage msg(this, wxGRIDTABLE_NOTIFY_COLS_APPENDED, static_cast<int>(numCols));
+		GetView()->ProcessTableMessage(msg);
+	}
+	return true;
+}
+
+bool ibGridEditor::ibGridEditorTable::DeleteCols(size_t pos, size_t numCols)
+{
+	if (pos >= static_cast<size_t>(m_numCols)) {
+		wxFAIL_MSG(wxT("ibGridEditorTable::DeleteCols: no such column"));
+		return false;
+	}
+	numCols = wxMin(numCols, static_cast<size_t>(m_numCols) - pos);
+	if (pos + numCols != static_cast<size_t>(m_numCols)) {
+		wxFAIL_MSG(wxT("ibGridEditorTable: columns are not taken from inside the sheet - its cells are the document's"));
+		return false;
+	}
+	m_numCols -= static_cast<int>(numCols);
+	if (GetView()) {
+		ibGridTableMessage msg(this, wxGRIDTABLE_NOTIFY_COLS_DELETED, static_cast<int>(pos), static_cast<int>(numCols));
+		GetView()->ProcessTableMessage(msg);
+	}
+	return true;
+}
+
+ibGridCellAttr* ibGridEditor::ibGridEditorAttrProvider::GetAttr(int row, int col, ibGridCellAttr::wxAttrKind kind) const
+{
+	ibGridCellAttr* const held = ibGridCellAttrProvider::GetAttr(row, col, kind);
+
+	// Asked for the cell's OWN attribute, the grid is about to change it (GetOrCreateCellAttr): what it holds.
+	if (kind != ibGridCellAttr::Any || m_view->m_spreadsheetObject == nullptr)
+		return held;
+
+	const ibSpreadsheetCellDescription* const cell = m_view->m_spreadsheetObject->GetSpreadsheetDesc().GetCell(row, col);
+	if (cell == nullptr)
+		return held;
+
+	ibGridCellAttr* const look = new ibGridCellAttr;
+	look->SetAlignment(cell->m_alignHorz, cell->m_alignVert);
+	look->SetTextOrient(cell->m_textOrient);
+	look->SetFont(typeConv::FontToWxFont(cell->m_font));
+	look->SetBackgroundColour(typeConv::ColourToWxColour(cell->m_backgroundColour));
+	look->SetTextColour(typeConv::ColourToWxColour(cell->m_textColour));
+
+	look->SetBorderLeft(static_cast<wxPenStyle>(cell->m_borderAt[0].m_style), typeConv::ColourToWxColour(cell->m_borderAt[0].m_colour), cell->m_borderAt[0].m_width);
+	look->SetBorderRight(static_cast<wxPenStyle>(cell->m_borderAt[1].m_style), typeConv::ColourToWxColour(cell->m_borderAt[1].m_colour), cell->m_borderAt[1].m_width);
+	look->SetBorderTop(static_cast<wxPenStyle>(cell->m_borderAt[2].m_style), typeConv::ColourToWxColour(cell->m_borderAt[2].m_colour), cell->m_borderAt[2].m_width);
+	look->SetBorderBottom(static_cast<wxPenStyle>(cell->m_borderAt[3].m_style), typeConv::ColourToWxColour(cell->m_borderAt[3].m_colour), cell->m_borderAt[3].m_width);
+
+	look->SetFitMode(ibToGridFitMode(cell->m_fitMode));
+	look->SetReadOnly(cell->m_isReadOnly);
+
+	if (held == nullptr)
+		return look;
+
+	// What the grid holds stands over it — first merged in is what is kept (ibGridCellAttr::MergeWith).
+	ibGridCellAttr* const merged = new ibGridCellAttr;
+	merged->SetKind(ibGridCellAttr::Merged);
+	merged->MergeWith(held);
+	merged->MergeWith(look);
+	held->DecRef();
+	look->DecRef();
+	return merged;
+}
+
+#pragma endregion
+
 bool ibGridEditor::AssociateDocument(const std::shared_ptr<ibSpreadsheetObject>& doc)
 {
 	if (m_spreadsheetObject != doc) {
@@ -220,21 +486,16 @@ void ibGridEditor::RequestAutoRowHeights(int fromRow, int toRow)
 
 #pragma region file
 
+// A template or a file: the document of the editor made from it — read the same way as one shown on a form.
 bool ibGridEditor::LoadDocument(const ibSpreadsheetDescription& spreadsheetDesc)
 {
-	if (!LoadSpreadsheet(spreadsheetDesc))
-		return false;
-
-	std::shared_ptr<ibSpreadsheetObject> doc =
-		std::make_shared<ibSpreadsheetObject>(spreadsheetDesc);
-
-	const bool associated = AssociateDocument(doc);
-	FitAutoRowHeights();   // against the document just associated — the one the rows are asked of
-	return associated;
+	return LoadDocument(std::make_shared<ibSpreadsheetObject>(spreadsheetDesc));
 }
 
 bool ibGridEditor::LoadDocument(const std::shared_ptr<ibSpreadsheetObject>& doc)
 {
+	// The document first: the table reads the cells there (ibGridEditorTable).
+	const bool associated = AssociateDocument(doc);
 	const ibSpreadsheetDescription& spreadsheetDesc = doc->GetSpreadsheetDesc();
 
 	// ⚠ THE SHEET COMES UP WHOLE — the window held still while it is read in, as its rows' heights are (FitAutoRowHeights),
@@ -248,39 +509,15 @@ bool ibGridEditor::LoadDocument(const std::shared_ptr<ibSpreadsheetObject>& doc)
 		ibGridUpdateLocker batch(this);
 
 		ibGrid::SetTable(
-			new ibGridEditorStringTable(spreadsheetDesc.GetNumberRows(), spreadsheetDesc.GetNumberCols()), true);
+			new ibGridEditorTable(this, spreadsheetDesc.GetNumberRows(), spreadsheetDesc.GetNumberCols()), true);
 
 		ibGrid::SetEvtHandlerEnabled(false);
 
-		for (int row = 0; row < spreadsheetDesc.GetNumberRows(); row++) {
-
-			for (int col = 0; col < spreadsheetDesc.GetNumberCols(); col++) {
-
-				const ibSpreadsheetCellDescription* cell = spreadsheetDesc.GetCell(row, col);
-				if (cell == nullptr)
-					continue;
-
-				ibGridCellAttrPtr attr = GetOrCreateCellAttrPtr(row, col);
-				attr->SetAlignment(cell->m_alignHorz, cell->m_alignVert);
-
-				GridApplyCellSpan(*this, row, col, cell->m_row_size, cell->m_col_size);
-
-				attr->SetTextOrient(cell->m_textOrient);
-				attr->SetFont(typeConv::FontToWxFont(cell->m_font));
-				attr->SetBackgroundColour(typeConv::ColourToWxColour(cell->m_backgroundColour));
-				attr->SetTextColour(typeConv::ColourToWxColour(cell->m_textColour));
-
-				attr->SetBorderLeft(static_cast<wxPenStyle>(cell->m_borderAt[0].m_style), typeConv::ColourToWxColour(cell->m_borderAt[0].m_colour), cell->m_borderAt[0].m_width);
-				attr->SetBorderRight(static_cast<wxPenStyle>(cell->m_borderAt[1].m_style), typeConv::ColourToWxColour(cell->m_borderAt[1].m_colour), cell->m_borderAt[1].m_width);
-				attr->SetBorderTop(static_cast<wxPenStyle>(cell->m_borderAt[2].m_style), typeConv::ColourToWxColour(cell->m_borderAt[2].m_colour), cell->m_borderAt[2].m_width);
-				attr->SetBorderBottom(static_cast<wxPenStyle>(cell->m_borderAt[3].m_style), typeConv::ColourToWxColour(cell->m_borderAt[3].m_colour), cell->m_borderAt[3].m_width);
-
-				attr->SetFitMode(ibToGridFitMode(cell->m_fitMode));
-				attr->SetReadOnly(cell->m_isReadOnly);
-
-				wxSharedPtr<wxString> ptr = wxSharedPtr<wxString>(new wxString(doc->ComputeStringValueFromParameters(cell->m_value, cell->m_fillSetType)));
-				m_table->SetValueAsCustom(row, col, s_strTypeTextOrString, ptr.get());
-			}
+		// The cells are the document's (ibGridEditorTable): of a cell the grid keeps only a merge.
+		for (int idx = 0; idx < spreadsheetDesc.GetCellCount(); idx++) {
+			const ibSpreadsheetCellDescription* cell = spreadsheetDesc.GetCellByIdx(idx);
+			if (cell != nullptr)
+				GridApplyCellSpan(*this, cell->m_row, cell->m_col, cell->m_row_size, cell->m_col_size);
 		}
 
 		m_rowAreaAt.Clear();
@@ -356,7 +593,7 @@ bool ibGridEditor::LoadDocument(const std::shared_ptr<ibSpreadsheetObject>& doc)
 				continue;
 
 			if ((int)row_size->m_row >= ibGrid::GetNumberRows())
-				ibGrid::AppendCols((int)row_size->m_row - ibGrid::GetNumberRows() + 1);
+				ibGrid::AppendRows((int)row_size->m_row - ibGrid::GetNumberRows() + 1);   // rows — it said columns, and the row then set did not exist
 
 			ibGrid::SetRowSize(row_size->m_row, row_size->m_height, 1.0f, false);
 		}
@@ -384,8 +621,6 @@ bool ibGridEditor::LoadDocument(const std::shared_ptr<ibSpreadsheetObject>& doc)
 	// void that reads as a rendering failure. Loading IS the moment that changes, so the trigger
 	// belongs inside it: a caller cannot forget what it never has to remember (Max, 2026-08-19).
 	FillVisibleArea();
-
-	const bool associated = AssociateDocument(doc);
 	FitAutoRowHeights();   // the rows without a height of their own, sized to their text before the first paint
 	return associated;
 }
@@ -399,23 +634,17 @@ bool ibGridEditor::SaveDocument(std::shared_ptr<ibSpreadsheetObject>& doc) const
 {
 	return SaveSpreadsheet(doc->GetSpreadsheetDesc());
 }
-
 void ibGridEditor::PutDocument(const std::shared_ptr<ibSpreadsheetObject>& doc, unsigned int groupLevel)
 {
 	ibGrid::SetEvtHandlerEnabled(false);
 
 	if (m_table == nullptr) {
 		ibGrid::SetTable(
-			new ibGridEditorStringTable, true);
+			new ibGridEditorTable(this), true);
 	}
 
 	const int maxRowBrake = GetMaxRowBrake();
 	const int maxColBrake = GetMaxColBrake();
-
-	// ⭐ THE AREA IS READ IN THE LANGUAGE OF THE DOCUMENT IT LANDS IN — the language the document's own
-	// PutArea renders the same cells in, through the same door, so the grid and the stored cell say
-	// one thing.
-	const wxString langCode = m_spreadsheetObject != nullptr ? m_spreadsheetObject->GetLangCode() : ibString();
 
 	ibGrid::AppendRows(doc->GetNumberRows());
 	if (doc->GetNumberCols() > m_table->GetNumberCols())
@@ -424,35 +653,13 @@ void ibGridEditor::PutDocument(const std::shared_ptr<ibSpreadsheetObject>& doc, 
 	m_numRows = m_table->GetNumberRows();
 	m_numCols = m_table->GetNumberCols();
 
-	for (int row = 0; row < doc->GetNumberRows(); row++) {
-
-		for (int col = 0; col < doc->GetNumberCols(); col++) {
-
-			const ibSpreadsheetCellDescription* cell = doc->GetSpreadsheetDesc().GetCell(row, col);
-			if (cell == nullptr)
-				continue;
-
-			ibGridCellAttrPtr attr = GetOrCreateCellAttrPtr(maxRowBrake + row, col);
-			attr->SetAlignment(cell->m_alignHorz, cell->m_alignVert);
-
-			GridApplyCellSpan(*this, maxRowBrake + row, col, cell->m_row_size, cell->m_col_size);
-
-			attr->SetTextOrient(cell->m_textOrient);
-			attr->SetFont(typeConv::FontToWxFont(cell->m_font));
-			attr->SetBackgroundColour(typeConv::ColourToWxColour(cell->m_backgroundColour));
-			attr->SetTextColour(typeConv::ColourToWxColour(cell->m_textColour));
-
-			attr->SetBorderLeft(static_cast<wxPenStyle>(cell->m_borderAt[0].m_style), typeConv::ColourToWxColour(cell->m_borderAt[0].m_colour), cell->m_borderAt[0].m_width);
-			attr->SetBorderRight(static_cast<wxPenStyle>(cell->m_borderAt[1].m_style), typeConv::ColourToWxColour(cell->m_borderAt[1].m_colour), cell->m_borderAt[1].m_width);
-			attr->SetBorderTop(static_cast<wxPenStyle>(cell->m_borderAt[2].m_style), typeConv::ColourToWxColour(cell->m_borderAt[2].m_colour), cell->m_borderAt[2].m_width);
-			attr->SetBorderBottom(static_cast<wxPenStyle>(cell->m_borderAt[3].m_style), typeConv::ColourToWxColour(cell->m_borderAt[3].m_colour), cell->m_borderAt[3].m_width);
-
-			attr->SetFitMode(ibToGridFitMode(cell->m_fitMode));
-			attr->SetReadOnly(cell->m_isReadOnly);
-
-			wxSharedPtr<wxString> ptr = wxSharedPtr<wxString>(new wxString(doc->ComputeStringValueFromParameters(cell->m_value, cell->m_fillSetType, langCode)));
-			m_table->SetValueAsCustom(maxRowBrake + row, col, s_strTypeTextOrString, ptr.get());
-		}
+	// ⭐ THE AREA'S CELLS ARE THE DOCUMENT'S — it stores them as it puts the area (ibSpreadsheetObject::PutArea, the
+	// text in its language), and the grid reads them there (ibGridEditorTable). Of a cell the grid keeps a merge.
+	const ibSpreadsheetDescription& area = doc->GetSpreadsheetDesc();
+	for (int idx = 0; idx < area.GetCellCount(); idx++) {
+		const ibSpreadsheetCellDescription* cell = area.GetCellByIdx(idx);
+		if (cell != nullptr)
+			GridApplyCellSpan(*this, maxRowBrake + cell->m_row, cell->m_col, cell->m_row_size, cell->m_col_size);
 	}
 
 	// A height only where the area's row has one; the rest have automatic height, fitted once the document
@@ -486,14 +693,11 @@ void ibGridEditor::JoinDocument(const std::shared_ptr<ibSpreadsheetObject>& doc,
 
 	if (m_table == nullptr) {
 		ibGrid::SetTable(
-			new ibGridEditorStringTable, true);
+			new ibGridEditorTable(this), true);
 	}
 
 	const int maxRowBrake = GetMaxRowBrake();
 	const int maxColBrake = GetMaxColBrake();
-
-	// the language of the document the area lands in — see PutDocument
-	const wxString langCode = m_spreadsheetObject != nullptr ? m_spreadsheetObject->GetLangCode() : ibString();
 
 	if (doc->GetNumberRows() > m_table->GetNumberRows())
 		ibGrid::AppendRows(doc->GetNumberRows() - m_table->GetNumberRows());
@@ -502,35 +706,12 @@ void ibGridEditor::JoinDocument(const std::shared_ptr<ibSpreadsheetObject>& doc,
 	m_numRows = m_table->GetNumberRows();
 	m_numCols = m_table->GetNumberCols();
 
-	for (int row = 0; row < doc->GetNumberRows(); row++) {
-
-		for (int col = 0; col < doc->GetNumberCols(); col++) {
-
-			const ibSpreadsheetCellDescription* cell = doc->GetSpreadsheetDesc().GetCell(row, col);
-			if (cell == nullptr)
-				continue;
-
-			ibGridCellAttrPtr attr = GetOrCreateCellAttrPtr(row, maxColBrake + col);
-			attr->SetAlignment(cell->m_alignHorz, cell->m_alignVert);
-
-			GridApplyCellSpan(*this, row, maxColBrake + col, cell->m_row_size, cell->m_col_size);
-
-			attr->SetTextOrient(cell->m_textOrient);
-			attr->SetFont(typeConv::FontToWxFont(cell->m_font));
-			attr->SetBackgroundColour(typeConv::ColourToWxColour(cell->m_backgroundColour));
-			attr->SetTextColour(typeConv::ColourToWxColour(cell->m_textColour));
-
-			attr->SetBorderLeft(static_cast<wxPenStyle>(cell->m_borderAt[0].m_style), typeConv::ColourToWxColour(cell->m_borderAt[0].m_colour), cell->m_borderAt[0].m_width);
-			attr->SetBorderRight(static_cast<wxPenStyle>(cell->m_borderAt[1].m_style), typeConv::ColourToWxColour(cell->m_borderAt[1].m_colour), cell->m_borderAt[1].m_width);
-			attr->SetBorderTop(static_cast<wxPenStyle>(cell->m_borderAt[2].m_style), typeConv::ColourToWxColour(cell->m_borderAt[2].m_colour), cell->m_borderAt[2].m_width);
-			attr->SetBorderBottom(static_cast<wxPenStyle>(cell->m_borderAt[3].m_style), typeConv::ColourToWxColour(cell->m_borderAt[3].m_colour), cell->m_borderAt[3].m_width);
-
-			attr->SetFitMode(ibToGridFitMode(cell->m_fitMode));
-			attr->SetReadOnly(cell->m_isReadOnly);
-
-			wxSharedPtr<wxString> ptr = wxSharedPtr<wxString>(new wxString(doc->ComputeStringValueFromParameters(cell->m_value, cell->m_fillSetType, langCode)));
-			m_table->SetValueAsCustom(row, maxColBrake + col, s_strTypeTextOrString, ptr.get());
-		}
+	// the area's cells are the document's, of a cell the grid keeps a merge — see PutDocument
+	const ibSpreadsheetDescription& area = doc->GetSpreadsheetDesc();
+	for (int idx = 0; idx < area.GetCellCount(); idx++) {
+		const ibSpreadsheetCellDescription* cell = area.GetCellByIdx(idx);
+		if (cell != nullptr)
+			GridApplyCellSpan(*this, cell->m_row, maxColBrake + cell->m_col, cell->m_row_size, cell->m_col_size);
 	}
 
 	// a height only where the area's row has one, the rest fitted afterwards — see PutDocument
@@ -572,153 +753,6 @@ void ibGridEditor::AppendColOutlineGroup(unsigned int start, unsigned int end, u
 	AddColGroup((int)start, (int)end, (int)level);
 	if (m_colOutlineWin) m_colOutlineWin->Refresh();
 	CalcDimensions();
-}
-
-bool ibGridEditor::LoadSpreadsheet(const ibSpreadsheetDescription& spreadsheetDesc)
-{
-	if (!spreadsheetDesc.IsEmptySpreadsheet())
-	{
-		ibGrid::SetTable(
-			new ibGridEditorStringTable(spreadsheetDesc.GetNumberRows(), spreadsheetDesc.GetNumberCols()), true);
-
-		ibGrid::SetEvtHandlerEnabled(false);
-
-		for (int row = 0; row < spreadsheetDesc.GetNumberRows(); row++) {
-
-			for (int col = 0; col < spreadsheetDesc.GetNumberCols(); col++) {
-
-				const ibSpreadsheetCellDescription* cell = spreadsheetDesc.GetCell(row, col);
-				if (cell == nullptr)
-					continue;
-
-				ibGridCellAttrPtr attr = GetOrCreateCellAttrPtr(row, col);
-				attr->SetAlignment(cell->m_alignHorz, cell->m_alignVert);
-
-				GridApplyCellSpan(*this, row, col, cell->m_row_size, cell->m_col_size);
-
-				attr->SetTextOrient(cell->m_textOrient);
-				attr->SetFont(typeConv::FontToWxFont(cell->m_font));
-				attr->SetBackgroundColour(typeConv::ColourToWxColour(cell->m_backgroundColour));
-				attr->SetTextColour(typeConv::ColourToWxColour(cell->m_textColour));
-
-				attr->SetBorderLeft(static_cast<wxPenStyle>(cell->m_borderAt[0].m_style), typeConv::ColourToWxColour(cell->m_borderAt[0].m_colour), cell->m_borderAt[0].m_width);
-				attr->SetBorderRight(static_cast<wxPenStyle>(cell->m_borderAt[1].m_style), typeConv::ColourToWxColour(cell->m_borderAt[1].m_colour), cell->m_borderAt[1].m_width);
-				attr->SetBorderTop(static_cast<wxPenStyle>(cell->m_borderAt[2].m_style), typeConv::ColourToWxColour(cell->m_borderAt[2].m_colour), cell->m_borderAt[2].m_width);
-				attr->SetBorderBottom(static_cast<wxPenStyle>(cell->m_borderAt[3].m_style), typeConv::ColourToWxColour(cell->m_borderAt[3].m_colour), cell->m_borderAt[3].m_width);
-
-				attr->SetFitMode(ibToGridFitMode(cell->m_fitMode));
-				attr->SetReadOnly(cell->m_isReadOnly);
-
-				if (cell->m_fillSetType == ibSpreadsheetFillType::ibSpreadsheetFillType_StrText) {
-					wxSharedPtr<wxString> ptr = wxSharedPtr<wxString>(new wxString(cell->m_value));
-					m_table->SetValueAsCustom(row, col, s_strTypeTextOrString, ptr.get());
-				}
-				else if (cell->m_fillSetType == ibSpreadsheetFillType::ibSpreadsheetFillType_StrTemplate) {
-					wxSharedPtr<wxString> ptr = wxSharedPtr<wxString>(new wxString(cell->m_value));
-					m_table->SetValueAsCustom(row, col, s_strTypeTemplate, ptr.get());
-				}
-				else if (cell->m_fillSetType == ibSpreadsheetFillType::ibSpreadsheetFillType_StrParameter) {
-					wxSharedPtr<wxString> ptr = wxSharedPtr<wxString>(new wxString(cell->m_value));
-					m_table->SetValueAsCustom(row, col, s_strTypeParameter, ptr.get());
-				}
-			}
-		}
-
-		m_rowAreaAt.Clear();
-
-		for (int idx = 0; idx < spreadsheetDesc.GetAreaNumberRows(); idx++) {
-
-			const ibSpreadsheetAreaDescription* area = spreadsheetDesc.GetRowAreaByIdx(idx);
-
-			if (area == nullptr)
-				continue;
-
-			//adding a new section
-			ibGridCellArea entry;
-
-			entry.m_start = area->m_start;
-			entry.m_end = area->m_end;
-			entry.m_areaLabel = area->m_label;
-
-			m_rowAreaAt.push_back(entry);
-		}
-
-		m_colAreaAt.Clear();
-
-		for (int idx = 0; idx < spreadsheetDesc.GetAreaNumberCols(); idx++) {
-
-			const ibSpreadsheetAreaDescription* area = spreadsheetDesc.GetColAreaByIdx(idx);
-
-			if (area == nullptr)
-				continue;
-
-			//adding a new section
-			ibGridCellArea entry;
-
-			entry.m_start = area->m_start;
-			entry.m_end = area->m_end;
-			entry.m_areaLabel = area->m_label;
-
-			m_colAreaAt.push_back(entry);
-		}
-
-		// Outline groups from desc (independent of label areas).
-		m_rowGroupAt.clear();
-		for (int idx = 0; idx < spreadsheetDesc.GetGroupNumberRows(); idx++) {
-			const ibSpreadsheetGroupDescription* g = spreadsheetDesc.GetRowGroupByIdx(idx);
-			if (g == nullptr) continue;
-			AddRowGroup((int)g->m_start, (int)g->m_end, (int)g->m_level, g->m_collapsed);
-		}
-		// The levels are in; the OUTLINE is what they mean — see ibGrid::NormalizeRowGroups.
-		NormalizeRowGroups();
-		m_colGroupAt.clear();
-		for (int idx = 0; idx < spreadsheetDesc.GetGroupNumberCols(); idx++) {
-			const ibSpreadsheetGroupDescription* g = spreadsheetDesc.GetColGroupByIdx(idx);
-			if (g == nullptr) continue;
-			AddColGroup((int)g->m_start, (int)g->m_end, (int)g->m_level, g->m_collapsed, g->m_head);
-		}
-		// …and the COLUMNS mean their levels the same way. This line was missing, so a column outline
-		// only ever worked when its producer handed it exact ranges — see ibGrid::NormalizeColGroups.
-		NormalizeColGroups();
-
-		m_rowBrakeAt.Clear();
-
-		for (int idx = 0; idx < spreadsheetDesc.GetBrakeNumberRows(); idx++)
-			m_rowBrakeAt.push_back(spreadsheetDesc.GetRowBrakeByIdx(idx));
-
-		m_colBrakeAt.Clear();
-
-		for (int idx = 0; idx < spreadsheetDesc.GetBrakeNumberCols(); idx++)
-			m_colBrakeAt.push_back(spreadsheetDesc.GetColBrakeByIdx(idx));
-
-		for (int idx = 0; idx < spreadsheetDesc.GetSizeNumberRows(); idx++) {
-			const ibSpreadsheetRowSizeDescription* row_size = spreadsheetDesc.GetRowSizeByIdx(idx);
-			if (row_size == nullptr)
-				continue;
-
-			if ((int)row_size->m_row >= ibGrid::GetNumberRows())
-				ibGrid::AppendCols((int)row_size->m_row - ibGrid::GetNumberRows() + 1);
-
-			ibGrid::SetRowSize((int)row_size->m_row, row_size->m_height, 1.0f, false);
-		}
-
-		for (int idx = 0; idx < spreadsheetDesc.GetSizeNumberCols(); idx++) {
-			const ibSpreadsheetColSizeDescription* col_size = spreadsheetDesc.GetColSizeByIdx(idx);
-			if (col_size == nullptr)
-				continue;
-
-			if ((int)col_size->m_col >= ibGrid::GetNumberCols())
-				ibGrid::AppendCols((int)col_size->m_col - ibGrid::GetNumberCols() + 1);
-
-			ibGrid::SetColSize(col_size->m_col, col_size->m_width, 1.0f, false);
-		}
-
-		FreezeTo(spreadsheetDesc.GetRowFreeze(), spreadsheetDesc.GetColFreeze());
-
-		ibGrid::SetEvtHandlerEnabled(true);
-	}
-
-	return true;
 }
 
 bool ibGridEditor::SaveSpreadsheet(ibSpreadsheetDescription& spreadsheetDesc) const

@@ -469,6 +469,15 @@ bool ibJobManager::Launch(ibJobEntry& e)
 			std::lock_guard<std::mutex> lk(pass->m_mtx);
 			pass->m_error = err.GetErrorDescription();
 		}
+		// what the library threw says what it was — see the background job's run (jobBackground.cpp)
+		catch (const std::bad_alloc&) {
+			std::lock_guard<std::mutex> lk(pass->m_mtx);
+			pass->m_error = _("not enough memory");
+		}
+		catch (const std::exception& err) {
+			std::lock_guard<std::mutex> lk(pass->m_mtx);
+			pass->m_error = ibString::FromUTF8(err.what());
+		}
 		catch (...) {
 			std::lock_guard<std::mutex> lk(pass->m_mtx);
 			pass->m_error = _("unknown exception");

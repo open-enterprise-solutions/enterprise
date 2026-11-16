@@ -95,7 +95,7 @@ public:
 	// ⚠ INTO AN EMPTY TABLE THE ROWS ARE EXCHANGED, not moved one by one: moving a row is not free (a
 	// checked build gives every moved-to container a proxy of its own), and the tables this is used for
 	// are usually just born — a leaf taken whole, the first branch of a union, a sorted rebuild.
-	void    AppendRowsFrom(ibQueryRamTable& src)              { if (m_rows.empty()) { m_rows.swap(src.m_rows); return; }
+	void    AppendRowsFrom(ibQueryRamTable&& src)             { if (m_rows.empty()) { m_rows.swap(src.m_rows); return; }
 	                                                             for (Row& row : src.m_rows) m_rows.push_back(std::move(row));
 	                                                             src.m_rows.clear(); }
 
@@ -138,7 +138,7 @@ public:
 	// put in the order of their new ids here, and a row only merges them with its riders. Sorting each row's cells
 	// swapped the values themselves, a quarter of the cells' count squared per row: 17% of the samples of a report
 	// over 100 000 turnovers (2026-11-04, Debug).
-	void    AppendRowsRekeyed(ibQueryRamTable& src, const std::vector<std::pair<ibMetaID, ibMetaID>>& rekey)
+	void    AppendRowsRekeyed(ibQueryRamTable&& src, const std::vector<std::pair<ibMetaID, ibMetaID>>& rekey)
 	{
 		if (!rekey.empty()) {
 			// The pairs by new id (stable: of two naming one id, the later stays later), and every id a pair names
@@ -157,7 +157,7 @@ public:
 			for (Row& r : src.m_rows)
 				RekeyRow(r, byNewId, named, cells);
 		}
-		AppendRowsFrom(src);
+		AppendRowsFrom(std::move(src));
 	}
 	long    RowCount() const                                  { return static_cast<long>(m_rows.size()); }
 	// A row taken back out. A fold that only knows a row is empty AFTER the last pass (an opening

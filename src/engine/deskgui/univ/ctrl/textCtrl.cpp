@@ -2764,8 +2764,10 @@ void ibTextCtrl::UpdateTextRect()
         m_rectText.height = m_heightLine;
     }
     // ... and one lower than its line with the theme's padding gives up the padding, not the line: a grid's editor
-    // is as tall as its row, and its text was cut to what the padding left
-    else if ( IsSingleLine() && m_heightLine > 0 && m_rectText.height < m_heightLine )
+    // is as tall as its row, and its text was cut to what the padding left. A multi-line one the same: the sheet's
+    // cell editor is one (Shift+Enter breaks its line), and its line stood two down, cut in half by the row's bottom
+    // (2026-11-16, Max's screenshot: "the editor lowers the field")
+    else if ( m_heightLine > 0 && m_rectText.height < m_heightLine )
     {
         const wxCoord height = wxMin(m_heightLine, rectTotal.height);
         m_rectText.y = rectTotal.y + (rectTotal.height - height) / 2;

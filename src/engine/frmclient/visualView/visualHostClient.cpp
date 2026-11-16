@@ -304,10 +304,13 @@ void ibVisualHostClient::Send(long long controlId, ibProtocol::ibEvent::ibKind e
 		return;
 
 	// What it says, as it says it — a sheet handed over whole by its size: written out, it was the sheet again in the
-	// journal at every edit.
-	const ibString said = args.IsNode() ? args.Write() : ibString(wxT("{}"));
+	// journal at every edit. ⚠ AND THE SIZE IS THE NODE'S, NOT THE TEXT'S: written out only to be counted, the sheet of
+	// an edit in a 100 000-line report was 19 % of it (2026-11-16, load-million-rows.md § 12). Asked inside the
+	// journal's call, so a build without the journal works none of it out.
 	ibJournalInfo(wxT("event"), wxT("%d on %lld: %s"), static_cast<int>(event), controlId,
-		said.length() <= 1024 ? said : ibString::Format(wxT("%zu characters"), said.length()));
+		args.GetBody() == nullptr ? ibString(wxT("{}"))
+		: args.GetBody()->Weight() <= 1024 ? args.Write()
+		: ibString::Format(wxT("<%zu bytes>"), args.GetBody()->Weight()));
 	m_mainFrame.Post(ibProtocol::ibMethod::Event, EventOf(controlId, event, args));
 }
 

@@ -57,14 +57,14 @@ class ibStructureBatch;
 struct ibSchemaColumn
 {
 	ibMetaID                    m_id     = 0;        // the column's model id (attribute metaID) — the match key
-	const ibBackendQueryColumn* m_column = nullptr;  // the live column (type source for the field diff)
+	std::shared_ptr<const ibBackendQueryColumn> m_column;   // the live column (type source for the field diff)
 };
 
 // An index declared by a table. Matched by name; a changed column set / uniqueness => drop + recreate.
 struct ibSchemaIndex
 {
 	ibString                                 m_name;
-	std::vector<const ibBackendQueryColumn*> m_columns;        // logical columns it covers (expand to fields at apply)
+	std::vector<std::shared_ptr<const ibBackendQueryColumn>> m_columns;   // logical columns it covers (expand to fields at apply)
 	bool                                     m_unique = false;
 	bool                                     m_descending = false;   // the twin a backward read walks
 };
@@ -96,7 +96,7 @@ struct ibSchemaSeedRow
 	// its own columns (a flat catalog has no Parent and no IsFolder), and a seed naming it would fill a
 	// cell for a column the table does not carry. The same IsAllowed the structure walk uses, so the seed
 	// and the columns it writes into cannot disagree.
-	ibSchemaSeedRow& Set(const ibBackendQueryColumn* qc, const ibValue& value) {
+	ibSchemaSeedRow& Set(const std::shared_ptr<const ibBackendQueryColumn>& qc, const ibValue& value) {
 		if (qc != nullptr && qc->IsAllowed())
 			m_values[qc->GetColumnId()] = value;
 		return *this;
@@ -125,7 +125,7 @@ struct ibSchemaSeedRow
 // accumulate itself stays unconditional and only its VALUE branches.
 struct ibSchemaDelta
 {
-	const ibBackendQueryColumn* m_column = nullptr;   // the totals column being accumulated
+	std::shared_ptr<const ibBackendQueryColumn> m_column;   // the totals column being accumulated
 	ibString                    m_valueExpr;          // SQL over {row} — what this movement adds (TRIGGER)
 
 	// The same contribution as an L3 expression, for REGENERATION. Two forms of one thing, and the
@@ -147,7 +147,7 @@ struct ibSchemaMaterialize
 	// queryable exists for — it is the contract the L3 door navigates a source through. Handing
 	// down a name would leave regeneration to re-resolve it, or to reach past L3 with hand-built
 	// SQL; handing down the queryable means regeneration is an ordinary L3 read.
-	const ibBackendQueryable* m_source = nullptr;
+	std::shared_ptr<const ibBackendQueryable> m_source;
 
 	// The source's physical table — resolved from the queryable, for the trigger DDL.
 	BACKEND_API ibString SourceTable() const;
@@ -166,7 +166,7 @@ struct ibSchemaMaterialize
 
 	// The totals KEY — the columns the delta upserts against (period + dimensions, plus the shard
 	// column when split). Also the PRIMARY KEY / unique index of the derived table.
-	std::vector<const ibBackendQueryColumn*> m_keys;
+	std::vector<std::shared_ptr<const ibBackendQueryColumn>> m_keys;
 
 	// Set by ibDeclareDerivedKey when the key is too wide for an index on this engine: the physical
 	// column that then CARRIES the key's uniqueness, filled by the delta with a digest of the key's own
@@ -176,9 +176,12 @@ struct ibSchemaMaterialize
 	// The period key: which key column holds the truncated period, and the movement expression it
 	// is truncated FROM. Empty column name = this derived table has no period dimension at all.
 	ibString       m_periodColumn;
+	ibString       m_periodUnitColumn;                       // the key column holding a row's unit; empty = one unit, no such column
 	ibString       m_periodSourceExpr;                       // SQL over {row} — the TRIGGER's form
-	const ibBackendQueryColumn* m_periodSource = nullptr;     // the same column, for REGENERATION to group by
-	ibTotalsPeriod m_periodUnit = ibTotalsPeriod::Month;      // STORED grain — the floor on what can be read back
+	std::shared_ptr<const ibBackendQueryColumn> m_periodSource;   // the same column, for REGENERATION to group by
+	// The STORED units, FINEST FIRST — each its own rows. front() is the stored grain: the floor on what can be
+	// read back. More than one only with m_periodUnitColumn.
+	std::vector<ibTotalsPeriod> m_periodUnits = { ibTotalsPeriod::Month };
 
 	// Non-key columns whose values accumulate.
 	std::vector<ibSchemaDelta> m_deltas;
@@ -223,16 +226,23 @@ struct ibSchemaMaterialize
 	std::vector<ibMaterializeView> m_views;
 
 	// ---- fluent declaration (mirrors ibSchemaTable's own builders) ----
-	ibSchemaMaterialize& Key(const ibBackendQueryColumn* qc) { m_keys.push_back(qc); return *this; }
+	ibSchemaMaterialize& Key(const std::shared_ptr<const ibBackendQueryColumn>& qc) { m_keys.push_back(qc); return *this; }
 	// `source` is the movement's period COLUMN; `sourceExpr` is how the trigger names it over {row}.
-	ibSchemaMaterialize& Period(const ibString& column, const ibBackendQueryColumn* source,
+	ibSchemaMaterialize& Period(const ibString& column, const std::shared_ptr<const ibBackendQueryColumn>& source,
 	                            const ibString& sourceExpr, ibTotalsPeriod unit)
 	{
-		m_periodColumn = column; m_periodSource = source; m_periodSourceExpr = sourceExpr; m_periodUnit = unit;
+		return Period(column, ibString(), source, sourceExpr, { unit });
+	}
+	// …kept at SEVERAL units, finest first: `unitColumn` is the key column that says which unit a row is of.
+	ibSchemaMaterialize& Period(const ibString& column, const ibString& unitColumn, const std::shared_ptr<const ibBackendQueryColumn>& source,
+	                            const ibString& sourceExpr, const std::vector<ibTotalsPeriod>& units)
+	{
+		m_periodColumn = column; m_periodUnitColumn = unitColumn; m_periodSource = source; m_periodSourceExpr = sourceExpr;
+		m_periodUnits = units;
 		return *this;
 	}
 	// Both forms of one contribution — see ibSchemaDelta on why the pair is unavoidable.
-	ibSchemaMaterialize& Accumulate(const ibBackendQueryColumn* qc, const ibString& valueExpr,
+	ibSchemaMaterialize& Accumulate(const std::shared_ptr<const ibBackendQueryColumn>& qc, const ibString& valueExpr,
 	                                const ibQueryColumnExprPtr& regenExpr = nullptr)
 	{
 		m_deltas.push_back({ qc, valueExpr, regenExpr }); return *this;
@@ -282,9 +292,9 @@ private:
 // One table's declared structure. Produced by a metaobject's DescribeTable(); consumed by DiffSnapshots.
 struct ibSchemaTable
 {
-	ibMetaID                    m_id   = 0;          // the metaobject's metaID — the table match key
-	ibString                    m_name;              // physical table name
-	const ibBackendQueryable*   m_queryable = nullptr;  // vends the metadata for the field diff (null for a pure drop)
+	ibMetaID                                  m_id = 0;      // the metaobject's metaID — the table match key
+	ibString                                  m_name;        // physical table name
+	std::shared_ptr<const ibBackendQueryable> m_queryable;   // vends the metadata for the field diff (null for a pure drop)
 
 	// EXTERNAL table — its CREATE / DROP is owned elsewhere (e.g. the shared sys_const, made by
 	// CreateConstantSQLTable: DEFAULT / PRIMARY KEY / single-row seed the snapshot can't model). The
@@ -301,15 +311,6 @@ struct ibSchemaTable
 	// "Don't move it, regenerate it, keep it consistent by trigger" — all three read off this bit.
 	bool                        m_derived = false;
 	ibSchemaMaterialize         m_materialize;   // meaningful only when m_derived
-
-	// The snapshot OWNS its scaffold / index raw columns (uuid, rowData) via shared_ptr — stable heap
-	// address through every move/copy of the table, so the pointers below never dangle. Live attribute
-	// columns are NOT owned (they belong to the in-memory config, valid for the save).
-	std::vector<std::shared_ptr<ibBackendColumnRawDB>> m_ownedRaw;
-
-	// A queryable this table owns (SelfSource) — set only for a table nothing else vends one for.
-	// Empty on every table declared by a metaobject: there m_queryable points at the live config.
-	std::shared_ptr<const ibBackendQueryable>   m_ownedQueryable;
 
 	// A CHECK THIS TABLE CARRIES, evaluated by the differ BEFORE the table is touched. Declaring a
 	// structure is not the same as being allowed to reach it: a chart of accounts that lowers its
@@ -333,7 +334,7 @@ struct ibSchemaTable
 	std::function<void(class ibRestructureInfo*)> m_afterChange;
 
 	// Scaffold columns (the uuid row-key / a register's rowData) — created WITH the table, never altered.
-	std::vector<const ibBackendQueryColumn*> m_scaffold;
+	std::vector<std::shared_ptr<const ibBackendQueryColumn>> m_scaffold;
 	// Logical columns (attributes / dimensions / resources) — diffed by id.
 	std::vector<ibSchemaColumn>              m_columns;
 	std::vector<ibSchemaIndex>               m_indexes;
@@ -342,41 +343,31 @@ struct ibSchemaTable
 	// …FOUND BY THESE where no unique index holds a row: a tabular section's line is its owner and its position, and a
 	// declared line (a predefined item's) is matched and written by their cells — the line the key holds updated, or
 	// one inserted where none stands; one no longer declared stays, the data's. Empty: a row is its uuid (SeedKeyColumn).
-	std::vector<const ibBackendQueryColumn*> m_seedKey;
-
-
-	// Own a raw column and return a stable pointer to it (for scaffold / index use).
-	const ibBackendQueryColumn* OwnRaw(ibBackendColumnRawDB col)
-	{
-		return m_ownedRaw.emplace_back(std::make_shared<ibBackendColumnRawDB>(std::move(col))).get();
-	}
+	std::vector<std::shared_ptr<const ibBackendQueryColumn>> m_seedKey;
 
 	// ---- fluent builders: a metaobject DECLARES its table by chaining these (structure first, then rows) --
 	// (the queryable is bound at construction by ibSchemaSnapshot::CreateSchemaTable; External re-binds it
 	//  for the shared sys_const table only.)
-	ibSchemaTable& External(const ibBackendQueryable* q) { if (m_queryable == nullptr) { m_queryable = q; m_external = true; } return *this; }
+	ibSchemaTable& External(const std::shared_ptr<const ibBackendQueryable>& q) { if (m_queryable == nullptr) { m_queryable = q; m_external = true; } return *this; }
 
-	// Bind a queryable this table OWNS, for a table no metaobject vends one for — the DERIVED
-	// (totals) table. Without it the table exists physically and is unreachable through the door:
-	// regeneration and the shard fold both gate on a non-null queryable and quietly do nothing.
-	// Held by shared_ptr so the pointer survives every move of this struct inside the snapshot's
-	// deque, exactly like m_ownedRaw does for the scaffold columns.
-	ibSchemaTable& SelfSource(std::shared_ptr<const ibBackendQueryable> q)
+	// Bind a queryable for a table no metaobject vends one for — the DERIVED (totals) table. Without it
+	// the table exists physically and is unreachable through the door: regeneration and the shard fold
+	// both gate on a non-null queryable and quietly do nothing.
+	ibSchemaTable& SelfSource(const std::shared_ptr<const ibBackendQueryable>& q)
 	{
-		m_ownedQueryable = std::move(q);
-		m_queryable      = m_ownedQueryable.get();
+		m_queryable = q;
 		return *this;
 	}
 
-	// Add a scaffold raw column (uuid / rowData) — owned, returns the stable pointer for index use.
-	const ibBackendQueryColumn* Scaffold(ibBackendColumnRawDB col) { const ibBackendQueryColumn* p = OwnRaw(std::move(col)); m_scaffold.push_back(p); return p; }
+	// Add a scaffold raw column (uuid / rowData) — handed back for index use.
+	std::shared_ptr<const ibBackendQueryColumn> Scaffold(const std::shared_ptr<const ibBackendQueryColumn>& col) { m_scaffold.push_back(col); return col; }
 	// Add a logical column — keyed by the column's own model id (== metaID for an attribute), so the diff
 	// matches columns across config instances by identity.
-	ibSchemaTable& Add(const ibBackendQueryColumn* qc) { m_columns.push_back({ qc->GetColumnId(), qc }); return *this; }
-	ibSchemaTable& Index(const ibString& name, std::vector<const ibBackendQueryColumn*> cols, bool unique = false) { m_indexes.push_back({ name, std::move(cols), unique }); return *this; }
+	ibSchemaTable& Add(const std::shared_ptr<const ibBackendQueryColumn>& qc) { m_columns.push_back({ qc->GetColumnId(), qc }); return *this; }
+	ibSchemaTable& Index(const ibString& name, std::vector<std::shared_ptr<const ibBackendQueryColumn>> cols, bool unique = false) { m_indexes.push_back({ name, std::move(cols), unique }); return *this; }
 	// The index a list reads by, BOTH ways: `name` ascending, and `name` + "D" descending for an engine that walks
 	// an index forward only (ibDialectDictionary::m_descendingIndexWord; elsewhere the twin is never made).
-	ibSchemaTable& ListIndex(const ibString& name, std::vector<const ibBackendQueryColumn*> cols) {
+	ibSchemaTable& ListIndex(const ibString& name, std::vector<std::shared_ptr<const ibBackendQueryColumn>> cols) {
 		m_indexes.push_back({ name, cols, false });
 		m_indexes.push_back({ name + ibT("D"), std::move(cols), false, true });
 		return *this;
@@ -386,7 +377,7 @@ struct ibSchemaTable
 	// spec for fluent filling: Derived(movQueryable, view).Key(dim).Period(col, expr, unit)
 	// .Accumulate(res, expr).Guard(expr).Split(4). Sets m_derived, which is what L3-3 and L3-4 read
 	// — declaring materialisation and being derived are the same statement, so they cannot disagree.
-	ibSchemaMaterialize& Derived(const ibBackendQueryable* source)
+	ibSchemaMaterialize& Derived(const std::shared_ptr<const ibBackendQueryable>& source)
 	{
 		m_derived = true;
 		m_materialize.m_source = source;
@@ -420,7 +411,7 @@ struct ibSchemaTable
 // DROP it again when a key narrows — a scaffold column is created with its table and never migrated,
 // which would leave a register that gained an analytic with a table shaped for the old key.
 BACKEND_API void ibDeclareDerivedKey(ibSchemaTable& table, const ibString& tableName,
-                                     const std::vector<const ibBackendQueryColumn*>& keyCols,
+                                     const std::vector<std::shared_ptr<const ibBackendQueryColumn>>& keyCols,
                                      ibMetaID hashColumnId);
 
 // A PLAIN (non-unique) index over the LEADING columns of `cols` that one index holds on this engine — a
@@ -435,13 +426,13 @@ BACKEND_API void ibDeclareDerivedKey(ibSchemaTable& table, const ibString& table
 // register with many dimensions got could narrow by them and then walk the key's whole history. With a
 // closing column the cut takes trailing `cols` instead and the closing one stays last.
 BACKEND_API void ibDeclareLookupIndex(ibSchemaTable& table, const ibString& indexName,
-                                      const std::vector<const ibBackendQueryColumn*>& cols,
-                                      const ibBackendQueryColumn* closing = nullptr);
+                                      const std::vector<std::shared_ptr<const ibBackendQueryColumn>>& cols,
+                                      const std::shared_ptr<const ibBackendQueryColumn>& closing = nullptr);
 
 // Which columns such an index takes - apart from the declaration so that the cut can be asked with a ceiling
 // of the caller's own (`fits(fields, bytes)`): a suite has no engine to ask, and with none nothing is ever cut.
-BACKEND_API std::vector<const ibBackendQueryColumn*> ibFitLookupColumns(
-	const std::vector<const ibBackendQueryColumn*>& cols, const ibBackendQueryColumn* closing,
+BACKEND_API std::vector<std::shared_ptr<const ibBackendQueryColumn>> ibFitLookupColumns(
+	const std::vector<std::shared_ptr<const ibBackendQueryColumn>>& cols, const std::shared_ptr<const ibBackendQueryColumn>& closing,
 	const std::function<bool(size_t fields, size_t bytes)>& fits);
 
 class BACKEND_API ibSchemaSnapshot
@@ -452,7 +443,7 @@ public:
 	// DISTINCT table object (enum, register, catalog + each of its tabular sections). The deque backing
 	// keeps the returned reference STABLE as more tables are added, so a metaobject can build its main
 	// table and its tabular sections in one chain.
-	ibSchemaTable& CreateSchemaTable(const ibBackendQueryable* queryable);
+	ibSchemaTable& CreateSchemaTable(const std::shared_ptr<const ibBackendQueryable>& queryable);
 
 	// Find-or-create — for a SHARED table several metaobjects extend (sys_const: every constant is one of
 	// its columns). Returns the existing table if present, else a fresh one.

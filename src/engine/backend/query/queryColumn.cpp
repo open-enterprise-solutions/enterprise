@@ -60,7 +60,7 @@ ibColumnType PrimitiveType(ibValueTypes vt, const ibTypeDescription& td)
 	}
 }
 
-// Reached only under `col->IsRawColumn()` — the column has already SAID what it is, so the cast asks
+// Reached only under `col.IsRawColumn()` — the column has already SAID what it is, so the cast asks
 // for the type it CARRIES rather than deciding identity (which is the column's own answer, never a
 // cast's).
 //
@@ -68,9 +68,9 @@ ibColumnType PrimitiveType(ibValueTypes vt, const ibTypeDescription& td)
 // type is repairable where a throw is not". It is not repairable: this answer becomes a CREATE TABLE.
 // A column silently created as text where a number belonged is a migration, discovered by arithmetic
 // failing months later.
-ibColumnType RawTypeOf(const ibBackendQueryColumn* col)
+ibColumnType RawTypeOf(const ibBackendQueryColumn& col)
 {
-	const ibBackendColumnRawDB* const raw = col != nullptr ? col->AsRawColumn() : nullptr;
+	const ibBackendColumnRawDB* const raw = col.AsRawColumn();
 	ibASSERT_MSG(raw != nullptr,
 		ibT("RawTypeOf asked of a column that does not carry its own physical type"));
 	if (raw == nullptr)
@@ -124,7 +124,7 @@ std::vector<ibColumnSlot> ibBackendQueryColumn::DescribeLayout() const
 		ibColumnSlot slot;
 		slot.m_name = GetPhysicalName();
 		slot.m_role = ibColumnRole::Raw;
-		slot.m_type = RawTypeOf(this);
+		slot.m_type = RawTypeOf(*this);
 		slots.push_back(std::move(slot));
 		return slots;
 	}
@@ -208,7 +208,7 @@ std::vector<ibColumnSlot> ibBackendQueryColumn::DescribeLayout() const
 bool ibBackendQueryColumn::ReadValue(const ibString& fieldName, const ibMetaData* metaData,
                                      ibValue& retValue, ibQueryResult& result, bool createData) const
 {
-	return ibColumnCodec::ReadValue(fieldName, this, metaData, retValue, result, createData);
+	return ibColumnCodec::ReadValue(fieldName, *this, metaData, retValue, result, createData);
 }
 
 // …and its inverse: the codec's decomposition, spread across exactly the fields the read above takes
@@ -219,7 +219,7 @@ bool ibBackendQueryColumn::ReadValue(const ibString& fieldName, const ibMetaData
 void ibBackendQueryColumn::BindValue(ibQueryStatement& statement, const ibMetaData* metaData,
                                      const ibValue& value, int& position) const
 {
-	ibColumnCodec::WriteValue(this, metaData, value, &statement, position);
+	ibColumnCodec::WriteValue(*this, metaData, value, &statement, position);
 }
 
 //***************************************************************************

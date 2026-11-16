@@ -45,10 +45,10 @@ static ibQueryConstructorField FieldOfColumn(const ibQueryConstructorModel& mode
 
 // THE FIELDS OF THESE COLUMNS — the ones that are there: a deleted or disabled field is not offered.
 static std::vector<ibQueryConstructorField> FieldsOfColumns(const ibQueryConstructorModel& model,
-                                                            const std::vector<const ibBackendQueryColumn*>& columns)
+                                                            const std::vector<std::shared_ptr<const ibBackendQueryColumn>>& columns)
 {
 	std::vector<ibQueryConstructorField> out;
-	for (const ibBackendQueryColumn* column : columns)
+	for (const std::shared_ptr<const ibBackendQueryColumn>& column : columns)
 		if (column != nullptr && column->IsAllowed())
 			out.push_back(FieldOfColumn(model, *column));
 	return out;
@@ -150,7 +150,8 @@ ibClassID ibQueryConstructorModel::ReferenceOfTable(const std::vector<ibString>&
 	if (path.size() != 2)
 		return 0;   // a virtual table — `AccumulationRegister.Stock.Balance` — is no table a reference points at
 	ibQueryableFactory* const factory = Factory();
-	const ibBackendQueryable* const table = factory != nullptr ? factory->Resolve(path[0], path[1]) : nullptr;
+	ibQueryableSourceDescriptor* const descriptor = factory != nullptr ? factory->FindDescriptor(path[0], path[1]) : nullptr;
+	const std::shared_ptr<const ibBackendQueryable> table = descriptor != nullptr ? descriptor->CreateQueryable(nullptr, 0) : nullptr;
 	const ibValueMetaObjectGenericData* const meta = table != nullptr ? table->GetSourceMetaObject() : nullptr;
 	ibValue emptyRef;
 	if (meta != nullptr && meta->ResolveQueryConstant(ibRefMember::EmptyRef, emptyRef))
@@ -356,7 +357,7 @@ std::vector<ibQueryConstructorField> ibQueryFieldsOfText(const ibString& text,
 	return fields;
 }
 
-std::vector<ibQueryConstructorField> ibQueryFieldsOfColumns(const std::vector<const ibBackendQueryColumn*>& columns,
+std::vector<ibQueryConstructorField> ibQueryFieldsOfColumns(const std::vector<std::shared_ptr<const ibBackendQueryColumn>>& columns,
 	const ibMetaData* metaData)
 {
 	return FieldsOfColumns(ibQueryConstructorModel(metaData), columns);
@@ -391,7 +392,7 @@ ibString ibQueryTextOfSource(const ibQueryableSourceDescriptor* source)
 	select.m_from.m_alias = source->GetName();
 	const ibString prefix = select.m_from.m_alias + ibT(".");
 
-	for (const ibBackendQueryColumn* column : source->GetQueryColumns({})) {
+	for (const std::shared_ptr<const ibBackendQueryColumn>& column : source->GetQueryColumns({})) {
 		if (column == nullptr || column->GetName().IsEmpty() || !column->IsAllowed())
 			continue;
 		ibQueryProjection projection;

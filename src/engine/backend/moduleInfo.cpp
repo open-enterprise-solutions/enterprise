@@ -6,9 +6,8 @@
 #include "moduleInfo.h"
 
 #include "appData.h"                 // DesignerMode() guard in Compile()
-#include "backend/compiler/cache/byteCodeCache.h"              // AOT cache Load / Save
 #include "backend/metaCollection/metaModuleObject.h"  // ibValueMetaObjectModuleBase full type for GetGuid/GetClassType
-#include "backend/metaData.h"                         // ibMetaData::GetConfigMD5 — the cache key's second half
+#include "backend/metaData.h"                         // ibByteCodeStorage — where a module's bytecode comes from
 #include "core/compiler/scriptParseCode.h"          // ibParseCode — the export names a TEXT declares
 // DEF_VAR_SKIP — the sentinel a parameter's default-value slot carries when there is NO default.
 // ⚠ It lives on the COMPILE side while the field it marks (ibByteParam::m_defaultValue) lives in
@@ -408,114 +407,80 @@ bool ibRuntimeModuleDataObject::Compile()
 
 	// Phase A — find a usable bytecode.
 	//
-	// (a) Try the AOT cache first. ibByteCodeCache::Load looks the
-	//     row up by descriptor_id and runs DeserializeAOT into bc.
+	// (a) The configuration's bytecode storage first (ibByteCodeStorage, on
+	//     the metadata's image): it holds the rows of the AOT cache read
+	//     as the configuration opened, and runs DeserializeAOT into bc.
 	//     Magic / format-version mismatch is reported as miss so an
 	//     OES binary upgrade transparently triggers full recompile.
 	//     After load, ResolveAndVerifyDependencies walks
 	//     m_dependencyIds via the bc registry; missing dep or version
 	//     drift downgrades the hit to a miss (case (c)) and the row
 	//     is invalidated.
-	// (b) Cache miss → fall through to compile-from-source. Single
+	// (b) A miss → compile-from-source, asked through the storage. Single
 	//     unified assemble path at the bottom — descriptor doesn't
 	//     care which arm produced bc.
-	// WHAT THIS BYTECODE WOULD BE COMPILED AGAINST, as one value. It is part of the cache KEY, so a
-	// row saved under any earlier state of the configuration is not found at all — see byteCodeCache.h.
+	// The module knows of no table, no key and no lock: what its bytecode is keyed by is the storage's (metaData.cpp).
 	const ibMetaData* const owner = meta->GetMetaData();
+	ibByteCodeStorage* const storage = owner != nullptr ? owner->GetByteCodeStorage() : nullptr;
 
-	// ⚠ THE KEY IS THE CONFIGURATION'S DIGEST, and it stays that. Mixing the module's own text into
-	// it was tried on 2026-09-04 and taken back out: it patches the symptom at the reader's end,
-	// while the cause is a WRITER that changes metadata without going through the save the rest of
-	// the product goes through (Max: you change a form, you change objects, and you go PAST the
-	// standard save). In the Designer, editing a module and closing the document saves the metadata —
-	// the digest moves, the cache row retires by itself. A door that skips that has to be fixed at
-	// the door.
-	const ibString configMd5 = owner != nullptr ? owner->GetConfigMD5() : ibString();
-
-	const auto loadCached = [&]() {
-		if (!ibByteCodeCache::Load(bc, meta->GetGuid(), configMd5))
-			return false;
-		if (bc.ResolveAndVerifyDependencies()) {
-			// Restore live pointers AOT skipped on serialize. Without
-			// m_parent runtime's parent-conformity check refuses the module.
-			bc.m_parent = parent;
-
-			// ⚠ NO COMPARISON AGAINST THE LOADED TABLE HERE. Checking the surface against
-			// bc.m_listVar on every hit was written and taken back out the same day: it turns the
-			// reader into the place that notices staleness, which is one place too late. A row that
-			// no longer matches the configuration must not be READABLE at all — it is thrown away
-			// where it goes stale (OnSaveMetaObject drops it on saveConfigFlag; the key retires
-			// every row of a previous configuration digest), and this branch may then trust what it
-			// gets (Max, 2026-09-04: a stale cache must be THROWN AWAY, not worked around).
-			return true;
-		}
-		// (c) — dep registry missing the target or version drift.
-		// Clear the stale row and let the recompile branch
-		// repopulate.
-		ibByteCodeCache::Invalidate(meta->GetGuid());
-		bc.Reset();
-		return false;
-	};
-
-	// An external report or data processor has no digest: a row under an empty one would outlive its file's text, and
-	// saving it weeds out every row of the base's configuration (WriteRow). It compiles when it is opened.
-	const bool hasDigest = !configMd5.IsEmpty();
-
-	// ⭐ NOT WHAT WAS COMPILED UNDER AN EVAL — see below, where it is saved. It holds no row either.
-	const bool cacheable = hasDigest && ibBackendException::IsEvalMode() == eval_none;
-
-	// A miss holds the module's row: whoever misses with it stands in the database until this compile
-	// has saved it, and reads it then (ibByteCodeCache::ibRowLock). Let go at the end of this scope if
-	// the compile below did not get as far as the save, and the next one compiles.
-	ibByteCodeCache::ibRowLock rowLock;
-	bool ready = hasDigest && loadCached();
-	if (!ready && cacheable) {
-		rowLock.Acquire(meta->GetGuid(), configMd5);
-		ready = loadCached();
-	}
-
-	if (!ready) {
-		// ⭐ THE ONE PLACE A COMPILER IS MADE TO BE RUN: no bytecode, so it makes it and goes. Under a parent that is
-		// bytecode alone there is one walk for a name (ibCompileContext::GetVariable, step 3), so one address
-		// for it, whether the parent itself came from a compile or from the cache. There used to be two:
-		// measured 2026-09-04, the first run after an apply posted a document and the next, the parent coming
-		// from the cache, failed in the posting handler with "'ValueIsFilled' is a global function".
+	// ⭐ THE ONE PLACE A COMPILER IS MADE TO BE RUN: no bytecode, so it makes it and goes. Under a parent that is
+	// bytecode alone there is one walk for a name (ibCompileContext::GetVariable, step 3), so one address
+	// for it, whether the parent itself came from a compile or from the cache. There used to be two:
+	// measured 2026-09-04, the first run after an apply posted a document and the next, the parent coming
+	// from the cache, failed in the posting handler with "'ValueIsFilled' is a global function".
+	const auto compile = [&](ibByteCode& outBc) {
 		ibCompileModule compiler(meta, *m_binds);
 		compiler.SetParent(parent);
 		if (!compiler.Compile())
 			return false;
 		// What stays is the base: the tree on the compiler's own form goes with the compiler (byteCode.h).
-		bc = std::move(static_cast<ibByteCode&>(compiler.m_cByteCode));
+		outBc = std::move(static_cast<ibByteCode&>(compiler.m_cByteCode));
 		// Stamp the freshly-compiled bytecode with the descriptor
 		// identity. m_id is the descriptor's GUID — stable across
 		// renames in Designer; cache rows in sys_bytecode_cache key
 		// off it. m_descriptorClsid records the kind (CommonModule /
 		// FormModule / etc.) for sanity checks at AOT-load time and
 		// for diag tooling.
-		bc.m_id = meta->GetGuid();
-		bc.m_descriptorClsid = meta->GetClassType();
+		outBc.m_id = meta->GetGuid();
+		outBc.m_descriptorClsid = meta->GetClassType();
 		// Per-compile version fingerprint. Random GUID for now —
 		// dependents snapshot it in m_dependencyVersions so any
 		// successful recompile makes their cached rows fail the dep
 		// version check (Step 4) and forces re-resolve.
-		bc.m_version = ibGuid::newGuid();
-		// Persist the freshly-compiled bytecode. Best-effort — Save
-		// returns false on serialization rejection (e.g. non-primitive
-		// constants) or DB error; the runtime keeps the live bc and
-		// the next session pays the recompile cost again.
-		//
-		// ⭐ NOT WHAT WAS COMPILED UNDER AN EVAL. A watch or a sandbox opens a compile inside its
-		// OWN host frame, and that frame is a rung: every operand this compile stamps carries a
-		// depth counted with it. Executed later on the ordinary road — a posting, a form — the
-		// rung is not there and the address points one step past the ladder. Live, that byte code
-		// is consistent with the run that made it; SAVED, it is handed to every later run as if
-		// it were ordinary, and the failure arrives on the SECOND launch, which is why it read as
-		// "worked yesterday" (Max, 2026-09-04). A module first touched from a sandbox therefore
-		// compiles again next time — the cost of a recompile, against an address that is wrong
-		// for everybody else.
-		if (cacheable && !rowLock.Save(bc))
-			ibByteCodeCache::Save(bc, configMd5);
-	}
+		outBc.m_version = ibGuid::newGuid();
+		return true;
+	};
+
+	// What the storage holds is taken; a miss compiles once, whoever else misses meanwhile, and the storage saves and
+	// holds what was compiled (ibByteCodeStorage::Load with `compile`). Best-effort: a save that fails leaves the live
+	// bc. No storage — a designer's own copy, a configuration not open — and it compiles for itself.
+	//
+	// ⭐ NOT WHAT WAS COMPILED UNDER AN EVAL. A watch or a sandbox opens a compile inside its
+	// OWN host frame, and that frame is a rung: every operand this compile stamps carries a
+	// depth counted with it. Executed later on the ordinary road — a posting, a form — the
+	// rung is not there and the address points one step past the ladder. Live, that byte code
+	// is consistent with the run that made it; SAVED, it is handed to every later run as if
+	// it were ordinary, and the failure arrives on the SECOND launch, which is why it read as
+	// "worked yesterday" (Max, 2026-09-04). A module first touched from a sandbox therefore
+	// compiles again next time — the cost of a recompile, against an address that is wrong
+	// for everybody else. It holds no row either.
+	const bool ready = storage == nullptr ? compile(bc)
+		: ibBackendException::IsEvalMode() == eval_none ? storage->Load(bc, meta->GetGuid(), compile)
+		: storage->Load(bc, meta->GetGuid()) || compile(bc);
+	if (!ready)
+		return false;
+
+	// Restore live pointers AOT skipped on serialize. Without
+	// m_parent runtime's parent-conformity check refuses the module.
+	//
+	// ⚠ NO COMPARISON AGAINST THE LOADED TABLE HERE. Checking the surface against
+	// bc.m_listVar on every hit was written and taken back out the same day: it turns the
+	// reader into the place that notices staleness, which is one place too late. A row that
+	// no longer matches the configuration must not be READABLE at all — it is thrown away
+	// where it goes stale (OnSaveMetaObject drops it on saveConfigFlag; the key retires
+	// every row of a previous configuration digest), and this branch may then trust what it
+	// gets (Max, 2026-09-04: a stale cache must be THROWN AWAY, not worked around).
+	bc.m_parent = parent;
 
 	// Publish bc in the process-wide registry. Dependents resolving
 	// their m_dependencyIds via ibByteCode::Find should now see this

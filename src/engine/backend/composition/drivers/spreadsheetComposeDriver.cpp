@@ -69,6 +69,36 @@ void BoxCell(ibSpreadsheetObject& area, int row, int col, bool top, bool bottom,
 		area.SetCellBorderBottom(row, col, pen);
 }
 
+// ⭐ A CELL'S LINK NAME, `Link_<row:8>_<col:4>` — one rule for every line written where it lands (PrintRow,
+// WriteCrossTable), so a grouping's cell and a table's are found back the same way.
+// ⚠ THE DIGITS BY HAND. `wxString << int` formats through a printf, and this name is spelled for every cell of the
+// sheet — a quarter of the writing, in the samples (2026-09-12, Debug).
+// ⚠ …AND AT A FIXED WIDTH, so the names come out in increasing order and each lands at the end of the sheet's
+// parameters without a search (SetParameter is hinted there). A line was an area of its own, put by PutArea, whose
+// `Cell_<col>_<row>_<col>` did not sort in the order it was written: the hint missed, and a third of composing 103
+// thousand movements went on searching the sheet's parameters for every cell (2026-11-16).
+ibString LinkName(int row, int col)
+{
+	ibChar text[32];
+	size_t n = 0;
+	const auto put = [&text, &n](int value, size_t width) {
+		ibChar digits[12];
+		size_t count = 0;
+		unsigned int u = static_cast<unsigned int>(value < 0 ? 0 : value);
+		do { digits[count++] = static_cast<ibChar>(ibT('0') + u % 10); u /= 10; } while (u != 0);
+		while (count < width && count < sizeof(digits) / sizeof(digits[0]))
+			digits[count++] = ibT('0');
+		while (count > 0)
+			text[n++] = digits[--count];
+	};
+	for (const ibChar* p = ibT("Link_"); *p != 0; ++p)
+		text[n++] = *p;
+	put(row, 8);
+	text[n++] = ibT('_');
+	put(col, 4);
+	return ibString(text, n);
+}
+
 // (A DETAIL ROW IS NOT BLANK PAPER — its fill is the theme's too, m_detailFill: left untinted it comes out
 //  pure white between the tinted group rows, and pure white is the loudest thing on a page of soft colour.
 //  Max, 2026-08-19: "the last row stands out all white; give it something very neutral".)
@@ -767,7 +797,13 @@ void ibSpreadsheetComposeDriver::PrintRow(const ibCompositionLine& line, const s
 	// repeating them would print the parent's name on every child.
 	const size_t ownDim = (level > 0) ? static_cast<size_t>(level - 1) : 0;
 
-	std::shared_ptr<ibSpreadsheetObject> row(std::make_shared<ibSpreadsheetObject>());
+	// ⭐⭐ WRITTEN WHERE IT LANDS, as a table's lines are (WriteCrossTable): one description per cell, set in one
+	// call, its link filed under the table's name for it (LinkName). The line used to be an area of its own — a
+	// document made, styled a setter at a time, copied across by PutArea, its links renamed there, and freed — and
+	// that was nearly all of composing a large report: 103 thousand movements took 32 s to write, a third of it the
+	// sheet's parameters searched for every cell (PutArea's `Cell_<col>_<row>_<col>` does not sort in the order it
+	// is written, so the hint at the end missed), a quarter the names spelled through Format (Debug, 2026-11-16).
+	const int at = m_document->GetNumberRows();   // the row this line becomes
 
 	// ⭐⭐ THE ROW'S OWN CHAIN, BUILT BEFORE ANYTHING IS WRITTEN — every figure of this row hangs
 	// under this row's heading, and a figure cannot link to a wrapper that does not exist yet.
@@ -800,9 +836,21 @@ void ibSpreadsheetComposeDriver::PrintRow(const ibCompositionLine& line, const s
 	}
 	KeepChain(level, chain);
 
+	// WHAT EACH CELL OF THE LINE SAYS, gathered first and then written in one call per cell. Two fields may stand in
+	// one column — every level's dimensions start at the dimension area's first column, and a record of a list keeps
+	// them all — so a cell keeps the text of the last of them, and its link and its alignment from the last that had
+	// one: what the area's setters left it with.
+	struct LineCell {
+		ibString m_text;
+		ibValue  m_bound;            // what the cell's link carries
+		bool     m_linked = false;
+		bool     m_right  = false;   // a number — read down its right edge
+	};
+	std::vector<LineCell> cells(static_cast<size_t>(std::max(m_columnCount, 0)));
+
 	for (size_t i = 0; i < values.size() && i < m_layout.size(); ++i) {
 		const int col = m_layout[i];
-		if (col < 0)
+		if (col < 0 || static_cast<size_t>(col) >= cells.size())
 			continue;
 
 		const bool isDimension = i < m_dimLevel.size() && m_dimLevel[i] >= 0;
@@ -832,30 +880,30 @@ void ibSpreadsheetComposeDriver::PrintRow(const ibCompositionLine& line, const s
 		if (isDimension && page > 0 && m_layout[i] == 0)
 			text.insert(0, page * kIndentPerLevel, ibT(' '));
 
-		row->SetCellValue(0, col, text);
+		if (static_cast<size_t>(col) < m_widest.size())
+			m_widest[static_cast<size_t>(col)] = std::max(m_widest[static_cast<size_t>(col)], text.length());
+
+		LineCell& said = cells[static_cast<size_t>(col)];
+		said.m_text = std::move(text);
 
 		// A CELL CARRIES ITS VALUE, and WHAT that means is the value's own business: the click ends in
 		// ibValue::ShowValue, and a value with nothing to show simply shows
 		// nothing. Asking here which types are "openable" would be a second, poorer answer to a
-		// question the value already answers (Max, 2026-08-19). The parameter travels with the area —
-		// PutArea re-keys it into the document — so the binding survives the move.
+		// question the value already answers (Max, 2026-08-19). The value is filed in the sheet under
+		// the cell's link name, below.
 		//
 		// ⭐ …AND IT CARRIES WHAT IT STOOD UNDER. A heading is bound to the wrapper built for it
 		// above; everything else on the row — its figures, a record's own fields — hangs under the
 		// row's chain, which is what the click reads back.
 		if (!value.IsEmpty()) {
-			const ibString name = ibString::Format(ibT("Cell_%d"), col);
-			row->SetParameter(name, (packed[i].IsEmpty() ? PackDetails(i, value, chain) : packed[i]));
-			row->SetCellDetailsParameter(0, col, name);
+			said.m_bound  = packed[i].IsEmpty() ? PackDetails(i, value, chain) : packed[i];
+			said.m_linked = true;
 		}
 
 		// A NUMBER READS DOWN ITS RIGHT EDGE. Measures are what the eye scans and compares, and
 		// left-aligned figures cannot be compared without reading each one.
 		if (value.GetType() == ibValueTypes::TYPE_NUMBER)
-			row->SetCellAlignment(0, col, ibAlignmentHorz_Right, ibAlignmentVert_Center);
-
-		if (static_cast<size_t>(col) < m_widest.size())
-			m_widest[static_cast<size_t>(col)] = std::max(m_widest[static_cast<size_t>(col)], text.length());
+			said.m_right = true;
 	}
 
 	// A GROUPING ROW IS TINTED ACROSS ITS WHOLE WIDTH AND BOLD — the tint says "a level starts here"
@@ -866,32 +914,56 @@ void ibSpreadsheetComposeDriver::PrintRow(const ibCompositionLine& line, const s
 	// deepest heading of a report that reads no records stays as it was — nothing is under any of them.
 	const bool groupRow = line.m_kind != ibSelectorNodeKind::Detail && (hasChildren || line.m_levelReadsDeeper);
 	const ibCompositionTheme& theme = ThemeOf(line);
-	const ibColour fill = groupRow ? theme.GroupFill(level) : theme.m_detailFill;
-	ibFont font = ibDefaultSpreadsheetFont();
-	if (groupRow)
-		font.m_weight = ibFONTWEIGHT_BOLD;
-	for (int col = 0; col < m_columnCount; ++col) {
-		row->SetCellBackgroundColour(0, col, fill);
-		if (groupRow)
-			row->SetCellFont(0, col, font);
-		// …and its share of the grid: the verticals that carry a column down the page, and the lines
-		// that close the row at both ends.
-		//
-		// ⚠ IT STATES ITS OWN TOP, and the reason is the merged header above it. A merged cell is asked
-		// for a bottom edge on its MAIN cell, and the grid draws that edge under the main cell's row —
-		// which for a span is a line inside itself, not the underside of the header. So the columns that
-		// merged lost the rule between the header and the first row while the unmerged one kept it (Max,
-		// 2026-08-28, with R6C4 selected: *"there is no line"*, Top: None). Every horizontal edge is now
-		// stated by the side that is never merged.
-		BoxCell(*row, 0, col, /*top*/ true, /*bottom*/ true, m_gridPen);
+	// ONE DESCRIPTION OF THE LINE'S CELL, as a table's: the line's fill and weight, and its share of the grid — the
+	// verticals that carry a column down the page, and the lines that close the row at both ends.
+	//
+	// ⚠ IT STATES ITS OWN TOP, and the reason is the merged header above it. A merged cell is asked
+	// for a bottom edge on its MAIN cell, and the grid draws that edge under the main cell's row —
+	// which for a span is a line inside itself, not the underside of the header. So the columns that
+	// merged lost the rule between the header and the first row while the unmerged one kept it (Max,
+	// 2026-08-28, with R6C4 selected: *"there is no line"*, Top: None). Every horizontal edge is now
+	// stated by the side that is never merged.
+	ibSpreadsheetCellDescription cell(0, 0);
+	const int plainHorz = cell.m_alignHorz, plainVert = cell.m_alignVert;
+	cell.m_backgroundColour = groupRow ? theme.GroupFill(level) : theme.m_detailFill;
+	if (groupRow) {
+		cell.m_font = ibDefaultSpreadsheetFont();
+		cell.m_font.m_weight = ibFONTWEIGHT_BOLD;
 	}
-	ApplyLineAttr(*row, line.m_attr);
+	for (ibSpreadsheetBorderDescription& edge : cell.m_borderAt)
+		edge = m_gridPen;
+	const ibCompositionLineAttr* const attr = line.m_attr;
+	for (int col = 0; col < m_columnCount; ++col) {
+		LineCell& said = cells[static_cast<size_t>(col)];
+		cell.m_value = std::move(said.m_text);
+		cell.m_alignHorz = said.m_right ? ibAlignmentHorz_Right : plainHorz;
+		cell.m_alignVert = said.m_right ? ibAlignmentVert_Center : plainVert;
+		cell.m_detailsParameter = said.m_linked ? LinkName(at, col) : ibString();
+		if (said.m_linked)
+			m_document->SetParameter(cell.m_detailsParameter, said.m_bound);
+		if (attr == nullptr) {
+			m_document->SetCell(at, col, cell);
+			continue;
+		}
+		// …its conditional appearance over it, on a copy — the description is the next cell's too: the line's, then
+		// the column's own where it has one (ApplyLineAttr's order).
+		ibSpreadsheetCellDescription dressed = cell;
+		ApplyAttr(dressed, attr->m_line);
+		for (const std::pair<size_t, ibCompositionAttr>& own : attr->m_cells)
+			if (own.first < m_layout.size() && m_layout[own.first] == col)
+				ApplyAttr(dressed, own.second);
+		m_document->SetCell(at, col, dressed);
+	}
 
 	// ⭐ AND THE ONLY POSITIONAL THING THIS DRIVER SAYS: how deep the row is DRAWN — the rung plus the
-	// hierarchy step. Where it lands, how far the group it opens reaches, which line carries the fold
-	// marker — all of that follows from the order the rows arrived in, and belongs to the document and
-	// the grid.
-	m_document->PutArea(row, static_cast<unsigned int>(std::max(0, page)));
+	// hierarchy step — the group it folds into at that depth (what PutArea said about a line besides its
+	// cells, with the end of the printed rows). Where it lands, how far the group reaches, which line
+	// carries the fold marker — all of that follows from the order the rows arrived in, and belongs to
+	// the document and the grid.
+	m_document->SetRowBrake(at);
+	if (page > 0)
+		m_document->GetSpreadsheetDesc().AddRowGroup(static_cast<unsigned int>(at), static_cast<unsigned int>(at),
+			static_cast<unsigned int>(page));
 	++m_rowsWritten;
 }
 
@@ -1605,31 +1677,6 @@ void ibSpreadsheetComposeDriver::WriteCrossTable()
 		std::fill(cellAttr.begin(), cellAttr.end(), nullptr);
 		for (ibString& link : cellLink)
 			link.clear();
-		// ⚠ THE DIGITS BY HAND. `wxString << int` formats through a printf, and this name is spelled
-		// for every cell of the table — a quarter of the writing, in the samples (2026-09-12, Debug).
-		// ⚠ …AND AT A FIXED WIDTH, `Link_<row:8>_<col:4>`, so the names come out in increasing order and
-		// each lands at the end of the sheet's parameters without a search (SetParameter is hinted there).
-		// `Link_` sorts after the `Cell_` names PutArea gives an area's links, so those never get in front.
-		const auto linkName = [at](int col) {
-			wchar_t text[32];
-			size_t  n = 0;
-			const auto put = [&text, &n](int value, size_t width) {
-				wchar_t digits[12];
-				size_t  count = 0;
-				unsigned int u = static_cast<unsigned int>(value < 0 ? 0 : value);
-				do { digits[count++] = static_cast<wchar_t>(L'0' + u % 10); u /= 10; } while (u != 0);
-				while (count < width && count < sizeof(digits) / sizeof(digits[0]))
-					digits[count++] = L'0';
-				while (count > 0)
-					text[n++] = digits[--count];
-			};
-			for (const wchar_t* p = L"Link_"; *p != 0; ++p)
-				text[n++] = *p;
-			put(at, 8);
-			text[n++] = L'_';
-			put(col, 4);
-			return ibString(text, n);
-		};
 
 		// ⭐ THE ROW'S CHAIN — its own heading fields, one under the next, under the heading above it.
 		// The same ladder the streaming layout builds, kept in the same place, so a cell of a table
@@ -1657,7 +1704,7 @@ void ibSpreadsheetComposeDriver::WriteCrossTable()
 			cellText[f] = std::move(text);
 			cellSaid[f] = 1;
 			if (!source.m_heading[f].IsEmpty()) {
-				cellLink[f] = linkName(static_cast<int>(f));
+				cellLink[f] = LinkName(at, static_cast<int>(f));
 				rowChain = PackDetails(f < headingAt.size() ? headingAt[f] : m_schema.size(),
 					source.m_heading[f], rowChain);
 				m_document->SetParameter(cellLink[f], rowChain);
@@ -1689,7 +1736,7 @@ void ibSpreadsheetComposeDriver::WriteCrossTable()
 				// is the whole difference between a table's figure and a grouping's. Both links, or
 				// the breakdown of a cell would silently drop one of the two things that made it.
 				if (!figures[m].IsEmpty()) {
-					cellLink[c] = linkName(col);
+					cellLink[c] = LinkName(at, col);
 					m_document->SetParameter(cellLink[c], PackDetails(
 						m < m_measureAt.size() ? m_measureAt[m] : m_schema.size(),
 						figures[m], rowChain, colChain));
