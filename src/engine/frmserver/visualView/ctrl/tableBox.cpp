@@ -11,6 +11,8 @@
 #include "backend/settings/settingsComposer.h"          // the reader's shelf — the setting marked "restore on open" goes on here
 #include "backend/system/systemManager.h"               // ibValueSystemFunction::Message — a mark whose setting is gone is said
 #include "backend/composition/dataComposer.h"           // the composer a header click sorts through
+#include "core/query/queryRender.h"                     // ibQueryColumnFromPath — a field's path as the hops a source walks
+#include "core/query/queryConstructorField.h"           // ibQueryConstructorField — what the walk ends in
 #include "core/formatString.h"                       // ibFormatString — a column's format, found once per fetch
 #include "formAttribute.h"                              // the attribute this box is bound to — its source IS the address
 #include "backend/srcDataObject.h"                      // …and the source answers with the guid of what it reads
@@ -1287,17 +1289,26 @@ void ibValueModelTableBox::Search(const ibString& text)
 		const ibDataNode textValue = ibStoreValue(ibValue(looked));
 		std::vector<ibFilterNodeDescription>& any = m_searchTextCondition.m_children;
 		std::set<ibString> contained, compared;   // a field two columns show is looked in once
+		const ibDataComposer& composer = m_tableModel->GetModelComposer();
 		std::vector<ibValueModelTableBoxColumn*> columns;
 		CollectColumns(this, columns);
 		for (const ibValueModelTableBoxColumn* column : columns) {
 			if (!column->IsColumnShown())
 				continue;
-			for (const ibString& field : GetTextFields(column)) {
-				if (contained.insert(field).second)
-					ibFilterDescription::Append(any, field, ibComparisonKind_Contains, textValue);
-			}
+			// ⭐ ONLY WHAT THE SOURCE CARRIES IS LOOKED IN — asked of it as every holder of fields is asked (WalkPath, the
+			// path laid out as the query carries it). A column it holds no field for — a tabular section's №, the row's
+			// place among those shown, not a value of it — narrows nothing: read in memory, a condition on it is unknown
+			// for every row, and in the OR group it let every row through (Max, 2026-11-17: "104.000" kept the whole
+			// section).
 			const ibString field = column->GetSourceFieldName();
-			if (field.IsEmpty() || !compared.insert(field).second)
+			const ibQueryAstExprPtr path = !field.IsEmpty() ? ibQueryColumnFromPath(field) : nullptr;
+			if (path == nullptr || path->m_path.empty() || composer.WalkPath(path->m_path).m_name.IsEmpty())
+				continue;
+			for (const ibString& one : GetTextFields(column)) {
+				if (contained.insert(one).second)
+					ibFilterDescription::Append(any, one, ibComparisonKind_Contains, textValue);
+			}
+			if (!compared.insert(field).second)
 				continue;
 			const ibTypeDescription& type = column->GetTypeValueDesc();
 			if (isNumber && type.ContainType(ibValueTypes::TYPE_NUMBER))
