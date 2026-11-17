@@ -3,9 +3,9 @@
 
 #include <memory>
 #include <atomic>
-#include <concepts>      // the pointer catch-all below (same_as / derived_from)
+#include <concepts>      // the pointer catch-all below (same_as), the member-pointer gates (derived_from)
 #include <cstdint>       // uint64_t — the hash mixer accumulates in it, never in size_t
-#include <type_traits>   // std::remove_cv_t — the same catch-all
+#include <type_traits>   // std::remove_cv_t, std::is_convertible_v — the same catch-all
 #include <typeinfo>
 #include <unordered_map>
 #include <map>
@@ -990,9 +990,17 @@ public:
 	//   * anything derived from ibValue or ibBackendValue — the two pointer constructors above are
 	//     for exactly those, and a DERIVED pointer would otherwise match this template exactly and
 	//     lose the base overload it was meant for.
+	//
+	// 🛑 ASKED AS THE POINTER CONVERTS, not as `std::derived_from`: that one asks is_base_of, which needs
+	// the class DEFINED, and GCC refuses a class it has only seen declared — on every overload set that
+	// holds an ibValue, not only where this constructor is called. A `const ibMetaData*` handed to
+	// `AdjustValue(type, metaData)` in a file that names the metadata and does not include it stopped the
+	// Linux build (queryLowering.cpp, 2026-11-17); MSVC and Clang let it through. For a defined class the
+	// answer is the same — it is the second half of derived_from; a declared one converts to nothing.
 	template <class T>
 		requires (!std::same_as<std::remove_cv_t<T>, char> && !std::same_as<std::remove_cv_t<T>, ibChar> &&
-			!std::derived_from<T, ibValue> && !std::derived_from<T, ibBackendValue>)
+			!std::is_convertible_v<const volatile T*, const volatile ibValue*> &&
+			!std::is_convertible_v<const volatile T*, const volatile ibBackendValue*>)
 	ibValue(T*) = delete;
 
 	virtual ~ibValue() { DEBUG_VALUE_DELETE(); }
@@ -1056,12 +1064,14 @@ public:
 	// (m_bReadOnly). Without this overload `value = constPtr` silently picked
 	// operator=(bool) (const ptr → bool) and the object became a Boolean.
 	void operator = (const ibValue* pParam) { ibVariant::operator=(static_cast<const ibVariant*>(pParam)); }
-	// Any other pointer — the deleted constructor's other half, and the same exemptions. Closing
-	// the constructor alone left `value = wxT("text")` (a `wchar_t*` since ibChar is char16_t)
-	// arriving through operator=(bool) as TRUE.
+	// Any other pointer — the deleted constructor's other half, and the same exemptions, asked the same
+	// way (as the pointer converts — a class only declared answers too). Closing the constructor alone
+	// left `value = wxT("text")` (a `wchar_t*` since ibChar is char16_t) arriving through operator=(bool)
+	// as TRUE.
 	template <class T>
 		requires (!std::same_as<std::remove_cv_t<T>, char> && !std::same_as<std::remove_cv_t<T>, ibChar> &&
-			!std::derived_from<T, ibValue> && !std::derived_from<T, ibBackendValue>)
+			!std::is_convertible_v<const volatile T*, const volatile ibValue*> &&
+			!std::is_convertible_v<const volatile T*, const volatile ibBackendValue*>)
 	void operator = (T*) = delete;
 
 	BACKEND_API const ibValue& operator+(const ibValue& cParam);

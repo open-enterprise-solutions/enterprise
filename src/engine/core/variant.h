@@ -23,9 +23,9 @@
 #include "core/fboolean.h"   // ibBoolean — the flag in the word
 
 #include <atomic>
-#include <concepts>      // the pointer catch-all below (same_as / derived_from)
+#include <concepts>      // the pointer catch-all below (same_as)
 #include <string>
-#include <type_traits>   // std::remove_cv_t — the same catch-all
+#include <type_traits>   // std::remove_cv_t, std::is_convertible_v — the same catch-all
 
 class ibDataNode;
 
@@ -118,10 +118,12 @@ public:
 	ibVariant(const S& sParam) : ibVariant(ibString(sParam)) {} //string
 
 	// ANY OTHER POINTER IS A MISTAKE, the runtime's rule: pointer-to-bool is a standard conversion, and an unrelated
-	// pointer would arrive as TRUE. Only an object (derived from this class) and a text are taken.
+	// pointer would arrive as TRUE. Only an object (derived from this class) and a text are taken — "derived" asked as
+	// the pointer converts, not as std::derived_from, whose is_base_of GCC refuses for a class only declared (value.h
+	// says the rest).
 	template <class T>
 		requires (!std::same_as<std::remove_cv_t<T>, char> && !std::same_as<std::remove_cv_t<T>, ibChar> &&
-			!std::derived_from<T, ibVariant>)
+			!std::is_convertible_v<const volatile T*, const volatile ibVariant*>)
 	ibVariant(T*) = delete;
 
 	virtual ~ibVariant() {
