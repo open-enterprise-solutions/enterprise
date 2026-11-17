@@ -26,7 +26,7 @@
 #include <wx/string.h>   // wxT, wxString - the engine's headers include no wx
 
 #include "backend/compiler/value.h"               // ibValue / ibNumber
-#include "backend/query/provider/queryProvider.h" // ibQueryComposer + ibQueryRamTable
+#include "backend/query/provider/queryComposer.h" // ibQueryComposer + ibQueryRamTable
 #include "backend/query/queryable.h"              // ibBackendQueryColumn
 #include "backend/query/queryColumn.h"            // ibTypeDescription
 #include "backend/query/dataQueryBuilder.h"       // ibQueryJoinKind
@@ -192,7 +192,7 @@ TEST_F(JoinParityFix, LeftJoin_KeepsUnmatchedLeft)
 // The SQLite driver now vends an ibTempTableDialect, which flips it OFF the RAM
 // floor: a heterogeneous JOIN (a computed leaf ⋈ a DB leaf) can materialise the
 // computed side into a server-side temp table on the embedded DB and run the
-// join DB⋈DB (queryProvider.cpp PromoteComputedLeaf), instead of always
+// join DB⋈DB (queryComposer.cpp PromoteComputedLeaf), instead of always
 // stitching in RAM. Presence IS the capability (docs/private/temp-db.md). This locks the
 // capability + its shape WITHOUT a pool; the full CREATE+INSERT+read round-trip
 // is integration scope (it needs a holder/connection) -> oes_temp_db_sqlite_test.

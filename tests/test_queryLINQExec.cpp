@@ -38,7 +38,7 @@
 
 #include "lambdaRecordFix.h"                      // ibTestRecordLambda — body -> compiled lambda -> AST
 #include "backend/query/queryLowering.h"          // ibQueryLowering::LowerLambdaPredicate (L4-2 lowering)
-#include "backend/query/provider/queryProvider.h" // ibQueryComposer::FilterRows + ibQueryRamTable
+#include "backend/query/provider/queryComposer.h" // ibQueryComposer::FilterRows + ibQueryRamTable
 #include "backend/query/queryable.h"              // ibBackendQueryable / ibQueryPredicate(Ptr)
 #include "backend/query/queryColumn.h"            // ibBackendQueryColumn / ibTypeDescription
 
@@ -75,7 +75,6 @@ public:
 	ibString GetQueryTableName() const override { return m_table; }
 	ibMetaID GetQueryTableId()   const override { return m_metaId; }
 	const ibUniqueKey& GetQueryTableGuid() const override { return m_key; }
-	bool     IsComputedInRam()   const override { return false; }   // physical source (dot-walk allowed; unused here)
 	const ibMetaData* GetMetaData() const override { return nullptr; }
 	std::vector<std::shared_ptr<const ibBackendQueryColumn>> GetQueryColumns() const override { return m_cols; }
 	bool ContainColumn(const std::shared_ptr<const ibBackendQueryColumn>& col) const override {

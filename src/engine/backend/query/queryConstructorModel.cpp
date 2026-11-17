@@ -4,10 +4,10 @@
 
 #include "queryConstructorModel.h"
 
-#include "queryable.h"                   // ibBackendQueryable::GetSourceMetaObject — a table's own reference type
-#include "backend/metaCollection/genericData.h"   // ResolveQueryConstant — …typed by its empty reference
+#include "queryable.h"                   // ibBackendQueryable::GetProvider — who says what a reference to a table is
+#include "queryProvider.h"               // ibBackendQueryProvider::ResolveReferenceType — …and the provider says it
 #include "backend/appData.h"             // ibApplicationInstance::GetQueryableFactory (no config open)
-#include "backend/metaData.h"            // ibMetaData::GetSourceFactory — the config the query runs on behalf of
+#include "queryableFactory.h"            // GetSourceFactory — the config the query runs on behalf of
 
 #include <algorithm>
 
@@ -66,7 +66,7 @@ static ibQueryableSourceDescriptor* DescriptorOf(ibQueryableFactory* factory, co
 	for (size_t i = 2; i < source.m_name.size(); ++i)
 		name += ibT(".") + source.m_name[i];   // `Register.Stock.Balance` — the virtual table is the third segment
 
-	for (ibQueryableSourceDescriptor* descriptor : factory->GetDescriptors())
+	for (ibQueryableSourceDescriptor* descriptor : factory->GetDescriptors(ibQueryableSourceKind::Any))
 		if (descriptor != nullptr && descriptor->GetNamespace().IsSameAs(ns, false)
 		    && descriptor->GetName().IsSameAs(name, false))
 			return descriptor;
@@ -82,7 +82,7 @@ ibQueryableFactory* ibQueryConstructorModel::Factory() const
 {
 	// The config's OWN factory first (sources register per-config, and it descends to the global one
 	// on a miss); with no config open the global factory is the honest answer, not an error.
-	ibQueryableFactory* factory = m_metaData != nullptr ? m_metaData->GetSourceFactory() : nullptr;
+	ibQueryableFactory* factory = GetSourceFactory(m_metaData);
 	return factory != nullptr ? factory : ibApplicationInstance::GetQueryableFactory();
 }
 
@@ -95,33 +95,33 @@ std::vector<ibQueryConstructorSource> ibQueryConstructorModel::GetSources() cons
 		return out;   // pre-appData / no config — an empty catalogue, not a crash
 
 	// THE WALK. Whatever registered is what the constructor offers — a metatype added tomorrow
-	// appears here the day it vends a descriptor, with nothing edited in this file.
-	for (ibQueryableSourceDescriptor* descriptor : factory->GetDescriptors()) {
-		if (descriptor == nullptr)
-			continue;
+	// appears here the day it vends a descriptor, with nothing edited in this file. In the factory's order: the
+	// application's as its configuration is read (ibMetaQueryableFactory::GetDescriptors), then the platform's.
+	for (const ibQueryableSourceKind kind : { ibQueryableSourceKind::Application, ibQueryableSourceKind::Platform }) {
+		for (ibQueryableSourceDescriptor* descriptor : factory->GetDescriptors(kind)) {
+			if (descriptor == nullptr)
+				continue;
 
-		ibQueryConstructorSource source;
-		source.m_path.push_back(descriptor->GetNamespace());
+			ibQueryConstructorSource source;
+			source.m_path.push_back(descriptor->GetNamespace());
 
-		// A descriptor's name is already the composite one for a virtual table
-		// ("Goods.Balance"), so it splits back into the segments a query writes.
-		const ibString name = descriptor->GetName();
-		ibString segment;
-		for (size_t i = 0; i < name.length(); ++i) {
-			if (name[i] == ibT('.')) { source.m_path.push_back(segment); segment.clear(); }
-			else                      { segment += name[i]; }
+			// A descriptor's name is already the composite one for a virtual table
+			// ("Goods.Balance"), so it splits back into the segments a query writes.
+			const ibString name = descriptor->GetName();
+			ibString segment;
+			for (size_t i = 0; i < name.length(); ++i) {
+				if (name[i] == ibT('.')) { source.m_path.push_back(segment); segment.clear(); }
+				else                      { segment += name[i]; }
+			}
+			if (!segment.IsEmpty())
+				source.m_path.push_back(segment);
+
+			source.m_presentation = source.Text();
+			source.m_picture = descriptor->GetPicture();
+			source.m_platform = kind == ibQueryableSourceKind::Platform;
+			out.push_back(std::move(source));
 		}
-		if (!segment.IsEmpty())
-			source.m_path.push_back(segment);
-
-		source.m_presentation = source.Text();
-		out.push_back(std::move(source));
 	}
-
-	std::sort(out.begin(), out.end(),
-		[](const ibQueryConstructorSource& a, const ibQueryConstructorSource& b) {
-			return a.Text().CmpNoCase(b.Text()) < 0;
-		});
 	return out;
 }
 
@@ -152,11 +152,7 @@ ibClassID ibQueryConstructorModel::ReferenceOfTable(const std::vector<ibString>&
 	ibQueryableFactory* const factory = Factory();
 	ibQueryableSourceDescriptor* const descriptor = factory != nullptr ? factory->FindDescriptor(path[0], path[1]) : nullptr;
 	const std::shared_ptr<const ibBackendQueryable> table = descriptor != nullptr ? descriptor->CreateQueryable(nullptr, 0) : nullptr;
-	const ibValueMetaObjectGenericData* const meta = table != nullptr ? table->GetSourceMetaObject() : nullptr;
-	ibValue emptyRef;
-	if (meta != nullptr && meta->ResolveQueryConstant(ibRefMember::EmptyRef, emptyRef))
-		return emptyRef.GetClassType();
-	return 0;
+	return table != nullptr ? table->GetProvider().ResolveReferenceType(table) : 0;
 }
 
 // Named as a query names the type (`Document.GoodsIssue`), which is both what a tree shows and what a

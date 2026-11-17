@@ -1797,7 +1797,10 @@ bool ScintillaWX::DoDropText(long x, long y, const wxString& data) {
 
     dragResult = evt.GetDragResult();
     if (dragResult == wxDragMove || dragResult == wxDragCopy) {
-        const wxScopedCharBuffer dropped = evt.GetString().utf8_str();
+        // The string held first: GetString gives a copy, and its utf8_str points into that copy's own conversion — taken
+        // off the temporary it was freed before DropAt read it (2026-11-17: a drop from the syntax helper wrote 0xDD).
+        const wxString droppedText = evt.GetString();
+        const wxScopedCharBuffer dropped = droppedText.utf8_str();
         DropAt(SelectionPosition(evt.GetPosition()),
                std::string_view(dropped.data(), dropped.length()),
                dragResult == wxDragMove,

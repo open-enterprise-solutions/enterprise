@@ -979,6 +979,8 @@ bool ibDialogQueryConstructor::FillCatalogueFields(const wxTreeItemId& item)
 // same cache.
 static const wxChar* const kKindNestedQuery = wxT("@nested");
 static const wxChar* const kKindTempTable   = wxT("@temp");
+// …and the heading the platform's kinds stand under (FillCatalogue) — no source, a folder, as `Data.Platform` in LINQ.
+static const wxChar* const kKindPlatform    = wxT("@platform");
 
 int ibDialogQueryConstructor::KindIcon(TreeIcons& icons, const wxString& kind) const
 {
@@ -994,10 +996,11 @@ int ibDialogQueryConstructor::KindIcon(TreeIcons& icons, const wxString& kind) c
 	// THE TWO SOURCES WITH NO METATYPE come from the art provider; everything else wears the icon
 	// its metaobject registered, which is why a metatype added tomorrow is dressed the day it
 	// registers and nothing here is edited.
-	if (kind == kKindNestedQuery || kind == kKindTempTable) {
-		const wxBitmap picture = wxArtProvider::GetBitmap(
-			kind == kKindNestedQuery ? wxART_NESTED_QUERY : wxART_TEMP_TABLE,
-			wxART_FRONTEND, FromDIP(wxSize(16, 16)));
+	if (kind == kKindNestedQuery || kind == kKindTempTable || kind == kKindPlatform) {
+		const wxBitmap picture = kind == kKindPlatform
+			? wxArtProvider::GetBitmap(wxART_COMMON_FOLDER, wxART_METATREE, FromDIP(wxSize(16, 16)))
+			: wxArtProvider::GetBitmap(kind == kKindNestedQuery ? wxART_NESTED_QUERY : wxART_TEMP_TABLE,
+				wxART_FRONTEND, FromDIP(wxSize(16, 16)));
 		if (picture.IsOk())
 			index = icons.m_images->Add(picture);
 	}
@@ -1055,6 +1058,11 @@ void ibDialogQueryConstructor::FillCatalogue(ibTreeCtrl* tree, bool withFields)
 
 	// THE CATALOGUE IS A WALK. The top level is whatever kinds the factory actually holds, so a
 	// metatype registered tomorrow appears here with nothing edited in this file.
+	// In the order the sources come — the application's as its configuration is read, then the platform's (the provider's,
+	// ibMetaQueryableFactory::GetDescriptors). A kind the PLATFORM declares (the registration journal) stands under a
+	// heading of its own, Platform: what `Data.Platform` is in LINQ. A heading, not a segment — the query still writes
+	// `Journal.Events`. Created on demand, as the temporary tables' below.
+	wxTreeItemId platform;
 	std::map<wxString, wxTreeItemId> groups;
 	for (const ibQueryConstructorSource& source : m_model.GetSources()) {
 		if (source.m_path.empty())
@@ -1062,8 +1070,12 @@ void ibDialogQueryConstructor::FillCatalogue(ibTreeCtrl* tree, bool withFields)
 		const wxString kind = source.m_path[0];
 		auto it = groups.find(kind);
 		if (it == groups.end()) {
+			if (source.m_platform && !platform.IsOk()) {
+				const int platformIcon = KindIcon(icons, kKindPlatform);
+				platform = tree->AppendItem(root, _("Platform"), platformIcon, platformIcon);
+			}
 			const int icon = KindIcon(icons, kind);
-			it = groups.emplace(kind, tree->AppendItem(root, kind, icon, icon)).first;
+			it = groups.emplace(kind, tree->AppendItem(source.m_platform ? platform : root, kind, icon, icon)).first;
 		}
 
 		wxString leaf;

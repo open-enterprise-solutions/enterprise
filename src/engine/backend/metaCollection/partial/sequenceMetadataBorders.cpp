@@ -5,8 +5,8 @@
 #include "sequence.h"
 
 #include "backend/metaData.h"
-#include "backend/query/structure/schemaSnapshot.h"                  // ibSchemaSnapshot / ibDeclareLookupIndex
-#include "backend/metaCollection/dimension/metaDimensionObject.h"    // the dimensions the key leads with
+#include "backend/query/provider/database/structure/schemaSnapshot.h" // ibSchemaSnapshot / ibDeclareLookupIndex
+#include "backend/metaCollection/dimension/metaDimensionObject.h"     // the dimensions the key leads with
 
 //***********************************************************************
 //*                        ibSequenceQueryable                          *

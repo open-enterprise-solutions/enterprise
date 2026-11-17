@@ -151,7 +151,12 @@ struct ibTypeDescription {
 		return *it;
 	}
 
-	const std::vector<ibClassID>& GetClsidList() const { return m_listTypeClass; }
+	// The classes — lent by a description that is held, GIVEN by one about to go. Lent by both, a loop over
+	// `f().GetClsidList()` (f answering a description, as ibOpenBarriers does) read a list already destroyed —
+	// C++20 extends no temporary behind a member it returns — and ran zero times: every [+] of every field tree
+	// was lost to it (2026-11-17).
+	const std::vector<ibClassID>& GetClsidList() const & { return m_listTypeClass; }
+	std::vector<ibClassID> GetClsidList() const && { return m_listTypeClass; }
 
 	//get special data number 
 	unsigned char GetPrecision() const { return m_typeData.GetPrecision(); }
@@ -399,10 +404,12 @@ struct ibTypeDescription {
 	//////////////////////////////////////////////////
 
 	ibTypeDescription() {}
-	ibTypeDescription(const ibClassID& clsid) : m_listTypeClass({ clsid }) { std::erase(m_listTypeClass, g_valueAnyCLSID); }
+	// Made of classes alone, a type takes the qualifiers AppendMetaType gives them — a date WITH its time: the default
+	// data's date-only cut every moment of a type made so (the journal's Date, a date parameter's output, 2026-11-17).
+	ibTypeDescription(const ibClassID& clsid) { AppendMetaType(clsid); }
 	ibTypeDescription(const ibClassID& clsid, const ibTypeData& descr) : m_listTypeClass({ clsid }), m_typeData(descr) { std::erase(m_listTypeClass, g_valueAnyCLSID); }
 	ibTypeDescription(const ibClassID& clsid, const ibQualifierNumber& qNumber, const ibQualifierDate& qDate, const ibQualifierString& qString) : m_listTypeClass({ clsid }), m_typeData(qNumber, qDate, qString) { std::erase(m_listTypeClass, g_valueAnyCLSID); }
-	ibTypeDescription(const std::vector<ibClassID>& array) : m_listTypeClass(array) { std::erase(m_listTypeClass, g_valueAnyCLSID); }
+	ibTypeDescription(const std::vector<ibClassID>& array) { AppendMetaType(array); }
 	ibTypeDescription(const std::vector<ibClassID>& array, const ibTypeData& descr) : m_listTypeClass(array), m_typeData(descr) { std::erase(m_listTypeClass, g_valueAnyCLSID); }
 	ibTypeDescription(const std::vector<ibClassID>& array, const ibQualifierNumber& qNumber, const ibQualifierDate& qDate, const ibQualifierString& qString) : m_listTypeClass(array), m_typeData(qNumber, qDate, qString) { std::erase(m_listTypeClass, g_valueAnyCLSID); }
 

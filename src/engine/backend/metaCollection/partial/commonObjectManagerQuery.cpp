@@ -22,7 +22,7 @@
 #include "backend/session/session.h"
 
 #include "backend/query/dataQueryBuilder.h"   // L3 door — composite-key existence probe, FindBy*
-#include "backend/metaCollection/partial/registerQueryLowering.h"   // ibRegWhereKeyValue — a key value as a condition
+#include "backend/query/provider/database/registerQueryLowering.h"  // ibRegWhereKeyValue — a key value as a condition
 
 #include "backend/metaCollection/attribute/metaAttributeObject.h"   // FindBy* — the attribute read
 #include "backend/metaCollection/partial/reference/reference.h"     // …and the reference it answers with

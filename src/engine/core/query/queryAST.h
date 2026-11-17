@@ -538,7 +538,7 @@ struct ibQuerySelect
 	// around it.
 	//
 	// It asks the runtime for nothing new: the fold already computes the whole-snapshot aggregates
-	// into the tree's ROOT (ibQueryComposer::BuildDimensionTree — "grand total in-place"). What this
+	// into the tree's ROOT (BuildDimensionTree — "grand total in-place"). What this
 	// says is whether that root is WALKED as a row, instead of only being reachable by GetTotal().
 	bool                           m_totalsOverall = false;
 

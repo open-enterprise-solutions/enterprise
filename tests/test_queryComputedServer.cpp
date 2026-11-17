@@ -38,10 +38,11 @@
 #include "backend/databaseLayer/connectionHolder.h"          // ibDatabaseConnectionHolder
 #include "backend/databaseLayer/sqllite/sqliteDatabaseLayer.h"
 #include "backend/query/dataQueryBuilder.h"
-#include "backend/query/provider/queryProvider.h"
+#include "backend/query/queryProvider.h"
 #include "backend/query/queryable.h"
 #include "backend/query/queryColumn.h"
 #include "backend/query/columnLayout.h"       // ColumnFieldNames — the metadata column's physical field spelling
+#include "backend/query/provider/database/columnCodec.h" // ibColumnCodec — a cell written and read back as the codec spreads it
 #include "backend/databaseLayer/databaseQueryBuilder.h"   // ibScan / ibFunc — a statement written by hand (the codec test)
 #include "backend/query/queryLowering.h"      // ibQueryLowering::LowerLambdaPredicate (L4-2 lowering)
 #include "core/query/queryAST.h"           // ibQueryAstExpr (recorded lambda)
@@ -52,7 +53,7 @@
 #include "backend/metadataConfiguration.h"                   // ibMetaDataConfigurationFile — a catalog to point references at
 #include "backend/metaCollection/metaObject.h"               // g_metaCatalogCLSID
 #include "backend/metaCollection/partial/reference/reference.h"   // ibValueReferenceDataObject::Create
-#include "backend/query/provider/dbTableProvider.h"          // ibDbTableProvider::BuildPredicateIR — the door that writes every WHERE
+#include "backend/query/provider/database/dbTableProvider.h" // ibDbTableProvider::BuildPredicateIR — the door that writes every WHERE
 #include "backend/databaseLayer/databaseQueryBuilder.h"      // ibQueryRenderer — the SQL a set becomes
 #include "lambdaRecordFix.h"                  // ibTestRecordLambda — body -> compiled lambda -> AST
 #include "queryRoad.h"                        // MeasureSent — the road a read took
@@ -83,7 +84,6 @@ public:
 	void SetBuilder(std::function<ibQueryRamTable()> b) { m_build = std::move(b); }
 
 	ibBackendQueryProvider& GetProvider() const override { return ibComputedProviderInstance(); }
-	bool     IsComputedInRam() const override { return true; }
 	ibQueryRamTable ComputeRows(const std::vector<ibQueryCondition>& /*extra*/) const override {
 		return m_build ? m_build() : ibQueryRamTable();
 	}
@@ -106,8 +106,8 @@ private:
 
 const ibMetaID S_ITEM = 20, S_QTY = 21;
 
-// A PHYSICAL source over a real DB table: it does NOT override GetProvider (inherits the DB provider) and
-// IsComputedInRam() is false, so the door runs it as SERVER SQL -- a LINQ-lowered WHERE on it executes on
+// A PHYSICAL source over a real DB table: it does NOT override GetProvider (inherits the DB provider, whose
+// IsComputedInRam() is false), so the door runs it as SERVER SQL -- a LINQ-lowered WHERE on it executes on
 // the DBMS (ibDbTableProvider::ExecuteRead), not a RAM fold.
 class PhysicalQ : public ibBackendQueryable {
 public:
@@ -115,7 +115,6 @@ public:
 		ibGuidImpl i{}; i.m_data1 = static_cast<unsigned long>(id); m_key = ibGuid(i);
 	}
 	void AddCol(const std::shared_ptr<const ibBackendQueryColumn>& c) { m_cols.push_back(c); }
-	bool     IsComputedInRam()   const override { return false; }
 	std::vector<std::shared_ptr<const ibBackendQueryColumn>> GetQueryColumns() const override { return m_cols; }
 	bool ContainColumn(const std::shared_ptr<const ibBackendQueryColumn>& col) const override {
 		for (const std::shared_ptr<const ibBackendQueryColumn>& c : m_cols) if (c == col) return true;

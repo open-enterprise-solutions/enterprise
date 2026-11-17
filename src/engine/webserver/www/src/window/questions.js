@@ -187,17 +187,21 @@ export class Questions {
 	}
 
 	/**
-	 * One of a list, as the thin client asks it (ibSingleChoiceDialog): the one Selected chosen to begin with, else the
-	 * first; OK — or a double click on an item — answers with it, Cancel and closing with none. SEVERAL (Multiple, the
-	 * thin client's ibMultiChoiceDialog): each ticked or not, those Selected ticked to begin with; OK answers with the
-	 * ticked ones' Ids in the order offered — none ticked, none.
+	 * One of a list, as the thin client asks it (ibDialogSelectDataType — each item with its picture, its pictures fetched
+	 * first): the one Selected chosen to begin with, else the first; OK — or a double click on an item — answers with it,
+	 * Cancel and closing with none. SEVERAL (Multiple, the thin client's ibMultiChoiceDialog): each ticked or not, those
+	 * Selected ticked to begin with; OK answers with the ticked ones' Ids in the order offered — none ticked, none.
 	 * @param {ProtocolNode} request
 	 */
-	choice(request) {
+	async choice(request) {
 		if (request.Quick === true) {
 			this.quickChoice(request);
 			return;
 		}
+		await this.pictures.fetchFor(request).catch(() => {});
+		// Let go by the server while its pictures came.
+		if (this.asked !== request.Id)
+			return;
 		const items = request.NodeChildren ?? [];
 		const several = request.Multiple === true;
 		const list = document.createElement('div');
@@ -225,7 +229,15 @@ export class Questions {
 					answer.Id = item.Id;
 			});
 			inputs.push(input);
-			label.append(input, item.Caption ?? '');
+			label.append(input);
+			const url = this.pictures.url(item.Picture);
+			if (url) {
+				const image = document.createElement('img');
+				image.src = url;
+				image.alt = '';
+				label.append(image);
+			}
+			label.append(item.Caption ?? '');
 			if (!several)
 				label.addEventListener('dblclick', () => this.answer(dialog, request, { Id: item.Id }));
 			list.append(label);

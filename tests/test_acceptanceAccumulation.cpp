@@ -44,11 +44,12 @@
 #include "backend/metaCollection/partial/accumulationRegister.h"
 #include "backend/metaCollection/partial/accumulationRegisterEnum.h"
 #include "backend/metaCollection/partial/accumulationRegisterManager.h"   // the manager a script calls Balance on (#409)
-#include "backend/metaCollection/partial/registerQueryLowering.h"
+#include "backend/query/provider/database/registerQueryLowering.h"
 #include "backend/metaCollection/partial/reference/reference.h"
 #include "backend/query/columnLayout.h"
+#include "backend/query/provider/database/columnCodec.h"
 #include "backend/query/dataQueryBuilder.h"
-#include "backend/query/structure/schemaSnapshot.h"
+#include "backend/query/provider/database/structure/schemaSnapshot.h"
 #include "backend/system/value/valueBoundary.h"
 #include "backend/system/value/valueTable.h"
 #include "backend/session/session.h"
@@ -705,7 +706,7 @@ TEST_F(AcceptanceAccumulation, ByTheRecorderTheServerAnswersAsTheRamRoad)
 			+ wxT(" from ") + from.GetString();
 
 		const auto turnovers = std::make_shared<ibTurnoverQueryable>(reg, from, to, nullptr, fold);
-		if (turnovers->IsComputedInRam())
+		if (!turnovers->CanReadOnServer())
 			GTEST_SKIP() << "no totals on this driver - both roads are the RAM one";
 		const std::vector<ibString> moved = { wxT("QuantityReceipt"), wxT("QuantityExpense"), wxT("QuantityTurnover") };
 		// The RAM road through the reading's own door (ComputeRows) — the register's Compute* are not exported.

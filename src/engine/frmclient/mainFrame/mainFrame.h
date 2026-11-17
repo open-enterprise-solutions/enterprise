@@ -159,8 +159,8 @@ public:
 	// modal: CreateChildFrame), and the value chosen comes back with the window's question asked again (Chosen), to
 	// the cell's ChoiceProcessing. No window asks — the cell is on the active tab (a designer's composer panel): the same
 	// act goes to the tab (event Select), whose view chooses through its configuration and says the value with the view
-	// (State Chosen). False — neither is there.
-	bool ChooseValue(class ibControlFrame* owner, const class ibValue& current);
+	// (State Chosen). `type` — the type the cell stands on (ibTypeControlFactory::ChooseValue). False — neither is there.
+	bool ChooseValue(class ibControlFrame* owner, const struct ibTypeDescription& type, const class ibValue& current);
 	// …and the value chosen, when the window's question or the tab's view state says one was (Chosen) — handed to the
 	// cell once.
 	void TakeChosen(const ibProtocolNode& asked);

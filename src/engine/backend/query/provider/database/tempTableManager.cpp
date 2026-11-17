@@ -13,7 +13,8 @@
 
 #include "tempTableManager.h"
 #include "backend/query/queryRamTable.h"                    // ibQueryRamTable / ibQueryRamColumn
-#include "backend/query/columnLayout.h"                     // ColumnFieldNames + ibColumnCodec::WriteValue — the column's physical field spread + codec
+#include "backend/query/columnLayout.h"                     // ColumnFieldNames — the column's physical field spread
+#include "backend/query/provider/database/columnCodec.h"    // ibColumnCodec::WriteValue — a cell, decomposed into those fields
 #include "backend/databaseLayer/databaseQueryBuilder.h"    // ibDatabaseQueryBuilder + DDL/DML factories + ibQueryStatement (L2)
 
 #include <atomic>

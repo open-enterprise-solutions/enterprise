@@ -1,19 +1,14 @@
 #include "selectData.h"
 
-#include "frmclient/backend/metaData.h"
-#include "frmclient/mainFrame/mainFrame.h"
+#include <wx/imaglist.h>
 
-bool ibDialogSelectDataType::ShowModal(ibClassID& clsid)
+bool ibDialogSelectDataType::ShowModal(int& chosen)
 {
 	if (m_listData->GetItemCount() == 0) {
 		return false;
 	}
 	else if (m_listData->GetItemCount() == 1) {
-		long lSelectedItem = m_listData->GetNextItem(-1, wxLIST_NEXT_ALL, wxLIST_STATE_DONTCARE);
-		if (lSelectedItem != wxNOT_FOUND) {
-			clsid = m_listTypeClass.at(lSelectedItem);
-			return true;
-		}
+		chosen = 0;
 		return true;
 	}
 
@@ -21,7 +16,7 @@ bool ibDialogSelectDataType::ShowModal(ibClassID& clsid)
 	if (res == wxID_OK) {
 		long lSelectedItem = m_listData->GetNextItem(-1, wxLIST_NEXT_ALL, wxLIST_STATE_SELECTED);
 		if (lSelectedItem != wxNOT_FOUND) {
-			clsid = m_listTypeClass.at(lSelectedItem);
+			chosen = static_cast<int>(lSelectedItem);
 			return true;
 		}
 	}
@@ -30,8 +25,8 @@ bool ibDialogSelectDataType::ShowModal(ibClassID& clsid)
 
 #define ICON_SIZE 16
 
-ibDialogSelectDataType::ibDialogSelectDataType(const ibMetaData* metaData, const std::vector<ibClassID>& array) :
-	ibDialog(ibFrontendMainFrame::GetFrame(), wxID_ANY, _("Select data type"), wxDefaultPosition, wxSize(315, 300), wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER)
+ibDialogSelectDataType::ibDialogSelectDataType(wxWindow* parent, const wxString& caption, const wxArrayString& captions, const std::vector<wxBitmap>& pictures) :
+	ibDialog(parent, wxID_ANY, caption, wxDefaultPosition, wxSize(315, 300), wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER)
 {
 	ibDialog::SetSizeHints(wxDefaultSize, wxDefaultSize);
 	wxBoxSizer* mainSizer = new wxBoxSizer(wxHORIZONTAL);
@@ -45,17 +40,21 @@ ibDialogSelectDataType::ibDialogSelectDataType(const ibMetaData* metaData, const
 		new wxImageList(ICON_SIZE, ICON_SIZE), wxIMAGE_LIST_SMALL
 	);
 
-	for (const auto clsid : array) {
-		// (The client's types are the ones the server named — ibValue::GetAvailableCtor; there is no configuration here.)
-		if (const ibCtorAbstractType* typeCtor = ibValue::GetAvailableCtor(clsid)) {
-			wxImageList* imageList = m_listData->GetImageList(wxIMAGE_LIST_SMALL);
-			long lSelectedItem = m_listData->InsertItem(m_listData->GetItemCount(), typeCtor->GetClassName(), imageList->Add(typeCtor->GetClassIcon()));
-			m_listTypeClass.insert_or_assign(lSelectedItem, clsid);
-		}
+	// An item with no picture (none sent, none the client holds) stands by its name alone; one of another size is fitted —
+	// the image list cuts a wider one into several, and the items after it would show their neighbours' pictures.
+	wxImageList* imageList = m_listData->GetImageList(wxIMAGE_LIST_SMALL);
+	for (size_t idx = 0; idx < captions.size(); idx++) {
+		wxBitmap picture = idx < pictures.size() ? pictures[idx] : wxNullBitmap;
+		if (picture.IsOk() && picture.GetSize() != wxSize(ICON_SIZE, ICON_SIZE))
+			wxBitmap::Rescale(picture, wxSize(ICON_SIZE, ICON_SIZE));
+		m_listData->InsertItem(static_cast<long>(idx), captions[idx], picture.IsOk() ? imageList->Add(picture) : -1);
 	}
 
-	// Connect Events
-	m_listData->Connect(wxEVT_COMMAND_LIST_ITEM_SELECTED, wxListEventHandler(ibDialogSelectDataType::OnListItemSelected), nullptr, this);
+	// A click picks an item, OK chooses it — or a double click, Enter, on it (ibSingleChoiceDialog's way); the first stands
+	// picked, so OK alone takes it.
+	if (m_listData->GetItemCount() > 0)
+		m_listData->SetItemState(0, wxLIST_STATE_SELECTED | wxLIST_STATE_FOCUSED, wxLIST_STATE_SELECTED | wxLIST_STATE_FOCUSED);
+	m_listData->Bind(wxEVT_LIST_ITEM_ACTIVATED, &ibDialogSelectDataType::OnListItemActivated, this);
 
 	wxBoxSizer* buttonsSizer = new wxBoxSizer(wxVERTICAL);
 	m_buttonOk = new ibButton(this, wxID_OK, _("Ok"), wxDefaultPosition, wxDefaultSize, 0);
@@ -75,7 +74,7 @@ ibDialogSelectDataType::~ibDialogSelectDataType()
 {
 }
 
-void ibDialogSelectDataType::OnListItemSelected(wxListEvent& event)
+void ibDialogSelectDataType::OnListItemActivated(wxListEvent& event)
 {
 	EndModal(wxID_OK);
 }

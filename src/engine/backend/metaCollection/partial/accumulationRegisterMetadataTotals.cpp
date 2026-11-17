@@ -17,7 +17,7 @@
 // hand-built aggregates: a reading that reads a view has nothing to build.
 #include "backend/databaseLayer/databaseMaterializeBuilder.h"  // L2-2 — RenderMaterializedRead
 #include "backend/query/dataQueryBuilder.h"                     // L3 door — From(balance/turnover queryable).Select()
-#include "backend/metaCollection/partial/registerQueryLowering.h"   // ibRegFieldsOf / ibRegValueField — the physical names a materialised READ still spells
+#include "backend/query/provider/database/registerQueryLowering.h"  // ibRegFieldsOf / ibRegValueField — the physical names a materialised READ still spells
 #include "backend/appData.h"
 #include "backend/session/session.h"
 
@@ -172,7 +172,7 @@ ibQueryRamTable ibValueMetaObjectAccumulationRegister::ComputeBalance(const ibVa
 // ============================================================================
 // Companion queryables — the LIVE fallback.
 //
-// ComputeRows runs only when there is no materialised surface (IsComputedInRam() is then true —
+// ComputeRows runs only when there is no materialised surface (CanReadOnServer() is then false —
 // on a driver that cannot maintain derived state, i.e. ODBC). With views present the source is a
 // derived table instead and these are never called; see GetSourceRelation below.
 //
@@ -205,40 +205,40 @@ ibQueryRamTable ibBalanceAndTurnoverQueryable::ComputeRows(const std::vector<ibQ
 // movements alone (ibMaterializeGrain::Movements) — and that is one GROUP BY as well (#646). It used to be a reason to
 // compute in RAM, and with it every step of the query above the reading: 23 s a pass of a report over 99 291
 // turnovers (2026-11-04, Debug).
-bool ibTurnoverQueryable::IsComputedInRam() const
+bool ibTurnoverQueryable::CanReadOnServer() const
 {
 	if (m_reg == nullptr || !m_reg->HasMaterializedViews())
-		return true;    // nothing stored to read — the live aggregation IS the reading
+		return false;   // nothing stored to read — the live aggregation IS the reading
 
 	if (m_fold.FromMovements() && !m_reg->HasMovementArm())
-		return true;    // the surface carries no movement, and no rolled-up total carries a recorder
+		return false;   // the surface carries no movement, and no rolled-up total carries a recorder
 
 	if (ibRegFinerThanStored(m_reg, m_fold))
-		return true;    // a unit finer than the stored grain is no projection of the surface — the movements answer it
+		return false;   // a unit finer than the stored grain is no projection of the surface — the movements answer it
 
-	return false;       // whole, periodised or by the movement: one GROUP BY, and the surface answers it
+	return true;        // whole, periodised or by the movement: one GROUP BY, and the surface answers it
 }
 
 // WHICH ROAD, and every clause of it is a different question — kept as separate returns rather than
 // one folded expression, because "there is no surface", "no period was asked for" and "this driver
 // cannot rank" are three unrelated reasons that happen to share an answer today.
-bool ibBalanceAndTurnoverQueryable::IsComputedInRam() const
+bool ibBalanceAndTurnoverQueryable::CanReadOnServer() const
 {
 	if (m_reg == nullptr || !m_reg->HasMaterializedViews())
-		return true;    // nothing stored to read — the live aggregation IS the reading
+		return false;   // nothing stored to read — the live aggregation IS the reading
 
 	if (m_fold.IsWholeInterval())
-		return false;   // one row per key: three conditional sums over one pass, no window involved
+		return true;    // one row per key: three conditional sums over one pass, no window involved
 
 	// By the recorder or the line each movement opens where the one before it closed (ibRegRunningMovements) — a window
 	// along the movements, asked of the driver below like every periodised one (#646).
 	if (m_fold.FromMovements() && (!m_reg->HasMovementArm() || m_reg->GetRegisterType() != ibRegisterType::eBalances))
-		return true;    // no movement arm to read them from, or no balance to run along them
+		return false;   // no movement arm to read them from, or no balance to run along them
 
 	// A unit finer than the stored grain is no projection of the surface: its turnovers are the movements', and the
 	// balance carried in ends where they begin (ComputeBalanceAndTurnover).
 	if (ibRegFinerThanStored(m_reg, m_fold))
-		return true;
+		return false;
 
 	// A calendar over an interval with both ends reports EVERY period of it, and the server spells that
 	// calendar into the statement a row per period — past the limit of ibRegCalendarOf (a daily one over
@@ -248,13 +248,13 @@ bool ibBalanceAndTurnoverQueryable::IsComputedInRam() const
 		const ibValue to   = ibReadRegisterBound(m_end).m_date;
 		if (from.GetType() == TYPE_DATE && to.GetType() == TYPE_DATE
 		    && ibRegCalendarOf(from, to, m_fold.m_unit).empty() && from.GetDate() <= to.GetDate())
-			return true;
+			return false;
 	}
 
 	// Periodised. The running balance is a window, so this road exists only where the engine has
 	// them — and where it does not, the live path answers exactly as it did before.
 	ibConnectionScope scope;
-	return !ibCanPushWindow(scope.get());
+	return ibCanPushWindow(scope.get());
 }
 // ⭐⭐ THE READING IS A READING. Nothing is recomputed here.
 //
@@ -942,7 +942,7 @@ ibQueryRamTable ibValueMetaObjectAccumulationRegister::ComputeBalanceAndTurnover
 // only matching rows ever leave the database — which is the whole point, since reading balances is
 // the most latency-critical operation the platform performs.
 //
-// When there is no materialised surface these are never called: IsComputedInRam() stays true and
+// When there is no materialised surface these are never called: CanReadOnServer() stays false and
 // the live aggregation answers instead.
 // ============================================================================
 
@@ -951,17 +951,9 @@ ibQueryRamTable ibValueMetaObjectAccumulationRegister::ComputeBalanceAndTurnover
 // columns through. Both died with the demolition - the readings now hand the door a condition and
 // let it read the view, which is what a view is for.
 
-// ONE answer for all three readings — the flag it asks is the virtual one, so each still decides its
-// own road while the rule about which provider serves which road is written down once.
-ibBackendQueryProvider& ibAccumulationTotalsQueryable::GetProvider() const
-{
-	// Materialised => the ordinary PHYSICAL provider, so the source behaves like any relation.
-	return IsComputedInRam() ? ibComputedRegisterQueryable::GetProvider() : ibBackendQueryable::GetProvider();
-}
-
 // ⭐⭐ A COMPANION NAVIGATES THROUGH ITS OWN SHAPE, ON BOTH ROADS.
 //
-// These used to swing with IsComputedInRam(): the VIEW when the surface existed, the REGISTER when
+// These used to swing with the road: the VIEW when the surface existed, the REGISTER when
 // it did not. So the columns a query could name changed with the road it happened to take — on the
 // live road it was told this table has `Quantity` and `Period` (the MOVEMENTS) and no
 // `Resource1Turnover` at all, which is the one answer that is never true of a virtual table.
@@ -1012,7 +1004,7 @@ std::vector<std::shared_ptr<const ibBackendQueryColumn>> ibBalanceAndTurnoverQue
 //
 // The parameters land INSIDE the subquery, so the selection happens on the server before the outer
 // query sees a row; a join to a catalog is then ordinary SQL. When there is no materialised surface
-// these are not called at all — IsComputedInRam() stays true and the live aggregation answers.
+// these are not called at all — CanReadOnServer() stays false and the live aggregation answers.
 // ============================================================================
 
 namespace {
@@ -1083,7 +1075,7 @@ std::vector<ibString> ReadKeys(const ibValueMetaObjectAccumulationRegister* reg)
 
 ibQueryRelPtr ibBalanceQueryable::GetSourceRelation(const ibString& alias) const
 {
-	if (IsComputedInRam())
+	if (!CanReadOnServer())
 		return nullptr;
 
 	// A balance AS OF A DATE is the turnovers folded up to that moment. The date cannot live in a
@@ -1123,7 +1115,7 @@ ibQueryRelPtr ibBalanceQueryable::GetSourceRelation(const ibString& alias) const
 
 ibQueryRelPtr ibTurnoverQueryable::GetSourceRelation(const ibString& alias) const
 {
-	if (IsComputedInRam())
+	if (!CanReadOnServer())
 		return nullptr;
 
 	// ⭐⭐ THE SURFACE HOLDS ROWS PER PERIOD; THE ANSWER IS PER KEY. Those are different things, and
@@ -1211,7 +1203,7 @@ ibQueryRelPtr ibTurnoverQueryable::GetSourceRelation(const ibString& alias) cons
 
 ibQueryRelPtr ibBalanceAndTurnoverQueryable::GetSourceRelation(const ibString& alias) const
 {
-	if (IsComputedInRam())
+	if (!CanReadOnServer())
 		return nullptr;
 
 	// The symbiosis, in ONE pass: what was carried in, what moved, what remains. Three different

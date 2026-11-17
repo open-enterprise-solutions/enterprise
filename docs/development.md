@@ -88,10 +88,18 @@ Say it with `ibValueSystemFunction::Message`, or hand the reason back to the cal
 **Database access goes through `ibPreparedStatement`.** Never concatenate a value into SQL.
 
 **In `backend/query/`, a metaobject is the provider's.** The folder's root is the engine's face: the door,
-the lowering's face, the contracts of a source and a column. What is inside a floor lives in `lowering/`,
-`provider/`, `temp/` or `structure/`. The door reads a source through its queryable, so a metadata header
+the lowering's face, the contracts of a source, a column and a provider. What is inside a floor lives in `lowering/` or
+`provider/` — the composer in its root, each provider in a folder of its own. The door reads a source through its queryable, so a metadata header
 (`metaData.h`, `metadata*.h`, `metaCollection/…`) is included under `query/provider/` and nowhere else in
 the folder. `.github/lint.sh` refuses a new one.
+
+**The providers are the kitchen.** Nothing outside `query/provider/` includes from it: a source is read through its
+queryable, a provider through the interface (`query/queryProvider.h`), the composer through the door. Where the face
+needs a body that only the kitchen can write, the face declares it and the kitchen defines it. The lowering parses
+and links doors: what a provider can do it asks through the interface, and a step no engine can take over the
+finished rows is a door over them. The named exceptions: the metadata side (`metaCollection/`, `metaData.cpp`,
+`metadataConfiguration*` — it answers the database provider's questions and holds its structure builder) and the
+platform's jobs. `.github/lint.sh` refuses a new include anywhere else, however it is spelled.
 
 ---
 

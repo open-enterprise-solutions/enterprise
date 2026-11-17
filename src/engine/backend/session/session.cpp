@@ -139,11 +139,13 @@ private:
 	// Not cached. It is a hot path and the answer is a session constant, so caching is tempting, but
 	// nothing here has been measured yet and a cache brings a staleness question with it. The place
 	// to put one is exactly here, when there is a number saying it is needed.
+	// A source no metaobject stands behind (the registration journal) answers for itself — and only ever for
+	// reading, which is all that is done to it whatever the operation.
 	bool TablesAllowed(const ibDataQueryBuilder& query, RightPredicate right) const
 	{
 		bool allowed = true;
-		Unwind(query, [&](const std::shared_ptr<const ibBackendQueryable>&, const ibValueMetaObjectGenericData* srcMeta) {
-			if ((srcMeta->*right)())
+		Unwind(query, [&](const std::shared_ptr<const ibBackendQueryable>& source, const ibValueMetaObjectGenericData* srcMeta) {
+			if (srcMeta != nullptr ? (srcMeta->*right)() : source->AccessRight_Show())
 				return true;
 			allowed = false;
 			return false;                                 // the first table that refuses ends the walk
@@ -154,8 +156,10 @@ private:
 	// THE UNWINDER — the one procedure that turns a query into the tables it actually touches, and
 	// the only walk in this class. Both sides of every Join, every branch of every Union (that is
 	// what GetSources does), each visited ONCE even when joined twice under two aliases, and each
-	// handed over as what carries its RIGHTS. Sources with nothing behind them — temp, computed,
-	// subquery — are skipped, exactly as the row filter skips them: no rights to ask of.
+	// handed over as what carries its RIGHTS. A source with nothing behind it — temp, computed, subquery,
+	// the registration journal — is handed over too, with NO metaobject: it may still answer for itself
+	// (AccessRight_Show, the table stage), while the row filter and the verdict have nothing to ask of it
+	// and pass it by. Each such source is its own (no table id to tell two of them apart by).
 	//
 	// All four operations and both stages go through here. Nobody else walks sources.
 	// `visit` returns false to STOP: the first table that refuses ends the walk. There is nothing to
@@ -169,13 +173,15 @@ private:
 		query.GetSources(sources);
 		std::vector<ibMetaID> seen;
 		for (const std::shared_ptr<const ibBackendQueryable>& source : sources) {
+			if (source == nullptr)
+				continue;
 			const ibValueMetaObjectGenericData* srcMeta = FindSourceMetaObject(source);
-			if (srcMeta == nullptr)
-				continue;
-			const ibMetaID tableId = source->GetQueryTableId();
-			if (std::find(seen.begin(), seen.end(), tableId) != seen.end())
-				continue;
-			seen.push_back(tableId);
+			if (srcMeta != nullptr) {
+				const ibMetaID tableId = source->GetQueryTableId();
+				if (std::find(seen.begin(), seen.end(), tableId) != seen.end())
+					continue;
+				seen.push_back(tableId);
+			}
 			if (!visit(source, srcMeta))
 				return;
 		}
@@ -207,8 +213,8 @@ private:
 
 		bool allowed = true;
 		Unwind(query, [&](const std::shared_ptr<const ibBackendQueryable>&, const ibValueMetaObjectGenericData* srcMeta) {
-			if (!srcMeta->IsAccessPerRecord())
-				return true;                              // a set — its count says nothing; keep looking
+			if (srcMeta == nullptr || !srcMeta->IsAccessPerRecord())
+				return true;                              // nothing behind it, or a set — its count says nothing; keep looking
 			allowed = false;
 			return false;                                 // refused: stop here
 		});
@@ -237,8 +243,9 @@ private:
 		// The modules run one at a time: they belong to the host session's runtime and keep their
 		// frame in the object, and a rented run borrows this very policy on another thread.
 		std::lock_guard<std::mutex> lk(m_applyMtx);
-		Unwind(query, [&](const std::shared_ptr<const ibBackendQueryable>& source, const ibValueMetaObjectGenericData*) {
-			ApplyToSource(query, source, operation);
+		Unwind(query, [&](const std::shared_ptr<const ibBackendQueryable>& source, const ibValueMetaObjectGenericData* srcMeta) {
+			if (srcMeta != nullptr)                       // a role restricts a metaobject's rows; nothing else has any
+				ApplyToSource(query, source, operation);
 			return true;
 		});
 		return true;

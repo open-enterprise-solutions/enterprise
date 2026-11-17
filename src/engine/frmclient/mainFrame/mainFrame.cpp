@@ -45,6 +45,7 @@
 #include "frmclient/win/dlgs/formEditor.h"
 #include "frmclient/win/dlgs/generation.h"
 #include "frmclient/win/dlgs/search.h"
+#include "frmclient/win/dlgs/selectData.h"   // ibDialogSelectDataType — the server's choice of one, with pictures
 #include "frmclient/win/dlgs/typeSelector.h"
 #include "protocol/protocolDesigner.h"   // ibProtocol::ibSchema::ibProperties — how the types offered are named (Classes)
 #include "frmclient/win/dlgs/jobSchedule/jobScheduleSettings.h"
@@ -1419,7 +1420,7 @@ void ibFrontendMainFrame::TakeChosen(const ibProtocolNode& asked)
 	owner->ChoiceProcessing(value);
 }
 
-bool ibFrontendMainFrame::ChooseValue(ibControlFrame* owner, const ibValue& current)
+bool ibFrontendMainFrame::ChooseValue(ibControlFrame* owner, const ibTypeDescription& type, const ibValue& current)
 {
 	// ⭐ NO WINDOW ASKS — the cell is on the active tab (a designer's composer panel; 2026-10-29: a parameter's "..." and a
 	// condition's opened nothing): the same act goes to the tab, whose view chooses through the configuration there.
@@ -1430,12 +1431,17 @@ bool ibFrontendMainFrame::ChooseValue(ibControlFrame* owner, const ibValue& curr
 
 	m_choosing = ibChoosing{ owner, ++m_choice, m_asking.size() };
 
-	// The type the cell stands on, and the value in it when there is one — the server's own node, given back.
+	// The type the cell stands on, written as a field's — the server puts it to the user when it admits several (or a
+	// family) and the cell holds none (ibTypeControlFactory::ChooseValue there), its configuration naming the classes;
+	// and the value in the cell — the server's own node, given back — which says its type when it holds one.
 	ibProtocolNode act;
 	act.SetValue(ibProtocol::ibRequest::ibListSettings::Act, static_cast<long long>(ibProtocol::ibRequest::ibListSettings::ibAct::Choose))
-		.SetValue(ibProtocol::ibRequest::ibListSettings::Type, wxString() << current.GetClassType())
 		.SetValue(ibProtocol::ibRequest::ibListSettings::Choice, m_choice);
-	if (!current.IsEmpty()) {
+	ibDataValue written;
+	ibTypeDescriptionMemory::WriteNode(written, type);
+	if (const std::optional<ibDataNode> node = written.AsChild())
+		ibWriteProtocolNode(*node, act.Child(ibProtocol::ibRequest::ibListSettings::Type));
+	if (current.GetType() != ibValueTypes::TYPE_EMPTY) {
 		ibDataNode node;
 		current.Serialize(node);
 		ibWriteProtocolNode(node, act.Child(ibProtocol::ibRequest::ibListSettings::Value));
@@ -1601,13 +1607,15 @@ void ibFrontendMainFrame::ShowRequest(const ibProtocolNode& request, ibProtocolN
 			}
 			break;
 		}
-		ibSingleChoiceDialog dialog(parent, request.GetString(ibProtocol::ibRequest::ibChoice::Caption), request.GetString(ibProtocol::ibRequest::ibChoice::Caption), captions);
-		if (!captions.IsEmpty())
-			dialog.SetSelection(selected);
+		// ONE — the desktop's type list (ibDialogSelectDataType), each item with the picture the server named for it.
+		std::vector<wxBitmap> pictures;
+		for (const ibProtocolNode& item : items)
+			pictures.push_back(ibProtocolPicture(item, ibProtocol::ibRequest::ibChoice::Picture));
+		ibDialogSelectDataType dialog(parent, request.GetString(ibProtocol::ibRequest::ibChoice::Caption), captions, pictures);
 		// Cancelled — answered with no Id: the server takes that for no choice.
-		if (dialog.ShowModal() == wxID_OK && dialog.GetSelection() >= 0
-			&& dialog.GetSelection() < static_cast<int>(items.size()))
-			response.SetValue(ibProtocol::ibRequest::ibChoice::Id, items[dialog.GetSelection()].GetInt(ibProtocol::ibRequest::ibChoice::Id));
+		int chosen = wxNOT_FOUND;
+		if (dialog.ShowModal(chosen) && chosen >= 0 && chosen < static_cast<int>(items.size()))
+			response.SetValue(ibProtocol::ibRequest::ibChoice::Id, items[chosen].GetInt(ibProtocol::ibRequest::ibChoice::Id));
 		break;
 	}
 	case ibProtocol::ibRequest::ibKind::Edit:
@@ -1926,10 +1934,21 @@ wxWindow* ibFrontendMainFrame::CreateChildFrame(ibFrontendView* view, const wxPo
 
 		wxIcon docIcon = document->GetIcon();
 
+		// AS LARGE AS A TAB — the client window's size less a margin, when the caller names none: wx's default (400 DIP wide)
+		// showed a choice form's list six rows high, and nothing grows the window to the form the server sends after it.
+		wxSize frameSize = size;
+		if (frameSize == wxDefaultSize) {
+			if (ibAuiMDIClientWindow* const client = GetClientWindow()) {
+				const wxSize tab = client->GetSize() - client->FromDIP(wxSize(64, 64));
+				if (tab.x > 0 && tab.y > 0)
+					frameSize = tab;
+			}
+		}
+
 		// Over the INNERMOST modal, a form's dialog too — the frame, disabled under them, gives its place to the window that
 		// takes the input (ibDialog::Create): over the first, a form chosen from a dialog opened by a modal window (a
 		// condition's, in the list's settings) stood behind it.
-		ibDialogDocChildFrame* subframe = new ibDialogDocChildFrame(document, view, wxTheApp->GetTopWindow(), wxID_ANY, document->GetTitle(), pos, size, style & ~wxCREATE_SDI_FRAME);
+		ibDialogDocChildFrame* subframe = new ibDialogDocChildFrame(document, view, wxTheApp->GetTopWindow(), wxID_ANY, document->GetTitle(), pos, frameSize, style & ~wxCREATE_SDI_FRAME);
 		if (docIcon.IsOk())
 			subframe->SetIcon(docIcon);
 		subframe->SetExtraStyle(wxWS_EX_BLOCK_EVENTS);

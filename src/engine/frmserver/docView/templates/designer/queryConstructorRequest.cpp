@@ -31,20 +31,20 @@ const ibQuerySource* ReadSource(const ibString& text, ibQueryPackage& package)
 	return &package.m_statements.front().m_select->m_from;
 }
 
-void WriteSources(ibDataNode& response, const ibQueryConstructorModel& model, const ibMetaData* metaData)
+void WriteSources(ibDataNode& response, const ibQueryConstructorModel& model)
 {
 	ibDataNode& sources = response.Child(qc::Sources);
-	// ⭐ EACH KIND'S PICTURE, ONCE — on the kind's row, never on its tables': a table wears its kind's (the desktop's
-	// KindIcon, GetAvailableCtor(kind)->GetClassIcon), the way the LINQ constructor's Kinds carry it.
+	// ⭐ EACH KIND'S PICTURE, ONCE — on the kind's row, never on its tables': a table wears its kind's, the way the LINQ
+	// constructor's Kinds carry it. Its first table's answer (ibQueryableSourceDescriptor::GetPicture): the class behind
+	// the kind, or what a source no class stands behind declares — the registration journal's.
 	ibDataNode& kinds = response.Child(qc::Kinds);
 	std::set<ibString> kindsWritten;
 	for (const ibQueryConstructorSource& source : model.GetSources()) {
 		if (!source.m_temp && !source.m_path.empty() && kindsWritten.insert(source.m_path.front()).second) {
 			ibDataNode& kind = kinds.AddChild(0, 0);
 			kind.SetValue(qc::Name, source.m_path.front());
-			const ibString picture = ibKindPicture(source.m_path.front(), metaData);
-			if (!picture.IsEmpty())
-				kind.SetValue(qc::Picture, picture);
+			if (source.m_picture != 0)
+				kind.SetValue(qc::Picture, ibBackendPicture::SendPicture(source.m_picture));
 		}
 		ibDataNode& row = sources.AddChild(0, 0);
 		std::vector<ibDataValue> path;
@@ -56,6 +56,8 @@ void WriteSources(ibDataNode& response, const ibQueryConstructorModel& model, co
 		// by; the client's model answers both from this list (ReferenceOfTable, TableOfReference).
 		if (const ibClassID reference = model.ReferenceOfTable(source.m_path))
 			row.SetValue(qc::Reference, ibString::Format(ibT("%llu"), static_cast<unsigned long long>(reference)));
+		if (source.m_platform)
+			row.SetValue(qc::Platform, true);
 	}
 }
 
@@ -156,7 +158,7 @@ bool ibFetchQueryConstructorRequest(const ibDataNode& request, ibDataNode& respo
 	}
 	const ibQueryConstructorModel model(metaData);
 	if (kind == qc::ibRequest::Sources) {
-		WriteSources(response, model, metaData);
+		WriteSources(response, model);
 		return true;
 	}
 

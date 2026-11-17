@@ -1,7 +1,7 @@
 // Hierarchical totals — the crown of the L3 query arc. Verifies the fold that
 // turns flat detail rows into a subtotal TREE: a grand-total root, one nested level per
 // grouping field, the aggregates folded at every level. Pure (no DB, no appData) — it runs
-// straight on ibQueryComposer::BuildTotalsTree over a hand-built ibQueryRamTable.
+// straight on BuildTotalsTree over a hand-built ibQueryRamTable.
 //
 // Scenario — `TOTALS Sum(Quantity) BY Region, Product`:
 //   North/Apple 10, North/Apple 5, North/Pear 3, South/Apple 7
@@ -17,7 +17,7 @@
 #include <gtest/gtest.h>
 #include <wx/string.h>   // wxT, wxString - the engine's headers include no wx
 
-#include "backend/query/provider/queryProvider.h" // ibQueryComposer::BuildTotalsTree + ibQueryRamTable + ibDataQueryBuilder
+#include "backend/query/provider/queryComposer.h" // ibQueryComposer::AppendUnionBranch / JoinRamTables + ibQueryRamTable + ibDataQueryBuilder
 #include "backend/query/queryColumn.h"            // ibBackendQueryColumn (the test column)
 #include "backend/query/queryRowCursor.h"         // ibQueryRowCursor — the fold's input (the streaming tests below)
 #include "backend/query/querySelector.h"          // ibSelector — the WALK, which is where the branch tests read from
@@ -78,7 +78,7 @@ TEST(QueryTotals, HierarchicalSubtotalsTree)
 	sum.m_alias = wxT("total");
 	const std::vector<ibDataQueryBuilder::AggregateItem> aggs = { sum };
 
-	const ibSelectorTree tree = ibQueryComposer::BuildTotalsTree(detail, groups, aggs);
+	const ibSelectorTree tree = BuildTotalsTree(detail, groups, aggs);
 
 	const ibMetaID AGG0 = AMOUNT;        // aggregate rolls IN-PLACE into its own column (amount)
 	const ibSelectorTree::Node& root = tree.Root();
@@ -125,7 +125,7 @@ TEST(QueryTotals, GrandTotalOnlyWhenNoGroups)
 	ibDataQueryBuilder::AggregateItem sum;
 	sum.m_fn = ibDataQueryBuilder::AggregateFn::Sum; sum.m_col = amount; sum.m_alias = wxT("total");
 
-	const ibSelectorTree tree = ibQueryComposer::BuildTotalsTree(detail, {}, { sum });
+	const ibSelectorTree tree = BuildTotalsTree(detail, {}, { sum });
 
 	const ibMetaID AGG0 = AMOUNT;   // SUM has a source column -> rolls IN-PLACE into it (not a synthetic key)
 	EXPECT_TRUE(NumEq(tree.Root().m_values.at(AGG0), 21));   // 4 + 6 + 11
@@ -172,7 +172,7 @@ TEST(QueryTotals, ABalanceIsTakenAtEachKeysFirstAndLastPeriod)
 		a.m_balanceKeys    = { item, store };
 		return a;
 	};
-	const ibSelectorTree tree = ibQueryComposer::BuildTotalsTree(detail, { item },
+	const ibSelectorTree tree = BuildTotalsTree(detail, { item },
 		{ balance(opening, ibBalanceRole::Opening), balance(closing, ibBalanceRole::Closing) });
 
 	const ibSelectorTree::Node& root = tree.Root();
@@ -187,7 +187,7 @@ TEST(QueryTotals, ABalanceIsTakenAtEachKeysFirstAndLastPeriod)
 	// …and the same figures as ordinary sums add every day's reading up — the number a role exists to prevent.
 	ibDataQueryBuilder::AggregateItem plain;
 	plain.m_fn = ibDataQueryBuilder::AggregateFn::Sum; plain.m_col = opening; plain.m_alias = wxT("opening");
-	EXPECT_TRUE(NumEq(ibQueryComposer::BuildTotalsTree(detail, {}, { plain }).Root().m_values.at(OPENING), 30));
+	EXPECT_TRUE(NumEq(BuildTotalsTree(detail, {}, { plain }).Root().m_values.at(OPENING), 30));
 }
 
 // RAM inner JOIN: orders ⋈ customers ON orders.custId = customers.custKey, projecting
@@ -324,7 +324,7 @@ TEST(QueryTotals, EmptyLevelHangsTheDetailRows)
 	levels.push_back(ibTotalLevel::One(region, ibDimensionKind::Elements));
 	levels.push_back(ibTotalLevel{});
 
-	const ibSelectorTree tree = ibQueryComposer::BuildDimensionTree(detail, levels, { sum }, nullptr, nullptr);
+	const ibSelectorTree tree = BuildDimensionTree(detail, levels, { sum }, nullptr, nullptr);
 
 	const ibMetaID AGG0 = AMOUNT;   // the aggregate rolls in place, into its own column
 	const ibSelectorTree::Node& root = tree.Root();
@@ -403,9 +403,9 @@ TEST(QueryTotals, AFigureMadeOfFiguresIsWorkedOutAtEveryHeading)
 	std::vector<ibTotalLevel> levels;
 	levels.push_back(ibTotalLevel::One(employee, ibDimensionKind::Elements));
 	levels.push_back(ibTotalLevel{});   // …and the rows under each heading
-	ibSelectorTree tree = ibQueryComposer::BuildDimensionTree(detail, levels, aggs, nullptr, nullptr);
-	ibQueryComposer::ApplyDerivedAggregates(tree, aggs, derived);
-	ibQueryComposer::ApplyDerivedAggregates(tree, aggs, derived);
+	ibSelectorTree tree = BuildDimensionTree(detail, levels, aggs, nullptr, nullptr);
+	ApplyDerivedAggregates(tree, aggs, derived);
+	ApplyDerivedAggregates(tree, aggs, derived);
 
 	// Declared ONCE, under the name it is read by.
 	ibMetaID NET = 0;
@@ -469,7 +469,7 @@ TEST(QueryTotals, TupleLevelGroupsByEveryFieldTogether)
 	pair.m_fields.push_back(ibTotalField{ region,  ibDimensionKind::Elements });
 	pair.m_fields.push_back(ibTotalField{ product, ibDimensionKind::Elements });
 
-	const ibSelectorTree tree = ibQueryComposer::BuildDimensionTree(detail, { pair }, { sum }, nullptr, nullptr);
+	const ibSelectorTree tree = BuildDimensionTree(detail, { pair }, { sum }, nullptr, nullptr);
 
 	const ibMetaID AGG0 = AMOUNT;
 	const ibSelectorTree::Node& root = tree.Root();
@@ -531,7 +531,7 @@ TEST(QueryTotals, TwoAggregatesOverOneColumnNeedTwoColumns)
 		countSameCol.m_col = amount;   countSameCol.m_alias = wxT("rows");
 
 		const ibSelectorTree tree =
-			ibQueryComposer::BuildDimensionTree(detail, levels, { sum, countSameCol }, nullptr, nullptr);
+			BuildDimensionTree(detail, levels, { sum, countSameCol }, nullptr, nullptr);
 		const ibSelectorTree::Node& north = *tree.Root().m_children[0];
 		EXPECT_TRUE(NumEq(north.m_values.at(AMOUNT), 2));   // the COUNT, standing where the SUM was
 	}
@@ -543,7 +543,7 @@ TEST(QueryTotals, TwoAggregatesOverOneColumnNeedTwoColumns)
 		countOwnCol.m_col = again;    countOwnCol.m_alias = wxT("rows");
 
 		const ibSelectorTree tree =
-			ibQueryComposer::BuildDimensionTree(detail, levels, { sum, countOwnCol }, nullptr, nullptr);
+			BuildDimensionTree(detail, levels, { sum, countOwnCol }, nullptr, nullptr);
 		const ibSelectorTree::Node& north = *tree.Root().m_children[0];
 		EXPECT_TRUE(NumEq(north.m_values.at(AMOUNT),       15));
 		EXPECT_TRUE(NumEq(north.m_values.at(AMOUNT_AGAIN),  2));
@@ -625,7 +625,7 @@ TEST(QueryTotals, StreamingFoldHoldsGroupsNotRows)
 	rowCount.m_fn = ibDataQueryBuilder::AggregateFn::Count; rowCount.m_col = nullptr; rowCount.m_alias = wxT("rows");
 
 	const std::vector<std::shared_ptr<const ibBackendQueryColumn>> groups = { region, product };
-	const ibSelectorTree tree = ibQueryComposer::BuildTotalsTree(rows, groups, { sum, rowCount });
+	const ibSelectorTree tree = BuildTotalsTree(rows, groups, { sum, rowCount });
 
 	EXPECT_EQ(rows.Reads(), ROWS + 1);                      // every row once, plus the Next() that ended it
 
@@ -665,7 +665,7 @@ TEST(QueryTotals, StreamingFoldStampsDetailRowsFromACursor)
 	levels.push_back(ibTotalLevel::One(region, ibDimensionKind::Elements));
 	levels.push_back(ibTotalLevel{});                       // detail records — a level with no fields
 
-	const ibSelectorTree tree = ibQueryComposer::BuildDimensionTree(rows, levels, { sum }, nullptr, nullptr);
+	const ibSelectorTree tree = BuildDimensionTree(rows, levels, { sum }, nullptr, nullptr);
 
 	const ibSelectorTree::Node& root = tree.Root();
 	EXPECT_TRUE(NumEq(root.m_values.at(AMOUNT), 6));
@@ -724,7 +724,7 @@ TEST(QueryTotals, PeriodsLevelGroupsByMonthAndPadsTheQuietOne)
 	level.m_fields.front().m_periods = std::make_shared<ibTotalPeriods>();
 	level.m_fields.front().m_periods->m_unit = ibTotalsPeriod::Month;   // no bounds — pad between first and last
 
-	const ibSelectorTree tree = ibQueryComposer::BuildDimensionTree(detail, { level }, { sum }, nullptr, nullptr);
+	const ibSelectorTree tree = BuildDimensionTree(detail, { level }, { sum }, nullptr, nullptr);
 
 	const ibSelectorTree::Node& root = tree.Root();
 	EXPECT_TRUE(NumEq(root.m_values.at(AMOUNT), 22));            // the grand total counts every row
@@ -766,7 +766,7 @@ TEST(QueryTotals, PeriodsBoundsPadOutwardsAndNeverFilter)
 	level.m_fields.front().m_periods->m_from = Moment(2026, 3, 1);   // BEFORE the only row
 	level.m_fields.front().m_periods->m_to   = Moment(2026, 6, 30);  // …and after it
 
-	const ibSelectorTree tree = ibQueryComposer::BuildDimensionTree(detail, { level }, { sum }, nullptr, nullptr);
+	const ibSelectorTree tree = BuildDimensionTree(detail, { level }, { sum }, nullptr, nullptr);
 
 	const ibSelectorTree::Node& root = tree.Root();
 	ASSERT_EQ(root.m_children.size(), 4u);                       // March, April, May, June
@@ -833,7 +833,7 @@ TEST(QueryTotals, CrossTableHangsTheColumnsUnderEveryRowHeading)
 
 	// THE STREAMING ROAD — the one every report travels (a cursor, one pass, no snapshot).
 	ibRamTableCursor cursor(detail);
-	const ibSelectorTree tree = ibQueryComposer::BuildDimensionTree(cursor, levels, { sum }, nullptr, nullptr);
+	const ibSelectorTree tree = BuildDimensionTree(cursor, levels, { sum }, nullptr, nullptr);
 
 	const ibSelectorTree::Node& root = tree.Root();
 	EXPECT_TRUE(NumEq(root.m_values.at(AMOUNT), 25));
@@ -907,7 +907,7 @@ TEST(QueryTotals, CrossTableDetailRecordsHangUnderTheRowHeadingWithTheirOwnCells
 	levels.push_back(ibTotalLevel{});   // …and the rows themselves — LAST in the config, always
 
 	ibRamTableCursor cursor(detail);
-	const ibSelectorTree tree = ibQueryComposer::BuildDimensionTree(cursor, levels, { sum }, nullptr, nullptr);
+	const ibSelectorTree tree = BuildDimensionTree(cursor, levels, { sum }, nullptr, nullptr);
 
 	const ibSelectorTree::Node& north = *tree.Root().m_children[2];   // after the root's two cells
 	EXPECT_EQ(north.m_values.at(REGION).GetString().ToStdString(), "North");
@@ -981,7 +981,7 @@ TEST(QueryTotals, SplitFoldsTheSameRowsDownEveryBranch)
 	levels.push_back(ibTotalLevel::One(series, ibDimensionKind::Elements));
 	levels.back().m_branch = bySeries;
 
-	const ibSelectorTree tree = ibQueryComposer::BuildDimensionTree(detail, levels, { sum }, nullptr, nullptr);
+	const ibSelectorTree tree = BuildDimensionTree(detail, levels, { sum }, nullptr, nullptr);
 
 	const ibMetaID AGG0 = AMOUNT;
 	const ibSelectorTree::Node& root = tree.Root();
@@ -1057,7 +1057,7 @@ TEST(QueryTotals, SplitWithNothingInCommonForksAtTheRoot)
 	levels.push_back(ibTotalLevel::One(store, ibDimensionKind::Elements));
 	levels.back().m_branch = byStore;
 
-	const ibSelectorTree tree = ibQueryComposer::BuildDimensionTree(detail, levels, { sum }, nullptr, nullptr);
+	const ibSelectorTree tree = BuildDimensionTree(detail, levels, { sum }, nullptr, nullptr);
 
 	const ibSelectorTree::Node& root = tree.Root();
 	ASSERT_EQ(root.m_children.size(), 2u);                 // two forks, side by side, not nested
@@ -1088,7 +1088,7 @@ TEST(QueryTotals, WithoutSplitTheTreeHasNoForks)
 	sum.m_col = amount;
 
 	const std::vector<ibTotalLevel> levels{ ibTotalLevel::One(region, ibDimensionKind::Elements) };
-	const ibSelectorTree tree = ibQueryComposer::BuildDimensionTree(detail, levels, { sum }, nullptr, nullptr);
+	const ibSelectorTree tree = BuildDimensionTree(detail, levels, { sum }, nullptr, nullptr);
 
 	ASSERT_EQ(tree.Root().m_children.size(), 1u);
 	EXPECT_EQ(tree.Root().m_children[0]->m_kind, ibSelectorNodeKind::Group);
@@ -1207,8 +1207,8 @@ TEST(QueryTotals, AggregateOverALevelStandsThereAndIsCarriedDown)
 		ibTotalLevel::One(item,      ibDimensionKind::Elements),
 		ibTotalLevel::One(warehouse, ibDimensionKind::Elements),
 	};
-	const ibSelectorTree tree = ibQueryComposer::BuildDimensionTree(detail, levels, { plain, overItem },
-	                                                               nullptr, nullptr);
+	const ibSelectorTree tree = BuildDimensionTree(detail, levels, { plain, overItem },
+	                                              nullptr, nullptr);
 
 	// The two aggregates land in slots of their own; the scoped one shares the amount column, so it
 	// is read by the SECOND slot (see AggSlotId — a repeated column takes a synthetic receiver).

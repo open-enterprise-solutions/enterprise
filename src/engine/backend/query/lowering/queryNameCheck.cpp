@@ -7,7 +7,6 @@
 #include "queryLoweringInternal.h"
 
 #include "backend/query/queryException.h"           // ibBackendQueryNameException — a name the configuration does not have
-#include "backend/query/provider/dbTableProvider.h" // ibCastLeafScope — one query's narrowed fields, at every door
 #include "backend/query/columnLayout.h"             // DescribeColumnLayout — whether a field can be compared at all
 #include "core/query/queryRewrite.h"                // ibQueryRewrite — the check sees the query the execution runs
 #include "core/query/queryRender.h"                 // ibQueryOutputName — the ONE answer to "what is this field called"

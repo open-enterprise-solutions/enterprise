@@ -55,16 +55,6 @@ public:
 	virtual ibSourceDescription& GetSourceDesc() const override { return m_sourceDesc; }
 	virtual const ibMetaData* GetMetaData() const override { return activeMetaData; }
 
-	// WHICH TYPE THIS CELL IS ABOUT TO HOLD — asked when the value choice starts,
-	// before anything is picked. The base answers from the metadata (and only puts
-	// the question to the user when more than one type is admitted); the left side
-	// of a condition needs no asking at all: a condition filters a FIELD.
-	virtual ibClassID GetDataType() const override {
-		if (m_side == kFilterColLeft)
-			return g_compositionFieldCLSID;
-		return ibTypeControlFactory::GetDataType();
-	}
-
 	// ASK THE ROW. The left side admits exactly one type — a composition field — and
 	// the right side admits whatever the chosen field lends it (the left side's type).
 	virtual ibTypeDescription& GetTypeDesc() const override {

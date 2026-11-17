@@ -8,10 +8,10 @@
 
 #include "chartOfCalculationTypes.h"
 #include "backend/metaData.h"
-#include "backend/metadataSerialization.h"                         // ibDeserializeValue - a declared type, read with this configuration
-#include "backend/query/structure/schemaSnapshot.h"                // ibSchemaTable::m_beforeChange - the rule the declaration carries
-#include "backend/restructureInfo.h"                               // ibRestructureInfo - where that rule states its reason
-#include "backend/system/value/composition/valueComposerField.h"   // ibValueCompositionPredefined - a declared type
+#include "backend/metadataSerialization.h"                            // ibDeserializeValue - a declared type, read with this configuration
+#include "backend/query/provider/database/structure/schemaSnapshot.h" // ibSchemaTable::m_beforeChange - the rule the declaration carries
+#include "backend/restructureInfo.h"                                  // ibRestructureInfo - where that rule states its reason
+#include "backend/system/value/composition/valueComposerField.h"      // ibValueCompositionPredefined - a declared type
 
 // ⭐ WHAT A PREDEFINED CALCULATION TYPE'S RELATIONS MUST BE, on top of what every item must have (the base's check of
 // this chart's table): every line it declares in Displacing, Base and Leading names a calculation type — a predefined

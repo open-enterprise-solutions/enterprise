@@ -1211,7 +1211,7 @@ msgstr "Виводити"
 #: src/engine/frmclient/win/dlgs/generation.cpp:56
 #: src/engine/frmclient/win/dlgs/kindSelector/kindSelector.cpp:86
 #: src/engine/frmclient/win/dlgs/lineInput/lineInput.cpp:30
-#: src/engine/frmclient/win/dlgs/selectData.cpp:63
+#: src/engine/frmclient/win/dlgs/selectData.cpp:56
 msgid "Cancel"
 msgstr "Скасувати"
 
@@ -3425,7 +3425,7 @@ msgid "Accounting"
 msgstr "Бухгалтерський облік"
 
 #: src/engine/backend/metaCollection/dimension/metaDimensionObject.h:47
-#: src/engine/backend/metaCollection/partial/registerQueryLowering.h:284
+#: src/engine/backend/query/provider/database/registerQueryLowering.h:285
 #: src/engine/backend/metaCollection/resource/metaResourceObject.h:74
 msgid "Balance"
 msgstr "Залишок"
@@ -4332,7 +4332,7 @@ msgstr "Створити таблицю констант"
 #: src/engine/backend/metaCollection/partial/commonObjectRefQuery.cpp:223
 #: src/engine/backend/metaCollection/partial/informationRegisterObject.cpp:142
 #: src/engine/backend/metaCollection/partial/informationRegisterObject.cpp:200
-#: src/engine/backend/metaCollection/partial/registerQueryLowering.h:1244
+#: src/engine/backend/query/provider/database/registerQueryLowering.h:1342
 msgid "Database is not open!"
 msgstr "База даних не відкрита!"
 
@@ -4636,12 +4636,12 @@ msgid "the account condition may only name the account - put anything else in Co
 msgstr "в умові на рахунок можна вказувати лише рахунок - усе інше вкажіть у Condition"
 
 #: src/engine/backend/metaCollection/partial/accountingRegisterMetadataTotals.cpp:822
-#: src/engine/backend/metaCollection/partial/registerQueryLowering.h:1176
+#: src/engine/backend/query/provider/database/registerQueryLowering.h:1274
 msgid "a reading's condition cannot hold a semi-join - write it as IN (SELECT ...)"
 msgstr "умова читання не може містити напівз'єднання - запишіть його як IN (SELECT ...)"
 
 #: src/engine/backend/metaCollection/partial/accountingRegisterMetadataTotals.cpp:859
-#: src/engine/backend/metaCollection/partial/registerQueryLowering.h:1207
+#: src/engine/backend/query/provider/database/registerQueryLowering.h:1305
 msgid "a reading's condition tests a field, not a computed value"
 msgstr "умова читання перевіряє поле, а не обчислюване значення"
 
@@ -4764,12 +4764,12 @@ msgid "Turnovers"
 msgstr "Обороти"
 
 #: src/engine/backend/metaCollection/partial/accumulationRegisterEnum.h:37
-#: src/engine/backend/metaCollection/partial/registerQueryLowering.h:283
+#: src/engine/backend/query/provider/database/registerQueryLowering.h:284
 msgid "Expense"
 msgstr "Витрата"
 
 #: src/engine/backend/metaCollection/partial/accumulationRegisterEnum.h:38
-#: src/engine/backend/metaCollection/partial/registerQueryLowering.h:282
+#: src/engine/backend/query/provider/database/registerQueryLowering.h:283
 msgid "Receipt"
 msgstr "Надходження"
 
@@ -6499,55 +6499,55 @@ msgstr "не вдалося прочитати рядок завдання"
 msgid "Not found"
 msgstr "Не знайдено"
 
-#: src/engine/backend/metaCollection/partial/registerQueryLowering.h:187
+#: src/engine/backend/query/provider/database/registerQueryLowering.h:188
 #, c-format
 msgid "periodicity '%s' is not one of: Period, Record, Recorder, Auto, Second..Year"
 msgstr "періодичність '%s' не входить до списку: Period, Record, Recorder, Auto, Second..Year"
 
-#: src/engine/backend/metaCollection/partial/registerQueryLowering.h:281
+#: src/engine/backend/query/provider/database/registerQueryLowering.h:282
 msgid "Turnover"
 msgstr "Оборот"
 
-#: src/engine/backend/metaCollection/partial/registerQueryLowering.h:285
+#: src/engine/backend/query/provider/database/registerQueryLowering.h:286
 #: src/engine/frmclient/win/dlgs/settings/composer/composerSettings.cpp:314
 msgid "Opening balance"
 msgstr "Початковий залишок"
 
-#: src/engine/backend/metaCollection/partial/registerQueryLowering.h:286
+#: src/engine/backend/query/provider/database/registerQueryLowering.h:287
 #: src/engine/frmclient/win/dlgs/settings/composer/composerSettings.cpp:315
 msgid "Closing balance"
 msgstr "Кінцевий залишок"
 
-#: src/engine/backend/metaCollection/partial/registerQueryLowering.h:287
+#: src/engine/backend/query/provider/database/registerQueryLowering.h:288
 msgid "Gross balance"
 msgstr "Розгорнутий залишок"
 
-#: src/engine/backend/metaCollection/partial/registerQueryLowering.h:288
+#: src/engine/backend/query/provider/database/registerQueryLowering.h:289
 msgid "Opening gross balance"
 msgstr "Початковий розгорнутий залишок"
 
-#: src/engine/backend/metaCollection/partial/registerQueryLowering.h:289
+#: src/engine/backend/query/provider/database/registerQueryLowering.h:290
 msgid "Closing gross balance"
 msgstr "Кінцевий розгорнутий залишок"
 
-#: src/engine/backend/metaCollection/partial/registerQueryLowering.h:290
+#: src/engine/backend/query/provider/database/registerQueryLowering.h:291
 msgid "Corresponding turnover"
 msgstr "Кореспондуючий оборот"
 
-#: src/engine/backend/metaCollection/partial/registerQueryLowering.h:309
+#: src/engine/backend/query/provider/database/registerQueryLowering.h:310
 msgid "Cr"
 msgstr "Кт"
 
-#: src/engine/backend/metaCollection/partial/registerQueryLowering.h:309
+#: src/engine/backend/query/provider/database/registerQueryLowering.h:310
 msgid "Dr"
 msgstr "Дт"
 
-#: src/engine/backend/metaCollection/partial/registerQueryLowering.h:906
+#: src/engine/backend/query/provider/database/registerQueryLowering.h:1004
 #, c-format
 msgid "filter names '%s', which is not a field of '%s'"
 msgstr "відбір вказує '%s', що не є полем '%s'"
 
-#: src/engine/backend/metaCollection/partial/registerQueryLowering.h:908
+#: src/engine/backend/query/provider/database/registerQueryLowering.h:1006
 #, c-format
 msgid "filter names '%s', which is not a dimension of '%s' - this reading folds the records and is filtered by dimensions only"
 msgstr "відбір вказує '%s', що не є виміром '%s' - це читання згортає записи, і відбирати його можна лише за вимірами"
@@ -6557,24 +6557,37 @@ msgstr "відбір вказує '%s', що не є виміром '%s' - це 
 msgid "filter names '%s', which is not an account dimension kind of '%s' - a Map is keyed by the kinds, a dimension is named in a Structure"
 msgstr "відбір вказує '%s', що не є видом аналітики '%s' - ключі Map - це види аналітики, вимір називають у Structure"
 
-#: src/engine/backend/metaCollection/partial/registerQueryLowering.h:1106
+#: src/engine/backend/query/provider/database/registerQueryLowering.h:1204
 #, c-format
 msgid "'%s' cannot select the rows of this reading: a condition inside a virtual table narrows what is folded, so it may name what the rows are kept by - the dimensions, and on an accounting register the accounts and their breakdown. A figure is known only after the fold and a period is the reading's own boundaries - put those into the query's WHERE"
 msgstr "'%s' не може відбирати рядки цього читання: умова всередині віртуальної таблиці звужує те, що згортається, тому в ній можна вказувати те, за чим зберігаються рядки, - виміри, а в регістрі бухгалтерії ще рахунки та їхню аналітику. Показник відомий лише після згортки, а період - це власні межі читання - їх вказуйте у WHERE запиту"
 
-#: src/engine/backend/metaCollection/partial/registerQueryLowering.h:1290
+#: src/engine/backend/query/provider/database/registerQueryLowering.h:1388
 msgid "The first moment counted, inclusive. Left out, the reading starts at the register's first movement - not at some default date."
 msgstr "Перший момент, що враховується, включно. Якщо не вказано, читання починається з першого руху регістру - а не з якоїсь дати за замовчуванням."
 
-#: src/engine/backend/metaCollection/partial/registerQueryLowering.h:1297
+#: src/engine/backend/query/provider/database/registerQueryLowering.h:1395
 msgid "The last moment counted, inclusive - and it may name a DOCUMENT rather than a date, which is how \"the turnovers up to this receipt\" is asked. Left out, the reading runs to the last movement there is."
 msgstr "Останній момент, що враховується, включно - і замість дати можна вказати ДОКУМЕНТ: так запитують \"обороти до цього надходження\". Якщо не вказано, читання триває до останнього наявного руху."
 
-#: src/engine/backend/metaCollection/partial/registerQueryLowering.h:1316
+#: src/engine/backend/query/provider/logger/logQueryable.cpp
+msgid "The first moment read, inclusive. Left out, the reading starts at the first event the journal keeps."
+msgstr "Перший момент, що читається, включно. Якщо не вказано, читання починається з першої події, яку зберігає журнал."
+
+#: src/engine/backend/query/provider/logger/logQueryable.cpp
+msgid "The last moment read, inclusive. Left out, the reading runs to the last event there is."
+msgstr "Останній момент, що читається, включно. Якщо не вказано, читання триває до останньої наявної події."
+
+#: src/engine/backend/query/provider/logger/logQueryable.cpp
+#, c-format
+msgid "'%s.%s' takes a date as %s"
+msgstr "'%s.%s' приймає дату в параметрі %s"
+
+#: src/engine/backend/query/provider/database/registerQueryLowering.h:1414
 msgid "A condition on the DIMENSIONS, applied inside the reading - so it selects the rows BEFORE they are folded, and the table arrives already narrowed. Written as a predicate (Warehouse = &Warehouse), and any predicate is taken: NOT, OR, IN, a walk through a reference (Warehouse.Code = \"01\"). Put a table's filters HERE rather than into the WHERE around it - there the whole register is read and folded first."
 msgstr "Умова на ВИМІРИ, що застосовується всередині читання - тому вона відбирає рядки ДО згортки, і таблиця надходить уже звуженою. Записується як предикат (Warehouse = &Warehouse), і приймається будь-який предикат: NOT, OR, IN, перехід за посиланням (Warehouse.Code = \"01\"). Відбори таблиці ставте СЮДИ, а не в зовнішній WHERE - там спочатку читається і згортається весь регістр."
 
-#: src/engine/backend/metaCollection/partial/registerQueryLowering.h:1344
+#: src/engine/backend/query/provider/database/registerQueryLowering.h:1442
 msgid "How finely this READING is cut, which decides what a row is and therefore which columns it has: none of them read whole, the period with a period, the recorder with both, a record with the line number too. Not the register's stored Periodicity property, which is the grain the totals are KEPT at and takes different words."
 msgstr "Наскільки дрібно розбито це ЧИТАННЯ - від цього залежить, що таке рядок і, отже, які в нього колонки: без розбивки - читається цілком, за періодом - з періодом, за реєстратором - з обома, за записом - ще й з номером рядка. Не плутати зі збереженою властивістю регістру Періодичність: це деталізація, з якою ЗБЕРІГАЮТЬСЯ підсумки, і значення в неї інші."
 
@@ -6778,13 +6791,18 @@ msgstr "Перейменування загального модуля '%s' на
 msgid "Common module '%s' did not compile - the session cannot start"
 msgstr "Загальний модуль '%s' не скомпілювався - сеанс не може розпочатися"
 
-#: src/engine/backend/moduleManager/moduleManagerDataUnit.cpp:131
-msgid "Data.From: a value table argument is required"
-msgstr "Data.From: потрібен аргумент - таблиця значень"
+#: src/engine/backend/moduleManager/moduleManagerDataUnit.cpp:245
+msgid "Data.From: a value table or a source name is required"
+msgstr "Data.From: потрібна таблиця значень або ім'я джерела"
 
-#: src/engine/backend/moduleManager/moduleManagerDataUnit.cpp:134
+#: src/engine/backend/moduleManager/moduleManagerDataUnit.cpp:253
 msgid "Data.From: the argument must be a value table"
 msgstr "Data.From: аргумент має бути таблицею значень"
+
+#: src/engine/backend/moduleManager/moduleManagerDataUnit.cpp:51
+#, c-format
+msgid "Data.From: there is no source '%s' - name it as a query does, e.g. Journal.Events or AccumulationRegister.Stock.Turnovers"
+msgstr "Data.From: немає джерела '%s' - назвіть його так, як у запиті, наприклад Journal.Events або AccumulationRegister.Stock.Turnovers"
 
 #: src/engine/backend/moduleManager/moduleManagerEvent.cpp:44
 #, c-format
@@ -6950,6 +6968,10 @@ msgstr "до '%s' не можна перейти: у жодній таблиці
 #: src/engine/backend/query/dbTableProvider.cpp:3136
 msgid "a dot-walk GROUP BY / aggregate path did not resolve its reference join"
 msgstr "шлях через крапку в GROUP BY / агрегаті не розв'язав своє з'єднання за посиланням"
+
+#: src/engine/backend/query/provider/database/dbTableProvider.cpp
+msgid "a join or union was handed whole to a statement that cannot write it"
+msgstr "з'єднання чи об'єднання передано цілком оператору, який не може його записати"
 
 #: src/engine/backend/query/dbTableProvider.cpp:5513
 msgid "Only an insert can write several rows in one statement"
@@ -7301,10 +7323,6 @@ msgstr "HAVING має порівнювати агрегатну функцію �
 #: src/engine/backend/query/queryLowering.cpp:4511
 msgid "HAVING compares an aggregate with =, <>, <, <=, > or >="
 msgstr "HAVING порівнює агрегат за допомогою =, <>, <, <=, > або >="
-
-#: src/engine/backend/query/queryLowering.cpp:4596
-msgid "ORDER BY an expression over a computed source is not yet supported: sort by a column"
-msgstr "ORDER BY за виразом над обчислюваним джерелом поки не підтримується: сортуйте за колонкою"
 
 #: src/engine/backend/query/queryLowering.cpp:4604
 #, c-format
@@ -7915,7 +7933,7 @@ msgstr "Так, ні чи скасувати"
 #: src/engine/backend/system/systemManagerEnum.h:28
 #: src/engine/backend/system/systemManagerEnum.h:41
 #: src/engine/frmclient/win/dlgs/generation.cpp:54
-#: src/engine/frmclient/win/dlgs/selectData.cpp:61
+#: src/engine/frmclient/win/dlgs/selectData.cpp:54
 msgid "Ok"
 msgstr "Ок"
 
@@ -14849,7 +14867,6 @@ msgstr "Автовисота рядка"
 msgid "Row height"
 msgstr "Висота рядка"
 
-#: src/engine/frmclient/win/dlgs/selectData.cpp:34
 #: src/engine/frmclient/win/dlgs/typeSelector.cpp:94
 #: src/engine/frmserver/visualView/ctrl/typeControl.cpp:206
 msgid "Select data type"
@@ -17765,6 +17782,7 @@ msgid "Answer, bytes"
 msgstr "Відповідь, байт"
 
 #: src/engine/appstudio/docManager/templates/docViewProfile.cpp:308
+#: src/engine/frmclient/win/dlgs/queryConstructor/queryConstructorFill.cpp:1077
 msgid "Platform"
 msgstr "Платформа"
 

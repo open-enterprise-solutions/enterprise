@@ -247,6 +247,7 @@ std::vector<ibQueryConstructorSource> ibQueryConstructorModel::GetSources() cons
 		for (const ibProtocolNode& segment : row.GetList(qc::Path))
 			source.m_path.push_back(segment.AsString());
 		source.m_presentation = row.GetString(qc::Presentation);
+		source.m_platform = row.GetBool(qc::Platform);
 		if (!source.m_path.empty())
 			out.push_back(std::move(source));
 	}

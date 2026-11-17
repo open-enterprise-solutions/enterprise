@@ -137,8 +137,11 @@ export class FilterEditor extends SettingsEditor {
 					this.draw();
 				}));
 			if (takesValue(Number(node.Kind ?? 0))) {
-				// A field not offered now (one under a reference not opened) — the value's own type tells.
-				const type = this.fields?.fieldAt(String(node.LPath ?? ''))?.types[0] ?? node.RValue?.t ?? Type.String;
+				// A field not offered now (one under a reference not opened) — the value's own type tells. A field of several
+				// types — its type whole: the cell stands on none until a value is chosen (the thin client's AdjustValue).
+				const field = this.fields?.fieldAt(String(node.LPath ?? ''));
+				const type = field !== undefined && field.types.length > 1 && field.type !== undefined ? field.type
+					: field?.types[0] ?? node.RValue?.t ?? Type.String;
 				right.append(this.valueCell(type, node.RValue, String(node.RText ?? ''), (value, text) => {
 					node.RValue = value;
 					node.RText = text;
@@ -200,12 +203,13 @@ export class FilterEditor extends SettingsEditor {
 	}
 
 	/**
-	 * A condition's right-hand side set to its field's type's own empty (the thin client's AdjustValue).
+	 * A condition's right-hand side set to its field's type's own empty (the thin client's AdjustValue) — none for a field
+	 * of several types, which has no one type to be the empty of.
 	 * @param {any} node
 	 * @param {Field} field
 	 */
 	takeEmpty(node, field) {
-		const empty = this.fields?.emptyOf(field.types[0] ?? Type.String);
+		const empty = field.types.length > 1 ? undefined : this.fields?.emptyOf(field.types[0] ?? Type.String);
 		node.RText = '';
 		if (empty !== undefined)
 			node.RValue = empty;

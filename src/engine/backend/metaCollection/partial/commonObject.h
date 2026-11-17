@@ -491,6 +491,9 @@ public:
 	// The metaobject behind the source — the front reads its icon / presentation off it (through the
 	// dynamic list's GetSourceMetaObject → GetSourceQueryable → here).
 	virtual const ibValueMetaObjectGenericData* GetSourceMetaObject() const override { return m_meta; }
+	// …its key and its number, read off the same metaobject.
+	virtual const ibUniqueKey& GetQueryTableGuid() const override { return m_meta->GetGuid(); }
+	virtual ibMetaID GetQueryTableId() const override { return m_meta->GetMetaID(); }
 
 	// …and what its rows are ordered by — the column above (ibBackendColumnSortOrder), which a sort by a
 	// reference to this kind sorts by.
@@ -1637,6 +1640,8 @@ public:
 	virtual const ibMetaData* GetMetaData() const override;                      // metadata context for column-based value reads
 	virtual std::vector<std::shared_ptr<const ibBackendQueryColumn>> GetPrimaryKeyColumns() const override;   // recorder+line+period / period+dims
 	virtual const ibValueMetaObjectGenericData* GetSourceMetaObject() const override;   // = m_meta (body in .cpp — the metaobject type is complete there)
+	virtual const ibUniqueKey& GetQueryTableGuid() const override;   // …its key and number, off the same m_meta
+	virtual ibMetaID GetQueryTableId() const override;
 private:
 	const ibValueMetaObjectRegisterData* m_meta;
 };

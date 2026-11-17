@@ -5,11 +5,11 @@
 #include "accountingRegisterEnum.h"
 #include "backend/propertyManager/property/propertyChartOfAccounts.h"
 #include "backend/query/queryable.h"               // ibComputedRegisterQueryable<TReg> — the shared base for a computed virtual table
-#include "backend/query/temp/tempTableQueryable.h" // ibDbTempTableQueryable — a named relation; what a SHAPE is to L3
+#include "backend/query/tempTableQueryable.h"      // ibDbTempTableQueryable — a named relation; what a SHAPE is to L3
 // The register-shared lowering: ibRegBound / ibRegFold / ibRegFilterPredicate / ibRegFlatLeaves. Shared
 // on purpose — an accounting register reads a boundary and a periodicity by exactly the same words the
 // accumulation register does, and a copy per register is how two registers come to disagree.
-#include "backend/metaCollection/partial/registerQueryLowering.h"
+#include "backend/query/provider/database/registerQueryLowering.h"
 
 #include <algorithm>
 #include <concepts>
@@ -1180,15 +1180,9 @@ public:
 	// ⭐ PURE. It carried `return false` while the totals bundle did not exist and no reading could
 	// answer anything else. All five answer for themselves now, so the default is never the answer —
 	// and a default of "no" is the one that hides a missing override: a new reading would quietly
-	// take the RAM road forever, correct and slow, with nothing saying why.
-	virtual bool CanReadOnServer() const = 0;
-
-	// The two answers that follow from it. Computed in RAM unless this call can go to the server; and
-	// then the ordinary PHYSICAL provider, so the source behaves like any other relation.
-	virtual bool IsComputedInRam() const override { return !CanReadOnServer(); }
-	virtual ibBackendQueryProvider& GetProvider() const override {
-		return IsComputedInRam() ? ibComputedRegisterQueryable::GetProvider() : ibBackendQueryable::GetProvider();
-	}
+	// take the RAM road forever, correct and slow, with nothing saying why. The provider follows from the
+	// answer, as for every register's reading (ibComputedRegisterQueryable::GetProvider).
+	virtual bool CanReadOnServer() const override = 0;
 
 protected:
 	ibAcctShape         m_shape;

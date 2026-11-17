@@ -790,29 +790,22 @@ bool ibValueReferenceDataObject::CoerceHopType(const ibSourceHop& hop, ibValue& 
 //
 // ⭐ AN "ANY" IS SEEN AS ITS FACADE — `CatalogRef` as every catalog's reference, `AnyRef` as every reference —
 // the way a characteristic is seen as its chart's types: a filter, a field tree, a picker offers what can be
-// CHOSEN, and nothing is ever "a CatalogRef". Read off its bits (clsid_admits), so a catalog added later is in
-// it. A field declared with one stores the same members (ibVariantAttribute::DoRefreshTypeDesc); this
-// answers for a type handed in on its own.
+// CHOSEN, and nothing is ever "a CatalogRef". The classes are read with their barriers opened (ibOpenBarriers),
+// so a type handed in on its own answers as a declared field does.
 std::vector<ibMetaID> ibValueReferenceDataObject::ConvertToMetaIds(const std::vector<ibClassID>& clsids, const ibMetaData* metaData)
 {
 	std::vector<ibMetaID> targets;
 	if (metaData == nullptr)
 		return targets;
-	const auto add = [&targets](const ibValueMetaObject* metaObj) {
+	ibTypeDescription declared;
+	declared.SetDefaultMetaType(clsids);
+	for (const ibClassID& clsid : ibOpenBarriers(declared, metaData).GetClsidList()) {
+		const ibCtorMetaValueType* typeCtor = metaData->GetTypeCtor(clsid);
+		if (typeCtor == nullptr || typeCtor->GetMetaTypeCtor() != ibCtorObjectMetaType::ibCtorObjectMetaType_Reference)
+			continue;
+		const ibValueMetaObject* metaObj = typeCtor->GetMetaObject();
 		if (metaObj != nullptr && std::find(targets.begin(), targets.end(), metaObj->GetMetaID()) == targets.end())
 			targets.push_back(metaObj->GetMetaID());
-	};
-	for (const ibClassID& clsid : clsids) {
-		if (const ibCtorMetaValueType* typeCtor = metaData->GetTypeCtor(clsid)) {
-			if (typeCtor->GetMetaTypeCtor() == ibCtorObjectMetaType::ibCtorObjectMetaType_Reference)
-				add(typeCtor->GetMetaObject());
-			continue;
-		}
-		if (!::IsReference(clsid) || !clsid_is_any(clsid))   // the kind byte — ibValue has an IsReference() of its own
-			continue;
-		for (const ibCtorMetaValueType* member : metaData->GetListCtorsByType(ibCtorObjectMetaType::ibCtorObjectMetaType_Reference))
-			if (clsid_admits(clsid, member->GetClassType()))
-				add(member->GetMetaObject());
 	}
 	return targets;
 }

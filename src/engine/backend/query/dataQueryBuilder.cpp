@@ -3,14 +3,17 @@
 //	              (From / Where / OrderBy / GroupBy / aggregate / SetValue) over a
 //	              borrowed holder and is L2- and BACKING-blind: it knows nothing of
 //	              ibQueryIR, of DB vs RAM, of the attribute field-machinery. All of
-//	              that lives behind the provider in queryProvider.cpp; the terminal
-//	              bodies (Select / SelectAggregate / Upsert / DeleteByKey / WriteRow)
-//	              are defined THERE. This TU holds only the surface: the fluent verbs
-//	              + EffectiveSort. See docs/private/query-language-arc.md §18, §22.
+//	              that lives behind the provider (query/provider/): the terminals
+//	              here (Execute / SelectAggregate / SelectTotals / Upsert / Delete …)
+//	              guard the read and hand the spec to the door's Execute* verbs,
+//	              which the composer defines (provider/queryComposer.cpp). This TU
+//	              holds the surface: the fluent verbs, the terminals and
+//	              EffectiveSort. See docs/private/query-language-arc.md §18, §22.
 ////////////////////////////////////////////////////////////////////////////
 
 #include "dataQueryBuilder.h"
-#include "provider/queryProvider.h"                                  // ibBackendQueryProvider abstraction (NO L2 — the door runs through it)
+#include "queryProvider.h"                                           // ibBackendQueryProvider abstraction (NO L2 — the door runs through it)
+#include "querySelector.h"                                           // ApplyDerivedAggregates — the figures made of figures, as a selection's Build adds them
 #include "queryRamTable.h"                                           // ibQueryRamTable — the empty selection an ALLOWED read yields on a refusal
 #include "queryProfiler.h"                                           // ibQueryProfiler — what goes through the door is told to a measurement
 #include "backend/session/session.h"                                 // ibSession::Current()->Holder()
@@ -18,7 +21,7 @@
 
 // NOTE: this TU intentionally includes NO L2 (databaseQueryBuilder.h) and NO
 // field-machinery (metaAttributeObject.h) — the door speaks columns + the provider
-// ABSTRACTION it pulls from the queryable; queryProvider.cpp owns all the lowering.
+// ABSTRACTION it pulls from the queryable; the providers own the lowering to SQL.
 // Keep it that way. The table right is not asked here either: the policy walks the
 // sources and resolves their metaobjects already, so it asks — see ibRuntimeAccessPolicy.
 
@@ -869,7 +872,7 @@ ibDataQueryResult ibDataQueryBuilder::Execute(const ibReadPageRequest& req) cons
 		}
 		return guarded.Execute(req);                  // L4-1 + L4-2 both land here
 	}
-	ibDataQueryResult r = ibQueryComposer::ExecuteRead(m_spec, req);
+	ibDataQueryResult r = ExecuteRead(req);
 	StampResult(r);
 	return r;
 }
@@ -916,7 +919,7 @@ ibDataQueryResult ibDataQueryBuilder::Execute(const ibReadPageRequest& req,
 		}
 		return guarded.Execute(req, cache, signature);
 	}
-	ibDataQueryResult r = ibQueryComposer::ExecuteReadCached(m_spec, req, cache, signature);
+	ibDataQueryResult r = ExecuteReadCached(req, cache, signature);
 	StampResult(r);
 	return r;
 }
@@ -966,7 +969,7 @@ ibDataQueryResult ibDataQueryBuilder::SelectAggregate() const
 		}
 		return guarded.SelectAggregate();
 	}
-	return ibQueryComposer::ExecuteAggregate(m_spec);
+	return ExecuteAggregate();
 }
 
 // Paged single-level group read (docs: group-level paging) — GROUP BY dim ORDER BY dim [dim </> anchor]
@@ -987,7 +990,7 @@ ibDataQueryResult ibDataQueryBuilder::SelectAggregatePage(const ibReadPageReques
 		}
 		return guarded.SelectAggregatePage(page);
 	}
-	return ibQueryComposer::ExecuteGroupLevelPage(m_spec, page);
+	return ExecuteGroupLevelPage(page);
 }
 
 // GUARDED TOO, though nothing calls it today. A read terminal with no policy on it is a loaded gun:
@@ -1034,7 +1037,7 @@ bool ibDataQueryBuilder::TryTotalsPushdown(ibDataQueryResult& out) const
 	// knows no L2 and no provider internals, and "can this dialect fold levels" is exactly such a
 	// question. The door asks; the tier that owns the answer answers.
 	ibSelectorTree folded;
-	if (!ibQueryComposer::TryFoldTotalsInDbms(m_spec, folded))
+	if (!TryFoldTotalsInDbms(folded))
 		return false;
 
 	out = ibMakeEmptyQueryResult(m_spec.m_queryable);
@@ -1057,8 +1060,8 @@ ibSelectorTree ibDataQueryBuilder::SelectTotals() const
 		}
 		return guarded.SelectTotals();
 	}
-	ibSelectorTree tree = ibQueryComposer::ExecuteTotals(m_spec);
-	ibQueryComposer::ApplyDerivedAggregates(tree, m_spec.m_totalAggregates, m_totalDerived);   // as a selection's Build does
+	ibSelectorTree tree = ExecuteTotals();
+	ApplyDerivedAggregates(tree, m_spec.m_totalAggregates, m_totalDerived);   // as a selection's Build does
 	return tree;
 }
 
@@ -1072,12 +1075,12 @@ bool ibDataQueryBuilder::Insert() const
 		guarded.m_policy = nullptr;
 		if (!m_policy->CheckCreate(guarded, ibAccessStage::Table))
 			ibBackendAccessException::Error(_("creating a record"));
-		const long affected = ibQueryComposer::ExecuteWrite(guarded.m_spec, WriteKind::Insert);
+		const long affected = guarded.ExecuteWrite(WriteKind::Insert);
 		if (!m_policy->CheckCreate(guarded, ibAccessStage::Value, affected))
 			ibBackendAccessException::Error(_("creating a record"));
 		return affected >= 0;
 	}
-	return ibQueryComposer::ExecuteWrite(m_spec, WriteKind::Insert) >= 0;
+	return ExecuteWrite(WriteKind::Insert) >= 0;
 }
 
 bool ibDataQueryBuilder::Upsert() const
@@ -1092,12 +1095,12 @@ bool ibDataQueryBuilder::Upsert() const
 		guarded.m_policy = nullptr;
 		if (!m_policy->CheckUpdate(guarded, ibAccessStage::Table))
 			ibBackendAccessException::Error(_("changing a record"));
-		const long affected = ibQueryComposer::ExecuteWrite(guarded.m_spec, WriteKind::Upsert);
+		const long affected = guarded.ExecuteWrite(WriteKind::Upsert);
 		if (!m_policy->CheckUpdate(guarded, ibAccessStage::Value, affected))
 			ibBackendAccessException::Error(_("changing a record"));
 		return affected >= 0;
 	}
-	return ibQueryComposer::ExecuteWrite(m_spec, WriteKind::Upsert) >= 0;
+	return ExecuteWrite(WriteKind::Upsert) >= 0;
 }
 
 // A REWRITE THAT HIT NOTHING IS A MISS ON THE KEY, NOT A WRITE OF ZERO ROWS — AND IT MUST SAY SO.
@@ -1160,7 +1163,7 @@ bool ibDataQueryBuilder::Update() const
 		guarded.m_policy = nullptr;
 		if (!m_policy->CheckUpdate(guarded, ibAccessStage::Table))   // the right on the table, plus the folded restriction
 			ibBackendAccessException::Error(_("changing a record"));
-		const long affected = ibQueryComposer::ExecuteWrite(guarded.m_spec, WriteKind::Update);
+		const long affected = guarded.ExecuteWrite(WriteKind::Update);
 		// The SECOND question, the one only the result can answer: did the rewrite happen? Where
 		// the right controls a row, nothing rewritten means the filter kept the statement off a row
 		// that exists — the policy says so and this returns false or throws. Where it controls a
@@ -1170,7 +1173,7 @@ bool ibDataQueryBuilder::Update() const
 		RaiseIfKeyedRewriteMissed(affected);
 		return affected >= 0;
 	}
-	const long affected = ibQueryComposer::ExecuteWrite(m_spec, WriteKind::Update);
+	const long affected = ExecuteWrite(WriteKind::Update);
 	RaiseIfKeyedRewriteMissed(affected);
 	return affected >= 0;
 }
@@ -1183,7 +1186,7 @@ bool ibDataQueryBuilder::Delete() const
 		guarded.m_policy = nullptr;
 		if (!m_policy->CheckDelete(guarded, ibAccessStage::Table))   // the right on the table, plus the folded restriction
 			ibBackendAccessException::Error(_("deleting a record"));
-		const long affected = ibQueryComposer::ExecuteWrite(guarded.m_spec, WriteKind::Delete);
+		const long affected = guarded.ExecuteWrite(WriteKind::Delete);
 		// The door does not interpret this number — it hands it back. Deleting rows that are not
 		// there is ordinary for a register set; for a row-controlled record it is the filter having
 		// kept the statement off a row that exists. Which of the two it is, the policy knows.
@@ -1192,5 +1195,5 @@ bool ibDataQueryBuilder::Delete() const
 			ibBackendAccessException::Error(_("deleting a record"));
 		return affected >= 0;
 	}
-	return ibQueryComposer::ExecuteWrite(m_spec, WriteKind::Delete) >= 0;
+	return ExecuteWrite(WriteKind::Delete) >= 0;
 }

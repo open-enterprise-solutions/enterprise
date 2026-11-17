@@ -9,10 +9,10 @@
 #include "backend/system/value/valueMap.h"
 #include "backend/appData.h"
 #include "backend/session/session.h"
-#include "backend/query/dataQueryBuilder.h"         // L3 door — From(slice) + Select materialises the slice through L3
-#include "backend/query/provider/dbTableProvider.h" // ibDbTableProvider::GetValueAttribute — the DB value-assembly
+#include "backend/query/dataQueryBuilder.h"                  // L3 door — From(slice) + Select materialises the slice through L3
+#include "backend/query/provider/database/dbTableProvider.h" // ibDbTableProvider::GetValueAttribute — the DB value-assembly
 #include "backend/databaseLayer/databaseQueryBuilder.h"   // L2 — structured IR for the slice self-join (ComputeSlice)
-#include "backend/metaCollection/partial/registerQueryLowering.h"   // ibRegFieldsOf / ibRegCompositeIR (shared lowering)
+#include "backend/query/provider/database/registerQueryLowering.h"  // ibRegFieldsOf / ibRegCompositeIR (shared lowering)
 
 ibValue ibValueManagerDataObjectInformationRegister::Get(const ibValue& cFilter)
 {

@@ -5,8 +5,8 @@
 #include "queryHierarchy.h"
 
 #include "dataQueryBuilder.h"         // L3 door - the one read the whole walk needs
-#include "provider/queryProvider.h"   // ibBackendQueryProvider - ResolveReferenceTarget, the metadata owner
-#include "provider/dbTableProvider.h" // ibDbTableProvider::ReferenceTargetsOf - the same owner, asked by a type
+#include "queryProvider.h"            // ibBackendQueryProvider - ResolveReferenceTarget, the metadata owner
+#include "queryableFactory.h"         // ReferenceTargetsOf - the same owner, asked by a type
 #include "queryException.h"           // ibBackendQueryException - a column that names no catalog, refused in words
 
 namespace {
@@ -92,7 +92,7 @@ ibQueryHierarchyScope::ibQueryHierarchyScope(const std::shared_ptr<const ibBacke
 ibQueryHierarchyScope::ibQueryHierarchyScope(const ibMetaData* metaData, const ibTypeDescription& type,
                                              const std::vector<ibValue>& named, ibQueryDimUnfold unfold)
 	: ibQueryHierarchyScope(unfold == ibQueryDimUnfold::Elements ? std::vector<std::shared_ptr<const ibBackendQueryable>>()
-	                        : ibDbTableProvider::ReferenceTargetsOf(metaData, type), named, unfold)
+	                        : ReferenceTargetsOf(metaData, type), named, unfold)
 {
 }
 

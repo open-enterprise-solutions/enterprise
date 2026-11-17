@@ -7,7 +7,7 @@
 // The register-shared lowering: ibRegFilterPredicate / ibRegFlatLeaves / ibRegCompositeIR. An
 // information register filters its dimensions by the same rule an accumulation register does, and an
 // accounting register will too — so the rule lives in one file for all three.
-#include "backend/metaCollection/partial/registerQueryLowering.h"
+#include "backend/query/provider/database/registerQueryLowering.h"
 
 #include <memory>
 

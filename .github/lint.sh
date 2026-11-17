@@ -106,6 +106,32 @@ done < <(git -c core.quotePath=false diff -U0 -M --no-color "$base...$head" -- '
   END { print "$$_[0]\t$$_[1]\n" for grep { !$had{"$$_[0]\t$$_[2]"} } @added }
 ')
 
+# 6. The providers are the kitchen: nothing outside backend/query/provider/ includes from it (development.md section
+# 2). A source is read through its queryable, a provider through the interface the face declares (queryProvider.h),
+# the composer through the verbs the door declares. Named, with their reason: the metadata side (metaCollection/,
+# metaData.cpp, metadataConfiguration* - it answers the database provider's questions and holds its structure
+# builder) and the platform's jobs (job/platformJobs.cpp). An include is the kitchen's whichever way it is spelled - from
+# the engine's root, from backend/, or relative inside query/. As in 5, an include the file already had - its header
+# moved into the kitchen under the same name - is not new.
+while IFS=$'\t' read -r file n; do
+  [ -n "$file" ] || continue
+  report "$file" "$n" "an include from backend/query/provider/ outside it - a provider is the kitchen: read a source through its queryable, a provider through query/queryProvider.h, the composer through the door. See docs/development.md section 2."
+done < <(git -c core.quotePath=false diff -U0 -M --no-color "$base...$head" -- 'src/engine' ':(exclude)src/engine/backend/query/provider' ':(exclude)src/engine/backend/metaCollection' ':(exclude)src/engine/backend/metaData.cpp' ':(exclude,glob)src/engine/backend/metadataConfiguration*' ':(exclude)src/engine/backend/job/platformJobs.cpp' "${exclude[@]}" | perl -ne '
+  if (/^\+\+\+ (?:b\/(.*)|\/dev\/null)$/) { $f = $1; next }
+  if (/^@@ -\S+ \+(\d+)/)                { $n = $1; next }
+  next unless defined $f;
+  if (/^-\s*#\s*include\s*"(?:[^"]*\/)?([^"\/]+)"/) { $had{"$f\t$1"} = 1; next }
+  next unless /^\+/;
+  if (/^\+\s*#\s*include\s*"([^"]+)"/) {
+    my $inc = $1;
+    my $kitchen = $inc =~ m{(?:^|/)query/provider/} || ($f =~ m{^src/engine/backend/query/} && $inc =~ m{^(?:\.\./)*provider/});
+    (my $base = $inc) =~ s{.*/}{};
+    push @added, [$f, $n, $base] if $kitchen;
+  }
+  $n++;
+  END { print "$$_[0]\t$$_[1]\n" for grep { !$had{"$$_[0]\t$$_[2]"} } @added }
+')
+
 range="$(git rev-parse --short "$base")..$(git rev-parse --short "$head")"
 if [ "$failures" -gt 0 ]; then
   echo "lint: $failures finding(s) in $range"

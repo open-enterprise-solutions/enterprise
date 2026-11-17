@@ -10,11 +10,14 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "dbTableProvider.h"                // ibDbTableProvider + ibRenderedPageCache (+ queryProvider.h / databaseQueryBuilder.h / metaAttributeObject.h)
+#include "backend/query/provider/queryComposer.h" // ibQueryComposer::PadPeriodLevels / EvalColumnExpr — the server's tree ends as ours does
 #include "backend/query/queryable.h"        // ibAliasColumn — a CAST's narrowed field answers as the field it stands for
+#include "backend/query/queryLowering.h"    // CastTarget / WalkEnters — a walk a CAST narrowed, read where the walk is written
 #include "backend/query/dataQueryBuilder.h" // ibDataQueryBuilder::EffectiveSort / ibDataQueryResult / ibReadPageRequest / ibDataQuerySpec / ibDotWalkColumn
 #include "backend/query/resultSource.h"     // ibDataResultSource — the selection backing ibDbResultSource derives
-#include "backend/query/columnLayout.h"     // the column-layout tier: DescribeColumnLayout + ibColumnCodec (value codec) + HasReference
-#include "backend/query/columnSpread.h"     // ibColumnSpread::TagForValue — which of a tagged column's fields a value fills
+#include "backend/query/columnLayout.h"     // the column-layout tier: DescribeColumnLayout
+#include "backend/query/provider/database/columnCodec.h" // ibColumnCodec (value codec) + HasReference; BindWriteValue is defined here
+#include "backend/query/provider/database/columnSpread.h" // ibColumnSpread::TagForValue — which of a tagged column's fields a value fills
 #include "backend/query/queryException.h"   // ibBackendQueryException — L3-L5 varieties (it used to arrive through the DB header)
 #include "backend/query/queryHierarchy.h"   // ibQueryHierarchyScope — «in hierarchy» read here where the server cannot walk it
 #include "backend/databaseLayer/connectionScope.h"   // ibConnectionScope — which driver is asked (ibCanWalkTree)
@@ -27,6 +30,9 @@
 #include "backend/system/value/valueType.h"                      // ibValueTypeDescription::AdjustValue (dot-walk typed empty)
 #include "backend/system/value/valueGuid.h"                      // ibValueGuid — a raw row key reads back AS a guid
 #include "backend/metaCollection/partial/reference/reference.h"  // ibValueReferenceDataObject::ReadBatch — this base's references, read once the rows are in
+#include "backend/metaCollection/genericData.h"                  // ResolveQueryConstant + ibRefMember — a table's constants and its empty reference
+#include "backend/query/queryableFactory.h"                      // GetSourceFactory / ReferenceTargetsOf — declared for the query engine, answered here
+#include "backend/metaCollection/metaGroups.h"                   // ibMetaGroupOrder — a configuration's sources in the order it is read
 
 #include <deque>          // ibDbResultSource — the field names it has found, where they stay put
 #include <map>            // dot-walk join dedup
@@ -34,10 +40,9 @@
 #include <unordered_set>  // ibArrivedReferences — one entry per reference object; an id bound once (DecomposeIn)
 #include <string>         // …keyed by its bytes
 #include <vector>
-#include <algorithm>    // std::find / std::remove — column-list housekeeping (the ROLLUP rows are no longer sorted here: the server orders them)
+#include <algorithm>    // std::find / std::remove — column-list housekeeping; std::stable_sort / std::any_of — an application's sources in order (the ROLLUP rows are no longer sorted here: the server orders them)
 #include <stdexcept>    // std::logic_error — the un-co-locatable WHERE-tree guard (BuildColocatedPredicate)
 #include <functional>   // std::function — the recursive dot-walk predicate-tree lowering in BuildPageIR
-#include <memory>       // CastLeaf — the narrowed fields, made once per query
 #include <cstring>      // memcmp — two references agree on their table, byte for byte (DecomposeIn)
 
 // ==========================================================================
@@ -219,7 +224,7 @@ static std::shared_ptr<const ibBackendQueryColumn> HierarchyColumnOf(const std::
 }
 
 // (The "does this column admit a reference value" check moved to the column-layout tier —
-//  ibColumnCodec::HasReference, query/columnLayout.h. Callers here use it directly.)
+//  ibColumnCodec::HasReference, query/provider/database/columnCodec.h. Callers here use it directly.)
 
 // (WriteFieldsOf removed — it was byte-identical to ColumnFieldNames (columnLayout.h): both are the
 //  column's physical field names off the one layout authority, DescribeColumnLayout. Callers use
@@ -509,7 +514,7 @@ ibQueryExprPtr DecomposeEquality(const std::shared_ptr<const ibBackendQueryColum
 	// ⭐⭐ A ROW THE FIELD WAS NEVER WRITTEN IN READS AS THE COLUMN'S EMPTY VALUE — so it equals it. A field
 	// a restructuring added leaves every row before it UNTAGGED: the tag column comes in `DEFAULT 0 NOT
 	// NULL`, so the tag is the empty one (or NULL, where a column came without that default), and the codec
-	// reads such a cell as the empty value of the column's type (TagFitsColumn, columnLayout.cpp). Filtered
+	// reads such a cell as the empty value of the column's type (TagFitsColumn, columnCodec.cpp). Filtered
 	// by that very value those rows were not found: `Export = False` read False on every contract and found
 	// only the ones written after the flag existed — 2 of 18, measured 2026-09-24 — so a contract list
 	// narrowed by the flag lost its old contracts. The same reading the empty reference gets above.
@@ -1097,13 +1102,13 @@ bool AllNodeKeysResolvable(const std::shared_ptr<ibQueryNode>& node)
 
 using ColocatedLeaves = std::vector<std::shared_ptr<const ibBackendQueryable>>;
 
-// Collect the Source-leaf queryables of a JOIN tree (DFS). False if any leaf is non-Source, null, or
-// COMPUTED (a Union subtree / a computed-temp source) — those are not SQL-co-locatable here.
+// Collect the Source-leaf queryables of a JOIN tree (DFS). False if any leaf is non-Source (a Union
+// subtree) or null. Whether each may go into the statement is the gate's question (ColocatableJoinTree).
 bool CollectColocatedLeaves(const std::shared_ptr<ibQueryNode>& node, ColocatedLeaves& out)
 {
 	if (node == nullptr) return false;
 	if (node->m_kind == ibQueryNode::Kind::Source) {
-		if (node->m_queryable == nullptr || node->m_queryable->IsComputedInRam()) return false;
+		if (node->m_queryable == nullptr) return false;
 		out.push_back(node->m_queryable);
 		return true;
 	}
@@ -1206,8 +1211,12 @@ bool ColocatableJoinTree(const ibDataQuerySpec& spec, ColocatedLeaves& leaves)
 	if (root == nullptr || root->m_kind != ibQueryNode::Kind::Join)
 		return false;
 	leaves.clear();
-	if (!CollectColocatedLeaves(root, leaves)) return false;   // all leaves real DB tables
+	if (!CollectColocatedLeaves(root, leaves)) return false;
 	if (leaves.size() < 2)                     return false;
+	// Every leaf one the statement can take: a table of the base — not one computed in RAM, not another connection's.
+	for (const std::shared_ptr<const ibBackendQueryable>& leaf : leaves)
+		if (!leaf->GetProvider().CanJoinOn(spec.m_holder))
+			return false;
 	// ⭐⭐ DISTINCTLY QUALIFIED — which is a weaker demand than "distinct tables", and the right one.
 	//
 	// A table read twice is perfectly co-locatable the moment each reading has a NAME of its own:
@@ -2035,7 +2044,7 @@ ibQueryExprPtr ibMetaIRBuilder::BuildPathExists(const std::shared_ptr<const ibBa
 			for (const std::shared_ptr<const ibBackendQueryable>& target : targets) {
 				if (target == nullptr || SelfReferenceField(target).empty()
 				    || target->ResolveColumnByName(path[seg + 1]->GetName()) == nullptr
-				    || !ibDbTableProvider::WalkEnters(target, path[seg + 1]))   // a CAST names the one type the walk goes into
+				    || !WalkEnters(target, path[seg + 1]))   // a CAST names the one type the walk goes into
 					continue;
 				const ibString alias = ibString::Format(ibT("ex%d"), aliases++);
 				const ibQueryExprPtr inner = seg + 2 == path.size() ? test(target, alias) : hop(target, alias, seg + 1);
@@ -2114,8 +2123,10 @@ ibQueryExprPtr ibMetaIRBuilder::BuildSemiJoinExists(const std::shared_ptr<const 
 	// table's, a superset of the rows asked: a key is in the difference iff no select row has it, whoever else has it.
 	// ⚠ A KEY HERE IS NEVER NULL — a NULL would group with the select's NULLs and drop a row NOT EXISTS keeps. So a pair
 	// is folded to its one empty value (EmptyFoldedField) where both may be empty, plain where the outer key is the
-	// row's own (never NULL); any other pair, another comparison, a source that is not a plain table — NOT EXISTS.
-	if (sj.m_negated && sj.m_op == ibQueryFilterOp::Equal && queryable != nullptr && !queryable->IsComputedInRam()
+	// row's own (never NULL); any other pair, another comparison, a source that is not a plain table of this
+	// provider — NOT EXISTS.
+	if (sj.m_negated && sj.m_op == ibQueryFilterOp::Equal && queryable != nullptr
+	    && queryable->GetProvider().CanJoinOn(nullptr /* the base's statement, being written */)
 	    && queryable->GetSourceRelation(ibString()) == nullptr && !queryable->GetQueryTableName().IsEmpty()) {
 		bool antiJoin = true;   // no connection to ask: the form that is right everywhere
 		{
@@ -2541,6 +2552,12 @@ ibQueryExprPtr ibMetaIRBuilder::BuildKeyInPredicate(const std::shared_ptr<const 
 // ==========================================================================
 ibDataQueryResult ibDbTableProvider::ExecuteRead(const ibDataQuerySpec& spec, const ibReadPageRequest& req)
 	{
+		// A tree of the base's tables, handed over whole once CanColocate said yes: one statement reads it.
+		if (spec.m_root != nullptr && spec.m_root->m_kind == ibQueryNode::Kind::Join)
+			return ExecuteColocatedJoin(spec, req);
+		if (spec.m_root != nullptr && spec.m_root->m_kind == ibQueryNode::Kind::Union)
+			return ExecuteColocatedUnion(spec, req);
+
 		const std::vector<ibQuerySortItem> effective =
 			ibDataQueryBuilder::EffectiveSort(spec.m_queryable, spec.m_sorts);
 		const std::vector<ibValue> external = BuildExternal(req, effective);
@@ -2610,6 +2627,13 @@ ibQueryRelPtr ibDbTableProvider::BuildReadRelation(const ibDataQuerySpec& spec)
 
 		return BuildPageIR(spec, whole, effective).m_root;
 	}
+
+// Factory for the opaque build-once cache (dataQueryBuilder.h) — made here, where its layout is complete and
+// ExecuteReadCached below fills it; the list model owns the result via shared_ptr.
+std::shared_ptr<ibRenderedPageCache> ibDataQueryBuilder::NewPageCache()
+{
+	return std::make_shared<ibRenderedPageCache>();
+}
 
 ibDataQueryResult ibDbTableProvider::ExecuteReadCached(const ibDataQuerySpec& spec, const ibReadPageRequest& req,
 	                                    ibRenderedPageCache& cache, const ibPageSignature& signature)
@@ -2682,7 +2706,7 @@ public:
 			std::shared_ptr<const ibBackendQueryColumn> refCol = path[i];
 			std::shared_ptr<const ibBackendQueryable> tgtQ = (curQ != nullptr) ? curQ->GetProvider().ResolveReferenceTarget(curQ, refCol) : nullptr;
 			if (tgtQ == nullptr)
-				tgtQ = ibDbTableProvider::CastTarget(path[i + 1]);   // a reference with several types, narrowed to one by a CAST
+				tgtQ = CastTarget(path[i + 1]);   // a reference with several types, narrowed to one by a CAST
 			const ibString tgtRefField = (tgtQ != nullptr) ? SelfReferenceField(tgtQ) : ibString();
 			if (tgtQ == nullptr || tgtRefField.empty()) return false;
 			curQual = AddLeftJoin(tgtQ, curQual, FirstSqlFieldOfColumn(refCol));   // a prefix joined once — see there
@@ -2750,7 +2774,7 @@ public:
 				sawComposite = true;
 				for (const std::shared_ptr<const ibBackendQueryable>& tq : ownerQ->GetProvider().ResolveReferenceTargets(ownerQ, col)) {
 					if (tq->ResolveColumnByName(path[seg + 1]->GetName()) == nullptr) continue;
-					if (!ibDbTableProvider::WalkEnters(tq, path[seg + 1])) continue;   // a CAST names the one type the walk goes into
+					if (!WalkEnters(tq, path[seg + 1])) continue;   // a CAST names the one type the walk goes into
 					const ibString f = SelfReferenceField(tq);
 					if (f.empty()) continue;
 					walk(AddLeftJoin(tq, ownerQual, FirstSqlFieldOfColumn(col)), tq, seg + 1);
@@ -3407,6 +3431,10 @@ static ibQueryResult RunSpecStatement(const ibDataQuerySpec& spec, ibDatabaseQue
 
 ibDataQueryResult ibDbTableProvider::ExecuteAggregate(const ibDataQuerySpec& spec)
 	{
+		// A tree of its tables, folded by one GROUP BY over the join (the composer asked CanColocate); one table — its own.
+		if (spec.m_root != nullptr && spec.m_root->m_kind != ibQueryNode::Kind::Source)
+			return ExecuteColocatedAggregate(spec);
+
 		ibDatabaseQueryBuilder q(spec.m_holder);
 		BuildAggregateQuery(spec, q);
 		ibDataQueryResult result(RunSpecStatement(spec, q), spec.m_queryable);
@@ -3450,6 +3478,13 @@ static bool CanColocateBase(const ibDataQuerySpec& spec, ColocatedLeaves& leaves
 	if (!AllNodeKeysSingleField(spec.m_root, leaves)) return false;
 	return true;
 }
+
+bool ibDbTableProvider::CanColocate(const ibDataQuerySpec& spec) const
+	{
+		if (!spec.m_groupBy.empty() || !spec.m_aggregates.empty())
+			return CanColocateAggregate(spec);
+		return CanColocateJoin(spec) || CanColocateUnion(spec);
+	}
 
 bool ibDbTableProvider::CanColocateJoin(const ibDataQuerySpec& spec)
 	{
@@ -3555,8 +3590,13 @@ static bool CollectExprColumns(const ibQueryColumnExprPtr& e, std::vector<std::s
 
 ibDataQueryResult ibDbTableProvider::ExecuteColocatedJoin(const ibDataQuerySpec& spec, const ibReadPageRequest& page)
 	{
+		// The leaf set, refilled — and a tree that has none here was handed over without CanColocate's yes: refused,
+		// never written into a statement that would name tables it cannot read.
 		ColocatedLeaves leaves;
-		ColocatableJoinTree(spec, leaves);   // the gate already validated; refill the leaf set
+		if (!ColocatableJoinTree(spec, leaves))
+			ibBackendQueryException::Throw(ibBackendQueryException::Kind::TranslationFailure,
+				_("a join or union was handed whole to a statement that cannot write it"));
+		ibJournalInfo(ibT("query.road"), ibT("SERVER: join co-located into one SELECT"));
 
 		ibDatabaseQueryBuilder q(spec.m_holder);
 		q.From(BuildColocatedFrom(spec.m_root, leaves));
@@ -3757,6 +3797,9 @@ bool ibDbTableProvider::CanColocateAggregate(const ibDataQuerySpec& spec)
 // server-side as GROUP BY dim ORDER BY dim [dim > anchor] LIMIT count -- a keyset-paged group read -- rather
 // than reading every detail row and folding all groups in RAM. Multi-level / dot-walk / multi-source groups
 // keep the fold (a multi-source group is a co-location follow-up, mirroring the JOIN/UNION push-downs).
+// TryPageGroupLevel asks it of the source's provider, so the source is this provider's: a source computed in
+// memory, or one of another connection, is asked of its own (and the computed one says no — its page would be
+// `FROM` the table it forwards to, a register balance's movements).
 bool ibDbTableProvider::CanPageGroupLevel(const ibDataQuerySpec& spec)
 	{
 		// Exactly one grouping level (the per-level drill).
@@ -3841,10 +3884,21 @@ ibDataQueryResult ibDbTableProvider::ExecuteGroupLevelPage(const ibDataQuerySpec
 		return ibDataQueryResult(RunSpecStatement(spec, q), queryable);
 	}
 
+// ⭐ THE PAGE, IF THIS SHAPE PAGES — the gate asked once, then the page read; no = nothing was read.
+bool ibDbTableProvider::TryPageGroupLevel(const ibDataQuerySpec& spec, const ibReadPageRequest& page, ibDataQueryResult& out)
+	{
+		if (!CanPageGroupLevel(spec))
+			return false;
+		out = ExecuteGroupLevelPage(spec, page);
+		return true;
+	}
+
 ibDataQueryResult ibDbTableProvider::ExecuteColocatedAggregate(const ibDataQuerySpec& spec)
 	{
-		ColocatedLeaves leaves;
-		ColocatableJoinTree(spec, leaves);
+		ColocatedLeaves leaves;   // refilled, and refused as the join read refuses it
+		if (!ColocatableJoinTree(spec, leaves))
+			ibBackendQueryException::Throw(ibBackendQueryException::Kind::TranslationFailure,
+				_("a join or union was handed whole to a statement that cannot write it"));
 		auto qual = [&](const std::shared_ptr<const ibBackendQueryColumn>& c) { return ColocatedQual(leaves, c); };
 
 		ibDatabaseQueryBuilder q(spec.m_holder);
@@ -4071,7 +4125,7 @@ bool ibDbTableProvider::CanColocateUnion(const ibDataQuerySpec& spec)
 		for (const auto& part : root->m_parts) {
 			const std::shared_ptr<ibQueryNode>& p = part;
 			if (p == nullptr || p->m_kind != ibQueryNode::Kind::Source)            return false;
-			if (p->m_queryable == nullptr || p->m_queryable->IsComputedInRam())     return false;
+			if (p->m_queryable == nullptr || !p->m_queryable->GetProvider().CanJoinOn(spec.m_holder))   return false;
 		}
 		// Every output column resolves by name in EVERY branch and is SCALAR there.
 		for (const auto& sc : spec.m_selectCols) {
@@ -4105,6 +4159,11 @@ ibDataQueryResult ibDbTableProvider::ExecuteColocatedUnion(const ibDataQuerySpec
 		ibQueryRelPtr unionRel;
 		for (size_t pi = 0; pi < root->m_parts.size(); ++pi) {
 			std::shared_ptr<const ibBackendQueryable> q = root->m_parts[pi]->m_queryable;
+			// A branch this statement cannot take — computed in memory, or another connection's — means the union was
+			// handed over without CanColocate's yes: refused, as the join read refuses its leaves.
+			if (q == nullptr || !q->GetProvider().CanJoinOn(spec.m_holder))
+				ibBackendQueryException::Throw(ibBackendQueryException::Kind::TranslationFailure,
+					_("a join or union was handed whole to a statement that cannot write it"));
 			// A UNION branch is a source like any other, so it is ASKED what it is read from. The gate
 			// above only refuses a branch computed in RAM — a register's Balance backed by a stored
 			// surface is not that, and it is still not a table: its date lives in a derived read.
@@ -4352,8 +4411,6 @@ static bool TotalsShapeFoldable(const ibDataQuerySpec& spec, bool rollup)
 			RollupDecline(ibT("more than one source (co-located / RAM road)"));
 		std::shared_ptr<const ibBackendQueryable> q = spec.m_queryable;
 		if (q == nullptr)                                         RollupDecline(ibT("no source"));
-		if (q->IsComputedInRam())
-			RollupDecline(ibT("source '%s' is computed in RAM"), q->GetQueryName());
 
 		const std::vector<ibTotalLevel> levels = RollupLevelsOf(spec);
 		if (levels.empty())                                       RollupDecline(ibT("no totals levels"));
@@ -5361,7 +5418,7 @@ static bool CanColocateUnionRollupShape(const ibDataQuerySpec& spec)
 	for (const auto& part : root->m_parts) {
 		const std::shared_ptr<ibQueryNode>& p = part;
 		if (p == nullptr || p->m_kind != ibQueryNode::Kind::Source)         return false;
-		if (p->m_queryable == nullptr || p->m_queryable->IsComputedInRam())  return false;
+		if (p->m_queryable == nullptr || !p->m_queryable->GetProvider().CanJoinOn(spec.m_holder))   return false;
 	}
 	// Resolve-by-name + SCALAR in EVERY branch (a reference / enum column is not co-located here).
 	auto okEveryBranch = [&](const std::shared_ptr<const ibBackendQueryColumn>& c) -> bool {
@@ -5543,6 +5600,36 @@ ibSelectorTree ibDbTableProvider::ExecuteColocatedRollupTotals(const ibDataQuery
 			// keys are built against the PRIMARY source — carrying them here would order by a name this
 			// statement does not have. Unordered, as it was.
 			std::vector<ibQuerySortKey>{});
+	}
+
+// ⭐ THE THREE FOLDS, each gate asked once, in the order the folds are preferred: a ladder by plain GROUP BY first (it
+// needs no ROLLUP and orders its groups itself), ROLLUP where the figures do not add up the ladder.
+//
+// ⭐ SAID ON EVERY ROAD, and that is the whole value of it: a journal that speaks only when something goes to RAM
+// cannot tell "the fold ran on the server" from "nobody journalled it". A right-looking report is consistent with
+// either, which is exactly how the server fold once went a whole arc without executing once.
+bool ibDbTableProvider::TryFoldTotalsInDbms(const ibDataQuerySpec& spec, ibSelectorTree& out)
+	{
+		const bool oneSource = spec.m_root == nullptr || spec.m_root->m_kind == ibQueryNode::Kind::Source;
+		if (!oneSource) {
+			if (!CanPushColocatedRollupTotals(spec))
+				return false;
+			ibJournalInfo(ibT("query.road"), ibT("SERVER: totals folded by GROUP BY ROLLUP (co-located sources)"));
+			out = ExecuteColocatedRollupTotals(spec);
+			return true;
+		}
+		if (CanFoldGroupByTotals(spec)) {
+			ibJournalInfo(ibT("query.road"), ibT("SERVER: %u level(s) folded by GROUP BY (single source)"),
+			              static_cast<unsigned>(spec.m_totals.size()));
+			out = ExecuteGroupByTotals(spec);
+			return true;
+		}
+		if (CanPushRollupTotals(spec)) {
+			ibJournalInfo(ibT("query.road"), ibT("SERVER: totals folded by GROUP BY ROLLUP (single source)"));
+			out = ExecuteRollupTotals(spec);
+			return true;
+		}
+		return false;
 	}
 
 // Bind a write column's value positionally: a RAW column straight by its declared RawType (no
@@ -6405,24 +6492,22 @@ ibQueryIR ibDbTableProvider::BuildPageIR(const ibDataQuerySpec& spec, const ibRe
 		return ir;
 	}
 
-// ⭐ THE NAMED QUERIES THIS STATEMENT DECLARED, into the SAME IR — `WITH a AS (…) SELECT …`.
-//
-// Each is an ordinary door, so it is lowered by the ordinary road: its own spec through this very
-// function, and what comes back is a RELATION — the same tree a FROM subquery would hold. That is
-// the whole implementation, and it is why nothing about building a query had to change: a CTE is a
-// query that ended up written in a different PLACE.
-//
-// Recursion is the inner query's own business: a named query that itself declares one arrives here
-// with its own list and is handed back whole. (A cycle is a query the engine refuses, and refusing
-// it there rather than counting hops here keeps one opinion about what a valid query is.)
-// ⭐⭐ AND THE SAME QUESTION, ASKED ONE STEP EARLIER. The lowering has to know BEFORE it declares a
-// query whether the declaration will render — because after it has declared one there is no road
-// back, and the statement would name a table its own text never wrote (`-206`).
+// ⭐ CAN THE CONNECTED ENGINE READ A NAMED QUERY AT ALL — asked of the driver through L2's own question, never of its
+// dictionary; an engine that cannot sends the nested query back to the rows road.
+bool ibDbTableProvider::CanDeclareNamedQuery(ibDatabaseConnectionHolder* holder) const
+{
+	ibConnectionScope scope(holder);
+	return scope && ibCanUseCte(scope.get());
+}
+
+// ⭐⭐ WOULD THIS DECLARATION RENDER — the question AttachNamedQueries below meets, asked one step earlier. The
+// lowering has to know BEFORE it declares a query whether the declaration will render — because after it has
+// declared one there is no road back, and the statement would name a table its own text never wrote (`-206`).
 //
 // A single source always renders: that is the page read, unchanged. A JOIN renders when the tree
 // co-locates, which is the read fast path's own gate — no second opinion about what a renderable
 // join is, and no chance of the two drifting.
-bool ibDbTableProvider::CanDeclareAsNamedQuery(const ibDataQueryBuilder& inner)
+bool ibDbTableProvider::CanDeclareAsNamedQuery(const ibDataQueryBuilder& inner) const
 	{
 		const ibDataQuerySpec& spec = inner.m_spec;
 		if (spec.m_queryable == nullptr)
@@ -6436,6 +6521,16 @@ bool ibDbTableProvider::CanDeclareAsNamedQuery(const ibDataQueryBuilder& inner)
 		return CanColocateJoin(spec);
 	}
 
+// ⭐ THE NAMED QUERIES THIS STATEMENT DECLARED, into the SAME IR — `WITH a AS (…) SELECT …`.
+//
+// Each is an ordinary door, so it is lowered by the ordinary road: its own spec through this very
+// function, and what comes back is a RELATION — the same tree a FROM subquery would hold. That is
+// the whole implementation, and it is why nothing about building a query had to change: a CTE is a
+// query that ended up written in a different PLACE.
+//
+// Recursion is the inner query's own business: a named query that itself declares one arrives here
+// with its own list and is handed back whole. (A cycle is a query the engine refuses, and refusing
+// it there rather than counting hops here keeps one opinion about what a valid query is.)
 void ibDbTableProvider::AttachNamedQueries(const ibDataQuerySpec& spec, ibQueryIR& ir)
 	{
 		if (spec.m_with.empty())
@@ -6805,8 +6900,9 @@ bool ibDbTableProvider::GetValueAttribute(const ibString& fieldName, ibFieldType
 // ibRecordQueryable so the query-provider layer names no metadata). A single-target reference COLUMN
 // resolves off `queryable`'s metadata context: the clsid KIND (bit-check, no metadata lookup) says
 // reference, then metaData->GetTypeCtor vends the reference ctor and ctor->GetQueryable() the target
-// queryable by VIRTUAL dispatch — NO cast, no RTTI on this dot-walk hot path. The base provider returns
-// null; the computed provider forwards here. (docs/private/query-language-arc.md §22 dot-walk; kind-typing)
+// queryable by VIRTUAL dispatch — NO cast, no RTTI on this dot-walk hot path. The base provider's default
+// asks here (ibDbTableProviderInstance), so every provider answers alike. (docs/private/query-language-arc.md
+// §22 dot-walk; kind-typing)
 // ==========================================================================
 std::shared_ptr<const ibBackendQueryable> ibDbTableProvider::ResolveReferenceTarget(const std::shared_ptr<const ibBackendQueryable>& queryable,
                                                                                     const std::shared_ptr<const ibBackendQueryColumn>& refColumn) const
@@ -6845,100 +6941,94 @@ std::vector<std::shared_ptr<const ibBackendQueryable>> ibDbTableProvider::Resolv
 	return ReferenceTargetsOf(queryable->GetMetaData(), refColumn->GetTypeValueDesc());
 }
 
-std::vector<std::shared_ptr<const ibBackendQueryable>> ibDbTableProvider::ReferenceTargetsOf(const ibMetaData* metaData,
-                                                                             const ibTypeDescription& type)
+// …the same answer for a TYPE a holder of fields already has in hand, with no column behind it (queryableFactory.h).
+std::vector<std::shared_ptr<const ibBackendQueryable>> ReferenceTargetsOf(const ibMetaData* metaData, const ibTypeDescription& type)
 {
 	std::vector<std::shared_ptr<const ibBackendQueryable>> targets;
 	if (metaData == nullptr)
 		return targets;
-	for (const ibClassID& clsid : type.GetClsidList()) {
+	// ⭐ AN "ANY" — `CatalogRef`, `AnyRef` — names no table: it is every reference it admits, walked as the composite of
+	// them all — the type with its barriers opened (ibOpenBarriers).
+	for (const ibClassID& clsid : ibOpenBarriers(type, metaData).GetClsidList()) {
 		if (!IsReference(clsid))
 			continue;                                    // a non-reference alternative of the composite type
-		// ⭐ AN "ANY" — `CatalogRef`, `AnyRef` — names no table: it is every reference it admits, walked as the
-		// composite of them all. Its bits say which (clsid_admits), as they do when a value is stored.
-		if (clsid_is_any(clsid)) {
-			for (const ibCtorMetaValueType* member : metaData->GetListCtorsByType(ibCtorObjectMetaType::ibCtorObjectMetaType_Reference))
-				if (clsid_admits(clsid, member->GetClassType()))
-					if (const std::shared_ptr<const ibBackendQueryable> q = member->GetQueryable())
-						if (std::find(targets.begin(), targets.end(), q) == targets.end())
-							targets.push_back(q);
-			continue;
-		}
 		// A configuration's reference has its own table.
 		if (const ibCtorMetaValueType* ctor = metaData->GetTypeCtor(clsid))
 			if (const std::shared_ptr<const ibBackendQueryable> q = ctor->GetQueryable())
-				targets.push_back(q);
+				if (std::find(targets.begin(), targets.end(), q) == targets.end())
+					targets.push_back(q);
 	}
 	return targets;
 }
 
-namespace {
-// The field a CAST reached on the type it named — the field in every respect, its id included, and the
-// type besides. A twin by construction (it answers as its origin), with the identity left as the origin's:
-// it is not a second reading of the table, it is the same reading that is not to be taken anywhere else.
-class ibCastLeafColumn final : public ibAliasColumn
+// The factory a query written on behalf of `metaData` resolves its sources through (queryableFactory.h) — asked
+// here, where the configuration may be named, so the lowering and the constructor hold one and never its header.
+ibQueryableFactory* GetSourceFactory(const ibMetaData* metaData)
 {
-public:
-	ibCastLeafColumn(const std::shared_ptr<const ibBackendQueryable>& target, const std::shared_ptr<const ibBackendQueryColumn>& leaf)
-		: ibAliasColumn(leaf), m_target(target) {}
-	ibMetaID GetColumnId() const override { return Origin()->GetColumnId(); }
-	const std::shared_ptr<const ibBackendQueryable>& Target() const { return m_target; }
-private:
-	std::shared_ptr<const ibBackendQueryable> m_target;
-};
-} // namespace
+	return metaData != nullptr ? metaData->GetSourceFactory() : nullptr;
+}
 
-// The query a thread is lowering, for the fields its CASTs narrowed (ibCastLeafScope) — null outside every door.
-static thread_local ibCastLeafScope* t_castLeafScope = nullptr;
-
-ibCastLeafScope::ibCastLeafScope()
+// AN APPLICATION'S SOURCES AS ITS CONFIGURATION IS READ (queryableFactory.h) — the kinds in its tree's order
+// (ibMetaGroupOrder: the charts before the registers), a kind's tables by name; a kind no metatype stands behind after
+// them all. A namespace IS its metatype's name (ibMetaQueryDescriptor::GetNamespace); asked without raising. The
+// platform's — made for this configuration, registered beside them — come apart, in the order they were made.
+std::vector<ibQueryableSourceDescriptor*> ibMetaQueryableFactory::GetDescriptors(ibQueryableSourceKind kind) const
 {
-	if (t_castLeafScope == nullptr) {
-		t_castLeafScope = this;
-		m_outermost     = true;
+	const auto isPlatform = [this](const ibQueryableSourceDescriptor* descriptor) {
+		return std::any_of(m_platformSources.begin(), m_platformSources.end(),
+			[descriptor](const std::unique_ptr<ibQueryableSourceDescriptor>& source) { return source.get() == descriptor; });
+	};
+
+	std::vector<ibQueryableSourceDescriptor*> descriptors;
+	if (kind != ibQueryableSourceKind::Platform) {
+		struct ibKeyed {
+			int                          m_order;
+			ibString                     m_namespace;
+			ibString                     m_name;
+			ibQueryableSourceDescriptor* m_descriptor;
+		};
+		std::vector<ibKeyed> keyed;
+		for (ibQueryableSourceDescriptor* descriptor : ibQueryableFactory::GetDescriptors(ibQueryableSourceKind::Application)) {
+			if (isPlatform(descriptor))
+				continue;
+			const ibString ns = descriptor->GetNamespace();
+			const ibCtorAbstractType* const metaType = ibValue::GetAvailableCtor(ns);
+			keyed.push_back({ ibMetaGroupOrder(metaType != nullptr ? metaType->GetClassType() : 0), ns, descriptor->GetName(),
+				descriptor });
+		}
+		std::stable_sort(keyed.begin(), keyed.end(), [](const ibKeyed& a, const ibKeyed& b) {
+			if (a.m_order != b.m_order)
+				return a.m_order < b.m_order;
+			const int kinds = a.m_namespace.CmpNoCase(b.m_namespace);
+			return kinds != 0 ? kinds < 0 : a.m_name.CmpNoCase(b.m_name) < 0;
+		});
+		for (const ibKeyed& one : keyed)
+			descriptors.push_back(one.m_descriptor);
 	}
+	if (kind != ibQueryableSourceKind::Application) {
+		for (const std::unique_ptr<ibQueryableSourceDescriptor>& source : m_platformSources)
+			descriptors.push_back(source.get());
+	}
+	return descriptors;
 }
 
-ibCastLeafScope::~ibCastLeafScope()
+// What a reference TO this table is — the class of its own empty reference. The empty reference is a word of the
+// metaobject behind the source (ibRefMember), so this provider says it and nobody above has to.
+ibClassID ibDbTableProvider::ResolveReferenceType(const std::shared_ptr<const ibBackendQueryable>& queryable) const
 {
-	if (m_outermost)
-		t_castLeafScope = nullptr;
+	ibValue emptyRef;
+	return ResolveQueryConstant(queryable, ibRefMember::EmptyRef, emptyRef) ? emptyRef.GetClassType() : 0;
 }
 
-// Made once per (type, field) in the query's scope (ibCastLeafScope), so a walk named twice in one query — grouped by
-// and sorted by — is one column, and the paths compare as one. The column holds nothing of its own but the two —
-// whatever it is asked, it asks them — and the field and the table it stands for are held by the column itself.
-std::shared_ptr<const ibBackendQueryColumn> ibDbTableProvider::CastLeaf(const std::shared_ptr<const ibBackendQueryable>& target,
-	const std::shared_ptr<const ibBackendQueryColumn>& leaf)
+// `VALUE(Catalog.Goods.<member>)` — answered by the metaobject behind the source; a source with none has no constants.
+bool ibDbTableProvider::ResolveQueryConstant(const std::shared_ptr<const ibBackendQueryable>& queryable,
+                                             const ibString& member, ibValue& out) const
 {
-	if (target == nullptr || leaf == nullptr)
-		return leaf;
-	if (t_castLeafScope == nullptr)
-		return std::make_shared<ibCastLeafColumn>(target, leaf);
-	std::shared_ptr<const ibBackendQueryColumn>& slot = t_castLeafScope->m_leaves[{ target, leaf }];
-	if (slot == nullptr)
-		slot = std::make_shared<ibCastLeafColumn>(target, leaf);
-	return slot;
+	const ibValueMetaObjectGenericData* const meta = queryable != nullptr ? queryable->GetSourceMetaObject() : nullptr;
+	return meta != nullptr && meta->ResolveQueryConstant(member, out);
 }
 
-std::shared_ptr<const ibBackendQueryable> ibDbTableProvider::CastTarget(const std::shared_ptr<const ibBackendQueryColumn>& next)
-{
-	const std::shared_ptr<const ibCastLeafColumn> cast = std::dynamic_pointer_cast<const ibCastLeafColumn>(next);
-	return cast != nullptr ? cast->Target() : nullptr;
-}
-
-// Compared by the metaobject behind the two, not by pointer alone: the type the CAST resolved and the
-// target a reference resolves may be two queryables over one table.
-bool ibDbTableProvider::WalkEnters(const std::shared_ptr<const ibBackendQueryable>& target, const std::shared_ptr<const ibBackendQueryColumn>& next)
-{
-	const std::shared_ptr<const ibBackendQueryable> named = CastTarget(next);
-	if (named == nullptr || named == target)
-		return true;
-	return target != nullptr && named->GetSourceMetaObject() != nullptr
-	    && named->GetSourceMetaObject() == target->GetSourceMetaObject();
-}
-
-size_t ibDbTableProvider::ParametersOneStatementTakes()
+size_t ibDbTableProvider::ParametersOneStatementTakes() const
 {
 	ibConnectionScope scope;
 	return scope ? scope.get()->GetDialect().m_maxParameters : 0;
@@ -6957,6 +7047,14 @@ size_t ibDbTableProvider::ParametersOneStatementTakes()
 void ibDbTableProvider::ReadReferences() const
 {
 	ibValueReferenceDataObject::ReadBatch();
+}
+
+// The one database provider, as the face names it (queryable.h): the default engine of a source, and whom the
+// interface's defaults ask what only metadata knows. Stateless — the spec carries every per-query value.
+ibBackendQueryProvider& ibDbTableProviderInstance()
+{
+	static ibDbTableProvider s_dbProvider;
+	return s_dbProvider;
 }
 
 // ==========================================================================
@@ -7004,7 +7102,7 @@ public:
 	//
 	// An output is named by its author (`AmountTurnoverDr`) and written under the projection's own
 	// namespace (`out_AmountTurnoverDr`, see ibSqlAliasOf). This reader talks to the DATABASE, so it
-	// must use the second; the RAM-backed twin (queryProvider.cpp) holds columns under the author's
+	// must use the second; the RAM-backed twin (queryComposer.cpp) holds columns under the author's
 	// name and correctly uses the first. One name each, decided by who is being asked.
 	//
 	// 🛑 THIS IS THE READER THE PREFIX FORGOT, and the failure was the silent kind it was introduced
@@ -7084,7 +7182,7 @@ private:
 } // namespace
 
 // ibDataQueryResult — the DB-cursor backing ctor (the RAM ctor + dtor / move / accessors live in
-// queryProvider.cpp, where the RAM source is). The selection hides which backing it holds.
+// queryComposer.cpp, where the RAM source is). The selection hides which backing it holds.
 ibDataQueryResult::ibDataQueryResult(ibQueryResult&& cursor, const std::shared_ptr<const ibBackendQueryable>& queryable)
 	: m_source(std::make_shared<ibDbResultSource>(std::move(cursor), queryable))
 {

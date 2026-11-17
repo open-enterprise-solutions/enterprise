@@ -8,8 +8,10 @@
 /** @typedef {import('../protocol/patch.js').ProtocolNode} ProtocolNode */
 /**
  * A field offered — and, once a reference is opened, the fields of what it points at under it.
+ * A field's `type` is its type whole, as the server described it — what a cell of several types puts back to the server
+ * to be chosen by (the thin client's ChooseValue); `types` — the class ids in it.
  * @typedef {{name: string, path: string, presentation: string, title: string, id: number, picture: string,
- *   types: string[], children: Field[] | null, depth: number, open: boolean}} Field
+ *   type: ProtocolNode | undefined, types: string[], children: Field[] | null, depth: number, open: boolean}} Field
  */
 
 // The primitive types a value is typed in for (their class ids, as the wire names them).
@@ -67,6 +69,7 @@ export class SettingsFieldTree {
 				title: parent !== null ? `${parent.title}.${presentation}` : presentation,
 				id: Number(one.Id ?? -1),
 				picture: one.Picture,
+				type: one.Type,
 				types: (one.Type?.Types ?? []).map((/** @type {any} */ type) => String(type.TypeId)),
 				children: null,
 				depth: parent !== null ? parent.depth + 1 : 0,

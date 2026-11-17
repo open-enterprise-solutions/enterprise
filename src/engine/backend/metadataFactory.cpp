@@ -10,9 +10,10 @@ ibMetaImage::ibMetaImage(ibMetaData* owner)
 {
 	if (owner != nullptr)
 		m_compileCache = owner->CreateDesignerCache();   // nullptr ⇒ no designer infra for this kind
-	// Every open snapshot gets its OWN source factory — metadata-backed queryables register into it, and resolve
-	// descends to the global factory on a miss. Dropping the image frees it (RAII), same lifecycle as the compile cache.
-	m_sourceFactory = std::make_unique<ibMetaQueryableFactory>();
+	// Every open snapshot gets its OWN source factory — metadata-backed queryables register into it, the platform's
+	// sources are made for this configuration in it, and resolve descends to the global factory on a miss. Dropping
+	// the image frees it (RAII), same lifecycle as the compile cache.
+	m_sourceFactory = std::make_unique<ibMetaQueryableFactory>(owner);
 	// The bytecode of a configuration that RUNS is read here — once, as it opens — and held for every session's
 	// modules (ibByteCodeStorage). A designer's own copy has the compile cache above and runs none.
 	if (owner != nullptr && m_compileCache == nullptr)

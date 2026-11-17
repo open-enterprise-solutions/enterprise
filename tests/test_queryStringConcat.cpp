@@ -14,7 +14,7 @@
 #include "backend/databaseLayer/firebird/firebirdDatabaseLayer.h"
 #include "backend/databaseLayer/postgres/postgresDatabaseLayer.h"
 #include "backend/databaseLayer/sqllite/sqliteDatabaseLayer.h"
-#include "backend/query/provider/dbTableProvider.h"
+#include "backend/query/provider/database/dbTableProvider.h"
 #include "backend/query/queryColumn.h"
 #include "backend/query/queryLowering.h"
 #include "backend/query/queryable.h"
@@ -49,7 +49,6 @@ public:
 	ibString GetQueryTableName() const override { return wxT("T"); }
 	ibMetaID GetQueryTableId()   const override { return 1; }
 	const ibUniqueKey& GetQueryTableGuid() const override { return m_key; }
-	bool     IsComputedInRam()   const override { return false; }
 	const ibMetaData* GetMetaData() const override { return nullptr; }
 	std::vector<std::shared_ptr<const ibBackendQueryColumn>> GetQueryColumns() const override { return m_cols; }
 	bool ContainColumn(const std::shared_ptr<const ibBackendQueryColumn>& col) const override {

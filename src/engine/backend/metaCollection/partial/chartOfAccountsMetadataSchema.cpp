@@ -10,11 +10,11 @@
 
 #include "chartOfAccounts.h"
 #include "backend/metaData.h"
-#include "backend/databaseLayer/databaseQueryBuilder.h"   // the L2 door - the "who already holds too many" count
-#include "backend/metadataSerialization.h"                // ibDeserializeValue - a declared kind, read with this configuration
-#include "backend/query/columnLayout.h"                   // ibOwnerRefField - the section's owner column
-#include "backend/query/structure/schemaSnapshot.h"       // ibSchemaTable::m_beforeChange - the rule the declaration carries
-#include "backend/restructureInfo.h"                      // ibRestructureInfo - where that rule states its reason
+#include "backend/databaseLayer/databaseQueryBuilder.h"               // the L2 door - the "who already holds too many" count
+#include "backend/metadataSerialization.h"                            // ibDeserializeValue - a declared kind, read with this configuration
+#include "backend/query/columnLayout.h"                               // ibOwnerRefField - the section's owner column
+#include "backend/query/provider/database/structure/schemaSnapshot.h" // ibSchemaTable::m_beforeChange - the rule the declaration carries
+#include "backend/restructureInfo.h"                                  // ibRestructureInfo - where that rule states its reason
 #include "backend/system/value/composition/valueComposerField.h"   // ibMaterializeCompositionValue - a declared kind, made live
 
 // THE DECLARATION CARRIES ITS OWN RULE. The base contributes this chart's table and its analytics-kinds

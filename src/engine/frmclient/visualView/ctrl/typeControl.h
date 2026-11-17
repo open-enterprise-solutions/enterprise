@@ -14,7 +14,6 @@
 #include "frmclient/backend/backend_type.h"
 #include "frmclient/backend/compiler/value.h"
 
-class FRMCLIENT_API ibMetaData;
 class FRMCLIENT_API ibControlFrame;
 class ibBackendSourceColumn;
 
@@ -35,10 +34,7 @@ public:
 	// server's type on the server. The one picked goes to ownerValue->ChoiceProcessing.
 	static bool ChooseValue(ibControlFrame* ownerValue, const ibChooseValueRequest& request = {}, wxWindow* parent = nullptr);
 
-	static ibClassID ShowSelectType(const ibMetaData* metadata, const ibTypeDescription& typeDescription);
-
 	virtual ibValue CreateValue() const override;
-	virtual ibClassID GetDataType() const;
 
 private:
 

@@ -20,12 +20,63 @@
 #include "queryRamTable.h"          // ibQueryRamTable (the snapshot, held BY VALUE — move-only)
 #include "queryRowCursor.h"         // ibQueryRowCursor — the rows as they arrive (what the group folds read)
 #include "querySelectorTree.h"      // ibSelectorTree (the folded tree) + ibSelectorTree::Node
-#include "provider/queryProvider.h" // ibQueryComposer::BuildHierarchyTree / BuildTotalsTree
 #include "dataQueryBuilder.h"       // ibDataQueryBuilder + ibSelectKind + ibDimensionKind + AggregateItem
 
 #include <algorithm>           // stable_sort — a level's own order over the nodes it hands out
 
 class ibDatabaseConnectionHolder;   // sub-selection recipe holds it by pointer (Select(kind) only)
+
+// ⭐⭐ THE FOLDS A SELECTION RUNS — rows in, a tree out; they read no source. Declared here, where a selection
+// calls them; their bodies are the RAM engine's (provider/queryComposer.cpp), whose aggregates and hierarchy
+// arrangement they are made of.
+
+// ⭐ The totals fold in isolation: detail ROWS -> subtotal tree, in ONE PASS. It takes a CURSOR
+// because that is all a fold ever reads — every row once, in arrival order — and taking the whole
+// materialised detail instead is what made a report's memory a function of the number of ROWS.
+// Now it is a function of the number of GROUPS (docs/private/data-composer.md, the acceptance criterion).
+// Pure (no DB) — unit-testable. The snapshot overload is the same call with the table handed over
+// as a cursor (ibRamTableCursor), for the callers that already hold their rows.
+BACKEND_API ibSelectorTree BuildTotalsTree(ibQueryRowCursor& rows,
+                                           const std::vector<std::shared_ptr<const ibBackendQueryColumn>>& groupFields,
+                                           const std::vector<ibDataQueryBuilder::AggregateItem>& aggregates);
+BACKEND_API ibSelectorTree BuildTotalsTree(const ibQueryRamTable& detail,
+                                           const std::vector<std::shared_ptr<const ibBackendQueryColumn>>& groupFields,
+                                           const std::vector<ibDataQueryBuilder::AggregateItem>& aggregates);
+// RECURSIVE hierarchy fold (parent-ref, unbounded depth) — the sibling of BuildTotalsTree (fixed
+// columns). From a WHOLE materialised detail SNAPSHOT: nests rows by parentKey == rowKey, sets each
+// node's m_hasChildren from the data (its key appears as some row's parent), and rolls a subtotal
+// over each node's subtree (correct for COUNT/AVG — aggregated from the raw leaves). `mode` is the
+// placement: Elements (leaves only) / Hierarchy (folders + leaves) / HierarchyOnly (folders only).
+// Pure (no DB) — unit-testable. (docs §22.1b)
+BACKEND_API ibSelectorTree BuildHierarchyTree(const ibQueryRamTable& detail,
+                                              const std::shared_ptr<const ibBackendQueryColumn>& rowKeyCol,
+                                              const std::shared_ptr<const ibBackendQueryColumn>& parentKeyCol,
+                                              const std::vector<ibDataQueryBuilder::AggregateItem>& aggregates,
+                                              ibDimensionKind mode);
+// GENERAL combiner: fold the snapshot by N TotalBy levels IN ORDER. Each level groups its rows by
+// the level field; a Hierarchy/HierarchyOnly level also unfolds the field's reference hierarchy
+// (target catalog parent-map, materialised through the door), and the NEXT level recurses inside
+// each value's own rows. Subtotals roll in-place at every node. Value-keyed (each level groups by
+// VALUE) — the catalog's OWN row-keyed hierarchy stays BuildHierarchyTree. (docs §22.1b)
+// ⭐ …AND THE SAME ONE PASS. A level that unfolds a reference HIERARCHY is the exception and says
+// so: its shape is not known until every value has been seen, so that fold drains the cursor into
+// a table (and journals that it did). Everything else — the ordinary report — streams.
+BACKEND_API ibSelectorTree BuildDimensionTree(ibQueryRowCursor& rows,
+                                              const std::vector<ibTotalLevel>& levels,
+                                              const std::vector<ibDataQueryBuilder::AggregateItem>& aggregates,
+                                              ibDatabaseConnectionHolder* holder,
+                                              const std::shared_ptr<const ibBackendQueryable>& source);
+BACKEND_API ibSelectorTree BuildDimensionTree(const ibQueryRamTable& snapshot,
+                                              const std::vector<ibTotalLevel>& levels,
+                                              const std::vector<ibDataQueryBuilder::AggregateItem>& aggregates,
+                                              ibDatabaseConnectionHolder* holder,
+                                              const std::shared_ptr<const ibBackendQueryable>& source);
+// ⭐ …AND THE FIGURES MADE OF FIGURES — `SUM(Accrued) - SUM(Deducted) AS ToPay` (ibDerivedAggregate), worked out
+// at every node from the figures already folded there, and published under their names. Called where every
+// road's tree comes out (ibSelector::Build), so a DBMS's tree and ours get them the same way.
+BACKEND_API void ApplyDerivedAggregates(ibSelectorTree& tree,
+                                        const std::vector<ibDataQueryBuilder::AggregateItem>& aggregates,
+                                        const std::vector<ibDerivedAggregate>& derived);
 
 // ⭐⭐ THE ORDER ONE LEVEL COMES IN — and it belongs HERE because a selection is what holds a level.
 //
@@ -50,7 +101,7 @@ public:
 		: m_snapshot(std::move(snapshot)), m_kind(kind) {}
 
 	// ⭐ …OR OF A CURSOR, which is how a READ arrives: result.Select(kind) hands the rows over
-	// unread, and a fold that streams (the group folds — see ibQueryComposer::BuildDimensionTree)
+	// unread, and a fold that streams (the group folds — see BuildDimensionTree)
 	// never materialises them at all. A fold that must address every row drains the cursor once, and
 	// then this selection holds a snapshot exactly as it always did.
 	explicit ibSelector(std::unique_ptr<ibQueryRowCursor> rows, ibSelectKind kind = ibSelectKind::ibSelectKind_Direct)
@@ -144,7 +195,7 @@ public:
 		ibSelectorTree tree = Fold();
 		// …a flat walk excepted: its nodes are the rows as they were read (BuildFlat), and a row has no figure to work out.
 		if (m_readyTree || m_kind != ibSelectKind::ibSelectKind_Direct)
-			ibQueryComposer::ApplyDerivedAggregates(tree, m_aggregates, m_derived);
+			ApplyDerivedAggregates(tree, m_aggregates, m_derived);
 		return tree;
 	}
 
@@ -351,8 +402,8 @@ private:
 		// detail. The self-hierarchy fast path below is row-KEYED — a row IS a node there — so it
 		// takes the snapshot road, which is the same cost by construction.
 		if (m_rows && !SelfHierarchyFold() && (!m_totalLevels.empty() || m_totalsOverall)) {
-			ibSelectorTree folded = ibQueryComposer::BuildDimensionTree(*m_rows, m_totalLevels, m_aggregates,
-			                                                            m_holder, m_queryable);
+			ibSelectorTree folded = BuildDimensionTree(*m_rows, m_totalLevels, m_aggregates,
+			                                           m_holder, m_queryable);
 			m_rows.reset();   // read once, and a spent cursor must not read back as rows
 			return folded;
 		}
@@ -371,18 +422,18 @@ private:
 			if (SelfHierarchyFold()) {
 				const std::vector<std::shared_ptr<const ibBackendQueryColumn>> keys = m_queryable->GetPrimaryKeyColumns();
 				if (!keys.empty() && keys.front() != nullptr)
-					return ibQueryComposer::BuildHierarchyTree(m_snapshot, keys.front(), m_totalLevels[0].HeadCol(),
-					                                           m_aggregates, m_totalLevels[0].HeadDim());
+					return BuildHierarchyTree(m_snapshot, keys.front(), m_totalLevels[0].HeadCol(),
+					                          m_aggregates, m_totalLevels[0].HeadDim());
 			}
 			// Everything else — Elements / cross-catalog ref-hierarchy / multi-level (in order, with
 			// per-level dimension unfold) → the general value-keyed combiner.
-			return ibQueryComposer::BuildDimensionTree(m_snapshot, m_totalLevels, m_aggregates, m_holder, m_queryable);
+			return BuildDimensionTree(m_snapshot, m_totalLevels, m_aggregates, m_holder, m_queryable);
 		}
 
 		// direct-config / unit-test fallback
 		if (!m_groupFields.empty())
-			return ibQueryComposer::BuildTotalsTree(m_snapshot, m_groupFields, m_aggregates);
-		return ibQueryComposer::BuildHierarchyTree(m_snapshot, m_rowKeyCol, m_parentKeyCol, m_aggregates, m_dimKind);
+			return BuildTotalsTree(m_snapshot, m_groupFields, m_aggregates);
+		return BuildHierarchyTree(m_snapshot, m_rowKeyCol, m_parentKeyCol, m_aggregates, m_dimKind);
 	}
 
 	// Direct fold — each row becomes a leaf node under the root (no subtotals, no nesting). Straight
@@ -444,7 +495,7 @@ private:
 	}
 
 	// ⭐ ONE COMPARISON FOR THE WHOLE HOUSE. The keys are compared by the same function a RAM ORDER BY
-	// compares rows with (ibQueryComposer::RamSortCompareKey) — a second answer to "which of these two
+	// compares rows with (RamSortCompareKey) — a second answer to "which of these two
 	// values comes first" is how a level's headings and the rows under them start disagreeing.
 	//
 	// STABLE, so nodes the sort cannot tell apart keep the order the fold gave them — which is the
@@ -456,7 +507,7 @@ private:
 		std::stable_sort(m_visits.begin(), m_visits.end(),
 			[this](const ibSelectorTree::Node* a, const ibSelectorTree::Node* b) {
 				for (const ibSelectorSort& key : m_order) {
-					const int c = ibQueryComposer::RamSortCompareKey(
+					const int c = RamSortCompareKey(
 						NodeValueFor(a, key), NodeValueFor(b, key), key.m_ascending);
 					if (c != 0) return c < 0;
 				}

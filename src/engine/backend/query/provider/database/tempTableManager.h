@@ -22,7 +22,7 @@
 // also returns null (graceful RAM fallback) after best-effort dropping the half-built table.
 // (docs/private/temp-db.md)
 
-#include "tempTableQueryable.h"                          // ibDbTempTableQueryable (the vended source)
+#include "backend/query/tempTableQueryable.h"            // ibDbTempTableQueryable (the vended source)
 #include "backend/databaseLayer/databaseLayer.h"         // ibTempTableDialect
 #include "backend/databaseLayer/connectionScope.h"       // ibConnectionScope (pins the holder's connection)
 

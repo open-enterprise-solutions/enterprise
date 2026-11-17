@@ -73,28 +73,8 @@ const ibArg& ArgSession() { static const ibArg a(ibT("session"), ibArg::Kind::Te
 const ibArg& ArgContains() { static const ibArg a(ibT("contains"), ibArg::Kind::Text, ibMcpText("Only rows whose message contains this text - a module name, a field, a phrase.")); return a; }
 const ibArg& ArgLimit() { static const ibArg a(ibT("limit"), ibArg::Kind::Whole, ibMcpText("How many rows at most. Default 50.")); return a; }
 
-// Levels are stored as numbers and asked for as words. The word is the unit a
-// caller thinks in - "show me the errors" - and the number is the file's.
-ibString LevelName(int level)
-{
-	switch (level) {
-		case 0: return ibT("info");
-		case 1: return ibT("warn");
-		case 2: return ibT("error");
-		case 3: return ibT("audit");
-	}
-	return ibT("info");
-}
-
-int LevelFromWord(const ibString& word)
-{
-	const ibString lowered = word.Lower();
-	if (lowered == ibT("info"))  return 0;
-	if (lowered == ibT("warn"))  return 1;
-	if (lowered == ibT("error")) return 2;
-	if (lowered == ibT("audit")) return 3;
-	return -1;      // any
-}
+// The level words — ibLevelName / ibLevelFromWord — are the journal's own (backend/logger/loggerEntry.h), shared with a
+// query's Journal.Events.
 
 //---------------------------------------------------------------------------
 // The engine's journal — plain text, one file per PROCESS RUN
@@ -449,7 +429,7 @@ public:
 
 		const ibString level = ArgLevel().Text(params);
 		if (!level.IsEmpty()) {
-			filter.min_level = LevelFromWord(level);
+			filter.min_level = ibLevelFromWord(level);
 
 			// An unrecognised word would silently widen the answer to everything,
 			// which reads as "nothing was filtered" rather than "that is not a level".
@@ -479,7 +459,7 @@ public:
 
 			// The level goes back as the WORD it was asked for by, never the number
 			// it is stored as - a reader should not have to hold the mapping.
-			entry->SetValue(ibT("level"), LevelName(row.level));
+			entry->SetValue(ibT("level"), ibLevelName(row.level));
 
 			if (!row.user_name.IsEmpty())  entry->SetValue(ibT("user"), row.user_name);
 			if (!row.source.IsEmpty())     entry->SetValue(ibT("source"), row.source);
@@ -876,7 +856,7 @@ public:
 		// `info` would put the line somewhere the caller does not look for it afterwards - and a
 		// journal entry nobody finds is the one failure this verb exists to prevent.
 		const ibString levelWord = ArgWriteLevel().Text(params);
-		const int level = levelWord.IsEmpty() ? 0 : LevelFromWord(levelWord);
+		const int level = levelWord.IsEmpty() ? 0 : ibLevelFromWord(levelWord);
 		if (level < 0) {
 			refusal = ibString::Format(
 				ibMcpText("'%s' is not a level. It is info, warn or error - or audit, which is the "
@@ -933,7 +913,7 @@ public:
 				case 3:  logger->Audit(source, event, message); break;
 				default: logger->Info (source, event, message); break;
 			}
-			result.SetValue(ibT("level"), LevelName(level));
+			result.SetValue(ibT("level"), ibLevelName(level));
 		}
 
 		result.SetValue(ibT("written"), true);

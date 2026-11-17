@@ -56,8 +56,8 @@ FRMSERVER_API void ibWriteSettingsTargetFields(ibDataNode& expanded, ibDataNode&
 class ibListSettingsChoice : public ibControlFrame, public ibTypeControlFactory {
 public:
 
-	ibListSettingsChoice(const ibMetaData* metaData, const ibClassID& clsid, const ibValue& value, std::int32_t choice)
-		: m_metaData(metaData), m_typeDesc(clsid), m_value(value), m_choice(choice) {
+	ibListSettingsChoice(const ibMetaData* metaData, const ibTypeDescription& type, const ibValue& value, std::int32_t choice)
+		: m_metaData(metaData), m_typeDesc(type), m_value(value), m_choice(choice) {
 	}
 
 	// ibControlFrame

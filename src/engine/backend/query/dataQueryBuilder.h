@@ -51,7 +51,6 @@ enum class ibAccessStage { Table, Value };
 #include <memory>
 #include <functional>   // the detach callback — see ibDataQueryResult::DetachColumns
 
-class ibValueMetaObjectAttributeBase;
 class ibDatabaseConnectionHolder;
 class ibTempTableManager;   // RLS temp-promote — a computed inner (value table / multi-source register) materialised to a DB temp table (non-FB), owned WITH the builder
 class ibQueryResult;        // L2 cursor — consumed by the DB result source
@@ -125,7 +124,7 @@ struct ibAggregateItem { ibAggregateFn m_fn; std::shared_ptr<const ibBackendQuer
 // ⭐⭐ A FIGURE MADE OF FIGURES — `TOTALS SUM(Accrued) - SUM(Deducted) AS ToPay`. It folds nothing itself: each
 // call inside it is an ordinary aggregate of the same set, declared under a name of its own, and m_expr reads
 // them by those names (OutputRef). Worked out at every node once the tree is folded, on whichever road folded
-// it (ibQueryComposer::ApplyDerivedAggregates) — so no road's SQL learns of it, and none can disagree.
+// it (ApplyDerivedAggregates) — so no road's SQL learns of it, and none can disagree.
 // m_col = the SELECTED field it answers to, the column it is written into on every heading, while a detail row
 // keeps the field's own value — one column, as `SUM(Number)` and `Number` are one. Null = a slot of its own,
 // read by alias (a figure named after nothing the selection carries), as COUNT(*) is — and empty on a detail row.
@@ -801,7 +800,7 @@ public:
 	//
 	// It exists for what a package already says: a statement names its result (`ONTO`) and later
 	// statements read it. Until now such a read wrapped the named select in a subquery source, which
-	// is a RAM source by construction (ibSubqueryQueryable::IsComputedInRam) — the rows came back to
+	// is a RAM source by construction (ibSubqueryQueryable vends the computed provider) — the rows came back to
 	// us and the join happened here. Declared instead, the named query stays INSIDE the SQL and the
 	// DBMS does the join with nothing in our memory.
 	//
@@ -1258,16 +1257,18 @@ public:
 			? ibQueryPredicate::Compose(ibQueryPredicateKind::And, m_spec.m_predicate, leaf)
 			: leaf;
 	}
+	// …and over a COMPUTED inner (a value table, a set built in memory): EXISTS needs a table the server can scan, so
+	// the inner's rows are carried onto THIS builder's connection as a temp table — kept while the builder lives,
+	// dropped with it — and the semi-join is written over it (`innerKey` its column of that name). False — the
+	// engine holds no temp table here (Firebird), nothing was added: the caller joins in memory. Defined by the
+	// composer (provider/queryComposer.cpp), which owns the temp tables.
+	bool TrySemiJoin(const std::shared_ptr<const ibBackendQueryable>& inner,
+	                 const std::shared_ptr<const ibBackendQueryColumn>& outerKey, const ibString& innerKey, ibQueryFilterOp op);
 
 
-	// The session connection this builder executes on (default ctor pulls it from ibSession::Current).
-	// RLS temp-promote reads it to materialise a computed inner onto THIS connection, so the main
-	// SELECT (same connection) sees the temp table — the semi-join then renders server-side.
+	// The session connection this builder executes on (default ctor pulls it from ibSession::Current) — the one a
+	// statement that joins its sources must be written on (CanJoinOn).
 	ibDatabaseConnectionHolder* GetHolder() const { return m_spec.m_holder; }
-	// Own a temp-table manager for the builder's lifetime (its DROP fires when the builder dies). Kept
-	// as shared_ptr so the builder stays COPYABLE (ibSubqueryQueryable copies it) — copies share the temp,
-	// and the type-erased deleter means callers destroying a copy never need the complete manager type.
-	void AdoptTempManager(std::shared_ptr<ibTempTableManager> mgr) { m_ownedTemps.push_back(std::move(mgr)); }
 
 	// Override the RLS policy (the default ctor already pulls it from the session).
 	// Pass nullptr for a TRUSTED / internal read that must bypass enforcement — e.g.
@@ -1320,7 +1321,9 @@ private:
 	// one pointed it at locals it had to keep alive beside it.
 	ibDataQuerySpec               m_spec;
 	const ibAccessPolicy*        m_policy = nullptr; // RLS — pulled from the session in the default ctor; null = no enforcement
-	std::vector<std::shared_ptr<ibTempTableManager>> m_ownedTemps;   // RLS temp-promote — materialised computed inners; DROP on builder death
+	// The computed inners TrySemiJoin carried to the server; DROP on builder death. Shared, so the builder stays copyable
+	// (ibSubqueryQueryable copies it) — copies share the temp, and destroying one never needs the complete manager type.
+	std::vector<std::shared_ptr<ibTempTableManager>> m_ownedTemps;
 	std::vector<ibDerivedAggregate> m_totalDerived; // .AggregateDerived() — the figures made of those
 	bool                          m_totalsOverall = false;   // .TotalsOverall() — the level above every dimension
 	bool                          m_aggInTotals = false;  // routing flag: .Aggregate → totals set when Totals() active
@@ -1341,6 +1344,18 @@ private:
 	std::vector<std::shared_ptr<const ibBackendQueryColumn>> MaterialiseColumns() const;
 	// Stamp the materialise-columns + totals config onto a freshly executed result.
 	void StampResult(ibDataQueryResult& r) const;
+
+	// ⭐ THE COMPOSER, ONE VERB PER TERMINAL — what a terminal runs with this door's own spec once the policy has let
+	// it through. Declared here so the door names no provider; defined in provider/queryComposer.cpp, beside the
+	// engine that answers.
+	ibDataQueryResult ExecuteRead(const ibReadPageRequest& page) const;
+	ibDataQueryResult ExecuteReadCached(const ibReadPageRequest& page, ibRenderedPageCache& cache,
+	                                    const ibPageSignature& signature) const;
+	ibDataQueryResult ExecuteAggregate() const;
+	ibDataQueryResult ExecuteGroupLevelPage(const ibReadPageRequest& page) const;
+	bool              TryFoldTotalsInDbms(ibSelectorTree& out) const;
+	ibSelectorTree    ExecuteTotals() const;
+	long              ExecuteWrite(WriteKind kind) const;
 };
 
 // An EMPTY selection — a temp table with nothing in it, handed back as an ordinary result.

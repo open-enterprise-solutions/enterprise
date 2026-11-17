@@ -10,19 +10,19 @@
 #include "valueMap.h"                            // ibValueStructure — structure-shaped rows (no single row ref)
 #include "valueTable.h"                          // ibValueModelTable — the ToTable materialised result
 
-#include "backend/query/queryable.h"               // ibBackendQueryable / ibBackendQueryColumn
-#include "backend/query/querySelector.h"           // ibSelector::Snapshot — ToTable's rows as the fast table
-#include "backend/system/value/valueType.h"        // ibValueTypeDescription::AdjustValue — an empty value of a declared type
-#include "backend/query/queryReadState.h"          // ibQueryReadState — one state for a whole pipeline
+#include "backend/query/queryable.h"                              // ibBackendQueryable / ibBackendQueryColumn
+#include "backend/query/queryProvider.h"                          // ibBackendQueryProvider::CanJoinOn — may the Join's inner take a temp beside it
+#include "backend/query/querySelector.h"                          // ibSelector::Snapshot — ToTable's rows as the fast table
+#include "backend/system/value/valueType.h"                       // ibValueTypeDescription::AdjustValue — an empty value of a declared type
+#include "backend/query/queryReadState.h"                         // ibQueryReadState — one state for a whole pipeline
 #include "core/query/queryAST.h"              // ibQueryAstExpr — the tree a predicate lowers from
 #include "backend/compiler/lambdaQueryAST.h"    // it is READ off the instructions, never stored
-#include "backend/query/queryLowering.h"           // LowerLambdaPredicate / LowerLambdaColumnPath
-#include "backend/query/temp/tempTableQueryable.h" // ibTempTableQueryable — wrap a RAM value-table Join argument
-#include "backend/query/temp/tempTableManager.h"   // ibTempTableManager — materialise a computed RLS inner to a DB temp (semi-join server-side)
-#include "backend/compiler/procUnitLambda.h"       // ibValueFunction (the lambda value)
-#include "backend/compiler/procUnit.h"             // InvokeLambdaWith2Args — run the Join result-selector in RAM
-#include "backend/compiler/procContext.h"          // ibRunContext — captured-frame name lookup
-#include "backend/compiler/typeCtor.h"             // SYSTEM_TYPE_REGISTER
+#include "backend/query/queryLowering.h"                          // LowerLambdaPredicate / LowerLambdaColumnPath
+#include "backend/query/tempTableQueryable.h"                     // ibTempTableQueryable — wrap a RAM value-table Join argument
+#include "backend/compiler/procUnitLambda.h"                      // ibValueFunction (the lambda value)
+#include "backend/compiler/procUnit.h"                            // InvokeLambdaWith2Args — run the Join result-selector in RAM
+#include "backend/compiler/procContext.h"                         // ibRunContext — captured-frame name lookup
+#include "backend/compiler/typeCtor.h"                            // SYSTEM_TYPE_REGISTER
 #include "backend/backend_exception.h"
 
 #include <optional>
@@ -490,8 +490,8 @@ bool ibValueQueryable::TryJoinThroughL3(ibValue& receiver, ibValue& ret, ibValue
 	ibValueQueryable* innerQV = nullptr;
 	if (!args[0]->ConvertToValue(innerQV) || innerQV->GetQueryable() == nullptr)
 		return false;
-	if (innerQV->GetQueryable()->IsComputedInRam())
-		return false;   // inner also computed -> no DB leaf to promote into -> RAM hash-join
+	if (!innerQV->GetQueryable()->GetProvider().CanJoinOn(nullptr /* the base's statement */))
+		return false;   // inner not a table of this base (computed, or another connection's) -> nothing to promote into -> RAM hash-join
 
 	// The receiver must be a value table we can wrap as a computed leaf (an arbitrary RAM
 	// collection — array of structures / references — stays on the RAM hash-join).
@@ -983,29 +983,11 @@ void ibValueQueryDecorator::DispatchLinqMethod(ibLinqMethod method, ibValue& ret
 			// server-side table: a computed-in-RAM leaf has no name for EXISTS to scan. So MATERIALISE it onto the
 			// session connection — the inner's own Where/folds are already baked into its rows (AsSource carried
 			// them; a value table has none) — and semi-join over the temp: the EXISTS then runs SERVER-SIDE in the
-			// one statement, exactly like the register-direct path. On Firebird (no temp dialect) Materialise
-			// returns null and we fall back to the RAM-composer INNER JOIN (multiplies — the known FB gap until the
-			// pure-SQL-subquery-EXISTS lands; docs/private/access-policy-rls.md).
-			// …and CAN is asked BEFORE the rows are computed: without temp tables the RAM join below computes
-			// the inner again, so rows taken first would be read twice (ibTempTableManager::CanMaterialise).
-			std::shared_ptr<ibTempTableManager> mgr;
-			if (ibTempTableManager::CanMaterialise(m_target->GetHolder()))
-				mgr = ibTempTableManager::Materialise(m_target->GetHolder(), innerSource->ComputeRows({}),
-				                                      innerSource->GetMetaData());
-			const std::shared_ptr<const ibDbTempTableQueryable> temp     = mgr ? mgr->Queryable() : nullptr;
-			std::shared_ptr<const ibBackendQueryColumn>         innerKey = temp ? temp->ResolveColumnByName(rcols.front()->GetName()) : nullptr;
-			if (temp != nullptr && innerKey != nullptr) {
-				ibSemiJoinExists sj;
-				sj.m_inner    = temp;                          // the materialised permission rows (a real DB temp)
-				sj.m_where    = nullptr;                       // the inner's conditions are already baked into the rows
-				sj.m_outerKey = lcols.front();                 // s.k
-				sj.m_innerKey = innerKey;                      // a.k — remapped onto the temp's same-named column
-				sj.m_op       = ibJoinCompareToFilterOp(op);
-				m_target->AddSemiJoin(sj);
-				m_target->AdoptTempManager(std::move(mgr));    // temp lives across Execute/pages; DROP on builder death
-			} else {
+			// one statement, exactly like the register-direct path (the door's TrySemiJoin). On Firebird (no temp
+			// dialect) the door says no and we fall back to the RAM-composer INNER JOIN (multiplies — the known FB gap
+			// until the pure-SQL-subquery-EXISTS lands; docs/private/access-policy-rls.md).
+			if (!m_target->TrySemiJoin(innerSource, lcols.front(), rcols.front()->GetName(), ibJoinCompareToFilterOp(op)))
 				m_target->Join(innerSource, lcols.front(), rcols.front(), op, ibQueryJoinKind::Inner);
-			}
 		}
 		ret = new ibValueQueryDecorator(m_target, m_source, m_sourceName);   // chain: same target
 		return;

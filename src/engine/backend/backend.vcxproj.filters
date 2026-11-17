@@ -2263,10 +2263,16 @@
     <Filter Include="query\provider">
       <UniqueIdentifier>{47d043d4-fc0f-46f0-af42-7852ced74d1a}</UniqueIdentifier>
     </Filter>
-    <Filter Include="query\temp">
+    <Filter Include="query\provider\database">
+      <UniqueIdentifier>{8042acb7-b6da-4a48-bb0b-8cc6dbde138e}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="query\provider\computed">
       <UniqueIdentifier>{c4b9acdc-60fa-4683-8ff2-c023391372bd}</UniqueIdentifier>
     </Filter>
-    <Filter Include="query\structure">
+    <Filter Include="query\provider\logger">
+      <UniqueIdentifier>{93304d83-6601-4d65-8055-9061bf568265}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="query\provider\database\structure">
       <UniqueIdentifier>{8f94abad-f629-4700-8053-76dc95c824d7}</UniqueIdentifier>
     </Filter>
     <Filter Include="composition">
@@ -2553,8 +2559,8 @@
     <ClCompile Include="query\queryConstructorModel.cpp">
       <Filter>query</Filter>
     </ClCompile>
-    <ClCompile Include="query\temp\queryTempStore.cpp">
-      <Filter>query\temp</Filter>
+    <ClCompile Include="query\queryTempStore.cpp">
+      <Filter>query</Filter>
     </ClCompile>
     <ClCompile Include="query\lowering\queryLowering.cpp">
       <Filter>query\lowering</Filter>
@@ -2616,8 +2622,17 @@
     <ClCompile Include="system\value\valueDynamicList.cpp">
       <Filter>system\value</Filter>
     </ClCompile>
-    <ClCompile Include="query\provider\queryProvider.cpp">
+    <ClCompile Include="query\provider\queryComposer.cpp">
       <Filter>query\provider</Filter>
+    </ClCompile>
+    <ClCompile Include="query\queryProvider.cpp">
+      <Filter>query</Filter>
+    </ClCompile>
+    <ClCompile Include="query\provider\computed\computedProvider.cpp">
+      <Filter>query\provider\computed</Filter>
+    </ClCompile>
+    <ClCompile Include="query\provider\logger\logQueryable.cpp">
+      <Filter>query\provider\logger</Filter>
     </ClCompile>
     <ClCompile Include="query\queryResult.cpp">
       <Filter>query</Filter>
@@ -2625,38 +2640,41 @@
     <ClCompile Include="query\queryable.cpp">
       <Filter>query</Filter>
     </ClCompile>
-    <ClCompile Include="query\provider\dbTableProvider.cpp">
-      <Filter>query\provider</Filter>
+    <ClCompile Include="query\provider\database\dbTableProvider.cpp">
+      <Filter>query\provider\database</Filter>
+    </ClCompile>
+    <ClCompile Include="query\provider\database\columnCodec.cpp">
+      <Filter>query\provider\database</Filter>
     </ClCompile>
     <ClCompile Include="query\columnLayout.cpp">
       <Filter>query</Filter>
     </ClCompile>
-    <ClCompile Include="query\structure\dataMover.cpp">
-      <Filter>query\structure</Filter>
+    <ClCompile Include="query\provider\database\structure\dataMover.cpp">
+      <Filter>query\provider\database\structure</Filter>
     </ClCompile>
-    <ClCompile Include="query\structure\schemaBuilder.cpp">
-      <Filter>query\structure</Filter>
+    <ClCompile Include="query\provider\database\structure\schemaBuilder.cpp">
+      <Filter>query\provider\database\structure</Filter>
     </ClCompile>
-    <ClCompile Include="query\structure\structureBatch.cpp">
-      <Filter>query\structure</Filter>
+    <ClCompile Include="query\provider\database\structure\structureBatch.cpp">
+      <Filter>query\provider\database\structure</Filter>
     </ClCompile>
     <ClCompile Include="databaseLayer\databaseMaterializeBuilder.cpp">
       <Filter>databaseLayer</Filter>
     </ClCompile>
-    <ClCompile Include="query\structure\derivedStateBuilder.cpp">
-      <Filter>query\structure</Filter>
+    <ClCompile Include="query\provider\database\structure\derivedStateBuilder.cpp">
+      <Filter>query\provider\database\structure</Filter>
     </ClCompile>
     <ClCompile Include="query\queryRamTable.cpp">
       <Filter>query</Filter>
     </ClCompile>
-    <ClCompile Include="query\structure\schemaSnapshot.cpp">
-      <Filter>query\structure</Filter>
+    <ClCompile Include="query\provider\database\structure\schemaSnapshot.cpp">
+      <Filter>query\provider\database\structure</Filter>
     </ClCompile>
-    <ClCompile Include="query\structure\structureBuilder.cpp">
-      <Filter>query\structure</Filter>
+    <ClCompile Include="query\provider\database\structure\structureBuilder.cpp">
+      <Filter>query\provider\database\structure</Filter>
     </ClCompile>
-    <ClCompile Include="query\temp\tempTableManager.cpp">
-      <Filter>query\temp</Filter>
+    <ClCompile Include="query\provider\database\tempTableManager.cpp">
+      <Filter>query\provider\database</Filter>
     </ClCompile>
     <ClCompile Include="moduleManager\moduleManagerDataUnit.cpp">
       <Filter>moduleManager</Filter>
@@ -2679,44 +2697,65 @@
     <ClInclude Include="query\dataQueryBuilder.h">
       <Filter>query</Filter>
     </ClInclude>
-    <ClInclude Include="query\provider\queryProvider.h">
+    <ClInclude Include="query\queryProvider.h">
+      <Filter>query</Filter>
+    </ClInclude>
+    <ClInclude Include="query\provider\queryComposer.h">
       <Filter>query\provider</Filter>
     </ClInclude>
-    <ClInclude Include="query\provider\dbTableProvider.h">
+    <ClInclude Include="query\tempColumn.h">
+      <Filter>query</Filter>
+    </ClInclude>
+    <ClInclude Include="query\provider\queryProviderInternal.h">
       <Filter>query\provider</Filter>
+    </ClInclude>
+    <ClInclude Include="query\provider\computed\computedProvider.h">
+      <Filter>query\provider\computed</Filter>
+    </ClInclude>
+    <ClInclude Include="query\provider\logger\logQueryable.h">
+      <Filter>query\provider\logger</Filter>
+    </ClInclude>
+    <ClInclude Include="query\provider\database\dbTableProvider.h">
+      <Filter>query\provider\database</Filter>
+    </ClInclude>
+    <ClInclude Include="query\provider\database\registerQueryLowering.h">
+      <Filter>query\provider\database</Filter>
+    </ClInclude>
+    <ClInclude Include="query\provider\database\columnCodec.h">
+      <Filter>query\provider\database</Filter>
     </ClInclude>
     <ClInclude Include="query\columnLayout.h">
       <Filter>query</Filter>
     </ClInclude>
-    <ClInclude Include="query\columnSpread.h">
-      <Filter>query</Filter>
+    <ClInclude Include="query\provider\database\columnSpread.h">
+      <Filter>query\provider\database</Filter>
     </ClInclude>
-    <ClInclude Include="query\structure\dataMover.h">
-      <Filter>query\structure</Filter>
+    <ClInclude Include="query\provider\database\structure\dataMover.h">
+      <Filter>query\provider\database\structure</Filter>
     </ClInclude>
-    <ClInclude Include="query\structure\schemaBuilder.h">
-      <Filter>query\structure</Filter>
+    <ClInclude Include="query\provider\database\structure\schemaBuilder.h">
+      <Filter>query\provider\database\structure</Filter>
     </ClInclude>
-    <ClInclude Include="query\structure\structureBatch.h">
-      <Filter>query\structure</Filter>
+    <ClInclude Include="query\provider\database\structure\structureBatch.h">
+      <Filter>query\provider\database\structure</Filter>
     </ClInclude>
     <ClInclude Include="databaseLayer\databaseMaterializeBuilder.h">
       <Filter>databaseLayer</Filter>
     </ClInclude>
-    <ClInclude Include="query\structure\derivedStateBuilder.h">
-      <Filter>query\structure</Filter>
+    <ClInclude Include="query\provider\database\structure\derivedStateBuilder.h">
+      <Filter>query\provider\database\structure</Filter>
     </ClInclude>
-    <ClInclude Include="query\structure\schemaSnapshot.h">
-      <Filter>query\structure</Filter>
+    <ClInclude Include="query\provider\database\structure\schemaSnapshot.h">
+      <Filter>query\provider\database\structure</Filter>
     </ClInclude>
-    <ClInclude Include="query\structure\structureBuilder.h">
-      <Filter>query\structure</Filter>
+    <ClInclude Include="query\provider\database\structure\structureBuilder.h">
+      <Filter>query\provider\database\structure</Filter>
     </ClInclude>
-    <ClInclude Include="query\temp\tempTableManager.h">
-      <Filter>query\temp</Filter>
+    <ClInclude Include="query\provider\database\tempTableManager.h">
+      <Filter>query\provider\database</Filter>
     </ClInclude>
-    <ClInclude Include="query\temp\tempTableQueryable.h">
-      <Filter>query\temp</Filter>
+    <ClInclude Include="query\tempTableQueryable.h">
+      <Filter>query</Filter>
     </ClInclude>
     <ClInclude Include="query\queryRamTable.h">
       <Filter>query</Filter>
@@ -2736,8 +2775,8 @@
     <ClInclude Include="query\queryConstructorModel.h">
       <Filter>query</Filter>
     </ClInclude>
-    <ClInclude Include="query\temp\queryTempStore.h">
-      <Filter>query\temp</Filter>
+    <ClInclude Include="query\queryTempStore.h">
+      <Filter>query</Filter>
     </ClInclude>
     <ClInclude Include="query\queryLowering.h">
       <Filter>query</Filter>
@@ -2839,9 +2878,6 @@
   <ItemGroup>
     <ClInclude Include="appEnv.h" />
     <ClInclude Include="eventDispatcher.h" />
-    <ClInclude Include="metaCollection\createRequest.h">
-      <Filter>metaCollection</Filter>
-    </ClInclude>
     <ClInclude Include="metaCollection\metaObjectEnum.h">
       <Filter>metaCollection</Filter>
     </ClInclude>

@@ -12,7 +12,7 @@
 #include "backend/metaData.h"   // GetAnyArrayObject — the registers this one's chart may name (GetRelatedRegisters)
 #include "backend/session/session.h"
 #include "backend/query/dataQueryBuilder.h"   // L3 door — From() + Where materialises the read through L3
-#include "backend/metaCollection/partial/registerQueryLowering.h"   // ibRegFilterPredicate (shared lowering)
+#include "backend/query/provider/database/registerQueryLowering.h"  // ibRegFilterPredicate (shared lowering)
 
 #include <algorithm>
 

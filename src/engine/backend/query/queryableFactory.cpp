@@ -6,6 +6,17 @@
 
 #include "backend/appData.h"             // ibApplicationInstance::GetQueryableFactory (the global fallback the per-config factory descends to)
 #include "backend/query/queryable.h"     // ibBackendQueryable::GetQueryTableId (IndexById, ResolveDescriptorById)
+#include "backend/compiler/typeCtor.h"   // ibCtorAbstractType::GetClassType — a kind's class, for a source's picture
+
+//////////////////////////////////////////////////////////////////////
+// ibQueryableSourceDescriptor
+//////////////////////////////////////////////////////////////////////
+
+ibPictureID ibQueryableSourceDescriptor::GetPicture() const
+{
+	const ibCtorAbstractType* const kind = ibValue::GetAvailableCtor(GetNamespace());
+	return kind != nullptr ? kind->GetClassType() : 0;
+}
 
 //////////////////////////////////////////////////////////////////////
 // ibQueryableFactory
@@ -92,9 +103,12 @@ ibQueryableSourceDescriptor* ibQueryableFactory::FindDescriptor(const ibString& 
 	return it != m_descriptors.end() ? it->second : nullptr;
 }
 
-std::vector<ibQueryableSourceDescriptor*> ibQueryableFactory::GetDescriptors() const
+std::vector<ibQueryableSourceDescriptor*> ibQueryableFactory::GetDescriptors(ibQueryableSourceKind kind) const
 {
+	// Every one registered here — the platform's are made only by a configuration's factory (ibMetaQueryableFactory).
 	std::vector<ibQueryableSourceDescriptor*> result;
+	if (kind == ibQueryableSourceKind::Platform)
+		return result;
 	result.reserve(m_descriptors.size());
 	for (const std::pair<const ibString, ibQueryableSourceDescriptor*>& kv : m_descriptors)
 		result.push_back(kv.second);
@@ -129,8 +143,37 @@ ibQueryableSourceDescriptor* ibQueryableFactory::ResolveDescriptorById(ibMetaID 
 }
 
 //////////////////////////////////////////////////////////////////////
+// ibPlatformSourceRegister — the makers every configuration's factory reads as it is made.
+//////////////////////////////////////////////////////////////////////
+
+// Asked through a function, not a namespace-scope vector: the registers are statics in other translation units,
+// constructed in no order the language promises, and the first of them may run before such a vector exists.
+static std::vector<ibPlatformSourceMaker>& PlatformSourceMakers()
+{
+	static std::vector<ibPlatformSourceMaker> s_makers;
+	return s_makers;
+}
+
+ibPlatformSourceRegister::ibPlatformSourceRegister(ibPlatformSourceMaker maker)
+{
+	if (maker != nullptr)
+		PlatformSourceMakers().push_back(maker);
+}
+
+//////////////////////////////////////////////////////////////////////
 // ibMetaQueryableFactory — per-config: own registry FIRST, then DESCEND to the global factory on a miss.
 //////////////////////////////////////////////////////////////////////
+
+ibMetaQueryableFactory::ibMetaQueryableFactory(const ibMetaData* metaData)
+{
+	if (metaData == nullptr)
+		return;
+	for (const ibPlatformSourceMaker maker : PlatformSourceMakers())
+		if (std::unique_ptr<ibQueryableSourceDescriptor> source = maker(metaData)) {
+			Register(source.get());
+			m_platformSources.push_back(std::move(source));
+		}
+}
 
 ibQueryableSourceDescriptor* ibMetaQueryableFactory::FindDescriptor(const ibString& ns, const ibString& objectName) const
 {

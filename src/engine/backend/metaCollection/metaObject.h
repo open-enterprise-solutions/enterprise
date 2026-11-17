@@ -181,7 +181,7 @@ enum metaObjectFlags {
 };
 
 // (rt_ref_chunk — the reference-blob wire chunk id — moved to its only user, the L3-3 wire codec
-//  in query/structure/dataMover.cpp.)
+//  in query/provider/database/structure/dataMover.cpp.)
 
 //flags metaobject
 #define metaDeletedFlag 0x0001000
@@ -597,11 +597,11 @@ public:
 	bool CloseSubtree(ibRunPhase phase);
 
 	// (CreateMetaTable / UpdateMetaTable / DeleteMetaTable removed — structure DDL is the config-save
-	//  differ's job; see ContributeTables below (declares both structure and seed) + query/structure/schemaSnapshot.h.)
+	//  differ's job; see ContributeTables below (declares both structure and seed) + query/provider/database/structure/schemaSnapshot.h.)
 
 	// (No per-object table-data dump / restore. Row data is moved off the config's ContributeTables
 	//  SNAPSHOT directly by the orchestrator (DumpDataToBuffer / RestoreDataFromBuffer) through the L3-3
-	//  mover — one source of truth, the same structure that drives the DDL. See query/structure/dataMover.h.)
+	//  mover — one source of truth, the same structure that drives the DDL. See query/provider/database/structure/dataMover.h.)
 
 	//events:
 	virtual bool OnCreateMetaObject(ibMetaData* metaData, int flags);
@@ -740,7 +740,7 @@ public:
 
 	// Declare this object's physical tables INTO a structure snapshot — the declarative replacement for
 	// CreateAndUpdateTableDB. The differ (DiffSnapshots) computes create/alter/drop from two snapshots;
-	// an object only declares "what I am now". (query/structure/schemaSnapshot.h, docs/private/query-language-arc.md)
+	// an object only declares "what I am now". (query/provider/database/structure/schemaSnapshot.h, docs/private/query-language-arc.md)
 	//
 	// Base = the CONTAINER behaviour: recurse into children, so the tree walks itself (SnapshotOf is one
 	// call on the common object). A TABLE-bearing object overrides to Add its table(s) — including nested

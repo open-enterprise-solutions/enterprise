@@ -37,6 +37,19 @@ TEST(TypeDescription, MultiTypeList) {
     EXPECT_TRUE(td.ContainType(g_valueStringCLSID));
 }
 
+// A date made of its class alone keeps its time: the constructor is AppendMetaType's road. It took the default data's
+// date-only, and every moment of a type made so came back at midnight — the journal's Date, a date parameter's output
+// (2026-11-17).
+TEST(TypeDescription, ADateMadeOfItsClassKeepsItsTime) {
+    EXPECT_EQ(ibTypeDescription(g_valueDateCLSID).GetDateFraction(), ibDateFractions::ibDateFractions_DateTime);
+    EXPECT_EQ(ibTypeDescription(std::vector<ibClassID>{ g_valueStringCLSID, g_valueDateCLSID }).GetDateFraction(),
+        ibDateFractions::ibDateFractions_DateTime);
+
+    ibTypeDescription appended;
+    appended.AppendMetaType(g_valueDateCLSID);
+    EXPECT_TRUE(ibTypeDescription(g_valueDateCLSID) == appended);
+}
+
 // ---------------------------------------------------------------------------
 // ContainType
 // ---------------------------------------------------------------------------

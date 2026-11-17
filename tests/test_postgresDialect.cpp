@@ -44,16 +44,16 @@
 #include "backend/databaseLayer/preparedStatement.h"
 #include "backend/databaseLayer/databaseLayerException.h"
 #include "backend/backend_exception.h"
-#include "backend/appData.h"                        // ibApplicationInstance — the door reads through the application's pool
-#include "backend/compiler/value.h"                 // ibValue / ibNumber / g_value*CLSID
-#include "backend/databaseLayer/connectionPool.h"   // ibConnectionPool::ThreadHolder
-#include "backend/databaseLayer/connectionHolder.h" // ibDatabaseConnectionHolder
-#include "backend/query/dataQueryBuilder.h"         // ibDataQueryBuilder — a totals through the door
-#include "backend/query/provider/queryProvider.h"   // ibQueryRamTable — the rows a temp table is made of
-#include "backend/query/querySelectorTree.h"        // ibSelectorTree — the headings that come back
-#include "backend/query/temp/tempTableManager.h"    // ibTempTableManager — a table on the server for them
-#include "core/description/typeDescription.h"       // ibTypeDescription
-#include "queryRoad.h"                              // MeasureSent — the road a totals took
+#include "backend/appData.h"                                  // ibApplicationInstance — the door reads through the application's pool
+#include "backend/compiler/value.h"                           // ibValue / ibNumber / g_value*CLSID
+#include "backend/databaseLayer/connectionPool.h"             // ibConnectionPool::ThreadHolder
+#include "backend/databaseLayer/connectionHolder.h"           // ibDatabaseConnectionHolder
+#include "backend/query/dataQueryBuilder.h"                   // ibDataQueryBuilder — a totals through the door
+#include "backend/query/queryProvider.h"                      // ibQueryRamTable — the rows a temp table is made of
+#include "backend/query/querySelectorTree.h"                  // ibSelectorTree — the headings that come back
+#include "backend/query/provider/database/tempTableManager.h" // ibTempTableManager — a table on the server for them
+#include "core/description/typeDescription.h"                 // ibTypeDescription
+#include "queryRoad.h"                                        // MeasureSent — the road a totals took
 
 #include <algorithm>
 #include <chrono>

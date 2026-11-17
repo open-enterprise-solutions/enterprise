@@ -14,9 +14,10 @@ import { emptyDate, Type } from './fieldTree.js';
  * @typedef {{caption: string, help: string, key?: string, press: () => void}} Tool
  */
 /**
- * A value chosen by the server — the window's act: the type, the value in the cell, told back with what was chosen;
- * false when the window is busy with another act.
- * @typedef {(type: string, value: object | undefined,
+ * A value chosen by the server — the window's act: the type the cell stands on, written as a field's (one class as
+ * `{Types: [{TypeId}]}`), the value in the cell, told back with what was chosen; false when the window is busy with
+ * another act.
+ * @typedef {(type: object, value: object | undefined,
  *   done: (value: object, presentation: string) => void) => boolean} Choose
  */
 
@@ -167,15 +168,16 @@ export class SettingsEditor {
 	/**
 	 * A value in its cell, typed by its type: a flag, a number, a date, a text; a reference — how it reads, «…» to choose
 	 * one (the server's choice), «×» for the empty one of its kind; any other type — a characteristic's, whose values are
-	 * of the types it lists — as a reference, chosen by the type of the value held (the thin client's), else its own.
-	 * @param {string} type
+	 * of the types it lists — as a reference, chosen by the type of the value held (the thin client's), else its own; a
+	 * field's type whole (several types) — as a reference too, the type asked by the server when none is held.
+	 * @param {string | object} type
 	 * @param {any} value the packed value
 	 * @param {string} text how a reference reads
-	 * @param {(value: object, text: string) => void} write
+	 * @param {(value: object | undefined, text: string) => void} write
 	 * @param {Choose} choose
 	 */
 	valueCell(type, value, text, write, choose) {
-		if (this.fields?.references.has(type))
+		if (typeof type !== 'string' || this.fields?.references.has(type))
 			return this.referenceCell(type, value, text, write, choose);
 		/** @param {any} v */
 		const put = (v) => write({ t: type, v }, '');
@@ -216,10 +218,10 @@ export class SettingsEditor {
 	}
 
 	/**
-	 * @param {string} type
+	 * @param {string | object} type
 	 * @param {any} value
 	 * @param {string} text
-	 * @param {(value: object, text: string) => void} write
+	 * @param {(value: object | undefined, text: string) => void} write
 	 * @param {Choose} choose
 	 */
 	referenceCell(type, value, text, write, choose) {
@@ -227,12 +229,14 @@ export class SettingsEditor {
 		cell.className = 'settings-reference';
 		const said = document.createElement('span');
 		said.textContent = text;
-		// The kind's empty reference — what «none» is here, as a new line's.
-		const empty = this.fields?.emptyOf(type) ?? {};
+		// The kind's empty reference — what «none» is here, as a new line's; a cell of several types has none — cleared,
+		// it stands on no type again.
+		const empty = typeof type === 'string' ? this.fields?.emptyOf(type) ?? {} : undefined;
 		cell.append(said,
 			smallButton('…', _('Select'), () => {
-				// Drawn again with it: the lines may have been drawn anew while it was chosen.
-				choose(type, value ?? empty, (chosen, presentation) => {
+				// Drawn again with it: the lines may have been drawn anew while it was chosen. The type goes as a field's is
+				// written, one class too; the server takes the value's when the cell holds one (the thin client's ChooseValue).
+				choose(typeof type === 'string' ? { Types: [{ TypeId: type }] } : type, value ?? empty, (chosen, presentation) => {
 					write(chosen, presentation);
 					this.draw();
 				});

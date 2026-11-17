@@ -2565,21 +2565,15 @@ public:
 			if (std::find(lists.begin(), lists.end(), list) == lists.end())
 				lists.push_back(list);
 		};
-		for (const ibClassID& clsid : field->GetTypeValueDesc().GetClsidList()) {
+		for (const ibClassID& clsid : ibOpenBarriers(field->GetTypeValueDesc(), metaData).GetClsidList()) {
 			if (settled != 0 && clsid != settled)
 				continue;   // the link has decided this field's type; the rest is not on offer
 			types.push_back(ibDataValue::String(metaData->GetNameObjectFromID(clsid)));
 			// A reference opens its list; an "any" — CatalogRef, AnyRef — any list of its facade, every reference
-			// its bits admit (clsid_admits), as the picker offers them: nothing opens "a CatalogRef".
-			if (!IsReference(clsid))
-				continue;
-			if (!clsid_is_any(clsid)) {
+			// its bits admit (ibOpenBarriers), as the picker offers them: nothing opens "a CatalogRef", and a barrier
+			// left with none opens nothing.
+			if (IsReference(clsid) && !clsid_is_any(clsid))
 				offer(clsid);
-				continue;
-			}
-			for (const ibCtorMetaValueType* member : metaData->GetListCtorsByType(ibCtorObjectMetaType::ibCtorObjectMetaType_Reference))
-				if (clsid_admits(clsid, member->GetClassType()))
-					offer(member->GetClassType());
 		}
 		result.AddField(ibT("types"), ibDataValue::Array(types));
 		result.SetValue(ibT("settled_by_link"), settled != 0);

@@ -9,9 +9,9 @@
 #include "backend/metaData.h"
 
 #include "backend/appData.h"
-#include "backend/query/structure/structureBatch.h" // ibStructureBatch — the per-table DDL batch the value column fills
-#include "backend/query/structure/schemaBuilder.h"  // ibSchemaBuilder — flushes the batch on the local channel
-#include "backend/query/structure/schemaSnapshot.h" // ibSchemaSnapshot — ContributeTables (declarative structure)
+#include "backend/query/provider/database/structure/structureBatch.h" // ibStructureBatch — the per-table DDL batch the value column fills
+#include "backend/query/provider/database/structure/schemaBuilder.h"  // ibSchemaBuilder — flushes the batch on the local channel
+#include "backend/query/provider/database/structure/schemaSnapshot.h" // ibSchemaSnapshot — ContributeTables (declarative structure)
 
 /////////////////////////////////////////////////////////////////////////////////////
 

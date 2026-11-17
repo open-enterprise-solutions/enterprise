@@ -204,6 +204,18 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
   or a `Boundary`; all when left out) and for the dimension values the structure names (every key when
   left out); the border follows each one. The first failure stops the run, keeps the border before that
   document and raises its error with the document's name. A sequence's list has a *Restore* command.
+- **The registration journal is a query source.** `SELECT … FROM Journal.Events(&BeginOfPeriod, &EndOfPeriod)`
+  reads its events — `Date`, `Level` (`info`, `warn`, `error`, `audit`), `Session`, `User`, `Host`, `Source`,
+  `Event`, `Message`, `Object` (a reference of the configuration), `Details` (the value written with the event) —
+  and joins them to the configuration's tables like any other: `JOIN Catalog.Goods AS G ON E.Object = G.Ref`. Both
+  moments are inclusive and either may be left out. It is read by the right that opens the journal window, and
+  `SELECT ALLOWED` reads a refusal as no rows.
+- **`Data.From(sourceName, arguments…)`** gives LINQ any source a query can name, with its arguments:
+  `from e in Data.From("Journal.Events", Begin, End) select e`, or a register's
+  `"AccumulationRegister.Stock.Turnovers"`. `Data.From(valueTable)` is as before.
+- **`Data.Platform`** holds the sources the platform declares in every configuration — `Data.Platform.Journal.Events`,
+  the whole registration journal — so the LINQ constructor's tree shows the journal. The query constructor shows it
+  under the same heading, *Platform*, after the configuration's kinds; the query still writes `Journal.Events`.
 - **A query over the turnovers, or the balance and turnovers, of an accumulation or accounting register by
   `Recorder` or `Record` runs in the database.** They were read into memory, and with them everything the query
   does above them: the joins, the grouping and the totals. They are now one statement where the register's totals

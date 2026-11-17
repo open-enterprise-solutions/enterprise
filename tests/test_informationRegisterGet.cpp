@@ -27,7 +27,7 @@
 #include "backend/metaCollection/partial/informationRegisterManager.h"
 #include "backend/query/columnLayout.h"
 #include "backend/query/dataQueryBuilder.h"
-#include "backend/query/structure/schemaSnapshot.h"
+#include "backend/query/provider/database/structure/schemaSnapshot.h"
 #include "backend/session/session.h"
 #include "backend/system/value/valueMap.h"
 #include "backend/system/value/valueTable.h"

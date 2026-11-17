@@ -139,8 +139,12 @@ private:
 
 // The shared stateless computed (RAM) provider, as a base reference — so a computed queryable
 // here can vend it WITHOUT this header naming the concrete ibComputedProvider (which lives in
-// the L2-aware queryProvider.h). Defined in queryProvider.cpp. (breaks the include cycle.)
+// provider/computed/computedProvider.h). Defined in computedProvider.cpp. (breaks the include cycle.)
 BACKEND_API ibBackendQueryProvider& ibComputedProviderInstance();
+// …and the database provider, the same way — the one a source with no engine of its own is read by, and the one
+// that answers what only metadata knows: where a reference points, the references a list made. Defined in
+// provider/database/dbTableProvider.cpp.
+BACKEND_API ibBackendQueryProvider& ibDbTableProviderInstance();
 
 // ==========================================================================
 // query-native vocabulary — the language between L3 and a queryable. NOT the
@@ -676,8 +680,8 @@ public:
 	// provider, never touching L2-1. The provider holds ALL the L2-1 + metadata->physical
 	// lowering. The DB families share one default (a stateless static DB provider);
 	// computed queryables (slice / balance / turnover) OVERRIDE this to vend their own
-	// (a static computed provider). The default impl lives in queryProvider.cpp where
-	// the concrete provider is complete. (docs/private/query-language-arc.md §22.4)
+	// (a static computed provider). The default impl lives in queryable.cpp and hands back
+	// ibDbTableProviderInstance(). (docs/private/query-language-arc.md §22.4)
 	virtual ibBackendQueryProvider& GetProvider() const;
 
 	// --- name resolution (COLUMNS — L3-clean) ---------------------------
@@ -755,10 +759,8 @@ public:
 	// declare the same thing for itself.
 	virtual ibQueryRelPtr GetSourceRelation(const ibString& alias) const { return nullptr; }
 
-	// This source's guid — DERIVED from GetSourceMetaObject by default, so a metaobject-backed source
-	// says nothing: it already said which metaobject it is. Still virtual, because a source can own an
-	// identity WITHOUT a metaobject — a temp table has a guid of its own and nothing to read it off.
-	// (Body in queryProvider.cpp, where the metaobject type is complete.)
+	// This source's guid — a metaobject-backed source answers its metaobject's, beside GetSourceMetaObject;
+	// a temp table has a guid of its own; the base, a source with neither, has none. (queryable.cpp)
 	virtual const ibUniqueKey& GetQueryTableGuid() const;
 
 	// The USER-facing name (as in the metadata tree, e.g. "Enumeration3") — for the restructure change
@@ -766,8 +768,8 @@ public:
 	// physical table name (a temp / computed source has no friendlier name).
 	virtual ibString GetQueryName() const { return GetQueryTableName(); }
 
-	// This queryable's metaID (the parent-reference blob / tree filter needs it) — the same projection
-	// of the same metaobject, with the same escape for a source that has none.
+	// This queryable's metaID (the parent-reference blob / tree filter needs it) — answered the same way:
+	// by the source that holds a metaobject, 0 by the base.
 	virtual ibMetaID GetQueryTableId() const;
 	// The metadata context the DB provider needs to reconstruct a column's value WITHOUT the
 	// attribute: a reference column rebuilds its ibValueReferenceDataObject from (clsid, blob) via
@@ -844,19 +846,18 @@ public:
 	// A COMPUTED virtual table — a register slice / balance / turnover — is a
 	// SELF-CONTAINED relation: its own filters (period, dimensions) are baked into
 	// the instance's constructor, and it produces its rows in RAM. You construct
-	// one, hand it to From(), and L3 reads it like any source — it checks
-	// IsComputedInRam() and, when true, builds the selection from ComputeRows()
-	// instead of the DB provider. So the same door reads physical and computed
-	// sources alike, and the computed result is a RAM relation L3 can join. The
-	// instance is call-scoped (it carries one query's filters). `extra` is any
-	// further door conditions to compose on top (post-filter) — ADVISORY: an
-	// implementation may push them into its own compute to build fewer rows, but
-	// the caller (ibComputedProvider) applies them over the result regardless, so
-	// ignoring them costs speed, never correctness. It is no longer "empty for
-	// now": the semi-join key reduction pushes an `In` filter through it.
-	// Default: physical. (docs/private/query-language-arc.md §22.4d, §22.6 — RAM-set.)
-	virtual bool IsComputedInRam() const { return false; }
-	
+	// one, hand it to From(), and L3 reads it like any source — it vends the
+	// computed provider (GetProvider; ibBackendQueryProvider::IsComputedInRam), which
+	// builds the selection from ComputeRows() instead of a scan. So the same door
+	// reads physical and computed sources alike, and the computed result is a RAM
+	// relation L3 can join. The instance is call-scoped (it carries one query's
+	// filters). `extra` is any further door conditions to compose on top
+	// (post-filter) — ADVISORY: an implementation may push them into its own compute
+	// to build fewer rows, but the caller (ibComputedProvider) applies them over the
+	// result regardless, so ignoring them costs speed, never correctness. It is no
+	// longer "empty for now": the semi-join key reduction pushes an `In` filter
+	// through it. (docs/private/query-language-arc.md §22.4d, §22.6 — RAM-set.)
+	//
 	// Produces the computed rows as L3's OWN table (ibQueryRamTable) — NOT a runtime
 	// ibValueModelTable. The register's Compute* builds it directly; a runtime-sourced temp
 	// table converts its model into one at this boundary. (docs/private/query-language-arc.md §22.6)
@@ -884,6 +885,13 @@ public:
 	// Null (the default): no order of its own, and a reference to it sorts by its identity. (Appended after
 	// the one above, for the same reason.)
 	virtual std::shared_ptr<const ibBackendQueryColumn> GetSortColumn() const { return nullptr; }
+
+	// ⭐ MAY THIS USER READ IT — the facade the access policy asks of a source no metaobject stands behind; where one
+	// does, its own right answers (ibValueMetaObjectGenericData::AccessRight_Show, the same words). Such a source is
+	// only ever read, so this is its one right whatever the query does to the others. A refusal is the door's to
+	// raise, or under SELECT ALLOWED to read as no rows. True (the default): a table in memory, a temp table, a nested
+	// query — what they hold was allowed where it came from. (Appended last, for the reason above.)
+	virtual bool AccessRight_Show() const { return true; }
 };
 
 // ==========================================================================
@@ -920,7 +928,7 @@ public:
 // pure L3 construct — it names no attribute, no L1 cursor (it is a computed/RAM source, so
 // AsRowReader() stays null). Columns = the inner explicit Select(col, alias) list, or — for
 // SELECT * — the inner PRIMARY source's full column set (GetQueryColumns). The bodies that touch
-// ibDataQueryBuilder live out-of-line (queryProvider.cpp), so this header forward-declares
+// ibDataQueryBuilder live out-of-line (queryComposer.cpp), so this header forward-declares
 // the inner door only. (docs/private/query-language-arc.md §22 nested subquery)
 // ==========================================================================
 class BACKEND_API ibSubqueryQueryable : public ibBackendQueryable
@@ -958,7 +966,6 @@ public:
 	std::vector<std::shared_ptr<const ibBackendQueryColumn>> GetPrimaryKeyColumns() const override;   // out-of-line — needs the inner builder
 
 	ibBackendQueryProvider& GetProvider() const override;            // out-of-line — vends the computed provider
-	bool IsComputedInRam() const override { return true; }
 	ibQueryRamTable ComputeRows(const std::vector<ibQueryCondition>& extra) const override;   // out-of-line — runs the inner query
 
 	// trivial L3 surface for a non-metaobject (derived) source — no metadata guid, no table name
@@ -1092,7 +1099,7 @@ public:
 		return m_sort != nullptr && m_sort == col ? m_sort->Origin() : nullptr;
 	}
 
-	bool ContainColumn(const std::shared_ptr<const ibBackendQueryColumn>& col) const override {
+	virtual bool ContainColumn(const std::shared_ptr<const ibBackendQueryColumn>& col) const override {
 		for (const std::shared_ptr<ibAliasColumn>& c : m_published)
 			if (c == col) return true;
 		return m_sort != nullptr && m_sort == col;
@@ -1102,29 +1109,29 @@ public:
 	// source (ResolveColumnByName); the ORIGIN's column, which belongs to the other side of the join, is
 	// never handed out. (They were minted on demand while a source could resolve names it did not list;
 	// since what it resolves is what it lists, there is nothing left to mint later — and no `mutable`.)
-	std::vector<std::shared_ptr<const ibBackendQueryColumn>> GetQueryColumns() const override {
+	virtual std::vector<std::shared_ptr<const ibBackendQueryColumn>> GetQueryColumns() const override {
 		return { m_published.begin(), m_published.end() };
 	}
-	std::vector<std::shared_ptr<const ibBackendQueryColumn>> GetPrimaryKeyColumns() const override;
-	std::shared_ptr<const ibBackendQueryColumn>              GetHierarchyColumn() const override;
-	std::shared_ptr<const ibBackendQueryColumn>              GetSortColumn() const override { return m_sort; }
+	virtual std::vector<std::shared_ptr<const ibBackendQueryColumn>> GetPrimaryKeyColumns() const override;
+	virtual std::shared_ptr<const ibBackendQueryColumn>              GetHierarchyColumn() const override;
+	virtual std::shared_ptr<const ibBackendQueryColumn>              GetSortColumn() const override { return m_sort; }
 
 	// …AND EVERYTHING ELSE IS THE ORIGIN'S, because it is the same table.
-	ibBackendQueryProvider& GetProvider()      const override { return m_origin->GetProvider(); }
-	ibString  GetQueryTableName()              const override { return m_origin->GetQueryTableName(); }
+	virtual ibBackendQueryProvider& GetProvider()      const override { return m_origin->GetProvider(); }
+	virtual ibString  GetQueryTableName()              const override { return m_origin->GetQueryTableName(); }
 	// …UNDER THIS NAME. A second reading of one table exists in SQL only as `T AS b`, and every
 	// qualification of its columns has to say `b`, not `T` — which is the whole reason the source
 	// carries the author's alias down here rather than leaving it in the statement.
-	ibString  GetQueryTableAlias()             const override { return m_sqlAlias; }
-	ibQueryRelPtr GetSourceRelation(const ibString& alias) const override { return m_origin->GetSourceRelation(alias); }
-	const ibUniqueKey& GetQueryTableGuid()     const override { return m_origin->GetQueryTableGuid(); }
-	ibMetaID  GetQueryTableId()                const override { return m_origin->GetQueryTableId(); }
-	ibString  GetQueryName()                   const override { return m_origin->GetQueryName(); }
-	const ibMetaData* GetMetaData()            const override { return m_origin->GetMetaData(); }
-	const class ibValueMetaObjectGenericData* GetSourceMetaObject() const override { return m_origin->GetSourceMetaObject(); }
-	ibHierarchyType GetHierarchyType()         const override { return m_origin->GetHierarchyType(); }
-	bool      IsComputedInRam()                const override { return m_origin->IsComputedInRam(); }
-	ibQueryRamTable ComputeRows(const std::vector<ibQueryCondition>& extra) const override { return m_origin->ComputeRows(extra); }
+	virtual ibString  GetQueryTableAlias()             const override { return m_sqlAlias; }
+	virtual ibQueryRelPtr GetSourceRelation(const ibString& alias) const override { return m_origin->GetSourceRelation(alias); }
+	virtual const ibUniqueKey& GetQueryTableGuid()     const override { return m_origin->GetQueryTableGuid(); }
+	virtual ibMetaID  GetQueryTableId()                const override { return m_origin->GetQueryTableId(); }
+	virtual ibString  GetQueryName()                   const override { return m_origin->GetQueryName(); }
+	virtual const ibMetaData* GetMetaData()            const override { return m_origin->GetMetaData(); }
+	virtual const class ibValueMetaObjectGenericData* GetSourceMetaObject() const override { return m_origin->GetSourceMetaObject(); }
+	virtual ibHierarchyType GetHierarchyType()         const override { return m_origin->GetHierarchyType(); }
+	virtual ibQueryRamTable ComputeRows(const std::vector<ibQueryCondition>& extra) const override { return m_origin->ComputeRows(extra); }
+	virtual bool      AccessRight_Show()               const override { return m_origin->AccessRight_Show(); }
 
 private:
 	std::shared_ptr<const ibBackendQueryable>   m_origin;
@@ -1164,7 +1171,7 @@ inline std::shared_ptr<const ibBackendQueryColumn> ibOriginColumn(const std::sha
 // ==========================================================================
 // ibComputedRegisterQueryable<TReg> — the shared base for a register's call-scoped,
 // RAM-computed virtual table (the information-register SLICE, the accumulation-register
-// BALANCE / TURNOVER). All of them are the same shape: IsComputedInRam() is true and the
+// BALANCE / TURNOVER). All of them are the same shape: they vend the computed provider and the
 // navigation methods FORWARD to the register's OWN queryable (a computed table returns the
 // register's columns), so a concrete subclass adds only its call-scoped filters (ctor) +
 // ComputeRows (the register's compute). TReg = ibValueMetaObjectInformationRegister /
@@ -1179,13 +1186,17 @@ class ibComputedRegisterQueryable : public ibBackendQueryable
 public:
 	explicit ibComputedRegisterQueryable(const TReg* reg) : m_reg(reg) {}
 
-	// Vends the shared stateless computed (RAM) provider; the door pulls it via GetProvider()
-	// and runs the read through it — the rows come from ComputeRows(), no physical scan, no L2-1.
-	virtual ibBackendQueryProvider& GetProvider() const override { return ibComputedProviderInstance(); }
+	// ⭐ WHICH ROAD — can THIS call be read off a surface the server keeps? No by default: a slice, a calculation
+	// register's reading are computed. A register whose readings keep one (the accumulation and the accounting
+	// totals) answers per call, and makes it pure there, so no reading of theirs inherits a silent no.
+	virtual bool CanReadOnServer() const { return false; }
 
-	// Computed (RAM) virtual table — the door builds the selection from ComputeRows(), never a
-	// physical scan (the concrete subclass overrides ComputeRows).
-	virtual bool IsComputedInRam() const override { return true; }
+	// …and the provider that follows from it, written once for every register: the ordinary PHYSICAL one when the
+	// call can go to the server, so the source behaves like any relation; the shared computed one when it cannot —
+	// the door runs the read through it and the rows come from ComputeRows() (the concrete subclass overrides it).
+	virtual ibBackendQueryProvider& GetProvider() const override {
+		return CanReadOnServer() ? ibBackendQueryable::GetProvider() : ibComputedProviderInstance();
+	}
 
 	// L3 navigation forwards to ONE source, named here so a subclass can redirect the whole set at
 	// once. By default that is the register's own queryable: a computed table carries the

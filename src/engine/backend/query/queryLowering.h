@@ -407,4 +407,77 @@ public:
 	                                                const std::map<ibString, ibValue>& captured);
 };
 
+// ⭐⭐ A WALK NARROWED BY CAST. `CAST(Analytics AS Catalog.Goods).Description` walks into the goods and
+// nowhere else: a counterparty in the same slot answers NULL, not its own description. The narrowing
+// is carried by the walk itself — the field reached on the named type stands in the path as a column
+// that knows the type (CastLeaf) — so every road that walks a path reads it where it forks, the lowering
+// that resolves the path and the provider that writes it alike:
+//   · CastTarget — the type a CAST named for the walk that continues with `next` (null: an ordinary walk);
+//   · WalkEnters — may a reference with several types be walked into `target` on its way to `next`.
+// The column answers every other question as the field it stands for, its id included, so a row filed
+// under it and a projection reading it cannot tell the two apart. Words of the language, not of a base —
+// defined in the lowering (queryLowering.cpp), beside the other scopes of one query.
+std::shared_ptr<const ibBackendQueryColumn> CastLeaf(const std::shared_ptr<const ibBackendQueryable>& target,
+                                                     const std::shared_ptr<const ibBackendQueryColumn>& leaf);
+std::shared_ptr<const ibBackendQueryable>   CastTarget(const std::shared_ptr<const ibBackendQueryColumn>& next);
+bool                                        WalkEnters(const std::shared_ptr<const ibBackendQueryable>& target,
+                                                       const std::shared_ptr<const ibBackendQueryColumn>& next);
+
+// ==========================================================================
+// ⭐⭐ A TYPE, AS A VALUE — made and read WITHOUT naming the class that carries one.
+//
+// `TYPE(Catalog.Goods)`, `VALUETYPE(x)`, a type handed in through a parameter: three spellings of one
+// thing — an ordinary value whose content is a type. The lowering has to MAKE one (a name written in
+// a query) and the evaluator has to READ the clsid back out (a value that came home), and neither may
+// name `ibValueType`: it lives in the runtime's value zoo, and a query tier that reaches in there has
+// stopped being metadata-blind.
+//
+// 🛑 I reached in — `#include "backend/system/value/valueType.h"` in the lowering AND in the provider
+// (Max, 2026-09-06, pointing at the line). And then put the doors in `typeDescription.h`, which is a
+// narrow header a great many things include: closing a leak by widening a wall.
+//
+// DECLARED HERE, DEFINED BY THE DATABASE PROVIDER (dbTableProvider.cpp) — the face declares, the kitchen
+// defines (2026-11-17). They stood in the provider's header, which made the lowering include the kitchen for
+// them; here they sit beside the other words of a CAST, in the header the lowering, the composer and the
+// provider all include.
+//
+// `ibTypeValueClsid` answers FALSE for a value that is not a type — a legitimate answer, and the one
+// a query needs when the other side of a comparison turns out to be a number.
+// ==========================================================================
+BACKEND_API ibValue ibTypeValueOf(const ibClassID& clsid);
+BACKEND_API ibValue ibTypeValueByName(const ibString& typeName);
+BACKEND_API bool    ibTypeValueClsid(const ibValue& value, ibClassID& outClsid);
+
+// ⭐ A VALUE AS A TYPE — what `CAST(x AS …)` answers, through the same door for the same reason. A primitive is
+// CONVERTED as a typed field converts what is written into it (AdjustValue: `Number(15, 2)` rounds, `String(10)`
+// cuts); a reference is NARROWED — it is of the type named or it is NULL, never an empty reference nobody wrote.
+BACKEND_API ibValue ibValueAsType(const ibValue& value, const ibTypeDescription& type);
+
+// ⭐ THE FIELDS A CAST NARROWED, KEPT FOR ONE QUERY. CastLeaf makes a (table, field) pair's column once in the open
+// scope and hands the same one on every later ask, so a walk named twice in one query — grouped by and sorted by —
+// is one column, and the paths compare as one. Every door of the lowering opens it (ibQueryLowering); a door
+// reached from inside another joins the scope already open, and the leaves go with the outermost one — from then
+// on they are held by whatever the query built of them. Outside a scope a leaf is made fresh on every ask.
+//
+// 🛑 It was a static map under a mutex, keyed by the table's ADDRESS and kept for the life of the process: a new
+// table born at a dead one's address got a leaf whose target dangled, and keyed by the share instead it would
+// have held every table it ever saw.
+class ibCastLeafScope
+{
+public:
+	ibCastLeafScope();
+	~ibCastLeafScope();
+
+	ibCastLeafScope(const ibCastLeafScope&) = delete;
+	ibCastLeafScope& operator=(const ibCastLeafScope&) = delete;
+
+private:
+	friend std::shared_ptr<const ibBackendQueryColumn> CastLeaf(const std::shared_ptr<const ibBackendQueryable>& target,
+	                                                            const std::shared_ptr<const ibBackendQueryColumn>& leaf);   // reads and fills the open scope's leaves
+
+	std::map<std::pair<std::shared_ptr<const ibBackendQueryable>, std::shared_ptr<const ibBackendQueryColumn>>,
+	         std::shared_ptr<const ibBackendQueryColumn>> m_leaves;
+	bool                                                    m_outermost = false;
+};
+
 #endif

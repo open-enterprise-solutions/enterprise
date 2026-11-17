@@ -20,6 +20,7 @@
 #include "protocol/protocolDesigner.h"   // ibProtocol::ibSchema::ibProperties
 
 #include <map>
+#include <memory>
 #include <set>
 
 ibDataNode& ibWriteSettingsField(ibDataNode& fields, const ibString& name, const ibString& presentation, ibMetaID id,
@@ -208,13 +209,17 @@ void ibChooseSettingsValue(const ibDataNode& act, const ibMetaData* metaData, ib
 		choosing->ControlDecrRef();
 		choosing = nullptr;
 	}
-	unsigned long long parsed = 0;
-	if (metaData == nullptr || !act.GetValue<ibString>(ibProtocol::ibRequest::ibListSettings::Type).ToULongLong(&parsed) || parsed == 0)
+	if (metaData == nullptr)
 		return;
-	const ibClassID clsid = parsed;
 
-	// The value in the cell — the server's own node, given back; none, or one the configuration cannot read: the empty
-	// one of the type.
+	// The type the cell stands on, written as a field's. A cell of several types (or of a family) that holds none of them
+	// has the type put to the user here, by the choice itself (ibTypeControlFactory::ChooseValue).
+	ibTypeDescription type;
+	if (const auto written = act.FindChild(ibProtocol::ibRequest::ibListSettings::Type))
+		ibTypeDescriptionMemory::ReadNode(ibDataValue::Child(std::make_shared<ibDataNode>(*written)), type);
+
+	// The value in the cell — the server's own node, given back; one held says its type: another of it is chosen. None,
+	// or one the configuration cannot read: the empty one of the type the cell stands on; a cell of several stays empty.
 	ibValue value;
 	if (const auto written = act.FindChild(ibProtocol::ibRequest::ibListSettings::Value)) {
 		try {
@@ -223,10 +228,16 @@ void ibChooseSettingsValue(const ibDataNode& act, const ibMetaData* metaData, ib
 		catch (const ibCoreException&) {
 		}
 	}
-	if (value.GetClassType() != clsid && metaData->IsRegisterCtor(clsid))
+	if (value.GetType() != ibValueTypes::TYPE_EMPTY)
+		type = ibTypeDescription(value.GetClassType());
+	if (type.GetClsidCount() == 0)
+		return;
+
+	const ibClassID clsid = type.GetFirstClsid();
+	if (type.GetClsidCount() == 1 && value.GetClassType() != clsid && metaData->IsRegisterCtor(clsid))
 		value = metaData->CreateObject(clsid);
 
-	choosing = new ibListSettingsChoice(metaData, clsid, value, act.GetValue<std::int32_t>(ibProtocol::ibRequest::ibListSettings::Choice));
+	choosing = new ibListSettingsChoice(metaData, type, value, act.GetValue<std::int32_t>(ibProtocol::ibRequest::ibListSettings::Choice));
 	choosing->ControlIncrRef();
 	ibTypeControlFactory::ChooseValue(choosing);
 }

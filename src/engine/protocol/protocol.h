@@ -732,8 +732,9 @@ namespace ibProtocol {
 			enum class ibAct : int {
 				Expand = 1,   // a reference field opened: the fields of its Targets — asked again with Expanded, their fields
 				              // (children as Fields') and their References
-				Choose = 2,   // a value of a type of the server's chosen (Type — its class id as text, Value — the one held,
-				              // Choice — the number the client asks it under): its quick choice, or its choice form — a tab
+				Choose = 2,   // a value of a type of the server's chosen (Type — its class id as text, or, a cell that stands on
+				              // no type yet — several, a family — its type whole as a field's, the type then asked here; Value —
+				              // the one held, Choice — the number the client asks it under): its quick choice, or its choice form — a tab
 				              // like any other, in the designer its declared values (ibPredefinedSelector); what is chosen
 				              // comes back in the window's question as Chosen (Choice, and Value with its Presentation
 				              // beside {t, v}), whenever it is

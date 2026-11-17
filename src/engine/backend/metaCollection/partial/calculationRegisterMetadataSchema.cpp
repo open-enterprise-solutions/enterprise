@@ -15,7 +15,7 @@
 
 #include "calculationRegister.h"
 
-#include "backend/query/structure/schemaSnapshot.h"                 // ibSchemaSnapshot / ibDeclareLookupIndex
+#include "backend/query/provider/database/structure/schemaSnapshot.h" // ibSchemaSnapshot / ibDeclareLookupIndex
 #include "backend/metaCollection/dimension/metaDimensionObject.h"    // the dimensions the lookup index leads with
 
 // ⭐⭐ THE RECORDS OF ONE EMPLOYEE — the read every road of this register makes, and nothing indexed it.

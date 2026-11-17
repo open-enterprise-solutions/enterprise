@@ -50,6 +50,7 @@
 #include "backend/databaseLayer/databaseQueryBuilder.h"
 #include "backend/query/dataQueryBuilder.h"
 #include "backend/query/columnLayout.h"
+#include "backend/query/provider/database/columnCodec.h"
 #include "core/clsid.h"
 
 using ibComposerNode = ibValueModel::ibComposerNode;

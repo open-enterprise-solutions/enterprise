@@ -15,7 +15,7 @@
 #include "backend/composition/dataComposer.h"      // ibDataDBComposer — render → SQL
 #include "backend/composition/drivers/listFetchDriver.h"   // ibListFetchDriver — the universal composer-fetch sink
 #include "backend/query/dataQueryBuilder.h"        // ibReadPageRequest — the page envelope
-#include "backend/query/provider/queryProvider.h"  // ibBackendQueryProvider — GetProvider().ResolveReferenceTarget (dot-walk hop)
+#include "backend/query/queryProvider.h"           // ibBackendQueryProvider — GetProvider().ResolveReferenceTarget (dot-walk hop)
 #include "backend/system/value/valueType.h"        // ibValueTypeDescription::AdjustValue — typed empty parent ref (hierarchy roots)
 #include "backend/metaCollection/partial/reference/reference.h"   // ibValueReferenceDataObject — drilled folder guid
 #include "backend/uniqueKey.h"                      // ibUniqueKey — GetItemKey builds the row's reference key
@@ -586,7 +586,7 @@ unsigned int ibValueModelCursor::RunComposerPage(const ibDataViewItem& parent, c
 		// LAZY drill: a TOTALS result arrives pre-order over EVERY level, but the paged control wants only the
 		// CURRENT scope's TOP level per fetch — deeper rows load when the user drills into a node. The TOP level
 		// is NOT the same number for the two shapes: BuildDimensionTree folds from Root (m_level 0), so the first
-		// grouping level's group headers sit at m_level == 1 (queryProvider.cpp FoldDimLevel: AddChild(m_level+1));
+		// grouping level's group headers sit at m_level == 1 (queryComposer.cpp FoldDimLevel: AddChild(m_level+1));
 		// a flat / DETAIL fetch (no TotalBy → hasTotals=false) emits every row at level 0. Filtering `!= 0`
 		// therefore dropped EVERY group header (they are level 1) → grouping produced zero rows and the list
 		// "disappeared". Keep level 1 for a group fetch, level 0 for a flat/detail one.

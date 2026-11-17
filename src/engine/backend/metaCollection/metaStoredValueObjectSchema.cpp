@@ -8,7 +8,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "metaStoredValueObject.h"
-#include "backend/query/structure/schemaSnapshot.h" // ibSchemaSnapshot - the declaration it merges its column into
+#include "backend/query/provider/database/structure/schemaSnapshot.h" // ibSchemaSnapshot - the declaration it merges its column into
 
 
 /////////////////////////////////////////////////////////////////////////////////////

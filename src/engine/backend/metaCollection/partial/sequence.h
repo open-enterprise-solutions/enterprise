@@ -2,7 +2,7 @@
 #define __SEQUENCE_H__
 
 #include "commonObject.h"
-#include "backend/metaCollection/partial/registerQueryLowering.h"   // ibValueMetaObjectRegisterTotals — the identity a second table is held by
+#include "backend/query/provider/database/registerQueryLowering.h"  // ibValueMetaObjectRegisterTotals — the identity a second table is held by
 
 ////////////////////////////////////////////////////////////////////////////
 //	Description : a sequence — up to which point the documents of a key

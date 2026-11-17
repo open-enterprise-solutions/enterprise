@@ -94,7 +94,7 @@ public:
 	// The state lives here, not in process-wide statics, because the barrier is tied to THIS holder's
 	// connection / transaction — so the SEVERAL ibSchemaBuilder instances of one save (Reset /
 	// per-table Execute / Flush) share one home through the holder they run on. ibSchemaBuilder owns
-	// the logic; the holder only stores. (query/structure/schemaBuilder.h)
+	// the logic; the holder only stores. (query/provider/database/structure/schemaBuilder.h)
 	//
 	// ⭐⭐ TWO SETS, BECAUSE TWO DIFFERENT QUESTIONS ARE ASKED — and answering both from one set is
 	// how the compensation came to DROP live tables. The barrier's DEFERRAL asks "did this save

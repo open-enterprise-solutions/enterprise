@@ -23,7 +23,8 @@
 #include <vector>
 
 #include "backend/query/dataQueryBuilder.h"   // ibDataQueryBuilder / ibDataQueryResult / ibReadPageRequest / AggregateFn
-#include "backend/query/provider/queryProvider.h" // ibComputedProviderInstance + ibQueryRamTable
+#include "backend/query/queryProvider.h"          // ibComputedProviderInstance + ibQueryRamTable
+#include "backend/query/provider/computed/computedProvider.h" // ibComputedProvider — the fake below derives it
 #include "backend/query/queryable.h"              // ibBackendQueryable / ibQueryCondition / ibQueryFilterOp
 #include "backend/query/queryColumn.h"            // ibBackendQueryColumn / ibTypeDescription
 
@@ -71,7 +72,6 @@ public:
 	void SetPrimaryKey(const std::shared_ptr<const ibBackendQueryColumn>& k) { m_pk = k; }
 
 	ibBackendQueryProvider& GetProvider() const override { static FakeComputedProvider s_fake; return s_fake; }
-	bool     IsComputedInRam() const override { return true; }
 	ibQueryRamTable ComputeRows(const std::vector<ibQueryCondition>& /*extra*/) const override {
 		return m_build ? m_build() : ibQueryRamTable();
 	}
@@ -176,6 +176,41 @@ struct ComputedFix : ::testing::Test {
 	}
 };
 
+// ⭐ A PROVIDER OF ANOTHER CONNECTION — it writes its own statements there, builds nothing in memory (IsComputedInRam
+// stays false) and no statement of the base joins its tables (CanJoinOn stays false). It counts its reads and notes a
+// walk handed to it, which it could not write: a walk through its references joins tables of the base.
+class RemoteProvider : public ibBackendQueryProvider {
+public:
+	ibDataQueryResult ExecuteRead(const ibDataQuerySpec& spec, const ibReadPageRequest& page) override;   // out-of-line: needs RemoteQ complete
+	std::shared_ptr<const ibBackendQueryable> ResolveReferenceTarget(const std::shared_ptr<const ibBackendQueryable>& q,
+		const std::shared_ptr<const ibBackendQueryColumn>& col) const override {
+		const std::shared_ptr<const ComputedQ> cq = std::dynamic_pointer_cast<const ComputedQ>(q);
+		return cq != nullptr ? cq->RefTarget(col) : nullptr;
+	}
+
+	int  m_reads = 0;
+	bool m_handedAWalk = false;
+};
+
+// A table of that connection: the rows its server holds are the ones the builder makes.
+class RemoteQ : public ComputedQ {
+public:
+	RemoteQ(const ibString& name, ibMetaID id, RemoteProvider& provider) : ComputedQ(name, id), m_provider(provider) {}
+	ibBackendQueryProvider& GetProvider() const override { return m_provider; }
+	ibQueryRamTable ServerRows() const { return ComputedQ::ComputeRows({}); }
+private:
+	RemoteProvider& m_provider;
+};
+
+ibDataQueryResult RemoteProvider::ExecuteRead(const ibDataQuerySpec& spec, const ibReadPageRequest& /*page*/)
+{
+	++m_reads;
+	for (const ibDotWalkColumn& dw : spec.m_dotWalks)
+		m_handedAWalk = m_handedAWalk || dw.m_path.size() > 1;
+	const std::shared_ptr<const RemoteQ> table = std::dynamic_pointer_cast<const RemoteQ>(spec.m_queryable);
+	return ibDataQueryResult(table != nullptr ? table->ServerRows() : ibQueryRamTable(), spec.m_queryable);
+}
+
 } // namespace
 
 // --- dot-walk over a computed source (RAM resolve of the reference leaf) -----------------------
@@ -265,6 +300,23 @@ TEST_F(ComputedFix, ComputedColumn_Projection)
 	while (res.Next())
 		amounts.push_back(res.GetColumn(wxT("amount")).GetInteger());
 	EXPECT_EQ(amounts, (std::vector<long>{ 200, 150, 60 }));
+}
+
+// ORDER BY Qty * Price — the computed source's rows sorted by an expression, computed per row: 60, 150, 200.
+TEST_F(ComputedFix, ComputedExpr_OrderBy)
+{
+	ibDataQueryBuilder q(nullptr);
+	q.From(balance);
+	q.Select(balQty, wxT("qty"));
+	q.OrderByExpr(ibQueryColumnExpr::Arith(ibQueryColumnArithOp::Mul, ibQueryColumnExpr::Col(balQty), ibQueryColumnExpr::Col(balPrice)),
+	              /*ascending*/ true);
+	ibReadPageRequest page;
+	ibDataQueryResult res = q.Execute(page);
+
+	std::vector<long> qtys;
+	while (res.Next())
+		qtys.push_back(res.GetValue(balQty).GetInteger());
+	EXPECT_EQ(qtys, (std::vector<long>{ 30, 50, 100 })) << "60, 150, 200 - ordered by the expression";
 }
 
 // WHERE Qty * Price > 100 — a computed-expression filter in RAM. Rows: 200 (keep), 150 (keep), 60 (drop).
@@ -391,6 +443,42 @@ TEST_F(ComputedFix, DotWalk_BooleanWhere)
 	while (res.Next())
 		qtys.push_back(res.GetValue(balQty).GetInteger());
 	EXPECT_EQ(qtys, (std::vector<long>{ 100, 50 }));
+}
+
+// --- a walk through a source of ANOTHER CONNECTION — its rows by its own provider, the walk in memory ------------
+
+// SELECT Stock.Item.Name ORDER BY Qty * Price — the composer hands the spec to the RAM engine, which reads the rows
+// through the source's own provider (never handed the walk) and joins the item in; the sort by an expression is
+// computed per row, as the statement would.   amounts as built: (K1, 200), (K2, 150), (K1, 60)
+TEST_F(ComputedFix, DotWalk_OverASourceOfAnotherConnection)
+{
+	RemoteProvider remote;
+	const auto stock = std::make_shared<RemoteQ>(wxT("stock"), 300, remote);
+	stock->AddCol(balItem);
+	stock->AddCol(balQty);
+	stock->AddCol(balPrice);
+	stock->SetRefTarget(balItem, items);
+	stock->SetBuilder(&BuildBalance);
+
+	ibDataQueryBuilder q(nullptr);
+	q.From(stock);
+	q.SelectPath({ balItem, itemName }, wxT("itemName"));
+	q.Select(balQty, wxT("qty"));
+	q.OrderByExpr(ibQueryColumnExpr::Arith(ibQueryColumnArithOp::Mul, ibQueryColumnExpr::Col(balQty), ibQueryColumnExpr::Col(balPrice)),
+	              /*ascending*/ true);
+	ibReadPageRequest page;
+	ibDataQueryResult res = q.Execute(page);
+
+	std::vector<std::string> names;
+	std::vector<long> qtys;
+	while (res.Next()) {
+		names.push_back(res.GetValue(itemName).GetString().ToStdString());
+		qtys.push_back(res.GetValue(balQty).GetInteger());
+	}
+	EXPECT_EQ(names, (std::vector<std::string>{ "Apple", "Pear", "Apple" }));
+	EXPECT_EQ(qtys, (std::vector<long>{ 30, 50, 100 })) << "60, 150, 200 - ordered by the expression";
+	EXPECT_EQ(remote.m_reads, 1) << "its rows are read by its own provider, once";
+	EXPECT_FALSE(remote.m_handedAWalk) << "it is never handed a walk through the base's tables";
 }
 
 // A field whose functional option is off. IsAvailable is that question.

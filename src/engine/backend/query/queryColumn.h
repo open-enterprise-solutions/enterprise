@@ -329,7 +329,7 @@ public:
 	// ⭐⭐ HOW THIS COLUMN IS READ OUT OF A RESULT — asked OF THE COLUMN, answered by the codec.
 	//
 	// The default is what every ordinary column has always done: the value codec reads the `_TYPE`
-	// tag and takes the field for it (ibColumnCodec::ReadValue, body in columnLayout.cpp). Nothing
+	// tag and takes the field for it (ibColumnCodec::ReadValue, body in provider/database/columnCodec.cpp). Nothing
 	// about that changes, and there is one such branch, not one per caller.
 	//
 	// What changes is WHO IS ASKED. A caller no longer names the codec; it asks the column, and a

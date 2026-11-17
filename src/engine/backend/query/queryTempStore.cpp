@@ -83,8 +83,6 @@ public:
 
 	std::vector<std::shared_ptr<const ibBackendQueryColumn>> GetQueryColumns() const override { return m_columns; }
 
-	bool IsComputedInRam() const override { return true; }
-
 	ibBackendQueryProvider& GetProvider() const override { return ibComputedProviderInstance(); }
 
 	// Handed out BY COPY per read: ibQueryRamTable is move-only (a copy of a result is never

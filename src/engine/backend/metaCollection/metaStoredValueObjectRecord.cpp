@@ -26,9 +26,10 @@ std::vector<std::shared_ptr<const ibBackendQueryColumn>> ibConstantQueryable::Ge
 		return {};
 	return { column->GetQueryColumn() };
 }
-// The metaobject behind this source — the guid and the metaID are READ OFF IT (see
-// ibBackendQueryable::GetQueryTableGuid), not answered a second time here.
+// The metaobject behind this source — and its key and number, read off the same m_meta.
 const ibValueMetaObjectGenericData* ibConstantQueryable::GetSourceMetaObject() const { return m_meta; }
+const ibUniqueKey& ibConstantQueryable::GetQueryTableGuid() const { return m_meta->GetGuid(); }
+ibMetaID ibConstantQueryable::GetQueryTableId() const { return m_meta->GetMetaID(); }
 
 ibString ibConstantQueryable::GetQueryTableName() const { return m_meta->GetPhysicalTableName(); }
 const ibMetaData* ibConstantQueryable::GetMetaData() const { return m_meta->GetMetaData(); }
@@ -307,7 +308,7 @@ ibValue ibValueMetaObjectStoredValue::ReadStoredValue() const
 
 			// ⚠ NOTHING WRITTEN is told by the value column's TYPE TAG, read AS IT LIES: 0 until the first write
 			// stores the value's own type (a column added after the row was defaults to 0 too). Read through the
-			// column, an untagged cell comes back as its type's EMPTY (columnLayout.cpp, the tag's `default`
+			// column, an untagged cell comes back as its type's EMPTY (columnCodec.cpp, the tag's `default`
 			// arm) — a Boolean's False — so a never-switched functional option read as switched off
 			// (measured 2026-09-27: `FunctionalOptions.X.Get()` answered False with nothing ever written).
 			if (selection.Next()) {

@@ -5,12 +5,12 @@
 #include "accumulationRegisterEnum.h"
 #include "core/stringUtils.h"   // IsSameAs — the one case-insensitive name comparison
 #include "backend/query/queryable.h"               // ibComputedRegisterQueryable<TReg> — shared base for the balance / turnover virtual tables
-#include "backend/query/temp/tempTableQueryable.h" // ibDbTempTableQueryable — a named physical relation; what a VIEW is to L3
+#include "backend/query/tempTableQueryable.h"      // ibDbTempTableQueryable — a named physical relation; what a VIEW is to L3
 // The register-shared lowering: ibRegFilterPredicate / ibRegFlatLeaves / ibRegCompositeIR. Shared on
 // purpose — an information register filters its dimensions by exactly the same rule, and an
 // accounting register will too; a copy per register is how three registers come to disagree about
 // what a filter is.
-#include "backend/metaCollection/partial/registerQueryLowering.h"
+#include "backend/query/provider/database/registerQueryLowering.h"
 
 #include <map>
 #include <memory>
@@ -529,8 +529,10 @@ public:
 	// Metadata only: the view queryable is built from the register's dimensions and resources without
 	// touching a database, so it is the right answer on the materialised road AND the live one.
 	virtual std::shared_ptr<const ibBackendQueryable> NavigationSource() const override;
-	// Materialised => the ordinary PHYSICAL provider, so the source behaves like any relation.
-	virtual ibBackendQueryProvider& GetProvider() const override;
+	// ⭐ WHICH ROAD — can THIS call be read off the stored surface? Each reading answers for itself, and the
+	// provider follows from the answer (ibComputedRegisterQueryable::GetProvider). PURE: a default would be
+	// the answer a new reading forgets to give.
+	virtual bool CanReadOnServer() const override = 0;
 
 	// ⭐ WHAT MAKES ONE ROW OF TOTALS THE SAME ROW. The totals surface is asked this like any other
 	// source — the upsert that maintains the table matches on it — and it must answer for ITSELF:
@@ -623,7 +625,7 @@ public:
 	                   const ibValue& period = ibValue(), const ibQueryPredicatePtr& filter = nullptr)
 		: ibAccumulationTotalsQueryable(reg, ibViewShape::Balance), m_period(period), m_filter(filter) {}
 
-	virtual bool IsComputedInRam() const override { return !m_reg->HasMaterializedViews(); }
+	virtual bool CanReadOnServer() const override { return m_reg->HasMaterializedViews(); }
 	virtual ibQueryRelPtr GetSourceRelation(const ibString& alias) const override;
 
 	// A balance is one moment, read WHOLE — the list the descriptor gives the constructor, given here too
@@ -664,7 +666,7 @@ public:
 	// GROUP BY and nothing else. (The periodicity used to be a reason to compute in RAM here, which
 	// is how the easy case stayed in memory while the hard one — the running balance next door —
 	// already ran on the server.)
-	virtual bool IsComputedInRam() const override;
+	virtual bool CanReadOnServer() const override;
 	virtual ibQueryRelPtr GetSourceRelation(const ibString& alias) const override;
 
 	// ⭐⭐ A COLUMN THE GRANULARITY DOES NOT PRODUCE IS NOT A COLUMN OF THIS READING.
@@ -723,7 +725,7 @@ public:
 	//
 	// Out of line because the answer depends on the CONNECTION (ibCanPushWindow), not only on the
 	// register and the fold.
-	virtual bool IsComputedInRam() const override;
+	virtual bool CanReadOnServer() const override;
 	virtual ibQueryRelPtr GetSourceRelation(const ibString& alias) const override;
 
 	// Same rule as the turnover reading — see ibTurnoverQueryable::GetQueryColumns.

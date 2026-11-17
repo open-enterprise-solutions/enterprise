@@ -35,6 +35,12 @@ struct ibQueryConstructorSource
 	// later statement may read — a query result link). They behave the same in a FROM, so they share
 	// m_temp; they are different things to a person, so the catalogue shows them apart.
 	bool                  m_namedResult = false;
+	// Declared by the PLATFORM in every configuration (ibPlatformSourceRegister — the registration journal), not by
+	// the configuration: the catalogue draws its kind under Platform, the heading `Data.Platform` is in LINQ.
+	bool                  m_platform = false;
+	// What it is drawn with — its descriptor's answer (ibQueryableSourceDescriptor::GetPicture), on the engine's side;
+	// the client's draws a table by its kind's row of the server's answer instead. 0 = none.
+	ibPictureID           m_picture = 0;
 
 	// INLINE, not exported: the struct itself carries no CORE_API (it is a plain value each side
 	// copies), so a definition in the .cpp would be invisible across the DLL — which is exactly what

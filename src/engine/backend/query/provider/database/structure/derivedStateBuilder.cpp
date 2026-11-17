@@ -5,10 +5,10 @@
 
 #include "derivedStateBuilder.h"
 
-#include "backend/query/structure/schemaSnapshot.h"
+#include "backend/query/provider/database/structure/schemaSnapshot.h"
 #include "backend/query/dataQueryBuilder.h"     // the L3-1 door — aggregate read + write core
 #include "backend/query/queryable.h"
-#include "backend/query/structure/schemaBuilder.h"
+#include "backend/query/provider/database/structure/schemaBuilder.h"
 #include "backend/databaseLayer/databaseMaterializeBuilder.h"   // ibCanMaterialize — the capability question belongs to L2-2
 #include "backend/restructureInfo.h"
 #include "backend/backend_exception.h"                // ibBackendCoreException — a rebuild refused aloud

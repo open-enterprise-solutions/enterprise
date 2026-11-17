@@ -12,7 +12,7 @@
 #include "protocol/protocol.h"
 #include "protocol/protocolDesigner.h"   // ibProtocol::ibView::ibQueryConstructor
 #include "backend/query/queryableFactory.h"        // ibQueryableSourceDescriptor — a table the configuration offers
-#include "backend/query/temp/tempTableQueryable.h" // ibTempTableQueryable — its columns, from a table in memory
+#include "backend/query/tempTableQueryable.h"      // ibTempTableQueryable — its columns, from a table in memory
 #include "backend/metadataConfiguration.h"         // ibMetaDataConfigurationFile — the open configuration it registers in
 #include "backend/query/queryLowering.h"           // the desktop's CheckNames / UngroupedProjections — the reference
 #include "backend/query/queryConstructorModel.h"   // the desktop's GetSources — the kinds' reference
@@ -99,6 +99,22 @@ private:
 	std::shared_ptr<ibTempTableQueryable> m_rows;
 };
 
+// A table of any kind, by the namespace and the name a query writes — what the catalogue's order is read from.
+class Table : public ibQueryableSourceDescriptor
+{
+public:
+	Table(const wxChar* ns, const wxChar* name) : m_namespace(ns), m_name(name) {}
+
+	ibString GetNamespace() const override { return m_namespace; }
+	ibString GetName() const override { return m_name; }
+	std::shared_ptr<const ibBackendQueryable> CreateQueryable(ibValue**, long, const std::vector<ibQueryPredicatePtr>&,
+		const ibQueryReadColumns&) override { return nullptr; }
+
+private:
+	ibString m_namespace;
+	ibString m_name;
+};
+
 // An OPEN configuration — only an open one has a source factory to register into.
 struct OpenConfiguration : ibMetaDataConfigurationFile
 {
@@ -169,6 +185,28 @@ TEST(QueryConstructorRequest, EachKindIsOneRowWithItsClassPicture)
 	EXPECT_EQ(expected, std::set<ibString>(kinds.begin(), kinds.end()));
 	EXPECT_EQ(expected.size(), kinds.size()) << "a kind is one row";
 	EXPECT_NE(expected.end(), expected.find(wxT("Document")));
+}
+
+TEST(QueryConstructorRequest, TheKindsStandAsAConfigurationIsRead)
+{
+	// The catalogue's kinds in the configuration tree's order (ibMetaGroupOrder) — LINQ's `Data` too — not by their names:
+	// the charts before the registers; a kind's tables by name.
+	Table stock(wxT("AccumulationRegister"), wxT("Stock")), prices(wxT("InformationRegister"), wxT("Prices")),
+		accounts(wxT("ChartOfAccounts"), wxT("Main")), sales(wxT("Document"), wxT("Sales")),
+		goods(wxT("Catalog"), wxT("Goods")), banks(wxT("Catalog"), wxT("Banks"));
+	OpenConfiguration cfg;
+	ASSERT_NE(nullptr, cfg.GetSourceFactory());
+	for (Table* table : { &stock, &prices, &accounts, &sales, &goods, &banks })
+		cfg.RegisterSource(table);
+
+	const std::set<ibString> registered = { wxT("AccumulationRegister.Stock"), wxT("InformationRegister.Prices"),
+		wxT("ChartOfAccounts.Main"), wxT("Document.Sales"), wxT("Catalog.Goods"), wxT("Catalog.Banks") };
+	std::vector<ibString> read;
+	for (const ibQueryConstructorSource& source : ibQueryConstructorModel(&cfg).GetSources())
+		if (registered.count(source.Text()) != 0)
+			read.push_back(source.Text());
+	EXPECT_EQ(read, (std::vector<ibString>{ wxT("Catalog.Banks"), wxT("Catalog.Goods"), wxT("Document.Sales"),
+		wxT("ChartOfAccounts.Main"), wxT("InformationRegister.Prices"), wxT("AccumulationRegister.Stock") }));
 }
 
 TEST(QueryConstructorRequest, CheckSaysWhyATextDoesNotParse)

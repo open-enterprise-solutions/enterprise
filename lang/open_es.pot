@@ -1203,7 +1203,7 @@ msgstr ""
 #: src/engine/frmclient/win/dlgs/generation.cpp:56
 #: src/engine/frmclient/win/dlgs/kindSelector/kindSelector.cpp:86
 #: src/engine/frmclient/win/dlgs/lineInput/lineInput.cpp:30
-#: src/engine/frmclient/win/dlgs/selectData.cpp:63
+#: src/engine/frmclient/win/dlgs/selectData.cpp:56
 msgid "Cancel"
 msgstr ""
 
@@ -3380,7 +3380,7 @@ msgid "Accounting"
 msgstr ""
 
 #: src/engine/backend/metaCollection/dimension/metaDimensionObject.h:47
-#: src/engine/backend/metaCollection/partial/registerQueryLowering.h:284
+#: src/engine/backend/query/provider/database/registerQueryLowering.h:285
 #: src/engine/backend/metaCollection/resource/metaResourceObject.h:74
 msgid "Balance"
 msgstr ""
@@ -4287,7 +4287,7 @@ msgstr ""
 #: src/engine/backend/metaCollection/partial/commonObjectRefQuery.cpp:223
 #: src/engine/backend/metaCollection/partial/informationRegisterObject.cpp:142
 #: src/engine/backend/metaCollection/partial/informationRegisterObject.cpp:200
-#: src/engine/backend/metaCollection/partial/registerQueryLowering.h:1244
+#: src/engine/backend/query/provider/database/registerQueryLowering.h:1342
 msgid "Database is not open!"
 msgstr ""
 
@@ -4591,12 +4591,12 @@ msgid "the account condition may only name the account - put anything else in Co
 msgstr ""
 
 #: src/engine/backend/metaCollection/partial/accountingRegisterMetadataTotals.cpp:822
-#: src/engine/backend/metaCollection/partial/registerQueryLowering.h:1176
+#: src/engine/backend/query/provider/database/registerQueryLowering.h:1274
 msgid "a reading's condition cannot hold a semi-join - write it as IN (SELECT ...)"
 msgstr ""
 
 #: src/engine/backend/metaCollection/partial/accountingRegisterMetadataTotals.cpp:859
-#: src/engine/backend/metaCollection/partial/registerQueryLowering.h:1207
+#: src/engine/backend/query/provider/database/registerQueryLowering.h:1305
 msgid "a reading's condition tests a field, not a computed value"
 msgstr ""
 
@@ -4719,12 +4719,12 @@ msgid "Turnovers"
 msgstr ""
 
 #: src/engine/backend/metaCollection/partial/accumulationRegisterEnum.h:37
-#: src/engine/backend/metaCollection/partial/registerQueryLowering.h:283
+#: src/engine/backend/query/provider/database/registerQueryLowering.h:284
 msgid "Expense"
 msgstr ""
 
 #: src/engine/backend/metaCollection/partial/accumulationRegisterEnum.h:38
-#: src/engine/backend/metaCollection/partial/registerQueryLowering.h:282
+#: src/engine/backend/query/provider/database/registerQueryLowering.h:283
 msgid "Receipt"
 msgstr ""
 
@@ -6454,55 +6454,55 @@ msgstr ""
 msgid "Not found"
 msgstr ""
 
-#: src/engine/backend/metaCollection/partial/registerQueryLowering.h:187
+#: src/engine/backend/query/provider/database/registerQueryLowering.h:188
 #, c-format
 msgid "periodicity '%s' is not one of: Period, Record, Recorder, Auto, Second..Year"
 msgstr ""
 
-#: src/engine/backend/metaCollection/partial/registerQueryLowering.h:281
+#: src/engine/backend/query/provider/database/registerQueryLowering.h:282
 msgid "Turnover"
 msgstr ""
 
-#: src/engine/backend/metaCollection/partial/registerQueryLowering.h:285
+#: src/engine/backend/query/provider/database/registerQueryLowering.h:286
 #: src/engine/frmclient/win/dlgs/settings/composer/composerSettings.cpp:314
 msgid "Opening balance"
 msgstr ""
 
-#: src/engine/backend/metaCollection/partial/registerQueryLowering.h:286
+#: src/engine/backend/query/provider/database/registerQueryLowering.h:287
 #: src/engine/frmclient/win/dlgs/settings/composer/composerSettings.cpp:315
 msgid "Closing balance"
 msgstr ""
 
-#: src/engine/backend/metaCollection/partial/registerQueryLowering.h:287
+#: src/engine/backend/query/provider/database/registerQueryLowering.h:288
 msgid "Gross balance"
 msgstr ""
 
-#: src/engine/backend/metaCollection/partial/registerQueryLowering.h:288
+#: src/engine/backend/query/provider/database/registerQueryLowering.h:289
 msgid "Opening gross balance"
 msgstr ""
 
-#: src/engine/backend/metaCollection/partial/registerQueryLowering.h:289
+#: src/engine/backend/query/provider/database/registerQueryLowering.h:290
 msgid "Closing gross balance"
 msgstr ""
 
-#: src/engine/backend/metaCollection/partial/registerQueryLowering.h:290
+#: src/engine/backend/query/provider/database/registerQueryLowering.h:291
 msgid "Corresponding turnover"
 msgstr ""
 
-#: src/engine/backend/metaCollection/partial/registerQueryLowering.h:309
+#: src/engine/backend/query/provider/database/registerQueryLowering.h:310
 msgid "Cr"
 msgstr ""
 
-#: src/engine/backend/metaCollection/partial/registerQueryLowering.h:309
+#: src/engine/backend/query/provider/database/registerQueryLowering.h:310
 msgid "Dr"
 msgstr ""
 
-#: src/engine/backend/metaCollection/partial/registerQueryLowering.h:906
+#: src/engine/backend/query/provider/database/registerQueryLowering.h:1004
 #, c-format
 msgid "filter names '%s', which is not a field of '%s'"
 msgstr ""
 
-#: src/engine/backend/metaCollection/partial/registerQueryLowering.h:908
+#: src/engine/backend/query/provider/database/registerQueryLowering.h:1006
 #, c-format
 msgid "filter names '%s', which is not a dimension of '%s' - this reading folds the records and is filtered by dimensions only"
 msgstr ""
@@ -6512,24 +6512,37 @@ msgstr ""
 msgid "filter names '%s', which is not an account dimension kind of '%s' - a Map is keyed by the kinds, a dimension is named in a Structure"
 msgstr ""
 
-#: src/engine/backend/metaCollection/partial/registerQueryLowering.h:1106
+#: src/engine/backend/query/provider/database/registerQueryLowering.h:1204
 #, c-format
 msgid "'%s' cannot select the rows of this reading: a condition inside a virtual table narrows what is folded, so it may name what the rows are kept by - the dimensions, and on an accounting register the accounts and their breakdown. A figure is known only after the fold and a period is the reading's own boundaries - put those into the query's WHERE"
 msgstr ""
 
-#: src/engine/backend/metaCollection/partial/registerQueryLowering.h:1290
+#: src/engine/backend/query/provider/database/registerQueryLowering.h:1388
 msgid "The first moment counted, inclusive. Left out, the reading starts at the register's first movement - not at some default date."
 msgstr ""
 
-#: src/engine/backend/metaCollection/partial/registerQueryLowering.h:1297
+#: src/engine/backend/query/provider/database/registerQueryLowering.h:1395
 msgid "The last moment counted, inclusive - and it may name a DOCUMENT rather than a date, which is how \"the turnovers up to this receipt\" is asked. Left out, the reading runs to the last movement there is."
 msgstr ""
 
-#: src/engine/backend/metaCollection/partial/registerQueryLowering.h:1316
+#: src/engine/backend/query/provider/logger/logQueryable.cpp
+msgid "The first moment read, inclusive. Left out, the reading starts at the first event the journal keeps."
+msgstr ""
+
+#: src/engine/backend/query/provider/logger/logQueryable.cpp
+msgid "The last moment read, inclusive. Left out, the reading runs to the last event there is."
+msgstr ""
+
+#: src/engine/backend/query/provider/logger/logQueryable.cpp
+#, c-format
+msgid "'%s.%s' takes a date as %s"
+msgstr ""
+
+#: src/engine/backend/query/provider/database/registerQueryLowering.h:1414
 msgid "A condition on the DIMENSIONS, applied inside the reading - so it selects the rows BEFORE they are folded, and the table arrives already narrowed. Written as a predicate (Warehouse = &Warehouse), and any predicate is taken: NOT, OR, IN, a walk through a reference (Warehouse.Code = \"01\"). Put a table's filters HERE rather than into the WHERE around it - there the whole register is read and folded first."
 msgstr ""
 
-#: src/engine/backend/metaCollection/partial/registerQueryLowering.h:1344
+#: src/engine/backend/query/provider/database/registerQueryLowering.h:1442
 msgid "How finely this READING is cut, which decides what a row is and therefore which columns it has: none of them read whole, the period with a period, the recorder with both, a record with the line number too. Not the register's stored Periodicity property, which is the grain the totals are KEPT at and takes different words."
 msgstr ""
 
@@ -6733,12 +6746,17 @@ msgstr ""
 msgid "Common module '%s' did not compile - the session cannot start"
 msgstr ""
 
-#: src/engine/backend/moduleManager/moduleManagerDataUnit.cpp:131
-msgid "Data.From: a value table argument is required"
+#: src/engine/backend/moduleManager/moduleManagerDataUnit.cpp:245
+msgid "Data.From: a value table or a source name is required"
 msgstr ""
 
-#: src/engine/backend/moduleManager/moduleManagerDataUnit.cpp:134
+#: src/engine/backend/moduleManager/moduleManagerDataUnit.cpp:253
 msgid "Data.From: the argument must be a value table"
+msgstr ""
+
+#: src/engine/backend/moduleManager/moduleManagerDataUnit.cpp:51
+#, c-format
+msgid "Data.From: there is no source '%s' - name it as a query does, e.g. Journal.Events or AccumulationRegister.Stock.Turnovers"
 msgstr ""
 
 #: src/engine/backend/moduleManager/moduleManagerEvent.cpp:44
@@ -6904,6 +6922,10 @@ msgstr ""
 #: src/engine/backend/query/dbTableProvider.cpp:3039
 #: src/engine/backend/query/dbTableProvider.cpp:3136
 msgid "a dot-walk GROUP BY / aggregate path did not resolve its reference join"
+msgstr ""
+
+#: src/engine/backend/query/provider/database/dbTableProvider.cpp
+msgid "a join or union was handed whole to a statement that cannot write it"
 msgstr ""
 
 #: src/engine/backend/query/dbTableProvider.cpp:5513
@@ -7255,10 +7277,6 @@ msgstr ""
 
 #: src/engine/backend/query/queryLowering.cpp:4511
 msgid "HAVING compares an aggregate with =, <>, <, <=, > or >="
-msgstr ""
-
-#: src/engine/backend/query/queryLowering.cpp:4596
-msgid "ORDER BY an expression over a computed source is not yet supported: sort by a column"
 msgstr ""
 
 #: src/engine/backend/query/queryLowering.cpp:4604
@@ -7866,7 +7884,7 @@ msgstr ""
 #: src/engine/backend/system/systemManagerEnum.h:28
 #: src/engine/backend/system/systemManagerEnum.h:41
 #: src/engine/frmclient/win/dlgs/generation.cpp:54
-#: src/engine/frmclient/win/dlgs/selectData.cpp:61
+#: src/engine/frmclient/win/dlgs/selectData.cpp:54
 msgid "Ok"
 msgstr ""
 
@@ -14760,7 +14778,6 @@ msgstr ""
 msgid "Row height"
 msgstr ""
 
-#: src/engine/frmclient/win/dlgs/selectData.cpp:34
 #: src/engine/frmclient/win/dlgs/typeSelector.cpp:94
 #: src/engine/frmserver/visualView/ctrl/typeControl.cpp:206
 msgid "Select data type"
@@ -17183,6 +17200,7 @@ msgid "Answer, bytes"
 msgstr ""
 
 #: src/engine/appstudio/docManager/templates/docViewProfile.cpp:308
+#: src/engine/frmclient/win/dlgs/queryConstructor/queryConstructorFill.cpp:1077
 msgid "Platform"
 msgstr ""
 

@@ -144,7 +144,7 @@ export class SettingsWindow {
 
 	/**
 	 * A value chosen by the server — false while another act is answered.
-	 * @param {string} type
+	 * @param {object} type the type the cell stands on, written as a field's (one class as `{Types: [{TypeId}]}`)
 	 * @param {object | undefined} value the value in the cell — the kind's empty one when there is none
 	 * @param {(value: object, presentation: string) => void} done
 	 */

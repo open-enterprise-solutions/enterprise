@@ -6,8 +6,7 @@
 
 #include "queryLoweringInternal.h"
 
-#include "backend/query/temp/queryTempStore.h"      // ibQueryTempTableStore — WHO keeps the temp tables alive
-#include "backend/query/provider/dbTableProvider.h" // ibCastLeafScope — one query's narrowed fields, at every door
+#include "backend/query/queryTempStore.h"           // ibQueryTempTableStore — WHO keeps the temp tables alive
 #include "core/query/queryRender.h"                 // ibRenderQueryPackage — the package as the journal says it; ibQueryColumnFromPath
 #include "core/query/queryRewrite.h"                // ibQueryFlattenAnd — a link's condition, one conjunct at a time
 
@@ -517,7 +516,7 @@ std::vector<ibQueryLowering::ibQueryPackageResult> ibQueryLowering::ExecutePacka
 		// ⭐⭐ AND THE NAME IS RESOLVED BY THE LOWERING, NOT SUBSTITUTED HERE. It used to be
 		// substituted here — the named statement's AST cloned into the reader's FROM as a nested
 		// source — and that road has ONE execution model: a nested source is computed in RAM
-		// (ibSubqueryQueryable::IsComputedInRam), so the rows came back to us and the join happened
+		// (ibSubqueryQueryable vends the computed provider), so the rows came back to us and the join happened
 		// here. Which road to take depends on what the ENGINE can do (`WITH`) and on what the named
 		// query IS, and both are things only the lowering knows. So the names travel to it in a
 		// scope, exactly as transient sources do, and it decides per source (ResolveFrom):

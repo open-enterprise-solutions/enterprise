@@ -15,18 +15,19 @@
 
 #include "backend/metaCollection/partial/tabularSection/tabularSection.h"
 #include "backend/metaCollection/attribute/metaAttributeObject.h"
-#include "backend/metaCollection/partial/reference/reference.h"   // ibValueReferenceDataObject (materialisation)
-#include "backend/query/dataQueryBuilder.h"                       // L3 write door (predefined seeding) + ibBackendColumnRawDB
-#include "backend/objCtor.h"                                      // ibCtorMetaValueType (reference-target resolution)
-#include "backend/system/value/valuePointInTime.h"                // g_valuePointInTimeCLSID — the moment column assembles one
-#include "backend/system/value/valueArray.h"                      // ibValueArray — what the order column reads as
-#include "backend/system/value/valueType.h"                       // ibValueTypeDescription::AdjustValue — the empty value of a declared type
-#include "backend/metaData.h"                                     // ibMetaData::GetTypeCtor
-#include "backend/databaseLayer/databaseQueryBuilder.h"           // ibDdlStatement / ibQueryStatement / ibQueryResult (L2)
-#include "backend/query/columnLayout.h"                           // ColumnFieldNames (column field list via ibBackendQueryColumn)
-#include "backend/query/structure/schemaBuilder.h"                // ibSchemaBuilder — the L3-2 schema door (DDL apply + barrier)
-#include "backend/query/structure/structureBatch.h"               // ibStructureBatch — per-table DDL/seed batch the Process* fill
-#include "backend/query/structure/schemaSnapshot.h"               // ibSchemaSnapshot / SnapshotOf — declarative structure (the differ's input)
+#include "backend/metaCollection/partial/reference/reference.h"       // ibValueReferenceDataObject (materialisation)
+#include "backend/query/dataQueryBuilder.h"                           // L3 write door (predefined seeding) + ibBackendColumnRawDB
+#include "backend/objCtor.h"                                          // ibCtorMetaValueType (reference-target resolution)
+#include "backend/system/value/valuePointInTime.h"                    // g_valuePointInTimeCLSID — the moment column assembles one
+#include "backend/system/value/valueArray.h"                          // ibValueArray — what the order column reads as
+#include "backend/system/value/valueType.h"                           // ibValueTypeDescription::AdjustValue — the empty value of a declared type
+#include "backend/metaData.h"                                         // ibMetaData::GetTypeCtor
+#include "backend/databaseLayer/databaseQueryBuilder.h"               // ibDdlStatement / ibQueryStatement / ibQueryResult (L2)
+#include "backend/query/columnLayout.h"                               // ColumnFieldNames (column field list via ibBackendQueryColumn)
+#include "backend/query/provider/database/columnCodec.h"              // ibColumnCodec::ReadField — a sort part / a moment read off its field
+#include "backend/query/provider/database/structure/schemaBuilder.h"  // ibSchemaBuilder — the L3-2 schema door (DDL apply + barrier)
+#include "backend/query/provider/database/structure/structureBatch.h" // ibStructureBatch — per-table DDL/seed batch the Process* fill
+#include "backend/query/provider/database/structure/schemaSnapshot.h" // ibSchemaSnapshot / SnapshotOf — declarative structure (the differ's input)
 
 ibString ibValueMetaObjectRecordDataRef::GetPhysicalTableName() const
 {
@@ -397,7 +398,7 @@ std::shared_ptr<const ibBackendQueryColumn> ibValueMetaObjectRecordDataHierarchy
 	// is not there.
 	return HasParentLink() ? GetDataParent()->GetQueryColumn() : nullptr;
 }
-// ResolveReferenceTarget / ResolveReferenceTargets moved to ibDbTableProvider (query/provider/dbTableProvider.cpp)
+// ResolveReferenceTarget / ResolveReferenceTargets moved to ibDbTableProvider (query/provider/database/dbTableProvider.cpp)
 // — the ONE provider that owns metadata. The record queryable only vends GetMetaData(); the provider
 // reads it off queryable->GetMetaData() and does clsid -> GetTypeCtor -> holder -> GetQueryable. The
 // call sites now go through queryable->GetProvider().ResolveReferenceTarget(queryable, col). (docs §22)
@@ -427,6 +428,8 @@ ibString ibRegisterDataQueryable::GetQueryTableName() const { return m_meta->Get
 ibString ibRegisterDataQueryable::GetQueryName()      const { return m_meta->GetName(); }
 const ibMetaData* ibRegisterDataQueryable::GetMetaData() const { return m_meta->GetMetaData(); }
 const ibValueMetaObjectGenericData* ibRegisterDataQueryable::GetSourceMetaObject() const { return m_meta; }   // the metaobject behind the source (front reads its icon)
+const ibUniqueKey& ibRegisterDataQueryable::GetQueryTableGuid() const { return m_meta->GetGuid(); }       // …its key and number, off the same m_meta
+ibMetaID ibRegisterDataQueryable::GetQueryTableId() const { return m_meta->GetMetaID(); }
 // Uniqueness key (UPSERT match): recorder + line number + period for a recorder-based register
 // (its dimensions are data); period + dimensions for an information register. The queryable is
 // the authority — no per-column / per-attribute flag. (docs/private/query-language-arc.md §22.1)

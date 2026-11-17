@@ -30,7 +30,9 @@ public:
 	virtual std::vector<std::shared_ptr<const ibBackendQueryColumn>> GetQueryColumns() const override;            // { the value column } — SELECT *, the constructor, a name
 	virtual ibString GetQueryTableName() const override;
 	virtual const ibMetaData* GetMetaData() const override;                      // metadata context for column-based value reads
-	virtual const ibValueMetaObjectGenericData* GetSourceMetaObject() const override;   // = m_meta — the guid / metaID are read off it
+	virtual const ibValueMetaObjectGenericData* GetSourceMetaObject() const override;   // = m_meta
+	virtual const ibUniqueKey& GetQueryTableGuid() const override;   // …its key and number, off the same m_meta
+	virtual ibMetaID GetQueryTableId() const override;
 	virtual std::vector<std::shared_ptr<const ibBackendQueryColumn>> GetPrimaryKeyColumns() const override;   // { RECORD_KEY } — the single-row UPSERT match
 private:
 	const ibValueMetaObjectStoredValue* m_meta;

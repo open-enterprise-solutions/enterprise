@@ -15,7 +15,11 @@ a script, a report, a list - is one place for rights, row restrictions, locks an
 
 - **Sources.** Objects and their tabular sections; registers and their readings (`Balance`, `Turnovers`,
   `SliceLast`, … - [registers.md](registers.md)); a temporary table made earlier in the package or held by
-  a temporary tables manager (`FROM Goods`); a value table handed in as a parameter (`FROM &Goods`).
+  a temporary tables manager (`FROM Goods`); a value table handed in as a parameter (`FROM &Goods`); the
+  registration journal's events, `Journal.Events(&BeginOfPeriod, &EndOfPeriod)` - read from the journal's
+  own files, joined to the configuration's tables in memory, by the right that opens the journal. LINQ
+  reads any of them by the same name: `Data.From("Journal.Events", Begin, End)`; the platform's own sources
+  are also members, `Data.Platform.Journal.Events` (the whole journal).
 - **References.** `Product.Manufacturer.Name` follows the reference and joins by itself. `REFS` tests a
   reference's kind; `VALUE(Catalog.Units.Piece)` names a predefined value; `IN HIERARCHY` takes a group
   and everything under it.

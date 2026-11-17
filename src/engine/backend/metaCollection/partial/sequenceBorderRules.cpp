@@ -29,7 +29,7 @@
 #include "backend/backend_exception.h"                               // ibBackendCoreException — a refusal says who refused
 #include "backend/databaseLayer/databaseQueryBuilder.h"
 #include "backend/metaCollection/dimension/metaDimensionObject.h"
-#include "backend/metaCollection/partial/registerQueryLowering.h"    // ibRegCompositeIR, ibRegFieldOfRole
+#include "backend/query/provider/database/registerQueryLowering.h"   // ibRegCompositeIR, ibRegFieldOfRole
 #include "backend/metaCollection/partial/reference/reference.h"     // the run posts a recorder through its object
 #include "backend/system/value/valueBoundary.h"                      // a run's boundary may say which side it means
 #include "backend/system/value/valuePointInTime.h"

@@ -13,10 +13,12 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <fstream>
 #include <map>
 #include <set>
 #include <string>
+#include <vector>
 
 #include <wx/filename.h>
 #include <wx/init.h>
@@ -36,11 +38,18 @@
 #include "backend/metaCollection/partial/reference/reference.h"
 #include "backend/propertyManager/property/propertyOwner.h"
 #include "backend/query/columnLayout.h"
+#include "backend/query/provider/database/columnCodec.h"
 #include "backend/query/dataQueryBuilder.h"
 #include "backend/query/queryHierarchy.h"
-#include "backend/query/provider/queryProvider.h"
+#include "backend/query/provider/queryComposer.h"
 #include "backend/query/queryRamTable.h"
+#include "backend/query/queryableFactory.h"   // ibQueryableSourceDescriptor — the journal, found by its name
+#include "backend/query/queryConstructorModel.h"   // ibQueryConstructorModel::GetReferenceBranches — the field tree's [+]
+#include "backend/moduleManager/moduleManager.h"   // ibValueModuleManager::ibValueDataUnit — Data.Platform.Journal.Events
+#include "backend/system/value/valueQueryable.h"   // ibValueQueryable — what it hands out
+#include "backend/objCtor.h"   // ibCtorMetaValueType — a catalog's reference class
 #include "core/description/typeDescription.h"
+#include "core/exception.h"   // ibCoreException — the journal's refusal of a period that is no date
 #include "core/clsid.h"
 
 namespace {
@@ -476,4 +485,150 @@ TEST_F(AcceptanceCatalogs, AContainsConditionOnAStoredListMatchesASubstring)
 	q.Where(like);
 	ibDataQueryResult rows = q.Execute(ibReadPageRequest{});
 	EXPECT_FALSE(rows.Next()) << "LIKE 'C' is not a substring match";
+}
+
+// ⭐ EVERY CONFIGURATION'S FACTORY FINDS THE REGISTRATION JOURNAL — by the name a query writes, with the period the
+// turnovers take, and read by the computed provider: in memory, never in a statement of the base.
+TEST_F(AcceptanceCatalogs, EveryConfigurationsFactoryFindsTheJournal)
+{
+	if (!ready) return;
+	ibQueryableFactory* const factory = cfg->GetSourceFactory();
+	ASSERT_NE(factory, nullptr);
+	ibQueryableSourceDescriptor* const journal = factory->FindDescriptor(wxT("Journal"), wxT("Events"));
+	ASSERT_NE(journal, nullptr);
+	EXPECT_NE(journal->GetPicture(), 0u) << "the constructor's list draws it with a picture of its own";
+
+	std::vector<ibQuerySourceParameter> parameters;
+	journal->DescribeParameters(parameters);
+	ASSERT_EQ(parameters.size(), 2u);
+	EXPECT_EQ(parameters[0].m_name, ibString(wxT("BeginOfPeriod")));
+	EXPECT_EQ(parameters[1].m_name, ibString(wxT("EndOfPeriod")));
+
+	const std::shared_ptr<const ibBackendQueryable> events = journal->CreateQueryable(nullptr, 0, {}, ibQueryReadColumns());
+	ASSERT_NE(events, nullptr);
+	std::vector<ibString> names;
+	for (const std::shared_ptr<const ibBackendQueryColumn>& column : events->GetQueryColumns())
+		names.push_back(column->GetName());
+	EXPECT_EQ(names, (std::vector<ibString>{ wxT("Date"), wxT("Level"), wxT("Session"), wxT("User"), wxT("Host"),
+		wxT("Source"), wxT("Event"), wxT("Message"), wxT("Object"), wxT("Details") }));
+	EXPECT_TRUE(events->GetProvider().IsComputedInRam());
+	EXPECT_FALSE(events->GetProvider().CanJoinOn(nullptr)) << "the journal's rows never go into a statement of the base";
+
+	// The period is a pair of moments; anything else is refused, by the source's name.
+	ibValue word(ibT("yesterday"));
+	ibValue* args[] = { &word };
+	EXPECT_THROW(journal->CreateQueryable(args, 1, {}, ibQueryReadColumns()), ibCoreException);
+}
+
+// ⭐ …AND IT IS THE PLATFORM'S, NOT THE CONFIGURATION'S — the factory names it among its platform sources (a catalog it
+// does not), the constructor's catalogue draws it under Platform, and LINQ reads it as Data.Platform.Journal.Events:
+// the same source, by the namespace and the name a query writes.
+TEST_F(AcceptanceCatalogs, TheJournalIsThePlatformsSource)
+{
+	if (!ready) return;
+	ibQueryableFactory* const factory = cfg->GetSourceFactory();
+	ASSERT_NE(factory, nullptr);
+	ibQueryableSourceDescriptor* const journal = factory->FindDescriptor(wxT("Journal"), wxT("Events"));
+	ASSERT_NE(journal, nullptr);
+	ibQueryableSourceDescriptor* const contractsSource = factory->FindDescriptor(wxT("Catalog"), wxT("Contracts"));
+	ASSERT_NE(contractsSource, nullptr);
+	const std::vector<ibQueryableSourceDescriptor*> platform = factory->GetDescriptors(ibQueryableSourceKind::Platform);
+	EXPECT_NE(std::find(platform.begin(), platform.end(), journal), platform.end());
+	EXPECT_EQ(std::find(platform.begin(), platform.end(), contractsSource), platform.end());
+
+	int journalRows = 0, contractRows = 0;
+	for (const ibQueryConstructorSource& source : ibQueryConstructorModel(cfg.get()).GetSources()) {
+		if (source.Text() == ibString(wxT("Journal.Events"))) {
+			++journalRows;
+			EXPECT_TRUE(source.m_platform) << "drawn under Platform";
+		}
+		if (source.Text() == ibString(wxT("Catalog.Contracts"))) {
+			++contractRows;
+			EXPECT_FALSE(source.m_platform) << "a catalog is the configuration's";
+		}
+	}
+	EXPECT_EQ(journalRows, 1);
+	EXPECT_EQ(contractRows, 1);
+
+	auto prop = [](ibValue& value, const wxChar* name) {
+		ibValue result;
+		const long number = value.FindProp(name);
+		EXPECT_NE(number, wxNOT_FOUND) << name;
+		if (number != wxNOT_FOUND)
+			value.GetPropVal(number, result);
+		return result;
+	};
+	ibValue data = new ibValueModuleManager::ibValueDataUnit(cfg.get());
+	ibValue namespaces = prop(data, wxT("Platform"));
+	ibValue sources = prop(namespaces, wxT("Journal"));
+	ibValue events = prop(sources, wxT("Events"));
+	ibValueQueryable* queryable = nullptr;
+	ASSERT_TRUE(events.ConvertToValue(queryable) && queryable != nullptr) << "Data.Platform.Journal.Events is a source";
+	EXPECT_EQ(queryable->GetSourceName(), ibString(wxT("Journal.Events")));
+	ASSERT_NE(queryable->GetQueryable(), nullptr);
+	EXPECT_TRUE(queryable->GetQueryable()->GetProvider().IsComputedInRam()) << "read by the computed provider";
+}
+
+// ⭐ ITS OBJECT IS DECLARED ANY REFERENCE AND HOLDS THIS CONFIGURATION'S — as a field declared `AnyRef` does
+// (ibOpenBarriers), so a field tree opens it by type. It showed a [+] with nothing behind it (2026-11-17): the column
+// held the bare barrier, and the constructor's branches are asked per class.
+TEST_F(AcceptanceCatalogs, TheJournalsObjectHoldsTheConfigurationsReferences)
+{
+	if (!ready) return;
+	ibQueryableFactory* const factory = cfg->GetSourceFactory();
+	ASSERT_NE(factory, nullptr);
+	ibQueryableSourceDescriptor* const journal = factory->FindDescriptor(wxT("Journal"), wxT("Events"));
+	ASSERT_NE(journal, nullptr);
+	const std::shared_ptr<const ibBackendQueryable> events = journal->CreateQueryable(nullptr, 0, {}, ibQueryReadColumns());
+	ASSERT_NE(events, nullptr);
+	const std::shared_ptr<const ibBackendQueryColumn> object = events->ResolveColumnByName(wxT("Object"));
+	ASSERT_NE(object, nullptr);
+
+	ASSERT_EQ(object->GetTypeDesc().GetClsidCount(), 1u);
+	EXPECT_TRUE(clsid_is_any(object->GetTypeDesc().GetClsidList().front())) << "declared any reference - what the Fields tab shows";
+
+	const ibCtorMetaValueType* const contractRefCtor = cfg->GetTypeCtor(contracts, ibCtorObjectMetaType::ibCtorObjectMetaType_Reference);
+	ASSERT_NE(contractRefCtor, nullptr);
+	const std::vector<ibClassID>& holds = object->GetTypeValueDesc().GetClsidList();
+	EXPECT_NE(std::find(holds.begin(), holds.end(), contractRefCtor->GetClassType()), holds.end())
+		<< "a contract is one of the objects an event can be about";
+
+	// …and the tables a settings tree's [+] is answered by (ibWriteSettingsReferences): the reference's own, and the
+	// barrier's members. A loop over the opened type's list read a temporary that was gone and answered nothing — every
+	// [+] of every field tree vanished (2026-11-17).
+	const std::vector<ibMetaID> own = ibValueReferenceDataObject::ConvertToMetaIds({ contractRefCtor->GetClassType() }, cfg.get());
+	EXPECT_EQ(own, std::vector<ibMetaID>{ contracts->GetMetaID() });
+	const std::vector<ibMetaID> admitted = ibValueReferenceDataObject::ConvertToMetaIds(object->GetTypeDesc().GetClsidList(), cfg.get());
+	EXPECT_NE(std::find(admitted.begin(), admitted.end(), contracts->GetMetaID()), admitted.end());
+
+	const ibQueryConstructorModel model(cfg.get());
+	bool contractsBranch = false;
+	for (const ibQueryConstructorField& branch : model.GetReferenceBranches(object->GetTypeValueDesc()))
+		contractsBranch = contractsBranch || branch.m_referenceClsid == contractRefCtor->GetClassType();
+	EXPECT_TRUE(contractsBranch) << "the field tree's [+] has the contracts behind it";
+}
+
+// ⭐ …AND A QUERY JOINS IT TO A TABLE OF THE BASE, by the name and in the words of any other source. Each side is read by
+// its own provider and the two are stitched in memory; no event of the journal is about a contract here, so every
+// contract comes once, with no event.
+TEST_F(AcceptanceCatalogs, AQueryJoinsTheJournalToACatalog)
+{
+	if (!ready) return;
+	ibDataDBComposer composer;
+	composer.SetMetaData(cfg.get());   // the configuration its names resolve in — the journal is this one's
+	composer.FromText(wxT("SELECT C.Code AS Code, J.Event AS Event FROM Catalog.Contracts AS C ")
+		wxT("LEFT JOIN Journal.Events AS J ON J.Object = C.Ref"));
+	std::vector<ibQueryLowering::ibQueryOutputColumn> schema;
+	bool hasTotals = false;
+	ibDataQueryResult rows = composer.Execute(schema, hasTotals);
+	std::vector<ibString> codes;
+	while (rows.Next()) {
+		codes.push_back(rows.GetColumn(wxT("Code")).GetString());
+		EXPECT_TRUE(rows.GetColumn(wxT("Event")).GetString().IsEmpty());
+	}
+	std::sort(codes.begin(), codes.end());
+	std::vector<ibString> expected;
+	for (const auto& contract : contractRef)
+		expected.push_back(contract.first);   // a map: in order already
+	EXPECT_EQ(codes, expected);
 }

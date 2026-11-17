@@ -34,7 +34,7 @@
 #include "backend/query/columnLayout.h"
 #include "backend/query/dataQueryBuilder.h"
 #include "backend/query/queryable.h"
-#include "backend/query/structure/schemaSnapshot.h"
+#include "backend/query/provider/database/structure/schemaSnapshot.h"
 #include "backend/session/session.h"
 #include "backend/system/value/valueQuery.h"
 #include "backend/system/value/valueTable.h"
@@ -496,6 +496,15 @@ TEST_F(QueryCompositeWalk, OrderByTheDateOfACompositeReferenceOverASlice)
 	Fill(ibPeriodicity::eWithinDay);
 	EXPECT_EQ(kReceiptFirst,
 		Keys(wxT("SELECT T.Key FROM InformationRegister.Payments.SliceLast() AS T ORDER BY T.Doc.Date")));
+}
+
+// …and sorted by an EXPRESSION over it — a CASE computed per row, as the statement would compute it.
+TEST_F(QueryCompositeWalk, OrderByAnExpressionOverASlice)
+{
+	Fill(ibPeriodicity::eWithinDay);
+	EXPECT_EQ((std::vector<ibString>{ wxT("invoice"), wxT("receipt") }),
+		Keys(wxT("SELECT T.Key FROM InformationRegister.Payments.SliceLast() AS T ")
+		     wxT("ORDER BY CASE WHEN T.Key = \"invoice\" THEN 0 ELSE 1 END")));
 }
 
 // The register's virtual table, ordered by a field of the composite dimension.

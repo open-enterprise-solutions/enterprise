@@ -868,7 +868,7 @@ void ibDataComposer::BuildPrintLevels(bool tree, const std::shared_ptr<const ibB
 	// 🛑 A RULE OF MY OWN STOOD HERE AND IS REMOVED. It skipped this level whenever the deepest rung
 	// grouped by the row's identity, reasoning that such a node IS the row and a record under it prints
 	// the same line twice. The reasoning is right and the PLACE is wrong: the fold already states it,
-	// per level, where it can SEE the level's key (`keyIsTheRow`, queryProvider.cpp). Being a second
+	// per level, where it can SEE the level's key (`keyIsTheRow`, queryComposer.cpp). Being a second
 	// answer it was also a worse one — it fired on spellings the fold does not, and emptied every
 	// heading of its own fields. Two builds, two wrong shapes, no gain (Max, 2026-08-29: *"roll them
 	// back, they carry no value"*).

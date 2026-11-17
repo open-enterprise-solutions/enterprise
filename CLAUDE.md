@@ -662,7 +662,7 @@ See `docs/private/eval-scope-refactor.md` for the full architecture.
 - **Do not teach the schema differ a metadata case.** `DiffSnapshots`, `DiffColumnInto` and
   `NeedsRegeneration` compare two DECLARED snapshots and know nothing about metadata. When an apply
   goes wrong, fix the declaration (`DescribeTable`), not the differ — the banner in
-  `backend/query/structure/schemaSnapshot.h` says why and how to tell.
+  `backend/query/provider/database/structure/schemaSnapshot.h` says why and how to tell.
 - **Do not wave off a slow Debug build with "Release will be fast".** Speed is accepted in the DEBUG
   build (Max, 2026-09-12: *"if debug works at a normal level, release will work fine — the debug
   build is the most serious examiner"*). What a checked build (MSVC, `_ITERATOR_DEBUG_LEVEL=2`) makes

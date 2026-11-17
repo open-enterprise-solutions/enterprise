@@ -1,18 +1,19 @@
-#include "backend/query/structure/schemaSnapshot.h"
+#include "backend/query/provider/database/structure/schemaSnapshot.h"
 
-#include "backend/query/structure/structureBatch.h"        // ibStructureBatch + DiffColumnInto
-#include "backend/query/structure/schemaBuilder.h"         // ibSchemaBuilder — the DDL door + FB barrier
-#include "backend/query/columnLayout.h"                    // ColumnFieldNames + ibColumnCodec::WriteValue (seed cell spread)
-#include "backend/databaseLayer/databaseQueryBuilder.h"    // ibDropIndex / ibQueryStatement (the seed upsert + uuid delete)
-#include "backend/restructureInfo.h"                        // ibRestructureInfo — the apply-change ledger
-#include "backend/backend_exception.h"                      // ibBackendCoreException — a refusal stops the apply
-#include "backend/query/queryColumn.h"                     // ibBackendQueryColumn::GetName (friendly column name)
-#include "backend/query/queryable.h"                        // ibBackendQueryable::GetQueryName / GetQueryTableName
+#include "backend/query/provider/database/structure/structureBatch.h" // ibStructureBatch + DiffColumnInto
+#include "backend/query/provider/database/structure/schemaBuilder.h"  // ibSchemaBuilder — the DDL door + FB barrier
+#include "backend/query/columnLayout.h"                               // ColumnFieldNames
+#include "backend/query/provider/database/columnCodec.h"              // BindWriteValue (seed cell spread)
+#include "backend/databaseLayer/databaseQueryBuilder.h"               // ibDropIndex / ibQueryStatement (the seed upsert + uuid delete)
+#include "backend/restructureInfo.h"                                       // ibRestructureInfo — the apply-change ledger
+#include "backend/backend_exception.h"                                     // ibBackendCoreException — a refusal stops the apply
+#include "backend/query/queryColumn.h"                                // ibBackendQueryColumn::GetName (friendly column name)
+#include "backend/query/queryable.h"                                       // ibBackendQueryable::GetQueryName / GetQueryTableName
 #include "backend/databaseLayer/databaseMaterializeBuilder.h"     // L2-2 RenderMaterialization — derived-state triggers + view
-#include "backend/query/structure/derivedStateBuilder.h"    // L3-4 — rebuild derived state after a structure change
-#include "backend/query/provider/dbTableProvider.h"         // BuildColumnExprIR / BuildPredicateIR — ToReadSpec's IR forms
-#include "appData.h"                                        // db_query — the local channel the seed writes target
-#include "backend/system/value/valueGuid.h"                 // ibValueGuid — the row key bound as the guid it is
+#include "backend/query/provider/database/structure/derivedStateBuilder.h" // L3-4 — rebuild derived state after a structure change
+#include "backend/query/provider/database/dbTableProvider.h"               // BuildColumnExprIR / BuildPredicateIR — ToReadSpec's IR forms
+#include "appData.h"                                                       // db_query — the local channel the seed writes target
+#include "backend/system/value/valueGuid.h"                                // ibValueGuid — the row key bound as the guid it is
 
 #include <algorithm>   // std::find / std::all_of — a column among the key's, a row of the same key
 

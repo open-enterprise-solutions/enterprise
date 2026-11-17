@@ -7,11 +7,11 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "chartOfCharacteristicTypes.h"
-#include "backend/metaData.h"                       // GetTypeCtor / IsRegisterCtor - the chart's characteristic, a type still there
-#include "backend/metadataSerialization.h"          // ibDeserializeValue - a declared Type, read with this configuration
-#include "backend/objCtor.h"                        // ibCtorMetaValueType::AllowValue - what the contour takes
-#include "backend/query/structure/schemaSnapshot.h" // ibSchemaTable::m_beforeChange - the rule the declaration carries
-#include "backend/restructureInfo.h"                // ibRestructureInfo - where that rule states its reason
+#include "backend/metaData.h"                                         // GetTypeCtor / IsRegisterCtor - the chart's characteristic, a type still there
+#include "backend/metadataSerialization.h"                            // ibDeserializeValue - a declared Type, read with this configuration
+#include "backend/objCtor.h"                                          // ibCtorMetaValueType::AllowValue - what the contour takes
+#include "backend/query/provider/database/structure/schemaSnapshot.h" // ibSchemaTable::m_beforeChange - the rule the declaration carries
+#include "backend/restructureInfo.h"                                  // ibRestructureInfo - where that rule states its reason
 
 // ⭐ WHAT A PREDEFINED CHARACTERISTIC MUST DECLARE (#278), on top of what every item must have (the base's check of this
 // chart's table): its Type, filled in — what a field typed by the characteristic holds — and within the chart's contour:

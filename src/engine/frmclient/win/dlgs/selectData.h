@@ -1,38 +1,29 @@
 #ifndef _SELECT_DATA_WND_H__
 #define _SELECT_DATA_WND_H__
 
-#include <map>
+#include <vector>
 
-#include <wx/artprov.h>
-#include <wx/xrc/xmlres.h>
-#include "deskgui/univ/ctrl/listCtrl.h"
-#include <wx/gdicmn.h>
-#include <wx/font.h>
-#include <wx/colour.h>
-#include <wx/settings.h>
-#include <wx/string.h>
-#include "deskgui/univ/ctrl/button.h"
 #include <wx/bitmap.h>
-#include <wx/image.h>
-#include <wx/icon.h>
-#include <wx/sizer.h>
+
+#include "deskgui/univ/ctrl/listCtrl.h"
+#include "deskgui/univ/ctrl/button.h"
 #include "deskgui/univ/dialog.h"
 
-#include "frmclient/backend/metaData.h"
-
+// ONE OF SEVERAL, EACH WITH ITS PICTURE — the server's question as it puts it (ibProtocol::ibRequest::ibKind::Choice): the
+// desktop's type list (ShowSelectType) — its classes named and pictured by the server, which holds the configuration.
 class ibDialogSelectDataType : public ibDialog {
 	ibListCtrl* m_listData;
 	ibButton* m_buttonOk;
 	ibButton* m_buttonCancel;
-	std::map<long, ibClassID> m_listTypeClass;
 public:
-	bool ShowModal(ibClassID& clsid);
-	ibDialogSelectDataType(const ibMetaData* metaData, const std::vector<ibClassID>& array);
+	// The item's number among those given; false — cancelled.
+	bool ShowModal(int& chosen);
+	ibDialogSelectDataType(wxWindow* parent, const wxString& caption, const wxArrayString& captions, const std::vector<wxBitmap>& pictures);
 	virtual ~ibDialogSelectDataType();
 
 protected:
 
-	virtual void OnListItemSelected(wxListEvent& event);
+	void OnListItemActivated(wxListEvent& event);
 };
 
 #endif

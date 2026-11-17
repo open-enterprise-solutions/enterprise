@@ -13,14 +13,15 @@
 
 #include "backend/databaseLayer/databaseQueryBuilder.h"             // L2 — the readings' relations
 #include "backend/query/columnLayout.h"                             // ColumnFieldNames
-#include "backend/metaCollection/partial/registerQueryLowering.h"   // ibRegFieldsOf / ibRegCompositeIR / the surface cache
+#include "backend/query/provider/database/registerQueryLowering.h"  // ibRegFieldsOf / ibRegCompositeIR / the surface cache
 #include "backend/metaCollection/dimension/metaDimensionObject.h"    // a position's dimensions
 #include "backend/metaCollection/resource/metaResourceObject.h"      // its figures
 #include "backend/metaCollection/partial/reference/reference.h"      // the base: a Base row's owner, as the type it is
-#include "backend/query/provider/dbTableProvider.h"                  // the base: a field's value off a row (GetValueAttribute)
+#include "backend/query/provider/database/dbTableProvider.h"         // the base: a field's value off a row (GetValueAttribute)
 #include "backend/system/value/valueArray.h"                         // the base: GetBase's arguments
 #include "backend/system/value/valueMap.h"
 #include "backend/query/queryRamTable.h"                             // the base: the table GetBase answers, filled fast
+#include "backend/query/tempColumn.h"                                // ibTempColumn — the columns a reading adds to a record's own
 #include "backend/metaData.h"                                        // the schedule data: the schedule register, by its id
 
 #include <algorithm>

@@ -26,7 +26,7 @@
 #include <wx/string.h>   // wxT, wxString - the engine's headers include no wx
 
 #include "backend/compiler/value.h"               // ibValue / ibNumber
-#include "backend/query/provider/queryProvider.h" // ibQueryComposer + ibQueryRamTable + BuildHierarchyTree
+#include "backend/query/provider/queryComposer.h" // ibQueryComposer::FilterRows + ibQueryRamTable
 #include "backend/query/queryable.h"              // ibQueryPredicate / ibQueryCondition
 #include "backend/query/queryColumn.h"            // ibBackendQueryColumn / ibTypeDescription
 #include "backend/query/querySelector.h"          // ibSelectorTree / ibDimensionKind
@@ -310,7 +310,7 @@ TEST(QueryParityAgg, AggregatesIgnoreNull)
 	using Fn = ibDataQueryBuilder::AggregateFn;
 	auto ramAgg = [&](Fn fn) -> long {
 		ibDataQueryBuilder::AggregateItem a; a.m_fn = fn; a.m_col = bonus; a.m_alias = wxT("agg");
-		const ibSelectorTree tree = ibQueryComposer::BuildHierarchyTree(
+		const ibSelectorTree tree = BuildHierarchyTree(
 			ram, key, parent, { a }, ibDimensionKind::Elements);
 		return tree.Root().m_values.at(BONUS).GetInteger();   // grand aggregate rolls into the column id
 	};

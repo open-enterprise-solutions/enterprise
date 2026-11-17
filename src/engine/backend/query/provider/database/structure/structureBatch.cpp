@@ -1,11 +1,11 @@
-#include "backend/query/structure/structureBatch.h"
+#include "backend/query/provider/database/structure/structureBatch.h"
 
-#include "backend/query/structure/schemaBuilder.h"        // ibSchemaBuilder — Execute / RunOrDefer / barrier
-#include "backend/query/queryable.h"                      // ibBackendQueryable — GetQueryTableName / GetMetaData
-#include "backend/query/queryColumn.h"                    // ibBackendQueryColumn — GetTypeDesc / GetPhysicalName
-#include "backend/databaseLayer/databaseQueryBuilder.h"   // L2 door — ibUpdate / ibDelete / Execute (the type-removal data cleanups)
-#include "backend/restructureInfo.h"                      // RequireExclusiveForDDL — demanded here, by the code that writes DDL
-#include "backend/backend_exception.h"                    // ibBackendCoreException — a refused write stops the apply
+#include "backend/query/provider/database/structure/schemaBuilder.h" // ibSchemaBuilder — Execute / RunOrDefer / barrier
+#include "backend/query/queryable.h"                                 // ibBackendQueryable — GetQueryTableName / GetMetaData
+#include "backend/query/queryColumn.h"                               // ibBackendQueryColumn — GetTypeDesc / GetPhysicalName
+#include "backend/databaseLayer/databaseQueryBuilder.h"              // L2 door — ibUpdate / ibDelete / Execute (the type-removal data cleanups)
+#include "backend/restructureInfo.h"                                 // RequireExclusiveForDDL — demanded here, by the code that writes DDL
+#include "backend/backend_exception.h"                               // ibBackendCoreException — a refused write stops the apply
 
 #include <set>
 #include <algorithm>   // std::find — an index's value fields first, then the rest (CreateIndex)

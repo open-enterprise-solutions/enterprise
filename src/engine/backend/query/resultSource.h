@@ -43,7 +43,7 @@ public:
 	}
 };
 
-// A column computed over a result's row — by the one evaluator the RAM road uses (queryProvider.cpp), the row
+// A column computed over a result's row — by the one evaluator the RAM road uses (queryComposer.cpp), the row
 // answering its own outputs. Asked by the selection for the columns it answers itself (queryResult.cpp).
 ibValue EvalOverResultRow(const ibQueryColumnSelect& c, const ibDataResultSource& src);
 

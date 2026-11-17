@@ -5,7 +5,7 @@
 // TABLE), so ibTempTableManager::Materialise can serialise a RAM intermediate
 // into a server-side temp table on the embedded DB. That is the capability that
 // lets a heterogeneous JOIN (a computed leaf ⋈ a DB leaf) promote OFF the RAM
-// floor and run DB⋈DB server-side (queryProvider.cpp PromoteComputedLeaf) — the
+// floor and run DB⋈DB server-side (queryComposer.cpp PromoteComputedLeaf) — the
 // optimisation the LINQ-join unification leans on once a side is computed. This
 // proves the machinery end-to-end: CREATE TEMP + chunked INSERT + read-back
 // through the L3 door.
@@ -39,11 +39,11 @@
 #include "backend/databaseLayer/connectionHolder.h"
 #include "backend/databaseLayer/sqllite/sqliteDatabaseLayer.h"
 #include "backend/databaseLayer/databaseResultSet.h"       // ibDatabaseResultSet — ANALYZE-ran assertion
-#include "backend/query/provider/queryProvider.h"         // ibQueryRamTable
-#include "backend/query/queryable.h"                      // ibBackendQueryable
-#include "backend/query/temp/tempTableManager.h"          // ibTempTableManager
-#include "backend/query/dataQueryBuilder.h"               // ibDataQueryBuilder / ibReadPageRequest
-#include "queryRoad.h"                                    // MeasureSent — the road a read took
+#include "backend/query/queryProvider.h"                      // ibQueryRamTable
+#include "backend/query/queryable.h"                          // ibBackendQueryable
+#include "backend/query/provider/database/tempTableManager.h" // ibTempTableManager
+#include "backend/query/dataQueryBuilder.h"                   // ibDataQueryBuilder / ibReadPageRequest
+#include "queryRoad.h"                                        // MeasureSent — the road a read took
 
 namespace {
 

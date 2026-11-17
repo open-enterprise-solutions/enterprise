@@ -34,10 +34,11 @@
 #include "backend/metaCollection/metaObject.h"
 #include "backend/metaCollection/dimension/metaDimensionObject.h"
 #include "backend/metaCollection/partial/sequence.h"
-#include "backend/query/structure/schemaSnapshot.h"
+#include "backend/query/provider/database/structure/schemaSnapshot.h"
 #include "backend/restructureInfo.h"
 #include "backend/metaCollection/partial/reference/reference.h"
 #include "backend/query/columnLayout.h"
+#include "backend/query/provider/database/columnCodec.h"
 #include "backend/system/value/valuePointInTime.h"
 #include "backend/system/value/valueBoundary.h"
 

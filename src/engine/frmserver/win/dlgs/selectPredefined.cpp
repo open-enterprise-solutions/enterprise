@@ -119,19 +119,12 @@ bool ibShowPredefinedSelector(ibControlFrame* ownerValue, const ibTypeDescriptio
 	std::vector<const ibValueMetaObjectRecordDataRef*> types;
 	ibTypeDescription offered;
 
-	for (const ibClassID& clsid : declared.GetClsidList()) {
-		// A FAMILY (`CatalogRef`, `AnyRef`) stands for every reference it admits: each is a branch of its own, as if
-		// it had been declared by hand - the way every picker opens a barrier (clsid_is_any, clsid_admits). The
-		// family itself is in no configuration's image, so asked as a type it named nothing and none were offered.
-		if (IsReference(clsid) && clsid_is_any(clsid)) {
-			for (const ibCtorMetaValueType* member : metaData->GetListCtorsByType(ibCtorObjectMetaType_Reference)) {
-				const auto* recordRef = clsid_admits(clsid, member->GetClassType())
-					? dynamic_cast<const ibValueMetaObjectRecordDataRef*>(member->GetMetaObject()) : nullptr;
-				if (recordRef != nullptr && std::find(types.begin(), types.end(), recordRef) == types.end())
-					types.push_back(recordRef);
-			}
+	// A FAMILY (`CatalogRef`, `AnyRef`) stands for every reference it admits: each is a branch of its own, as if it had
+	// been declared by hand - the way every picker opens a barrier (ibOpenBarriers). A family left with none is in no
+	// configuration's image and offers nothing.
+	for (const ibClassID& clsid : ibOpenBarriers(declared, metaData).GetClsidList()) {
+		if (IsReference(clsid) && clsid_is_any(clsid))
 			continue;
-		}
 		const ibCtorMetaValueType* so = metaData->GetTypeCtor(clsid);
 		const auto* recordRef = (so != nullptr && so->GetMetaTypeCtor() == ibCtorObjectMetaType_Reference)
 			? dynamic_cast<const ibValueMetaObjectRecordDataRef*>(so->GetMetaObject()) : nullptr;

@@ -455,18 +455,22 @@ says which file is where.
 
 | File | Holds |
 |---|---|
-| `queryProvider.h/cpp` | `ibBackendQueryProvider` — the whole L3↔L2-1 layer: turns the door's calls into L2-1 IR |
+| `queryProvider.h/cpp` | `ibBackendQueryProvider` — the interface every provider answers. The providers are the kitchen: `provider/`, and nothing in `query/`'s root includes from there |
+| `provider/queryComposer.h/cpp` | `ibQueryComposer`, which the door runs a whole query through (the door's verbs and the folds a selection runs are declared in the face, defined here); each provider lives in a folder of its own under `provider/` |
 | `queryable.h` | `ibBackendQueryable` — the source-navigation contract L3 reads a metaobject through. A pure mixin, no data, second base so `ibValue` stays at offset 0 |
 | `queryColumn.h` | `ibBackendQueryColumn` — the column counterpart. Deliberately a LIGHT header (an attribute derives from it), so nothing GUI-shaped may enter |
 | `core/query/queryAST.h`, `queryParser.*`, `queryLexer.*`, `queryRender.*`, `queryRewrite.*` | the L4-1 text query — one AST shared with LINQ, its reader, its writer, and the rules that move a term (`WHERE` → `HAVING`); the core's since 2026-10-20, so the thin side reads a text by the same rules |
-| `queryLowering.*` | L4 → the single L3 door: name resolution, aggregate rules, `DescribeOutput`, package execution |
+| `queryLowering.h`, `lowering/` | L4 → the single L3 door: name resolution, aggregate rules, `DescribeOutput`, package execution |
 | `queryHierarchy.{h,cpp}` | `ibQueryHierarchyScope` — the parent walk and the "whom does this row report under" map, asked of the COLUMN through the provider (one read, not one per node). Left the accounting register in 2026-08-13 |
 | `queryException.{h,cpp}` | `ibBackendQueryException` (this tier failed) and `ibBackendQuerySourceException` (the query itself does not hold up — carries line + column) |
-| `schemaSnapshot.{h,cpp}` | `ibSchemaSnapshot` + `DiffSnapshots` — projects a configuration into tables / columns / indexes and turns a PAIR of them into DDL. Knows nothing about metadata, and never asks the live database anything ([schema-authority.md](private/schema-authority.md)) |
-| `schemaBuilder.*`, `structureBuilder.*`, `structureBatch.*` | applying that difference: rendering and running the DDL, the deferred second phase, and its compensation |
-| `derivedStateBuilder.cpp` | L3-4 — regenerating what a changed declaration made stale |
-| `tempTableManager.*`, `tempTableQueryable.h` | temp tables as ordinary sources (`ibTempTableManager` decides how long one lives) |
-| `dbTableProvider.cpp` | the DB-backed provider: read, aggregate and the two NON-terminal endings (`BuildAggregateRelation` / `BuildReadRelation`) that let a reading hand back a relation instead of rows |
+| `provider/database/structure/schemaSnapshot.{h,cpp}` | `ibSchemaSnapshot` + `DiffSnapshots` — projects a configuration into tables / columns / indexes and turns a PAIR of them into DDL. Knows nothing about metadata, and never asks the live database anything ([schema-authority.md](private/schema-authority.md)) |
+| `provider/database/structure/schemaBuilder.*`, `structureBuilder.*`, `structureBatch.*` | applying that difference: rendering and running the DDL, the deferred second phase, and its compensation |
+| `provider/database/structure/derivedStateBuilder.cpp` | L3-4 — regenerating what a changed declaration made stale |
+| `tempTableQueryable.h`, `tempColumn.h`, `queryTempStore.*`; `provider/database/tempTableManager.*` | temp tables as ordinary sources — in the base and in memory (`ibTempTableManager` decides how long one in the base lives; `ibQueryTempTableStore` owns a package's) |
+| `provider/database/dbTableProvider.cpp`, `columnCodec.*`, `columnSpread.h`, `registerQueryLowering.h` | the DB-backed provider: read, aggregate and the two NON-terminal endings (`BuildAggregateRelation` / `BuildReadRelation`) that let a reading hand back a relation instead of rows; the value codec; the registers' lowering |
+| `provider/computed/computedProvider.*` | the computed provider — rows computed in memory (a register's balance, a temp table, a subquery) |
+| `provider/queryProviderInternal.h` | the RAM engine's own words — what the composer and the computed provider say to each other; nothing outside `provider/` includes it |
+| `provider/logger/logQueryable.*` | `Journal.Events` — the registration journal as a source of every configuration, read through the journal's reader and computed in memory |
 
 ### `src/engine/backend/metaCollection/`
 
@@ -902,7 +906,7 @@ Stated as policy 2026-08-14. The rule, its scope, the three physical reads that 
 and the four things it already forces (rollback-able apply, publication last, compensated second
 phase, schema settings must serialise) are in
 **[schema-authority.md](private/schema-authority.md)**. The differ itself is
-`query/structure/schemaSnapshot.{h,cpp}`.
+`query/provider/database/structure/schemaSnapshot.{h,cpp}`.
 
 ---
 

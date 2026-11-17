@@ -11,10 +11,10 @@
 #include "backend/compiler/cache/byteCodeCache.h"   // ibByteCodeCache — the table ibByteCodeStorage reads and saves through
 #include "backend/metaCollection/metaModuleObject.h"
 #include "backend/metaCollection/metaFormObject.h"
-#include "backend/query/queryableFactory.h"         // ibQueryableFactory::Register/Unregister — the per-config source registry
-#include "backend/query/structure/schemaSnapshot.h" // ibSchemaSnapshot — BuildSchemaSnapshot
-#include "core/serialize/dataBuilder.h"             // ibDataBuilder / ibBinaryProvider — a copied object's properties, as bytes
-#include "core/memory/memoryStream.h"               // ibReaderMemory / ibWriterMemory — a bytecode row to and from its blob
+#include "backend/query/queryableFactory.h"                           // ibQueryableFactory::Register/Unregister — the per-config source registry
+#include "backend/query/provider/database/structure/schemaSnapshot.h" // ibSchemaSnapshot — BuildSchemaSnapshot
+#include "core/serialize/dataBuilder.h"                               // ibDataBuilder / ibBinaryProvider — a copied object's properties, as bytes
+#include "core/memory/memoryStream.h"                                 // ibReaderMemory / ibWriterMemory — a bytecode row to and from its blob
 
 #include <algorithm>
 #include <cwctype>

@@ -6,18 +6,17 @@
 // ⭐⭐ THE QUERYABLE'S OWN FILE, beside its header — the arrangement queryColumn.{h,cpp} already has
 // for a COLUMN (Max, 2026-08-26: *"make a separate file and put the queryable in it"*).
 //
-// These bodies used to live in queryProvider.cpp, which is 4000 lines of something else: the RAM
-// composer, the computed provider, the result sources. A base class answering "which metaobject
+// These bodies used to live in the composer's file (then queryProvider.cpp, now provider/queryComposer.cpp),
+// which is 4000 lines of something else: the RAM composer, the computed provider, the result sources. A base class answering "which metaobject
 // stands behind me" was reachable only by knowing that a file named after PROVIDERS happened to
 // carry it — and every reader who went looking learned the provider's internals on the way.
 //
 // What belongs here is what the BASE answers: the default engine it vends, the default column
-// lookup, and the two projections of its metaobject. A concrete source overrides them in its own
-// file; nothing here knows about any of them.
+// lookup, and the identity of a source with no metaobject. A concrete source overrides them in its
+// own file; nothing here knows about any of them.
 
 #include "backend/query/queryable.h"
-#include "backend/query/provider/dbTableProvider.h"        // ibDbTableProvider — the DB default this base vends
-#include "backend/metaCollection/genericData.h"            // ibValueMetaObjectGenericData — the metaobject asked below
+#include "backend/query/dataQueryBuilder.h"   // ibDataQueryBuilder::GetPrimarySource — a nested query's key is its source's
 
 #include <atomic>                                          // the alias-column id counter below
 
@@ -29,8 +28,7 @@
 // ==========================================================================
 ibBackendQueryProvider& ibBackendQueryable::GetProvider() const
 {
-	static ibDbTableProvider s_dbProvider;   // stateless — the spec carries every per-query value
-	return s_dbProvider;
+	return ibDbTableProviderInstance();   // stateless — the spec carries every per-query value
 }
 
 // A column the source LISTS, by name — then its sort order. Listing and resolving were two answers to one
@@ -45,34 +43,26 @@ std::shared_ptr<const ibBackendQueryColumn> ibBackendQueryable::ResolveColumnByN
 	return sort != nullptr && sort->GetName().IsSameAs(name, false) ? sort : nullptr;
 }
 
-// ⭐⭐ THE METAOBJECT IS ASKED ONCE, AND ITS GUID AND ID ARE READ OFF IT.
+// A SOURCE WITH NO METAOBJECT HAS NO GUID AND NO METAID — the base's answer. A metaobject-backed source
+// answers both itself, beside its GetSourceMetaObject and off the same m_meta (the record, register and
+// constant families; the tabular part, the sequence borders and the recalculation always did).
 //
-// These two used to be pure virtuals of their own, and every metaobject-backed source implemented
-// both with the same two lines — `m_meta->GetGuid()`, `m_meta->GetMetaID()`. Three questions, one
-// fact: "which metaobject stands behind this source". A source with none (temp / subquery /
-// computed) answered a hand-written empty, which is precisely what falling through to no metaobject
-// says by itself.
-//
-// The cost of the duplicate is not the typing. A projection published beside the thing it projects
-// invites a consumer to reach for whichever is nearest, and the two drift the moment one is
-// overridden and the other forgotten — the same shape that let a SORT stand in for a KEY until an
-// enumeration reordered itself and every reader of that key read a number.
+// ⚠ They were read off GetSourceMetaObject HERE, once, for every family (2026-08 — the same two lines
+// in each had invited the drift a duplicate does), and that put the metaobject's header into the
+// source's own file. A metaobject is the provider's, never the face's (2026-11-17, Max): each family
+// answers in the class that holds the metaobject, where the three answers cannot drift apart.
 //
 // GetQueryTableName stays virtual on purpose: the PHYSICAL table is a different fact, and a temp
 // source has one without a metaobject anywhere.
 const ibUniqueKey& ibBackendQueryable::GetQueryTableGuid() const
 {
-	const ibValueMetaObjectGenericData* const meta = GetSourceMetaObject();
-	if (meta != nullptr)
-		return meta->GetGuid();   // the metaobject's own key
-	static const ibUniqueKey none;   // a source with no metaobject has no guid
+	static const ibUniqueKey none;
 	return none;
 }
 
 ibMetaID ibBackendQueryable::GetQueryTableId() const
 {
-	const ibValueMetaObjectGenericData* const meta = GetSourceMetaObject();
-	return meta != nullptr ? meta->GetMetaID() : 0;
+	return 0;
 }
 
 // ==========================================================================

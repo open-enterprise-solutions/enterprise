@@ -76,7 +76,7 @@ public:
 	                      const std::vector<ibValue>& named, ibQueryDimUnfold unfold);
 	// …and by the field's TYPE, where a holder of fields has the type with no column behind it — a setting's field,
 	// walked by its type (ibQueryConstructorModel::WalkFrom) and read against rows in memory. The same metadata
-	// owner names the targets (ibDbTableProvider::ReferenceTargetsOf); a type that names none leaves every named
+	// owner names the targets (ReferenceTargetsOf, queryableFactory.h); a type that names none leaves every named
 	// value standing for itself, as a flat list does above.
 	ibQueryHierarchyScope(const ibMetaData* metaData, const ibTypeDescription& type,
 	                      const std::vector<ibValue>& named, ibQueryDimUnfold unfold);

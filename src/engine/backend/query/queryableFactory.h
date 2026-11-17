@@ -80,6 +80,10 @@ public:
 
 	virtual ibString GetNamespace() const = 0;
 	virtual ibString GetName() const = 0;
+	// WHAT IT IS DRAWN WITH — by default its kind's: the class registered under its namespace (a catalog's, a
+	// register's), so a table and its kind look alike. A source no class stands behind answers its own (the
+	// registration journal). 0 = none.
+	virtual ibPictureID GetPicture() const;
 
 	// ⭐⭐ THE READING OF THIS SOURCE, MADE FROM THESE ARGUMENTS — the one entrance.
 	//
@@ -193,6 +197,9 @@ public:
 //  metaCollection/partial/commonObject.h, where the metaobjects that instantiate them live. This L4 header keeps only
 //  the metadata-agnostic base ibQueryableSourceDescriptor above and the factory below.)
 
+// WHOSE SOURCES a factory is asked for (GetDescriptors) — the application's own, the platform's, or both.
+enum class ibQueryableSourceKind { Application, Platform, Any };
+
 class BACKEND_API ibQueryableFactory
 {
 public:
@@ -218,8 +225,11 @@ public:
 	// a queryable is the asker's — asked of the descriptor (CreateQueryable) and held for as long as it is read.
 
 	// Enumerate registered source descriptors — the dynamic-list source picker lists
-	// them by GetNamespace()/GetName(). Non-owning pointers, valid for owners' life.
-	std::vector<ibQueryableSourceDescriptor*> GetDescriptors() const;
+	// them by GetNamespace()/GetName(). Non-owning pointers, valid for owners' life. Whose (ibQueryableSourceKind): the
+	// application's — a configuration's factory gives them in the order the configuration is read; the PLATFORM's
+	// (ibPlatformSourceRegister) — `Data.Platform`, the constructors' Platform: the per-config factory makes and holds
+	// them, this one has none; Any — both, the application's first.
+	virtual std::vector<ibQueryableSourceDescriptor*> GetDescriptors(ibQueryableSourceKind kind) const;
 
 	// THE DESCRIPTOR ITSELF, not the queryable it builds. The lowering needs it to ask what the
 	// source's arguments MEAN (DescribeParameters) before evaluating them — a condition argument
@@ -253,19 +263,56 @@ private:
 	std::map<ibString, ibMetaID> m_tableIdOfKey;
 };
 
+// ⭐ A SOURCE THE PLATFORM DECLARES IN EVERY CONFIGURATION — no metaobject's: the registration journal's events
+// today, an external table or another reporting engine tomorrow. It is made FOR the configuration it is read in
+// (the journal's Object is a reference of THAT configuration), so each configuration's factory makes its own,
+// holds it and registers it as it is made. A provider adds its source with one static ibPlatformSourceRegister in
+// its own .cpp — the type registers' idiom (value_register) — and nothing outside the provider names it.
+using ibPlatformSourceMaker = std::unique_ptr<ibQueryableSourceDescriptor> (*)(const class ibMetaData* metaData);
+
+class BACKEND_API ibPlatformSourceRegister
+{
+public:
+	explicit ibPlatformSourceRegister(ibPlatformSourceMaker maker);
+};
+
 // The PER-CONFIG source factory — one per open snapshot (ibMetaImage), holding that config's OWN metadata-backed
-// source descriptors. On a LOCAL miss the resolve DESCENDS to the global factory (plugin / system / common sources),
-// so a config sees its own sources FIRST and the shared ones as a fallback. A copy / a second open config therefore
-// resolves ITS source (its columns), never whatever registered globally last — the fix for copied dynamic lists.
+// source descriptors and the platform's sources made for it. On a LOCAL miss the resolve DESCENDS to the global
+// factory (plugin / system / common sources), so a config sees its own sources FIRST and the shared ones as a
+// fallback. A copy / a second open config therefore resolves ITS source (its columns), never whatever registered
+// globally last — the fix for copied dynamic lists.
 class BACKEND_API ibMetaQueryableFactory : public ibQueryableFactory
 {
 public:
-	ibMetaQueryableFactory() = default;   // owned by the snapshot; no appData token
+	// Owned by the snapshot; no appData token. Makes every platform source for `metaData` and registers it.
+	explicit ibMetaQueryableFactory(const class ibMetaData* metaData);
 
-	ibQueryableSourceDescriptor* ResolveDescriptorById(ibMetaID tableId) const override;
+	// Its own: the application's in the order the configuration is read — the kinds as its tree stands them, a kind's
+	// tables by name; the platform's made for it (m_platformSources); Any — the application's, then the platform's.
+	// Whoever lists them (the constructors, a list's source) takes them as they come.
+	// (Body in provider/database/dbTableProvider.cpp, beside GetSourceFactory: the order is the configuration's.)
+	virtual std::vector<ibQueryableSourceDescriptor*> GetDescriptors(ibQueryableSourceKind kind) const override;
+	virtual ibQueryableSourceDescriptor* ResolveDescriptorById(ibMetaID tableId) const override;
 	// Own registry first, then the global one — the same order ResolveDescriptorById keeps, for the same reason:
-	// a configuration's sources are its own, and a miss falls through to what the platform declares.
-	ibQueryableSourceDescriptor* FindDescriptor(const ibString& ns, const ibString& objectName) const override;
+	// a configuration's sources are its own, and a miss falls through to what is shared.
+	virtual ibQueryableSourceDescriptor* FindDescriptor(const ibString& ns, const ibString& objectName) const override;
+
+private:
+	// The platform's sources made for this configuration — HELD here, unlike a metaobject's descriptor, which its
+	// metaobject owns: nothing else stands behind them. Registered by the ctor, for the factory's life.
+	std::vector<std::unique_ptr<ibQueryableSourceDescriptor>> m_platformSources;
 };
+
+// The factory a query written on behalf of `metaData` resolves its sources through — ibMetaData::GetSourceFactory, asked
+// without the metadata header: a configuration is the provider's to know, never the lowering's. Null for no metadata.
+// (Body in provider/database/dbTableProvider.cpp, beside the provider's other answers by a configuration.)
+BACKEND_API ibQueryableFactory* GetSourceFactory(const class ibMetaData* metaData);
+
+// The tables a reference of this TYPE points at, in the configuration `metaData` — one per reference type the type
+// admits (an "any" reference is every one it admits). For a holder of fields that has a type with no column behind
+// it — a setting's field, walked by its type (ibQueryConstructorModel::WalkFrom); over a column the provider answers
+// (ResolveReferenceTargets), with this. (Body in provider/database/dbTableProvider.cpp, beside GetSourceFactory.)
+BACKEND_API std::vector<std::shared_ptr<const ibBackendQueryable>> ReferenceTargetsOf(const class ibMetaData* metaData,
+                                                                                      const ibTypeDescription& type);
 
 #endif

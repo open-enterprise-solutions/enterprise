@@ -118,7 +118,8 @@ class BACKEND_API ibValueMetaObjectAttributeBase :
 	// (The whole SQL-field façade — GetSQLFieldName / GetCompositeSQLFieldName / GetExcludeSQLFieldName /
 	//  GetSQLFieldCount / GetSQLFieldData, plus the ibFieldTypes / ibSQLField re-exports — is GONE. An
 	//  attribute is just an ibBackendQueryColumn; its physical fields come from the column-layout tier
-	//  (columnLayout.h: ColumnFieldList / ColumnFieldNames / ColumnComparePredicate / ibColumnCodec).
+	//  (columnLayout.h: ColumnFieldList / ColumnFieldNames / ColumnComparePredicate; the values,
+	//  ibColumnCodec, in query/provider/database/columnCodec.h).
 	//  Register lowering uses the ibReg* helpers in registerQueryLowering.h.)
 
 	// (Column DDL — the type-set diff — moved OFF the attribute to the structure tier's free function
@@ -126,7 +127,7 @@ class BACKEND_API ibValueMetaObjectAttributeBase :
 
 	// (Value assembly from / binding to a DB row moved to ibDbTableProvider::GetValueAttribute /
 	// ::SetValueAttribute — it is a DB provider concern, not the metadata attribute's. See
-	// query/provider/dbTableProvider.h. The binary dump/restore codec is ibDataMover::BinaryToStatement /
+	// query/provider/database/dbTableProvider.h. The binary dump/restore codec is ibDataMover::BinaryToStatement /
 	// ::BinaryFromResult (L3-3) — callers use the tier directly, no attribute forwarder.)
 
 	//contain type

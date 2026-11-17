@@ -11,8 +11,8 @@
 #include "backend/databaseLayer/databaseQueryBuilder.h"        // L2-1 — structured IR for the live aggregates
 #include "backend/databaseLayer/databaseMaterializeBuilder.h"  // L2-2 — RenderMaterializedRead (the materialised readings)
 #include "backend/query/dataQueryBuilder.h"                     // L3 door — From(balance/turnover queryable).Select()
-#include "backend/query/provider/dbTableProvider.h"             // ibDbTableProvider::GetValueAttribute — the DB value-assembly
-#include "backend/metaCollection/partial/registerQueryLowering.h"   // ibRegFieldsOf / ibRegValueField / ibRegCompositeIR
+#include "backend/query/provider/database/dbTableProvider.h"    // ibDbTableProvider::GetValueAttribute — the DB value-assembly
+#include "backend/query/provider/database/registerQueryLowering.h"  // ibRegFieldsOf / ibRegValueField / ibRegCompositeIR
 #include "backend/appData.h"
 #include "backend/session/session.h"
 #include "backend/query/queryRamTable.h"                        // ibQueryRamTable — the folded balance, laid down as a table

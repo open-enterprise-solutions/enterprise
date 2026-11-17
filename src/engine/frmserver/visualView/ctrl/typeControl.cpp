@@ -193,21 +193,11 @@ ibChoiceCondition ibTypeControlFactory::GetChoiceCondition() const
 ibClassID ibTypeControlFactory::ShowSelectType(const ibMetaData* metaData, const ibTypeDescription& typeDescription)
 {
 	// WHAT CAN BE CHOSEN: an "any" among the types — `CatalogRef`, `AnyRef` — offers its facade, every reference
-	// its bits admit (clsid_admits): nothing is ever "a CatalogRef".
+	// its bits admit (ibOpenBarriers): nothing is ever "a CatalogRef", and a barrier left with none offers nothing.
 	std::vector<ibClassID> offered;
-	const auto offer = [&offered](const ibClassID& clsid) {
-		if (std::find(offered.begin(), offered.end(), clsid) == offered.end())
+	for (const ibClassID& clsid : ibOpenBarriers(typeDescription, metaData).GetClsidList())
+		if (!::IsReference(clsid) || !clsid_is_any(clsid))
 			offered.push_back(clsid);
-	};
-	for (const ibClassID& clsid : typeDescription.GetClsidList()) {
-		if (!::IsReference(clsid) || !clsid_is_any(clsid) || metaData == nullptr) {
-			offer(clsid);
-			continue;
-		}
-		for (const ibCtorMetaValueType* member : metaData->GetListCtorsByType(ibCtorObjectMetaType::ibCtorObjectMetaType_Reference))
-			if (clsid_admits(clsid, member->GetClassType()))
-				offer(member->GetClassType());
-	}
 	if (offered.size() < 2) return offered.empty() ? 0 : offered.front();
 
 	// Several: the person picks one — each type by the name its constructor gives it, and its class's picture.

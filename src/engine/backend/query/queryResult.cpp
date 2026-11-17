@@ -2,17 +2,16 @@
 //	Description : the L3 SELECTION — ibDataQueryResult, a thin value handle over a
 //	              polymorphic ibDataResultSource (resultSource.h): the backing that
 //	              is a RAM table (ibRamTableResultSource), the rows handed to a fold
-//	              as a cursor (Select), and ibDataQueryBuilder::NewPageCache. The DB
-//	              cursor's backing is dbTableProvider.cpp's; the roads that make a
-//	              result are queryProvider.cpp's. See docs/private/query-language-arc.md §22.4d.
+//	              as a cursor (Select). The DB cursor's backing and the page cache
+//	              (ibDataQueryBuilder::NewPageCache) are dbTableProvider.cpp's; the roads that make a
+//	              result are queryComposer.cpp's. See docs/private/query-language-arc.md §22.4d.
 ////////////////////////////////////////////////////////////////////////////
 
-#include "provider/queryProvider.h"   // ibDataQueryResult (+ dataQueryBuilder.h, queryable.h); ibBackendQueryProvider::ReadReferences
+#include "queryProvider.h"            // ibDataQueryResult (+ dataQueryBuilder.h, queryable.h); ibBackendQueryProvider::ReadReferences
 #include "queryRamTable.h"            // ibQueryRamTable — the backing that is a table
 #include "queryRowCursor.h"           // ibQueryRowCursor — the rows Select hands to a fold
 #include "querySelector.h"            // ibSelector — what Select answers
 #include "querySelectorTree.h"        // ibSelectorTree — the push-down's ready tree
-#include "provider/dbTableProvider.h" // ibRenderedPageCache — complete here, for NewPageCache
 #include "resultSource.h"             // ibDataResultSource + EvalOverResultRow — a column computed over the row
 
 #include <map>
@@ -283,11 +282,4 @@ ibSelector ibDataQueryResult::Select(ibSelectKind mode, const ibString& branch)
 	if (m_branchTree != nullptr)
 		s.WithReadyTree(m_branchTree);    // hands over a Clone(), so one branch's walk cannot disturb another's
 	return s;
-}
-
-// Factory for the opaque build-once cache (defined where ibRenderedPageCache is
-// complete) — the list model owns the result via shared_ptr.
-std::shared_ptr<ibRenderedPageCache> ibDataQueryBuilder::NewPageCache()
-{
-	return std::make_shared<ibRenderedPageCache>();
 }

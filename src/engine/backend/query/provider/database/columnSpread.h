@@ -2,13 +2,14 @@
 #define __COLUMN_SPREAD_H__
 
 // Shared physical-spread machinery — the role-driven binding both codecs build on: the L3-1 VALUE
-// codec (ibColumnCodec::WriteValue, columnLayout.cpp — source = ibValue) and the L3-3 WIRE codec
+// codec (ibColumnCodec::WriteValue, provider/database/columnCodec.cpp — source = ibValue) and the L3-3 WIRE codec
 // (ibDataMover::BinaryToStatement, dataMover.cpp — source = the binary wire). Both bind a column's
 // _TYPE tag + per-present-primitive value + reference pair into an ibQueryStatement in the ONE
 // load-bearing order; only the value SOURCE differs, so the per-slot bind is a caller callback.
 // Internal to the codec TUs — not part of any public surface.
 
-#include "backend/query/columnLayout.h"   // ibColumnRole / ibPersistedTypeTag / ibColumnCodec::HasReference / ibQueryStatement
+#include "backend/query/columnLayout.h"                  // ibColumnRole / ibPersistedTypeTag
+#include "backend/query/provider/database/columnCodec.h" // ibColumnCodec::HasReference / ibQueryStatement
 #include "backend/backend_core.h"          // ibDateTime, emptyEnum
 #include "backend/compiler/value.h"        // ibValueTypes
 #include "backend/system/value/valueJob.h"    // g_valueScheduleCLSID — a value object stored whole

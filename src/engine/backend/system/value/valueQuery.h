@@ -27,7 +27,7 @@
 #include "backend/compiler/enumUnit.h"          // ibValueEnumeration — runtime enum reflecting ibSelectKind
 #include "core/query/queryAST.h"
 #include "backend/query/queryLowering.h"
-#include "backend/query/temp/queryTempStore.h"   // ibQueryTempTableStore — what TempTablesManager holds
+#include "backend/query/queryTempStore.h"        // ibQueryTempTableStore — what TempTablesManager holds
 #include "backend/query/dataQueryBuilder.h"     // ibDataQueryResult / ibSelectKind
 #include "backend/query/queryReadState.h"    // ibQueryReadState — the state a live answer is read in
 #include "backend/query/querySelector.h"        // ibSelector — the grouped / hierarchical traversal

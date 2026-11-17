@@ -276,4 +276,10 @@ BACKEND_API void FoldBalancesForward(ibQueryRamTable& table,
                                      const std::vector<ibBalanceFoldSlot>& slots,
                                      const ibBalanceOpening& opening);
 
+// Compare one ORDER BY key for the RAM sort floor: NULL = smallest (SQLite convention)
+// -> NULLS FIRST on ASC, NULLS LAST on DESC, deterministically. <0: a before b; >0: b before a;
+// 0: equal on this key. Pure — unit-testable; shared by both RAM ORDER BY comparators and a selection's
+// own order of a level. (Body in provider/queryComposer.cpp, beside the comparators.)
+BACKEND_API int RamSortCompareKey(const ibValue& a, const ibValue& b, bool ascending);
+
 #endif // __QUERY_RAM_TABLE_H__

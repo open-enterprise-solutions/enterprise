@@ -14,17 +14,17 @@
 
 #include "backend/metaCollection/partial/tabularSection/tabularSection.h"
 #include "backend/metaCollection/attribute/metaAttributeObject.h"
-#include "backend/metaCollection/partial/reference/reference.h"   // ibValueReferenceDataObject - the seed's reference cells
-#include "backend/metadataSerialization.h"                        // ibDeserializeValue - a declared value, read with this configuration
-#include "backend/system/value/composition/valueComposerField.h"  // ibMaterializeCompositionValue - a declared value made live
-#include "backend/system/value/valueGuid.h"                       // ibValueGuid - a declared line's owner, its key
-#include "backend/backend_exception.h"                            // ibBackendCoreException - a section that cannot take its lines
-#include "backend/query/columnLayout.h"                           // ibOwnerRefColumn / ibFieldSuffix - the scaffold + field names
-#include "backend/query/structure/schemaSnapshot.h"               // ibSchemaSnapshot / ibSchemaTable - what a declaration is
-#include "backend/restructureInfo.h"                              // ibRestructureInfo - where a predefined item's refusal is said
-#include "backend/databaseLayer/databaseQueryBuilder.h"           // the L2 door - the lines a section's owner already holds
-#include "backend/valueInfo.h"                                    // ibReference - a line's owner, read back as stored
-#include "core/memory/memoryBuffer.h"                             // ibMemoryBuffer - the owner's bytes
+#include "backend/metaCollection/partial/reference/reference.h"       // ibValueReferenceDataObject - the seed's reference cells
+#include "backend/metadataSerialization.h"                            // ibDeserializeValue - a declared value, read with this configuration
+#include "backend/system/value/composition/valueComposerField.h"      // ibMaterializeCompositionValue - a declared value made live
+#include "backend/system/value/valueGuid.h"                           // ibValueGuid - a declared line's owner, its key
+#include "backend/backend_exception.h"                                // ibBackendCoreException - a section that cannot take its lines
+#include "backend/query/columnLayout.h"                               // ibOwnerRefColumn / ibFieldSuffix - the scaffold + field names
+#include "backend/query/provider/database/structure/schemaSnapshot.h" // ibSchemaSnapshot / ibSchemaTable - what a declaration is
+#include "backend/restructureInfo.h"                                  // ibRestructureInfo - where a predefined item's refusal is said
+#include "backend/databaseLayer/databaseQueryBuilder.h"               // the L2 door - the lines a section's owner already holds
+#include "backend/valueInfo.h"                                        // ibReference - a line's owner, read back as stored
+#include "core/memory/memoryBuffer.h"                                 // ibMemoryBuffer - the owner's bytes
 
 #include <algorithm>   // std::find - an attribute that is itself one of the list order's columns; std::find_if - a line's column
 #include <map>         // the lines each owner already holds

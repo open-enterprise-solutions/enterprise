@@ -65,7 +65,7 @@
 #include "backend/system/value/valueArray.h"                        // ibValueArray — a requested breakdown may be a LIST
 #include "backend/system/value/valueType.h"                         // ibValueTypeDescription::AdjustValue — a column's typed empty
 #include "backend/metaData.h"                                       // ibMetaData whole — AdjustValue(…, metaData) must see it is no ibValue
-#include "backend/metaCollection/partial/registerQueryLowering.h"   // ibRegFieldsOf / ibRegBound / ibRegFold / ibRegFillArmCut
+#include "backend/query/provider/database/registerQueryLowering.h"  // ibRegFieldsOf / ibRegBound / ibRegFold / ibRegFillArmCut
 #include "backend/metaCollection/resource/metaResourceObject.h"     // IsBalanceResource — one value for the entry, or one per side
 #include "backend/metaCollection/accountingKind/metaAccountingKindObject.h"   // the chart's flag a figure is kept under
 #include "backend/appData.h"
@@ -4200,7 +4200,7 @@ namespace {
 // id). A cell nobody wrote holds no tag at all — `_TYPE` NULL or 0 — and that is a legitimate state, not
 // damage: a column ADDED to a table that already had rows starts that way, and a type change clears the
 // tag of the values it no longer admits (structureBatch.cpp). The codec reads both as the same typed
-// empty (columnLayout.cpp, TagFitsColumn), so every reading through it sees one value.
+// empty (columnCodec.cpp, TagFitsColumn), so every reading through it sees one value.
 //
 // A GROUP BY does not read through the codec — it compares fields — and saw two. Measured 2026-09-16 on
 // the continental ledger, whose currency was added after its first postings: "28 / Coffee" came back as

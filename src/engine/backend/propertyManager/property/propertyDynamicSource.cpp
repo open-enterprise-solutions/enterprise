@@ -92,7 +92,7 @@ bool ibPropertyDynamicSource::GetProtocolValue(ibDataNode& row, ibReader reader)
 	ibQueryableFactory* const factory = ibDynamicSourceFactory(m_owner);
 	if (factory == nullptr)
 		return true;
-	for (ibQueryableSourceDescriptor* const descriptor : factory->GetDescriptors()) {
+	for (ibQueryableSourceDescriptor* const descriptor : factory->GetDescriptors(ibQueryableSourceKind::Any)) {
 		if (descriptor == nullptr)
 			continue;
 		const std::shared_ptr<const ibBackendQueryable> queryable = descriptor->CreateQueryable(nullptr, 0);

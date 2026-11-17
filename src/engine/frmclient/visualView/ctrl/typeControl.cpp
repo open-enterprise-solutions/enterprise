@@ -1,7 +1,6 @@
 #include "typeControl.h"
 #include "deskgui/typeconv.h"   // DateTimeToWxDateTime / WxDateTimeToDateTime — a date across to wx and back
 
-#include <algorithm>
 #include <utility>   // std::exchange — the owner told once
 
 #include "deskgui/univ/ctrl/calendarCtrl.h"
@@ -10,6 +9,7 @@
 #include <wx/sizer.h>
 #include <wx/settings.h>
 
+#include "core/clsid.h"                       // a family (`AnyRef`) — no type a cell stands on by itself
 #include "frmclient/mainFrame/mainFrame.h"   // ibFrontendMainFrame::ChooseValue — a value of the server's type
 #include "frmclient/visualView/ctrl/frame.h"
 #include "deskgui/univ/ctrl/control.h"         // ibControl — where a quick choice drops down from, beside its title
@@ -30,33 +30,30 @@ bool ibTypeControlFactory::ChooseValue(ibControlFrame* ownerValue, const ibChoos
 	ibValue current;
 	ownerValue->GetControlValue(current);
 
-	// UNDEFINED = the type is not settled yet. GetDataType answers it — the cell's own type, or the one asked of the
-	// user when it admits more than one (the desktop's). Only a cell has one to settle: the holder of a server's
-	// question carries a value.
+	// The type the cell stands on — a cell's own; the holder of a server's question has none but its value's class.
+	ibTypeControlFactory* const factory = dynamic_cast<ibTypeControlFactory*>(ownerValue);
+	const ibTypeDescription type = factory != nullptr ? factory->GetTypeValueDesc() : ibTypeDescription(current.GetClassType());
+
+	// UNDEFINED = the type is not settled yet. A cell of ONE type stands on it here, and its value is chosen in this very
+	// call. A cell of several — or of a family, `CatalogRef`, `AnyRef` — puts the type to the user, and that is the
+	// server's question, as it was the desktop's (ShowSelectType there): the classes are named in its configuration, and
+	// the value of the type picked is chosen in the same press. Asked here, the window had no class named and came up
+	// empty, unseen: the «...» of an empty composite cell did nothing (2026-11-17). Only a cell has one to settle: the
+	// holder of a server's question carries a value.
 	if (current.GetType() == ibValueTypes::TYPE_EMPTY) {
 
-		ibTypeControlFactory* const factory = dynamic_cast<ibTypeControlFactory*>(ownerValue);
-		if (factory == nullptr)
-			return false;
-
-		// ⭐⭐ WAS A WINDOW ACTUALLY RAISED? — the desktop's: a cell that admits one type has no question to put, and the
-		// value can be chosen in this very call.
-		const bool asksTheUser = factory->GetTypeDesc().GetClsidCount() > 1;
-
-		const ibClassID clsid = factory->GetDataType();
-		if (clsid == 0)
-			return false;   // the user closed the type choice
-		current = ibValueTypeDescription::AdjustValue(ibTypeDescription(clsid));
-		ownerValue->SetControlValue(current);   // the cell now stands on its settled type
-
-		// AND THE CHOICE ENDS HERE WHEN IT WAS ASKED — a modal ran an event loop of its own, and the editor is gone.
-		if (asksTheUser)
-			return true;
+		if (factory == nullptr || type.GetClsidCount() == 0)
+			return false;   // no cell to settle, or one that admits nothing
+		const ibClassID only = type.GetFirstClsid();
+		if (type.GetClsidCount() == 1 && !(::IsReference(only) && clsid_is_any(only))) {
+			current = ibValueTypeDescription::AdjustValue(ibTypeDescription(only));
+			ownerValue->SetControlValue(current);   // the cell now stands on its settled type
+		}
 	}
 
 	// A PRIMITIVE IS CHOSEN HERE — its calculator, its calendar, a flag's or an enumeration's list: what the value is
 	// picked among (ibValue::FindValue), itself marked.
-	if (ownerValue->HasQuickChoice()) {
+	if (current.GetType() != ibValueTypes::TYPE_EMPTY && ownerValue->HasQuickChoice()) {
 		if (ibTypeControlFactory::SimpleChoice(ownerValue, current.GetClassType(), parent))
 			return true;
 		ibChooseValueRequest offered;
@@ -74,7 +71,7 @@ bool ibTypeControlFactory::ChooseValue(ibControlFrame* ownerValue, const ibChoos
 	// …A VALUE OF THE SERVER'S TYPE THERE — its quick choice or its choice form, opened for the window asking (a dialog over
 	// it); the value chosen comes back to this cell's ChoiceProcessing.
 	ibFrontendMainFrame* const frame = ibFrontendMainFrame::GetFrame();
-	return frame != nullptr && frame->ChooseValue(ownerValue, current);
+	return frame != nullptr && frame->ChooseValue(ownerValue, type, current);
 }
 
 namespace {
@@ -645,32 +642,4 @@ ibValue ibTypeControlFactory::CreateValue() const
 {
 	// Value creation is the FACTORY's job — it knows its bound Type (GetTypeDesc).
 	return ibBackendTypeSourceFactory::CreateValue();
-}
-
-ibClassID ibTypeControlFactory::GetDataType() const
-{
-	return ShowSelectType(GetMetaData(), GetTypeValueDesc());
-}
-
-#include "frmclient/win/dlgs/selectData.h"
-
-ibClassID ibTypeControlFactory::ShowSelectType(const ibMetaData* metaData, const ibTypeDescription& typeDescription)
-{
-	// WHAT CAN BE CHOSEN — the desktop's: each type once. (An "any" among them — `CatalogRef`, `AnyRef` — offered its
-	// members there, which the configuration names: here it is offered as it is.)
-	std::vector<ibClassID> offered;
-	for (const ibClassID& clsid : typeDescription.GetClsidList())
-		if (std::find(offered.begin(), offered.end(), clsid) == offered.end())
-			offered.push_back(clsid);
-	if (offered.size() < 2) return offered.empty() ? 0 : offered.front();
-
-	ibDialogSelectDataType* selectDataType = new ibDialogSelectDataType(metaData, offered);
-
-	ibClassID clsid = 0;
-	if (selectDataType->ShowModal(clsid)) {
-		selectDataType->Destroy();
-		return clsid;
-	}
-	selectDataType->Destroy();
-	return 0;
 }

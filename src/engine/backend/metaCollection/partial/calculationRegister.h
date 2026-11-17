@@ -10,8 +10,7 @@
 // The register-shared lowering: ibRegFilterPredicate / ibRegFlatLeaves / ibRegCompositeIR — a
 // calculation register filters its dimensions by the same rule the other registers do, so the rule
 // lives in one shared file.
-#include "backend/metaCollection/partial/registerQueryLowering.h"
-#include "backend/query/temp/tempTableQueryable.h" // ibTempColumn — the columns a reading adds to a record's own
+#include "backend/query/provider/database/registerQueryLowering.h"
 
 #include <functional>   // ibCalcNarrowing
 #include <list>         // the base's sources (m_baseSources)

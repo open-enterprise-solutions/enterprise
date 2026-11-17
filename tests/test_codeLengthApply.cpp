@@ -27,8 +27,8 @@
 #include "backend/metadataConfiguration.h"
 #include "backend/metadataSerialization.h"   // ibSerializeValue - a declared code, as it is kept
 #include "backend/query/columnLayout.h"
-#include "backend/query/structure/schemaBuilder.h"
-#include "backend/query/structure/schemaSnapshot.h"
+#include "backend/query/provider/database/structure/schemaBuilder.h"
+#include "backend/query/provider/database/structure/schemaSnapshot.h"
 #include "backend/restructureInfo.h"
 #include "core/clsid.h"
 #include "core/guid.h"

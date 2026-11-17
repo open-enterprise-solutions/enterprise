@@ -21,13 +21,14 @@
 #include <map>         // the minted-id ledger — SyntheticId collision sweep
 #include <set>         // distinct ids a declaration mints
 
-#include "backend/query/provider/queryProvider.h"   // ibQueryComposer + ibQueryRamTable
-#include "backend/query/querySelector.h"            // ibSelector — traversal façade over a snapshot
-#include "backend/query/provider/dbTableProvider.h" // ibDbTableProvider::CanColocate* (the gates)
-#include "backend/query/dataQueryBuilder.h"         // ibDataQuerySpec / ibQueryNode / AggregateItem
-#include "backend/query/queryable.h"                // ibBackendQueryable / ibQueryCondition
-#include "backend/query/queryColumn.h"              // ibBackendQueryColumn / ibBackendColumnRawDB
-#include "backend/query/temp/tempTableQueryable.h" // ibCteQueryable — what a declared query publishes
+#include "backend/query/provider/queryComposer.h"            // ibQueryComposer + ibQueryRamTable
+#include "backend/query/querySelector.h"                     // ibSelector — traversal façade over a snapshot
+#include "backend/query/provider/database/dbTableProvider.h" // ibDbTableProvider::CanColocate* (the gates)
+#include "backend/query/dataQueryBuilder.h"                  // ibDataQuerySpec / ibQueryNode / AggregateItem
+#include "backend/query/queryable.h"                         // ibBackendQueryable / ibQueryCondition
+#include "backend/query/queryColumn.h"                       // ibBackendQueryColumn / ibBackendColumnRawDB
+#include "backend/query/tempTableQueryable.h"                // ibCteQueryable — what a declared query publishes
+#include "backend/query/queryException.h"                    // ibBackendQueryException — a tree the database refuses
 #include "core/clsid.h"                    // reference_to_clsid — a reference-typed column (multi-field spread)
 
 namespace {
@@ -68,7 +69,10 @@ public:
 	// A stable, table-distinct guid from the id, so identity/colocation logic still tells the two tables
 	// apart — made once and kept, because the source hands out the key its metaobject keeps (a reference).
 	const ibUniqueKey& GetQueryTableGuid() const override { return m_key; }
-	bool     IsComputedInRam()   const override { return m_computed; }
+	// A computed leaf is read by the computed provider, as every real one is — the road is the provider's answer.
+	ibBackendQueryProvider& GetProvider() const override {
+		return m_computed ? ibComputedProviderInstance() : ibBackendQueryable::GetProvider();
+	}
 	const ibMetaData* GetMetaData() const override { return nullptr; }
 	std::vector<std::shared_ptr<const ibBackendQueryColumn>> GetQueryColumns() const override { return m_cols; }
 	bool ContainColumn(const std::shared_ptr<const ibBackendQueryColumn>& col) const override {
@@ -104,7 +108,6 @@ public:
 	const std::vector<ibQueryCondition>& Seen() const { return m_seen; }
 
 	ibBackendQueryProvider& GetProvider() const override { return ibComputedProviderInstance(); }
-	bool     IsComputedInRam() const override { return true; }
 	ibQueryRamTable ComputeRows(const std::vector<ibQueryCondition>& extra) const override {
 		m_seen = extra;                                  // record, then ignore — see the note above
 		return m_build ? m_build() : ibQueryRamTable();
@@ -127,6 +130,102 @@ private:
 	std::function<ibQueryRamTable()>                         m_build;
 	mutable std::vector<ibQueryCondition>                    m_seen;
 };
+
+// A provider that WRITES ITS OWN STATEMENTS on another connection — a base elsewhere, the journal kept in SQL. It
+// computes nothing in memory (IsComputedInRam stays false), and its CanJoinOn says yes to no connection of ours (the
+// default), so none of its sources may go into our statement.
+class ForeignProvider : public ibBackendQueryProvider {
+public:
+	ibDataQueryResult ExecuteRead(const ibDataQuerySpec& spec, const ibReadPageRequest& /*page*/) override {
+		return ibDataQueryResult(ibQueryRamTable(), spec.m_queryable);
+	}
+};
+
+// A table of that other connection: a plain table by every answer it gives, but read by the foreign provider.
+class ForeignQueryable : public TestQueryable {
+public:
+	using TestQueryable::TestQueryable;
+	ibBackendQueryProvider& GetProvider() const override { static ForeignProvider s_foreign; return s_foreign; }
+};
+
+// ⭐ A PROVIDER OF ANOTHER CONNECTION THAT WRITES A TREE OF ITS OWN TABLES AS ONE STATEMENT — a base elsewhere, the
+// join its server's. It takes whole what is asked of its tables alone (CanColocate, TryFoldTotalsInDbms, TryPageGroupLevel)
+// and counts what it was handed, so a test tells a tree that went to it whole from leaves read one by one.
+class RemoteProvider : public ibBackendQueryProvider {
+public:
+	explicit RemoteProvider(const ibString& connection) : m_connection(connection) {}
+	const ibString& GetConnection() const { return m_connection; }
+
+	bool CanColocate(const ibDataQuerySpec& spec) const override { return OneStatement(spec.m_root); }
+
+	ibDataQueryResult ExecuteRead(const ibDataQuerySpec& spec, const ibReadPageRequest& /*page*/) override {
+		++(IsTree(spec) ? m_treeReads : m_leafReads);
+		return NoRows(spec);
+	}
+	ibDataQueryResult ExecuteAggregate(const ibDataQuerySpec& spec) override {
+		++(IsTree(spec) ? m_treeAggregates : m_leafAggregates);
+		return NoRows(spec);
+	}
+	bool TryPageGroupLevel(const ibDataQuerySpec& spec, const ibReadPageRequest& /*page*/, ibDataQueryResult& out) override {
+		if (IsTree(spec))
+			return false;
+		++m_pages;
+		out = NoRows(spec);
+		return true;
+	}
+	bool TryFoldTotalsInDbms(const ibDataQuerySpec& spec, ibSelectorTree& out) override {
+		if (!OneStatement(spec.m_root))
+			return false;
+		++m_totals;
+		out = ibSelectorTree();
+		return true;
+	}
+
+	int m_treeReads = 0, m_leafReads = 0, m_treeAggregates = 0, m_leafAggregates = 0, m_pages = 0, m_totals = 0;
+
+private:
+	static bool IsTree(const ibDataQuerySpec& spec) { return spec.m_root != nullptr && spec.m_root->m_kind != ibQueryNode::Kind::Source; }
+	// Every leaf of the tree one of ITS tables (defined below RemoteQueryable, which answers that).
+	bool OneStatement(const std::shared_ptr<ibQueryNode>& node) const;
+	// The source's columns and no rows: what came back is not the question, who was handed what is.
+	static ibDataQueryResult NoRows(const ibDataQuerySpec& spec) {
+		ibQueryRamTable rows;
+		for (const std::shared_ptr<const ibBackendQueryColumn>& c : spec.m_queryable->GetQueryColumns())
+			rows.AddColumn(c->GetColumnId(), c->GetName(), kNoType);
+		return ibDataQueryResult(std::move(rows), spec.m_queryable);
+	}
+
+	ibString m_connection;
+};
+
+// A table of that connection.
+class RemoteQueryable : public TestQueryable {
+public:
+	RemoteQueryable(const ibString& table, ibMetaID metaId, RemoteProvider& provider)
+		: TestQueryable(table, metaId), m_provider(provider) {}
+	ibBackendQueryProvider& GetProvider() const override { return m_provider; }
+	const ibString& GetConnection() const { return m_provider.GetConnection(); }
+private:
+	RemoteProvider& m_provider;
+};
+
+bool RemoteProvider::OneStatement(const std::shared_ptr<ibQueryNode>& node) const
+{
+	if (node == nullptr)
+		return true;   // the one source the spec reads, asked of its own provider
+	switch (node->m_kind) {
+	case ibQueryNode::Kind::Source: {
+		const RemoteQueryable* table = dynamic_cast<const RemoteQueryable*>(node->m_queryable.get());
+		return table != nullptr && table->GetConnection() == m_connection;
+	}
+	case ibQueryNode::Kind::Join:
+		return OneStatement(node->m_left) && OneStatement(node->m_right);
+	case ibQueryNode::Kind::Union:
+		return std::all_of(node->m_parts.begin(), node->m_parts.end(),
+		                   [this](const std::shared_ptr<ibQueryNode>& part) { return OneStatement(part); });
+	}
+	return false;
+}
 
 // One-column key table (model id `id`) holding `keys` — the driving side of the reductions below.
 ibQueryRamTable KeyRows(ibMetaID id, const ibString& name, const std::vector<long>& keys)
@@ -470,18 +569,18 @@ TEST(QueryComposerCore, RamSortCompareKey_NullOrdering)
 	const ibValue a(ibString(wxT("A"))), b(ibString(wxT("B")));
 
 	// non-NULL total order, both directions; equal keys fall through (0)
-	EXPECT_LT(ibQueryComposer::RamSortCompareKey(a, b, true ), 0);   // A before B (asc)
-	EXPECT_GT(ibQueryComposer::RamSortCompareKey(a, b, false), 0);   // B before A (desc)
-	EXPECT_EQ(ibQueryComposer::RamSortCompareKey(a, a, true ), 0);   // equal -> next key
+	EXPECT_LT(RamSortCompareKey(a, b, true ), 0);   // A before B (asc)
+	EXPECT_GT(RamSortCompareKey(a, b, false), 0);   // B before A (desc)
+	EXPECT_EQ(RamSortCompareKey(a, a, true ), 0);   // equal -> next key
 
 	// NULL is the smallest value
-	EXPECT_LT(ibQueryComposer::RamSortCompareKey(nul, a, true ), 0); // ASC -> NULL first
-	EXPECT_GT(ibQueryComposer::RamSortCompareKey(a, nul, true ), 0);
-	EXPECT_GT(ibQueryComposer::RamSortCompareKey(nul, a, false), 0); // DESC -> NULL last
-	EXPECT_LT(ibQueryComposer::RamSortCompareKey(a, nul, false), 0);
+	EXPECT_LT(RamSortCompareKey(nul, a, true ), 0); // ASC -> NULL first
+	EXPECT_GT(RamSortCompareKey(a, nul, true ), 0);
+	EXPECT_GT(RamSortCompareKey(nul, a, false), 0); // DESC -> NULL last
+	EXPECT_LT(RamSortCompareKey(a, nul, false), 0);
 
-	EXPECT_EQ(ibQueryComposer::RamSortCompareKey(nul, nul, true ), 0); // both NULL -> equal
-	EXPECT_EQ(ibQueryComposer::RamSortCompareKey(nul, nul, false), 0);
+	EXPECT_EQ(RamSortCompareKey(nul, nul, true ), 0); // both NULL -> equal
+	EXPECT_EQ(RamSortCompareKey(nul, nul, false), 0);
 }
 
 // Drive a stable_sort with the comparator: NULLs cluster first (ASC) / last (DESC) deterministically,
@@ -494,7 +593,7 @@ TEST(QueryComposerCore, RamSortCompareKey_StableSortPlacesNulls)
 
 	std::vector<ibValue> asc = v;
 	std::stable_sort(asc.begin(), asc.end(),
-		[](const ibValue& x, const ibValue& y) { return ibQueryComposer::RamSortCompareKey(x, y, true) < 0; });
+		[](const ibValue& x, const ibValue& y) { return RamSortCompareKey(x, y, true) < 0; });
 	EXPECT_EQ(asc[0].GetType(), ibValueTypes::TYPE_NULL);         // NULLs first
 	EXPECT_EQ(asc[1].GetType(), ibValueTypes::TYPE_NULL);
 	EXPECT_EQ(asc[2].GetString().ToStdString(), "A");
@@ -502,7 +601,7 @@ TEST(QueryComposerCore, RamSortCompareKey_StableSortPlacesNulls)
 
 	std::vector<ibValue> desc = v;
 	std::stable_sort(desc.begin(), desc.end(),
-		[](const ibValue& x, const ibValue& y) { return ibQueryComposer::RamSortCompareKey(x, y, false) < 0; });
+		[](const ibValue& x, const ibValue& y) { return RamSortCompareKey(x, y, false) < 0; });
 	EXPECT_EQ(desc[0].GetString().ToStdString(), "B");           // NULLs last
 	EXPECT_EQ(desc[1].GetString().ToStdString(), "A");
 	EXPECT_EQ(desc[2].GetType(), ibValueTypes::TYPE_NULL);
@@ -647,6 +746,24 @@ TEST(QueryComposerGate, Join_ComputedLeaf_NotColocatable)
 	EXPECT_FALSE(ibDbTableProvider::CanColocateJoin(spec));   // a computed leaf -> RAM (or temp-promote, not this gate)
 }
 
+// ⭐ A LEAF ANOTHER PROVIDER READS IS NOT THIS STATEMENT'S — even one that is no computed source at all: its own
+// provider writes SQL for another connection, and rendered into ours it would name a table our server does not have.
+TEST(QueryComposerGate, Join_ForeignProviderLeaf_NotColocatable)
+{
+	const std::shared_ptr<const ibBackendColumnRawDB> aKey = ibBackendColumnRawDB::Number(wxT("a_key"));
+	const std::shared_ptr<const ibBackendColumnRawDB> aOut = ibBackendColumnRawDB::String(wxT("a_out"));
+	const std::shared_ptr<const ibBackendColumnRawDB> fKey = ibBackendColumnRawDB::Number(wxT("f_key"));
+	const auto A = std::make_shared<TestQueryable>(wxT("TableA"), 1);    A->AddCol(aKey); A->AddCol(aOut);
+	const auto F = std::make_shared<ForeignQueryable>(wxT("Remote"), 2); F->AddCol(fKey);
+
+	auto root = Join2(A, F, aKey, fKey);
+	SpecBuf buf; buf.sel = { { aOut, wxT("ao") } };
+	const ibDataQuerySpec spec = buf.Make(root, A);
+
+	EXPECT_FALSE(F->GetProvider().IsComputedInRam());          // not a computed source…
+	EXPECT_FALSE(ibDbTableProvider::CanColocateJoin(spec));    // …and still joined in memory, each side by its own provider
+}
+
 TEST(QueryComposerGate, Join_ColumnTheta_Colocatable)
 {
 	// A column-to-column theta join (a_key > b_key) over two DB tables renders server-side now — the ON
@@ -706,6 +823,180 @@ TEST(QueryComposerGate, Union_ComputedBranch_NotColocatableDirectly)
 
 	// A computed branch fails the DIRECT union gate (the composer's mixed-promote path handles it).
 	EXPECT_FALSE(ibDbTableProvider::CanColocateUnion(spec));
+}
+
+TEST(QueryComposerGate, Union_ForeignProviderBranch_NotColocatable)
+{
+	const std::shared_ptr<const ibBackendColumnRawDB> aCode = ibBackendColumnRawDB::String(wxT("code"));
+	const std::shared_ptr<const ibBackendColumnRawDB> fCode = ibBackendColumnRawDB::String(wxT("code"));
+	const auto A = std::make_shared<TestQueryable>(wxT("TableA"), 1);    A->AddCol(aCode);
+	const auto F = std::make_shared<ForeignQueryable>(wxT("Remote"), 2); F->AddCol(fCode);
+
+	auto root = std::make_shared<ibQueryNode>();
+	root->m_kind = ibQueryNode::Kind::Union;
+	root->m_parts.push_back(ibQueryNode::Source(A));
+	root->m_parts.push_back(ibQueryNode::Source(F));
+
+	SpecBuf buf; buf.sel = { { aCode, wxT("code") } };
+	const ibDataQuerySpec spec = buf.Make(root, A);
+
+	EXPECT_FALSE(ibDbTableProvider::CanColocateUnion(spec));   // a branch of another connection -> RAM union
+}
+
+// ⭐ THE DOOR REFUSES A TREE IT CANNOT WRITE. Handed to the database provider without CanColocate's yes, a join, its
+// fold and a union are refused before any statement is built — never written naming a table this server has not.
+TEST(QueryComposerGate, Join_ComputedLeaf_HandedWhole_Refused)
+{
+	const std::shared_ptr<const ibBackendColumnRawDB> aKey = ibBackendColumnRawDB::Number(wxT("a_key"));
+	const std::shared_ptr<const ibBackendColumnRawDB> aOut = ibBackendColumnRawDB::String(wxT("a_out"));
+	const std::shared_ptr<const ibBackendColumnRawDB> cKey = ibBackendColumnRawDB::Number(wxT("c_key"));
+	const auto A = std::make_shared<TestQueryable>(wxT("TableA"), 1);               A->AddCol(aKey); A->AddCol(aOut);
+	const auto C = std::make_shared<TestQueryable>(wxT("Slice"), 2, /*computed*/ true); C->AddCol(cKey);
+
+	SpecBuf buf; buf.sel = { { aOut, wxT("ao") } };
+	const ibDataQuerySpec spec = buf.Make(Join2(A, C, aKey, cKey), A);
+
+	EXPECT_THROW(ibDbTableProviderInstance().ExecuteRead(spec, ibReadPageRequest{}), ibBackendQueryException);
+}
+
+TEST(QueryComposerGate, JoinAggregate_ForeignLeaf_HandedWhole_Refused)
+{
+	const std::shared_ptr<const ibBackendColumnRawDB> aKey = ibBackendColumnRawDB::Number(wxT("a_key"));
+	const std::shared_ptr<const ibBackendColumnRawDB> aDim = ibBackendColumnRawDB::String(wxT("a_dim"));
+	const std::shared_ptr<const ibBackendColumnRawDB> fKey = ibBackendColumnRawDB::Number(wxT("f_key"));
+	const auto A = std::make_shared<TestQueryable>(wxT("TableA"), 1);    A->AddCol(aKey); A->AddCol(aDim);
+	const auto F = std::make_shared<ForeignQueryable>(wxT("Remote"), 2); F->AddCol(fKey);
+
+	SpecBuf buf; buf.groupBy = { aDim };
+	const ibDataQuerySpec spec = buf.Make(Join2(A, F, aKey, fKey), A);
+
+	EXPECT_THROW(ibDbTableProviderInstance().ExecuteAggregate(spec), ibBackendQueryException);
+}
+
+TEST(QueryComposerGate, Union_ForeignBranch_HandedWhole_Refused)
+{
+	const std::shared_ptr<const ibBackendColumnRawDB> fCode = ibBackendColumnRawDB::String(wxT("code"));
+	const std::shared_ptr<const ibBackendColumnRawDB> aCode = ibBackendColumnRawDB::String(wxT("code"));
+	const auto F = std::make_shared<ForeignQueryable>(wxT("Remote"), 1); F->AddCol(fCode);
+	const auto A = std::make_shared<TestQueryable>(wxT("TableA"), 2);    A->AddCol(aCode);
+
+	auto root = std::make_shared<ibQueryNode>();
+	root->m_kind = ibQueryNode::Kind::Union;
+	root->m_parts.push_back(ibQueryNode::Source(F));   // the first branch already one this statement cannot take
+	root->m_parts.push_back(ibQueryNode::Source(A));
+
+	SpecBuf buf; buf.sel = { { fCode, wxT("code") } };
+	const ibDataQuerySpec spec = buf.Make(root, F);
+
+	EXPECT_THROW(ibDbTableProviderInstance().ExecuteRead(spec, ibReadPageRequest{}), ibBackendQueryException);
+}
+
+// ===========================================================================
+// A provider of another connection writes ITS trees, folds and pages itself — the composer asks the provider of the
+// primary source and never names the base's own (RemoteProvider records what it was handed).
+// ===========================================================================
+
+TEST(QueryComposerRemote, Join_OfItsTables_GoesToItWhole)
+{
+	RemoteProvider remote(wxT("elsewhere"));
+	const auto aKey = std::make_shared<TestCol>(wxT("k"), 1);
+	const auto bKey = std::make_shared<TestCol>(wxT("k"), 2);
+	const auto bVal = std::make_shared<TestCol>(wxT("v"), 3);
+	const auto A = std::make_shared<RemoteQueryable>(wxT("a"), 100, remote); A->AddCol(aKey);
+	const auto B = std::make_shared<RemoteQueryable>(wxT("b"), 101, remote); B->AddCol(bKey); B->AddCol(bVal);
+
+	ibDataQueryBuilder q(nullptr);
+	q.From(A).Join(B, aKey, bKey);
+	q.Select(bVal, wxT("v"));
+	ibReadPageRequest page;
+	(void)q.Execute(page);
+
+	EXPECT_EQ(remote.m_treeReads, 1) << "the join is one statement of its server";
+	EXPECT_EQ(remote.m_leafReads, 0) << "no table of it was read alone";
+}
+
+// …and joined to a source it does not write, it reads its own table alone and the join is stitched in memory.
+TEST(QueryComposerRemote, Join_ToAnotherProvider_EachSideReadByItsOwn)
+{
+	RemoteProvider remote(wxT("elsewhere"));
+	const ibMetaID AK = 1, BK = 2, BV = 3;
+	const auto aKey = std::make_shared<TestCol>(wxT("k"), AK);
+	const auto bKey = std::make_shared<TestCol>(wxT("k"), BK);
+	const auto bVal = std::make_shared<TestCol>(wxT("v"), BV);
+	const auto A = std::make_shared<RemoteQueryable>(wxT("a"), 100, remote); A->AddCol(aKey);
+	const auto B = std::make_shared<RecordingComputedQ>(wxT("b"), 101);     B->AddCol(bKey); B->AddCol(bVal);
+	B->SetRows([&] {
+		ibQueryRamTable t;
+		t.AddColumn(BK, wxT("k"), kNoType);
+		t.AddColumn(BV, wxT("v"), kNoType);
+		const long r = t.AppendRow();
+		t.SetCell(r, BK, ibValue(ibNumber(1)));
+		t.SetCell(r, BV, ibValue(ibNumber(10)));
+		return t;
+	});
+
+	ibDataQueryBuilder q(nullptr);
+	q.From(A).Join(B, aKey, bKey);
+	q.Select(bVal, wxT("v"));
+	ibReadPageRequest page;
+	ibDataQueryResult res = q.Execute(page);
+
+	int rows = 0;
+	while (res.Next()) ++rows;
+	EXPECT_EQ(rows, 0) << "its table came back empty - an inner join of nothing";
+	EXPECT_EQ(remote.m_treeReads, 0) << "a tree with a table it does not write is not its statement";
+	EXPECT_GT(remote.m_leafReads, 0) << "its own table is read by it, on its server";
+}
+
+TEST(QueryComposerRemote, Aggregate_OfItsTables_FoldedByIt)
+{
+	RemoteProvider remote(wxT("elsewhere"));
+	const auto aKey = std::make_shared<TestCol>(wxT("k"), 1);
+	const auto bKey = std::make_shared<TestCol>(wxT("k"), 2);
+	const auto bVal = std::make_shared<TestCol>(wxT("v"), 3);
+	const auto A = std::make_shared<RemoteQueryable>(wxT("a"), 100, remote); A->AddCol(aKey);
+	const auto B = std::make_shared<RemoteQueryable>(wxT("b"), 101, remote); B->AddCol(bKey); B->AddCol(bVal);
+
+	SpecBuf buf;
+	buf.groupBy = { aKey };
+	ibDataQueryBuilder::AggregateItem sum;
+	sum.m_fn = ibDataQueryBuilder::AggregateFn::Sum; sum.m_col = bVal; sum.m_alias = wxT("total");
+	buf.aggs = { sum };
+	ibQueryComposer::ExecuteAggregate(buf.Make(Join2(A, B, aKey, bKey), A));
+
+	EXPECT_EQ(remote.m_treeAggregates, 1) << "the join and its GROUP BY are one statement of its server";
+	EXPECT_EQ(remote.m_leafReads, 0);
+}
+
+TEST(QueryComposerRemote, Totals_OfItsTables_FoldedByIt)
+{
+	RemoteProvider remote(wxT("elsewhere"));
+	const auto aKey = std::make_shared<TestCol>(wxT("k"), 1);
+	const auto bKey = std::make_shared<TestCol>(wxT("k"), 2);
+	const auto A = std::make_shared<RemoteQueryable>(wxT("a"), 100, remote); A->AddCol(aKey);
+	const auto B = std::make_shared<RemoteQueryable>(wxT("b"), 101, remote); B->AddCol(bKey);
+
+	SpecBuf buf;
+	ibQueryComposer::ExecuteTotals(buf.Make(Join2(A, B, aKey, bKey), A));
+
+	EXPECT_EQ(remote.m_totals, 1) << "its server folds the levels; no detail is read to fold them here";
+	EXPECT_EQ(remote.m_leafReads, 0);
+	EXPECT_EQ(remote.m_treeReads, 0);
+}
+
+TEST(QueryComposerRemote, GroupLevelPage_OfItsTable_PagedByIt)
+{
+	RemoteProvider remote(wxT("elsewhere"));
+	const auto aKey = std::make_shared<TestCol>(wxT("k"), 1);
+	const auto A = std::make_shared<RemoteQueryable>(wxT("a"), 100, remote); A->AddCol(aKey);
+
+	SpecBuf buf;
+	buf.groupBy = { aKey };
+	ibReadPageRequest page;
+	ibQueryComposer::ExecuteGroupLevelPage(buf.Make(nullptr, A), page);
+
+	EXPECT_EQ(remote.m_pages, 1);
+	EXPECT_EQ(remote.m_leafAggregates, 0) << "paged by it, not every group folded at once";
 }
 
 // The co-located UNION read pushes the full boolean WHERE tree + RLS semi-join into EACH branch
@@ -1056,6 +1347,7 @@ TEST(QueryComposerGate, RollupTotals_SingleSource_NotColocatable)
 // Routing gate — CanPageGroupLevel (single-level group KEYSET paging: one plain scalar dimension over a
 // single DB source pages its groups server-side — GROUP BY dim ORDER BY dim [dim > anchor] LIMIT count —
 // instead of reading every detail row and folding all groups in RAM). Outside the shape keeps the fold.
+// The database's gate of TryPageGroupLevel, which the composer asks of the provider of the spec's primary source.
 // ===========================================================================
 
 TEST(QueryComposerGate, GroupLevelPage_SingleScalarDim_Pageable)
@@ -1103,6 +1395,32 @@ TEST(QueryComposerGate, GroupLevelPage_JoinSource_NotPageable)
 	buf.groupBy = { aDim };
 	const ibDataQuerySpec spec = buf.Make(root, A);
 	EXPECT_FALSE(ibDbTableProvider::CanPageGroupLevel(spec));   // multi-source group -> RAM fold (co-location is a later step)
+}
+
+// The page is written `FROM <its table>` on the base's connection — so the provider of a source the base's statement
+// cannot read pages nothing: one computed in memory (a register's balance would page its movements' table)… (That
+// the composer asks the source's own provider is QueryComposerRemote's, GroupLevelPage_OfItsTable_PagedByIt.)
+TEST(QueryComposerGate, GroupLevelPage_ComputedSource_NotPageable)
+{
+	const std::shared_ptr<const ibBackendColumnRawDB> dim = ibBackendColumnRawDB::String(wxT("code"));
+	const auto C = std::make_shared<TestQueryable>(wxT("Slice"), 1, /*computed*/ true); C->AddCol(dim);
+	SpecBuf buf;
+	buf.groupBy = { dim };
+	const ibDataQuerySpec spec = buf.Make(nullptr, C);
+	ibDataQueryResult page = ibMakeEmptyQueryResult();
+	EXPECT_FALSE(spec.m_queryable->GetProvider().TryPageGroupLevel(spec, ibReadPageRequest{}, page));
+}
+
+// …and one of another connection.
+TEST(QueryComposerGate, GroupLevelPage_ForeignSource_NotPageable)
+{
+	const std::shared_ptr<const ibBackendColumnRawDB> dim = ibBackendColumnRawDB::String(wxT("code"));
+	const auto F = std::make_shared<ForeignQueryable>(wxT("Remote"), 1); F->AddCol(dim);
+	SpecBuf buf;
+	buf.groupBy = { dim };
+	const ibDataQuerySpec spec = buf.Make(nullptr, F);
+	ibDataQueryResult page = ibMakeEmptyQueryResult();
+	EXPECT_FALSE(spec.m_queryable->GetProvider().TryPageGroupLevel(spec, ibReadPageRequest{}, page));
 }
 
 TEST(QueryComposerGate, GroupLevelPage_ReferenceDim_NotPageable)
@@ -1282,9 +1600,10 @@ TEST(QueryComposerGate, RollupTotals_MultiSource_NotSingleShape)
 	EXPECT_FALSE(ibDbTableProvider::CanRollupTotalsShape(spec));   // join tree -> not single-source
 }
 
-TEST(QueryComposerGate, RollupTotals_SingleComputed_NotShape)
+TEST(QueryComposerGate, RollupTotals_SingleComputed_NotFolded)
 {
-	// A computed (RAM) single source (a register slice) can't push ROLLUP -> RAM fold.
+	// The provider of a computed (RAM) single source (a register slice) folds nothing on a server -> RAM fold. (That
+	// the composer asks the source's own provider is QueryComposerRemote's, Totals_OfItsTables_FoldedByIt.)
 	const std::shared_ptr<const ibBackendColumnRawDB> dim = ibBackendColumnRawDB::String(wxT("dim"));
 	const std::shared_ptr<const ibBackendColumnRawDB> amt = ibBackendColumnRawDB::Number(wxT("amt"));
 	const auto C = std::make_shared<TestQueryable>(wxT("Slice"), 1, /*computed*/ true); C->AddCol(dim); C->AddCol(amt);
@@ -1296,7 +1615,27 @@ TEST(QueryComposerGate, RollupTotals_SingleComputed_NotShape)
 	buf.aggs = { sum };
 	const ibDataQuerySpec spec = buf.Make(nullptr, C);
 
-	EXPECT_FALSE(ibDbTableProvider::CanRollupTotalsShape(spec));   // computed source -> RAM
+	ibSelectorTree folded;
+	EXPECT_FALSE(spec.m_queryable->GetProvider().TryFoldTotalsInDbms(spec, folded));   // computed source -> RAM
+}
+
+TEST(QueryComposerGate, RollupTotals_SingleForeign_NotFolded)
+{
+	// The provider of one of another connection folds nothing either — never our ROLLUP over a table the base does
+	// not have.
+	const std::shared_ptr<const ibBackendColumnRawDB> dim = ibBackendColumnRawDB::String(wxT("dim"));
+	const std::shared_ptr<const ibBackendColumnRawDB> amt = ibBackendColumnRawDB::Number(wxT("amt"));
+	const auto F = std::make_shared<ForeignQueryable>(wxT("Remote"), 1); F->AddCol(dim); F->AddCol(amt);
+
+	SpecBuf buf;
+	buf.groupBy = { dim };
+	ibDataQueryBuilder::AggregateItem sum;
+	sum.m_fn = ibDataQueryBuilder::AggregateFn::Sum; sum.m_col = amt; sum.m_alias = wxT("total");
+	buf.aggs = { sum };
+	const ibDataQuerySpec spec = buf.Make(nullptr, F);
+
+	ibSelectorTree folded;
+	EXPECT_FALSE(spec.m_queryable->GetProvider().TryFoldTotalsInDbms(spec, folded));   // its provider folds no totals -> RAM
 }
 
 // ===========================================================================
@@ -1344,7 +1683,7 @@ TEST(QueryHierarchy, Hierarchy_TreeSubtotalsHasChildren)
 	const auto parentCol = std::make_shared<TestCol>(wxT("parent"), HPARENT);
 	const auto amtCol    = std::make_shared<TestCol>(wxT("amount"), HAMT);
 	const ibQueryRamTable d = HierDetail();
-	const ibSelectorTree tree = ibQueryComposer::BuildHierarchyTree(
+	const ibSelectorTree tree = BuildHierarchyTree(
 		d, keyCol, parentCol, { SumOf(amtCol) }, ibDimensionKind::Hierarchy);
 
 	const ibSelectorTree::Node& root = tree.Root();
@@ -1372,7 +1711,7 @@ TEST(QueryHierarchy, HierarchyOnly_FoldersOnly)
 	const auto parentCol = std::make_shared<TestCol>(wxT("parent"), HPARENT);
 	const auto amtCol    = std::make_shared<TestCol>(wxT("amount"), HAMT);
 	const ibQueryRamTable d = HierDetail();
-	const ibSelectorTree tree = ibQueryComposer::BuildHierarchyTree(
+	const ibSelectorTree tree = BuildHierarchyTree(
 		d, keyCol, parentCol, { SumOf(amtCol) }, ibDimensionKind::HierarchyOnly);
 
 	const ibSelectorTree::Node& root = tree.Root();
@@ -1391,7 +1730,7 @@ TEST(QueryHierarchy, Elements_LeafNodesWithGrandTotal)
 	const auto parentCol = std::make_shared<TestCol>(wxT("parent"), HPARENT);
 	const auto amtCol    = std::make_shared<TestCol>(wxT("amount"), HAMT);
 	const ibQueryRamTable d = HierDetail();
-	const ibSelectorTree tree = ibQueryComposer::BuildHierarchyTree(
+	const ibSelectorTree tree = BuildHierarchyTree(
 		d, keyCol, parentCol, { SumOf(amtCol) }, ibDimensionKind::Elements);
 
 	ASSERT_EQ(tree.Root().m_children.size(), 5u);                            // every row a leaf node, no nesting
