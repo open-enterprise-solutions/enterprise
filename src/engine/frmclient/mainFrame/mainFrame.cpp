@@ -45,6 +45,8 @@
 #include "frmclient/win/dlgs/formEditor.h"
 #include "frmclient/win/dlgs/generation.h"
 #include "frmclient/win/dlgs/search.h"
+#include "frmclient/win/dlgs/typeSelector.h"
+#include "protocol/protocolDesigner.h"   // ibProtocol::ibSchema::ibProperties — how the types offered are named (Classes)
 #include "frmclient/win/dlgs/jobSchedule/jobScheduleSettings.h"
 #include "frmclient/win/editor/gridEditor/gridPrintout.h"   // a script's sheet printed — and the preview's page (ApplyFitToPageWidth)
 #include "frmclient/win/dlgs/settings/savedSettings.h"
@@ -1677,6 +1679,29 @@ void ibFrontendMainFrame::ShowRequest(const ibProtocolNode& request, ibProtocolN
 			ibDataNode chosen;
 			holder.GetChosen().Serialize(chosen);
 			ibWriteProtocolNode(chosen, response.Child(ibProtocol::ibRequest::ibSimpleChoice::Value));
+		}
+		break;
+	}
+	case ibProtocol::ibRequest::ibKind::TypeSelector: {
+		// THE DESKTOP'S TYPE PICKER over a field holding a type description — the types it may take come named in the
+		// question (Classes), the description edited is the answer; cancelled — none.
+		const ibProtocolNode classes = request.FindChild(ibProtocol::ibRequest::ibTypeSelector::Classes);
+		ibValue::ReadClasses(classes);
+		std::vector<ibClassID> offered;
+		for (const ibProtocolNode& entry : classes.Children()) {
+			unsigned long long clsid = 0;
+			if (entry.GetString(ibProtocol::ibSchema::ibProperties::Type).ToULongLong(&clsid) && clsid != 0)
+				offered.push_back(static_cast<ibClassID>(clsid));
+		}
+		auto held = std::make_shared<ibDataNode>();
+		ibReadProtocolNode(request.FindChild(ibProtocol::ibRequest::ibTypeSelector::Value), *held);
+		ibTypeDescription type;
+		ibTypeDescriptionMemory::ReadNode(ibDataValue::Child(held), type);
+		if (ibShowTypeSelector(parent, ibSelectorDataType::ibSelectorDataType_reference, offered, type, nullptr)) {
+			ibDataValue written;
+			ibTypeDescriptionMemory::WriteNode(written, type);
+			if (const std::optional<ibDataNode> node = written.AsChild())
+				ibWriteProtocolNode(*node, response.Child(ibProtocol::ibRequest::ibTypeSelector::Value));
 		}
 		break;
 	}

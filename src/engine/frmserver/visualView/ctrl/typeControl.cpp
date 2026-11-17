@@ -17,6 +17,8 @@
 #include "backend/choiceLinkResolver.h"               // what narrows this choice — type and conditions
 #include "backend/metaCollection/metaObject.h"                      // the metaobject a choice opens
 #include "frmserver/win/dlgs/selectPredefined.h"   // ibShowPredefinedSelector — the designer's declared values
+#include "frmserver/win/dlgs/typeSelector.h"       // ibShowTypeSelector — a type description edited
+#include "backend/metaCollection/partial/chartOfCharacteristicTypes.h"   // the chart a characteristic's types are its
 #include "backend/appData.h"                        // DesignerMode — the two roads part here
 
 bool ibTypeControlFactory::ChooseValue(ibControlFrame* ownerValue, const ibValueMetaObject* choiceForm)
@@ -50,10 +52,25 @@ bool ibTypeControlFactory::ChooseValue(ibControlFrame* ownerValue, const ibValue
 	// an enumeration, a reference), then the metaobject's own selection form.
 	const ibClassID clsid = current.GetClassType();
 
-	// A TYPE DESCRIPTION is edited by the type picker, an editor of its own — a protocol service beside the
-	// runtime, as every editor outside it is.
-	if (clsid == g_valueTypeDescriptionCLSID)
-		return false;
+	// A TYPE DESCRIPTION is edited by the type picker — the client's window, the one the designer opens over an attribute's
+	// Type. What may be picked is the chart's whose object holds the field: a characteristic is only ever one of the types
+	// its chart declares (TypesOfCharacteristics). A field no chart holds — a filter cell, a form's own attribute — is
+	// offered the whole reference shape, as the desktop's.
+	if (clsid == g_valueTypeDescriptionCLSID) {
+		const ibSourceObject* const source = factory->GetSourceObject();
+		const auto* const chart = source != nullptr
+			? dynamic_cast<const ibValueMetaObjectChartOfCharacteristicTypes*>(source->GetSourceMetaObject()) : nullptr;
+		ibTypeDescription offered;
+		if (chart != nullptr) {
+			offered = chart->GetTypesOfCharacteristics();
+		}
+		else if (metaData != nullptr) {
+			std::vector<ibClassID> shape;
+			ibBackendTypeConfigFactory::GetTypesByFilter(ibSelectorDataType::ibSelectorDataType_reference, metaData, shape);
+			offered.SetDefaultMetaType(shape);
+		}
+		return ibShowTypeSelector(ownerValue, offered, metaData);
+	}
 
 	// IN THE DESIGNER EVERY REFERENCE ASKS ITS DECLARED VALUES — a catalog, a document and an enumeration, one window,
 	// one habit (Max, 2026-08-28). A cell that declares nothing is standing on the type it already holds.

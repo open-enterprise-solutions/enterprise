@@ -843,6 +843,45 @@ wa-dialog.answered-only::part(close-button) {
 	height: 16px;
 }
 
+/* A type description edited (Questions.typeSelector, the thin client's type picker): the types offered, a family's
+   references under it, a plain heading not ticked; the qualifiers of the type pressed on a line under them. */
+.type-selector-dialog {
+	--width: 26rem;
+}
+
+.type-selector {
+	display: grid;
+	gap: 0.5rem;
+}
+
+.type-members {
+	display: grid;
+	gap: 0.125rem;
+	padding-left: 1.5rem;
+}
+
+.type-heading {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	padding: 0.25rem 0.5rem;
+}
+
+.type-selector-line {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0.375rem;
+}
+
+.type-selector-line[hidden] {
+	display: none;
+}
+
+.type-selector-line input[type='number'] {
+	width: 5rem;
+}
+
 /* A schedule edited (Questions.schedule, the thin client's ibDialogJobSchedule): its tabs at the window's size, their
    lines of captions and fields, a group framed as a form's static box (oes-staticboxsizer), the checked lists boxed and
    scrolled (ibCheckListBox); the sentence under the tabs. */

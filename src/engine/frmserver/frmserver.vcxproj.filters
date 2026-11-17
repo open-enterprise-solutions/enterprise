@@ -430,6 +430,9 @@
     <ClCompile Include="win\dlgs\selectPredefined.cpp">
       <Filter>win\dlgs</Filter>
     </ClCompile>
+    <ClCompile Include="win\dlgs\typeSelector.cpp">
+      <Filter>win\dlgs</Filter>
+    </ClCompile>
     <ClCompile Include="win\dlgs\settings\savedSettings.cpp">
       <Filter>win\dlgs\settings</Filter>
     </ClCompile>
@@ -935,6 +938,9 @@
       <Filter>win\dlgs</Filter>
     </ClInclude>
     <ClInclude Include="win\dlgs\selectPredefined.h">
+      <Filter>win\dlgs</Filter>
+    </ClInclude>
+    <ClInclude Include="win\dlgs\typeSelector.h">
       <Filter>win\dlgs</Filter>
     </ClInclude>
     <ClInclude Include="win\dlgs\settings\savedSettings.h">

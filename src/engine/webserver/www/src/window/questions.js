@@ -16,6 +16,7 @@ import { ListSettings } from './listSettings.js';
 import { SavedSettings } from './savedSettings.js';
 import { SearchWindow } from './searchWindow.js';
 import { calculator, calendar } from './simpleChoice.js';
+import { typeEditor } from './typeSelector.js';
 
 /** @typedef {import('../protocol/session.js').Session} Session */
 /** @typedef {import('../protocol/pictures.js').Pictures} Pictures */
@@ -28,6 +29,7 @@ import { calculator, calendar } from './simpleChoice.js';
 const Kind = Object.freeze({
 	Message: 1, Choice: 2, Edit: 4, File: 5, Generation: 6, ViewMode: 7, SavedSettings: 8, Menu: 9, FormEditor: 10,
 	ListSettings: 11, SimpleChoice: 12, ComposerSettings: 13, Error: 14, Print: 15, Schedule: 16, Search: 20,
+	TypeSelector: 21,
 });
 
 // A message's buttons — wx's flags in its Style, wx's codes in the answer (ibMessage); said as they are asked for, in
@@ -154,6 +156,9 @@ export class Questions {
 			break;
 		case Kind.Search:
 			this.search(request);
+			break;
+		case Kind.TypeSelector:
+			this.typeSelector(request);
 			break;
 		default:
 			this.dialog(_('Not in the browser yet'),
@@ -421,6 +426,25 @@ export class Questions {
 			{ caption: _('Cancel'), answer: {} },
 		], request);
 		dialog.classList.add('job-schedule-dialog');
+		dialog.querySelector('.text')?.replaceWith(editor.element);
+	}
+
+	/**
+	 * A type description, as the thin client's type picker asks it (ibShowTypeSelector) over a field that holds one: the
+	 * types offered named and drawn as the server names them (Classes), their pictures first. OK answers with the
+	 * description edited, Cancel and closing with none.
+	 * @param {ProtocolNode} request
+	 */
+	async typeSelector(request) {
+		await this.pictures.fetchFor(request).catch(() => {});
+		if (this.asked !== request.Id)
+			return;
+		const editor = typeEditor(request.Value ?? {}, request.Classes?.NodeChildren ?? [], (picture) => this.pictures.url(picture));
+		const dialog = this.dialog(_('Select data type'), '', [
+			{ caption: labelText('&OK'), preferred: true, answer: async () => ({ Value: editor.edited() }) },
+			{ caption: _('Cancel'), answer: {} },
+		], request);
+		dialog.classList.add('type-selector-dialog');
 		dialog.querySelector('.text')?.replaceWith(editor.element);
 	}
 

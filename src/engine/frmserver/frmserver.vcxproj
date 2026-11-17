@@ -258,6 +258,7 @@
     <ClCompile Include="win\dlgs\kindSelector.cpp" />
     <ClCompile Include="win\dlgs\generation.cpp" />
     <ClCompile Include="win\dlgs\selectPredefined.cpp" />
+    <ClCompile Include="win\dlgs\typeSelector.cpp" />
     <ClCompile Include="win\dlgs\settings\savedSettings.cpp" />
     <ClCompile Include="win\dlgs\settings\settingsRequest.cpp" />
     <ClCompile Include="win\dlgs\settings\list\listSettings.cpp" />
@@ -429,6 +430,7 @@
     <ClInclude Include="win\dlgs\kindSelector.h" />
     <ClInclude Include="win\dlgs\generation.h" />
     <ClInclude Include="win\dlgs\selectPredefined.h" />
+    <ClInclude Include="win\dlgs\typeSelector.h" />
     <ClInclude Include="win\dlgs\settings\savedSettings.h" />
     <ClInclude Include="win\dlgs\settings\settingsRequest.h" />
     <ClInclude Include="win\dlgs\settings\list\listSettings.h" />

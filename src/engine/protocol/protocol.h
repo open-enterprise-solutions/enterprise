@@ -542,6 +542,7 @@ namespace ibProtocol {
 			ObjectKind       = 18,   // ibObjectKind
 			PredefinedSelector = 19, // ibPredefinedSelector
 			Search           = 20,   // ibSearch
+			TypeSelector     = 21,   // ibTypeSelector
 		};
 
 		// Text, Caption, Style (ibStyle's flags) → Button (the ibStyle button pressed: Yes, No, OK, Cancel).
@@ -745,6 +746,17 @@ namespace ibProtocol {
 		namespace ibSimpleChoice {
 
 			inline constexpr const char* Value = "Value";
+
+		}
+
+		// The desktop's type picker over a field holding a type description (a characteristic's Type): Value — the
+		// description now, as ibTypeDescriptionMemory writes it; Classes — the types it may take, each once, as the
+		// configuration names and draws them (ibSchema::ibProperties: Type, Name, Picture) → Value — the description edited;
+		// none — cancelled.
+		namespace ibTypeSelector {
+
+			inline constexpr const char* Value   = "Value";
+			inline constexpr const char* Classes = "Classes";
 
 		}
 
