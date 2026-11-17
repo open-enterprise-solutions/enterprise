@@ -702,7 +702,11 @@ public:
 // ----------------------------------------------------------------------------
 
 struct ibGridCellBorder {
-	wxPenStyle m_style = wxPenStyle::wxPENSTYLE_TRANSPARENT;
+	// ⚠ UNSET UNTIL STATED, as every other part of an attribute is: `HasBorder*` reads INVALID as "not said". A
+	// transparent default made every attribute state four borders, so a merge kept the first one's (nothing) over the
+	// document's lines — the list output came up without its grid (Max, 2026-11-17). The grid's default attribute
+	// states them transparent.
+	wxPenStyle m_style = wxPenStyle::wxPENSTYLE_INVALID;
 	wxColour m_colour = *wxBLACK;
 	int m_width = 1;
 };
@@ -879,7 +883,7 @@ public:
 	bool HasOverflowMode() const { return m_fitMode.IsSpecified(); }
 	bool HasSize() const { return m_sizeRows != 1 || m_sizeCols != 1; }
 
-	bool HasAnyBorder() const { return HasBorderLeft() || HasBorderRight() || HasBorderRight() || HasBorderBottom(); }
+	bool HasAnyBorder() const { return HasBorderLeft() || HasBorderRight() || HasBorderTop() || HasBorderBottom(); }
 
 	bool HasBorderLeft() const { return m_borderLeft.m_style != wxPenStyle::wxPENSTYLE_INVALID; }
 	bool HasBorderRight() const { return m_borderRight.m_style != wxPenStyle::wxPENSTYLE_INVALID; }

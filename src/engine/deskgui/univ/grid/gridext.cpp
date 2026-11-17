@@ -3247,6 +3247,10 @@ void ibGrid::Create()
 	m_defaultCellAttr->SetRenderer(new ibGridCellStringRenderer);
 	m_defaultCellAttr->SetEditor(new ibGridCellTextEditor);
 	m_defaultCellAttr->SetFitMode(ibGridFitMode::Overflow());
+	m_defaultCellAttr->SetBorderLeft(wxPenStyle::wxPENSTYLE_TRANSPARENT, *wxBLACK);
+	m_defaultCellAttr->SetBorderRight(wxPenStyle::wxPENSTYLE_TRANSPARENT, *wxBLACK);
+	m_defaultCellAttr->SetBorderTop(wxPenStyle::wxPENSTYLE_TRANSPARENT, *wxBLACK);
+	m_defaultCellAttr->SetBorderBottom(wxPenStyle::wxPENSTYLE_TRANSPARENT, *wxBLACK);
 
 #if _USE_VISATTR
 	wxVisualAttributes gva = wxListBox::GetClassDefaultAttributes();
