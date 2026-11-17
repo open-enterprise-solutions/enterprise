@@ -89,6 +89,23 @@ done < <(git -c core.quotePath=false diff -U0 -M --no-color "$base...$head" -- '
   $n++;
 ')
 
+# 5. In backend/query/, a header of the metadata is included under provider/ and nowhere else (development.md
+# section 2). Asked of an include the change BRINGS: one the same file already had - moved, re-spelled, its
+# comment re-aligned - is not new, and the ones already there are being taken out one by one.
+while IFS=$'\t' read -r file n; do
+  [ -n "$file" ] || continue
+  report "$file" "$n" "a metadata header included in backend/query/ outside provider/ - L3 reads a source through its queryable, and a metaobject is the provider's. Ask the queryable, or move the code that needs the metaobject to query/provider/. See docs/development.md section 2."
+done < <(git -c core.quotePath=false diff -U0 -M --no-color "$base...$head" -- 'src/engine/backend/query/*' ':(exclude)src/engine/backend/query/provider/*' "${exclude[@]}" | perl -ne '
+  if (/^\+\+\+ (?:b\/(.*)|\/dev\/null)$/) { $f = $1; next }
+  if (/^@@ -\S+ \+(\d+)/)                { $n = $1; next }
+  next unless defined $f;
+  if (/^-\s*#\s*include\s*"([^"]+)"/)    { $had{"$f\t$1"} = 1; next }
+  next unless /^\+/;
+  push @added, [$f, $n, $1] if /^\+\s*#\s*include\s*"((?:backend\/)?(?:metaData\.h|metadata\w*\.h|metaCollection\/)[^"]*)"/;
+  $n++;
+  END { print "$$_[0]\t$$_[1]\n" for grep { !$had{"$$_[0]\t$$_[2]"} } @added }
+')
+
 range="$(git rev-parse --short "$base")..$(git rev-parse --short "$head")"
 if [ "$failures" -gt 0 ]; then
   echo "lint: $failures finding(s) in $range"

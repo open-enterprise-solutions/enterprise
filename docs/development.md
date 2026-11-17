@@ -87,6 +87,12 @@ Say it with `ibValueSystemFunction::Message`, or hand the reason back to the cal
 
 **Database access goes through `ibPreparedStatement`.** Never concatenate a value into SQL.
 
+**In `backend/query/`, a metaobject is the provider's.** The folder's root is the engine's face: the door,
+the lowering's face, the contracts of a source and a column. What is inside a floor lives in `lowering/`,
+`provider/`, `temp/` or `structure/`. The door reads a source through its queryable, so a metadata header
+(`metaData.h`, `metadata*.h`, `metaCollection/…`) is included under `query/provider/` and nowhere else in
+the folder. `.github/lint.sh` refuses a new one.
+
 ---
 
 ## 3. Before you add anything: where does it already live?
