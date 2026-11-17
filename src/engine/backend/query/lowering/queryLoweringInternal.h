@@ -11,8 +11,8 @@
 // file-local and stay as they were, so they live in a namespace of their own: another file of the engine
 // says ibNoCaseLess too.
 
-#include "queryLowering.h"
-#include "queryRamTable.h"   // ibQueryRamTable — what DrainIntoSnapshot pours a selection into
+#include "backend/query/queryLowering.h"
+#include "backend/query/queryRamTable.h" // ibQueryRamTable — what DrainIntoSnapshot pours a selection into
 
 #include <map>
 #include <memory>

@@ -902,7 +902,7 @@ Stated as policy 2026-08-14. The rule, its scope, the three physical reads that 
 and the four things it already forces (rollback-able apply, publication last, compensated second
 phase, schema settings must serialise) are in
 **[schema-authority.md](private/schema-authority.md)**. The differ itself is
-`query/schemaSnapshot.{h,cpp}`.
+`query/structure/schemaSnapshot.{h,cpp}`.
 
 ---
 

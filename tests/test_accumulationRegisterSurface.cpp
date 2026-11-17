@@ -23,7 +23,7 @@
 #include "backend/metaCollection/metaObject.h"
 #include "backend/metaCollection/partial/accumulationRegister.h"
 #include "backend/metaCollection/partial/registerQueryLowering.h"   // ibRegFinerThanStored — which units the totals answer
-#include "backend/query/schemaSnapshot.h"
+#include "backend/query/structure/schemaSnapshot.h"
 #include "backend/query/columnLayout.h"
 #include "backend/databaseLayer/databaseMaterializeBuilder.h"
 #include "backend/databaseLayer/databaseQueryBuilder.h"

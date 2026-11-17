@@ -13,7 +13,7 @@
 #include "backend/databaseLayer/databaseQueryBuilder.h"   // the L2 door - the "who already holds too many" count
 #include "backend/metadataSerialization.h"                // ibDeserializeValue - a declared kind, read with this configuration
 #include "backend/query/columnLayout.h"                   // ibOwnerRefField - the section's owner column
-#include "backend/query/schemaSnapshot.h"                 // ibSchemaTable::m_beforeChange - the rule the declaration carries
+#include "backend/query/structure/schemaSnapshot.h"       // ibSchemaTable::m_beforeChange - the rule the declaration carries
 #include "backend/restructureInfo.h"                      // ibRestructureInfo - where that rule states its reason
 #include "backend/system/value/composition/valueComposerField.h"   // ibMaterializeCompositionValue - a declared kind, made live
 

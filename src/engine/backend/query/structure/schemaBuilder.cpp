@@ -1,4 +1,4 @@
-#include "backend/query/schemaBuilder.h"
+#include "backend/query/structure/schemaBuilder.h"
 
 #include "backend/appData.h"                              // db_query (the local DDL channel)
 #include "backend/databaseLayer/databaseLayer.h"          // ibDatabaseLayer (Commit / BeginTransaction)

@@ -126,7 +126,7 @@ class BACKEND_API ibValueMetaObjectAttributeBase :
 
 	// (Value assembly from / binding to a DB row moved to ibDbTableProvider::GetValueAttribute /
 	// ::SetValueAttribute — it is a DB provider concern, not the metadata attribute's. See
-	// query/dbTableProvider.h. The binary dump/restore codec is ibDataMover::BinaryToStatement /
+	// query/provider/dbTableProvider.h. The binary dump/restore codec is ibDataMover::BinaryToStatement /
 	// ::BinaryFromResult (L3-3) — callers use the tier directly, no attribute forwarder.)
 
 	//contain type

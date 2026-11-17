@@ -6,13 +6,13 @@
 
 #include "queryLoweringInternal.h"
 
-#include "queryException.h"                // ibBackendQueryNameException — a name the configuration does not have
-#include "dbTableProvider.h"               // ibCastLeafScope — one query's narrowed fields, at every door
-#include "columnLayout.h"                  // DescribeColumnLayout — whether a field can be compared at all
-#include "core/query/queryRewrite.h"       // ibQueryRewrite — the check sees the query the execution runs
-#include "core/query/queryRender.h"        // ibQueryOutputName — the ONE answer to "what is this field called"
-#include "core/query/queryAggregates.h"    // ibQueryAggregatesFor — what a type does not admit is refused
-#include "core/stringTokenizer.h"          // the OVER area may name several groupings, comma-separated
+#include "backend/query/queryException.h"           // ibBackendQueryNameException — a name the configuration does not have
+#include "backend/query/provider/dbTableProvider.h" // ibCastLeafScope — one query's narrowed fields, at every door
+#include "backend/query/columnLayout.h"             // DescribeColumnLayout — whether a field can be compared at all
+#include "core/query/queryRewrite.h"                // ibQueryRewrite — the check sees the query the execution runs
+#include "core/query/queryRender.h"                 // ibQueryOutputName — the ONE answer to "what is this field called"
+#include "core/query/queryAggregates.h"             // ibQueryAggregatesFor — what a type does not admit is refused
+#include "core/stringTokenizer.h"                   // the OVER area may name several groupings, comma-separated
 
 #include <algorithm>
 #include <functional>   // the recursive walks over an expression (std::function)

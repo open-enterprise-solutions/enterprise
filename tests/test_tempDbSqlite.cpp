@@ -39,9 +39,9 @@
 #include "backend/databaseLayer/connectionHolder.h"
 #include "backend/databaseLayer/sqllite/sqliteDatabaseLayer.h"
 #include "backend/databaseLayer/databaseResultSet.h"       // ibDatabaseResultSet — ANALYZE-ran assertion
-#include "backend/query/queryProvider.h"                  // ibQueryRamTable
+#include "backend/query/provider/queryProvider.h"         // ibQueryRamTable
 #include "backend/query/queryable.h"                      // ibBackendQueryable
-#include "backend/query/tempTableManager.h"               // ibTempTableManager
+#include "backend/query/temp/tempTableManager.h"          // ibTempTableManager
 #include "backend/query/dataQueryBuilder.h"               // ibDataQueryBuilder / ibReadPageRequest
 #include "queryRoad.h"                                    // MeasureSent — the road a read took
 

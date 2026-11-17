@@ -4,10 +4,10 @@
 
 #include "queryHierarchy.h"
 
-#include "dataQueryBuilder.h"   // L3 door - the one read the whole walk needs
-#include "queryProvider.h"      // ibBackendQueryProvider - ResolveReferenceTarget, the metadata owner
-#include "dbTableProvider.h"    // ibDbTableProvider::ReferenceTargetsOf - the same owner, asked by a type
-#include "queryException.h"     // ibBackendQueryException - a column that names no catalog, refused in words
+#include "dataQueryBuilder.h"         // L3 door - the one read the whole walk needs
+#include "provider/queryProvider.h"   // ibBackendQueryProvider - ResolveReferenceTarget, the metadata owner
+#include "provider/dbTableProvider.h" // ibDbTableProvider::ReferenceTargetsOf - the same owner, asked by a type
+#include "queryException.h"           // ibBackendQueryException - a column that names no catalog, refused in words
 
 namespace {
 

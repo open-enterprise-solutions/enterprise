@@ -25,11 +25,11 @@
 #include <gtest/gtest.h>
 #include <wx/string.h>   // wxT, wxString - the engine's headers include no wx
 
-#include "backend/compiler/value.h"          // ibValue / ibNumber
-#include "backend/query/queryProvider.h"     // ibQueryComposer + ibQueryRamTable
-#include "backend/query/queryable.h"         // ibBackendQueryColumn
-#include "backend/query/queryColumn.h"       // ibTypeDescription
-#include "backend/query/dataQueryBuilder.h"  // ibQueryJoinKind
+#include "backend/compiler/value.h"               // ibValue / ibNumber
+#include "backend/query/provider/queryProvider.h" // ibQueryComposer + ibQueryRamTable
+#include "backend/query/queryable.h"              // ibBackendQueryColumn
+#include "backend/query/queryColumn.h"            // ibTypeDescription
+#include "backend/query/dataQueryBuilder.h"       // ibQueryJoinKind
 
 #include "backend/databaseLayer/sqllite/sqliteDatabaseLayer.h"
 #include "backend/databaseLayer/databaseResultSet.h"

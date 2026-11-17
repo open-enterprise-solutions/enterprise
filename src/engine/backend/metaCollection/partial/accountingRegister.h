@@ -4,8 +4,8 @@
 #include "commonObject.h"
 #include "accountingRegisterEnum.h"
 #include "backend/propertyManager/property/propertyChartOfAccounts.h"
-#include "backend/query/queryable.h"          // ibComputedRegisterQueryable<TReg> — the shared base for a computed virtual table
-#include "backend/query/tempTableQueryable.h" // ibDbTempTableQueryable — a named relation; what a SHAPE is to L3
+#include "backend/query/queryable.h"               // ibComputedRegisterQueryable<TReg> — the shared base for a computed virtual table
+#include "backend/query/temp/tempTableQueryable.h" // ibDbTempTableQueryable — a named relation; what a SHAPE is to L3
 // The register-shared lowering: ibRegBound / ibRegFold / ibRegFilterPredicate / ibRegFlatLeaves. Shared
 // on purpose — an accounting register reads a boundary and a periodicity by exactly the same words the
 // accumulation register does, and a copy per register is how two registers come to disagree.

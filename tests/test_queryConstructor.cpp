@@ -254,7 +254,7 @@ TEST(QueryConstructorModel, AHiddenStartHidesTheWalkPastAHopNobodyAnswers)
 //  session, a database or a window.
 // ===========================================================================
 
-#include "backend/query/queryTempStore.h"
+#include "backend/query/temp/queryTempStore.h"
 #include "backend/query/queryable.h"      // ibBackendQueryable — a stored table IS one
 
 namespace {

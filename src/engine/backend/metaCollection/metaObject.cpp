@@ -71,7 +71,7 @@ ibValueMetaObject::~ibValueMetaObject()
 
 // (CreateMetaTable / UpdateMetaTable / DeleteMetaTable + CreateAndUpdateTableDB removed: structure DDL
 //  is now the config-save differ's job — a metaobject DECLARES its tables AND their seed rows via
-//  ContributeTables; ibStructureBuilder snapshots + diffs both structure and data. query/schemaSnapshot.h.)
+//  ContributeTables; ibStructureBuilder snapshots + diffs both structure and data. query/structure/schemaSnapshot.h.)
 
 bool ibValueMetaObject::OnCreateMetaObject(ibMetaData* metaData, int flags)
 {

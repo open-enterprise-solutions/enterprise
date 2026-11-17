@@ -6,10 +6,10 @@
 #include "accountingRegister.h"
 
 #include "backend/backend_exception.h"                            // ibBackendCoreException — a missing side stops the apply
-#include "backend/query/schemaSnapshot.h"
+#include "backend/query/structure/schemaSnapshot.h"
 #include "backend/query/queryColumn.h"
 #include "backend/query/columnLayout.h"                          // DescribeColumnLayout -- physical fields WITH their canonical types
-#include "backend/query/tempTableQueryable.h"                       // ibSchemaTableQueryable — the totals table as a source
+#include "backend/query/temp/tempTableQueryable.h"                  // ibSchemaTableQueryable — the totals table as a source
 #include "backend/metaCollection/attribute/metaAttributeObject.h"
 #include "backend/metaCollection/resource/metaResourceObject.h"
 #include "backend/metaCollection/partial/registerQueryLowering.h"   // ibRegValueField

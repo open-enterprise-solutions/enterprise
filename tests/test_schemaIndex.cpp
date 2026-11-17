@@ -15,7 +15,7 @@
 #include <wx/string.h>   // wxT, wxString - the engine's headers include no wx
 
 #include "backend/query/queryColumn.h"
-#include "backend/query/schemaSnapshot.h"
+#include "backend/query/structure/schemaSnapshot.h"
 
 namespace {
 

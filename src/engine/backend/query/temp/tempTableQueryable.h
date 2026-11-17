@@ -9,7 +9,7 @@
 // computed provider (its rows are a RAM table it already holds); the composer joins /
 // unions it with native sources (catalog / register) like any other leaf. (docs §22.1)
 
-#include "queryProvider.h"                              // dataQueryBuilder.h / queryable.h (ibComputedProviderInstance, vended)
+#include "backend/query/provider/queryProvider.h"       // dataQueryBuilder.h / queryable.h (ibComputedProviderInstance, vended)
 #include "backend/system/value/valueTable.h"           // ibValueModelTable — iterate the pre-filled table's columns
 
 #include <memory>

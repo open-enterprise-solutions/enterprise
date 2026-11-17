@@ -18,7 +18,7 @@
 #include "backend/compiler/value.h"
 #include "backend/query/columnLayout.h"
 #include "backend/query/queryable.h"
-#include "backend/query/schemaSnapshot.h"
+#include "backend/query/structure/schemaSnapshot.h"
 #include "core/clsid.h"
 
 #include <chrono>
@@ -46,7 +46,7 @@
 #include "backend/metaCollection/resource/metaResourceObject.h"
 #include "backend/metadataConfiguration.h"
 #include "backend/propertyManager/property/propertyBoolean.h"
-#include "backend/query/schemaBuilder.h"
+#include "backend/query/structure/schemaBuilder.h"
 #include "backend/restructureInfo.h"
 #include "core/guid.h"
 

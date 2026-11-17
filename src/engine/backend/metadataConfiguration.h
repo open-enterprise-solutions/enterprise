@@ -8,7 +8,7 @@
 #include "backend/metaData.h"
 #include "backend/appData.h"
 #include "backend/appEnv.h"   // appEnv::ActiveMetaData accessor
-#include "backend/query/structureBuilder.h"   // ibStructureBuilder — the config-save structure subsystem (member)
+#include "backend/query/structure/structureBuilder.h" // ibStructureBuilder — the config-save structure subsystem (member)
 
 class ibDebuggerServer;
 class ibDebuggerClient;
@@ -486,7 +486,7 @@ private:
 
 	// The config-save STRUCTURE + SEED engine — METADATA-AGNOSTIC: it works only on snapshots this Storage
 	// hands it (built via ContributeTables on the edited config + the saved baseline). On save the Storage
-	// builds both snapshots and drives the builder's before/during/after events. (query/structureBuilder.h)
+	// builds both snapshots and drives the builder's before/during/after events. (query/structure/structureBuilder.h)
 	ibStructureBuilder m_structureBuilder;
 
 	// Designer-side debugger client. Same ownership pattern as

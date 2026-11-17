@@ -9,7 +9,7 @@
 #include "chartOfCalculationTypes.h"
 #include "backend/metaData.h"
 #include "backend/metadataSerialization.h"                         // ibDeserializeValue - a declared type, read with this configuration
-#include "backend/query/schemaSnapshot.h"                          // ibSchemaTable::m_beforeChange - the rule the declaration carries
+#include "backend/query/structure/schemaSnapshot.h"                // ibSchemaTable::m_beforeChange - the rule the declaration carries
 #include "backend/restructureInfo.h"                               // ibRestructureInfo - where that rule states its reason
 #include "backend/system/value/composition/valueComposerField.h"   // ibValueCompositionPredefined - a declared type
 

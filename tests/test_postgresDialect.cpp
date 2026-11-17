@@ -49,9 +49,9 @@
 #include "backend/databaseLayer/connectionPool.h"   // ibConnectionPool::ThreadHolder
 #include "backend/databaseLayer/connectionHolder.h" // ibDatabaseConnectionHolder
 #include "backend/query/dataQueryBuilder.h"         // ibDataQueryBuilder — a totals through the door
-#include "backend/query/queryProvider.h"            // ibQueryRamTable — the rows a temp table is made of
+#include "backend/query/provider/queryProvider.h"   // ibQueryRamTable — the rows a temp table is made of
 #include "backend/query/querySelectorTree.h"        // ibSelectorTree — the headings that come back
-#include "backend/query/tempTableManager.h"         // ibTempTableManager — a table on the server for them
+#include "backend/query/temp/tempTableManager.h"    // ibTempTableManager — a table on the server for them
 #include "core/description/typeDescription.h"       // ibTypeDescription
 #include "queryRoad.h"                              // MeasureSent — the road a totals took
 

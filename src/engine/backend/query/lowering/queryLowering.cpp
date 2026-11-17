@@ -3,33 +3,33 @@
 //	L4-2 LINQ (LowerLambda*) -> ibDataQueryBuilder, executed (queryLowering.h)
 ////////////////////////////////////////////////////////////////////////////
 
-#include "queryLowering.h"
+#include "backend/query/queryLowering.h"
 #include "queryLoweringInternal.h"         // the words this file shares with the name check and the package
 
-#include "queryException.h"                // ibBackendQuerySourceException — L3 refuses in its own variety
+#include "backend/query/queryException.h"  // ibBackendQuerySourceException — L3 refuses in its own variety
 #include "core/query/queryRewrite.h"                 // ibQueryRewrite — optimizer pass (AST -> AST)
 #include "core/query/queryRender.h"                  // ibQueryOutputName — the ONE answer to "what is this field called"
 #include "core/query/queryLexer.h"                   // ibQueryLexer::ParamNames — which words of a query are its parameters
 #include "core/query/queryParser.h"                  // ibQueryCastType — the primitive a CAST converts to, as the parser read it
-#include "queryRamTable.h"                // ibQueryRamTable — a package's temp table IS a snapshot
-#include "queryTempStore.h"               // ibQueryTempTableStore — WHO keeps the temp tables alive
-#include "tempTableQueryable.h"           // ibTempTableQueryable — a table handed in as a PARAMETER is a source
-#include "queryable.h"                    // ibBackendQueryColumn / ibQueryFilterOp
-#include "columnLayout.h"                 // ColumnFieldNames — a declared query publishes only what it can write
-#include "queryHierarchy.h"               // ibQueryHierarchyScope / ibQueryHierarchyNamedValues — «IN HIERARCHY»
-#include "queryableFactory.h"             // ibQueryableSourceDescriptor — the source that consumes its own condition
-#include "queryProvider.h"                // ibBackendQueryProvider — GetProvider().ResolveReferenceTarget (dot-walk resolution)
-#include "dbTableProvider.h"              // ibDbTableProvider::CanDeclareAsNamedQuery — would this door render whole?
-#include "queryableFactory.h"             // ibQueryableFactory — source-namespace resolution
-#include "backend/appData.h"              // ibApplicationInstance::GetQueryableFactory
-#include "backend/session/session.h"      // the session's access policy — an IN (SELECT …) said as EXISTS is guarded by it
-#include "backend/metaData.h"             // ibMetaData::GetSourceFactory — resolve through the query's OWN config
+#include "backend/query/queryRamTable.h"            // ibQueryRamTable — a package's temp table IS a snapshot
+#include "backend/query/temp/queryTempStore.h"      // ibQueryTempTableStore — WHO keeps the temp tables alive
+#include "backend/query/temp/tempTableQueryable.h"  // ibTempTableQueryable — a table handed in as a PARAMETER is a source
+#include "backend/query/queryable.h"                // ibBackendQueryColumn / ibQueryFilterOp
+#include "backend/query/columnLayout.h"             // ColumnFieldNames — a declared query publishes only what it can write
+#include "backend/query/queryHierarchy.h"           // ibQueryHierarchyScope / ibQueryHierarchyNamedValues — «IN HIERARCHY»
+#include "backend/query/queryableFactory.h"         // ibQueryableSourceDescriptor — the source that consumes its own condition
+#include "backend/query/provider/queryProvider.h"   // ibBackendQueryProvider — GetProvider().ResolveReferenceTarget (dot-walk resolution)
+#include "backend/query/provider/dbTableProvider.h" // ibDbTableProvider::CanDeclareAsNamedQuery — would this door render whole?
+#include "backend/query/queryableFactory.h"         // ibQueryableFactory — source-namespace resolution
+#include "backend/appData.h"                        // ibApplicationInstance::GetQueryableFactory
+#include "backend/session/session.h"                // the session's access policy — an IN (SELECT …) said as EXISTS is guarded by it
+#include "backend/metaData.h"                       // ibMetaData::GetSourceFactory — resolve through the query's OWN config
 #include "backend/metaCollection/genericData.h"  // ibValueMetaObjectGenericData::ResolveQueryConstant (value(...) resolution)
 #include "backend/tabularModel.h"     // ibComparisonType
-#include "backend/backend_exception.h"    // ibBackendCoreException
-#include "core/fiber/fiber.h"             // StackLow — a nested query is native recursion with no count
+#include "backend/backend_exception.h"              // ibBackendCoreException
+#include "core/fiber/fiber.h"                       // StackLow — a nested query is native recursion with no count
 #include "backend/system/value/valueType.h"   // ibValueTypeDescription::AdjustValue — a field's empty value, for a NULL key
-#include "core/query/queryAggregates.h"   // ibQueryAggregatesFor — CheckNames refuses what a type does not admit
+#include "core/query/queryAggregates.h"             // ibQueryAggregatesFor — CheckNames refuses what a type does not admit
 
 // ⚠ NAMED, NOT INHERITED. std::find / std::remove_if arrived in this file with the grouping and
 // prune passes; MSVC hands <algorithm> over transitively and GCC/Clang do not, so the Windows build

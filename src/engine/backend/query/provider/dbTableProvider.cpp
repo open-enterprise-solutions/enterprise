@@ -9,14 +9,14 @@
 //	              See docs/private/query-language-arc.md §18, §22.
 ////////////////////////////////////////////////////////////////////////////
 
-#include "dbTableProvider.h"   // ibDbTableProvider + ibRenderedPageCache (+ queryProvider.h / databaseQueryBuilder.h / metaAttributeObject.h)
-#include "queryable.h"         // ibAliasColumn — a CAST's narrowed field answers as the field it stands for
-#include "dataQueryBuilder.h"  // ibDataQueryBuilder::EffectiveSort / ibDataQueryResult / ibReadPageRequest / ibDataQuerySpec / ibDotWalkColumn
-#include "resultSource.h"      // ibDataResultSource — the selection backing ibDbResultSource derives
-#include "columnLayout.h"      // the column-layout tier: DescribeColumnLayout + ibColumnCodec (value codec) + HasReference
-#include "columnSpread.h"      // ibColumnSpread::TagForValue — which of a tagged column's fields a value fills
-#include "queryException.h"    // ibBackendQueryException — L3-L5 varieties (it used to arrive through the DB header)
-#include "queryHierarchy.h"    // ibQueryHierarchyScope — «in hierarchy» read here where the server cannot walk it
+#include "dbTableProvider.h"                // ibDbTableProvider + ibRenderedPageCache (+ queryProvider.h / databaseQueryBuilder.h / metaAttributeObject.h)
+#include "backend/query/queryable.h"        // ibAliasColumn — a CAST's narrowed field answers as the field it stands for
+#include "backend/query/dataQueryBuilder.h" // ibDataQueryBuilder::EffectiveSort / ibDataQueryResult / ibReadPageRequest / ibDataQuerySpec / ibDotWalkColumn
+#include "backend/query/resultSource.h"     // ibDataResultSource — the selection backing ibDbResultSource derives
+#include "backend/query/columnLayout.h"     // the column-layout tier: DescribeColumnLayout + ibColumnCodec (value codec) + HasReference
+#include "backend/query/columnSpread.h"     // ibColumnSpread::TagForValue — which of a tagged column's fields a value fills
+#include "backend/query/queryException.h"   // ibBackendQueryException — L3-L5 varieties (it used to arrive through the DB header)
+#include "backend/query/queryHierarchy.h"   // ibQueryHierarchyScope — «in hierarchy» read here where the server cannot walk it
 #include "backend/databaseLayer/connectionScope.h"   // ibConnectionScope — which driver is asked (ibCanWalkTree)
 
 #include "backend/databaseLayer/databaseLayer.h"

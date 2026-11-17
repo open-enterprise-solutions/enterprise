@@ -16,7 +16,7 @@
 // file; nothing here knows about any of them.
 
 #include "backend/query/queryable.h"
-#include "backend/query/dbTableProvider.h"                 // ibDbTableProvider — the DB default this base vends
+#include "backend/query/provider/dbTableProvider.h"        // ibDbTableProvider — the DB default this base vends
 #include "backend/metaCollection/genericData.h"            // ibValueMetaObjectGenericData — the metaobject asked below
 
 #include <atomic>                                          // the alias-column id counter below

@@ -32,13 +32,13 @@
 // See docs/private/query-language-arc.md §22.1b / §23.
 
 #include "backend/backend_core.h"
-#include "backend/compiler/value.h"        // ibValue — driver rows / parameters
+#include "backend/compiler/value.h"            // ibValue — driver rows / parameters
 #include "core/query/queryAST.h"        // ibQuerySelectPtr — the cached parse
-#include "backend/query/queryLowering.h"   // ibQueryLowering::ibQueryOutputColumn (+ ibBackendQueryColumn)
-#include "backend/query/queryTempStore.h"  // ibQueryTempTableStore — what the preparing statements made
+#include "backend/query/queryLowering.h"       // ibQueryLowering::ibQueryOutputColumn (+ ibBackendQueryColumn)
+#include "backend/query/temp/queryTempStore.h" // ibQueryTempTableStore — what the preparing statements made
 #include "drivers/compositionDriver.h"             // ibCompositionDriver / ibCompositionOutputInfo — the contract, cut out on 2026-08-28
 #include "compositionCondition.h"                  // the evaluator — how a row in hand is read against a condition (SubtreeOf feeds it)
-#include "backend/backend_composition.h"   // ibFilterDescription — a level's filter is the stored one; ibStoredValue
+#include "backend/backend_composition.h"       // ibFilterDescription — a level's filter is the stored one; ibStoredValue
 #include "core/composition/compositionTheme.h"   // ibCompositionTheme — the palette a run hands its driver
 #include "backend/functionalOption/functionalOptionGate.h"   // AsApplication — a run shows what the base uses
 

@@ -702,6 +702,6 @@ ibString ColumnComparePredicate(const ibBackendQueryColumn& col, const ibString&
 
 
 // (The binary-wire codec — BinaryToStatement / BinaryFromResult — moved to the L3-3 data mover
-//  (query/dataMover.{h,cpp}): it is the dump / restore PRIMITIVE, and its only consumers are the
+//  (query/structure/dataMover.{h,cpp}): it is the dump / restore PRIMITIVE, and its only consumers are the
 //  mover and the constant's single-cell dump. It still drives ibColumnSpread::DriveSpread + this
 //  codec's HasReference, so the value codec and the wire codec stay byte-identical.)

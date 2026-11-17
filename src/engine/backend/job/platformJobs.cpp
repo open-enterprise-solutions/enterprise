@@ -10,9 +10,9 @@
 #include "backend/metadataConfiguration.h"
 #include "backend/session/session.h"
 
-#include "backend/query/schemaSnapshot.h"        // ibSchemaSnapshot + ContributeTables
-#include "backend/query/derivedStateBuilder.h"   // ibDerivedState::MaintainTotals
-#include "backend/logger/logger.h"               // ibLog->Warn — a disagreement is said where people read
+#include "backend/query/structure/schemaSnapshot.h"      // ibSchemaSnapshot + ContributeTables
+#include "backend/query/structure/derivedStateBuilder.h" // ibDerivedState::MaintainTotals
+#include "backend/logger/logger.h"                       // ibLog->Warn — a disagreement is said where people read
 
 namespace {
 

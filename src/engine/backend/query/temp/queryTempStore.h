@@ -27,7 +27,7 @@
 //
 ////////////////////////////////////////////////////////////////////////////
 
-#include "queryRamTable.h"
+#include "backend/query/queryRamTable.h"
 
 #include <map>
 #include <memory>

@@ -16,9 +16,9 @@
 // carries all state), so a queryable hands back a shared static instance.
 // See docs/private/query-language-arc.md §22.
 
-#include "dataQueryBuilder.h"   // ibDataQueryResult / ibReadPageRequest / ibDataQuerySpec / ibRenderedPageCache (all L2-free)
-#include "querySelectorTree.h"  // ibSelectorTree — the folded node tree the totals/hierarchy entries return
-#include "queryRowCursor.h"     // ibQueryRowCursor — what the folds READ (one pass over the detail rows)
+#include "backend/query/dataQueryBuilder.h"  // ibDataQueryResult / ibReadPageRequest / ibDataQuerySpec / ibRenderedPageCache (all L2-free)
+#include "backend/query/querySelectorTree.h" // ibSelectorTree — the folded node tree the totals/hierarchy entries return
+#include "backend/query/queryRowCursor.h"    // ibQueryRowCursor — what the folds READ (one pass over the detail rows)
 
 // (ibDbTableProvider — the BIG DB provider + its static GET/WRITE template — lives in its own
 // L2-coupled dbTableProvider.h; this header stays deliberately L2-free.)

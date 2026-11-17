@@ -23,9 +23,9 @@
 #include <vector>
 
 #include "backend/query/dataQueryBuilder.h"   // ibDataQueryBuilder / ibDataQueryResult / ibReadPageRequest / AggregateFn
-#include "backend/query/queryProvider.h"       // ibComputedProviderInstance + ibQueryRamTable
-#include "backend/query/queryable.h"           // ibBackendQueryable / ibQueryCondition / ibQueryFilterOp
-#include "backend/query/queryColumn.h"         // ibBackendQueryColumn / ibTypeDescription
+#include "backend/query/provider/queryProvider.h" // ibComputedProviderInstance + ibQueryRamTable
+#include "backend/query/queryable.h"              // ibBackendQueryable / ibQueryCondition / ibQueryFilterOp
+#include "backend/query/queryColumn.h"            // ibBackendQueryColumn / ibTypeDescription
 
 namespace {
 

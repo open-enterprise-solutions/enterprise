@@ -17,11 +17,11 @@
 // snapshot; subtotals roll from THAT snapshot (no second query → detail and total can't skew).
 // (docs/private/query-language-arc.md §22.1b)
 
-#include "queryRamTable.h"      // ibQueryRamTable (the snapshot, held BY VALUE — move-only)
-#include "queryRowCursor.h"     // ibQueryRowCursor — the rows as they arrive (what the group folds read)
-#include "querySelectorTree.h"  // ibSelectorTree (the folded tree) + ibSelectorTree::Node
-#include "queryProvider.h"      // ibQueryComposer::BuildHierarchyTree / BuildTotalsTree
-#include "dataQueryBuilder.h"   // ibDataQueryBuilder + ibSelectKind + ibDimensionKind + AggregateItem
+#include "queryRamTable.h"          // ibQueryRamTable (the snapshot, held BY VALUE — move-only)
+#include "queryRowCursor.h"         // ibQueryRowCursor — the rows as they arrive (what the group folds read)
+#include "querySelectorTree.h"      // ibSelectorTree (the folded tree) + ibSelectorTree::Node
+#include "provider/queryProvider.h" // ibQueryComposer::BuildHierarchyTree / BuildTotalsTree
+#include "dataQueryBuilder.h"       // ibDataQueryBuilder + ibSelectKind + ibDimensionKind + AggregateItem
 
 #include <algorithm>           // stable_sort — a level's own order over the nodes it hands out
 

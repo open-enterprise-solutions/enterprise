@@ -14,7 +14,7 @@
 #include "backend/databaseLayer/firebird/firebirdDatabaseLayer.h"
 #include "backend/databaseLayer/postgres/postgresDatabaseLayer.h"
 #include "backend/databaseLayer/sqllite/sqliteDatabaseLayer.h"
-#include "backend/query/dbTableProvider.h"
+#include "backend/query/provider/dbTableProvider.h"
 #include "backend/query/queryColumn.h"
 #include "backend/query/queryLowering.h"
 #include "backend/query/queryable.h"

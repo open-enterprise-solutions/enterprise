@@ -50,7 +50,7 @@
 #include "backend/databaseLayer/databaseMaterializeBuilder.h"
 #include "backend/databaseLayer/databaseResultSet.h"
 #include "backend/databaseLayer/sqllite/sqliteDatabaseLayer.h"
-#include "backend/query/schemaSnapshot.h"
+#include "backend/query/structure/schemaSnapshot.h"
 
 namespace {
 

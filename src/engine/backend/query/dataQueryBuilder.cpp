@@ -10,7 +10,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "dataQueryBuilder.h"
-#include "queryProvider.h"                                           // ibBackendQueryProvider abstraction (NO L2 — the door runs through it)
+#include "provider/queryProvider.h"                                  // ibBackendQueryProvider abstraction (NO L2 — the door runs through it)
 #include "queryRamTable.h"                                           // ibQueryRamTable — the empty selection an ALLOWED read yields on a refusal
 #include "queryProfiler.h"                                           // ibQueryProfiler — what goes through the door is told to a measurement
 #include "backend/session/session.h"                                 // ibSession::Current()->Holder()

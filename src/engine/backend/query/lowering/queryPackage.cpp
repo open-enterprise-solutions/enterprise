@@ -6,10 +6,10 @@
 
 #include "queryLoweringInternal.h"
 
-#include "queryTempStore.h"               // ibQueryTempTableStore — WHO keeps the temp tables alive
-#include "dbTableProvider.h"              // ibCastLeafScope — one query's narrowed fields, at every door
-#include "core/query/queryRender.h"       // ibRenderQueryPackage — the package as the journal says it; ibQueryColumnFromPath
-#include "core/query/queryRewrite.h"      // ibQueryFlattenAnd — a link's condition, one conjunct at a time
+#include "backend/query/temp/queryTempStore.h"      // ibQueryTempTableStore — WHO keeps the temp tables alive
+#include "backend/query/provider/dbTableProvider.h" // ibCastLeafScope — one query's narrowed fields, at every door
+#include "core/query/queryRender.h"                 // ibRenderQueryPackage — the package as the journal says it; ibQueryColumnFromPath
+#include "core/query/queryRewrite.h"                // ibQueryFlattenAnd — a link's condition, one conjunct at a time
 
 #include <unordered_set>                  // the link step matches rows by a key tuple
 

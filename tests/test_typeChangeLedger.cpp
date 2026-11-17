@@ -27,8 +27,8 @@
 #include "backend/databaseLayer/sqllite/sqliteDatabaseLayer.h"
 #include "backend/query/columnLayout.h"
 #include "backend/query/queryColumn.h"
-#include "backend/query/schemaBuilder.h"
-#include "backend/query/schemaSnapshot.h"
+#include "backend/query/structure/schemaBuilder.h"
+#include "backend/query/structure/schemaSnapshot.h"
 #include "backend/restructureInfo.h"
 #include "core/clsid.h"
 

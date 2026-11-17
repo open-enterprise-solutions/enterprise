@@ -20,7 +20,7 @@
 #include "backend/system/value/valueGuid.h"                       // ibValueGuid - a declared line's owner, its key
 #include "backend/backend_exception.h"                            // ibBackendCoreException - a section that cannot take its lines
 #include "backend/query/columnLayout.h"                           // ibOwnerRefColumn / ibFieldSuffix - the scaffold + field names
-#include "backend/query/schemaSnapshot.h"                         // ibSchemaSnapshot / ibSchemaTable - what a declaration is
+#include "backend/query/structure/schemaSnapshot.h"               // ibSchemaSnapshot / ibSchemaTable - what a declaration is
 #include "backend/restructureInfo.h"                              // ibRestructureInfo - where a predefined item's refusal is said
 #include "backend/databaseLayer/databaseQueryBuilder.h"           // the L2 door - the lines a section's owner already holds
 #include "backend/valueInfo.h"                                    // ibReference - a line's owner, read back as stored

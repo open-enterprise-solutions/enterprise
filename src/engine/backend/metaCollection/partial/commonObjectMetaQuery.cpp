@@ -24,9 +24,9 @@
 #include "backend/metaData.h"                                     // ibMetaData::GetTypeCtor
 #include "backend/databaseLayer/databaseQueryBuilder.h"           // ibDdlStatement / ibQueryStatement / ibQueryResult (L2)
 #include "backend/query/columnLayout.h"                           // ColumnFieldNames (column field list via ibBackendQueryColumn)
-#include "backend/query/schemaBuilder.h"                          // ibSchemaBuilder — the L3-2 schema door (DDL apply + barrier)
-#include "backend/query/structureBatch.h"                         // ibStructureBatch — per-table DDL/seed batch the Process* fill
-#include "backend/query/schemaSnapshot.h"                         // ibSchemaSnapshot / SnapshotOf — declarative structure (the differ's input)
+#include "backend/query/structure/schemaBuilder.h"                // ibSchemaBuilder — the L3-2 schema door (DDL apply + barrier)
+#include "backend/query/structure/structureBatch.h"               // ibStructureBatch — per-table DDL/seed batch the Process* fill
+#include "backend/query/structure/schemaSnapshot.h"               // ibSchemaSnapshot / SnapshotOf — declarative structure (the differ's input)
 
 ibString ibValueMetaObjectRecordDataRef::GetPhysicalTableName() const
 {
@@ -397,7 +397,7 @@ std::shared_ptr<const ibBackendQueryColumn> ibValueMetaObjectRecordDataHierarchy
 	// is not there.
 	return HasParentLink() ? GetDataParent()->GetQueryColumn() : nullptr;
 }
-// ResolveReferenceTarget / ResolveReferenceTargets moved to ibDbTableProvider (query/dbTableProvider.cpp)
+// ResolveReferenceTarget / ResolveReferenceTargets moved to ibDbTableProvider (query/provider/dbTableProvider.cpp)
 // — the ONE provider that owns metadata. The record queryable only vends GetMetaData(); the provider
 // reads it off queryable->GetMetaData() and does clsid -> GetTypeCtor -> holder -> GetQueryable. The
 // call sites now go through queryable->GetProvider().ResolveReferenceTarget(queryable, col). (docs §22)

@@ -8,7 +8,7 @@
 #include <wx/init.h>
 
 #include "backend/backend_core.h"           // ibDateTime
-#include "backend/query/dataMover.h"       // ibDataMover::DateOfWire, DateForm
+#include "backend/query/structure/dataMover.h" // ibDataMover::DateOfWire, DateForm
 
 // A dump says which form its dates are in (chunk 3); one made before 2026-09 says nothing and carried
 // instants of the dumping machine's clock. An ibDateTime's count passes through; the first wall form

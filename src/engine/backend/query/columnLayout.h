@@ -260,7 +260,7 @@ public:
 	static bool HasReference(const ibBackendQueryColumn& col);
 
 	// (The BINARY-WIRE codec — BinaryToStatement / BinaryFromResult — is the L3-3 dump / restore
-	//  PRIMITIVE; it lives with its consumer in query/dataMover.h (ibDataMover), not here. It reuses
+	//  PRIMITIVE; it lives with its consumer in query/structure/dataMover.h (ibDataMover), not here. It reuses
 	//  this codec's HasReference + the shared spread driver, so the two stay byte-identical.)
 
 private:

@@ -10,19 +10,19 @@
 #include "valueMap.h"                            // ibValueStructure — structure-shaped rows (no single row ref)
 #include "valueTable.h"                          // ibValueModelTable — the ToTable materialised result
 
-#include "backend/query/queryable.h"             // ibBackendQueryable / ibBackendQueryColumn
-#include "backend/query/querySelector.h"         // ibSelector::Snapshot — ToTable's rows as the fast table
-#include "backend/system/value/valueType.h"      // ibValueTypeDescription::AdjustValue — an empty value of a declared type
-#include "backend/query/queryReadState.h"        // ibQueryReadState — one state for a whole pipeline
+#include "backend/query/queryable.h"               // ibBackendQueryable / ibBackendQueryColumn
+#include "backend/query/querySelector.h"           // ibSelector::Snapshot — ToTable's rows as the fast table
+#include "backend/system/value/valueType.h"        // ibValueTypeDescription::AdjustValue — an empty value of a declared type
+#include "backend/query/queryReadState.h"          // ibQueryReadState — one state for a whole pipeline
 #include "core/query/queryAST.h"              // ibQueryAstExpr — the tree a predicate lowers from
 #include "backend/compiler/lambdaQueryAST.h"    // it is READ off the instructions, never stored
-#include "backend/query/queryLowering.h"         // LowerLambdaPredicate / LowerLambdaColumnPath
-#include "backend/query/tempTableQueryable.h"    // ibTempTableQueryable — wrap a RAM value-table Join argument
-#include "backend/query/tempTableManager.h"      // ibTempTableManager — materialise a computed RLS inner to a DB temp (semi-join server-side)
-#include "backend/compiler/procUnitLambda.h"     // ibValueFunction (the lambda value)
-#include "backend/compiler/procUnit.h"           // InvokeLambdaWith2Args — run the Join result-selector in RAM
-#include "backend/compiler/procContext.h"        // ibRunContext — captured-frame name lookup
-#include "backend/compiler/typeCtor.h"           // SYSTEM_TYPE_REGISTER
+#include "backend/query/queryLowering.h"           // LowerLambdaPredicate / LowerLambdaColumnPath
+#include "backend/query/temp/tempTableQueryable.h" // ibTempTableQueryable — wrap a RAM value-table Join argument
+#include "backend/query/temp/tempTableManager.h"   // ibTempTableManager — materialise a computed RLS inner to a DB temp (semi-join server-side)
+#include "backend/compiler/procUnitLambda.h"       // ibValueFunction (the lambda value)
+#include "backend/compiler/procUnit.h"             // InvokeLambdaWith2Args — run the Join result-selector in RAM
+#include "backend/compiler/procContext.h"          // ibRunContext — captured-frame name lookup
+#include "backend/compiler/typeCtor.h"             // SYSTEM_TYPE_REGISTER
 #include "backend/backend_exception.h"
 
 #include <optional>

@@ -7,13 +7,13 @@
 //	              result are queryProvider.cpp's. See docs/private/query-language-arc.md §22.4d.
 ////////////////////////////////////////////////////////////////////////////
 
-#include "queryProvider.h"       // ibDataQueryResult (+ dataQueryBuilder.h, queryable.h); ibBackendQueryProvider::ReadReferences
-#include "queryRamTable.h"       // ibQueryRamTable — the backing that is a table
-#include "queryRowCursor.h"      // ibQueryRowCursor — the rows Select hands to a fold
-#include "querySelector.h"       // ibSelector — what Select answers
-#include "querySelectorTree.h"   // ibSelectorTree — the push-down's ready tree
-#include "dbTableProvider.h"     // ibRenderedPageCache — complete here, for NewPageCache
-#include "resultSource.h"        // ibDataResultSource + EvalOverResultRow — a column computed over the row
+#include "provider/queryProvider.h"   // ibDataQueryResult (+ dataQueryBuilder.h, queryable.h); ibBackendQueryProvider::ReadReferences
+#include "queryRamTable.h"            // ibQueryRamTable — the backing that is a table
+#include "queryRowCursor.h"           // ibQueryRowCursor — the rows Select hands to a fold
+#include "querySelector.h"            // ibSelector — what Select answers
+#include "querySelectorTree.h"        // ibSelectorTree — the push-down's ready tree
+#include "provider/dbTableProvider.h" // ibRenderedPageCache — complete here, for NewPageCache
+#include "resultSource.h"             // ibDataResultSource + EvalOverResultRow — a column computed over the row
 
 #include <map>
 #include <memory>

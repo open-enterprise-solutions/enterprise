@@ -5,10 +5,10 @@
 
 #include "accumulationRegister.h"
 
-#include "backend/query/schemaSnapshot.h"
+#include "backend/query/structure/schemaSnapshot.h"
 #include "backend/query/queryColumn.h"
 #include "backend/query/columnLayout.h"                          // DescribeColumnLayout -- physical fields WITH their canonical types
-#include "backend/query/tempTableQueryable.h"                       // ibSchemaTableQueryable — the totals table as a source
+#include "backend/query/temp/tempTableQueryable.h"                  // ibSchemaTableQueryable — the totals table as a source
 #include "backend/metaCollection/attribute/metaAttributeObject.h"
 #include "backend/metaCollection/partial/registerQueryLowering.h"   // ibRegValueField
 #include "backend/databaseLayer/databaseMaterializeBuilder.h"      // ibCanMaterialize — ask L2-2, never a dialect

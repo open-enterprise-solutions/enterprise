@@ -38,7 +38,7 @@
 #include "backend/databaseLayer/connectionHolder.h"          // ibDatabaseConnectionHolder
 #include "backend/databaseLayer/sqllite/sqliteDatabaseLayer.h"
 #include "backend/query/dataQueryBuilder.h"
-#include "backend/query/queryProvider.h"
+#include "backend/query/provider/queryProvider.h"
 #include "backend/query/queryable.h"
 #include "backend/query/queryColumn.h"
 #include "backend/query/columnLayout.h"       // ColumnFieldNames — the metadata column's physical field spelling
@@ -52,7 +52,7 @@
 #include "backend/metadataConfiguration.h"                   // ibMetaDataConfigurationFile — a catalog to point references at
 #include "backend/metaCollection/metaObject.h"               // g_metaCatalogCLSID
 #include "backend/metaCollection/partial/reference/reference.h"   // ibValueReferenceDataObject::Create
-#include "backend/query/dbTableProvider.h"                   // ibDbTableProvider::BuildPredicateIR — the door that writes every WHERE
+#include "backend/query/provider/dbTableProvider.h"          // ibDbTableProvider::BuildPredicateIR — the door that writes every WHERE
 #include "backend/databaseLayer/databaseQueryBuilder.h"      // ibQueryRenderer — the SQL a set becomes
 #include "lambdaRecordFix.h"                  // ibTestRecordLambda — body -> compiled lambda -> AST
 #include "queryRoad.h"                        // MeasureSent — the road a read took

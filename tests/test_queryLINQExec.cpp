@@ -36,11 +36,11 @@
 #include "backend/compiler/lambdaQueryAST.h"  // ibBuildLambdaQueryAstFromCode (L4-2 recorder)
 #include "core/query/queryAST.h"           // ibQueryAstExpr
 
-#include "lambdaRecordFix.h"                  // ibTestRecordLambda — body -> compiled lambda -> AST
-#include "backend/query/queryLowering.h"      // ibQueryLowering::LowerLambdaPredicate (L4-2 lowering)
-#include "backend/query/queryProvider.h"      // ibQueryComposer::FilterRows + ibQueryRamTable
-#include "backend/query/queryable.h"          // ibBackendQueryable / ibQueryPredicate(Ptr)
-#include "backend/query/queryColumn.h"        // ibBackendQueryColumn / ibTypeDescription
+#include "lambdaRecordFix.h"                      // ibTestRecordLambda — body -> compiled lambda -> AST
+#include "backend/query/queryLowering.h"          // ibQueryLowering::LowerLambdaPredicate (L4-2 lowering)
+#include "backend/query/provider/queryProvider.h" // ibQueryComposer::FilterRows + ibQueryRamTable
+#include "backend/query/queryable.h"              // ibBackendQueryable / ibQueryPredicate(Ptr)
+#include "backend/query/queryColumn.h"            // ibBackendQueryColumn / ibTypeDescription
 
 #include "backend/databaseLayer/sqllite/sqliteDatabaseLayer.h"
 #include "backend/databaseLayer/databaseResultSet.h"

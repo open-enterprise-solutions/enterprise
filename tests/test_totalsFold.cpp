@@ -43,10 +43,10 @@
 #include "backend/metaCollection/dimension/metaDimensionObject.h"
 #include "backend/metaCollection/partial/accumulationRegister.h"
 #include "backend/query/columnLayout.h"
-#include "backend/query/derivedStateBuilder.h"
+#include "backend/query/structure/derivedStateBuilder.h"
 #include "backend/query/queryColumn.h"
 #include "backend/query/queryable.h"
-#include "backend/query/schemaSnapshot.h"
+#include "backend/query/structure/schemaSnapshot.h"
 
 namespace {
 

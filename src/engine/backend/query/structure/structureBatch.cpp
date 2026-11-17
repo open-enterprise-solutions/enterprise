@@ -1,6 +1,6 @@
-#include "backend/query/structureBatch.h"
+#include "backend/query/structure/structureBatch.h"
 
-#include "backend/query/schemaBuilder.h"                  // ibSchemaBuilder — Execute / RunOrDefer / barrier
+#include "backend/query/structure/schemaBuilder.h"        // ibSchemaBuilder — Execute / RunOrDefer / barrier
 #include "backend/query/queryable.h"                      // ibBackendQueryable — GetQueryTableName / GetMetaData
 #include "backend/query/queryColumn.h"                    // ibBackendQueryColumn — GetTypeDesc / GetPhysicalName
 #include "backend/databaseLayer/databaseQueryBuilder.h"   // L2 door — ibUpdate / ibDelete / Execute (the type-removal data cleanups)

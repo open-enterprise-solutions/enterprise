@@ -38,7 +38,7 @@
 #include "backend/query/columnLayout.h"
 #include "backend/query/dataQueryBuilder.h"
 #include "backend/query/queryHierarchy.h"
-#include "backend/query/queryProvider.h"
+#include "backend/query/provider/queryProvider.h"
 #include "backend/query/queryRamTable.h"
 #include "core/description/typeDescription.h"
 #include "core/clsid.h"

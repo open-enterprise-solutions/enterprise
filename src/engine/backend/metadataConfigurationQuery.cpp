@@ -96,7 +96,7 @@ bool ibMetaDataConfiguration::LoadDatabase(int flags)
 //**************************************************************************************************
 
 #include "metaCollection/metaStoredValueObject.h"   // the shared sys_const table every stored value lives in
-#include "backend/query/schemaSnapshot.h"   // ibSchemaSnapshot — the Storage builds it (ContributeTables) and hands it to the builder
+#include "backend/query/structure/schemaSnapshot.h" // ibSchemaSnapshot — the Storage builds it (ContributeTables) and hands it to the builder
 
 ////////////////////////////////////////////////////////////////////////////////
 

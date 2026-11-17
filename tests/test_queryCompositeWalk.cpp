@@ -34,7 +34,7 @@
 #include "backend/query/columnLayout.h"
 #include "backend/query/dataQueryBuilder.h"
 #include "backend/query/queryable.h"
-#include "backend/query/schemaSnapshot.h"
+#include "backend/query/structure/schemaSnapshot.h"
 #include "backend/session/session.h"
 #include "backend/system/value/valueQuery.h"
 #include "backend/system/value/valueTable.h"

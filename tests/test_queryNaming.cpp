@@ -24,11 +24,11 @@
 #include "core/query/queryAggregates.h"         // ibQueryAggregatesFor — which folds a type admits
 #include "backend/query/queryConstructorModel.h"
 #include "backend/composition/dataComposer.h"
-#include "backend/query/queryableFactory.h"      // ibQueryableSourceDescriptor — a virtual table that consumes its condition
-#include "backend/query/tempTableQueryable.h"    // ibTempTableQueryable — its columns, from a table in memory
-#include "backend/metadataConfiguration.h"       // ibMetaDataConfigurationFile — the open configuration it registers in
+#include "backend/query/queryableFactory.h"        // ibQueryableSourceDescriptor — a virtual table that consumes its condition
+#include "backend/query/temp/tempTableQueryable.h" // ibTempTableQueryable — its columns, from a table in memory
+#include "backend/metadataConfiguration.h"         // ibMetaDataConfigurationFile — the open configuration it registers in
 #include "backend/query/dataQueryBuilder.h"       // ibDataQueryResult — what a composer's run hands back
-#include "backend/query/querySelector.h"         // ibSelector — its totals, read at the root
+#include "backend/query/querySelector.h"           // ibSelector — its totals, read at the root
 
 namespace {
 

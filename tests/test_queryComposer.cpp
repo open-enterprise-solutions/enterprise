@@ -21,13 +21,13 @@
 #include <map>         // the minted-id ledger — SyntheticId collision sweep
 #include <set>         // distinct ids a declaration mints
 
-#include "backend/query/queryProvider.h"     // ibQueryComposer + ibQueryRamTable
-#include "backend/query/querySelector.h"     // ibSelector — traversal façade over a snapshot
-#include "backend/query/dbTableProvider.h"   // ibDbTableProvider::CanColocate* (the gates)
-#include "backend/query/dataQueryBuilder.h"  // ibDataQuerySpec / ibQueryNode / AggregateItem
-#include "backend/query/queryable.h"         // ibBackendQueryable / ibQueryCondition
-#include "backend/query/queryColumn.h"       // ibBackendQueryColumn / ibBackendColumnRawDB
-#include "backend/query/tempTableQueryable.h" // ibCteQueryable — what a declared query publishes
+#include "backend/query/provider/queryProvider.h"   // ibQueryComposer + ibQueryRamTable
+#include "backend/query/querySelector.h"            // ibSelector — traversal façade over a snapshot
+#include "backend/query/provider/dbTableProvider.h" // ibDbTableProvider::CanColocate* (the gates)
+#include "backend/query/dataQueryBuilder.h"         // ibDataQuerySpec / ibQueryNode / AggregateItem
+#include "backend/query/queryable.h"                // ibBackendQueryable / ibQueryCondition
+#include "backend/query/queryColumn.h"              // ibBackendQueryColumn / ibBackendColumnRawDB
+#include "backend/query/temp/tempTableQueryable.h" // ibCteQueryable — what a declared query publishes
 #include "core/clsid.h"                    // reference_to_clsid — a reference-typed column (multi-field spread)
 
 namespace {

@@ -19,7 +19,7 @@
 #include "backend/metaCollection/partial/chartOfCharacteristicTypes.h"
 #include "backend/metaCollection/accountingKind/metaAccountingKindObject.h"
 #include "backend/metaCollection/partial/reference/reference.h"
-#include "backend/query/schemaSnapshot.h"
+#include "backend/query/structure/schemaSnapshot.h"
 #include "backend/restructureInfo.h"
 #include "backend/system/value/valueGuid.h"
 #include "backend/system/value/valueType.h"

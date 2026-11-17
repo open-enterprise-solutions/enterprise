@@ -15,7 +15,7 @@
 #include "backend/metaData.h"
 
 #include "backend/query/queryable.h"                // ibBackendQueryableHolder
-#include "backend/query/tempTableQueryable.h"       // ibTempTableQueryable — Data.From wrapper
+#include "backend/query/temp/tempTableQueryable.h"  // ibTempTableQueryable — Data.From wrapper
 #include "backend/system/value/valueTable.h"        // ibValueModelTable — the From argument
 #include "backend/system/value/valueQueryable.h"    // ibValueQueryable — the vended leaf
 #include "backend/backend_exception.h"              // ibBackendCoreException — From argument validation

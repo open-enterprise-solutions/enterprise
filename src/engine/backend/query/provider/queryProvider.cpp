@@ -17,15 +17,15 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "queryProvider.h"                                            // ibBackendQueryProvider / ibComputedProvider (+ dataQueryBuilder.h, queryable.h)
-#include "queryRamTable.h"                                            // ibQueryRamTable — L3's raw flat snapshot (names no runtime type but ibValue)
-#include "queryRowCursor.h"                                           // ibQueryRow / ibQueryRowCursor — what a fold reads (one pass, no table)
-#include "querySelector.h"                                            // ibSelector — result.Select(mode) hands the drained snapshot to it
+#include "backend/query/queryRamTable.h"                              // ibQueryRamTable — L3's raw flat snapshot (names no runtime type but ibValue)
+#include "backend/query/queryRowCursor.h"                             // ibQueryRow / ibQueryRowCursor — what a fold reads (one pass, no table)
+#include "backend/query/querySelector.h"                              // ibSelector — result.Select(mode) hands the drained snapshot to it
 #include "dbTableProvider.h"                                          // ibDbTableProvider (vended by GetProvider) + ibRenderedPageCache (NewPageCache)
-#include "resultSource.h"                                             // ibDataResultSource — the backing ibRamTableResultSource derives
-#include "columnLayout.h"                                             // ibSqlAliasOf — what the STATEMENT calls an output, vs what its author does
-#include "tempTableManager.h"                                         // ibTempTableManager — promote a computed leaf to a DB temp table (+ ibDbTempTableQueryable)
-#include "queryException.h"                                           // ibBackendQueryException — a named hierarchy refused over rows in memory
-#include "queryHierarchy.h"                                           // ibQueryHierarchyScope — «IN HIERARCHY» resolved where rows are filtered in memory
+#include "backend/query/resultSource.h"                               // ibDataResultSource — the backing ibRamTableResultSource derives
+#include "backend/query/columnLayout.h"                               // ibSqlAliasOf — what the STATEMENT calls an output, vs what its author does
+#include "backend/query/temp/tempTableManager.h"                      // ibTempTableManager — promote a computed leaf to a DB temp table (+ ibDbTempTableQueryable)
+#include "backend/query/queryException.h"                             // ibBackendQueryException — a named hierarchy refused over rows in memory
+#include "backend/query/queryHierarchy.h"                             // ibQueryHierarchyScope — «IN HIERARCHY» resolved where rows are filtered in memory
 
 
 #include <deque>                                                      // the streaming fold's pools — see ibStreamingFold

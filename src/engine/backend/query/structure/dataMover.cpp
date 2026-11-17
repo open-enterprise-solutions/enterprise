@@ -2,10 +2,10 @@
 //	Description : ibDataMover — L3-3 row mover. The generic per-table dump /
 //	              restore that used to be copy-pasted across the record /
 //	              register metaobjects, now driven purely by the L3-2 STRUCTURE
-//	              (ibSchemaTable) + the L3 column codec. See query/dataMover.h.
+//	              (ibSchemaTable) + the L3 column codec. See query/structure/dataMover.h.
 ////////////////////////////////////////////////////////////////////////////
 
-#include "backend/query/dataMover.h"
+#include "backend/query/structure/dataMover.h"
 
 #include "backend/appData.h"                              // db_query (the L2 door's holder)
 #include "backend/databaseLayer/databaseLayer.h"          // ibDatabaseLayer::GetHolder
@@ -13,7 +13,7 @@
 #include "backend/query/columnLayout.h"                   // ColumnFieldNames + ibColumnCodec::HasReference + ibFieldSuffix / ibPersistedTypeTag
 #include "backend/query/columnSpread.h"                   // ibColumnSpread::DriveSpread — shared role-spread binding
 #include "backend/query/queryColumn.h"                    // ibBackendQueryColumn::GetColumnId / GetPhysicalName
-#include "backend/query/schemaSnapshot.h"                 // ibSchemaTable / ibSchemaColumn / ibSchemaIndex — the mover's input
+#include "backend/query/structure/schemaSnapshot.h"       // ibSchemaTable / ibSchemaColumn / ibSchemaIndex — the mover's input
 #include "backend/query/queryable.h"                      // ibBackendQueryable::GetMetaData
 #include "core/description/typeDescription.h"                       // ibTypeDescription::ContainType (the wire codec gates on it)
 #include "core/fnumber.h"                               // ibNumber (the wire codec round-trips it)

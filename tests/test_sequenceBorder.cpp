@@ -34,7 +34,7 @@
 #include "backend/metaCollection/metaObject.h"
 #include "backend/metaCollection/dimension/metaDimensionObject.h"
 #include "backend/metaCollection/partial/sequence.h"
-#include "backend/query/schemaSnapshot.h"
+#include "backend/query/structure/schemaSnapshot.h"
 #include "backend/restructureInfo.h"
 #include "backend/metaCollection/partial/reference/reference.h"
 #include "backend/query/columnLayout.h"

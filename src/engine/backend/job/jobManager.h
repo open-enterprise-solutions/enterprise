@@ -23,7 +23,7 @@
 // and the pool dispatches per-session FIFO under a lease. Both properties are load-
 // bearing here rather than incidental:
 //   - one connection per job is what lets a job hand `session->Holder()` to engine
-//     code that demands an explicit holder (see query/derivedStateBuilder.h);
+//     code that demands an explicit holder (see query/structure/derivedStateBuilder.h);
 //   - per-session FIFO means two runs of the SAME job can never overlap, which some
 //     jobs need for correctness (the totals fold corrupts sums if two passes race on
 //     one table) and which costs nothing to get this way;
@@ -73,7 +73,7 @@ struct ibProfileData;   // what a run's code measured of itself (debugger/debugD
 // out the full interval. `false` means "nothing left for now". This exists because
 // the first tenant asks for it explicitly: a fold reads and writes the same database
 // everyone else is using, so it must be paced rather than run to exhaustion, and
-// stopping between units is always safe (query/derivedStateBuilder.h).
+// stopping between units is always safe (query/structure/derivedStateBuilder.h).
 //
 // Throwing is allowed. The exception is captured by the worker's promise and logged
 // by the manager on the next tick; it does not escape into the tick source.

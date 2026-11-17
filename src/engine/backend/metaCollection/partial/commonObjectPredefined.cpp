@@ -19,7 +19,7 @@
 #include "backend/metaCollection/enumeration/metaEnumObject.h"            // an enumeration's members, declared values
 #include "backend/metaCollection/partial/declaredPresentation.h"         // ibDeclaredTypeName - how a declared value reads
 #include "backend/metaCollection/partial/tabularSection/tabularSection.h"  // a section's columns, its line number
-#include "backend/query/schemaSnapshot.h"                                 // ibSchemaSnapshot - what an item declares is read off it
+#include "backend/query/structure/schemaSnapshot.h"                       // ibSchemaSnapshot - what an item declares is read off it
 #include "backend/system/value/composition/valueComposerField.h"         // ibValueCompositionPredefined - a declared reference
 #include "backend/system/value/valueType.h"                              // ibValueTypeDescription - a characteristic's declared Type
 #include "core/serialize/dataBuilder.h"                                  // node serialization (WriteData / ReadData)

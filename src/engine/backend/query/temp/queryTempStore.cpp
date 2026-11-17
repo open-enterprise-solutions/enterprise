@@ -4,8 +4,8 @@
 
 #include "queryTempStore.h"
 
-#include "queryable.h"        // ibBackendQueryable + ibComputedProviderInstance
-#include "queryColumn.h"      // ibBackendQueryColumn
+#include "backend/query/queryable.h"   // ibBackendQueryable + ibComputedProviderInstance
+#include "backend/query/queryColumn.h" // ibBackendQueryColumn
 
 #include <algorithm>
 #include <map>

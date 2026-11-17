@@ -1,7 +1,7 @@
-#include "backend/query/structureBuilder.h"
+#include "backend/query/structure/structureBuilder.h"
 
-#include "backend/query/schemaSnapshot.h"   // DiffSnapshots — the agnostic differ over two snapshots
-#include "backend/query/schemaBuilder.h"    // ibSchemaBuilder::Reset / Flush — per-save barrier + deferred drain
+#include "backend/query/structure/schemaSnapshot.h" // DiffSnapshots — the agnostic differ over two snapshots
+#include "backend/query/structure/schemaBuilder.h"  // ibSchemaBuilder::Reset / Flush — per-save barrier + deferred drain
 #include "backend/databaseLayer/databaseLayer.h"        // ibDatabaseLayer — the connection it holds the TX on
 #include "backend/databaseLayer/connectionHolder.h"     // ibDatabaseConnectionHolder::EnsureConnection
 #include "backend/databaseLayer/connectionScope.h"      // ibConnectionScope — the apply's hold on its holder's connection

@@ -4,8 +4,8 @@
 #include "commonObject.h"
 #include "accumulationRegisterEnum.h"
 #include "core/stringUtils.h"   // IsSameAs — the one case-insensitive name comparison
-#include "backend/query/queryable.h"          // ibComputedRegisterQueryable<TReg> — shared base for the balance / turnover virtual tables
-#include "backend/query/tempTableQueryable.h" // ibDbTempTableQueryable — a named physical relation; what a VIEW is to L3
+#include "backend/query/queryable.h"               // ibComputedRegisterQueryable<TReg> — shared base for the balance / turnover virtual tables
+#include "backend/query/temp/tempTableQueryable.h" // ibDbTempTableQueryable — a named physical relation; what a VIEW is to L3
 // The register-shared lowering: ibRegFilterPredicate / ibRegFlatLeaves / ibRegCompositeIR. Shared on
 // purpose — an information register filters its dimensions by exactly the same rule, and an
 // accounting register will too; a copy per register is how three registers come to disagree about

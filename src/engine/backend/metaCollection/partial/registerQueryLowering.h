@@ -9,16 +9,16 @@
 
 #include "backend/databaseLayer/databaseQueryBuilder.h"
 #include "backend/metaCollection/attribute/metaAttributeObject.h"
-#include "backend/query/dbTableProvider.h"   // ibDbTableProvider::SetValueAttribute — the DB write decomposition
-#include "backend/query/columnLayout.h"      // the column-layout tier: ColumnFieldNames / ColumnFieldList / etc.
-#include "backend/system/value/valueMap.h"   // ibValueStructure — the sugar ibRegFilterPredicate converts
-#include "backend/system/value/valueTable.h" // ibValueModelTable — the table a reading hands a script
-#include "backend/query/dataQueryBuilder.h"  // ibDataQueryResult — the selection those rows come off
-#include "backend/query/querySelector.h"     // ibSelector::Snapshot — …as the fast table they go in through
-#include "backend/query/tempTableQueryable.h" // ibTempColumn / ibDbTempTableQueryable — a derived surface IS one
-#include "backend/query/schemaSnapshot.h"     // ibSchemaTable / ibSchemaMaterialize — the totals bundle's own vocabulary
-#include "backend/query/queryColumn.h"        // ibBackendQueryColumn::SyntheticId — a derived column's number
-#include "backend/query/queryHierarchy.h"     // «IN HIERARCHY» — the words a reading's condition carries down (ibQueryDimUnfold)
+#include "backend/query/provider/dbTableProvider.h" // ibDbTableProvider::SetValueAttribute — the DB write decomposition
+#include "backend/query/columnLayout.h"             // the column-layout tier: ColumnFieldNames / ColumnFieldList / etc.
+#include "backend/system/value/valueMap.h"          // ibValueStructure — the sugar ibRegFilterPredicate converts
+#include "backend/system/value/valueTable.h"        // ibValueModelTable — the table a reading hands a script
+#include "backend/query/dataQueryBuilder.h"         // ibDataQueryResult — the selection those rows come off
+#include "backend/query/querySelector.h"            // ibSelector::Snapshot — …as the fast table they go in through
+#include "backend/query/temp/tempTableQueryable.h"  // ibTempColumn / ibDbTempTableQueryable — a derived surface IS one
+#include "backend/query/structure/schemaSnapshot.h" // ibSchemaTable / ibSchemaMaterialize — the totals bundle's own vocabulary
+#include "backend/query/queryColumn.h"              // ibBackendQueryColumn::SyntheticId — a derived column's number
+#include "backend/query/queryHierarchy.h"           // «IN HIERARCHY» — the words a reading's condition carries down (ibQueryDimUnfold)
 
 // ⚠ NAMED, NOT INHERITED — MSVC hands these over transitively and GCC / Clang do not.
 #include <algorithm>   // std::find — the running grid names each figure once

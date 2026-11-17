@@ -16,7 +16,7 @@
 #include "backend/query/dataQueryBuilder.h"
 #include "backend/query/queryable.h"
 #include "backend/query/queryColumn.h"
-#include "backend/query/queryProvider.h"
+#include "backend/query/provider/queryProvider.h"
 #include "backend/backend_exception.h"
 
 namespace {

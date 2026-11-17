@@ -11,14 +11,14 @@
 #include "frmserver/docView/templates/designer/queryConstructorRequest.h"
 #include "protocol/protocol.h"
 #include "protocol/protocolDesigner.h"   // ibProtocol::ibView::ibQueryConstructor
-#include "backend/query/queryableFactory.h"      // ibQueryableSourceDescriptor — a table the configuration offers
-#include "backend/query/tempTableQueryable.h"    // ibTempTableQueryable — its columns, from a table in memory
-#include "backend/metadataConfiguration.h"       // ibMetaDataConfigurationFile — the open configuration it registers in
-#include "backend/query/queryLowering.h"         // the desktop's CheckNames / UngroupedProjections — the reference
-#include "backend/query/queryConstructorModel.h" // the desktop's GetSources — the kinds' reference
-#include "backend/query/queryable.h"             // ibSourceMetaDataScope
-#include "backend/backend_picture.h"             // ibBackendPicture::SendPicture — a kind's picture, the reference
-#include "backend/compiler/typeCtor.h"           // ibCtorAbstractType
+#include "backend/query/queryableFactory.h"        // ibQueryableSourceDescriptor — a table the configuration offers
+#include "backend/query/temp/tempTableQueryable.h" // ibTempTableQueryable — its columns, from a table in memory
+#include "backend/metadataConfiguration.h"         // ibMetaDataConfigurationFile — the open configuration it registers in
+#include "backend/query/queryLowering.h"           // the desktop's CheckNames / UngroupedProjections — the reference
+#include "backend/query/queryConstructorModel.h"   // the desktop's GetSources — the kinds' reference
+#include "backend/query/queryable.h"               // ibSourceMetaDataScope
+#include "backend/backend_picture.h"               // ibBackendPicture::SendPicture — a kind's picture, the reference
+#include "backend/compiler/typeCtor.h"             // ibCtorAbstractType
 
 #include <set>
 

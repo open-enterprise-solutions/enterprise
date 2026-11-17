@@ -22,7 +22,7 @@
 
 #include "backend/backend.h"
 
-struct ibSchemaTable;     // L3-2 structure — the mover's single input (query/schemaSnapshot.h)
+struct ibSchemaTable;     // L3-2 structure — the mover's single input (query/structure/schemaSnapshot.h)
 class ibBackendQueryColumn;
 class ibMetaData;
 class ibReaderMemory;
