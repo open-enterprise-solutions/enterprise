@@ -162,9 +162,10 @@ TEST(QueryConstructorRequest, WithNoConfigurationTheSourcesAreAnsweredEmpty)
 	EXPECT_TRUE(kinds->Children().empty());
 }
 
-TEST(QueryConstructorRequest, EachKindIsOneRowWithItsClassPicture)
+TEST(QueryConstructorRequest, EachKindIsOneRowWithItsTablesPicture)
 {
-	// The kinds' rows are the sources' first segments, once each, and a kind's picture is its class's (LINQ's Kinds).
+	// The kinds' rows are the sources' first segments, once each, and a kind wears its tables' picture: the class
+	// behind the kind (LINQ's Kinds), or - where no class stands behind it - what its table declares (the journal's).
 	Sales sales;
 	OpenConfiguration cfg;
 	ASSERT_NE(nullptr, cfg.GetSourceFactory());
@@ -178,9 +179,16 @@ TEST(QueryConstructorRequest, EachKindIsOneRowWithItsClassPicture)
 	std::vector<ibString> kinds;
 	for (const ibDataNode& row : response.FindChild(qc::Kinds)->Children()) {
 		kinds.push_back(row.GetValue<ibString>(qc::Name));
-		const ibCtorAbstractType* const ctor = cfg.GetAvailableCtor(kinds.back());
-		EXPECT_EQ(ctor != nullptr ? ibString(ibBackendPicture::SendPicture(ctor->GetClassType())) : ibString(),
-			row.Has(qc::Picture) ? row.GetValue<ibString>(qc::Picture) : ibString()) << kinds.back();
+		ibString picture;
+		if (const ibCtorAbstractType* const ctor = cfg.GetAvailableCtor(kinds.back()))
+			picture = ibBackendPicture::SendPicture(ctor->GetClassType());
+		else
+			for (const ibQueryableSourceDescriptor* descriptor : cfg.GetSourceFactory()->GetDescriptors(ibQueryableSourceKind::Any))
+				if (descriptor->GetNamespace() == kinds.back() && descriptor->GetPicture() != 0) {
+					picture = ibBackendPicture::SendPicture(descriptor->GetPicture());
+					break;
+				}
+		EXPECT_EQ(picture, row.Has(qc::Picture) ? row.GetValue<ibString>(qc::Picture) : ibString()) << kinds.back();
 	}
 	EXPECT_EQ(expected, std::set<ibString>(kinds.begin(), kinds.end()));
 	EXPECT_EQ(expected.size(), kinds.size()) << "a kind is one row";

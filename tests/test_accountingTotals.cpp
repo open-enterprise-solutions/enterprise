@@ -470,7 +470,7 @@ TEST(AcctGuard, GuardsCompose)
 
 namespace {
 
-ibString BackendPartialsDir()
+wxFileName BackendDir()
 {
 	wxFileName here(ibString::FromUTF8(__FILE__));
 	here.SetFullName(wxEmptyString);
@@ -478,6 +478,12 @@ ibString BackendPartialsDir()
 	here.AppendDir(wxT("src"));
 	here.AppendDir(wxT("engine"));
 	here.AppendDir(wxT("backend"));
+	return here;
+}
+
+ibString BackendPartialsDir()
+{
+	wxFileName here = BackendDir();
 	here.AppendDir(wxT("metaCollection"));
 	here.AppendDir(wxT("partial"));
 	return here.GetPath();
@@ -554,8 +560,12 @@ TEST(AcctGuardSource, TheInForceRuleIsSpelledInExactlyOnePlace)
 	}
 	EXPECT_GE(callers, 2u) << "both registers declare it — accumulation and accounting";
 
-	// …and the helper itself still writes the comparison.
-	wxFileName lowering(BackendPartialsDir(), wxT("registerQueryLowering.h"));
+	// …and the helper itself still writes the comparison - in the database provider, which lowers the registers.
+	wxFileName lowering = BackendDir();
+	lowering.AppendDir(wxT("query"));
+	lowering.AppendDir(wxT("provider"));
+	lowering.AppendDir(wxT("database"));
+	lowering.SetFullName(wxT("registerQueryLowering.h"));
 	const std::vector<ibString> lines = ReadLines(lowering.GetFullPath());
 	ASSERT_FALSE(lines.empty()) << "registerQueryLowering.h must be readable";
 
