@@ -418,7 +418,7 @@ ibValue ibValueQuerySelect::ReadColumn(const ibQueryLowering::ibQueryOutputColum
 ibValue ibValueQuerySelect::ToTable()
 {
 	// Column i is the output column i, keyed by its ordinal from 1 — a projection may read one source column
-	// under two names, so the source's own id would not tell them apart (DrainIntoSnapshot, queryLowering.cpp).
+	// under two names, so the source's own id would not tell them apart (DrainIntoSnapshot, queryPackage.cpp).
 	ibQueryRamTable rows;
 	for (size_t i = 0; i < m_schema.size(); ++i)
 		rows.AddColumn(static_cast<ibMetaID>(i + 1), m_schema[i].m_name, m_schema[i].GetTypeDesc());

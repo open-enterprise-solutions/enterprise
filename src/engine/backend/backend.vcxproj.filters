@@ -2547,6 +2547,12 @@
     <ClCompile Include="query\queryLowering.cpp">
       <Filter>query</Filter>
     </ClCompile>
+    <ClCompile Include="query\queryNameCheck.cpp">
+      <Filter>query</Filter>
+    </ClCompile>
+    <ClCompile Include="query\queryPackage.cpp">
+      <Filter>query</Filter>
+    </ClCompile>
     <ClCompile Include="query\queryProfiler.cpp">
       <Filter>query</Filter>
     </ClCompile>
@@ -2599,6 +2605,9 @@
       <Filter>system\value</Filter>
     </ClCompile>
     <ClCompile Include="query\queryProvider.cpp">
+      <Filter>query</Filter>
+    </ClCompile>
+    <ClCompile Include="query\queryResult.cpp">
       <Filter>query</Filter>
     </ClCompile>
     <ClCompile Include="query\queryable.cpp">
@@ -2704,6 +2713,9 @@
       <Filter>query</Filter>
     </ClInclude>
     <ClInclude Include="query\queryLowering.h">
+      <Filter>query</Filter>
+    </ClInclude>
+    <ClInclude Include="query\queryLoweringInternal.h">
       <Filter>query</Filter>
     </ClInclude>
     <ClInclude Include="query\queryProfiler.h">

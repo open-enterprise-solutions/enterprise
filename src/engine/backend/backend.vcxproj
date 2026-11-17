@@ -264,6 +264,7 @@
     <ClInclude Include="query\queryConstructorModel.h" />
     <ClInclude Include="query\queryTempStore.h" />
     <ClInclude Include="query\queryLowering.h" />
+    <ClInclude Include="query\queryLoweringInternal.h" />
     <ClInclude Include="query\queryProfiler.h" />
     <ClInclude Include="query\queryException.h" />
     <ClInclude Include="query\queryHierarchy.h" />
@@ -744,6 +745,8 @@
     <ClCompile Include="query\queryConstructorModel.cpp" />
     <ClCompile Include="query\queryTempStore.cpp" />
     <ClCompile Include="query\queryLowering.cpp" />
+    <ClCompile Include="query\queryNameCheck.cpp" />
+    <ClCompile Include="query\queryPackage.cpp" />
     <ClCompile Include="query\queryProfiler.cpp" />
     <ClCompile Include="query\queryException.cpp" />
     <ClCompile Include="query\queryHierarchy.cpp" />
@@ -762,6 +765,7 @@
     <ClCompile Include="system\value\valueQuery.cpp" />
     <ClCompile Include="system\value\valueQueryable.cpp" />
     <ClCompile Include="query\queryProvider.cpp" />
+    <ClCompile Include="query\queryResult.cpp" />
     <ClCompile Include="query\queryReadState.cpp" />
     <ClCompile Include="query\dbTableProvider.cpp" />
     <ClCompile Include="query\columnLayout.cpp" />

@@ -5,7 +5,7 @@
 // DB cursor OR a computed RAM table, NEVER mixed. The selection forwards to it and never
 // branches on which. The two implementations live in their own TUs — ibDbResultSource (the DB
 // cursor materialisation) in dbTableProvider.cpp, ibRamTableResultSource (the composed / computed
-// RAM table) in queryProvider.cpp — so this tiny shared header is the only thing both need. It
+// RAM table) in queryResult.cpp — so this tiny shared header is the only thing both need. It
 // names no L2 / metaobject type: pure abstraction over columns + values. (docs §22.4d)
 
 #include "queryable.h"       // ibBackendQueryColumn (Value param) + ibValue / wxString
@@ -42,5 +42,9 @@ public:
 		throw std::logic_error("ibDataResultSource::Table: this result is read row by row - there is no table to take");
 	}
 };
+
+// A column computed over a result's row — by the one evaluator the RAM road uses (queryProvider.cpp), the row
+// answering its own outputs. Asked by the selection for the columns it answers itself (queryResult.cpp).
+ibValue EvalOverResultRow(const ibQueryColumnSelect& c, const ibDataResultSource& src);
 
 #endif // __RESULT_SOURCE_H__
