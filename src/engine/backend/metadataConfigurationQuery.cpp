@@ -140,7 +140,7 @@ bool ibMetaDataConfigurationStorage::OnSaveDatabase(int flags)
 	// transaction + the auto-acquired exclusive mode — the next apply then bails
 	// silently at the "transaction already active" guard ("metadata returned
 	// false", no text). Roll back + release here and rethrow so any caller
-	// (designer / codeRunner / appserver) still reports the error and the DB stays clean.
+	// (designer / coderunner / appserver) still reports the error and the DB stays clean.
 	try {
 
 	//remove old tables (if need)

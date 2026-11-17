@@ -29,7 +29,7 @@ ibDatabaseLayer* ibStructureBuilder::Conn() const
 	// deferred drain running at active=1 — inside a transaction that had not committed yet, so
 	// CREATE TRIGGER could not see the table the same apply had just created ("Table unknown").
 	//
-	// db_query stays the fallback for callers that have no session at all (codeRunner, tests).
+	// db_query stays the fallback for callers that have no session at all (coderunner, tests).
 	if (m_holder != nullptr)
 		return m_holder->EnsureConnection().get();
 	if (ibSession* session = ibSession::Current())
