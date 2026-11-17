@@ -455,15 +455,33 @@ TEST_F(QueryCompositeWalk, SelectTheDateOfACompositeReference)
 		Keys(wxT("SELECT T.Key, T.Doc.Date AS D FROM InformationRegister.Payments AS T ORDER BY D")));
 }
 
-// ⭐ A NESTED SOURCE IS THE SERVER'S — declared on the reader's statement as `WITH` and read by its name, not read into
-// memory and handed over. Every composition reads its source as a nested query (dataComposer.cpp), so this is the road
-// every report starts on. The rows are the same on both roads; the statement is what tells them apart.
-TEST_F(QueryCompositeWalk, ANestedSourceIsDeclaredToTheServer)
+// ⭐ A NESTED SOURCE IS THE SERVER'S, on one of two roads — never read into memory and handed over. Every composition
+// reads its source as a nested query (dataComposer.cpp), so these are the roads every report starts on. The rows are
+// the same on every road; the statements are what tell them apart.
+//
+// A plain one is folded into the reader (queryRewrite.h, rule 2): its condition joins the outer one, and one read of
+// the table answers both.
+TEST_F(QueryCompositeWalk, ANestedPlainSelectIsReadInTheReadersStatement)
 {
 	Fill();
 	std::vector<ibString> keys;
 	const SentToDatabase sent = MeasureSent([&] {
 		keys = Keys(wxT("SELECT T.Key FROM (SELECT P.Key FROM InformationRegister.Payments AS P ")
+		            wxT("WHERE P.Key = \"invoice\") AS T"));
+	});
+	EXPECT_EQ(std::vector<ibString>{ wxT("invoice") }, keys);
+	EXPECT_EQ(sent.m_statements, 1u) << sent;
+	EXPECT_EQ(sent.m_rows, 1u) << "the condition was the server's\n" << sent;
+}
+
+// One the rule may not fold — TOP here, whose limit merging would lose — is declared on the reader's statement as
+// `WITH`, its limit in the body, and read by its name.
+TEST_F(QueryCompositeWalk, ANestedSourceIsDeclaredToTheServer)
+{
+	Fill();
+	std::vector<ibString> keys;
+	const SentToDatabase sent = MeasureSent([&] {
+		keys = Keys(wxT("SELECT T.Key FROM (SELECT TOP 5 P.Key FROM InformationRegister.Payments AS P ")
 		            wxT("WHERE P.Key = \"invoice\") AS T"));
 	});
 	EXPECT_EQ(std::vector<ibString>{ wxT("invoice") }, keys);
