@@ -257,6 +257,12 @@ would have caught it, or says in the pull request why one is impractical.
 with the machinery under test confirms itself. The reference answer comes from raw records (the
 postings, the movements), and synthetic cases are backed by runs over real configurations.
 
+**A shape the server must answer asserts its road.** Both roads give the same answer, so a gate that
+stops letting a shape through makes a report slow, not wrong, and no check of the answer sees it.
+Run the read under `MeasureSent` ([tests/queryRoad.h](../tests/queryRoad.h)) and assert what came
+back: the groups, not the rows they fold; one statement, not one per table. The journal's
+`query.road` line exists only in a Debug build.
+
 ---
 
 ## 6. Speed

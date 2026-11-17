@@ -26,6 +26,7 @@
 #include <wx/string.h>   // wxT, wxString - the engine's headers include no wx
 
 #include <algorithm>
+#include <map>
 #include <memory>
 #include <vector>
 
@@ -42,6 +43,7 @@
 #include "backend/query/queryable.h"                      // ibBackendQueryable
 #include "backend/query/tempTableManager.h"               // ibTempTableManager
 #include "backend/query/dataQueryBuilder.h"               // ibDataQueryBuilder / ibReadPageRequest
+#include "queryRoad.h"                                    // MeasureSent — the road a read took
 
 namespace {
 
@@ -321,10 +323,13 @@ TEST_F(TempDbSqliteFix, DoorWhereLikeFiltersRows)
 	ibDataQueryBuilder q(ibConnectionPool::ThreadHolder());
 	q.From(d.temp).WhereLike(d.cName, ibValue(ibString(wxT("A%"))));
 	ibReadPageRequest page;
-	ibDataQueryResult sel = q.Execute(page);
 	int n = 0;
-	while (sel.Next()) ++n;
+	const SentToDatabase sent = MeasureSent([&] {
+		ibDataQueryResult sel = q.Execute(page);
+		while (sel.Next()) ++n;
+	});
 	EXPECT_EQ(n, 2) << "WhereLike 'A%' should match Apple and Avocado";
+	EXPECT_EQ(sent.m_rows, 2u) << "the LIKE ran on the server: two of the three rows came back\n" << sent;
 }
 
 // NOTE: OrderBy through the door is intentionally NOT exercised on a bare temp
@@ -473,9 +478,12 @@ TEST_F(TempDbSqliteFix, RlsSemiJoin_FiltersByExistence)
 	ASSERT_TRUE(sales.Build(holder, 601, {1, 2, 3, 4}));
 	ASSERT_TRUE(perm .Build(holder, 602, {2, 4}));
 
-	std::vector<int> got = SemiJoinSurvivors(holder, sales, perm);
+	std::vector<int> got;
+	const SentToDatabase sent = MeasureSent([&] { got = SemiJoinSurvivors(holder, sales, perm); });
 	std::sort(got.begin(), got.end());
 	EXPECT_EQ(got, (std::vector<int>{2, 4})) << "only rows whose key EXISTS in the permission set survive";
+	EXPECT_EQ(sent.m_rows, 2u) << "the EXISTS ran inside the server's read: the survivors came back, not both tables\n"
+		<< sent;
 }
 
 TEST_F(TempDbSqliteFix, RlsSemiJoin_DoesNotMultiply)
@@ -591,4 +599,85 @@ TEST_F(TempDbSqliteFix, RlsSemiJoin_MultipleJoinsCompose)
 	while (sel.Next()) got.push_back(sel.GetValue(sales.k).GetInteger());
 	std::sort(got.begin(), got.end());
 	EXPECT_EQ(got, (std::vector<int>{3, 4})) << "two semi-joins AND-compose: only keys present in BOTH permission sets";
+}
+
+// ===========================================================================
+// TWO TABLES OF ONE CONNECTION, ON THE SERVER'S ROAD — a join, a fold over it, a stack of branches, each ONE statement
+// (docs/private/query-language-arc.md §22.1a, §22.1b). The gates are asked of hand-made shapes in test_queryComposer.cpp;
+// here the door is driven and what crossed the wire is held (queryRoad.h). Fallen to the RAM stitch, every table is
+// read whole, a statement each.
+// ===========================================================================
+
+// goods { 3 Apple 30, 1 Banana 10, 2 Avocado 20 } joined to sold { 1, 2, 2 } on id = k: Banana once, Avocado twice.
+TEST_F(TempDbSqliteFix, TwoTablesJoinInOneStatement)
+{
+	if (!ready) GTEST_SKIP();
+	ibDatabaseConnectionHolder* holder = ibConnectionPool::ThreadHolder();
+	DoorRows goods;
+	KeyTable sold;
+	ASSERT_TRUE(goods.Build(holder));
+	ASSERT_TRUE(sold.Build(holder, 701, {1, 2, 2}));
+
+	ibDataQueryBuilder q(holder);
+	q.From(goods.temp);
+	q.Join(sold.temp, goods.cId, sold.k);
+	q.Select(goods.cName, wxT("name"));
+	q.Select(sold.k, wxT("k"));
+	std::vector<ibString> names;
+	const SentToDatabase sent = MeasureSent([&] {
+		ibDataQueryResult sel = q.Execute(ibReadPageRequest{});
+		while (sel.Next()) names.push_back(sel.GetColumn(wxT("name")).GetString());
+	});
+	std::sort(names.begin(), names.end());
+	EXPECT_EQ(names, (std::vector<ibString>{ wxT("Avocado"), wxT("Avocado"), wxT("Banana") }));
+	EXPECT_EQ(sent.m_statements, 1u) << "one SELECT … JOIN, not a read of each table\n" << sent;
+	EXPECT_EQ(sent.m_rows, 3u) << "the joined rows came back, not both tables\n" << sent;
+}
+
+// The same join folded — GROUP BY name, SUM(amt): Avocado 20 twice, Banana 10.
+TEST_F(TempDbSqliteFix, AFoldOverTwoTablesIsOneStatement)
+{
+	if (!ready) GTEST_SKIP();
+	ibDatabaseConnectionHolder* holder = ibConnectionPool::ThreadHolder();
+	DoorRows goods;
+	KeyTable sold;
+	ASSERT_TRUE(goods.Build(holder));
+	ASSERT_TRUE(sold.Build(holder, 711, {1, 2, 2}));
+
+	ibDataQueryBuilder q(holder);
+	q.From(goods.temp);
+	q.Join(sold.temp, goods.cId, sold.k);
+	q.GroupBy(goods.cName);
+	q.Sum(goods.cAmt, wxT("total"));
+	std::map<ibString, long> totals;
+	const SentToDatabase sent = MeasureSent([&] {
+		ibDataQueryResult s = q.SelectAggregate();
+		while (s.Next()) totals[s.GetValue(goods.cName).GetString()] = s.GetColumn(wxT("total")).GetInteger();
+	});
+	EXPECT_EQ(totals, (std::map<ibString, long>{ { wxT("Avocado"), 40 }, { wxT("Banana"), 10 } }));
+	EXPECT_EQ(sent.m_statements, 1u) << "one SELECT … JOIN … GROUP BY, not a read of each table\n" << sent;
+	EXPECT_EQ(sent.m_rows, 2u) << "the groups came back, not the rows they fold\n" << sent;
+}
+
+// Two tables of the same columns stacked: six names. Stacked in memory, the rows are the same and each branch is a
+// read of its own — so here the statements tell the road.
+TEST_F(TempDbSqliteFix, TwoTablesStackInOneStatement)
+{
+	if (!ready) GTEST_SKIP();
+	ibDatabaseConnectionHolder* holder = ibConnectionPool::ThreadHolder();
+	DoorRows first, second;
+	ASSERT_TRUE(first.Build(holder));
+	ASSERT_TRUE(second.Build(holder));
+
+	ibDataQueryBuilder q(holder);
+	q.From(first.temp);
+	q.Union(second.temp);
+	q.Select(first.cName, wxT("name"));
+	std::vector<ibString> names;
+	const SentToDatabase sent = MeasureSent([&] {
+		ibDataQueryResult sel = q.Execute(ibReadPageRequest{});
+		while (sel.Next()) names.push_back(sel.GetColumn(wxT("name")).GetString());
+	});
+	EXPECT_EQ(names.size(), 6u);
+	EXPECT_EQ(sent.m_statements, 1u) << "one UNION ALL, not a read of each branch\n" << sent;
 }

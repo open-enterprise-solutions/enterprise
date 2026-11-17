@@ -19,7 +19,9 @@
 //   * guids — the identity column type, back as the same string;
 //   * blobs — bytes in, same bytes out;
 //   * upsert — the dialect's own spelling (ON CONFLICT), including the second
-//     write that must UPDATE rather than duplicate.
+//     write that must UPDATE rather than duplicate;
+//   * the fold only this engine does — GROUP BY ROLLUP — asserted on the road
+//     it took as well as on the answer (queryRoad.h).
 //
 // CONNECTION comes from the environment, so the same binary is a no-op on a
 // developer machine and a real test in CI:
@@ -42,9 +44,21 @@
 #include "backend/databaseLayer/preparedStatement.h"
 #include "backend/databaseLayer/databaseLayerException.h"
 #include "backend/backend_exception.h"
+#include "backend/appData.h"                        // ibApplicationInstance — the door reads through the application's pool
+#include "backend/compiler/value.h"                 // ibValue / ibNumber / g_value*CLSID
+#include "backend/databaseLayer/connectionPool.h"   // ibConnectionPool::ThreadHolder
+#include "backend/databaseLayer/connectionHolder.h" // ibDatabaseConnectionHolder
+#include "backend/query/dataQueryBuilder.h"         // ibDataQueryBuilder — a totals through the door
+#include "backend/query/queryProvider.h"            // ibQueryRamTable — the rows a temp table is made of
+#include "backend/query/querySelectorTree.h"        // ibSelectorTree — the headings that come back
+#include "backend/query/tempTableManager.h"         // ibTempTableManager — a table on the server for them
+#include "core/description/typeDescription.h"       // ibTypeDescription
+#include "queryRoad.h"                              // MeasureSent — the road a totals took
 
+#include <algorithm>
 #include <chrono>
 #include <cstdlib>
+#include <map>
 #include <memory>
 
 namespace {
@@ -302,4 +316,102 @@ TEST_F(PostgresDialect, NoWaitDoesNotWaitForAHeldRow)
 	EXPECT_EQ(wxT("55P03"), state)
 		<< "a noWait transaction must be refused for the lock, not cancelled: " << state.utf8_str();
 	EXPECT_LT(waited, 1000) << "waited " << waited << " ms";
+}
+
+// =============================================================================
+// THE FOLD ONLY THIS ENGINE DOES. PostgreSQL folds every level of a totals in one statement (GROUP BY ROLLUP); SQLite
+// and Firebird have none, so on them a figure the groups below do not add up to — an average, a count of distinct
+// values — is folded in memory. Nothing else in the suite sees this fold run, so it is asserted on the road as well as
+// on the answer. The door reads through the application's pool, so this fixture brings one up over the same server.
+// =============================================================================
+namespace {
+
+class PostgresRoads : public ::testing::Test {
+protected:
+	void SetUp() override
+	{
+		if (!HaveServer())
+			GTEST_SKIP() << "OES_PG_USER not set — no PostgreSQL to talk to";
+		static wxInitializer s_wxInit;   // wxString / wxDateTime need wxBase up
+		m_db = OpenFresh();
+		if (m_db == nullptr)
+			GTEST_SKIP() << "PostgreSQL is configured but did not open";
+		if (!ibApplicationInstance::CreateAppDataEnv(ibRunMode::eFILE_MODE))
+			GTEST_SKIP() << "appData env unavailable headless";
+		ibConnectionPool* pool = ibApplicationInstance::GetConnectionPool();
+		if (pool == nullptr)
+			GTEST_SKIP() << "no connection pool after CreateAppDataEnv";
+		pool->Init(m_db, /*maxSize=*/1, /*minIdle=*/0);
+	}
+
+	void TearDown() override
+	{
+		if (ibApplicationInstance::Get() != nullptr)
+			ibApplicationInstance::DestroyAppDataEnv();
+	}
+
+	std::shared_ptr<ibDatabaseLayerPostgres> m_db;
+};
+
+} // namespace
+
+// An average under two levels of headings: no plain GROUP BY adds it up from the groups below, so the server folds
+// every level at once and what comes back is the headings — three items, two categories, the grand total — not the
+// eight rows. Every average is whole, so the figures are compared exactly.
+TEST_F(PostgresRoads, AnAverageUnderHeadingsIsFoldedByRollup)
+{
+	const ibMetaID CAT = 801, ITEM = 802, QTY = 803;
+	ibQueryRamTable ram;
+	ram.AddColumn(CAT,  wxT("cat"),  ibTypeDescription(g_valueStringCLSID));
+	ram.AddColumn(ITEM, wxT("item"), ibTypeDescription(g_valueStringCLSID));
+	ram.AddColumn(QTY,  wxT("qty"),  ibTypeDescription(g_valueNumberCLSID));
+	const auto add = [&](const ibString& cat, const ibString& item, long qty) {
+		const long r = ram.AppendRow();
+		ram.SetCell(r, CAT,  ibValue(cat));
+		ram.SetCell(r, ITEM, ibValue(item));
+		ram.SetCell(r, QTY,  ibValue(ibNumber(qty)));
+	};
+	add(wxT("a"), wxT("x"), 10); add(wxT("a"), wxT("x"), 20); add(wxT("a"), wxT("x"), 30);   // x: 20
+	add(wxT("a"), wxT("y"), 40); add(wxT("a"), wxT("y"), 60);                                // y: 50, a: 160 / 5 = 32
+	add(wxT("b"), wxT("z"), 6);  add(wxT("b"), wxT("z"), 8);  add(wxT("b"), wxT("z"), 10);   // z: 8, b: 8; all: 184 / 8 = 23
+
+	ibDatabaseConnectionHolder* holder = ibConnectionPool::ThreadHolder();
+	ASSERT_NE(holder, nullptr);
+	const std::unique_ptr<ibTempTableManager> temp = ibTempTableManager::Materialise(holder, ram, nullptr);
+	ASSERT_NE(temp, nullptr) << "PostgreSQL vends a temp-table dialect";
+	std::shared_ptr<const ibBackendQueryColumn> cat, item, qty;
+	for (const std::shared_ptr<const ibBackendQueryColumn>& c : temp->Queryable()->GetQueryColumns()) {
+		if      (c->GetColumnId() == CAT)  cat  = c;
+		else if (c->GetColumnId() == ITEM) item = c;
+		else if (c->GetColumnId() == QTY)  qty  = c;
+	}
+	ASSERT_TRUE(cat != nullptr && item != nullptr && qty != nullptr);
+
+	ibDataQueryBuilder q(holder);
+	q.From(temp->Queryable());
+	q.TotalBy(cat, ibDimensionKind::Elements);
+	q.TotalBy(item, ibDimensionKind::Elements);
+	q.Totals().Avg(qty, wxT("Mean"));
+	ibSelectorTree tree;
+	const SentToDatabase sent = MeasureSent([&] { tree = q.SelectTotals(); });
+
+	const auto mean = [&qty](const ibSelectorTree::Node& node) { return node.m_values.at(qty->GetColumnId()).GetNumber(); };
+	EXPECT_EQ(0, mean(tree.Root()).Compare(ibNumber(23))) << "the grand average is over the rows, not over the groups";
+	std::map<ibString, ibNumber> byCat, byItem;
+	for (const std::unique_ptr<ibSelectorTree::Node>& c : tree.Root().m_children) {
+		byCat[c->m_values.at(cat->GetColumnId()).GetString()] = mean(*c);
+		for (const std::unique_ptr<ibSelectorTree::Node>& i : c->m_children)
+			byItem[i->m_values.at(item->GetColumnId()).GetString()] = mean(*i);
+	}
+	ASSERT_EQ(byCat.size(), 2u);
+	ASSERT_EQ(byItem.size(), 3u);
+	EXPECT_EQ(0, byCat[wxT("a")].Compare(ibNumber(32)));
+	EXPECT_EQ(0, byCat[wxT("b")].Compare(ibNumber(8)));
+	EXPECT_EQ(0, byItem[wxT("x")].Compare(ibNumber(20)));
+	EXPECT_EQ(0, byItem[wxT("y")].Compare(ibNumber(50)));
+	EXPECT_EQ(0, byItem[wxT("z")].Compare(ibNumber(8)));
+
+	EXPECT_TRUE(std::any_of(sent.m_texts.begin(), sent.m_texts.end(),
+		[](const ibString& text) { return text.Contains(wxT("ROLLUP")); })) << sent;
+	EXPECT_EQ(sent.m_rows, 6u) << "the headings came back, not the eight rows\n" << sent;
 }

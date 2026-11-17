@@ -55,6 +55,7 @@
 #include "backend/query/dbTableProvider.h"                   // ibDbTableProvider::BuildPredicateIR — the door that writes every WHERE
 #include "backend/databaseLayer/databaseQueryBuilder.h"      // ibQueryRenderer — the SQL a set becomes
 #include "lambdaRecordFix.h"                  // ibTestRecordLambda — body -> compiled lambda -> AST
+#include "queryRoad.h"                        // MeasureSent — the road a read took
 
 namespace {
 
@@ -193,11 +194,17 @@ TEST_F(ComputedServerFix, Aggregate_PromotesToServer)
 	q.From(balance);
 	q.GroupBy(item);
 	q.Aggregate(ibDataQueryBuilder::AggregateFn::Sum, qty, wxT("total"));
-	ibDataQueryResult res = q.SelectAggregate();   // -> ExecuteAggregate -> PromoteSingleComputed -> temp -> SQL
 
 	std::map<std::string, long> totals;
-	while (res.Next())
-		totals[res.GetValue(item).GetString().ToStdString()] = res.GetColumn(wxT("total")).GetInteger();
+	const SentToDatabase sent = MeasureSent([&] {
+		ibDataQueryResult res = q.SelectAggregate();   // -> ExecuteAggregate -> PromoteSingleComputed -> temp -> SQL
+		while (res.Next())
+			totals[res.GetValue(item).GetString().ToStdString()] = res.GetColumn(wxT("total")).GetInteger();
+	});
+	// Folded in memory, nothing would have been sent at all.
+	EXPECT_TRUE(std::any_of(sent.m_texts.begin(), sent.m_texts.end(),
+		[](const ibString& text) { return text.Contains(wxT("GROUP BY")); }))
+		<< "the rows went into a temp table and the server grouped them\n" << sent;
 
 	EXPECT_EQ(totals.size(), 3u);
 	EXPECT_EQ(totals["K0"], 500);
@@ -237,11 +244,13 @@ TEST_F(ComputedServerFix, Linq_WherePushesToServer)
 	q.Select(qty, wxT("qty"));
 	q.Where(pred);
 	ibReadPageRequest page;
-	ibDataQueryResult res = q.Execute(page);   // physical source -> ibDbTableProvider::ExecuteRead -> server SQL
-
 	int rows = 0;
-	while (res.Next()) ++rows;
-	EXPECT_EQ(rows, 2);   // the two North rows survived the server-side WHERE (out of four) -> LINQ pushed to the DBMS
+	const SentToDatabase sent = MeasureSent([&] {
+		ibDataQueryResult res = q.Execute(page);   // physical source -> ibDbTableProvider::ExecuteRead -> server SQL
+		while (res.Next()) ++rows;
+	});
+	EXPECT_EQ(rows, 2);   // the two North rows survived the WHERE (out of four)…
+	EXPECT_EQ(sent.m_rows, 2u) << "…and only they came back: the WHERE ran on the DBMS, not over four rows read\n" << sent;
 }
 
 // ---- WhereIn: the semi-join key filter, rendered server-side -------------------

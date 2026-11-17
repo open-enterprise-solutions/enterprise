@@ -7,6 +7,7 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <map>
 #include <set>
 #include <vector>
@@ -40,6 +41,7 @@
 #include "core/clsid.h"
 
 #include "activeMetaDataAccess.h"
+#include "queryRoad.h"   // MeasureSent — the road a query took
 
 namespace {
 
@@ -451,6 +453,23 @@ TEST_F(QueryCompositeWalk, SelectTheDateOfACompositeReference)
 	Fill();
 	EXPECT_EQ(kReceiptFirst,
 		Keys(wxT("SELECT T.Key, T.Doc.Date AS D FROM InformationRegister.Payments AS T ORDER BY D")));
+}
+
+// ⭐ A NESTED SOURCE IS THE SERVER'S — declared on the reader's statement as `WITH` and read by its name, not read into
+// memory and handed over. Every composition reads its source as a nested query (dataComposer.cpp), so this is the road
+// every report starts on. The rows are the same on both roads; the statement is what tells them apart.
+TEST_F(QueryCompositeWalk, ANestedSourceIsDeclaredToTheServer)
+{
+	Fill();
+	std::vector<ibString> keys;
+	const SentToDatabase sent = MeasureSent([&] {
+		keys = Keys(wxT("SELECT T.Key FROM (SELECT P.Key FROM InformationRegister.Payments AS P ")
+		            wxT("WHERE P.Key = \"invoice\") AS T"));
+	});
+	EXPECT_EQ(std::vector<ibString>{ wxT("invoice") }, keys);
+	EXPECT_TRUE(std::any_of(sent.m_texts.begin(), sent.m_texts.end(),
+		[](const ibString& text) { return text.Contains(wxT("WITH ")); }))
+		<< "the nested query went to the server as WITH, inside the reader's statement\n" << sent;
 }
 
 // The same walk over a register's VIRTUAL table: rows the engine computes rather than reads.

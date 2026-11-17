@@ -53,6 +53,7 @@
 #include "backend/system/value/valueTable.h"
 #include "backend/session/session.h"
 #include "core/clsid.h"
+#include "queryRoad.h"   // MeasureSent — the road a totals read took
 
 namespace {
 
@@ -723,7 +724,8 @@ TEST_F(AcceptanceAccumulation, ByTheRecorderTheServerAnswersAsTheRamRoad)
 // every movement into memory to make their headings; one GROUP BY over both levels' fields now returns the items under
 // each warehouse, and the warehouses and the grand total add up from them. Ordered by the figure, each level stands in
 // the order the rows read by it meet its groups — by the largest movement under each, the largest first: the kitchen
-// before the bar, which the alphabet would not put there. The oracle is the movements read plainly and added up here.
+// before the bar, which the alphabet would not put there. The oracle is the movements read plainly and added up here;
+// the road is what came back (queryRoad.h) — the items under each warehouse, where memory reads every movement.
 TEST_F(AcceptanceAccumulation, ALadderOfTotalsIsFoldedByTheServerAsInMemory)
 {
 	if (!ready) return;
@@ -736,6 +738,7 @@ TEST_F(AcceptanceAccumulation, ALadderOfTotalsIsFoldedByTheServerAsInMemory)
 	std::map<ibString, Figures> byWarehouse;
 	std::map<std::pair<ibString, ibString>, Figures> byItem;
 	ibNumber total;
+	size_t movements = 0;
 	{
 		ibDataQueryBuilder rows(ibConnectionPool::ThreadHolder());
 		rows.From(reg->GetQueryable());
@@ -755,9 +758,11 @@ TEST_F(AcceptanceAccumulation, ALadderOfTotalsIsFoldedByTheServerAsInMemory)
 			add(byWarehouse[wh], qty);
 			add(byItem[{ wh, read.GetValue(itemCol).GetString() }], qty);
 			total = total + qty;
+			++movements;
 		}
 	}
 	ASSERT_GT(byItem.size(), byWarehouse.size()) << "a warehouse holds several items";
+	ASSERT_LT(byItem.size(), movements) << "an item moved more than once";
 
 	ibDataQueryBuilder q(ibConnectionPool::ThreadHolder());
 	q.From(reg->GetQueryable());
@@ -765,10 +770,11 @@ TEST_F(AcceptanceAccumulation, ALadderOfTotalsIsFoldedByTheServerAsInMemory)
 	q.TotalBy(itemCol, ibDimensionKind::Elements);
 	q.Totals().Sum(qtyCol, wxT("Qty"));   // named, as the lowering names it: the server's answer is read back by the name
 	q.OrderBy(qtyCol, /*ascending*/ false);
-	ibDataQueryResult pushed = ibMakeEmptyQueryResult(nullptr);
-	ASSERT_TRUE(q.TryTotalsPushdown(pushed)) << "two levels of sums are folded by the server, ROLLUP or not";
+	ibSelectorTree tree;
+	const SentToDatabase sent = MeasureSent([&] { tree = q.SelectTotals(); });
+	EXPECT_EQ(sent.m_rows, byItem.size()) << "the server's GROUP BY answers the items under each warehouse, not the "
+		"movements\n" << sent;
 
-	const ibSelectorTree tree = q.SelectTotals();
 	const ibSelectorTree::Node& root = tree.Root();
 	EXPECT_EQ(0, root.m_values.at(qtyCol->GetColumnId()).GetNumber().Compare(total)) << "the grand total";
 	ASSERT_EQ(root.m_children.size(), byWarehouse.size());
@@ -823,10 +829,11 @@ TEST_F(AcceptanceAccumulation, AFigureOverAProjectionIsFoldedByTheServer)
 	q.TotalBy(itemCol, ibDimensionKind::Elements);
 	q.Totals().Sum(qtyCol, wxT("Qty"));
 	q.Totals().Sum(twice, wxT("TwiceQty"));
-	ibDataQueryResult pushed = ibMakeEmptyQueryResult(nullptr);
-	ASSERT_TRUE(q.TryTotalsPushdown(pushed)) << "a figure over a projection of the source's row is the server's";
+	ibSelectorTree tree;
+	const SentToDatabase sent = MeasureSent([&] { tree = q.SelectTotals(); });
+	EXPECT_LT(sent.m_rows, posted.size()) << "a figure over a projection of the source's row is the server's: its groups "
+		"came back, not the movements\n" << sent;
 
-	const ibSelectorTree tree = q.SelectTotals();
 	size_t headings = 0;
 	const std::function<void(const ibSelectorTree::Node&)> check = [&](const ibSelectorTree::Node& node) {
 		const ibNumber qty = node.m_values.at(qtyCol->GetColumnId()).GetNumber();
