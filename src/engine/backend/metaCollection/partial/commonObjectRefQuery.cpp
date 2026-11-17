@@ -5,7 +5,8 @@
 //	              ses_query (session's holder) so writes join the outer
 //	              document-save TX. Includes the GenerateNextIdentifier
 //	              static utility used by catalogs / documents to allocate
-//	              codes through sys_sequence — on a transaction of its own.
+//	              codes through sys_sequence — on a transaction of its own
+//	              while the pool has a connection free, else in the writer's.
 ////////////////////////////////////////////////////////////////////////////
 
 #include "commonObject.h"
@@ -567,9 +568,21 @@ ibValue ibValueRecordDataObjectRef::GenerateNextIdentifier(ibValueMetaObjectAttr
 	// RETURNING, so the dialect that owns the clause owns the answer (m_returningClause).
 	// That admits SQLite as well now, and gives ODBC one honest error from the
 	// renderer instead of a hardcoded name check that drifts from the dialects.
+	//
+	// ⚠ …WHEN THE POOL HAS ONE FREE AT ONCE. The writer holds its connection while it asks for the counter's, so
+	// writers that have taken every connection of the pool would each wait for a second one only another of them can
+	// give back — half a minute, then a refused write (a pool of one met it at once, the tests', 2026-11-17). A counter
+	// that cannot have its own connection now counts in the writer's transaction, as it did before: one writer of
+	// the type at a time again, but only while the pool is full.
+	constexpr std::chrono::milliseconds kCounterWait{ 1 };   // what is free now; zero would be the pool's half-minute
 	ibDatabaseQueryBuilder q;
 	ibSingleConnectionHolder own;
-	ibDatabaseQueryBuilder counter(&own);
+	bool apart = false;
+	try {
+		apart = own.EnsureConnection(kCounterWait) != nullptr;
+	}
+	catch (const ibCoreException&) { /* the pool is full — counted in the writer's transaction */ }
+	ibDatabaseQueryBuilder counter = apart ? ibDatabaseQueryBuilder(&own) : ibDatabaseQueryBuilder();
 
 	// The series. A catalog, and a document that is not periodic, stay on 20000101 — the bucket
 	// every number allocated before periodicity was a setting already lives in. A periodic document
@@ -676,7 +689,8 @@ ibValue ibValueRecordDataObjectRef::GenerateNextIdentifier(ibValueMetaObjectAttr
 	ibNumber resultCode = 1;
 	bool gotCode = false;
 	bool counted = false;   // the row was there, and the number is the counter's
-	counter.BeginTransaction();
+	if (apart)
+		counter.BeginTransaction();
 	for (int attempt = 0; attempt < 2 && !gotCode; ++attempt) {
 		// UPDATE … SET number = number + 1 … RETURNING number. One statement, so the row is
 		// locked, incremented and read in a single shot — concurrent sessions (including
@@ -723,14 +737,17 @@ ibValue ibValueRecordDataObjectRef::GenerateNextIdentifier(ibValueMetaObjectAttr
 			// PK conflict from a racing session's bootstrap — the constraint violation now
 			// arrives as an exception (L1 signals failure by throwing), so it is caught here
 			// rather than read off a return code. Fall through to the retry — in a transaction begun again: on
-			// PostgreSQL a statement refused ends the one it was in.
-			counter.RollBack();
-			counter.BeginTransaction();
+			// PostgreSQL a statement refused ends the one it was in. (The writer's transaction is the writer's.)
+			if (apart) {
+				counter.RollBack();
+				counter.BeginTransaction();
+			}
 		}
 	}
 
 	if (!gotCode) {
-		counter.RollBack();
+		if (apart)
+			counter.RollBack();
 		return attribute->CreateValue();
 	}
 
@@ -746,6 +763,7 @@ ibValue ibValueRecordDataObjectRef::GenerateNextIdentifier(ibValueMetaObjectAttr
 			keyPredicate()));
 	}
 
-	counter.Commit();
+	if (apart)
+		counter.Commit();
 	return codeOf(resultCode);
 }

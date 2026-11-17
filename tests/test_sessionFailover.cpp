@@ -939,8 +939,16 @@ TEST_F(SessionFailover, ByteCodeStorageHoldsWhatItCompiledAndDetachedSavesNothin
 {
 	ibMetaDataConfigurationBase* const meta = ibApplicationInstance::GetActiveMetaData(g_base->app);
 	ASSERT_NE(meta, nullptr);
-	ibByteCodeStorage* const storage = meta->GetByteCodeStorage();
-	ASSERT_NE(storage, nullptr) << "a configuration that runs holds its bytecode";
+	ASSERT_NE(meta->GetByteCodeStorage(), nullptr) << "a configuration that runs holds its bytecode";
+
+	// ⚠ A STORAGE HOLDS ONLY UNDER A DIGEST, and this base's configuration has none: it was made here and never saved,
+	// and the digest is computed from the saved blob (metadataConfigurationQuery.cpp). The designer saves a new
+	// configuration on its first load, so one that runs in a person's base has it. The storages below are made over a
+	// configuration that answers one — the only thing ibByteCodeStorage's constructor asks of it.
+	struct Saved : ibMetaDataConfigurationFile {
+		ibString GetConfigMD5() const override { return wxT("bytecode-storage-test"); }
+	} saved;
+	ibByteCodeStorage storage(&saved);
 
 	// A module nobody has: its row is this test's alone, and goes with it.
 	const ibGuid module = ibGuid::newGuid();
@@ -948,7 +956,7 @@ TEST_F(SessionFailover, ByteCodeStorageHoldsWhatItCompiledAndDetachedSavesNothin
 		ibByteCodeStorage* storage;
 		ibGuid             module;
 		~Restore() { storage->Invalidate(module); }
-	} restore{ storage, module };
+	} restore{ &storage, module };
 
 	int compiled = 0;
 	const auto compile = [&](ibByteCode& bc) {
@@ -960,17 +968,17 @@ TEST_F(SessionFailover, ByteCodeStorageHoldsWhatItCompiledAndDetachedSavesNothin
 
 	// A miss compiles, and what was compiled is held: the second asking compiles nothing.
 	ibByteCode first;
-	ASSERT_TRUE(storage->Load(first, module, compile));
+	ASSERT_TRUE(storage.Load(first, module, compile));
 	EXPECT_EQ(compiled, 1);
 	ibByteCode second;
-	ASSERT_TRUE(storage->Load(second, module, compile));
+	ASSERT_TRUE(storage.Load(second, module, compile));
 	EXPECT_EQ(compiled, 1);
 	EXPECT_TRUE(second.m_version == first.m_version);
 
 	// It was saved as well. A storage made now — another process opening the same configuration — reads the row with
 	// the configuration's others, before anything is asked of it.
 	{
-		ibByteCodeStorage opened(meta);
+		ibByteCodeStorage opened(&saved);
 		ibByteCode read;
 		EXPECT_TRUE(opened.Load(read, module));
 		EXPECT_TRUE(read.m_version == first.m_version);
@@ -983,7 +991,7 @@ TEST_F(SessionFailover, ByteCodeStorageHoldsWhatItCompiledAndDetachedSavesNothin
 		bc.m_version = ibGuid::newGuid();
 		return true;
 	};
-	ibByteCodeStorage detached(meta);
+	ibByteCodeStorage detached(&saved);
 	detached.Detach();
 	ibByteCode own;
 	ASSERT_TRUE(detached.Load(own, other, compileOther));
@@ -991,7 +999,7 @@ TEST_F(SessionFailover, ByteCodeStorageHoldsWhatItCompiledAndDetachedSavesNothin
 	EXPECT_TRUE(detached.Load(held, other));
 	EXPECT_TRUE(held.m_version == own.m_version);
 
-	ibByteCodeStorage after(meta);
+	ibByteCodeStorage after(&saved);
 	ibByteCode none;
 	EXPECT_FALSE(after.Load(none, other)) << "a replaced configuration saved a row";
 }
