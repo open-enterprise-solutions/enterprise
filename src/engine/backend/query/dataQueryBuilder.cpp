@@ -13,7 +13,7 @@
 
 #include "dataQueryBuilder.h"
 #include "queryProvider.h"                                           // ibBackendQueryProvider abstraction (NO L2 — the door runs through it)
-#include "querySelector.h"                                           // ApplyDerivedAggregates — the figures made of figures, as a selection's Build adds them
+#include "querySelector.h"                                           // ibSelector — SelectTotals' tree comes out of a selection's Build
 #include "queryRamTable.h"                                           // ibQueryRamTable — the empty selection an ALLOWED read yields on a refusal
 #include "queryProfiler.h"                                           // ibQueryProfiler — what goes through the door is told to a measurement
 #include "backend/session/session.h"                                 // ibSession::Current()->Holder()
@@ -1060,9 +1060,15 @@ ibSelectorTree ibDataQueryBuilder::SelectTotals() const
 		}
 		return guarded.SelectTotals();
 	}
-	ibSelectorTree tree = ExecuteTotals();
-	ApplyDerivedAggregates(tree, m_spec.m_totalAggregates, m_totalDerived);   // as a selection's Build does
-	return tree;
+	// ⭐ THE ROADS A REPORT'S TOTALS TAKE, AND NO OTHER: the source's provider folds the levels where it can
+	// (TryTotalsPushdown), else the detail is read and the result folds it — and either tree comes out of the
+	// selection's Build, where the figures made of figures are worked out once.
+	// 🛑 This door had a fold of its own in memory, by the GROUP BY list, while TotalBy fills the levels: a source
+	// whose provider could not fold came back as a tree with no level at all.
+	ibDataQueryResult read = ibMakeEmptyQueryResult(nullptr);   // no default state — made as every empty result is
+	if (!TryTotalsPushdown(read))
+		read = Execute(ibReadPageRequest{});
+	return read.Select(ibSelectKind::ibSelectKind_ByGroups).Build();
 }
 
 bool ibDataQueryBuilder::Insert() const

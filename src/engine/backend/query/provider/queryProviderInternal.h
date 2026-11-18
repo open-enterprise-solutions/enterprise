@@ -92,6 +92,12 @@ private:
 // RAM GROUP BY over a composed table: bucket the rows by the group keys, fold the aggregates per bucket.
 ibDataQueryResult RamAggregate(const ibQueryRamTable& TC, const ibDataQuerySpec& spec);
 
+// The rows of a page held in memory, in order — sorted by `sorting` (a key that is an expression computed for its row),
+// turned round for a page read backwards, started past the anchor. `order` gets every row, the page first (what
+// ibQueryRamTable::ReorderRows takes); the answer is how many of them are the page. Body in queryComposer.cpp.
+long RamPageOrder(const ibQueryRamTable& rows, const std::vector<ibQuerySortItem>& sorting, const ibReadPageRequest& page,
+                  std::vector<long>& order);
+
 } // namespace ibProvider
 
 #endif

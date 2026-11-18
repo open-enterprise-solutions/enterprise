@@ -281,7 +281,7 @@ TEST(QueryCompose, UnionHeterogeneousBranches)
 	EXPECT_EQ(out.GetCell(1, OUT_CODE).GetString().ToStdString(), "A2");
 	EXPECT_EQ(out.GetCell(1, OUT_NAME).GetString().ToStdString(), "Pear");
 	EXPECT_EQ(out.GetCell(2, OUT_CODE).GetString().ToStdString(), "B1");
-	EXPECT_TRUE(out.GetCell(2, OUT_NAME).GetString().IsEmpty());   // absent in branch B -> NULL
+	EXPECT_TRUE(out.GetCell(2, OUT_NAME).IsNull());   // absent in branch B -> NULL
 }
 
 // ⭐ THE DETAIL LEVEL — a level with NO FIELDS is the rows themselves, hung under the deepest

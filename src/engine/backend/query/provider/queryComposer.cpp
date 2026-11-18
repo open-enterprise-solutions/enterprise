@@ -291,30 +291,55 @@ bool RamLike(const ibString& s, const ibString& pat)
 	return m(0, 0);
 }
 
-// One pushed-down outer condition against a materialised RAM cell — the aggregate
-// subquery's post-filter (the condition references POST-aggregation output, HAVING
-// semantics, so it cannot ride the inner WHERE).
-bool MatchRamCondition(const ibValue& cell, const ibQueryCondition& c)
+// SQL three-valued (Kleene) logic: a comparison with a NULL operand is UNKNOWN, and a
+// WHERE keeps a row ONLY on a definite TRUE. This is what makes the RAM filter agree with
+// the database — e.g. NOT(col = x) DROPS a NULL-col row (it does not keep it), and the same
+// settings feed the DB push-down and the RAM fallback alike. See tests/test_queryParity.cpp.
+enum class RamTri { False = 0, True = 1, Unknown = 2 };
+
+RamTri RamTriNot(RamTri a)
 {
-	switch (c.m_op) {   // ONE op now (m_comparison + m_explicitOp collapsed into m_op)
-	case ibQueryFilterOp::Equal:    return  (cell == c.m_value);
-	case ibQueryFilterOp::NotEqual: return !(cell == c.m_value);
-	// …and a LIKE read as every other LIKE over rows in memory is: the case aside. It translated % / _ into wx's
-	// wildcards and matched with the case, so a post-filter disagreed with the WHERE beside it.
-	case ibQueryFilterOp::Like:     return RamLike(cell.GetString(), c.m_value.GetString());
-	case ibQueryFilterOp::Less:         return cell < c.m_value;
-	case ibQueryFilterOp::LessEqual:    return cell < c.m_value || cell == c.m_value;
-	case ibQueryFilterOp::Greater:      return !(cell < c.m_value) && !(cell == c.m_value);
-	case ibQueryFilterOp::GreaterEqual: return !(cell < c.m_value);
-	// SET-valued: reads m_values, not m_value. An empty set matches nothing (same answer the SQL side
-	// renders), so the loop falling through to false is the correct empty-IN semantics, not an oversight.
-	case ibQueryFilterOp::In:
+	return a == RamTri::Unknown ? RamTri::Unknown : (a == RamTri::True ? RamTri::False : RamTri::True);
+}
+
+// (defined below, beside the absent value it tells apart — SQL NULL only)
+bool RamIsNullValue(const ibValue& v);
+
+// ⭐ ONE CELL AGAINST ONE CONDITION, in the database's three values — the comparison every filter over rows in memory
+// makes: a WHERE over a row (RamEvalLeaf, which reads both sides off it), the post-filter of a nested aggregate query
+// (the condition references POST-aggregation output, HAVING semantics, so it cannot ride the inner WHERE), a HAVING
+// over a group (PassesHaving). `value` is the right side as the caller holds it: the condition's constant, or a
+// computed right side evaluated over the row.
+// 🛑 The three used to compare each on its own, two of them in two values: a post-filter's `NotEqual` kept the NULL
+// row the database drops, and a HAVING kept every group under an operator it did not list.
+RamTri MatchRamCondition(const ibValue& cell, const ibQueryCondition& c, const ibValue& value)
+{
+	// SET-valued `In` — handled BEFORE the scalar null guard below, which would read the unset m_value as
+	// NULL and answer UNKNOWN for every row. Semantics match SQL: a NULL probe is UNKNOWN, an empty set is
+	// FALSE, otherwise membership. (m_values itself never carries NULL — the producer strips them.)
+	if (c.m_op == ibQueryFilterOp::In) {
 		RefuseNamedHierarchy(c);
+		if (RamIsNullValue(cell)) return RamTri::Unknown;
 		for (const ibValue& v : c.m_values)
-			if (cell == v) return true;
-		return false;
+			if (cell.CompareValueEQ(v)) return RamTri::True;
+		return RamTri::False;
 	}
-	return false;
+	// Any NULL operand -> UNKNOWN (the row survives only on a definite TRUE below).
+	if (RamIsNullValue(cell) || RamIsNullValue(value))
+		return RamTri::Unknown;
+	bool res = false;
+	switch (c.m_op) {   // ONE op now (m_comparison + m_explicitOp collapsed into m_op)
+		case ibQueryFilterOp::Equal:        res =  cell.CompareValueEQ(value); break;
+		case ibQueryFilterOp::NotEqual:     res = !cell.CompareValueEQ(value); break;
+		case ibQueryFilterOp::Less:         res = cell.CompareValueLS(value) < 0; break;   // three-way int -> '<'
+		case ibQueryFilterOp::LessEqual:    res = cell.CompareValueLE(value); break;
+		case ibQueryFilterOp::Greater:      res = cell.CompareValueGT(value) > 0; break;   // three-way int -> '>'
+		case ibQueryFilterOp::GreaterEqual: res = cell.CompareValueGE(value); break;
+		// …and a LIKE read as every other LIKE over rows in memory is: the case aside.
+		case ibQueryFilterOp::Like:         res = RamLike(cell.GetString(), value.GetString()); break;
+		case ibQueryFilterOp::In:           break;   // unreachable — returned above; listed to keep the switch exhaustive
+	}
+	return res ? RamTri::True : RamTri::False;
 }
 
 // (defined below — a derived nested query asks it which columns a computed projection reads)
@@ -582,7 +607,7 @@ ibQueryRamTable ibSubqueryQueryable::ComputeRows(const std::vector<ibQueryCondit
 			for (const ibQueryCondition& c : extra) {
 				if (c.m_col == nullptr) continue;
 				for (size_t i = 0; i < m_columns.size(); ++i)
-					if (m_columns[i] == c.m_col) { keep = MatchRamCondition(rowVals[i], c); break; }
+					if (m_columns[i] == c.m_col) { keep = MatchRamCondition(rowVals[i], c, c.m_value) == RamTri::True; break; }
 				if (!keep) break;
 			}
 			if (!keep) continue;
@@ -698,7 +723,7 @@ ibQueryRamTable ibSubqueryQueryable::ComputeRows(const std::vector<ibQueryCondit
 
 		bool keep = true;
 		for (const auto& condition : afterRead)
-			if (!(keep = MatchRamCondition(rowVals[condition.first], condition.second)))
+			if (!(keep = MatchRamCondition(rowVals[condition.first], condition.second, condition.second.m_value) == RamTri::True))
 				break;
 		if (!keep)
 			continue;
@@ -979,63 +1004,6 @@ ibQueryRamTable MaterialiseLeafToRam(const std::shared_ptr<const ibBackendQuerya
 	              t.RowCount(), static_cast<unsigned>(cols.size()), execute.Ms(), fetch.Ms(), cells.Ms());
 	return t;
 }
-
-// ⭐ THE SAME READ, NOT MATERIALISED — a leaf read through its own provider and handed over as a
-// CURSOR. Same source, same pushed-down conditions, same columns as MaterialiseLeafToRam above; the
-// difference is that the rows are never all in hand, which is the whole of what a totals fold needs.
-// It owns the query and the result, so the cursor may outlive the expression that made it.
-class ibLeafRowCursor : public ibQueryRowCursor
-{
-public:
-	ibLeafRowCursor(const std::shared_ptr<const ibBackendQueryable>& leaf, ibDatabaseConnectionHolder* holder,
-	                const std::vector<ibQueryCondition>& conds,
-	                const std::vector<std::shared_ptr<const ibBackendQueryColumn>>& cols)
-		: m_query(holder)
-	{
-		// The three lists stay PARALLEL by construction — grown together, nulls dropped together.
-		// A read column is matched to its key by POSITION, so a list that skipped an entry the others
-		// kept would read every column after it off its neighbour.
-		for (const std::shared_ptr<const ibBackendQueryColumn>& col : cols)
-			if (col != nullptr) {
-				m_columns.push_back(ibQueryRamColumn{ col->GetColumnId(), col->GetName(), col->GetTypeDesc() });
-				m_cols.push_back(col);
-				m_readCols.push_back(ibOriginColumn(leaf, col));   // an aliased leaf reads through its table — see above
-			}
-
-		m_query.From(ibOriginQueryable(leaf));
-		for (const ibQueryCondition& c : conds) {
-			ibQueryCondition rc = c;
-			rc.m_col = ibOriginColumn(leaf, c.m_col);
-			m_query.Where(rc);   // VERBATIM but for the column — see MaterialiseLeafToRam
-		}
-		ibReadPageRequest page; page.m_count = 0;   // every matching row
-		m_result = std::make_unique<ibDataQueryResult>(m_query.Execute(page));
-		ibJournalInfo(ibT("query.road"), ibT("STREAM: reading leaf '%s' - %u columns, rows not held"),
-		              leaf != nullptr ? leaf->GetQueryName() : ibString(ibT("<none>")),
-		              static_cast<unsigned>(m_columns.size()));
-	}
-
-	bool Next() override { return m_result != nullptr && m_result->Next(); }
-
-	ibValue Get(ibMetaID id) const override
-	{
-		if (m_result == nullptr)
-			return ibValue();
-		for (size_t i = 0; i < m_cols.size(); ++i)
-			if (m_cols[i] != nullptr && m_cols[i]->GetColumnId() == id)
-				return m_result->GetValue(m_readCols[i]);   // asked by the twin's id, read by the table's column
-		return ibValue();
-	}
-
-	const std::vector<ibQueryRamColumn>& Columns() const override { return m_columns; }
-
-private:
-	ibDataQueryBuilder                       m_query;    // outlives the result it produced
-	std::unique_ptr<ibDataQueryResult>       m_result;
-	std::vector<std::shared_ptr<const ibBackendQueryColumn>> m_cols;
-	std::vector<std::shared_ptr<const ibBackendQueryColumn>> m_readCols; // parallel to m_cols — what the result is asked for
-	std::vector<ibQueryRamColumn>            m_columns;
-};
 
 // Leaf materialisation entry for the composer's join/union/totals. Deliberately RAM:
 // temping a leaf pays only when the JOIN itself goes server-side, and the server-side
@@ -1476,17 +1444,7 @@ void CollectJoinKeys(const std::shared_ptr<ibQueryNode>& node, std::vector<std::
 // leaves cannot be pushed, so it is evaluated against the materialised joined row here. Only PLAIN
 // (non-dot-walk) leaves filter in RAM — a dot-walk leaf would need a further join not in the composed
 // table. Each leaf column rides into the composed table via ReferencedColumns below.
-
-// SQL three-valued (Kleene) logic: a comparison with a NULL operand is UNKNOWN, and a
-// WHERE keeps a row ONLY on a definite TRUE. This is what makes the RAM filter agree with
-// the database — e.g. NOT(col = x) DROPS a NULL-col row (it does not keep it), and the same
-// settings feed the DB push-down and the RAM fallback alike. See tests/test_queryParity.cpp.
-enum class RamTri { False = 0, True = 1, Unknown = 2 };
-
-RamTri RamTriNot(RamTri a)
-{
-	return a == RamTri::Unknown ? RamTri::Unknown : (a == RamTri::True ? RamTri::False : RamTri::True);
-}
+// (Three-valued, as MatchRamCondition answers — RamTri is stated beside it.)
 
 RamTri RamEvalLeaf(const ibQueryCondition& c, const ibQueryRow& row)
 {
@@ -1504,31 +1462,7 @@ RamTri RamEvalLeaf(const ibQueryCondition& c, const ibQueryRow& row)
 	else                         return RamTri::False;
 	// …and so does a computed right side (WHERE ActionPeriod < RegistrationPeriod); else the constant.
 	const ibValue value = c.m_valueExpr ? EvalColumnExprRow(c.m_valueExpr, row) : c.m_value;
-	// SET-valued `In` — handled BEFORE the scalar null guard below, which would read the unset m_value as
-	// NULL and answer UNKNOWN for every row. Semantics match SQL: a NULL probe is UNKNOWN, an empty set is
-	// FALSE, otherwise membership. (m_values itself never carries NULL — the producer strips them.)
-	if (c.m_op == ibQueryFilterOp::In) {
-		RefuseNamedHierarchy(c);
-		if (RamIsNullValue(cell)) return RamTri::Unknown;
-		for (const ibValue& v : c.m_values)
-			if (cell.CompareValueEQ(v)) return RamTri::True;
-		return RamTri::False;
-	}
-	// Any NULL operand -> UNKNOWN (the row survives only on a definite TRUE below).
-	if (RamIsNullValue(cell) || RamIsNullValue(value))
-		return RamTri::Unknown;
-	bool res = false;
-	switch (c.m_op) {   // ONE op now (m_comparison + m_explicitOp collapsed into m_op)
-		case ibQueryFilterOp::Equal:        res =  cell.CompareValueEQ(value); break;
-		case ibQueryFilterOp::NotEqual:     res = !cell.CompareValueEQ(value); break;
-		case ibQueryFilterOp::Less:         res = cell.CompareValueLS(value) < 0; break;   // three-way int -> '<'
-		case ibQueryFilterOp::LessEqual:    res = cell.CompareValueLE(value); break;
-		case ibQueryFilterOp::Greater:      res = cell.CompareValueGT(value) > 0; break;   // three-way int -> '>'
-		case ibQueryFilterOp::GreaterEqual: res = cell.CompareValueGE(value); break;
-		case ibQueryFilterOp::Like:         res = RamLike(cell.GetString(), value.GetString()); break;
-		case ibQueryFilterOp::In:           break;   // unreachable — returned above; listed to keep the switch exhaustive
-	}
-	return res ? RamTri::True : RamTri::False;
+	return MatchRamCondition(cell, c, value);
 }
 
 RamTri RamEvalPredicate(const ibQueryPredicatePtr& p, const ibQueryRow& row)
@@ -1700,8 +1634,13 @@ ibValue EvalColumnExprRow(const ibQueryColumnExprPtr& e, const ibQueryRow& row, 
 				case ibQueryColumnArithOp::Concat: break;   // answered above
 				case ibQueryColumnArithOp::Sub: return ibValue(a - b);
 				case ibQueryColumnArithOp::Mul: return ibValue(a * b);
-				case ibQueryColumnArithOp::Div: return ibValue(b.IsZero() ? ibNumber() : a / b);   // guard /0 -> 0
-				case ibQueryColumnArithOp::Mod: return ibValue(b.IsZero() ? ibNumber() : a % b);
+				// ⭐ A DIVISION BY ZERO IS REFUSED — as the database refuses it (PostgreSQL, Firebird, MS SQL raise) and in the
+				// language's own sentence. It answered 0 here: a figure the same query read by the server never gives.
+				case ibQueryColumnArithOp::Div:
+				case ibQueryColumnArithOp::Mod:
+					if (b.IsZero())
+						ibBackendCoreException::Error(ibScriptError_DivideByZero);
+					return ibValue(e->m_arith == ibQueryColumnArithOp::Div ? a / b : a % b);
 			}
 			return ibValue();
 		}
@@ -2059,7 +1998,10 @@ std::vector<std::shared_ptr<const ibBackendQueryColumn>> ReferencedColumns(const
 		cols.push_back(c);
 	};
 	for (const auto& s : spec.m_selectCols)             add(s.first);
-	for (const ibQuerySortItem& s : spec.m_sorts)       add(s.m_col);   // ORDER BY cols ride too (sorted post-compose)
+	for (const ibQuerySortItem& s : spec.m_sorts) {      // ORDER BY cols ride too (sorted post-compose)
+		add(s.m_col);
+		GatherColumnExprColumns(s.m_expr, add);            // …and what a key that is an expression reads
+	}
 	for (const ibQueryCondition& c : spec.m_conditions) GatherConditionColumns(c, add);
 	GatherPredicateColumns(spec.m_predicate, add);   // a boolean WHERE-tree leaf rides too (RAM post-filter)
 	for (const ibQueryColumnSelect& sc : spec.m_selectExprs) GatherColumnExprColumns(sc.m_expr, add);   // computed cols ride too
@@ -2413,9 +2355,72 @@ ibQueryRamTable MaterialiseNode(const std::shared_ptr<ibQueryNode>& node, const 
 	return ibQueryComposer::JoinRamTables(TL, TR, onL, onR, outCols, fromLeft, node->m_joinKind, node->m_on);
 }
 
-// Finalise a GetColumnId-keyed combined table into the result: ORDER BY (RAM stable
-// sort over m_sorts, each key read by GetColumnId), project the select-list (alias-keyed
-// output), and LIMIT to the page count. One finaliser for both JOIN and UNION.
+// ⭐ THE ROWS OF A PAGE HELD IN MEMORY, IN ORDER — one answer for every read that sorts its rows itself (a computed
+// source's, a composition's), as the statement answers it for the database: the rows in the order of `sorting`, turned
+// round for a page read backwards (m_reverseSort), the page started past the anchor. `order` gets EVERY row, the page
+// first (ReorderRows wants the whole permutation); the answer is how many of them are the page — at most m_count, all
+// the rows past the anchor when it is 0.
+// 🛑 A composition sorted on its own, by its columns alone: a key with no column (ORDER BY an expression, which the
+// database sorts by) was skipped, and the page was the first rows whatever the anchor said.
+long RamPageOrder(const ibQueryRamTable& rows, const std::vector<ibQuerySortItem>& sorting, const ibReadPageRequest& page,
+                  std::vector<long>& order)
+{
+	// ⭐ THE KEYS ARE TAKEN OUT OF THE ROWS ONCE, not once per comparison. The comparator used to ask
+	// the table for both cells of every key on every call — a lookup in the row's map and a COPY of
+	// the value each time — and a sort makes n·log n calls: the payroll sheet's 126 thousand rows by
+	// three keys did that some thirteen million times. Read into one flat array first, the comparator
+	// only looks at what is already there.
+	std::vector<const ibQuerySortItem*> by;
+	std::vector<size_t> anchorAt;   // where each key's anchor value stands — the anchor has one per sort item
+	for (size_t i = 0; i < sorting.size(); ++i)
+		if (sorting[i].m_col != nullptr || sorting[i].m_expr != nullptr) {
+			by.push_back(&sorting[i]);
+			anchorAt.push_back(i);
+		}
+	const size_t width = by.size();
+	std::vector<ibValue> keys(static_cast<size_t>(rows.RowCount()) * width);
+	// A key that is an expression (ORDER BY CASE …, a sum of two fields) is computed for its row, as the
+	// statement computes it — over the rows of a source whose walks brought it here, as over any other.
+	for (long i = 0; i < rows.RowCount(); ++i)
+		for (size_t k = 0; k < width; ++k)
+			keys[static_cast<size_t>(i) * width + k] = by[k]->m_expr != nullptr
+				? EvalColumnExprRow(by[k]->m_expr, rows, i)
+				: rows.GetCell(i, by[k]->m_col->GetColumnId());
+	order.resize(static_cast<size_t>(rows.RowCount()));
+	for (long i = 0; i < rows.RowCount(); ++i) order[static_cast<size_t>(i)] = i;
+	if (width != 0)
+		std::stable_sort(order.begin(), order.end(), [&](long a, long b) {
+			const ibValue* const ka = keys.data() + static_cast<size_t>(a) * width;
+			const ibValue* const kb = keys.data() + static_cast<size_t>(b) * width;
+			for (size_t k = 0; k < width; ++k) {
+				const int c = RamSortCompareKey(ka[k], kb[k], by[k]->m_ascending != page.m_reverseSort);
+				if (c != 0) return c < 0;
+			}
+			return false;
+		});
+	// …and the page starts at the first row past the anchor — turned to the front, the rows before it after the page.
+	size_t from = 0;
+	if (page.m_hasAnchor && width != 0) {
+		while (from < order.size()) {
+			const ibValue* const key = keys.data() + static_cast<size_t>(order[from]) * width;
+			int c = 0;
+			for (size_t k = 0; k < width && c == 0; ++k)
+				if (anchorAt[k] < page.m_anchorSortValues.size())
+					c = RamSortCompareKey(key[k], page.m_anchorSortValues[anchorAt[k]],
+						by[k]->m_ascending != page.m_reverseSort);
+			if (c > 0)
+				break;
+			++from;
+		}
+		std::rotate(order.begin(), order.begin() + static_cast<std::ptrdiff_t>(from), order.end());
+	}
+	const long past = rows.RowCount() - static_cast<long>(from);
+	return (page.m_count > 0 && page.m_count < past) ? page.m_count : past;
+}
+
+// Finalise a GetColumnId-keyed combined table into the result: ORDER BY (RamPageOrder — the
+// order every read in memory sorts by), project the select-list (alias-keyed output), and LIMIT
+// to the page count. One finaliser for both JOIN and UNION.
 ibDataQueryResult ProjectToAliases(ibQueryRamTable&& TC, const ibDataQuerySpec& spec, const ibReadPageRequest& page)
 {
 	const long rows = TC.RowCount();
@@ -2426,19 +2431,13 @@ ibDataQueryResult ProjectToAliases(ibQueryRamTable&& TC, const ibDataQuerySpec& 
 	// the code for one afternoon and false of it afterwards: a diagnostic that keeps saying the old
 	// answer is worse than none.)
 
-	std::vector<long> order(static_cast<size_t>(rows));
-	for (long i = 0; i < rows; ++i) order[static_cast<size_t>(i)] = i;
-	if (!spec.m_sorts.empty())
-		std::stable_sort(order.begin(), order.end(), [&](long a, long b) {
-			for (const ibQuerySortItem& s : spec.m_sorts) {
-				if (s.m_col == nullptr) continue;
-				const ibValue va = RamCell(TC, a, s.m_col);
-				const ibValue vb = RamCell(TC, b, s.m_col);
-				const int c = RamSortCompareKey(va, vb, s.m_ascending);
-				if (c != 0) return c < 0;
-			}
-			return false;
-		});
+	// The rows in order, past the page's anchor — sorted as every read that sorts rows itself sorts them (RamPageOrder),
+	// a key that is an expression computed for its row. Asked for ALL of them past the anchor: DISTINCT below folds
+	// rows away before the page is counted, so the page is cut where the rows are emitted, not here.
+	std::vector<long> order;
+	ibReadPageRequest pastAnchor = page;
+	pastAnchor.m_count = 0;
+	const long past = RamPageOrder(TC, spec.m_sorts, pastAnchor, order);
 
 	// ⭐⭐ KEYED BY THE COLUMN ITSELF, the way the UNION stitch below already keys its output. The
 	// selection that reads this table asks for a cell BY COLUMN — `m_table.GetCell(row,
@@ -2588,7 +2587,7 @@ ibDataQueryResult ProjectToAliases(ibQueryRamTable&& TC, const ibDataQuerySpec& 
 				rekey.emplace_back(from, outIds[k]);
 		}
 		if (eachOnce) {
-			TC.ReorderRows(order, std::min(rows, limit));   // the sort's order, cut to the page — in place
+			TC.ReorderRows(order, std::min(past, limit));   // the sort's order, cut to the page — in place
 			TO.AppendRowsRekeyed(std::move(TC), rekey);
 			return ibDataQueryResult(std::move(TO), spec.m_queryable);
 		}
@@ -2614,7 +2613,7 @@ ibDataQueryResult ProjectToAliases(ibQueryRamTable&& TC, const ibDataQuerySpec& 
 	// so the fold below inserts them directly instead of rendering them to text.
 	std::unordered_set<std::vector<ibValue>, ibValueSeqHash, ibValueSeqEqual> seenDistinct;
 	long emitted = 0;
-	for (long oi = 0; oi < rows && emitted < limit; ++oi) {
+	for (long oi = 0; oi < past && emitted < limit; ++oi) {
 		const long i = order[static_cast<size_t>(oi)];
 		windows.m_row = i;   // which composed row the folded windows are being read for
 		for (size_t k = 0; k < exprs.size(); ++k)
@@ -3322,25 +3321,19 @@ std::vector<long> AttachHierNode(const HierBuildCtx& ctx, ibSelectorTree::Node* 
 
 // Does a bucket satisfy every HAVING condition? Each HavingItem compares its aggregate (fn over col,
 // COUNT(*) when col is null) to a value. Used to drop a group in the RAM fold — the computed source's
-// register can't apply HAVING, so the fold does (a SUM > N group filter is core reporting).
+// register can't apply HAVING, so the fold does (a SUM > N group filter is core reporting). Asked as
+// every condition over rows in memory is (MatchRamCondition): a NULL aggregate is UNKNOWN, and the group
+// goes, as the database's HAVING drops it.
 bool PassesHaving(const std::vector<ibDataQueryBuilder::HavingItem>& having,
                   const ibQueryRamTable& TC, const std::vector<long>& idx)
 {
 	for (const ibDataQueryBuilder::HavingItem& h : having) {
 		ibDataQueryBuilder::AggregateItem ai;                 // m_alias / m_path / m_expr default-empty
 		ai.m_fn = h.m_fn; ai.m_col = h.m_col;
-		const ibValue agg = AggregateOne(ai, TC, idx);
-		bool ok = true;
-		switch (h.m_op) {
-		case ibQueryFilterOp::Greater:      ok =  (agg >  h.m_value); break;
-		case ibQueryFilterOp::GreaterEqual: ok = !(agg <  h.m_value); break;
-		case ibQueryFilterOp::Less:         ok =  (agg <  h.m_value); break;
-		case ibQueryFilterOp::LessEqual:    ok = !(agg >  h.m_value); break;
-		case ibQueryFilterOp::Equal:        ok =  (agg == h.m_value); break;
-		case ibQueryFilterOp::NotEqual:     ok = !(agg == h.m_value); break;
-		default:                            ok = true;                break;
-		}
-		if (!ok) return false;
+		ibQueryCondition asked;                               // the comparison alone — the aggregate is its left side
+		asked.m_op = h.m_op;
+		if (MatchRamCondition(AggregateOne(ai, TC, idx), asked, h.m_value) != RamTri::True)
+			return false;
 	}
 	return true;
 }
@@ -6285,6 +6278,8 @@ ibQueryRamTable ibQueryComposer::JoinRamTables(const ibQueryRamTable& left, cons
 
 // RAM UNION stacking: append a branch's rows, each output column read from the branch's
 // same-named column (null = absent -> NULL). Vertical concat for heterogeneous branches.
+// ⚠ NULL, NOT AN EMPTY VALUE — the column is not in this branch, which is what SQL pads a union with. An empty
+// ibValue (TYPE_EMPTY) answered FALSE to `IS NULL` and was counted by COUNT(x).
 void ibQueryComposer::AppendUnionBranch(ibQueryRamTable& out, const ibQueryRamTable& branch,
 		const std::vector<std::shared_ptr<const ibBackendQueryColumn>>& outCols,
 		const std::vector<std::shared_ptr<const ibBackendQueryColumn>>& branchCols)
@@ -6293,7 +6288,7 @@ void ibQueryComposer::AppendUnionBranch(ibQueryRamTable& out, const ibQueryRamTa
 		const long r = out.AppendRow();
 		for (size_t k = 0; k < outCols.size(); ++k)
 			out.SetCell(r, outCols[k]->GetColumnId(),
-			            branchCols[k] != nullptr ? branch.GetCell(i, branchCols[k]->GetColumnId()) : ibValue());
+			            branchCols[k] != nullptr ? branch.GetCell(i, branchCols[k]->GetColumnId()) : RamNullValue());
 	}
 }
 
@@ -6318,21 +6313,26 @@ void ibQueryComposer::AppendUnionBranch(ibQueryRamTable& out, ibQueryRamTable&& 
 	bool eachOnce = true;
 	for (size_t k = 0; k < outCols.size() && eachOnce; ++k) {
 		if (branchCols[k] == nullptr)
-			continue;   // absent here — nothing to move, and the stacked row reads it as empty
+			continue;   // absent here — nothing to move; it is set NULL below, once the rows are in
 		const ibMetaID from = branchCols[k]->GetColumnId();
 		for (const std::pair<ibMetaID, ibMetaID>& had : rekey)
 			eachOnce = eachOnce && had.first != from;
 		rekey.emplace_back(from, outCols[k]->GetColumnId());
 	}
 	if (eachOnce) {
+		const long first = out.RowCount();
 		out.AppendRowsRekeyed(std::move(branch), rekey);
+		for (size_t k = 0; k < outCols.size(); ++k)
+			if (branchCols[k] == nullptr)
+				for (long r = first; r < out.RowCount(); ++r)
+					out.SetCell(r, outCols[k]->GetColumnId(), RamNullValue());
 		return;
 	}
 	for (long i = 0; i < branch.RowCount(); ++i) {
 		const long r = out.AppendRow();
 		for (size_t k = 0; k < outCols.size(); ++k)
 			out.SetCell(r, outCols[k]->GetColumnId(),
-			            branchCols[k] != nullptr ? branch.TakeCell(i, branchCols[k]->GetColumnId()) : ibValue());
+			            branchCols[k] != nullptr ? branch.TakeCell(i, branchCols[k]->GetColumnId()) : RamNullValue());
 	}
 }
 
@@ -6386,57 +6386,14 @@ ibDataQueryResult ibQueryComposer::ExecuteGroupLevelPage(const ibDataQuerySpec& 
 	return ExecuteAggregate(spec);   // not pageable server-side -> unpaged all-groups
 }
 
-// totals (hierarchical totals): fold the detail rows into a subtotal TREE. The group
-// columns are the LEVELS (in order); the aggregates the sums folded at every level + the
-// grand total. Input = the single source materialised, or the composed multi-source
-// result. The tree lives in L3's own ibQueryRamTable. (docs/private/query-language-arc.md §22.1b)
-// ⭐ CAN THE DBMS FOLD THIS TOTALS ITSELF, and if so — fold it. The push-down ExecuteTotals takes
+// ⭐ CAN THE DBMS FOLD THIS TOTALS ITSELF, and if so — fold it. The push-down a totals read takes
 // when it can, asked as a QUESTION so a caller that must otherwise read detail rows (the query
-// lowering) can take the cheap road when it exists and its own road when it does not. Asked of the
-// provider of the primary source, by the same verb. False = nothing was read; the caller proceeds
-// exactly as before.
+// lowering, the door's SelectTotals) can take the cheap road when it exists and the result's fold
+// when it does not. Asked of the provider of the primary source, by the same verb. False = nothing
+// was read; the caller proceeds exactly as before.
 bool ibQueryComposer::TryFoldTotalsInDbms(const ibDataQuerySpec& spec, ibSelectorTree& out)
 {
 	return ProviderOf(spec).TryFoldTotalsInDbms(spec, out);
-}
-
-ibSelectorTree ibQueryComposer::ExecuteTotals(const ibDataQuerySpec& spec)
-{
-	// The one that needs it most: totals read the detail AND fold it, often in more than one pass. Where the rows
-	// live, their provider folds them (TryFoldTotalsInDbms) and only the folded rows transit.
-	ibSelectorTree folded;
-	if (TryFoldTotalsInDbms(spec, folded))
-		return folded;
-
-	// …and here the fold is OURS: the detail is read whole and the tree is built in memory. Correct
-	// either way — the numbers do not depend on the road — so this line is the only thing that tells
-	// a person which one they got.
-	ibJournalInfo(ibT("query.road"), ibT("RAM: totals folded in memory (%s, %u levels)"),
-	              IsSingleSource(spec) ? ibT("single source") : ibT("composed sources"),
-	              static_cast<unsigned>(spec.m_totals.size()));
-
-	if (IsSingleSource(spec)) {
-		// ⭐ READ AND FOLD IN ONE PASS. The source's group + sum columns, unfiltered by page, straight
-		// off the cursor: the fold takes the rows as they arrive and keeps only the tree. This road
-		// used to materialise the whole detail first — the one thing a totals read must not do.
-		std::vector<std::shared_ptr<const ibBackendQueryColumn>> cols = spec.m_groupBy;
-		for (const ibDataQueryBuilder::AggregateItem& a : spec.m_aggregates)
-			if (a.m_col != nullptr) cols.push_back(a.m_col);
-		ibLeafRowCursor rows(spec.m_queryable, spec.m_holder, LeafConditions(spec, spec.m_queryable), cols);
-		return BuildTotalsTree(rows, spec.m_groupBy, spec.m_aggregates);
-	}
-
-	ibQueryRamTable combined;
-	{
-		const std::shared_ptr<ibQueryNode>& root = spec.m_root;
-		const bool ok = root != nullptr &&
-		                ((root->m_kind == ibQueryNode::Kind::Union && !root->m_parts.empty()) ||
-		                 (root->m_kind == ibQueryNode::Kind::Join && AllJoinsHaveKeys(root)));
-		if (!ok)
-			RamCompositionNotYet();
-		combined = Compose(spec, AggregateRefCols(spec));
-	}
-	return BuildTotalsTree(combined, spec.m_groupBy, spec.m_aggregates);
 }
 
 long ibQueryComposer::ExecuteWrite(const ibDataQuerySpec& spec, ibDataQueryBuilder::WriteKind kind)
@@ -6484,11 +6441,6 @@ ibDataQueryResult ibDataQueryBuilder::ExecuteGroupLevelPage(const ibReadPageRequ
 bool ibDataQueryBuilder::TryFoldTotalsInDbms(ibSelectorTree& out) const
 {
 	return ibQueryComposer::TryFoldTotalsInDbms(m_spec, out);
-}
-
-ibSelectorTree ibDataQueryBuilder::ExecuteTotals() const
-{
-	return ibQueryComposer::ExecuteTotals(m_spec);
 }
 
 long ibDataQueryBuilder::ExecuteWrite(WriteKind kind) const

@@ -354,7 +354,32 @@ TEST(QueryComposerCore, AppendUnionBranch_MissingColumnIsNull)
 
 	ASSERT_EQ(out.RowCount(), 1);
 	EXPECT_EQ(out.GetCell(0, CODE).GetString().ToStdString(), "X");
-	EXPECT_TRUE(out.GetCell(0, NAME).GetString().IsEmpty());   // absent in this branch -> empty cell
+	EXPECT_TRUE(out.GetCell(0, NAME).IsNull()) << "absent in this branch -> NULL, as SQL pads a union";
+}
+
+// The same stack from a branch nobody reads again: its rows are moved and RE-KEYED (its column ids are its
+// own), and the column it lacks must still read as NULL, not as a cell that was never set.
+TEST(QueryComposerCore, AppendUnionBranch_MovedBranchMissingColumnIsNull)
+{
+	const ibMetaID CODE = 1, NAME = 2, B_CODE = 20;
+	const auto code  = std::make_shared<TestCol>(wxT("code"), CODE);
+	const auto name  = std::make_shared<TestCol>(wxT("name"), NAME);
+	const auto bCode = std::make_shared<TestCol>(wxT("code"), B_CODE);
+
+	ibQueryRamTable out;
+	out.AddColumn(CODE, wxT("code"), kNoType);
+	out.AddColumn(NAME, wxT("name"), kNoType);
+
+	ibQueryRamTable branch;   // has code under an id of its own, NOT name
+	branch.AddColumn(B_CODE, wxT("code"), kNoType);
+	const long br = branch.AppendRow();
+	branch.SetCell(br, B_CODE, ibValue(ibString(wxT("X"))));
+
+	ibQueryComposer::AppendUnionBranch(out, std::move(branch), { code, name }, { bCode, nullptr });
+
+	ASSERT_EQ(out.RowCount(), 1);
+	EXPECT_EQ(out.GetCell(0, CODE).GetString().ToStdString(), "X");
+	EXPECT_TRUE(out.GetCell(0, NAME).IsNull()) << "a re-keyed branch's absent column is NULL too";
 }
 
 // ===========================================================================
@@ -977,7 +1002,8 @@ TEST(QueryComposerRemote, Totals_OfItsTables_FoldedByIt)
 	const auto B = std::make_shared<RemoteQueryable>(wxT("b"), 101, remote); B->AddCol(bKey);
 
 	SpecBuf buf;
-	ibQueryComposer::ExecuteTotals(buf.Make(Join2(A, B, aKey, bKey), A));
+	ibSelectorTree tree;
+	EXPECT_TRUE(ibQueryComposer::TryFoldTotalsInDbms(buf.Make(Join2(A, B, aKey, bKey), A), tree));
 
 	EXPECT_EQ(remote.m_totals, 1) << "its server folds the levels; no detail is read to fold them here";
 	EXPECT_EQ(remote.m_leafReads, 0);
@@ -2623,6 +2649,164 @@ TEST(QueryComputedAggregate, TopTakesTheFirstGroupsInTheirOrder)
 	ASSERT_EQ(2u, totals.size());
 	EXPECT_EQ(ibNumber(40), totals[0]);
 	EXPECT_EQ(ibNumber(12), totals[1]);
+}
+
+// HAVING over groups folded in memory answers in the database's three values: a group whose figure is NULL (a sum of
+// rows that all have no value) is UNKNOWN to `<> 40` and goes, as the database's HAVING drops it. The fold compared in
+// two values and kept it.
+TEST(QueryComputedAggregate, HavingDropsAGroupWhoseFigureIsNull)
+{
+	const ibMetaID M = 1, A = 2;
+	const auto month  = std::make_shared<TestCol>(wxT("m"), M);
+	const auto amount = std::make_shared<TestCol>(wxT("a"), A);
+	const auto src = std::make_shared<RecordingComputedQ>(wxT("s"), 162);
+	src->AddCol(month);
+	src->AddCol(amount);
+	src->SetRows([&] {                                   // totals: month 1 = 12, 2 = 40, 3 = 11, 4 = 2, 5 = NULL
+		ibQueryRamTable t = MonthRows(M, A);
+		const long r = t.AppendRow();
+		t.SetCell(r, M, ibValue(ibNumber(5)));
+		t.SetCell(r, A, ibValue(ibValueTypes::TYPE_NULL));
+		return t;
+	});
+
+	ibDataQueryBuilder q(nullptr);
+	q.From(src);
+	q.GroupBy(month);
+	q.Sum(amount, wxT("total"));
+	q.Having(ibDataQueryBuilder::AggregateFn::Sum, amount, ibQueryFilterOp::NotEqual, ibValue(ibNumber(40)));
+	q.OrderBy(month, /*ascending*/ true);
+	ibDataQueryResult res = q.SelectAggregate();
+
+	std::vector<long> months;
+	while (res.Next())
+		months.push_back(res.GetValue(month).GetInteger());
+	EXPECT_EQ(std::vector<long>({ 1, 3, 4 }), months) << "month 2 is 40; month 5 is NULL, which is not 'not 40'";
+}
+
+// ---- a composition sorted and paged in memory ------------------------------------------------------------------
+//
+// Rows composed here (two sources no statement can join) are sorted and paged as a computed source's are
+// (RamPageOrder). The composition sorted on its own: a key with no column was skipped, and its page was the first
+// rows whatever the anchor said.
+
+namespace {
+
+// A ⋈ B on k, both computed: k = 1..5 on each side, B carrying v = 10 * k.
+struct ComposedPair {
+	explicit ComposedPair(ibMetaID base) {
+		A = std::make_shared<RecordingComputedQ>(wxT("a"), base);     A->AddCol(aKey);
+		B = std::make_shared<RecordingComputedQ>(wxT("b"), base + 1); B->AddCol(bKey); B->AddCol(bVal);
+		A->SetRows([] { return KeyRows(1, wxT("k"), { 1, 2, 3, 4, 5 }); });
+		B->SetRows([] {
+			ibQueryRamTable t;
+			t.AddColumn(2, wxT("k"), kNoType);
+			t.AddColumn(3, wxT("v"), kNoType);
+			for (const long k : { 1, 2, 3, 4, 5 }) {
+				const long r = t.AppendRow();
+				t.SetCell(r, 2, ibValue(ibNumber(k)));
+				t.SetCell(r, 3, ibValue(ibNumber(k * 10)));
+			}
+			return t;
+		});
+	}
+	const std::shared_ptr<TestCol> aKey = std::make_shared<TestCol>(wxT("k"), 1);
+	const std::shared_ptr<TestCol> bKey = std::make_shared<TestCol>(wxT("k"), 2);
+	const std::shared_ptr<TestCol> bVal = std::make_shared<TestCol>(wxT("v"), 3);
+	std::shared_ptr<RecordingComputedQ> A, B;
+};
+
+std::vector<long> KeysRead(ibDataQueryResult& res, const std::shared_ptr<TestCol>& key)
+{
+	std::vector<long> keys;
+	while (res.Next())
+		keys.push_back(res.GetValue(key).GetInteger());
+	return keys;
+}
+
+} // namespace
+
+// ORDER BY an expression over a column the select list does not carry: the key is computed for each composed row,
+// and what it reads rides into the composition for it.
+TEST(QueryComposedRead, SortsByAnExpression)
+{
+	ComposedPair pair(170);
+	ibDataQueryBuilder q(nullptr);
+	q.From(pair.A).Join(pair.B, pair.aKey, pair.bKey);
+	q.Select(pair.aKey, wxT("k"));
+	q.OrderByExpr(ibQueryColumnExpr::Arith(ibQueryColumnArithOp::Sub,
+		ibQueryColumnExpr::Const(ibValue(ibNumber(0))), ibQueryColumnExpr::Col(pair.bVal)), /*ascending*/ true);
+	ibReadPageRequest page;
+	ibDataQueryResult res = q.Execute(page);
+
+	EXPECT_EQ(std::vector<long>({ 5, 4, 3, 2, 1 }), KeysRead(res, pair.aKey)) << "0 - v ascending is v descending";
+}
+
+// A page read past its anchor starts after it — not again at the first row.
+TEST(QueryComposedRead, PageStartsPastItsAnchor)
+{
+	ComposedPair pair(172);
+	ibDataQueryBuilder q(nullptr);
+	q.From(pair.A).Join(pair.B, pair.aKey, pair.bKey);
+	q.Select(pair.aKey, wxT("k"));
+	q.OrderBy(pair.aKey, /*ascending*/ true);
+	ibReadPageRequest page;
+	page.m_count = 2;
+	page.m_hasAnchor = true;
+	page.m_anchorSortValues = { ibValue(ibNumber(2)) };
+	ibDataQueryResult res = q.Execute(page);
+
+	EXPECT_EQ(std::vector<long>({ 3, 4 }), KeysRead(res, pair.aKey)) << "the two rows after k = 2";
+}
+
+// ---- the totals door over a source its provider cannot fold ----------------------------------------------------
+//
+// SelectTotals takes a report's roads: the provider folds the levels where it can, else the detail is read and the
+// result folds it. It had a fold of its own by the GROUP BY list, while TotalBy fills the levels — a source whose
+// provider could not fold came back as a tree with no level at all.
+TEST(QueryComputedTotals, SelectTotalsFoldsTheLevelsInMemory)
+{
+	const ibMetaID M = 1, A = 2;
+	const auto month  = std::make_shared<TestCol>(wxT("m"), M);
+	const auto amount = std::make_shared<TestCol>(wxT("a"), A);
+	const auto src = std::make_shared<RecordingComputedQ>(wxT("s"), 174);
+	src->AddCol(month);
+	src->AddCol(amount);
+	src->SetRows([&] { return MonthRows(M, A); });   // totals: month 1 = 12, 2 = 40, 3 = 11, 4 = 2
+
+	ibDataQueryBuilder q(nullptr);
+	q.From(src);
+	q.TotalBy(month, ibDimensionKind::Elements);
+	q.Totals().Sum(amount, wxT("total"));
+	const ibSelectorTree tree = q.SelectTotals();
+
+	const ibSelectorTree::Node& root = tree.Root();
+	EXPECT_EQ(root.m_children.size(), 4u) << "one node per month";
+	ASSERT_TRUE(root.m_values.count(A) == 1) << "the grand total rolls into the summed column";
+	EXPECT_EQ(ibNumber(65), root.m_values.at(A).GetNumber());
+}
+
+// A division by zero over rows in memory is refused, as the database refuses it — it was answered 0, a figure the
+// same query read by the server never gives.
+TEST(QueryComputedRead, DivisionByZeroIsRefused)
+{
+	const ibMetaID K = 1;
+	const auto key = std::make_shared<TestCol>(wxT("k"), K);
+	const auto src = std::make_shared<RecordingComputedQ>(wxT("s"), 176);
+	src->AddCol(key);
+	src->SetRows([&] { return KeyRows(K, wxT("k"), { 1, 0 }); });
+
+	ibDataQueryBuilder q(nullptr);
+	q.From(src);
+	q.Select(key, wxT("k"));
+	q.SelectExpr(ibQueryColumnExpr::Arith(ibQueryColumnArithOp::Div,
+		ibQueryColumnExpr::Const(ibValue(ibNumber(10))), ibQueryColumnExpr::Col(key)), wxT("q"));
+	ibReadPageRequest page;
+	EXPECT_THROW({
+		ibDataQueryResult res = q.Execute(page);
+		while (res.Next())
+			(void)res.GetColumn(wxT("q"));
+	}, ibBackendException) << "10 / 0 is an error, not 0";
 }
 
 // The page cache's signature compares the query's parameters as VALUES. It used to print them into one text:

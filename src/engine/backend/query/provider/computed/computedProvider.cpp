@@ -9,7 +9,6 @@
 #include "backend/query/provider/queryComposer.h"            // ibQueryComposer::FilterRows — a WHERE tree over the rows in memory
 #include "backend/query/columnLayout.h"                      // ibSqlAliasOf — what the statement calls an output
 
-#include <algorithm>                                          // stable_sort, rotate — ORDER BY over the rows, a page from its anchor
 #include <unordered_set>                                      // DISTINCT — keyed by a sequence of values (ibValueSeqHash)
 
 using namespace ibProvider;
@@ -199,62 +198,14 @@ ibDataQueryResult ibComputedProvider::ExecuteRead(const ibDataQuerySpec& given, 
 
 	if (!sorting.empty()) {
 		sort.Resume();
-		// ⭐ THE KEYS ARE TAKEN OUT OF THE ROWS ONCE, not once per comparison. The comparator used to ask
-		// the table for both cells of every key on every call — a lookup in the row's map and a COPY of
-		// the value each time — and a sort makes n·log n calls: the payroll sheet's 126 thousand rows by
-		// three keys did that some thirteen million times. Read into one flat array first, the comparator
-		// only looks at what is already there.
-		std::vector<const ibQuerySortItem*> by;
-		std::vector<size_t> anchorAt;   // where each key's anchor value stands — the anchor has one per sort item
-		for (size_t i = 0; i < sorting.size(); ++i)
-			if (sorting[i].m_col != nullptr || sorting[i].m_expr != nullptr) {
-				by.push_back(&sorting[i]);
-				anchorAt.push_back(i);
-			}
-		const size_t width = by.size();
-		std::vector<ibValue> keys(static_cast<size_t>(rows.RowCount()) * width);
-		// A key that is an expression (ORDER BY CASE …, a sum of two fields) is computed for its row, as the
-		// statement computes it — over the rows of a source whose walks brought it here, as over any other.
-		for (long i = 0; i < rows.RowCount(); ++i)
-			for (size_t k = 0; k < width; ++k)
-				keys[static_cast<size_t>(i) * width + k] = by[k]->m_expr != nullptr
-					? EvalColumnExprRow(by[k]->m_expr, rows, i)
-					: rows.GetCell(i, by[k]->m_col->GetColumnId());
-		std::vector<long> order(static_cast<size_t>(rows.RowCount()));
-		for (long i = 0; i < rows.RowCount(); ++i) order[static_cast<size_t>(i)] = i;
-		std::stable_sort(order.begin(), order.end(), [&](long a, long b) {
-			const ibValue* const ka = keys.data() + static_cast<size_t>(a) * width;
-			const ibValue* const kb = keys.data() + static_cast<size_t>(b) * width;
-			for (size_t k = 0; k < width; ++k) {
-				const int c = RamSortCompareKey(ka[k], kb[k], by[k]->m_ascending != req.m_reverseSort);
-				if (c != 0) return c < 0;
-			}
-			return false;
-		});
-		// …and the page starts at the first row past the anchor — turned to the front, the rows before it after the page.
-		size_t from = 0;
-		if (req.m_hasAnchor && width != 0) {
-			while (from < order.size()) {
-				const ibValue* const key = keys.data() + static_cast<size_t>(order[from]) * width;
-				int c = 0;
-				for (size_t k = 0; k < width && c == 0; ++k)
-					if (anchorAt[k] < req.m_anchorSortValues.size())
-						c = RamSortCompareKey(key[k], req.m_anchorSortValues[anchorAt[k]],
-							by[k]->m_ascending != req.m_reverseSort);
-				if (c > 0)
-					break;
-				++from;
-			}
-			std::rotate(order.begin(), order.begin() + static_cast<std::ptrdiff_t>(from), order.end());
-		}
+		std::vector<long> order;
+		const long limit = RamPageOrder(rows, sorting, req, order);   // the order every read in memory sorts by
 		sort.Pause();
 		rebuild.Resume();
 		// ⚠ THE ROWS ARE PUT IN THE NEW ORDER WHERE THEY STAND, NOT COPIED — `rows` is not read again, and
 		// a copy was every cell of the list made and freed once more (1.6 s of the payroll sheet, 2026-09-12,
 		// Debug). Reordered in place (ReorderRows) and handed to the result whole.
 		ibQueryRamTable sorted = RamTableOf(cols);
-		const long past = rows.RowCount() - static_cast<long>(from);
-		const long limit = (req.m_count > 0 && req.m_count < past) ? req.m_count : past;
 		rows.ReorderRows(order, limit);
 		sorted.AppendRowsFrom(std::move(rows));
 		rebuild.Pause();

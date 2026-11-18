@@ -8,7 +8,7 @@
 // declares (querySelector.h), and the interface every provider answers is the face's (queryProvider.h).
 
 #include "backend/query/queryProvider.h"     // ibBackendQueryProvider (+ dataQueryBuilder.h: ibDataQuerySpec / ibDataQueryResult)
-#include "backend/query/querySelectorTree.h" // ibSelectorTree — the tree ExecuteTotals returns
+#include "backend/query/querySelectorTree.h" // ibSelectorTree — the tree TryFoldTotalsInDbms fills
 
 // The door is blind to single-vs-multi source: it hands the composer the spec, and the composer asks the provider of
 // the primary source (CanColocate, TryPageGroupLevel, TryFoldTotalsInDbms) before it reads the leaves itself — so
@@ -23,10 +23,9 @@ public:
 	// Paged single-level group read (door SelectAggregatePage): server-side GROUP BY + keyset + LIMIT when the
 	// source's provider pages it (TryPageGroupLevel), else the unpaged ExecuteAggregate (all groups).
 	static ibDataQueryResult ExecuteGroupLevelPage(const ibDataQuerySpec& spec, const ibReadPageRequest& page);
-	static ibSelectorTree    ExecuteTotals(const ibDataQuerySpec& spec);   // totals — raw hierarchical totals tree
-	// The push-down ExecuteTotals takes first, asked as a QUESTION: true = the DBMS folded the levels
-	// and `out` is the tree; false = nothing was read, fold it yourself. This is what lets the query
-	// lowering — and therefore every composition — stop reading detail rows to add them up here.
+	// The push-down a totals read takes first, asked as a QUESTION: true = the DBMS folded the levels
+	// and `out` is the tree; false = nothing was read, and the result folds the detail. This is what lets
+	// the query lowering — and therefore every composition — stop reading detail rows to add them up here.
 	static bool              TryFoldTotalsInDbms(const ibDataQuerySpec& spec, ibSelectorTree& out);
 	// Cross-catalog reference-dimension hierarchy: group the snapshot rows by `refCol`'s VALUE, then
 	// arrange the value groups into the TARGET catalog's parent-ref hierarchy. The parent of each value

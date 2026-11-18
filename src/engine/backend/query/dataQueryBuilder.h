@@ -1354,7 +1354,6 @@ private:
 	ibDataQueryResult ExecuteAggregate() const;
 	ibDataQueryResult ExecuteGroupLevelPage(const ibReadPageRequest& page) const;
 	bool              TryFoldTotalsInDbms(ibSelectorTree& out) const;
-	ibSelectorTree    ExecuteTotals() const;
 	long              ExecuteWrite(WriteKind kind) const;
 };
 
