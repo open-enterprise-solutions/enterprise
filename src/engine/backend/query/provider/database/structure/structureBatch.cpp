@@ -3,6 +3,7 @@
 #include "backend/query/provider/database/structure/schemaBuilder.h" // ibSchemaBuilder — Execute / RunOrDefer / barrier
 #include "backend/query/queryable.h"                                 // ibBackendQueryable — GetQueryTableName / GetMetaData
 #include "backend/query/queryColumn.h"                               // ibBackendQueryColumn — GetTypeDesc / GetPhysicalName
+#include "backend/query/provider/database/columnCodec.h"             // BindWriteValue — a field's DEFAULT is the column's write of a fresh value
 #include "backend/databaseLayer/databaseQueryBuilder.h"              // L2 door — ibUpdate / ibDelete / Execute (the type-removal data cleanups)
 #include "backend/restructureInfo.h"                                 // RequireExclusiveForDDL — demanded here, by the code that writes DDL
 #include "backend/backend_exception.h"                               // ibBackendCoreException — a refused write stops the apply
@@ -25,47 +26,90 @@ const ibMetaData* ibStructureBatch::GetMetaData() const
 
 namespace {
 
-// One physical field (layout slot) -> the L2 column it renders as.
+// One physical field (layout slot) -> the L2 column it renders as, with no DEFAULT (ColumnsOf asks for one).
 ibDdlColumn ColumnOf(const ibColumnSlot& slot)
 {
 	ibDdlColumn c;
 	c.m_name    = slot.m_name;
 	c.m_type    = slot.m_type;
 	c.m_notNull = slot.m_notNull;
-	c.m_default = slot.m_default;
 	return c;
+}
+
+// ⭐ A LOGICAL COLUMN'S FIELDS AS THE L2 COLUMNS THEY RENDER AS, in its layout's order — each created holding what the
+// column's write puts there for the value a fresh row of it holds: its DEFAULT, so a row a seed fills in part, or one
+// already in the table when the field is added, reads as that value written — a functional option nobody switched as
+// its initial value, a dimension kind a predefined account's seed left out as the empty value of its type. The value is
+// the column's (ibBackendQueryColumn::CreateValue — an attribute's column makes it as its attribute does, any other
+// from its type). Asked of the codec, the DEFAULT cannot be a second spelling of a write. A raw field is written as it is by whoever writes it and gets none; nor does a field the write leaves NULL (a
+// key a composite has no reference for) or empty (a schedule's absent blob).
+std::vector<ibDdlColumn> ColumnsOf(const ibBackendQueryColumn& column, const ibMetaData* metaData)
+{
+	const std::vector<ibColumnSlot> layout = DescribeColumnLayout(column);
+	std::vector<ibDdlColumn> columns;
+	columns.reserve(layout.size());
+	for (const ibColumnSlot& slot : layout)
+		columns.push_back(ColumnOf(slot));
+	if (column.AsRawColumn() != nullptr)
+		return columns;
+
+	std::vector<ibString> fields;
+	fields.reserve(layout.size());
+	for (const ibColumnSlot& slot : layout)
+		fields.push_back(slot.m_name);
+	ibQueryStatement capture(ibQueryStatement::Kind::Delete, ibString(), fields);
+	int position = 1;
+	BindWriteValue(capture, column, metaData, column.CreateValue(), position);
+	const std::vector<ibQueryExprPtr>& values = capture.CapturedValues();
+	for (size_t i = 0; i < columns.size() && i < values.size(); ++i) {
+		const ibQueryExprPtr& value = values[i];
+		if (value && (value->m_blob.GetDataLen() > 0
+		              || (value->m_const.GetType() != TYPE_EMPTY && value->m_const.GetType() != TYPE_NULL)))
+			columns[i].m_default = value;
+	}
+	return columns;
+}
+
+// …the one of them `slot` is.
+ibDdlColumn ColumnOf(const ibBackendQueryColumn& column, const ibColumnSlot& slot, const ibMetaData* metaData)
+{
+	for (ibDdlColumn& field : ColumnsOf(column, metaData))
+		if (field.m_name == slot.m_name)
+			return std::move(field);
+	return ColumnOf(slot);
 }
 
 } // namespace
 
 void ibStructureBatch::AddColumn(const std::shared_ptr<const ibBackendQueryColumn>& column)
 {
-	for (const ibColumnSlot& slot : DescribeColumnLayout(*column))
-		AddField(slot);
+	for (ibDdlColumn& field : ColumnsOf(*column, GetMetaData()))
+		m_steps.push_back(ibAddColumn(m_table, std::move(field)));
 }
 
 void ibStructureBatch::DropColumn(const std::shared_ptr<const ibBackendQueryColumn>& column)
 {
-	for (const ibColumnSlot& slot : DescribeColumnLayout(*column))
-		DropField(slot);
+	for (ibDdlColumn& field : ColumnsOf(*column, GetMetaData()))
+		m_steps.push_back(ibDropColumn(m_table, std::move(field)));
 }
 
 // Each clause, as it is decided — this is the half that says WHICH column the differ believes in.
 // A drop of a field that was never created, or an add of one that exists, is visible here one line
 // before the database refuses it.
-void ibStructureBatch::AddField(const ibColumnSlot& slot)
+void ibStructureBatch::AddField(const std::shared_ptr<const ibBackendQueryColumn>& column, const ibColumnSlot& slot)
 {
-	m_steps.push_back(ibAddColumn(m_table, ColumnOf(slot)));
+	m_steps.push_back(ibAddColumn(m_table, ColumnOf(*column, slot, GetMetaData())));
 }
 
-void ibStructureBatch::DropField(const ibColumnSlot& slot)
+void ibStructureBatch::DropField(const std::shared_ptr<const ibBackendQueryColumn>& column, const ibColumnSlot& slot)
 {
 	// The full column rides the statement: the renderer spells only the name, the compensation
 	// ledger reads the shape back if the second phase fails and the drop has to be undone (empty).
-	m_steps.push_back(ibDropColumn(m_table, ColumnOf(slot)));
+	m_steps.push_back(ibDropColumn(m_table, ColumnOf(*column, slot, GetMetaData())));
 }
 
-void ibStructureBatch::AlterField(const ibColumnSlot& slot, const ibColumnSlot& prev)
+void ibStructureBatch::AlterField(const std::shared_ptr<const ibBackendQueryColumn>& column, const ibColumnSlot& slot,
+	const ibColumnSlot& prev)
 {
 	// ⭐⭐ A STRING THAT GAINS OR LOSES ITS LIMIT IS MADE ANEW, ITS VALUES CARRIED OVER (Max, 2026-11-10). A text of no
 	// length is not a type an ALTER reaches everywhere: Firebird keeps it as a text blob and turns no column into one or
@@ -74,13 +118,13 @@ void ibStructureBatch::AlterField(const ibColumnSlot& slot, const ibColumnSlot& 
 	// and the data phase copies the values across, cut to the length when the limit comes back (as Adjust cuts them),
 	// then drops the old column. The ledger undoes the rename and the add in reverse if that phase fails.
 	if ((slot.m_type.m_kind == ibCanonicalKind::Text) == (prev.m_type.m_kind == ibCanonicalKind::Text)) {
-		m_steps.push_back(ibAlterColumn(m_table, ColumnOf(slot), ColumnOf(prev)));
+		m_steps.push_back(ibAlterColumn(m_table, ColumnOf(slot), ColumnOf(prev)));   // the type alone: all an ALTER and its undo read
 		return;
 	}
 	const ibString table = m_table, field = slot.m_name, held = slot.m_name + ibT("_N");
 	const ibColumnType type = slot.m_type;
 	Ddl(ibRenameColumn(table, field, held));
-	AddField(slot);
+	AddField(column, slot);
 	Insert([table, field, held, type]() {
 		const ibQueryExprPtr value = type.m_kind == ibCanonicalKind::Text ? ibCol(held)
 			: ibCast(ibSubstring(ibCol(held), ibConst(ibValue(1)), ibConst(ibValue(type.m_length))), ibTypeString(type.m_length));
@@ -96,8 +140,8 @@ void ibStructureBatch::CreateTable(const std::vector<std::shared_ptr<const ibBac
 	// No table-level PRIMARY KEY — identity is an index concern (see CreateIndex).
 	std::vector<ibDdlColumn> ddlCols;
 	for (const std::shared_ptr<const ibBackendQueryColumn>& col : columns)
-		for (const ibColumnSlot& slot : DescribeColumnLayout(*col))
-			ddlCols.push_back(ColumnOf(slot));
+		for (ibDdlColumn& field : ColumnsOf(*col, GetMetaData()))
+			ddlCols.push_back(std::move(field));
 	m_steps.push_back(ibCreateTable(m_table, std::move(ddlCols)));
 }
 
@@ -111,8 +155,8 @@ void ibStructureBatch::DropTable(const std::vector<std::shared_ptr<const ibBacke
 	// The same expansion CreateTable makes — what the ledger re-creates is the table as it was declared.
 	std::vector<ibDdlColumn> ddlCols;
 	for (const std::shared_ptr<const ibBackendQueryColumn>& col : columns)
-		for (const ibColumnSlot& slot : DescribeColumnLayout(*col))
-			ddlCols.push_back(ColumnOf(slot));
+		for (ibDdlColumn& field : ColumnsOf(*col, GetMetaData()))
+			ddlCols.push_back(std::move(field));
 	m_steps.push_back(ibDropTable(m_table, std::move(ddlCols)));
 }
 
@@ -301,10 +345,10 @@ ibQueryExprPtr OfTarget(const ibString& fieldName, ibClassID clsid)
 		ibBinOp(ibQueryBinOp::Eq, ibCol(fieldName + ibFieldSuffix(ibColumnRole::ReferenceType)), ibConst(ibValue(ibNumber(clsid)))));
 }
 
-// UPDATE <table> SET <column> = <value> WHERE <where> — empty what the type no longer admits: the variant
-// tag of rows whose stored type was just removed (the overload below — they read back as undefined, not as
-// a now-missing sub-field), a number below zero of a type made non-negative (DiffColumnInto). Returns how
-// many rows that empties, counted NOW, while the values are still there.
+// UPDATE <table> SET <assignments> WHERE <where> — empty what the type no longer admits: the rows whose stored
+// type was just removed (the overload below — the column's empty value, every field of it), a number below zero
+// of a type made non-negative (DiffColumnInto). Returns how many rows that empties, counted NOW, while the values
+// are still there.
 //
 // ⭐⭐ POURED INTO THE BATCH, NOT RUN HERE. Every ADD / DROP this diff decides on is ACCUMULATED and
 // reaches the database later, at Flush; a cleanup executed on the spot therefore runs against the
@@ -313,9 +357,8 @@ ibQueryExprPtr OfTarget(const ibString& fieldName, ibClassID clsid)
 // stops the apply, the entire restructuring dies on a cleanup for work that had not happened.
 //
 // The batch is the existing answer to exactly this: seed writes already ride it, and it routes them
-// through the DDL barrier so they land after the shape is settled. The order the cleanup needs is
-// preserved either way — the discriminator (_TYPE) is never added or dropped, only the per-type data
-// fields around it are, so clearing it after the drop reads the same as clearing it before.
+// through the DDL barrier so they land after the shape is settled — and the cleanup needs that order: it
+// writes every field of the column as it is declared now, one the same restructuring added among them.
 // How many rows of the batch's table `where` holds, asked NOW — before the batch changes them.
 long long CountRows(const ibStructureBatch& batch, const ibQueryExprPtr& where)
 {
@@ -326,23 +369,40 @@ long long CountRows(const ibStructureBatch& batch, const ibQueryExprPtr& where)
 	return rows.Next() ? rows.GetResultLong(ibT("n")) : 0;
 }
 
-long long ClearRows(ibStructureBatch& batch, const ibString& column, const ibQueryExprPtr& value, const ibQueryExprPtr& where)
+long long ClearRows(ibStructureBatch& batch, std::vector<ibDmlAssign> assignments, const ibQueryExprPtr& where)
 {
 	const ibString& tableName = batch.GetTable();
 	const long long cleared = CountRows(batch, where);
 
-	batch.Insert([tableName, column, value, where]() {
+	batch.Insert([tableName, assignments = std::move(assignments), where]() {
 		ibDatabaseQueryBuilder q;
-		q.Execute(ibUpdate(tableName, { { column, value } }, where));
+		q.Execute(ibUpdate(tableName, assignments, where));
 		return true;   // a 0-row clear is the ordinary case; a real failure THREW
 	});
 	return cleared;
 }
 
-// …the variant tag, as above: a field whose stored type was removed reads back undefined.
-long long ClearRows(ibStructureBatch& batch, const ibString& fieldName, const ibQueryExprPtr& where)
+// …a row whose stored type was removed: it holds the column's empty value (AdjustValue — what the codec reads such a
+// row as), every field as the column's write spells it, the one spelling every other row of the table has for that
+// value. Its tag alone set to 0 left the other fields as they were: the row read back empty, yet a GROUP BY over its
+// fields — which is how the server folds a level — made it a group of its own beside the written empties, one for each
+// reference it used to hold.
+long long ClearRows(ibStructureBatch& batch, const ibBackendQueryColumn& column, const ibQueryExprPtr& where)
 {
-	return ClearRows(batch, fieldName + ibFieldSuffix(ibColumnRole::Discriminator), ibConst(ibValue(0)), where);
+	const std::vector<ibColumnSlot> layout = DescribeColumnLayout(column);
+	std::vector<ibString> fields;
+	fields.reserve(layout.size());
+	for (const ibColumnSlot& slot : layout)
+		fields.push_back(slot.m_name);
+	ibQueryStatement capture(ibQueryStatement::Kind::Delete, ibString(), fields);
+	int position = 1;
+	BindWriteValue(capture, column, batch.GetMetaData(), column.AdjustValue(), position);
+	const std::vector<ibQueryExprPtr>& values = capture.CapturedValues();
+	std::vector<ibDmlAssign> assignments;
+	assignments.reserve(fields.size());
+	for (size_t i = 0; i < fields.size(); ++i)
+		assignments.push_back({ fields[i], i < values.size() && values[i] ? values[i] : ibConst(ibValue()) });
+	return ClearRows(batch, std::move(assignments), where);
 }
 
 } // namespace
@@ -383,23 +443,23 @@ long long DiffColumnInto(ibStructureBatch& batch, const std::shared_ptr<const ib
 	};
 	for (const ibColumnSlot& s : srcLayout)
 		if (!isRefSlot(s) && SlotByName(dstLayout, s.m_name) == nullptr)
-			batch.AddField(s);
+			batch.AddField(srcCol, s);
 	for (const ibColumnSlot& d : dstLayout) {
 		if (isRefSlot(d))
 			continue;
 		const ibColumnSlot* s = SlotByName(srcLayout, d.m_name);
 		if (s == nullptr) {
-			// gone -> DROP the field; clear the stale _TYPE tag of rows that held this type.
-			batch.DropField(d);
+			// gone -> DROP the field; the rows that held this type hold the column's empty value.
+			batch.DropField(dstCol, d);
 			if (d.m_role != ibColumnRole::Discriminator)
-				cleared += ClearRows(batch, fieldName, OfType(fieldName, ibPersistedTypeTag(d.m_role)));
+				cleared += ClearRows(batch, *srcCol, OfType(fieldName, ibPersistedTypeTag(d.m_role)));
 		}
 		else if (!ibSameFieldType(s->m_type, d.m_type)) {
 			// A date narrowing from Time cannot ALTER in place -> drop + re-add; else ALTER.
 			if (s->m_role == ibColumnRole::Date
 			    && s->m_type.m_datePrec != ibDatePrec::Time && d.m_type.m_datePrec == ibDatePrec::Time) {
-				batch.DropField(d);
-				batch.AddField(*s);
+				batch.DropField(dstCol, d);
+				batch.AddField(srcCol, *s);
 			}
 			else {
 				// …and a string of no limit given a length keeps what fits it (AlterField cuts the rest): the rows with a
@@ -408,7 +468,7 @@ long long DiffColumnInto(ibStructureBatch& batch, const std::shared_ptr<const ib
 					*cut += CountRows(batch, ibBinOp(ibQueryBinOp::Ne,
 						ibCast(ibSubstring(ibCol(d.m_name), ibConst(ibValue(s->m_type.m_length + 1)), ibConst(ibValue(1))), ibTypeString(1)),
 						ibConst(ibValue(ibString()))));
-				batch.AlterField(*s, d);
+				batch.AlterField(srcCol, *s, d);
 			}
 		}
 	}
@@ -420,7 +480,7 @@ long long DiffColumnInto(ibStructureBatch& batch, const std::shared_ptr<const ib
 	if (srcTypeDesc.IsNonNegative() && !dstTypeDesc.IsNonNegative())
 		if (const ibColumnSlot* number = SlotOfRole(srcLayout, ibColumnRole::Number))
 			if (SlotOfRole(dstLayout, ibColumnRole::Number) != nullptr)
-				cleared += ClearRows(batch, number->m_name, ibConst(ibValue(0)), ibBinOp(ibQueryBinOp::And,
+				cleared += ClearRows(batch, { { number->m_name, ibConst(ibValue(0)) } }, ibBinOp(ibQueryBinOp::And,
 					OfType(fieldName, ibPersistedTypeTag(ibColumnRole::Number)),
 					ibBinOp(ibQueryBinOp::Lt, ibCol(number->m_name), ibConst(ibValue(0)))));
 
@@ -449,25 +509,25 @@ long long DiffColumnInto(ibStructureBatch& batch, const std::shared_ptr<const ib
 	if (newHasRef && !oldHasRef) {
 		// Field GAINED references (had none) -> ADD the shared pair.
 		if (const ibColumnSlot* rt = SlotOfRole(srcLayout, ibColumnRole::ReferenceType))
-			batch.AddField(*rt);
+			batch.AddField(srcCol, *rt);
 		if (const ibColumnSlot* rr = SlotOfRole(srcLayout, ibColumnRole::ReferenceId))
-			batch.AddField(*rr);
+			batch.AddField(srcCol, *rr);
 	}
 	else if (oldHasRef && !newHasRef) {
 		// Field LOST all references -> clear the rows that held one + DROP the shared pair (never a row
 		// DELETE — that wipes records). The slots come off the OLD layout — they exist there because
 		// oldHasRef is what this branch means.
-		cleared += ClearRows(batch, fieldName, OfType(fieldName, ibPersistedTypeTag(ibColumnRole::ReferenceType)));
+		cleared += ClearRows(batch, *srcCol, OfType(fieldName, ibPersistedTypeTag(ibColumnRole::ReferenceType)));
 		if (const ibColumnSlot* rt = SlotOfRole(dstLayout, ibColumnRole::ReferenceType))
-			batch.DropField(*rt);
+			batch.DropField(dstCol, *rt);
 		if (const ibColumnSlot* rr = SlotOfRole(dstLayout, ibColumnRole::ReferenceId))
-			batch.DropField(*rr);
+			batch.DropField(dstCol, *rr);
 	}
 	else if (!removedRef.empty()) {
 		// Still a reference, but SOME targets were dropped (incl. a full retarget) -> KEEP the shared pair;
-		// clear the stale _TYPE of rows whose stored target (_RTRef) is gone so they read undefined, not dead.
+		// the rows whose stored target (_RTRef) is gone hold the column's empty value, not a dead reference.
 		for (auto clsid : removedRef)
-			cleared += ClearRows(batch, fieldName, OfTarget(fieldName, clsid));
+			cleared += ClearRows(batch, *srcCol, OfTarget(fieldName, clsid));
 	}
 	return cleared;   // a real DB error THREW
 }

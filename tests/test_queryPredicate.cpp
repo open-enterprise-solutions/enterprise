@@ -24,6 +24,7 @@ public:
     ibString           GetPhysicalName() const override { return m_n; }
     ibTypeDescription& GetTypeDesc()     const override { return m_t; }
     ibMetaID           GetColumnId()     const override { return 1; }
+    const ibMetaData*  GetMetaData()     const override { return nullptr; }
 private:
     ibString                  m_n;
     mutable ibTypeDescription m_t;

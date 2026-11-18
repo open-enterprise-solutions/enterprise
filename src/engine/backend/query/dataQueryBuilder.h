@@ -52,10 +52,11 @@ enum class ibAccessStage { Table, Value };
 #include <functional>   // the detach callback — see ibDataQueryResult::DetachColumns
 
 class ibDatabaseConnectionHolder;
-class ibTempTableManager;   // RLS temp-promote — a computed inner (value table / multi-source register) materialised to a DB temp table (non-FB), owned WITH the builder
+class ibTempTableManager;   // a semi-join's keys (TrySemiJoin) in a DB temp table (non-FB), owned WITH the builder
 class ibQueryResult;        // L2 cursor — consumed by the DB result source
 class ibDataResultSource;   // the selection's backing (DB scan OR RAM table) — pimpl, defined in the .cpp
 class ibSelector;           // the traversal a result hands out: result.Select(mode) — defined in querySelector.h
+
 struct ibRenderedPageCache; // build-once page cache — opaque; defined in the .cpp, created via NewPageCache()
 
 // === selection KINDS (two axes) + aggregate / totals PODs ====================================
@@ -499,12 +500,11 @@ struct ibPageSignature
 };
 
 // L3 join kind — the door's own (NOT L2's ibQueryJoinType; the door is L2-blind).
-enum class ibQueryJoinKind { Inner, Left, Right, Full };   // Right / Full -> RAM stitch only (co-located does Inner/Left)
+enum class ibQueryJoinKind { Inner, Left, Right, Full };   // each one the statement's (L2-1 ibQueryJoinType)
 
 // Join ON comparison operator. Independent of the L4 AST's ibQueryCompareOp (L3 must not depend on the L4
-// parser). Eq is the hash-join fast path; a non-equi op is a theta join. A COLUMN-KEYED theta co-locates —
-// BuildColocatedFrom emits the node's real operator server-side (JoinOpToBinOp, dbTableProvider.cpp) — so only
-// a COMPUTED ON forces the RAM nested-loop stitch. (Landed 2026-07-16; the gate is `allColumnKeyed`.)
+// parser). Eq is an equi-join; a non-equi op is a theta join. The statement writes the node's real operator,
+// over columns or computed sides alike (BuildColocatedFrom -> JoinOpToBinOp, dbTableProvider.cpp).
 enum class ibJoinCompareOp { Eq, Ne, Lt, Le, Gt, Ge };
 
 // ⭐⭐ THE SAME COMPARISON, READ FROM THE OTHER SIDE — `a > b` seen as `b < a`.
@@ -537,9 +537,8 @@ inline ibJoinCompareOp ibMirrorJoinOp(ibJoinCompareOp op)
 
 // A JOIN's ON condition — grouped (was six scattered fields on ibQueryNode) so the mutually-exclusive ways to
 // express it live in one cohesive place. By convention: m_cross = cartesian (ON TRUE); else m_exprL/m_exprR
-// set = a COMPUTED join (a.x+1 <op> b.y), always RAM — no column key to qualify against a leaf's table (Eq ->
-// hash on the computed values, other m_op -> nested loop); else m_colL/m_colR = explicit key columns (Eq ->
-// hash, other m_op -> theta), co-locatable either way.
+// set = a COMPUTED join (a.x+1 <op> b.y), each side its expression; else m_colL/m_colR = explicit key columns.
+// Either is the statement's ON, `m_op` its operator (Eq -> an equi-join, other m_op -> theta).
 //
 // ⚠ THERE IS NO FOURTH CASE ANY MORE. "All null and not cross" used to mean an auto-join by
 // reference, worked out from the metadata — which made one query text mean different things as the
@@ -552,9 +551,8 @@ struct ibJoinOn {
 	// B.Goods AND T.Warehouse = B.Warehouse` is the ordinary sentence, not an exotic one.
 	//
 	// Held as EXTRA PAIRS beside the first rather than replacing it with a list: every reader of a
-	// single-key join goes on reading `m_colL` / `m_colR` unchanged, and only the two places that
-	// can honour more (the hash stitch, the co-located renderer) look here. `m_op` applies to the
-	// whole key — a composite key is equality by construction; a theta join keeps its one pair.
+	// single-key join goes on reading `m_colL` / `m_colR` unchanged, and only the places that
+	// can honour more (the statement's ON, the composer's twins of it) look here.
 	//
 	// 🛑 Before this an outer join REFUSED the second comparison outright ("write the other
 	// conditions in WHERE") — and for an OUTER join that advice is wrong, not merely inconvenient:
@@ -567,9 +565,9 @@ struct ibJoinOn {
 	// it outright — which is how "how long did this rate hold" became inexpressible: no windows, no
 	// scalar subquery, and now no join either (measured 2026-09-05).
 	//
-	// The EQUALITIES still form the hash key (that is what makes the join O(n+m)); the rest are
-	// checked per candidate pair inside the matching bucket. So the common case pays nothing and the
-	// mixed case is a bucket scan rather than a full product.
+	// In a base in memory the EQUALITIES of field to field are the key the other side is filed by
+	// (queryInterpreter, Statement::Join); the rest are checked per pair the key meets. So the common
+	// case pays no product, and the mixed case is a scan of one key's rows rather than of all of them.
 	// ⭐⭐ …AND A PART MAY BE COMPUTED, as the first pair may. "This month against the month before" is
 	// `B.Item = A.Item AND B.Period = DATEADD(A.Period, MONTH, -1)`: the second part compares the two
 	// sides as surely as the first, and an equality of computed sides is as good a key as one of
@@ -582,10 +580,10 @@ struct ibJoinOn {
 		ibQueryColumnExprPtr        m_exprR;                       // computed RIGHT side (instead of m_colR)
 	};
 	std::vector<ibJoinKeyPart> m_alsoOn;
-	ibJoinCompareOp              m_op    = ibJoinCompareOp::Eq;   // the FIRST pair's comparison: Eq -> hash; non-Eq -> theta
-	ibQueryColumnExprPtr         m_exprL;                         // computed ON: LEFT-side expr (RAM; Eq hashes too)
+	ibJoinCompareOp              m_op    = ibJoinCompareOp::Eq;   // the FIRST pair's comparison: Eq -> equi; non-Eq -> theta
+	ibQueryColumnExprPtr         m_exprL;                         // computed ON: LEFT-side expr
 	ibQueryColumnExprPtr         m_exprR;                         // computed ON: RIGHT-side expr
-	bool                         m_cross = false;                 // CROSS / ON TRUE — keyless cartesian (RAM only)
+	bool                         m_cross = false;                 // CROSS / ON TRUE — keyless cartesian
 };
 
 // (ibSelectKind / ibDimensionKind — defined at namespace scope above, before ibDataQueryResult.)
@@ -595,9 +593,10 @@ struct ibJoinOn {
 // A query is NOT a single source: it is a tree of heterogeneous sources combined
 // horizontally (Join) and vertically (Union), nestably. Each LEAF is a queryable
 // (catalog / temp table / register slice / external) that vends its own provider;
-// the composer realizes the tree over those per-leaf providers (co-locate into one
-// SQL where possible, else materialise + stitch). Union-ready by shape — that is
-// the whole point (FROM catalog, FROM temp table, then UNION).
+// the composer reads the tree as ONE statement — of the base, when every leaf's
+// provider joins on it, else of a base in memory the leaves are copied into
+// (query-one-road.md §7). Union-ready by shape — that is the whole point (FROM
+// catalog, FROM temp table, then UNION).
 // (docs/private/query-language-arc.md §22.1)
 // ==========================================================================
 struct ibQueryNode
@@ -622,9 +621,9 @@ struct ibQueryNode
 	// (left-assoc: A UNION B UNION ALL C dedupes after B, keeps C's duplicates). parts[0] = true.
 	//
 	// ⭐ ONE FLAG PER PART, BY CONSTRUCTION — not by convention. Both places that ever grow a Union
-	// push the part and the flag in the same breath (ibDataQueryBuilder::Union), and the one place
-	// that rebuilds a Union copies the flags whole and emits exactly one part per input part or
-	// abandons the rebuild (PromoteUnionBranches). Nothing erases, resizes or clears either vector.
+	// push the part and the flag in the same breath (ibDataQueryBuilder::Union), and the places
+	// that rebuild a Union copy the flags whole and emit exactly one part per input part. Nothing
+	// erases, resizes or clears either vector.
 	// So readers index this directly: the "flag might be missing" guard three of them carried was
 	// guarding against a shape no producer can make.
 	std::vector<bool> m_partAll;
@@ -817,8 +816,8 @@ public:
 	// Add another source. Join(b) auto-joins by reference (dot-walk style); Join(b,
 	// left, right) joins on explicit columns (temp / RAM / arbitrary). Union(b) stacks
 	// b vertically (same projection). The door builds an ibQueryNode TREE; the composer
-	// realizes it over each leaf's provider — co-located into one SQL where possible,
-	// else materialised + stitched. (docs/private/query-language-arc.md §22.1)
+	// reads it as one statement — of the base, or of a base in memory the leaves are
+	// copied into. (docs/private/query-one-road.md §7)
 	// ⛔ NO KEYLESS OVERLOAD. `Join(b)` used to mean "work the link out from a reference" — removed
 	// with the derivation behind it. A join carries its ON; a product is CrossJoin, and in the
 	// language it is written with a comma.
@@ -831,15 +830,15 @@ public:
 	                         ibJoinCompareOp onOp,
 	                         ibQueryJoinKind kind = ibQueryJoinKind::Inner,
 	                         const ibString& alias = ibEmptyString,
-	                         // …and the rest of a COMPOSITE key (`AND a.z = b.w`), which the hash
-	                         // stitch and the co-located renderer honour. See ibJoinOn::m_alsoOn.
+	                         // …and the rest of a COMPOSITE key (`AND a.z = b.w`), written into the
+	                         // statement's ON. See ibJoinOn::m_alsoOn.
 	                         const std::vector<ibJoinOn::ibJoinKeyPart>& alsoOn = {});   // explicit on-cols + comparison (theta when != Eq)
 	ibDataQueryBuilder& Join(const std::shared_ptr<const ibBackendQueryable>& queryable,
 	                         const ibQueryColumnExprPtr& onExprL, const ibQueryColumnExprPtr& onExprR,
 	                         ibJoinCompareOp onOp,
 	                         ibQueryJoinKind kind = ibQueryJoinKind::Inner,
 	                         const ibString& alias = ibEmptyString,
-	                         const std::vector<ibJoinOn::ibJoinKeyPart>& alsoOn = {});   // computed ON (a.x+1 <op> b.y) — always RAM
+	                         const std::vector<ibJoinOn::ibJoinKeyPart>& alsoOn = {});   // computed ON (a.x+1 <op> b.y)
 	ibDataQueryBuilder& CrossJoin(const std::shared_ptr<const ibBackendQueryable>& queryable,
 	                              ibQueryJoinKind kind = ibQueryJoinKind::Inner,
 	                              const ibString& alias = ibEmptyString);                        // CROSS / ON TRUE — cartesian
@@ -859,21 +858,20 @@ public:
 	// Rebuilding one from (col, op, value) silently drops the rest, which for an `In` means an EMPTY set,
 	// i.e. "matches nothing". Forward the whole struct; every future field rides for free.
 	ibDataQueryBuilder& Where(const ibQueryCondition& condition);
-	// Set membership — col IN (values). THE semi-join key filter: the RAM stitch materialises the cheap side
-	// of a join first and pushes that side's key values in here, so the other leaf reads only rows that can
-	// possibly join instead of the whole table. NULLs are dropped on the way in (a NULL key matches nothing
-	// in an equi-join, and `IN (…, NULL)` is the classic SQL trap), so an all-NULL or empty set renders as
-	// "matches nothing" on BOTH the SQL and the RAM side. Pass DISTINCT values — duplicates are harmless but
-	// only lengthen the rendered list.
+	// Set membership — col IN (values). THE semi-join key filter: a read in a base in memory copies one side
+	// of a join first and hands that side's key values to the next (ibQueryComposer::OverMemorySpace), so the
+	// other leaf reads only rows that can possibly join instead of the whole table. NULLs are dropped on the
+	// way in (a NULL key matches nothing in an equi-join, and `IN (…, NULL)` is the classic SQL trap), so an
+	// all-NULL or empty set renders as "matches nothing" on every base. Pass DISTINCT values — duplicates are
+	// harmless but only lengthen the rendered list.
 	ibDataQueryBuilder& WhereIn(const std::shared_ptr<const ibBackendQueryColumn>& col, const std::vector<ibValue>& values);
 	// Full boolean WHERE — a predicate TREE (OR / NOT / IS NULL beyond the flat AND-fold of the
 	// verbs above). L4 builds it from its parsed WHERE; the provider lowers it to the L2 IR. AND-folded
 	// with any verb conditions / row-key filters. (docs/private/query-language-arc.md §23 — door Where via L2.)
 	ibDataQueryBuilder& Where(const ibQueryPredicatePtr& predicate);
-	// COMPUTED-expression WHERE — `expr <op> value` (WHERE Qty * Price > 100, a CASE …). A single DB
-	// source lowers it server-side via BuildColumnExpr; a COMPUTED source / RAM-filterable predicate
-	// evaluates it per row (RamEvalLeaf -> EvalColumnExprRow). Only a multi-source JOIN is gated at L4
-	// (GateComputedExpr — the stitch has no cross-leaf expression evaluator).
+	// COMPUTED-expression WHERE — `expr <op> value` (WHERE Qty * Price > 100, a CASE …). The statement
+	// lowers it via BuildColumnExpr — the base's, or that of a base in memory a COMPUTED source's rows are
+	// copied into. Over a JOIN, L4 computes it one level down (GateComputedExpr, queryRewrite.cpp rule 3).
 	ibDataQueryBuilder& WhereExpr(const ibQueryColumnExprPtr& expr,
 	                              ibQueryFilterOp comparison, const ibValue& value);   // = / <> (Equal/NotEqual)
 	ibDataQueryBuilder& WhereExprCompare(const ibQueryColumnExprPtr& expr,
@@ -956,7 +954,7 @@ public:
 	ibDataQueryBuilder& Aggregate(AggregateFn fn, const std::vector<std::shared_ptr<const ibBackendQueryColumn>>& path, const ibString& alias,
 		bool distinct = false);
 	// Aggregate over a COMPUTED expression — SUM(Qty * Price). The provider lowers the input via
-	// BuildColumnExpr. Single-source DB aggregates only (gated at the L4 lowering).
+	// BuildColumnExpr; over a JOIN its columns are the composite's (ibQueryComposer::OverComposite).
 	ibDataQueryBuilder& Aggregate(AggregateFn fn, const ibQueryColumnExprPtr& expr, const ibString& alias,
 		bool distinct = false);
 	// ⭐⭐ …AND WHICH LEVEL AN ALREADY-DECLARED AGGREGATE IS COMPUTED OVER — `TOTALS SUM(x) OVER Item`.

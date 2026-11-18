@@ -16,13 +16,17 @@
 #include "backend/system/value/valueType.h"                        // ibValueTypeDescription::AdjustValue (typed-empty)
 #include "backend/metaCollection/partial/reference/reference.h"    // ibValueReferenceDataObject (reference assembly)
 #include "backend/metaCollection/metaObject.h"                     // ibValueMetaObject (reference reconstruction)
+#include "backend/metadataSerialization.h"                         // ibSerializeValue / ibDeserializeValue — a value of no type, as its node
+#include "core/serialize/dataBuilder.h"                            // ibDataNode
 #include "backend/databaseLayer/databaseLayerException.h"          // ibDatabaseLayerException — the "no such field" verdict
 #include "backend/databaseLayer/databaseErrorCodes.h"              // DATABASE_LAYER_FIELD_NOT_IN_RESULTSET
 // ibFieldTypes (the wire tag) now comes from query/queryColumn.h — the codec no longer depends on
 // the attribute header (metaAttributeObject.h), only on the shared L3 column vocabulary.
 
 
+#include <algorithm>  // std::find_if — the enumeration among a column's classes
 #include <optional>   // ibColumnCodec::WriteValue — a blob buffer only for the value that has one
+#include <vector>
 
 // ==========================================================================
 // ibColumnCodec — the value <-> physical-fields codec (was ibDbTableProvider::Set/GetValueColumn).
@@ -45,7 +49,12 @@ ibValue ReadSingleTargetReference(const ibMetaData* metaData, const ibClassID& t
 
 bool ibColumnCodec::HasReference(const ibBackendQueryColumn& col)
 {
-	for (const auto& clsid : col.GetTypeValueDesc().GetClsidList())
+	// A column of no type is laid out as the widest composite, the pair included (DescribeLayout) — when it spreads at
+	// all: a raw field and a computed output are their one field.
+	const ibTypeDescription& td = col.GetTypeValueDesc();
+	if (td.GetClsidCount() == 0)
+		return !col.IsRawColumn() && col.GetColumnKind() != ibBackendQueryColumn::Kind::Computed;
+	for (const auto& clsid : td.GetClsidList())
 		if (IsReference(clsid))
 			return true;
 	return false;
@@ -58,6 +67,22 @@ void ibColumnCodec::WriteValue(const ibBackendQueryColumn& col, const ibMetaData
 	// WRITE needs NO metadata: the reference slot is gated by the clsid KIND (IsReference) and the
 	// blob comes off the value itself. metaData stays on the signature only to mirror ReadValue.
 	const int tag = ibColumnSpread::TagForValue(cValue);
+
+	// ⭐ A COMPUTED OUTPUT IS ITS ONE FIELD, AND NO TAG BESIDE IT (DescribeLayout) — the twin of its read (ReadTaggedValue):
+	// the value as itself, read back by the column's type. Spread as a column of that type, it bound a tag and a value for
+	// one field, and a derived surface copied into the base in memory kept the TAG where its figure was — seen once the
+	// copy counted what each column bound (2026-11-18, the turnovers by correspondence). What one field reads back is a
+	// primitive or a member; anything else is no value there, as for an output that was not computed.
+	if (col.GetColumnKind() == ibBackendQueryColumn::Kind::Computed) {
+		switch (tag) {
+		case ibFieldTypes_Boolean: statement->SetParamBool(position++, cValue.GetBoolean()); return;
+		case ibFieldTypes_Number:  statement->SetParamNumber(position++, cValue.GetNumber()); return;
+		case ibFieldTypes_Date:    statement->SetParamDate(position++, cValue.GetDate()); return;
+		case ibFieldTypes_String:  statement->SetParamString(position++, cValue.GetString()); return;
+		case ibFieldTypes_Enum:    statement->SetParamInt(position++, cValue.GetInteger()); return;
+		default:                   statement->SetParamNull(position++); return;
+		}
+	}
 
 	// Schedule payload — serialised once, bound at the _SCH slot. Read off the value itself, like
 	// the reference blob below: no metadata, no session. The buffer exists only for a schedule: made for
@@ -109,6 +134,14 @@ void ibColumnCodec::WriteValue(const ibBackendQueryColumn& col, const ibMetaData
 			case ibColumnRole::TypeDescription:
 				statement->SetParamBlob(p++, typeDescBlob->GetData(), typeDescBlob->GetDataLen());
 				break;
+			case ibColumnRole::Value: {   // a column of no type: what has no field of its own, as its node's bytes (ReadFieldOf reads them)
+				ibDataNode node;
+				ibSerializeValue(cValue, node);
+				ibMemoryBuffer bytes;
+				ibBinaryProvider().Write(node, bytes);
+				statement->SetParamBlob(p++, bytes.GetData(), static_cast<long>(bytes.GetDataLen()));
+				break;
+			}
 			default:                                                                        break;
 			}
 		},
@@ -230,12 +263,26 @@ bool ReadFieldOf(ibCellFields& cell, ibColumnRole valueRole, int fieldType,
 		retValue = created;
 		return true;
 	}
+	case ibFieldTypes_Value: {
+		// What a column of no type holds with no field of its own: the bytes of the node it was written as
+		// (WriteValue binds them, SetParamBlob), read here, where the configuration a reference inside it belongs to is
+		// known — the base kept only the bytes.
+		ibMemoryBuffer bytes;
+		ibDataNode node;
+		if (result.GetResultBlob(cell.Field(valueRole), bytes) != nullptr && bytes.GetDataLen() > 0)
+			ibBinaryProvider().Read(bytes, node);
+		retValue = ibDeserializeValue(node, metaData);
+		return true;
+	}
 	case ibFieldTypes_Enum:
 	{
 		ibASSERT(metaData);
-		// The enum ctor is keyed by the ENUM clsid — taken from the column's type descriptor. The
-		// error fallback yields an empty value (an unreadable enum degrades to empty).
-		const ibClassID enumClsid = col.GetTypeDesc().GetFirstClsid();
+		// The enum ctor is keyed by the ENUM clsid — taken from the column's type descriptor: its
+		// enumeration, not its first class, which for a column of a number or a string beside it is no
+		// enumeration at all. The error fallback yields an empty value (an unreadable enum degrades to empty).
+		const std::vector<ibClassID>& classes = col.GetTypeDesc().GetClsidList();
+		const auto enumeration = std::find_if(classes.begin(), classes.end(), [](const ibClassID& clsid) { return IsEnum(clsid); });
+		const ibClassID enumClsid = enumeration != classes.end() ? *enumeration : 0;
 		const ibCtorAbstractType* so = metaData != nullptr ? metaData->GetAvailableCtor(enumClsid) : nullptr;
 
 		if (so != nullptr) {
@@ -334,19 +381,22 @@ bool ibColumnCodec::ReadField(const ibString& fieldName, int fieldType,
 // So the tag is checked against the layout before it is believed. A tag that does not fit reads as the
 // column's TYPED EMPTY value — the same answer an untagged cell gets — which keeps rows already in the
 // database readable instead of requiring them to be rewritten. Asked through the same ContainType /
-// HasReference gates DescribeColumnLayout builds the slots from, so the two cannot drift apart.
+// HasReference gates DescribeColumnLayout builds the slots from, so the two cannot drift apart — and a column
+// of no type has the fields the widest composite has: every primitive, a reference, _V.
 static bool TagFitsColumn(const ibBackendQueryColumn& col, ibFieldTypes tag)
 {
 	const ibTypeDescription& td = col.GetTypeValueDesc();
+	const bool any = td.GetClsidCount() == 0;
 	switch (tag) {
-	case ibFieldTypes_Boolean:         return td.ContainType(ibValueTypes::TYPE_BOOLEAN);
-	case ibFieldTypes_Number:          return td.ContainType(ibValueTypes::TYPE_NUMBER);
-	case ibFieldTypes_Date:            return td.ContainType(ibValueTypes::TYPE_DATE);
-	case ibFieldTypes_String:          return td.ContainType(ibValueTypes::TYPE_STRING);
+	case ibFieldTypes_Boolean:         return any || td.ContainType(ibValueTypes::TYPE_BOOLEAN);
+	case ibFieldTypes_Number:          return any || td.ContainType(ibValueTypes::TYPE_NUMBER);
+	case ibFieldTypes_Date:            return any || td.ContainType(ibValueTypes::TYPE_DATE);
+	case ibFieldTypes_String:          return any || td.ContainType(ibValueTypes::TYPE_STRING);
 	case ibFieldTypes_Enum:            return td.ContainType(ibValueTypes::TYPE_ENUM);
 	case ibFieldTypes_Schedule:        return td.ContainType(g_valueScheduleCLSID);
 	case ibFieldTypes_TypeDescription: return td.ContainType(g_valueTypeDescriptionCLSID);
 	case ibFieldTypes_Reference:       return ibColumnCodec::HasReference(col);
+	case ibFieldTypes_Value:           return any;
 	default:                           return true;   // Empty / Null read no sub-field at all
 	}
 }
@@ -409,6 +459,13 @@ bool ibColumnCodec::ReadTaggedValue(const ibString& fieldName,
 		const ibFieldTypes tag = ibColumnSpread::TagForValueType(ibValue::GetVTByID(col.GetTypeDesc().GetByIdx(0)));
 		return ReadFieldOf(cell, ibColumnRole::Raw, tag, col, metaData, retValue, createData);
 	}
+	// …AND ONE NOTHING TYPED, OR TYPED SEVERAL WAYS, IS READ AS THE FIELD HOLDS IT — by the type the base gives the field
+	// (ibQueryResult::GetValue). It has one field and no tag either; asked for a tag, it came back empty.
+	if (col.GetColumnKind() == ibBackendQueryColumn::Kind::Computed) {
+		const int field = cell.Field(ibColumnRole::Raw);
+		retValue = result.IsResultNull(field) ? ibValue(ibValueTypes::TYPE_NULL) : result.GetValue(field);
+		return true;
+	}
 
 	// ⭐⭐ NOTHING THERE AT ALL IS *NULL* — and it is a different fact from an untagged value.
 	//
@@ -457,6 +514,8 @@ bool ibColumnCodec::ReadTaggedValue(const ibString& fieldName,
 		return ReadFieldOf(cell, ibColumnRole::Enum, ibFieldTypes_Enum, col, metaData, retValue, createData);
 	case ibFieldTypes_Reference:
 		return ReadFieldOf(cell, ibColumnRole::Raw, ibFieldTypes_Reference, col, metaData, retValue, createData);
+	case ibFieldTypes_Value:
+		return ReadFieldOf(cell, ibColumnRole::Value, ibFieldTypes_Value, col, metaData, retValue, createData);
 	default:
 		// The stored TYPE tag is NULL / untagged (0): no value in this cell — a fresh row, or a dot-walk
 		// through an empty / broken reference whose LEFT JOIN did not match. Yield the COLUMN'S TYPED EMPTY

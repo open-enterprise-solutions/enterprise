@@ -2,7 +2,7 @@
 
 #include <algorithm>
 
-#include "databaseLayer.h"   // GetDatabaseLayerType — which database a statement went to
+#include "databaseLayer.h"   // GetDatabaseLayerName — which database a statement went to
 
 #include "core/fiber/fiberLocals.h"   // the run's time in the database is kept per fiber
 
@@ -29,19 +29,6 @@ struct ibRegisterSpentLocal {
 std::int64_t Microseconds(ibDatabaseProfiler::ibClock::duration spent)
 {
 	return static_cast<std::int64_t>(std::chrono::duration_cast<std::chrono::microseconds>(spent).count());
-}
-
-ibString DbmsOf(const ibDatabaseLayer* db)
-{
-	if (db == nullptr)
-		return ibString();
-	switch (db->GetDatabaseLayerType()) {
-	case DATABASELAYER_FIREBIRD:   return ibT("Firebird");
-	case DATABASELAYER_POSTGRESQL: return ibT("PostgreSQL");
-	case DATABASELAYER_ODBC:       return ibT("ODBC");
-	case DATABASELAYER_SQLLITE:    return ibT("SQLite");
-	}
-	return ibString();
 }
 
 } // namespace
@@ -157,7 +144,7 @@ void ibDatabaseProfiler::OnSql(const ibDatabaseLayer* db, const ibString& text, 
 
 	ibStatementSum& sum = m_places[place][text];
 	if (sum.m_count++ == 0) {
-		sum.m_dbms = DbmsOf(db);
+		sum.m_dbms = db != nullptr ? db->GetDatabaseLayerName() : ibString();
 
 		// The plan of a text is asked once: a plan is the database's answer to the text, not to a run of it.
 		auto [known, made] = m_plans.try_emplace(text);

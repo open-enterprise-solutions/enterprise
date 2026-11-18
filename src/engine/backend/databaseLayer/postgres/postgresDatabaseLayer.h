@@ -1,7 +1,6 @@
 #ifndef __POSTGRESQL_DATABASE_LAYER_H__
 #define __POSTGRESQL_DATABASE_LAYER_H__
 
-#include "backend/databaseLayer/databaseLayerDef.h"
 #include "backend/databaseLayer/databaseLayer.h"
 #include "backend/databaseLayer/preparedStatement.h"
 
@@ -69,9 +68,7 @@ public:
 	virtual std::vector<ibString> GetViews();
 	virtual std::vector<ibString> GetColumns(const ibString& table);
 
-	virtual int GetDatabaseLayerType() const {
-		return DATABASELAYER_POSTGRESQL;
-	}
+	virtual ibString GetDatabaseLayerName() const override { return ibT("PostgreSQL"); }
 
 	// PG SQL dialect. Static holds the definition (a test reads it without
 	// constructing the driver — no libpq). The virtual GetDialect() is the

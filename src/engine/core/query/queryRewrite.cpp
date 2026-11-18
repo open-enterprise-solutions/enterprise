@@ -658,7 +658,8 @@ bool ReadsAWalk(const ibQuerySelect& s, const ibQueryAstExprPtr& e)
 	return e && (IsWalk(s, *e) || ComputesThroughAWalk(s, e));
 }
 
-// A fold whose argument is neither a field nor a constant — what the stitched rows of a JOIN cannot fold.
+// A fold whose argument is neither a field nor a constant. A HAVING over a JOIN that holds one reads the rows one level
+// down (ComputesOverItsRows); a projection that holds one no longer does.
 bool FoldsAnExpression(const ibQueryAstExprPtr& e)
 {
 	if (!e)
@@ -727,9 +728,12 @@ bool ComputesWhereItCannot(const ibQuerySelect& s, const ibQueryAstExprPtr& term
 // Does the statement hold an expression — outside its WHERE — that only its rows one level down can compute?
 bool ComputesOverItsRows(const ibQuerySelect& s)
 {
+	// (A fold of an expression over a join stays: the join is read as a composite, a source the whole translation
+	// folds over. It went down while a join was stitched in memory, which folds fields — 2026-11-19, query 9 of the
+	// million rows: the balance and the slice copied twice and read back as values between.)
 	const bool joined = !s.m_joins.empty();
 	for (const ibQueryProjection& p : s.m_projections)
-		if (ComputesThroughAWalk(s, p.m_expr) || ConditionReadsAWalk(s, p.m_expr) || (joined && FoldsAnExpression(p.m_expr)))
+		if (ComputesThroughAWalk(s, p.m_expr) || ConditionReadsAWalk(s, p.m_expr))
 			return true;
 	for (const ibQueryAstExprPtr& g : s.m_groupBy)
 		if (ComputesThroughAWalk(s, g))

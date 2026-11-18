@@ -407,6 +407,43 @@ TEST(QueryDdlRenderer, Postgres_BlobIsBytea)
 	EXPECT_EQ(r.RenderDDL(ddl).ToStdString(), "CREATE TABLE T (Data BYTEA)");
 }
 
+// ⭐ A COLUMN'S DEFAULT IS A CONSTANT OF THE IR, SPELLED BY THE DIALECT where nothing is bound (ibSqlOfValue): a boolean
+// in its form, bytes through the binary template, a date as its field keeps one — at its precision, or as the text a
+// bind writes where the dialect keeps dates as text — and always before NOT NULL. What a structure creates a field
+// holding is the column's write of a fresh value (structureBatch.cpp); this is how each base is told it.
+TEST(QueryDdlRenderer, ADefaultIsSpelledByTheDialect)
+{
+	const unsigned char bytes[2] = { 0x00, 0xFF };
+	const ibDdlStatement table = ibCreateTable(wxT("T"), {
+		ibDdlColumn{ wxT("flag_B"),    ibTypeBoolean(),               true,  false, ibConst(ibValue(false)) },
+		ibDdlColumn{ wxT("key_RRRef"), ibTypeBinary(2),               false, false, ibConstBlob(bytes, sizeof(bytes)) },
+		ibDdlColumn{ wxT("born_D"),    ibTypeDate(),                  true,  false, ibConst(ibValue(ibDateTime())) },
+		ibDdlColumn{ wxT("day_D"),     ibTypeDate(ibDatePrec::Date),  true,  false, ibConst(ibValue(ibDateTime(2026, 11, 18, 0, 0, 0))) },
+		ibDdlColumn{ wxT("note_S"),    ibTypeString(10),              true,  false, ibConst(ibValue(ibString(wxT("it's")))) },
+	});
+	const auto has = [&table](const ibDialectDictionary& dialect, const std::string& part) -> ::testing::AssertionResult {
+		const std::string sql = ibQueryRenderer(dialect).RenderDDL(table).ToStdString();
+		if (sql.find(part) != std::string::npos)
+			return ::testing::AssertionSuccess();
+		return ::testing::AssertionFailure() << "'" << part << "' is not in: " << sql;
+	};
+
+	EXPECT_TRUE(has(PgDialect(), "flag_B BOOLEAN DEFAULT FALSE NOT NULL"));
+	EXPECT_TRUE(has(PgDialect(), "key_RRRef BYTEA DEFAULT '\\x00FF'::bytea,"));
+	EXPECT_TRUE(has(PgDialect(), "born_D TIMESTAMP DEFAULT '0001-01-01 00:00:00' NOT NULL"));
+	EXPECT_TRUE(has(PgDialect(), "day_D DATE DEFAULT '2026-11-18' NOT NULL"));
+	EXPECT_TRUE(has(PgDialect(), "note_S VARCHAR(10) DEFAULT 'it''s' NOT NULL"));
+
+	EXPECT_TRUE(has(FbDialect(), "flag_B SMALLINT DEFAULT 0 NOT NULL"));
+	EXPECT_TRUE(has(FbDialect(), " DEFAULT X'00FF',"));
+	EXPECT_TRUE(has(FbDialect(), "born_D TIMESTAMP DEFAULT '0001-01-01 00:00:00' NOT NULL"));
+	EXPECT_TRUE(has(FbDialect(), "day_D DATE DEFAULT '2026-11-18' NOT NULL"));
+
+	EXPECT_TRUE(has(SqliteDialect(), "flag_B INTEGER DEFAULT 0 NOT NULL"));
+	EXPECT_TRUE(has(SqliteDialect(), " DEFAULT X'00FF',"));
+	EXPECT_TRUE(has(SqliteDialect(), "day_D TEXT DEFAULT '2026-11-18 00:00:00' NOT NULL")) << "a date kept as text, as a bind writes it";
+}
+
 TEST(QueryDdlRenderer, CreateIndex)
 {
 	ibDdlStatement s = ibCreateIndex(wxT("Reference9"), wxT("Reference9_INDEX"), { wxT("code_S"), wxT("name_S") });

@@ -1777,8 +1777,8 @@ static void ibValueLinqDispatchImpl(ibValue* self, ibValue::ibLinqMethod method,
 		case M::Join: // Join(inner, leftKey, rightKey, projection)
 		{
 			// Layer 2 — RAM receiver ⋈ a DB queryable argument: wrap the receiver as a leaf
-			// and run server-side through the L3 door (the composer temp-promotes the RAM
-			// side), instead of the RAM hash-join below. Falls through on any other shape.
+			// and run it through the L3 door (the table read only for the receiver's keys),
+			// instead of the RAM hash-join below. Falls through on any other shape.
 			if (ibValueQueryable::TryJoinThroughL3(*self, ret, args, n))
 				break;
 			if (n < 4 || args == nullptr || args[0] == nullptr || args[1] == nullptr

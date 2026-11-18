@@ -17,7 +17,7 @@
 #include <gtest/gtest.h>
 #include <wx/string.h>   // wxT, wxString - the engine's headers include no wx
 
-#include "backend/query/provider/queryComposer.h" // ibQueryComposer::AppendUnionBranch / JoinRamTables + ibQueryRamTable + ibDataQueryBuilder
+#include "backend/query/provider/queryComposer.h" // BuildTotalsTree + ibQueryRamTable + ibDataQueryBuilder
 #include "backend/query/queryColumn.h"            // ibBackendQueryColumn (the test column)
 #include "backend/query/queryRowCursor.h"         // ibQueryRowCursor — the fold's input (the streaming tests below)
 #include "backend/query/querySelector.h"          // ibSelector — the WALK, which is where the branch tests read from
@@ -33,6 +33,7 @@ public:
 	ibString           GetPhysicalName() const override { return m_name; }
 	ibTypeDescription& GetTypeDesc()     const override { return m_type; }
 	ibMetaID           GetColumnId()      const override { return m_id; }
+	const ibMetaData*  GetMetaData()     const override { return nullptr; }
 private:
 	ibString                  m_name;
 	ibMetaID                  m_id;
@@ -190,99 +191,8 @@ TEST(QueryTotals, ABalanceIsTakenAtEachKeysFirstAndLastPeriod)
 	EXPECT_TRUE(NumEq(BuildTotalsTree(detail, {}, { plain }).Root().m_values.at(OPENING), 30));
 }
 
-// RAM inner JOIN: orders ⋈ customers ON orders.custId = customers.custKey, projecting
-// (orders.amount, customers.name). Customer 300 (Carol) has no orders -> dropped (inner).
-TEST(QueryCompose, InnerJoinByKey)
-{
-	const ibMetaID ORDERID = 10, CUSTID = 20, AMOUNT = 30, CUSTKEY = 21, NAME = 22;
-
-	ibQueryRamTable orders;
-	orders.AddColumn(ORDERID, wxT("orderId"), ibTypeDescription());
-	orders.AddColumn(CUSTID,  wxT("custId"),  ibTypeDescription());
-	orders.AddColumn(AMOUNT,  wxT("amount"),  ibTypeDescription());
-	auto addOrder = [&](long id, long cust, long amt) {
-		const long row = orders.AppendRow();
-		orders.SetCell(row, ORDERID, ibValue(ibNumber(id)));
-		orders.SetCell(row, CUSTID,  ibValue(ibNumber(cust)));
-		orders.SetCell(row, AMOUNT,  ibValue(ibNumber(amt)));
-	};
-	addOrder(1, 100, 50);
-	addOrder(2, 100, 20);
-	addOrder(3, 200, 70);
-
-	ibQueryRamTable customers;
-	customers.AddColumn(CUSTKEY, wxT("custKey"), ibTypeDescription());
-	customers.AddColumn(NAME,    wxT("name"),    ibTypeDescription());
-	auto addCust = [&](long key, const ibString& nm) {
-		const long row = customers.AppendRow();
-		customers.SetCell(row, CUSTKEY, ibValue(ibNumber(key)));
-		customers.SetCell(row, NAME,    ibValue(nm));
-	};
-	addCust(100, wxT("Alice"));
-	addCust(200, wxT("Bob"));
-	addCust(300, wxT("Carol"));   // no orders — inner join drops it
-
-	const auto custId  = std::make_shared<TestCol>(wxT("custId"), CUSTID);
-	const auto custKey = std::make_shared<TestCol>(wxT("custKey"), CUSTKEY);
-	const auto amount  = std::make_shared<TestCol>(wxT("amount"), AMOUNT);
-	const auto name    = std::make_shared<TestCol>(wxT("name"), NAME);
-	const std::vector<std::shared_ptr<const ibBackendQueryColumn>> outCols = { amount, name };
-	const std::vector<bool> fromLeft = { true, false };
-
-	const ibQueryRamTable out = ibQueryComposer::JoinRamTables(orders, customers, custId, custKey, outCols, fromLeft);
-
-	ASSERT_EQ(out.RowCount(), 3);   // order1+order2 -> Alice, order3 -> Bob; Carol dropped
-	EXPECT_TRUE(NumEq(out.GetCell(0, AMOUNT), 50));
-	EXPECT_EQ(out.GetCell(0, NAME).GetString().ToStdString(), "Alice");
-	EXPECT_TRUE(NumEq(out.GetCell(1, AMOUNT), 20));
-	EXPECT_EQ(out.GetCell(1, NAME).GetString().ToStdString(), "Alice");
-	EXPECT_TRUE(NumEq(out.GetCell(2, AMOUNT), 70));
-	EXPECT_EQ(out.GetCell(2, NAME).GetString().ToStdString(), "Bob");
-}
-
-// RAM UNION (heterogeneous): branch A has [code, name], branch B has [code] only. The
-// shared output is [code, name]; B's rows get NULL for the absent name. Rows concatenate.
-TEST(QueryCompose, UnionHeterogeneousBranches)
-{
-	const ibMetaID OUT_CODE = 1, OUT_NAME = 2;
-	const auto outCode = std::make_shared<TestCol>(wxT("code"), OUT_CODE);
-	const auto outName = std::make_shared<TestCol>(wxT("name"), OUT_NAME);
-	const std::vector<std::shared_ptr<const ibBackendQueryColumn>> outCols = { outCode, outName };
-
-	ibQueryRamTable out;
-	for (const std::shared_ptr<const ibBackendQueryColumn>& c : outCols)
-		out.AddColumn(c->GetColumnId(), c->GetName(), ibTypeDescription());
-
-	// Branch A — full shape (its own column ids).
-	const ibMetaID A_CODE = 10, A_NAME = 11;
-	ibQueryRamTable a;
-	a.AddColumn(A_CODE, wxT("code"), ibTypeDescription());
-	a.AddColumn(A_NAME, wxT("name"), ibTypeDescription());
-	auto addA = [&](const ibString& c, const ibString& n) {
-		const long row = a.AppendRow(); a.SetCell(row, A_CODE, ibValue(c)); a.SetCell(row, A_NAME, ibValue(n));
-	};
-	addA(wxT("A1"), wxT("Apple"));
-	addA(wxT("A2"), wxT("Pear"));
-	const auto aCode = std::make_shared<TestCol>(wxT("code"), A_CODE);
-	const auto aName = std::make_shared<TestCol>(wxT("name"), A_NAME);
-	ibQueryComposer::AppendUnionBranch(out, a, outCols, { aCode, aName });
-
-	// Branch B — no `name` column (heterogeneous): name resolves to null -> NULL cell.
-	const ibMetaID B_CODE = 20;
-	ibQueryRamTable b;
-	b.AddColumn(B_CODE, wxT("code"), ibTypeDescription());
-	{ const long row = b.AppendRow(); b.SetCell(row, B_CODE, ibValue(ibString(wxT("B1")))); }
-	const auto bCode = std::make_shared<TestCol>(wxT("code"), B_CODE);
-	ibQueryComposer::AppendUnionBranch(out, b, outCols, { bCode, nullptr });
-
-	ASSERT_EQ(out.RowCount(), 3);
-	EXPECT_EQ(out.GetCell(0, OUT_CODE).GetString().ToStdString(), "A1");
-	EXPECT_EQ(out.GetCell(0, OUT_NAME).GetString().ToStdString(), "Apple");
-	EXPECT_EQ(out.GetCell(1, OUT_CODE).GetString().ToStdString(), "A2");
-	EXPECT_EQ(out.GetCell(1, OUT_NAME).GetString().ToStdString(), "Pear");
-	EXPECT_EQ(out.GetCell(2, OUT_CODE).GetString().ToStdString(), "B1");
-	EXPECT_TRUE(out.GetCell(2, OUT_NAME).IsNull());   // absent in branch B -> NULL
-}
+// (A join and a union of rows in memory are the base in memory's now — its interpreter is held to SQLite in
+// test_memoryDatabaseLayer.cpp and test_queryJoinParity.cpp; the composer's own cores went with their road.)
 
 // ⭐ THE DETAIL LEVEL — a level with NO FIELDS is the rows themselves, hung under the deepest
 // heading ("a detail record is an empty grouping"). Not "one group of everything": that is what

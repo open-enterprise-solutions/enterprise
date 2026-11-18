@@ -3,9 +3,9 @@
 //
 // ibQueryColumnExpr (backend/query/queryable.h) is the L3 computed-column
 // expression tree (column / const / arithmetic / searched CASE) a projection can
-// COMPUTE; the provider lowers it to the L2 IR. Evaluation is covered by
-// test_queryComposer (EvalColumnExpr); this pins the TREE construction (kind +
-// operands) of the factory helpers. Pure.
+// COMPUTE; the provider lowers it to the L2 IR. Evaluation is the statement's
+// (test_memoryDatabaseLayer, test_queryComposer's QueryComposedRead); this pins
+// the TREE construction (kind + operands) of the factory helpers. Pure.
 // =============================================================================
 
 #include <gtest/gtest.h>
@@ -24,6 +24,7 @@ public:
     ibString           GetPhysicalName() const override { return m_n; }
     ibTypeDescription& GetTypeDesc()     const override { return m_t; }
     ibMetaID           GetColumnId()     const override { return 1; }
+    const ibMetaData*  GetMetaData()     const override { return nullptr; }
 private:
     ibString                  m_n;
     mutable ibTypeDescription m_t;

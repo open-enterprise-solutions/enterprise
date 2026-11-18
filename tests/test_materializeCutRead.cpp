@@ -253,6 +253,28 @@ TEST(MaterializeCutRead, ATurnoverBoundsItsStoredHalfBelow) {
 	EXPECT_FALSE(balance.Contains(wxT("period_ >= "))) << balance;
 }
 
+// ⭐ THE MOVEMENTS ALONE, AT THE READING'S OWN GRAIN. A reading by what no stored row carries — the account a posting
+// moved against — is handed the movements and no stored rows: ONE selection of the movements, the totals not read,
+// nothing cut, and the interval bounded on the movements themselves.
+TEST(MaterializeCutRead, TheMovementsAloneAreOneSelectionOfTheMovements) {
+	const ibDateTime from(2026, 3, 4);
+	const ibDateTime to(2026, 3, 5, 14, 0, 0);
+	ibMaterializeReadSpec r = BalanceRead(/*rows*/ true, to, false);
+	r.m_storedRows = nullptr;
+	r.m_from = ibValue(from);
+	r.m_columns = {
+		{ wxT("Qty_Moved"), wxT("Qty_Turnover"), ibString(), ibMaterializeAgg::Value, ibMaterializeWhen::InRange, true },
+	};
+	const ibString sql = ReadSql(r);
+
+	EXPECT_TRUE(sql.Contains(wxT("FROM Reg9 "))) << sql;
+	EXPECT_FALSE(sql.Contains(wxT("Reg9_T"))) << sql;
+	EXPECT_FALSE(sql.Contains(wxT("Reg9_Turnovers"))) << sql;
+	EXPECT_FALSE(sql.Contains(wxT("UNION ALL"))) << sql;
+	EXPECT_FALSE(sql.Contains(wxT("rec_ IS NULL"))) << sql;   // no arm to tell apart
+	EXPECT_TRUE(sql.Contains(wxT("period_ >= "))) << sql;      // the interval's start, on the movements
+}
+
 // =============================================================================
 // The numbers — live, on SQLite
 // =============================================================================
@@ -457,6 +479,40 @@ TEST_F(CutReadFix, ATurnoverBoundedBelowAnswersWhatTheMovementsSay) {
 	EXPECT_DOUBLE_EQ(hand, 3.0);
 	EXPECT_DOUBLE_EQ(read(/*rows*/ false), hand);
 	EXPECT_DOUBLE_EQ(read(/*rows*/ true), hand);
+}
+
+// ⭐ THE MOVEMENTS ALONE ANSWER WHAT THE MOVEMENTS SAY, at the grain the reading asks — the interval whole, and by the
+// day. The same interval as above: 04.03 is +30 -25, 05.03 through 14:00 is +7 -9 (the 500 is not in force), and
+// nothing else. Read off the movements alone it is the number the cut gives: a road, not a meaning.
+TEST_F(CutReadFix, TheMovementsAloneAnswerWhatTheMovementsSay) {
+	Fill();
+	const ibDateTime from(2026, 3, 4);
+	const ibDateTime to(2026, 3, 5, 14, 0, 0);
+
+	ibMaterializeReadSpec r = BalanceRead(/*rows*/ true, to, /*excluding*/ false);
+	r.m_from = ibValue(from);
+	r.m_columns = {
+		{ wxT("Qty_Balance"), wxT("Qty_Turnover"), ibString(), ibMaterializeAgg::Value, ibMaterializeWhen::InRange, true },
+	};
+	r.m_storedRows = nullptr;
+	EXPECT_DOUBLE_EQ(Balance(r, wxT("kitchen")), 3.0);
+	EXPECT_DOUBLE_EQ(Balance(r, wxT("bar")), -1e9);   // nothing of the bar moved inside the interval
+
+	// By the day: a row per day the kitchen moved in, each that day's own figure.
+	r.m_grain      = ibMaterializeGrain::Calendar;
+	r.m_periodUnit = ibTotalsPeriod::Day;
+	r.m_fromGrain  = ibValue(from);
+	ibDatabaseQueryBuilder q(ibConnectionPool::ThreadHolder());
+	q.From(RenderMaterializedRead(r, wxT("b")));
+	q.Project({ ibQueryProjItem{ ibCol(wxT("b"), wxT("wh")), wxT("wh") },
+	            ibQueryProjItem{ ibCol(wxT("b"), wxT("Qty_Balance")), wxT("Qty_Balance") } });
+	ibQueryResult rs = q.Execute();
+	std::vector<double> days;
+	while (rs.Next())
+		if (rs.GetResultString(wxT("wh")) == wxT("kitchen"))
+			days.push_back(rs.GetResultDouble(wxT("Qty_Balance")));
+	std::sort(days.begin(), days.end());
+	EXPECT_EQ(days, (std::vector<double>{ -2.0, 5.0 }));
 }
 
 // =============================================================================

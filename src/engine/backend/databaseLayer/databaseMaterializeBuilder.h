@@ -323,6 +323,8 @@ struct ibMaterializeReadSpec
 	// (RenderStoredRows / RenderMovementRows), so nothing has to exist in the database beyond the totals
 	// table and the movements — a base built before this reading answers it as it stands.
 	// m_movedRows null = the surface has no movement arm, and nothing is cut. A Movements grain reads m_movedRows alone.
+	// ⭐ m_movedRows WITHOUT m_storedRows = the movements alone at ANY grain: a reading by what no stored row carries —
+	// the account a posting moved against — is handed no stored rows, and folds the movements to its own grain.
 	ibQueryRelPtr m_storedRows;
 	ibQueryRelPtr m_movedRows;
 

@@ -42,7 +42,7 @@ public:
 					if (info != nullptr)
 						m_columns.push_back(std::make_shared<ibTempColumn>(
 							info->GetColumnName(), info->GetColumnType(),
-							static_cast<ibMetaID>(info->GetColumnID())));
+							static_cast<ibMetaID>(info->GetColumnID()), metaData));
 				}
 		}
 	}
@@ -68,10 +68,10 @@ public:
 	// column by name (ResolveColumnByName searches this list).
 	std::vector<std::shared_ptr<const ibBackendQueryColumn>> GetQueryColumns() const override { return m_columns; }
 
-	// --- the temp table VENDS the computed (RAM) provider; rows = the held table ----
-	// A RAM-held relation, like ibSubqueryQueryable. The composer's co-location gate keys on
-	// the provider (a temp source is read by no statement, so it is never a co-locatable DB
-	// leaf); when joined with a DB source it is temp-promoted (PromoteComputedLeaf) instead.
+	// --- the temp table VENDS the computed provider; rows = the held table ----
+	// A relation held in memory, like ibSubqueryQueryable: no statement of the base reads it, so a
+	// read of it — alone or joined — copies its rows into a base in memory and is read there
+	// (ibQueryComposer::OverMemorySpace).
 	ibBackendQueryProvider& GetProvider() const override { return ibComputedProviderInstance(); }   // reads the table from ComputeRows
 	// Convert the held runtime table into L3's own ibQueryRamTable at this ingest seam
 	// (this bridge is the one place a runtime table enters L3). Keyed by each column's
@@ -140,6 +140,13 @@ public:
 		for (ibTempColumn& c : columns)
 			m_columns.push_back(std::make_shared<ibTempColumn>(std::move(c)));
 	}
+	// …A COPY OF A SOURCE (ibTempTableManager::Materialise of a source): the source's own columns and key, published as
+	// they are — a query built over the source reads the copy with the columns it already holds, their names, types and
+	// what they stand for included.
+	ibDbTempTableQueryable(ibString tableName, std::vector<std::shared_ptr<const ibBackendQueryColumn>> columns,
+	                       std::vector<std::shared_ptr<const ibBackendQueryColumn>> keys, const ibMetaData* metaData)
+		: m_tableName(std::move(tableName)), m_tableGuid(ibNewUniqueGuid), m_columns(std::move(columns))
+		, m_metaData(metaData), m_keys(std::move(keys)) {}
 
 	ibString          GetQueryTableName() const override { return m_tableName; }
 	const ibUniqueKey& GetQueryTableGuid() const override { return m_tableGuid; }
@@ -147,6 +154,7 @@ public:
 	const ibMetaData* GetMetaData()       const override { return m_metaData; }        // reference / enum reconstruction context
 
 	std::vector<std::shared_ptr<const ibBackendQueryColumn>> GetQueryColumns() const override { return m_columns; }
+	std::vector<std::shared_ptr<const ibBackendQueryColumn>> GetPrimaryKeyColumns() const override { return m_keys; }
 	bool ContainColumn(const std::shared_ptr<const ibBackendQueryColumn>& col) const override
 	{
 		for (const std::shared_ptr<const ibBackendQueryColumn>& c : m_columns)
@@ -161,6 +169,7 @@ private:
 	ibUniqueKey				  m_tableGuid;   // the real temp table GUID (the manager owns its DB lifetime)
 	std::vector<std::shared_ptr<const ibBackendQueryColumn>> m_columns;   // metadata-format columns (real type), read via the DB spread
 	const ibMetaData*         m_metaData;    // reference / enum reconstruction context
+	std::vector<std::shared_ptr<const ibBackendQueryColumn>> m_keys;      // a copy's: its source's key; none otherwise
 };
 
 // ==========================================================================
@@ -317,7 +326,7 @@ public:
 			const std::shared_ptr<ibTempColumn> column = std::make_shared<ibTempColumn>(field.m_name,
 				field.m_physical.IsEmpty() ? field.m_name : field.m_physical, field.m_type,
 				ibBackendQueryColumn::SyntheticId(ibBackendQueryColumn::SyntheticKind::Subquery, ordinal++),
-				ibEmptyString, field.m_kind);
+				metaData, ibEmptyString, field.m_kind);
 			column->PlaysInBalance(field.m_balanceRole, field.m_periodRank);
 			m_columns.push_back(column);
 			if (field.m_isKey) m_keys.push_back(column);

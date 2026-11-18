@@ -1,7 +1,6 @@
 #ifndef __ODBC_DATABASE_LAYER_H__ibDatabaseLayerODBC
 #define __ODBC_DATABASE_LAYER_H__
 
-#include "backend/databaseLayer/databaseLayerDef.h"
 #include "backend/databaseLayer/databaseLayer.h"
 
 class ibInterfaceODBC;
@@ -54,9 +53,7 @@ public:
 	virtual std::vector<ibString> GetViews();
 	virtual std::vector<ibString> GetColumns(const ibString& table);
 
-	virtual int GetDatabaseLayerType() const {
-		return DATABASELAYER_ODBC;
-	}
+	virtual ibString GetDatabaseLayerName() const override { return ibT("ODBC"); }
 
 	// ODBC fronts many backends — the dialect is the default-constructed ANSI
 	// baseline (? params, LIMIT/OFFSET). This is the home of the generic default.

@@ -95,8 +95,8 @@ public:
 	static bool ReadField(const ibString& fieldName, int fieldType, const ibBackendQueryColumn& col,
 	                      const ibMetaData* metaData, ibValue& retValue, ibQueryResult& result, bool createData = false);
 
-	// Does the column's type admit a reference value — its spread carries _RTRef/_RRRef?
-	// Pure clsid-kind gate (IsReference), no metadata.
+	// Does the column's type admit a reference value — its spread carries _RTRef/_RRRef? A column of no
+	// type does (the widest composite). Pure clsid-kind gate (IsReference), no metadata.
 	static bool HasReference(const ibBackendQueryColumn& col);
 
 	// (The BINARY-WIRE codec — BinaryToStatement / BinaryFromResult — is the L3-3 dump / restore

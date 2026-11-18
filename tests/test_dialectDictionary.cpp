@@ -132,7 +132,7 @@ TEST(DbCapabilities, ExecuteDdlRunsTheStatementAsGiven) {
     ibDdlColumn tag;
     tag.m_name    = wxT("tag");
     tag.m_type    = ibTypeString(16);
-    tag.m_default = wxT("'100%'");
+    tag.m_default = ibConst(ibValue(ibString(wxT("100%"))));   // rendered '100%'
 
     ibDdlColumn id;
     id.m_name = wxT("id");

@@ -17,8 +17,8 @@
 //      NOT col      ->  col = FALSE   (truthy boolean column; OES attributes hold
 //                                      typed empties, never SQL NULL, so this is exact)
 //      Payoff: a Not-free WHERE is far more often a FLAT AND-chain (IsFlatAndWhere),
-//      which rides the door's verb conditions — the path that works across JOINs and
-//      the RAM stitch, where the boolean predicate tree is still restricted.
+//      which rides the door's verb conditions — each one handed to the source it names,
+//      which a source computed in memory takes as a narrowing of its own.
 //
 //   2. FROM-subquery flattening — FROM (SELECT cols FROM X WHERE p) AS s WHERE q
 //      becomes FROM X WHERE q' AND p, with s's output names substituted back to the

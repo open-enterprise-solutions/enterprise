@@ -94,9 +94,6 @@
     <ClInclude Include="databaseLayer\databaseProfiler.h">
       <Filter>databaseLayer</Filter>
     </ClInclude>
-    <ClInclude Include="databaseLayer\databaseLayerDef.h">
-      <Filter>databaseLayer</Filter>
-    </ClInclude>
     <ClInclude Include="databaseLayer\databaseLayerException.h">
       <Filter>databaseLayer</Filter>
     </ClInclude>
@@ -2625,6 +2622,9 @@
     <ClCompile Include="query\provider\queryComposer.cpp">
       <Filter>query\provider</Filter>
     </ClCompile>
+    <ClCompile Include="query\provider\composedQueryable.cpp">
+      <Filter>query\provider</Filter>
+    </ClCompile>
     <ClCompile Include="query\queryProvider.cpp">
       <Filter>query</Filter>
     </ClCompile>
@@ -2659,6 +2659,12 @@
       <Filter>query\provider\database\structure</Filter>
     </ClCompile>
     <ClCompile Include="databaseLayer\databaseMaterializeBuilder.cpp">
+      <Filter>databaseLayer</Filter>
+    </ClCompile>
+    <ClCompile Include="databaseLayer\databaseQueryInterpreter.cpp">
+      <Filter>databaseLayer</Filter>
+    </ClCompile>
+    <ClCompile Include="databaseLayer\databaseMemoryBase.cpp">
       <Filter>databaseLayer</Filter>
     </ClCompile>
     <ClCompile Include="query\provider\database\structure\derivedStateBuilder.cpp">
@@ -2703,6 +2709,9 @@
     <ClInclude Include="query\provider\queryComposer.h">
       <Filter>query\provider</Filter>
     </ClInclude>
+    <ClInclude Include="query\provider\composedQueryable.h">
+      <Filter>query\provider</Filter>
+    </ClInclude>
     <ClInclude Include="query\tempColumn.h">
       <Filter>query</Filter>
     </ClInclude>
@@ -2740,6 +2749,12 @@
       <Filter>query\provider\database\structure</Filter>
     </ClInclude>
     <ClInclude Include="databaseLayer\databaseMaterializeBuilder.h">
+      <Filter>databaseLayer</Filter>
+    </ClInclude>
+    <ClInclude Include="databaseLayer\databaseQueryInterpreter.h">
+      <Filter>databaseLayer</Filter>
+    </ClInclude>
+    <ClInclude Include="databaseLayer\databaseMemoryBase.h">
       <Filter>databaseLayer</Filter>
     </ClInclude>
     <ClInclude Include="query\provider\database\structure\derivedStateBuilder.h">

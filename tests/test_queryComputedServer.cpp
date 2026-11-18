@@ -1,16 +1,11 @@
 // =============================================================================
-// Server-side push of a COMPUTED source — the temp-promote.
+// A COMPUTED source read by a STATEMENT — its rows copied into a base in memory, its aggregate the statement's
+// GROUP BY there, written by the same translation as over a table (ibQueryComposer::OverMemorySpace,
+// docs/private/query-one-road.md §7). A reference column travels as its spread (the copy stores it as a table
+// does), so grouping / filtering by the reference needs NO decomposition.
 //
-// A single computed source (register slice / balance / subquery) with >= kTempTableMinRows rows is
-// MATERIALISED into a DB temp table, and its aggregate runs as SERVER-SIDE SQL (GROUP BY over a REAL
-// SQLite table) instead of a RAM fold. This is the engine's rule: "push what you can to the DBMS; RAM is
-// the fallback." A reference column travels as its ibReference blob (the temp stores the spread) — grouping
-// / filtering by the reference needs NO decomposition. A DOT-WALK (navigate THROUGH a reference) is not
-// promoted (stays the RAM path). This harness proves the SERVER path produces the correct result on a real
-// embedded SQLite. (docs/private/temp-db.md)
-//
-// Needs a real connection (temp tables) so it brings up appData + the connection pool over an in-memory
-// SQLite, like test_tempDbSqlite. Skips (not fails) if the headless env cannot come up.
+// Needs a real connection (the physical cases below) so it brings up appData + the connection pool over an
+// in-memory SQLite, like test_tempDbSqlite. Skips (not fails) if the headless env cannot come up.
 //
 // The same fixture also covers the OTHER things the door pushes server-side over a PHYSICAL source, where
 // the assertion has to be real rows on a real DBMS rather than a rendered string: the LINQ-lowered WHERE,
@@ -68,13 +63,14 @@ public:
 	ibString           GetPhysicalName() const override { return m_name; }
 	ibTypeDescription& GetTypeDesc()     const override { return m_type; }
 	ibMetaID           GetColumnId()     const override { return m_id; }
+	const ibMetaData*  GetMetaData()     const override { return nullptr; }
 private:
 	ibString                  m_name;
 	ibMetaID                  m_id;
 	mutable ibTypeDescription m_type;
 };
 
-// A computed (RAM) queryable, rows built by a builder each call (ibQueryRamTable is move-only).
+// A computed queryable, rows built by a builder each call (ibQueryRamTable is move-only).
 class ComputedQ : public ibBackendQueryable {
 public:
 	ComputedQ(const ibString& name, ibMetaID id) : m_name(name), m_id(id) {
@@ -163,9 +159,9 @@ struct ComputedServerFix : ::testing::Test {
 	}
 };
 
-// SUM(qty) GROUP BY item over a 1500-row computed source (>= kTempTableMinRows = 1000) -> temp-promote ->
-// server-side SQL GROUP BY on SQLite. 3 items, 500 rows each, qty = 1 -> each item sums to 500.
-TEST_F(ComputedServerFix, Aggregate_PromotesToServer)
+// SUM(qty) GROUP BY item over a 1500-row computed source -> its rows copied into a base in memory -> the statement's
+// GROUP BY there. 3 items, 500 rows each, qty = 1 -> each item sums to 500.
+TEST_F(ComputedServerFix, Aggregate_IsTheStatementsGroupBy)
 {
 	if (!ready) return;
 
@@ -196,14 +192,14 @@ TEST_F(ComputedServerFix, Aggregate_PromotesToServer)
 
 	std::map<std::string, long> totals;
 	const SentToDatabase sent = MeasureSent([&] {
-		ibDataQueryResult res = q.SelectAggregate();   // -> ExecuteAggregate -> PromoteSingleComputed -> temp -> SQL
+		ibDataQueryResult res = q.SelectAggregate();   // -> OverMemorySpace -> the copy -> the statement
 		while (res.Next())
 			totals[res.GetValue(item).GetString().ToStdString()] = res.GetColumn(wxT("total")).GetInteger();
 	});
-	// Folded in memory, nothing would have been sent at all.
+	// Folded by a fold of the engine's own, no statement would have grouped them.
 	EXPECT_TRUE(std::any_of(sent.m_texts.begin(), sent.m_texts.end(),
 		[](const ibString& text) { return text.Contains(wxT("GROUP BY")); }))
-		<< "the rows went into a temp table and the server grouped them\n" << sent;
+		<< "the rows went into a base in memory and the statement grouped them\n" << sent;
 
 	EXPECT_EQ(totals.size(), 3u);
 	EXPECT_EQ(totals["K0"], 500);
@@ -213,7 +209,7 @@ TEST_F(ComputedServerFix, Aggregate_PromotesToServer)
 
 // A LINQ lambda WHERE, lowered and run over a PHYSICAL DB source, executes as SERVER SQL on SQLite (not a
 // RAM fold): x.region == "North" -> door.Where(predicate) -> ExecuteRead -> SELECT ... FROM t WHERE
-// region = 'North'. Proves the LINQ front-end PUSHES to the DBMS, not just the RAM-parity test_queryLINQExec
+// region = 'North'. Proves the LINQ front-end PUSHES to the DBMS, not just the memory parity test_queryLINQExec
 // proves. (The predicate is scalar, so no metaData is needed -- the config-layer wall is not hit here.)
 TEST_F(ComputedServerFix, Linq_WherePushesToServer)
 {
@@ -258,8 +254,8 @@ TEST_F(ComputedServerFix, Linq_WherePushesToServer)
 // direct unit seam — it is covered here through the SAME door a caller uses: door.WhereIn() ->
 // ExecuteRead -> BuildFilterPredicate -> BuildConditionExpr -> L2 -> real SQLite. Row counts are the
 // assertion, so a wrong render (a fragment compared, an empty set degrading to "no predicate") shows up
-// as the wrong rows rather than as a passing string match. The RAM half of the same operator is pinned
-// by the parity cases in test_queryParity.cpp.
+// as the wrong rows rather than as a passing string match. The base-in-memory half of the same operator is
+// pinned by the parity cases in test_queryParity.cpp.
 
 // A RAW column is one physical field -> the native IN branch.
 TEST_F(ComputedServerFix, In_RawColumnRendersNativeIn)
@@ -290,8 +286,42 @@ TEST_F(ComputedServerFix, In_RawColumnRendersNativeIn)
 	EXPECT_EQ(rows, 3);   // two North + one East, the South row filtered server-side
 }
 
+// ⭐ A QUESTION PUT TO A VALUE IN A CONDITION is answered over a table's rows as over a source computed in memory: no
+// statement has SQL for it, so the read goes through a base in memory (ReadsInMemorySpace). Over a table it was refused,
+// over a computed source answered — one query, two answers by where its rows came from.
+TEST_F(ComputedServerFix, AQuestionPutToTheValueOfATableIsAnswered)
+{
+	if (!ready) return;
+
+	db->RunQuery(wxT("CREATE TABLE t (region TEXT, qty INTEGER)"));
+	db->RunQuery(wxT("INSERT INTO t (region, qty) VALUES ('North', 10), ('South', 5), ('North', 7), ('East', 3)"));
+
+	const std::shared_ptr<const ibBackendColumnRawDB> region = ibBackendColumnRawDB::String(wxT("region"));
+	const std::shared_ptr<const ibBackendColumnRawDB> qty    = ibBackendColumnRawDB::Number(wxT("qty"));
+	const auto src = std::make_shared<PhysicalQ>(wxT("t"), 314);
+	src->AddCol(region);
+	src->AddCol(qty);
+
+	ibDatabaseConnectionHolder* holder = ibConnectionPool::ThreadHolder();
+	ASSERT_NE(holder, nullptr);
+
+	ibDataQueryBuilder q(holder);
+	q.From(src);
+	q.Select(qty, wxT("qty"));
+	q.Where(region, ibValue(ibString(wxT("North"))));   // a plain condition still narrows the table's own read
+	q.WhereExpr(ibQueryColumnExpr::ValueAsk(ibQueryColumnExpr::Col(qty), ibQueryValueAsk::Presentation),
+		ibQueryFilterOp::Equal, ibValue(ibString(wxT("7"))));
+	ibReadPageRequest page;
+	ibDataQueryResult res = q.Execute(page);
+
+	std::vector<long> seen;
+	while (res.Next())
+		seen.push_back(res.GetValue(qty).GetInteger());
+	EXPECT_EQ(seen, std::vector<long>({ 7 }));
+}
+
 // A NULL in the probed column must NOT survive the set test — SQL says UNKNOWN, and the reduction is only
-// sound if it means the same thing here as in the RAM stitch (test_queryParity.In_NullProbeIsUnknown).
+// sound if it means the same thing here as in a base in memory (test_queryParity.In_NullProbeIsUnknown).
 TEST_F(ComputedServerFix, In_NullProbeDropped)
 {
 	if (!ready) return;
@@ -658,9 +688,9 @@ TEST_F(ComputedServerFix, In_ReferencesOfTwoTablesSayEachTableOnce)
 	EXPECT_EQ(ReferenceSetFix::CountOf(sql, wxT(" OR ")), 1) << "the two tables, ORed";
 }
 
-// 🛑 AN EMPTY REFERENCE IN THE LIST, AND THE WHOLE LIST GOES PAIR BY PAIR. "Not filled" is the zero-guid
-// sentinel OR SQL NULL in a row, and only the equality road says both (DecomposeEquality); inside the engine's
-// IN the empty value would match the sentinel alone, and the rows stored as NULL would silently stop being found.
+// 🛑 AN EMPTY VALUE IN THE LIST, AND THE WHOLE LIST GOES PAIR BY PAIR. Its equality is its own
+// (DecomposeEquality): UNDEFINED is the tag alone, written as the row holds it — `_TYPE = 0`, no NULL beside it
+// since a field holds its DEFAULT (2026-11-18) — which no IN of one table's ids can say.
 TEST_F(ComputedServerFix, In_AnEmptyReferenceAmongTheValuesGoesPairByPair)
 {
 	if (!ready) return;
@@ -673,5 +703,51 @@ TEST_F(ComputedServerFix, In_AnEmptyReferenceAmongTheValuesGoesPairByPair)
 	const ibString sql = f.SqlOfSet(item, 345, values);
 	ASSERT_FALSE(sql.IsEmpty());
 	EXPECT_EQ(ReferenceSetFix::CountOf(sql, wxT(" IN (")), 0) << sql;
-	EXPECT_EQ(ReferenceSetFix::CountOf(sql, wxT(" IS NULL")), 1) << sql;
+	EXPECT_EQ(ReferenceSetFix::CountOf(sql, wxT(" IS NULL")), 0) << sql;
+}
+
+// ⭐ AN EQUALITY WITH AN EMPTY VALUE IS THE SPELLING IT IS WRITTEN IN (2026-11-18). A value has one spelling in a
+// row — the codec's write, a field's DEFAULT, a type change writing the empty value — so `= <empty reference>` is the
+// zero key and `= False` the tag and the false, exactly as the GROUP BY of a level tells the rows apart: no NULL
+// beside them, no OR. (A drill into a list's heading scopes its rows by this equality.)
+TEST_F(ComputedServerFix, Equal_AnEmptyValueIsTheSpellingItIsWritten)
+{
+	if (!ready) return;
+	ReferenceSetFix f;
+	ASSERT_TRUE(f.Ready());
+
+	const auto item = std::make_shared<TypedCol>(wxT("item"), 346, ibTypeDescription(reference_to_clsid(f.items->GetMetaID(), clsid_metaclass(f.items->GetClassType()))));
+	const auto flag = std::make_shared<TypedCol>(wxT("flag"), 347, ibTypeDescription(g_valueBooleanCLSID));
+	const auto sqlOf = [&f](const std::shared_ptr<const ibBackendQueryColumn>& column, const ibValue& value) {
+		const auto table = std::make_shared<MetaPhysicalQ>(wxT("T"), 348, &f.cfg);
+		table->AddCol(column);
+		ibQueryCondition equal;
+		equal.m_col   = column;
+		equal.m_value = value;
+		const ibQueryExprPtr predicate = ibDbTableProvider::BuildPredicateIR(table, ibQueryPredicate::Leaf(equal));
+		if (!predicate) return ibString();
+		ibDatabaseQueryBuilder q;
+		q.From(wxT("T")).Where(predicate);
+		return ibQueryRenderer(ibDatabaseLayerSQLite::Dialect()).Render(q.Build()).m_sql;
+	};
+
+	const ibString emptyRef = sqlOf(item, ibValue(ibValueReferenceDataObject::Create(&f.cfg, f.items->GetMetaID(), ibGuid())));
+	ASSERT_FALSE(emptyRef.IsEmpty());
+	EXPECT_EQ(ReferenceSetFix::CountOf(emptyRef, wxT(" IS NULL")), 0) << emptyRef;
+	EXPECT_EQ(ReferenceSetFix::CountOf(emptyRef, wxT(" OR ")), 0) << emptyRef;
+
+	const ibString isFalse = sqlOf(flag, ibValue(false));
+	ASSERT_FALSE(isFalse.IsEmpty());
+	EXPECT_EQ(ReferenceSetFix::CountOf(isFalse, wxT(" IS NULL")), 0) << isFalse;
+	EXPECT_EQ(ReferenceSetFix::CountOf(isFalse, wxT(" OR ")), 0) << isFalse;
+
+	// …and UNDEFINED in a composite is the tag 0 it is written as (beside a NULL key), which the column reads back as
+	// Undefined: asked of the key, a ledger's unused dimension opened at its heading found nothing (2026-11-19).
+	ibTypeDescription both(reference_to_clsid(f.items->GetMetaID(), clsid_metaclass(f.items->GetClassType())));
+	both.AppendMetaType(reference_to_clsid(f.units->GetMetaID(), clsid_metaclass(f.units->GetClassType())));
+	const auto subject = std::make_shared<TypedCol>(wxT("subject"), 349, both);
+	const ibString undefined = sqlOf(subject, ibValue());
+	ASSERT_FALSE(undefined.IsEmpty());
+	EXPECT_EQ(ReferenceSetFix::CountOf(undefined, wxT("_TYPE")), 1) << undefined;
+	EXPECT_EQ(ReferenceSetFix::CountOf(undefined, wxT("_RRRef")), 0) << undefined;
 }

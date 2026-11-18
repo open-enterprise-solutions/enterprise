@@ -15,12 +15,11 @@
 
 #include "backend/query/queryColumn.h"
 #include "backend/query/columnLayout.h"                            // ibFieldSuffix
-#include "backend/backend_core.h"                                  // emptyEnum — the "no member" ordinal
 
 #include <atomic>                                                  // the synthetic-id counter below
 #include "core/clsid.h"                                         // IsReference — a reference target by its clsid KIND
 #include "backend/system/value/valueJob.h"                         // g_valueScheduleCLSID — a value stored whole
-#include "backend/system/value/valueType.h"                        // g_valueTypeDescriptionCLSID — the other one
+#include "backend/system/value/valueType.h"                        // g_valueTypeDescriptionCLSID — the other one; AdjustValue — a value of the type
 #include "backend/valueInfo.h"                                     // reference_size_t — the width of the stored key
 
 namespace {
@@ -141,58 +140,92 @@ std::vector<ibColumnSlot> ibBackendQueryColumn::DescribeLayout() const
 
 	// What a VALUE here may be — not what is declared. The two differ only for a characteristic, whose
 	// declaration names a class no value carries (backend_type.h).
-	const ibTypeDescription& td = GetTypeValueDesc();
+	//
+	// ⭐ …AND A COLUMN THAT DECLARES NO TYPE MAY HOLD ANY VALUE: it is laid out as the WIDEST COMPOSITE — every primitive
+	// in a field of its own and of no limit, a reference as its pair, and in _V only what has no field of its own (an
+	// object, a member of an enumeration, a schedule). Kept in fields, its numbers still sum and its keys still order
+	// (Max, 2026-11-18); kept whole as one node, they did neither.
+	static const ibTypeDescription s_anyPrimitive(
+		{ g_valueBooleanCLSID, g_valueNumberCLSID, g_valueDateCLSID, g_valueStringCLSID },
+		ibQualifierNumber(0, 0), ibQualifierDate(ibDateFractions::ibDateFractions_DateTime), ibQualifierString(0));   // 0 — no limit
+	const bool any = GetTypeValueDesc().GetClsidCount() == 0;
+	const ibTypeDescription& td = any ? s_anyPrimitive : GetTypeValueDesc();
 	const ibString base = GetPhysicalName();
 
 	// A slot named off its role through the one suffix table.
-	auto makeSlot = [&](ibColumnRole role, ibColumnType type, const ibString& def, bool notNull) {
+	auto makeSlot = [&](ibColumnRole role, ibColumnType type, bool notNull) {
 		ibColumnSlot slot;
 		slot.m_name    = base + ibFieldSuffix(role);
 		slot.m_role    = role;
 		slot.m_type    = std::move(type);
-		slot.m_default = def;
 		slot.m_notNull = notNull;
 		return slot;
 	};
 
-	// _TYPE — the variant discriminator. Always present, DEFAULT 0 NOT NULL.
-	slots.push_back(makeSlot(ibColumnRole::Discriminator, ibTypeInteger(), ibT("0"), true));
+	// ⭐ THE FIELDS NO WRITE LEAVES NULL ARE NOT NULL — the tag, every primitive (an absent one binds its placeholder,
+	// BindAbsentPrimitive) and the class; each is created holding what the column's write puts there for a fresh row
+	// (structureBatch.cpp). The key is not: a composite binds none for what is no reference, and a column
+	// widened from one reference to more keeps its field as it was created.
+
+	// _TYPE — the variant discriminator. Always present, NOT NULL.
+	slots.push_back(makeSlot(ibColumnRole::Discriminator, ibTypeInteger(), true));
 
 	// Primitive value slots — in the FIXED order B, N, D, S, E (load-bearing: matches the keyset
 	// anchor + the write/read bind order).
-	auto pushPrim = [&](ibValueTypes vt, ibColumnRole role, const ibString& def) {
+	auto pushPrim = [&](ibValueTypes vt, ibColumnRole role) {
 		if (td.ContainType(vt))
-			slots.push_back(makeSlot(role, PrimitiveType(vt, td), def, false));
+			slots.push_back(makeSlot(role, PrimitiveType(vt, td), true));
 	};
-	pushPrim(ibValueTypes::TYPE_BOOLEAN, ibColumnRole::Boolean, ibString());
-	pushPrim(ibValueTypes::TYPE_NUMBER,  ibColumnRole::Number,  ibString());
-	pushPrim(ibValueTypes::TYPE_DATE,    ibColumnRole::Date,    ibString());
-	pushPrim(ibValueTypes::TYPE_STRING,  ibColumnRole::String,  ibString());
-	// The enum's DEFAULT is the "no member" number, NOT zero: 0 is an ordinary member number, so a
-	// column defaulting to it hands every unfilled row a member as though someone had chosen it.
-	pushPrim(ibValueTypes::TYPE_ENUM,    ibColumnRole::Enum,    ibString::Format(ibT("%i"), emptyEnum));
+	pushPrim(ibValueTypes::TYPE_BOOLEAN, ibColumnRole::Boolean);
+	pushPrim(ibValueTypes::TYPE_NUMBER,  ibColumnRole::Number);
+	pushPrim(ibValueTypes::TYPE_DATE,    ibColumnRole::Date);
+	pushPrim(ibValueTypes::TYPE_STRING,  ibColumnRole::String);
+	pushPrim(ibValueTypes::TYPE_ENUM,    ibColumnRole::Enum);
 
 	// _SCH — a schedule, serialised whole. A BLOB rather than fourteen columns: what people actually
 	// filter on is WHEN THIS RUNS NEXT, and that is a date column of its own on the job row
 	// (docs/private/scheduled-jobs.md § 5b).
 	if (td.ContainType(g_valueScheduleCLSID))
-		slots.push_back(makeSlot(ibColumnRole::Schedule, ibTypeBlob(), ibString(), false));
+		slots.push_back(makeSlot(ibColumnRole::Schedule, ibTypeBlob(), false));
 
 	// _TD — a type description, serialised whole. This is what a characteristic's own Type is: a
 	// FILTER carrying admissible types and their qualifiers. Stored as one blob for the same reason
 	// the schedule is — nothing predicates on it in SQL.
 	if (td.ContainType(g_valueTypeDescriptionCLSID))
-		slots.push_back(makeSlot(ibColumnRole::TypeDescription, ibTypeBlob(), ibString(), false));
+		slots.push_back(makeSlot(ibColumnRole::TypeDescription, ibTypeBlob(), false));
 
 	// Reference pair — _RTRef (target clsid, BIGINT) + _RRRef (pure guid blob, fixed-width BINARY so
-	// it is indexable for the dot-walk = join). Present when ANY clsid in the type is a reference.
-	bool hasReference = false;
+	// it is indexable for the dot-walk = join). Present when ANY clsid in the type is a reference, or the column declares
+	// no type at all.
+	bool hasReference = any;
 	for (const auto& clsid : td.GetClsidList())
 		if (IsReference(clsid)) { hasReference = true; break; }
 	if (hasReference) {
-		slots.push_back(makeSlot(ibColumnRole::ReferenceType, ibTypeBigInt(),                 ibString(), false));
-		slots.push_back(makeSlot(ibColumnRole::ReferenceId,   ibTypeBinary(reference_size_t), ibString(), false));
+		slots.push_back(makeSlot(ibColumnRole::ReferenceType, ibTypeBigInt(),                 true));
+		slots.push_back(makeSlot(ibColumnRole::ReferenceId,   ibTypeBinary(reference_size_t), false));
 	}
 
+	// _V — what a column of no type holds and none of the fields above would, as its node's bytes (the codec writes
+	// them, WriteValue). Every declared attribute has a type, so no table of a configuration has one.
+	if (any)
+		slots.push_back(makeSlot(ibColumnRole::Value, ibTypeBlob(), false));
+
 	return slots;
+}
+
+// ⭐ THE TYPE FACTORY'S PAIR (ibBackendTypeConfigFactory) — of the column's type, made by its configuration. A fresh
+// value of a column with nothing behind it is its type's empty.
+ibValue ibBackendQueryColumn::CreateValue() const
+{
+	return AdjustValue();
+}
+
+ibValue ibBackendQueryColumn::AdjustValue() const
+{
+	return ibValueTypeDescription::AdjustValue(GetTypeValueDesc(), GetMetaData());
+}
+
+ibValue ibBackendQueryColumn::AdjustValue(const ibValue& varValue) const
+{
+	return ibValueTypeDescription::AdjustValue(GetTypeValueDesc(), varValue, GetMetaData());
 }

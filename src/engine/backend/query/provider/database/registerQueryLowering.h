@@ -1703,10 +1703,10 @@ inline ibTempColumn ibRegAttributeColumn(const ibValueMetaObjectAttributeBase* a
 	const ibTypeDescription& stored = attribute->GetTypeValueDesc();
 	return spreads
 		? ibTempColumn(name, attribute->GetPhysicalName(),
-		               stored, id, synonym,
+		               stored, id, attribute->GetMetaData(), synonym,
 		               ibBackendQueryColumn::Kind::Composite).StandsFor(attribute->GetQueryColumn())
 		: ibTempColumn(name, ibRegValueField(attribute),
-		               stored, id, synonym,
+		               stored, id, attribute->GetMetaData(), synonym,
 		               ibBackendQueryColumn::Kind::Computed).StandsFor(attribute->GetQueryColumn());
 }
 

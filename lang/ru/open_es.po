@@ -2940,6 +2940,11 @@ msgstr "Firebird: значение double привязано к параметр
 msgid "Firebird: a date was bound to a parameter the statement declares as SQL type %d"
 msgstr "Firebird: дата привязана к параметру, который в операторе объявлен с SQL-типом %d"
 
+#: src/engine/backend/databaseLayer/firebird/firebirdParameter.cpp:417
+#, c-format
+msgid "Firebird: bytes were bound to a parameter the statement declares as SQL type %d"
+msgstr "Firebird: байты привязаны к параметру, который в операторе объявлен с SQL-типом %d"
+
 #: src/engine/backend/databaseLayer/firebird/firebirdParameterCollection.cpp:44
 #, c-format
 msgid "Firebird: parameter %d was bound, the statement has %d"

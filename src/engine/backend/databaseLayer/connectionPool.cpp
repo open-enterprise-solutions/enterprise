@@ -250,6 +250,34 @@ void ibConnectionPool::ReleaseAll(ibDatabaseConnectionHolder* holder)
 	}
 }
 
+void ibConnectionPool::Discard(ibDatabaseConnectionHolder* holder)
+{
+	if (holder == nullptr) return;
+
+	std::shared_ptr<ibDatabaseLayer> conn;
+	{
+		std::lock_guard<std::mutex> lock(m_mutex);
+		for (auto it = m_entries.begin(); it != m_entries.end(); ++it) {
+			if (it->scopeHolder != holder)
+				continue;
+			if (it->conn != m_source)
+				conn = it->conn;   // the source is not closed: every clone is made from it
+			if (it->conn) {
+				it->conn->m_holder = nullptr;
+				it->conn->m_pool   = nullptr;
+			}
+			m_entries.erase(it);
+			m_cv.notify_one();   // one place fewer: a Checkout waiting at the ceiling may clone
+			break;
+		}
+	}
+	// Closed after the lock, as ReleaseAll closes what a holder left: no driver call under m_mutex.
+	if (conn) {
+		try { if (conn->IsOpen()) conn->Close(); }
+		catch (...) { /* swallowed: a scope's unwinding comes here (ibMemorySpace) — a refused close goes with the connection */ }
+	}
+}
+
 ibSingleConnectionHolder::ibSingleConnectionHolder() = default;
 
 ibSingleConnectionHolder::~ibSingleConnectionHolder()

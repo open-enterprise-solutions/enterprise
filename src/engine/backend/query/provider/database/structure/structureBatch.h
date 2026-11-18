@@ -47,13 +47,15 @@ public:
 	void AddColumn(const std::shared_ptr<const ibBackendQueryColumn>& column);
 	void DropColumn(const std::shared_ptr<const ibBackendQueryColumn>& column);
 
-	// --- field-level: one physical field (the variant type-set diff adds / drops / alters individual
-	//     slots of a column — that granularity is a metadata concern, so the caller hands us slots).
-	//     DROP and ALTER take the slot WHOLE, not a name: the statement then carries the shape the
-	//     barrier's compensation ledger restores from if the apply's second phase fails. --
-	void AddField(const ibColumnSlot& slot);                    // coalesced into a batched ALTER … ADD
-	void DropField(const ibColumnSlot& slot);                   // coalesced into a batched ALTER … DROP COLUMN
-	void AlterField(const ibColumnSlot& slot, const ibColumnSlot& prev);   // standalone type change (not batched)
+	// --- field-level: one physical field of `column` (the variant type-set diff adds / drops / alters
+	//     individual slots of a column — that granularity is a metadata concern, so the caller hands us
+	//     slots). The column is what the field's DEFAULT is asked of: what its write puts there for a
+	//     fresh row. DROP and ALTER take the slot WHOLE, not a name: the statement then carries the shape
+	//     the barrier's compensation ledger restores from if the apply's second phase fails. --
+	void AddField(const std::shared_ptr<const ibBackendQueryColumn>& column, const ibColumnSlot& slot);    // coalesced into a batched ALTER … ADD
+	void DropField(const std::shared_ptr<const ibBackendQueryColumn>& column, const ibColumnSlot& slot);   // coalesced into a batched ALTER … DROP COLUMN
+	void AlterField(const std::shared_ptr<const ibBackendQueryColumn>& column, const ibColumnSlot& slot,
+		const ibColumnSlot& prev);                                                                         // standalone type change (not batched)
 
 	// --- table / index -------------------------------------------------------------------------
 	// Create the table from LOGICAL columns (the uuid row-key / a register's rowData are ibBackendColumnRawDB

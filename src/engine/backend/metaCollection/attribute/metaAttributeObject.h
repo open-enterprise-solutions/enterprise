@@ -96,6 +96,12 @@ class BACKEND_API ibValueMetaObjectAttributeBase :
 		// which is already true of every type description a column hands out.
 		ibTypeDescription& GetTypeDesc() const override;
 		ibTypeDescription& GetTypeValueDesc() const override;
+		// The type factory's pair, the attribute's own — a fresh value as the attribute makes one (a functional option's
+		// initial value), adjusted as it adjusts; a detached column answers from its empty type.
+		ibValue  CreateValue() const override                        { return m_owner != nullptr ? m_owner->CreateValue() : ibBackendQueryColumn::CreateValue(); }
+		ibValue  AdjustValue() const override                        { return m_owner != nullptr ? m_owner->AdjustValue() : ibBackendQueryColumn::AdjustValue(); }
+		ibValue  AdjustValue(const ibValue& varValue) const override { return m_owner != nullptr ? m_owner->AdjustValue(varValue) : ibBackendQueryColumn::AdjustValue(varValue); }
+		const ibMetaData* GetMetaData() const override               { return m_owner != nullptr ? m_owner->GetMetaData() : nullptr; }
 
 	private:
 		const ibValueMetaObjectAttributeBase* m_owner;   // NON-OWNING; cleared on the owner's death

@@ -150,3 +150,17 @@ void ibConnectionScope::SafeRollBackTransaction()
 		m_activeTx = false;
 	}
 }
+
+void ibConnectionScope::Discard()
+{
+	if (!m_ownsConn || m_holder == nullptr)
+		return;
+	if (m_activeTx && m_conn) {
+		try { m_conn->RollBack(); } catch (...) { /* swallowed: the dtor's rule — a dtor comes here (ibMemorySpace) */ }
+		m_activeTx = false;
+	}
+	if (auto* pool = m_holder->GetPool())
+		pool->Discard(m_holder);
+	m_ownsConn = false;   // the pool holds nothing of it to unbind
+	m_conn.reset();
+}

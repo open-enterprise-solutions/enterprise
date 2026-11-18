@@ -362,8 +362,8 @@ bool ibValueQueryable::JoinPushDown(ibValue& ret, ibValue** args, long n)
 	// --- resolve the inner source to a queryable leaf ----------------------------
 	// inner is either ANOTHER queryable (taken BARE — its own folds aren't transferred into
 	// the join node, so a folded inner would silently lose them) OR a RAM value table, which
-	// we wrap as a computed leaf (ibTempTableQueryable, exactly like Data.From) so the
-	// composer temp-promotes it into a DB temp table and joins server-side. Anything else
+	// we wrap as a computed leaf (ibTempTableQueryable, exactly like Data.From), which the
+	// composer joins in a base in memory. Anything else
 	// (an arbitrary collection / a folded queryable) -> the RAM floor (ibValueJoinState).
 	std::shared_ptr<const ibBackendQueryable>   innerQ;
 	std::shared_ptr<const ibBackendQueryColumn> innerRef;              // single row reference, or null = structure rows
@@ -388,7 +388,7 @@ bool ibValueQueryable::JoinPushDown(ibValue& ret, ibValue** args, long n)
 	if (m_queryable == innerQ)                       return false;
 
 	// --- outer folded-state gate -------------------------------------------------
-	// Outer may carry a Where (co-locates as a per-leaf filter); NOT OrderBy / Take — those
+	// Outer may carry a Where (it rides the join as a filter on its side); NOT OrderBy / Take — those
 	// reshape the order / row set BEFORE the join, which this path does not reproduce
 	// server-side.
 	if (m_take != 0)                                 return false;
@@ -413,8 +413,7 @@ bool ibValueQueryable::JoinPushDown(ibValue& ret, ibValue** args, long n)
 	// attributes through the rehydrated reference, lazily); a structure-shaped side
 	// projects ALL its columns (the row is a structure of them) — exactly the two shapes
 	// an ibValueQueryable row takes (RowValue). Distinct alias prefixes ("o"/"i") keep the
-	// two sides apart in the select list; read back BY ALIAS, robust across the co-located,
-	// temp-promoted AND RAM-stitch paths.
+	// two sides apart in the select list; read back BY ALIAS, whichever base the statement ran in.
 	std::shared_ptr<const ibBackendQueryColumn> outerRef = RowReferenceColumn();
 
 	ibValueQueryable* link = CloneLink();          // carries outer From + folded Where
@@ -444,7 +443,7 @@ bool ibValueQueryable::JoinPushDown(ibValue& ret, ibValue** args, long n)
 	for (size_t i = 0; i < outerCols.size(); ++i) link->m_builder.Select(outerCols[i], outerAlias[i]);
 	for (size_t i = 0; i < innerCols.size(); ++i) link->m_builder.Select(innerCols[i], innerAlias[i]);
 
-	// --- execute (co-located / temp-promoted / RAM-stitched — the composer decides) --
+	// --- execute (the base's statement, or a base in memory's — the composer decides) --
 	ibReadPageRequest page;                        // outer Take gated out -> all joined rows
 	ibDataQueryResult sel = link->m_builder.Execute(page);
 
@@ -482,8 +481,8 @@ bool ibValueQueryable::TryJoinThroughL3(ibValue& receiver, ibValue& ret, ibValue
 {
 	// Layer 2 — the RAM-receiver entry, dispatched from the base LINQ switch when `.Join()`
 	// is called on a value table (a non-queryable receiver). It is worth routing to L3 ONLY
-	// when the INNER argument is a REAL DB queryable: that is the leaf the RAM receiver is
-	// temp-promoted INTO. (A RAM ⋈ RAM join gains nothing server-side -> stay on the RAM
+	// when the INNER argument is a REAL DB queryable: that table is read only for the keys the
+	// RAM receiver holds. (A RAM ⋈ RAM join gains nothing from it -> stay on the RAM
 	// hash-join.)
 	if (n < 4 || args == nullptr || args[0] == nullptr)
 		return false;
@@ -491,7 +490,7 @@ bool ibValueQueryable::TryJoinThroughL3(ibValue& receiver, ibValue& ret, ibValue
 	if (!args[0]->ConvertToValue(innerQV) || innerQV->GetQueryable() == nullptr)
 		return false;
 	if (!innerQV->GetQueryable()->GetProvider().CanJoinOn(nullptr /* the base's statement */))
-		return false;   // inner not a table of this base (computed, or another connection's) -> nothing to promote into -> RAM hash-join
+		return false;   // inner not a table of this base (computed, or another connection's) -> nothing to narrow -> RAM hash-join
 
 	// The receiver must be a value table we can wrap as a computed leaf (an arbitrary RAM
 	// collection — array of structures / references — stays on the RAM hash-join).
@@ -501,7 +500,7 @@ bool ibValueQueryable::TryJoinThroughL3(ibValue& receiver, ibValue& ret, ibValue
 
 	// Wrap the receiver as a queryable and REUSE the queryable-side push-down: the wrapped
 	// RAM table is the OUTER (computed) leaf, the inner DB queryable is args[0]. The composer
-	// temp-promotes the computed outer and runs the join server-side. leftKey / rightKey /
+	// joins them in a base in memory, the inner read for the outer's keys. leftKey / rightKey /
 	// projection map 1:1 onto JoinPushDown's outer / inner / result-selector.
 	ibValueQueryable wrapped(std::make_shared<ibTempTableQueryable>(ibValue(&receiver), innerQV->GetQueryable()->GetMetaData()),
 	                         ibT("Join"));   // its references are read in the configuration of the side it joins
@@ -911,7 +910,7 @@ void ibValueQueryDecorator::DispatchLinqMethod(ibLinqMethod method, ibValue& ret
 		//   op as a string 4th arg.
 		// inner is a FULL classic ibValueQueryable (Data.Catalogs.X / Data.Registers.Y — its own
 		// Where/folds ride along) OR a computed value table (a pre-selected set: "execute a query
-		// then join its data"), temp-promoted. The main source stays real, so the query still pages.
+		// then join its data"), read in a base in memory. The query still pages.
 		if (n < 2 || args == nullptr || args[0] == nullptr || args[1] == nullptr)
 			ibBackendCoreException::Error(_("QueryDecorator.Join: expects (source, onCond) or (source, leftKey, rightKey [, op])"));
 

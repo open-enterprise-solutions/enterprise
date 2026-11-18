@@ -39,8 +39,8 @@ public:
 	// The page of one grouping level, when the shape pages (CanPageGroupLevel) — the gate asked once, then the page read.
 	virtual bool TryPageGroupLevel(const ibDataQuerySpec& spec, const ibReadPageRequest& page, ibDataQueryResult& out) override;
 
-	// Its three folds: one source — a plain GROUP BY over the levels wherever the figures add up (any engine), else
-	// GROUP BY ROLLUP where the engine has it; a tree of its tables — ROLLUP over the co-located join or union.
+	// Its two folds over one source — a plain GROUP BY over the levels wherever the figures add up (any engine), else
+	// GROUP BY ROLLUP where the engine has it. A tree of its tables comes here as one source (ibComposedQueryable).
 	virtual bool TryFoldTotalsInDbms(const ibDataQuerySpec& spec, ibSelectorTree& out) override;
 
 	// The same GROUP BY / the same read, stopped one step before they run — see the base declarations.
@@ -50,17 +50,14 @@ public:
 	// Yes, whichever connection is named: every statement of the base is this provider's, on any of the base's
 	// connections — a source of another base is read by a provider of its own.
 	virtual bool CanJoinOn(ibDatabaseConnectionHolder* /*holder*/) const override { return true; }
-	// A join of its tables (CanColocateJoin) or a union of them (CanColocateUnion), read; a join of them folded by one
-	// GROUP BY (CanColocateAggregate), when the spec groups or aggregates.
-	virtual bool CanColocate(const ibDataQuerySpec& spec) const override;
 
 	// A named query on the connected engine (ibCanUseCte).
 	virtual bool CanDeclareNamedQuery(ibDatabaseConnectionHolder* holder) const override;
 	// …and, of a built inner door: WOULD IT RENDER WHOLE, IF IT WERE DECLARED? Asked BEFORE `.With(name, inner)` by the
 	// lowering that is choosing a road, and answered by the tier that would have to write the SQL.
 	//
-	// A single-source door always would. A JOINED one only when its tree co-locates — the same
-	// question the join read asks (CanColocateJoin), because it is the same rendering: the leaves
+	// A single-source door always would. A JOINED one when the base joins every table of its tree
+	// (ibCanJoinOn) — the same question the join read asks, because it is the same rendering: the leaves
 	// become one server-side FROM. A door that would not render whole must go back to the rows road
 	// while there is still a road to go back to; declared anyway, it would leave the outer statement
 	// naming a table nothing ever wrote.
@@ -88,36 +85,15 @@ public:
 	// what they say together, a table at a time (ibValueReferenceDataObject::ReadBatch). See the base's note.
 	virtual void ReadReferences() const override;
 
-	// --- the gates of CanColocate, TryPageGroupLevel and TryFoldTotalsInDbms, one road each; BACKEND_API so each
-	//     routing decision is unit-testable across the DLL. Each road's execution is private, reached through
-	//     ExecuteRead / ExecuteAggregate / TryPageGroupLevel / TryFoldTotalsInDbms. ---------------------------------
-
-	// Co-located server-side JOIN (docs/private/query-language-arc.md §22.1a) — is the spec's relational tree an N-way
-	// INNER/LEFT join of DISTINCT real DB tables on resolvable (explicit OR reference-derived) single-field keys, every
-	// output column owned by a leaf? When true the whole join runs in ONE server-side SELECT (the DBMS does the join +
-	// the cross-table filter; reference / enum / variant outputs reconstruct via the full spread). Outside this shape
-	// (self-join, a RAM-computed leaf, row-key conditions, dot-walk, key-in) stays the composer's RAM path — a
-	// co-location FAST PATH, not a replacement. Note a DB TEMP leaf co-locates like any real table
-	// (ibDbTempTableQueryable does not override GetProvider), and an aggregate terminal is the sibling gate's,
-	// CanColocateAggregate.
-	static BACKEND_API bool CanColocateJoin(const ibDataQuerySpec& spec);
-
-	// Co-located server-side AGGREGATE — the same join-tree gate, terminal = GroupBy()/Sum()/… : the
-	// JOIN + GROUP BY + aggregates run in ONE server-side SELECT (vs the composer's RAM fold). Group
-	// keys may be reference (grouped by the full spread); aggregate INPUTS stay scalar.
-	static BACKEND_API bool CanColocateAggregate(const ibDataQuerySpec& spec);
-
-	// Co-located server-side UNION — the branches (each a real DB table) stack as a SQL UNION ALL of
-	// per-branch SELECTs (output columns resolved per branch by NAME, aligned by position); ORDER BY /
-	// LIMIT wrap the union in a subquery. Scalar outputs (the common catalog ∪ catalog list); a
-	// computed branch is handled by the composer's mixed-promote, not this gate.
-	static BACKEND_API bool CanColocateUnion(const ibDataQuerySpec& spec);
+	// --- the gates of TryPageGroupLevel and TryFoldTotalsInDbms, one road each; BACKEND_API so each routing decision is
+	//     unit-testable across the DLL. Each road's execution is private, reached through TryPageGroupLevel /
+	//     TryFoldTotalsInDbms. -------------------------------------------------------------------------------------
 
 	// Single-level group KEYSET paging (docs: group-level paging): a single PLAIN scalar grouping dimension -> the
 	// level's groups page server-side as GROUP BY dim ORDER BY dim [dim > anchor] LIMIT count, instead of reading EVERY
 	// detail row and folding all groups in RAM (the eager path that OOMs a nomenclature hierarchy with thousands of
 	// groups per level). Outside the shape (multi-level, a dot-walk / computed dim, a multi-source group) keeps the RAM
-	// fold. No dialect probe -> unit-testable without a DB, like the co-location gates.
+	// fold. No dialect probe -> unit-testable without a DB.
 	static BACKEND_API bool CanPageGroupLevel(const ibDataQuerySpec& spec);
 
 	// Totals push-down via GROUP BY ROLLUP (docs/private/query-language-arc.md §22.1b). CanPushRollupTotals:
@@ -138,23 +114,6 @@ public:
 	// dialect probe -> unit-testable without a DB.
 	static BACKEND_API bool CanFoldGroupByTotals(const ibDataQuerySpec& spec);
 
-	// Multi-source variant of the ROLLUP totals push-down: the SAME GROUP BY ROLLUP + GROUPING()
-	// mechanism, but over a co-located INNER/LEFT JOIN tree (BuildColocatedFrom) OR a UNION-of-branches
-	// derived table (BuildUnionRollupFrom) instead of one table —
-	// so a TOTALS over a JOIN runs server-side (the DBMS computes every subtotal level; only aggregated
-	// rows transit) instead of the composer materialising both leaves and folding the tree in RAM. Same
-	// ibSelectorTree either way — perf, not correctness. Split in two so the routing is unit-testable
-	// without a DB (unlike the single-source CanPushRollupTotals, which conflates shape + dialect and is
-	// consequently untested):
-	//   CanColocateRollupTotals     — the STRUCTURAL half: CanColocateBase's join tree, SCALAR or REFERENCE group
-	//                                 keys over the JOIN (a reference groups by its spread as a composite ROLLUP
-	//                                 element; a UNION branch stays scalar), scalar aggregate inputs, no dot-walk /
-	//                                 computed group or aggregate. No dialect probe -> testable like
-	//                                 CanColocateAggregate.
-	//   CanPushColocatedRollupTotals — adds the DB-intrinsic ROLLUP-dialect capability (what TryFoldTotalsInDbms asks).
-	static BACKEND_API bool CanColocateRollupTotals(const ibDataQuerySpec& spec);
-	static BACKEND_API bool CanPushColocatedRollupTotals(const ibDataQuerySpec& spec);
-
 	// (The plain column value codec — GetValueColumn / SetValueColumn — was INLINED to its tier home
 	//  ibColumnCodec::ReadValue / WriteValue (query/provider/database/columnCodec.h): call sites speak the tier directly,
 	//  no provider forwarder. WriteFieldsOf likewise -> ColumnFieldNames. The attribute adapters below
@@ -172,8 +131,8 @@ public:
 	                              const ibValueMetaObjectAttributeBase* attr, ibValue& retValue, ibQueryResult& result, bool createData = false);
 
 	// The named queries the door declared (`With`), lowered into the SAME IR as `WITH … AS (…)`.
-	// Each is an ordinary spec lowered by BuildPageIR — or, for a joined one, by the co-located
-	// join's own FROM tree: a CTE is a query written in another place, not a simpler kind of query.
+	// Each is an ordinary spec lowered by BuildPageIR — a joined one over the composite its tree is
+	// (ibQueryComposer::OverComposite): a CTE is a query written in another place, not a simpler kind of query.
 	//
 	// ⚠ ASKED BY WHOEVER ASSEMBLES AN IR, which is why it is not private: the page read is not the
 	// only assembler. The ROLLUP fold builds its own statement out of the same spec, and a statement
@@ -199,15 +158,11 @@ public:
 
 private:
 	// What each gate above opens — reached only through the verbs of the interface, once their question said yes.
-	static ibDataQueryResult ExecuteColocatedJoin(const ibDataQuerySpec& spec, const ibReadPageRequest& page);
-	static ibDataQueryResult ExecuteColocatedAggregate(const ibDataQuerySpec& spec);
-	static ibDataQueryResult ExecuteColocatedUnion(const ibDataQuerySpec& spec, const ibReadPageRequest& page);
 	// The page: SELECT dim [, aggs] FROM src WHERE <conds> [AND dim </> anchor] GROUP BY dim ORDER BY dim LIMIT count —
 	// the dim is the group key AND the keyset column, so a page is positioned by the anchor group's dim value.
 	static ibDataQueryResult ExecuteGroupLevelPage(const ibDataQuerySpec& spec, const ibReadPageRequest& page);
 	static ibSelectorTree    ExecuteRollupTotals(const ibDataQuerySpec& spec);
 	static ibSelectorTree    ExecuteGroupByTotals(const ibDataQuerySpec& spec);
-	static ibSelectorTree    ExecuteColocatedRollupTotals(const ibDataQuerySpec& spec);
 
 	// The GROUP BY, assembled into an L2 builder and not yet run. ONE assembly, two endings: the
 	// execute path runs it, the relation path takes its IR. Split for exactly that reason — two

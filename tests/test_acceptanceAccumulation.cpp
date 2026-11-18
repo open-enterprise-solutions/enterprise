@@ -809,6 +809,63 @@ TEST_F(AcceptanceAccumulation, ALadderOfTotalsIsFoldedByTheServerAsInMemory)
 		<< "the kitchen moved the most at once";
 }
 
+// ⭐ A VALUE SPELLED TWO WAYS IS ONE HEADING ON THE SERVER, AS IN MEMORY (2026-11-18). A level is grouped by its fields
+// and read back as values; the headings above the bottom were keyed by what they read, the bottom by the group the
+// statement returned — so a list drilling one level at a time, where the level asked is the bottom, showed two
+// headings for one value while a report over the same rows printed one. Two movements are given the spelling a
+// restructuring used to leave (the tag cleared, the reference it held still beside it): both read as the empty
+// recorder, and the statement returns them as two groups.
+TEST_F(AcceptanceAccumulation, AValueSpelledTwoWaysIsOneHeadingOnTheServer)
+{
+	if (!ready) return;
+	PostOpening();
+	const std::shared_ptr<const ibBackendQueryColumn> recCol = reg->GetRegisterRecorder()->GetQueryColumn();
+	const std::shared_ptr<const ibBackendQueryColumn> qtyCol = reg->GetResourceArrayObject().front()->GetQueryColumn();
+	ibString tagField, keyField;
+	for (const ibColumnSlot& slot : DescribeColumnLayout(*recCol)) {
+		if (slot.m_role == ibColumnRole::Discriminator) tagField = slot.m_name;
+		if (slot.m_role == ibColumnRole::ReferenceId)   keyField = slot.m_name;
+	}
+	ASSERT_FALSE(tagField.IsEmpty());
+	ASSERT_FALSE(keyField.IsEmpty());
+	ASSERT_GE(db->RunQuery(wxT("UPDATE %s SET %s = 0 WHERE rowid IN (SELECT MIN(rowid) FROM %s GROUP BY %s LIMIT 2)"),
+		movementsTable, tagField, movementsTable, keyField), 0);
+	if (db->IsActiveTransaction())
+		db->Commit();
+
+	// The oracle: the movements read plainly, added up by the recorder each reads as.
+	std::map<ibValue, ibNumber, ibValueLess> byRecorder;
+	{
+		ibDataQueryBuilder rows(ibConnectionPool::ThreadHolder());
+		rows.From(reg->GetQueryable());
+		rows.Select(recCol, wxT("rec"));
+		rows.Select(qtyCol, wxT("qty"));
+		ibDataQueryResult read = rows.Execute(ibReadPageRequest{});
+		while (read.Next()) {
+			ibNumber& sum = byRecorder[read.GetValue(recCol)];
+			sum = sum + read.GetValue(qtyCol).GetNumber();
+		}
+	}
+	ASSERT_EQ(std::count_if(byRecorder.begin(), byRecorder.end(), [](const auto& kv) { return kv.first.IsEmpty(); }), 1)
+		<< "both movements read as the empty recorder";
+
+	ibDataQueryBuilder q(ibConnectionPool::ThreadHolder());
+	q.From(reg->GetQueryable());
+	q.TotalBy(recCol, ibDimensionKind::Elements);
+	q.Totals().Sum(qtyCol, wxT("Qty"));
+	ibSelectorTree tree;
+	const SentToDatabase sent = MeasureSent([&] { tree = q.SelectTotals(); });
+	EXPECT_EQ(sent.m_rows, byRecorder.size() + 1) << "the server's GROUP BY returns the two spellings apart\n" << sent;
+
+	const ibSelectorTree::Node& root = tree.Root();
+	ASSERT_EQ(root.m_children.size(), byRecorder.size()) << "one heading a value";
+	for (const std::unique_ptr<ibSelectorTree::Node>& r : root.m_children) {
+		const auto at = byRecorder.find(r->m_values.at(recCol->GetColumnId()));
+		ASSERT_NE(at, byRecorder.end());
+		EXPECT_EQ(0, r->m_values.at(qtyCol->GetColumnId()).GetNumber().Compare(at->second)) << "a heading adds up its spellings";
+	}
+}
+
 // ⭐ A FIGURE OVER A PROJECTION IS FOLDED BY THE SERVER TOO (2026-11-05). A second fold over one column, a computed
 // field: the lowering projects each and folds it through a handle named by the projection. The ladder aggregated that
 // name over the bare source, and Firebird answered "Column unknown"; the source is now read with the projection beside

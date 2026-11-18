@@ -1307,7 +1307,7 @@ TEST(MetaDataSerialize, AValueWithNoPackedFormIsRefused) {
 // (2026-09-24), so every reference type of a configuration came back as the
 // untyped empty value. A ledger balance split one item into two rows: a currency
 // never written read as Undefined, one written empty read as the empty
-// reference, and the key a server read groups by (KeyFieldsAsRead) could no
+// reference, and the key a server read grouped by then (KeyFieldsAsRead) could no
 // longer say they are the same. Measured 2026-09-26 on account 28 of a ledger
 // whose currency was added after its first postings.
 
@@ -1355,6 +1355,24 @@ TEST(TypedEmpty, ATypeNobodyHasIsTheEmptyValueNotARefusal) {
 	ibValue empty(ibNumber(7));
 	ASSERT_NO_THROW(empty = ibValueTypeDescription::AdjustValue(ibTypeDescription(catalogRef), &metaData));
 	EXPECT_EQ(empty.GetType(), ibValueTypes::TYPE_EMPTY);
+}
+
+#include "backend/query/tempColumn.h"   // ibTempColumn — a column the engine makes
+#include "backend/query/queryable.h"    // ibAliasColumn — one standing for it
+
+// ⭐ A COLUMN MAKES ITS VALUE BY THE CONFIGURATION IT IS A COLUMN OF (ibBackendQueryColumn::GetMetaData) — one the engine
+// makes, by the one it was made with, never by whichever happens to be active: the stand-in is not, and asked of the
+// active one the reference came back as nothing. A column standing for it answers the same, and so does a raw reference
+// made with its target's.
+TEST(TypedEmpty, AColumnMakesItsValueByTheConfigurationItIsAColumnOf) {
+	const ibClassID catalogRef = reference_to_clsid(987656);
+	MakingStandIn metaData(catalogRef);
+	const ibString made(wxT("the catalog's empty reference"));
+
+	const std::shared_ptr<const ibTempColumn> column = std::make_shared<ibTempColumn>(wxT("Owner"), ibTypeDescription(catalogRef), 1, &metaData);
+	EXPECT_EQ(column->CreateValue().GetString(), made);
+	EXPECT_EQ(ibAliasColumn(column).CreateValue().GetString(), made);
+	EXPECT_EQ(ibBackendColumnRawDB::Reference(wxT("owner"), catalogRef, &metaData)->CreateValue().GetString(), made);
 }
 
 // ===========================================================================

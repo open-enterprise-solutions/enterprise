@@ -410,6 +410,9 @@ void ibDataMover::BinaryToStatement(const ibBackendQueryColumn& col, const ibMet
 				statement->SetParamBlob(p++, typeDescBuffer.GetData(), typeDescBuffer.GetDataLen());
 				break;
 			}
+			// What a column of no declared type keeps as its node is never moved — no table of a configuration declares one —
+			// so its field is held in place, empty, and every field after it keeps its position.
+			case ibColumnRole::Value:  statement->SetParamNull(p++); break;
 			default:                                                                  break;
 			}
 		},

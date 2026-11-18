@@ -137,6 +137,11 @@ public:
 	// callers don't need to distinguish.
 	bool Owns() const { return m_ownsConn; }
 
+	// ⚠ …AND AN OWNER MAY NOT GIVE IT BACK: the pool forgets the connection, which goes now, with what it holds — for one
+	// nobody may be given after this work (a space in memory, ibMemorySpace). An unresolved Begin is rolled back first,
+	// as the dtor would. A scope that inherited its connection leaves it to the one that took it.
+	void Discard();
+
 private:
 	// Acquire from pool, optionally bound to an explicit holder; if
 	// `customHolder` is null, the holder is resolved from the current

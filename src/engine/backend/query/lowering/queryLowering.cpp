@@ -194,6 +194,19 @@ bool WalkEnters(const std::shared_ptr<const ibBackendQueryable>& target, const s
 	    && named->GetQueryTableId() == target->GetQueryTableId();
 }
 
+// Asked ONCE, of the whole tree, because it is a property of the tree (queryLowering.h).
+bool ExprIsAnsweredHere(const ibQueryColumnExprPtr& e)
+{
+	if (e == nullptr) return false;
+	if (e->m_kind == ibQueryColumnExprKind::ValueAsk || e->m_kind == ibQueryColumnExprKind::OutputRef)
+		return true;
+	if (ExprIsAnsweredHere(e->m_lhs) || ExprIsAnsweredHere(e->m_rhs)
+	 || ExprIsAnsweredHere(e->m_else)) return true;
+	for (const ibQueryColumnExprPtr& a : e->m_args) if (ExprIsAnsweredHere(a)) return true;
+	for (const auto& wt : e->m_cases)               if (ExprIsAnsweredHere(wt.second)) return true;
+	return false;
+}
+
 namespace ibLowering {
 
 // ⭐ THE NAME A GROUPED WALK IS PROJECTED AND READ BACK UNDER — spelled from the walk itself, so the GROUP BY
@@ -261,7 +274,7 @@ static ibValue DateTimeOfParts(const int parts[6], const ibQueryAstExpr& e)
 //            filters the rows answers it — the database has the server walk the subtree (dbTableProvider
 //            BuildSubtreeIn), rows in memory get it read where they are filtered (queryProvider SubtreeResolved).
 //   Here   — a condition inside an EXPRESSION (a CASE's WHEN): whoever evaluates the expression — the server,
-//            the stitch, the result over its rows — is handed a list, so the subtree is read here.
+//            a base in memory, the result over its rows — is handed a list, so the subtree is read here.
 //   Source — a condition handed to a SOURCE, which folds by the word (queryable.h, ibQueryCondition::m_unfold).
 enum class ibHierarchyAnswer { Door, Here, Source };
 
@@ -864,49 +877,9 @@ std::shared_ptr<const ibBackendQueryColumn> ResolveColumnSingle(const std::vecto
 	return nullptr;
 }
 
-// ⭐⭐ A TABLE ONE WALK REACHES A SECOND WAY IS A SECOND READING OF IT — over a source computed in memory.
-//
-// `T.Account.Code, T.CorrAccount.Code` walk to ONE table through two references, and both end in its `Code`: one
-// column, one id. A row read in memory is keyed by column id, so the second walk's code landed in the first
-// one's cell and both answered the correspondent's (measured 2026-09-16, the ledger's turnovers — all 78 rows).
-// The server road never met it: SQL qualifies each join by its own alias.
-//
-// The cure is the one a table joined to itself already has (ibAliasQueryable): the second way in walks a TWIN
-// of the table, whose columns carry ids of their own and read the same data. Decided per PREFIX — the chain of
-// references walked so far — so the same path named again (in SELECT and in ORDER BY) is the same reading, and
-// only a different way to the same table is a new one. Armed by the lowering of a computed source alone; the
-// twins live as long as the door that reads them.
-struct ibDotWalkTwins {
-	ibDataQueryBuilder*                                                  m_builder = nullptr;
-	std::map<std::shared_ptr<const ibBackendQueryable>, ibString>        m_firstPrefix;   // table -> the way it was reached first
-	std::map<ibString, std::shared_ptr<const ibBackendQueryable>>        m_twinOf;        // another way -> its twin (held: a twin lives as long as a walk names it)
-};
-static thread_local ibDotWalkTwins* t_dotWalkTwins = nullptr;
-
-struct ibDotWalkTwinsScope {
-	explicit ibDotWalkTwinsScope(ibDotWalkTwins* now) : m_prev(t_dotWalkTwins) { t_dotWalkTwins = now; }
-	~ibDotWalkTwinsScope() { t_dotWalkTwins = m_prev; }
-	ibDotWalkTwins* m_prev;
-};
-
-std::shared_ptr<const ibBackendQueryable> TwinForDotWalk(const std::shared_ptr<const ibBackendQueryable>& target, const ibString& prefix)
-{
-	ibDotWalkTwins* const twins = t_dotWalkTwins;
-	if (twins == nullptr || twins->m_builder == nullptr || target == nullptr)
-		return target;
-	const auto [first, inserted] = twins->m_firstPrefix.try_emplace(target, prefix);
-	if (inserted)
-		return target;
-	if (first->second == prefix)
-		return target;
-	const auto known = twins->m_twinOf.find(prefix);
-	if (known != twins->m_twinOf.end())
-		return known->second;
-	const std::shared_ptr<const ibBackendQueryable> twin = std::make_shared<ibAliasQueryable>(
-		target, ibString::Format(ibT("_wr%u"), static_cast<unsigned>(twins->m_twinOf.size())));
-	twins->m_twinOf.emplace(prefix, twin);
-	return twin;
-}
+// (A TABLE ONE WALK REACHES A SECOND WAY needed a twin of its own while the walks of a source read in memory were
+//  joined over rows keyed by column id — `T.Account.Code, T.CorrAccount.Code` both landed in one cell (2026-09-16).
+//  Every walk is the statement's now, on a base in memory too, and SQL qualifies each join by its own alias.)
 
 // A reference dot-walk path (Producer.Name | b.Producer.Name) -> the chain of columns SelectPath
 // wants. An alias prefix selects the starting source; otherwise the walk starts on the source that
@@ -1050,8 +1023,6 @@ std::vector<std::shared_ptr<const ibBackendQueryColumn>> ResolvePath(const std::
 
 	// The segment just walked through, when it held SEVERAL types — see the absent leaf below.
 	ibString composite;
-	// The references walked so far, by identity — which way a table was reached (TwinForDotWalk).
-	ibString prefix;
 
 	for (size_t k = i; k < path.size(); ++k) {
 		std::shared_ptr<const ibBackendQueryColumn> col = cur->ResolveColumnByName(path[k]);
@@ -1118,8 +1089,7 @@ std::vector<std::shared_ptr<const ibBackendQueryColumn>> ResolvePath(const std::
 
 				composite = path[k];   // so a refusal one segment on names the FIELD, not a stand-in
 			}
-			prefix += ibString::Format(ibT("%p|"), (const void*)col.get());
-			cur = TwinForDotWalk(next, prefix);
+			cur = next;
 		}
 	}
 	return cols;
@@ -1188,7 +1158,7 @@ std::shared_ptr<const ibBackendQueryable> OwnerOfPathLeaf(const std::vector<ibSo
 }
 
 // Expand a reference dot-walk path (size > 1) over a MULTI-SOURCE builder. `ibRefJoinChain` builds
-// SQL joins for the single-source door; the RAM stitch has none, so here each NON-leaf segment's
+// SQL joins for the single-source door; a JOIN has none, so here each NON-leaf segment's
 // reference target becomes an explicit LEFT-join leaf, keyed EXACTLY on (segment ref column, target
 // self-reference = GetPrimaryKeyColumns().front()) — no `ReferenceColumnTo` ambiguity when a leaf has
 // two references to the same target. Joins are deduped by path prefix (`joined`: prefix-key -> target),
@@ -1199,7 +1169,7 @@ std::shared_ptr<const ibBackendQueryColumn> ExpandDotWalkJoins(
 	const std::vector<std::shared_ptr<const ibBackendQueryColumn>>& pathCols,
 	std::map<ibString, std::shared_ptr<const ibBackendQueryable>>& joined, int& aliasSeq, const ibQueryAstExpr& e)
 {
-	// The stitch routes a column to the table that OWNS it. The path was resolved on the tables themselves, and a
+	// A join routes a column to the table that OWNS it. The path was resolved on the tables themselves, and a
 	// hop may be read through a twin (below) or stand as the field a CAST reached (CastLeaf) —
 	// so each column is taken as the reading's own field of that name. The narrowing has done its work by then: it
 	// chose the one table joined.
@@ -1334,28 +1304,6 @@ struct ibValueAskWalksScope {
 	~ibValueAskWalksScope() { t_valueAskWalks = m_prev; }
 	std::vector<ibValueAskWalk>* m_prev;
 };
-
-// ⭐⭐ CAN AN ENGINE BE ASKED FOR THIS AT ALL? — one question, asked of the finished expression.
-//
-// Two kinds cannot be written into SQL, and for the same reason rather than two: they are not
-// readings of a stored field. `ValueAsk` puts a question to the VALUE (what it shows, what type it
-// is — answered by the metatype, off the loaded object); `OutputRef` reads a figure that does not
-// exist until a fold has run. Both are answered over the row that came back, and an expression
-// containing either goes to the result rather than to the door (SetComputedOverRow).
-//
-// Asked ONCE, of the whole tree, because it is a property of the tree: `ISNULL(PRESENTATION(x), "-")`
-// is our side even though ISNULL is not.
-bool ExprIsAnsweredHere(const ibQueryColumnExprPtr& e)
-{
-	if (e == nullptr) return false;
-	if (e->m_kind == ibQueryColumnExprKind::ValueAsk || e->m_kind == ibQueryColumnExprKind::OutputRef)
-		return true;
-	if (ExprIsAnsweredHere(e->m_lhs) || ExprIsAnsweredHere(e->m_rhs)
-	 || ExprIsAnsweredHere(e->m_else)) return true;
-	for (const ibQueryColumnExprPtr& a : e->m_args) if (ExprIsAnsweredHere(a)) return true;
-	for (const auto& wt : e->m_cases)               if (ExprIsAnsweredHere(wt.second)) return true;
-	return false;
-}
 
 // Every SOURCE column such an expression reads — they have to be projected, or the question is put
 // to a value that never came back. (The fold's own outputs are read by name and need nothing here.)
@@ -1697,9 +1645,9 @@ bool IsComputedExprAst(const ibQueryAstExpr& e)
 	    || e.m_kind == ibQueryAstExprKind::ScalarCall || e.m_kind == ibQueryAstExprKind::Cast || IsConditionAst(e);
 }
 
-// Gate for a computed (arithmetic / CASE) condition lhs / aggregate input / sort: a single DB source lowers it
-// server-side; a COMPUTED source (register slice / subquery) evaluates it in RAM per row (EvalColumnExprRow —
-// SELECT / WHERE / SUM alike). Over a JOIN it is not computed here at all: the statement reads its rows one level
+// Gate for a computed (arithmetic / CASE) condition lhs / aggregate input / sort: the statement lowers it — the
+// base's, or that of a base in memory a COMPUTED source (register slice / subquery) is copied into (SELECT / WHERE /
+// SUM alike). Over a JOIN it is not computed here at all: the statement reads its rows one level
 // down and computes it over them, one source (queryRewrite.cpp, rule 3). What still arrives is a statement that
 // rule leaves as written — `SELECT *`, `FOR UPDATE`.
 void GateComputedExpr(const std::vector<ibSourceBinding>& sources, const ibQueryAstExpr& e)
@@ -1845,13 +1793,11 @@ static bool MentionsSemiJoin(const ibQueryPredicatePtr& p)
 //
 // ⚠ BOTH SIDES ARE ONE FIELD OF ONE KIND — identities (a row's own key, a reference by its id), or values of one
 // primitive kind (a code, a name, a number, a date, a flag: the type tag and one value field). An identity
-// against a value, or a code against a number, goes on reading the set. The correlation compares that field,
-// while the set road matches an EMPTY value against an empty one in every spelling it has (DecomposeEquality):
-// the zero sentinel or a NULL key, an untagged row, the type's own empty value. A row key is never empty, so with
-// one on either side the plain equality answers as the set road does — «employees not in …», the case that ran
-// out of parameters, is that shape. Otherwise both may be empty (`Doc.Item IN (SELECT Item …)`, `Code IN (SELECT
-// Code …)`) and the correlation is told so (m_emptyMatchesEmpty): empty meets empty on both roads (2026-10-01;
-// until then those shapes read the set).
+// against a value, or a code against a number, goes on reading the set. The correlation compares that field, and
+// an EMPTY value meets an empty one there as on the set road: an empty value of these kinds is written as one value
+// — the zero key, the type's own empty value (DecomposeEquality) — so the plain equality says it, `Doc.Item IN
+// (SELECT Item …)` as much as «employees not in …», the case that ran out of parameters. (Until 2026-11-18 a pair
+// that could be empty on both sides was told so, and matched an empty one spelled another way too.)
 //
 // ⚠ THE INNER READ IS GUARDED as the read it replaces was. The session's policy folds its restriction into the
 // inner's own WHERE (CheckSelect, as Execute does) — an EXISTS over the bare table would see the rows the user may
@@ -1946,9 +1892,8 @@ static ibQueryPredicatePtr InSubqueryAsSemiJoin(const std::vector<ibSourceBindin
 		semi.m_innerKey = keys.front();
 		semi.m_where    = scope.GetWherePredicate();
 		semi.m_negated  = negated;   // NOT IN is said by the leaf: the provider picks the anti-join's form for its server
-		semi.m_emptyMatchesEmpty = cols.front() != outerRowKey && keys.front() != innerRowKey;   // two values that may both be empty
 		for (size_t i = 1; i < cols.size(); ++i)
-			semi.m_alsoKeys.push_back({ cols[i], keys[i], cols[i] != outerRowKey && keys[i] != innerRowKey });
+			semi.m_alsoKeys.push_back({ cols[i], keys[i] });
 		if (MentionsSemiJoin(semi.m_where))
 			return nullptr;   // a nested EXISTS would read its own alias (`sj`) for this one's
 
@@ -1966,7 +1911,7 @@ static ibQueryPredicatePtr InSubqueryAsSemiJoin(const std::vector<ibSourceBindin
 // NOT IN / NOT BETWEEN / NOT LIKE wrap the positive form in Not — so the tree needs no dedicated node.
 // Compare / LIKE / BETWEEN leaves carry a reference dot-walk PATH (the leaf condition's m_path) when
 // allowDotWalk; the provider joins it (single-source non-aggregate read). IN / IS NULL stay plain-column
-// (no path leaf on those nodes yet). Used for single-source queries + co-located JOIN booleans.
+// (no path leaf on those nodes yet). Used for single-source queries + JOIN booleans (read over the composite).
 ibQueryPredicatePtr BuildWherePredicate(const std::vector<ibSourceBinding>& sources,
                                         const ibQueryAstExpr& e, const std::map<ibString, ibValue>& params,
                                         bool allowDotWalk, ibHierarchyAnswer answer)
@@ -2326,7 +2271,7 @@ ibQueryPredicatePtr BuildWherePredicate(const std::vector<ibSourceBinding>& sour
 // Resolve a WHERE / ORDER target to a column PATH: size 1 = a plain column, >1 = a reference dot-walk
 // (Producer.Region). Dot-walk is realizable in a single-source read — a page (BuildPageIR) or, for a
 // filter, a grouped one (BuildAggregateQuery), both joining it through ibRefJoinChain; reject it
-// elsewhere rather than let a stitch path silently drop the filter. The caller says which it is building
+// elsewhere rather than let a road silently drop the filter. The caller says which it is building
 // (allowDotWalk for the ORDER, allowWhereDotWalk for the WHERE).
 std::vector<std::shared_ptr<const ibBackendQueryColumn>> ResolveWhereTarget(const std::vector<ibSourceBinding>& sources,
                                                             const ibQueryAstExpr& e, bool allowDotWalk)
@@ -2639,9 +2584,9 @@ void LowerFlatWhere(ibDataQueryBuilder& b, const std::vector<ibSourceBinding>& s
 }
 
 // A WHERE is "flat" if it is a pure AND-tree of simple comparisons / LIKE / BETWEEN — no OR / NOT /
-// IN / IS NULL. A flat JOIN WHERE rides the door's per-leaf verb conditions (work co-located AND in
-// the RAM stitch); a boolean one goes through the predicate tree, which only the co-located join path
-// lowers (per-leaf qualified) — the stitch path errors clearly rather than under-filter.
+// IN / IS NULL. A flat JOIN WHERE rides the door's per-leaf verb conditions; a boolean one goes through
+// the predicate tree, lowered over the composite the join is read as (per-leaf qualified) — in the base's
+// statement or in a base in memory's alike.
 bool IsFlatAndWhere(const ibQueryAstExpr& e)
 {
 	switch (e.m_kind) {
@@ -3057,8 +3002,10 @@ public:
 	// clsid separates a reference from an object from a manager (clsid.h). The caller hands a plain
 	// number and knows nothing about the layout; the class is what knows which kind it is.
 	// `available` — whether what it is computed from may be shown (IsExprAvailable), taken when it is minted.
-	ibSyntheticOutputColumn(const ibString& name, const ibTypeDescription& type, ibMetaID id, bool available = true)
-		: m_name(name), m_type(type), m_id(SyntheticId(SyntheticKind::Output, id)), m_available(available) {}
+	// `metaData` — the configuration whose values it holds (GetMetaData), the query's.
+	ibSyntheticOutputColumn(const ibString& name, const ibTypeDescription& type, ibMetaID id, const ibMetaData* metaData,
+	                        bool available = true)
+		: m_name(name), m_type(type), m_id(SyntheticId(SyntheticKind::Output, id)), m_metaData(metaData), m_available(available) {}
 
 	ibString           GetName()         const override { return m_name; }
 	ibString           GetPhysicalName() const override { return m_name; }
@@ -3068,11 +3015,13 @@ public:
 	// behind it, and read back by its alias.
 	Kind               GetColumnKind()   const override { return Kind::Computed; }
 	bool               IsAvailable()     const override { return m_available; }
+	const ibMetaData*  GetMetaData()     const override { return m_metaData; }
 
 private:
 	ibString                  m_name;
 	mutable ibTypeDescription m_type;   // mutable: GetTypeDesc() is const and returns a non-const ref
 	ibMetaID                  m_id;
+	const ibMetaData*         m_metaData;
 	bool                      m_available;
 };
 
@@ -3819,7 +3768,7 @@ ibDataQueryResult SortOverRow(ibDataQueryResult rows, std::vector<ibQueryOutputC
 // read finds nothing and hands back the type's default (an empty date, False, an empty string), which is
 // indistinguishable from a table full of blank rows. That is how a report over `(SELECT Document1.Ref, …)` came out
 // empty. ⭐ The test is the column's own (Max: "there are not just those four types — there's a unique identifier,
-// there can be anything"): IsRawColumn, the question the co-located join asks when it plans a projection.
+// there can be anything"): IsRawColumn, the question a composite's join asks when it plans a projection.
 // Several sources read the spread back under the name as a prefix — it is what tells two same-named columns apart;
 // one source has nothing to disambiguate, so the column itself is the read.
 //
@@ -3859,36 +3808,26 @@ bool PopulateBuilder(const ibQuerySelect& ast, const std::map<ibString, ibValue>
 {
 	const bool multiSource      = sources.size() > 1;
 	const bool explicitProjection = asSubquery || multiSource;
-	// ONE SOURCE NO STATEMENT OF THE BASE READS — computed in memory (a nested query, a virtual table), or read by a
-	// provider of another connection (CanJoinOn): its reference walks have no join of the base to ride, so they are
-	// joined in memory over its rows (the composer's walk resolver); a path leaf is never pushed as a plain column
-	// (silently wrong rows).
-	const bool walksInMemory  = sources.size() == 1 && sources[0].m_q != nullptr
-	                            && !sources[0].m_q->GetProvider().CanJoinOn(nullptr /* the base's statement */);
+	// (A source no statement of the base reads — computed in memory, or read on another connection — is lowered as any
+	//  other: its walks are the statement's too, read in a base in memory beside the tables they go into
+	//  (ibQueryComposer::OverMemorySpace, query-one-road.md §7, S4).)
 	std::map<ibString, std::shared_ptr<const ibBackendQueryable>> dwJoined; int dwAliasSeq = 0;   // dot-walk join dedup (multi-source projection)
 
 	// ⭐⭐ THE EXPANSION, ARMED FOR THE WHOLE LOWERING — one door, every clause (ExpandDotWalkHere).
 	//
 	// It sits here rather than beside the WHERE because the SELECT list, the GROUP BY and the sort all
 	// walk the same paths and share one dedup map: a prefix joined for the projection must not be
-	// joined again for the filter. Armed for a multi-source read of REAL sources; a source whose walks
-	// are joined in memory (walksInMemory) resolves them there, and arming it would offer a second way
-	// to do what that road already does.
+	// joined again for the filter. Armed for a multi-source read.
 	const ibDotWalkExpansion dotWalkExpansion{ &b, &dwJoined, &dwAliasSeq };
-	const ibDotWalkExpansionScope dotWalkScope(
-		(multiSource && !walksInMemory) ? &dotWalkExpansion : nullptr);
-	// …and where the walks are joined in memory, a table reached two ways is read twice (TwinForDotWalk).
-	ibDotWalkTwins dotWalkTwins;
-	dotWalkTwins.m_builder = &b;
-	const ibDotWalkTwinsScope dotWalkTwinsScope(walksInMemory ? &dotWalkTwins : nullptr);
+	const ibDotWalkExpansionScope dotWalkScope(multiSource ? &dotWalkExpansion : nullptr);
 
 	int aggExprSeq = 0;   // names the folds registered from inside an expression (_agg0, _agg1, …)
 
 	// ⭐ THE ONLY PLACE THAT HAS TO COUNT — so it counts for itself.
 	//
 	// Every other minted column takes its number from something it already has: a twin from the
-	// column it stands for, a named query from this run's count of sources, the stitch and the folds
-	// from the position they are already walking. Only an output with nothing behind it has no such
+	// column it stands for, a named query from this run's count of sources, the folds from the
+	// position they are already walking. Only an output with nothing behind it has no such
 	// number, and one running ordinal over THIS query's outputs is the whole of what it needs — the
 	// synthetic column stamps its own kind onto it, which is what makes it negative and distinct.
 	ibMetaID outputOrdinal = 0;
@@ -3903,7 +3842,8 @@ bool PopulateBuilder(const ibQuerySelect& ast, const std::map<ibString, ibValue>
 	auto giveIdentity = [&nextOutputId, &minted](ibQueryOutputColumn& oc) {
 		if (oc.m_col != nullptr)
 			return;
-		oc.m_col = std::make_shared<ibSyntheticOutputColumn>(oc.m_name, oc.m_type, nextOutputId(), oc.m_available);
+		oc.m_col = std::make_shared<ibSyntheticOutputColumn>(oc.m_name, oc.m_type, nextOutputId(), ibSourceMetaDataScope::Get(),
+		                                                     oc.m_available);
 		minted.push_back(oc.m_col);
 	};
 
@@ -3983,12 +3923,12 @@ bool PopulateBuilder(const ibQuerySelect& ast, const std::map<ibString, ibValue>
 			if (e.m_kind == ibQueryAstExprKind::Func) {
 				RefuseUnloweredWindow(e);
 				// Aggregate input: a plain column, a reference dot-walk leaf (SUM(Producer.Weight)), or a
-				// COMPUTED expression (SUM(Qty * Price) — the provider lowers it; single DB source, gated).
+				// COMPUTED expression (SUM(Qty * Price) — the provider lowers it). Over a JOIN as well: the join is
+				// read as a composite, and the fold of its columns is the composite's like any other.
 				if (e.m_star) {
 					b.Aggregate(AggFn(e.m_func), std::shared_ptr<const ibBackendQueryColumn>(), alias, e.m_distinctArg);
 				}
 				else if (e.m_arg && IsComputedExprAst(*e.m_arg)) {
-					GateComputedExpr(sources, *e.m_arg);
 					b.Aggregate(AggFn(e.m_func), BuildColumnExprFromAst(sources, *e.m_arg, params), alias, e.m_distinctArg);
 				}
 				// ⭐⭐ AND AN AGGREGATE OVER A CONSTANT IS ORDINARY. `SUM(1)`, `MAX(&Limit)`,
@@ -4018,8 +3958,7 @@ bool PopulateBuilder(const ibQuerySelect& ast, const std::map<ibString, ibValue>
 						ThrowQueryException(e.m_line, e.m_col,
 							_("%s() has nothing to fold - that argument resolves to no column of the "
 							  "tables this query reads."), e.m_func);
-					// A dot-walk aggregate input over a COMPUTED source is resolved in RAM (the provider LEFT-joins
-					// the reference leaf via ResolveComputedDotWalks, then aggregates it); a JOIN expands SQL leaves.
+					// A dot-walk aggregate input over one source rides the provider's join chain; a JOIN expands SQL leaves.
 					if (argCols.size() > 1 && multiSource) {
 						// dot-walk aggregate input over a JOIN — expand the ref path into LEFT-join leaves and
 						// aggregate the qualified leaf (same mechanism as the TOTALS dimension / projection).
@@ -4036,7 +3975,7 @@ bool PopulateBuilder(const ibQuerySelect& ast, const std::map<ibString, ibValue>
 			}
 			else if (e.m_kind == ibQueryAstExprKind::Column) {
 				const std::vector<std::shared_ptr<const ibBackendQueryColumn>> pathCols = ResolvePath(sources, e);
-				if (aggregate && pathCols.size() > 1 && !multiSource && !walksInMemory) {
+				if (aggregate && pathCols.size() > 1 && !multiSource) {
 					// A WALK over one physical source is grouped under a name of its own (GroupedWalkAlias) and
 					// read back by it — the flat read's own reading of a walk: a plain scalar by the name, an
 					// object reassembled from its spread under the name as a prefix.
@@ -4055,8 +3994,8 @@ bool PopulateBuilder(const ibQuerySelect& ast, const std::map<ibString, ibValue>
 					// AGGREGATE mode: a projected column is a GROUP BY key (a non-aggregate output must be
 					// grouped). The provider GROUPS BY + projects it (plain or dot-walk leaf) and the result is
 					// read back by the leaf column — NOT via SelectPath (the read-path machinery).
-					// A dot-walk GROUP BY key over a COMPUTED source is RAM-joined by the provider; over a JOIN it
-					// expands SQL join leaves; either way the key IS the leaf column (read back by GetColumnId).
+					// A dot-walk GROUP BY key over a JOIN expands SQL join leaves; the key IS the leaf column (read
+					// back by GetColumnId).
 					oc.m_col = (pathCols.size() > 1 && multiSource)
 						? ExpandDotWalkHere(sources, pathCols, e)   // JOIN -> expand the ref path, through the one door
 						: pathCols.back();
@@ -4068,8 +4007,8 @@ bool PopulateBuilder(const ibQuerySelect& ast, const std::map<ibString, ibValue>
 				else if (pathCols.size() == 1)
 					ProjectPlainColumn(b, oc, pathCols[0], alias, multiSource);   // explicit: under its alias
 				else if (multiSource) {
-					// MULTI-SOURCE dot-walk projection — `SelectPath` is the single-source door's join; the RAM
-					// stitch has none. Expand the path into explicit LEFT-join leaves (ExpandDotWalkJoins) and
+					// MULTI-SOURCE dot-walk projection — `SelectPath` is the single-source door's join; a JOIN
+					// has none. Expand the path into explicit LEFT-join leaves (ExpandDotWalkJoins) and
 					// project the qualified leaf column, read back by alias (a scalar value or a whole reference
 					// cell). Paths sharing a prefix reuse one join via dwJoined.
 					std::shared_ptr<const ibBackendQueryColumn> dwLeaf =
@@ -4080,28 +4019,18 @@ bool PopulateBuilder(const ibQuerySelect& ast, const std::map<ibString, ibValue>
 					oc.m_type = dwLeaf->GetTypeDesc();   // the LEAF of the walk is what the output holds
 				}
 				else {
-					b.SelectPath(pathCols, alias);   // records m_dotWalks — the provider resolves it (SQL join / computed-source RAM join)
-					if (walksInMemory) {
-						// Walks joined in memory resolve in RAM (ResolveComputedDotWalks
-						// materialises the reference targets + LEFT-joins the leaf in, keyed by GetColumnId), so the
-						// leaf — scalar OR a whole reassembled reference/enum cell — is read DIRECTLY by its column, not
-						// by an SQL alias. (The physical path below aliases it in SQL and reads by alias.)
-						oc.m_col  = pathCols.back();
-						oc.m_type = pathCols.back()->GetTypeDesc();
-					}
-					else {
-						oc.m_alias = alias;
-						oc.m_byAlias = true;
-						oc.m_type   = pathCols.back()->GetTypeDesc();
-						// A NON-scalar leaf (reference / enum / composite) is read by reassembling its full field
-						// spread (the provider projects it under the alias prefix). A plain single-primitive scalar
-						// keeps the by-alias single-field read. Same type test as the provider's scalar/object split.
-						const ibTypeDescription& ltd = pathCols.back()->GetTypeDesc();
-						const bool plainScalar = ibReadsBackAsItself(ltd);
-						if (!plainScalar) {
-							oc.m_objectPrefix = alias;
-							oc.m_col          = pathCols.back();
-						}
+					b.SelectPath(pathCols, alias);   // records m_dotWalks — the provider's statement joins it
+					oc.m_alias = alias;
+					oc.m_byAlias = true;
+					oc.m_type   = pathCols.back()->GetTypeDesc();
+					// A NON-scalar leaf (reference / enum / composite) is read by reassembling its full field
+					// spread (the provider projects it under the alias prefix). A plain single-primitive scalar
+					// keeps the by-alias single-field read. Same type test as the provider's scalar/object split.
+					const ibTypeDescription& ltd = pathCols.back()->GetTypeDesc();
+					const bool plainScalar = ibReadsBackAsItself(ltd);
+					if (!plainScalar) {
+						oc.m_objectPrefix = alias;
+						oc.m_col          = pathCols.back();
 					}
 				}
 			}
@@ -4160,7 +4089,7 @@ bool PopulateBuilder(const ibQuerySelect& ast, const std::map<ibString, ibValue>
 					for (const std::shared_ptr<const ibBackendQueryColumn>& in : inputs) {
 						// ⭐ A WALKED INPUT ARRIVES AS A WALK IN THE SELECTION WOULD — joined, grouped by where the query
 						// folds, and read back the way that road reads it: by its column over a computed source or a
-						// stitch, under a name of its own (an object reassembled under it as a prefix) over one table.
+						// join, under a name of its own (an object reassembled under it as a prefix) over one table.
 						const auto walked = std::find_if(walks.begin(), walks.end(),
 							[in](const ibValueAskWalk& w) { return w.m_leaf == in; });
 						if (walked != walks.end()) {
@@ -4169,11 +4098,6 @@ bool PopulateBuilder(const ibQuerySelect& ast, const std::map<ibString, ibValue>
 								if (aggregate) b.GroupBy(leaf);
 								else           b.Select(leaf, inputAlias());
 								ours.m_inputs.push_back({ leaf, ibString(), false });
-							}
-							else if (walksInMemory) {
-								if (aggregate) b.GroupBy(walked->m_path);
-								else           b.SelectPath(walked->m_path, inputAlias());
-								ours.m_inputs.push_back({ in, ibString(), false });
 							}
 							else {
 								const ibString walkAlias = aggregate ? GroupedWalkAlias(walked->m_path)
@@ -4204,7 +4128,7 @@ bool PopulateBuilder(const ibQuerySelect& ast, const std::map<ibString, ibValue>
 						// ⭐⭐ …AND OUTSIDE A FOLD IT IS READ BY ITS COLUMN TOO. It was remembered under a projection
 						// name, `_vinN`, and neither road that reads such a row answers to it: a read of one table
 						// is `SELECT *` (or `main.*` beside a walk), where no such name was ever written, and a
-						// join is stitched into a table filed by column id, whose name for it is the door's
+						// join was stitched into a table filed by column id, whose name for it is the door's
 						// spelling rather than the statement's. Every `PRESENTATION(x)` / `VALUETYPE(x)` came back
 						// blank — on a catalog, a register, a join alike (measured 2026-09-17). A multi-source read
 						// is still TOLD about the input, or its projection would not bring it at all.
@@ -4229,14 +4153,14 @@ bool PopulateBuilder(const ibQuerySelect& ast, const std::map<ibString, ibValue>
 					continue;
 				}
 				// COMPUTED column (a * b, CASE …). The provider lowers the L3 expression tree + projects it
-				// AS the alias: a single DB source projects it server-side, a JOIN / computed source
-				// evaluates it per row in the composer (EvalColumnExprRow).
+				// AS the alias — in the base's statement, or in that of a base in memory a computed source
+				// is copied into.
 				if (aggregate) {
 					// ⭐ IN AN AGGREGATE QUERY A COMPUTED PROJECTION IS A GROUP KEY — the very answer the plain
 					// column above gets, reached through GroupByExpr because an expression has no physical name
-					// to be read back by and must carry its alias. Both floors already honour a computed key:
-					// the SQL path GROUPs BY the lowered tree and projects it (dbTableProvider), the RAM fold
-					// evaluates it per row (RamAggregate) — this branch was the only one not using them.
+					// to be read back by and must carry its alias. The statement already honours a computed key:
+					// it GROUPs BY the lowered tree and projects it (dbTableProvider) — this branch was the only
+					// one not using it.
 					//
 					// AND GROUPING BY IT DECIDES NOTHING. The expression is built from group keys, so inside a
 					// group it cannot vary: adding it is "a spelling the server requires", exactly as the
@@ -4262,8 +4186,6 @@ bool PopulateBuilder(const ibQuerySelect& ast, const std::map<ibString, ibValue>
 					b.GroupByExpr(built, alias);
 				}
 				else {
-					// A computed column over a COMPUTED source evaluates in RAM (ibComputedProvider::ExecuteRead —
-					// EvalColumnExprRow per row, projected under the alias).
 					b.SelectExpr(built, alias);
 				}
 				oc.m_type = TypeOfExpr(sources, e, params);   // what the expression answers with — see TypeOfExpr
@@ -4340,11 +4262,10 @@ bool PopulateBuilder(const ibQuerySelect& ast, const std::map<ibString, ibValue>
 			continue;
 		}
 		const std::vector<std::shared_ptr<const ibBackendQueryColumn>> gcols = ResolvePath(sources, *g);
-		// A dot-walk GROUP BY over a COMPUTED source is RAM-joined by the provider (ExecuteAggregate resolves
-		// m_groupPaths); a JOIN expands SQL join leaves; a single physical source auto-joins the ref chain.
+		// A dot-walk GROUP BY over a JOIN expands SQL join leaves; a single source auto-joins the ref chain.
 		if (gcols.size() > 1 && multiSource)
 			b.GroupBy(ExpandDotWalkHere(sources, gcols, *g));   // JOIN -> expand the ref path, through the one door
-		else if (gcols.size() > 1 && !walksInMemory)
+		else if (gcols.size() > 1)
 			b.GroupBy(gcols, GroupedWalkAlias(gcols));           // a walk keeps a name of its own — see the helper
 		else
 			b.GroupBy(gcols);
@@ -4377,7 +4298,7 @@ bool PopulateBuilder(const ibQuerySelect& ast, const std::map<ibString, ibValue>
 				continue;
 			if (pcols.size() > 1 && multiSource)
 				b.GroupBy(ExpandDotWalkHere(sources, pcols, *e));
-			else if (pcols.size() > 1 && !walksInMemory)
+			else if (pcols.size() > 1)
 				b.GroupBy(pcols, GroupedWalkAlias(pcols));
 			else
 				b.GroupBy(pcols);
@@ -4385,12 +4306,8 @@ bool PopulateBuilder(const ibQuerySelect& ast, const std::map<ibString, ibValue>
 		}
 	}
 
-	// HAVING — aggregate <op> value (ordered ops only; the door's filter-op set has no = / <>)
-	// Over a COMPUTED source the aggregate folds in RAM, which does not apply HAVING — reject
-	// rather than silently return unfiltered groups.
-	if (ast.m_having && sources.size() == 1 && sources[0].m_q != nullptr && sources[0].m_q->GetProvider().IsComputedInRam())
-		ThrowQueryException(ast.m_having->m_line, ast.m_having->m_col,
-			_("HAVING over a computed source (subquery / virtual table) is not yet supported"));
+	// HAVING — aggregate <op> value. Over a computed source too: its rows are read as a table of a base in memory, and
+	// the statement's HAVING filters the groups there as on a server.
 	if (ast.m_having) {
 		// ⚠ ONE HAVING PER AND-TERM. `Having()` is AND-folded by the builder (dataQueryBuilder.h), so
 		// several group filters compose exactly as they read — and they arrive together routinely
@@ -4426,25 +4343,24 @@ bool PopulateBuilder(const ibQuerySelect& ast, const std::map<ibString, ibValue>
 		}
 	}
 
-	// Dot-walk in WHERE / ORDER is realizable only on a single-source, non-aggregate, PHYSICAL READ
-	// (the provider's BuildPageIR builds the reference join + qualifies the leaf). An aggregate /
-	// JOIN query rejects it, and a source whose walks are joined in memory takes them there (below).
-	const bool allowDotWalk = !aggregate && !multiSource && !walksInMemory;
+	// Dot-walk in WHERE / ORDER is realizable only on a single-source, non-aggregate READ (the provider's
+	// BuildPageIR builds the reference join + qualifies the leaf). An aggregate / JOIN query rejects it.
+	const bool allowDotWalk = !aggregate && !multiSource;
 	// ⭐ …EXCEPT A GROUPED READ'S FILTER, which walks now. The aggregate joins it through the chain its GROUP
 	// BY keys already ride (ibRefJoinChain::PathConditions, BuildAggregateQuery), and the two roads that
 	// could not — ROLLUP totals and the group-level page — decline it to the fold, which reads through the
 	// page road. Refused before, because the aggregate's WHERE skipped a condition with a path and the
 	// filter would have fallen away: the payroll statement of one store could not be printed (2026-09-11).
 	// The ORDER stays as it was: a grouped sort by a walk rides its group key (below), not a join.
-	const bool allowWhereDotWalk = !multiSource && !walksInMemory;
+	const bool allowWhereDotWalk = !multiSource;
 
 	// (The dot-walk expansion is armed at the top of this function — one door for every clause.)
 
 	// WHERE — a FLAT AND-of-simple WHERE rides the door's verb conditions (plain columns + dot-walk
 	// leaves); a BOOLEAN WHERE (OR / NOT / IN / IS NULL) goes through the predicate tree. The tree
 	// supports the full boolean for a single source — INCLUDING dot-walk leaves (Compare/LIKE/BETWEEN)
-	// when allowWhereDotWalk; the provider joins them. For a JOIN the tree lowers only in the co-located
-	// path (the stitch path errors), and a dot-walk leaf there is rejected (allowWhereDotWalk is false).
+	// when allowWhereDotWalk; the provider joins them. For a JOIN the tree lowers over the composite the
+	// join is read as, and a dot-walk leaf there is rejected (allowWhereDotWalk is false).
 	if (ast.m_where) {
 		// The equalities through a reference, asked of the tables it points into first (AskThroughReferences) — and
 		// what is left of the WHERE goes on by the road it would have taken, conjunct by conjunct.
@@ -4457,13 +4373,9 @@ bool PopulateBuilder(const ibQuerySelect& ast, const std::map<ibString, ibValue>
 			: std::vector<ibQueryAstExprPtr>{ ast.m_where };
 		for (const ibQueryAstExprPtr& where : lowered) {
 			if (IsFlatAndWhere(*where))
-				// Walks joined in memory resolve a flat dot-walk WHERE (Ref.Field = X) in RAM: the RAM engine joins
-				// the reference leaf and filters by it (the source cannot). The boolean predicate path stays gated.
-				LowerFlatWhere(b, sources, *where, params, allowWhereDotWalk || walksInMemory);
+				LowerFlatWhere(b, sources, *where, params, allowWhereDotWalk);
 			else
-				// …and a boolean dot-walk WHERE (Ref.A = X OR Ref.B = Y) in RAM too: the RAM engine joins the
-				// leaves (predicate-tree gather) and FilterRows evaluates the tree by the leaf.
-				b.Where(BuildWherePredicate(sources, *where, params, allowWhereDotWalk || walksInMemory));
+				b.Where(BuildWherePredicate(sources, *where, params, allowWhereDotWalk));
 		}
 	}
 
@@ -4479,16 +4391,13 @@ bool PopulateBuilder(const ibQuerySelect& ast, const std::map<ibString, ibValue>
 		if (!condition)
 			continue;
 		if (IsFlatAndWhere(*condition))
-			LowerFlatWhere(b, sources, *condition, params, allowWhereDotWalk || walksInMemory);
+			LowerFlatWhere(b, sources, *condition, params, allowWhereDotWalk);
 		else
-			b.Where(BuildWherePredicate(sources, *condition, params, allowWhereDotWalk || walksInMemory));
+			b.Where(BuildWherePredicate(sources, *condition, params, allowWhereDotWalk));
 	}
 
-	// ORDER BY — plain column or reference dot-walk leaf. Where the walks are joined in memory, the leaf is
-	// resolved in RAM (ResolveComputedDotWalks joins it, keyed by GetColumnId; the RAM sort keys on
-	// s.m_col == the leaf), so ORDER BY a reference field is allowed there too — the physical path SQL-joins
-	// it instead, but either way the sort keys on the leaf column.
-	const bool allowOrderDotWalk = allowDotWalk || walksInMemory;
+	// ORDER BY — plain column or reference dot-walk leaf; the statement joins the walk and sorts on the leaf column.
+	const bool allowOrderDotWalk = allowDotWalk;
 	// ⭐ AN ORDER NO ENGINE CAN GIVE is not asked of one: when a key names an output answered over the finished row,
 	// the whole ORDER is applied once the outputs are known (SortOverRow), every key together.
 	const bool sortedOverRow = outComputedOverRow != nullptr && SortsOverRow(ast, *outComputedOverRow);
@@ -4785,7 +4694,7 @@ public:
 	{
 		for (size_t i = 0; i < schema.size(); ++i)
 			m_columns.push_back(std::make_shared<ibTempColumn>(schema[i].m_name, schema[i].GetTypeDesc(),
-			                                                   static_cast<ibMetaID>(i + 1)));
+			                                                   static_cast<ibMetaID>(i + 1), metaData));
 	}
 
 	std::vector<std::shared_ptr<const ibBackendQueryColumn>> GetQueryColumns() const override
@@ -5351,11 +5260,11 @@ std::shared_ptr<const ibBackendQueryable> DeclareNamedResultAsCte(ibDataQueryBui
 		           innerSources.front().m_q->GetQueryName());
 
 	// …AND WOULD IT RENDER? Asked of the same provider, because that is where the answer
-	// lives: one source always renders, a join renders when its tree co-locates. Asked HERE, while
+	// lives: one source always renders, a join when the base's statement joins every leaf of it. Asked HERE, while
 	// there is still a road back — after `outer.With(...)` the statement would name a table nothing
 	// wrote.
 	if (!provider.CanDeclareAsNamedQuery(inner))
-		CteDecline(ibT("its source tree has no single server-side form (a join that does not co-locate)"));
+		CteDecline(ibT("its source tree has no single server-side form (a join of a source the base's statement does not read)"));
 
 	// ⚠ A DOT-WALKED OUTPUT IS FINE HERE, and this is worth saying because it was refused outright
 	// for one build. The declaration publishes it and AttachNamedQueries writes it — BuildPageIR
@@ -5573,8 +5482,8 @@ std::shared_ptr<const ibBackendQueryable> DeclareNamedResultAsCte(ibDataQueryBui
 #undef CteDecline   // one function's word — it ends with the function
 
 // UNION — every branch (the first SELECT's core + each m_unions branch) is wrapped as a queryable and
-// stacked vertically; the trailing ORDER BY applies to the whole. The composer realizes the stack
-// (RAM union today, co-located where possible). Columns match BY NAME across branches.
+// stacked vertically; the trailing ORDER BY applies to the whole. The composer reads the stack as one
+// statement (the base's, or a base in memory's). Columns match BY NAME across branches.
 ibDataQueryResult LowerUnion(const ibQuerySelect& ast, const std::map<ibString, ibValue>& params,
                             std::vector<ibQueryOutputColumn>& outSchema, ibSubqueryOwner& owner)
 {
@@ -5625,7 +5534,7 @@ ibDataQueryResult LowerUnion(const ibQuerySelect& ast, const std::map<ibString, 
 
 // Build the FROM + JOIN source tree into `b` and the `sources` bindings: the primary source, then each JOIN —
 // a named ref-join (`JOIN a.ref AS x`), a CROSS (`ON TRUE`), a comparison ON (`a.x <op> b.y` — plain columns
-// hash/theta, a computed side -> RAM theta), or an auto-join by reference (no ON). Shared by the read
+// or a computed side, any operator), or an auto-join by reference (no ON). Shared by the read
 // (ExecuteImpl) and the totals (ExecuteTotals) single-/JOIN-source paths, so every JOIN feature lives in ONE
 // place. The caller has already taken the UNION path (its own vertical stack) before calling this.
 void BuildSourceTree(const ibQuerySelect& ast, const std::map<ibString, ibValue>& params,
@@ -5969,9 +5878,9 @@ void BuildSourceTree(const ibQuerySelect& ast, const std::map<ibString, ibValue>
 
 				const ibJoinOn::ibJoinKeyPart first = keyPart(keyTerms.front());
 				if (first.m_exprL)
-					b.Join(qi, first.m_exprL, first.m_exprR, first.m_op, kind, alias, alsoOn);   // computed -> RAM (= hashes)
+					b.Join(qi, first.m_exprL, first.m_exprR, first.m_op, kind, alias, alsoOn);   // computed sides
 				else
-					b.Join(qi, first.m_colL, first.m_colR, first.m_op, kind, alias, alsoOn);     // = -> hash; <,<=,>,>=,<> -> theta (server-side when co-located)
+					b.Join(qi, first.m_colL, first.m_colR, first.m_op, kind, alias, alsoOn);     // = -> equi; <,<=,>,>=,<> -> theta
 				for (const ibQueryAstExprPtr& term : otherTerms)
 					asCondition(term);   // an INNER join's — an outer one with such a term was refused above
 			}
@@ -6269,8 +6178,8 @@ ibDataQueryResult ibQueryLowering::ExecuteImpl(const ibQuerySelect& astIn,
 	const long topBeforeSort = sortOverRow ? 0 : ast.m_top;
 
 	if (aggregate) {
-		// SELECT TOP n + GROUP BY — the door's aggregate-terminal row limit: the DB / co-located
-		// paths render the dialect LIMIT, the RAM fold truncates after grouping.
+		// SELECT TOP n + GROUP BY — the door's aggregate-terminal row limit: the statement renders the
+		// dialect LIMIT.
 		if (ast.m_top > 0 && !dedupeOverRow && !refoldOverRow && !sortOverRow)
 			b.Top(ast.m_top);
 		ibDataQueryResult aggregated = b.SelectAggregate();
@@ -6809,7 +6718,7 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 					const ibString alias = ibString::Format(ibT("dim%u"), static_cast<unsigned>(nextSynthId));
 					// Every hop of the walk answers for the dimension — one the options take away, and it goes.
 					oc.m_col = std::make_shared<ibSyntheticOutputColumn>(alias, leaf->GetTypeDesc(), nextSynthId++,
-						ibIsWalkAvailable(pathCols));
+						leaf->GetMetaData(), ibIsWalkAvailable(pathCols));
 					level.m_fields.push_back(b.DeclareDimDotWalk(pathCols, oc.m_col, alias, dim));
 				}
 				else {

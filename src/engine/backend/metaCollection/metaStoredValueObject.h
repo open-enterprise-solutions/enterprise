@@ -101,6 +101,8 @@ class BACKEND_API ibValueMetaObjectStoredValue :
 		virtual ibMetaID GetColumnId() const override { return m_owner != nullptr ? m_owner->GetMetaID() : 0; }
 		virtual ibTypeDescription& GetTypeDesc() const override { return m_owner->GetTypeDesc(); }
 		virtual bool FillCheck() const override { return m_owner != nullptr && m_owner->FillCheck(); }
+		// A fresh value of the stored value's kind — an option's initial value, which its column is created holding.
+		virtual ibValue CreateValue() const override { return m_owner->CreateValue(); }
 
 	private:
 		ibValueMetaObjectStoredValue* m_owner;

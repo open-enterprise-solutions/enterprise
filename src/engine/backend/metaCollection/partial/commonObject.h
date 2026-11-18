@@ -418,6 +418,7 @@ public:
 	// element — the same order the server gives the fields.
 	bool ReadValue(const ibString& fieldName, const class ibMetaData* metaData,
 	               class ibValue& retValue, class ibQueryResult& result, bool createData = false) const override;
+	const class ibMetaData* GetMetaData() const override;   // its kind's
 
 private:
 	const ibValueMetaObjectRecordDataRef* m_owner;
@@ -1152,6 +1153,12 @@ public:
 		// decomposes lexicographically over exactly these fields), and that is the value it compares.
 		void BindValue(class ibQueryStatement& statement, const class ibMetaData* metaData,
 		               const class ibValue& value, int& position) const override;
+
+		// …and its value is the moment attribute's.
+		ibValue CreateValue() const override;
+		ibValue AdjustValue() const override;
+		ibValue AdjustValue(const ibValue& varValue) const override;
+		const class ibMetaData* GetMetaData() const override;
 
 	private:
 		const ibValueMetaObjectAttributePredefined* m_moment;

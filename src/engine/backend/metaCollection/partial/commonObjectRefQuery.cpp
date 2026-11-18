@@ -429,7 +429,7 @@ bool ibValueRecordDataObjectRef::DeleteData()
 	// Deleting a folder used to delete exactly one row, so every child kept a reference to a guid that
 	// no longer exists. The value itself is honest about that — an unresolved reference reads back as
 	// "Not found <type:guid>" (ibValueReferenceDataObject::GetString) — but the LIST cannot place such a
-	// row anywhere: the root asks for a parent that is NULL or the zero sentinel, and a folder asks for
+	// row anywhere: the root asks for a parent that is the empty reference (the zero key), and a folder asks for
 	// its own key, and this one is neither. The row exists, is counted, and is visible nowhere.
 	//
 	// The moment a reference BECOMES broken is the only moment it is known for certain, and we are

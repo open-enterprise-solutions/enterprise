@@ -2,6 +2,7 @@
 #include "core/fnumber.h"
 
 #include "core/memory/memoryStream.h" // ibReaderMemory / ibWriterMemory
+#include "core/memory/memoryPool.h"   // ibMemoryPool — the heap tier's block, as a text's
 #include "core/fstring.h"       // ibString — ToString into the engine's string
 
 #include <algorithm>
@@ -12,6 +13,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <new>           // the heap tier's block, made in place
 #include <ostream>
 #include <stdexcept>
 #include <string>
@@ -401,17 +403,67 @@ struct ibNumber::BigImpl
 
 };
 
-// A heap-tier number's BigImpl and the count of the numbers holding it — see fnumber.h.
+// ⭐ ONE BLOCK PER HEAP-TIER NUMBER: the owners' count, the exponent, the sign, how many limbs it holds and how many
+// it has room for, then the limbs — one allocation from the pool, as a text's (fstring.cpp). It was the count in one
+// block with a BigImpl in it, and the limbs in a std::vector in a second: two allocations from the CRT for every
+// number past the immediate tier, three in a checked build (the vector's proxy) — a class id bound as a number
+// among them, on every reference cell a copy into a base in memory writes (docs/private/query-one-road.md §7).
+// The arithmetic still works on a BigImpl: Load and Store are the two ways between it and the block.
 struct ibNumber::SharedBig
 {
 	std::atomic<long> m_refCount{ 1 };
-	BigImpl           m_big;
+	int32_t           m_exp = 0;
+	uint32_t          m_size = 0;        // the limbs held — trimmed: no zero at the top, none at all for 0
+	uint32_t          m_cap;             // the limbs the block has room for
+	bool              m_negative = false;
 
-	SharedBig() = default;
-	explicit SharedBig(const BigImpl& big) : m_big(big) {}
-	explicit SharedBig(BigImpl&& big) noexcept : m_big(std::move(big)) {}
+	explicit SharedBig(uint32_t cap) noexcept : m_cap(cap) {}
+
+	uint32_t*       Limbs() noexcept       { return reinterpret_cast<uint32_t*>(this + 1); }
+	const uint32_t* Limbs() const noexcept { return reinterpret_cast<const uint32_t*>(this + 1); }
 
 	bool Alone() const noexcept { return m_refCount.load(std::memory_order_acquire) == 1; }
+	bool IsZero() const noexcept { return m_size == 0; }
+
+	static size_t BytesFor(size_t cap) noexcept { return sizeof(SharedBig) + cap * sizeof(uint32_t); }
+
+	// Room for `cap` limbs at least — and for as many more as the pool's block holds anyway (ibString::Impl::Make).
+	static SharedBig* Make(size_t cap) {
+		const size_t asked = BytesFor(cap);
+		const int c = ibMemoryPool::detail::ClassOf(asked);
+		const size_t bytes = c < 0 ? asked : ibMemoryPool::detail::kClasses[c];
+		void* const place = c < 0 ? ::operator new(bytes) : ibMemoryPool::AllocateClass(c);
+		return new (place) SharedBig(static_cast<uint32_t>((bytes - sizeof(SharedBig)) / sizeof(uint32_t)));
+	}
+	// The last owner went: the block goes back to the pool.
+	static void Free(SharedBig* shared) noexcept {
+		const size_t bytes = BytesFor(shared->m_cap);
+		shared->~SharedBig();
+		ibMemoryPool::Deallocate(shared, bytes);
+	}
+
+	void Load(BigImpl& out) const {
+		out.limbs.assign(Limbs(), Limbs() + m_size);
+		out.negative = m_negative;
+		out.exp = m_exp;
+	}
+	// `src`'s limbs fit the room (the caller has asked); trimmed here, whatever `src` held at the top.
+	void Store(const BigImpl& src) noexcept {
+		size_t size = src.limbs.size();
+		while (size != 0 && src.limbs[size - 1] == 0) --size;
+		if (size != 0) std::memcpy(Limbs(), src.limbs.data(), size * sizeof(uint32_t));
+		m_size = static_cast<uint32_t>(size);
+		m_negative = size != 0 && src.negative;
+		m_exp = size != 0 ? src.exp : 0;
+	}
+	// …an integer's magnitude and sign, for a block of room for two limbs at least.
+	void Store(uint64_t magnitude, bool negative) noexcept {
+		Limbs()[0] = static_cast<uint32_t>(magnitude);
+		Limbs()[1] = static_cast<uint32_t>(magnitude >> 32);
+		m_size = (magnitude >> 32) != 0 ? 2 : magnitude != 0 ? 1 : 0;
+		m_negative = m_size != 0 && negative;
+		m_exp = 0;
+	}
 };
 
 namespace
@@ -551,11 +603,6 @@ ibNumber::SharedBig* ibNumber::Shared() const
 	return reinterpret_cast<SharedBig*>(static_cast<uintptr_t>(m_payload & ~1ULL));   // drop the tag
 }
 
-ibNumber::BigImpl* ibNumber::HeapPtr() const
-{
-	return &Shared()->m_big;
-}
-
 void ibNumber::StoreHeap(SharedBig* p) noexcept
 {
 	m_payload = static_cast<uint64_t>(reinterpret_cast<uintptr_t>(p)) | 1ULL;   // tag 1 = heap
@@ -574,8 +621,8 @@ void ibNumber::FromSigned64(int64_t v) noexcept
 		m_payload = PackImmediate(v, 0);
 		return;
 	}
-	SharedBig* p = new SharedBig();
-	p->m_big.FromInt64(v);
+	SharedBig* const p = SharedBig::Make(2);
+	p->Store(v < 0 ? static_cast<uint64_t>(-(v + 1)) + 1 : static_cast<uint64_t>(v), v < 0);   // INT64_MIN's magnitude too
 	StoreHeap(p);
 }
 
@@ -598,11 +645,8 @@ void ibNumber::FromUnsigned64(uint64_t v) noexcept
 		m_payload = PackImmediate(static_cast<int64_t>(v), 0);
 		return;
 	}
-	SharedBig* p = new SharedBig();
-	p->m_big.limbs.push_back(static_cast<uint32_t>(v));
-	if (v >> 32) p->m_big.limbs.push_back(static_cast<uint32_t>(v >> 32));
-	p->m_big.negative = false;
-	p->m_big.exp      = 0;
+	SharedBig* const p = SharedBig::Make(2);
+	p->Store(v, false);
 	StoreHeap(p);
 }
 
@@ -649,17 +693,17 @@ ibNumber::ibNumber(double v)
 
 	BigImpl big;
 	if (TryParseString(strDigits.c_str(), big))
-		StoreBig(std::move(big));
+		StoreBig(big);
 }
 
 ibNumber::ibNumber(const ibString& s)
 	: m_payload(PackImmediate(0, 0))
 {
 	BigImpl big;
-	if (TryParseString(s.c_str(), big)) StoreBig(std::move(big));
+	if (TryParseString(s.c_str(), big)) StoreBig(big);
 }
 
-// A heap-tier number is SHARED: one more owner of its BigImpl, nothing copied.
+// A heap-tier number is SHARED: one more owner of its block, nothing copied.
 void ibNumber::Hold() const noexcept
 {
 	Shared()->m_refCount.fetch_add(1, std::memory_order_relaxed);
@@ -670,7 +714,7 @@ void ibNumber::Clear() noexcept
 	if (IsHeap()) {
 		SharedBig* const shared = Shared();
 		if (shared->m_refCount.fetch_sub(1, std::memory_order_acq_rel) == 1)
-			delete shared;   // the last owner
+			SharedBig::Free(shared);   // the last owner
 	}
 	m_payload = PackImmediate(0, 0);
 }
@@ -683,7 +727,7 @@ void ibNumber::LoadBig(BigImpl& out) const
 		out.FromInt64(ImmMantissa());
 		out.exp = ImmExp();
 	} else {
-		out = *HeapPtr();
+		Shared()->Load(out);
 	}
 }
 
@@ -691,20 +735,16 @@ void ibNumber::StoreBig(const BigImpl& src)
 {
 	// Zero result — stay where we are, no churn:
 	//   - If immediate: write immediate(0,0) directly, no Clear() call.
-	//   - If heap: keep allocation, just zero the limbs in place. Saves
-	//     delete + new on accumulator patterns that flap to/from zero
-	//     (e.g. running sum that hits zero between additions).
-	//   A BigImpl is written in place only when this number owns it ALONE; a shared one
-	//   is let go and the result gets its own (copy on write).
+	//   - If heap: keep the block, just zero it in place. Saves a free and a make on
+	//     accumulator patterns that flap to/from zero (e.g. running sum that hits zero
+	//     between additions).
+	//   A block is written in place only when this number owns it ALONE and its room takes
+	//   the limbs; otherwise the result gets a block of its own (copy on write).
 	if (src.IsZero()) {
-		if (IsHeap() && Shared()->Alone()) {
-			BigImpl* hp = HeapPtr();
-			hp->limbs.clear();
-			hp->negative = false;
-			hp->exp      = 0;
-		} else {
+		if (IsHeap() && Shared()->Alone())
+			Shared()->Store(src);
+		else
 			Clear();
-		}
 		return;
 	}
 
@@ -714,29 +754,14 @@ void ibNumber::StoreBig(const BigImpl& src)
 		StoreImmediate(m64, src.exp);
 		return;
 	}
-	if (IsHeap() && Shared()->Alone()) {
-		*HeapPtr() = src;
+	if (IsHeap() && Shared()->Alone() && Shared()->m_cap >= src.limbs.size()) {
+		Shared()->Store(src);
 		return;
 	}
+	SharedBig* const p = SharedBig::Make(src.limbs.size());
+	p->Store(src);
 	Clear();
-	StoreHeap(new SharedBig(src));
-}
-
-void ibNumber::StoreBig(BigImpl&& src)
-{
-	// The one decision is the copying store's: only where it lands on the HEAP does a value handed over move
-	// in — zero and the immediate tier take nothing from it, and go through it unchanged.
-	int64_t m64;
-	if (src.IsZero() || (src.MagToInt64(m64) && CanBeImmediate(m64, src.exp))) {
-		StoreBig(static_cast<const BigImpl&>(src));
-		return;
-	}
-	if (IsHeap() && Shared()->Alone()) {
-		*HeapPtr() = std::move(src);
-		return;
-	}
-	Clear();
-	StoreHeap(new SharedBig(std::move(src)));
+	StoreHeap(p);
 }
 
 // ---- arithmetic ----------------------------------------------------------------------
@@ -751,7 +776,7 @@ ibNumber& ibNumber::AddBig(const ibNumber& rhs)
 	rhs.LoadBig(b);
 	AlignExp(a, b);
 	a.Add(b);
-	StoreBig(std::move(a));
+	StoreBig(a);
 	return *this;
 }
 
@@ -762,7 +787,7 @@ ibNumber& ibNumber::SubBig(const ibNumber& rhs)
 	rhs.LoadBig(b);
 	AlignExp(a, b);
 	a.Sub(b);
-	StoreBig(std::move(a));
+	StoreBig(a);
 	return *this;
 }
 
@@ -773,7 +798,7 @@ ibNumber& ibNumber::MulBig(const ibNumber& rhs)
 	rhs.LoadBig(b);
 	a.Mul(b);
 	a.exp += b.exp;
-	StoreBig(std::move(a));
+	StoreBig(a);
 	return *this;
 }
 
@@ -903,7 +928,7 @@ ibNumber& ibNumber::operator/=(const ibNumber& rhs)
 				quotient.limbs.assign(q.w, q.w + used);
 				quotient.negative = negative;
 				quotient.exp      = exp;
-				StoreBig(std::move(quotient));
+				StoreBig(quotient);
 				return *this;
 			}
 		}
@@ -978,7 +1003,7 @@ ibNumber& ibNumber::operator/=(const ibNumber& rhs)
 	BigImpl::TrimMag(a.limbs);
 	TrimFractionZeros(a);
 
-	StoreBig(std::move(a));
+	StoreBig(a);
 	return *this;
 }
 
@@ -1000,7 +1025,7 @@ ibNumber ibNumber::operator-() const
 	LoadBig(b);
 	b.ChangeSign();
 	ibNumber r;
-	r.StoreBig(std::move(b));
+	r.StoreBig(b);
 	return r;
 }
 
@@ -1027,7 +1052,7 @@ int ibNumber::CompareBig(const ibNumber& rhs) const
 bool ibNumber::IsZero() const noexcept
 {
 	if (IsImmediate()) return ImmMantissa() == 0;
-	return HeapPtr()->IsZero();
+	return Shared()->IsZero();
 }
 
 int64_t ibNumber::ToInt64() const
@@ -1166,7 +1191,7 @@ ibNumber ibNumber::Round() const
 	res.negative = b.negative && !res.IsZero();
 	res.exp     = 0;
 
-	ibNumber out; out.StoreBig(std::move(res));
+	ibNumber out; out.StoreBig(res);
 	return out;
 }
 
@@ -1184,7 +1209,7 @@ ibNumber ibNumber::Trunc() const
 		b.exp = 0;
 	}
 	ibNumber out;
-	out.StoreBig(std::move(b));
+	out.StoreBig(b);
 	return out;
 }
 
@@ -1242,7 +1267,7 @@ ibNumber ibNumber::Round(int n) const
 	res.negative = b.negative && !res.IsZero();
 	res.exp      = -n;
 
-	ibNumber out; out.StoreBig(std::move(res));
+	ibNumber out; out.StoreBig(res);
 	return out;
 }
 
@@ -1262,7 +1287,7 @@ ibNumber ibNumber::operator++(int)
 bool ibNumber::IsSign() const noexcept
 {
 	if (IsImmediate()) return ImmMantissa() < 0;
-	return HeapPtr()->negative;
+	return Shared()->m_negative;
 }
 
 void ibNumber::ChangeSign()
@@ -1270,7 +1295,7 @@ void ibNumber::ChangeSign()
 	BigImpl b;
 	LoadBig(b);
 	b.ChangeSign();
-	StoreBig(std::move(b));
+	StoreBig(b);
 }
 
 ibNumber ibNumber::Abs() const
@@ -1279,7 +1304,7 @@ ibNumber ibNumber::Abs() const
 	LoadBig(b);
 	b.negative = false;
 	ibNumber r;
-	r.StoreBig(std::move(b));
+	r.StoreBig(b);
 	return r;
 }
 
@@ -1299,10 +1324,10 @@ int ibNumber::ToUnsigned64(uint64_t& out) const
 
 	// An integer too wide for the immediate tier is read where it lies: a class id in a bytecode's const pool is one
 	// (procUnit.cpp, ClassIdOf), read on every `New` and every typed assignment — the copy below is an allocation.
-	if (const BigImpl* held = IsImmediate() ? nullptr : HeapPtr(); held != nullptr && held->exp == 0) {
-		if (held->negative || held->limbs.size() > 2) return 1;
-		out = held->limbs.empty() ? 0 : held->limbs[0];
-		if (held->limbs.size() == 2) out |= static_cast<uint64_t>(held->limbs[1]) << 32;
+	if (const SharedBig* held = IsImmediate() ? nullptr : Shared(); held != nullptr && held->m_exp == 0) {
+		if (held->m_negative || held->m_size > 2) return 1;
+		out = held->m_size == 0 ? 0 : held->Limbs()[0];
+		if (held->m_size == 2) out |= static_cast<uint64_t>(held->Limbs()[1]) << 32;
 		return 0;
 	}
 
@@ -1577,7 +1602,7 @@ ibNumber& ibNumber::operator%=(const ibNumber& rhs)
 	BigImpl::DivModMag(a.limbs, b.limbs, q, r);
 	a.limbs = std::move(r);
 	if (a.IsZero()) a.negative = false;
-	StoreBig(std::move(a));
+	StoreBig(a);
 	return *this;
 }
 
@@ -2037,7 +2062,7 @@ bool ibNumber::FromString(const ibString& s, size_t& length)
 		return false;
 	}
 	length = static_cast<size_t>(end - begin);
-	StoreBig(std::move(big));
+	StoreBig(big);
 	return true;
 }
 
@@ -2140,7 +2165,7 @@ bool ibNumber::SetBuffer(const void* data, size_t len)
 	BigImpl::TrimMag(b.limbs);
 	if (b.IsZero()) b.negative = false;
 
-	StoreBig(std::move(b));
+	StoreBig(b);
 	return true;
 }
 
@@ -2261,7 +2286,7 @@ void ibNumber::From128Bytes(const uint8_t bytes[16])
 	b.limbs.assign(limbs, limbs + 4);
 	BigImpl::TrimMag(b.limbs);
 	if (b.IsZero()) b.negative = false;
-	StoreBig(std::move(b));
+	StoreBig(b);
 }
 
 void ibNumber::ShiftDecimal(int32_t exp10)
@@ -2290,7 +2315,7 @@ void ibNumber::ShiftDecimal(int32_t exp10)
 	LoadBig(b);
 	b.exp += exp10;
 	TrimFractionZeros(b);
-	StoreBig(std::move(b));
+	StoreBig(b);
 }
 
 // ---- stream insertion ----------------------------------------------------------------

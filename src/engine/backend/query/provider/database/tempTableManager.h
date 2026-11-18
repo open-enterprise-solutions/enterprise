@@ -44,6 +44,18 @@ public:
 	static std::unique_ptr<ibTempTableManager> Materialise(ibDatabaseConnectionHolder* holder,
 	                                                       const ibQueryRamTable& rows,
 	                                                       const ibMetaData* metaData = nullptr);
+	// ⭐ A COPY OF A SOURCE — `rows` read from `source`, under a name of its own: the queryable it vends answers with the
+	// source's own columns (those `rows` holds) and its key, so a query built over the source reads the copy with the
+	// columns it already names — their captions, availability, balance role and what they stand for included.
+	static std::unique_ptr<ibTempTableManager> Materialise(ibDatabaseConnectionHolder* holder,
+	                                                       const ibQueryRamTable& rows,
+	                                                       const std::shared_ptr<const ibBackendQueryable>& source);
+	// …and a TABLE, under its own name and its own fields — the rows of `table` on `from` that `keys` name: a walk's target
+	// in a base in memory, joined by the walk exactly as on the base it was read from (query-one-road.md §7, decision 5).
+	static std::unique_ptr<ibTempTableManager> Materialise(ibDatabaseConnectionHolder* holder,
+	                                                       const std::shared_ptr<const ibBackendQueryable>& table,
+	                                                       const std::vector<ibValue>& keys,
+	                                                       ibDatabaseConnectionHolder* from);
 
 	// Whether `holder`'s connection takes a temp table at all — the first two answers Materialise gives
 	// (the dialect's presence, then the probe), for a caller that has not computed its rows yet. Ask it
@@ -63,6 +75,13 @@ private:
 	ibTempTableManager(ibConnectionScope scope, ibDatabaseConnectionHolder* holder,
 	                   ibTempTableDialect dialect, ibString tableName,
 	                   const std::shared_ptr<const ibDbTempTableQueryable>& queryable);
+
+	// ONE WRITER FOR EVERY COPY — the table `tableName`, one field per slot of `columns`, filled from `rows` (a cell by
+	// its column's id), published with `keys`.
+	static std::unique_ptr<ibTempTableManager> Materialise(ibDatabaseConnectionHolder* holder, const ibString& tableName,
+	                                                       std::vector<std::shared_ptr<const ibBackendQueryColumn>> columns,
+	                                                       std::vector<std::shared_ptr<const ibBackendQueryColumn>> keys,
+	                                                       const ibQueryRamTable& rows, const ibMetaData* metaData);
 
 	ibConnectionScope                              m_scope;       // pins the holder's connection (the temp table's lifetime anchor)
 	ibDatabaseConnectionHolder*                    m_holder;      // for the DROP query (nests on the still-pinned scope in the dtor)

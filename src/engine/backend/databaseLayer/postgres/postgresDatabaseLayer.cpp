@@ -38,6 +38,7 @@ const ibDialectDictionary& ibDatabaseLayerPostgres::Dialect()
 		d.m_typeBinaryPattern = ibT("BYTEA");     // PG has no fixed-width binary; BYTEA holds the _RRRef blob
 		d.m_typeGuid          = ibT("UUID");
 		d.m_typeNumberPattern = ibT("NUMERIC(%d,%d)");
+		d.m_binaryLiteralTemplate = ibT("'\\x{hex}'::bytea");   // X'…' is a BIT string here, not a bytea
 		d.m_analyzePrefix     = ibT("ANALYZE");   // ANALYZE <t> — refresh planner stats (temps aren't autovacuumed)
 		d.m_rowIdColumn    = ibT("ctid");         // physical row id for the pre-UNIQUE dedup (keep one row per key)
 		d.m_maxIndexSegments = 32;                // INDEX_MAX_KEYS — a build-time constant, 32 in every stock build
@@ -218,7 +219,6 @@ const ibMaterializationDialect& ibDatabaseLayerPostgres::MaterializationDialect(
 			ibT("CREATE TRIGGER {name} {timing} ON {table} FOR EACH ROW EXECUTE FUNCTION {function}()");
 		m.m_dropTriggerTemplate  = ibT("DROP TRIGGER IF EXISTS {name} ON {table}");
 		m.m_dropFunctionTemplate = ibT("DROP FUNCTION IF EXISTS {name}()");
-		m.m_binaryLiteralTemplate = ibT("'\\x{hex}'::bytea");   // X'…' is a BIT string here, not a bytea
 		m.m_deltaUpsertTemplate =
 			ibT("INSERT INTO {table} ({columns}) SELECT {values}{from}{where} ON CONFLICT ({keys}) DO UPDATE SET {update}");
 		m.m_deltaTargetAlias  = ibT("{table}");     // ON CONFLICT names the target by table name

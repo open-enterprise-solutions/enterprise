@@ -9,16 +9,18 @@
 
 // A generic temp-table column — name + type + source-id. NO attribute behind it; the
 // source-id (GetColumnId) is the key the RAM table stores the column's value at.
+// `metaData` — the configuration whose values it holds (GetMetaData), its maker's.
 class ibTempColumn : public ibBackendQueryColumn
 {
 public:
-	ibTempColumn(const ibString& name, const ibTypeDescription& type, ibMetaID modelId)
-		: m_name(name), m_physical(name), m_type(type), m_modelId(modelId) {}
+	ibTempColumn(const ibString& name, const ibTypeDescription& type, ibMetaID modelId, const ibMetaData* metaData)
+		: m_name(name), m_physical(name), m_type(type), m_modelId(modelId), m_metaData(metaData) {}
 	// …and one whose value is told apart from its declaration, as a declared field's is: `AnyRef` declared, the
 	// configuration's references held (ibOpenBarriers). The declaration is what it shows; what it holds is what a
 	// walk and a picker read (GetTypeValueDesc).
-	ibTempColumn(const ibString& name, const ibTypeDescription& type, const ibTypeDescription& typeValue, ibMetaID modelId)
-		: m_name(name), m_physical(name), m_type(type), m_typeValue(typeValue), m_modelId(modelId) {}
+	ibTempColumn(const ibString& name, const ibTypeDescription& type, const ibTypeDescription& typeValue, ibMetaID modelId,
+	             const ibMetaData* metaData)
+		: m_name(name), m_physical(name), m_type(type), m_typeValue(typeValue), m_modelId(modelId), m_metaData(metaData) {}
 
 	// ⭐ THE NAME A QUERY WRITES AND THE NAME THE STORAGE KEEPS ARE TWO DIFFERENT NAMES.
 	//
@@ -32,9 +34,9 @@ public:
 	// with the generated table, and it must not drift), everybody who shows or resolves a field asks
 	// for the ordinary one.
 	ibTempColumn(const ibString& name, const ibString& physical,
-	             const ibTypeDescription& type, ibMetaID modelId, const ibString& synonym = ibEmptyString,
-	             Kind kind = Kind::Composite)
-		: m_name(name), m_physical(physical), m_type(type), m_modelId(modelId), m_synonym(synonym),
+	             const ibTypeDescription& type, ibMetaID modelId, const ibMetaData* metaData,
+	             const ibString& synonym = ibEmptyString, Kind kind = Kind::Composite)
+		: m_name(name), m_physical(physical), m_type(type), m_modelId(modelId), m_metaData(metaData), m_synonym(synonym),
 		  m_kind(kind) {}
 
 	// ⭐ THE PICTURE THIS COLUMN IS DRAWN WITH — that of what it stands for (StandsFor), asked of it: a derived
@@ -82,12 +84,15 @@ public:
 	// base does not use goes with the dimension. An ordinary temp table's column stands for nothing: available.
 	bool IsAvailable() const override { return m_standsFor == nullptr || m_standsFor->IsAvailable(); }
 
+	const ibMetaData* GetMetaData() const override { return m_metaData; }
+
 private:
 	ibString                  m_name;
 	ibString                  m_physical;   // == m_name unless the storage spells it differently
 	mutable ibTypeDescription m_type;     // mutable: GetTypeDesc() is const but returns a non-const ref
 	mutable ibTypeDescription m_typeValue;   // what it holds; empty = the declaration answers
 	ibMetaID                  m_modelId;
+	const ibMetaData*         m_metaData;   // see GetMetaData
 	ibString                  m_synonym;    // empty = the name
 	Kind                      m_kind = Kind::Composite;   // see GetColumnKind
 	std::shared_ptr<const ibBackendQueryColumn> m_standsFor;   // see StandsFor

@@ -203,6 +203,8 @@ bool ibBackendColumnSortOrder::ReadValue(const ibString& /*fieldName*/, const ib
 	return true;
 }
 
+const ibMetaData* ibBackendColumnSortOrder::GetMetaData() const { return m_owner->GetMetaData(); }
+
 // ⭐ AN ENUMERATION IS ORDERED AS ITS AUTHOR DECLARED, then by the reference.
 ibEnumQueryable::ibEnumQueryable(const ibValueMetaObjectRecordDataEnumRef* meta)
 	: ibRecordQueryable<ibValueMetaObjectRecordDataEnumRef>(meta) {}
@@ -254,6 +256,10 @@ ibString ibRecorderQueryable::ibBackendColumnPointInTime::GetPhysicalName() cons
 ibMetaID ibRecorderQueryable::ibBackendColumnPointInTime::GetColumnId()     const { return m_moment->GetColumnId(); }
 ibTypeDescription& ibRecorderQueryable::ibBackendColumnPointInTime::GetTypeDesc() const { return m_moment->GetTypeDesc(); }
 bool     ibRecorderQueryable::ibBackendColumnPointInTime::IsAvailable()     const { return m_moment->IsAvailable(); }
+ibValue  ibRecorderQueryable::ibBackendColumnPointInTime::CreateValue()     const { return m_moment->CreateValue(); }
+ibValue  ibRecorderQueryable::ibBackendColumnPointInTime::AdjustValue()     const { return m_moment->AdjustValue(); }
+ibValue  ibRecorderQueryable::ibBackendColumnPointInTime::AdjustValue(const ibValue& varValue) const { return m_moment->AdjustValue(varValue); }
+const ibMetaData* ibRecorderQueryable::ibBackendColumnPointInTime::GetMetaData() const { return m_moment->GetMetaData(); }
 
 // THE MOMENT LIES IN TWO OTHER COLUMNS — the date first, then the reference. Each of them already
 // describes itself (tag + value for the date; tag, metatype and identifier for the reference), so

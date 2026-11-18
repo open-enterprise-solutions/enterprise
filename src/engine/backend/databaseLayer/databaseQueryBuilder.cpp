@@ -8,8 +8,16 @@
 #include "backend/databaseLayer/preparedStatement.h"
 #include "backend/databaseLayer/databaseResultSet.h"
 #include "backend/databaseLayer/resultSetMetaData.h"
+#include "backend/databaseLayer/databaseMemoryBase.h"   // the base in memory, the IR's second executor and the rows it gives
 #include "backend/session/session.h"   // ibQueryResult hears its reader's cancel (ibSession::RunState)
 #include "core/diagnostics/debugTrace.h"  // ibDebugTraceEnabled — the parameters' values, only when asked for
+
+// ⭐ THE BASE IN MEMORY'S EXECUTOR — where the dialect says the base computes in memory (ibSqlFeatures::m_inMemory), the
+// base IS ibDatabaseLayerMemory, and its interpreter is handed the IR as it is; none for a base that speaks SQL.
+static ibQueryInterpreter* ibInterpreterOf(ibDatabaseLayer& conn)
+{
+	return conn.GetDialect().m_features.m_inMemory ? static_cast<ibDatabaseLayerMemory&>(conn).GetQueryInterpreter() : nullptr;
+}
 
 // --------------------------------------------------------------------------
 // Parameter binding: ibValue -> ibPreparedStatement::SetParam* by type.
@@ -137,6 +145,51 @@ static ibString ibSqlOfValue(const ibValue& v)
 	}
 }
 
+// Bytes as hex digits, two a byte from a table, as ibValueBinaryData::HexString writes them: a format a byte was most of
+// the values of a copy into a base in memory, a reference's 16 bytes a field (MEASURED 2026-11-18).
+static ibString ibHexOf(const ibMemoryBuffer& blob)
+{
+	static const ibChar s_digits[] = ibT("0123456789ABCDEF");
+	const unsigned char* bytes = static_cast<const unsigned char*>(blob.GetData());
+	ibString text;
+	text.reserve(blob.GetDataLen() * 2);
+	for (size_t b = 0; b < blob.GetDataLen(); ++b) {
+		text += s_digits[bytes[b] >> 4];
+		text += s_digits[bytes[b] & 0x0F];
+	}
+	return text;
+}
+
+// …and a constant of the IR as the DIALECT spells it where nothing is bound — a column's DEFAULT (RenderColumn): a
+// boolean in its form, bytes through its binary template, a date as the field keeps one — at the field's own precision,
+// or, where the dialect keeps a date in its text type, as the text a bind writes there (SQLite's SetParamDate).
+static ibString ibSqlOfValue(const ibQueryExpr& value, const ibColumnType& type, const ibDialectDictionary& dialect)
+{
+	if (value.m_blob.GetDataLen() > 0) {
+		ibString text = dialect.m_binaryLiteralTemplate;
+		text.Replace(ibT("{hex}"), ibHexOf(value.m_blob));
+		return text;
+	}
+	const ibValue& v = value.m_const;
+	switch (v.GetType()) {
+	case TYPE_BOOLEAN:
+		if (dialect.m_boolForm == ibBoolForm::TrueFalse)
+			return v.GetBoolean() ? ibT("TRUE") : ibT("FALSE");
+		return v.GetBoolean() ? ibT("1") : ibT("0");
+	case TYPE_DATE: {
+		ibDateTimeParts p;
+		v.GetDate().ToParts(p);
+		const ibString date = ibString::Format(ibT("%04d-%02u-%02u"), p.m_year, p.m_month, p.m_day);
+		const ibString time = ibString::Format(ibT("%02u:%02u:%02u"), p.m_hour, p.m_minute, p.m_second);
+		const bool asText = ibMapColumnType(dialect, type) == dialect.m_typeText;
+		return ibT("'") + (asText || type.m_datePrec == ibDatePrec::DateTime ? date + ibT(" ") + time
+			: type.m_datePrec == ibDatePrec::Date ? date : time) + ibT("'");
+	}
+	default:
+		return ibSqlOfValue(v);
+	}
+}
+
 // What a plan binds, in placeholder order, each as SQL writes it (a blob as x'…') — asked by a database measurement of
 // a run slower than every one before it (ibDatabaseProfiler::ibValues), while the run is still in hand: the plan and the
 // caller's values are read where they lie.
@@ -151,13 +204,8 @@ static ibDatabaseProfiler::ibValues ibValuesOfPlan(const std::vector<ibQueryPara
 				const bool inRange = p.m_externalIndex >= 0 && p.m_externalIndex < static_cast<int>(external.size());
 				values.push_back(inRange ? ibSqlOfValue(external[p.m_externalIndex]) : ibString(ibT("NULL")));
 			}
-			else if (p.m_isBlob) {
-				ibString text = ibT("x'");
-				const unsigned char* bytes = static_cast<const unsigned char*>(p.m_blob.GetData());
-				for (size_t b = 0; b < p.m_blob.GetDataLen(); ++b)
-					text << ibString::Format(ibT("%02X"), bytes[b]);
-				values.push_back(text + ibT("'"));
-			}
+			else if (p.m_isBlob)
+				values.push_back(ibT("x'") + ibHexOf(p.m_blob) + ibT("'"));
 			else
 				values.push_back(ibSqlOfValue(p.m_value));
 		}
@@ -242,6 +290,34 @@ static void ibMeasuredWrite(const ibStatementClock& clock, const ibDatabaseLayer
 	if (clock.m_measured)
 		ibDatabaseProfiler::Sql(conn, sql, clock.Spent(), changed > 0 ? static_cast<std::uint64_t>(changed) : 0,
 			[stmt] { return stmt->GetPlan(); }, values);
+}
+
+// …and both for a run the base in memory executes itself (ibInterpreterOf), which no statement carries: told
+// by the text `render` writes for it in the driver's dialect, called only while a measurement runs. The text names the
+// run as a prepared statement's names it; nothing is prepared from it, and there is no plan to ask.
+template <typename Render>
+static std::uint64_t ibMeasuredRead(const ibStatementClock& clock, const ibDatabaseLayer* conn, Render render,
+                                    const std::vector<ibValue>& external)
+{
+	if (!clock.m_measured)
+		return 0;
+	const ibDatabaseProfiler::ibClock::duration spent = clock.Spent();
+	const ibRenderedQuery rendered = render();
+	return ibDatabaseProfiler::SqlWithResults(conn, rendered.m_sql, spent, {}, ibValuesOfPlan(rendered.m_params, external));
+}
+
+template <typename Render>
+static void ibMeasuredWrite(const ibStatementClock& clock, const ibDatabaseLayer* conn, Render render, int changed,
+                            const std::vector<ibValue>& external)
+{
+	if (!clock.m_measured)
+		return;
+	const ibDatabaseProfiler::ibClock::duration spent = clock.Spent();
+	const ibRenderedQuery rendered = render();
+	if (rendered.m_sql.IsEmpty())
+		return;   // a statement the dialect has no text for (ANALYZE) runs as nothing, as on a driver that reads text
+	ibDatabaseProfiler::Sql(conn, rendered.m_sql, spent, changed > 0 ? static_cast<std::uint64_t>(changed) : 0, {},
+		ibValuesOfPlan(rendered.m_params, external));
 }
 
 // Run a rendered SELECT and wrap the cursor. Shared by Execute() and ExecuteIR() — and by the runs of one
@@ -439,6 +515,15 @@ ibQueryResult ibDatabaseQueryBuilder::ExecuteIR(const ibQueryIR& ir, const std::
 		ibBackendSessionException::Throw(ibBackendSessionException::Kind::NoConnection,
 			_("Query layer could not obtain a database connection from the holder."));
 
+	// ⭐ A BASE THAT EXECUTES THE IR ITSELF IS HANDED IT — no text is written for it (databaseQueryInterpreter.h).
+	if (ibQueryInterpreter* interpreter = ibInterpreterOf(*conn)) {
+		const ibStatementClock clock;
+		ibMemoryTable rows = interpreter->Execute(ir, externalParams);
+		const std::uint64_t statement = ibMeasuredRead(clock, conn.get(),
+			[&] { return ibQueryRenderer(conn->GetDialect()).Render(ir); }, externalParams);
+		return ibQueryResult(conn, std::move(rows), ibCancelOfReader(m_scope), statement);
+	}
+
 	const ibDialectDictionary& dialect = conn->GetDialect();
 
 	ibQueryRenderer renderer(dialect);
@@ -465,6 +550,21 @@ ibQueryResult ibDatabaseQueryBuilder::ExecuteIR(const std::vector<ibQueryIR>& ru
 			_("Query layer could not obtain a database connection from the holder."));
 	if (runs.empty())
 		return ibQueryResult(conn, nullptr, nullptr);   // nothing to run: a cursor with no rows
+
+	// …each run executed in turn and their rows read as one — every run is the same statement, so the same fields.
+	if (ibQueryInterpreter* interpreter = ibInterpreterOf(*conn)) {
+		const ibStatementClock clock;
+		ibMemoryTable all = interpreter->Execute(runs.front(), externalParams);
+		std::vector<ibMemoryRow>& rows = all.m_rows.GetWriteRows();   // a table's, perhaps: a copy then
+		for (size_t i = 1; i < runs.size(); ++i) {
+			ibMemoryTable run = interpreter->Execute(runs[i], externalParams);
+			for (ibMemoryRow& row : run.m_rows.TakeRows())
+				rows.push_back(std::move(row));
+		}
+		const std::uint64_t statement = ibMeasuredRead(clock, conn.get(),
+			[&] { return ibQueryRenderer(conn->GetDialect()).Render(runs.front()); }, externalParams);
+		return ibQueryResult(conn, std::move(all), ibCancelOfReader(m_scope), statement);
+	}
 
 	const ibDialectDictionary& dialect = conn->GetDialect();
 	ibQueryRenderer renderer(dialect);
@@ -531,6 +631,17 @@ int ibDatabaseQueryBuilder::Execute(const ibDdlStatement& ddl)
 	if (!conn)
 		ibBackendSessionException::Throw(ibBackendSessionException::Kind::NoConnection,
 			_("Query layer could not obtain a database connection from the holder."));
+
+	if (ibQueryInterpreter* interpreter = ibInterpreterOf(*conn)) {
+		const ibStatementClock clock;
+		const int changed = interpreter->Execute(ddl);
+		ibMeasuredWrite(clock, conn.get(), [&] {
+			ibRenderedQuery rendered;
+			rendered.m_sql = ibQueryRenderer(conn->GetDialect()).RenderDDL(ddl);
+			return rendered;
+		}, changed, {});
+		return changed;
+	}
 
 	const ibDialectDictionary& dialect = conn->GetDialect();
 
@@ -623,6 +734,14 @@ int ibDatabaseQueryBuilder::Execute(const ibDmlStatement& dml, const std::vector
 		ibBackendSessionException::Throw(ibBackendSessionException::Kind::NoConnection,
 			_("Query layer could not obtain a database connection from the holder."));
 
+	if (ibQueryInterpreter* interpreter = ibInterpreterOf(*conn)) {
+		const ibStatementClock clock;
+		const int changed = interpreter->Execute(dml, externalParams);
+		ibMeasuredWrite(clock, conn.get(), [&] { return ibQueryRenderer(conn->GetDialect()).RenderDML(dml); }, changed,
+			externalParams);
+		return changed;
+	}
+
 	const ibDialectDictionary& dialect = conn->GetDialect();
 
 	if (dml.m_kind == ibDmlKind::Insert && !dml.m_selectSource && !dml.m_extraRows.empty()
@@ -657,6 +776,14 @@ ibQueryResult ibDatabaseQueryBuilder::ExecuteReturning(const ibDmlStatement& dml
 		ibBackendQueryException::Throw(ibBackendQueryException::Kind::TranslationFailure,
 			_("ExecuteReturning needs a RETURNING column list - use ibReturning(), or Execute() for a plain write."));
 
+	if (ibQueryInterpreter* interpreter = ibInterpreterOf(*conn)) {
+		const ibStatementClock clock;
+		ibMemoryTable rows = interpreter->ExecuteReturning(dml, externalParams);
+		const std::uint64_t statement = ibMeasuredRead(clock, conn.get(),
+			[&] { return ibQueryRenderer(conn->GetDialect()).RenderDML(dml); }, externalParams);
+		return ibQueryResult(conn, std::move(rows), ibCancelOfReader(m_scope), statement);
+	}
+
 	ibQueryRenderer renderer(conn->GetDialect());
 
 	// Same door as a SELECT from here on: a RETURNING write yields a cursor, so it runs
@@ -684,6 +811,15 @@ ibQueryResult::ibQueryResult(std::shared_ptr<ibDatabaseLayer> conn,
                              std::uint64_t statement)
 	: m_conn(std::move(conn)), m_stmt(stmt), m_rs(rs), m_runs(std::move(runs)), m_cancel(cancel), m_statement(statement)
 {
+}
+
+ibQueryResult::ibQueryResult(std::shared_ptr<ibDatabaseLayer> conn,
+                             ibMemoryTable rows,
+                             const std::atomic<ibRunState>* cancel,
+                             std::uint64_t statement)
+	: m_conn(std::move(conn)), m_cancel(cancel), m_statement(statement)
+{
+	m_rs = new ibDatabaseResultSetMemory(std::move(rows));
 }
 
 ibQueryResult::~ibQueryResult()
@@ -1724,7 +1860,7 @@ ibString ibQueryRenderer::RenderDDL(const ibDdlStatement& ddl)
 ibString ibQueryRenderer::RenderColumn(const ibDdlColumn& col, bool inlinePrimaryKey)
 {
 	ibString s = QuoteIdent(col.m_name) + ibT(" ") + MapType(col.m_type);
-	if (!col.m_default.empty()) s += ibT(" DEFAULT ") + col.m_default;   // before NOT NULL (e.g. "INTEGER DEFAULT 0 NOT NULL")
+	if (col.m_default) s += ibT(" DEFAULT ") + ibSqlOfValue(*col.m_default, col.m_type, m_dialect);   // before NOT NULL ("INTEGER DEFAULT 0 NOT NULL")
 	if (inlinePrimaryKey && col.m_primaryKey) s += ibT(" PRIMARY KEY");   // implies NOT NULL
 	else if (col.m_notNull || col.m_primaryKey) s += ibT(" NOT NULL");
 	return s;
@@ -2168,20 +2304,28 @@ ibBatchInsert::ibBatchInsert(const ibString& table, std::vector<ibString> column
 			_("Query layer could not obtain a database connection from the holder."));
 
 	const ibDialectDictionary& dialect = conn->GetDialect();
-	if (!dialect.m_features.m_multiRowValues && dialect.m_features.m_batchByReexecution) {
+	const bool interprets = dialect.m_features.m_inMemory;
+	if (interprets || (!dialect.m_features.m_multiRowValues && dialect.m_features.m_batchByReexecution)) {
 		// The one-row INSERT, every value a placeholder — the text Execute's per-row form runs, rendered the
-		// same way (a constant renders as a placeholder), and journalled once.
+		// same way (a constant renders as a placeholder), and journalled once. A base in memory prepares nothing
+		// from it: it is the text a measurement names the rows by.
 		ibDmlStatement one(ibDmlKind::Insert);
 		one.m_table = m_table;
 		for (const ibString& column : m_columns)
 			one.m_assignments.push_back(ibDmlAssign{ column, ibConst(ibValue()) });
 		ibQueryRenderer renderer(dialect);
 		const ibRenderedQuery rendered = renderer.RenderDML(one);
+		m_preparedSql = rendered.m_sql;
+		if (interprets) {
+			m_cells = std::make_unique<ibMemoryTable>();
+			m_cells->m_fields = m_columns;
+			m_cells->m_rows.GetWriteRows().emplace_back(m_columns.size());
+			return;
+		}
 		m_prepared = std::make_unique<ibStatementGuard>(conn, conn->PrepareStatement(ibT("%s"), rendered.m_sql));   // data, not a format
 		if (!*m_prepared)
 			ibBackendQueryException::Throw(ibBackendQueryException::Kind::TranslationFailure,
 				ibString::Format(_("Query layer failed to prepare statement: %s"), rendered.m_sql));
-		m_preparedSql = rendered.m_sql;
 		m_bound.assign(m_columns.size(), false);
 	}
 	else
@@ -2196,51 +2340,80 @@ void ibBatchInsert::Bound(int p)
 		m_bound[p - 1] = true;
 }
 
-// Into the prepared INSERT where there is one, else captured as any template's value is.
+// The row being bound (the last of `cells`) and the 0-based field a 1-based position names — as ibQueryStatement::Put
+// puts a value's node; a position past the row is nobody's (the row's Set lets it be).
+static ibMemoryRow& ibBoundRow(ibMemoryTable& cells)
+{
+	return cells.m_rows.GetWriteRows().back();
+}
+static size_t ibFieldOf(int position)
+{
+	return position >= 1 ? static_cast<size_t>(position) - 1 : static_cast<size_t>(-1);
+}
+
+// Into the row of a base in memory — the value's bytes written where the row is, no cell of its own made first — or into
+// the prepared INSERT where there is one, else captured as any template's value is.
 void ibBatchInsert::SetParamInt(int p, int v)
 {
-	if (m_prepared) { Bound(p); (*m_prepared)->SetParamInt(p, v); }
-	else            ibQueryStatement::SetParamInt(p, v);
+	if (m_cells)         ibBoundRow(*m_cells).Set(ibFieldOf(p), ibNumber(v));
+	else if (m_prepared) { Bound(p); (*m_prepared)->SetParamInt(p, v); }
+	else                 ibQueryStatement::SetParamInt(p, v);
 }
 void ibBatchInsert::SetParamDouble(int p, double v)
 {
-	if (m_prepared) { Bound(p); (*m_prepared)->SetParamNumber(p, ibNumber(v)); }
-	else            ibQueryStatement::SetParamDouble(p, v);
+	if (m_cells)         ibBoundRow(*m_cells).Set(ibFieldOf(p), ibNumber(v));
+	else if (m_prepared) { Bound(p); (*m_prepared)->SetParamNumber(p, ibNumber(v)); }
+	else                 ibQueryStatement::SetParamDouble(p, v);
 }
 void ibBatchInsert::SetParamNumber(int p, const ibNumber& v)
 {
-	if (m_prepared) { Bound(p); (*m_prepared)->SetParamNumber(p, v); }
-	else            ibQueryStatement::SetParamNumber(p, v);
+	if (m_cells)         ibBoundRow(*m_cells).Set(ibFieldOf(p), v);
+	else if (m_prepared) { Bound(p); (*m_prepared)->SetParamNumber(p, v); }
+	else                 ibQueryStatement::SetParamNumber(p, v);
 }
 void ibBatchInsert::SetParamString(int p, const ibString& v)
 {
-	if (m_prepared) { Bound(p); (*m_prepared)->SetParamString(p, v); }
-	else            ibQueryStatement::SetParamString(p, v);
+	if (m_cells)         ibBoundRow(*m_cells).Set(ibFieldOf(p), v);
+	else if (m_prepared) { Bound(p); (*m_prepared)->SetParamString(p, v); }
+	else                 ibQueryStatement::SetParamString(p, v);
 }
 void ibBatchInsert::SetParamNull(int p)
 {
-	if (m_prepared) { Bound(p); (*m_prepared)->SetParamNull(p); }
-	else            ibQueryStatement::SetParamNull(p);
+	if (m_cells)         ibBoundRow(*m_cells).Set(ibFieldOf(p), ibMemoryCell());
+	else if (m_prepared) { Bound(p); (*m_prepared)->SetParamNull(p); }
+	else                 ibQueryStatement::SetParamNull(p);
 }
 void ibBatchInsert::SetParamDate(int p, const ibDateTime& v)
 {
-	if (m_prepared) { Bound(p); (*m_prepared)->SetParamDate(p, v); }
-	else            ibQueryStatement::SetParamDate(p, v);
+	if (m_cells)         ibBoundRow(*m_cells).Set(ibFieldOf(p), v);
+	else if (m_prepared) { Bound(p); (*m_prepared)->SetParamDate(p, v); }
+	else                 ibQueryStatement::SetParamDate(p, v);
 }
 void ibBatchInsert::SetParamBool(int p, bool v)
 {
-	if (m_prepared) { Bound(p); (*m_prepared)->SetParamBool(p, v); }
-	else            ibQueryStatement::SetParamBool(p, v);
+	if (m_cells)         ibBoundRow(*m_cells).Set(ibFieldOf(p), v);
+	else if (m_prepared) { Bound(p); (*m_prepared)->SetParamBool(p, v); }
+	else                 ibQueryStatement::SetParamBool(p, v);
 }
 void ibBatchInsert::SetParamBlob(int p, const void* d, long n)
 {
-	if (!m_prepared)     ibQueryStatement::SetParamBlob(p, d, n);
+	if (m_cells)         ibBoundRow(*m_cells).Set(ibFieldOf(p), d, n > 0 ? static_cast<size_t>(n) : 0);
+	else if (!m_prepared) ibQueryStatement::SetParamBlob(p, d, n);
 	else if (n > 0)      { Bound(p); (*m_prepared)->SetParamBlob(p, d, n); }
 	else                 { Bound(p); (*m_prepared)->SetParamNull(p); }   // an empty blob is no value, as in a plan
 }
 
 int ibBatchInsert::RunQuery()
 {
+	if (m_cells) {
+		// The row is bound — a field it left unbound is NULL, as a fresh row's cells are — and the next one begun, with
+		// the room this one took: the rows of one batch are rows of one table.
+		std::vector<ibMemoryRow>& rows = m_cells->m_rows.GetWriteRows();
+		const size_t room = rows.back().Weight();
+		rows.emplace_back(m_columns.size(), room);
+		return m_cells->m_rows.size() - 1 >= kRowsPerStatement ? Flush() : 0;
+	}
+
 	if (m_prepared) {
 		// A position this row left unbound writes NULL, as it does on the other road: the parameter lives on for
 		// the statement's next rows, and would carry the row before's value into this one.
@@ -2280,6 +2453,24 @@ ibDatabaseResultSet* ibBatchInsert::RunQueryWithResults()
 
 int ibBatchInsert::Flush()
 {
+	if (m_cells) {
+		if (m_cells->m_rows.size() <= 1)
+			return 0;
+		// The rows bound go; the one being bound stays.
+		ibMemoryTable rows;
+		rows.m_fields = m_cells->m_fields;
+		rows.m_rows = std::move(m_cells->m_rows);
+		std::vector<ibMemoryRow>& bound = rows.m_rows.GetWriteRows();
+		m_cells->m_rows.GetWriteRows().push_back(std::move(bound.back()));
+		bound.pop_back();
+
+		const std::shared_ptr<ibDatabaseLayer>& conn = m_scope.shared();
+		const ibStatementClock clock;
+		const int n = ibInterpreterOf(*conn)->Insert(m_table, std::move(rows));
+		ibMeasuredWrite(clock, conn.get(), [this] { return ibRenderedQuery{ m_preparedSql, {} }; }, n, {});
+		return n;
+	}
+
 	if (m_held.m_assignments.empty())
 		return 0;
 	ibDatabaseQueryBuilder q(m_scope.Holder());

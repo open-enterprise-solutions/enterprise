@@ -507,6 +507,26 @@ TEST_F(QueryCompositeWalk, OrderByAnExpressionOverASlice)
 		     wxT("ORDER BY CASE WHEN T.Key = \"invoice\" THEN 0 ELSE 1 END")));
 }
 
+// Two fields of ONE referenced document over the slice: one copy of the target holds both, and both arrive (a slice read
+// `A.Benefit.Percent` and lost `A.Benefit.PerChild` once, 2026-09-11).
+TEST_F(QueryCompositeWalk, TwoFieldsOfOneReferenceOverASlice)
+{
+	Fill(ibPeriodicity::eWithinDay);
+	EXPECT_EQ((std::vector<ibString>{ wxT("B-1"), wxT("A-1") }), Column(
+		wxT("SELECT T.Doc.Date AS D, T.Doc.Number AS N FROM InformationRegister.Payments.SliceLast() AS T ORDER BY D"),
+		wxT("N")));
+}
+
+// A walk inside an OR over the slice: the documents it reads are copied beside the slice's rows like any other walk's.
+TEST_F(QueryCompositeWalk, AnOrOfAWalkAndAFieldOverASlice)
+{
+	Fill(ibPeriodicity::eWithinDay);
+	EXPECT_EQ(std::vector<ibString>{ wxT("receipt") },
+		Keys(wxT("SELECT T.Key FROM InformationRegister.Payments.SliceLast() AS T WHERE T.Doc.Number = \"B-1\" OR T.Key = \"none\"")));
+	EXPECT_EQ(std::vector<ibString>{ wxT("invoice") },
+		Keys(wxT("SELECT T.Key FROM InformationRegister.Payments.SliceLast() AS T WHERE T.Doc.Number = \"Z-9\" OR T.Key = \"invoice\"")));
+}
+
 // The register's virtual table, ordered by a field of the composite dimension.
 TEST_F(QueryCompositeWalk, OrderByTheDateOfACompositeDimensionOverBalanceAndTurnovers)
 {

@@ -15,6 +15,7 @@
 
 #include <climits>
 #include <sstream>
+#include <string>
 
 // ===========================================================================
 // Layout
@@ -58,6 +59,59 @@ TEST(NumberShared, ItselfOnBothSides) {
     n = n;
     n += n;
     EXPECT_EQ(n.ToString(), wxT("1530.6913509135530886686"));
+}
+
+// The heap tier is one block from the pool, with room for a few limbs more than asked (fnumber.cpp, SharedBig): a
+// number held alone is written in place while its limbs fit, and takes a larger block when they do not — up and back.
+TEST(NumberShared, AWriteThatOutgrowsTheBlockTakesALargerOne) {
+    ibNumber n(ibString(wxT("1000000000000000")));   // 10^15 — past the immediate tier
+    ASSERT_TRUE(n.IsHeap());
+    std::string expected = "1000000000000000";
+    for (int i = 0; i < 40; ++i) {
+        n *= ibNumber(1000000000);
+        expected += "000000000";
+    }
+    EXPECT_EQ(n.ToString(), ibString::FromUTF8(expected.c_str()));
+    for (int i = 0; i < 40; ++i)
+        n /= ibNumber(1000000000);
+    EXPECT_EQ(n.ToString(), wxT("1000000000000000"));
+}
+
+// A result of zero keeps the block it is held in (no free and make on a sum that passes through zero), and reads as the
+// zero it is: not negative, no digits — and grows from there again.
+TEST(NumberShared, AZeroKeptInItsBlockIsZero) {
+    ibNumber n(ibString(wxT("-765.3456754567765443343")));
+    n -= ibNumber(ibString(wxT("-765.3456754567765443343")));
+    EXPECT_TRUE(n.IsZero());
+    EXPECT_FALSE(n.IsSign());
+    EXPECT_EQ(n.ToString(), wxT("0"));
+    EXPECT_EQ(n, ibNumber(0));
+    n += ibNumber(ibString(wxT("12345678901234567890")));
+    EXPECT_EQ(n.ToString(), wxT("12345678901234567890"));
+}
+
+// A number past the pool's largest block (4096 bytes — a thousand limbs) is made by the CRT instead, and shared and
+// written all the same.
+TEST(NumberShared, ANumberPastThePoolsLargestBlock) {
+    const std::string digits(10000, '7');                // ~1040 limbs
+    const ibNumber original(ibString::FromUTF8(digits.c_str()));
+    ibNumber copy(original);
+    copy += ibNumber(1);
+    EXPECT_EQ(original.ToString(), ibString::FromUTF8(digits.c_str()));
+    EXPECT_EQ(copy.ToString(), ibString::FromUTF8((std::string(9999, '7') + "8").c_str()));
+}
+
+// A class id is an integer wider than the immediate tier — a heap number, read back where it lies (ToUnsigned64), as
+// the bytecode's pool and the reference type of a cell read it.
+TEST(NumberShared, AClassIdReadsBackWhereItLies) {
+    const unsigned long long clsid = 0x17000000000ABCDEULL;
+    const ibNumber n(clsid);
+    ASSERT_TRUE(n.IsHeap());
+    const ibNumber held(n);
+    unsigned long long out = 0;
+    EXPECT_EQ(held.ToInt(out), 0);
+    EXPECT_EQ(out, clsid);
+    EXPECT_EQ(ibNumber(static_cast<long long>(INT64_MIN)).ToInt(out), 1) << "negative: no unsigned value";
 }
 
 // ===========================================================================

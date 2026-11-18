@@ -214,6 +214,11 @@ private:
 	// for self-cleanup.
 	void ReleaseAll(ibDatabaseConnectionHolder* holder);
 
+	// …or let it go for good (ibConnectionScope::Discard): the connection scope-bound to `holder` is closed and
+	// forgotten, as the reaper forgets an entry, and goes with its last hand-out, whatever it holds. The source stays
+	// what every clone is made from — only no longer handed out.
+	void Discard(ibDatabaseConnectionHolder* holder);
+
 	// Wrap a pool-owned shared_ptr as a hand-out for a caller. The
 	// returned shared_ptr has its own control block whose custom
 	// deleter clears entry.inUse when the caller drops it. The lambda

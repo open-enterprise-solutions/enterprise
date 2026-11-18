@@ -28,17 +28,19 @@ class ibString;       // core/fstring.h
 // at all — sizeof(ibNumber) == 8, alignment == 8.
 //
 // Numbers that don't fit (more than ~14 mantissa digits, |exp| > 32767, or
-// arithmetic that overflows the inline range) live on the heap as a BigImpl
-// — a sign-magnitude bignum with a std::vector<uint32_t> magnitude that grows
-// by demand and a 32-bit exp10. Promotion happens automatically on assignment
-// / arithmetic. The heap tier is SHARED: a copy is one more owner of the same
-// BigImpl (an atomic count), and a write gets a BigImpl of its own first.
+// arithmetic that overflows the inline range) live on the heap — a sign-magnitude
+// bignum of 32-bit limbs and a 32-bit exp10, in ONE block from the engine's pool
+// (core/memory/memoryPool.h), as a text's: the owners' count, the exponent, the
+// sign, then the limbs. Promotion happens automatically on assignment /
+// arithmetic, which works on a BigImpl (a std::vector<uint32_t> magnitude that
+// grows by demand). The heap tier is SHARED: a copy is one more owner of the same
+// block (an atomic count), and a write gets a block of its own first.
 //
 // Examples:
 //   "0"                         — immediate (0, 0)
 //   "456"                       — immediate (456, 0)
 //   "0.01"                      — immediate (1, -2)
-//   "765.3456754567765443343"   — heap BigImpl (mag=7653...3343, e=-19) — 22 digits
+//   "765.3456754567765443343"   — heap block (mag=7653...3343, e=-19) — 22 digits
 //
 // Self-contained: no dependency on ttmath. All big-int arithmetic
 // (Add/Sub/Mul/Div/Compare, decimal ToString/FromString) lives inside
@@ -48,7 +50,7 @@ class ibString;       // core/fstring.h
 //   - Distinct ibNumber instances are fully independent — operations on
 //     different objects from different threads are always safe (no shared
 //     global / static state, no hidden cache; two numbers sharing a heap-tier
-//     BigImpl count their owners atomically and never write to a shared one).
+//     block count their owners atomically and never write to a shared one).
 //   - Concurrent **const-only** access to the same instance from multiple
 //     threads is safe: every const method (ToString, Compare, IsZero, ToInt,
 //     Serialize, etc.) reads `m_payload`, materialises a local BigImpl copy
@@ -389,11 +391,9 @@ private:
 		return static_cast<int>(e);
 	}
 
-	BigImpl* HeapPtr()     const;   // cold — reached through LoadBig, not the fast path
-
 	// THE HEAP TIER IS SHARED — ibString's scheme (fstring.h): a copy of a heap-tier number is one
-	// more owner of its BigImpl, the last owner frees it, and a write in place goes only to a BigImpl
-	// this number owns alone (StoreBig). The count is atomic. Defined in fnumber.cpp.
+	// more owner of its block, the last owner gives it back to the pool, and a write in place goes only
+	// to a block this number owns alone (StoreBig). The count is atomic. Defined in fnumber.cpp.
 	struct SharedBig;
 	SharedBig* Shared() const;
 
@@ -489,13 +489,11 @@ private:
 	int ToSigned64(int64_t& out) const;
 	int ToUnsigned64(uint64_t& out) const;
 
-	// Materialises current value into a stack-allocated BigImpl (no extra heap).
+	// The current value as a BigImpl — the form the arithmetic works on.
 	void LoadBig(BigImpl& out) const;
-	// Stores `src`. If it fits inline, packs as immediate; otherwise allocates heap.
+	// Stores `src`. If it fits inline, packs as immediate; otherwise into the block this number holds alone
+	// when its room takes the limbs, or into a block of its own.
 	void StoreBig(const BigImpl& src);
-	// …and the same for a value the caller is done with: on the heap its limbs MOVE in rather than being
-	// copied — one allocation fewer for every result that does not fit the immediate tier.
-	void StoreBig(BigImpl&& src);
 
 	// The plain text, appended to `out` — every ToString without a format writes through it, whichever string it fills.
 	template<class Text> void AppendText(Text& out) const;

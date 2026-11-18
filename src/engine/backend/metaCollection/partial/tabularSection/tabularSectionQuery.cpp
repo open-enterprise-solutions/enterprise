@@ -47,6 +47,7 @@ std::shared_ptr<const ibBackendQueryColumn> ibTabularQueryable::OwnerRefColumn()
 
 		m_ownerRef = ibBackendColumnRawDB::Reference(ibOwnerRefField(),
 			owner != nullptr ? reference_to_clsid(owner->GetMetaID(), clsid_metaclass(owner->GetClassType())) : 0,
+			owner != nullptr ? owner->GetMetaData() : nullptr,
 			ownerReference != nullptr ? ownerReference->GetName() : ibString(), identity);
 	});
 	return m_ownerRef;

@@ -1,23 +1,18 @@
 // =============================================================================
-// Query PARITY harness — DB push-down vs RAM core, SAME fixture, SAME filter.
+// Query PARITY harness — SQL text on SQLite vs the base in memory, SAME rows, SAME filter.
 //
-// The DB/RAM boundary is the classic LINQ trap: a predicate evaluated server-side
-// (SQL) and the same predicate evaluated in the RAM core must give IDENTICAL
-// results, or a report silently means two different things depending on where it
-// ran. NULL / three-valued logic is the worst offender.
+// A predicate must mean the same thing on every base, or a report silently means two different things
+// depending on where it ran. NULL / three-valued logic is the worst offender.
 //
-// This harness loads ONE fixture into both a real (in-memory) SQLite database and
-// an ibQueryRamTable, then foreach filter compares:
-//   RAM  = ibQueryComposer::FilterRows(table, predicate).RowCount()
-//   SQL  = SELECT COUNT(*) FROM t WHERE <equivalent clause>
+// This harness loads ONE fixture into both a real (in-memory) SQLite database and a base in memory
+// (memoryParityFix.h), then foreach filter compares:
+//   MEMORY = the predicate lowered by the provider (BuildPredicateIR), run by the interpreter
+//   SQL    = SELECT COUNT(*) FROM t WHERE <equivalent clause>
 //
-// Every case here is LOCKED (regression guard). The former divergence —
-// `NOT (region = 'North')`: SQL three-valued logic drops the NULL-region row, the RAM core used to
-// keep it — is FIXED: the RAM evaluator adopted SQL NULL semantics (three-valued / Kleene), so
-// NotEq_NullThreeValuedLogic and the IS NULL / AND / LIKE / aggregate cases all assert parity.
-// A SQL NULL is modelled as ibValue(TYPE_NULL) (what the driver yields), NOT an unset/Undefined
-// (TYPE_EMPTY) cell. See docs/private/query-language-arc.md and the form-attribute-binding / DynamicList
-// note: the same settings feed both paths, so DB≡RAM parity is load-bearing for lists AND reports.
+// Every case here is LOCKED (regression guard): `NOT (region = 'North')` drops the NULL-region row on
+// both, as do `<>`, AND, LIKE and IN over it. Rows in memory were filtered by a road of the composer's
+// own until it was deleted (query-one-road.md §7, P5); this harness is what that road's parity became.
+// The fold the selection runs over a result's rows (BuildHierarchyTree) is checked against SQL below.
 //
 // Pure + self-contained: SQLite is always embedded; no appData session bring-up.
 // =============================================================================
@@ -26,7 +21,8 @@
 #include <wx/string.h>   // wxT, wxString - the engine's headers include no wx
 
 #include "backend/compiler/value.h"               // ibValue / ibNumber
-#include "backend/query/provider/queryComposer.h" // ibQueryComposer::FilterRows + ibQueryRamTable
+#include "memoryParityFix.h"                      // ibTestMemoryRegions — the base in memory, the same rows
+#include "backend/query/queryRamTable.h"          // ibQueryRamTable — the rows the fold below reads
 #include "backend/query/queryable.h"              // ibQueryPredicate / ibQueryCondition
 #include "backend/query/queryColumn.h"            // ibBackendQueryColumn / ibTypeDescription
 #include "backend/query/querySelector.h"          // ibSelectorTree / ibDimensionKind
@@ -39,8 +35,7 @@ namespace {
 
 const ibTypeDescription kNoType;
 
-// Minimal RAM-core column — name + model id (the row read key). No metaobject.
-// (Mirrors TestCol in test_queryComposer.cpp / test_queryTotals.cpp.)
+// Minimal column — name + model id (the row read key). No metaobject. For the fold below.
 class TestCol : public ibBackendQueryColumn {
 public:
 	TestCol(const ibString& name, ibMetaID id) : m_name(name), m_id(id) {}
@@ -48,36 +43,15 @@ public:
 	ibString           GetPhysicalName() const override { return m_name; }
 	ibTypeDescription& GetTypeDesc()     const override { return m_type; }
 	ibMetaID           GetColumnId()     const override { return m_id; }
+	const ibMetaData*  GetMetaData()     const override { return nullptr; }
 private:
 	ibString                  m_name;
 	ibMetaID                  m_id;
 	mutable ibTypeDescription m_type;
 };
 
-// The shared fixture: regions { North, South, East, <NULL> } with quantities.
-// One NULL-region row is the whole point — it is where three-valued logic bites.
-const ibMetaID REGION = 1, QTY = 2;
-
-ibQueryRamTable MakeRamFixture()
-{
-	ibQueryRamTable t;
-	t.AddColumn(REGION, wxT("region"), kNoType);
-	t.AddColumn(QTY,    wxT("qty"),    kNoType);
-	auto row = [&](const ibString& reg, long q, bool regNull) {
-		const long r = t.AppendRow();
-		// A DB NULL column materialises as ibValue(TYPE_NULL) (the driver) — model that, not an
-		// unset/Undefined (TYPE_EMPTY) cell, which is a runtime placeholder and not a SQL null.
-		t.SetCell(r, REGION, regNull ? ibValue(ibValueTypes::TYPE_NULL) : ibValue(reg));
-		t.SetCell(r, QTY, ibValue(ibNumber(q)));
-	};
-	row(wxT("North"), 10, false);
-	row(wxT("South"),  5, false);
-	row(wxT("East"),   7, false);
-	row(ibString(),    3, true);   // region IS NULL
-	return t;
-}
-
-// The SAME fixture in a fresh in-memory SQLite.
+// The SAME fixture as memoryParityFix.h's in a fresh in-memory SQLite: regions { North, South, East, <NULL> } with
+// quantities. One NULL-region row is the whole point — it is where three-valued logic bites.
 bool MakeSqlFixture(ibDatabaseLayerSQLite& db)
 {
 	if (!db.Open(wxT(":memory:")))
@@ -101,11 +75,6 @@ int SqlCount(ibDatabaseLayerSQLite& db, const ibString& where)
 	const int n = rs->Next() ? rs->GetResultInt(wxT("cnt")) : -1;
 	db.CloseResultSet(rs);
 	return n;
-}
-
-int RamCount(const ibQueryRamTable& t, const ibQueryPredicatePtr& pred)
-{
-	return (int) ibQueryComposer::FilterRows(t, pred).RowCount();
 }
 
 ibQueryPredicatePtr Eq(const std::shared_ptr<const ibBackendQueryColumn>& c, const ibString& v)
@@ -149,11 +118,12 @@ ibQueryPredicatePtr In(const std::shared_ptr<const ibBackendQueryColumn>& c, con
 
 // A test holding the two fixtures side by side.
 struct ParityFix : ::testing::Test {
-	std::shared_ptr<const TestCol> region = std::make_shared<TestCol>(wxT("region"), REGION);
-	std::shared_ptr<const TestCol> qty    = std::make_shared<TestCol>(wxT("qty"), QTY);
-	ibQueryRamTable                ram    = MakeRamFixture();
-	ibDatabaseLayerSQLite          db;
+	ibTestMemoryRegions                                memory;
+	const std::shared_ptr<const ibBackendQueryColumn>& region = memory.m_table->Region();
+	const std::shared_ptr<const ibBackendQueryColumn>& qty    = memory.m_table->Qty();
+	ibDatabaseLayerSQLite                              db;
 	void SetUp() override { ASSERT_TRUE(MakeSqlFixture(db)) << "SQLite in-memory fixture failed to open"; }
+	int MemoryCount(const ibQueryPredicatePtr& pred) { return memory.Count(pred); }
 };
 
 } // namespace
@@ -161,14 +131,14 @@ struct ParityFix : ::testing::Test {
 // Sanity: both fixtures loaded the same number of rows before any filter.
 TEST_F(ParityFix, Fixtures_SameCardinality)
 {
-	EXPECT_EQ((int) ram.RowCount(), SqlCount(db, wxT("1=1")));   // 4 == 4
+	EXPECT_EQ(MemoryCount(nullptr), SqlCount(db, wxT("1=1")));   // 4 == 4
 }
 
 // ---- LOCKED parity invariants (these already agree; keep them agreeing) ------
 
 TEST_F(ParityFix, Eq_Match)
 {
-	EXPECT_EQ(RamCount(ram, Eq(region, wxT("North"))),
+	EXPECT_EQ(MemoryCount(Eq(region, wxT("North"))),
 	          SqlCount(db, wxT("region = 'North'")));            // 1 == 1
 }
 
@@ -176,19 +146,19 @@ TEST_F(ParityFix, Or_Match)
 {
 	const ibQueryPredicatePtr orPred = ibQueryPredicate::Compose(
 		ibQueryPredicateKind::Or, Eq(region, wxT("North")), Eq(region, wxT("South")));
-	EXPECT_EQ(RamCount(ram, orPred),
+	EXPECT_EQ(MemoryCount(orPred),
 	          SqlCount(db, wxT("region = 'North' OR region = 'South'")));   // 2 == 2
 }
 
 TEST_F(ParityFix, IsNull_Match)
 {
-	EXPECT_EQ(RamCount(ram, ibQueryPredicate::Null(region, /*negated*/ false)),
+	EXPECT_EQ(MemoryCount(ibQueryPredicate::Null(region, /*negated*/ false)),
 	          SqlCount(db, wxT("region IS NULL")));              // 1 == 1
 }
 
 TEST_F(ParityFix, IsNotNull_Match)
 {
-	EXPECT_EQ(RamCount(ram, ibQueryPredicate::Null(region, /*negated*/ true)),
+	EXPECT_EQ(MemoryCount(ibQueryPredicate::Null(region, /*negated*/ true)),
 	          SqlCount(db, wxT("region IS NOT NULL")));          // 3 == 3
 }
 
@@ -196,20 +166,20 @@ TEST_F(ParityFix, IsNotNull_Match)
 //
 // SQL `NOT (region = 'North')` : NULL = 'North' is UNKNOWN, NOT UNKNOWN is UNKNOWN
 //   -> the NULL-region row is EXCLUDED -> 2 rows (South, East).
-// The RAM filter core now evaluates predicates in SQL three-valued (Kleene) logic
-// (ibQueryComposer / RamEvalPredicate), so it drops the NULL row too -> parity.
+// The interpreter evaluates predicates in SQL three-valued (Kleene) logic, so it drops the NULL row
+// too -> parity.
 TEST_F(ParityFix, NotEq_NullThreeValuedLogic)
 {
 	const ibQueryPredicatePtr notNorth = ibQueryPredicate::Not(Eq(region, wxT("North")));
-	EXPECT_EQ(RamCount(ram, notNorth),
+	EXPECT_EQ(MemoryCount(notNorth),
 	          SqlCount(db, wxT("NOT (region = 'North')")))
-		<< "RAM and SQL must agree on NOT over a NULL operand (three-valued logic).";
+		<< "memory and SQL must agree on NOT over a NULL operand (three-valued logic).";
 }
 
 // `<>` (the m_comparison leaf path) over a NULL operand: SQL drops the NULL row -> 2.
 TEST_F(ParityFix, NotEqual_NullThreeValuedLogic)
 {
-	EXPECT_EQ(RamCount(ram, Ne(region, wxT("North"))),
+	EXPECT_EQ(MemoryCount(Ne(region, wxT("North"))),
 	          SqlCount(db, wxT("region <> 'North'")));          // South, East -> 2 == 2
 }
 
@@ -218,49 +188,49 @@ TEST_F(ParityFix, And_NullThreeValuedLogic)
 {
 	const ibQueryPredicatePtr andP = ibQueryPredicate::Compose(
 		ibQueryPredicateKind::And, Eq(region, wxT("North")), Ne(region, wxT("South")));
-	EXPECT_EQ(RamCount(ram, andP),
+	EXPECT_EQ(MemoryCount(andP),
 	          SqlCount(db, wxT("region = 'North' AND region <> 'South'")));   // North -> 1 == 1
 }
 
 // LIKE over a NULL operand: UNKNOWN -> dropped, on both sides.
 TEST_F(ParityFix, Like_NullDropped)
 {
-	EXPECT_EQ(RamCount(ram, Like(region, wxT("Nor%"))),
+	EXPECT_EQ(MemoryCount(Like(region, wxT("Nor%"))),
 	          SqlCount(db, wxT("region LIKE 'Nor%'")));          // North -> 1 == 1
 }
 
 // ---- IN parity: the semi-join key filter --------------------------------------
 //
-// The reduction is only sound if `col IN (keys)` means the SAME thing in the RAM stitch and
-// server-side — it is applied to make a read cheaper, never to change what it returns.
+// A reduction is only sound if `col IN (keys)` means the SAME thing on every base — it is applied to
+// make a read cheaper, never to change what it returns.
 
 TEST_F(ParityFix, In_Match)
 {
-	EXPECT_EQ(RamCount(ram, In(region, { wxT("North"), wxT("South") })),
+	EXPECT_EQ(MemoryCount(In(region, { wxT("North"), wxT("South") })),
 	          SqlCount(db, wxT("region IN ('North', 'South')")));   // 2 == 2
 }
 
 // A single-element IN must agree with plain equality — the degenerate key set.
 TEST_F(ParityFix, In_SingleValueEqualsEquality)
 {
-	EXPECT_EQ(RamCount(ram, In(region, { wxT("North") })),
-	          RamCount(ram, Eq(region, wxT("North"))));      // 1 == 1
-	EXPECT_EQ(RamCount(ram, In(region, { wxT("North") })),
+	EXPECT_EQ(MemoryCount(In(region, { wxT("North") })),
+	          MemoryCount(Eq(region, wxT("North"))));      // 1 == 1
+	EXPECT_EQ(MemoryCount(In(region, { wxT("North") })),
 	          SqlCount(db, wxT("region IN ('North')")));            // 1 == 1
 }
 
 // The NULL-region row probes the set and is UNKNOWN, not FALSE — dropped on both sides. This is
-// where a naive "cell equals any value, else false" RAM implementation diverges from SQL.
+// where a naive "cell equals any value, else false" implementation diverges from SQL.
 TEST_F(ParityFix, In_NullProbeIsUnknown)
 {
-	EXPECT_EQ(RamCount(ram, In(region, { wxT("North"), wxT("East") })),
+	EXPECT_EQ(MemoryCount(In(region, { wxT("North"), wxT("East") })),
 	          SqlCount(db, wxT("region IN ('North', 'East')")));    // 2 == 2, the NULL row excluded
 }
 
 // A value in the set that matches nothing must not widen the result.
 TEST_F(ParityFix, In_UnmatchedValueIgnored)
 {
-	EXPECT_EQ(RamCount(ram, In(region, { wxT("North"), wxT("Nowhere") })),
+	EXPECT_EQ(MemoryCount(In(region, { wxT("North"), wxT("Nowhere") })),
 	          SqlCount(db, wxT("region IN ('North', 'Nowhere')")));  // 1 == 1
 }
 
@@ -270,7 +240,7 @@ TEST_F(ParityFix, In_UnmatchedValueIgnored)
 // constant (which is exactly how L2 renders an empty IN — QueryRenderer.In_EmptyListIsConstantFalse).
 TEST_F(ParityFix, In_EmptySetMatchesNothing)
 {
-	EXPECT_EQ(RamCount(ram, In(region, {})),
+	EXPECT_EQ(MemoryCount(In(region, {})),
 	          SqlCount(db, wxT("1 = 0")));                          // 0 == 0
 }
 

@@ -586,9 +586,9 @@ void ibMetaDataConfigurationStorage::CreateConfigTable() {
 		// picks per driver, so the PG/non-PG fork is gone. binary_data: BYTEA on PG, BLOB elsewhere.
 		ibDatabaseQueryBuilder q;
 		q.Execute(ibCreateTable(config_table, {
-			{ ibT("file_name"),   ibTypeString(128), false, true,  ibEmptyString },
-			{ ibT("file_guid"),   ibTypeGuid(),      true,  false, ibEmptyString },
-			{ ibT("binary_data"), ibTypeBlob(),      true,  false, ibEmptyString },
+			{ ibT("file_name"),   ibTypeString(128), false, true,  nullptr },
+			{ ibT("file_guid"),   ibTypeGuid(),      true,  false, nullptr },
+			{ ibT("binary_data"), ibTypeBlob(),      true,  false, nullptr },
 		}));
 		q.Execute(ibCreateIndex(config_table, ibT("s_config_index"), { ibT("file_name") }));
 	}
@@ -601,9 +601,9 @@ void ibMetaDataConfigurationStorage::CreateConfigSaveTable() {
 		// Same schema as config_table — GUID + blob columns resolve per driver via the dialect TYPE-MAP.
 		ibDatabaseQueryBuilder q;
 		q.Execute(ibCreateTable(config_save_table, {
-			{ ibT("file_name"),   ibTypeString(128), false, true,  ibEmptyString },
-			{ ibT("file_guid"),   ibTypeGuid(),      true,  false, ibEmptyString },
-			{ ibT("binary_data"), ibTypeBlob(),      true,  false, ibEmptyString },
+			{ ibT("file_name"),   ibTypeString(128), false, true,  nullptr },
+			{ ibT("file_guid"),   ibTypeGuid(),      true,  false, nullptr },
+			{ ibT("binary_data"), ibTypeBlob(),      true,  false, nullptr },
 		}));
 		q.Execute(ibCreateIndex(config_save_table, ibT("s_config_save_index"), { ibT("file_name") }));
 	}
@@ -620,10 +620,10 @@ void ibMetaDataConfigurationStorage::CreateConfigSequence()
 		// also the UPSERT match target in LoadSequenceFromBuffer (and replaces the old separate index).
 		ibDatabaseQueryBuilder q;
 		q.Execute(ibCreateTable(sequence_table, {
-			{ ibT("interval"),  ibTypeInteger(),  true, false, ibEmptyString },
-			{ ibT("meta_guid"), ibTypeString(36), true, false, ibEmptyString },
-			{ ibT("prefix"),    ibTypeString(24), true, false, ibEmptyString },
-			{ ibT("number"),    ibTypeInteger(),  true, false, ibEmptyString },
+			{ ibT("interval"),  ibTypeInteger(),  true, false, nullptr },
+			{ ibT("meta_guid"), ibTypeString(36), true, false, nullptr },
+			{ ibT("prefix"),    ibTypeString(24), true, false, nullptr },
+			{ ibT("number"),    ibTypeInteger(),  true, false, nullptr },
 		}));
 		q.Execute(ibCreateIndex(sequence_table, ibT("sequence_index"),
 			{ ibT("interval"), ibT("meta_guid"), ibT("prefix") }, /*unique*/true));

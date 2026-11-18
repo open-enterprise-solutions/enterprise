@@ -1,7 +1,6 @@
 #ifndef __RESULT_SET_METADATA_H__
 #define __RESULT_SET_METADATA_H__
 
-#include "databaseLayerDef.h"
 #include "databaseStringConverter.h"
 
 class BACKEND_API ibResultSetMetaData : public ibDatabaseStringConverter

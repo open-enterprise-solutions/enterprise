@@ -1,7 +1,6 @@
 #ifndef __FIREBIRD_DATABASE_LAYER_H__
 #define __FIREBIRD_DATABASE_LAYER_H__
 
-#include "backend/databaseLayer/databaseLayerDef.h"
 #include "backend/databaseLayer/databaseLayer.h"
 #include "backend/databaseLayer/firebird/engine/ibase.h"
 
@@ -90,9 +89,7 @@ public:
 	virtual std::vector<ibString> GetViews();
 	virtual std::vector<ibString> GetColumns(const ibString& table);
 
-	virtual int GetDatabaseLayerType() const {
-		return DATABASELAYER_FIREBIRD;
-	}
+	virtual ibString GetDatabaseLayerName() const override { return ibT("Firebird"); }
 
 	static const ibDialectDictionary& Dialect();                       // FB dialect (no instance needed)
 	virtual const ibDialectDictionary& GetDialect() const override;    // polymorphic access for L2

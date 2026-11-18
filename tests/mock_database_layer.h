@@ -27,7 +27,7 @@ public:
     std::vector<ibString> GetTables() override                      { return {}; }
     std::vector<ibString> GetViews() override                       { return {}; }
     std::vector<ibString> GetColumns(const ibString&) override      { return {}; }
-    int  GetDatabaseLayerType() const override              { return 0; }
+    ibString GetDatabaseLayerName() const override          { return ibT("Mock"); }
     const ibDialectDictionary& GetDialect() const override {
         static const ibDialectDictionary s_dialect;   // default ctor = ANSI baseline
         return s_dialect;

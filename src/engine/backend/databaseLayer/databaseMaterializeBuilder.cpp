@@ -30,7 +30,7 @@ ibString Fill(ibString tpl, const ibString& key, const ibString& value)
 }
 
 // Every `{binary:<hex>}` in a guard, spelled as the engine writes a byte string (m_binaryLiteralTemplate).
-ibString FillBinaryLiterals(ibString text, const ibMaterializationDialect& mat)
+ibString FillBinaryLiterals(ibString text, const ibDialectDictionary& dialect)
 {
 	static const ibString open = ibT("{binary:");
 	for (size_t at = text.find(open); at != ibString::npos; at = text.find(open)) {
@@ -38,7 +38,7 @@ ibString FillBinaryLiterals(ibString text, const ibMaterializationDialect& mat)
 		if (close == ibString::npos)
 			break;
 		const ibString hex = text.Mid(at + open.length(), close - at - open.length());
-		text = text.Left(at) + Fill(mat.m_binaryLiteralTemplate, ibT("hex"), hex) + text.Mid(close + 1);
+		text = text.Left(at) + Fill(dialect.m_binaryLiteralTemplate, ibT("hex"), hex) + text.Mid(close + 1);
 	}
 	return text;
 }
@@ -220,6 +220,10 @@ ibString RenderDelta(const ibMaterializeSpec& spec,
 		update.push_back(item);
 	}
 
+	// (THE DIGEST IS NOT MATCHED ON. Leading the `ON`, so the MERGE would probe the unique index once rather than
+	// walk the rows sharing the key's head on `_KL`, it made the ledger's debit insert slower: 1.1–1.3 ms → 1.9 ms
+	// a movement, 100 receipts at 36 000 documents, two runs each (fb_load_1118, 2026-11-19). Why is not known —
+	// the trigger's plan was not read. load-million-rows.md § 17.)
 	for (const ibString& k : keyNames) {
 		ibString item = Fill(mat.m_deltaKeyMatchItem, ibT("col"), k);
 		item = Fill(item, ibT("target"), target);
@@ -233,7 +237,7 @@ ibString RenderDelta(const ibMaterializeSpec& spec,
 	// A guarded delta is a SELECT with a WHERE, and a source-less SELECT cannot carry one on every
 	// engine — hence the dummy relation, whose spelling already lives in the query dictionary
 	// (RDB$DATABASE / DUAL) and is therefore not restated in the materialization one.
-	const ibString guard = FillBinaryLiterals(overRow(spec.m_guard), mat);
+	const ibString guard = FillBinaryLiterals(overRow(spec.m_guard), dialect);
 	ibString from, where;
 	if (!dialect.m_selectFromDual.IsEmpty())
 		from = ibT(" FROM ") + dialect.m_selectFromDual;
@@ -356,7 +360,6 @@ void AppendPeriodColumns(const ibMaterializeSpec& spec, const ibDialectDictionar
 // ---------------------------------------------------------------------------
 ibString RenderMovementArm(const ibMaterializeSpec& spec,
                            const ibMaterializeView& view,
-                           const ibMaterializationDialect& mat,
                            const ibDialectDictionary& dialect)
 {
 	auto overRow = [&](ibString e) { return Fill(std::move(e), ibT("row"), spec.m_source); };
@@ -394,7 +397,7 @@ ibString RenderMovementArm(const ibMaterializeSpec& spec,
 	// would add rows the totals below it deliberately never counted.
 	ibString body = ibT("SELECT ") + Join(select, ibT(", ")) + ibT(" FROM ") + spec.m_source;
 	if (!spec.m_guard.IsEmpty())
-		body += ibT(" WHERE ") + FillBinaryLiterals(overRow(spec.m_guard), mat);
+		body += ibT(" WHERE ") + FillBinaryLiterals(overRow(spec.m_guard), dialect);
 
 	return body;
 }
@@ -512,7 +515,7 @@ ibString RenderView(const ibMaterializeSpec& spec,
 		body += unitRows.IsEmpty() ? (ibT(" WHERE ") + nonZero) : (ibT(" AND (") + nonZero + ibT(")"));
 
 	if (view.m_withMovements)
-		body += ibT(" UNION ALL ") + RenderMovementArm(spec, view, mat, dialect);
+		body += ibT(" UNION ALL ") + RenderMovementArm(spec, view, dialect);
 
 	return Fill(Fill(mat.m_createViewTemplate, ibT("name"), view.m_name), ibT("body"), body);
 }
@@ -1119,6 +1122,9 @@ ibQueryRelPtr RenderMaterializedRead(const ibMaterializeReadSpec& spec, const ib
 	// above (the outer bound below, and the caller's own query) names one thing whether the grain is
 	// the surface's or a calendar unit. By the movement it is each movement's own instant, as stored.
 	const bool movements  = spec.m_grain == ibMaterializeGrain::Movements;
+	// ⭐ THE ROWS ARE THE MOVEMENTS ALONE — by the movement, or handed the movements with no stored rows beside
+	// them: a reading by what no stored row carries (the account a posting moved against), at its own grain.
+	const bool movedAlone = movements || (spec.m_movedRows && !spec.m_storedRows);
 	const bool periodised = spec.m_grain != ibMaterializeGrain::Whole && !spec.m_periodColumn.IsEmpty();
 	ibQueryExprPtr grain;
 	if (periodised) {
@@ -1225,12 +1231,12 @@ ibQueryRelPtr RenderMaterializedRead(const ibMaterializeReadSpec& spec, const ib
 
 	// 🛑 STORED ROWS WITHOUT THE MOVEMENTS CANNOT ANSWER BY THE MOVEMENT, nor can a view without its movement arm:
 	// the rows would be read from nowhere, and the reading would report nothing moved.
-	if (movements && (spec.m_storedRows ? !spec.m_movedRows : spec.m_markColumn.IsEmpty()))
+	if (movements && !spec.m_movedRows && (spec.m_storedRows || spec.m_markColumn.IsEmpty()))
 		ibBackendQueryException::Throw(ibBackendQueryException::Kind::UnsupportedNode,
 			_("A reading by the movement was handed a surface without its movements"));
 
 	ibDatabaseQueryBuilder q;
-	if (movements && spec.m_movedRows)
+	if (movedAlone && spec.m_movedRows)
 		q.From(ibSubquery(spec.m_movedRows, rows)).Project(proj);
 	else if (spec.m_storedRows)
 		q.From(ibSubquery(spec.m_storedRows, rows)).Project(proj);
@@ -1276,7 +1282,7 @@ ibQueryRelPtr RenderMaterializedRead(const ibMaterializeReadSpec& spec, const ib
 	// These are the stored arm's WHOLE bounds, and the only ones said to it: a second, wider bound on the period
 	// beside a unit's own is one an engine may take to the index in its place, and the days of a ten-year interval
 	// are then walked for the sake of its first week.
-	const bool byUnits = !movements && spec.m_storedRows && !spec.m_storedUnits.empty()
+	const bool byUnits = !movedAlone && spec.m_storedRows && !spec.m_storedUnits.empty()
 		&& !spec.m_periodUnitColumn.IsEmpty() && !spec.m_periodColumn.IsEmpty();
 	std::vector<ibQueryExprPtr> storedUnits;
 	if (byUnits) {
@@ -1347,8 +1353,8 @@ ibQueryRelPtr RenderMaterializedRead(const ibMaterializeReadSpec& spec, const ib
 
 	// ⭐ BY THE MOVEMENT THERE IS NOTHING TO CUT. Every row is a movement and is counted by itself — the stored rows are
 	// not read at all — so only the boundaries are said: an instant, or an instant AND the document at it, exactly as
-	// the movement half of a cut says them.
-	if (movements) {
+	// the movement half of a cut says them. The same for the movements handed alone, whatever the grain.
+	if (movedAlone) {
 		if (!spec.m_movedRows)
 			q.Where(ibIsNull(ibCol(spec.m_markColumn), /*negated*/ true));   // the view's movement arm
 		if (!spec.m_periodColumn.IsEmpty()) {

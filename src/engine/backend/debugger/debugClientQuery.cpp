@@ -27,9 +27,9 @@ bool ibDebuggerClient::CreateBreakpointDatabase()
 		// as a UNIQUE index — which is also exactly what the UPSERT match target needs.
 		try {
 			q.Execute(ibCreateTable(dbg_table, {
-				{ ibT("moduleName"),    ibTypeString(128),  /*notNull*/true,  /*pk*/false, ibEmptyString },
-				{ ibT("moduleLine"),    ibTypeInteger(),    /*notNull*/true,  /*pk*/false, ibEmptyString },
-				{ ibT("lineCondition"), ibTypeString(1024), /*notNull*/false, /*pk*/false, ibEmptyString },
+				{ ibT("moduleName"),    ibTypeString(128),  /*notNull*/true,  /*pk*/false, nullptr },
+				{ ibT("moduleLine"),    ibTypeInteger(),    /*notNull*/true,  /*pk*/false, nullptr },
+				{ ibT("lineCondition"), ibTypeString(1024), /*notNull*/false, /*pk*/false, nullptr },
 			}));
 			q.Execute(ibCreateIndex(dbg_table, ibT("dbg_index"),
 				{ ibT("moduleName"), ibT("moduleLine") }, /*unique*/true));
@@ -45,7 +45,7 @@ bool ibDebuggerClient::CreateBreakpointDatabase()
 			if (column.CmpNoCase(ibT("lineCondition")) == 0)
 				hasCondition = true;
 		if (!hasCondition) {
-			try { ibDatabaseQueryBuilder qa; qa.Execute(ibAddColumn(dbg_table, { ibT("lineCondition"), ibTypeString(1024), false, false, ibEmptyString })); }
+			try { ibDatabaseQueryBuilder qa; qa.Execute(ibAddColumn(dbg_table, { ibT("lineCondition"), ibTypeString(1024), false, false, nullptr })); }
 			catch (...) { /* best-effort, as the session table's: without it a condition is not kept past the session */ }
 		}
 	}

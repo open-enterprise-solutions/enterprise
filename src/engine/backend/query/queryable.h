@@ -167,7 +167,7 @@ BACKEND_API ibBackendQueryProvider& ibDbTableProviderInstance();
 // path. Equal/NotEqual are the common case; the rest are the former WhereCompare/WhereLike ops. (Max: "why do you
 // drag that clunky ibComparisonType everywhere".)
 // `In` is the ONE set-valued op: it reads m_values, NOT m_value (every other op is the reverse). It exists
-// for the SEMI-JOIN key reduction — the RAM stitch materialises the cheap side of a join first, collects that
+// for the SEMI-JOIN key reduction — a read in a base in memory copies one side of a join first, collects that
 // side's DISTINCT key values, and pushes them as an `In` condition into the other leaf's read, so the leaf
 // fetches only rows that can possibly join instead of the whole table. Appended LAST: the enum is runtime-only
 // (never serialised), but keeping the existing ordinals stable costs nothing.
@@ -219,8 +219,9 @@ struct ibQueryCondition
 
 	// COMPUTED left-hand side (WHERE Qty * Price > value, a CASE …): when set, the provider lowers
 	// the expression via BuildColumnExpr and compares it to m_value — m_col stays null, m_path empty.
-	// Single-source DB reads / aggregates only (the lowering gates it); the RAM stitch and computed
-	// sources do not evaluate it. Declared after m_path so the flat struct stays POD-ordered.
+	// The statement lowers it — the base's, or a base in memory's for a computed source; over a JOIN
+	// the lowering computes it one level down (GateComputedExpr). Declared after m_path so the flat
+	// struct stays POD-ordered.
 	std::shared_ptr<struct ibQueryColumnExpr> m_expr;
 
 	// …AND A COMPUTED RIGHT-HAND SIDE, when the other side is not a constant either: `WHERE
@@ -367,17 +368,11 @@ struct ibSemiJoinExists
 	std::shared_ptr<const ibBackendQueryColumn> m_innerKey;             // a.k — correlation column on the INNER
 	ibQueryFilterOp                             m_op = ibQueryFilterOp::Equal;   // correlation comparison (Equal default; FilterOpToBinOp at render)
 	bool                                        m_negated = false;      // NOT EXISTS — `x NOT IN (SELECT k …)`; its form is the server's (ibSqlFeatures::m_antiJoin)
-	// An EMPTY key matches an empty one, in whichever spelling either side holds it (a NULL or zero key, an
-	// untagged row, the type's empty value), as an equality of values says (DecomposeEquality). Set by
-	// `x IN (SELECT k …)` when neither key is a row's own (and so both may be empty); a policy's restriction
-	// keeps the plain correlation.
-	bool                                        m_emptyMatchesEmpty = false;
 	// ⭐ …AND THE REST OF A ROW — `(a, b) IN (SELECT x, y …)`: each further pair is one more equality of the
 	// correlation, held as the first pair is, the way a join holds its further key parts (ibJoinOn::m_alsoOn).
 	struct ibSemiJoinKeyPart {
 		std::shared_ptr<const ibBackendQueryColumn> m_outerKey;
 		std::shared_ptr<const ibBackendQueryColumn> m_innerKey;
-		bool                                        m_emptyMatchesEmpty = false;
 	};
 	std::vector<ibSemiJoinKeyPart> m_alsoKeys;
 };
@@ -697,11 +692,18 @@ public:
 	virtual bool ContainColumn(const std::shared_ptr<const ibBackendQueryColumn>& col) const {
 		// Identity by model-id, NOT merely by name: two joined sources can each expose an attribute with
 		// the SAME name (e.g. "Reference"), and a name-only check would let BOTH claim the other's column —
-		// the RAM stitch would then read a foreign field off this leaf's own SELECT * (fld<id>_TYPE not
-		// found). The model-id (attribute metaID) is config-unique, so each column belongs to exactly one.
+		// a join would then read a foreign field off this leaf's own SELECT * (fld<id>_TYPE not found).
+		// The model-id (attribute metaID) is config-unique, so each column belongs to exactly one.
 		if (col == nullptr) return false;
 		const std::shared_ptr<const ibBackendQueryColumn> mine = ResolveColumnByName(col->GetName());
 		return mine != nullptr && mine->GetColumnId() == col->GetColumnId();
+	}
+
+	// What a column is called in THIS source's relation — the name its codec reads `<name><suffix>` under. Default: the
+	// column's own; a composite answers a leaf's column with its twin's, under which its relation projects the leaf's
+	// fields (composedQueryable.h). Asked by whoever reads a result of this source by the columns it was built from.
+	virtual ibString GetPhysicalName(const std::shared_ptr<const ibBackendQueryColumn>& col) const {
+		return col->GetPhysicalName();
 	}
 
 	// ALL columns this source exposes — for SELECT * (a nested subquery over `From(src)`
@@ -1073,6 +1075,10 @@ public:
 	               const class ibValue& value, int& position) const override {
 		m_origin->BindValue(statement, metaData, value, position);
 	}
+	ibValue CreateValue() const override                        { return m_origin->CreateValue(); }
+	ibValue AdjustValue() const override                        { return m_origin->AdjustValue(); }
+	ibValue AdjustValue(const ibValue& varValue) const override { return m_origin->AdjustValue(varValue); }
+	const ibMetaData* GetMetaData() const override              { return m_origin->GetMetaData(); }
 
 private:
 	std::shared_ptr<const ibBackendQueryColumn> m_origin;

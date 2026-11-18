@@ -4,7 +4,6 @@
 #include <unordered_map>   // StringToIntMap — the field-name index
 #include <unordered_set>   // MetaDataHashSet
 
-#include "databaseLayerDef.h"
 #include "databaseErrorReporter.h"
 #include "databaseStringConverter.h"
 #include "resultSetMetaData.h"

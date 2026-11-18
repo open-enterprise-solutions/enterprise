@@ -1,7 +1,7 @@
 #ifndef __DATABASE_STRING_CONVERTER_H__
 #define __DATABASE_STRING_CONVERTER_H__
 
-#include "databaseLayerDef.h"
+#include "backend/backend_core.h"
 
 // ⭐⭐ THE WIRE IS UTF-8, BOTH WAYS, FOR EVERY DRIVER — and nothing here is a setting.
 //

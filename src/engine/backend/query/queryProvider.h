@@ -52,7 +52,7 @@ public:
 
 	// ⭐ TOTALS FOLDED BY ITS OWN STATEMENT, if it can — the ladder of headings (spec.m_totals) and their figures
 	// computed where the rows live, so only the folded rows come back. Asked of the provider of the spec's primary
-	// source, which for a tree answers for every leaf, as CanColocate does. ONE verb, the composer's own
+	// source — a tree is one source by then, the composite it is (ibQueryComposer::OverComposite). ONE verb, the composer's own
 	// (ibQueryComposer::TryFoldTotalsInDbms): a provider with several folds asks each of its gates once and folds by
 	// the first that says yes. True = `out` is the tree; false (the default) = nothing was read, and the composer reads
 	// the detail and folds it in memory — the numbers do not depend on the road.
@@ -96,14 +96,6 @@ public:
 	// a provider that writes no statement (computed in RAM), or one that writes it on another connection, which says
 	// yes for its own connection only.
 	virtual bool CanJoinOn(ibDatabaseConnectionHolder* /*holder*/) const { return false; }
-
-	// ⭐ CAN IT WRITE THE WHOLE TREE AS ONE STATEMENT OF ITS OWN — the spec's join or union of several sources read by
-	// one statement, the join the server's; folded by it, when the spec groups or aggregates. Asked by the composer of
-	// the provider of the spec's primary source (the one `.From` named), which answers for every leaf: each must be a
-	// table it writes into that statement. On a yes the tree goes to it whole — ExecuteAggregate for a spec
-	// that groups or aggregates, ExecuteRead for any other. False (the default) = each leaf is read by its own provider
-	// and the tree is stitched in memory.
-	virtual bool CanColocate(const ibDataQuerySpec& /*spec*/) const { return false; }
 
 	// ⭐ CAN A STATEMENT DECLARE A NAMED QUERY — `WITH <name> AS (…)`? Asked by the LOWERING before it chooses how a
 	// nested query travels: declared, the server reads it and the join is the server's; otherwise its rows come

@@ -16,7 +16,7 @@ const ibString& ibFieldSuffix(ibColumnRole role)
 	static const ibString s_empty;
 	static const ibString s_type(ibT("_TYPE")), s_bool(ibT("_B")), s_number(ibT("_N")), s_date(ibT("_D")),
 		s_string(ibT("_S")), s_enum(ibT("_E")), s_refType(ibT("_RTRef")), s_refId(ibT("_RRRef")),
-		s_schedule(ibT("_SCH")), s_typeDesc(ibT("_TD"));
+		s_schedule(ibT("_SCH")), s_typeDesc(ibT("_TD")), s_value(ibT("_V"));
 	switch (role) {
 	case ibColumnRole::Discriminator:   return s_type;
 	case ibColumnRole::Boolean:         return s_bool;
@@ -28,6 +28,7 @@ const ibString& ibFieldSuffix(ibColumnRole role)
 	case ibColumnRole::ReferenceId:     return s_refId;
 	case ibColumnRole::Schedule:        return s_schedule;
 	case ibColumnRole::TypeDescription: return s_typeDesc;
+	case ibColumnRole::Value:           return s_value;
 	default:                            return s_empty;   // Raw — the column is its own field
 	}
 }
@@ -112,6 +113,7 @@ int ibPersistedTypeTag(ibColumnRole role)
 	case ibColumnRole::ReferenceId:   return ibFieldTypes_Reference;
 	case ibColumnRole::Schedule:      return ibFieldTypes_Schedule;
 	case ibColumnRole::TypeDescription: return ibFieldTypes_TypeDescription;
+	case ibColumnRole::Value:         return ibFieldTypes_Value;
 	default:                          return ibFieldTypes_Empty;   // Raw / Discriminator carry no tag
 	}
 }

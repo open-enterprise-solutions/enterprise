@@ -101,6 +101,8 @@ add_executable(oes_tests
     test_queryStringConcat.cpp
     test_queryLifecycle.cpp
     test_queryBuilderShowcase.cpp
+    test_memoryDatabaseLayer.cpp
+    bench_queryMemory.cpp
     test_queryTotals.cpp
     test_queryL2.cpp
     test_queryComposer.cpp
@@ -424,8 +426,8 @@ set_target_properties(oes_query_totals_test PROPERTIES
 oes_discover_tests(oes_query_totals_test)
 
 # ---------------------------------------------------------------------------
-# Standalone DB/RAM parity test — backend + gtest only (isolated, like the
-# TOTALS-tree target above). Real in-memory SQLite vs the RAM filter core:
+# Standalone parity test — backend + gtest only (isolated, like the
+# TOTALS-tree target above). Real in-memory SQLite vs the base in memory:
 #   cmake --build build --target oes_query_parity_test --config Debug
 #   ./bin/oes_query_parity_test
 #   ./bin/oes_query_parity_test --gtest_also_run_disabled_tests   # show the gap
@@ -458,8 +460,8 @@ set_target_properties(oes_query_parity_test PROPERTIES
 oes_discover_tests(oes_query_parity_test)
 
 # ---------------------------------------------------------------------------
-# Standalone JOIN parity test — RAM join core vs a live in-memory SQLite JOIN
-# (isolated, like the parity target above). No appData / pool:
+# Standalone JOIN parity test — the base in memory's JOIN vs a live in-memory
+# SQLite JOIN (isolated, like the parity target above). No appData:
 #   cmake --build build --target oes_query_join_parity_test --config Debug
 #   ./bin/oes_query_join_parity_test
 # ---------------------------------------------------------------------------

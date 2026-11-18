@@ -43,6 +43,8 @@ enum class ibRunState : uint8_t;   // backend/compiler/procUnitState.h — the r
 class ibDatabaseConnectionHolder;
 class ibDatabaseResultSet;
 class ibResultSetMetaData;
+struct ibMemoryTable;               // databaseQueryInterpreter.h — the rows the interpreter gives
+class ibDatabaseResultSetMemory;    // …and the cursor over them
 
 // ==========================================================================
 // Query IR — the universal, structured query L2-1 accepts. Plain data (tagged
@@ -706,11 +708,11 @@ struct ibQueryIR
 
 struct ibDdlColumn
 {
-	ibString     m_name;
-	ibColumnType m_type;
-	bool         m_notNull    = false;
-	bool         m_primaryKey = false;   // PRIMARY KEY implies NOT NULL
-	ibString     m_default;              // DEFAULT clause value (literal SQL), empty = none
+	ibString       m_name;
+	ibColumnType   m_type;
+	bool           m_notNull    = false;
+	bool           m_primaryKey = false;   // PRIMARY KEY implies NOT NULL
+	ibQueryExprPtr m_default;              // DEFAULT — a constant (ibConst / ibConstBlob), spelled by the dialect; none = no DEFAULT
 };
 
 // A single clause inside a batched ALTER TABLE. The structure builder coalesces consecutive
@@ -1237,6 +1239,12 @@ public:
 	              std::unique_ptr<struct ibQueryRuns> runs,
 	              const std::atomic<ibRunState>* cancel,
 	              std::uint64_t statement = 0);
+	// …and the rows a base that computes in memory gave (ibSqlFeatures::m_inMemory): the same cursor over
+	// them, its cancel heard between rows the same way, its rows told to the measurement that numbered the run.
+	ibQueryResult(std::shared_ptr<ibDatabaseLayer> conn,
+	              ibMemoryTable rows,
+	              const std::atomic<ibRunState>* cancel,
+	              std::uint64_t statement);
 	~ibQueryResult();
 
 	ibQueryResult(ibQueryResult&& other) noexcept;
@@ -1556,6 +1564,9 @@ protected:   // ibBatchInsert is one — its table, its columns and the values i
 // is "this row is bound". A writer binds a row through the SetParam* it already speaks (a column's BindValue, the
 // codec under it), from position 1, and runs it; which statement carries the rows is decided here, as Execute
 // decides it for a batch handed over whole:
+//   · where the base computes in memory (ibSqlFeatures::m_inMemory — the base in memory), every value is written
+//     straight into the row being bound (ibMemoryRow::Set), and kRowsPerStatement rows go to it at a time
+//     (ibQueryInterpreter::Insert) — no cell and no node is made for a value;
 //   · where the engine runs a prepared statement again (ibSqlFeatures::m_batchByReexecution), the one-row
 //     INSERT is prepared once, every value goes straight into its parameter, and each row runs as it is bound;
 //   · elsewhere a row is captured as the template captures any (its values), and kRowsPerStatement of them go as
@@ -1603,8 +1614,9 @@ private:
 	void Bound(int nPosition);
 
 	ibConnectionScope                 m_scope;
+	std::unique_ptr<ibMemoryTable>    m_cells;      // a base in memory: the rows bound and not handed in, the last the one being bound
 	std::unique_ptr<ibStatementGuard> m_prepared;   // the one-row INSERT, where the engine runs it again
-	ibString                          m_preparedSql;   // …and its text — what a measurement names its rows by
+	ibString                          m_preparedSql;   // …and its text — what a measurement names its rows by (a base in memory's too)
 	std::vector<bool>                 m_bound;      // …and which of its positions this row has bound
 	ibDmlStatement                    m_held;       // elsewhere: the rows held for the next statement
 };

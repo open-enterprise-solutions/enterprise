@@ -14,7 +14,6 @@
 // native_code + sqlstate populated by the per-driver error reporter.
 
 #include "backend/backend_exception.h"
-#include "databaseLayerDef.h"
 
 // ibBackendDatabaseException — category exception for "something went
 // wrong at the DB tier". Bridges driver-internal failures into the

@@ -1,17 +1,19 @@
 // =============================================================================
-// Computed-source dot-walk + computed-expression resolution — the RAM analogs of the physical paths.
+// A computed source read by the statement a server would be given — computed columns, expression filters and sorts,
+// folds and HAVING over rows the engine computes rather than reads.
 //
-// A COMPUTED source (register Balance / Turnover, a subquery) has NO server-side table, so a reference
-// dot-walk (Balance.Item.Name), a computed column (Qty * Price), a HAVING and an expression WHERE cannot
-// be SQL. ibComputedProvider resolves them in RAM: it materialises reference TARGETS + LEFT-joins the leaf
-// (ResolveComputedDotWalks), evaluates arithmetic / CASE per row (EvalColumnExprRow) and folds / filters
-// the fold (RamAggregate + HAVING). This is what makes REPORTING over a register work — calculated
-// measures, group filters, reference fields — the same as over a physical source (which pushes to the DBMS).
+// A COMPUTED source (register Balance / Turnover, a subquery) has NO server-side table. Its rows are copied into a
+// base in memory and the spec is read there by the same translation as over a table (ibQueryComposer::OverMemorySpace,
+// docs/private/query-one-road.md §7) — so a calculated measure, a group filter and an expression WHERE mean over a
+// register what they mean over a catalog. This is what makes REPORTING over a register work.
 //
-// This harness drives the REAL door (ibDataQueryBuilder) over two hand-built computed queryables — no DB,
-// no session: holder = null, every read routes through ComputeRows. The "reference" is a column whose value
-// equals the target's PRIMARY KEY value (JoinRamTables matches by value), so no real reference metadata is
-// needed to exercise the mechanism. (docs/private/query-engine-layers.md — computed source; query-language-arc §22.)
+// This harness drives the REAL door (ibDataQueryBuilder) over a hand-built computed queryable — no DB, no session:
+// holder = null, the rows come from ComputeRows and the base in memory is the read's own. Its columns declare no type,
+// so the copy lays each out as the widest composite (a number in its _N, a reference as its pair).
+//
+// (A walk through a reference of a computed source joins the copy of its target, found by what the configuration says
+// the reference holds — the one answer the copies give, so it is checked on a configuration: test_queryCompositeWalk,
+// over a slice and over balances and turnovers.)
 // =============================================================================
 
 #include <gtest/gtest.h>
@@ -24,7 +26,6 @@
 
 #include "backend/query/dataQueryBuilder.h"   // ibDataQueryBuilder / ibDataQueryResult / ibReadPageRequest / AggregateFn
 #include "backend/query/queryProvider.h"          // ibComputedProviderInstance + ibQueryRamTable
-#include "backend/query/provider/computed/computedProvider.h" // ibComputedProvider — the fake below derives it
 #include "backend/query/queryable.h"              // ibBackendQueryable / ibQueryCondition / ibQueryFilterOp
 #include "backend/query/queryColumn.h"            // ibBackendQueryColumn / ibTypeDescription
 
@@ -40,27 +41,15 @@ public:
 	ibString           GetPhysicalName() const override { return m_name; }
 	ibTypeDescription& GetTypeDesc()     const override { return m_type; }
 	ibMetaID           GetColumnId()     const override { return m_id; }
+	const ibMetaData*  GetMetaData()     const override { return nullptr; }
 private:
 	ibString                  m_name;
 	ibMetaID                  m_id;
 	mutable ibTypeDescription m_type;
 };
 
-class ComputedQ;   // fwd — the fake provider reads the reference map off it
-
-// The RAM harness has no real metadata (a computed register would carry the register's), so the DB
-// provider's reference resolution returns null here. This fake provider — vended by ComputedQ::GetProvider()
-// in place of the shared computed one — resolves a reference by the map INJECTED into the ComputedQ, so the
-// tests exercise the SAME provider-side dot-walk path (queryable->GetProvider().ResolveReferenceTarget).
-class FakeComputedProvider : public ibComputedProvider {
-public:
-	std::shared_ptr<const ibBackendQueryable> ResolveReferenceTarget(const std::shared_ptr<const ibBackendQueryable>& q,
-		const std::shared_ptr<const ibBackendQueryColumn>& col) const override;   // out-of-line: needs ComputedQ complete
-};
-
-// A COMPUTED (RAM) queryable. ComputeRows rebuilds its rows from a BUILDER each call (ibQueryRamTable is
-// move-only, so the source can't hold + copy one). Reference targets + a primary key are injected so
-// ResolveComputedDotWalks can walk + join.
+// A COMPUTED queryable. ComputeRows rebuilds its rows from a BUILDER each call (ibQueryRamTable is
+// move-only, so the source can't hold + copy one).
 class ComputedQ : public ibBackendQueryable {
 public:
 	ComputedQ(const ibString& name, ibMetaID id) : m_name(name), m_id(id) {
@@ -68,26 +57,15 @@ public:
 	}
 	void AddCol(const std::shared_ptr<const ibBackendQueryColumn>& c) { m_cols.push_back(c); }
 	void SetBuilder(std::function<ibQueryRamTable()> b) { m_build = std::move(b); }
-	void SetRefTarget(const std::shared_ptr<const ibBackendQueryColumn>& refCol, const std::shared_ptr<const ibBackendQueryable>& tgt) { m_refs[refCol] = tgt; }
-	void SetPrimaryKey(const std::shared_ptr<const ibBackendQueryColumn>& k) { m_pk = k; }
 
-	ibBackendQueryProvider& GetProvider() const override { static FakeComputedProvider s_fake; return s_fake; }
+	ibBackendQueryProvider& GetProvider() const override { return ibComputedProviderInstance(); }
 	ibQueryRamTable ComputeRows(const std::vector<ibQueryCondition>& /*extra*/) const override {
 		return m_build ? m_build() : ibQueryRamTable();
 	}
 	std::vector<std::shared_ptr<const ibBackendQueryColumn>> GetQueryColumns() const override { return m_cols; }
-	std::vector<std::shared_ptr<const ibBackendQueryColumn>> GetPrimaryKeyColumns() const override {
-		return m_pk != nullptr ? std::vector<std::shared_ptr<const ibBackendQueryColumn>>{ m_pk }
-		                       : std::vector<std::shared_ptr<const ibBackendQueryColumn>>{};
-	}
 	bool ContainColumn(const std::shared_ptr<const ibBackendQueryColumn>& col) const override {
 		for (const std::shared_ptr<const ibBackendQueryColumn>& c : m_cols) if (c == col) return true;
 		return false;
-	}
-	// The reference map, read by FakeComputedProvider::ResolveReferenceTarget (resolution is provider-side now).
-	std::shared_ptr<const ibBackendQueryable> RefTarget(const std::shared_ptr<const ibBackendQueryColumn>& c) const {
-		auto it = m_refs.find(c);
-		return it != m_refs.end() ? it->second : nullptr;
 	}
 	ibString GetQueryTableName() const override { return m_name; }
 	ibMetaID GetQueryTableId()   const override { return m_id; }
@@ -99,39 +77,12 @@ private:
 	ibUniqueKey m_key;   // its table guid, the id in the first word
 	std::vector<std::shared_ptr<const ibBackendQueryColumn>> m_cols;
 	std::function<ibQueryRamTable()> m_build;
-	std::map<std::shared_ptr<const ibBackendQueryColumn>, std::shared_ptr<const ibBackendQueryable>> m_refs;
-	std::shared_ptr<const ibBackendQueryColumn> m_pk;
 };
 
-// Reference resolution over the fake computed source — reads the map injected into the ComputedQ.
-std::shared_ptr<const ibBackendQueryable> FakeComputedProvider::ResolveReferenceTarget(const std::shared_ptr<const ibBackendQueryable>& q,
-	const std::shared_ptr<const ibBackendQueryColumn>& col) const {
-	const std::shared_ptr<const ComputedQ> cq = std::dynamic_pointer_cast<const ComputedQ>(q);
-	return cq != nullptr ? cq->RefTarget(col) : nullptr;
-}
-
 // Column ids for the shared scenario.
-const ibMetaID ITEM_KEY = 10, ITEM_NAME = 11, ITEM_COLOUR = 12, BAL_ITEM = 20, BAL_QTY = 21, BAL_PRICE = 22;
+const ibMetaID BAL_ITEM = 20, BAL_QTY = 21, BAL_PRICE = 22;
 
-// target items:  K1 -> Apple (red), K2 -> Pear (green)   (keyed on itemKey)
-ibQueryRamTable BuildItems()
-{
-	ibQueryRamTable it;
-	it.AddColumn(ITEM_KEY,    wxT("itemKey"), kNoType);
-	it.AddColumn(ITEM_NAME,   wxT("name"),    kNoType);
-	it.AddColumn(ITEM_COLOUR, wxT("colour"),  kNoType);
-	auto add = [&](const ibString& k, const ibString& n, const ibString& c) {
-		const long r = it.AppendRow();
-		it.SetCell(r, ITEM_KEY,    ibValue(k));
-		it.SetCell(r, ITEM_NAME,   ibValue(n));
-		it.SetCell(r, ITEM_COLOUR, ibValue(c));
-	};
-	add(wxT("K1"), wxT("Apple"), wxT("red"));
-	add(wxT("K2"), wxT("Pear"),  wxT("green"));
-	return it;
-}
-
-// source balance:  (item, qty, price)  — item references an item by its key.
+// source balance:  (item, qty, price)
 //   (K1, 100, 2), (K2, 50, 3), (K1, 30, 2)
 ibQueryRamTable BuildBalance()
 {
@@ -152,140 +103,22 @@ ibQueryRamTable BuildBalance()
 }
 
 struct ComputedFix : ::testing::Test {
-	std::shared_ptr<const TestCol> itemKey    = std::make_shared<TestCol>(wxT("itemKey"), ITEM_KEY);
-	std::shared_ptr<const TestCol> itemName   = std::make_shared<TestCol>(wxT("name"),    ITEM_NAME);
-	std::shared_ptr<const TestCol> itemColour = std::make_shared<TestCol>(wxT("colour"),  ITEM_COLOUR);
 	std::shared_ptr<const TestCol> balItem    = std::make_shared<TestCol>(wxT("item"),    BAL_ITEM);
 	std::shared_ptr<const TestCol> balQty     = std::make_shared<TestCol>(wxT("qty"),     BAL_QTY);
 	std::shared_ptr<const TestCol> balPrice   = std::make_shared<TestCol>(wxT("price"),   BAL_PRICE);
-	std::shared_ptr<ComputedQ>     items      = std::make_shared<ComputedQ>(wxT("items"),   100);
 	std::shared_ptr<ComputedQ>     balance    = std::make_shared<ComputedQ>(wxT("balance"), 200);
 
 	void SetUp() override {
-		items->AddCol(itemKey);
-		items->AddCol(itemName);
-		items->AddCol(itemColour);
-		items->SetPrimaryKey(itemKey);
-		items->SetBuilder(&BuildItems);
-
 		balance->AddCol(balItem);
 		balance->AddCol(balQty);
 		balance->AddCol(balPrice);
-		balance->SetRefTarget(balItem, items);
 		balance->SetBuilder(&BuildBalance);
 	}
 };
 
-// ⭐ A PROVIDER OF ANOTHER CONNECTION — it writes its own statements there, builds nothing in memory (IsComputedInRam
-// stays false) and no statement of the base joins its tables (CanJoinOn stays false). It counts its reads and notes a
-// walk handed to it, which it could not write: a walk through its references joins tables of the base.
-class RemoteProvider : public ibBackendQueryProvider {
-public:
-	ibDataQueryResult ExecuteRead(const ibDataQuerySpec& spec, const ibReadPageRequest& page) override;   // out-of-line: needs RemoteQ complete
-	std::shared_ptr<const ibBackendQueryable> ResolveReferenceTarget(const std::shared_ptr<const ibBackendQueryable>& q,
-		const std::shared_ptr<const ibBackendQueryColumn>& col) const override {
-		const std::shared_ptr<const ComputedQ> cq = std::dynamic_pointer_cast<const ComputedQ>(q);
-		return cq != nullptr ? cq->RefTarget(col) : nullptr;
-	}
-
-	int  m_reads = 0;
-	bool m_handedAWalk = false;
-};
-
-// A table of that connection: the rows its server holds are the ones the builder makes.
-class RemoteQ : public ComputedQ {
-public:
-	RemoteQ(const ibString& name, ibMetaID id, RemoteProvider& provider) : ComputedQ(name, id), m_provider(provider) {}
-	ibBackendQueryProvider& GetProvider() const override { return m_provider; }
-	ibQueryRamTable ServerRows() const { return ComputedQ::ComputeRows({}); }
-private:
-	RemoteProvider& m_provider;
-};
-
-ibDataQueryResult RemoteProvider::ExecuteRead(const ibDataQuerySpec& spec, const ibReadPageRequest& /*page*/)
-{
-	++m_reads;
-	for (const ibDotWalkColumn& dw : spec.m_dotWalks)
-		m_handedAWalk = m_handedAWalk || dw.m_path.size() > 1;
-	const std::shared_ptr<const RemoteQ> table = std::dynamic_pointer_cast<const RemoteQ>(spec.m_queryable);
-	return ibDataQueryResult(table != nullptr ? table->ServerRows() : ibQueryRamTable(), spec.m_queryable);
-}
-
 } // namespace
 
-// --- dot-walk over a computed source (RAM resolve of the reference leaf) -----------------------
-
-// SELECT Balance.Item.Name — each row's item reference resolves to the item's name.
-TEST_F(ComputedFix, DotWalk_Projection)
-{
-	ibDataQueryBuilder q(nullptr);
-	q.From(balance);
-	q.SelectPath({ balItem, itemName }, wxT("itemName"));
-	ibReadPageRequest page;
-	ibDataQueryResult res = q.Execute(page);
-
-	std::vector<std::string> got;
-	while (res.Next())
-		got.push_back(res.GetValue(itemName).GetString().ToStdString());
-	EXPECT_EQ(got, (std::vector<std::string>{ "Apple", "Pear", "Apple" }));
-}
-
-// SELECT Balance.Item.Name, Balance.Item.Colour — two fields of ONE referenced object. The join over the
-// shared reference was known by the reference alone, so the second sibling was taken for a repeat and its
-// leaf never reached the rows (a register slice read `A.Benefit.Percent` and lost `A.Benefit.PerChild`,
-// 2026-09-11). Both have to arrive.
-TEST_F(ComputedFix, DotWalk_TwoFieldsOfOneReference)
-{
-	ibDataQueryBuilder q(nullptr);
-	q.From(balance);
-	q.SelectPath({ balItem, itemName }, wxT("itemName"));
-	q.SelectPath({ balItem, itemColour }, wxT("itemColour"));
-	ibReadPageRequest page;
-	ibDataQueryResult res = q.Execute(page);
-
-	std::vector<std::string> names, colours;
-	while (res.Next()) {
-		names.push_back(res.GetValue(itemName).GetString().ToStdString());
-		colours.push_back(res.GetValue(itemColour).GetString().ToStdString());
-	}
-	EXPECT_EQ(names,   (std::vector<std::string>{ "Apple", "Pear", "Apple" }));
-	EXPECT_EQ(colours, (std::vector<std::string>{ "red", "green", "red" }));
-}
-
-// WHERE Item.Name = 'Apple' — the register can't filter by a dot-walk; the provider joins the leaf and
-// filters it in RAM. Only the two K1 (Apple) rows survive.
-TEST_F(ComputedFix, DotWalk_Where)
-{
-	ibDataQueryBuilder q(nullptr);
-	q.From(balance);
-	q.Select(balQty, wxT("qty"));
-	q.Where({ balItem, itemName }, ibQueryFilterOp::Equal, ibValue(ibString(wxT("Apple"))));
-	ibReadPageRequest page;
-	ibDataQueryResult res = q.Execute(page);
-
-	std::vector<long> qtys;
-	while (res.Next())
-		qtys.push_back(res.GetValue(balQty).GetInteger());
-	EXPECT_EQ(qtys, (std::vector<long>{ 100, 30 }));
-}
-
-// ORDER BY Item.Name — sort by the reference leaf: Apple (K1) rows first (100, 30), then Pear (K2, 50).
-TEST_F(ComputedFix, DotWalk_OrderBy)
-{
-	ibDataQueryBuilder q(nullptr);
-	q.From(balance);
-	q.Select(balQty, wxT("qty"));
-	q.OrderBy({ balItem, itemName }, /*ascending*/ true);
-	ibReadPageRequest page;
-	ibDataQueryResult res = q.Execute(page);
-
-	std::vector<long> qtys;
-	while (res.Next())
-		qtys.push_back(res.GetValue(balQty).GetInteger());
-	EXPECT_EQ(qtys, (std::vector<long>{ 100, 30, 50 }));
-}
-
-// --- computed EXPRESSIONS over a computed source (RAM per-row evaluation) — the reporting core --------
+// --- computed EXPRESSIONS over a computed source — the reporting core --------
 
 // SELECT Qty * Price — a computed column evaluated per row (100*2, 50*3, 30*2).
 TEST_F(ComputedFix, ComputedColumn_Projection)
@@ -319,7 +152,7 @@ TEST_F(ComputedFix, ComputedExpr_OrderBy)
 	EXPECT_EQ(qtys, (std::vector<long>{ 30, 50, 100 })) << "60, 150, 200 - ordered by the expression";
 }
 
-// WHERE Qty * Price > 100 — a computed-expression filter in RAM. Rows: 200 (keep), 150 (keep), 60 (drop).
+// WHERE Qty * Price > 100 — a computed-expression filter. Rows: 200 (keep), 150 (keep), 60 (drop).
 TEST_F(ComputedFix, ComputedExpr_Where)
 {
 	ibDataQueryBuilder q(nullptr);
@@ -369,7 +202,7 @@ TEST_F(ComputedFix, ComputedAggregate_GroupBy)
 	q.Aggregate(ibDataQueryBuilder::AggregateFn::Sum,
 	            ibQueryColumnExpr::Arith(ibQueryColumnArithOp::Mul, ibQueryColumnExpr::Col(balQty), ibQueryColumnExpr::Col(balPrice)),
 	            wxT("total"));
-	ibDataQueryResult res = q.SelectAggregate();   // aggregate execute -> ExecuteAggregate -> RamAggregate
+	ibDataQueryResult res = q.SelectAggregate();   // the fold of the statement over the copy
 
 	std::map<std::string, long> totals;
 	while (res.Next())
@@ -378,27 +211,7 @@ TEST_F(ComputedFix, ComputedAggregate_GroupBy)
 	EXPECT_EQ(totals["K2"], 150);
 }
 
-// GROUP BY Item.Name, SUM(Qty) — a DOT-WALK group KEY over a computed source: the register can't group by
-// the reference's FIELD; the provider joins the leaf and folds by it. This is the RAM analog of the SERVER
-// path (a promoted temp joins the target catalog through the same ibRefJoinChain). Apple(K1): 100+30=130;
-// Pear(K2): 50.
-TEST_F(ComputedFix, DotWalk_GroupByReferenceField)
-{
-	ibDataQueryBuilder q(nullptr);
-	q.From(balance);
-	q.GroupBy(std::vector<std::shared_ptr<const ibBackendQueryColumn>>{ balItem, itemName });   // GROUP BY Item.Name (dot-walk key)
-	q.Aggregate(ibDataQueryBuilder::AggregateFn::Sum, balQty, wxT("totalQty"));
-	ibDataQueryResult res = q.SelectAggregate();
-
-	std::map<std::string, long> totals;
-	while (res.Next())
-		totals[res.GetValue(itemName).GetString().ToStdString()] = res.GetColumn(wxT("totalQty")).GetInteger();
-	EXPECT_EQ(totals.size(), 2u);
-	EXPECT_EQ(totals["Apple"], 130);   // K1 rows: 100 + 30
-	EXPECT_EQ(totals["Pear"],  50);    // K2 row
-}
-
-// GROUP BY Item HAVING SUM(Qty) > 100 — group filtering the register can't do; the RAM fold does.
+// GROUP BY Item HAVING SUM(Qty) > 100 — group filtering the register can't do; the statement over its copy does.
 //   K1: SUM(qty) = 130 > 100 (keep)   K2: SUM(qty) = 50 (dropped)
 TEST_F(ComputedFix, Having_DropsGroupBelowThreshold)
 {
@@ -414,71 +227,6 @@ TEST_F(ComputedFix, Having_DropsGroupBelowThreshold)
 		totals[res.GetValue(balItem).GetString().ToStdString()] = res.GetColumn(wxT("totalQty")).GetInteger();
 	EXPECT_EQ(totals.size(), 1u);   // K2 (SUM qty = 50) dropped by HAVING
 	EXPECT_EQ(totals["K1"], 130);   // 100 + 30 > 100 -> kept
-}
-
-// Boolean WHERE (Item.Name = 'Pear' OR qty = 100) — an OR of a dot-walk leaf and a plain column over the
-// computed source: the predicate-tree gather joins the reference leaf, FilterRows evaluates the tree in RAM.
-//   (K1,100) via qty=100 · (K2,50) via Pear · (K1,30) dropped
-TEST_F(ComputedFix, DotWalk_BooleanWhere)
-{
-	ibQueryCondition c1;
-	c1.m_col   = itemName;
-	c1.m_path  = { balItem, itemName };
-	c1.m_op    = ibQueryFilterOp::Equal;
-	c1.m_value = ibValue(ibString(wxT("Pear")));
-	ibQueryCondition c2;
-	c2.m_col   = balQty;
-	c2.m_op    = ibQueryFilterOp::Equal;
-	c2.m_value = ibValue(ibNumber(100));
-
-	ibDataQueryBuilder q(nullptr);
-	q.From(balance);
-	q.Select(balQty, wxT("qty"));
-	q.Where(ibQueryPredicate::Compose(ibQueryPredicateKind::Or,
-	                                  ibQueryPredicate::Leaf(c1), ibQueryPredicate::Leaf(c2)));
-	ibReadPageRequest page;
-	ibDataQueryResult res = q.Execute(page);
-
-	std::vector<long> qtys;
-	while (res.Next())
-		qtys.push_back(res.GetValue(balQty).GetInteger());
-	EXPECT_EQ(qtys, (std::vector<long>{ 100, 50 }));
-}
-
-// --- a walk through a source of ANOTHER CONNECTION — its rows by its own provider, the walk in memory ------------
-
-// SELECT Stock.Item.Name ORDER BY Qty * Price — the composer hands the spec to the RAM engine, which reads the rows
-// through the source's own provider (never handed the walk) and joins the item in; the sort by an expression is
-// computed per row, as the statement would.   amounts as built: (K1, 200), (K2, 150), (K1, 60)
-TEST_F(ComputedFix, DotWalk_OverASourceOfAnotherConnection)
-{
-	RemoteProvider remote;
-	const auto stock = std::make_shared<RemoteQ>(wxT("stock"), 300, remote);
-	stock->AddCol(balItem);
-	stock->AddCol(balQty);
-	stock->AddCol(balPrice);
-	stock->SetRefTarget(balItem, items);
-	stock->SetBuilder(&BuildBalance);
-
-	ibDataQueryBuilder q(nullptr);
-	q.From(stock);
-	q.SelectPath({ balItem, itemName }, wxT("itemName"));
-	q.Select(balQty, wxT("qty"));
-	q.OrderByExpr(ibQueryColumnExpr::Arith(ibQueryColumnArithOp::Mul, ibQueryColumnExpr::Col(balQty), ibQueryColumnExpr::Col(balPrice)),
-	              /*ascending*/ true);
-	ibReadPageRequest page;
-	ibDataQueryResult res = q.Execute(page);
-
-	std::vector<std::string> names;
-	std::vector<long> qtys;
-	while (res.Next()) {
-		names.push_back(res.GetValue(itemName).GetString().ToStdString());
-		qtys.push_back(res.GetValue(balQty).GetInteger());
-	}
-	EXPECT_EQ(names, (std::vector<std::string>{ "Apple", "Pear", "Apple" }));
-	EXPECT_EQ(qtys, (std::vector<long>{ 30, 50, 100 })) << "60, 150, 200 - ordered by the expression";
-	EXPECT_EQ(remote.m_reads, 1) << "its rows are read by its own provider, once";
-	EXPECT_FALSE(remote.m_handedAWalk) << "it is never handed a walk through the base's tables";
 }
 
 // A field whose functional option is off. IsAvailable is that question.

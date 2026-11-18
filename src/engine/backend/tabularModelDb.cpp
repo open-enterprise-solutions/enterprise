@@ -326,7 +326,11 @@ unsigned int ibValueModelCursor::RunComposerPage(const ibDataViewItem& parent, c
 	}
 	// (A level sorted by what no keyset follows takes no anchor into the read: it is read whole, and its anchor is the
 	// window's — below.)
-	if (anchor.IsOk() && !dotWalkSort) {
+	// ⚠ …NOR DOES AN ANCHOR THAT IS THE PARENT ITSELF. Opening the current row asks for its children at that row, and
+	// a heading carries no values of the rows under it: its own read as their keyset bound bytes of a reference to the
+	// period — "empty pointer to data at SQLVAR index 13", a ledger grouped by its dimensions opened at a heading
+	// (Max, 2026-11-19). Not one of its own children, it starts their window at the top, as the RAM half's does.
+	if (anchor.IsOk() && !(anchor == parent) && !dotWalkSort) {
 		page.m_hasAnchor = true;
 		ibValueModel::ibComposerNode* a = GetViewData<ibValueModel::ibComposerNode>(anchor);
 		// A GROUP-LEVEL keyset page is ordered by the level's DIM alone -> the single anchor value is the anchor

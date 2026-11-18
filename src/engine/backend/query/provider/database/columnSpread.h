@@ -63,7 +63,12 @@ inline ibFieldTypes TagForValue(const ibValue& value)
 	// "an empty reference can be of a concrete type; an empty reference and an undefined that was written
 	// are different values"). An enumeration folds because its unset shape carries no target to remember;
 	// a reference does.
-	return TagForValueType(value.GetType());
+	//
+	// ⭐ …AND AN OBJECT THAT IS NO REFERENCE — an array, a structure — IS NOT ONE EITHER. No column has a field for it but
+	// the _V of a column of no type, which keeps it as its node (DescribeLayout); tagged Reference, it was a reference
+	// with no key there, and read back as an empty one.
+	const ibFieldTypes tag = TagForValueType(value.GetType());
+	return tag == ibFieldTypes_Reference && !IsReference(value.GetClassType()) ? ibFieldTypes_Value : tag;
 }
 
 // Bind a primitive slot's PLACEHOLDER — the value it carries when it is NOT the active type
@@ -97,14 +102,20 @@ void DriveSpread(const ibBackendQueryColumn& col, int tag,
 	// from the layout, the parameters come from here, and a slot one of them knows about and the other
 	// does not shifts every parameter after it one position early (see the note further down).
 	const ibTypeDescription& td = col.GetTypeValueDesc();
+	// A column that declares no type is the WIDEST COMPOSITE (DescribeLayout): a primitive and a reference keep their own
+	// fields, and what has none there — a member of an enumeration, a schedule, a type description — goes into _V as its
+	// node, under the Value tag.
+	const bool any = td.GetClsidCount() == 0;
+	if (any && (tag == ibFieldTypes_Enum || tag == ibFieldTypes_Schedule || tag == ibFieldTypes_TypeDescription))
+		tag = ibFieldTypes_Value;
 	st->SetParamInt(pos++, tag);   // _TYPE discriminator
 
 	// WHICH SLOTS THE COLUMN HAS, in ONE pass over the classes its type admits — each answer exactly the one
 	// DescribeColumnLayout gets from ContainType / the reference test, so the two stay slot for slot. Asked as
 	// seven searches of the list per cell, this was a share of writing a register line of its own (stack
 	// samples 2026-09-14, Debug).
-	bool hasBoolean = false, hasNumber = false, hasDate = false, hasString = false, hasEnum = false;
-	bool hasSchedule = false, hasTypeDescription = false, hasReference = false;
+	bool hasBoolean = any, hasNumber = any, hasDate = any, hasString = any, hasEnum = false;
+	bool hasSchedule = false, hasTypeDescription = false, hasReference = any;
 	for (const ibClassID& clsid : td.GetClsidList()) {
 		if      (clsid == g_valueBooleanCLSID)         hasBoolean = true;
 		else if (clsid == g_valueNumberCLSID)          hasNumber = true;
@@ -151,6 +162,12 @@ void DriveSpread(const ibBackendQueryColumn& col, int tag,
 	if (hasReference) {
 		bindRef(ibColumnRole::ReferenceType, pos);
 		bindRef(ibColumnRole::ReferenceId,   pos);
+	}
+
+	// _V last, where DescribeLayout puts it.
+	if (any) {
+		if (tag == ibFieldTypes_Value) bindActive(ibColumnRole::Value, pos);
+		else                           st->SetParamNull(pos++);
 	}
 }
 

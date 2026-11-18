@@ -430,9 +430,9 @@ std::shared_ptr<const ibBackendQueryable> ibValueMetaObjectCalculationRegister::
 		const ibTypeDescription& day = GetActionPeriodStart()->GetTypeDesc();
 		const ibMetaID dayId = GetActionPeriodStart()->GetMetaID();
 		columns.push_back(ibTempColumn(ibCalcFactColumn::PositionStart, ibCalcPositionFirst, day, ibRegDerivedColumnId(dayId, 1),
-			_("Position start"), ibBackendQueryColumn::Kind::Computed).StandsFor(GetActionPeriodStart()->GetQueryColumn()));
+			GetMetaData(), _("Position start"), ibBackendQueryColumn::Kind::Computed).StandsFor(GetActionPeriodStart()->GetQueryColumn()));
 		columns.push_back(ibTempColumn(ibCalcFactColumn::PositionEnd, ibCalcPositionLast, day, ibRegDerivedColumnId(dayId, 2),
-			_("Position end"), ibBackendQueryColumn::Kind::Computed).StandsFor(GetActionPeriodStart()->GetQueryColumn()));
+			GetMetaData(), _("Position end"), ibBackendQueryColumn::Kind::Computed).StandsFor(GetActionPeriodStart()->GetQueryColumn()));
 	});
 }
 
@@ -1371,7 +1371,7 @@ std::shared_ptr<const ibBackendQueryable> ibValueMetaObjectCalculationRegister::
 		for (const ibValueMetaObjectResource* resource : resources) {
 			const ibString name = resource->GetName() + ibCalcBaseName;
 			columns.push_back(ibTempColumn(name, name, resource->GetTypeDesc(), ibRegDerivedColumnId(resource->GetMetaID(), ibCalcBaseColumn_Figure),
-				ibRegColumnCaptionOf(resource->GetSynonym(), _("Base")),
+				GetMetaData(), ibRegColumnCaptionOf(resource->GetSynonym(), _("Base")),
 				ibBackendQueryColumn::Kind::Computed).StandsFor(resource->GetQueryColumn()));
 		}
 		for (const ibValueMetaObjectAttributeBase* field : sections)
@@ -1667,7 +1667,7 @@ std::shared_ptr<const ibBackendQueryable> ibValueMetaObjectCalculationRegister::
 			for (const ibCalcSchedulePeriod period : periods) {
 				const ibString name = resource->GetName() + ibCalcSchedulePeriodName(period);
 				columns.push_back(ibTempColumn(name, name, resource->GetTypeDesc(), ibRegDerivedColumnId(resource->GetMetaID(), period),
-					ibRegColumnCaptionOf(resource->GetSynonym(), ibCalcSchedulePeriodCaption(period)),
+					GetMetaData(), ibRegColumnCaptionOf(resource->GetSynonym(), ibCalcSchedulePeriodCaption(period)),
 					ibBackendQueryColumn::Kind::Computed).StandsFor(resource->GetQueryColumn()));
 			}
 		}

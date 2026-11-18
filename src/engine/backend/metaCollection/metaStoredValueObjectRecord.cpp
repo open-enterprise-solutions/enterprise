@@ -6,7 +6,6 @@
 #include "metaStoredValueObject.h"
 #include "backend/metaData.h"
 #include "backend/databaseLayer/connectionScope.h"   // ibConnectionScope — the write door's transaction
-#include "backend/query/columnLayout.h"              // ibFieldSuffix — the value column's type tag, read as it lies
 #include "backend/system/systemManager.h"
 
 #include "backend/appData.h"
@@ -306,23 +305,16 @@ ibValue ibValueMetaObjectStoredValue::ReadStoredValue() const
 			page.m_count = 1;
 			ibDataQueryResult selection = q.Execute(page);
 
-			// ⚠ NOTHING WRITTEN is told by the value column's TYPE TAG, read AS IT LIES: 0 until the first write
-			// stores the value's own type (a column added after the row was defaults to 0 too). Read through the
-			// column, an untagged cell comes back as its type's EMPTY (columnCodec.cpp, the tag's `default`
-			// arm) — a Boolean's False — so a never-switched functional option read as switched off
-			// (measured 2026-09-27: `FunctionalOptions.X.Get()` answered False with nothing ever written).
-			if (selection.Next()) {
-				const std::shared_ptr<const ibBackendQueryColumn> tag =
-					ibBackendColumnRawDB::Number(GetValueColumn()->GetPhysicalName() + ibFieldSuffix(ibColumnRole::Discriminator));
-				const ibValue written = selection.GetValue(tag);
-				if (written.GetType() == ibValueTypes::TYPE_NUMBER && written.GetInteger() != 0)
-					return AdjustValue(selection.GetValue(GetValueColumn()->GetQueryColumn()));
-			}
+			// The value as it lies. A column nobody wrote holds what it was created holding — a fresh value of this kind,
+			// its DEFAULT (structureBatch.cpp), a functional option's initial value among them — so an option that was
+			// never switched reads as its author said, the row there or added later.
+			if (selection.Next())
+				return AdjustValue(selection.GetValue(GetValueColumn()->GetQueryColumn()));
 		}
 		catch (...) {}
 	}
 
-	// No table, no row, no tag: a fresh value of this kind (a constant's type's empty, an option's initial value).
+	// No table, no row: a fresh value of this kind (a constant's type's empty, an option's initial value).
 	return CreateValue();
 }
 

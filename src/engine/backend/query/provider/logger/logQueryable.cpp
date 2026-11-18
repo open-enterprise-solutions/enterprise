@@ -69,7 +69,7 @@ ibLogQueryable::ibLogQueryable(const ibMetaData* metaData, const ibDateTime& beg
 	const auto column = [this, &place](const ibString& name, const ibTypeDescription& type,
 	                                   const ibTypeDescription& typeValue = ibTypeDescription()) {
 		const std::shared_ptr<const ibBackendQueryColumn> made = std::make_shared<ibTempColumn>(name, type, typeValue,
-			ibBackendQueryColumn::SyntheticId(ibBackendQueryColumn::SyntheticKind::Derived, ++place));
+			ibBackendQueryColumn::SyntheticId(ibBackendQueryColumn::SyntheticKind::Derived, ++place), m_metaData);
 		m_columns.push_back(made);
 		return made;
 	};
@@ -120,8 +120,8 @@ ibQueryRamTable ibLogQueryable::ComputeRows(const std::vector<ibQueryCondition>&
 		return rows;   // a base that keeps no journal has no events
 
 	// WHAT THE READER CAN NARROW BY, so it does not hand back every month there is. Only ever WIDER than what was
-	// asked — the period is cut exactly below, and the provider filters each condition again over these rows
-	// (ComputeRowsResolved):
+	// asked — the period is cut exactly below, and the statement over these rows' copy filters by each condition
+	// again (ibQueryComposer::OverMemorySpace):
 	//   a moment — a date is the wall clock's reading and the file keeps the instant, so a moment is read as if
 	//     the clock were UTC and its bound widened by a day each way, more than any zone is from UTC;
 	//   the level — the reader's ladder: this level and up, the audit by itself;

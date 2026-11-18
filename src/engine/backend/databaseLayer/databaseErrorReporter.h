@@ -1,7 +1,6 @@
 #ifndef __DATABASE_ERROR_REPORTER_H__
 #define __DATABASE_ERROR_REPORTER_H__
 
-#include "databaseLayerDef.h"
 #include "databaseLayerException.h"   // ibBackendDatabaseException::Kind
 
 class BACKEND_API ibDatabaseErrorReporter

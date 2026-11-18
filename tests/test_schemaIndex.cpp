@@ -40,7 +40,7 @@ TEST(SchemaIndex, ARetypedColumnIsNotTheSameIndex)
 {
     const std::shared_ptr<const ibBackendColumnRawDB> text = ibBackendColumnRawDB::String(wxT("D"), 7, 10);
     const std::shared_ptr<const ibBackendColumnRawDB> number = ibBackendColumnRawDB::Number(wxT("D"), 7, 15, 2);
-    const std::shared_ptr<const ibBackendColumnRawDB> reference = ibBackendColumnRawDB::Reference(wxT("D"), 0, wxEmptyString, 7);
+    const std::shared_ptr<const ibBackendColumnRawDB> reference = ibBackendColumnRawDB::Reference(wxT("D"), 0, nullptr, wxEmptyString, 7);
 
     EXPECT_FALSE(ibSameSchemaIndex(IndexOver(text), IndexOver(number)));
     EXPECT_FALSE(ibSameSchemaIndex(IndexOver(text), IndexOver(reference)));

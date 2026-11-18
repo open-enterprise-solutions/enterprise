@@ -87,9 +87,9 @@ ibDataQueryBuilder& ibDataQueryBuilder::JoinNode(const std::shared_ptr<const ibB
 	//
 	// `ON t.Goods = G.Ref` names the SOURCE BEING JOINED first and the accumulated tree second —
 	// which is ordinary, symmetric, and the way people write it. But `m_colL` / `m_colR` mean the
-	// node's LEFT and RIGHT, and every reader downstream takes them literally: the RAM stitch does
-	// `left.GetCell(row, m_colL->GetColumnId())`, the co-located renderer qualifies each by its own
-	// side's table. Kept as typed, each side then asks its table for a column the OTHER one owns.
+	// node's LEFT and RIGHT, and every reader downstream takes them literally: the composite's
+	// renderer qualifies each by its own side's table, the semi-join reduction reads each off its
+	// own side's rows. Kept as typed, each side then asks its table for a column the OTHER one owns.
 	//
 	// 🛑 AND THAT DOES NOT FAIL — IT MULTIPLIES. A missing column reads as an EMPTY cell, not as an
 	// error, so every row on the left carries the same empty key, every row on the right carries the
@@ -152,7 +152,7 @@ ibDataQueryBuilder& ibDataQueryBuilder::Join(const std::shared_ptr<const ibBacke
 
 ibDataQueryBuilder& ibDataQueryBuilder::CrossJoin(const std::shared_ptr<const ibBackendQueryable>& queryable, ibQueryJoinKind kind, const ibString& alias)
 {
-	// CROSS / ON TRUE -- keyless cartesian; the composer's RAM stitch does the product on a null key.
+	// CROSS / ON TRUE -- keyless cartesian; the statement writes it as a join on TRUE.
 	ibJoinOn on; on.m_cross = true;
 	return JoinNode(queryable, kind, alias, on);
 }

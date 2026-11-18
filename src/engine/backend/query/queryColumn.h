@@ -49,19 +49,26 @@ enum class ibColumnRole : uint8_t {
 	ReferenceType,   // _RTRef — the reference target's clsid (BIGINT)
 	ReferenceId,     // _RRRef — the reference value (pure guid blob; type is _RTRef)
 	Schedule,        // _SCH   — a JobSchedule, serialised whole (blob); see ibFieldTypes_Schedule
-	TypeDescription  // _TD    — a type description, serialised whole (blob). Same reasoning as the
+	TypeDescription, // _TD    — a type description, serialised whole (blob). Same reasoning as the
 	                 //          schedule: what it carries is a SET OF ADMISSIBLE TYPES with their
 	                 //          qualifiers, and nothing filters on it in SQL — so spreading it into
 	                 //          columns would buy a predicate nobody writes and cost an ALTER every
 	                 //          time the type system grows. It is read to NARROW a value, in memory.
+	Value            // _V     — a value as its NODE (blob): the last field of a column that declares no type
+	                 //          (a table a script filled, a nested query's untyped output), laid out as the
+	                 //          widest composite — it holds what has no field of its own there: an object, a
+	                 //          member of an enumeration, a schedule. Like the two above, the base keeps its
+	                 //          bytes and nothing else — the codec writes the node and reads it back against
+	                 //          the configuration (its bytes by SetParamBlob and GetResultBlob).
 };
 
-// One physical field of a logical column (the layout decomposition unit).
+// One physical field of a logical column (the layout decomposition unit). Its DEFAULT is not here: it is what the
+// column's write puts in the field for the value a fresh row holds (CreateValue), asked where the DDL is written
+// (structureBatch.cpp).
 struct ibColumnSlot {
 	ibString     m_name;                       // physical column name (base + suffix)
 	ibColumnRole m_role    = ibColumnRole::Raw;
 	ibColumnType m_type;                       // canonical type for DDL (MapType -> dialect SQL)
-	ibString     m_default;                    // DEFAULT clause (e.g. "0"), empty = none
 	bool         m_notNull = false;
 };
 
@@ -92,6 +99,9 @@ enum ibFieldTypes {
 	// composite column's _TYPE field, so inserting one renumbers every tag after it and old rows
 	// start reading as a different type.
 	ibFieldTypes_TypeDescription,
+	// A VALUE KEPT AS ITS NODE in the _V field of a column that declares no type — one with no field of its own there
+	// (ibColumnRole::Value) — or an object no column has a field for (TagForValue). Appended, as above.
+	ibFieldTypes_Value,
 };
 
 // (ibSQLField — the structured "_TYPE + per-type field" projection — is REMOVED. Its analog is the
@@ -360,10 +370,23 @@ public:
 	// So the question is asked OF THE COLUMN and answered by whoever can: the raw column with itself,
 	// a forwarding one with what it stands for, everybody else with null. A cast cannot be wrong when
 	// there is no cast.
+	virtual const class ibBackendColumnRawDB* AsRawColumn() const { return nullptr; }
+
+	// ⭐ A VALUE OF THIS COLUMN — the type factory's pair, repeated (ibBackendTypeConfigFactory): of its type
+	// (GetTypeValueDesc), made by its configuration (GetMetaData). A column over an attribute answers as its attribute
+	// does, through the bridge (ibValueMetaObjectAttributeBase::CreateValue — a functional option's initial value); one
+	// that stands for another, as that one. What a fresh row holds is what a field nobody wrote is created holding: its
+	// DEFAULT, the column's own write of this value (structureBatch.cpp).
 	//
 	// ⚠ LAST IN THE CLASS ON PURPOSE — a virtual inserted among the others renumbers every slot after
 	// it. New optional virtuals go here.
-	virtual const class ibBackendColumnRawDB* AsRawColumn() const { return nullptr; }
+	virtual class ibValue CreateValue() const;                                // a fresh value, as a new row holds it
+	virtual class ibValue AdjustValue() const;                                // the type's empty
+	virtual class ibValue AdjustValue(const class ibValue& varValue) const;   // a value narrowed to the type
+
+	// …and the configuration it is a column of — what makes its type's values. Every column says whose it is: an
+	// attribute's, its attribute's; one that stands for another, that one's; one the engine makes, the one it was made with.
+	virtual const class ibMetaData* GetMetaData() const = 0;
 };
 
 // ==========================================================================
@@ -404,6 +427,9 @@ public:
 	Kind                  GetColumnKind()   const override { return Kind::Raw; }
 	// …and it IS one, which is the whole of the answer nobody else can give.
 	const ibBackendColumnRawDB* AsRawColumn() const override { return this; }
+	// Whose type it holds: a reference's (Reference), the configuration it was made with; a primitive's, none — the
+	// value registry makes one by itself (ibValueTypeDescription::AdjustValue).
+	const ibMetaData*     GetMetaData()     const override { return m_metaData; }
 
 	RawType               GetRawType()      const { return m_type; }   // the provider's bind selector
 	// The declared width: a string's length, a number's PRECISION. 0 = "no reason to say", and the
@@ -438,12 +464,15 @@ public:
 	// because the value may point at several kinds. This one cannot: a tabular section belongs to
 	// exactly one owner, so the type is known from the metadata and storing it per row would be a
 	// column repeating one constant a million times. The target rides on the column instead, and the
-	// codec reads a real reference out of the sixteen bytes it finds.
-	static std::shared_ptr<const ibBackendColumnRawDB> Reference(const ibString& field, const ibClassID& target = 0,
+	// codec reads a real reference out of the sixteen bytes it finds. `metaData` — the configuration the target is
+	// a type of (GetMetaData).
+	static std::shared_ptr<const ibBackendColumnRawDB> Reference(const ibString& field, const ibClassID& target,
+	                                                             const ibMetaData* metaData,
 	                                                             const ibString& name = ibEmptyString, ibMetaID modelId = 0)
 	{
 		const std::shared_ptr<ibBackendColumnRawDB> col = std::make_shared<ibBackendColumnRawDB>(field, RawType::Reference, modelId);
-		col->m_name = name;
+		col->m_name     = name;
+		col->m_metaData = metaData;
 		if (target != 0)
 			col->m_typeDesc.SetDefaultMetaType(target);
 		return col;
@@ -477,6 +506,7 @@ private:
 	unsigned int              m_scale  = 0;   // number scale — the fraction a figure is stored with
 	ibMetaID                  m_modelId;   // 0 = scaffold: created with its table, never migrated
 	mutable ibTypeDescription m_typeDesc;   // mutable: GetTypeDesc() is const but returns a non-const ref
+	const ibMetaData*         m_metaData = nullptr;   // a reference's — see GetMetaData
 };
 
 #endif

@@ -32,6 +32,7 @@ public:
 	ibTypeDescription& GetTypeDesc()     const override { return m_type; }
 	ibMetaID           GetColumnId()     const override { return 1; }
 	Kind               GetColumnKind()   const override { return m_kind; }
+	const ibMetaData*  GetMetaData()     const override { return nullptr; }
 private:
 	ibString                  m_name;
 	Kind                      m_kind;

@@ -105,9 +105,9 @@ class BACKEND_API ibValueQueryable : public ibValueStaticMembers<&ibBindLinqMeth
 	// L4-2 JOIN push-down: when the inner argument is ALSO a queryable and the two key
 	// selectors each lower to one column, build the JOIN on the L3 door and run the
 	// (outer, inner) result-selector in RAM over the reconstructed rows. The door decides
-	// HOW the join runs — co-located in one server-side SELECT (DB ⋈ DB), temp-promoted
-	// (a computed inner, e.g. Data.From, materialised into a DB temp table), or RAM-
-	// stitched — all transparent here. Each side's row is reconstructed to match the RAM
+	// HOW the join runs — one server-side SELECT (DB ⋈ DB), or, with a computed side (e.g.
+	// Data.From), one statement of a base in memory the sides are copied into — both
+	// transparent here. Each side's row is reconstructed to match the RAM
 	// path's shape: a reference object for a single-reference-keyed source (catalog /
 	// document), a structure of columns otherwise (register / Data.From) — so no single-PK
 	// requirement. Returns true when it handled the op; false on anything outside the slice
@@ -148,8 +148,9 @@ public:
 
 	// L4-2 JOIN unification (Layer 2) — the RAM-side entry. When `.Join()` is dispatched
 	// on a NON-queryable receiver (a value table) but the inner argument IS a real DB
-	// queryable, wrap the receiver as a computed leaf and run server-side through
-	// JoinPushDown (the composer temp-promotes the RAM side into a DB temp table). Returns
+	// queryable, wrap the receiver as a computed leaf and run it through JoinPushDown (the
+	// composer reads both into a base in memory, the table only for the keys the receiver
+	// holds). Returns
 	// true when handled; false -> the caller stays on the RAM hash-join (ibValueJoinState),
 	// always correct. Called from the base LINQ dispatch (procUnitLINQ.cpp, case Join), so
 	// BOTH receiver kinds (queryable / RAM table) reach the one L3 join executor.

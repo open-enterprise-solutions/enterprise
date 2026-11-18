@@ -7,16 +7,16 @@
 //
 //   lambda body text --(compile + ibBuildLambdaQueryAstFromCode)--> ibQueryAstExpr [L4-2 recorder]
 //                    --(ibQueryLowering::LowerLambdaPredicate)--> ibQueryPredicate [L4-2 lowering]
-//                    --(ibQueryComposer::FilterRows)------------> rows             [L3 RAM core]
+//                    --(ibDbTableProvider::BuildPredicateIR)----> rows of a base in memory [L3 -> L2]
 //
 // and asserts the row count equals the SAME filter as SQL against an in-memory SQLite —
 // the LINQ trap through the LINQ front-end: a predicate LOWERED FROM A LAMBDA must mean
-// the SAME thing server-side and RAM-side, NULL / three-valued (Kleene) logic included.
+// the SAME thing on every base, NULL / three-valued (Kleene) logic included (memoryParityFix.h).
 // Plus the bail path: an untranslatable-at-LOWERING body (an unresolvable column) yields
 // null -> the Queryable fold falls back to RAM, never a thrown user error.
 //
 // Pure + session-free: LowerLambdaPredicate takes the source AS AN ARGUMENT (no
-// activeMetaData), so a metadata-free TestQueryable drives it — exactly what
+// activeMetaData), so a metadata-free source drives it — exactly what
 // test_queryComposer proves a queryable may be. (L4-1 text Execute() resolves names
 // against activeMetaData and is NOT reachable here — L4-2 is where the executable-parity
 // test lives. See docs/private/query-engine-layers.md §L4, docs/private/query-language-arc.md §23.5.)
@@ -37,80 +37,18 @@
 #include "core/query/queryAST.h"           // ibQueryAstExpr
 
 #include "lambdaRecordFix.h"                      // ibTestRecordLambda — body -> compiled lambda -> AST
+#include "memoryParityFix.h"                      // ibTestMemoryRegions — the source and the base in memory
 #include "backend/query/queryLowering.h"          // ibQueryLowering::LowerLambdaPredicate (L4-2 lowering)
-#include "backend/query/provider/queryComposer.h" // ibQueryComposer::FilterRows + ibQueryRamTable
 #include "backend/query/queryable.h"              // ibBackendQueryable / ibQueryPredicate(Ptr)
-#include "backend/query/queryColumn.h"            // ibBackendQueryColumn / ibTypeDescription
 
 #include "backend/databaseLayer/sqllite/sqliteDatabaseLayer.h"
 #include "backend/databaseLayer/databaseResultSet.h"
 
 namespace {
 
-const ibTypeDescription kNoType;
-
-// Minimal metadata-free column (name + model id read key). Mirrors TestCol elsewhere.
-class TestCol : public ibBackendQueryColumn {
-public:
-	TestCol(const ibString& name, ibMetaID id) : m_name(name), m_id(id) {}
-	ibString           GetName()         const override { return m_name; }
-	ibString           GetPhysicalName() const override { return m_name; }
-	ibTypeDescription& GetTypeDesc()     const override { return m_type; }
-	ibMetaID           GetColumnId()     const override { return m_id; }
-private:
-	ibString                  m_name;
-	ibMetaID                  m_id;
-	mutable ibTypeDescription m_type;
-};
-
-// Metadata-free source vending its columns by name — what LowerLambdaPredicate resolves the
-// lambda's member paths through. (Same shape as test_queryComposer's mock queryable.)
-class TestQueryable : public ibBackendQueryable {
-public:
-	TestQueryable(const ibString& table, ibMetaID metaId) : m_table(table), m_metaId(metaId) {
-		ibGuidImpl impl{}; impl.m_data1 = static_cast<unsigned long>(metaId); m_key = ibGuid(impl);
-	}
-	void AddCol(const std::shared_ptr<const ibBackendQueryColumn>& c) { m_cols.push_back(c); }
-
-	ibString GetQueryTableName() const override { return m_table; }
-	ibMetaID GetQueryTableId()   const override { return m_metaId; }
-	const ibUniqueKey& GetQueryTableGuid() const override { return m_key; }
-	const ibMetaData* GetMetaData() const override { return nullptr; }
-	std::vector<std::shared_ptr<const ibBackendQueryColumn>> GetQueryColumns() const override { return m_cols; }
-	bool ContainColumn(const std::shared_ptr<const ibBackendQueryColumn>& col) const override {
-		for (const std::shared_ptr<const ibBackendQueryColumn>& c : m_cols) if (c == col) return true;
-		return false;
-	}
-private:
-	ibString m_table;
-	ibMetaID m_metaId;
-	ibUniqueKey m_key;   // its table guid, the id in the first word
-	std::vector<std::shared_ptr<const ibBackendQueryColumn>> m_cols;
-};
-
 // The shared fixture: region { North, South, East, <NULL> } with qty — same as test_queryParity.
 // The NULL-region row is the whole point: it is where three-valued logic bites, now reached
 // through the LINQ front-end instead of a hand-built predicate.
-const ibMetaID REGION = 1, QTY = 2;
-
-ibQueryRamTable MakeRamFixture()
-{
-	ibQueryRamTable t;
-	t.AddColumn(REGION, wxT("region"), kNoType);
-	t.AddColumn(QTY,    wxT("qty"),    kNoType);
-	auto row = [&](const ibString& reg, long q, bool regNull) {
-		const long r = t.AppendRow();
-		// A DB NULL materialises as ibValue(TYPE_NULL) (the driver), not an unset/Undefined cell.
-		t.SetCell(r, REGION, regNull ? ibValue(ibValueTypes::TYPE_NULL) : ibValue(reg));
-		t.SetCell(r, QTY, ibValue(ibNumber(q)));
-	};
-	row(wxT("North"), 10, false);
-	row(wxT("South"),  5, false);
-	row(wxT("East"),   7, false);
-	row(ibString(),    3, true);   // region IS NULL
-	return t;
-}
-
 bool MakeSqlFixture(ibDatabaseLayerSQLite& db)
 {
 	if (!db.Open(wxT(":memory:")))
@@ -145,16 +83,14 @@ std::shared_ptr<ibQueryAstExpr> Record(const ibString& body, const ibString& row
 
 } // namespace
 
-// A test holding the metadata-free source, the RAM fixture, and the SQLite twin side by side.
+// A test holding the metadata-free source, the base in memory, and the SQLite twin side by side.
 struct LinqExecFix : ::testing::Test {
 	ibTestCodeStyle       style{ CODE_CES };   // the lambda bodies below are CES ('{ return … ; }')
-	std::shared_ptr<TestQueryable> src = std::make_shared<TestQueryable>(wxT("t"), 100);
-	ibQueryRamTable       ram = MakeRamFixture();
+	ibTestMemoryRegions   memory;
+	std::shared_ptr<const ibBackendQueryable> src = memory.m_table;
 	ibDatabaseLayerSQLite db;
 
 	void SetUp() override {
-		src->AddCol(std::make_shared<TestCol>(wxT("region"), REGION));
-		src->AddCol(std::make_shared<TestCol>(wxT("qty"), QTY));
 		ASSERT_TRUE(MakeSqlFixture(db)) << "SQLite in-memory fixture failed to open";
 	}
 
@@ -172,7 +108,7 @@ struct LinqExecFix : ::testing::Test {
 		if (expr == nullptr) return nullptr;
 		return ibQueryLowering::LowerLambdaPredicate(src, *expr, captured);
 	}
-	int RamCount(const ibQueryPredicatePtr& p) { return (int) ibQueryComposer::FilterRows(ram, p).RowCount(); }
+	int MemoryCount(const ibQueryPredicatePtr& p) { return memory.Count(p); }
 };
 
 // ---- executable parity: a lambda-lowered predicate == the SAME filter run as SQL ----
@@ -184,14 +120,14 @@ TEST_F(LinqExecFix, Eq_ParityWithSql)
 	// test_lambdaRecorder.cpp. Compiling them for real is what surfaced it.
 	auto p = Lower(wxT("{ return x.region = \"North\"; }"));
 	ASSERT_TRUE(p != nullptr) << "a translatable lambda body must lower to a predicate";
-	EXPECT_EQ(RamCount(p), SqlCount(db, wxT("region = 'North'")));   // 1 == 1
+	EXPECT_EQ(MemoryCount(p), SqlCount(db, wxT("region = 'North'")));   // 1 == 1
 }
 
 TEST_F(LinqExecFix, Or_ParityWithSql)
 {
 	auto p = Lower(wxT("{ return x.region = \"North\" Or x.region = \"South\"; }"));
 	ASSERT_TRUE(p != nullptr);
-	EXPECT_EQ(RamCount(p),
+	EXPECT_EQ(MemoryCount(p),
 	          SqlCount(db, wxT("region = 'North' OR region = 'South'")));   // 2 == 2
 }
 
@@ -202,7 +138,7 @@ TEST_F(LinqExecFix, NotEq_NullThreeValued_ParityWithSql)
 {
 	auto p = Lower(wxT("{ return x.region <> \"North\"; }"));
 	ASSERT_TRUE(p != nullptr);
-	EXPECT_EQ(RamCount(p), SqlCount(db, wxT("region <> 'North'")))   // South, East -> 2
+	EXPECT_EQ(MemoryCount(p), SqlCount(db, wxT("region <> 'North'")))   // South, East -> 2
 		<< "L4-2 lowered `<>` must drop the NULL-region row (three-valued), like SQL.";
 }
 
@@ -210,14 +146,14 @@ TEST_F(LinqExecFix, NumericGt_ParityWithSql)
 {
 	auto p = Lower(wxT("{ return x.qty > 6; }"));
 	ASSERT_TRUE(p != nullptr);
-	EXPECT_EQ(RamCount(p), SqlCount(db, wxT("qty > 6")));   // North(10), East(7) -> 2 == 2
+	EXPECT_EQ(MemoryCount(p), SqlCount(db, wxT("qty > 6")));   // North(10), East(7) -> 2 == 2
 }
 
 TEST_F(LinqExecFix, AndLogic_ParityWithSql)
 {
 	auto p = Lower(wxT("{ return x.qty >= 5 And x.region <> \"South\"; }"));
 	ASSERT_TRUE(p != nullptr);
-	EXPECT_EQ(RamCount(p),
+	EXPECT_EQ(MemoryCount(p),
 	          SqlCount(db, wxT("qty >= 5 AND region <> 'South'")));   // North, East -> 2 == 2
 }
 
@@ -227,7 +163,7 @@ TEST_F(LinqExecFix, CapturedParam_ParityWithSql)
 	std::map<ibString, ibValue> captured{ { wxT("minQty"), ibValue(ibNumber(6)) } };
 	auto p = Lower(wxT("{ return x.qty > minQty; }"), captured);
 	ASSERT_TRUE(p != nullptr) << "a captured identifier must lower via the captured map";
-	EXPECT_EQ(RamCount(p), SqlCount(db, wxT("qty > 6")));   // 2 == 2
+	EXPECT_EQ(MemoryCount(p), SqlCount(db, wxT("qty > 6")));   // 2 == 2
 }
 
 // Bail at LOWERING (not recording): a well-formed AST naming a column the SOURCE cannot resolve.
@@ -289,7 +225,7 @@ TEST_F(LinqExecFix, In_AThousandValuesAreOneLeaf)
 	EXPECT_EQ(p->m_kind, ibQueryPredicateKind::Leaf);
 	EXPECT_EQ(p->m_leaf.m_op, ibQueryFilterOp::In);
 	EXPECT_EQ(p->m_leaf.m_values.size(), values.size());
-	EXPECT_EQ(RamCount(p), SqlCount(db, wxT("region IN ('North', 'East')")));   // 2 == 2, the NULL row excluded
+	EXPECT_EQ(MemoryCount(p), SqlCount(db, wxT("region IN ('North', 'East')")));   // 2 == 2, the NULL row excluded
 }
 
 // NOT IN is the same leaf under a Not — and keeps SQL's three-valued answer for the NULL row.
@@ -299,7 +235,7 @@ TEST_F(LinqExecFix, NotIn_ParityWithSql)
 		*InList(wxT("region"), { ibVariant(ibT("North")), ibVariant(ibT("East")) }, /*negated*/ true), {});
 	ASSERT_TRUE(p != nullptr);
 	EXPECT_EQ(p->m_kind, ibQueryPredicateKind::Not);
-	EXPECT_EQ(RamCount(p), SqlCount(db, wxT("region NOT IN ('North', 'East')")));   // South alone
+	EXPECT_EQ(MemoryCount(p), SqlCount(db, wxT("region NOT IN ('North', 'East')")));   // South alone
 }
 
 // One value is an equality, as it always was — nothing that rides an Equal leaf loses it to a set of one.
@@ -309,7 +245,7 @@ TEST_F(LinqExecFix, In_ASingleValueStaysAnEquality)
 	ASSERT_TRUE(p != nullptr);
 	ASSERT_EQ(p->m_kind, ibQueryPredicateKind::Leaf);
 	EXPECT_EQ(p->m_leaf.m_op, ibQueryFilterOp::Equal);
-	EXPECT_EQ(RamCount(p), 1);
+	EXPECT_EQ(MemoryCount(p), 1);
 }
 
 // 🛑 A list that cannot be one leaf (a NULL among the values) still folds pair by pair — as a BALANCED
@@ -325,5 +261,5 @@ TEST_F(LinqExecFix, In_APairwiseFoldIsBalancedNotChained)
 	ASSERT_TRUE(p != nullptr);
 	EXPECT_EQ(p->m_kind, ibQueryPredicateKind::Or);
 	EXPECT_LE(DepthOf(p), 12) << "an OR over " << values.size() << " values must be ~log2(N) deep";
-	EXPECT_EQ(RamCount(p), 1);   // North; a NULL in the list matches nothing
+	EXPECT_EQ(MemoryCount(p), 1);   // North; a NULL in the list matches nothing
 }

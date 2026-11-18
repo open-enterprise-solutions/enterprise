@@ -3,12 +3,12 @@
 
 /////////////////////////////////////////////////////////////////////////////
 // ibMemoryPool — the per-thread, size-classed free list the engine's small blocks come from: a text's
-// (ibString) and a buffer's bytes (ibMemoryBuffer). A block freed goes back to the pool of the thread
-// that frees it while that thread's cache has room (kCap, memoryPool.cpp); one larger than the biggest class
-// goes straight to the CRT.
+// (ibString), a buffer's bytes (ibMemoryBuffer) and a heap-tier number's limbs (ibNumber). A block freed goes
+// back to the pool of the thread that frees it while that thread's cache has room (kCap, memoryPool.cpp); one
+// larger than the biggest class goes straight to the CRT.
 //
-// It was ibString's alone (fstring.cpp) until the buffer took the string's shape (2026-10-23); the code is
-// the string's, moved. AllocateClass and Deallocate are core's own — not exported, so on Linux, where core
+// It was ibString's alone (fstring.cpp) until the buffer took the string's shape (2026-10-23), and the number's
+// heap tier after it (2026-11-18); the code is the string's, moved. AllocateClass and Deallocate are core's own — not exported, so on Linux, where core
 // hides what it does not export, a call to them is direct; Drain is exported for the hosts' exit paths.
 /////////////////////////////////////////////////////////////////////////////
 

@@ -540,12 +540,12 @@ TEST(RegisterArmCut, TheBalanceBeforeMidnightLeavesOutTheDayThatStartsThere)
 
 TEST(RegisterSurface, ACaptionFallsBackToTheNameAndNeverToNothing) {
     ibTypeDescription type;
-    const ibTempColumn bare(wxT("AmountBalanceDr"), wxT("Amount_BalanceDr"), type, 1);
+    const ibTempColumn bare(wxT("AmountBalanceDr"), wxT("Amount_BalanceDr"), type, 1, nullptr);
     // No caption given: the base class's own answer, which is right for a temp table whose columns
     // are named by whoever made it. What must NOT happen is an empty heading.
     EXPECT_EQ(wxT("AmountBalanceDr"), bare.GetSynonym());
 
-    const ibTempColumn dressed(wxT("AmountBalanceDr"), wxT("Amount_BalanceDr"), type, 1, wxT("Amount Balance Dr"));
+    const ibTempColumn dressed(wxT("AmountBalanceDr"), wxT("Amount_BalanceDr"), type, 1, nullptr, wxT("Amount Balance Dr"));
     EXPECT_EQ(wxT("Amount Balance Dr"), dressed.GetSynonym());
     // …and the other two names are untouched by it. Three names, one column, no aliasing.
     EXPECT_EQ(wxT("AmountBalanceDr"),  dressed.GetName());
@@ -594,7 +594,7 @@ TEST(RegisterSurface, TheSameQuestionGetsTheSameSurface) {
     ibRegSurfaceCache cache;
     ibTypeDescription type;
     const auto build = [&type](std::vector<ibTempColumn>& columns) {
-        columns.push_back(ibTempColumn(wxT("A"), wxT("fldA"), type, ibRegDerivedColumnId(1001)));
+        columns.push_back(ibTempColumn(wxT("A"), wxT("fldA"), type, ibRegDerivedColumnId(1001), nullptr));
     };
 
     const std::shared_ptr<const ibBackendQueryable> first  = cache.Obtain(wxT("k"), wxT("sig-1"), wxT("T"), nullptr, build);
@@ -607,11 +607,11 @@ TEST(RegisterSurface, AChangedShapeRebuildsAndTheOldPointerStaysAlive) {
     ibRegSurfaceCache cache;
     ibTypeDescription type;
     const auto one = [&type](std::vector<ibTempColumn>& columns) {
-        columns.push_back(ibTempColumn(wxT("A"), wxT("fldA"), type, ibRegDerivedColumnId(1001)));
+        columns.push_back(ibTempColumn(wxT("A"), wxT("fldA"), type, ibRegDerivedColumnId(1001), nullptr));
     };
     const auto two = [&type](std::vector<ibTempColumn>& columns) {
-        columns.push_back(ibTempColumn(wxT("A"), wxT("fldA"), type, ibRegDerivedColumnId(1001)));
-        columns.push_back(ibTempColumn(wxT("B"), wxT("fldB"), type, ibRegDerivedColumnId(1002)));
+        columns.push_back(ibTempColumn(wxT("A"), wxT("fldA"), type, ibRegDerivedColumnId(1001), nullptr));
+        columns.push_back(ibTempColumn(wxT("B"), wxT("fldB"), type, ibRegDerivedColumnId(1002), nullptr));
     };
 
     const std::shared_ptr<const ibBackendQueryable> before = cache.Obtain(wxT("k"), wxT("sig-1"), wxT("T"), nullptr, one);
@@ -930,6 +930,7 @@ public:
 	ibString           GetPhysicalName() const override { return m_name; }
 	ibTypeDescription& GetTypeDesc()     const override { return m_type; }
 	ibMetaID           GetColumnId()     const override { return m_id; }
+	const ibMetaData*  GetMetaData()     const override { return nullptr; }
 private:
 	ibString                  m_name;
 	ibMetaID                  m_id;

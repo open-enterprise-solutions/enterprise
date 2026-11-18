@@ -1,7 +1,6 @@
 #ifndef __SQLITE_DATABASE_LAYER_H__
 #define __SQLITE_DATABASE_LAYER_H__
 
-#include "backend/databaseLayer/databaseLayerDef.h"
 #include "backend/databaseLayer/databaseLayer.h"
 
 #include <mutex>   // m_cancelGuard
@@ -48,9 +47,7 @@ public:
 	virtual std::vector<ibString> GetViews();
 	virtual std::vector<ibString> GetColumns(const ibString& table);
 
-	virtual int GetDatabaseLayerType() const {
-		return DATABASELAYER_SQLLITE;
-	}
+	virtual ibString GetDatabaseLayerName() const override { return ibT("SQLite"); }
 
 	static const ibDialectDictionary& Dialect();                       // SQLite dialect (no instance needed)
 	virtual const ibDialectDictionary& GetDialect() const override;    // polymorphic access for L2

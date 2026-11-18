@@ -7,17 +7,22 @@
 //	              and DROPs it on destruction. Driven ENTIRELY by the L1 dictionary
 //	              (ibTempTableDialect + the main dialect type-map) — no per-driver
 //	              fork; a driver with no temp dialect (Firebird) makes Materialise
-//	              return null and the caller stays on the RAM composer.
+//	              return null and the caller takes its road in memory. The base in
+//	              memory is a base like any (ibQueryMemoryManager, a space of it ibMemorySpace): its copies are made here too.
 //	              See docs/private/temp-db.md.
 ////////////////////////////////////////////////////////////////////////////
 
 #include "tempTableManager.h"
 #include "backend/query/queryRamTable.h"                    // ibQueryRamTable / ibQueryRamColumn
-#include "backend/query/columnLayout.h"                     // ColumnFieldNames — the column's physical field spread
-#include "backend/query/provider/database/columnCodec.h"    // ibColumnCodec::WriteValue — a cell, decomposed into those fields
-#include "backend/databaseLayer/databaseQueryBuilder.h"    // ibDatabaseQueryBuilder + DDL/DML factories + ibQueryStatement (L2)
+#include "backend/query/columnLayout.h"                     // DescribeColumnLayout — the column's physical field spread
+#include "backend/databaseLayer/databaseQueryBuilder.h"    // ibDatabaseQueryBuilder + DDL factories + ibBatchInsert (L2)
+#include "backend/databaseLayer/connectionHolder.h"        // the base a holder takes its connections from — what the probe is kept by
+#include "backend/query/dataQueryBuilder.h"                // a table's rows read for its copy
+#include "backend/query/queryException.h"
 
+#include <algorithm>
 #include <atomic>
+#include <exception>
 #include <vector>
 #include <map>
 #include <mutex>
@@ -25,9 +30,9 @@
 namespace {
 
 // The temp table stores every column in the METADATA STORAGE FORMAT (the same physical spread a real
-// table uses): one DDL column per ColumnFieldNames field, typed by suffix; the cell decomposed by the
-// SAME SetValueColumn the DB write path uses. So a temp row is byte-identical to a real-table row and
-// reference / enum / variant values round-trip (keys AND outputs) via GetValueColumn — no lossy form.
+// table uses): one DDL column per DescribeColumnLayout field, typed by role; the cell bound by the column
+// itself (BindValue), as the DB write path binds it. So a temp row is byte-identical to a real-table row and
+// reference / enum / variant values round-trip (keys AND outputs) via ReadValue — no lossy form.
 
 // DDL type for one physical SPREAD field, keyed by its layout ROLE (not by re-parsing the name suffix —
 // ibFieldSuffix already owns the role<->suffix lettering). Deliberately WIDE: the temp holds heterogeneous
@@ -41,39 +46,35 @@ ibColumnType WidenForTemp(ibColumnRole role)
 	case ibColumnRole::Date:        return ibTypeDate();
 	case ibColumnRole::Boolean:     return ibTypeBoolean();
 	case ibColumnRole::String:      return ibTypeString(4000);
-	default:                        return ibTypeInteger();   // Discriminator / Enum / ReferenceType / Raw
+	case ibColumnRole::Schedule:
+	case ibColumnRole::TypeDescription:
+	case ibColumnRole::Value:       return ibTypeBlob();      // a value serialised: its bytes (the codec reads them back)
+	case ibColumnRole::ReferenceType: return ibTypeBigInt();  // a clsid: 64 bits, its kind in the top byte (DescribeLayout)
+	default:                        return ibTypeInteger();   // Discriminator / Enum / Raw
 	}
 }
 
-// Decompose ONE cell into its per-field bound exprs (Const / Blob), in ColumnFieldNames order — REUSING
-// the DB write decomposition (a capture-only ibQueryStatement records each SetParam* as an IR node).
-std::vector<ibQueryExprPtr> DecomposeCell(const ibBackendQueryColumn& col, const ibMetaData* meta, const ibValue& cell)
-{
-	const std::vector<ibString> fields = ColumnFieldNames(col);
-	ibQueryStatement capture(ibQueryStatement::Kind::Delete, ibString(), fields);
-	int pos = 1;
-	ibColumnCodec::WriteValue(col, meta, cell, &capture, pos);
-	const std::vector<ibQueryExprPtr>& consts = capture.CapturedValues();
-	std::vector<ibQueryExprPtr> out;
-	out.reserve(fields.size());
-	for (size_t i = 0; i < fields.size(); ++i)
-		out.push_back((i < consts.size() && consts[i]) ? consts[i] : ibConst(ibValue()));
-	return out;
-}
-
-// --- runtime capability probe, cached per holder (temp-db.md §6) -------------------------------
+// --- runtime capability probe, cached per base (temp-db.md §6) ---------------------------------
 // Static capability = the dialect's presence. DYNAMIC capability = "this connection can actually
 // CREATE a temp table" (DDL right / not a read-only replica / temp-space available). We probe it ONCE
-// per holder with a trivial CREATE+DROP and remember — so a real materialise never discovers
+// per base with a trivial CREATE+DROP and remember — so a real materialise never discovers
 // incapability mid-bulk-insert (pay the failed million-row insert, then redo in RAM).
-std::mutex                                  s_probeMutex;
-std::map<ibDatabaseConnectionHolder*, bool> s_probeCache;
+//
+// ⚠ BY THE BASE, NOT BY THE HOLDER. Whether a table can be created is the base's answer (its rights, a replica), and
+// a holder is short-lived: a session's address, freed, is the next session's — of another base, perhaps — which then
+// read the first one's answer. A base's pool stands while the base does. A base in memory is never probed: its tables
+// are rows in the process, and a table is always made there.
+std::mutex                       s_probeMutex;
+std::map<ibConnectionPool*, bool> s_probeCache;
 
-bool ProbeTempCapability(ibDatabaseConnectionHolder* holder, const ibTempTableDialect& dialect)
+bool ProbeTempCapability(ibDatabaseConnectionHolder* holder, ibDatabaseLayer& connection, const ibTempTableDialect& dialect)
 {
+	if (connection.GetDialect().m_features.m_inMemory)
+		return true;
+	ibConnectionPool* const base = holder != nullptr ? holder->GetPool() : nullptr;
 	{
 		std::lock_guard<std::mutex> lock(s_probeMutex);
-		const auto it = s_probeCache.find(holder);
+		const auto it = s_probeCache.find(base);
 		if (it != s_probeCache.end())
 			return it->second;
 	}
@@ -95,7 +96,7 @@ bool ProbeTempCapability(ibDatabaseConnectionHolder* holder, const ibTempTableDi
 	}
 
 	std::lock_guard<std::mutex> lock(s_probeMutex);
-	s_probeCache[holder] = capable;
+	s_probeCache[base] = capable;
 	return capable;
 }
 
@@ -113,14 +114,80 @@ bool ibTempTableManager::CanMaterialise(ibDatabaseConnectionHolder* holder)
 	if (!scope)
 		return false;
 	const ibTempTableDialect* dialect = scope->GetTempTableDialect();
-	return dialect != nullptr && ProbeTempCapability(holder, *dialect);
+	return dialect != nullptr && ProbeTempCapability(holder, *scope.get(), *dialect);
 }
 
 std::unique_ptr<ibTempTableManager> ibTempTableManager::Materialise(ibDatabaseConnectionHolder* holder,
                                                                     const ibQueryRamTable& rows,
                                                                     const ibMetaData* metaData)
 {
-	if (rows.Columns().empty())
+	// Metadata-format columns: one ibTempColumn per logical column (real type), each EXPANDING to its
+	// physical spread via DescribeColumnLayout — the ONE authority for the field set, ORDER and role.
+	std::vector<std::shared_ptr<const ibBackendQueryColumn>> columns;
+	columns.reserve(rows.Columns().size());
+	for (const ibQueryRamColumn& c : rows.Columns())
+		columns.push_back(std::make_shared<ibTempColumn>(c.m_name, c.m_type, c.m_id, metaData));
+	static std::atomic<unsigned long> s_seq{ 0 };
+	return Materialise(holder, ibString::Format(ibT("oes_tmp_%lu"), ++s_seq), std::move(columns), {}, rows, metaData);
+}
+
+std::unique_ptr<ibTempTableManager> ibTempTableManager::Materialise(ibDatabaseConnectionHolder* holder,
+                                                                    const ibQueryRamTable& rows,
+                                                                    const std::shared_ptr<const ibBackendQueryable>& source)
+{
+	if (source == nullptr)
+		return nullptr;
+	// The source's columns the rows hold — a source computed whole hands every one, a read hands those it was asked for.
+	std::vector<std::shared_ptr<const ibBackendQueryColumn>> columns;
+	for (const std::shared_ptr<const ibBackendQueryColumn>& col : source->GetQueryColumns())
+		if (col != nullptr && std::any_of(rows.Columns().begin(), rows.Columns().end(),
+		                                  [&col](const ibQueryRamColumn& held) { return held.m_id == col->GetColumnId(); }))
+			columns.push_back(col);
+	std::vector<std::shared_ptr<const ibBackendQueryColumn>> keys;
+	for (const std::shared_ptr<const ibBackendQueryColumn>& key : source->GetPrimaryKeyColumns())
+		if (std::find(columns.begin(), columns.end(), key) != columns.end())
+			keys.push_back(key);
+	static std::atomic<unsigned long> s_seq{ 0 };
+	return Materialise(holder, ibString::Format(ibT("oes_copy_%lu"), ++s_seq), std::move(columns), std::move(keys), rows,
+		source->GetMetaData());
+}
+
+std::unique_ptr<ibTempTableManager> ibTempTableManager::Materialise(ibDatabaseConnectionHolder* holder,
+                                                                    const std::shared_ptr<const ibBackendQueryable>& table,
+                                                                    const std::vector<ibValue>& keys,
+                                                                    ibDatabaseConnectionHolder* from)
+{
+	if (table == nullptr)
+		return nullptr;
+	const std::vector<std::shared_ptr<const ibBackendQueryColumn>> columns = table->GetQueryColumns();
+	ibQueryRamTable rows;
+	for (const std::shared_ptr<const ibBackendQueryColumn>& col : columns)
+		rows.AddColumn(col->GetColumnId(), col->GetName(), col->GetTypeDesc());
+	if (!keys.empty()) {
+		// The rows the keys name, each column by its own read — the batch that says what references are reads the same way.
+		ibDataQueryBuilder read(from);
+		read.From(table);
+		read.WhereKeyIn(keys);
+		for (const std::shared_ptr<const ibBackendQueryColumn>& col : columns)
+			read.Select(col, ibEmptyString);
+		ibReadPageRequest page;
+		page.m_count = 0;   // every row named
+		ibDataQueryResult found = read.Execute(page);
+		while (found.Next()) {
+			const long row = rows.AppendRow();
+			for (const std::shared_ptr<const ibBackendQueryColumn>& col : columns)
+				rows.SetCell(row, col->GetColumnId(), found.GetValue(col));
+		}
+	}
+	return Materialise(holder, table->GetQueryTableName(), columns, table->GetPrimaryKeyColumns(), rows, table->GetMetaData());
+}
+
+std::unique_ptr<ibTempTableManager> ibTempTableManager::Materialise(ibDatabaseConnectionHolder* holder, const ibString& tableName,
+                                                                    std::vector<std::shared_ptr<const ibBackendQueryColumn>> columns,
+                                                                    std::vector<std::shared_ptr<const ibBackendQueryColumn>> keys,
+                                                                    const ibQueryRamTable& rows, const ibMetaData* metaData)
+{
+	if (columns.empty())
 		return nullptr;
 
 	// Pin the holder's connection for the table's whole life — the temp table lives on THIS connection
@@ -132,84 +199,81 @@ std::unique_ptr<ibTempTableManager> ibTempTableManager::Materialise(ibDatabaseCo
 	// Capability = the L1 temp dialect's PRESENCE, read here as facts rather than through CanMaterialise:
 	// the CREATE's lexical bits come from them two lines down. (CanMaterialise exists for the callers that
 	// must know BEFORE computing their rows; this is the insurance for one that did not ask.) nullptr =>
-	// the driver has no DB temp tables (FB) => the caller stays on the RAM composer.
+	// the driver has no DB temp tables (FB) => the caller takes its road in memory.
 	const ibTempTableDialect* dialect = scope->GetTempTableDialect();
 	if (dialect == nullptr)
 		return nullptr;
-	if (!ProbeTempCapability(holder, *dialect))
+	if (!ProbeTempCapability(holder, *scope.get(), *dialect))
 		return nullptr;   // dialect present but this connection can't create temp tables (no DDL right / read-only) -> RAM
+	const bool interprets = scope->GetDialect().m_features.m_inMemory;
 
-	static std::atomic<unsigned long> s_seq{ 0 };
-	const ibString tableName = ibString::Format(ibT("oes_tmp_%lu"), ++s_seq);
-
-	// Metadata-format columns: one ibTempColumn per logical column (real type), each EXPANDING to its
-	// physical spread via DescribeColumnLayout — the ONE authority for the field set, ORDER and role.
 	// That flattened slot list drives BOTH the CREATE (name + type-by-role) and the INSERT column order,
 	// so the temp mirrors a real table from a single source.
-	std::vector<ibTempColumn> tempCols;
-	tempCols.reserve(rows.Columns().size());
-	for (const ibQueryRamColumn& c : rows.Columns())
-		tempCols.emplace_back(c.m_name, c.m_type, c.m_id);
-
-	std::vector<ibColumnSlot> slots;   // flattened spread over all columns
-	for (const ibTempColumn& tc : tempCols)
-		for (const ibColumnSlot& s : DescribeColumnLayout(tc))
-			slots.push_back(s);
+	std::vector<ibColumnSlot> slots;      // flattened spread over all columns
+	std::vector<int>          fieldsOf;   // …how many of them each column binds
+	std::vector<ibDdlColumn>  ddlCols;    // …and what each is created as
+	fieldsOf.reserve(columns.size());
+	for (const std::shared_ptr<const ibBackendQueryColumn>& col : columns) {
+		std::vector<ibColumnSlot> layout = DescribeColumnLayout(*col);
+		fieldsOf.push_back(static_cast<int>(layout.size()));
+		for (ibColumnSlot& s : layout) {
+			// A raw column's field is created as it is declared, as a real table creates it: a key binds its sixteen
+			// bytes (ibBackendColumnRawDB::BindValue), which the INTEGER of a field of no declared type would refuse.
+			ibDdlColumn dc;
+			dc.m_name = s.m_name;
+			dc.m_type = s.m_role == ibColumnRole::Raw && col->AsRawColumn() != nullptr ? s.m_type : WidenForTemp(s.m_role);
+			ddlCols.push_back(std::move(dc));
+			slots.push_back(std::move(s));
+		}
+	}
 
 	std::vector<ibString> allFields;   // slot names — the INSERT column order
 	allFields.reserve(slots.size());
 	for (const ibColumnSlot& s : slots)
 		allFields.push_back(s.m_name);
 
-	// Decompose a whole row into its flattened per-field bound exprs (column order = allFields).
-	auto buildRow = [&](long r) {
-		std::vector<ibQueryExprPtr> vals;
-		vals.reserve(allFields.size());
-		size_t ci = 0;
-		for (const ibQueryRamColumn& c : rows.Columns()) {
-			std::vector<ibQueryExprPtr> fv = DecomposeCell(tempCols[ci], metaData, rows.GetCell(r, c.m_id));
-			for (auto& e : fv) vals.push_back(std::move(e));
-			++ci;
-		}
-		return vals;
-	};
-
 	// CREATE + fill on the pinned connection (nested ibDatabaseQueryBuilder over the same holder
-	// inherits this scope's connection). Any runtime failure -> drop the half-built table, return null
-	// (graceful RAM fallback — the fast path is opportunistic, correctness always lands).
+	// inherits this scope's connection). Any runtime failure, or a row the database refused -> drop the
+	// half-built table, return null (graceful RAM fallback — the fast path is opportunistic, correctness always lands).
+	bool               filled = false;
+	std::exception_ptr failure;
 	try {
-		std::vector<ibDdlColumn> ddlCols;
-		ddlCols.reserve(slots.size());
-		for (const ibColumnSlot& s : slots) {
-			ibDdlColumn dc; dc.m_name = s.m_name; dc.m_type = WidenForTemp(s.m_role);
-			ddlCols.push_back(std::move(dc));
-		}
 		ibDatabaseQueryBuilder qCreate(holder);
 		qCreate.Execute(ibCreateTempTable(tableName, ddlCols, dialect->m_createPrefix, dialect->m_onCommitClause));
 
-		// Bulk-fill in CHUNKS — one multi-row INSERT per chunk (row 0 carries the column list as
-		// assignments, the rest ride as extra VALUES tuples). The chunk caps params/row to stay under
-		// driver placeholder limits (PG ~65535, SQLite 999); per-row would be RowCount round-trips.
-		const long total  = rows.RowCount();
-		const long kChunk = 50;   // each row is now several physical fields per logical column
-		for (long start = 0; start < total; start += kChunk) {
-			const long end = (start + kChunk < total) ? start + kChunk : total;
-
-			ibDmlStatement ins(ibDmlKind::Insert);
-			ins.m_table = tableName;
-			std::vector<ibQueryExprPtr> first = buildRow(start);
-			for (size_t k = 0; k < allFields.size() && k < first.size(); ++k)
-				ins.m_assignments.push_back(ibDmlAssign{ allFields[k], first[k] });
-			for (long r = start + 1; r < end; ++r)
-				ins.m_extraRows.push_back(buildRow(r));
-
-			ibDatabaseQueryBuilder qIns(holder);
-			qIns.Execute(ins);
+		// ⭐ THE ROWS GO AS A REGISTER'S ROWS GO (ibBatchInsert): each column binds its value into its own fields — a
+		// raw key as its bytes, a moment as its halves — and the batch carries them as the base takes rows: into its
+		// cells for a base in memory, with no IR constant made for a value. As multi-row INSERTs of them, a capture
+		// and a constant for each field of each row, the copy was three quarters of a turnover by correspondence read in
+		// memory (sampled 2026-11-18, 132 402 rows, Debug).
+		ibBatchInsert batch(tableName, allFields, holder);
+		const long total   = rows.RowCount();
+		bool       refused = false;
+		for (long r = 0; r < total && !refused; ++r) {
+			int position = 1;
+			for (std::size_t c = 0; c < columns.size(); ++c) {
+				const int first = position;
+				columns[c]->BindValue(batch, metaData, rows.GetCell(r, columns[c]->GetColumnId()), position);
+				// ONE VALUE PER FIELD, EXACTLY — the bind is positional: a column that binds another number of values
+				// than it declares fields moves every value after it into somebody else's field (the register writes
+				// keep the same rule, dbTableProvider.cpp).
+				if (position - first != fieldsOf[c])
+					ibBackendCoreException::Error(
+						_("A batched write captured %d values for a column declaring %d fields"), position - first, fieldsOf[c]);
+			}
+			refused = batch.RunQuery() < 0;
 		}
+		filled = !refused && batch.Flush() >= 0;
 	}
 	catch (...) {
+		failure = std::current_exception();
+	}
+	if (!filled) {
 		try { ibDatabaseQueryBuilder qDrop(holder); qDrop.Execute(ibDropTable(tableName, /*ifExists*/ true)); }
 		catch (...) {}
+		// A base in memory has no incapability to fall back from: what failed there is said as it is.
+		if (interprets && failure)
+			std::rethrow_exception(failure);
 		return nullptr;
 	}
 
@@ -223,7 +287,7 @@ std::unique_ptr<ibTempTableManager> ibTempTableManager::Materialise(ibDatabaseCo
 	try { ibDatabaseQueryBuilder qAnalyze(holder); qAnalyze.Execute(ibAnalyzeTable(tableName)); }
 	catch (...) {}
 
-	const auto queryable = std::make_shared<ibDbTempTableQueryable>(tableName, std::move(tempCols), metaData);
+	const auto queryable = std::make_shared<ibDbTempTableQueryable>(tableName, std::move(columns), std::move(keys), metaData);
 	return std::unique_ptr<ibTempTableManager>(
 		new ibTempTableManager(std::move(scope), holder, *dialect, tableName, queryable));
 }

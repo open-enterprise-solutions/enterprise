@@ -3,7 +3,6 @@
 
 #include <unordered_set>
 
-#include "databaseLayerDef.h"
 #include "databaseErrorReporter.h"
 #include "databaseStringConverter.h"
 #include "databaseResultSet.h"

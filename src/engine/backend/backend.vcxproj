@@ -102,8 +102,9 @@
     <ClInclude Include="databaseLayer\columnType.h" />
     <ClInclude Include="databaseLayer\databaseQueryBuilder.h" />
     <ClInclude Include="databaseLayer\databaseMaterializeBuilder.h" />
+    <ClInclude Include="databaseLayer\databaseQueryInterpreter.h" />
+    <ClInclude Include="databaseLayer\databaseMemoryBase.h" />
     <ClInclude Include="databaseLayer\databaseLayer.h" />
-    <ClInclude Include="databaseLayer\databaseLayerDef.h" />
     <ClInclude Include="databaseLayer\databaseLayerException.h" />
     <ClInclude Include="databaseLayer\databaseProfiler.h" />
     <ClInclude Include="databaseLayer\databaseQueryParser.h" />
@@ -249,6 +250,7 @@
     <ClInclude Include="query\dataQueryBuilder.h" />
     <ClInclude Include="query\queryProvider.h" />
     <ClInclude Include="query\provider\queryComposer.h" />
+    <ClInclude Include="query\provider\composedQueryable.h" />
     <ClInclude Include="query\tempColumn.h" />
     <ClInclude Include="query\provider\queryProviderInternal.h" />
     <ClInclude Include="query\provider\computed\computedProvider.h" />
@@ -510,6 +512,8 @@
     <ClCompile Include="databaseLayer\connectionScope.cpp" />
     <ClCompile Include="databaseLayer\databaseQueryBuilder.cpp" />
     <ClCompile Include="databaseLayer\databaseMaterializeBuilder.cpp" />
+    <ClCompile Include="databaseLayer\databaseQueryInterpreter.cpp" />
+    <ClCompile Include="databaseLayer\databaseMemoryBase.cpp" />
     <ClCompile Include="databaseLayer\databaseErrorReporter.cpp" />
     <ClCompile Include="databaseLayer\databaseLayer.cpp" />
     <ClCompile Include="databaseLayer\databaseLayerException.cpp" />
@@ -776,6 +780,7 @@
     <ClCompile Include="system\value\valueQuery.cpp" />
     <ClCompile Include="system\value\valueQueryable.cpp" />
     <ClCompile Include="query\provider\queryComposer.cpp" />
+    <ClCompile Include="query\provider\composedQueryable.cpp" />
     <ClCompile Include="query\queryProvider.cpp" />
     <ClCompile Include="query\provider\computed\computedProvider.cpp" />
     <ClCompile Include="query\provider\logger\logQueryable.cpp" />

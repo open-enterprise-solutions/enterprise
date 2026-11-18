@@ -20,6 +20,7 @@
 #include "core/fileSystem.h"   // backend.conf and lang/ sit in the program folder, not inside a bundle
 #include "backend/session/session.h"   // ibSession::CurrentCached — the journal's first question
 #include "backend/session/workerPoolHeadless.h"   // the process's worker pool
+#include "backend/databaseLayer/databaseMemoryBase.h"   // the process's queries' memory manager
 #include "backend/compiler/value.h"   // ibValue::IsRegisterCtor / GetNameObjectFromID — the registry the help corpus checks by
 #include "core/syntaxHelper/helpService.h"
 
@@ -39,6 +40,11 @@ std::unique_ptr<ibApplicationHost>                 ibApplicationHost::s_applicat
 std::mutex                                          ibApplicationHost::s_mutex;
 std::vector<std::unique_ptr<ibApplicationInstance>> ibApplicationHost::s_instances;
 std::atomic<std::size_t>                            ibApplicationHost::s_instanceCount{ 0 };
+
+// The queries' memory manager (GetQueryMemoryManager) — the process's, made on the first ask and kept, as the instances
+// above are, until the statics go; HasPool asks it from a holder's destructor.
+static std::mutex                            s_queryMemoryManagerMutex;
+static std::unique_ptr<ibQueryMemoryManager> s_queryMemoryManager;
 
 // The base a thread with no session works for (ibApplicationInstanceScope, SetThreadInstance).
 static thread_local ibApplicationInstance* t_instance = nullptr;
@@ -138,11 +144,25 @@ bool ibApplicationHost::HasPool(const ibConnectionPool* pool)
 {
 	if (pool == nullptr)
 		return false;
+	{
+		// …the queries' memory manager's too: the process holds it while it lives.
+		std::lock_guard<std::mutex> lk(s_queryMemoryManagerMutex);
+		if (s_queryMemoryManager != nullptr && s_queryMemoryManager->GetConnectionPool() == pool)
+			return true;
+	}
 	std::lock_guard<std::mutex> lk(s_mutex);
 	for (const auto& applicationInstance : s_instances)
 		if (ibApplicationInstance::GetConnectionPool(applicationInstance.get()) == pool)
 			return true;
 	return false;
+}
+
+ibQueryMemoryManager& ibApplicationHost::GetQueryMemoryManager()
+{
+	std::lock_guard<std::mutex> lk(s_queryMemoryManagerMutex);
+	if (s_queryMemoryManager == nullptr)
+		s_queryMemoryManager.reset(new ibQueryMemoryManager(ib::AppDataCtorToken{}));
+	return *s_queryMemoryManager;
 }
 
 ibApplicationHost* ibApplicationHost::Ensure(ibRunMode runMode)

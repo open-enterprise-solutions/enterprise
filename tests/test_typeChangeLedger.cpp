@@ -44,6 +44,7 @@ struct StoredColumn : ibBackendQueryColumn {
 	ibString GetPhysicalName() const override { return physical; }
 	ibTypeDescription& GetTypeDesc() const override { return type; }
 	ibMetaID GetColumnId() const override { return 1; }
+	const ibMetaData* GetMetaData() const override { return nullptr; }
 };
 
 ibString FieldOf(const StoredColumn& column, ibColumnRole role)
@@ -177,6 +178,29 @@ protected:
 			++counts[rows.IsResultNull(typeCol) ? 0 : rows.GetResultInt(typeCol)];
 		return counts;
 	}
+
+	// How many rows hold each (tag, number) — what a GROUP BY over the column's fields tells apart (-1 = NULL).
+	using Spelled = std::map<std::pair<int, long long>, int>;
+	static Spelled Spellings(const ibString& typeCol, const ibString& numberCol)
+	{
+		Spelled counts;
+		ibQueryResult rows = ibDatabaseQueryBuilder().From(wxT("goods")).Select({ typeCol, numberCol }).Execute();
+		while (rows.Next())
+			++counts[{ rows.IsResultNull(typeCol) ? -1 : rows.GetResultInt(typeCol),
+			           rows.IsResultNull(numberCol) ? -1 : rows.GetResultLong(numberCol) }];
+		return counts;
+	}
+
+	// How many rows hold `value` in `field`.
+	static long long Holding(const ibString& field, const ibValue& value)
+	{
+		ibDatabaseQueryBuilder q;
+		q.From(wxT("goods"));
+		q.Where(ibBinOp(ibQueryBinOp::Eq, ibCol(field), ibConst(value)));
+		q.Project({ ibQueryProjItem{ ibFunc(wxT("COUNT"), {}), wxT("n_") } });
+		ibQueryResult rows = q.Execute();
+		return rows.Next() ? rows.GetResultLong(wxT("n_")) : 0;
+	}
 };
 
 } // namespace
@@ -192,19 +216,20 @@ TEST_P(TypeChangeLedger, ARemovedTypeIsCountedAndExactlyThoseRowsReadEmpty)
 
 	Create(was);
 	const ibString typeCol = FieldOf(was, ibColumnRole::Discriminator);
+	const ibString numberCol = FieldOf(was, ibColumnRole::Number);
 	const int stringTag = ibPersistedTypeTag(ibColumnRole::String);
 	const int numberTag = ibPersistedTypeTag(ibColumnRole::Number);
 	Put(typeCol, ibString::Format(wxT("%d"), stringTag));
 	Put(typeCol, ibString::Format(wxT("%d"), stringTag));
-	Put(typeCol, ibString::Format(wxT("%d"), numberTag));
+	Put(typeCol + wxT(", ") + numberCol, ibString::Format(wxT("%d, 7"), numberTag));
 
 	const std::vector<ibString> said = Apply(was, next);
 	ASSERT_EQ(said.size(), 1u);
 	EXPECT_NE(said[0].Find(wxT(": 2 stored values will be cleared")), wxNOT_FOUND) << said[0];
 
-	const std::map<int, int> tags = TagCounts(typeCol);
-	EXPECT_EQ(tags.count(0) ? tags.at(0) : 0, 2);
-	EXPECT_EQ(tags.count(numberTag) ? tags.at(numberTag) : 0, 1);
+	// …and they hold the column's empty value as the column writes it — a number's tag, a zero beside it — the one
+	// spelling a number written empty has, so a GROUP BY over the fields finds them in its group, not beside it.
+	EXPECT_EQ(Spellings(typeCol, numberCol), (Spelled{ { { numberTag, 0 }, 2 }, { { numberTag, 7 }, 1 } }));
 }
 
 // _RTRef outlives the reference it named: a row that holds a number now may still carry the clsid
@@ -240,6 +265,9 @@ TEST_P(TypeChangeLedger, ARemovedTargetLeavesANumberThatStillCarriesItsClsid)
 	EXPECT_EQ(tags.count(0) ? tags.at(0) : 0, 1);
 	EXPECT_EQ(tags.count(refTag) ? tags.at(refTag) : 0, 1);
 	EXPECT_EQ(tags.count(numberTag) ? tags.at(numberTag) : 0, 1) << "the number lost its tag to a clsid it no longer holds";
+	// The cleared row is the column's empty value in every field: it names no target, and the stale clsid left is the
+	// number's.
+	EXPECT_EQ(Holding(targetCol, ibValue(ibNumber(static_cast<long long>(gone)))), 1) << "the cleared row still names its dead target";
 }
 
 // An added type changes the shape and empties nothing.

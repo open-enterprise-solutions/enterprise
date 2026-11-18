@@ -423,6 +423,14 @@ std::shared_ptr<const ibBackendQueryable>   CastTarget(const std::shared_ptr<con
 bool                                        WalkEnters(const std::shared_ptr<const ibBackendQueryable>& target,
                                                        const std::shared_ptr<const ibBackendQueryColumn>& next);
 
+// ⭐⭐ CAN AN ENGINE BE ASKED FOR THIS AT ALL? — one question, asked of the finished expression. Two kinds cannot be
+// written into SQL, and for the same reason rather than two: they are not readings of a stored field. `ValueAsk` puts a
+// question to the VALUE (what it shows, what type it is — answered by the metatype, off the loaded object); `OutputRef`
+// reads a figure that does not exist until a fold has run. Asked of the whole tree: `ISNULL(PRESENTATION(x), "-")` is
+// our side even though ISNULL is not. An output so made is answered over the row that came back (SetComputedOverRow), a
+// condition over its source's rows in a base in memory (ibQueryComposer::OverMemorySpace) — whatever the source is.
+bool                                        ExprIsAnsweredHere(const ibQueryColumnExprPtr& e);
+
 // ==========================================================================
 // ⭐⭐ A TYPE, AS A VALUE — made and read WITHOUT naming the class that carries one.
 //
@@ -452,6 +460,11 @@ BACKEND_API bool    ibTypeValueClsid(const ibValue& value, ibClassID& outClsid);
 // CONVERTED as a typed field converts what is written into it (AdjustValue: `Number(15, 2)` rounds, `String(10)`
 // cuts); a reference is NARROWED — it is of the type named or it is NULL, never an empty reference nobody wrote.
 BACKEND_API ibValue ibValueAsType(const ibValue& value, const ibTypeDescription& type);
+
+// ⭐ …AND A CONDITION THAT ASKS A FIELD ITS TYPE: `VALUETYPE(x) = TYPE(T)`, or `<>`. Unlike every other question put to a
+// value it has SQL — the field's stored tag, or `_RTRef` for a reference — so the statement asks it where the field is.
+// The field it tests, and the type in `type`; null for any other condition.
+BACKEND_API std::shared_ptr<const ibBackendQueryColumn> ibTypeTestOf(const ibQueryCondition& c, ibClassID& type);
 
 // ⭐ THE FIELDS A CAST NARROWED, KEPT FOR ONE QUERY. CastLeaf makes a (table, field) pair's column once in the open
 // scope and hands the same one on every later ask, so a walk named twice in one query — grouped by and sorted by —

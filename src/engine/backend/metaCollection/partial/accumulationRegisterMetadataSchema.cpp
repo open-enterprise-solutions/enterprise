@@ -486,7 +486,7 @@ std::shared_ptr<const ibBackendQueryable> ibValueMetaObjectAccumulationRegister:
 		// ⭐ …AND IT IS THE MOMENT a balance's first and last are counted by — as is each coarser unit below.
 		columns.push_back(ibTempColumn(periodName, periodField,
 		                               GetRegisterPeriod()->GetTypeDesc(), ibRegDerivedColumnId(GetRegisterPeriod()->GetMetaID(), 1),
-		                               GetRegisterPeriod()->GetSynonym(),
+		                               GetMetaData(), GetRegisterPeriod()->GetSynonym(),
 		                               ibBackendQueryColumn::Kind::Computed).StandsFor(GetRegisterPeriod()->GetQueryColumn())
 		                  .PlaysInBalance(ibBalanceRole::Moment, ibSourcePeriodRank(1)));
 
@@ -506,7 +506,7 @@ std::shared_ptr<const ibBackendQueryable> ibValueMetaObjectAccumulationRegister:
 				                               periodField + ibT("_") + u.second,
 				                               GetRegisterPeriod()->GetTypeDesc(),
 				                               ibRegDerivedColumnId(GetRegisterPeriod()->GetMetaID(), 2 + static_cast<unsigned int>(u.first)),
-				                               ibEmptyString, ibBackendQueryColumn::Kind::Computed).StandsFor(GetRegisterPeriod()->GetQueryColumn())
+				                               GetMetaData(), ibEmptyString, ibBackendQueryColumn::Kind::Computed).StandsFor(GetRegisterPeriod()->GetQueryColumn())
 				                  .PlaysInBalance(ibBalanceRole::Moment, ibSourcePeriodRank(1)));   // a grain of the same period
 	}
 
@@ -547,7 +547,7 @@ std::shared_ptr<const ibBackendQueryable> ibValueMetaObjectAccumulationRegister:
 	auto add = [&](const ibValueMetaObjectAttributeBase* res, const ibString& suffix) {
 		columns.push_back(ibTempColumn(res->GetName() + suffix,
 		                               ibAccumFigureField(ibRegValueField(res), suffix),
-		                               res->GetTypeDesc(), ibRegDerivedColumnId(res->GetMetaID(), ++figureNo),
+		                               res->GetTypeDesc(), ibRegDerivedColumnId(res->GetMetaID(), ++figureNo), GetMetaData(),
 		                               ibRegColumnCaptionOf(res->GetSynonym(), ibRegFigureCaption(suffix)),
 		                               ibBackendQueryColumn::Kind::Computed).StandsFor(res->GetQueryColumn())
 		                  .PlaysInBalance(ibRegFigureBalanceRole(suffix)));

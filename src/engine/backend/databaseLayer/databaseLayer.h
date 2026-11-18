@@ -7,7 +7,6 @@
 #include <unordered_set>
 #include <vector>
 
-#include "databaseLayerDef.h"
 #include "databaseErrorReporter.h"
 #include "databaseStringConverter.h"
 #include "databaseResultSet.h"
@@ -124,6 +123,11 @@ struct ibSqlFeatures
 	// to it — which is not automatic: a Firebird string bind used to overwrite its slot's described
 	// length, and the next row's string was cut to the previous one's (firebirdParameterCollection.cpp).
 	bool m_batchByReexecution = false;
+
+	// ⭐ THE BASE COMPUTES IN MEMORY — it is the base in memory (ibDatabaseLayerMemory, databaseMemoryBase.h): it reads no
+	// SQL and runs the IR, the DDL and the DML as they are. TRUE lets whoever holds it cast it statically to that class
+	// (the builder, databaseQueryBuilder.cpp); a driver that speaks SQL leaves it false and is handed the text.
+	bool m_inMemory = false;
 };
 
 // The calendar's periods (ibTotalsPeriod) and a date's parts (ibDatePart) are the date's own, and so
@@ -270,6 +274,15 @@ struct ibDialectDictionary
 	ibString m_typeText          = ibT("TEXT");          // a string of no limit (ibCanonicalKind::Text)
 	ibString m_typeBinaryPattern = ibT("BINARY(%d)");    // fixed-length bytes (reference _RRRef = pure guid); indexable for = joins
 	ibString m_typeNumberPattern = ibT("DECIMAL(%d,%d)");
+
+	// --- a byte string written as a literal ------------------------------------
+	// Where nothing is bound, a binary value is spelled: a column's DEFAULT (the zero key of an empty reference,
+	// ibQueryRenderer::RenderColumn), and a trigger or view body, whose guard names it `{binary:<hex digits>}`. The
+	// renderer fills this template's {hex}. `X'…'` is the standard binary string (Firebird, SQLite, MySQL);
+	// PostgreSQL's bytea is written differently. What asks for it in a guard: an EMPTY REFERENCE differs from a
+	// filled one only in its id field (zero bytes), so "the row names an account" is that field compared with the
+	// zero id.
+	ibString m_binaryLiteralTemplate = ibT("X'{hex}'");
 
 	// DDL/DML transaction barrier. Some engines cannot safely populate a table
 	// (prepared INSERT/UPDATE with bind) in the SAME transaction that created or
@@ -673,14 +686,6 @@ struct ibMaterializationDialect
 	// {expr} — the joined parts, digested into what the column stores.
 	ibString m_keyHashDigest;
 
-	// --- a byte string written INTO trigger and view text ----------------------
-	// A trigger body binds no parameters, so a binary value it compares with is spelled as a literal: a
-	// guard names it `{binary:<hex digits>}`, and the renderer fills this template's {hex}. `X'…'` is the
-	// standard binary string (Firebird, SQLite, MySQL); PostgreSQL's bytea is written differently. What asks
-	// for it: an EMPTY REFERENCE differs from a filled one only in its id field (zero bytes), so "the row
-	// names an account" is that field compared with the zero id.
-	ibString m_binaryLiteralTemplate = ibT("X'{hex}'");
-
 	// --- the totals table itself ----------------------------------------------
 	// Appended after the CREATE TABLE column list — PostgreSQL " WITH (fillfactor = 80)",
 	// which keeps the hot totals UPDATE on the same page (HOT update, no index write) and is
@@ -961,11 +966,18 @@ public:
 	///  is thrown unless bRequireUniqueResult is false
 	virtual int GetSingleResultInt(const ibString& strSQL, int nField, bool bRequireUniqueResult = true);
 
-	virtual int GetDatabaseLayerType() const = 0;
+	// WHICH DRIVER THIS IS, by name — "Firebird", "PostgreSQL", "ODBC", "SQLite", "Memory": what a person reads where a
+	// statement went (the profiler). A name and not a number: nothing branches on it — what differs between drivers is
+	// asked of the dialect below — and nothing stores it.
+	//
+	// PRODUCTION is Firebird and PostgreSQL. SQLite is embedded for TESTS and LOGGING only — single-process, no
+	// materialized views, no ALTER COLUMN — and is never a production target. ODBC is the base an MSSQL layer derives
+	// from (its own dialect dictionary, ibTriggerFamily::SetBased). Memory is the base in memory (databaseMemoryBase.h).
+	virtual ibString GetDatabaseLayerName() const = 0;
 
 	// The SQL dialect this driver speaks (placeholder style, pagination, type
 	// map, feature flags). L2-1 (ibDatabaseQueryBuilder / ibQueryRenderer) reads
-	// this instead of branching on GetDatabaseLayerType() — there is no
+	// this instead of branching on the driver — there is no
 	// "is this PG or FB" check anywhere. PURE virtual: every concrete driver
 	// owns its dialect (typically a static singleton it returns by reference);
 	// ODBC returns a default-constructed ANSI dictionary.

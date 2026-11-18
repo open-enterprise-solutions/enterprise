@@ -409,6 +409,14 @@ void ibDatabaseParameterFirebird::Set(const void* pData, long nDataLength)
 		memcpy(m_pParameter->sqldata, &len, sizeof(ISC_USHORT));
 		memcpy(m_pParameter->sqldata + sizeof(ISC_USHORT), pData, n);
 	}
+	else {
+		// Raises for the same reason the number branch above does. Left to fall through, the slot kept no data
+		// and was marked set, and the engine refused the whole statement far from here: bytes of a reference bound
+		// to a TIMESTAMP read "empty pointer to data at SQLVAR index 13" (2026-11-19).
+		ibBackendCoreException::Error(
+			_("Firebird: bytes were bound to a parameter the statement declares as SQL type %d"),
+			nType);
+	}
 
 	m_nNullFlag = 0;
 	m_pParameter->sqlind = &m_nNullFlag; // NULL indicator

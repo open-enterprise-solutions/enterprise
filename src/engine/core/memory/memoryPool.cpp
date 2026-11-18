@@ -108,8 +108,8 @@ void Deallocate(void* p, std::size_t bytes) noexcept {
 	pool.bytes[c] += detail::kClasses[c];
 }
 
-// Hands this thread's cached blocks back to the CRT. The cache exists to make string and buffer
-// churn cheap, not to outlive the process: at exit the free list is indistinguishable from a leak
+// Hands this thread's cached blocks back to the CRT. The cache exists to make string, buffer and
+// number churn cheap, not to outlive the process: at exit the free list is indistinguishable from a leak
 // in the CRT dump — the block still holds its old contents with only the first word overwritten by
 // `next`, which is why the dump used to show fragments of metadata names. 279 blocks of that
 // hide the next real leak.

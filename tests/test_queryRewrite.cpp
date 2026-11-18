@@ -8,7 +8,7 @@
 // Rule 2 — FROM-subquery flattening: a plain inner projection merges into the outer
 // query (one server-side SELECT instead of a RAM-materialised ibSubqueryQueryable).
 // Rule 3 — the rows one level down: an expression the row road cannot compute where it
-// stands (through a walk, or folded / filtered / sorted over a join) is computed over them.
+// stands (through a walk, or filtered / sorted over a join, or folded in a HAVING over one) is computed over them.
 
 #include <gtest/gtest.h>
 #include <wx/string.h>   // wxT, wxString - the engine's headers include no wx
@@ -388,12 +388,12 @@ TEST(QueryRewrite, AWalkInAConditionProjectedAsAValue_ReadsTheRowsOneLevelDown)
 	EXPECT_TRUE(Carries(*sel, wxT("T.Item.Price")));
 }
 
-TEST(QueryRewrite, AFoldOfAnExpressionOverAJoin_ReadsTheRowsOneLevelDown)
+TEST(QueryRewrite, AFoldOfAnExpressionInAHavingOverAJoin_ReadsTheRowsOneLevelDown)
 {
-	// The stitched rows of a join carry columns, not expressions: one level up the join is ONE source.
+	// The HAVING keeps its rule over a join (a projection's fold of an expression stays — see the standing ones below).
 	auto sel = ParseAndRewrite(
-		wxT("SELECT B.Item AS Item, SUM(B.Qty * G.Price) AS Amount FROM AccumulationRegister.Stock AS B ")
-		wxT("LEFT JOIN Catalog.Goods AS G ON G.Ref = B.Item WHERE B.Qty > 0 GROUP BY B.Item"));
+		wxT("SELECT B.Item AS Item FROM AccumulationRegister.Stock AS B ")
+		wxT("LEFT JOIN Catalog.Goods AS G ON G.Ref = B.Item WHERE B.Qty > 0 GROUP BY B.Item HAVING SUM(B.Qty * G.Price) > 100"));
 
 	ASSERT_TRUE(sel->m_from.m_subquery != nullptr);
 	EXPECT_TRUE(sel->m_joins.empty());
@@ -460,6 +460,8 @@ TEST(QueryRewrite, WhatTheRowRoadComputesItself_StaysWhereItWasWritten)
 		wxT("SELECT SUM(1) AS N FROM AccumulationRegister.Stock AS B LEFT JOIN Catalog.Goods AS G ON G.Ref = B.Item"),
 		wxT("SELECT B.Item AS Item, SUM(G.Price) AS P FROM AccumulationRegister.Stock AS B ")
 		wxT("LEFT JOIN Catalog.Goods AS G ON G.Ref = B.Item GROUP BY B.Item"),                          // a field folded over a join
+		wxT("SELECT B.Item AS Item, SUM(B.Qty * G.Price) AS Amount FROM AccumulationRegister.Stock AS B ")
+		wxT("LEFT JOIN Catalog.Goods AS G ON G.Ref = B.Item WHERE B.Qty > 0 GROUP BY B.Item"),          // an expression folded over a join: the composite folds it
 		wxT("SELECT T.Qty FROM Document.Sale.Goods AS T ")
 		wxT("WHERE (T.Item, T.Qty * 2) IN (SELECT G.Item, G.Qty FROM Document.Sale.Goods AS G)"),       // a row: refused where it stands
 	};

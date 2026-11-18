@@ -506,6 +506,28 @@ void ibValueMetaObjectAccountingRegister::ContributeTables(ibSchemaSnapshot& out
 					v.m_movementColumns.push_back({ s.m_name, s.m_type });
 				for (const ibColumnSlot& s : DescribeColumnLayout(*GetRegisterLineNumber()->GetQueryColumn()))
 					v.m_movementColumns.push_back({ s.m_name, s.m_type });
+
+				// ⭐⭐ …AND THE CORRESPONDENT — the other side of the same posting: its account, its breakdown, the other
+				// half of a field kept per side. A side's stored row keeps one account and carries none of it, so a
+				// reading cut by the correspondent stands on this arm alone (ServerCorrespondentKeys), and what the
+				// correspondent moved is the other half of a figure, read as the field it is.
+				if (correspondence) {
+					const bool other = !creditSide;
+					const auto carry = [&v](const ibValueMetaObjectAttributeBase* attribute) {
+						if (attribute != nullptr)
+							for (const ibColumnSlot& s : DescribeColumnLayout(*attribute->GetQueryColumn()))
+								v.m_movementColumns.push_back({ s.m_name, s.m_type });
+					};
+					carry(other ? GetRegisterAccountCr() : GetRegisterAccount());
+					for (unsigned int idx = 0; idx < GetAccountDimensionCount(); idx++) {
+						carry(GetAccountDimensionKindSlot(other, idx));
+						carry(GetAccountDimensionSlot(other, idx));
+					}
+					for (const auto dimension : GetDimensionArrayObject())
+						carry(GetFieldSide(other, dimension));
+					for (const auto resource : GetResourceArrayObject())
+						carry(GetFieldSide(other, resource));
+				}
 			}
 
 			for (const Figure& figure : figures)
@@ -554,6 +576,16 @@ std::shared_ptr<const ibBackendQueryable> ibValueMetaObjectAccountingRegister::G
 	for (const auto dimension : GetDimensionArrayObject())
 		ibRegSignColumn(builtFrom, GetRegisterDimension(creditSide, dimension));
 	for (const auto resource  : GetResourceArrayObject())  ibRegSignAttribute(builtFrom, resource);
+	// …and the correspondent its movement arm carries — the other side's account, slots and halves.
+	if (IsCorrespondence()) {
+		ibRegSignAttribute(builtFrom, creditSide ? GetRegisterAccount() : GetRegisterAccountCr());
+		for (unsigned int idx = 0; idx < GetAccountDimensionCount(); idx++) {
+			ibRegSignAttribute(builtFrom, GetAccountDimensionKindSlot(!creditSide, idx));
+			ibRegSignAttribute(builtFrom, GetAccountDimensionSlot(!creditSide, idx));
+		}
+		for (const auto dimension : GetDimensionArrayObject()) ibRegSignAttribute(builtFrom, GetFieldSide(!creditSide, dimension));
+		for (const auto resource  : GetResourceArrayObject())  ibRegSignAttribute(builtFrom, GetFieldSide(!creditSide, resource));
+	}
 
 	return m_surfaces.Obtain(viewName, builtFrom, viewName, GetMetaData(),
 		[&](std::vector<ibTempColumn>& columns)
@@ -596,6 +628,22 @@ std::shared_ptr<const ibBackendQueryable> ibValueMetaObjectAccountingRegister::G
 	if (HasRecorder() && GetRegisterRecorder() != nullptr && GetRegisterLineNumber() != nullptr) {
 		columns.push_back(ibRegAttributeColumn(GetRegisterRecorder()));
 		columns.push_back(ibRegAttributeColumn(GetRegisterLineNumber()));
+
+		// …and the correspondent it carries (the view's declaration, ContributeTables, says why) — the other
+		// side's account, slots and halves, each as the attribute it is on the source table.
+		if (IsCorrespondence()) {
+			const auto publish = [&columns](const ibValueMetaObjectAttributeBase* attribute) {
+				if (attribute != nullptr)
+					columns.push_back(ibRegAttributeColumn(attribute));
+			};
+			publish(creditSide ? GetRegisterAccount() : GetRegisterAccountCr());
+			for (unsigned int idx = 0; idx < GetAccountDimensionCount(); idx++) {
+				publish(GetAccountDimensionKindSlot(!creditSide, idx));
+				publish(GetAccountDimensionSlot(!creditSide, idx));
+			}
+			for (const auto dimension : GetDimensionArrayObject()) publish(GetFieldSide(!creditSide, dimension));
+			for (const auto resource  : GetResourceArrayObject())  publish(GetFieldSide(!creditSide, resource));
+		}
 	}
 
 	// The figures. `add` spells BOTH names from one suffix — `AmountTurnoverDr` for a query to write,
@@ -623,7 +671,7 @@ std::shared_ptr<const ibBackendQueryable> ibValueMetaObjectAccountingRegister::G
 		columns.push_back(ibTempColumn(
 			figureName, ibAcctTurnoverField(ibRegValueField(resource), credit),
 			// Numbered over the resource, by side (ibRegDerivedColumnId).
-			resource->GetTypeDesc(), ibRegDerivedColumnId(resource->GetMetaID(), credit ? 2 : 1),
+			resource->GetTypeDesc(), ibRegDerivedColumnId(resource->GetMetaID(), credit ? 2 : 1), GetMetaData(),
 			// …and the caption, from the same pair the name is built from.
 			ibRegColumnCaptionOf(resource->GetSynonym(), ibRegSidedCaption(ibRegFigure::Turnover, credit)),
 			ibBackendQueryColumn::Kind::Computed)

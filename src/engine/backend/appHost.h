@@ -3,7 +3,7 @@
 
 // ibApplicationHost — THE PROCESS, and the bases it serves.
 //
-// A process holds one base — every host of today: the desktop client, the designer, codeRunner, the web
+// A process holds one base — every host of today: the desktop client, the designer, coderunner, the web
 // host, the tests — or several: the application server. Each base is an ibApplicationInstance. What belongs to the process
 // rather than to any base lives here, once: the plugins (DLLs loaded into the process, each initialised
 // once), the platform locale (the C library's is process state) and the syntax-helper corpus that follows it.
@@ -23,6 +23,7 @@
 
 class ibPluginManager;
 class ibWorkerPool;
+class ibQueryMemoryManager;
 
 class BACKEND_API ibApplicationHost {
 public:
@@ -41,6 +42,11 @@ public:
 	// touching it — for a session or a connection holder that may outlive its base on the way out.
 	static bool HasRegistry(const class ibSessionRegistry* registry);
 	static bool HasPool(const class ibConnectionPool* pool);
+
+	// The queries' memory manager — ONE FOR THE PROCESS, over every driver: the base in memory
+	// (databaseLayer/databaseMemoryBase.h). Made the first time it is asked for and held until the process ends,
+	// whatever bases it opens or closes — so it is the process's, not this object's, and asked of the class.
+	static ibQueryMemoryManager& GetQueryMemoryManager();
 
 	// A base's OWN SERVICE names the thread it runs on — the registry thread, the job tick — so the journal can
 	// say which base their lines are about. For the journal only: the service holds its base and asks IT; this

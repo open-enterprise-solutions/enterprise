@@ -1,14 +1,11 @@
 // =============================================================================
 // Temp-DB round-trip on the embedded SQLite driver (integration scope).
 //
-// The SQLite driver now vends an ibTempTableDialect (ad-hoc CREATE TEMPORARY
-// TABLE), so ibTempTableManager::Materialise can serialise a RAM intermediate
-// into a server-side temp table on the embedded DB. That is the capability that
-// lets a heterogeneous JOIN (a computed leaf ⋈ a DB leaf) promote OFF the RAM
-// floor and run DB⋈DB server-side (queryComposer.cpp PromoteComputedLeaf) — the
-// optimisation the LINQ-join unification leans on once a side is computed. This
-// proves the machinery end-to-end: CREATE TEMP + chunked INSERT + read-back
-// through the L3 door.
+// The SQLite driver vends an ibTempTableDialect (ad-hoc CREATE TEMPORARY
+// TABLE), so ibTempTableManager::Materialise can serialise rows held in memory
+// into a server-side temp table on the embedded DB — a nested query's keys for a
+// semi-join, a table the server then reads like any other. This proves the
+// machinery end-to-end: CREATE TEMP + chunked INSERT + read-back through the L3 door.
 //
 // Unlike the pure parity tests, this one DOES bring up the global appData env
 // (the way coderunner does — ibApplicationInstance::CreateAppDataEnv) plus a
@@ -129,8 +126,8 @@ TEST_F(TempDbSqliteFix, MaterialiseScalarRoundTrip)
 	EXPECT_GE(statTables, 1) << "ANALYZE should have created sqlite_stat1 (stats refresh executed)";
 }
 
-// Empty input -> no temp table (the manager returns null; the caller stays on
-// the RAM floor). Guards the documented "Columns().empty() -> nullptr" contract.
+// Empty input -> no temp table (the manager returns null; the caller says why it has none).
+// Guards the documented "Columns().empty() -> nullptr" contract.
 TEST_F(TempDbSqliteFix, MaterialiseEmptyReturnsNull)
 {
 	if (!ready) GTEST_SKIP();
@@ -415,14 +412,13 @@ TEST_F(TempDbSqliteFix, DoorMultipleAggregatesInOneRow)
 // The access-policy decorator folds `restrict s join perm on s.k = perm.k` into the
 // query's WHERE predicate as an ibSemiJoinExists (ibDataQueryBuilder::AddSemiJoin);
 // the provider renders it EXISTS(SELECT * FROM perm sj WHERE sj.k = s.k) — the SAME
-// render the register-direct path AND the temp-promoted value-table / multi-source path
-// both funnel through (BuildSemiJoinExists). RLS lives or dies on two properties, both
+// render every source's read funnels through (BuildSemiJoinExists). RLS lives or dies on two properties, both
 // asserted here by RUNNING the render against SQLite:
 //   * it FILTERS — a row passes iff a permitting row EXISTS (no permission → not visible);
 //   * it NEVER MULTIPLIES — a row permitted by N rows appears ONCE, not N times (an INNER
 //     JOIN would duplicate; the filter-not-JOIN principle, docs/private/access-policy-rls.md).
 // Both sources are SQLite temp tables (the vehicle), so the correlation runs server-side
-// exactly like a temp-promoted inner — the outer key qualifies by the source's own table
+// exactly like over a table of the base — the outer key qualifies by the source's own table
 // name (BuildConditionExpr's empty-mainQual fallback), so it never binds inside the EXISTS.
 // ===========================================================================
 namespace {
@@ -449,15 +445,13 @@ struct KeyTable {
 // `SELECT * FROM outer WHERE [NOT] EXISTS(perm correlated on k)` — the semi-join is the ONLY
 // restriction. Returns the surviving outer keys (dups in the result would prove multiplication).
 std::vector<int> SemiJoinSurvivors(ibDatabaseConnectionHolder* holder,
-                                   const KeyTable& outer, const KeyTable& perm, bool negated = false,
-                                   bool emptyMatchesEmpty = false) {
+                                   const KeyTable& outer, const KeyTable& perm, bool negated = false) {
 	ibSemiJoinExists sj;
 	sj.m_inner    = perm.temp;    // the permission source — EXISTS scans it
 	sj.m_outerKey = outer.k;      // s.k
 	sj.m_innerKey = perm.k;       // a.k
 	sj.m_op       = ibQueryFilterOp::Equal;
 	sj.m_negated  = negated;      // NOT EXISTS — the anti-join / deny-if-present rule
-	sj.m_emptyMatchesEmpty = emptyMatchesEmpty;   // as `x NOT IN (SELECT k …)` sets it
 
 	ibDataQueryBuilder q(holder);
 	q.From(outer.temp);
@@ -528,7 +522,8 @@ TEST_F(TempDbSqliteFix, RlsSemiJoin_NegatedIsAntiJoin)
 
 // `x NOT IN (SELECT k …)` on a server with no anti-join (SQLite here, Firebird in production, m_antiJoin false) is
 // asked as the row's key among the outer's keys MINUS the select's — and must keep exactly the rows NOT EXISTS keeps:
-// the empty key (0) matches the select's empty one, a key the select repeats is dropped once, nothing multiplies.
+// the empty key (0) matches the select's empty one — the one value an empty number is written as — a key the select
+// repeats is dropped once, nothing multiplies.
 TEST_F(TempDbSqliteFix, NotInSemiJoin_KeysMinusTheSelects)
 {
 	if (!ready) GTEST_SKIP();
@@ -537,7 +532,7 @@ TEST_F(TempDbSqliteFix, NotInSemiJoin_KeysMinusTheSelects)
 	ASSERT_TRUE(sales.Build(holder, 651, {0, 1, 2, 3, 3, 4}));
 	ASSERT_TRUE(perm .Build(holder, 652, {0, 2, 2, 4}));
 
-	std::vector<int> got = SemiJoinSurvivors(holder, sales, perm, /*negated*/ true, /*emptyMatchesEmpty*/ true);
+	std::vector<int> got = SemiJoinSurvivors(holder, sales, perm, /*negated*/ true);
 	std::sort(got.begin(), got.end());
 	EXPECT_EQ(got, (std::vector<int>{1, 3, 3})) << "the rows whose key the select lacks, each once per row";
 }
@@ -603,9 +598,8 @@ TEST_F(TempDbSqliteFix, RlsSemiJoin_MultipleJoinsCompose)
 
 // ===========================================================================
 // TWO TABLES OF ONE CONNECTION, ON THE SERVER'S ROAD — a join, a fold over it, a stack of branches, each ONE statement
-// (docs/private/query-language-arc.md §22.1a, §22.1b). The gates are asked of hand-made shapes in test_queryComposer.cpp;
-// here the door is driven and what crossed the wire is held (queryRoad.h). Fallen to the RAM stitch, every table is
-// read whole, a statement each.
+// (docs/private/query-one-road.md §7 — the composite they are, read as one source). The door is driven and what crossed
+// the wire is held (queryRoad.h): read table by table, every table would come back whole, a statement each.
 // ===========================================================================
 
 // goods { 3 Apple 30, 1 Banana 10, 2 Avocado 20 } joined to sold { 1, 2, 2 } on id = k: Banana once, Avocado twice.
@@ -659,8 +653,8 @@ TEST_F(TempDbSqliteFix, AFoldOverTwoTablesIsOneStatement)
 	EXPECT_EQ(sent.m_rows, 2u) << "the groups came back, not the rows they fold\n" << sent;
 }
 
-// Two tables of the same columns stacked: six names. Stacked in memory, the rows are the same and each branch is a
-// read of its own — so here the statements tell the road.
+// Two tables of the same columns stacked: six names. Stacked branch by branch, the rows would be the same and each
+// branch a read of its own — so here the statements tell the road.
 TEST_F(TempDbSqliteFix, TwoTablesStackInOneStatement)
 {
 	if (!ready) GTEST_SKIP();
