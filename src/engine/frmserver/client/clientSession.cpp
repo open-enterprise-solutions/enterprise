@@ -24,7 +24,9 @@ bool ibClientSession::OnClose(bool force)
 	if (force)
 		return m_frame->ExitClient(true);
 
-	// Nobody is asked yet whether the client may close (unsaved input, a running report): when it grows that
-	// question, it is answered on the !force road, and a refusal returns false from here.
-	return m_frame->GetClientInstance()->RequestClose();
+	// NOT FORCED — a script's EndJob(False), an assistant's app_close: the person's [X], arriving from the engine. The
+	// client is told to close and asks what it keeps, as from its own window; taken off the host in silence instead, a
+	// designer's unsaved application was lost without the question its window asks. The answer is the person's, later.
+	m_frame->CloseClient();
+	return true;
 }

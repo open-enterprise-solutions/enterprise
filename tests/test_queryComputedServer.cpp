@@ -225,8 +225,8 @@ TEST_F(ComputedServerFix, Linq_WherePushesToServer)
 	src->AddCol(region);
 	src->AddCol(qty);
 
-	// `=`, not `==` — the language has no `==`; see the note on Record in test_lambdaRecorder.cpp.
-	auto expr = RecordLambda(wxT("{ return x.region = \"North\"; }"));
+	// CES compares with `==` - see the note on Record in test_lambdaRecorder.cpp.
+	auto expr = RecordLambda(wxT("{ return x.region == \"North\"; }"));
 	ASSERT_NE(expr, nullptr);
 	ibQueryPredicatePtr pred = ibQueryLowering::LowerLambdaPredicate(src, *expr, {});
 	ASSERT_NE(pred, nullptr) << "a translatable LINQ body must lower to a predicate";

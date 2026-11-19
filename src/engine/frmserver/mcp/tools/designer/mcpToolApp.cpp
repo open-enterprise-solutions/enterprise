@@ -31,6 +31,7 @@
 #include "backend/appData.h"
 #include "backend/debugger/debugClient.h"     // one debug session at a time — the menu's own guard
 #include "backend/metadataApplication.h"      // …and the application must already be in the base
+#include "backend/session/session.h"          // app_close — the session's Close, the person's [X]
 #include "core/startProcess.h"                // ibStopProcess, ibKillProcess, ibProcessExists — asked to close, made to, gone
 
 #include <chrono>
@@ -72,6 +73,14 @@ const ibArg& ArgRestart()
 		  "after changing a module: a running application keeps the bytecode it started with, so "
 		  "the change is invisible until it comes up again. A run started from here WITHOUT the "
 		  "debugger is ended too - it has no debug connection, but this designer knows its process."));
+	return s_a;
+}
+
+const ibArg& ArgForce()
+{
+	static const ibArg s_a(ibT("force"), ibArg::Kind::Flag,
+		ibMcpText("Close without asking: a changed application is not saved, an unsaved tab is lost. Default false - "
+		  "the designer asks as when its window is closed, and the person at it answers."));
 	return s_a;
 }
 
@@ -298,3 +307,51 @@ public:
 };
 
 MCP_TOOL_REGISTER_DESIGNER(ibMcpToolAppStop);
+
+//---------------------------------------------------------------------------
+// app_close
+//---------------------------------------------------------------------------
+
+// THIS DESIGNER CLOSED — the window the call came from, not the application it started (app_stop). The session's door,
+// as a script's EndJob: the person's [X] arriving from the engine, so its questions are asked and answered by the
+// person; forced, nothing is asked. An assistant's way out of a window a person would otherwise have to close for it.
+class ibMcpToolAppClose : public ibMcpTool {
+public:
+
+	ibString GetName() const override { return ibT("app_close"); }
+
+	ibString GetActivity(const ibDataNode&) const override
+	{
+		return ibMcpText("closing the designer");
+	}
+
+	ibString GetDescription() const override
+	{
+		return ibMcpText("Close this designer - the window this connection comes from, not the application app_run "
+			"started (that is app_stop). As when its window is closed: it asks whether to save a changed application "
+			"and each unsaved tab, the person at it answers, and a refusal keeps it open. With force: true nothing is "
+			"asked and nothing unsaved is kept. This connection ends with the designer.");
+	}
+
+	const std::vector<ibMcpArgument>& Arguments() const override
+	{
+		static const std::vector<ibMcpArgument> s_arguments = { ArgForce() };
+		return s_arguments;
+	}
+
+	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
+	{
+		const bool force = ArgForce().Flag(params);
+		ibSession* const session = ibSession::Current();
+		if (session == nullptr || !session->Close(force)) {
+			refusal = ibMcpText("The designer did not close.");
+			return false;
+		}
+		result.AddField(ibT("force"), ibDataValue::Bool(force));
+		if (!force)
+			result.SetValue(ibT("note"), ibMcpText("Its questions are the person's to answer; a refusal keeps it open."));
+		return true;
+	}
+};
+
+MCP_TOOL_REGISTER_DESIGNER(ibMcpToolAppClose);

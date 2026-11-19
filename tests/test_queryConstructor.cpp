@@ -422,3 +422,39 @@ TEST(QueryTempStore, WithoutAnIndexEveryRowIsStillReturned)
 	EXPECT_EQ(2, source->ComputeRows({ equality }).RowCount())
 		<< "the filter is applied downstream — the store hands back what it has";
 }
+
+// ===========================================================================
+//  A second reading of a stored table keys its rows by its own columns.
+// ===========================================================================
+
+TEST(QueryTempStore, ASecondReadingKeysItsRowsByItsOwnColumns)
+{
+	// Stored tables number their columns alike (1, 2, …), so the second of two in one statement is read through a twin
+	// (ibAliasQueryable), and its readers key the rows by the twin's columns: the copy into a base in memory, a
+	// semi-join's keys. Under the origin's numbers the copy found none of its columns and was refused (2026-11-19).
+	ibQueryRamTable table;
+	table.AddColumn(1, wxT("Code"), ibTypeDescription());
+	for (const wxChar* code : { wxT("A"), wxT("B"), wxT("A") }) {
+		const long row = table.AppendRow();
+		table.SetCell(row, 1, ibValue(ibString(code)));
+	}
+	ibQueryTempTableStore store;
+	store.Put(wxT("Sales"), std::move(table), { wxT("Code") });
+
+	const auto twin = std::make_shared<const ibAliasQueryable>(store.Sources().at(wxT("Sales")), wxT("S2"));
+	const std::shared_ptr<const ibBackendQueryColumn> code = twin->GetQueryColumns().at(0);
+	ASSERT_NE(1, code->GetColumnId()) << "a twin's column has an id of its own";
+
+	const ibQueryRamTable rows = twin->ComputeRows({});
+	ASSERT_EQ(1u, rows.Columns().size());
+	EXPECT_EQ(code->GetColumnId(), rows.Columns()[0].m_id);
+	ASSERT_EQ(3, rows.RowCount());
+	EXPECT_EQ(wxT("B"), rows.GetCell(1, code->GetColumnId()).GetString());
+
+	// …and a condition on the twin's column reaches the origin as its own: the index answers it.
+	ibQueryCondition equality;
+	equality.m_col   = code;
+	equality.m_op    = ibQueryFilterOp::Equal;
+	equality.m_value = ibValue(ibString(wxT("A")));
+	EXPECT_EQ(2, twin->ComputeRows({ equality }).RowCount());
+}

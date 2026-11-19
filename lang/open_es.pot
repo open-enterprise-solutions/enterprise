@@ -1980,6 +1980,15 @@ msgstr ""
 msgid "Keyword expected %s"
 msgstr ""
 
+#: src/engine/backend/backend_exception.cpp:226
+msgid "A for loop counts with To: for (i = 1 To n). There is no for (start; condition; step) - a loop on a condition is while (condition)."
+msgstr ""
+
+#: src/engine/backend/backend_exception.cpp:223
+#, c-format
+msgid "'%s' is a word of the language - it cannot name a variable, a parameter or a procedure"
+msgstr ""
+
 #: src/engine/backend/backend_exception.cpp:144
 #, c-format
 msgid "Identifier '%s' not found"
@@ -2008,6 +2017,11 @@ msgstr ""
 #: src/engine/backend/backend_exception.cpp:150
 #, c-format
 msgid "Procedure or function not detected (%s)"
+msgstr ""
+
+#: src/engine/backend/compiler/compileCode.cpp:1381 src/engine/backend/compiler/compileCode.cpp:3629
+#, c-format
+msgid "%s - a global function with a similar name: %s"
 msgstr ""
 
 #: src/engine/backend/backend_exception.cpp:151
@@ -2150,7 +2164,21 @@ msgstr ""
 
 #: src/engine/backend/backend_exception.cpp:199
 #, c-format
-msgid "Aggregate object field not found '%s'"
+msgid "'%s' is not a member of %s"
+msgstr ""
+
+#: src/engine/backend/metaCollection/metaObjectSerialize.cpp:157
+#, c-format
+msgid "'%s' holds no '%s' - the application was saved by an engine that named it otherwise or did not have it, and is not read. Export its files with that engine, rename in them what the release notes list as renamed, and import them into a new base."
+msgstr ""
+
+#: src/engine/backend/compiler/procUnit.cpp:1044
+#, c-format
+msgid "%s - a member with a similar name: %s"
+msgstr ""
+
+#: src/engine/backend/compiler/procUnit.cpp:1039
+msgid "this value"
 msgstr ""
 
 #: src/engine/backend/backend_exception.cpp:205
@@ -2189,12 +2217,26 @@ msgstr ""
 
 #: src/engine/backend/backend_exception.cpp:679
 #, c-format
-msgid "%s is locked by another session."
+msgid "%s is open for editing by %s. It is free when it is closed there or that session ends."
 msgstr ""
 
 #: src/engine/backend/backend_exception.cpp:681
 #, c-format
-msgid "%s is locked by user %s."
+msgid "%s is open for editing by %s since %s. It is free when it is closed there or that session ends."
+msgstr ""
+
+#: src/engine/backend/lock/lockManager.cpp:127
+#, c-format
+msgid "%s on %s"
+msgstr ""
+
+#: src/engine/backend/lock/lockManager.cpp:126
+#, c-format
+msgid "a session on %s"
+msgstr ""
+
+#: src/engine/backend/backend_exception.cpp:688
+msgid "another session"
 msgstr ""
 
 #: src/engine/backend/backend_exception.h:196
@@ -2597,8 +2639,18 @@ msgstr ""
 msgid "Aggregate reducer must be a Function value"
 msgstr ""
 
-#: src/engine/backend/compiler/procUnitLINQ.cpp:1957
-msgid "The aggregate selector must be a Function value"
+#: src/engine/backend/tabularModel.cpp:123
+msgid "A table's rows are aggregated by a column: name it, as Sum(\"Amount\")"
+msgstr ""
+
+#: src/engine/backend/tabularModel.cpp:128
+#, c-format
+msgid "The row has no column '%s' to aggregate by"
+msgstr ""
+
+#: src/engine/backend/tabularModel.cpp:133
+#, c-format
+msgid "The column '%s' holds %s, which is not added up: Sum and Average take a column of numbers"
 msgstr ""
 
 #: src/engine/backend/compiler/procUnitLINQ.cpp:1999
@@ -2782,6 +2834,11 @@ msgstr ""
 
 #: src/engine/backend/databaseLayer/databaseLayer.cpp:61
 msgid "Cannot commit: this transaction has already been rolled back at an inner level (a write that failed and whose error was caught). Nothing of it can be kept - roll it back."
+msgstr ""
+
+#: src/engine/backend/databaseLayer/databaseLayer.cpp:110
+#, c-format
+msgid "Cannot commit: this transaction has already been rolled back at an inner level - a write failed and its error was caught: %s. Nothing of it can be kept - roll it back."
 msgstr ""
 
 #: src/engine/backend/databaseLayer/databaseLayer.cpp:96
@@ -4470,7 +4527,7 @@ msgid "Correspondence"
 msgstr ""
 
 #: src/engine/backend/metaCollection/partial/accountingRegister.h:998
-msgid "Whether a line is a whole posting or one side of it. On (the default): a line carries AccountDr and AccountCr with one amount, and the dimension slots double - each side has its own analytics; correspondence turnovers and a chessboard can be read. Off: a line carries RecordType and one Account, a posting is two lines."
+msgid "Whether a line is a whole posting or one side of it - the two bookkeeping traditions, both double entry. On (the default), the continental books: a line carries AccountDr and AccountCr with one amount, and the dimension slots double - each side has its own analytics; correspondence turnovers and a chessboard can be read. Off, the Anglo-Saxon general ledger (US GAAP, IFRS): a line carries RecordType and one Account, an entry is as many lines as it needs - one debit to a customer and a credit per item sold - and the debits and credits of a recorder must balance."
 msgstr ""
 
 #: src/engine/backend/metaCollection/partial/accountingRegister.h:1000
@@ -6088,6 +6145,11 @@ msgstr ""
 msgid "The %s is required on line %ld of the %s"
 msgstr ""
 
+#: src/engine/backend/metaCollection/partial/commonObjectRecordSetQuery.cpp:303
+#, c-format
+msgid "The %s is required on line %ld of the %s - a record a document writes keeps its moment in every register, with periodicity or without: usually the document's Date"
+msgstr ""
+
 #: src/engine/backend/metaCollection/partial/commonObjectRecordSetQuery.cpp:455
 #, c-format
 msgid "Register '%s': failed to clear the stored records"
@@ -6684,11 +6746,11 @@ msgid "In a catalog with folders: which nodes have this tabular section - items 
 msgstr ""
 
 #: src/engine/backend/metaCollection/table/metaTableObject.h:211
-msgid "N"
+msgid "No."
 msgstr ""
 
 #: src/engine/backend/metaCollection/table/metaTableObject.h:212
-msgid "The row's number in the tabular section, 1-based, kept by the platform: renumbered when rows are added, deleted or moved, and written with the object. Read-only for code."
+msgid "The line's number in the tabular section, from 1, kept by the platform: renumbered when lines are added, deleted or moved, and written with the object. Read-only for code."
 msgstr ""
 
 #: src/engine/backend/metadataApplication.cpp:79

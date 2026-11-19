@@ -1258,6 +1258,18 @@ bool ibCompileCode::CompileLinqChain(ibCompileContext* context,
 	if (terminalCounts || terminalAny || terminalFirst)
 		return false;
 
+	// ⭐ WITH NO SELECT, WHAT IS AGGREGATED IS THE SOURCE'S OWN ELEMENT, and the element answers the verb itself (a table's
+	// row refuses to be added unnamed — ibValueModelReturnLine::DispatchLinqMethod). The loop adds with OPER_ADD and asks
+	// nobody, so a bare Sum / Min / Max / Average keeps the dispatcher's road unless a Select made the values (2026-11-19).
+	if (terminalSum || terminalMin || terminalMax || terminalAvg) {
+		bool projected = false;
+		for (size_t i = 0; i + 1 < links.size(); ++i)
+			if (links[i].m_numVerb == (long)ibValue::ibLinqMethod::Select)
+				projected = true;
+		if (!projected)
+			return false;
+	}
+
 	// ⭐ WHAT THE CHAIN CARRIES decides what the loop needs before it opens. Asked once, here, so the
 	// body below emits only what this particular chain actually uses — a chain without `Skip` pays
 	// for no counter, one without `Distinct` allocates nothing to remember rows in.
@@ -2819,6 +2831,31 @@ void ibCompileCode::CompileLinqBlock(ibCompileContext* linqCtx, const ibLinqBind
 			lb.origin    = ibLinqBinding::FromLet;
 			lb.valueSlot = aliasSlot;
 			data.m_bindings.push_back(lb);
+		}
+
+		// ⭐⭐ AN ORDERED QUERY'S `skip` / `take` ARE A WINDOW OVER THE ORDER, and the order is known only when
+		// the last row has arrived. Counted as the rows arrive (below), they cut whatever the source handed
+		// over first, and the sort then ordered that: `orderby Quantity descending take 3` answered with three
+		// rows from the middle where `SELECT TOP 3 … ORDER BY Quantity DESC` gave the top (2026-11-19, a demo
+		// base's dashboard). So the window goes into the collection beside the keys, and OPER_LINQ_RESULT cuts
+		// the rows to it once they are in order. A query that does not order counts below, and stops reading
+		// at the last row it takes.
+		if (data.m_hasOrderBy) {
+			for (const int clause : { KEY_SKIP, KEY_TAKE }) {
+				if (!IsNextKeyword(clause))
+					continue;
+				ExpectKeyword(clause);
+				const ibParamUnit count = GetExpression(context);
+				if (count.m_clsid != 0 && count.m_clsid != g_valueNumberCLSID)
+					Refuse(ibScriptError_NumberType);   // as the counting road below
+				ibByteUnit c; StampSource(c);
+				c.m_numOper = OPER_LINQ_WINDOW;
+				c.m_param1  = data.m_resultArray;
+				c.m_param2.m_numArray = DEF_VAR_SKIP;
+				c.m_param3.m_numArray = DEF_VAR_SKIP;
+				(clause == KEY_SKIP ? c.m_param2 : c.m_param3) = count;
+				m_cByteCode.m_listCode.emplace_back(std::move(c));
+			}
 		}
 
 		// SKIP — counter++, if (counter <= N) goto next-iter.

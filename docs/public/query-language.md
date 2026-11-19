@@ -19,7 +19,9 @@ a script, a report, a list - is one place for rights, row restrictions, locks an
   registration journal's events, `Journal.Events(&BeginOfPeriod, &EndOfPeriod)` - read from the journal's
   own files, joined to the application's tables in memory, by the right that opens the journal. LINQ
   reads any of them by the same name: `Data.From("Journal.Events", Begin, End)`; the platform's own sources
-  are also members, `Data.Platform.Journal.Events` (the whole journal).
+  are also members, `Data.Platform.Journal.Events` (the whole journal). A source's readings and tabular
+  sections are its members, with the same arguments: `Data.AccumulationRegisters.Stock.Balance(At)`,
+  `Data.Documents.Sale.Goods`.
 - **References.** `Product.Manufacturer.Name` follows the reference and joins by itself. `REFS` tests a
   reference's kind; `VALUE(Catalog.Units.Piece)` names a predefined value; `IN HIERARCHY` takes a group
   and everything under it.

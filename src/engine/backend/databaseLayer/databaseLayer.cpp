@@ -77,6 +77,7 @@ void ibDatabaseLayer::BeginTransaction(const ibTxOptions& opts)
 	if (m_txDepth == 0) {
 		MeasuredStep(this, ibT("START TRANSACTION"), [&] { DoBeginTransaction(opts); });   // may throw — depth stays 0, state clean
 		m_txAborted = false;
+		m_txAbortedBy.Clear();
 		// Pin this conn for the whole TX, in its own pool (m_pool — the
 		// base the TX runs in): to the calling thread's db_query channel
 		// when that is free, else to its own holder. While set, db_query
@@ -103,10 +104,15 @@ void ibDatabaseLayer::Commit()
 	// writing was told "committed" over an empty base (2026-09-15, a committing code_run seeding a demo
 	// base; a script's own CommitTransaction() answered the same way). Max: *"either success, or an
 	// exception if it was rolled back"*.
-	if (m_txAborted)
+	if (m_txAborted) {
+		if (!m_txAbortedBy.IsEmpty())
+			ibBackendDatabaseException::Throw(ibBackendDatabaseException::Kind::RolledBack, ibString::Format(
+				_("Cannot commit: this transaction has already been rolled back at an inner level - a write failed "
+				  "and its error was caught: %s. Nothing of it can be kept - roll it back."), m_txAbortedBy));
 		ibBackendDatabaseException::Throw(ibBackendDatabaseException::Kind::RolledBack,
 			_("Cannot commit: this transaction has already been rolled back at an inner level (a write "
 			  "that failed and whose error was caught). Nothing of it can be kept - roll it back."));
+	}
 
 	if (m_txDepth > 1) {
 		--m_txDepth;                 // nested inner commit — count down, defer
@@ -127,6 +133,7 @@ void ibDatabaseLayer::Commit()
 
 	m_txDepth = 0;
 	m_txAborted = false;
+	m_txAbortedBy.Clear();
 	// Release the holder's TX pin LAST: the layer stays alive through whatever other shared_ptr the
 	// caller holds (scope, pool entry after drop, etc.), and nothing below this line touches `this`.
 	ibConnectionPool::ClearActiveTxConnection(this);
@@ -145,12 +152,22 @@ void ibDatabaseLayer::RollBack()
 	m_txAborted = true;              // poison any pending outer commit
 
 	if (m_txDepth > 1) {
+		// THE FIRST REFUSAL IS THE REASON, kept for the outer commit to name. An owner rolls back in its catch, so
+		// the refusal it caught is the one being handled right now.
+		if (m_txAbortedBy.IsEmpty()) {
+			if (const std::exception_ptr handling = std::current_exception()) {
+				try { std::rethrow_exception(handling); }
+				catch (const ibCoreException& err) { m_txAbortedBy = err.GetErrorDescription(); }
+				catch (...) {}
+			}
+		}
 		--m_txDepth;                 // nested inner rollback — count down, defer real op
 		return;
 	}
 
 	m_txDepth = 0;
 	m_txAborted = false;
+	m_txAbortedBy.Clear();
 	ibConnectionPool::ClearActiveTxConnection(this);
 	MeasuredStep(this, ibT("ROLLBACK"), [this] { DoRollBack(); });
 }

@@ -24,8 +24,8 @@ BACKEND_API bool InvokeLambda(ibValue& callable, ibValue** argPtrs, long n, ibVa
 // Convenience over InvokeLambda for the common single-argument call (argPtrs = { &arg }).
 BACKEND_API bool InvokeLambdaWithArg(ibValue& callable, ibValue& arg, ibValue& retVal);
 
-// ⭐⭐ WHAT A COMPILED PIPELINE DOES TO ITS OWN COLLECTION — the three verbs behind OPER_LINQ_SEEN /
-// KEEP / RESULT (codeDef.h). The collection is LINQ's OWN runtime class, not a script `Array`: a
+// ⭐⭐ WHAT A COMPILED PIPELINE DOES TO ITS OWN COLLECTION — the verbs behind OPER_LINQ_SEEN / KEEP /
+// WINDOW / RESULT (codeDef.h). The collection is LINQ's OWN runtime class, not a script `Array`: a
 // user-visible Array is heavy, is built by NAME through the object factory, and answers "seen this
 // before?" in linear time where a set answers in log n. It lives beside the pipeline's other state
 // classes, in procUnitLINQ.cpp, and reaches script in exactly one place — `ibLinqResult` building an
@@ -37,7 +37,11 @@ BACKEND_API bool ibLinqSeen(ibValue& scratch, const ibValue& value);
 // `row` null = this instruction carries only a further ordering key for the row already kept;
 // `keyAt` is that key's position among the clause's keys, `descending` the way it runs. See the definition.
 BACKEND_API void ibLinqKeep(ibValue& scratch, const ibValue* row, const ibValue* key, long keyAt, bool descending);
-// `ordering`: 0 leave as they came · 2 by the keys, each the way it was kept with · 3 simply reversed.
+// The window of an ordered answer — `skip` / `take` after `orderby` — kept until `ibLinqResult` has the rows in
+// order; a null side is left as it was.
+BACKEND_API void ibLinqWindow(ibValue& scratch, const ibValue* skip, const ibValue* take);
+// `ordering`: 0 leave as they came · 2 by the keys, each the way it was kept with · 3 simply reversed;
+// then the rows are cut to the window `ibLinqWindow` kept, if it kept one.
 // `wantFirst` asks for the first row instead of all of them (an empty value when there are none).
 //
 // What the rest becomes is READ OFF THE ROWS: a table when they carry named columns — which after a

@@ -14,6 +14,7 @@
 
 #include "core/compiler/translateCode.h"
 #include "backend/compiler/procUnit.h"
+#include "backend/compiler/similarNames.h"   // ibSimilarNames - what FillPropertyValues names beside a missing member
 #include "backend/appData.h"
 #include "backend/session/session.h"
 #include "backend/backend_localization.h"            // Tstr — the language a caption is read in
@@ -805,8 +806,20 @@ void ibValueSystemFunction::FillPropertyValues(ibValue& receiver, ibValue& sourc
 			if (from >= 0 && isExcluded(from))
 				continue;
 			const long to = receiver.FindProp(name);
-			if (from < 0 || to < 0)
-				ibBackendCoreException::Error(ibScriptError_MemberNotFound, name);
+			if (from < 0 || to < 0) {
+				// The side that has no such member, named as the interpreter names it (procUnit.cpp, RaiseMemberNotFound).
+				const ibValue& lacking = from < 0 ? source : receiver;
+				ibString type;
+				try {
+					type = lacking.GetClassName();
+				}
+				catch (const ibCoreException&) {
+					type = _("this value");
+				}
+				const ibString similarNames = ibSimilarNames(name, lacking);
+				ibBackendCoreException::Error(ibScriptError_MemberNotFound, name, similarNames.IsEmpty() ? type
+					: ibString::Format(_("%s - a member with a similar name: %s"), type, similarNames));
+			}
 			if (!source.IsPropReadable(from))
 				ibBackendCoreException::Error(ibScriptError_PropNotReadable, name);
 			if (!receiver.IsPropWritable(to))

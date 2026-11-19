@@ -692,13 +692,13 @@ TEST(RuntimeTest, ABraceLessBodyIsOneStatementOfAnyKind) {
 
 	struct Case { const wxChar* body; int a; int b; };
 	const Case cases[] = {
-		{ wxT("if (1 = 1) { a = 1; } else if (1 = 2) { a = 2; } b = 7;"), 1, 7 },
-		{ wxT("if (1 = 2) { a = 1; } else if (1 = 1) { a = 2; } b = 7;"), 2, 7 },
-		{ wxT("if (1 = 2) while (a < 3) { a = a + 1; } b = 7;"),          0, 7 },
-		{ wxT("if (1 = 2) try { a = 1; } except { a = 2; } b = 7;"),      0, 7 },
-		{ wxT("if (1 = 2) if (1 = 1) { a = 1; } b = 7;"),                 0, 7 },
-		{ wxT("if (1 = 1) a = 1; else a = 2; b = 7;"),                     1, 7 },
-		{ wxT("if (1 = 2) a = 1; else a = 2; b = 7;"),                     2, 7 },
+		{ wxT("if (1 == 1) { a = 1; } else if (1 == 2) { a = 2; } b = 7;"), 1, 7 },
+		{ wxT("if (1 == 2) { a = 1; } else if (1 == 1) { a = 2; } b = 7;"), 2, 7 },
+		{ wxT("if (1 == 2) while (a < 3) { a = a + 1; } b = 7;"),           0, 7 },
+		{ wxT("if (1 == 2) try { a = 1; } except { a = 2; } b = 7;"),       0, 7 },
+		{ wxT("if (1 == 2) if (1 == 1) { a = 1; } b = 7;"),                 0, 7 },
+		{ wxT("if (1 == 1) a = 1; else a = 2; b = 7;"),                     1, 7 },
+		{ wxT("if (1 == 2) a = 1; else a = 2; b = 7;"),                     2, 7 },
 	};
 	for (const Case& c : cases) {
 		const std::string body = ibString(c.body).ToStdString();
@@ -1235,6 +1235,76 @@ TEST(RuntimeTest, LinqClauseAfterAnUnnamedGroup_IsRefusedByName) {
 }
 
 // ===========================================================================
+// A REFUSAL THAT SAYS WHAT WAS MEANT (2026-11-19). Writing a demo base, an assistant met three that were
+// true and no help: a word of the language used as a name ("Identifier expected", or - at the start of a
+// statement - the end of the program two lines on), a loop of another language ("Keyword expected To"), a
+// function spelled as another language spells it ("Procedure or function not detected"). Each names its case.
+// ===========================================================================
+
+TEST(RuntimeTest, AWordOfTheLanguageAsAName_IsRefusedByName) {
+	struct StyleGuard {
+		const short saved = ibCompileCode::GetCodeStyle();
+		~StyleGuard() { ibCompileCode::SetCodeStyle(saved); }
+	} guard;
+	ibCompileCode::SetCodeStyle(CODE_CES);
+
+	ibString why;
+	ibCompileCode parameter(wxT("test"), wxT("memory"), false);
+	EXPECT_FALSE(TryCompileNamed(parameter, wxT("Procedure P(from) {\n}\n"), why));
+	EXPECT_TRUE(why.Contains(wxT("'from' is a word of the language"))) << why.ToStdString();
+
+	ibCompileCode assigned(wxT("test"), wxT("memory"), false);
+	EXPECT_FALSE(TryCompileNamed(assigned, wxT("in = 5;\n"), why));
+	EXPECT_TRUE(why.Contains(wxT("'in' is a word of the language"))) << why.ToStdString();
+
+	// After a dot it is a member's name, as it always was.
+	ibCompileCode member(wxT("test"), wxT("memory"), false);
+	EXPECT_TRUE(TryCompileNamed(member, wxT("s = 1;\nx = s.To;\n"), why)) << why.ToStdString();
+}
+
+TEST(RuntimeTest, ALoopWithAStep_IsRefusedWithTheLoopThatCounts) {
+	struct StyleGuard {
+		const short saved = ibCompileCode::GetCodeStyle();
+		~StyleGuard() { ibCompileCode::SetCodeStyle(saved); }
+	} guard;
+	ibCompileCode::SetCodeStyle(CODE_CES);
+
+	ibString why;
+	ibCompileCode cStyle(wxT("test"), wxT("memory"), false);
+	EXPECT_FALSE(TryCompileNamed(cStyle, wxT("n = 0;\nfor (i = 0; i < 3; i++) {\n\tn = n + i;\n}\n"), why));
+	EXPECT_TRUE(why.Contains(wxT("A for loop counts with To"))) << why.ToStdString();
+
+	ibCompileCode counting(wxT("test"), wxT("memory"), false);
+	EXPECT_TRUE(TryCompileNamed(counting, wxT("n = 0;\nfor (i = 0 To 2) {\n\tn = n + i;\n}\n"), why)) << why.ToStdString();
+}
+
+TEST(RuntimeTest, AnUnknownFunction_NamesTheGlobalSpelledSimilarToIt) {
+	ibString why;
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	EXPECT_FALSE(TryCompileNamed(cc, wxT("x = StrFind(\"abc\", \"b\");\n"), why));
+	EXPECT_TRUE(why.Contains(wxT("StrFind"))) << why.ToStdString();
+	EXPECT_TRUE(why.Contains(wxT("a global function with a similar name: Find"))) << why.ToStdString();
+
+	// A name similar to nothing is refused as before, without a list.
+	ibCompileCode unknown(wxT("test"), wxT("memory"), false);
+	EXPECT_FALSE(TryCompileNamed(unknown, wxT("x = Qwzxv();\n"), why));
+	EXPECT_FALSE(why.Contains(wxT("similar name"))) << why.ToStdString();
+}
+
+// ⭐ A MEMBER THE VALUE DOES NOT HAVE IS REFUSED NAMING THE VALUE'S TYPE, and its members spelled similar to the one
+// asked for (2026-11-19). It was "Aggregate object field not found 'Amout'", which named neither the value nor what it
+// has.
+TEST(RuntimeTest, AMemberTheValueHasNot_NamesItsTypeAndTheSimilarOnes) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	ASSERT_TRUE(TryCompile(cc, wxT("var s = New Structure(\"Amount\", 1);\nvar x = s.Amout;\n")));
+	ibProcUnit pu;
+	ibString why;
+	EXPECT_FALSE(RunBound(cc, pu, why));
+	EXPECT_TRUE(why.Contains(wxT("'Amout' is not a member of Structure"))) << why.ToStdString();
+	EXPECT_TRUE(why.Contains(wxT("a member with a similar name: Amount"))) << why.ToStdString();
+}
+
+// ===========================================================================
 // LINQ block join — a key with SEVERAL matching inner rows fans out into one
 // result row per match, like the `.Join()` executor and SQL. This used to die
 // at hash-build time: the block's index was a plain Container, and
@@ -1634,6 +1704,34 @@ TEST(RuntimeTest, LinqOrderBy_ASingleKeyStillOrders) {
 	ibValue ret;
 	pu.CallAsFunc(wxT("OneKey"), ret);
 	EXPECT_EQ(ret.GetInteger(), 123);
+}
+
+// ⭐ `skip` / `take` AFTER `orderby` ARE A WINDOW OVER THE ORDER (2026-11-19). They were counted as the rows
+// arrived, so `orderby r descending take 2` kept the first two rows READ and then ordered those: a demo base's
+// dashboard listed three rows from the middle where `SELECT TOP 3 … ORDER BY … DESC` gave the top. The largest
+// arrive last here, so counting as they arrive cannot pass by luck.
+TEST(RuntimeTest, LinqOrderBy_SkipAndTakeCutTheOrder) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	const ibString src =
+		wxT("Function Window() Public\n")
+		wxT("  var flat; var q; var w;\n")
+		wxT("  flat = New Array; flat.Add(1); flat.Add(4); flat.Add(2); flat.Add(5); flat.Add(3); flat.Add(6);\n")
+		wxT("  q = from r in flat orderby r descending take 2 select { V = r };\n")
+		wxT("  If q.Count() <> 2 Then Return -1; EndIf;\n")
+		wxT("  w = from r in flat orderby r skip 1 take 3 select { V = r };\n")
+		wxT("  If w.Count() <> 3 Then Return -2; EndIf;\n")
+		wxT("  Return q[0].V * 100000 + q[1].V * 10000 + w[0].V * 100 + w[1].V * 10 + w[2].V;\n")
+		wxT("EndFunction\n");
+	ASSERT_TRUE(TryCompile(cc, src));
+
+	ibProcUnit pu;
+	ASSERT_TRUE(TryExecute(pu, cc.m_cByteCode));
+
+	ibValue ret;
+	pu.CallAsFunc(wxT("Window"), ret);
+	// The top two of 1..6 are 6, 5; past the first of the order, three are 2, 3, 4. Counted as they arrived
+	// it was 4, 1 and 2, 4, 5.
+	EXPECT_EQ(ret.GetInteger(), 650234);
 }
 
 // Case-sensitivity of string join keys is covered by LinqBlockJoin_StringKeysBlockOnly
@@ -3029,7 +3127,7 @@ TEST(RuntimeTest, AFoldedChainInALoopStartsWithNoAnswer) {
 		wxT("  var m = gr.Where(Function(x) { return x > 0; }).Max();\n")
 		wxT("  maxes = maxes + m + \";\";\n")
 		wxT("  var f = gr.Where(Function(x) { return x > 5; }).First();\n")
-		wxT("  if (f = Undefined) { nones = nones + 1; }\n")
+		wxT("  if (f == Undefined) { nones = nones + 1; }\n")
 		wxT("}\n")));
 
 	ibProcUnit pu;
@@ -3928,6 +4026,66 @@ TEST(RuntimeTest, AColumnUnloadedIntoAnArraySumsAndAveragesItsNumbers) {
 	EXPECT_EQ(2, v.GetInteger());
 	ASSERT_TRUE(pu.GetPropVal(wxT("projected"), v));
 	EXPECT_EQ(6, v.GetInteger());
+}
+
+// A query answers with a table, so an aggregate walks ROWS: with nothing named they were added as they were, a row plus
+// a row is text, and `(from x in arr select x).Sum()` answered `TableRow` (2026-11-19, the demo base). The aggregate
+// hands each row the verb with the column the call names (ibValueModelReturnLine::DispatchLinqMethod) - on the
+// dispatcher's road and on a chain the loop would have compiled; a Select still compiles and makes its own values. A
+// row is never added unnamed, of one column or several: the column is said, not guessed.
+TEST(RuntimeTest, AnAggregateOverRowsTakesTheColumnItIsNamed) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	ASSERT_TRUE(TryCompile(cc,
+		wxT("var total public; var low public; var high public; var mean public; var filtered public;\n")
+		wxT("var projected public; var second public; var unnamed public; var notAdded public;\n")
+		wxT("var arr; arr = New Array; arr.Add(1); arr.Add(2); arr.Add(3);\n")
+		wxT("var q; q = from x in arr select x;\n")
+		wxT("total = q.Sum(\"Value\"); low = q.Min(\"Value\"); high = q.Max(\"Value\"); mean = q.Average(\"Value\");\n")
+		wxT("filtered = q.Where(Function(r) Return r.Value > 1 EndFunction).Sum(\"Value\");\n")
+		wxT("projected = q.Select(Function(r) Return r.Value * 10 EndFunction).Sum();\n")
+		wxT("var t; t = New Table; t.Columns.AddColumn(\"A\"); t.Columns.AddColumn(\"B\");\n")
+		wxT("var r; r = t.Add(); r.A = 1; r.B = 2;\n")
+		wxT("r = t.Add(); r.A = 10; r.B = 20;\n")
+		wxT("second = t.Sum(\"B\");\n")
+		wxT("unnamed = False;\n")
+		wxT("Try\n")
+		wxT("  q.Sum();\n")
+		wxT("Except\n")
+		wxT("  unnamed = True;\n")
+		wxT("EndTry;\n")
+		wxT("var words; words = New Table; words.Columns.AddColumn(\"Name\");\n")
+		wxT("r = words.Add(); r.Name = \"bolt\";\n")
+		wxT("notAdded = False;\n")
+		wxT("Try\n")
+		wxT("  words.Sum(\"Name\");\n")
+		wxT("Except\n")
+		wxT("  notAdded = True;\n")
+		wxT("EndTry;\n")));
+
+	ibProcUnit pu;
+	ibString strError;
+	ASSERT_TRUE(RunBound(cc, pu, strError)) << strError.ToStdString();
+
+	ibValue v;
+	ASSERT_TRUE(pu.GetPropVal(wxT("total"), v));
+	EXPECT_EQ(ibValueTypes::TYPE_NUMBER, v.GetType());
+	EXPECT_EQ(6, v.GetInteger());
+	ASSERT_TRUE(pu.GetPropVal(wxT("low"), v));
+	EXPECT_EQ(1, v.GetInteger());
+	ASSERT_TRUE(pu.GetPropVal(wxT("high"), v));
+	EXPECT_EQ(3, v.GetInteger());
+	ASSERT_TRUE(pu.GetPropVal(wxT("mean"), v));
+	EXPECT_EQ(2, v.GetInteger());
+	ASSERT_TRUE(pu.GetPropVal(wxT("filtered"), v));
+	EXPECT_EQ(5, v.GetInteger());
+	ASSERT_TRUE(pu.GetPropVal(wxT("projected"), v));
+	EXPECT_EQ(60, v.GetInteger());
+	ASSERT_TRUE(pu.GetPropVal(wxT("second"), v));
+	EXPECT_EQ(22, v.GetInteger());
+	ASSERT_TRUE(pu.GetPropVal(wxT("unnamed"), v));
+	EXPECT_TRUE(v.GetBoolean()) << "rows were aggregated with no column named";
+	ASSERT_TRUE(pu.GetPropVal(wxT("notAdded"), v));
+	EXPECT_TRUE(v.GetBoolean()) << "a column of text was added up";
 }
 
 // Issue #416: whether a table has a column was answerable only by trying to read it. The column

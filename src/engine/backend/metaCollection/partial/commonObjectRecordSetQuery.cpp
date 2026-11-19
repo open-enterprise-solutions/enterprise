@@ -296,8 +296,12 @@ bool ibValueRecordSetObject::SaveData(bool replace, bool clearTable)
 		for (const auto object : attributes) {
 			if (object->FillCheck()) {
 				if (node->IsEmptyValue(object->GetMetaID())) {
-					ibString fillError =
-						ibString::Format(_("The %s is required on line %ld of the %s"), object->GetSynonym(), currLine, m_metaObject->GetSynonym());
+					// THE PERIOD SAYS WHAT IT WANTS: a register written by a document keeps each record's moment even
+					// without periodicity, and an author who declared none did not think to set it (2026-11-19, a
+					// non-periodic information register refusing a demo base's every acquisition).
+					ibString fillError = m_metaObject->IsRegisterPeriod(object->GetMetaID())
+						? ibString::Format(_("The %s is required on line %ld of the %s - a record a document writes keeps its moment in every register, with periodicity or without: usually the document's Date"), object->GetSynonym(), currLine, m_metaObject->GetSynonym())
+						: ibString::Format(_("The %s is required on line %ld of the %s"), object->GetSynonym(), currLine, m_metaObject->GetSynonym());
 					ibValueSystemFunction::Message(fillError, ibStatusMessage::ibStatusMessage_Information);
 					if (!fillErrors.IsEmpty())
 						fillErrors += ibT("; ");

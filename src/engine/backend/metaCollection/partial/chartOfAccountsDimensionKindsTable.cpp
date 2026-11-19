@@ -32,7 +32,7 @@ ibValueMetaObjectAccountDimensionKindsTable::~ibValueMetaObjectAccountDimensionK
 {
 }
 
-// predefined columns as Child sub-nodes + the base table data (NumberLine + Use).
+// predefined columns as Child sub-nodes + the base table data (LineNumber + Use).
 bool ibValueMetaObjectAccountDimensionKindsTable::ReadData(const ibDataNode& node)
 {
 	m_propertyAccountDimensionKind->SetNodeValue(node.GetProperty(m_propertyAccountDimensionKind->GetName()));

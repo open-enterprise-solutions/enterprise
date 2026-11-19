@@ -1136,7 +1136,7 @@ public:
 	virtual const ibMetaData* GetMetaData()            const override { return m_origin->GetMetaData(); }
 	virtual const class ibValueMetaObjectGenericData* GetSourceMetaObject() const override { return m_origin->GetSourceMetaObject(); }
 	virtual ibHierarchyType GetHierarchyType()         const override { return m_origin->GetHierarchyType(); }
-	virtual ibQueryRamTable ComputeRows(const std::vector<ibQueryCondition>& extra) const override { return m_origin->ComputeRows(extra); }
+	virtual ibQueryRamTable ComputeRows(const std::vector<ibQueryCondition>& extra) const override;   // out-of-line — the origin's rows under the twins' ids
 	virtual bool      AccessRight_Show()               const override { return m_origin->AccessRight_Show(); }
 
 private:

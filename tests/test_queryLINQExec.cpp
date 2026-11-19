@@ -115,17 +115,16 @@ struct LinqExecFix : ::testing::Test {
 
 TEST_F(LinqExecFix, Eq_ParityWithSql)
 {
-	// ⚠ `=` AND `<>`, NOT `==` AND `!=`. These bodies used to be written with the C spellings, which
-	// the deleted lexeme reader accepted and the LANGUAGE never had — see the note on Record in
-	// test_lambdaRecorder.cpp. Compiling them for real is what surfaced it.
-	auto p = Lower(wxT("{ return x.region = \"North\"; }"));
+	// The bodies are CES, so they compare with `==` / `!=` and join with `&&` / `||` - the dialect's own
+	// spellings, which its compiler holds them to (the note on Record in test_lambdaRecorder.cpp).
+	auto p = Lower(wxT("{ return x.region == \"North\"; }"));
 	ASSERT_TRUE(p != nullptr) << "a translatable lambda body must lower to a predicate";
 	EXPECT_EQ(MemoryCount(p), SqlCount(db, wxT("region = 'North'")));   // 1 == 1
 }
 
 TEST_F(LinqExecFix, Or_ParityWithSql)
 {
-	auto p = Lower(wxT("{ return x.region = \"North\" Or x.region = \"South\"; }"));
+	auto p = Lower(wxT("{ return x.region == \"North\" || x.region == \"South\"; }"));
 	ASSERT_TRUE(p != nullptr);
 	EXPECT_EQ(MemoryCount(p),
 	          SqlCount(db, wxT("region = 'North' OR region = 'South'")));   // 2 == 2
@@ -136,7 +135,7 @@ TEST_F(LinqExecFix, Or_ParityWithSql)
 // must agree. This is the executable proof the L4-2 path inherits Kleene NULL semantics.
 TEST_F(LinqExecFix, NotEq_NullThreeValued_ParityWithSql)
 {
-	auto p = Lower(wxT("{ return x.region <> \"North\"; }"));
+	auto p = Lower(wxT("{ return x.region != \"North\"; }"));
 	ASSERT_TRUE(p != nullptr);
 	EXPECT_EQ(MemoryCount(p), SqlCount(db, wxT("region <> 'North'")))   // South, East -> 2
 		<< "L4-2 lowered `<>` must drop the NULL-region row (three-valued), like SQL.";
@@ -151,7 +150,7 @@ TEST_F(LinqExecFix, NumericGt_ParityWithSql)
 
 TEST_F(LinqExecFix, AndLogic_ParityWithSql)
 {
-	auto p = Lower(wxT("{ return x.qty >= 5 And x.region <> \"South\"; }"));
+	auto p = Lower(wxT("{ return x.qty >= 5 && x.region != \"South\"; }"));
 	ASSERT_TRUE(p != nullptr);
 	EXPECT_EQ(MemoryCount(p),
 	          SqlCount(db, wxT("qty >= 5 AND region <> 'South'")));   // North, East -> 2 == 2

@@ -97,6 +97,11 @@ ibString ibSequenceBordersSourceDescriptor::GetName() const
 	return m_meta->GetName() + ibT(".") + m_meta->GetBordersObject()->GetName();
 }
 
+std::shared_ptr<const ibBackendQueryable> ibSequenceBordersSourceDescriptor::GetOwnerQueryable() const
+{
+	return m_meta->GetQueryable();
+}
+
 // No arguments: a border is a fact of the key, not a reading as of a moment — its own queryable, shared without owning.
 std::shared_ptr<const ibBackendQueryable> ibSequenceBordersSourceDescriptor::CreateQueryable(ibValue** /*paParams*/, long /*lSizeArray*/,
 	const std::vector<ibQueryPredicatePtr>& /*conditions*/, const ibQueryReadColumns& /*read*/)

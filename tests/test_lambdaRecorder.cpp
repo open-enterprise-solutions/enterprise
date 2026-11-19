@@ -20,12 +20,12 @@
 
 namespace {
 
-// ⚠ THE SPELLINGS BELOW ARE THE LANGUAGE'S, and several of them had to be corrected: comparison is
-// `=` and inequality `<>` — there is no `==` and the tests were written with one. That is not a
-// detail of style. The reader these tests were written for had a grammar of its OWN, WIDER than the
-// language, so it accepted operators the compiler never had; recording a predicate the program does
-// not contain is exactly why it was replaced (compileCode.cpp, at the recorder callsite), and the
-// tests kept asserting against the wider grammar until they were compiled for real.
+// ⚠ THE SPELLINGS BELOW ARE THE LANGUAGE'S, each dialect its own: CES compares with `==` / `!=` and
+// joins with `&&` / `||` / `!`, VES with `=` / `<>` and the words And / Or / Not, and each refuses the
+// other's by name (2026-11-19). That is not a detail of style. The reader these tests were first written
+// for had a grammar of its OWN, WIDER than the language, so it accepted operators the compiler did not
+// have; recording a predicate the program does not contain is exactly why it was replaced
+// (compileCode.cpp, at the recorder callsite), and compiling the bodies for real holds them to the language.
 std::shared_ptr<ibQueryAstExpr> Record(const ibString& body, const ibString& rowParam = wxT("x"),
 	const ibString& outerNames = wxEmptyString)
 {
@@ -61,7 +61,7 @@ TEST_F(LambdaRecorderCES, MemberCompareLiteral)
 
 TEST_F(LambdaRecorderCES, DotWalkChain_DropsParamSegment)
 {
-	auto e = Record(wxT("{ return x.Producer.Region.Name = \"South\"; }"));
+	auto e = Record(wxT("{ return x.Producer.Region.Name == \"South\"; }"));
 	ASSERT_TRUE(e != nullptr);
 	EXPECT_EQ(e->m_cmp, ibQueryCompareOp::Eq);
 	ASSERT_EQ(e->m_lhs->m_path.size(), 3u);
@@ -80,11 +80,11 @@ TEST_F(LambdaRecorderCES, CapturedIdentifierBecomesParam)
 	EXPECT_EQ(e->m_rhs->m_paramName, wxT("minPrice"));
 }
 
-TEST_F(LambdaRecorderCES, BooleanLogic_KeywordsAndPairedCompares)
+TEST_F(LambdaRecorderCES, BooleanLogic_PairedOperators)
 {
-	// Logical ops are the And/Or/Not KEYWORDS in both styles (bare '&'/'|' belong
-	// to the lexer's string-continuation syntax); comparisons pair freely (>=, !=).
-	auto e = Record(wxT("{ return x.Price >= 10 And (x.Kind <> 3 Or x.Posted); }"));
+	// CES joins conditions with C's `&&` / `||` and compares with `==` / `!=` - each a pair of
+	// characters the lexer reads as one operator; the words And / Or / Not are the VES spelling.
+	auto e = Record(wxT("{ return x.Price >= 10 && (x.Kind != 3 || x.Posted); }"));
 	ASSERT_TRUE(e != nullptr);
 	EXPECT_EQ(e->m_kind, ibQueryAstExprKind::Logical);
 	EXPECT_FALSE(e->m_isOr);                                  // top = AND
@@ -114,14 +114,14 @@ TEST_F(LambdaRecorderCES, ArithmeticPrecedence)
 // — the way the query language already reads NOT (queryParser.cpp).
 TEST_F(LambdaRecorderCES, UnaryNotBindsTighterThanAnd)
 {
-	auto e = Record(wxT("{ return !x.Posted And x.Delta >= -5; }"));
+	auto e = Record(wxT("{ return !x.Posted && x.Delta >= -5; }"));
 	ASSERT_TRUE(e != nullptr);
 	EXPECT_EQ(ibDescribeQueryAst(e).ToStdString(), "(NOT Posted AND (Delta >= -5))");
 }
 
 TEST_F(LambdaRecorderCES, UnaryNotTakesTheWholeComparison)
 {
-	auto e = Record(wxT("{ return !x.Delta = 5 Or x.Posted; }"));
+	auto e = Record(wxT("{ return !x.Delta == 5 || x.Posted; }"));
 	ASSERT_TRUE(e != nullptr);
 	EXPECT_EQ(ibDescribeQueryAst(e).ToStdString(), "(NOT (Delta = 5) OR Posted)");
 }
@@ -153,7 +153,7 @@ TEST_F(LambdaRecorderVES, DiamondNotEqual)
 
 TEST_F(LambdaRecorderCES, Bail_MethodCallOnChain)
 {
-	EXPECT_TRUE(Record(wxT("{ return x.Name.Trim() = \"a\"; }")) == nullptr);
+	EXPECT_TRUE(Record(wxT("{ return x.Name.Trim() == \"a\"; }")) == nullptr);
 }
 
 TEST_F(LambdaRecorderCES, Bail_CapturedMemberAccess)

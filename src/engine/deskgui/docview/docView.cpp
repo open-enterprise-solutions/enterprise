@@ -45,6 +45,7 @@
 #include "deskgui/univ/choiceDialog.h"   // ibGetSingleChoiceData — a document's view, when it has several
 #include "deskgui/univ/messageDialog.h"  // ibMessageBox — save the changes?
 #include "deskgui/univ/findReplaceDialog.h"   // ibFindReplaceDialog — Find, deleted with the manager
+#include "deskgui/univ/dialog.h"   // ibIsModalShown — a view made under a modal is a dialog over it
 
 #include "core/diagnostics/journal.h"   // ibJournalError - a file not read, not written
 
@@ -2510,17 +2511,8 @@ bool ibFrontendDocument::OnCreate(const wxString& WXUNUSED(path), long flags)
 		view->SetFrame(composedWindow);
 	}
 	else {
-		bool createModal = false;
-		for (wxWindow* window : wxTopLevelWindows) {
-			if (window->IsKindOf(CLASSINFO(wxDialog))) {
-				if (((wxDialog*)window)->IsModal()) {
-					createModal = true; break;
-				}
-			}
-		}
-
 		long style = wxDEFAULT_FRAME_STYLE;
-		if (createModal) style = style | wxCREATE_SDI_FRAME;
+		if (ibIsModalShown()) style = style | wxCREATE_SDI_FRAME;
 
 		GetDocumentManager()->GetParentFrame()->CreateChildFrame(view.get(), wxDefaultPosition, wxDefaultSize, style);
 	}

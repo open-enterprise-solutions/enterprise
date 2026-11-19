@@ -204,6 +204,7 @@
     <ClCompile Include="mcp\tools\designer\mcpToolExternal.cpp" />
     <ClCompile Include="mcp\tools\designer\mcpToolForms.cpp" />
     <ClCompile Include="mcp\tools\designer\mcpToolFeatureOption.cpp" />
+    <ClCompile Include="mcp\tools\designer\mcpToolHomePage.cpp" />
     <ClCompile Include="mcp\tools\designer\mcpToolJournal.cpp" />
     <ClCompile Include="mcp\tools\designer\mcpToolLocks.cpp" />
     <ClCompile Include="mcp\tools\designer\mcpToolMetadataWrite.cpp" />

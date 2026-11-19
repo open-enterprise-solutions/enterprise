@@ -749,12 +749,17 @@ bool ibTranslateCode::GetNumber(ibString* strNumber) const
 * true,false
 */
 
-// `|` continues a string; `||` is the logical Or - two delimiters, which the compiler reads as a pair.
+// `|` continues a string; `||` is the logical Or - two delimiters, which the compiler reads as a pair. Neither bar of
+// it begins a string, the second included: it is reached with the first one just taken.
 bool ibTranslateCode::IsString() const
 {
 	if (IsByte(ibT('\"')))
 		return true;
-	return IsByte(ibT('|')) && (m_currentPos + 1 >= m_bufferSize || m_strBuffer[m_currentPos + 1] != ibT('|'));
+	if (!IsByte(ibT('|')))
+		return false;
+	const bool barFollows = m_currentPos + 1 < m_bufferSize && m_strBuffer[m_currentPos + 1] == ibT('|');
+	const bool barPrecedes = m_currentPos > 0 && m_strBuffer[m_currentPos - 1] == ibT('|');
+	return !barFollows && !barPrecedes;
 }
 
 /**

@@ -343,6 +343,15 @@ passes on Windows and on macOS (UTF-8 by default), which is what kept it invisib
 - ⚠ The contract test covers tool DESCRIPTIONS only; the same sweep found ~19 more empty strings in
   refusals, activity lines and argument texts — 47 across the tree — that nothing was watching.
 
+### 1.9b A `\x` escape in `ibT()` is a UTF-16 unit, not a byte (2026-11-19)
+
+`ibT(s)` is `u ## s` and `ibMcpText(s)` is `ibString(ibT(s))`, so their literals are `char16_t`, and
+`\xNN` there is ONE code unit. `"\xF0\x9F\x9B\x91"` is not 🛑 but four Latin-1 letters. Two argument
+texts of the sheet tools (`row`, `col`) went out to every caller garbled that way.
+
+- Write the character itself, since the sources are UTF-8, or use `\u` / `\U` with its code point.
+- `.github/lint.sh` refuses a new `\x` escape above 0x7F in a string.
+
 ### 1.10 Fix the root, then sweep — do not fix where the compiler stopped
 
 A compiler reports the first place a class of mistake surfaces, never the class. Every time one

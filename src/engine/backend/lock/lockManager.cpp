@@ -33,6 +33,8 @@
 #include "backend/databaseLayer/databaseLayerException.h"   // a primary-key race arrives as this
 #include "backend/databaseLayer/databaseQueryBuilder.h"     // L2 door
 #include "backend/session/session.h"
+#include "backend/session/sessionRegistry.h"   // HolderOf - the program a holder without a user is named by
+#include "backend/session/sessionSnapshot.h"
 #include "backend/userInfo.h"
 
 #include <algorithm>
@@ -100,6 +102,29 @@ void LockKeyHeader(ibDatabaseQueryBuilder& q, const ibString& ns, const ibString
 			throw;
 		throw HeaderAlreadyThere();
 	}
+}
+
+// WHO HOLDS A LOCK, in the words a person finds them by: the user, else the program on its computer ("Application
+// Workspace on OFFICE-7") - a session nobody logged into has no user, and "another session" left the reader nothing
+// to look for (2026-11-19). The program is the cluster snapshot's own word for the session (GetProgram), a copy taken
+// under a read lock: no base is read and no lock is asked for while this transaction holds its headers.
+ibString HolderOf(const ibString& user, const ibString& session, const ibString& computer)
+{
+	if (!user.IsEmpty())
+		return user;
+	ibString program;
+	if (ibSessionRegistry* const registry = ibApplicationInstance::GetSessionRegistry(ibApplicationInstance::Get(false))) {
+		const ibSessionSnapshot snapshot = registry->GetClusterSnapshot();
+		for (unsigned int idx = 0; idx < snapshot.GetSessionCount(); idx++) {
+			if (snapshot.GetSession(idx).CmpNoCase(session) == 0) {
+				program = snapshot.GetProgram(idx);
+				break;
+			}
+		}
+	}
+	if (program.IsEmpty())
+		return computer.IsEmpty() ? ibString() : ibString::Format(_("a session on %s"), computer);
+	return computer.IsEmpty() ? program : ibString::Format(_("%s on %s"), program, computer);
 }
 
 } // namespace
@@ -200,6 +225,9 @@ ibLockHandle ibLockManager::Acquire(const std::vector<ibLockItem>& items,
 				ibLockMode ownExistingMode = ibLockMode::Shared;
 				bool       conflictHit = false;
 				ibString   conflictUser;
+				ibString   conflictSession;
+				ibString   conflictComputer;
+				ibDateTime conflictSince;
 				{
 					ibQueryIR ir(ibProject(
 						ibFilter(ibScan(lock_table),
@@ -209,6 +237,8 @@ ibLockHandle ibLockManager::Acquire(const std::vector<ibLockItem>& items,
 						{ { ibCol(ibT("lockGuid")),    ibEmptyString },
 						  { ibCol(ibT("sessionGuid")), ibEmptyString },
 						  { ibCol(ibT("userName")),    ibEmptyString },
+						  { ibCol(ibT("computer")),    ibEmptyString },
+						  { ibCol(ibT("acquiredAt")),  ibEmptyString },
 						  { ibCol(ibT("lockMode")),    ibEmptyString } }));
 
 					// The cursor must be released before the INSERT/UPDATE on the same connection.
@@ -232,15 +262,20 @@ ibLockHandle ibLockManager::Acquire(const std::vector<ibLockItem>& items,
 						if (otherMode == ibLockMode::Exclusive ||
 						    item.lockMode == ibLockMode::Exclusive)
 						{
-							conflictHit  = true;
-							conflictUser = otherUser;
+							conflictHit      = true;
+							conflictUser     = otherUser;
+							conflictSession  = otherSess;
+							conflictComputer = rs.GetResultString(ibT("computer"));
+							conflictSince    = rs.GetResultDate(ibT("acquiredAt"));
 							break;
 						}
 					}
 				}
 
 				if (conflictHit)
-					ibBackendLockException::LockConflictThrow(item.namespaceName, conflictUser);
+					ibBackendLockException::LockConflictThrow(
+						item.objectName.IsEmpty() ? item.namespaceName : item.objectName,
+						HolderOf(conflictUser, conflictSession, conflictComputer), conflictSince);
 
 				if (ownExisting) {
 					if (item.lockMode > ownExistingMode && opts.allowUpgrade) {

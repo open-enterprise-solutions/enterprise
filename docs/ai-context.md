@@ -166,6 +166,13 @@ each keyword has exactly ONE spelling — the one in
 identifier and the script breaks at the parser, not at runtime. Use the
 canonical spelling shown below.
 
+Every other name folds case the same way: `s` and `S` are ONE variable, so a
+selection and a structure named so in one function overwrite each other. A
+keyword is never a name - `from`, `in`, `to`, `select` cannot name a variable or
+a parameter. A `for` counts with `To` - `for (i = 1 To n)`; there is no
+`for (start; condition; step)`. A tabular section's line and a register's record
+both number themselves `LineNumber` (shown as *No.*).
+
 | Use | Not a keyword (treated as identifier / rejected) |
 |---|---|
 | `If ... Then ... Endif` | `End If` (two words) |
@@ -406,6 +413,12 @@ foreach (b in tax.GetBase(resources, new Structure("Employee", "Accrual.Employee
 
 Design and measurements: `docs/private/accounting-register-arc.md` (§ 7, § 8.3). What a generator must get
 right is mostly NAMES, and they depend on the register's mode and on the table being read.
+
+**The mode is the bookkeeping tradition, and both are double entry.** On: the continental books, a posting is a
+pair of accounts. Off: the Anglo-Saxon general ledger (US GAAP, IFRS), an entry is lines one after another, one
+account and one side each, as many as it needs, and the write refuses a recorder whose debits and credits differ.
+"Anglo-Saxon" or "continental" names the cost model (the chart: expenses by function or by nature) AND this shape;
+books kept under both models are two registers, one in each mode, each over its own chart.
 
 **The line.** `Correspondence` off (one-sided): `RecordType` + `Account` + `AccountDimension1..N`.
 On: `AccountDr` + `AccountCr` + `AccountDimensionDr1..N` / `AccountDimensionCr1..N`, and no

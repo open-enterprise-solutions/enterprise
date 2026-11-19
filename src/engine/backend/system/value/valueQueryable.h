@@ -9,11 +9,11 @@
 // through, so the script surface and `FROM Catalogs.X` are one world by
 // construction.
 //
-// ONLY LINQ speaks to it. The value exposes NO properties and no own methods
-// beyond the pipeline verbs it NAMES for the editor (ibBindLinqMethods below,
-// shared with the RAM tail) — the single entry is the LINQ dispatch
-// (DispatchLinqMethod override) plus the iteration protocol (CreateIterator —
-// what Foreach uses):
+// LINQ speaks to it — the pipeline verbs it NAMES for the editor (ibBindLinqMethods below, shared with the
+// RAM tail), the LINQ dispatch (DispatchLinqMethod override) and the iteration protocol (CreateIterator —
+// what Foreach uses). Its only other members are THE TABLES THAT LIVE IN IT, found when it is made: a
+// register's virtual tables (`.Balance`, `.Turnovers(Begin, End)` — a property, and a method taking the
+// arguments a query gives them), a document's tabular sections (`.Goods`), each a Queryable of its own:
 //
 //   - a TRANSLATABLE pipeline op FOLDS into the accumulated L3 door builder and
 //     returns a NEW Queryable (the chain is lazy):
@@ -51,6 +51,7 @@
 #include <memory>
 
 class ibBackendQueryable;
+class ibQueryableSourceDescriptor;
 
 // ⭐⭐ THE PIPELINE SURFACE, DECLARED ONCE FOR BOTH VENDORS OF IT. A LINQ chain has two carriers —
 // this one (a DB-backed source and every fold over it) and `ibValueQuery` (the RAM pipeline tail in
@@ -69,10 +70,17 @@ inline void ibBindLinqMethods(ibValue::ibMemberTable& helper, const ibValue*)
 		helper.AppendFunc(ibString(info.name), ibString(info.helper));
 }
 
-class BACKEND_API ibValueQueryable : public ibValueStaticMembers<&ibBindLinqMethods>
+class BACKEND_API ibValueQueryable : public ibValueDynamicMembers
 {
+	enum helperAlias {
+		eTable   // a table living in this one; its data is its position in m_children
+	};
+
 	std::shared_ptr<const ibBackendQueryable>   m_queryable;
 	ibString                                    m_sourceName;   // "Catalogs.Goods" — watch / diagnostics
+	// The tables living in this one — the sources whose owner it is (GetOwnerQueryable): a register's `Balance`,
+	// a document's `Goods`. Found by the constructor; a chain link has none.
+	std::vector<ibQueryableSourceDescriptor*>   m_children;
 	ibDataQueryBuilder                          m_builder;      // accumulated door verbs (From set at vend)
 	long                                        m_take = 0;     // Take(n) — page limit at execute (0 = all)
 	// Select(x => x.Field) — a single-column SCALAR projection: the read yields THIS column's
@@ -82,6 +90,9 @@ class BACKEND_API ibValueQueryable : public ibValueStaticMembers<&ibBindLinqMeth
 	std::shared_ptr<const ibBackendQueryColumn> m_projectCol;
 	ibString                                    m_projectAlias;
 	std::vector<ibString>                       m_ops;          // folded-op labels — the watch string only
+
+	// The pipeline verbs, then a property per table in m_children — and a method beside it for one taking arguments.
+	void FillMembers(ibMemberTable& helper) const;
 
 	// Fresh chain link: same source, the caller mutates the copy's builder/take.
 	ibValueQueryable* CloneLink() const;
@@ -117,7 +128,7 @@ class BACKEND_API ibValueQueryable : public ibValueStaticMembers<&ibBindLinqMeth
 	bool JoinPushDown(ibValue& ret, ibValue** args, long n);
 
 public:
-	ibValueQueryable() : ibValueStaticMembers(ibValueTypes::TYPE_VALUE) {}
+	ibValueQueryable() : ibValueDynamicMembers(ibValueTypes::TYPE_VALUE) { m_members.Bind(this, &ibValueQueryable::FillMembers); }
 	// A metaobject's table or Data.From's wrapper — held, so it lives while the last chain link does.
 	ibValueQueryable(const std::shared_ptr<const ibBackendQueryable>& queryable, const ibString& sourceName);
 
@@ -164,6 +175,10 @@ public:
 	// The single consumer surface — LINQ ops fold / execute (see the header note).
 	virtual void DispatchLinqMethod(ibLinqMethod method, ibValue& ret,
 	                                ibValue** args, long n) override;
+
+	// A table living in this one — read whole as a property, or with its arguments as a method.
+	virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal) override;
+	virtual bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray) override;
 
 	// ⭐⭐ TAKE THE LOOP'S PREDICATE, IF YOU CAN RUN IT. A chain compiled as a loop (compileCode.cpp)
 	// would otherwise stream every row here to filter it in the client; this is the instruction that

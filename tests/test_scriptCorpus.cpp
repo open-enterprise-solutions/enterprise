@@ -169,12 +169,15 @@ struct ibCorpusHost {
 // data; assuming one is a guess.
 //
 // Returns true when some dialect compiled it, and leaves the compiler holding
-// that dialect's bytecode. `strError` is the LAST attempt's message — keeping
-// the first reports CES complaining about a VES source, a true sentence about
-// the wrong question.
+// that dialect's bytecode. `strError` is EVERY attempt's message, each under its
+// dialect: which one the file is in is not known here, so neither sentence may
+// stand alone. It was the last (VES) one only, and a CES file the lexer broke
+// reported VES complaining about `!=` - the CI log pointed at the wrong line
+// (2026-11-19: three scripts with `||`).
 bool CompileEitherDialect(ibCompileCode& compiler, ibCorpusHost& host,
 	const ibString& strText, ibString& strError)
 {
+	strError.Clear();
 	for (short style : { (short)CODE_CES, (short)CODE_VES }) {
 
 		ibCompileCode::SetCodeStyle(style);
@@ -191,7 +194,8 @@ bool CompileEitherDialect(ibCompileCode& compiler, ibCorpusHost& host,
 			strTry = wxT("unknown exception");
 		}
 
-		strError = strTry;
+		strError += style == CODE_CES ? wxT("\n    as CES: ") : wxT("\n    as VES: ");
+		strError += strTry;
 	}
 
 	return false;
@@ -290,7 +294,7 @@ TEST_F(ScriptCorpus, EveryScriptCompiles)
 //
 // The binder is not optional. `Message` is a CONTEXT METHOD, so its owning
 // context variable is a required binding, and the no-binder Execute overload
-// raises "Required binding not provided" before the first opcode. codeRunner
+// raises "Required binding not provided" before the first opcode. coderunner
 // does exactly what this does: Compile, CreateBinder, Execute.
 //
 // ⭐ ONE CASE PER SCRIPT, because a sanitiser ends the PROCESS. While the whole

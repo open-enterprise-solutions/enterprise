@@ -1,5 +1,7 @@
 #include "mcpServer.h"
 
+#include <chrono>
+#include <condition_variable>
 #include <mutex>
 #include <string>
 #include <vector>
@@ -21,6 +23,10 @@ namespace {
 // client that has lost its place — refused before it is allocated, the way the
 // debug server refuses an absurd packet length.
 const std::size_t kMaxRequestBytes = 8u * 1024u * 1024u;
+
+// How long a port closing waits for the answers under way (ibMcpListener::Stop) — a call that closes the window it came
+// through is answered first. A call still waiting for the server by then is not: the window is going.
+constexpr std::chrono::seconds kAnswersWithin(2);
 
 // The designer's and the application's apart: both can be open on one machine, each on its own port.
 wxString SettingsGroup()
@@ -116,9 +122,15 @@ public:
 	}
 
 	// The port closed and the connections let go — the stream's among them — before this returns, so
-	// a restart on the same port cannot race the old listener.
+	// a restart on the same port cannot race the old listener. The answers under way go out first: the server lets every
+	// connection go at once, and a call that closed the window it came through (app_close) lost its answer 3 ms before
+	// it was written (2026-11-19).
 	void Stop()
 	{
+		{
+			std::unique_lock<std::mutex> lock(m_carryMutex);
+			m_carried.wait_for(lock, kAnswersWithin, [this]() { return m_carrying == 0; });
+		}
 		m_server.Stop();
 
 		std::lock_guard<std::mutex> lock(m_streamMutex);
@@ -161,6 +173,29 @@ private:
 	private:
 		ibMcpListener&                 m_listener;
 		std::shared_ptr<ibEventStream> m_stream;
+	};
+
+	// A QUESTION WHILE IT IS CARRIED — counted from the moment it is heard until it is answered, so a port closing
+	// waits for its answer (Stop).
+	class ibCarrying {
+	public:
+
+		explicit ibCarrying(ibMcpListener& listener)
+			: m_listener(listener)
+		{
+			std::lock_guard<std::mutex> lock(m_listener.m_carryMutex);
+			++m_listener.m_carrying;
+		}
+
+		~ibCarrying()
+		{
+			std::lock_guard<std::mutex> lock(m_listener.m_carryMutex);
+			if (--m_listener.m_carrying == 0)
+				m_listener.m_carried.notify_all();
+		}
+
+	private:
+		ibMcpListener& m_listener;
 	};
 
 	// ⭐ THE ONE QUESTION ASKED OF EVERY REQUEST. `Authorization: Bearer <token>`, compared whole.
@@ -296,6 +331,7 @@ private:
 		// A POST IS A QUESTION: one JSON-RPC message in, one answer out.
 		m_server.Post("/", [this](const ibHttpRequest& req, ibHttpResponder respond) {
 
+			const ibCarrying carrying(*this);
 			ibHttpResponse res;
 			if (Refuse(req, res)) {
 				respond(std::move(res));
@@ -362,6 +398,11 @@ private:
 	// The way out — the one stream listening, or none. Said to by what the server says unasked.
 	std::mutex                     m_streamMutex;
 	std::shared_ptr<ibEventStream> m_stream;
+
+	// The questions being carried (ibCarrying) — what a port closing waits for.
+	std::mutex              m_carryMutex;
+	std::condition_variable m_carried;
+	int                     m_carrying = 0;
 };
 
 //---------------------------------------------------------------------------

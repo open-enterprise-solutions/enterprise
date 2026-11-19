@@ -795,6 +795,13 @@ void ibDialogLinqConstructor::OnExpanding(wxTreeEvent& event)
 	if (!structure && !rows.m_names.empty()) {
 		node->m_kind = ibNodeKind::Source;
 		FillFields(tree, item, node->m_expression, rows);
+		// …and under its fields, the tables living in a source of `Data` — a register's virtual tables, a document's
+		// tabular sections. They are its only properties (ibValueQueryable), each a source of its own, read by the dot.
+		if (underData) {
+			const int icon = KindIcon(tree, node->m_expression.AfterFirst(wxT('.')).BeforeFirst(wxT('.')));
+			for (const wxString& member : members.m_names)
+				AddPlace(tree, item, member, node->m_expression + wxT(".") + member, icon, /*probe*/ false);
+		}
 	}
 	else if (!members.m_names.empty()) {
 		node->m_kind = ibNodeKind::Container;   // a variable that turned out to be a place, not a table

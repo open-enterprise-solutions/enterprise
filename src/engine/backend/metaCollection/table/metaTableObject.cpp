@@ -38,6 +38,13 @@ ibString ibTabularSourceDescriptor::GetName() const
 	return parent != nullptr ? (parent->GetName() + ibT(".") + m_meta->GetName()) : m_meta->GetName();
 }
 
+// The object the section belongs to: its table is the one the section lives in.
+std::shared_ptr<const ibBackendQueryable> ibTabularSourceDescriptor::GetOwnerQueryable() const
+{
+	const ibValueMetaObjectRecordDataRef* owner = m_meta->GetParentAsType<ibValueMetaObjectRecordDataRef>();
+	return owner != nullptr ? owner->GetQueryable() : nullptr;
+}
+
 // A table takes no arguments: its own queryable, shared without owning.
 std::shared_ptr<const ibBackendQueryable> ibTabularSourceDescriptor::CreateQueryable(ibValue** /*paParams*/, long /*lSizeArray*/,
 	const std::vector<ibQueryPredicatePtr>& /*conditions*/, const ibQueryReadColumns& /*read*/)
@@ -91,7 +98,7 @@ ibValueMetaObjectTableData::~ibValueMetaObjectTableData()
 bool ibValueMetaObjectTableData::ReadData(const ibDataNode& node)
 {
 	m_propertyUse->SetNodeValue(node.GetProperty(m_propertyUse->GetName()));
-	m_propertyNumberLine->SetNodeValue(node.GetProperty(m_propertyNumberLine->GetName()));
+	m_propertyLineNumber->SetNodeValue(node.GetProperty(m_propertyLineNumber->GetName()));
 
 	return true;
 }
@@ -99,7 +106,7 @@ bool ibValueMetaObjectTableData::ReadData(const ibDataNode& node)
 bool ibValueMetaObjectTableData::WriteData(ibDataNode& node) const
 {
 	node.SetProperty(m_propertyUse->GetName(), m_propertyUse->GetNodeValue());
-	node.SetProperty(m_propertyNumberLine->GetName(), m_propertyNumberLine->GetNodeValue());
+	node.SetProperty(m_propertyLineNumber->GetName(), m_propertyLineNumber->GetNodeValue());
 
 	return true;
 }
@@ -112,7 +119,7 @@ bool ibValueMetaObjectTableData::OnCreateMetaObject(ibMetaData* metaData, int fl
 {
 	if (!ibValueMetaObject::OnCreateMetaObject(metaData, flags))
 		return false;
-	if (!(*m_propertyNumberLine)->OnCreateMetaObject(metaData, flags)) {
+	if (!(*m_propertyLineNumber)->OnCreateMetaObject(metaData, flags)) {
 		return false;
 	}
 	return true;
@@ -120,7 +127,7 @@ bool ibValueMetaObjectTableData::OnCreateMetaObject(ibMetaData* metaData, int fl
 
 bool ibValueMetaObjectTableData::OnLoadMetaObject(ibMetaData* metaData)
 {
-	if (!(*m_propertyNumberLine)->OnLoadMetaObject(metaData))
+	if (!(*m_propertyLineNumber)->OnLoadMetaObject(metaData))
 		return false;
 
 	return ibValueMetaObject::OnLoadMetaObject(metaData);
@@ -128,7 +135,7 @@ bool ibValueMetaObjectTableData::OnLoadMetaObject(ibMetaData* metaData)
 
 bool ibValueMetaObjectTableData::OnSaveMetaObject(int flags)
 {
-	if (!(*m_propertyNumberLine)->OnSaveMetaObject(flags))
+	if (!(*m_propertyLineNumber)->OnSaveMetaObject(flags))
 		return false;
 
 	return ibValueMetaObject::OnSaveMetaObject(flags);
@@ -136,7 +143,7 @@ bool ibValueMetaObjectTableData::OnSaveMetaObject(int flags)
 
 bool ibValueMetaObjectTableData::OnDeleteMetaObject()
 {
-	if (!(*m_propertyNumberLine)->OnDeleteMetaObject())
+	if (!(*m_propertyLineNumber)->OnDeleteMetaObject())
 		return false;
 
 	return ibValueMetaObject::OnDeleteMetaObject();
@@ -155,7 +162,7 @@ bool ibValueMetaObjectTableData::OnReloadMetaObject()
 // The value-ctor registration is each leaf's own job, done in its override before this call.
 bool ibValueMetaObjectTableData::OnBeforeRunMetaObject(int flags)
 {
-	if (!(*m_propertyNumberLine)->OnBeforeRunMetaObject(flags))
+	if (!(*m_propertyLineNumber)->OnBeforeRunMetaObject(flags))
 		return false;
 	return ibValueMetaObject::OnBeforeRunMetaObject(flags);
 }
@@ -174,7 +181,7 @@ bool ibValueMetaObjectTableData::OnBeforeCloseMetaObject()
 
 bool ibValueMetaObjectTableData::OnAfterCloseMetaObject()
 {
-	if (!(*m_propertyNumberLine)->OnAfterCloseMetaObject())
+	if (!(*m_propertyLineNumber)->OnAfterCloseMetaObject())
 		return false;
 	ibValueMetaObjectRecordData* metaObject = dynamic_cast<ibValueMetaObjectRecordData*>(GetParent());
 	ibASSERT(metaObject);

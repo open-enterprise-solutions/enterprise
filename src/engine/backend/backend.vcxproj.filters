@@ -172,6 +172,9 @@
     <ClInclude Include="compiler\compileState.h">
       <Filter>compiler</Filter>
     </ClInclude>
+    <ClInclude Include="compiler\similarNames.h">
+      <Filter>compiler</Filter>
+    </ClInclude>
     <ClInclude Include="backend_core.h" />
     <ClInclude Include="databaseLayer\firebird\firebirdBlobCompression.h">
       <Filter>databaseLayer\firebird</Filter>

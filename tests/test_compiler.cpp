@@ -178,6 +178,33 @@ TEST(LexerTest, StringLiteralLexes) {
 	EXPECT_GE(cc.m_translateCode.GetLexCount(), 4u);
 }
 
+// `||` is two delimiters, as `&&` is - BOTH of its bars. Only the bar AFTER a bar was looked at, so the second one
+// began a string continuation, and every CES condition with an Or answered "Constant string expected" (2026-11-19).
+TEST(LexerTest, BothBarsOfALogicalOr_AreDelimiters) {
+	ibCompileCode orCode(wxT("test"), wxT("memory"), false);
+	orCode.Load(wxT("a = b || c;"));
+	ASSERT_TRUE(orCode.Translate());
+
+	ibCompileCode andCode(wxT("test"), wxT("memory"), false);
+	andCode.Load(wxT("a = b && c;"));
+	ASSERT_TRUE(andCode.Translate());
+
+	EXPECT_EQ(orCode.m_translateCode.GetLexCount(), andCode.m_translateCode.GetLexCount());
+}
+
+// …and a bar that starts a line still continues the string above it: one constant, as if written on one line.
+TEST(LexerTest, AStringContinuedOnTheNextLine_IsOneConstant) {
+	ibCompileCode continued(wxT("test"), wxT("memory"), false);
+	continued.Load(wxT("s = \"one\n\t|two\";"));
+	ASSERT_TRUE(continued.Translate());
+
+	ibCompileCode oneLine(wxT("test"), wxT("memory"), false);
+	oneLine.Load(wxT("s = \"one two\";"));
+	ASSERT_TRUE(oneLine.Translate());
+
+	EXPECT_EQ(continued.m_translateCode.GetLexCount(), oneLine.m_translateCode.GetLexCount());
+}
+
 // ===========================================================================
 // Compile — bytecode emission shape (does not execute)
 // ===========================================================================

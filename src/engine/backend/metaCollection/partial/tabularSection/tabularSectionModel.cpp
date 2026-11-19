@@ -45,7 +45,7 @@ void ibValueTabularSectionDataObjectBase::GetValueByRow(ibVariant& variant,
 	ibComposerNode* node = GetViewData<ibComposerNode>(row);
 	if (node == nullptr) return;
 
-	if (m_metaTable->IsNumberLine(col)) {
+	if (m_metaTable->IsLineNumber(col)) {
 		// ⭐⭐ THE NUMBER A PERSON READS IS THE ROW'S PLACE IN WHAT IS SHOWN — 1, 2, 3, 4, 5, 6, however they
 		// have played with the order (Max, 2026-08-29). It comes off the FETCH, which is the one step that
 		// knows it, because producing the display order is what it does.
@@ -74,7 +74,7 @@ bool ibValueTabularSectionDataObjectBase::SetValueByRow(const ibVariant& variant
 	
 	if (node == nullptr) return false;
 
-	if (!m_metaTable->IsNumberLine(col)) {
+	if (!m_metaTable->IsLineNumber(col)) {
 		const ibMetaData* metaData = m_metaTable->GetMetaData();
 		ibASSERT(metaData);
 		const bool hasCol = node->HasColumnValue(col);
@@ -148,7 +148,7 @@ void ibValueTabularSectionDataObjectBase::CopyValue(const ibDataViewItem& row)
 	// section whose columns are ALL predefined — a chart of accounts' analytics kinds — therefore
 	// copied nothing at all: the new row arrived with a line number and four empty cells.
 	for (const auto object : m_metaTable->GetGenericAttributeArrayObject()) {
-		if (!m_metaTable->IsNumberLine(object->GetMetaID())) {
+		if (!m_metaTable->IsLineNumber(object->GetMetaID())) {
 			rowData->AppendTableValue(object->GetMetaID(), node->GetTableValue(object->GetMetaID()));
 		}
 		else {

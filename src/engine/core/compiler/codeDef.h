@@ -210,12 +210,22 @@ enum { //instruction types
 	// whose operand is a list of unbounded length is no longer one step of a tape.
 	OPER_LINQ_KEEP,
 
+	// ⭐ THE WINDOW OF AN ORDERED ANSWER — `skip` / `take` written after `orderby`. The first rows of an
+	// order are known only when the last row has arrived, so the window is kept in the collection beside
+	// the keys and OPER_LINQ_RESULT cuts the rows to it once they are in order. One per clause, so each
+	// sets its own side:
+	//   m_param1 — the collection
+	//   m_param2 — how many rows to skip; m_numArray == DEF_VAR_SKIP when this one is the take
+	//   m_param3 — how many rows to take; m_numArray == DEF_VAR_SKIP when this one is the skip
+	OPER_LINQ_WINDOW,
+
 	// ⭐ WHAT THE CHAIN ANSWERS WITH, once the loop is over — the one place where LINQ's own
 	// collection becomes something the language can hold.
 	//   m_param1              — the destination
 	//   m_param2              — the collection
 	//   m_param3.m_numIndex   — 0: an Array of the rows · 1: the first row (empty when there is none)
 	//   m_param3.m_numArray   — 1 to put the rows in key order first (descending), 2 ascending
+	// …and then cuts them to the window an OPER_LINQ_WINDOW kept, when one did.
 	OPER_LINQ_RESULT,
 
 	// ⭐ GROUPING AND JOINING, in the same collection and with no name anywhere. A bucket is found by
@@ -466,6 +476,10 @@ enum ibScriptError { //Error message numbers
 
 	// --- runtime, appended ------
 	ibScriptError_ProcedureNotDone,
+
+	// --- compiler, appended ------
+	ibScriptError_KeywordAsName,
+	ibScriptError_ForCountsWithTo,
 
 	ibScriptError_Count
 };

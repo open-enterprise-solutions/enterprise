@@ -381,7 +381,7 @@ std::vector<std::pair<ibString, ibValue>> KindsOfAccount(const ibValue& account)
 	const std::shared_ptr<const ibBackendQueryColumn> ownerCol = chart->GetDataReference() != nullptr
 		? rows->ResolveColumnByName(chart->GetDataReference()->GetName()) : nullptr;
 	const std::shared_ptr<const ibBackendQueryColumn> kindCol = columnOf(table->GetAccountDimensionKind());
-	const std::shared_ptr<const ibBackendQueryColumn> lineCol = columnOf(table->GetNumberLine());
+	const std::shared_ptr<const ibBackendQueryColumn> lineCol = columnOf(table->GetLineNumber());
 	if (ownerCol == nullptr || kindCol == nullptr)
 		return kinds;
 

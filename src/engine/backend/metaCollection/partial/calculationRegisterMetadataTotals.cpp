@@ -651,6 +651,11 @@ ibString ibCalcFactSourceDescriptor::GetName() const
 	return m_meta->GetName() + ibT(".") + ibCalcFactName;
 }
 
+std::shared_ptr<const ibBackendQueryable> ibCalcFactSourceDescriptor::GetOwnerQueryable() const
+{
+	return m_meta->GetQueryable();
+}
+
 // What a query's condition is resolved against: the surface the reading publishes — `ActionPeriodStart` there is a
 // PIECE's first day, and the condition means what the table shows.
 std::shared_ptr<const ibBackendQueryable> ibCalcFactSourceDescriptor::GetConditionScope() const
@@ -1467,6 +1472,11 @@ ibString ibCalcBaseSourceDescriptor::GetName() const
 	return m_meta->GetName() + ibT(".") + ibCalcBaseName + m_base->GetName();
 }
 
+std::shared_ptr<const ibBackendQueryable> ibCalcBaseSourceDescriptor::GetOwnerQueryable() const
+{
+	return m_meta->GetQueryable();
+}
+
 // What a condition is resolved against: the surface the reading publishes.
 std::shared_ptr<const ibBackendQueryable> ibCalcBaseSourceDescriptor::GetConditionScope() const
 {
@@ -2216,6 +2226,11 @@ ibString ibCalcScheduleDataSourceDescriptor::GetNamespace() const
 ibString ibCalcScheduleDataSourceDescriptor::GetName() const
 {
 	return m_meta->GetName() + ibT(".") + ibCalcScheduleDataName;
+}
+
+std::shared_ptr<const ibBackendQueryable> ibCalcScheduleDataSourceDescriptor::GetOwnerQueryable() const
+{
+	return m_meta->GetQueryable();
 }
 
 // What a condition is resolved against: the surface the reading publishes.

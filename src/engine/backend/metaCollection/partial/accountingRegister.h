@@ -247,6 +247,7 @@ public:
 
 	ibString GetNamespace() const override;
 	ibString GetName() const override;
+	std::shared_ptr<const ibBackendQueryable> GetOwnerQueryable() const override;   // the register's — every shape lives in it
 
 	// ⭐⭐ THE ACCOUNT CONDITIONS THIS SOURCE CONSUMES ITSELF. They do not reach a WHERE: a reading asked for
 	// accounts «in hierarchy» reports the subordinates UNDER the account that was named, and a filter applied
@@ -983,10 +984,15 @@ private:
 	// It is a property rather than a preference: a chessboard and correspondence turnovers cannot be
 	// expressed at all by a line that names only one side, and no reading can recover the pairing
 	// afterwards — a join over the recorder produces every debit against every credit.
-	// ON by default: double entry is what an accounting register is FOR, and a one-sided one is the
-	// special case (a register of quantities, a memo book). Defaulting to off meant every new register
-	// started as the exception and had to be corrected into the rule.
-	ibPropertyBoolean* m_propertyCorrespondence = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryData, ibT("Correspondence"), _("Correspondence"), _("Whether a line is a whole posting or one side of it. On (the default): a line carries AccountDr and AccountCr with one amount, and the dimension slots double - each side has its own analytics; correspondence turnovers and a chessboard can be read. Off: a line carries RecordType and one Account, a posting is two lines."), true);
+	// ⭐ THE TWO MODES ARE THE TWO BOOKKEEPING TRADITIONS, and both are double entry. On: the continental
+	// books, where a posting IS a pair of accounts. Off: the Anglo-Saxon general ledger (US GAAP, IFRS) -
+	// a journal entry is lines one after another, each one account and one side, as many as it needs
+	// (a sale: one debit to the customer, a credit per item), and the write refuses a set whose debits
+	// and credits differ (CheckDoubleEntry). It is not a register of quantities or a memo book: this
+	// comment said so, and an assistant asked for an Anglo-Saxon ledger built it in pairs (2026-11-19).
+	// ON by default: the continental pair is what this platform's books start from. Defaulting to off
+	// meant every new register had to be corrected into it.
+	ibPropertyBoolean* m_propertyCorrespondence = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryData, ibT("Correspondence"), _("Correspondence"), _("Whether a line is a whole posting or one side of it - the two bookkeeping traditions, both double entry. On (the default), the continental books: a line carries AccountDr and AccountCr with one amount, and the dimension slots double - each side has its own analytics; correspondence turnovers and a chessboard can be read. Off, the Anglo-Saxon general ledger (US GAAP, IFRS): a line carries RecordType and one Account, an entry is as many lines as it needs - one debit to a customer and a credit per item sold - and the debits and credits of a recorder must balance."), true);
 
 	ibPropertyChartOfAccounts* m_propertyChartOfAccounts = ibPropertyObject::CreateProperty<ibPropertyChartOfAccounts>(m_categoryData, ibT("ChartOfAccounts"), _("Chart of accounts"), _("The chart of accounts the register is kept by: Account (or AccountDr / AccountCr) is a reference into it, and its account dimension kinds decide the register's dimension slots and what each may hold. Required."));
 

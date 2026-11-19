@@ -1108,6 +1108,11 @@ protected:
 	/// commit. Atomic for the same cross-thread-visibility reason as
 	/// m_txDepth.
 	std::atomic<bool> m_txAborted{false};
+	/// WHAT ABORTED IT - the refusal the first inner rollback was taken over, named by the outer commit's own
+	/// refusal. That one said only "a write that failed and whose error was caught", and which write, and why,
+	/// had to be dug out of the trace (2026-11-19: a committing code_run, a register's Period). Empty when the
+	/// rollback was not taken in a catch. Serial per session, as m_txDepth.
+	ibString m_txAbortedBy;
 
 	/// Back-pointer to the holder that has this layer reserved for an
 	/// active TX. Maintained exclusively by ibConnectionPool — see

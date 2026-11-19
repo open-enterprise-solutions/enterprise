@@ -5,6 +5,7 @@
 
 #include "procUnit.h"
 #include "procUnitLambda.h"    // ibValueIterator / ibValueFunction / AsFunction / AsIterator
+#include "similarNames.h"      // ibSimilarNames - the members spelled similar to one a value does not have
 #include "core/fiber/fiber.h"          // StackLow — the depth count is not the only way the stack runs out
 
 #include "debugger/debugServer.h"
@@ -1019,13 +1020,28 @@ inline void CompareValueNE(ibValue& cValue1, const ibValue& cValue2, const ibVal
 // out-of-line place — see the raise-helper note above.
 IB_NOINLINE void RaiseMemberNotFound(const ibValue& variable, const ibString& name)
 {
-	// The receiver is deliberately NOT named — asking a value what it is means calling into
-	// it, and a reference answers by reading, which can recurse or raise. See the note beside
-	// the message texts in backend_exception.cpp.
-
 	// Which of the two it is depends on the VALUE, not on the opcode — so the
 	// choice belongs here rather than at each of the call sites.
-	Raise(variable.IsReference() ? ibScriptError_MemberNotFound : ibScriptError_MemberNotAggregate, name);
+	if (!variable.IsReference())
+		Raise(ibScriptError_MemberNotAggregate, name);
+
+	// ⭐ THE RECEIVER IS NAMED BY ITS TYPE, and the members it has spelled similar to the one asked for beside it (Max,
+	// 2026-11-19: a guess that is refused once goes into the platform - `Choose` asked of a query's result and
+	// `TableHeight` of a spreadsheet document came back "Aggregate object field not found", naming neither). It was
+	// left unnamed on 2026-09-04 because asking a reference what it is meant reading; a reference names its type from
+	// its metaobject's type factory (reference.cpp, GetClassName), and the members are the table the lookup that missed
+	// has just asked - nothing is read. A value whose class is not registered cannot say its type, and this refusal is
+	// not to become that one: the value is then left unnamed.
+	ibString type;
+	try {
+		type = variable.GetClassName();
+	}
+	catch (const ibCoreException&) {
+		type = _("this value");
+	}
+	const ibString similarNames = ibSimilarNames(name, variable);
+	Raise(ibScriptError_MemberNotFound, name, similarNames.IsEmpty() ? type
+		: ibString::Format(_("%s - a member with a similar name: %s"), type, similarNames));
 }
 
 // A METHOD the value does not have. A GLOBAL FUNCTION asked of a value is the commonest shape of
@@ -1832,6 +1848,13 @@ start_label:
 					array3 == DEF_VAR_SKIP ? nullptr : &cvariable3,
 					(long)curCode.m_param4.m_numIndex,
 					curCode.m_param4.m_numArray != 0);
+				break;
+
+			// p2 = the rows to skip, p3 = the rows to take; the side this clause is not is SKIP. See ibLinqWindow.
+			case OPER_LINQ_WINDOW:
+				ibLinqWindow(variable1,
+					array2 == DEF_VAR_SKIP ? nullptr : &cvariable2,
+					array3 == DEF_VAR_SKIP ? nullptr : &cvariable3);
 				break;
 
 			case OPER_LINQ_BUCKET:

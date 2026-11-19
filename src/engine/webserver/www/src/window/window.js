@@ -754,7 +754,7 @@ export class ClientWindow {
 			new Promise((resolve) => setTimeout(resolve, startsWithin))]);
 	}
 
-	/** @param {{Messages?: ProtocolNode, Clear?: boolean, Exit?: boolean}} events */
+	/** @param {{Messages?: ProtocolNode, Clear?: boolean, Exit?: boolean, Close?: boolean}} events */
 	happened(events) {
 		if (events.Clear)
 			this.clearMessages();
@@ -766,6 +766,9 @@ export class ClientWindow {
 			this.ended(_('Exit'));
 			this.session.logout();
 		}
+		// Closed as the person closes it (a script's EndJob(False)): its Quit, each tab asked what it keeps.
+		else if (events.Close)
+			this.session.call('command', { Command: Command.Exit });
 	}
 
 	/**

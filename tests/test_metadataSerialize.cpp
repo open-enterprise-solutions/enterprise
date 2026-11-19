@@ -32,6 +32,8 @@
 #include <wx/filefn.h>     // wxRemoveFile
 
 #include "backend/metadataApplication.h"
+#include "backend/backend_exception.h"   // ibBackendException - a node that cannot be read is refused
+#include "backend/metaCollection/metaObject.h"   // g_metaCatalogCLSID
 #include "core/build.h"   // version_generate, version_oes_last
 #include "core/clsid.h"   // metadata_to_clsid("MD_CAT")
 
@@ -125,6 +127,42 @@ TEST(MetadataSerialize, EveryBusinessObjectType_RoundTrip_BytesEqual) {
 
 		ASSERT_EQ(buf1.GetDataLen(), buf2.GetDataLen()) << "length drift for " << c.clsid;
 		EXPECT_TRUE(BuffersEqual(buf1, buf2))           << "byte drift for "   << c.clsid;
+	}
+}
+
+// ⭐ A PREDEFINED ATTRIBUTE THE SAVED NODE DOES NOT HOLD IS REFUSED, NAMING IT (2026-11-19). Loaded as it used to be, it kept
+// the constructor's id 0 - a line number renamed since the application was saved stood in for a row's owner, and the apply
+// that followed refused every declared line. A catalog saved, its Code taken out of the node, read into a fresh one.
+TEST(MetadataSerialize, APredefinedAttributeTheSavedNodeLacks_IsRefusedByName) {
+	ibMetaDataApplicationFile cfg;
+	ibValueMetaObjectApplication* root = cfg.GetRootMetaObject();
+	ASSERT_NE(root, nullptr);
+	ibValueMetaObject* catalog = cfg.CreateMetaObject(g_metaCatalogCLSID, root, /*runObject*/ false);
+	ASSERT_NE(catalog, nullptr);
+	cfg.RenameMetaObject(catalog, ibString(wxT("Goods")));
+
+	ibDataNode saved;
+	ASSERT_TRUE(catalog->SaveNode(saved));
+	ibDataNode older;
+	bool dropped = false;
+	for (const auto& field : saved.Fields()) {
+		if (field.first == wxT("Code"))
+			dropped = true;
+		else
+			older.AddField(field.first, field.second);
+	}
+	ASSERT_TRUE(dropped) << "the catalog's node holds no Code to take out";
+
+	ibValue* params[] = { root };   // made as the loader makes a child: by its class, under its parent
+	const ibValuePtr<ibValueMetaObject> fresh = ibValue::CreateObject(g_metaCatalogCLSID, params, 1);
+	ASSERT_TRUE(fresh != nullptr);
+	fresh->SetMetaData(&cfg);
+	try {
+		fresh->LoadNode(older);
+		FAIL() << "a node without Code was read";
+	}
+	catch (const ibBackendException& err) {
+		EXPECT_TRUE(err.GetErrorDescription().Contains(wxT("'Code'"))) << err.GetErrorDescription().ToStdString();
 	}
 }
 

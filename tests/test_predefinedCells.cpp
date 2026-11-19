@@ -802,7 +802,7 @@ TEST(PredefinedCells, AnAccountsAnalyticsAreLinesItOwns) {
 	ASSERT_TRUE(owner->second.ConvertToValue(ownerGuid));
 	ASSERT_NE(ownerGuid, nullptr);
 	EXPECT_EQ(static_cast<ibGuid>(*ownerGuid), settlements);
-	const ibValue* number = SeedCell(line, kinds->GetNumberLine());
+	const ibValue* number = SeedCell(line, kinds->GetLineNumber());
 	const ibValue* kindCell = SeedCell(line, kinds->GetAccountDimensionKind());
 	const ibValue* summary = SeedCell(line, kinds->GetSummaryOnly());
 	ASSERT_NE(number, nullptr);

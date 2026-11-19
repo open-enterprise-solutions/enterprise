@@ -11,6 +11,7 @@
 #include "deskgui/docview/choiceTemplate.h"
 
 #include "deskgui/univ/findReplaceDialog.h"   // ibFindReplaceDialog — Find, the theme's dialog
+#include "deskgui/univ/dialog.h"   // ibIsModalShown — a view made under a modal is a dialog over it
 
 #include "core/diagnostics/journal.h"   // ibJournalInfo - a view activated, left
 
@@ -135,18 +136,8 @@ ibFrontendView *ibFrontendDocTemplate::CreateView(ibFrontendDocument *doc, long 
 	// null parent. The meta path bypasses this CreateView entirely (its
 	// own OnCreate calls CreateChildFrame itself), so there is no double
 	// creation.
-	bool createModal = false;
-	for (wxWindow* window : wxTopLevelWindows) {
-		if (window->IsKindOf(CLASSINFO(wxDialog))) {
-			if (((wxDialog*)window)->IsModal()) {
-				createModal = true;
-				break;
-			}
-		}
-	}
-
 	long style = wxDEFAULT_FRAME_STYLE;
-	if (createModal) style |= wxCREATE_SDI_FRAME;
+	if (ibIsModalShown()) style |= wxCREATE_SDI_FRAME;
 
 	GetDocumentManager()->GetParentFrame()->CreateChildFrame(view.get(), wxDefaultPosition, wxDefaultSize, style);
 

@@ -37,6 +37,7 @@ public:
 	~ibAccumRegisterBalanceDescriptor() override;
 	ibString GetNamespace() const override;
 	ibString GetName() const override;
+	std::shared_ptr<const ibBackendQueryable> GetOwnerQueryable() const override;   // the register's — the three tables live in it
 	// ⭐ THE CONDITION IS CONSUMED — resolved against the movements (GetConditionScope) and applied INSIDE the
 	// reading, before the fold, on whichever surface it stands (ibRegConditionOn). The same for all three tables.
 	std::shared_ptr<const ibBackendQueryable> CreateQueryable(ibValue** paParams, long lSizeArray,
@@ -64,6 +65,7 @@ public:
 	~ibAccumRegisterTurnoverDescriptor() override;
 	ibString GetNamespace() const override;
 	ibString GetName() const override;
+	std::shared_ptr<const ibBackendQueryable> GetOwnerQueryable() const override;
 	std::shared_ptr<const ibBackendQueryable> CreateQueryable(ibValue** paParams, long lSizeArray,
 	                                                          const std::vector<ibQueryPredicatePtr>& conditions,
 	                                                          const ibQueryReadColumns& read) override;
@@ -89,6 +91,7 @@ public:
 	~ibAccumRegisterBalanceAndTurnoverDescriptor() override;
 	ibString GetNamespace() const override;
 	ibString GetName() const override;
+	std::shared_ptr<const ibBackendQueryable> GetOwnerQueryable() const override;
 	std::shared_ptr<const ibBackendQueryable> CreateQueryable(ibValue** paParams, long lSizeArray,
 	                                                          const std::vector<ibQueryPredicatePtr>& conditions,
 	                                                          const ibQueryReadColumns& read) override;
@@ -881,6 +884,11 @@ inline ibString ibAccumRegisterBalanceDescriptor::GetName() const
 	return m_reg->GetName() + ibT(".Balance");
 }
 
+inline std::shared_ptr<const ibBackendQueryable> ibAccumRegisterBalanceDescriptor::GetOwnerQueryable() const
+{
+	return m_reg->GetQueryable();
+}
+
 // What a query's condition is resolved against: the movements, where every dimension is a column.
 inline std::shared_ptr<const ibBackendQueryable> ibAccumRegisterBalanceDescriptor::GetConditionScope() const
 {
@@ -943,6 +951,11 @@ inline ibString ibAccumRegisterTurnoverDescriptor::GetNamespace() const
 inline ibString ibAccumRegisterTurnoverDescriptor::GetName() const
 {
 	return m_reg->GetName() + ibT(".Turnovers");
+}
+
+inline std::shared_ptr<const ibBackendQueryable> ibAccumRegisterTurnoverDescriptor::GetOwnerQueryable() const
+{
+	return m_reg->GetQueryable();
 }
 
 inline std::shared_ptr<const ibBackendQueryable> ibAccumRegisterTurnoverDescriptor::GetConditionScope() const
@@ -1026,6 +1039,11 @@ inline ibString ibAccumRegisterBalanceAndTurnoverDescriptor::GetNamespace() cons
 inline ibString ibAccumRegisterBalanceAndTurnoverDescriptor::GetName() const
 {
 	return m_reg->GetName() + ibT(".BalanceAndTurnovers");
+}
+
+inline std::shared_ptr<const ibBackendQueryable> ibAccumRegisterBalanceAndTurnoverDescriptor::GetOwnerQueryable() const
+{
+	return m_reg->GetQueryable();
 }
 
 inline std::shared_ptr<const ibBackendQueryable> ibAccumRegisterBalanceAndTurnoverDescriptor::GetConditionScope() const

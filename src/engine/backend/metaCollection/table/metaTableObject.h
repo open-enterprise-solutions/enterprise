@@ -47,6 +47,7 @@ public:
 	explicit ibTabularSourceDescriptor(ibValueMetaObjectTableDataRef* meta);
 	ibString GetNamespace() const override;
 	ibString GetName() const override;
+	std::shared_ptr<const ibBackendQueryable> GetOwnerQueryable() const override;   // the object's — a section lives in it
 	std::shared_ptr<const ibBackendQueryable> CreateQueryable(ibValue** paParams, long lSizeArray,
 	                                                          const std::vector<ibQueryPredicatePtr>& conditions,
 	                                                          const ibQueryReadColumns& read) override;
@@ -82,8 +83,8 @@ public:
 
 	ibItemMode GetTableUse() const { return m_propertyUse->GetValueAsEnum(); }
 
-	ibValueMetaObjectAttributePredefined* GetNumberLine() const { return m_propertyNumberLine->GetMetaObject(); }
-	bool IsNumberLine(const ibMetaID& id) const { return id == (*m_propertyNumberLine)->GetMetaID(); }
+	ibValueMetaObjectAttributePredefined* GetLineNumber() const { return m_propertyLineNumber->GetMetaObject(); }
+	bool IsLineNumber(const ibMetaID& id) const { return id == (*m_propertyLineNumber)->GetMetaID(); }
 
 	//get table class
 	ibTypeDescription GetTypeDesc() const;
@@ -195,7 +196,7 @@ protected:
 
 	//get default attributes
 	virtual bool FillArrayObjectByPredefinedAttribute(std::vector<ibValueMetaObjectAttributeBase*>& array) const {
-		array = { m_propertyNumberLine->GetMetaObject() };
+		array = { m_propertyLineNumber->GetMetaObject() };
 		return true;
 	}
 
@@ -210,8 +211,12 @@ private:
 		_("In a catalog with folders: which nodes have this tabular section - items (the default), folders, or both. The other kind's form and record simply do not offer it."),
 		ibItemMode::ibItemMode_Item);
 	// The line number's length is the application's - shown and set as its type, a number alone (ibPropertyPredefinedType).
-	ibPropertyPredefinedType* m_propertyNumberLine = ibPropertyObject::CreateProperty<ibPropertyPredefinedType>(m_categoryPredefined, ibValueMetaObjectCompositeData::CreateNumber(ibT("NumberLine"), _("N"),
-		_("The row's number in the tabular section, 1-based, kept by the platform: renumbered when rows are added, deleted or moved, and written with the object. Read-only for code."), 6, 0), { g_valueNumberCLSID });
+	// ⭐ ONE NAME, ONE PRESENTATION: `LineNumber`, shown as "No." - as a register record's (commonObject.h). Short
+	// because a column of line numbers is narrow, and "No." because that is how English writes the numero sign (a bare
+	// "N" reads as a count); the name in full because code must not guess: it was `NumberLine` here and an author wrote
+	// the register's spelling (2026-11-19, Max: "so that we do not guess").
+	ibPropertyPredefinedType* m_propertyLineNumber = ibPropertyObject::CreateProperty<ibPropertyPredefinedType>(m_categoryPredefined, ibValueMetaObjectCompositeData::CreateNumber(ibT("LineNumber"), _("No."),
+		_("The line's number in the tabular section, from 1, kept by the platform: renumbered when lines are added, deleted or moved, and written with the object. Read-only for code."), 6, 0), { g_valueNumberCLSID });
 };
 
 // ibValueMetaObjectTableDataRam — RAM-only tabular section (data tools / reports). A thin

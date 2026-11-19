@@ -52,6 +52,7 @@
 #include "backend/query/provider/database/structure/schemaSnapshot.h"
 #include "backend/system/value/valueBoundary.h"
 #include "backend/system/value/valueTable.h"
+#include "backend/system/value/valueQueryable.h"   // ibValueQueryable — a register's readings as its members
 #include "backend/session/session.h"
 #include "core/clsid.h"
 #include "queryRoad.h"   // MeasureSent — the road a totals read took
@@ -548,6 +549,28 @@ TEST_F(AcceptanceAccumulation, BalanceAndTurnoversIsTheOpeningPlusTheMonth)
 			continue;
 		ExpectBalanceAndTurnovers(question);
 	}
+}
+
+// ⭐ A REGISTER'S READINGS ARE MEMBERS OF ITS SOURCE — `Data.AccumulationRegisters.Stock.Balance` whole, and
+// `.Turnovers(Begin, End)` with the arguments a query gives them: found when the source is made, among the sources
+// whose owner it is, and each a source of its own.
+TEST_F(AcceptanceAccumulation, ARegistersReadingsAreMembersOfItsSource)
+{
+	if (!ready) return;
+	const ibValuePtr<ibValueQueryable> stock(new ibValueQueryable(reg->GetQueryable(), wxT("AccumulationRegisters.Stock")));
+	for (const ibString& reading : { ibString(wxT("Balance")), ibString(wxT("Turnovers")), ibString(wxT("BalanceAndTurnovers")) }) {
+		EXPECT_NE(stock->FindProp(reading), ibNOT_FOUND) << reading << " is read whole";
+		EXPECT_NE(stock->FindMethod(reading), ibNOT_FOUND) << reading << " takes its arguments";
+	}
+
+	ibValue balance;
+	ASSERT_TRUE(stock->GetPropVal(stock->FindProp(wxT("Balance")), balance));
+	ibValueQueryable* read = nullptr;
+	ASSERT_TRUE(balance.ConvertToValue(read));
+	ASSERT_NE(read, nullptr);
+	EXPECT_EQ(read->GetSourceName(), ibString(wxT("AccumulationRegisters.Stock.Balance")));
+	EXPECT_NE(read->GetQueryable(), nullptr);
+	EXPECT_EQ(read->FindProp(wxT("Balance")), ibNOT_FOUND) << "a reading has no readings of its own";
 }
 
 // Disabled for the same known gap: the opening still includes the point the period starts on.

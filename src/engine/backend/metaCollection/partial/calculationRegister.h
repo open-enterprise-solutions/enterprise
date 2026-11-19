@@ -60,6 +60,7 @@ public:
 	explicit ibCalcFactSourceDescriptor(ibValueMetaObjectCalculationRegister* meta) : m_meta(meta) {}
 	ibString GetNamespace() const override;
 	ibString GetName() const override;
+	std::shared_ptr<const ibBackendQueryable> GetOwnerQueryable() const override;   // the register's — its tables live in it
 	// ⭐ THE CONDITION IS CONSUMED — resolved against the fact surface (GetConditionScope) and applied by the
 	// reading itself: narrowing every table read where it can, and over the pieces exactly (ComputeRows).
 	std::shared_ptr<const ibBackendQueryable> CreateQueryable(ibValue** paParams, long lSizeArray,
@@ -85,6 +86,7 @@ public:
 	explicit ibCalcScheduleDataSourceDescriptor(ibValueMetaObjectCalculationRegister* meta) : m_meta(meta) {}
 	ibString GetNamespace() const override;
 	ibString GetName() const override;
+	std::shared_ptr<const ibBackendQueryable> GetOwnerQueryable() const override;
 	// THE CONDITION IS CONSUMED — resolved against the schedule data's surface and applied to the records read.
 	std::shared_ptr<const ibBackendQueryable> CreateQueryable(ibValue** paParams, long lSizeArray,
 	                                                          const std::vector<ibQueryPredicatePtr>& conditions,
@@ -109,6 +111,7 @@ public:
 		: m_meta(meta), m_base(base) {}
 	virtual ibString GetNamespace() const override;
 	virtual ibString GetName() const override;
+	virtual std::shared_ptr<const ibBackendQueryable> GetOwnerQueryable() const override;   // the register reading its base
 	// THE CONDITION IS CONSUMED — resolved against the base's surface and applied to the records read.
 	virtual std::shared_ptr<const ibBackendQueryable> CreateQueryable(ibValue** paParams, long lSizeArray,
 	                                                                  const std::vector<ibQueryPredicatePtr>& conditions,
@@ -149,6 +152,7 @@ public:
 	explicit ibRecalculationSourceDescriptor(ibValueMetaObjectCalculationRegister* meta) : m_meta(meta), m_queryable(std::make_shared<ibRecalculationQueryable>(meta)) {}
 	ibString GetNamespace() const override;
 	ibString GetName() const override;
+	std::shared_ptr<const ibBackendQueryable> GetOwnerQueryable() const override;
 	std::shared_ptr<const ibBackendQueryable> CreateQueryable(ibValue** paParams, long lSizeArray,
 	                                                          const std::vector<ibQueryPredicatePtr>& conditions,
 	                                                          const ibQueryReadColumns& read) override;

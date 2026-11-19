@@ -5809,6 +5809,11 @@ ibString ibAcctSourceDescriptor::GetName() const
 	return m_reg->GetName() + ibT(".") + ShapeWord(m_shape);
 }
 
+std::shared_ptr<const ibBackendQueryable> ibAcctSourceDescriptor::GetOwnerQueryable() const
+{
+	return m_reg->GetQueryable();
+}
+
 ibAcctCallArgs ibAcctParseCall(const ibValueMetaObjectAccountingRegister* reg, ibAcctShape shape,
                                ibValue** paParams, long lSizeArray)
 {

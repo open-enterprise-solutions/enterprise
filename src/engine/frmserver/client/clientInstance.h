@@ -70,12 +70,6 @@ public:
 	std::int64_t LastActiveMs() const;
 	void         Touch();
 
-	// THE INSTANCE ASKS TO GO — its session closing (a kick, the application's own exit). Not done here: the
-	// caller is usually the session's own worker, and the exit drains that worker. The host takes the instance
-	// down on its next round (ibClientHost).
-	bool RequestClose();
-	bool IsCloseRequested() const { return m_closeRequested.load(); }
-
 private:
 
 	ibApplicationInstance* m_applicationInstance;
@@ -90,8 +84,6 @@ private:
 	// A login and an exit on one instance never overlap — a client coming back racing the removal of its
 	// instance. Recursive: the destructor's exit may be reached from inside another.
 	std::recursive_mutex m_lifecycleMutex;
-
-	std::atomic<bool> m_closeRequested{ false };
 
 	// The frame owns the session from CreateSession on.
 	std::unique_ptr<ibClientFrame> m_frame;

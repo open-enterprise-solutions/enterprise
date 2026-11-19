@@ -77,6 +77,10 @@ private:
     wxDECLARE_EVENT_TABLE();
 };
 
+// A modal dialog is up in this process - a window asking, whoever opened it: a view made meanwhile is a dialog over it,
+// and a close that is not forced waits for its answer.
+DESKGUI_API bool ibIsModalShown();
+
 // wxStdDialogButtonSizer of the library's buttons: OK, Cancel, Help... in the platform's order
 class DESKGUI_API ibStdDialogButtonSizer : public wxBoxSizer
 {

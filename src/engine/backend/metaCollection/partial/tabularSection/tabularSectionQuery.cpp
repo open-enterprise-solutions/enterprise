@@ -114,7 +114,7 @@ bool ibValueTabularSectionDataObjectRef::LoadData(const ibGuid& srcGuid, bool cr
 		// engine reads them in, and the save numbers them anew in that order — nothing but the storage kept a
 		// document's lines where they were.
 		q.From(m_metaTable->GetQueryable()).Where(ibOwnerRefColumn(), ibValue(ibString(srcGuid)))
-			.OrderBy(m_metaTable->GetNumberLine()->GetQueryColumn(), /*ascending*/ true);
+			.OrderBy(m_metaTable->GetLineNumber()->GetQueryColumn(), /*ascending*/ true);
 		ibReadPageRequest page;
 		page.m_count = 0;   // all lines
 		ibDataQueryResult selection = q.Execute(page);
@@ -122,7 +122,7 @@ bool ibValueTabularSectionDataObjectRef::LoadData(const ibGuid& srcGuid, bool cr
 		while (selection.Next()) {
 			ibComposerNode* rowData = new ibComposerNode();
 			for (const auto object : attributes) {
-				if (m_metaTable->IsNumberLine(object->GetMetaID()))
+				if (m_metaTable->IsLineNumber(object->GetMetaID()))
 					continue;
 				rowData->AppendTableValue(object->GetMetaID()) = selection.GetValue(object->GetQueryColumn());
 			}
@@ -205,7 +205,7 @@ bool ibValueTabularSectionDataObjectRef::SaveData()
 		const ibComposerNode* node = GetViewData<ibComposerNode>(GetItem(row));   // the line, once
 		ibASSERT(node);
 		for (const auto object : attributes) {
-			if (!m_metaTable->IsNumberLine(object->GetMetaID())) {
+			if (!m_metaTable->IsLineNumber(object->GetMetaID())) {
 				q.SetValue(object->GetQueryColumn(), node->GetTableValue(object->GetMetaID()));
 			}
 			else {

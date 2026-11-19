@@ -466,7 +466,17 @@ public:
 			"and inside each template its `HTTPServiceMethod`s (`HTTPMethod`: Get, Post, ... or Any; "
 			"`Handler`: a function of the service's own module, the id in its `ServiceModule` property, "
 			"which is prepared with `Function <Handler>(Request)`). The handler is given an "
-			"HTTPServiceRequest and returns an HTTPServiceResponse; pattern_read `http-services` says the rest.");
+			"HTTPServiceRequest and returns an HTTPServiceResponse; pattern_read `http-services` says the rest.\n"
+			"A SCREEN THAT ACTS OR SHOWS ACROSS MANY OBJECTS AND KEEPS NOTHING OF ITS OWN - a dashboard, a "
+			"workplace, a loading or upload screen, a bulk action over a selection - is a `DataTool`, a top-level "
+			"kind. A document records that something happened and stays as its evidence; a report only reads and "
+			"answers a question; a data tool does or shows, and leaves only what it did. Its attributes and "
+			"tabular sections are the screen's fields. Its form is made under it with `FormType` `FormDataTool` "
+			"and reaches it through the form's main attribute, `Object`. The work goes in the data tool's object "
+			"module as Public procedures the form calls - `Object.ReadFigures()` in the form's `OnOpen`, or in the "
+			"Action of a form command (form_add with `command`, form_set `Action`, a Button bound to it by "
+			"form_bind `Command`). Which of the kinds of data tool a request asks for is pattern_read `shapes`; a "
+			"dashboard the start page shows is `home-page`.");
 	}
 
 	const std::vector<ibMcpArgument>& Arguments() const override

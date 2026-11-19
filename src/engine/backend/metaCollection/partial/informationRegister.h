@@ -33,6 +33,7 @@ public:
 		: m_reg(reg), m_suffix(suffix) {}
 	ibString GetNamespace() const override;
 	ibString GetName() const override;
+	std::shared_ptr<const ibBackendQueryable> GetOwnerQueryable() const override;   // the register's — a slice lives in it
 	// ⭐ THE CONDITION IS CONSUMED — resolved against the register's own table (GetConditionScope) and applied
 	// while the slice is taken (ComputeSlice), not ANDed around the finished slice.
 	std::shared_ptr<const ibBackendQueryable> CreateQueryable(ibValue** paParams, long lSizeArray,
@@ -393,6 +394,12 @@ template <typename TSlice>
 ibString ibInfoRegisterSliceDescriptor<TSlice>::GetName() const
 {
 	return m_reg->GetName() + ibT(".") + m_suffix;
+}
+
+template <typename TSlice>
+std::shared_ptr<const ibBackendQueryable> ibInfoRegisterSliceDescriptor<TSlice>::GetOwnerQueryable() const
+{
+	return m_reg->GetQueryable();
 }
 
 template <typename TSlice>

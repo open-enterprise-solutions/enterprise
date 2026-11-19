@@ -91,7 +91,7 @@ bool ibValueRecordDataObjectRef::TryAcquireFormLock(ibLockMode mode)
 	if (lm == nullptr)
 		ibBackendCoreException::Error(_("Lock manager not initialised"));
 	m_formLockHandle = lm->Acquire({
-		ibLockItem::ForRef(m_metaObject->GetDocPath(), m_objGuid, mode)
+		ibLockItem::ForRef(m_metaObject->GetDocPath(), m_objGuid, mode, m_metaObject->GetSynonym())
 	});
 	return true;
 }
@@ -367,6 +367,14 @@ bool ibValueRecordDataObjectRef::SaveData()
 			// what makes a dot-walk JOIN equate source.fldX_RRRef = target.<selfref>_RRRef.
 			// OnDemand: only the identity bytes are wanted here, not materialised members.
 			value = ibValue(ibValueReferenceDataObject::Create(m_metaObject, m_objGuid, ibReferenceLoad::OnDemand));
+		}
+		else if (!ibItemModeFits(object->GetItemMode(), GetObjectMode())) {
+			// ⭐ A FIELD THAT IS NOT THIS KIND'S STILL HAS A COLUMN IN ITS ROW, and the column takes no NULL: the
+			// fields no write leaves NULL are NOT NULL (queryColumn.cpp). An item's attribute on a folder is held as
+			// TYPE_NULL - "not asked of this kind" (PrepareEmptyObject) - and written so it was refused (Firebird:
+			// a validation error on the column, 2026-11-19, every catalog folder of the demo base). The row holds what
+			// the column holds for a fresh one, as DeleteData below clears a parent.
+			value = object->CreateValue();
 		}
 		else {
 			const auto it = m_listObjectValue.find(object->GetMetaID());

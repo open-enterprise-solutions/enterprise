@@ -152,7 +152,7 @@ void ibValueMetaObjectRecordDataMutableRef::ContributeTables(ibSchemaSnapshot& o
 			tt.Add(object->GetQueryColumn());
 		tt.Index(tt.m_name + ibT("_INDEX"), { tabUuid });                     // tabular uuid index — NOT unique (repeats per owner)
 		// A line is its owner and its position — the key a declared line is found and written by (a predefined item's).
-		tt.m_seedKey = { tabUuid, tab->GetNumberLine()->GetQueryColumn() };
+		tt.m_seedKey = { tabUuid, tab->GetLineNumber()->GetQueryColumn() };
 		// Per-attribute secondary indexes on the section's own columns — no single row reference
 		// (browsing is per-owner by line), so the ordered variant degrades to a plain index here.
 		ContributeAttributeIndexes(tt, tab->GetGenericAttributeArrayObject());
@@ -420,7 +420,7 @@ void ibValueMetaObjectRecordDataHierarchyMutableRef::ContributeTables(ibSchemaSn
 				ibSchemaSeedRow& lineRow = lines.AddRow(ibNullGuid,
 					ibString::Format(ibT("%s.%s %i"), object.m_name, table->GetName(), number));
 				lineRow.Set(lines.m_seedKey.front(), ibValuePtr<ibValueGuid>(new ibValueGuid(object.m_guid)))
-					.Set(table->GetNumberLine()->GetQueryColumn(), ibValue(number));
+					.Set(table->GetLineNumber()->GetQueryColumn(), ibValue(number));
 				for (const auto& cell : line) {
 					const auto column = std::find_if(listed.begin(), listed.end(),
 						[&cell](const ibValueMetaObjectAttributeBase* attribute) { return attribute->GetMetaID() == cell.first; });
@@ -475,7 +475,8 @@ void ibValueMetaObjectRecordDataHierarchyMutableRef::ContributeTables(ibSchemaSn
 			std::map<ibGuid, int> held;
 			ibQueryIR ir;
 			ir.m_root = ibAggregate(ibScan(tableName),
-				{ { ibFunc(ibT("COUNT"), { ibCol(ibOwnerRefField()) }), ibT("lineCount") } },
+				{ { ibCol(ibOwnerRefField()), ibOwnerRefField() },
+				  { ibFunc(ibT("COUNT"), { ibCol(ibOwnerRefField()) }), ibT("lineCount") } },
 				{ ibCol(ibOwnerRefField()) });
 			ibQueryResult rs = q.ExecuteIR(ir);
 			while (rs.Next()) {

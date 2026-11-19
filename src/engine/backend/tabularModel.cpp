@@ -106,6 +106,34 @@ ibValue::ibMemberTable* ibValueModel::ibValueModelReturnLine::DoGetPMethods() co
 	return model != nullptr ? &model->m_methodHelperReturnLine : nullptr;
 }
 
+// ⭐ A ROW IS AGGREGATED BY THE COLUMN NAMED. An aggregate with no selector hands each element the verb with what it was
+// given (ibValueLinqDispatchImpl, procUnitLINQ.cpp) - `q.Sum("Amount")` - and the row answers with that column's cell. A
+// query answers with a table, and `(from l in Goods select l.Amount).Sum()` added the rows themselves and answered
+// `TableRow` (2026-11-19, the demo base). Unnamed is refused, one column or several: the column is said, not guessed -
+// and a column that is not added up (an item) is refused by Sum and Average, said why.
+void ibValueModel::ibValueModelReturnLine::DispatchLinqMethod(ibLinqMethod method, ibValue& ret, ibValue** args, long n)
+{
+	if (method != ibLinqMethod::Sum && method != ibLinqMethod::Min && method != ibLinqMethod::Max
+		&& method != ibLinqMethod::Average) {
+		ibValue::DispatchLinqMethod(method, ret, args, n);
+		return;
+	}
+	const ibValue* const named = (n >= 1 && args != nullptr) ? args[0] : nullptr;
+	if (named == nullptr)
+		ibBackendCoreException::Error(_("A table's rows are aggregated by a column: name it, as Sum(\"Amount\")"));
+	const ibValueModelColumnCollection* const columns = GetOwnerModel()->GetColumnCollection();
+	const ibValueModelColumnCollection::ibValueModelColumnInfo* const column =
+		columns != nullptr ? columns->GetColumnByName(named->GetString()) : nullptr;
+	if (column == nullptr)
+		ibBackendCoreException::Error(_("The row has no column '%s' to aggregate by"), named->GetString());
+	GetValueByMetaID(column->GetColumnID(), ret);
+	// Min and Max compare whatever the column holds; Sum and Average add, and an item, a date or a text is not added up.
+	if ((method == ibLinqMethod::Sum || method == ibLinqMethod::Average)
+		&& !ret.IsEmpty() && ret.GetType() != ibValueTypes::TYPE_NUMBER)
+		ibBackendCoreException::Error(_("The column '%s' holds %s, which is not added up: Sum and Average take a column of numbers"),
+			column->GetColumnName(), ret.GetClassName());
+}
+
 void ibValueModel::DescribeReturnLine(ibMemberTable& helper) const
 {
 	const ibValueModelColumnCollection* columns = GetColumnCollection();

@@ -27,6 +27,15 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
   - The Visual-Basic-style syntax is stored as `ves`, not `vbs` (`ProgramSyntax.ves`).
 - **A base, an application file or an application folder written before this build is not read.** The stored names
   changed with the ones above, and nothing reads the old ones: make the base again and load the application into it.
+- **Each syntax compares and joins conditions in its own spelling.** CES compares with `==` / `!=` and joins with
+  `&&` / `||` / `!`; VES with `=` / `<>` and `And` / `Or` / `Not`. A module that mixes them no longer compiles, and
+  the message names the spelling to use: *'=' is not a comparison here - comparison is written '=='*.
+- **A tabular section's line number is `LineNumber`**, as a register record's is, and both are shown as *No.* (a
+  tabular section's was *N*, a register's *Line number*). It was `NumberLine`: rename it in modules and queries (`row.LineNumber`,
+  `ORDER BY G.LineNumber`). An application saved before is refused when it is opened, naming the attribute it lacks:
+  export its files with the engine it was saved by, rename `NumberLine` to `LineNumber` in them, and import them into a
+  new base. Before, it loaded with the attribute broken, and the next update refused every line a predefined item
+  declares.
 
 - **In a date pattern `MM` is the month and `mm` the minutes**, as everywhere else they are written;
   the seconds are `ss`. It was the other way round. A stored format such as `DF=dd.mm.yyyy` now
@@ -110,6 +119,11 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
   service's own module, given an `HTTPServiceRequest` and returning an `HTTPServiceResponse`. Each
   request is a session of its own, logged in by its `Authorization: Basic`, checked before the session
   is made. See [http-services.md](../public/http-services.md).
+- **The example base is an English demo of trading, payroll and accounting** (`examples/fb_test_buh`, the demo
+  server's base of that name). Goods are bought, moved and sold by lots (FIFO); payroll runs on a calculation
+  register; two companies keep their books in two ledgers at once - the continental one, where a posting is a pair,
+  and the Anglo-Saxon general ledger, where an entry is lines - over a chart of accounts each. The start page shows a
+  dashboard (a data tool's form), the sales being worked through and two reports.
 
 ## Script language
 
@@ -237,6 +251,10 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
 - **`Data.From(sourceName, arguments…)`** gives LINQ any source a query can name, with its arguments:
   `from e in Data.From("Journal.Events", Begin, End) select e`, or a register's
   `"AccumulationRegister.Stock.Turnovers"`. `Data.From(valueTable)` is as before.
+- **A source in `Data` holds the tables that live in it.** A register's virtual tables are read through the dot —
+  `Data.AccumulationRegisters.Sales.Balance` whole, `Data.AccumulationRegisters.Sales.Turnovers(Begin, End)` with the
+  arguments a query gives them — and so are a document's tabular sections, `Data.Documents.Sale.Goods`. The LINQ
+  constructor shows them under their table.
 - **`Data.Platform`** holds the sources the platform declares in every application — `Data.Platform.Journal.Events`,
   the whole registration journal — so the LINQ constructor's tree shows the journal. The query constructor shows it
   under the same heading, *Platform*, after the application's kinds; the query still writes `Journal.Events`.
@@ -408,6 +426,8 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
   `Displacing`, `Base` or `Leading` line names no type the section may name, a new declared line
   where the base already holds one (remove the lines held there first). A line the application
   stops declaring stays, an ordinary line.
+- **An assistant arranges the start page.** Over MCP `home_page` reads it - the template, each column's forms and
+  every form it can show - and sets a column or the template, as the designer's start-page dialog does.
 
 ## Forms
 
@@ -427,6 +447,52 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
 
 ## Fixes
 
+- **A catalog folder is written on Firebird.** Every folder was refused: *Incorrect values within SQLDA structure -
+  empty pointer to data*. A folder's deletion mark was left empty, and the driver sent an empty value without
+  saying it may be empty.
+- **`||` works in CES.** Its second bar was read as the start of a continued string: *Constant string expected*.
+- **A manager's `GetForm` opens the object's own form.** `Reports.Sales.GetForm()` opened an empty tab with no
+  title: every manager made its `GetForm` through one generic road, without the object behind it, so the default
+  form was never asked and a form laid out by the platform had nothing to lay out. Each now goes through its own
+  door — the object form of a catalog, a document, a report, a data tool; the list of a register or an enumeration;
+  an information register's record.
+- **Two temporary tables join in one statement.** `SELECT … FROM A LEFT JOIN B ON …`, both made by `INTO` earlier in
+  the package, was refused: *'' could not be copied into a base in memory*. The second table is read as a second
+  reading of its own (the tables number their columns alike), and its rows came back under the first one's numbers,
+  so the copy found none of its columns - and a plain condition on it was dropped as naming a column it does not have.
+- **An aggregate over a table's rows names its column.** A query answers with a table, and `(from l in Goods select
+  l.Amount).Sum()` added the rows themselves and answered `TableRow`. Rows are now aggregated by the column the call
+  names - `q.Sum("Amount")`, as `Min`, `Max` and `Average` - or by a selector, `Sum(r => r.Amount)`; with neither, and
+  over a column that is not added up (an item, a text), the call is refused and says why.
+- **`skip` and `take` after `orderby` cut the order.** `from s in Stock orderby s.Quantity descending take 3` kept
+  the first three rows read and then ordered them, so the answer was three rows from the middle. Modules are compiled
+  again on first run (the bytecode format moved to 39).
+- **The compiler says which word it expected.** Where a name was missing it said *Constant boolean expected*.
+- **The compiler names what was meant.** A word of the language used as a name - `in = 5`, a parameter `from` - is
+  refused as such; it was *Identifier expected*, or *Unexpected program code termination* two lines on. A loop
+  written `for (i = 0; i < n; i++)` is told that a for counts with `To`. A call of a function that is not there names
+  the global functions spelled similar to it: *StrFind - a global function with a similar name: Find*.
+- **A committing run that caught a refused write names that write.** Its commit was refused with *rolled back at an
+  inner level* and nothing more; the refusal it caught is now part of the sentence.
+- **A register's Period says what it wants.** A record a document writes keeps its moment in every register, with
+  periodicity or without, and the refusal of an empty one now says so: usually the document's Date.
+- **A member a value does not have is refused naming the value's type**, and the members it has spelled similar to the
+  one asked for: *'Amout' is not a member of Structure - a member with a similar name: Amount*. It was *Aggregate
+  object field not found 'Amout'*, which said neither.
+- **A lock refusal says what is locked, who holds it and since when**, and what frees it: *Goods receipt is open for
+  editing by Application Workspace on OFFICE-7 since 19.11.2026 18:40:12. It is free when it is closed there or that
+  session ends.* It named the object by an internal identifier, and a holder without a user as *another session*.
+- **`code_run` says how a run answers** when its statements end in `Return`: the compiler refuses a `Return` outside a
+  procedure, and the run's answer is what it assigns to `Result`.
+- **Declaring one more line on a predefined item that already has lines in the base is applied.** The update stopped
+  on *Field 'Row_RRRef' not found in the resultset*: the check that a declared line lands only where nothing stands
+  counted the base's lines per item without reading which item they were.
+- **What `Correspondence` chooses is said where it is chosen.** On, the continental books: a posting is a pair. Off,
+  the Anglo-Saxon general ledger: an entry is lines, one account and one side each, balancing per recorder. Both are
+  double entry; the description called the second one a special case.
+- **An object is no longer reported as reordered after the database is updated.** `database_diff` kept listing it
+  while the update had nothing left to do. The order compared is the author's: children of one kind among
+  themselves, the built-in fields left out.
 - **A template put into a document that names no language reads in your language.** `Put` and `Join` laid a
   template's captions down in the language written first for every user unless a script had set the document's
   `LanguageCode`; a document without one now takes the session's (#680). And an area taken from a template carries
@@ -557,6 +623,20 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
 - **MCP: `app_stop` ends the application started from here**, with the debugger or without it, at a breakpoint
   or running. Only `app_run`'s restart could end it, so an application stopped at a breakpoint held the base and
   `app_apply` waited behind it; its refusal now names `app_stop`.
+
+- **MCP: `app_close` closes the designer itself**, as when its window is closed: it asks whether to save a changed
+  application and each unsaved tab, and the person answers; `force: true` asks nothing. Behind it, a session closed
+  without force — a script's `EndJob(False)` as well — now closes the thin client and the browser as the person's
+  [X] does, questions and all; it used to take the client off the server without asking. Such a close — and one
+  from the taskbar — now waits while a dialog of the client's own is up: with the LINQ constructor open on a module,
+  the designer closed the module's tab under it and fell.
+
+- **MCP: a search of the pattern corpus is a fifth faster.** Its entries are cut into topics once, when the corpus
+  is built, rather than on every search - `pattern_read` with a query, `mcp_search`, and the first call of each tool
+  family, whose reminder searches the corpus.
+
+- **MCP: the reminder on a family's first call points only where the word was found.** A word met only in the
+  application's notes sent the caller to `syntax_search`, which knew nothing of it.
 
 - **A value read from JSON no longer gains a `type` field.** The type's name the JSON view writes
   beside a value's type came back as a field, one more on each round.

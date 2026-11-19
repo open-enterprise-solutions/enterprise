@@ -7,7 +7,7 @@
 |---|---|---|
 | `InformationRegister` | values by key, periodic or not; written on its own by key, or as a document's movements (`WriteMode`) | the records; `SliceLast`, `SliceFirst` at a moment |
 | `AccumulationRegister` | movements of quantities and sums: receipts and expenses (`RegisterType` *Balances*), or turnovers alone | `Balance`, `Turnovers`, `BalanceAndTurnovers` |
-| `AccountingRegister` | entries on a chart of accounts, one-sided or in correspondence (`Correspondence`) | `Balance`, `Turnovers`, `DrCrTurnovers`, `BalanceAndTurnovers` |
+| `AccountingRegister` | entries on a chart of accounts: in correspondence, a posting a pair (the continental books), or one-sided, an entry lines that balance (the Anglo-Saxon ledger) - `Correspondence` | `Balance`, `Turnovers`, `DrCrTurnovers`, `BalanceAndTurnovers` |
 | `CalculationRegister` | calculation records on a chart of calculation types, each for an action period | the records, `ActualActionPeriod`, the base, its `Recalculation` marks |
 
 **Why.** A document says what happened; a register says what it changed. A balance asked at a moment is

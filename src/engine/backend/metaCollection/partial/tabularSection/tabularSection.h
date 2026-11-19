@@ -230,7 +230,7 @@ public:
 
 	virtual bool AutoCreateColumn() const { return false; }
 	virtual bool EditableLine(const ibDataViewItem& item, unsigned int col) const {
-		return ibValueModel::EditableLine(item, col) && !m_metaTable->IsNumberLine(col);
+		return ibValueModel::EditableLine(item, col) && !m_metaTable->IsLineNumber(col);
 	}
 
 

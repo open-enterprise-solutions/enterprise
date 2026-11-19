@@ -182,6 +182,8 @@ public:
 	bool                        TakeClearPending();
 	// The client is to go — Exit done: every tab closed. A one-shot flag, as Clear, told with the next answer.
 	bool                        TakeExitPending();
+	// …and to close as the person closes it (CloseClient), one-shot as well.
+	bool                        TakeClosePending();
 	// …and its window to be raised (RaiseFrame), one-shot as well.
 	bool                        TakeRaisePending();
 	// ⭐ THE CLIENT TOLD TO GO — its own Exit (DoCommand): every tab but the locked ones closed (CloseAll), each may keep
@@ -189,6 +191,10 @@ public:
 	// kick: OnClose): nothing is asked, and a client at rest is called for it (RefreshFrame) — it hears Exit in the next
 	// answer, or in the answer of the call it is in, and goes as from its own Exit: its logout takes the session.
 	bool                        ExitClient(bool force);
+	// ⭐ THE CLIENT TOLD TO CLOSE AS THE PERSON CLOSES IT — the session closed without force (a script's EndJob(False), an
+	// assistant's app_close: OnClose). Nothing closed here: the client hears Close and takes its own [X] — the designer's
+	// Save?, then its Exit, each tab asked — and a refusal there keeps everything. A client at rest is called for it.
+	void                        CloseClient();
 	// THE INSPECTOR'S ROWS OF AN OBJECT A DOOR ACTED ON — an edit's, a new object's, the one the tree goes to after a
 	// removal, a form editor's own: written now, as the inspector's read writes them (ibSchemaProperties::Build), and told
 	// with the next answer (Properties) — the client shows them without reading them again. `tabId` — the tab whose tree
@@ -307,6 +313,7 @@ private:
 	std::vector<PendingMessage> m_pendingMessages;
 	bool                        m_clearPending = false;
 	bool                        m_exitPending = false;
+	bool                        m_closePending = false;
 	bool                        m_raisePending = false;
 	std::vector<ibDataNode>     m_shownProperties;
 

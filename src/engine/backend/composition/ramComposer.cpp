@@ -286,7 +286,7 @@ bool ibDataRamComposer::Run(ibCompositionDriver& driver)
 	// before, on the strength of having been folded into the front of `fields` — which happens only
 	// where the field was NOT already among the printed ones. A table that shows the column it is
 	// grouped by (every ordinary one) therefore grouped by whatever field happened to sit at that
-	// position: here `NumberLine`, empty on every row, so three rows came out as ONE group while the
+	// position: here `LineNumber`, empty on every row, so three rows came out as ONE group while the
 	// screen plainly showed two (Max, 2026-08-29: *"it does not work"*).
 	//
 	// A key is a field in its own right; asking for it BY NAME is the whole fix, and it cannot drift

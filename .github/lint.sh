@@ -89,6 +89,22 @@ done < <(git -c core.quotePath=false diff -U0 -M --no-color "$base...$head" -- '
   $n++;
 ')
 
+# 4a. No \x escape above 0x7F in a string (portability.md section 1.9b). ibT() and ibMcpText() make a u"" literal, where
+# \xNN is ONE UTF-16 unit and not a UTF-8 byte. Asked of the ADDED lines only, never of a comment.
+while IFS=$'\t' read -r file n; do
+  [ -n "$file" ] || continue
+  report "$file" "$n" "a \\x escape above 0x7F in a string - ibT() and ibMcpText() make a u\"\" literal, where \\xF0\\x9F\\x9B\\x91 is four Latin-1 letters and not one emoji. Write the character itself (the sources are UTF-8), or \\u / \\U with its code point. See docs/portability.md section 1.9b."
+done < <(git -c core.quotePath=false diff -U0 -M --no-color "$base...$head" -- '*.cpp' '*.h' '*.hpp' '*.inl' "${exclude[@]}" | perl -ne '
+  if (/^\+\+\+ (?:b\/(.*)|\/dev\/null)$/) { $f = $1; next }
+  if (/^@@ -\S+ \+(\d+)/)                { $n = $1; next }
+  next unless defined $f && /^\+/;
+  my $l = substr($_, 1);
+  print "$f\t$n\n"
+    if $l !~ m{^\s*(?://|/?\*)}
+    && $l =~ m{^(?:(?!//).)*?"(?:[^"\\\n]|\\.)*?\\x[89A-Fa-f][0-9A-Fa-f]};
+  $n++;
+')
+
 # 5. In backend/query/, a header of the metadata is included under provider/ and nowhere else (development.md
 # section 2). Asked of an include the change BRINGS: one the same file already had - moved, re-spelled, its
 # comment re-aligned - is not new, and the ones already there are being taken out one by one.

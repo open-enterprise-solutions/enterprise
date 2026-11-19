@@ -119,12 +119,12 @@ static ibString gs_listErrorString[] =
 	_("ASSERT: Module system error %s in line %d"),
 	_("ASSERT_VALID: Module system error %s in line %d"),
 	_("System error(out of array) when trying to process an error with a number %d"),
-	_("Symbol expected :\n%s"),
-	_("Word expected :\n%s"),
-	_("Constant boolean expected:\n%s"),
-	_("Constant number expected:\n%s"),
-	_("Constant string expected:\n%s"),
-	_("Constant date expected:\n%s"),
+	_("Symbol expected :\n%s"),//ibScriptError_TranslateByte
+	_("Constant boolean expected:\n%s"),//ibScriptError_TranslateBoolean
+	_("Word expected :\n%s"),//ibScriptError_TranslateWord
+	_("Constant number expected:\n%s"),//ibScriptError_TranslateNumber
+	_("Constant string expected:\n%s"),//ibScriptError_TranslateString
+	_("Constant date expected:\n%s"),//ibScriptError_TranslateDate
 	_("Duplicate identifier %s"),//ibScriptError_IdentifierDuplicate
 	_("Label '%s' not defined"),
 	_("One of the keywords is expected!"),
@@ -189,14 +189,13 @@ static ibString gs_listErrorString[] =
 	_("Object field not writable (%s)"),//ibScriptError_PropNotWritable
 	_("Object field not readable (%s)"),//ibScriptError_PropNotReadable
 	_("Object field is scope-local (%s)"),//ibScriptError_PropScopeLocal
-	// NAMING THE RECEIVER'S TYPE HERE WAS TRIED AND TAKEN BACK OUT. The type would be the
-	// interesting half, but the only honest way to ask for it is the value itself
-	// (GetClassName is virtual — a reference, a manager, a record each answer their own way),
-	// and a reference answers it by READING: ReadData walks reference fields and can recurse
-	// (see reference.cpp's cycle guard) or raise. A diagnostic that reads is a diagnostic
-	// that can fail while explaining a failure, so the receiver stays unnamed (Max, 2026-09-04).
 	_("No attribute or method found '%s' - a variable is not an aggregate object"),//ibScriptError_MemberNotAggregate
-	_("Aggregate object field not found '%s'"),//ibScriptError_MemberNotFound
+	// ⭐ THE RECEIVER IS NAMED BY ITS TYPE (Max, 2026-11-19), the members it has spelled similar beside it - the second
+	// %s is the type, or "<type> - a member with a similar name: …" (procUnit.cpp, RaiseMemberNotFound). It was left unnamed on
+	// 2026-09-04, because a reference was taken to answer GetClassName by READING; it answers from its metaobject's type
+	// factory (reference.cpp) and reads nothing. What still cannot be asked - a class nobody registered - leaves the
+	// value unnamed rather than raise in place of this refusal.
+	_("'%s' is not a member of %s"),//ibScriptError_MemberNotFound
 	// STATES THE FACT, ADVISES NOTHING. It first read "call it directly, without the dot",
 	// which was written for `x.ValueIsFilled()` — and then it met a CORRECT call,
 	// `ValueIsFilled(Warehouse)`, that failed for a different reason, and told the person to
@@ -215,7 +214,20 @@ static ibString gs_listErrorString[] =
 	// CallAsProc at all, or its case written in CallAsFunc - did nothing, and the module went on (2026-11-03:
 	// COMObject.AddEventHandler, ComSafeArray.SetValue, Lock and Unlock of every object).
 	_("The procedure '%s' was not carried out by this value"),//ibScriptError_ProcedureNotDone
+
+	// --- compiler, appended — lock-step with the enum ----
+	// A WORD OF THE LANGUAGE WHERE A NAME STANDS was "Identifier expected" - or, at the start of a statement,
+	// "Unexpected program code termination" two lines on: `in = 5` and `Procedure P(from)` (2026-11-19, an
+	// assistant writing a demo base lost a run on each). The word is named, and so is why.
+	_("'%s' is a word of the language - it cannot name a variable, a parameter or a procedure"),//ibScriptError_KeywordAsName
+	// A C-STYLE LOOP met "Keyword expected To" at its first ';' - true, and no help to someone who wrote the only
+	// for loop they know (2026-11-19).
+	_("A for loop counts with To: for (i = 1 To n). There is no for (start; condition; step) - a loop on a "
+	  "condition is while (condition)."),//ibScriptError_ForCountsWithTo
 };
+// A code an entry: a code appended without its message read the NEXT code's text, or past the end.
+static_assert(sizeof(gs_listErrorString) / sizeof(gs_listErrorString[0]) == ibScriptError_Count,
+	"gs_listErrorString goes in lock-step with ibScriptError");
 
 //////////////////////////////////////////////////////////////////////
 
@@ -671,14 +683,22 @@ void ibBackendLockException::RowLockTimeoutThrow(const ibString& objectSynonym)
 	throw ibBackendLockException(Kind::RowLockTimeout, msg);
 }
 
+// ⭐ WHAT, WHO, SINCE WHEN, AND WHAT FREES IT. It said "<guid> is locked by another session." - an identity nobody
+// knows, and no holder a person could find (a session without a user has no name): a lock met while loading a demo base
+// over MCP could not be traced to the window holding it (2026-11-19). The holder is a user, or the program on its
+// computer; what frees a lock is its form closed, or its session ended.
 void ibBackendLockException::LockConflictThrow(const ibString& objectName,
-                                                const ibString& blockingUser)
+                                                const ibString& blockingUser,
+                                                const ibDateTime& since)
 {
-	const ibString msg = blockingUser.IsEmpty()
+	const ibString holder = blockingUser.IsEmpty() ? ibString(_("another session")) : blockingUser;
+	const ibString msg = since.IsEmpty()
 		? ibString::Format(
-			_("%s is locked by another session."), objectName)
+			_("%s is open for editing by %s. It is free when it is closed there or that session ends."),
+			objectName, holder)
 		: ibString::Format(
-			_("%s is locked by user %s."), objectName, blockingUser);
+			_("%s is open for editing by %s since %s. It is free when it is closed there or that session ends."),
+			objectName, holder, since.ToString());
 	throw ibBackendLockException(Kind::LockConflict, msg, objectName, blockingUser);
 }
 

@@ -102,7 +102,7 @@ const ibArg& ArgRow()
 {
 	static const ibArg s_a(ibT("row"), ibArg::Kind::Whole,
 		ibMcpText("Row, 1-based - the number the editor shows in the margin.\n"
-			  "\xF0\x9F\x9B\x91 THE SCRIPT COUNTS FROM ZERO. `SpreadsheetDocument.Area(row, col)` - "
+			  "KEY: THE SCRIPT COUNTS FROM ZERO. `SpreadsheetDocument.Area(row, col)` - "
 			  "the way a MODULE reads a cell back - passes the number straight to the storage, "
 			  "which is 0-based, while these verbs and the editor are 1-based. So the cell you "
 			  "wrote here at row 6 is Area(5, ...) in script, and reading it at Area(6, ...) "
@@ -115,7 +115,7 @@ const ibArg& ArgCol()
 {
 	static const ibArg s_a(ibT("col"), ibArg::Kind::Whole,
 		ibMcpText("Column, 1-based - the number the editor shows across the top.\n"
-			  "\xF0\x9F\x9B\x91 THE SCRIPT COUNTS FROM ZERO here too - see `row`. And a read past "
+			  "KEY: THE SCRIPT COUNTS FROM ZERO here too - see `row`. And a read past "
 			  "the last column does not refuse: it answers with the last one again, so a loop "
 			  "that runs one column too far reports a duplicate rather than an end."));
 	return s_a;

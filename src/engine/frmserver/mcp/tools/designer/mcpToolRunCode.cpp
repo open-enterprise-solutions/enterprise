@@ -90,6 +90,7 @@
 #include "core/startProcess.h"            // ibProcessExists — the application app_run started, still there
 
 #include "backend/compiler/scriptCheck.h"     // the code is CHECKED here, before anything is sent
+#include "core/compiler/codeDef.h"            // ibScriptError_UseReturn - a Return in the run's own statements
 #include "backend/session/session.h"          // ibSession::Current — whose worker the check is handed to
 #include "backend/session/workerPool.h"       // …on the thread that owns what it is checked against
 #include "backend/metadataApplication.h"      // activeMetaData - whose application it checks against
@@ -399,9 +400,15 @@ bool CheckCode(const ibString& text, ibString& refusal)
 	if (found.empty())
 		return true;
 
+	// ⭐ A `Return` IN A RUN'S OWN STATEMENTS is the commonest way to try to hand something back, and the compiler's
+	// refusal is true of every module body and says nothing of how a RUN answers - so the run's way is said beside it,
+	// where the author stands (2026-11-19: `return "…";` written at the top of a run, the description read only after).
 	ibString said;
-	for (const ibDiagnostic& one : found)
+	for (const ibDiagnostic& one : found) {
 		said += ibString::Format(ibT("\n  line %d: %s"), (int)one.m_line, one.m_message);
+		if (one.m_code == ibScriptError_UseReturn)
+			said += ibMcpText(" - a run hands back what it assigns to `Result`: `Result = value;`");
+	}
 	refusal = ibString::Format(
 		ibMcpText("That code did not compile, so NOTHING was sent - no application was asked to do "
 			  "anything and nothing was written:%s"),

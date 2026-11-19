@@ -79,11 +79,41 @@ const ibArg& ArgQuery()
 	return a;
 }
 
-// ONE ENTRY. `name` is the address, `summary` is what the listing shows, `text` is the whole of it.
+// ⭐⭐ A PATTERN IS READ IN LAYERS, and the reason is arithmetic. The corpus grew past a hundred
+// kilobytes: handing over a whole entry to answer one question spends more than the answer is
+// worth, and the parts nobody asked for crowd out what they did.
+//
+// So the entries are CUT INTO TOPICS - by the headings they already carry, rather than by a second
+// structure written beside them. Asking for a pattern gives its summary and the list of what is
+// inside; asking for a topic gives that part in full. Nothing is rewritten and nothing can drift,
+// because the table of contents IS the text.
+//
+// ⚠ WHAT COUNTS AS A HEADING is deliberately narrow: a line that opens a paragraph and begins with
+// two or more WORDS IN CAPITALS, after any marker. That is how this corpus is written throughout,
+// so the split follows the author's own emphasis - and a paragraph that is not marked stays with
+// the topic above it, which is the correct reading of an unmarked continuation.
+struct ibMcpTopic {
+	ibString m_title;
+	ibString m_body;
+};
+
+std::vector<ibMcpTopic> TopicsOf(const ibString& text);
+
+// ONE ENTRY. `name` is the address, `summary` is what the listing shows, `topics` are the whole of it - cut ONCE, as the
+// corpus is built. Every search cut the text anew, a line at a time, and glued a copy of each topic to the summary to
+// look in: a hundred milliseconds a search (Debug), paid by pattern_read, mcp_search and the first call of every tool
+// family, whose reminder searches here (2026-11-19).
 struct ibMcpPattern {
-	const ibChar* m_name;
-	ibString      m_summary;
-	ibString      m_text;
+	ibMcpPattern(const ibChar* name, const ibString& summary, const ibString& text)
+		: m_name(name), m_summary(summary), m_topics(TopicsOf(text)) {}
+
+	// The whole entry, its topics end to end - as written: a topic ends each of its lines with '\n', the text's last
+	// line had none of its own.
+	ibString Text() const;
+
+	const ibChar*           m_name;
+	ibString                m_summary;
+	std::vector<ibMcpTopic> m_topics;
 };
 
 // ⚠ HELD AS A FUNCTION, not a file-scope table: a static built before the locale is set would
@@ -157,10 +187,23 @@ const std::vector<ibMcpPattern>& Patterns()
 		"`ROLE` written into a report's query is dropped), in a query run from code with `ROLE` in the\n"
 		"SELECT (help: q.Role).\n"
 		"\n"
-		"The moment the words are an accountant's - an account, a correspondence, debit against\n"
-		"credit - it is an AccountingRegister over a ChartOfAccounts with `Correspondence` on.\n"
-		"Nothing else carries double entry, and imitating it with a pair of accumulation registers\n"
-		"loses the one property that makes it accounting.\n"
+		"The moment the words are an accountant's - an account, debit and credit, a ledger - it is\n"
+		"an AccountingRegister over a ChartOfAccounts. Nothing else carries double entry, and\n"
+		"imitating it with a pair of accumulation registers loses the one property that makes it\n"
+		"accounting.\n"
+		"KEY: `Correspondence` CHOOSES THE BOOKKEEPING TRADITION, AND BOTH ARE DOUBLE ENTRY.\n"
+		"* On - the continental books: a posting IS a pair, AccountDr against AccountCr with one\n"
+		"amount; correspondence turnovers and a chessboard can be read.\n"
+		"* Off - the Anglo-Saxon general ledger (US GAAP, IFRS): a journal entry is lines one after\n"
+		"another, each `RecordType` + one `Account` + an amount, as many as it needs - a sale is one\n"
+		"debit to the customer and a credit per item - and the write refuses a recorder whose debits\n"
+		"and credits differ. Nobody keeps which debit answered which credit.\n"
+		"STOP: \"Anglo-Saxon\" OR \"continental\" NAMES BOTH THE COST MODEL AND THE LEDGER'S SHAPE. Expenses by\n"
+		"function against expenses by nature is the chart of accounts; pairs against lines is this\n"
+		"property. Books kept under both models are two registers, one in each mode, each over its\n"
+		"own chart - a document posts the pair to one and the lines to the other. Building only the\n"
+		"charts leaves the Anglo-Saxon ledger a continental one with other account numbers\n"
+		"(2026-11-19: done exactly so).\n"
 		"\n"
 		"KEY: THE WORDS THEY USE ALREADY CONTAIN A DESIGN - AND IT IS NOT THEIR DECISION TO HAVE MADE.\n"
 		"An accountant saying \"lots of goods in warehouses\", \"write off by FIFO\", \"the receipt\n"
@@ -273,6 +316,10 @@ const std::vector<ibMcpPattern>& Patterns()
 		"once and can click things\" is a WORKPLACE - not a report, which answers a question and\n"
 		"changes nothing, and not a list form, which shows one kind of thing. Building it as a report\n"
 		"is the commonest way that request is refused without anybody saying no.\n"
+		"* A DASHBOARD IS A WORKPLACE TOO - the day's figures at a glance, what needs somebody today,\n"
+		"and buttons that create the documents and open the reports behind each figure. Its form is\n"
+		"what the start page shows first (`home-page`); its object module reads the figures every\n"
+		"time the form opens, so nothing it shows is ever stale or stored.\n"
 		"* AND A WORKPLACE HAS NO STORAGE OF ITS OWN: what it shows is read, what it does is done to\n"
 		"real objects. If it starts wanting to remember something between sessions, that is a register\n"
 		"and a setting per person (`user-settings`).\n"
@@ -4854,6 +4901,13 @@ const std::vector<ibMcpPattern>& Patterns()
 		" answer: a second set of books IS a second chart and a second register, and they cost\n"
 		" nothing to have side by side. If the words being used are an accountant's, this is\n"
 		" where to start.\n"
+		" KEY: AND THE SECOND REGISTER TAKES ITS OWN BOOKS' SHAPE, NOT THE FIRST ONE'S. IFRS and\n"
+		" US GAAP books are the Anglo-Saxon general ledger: `Correspondence` off, an entry is lines\n"
+		" one after another, one account and one side each, balancing per recorder - a document\n"
+		" posts a pair to the continental register and lines to this one. Their charts differ in\n"
+		" the cost model besides: expenses by nature against expenses by function (`shapes`). A\n"
+		" second register copied from the first keeps the pairs, and is a continental ledger with\n"
+		" other account numbers (2026-11-19: built so, and caught by the person it was built for).\n"
 		" OPERATIONAL REGISTERS THAT FEED IT. Keep the working detail - lots, stock, movement -\n"
 		" on accumulation registers where it is cheap to read, and TRANSLATE from them into the\n"
 		" accounting register as postings. The operational side answers \"what is where\" fast;\n"
@@ -7933,6 +7987,15 @@ const std::vector<ibMcpPattern>& Patterns()
 		"postings wrote no lines finishes exactly as cleanly as one that wrote them all. Put the counts\n"
 		"into the run's own answer - rows per register, how many of them are corrections - so the\n"
 		"answer that says it finished also says what it left.\n"
+		"\n"
+		"STOP: A COMMITTING RUN IS ONE TRANSACTION, AND A REFUSAL CAUGHT INSIDE IT STILL ENDS IT. A\n"
+		"posting refused and caught by `try` rolls its level back, so the run's own commit is refused at\n"
+		"the end - naming the write that failed - and nothing of the run is kept. Catching to skip a bad\n"
+		"document and go on does not work: let the refusal through, mend its cause, run again. A load\n"
+		"that must skip a row decides BEFORE writing it (the credit limit, the stock), not by catching.\n"
+		"* AND IN THE CODE ITSELF, NAMES FOLD CASE: `s` and `S` are one variable. A selection and a\n"
+		"structure so named in one function overwrite each other, and the failure comes far from the\n"
+		"cause. Name a thing by what it holds.\n"
 		"* AND A TRIAL AT A SMALL SCALE PROVES THE CODE RUNS, NOT THAT THE RARE PATH RAN. Measured: a\n"
 		"generator run at five per cent produced no late events at all, so the correction path it\n"
 		"existed to show never executed and the trial was green. Scale the rare case up, not only the\n"
@@ -8200,6 +8263,44 @@ const std::vector<ibMcpPattern>& Patterns()
 		"the purpose and maintained by hand as documents are added - so the test for creating one\n"
 		"gets stricter, not looser: build it where somebody genuinely works across kinds in date\n"
 		"order, never merely to gather related documents in one place.") },
+
+	{ ibT("home-page"),
+	  ibMcpText("The start page: what earns a place on the first tab, and why a data tool does it best."),
+	  ibMcpText("THE START PAGE IS THE FIRST THING EVERY SESSION OPENS - A DESK, NOT A MENU.\n"
+		"\n"
+		"It is one tab holding several forms at once, side by side, each a full runtime form whose\n"
+		"module and events run as they do anywhere else. It belongs to the application root, so every\n"
+		"user meets the same one. The sections already answer \"where is X\"; the page answers the\n"
+		"other question a person arrives with: \"what needs me today\".\n"
+		"\n"
+		"* A DATA TOOL'S FORM DOES THIS BEST. A data tool belongs to no table, so its form shows exactly\n"
+		"what you decide: the day's figures worked out when it opens - sales so far, what customers owe\n"
+		"and what of it is overdue, cash at the bank, items to reorder - buttons that create the\n"
+		"documents of the day, and buttons that open the list or the report behind each figure. Make\n"
+		"one for the purpose - a desk per job when the jobs differ - and leave it out of the sections:\n"
+		"it is reached by being there. Its form's OnOpen fills the attributes and tables from queries;\n"
+		"a command opens what a figure stands on (`Documents.GoodsSale.GetListForm().Show()`,\n"
+		"`Reports.Sales.GetForm().Show()`) or a new document\n"
+		"(`Documents.GoodsSale.CreateDocument().GetFormObject().Show()`).\n"
+		"\n"
+		"* A LIST FORM is the second tenant: the documents somebody works through all day - today's\n"
+		"orders, the unpaid invoices - as the document's list form.\n"
+		"\n"
+		"* A REPORT'S FORM belongs only when the report is small and answers on opening - a summary of\n"
+		"a handful of rows. A report that wants a period chosen, or takes seconds, makes the first tab\n"
+		"of every session wait for it.\n"
+		"\n"
+		"* AN OBJECT FORM DOES NOT BELONG: on the page it opens a NEW object every time a session\n"
+		"starts.\n"
+		"\n"
+		"TWO TO FOUR FORMS. The template splits the page into one column or two (1 : 1, 2 : 1, 1 : 2)\n"
+		"and each column stacks its forms top to bottom; five make each too small to read. The working\n"
+		"list goes in the wide column, the figures beside it.\n"
+		"\n"
+		"BY MCP: the page takes forms that EXIST as metaobjects - a generated form is not one, so make\n"
+		"it first (metadata_create of kind Form under its owner, with its FormType). Then home_page\n"
+		"{template, left, right}; home_page with no arguments lists every form it can show. app_save and\n"
+		"app_apply give it to the base, and a running application shows it from its next start.") },
 
 	{ ibT("picking"),
 	  ibMcpText("The dialogue that fills a document: what it hands back, what it must subtract, when not to ask."),
@@ -9927,24 +10028,7 @@ const std::vector<ibMcpPattern>& Patterns()
 	return s_patterns;
 }
 
-// ⭐⭐ A PATTERN IS READ IN LAYERS, and the reason is arithmetic. The corpus grew past a hundred
-// kilobytes: handing over a whole entry to answer one question spends more than the answer is
-// worth, and the parts nobody asked for crowd out what they did.
-//
-// So the entries are CUT INTO TOPICS - by the headings they already carry, rather than by a second
-// structure written beside them. Asking for a pattern gives its summary and the list of what is
-// inside; asking for a topic gives that part in full. Nothing is rewritten and nothing can drift,
-// because the table of contents IS the text.
-//
-// ⚠ WHAT COUNTS AS A HEADING is deliberately narrow: a line that opens a paragraph and begins with
-// two or more WORDS IN CAPITALS, after any marker. That is how this corpus is written throughout,
-// so the split follows the author's own emphasis - and a paragraph that is not marked stays with
-// the topic above it, which is the correct reading of an unmarked continuation.
-struct ibMcpTopic {
-	ibString m_title;
-	ibString m_body;
-};
-
+// (A pattern's topics are cut by its headings - see ibMcpTopic, beside the pattern.)
 bool LooksLikeHeading(const ibString& line)
 {
 	size_t at = 0;
@@ -10035,6 +10119,14 @@ std::vector<ibMcpTopic> TopicsOf(const ibString& text)
 	return topics;
 }
 
+ibString ibMcpPattern::Text() const
+{
+	ibString text;
+	for (const ibMcpTopic& topic : m_topics)
+		text << topic.m_body;
+	return text.IsEmpty() ? text : text.Left(text.length() - 1);
+}
+
 // How many lines a topic is - so a table of contents says the SIZE of what it offers and not only
 // its name. Without it, "WHAT A FULL CLOSE ACTUALLY CONTAINS" and a two-line aside look alike from
 // outside, and the only way to find out is to fetch one and see.
@@ -10104,7 +10196,7 @@ std::vector<std::pair<ibString, ibString>> ibMcpPatternIndex()
 ibString ibMcpPatternText(const ibString& name)
 {
 	const ibMcpPattern* found = FindPattern(name);
-	return found != nullptr ? found->m_text : ibString();
+	return found != nullptr ? found->Text() : ibString();
 }
 
 //---------------------------------------------------------------------------
@@ -10188,27 +10280,34 @@ public:
 		if (query.IsEmpty())
 			return;
 
-		struct ibPlace { const ibMcpPattern* m_pattern; ibMcpTopic m_topic; size_t m_score; };
+		struct ibPlace { const ibMcpPattern* m_pattern; const ibMcpTopic* m_topic; size_t m_score; };
 
 		std::vector<ibPlace> scored;
 		size_t asked = 0, best = 0;
 
 		for (const ibMcpPattern& pattern : Patterns()) {
 
-			for (const ibMcpTopic& topic : TopicsOf(pattern.m_text)) {
+			// The pattern's NAME and SUMMARY count towards each topic's score: a caller asking "lots"
+			// should reach every part of the lots entry, not only the paragraphs that happen to repeat
+			// the word. Asked once for the pattern, and a word met there or in the topic is met - the
+			// three were glued into one text per topic, a copy of the body every search.
+			std::vector<bool> inHead;
+			ibMcpWordsPresent(ibString(pattern.m_name) + ibT("\n") + pattern.m_summary, query, inHead);
 
-				// The pattern's NAME and SUMMARY count towards the topic's score: a caller asking
-				// "lots" should reach every part of the lots entry, not only the paragraphs that
-				// happen to repeat the word.
-				const ibString haystack = ibString(pattern.m_name) + ibT("\n")
-					+ pattern.m_summary + ibT("\n") + topic.m_body;
+			for (const ibMcpTopic& topic : pattern.m_topics) {
 
-				const size_t score = ibMcpWordsFound(haystack, query, &asked);
+				std::vector<bool> inBody;
+				ibMcpWordsPresent(topic.m_body, query, inBody);
+				asked = inBody.size();
+
+				size_t score = 0;
+				for (size_t word = 0; word < inBody.size(); ++word)
+					score += (inBody[word] || (word < inHead.size() && inHead[word])) ? 1 : 0;
 				if (score == 0)
 					continue;
 
 				best = std::max(best, score);
-				scored.push_back({ &pattern, topic, score });
+				scored.push_back({ &pattern, &topic, score });
 			}
 		}
 
@@ -10227,14 +10326,14 @@ public:
 
 			std::shared_ptr<ibDataNode> hit = std::make_shared<ibDataNode>();
 			hit->SetValue(ibT("pattern"), ibString(place.m_pattern->m_name));
-			hit->SetValue(ibT("topic"), TopicLabel(place.m_topic.m_title));
+			hit->SetValue(ibT("topic"), TopicLabel(place.m_topic->m_title));
 
 			if (partial)
 				hit->SetValue(ibT("matched"), ibString::Format(
 					ibMcpText("%i of your %i words"), (int)place.m_score, (int)asked));
 
 			// The line that matched, so a caller can judge the hit without fetching it.
-			const ibString line = ibMcpMatchingLine(place.m_topic.m_body, query);
+			const ibString line = ibMcpMatchingLine(place.m_topic->m_body, query);
 			if (!line.IsEmpty())
 				hit->SetValue(ibT("line"), line);
 
@@ -10368,14 +10467,14 @@ public:
 		result.SetValue(ibT("name"), ibString(found->m_name));
 		result.SetValue(ibT("summary"), found->m_summary);
 
-		const std::vector<ibMcpTopic> topics = TopicsOf(found->m_text);
+		const std::vector<ibMcpTopic>& topics = found->m_topics;
 		const ibString wanted = ArgTopic().Text(params);
 
 		// EVERYTHING, when asked for it - or when the entry is short enough that a table of
 		// contents would cost more than the text it describes.
-		if (wanted.IsSameAs(ibT("all"), false) || topics.size() < 3
-			|| found->m_text.length() < 2500) {
-			result.SetValue(ibT("text"), found->m_text);
+		const ibString text = found->Text();
+		if (wanted.IsSameAs(ibT("all"), false) || topics.size() < 3 || text.length() < 2500) {
+			result.SetValue(ibT("text"), text);
 			return true;
 		}
 

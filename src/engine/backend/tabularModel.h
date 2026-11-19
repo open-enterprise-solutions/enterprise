@@ -515,6 +515,10 @@ public:
 			return false;
 		}
 
+		// Sum / Min / Max / Average asked of a row answer with the cell of the column named (`q.Sum("Amount")`); unnamed
+		// is refused. Every other verb is the base's.
+		virtual void DispatchLinqMethod(ibLinqMethod method, ibValue& ret, ibValue** args, long n) override;
+
 	protected:
 		ibDataViewItem m_lineItem;
 

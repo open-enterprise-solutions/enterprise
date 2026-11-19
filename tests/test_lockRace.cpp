@@ -135,8 +135,9 @@ Outcome TryAcquire(ibApplicationInstance* app, ibLockManager* manager, ibLockHol
 		out.handle = manager->Acquire({ item }, opts, holder);
 		out.kind = OutcomeKind::Granted;
 	}
-	catch (const ibBackendLockException&) {
+	catch (const ibBackendLockException& err) {
 		out.kind = OutcomeKind::Conflict;
+		out.error = err.GetErrorDescription();   // what the conflict tells the person refused
 	}
 	catch (const ibCoreException& err) {
 		out.kind = OutcomeKind::Other;
@@ -703,6 +704,21 @@ TEST_F(SqliteLockRace, Acquire_ExclusiveWhileSharedHeld_Refused)
 	const Outcome blocked = TryAcquire(App(), Peer(), &right, exclusive, {});
 	EXPECT_EQ(blocked.kind, OutcomeKind::Conflict) << blocked.error;
 	EXPECT_EQ(CountRows(lock_table, shared.namespaceName, shared.KeyHash()), 1);
+}
+
+// ⭐ A CONFLICT NAMES WHAT IS LOCKED, WHO HOLDS IT AND SINCE WHEN (2026-11-19). It said "<namespace> is locked by
+// another session": a metaobject's guid, and no holder a person could find.
+TEST_F(SqliteLockRace, Acquire_Conflict_NamesTheObjectTheHolderAndSince)
+{
+	ibLockItem item = Item(wxT("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbc1"), ibLockMode::Exclusive);
+	item.objectName = wxT("Goods receipt");
+	ibSingleLockHolder left(wxT("left"));
+	ibSingleLockHolder right(wxT("right"));
+	ibLockHandle held = Mine()->Acquire({ item }, {}, &left);
+	ASSERT_TRUE(held.IsValid());
+	const Outcome blocked = TryAcquire(App(), Peer(), &right, item, {});
+	ASSERT_EQ(blocked.kind, OutcomeKind::Conflict) << blocked.error;
+	EXPECT_TRUE(blocked.error.Contains(wxT("Goods receipt is open for editing by left since "))) << blocked.error;
 }
 
 TEST_F(SqliteLockRace, Acquire_UpgradeOfOwnShared_KeepsGuid)

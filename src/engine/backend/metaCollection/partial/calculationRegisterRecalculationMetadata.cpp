@@ -54,6 +54,11 @@ ibString ibRecalculationSourceDescriptor::GetName() const
 	return m_meta->GetName() + ibT(".") + m_meta->GetRecalculationObject()->GetName();
 }
 
+std::shared_ptr<const ibBackendQueryable> ibRecalculationSourceDescriptor::GetOwnerQueryable() const
+{
+	return m_meta->GetQueryable();
+}
+
 // A table: whatever it is called with, it is the register's own member — shared without owning.
 std::shared_ptr<const ibBackendQueryable> ibRecalculationSourceDescriptor::CreateQueryable(ibValue** /*paParams*/, long /*lSizeArray*/,
 	const std::vector<ibQueryPredicatePtr>& /*conditions*/, const ibQueryReadColumns& /*read*/)

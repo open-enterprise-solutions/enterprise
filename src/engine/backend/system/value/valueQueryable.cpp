@@ -15,6 +15,8 @@
 #include "backend/query/querySelector.h"                          // ibSelector::Snapshot — ToTable's rows as the fast table
 #include "backend/system/value/valueType.h"                       // ibValueTypeDescription::AdjustValue — an empty value of a declared type
 #include "backend/query/queryReadState.h"                         // ibQueryReadState — one state for a whole pipeline
+#include "backend/query/queryableFactory.h"                       // ibQueryableFactory — every source, and whose owner each is
+#include "backend/metaData.h"                                     // ibMetaData::GetSourceFactory
 #include "core/query/queryAST.h"              // ibQueryAstExpr — the tree a predicate lowers from
 #include "backend/compiler/lambdaQueryAST.h"    // it is READ off the instructions, never stored
 #include "backend/query/queryLowering.h"                          // LowerLambdaPredicate / LowerLambdaColumnPath
@@ -261,10 +263,59 @@ private:
 // ibValueQueryable
 //////////////////////////////////////////////////////////////////////
 
+// ⭐ WHAT TABLES LIVE IN THIS ONE IS SETTLED HERE, ONCE: of every source the application's factory holds, those whose
+// owner is this table (GetOwnerQueryable) — a register's virtual tables, a document's tabular sections.
 ibValueQueryable::ibValueQueryable(const std::shared_ptr<const ibBackendQueryable>& queryable, const ibString& sourceName)
-	: ibValueStaticMembers(ibValueTypes::TYPE_VALUE), m_queryable(queryable), m_sourceName(sourceName)
+	: ibValueDynamicMembers(ibValueTypes::TYPE_VALUE), m_queryable(queryable), m_sourceName(sourceName)
 {
+	m_members.Bind(this, &ibValueQueryable::FillMembers);
 	m_builder.From(queryable);
+
+	const ibMetaData* const metaData = queryable != nullptr ? queryable->GetMetaData() : nullptr;
+	const ibQueryableFactory* const factory = metaData != nullptr ? metaData->GetSourceFactory() : nullptr;
+	if (factory == nullptr)
+		return;
+	for (ibQueryableSourceDescriptor* const source : factory->GetDescriptors(ibQueryableSourceKind::Any))
+		if (source->GetOwnerQueryable() == queryable)
+			m_children.push_back(source);
+}
+
+// A table that takes arguments is a property AND a method of the same name: read whole, `Data.AccumulationRegisters.
+// Sales.Balance`; with arguments, `.Balance(&At)` — the ones the query gives it, in its order (DescribeParameters).
+void ibValueQueryable::FillMembers(ibMemberTable& helper) const
+{
+	ibBindLinqMethods(helper, this);
+	for (size_t at = 0; at < m_children.size(); ++at) {
+		const ibString table = m_children[at]->GetName().AfterLast(ibT('.'));
+		helper.AppendProp(table, true, false, (long)at, eTable);
+		std::vector<ibQuerySourceParameter> parameters;
+		m_children[at]->DescribeParameters(parameters);
+		if (parameters.empty())
+			continue;
+		ibString signature = table + ibT("(");
+		for (size_t i = 0; i < parameters.size(); ++i)
+			signature += (i == 0 ? ibString() : ibString(ibT(", "))) + parameters[i].m_name;
+		helper.AppendFunc(table, (long)parameters.size(), signature + ibT(")"), (long)at, eTable);
+	}
+}
+
+bool ibValueQueryable::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
+{
+	const long at = m_members.GetPropData(lPropNum);
+	if (m_members.GetPropAlias(lPropNum) != eTable || at < 0 || at >= (long)m_children.size())
+		return false;
+	pvarPropVal = new ibValueQueryable(m_children[at]->CreateQueryable(nullptr, 0), m_sourceName + ibT(".") + GetPropName(lPropNum));
+	return true;
+}
+
+bool ibValueQueryable::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray)
+{
+	const long at = m_members.GetMethodData(lMethodNum);
+	if (m_members.GetMethodAlias(lMethodNum) != eTable || at < 0 || at >= (long)m_children.size())
+		return ibValueDynamicMembers::CallAsFunc(lMethodNum, pvarRetValue, paParams, lSizeArray);
+	pvarRetValue = new ibValueQueryable(m_children[at]->CreateQueryable(paParams, lSizeArray),
+		m_sourceName + ibT(".") + GetMethodName(lMethodNum));
+	return true;
 }
 
 ibValueQueryable* ibValueQueryable::CloneLink() const

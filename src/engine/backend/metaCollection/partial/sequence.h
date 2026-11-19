@@ -125,6 +125,7 @@ public:
 	explicit ibSequenceBordersSourceDescriptor(ibValueMetaObjectSequence* meta) : m_meta(meta), m_queryable(std::make_shared<ibSequenceBordersQueryable>(meta)) {}
 	ibString GetNamespace() const override;
 	ibString GetName() const override;
+	std::shared_ptr<const ibBackendQueryable> GetOwnerQueryable() const override;   // the sequence's — its borders live in it
 	std::shared_ptr<const ibBackendQueryable> CreateQueryable(ibValue** paParams, long lSizeArray,
 	                                                          const std::vector<ibQueryPredicatePtr>& conditions,
 	                                                          const ibQueryReadColumns& read) override;

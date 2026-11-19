@@ -271,6 +271,14 @@ void ibDialog::OnCloseWindow(wxCloseEvent& event)
         event.Skip();
 }
 
+bool ibIsModalShown()
+{
+    for ( wxWindow *window : wxTopLevelWindows )
+        if ( window->IsKindOf(CLASSINFO(wxDialog)) && static_cast<wxDialog *>(window)->IsModal() )
+            return true;
+    return false;
+}
+
 //-----------------------------------------------------------------------------
 // ibStdDialogButtonSizer
 //-----------------------------------------------------------------------------

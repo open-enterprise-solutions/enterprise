@@ -228,6 +228,7 @@ namespace ibProtocol {
 		inline constexpr const char* Messages   = "Messages";   // ibMessage each
 		inline constexpr const char* Clear      = "Clear";
 		inline constexpr const char* Exit       = "Exit";       // the client is to go — Exit done
+		inline constexpr const char* Close      = "Close";      // the client to close as the person closes it — its [X], asking
 		inline constexpr const char* Raise      = "Raise";      // the client's window raised — a debugger left its loop
 		inline constexpr const char* Title      = "Title";
 		inline constexpr const char* Status     = "Status";

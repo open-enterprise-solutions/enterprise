@@ -1099,6 +1099,31 @@ void ibMcpDescribePlatform(const ibApplicationInstance* applicationInstance, ibD
 	into.SetValue(ibT("dialect"), ibString(
 		ibApplicationWritesInWords(metaData) ? ibT("word-fenced") : ibT("c-style")));
 
+	// ⭐ HOW A QUERY IS WRITTEN, said before the strings: this answer taught only the text query, and an
+	// assistant writing a demo base read every figure of a dashboard through `New Query` and a loop of maps
+	// (2026-11-19, Max: "why don't you use LINQ in the platform?"). Then it said "LINQ first", and the same
+	// assistant wrote LINQ where the database should have folded, in the long form (Max, the same day: "know
+	// WHEN"). So it says which road does what, and the short forms.
+	into.SetValue(ibT("queries"),
+		ibMcpText("TWO ROADS, CHOSEN BY WHO DOES THE WORK.\n"
+		  "A TEXT QUERY (`new Query`, `strings` below) when the DATABASE works: a balance at a moment, turnovers "
+		  "over a period, a slice, a total or a grouping over many rows, a join the base makes - the rows never "
+		  "travel.\n"
+		  "LINQ when the answer is IN HAND and is reshaped - folded again, sorted, cut to the top N, joined to "
+		  "another answer, read more than once:\n"
+		  "  debts = q.Execute().Unload();\n"
+		  "  top = from d in debts orderby d.Amount descending take 5;\n"
+		  "  byCompany = from d in debts group d.Amount by d.Company into g "
+		  "select { Company = g.Key, Amount = g.Values.Sum() };\n"
+		  "The short forms: `group <value> by <key>` folds the value alone (`g.Values.Sum()`, no lambda); no "
+		  "`select`, or `select d`, gives the rows themselves.\n"
+		  "A source is read through `Data`, and the tables living in it through the dot, with the arguments a "
+		  "query gives them: `Data.AccumulationRegisters.Sales.Turnovers(Begin, End)`, "
+		  "`Data.AccountingRegisters.Ledger.Balance(At, Account)`, `Data.Documents.Sale.Goods`; "
+		  "`Data.From(\"Journal.Events\", Begin, End)` reads one by the name a query writes. Call `linq_methods` "
+		  "before writing one - the vocabulary and which form a job wants; `script_query` shows what the compiler "
+		  "made of it."));
+
 	// ⭐ HOW A TEXT IS WRITTEN, said beside the dialect because both dialects share the one lexer
 	// (ibTranslateCode) and a caller writing code asks here first. A query in code is a MULTI-LINE
 	// string, and without this a caller glues it together line by line with `+` (measured
@@ -2782,13 +2807,19 @@ ibString ibMcpServer::Answer(const ibString& request, const ibMcpWireHeaders& he
 						// names, signatures and guides. A caller pointed at only one of them gets
 						// half an answer — a template builder was told how a blank is cut into
 						// bands and never that `SpreadsheetDocument` and `GetArea` exist.
-						int fromPatterns = 0;
+						// Each side counted by its own mark - a helper's place carries `syntax` or `type`. A third
+						// body answers too, the notes of this application (a place with an `id`), and the rest of
+						// the list taken as the helper's said "the syntax helper" of a word only the notes held.
+						int fromPatterns = 0, fromSyntax = 0;
 						for (const ibDataValue& each : places) {
-							if (each.Kind() == ibDataKind::Child && each.AsChild()->Has(ibT("pattern")))
+							if (each.Kind() != ibDataKind::Child)
+								continue;
+							const auto place = each.AsChild();
+							if (place->Has(ibT("pattern")))
 								++fromPatterns;
+							else if (place->Has(ibT("syntax")) || place->Has(ibT("type")))
+								++fromSyntax;
 						}
-
-						const int fromSyntax = (int)places.size() - fromPatterns;
 
 						// 🛑 AND NO COUNT IS QUOTED, BECAUSE THERE IS NONE TO QUOTE. Both sides cap
 						// what they hand back — the patterns at two dozen, the helper at four — so
@@ -2812,11 +2843,12 @@ ibString ibMcpServer::Answer(const ibString& request, const ibMcpWireHeaders& he
 								  "(syntax_search {query: '%s'})"), family);
 						}
 
-						result.SetValue(ibT("worthReading"),
-							ibString::Format(
-								ibMcpText("`%s` is written about in %s. Knowledge no single answer "
-								  "carries. Said once."),
-								family, where));
+						if (!where.IsEmpty())
+							result.SetValue(ibT("worthReading"),
+								ibString::Format(
+									ibMcpText("`%s` is written about in %s. Knowledge no single answer "
+									  "carries. Said once."),
+									family, where));
 					}
 				}
 			}

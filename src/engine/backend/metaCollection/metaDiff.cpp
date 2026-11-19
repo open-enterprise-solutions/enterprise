@@ -373,6 +373,25 @@ bool ibMetaDiffWalker::SubtreeHasDifference(
 	return false;
 }
 
+// THE ORDER AN AUTHOR SETS: each kind's children among themselves - the attributes, the dimensions, the forms - which
+// is what moving one up or down in the tree changes. Not the whole list: that interleaves the kinds, and holds the
+// attributes the engine makes itself (PredefinedAttribute) in the order things happened to be made. An accounting
+// register built in the designer lists its analytics slots before the dimensions added after them, and the same
+// register read back from the base lists them after: database_diff answered "reordered" for every new register, and
+// the apply, rightly, had nothing to write (2026-11-19).
+static std::vector<std::pair<ibClassID, ibGuid>> AuthoredChildOrder(const ibValueMetaObject* parent)
+{
+	std::vector<std::pair<ibClassID, ibGuid>> order;
+	for (unsigned int i = 0; i < parent->GetChildCount(); ++i) {
+		const ibValueMetaObject* child = parent->GetChild(i);
+		if (child != nullptr && child->GetClassType() != g_metaPredefinedAttributeCLSID)
+			order.emplace_back(child->GetClassType(), child->GetGuid());
+	}
+	std::stable_sort(order.begin(), order.end(),
+		[](const std::pair<ibClassID, ibGuid>& a, const std::pair<ibClassID, ibGuid>& b) { return a.first < b.first; });
+	return order;
+}
+
 // static
 bool ibMetaDiffWalker::ChildOrderDiffers(
 	const ibValueMetaObject* left,
@@ -385,16 +404,16 @@ bool ibMetaDiffWalker::ChildOrderDiffers(
 	if (n != right->GetChildCount())
 		return false;
 
+	const std::vector<std::pair<ibClassID, ibGuid>> leftOrder = AuthoredChildOrder(left);
+	const std::vector<std::pair<ibClassID, ibGuid>> rightOrder = AuthoredChildOrder(right);
+	if (leftOrder.size() != rightOrder.size())
+		return false;
+
 	bool positionMatches = true;
-	for (unsigned int i = 0; i < n; ++i) {
-		const ibValueMetaObject* lc = left->GetChild(i);
-		const ibValueMetaObject* rc = right->GetChild(i);
-		if (lc == nullptr || rc == nullptr)
+	for (size_t i = 0; i < leftOrder.size(); ++i) {
+		if (!leftOrder[i].second.isValid())
 			return false;
-		const ibGuid leftGuid = lc->GetGuid();
-		if (!leftGuid.isValid())
-			return false;
-		if (!rc->CompareGuid(leftGuid)) {
+		if (leftOrder[i] != rightOrder[i]) {
 			positionMatches = false;
 			break;
 		}

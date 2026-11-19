@@ -178,9 +178,3 @@ void ibClientInstance::Touch()
 	std::lock_guard<std::mutex> lock(m_mutex);
 	m_lastActiveMs = NowMs();
 }
-
-bool ibClientInstance::RequestClose()
-{
-	m_closeRequested.store(true);
-	return true;
-}

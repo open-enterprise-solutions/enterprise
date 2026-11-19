@@ -62,6 +62,10 @@ struct BACKEND_API ibLockItem {
 	ibString                                  namespaceName;
 	std::vector<std::pair<ibString, ibValue>> keyFields;
 	ibLockMode                                lockMode = ibLockMode::Exclusive;
+	// ⭐ WHAT A REFUSAL NAMES - the locked thing as a person knows it (a metaobject's synonym), given by whoever asks
+	// for the lock, which is the one that knows it. The namespace is an identity, a metaobject's guid: a conflict
+	// said "3f2a…-… is locked by another session" (2026-11-19). Empty: the refusal names the namespace.
+	ibString                                  objectName;
 
 	ibLockItem() = default;
 
@@ -72,11 +76,13 @@ struct BACKEND_API ibLockItem {
 	// free of the magic string.
 	static ibLockItem ForRef(const ibString& namespacePath,
 	                          const ibGuid&   refGuid,
-	                          ibLockMode      mode = ibLockMode::Exclusive) {
+	                          ibLockMode      mode = ibLockMode::Exclusive,
+	                          const ibString& objectName = ibEmptyString) {
 		ibLockItem it;
 		it.namespaceName = namespacePath;
 		it.keyFields.push_back({ ibT("Ref"), ibValue(refGuid.str()) });
 		it.lockMode = mode;
+		it.objectName = objectName;
 		return it;
 	}
 
@@ -84,10 +90,12 @@ struct BACKEND_API ibLockItem {
 	// "global" resources (Constants — one row per metaobject, the
 	// namespace IS the identifier) collide on the namespace alone.
 	static ibLockItem ForNamespace(const ibString& namespacePath,
-	                                ibLockMode      mode = ibLockMode::Exclusive) {
+	                                ibLockMode      mode = ibLockMode::Exclusive,
+	                                const ibString& objectName = ibEmptyString) {
 		ibLockItem it;
 		it.namespaceName = namespacePath;
 		it.lockMode = mode;
+		it.objectName = objectName;
 		return it;
 	}
 

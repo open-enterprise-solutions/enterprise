@@ -40,6 +40,7 @@
 #include "system/value/valueQueryable.h"  // ibValueQueryable::TryJoinThroughL3 — RAM-receiver join push-down (Layer 2)
 
 #include <algorithm>
+#include <cstdint>         // SIZE_MAX — a window that takes every row
 #include <map>
 #include <unordered_map>   // the join index — see KeyHash in ibValueJoinState
 #include <set>
@@ -933,6 +934,15 @@ public:
 		m_keyDescending[(size_t)at] = descending;
 	}
 
+	// ⭐ THE WINDOW OF AN ORDERED ANSWER — `skip` / `take` written after `orderby` (OPER_LINQ_WINDOW). The first
+	// rows of an order are not known until the last row has arrived, so the window waits here beside the keys
+	// and the rows are cut to it once they are in order (CutToWindow). Each clause sets its own side; a count
+	// below nothing is nothing, as the road that counts rows as they arrive reads it.
+	void KeepWindow(const ibValue* skip, const ibValue* take) {
+		if (skip != nullptr) m_skip = (size_t)std::max<long long>(0, skip->GetNumber().ToInt64());
+		if (take != nullptr) m_take = (size_t)std::max<long long>(0, take->GetNumber().ToInt64());
+	}
+
 	long           Count()    const { return (long)Rows().size(); }
 	const ibValue& At(long i) const { return Rows()[(size_t)i]; }
 	bool           HasKeys()  const {
@@ -1043,6 +1053,18 @@ public:
 		m_rows.swap(sorted);
 	}
 
+	// …and the rows cut to the window KeepWindow kept: past the skipped ones, as many as are taken. With no
+	// window it keeps them all. The keys go — they are read to order, and that has been done.
+	void CutToWindow() {
+		const size_t from = std::min(m_skip, m_rows.size());
+		const size_t to   = from + std::min(m_take, m_rows.size() - from);
+		if (from == 0 && to == m_rows.size())
+			return;
+		m_rows.erase(m_rows.begin() + to, m_rows.end());
+		m_rows.erase(m_rows.begin(), m_rows.begin() + from);
+		m_keys.clear();
+	}
+
 	// Widen the key block, which happens on the FIRST row and never again: the compiler emits the
 	// same KEEPs for every row, so by the time a second row arrives the width is settled.
 	void Rewiden(size_t width) {
@@ -1133,6 +1155,9 @@ private:
 	size_t               m_keyStride = 0;
 	// The way each key position runs (true = descending), `m_keyStride` of them — see KeepKey.
 	std::vector<bool>    m_keyDescending;
+	// The window the rows are cut to once they are in order — see KeepWindow. As made, it is all of them.
+	size_t               m_skip = 0;
+	size_t               m_take = SIZE_MAX;
 	// Values seen and buckets — see ibIndex. Null until `distinct` or a bucket first asks.
 	std::unique_ptr<ibIndex> m_index;
 };
@@ -1659,6 +1684,15 @@ static void ibValueLinqDispatchImpl(ibValue* self, ibValue::ibLinqMethod method,
 			else                         self->CallAsProc(ownNum, args, n);
 			return;
 		}
+		// ⭐ ONE VALUE AGGREGATES TO ITSELF. An aggregate with no selector asks each element the verb (a table's row
+		// answers with the column the call names); an element that is no collection — a number, a reference Min / Max
+		// compare — is its own term, as it was before it was asked (2026-11-19). A copy: an object's is the object held,
+		// a number's the number.
+		if ((method == M::Sum || method == M::Min || method == M::Max || method == M::Average)
+			&& (n < 1 || args == nullptr || args[0] == nullptr)) {
+			CopyValue(ret, *self);
+			return;
+		}
 		ibBackendQueryLinqException::Error(_("Value is not iterable"));
 	}
 
@@ -1984,7 +2018,8 @@ static void ibValueLinqDispatchImpl(ibValue* self, ibValue::ibLinqMethod method,
 		// AGGREGATES OVER THE STREAM — one pass, nothing materialised. Each takes an
 		// OPTIONAL selector, exactly as the concrete collections' own Sum/Min/Max/
 		// Average do (ibValueArray::SumWithSelector and friends): `Sum()` totals the
-		// elements, `Sum(fn)` totals fn(element). An EMPTY sequence answers Empty
+		// elements, `Sum(fn)` totals fn(element), `Sum("Amount")` totals each row's cell of
+		// that column (the row answers - ibValueModelReturnLine). An EMPTY sequence answers Empty
 		// rather than zero — the same answer the Array versions give, and the honest
 		// one, because "nothing to add up" is not the same statement as "adds up to
 		// nothing".
@@ -1993,9 +2028,9 @@ static void ibValueLinqDispatchImpl(ibValue* self, ibValue::ibLinqMethod method,
 		case M::Max:
 		case M::Average:
 		{
+			// A function is the selector; anything else given - a column's name, `Sum("Amount")` - goes to each element
+			// with the verb (below).
 			ibValueFunction* selector = (n >= 1 && args && args[0]) ? AsFunction(args[0]) : nullptr;
-			if (n >= 1 && args && args[0] != nullptr && selector == nullptr)
-				ibBackendQueryLinqException::Error(_("The aggregate selector must be a Function value"));
 
 			ibValue acc, current, projected;
 			long   seen  = 0;
@@ -2004,6 +2039,13 @@ static void ibValueLinqDispatchImpl(ibValue* self, ibValue::ibLinqMethod method,
 				ibValue* pTerm = &current;
 				if (selector != nullptr) {
 					CallLambdaWithArgs(*selector, &pTerm, 1, projected);
+					pTerm = &projected;
+				}
+				else {
+					// the element is asked the verb itself, with what the call named - a table's row answers with the cell
+					// of that column (its DispatchLinqMethod); a number, or a reference with no answer of its own, asked
+					// with nothing named, is its own term (above, "one value aggregates to itself")
+					current.DispatchLinqMethod(method, projected, args, n);
 					pTerm = &projected;
 				}
 				if (seen == 0) {
@@ -2324,12 +2366,18 @@ void ibLinqKeep(ibValue& scratch, const ibValue* row, const ibValue* key, long k
 		kept.KeepKey(*key, keyAt, descending);
 }
 
+void ibLinqWindow(ibValue& scratch, const ibValue* skip, const ibValue* take)
+{
+	LinqResultIn(scratch).KeepWindow(skip, take);
+}
+
 void ibLinqResult(ibValue& out, ibValue& scratch, int ordering, bool wantFirst)
 {
 	ibValueLinqRows& kept = LinqResultIn(scratch);
 	// 2 by the keys, each the way it was kept with · 3 simply reversed (no keys involved)
 	if (ordering == 3)      kept.ReverseRows();
 	else if (ordering != 0) kept.SortByKeys();
+	kept.CutToWindow();
 
 	if (wantFirst) {
 		// An empty source answers with an empty value, which is what `First` over nothing IS — not

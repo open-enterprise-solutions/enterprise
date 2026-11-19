@@ -217,6 +217,14 @@ bool ibClientFrame::TakeExitPending()
 	return was;
 }
 
+bool ibClientFrame::TakeClosePending()
+{
+	std::lock_guard<std::mutex> lock(m_msgMutex);
+	const bool was = m_closePending;
+	m_closePending = false;
+	return was;
+}
+
 bool ibClientFrame::TakeRaisePending()
 {
 	std::lock_guard<std::mutex> lock(m_msgMutex);
@@ -745,6 +753,15 @@ bool ibClientFrame::ExitClient(bool force)
 	if (force)
 		RefreshFrame();
 	return true;
+}
+
+void ibClientFrame::CloseClient()
+{
+	{
+		std::lock_guard<std::mutex> lock(m_msgMutex);
+		m_closePending = true;
+	}
+	RefreshFrame();
 }
 
 bool ibClientFrame::EditFocused(ibDocCommand command)

@@ -43,7 +43,7 @@ bool ibValueMetaObjectCalculationTypeRelationTable::StampIfNeverSaved(ibMetaData
 	return true;
 }
 
-// predefined column as a Child sub-node + the base table data (NumberLine + Use).
+// predefined column as a Child sub-node + the base table data (LineNumber + Use).
 bool ibValueMetaObjectCalculationTypeRelationTable::ReadData(const ibDataNode& node)
 {
 	m_propertyCalculationType->SetNodeValue(node.GetProperty(m_propertyCalculationType->GetName()));

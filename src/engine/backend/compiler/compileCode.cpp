@@ -6,6 +6,7 @@
 #include "compileCode.h"
 #include "core/compiler/codeDef.h"
 #include "lambdaQueryAST.h"   // L4-2 — lambda body -> L4 query AST (pushdown)
+#include "similarNames.h"     // ibSimilarNames - the globals spelled similar to a call found nowhere
 
 #include "system/systemManager.h"
 #include "backend/session/session.h"       // GetCompileState — the code style lives there
@@ -23,6 +24,20 @@ constexpr long kAndUnknownMark = 1;
 static ibValue ClassIdConst(const ibClassID clsid)
 {
 	return ibValue(ibNumber(static_cast<unsigned long long>(clsid)));
+}
+
+// THE GLOBAL FUNCTIONS SPELLED SIMILAR TO `name` (ibSimilarNames). A call of a function that is not there was
+// "Procedure or function not detected (StrFind)", and the name the author meant had to be looked up (2026-11-19, an
+// assistant writing a demo base); the table the runtime asks for "is a global function" knows it.
+static ibString SimilarGlobalNames(const ibString& name)
+{
+	const ibValue::ibMemberTable* const globals = ibValue::ibMemberTable::Shared<&ibValueSystemFunction_BindNames>();
+	if (globals == nullptr)
+		return ibString();
+	std::vector<ibString> names;
+	for (long i = 0; i < globals->GetNMethods(); i++)
+		names.push_back(globals->GetMethodName(i));
+	return ibSimilarNames(name, names);
 }
 
 #pragma warning(push)
@@ -592,7 +607,10 @@ ibString ibCompileCode::ExpectIdentifier(bool strRealName, bool acceptKeyword)
 		if (m_compileMode != ibCompileMode::Tolerant)
 			m_numCurrentCompile--;
 
-		Refuse(ibScriptError_IdentifierDefine);
+		if (lex.m_lexType == KEYWORD)
+			Refuse(ibScriptError_KeywordAsName, lex.m_strData);
+		else
+			Refuse(ibScriptError_IdentifierDefine);
 		return ibEmptyString;
 	}
 
@@ -1331,7 +1349,9 @@ bool ibCompileCode::PushCallFunction(const std::shared_ptr<ibCallFunction>& call
 			return true;
 		}
 		m_numCurrentCompile = callFunction->m_numError;
-		Refuse(ibScriptError_CallFunction, callFunction->m_strRealName);// there is no such function in the module
+		const ibString similarNames = SimilarGlobalNames(callFunction->m_strRealName);   // there is no such function in the module
+		Refuse(ibScriptError_CallFunction, similarNames.IsEmpty() ? callFunction->m_strRealName
+			: ibString::Format(_("%s - a global function with a similar name: %s"), callFunction->m_strRealName, similarNames));
 		return false;
 	}
 
@@ -2310,6 +2330,18 @@ bool ibCompileCode::CompileBlock(ibCompileContext* context)
 				break;
 			}
 			default:
+				// A WORD OF THE LANGUAGE ASSIGNED TO is a variable named by it (`in = 5`): no bracket that ends a
+				// block is followed by '='. Taken for one, it ended the block and was refused as the end of the
+				// program two lines on. (The word is the next lexem - PreviewGetLexem stepped back - so '=' is the one
+				// after it.)
+				if (m_numCurrentCompile + 2 < m_translateCode.GetLexCount()) {
+					const ibLexem& after = m_translateCode.GetLexAt(m_numCurrentCompile + 2);
+					if (after.m_lexType == DELIMITER && after.m_numData == ibT('=')) {
+						GetLexem();   // onto the word, so the report points at it
+						Refuse(ibScriptError_KeywordAsName, lex.m_strData);
+						return false;
+					}
+				}
 				return true;	// means the operator bracket ending this block has been encountered (for example, ENDIF, ENDDO, ENDFUNCTION, etc.)
 			}
 		}
@@ -3235,6 +3267,13 @@ bool ibCompileCode::CompileFor(ibCompileContext* context)
 		}
 	}
 
+	// `for (i = 0; i < n; i++)` - the loop of another language, met at its first ';'.
+	if (IsNextDelimiter(ibT(';'))) {
+		GetLexem();
+		Refuse(ibScriptError_ForCountsWithTo);
+		return false;
+	}
+
 	ExpectKeyword(KEY_TO);
 
 	ibParamUnit variableTo =
@@ -3558,7 +3597,9 @@ ibParamUnit ibCompileCode::GetCallFunction(ibCompileContext* context, const ibSt
 	}
 
 	if (IsExpressionOnly()) {
-		Refuse(ibScriptError_CallFunction, strRealName);
+		const ibString similarNames = SimilarGlobalNames(strRealName);
+		Refuse(ibScriptError_CallFunction, similarNames.IsEmpty() ? strRealName
+			: ibString::Format(_("%s - a global function with a similar name: %s"), strRealName, similarNames));
 		return ibParamUnit();
 	}
 

@@ -146,7 +146,7 @@ ibString ibValueTabularSectionDataObjectBase::GetString() const
 
 bool ibValueTabularSectionDataObjectBase::SetValueByMetaID(const ibDataViewItem& item, const ibMetaID& id, const ibValue& varMetaVal)
 {
-	if (m_readOnly || m_metaTable->IsNumberLine(id))
+	if (m_readOnly || m_metaTable->IsLineNumber(id))
 		return false;
 
 	if (!appData->DesignerMode()) {
@@ -186,7 +186,7 @@ bool ibValueTabularSectionDataObjectBase::SetValueByMetaID(const ibDataViewItem&
 
 bool ibValueTabularSectionDataObjectBase::GetValueByMetaID(const ibDataViewItem& item, const ibMetaID& id, ibValue& pvarMetaVal) const
 {
-	if (m_metaTable->IsNumberLine(id)) {
+	if (m_metaTable->IsLineNumber(id)) {
 		// The SAME number the display reads — the row's place in what is shown (DisplayNumberOf). A group
 		// header is synthetic and carries none; a row outside the filter is shown nowhere and carries none.
 		// Both answer empty rather than a bogus "0".
@@ -363,7 +363,7 @@ ibValuePtr<ibValueModel> ibValueTabularSectionDataObjectBase::SaveDataToTable() 
 		for (unsigned int col = 0; col < colData->GetColumnCount(); col++) {
 			ibValueModelColumnCollection::ibValueModelColumnInfo* colInfo = colData->GetColumnInfo(col);
 			ibASSERT(colInfo);
-			if (m_metaTable->IsNumberLine(colInfo->GetColumnID()))
+			if (m_metaTable->IsLineNumber(colInfo->GetColumnID()))
 				continue;
 			ibValue cRetValue;
 			if (GetValueByMetaID(srcItem, colInfo->GetColumnID(), cRetValue)) {
@@ -433,7 +433,7 @@ void ibValueTabularSectionDataObjectBase::DescribeReturnLine(ibMemberTable& help
 		helper.AppendProp(
 			objectName,
 			true,
-			!m_metaTable->IsNumberLine(object->GetMetaID()),
+			!m_metaTable->IsLineNumber(object->GetMetaID()),
 			object->GetMetaID()
 		);
 	}
@@ -500,7 +500,7 @@ ibValueTabularSectionDataObjectBase::ibValueTabularSectionDataObjectColumnCollec
 	const ibValueMetaObjectTableData* metaTable = m_ownerTable->GetMetaObject();
 	ibASSERT(metaTable);
 	for (const auto object : metaTable->GetGenericAttributeArrayObject()) {
-		if (metaTable->IsNumberLine(object->GetMetaID()))
+		if (metaTable->IsLineNumber(object->GetMetaID()))
 			continue;
 		m_listColumnInfo.insert_or_assign(object->GetMetaID(),
 			new ibValueTabularSectionColumnInfo(object)
@@ -579,7 +579,7 @@ void ibCollectFilterDefaults(const std::vector<ibFilterNodeDescription>& nodes, 
 void ibValueTabularSectionDataObjectBase::DescribeNewRow(ibNewRowColumns& columns) const
 {
 	for (const auto object : m_metaTable->GetGenericAttributeArrayObject())
-		if (!m_metaTable->IsNumberLine(object->GetMetaID()))
+		if (!m_metaTable->IsLineNumber(object->GetMetaID()))
 			columns.push_back({ object->GetMetaID(), [object]() { return object->CreateValue(); } });
 }
 

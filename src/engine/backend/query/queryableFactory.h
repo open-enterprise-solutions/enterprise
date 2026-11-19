@@ -112,6 +112,10 @@ public:
 	// none, and the lowering leaves every condition where it was: in the WHERE around the reading.
 	virtual std::shared_ptr<const ibBackendQueryable> GetConditionScope() const { return nullptr; }
 
+	// THE TABLE THIS SOURCE LIVES IN — the register's for its virtual tables, the object's for its tabular sections;
+	// null for a table of its own. A source in `Data` offers what lives in it through the dot (ibValueQueryable).
+	virtual std::shared_ptr<const ibBackendQueryable> GetOwnerQueryable() const { return nullptr; }
+
 	// ---- The source's COMMAND surface, held PARALLEL to the queryable (queryable = data; these = how a LIST
 	// acts on a row). This is the SINGLE bridge a metadata-blind dynamic list talks to: it fills the columns,
 	// lists + runs the commands, opens a row, and resolves the picker select. The BASE is neutral (an enum /

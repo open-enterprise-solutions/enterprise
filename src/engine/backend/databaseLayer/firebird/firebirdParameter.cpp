@@ -24,10 +24,15 @@ ibDatabaseParameterFirebird::ibDatabaseParameterFirebird(ibInterfaceFirebird* pI
 	m_pParameter->sqlind = &m_nNullFlag; // NULL indicator
 }
 
+// ⭐ THE NULLABLE BIT IS WHAT MAKES THE INDICATOR COUNT. Firebird reads sqlind only where sqltype carries bit 1, and
+// where it does not it wants data - so a NULL bound into a parameter described without the bit was refused as
+// "empty pointer to data", naming an SQLVAR index and no column. A catalog FOLDER, whose item-only attributes are NULL,
+// could not be written at all (2026-11-19). A NOT NULL column is still refused - by the server, in its own words.
 void ibDatabaseParameterFirebird::SetNull()
 {
 	m_nParameterType = ibDatabaseParameterFirebird::PARAM_NULL;
 
+	m_pParameter->sqltype |= 1;
 	m_nNullFlag = -1;
 	m_pParameter->sqlind = &m_nNullFlag; // NULL indicator
 }

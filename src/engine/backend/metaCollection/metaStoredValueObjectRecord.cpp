@@ -331,7 +331,7 @@ bool ibValueRecordDataObjectConstant::TryAcquireFormLock(ibLockMode mode)
 	if (lm == nullptr)
 		ibBackendCoreException::Error(_("Lock manager not initialised"));
 	m_formLockHandle = lm->Acquire({
-		ibLockItem::ForNamespace(m_metaObject->GetDocPath(), mode)
+		ibLockItem::ForNamespace(m_metaObject->GetDocPath(), mode, m_metaObject->GetSynonym())
 	});
 	return true;
 }

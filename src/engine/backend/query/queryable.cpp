@@ -18,6 +18,7 @@
 #include "backend/query/queryable.h"
 #include "backend/query/dataQueryBuilder.h"   // ibDataQueryBuilder::GetPrimarySource — a nested query's key is its source's
 
+#include <algorithm>                                       // std::none_of — the sort order's cell, re-keyed once
 #include <atomic>                                          // the alias-column id counter below
 
 // ==========================================================================
@@ -145,4 +146,40 @@ std::shared_ptr<const ibBackendQueryColumn> ibAliasQueryable::GetHierarchyColumn
 	for (const std::shared_ptr<ibAliasColumn>& c : m_published)
 		if (c->Origin() == h) return c;
 	return nullptr;
+}
+
+// ⭐ THE ORIGIN'S ROWS, UNDER THIS READING'S IDS — computed by the origin, keyed as this side of the join carries them,
+// as a table read through an alias is (MaterialiseLeafToRam: the read the origin's, the key the twin's). The conditions
+// come on our twins and go to the origin as its own columns. The rows came back under the origin's ids, and every
+// reader keying them by this reading's columns found none: two temporary tables in one statement - the second is a
+// twin, the tables number their columns alike - could not be copied into a base in memory, and a semi-join over a
+// twin took no keys (2026-11-19).
+ibQueryRamTable ibAliasQueryable::ComputeRows(const std::vector<ibQueryCondition>& extra) const
+{
+	std::vector<ibQueryCondition> asked = extra;
+	for (ibQueryCondition& c : asked) {
+		if (const std::shared_ptr<const ibBackendQueryColumn> origin = OriginOf(c.m_col))
+			c.m_col = origin;
+		for (std::shared_ptr<const ibBackendQueryColumn>& step : c.m_path)
+			if (const std::shared_ptr<const ibBackendQueryColumn> origin = OriginOf(step))
+				step = origin;
+	}
+	ibQueryRamTable computed = m_origin->ComputeRows(asked);
+
+	ibQueryRamTable rows;
+	std::vector<std::pair<ibMetaID, ibMetaID>> rekey;
+	for (const ibQueryRamColumn& held : computed.Columns())
+		for (const std::shared_ptr<ibAliasColumn>& c : m_published)
+			if (c->Origin()->GetColumnId() == held.m_id) {
+				rows.AddColumn(c->GetColumnId(), held.m_name, held.m_type, held.m_caption, held.m_available);
+				rekey.emplace_back(held.m_id, c->GetColumnId());
+				break;
+			}
+	// …and the sort order's cell, where the origin's rows hold it under an id no published column takes (a cell is moved
+	// once: AppendRowsRekeyed).
+	if (m_sort != nullptr && std::none_of(rekey.begin(), rekey.end(),
+			[this](const std::pair<ibMetaID, ibMetaID>& k) { return k.first == m_sort->Origin()->GetColumnId(); }))
+		rekey.emplace_back(m_sort->Origin()->GetColumnId(), m_sort->GetColumnId());
+	rows.AppendRowsRekeyed(std::move(computed), rekey);
+	return rows;
 }

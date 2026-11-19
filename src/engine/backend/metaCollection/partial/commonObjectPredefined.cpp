@@ -326,7 +326,7 @@ const ibPredefinedDescription& ibValueMetaObjectRecordDataHierarchyMutableRef::G
 		for (const ibSchemaColumn& column : table.m_columns) {
 			const auto attribute = std::find_if(listed.begin(), listed.end(),
 				[&column](const ibValueMetaObjectAttributeBase* object) { return object->GetMetaID() == column.m_id; });
-			if (attribute != listed.end() && column.m_id != section->GetNumberLine()->GetMetaID())
+			if (attribute != listed.end() && column.m_id != section->GetLineNumber()->GetMetaID())
 				declarable.m_columns.push_back(Describe(m_metaData, *attribute));
 		}
 	}

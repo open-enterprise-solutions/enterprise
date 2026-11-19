@@ -2460,6 +2460,9 @@ void ibClientHost::DrawFrame(ibClientFrame* frame, ibDataNode& state, ibDataNode
 	// Exit done — the client goes; its session goes when it logs out.
 	if (frame->TakeExitPending())
 		events.SetValue(ibProtocol::ibFrame::Exit, true);
+	// Closed as the person closes it — the client takes its own [X] (CloseClient).
+	if (frame->TakeClosePending())
+		events.SetValue(ibProtocol::ibFrame::Close, true);
 	// A debugger left its loop — the client's window raised, as the desktop's raised its own.
 	if (frame->TakeRaisePending())
 		events.SetValue(ibProtocol::ibFrame::Raise, true);
@@ -2519,10 +2522,11 @@ void ibClientHost::RoundBody()
 			// …and a connectionless client TOLD TO GO (an administrator's kick, a debugger's Stop — ExitClient) goes now:
 			// its Exit waits in the frame for a call, and nothing calls an in-memory client but the one who made it, so
 			// its logout never came and the kicked session held the base until the idle limit (2026-11-14, five of an
-			// assistant's clients). Its next call is refused as a client that has gone.
+			// assistant's clients). Its next call is refused as a client that has gone. One TOLD TO CLOSE (CloseClient)
+			// goes as well: it has no window to ask what it keeps.
 			ibClientFrame* const frame = entry.second->connectionless ? instance->GetFrame() : nullptr;
-			const bool exited = frame != nullptr && frame->TakeExitPending();
-			if (instance->IsCloseRequested() || idle || exited) {
+			const bool exited = frame != nullptr && (frame->TakeExitPending() || frame->TakeClosePending());
+			if (idle || exited) {
 				RemoveClient(entry.first);
 				continue;
 			}

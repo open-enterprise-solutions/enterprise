@@ -65,6 +65,7 @@
 #include "deskgui/univ/aui/auibook.h"
 #include "deskgui/univ/aui/aui.h"
 #include "deskgui/univ/messageDialog.h"
+#include "deskgui/univ/dialog.h"   // ibIsModalShown — a close waits for the window asking
 #include "deskgui/univ/menu.h"   // ibMenu — a server's popup menu, the theme's
 #include "deskgui/univ/stockItem.h"   // ibGetStockLabel — File, Edit and Help, in the base's language
 
@@ -1111,6 +1112,9 @@ void ibFrontendMainFrame::Draw(const ibProtocolNode& answer)
 	// client goes once its call has settled (Call, AllowClose).
 	if (answer.GetBool(ibProtocol::ibFrame::Exit))
 		m_exitGranted = true;
+	// Closed as the person closes it: its own [X], once this call has settled — the questions it asks run a message loop.
+	if (answer.GetBool(ibProtocol::ibFrame::Close))
+		CallAfter([this]() { Close(); });
 	// A debugger left its loop — the window raised, as the desktop's raised its own after the loop.
 	if (answer.GetBool(ibProtocol::ibFrame::Raise))
 		RaiseFrame();
@@ -2117,8 +2121,10 @@ void ibFrontendMainFrame::OnCloseWindow(wxCloseEvent& event)
 	// loop — in which a SECOND close can arrive; the close that is asking decides (the desktop's own lesson, 2026-09-16).
 	// …and not under a window asking: it runs a message loop over the frame, its window on the stack of the call that
 	// asks (ShowRequest) - a close let through destroyed the frame under it, and with it the window, a stack object
-	// deleted (an Output list's column choice; a close from the taskbar, 2026-11-13). The window asking decides first.
-	if ((m_closingWindow || !m_asking.empty()) && !force) {
+	// deleted (an Output list's column choice; a close from the taskbar, 2026-11-13). The window asking decides first —
+	// the client's own as well: the LINQ constructor on a module's tab, a stack object, was deleted with the tab the
+	// close took (an assistant's app_close, 2026-11-19).
+	if ((m_closingWindow || !m_asking.empty() || ibIsModalShown()) && !force) {
 		event.Veto();
 		return;
 	}
