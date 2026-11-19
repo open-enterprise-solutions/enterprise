@@ -99,12 +99,12 @@ struct BackupRestore : ::testing::Test {
 
 		ibDatabaseQueryBuilder q;
 		q.Execute(ibCreateTable(user_table, {
-			{ wxT("guid"),       ibTypeString(36),  false, true,  wxEmptyString },
-			{ wxT("name"),       ibTypeString(64),  true,  false, wxEmptyString },
-			{ wxT("fullName"),   ibTypeString(128), true,  false, wxEmptyString },
-			{ wxT("changed"),    ibTypeDate(),      true,  false, wxEmptyString },
-			{ wxT("dataSize"),   ibTypeInteger(),   true,  false, wxEmptyString },
-			{ wxT("binaryData"), ibTypeBlob(),      true,  false, wxEmptyString },
+			{ wxT("guid"),       ibTypeString(36),  false, true },
+			{ wxT("name"),       ibTypeString(64),  true,  false },
+			{ wxT("fullName"),   ibTypeString(128), true,  false },
+			{ wxT("changed"),    ibTypeDate(),      true,  false },
+			{ wxT("dataSize"),   ibTypeInteger(),   true,  false },
+			{ wxT("binaryData"), ibTypeBlob(),      true,  false },
 		}));
 		ready = true;
 	}

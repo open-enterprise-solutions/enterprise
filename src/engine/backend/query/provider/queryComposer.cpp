@@ -1079,7 +1079,7 @@ ibDataQuerySpec ComposedOver(const ibDataQuerySpec& spec, std::shared_ptr<ibMemo
 		collect(flat);
 		const auto composite = std::make_shared<ibComposedQueryable>(flat, namedThroughInner(),
 			std::vector<std::pair<std::shared_ptr<const ibBackendQueryColumn>, ibString>>(), primaryAmong(leaves),
-			ibString::Format(ibT("oes_composed%d"), ++numbered));
+			ibString::Format(ibT("oes_composed%d"), ++numbered), nullptr, std::vector<std::unique_ptr<ibTempTableManager>>());
 		inner.push_back(composite);
 		return ibQueryNode::Source(composite);
 	};

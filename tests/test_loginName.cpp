@@ -49,12 +49,12 @@ struct LoginNameFix : ::testing::Test {
 	{
 		ibDatabaseQueryBuilder q;
 		q.Execute(ibCreateTable(user_table, {
-			{ wxT("guid"),       ibTypeString(36),  /*notNull*/false, /*pk*/true,  wxEmptyString },
-			{ wxT("name"),       ibTypeString(64),  /*notNull*/true,  /*pk*/false, wxEmptyString },
-			{ wxT("fullName"),   ibTypeString(128), /*notNull*/true,  /*pk*/false, wxEmptyString },
-			{ wxT("changed"),    ibTypeDate(),      /*notNull*/true,  /*pk*/false, wxEmptyString },
-			{ wxT("dataSize"),   ibTypeInteger(),   /*notNull*/true,  /*pk*/false, wxEmptyString },
-			{ wxT("binaryData"), ibTypeBlob(),      /*notNull*/true,  /*pk*/false, wxEmptyString },
+			{ wxT("guid"),       ibTypeString(36),  /*notNull*/false, /*pk*/true },
+			{ wxT("name"),       ibTypeString(64),  /*notNull*/true,  /*pk*/false },
+			{ wxT("fullName"),   ibTypeString(128), /*notNull*/true,  /*pk*/false },
+			{ wxT("changed"),    ibTypeDate(),      /*notNull*/true,  /*pk*/false },
+			{ wxT("dataSize"),   ibTypeInteger(),   /*notNull*/true,  /*pk*/false },
+			{ wxT("binaryData"), ibTypeBlob(),      /*notNull*/true,  /*pk*/false },
 		}));
 
 		ibUserInfo keeper;

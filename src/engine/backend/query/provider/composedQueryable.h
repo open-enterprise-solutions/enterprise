@@ -119,13 +119,14 @@ public:
 	//
 	// ⭐ A COMPOSITE OVER COPIES HOLDS THEM — `space`, the space of the base in memory its leaves were copied into, and
 	// `copies`, the copies themselves (ibQueryComposer::OverMemorySpace): the result read through it holds it, so the rows
-	// stay while the result is read; the copies go first, then the space with whatever is left in it.
+	// stay while the result is read; the copies go first, then the space with whatever is left in it. Neither has a
+	// default: a `{}` of copies this header only declares would be destroyed in every file that includes it.
 	ibComposedQueryable(const std::shared_ptr<ibQueryNode>& root,
 	                    const std::vector<std::shared_ptr<const ibBackendQueryColumn>>& columns,
 	                    const std::vector<std::pair<std::shared_ptr<const ibBackendQueryColumn>, ibString>>& outputs,
 	                    const std::shared_ptr<const ibBackendQueryable>& primary, const ibString& name,
-	                    std::shared_ptr<ibMemorySpace> space = nullptr,
-	                    std::vector<std::unique_ptr<ibTempTableManager>> copies = {});
+	                    std::shared_ptr<ibMemorySpace> space,
+	                    std::vector<std::unique_ptr<ibTempTableManager>> copies);
 	~ibComposedQueryable() override;
 	ibComposedQueryable(const ibComposedQueryable&) = delete; ibComposedQueryable& operator=(const ibComposedQueryable&) = delete;
 
