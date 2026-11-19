@@ -7,7 +7,7 @@
 // what it is about. Starting a process and listing who is in one are different questions.
 //
 //
-// ⭐ THE LAST STEP OF THE LOOP. Everything else here builds a configuration and
+// ⭐ THE LAST STEP OF THE LOOP. Everything else here builds an application and
 // reads what came of it; this is what makes it RUN, so "update the database and
 // start debugging" becomes one sequence instead of a sentence handed to a
 // person to carry out.
@@ -16,21 +16,21 @@
 // ibApplicationInstance::RunApplication — which is why the connection flags, the
 // manifest handshake for the web server and the debug port offset all come for
 // free. What the MENU does around that door is ask questions: it saves a
-// modified configuration first, and it refuses to start a second debug session.
+// modified application first, and it refuses to start a second debug session.
 // Those become a refusal and an argument here, because a tool has nobody to ask.
 //
 // ⚠ IT DOES NOT SAVE FOR YOU. The menu offers; this refuses. A launch that
 // silently applied pending changes to the database would be the one action in
 // this whole surface capable of altering a live base as a SIDE EFFECT of
 // something that reads as "start the app" — database_diff says what is pending
-// and config_apply is the verb that writes it.
+// and app_apply is the verb that writes it.
 //
 
 #include "frmserver/mcp/mcpTool.h"
 
 #include "backend/appData.h"
 #include "backend/debugger/debugClient.h"     // one debug session at a time — the menu's own guard
-#include "backend/metadataConfiguration.h"    // …and the configuration must already be in the base
+#include "backend/metadataApplication.h"      // …and the application must already be in the base
 #include "core/startProcess.h"                // ibStopProcess, ibKillProcess, ibProcessExists — asked to close, made to, gone
 
 #include <chrono>
@@ -50,9 +50,9 @@ const ibArg& ArgDebug()
 	return s_a;
 }
 
-const ibArg& ArgApplication()
+const ibArg& ArgProgram()
 {
-	static const ibArg s_a(ibT("application"), ibArg::Kind::Text,
+	static const ibArg s_a(ibT("program"), ibArg::Kind::Text,
 		ibMcpText("Which one. Default is the thin client."),
 			/*required*/ false, { ibT("appworkspace"), ibT("webserver") });
 	return s_a;
@@ -131,7 +131,7 @@ public:
 
 	ibString GetActivity(const ibDataNode& params) const override
 	{
-		const ibString what = ArgApplication().Text(params);
+		const ibString what = ArgProgram().Text(params);
 		return ibString::Format(ibMcpText("starting %s"), what.IsEmpty() ? ibMcpText("the application") : what);
 	}
 
@@ -141,16 +141,16 @@ public:
 			"without the debugger attached. The same launch the designer's Debug menu "
 			"performs, so connection flags and the debug port are handled; the web server answers its "
 			"page's address in `page` - no browser is opened. Refuses when the "
-			"configuration has edits the base does not hold - a module written a moment ago as much as "
-			"a change of structure: config_apply them first, because a launch must never write to a base "
+			"application has edits the base does not hold - a module written a moment ago as much as "
+			"a change of structure: app_apply them first, because a launch must never write to a base "
 			"as a side effect (database_diff lists only the structure).\n\n"
-			"After changing a module: config_apply, then restart: true - a running application keeps the "
+			"After changing a module: app_apply, then restart: true - a running application keeps the "
 			"bytecode it came up with, so the new code is invisible until it is started again.");
 	}
 
 	const std::vector<ibMcpArgument>& Arguments() const override
 	{
-		static const std::vector<ibMcpArgument> s_arguments = { ArgApplication(), ArgDebug(), ArgRestart() };
+		static const std::vector<ibMcpArgument> s_arguments = { ArgProgram(), ArgDebug(), ArgRestart() };
 		return s_arguments;
 	}
 
@@ -162,9 +162,9 @@ public:
 		}
 
 		// Any of the argument's words — one it does not take was refused before Call (ibMcpArgument's list).
-		ibString application = ArgApplication().Text(params);
-		if (application.IsEmpty())
-			application = ibT("appworkspace");
+		ibString program = ArgProgram().Text(params);
+		if (program.IsEmpty())
+			program = ibT("appworkspace");
 
 		// DEFAULTS TO TRUE, and asked of the field rather than of the value: `debug: false` has
 		// to be distinguishable from "not said", or the default silently wins over an explicit no.
@@ -174,25 +174,25 @@ public:
 
 		const bool restart = ArgRestart().Flag(params);
 
-		// ⚠ THE CONFIGURATION MUST ALREADY BE IN THE BASE. The application reads the database's
-		// copy, so launching with unapplied changes runs the OLD configuration while the caller
+		// ⚠ THE APPLICATION MUST ALREADY BE IN THE BASE. The running application reads the database's
+		// copy, so launching with unapplied changes runs the OLD application while the caller
 		// believes it is testing the new one — a failure that looks like a bug in the code just
 		// written.
-		// ⭐ ASKED OF THE BASE, with nothing to recognise first. IsConfigSave is virtual on
-		// ibMetaDataConfigurationBase and the active metadata is a configuration by definition, so
+		// ⭐ ASKED OF THE BASE, with nothing to recognise first. IsApplicationSave is virtual on
+		// ibMetaDataApplicationBase and the active metadata is an application by definition, so
 		// the cast to the storage class was a conversion to reach a question already in hand.
 		//
-		// 🛑 AND AN EDIT NOT YET SAVED IS ONE TOO. IsConfigSave compares what was SAVED with the base, so a
-		// module written a moment ago (module_write marks the configuration modified and saves nothing)
+		// 🛑 AND AN EDIT NOT YET SAVED IS ONE TOO. IsApplicationSave compares what was SAVED with the base, so a
+		// module written a moment ago (module_write marks the application modified and saves nothing)
 		// passed, and the restarted application ran the old text with nothing said (measured 2026-09-11).
 		// The designer's own Debug menu asks the same question of IsModified before it launches.
 		//
 		// ⚠ ASKED BEFORE ANYTHING IS ENDED: a refusal that arrives after `restart` has closed the running
 		// application has cost the caller that application for nothing.
-		if (activeMetaData->IsModified() || !activeMetaData->IsConfigSave()) {
-			refusal = ibMcpText("The configuration has edits the base does not hold yet, so the application would "
+		if (activeMetaData->IsModified() || !activeMetaData->IsApplicationSave()) {
+			refusal = ibMcpText("The application has edits the base does not hold yet, so the application would "
 				"run the old text - a module written a moment ago as much as a change of structure. "
-				"config_apply puts them in the base (a module's text needs no exclusive mode; database_diff "
+				"app_apply puts them in the base (a module's text needs no single-user mode; database_diff "
 				"lists only the structure, so it shows nothing for code), then app_run again.");
 			return false;
 		}
@@ -209,7 +209,7 @@ public:
 			// and it is not even what the caller wants — they want the new code running.
 			refusal = debugging
 				? ibMcpText("A debug session is already running. Pass restart: true to end it "
-					"and come up again with the current configuration - that is what to do after "
+					"and come up again with the current application - that is what to do after "
 					"changing a module, because a running application keeps the bytecode it "
 					"started with. (debug_sessions reports the address, and app_stop ends it "
 					"without starting anything.)")
@@ -221,20 +221,20 @@ public:
 
 		const bool ended = restart && StopStartedApplication();
 
-		const ibString useWeb = application.Lower();
+		const ibString useWeb = program.Lower();
 		const bool manifest = useWeb.IsSameAs(ibT("webserver"));
 
 		ibString page;
 		const long pid = appData->RunApplication(useWeb, withDebug, manifest, &page);
 
 		if (pid == 0) {
-			refusal = ibString::Format(ibMcpText("%s could not be started."), application);
+			refusal = ibString::Format(ibMcpText("%s could not be started."), program);
 			return false;
 		}
 
 		ibMcpRememberStartedApplication(pid);
 
-		result.SetValue(ibT("started"), application);
+		result.SetValue(ibT("started"), program);
 		result.AddField(ibT("pid"), ibDataValue::Int((std::int64_t)pid));
 		result.AddField(ibT("debug"), ibDataValue::Bool(withDebug));
 		if (!page.IsEmpty())
@@ -260,7 +260,7 @@ MCP_TOOL_REGISTER_DESIGNER(ibMcpToolAppRun);
 //---------------------------------------------------------------------------
 
 // ⭐ app_run's PAIR (#646). Ending a run was a step of a restart and nothing on its own, so an application stopped at a
-// breakpoint held the base until `debug_run continue` let it go - and config_apply, which needs the base to itself,
+// breakpoint held the base until `debug_run continue` let it go - and app_apply, which needs the base to itself,
 // waited behind it.
 class ibMcpToolAppStop : public ibMcpTool {
 public:
@@ -276,7 +276,7 @@ public:
 	{
 		return ibMcpText("End the application started from here - the thin client or the web server, with the "
 			"debugger or without it, stopped at a breakpoint or running: what app_run's restart ends before it "
-			"starts again, with nothing started after. Use it before config_apply, which needs the base to itself.");
+			"starts again, with nothing started after. Use it before app_apply, which needs the base to itself.");
 	}
 
 	const std::vector<ibMcpArgument>& Arguments() const override

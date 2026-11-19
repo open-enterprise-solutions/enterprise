@@ -10,7 +10,7 @@
 #include "deskgui/univ/dialog.h"
 
 // ONE OF SEVERAL, EACH WITH ITS PICTURE — the server's question as it puts it (ibProtocol::ibRequest::ibKind::Choice): the
-// desktop's type list (ShowSelectType) — its classes named and pictured by the server, which holds the configuration.
+// desktop's type list (ShowSelectType) — its classes named and pictured by the server, which holds the application.
 class ibDialogSelectDataType : public ibDialog {
 	ibListCtrl* m_listData;
 	ibButton* m_buttonOk;

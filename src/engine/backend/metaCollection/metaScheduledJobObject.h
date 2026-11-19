@@ -1,8 +1,8 @@
 #ifndef __META_SCHEDULED_JOB_OBJECT_H__
 #define __META_SCHEDULED_JOB_OBJECT_H__
 
-// A PREDEFINED scheduled job — the configuration's own unattended work, declared once and existing
-// once. It serves the CONFIGURATION; a job that serves DATA is the parameterized kind, a reference
+// A PREDEFINED scheduled job — the application's own unattended work, declared once and existing
+// once. It serves the APPLICATION; a job that serves DATA is the parameterized kind, a reference
 // object whose rows are its instances (docs/private/scheduled-jobs.md § 2).
 //
 // It is a plain ibValueMetaObject holding ONE module — the MANAGER module, which is where execution
@@ -19,7 +19,7 @@
 // LIFECYCLE. The module registers itself on run and unregisters on close — this object only
 // forwards. What it adds is its own registration with ibJobManager: declared on the AFTER-run phase
 // (the resolve half, once the module is registered) and withdrawn on BEFORE-close, inversely. In
-// the Designer nothing is registered at all: a designer that ran the configuration's jobs on a
+// the Designer nothing is registered at all: a designer that ran the application's jobs on a
 // schedule would execute application code while it is being edited.
 
 #include "metaModuleObject.h"   // ibPropertyInnerModule + ibValueMetaObjectManagerModule
@@ -67,7 +67,7 @@ public:
 	static ibPicture GetIconGroup();
 
 	// designer context menu — "Open job module" opens the handler's code editor, exactly as a
-	// common module or a command does.
+	// shared module or a command does.
 	virtual bool CollectContextMenu(std::vector<ibMetaMenuItem>& items) override;
 
 	//lifecycle — forward to the inner module (its own registration), then our own with the manager
@@ -107,7 +107,7 @@ private:
 	// command's private one.
 	ibPropertyInnerModule<ibValueMetaObjectManagerModule>* m_propertyJobModule =
 		ibPropertyObject::CreateProperty<ibPropertyInnerModule<ibValueMetaObjectManagerModule>>(
-			m_categoryContext, ibT("JobModule"), _("Job module"), _("The job's code: the handler the job manager calls when the job runs, compiled with the session's modules so it can call common modules like any other code."));
+			m_categoryContext, ibT("JobModule"), _("Job module"), _("The job's code: the handler the job manager calls when the job runs, compiled with the session's modules so it can call shared modules like any other code."));
 
 	ibRole* m_roleUse = ibValueMetaObject::CreateRole(ibT("Use"), ibGETTEXT_IN_CONTEXT("access right", "Use"));
 

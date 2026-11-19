@@ -5,7 +5,7 @@
 
 #include "backend/backend.h"
 #include "backend/compiler/value.h"
-#include "backend/createRequest.h"   // ibFormRequest — a common form is opened with one too
+#include "backend/createRequest.h"   // ibFormRequest — a shared form is opened with one too
 
 //-- Constants:
 #define PageBreak ibT("\n\n")
@@ -145,7 +145,7 @@ public:
 
 	// ⭐⭐ A RUNTIME VALUE AS TEXT, AND BACK. The engine has packed values into an ibDataNode for a
 	// while (value.h `Serialize` / `Deserialize`, ibMetaData's door for the types only a
-	// configuration has), and a provider has been able to write that node as JSON — but nothing in
+	// application has), and a provider has been able to write that node as JSON — but nothing in
 	// the LANGUAGE could ask for either, so the whole road was reachable from C++ alone.
 	//
 	// These two open it: a script hands over any value it holds and gets text it can print, store,
@@ -180,8 +180,8 @@ public:
 	static ibString UserDir();
 	static ibString UserName();
 	static ibString UserPassword();
-	static bool ExclusiveMode();
-	static void SetExclusive(bool on);
+	static bool SingleUserMode();
+	static void SetSingleUserMode(bool on);
 	static ibString GeneralLanguage();
 	static void EndJob(bool force = false);
 
@@ -190,10 +190,10 @@ public:
 	static bool AccessRight(const ibString& strRoleName, const ibValue& cData);
 	static bool IsInRole(const ibValue& cData);
 
-	static ibValue GetCommonForm(const ibFormRequest& request, class ibBackendControlFrame* owner, class ibValueGuid* unique);
-	static void ShowCommonForm(const ibFormRequest& request, class ibBackendControlFrame* owner, class ibValueGuid* unique);
+	static ibValue GetSharedForm(const ibFormRequest& request, class ibBackendControlFrame* owner, class ibValueGuid* unique);
+	static void ShowSharedForm(const ibFormRequest& request, class ibBackendControlFrame* owner, class ibValueGuid* unique);
 
-	static ibValue GetCommonTemplate(const ibString& strTemplateName);
+	static ibValue GetSharedTemplate(const ibString& strTemplateName);
 
 	static void BeginTransaction();
 	static void CommitTransaction();
@@ -217,7 +217,7 @@ public:
 	// the caller may wait on it, poll it, cancel it, or drop it and let the work
 	// finish unattended.
 	//
-	// `procedure` is `ModuleName.MethodName`: a PUBLIC method of a common module.
+	// `procedure` is `ModuleName.MethodName`: a PUBLIC method of a shared module.
 	// The run adopts the CALLER's identity, so it sees exactly what the caller
 	// sees. `args` is an Array whose elements are passed positionally; every one
 	// of them must be transferable (ibValue::IsTransferable) — passing a form, an

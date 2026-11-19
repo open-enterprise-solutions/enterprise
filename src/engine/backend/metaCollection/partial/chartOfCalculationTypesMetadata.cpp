@@ -292,10 +292,10 @@ bool ibValueMetaObjectChartOfCalculationTypes::OnBeforeRunMetaObject(int flags)
 	// leaves at 0 does not run either — the section refuses that itself, since the tree's own walk
 	// (RunSubtree) reaches it without passing through here.
 	//
-	// WHICH COPY THIS IS, THE RUN ALREADY SAYS: the designer's baseline is run with loadConfigFlag, and
+	// WHICH COPY THIS IS, THE RUN ALREADY SAYS: the designer's baseline is run with loadApplicationFlag, and
 	// the running application is not the designer — the pair a module's debugger set-up asks by
-	// (metaModuleObject.cpp). It was a cast of the metadata to a configuration, to read its type.
-	const bool savesItself = (flags & loadConfigFlag) == 0 && appData->DesignerMode();
+	// (metaModuleObject.cpp). It was a cast of the metadata to an application, to read its type.
+	const bool savesItself = (flags & loadApplicationFlag) == 0 && appData->DesignerMode();
 	for (auto* relation : GetRelationTables()) {
 		if (savesItself && !relation->StampIfNeverSaved(m_metaData))
 			return false;
@@ -368,7 +368,7 @@ bool ibValueMetaObjectChartOfCalculationTypes::OnAfterRunMetaObject(int flags)
 // month's salary and bonus, and it is stale the moment one of them changes. Neither reader needs anything
 // more for it — GetBase and the recalculations match records by the type a row names, whichever chart
 // that type is from. What decides WHICH charts is the chart itself (BaseCharts, plus its own): the
-// sections used to take any chart of the configuration, so a type could be named as a base that nothing
+// sections used to take any chart of the application, so a type could be named as a base that nothing
 // had declared a base could come from.
 // Run after every chart has registered its reference type in its own before-run — a chart earlier in
 // the tree would not yet find a later one's. Displacing stays typed within the chart (the before-run):

@@ -5,9 +5,9 @@
 // (backend/logger), outside its own database, so no statement of the base can read it: this source reads the rows
 // through ibLoggerReader — the reader the journal window and the assistant's journal_read use — and the computed
 // provider takes them from there, which no statement of the base ever joins (CanJoinOn). A query joins it to the
-// configuration's tables as it joins any source read in memory: each side by its own provider, stitched in memory. It
-// is one of the platform's sources (ibPlatformSourceRegister): every configuration's factory makes its own, because
-// the journal's Object is a reference of that configuration.
+// application's tables as it joins any source read in memory: each side by its own provider, stitched in memory. It
+// is one of the platform's sources (ibPlatformSourceRegister): every application's factory makes its own, because
+// the journal's Object is a reference of that application.
 
 #include "backend/query/queryableFactory.h"                      // ibQueryableSourceDescriptor — what the factory finds by name
 #include "backend/query/tempColumn.h"                            // ibTempColumn — its columns
@@ -15,10 +15,10 @@
 #include <memory>
 #include <vector>
 
-// THE JOURNAL'S EVENTS, read for one configuration over one period — a virtual table, as a register's turnovers:
+// THE JOURNAL'S EVENTS, read for one application over one period — a virtual table, as a register's turnovers:
 // `Journal.Events(&BeginOfPeriod, &EndOfPeriod)`, both moments inclusive, either left out (empty) for no bound. Its columns are no
 // metaobject's, so their ids are synthetic (SyntheticKind::Derived over their place) and can never be a
-// configuration's number; a source whose numbers they meet in one query is the lowering's to wrap, as for any other.
+// application's number; a source whose numbers they meet in one query is the lowering's to wrap, as for any other.
 class ibLogQueryable : public ibBackendQueryable
 {
 public:
@@ -57,8 +57,8 @@ private:
 	std::vector<std::shared_ptr<const ibBackendQueryColumn>> m_columns;   // the ten above, in the order a query lists them
 };
 
-// `Journal.Events` in the factory of one configuration — a reading made for every call, with its period or without
-// one: the factory is made as the configuration starts to load, before the references its Object may be are there.
+// `Journal.Events` in the factory of one application — a reading made for every call, with its period or without
+// one: the factory is made as the application starts to load, before the references its Object may be are there.
 class ibLogQueryDescriptor : public ibQueryableSourceDescriptor
 {
 public:
@@ -74,7 +74,7 @@ public:
 	virtual std::vector<std::shared_ptr<const ibBackendQueryColumn>> GetQueryColumns(const std::vector<ibValue>& args) const override;
 
 private:
-	const ibMetaData* m_metaData = nullptr;   // the configuration its readings belong to
+	const ibMetaData* m_metaData = nullptr;   // the application its readings belong to
 };
 
 #endif

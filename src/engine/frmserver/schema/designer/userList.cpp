@@ -2,7 +2,7 @@
 
 #include <algorithm>
 
-#include "backend/metadataConfiguration.h"
+#include "backend/metadataApplication.h"
 #include "backend/metaCollection/metaObjectMetadata.h"   // AccessRight_Administration of a role — the item's OK check
 #include "backend/metaCollection/metaLanguageObject.h"
 #include "backend/metaCollection/metaRoleObject.h"
@@ -14,7 +14,7 @@
 
 bool ibSchemaUserList::AccessRight(const ibSession& session) const
 {
-	const ibMetaDataConfigurationBase* const metaData = session.GetMetaData();
+	const ibMetaDataApplicationBase* const metaData = session.GetMetaData();
 	return metaData != nullptr && metaData->AccessRight_DataAdministration();
 }
 
@@ -23,7 +23,7 @@ void ibSchemaUserList::Build(const ibSession& session, const ibDataNode& args, i
 	const ibString guid = args.GetValue<ibString>(ibProtocol::ibSchema::ibUserList::Guid);
 
 	// The list — the rows ibUserListModel::PrepareData read, a Brief each — and what a user's record is chosen from:
-	// the roles ibDialogUserItem listed off the configuration, which the client does not hold (its languages are
+	// the roles ibDialogUserItem listed off the application, which the client does not hold (its languages are
 	// every translation's — ibSchemaLanguages).
 	if (guid.IsEmpty()) {
 		ibDataNode& users = result.Child(ibProtocol::ibSchema::ibUserList::Users);
@@ -35,7 +35,7 @@ void ibSchemaUserList::Build(const ibSession& session, const ibDataNode& args, i
 			row.SetValue(ibProtocol::ibSchema::ibUserList::FullName, list[idx].m_strUserFullName);
 		}
 
-		const ibMetaDataConfigurationBase* const metaData = session.GetMetaData();
+		const ibMetaDataApplicationBase* const metaData = session.GetMetaData();
 		if (metaData == nullptr)
 			return;
 
@@ -73,10 +73,10 @@ void ibSchemaUserList::Build(const ibSession& session, const ibDataNode& args, i
 std::function<void()> ibSchemaUserList::Command(const ibSession& session, std::int32_t command,
 	const ibDataNode& args, ibProtocol::ibRefusal& refusal, ibString& error) const
 {
-	const ibMetaDataConfigurationBase* const metaData = session.GetMetaData();
+	const ibMetaDataApplicationBase* const metaData = session.GetMetaData();
 	if (metaData == nullptr) {
 		refusal = ibProtocol::ibRefusal::NoSession;
-		error = ibT("the session has no configuration");
+		error = ibT("the session has no application");
 		return nullptr;
 	}
 
@@ -105,10 +105,10 @@ std::function<void()> ibSchemaUserList::Command(const ibSession& session, std::i
 			userInfo.m_strUserPassword = ibPasswordHash::PasswordToStore(ibUserInfo::Read(userGuid).m_strUserPassword,
 				password.has_value(), password.has_value() ? password->AsString() : ibString());
 
-			const ibValueMetaObjectConfiguration* commonObject = metaData->GetCommonMetaObject();
-			ibASSERT(commonObject);
+			const ibValueMetaObjectApplication* rootObject = metaData->GetRootMetaObject();
+			ibASSERT(rootObject);
 
-			// The language and the roles the item offered — the configuration's, found by the guids it sent.
+			// The language and the roles the item offered — the application's, found by the guids it sent.
 			const ibString languageGuid = args.GetValue<ibString>(ibProtocol::ibSchema::ibUserList::Language);
 			for (const auto object : metaData->GetAnyArrayObject<ibValueMetaObjectLanguage>(g_metaLanguageCLSID)) {
 				if (object->GetDocPath() != languageGuid)
@@ -136,8 +136,8 @@ std::function<void()> ibSchemaUserList::Command(const ibSession& session, std::i
 				entry.m_mode = object->GetRoleCompositionMode();
 				// Parenthesised as it always behaved: a role grants the right only if it carries
 				// BOTH administration flags, and any one such role is enough for the user.
-				access_right = access_right || (commonObject->AccessRight_Administration(entry.m_miRoleId) &&
-					commonObject->AccessRight_DataAdministration(entry.m_miRoleId));
+				access_right = access_right || (rootObject->AccessRight_Administration(entry.m_miRoleId) &&
+					rootObject->AccessRight_DataAdministration(entry.m_miRoleId));
 			}
 
 			// …or another user keeps one. The desktop's loop went on past a user who did, and the last user's roles
@@ -149,8 +149,8 @@ std::function<void()> ibSchemaUserList::Command(const ibSession& session, std::i
 						continue;
 					const ibUserInfo userEntry = ibUserInfo::Read(otherGuid);
 					for (const auto& role : userEntry.m_roleArray) {   // by reference — a role is a struct, not a handle
-						access_right = commonObject->AccessRight_Administration(role.m_miRoleId) &&
-							commonObject->AccessRight_DataAdministration(role.m_miRoleId);
+						access_right = rootObject->AccessRight_Administration(role.m_miRoleId) &&
+							rootObject->AccessRight_DataAdministration(role.m_miRoleId);
 						if (access_right) break;
 					}
 					if (access_right) break;

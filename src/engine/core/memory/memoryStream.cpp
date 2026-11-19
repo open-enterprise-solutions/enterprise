@@ -186,7 +186,7 @@ std::uint64_t ibReaderMemory::find_chunk(std::uint64_t ID, bool* bCompressed) co
 			else
 			{
 				// ⚠ A SIZE THAT DOES NOT FIT IS NOT A CHUNK TO STEP OVER. A block of another format (a base
-				// written before the configuration's layout changed) reads as a header with any number in
+				// written before the application's layout changed) reads as a header with any number in
 				// it; stepped over, the reader landed past its own end and stayed there (advance only
 				// ASSERTS), and the next read walked off the page — the designer died opening an old base
 				// (2026-09-27). Not the chunk sought, and nothing after it can be trusted: not found.

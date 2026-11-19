@@ -1,20 +1,20 @@
 #ifndef __SCHEMA_SNAPSHOT_H__
 #define __SCHEMA_SNAPSHOT_H__
 
-// The declarative STRUCTURE snapshot — a narrow projection of a configuration's physical schema
+// The declarative STRUCTURE snapshot — a narrow projection of an application's physical schema
 // (tables + columns + indexes), and the agnostic differ over it. This is the contract that decouples
 // metadata from DDL: metadata DECLARES its tables (ibValueMetaObject::DescribeTable -> ibSchemaTable),
 // SnapshotOf assembles a snapshot, and DiffSnapshots turns (baseline, target) into DDL — knowing
 // NOTHING about metadata. baseline == null => create-all (a fresh DB / ReCreate).
 //
-// Ephemeral: built at config-save, diffed, discarded. It holds LIVE pointers (queryable / columns /
-// metadata of the two in-memory configurations), never owned — valid only for the duration of a save.
+// Ephemeral: built at application-save, diffed, discarded. It holds LIVE pointers (queryable / columns /
+// metadata of the two in-memory applications), never owned — valid only for the duration of a save.
 //
 // Identity, not name, is the match key: a table is its metaID, a column its model id. So a renamed /
 // retyped object is an ALTER (matched by id), and a vanished id is a DROP. (docs/private/query-language-arc.md)
 //
 // 🛑 THE DIFFER IS NOT WHERE A METADATA CASE IS FIXED. It compares two DECLARED snapshots — the old
-// configuration and the new one — and knows nothing about metadata. A type, a column or a table that
+// application and the new one — and knows nothing about metadata. A type, a column or a table that
 // leaves the declaration is cleared or dropped the same way in EVERY table that declares it, derived
 // tables included. So when an apply goes wrong, suspect the DECLARATION first: something one snapshot
 // declares and should not, or misses (DescribeTable). The signs of a fix in the wrong place: a rule
@@ -48,7 +48,7 @@ using  ibQueryColumnExprPtr = std::shared_ptr<ibQueryColumnExpr>;
 // Same reasoning for the guard's regeneration form — a predicate rather than a value expression.
 struct ibQueryPredicate;
 using  ibQueryPredicatePtr  = std::shared_ptr<ibQueryPredicate>;
-class ibMetaDataConfigurationBase;
+class ibMetaDataApplicationBase;
 class ibRestructureInfo;
 class ibStructureBatch;
 
@@ -90,9 +90,9 @@ struct ibSchemaSeedRow
 
 	// Fluent cell binding: row.Set(qc, value) — the link between a column and its value in this row. The
 	// cell is keyed by the column's model id (== metaID for an attribute), so baseline/target rows from
-	// two different config instances still compare cell-for-cell.
+	// two different application instances still compare cell-for-cell.
 	//
-	// A column the configuration does NOT have is skipped, not written: an arrangement can retire one of
+	// A column the application does NOT have is skipped, not written: an arrangement can retire one of
 	// its own columns (a flat catalog has no Parent and no IsFolder), and a seed naming it would fill a
 	// cell for a column the table does not carry. The same IsAllowed the structure walk uses, so the seed
 	// and the columns it writes into cannot disagree.
@@ -320,7 +320,7 @@ struct ibSchemaTable
 	// The check belongs to the declaration for the same reason the columns do — the object that knows
 	// the rule attaches it while contributing, and the differ, which knows nothing about accounts,
 	// simply asks. Returning false appends its own error to the ledger (which greys Apply) and leaves
-	// the table alone. Empty = nothing to ask. Asked with the table as the applied configuration
+	// the table alone. Empty = nothing to ask. Asked with the table as the applied application
 	// declared it (`baseline`; null: a table new to it) — what a check that compares needs.
 	//
 	// ⭐ SEVERAL, ONE PER LEVEL THAT HAS A RULE: every level adds its own (+=) — a catalog's item its
@@ -362,7 +362,7 @@ struct ibSchemaTable
 	// Add a scaffold raw column (uuid / rowData) — handed back for index use.
 	std::shared_ptr<const ibBackendQueryColumn> Scaffold(const std::shared_ptr<const ibBackendQueryColumn>& col) { m_scaffold.push_back(col); return col; }
 	// Add a logical column — keyed by the column's own model id (== metaID for an attribute), so the diff
-	// matches columns across config instances by identity.
+	// matches columns across application instances by identity.
 	ibSchemaTable& Add(const std::shared_ptr<const ibBackendQueryColumn>& qc) { m_columns.push_back({ qc->GetColumnId(), qc }); return *this; }
 	ibSchemaTable& Index(const ibString& name, std::vector<std::shared_ptr<const ibBackendQueryColumn>> cols, bool unique = false) { m_indexes.push_back({ name, std::move(cols), unique }); return *this; }
 	// The index a list reads by, BOTH ways: `name` ascending, and `name` + "D" descending for an engine that walks

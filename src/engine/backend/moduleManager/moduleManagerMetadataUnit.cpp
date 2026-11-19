@@ -35,14 +35,14 @@ struct ibMetadataKind {
 };
 
 constexpr ibMetadataKind s_metadataKinds[] = {
-	{ ibT("CommonModules"),               g_metaCommonModuleCLSID },
-	{ ibT("CommonForms"),                 g_metaCommonFormCLSID },
-	{ ibT("CommonTemplates"),             g_metaCommonTemplateCLSID },
+	{ ibT("SharedModules"),               g_metaSharedModuleCLSID },
+	{ ibT("SharedForms"),                 g_metaSharedFormCLSID },
+	{ ibT("SharedTemplates"),             g_metaSharedTemplateCLSID },
 	{ ibT("Constants"),                   g_metaConstantCLSID },
 	{ ibT("Catalogs"),                    g_metaCatalogCLSID },
 	{ ibT("Documents"),                   g_metaDocumentCLSID },
 	{ ibT("Enumerations"),                g_metaEnumerationCLSID },
-	{ ibT("DataProcessors"),              g_metaDataProcessorCLSID },
+	{ ibT("DataTools"),                   g_metaDataToolCLSID },
 	{ ibT("Reports"),                     g_metaReportCLSID },
 	{ ibT("InformationRegisters"),        g_metaInformationRegisterCLSID },
 	{ ibT("AccumulationRegisters"),       g_metaAccumulationRegisterCLSID },

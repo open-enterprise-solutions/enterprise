@@ -11,29 +11,29 @@ class ibCtorAbstractType;
 class ibProtocolNode;
 class ibValueMetaObject;
 
-// THE CONFIGURATION — the engine's ibMetaData: the server's, which the client reaches through the tab that shows it
+// THE APPLICATION — the engine's ibMetaData: the server's, which the client reaches through the tab that shows it
 // (a tree's, a form's, a module's — the server finds which, ibSchemaMetaData::FindMetaData); tab 0 — the session's.
 // A value: the tab's document gives it (ibTabDocument::GetMetaData), a widget keeps it as a field, and it is handed on
-// as the desktop's was — what a configuration lists, it lists on the server, asked with this tab. The client's objects
+// as the desktop's was — what an application lists, it lists on the server, asked with this tab. The client's objects
 // have none (GetMetaData answers null).
 class FRMCLIENT_API ibMetaData {
 public:
 	explicit ibMetaData(long long tabId = 0) : m_tabId(tabId) {}
 
-	// The tab a question to the server names — its configuration's.
+	// The tab a question to the server names — its application's.
 	long long GetTabId() const { return m_tabId; }
 
 	void GetOwner(ibMetaData*& owner) const { owner = nullptr; }
 
-	// A class as the server named it (ibValue::GetAvailableCtor) — the configuration's names are the server's, said with
+	// A class as the server named it (ibValue::GetAvailableCtor) — the application's names are the server's, said with
 	// what shows them (a property's choices, a composer's Classes); one never said answers null.
 	ibCtorAbstractType* GetAvailableCtor(const ibClassID& clsid) const;
 
 	// Whether what the tab shows may be changed — the server's word, said with the tab (ibFrame::ibTab::ReadOnly: its
 	// document's IsEditable); read off the frame as it stands, so it answers the tab's state now. No tab, or none said:
-	// editable — the desktop's answer for a configuration nobody restricted.
+	// editable — the desktop's answer for an application nobody restricted.
 	bool IsEditable() const;
-	// …and a question to it — fetch {Tab, Request} (ibTabDocument::Fetch): what the desktop asked its configuration, a
+	// …and a question to it — fetch {Tab, Request} (ibTabDocument::Fetch): what the desktop asked its application, a
 	// panel asks the tab it is on. No tab, or none open: false — nobody to ask.
 	bool Fetch(const ibProtocolNode& request, ibProtocolNode& answer) const;
 

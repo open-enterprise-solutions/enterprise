@@ -520,7 +520,7 @@ bool ibJsonReader<Char>::ParseNode(ibDataNode& node)
 // including nested children, arrays, base64 binaries and the synthetic keys. It is NOT
 // wired into any load path — the round-trip path stays ibBinaryProvider — because the
 // view is lossy in three places the parser cannot undo (header). Use it for tooling that
-// reads a JSON dump back into a tree, not to load a configuration.
+// reads a JSON dump back into a tree, not to load an application.
 bool ibJsonProvider::Read(ibReaderMemory& reader, ibDataNode& root) const
 {
 	const int size = reader.elapsed();

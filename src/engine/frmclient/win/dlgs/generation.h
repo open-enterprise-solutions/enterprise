@@ -11,7 +11,7 @@
 
 // THE OBJECT TO BASE A NEW ONE ON — the old desktop's ibDialogGeneration.What it lists
 // the server sent (ibProtocol::ibRequest::ibKind::Generation) — a row per object generated, its Id, Caption and Picture, and
-// the window's Picture; the desktop's read them of the configuration.
+// the window's Picture; the desktop's read them of the application.
 class ibDialogGeneration : public ibDialog {
 	ibListCtrl* m_listData;
 	ibButton* m_buttonOk;

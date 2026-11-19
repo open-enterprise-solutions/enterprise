@@ -52,19 +52,19 @@ public:
 	//*           The start, as the desktop window's (ibFrontendMainFrame::Show)            *
 	//***************************************************************************************
 
-	// THE FRAME'S OWN PARTS, once the login has brought the person's rights and the configuration — the menus, the
+	// THE FRAME'S OWN PARTS, once the login has brought the person's rights and the application — the menus, the
 	// designer's debugger. The frame itself is made before the login (ibClientInstance::CreateSession): the session's
 	// way to the person from its first step, which a failed compile already speaks through. Nothing by default.
 	virtual void OnCreate() {}
 
-	// THE MODE'S VETO POINT — the runtime runs the configuration's start, the designer asks for the right to
+	// THE MODE'S VETO POINT — the runtime runs the application's start, the designer asks for the right to
 	// edit it. False: the client is refused, and the frame goes with its session.
 	virtual bool AllowRun() = 0;
 
 	// The mode's own tabs, after the start — the runtime's start page.
 	virtual void CreateStartupPage() {}
 
-	// THE MODE'S OWN PART OF THE FRAME, beside its tabs — the designer's configuration tree: written into the frame's
+	// THE MODE'S OWN PART OF THE FRAME, beside its tabs — the designer's application tree: written into the frame's
 	// state with every answer (ibClientHost::DrawFrame), as a view writes its own (ibView::OnDraw). Nothing by default.
 	virtual void OnDraw(ibDataNode& /*state*/) {}
 
@@ -86,6 +86,9 @@ public:
 	virtual void BackendError(const ibString& strFileName,
 		const ibString& strDocPath, const long line,
 		const ibString& strErrorMessage) override;
+	// THE METADATA OF A FILE — an external data tool's or report's open in a tab, by the file it was read from: what a
+	// failure in its module is quoted from (ibBackendException::ProcessError) and opened at (the designer's Open).
+	virtual class ibMetaData* FindMetadataByPath(const ibString& strFileName) const override;
 
 	// A REPAINT the backend asks for, the frame having changed by itself (a report delivered, a debugger stopped): the
 	// client is told so (ibClientHost::NotifyChanged) and asks for it — the next frame it is sent is the repaint.
@@ -166,7 +169,15 @@ public:
 	struct PendingMessage {
 		ibStatusMessage level;
 		ibString        text;
+		// …and its place, when it has one: the file (none: the application), the module by its address, the line.
+		ibString        fileName;
+		ibString        docPath;
+		long            line = 0;
 	};
+	// A message with its place — a script's failure (the designer's BackendError): its line, double-clicked, opens the
+	// module there (the desktop's ibOutputWindow).
+	void Message(const ibString& strMessage, ibStatusMessage status,
+		const ibString& strFileName, const ibString& strDocPath, long line);
 	std::vector<PendingMessage> DrainPendingMessages();
 	bool                        TakeClearPending();
 	// The client is to go — Exit done: every tab closed. A one-shot flag, as Clear, told with the next answer.
@@ -181,7 +192,7 @@ public:
 	// THE INSPECTOR'S ROWS OF AN OBJECT A DOOR ACTED ON — an edit's, a new object's, the one the tree goes to after a
 	// removal, a form editor's own: written now, as the inspector's read writes them (ibSchemaProperties::Build), and told
 	// with the next answer (Properties) — the client shows them without reading them again. `tabId` — the tab whose tree
-	// the client holds the object of (0: the configuration's).
+	// the client holds the object of (0: the application's).
 	void                        ShowProperties(ibValueMetaObject* object, std::int32_t tabId);
 	std::vector<ibDataNode>     TakeShownProperties();
 

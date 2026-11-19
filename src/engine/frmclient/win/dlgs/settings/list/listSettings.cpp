@@ -8,7 +8,7 @@
 #include "frmclient/win/dlgs/rowValueCell.h"                        // ibRowValueCellRenderer — the shared value cell
 #include "frmclient/win/dlgs/queryConstructor/queryConstructor.h"   // the Query tab's constructor button, its styling
 #include "frmclient/backend/query/queryConstructorModel.h"          // ibListSourceFields — the list's fields, asked of its tab
-#include "frmclient/backend/metaData.h"                            // …the tab its configuration handle carries
+#include "frmclient/backend/metaData.h"                            // …the tab its application handle carries
 #include "deskgui/univ/stc/stc.h"                                  // the arbitrary query is shown in the styled editor
 
 #include "frmclient/backend/appData.h"                        // appData->DesignerMode() — the Query tab is a developer tool
@@ -200,7 +200,7 @@ void ibListSettingsPanel::BindFieldSource()
 
 	const ibMetaData* metaData = SourceMetaData();
 
-	// ⭐⭐ THE MAIN TABLE'S FIELDS, AND WHAT THE QUERY ADDS ON TOP — the desktop's answer, read where the configuration is:
+	// ⭐⭐ THE MAIN TABLE'S FIELDS, AND WHAT THE QUERY ADDS ON TOP — the desktop's answer, read where the application is:
 	// a list edited on a designer tab (a form attribute's) asks the tab (ibListSourceFields, Kind Source).
 	if (m_schema != nullptr && (m_schema->HasMainTable() || m_schema->HasQuery())
 		&& metaData != nullptr && metaData->GetTabId() != 0) {
@@ -517,8 +517,8 @@ void ibListSettingsPanel::ApplyToSettings()
 	// The whole copy goes back to the model on OK (SetCompositionDesc).
 }
 
-// The config metaData that resolves reference targets — the dynamic list's own, else the ACTIVE
-// config. Without a valid metaData, ConvertToMetaIds returns nothing and every field looks like a
+// The application metaData that resolves reference targets — the dynamic list's own, else the ACTIVE
+// application. Without a valid metaData, ConvertToMetaIds returns nothing and every field looks like a
 // leaf (no [+]) — which is exactly the "flat list" bug.
 // SOMETHING CHANGED — see the header. NOTHING HAPPENS HERE, and that is the whole answer for this
 // window: a list has no settings of its own and lives only inside an ATTRIBUTE (Max, 2026-08-24), so
@@ -545,8 +545,8 @@ void ibListSettingsPanel::ShowQueryFault()
 
 const ibMetaData* ibListSettingsPanel::SourceMetaData() const
 {
-	// ⭐ THE CONFIGURATION THIS WINDOW WAS TOLD, and never the active one: a window may be shown for a
-	// configuration that is not the one in front (there are several open at once). The caller hands
+	// ⭐ THE APPLICATION THIS WINDOW WAS TOLD, and never the active one: a window may be shown for a
+	// application that is not the one in front (there are several open at once). The caller hands
 	// it in with the settings; nothing here goes looking.
 	return m_metaData != nullptr ? m_metaData : activeMetaData;
 }
@@ -692,7 +692,7 @@ bool ibListSettingsPanel::Commit()
 //  The dialog — the panel plus OK / Cancel
 // ===========================================================================
 
-// ⭐ ONE CTOR — a description, its configuration, and the setting being edited. Nothing running: see
+// ⭐ ONE CTOR — a description, its application, and the setting being edited. Nothing running: see
 // the panel. `settings` null means the description's own settings section is what is edited.
 ibDialogListSettings::ibDialogListSettings(wxWindow* parent, ibCompositionDescription& desc,
 	const ibMetaData* metaData)
@@ -771,7 +771,7 @@ bool ibDialogListSettings::ShowUserSettings(wxWindow* parent, const ibProtocolNo
 	// columns, so they are stated HERE, as data. Either way what crosses is a description, never the
 	// running object (Max, 2026-08-24).
 	// 🛑 THE SCHEMA GOES IN CONST, and that is the guarantee — made by the compiler, not by care.
-	// Opening the reader's settings cannot change what the configuration ships (Max, 2026-08-24:
+	// Opening the reader's settings cannot change what the application ships (Max, 2026-08-24:
 	// "if you open the settings, you must guarantee the schema does not mutate"). What the reader
 	// edits is `edited`, which is handed back and put on the composer.
 	static const ibCompositionDescription kNoSource;   // a model that describes no source of its own

@@ -32,7 +32,7 @@
             │                                                          └─────────┬─────────┘
             ▼                                                                    ▼
   ┌────────────────────────────────────────────────────────────────────────────────────┐
-  │  backend.dll — ibApplicationHost → its bases · ibMetaDataConfiguration ·           │
+  │  backend.dll — ibApplicationHost → its bases · ibMetaDataApplication ·           │
   │  ibCompileCode / ibProcUnit · sessions · jobs · MCP · ibDatabaseLayer (+4 drivers) │
   │  · ibDebuggerServer                                                                │
   └──────────────────────────────────────────┬─────────────────────────────────────────┘
@@ -73,7 +73,7 @@ engine into their process; the cluster and its tray link `core` alone:
 | `webserver.exe` | `eFILE_MODE` (the file bases it opens) | — | The web gateway: browsers over HTTP(S) and WebSocket to file bases it opens and to application servers' bases |
 | `coderunner.exe` | `eSANDBOX_MODE` | — | Executes a single script module |
 
-> The run mode says only how the process holds the base — serving it (`eSERVER_MODE`) or as a file base for the one who started it (`eFILE_MODE`). What a session works in is its kind: either mode hosts designers, runtimes and jobs alike, and `DesignerMode()` / `EnterpriseMode()` are answered by the current session's kind. The base loads and runs its configuration as it opens, before any session is let in; every session takes a reference to it, and a designer's session works in an editable configuration of its own.
+> The run mode says only how the process holds the base — serving it (`eSERVER_MODE`) or as a file base for the one who started it (`eFILE_MODE`). What a session works in is its kind: either mode hosts designers, runtimes and jobs alike, and `DesignerMode()` / `EnterpriseMode()` are answered by the current session's kind. The base loads and runs its application as it opens, before any session is let in; every session takes a reference to it, and a designer's session works in an editable application of its own.
 
 ### Core Layer (`core.dll`)
 
@@ -97,10 +97,10 @@ factories, no checks: a schema stores ids and structure.
 | `xml/` | XML read and written by the engine itself, never through wx: `ibXmlParser` (a pull parser over expat, `src/3rdparty/expat`, behind a pointer — no header names its types), `ibXmlWriter`, `ibXmlDocument` / `ibXmlNode` (a document held whole as a tree, read with that parser, from a string or straight from a file's bytes — the one road to a tree: the workbook reader's and `ibXmlProvider`'s), the encodings by `ibCodePage` (`core/codePage.h`), `ibXmlNodeType`. What a script sees of it is `backend/system/value/valueXml.h` |
 | `zip/` | `ibZipReader` / `ibZipWriter` — the zip format over std streams: stored and deflated entries, UTF-8 names, ZIP64. A format, beside `json/` and `xml/`, not memory: a backup, a workbook's and a document's package, the help and the web site are zips |
 | `exception` | `ibCoreException : std::exception` — the base of every refusal (see [Exception taxonomy](#exception-taxonomy)) |
-| `description/` | the schemas both sides read and write the same way: `ibSourceDescription` (a binding path as hops), `ibCommandDescription` (a command path as hops), `ibCalcScheduleDescription`, `ibChoiceLinkDescription`, `ibCompositionDescription` (what a list and a report are: filter, sort, grouping, structure, parameters, variants — every value in it packed as a node, restored by the side's `backend_composition.h` against its configuration, which also holds the check `ibValidateSettings`), `ibHomePageDescription`, `ibJobScheduleDescription` (when a job is due, as fields and masks — what they mean, and whether they are well formed, is `ibJobScheduleRules`, `job/`), `ibPictureDescription` (an engine picture's id, a configuration's Guid or the image bytes — whether the engine has that id is asked by whoever reads it), `ibSpreadsheetDescription`, `ibStandardCommandDescription` (the action a tool runs — a system id or a handler's name), `ibTypeDescription` / `ibMetaDescription` (a type as clsids + qualifiers; a binding as metaIDs — the ids alone, no names: an id that names nothing is dropped by whoever reads it). A schema holds ids and nodes, never a value |
+| `description/` | the schemas both sides read and write the same way: `ibSourceDescription` (a binding path as hops), `ibCommandDescription` (a command path as hops), `ibCalcScheduleDescription`, `ibChoiceLinkDescription`, `ibCompositionDescription` (what a list and a report are: filter, sort, grouping, structure, parameters, variants — every value in it packed as a node, restored by the side's `backend_composition.h` against its application, which also holds the check `ibValidateSettings`), `ibHomePageDescription`, `ibJobScheduleDescription` (when a job is due, as fields and masks — what they mean, and whether they are well formed, is `ibJobScheduleRules`, `job/`), `ibPictureDescription` (an engine picture's id, an application's Guid or the image bytes — whether the engine has that id is asked by whoever reads it), `ibSpreadsheetDescription`, `ibStandardCommandDescription` (the action a tool runs — a system id or a handler's name), `ibTypeDescription` / `ibMetaDescription` (a type as clsids + qualifiers; a binding as metaIDs — the ids alone, no names: an id that names nothing is dropped by whoever reads it). A schema holds ids and nodes, never a value |
 | `graphics/` | a picture, a font, a colour, a point, a size, a rect — as DATA, for both sides and for a page: `ibPicture` (a PNG's bytes; its size, scaled and read from a master's Base-64 by LodePNG, drawn from SVG and said as SVG by NanoSVG), `ibFont` (face, style, weight, fractional size, family, underlined, struck through), `ibColour` (RGBA or none), `ibPoint` / `ibSize` / `ibRect` (wx's, byte for byte), a sizer's words `ibAlignment` / `ibOrientation` / `ibStretch` / `ibDirection` (`geometry.h`, wx's numbers — a stored value reads the same). The conversion to wx is each window's (the thin client: `ibProtocolImage`, `frmclient/win/picture.h`); the backend and frmserver have no wx image. The backend and frmserver hold fonts, colours, points and sizes only as these (property cells, form defaults, sheet cells); `typeconv` (`Font`/`Colour`/`Point`/`Size` ⇄ wx) lives in `deskgui/typeconv.h` |
 | `tabular/` | `tabularModelView` — the table's model view, ONE for the server's tables and the thin client's: `ibDataViewModel` (values, hierarchy, the paged fetch, the notifier, `SubmitFetchAsync` — a thread of the model's own, bare: no session, no base), `ibDataViewItem` / `ibDataViewObject`, `ibDataViewItemAttr` (a row's look — colours as `ibColour`; the font it lays over a view's is the side's, `ibEffectiveFont` beside each data view), `ibFetchDirection`, `s_constIgnoreParent`. The server's models bind the fetch thread to the asker's base in `ibDataViewModelProvider` (`backend/tabularModel.h`) |
-| `query/` | the query language's words: `ibQueryKeyword` + the keyword and scalar-call tables (`queryKeywords`), `ibQueryDimUnfold` (`queryUnfold.h`), `ibBalanceRole` (`queryBalanceRole.h`), the period units (`queryPeriodUnits.h`). `ibQueryAggregatesFor` / `ibQueryAggregateCallsFor` — the aggregates a type admits: the lowering refuses by it, every window offers by it. `ibQueryConstructorField` — a field a source or a text offers (name, caption, type, picture, available); `ibQuerySourceParameter` — a source call's parameter. The L4-1 text itself (since 2026-10-20): `queryLexer`, `queryParser`, `queryAST.h` / `queryAstExpr.h` (one AST, shared with LINQ), `queryRender`, `queryRewrite`, and what they give back when a text does not read (`queryRefusal`). `anyQueryConstructorModel` — the query constructor's model, held by either side. Names stay strings here; resolving them against a configuration is the backend's lowering |
+| `query/` | the query language's words: `ibQueryKeyword` + the keyword and scalar-call tables (`queryKeywords`), `ibQueryDimUnfold` (`queryUnfold.h`), `ibBalanceRole` (`queryBalanceRole.h`), the period units (`queryPeriodUnits.h`). `ibQueryAggregatesFor` / `ibQueryAggregateCallsFor` — the aggregates a type admits: the lowering refuses by it, every window offers by it. `ibQueryConstructorField` — a field a source or a text offers (name, caption, type, picture, available); `ibQuerySourceParameter` — a source call's parameter. The L4-1 text itself (since 2026-10-20): `queryLexer`, `queryParser`, `queryAST.h` / `queryAstExpr.h` (one AST, shared with LINQ), `queryRender`, `queryRewrite`, and what they give back when a text does not read (`queryRefusal`). `anyQueryConstructorModel` — the query constructor's model, held by either side. Names stay strings here; resolving them against an application is the backend's lowering |
 | `job/` | `ibJobScheduleRules` — what a schedule means at a moment: allowed, the next one, its sentence, well formed |
 | `spreadsheet/`, `composition/` | `ibSpreadsheetObject` — the sheet as a model, ONE class for the engine and the thin client, each side adding its listener and its values; `ibSheetFormat` — a foreign table file read into it and written out of it; `ibCompositionTheme` — the palette a report is painted in |
 | `net/` | the engine's HTTP: `ibHttpServer` — HTTP/1.1 and WebSocket over plain TCP or TLS, asynchronous (Asio; llhttp parses; Mbed TLS), a waiting socket a buffer, not a thread; it refuses oversized and slow requests and foreign origins by itself, and plain HTTP off this machine unless the owner allows it (`m_clearBeyondMachine` — the debugger's alone; `ibIsLoopback` says what is this machine). `ibHttpClient` / `ibWebSocketClient` / `ibHttpPost` — the connections out (the web server's, the thin client's, the debugger's, a script's HTTP), over TLS when handed a client's trust (`ibTlsClientContext`, made once for all of a caller's sockets); `ibWebSocketRelay` — a socket carried on to a server (the web server's, the cluster's); `ibIoThreads` — the I/O threads of a process that listens on nothing |
@@ -135,7 +135,7 @@ The backend is the core engine. It is self-contained — no GUI dependencies. Ke
 
 - **`ibApplicationHost`** (`src/engine/backend/appHost.h`) — the PROCESS: the bases it holds, and what belongs to the process rather than to any base — the plugins, the platform locale and the syntax-helper corpus, the one worker pool, the limits read from `backend.conf`. See [Processes and bases](#processes-and-bases).
 - **`ibApplicationInstance`** (`src/engine/backend/appData.h`) — ONE BASE: its connection pool, lock manager, session registry, job manager, settings storage, temporary files, logger and metadata. A process holds one (a thin client's file base, the application server, the tests) or several (the web server, a file base per publication). Reached through the `appData` macro, which answers the base of the session the thread works for — there is no global current base. Per-session state (user info, ProcUnits, frame) lives on `ibSession`; sys_user on `ibUserInfo`; the sys_session snapshot on `ibSessionSnapshot` produced by `ibSessionRegistry`.
-- **`ibMetaDataConfiguration`** (`src/engine/backend/metadataConfiguration.h`) — loads, saves, and manages the metadata tree (all business objects). Accessed via `activeMetaData` — the calling session's own configuration. Stores compile cache (compiled bytecode) per module descriptor; runtime instances live in sessions.
+- **`ibMetaDataApplication`** (`src/engine/backend/metadataApplication.h`) — loads, saves, and manages the metadata tree (all business objects). Accessed via `activeMetaData` — the calling session's own application. Stores compile cache (compiled bytecode) per module descriptor; runtime instances live in sessions.
 - **`ibSession` / `ibSessionRegistry`** (`src/engine/backend/session/`) — per-session state and the base's session manager (one registry per base). The session is reachable via `ibSession::Current()`: the calling thread's own binding, else the base's fallback — the process's own session in that base (never a job's or a web tab's). `ibSessionScope` and `ibSessionThreadBinding` are the RAII helpers that bind a session to the calling thread. See [Sessions and Runtime Ownership](#sessions-and-runtime-ownership).
 - **`ibDebuggerServer`** (`src/engine/backend/debugger/debugServer.h`) — TCP server that accepts designer connections and relays debugger events.
 
@@ -206,8 +206,8 @@ A connection layer knows its pool (`ibDatabaseLayer::GetPool`), so a transaction
           └─ ibApplicationInstance::Open          ONE road for every kind of base:
                listed in the process, the opening thread working for it,
                pool (infobase.conf `Connections`), CanOpen (held by another process?),
-               system tables + migrations (the configuration's too), locale, logger, platform jobs,
-               then the configuration — loaded and run before any session is let in — the session registry
+               system tables + migrations (the application's too), locale, logger, platform jobs,
+               then the application — loaded and run before any session is let in — the session registry
                and the job manager.
                Refused or thrown → closed again, alone; the other bases stay.
 ```
@@ -228,7 +228,7 @@ The init list is **the** ordering contract:
 
 The MCP server is not the base's: the engine's is one per client (`frmserver/mcp`, `ibClientHost::GetMcpServer`), and the port is the client's, on the person's machine.
 
-`m_logger` is created by `Open` (`CreateLogger`) after the tables exist. `m_activeMetaData` — the application's `ibMetaDataConfiguration` — is made, loaded and run by `Open` (`CreateActiveMetaData(applicationInstance, flags)`, the flags from the request: the debug server), before any session is let in; a configuration that does not come up refuses the base. Launcher and coderunner have none. It is held for the sessions to come: a session takes its own reference when it is let in and lets it go when it leaves. A designer's session (`Designer`, `ThinDesigner`) takes none: it makes the configuration it edits, an `ibMetaDataConfigurationStorage`, and holds it alone (`ibSession::AcquireMetaData`). Its apply replaces the active one with the configuration it published (`ReplaceActiveMetaData`); sessions already working finish on the old one, which closes with its last holder. The job manager starts with the base, at the end of `Open` — jobs need no user. Every metadata — a configuration, an external report or data processor, a configuration file — is made by `ibMetaData::MakeShared` and held by `shared_ptr` by whoever works in it. The plugins and the syntax-helper corpus (constructed in `InitLocale()` once the locale is settled — see `docs/private/syntax-helper-design.md`) are the process's.
+`m_logger` is created by `Open` (`CreateLogger`) after the tables exist. `m_activeMetaData` — the application's `ibMetaDataApplication` — is made, loaded and run by `Open` (`CreateActiveMetaData(applicationInstance, flags)`, the flags from the request: the debug server), before any session is let in; an application that does not come up refuses the base. Launcher and coderunner have none. It is held for the sessions to come: a session takes its own reference when it is let in and lets it go when it leaves. A designer's session (`Designer`, `ThinDesigner`) takes none: it makes the application it edits, an `ibMetaDataApplicationStorage`, and holds it alone (`ibSession::AcquireMetaData`). Its apply replaces the active one with the application it published (`ReplaceActiveMetaData`); sessions already working finish on the old one, which closes with its last holder. The job manager starts with the base, at the end of `Open` — jobs need no user. Every metadata — an application, an external report or data tool, an application file — is made by `ibMetaData::MakeShared` and held by `shared_ptr` by whoever works in it. The plugins and the syntax-helper corpus (constructed in `InitLocale()` once the locale is settled — see `docs/private/syntax-helper-design.md`) are the process's.
 
 ### Closing a base (`ibApplicationHost::Close` → `ibApplicationInstance::Close`)
 
@@ -250,7 +250,7 @@ ibApplicationInstance::Close() {
 
 ### Token pattern for subsystem construction
 
-Every owned subsystem's ctor takes `ib::AppDataCtorToken` (`backend/appDataCtorToken.h`). Its ctor is private and only `ibApplicationInstance`, `ibApplicationHost` and `ibSession` are friends, so external code that tries `new ibSessionRegistry(…)` gets a compile error. The token also says **whose**: a base mints `AppDataCtorToken{ this }` and the subsystem reads its owner off it (`GetApplicationInstance()`); the host mints a null one for the process's share (the plugins, the corpus); a designer's session mints one with its base for the configuration it edits.
+Every owned subsystem's ctor takes `ib::AppDataCtorToken` (`backend/appDataCtorToken.h`). Its ctor is private and only `ibApplicationInstance`, `ibApplicationHost` and `ibSession` are friends, so external code that tries `new ibSessionRegistry(…)` gets a compile error. The token also says **whose**: a base mints `AppDataCtorToken{ this }` and the subsystem reads its owner off it (`GetApplicationInstance()`); the host mints a null one for the process's share (the plugins, the corpus); a designer's session mints one with its base for the application it edits.
 
 Why a token instead of a friend declaration on each subsystem header? Friends scattered across seven headers mean refactoring the owner ripples into every owned class. One token type keeps the "who can build subsystems" decision in one place; subsystem headers declare their ctors public.
 
@@ -376,7 +376,7 @@ ibCoreException : std::exception          ─── core/exception.h. The base o
     │                                          the "LINQ: " prefix spelled by hand.
     │
     ├── ibBackendSessionException         ─── The SESSION refuses. Kind:
-    │                                          ExclusiveHeld / OthersActive /
+    │                                          SingleUserHeld / OthersActive /
     │                                          NoSession / NoConnection.
     │                                          (session/sessionException.h)
     │
@@ -463,14 +463,14 @@ says which file is where.
 | `queryLowering.h`, `lowering/` | L4 → the single L3 door: name resolution, aggregate rules, `DescribeOutput`, package execution |
 | `queryHierarchy.{h,cpp}` | `ibQueryHierarchyScope` — the parent walk and the "whom does this row report under" map, asked of the COLUMN through the provider (one read, not one per node). Left the accounting register in 2026-08-13 |
 | `queryException.{h,cpp}` | `ibBackendQueryException` (this tier failed) and `ibBackendQuerySourceException` (the query itself does not hold up — carries line + column) |
-| `provider/database/structure/schemaSnapshot.{h,cpp}` | `ibSchemaSnapshot` + `DiffSnapshots` — projects a configuration into tables / columns / indexes and turns a PAIR of them into DDL. Knows nothing about metadata, and never asks the live database anything ([schema-authority.md](private/schema-authority.md)) |
+| `provider/database/structure/schemaSnapshot.{h,cpp}` | `ibSchemaSnapshot` + `DiffSnapshots` — projects an application into tables / columns / indexes and turns a PAIR of them into DDL. Knows nothing about metadata, and never asks the live database anything ([schema-authority.md](private/schema-authority.md)) |
 | `provider/database/structure/schemaBuilder.*`, `structureBuilder.*`, `structureBatch.*` | applying that difference: rendering and running the DDL, the deferred second phase, and its compensation |
 | `provider/database/structure/derivedStateBuilder.cpp` | L3-4 — regenerating what a changed declaration made stale |
 | `tempTableQueryable.h`, `tempColumn.h`, `queryTempStore.*`; `provider/database/tempTableManager.*` | temp tables as ordinary sources — in the base and in memory (`ibTempTableManager` decides how long one in the base lives; `ibQueryTempTableStore` owns a package's) |
 | `provider/database/dbTableProvider.cpp`, `columnCodec.*`, `columnSpread.h`, `registerQueryLowering.h` | the DB-backed provider: read, aggregate and the two NON-terminal endings (`BuildAggregateRelation` / `BuildReadRelation`) that let a reading hand back a relation instead of rows; the value codec; the registers' lowering |
 | `provider/computed/computedProvider.*` | the computed provider — rows computed in memory (a register's balance, a temp table, a subquery) |
 | `provider/queryProviderInternal.h` | the RAM engine's own words — what the composer and the computed provider say to each other; nothing outside `provider/` includes it |
-| `provider/logger/logQueryable.*` | `Journal.Events` — the registration journal as a source of every configuration, read through the journal's reader and computed in memory |
+| `provider/logger/logQueryable.*` | `Journal.Events` — the registration journal as a source of every application, read through the journal's reader and computed in memory |
 
 ### `src/engine/backend/metaCollection/`
 
@@ -493,10 +493,10 @@ aspects carry the `Metadata` infix; the runtime value, its manager and its comma
 
 Aspects in use: `Schema`, `Property`, `Menu`, `_res`, plus three one-of-a-kind readings that earn a
 file each — `accumulationRegisterMetadataTotals.cpp`, `informationRegisterMetadataSlice.cpp`,
-`metaStoredValueObjectQuery.cpp` (a constant's and a functional option's value in `sys_const`). A base FAMILY is
+`metaStoredValueObjectQuery.cpp` (a constant's and a feature option's value in `sys_const`). A base FAMILY is
 named after its base header instead of a metatype: `commonObject.cpp`, `commonObjectSchema.cpp`,
 `commonObjectProperty.cpp`, `commonObjectAction.cpp`, `commonObjectMetaQuery.cpp`, `commonObjectEnum.{h,cpp}`;
-the stored-value family (constant, functional option) — `metaStoredValueObject*.cpp`.
+the stored-value family (constant, feature option) — `metaStoredValueObject*.cpp`.
 
 **The rule for new code:** everything a metaobject contributes to the database SCHEMA —
 `ContributeTables` and the `m_beforeChange` / `m_afterChange` rules attached to the tables it
@@ -508,7 +508,7 @@ totals bundle), `accountingRegisterMetadataSchema.cpp` (the two-sided totals bun
 `chartOfAccountsMetadataSchema.cpp` (the analytics-ceiling rule; a predefined account's analytics),
 `chartOfCharacteristicTypesMetadataSchema.cpp` (a predefined characteristic's `Type`),
 `chartOfCalculationTypesMetadataSchema.cpp` (a predefined calculation type's relation lines),
-`metaStoredValueObjectSchema.cpp` (a constant or a functional option: one column in the shared external `sys_const`),
+`metaStoredValueObjectSchema.cpp` (a constant or a feature option: one column in the shared external `sys_const`),
 `calculationRegisterMetadataSchema.cpp` (the lookup indexes `_DIX` / `_RIX`, and the recalculation's marks
 where `UseRecalculation` is on). Each level adds its own rule to a table (`m_beforeChange += …`); the
 differ asks them all. Declaring the table and
@@ -519,7 +519,7 @@ declaring the rule that guards it are the same statement, so they cannot drift a
 
 | File | Class | Role |
 |---|---|---|
-| `debugServer.h/cpp` | `ibDebuggerServer` | The debuggee's port — a WebSocket at `/debugger` on the core's HTTP, one designer at a time; owned by the running configuration |
+| `debugServer.h/cpp` | `ibDebuggerServer` | The debuggee's port — a WebSocket at `/debugger` on the core's HTTP, one designer at a time; owned by the running application |
 | `debugClient.h/cpp`, `debugClientAsync.cpp`, `debugClientQuery.cpp` | `ibDebuggerClient` | The designer's end (a thin designer's session on the server): the connection, the events told every bridge, the breakpoints kept in the base |
 | `debugClientBridge.h/cpp` | `ibDebuggerClientBridge` | Bridge between client socket and UI |
 | `runtimeProfiler.h/cpp` | `ibRuntimeProfiler` | A measurement: which lines of which modules the runs spent their time on — of every session (the designer's Debug menu, `profile_start` / `profile_stop`) or of one run (`code_run {profile}`) |
@@ -616,9 +616,9 @@ Each opcode has type-specialised variants selected by adding `TYPE_DELTA1` (numb
 
 Keywords are English-only — there are no Cyrillic / Russian-language synonyms. Two parallel syntax modes share these keywords and compile to the same bytecode:
 - **VES** — Visual-Basic-style: `If c Then … EndIf`, `Foreach x In coll Do … EndDo`, `Procedure F() … EndProcedure`. Keyword-fenced blocks.
-- **CES** — C-style: `if (c) { … }`, `Foreach (x In coll) { … }`, `Procedure F() { … }`. Brace-delimited. Default for new configurations since 2026-05-10.
+- **CES** — C-style: `if (c) { … }`, `Foreach (x In coll) { … }`, `Procedure F() { … }`. Brace-delimited. Default for new applications since 2026-05-10.
 
-Mode is the session's (`ibCompileCode::SetCodeStyle()` writes its `ibCompileState`, taken from its base's configuration); serialised configurations preserve their stored Syntax flag (wire token still reads `vbs` for back-compat).
+Mode is the session's (`ibCompileCode::SetCodeStyle()` writes its `ibCompileState`, taken from its base's application); serialised applications preserve their stored Syntax flag (`ves` / `ces`).
 
 ---
 
@@ -626,10 +626,10 @@ Mode is the session's (`ibCompileCode::SetCodeStyle()` writes its `ibCompileStat
 
 ### ibValueMetaObject
 
-`ibValueMetaObject` (defined in `src/engine/backend/metaCollection/metaObject.h`) is the abstract base for all configuration objects. It extends `ibValueDynamicMembers` (which extends `ibValue`, so it can be assigned to script variables) and `ibPropertyObjectHelper<ibValueMetaObject>` (so properties appear in the designer's object inspector), plus `ibAccessObject` / `ibInterfaceObject`.
+`ibValueMetaObject` (defined in `src/engine/backend/metaCollection/metaObject.h`) is the abstract base for all application objects. It extends `ibValueDynamicMembers` (which extends `ibValue`, so it can be assigned to script variables) and `ibPropertyObjectHelper<ibValueMetaObject>` (so properties appear in the designer's object inspector), plus `ibAccessObject` / `ibInterfaceObject`.
 
 Key attributes:
-- `ibMetaID m_metaId` — numeric identifier within the configuration
+- `ibMetaID m_metaId` — numeric identifier within the application
 - `ibGuid m_metaGuid` — globally-unique GUID
 - `ibString GetName()` / `GetSynonym()` — developer name and user-visible synonym
 - `ibMetaData* m_metaData` — back-pointer to the owning metadata container
@@ -644,7 +644,7 @@ Key attributes:
 | Constant | `ibValueMetaObjectConstant` | `metaCollection/partial/constant.h` |
 | InformationRegister | `ibValueMetaObjectInformationRegister` | `metaCollection/partial/informationRegister.h` |
 | AccumulationRegister | `ibValueMetaObjectAccumulationRegister` | `metaCollection/partial/accumulationRegister.h` |
-| DataProcessor | `ibValueMetaObjectDataProcessor` | `metaCollection/partial/dataProcessor.h` |
+| DataTool | `ibValueMetaObjectDataTool` | `metaCollection/partial/dataTool.h` |
 | Report | `ibValueMetaObjectReport` | `metaCollection/partial/dataReport.h` |
 | ChartOfCharacteristicTypes | `ibValueMetaObjectChartOfCharacteristicTypes` | `metaCollection/partial/chartOfCharacteristicTypes.h` |
 | ChartOfAccounts | `ibValueMetaObjectChartOfAccounts` | `metaCollection/partial/chartOfAccounts.h` |
@@ -652,10 +652,8 @@ Key attributes:
 | ChartOfCalculationTypes | `ibValueMetaObjectChartOfCalculationTypes` | `metaCollection/partial/chartOfCalculationTypes.h` |
 | CalculationRegister | `ibValueMetaObjectCalculationRegister` | `metaCollection/partial/calculationRegister.h` |
 
-The last two landed 2026-09-10 (committed 2026-09-11). A **recalculation** is not an object: since
-2026-09-14 it is the register's property `UseRecalculation` (the nested class
-`ibValueMetaObjectCalculationRegister::ibValueMetaObjectRecalculation` only loads a configuration saved
-with the object it used to be, and lets it go). See *Calculation Objects* below.
+The last two landed 2026-09-10 (committed 2026-09-11). A **recalculation** is not an object: it is the
+register's property `UseRecalculation`. See *Calculation Objects* below.
 
 ### Inheritance Chain (simplified)
 
@@ -665,7 +663,7 @@ ibValue
        ├─ ibValueMetaObjectAttribute         (scalar field descriptor)
        ├─ ibValueMetaObjectStoredValue       (one value per base, a column of sys_const)
        │    ├─ ibValueMetaObjectConstant
-       │    └─ ibValueMetaObjectFunctionalOption
+       │    └─ ibValueMetaObjectFeatureOption
        ├─ ibValueMetaObjectRecordData        (record-based objects)
        │    ├─ ibValueMetaObjectRecordDataMutableRef
        │    │    └─ ibValueMetaObjectRecordDataRecorderRef   (records movements → sits in time)
@@ -676,7 +674,7 @@ ibValue
        │    │    ├─ ibValueMetaObjectChartOfAccounts
        │    │    └─ ibValueMetaObjectChartOfCalculationTypes
        │    └─ ibValueMetaObjectRecordDataExt
-       │         ├─ ibValueMetaObjectDataProcessor
+       │         ├─ ibValueMetaObjectDataTool
        │         └─ ibValueMetaObjectReport
        ├─ ibValueMetaObjectRegisterData
        │    ├─ ibValueMetaObjectInformationRegister
@@ -714,14 +712,14 @@ there is nothing to build a moment from and nothing offered in its field tree.
 
 ### Open/Close — the runtime image (`ibMetaImage`)
 
-A metadata's **open state is the presence of its image**, not a separate boolean. `ibMetaData` (`src/engine/backend/metaData.h`) holds `std::shared_ptr<ibMetaImage> m_image`: nullptr = closed, live = open. `IsConfigOpen()` returns `m_image != nullptr`.
+A metadata's **open state is the presence of its image**, not a separate boolean. `ibMetaData` (`src/engine/backend/metaData.h`) holds `std::shared_ptr<ibMetaImage> m_image`: nullptr = closed, live = open. `IsOpen()` returns `m_image != nullptr`.
 
-- **`ibMetaImage`** aggregates everything a run fills and a close discards: the type-ctor factory (`ibCtorRegistry<ibCtorMetaValueType>`), the common-module skeleton (`ibModuleStorage`), and the designer-only compile-value cache (`ibCompileValueCache`). The registry **owns its ctors via `shared_ptr`**, so dropping the image frees them — no manual cleanup. The image is non-copyable / non-movable; lifetime is managed only through the shared_ptr.
+- **`ibMetaImage`** aggregates everything a run fills and a close discards: the type-ctor factory (`ibCtorRegistry<ibCtorMetaValueType>`), the shared-module skeleton (`ibModuleStorage`), and the designer-only compile-value cache (`ibCompileValueCache`). The registry **owns its ctors via `shared_ptr`**, so dropping the image frees them — no manual cleanup. The image is non-copyable / non-movable; lifetime is managed only through the shared_ptr.
 - **`LoadGuard`** (nested in `ibMetaData`) is the RAII transaction. Its ctor creates the image (asserting the metadata was closed); the dtor drops it — *unless* `Commit()` ran. A raised `ibBackendException` (or any early return) unwinds through the dtor, the image is dropped, and the state is exactly the closed state it started from ("the load never happened").
 - `m_factoryCtorCountChanges` (the monotonic compiler-cache invalidation counter) deliberately lives on `ibMetaData`, *outside* the image, so dropping the image never resets it.
-- Each metadata kind builds its own designer infrastructure via `CreateDesignerCache()` (cache + module-manager for designer kinds; `nullptr` for runtime / external DP / report). The compile cache is `nullptr` on runtime configurations — callers gate with `if (auto* cc = metaData->GetCompileCache())`, not `appData->DesignerMode()`.
+- Each metadata kind builds its own designer infrastructure via `CreateDesignerCache()` (cache + module-manager for designer kinds; `nullptr` for runtime / external data tool / report). The compile cache is `nullptr` on runtime applications — callers gate with `if (auto* cc = metaData->GetCompileCache())`, not `appData->DesignerMode()`.
 
-`RunDatabase()` / `CloseDatabase()` (overridden per subclass) drive the run/close cascade under `LoadGuard`. `LoadDatabase()` / `SaveDatabase()` are the buffer-level entry points on `ibMetaDataConfigurationBase`; they reach `LoadConfigFromBuffer` / `SaveConfigToBuffer`.
+`RunDatabase()` / `CloseDatabase()` (overridden per subclass) drive the run/close cascade under `LoadGuard`. `LoadDatabase()` / `SaveDatabase()` are the buffer-level entry points on `ibMetaDataApplicationBase`; they reach `LoadApplicationFromBuffer` / `SaveApplicationToBuffer`.
 
 ### Serialization — `ibDataNode` + format providers
 
@@ -729,15 +727,15 @@ Metadata serialization runs through a uniform, format-agnostic tree (`src/engine
 
 - **`ibDataNode`** — one self-similar node of the structure tree (clsid + metaId + one set of named fields + child nodes; fields and properties have been one set since 2026-10-26). A metaobject contributes its data into a node; a composite value can itself *be* a child node (`ibDataKind::Child`).
 - **`ibFormatProvider`** — abstract `Write(node, writer)` / `Read(reader, node)`. Concrete providers:
-  - `ibBinaryProvider` — the packet: OES-RPC, the node's own bytes (`OES1`, the version — 2, and 1 still read, from before a guid had a kind of its own — a length, the root node; every container says how long it is and how many it holds, text UTF-16LE, a guid its 16 bytes). The same bytes are the node in memory, in storage (the configuration, form blobs) and on the client protocol's WebSocket; `Read` checks a packet once, where it comes in. Read + write.
-  - `ibJsonProvider` (`serialize/provider/jsonProvider.{h,cpp}`) — JSON for a repository, an assistant and a human reader. `Read` is a full parser: MCP and the client protocol's HTTP `POST` parse every JSON-RPC request through it (`rpc/rpcMessage.cpp`, before any login), so it refuses nesting past 256 containers, and `ibFileProvider` reads a configuration's node files through it. The view is lossy by design (Date → ISO string, Guid → its text, the type by name with a synthetic `TypeDesc`): a typed reader gets a date or a guid back from its text (`AsDate`, `AsGuid`), but the node read back is not the node written byte for byte — `ibBinaryProvider` round-trips, and `ibXmlProvider` in text.
-  - `ibFileProvider` (`serialize/provider/fileProvider.{h,cpp}`) — a configuration as a directory of files: a node file per object in `ibJsonProvider`'s form, module texts and binaries beside it ([configuration-files.md](public/configuration-files.md)).
+  - `ibBinaryProvider` — the packet: OES-RPC, the node's own bytes (`OES1`, the version — 2, and 1 still read, from before a guid had a kind of its own — a length, the root node; every container says how long it is and how many it holds, text UTF-16LE, a guid its 16 bytes). The same bytes are the node in memory, in storage (the application, form blobs) and on the client protocol's WebSocket; `Read` checks a packet once, where it comes in. Read + write.
+  - `ibJsonProvider` (`serialize/provider/jsonProvider.{h,cpp}`) — JSON for a repository, an assistant and a human reader. `Read` is a full parser: MCP and the client protocol's HTTP `POST` parse every JSON-RPC request through it (`rpc/rpcMessage.cpp`, before any login), so it refuses nesting past 256 containers, and `ibFileProvider` reads an application's node files through it. The view is lossy by design (Date → ISO string, Guid → its text, the type by name with a synthetic `TypeDesc`): a typed reader gets a date or a guid back from its text (`AsDate`, `AsGuid`), but the node read back is not the node written byte for byte — `ibBinaryProvider` round-trips, and `ibXmlProvider` in text.
+  - `ibFileProvider` (`serialize/provider/fileProvider.{h,cpp}`) — an application as a directory of files: a node file per object in `ibJsonProvider`'s form, module texts and binaries beside it ([application-files.md](public/application-files.md)).
   - `ibXmlProvider` (`serialize/provider/xmlProvider.{h,cpp}`) — the node as XML, lossless: `<Node Type Id>` holds `<Field Name>` (a kind other than a string named by `Kind`, a string XML 1.0 cannot hold as base64), `<Raw>` and `<Children>`; a value's node says its type by XML Schema's means (`xsi:type`, `xsi:nil`), and a primitive is its text; Write→Read→Write gives the same text. Read + write.
 - **`ibDataBuilder`** owns the root node and drives `Save(provider, writer)` / `Load(provider, reader)`.
 
 A node is held as its packet's bytes and read where it lies; `ibReaderMemory` / `ibWriterMemory` carry a packet where a stream is asked for. Each metadata class registers a `ibClassID` CLSID (e.g. `MD_CAT` for Catalog) used as the per-node type discriminator.
 
-File-level export/import goes through `ibMetaDataConfigurationBase`: `LoadConfigFromFile()` / `SaveConfigToFile()` — one file, the binary packet — and `LoadConfigFromFiles()` / `SaveConfigToFiles()` — a directory of text files, or the same set held in memory as a node. (The former separate `metadataConfigurationXML.cpp` / `metadataConfigurationJSON.cpp` and the `SaveConfigToXML/JSON` API were replaced by the provider model.)
+File-level export/import goes through `ibMetaDataApplicationBase`: `LoadApplicationFromFile()` / `SaveApplicationToFile()` — one file, the binary packet — and `LoadApplicationFromFiles()` / `SaveApplicationToFiles()` — a directory of text files, or the same set held in memory as a node. (The former separate `metadataApplicationXML.cpp` / `metadataApplicationJSON.cpp` and the `SaveConfigToXML/JSON` API were replaced by the provider model.)
 
 ### Accounting Objects
 
@@ -762,14 +760,13 @@ Bindings: AccountingRegister → ChartOfAccounts (via `ibPropertyChartOfAccounts
 
 Two metadata types and one subordinate support calculation — payroll accruals and deductions whose
 types displace one another over days, take a base from other types' results, and go stale when those
-change. Built 2026-09-10, committed 2026-09-11; verified by running a payroll configuration on a live
+change. Built 2026-09-10, committed 2026-09-11; verified by running a payroll application on a live
 Firebird base. See [payroll-arc.md § 11](private/payroll-arc.md) for the design as built.
 
 | Type | CLSID | Purpose |
 |---|---|---|
 | ChartOfCalculationTypes | `MD_CHCL` | The calculation TYPES — a hierarchical chart with `UseActionPeriod`, `BaseDependence` (`None` / `ByActionPeriod` / `ByRegistrationPeriod`), `BaseCharts`, and three predefined relation sections of one class, `ibValueMetaObjectCalculationTypeRelationTable` (`MD_DSTB`): `Displacing`, `Base`, `Leading`. A row is an edge from the type that owns it to the type it names |
 | CalculationRegister | `MD_CREG` | Movements subordinate to a recorder, keyed by (recorder, line), no record manager. Standard attributes `CalculationType`, `RegistrationPeriod` (its one period — no `Period` column), `Storno`; `ActionPeriod` / `ActionPeriodStart` / `ActionPeriodEnd` with `UseActionPeriod`; `BasePeriodStart` / `BasePeriodEnd` with `UseBasePeriod`. The actual action periods are a reading of the records (source `CalculationRegister.<Register>.ActualActionPeriod`); with a `Schedule` bound (an information register, its value resource, its date dimension, a dimension link per other dimension), `CalculationRegister.<Register>.ScheduleData` reads the schedule summed over each record's periods; with `UseRecalculation` the record-set write keeps the recalculation marks — one table of the register's own columns, read as `CalculationRegister.<Register>.Recalculation`; `GetBase` is a function of the records (a record's line and the manager), and the same reading is the source `CalculationRegister.<Register>.Base<BaseRegister>` — a table per register the chart takes a base from |
-| Recalculation | `MD_RCLC` | Retired 2026-09-14 — a calculation register keeps its marks itself (`UseRecalculation`). The class stays registered so a configuration saved with the object still loads; the register lets the object go on load, with a line in the journal, and the table it had is declared by nobody |
 
 The calculation logic that is not a metaobject — days, intervals, the relations, displacement, what
 a change leads — lives in `backend/calculation/calculation.{h,cpp}`; the metaobjects read and write,
@@ -788,13 +785,13 @@ OES distinguishes between **metadata** (compile-time, process-wide, shared) and 
 `ibSession` (`src/engine/backend/session/session.h`) is the unit of runtime state:
 
 - **Identity** (`ibSessionIdentity`) — guid, userName, userGuid, computer, address (host:port for web), appMode, started timestamp, pid
-- **Kind** (`ibSessionKind`) — Launcher / Designer / Enterprise / Service (a server's own login) / WebServer (the old web server's technical row) / WebClient (per-tab) / BackgroundJob / ScheduledJob / SystemJob / ThinClient / ThinDesigner (a client of the protocol, in the application or in the configuration). The kind, not the run mode, says what a session is: a job or a thin client lives in whatever process hosts it, and its run mode is its host's.
+- **Kind** (`ibSessionKind`) — Launcher / Designer / Enterprise / Service (a server's own login) / WebServer (the old web server's technical row) / WebClient (per-tab) / BackgroundJob / ScheduledJob / SystemJob / ThinClient / ThinDesigner (a client of the protocol, in the application or in the application). The kind, not the run mode, says what a session is: a job or a thin client lives in whatever process hosts it, and its run mode is its host's.
 - **State machine** — `ibSessionState` (Created / Added / Rejected / Stopping / Gone), `ibAuthState` (Anonymous / Authenticated / AuthFailed)
 - **User info** — `ibUserInfo` (formerly `ibApplicationDataUserInfo`) — OES-user (from `sys_user` table), distinct from the DB-level admin user used to open the database connection. Plus `m_sessionRawPassword` — plain-text cached only for Designer "Start debugging" so spawned children can re-authenticate without prompting. `ibUserInfo` itself owns sys_user CRUD as static factories — `appData` no longer mediates.
 - **Working date** — `m_workDate` per-session (replaces the legacy static `ibValueSystemFunction::ms_workDate` so two web sessions don't step on each other).
-- **Translate state** — `ibTranslateState`: explicit override, the user's language, the configuration's own, and the resolved code (`override || user || configuration`). Selects which metadata synonym / form-label translation is shown. Per-session, so concurrent web tabs each render their own user's language and two bases in one process each keep their own. Distinct from the engine's UI gettext (`ibDictionary`, the base's locale per thread). Read through `ibBackendLocalization::GetUserLanguage()`.
-- **Compile state** — `ibCompileState`: the code style (CES / VES) the session's modules compile in, taken from its base's configuration. Like the interpreter's `ibProcUnitState`, a thread with no session (coderunner, tests) has its own `thread_local` one.
-- **Root module manager** — `m_root : ibValuePtr<ibValueModuleManagerRuntimeConfiguration>`. Created via `EnsureRoot()` in `ibSessionRegistry::NotifyAuthenticated`, right after `AcquireMetaData` and before the `OnAuthenticated` listeners. Stays nullptr for sessions that never run scripts — **the Designer never creates a root** (`EnsureRoot` is gated on `DesignerMode()`; it uses the lightweight `ibValueModuleManagerDesigner` in the compile cache instead), and likewise WebServer technical / Launcher. Objects/records/modules reach the right manager through the `ibSession::GetEditModuleManager(metaData)` seam (Designer → compile-cache designer manager; runtime → `m_root`). See [module-manager-split.md](private/module-manager-split.md).
+- **Translate state** — `ibTranslateState`: explicit override, the user's language, the application's own, and the resolved code (`override || user || application`). Selects which metadata synonym / form-label translation is shown. Per-session, so concurrent web tabs each render their own user's language and two bases in one process each keep their own. Distinct from the engine's UI gettext (`ibDictionary`, the base's locale per thread). Read through `ibBackendLocalization::GetUserLanguage()`.
+- **Compile state** — `ibCompileState`: the code style (CES / VES) the session's modules compile in, taken from its base's application. Like the interpreter's `ibProcUnitState`, a thread with no session (coderunner, tests) has its own `thread_local` one.
+- **Root module manager** — `m_root : ibValuePtr<ibValueModuleManagerRuntimeApplication>`. Created via `EnsureRoot()` in `ibSessionRegistry::NotifyAuthenticated`, right after `AcquireMetaData` and before the `OnAuthenticated` listeners. Stays nullptr for sessions that never run scripts — **the Designer never creates a root** (`EnsureRoot` is gated on `DesignerMode()`; it uses the lightweight `ibValueModuleManagerDesigner` in the compile cache instead), and likewise WebServer technical / Launcher. Objects/records/modules reach the right manager through the `ibSession::GetEditModuleManager(metaData)` seam (Designer → compile-cache designer manager; runtime → `m_root`). See [module-manager-split.md](private/module-manager-split.md).
 - **Frame** — `virtual ibBackendDocFrame* GetFrame() const { return nullptr; }` on base `ibSession`. Frame storage lives on derived sessions that have one (`ibClientSession::SetFrame(ibClientFrame*)`, `frmserver/client/clientSession.h` — a protocol client's). Base has no `m_frame` field — null means "no frame on this session" (coderunner, a server's technical session). The frame belongs to the session that created it, not to a process-wide singleton.
 - **Per-session debug** — optional `ibDebugSession` (CV/mutex + per-session watch expressions + run context) so concurrent web sessions can each enter their own debug loop without blocking.
 - **Exclusive (monopoly) mode** — `m_exclusive`. At most one session in the registry holds it; while held, every other Connect parks until release.
@@ -807,7 +804,7 @@ OES distinguishes between **metadata** (compile-time, process-wide, shared) and 
 
 `ibSessionScope` (legacy) and `ibSessionThreadBinding` (preferred for app entry points) are the RAII helpers that bind a session to the calling thread. The interpreter no longer reads global `thread_local` state directly: `ibProcUnitState` lives under `ibSession` (`session.h`), and the only `thread_local` slot in `session.cpp` is a fallback for sessionless callers (coderunner sandbox / system bootstrap). The worker pool (`workerPool.h` + `workerPoolHeadless.cpp`) leases a session into a thread via `tl_currentLease` and runs the request on it.
 
-Runtime ProcUnits live on per-session descriptors. The session's root `ibValueModuleManagerRuntimeConfiguration` (`ibSession::m_root`) owns common modules, forms, and per-instance object runtimes; each child is its own descriptor (`ibRuntimeModuleDataObject`) carrying its own `shared_ptr<ibProcUnit>`. Concurrent web sessions therefore each work on their own descriptor instances — no shared ProcUnit, no cross-session execution mutex. See [runtime-facade.md](private/runtime-facade.md) for the descriptor composition / parent chain details.
+Runtime ProcUnits live on per-session descriptors. The session's root `ibValueModuleManagerRuntimeApplication` (`ibSession::m_root`) owns shared modules, forms, and per-instance object runtimes; each child is its own descriptor (`ibRuntimeModuleDataObject`) carrying its own `shared_ptr<ibProcUnit>`. Concurrent web sessions therefore each work on their own descriptor instances — no shared ProcUnit, no cross-session execution mutex. See [runtime-facade.md](private/runtime-facade.md) for the descriptor composition / parent chain details.
 
 ### ibSessionRegistry
 
@@ -823,27 +820,27 @@ The registry supports multiple concurrent sessions (a server's clients, a file b
 
 ### Runtime ownership
 
-**Compile state — none is kept; the bytecode stays.** `ibRuntimeModuleDataObject::Compile()` (`backend/moduleInfo.cpp`) takes the module's `ibByteCode` from the AOT cache (`sys_bytecode_cache` via `ibByteCodeCache`). Only on a miss does it make a local `ibCompileModule`, which compiles and goes when the bytecode is made. A descriptor holds its bytecode, its binds (`m_binds`) and its ProcUnit, each session its own; one bytecode per module per process is decided, not built. The cached blob is `ibByteCode::SerializeAOT/DeserializeAOT` (magic `'PBC1'`; see the [compiler module table](#srcenginebackendcompiler)). A row is found only under the key it was written with — an MD5 of the format version (`kAOTFormatVersion`), the engine hash taken at build time (`kEngineFingerprint`: the compiler, the interpreter and the built-in registry) and the configuration's digest — so a saved configuration, a compiler change or a new built-in is a miss and a recompile, never a stale hit. A compiler stands under its parent's bytecode alone, whether that parent was compiled or loaded, so a name has one walk and one address. Not cached: bytecode compiled under an eval (a watch or the debugger's sandbox; its host frame is an extra rung) and an external report or data processor (it has no configuration digest; it compiles when opened). See [compiler-pipeline.md § 4a](private/compiler-pipeline.md).
+**Compile state — none is kept; the bytecode stays.** `ibRuntimeModuleDataObject::Compile()` (`backend/moduleInfo.cpp`) takes the module's `ibByteCode` from the AOT cache (`sys_bytecode_cache` via `ibByteCodeCache`). Only on a miss does it make a local `ibCompileModule`, which compiles and goes when the bytecode is made. A descriptor holds its bytecode, its binds (`m_binds`) and its ProcUnit, each session its own; one bytecode per module per process is decided, not built. The cached blob is `ibByteCode::SerializeAOT/DeserializeAOT` (magic `'PBC1'`; see the [compiler module table](#srcenginebackendcompiler)). A row is found only under the key it was written with — an MD5 of the format version (`kAOTFormatVersion`), the engine hash taken at build time (`kEngineFingerprint`: the compiler, the interpreter and the built-in registry) and the application's digest — so a saved application, a compiler change or a new built-in is a miss and a recompile, never a stale hit. A compiler stands under its parent's bytecode alone, whether that parent was compiled or loaded, so a name has one walk and one address. Not cached: bytecode compiled under an eval (a watch or the debugger's sandbox; its host frame is an extra rung) and an external report or data tool (it has no application digest; it compiles when opened). See [compiler-pipeline.md § 4a](private/compiler-pipeline.md).
 
 **Runtime state — per-session, owned via descriptors.** Each session owns its own runtime tree:
 
 ```
-ibSession::m_root  →  ibValueModuleManagerRuntimeConfiguration  (per-session root)
+ibSession::m_root  →  ibValueModuleManagerRuntimeApplication  (per-session root)
                        │
-                       ├── ibValueModuleUnit             (per common module)
+                       ├── ibValueModuleUnit             (per shared module)
                        │     └── m_procUnit : shared_ptr<ibProcUnit>
-                       ├── ibValueModuleUnit             (per common module)
+                       ├── ibValueModuleUnit             (per shared module)
                        │     └── m_procUnit : shared_ptr<ibProcUnit>
                        └── ...
 ```
 
 - The root manager's `m_procUnit` is the session's main module ProcUnit.
-- Each common module wraps a child `ibRuntimeModuleDataObject` (`backend/moduleInfo.h`) carrying its own `shared_ptr<ibProcUnit>`, `shared_ptr<ibByteCode>` and `shared_ptr<ibBindTable>`. Context handles (`ThisObject`/`ThisForm`), scope containers, export handles (`Controls`/`DataSource`/…) and a module's own injected locals (a constant's `Value`) are registered once via `Bind{Context,Scope,Export,Local}Variable`; each `Execute` fills a binder made for that call from them — they replaced the hand-rolled `PrepareNames`/`AppendProp` name surface. See [Name binding](private/name-binding.md).
+- Each shared module wraps a child `ibRuntimeModuleDataObject` (`backend/moduleInfo.h`) carrying its own `shared_ptr<ibProcUnit>`, `shared_ptr<ibByteCode>` and `shared_ptr<ibBindTable>`. Context handles (`ThisObject`/`ThisForm`), scope containers, export handles (`Controls`/`DataSource`/…) and a module's own injected locals (a constant's `Value`) are registered once via `Bind{Context,Scope,Export,Local}Variable`; each `Execute` fills a binder made for that call from them — they replaced the hand-rolled `PrepareNames`/`AppendProp` name surface. See [Name binding](private/name-binding.md).
 - A global module is a bind on the root too (`BindGlobalModule`, through `ibCompilableSourceCode`): it has no compile of its own, its lexems are read in front of the root's text and its names are the root's.
-- Forms, per-instance catalog/document runtimes, external data processors / reports hang off as children of the root via the same descriptor mixin (`m_parent` raw-pointer chain; container enforces parent-outlives-child).
+- Forms, per-instance catalog/document runtimes, external data tools / reports hang off as children of the root via the same descriptor mixin (`m_parent` raw-pointer chain; container enforces parent-outlives-child).
 - Concurrent sessions therefore run on **physically separate** ProcUnit instances. Bytecode, frame stacks, locals and binders are per session; what sessions share is the cache row they load the bytecode from.
 
-**`m_runtimeMutex` guards bring-up vs teardown, not execution.** `ibValueModuleManager::AttachRuntime(session)` (called from `ibSession::CompileRoot` at login, on every run mode; a configuration that does not start throws there and the login is refused) builds the runtime tree under the lock. `DetachRuntime(session)` drops it under the same lock. Per-session script execution does NOT take this lock — different sessions execute in parallel on their own descriptors.
+**`m_runtimeMutex` guards bring-up vs teardown, not execution.** `ibValueModuleManager::AttachRuntime(session)` (called from `ibSession::CompileRoot` at login, on every run mode; an application that does not start throws there and the login is refused) builds the runtime tree under the lock. `DetachRuntime(session)` drops it under the same lock. Per-session script execution does NOT take this lock — different sessions execute in parallel on their own descriptors.
 
 **Worker pool dispatch.** Script execution runs on a worker thread leased via `ibWorkerPool` (`backend/session/workerPool.h` + headless impl). Each request leases a session into `tl_currentLease` for the call's duration; `ibSession::Current()` resolves through this slot. Every host but the launcher runs it (`appHost.cpp`) — a thin client's file base, the web host and the application server alike — each request leased onto a worker of the process's one pool; a script that waits parks a fiber (`core/fiber`) on its thread, which goes on serving other sessions until `Wake` resumes it. The script interpreter never touches global `thread_local` state directly — `ibProcUnitState` lives under `ibSession`, the one `thread_local` fallback in `session.cpp` exists only for sessionless callers (coderunner sandbox / system bootstrap).
 
@@ -853,7 +850,7 @@ ibSession::m_root  →  ibValueModuleManagerRuntimeConfiguration  (per-session r
 
 ### Designer — compile only
 
-A designer session (`Designer`, `ThinDesigner`) has no runtime — `AttachRuntime` returns early for a designer kind. It holds neither a compiler nor bytecode: each question about a text (autocomplete, syntax check) gets a compile chain made for it (`CreateCompiler`, up the descriptors' `m_parent`, each with its binds), which goes with the answer. Global modules are bound here as in the runtime, so a text sees their names and a broken one is reported. Scripts are not executed. Autocomplete reads bound names off that chain (`ibValueAtCaret` / `ibNamesAtCaret`, `backend/compiler/scriptComplete.h`); the editor keeps only its lexer. See [Name binding § Designer](private/name-binding.md#designer--surfacing-the-same-binds). Debug sessions attach to the process that runs the configuration over its debug port — see [Debugger Architecture](#debugger-architecture).
+A designer session (`Designer`, `ThinDesigner`) has no runtime — `AttachRuntime` returns early for a designer kind. It holds neither a compiler nor bytecode: each question about a text (autocomplete, syntax check) gets a compile chain made for it (`CreateCompiler`, up the descriptors' `m_parent`, each with its binds), which goes with the answer. Global modules are bound here as in the runtime, so a text sees their names and a broken one is reported. Scripts are not executed. Autocomplete reads bound names off that chain (`ibValueAtCaret` / `ibNamesAtCaret`, `backend/compiler/scriptComplete.h`); the editor keeps only its lexer. See [Name binding § Designer](private/name-binding.md#designer--surfacing-the-same-binds). Debug sessions attach to the process that runs the application over its debug port — see [Debugger Architecture](#debugger-architecture).
 
 ---
 
@@ -894,8 +891,8 @@ Every driver folder except `odbc/` contains an `engine/` subdirectory with the v
 
 ### Where the physical schema comes from
 
-> ⭐⭐ **THE DIFF BETWEEN TWO CONFIGURATIONS CARRIES ALL THE INFORMATION.** The apply is a function of
-> exactly two arguments — the baseline (the active configuration) and the target (the edited one) —
+> ⭐⭐ **THE DIFF BETWEEN TWO APPLICATIONS CARRIES ALL THE INFORMATION.** The apply is a function of
+> exactly two arguments — the baseline (the active application) and the target (the edited one) —
 > and it brings the database to a schema matching the target exactly. The live catalogue is never
 > consulted, and **physical introspection is banned**: insuring against the physics turns a drift
 > from a defect into a normal state and deletes the only signal that the mechanism is broken. The
@@ -928,7 +925,7 @@ ibValueForm  (concrete — frmserver/visualView/ctrl/form.h)
   , public ibRuntimeModuleDataObject (per-instance compile module + ProcUnit)
 ```
 
-`ibValueForm` owns the complete control tree for one open form. The static entry point `ibBackendValueForm::CreateNewForm()` instantiates the form; the higher-level orchestrator is `ibValueMetaObjectFormBase::CreateAndBuildForm()` (`metaCollection/metaFormObject.h`), which resolves the form descriptor from metadata and builds the control tree (see [Form Open](#form-open)). The verb a caller actually uses is `ibValueMetaObjectFormBase::GetObjectForm()` — virtual, answered by the form's own kind (a common form stands alone, an object form asks the object that owns it). Full map: [form-engine.md](private/form-engine.md).
+`ibValueForm` owns the complete control tree for one open form. The static entry point `ibBackendValueForm::CreateNewForm()` instantiates the form; the higher-level orchestrator is `ibValueMetaObjectFormBase::CreateAndBuildForm()` (`metaCollection/metaFormObject.h`), which resolves the form descriptor from metadata and builds the control tree (see [Form Open](#form-open)). The verb a caller actually uses is `ibValueMetaObjectFormBase::GetObjectForm()` — virtual, answered by the form's own kind (a shared form stands alone, an object form asks the object that owns it). Full map: [form-engine.md](private/form-engine.md).
 
 ### Attribute binding
 
@@ -983,7 +980,7 @@ named in the answer's patch, so the field shows the server's text at once.
 ### Client-Server Model
 
 ```
-the debuggee — whatever runs the configuration       the designer
+the debuggee — whatever runs the application       the designer
 (appserver, webserver,                               appstudio.exe — the client in its session
  a thin client's file base)                          on the server, reached over the client protocol
       │                                                     │
@@ -1055,13 +1052,13 @@ appworkspace.exe / appstudio.exe --file=… (a file base: fileserver, in the cli
                  └─ ibClientInstance::Open → session->Open(user, password)   # auth orchestration
                       └─ ticket.Attach(user, pwd) — Submit(Attach, Normal)
                            └─ ibApplicationInstance::AuthenticateUser
-                                  (PBKDF2 preferred, MD5 silent-upgrade path)
+                                  (PBKDF2, re-hashed below the policy)
                                 └─ InstallUser writes session->m_userInfo
-                                     └─ NotifyAuthenticated phases (registry-driven; the configuration
+                                     └─ NotifyAuthenticated phases (registry-driven; the application
                                         ran as the base opened):
                                           1. OnFirstConnect — on the first auth
                                           2. session->AcquireMetaData() — its own reference
-                                             (a designer's: a configuration of its own, loaded and run)
+                                             (a designer's: an application of its own, loaded and run)
                                              session->EnsureRoot() — CreateRoot(GetMetaData())
                                           3. OnAuthenticated — session->CompileRoot()
                                                              + mm->AttachRuntime(s)
@@ -1126,7 +1123,7 @@ ibClientInstance::OnExit (frmserver) — the client logs out, or its connection 
 
 Two parallel translation surfaces exist; do not confuse them:
 
-- **Configuration language** — the session's translate state (`ibTranslateState::m_resolvedLanguageCode`), selects metadata synonyms / form-label translations stored *inside* the configuration. See `ibBackendLocalization::GetUserLanguage` / `SetUserLanguage`.
+- **Application language** — the session's translate state (`ibTranslateState::m_resolvedLanguageCode`), selects metadata synonyms / form-label translations stored *inside* the application. See `ibBackendLocalization::GetUserLanguage` / `SetUserLanguage`.
 - **Engine UI language** — gettext catalogs under `lang/`, laid out as the programs read them: the template `lang/open_es.pot`, and per language `lang/<code>/open_es.po` with its compiled `open_es.mo` beside it. Strings wrapped in `_("...")` macros across `src/engine/**` end up in the `.mo` and are looked up by the engine's own `ibDictionary` (`core/localization/dictionary.h`), one per language, chosen per thread by the base it works for ([translations.md](public/translations.md)). A program finds `lang/` beside it, or walking up from its folder in a build tree; the packages carry `lang/`. The browser page reads the same `.mo`, served by the web server at `lang/` (`www/src/localization.js`: `_(text)`, `_(text, context)`, and `labelText` for a stock word the thin client takes with its mnemonic, `&OK`).
 
 **Workflow** (when adding new `_()` strings):

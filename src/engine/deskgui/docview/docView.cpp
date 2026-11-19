@@ -1393,7 +1393,7 @@ void ibFrontendDocManager::OnUpdateFileSaveAs(wxUpdateUIEvent& event)
 
     // Normally Save-As requires a top-level document; OES allows child
     // documents whose template opts in via ibTEMPLATE_SAVE_AS_FILE
-    // (e.g. external data processor / report editor windows).
+    // (e.g. external data tool / report editor windows).
     bool enable_save_as = doc && !doc->IsChildDocument();
 
     if (docTemplate != nullptr &&
@@ -1556,7 +1556,7 @@ ibFrontendDocument* ibFrontendDocManager::FindOpenDocument(const wxString& ident
         return found;
 
     // …THEN THE OWNER'S. Editors opened from a navigator belong to the document holding that
-    // configuration and are not in the list above, so without this half the answer is "not open"
+    // application and are not in the list above, so without this half the answer is "not open"
     // about most of what is on screen.
     return docParent != nullptr ? docParent->FindChildDocument(identifier) : nullptr;
 }

@@ -2,15 +2,15 @@
 
 #include "backend/metaData.h"                      // ibMetaData::Deserialize — the door a caller HANDS IN
 #include "backend/backend_exception.h"             // ibBackendCoreException — a setting that cannot apply is refused
-#include "backend/backend_localization.h"          // a variant's caption is read in the configuration's language
+#include "backend/backend_localization.h"          // a variant's caption is read in the application's language
 #include "backend/compiler/valueSerialization.h"    // ibReadNodeType — whose value is in this node
-#include "backend/metadataSerialization.h"          // ibDeserializeValue — a stored value through the configuration
+#include "backend/metadataSerialization.h"          // ibDeserializeValue — a stored value through the application
 #include "backend/system/value/composition/valueComposerField.h"   // the declared value this tier vends
 
 #include <algorithm>                               // std::none_of — is this value one the field admits?
 
 // THE TWO DOORS — see the header. A stored node becomes a value only when somebody asks, with the
-// configuration to ask against; a value becomes a node by packing itself.
+// application to ask against; a value becomes a node by packing itself.
 ibValue ibStoredValue(const ibDataNode& stored, const ibMetaData* metaData)
 {
 	// NOTHING WAS STORED = an empty value, not a failure. A value writes its type into a field of the
@@ -21,17 +21,17 @@ ibValue ibStoredValue(const ibDataNode& stored, const ibMetaData* metaData)
 	// ⭐⭐ ITS OWN VALUE, BUILT BY ITS OWNER. `CompositionPredefinedValue` is a SYSTEM type — the value
 	// factory does not create those, and nothing writes `New` of it. It belongs to this tier: the
 	// designer's window makes one when a declared value is chosen, and here is where the store makes
-	// it back out of what it kept. Everything else goes through the configuration's own door.
+	// it back out of what it kept. Everything else goes through the application's own door.
 	if (ibReadNodeType(stored) == g_compositionPredefinedCLSID) {
 		ibValueCompositionPredefined* declared = new ibValueCompositionPredefined();
 		declared->Deserialize(stored);
 		return ibValue(declared);
 	}
 
-	// ⭐⭐ A STORED VALUE COMES BACK THROUGH THE CONFIGURATION'S OWN DOOR. A filter compares against references and enum
+	// ⭐⭐ A STORED VALUE COMES BACK THROUGH THE APPLICATION'S OWN DOOR. A filter compares against references and enum
 	// members, whose types exist only in the metadata's own registry; asking the value factory for one raises "Unknown
 	// value type '<id>' in the data" on a filter that was saved perfectly well. Whoever restores a value knows which
-	// configuration it belongs to and hands it in; none handed in, the door takes the session's.
+	// application it belongs to and hands it in; none handed in, the door takes the session's.
 	return ibDeserializeValue(stored, metaData);
 }
 
@@ -39,10 +39,10 @@ ibValue ibStoredValue(const ibDataNode& stored, const ibMetaData* metaData)
 // a type is a value: a 0, a False, an empty date or an empty reference was dropped here and read back as
 // Undefined — `Amount < 0` came back `Amount < Undefined` (2026-09-30, found by the round-trip test).
 //
-// …AND A VALUE OF A CONFIGURATION'S TYPE IS SAID AS IT READS, beside it (Presentation): a reference's name, an
-// enumeration member's word are the configuration's, and whoever shows a setting without one (a thin client's
+// …AND A VALUE OF AN APPLICATION'S TYPE IS SAID AS IT READS, beside it (Presentation): a reference's name, an
+// enumeration member's word are the application's, and whoever shows a setting without one (a thin client's
 // settings window) has nothing else to show it by. Written afresh at every write, never read back — the value is
-// read through the configuration's door (ibStoredValue).
+// read through the application's door (ibStoredValue).
 void ibStoreValue(ibDataNode& stored, const ibValue& value)
 {
 	stored = ibDataNode();
@@ -69,7 +69,7 @@ ibDataNode ibStoreValue(const ibValue& value)
 }
 
 // ===========================================================================
-//  The read against a configuration — every packed value read back once
+//  The read against an application — every packed value read back once
 // ===========================================================================
 namespace {
 void CheckStoredValue(const ibSettingsDescription& settings, const ibMetaData* metaData);
@@ -81,7 +81,7 @@ void CheckStoredValue(const std::vector<ibFilterNodeDescription>& nodes, const i
 			CheckStoredValue(item.m_children, metaData);
 			continue;
 		}
-		ibStoredValue(item.m_left.m_value, metaData);    // raises on a type this configuration does not have
+		ibStoredValue(item.m_left.m_value, metaData);    // raises on a type this application does not have
 		ibStoredValue(item.m_right.m_value, metaData);
 	}
 }
@@ -149,7 +149,7 @@ bool ibBackendTemplateDescriptionMemory::ReadNode(const ibDataValue& value, ibTe
 	return true;
 }
 
-// A VARIANT'S CAPTION, in the CONFIGURATION's language — see the note beside the declaration. The
+// A VARIANT'S CAPTION, in the APPLICATION's language — see the note beside the declaration. The
 // synonym is stored as a translated text; a language missing from it is answered inside the localizer,
 // and a synonym written plainly (no languages in it at all) is its own caption.
 ibString ibVariantCaption(const ibVariantDescription& variant)

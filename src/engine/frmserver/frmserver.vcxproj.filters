@@ -121,13 +121,13 @@
     <ClCompile Include="docView\templates\docViewAuditLog.cpp">
       <Filter>docView\templates</Filter>
     </ClCompile>
-    <ClCompile Include="docView\templates\docViewDataProcessorFile.cpp">
+    <ClCompile Include="docView\templates\docViewDataToolFile.cpp">
       <Filter>docView\templates</Filter>
     </ClCompile>
     <ClCompile Include="docView\templates\docViewDataReportFile.cpp">
       <Filter>docView\templates</Filter>
     </ClCompile>
-    <ClCompile Include="docView\templates\designer\docViewDataProcessorEdit.cpp">
+    <ClCompile Include="docView\templates\designer\docViewDataToolEdit.cpp">
       <Filter>docView\templates\designer</Filter>
     </ClCompile>
     <ClCompile Include="docView\templates\designer\docViewMetaFile.cpp">
@@ -157,10 +157,10 @@
     <ClCompile Include="docView\templates\docViewAssistant.cpp">
       <Filter>docView\templates</Filter>
     </ClCompile>
-    <ClCompile Include="docView\templates\designer\docViewCommonAttributeEdit.cpp">
+    <ClCompile Include="docView\templates\designer\docViewSharedAttributeEdit.cpp">
       <Filter>docView\templates\designer</Filter>
     </ClCompile>
-    <ClCompile Include="docView\templates\designer\docViewFunctionalOptionEdit.cpp">
+    <ClCompile Include="docView\templates\designer\docViewFeatureOptionEdit.cpp">
       <Filter>docView\templates\designer</Filter>
     </ClCompile>
     <ClCompile Include="docView\templates\designer\docViewComposerEdit.cpp">
@@ -265,7 +265,7 @@
     <ClCompile Include="mcp\tools\designer\mcpToolForms.cpp">
       <Filter>mcp\tools\designer</Filter>
     </ClCompile>
-    <ClCompile Include="mcp\tools\designer\mcpToolFunctionalOption.cpp">
+    <ClCompile Include="mcp\tools\designer\mcpToolFeatureOption.cpp">
       <Filter>mcp\tools\designer</Filter>
     </ClCompile>
     <ClCompile Include="mcp\tools\designer\mcpToolJournal.cpp">
@@ -322,10 +322,10 @@
     <ClCompile Include="mcp\tools\runtime\mcpToolWindow.cpp">
       <Filter>mcp\tools\runtime</Filter>
     </ClCompile>
-    <ClCompile Include="metaTree\treeConfiguration.cpp">
+    <ClCompile Include="metaTree\treeApplication.cpp">
       <Filter>metaTree</Filter>
     </ClCompile>
-    <ClCompile Include="metaTree\treeDataProcessor.cpp">
+    <ClCompile Include="metaTree\treeDataTool.cpp">
       <Filter>metaTree</Filter>
     </ClCompile>
     <ClCompile Include="metaTree\treeDataReport.cpp">
@@ -364,7 +364,7 @@
     <ClCompile Include="schema\designer\objectText.cpp">
       <Filter>schema\designer</Filter>
     </ClCompile>
-    <ClCompile Include="schema\designer\configCompare.cpp">
+    <ClCompile Include="schema\designer\applicationCompare.cpp">
       <Filter>schema\designer</Filter>
     </ClCompile>
     <ClCompile Include="schema\designer\database.cpp">
@@ -754,13 +754,13 @@
     <ClInclude Include="docView\templates\docViewAuditLog.h">
       <Filter>docView\templates</Filter>
     </ClInclude>
-    <ClInclude Include="docView\templates\docViewDataProcessorFile.h">
+    <ClInclude Include="docView\templates\docViewDataToolFile.h">
       <Filter>docView\templates</Filter>
     </ClInclude>
     <ClInclude Include="docView\templates\docViewDataReportFile.h">
       <Filter>docView\templates</Filter>
     </ClInclude>
-    <ClInclude Include="docView\templates\designer\docViewDataProcessorEdit.h">
+    <ClInclude Include="docView\templates\designer\docViewDataToolEdit.h">
       <Filter>docView\templates\designer</Filter>
     </ClInclude>
     <ClInclude Include="docView\templates\designer\docViewMetaFile.h">
@@ -781,10 +781,10 @@
     <ClInclude Include="docView\templates\docViewAssistant.h">
       <Filter>docView\templates</Filter>
     </ClInclude>
-    <ClInclude Include="docView\templates\designer\docViewCommonAttributeEdit.h">
+    <ClInclude Include="docView\templates\designer\docViewSharedAttributeEdit.h">
       <Filter>docView\templates\designer</Filter>
     </ClInclude>
-    <ClInclude Include="docView\templates\designer\docViewFunctionalOptionEdit.h">
+    <ClInclude Include="docView\templates\designer\docViewFeatureOptionEdit.h">
       <Filter>docView\templates\designer</Filter>
     </ClInclude>
     <ClInclude Include="docView\templates\designer\docViewComposerEdit.h">
@@ -829,10 +829,10 @@
     <ClInclude Include="mcp\tools\mcpToolMetadata.h">
       <Filter>mcp\tools</Filter>
     </ClInclude>
-    <ClInclude Include="metaTree\treeConfiguration.h">
+    <ClInclude Include="metaTree\treeApplication.h">
       <Filter>metaTree</Filter>
     </ClInclude>
-    <ClInclude Include="metaTree\treeDataProcessor.h">
+    <ClInclude Include="metaTree\treeDataTool.h">
       <Filter>metaTree</Filter>
     </ClInclude>
     <ClInclude Include="metaTree\treeDataReport.h">
@@ -871,7 +871,7 @@
     <ClInclude Include="schema\designer\objectText.h">
       <Filter>schema\designer</Filter>
     </ClInclude>
-    <ClInclude Include="schema\designer\configCompare.h">
+    <ClInclude Include="schema\designer\applicationCompare.h">
       <Filter>schema\designer</Filter>
     </ClInclude>
     <ClInclude Include="schema\designer\database.h">

@@ -84,7 +84,7 @@ class ibDebuggerClient {
 		std::vector<std::unique_ptr<ibDebuggerClientBridge> > m_debugBridges;
 	};
 
-	// THE CONFIGURATION IS THE SERVER'S: its guid, asked of schema Debugger; and the debugger's news listened to from then
+	// THE APPLICATION IS THE SERVER'S: its guid, asked of schema Debugger; and the debugger's news listened to from then
 	// on (Listen).
 	ibDebuggerClient();
 	// …or of its store as the login read it (the designer's GetStartSchemas): nothing asked.
@@ -127,8 +127,8 @@ public:
 		friend class ibDebuggerClient;
 	};
 
-	// The configuration the runtimes over there are checked against — the engine's GetMetaData()->GetConfigGuid().
-	const ibGuid& GetConfigGuid() const { return m_configGuid; }
+	// The application the runtimes over there are checked against — the engine's GetMetaData()->GetApplicationGuid().
+	const ibGuid& GetApplicationGuid() const { return m_applicationGuid; }
 
 	void SetBridge(ibDebuggerClientBridge* bridge) { m_adapter->SetBridge(bridge); }
 
@@ -249,7 +249,7 @@ private:
 
 	static ibDebuggerClient* ms_debugClient;
 
-	ibGuid m_configGuid;
+	ibGuid m_applicationGuid;
 
 	ibDebuggerClientAdapter* m_adapter = nullptr;
 

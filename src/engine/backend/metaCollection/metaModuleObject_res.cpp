@@ -15,12 +15,12 @@ ibPicture ibValueMetaObjectModuleBase::GetIconGroup()
 	return picture;
 }
 
-ibPicture ibValueMetaObjectCommonModule::GetIcon() const
+ibPicture ibValueMetaObjectSharedModule::GetIcon() const
 {
 	return GetIconGroup();
 }
 
-ibPicture ibValueMetaObjectCommonModule::GetIconGroup()
+ibPicture ibValueMetaObjectSharedModule::GetIconGroup()
 {
 	static const ibPicture picture = ibPicture::FromBase64(s_module_64_png, ibSize(16, 16));
 

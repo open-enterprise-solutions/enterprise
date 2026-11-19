@@ -1,12 +1,12 @@
 #include "variantType.h"
 #include "backend/metaData.h"
-#include "backend/objCtor.h"   // ibOpenBarriers — what a declared type holds in the configuration
+#include "backend/objCtor.h"   // ibOpenBarriers — what a declared type holds in the application
 
 ibString ibVariantAttribute::GetString() const
 {
 	ibString strDescr;
 	if (m_ownerProperty != nullptr) {
-		// The same owner as DoRefreshTypeDesc, and the same answer when it has no configuration: the value
+		// The same owner as DoRefreshTypeDesc, and the same answer when it has no application: the value
 		// registry names what it holds itself.
 		const ibMetaData* metaData = m_ownerProperty->GetMetaData();
 		for (const auto clsid : m_typeDesc.GetClsidList()) {
@@ -22,14 +22,14 @@ ibString ibVariantAttribute::GetString() const
 
 void ibVariantAttribute::DoSetDefaultMetaType() {
 	if (m_ownerProperty != nullptr)
-		m_typeDesc.SetDefaultMetaType(ibBackendTypeConfigFactory::GetDefaultTypeByFilter(m_ownerProperty->GetFilterDataType()));
+		m_typeDesc.SetDefaultMetaType(ibBackendTypeApplicationFactory::GetDefaultTypeByFilter(m_ownerProperty->GetFilterDataType()));
 }
 
 void ibVariantAttribute::DoSetFromMetaId(const ibMetaID& id)
 {
 	if (m_ownerProperty != nullptr && id != ibNOT_FOUND) {
 
-		// An attribute is found in a configuration; an owner that has none (see DoRefreshTypeDesc) finds none.
+		// An attribute is found in an application; an owner that has none (see DoRefreshTypeDesc) finds none.
 		const ibMetaData* metaData = m_ownerProperty->GetMetaData();
 		if (metaData == nullptr) {
 			SetDefaultMetaType();
@@ -63,11 +63,11 @@ void ibVariantAttribute::DoRefreshTypeDesc()
 {
 	if (m_ownerProperty != nullptr) {
 
-		// 🛑 THE OWNER NEED NOT BELONG TO A CONFIGURATION. A value table's column answers the ACTIVE one, and a
+		// 🛑 THE OWNER NEED NOT BELONG TO AN APPLICATION. A value table's column answers the ACTIVE one, and a
 		// process may have none — a test, a headless tool before it opens a base. The check below then read the
-		// configuration through nothing, and giving a table's column a type there was an access violation
+		// application through nothing, and giving a table's column a type there was an access violation
 		// (ValueTableVerbs.AColumnAddedWithoutAType_KeepsTextOfAnyLength, on every platform of CI, 2026-09-22):
-		// the untyped columns every other test used never came here. Without a configuration there is nothing a
+		// the untyped columns every other test used never came here. Without an application there is nothing a
 		// type can have been removed from — the value registry's own types stand as given, the same rule
 		// ibValueTypeDescription::AdjustValue keeps for the same process.
 		const ibMetaData* metaData = m_ownerProperty->GetMetaData();

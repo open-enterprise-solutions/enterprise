@@ -9,7 +9,7 @@
 // examples, and which runtimes an entry is even valid in.
 //
 // ⭐ IT IS THE SYNTAX HELPER AND NOTHING ELSE — the same corpus the designer shows beside the
-// editor. What a CONFIGURATION holds is metadata_tree / metadata_get / query_fields; how something
+// editor. What an APPLICATION holds is metadata_tree / metadata_get / query_fields; how something
 // is USUALLY BUILT here is pattern_read. Those three questions look alike and are not, and a verb
 // that answers all of them teaches a caller to ask the wrong one.
 //
@@ -25,8 +25,8 @@
 #include "frmserver/mcp/mcpTool.h"
 
 #include "backend/appData.h"
-#include "backend/metaCollection/metaIntrospect.h"   // ibConfigurationWritesInWords — the dialect this configuration uses
-#include "backend/metadataConfiguration.h"
+#include "backend/metaCollection/metaIntrospect.h"   // ibApplicationWritesInWords — the dialect this application uses
+#include "backend/metadataApplication.h"
 #include "core/syntaxHelper/helpCorpus.h"
 #include "core/syntaxHelper/helpEntry.h"
 #include "core/syntaxHelper/helpService.h"
@@ -37,7 +37,7 @@ namespace {
 // would hand back the other dialect's spelling — code that reads correctly and
 // does not compile, which is the worst kind of wrong answer to give something
 // that cannot tell.
-bool WritesInWords() { return ibConfigurationWritesInWords(activeMetaData); }
+bool WritesInWords() { return ibApplicationWritesInWords(activeMetaData); }
 
 // The id grammar already carries the kind as a prefix ("fn.Message"), but a
 // caller should not have to parse an id to learn what it is holding: the
@@ -60,7 +60,7 @@ ibString KindWord(ibHelpKind kind)
 	// for any of these and handed them over as kKeyword, so every property and method of every
 	// class answered `help_read` with "keyword" — the one classification that is never true of a
 	// member. The words differ from the metaobject ones on purpose: "attribute" and "method"
-	// there are about a CONFIGURATION's object, these are about a platform class.
+	// there are about an APPLICATION's object, these are about a platform class.
 	case ibHelpKind::kProperty:            return ibT("property");
 	case ibHelpKind::kMethod:              return ibT("classMethod");
 	case ibHelpKind::kProcedure:           return ibT("classProcedure");
@@ -105,9 +105,9 @@ ibDataValue Brief(const ibHelpEntry& entry)
 		node->SetValue(ibT("signature"), entry.signature);
 
 	// Whose documentation this is. A platform entry describes the engine; one
-	// from the configuration describes what somebody built here, and a caller
+	// from the application describes what somebody built here, and a caller
 	// weighing an answer wants to know which.
-	node->AddField(ibT("fromConfiguration"), ibDataValue::Bool(entry.fromConfiguration));
+	node->AddField(ibT("fromApplication"), ibDataValue::Bool(entry.fromApplication));
 
 	return ibDataValue::Child(node);
 }
@@ -191,7 +191,7 @@ public:
 			"because you have to know a thing exists to search for it.\nThe types and enumerations "
 			"of the platform that have no article come back as `types`: syntax_get with the name "
 			"says what one offers.\nIT IS NOT A SEARCH OVER "
-			"THE CONFIGURATION, and does not pretend to be: what an "
+			"THE APPLICATION, and does not pretend to be: what an "
 			"object holds is answered by metadata_tree / metadata_get, its fields by query_fields, "
 			"and how something is USUALLY BUILT here by pattern_read.");
 	}
@@ -245,7 +245,7 @@ public:
 			}
 		}
 
-		// No `id` on the hit: a place with one is an object of this configuration (mcp_search), and a type's is a
+		// No `id` on the hit: a place with one is an object of this application (mcp_search), and a type's is a
 		// class id.
 		for (const ibDataValue& type : Types(query, found)) {
 			if (taken == 4)
@@ -312,7 +312,7 @@ public:
 
 		// ⭐ THIS IS THE SYNTAX HELPER, AND ONLY THAT — the same corpus the designer shows beside the
 		// editor: how the LANGUAGE is written. It briefly also answered names out of the open
-		// configuration, and that was a mixing of two different questions: what a configuration
+		// application, and that was a mixing of two different questions: what an application
 		// HOLDS is metadata_tree / metadata_get / query_fields, and how things are USUALLY BUILT is
 		// pattern_read, which is the reference of the trade. A search that answers all three teaches
 		// a caller to ask the wrong one of them.
@@ -322,7 +322,7 @@ public:
 		if (entries.empty() && types.empty())
 			result.SetValue(ibT("nothing"),
 				ibMcpText("Nothing in the syntax helper by that name. This is the LANGUAGE reference - "
-				  "functions, keywords, types. For what THIS configuration holds ask metadata_tree / "
+				  "functions, keywords, types. For what THIS application holds ask metadata_tree / "
 				  "metadata_get / query_fields; for how such a thing is usually built, pattern_read."));
 
 		// The corpus's own digest. A caller that caches answers can tell whether
@@ -377,7 +377,7 @@ public:
 		return ibMcpText("One entry of the SYNTAX HELPER in full: signature, parameters, what it returns, "
 			"both syntax forms, worked examples, and which runtimes it is valid in. Ids come from "
 			"syntax_search - the language ones (`kw.`, `fn.`, `cls.`, `guide.`) - and a name from its "
-			"`types` answers with what that type offers. An object of the configuration has no "
+			"`types` answers with what that type offers. An object of the application has no "
 			"article here; it is read with metadata_get.");
 	}
 
@@ -397,20 +397,20 @@ public:
 		const ibHelpEntry* entry = corpus->FindById(id);
 		if (entry == nullptr) {
 
-			// ⭐ AN ID FROM THE CONFIGURATION HALF OF syntax_search LANDS HERE, and "no such entry" is
+			// ⭐ AN ID FROM THE APPLICATION HALF OF syntax_search LANDS HERE, and "no such entry" is
 			// a true sentence that teaches the caller nothing: `Document.GoodsReceipt` was just
-			// handed to them BY syntax_search, marked `fromConfiguration` with the verb to read it
+			// handed to them BY syntax_search, marked `fromApplication` with the verb to read it
 			// beside it. There is no article to fetch — objects are read with the metadata verbs —
 			// so say that, with the id those verbs take, instead of sending them back to the search
 			// that already answered.
 			const ibString objectName = id.AfterLast(ibT('.'));
 
-			if (!objectName.IsEmpty() && activeMetaData != nullptr && activeMetaData->IsConfigOpen()) {
+			if (!objectName.IsEmpty() && activeMetaData != nullptr && activeMetaData->IsOpen()) {
 				if (const ibValueMetaObject* object =
 						activeMetaData->FindAnyObjectByFilter<ibValueMetaObject>(objectName)) {
 
 					refusal = ibString::Format(
-						ibMcpText("'%s' is an object of this configuration, not an article - it has no "
+						ibMcpText("'%s' is an object of this application, not an article - it has no "
 						  "help text of its own. Read it with metadata_get {id: %i}, its fields with "
 						  "query_fields."), id, (int)object->GetMetaID());
 					return false;
@@ -446,10 +446,10 @@ public:
 		if (!entry->parameters.IsEmpty())  result.SetValue(ibT("parameters"), entry->parameters);
 		if (!entry->returnDescr.IsEmpty()) result.SetValue(ibT("returns"), entry->returnDescr);
 
-		// ⚠ TWO SYNTAX FORMS, AND THE CONFIGURATION DECIDES WHICH IS RIGHT. The
+		// ⚠ TWO SYNTAX FORMS, AND THE APPLICATION DECIDES WHICH IS RIGHT. The
 		// same entry carries a C-style spelling and a word-style one; handing
 		// back the other dialect's produces code that reads correctly and does
-		// not compile. So `syntax` and `example` are THIS configuration's form —
+		// not compile. So `syntax` and `example` are THIS application's form —
 		// what to write — and the other one is offered beside it, named, for a
 		// caller that is reading someone else's module rather than writing.
 		const bool words = WritesInWords();
@@ -485,7 +485,7 @@ public:
 		if (!related.empty())
 			result.AddField(ibT("seeAlso"), ibDataValue::Array(related));
 
-		result.AddField(ibT("fromConfiguration"), ibDataValue::Bool(entry->fromConfiguration));
+		result.AddField(ibT("fromApplication"), ibDataValue::Bool(entry->fromApplication));
 
 		// ⚠ SAID PLAINLY: a draft was written by a machine and has not been
 		// through a person. Passing it on as settled documentation is how a wrong

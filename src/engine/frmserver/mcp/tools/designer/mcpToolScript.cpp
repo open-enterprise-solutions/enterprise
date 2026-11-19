@@ -11,7 +11,7 @@
 
 #include "backend/compiler/scriptCheck.h"
 #include "backend/compiler/scriptComplete.h" // ibOutlineScriptQueries — what the compiler understood
-#include "backend/metadataConfiguration.h"   // the open configuration is the check's context
+#include "backend/metadataApplication.h"   // the open application is the check's context
 
 namespace {
 
@@ -66,7 +66,7 @@ public:
 		return ibMcpText("Compile a module text and report what is wrong with it. The text is compiled and "
 			"thrown away: nothing is stored and no module is replaced. An empty diagnostics list "
 			"means it compiles.\n"
-			"IT COMPILES A BARE TEXT, WITH NO OWNER. The configuration's globals, managers and "
+			"IT COMPILES A BARE TEXT, WITH NO OWNER. The application's globals, managers and "
 			"metatype collections resolve; the OWN NAMES OF AN OBJECT MODULE do not - a document's "
 			"attribute, a catalog's tabular section. So `Var is not found (FixedAsset)` about a "
 			"document's own attribute is this tool's limit and not a fault in the code. For an "
@@ -91,24 +91,24 @@ public:
 
 		const ibString module = ArgModule().Text(params);
 
-		// ⭐ THE OPEN CONFIGURATION IS THE CONTEXT, and it is handed over rather than reached for.
+		// ⭐ THE OPEN APPLICATION IS THE CONTEXT, and it is handed over rather than reached for.
 		// Without it the compile has no parent and the platform's own globals do not resolve — a
 		// check that answers *"Procedure or function not detected (Message)"* about `Message`.
 		const ibMetaData* const context =
-			activeMetaData != nullptr && activeMetaData->IsConfigOpen() ? activeMetaData : nullptr;
+			activeMetaData != nullptr && activeMetaData->IsOpen() ? activeMetaData : nullptr;
 
 		const ibString named = module.IsEmpty() ? ibString(ibT("module")) : module;
 		const std::vector<ibDiagnostic> diagnostics = ibCheckScript(text, named, context);
 
 		// ⭐⭐ THE VERDICT IS ABOUT THE TEXT THAT WAS SENT, and only compiling it with the
-		// configuration open showed that it had not been. Bringing the context in brings its
+		// application open showed that it had not been. Bringing the context in brings its
 		// modules too, so a module somebody is editing in the designer RIGHT NOW — unfinished, as
 		// an edited module is — puts its own errors in this list, and `ok` went false about a text
 		// that was perfect. Measured 2026-09-08: `var x = 1;` came back false, with one diagnostic
-		// naming ConfigurationModule line 8.
+		// naming ApplicationModule line 8.
 		//
 		// Both halves are kept, because both are worth knowing: the caller's own errors decide the
-		// verdict, and the configuration's are reported beside them under their own name — a query
+		// verdict, and the application's are reported beside them under their own name — a query
 		// written against a module that does not compile is worth a warning, not a silent pass.
 		std::vector<ibDiagnostic> mine, elsewhere;
 		for (const ibDiagnostic& one : diagnostics)
@@ -117,9 +117,9 @@ public:
 		result.AddField(ibT("ok"), ibDataValue::Bool(mine.empty()));
 		result.AddField(ibT("diagnostics"), DiagnosticsOf(mine));
 		if (!elsewhere.empty())
-			result.AddField(ibT("inTheConfiguration"), DiagnosticsOf(elsewhere));
+			result.AddField(ibT("inTheApplication"), DiagnosticsOf(elsewhere));
 
-		// ⚠ SAID OUT LOUD, because it is what the answer is worth. With a configuration open the
+		// ⚠ SAID OUT LOUD, because it is what the answer is worth. With an application open the
 		// text is judged against its module manager — the globals, Manager, the metatype
 		// collections — which is what a real module sees minus its OWN owner's names. Without one
 		// it is the language and nothing else.
@@ -128,7 +128,7 @@ public:
 		// stopped being text-only, which is a lie in the one field a caller reads to know how much
 		// to trust the verdict.
 		result.SetValue(ibT("scope"), ibString(context != nullptr
-			? ibMcpText("this configuration's context, but NO owning object - see ownNames if there are any")
+			? ibMcpText("this application's context, but NO owning object - see ownNames if there are any")
 			: ibString(ibT("text-only"))));
 
 		// ⭐⭐ AND AN UNRESOLVED NAME SAYS WHICH OF THE TWO IT IS. `Var is not found` is what this
@@ -154,7 +154,7 @@ public:
 				  "belong to the object, and this check compiles the text with no owner. Write it "
 				  "with `module_write` instead - that compiles against the owning metaobject, the "
 				  "way the designer's Syntax control does, and its `diagnostics` are the ones to act "
-				  "on. For a common module, where there is no owner to miss, the name really is "
+				  "on. For a shared module, where there is no owner to miss, the name really is "
 				  "unknown."));
 		}
 
@@ -230,7 +230,7 @@ public:
 
 		const ibString module = ArgModule().Text(params);
 		const ibMetaData* const context =
-			activeMetaData != nullptr && activeMetaData->IsConfigOpen() ? activeMetaData : nullptr;
+			activeMetaData != nullptr && activeMetaData->IsOpen() ? activeMetaData : nullptr;
 
 		const std::vector<ibQueryOutline> outlines =
 			ibOutlineScriptQueries(text, module.IsEmpty() ? ibString(ibT("module")) : module, context);
@@ -297,7 +297,7 @@ public:
 		result.AddField(ibT("count"), ibDataValue::Int((std::int64_t)queries.size()));
 		result.AddField(ibT("queries"), ibDataValue::Array(queries));
 		result.SetValue(ibT("scope"), ibString(context != nullptr
-			? ibMcpText("this configuration's context") : ibString(ibT("text-only"))));
+			? ibMcpText("this application's context") : ibString(ibT("text-only"))));
 
 		if (queries.empty())
 			result.SetValue(ibT("note"), ibMcpText("No `from ...` query and no `restrict ...` in this "

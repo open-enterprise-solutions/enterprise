@@ -25,9 +25,9 @@ public:
 	// its form via GetFormByCommandType); a command OVERRIDES Execute to run its runtime handler instead. srcForm /
 	// commandParameter are the context an override may use (the default form path ignores them), so a bare
 	// Execute(cmdType) is the common call.
-	// CONST — the metaobject is CONST (found through a const config); execution does NOT mutate it: it opens a form
+	// CONST — the metaobject is CONST (found through a const application); execution does NOT mutate it: it opens a form
 	// (a fresh form value) or, for a command, spawns a TRANSIENT runtime (ibValueCommandDataObject) that lives only
-	// for the call and vanishes. So a const command / object, resolved from the FORM's own const config, runs — no
+	// for the call and vanishes. So a const command / object, resolved from the FORM's own const application, runs — no
 	// activeMetaData, no const_cast.
 	virtual bool Execute(ibInterfaceCommandType cmdType = ibInterfaceCommandType::ibInterfaceCommandType_Default,
 	                     ibBackendValueForm* srcForm = nullptr, ibValue* commandParameter = nullptr) const;
@@ -86,7 +86,7 @@ public:
 
 #pragma region _form_builder_h_
 	// MY form value, bound to whatever source my kind implies — the one verb, answered by each
-	// kind for itself: a common form stands alone, an object form asks the object that owns it.
+	// kind for itself: a shared form stands alone, an object form asks the object that owns it.
 	// A caller never asks "which kind are you" and then casts to say it; the access right is
 	// answered by the same call.
 	//
@@ -139,10 +139,10 @@ class BACKEND_API ibValueMetaObjectGenericData;
 class BACKEND_API ibDeferredForm {
 public:
 	// `build` = how THIS form materialises its runtime value. Both form kinds are DEFERRED (the build only
-	// runs on first FindCompileModule, AFTER the whole config has run and every metaobject is registered) so
+	// runs on first FindCompileModule, AFTER the whole application has run and every metaobject is registered) so
 	// a form can safely resolve its attribute types / source hops against objects that register later in the
 	// pass. The two kinds differ only in the entry: an OBJECT form goes through its owning GenericData (which
-	// binds the source object), a COMMON form builds standalone — both land on CreateAndBuildForm underneath.
+	// binds the source object), a SHARED form builds standalone — both land on CreateAndBuildForm underneath.
 	// The form ptr is kept for the paste re-home: Construct reads its LIVE paste mark at build time.
 	ibDeferredForm(ibValueMetaObjectFormBase* form, std::function<ibFormPtr<ibBackendValueForm>()> build) noexcept
 		: m_form(form), m_build(std::move(build)) {}
@@ -245,14 +245,14 @@ private:
 };
 
 // -----------------------------------------------------------------------
-// ibValueMetaObjectCommonForm
+// ibValueMetaObjectSharedForm
 // -----------------------------------------------------------------------
 
-class BACKEND_API ibValueMetaObjectCommonForm :
+class BACKEND_API ibValueMetaObjectSharedForm :
 	public ibValueMetaObjectFormBase, public ibBackendCommandItem {
 	public:
 
-	// A common form can be checked into a section — it opens from the navigation panel.
+	// A shared form can be checked into a section — it opens from the navigation panel.
 	// (A form belonging to an object cannot: it is reached through that object.)
 	virtual bool IsInterfaceAllowed() const override { return true; }
 
@@ -265,7 +265,7 @@ class BACKEND_API ibValueMetaObjectCommonForm :
 	bool AccessRight_Use() const { return IsFullAccess() || AccessRight(m_roleUse); }
 #pragma endregion
 
-	ibValueMetaObjectCommonForm(const ibString& strName = ibEmptyString, const ibString& synonym = ibEmptyString, const ibString& comment = ibEmptyString);
+	ibValueMetaObjectSharedForm(const ibString& strName = ibEmptyString, const ibString& synonym = ibEmptyString, const ibString& comment = ibEmptyString);
 
 	//support icons
 	virtual ibPicture GetIcon() const;
@@ -322,7 +322,7 @@ protected:
 private:
 
 	ibPropertyForm* m_propertyForm = ibPropertyObject::CreateProperty<ibPropertyForm>(m_categoryContext, ibT("FormData"), _("Form"),
-		_("The common form itself: its layout (controls, attributes, commands) and its module code, kept together in one cell. A common form belongs to no object; it is opened by name or from a section of the navigation panel."));
+		_("The shared form itself: its layout (controls, attributes, commands) and its module code, kept together in one cell. A shared form belongs to no object; it is opened by name or from a section of the navigation panel."));
 
 #pragma region role
 	ibRole* m_roleUse = ibValueMetaObject::CreateRole(ibT("Use"), ibGETTEXT_IN_CONTEXT("access right", "Use"));

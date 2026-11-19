@@ -10,7 +10,7 @@
 // GetInterfaceItemArrayObject() — the same question without an area — is that page's question, answered
 // once per object.
 //
-// DB-FREE AND UI-FREE: a fresh ibMetaDataConfigurationFile, objects created with runObject=false and
+// DB-FREE AND UI-FREE: a fresh ibMetaDataApplicationFile, objects created with runObject=false and
 // included into the section with SetInterface — the same call section_include makes.
 // =============================================================================
 
@@ -20,7 +20,7 @@
 #include <algorithm>
 #include <vector>
 
-#include "backend/metadataConfiguration.h"
+#include "backend/metadataApplication.h"
 #include "backend/metaCollection/metaObject.h"
 #include "backend/metaCollection/metaSectionObject.h"
 #include "backend/metaCollection/metaCommandGroupObject.h"
@@ -28,12 +28,12 @@
 namespace {
 
 struct SectionFix {
-	ibMetaDataConfigurationFile cfg;
-	ibValueMetaObjectConfiguration* root = nullptr;
+	ibMetaDataApplicationFile cfg;
+	ibValueMetaObjectApplication* root = nullptr;
 	ibValueMetaObjectSection* section = nullptr;
 
 	SectionFix() {
-		root = cfg.GetCommonMetaObject();
+		root = cfg.GetRootMetaObject();
 		if (root == nullptr)
 			return;
 		section = dynamic_cast<ibValueMetaObjectSection*>(
@@ -118,7 +118,7 @@ TEST(SectionInterfaceItems, SeveralObjects_EachOnce_InTheOrderTheyAreFirstMet)
 	EXPECT_EQ(1u, Occurrences(shown, documents));
 	EXPECT_EQ(3u, shown.size());
 
-	// Default area first, in the configuration's own order: Firms, Staff, then Orders.
+	// Default area first, in the application's own order: Firms, Staff, then Orders.
 	const auto at = [&](const ibValueMetaObject* o) { return std::find(shown.begin(), shown.end(), o) - shown.begin(); };
 	EXPECT_LT(at(firms), at(staff));
 	EXPECT_LT(at(staff), at(documents));
@@ -146,14 +146,14 @@ TEST(SectionInterfaceItems, AnEmptySection_ShowsNothing)
 
 // =============================================================================
 // COMMAND GROUPS — a command names its group in Group: one of the platform's (the area) or one the
-// configuration declares (its metaID). The section files a command under a declared group there, and in
+// application declares (its metaID). The section files a command under a declared group there, and in
 // no platform area.
 // =============================================================================
 
 namespace {
 
 ibValueMetaObject* IncludeCommand(SectionFix& f, const ibString& name, long group) {
-	ibValueMetaObject* command = f.Include(g_metaCommonCommandCLSID, name);
+	ibValueMetaObject* command = f.Include(g_metaSharedCommandCLSID, name);
 	if (command != nullptr)
 		command->GetProperty(ibT("Group"))->SetValue(ibVariant(group));
 	return command;

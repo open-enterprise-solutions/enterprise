@@ -17,7 +17,7 @@
 
 bool ibValueMetaObjectStoredValue::CreateConstantSQLTable()
 {
-	RestructureWarning(_("Create constant table"));   // static facade -> the active config's ledger
+	RestructureWarning(_("Create constant table"));   // static facade -> the active application's ledger
 
 	//create constats
 	ibDatabaseQueryBuilder q;
@@ -49,7 +49,7 @@ bool ibValueMetaObjectStoredValue::DeleteConstantSQLTable()
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////
 
-// (Constant dump & restore are GONE — sys_const is just another ibSchemaTable in the config snapshot;
+// (Constant dump & restore are GONE — sys_const is just another ibSchemaTable in the application snapshot;
 //  the L3-3 mover's EXTERNAL single-row mode UPDATEs its constant columns in place (the '6' key row is
 //  pre-seeded by CreateConstantSQLTable). One source of truth: ContributeTables drives DDL AND data.)
 

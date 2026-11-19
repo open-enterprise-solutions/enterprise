@@ -40,7 +40,7 @@ enum ibContentType
 // were — so a module's export surface could say a method takes three arguments and never which
 // three, and every caller looking at `Print` was told its arity and left to guess the rest
 // (2026-09-09, reading a manager's members through script_complete: platform verbs came back
-// with their call form, a configuration's own with a bare name).
+// with their call form, an application's own with a bare name).
 //
 // The two axes beside the name are the ones that change how a CALL is written: `Val` decides
 // whether the callee can hand something back through the argument, and a default decides whether

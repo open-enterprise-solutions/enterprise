@@ -4,7 +4,7 @@
 
 #include "translateConstructor.h"
 
-#include "frmclient/backend/userInfo.h"   // ibUserInfo::ListLanguages — the configuration's languages, the server's
+#include "frmclient/backend/userInfo.h"   // ibUserInfo::ListLanguages — the application's languages, the server's
 #include "core/stringUtils.h"
 
 #include "deskgui/univ/ctrl/button.h"
@@ -25,12 +25,12 @@ ibDialogTranslateConstructor::ibDialogTranslateConstructor(wxWindow* parent, con
 	: ibDialog(parent, wxID_ANY, title, wxDefaultPosition, wxDefaultSize, wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER),
 	m_original(text)
 {
-	// The configuration's languages, in its own order — the server's (an extension's are its owner's).
+	// The application's languages, in its own order — the server's (an extension's are its owner's).
 	std::vector<std::pair<wxString, wxString>> languages;   // code, what a person calls it
 	for (const ibUserInfo::LanguageBrief& language : ibUserInfo::ListLanguages(metaData))
 		languages.emplace_back(language.m_strLanguageCode, language.m_strLanguageTitle);
-	const bool hasConfiguration = !languages.empty();
-	// No configuration behind the text: the language in force is the one box every text has.
+	const bool hasApplication = !languages.empty();
+	// No application behind the text: the language in force is the one box every text has.
 	if (languages.empty())
 		languages.emplace_back(ibBackendLocalization::GetUserLanguage(), wxString());
 
@@ -84,7 +84,7 @@ ibDialogTranslateConstructor::ibDialogTranslateConstructor(wxWindow* parent, con
 	top->Add(own, wxSizerFlags(static_cast<int>(languages.size())).Expand().Border(wxALL, gap * 2));
 
 	// ⭐ WHAT THE TEXT HOLDS BEYOND THOSE LANGUAGES — shown apart, and kept. Rebuilding the text from the
-	// configuration's languages is how a translation written for one nobody declared was lost unseen.
+	// application's languages is how a translation written for one nobody declared was lost unseen.
 	wxFlexGridSizer* other = nullptr;
 	wxSizerItem* otherItem = nullptr;
 	int otherRows = 0;
@@ -92,8 +92,8 @@ ibDialogTranslateConstructor::ibDialogTranslateConstructor(wxWindow* parent, con
 		if (isLanguage(entry.m_code))
 			continue;
 		if (other == nullptr) {
-			top->Add(new ibStaticText(this, wxID_ANY, hasConfiguration
-					? _("Also in this text, for codes this configuration has no language for. They are kept:")
+			top->Add(new ibStaticText(this, wxID_ANY, hasApplication
+					? _("Also in this text, for codes this application has no language for. They are kept:")
 					: _("Also in this text:")),
 				wxSizerFlags().Border(wxLEFT | wxRIGHT, gap * 2));
 			other = new wxFlexGridSizer(2, gap, gap);

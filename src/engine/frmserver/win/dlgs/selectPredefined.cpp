@@ -121,7 +121,7 @@ bool ibShowPredefinedSelector(ibControlFrame* ownerValue, const ibTypeDescriptio
 
 	// A FAMILY (`CatalogRef`, `AnyRef`) stands for every reference it admits: each is a branch of its own, as if it had
 	// been declared by hand - the way every picker opens a barrier (ibOpenBarriers). A family left with none is in no
-	// configuration's image and offers nothing.
+	// application's image and offers nothing.
 	for (const ibClassID& clsid : ibOpenBarriers(declared, metaData).GetClsidList()) {
 		if (IsReference(clsid) && clsid_is_any(clsid))
 			continue;
@@ -154,7 +154,7 @@ bool ibShowPredefinedSelector(ibControlFrame* ownerValue, const ibTypeDescriptio
 		return true;
 	}
 
-	// …AND THE TECHNICAL ENTRY ASKS THE SECOND QUESTION: which of the values the configuration
+	// …AND THE TECHNICAL ENTRY ASKS THE SECOND QUESTION: which of the values the application
 	// declares this is — an empty reference, a predefined element, an enumeration member — with every
 	// admitted reference type standing as its own branch, in the client's window.
 	ibBackendDocFrame* const frame = ibSession::CurrentFrame();
@@ -176,7 +176,7 @@ bool ibShowPredefinedSelector(ibControlFrame* ownerValue, const ibTypeDescriptio
 
 	// ⭐⭐ WHAT IS WRITTEN IS THE DECLARATION, NOT A LIVE REFERENCE. A reference object is runtime — a
 	// session, a register, a row to read — and this value is going into a DESCRIPTION that is saved
-	// with the configuration and read back while the next load is still building the tree. So the
+	// with the application and read back while the next load is still building the tree. So the
 	// choice is stored as what it is: this metaobject, this declared value, and the name it reads by.
 	// The runtime reference is made from it at execution, by the running composer
 	// (ibMaterializeCompositionValue).

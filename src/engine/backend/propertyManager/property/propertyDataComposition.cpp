@@ -1,7 +1,7 @@
 #include "propertyDataComposition.h"
 
 #include "backend/propertyManager/property/variant/variantComposition.h"
-#include "backend/backend_composition.h"   // ibBackendCompositionDescriptionMemory — read against the configuration
+#include "backend/backend_composition.h"   // ibBackendCompositionDescriptionMemory — read against the application
 
 ////////////////////////////////////////////////////////////////////////
 
@@ -26,8 +26,8 @@ void ibPropertyDataComposition::SetValue(const ibCompositionDescription& val) {
 // and so is what a list saves — so the pair that reads and writes one is the pair that runs here.
 bool ibPropertyDataComposition::ReadNodeValue(const ibDataValue& value)
 {
-	// …AND THE CONFIGURATION IT IS READ AGAINST. What is read back holds references and enum members
-	// — a filter's right side, a parameter's value — and those types exist only in the configuration's
+	// …AND THE APPLICATION IT IS READ AGAINST. What is read back holds references and enum members
+	// — a filter's right side, a parameter's value — and those types exist only in the application's
 	// own registry: without it the value factory raises "Unknown value type '<id>'" on a record saved
 	// perfectly well, the id being a metaobject's (Max, 2026-08-28).
 	//

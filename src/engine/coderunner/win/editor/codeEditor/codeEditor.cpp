@@ -146,7 +146,7 @@ ibCodeEditor::ibCodeEditor(wxWindow* parent, wxWindowID id, const wxPoint& pos, 
 	// The stream needs no module and no metadata: what the text MEANS is asked of the compiler, and
 	// the module is passed at the moment of asking. So a sessionless host (coderunner, which has no
 	// document) gets the same stream as any other — folding, brace matching and the caret question
-	// all work; only the answers that need a configuration are absent, and they are absent there
+	// all work; only the answers that need an application are absent, and they are absent there
 	// anyway.
 	m_tc.SetLexemMode(ibLexemMode::Editing);
 

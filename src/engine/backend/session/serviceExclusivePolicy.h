@@ -6,7 +6,7 @@
 // Nobody attaches to a served base from the side — a designer opening a file base's directory directly, a
 // client started against it; and several application servers may serve one base together: what they share
 // lives in the base already (sys_session, sys_lock, a job's claim and its clock in sys_job). NOT the
-// per-session exclusive mode: that one wants the SOLE live session, the process's own included, and would
+// per-session single-user mode: that one wants the SOLE live session, the process's own included, and would
 // lock the server out of its own jobs. This is a rule over the PROCESSES in the cluster snapshot:
 //
 //   - a Service session (a server's row in the base) is refused while a session of another process that is

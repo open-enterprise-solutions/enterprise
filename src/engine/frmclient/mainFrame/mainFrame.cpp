@@ -309,7 +309,7 @@ ibFrontendMainFrame::ibFrontendMainFrame(std::unique_ptr<ibCommunicator> communi
 	}
 
 	// Its templates are the server's — a mode's own among them, the designer's metaobjects', the runtime's external data
-	// processor and report (DrawTemplates).
+	// tool and report (DrawTemplates).
 	SetDocumentManager(new ibFrontendDocManager);
 
 	Bind(wxEVT_CLOSE_WINDOW, &ibFrontendMainFrame::OnCloseWindow, this);
@@ -669,8 +669,8 @@ void ibFrontendMainFrame::InitializeDefaultMenu()
 	wxMenuBar* const bar = new ibMenuBar();
 	bar->Append(m_menuFile, ibGetStockLabel(wxID_FILE));
 	bar->Append(m_menuEdit, ibGetStockLabel(wxID_EDIT));
-	if (m_menuConfiguration != nullptr)
-		bar->Append(m_menuConfiguration, _("Configuration"));
+	if (m_menuApplication != nullptr)
+		bar->Append(m_menuApplication, _("Application"));
 	if (m_menuDebug != nullptr)
 		bar->Append(m_menuDebug, _("Debug"));
 	if (m_menuHelp != nullptr)
@@ -1065,7 +1065,7 @@ void ibFrontendMainFrame::Draw(const ibProtocolNode& answer)
 	const bool whole = !patch.IsNode();
 
 	// THE LANGUAGE TEXT IS READ IN — the session's, as the server says it, before anything is drawn: a caption held
-	// whole (a property's Synonym) reads in it, as the desktop's read in its configuration's.
+	// whole (a property's Synonym) reads in it, as the desktop's read in its application's.
 	if (whole || patch.Has(ibProtocol::ibFrame::Language))
 		ibBackendLocalization::SetUserLanguage(frame.GetString(ibProtocol::ibFrame::Language));
 
@@ -1118,8 +1118,17 @@ void ibFrontendMainFrame::Draw(const ibProtocolNode& answer)
 		if (answer.GetBool(ibProtocol::ibFrame::Clear))
 			m_outputWindow->Clear();
 		const std::vector<ibProtocolNode> messages = answer.FindChild(ibProtocol::ibFrame::Messages).Children();
-		for (const ibProtocolNode& message : messages)
-			m_outputWindow->Output(message.GetString(ibProtocol::ibFrame::ibMessage::Text), LevelOf(message.GetInt(ibProtocol::ibFrame::ibMessage::Level)));
+		for (const ibProtocolNode& message : messages) {
+			const wxString text = message.GetString(ibProtocol::ibFrame::ibMessage::Text);
+			const ibProtocol::ibFrame::ibMessage::ibLevel level = LevelOf(message.GetInt(ibProtocol::ibFrame::ibMessage::Level));
+			// …with its place when it has one (a script's failure): its lines, double-clicked, open the module there.
+			const wxString module = message.GetString(ibProtocol::ibFrame::ibMessage::Module);
+			if (module.IsEmpty())
+				m_outputWindow->Output(text, level);
+			else
+				m_outputWindow->Output(text, level, message.GetString(ibProtocol::ibFrame::ibMessage::File), module,
+					static_cast<int>(message.GetInt(ibProtocol::ibFrame::ibMessage::Line)));
+		}
 	}
 }
 
@@ -1178,9 +1187,9 @@ void ibFrontendMainFrame::DrawMenu(const ibProtocolNode& menu)
 	};
 
 	// File and Edit first — the window's own, moved over as they are: the files opened last are kept in File's. A mode's
-	// Configuration and Debug go over with them, after Edit; its Help, last.
+	// Application and Debug go over with them, after Edit; its Help, last.
 	wxMenuBar* const previous = GetMenuBar();
-	for (wxMenu* const own : { m_menuFile, m_menuEdit, m_menuConfiguration, m_menuDebug, m_menuHelp }) {
+	for (wxMenu* const own : { m_menuFile, m_menuEdit, m_menuApplication, m_menuDebug, m_menuHelp }) {
 		for (size_t pos = 0; previous != nullptr && pos < previous->GetMenuCount(); ++pos) {
 			if (previous->GetMenu(pos) == own) {
 				previous->Remove(pos);
@@ -1194,8 +1203,8 @@ void ibFrontendMainFrame::DrawMenu(const ibProtocolNode& menu)
 	wxMenuBar* const bar = new ibMenuBar();
 	bar->Append(m_menuFile, ibGetStockLabel(wxID_FILE));
 	bar->Append(m_menuEdit, ibGetStockLabel(wxID_EDIT));
-	if (m_menuConfiguration != nullptr)
-		bar->Append(m_menuConfiguration, _("Configuration"));
+	if (m_menuApplication != nullptr)
+		bar->Append(m_menuApplication, _("Application"));
 	if (m_menuDebug != nullptr)
 		bar->Append(m_menuDebug, _("Debug"));
 	for (const ibProtocolNode& top : menu.Children()) {
@@ -1350,7 +1359,7 @@ void ibFrontendMainFrame::DrawView(long long active, const ibProtocolNode& view,
 	// …and its view the doc manager's current one when the active tab is another — the patch names ActiveTab: a tab
 	// closed picks the page after it with the notebook's events off (ibAuiDocChildFrame::Destroy), so that page's view is
 	// never told it became active. Not on any other answer, nor on a frame drawn whole: the person may be in a view that is
-	// no tab (the configuration's tree), and the answer to their edit must leave them there.
+	// no tab (the application's tree), and the answer to their edit must leave them there.
 	if (patch.Has(ibProtocol::ibFrame::ActiveTab) && m_docManager->GetCurrentView() != shown)
 		shown->Activate(true);
 
@@ -1423,7 +1432,7 @@ void ibFrontendMainFrame::TakeChosen(const ibProtocolNode& asked)
 bool ibFrontendMainFrame::ChooseValue(ibControlFrame* owner, const ibTypeDescription& type, const ibValue& current)
 {
 	// ⭐ NO WINDOW ASKS — the cell is on the active tab (a designer's composer panel; 2026-10-29: a parameter's "..." and a
-	// condition's opened nothing): the same act goes to the tab, whose view chooses through the configuration there.
+	// condition's opened nothing): the same act goes to the tab, whose view chooses through the application there.
 	const bool asking = !m_asking.empty() && IsSettingsRequest(GetRequest());
 	const long long tab = asking ? 0 : GetActiveTab();
 	if (owner == nullptr || (!asking && tab == 0))
@@ -1432,7 +1441,7 @@ bool ibFrontendMainFrame::ChooseValue(ibControlFrame* owner, const ibTypeDescrip
 	m_choosing = ibChoosing{ owner, ++m_choice, m_asking.size() };
 
 	// The type the cell stands on, written as a field's — the server puts it to the user when it admits several (or a
-	// family) and the cell holds none (ibTypeControlFactory::ChooseValue there), its configuration naming the classes;
+	// family) and the cell holds none (ibTypeControlFactory::ChooseValue there), its application naming the classes;
 	// and the value in the cell — the server's own node, given back — which says its type when it holds one.
 	ibProtocolNode act;
 	act.SetValue(ibProtocol::ibRequest::ibListSettings::Act, static_cast<long long>(ibProtocol::ibRequest::ibListSettings::ibAct::Choose))

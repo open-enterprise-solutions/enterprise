@@ -181,7 +181,7 @@ bool ibDialogSavedSettings::ActOnSelected()
 	}
 
 	if (!ibRestoreComposerSettings(m_category, m_objectKey, m_entries[at].m_id, m_composer, m_metaData)) {
-		// A REFUSAL IS SPOKEN. The row may hold a value whose type this configuration no longer has —
+		// A REFUSAL IS SPOKEN. The row may hold a value whose type this application no longer has —
 		// the read says so and the row stays; the person is told rather than left pressing an entry
 		// that does nothing.
 		ibMessageBox(ibString::Format(_("The settings named \"%s\" could not be restored."), m_entries[at].m_name),

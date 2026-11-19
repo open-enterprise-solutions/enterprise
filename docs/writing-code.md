@@ -269,7 +269,7 @@ sessions read at once. A mutex covers only what still races. No shared `static` 
 
 **Everything about a property lives in its value (`ibVariant…`).** The value is an `ibVariant`, the
 system's one value type — a primitive in place, or a counted reference to a LIVE value that keeps itself
-current (a type refreshes against its configuration), so every holder sees it change. Derived data is
+current (a type refreshes against its application), so every holder sees it change. Derived data is
 generated from the value, and the owning object keeps no parallel member: `m_sourceDescriptor` became
 `ibVariantSource`.
 
@@ -370,7 +370,7 @@ is wide, and every body there rebuilds the backend.
 **Core holds structure and data only.** Every schema (an `ib…Description` with its
 `ib…DescriptionMemory`) lives in `core/description/`, even with one copy, and reading and writing
 it is pure. Core has no metadata, no factories and no interfaces to them. Checking a description
-against a configuration is a separate step on the side, and the runtime over a schema lives in
+against an application is a separate step on the side, and the runtime over a schema lives in
 `backend/backend_<x>.h`.
 
 **Layers know only downward:** schema, then composer, then runtime. A description holds no runtime
@@ -395,8 +395,8 @@ collision where an id crosses domains, never by migrating a domain.
 **Generated code obeys the hand-written rules.** A query the engine writes qualifies its fields
 exactly as a person must.
 
-**A guid is unique only inside its configuration.** A lookup across documents or caches resolves
-the owning configuration first (`FindMetaDataDocument(metaObject->GetMetaData())`).
+**A guid is unique only inside its application.** A lookup across documents or caches resolves
+the owning application first (`FindMetaDataDocument(metaObject->GetMetaData())`).
 
 **What the platform knows goes into the platform:** a refusal in the tool, a paragraph in its
 `GetDescription()`, an entry in `mcpToolPatterns.cpp`, a construct in `syntaxHelper/`. Every
@@ -462,7 +462,7 @@ with the `X::Error(...)` helpers, derive from `ibBackendException`, never `throw
 `catch (...)` to swallow: let it rise, or record it with its text.
 
 **Turning a crash into `false` is half a fix.** Follow the `false` up to a person, and prefer the
-door throwing with words. A configuration that failed to load once opened silently empty because a
+door throwing with words. An application that failed to load once opened silently empty because a
 caller returned on `false`.
 
 **One value never carries two meanings.** `nullptr` cannot mean both "no such source" and "opaque
@@ -510,7 +510,7 @@ whom it works for, refuse rather than guess.
 **Interpreter state is a session member, not `thread_local`:** sessions move between workers.
 
 **Whatever reads a session's interface tree runs on that session's worker** (`RunOnWorker`), even
-read-only serialisation. Work on shared configuration state runs on the session's pool, never on a
+read-only serialisation. Work on shared application state runs on the session's pool, never on a
 server I/O thread.
 
 **A `static` scratch buffer under a lock that only serialises threads becomes `thread_local`,**
@@ -542,7 +542,7 @@ mark); a wire flag is added only when the client must act on it.
 **Data needed in one place travels in that place's packet,** trimmed on the server, not through a
 new door, schema or request per holder. A diff that shrinks is the sign of the right answer.
 
-**Before sending something, ask whose it is.** Configuration and session data come from the
+**Before sending something, ask whose it is.** Application and session data come from the
 server. Constants compiled into the engine (its pictures) are in core, and the wire carries only
 their ids.
 
@@ -628,7 +628,7 @@ reference exists in `src/`, and that their messages are ASCII. The solution neve
 **A symptom in the interface is pinned by a backend test first,** step by step along the data
 chain; the interface is touched once the chain is green.
 
-**A milestone is proved on real configuration data along the user's road,** counting "matched what
+**A milestone is proved on real application data along the user's road,** counting "matched what
 was expected", not "something came back".
 
 **After a run, read the technology journal:** exceptions, asserts and refusals, counted before and

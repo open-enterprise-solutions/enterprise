@@ -168,7 +168,7 @@ bool ibJobRunByteCode::Start(const ibJobRunRequest& request, ibJobRunByteCodeSta
 	// misses.
 	if (appData != nullptr && appData->DesignerMode()) {
 		state.m_refusal = _("Running code: a designer builds no runtime, so there is nothing here to "
-			"run configuration code in");
+			"run application code in");
 		return false;
 	}
 
@@ -198,14 +198,14 @@ bool ibJobRunByteCode::Start(const ibJobRunRequest& request, ibJobRunByteCodeSta
 		if (!layer)
 			ibBackendCoreException::Error(_("Running code: the session has no connection to write through"));
 
-		ibValueModuleManagerRuntimeConfiguration* const mm = session->GetManagerModule();
+		ibValueModuleManagerRuntimeApplication* const mm = session->GetManagerModule();
 		std::shared_ptr<ibProcUnit> unit = mm != nullptr ? mm->GetProcUnit() : nullptr;
 		if (!unit)
 			ibBackendCoreException::Error(_("Running code: the session has no runtime"));
 
 		// ⭐⭐ COMPILED HERE, PARENTED ON THIS APPLICATION'S OWN ROOT. That parent is the whole of
 		// what makes the code able to do anything: `Catalogs`, `Documents`, the metatype collections,
-		// every common module and the platform's own global functions are names on the root, and a
+		// every shared module and the platform's own global functions are names on the root, and a
 		// compile without it produces a program that resolves nothing. Same recipe as the syntax
 		// check uses in the designer (`ibCheckScript`, compiler/scriptCheck.cpp).
 		//
@@ -230,8 +230,8 @@ bool ibJobRunByteCode::Start(const ibJobRunRequest& request, ibJobRunByteCodeSta
 		// on `var x = 1 + 1;`, which is as far from the code's own fault as it gets.
 		//
 		// ⚠ delta FALSE — REGISTER, DO NOT RUN. The root's top level is declarations; running its
-		// body here would execute the configuration's start-up code inside somebody's background
-		// job. That is exactly what a common module's unit does for the same reason
+		// body here would execute the application's start-up code inside somebody's background
+		// job. That is exactly what a shared module's unit does for the same reason
 		// (moduleManager.cpp).
 		if (unit->GetByteCode() != root) {
 			if (!root->m_bCompile)
@@ -246,8 +246,8 @@ bool ibJobRunByteCode::Start(const ibJobRunRequest& request, ibJobRunByteCodeSta
 		compiler.SetParent(root);
 		if (!compiler.Compile(text))
 			ibBackendCoreException::Error(
-				_("Running code: it did not compile here. The application is running a different "
-				  "configuration than the one it was written against."));
+				_("Running code: it did not compile here. The running application is not the one it was "
+				  "written against."));
 
 		ibValue answer;
 		layer->BeginTransaction();
@@ -260,13 +260,13 @@ bool ibJobRunByteCode::Start(const ibJobRunRequest& request, ibJobRunByteCodeSta
 			// the unit has none. MEASURED 2026-09-06, and it is the good kind of failure: the engine
 			// refused a mismatched pair instead of running one.
 			//
-			// ⭐ SO THE RUN GETS A UNIT OF ITS OWN, parented on the root — exactly the shape a common
+			// ⭐ SO THE RUN GETS A UNIT OF ITS OWN, parented on the root — exactly the shape a shared
 			// module's unit has (`SetParent(moduleManager)` in its ctor, moduleManagerUnit.cpp). It
 			// is a local: the program runs once and the frame goes with it.
 			const std::shared_ptr<ibProcUnit> runner = std::make_shared<ibProcUnit>();
 			runner->SetParent(unit.get());
 
-			// ⚠ delta TRUE — the module BODY is what runs. A common module's top level is only
+			// ⚠ delta TRUE — the module BODY is what runs. A shared module's top level is only
 			// declarations and is registered without running; this is the opposite kind of code, a
 			// body written to be executed once.
 			// ⭐ MEASURED WHEN ASKED (code_run {profile}): the run's own session, for as long as its code runs. What
@@ -388,7 +388,7 @@ bool ibJobRunByteCode::Start(const ibJobRunRequest& request, ibJobRunByteCodeSta
 
 	// ⭐ STANDALONE, NOT TENANT, and the reasons stack. A tenant borrows its parent's policy and
 	// builds NO runtime - right for reading on somebody's behalf, useless here, since this runs the
-	// configuration's own code. And a tenant is UNLISTED: nobody could see this run or stop it,
+	// application's own code. And a tenant is UNLISTED: nobody could see this run or stop it,
 	// which is acceptable for a read and is not acceptable for a write.
 	std::shared_ptr<ibBackgroundRun> run;
 	try {

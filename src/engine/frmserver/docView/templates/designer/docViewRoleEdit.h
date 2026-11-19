@@ -15,7 +15,7 @@ public:
 
 	ibRoleRightsView() : ibMetaView() {}
 
-	// The role's rights — the configuration's row, under it a group per metatype, under each the objects of it that have
+	// The role's rights — the application's row, under it a group per metatype, under each the objects of it that have
 	// rights, each with its rights (Roles) as this role gives them.
 	virtual void OnDraw(ibDataNode& frame) override;
 	virtual ibProtocol::ibView::ibKind GetViewKind() const override { return ibProtocol::ibView::ibKind::Role; }
@@ -24,7 +24,7 @@ public:
 
 private:
 
-	// A metatype's group row — the configuration's row itself for a metatype with no constructor, as the desktop's.
+	// A metatype's group row — the application's row itself for a metatype with no constructor, as the desktop's.
 	ibDataNode& GroupFor(ibDataNode& root, const ibClassID& clsid);
 
 	ibDataNode& AppendItem(ibDataNode& parent, ibValueMetaObject* metaObject);
@@ -38,7 +38,7 @@ private:
 };
 
 // Its document — the role metaobject's (ibMetaDocument::GetMetaObject); the rights live in the objects, saved with the
-// configuration — nothing of its own to hold; its Save is the configuration's (see docViewInterfaceEdit.h).
+// application — nothing of its own to hold; its Save is the application's (see docViewInterfaceEdit.h).
 class FRMSERVER_API ibRoleRightsDocument : public ibMetaDocument {
 public:
 

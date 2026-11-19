@@ -19,7 +19,7 @@
 #include "backend/rpc/rpcMessage.h"
 #include "frmserver/mcp/mcpTool.h"
 #include "backend/metaCollection/metaIntrospect.h"  // ibMetaTypeResolver
-#include "backend/metadataConfiguration.h"
+#include "backend/metadataApplication.h"
 #include "backend/session/session.h"
 #include "backend/session/workerPool.h"             // the queue of the session's tasks
 
@@ -120,7 +120,7 @@ ibMcpServer::ibMcpServer(ib::ClientHostCtorToken owner, ibSession* session) :
 // would otherwise put to somebody who is not there.
 //
 // ⚠ ONE LINE PER STAGE AND NOTHING KEPT. A bridge that remembered would be a second copy of the
-// configuration, going stale the moment anything changed; the configuration is right there to be
+// application, going stale the moment anything changed; the application is right there to be
 // asked. This is a LOG (Max, 2026-09-01), and its whole value is that it arrives unasked.
 class ibMcpMetaBridge : public ibMetaDataNotifier {
 public:
@@ -260,7 +260,7 @@ private:
 	}
 
 	ibMcpServer* const m_server;
-	// The configuration whose list it is on — HELD, as whoever works in a metadata holds it (metaData.h), so it goes
+	// The application whose list it is on — HELD, as whoever works in a metadata holds it (metaData.h), so it goes
 	// after the bridge lets go of it, never under it: the session that opened it may leave first.
 	std::shared_ptr<ibMetaData> m_watched;
 
@@ -273,7 +273,7 @@ private:
 	ibMcpMetaBridge& operator=(const ibMcpMetaBridge&) = delete;
 };
 
-ibMetaDataConfigurationBase* ibMcpServer::GetMetaData() const
+ibMetaDataApplicationBase* ibMcpServer::GetMetaData() const
 {
 	return m_session != nullptr ? m_session->GetMetaData() : nullptr;
 }
@@ -283,10 +283,10 @@ void ibMcpServer::WatchMetadata()
 	if (m_metaBridge == nullptr)
 		m_metaBridge = std::make_unique<ibMcpMetaBridge>(this);
 
-	// The open configuration, or nothing — a server outlives any one configuration and must not
+	// The open application, or nothing — a server outlives any one application and must not
 	// keep a subscription on one that has been closed.
-	ibMetaDataConfigurationBase* const metaData = GetMetaData();
-	m_metaBridge->Watch(metaData != nullptr && metaData->IsConfigOpen() ? metaData : nullptr);
+	ibMetaDataApplicationBase* const metaData = GetMetaData();
+	m_metaBridge->Watch(metaData != nullptr && metaData->IsOpen() ? metaData : nullptr);
 }
 
 ibMcpServer::~ibMcpServer()
@@ -376,8 +376,8 @@ void ibMcpServer::Listen(std::function<void(const ibString& message)> told)
 			  "will be collected until it is switched on again."),
 			ibEmptyString);
 
-		// Detach DESTROYS the bridge — the debug client's list owns it. ⚠ The debug client is the configuration's,
-		// so the bridge dies with it — and `Watch(nullptr)` can be what lets the configuration go. A pointer kept
+		// Detach DESTROYS the bridge — the debug client's list owns it. ⚠ The debug client is the application's,
+		// so the bridge dies with it — and `Watch(nullptr)` can be what lets the application go. A pointer kept
 		// past that was read after it (crash dump 2026-10-20 16:45, thin designer's exit); the bridge's destructor
 		// clears this one.
 		if (ibMcpDebugBridge* const bridge = m_debugBridge.load())
@@ -397,7 +397,7 @@ void ibMcpServer::Listen(std::function<void(const ibString& message)> told)
 	ibJournalInfo(ibT("mcp"), ibT("assistant access: a transport came"));
 
 	// ⭐ WATCHING FROM THE MOMENT IT IS UP, not from the first question somebody asks it. The
-	// subscription is also refreshed at every dispatch, because a configuration can be opened and
+	// subscription is also refreshed at every dispatch, because an application can be opened and
 	// closed while the server runs — but relying on the dispatch ALONE means everything the person
 	// did before the assistant's first call happened unobserved (2026-09-01, watching exactly that:
 	// two empty lists after a template had been created).
@@ -426,14 +426,14 @@ void ibMcpServer::Listen(std::function<void(const ibString& message)> told)
 
 void ibMcpServer::Stop()
 {
-	// 🛑 OFF THE METADATA FIRST. The bridge HOLDS the configuration it watches, so the configuration goes
+	// 🛑 OFF THE METADATA FIRST. The bridge HOLDS the application it watches, so the application goes
 	// after the server, never before it. While it held a bare pointer it was outlived twice: by the base's
 	// own release order (crash dump 2026-09-08 09:43, `_Adopt_unlocked` inside `ibMetaData::RemoveNotifier`),
-	// and by the session that opened it — the thin designer's logout let go of its configuration before the
+	// and by the session that opened it — the thin designer's logout let go of its application before the
 	// base closed, and this line called `RemoveNotifier` on a freed list (2026-10-16).
 	//
 	// Let go HERE because this is what the host calls before the client's session goes (ibClientHost::
-	// StopMcpServer), while the pool and the registry a closing configuration still asks for are alive.
+	// StopMcpServer), while the pool and the registry a closing application still asks for are alive.
 	if (m_metaBridge != nullptr)
 		m_metaBridge->Watch(nullptr);
 
@@ -611,10 +611,10 @@ ibString ibMcpServer::Greeting() const
 
 	// WHAT IS OPEN, because that is what an assistant would be working on and what makes the
 	// line worth reading rather than a status light.
-	const ibMetaDataConfigurationBase* const metaData = GetMetaData();
-	if (metaData != nullptr && metaData->IsConfigOpen())
-		if (const ibValueMetaObject* root = metaData->GetCommonMetaObject())
-			out += ibString::Format(_(" Configuration '%s' is open."), root->GetName());
+	const ibMetaDataApplicationBase* const metaData = GetMetaData();
+	if (metaData != nullptr && metaData->IsOpen())
+		if (const ibValueMetaObject* root = metaData->GetRootMetaObject())
+			out += ibString::Format(_(" Application '%s' is open."), root->GetName());
 
 	// ⚠ AND WHETHER ANYBODY IS ACTUALLY THERE. "Running" is not "connected", and a person waiting
 	// for an answer from an assistant that never joined would otherwise have no way to tell the
@@ -654,7 +654,7 @@ std::vector<ibMcpServer::Turn> ibMcpServer::GetConversation() const
 //
 // ⚠ AND THE PLATFORM STILL HAS NO MODEL, which is the part worth keeping. No key is stored here
 // and no outbound connection is made: the completion runs wherever the client's already does, on
-// the same assistant that is already working on this configuration.
+// the same assistant that is already working on this application.
 
 bool ibMcpServer::CanAskModel() const
 {
@@ -752,14 +752,14 @@ bool ibMcpServer::RunTool(const class ibMcpTool* tool, const ibDataNode& argumen
 	if (outPending != nullptr)
 		*outPending = false;
 
-	// ⭐ ON THE OPEN CONFIGURATION'S LIST, checked here because this is the one place every call
-	// passes and a configuration can be opened, closed and reopened while the server runs. A
+	// ⭐ ON THE OPEN APPLICATION'S LIST, checked here because this is the one place every call
+	// passes and an application can be opened, closed and reopened while the server runs. A
 	// pointer compare when nothing has changed, which is almost always.
 	WatchMetadata();
 
 	// What touches the records needs the person's roles to give them to the assistant: see ibMcpTool::IsDataAssistant.
 	if (tool->IsDataAssistant() && ibIsMcpInApplication()) {
-		const ibMetaDataConfigurationBase* const metaData = ibSession::Current()->GetMetaData();
+		const ibMetaDataApplicationBase* const metaData = ibSession::Current()->GetMetaData();
 		if (metaData == nullptr || !metaData->AccessRight_DataAssistant())
 			ibBackendAccessException::Error(ibString::Format(ibMcpText("the data, for '%s': a role's Data assistant right gives it"), tool->GetName()));
 	}
@@ -798,7 +798,7 @@ bool ibMcpServer::RunTool(const class ibMcpTool* tool, const ibDataNode& argumen
 	});
 
 	// ⚠ FINITE, AND THE NUMBER IS A COMPROMISE STATED OUT LOUD. The wait is not there to bound the
-	// WORK — applying a configuration legitimately takes minutes and must not be cut off — it is
+	// WORK — applying an application legitimately takes minutes and must not be cut off — it is
 	// there so a MODAL DIALOG cannot wedge the server for the rest of the day: the session's task is
 	// then waiting until a person clicks, and nobody is watching this socket. Long enough for real
 	// work, finite so a forgotten dialog is answered instead of hung on.
@@ -812,8 +812,8 @@ bool ibMcpServer::RunTool(const class ibMcpTool* tool, const ibDataNode& argumen
 		// 🛑 AND THIS IS NOT A REFUSAL, WHICH IS THE WHOLE POINT OF SAYING SO OUT LOUD. The work is
 		// queued and WILL run; what expired is our patience, not the call. Reported as an error it
 		// reads to a caller as "this did not happen", and the caller then does the one thing that
-		// makes it worse — asks again. That is exactly how three unnamed common modules were left
-		// in somebody's configuration.
+		// makes it worse — asks again. That is exactly how three unnamed shared modules were left
+		// in somebody's application.
 		if (outPending != nullptr)
 			*outPending = true;
 
@@ -822,7 +822,7 @@ bool ibMcpServer::RunTool(const class ibMcpTool* tool, const ibDataNode& argumen
 			"left half-done: it runs when the window is answered, and the outcome is simply not "
 			"known here yet.\n"
 			"DO NOT REPEAT THIS CALL. Repeating a call that creates something is how a "
-			"configuration ends up with two of it. Read back what you were making instead - "
+			"application ends up with two of it. Read back what you were making instead - "
 			"metadata_list or metadata_get for an object, module_read for text - and only act on "
 			"what you find.");
 		return false;
@@ -1003,7 +1003,7 @@ static ibString ibMcpArgumentsOnOffer(const ibMcpTool* tool, const ibString& giv
 //
 // ⭐ THE ORIENTATION IS THE PROTOCOL'S OWN FIELD, and it was empty. A client arrived, saw two
 // tools, and had to work out by trial that the rest are FOUND rather than announced — and had no
-// way at all to learn that this configuration carries written findings about itself.
+// way at all to learn that this application carries written findings about itself.
 //
 // ⭐⭐ AND THE NOTES ARE INLINED, not pointed at. A pointer is a suggestion, and a suggestion is
 // followed by whoever happens to think of it; the point of writing down why something is the way
@@ -1020,9 +1020,9 @@ void ibMcpDescribePlatform(const ibApplicationInstance* applicationInstance, ibD
 	into.AddField(ibT("build"), ibDataValue::Int((std::int64_t)GetBuildId()));
 
 	// ⭐⭐ AND WHICH BASE THIS IS. Every tool here answers for the process that happens to hold the port,
-	// and two designers can stand open on two different bases — so an answer naming the configuration but
+	// and two designers can stand open on two different bases — so an answer naming the application but
 	// not the base lets a caller work in the wrong one and never learn it from anything but the journal
-	// (2026-09-22: a print form, a command and an applied configuration, all built in the base somebody
+	// (2026-09-22: a print form, a command and an applied application, all built in the base somebody
 	// else had open). Where the base lives is said beside it: a Firebird folder, or a PostgreSQL server's database.
 	// A designer's to know: an application's person is given the base by their client, not where it lies.
 	if (!ibIsMcpInApplication()) {
@@ -1070,19 +1070,19 @@ void ibMcpDescribePlatform(const ibApplicationInstance* applicationInstance, ibD
 			user.SetValue(ibT("language"), ibMcpLanguageName(who));
 	}
 
-	// The configuration of the session this is asked in — as the user above is that session's.
-	ibMetaDataConfigurationBase* metaData = ibApplicationInstance::GetActiveMetaData();
+	// The application of the session this is asked in — as the user above is that session's.
+	ibMetaDataApplicationBase* metaData = ibApplicationInstance::GetActiveMetaData();
 
-	if (metaData == nullptr || !metaData->IsConfigOpen()) {
-		into.AddField(ibT("configurationOpen"), ibDataValue::Bool(false));
+	if (metaData == nullptr || !metaData->IsOpen()) {
+		into.AddField(ibT("applicationOpen"), ibDataValue::Bool(false));
 		return;
 	}
 
-	into.AddField(ibT("configurationOpen"), ibDataValue::Bool(true));
+	into.AddField(ibT("applicationOpen"), ibDataValue::Bool(true));
 
-	if (ibValueMetaObject* root = metaData->GetCommonMetaObject()) {
+	if (ibValueMetaObject* root = metaData->GetRootMetaObject()) {
 
-		into.SetValue(ibT("configuration"), root->GetName());
+		into.SetValue(ibT("application"), root->GetName());
 		if (!root->GetSynonym().IsEmpty())
 			into.SetValue(ibT("synonym"), root->GetSynonym());
 
@@ -1090,14 +1090,14 @@ void ibMcpDescribePlatform(const ibApplicationInstance* applicationInstance, ibD
 		// reports it: it appears in no listing (it is not of a listable KIND) and in no answer
 		// about anything else. Telling a caller to write on the root without this is telling them
 		// to address an object they have no way to name.
-		into.AddField(ibT("configurationId"), ibDataValue::Int((std::int64_t)root->GetMetaID()));
+		into.AddField(ibT("applicationId"), ibDataValue::Int((std::int64_t)root->GetMetaID()));
 	}
 
 	// ⭐⭐ THE ONE A CALLER MUST RE-ASK. Everything else here drifts slowly; this can be flipped
 	// between two calls, and code written in the other dialect is rejected by the compiler while
 	// reading perfectly to a human.
 	into.SetValue(ibT("dialect"), ibString(
-		ibConfigurationWritesInWords(metaData) ? ibT("word-fenced") : ibT("c-style")));
+		ibApplicationWritesInWords(metaData) ? ibT("word-fenced") : ibT("c-style")));
 
 	// ⭐ HOW A TEXT IS WRITTEN, said beside the dialect because both dialects share the one lexer
 	// (ibTranslateCode) and a caller writing code asks here first. A query in code is a MULTI-LINE
@@ -1134,7 +1134,7 @@ void ibMcpDescribePlatform(const ibApplicationInstance* applicationInstance, ibD
 	// the copy would be wrong the first time a member was added.
 	into.AddField(ibT("compatibilityVersion"), ibDataValue::Int((std::int64_t)metaData->GetVersion()));
 
-	if (ibValueMetaObject* root = metaData->GetCommonMetaObject()) {
+	if (ibValueMetaObject* root = metaData->GetRootMetaObject()) {
 
 		// ⭐ ASKED BY NAME. This walked every property of the root comparing names — which is what
 		// GetProperty(name) does, on the object that owns them.
@@ -1160,10 +1160,10 @@ void ibMcpDescribePlatform(const ibApplicationInstance* applicationInstance, ibD
 	// different consequences and different cures:
 	//
 	//   unsavedEdits  - changed since it was last STORED. Close the designer now and this is
-	//                   gone. `config_save` is the cure, and it is cheap.
+	//                   gone. `app_save` is the cure, and it is cheap.
 	//   inDatabase    - the same as the copy the DATABASE holds. False means the running
-	//                   application is still on the old configuration however much was saved.
-	//                   `config_apply` is the cure, and it writes DDL.
+	//                   application is still on the old one however much was saved.
+	//                   `app_apply` is the cure, and it writes DDL.
 	//
 	// Reporting only one of them is how work is lost: today a note written through this server
 	// survived every check a caller could make and died with the process, because nothing
@@ -1172,13 +1172,13 @@ void ibMcpDescribePlatform(const ibApplicationInstance* applicationInstance, ibD
 	// OPENED". The flag means "differs from the copy the DATABASE holds", and it is maintained at
 	// all three points that can change that answer:
 	//
-	//   LOAD    — `Modify(!CompareMetadata(m_configMetadata))`, a real comparison
-	//             (ibMetaDataConfigurationStorage::LoadDatabase)
+	//   LOAD    — `Modify(!CompareMetadata(m_applicationMetadata))`, a real comparison
+	//             (ibMetaDataApplicationStorage::LoadDatabase)
 	//   EDIT    — set true by whatever changed something
-	//   APPLY   — set FALSE once the configuration blob is committed
-	//             (metadataConfigurationQuery.cpp, inside the transaction guard)
+	//   APPLY   — set FALSE once the application blob is committed
+	//             (metadataApplicationQuery.cpp, inside the transaction guard)
 	//
-	// ⭐ AND IT STAYS TRUE AFTER A PLAIN SAVE, CORRECTLY. `config_save` persists the configuration
+	// ⭐ AND IT STAYS TRUE AFTER A PLAIN SAVE, CORRECTLY. `app_save` persists the application
 	// so it survives a re-login; it does NOT touch the database's copy, so the difference it
 	// describes is still there. Nothing is failing to reset — the condition has not changed.
 	//
@@ -1189,14 +1189,14 @@ void ibMcpDescribePlatform(const ibApplicationInstance* applicationInstance, ibD
 	into.AddField(ibT("differsFromDatabase"), ibDataValue::Bool(differs));
 
 	// ⭐ ASKED OF THE CONTAINER, and there is nothing to recognise first. The ACTIVE metadata is a
-	// configuration by definition — an external report or data processor is a container of the BASE
+	// application by definition — an external report or data tool is a container of the BASE
 	// metadata class and never this one — so the cast to the storage class tested something that is
 	// always true and then reported `inDatabase` only when it happened to hold.
 	//
-	// ⚠ AND NOT `GetConfiguration() != nullptr` EITHER, which was the other thing tried here: that
+	// ⚠ AND NOT `GetApplication() != nullptr` EITHER, which was the other thing tried here: that
 	// answers "is there a designer-side BASELINE", and it is null in the RUNTIME — precisely where
-	// this field matters most. IsConfigSave is virtual on the base and is the question itself.
-	const bool applied = metaData->IsConfigSave();
+	// this field matters most. IsApplicationSave is virtual on the base and is the question itself.
+	const bool applied = metaData->IsApplicationSave();
 
 	into.AddField(ibT("inDatabase"), ibDataValue::Bool(applied));
 
@@ -1214,7 +1214,7 @@ void ibMcpDescribePlatform(const ibApplicationInstance* applicationInstance, ibD
 	// forgotten — the reader tests the flag they thought of and calls it done. The flags stay,
 	// because a caller may want either half; the WORD is what the answer is about.
 	// 🛑 AND THE WORD READ ONLY ONE OF THE TWO. Three situations, and this folded `differs` away:
-	// a configuration that HAS been applied and has been edited since answered `inStep`, "nothing
+	// an application that HAS been applied and has been edited since answered `inStep`, "nothing
 	// is pending against it", in the same breath as `differsFromDatabase: true` two lines above.
 	// A caller reading its own answer found it arguing with itself and had no way to tell which
 	// half to believe (measured over MCP, 2026-09-03).
@@ -1227,35 +1227,35 @@ void ibMcpDescribePlatform(const ibApplicationInstance* applicationInstance, ibD
 		// is known, so the state says which of the two it is instead of asserting the good one.
 		into.SetValue(ibT("meaning"), unsaved
 			? ibMcpText("NOT stored: closing the designer loses this work. And the DATABASE holds an "
-			    "older configuration besides, so the running application does not have any of it. "
-			    "`config_save` writes the store; `config_apply` does that AND publishes to the "
+			    "older application besides, so the running application does not have any of it. "
+			    "`app_save` writes the store; `app_apply` does that AND publishes to the "
 			    "database. `database_diff` says what differs.")
 			: ibMcpText("Stored - it survives closing the designer - but the DATABASE still holds an "
-			    "older configuration, so the running application does not have any of it. "
-			    "`database_diff` says what differs; `config_apply` writes it."));
+			    "older application, so the running application does not have any of it. "
+			    "`database_diff` says what differs; `app_apply` writes it."));
 	}
 	else if (differs) {
 		into.SetValue(ibT("state"), ibString(ibT("editedSinceApplied")));
 
 		// ⚠ AND A DIFFERENCE IS NOT ALWAYS A SCHEMA DIFFERENCE, which is why this says which
 		// question `database_diff` answers. A comment, a note, a module's text all change the
-		// configuration and change no table, so the diff can legitimately answer "0" while this is
+		// application and change no table, so the diff can legitimately answer "0" while this is
 		// true — and a reader who takes the diff for the whole answer concludes the flag is broken.
 		into.SetValue(ibT("meaning"),
 			ibMcpText("The database's copy is behind this one: it was applied, and edited since. The "
 			  "running application still works from what was applied. `database_diff` says what "
-			  "of it reaches the SCHEMA - a comment, a note or a module changes the configuration "
+			  "of it reaches the SCHEMA - a comment, a note or a module changes the application "
 			  "and no table, so an empty diff here means the edits are not structural, not that "
-			  "there are none. `config_apply` puts them in."));
+			  "there are none. `app_apply` puts them in."));
 	}
 	else {
 		into.SetValue(ibT("state"), ibString(ibT("inStep")));
 		into.SetValue(ibT("meaning"),
-			ibMcpText("The database holds this configuration - nothing is pending against it."));
+			ibMcpText("The database holds this application - nothing is pending against it."));
 	}
 
 	// ⭐ SAID ONLY WHEN THERE IS SOMETHING TO LOSE. This field was `storedUnknown` and it was there
-	// on every differing configuration, saying the platform could not tell — advice to save "just in
+	// on every differing application, saying the platform could not tell — advice to save "just in
 	// case", which is the shape of a warning that gets read past. It is now a fact about THIS
 	// session and appears only when it is true.
 	if (unsaved)
@@ -1263,10 +1263,10 @@ void ibMcpDescribePlatform(const ibApplicationInstance* applicationInstance, ibD
 			ibMcpText("There are edits that exist only in this process. Closing the designer - including "
 			  "a close for a rebuild - loses them, and nothing else in this answer says so: "
 			  "`differsFromDatabase` is about the DATABASE and stays true after a perfectly good "
-			  "save. `config_save` is the cure and is cheap."));
+			  "save. `app_save` is the cure and is cheap."));
 
 	// ⭐ AND WHETHER ANYTHING IS BEING WATCHED. Breakpoints are set against a runtime, not against
-	// a configuration: with nothing attached they are set and never reached, which looks exactly
+	// an application: with nothing attached they are set and never reached, which looks exactly
 	// like code that does not run. `debug_sessions` gives the list; this is the count, so a
 	// caller learns from ONE call whether that whole road is open.
 	if (debugClient != nullptr) {
@@ -1300,7 +1300,7 @@ void ibMcpDescribePlatform(const ibApplicationInstance* applicationInstance, ibD
 namespace {
 
 // A ceiling, because this is read IN FULL at every connection. Generous enough that an ordinary
-// configuration is never cut, small enough that a runaway one cannot make connecting expensive.
+// application is never cut, small enough that a runaway one cannot make connecting expensive.
 const size_t kOrientationNotesLimit = 20000;
 
 // The person's roles in a line.
@@ -1345,7 +1345,7 @@ ibString BuildApplicationOrientation(const ibApplicationInstance* applicationIns
 		<< (unsigned)GetBuildId()
 		<< ibT("), working inside the session of the person at it, with exactly their rights.\n\n");
 
-	out << ibT("THIS IS NOT THE DESIGNER, AND YOU CANNOT CHANGE THE CONFIGURATION FROM HERE. Objects, ")
+	out << ibT("THIS IS NOT THE DESIGNER, AND YOU CANNOT CHANGE THE APPLICATION FROM HERE. Objects, ")
 		<< ibT("forms, modules and reports are changed in the designer, and the tools that do it are ")
 		<< ibT("not offered here: `mcp_search` will not find them, and that is not a fault. When the ")
 		<< ibT("person asks for such a change, say plainly that it is the designer's work.\n\n");
@@ -1367,15 +1367,15 @@ ibString BuildApplicationOrientation(const ibApplicationInstance* applicationIns
 			<< ibT("starts it.\n\n");
 	}
 
-	const ibMetaDataConfigurationBase* const metaData = ibApplicationInstance::GetActiveMetaData();
-	if (metaData == nullptr || !metaData->IsConfigOpen()) {
-		out << ibT("NO CONFIGURATION IS OPEN here.\n");
+	const ibMetaDataApplicationBase* const metaData = ibApplicationInstance::GetActiveMetaData();
+	if (metaData == nullptr || !metaData->IsOpen()) {
+		out << ibT("NO APPLICATION IS OPEN here.\n");
 		return out;
 	}
 
 	if (metaData->AccessRight_DataAssistant()) {
 		out << ibT("YOU MAY READ THE DATA THIS PERSON MAY SEE. `compose_run` answers with rows: from a ")
-			<< ibT("report of the configuration (`id`), a composition you hand over (`schema`) or a ")
+			<< ibT("report of the application (`id`), a composition you hand over (`schema`) or a ")
 			<< ibT("query (`query`). `query_sources` before writing a FROM, `query_check` before ")
 			<< ibT("believing a query. WHEN THEY ASK TO SEE IT, `report_show` opens a composition as a report ")
 			<< ibT("in their window.\n\n")
@@ -1388,13 +1388,13 @@ ibString BuildApplicationOrientation(const ibApplicationInstance* applicationIns
 			<< ibT("`pattern_read` how a thing is usually done here, `query_fields` what a table holds.\n\n");
 	}
 	else {
-		out << ibT("YOU SEE THE CONFIGURATION, NOT THE DATA. This person's roles do not give the ")
+		out << ibT("YOU SEE THE APPLICATION, NOT THE DATA. This person's roles do not give the ")
 			<< ibT("assistant the records, so no tool here reads a row. A role's *Data assistant* right ")
 			<< ibT("is what gives them; that is the administrator's to decide.\n\n");
 	}
 
-	if (const ibValueMetaObject* const root = metaData->GetCommonMetaObject()) {
-		out << ibT("THIS CONFIGURATION IS CALLED ") << root->GetName();
+	if (const ibValueMetaObject* const root = metaData->GetRootMetaObject()) {
+		out << ibT("THIS APPLICATION IS CALLED ") << root->GetName();
 		const ibString synonym = root->GetSynonym();
 		if (!synonym.IsEmpty() && synonym != root->GetName())
 			out << ibT(" (") << synonym << ibT(")");
@@ -1418,8 +1418,8 @@ ibString BuildApplicationOrientation(const ibApplicationInstance* applicationIns
 	out << ibT("\nFIRST THING, AND NOTHING ELSE RUNS UNTIL IT IS DONE. Until `chat_say` has happened, every ")
 		<< ibT("other verb is refused; what runs before it is `chat_history`, `platform_state`, ")
 		<< ibT("`metadata_tree`, `mcp_search`, `chat_say`. Read `chat_history`, then `chat_say` a ")
-		<< ibT("greeting: which assistant and which model you are, the configuration you see, that here ")
-		<< ibT("you work within this person's rights and do not change the configuration, and ask what ")
+		<< ibT("greeting: which assistant and which model you are, the application you see, that here ")
+		<< ibT("you work within this person's rights and do not change the application, and ask what ")
 		<< ibT("they need.\n");
 
 	return out;
@@ -1435,7 +1435,7 @@ ibString BuildOrientation(const ibApplicationInstance* applicationInstance)
 	out << ibT("You are connected to a running OES Enterprise DESIGNER (build ")
 		<< (unsigned)GetBuildId()
 		<< ibT("), working inside the session of the person at it, with exactly their rights. ")
-		<< ibT("What you change is their live configuration.\n\n");
+		<< ibT("What you change is their live application.\n\n");
 
 	AppendTextEncoding(out);
 
@@ -1473,7 +1473,7 @@ ibString BuildOrientation(const ibApplicationInstance* applicationInstance)
 
 		out << ibT("\n\nEverything you do is written to the registration journal under that name, ")
 			<< ibT("beside what they did themselves. There is no separate identity for an ")
-			<< ibT("assistant, by design: an actor that can change a configuration leaves the ")
+			<< ibT("assistant, by design: an actor that can change an application leaves the ")
 			<< ibT("same trail a person does. (Reading it back is `journal_read` - see WRITE DOWN ")
 			<< ibT("WHAT YOU FIND below.)\n\n");
 	}
@@ -1538,11 +1538,11 @@ ibString BuildOrientation(const ibApplicationInstance* applicationInstance)
 	// mcp_search points at the patterns in every answer; NOTHING points at note_write at the moment
 	// a finding appears, so a session that got a cut copy simply does not know the discipline
 	// exists. Highest-value paragraph, therefore first.
-	out << ibT("WRITE DOWN WHAT YOU FIND - a configuration records what was built and never WHY, so ")
+	out << ibT("WRITE DOWN WHAT YOU FIND - an application records what was built and never WHY, so ")
 		<< ibT("what you worked out dies with your session unless you put it somewhere. Four ")
 		<< ibT("surfaces, different readers:\n")
 		<< ibT(" * `note_write` {id: <root>, target: \"notes\"} - what is true of the WHOLE ")
-		<< ibT("configuration: how it is put together, what was decided against, where to look ")
+		<< ibT("application: how it is put together, what was decided against, where to look ")
 		<< ibT("next. Read first, before any object.\n")
 		<< ibT(" * `note_write` {id, target: \"notes\"} on EACH OBJECT - why it exists, which shape ")
 		<< ibT("was chosen, what was rejected. On the object, not on the root: nobody re-reads the ")
@@ -1554,11 +1554,11 @@ ibString BuildOrientation(const ibApplicationInstance* applicationInstance)
 		<< ibT("And what you DID is kept for you - `journal_read` says what was actually done, and ")
 		<< ibT("tells your changes from somebody else's.\n\n");
 
-	// The configuration of the session this is asked in — as the user above is that session's.
-	ibMetaDataConfigurationBase* metaData = ibApplicationInstance::GetActiveMetaData();
+	// The application of the session this is asked in — as the user above is that session's.
+	ibMetaDataApplicationBase* metaData = ibApplicationInstance::GetActiveMetaData();
 
-	if (metaData == nullptr || !metaData->IsConfigOpen()) {
-		out << ibT("NO CONFIGURATION IS OPEN in this designer yet.\n");
+	if (metaData == nullptr || !metaData->IsOpen()) {
+		out << ibT("NO APPLICATION IS OPEN in this designer yet.\n");
 		return out;
 	}
 
@@ -1580,7 +1580,7 @@ ibString BuildOrientation(const ibApplicationInstance* applicationInstance)
 				object->GetClassName() + ibT(".") + object->GetName(), written));
 	}
 
-	// ⭐⭐ THE ROOT IS NOT ONE MORE OBJECT WITH A NOTE ON IT — it is where the configuration says
+	// ⭐⭐ THE ROOT IS NOT ONE MORE OBJECT WITH A NOTE ON IT — it is where the application says
 	// what it is FOR: the direction of the whole thing, the concept, what is being built and why.
 	// Everything below is a detail of that, so it goes FIRST and it is named as the starting
 	// point, rather than being sorted in among the catalogs.
@@ -1590,7 +1590,7 @@ ibString BuildOrientation(const ibApplicationInstance* applicationInstance)
 	ibString direction;
 	ibString called;
 
-	if (ibValueMetaObject* root = metaData->GetCommonMetaObject()) {
+	if (ibValueMetaObject* root = metaData->GetRootMetaObject()) {
 
 		direction = root->GetNoteContent();
 
@@ -1606,12 +1606,12 @@ ibString BuildOrientation(const ibApplicationInstance* applicationInstance)
 
 	if (!called.IsEmpty()) {
 
-		out << ibT("THIS CONFIGURATION IS CALLED ") << called;
+		out << ibT("THIS APPLICATION IS CALLED ") << called;
 
 		// The id, said where the name is said. The root appears in no listing — it is not of a
 		// kind that can be listed — so this is the only place a caller learns how to address the
 		// object it is told below to write the direction on.
-		if (ibValueMetaObject* root = metaData->GetCommonMetaObject())
+		if (ibValueMetaObject* root = metaData->GetRootMetaObject())
 			out << ibT(", and its root has NodeId ") << (int)root->GetMetaID()
 				<< ibT(" (it is in no listing; that is how you address it)");
 
@@ -1620,16 +1620,16 @@ ibString BuildOrientation(const ibApplicationInstance* applicationInstance)
 
 	// ⭐⭐ TWO FACTS THAT DECIDE WHETHER WHAT YOU WRITE COMPILES AT ALL, and neither can be guessed
 	// from anything else. The DIALECT is a genuine fork - the same platform reads `If … Then …
-	// EndIf` or `if (…) { … }` depending on what this configuration declared, and handing somebody
+	// EndIf` or `if (…) { … }` depending on what this application declared, and handing somebody
 	// the other one produces code that reads correctly and is rejected. The LANGUAGES decide where
 	// a caption goes: a synonym is an array BY language, so writing one without knowing the codes
 	// puts it under the wrong heading or nowhere.
 	// ⚠ EVERYTHING BELOW IS A SNAPSHOT, and this is the one place that says so. `instructions` is
 	// read ONCE, at the handshake; the dialect is a property a person can change from the
-	// configuration's own settings at any moment, and after that this paragraph is confidently
+	// application's own settings at any moment, and after that this paragraph is confidently
 	// wrong. There is no "instructions changed" in the protocol — so instead of pretending the
 	// snapshot stays true, it names the tool that answers the same question live.
-	out << ibT("HOW THIS CONFIGURATION IS WRITTEN - true when you connected. `platform_state` ")
+	out << ibT("HOW THIS APPLICATION IS WRITTEN - true when you connected. `platform_state` ")
 		<< ibT("answers all of it again at any moment. Ask it at two points, not one:\n")
 		<< ibT(" BEFORE WRITING CODE - the dialect can be switched while you are connected, and ")
 		<< ibT("the other one is rejected by the compiler while reading perfectly.\n")
@@ -1640,7 +1640,7 @@ ibString BuildOrientation(const ibApplicationInstance* applicationInstance)
 
 	out << ibT("Script dialect: ");
 
-	if (ibConfigurationWritesInWords(metaData))
+	if (ibApplicationWritesInWords(metaData))
 		out << ibT("WORD-FENCED (`If ... Then ... EndIf`, `Procedure ... EndProcedure`).");
 	else
 		out << ibT("C-STYLE (`if (...) { ... }`, braces and semicolons).");
@@ -1649,12 +1649,14 @@ ibString BuildOrientation(const ibApplicationInstance* applicationInstance)
 		<< ibT("`script_check` is how you find out before anyone runs it.\n");
 
 	// ⭐ WHERE THE BRACES STOP BEING C. Each of these cost a round of refusals to an assistant that read C in
-	// them (a payroll built from nothing, 2026-10-30); the last one compiles and fails only when it runs.
-	if (!ibConfigurationWritesInWords(metaData))
-		out << ibT("THE BRACES ARE NOT C: `=` compares and `<>` is not-equal; conditions join with `And` / `Or` ")
-			<< ibT("(`!` negates); a loop counts `for (i = 0 To n - 1)`; `Procedure Name() Public { }` is what ")
-			<< ibT("other code may call. NAMES ARE NOT CASE-SENSITIVE - a local `baseKinds` hides the function ")
-			<< ibT("`BaseKinds` of its module, and the call fails at run time, not in `script_check`.\n");
+	// them (a payroll built from nothing, 2026-10-30); the last one compiles and fails only when it runs. The
+	// comparisons and the logic ARE C's since 2026-11-19.
+	if (!ibApplicationWritesInWords(metaData))
+		out << ibT("Comparison and logic are C's: `==` `!=` `&&` `||` `!` `%` (a single `=` in a condition, `<>` and ")
+			<< ibT("`And` / `Or` / `Not` are refused). THE REST IS NOT C: a loop counts `for (i = 0 To n - 1)`; ")
+			<< ibT("`Procedure Name() Public { }` is what other code may call. NAMES ARE NOT CASE-SENSITIVE - a local ")
+			<< ibT("`baseKinds` hides the function `BaseKinds` of its module, and the call fails at run time, not in ")
+			<< ibT("`script_check`.\n");
 
 	const std::vector<ibString> languages = ibListMetaObjectNames(metaData, ibT("Language"));
 
@@ -1669,7 +1671,7 @@ ibString BuildOrientation(const ibApplicationInstance* applicationInstance)
 	}
 
 	// ⭐⭐ THE LINE BETWEEN WHAT IS WRITTEN AND WHAT IS SHOWN, and it is not a style preference —
-	// it is where the configuration stops being portable. A NAME travels into script, into query
+	// it is where the application stops being portable. A NAME travels into script, into query
 	// text, into the database schema; written in anything but English it makes every module that
 	// touches it unreadable to the next person and unquotable in a query. A SYNONYM is what a
 	// person sees, and it belongs in their language.
@@ -1677,7 +1679,7 @@ ibString BuildOrientation(const ibApplicationInstance* applicationInstance)
 	// Said in the orientation because a model working with a Russian-speaking developer will
 	// otherwise mirror their language into the names, helpfully and wrongly, and the mistake is
 	// expensive to undo once modules reference it.
-	out << ibT("NOTE: THE CONFIGURATION IS WRITTEN IN ENGLISH. Names of objects, attributes, tabular ")
+	out << ibT("NOTE: THE APPLICATION IS WRITTEN IN ENGLISH. Names of objects, attributes, tabular ")
 		<< ibT("sections and modules - and the code inside them - are English, always: a name goes ")
 		<< ibT("into script, into query text and into the database schema, and it is what the next ")
 		<< ibT("person has to read.\n")
@@ -1686,7 +1688,7 @@ ibString BuildOrientation(const ibApplicationInstance* applicationInstance)
 		<< ibT("assistant window. Answer them in ")
 		<< ibT("their language; name things in English.\n");
 
-	// ⭐⭐ AND THE LANGUAGES ARE A THING TO SET UP, NOT A SETTING TO READ. A fresh configuration is
+	// ⭐⭐ AND THE LANGUAGES ARE A THING TO SET UP, NOT A SETTING TO READ. A fresh application is
 	// created with English alone, so a person working in Russian or Ukrainian has a base whose
 	// interface can only ever speak English — and every synonym written before their language
 	// EXISTS is written into English, silently, because `language` had nowhere else to put it.
@@ -1696,11 +1698,11 @@ ibString BuildOrientation(const ibApplicationInstance* applicationInstance)
 	// from that moment on. Said here because the cost of the wrong order is paid once per object,
 	// by hand, months later.
 	// 🛑 WRITTEN AS THREE STEPS BECAUSE THE RULE ALONE DID NOT WORK. It stood here as a sentence -
-	// "a Synonym without `language` goes to the configuration's own" - and the very next assistant
+	// "a Synonym without `language` goes to the application's own" - and the very next assistant
 	// to read it (the one that wrote it, 2026-09-03) still put Russian captions into the ENGLISH
 	// slot on fourteen objects and on the Russian language itself. A rule is read; a STEP is done.
 	// ⚠ AND A FOURTH, because three were done right and the application still spoke English: every caption
-	// sat in the Russian slot of a configuration whose default language was English (a payroll built from
+	// sat in the Russian slot of an application whose default language was English (a payroll built from
 	// nothing, 2026-10-30).
 	out << ibT("CAPTIONS AND LANGUAGES, IN FOUR STEPS - the third is where everybody slips, the fourth is ")
 		<< ibT("the one nobody is told:\n")
@@ -1709,15 +1711,15 @@ ibString BuildOrientation(const ibApplicationInstance* applicationInstance)
 		<< ibT(" 2. DECLARE IT FIRST - `metadata_create` {kind: \"Language\", name: \"Russian\"}, an ")
 		<< ibT("English name like any other, then set its `Code` (`ru`, `uk`, `en`).\n")
 		<< ibT(" 3. WRITE EVERY CAPTION WITH `language`. Omitting it is not \"all languages\": it ")
-		<< ibT("writes into the configuration's own - English in a fresh base - so a Russian caption ")
+		<< ibT("writes into the application's own - English in a fresh base - so a Russian caption ")
 		<< ibT("is stored as the English one and its reader sees nothing.\n")
-		<< ibT(" 4. MAKE IT THE ONE THEY SEE: `metadata_set` DefaultLanguage on the configuration's root. A user ")
+		<< ibT(" 4. MAKE IT THE ONE THEY SEE: `metadata_set` DefaultLanguage on the application's root. A user ")
 		<< ibT("with no language of their own sees the DEFAULT one, so every caption written in step 3 stays ")
 		<< ibT("unseen while it is English - the application opens in English and nothing says why.\n\n");
 
 	AppendPersonLanguage(out, who);
 
-	// ⚠ THE VERSION A CONFIGURATION DECLARES is not decoration: it is what the platform gates
+	// ⚠ THE VERSION AN APPLICATION DECLARES is not decoration: it is what the platform gates
 	// behaviour on, both in what code may say and in what schema is produced. Raising it IS the
 	// migration, and it is the PERSON's step to take - so it is reported and never touched.
 	out << ibT("Compatibility version: ") << (int)metaData->GetVersion()
@@ -1734,7 +1736,7 @@ ibString BuildOrientation(const ibApplicationInstance* applicationInstance)
 
 	// THE STARTING POINT, before any detail. A reader who has this needs far less of the rest.
 	if (!direction.IsEmpty()) {
-		out << ibT("WHAT THIS CONFIGURATION IS FOR - written on its root, and the place to begin. ")
+		out << ibT("WHAT THIS APPLICATION IS FOR - written on its root, and the place to begin. ")
 			<< ibT("It is the concept: what is being built, which way it is going, what it is ")
 			<< ibT("deliberately not. Everything below is a detail of it.\n\n")
 			<< direction << ibT("\n\n");
@@ -1762,12 +1764,12 @@ ibString BuildOrientation(const ibApplicationInstance* applicationInstance)
 	}
 
 	// ⭐ AN EMPTY ROOT IS A TASK, NOT A FACT ABOUT THE PLACE. It means nobody wrote the direction
-	// down yet — a configuration just started, or one that grew by objects being copied in — and
+	// down yet — an application just started, or one that grew by objects being copied in — and
 	// the useful thing to do about it is not to note the absence and carry on. Reconstruct it from
 	// what is actually there and write it, marking that it was reconstructed rather than declared,
 	// so the person can correct it instead of inheriting your guess as their own statement.
 	if (direction.IsEmpty()) {
-		out << ibT("THE ROOT SAYS NOTHING about what this configuration is for. That is ordinary ")
+		out << ibT("THE ROOT SAYS NOTHING about what this application is for. That is ordinary ")
 			<< ibT("- a new base, or one that grew by objects being copied in - and it is ")
 			<< ibT("something to FIX rather than to note: read the tree, work out what is being ")
 			<< ibT("built, and write it on the root with `note_write`. Say plainly that you ")
@@ -1788,7 +1790,7 @@ ibString BuildOrientation(const ibApplicationInstance* applicationInstance)
 		out << ibT("WHAT WAS LEARNED BUILDING IT: ") << (int)notes.size()
 			<< ibT(" object(s) carry technical notes - why a thing exists, which shape was chosen, ")
 			<< ibT("what was rejected. `note_read` gives them, whole. Read them before proposing ")
-			<< ibT("anything: a configuration records what was built and never why.\n\n");
+			<< ibT("anything: an application records what was built and never why.\n\n");
 	}
 
 	// (Where each kind of text belongs is stated near the top, above the cut. Not repeated here —
@@ -1814,7 +1816,7 @@ ibString BuildOrientation(const ibApplicationInstance* applicationInstance)
 		<< ibT(" `syntax_search` / `syntax_get` - the language reference, function by function\n")
 		<< ibT(" `type_list` / `type_members` - what a value IS and what it can do\n")
 		<< ibT(" `linq_methods` - the query pipeline operations\n")
-		<< ibT(" `metadata_list` / `metadata_get` - the configuration tree, kind by kind\n")
+		<< ibT(" `metadata_list` / `metadata_get` - the application tree, kind by kind\n")
 		<< ibT(" `pattern_read` - how things are USUALLY done here, in the words of the trade; the ")
 		<< ibT("one above that is about practice rather than syntax\n")
 		<< ibT(" `script_check` / `query_check` - COMPILE without running. Ask them before you ")
@@ -1828,7 +1830,7 @@ ibString BuildOrientation(const ibApplicationInstance* applicationInstance)
 	// "which register this document writes") found nothing, and the conclusion drawn was that the
 	// platform could not express it at all: an hour, and a wrong report to the person.
 	//
-	// AND "BUILT" IS NOT "SAVED". Everything above answers happily while the configuration is
+	// AND "BUILT" IS NOT "SAVED". Everything above answers happily while the application is
 	// unsaveable — the check that says so is one call and nobody thinks to make it.
 	// ⭐⭐ AND THE ONE THAT MAKES THE DIFFERENCE BETWEEN BUILDING AND KNOWING IT WORKS. An assistant
 	// can create every metaobject and still never see the thing RUN — measured 2026-09-03: the
@@ -1895,7 +1897,7 @@ ibString BuildOrientation(const ibApplicationInstance* applicationInstance)
 		<< ibT("later one does not take over: move it with `metadata_set` on `DefaultComposer` / ")
 		<< ibT("`DefaultFormObject` / ..., which are ordinary lists. A form's MAIN ATTRIBUTE has its ")
 		<< ibT("own verb, `form_attribute`.\n")
-		<< ibT(" `config_check` -> `config_save` -> `config_apply` - half-built / outlives the ")
+		<< ibT(" `app_check` -> `app_save` -> `app_apply` - half-built / outlives the ")
 		<< ibT("designer / reaches the running application. Three different questions; none ")
 		<< ibT("implies the others.\n\n");
 
@@ -1916,11 +1918,11 @@ ibString BuildOrientation(const ibApplicationInstance* applicationInstance)
 
 	// ⭐⭐ SAY HELLO, AND SAY IT FIRST. There is a person sitting in front of this window, and from
 	// their side a connection is INVISIBLE unless something says so — an assistant that reads the
-	// whole configuration in silence and waits to be addressed looks exactly like one that never
+	// whole application in silence and waits to be addressed looks exactly like one that never
 	// arrived. Greeting is not manners here; it is the only evidence they get.
 	//
 	// ⚠ AND IT SAYS WHAT WAS SEEN, not just that it happened. "Hello" tells them nothing they
-	// could act on; naming the configuration and what is in it proves the connection works AND
+	// could act on; naming the application and what is in it proves the connection works AND
 	// hands them the first thing to correct if it is wrong.
 	// ⭐⭐ THE ROUTE, NOT THE REFERENCE. Everything above says what EXISTS; a newcomer with no memory
 	// of this project needs to know in what ORDER to use it, and that is the one thing no verb can
@@ -1932,12 +1934,12 @@ ibString BuildOrientation(const ibApplicationInstance* applicationInstance)
 		<< ibT("order things are built in. 4. PUT THE FORKS BACK to the person in their own words, ")
 		<< ibT("with a recommendation. 5. Build in the recipe's order, `metadata_accepts` before ")
 		<< ibT("creating and `metadata_bind` after. 6. `script_check` / `query_check` before ")
-		<< ibT("believing any code. 7. `config_check`, then `config_save`. Write down WHY as you ")
+		<< ibT("believing any code. 7. `app_check`, then `app_save`. Write down WHY as you ")
 		<< ibT("go - notes on the objects, one line of `Comment` each.\n")
 		<< ibT("AND SPEND YOUR READING WHERE IT PAYS. `pattern_read` in layers (no argument lists ")
 		<< ibT("the topics; `name` gives one; `topic` gives it in full) - not the whole corpus. ")
 		<< ibT("`mcp_search` in the words of the job rather than by guessing a verb. Ask the ")
-		<< ibT("configuration about ITSELF (`metadata_tree`, `metadata_get`) rather than reading ")
+		<< ibT("application about ITSELF (`metadata_tree`, `metadata_get`) rather than reading ")
 		<< ibT("everything: a deep walk of a full base is mostly predefined attributes.\n\n");
 
 	out << ibT("FIRST THING, AND NOTHING ELSE RUNS UNTIL IT IS DONE - this is a door, not a ")
@@ -1949,8 +1951,8 @@ ibString BuildOrientation(const ibApplicationInstance* applicationInstance)
 		<< ibT("already in progress - and then `chat_say` a greeting with four things in it:\n")
 		<< ibT(" WHO YOU ARE. Name yourself - which assistant and which model. The handshake ")
 		<< ibT("tells them the client's name and nothing else; what is actually reading their ")
-		<< ibT("configuration is something only you can say, and they are entitled to know it.\n")
-		<< ibT(" WHAT YOU SEE. The configuration by name and what is in it, in a line or two. ")
+		<< ibT("application is something only you can say, and they are entitled to know it.\n")
+		<< ibT(" WHAT YOU SEE. The application by name and what is in it, in a line or two. ")
 		<< ibT("This is also the proof the connection works - a greeting that describes their ")
 		<< ibT("base cannot be a stale window.\n")
 		<< ibT(" ANYTHING ALREADY WORTH SAYING. Objects in no section, nothing written on the ")
@@ -2182,7 +2184,7 @@ ibString ibMcpServer::Answer(const ibString& request, const ibMcpWireHeaders& he
 		// ⭐ ARRIVING ORIENTED, not arriving and then asking. `instructions` is the protocol's own
 		// field for the server to say how it should be worked with, and it was left empty — so a
 		// client connected, saw TWO tools, and had to discover by trial that the rest are found
-		// rather than announced, that the configuration carries written findings, and that a
+		// rather than announced, that the application carries written findings, and that a
 		// conversation was already in progress.
 		//
 		// ⚠ WHAT IS HERE IS THE MAP, NOT THE TERRITORY. The census tells a caller what kind of
@@ -2192,7 +2194,7 @@ ibString ibMcpServer::Answer(const ibString& request, const ibMcpWireHeaders& he
 		result.SetValue(ibT("instructions"), BuildOrientation(m_applicationInstance));
 
 		// ⭐ THE PERSON IS TOLD SOMEBODY ARRIVED. Until now a client could connect, read the whole
-		// configuration and start working, and the window in front of the person showed nothing
+		// application and start working, and the window in front of the person showed nothing
 		// at all — the difference between "nobody is there" and "somebody is reading everything
 		// you have" was invisible. Announcing it is the least a window watching this owes them.
 		//
@@ -2445,7 +2447,7 @@ ibString ibMcpServer::Answer(const ibString& request, const ibMcpWireHeaders& he
 
 			// 🛑 A CLIENT NEED NOT INTRODUCE ITSELF TO WORK. The token is what admits it;
 			// `initialize` is a courtesy the protocol expects and nothing here enforces — so a
-			// caller can read and change a configuration having said nothing, and the person
+			// caller can read and change an application having said nothing, and the person
 			// watching sees things happen in their tree with no idea who is doing them. The
 			// arrival announcement was tied to the handshake, which is exactly the event that can
 			// be skipped.
@@ -2511,7 +2513,7 @@ ibString ibMcpServer::Answer(const ibString& request, const ibMcpWireHeaders& he
 				//
 				// ⭐⭐ NOT A REMINDER — A DOOR. There is a person sitting in front of this designer, and
 				// from their side a connection is INVISIBLE until something says so: an assistant that
-				// reads their whole configuration in silence looks exactly like one that never came.
+				// reads their whole application in silence looks exactly like one that never came.
 				//
 				// 🛑 ASKING NICELY DOES NOT WORK, and every gentler shape was tried in one day
 				// (2026-09-03): said once at the handshake, it is gone from a long-running client's
@@ -2528,11 +2530,11 @@ ibString ibMcpServer::Answer(const ibString& request, const ibMcpWireHeaders& he
 
 					refusal = ibMcpText("Nobody knows you are here yet. Say who you are first: `chat_say` "
 						"with WHO YOU ARE (which assistant and which model), WHAT YOU SEE (the "
-						"configuration by name and what is in it - `platform_state` and "
+						"application by name and what is in it - `platform_state` and "
 						"`metadata_tree` depth 1 answer that), ANYTHING ALREADY WORTH SAYING, and "
 						"WHAT YOU MEAN TO DO. Until then only those four verbs and `chat_history` "
 						"run - the person sitting there sees a window that has been silent while "
-						"their configuration was being read, and that is the one thing this "
+						"their application was being read, and that is the one thing this "
 						"platform will not allow.");
 				}
 				else if (!undeclared.IsEmpty()) {
@@ -2629,7 +2631,7 @@ ibString ibMcpServer::Answer(const ibString& request, const ibMcpWireHeaders& he
 			// the same place it reads a result from.
 			std::shared_ptr<ibDataNode> content = std::make_shared<ibDataNode>();
 			content->SetValue(ibT("type"), ibString(ibT("text")));
-			// Rendered against the configuration this server serves, so a type
+			// Rendered against the application this server serves, so a type
 			// reads as "CatalogRef.Goods" rather than as a number that means
 			// nothing on the other side of the socket.
 			const ibString text = ok
@@ -2641,7 +2643,7 @@ ibString ibMcpServer::Answer(const ibString& request, const ibMcpWireHeaders& he
 			// once, at the handshake. A client that runs for hours, or one whose own context was
 			// compacted, no longer has that text in front of it and cannot be expected to obey a
 			// rule it can no longer read. It then works in silence, and the person watching their
-			// own configuration change has no idea who is doing it.
+			// own application change has no idea who is doing it.
 			//
 			// So the reminder rides the ANSWER, which is the one thing a working client always
 			// reads, and stops the moment it is honoured. Not a nag: it is the platform stating an
@@ -2732,12 +2734,12 @@ ibString ibMcpServer::Answer(const ibString& request, const ibMcpWireHeaders& he
 							each->FindInside(family, places);
 					}
 
-					// ⭐⭐ AND WHETHER THIS CONFIGURATION SPEAKS MORE THAN ONE LANGUAGE — said at the
+					// ⭐⭐ AND WHETHER THIS APPLICATION SPEAKS MORE THAN ONE LANGUAGE — said at the
 					// first thing a caller does, because it changes how EVERY visible string is
 					// written from that moment on.
 					//
 					// A synonym, a form's title, a column heading, a caption on a printed blank: all
-					// of them are localised strings, and in a two-language configuration a bare one
+					// of them are localised strings, and in a two-language application a bare one
 					// is stored as itself and shown as itself, so the second language gets the first
 					// language's words. Nothing refuses it and nothing looks wrong — the form is
 					// correct in the language whoever built it is looking at, and the failure belongs
@@ -2747,8 +2749,8 @@ ibString ibMcpServer::Answer(const ibString& request, const ibMcpWireHeaders& he
 					// per-cell and per-object, and there may be hundreds. A caller that has this
 					// early writes every language as it goes, which costs nothing extra when the one
 					// writing is a model that can translate.
-					ibMetaDataConfigurationBase* const metaData = GetMetaData();
-					if (!m_saidLanguages && metaData != nullptr && metaData->IsConfigOpen()) {
+					ibMetaDataApplicationBase* const metaData = GetMetaData();
+					if (!m_saidLanguages && metaData != nullptr && metaData->IsOpen()) {
 
 						const std::vector<ibString> languages =
 							ibListMetaObjectNames(metaData, ibT("Language"));
@@ -2762,7 +2764,7 @@ ibString ibMcpServer::Answer(const ibString& request, const ibMcpWireHeaders& he
 							m_saidLanguages = true;
 							result.SetValue(ibT("languages"),
 								ibString::Format(
-									ibMcpText("This configuration declares %d languages (%s), so every string a "
+									ibMcpText("This application declares %d languages (%s), so every string a "
 									  "PERSON reads - a synonym, a form title, a column heading, a caption on "
 									  "a blank - has to carry all of them. Write them together as you go: a "
 									  "bare string is shown as itself in every language, and correcting it "
@@ -2914,7 +2916,7 @@ ibString ibMcpServer::Answer(const ibString& request, const ibMcpWireHeaders& he
 			? parsed.m_params.GetValue<ibString>(ibT("name")) : toolName;
 
 		// IN THE READER'S WORDS, NOT THE PROTOCOL'S. The person reading either the window or the
-		// journal is a developer looking at their own configuration; "creating catalog Goods" is
+		// journal is a developer looking at their own application; "creating catalog Goods" is
 		// what happened, `metadata_create` is only how it was spelled on the wire. The tool is
 		// asked, because it is the only thing that knows what its own arguments mean.
 		//
@@ -2931,7 +2933,7 @@ ibString ibMcpServer::Answer(const ibString& request, const ibMcpWireHeaders& he
 			// LANDED. Found live on 2026-08-31: `metadata_set` with a boolean value set the
 			// property, then GetActivity read that same argument as a string
 			// (`params.GetValue<wxString>`), ibDataValue::Expect raised on the kind mismatch, and
-			// the answer died on the way out. The configuration was modified; the caller was told
+			// the answer died on the way out. The application was modified; the caller was told
 			// nothing at all, which is worse than being told no.
 			//
 			// ⚠ NOT FIXED BY MAKING GetValue FORGIVING. Reading a value as the wrong kind SHOULD
@@ -2985,7 +2987,7 @@ ibString ibMcpServer::Answer(const ibString& request, const ibMcpWireHeaders& he
 		// it is gone when the session ends. The journal is the RECORD — read later, by an
 		// administrator who was not there, with the same reader (`journal_read`, `ibLoggerReader`)
 		// that shows every other thing the platform did. An assistant that can change a
-		// configuration has to leave the same trail a person does; anything less makes "who did
+		// application has to leave the same trail a person does; anything less makes "who did
 		// this" unanswerable for exactly the actor most likely to be asked about.
 		//
 		// ⭐ ONE PLACE, ALL TOOLS. Written here rather than in each tool for the reason the

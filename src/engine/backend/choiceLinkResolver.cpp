@@ -114,7 +114,7 @@ bool ibChoiceLinkResolver::CanGovern(const ibTypeDescription& type)
 	//
 	// 🛑 THIS REFUSED EVERYTHING BUT A CHARACTERISTIC, TWICE OVER — first by naming the chart's class,
 	// then by asking whether a field's two type answers differ. Both were the same mistake wearing
-	// different clothes: they made the mechanism be ABOUT characteristics, and on a configuration with
+	// different clothes: they made the mechanism be ABOUT characteristics, and on an application with
 	// no characteristic beside the field the list came up empty, so the link could not be set at all.
 	// A refusal that cannot be satisfied is not a safeguard.
 	//
@@ -144,10 +144,10 @@ bool ibChoiceLinkResolver::ResolveParameters(const ibChoiceParametersDescription
 			continue;
 
 		// The parameter is held by id and spelled into the condition by NAME, because that is what a
-		// filter path is. An id the configuration no longer holds names nothing, and a condition over
+		// filter path is. An id the application no longer holds names nothing, and a condition over
 		// nothing would quietly pass every row.
 		//
-		// 🛑 ASKED DEEP, and the flag is not a detail: without it the search is the configuration's
+		// 🛑 ASKED DEEP, and the flag is not a detail: without it the search is the application's
 		// DIRECT CHILDREN — the catalogs and documents themselves — and a parameter is a field two
 		// levels down, so it was never found FOR ANY ROW. Every row fell out of the loop, the filter
 		// came out empty, the request carried no condition, and the choice list opened showing
@@ -155,9 +155,9 @@ bool ibChoiceLinkResolver::ResolveParameters(const ibChoiceParametersDescription
 		// document whose contracts showed every counterparty's).
 		const ibValueMetaObject* parameter = metaData->FindAnyObjectByFilter(row.m_parameter, true);
 		if (parameter == nullptr || parameter->IsDeleted()) {
-			// A row naming a field the configuration no longer holds narrows nothing — and said nothing,
+			// A row naming a field the application no longer holds narrows nothing — and said nothing,
 			// which is how this arc spent an afternoon opening unnarrowed lists with no refusal anywhere.
-			ibJournalWarning(ibT("choice.param"), ibT("row names #%d, which this configuration has not - skipped"),
+			ibJournalWarning(ibT("choice.param"), ibT("row names #%d, which this application has not - skipped"),
 				row.m_parameter);
 			continue;
 		}
@@ -203,7 +203,7 @@ void ibChoiceLinkResolver::Fill(ibChoiceHolder& holder, const ibCreateRequest& r
 		fields->GetSourceName(), static_cast<int>(request.m_condition.m_parameters.size()));
 
 	// 🛑⭐ THE FIELDS THE SOURCE ITSELF LISTS, and it has to be them. `FindAnyObjectByFilter` on the
-	// configuration searches its DIRECT CHILDREN, and the field this whole arc is about — a subordinate
+	// application searches its DIRECT CHILDREN, and the field this whole arc is about — a subordinate
 	// catalog's `Owner` — is not one: it is a PREDEFINED attribute of the catalog. So the commonest narrowing
 	// there was named a field that lookup could not see, nothing was filled, and a contract created in a list
 	// showing one counterparty's was born with no counterparty (Max, 2026-09-23: "the substitution of the
@@ -313,7 +313,7 @@ void ibChoiceLinkResolver::ClearLinked(ibChoiceHolder& holder, const ibMetaID& e
 	// ⭐ ONE PASS, AND THE CHAIN FOLLOWS BY ITSELF. Emptying a field makes it a changed field in its turn,
 	// and whatever was chosen within THAT is stale for the same reason — but the emptied value is written
 	// through the record's own write (the hop gate below), which is the very write that called this. So
-	// the next link of the chain is cleared by the next call, and a configuration that names itself in a
+	// the next link of the chain is cleared by the next call, and an application that names itself in a
 	// circle stops where a value is already empty: writing it again is no change.
 	//
 	// 🛑 A HAND-BUILT CHAIN STOOD HERE AS WELL — a queue of changed ids and a list of visited ones, with

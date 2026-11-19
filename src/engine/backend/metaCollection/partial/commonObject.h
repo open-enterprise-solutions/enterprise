@@ -132,7 +132,7 @@ class BACKEND_API ibValueMetaObjectRecordData
 	: public ibValueMetaObjectGenericData {
 	public:
 
-	// EVERY STORED KIND MAY GO INTO A SECTION — catalogs and documents, processors and
+	// EVERY STORED KIND MAY GO INTO A SECTION — catalogs and documents, data tools and
 	// reports here, and the register families on their own line (ibValueMetaObjectRegisterData),
 	// which does not pass through this one. Given once per line instead of being spelled out as a
 	// branch per metatype in the editor.
@@ -143,11 +143,11 @@ public:
 	virtual ibClassID ResolveChild(const ibClassID& clsid) const {
 		if (clsid == g_metaAttributeCLSID)
 			return clsid;
-		// A common attribute's copy — gated by the object's own answer, not by a list kept
-		// elsewhere. Only a declaration under Common ever creates one.
-		if (clsid == g_metaCommonAttributeColumnCLSID && IsCompositionAllowed())
+		// A shared attribute's copy — gated by the object's own answer, not by a list kept
+		// elsewhere. Only a declaration under Shared ever creates one.
+		if (clsid == g_metaSharedAttributeColumnCLSID && IsCompositionAllowed())
 			return clsid;
-		// RAM owner (processor / report): either tabular-section variant maps to MD_TBL.
+		// RAM owner (data tool / report): either tabular-section variant maps to MD_TBL.
 		if (clsid == g_metaTableCLSID || clsid == g_metaTableRefCLSID)
 			return g_metaTableCLSID;
 		return ibValueMetaObjectGenericData::ResolveChild(clsid);
@@ -178,7 +178,7 @@ public:
 	virtual std::vector<ibValueMetaObjectAttributeBase*> GetGenericAttributeArrayObject(
 		std::vector<ibValueMetaObjectAttributeBase*>& array) const {
 		FillArrayObjectByPredefinedAttribute(array);
-		FillArrayObjectByCommonAttribute(array);
+		FillArrayObjectBySharedAttribute(array);
 		FillArrayObjectByFilter<ibValueMetaObjectAttributeBase>(array, { g_metaAttributeCLSID });
 		return array;
 	}
@@ -240,7 +240,7 @@ public:
 		// (ibValueRecordDataObjectCatalog::GetSourceExplorer walks it). Hiding them from the
 		// DESIGNER TREE is a display decision and belongs where the tree is drawn — taking
 		// them out of this list took them out of the form as well.
-		FillArrayObjectByFilter<ibValueMetaObjectAttributeBase>(array, { g_metaAttributeCLSID, g_metaCommonAttributeColumnCLSID });
+		FillArrayObjectByFilter<ibValueMetaObjectAttributeBase>(array, { g_metaAttributeCLSID, g_metaSharedAttributeColumnCLSID });
 		return array;
 	}
 
@@ -257,7 +257,7 @@ public:
 
 	// ⭐⭐ ANY ATTRIBUTE — ASKED BY TYPE, NOT BY A LIST OF KINDS. An empty filter is the search's own
 	// "match on the template argument" (metaObject.h), and EVERY attribute there is derives from
-	// ibValueMetaObjectAttributeBase: a plain one, a predefined one, a common attribute's column, a
+	// ibValueMetaObjectAttributeBase: a plain one, a predefined one, a shared attribute's column, a
 	// chart's ACCOUNTING KIND. Named as three clsids instead, the filter was a list nobody is made to
 	// extend — the kinds were missing from it, the find answered `nullptr`, and the caller that adjusts
 	// a value to its type dereferenced that: `obj.Currency = true` took the whole application down
@@ -333,10 +333,10 @@ inline bool ibItemModeFits(ibItemMode itemMode, ibObjectMode objMode) {
 class BACKEND_API ibValueMetaObjectRecordDataExt : public ibValueMetaObjectRecordData {
 	public:
 
-	// AN OBJECT AND A MANAGER, and no reference — a data processor or a report is
+	// AN OBJECT AND A MANAGER, and no reference — a data tool or a report is
 	// something you OPEN and RUN, not something other data points at. It stores
 	// no rows of its own, so there is nothing to reference; the external variants
-	// (external data processor / external report) inherit exactly this.
+	// (external data tool / external report) inherit exactly this.
 	static constexpr unsigned s_features =
 		ibMetaFeature_Object | ibMetaFeature_Manager;
 
@@ -395,7 +395,7 @@ private:
 // every kind under that name, each kind's own, and the fields of one role meet in one COALESCE.
 //
 // Which columns — its PARTS — is the KIND's statement (ibRecordQueryable::GetSortParts), asked every time rather than
-// kept: what a catalog is presented by is its author's setting, and changes while the configuration is open.
+// kept: what a catalog is presented by is its author's setting, and changes while the application is open.
 // ==========================================================================
 class BACKEND_API ibBackendColumnSortOrder : public ibBackendQueryColumn {
 public:
@@ -616,12 +616,12 @@ public:
 	virtual ibSelectorDataType GetFilterDataType() const { return ibSelectorDataType::ibSelectorDataType_reference; }
 
 	//reference owners persist their tabular sections to the DB — they take the MD_TBLR variant
-	//(processors/reports keep the RAM MD_TBL via the base RecordData::ResolveChild).
+	//(data tools/reports keep the RAM MD_TBL via the base RecordData::ResolveChild).
 	virtual ibClassID ResolveChild(const ibClassID& clsid) const {
 		if (clsid == g_metaAttributeCLSID)
 			return clsid;
 		// Same gate as the RAM owner above — the object answers for itself.
-		if (clsid == g_metaCommonAttributeColumnCLSID && IsCompositionAllowed())
+		if (clsid == g_metaSharedAttributeColumnCLSID && IsCompositionAllowed())
 			return clsid;
 		// reference owner (catalog / document): either tabular-section variant maps to MD_TBLR.
 		if (clsid == g_metaTableCLSID || clsid == g_metaTableRefCLSID)
@@ -822,7 +822,7 @@ public:
 
 	//descriptions...
 	//
-	// ⭐⭐ AN ENUMERATION MEMBER IS DECLARED, NOT STORED — it reads as the configuration writes it in the
+	// ⭐⭐ AN ENUMERATION MEMBER IS DECLARED, NOT STORED — it reads as the application writes it in the
 	// designer and as the synonym a person put on it at run time.
 	virtual bool GenerateDataDesc(const ibValueDataObject* objValue, ibString& out) const override;
 	// …so it reads NO field to say it: the member is found by its guid in the metadata.
@@ -891,7 +891,7 @@ protected:
 		// declared as a property and left out of here, so the position existed in the metadata and
 		// nowhere else - no column to write it into, and nothing for a list to sort by. The values
 		// then came back in whatever order the table handed them over, which is not the order the
-		// configuration declares them in and is what a person picking from the list actually reads.
+		// application declares them in and is what a person picking from the list actually reads.
 		array.push_back(m_propertyAttributeOrder->GetMetaObject());
 		return true;
 	}
@@ -909,7 +909,7 @@ protected:
 private:
 
 	//default attributes 
-	ibPropertyPredefined<>* m_propertyAttributeOrder = ibPropertyObject::CreateProperty<ibPropertyPredefined<>>(m_categoryPredefined, ibValueMetaObjectCompositeData::CreateNumber(ibT("Order"), _("Order"), _("The position of the value in its enumeration, as the values are listed in the configuration. Values compare and sort by it, so a query ordering by an enumeration field orders by the declared order, not by the name."), 6, true));
+	ibPropertyPredefined<>* m_propertyAttributeOrder = ibPropertyObject::CreateProperty<ibPropertyPredefined<>>(m_categoryPredefined, ibValueMetaObjectCompositeData::CreateNumber(ibT("Order"), _("Order"), _("The position of the value in its enumeration, as the values are listed in the application. Values compare and sort by it, so a query ordering by an enumeration field orders by the declared order, not by the name."), 6, true));
 
 	// …and this kind's own source descriptor — typed to the ENUMERATION kind, registered by it.
 	ibMetaCommandDescriptor<ibEnumQueryable, ibValueMetaObjectRecordDataEnumRef> m_queryable{ this };
@@ -918,14 +918,11 @@ private:
 // Helper macro — emits the Read/Write/Delete role triplet + their
 // AccessRight_* helpers. Used by both ibValueMetaObjectRecordDataMutableRef
 // and ibValueMetaObjectRegisterData (independent branches of the tree
-// share the same RWD policy). The macro is parameterised on the
-// stored role-name for "Write" because MutableRef historically stored
-// it as "Wrire" (legacy typo) while RegisterData stored "Write" —
-// fixing the typo requires a metadata migration tracked separately.
-#define IB_DECLARE_RWD_ROLE_TRIPLET(writeStorageName) \
+// share the same RWD policy).
+#define IB_DECLARE_RWD_ROLE_TRIPLET() \
 private: \
 	ibRole* m_roleRead   = ibValueMetaObject::CreateRole(ibT("Read"),   _("Read")); \
-	ibRole* m_roleWrite  = ibValueMetaObject::CreateRole(ibT(writeStorageName), _("Write")); \
+	ibRole* m_roleWrite  = ibValueMetaObject::CreateRole(ibT("Write"),  _("Write")); \
 	ibRole* m_roleDelete = ibValueMetaObject::CreateRole(ibT("Delete"), ibGETTEXT_IN_CONTEXT("access right", "Delete")); \
 public: \
 	bool AccessRight_Read()   const { return IsFullAccess() || AccessRight(m_roleRead);   } \
@@ -946,9 +943,9 @@ public:
 		ibValueMetaObjectRecordDataRef::s_features
 		| ibMetaFeature_Object | ibMetaFeature_Selection;
 
-	// COMMON ATTRIBUTES LAND HERE — on the line a catalog and a document share, which is
+	// SHARED ATTRIBUTES LAND HERE — on the line a catalog and a document share, which is
 	// the line that has stored, editable rows to put a column on. Registers and the
-	// unstored kinds (processors, reports) are deliberately left out: for a register it is
+	// unstored kinds (data tools, reports) are deliberately left out: for a register it is
 	// a decision about data separation that has not been taken, and an unstored object has
 	// no table at all.
 	virtual bool IsCompositionAllowed() const override { return true; }
@@ -966,8 +963,7 @@ public:
 	virtual bool AccessRight_Erase() const { return AccessRight_Delete(); }
 #pragma endregion
 
-	// ("Write" carries the legacy storage typo — kept until the migration arc.)
-	IB_DECLARE_RWD_ROLE_TRIPLET("Write")
+	IB_DECLARE_RWD_ROLE_TRIPLET()
 
 	ibMetaDescription& GetGenerationDescription() const { return m_propertyGeneration->GetValueAsMetaDesc(); }
 
@@ -1037,7 +1033,7 @@ public:
 	//get command section
 	virtual ibInterfaceCommandSection GetCommandSection() const { return ibInterfaceCommandSection::ibInterfaceCommandSection_Combined; }
 
-	// (no table-data dump / restore here — the orchestrator moves rows off the config's ContributeTables
+	// (no table-data dump / restore here — the orchestrator moves rows off the application's ContributeTables
 	//  snapshot through the L3-3 mover; this object only DECLARES its tables via ContributeTables.)
 
 protected:
@@ -1304,10 +1300,10 @@ protected:
 	ibPropertySequenceRecord* m_propertySequenceRecord = ibPropertyObject::CreateProperty<ibPropertySequenceRecord>(m_categoryData, ibT("ListSequenceRecord"), _("List sequence record"), _("The sequences this document registers in. For each one the document gets a set of registrations (Sequences.<Sequence>) addressed by its reference, filled by the posting handler and written when posting ends; the sequence's border then moves by those rows. A sequence not listed here cannot take this document as its recorder."));
 	// ⭐ THE MOVEMENTS ARE CLEARED, NOT COMPARED (Max, 2026-09-14): posting again clears what the document wrote and its
 	// handler writes it anew — nothing tracks what changed. Whether the platform clears them is this property's to say;
-	// a configuration that has not set it posts as it always has.
+	// an application that has not set it posts as it always has.
 	ibPropertyEnum<ibValueEnumDocumentRecordsDeletion>* m_propertyRegisterRecordsDeletion =ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumDocumentRecordsDeletion>>(m_categoryData,
-		ibT("RegisterRecordsDeletion"), _("Register records deletion"), _("What the platform does with the document's movements when it is posted again or its posting is undone. Automatically (the default): cleared before the posting handler runs and when the posting is undone. On undo posting: kept when posted again, cleared on undo. Never: the configuration clears them. A deleted document always takes its movements with it."), ibDocumentRecordsDeletion::ibDocumentRecordsDeletion_Automatically);
-	// The number's type and length are the configuration's - shown and set as its type (ibPropertyPredefinedType).
+		ibT("RegisterRecordsDeletion"), _("Register records deletion"), _("What the platform does with the document's movements when it is posted again or its posting is undone. Automatically (the default): cleared before the posting handler runs and when the posting is undone. On undo posting: kept when posted again, cleared on undo. Never: the application clears them. A deleted document always takes its movements with it."), ibDocumentRecordsDeletion::ibDocumentRecordsDeletion_Automatically);
+	// The number's type and length are the application's - shown and set as its type (ibPropertyPredefinedType).
 	ibPropertyPredefinedType* m_propertyAttributeNumber = ibPropertyObject::CreateProperty<ibPropertyPredefinedType>(m_categoryPredefined, ibValueMetaObjectCompositeData::CreateString(ibT("Number"), ibGETTEXT_IN_CONTEXT("document attribute", "Number"), _("The document's number - what a person finds it by. Indexed; shown with the date in lists and links. Left empty, it is generated when the document is written; the object module's SetNewNumber handler may give it a prefix or take the numbering over."), 11, true, ibItemMode::ibItemMode_Item, ibSelectMode::ibSelectMode_Items, ibIndexingMode::ibIndexingMode_IndexWithAdditionalOrder));
 	ibPropertyPredefined<>* m_propertyAttributeDate = ibPropertyObject::CreateProperty<ibPropertyPredefined<>>(m_categoryPredefined, ibValueMetaObjectCompositeData::CreateDate(ibT("Date"), _("Date"), _("The document's date and time - when the fact happened. Documents are ordered by it, and it is the moment its movements stand at in the registers: a balance as of a moment counts the documents up to it."), ibDateFractions::ibDateFractions_DateTime, true, ibItemMode::ibItemMode_Item, ibSelectMode::ibSelectMode_Items, ibIndexingMode::ibIndexingMode_IndexWithAdditionalOrder));
 	// The moment — registered like the date above, typed as the PointInTime value. See GetPointInTime
@@ -1379,7 +1375,7 @@ class BACKEND_API ibValueMetaObjectRecordDataHierarchyMutableRef :
 	// hierarchy types.
 	//
 	// And PRESENCE, which is the part a boolean-plus-enum could not express: an attribute that this
-	// arrangement has no use for is not present in this configuration, which is exactly what
+	// arrangement has no use for is not present in this application, which is exactly what
 	// metaDisableFlag says (the same flag a catalog with no owner puts on Owner, and an independent
 	// register on Recorder). The flag alone does not reach the schema — the list that becomes columns
 	// asks the same two questions itself (FillArrayObjectByPredefinedAttribute), so a flat catalog
@@ -1409,7 +1405,7 @@ class BACKEND_API ibValueMetaObjectRecordDataHierarchyMutableRef :
 	// the presentation template below, which every road that shows a reference is built from.
 	ibDataPresentation GetReferencePresentation() const { return m_propertyDataPresentation->GetValueAsEnum(); }
 	// …stated by a kind that is named by its code (a chart of accounts) at construction; a loaded
-	// configuration's own choice replaces it.
+	// application's own choice replaces it.
 	void SetReferencePresentation(ibDataPresentation presentation) { m_propertyDataPresentation->SetValue(presentation); }
 	// …and the attribute that IS the presentation: what a reference reads as, and what a list of the
 	// items is ordered by (ibCreateHierarchyList's presentation column) - one declaration, both roads.
@@ -1516,7 +1512,7 @@ class BACKEND_API ibValueMetaObjectRecordDataHierarchyMutableRef :
 	void SetPredefinedValue(const ibPredefinedItemDescription& item);
 	void DeletePredefinedValue(const ibGuid& predefinedGuid);
 
-	// The item of that guid, or of that name, as the configuration keeps it — null when none.
+	// The item of that guid, or of that name, as the application keeps it — null when none.
 	const ibPredefinedItemDescription* FindPredefinedValue(const ibGuid& predefinedGuid) const { return m_predefinedDesc.FindItem(predefinedGuid); }
 	const ibPredefinedItemDescription* FindPredefinedValue(const ibString& predefinedName) const { return m_predefinedDesc.FindItem(predefinedName); }
 
@@ -1608,21 +1604,21 @@ protected:
 	ibPropertyEnum<ibValueEnumDataPresentation>* m_propertyDataPresentation = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumDataPresentation>>(m_categoryPresentation, ibT("DataPresentation"), _("Data presentation"), _("How a reference to an item reads wherever it is shown - in a field, a list, a report: by its Description (the default for a catalog) or by its Code (the default for a chart of accounts, whose accounts are named by their numbers)."), ibDataPresentation_Description);
 
 	//create default attributes
-	ibPropertyPredefined<>* m_propertyAttributePredefined = ibPropertyObject::CreateProperty<ibPropertyPredefined<>>(m_categoryPredefined, ibValueMetaObjectCompositeData::CreateString(ibT("PredefinedName"), _("Predefined name"), _("The name of an item the configuration itself declares (a predefined item) - what code refers to it by, as Catalogs.<Name>.<PredefinedName>. Empty for items created by users; a predefined item cannot be deleted."), 150, ibItemMode::ibItemMode_Folder_Item));
-	// The code's and the description's type and length are the configuration's - shown and set as their type
+	ibPropertyPredefined<>* m_propertyAttributePredefined = ibPropertyObject::CreateProperty<ibPropertyPredefined<>>(m_categoryPredefined, ibValueMetaObjectCompositeData::CreateString(ibT("PredefinedName"), _("Predefined name"), _("The name of an item the application itself declares (a predefined item) - what code refers to it by, as Catalogs.<Name>.<PredefinedName>. Empty for items created by users; a predefined item cannot be deleted."), 150, ibItemMode::ibItemMode_Folder_Item));
+	// The code's and the description's type and length are the application's - shown and set as their type
 	// (ibPropertyPredefinedType); the description is a string alone.
 	ibPropertyPredefinedType* m_propertyAttributeCode = ibPropertyObject::CreateProperty<ibPropertyPredefinedType>(m_categoryPredefined, ibValueMetaObjectCompositeData::CreateString(ibT("Code"), _("Code"), _("The item's code - a short identifier a person types or searches by. Indexed. Left empty, it is generated when the item is written; the object module's SetNewCode handler may give it a prefix or take the numbering over."), 8, true, ibItemMode::ibItemMode_Folder_Item, ibSelectMode::ibSelectMode_Items, ibIndexingMode::ibIndexingMode_IndexWithAdditionalOrder));
 	ibPropertyPredefinedType* m_propertyAttributeDescription = ibPropertyObject::CreateProperty<ibPropertyPredefinedType>(m_categoryPredefined, ibValueMetaObjectCompositeData::CreateString(ibT("Description"), ibGETTEXT_IN_CONTEXT("item name", "Description"), _("The item's name - what it is shown as wherever a reference to it appears: in fields, lists, reports and printed forms. Indexed, and searched by in quick choice."), 150, true, ibItemMode::ibItemMode_Folder_Item, ibSelectMode::ibSelectMode_Items, ibIndexingMode::ibIndexingMode_IndexWithAdditionalOrder), { g_valueStringCLSID });
 	ibPropertyPredefined<>* m_propertyAttributeParent = ibPropertyObject::CreateProperty<ibPropertyPredefined<>>(m_categoryPredefined, ibValueMetaObjectCompositeData::CreateEmptyType(ibT("Parent"), _("Parent"), _("The folder or item this one sits under. What it may point to follows the hierarchy type: a folder in a folders-and-items hierarchy, any item in an items hierarchy. Empty: the item is at the top level."), ibItemMode::ibItemMode_Folder_Item, ibSelectMode::ibSelectMode_Folders, ibIndexingMode::ibIndexingMode_Index));
 	ibPropertyPredefined<>* m_propertyAttributeIsFolder = ibPropertyObject::CreateProperty<ibPropertyPredefined<>>(m_categoryPredefined, ibValueMetaObjectCompositeData::CreateBoolean(ibT("IsFolder"), _("Is folder"), _("Set on a folder of a folders-and-items hierarchy: a folder only holds other items and folders, and carries only the attributes whose use says folders. Decided when the object is created and not changed afterwards."), ibItemMode::ibItemMode_Folder_Item));
 
-	// ⭐⭐ THE PREDEFINED ITEMS — ONE DESCRIPTION, the configuration's: read and written with it (ReadData / WriteData),
+	// ⭐⭐ THE PREDEFINED ITEMS — ONE DESCRIPTION, the application's: read and written with it (ReadData / WriteData),
 	// the seed built of it (ContributeTables), shown and checked through GetPredefinedDesc. Its items are what a
 	// declaration owns beyond the name — a characteristic's Type, an account's side, flags and analytics, a calculation
-	// type's related types: set as data they do not travel with the configuration (#278). A reference is held as what it
-	// is in a configuration, a DECLARATION (ibValueCompositionPredefined), packed as every value travels, so loading a
-	// configuration never builds runtime; the seed makes it live (ibMaterializeCompositionValue). Kept whole and written
-	// whole, the configuration's and the wire's alike: the items, and the form they are declared with as it was last
+	// type's related types: set as data they do not travel with the application (#278). A reference is held as what it
+	// is in an application, a DECLARATION (ibValueCompositionPredefined), packed as every value travels, so loading a
+	// application never builds runtime; the seed makes it live (ibMaterializeCompositionValue). Kept whole and written
+	// whole, the application's and the wire's alike: the items, and the form they are declared with as it was last
 	// asked (GetPredefinedDesc writes it); what they must declare is each kind's check before the update (ContributeTables).
 	ibPredefinedDescription m_predefinedDesc;
 
@@ -1701,7 +1697,7 @@ public:
 	virtual bool IsAccessPerRecord() const override { return false; }
 #pragma endregion
 
-	IB_DECLARE_RWD_ROLE_TRIPLET("Write")
+	IB_DECLARE_RWD_ROLE_TRIPLET()
 
 	ibValueMetaObjectAttributePredefined* GetRegisterActive() const { return m_propertyAttributeLineActive->GetMetaObject(); }
 	bool IsRegisterActive(const ibMetaID& id) const { return id == (*m_propertyAttributeLineActive)->GetMetaID(); }
@@ -1735,7 +1731,7 @@ public:
 	virtual std::vector<ibValueMetaObjectAttributeBase*> GetGenericAttributeArrayObject(
 		std::vector<ibValueMetaObjectAttributeBase*>& array) const {
 		FillArrayObjectByPredefinedAttribute(array);
-		FillArrayObjectByCommonAttribute(array);
+		FillArrayObjectBySharedAttribute(array);
 		FillArrayObjectByFilter<ibValueMetaObjectAttributeBase>(array, { g_metaDimensionCLSID, g_metaResourceCLSID, g_metaAttributeCLSID });
 		return array;
 	}
@@ -1755,7 +1751,7 @@ public:
 	std::vector<ibValueMetaObjectAttributeBase*> GetAnyAttributeArrayObject(
 		std::vector<ibValueMetaObjectAttributeBase*> array = std::vector<ibValueMetaObjectAttributeBase*>()) const {
 		FillArrayObjectByPredefinedAttribute(array);
-		FillArrayObjectByCommonAttribute(array);
+		FillArrayObjectBySharedAttribute(array);
 		FillArrayObjectByFilter<ibValueMetaObjectAttributeBase>(array, { g_metaDimensionCLSID, g_metaResourceCLSID, g_metaAttributeCLSID });
 		return array;
 	}
@@ -1777,7 +1773,7 @@ public:
 	//attribute
 	std::vector<ibValueMetaObjectAttributeBase*> GetAttributeArrayObject(
 		std::vector<ibValueMetaObjectAttributeBase*> array = std::vector<ibValueMetaObjectAttributeBase*>()) const {
-		// The copies come along: the designer tree lists what an object HAS, and a common
+		// The copies come along: the designer tree lists what an object HAS, and a shared
 		// attribute it carries is one of those — visible where it lives, and edited only
 		// where it was declared.
 		FillArrayObjectByFilter<ibValueMetaObjectAttributeBase>(array, { g_metaAttributeCLSID });
@@ -1813,7 +1809,7 @@ public:
 	//any attribute 
 	template <typename _T1>
 	ibValueMetaObjectAttributeBase* FindAnyAttributeObjectByFilter(const _T1& id) const {
-		return FindObjectByFilter<ibValueMetaObjectAttributeBase>(id, { g_metaDimensionCLSID, g_metaResourceCLSID, g_metaAttributeCLSID, g_metaPredefinedAttributeCLSID, g_metaCommonAttributeColumnCLSID });
+		return FindObjectByFilter<ibValueMetaObjectAttributeBase>(id, { g_metaDimensionCLSID, g_metaResourceCLSID, g_metaAttributeCLSID, g_metaPredefinedAttributeCLSID, g_metaSharedAttributeColumnCLSID });
 	}
 
 	//dimension
@@ -1922,7 +1918,7 @@ public:
 	//special functions for DB
 	virtual ibString GetPhysicalTableName() const;
 
-	// (no table-data dump / restore here — the orchestrator moves rows off the config's ContributeTables
+	// (no table-data dump / restore here — the orchestrator moves rows off the application's ContributeTables
 	//  snapshot through the L3-3 mover; this object only DECLARES its table via ContributeTables.)
 
 protected:
@@ -2040,7 +2036,7 @@ class BACKEND_API ibValueManagerDataObject : public ibValueManagerObject {
 	ibValueManagerDataObject() : ibValueManagerObject() { m_members.Bind(this, &ibValueManagerDataObject::FillMembers); }
 	virtual ~ibValueManagerDataObject() {}
 
-	virtual const ibValueMetaObjectCommonModule* GetManagerModule() const = 0;
+	virtual const ibValueMetaObjectSharedModule* GetManagerModule() const = 0;
 	virtual const ibValueMetaObjectGenericData*  GetMetaObject()    const = 0;
 
 	void FillMembers(ibMemberTable& helper) const;       // manager-module methods (was PrepareNames)
@@ -2174,7 +2170,7 @@ public:
 	//    (eTable) + data-object module exports (eProcUnit). Bound by the base ctor,
 	//    shared by every leaf. Attribute writability follows IsDataReference.
 	//  - FillBaseMethods — the three fixed methods (GetFormObject/GetTemplate/
-	//    GetMetadata) for leaves with no API of their own (DataProcessor, Report);
+	//    GetMetadata) for leaves with no API of their own (DataTool, Report);
 	//    they bind this. Leaves with their own method set (Catalog, Document, …)
 	//    bind their own FillMethods instead.
 	void FillDataMembers(ibMemberTable& helper) const;
@@ -2249,7 +2245,7 @@ public:
 #pragma region _form_builder_h_
 	// Universal form-open trampolines. Hoisted from per-leaf code that
 	// followed the same shape across HierarchyRef, RecorderRef (Document)
-	// and Ext (DataProcessor / Report). Variation per leaf collapses to
+	// and Ext (DataTool / Report). Variation per leaf collapses to
 	// two hooks: GetCurrentObjectFormID (form-id enum value) and
 	// OnFormCreated (post-creation tweak — e.g. CloseOnOwnerClose(false)
 	// on ref-flavour leaves, no-op on Ext). valueForm->Modify uses the
@@ -2261,7 +2257,7 @@ public:
 protected:
 	// Leaf-specific form-id enum value for the current object state.
 	// Hierarchy returns eFormObject / eFormFolder by m_objMode;
-	// Document / DataProcessor / Report return a single fixed id.
+	// Document / DataTool / Report return a single fixed id.
 	virtual ibFormID GetCurrentObjectFormID() const = 0;
 public:
 
@@ -2312,10 +2308,10 @@ protected:
 };
 
 //Object with file
-// Mix-in for external DP/Report value objects: HOLDS the external metadata container the object works in, as every
+// Mix-in for external DataTool/Report value objects: HOLDS the external metadata container the object works in, as every
 // metadata is held (ibMetaData::MakeShared) — at runtime the object's life keeps the container, and its last holder
-// closes it. Mixed into ibValueRecordDataObjectExternal* alongside the regular DP/Report value class; embedded /
-// config value objects don't inherit it. A copy holds it too.
+// closes it. Mixed into ibValueRecordDataObjectExternal* alongside the regular DataTool/Report value class; embedded /
+// application value objects don't inherit it. A copy holds it too.
 class BACKEND_API ibExternalOwnerHelper {
 public:
 	ibExternalOwnerHelper(std::shared_ptr<ibMetaData> externalMetadata = nullptr) : m_externalMetadata(std::move(externalMetadata)) {}
@@ -2791,7 +2787,7 @@ public:
 	// ⭐ BOTH HOLDERS, one act: this is what makes `RegisterRecords.<Name>` — and `Sequences.<Name>`
 	// beside it — resolve in the module after the document's lists are edited. Driving only the
 	// first left the second answering "not found" in the designer's syntax check until the whole
-	// configuration was reloaded.
+	// application was reloaded.
 	void ClearRecordSet()  { ibASSERT(m_registerRecords && m_sequenceRecords); m_registerRecords->ClearRecordSet(); m_sequenceRecords->ClearRecordSet(); }
 	void UpdateRecordSet() { ClearRecordSet(); m_registerRecords->CreateRecordSet(); m_sequenceRecords->CreateRecordSet(); }
 
@@ -2978,7 +2974,7 @@ class BACKEND_API ibValueRecordSetObject : public ibValueModelStorage, public ib
 			// its chart's list) — ask it rather than deciding here.
 			virtual const ibTypeDescription GetColumnTypeValue() const { return m_metaAttribute->GetTypeValueDesc(); }
 			virtual const ibFormatString& GetColumnFormat() const {
-				return ibBackendTypeConfigFactory::GetFormatFromColumn(m_metaAttribute->GetFormat(), m_metaAttribute->GetTypeDesc());
+				return ibBackendTypeApplicationFactory::GetFormatFromColumn(m_metaAttribute->GetFormat(), m_metaAttribute->GetTypeDesc());
 			}
 			virtual bool IsColumnAvailable() const override { return m_metaAttribute->IsAvailable(); }
 
@@ -3156,7 +3152,7 @@ public:
 	//get metaData from object
 	virtual const ibValueMetaObjectCompositeData* GetSourceMetaObject() const { return GetMetaObject(); }
 
-	//get metaData: the record set's own config via its meta object; no object -> the active config, so reference-
+	//get metaData: the record set's own application via its meta object; no object -> the active application, so reference-
 	//typed columns still resolve their targets. Mirrors ibValueModelTable / the object list.
 	virtual const ibMetaData* GetSourceMetaData() const override {
 		const ibValueMetaObjectCompositeData* mo = GetSourceMetaObject();

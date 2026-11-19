@@ -77,7 +77,7 @@
 #include "backend/session/session.h"           // DISABLED_CallCost — what a frame asks for
 #include "backend/system/value/valueArray.h"   // DISABLED_TypeCheckCost
 #include "backend/system/value/valueJson.h"    // JsonBench
-#include "backend/metadataConfiguration.h"     // MetadataBench — a configuration in memory
+#include "backend/metadataApplication.h"       // MetadataBench — an application in memory
 #include "backend/metaCollection/metaObject.h" // MetadataBench — g_metaCatalogCLSID, GetName
 #include <nlohmann/json.hpp>                   // JsonBench - the native baseline
 
@@ -520,17 +520,17 @@ TEST(RuntimeBench, DISABLED_DateLoop) {
     SUCCEED();
 }
 
-// --- a metadata object's name, and a configuration read back ---------------
+// --- a metadata object's name, and an application read back ---------------
 //
 // What the wxVariant inside a property costs: GetName() turns the variant into a wxString and that into an ibString,
 // every call. The native column is a name held as an ibString and read by reference — what the property gives back
-// once it holds its value itself. The load reads 200 catalogs of 10 attributes from a buffer: the configuration's
+// once it holds its value itself. The load reads 200 catalogs of 10 attributes from a buffer: the application's
 // opening without a base.
 //
 //   oes_tests --gtest_also_run_disabled_tests --gtest_filter=MetadataBench.*
 TEST(MetadataBench, DISABLED_GetNameAndLoad) {
-    ibMetaDataConfigurationFile cfg;
-    ibValueMetaObjectConfiguration* root = cfg.GetCommonMetaObject();
+    ibMetaDataApplicationFile cfg;
+    ibValueMetaObjectApplication* root = cfg.GetRootMetaObject();
     ASSERT_NE(nullptr, root);
     for (int c = 0; c < 200; ++c) {
         ibValueMetaObject* catalog = cfg.CreateMetaObject(g_metaCatalogCLSID, root, /*runObject*/ false);
@@ -552,12 +552,12 @@ TEST(MetadataBench, DISABLED_GetNameAndLoad) {
     RowOes("GetName == name (ns)", TimeNsPerOp(n, [&](long) { g_sink += (uint64_t)(named->GetName() == held); }), "ns");
 
     ibMemoryBuffer saved;
-    ASSERT_TRUE(cfg.SaveConfigToBuffer(saved));
+    ASSERT_TRUE(cfg.SaveApplicationToBuffer(saved));
     const double load = BestTotalNs(5, [&] {
-        ibMetaDataConfigurationFile loaded;
-        if (!loaded.LoadConfigFromBuffer(saved))
-            ADD_FAILURE() << "the configuration did not load back";
-        g_sink += (uint64_t)loaded.GetCommonMetaObject()->GetChildCount();
+        ibMetaDataApplicationFile loaded;
+        if (!loaded.LoadApplicationFromBuffer(saved))
+            ADD_FAILURE() << "the application did not load back";
+        g_sink += (uint64_t)loaded.GetRootMetaObject()->GetChildCount();
     });
     RowOes("load 200x10 (ms)", load / 1e6, "ms", load);
     SUCCEED();
@@ -1671,7 +1671,7 @@ TEST(RuntimeBench, DISABLED_MethodResolve) {
 // --- a shape closer to GENERATED code -------------------------------------
 // The five scenarios above are microbenchmarks: a tight arithmetic loop, a
 // recursion, a concatenation. They were chosen for what stresses the
-// interpreter, not for what real configuration code looks like — and least of
+// interpreter, not for what real application code looks like — and least of
 // all for what a model writes.
 //
 // Generated code has a different profile: it builds records rather than
@@ -1682,7 +1682,7 @@ TEST(RuntimeBench, DISABLED_MethodResolve) {
 // proportions generated code actually produces.
 //
 // Reported per ROW, so the number is "what one record costs to build and
-// process", which is the unit a configuration author thinks in.
+// process", which is the unit an application author thinks in.
 TEST(RuntimeBench, DISABLED_RecordWalk) {
     // No single n here: the scaling probe below drives its own series.
     ibCompileCode cc(wxT("test"), wxT("memory"), false);

@@ -19,7 +19,7 @@
       "syntax_block": "Hashing = New DataHashing(HashFunction.SHA256);\nHashing.Append(Text);\nSum = Hashing.HashSum;                 // BinaryData\n\nSigning = New DataHashing(HashFunction.SHA256, Key);   // HMAC",
       "parameters": "function - a member of HashFunction: MD5, SHA1, SHA256, SHA384 or SHA512.\nkey - a string or a BinaryData; given, the object computes an HMAC with it. Left out, the plain digest.",
       "return_descr": "DataHashing.",
-      "example": "// a webhook: HMAC-SHA256 of the body, compared in hex\nCheck = New DataHashing(HashFunction.SHA256, Secret);\nCheck.Append(Body);\nif (Lower(HexString(Check.HashSum)) <> Signature) { Raise(\"the signature does not match\"); }",
+      "example": "// a webhook: HMAC-SHA256 of the body, compared in hex\nCheck = New DataHashing(HashFunction.SHA256, Secret);\nCheck.Append(Body);\nif (Lower(HexString(Check.HashSum)) != Signature) { Raise(\"the signature does not match\"); }",
       "availability": "Client, Server",
       "see_also": [
         "cls.DataHashing.Append",
@@ -118,7 +118,7 @@
       "syntax_block": "Function = Hashing.HashFunction;",
       "parameters": "",
       "return_descr": "HashFunction.",
-      "example": "if (Hashing.HashFunction = HashFunction.MD5) { Message(\"MD5 - for a checksum only\"); }",
+      "example": "if (Hashing.HashFunction == HashFunction.MD5) { Message(\"MD5 - for a checksum only\"); }",
       "availability": "Client, Server",
       "see_also": [
         "cls.DataHashing",

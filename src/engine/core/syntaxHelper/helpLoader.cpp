@@ -344,7 +344,7 @@ void ParseBucket(const std::string&            raw,
 				unsigned mask = 0u;
 				for (const ibString& m : modeArr) {
 					const ibString low = m.Lower();
-					if      (low == ibT("ves") || low == ibT("vbs"))
+					if      (low == ibT("ves"))
 						mask |= ibHelpEntry::kModeVes;
 					else if (low == ibT("ces"))
 						mask |= ibHelpEntry::kModeCes;
@@ -613,7 +613,7 @@ LoadSource(const ibString&               localeCode,
 	(void)errorsOut;
 
 	// The category dictionary, asked for by name because the bucket listing
-	// skips meta files. A source without one is normal (a per-configuration
+	// skips meta files. A source without one is normal (a per-application
 	// corpus need not restate the platform's section names).
 	std::map<ibString, ibString> categoryNames;
 	{
@@ -633,7 +633,7 @@ LoadSource(const ibString&               localeCode,
 
 ibHelpLoadResult LoadHelpCorpus(const ibString& localeCode,
                                 const ibString& platformDir,
-                                const ibString& configCacheDir,
+                                const ibString& applicationCacheDir,
                                 const ibHelpClassName& className) {
 	ibHelpLoadResult result;
 	ibString locale = CanonicaliseLocale(localeCode);
@@ -665,16 +665,16 @@ ibHelpLoadResult LoadHelpCorpus(const ibString& localeCode,
 		    LoadSource(locale, platformDir,
 		               ibHelpCorpus::Source::kPlatform, className, result.errors);
 
-		std::shared_ptr<const ibHelpCorpus> perConfig;
-		if (!configCacheDir.empty()) {
-			perConfig = LoadSource(locale, configCacheDir,
-			                        ibHelpCorpus::Source::kPerConfiguration,
+		std::shared_ptr<const ibHelpCorpus> perApplication;
+		if (!applicationCacheDir.empty()) {
+			perApplication = LoadSource(locale, applicationCacheDir,
+			                        ibHelpCorpus::Source::kPerApplication,
 			                        className, result.errors);
 		}
 
-		if (perConfig) {
+		if (perApplication) {
 			result.corpus = std::make_shared<ibHelpCorpus>(
-			    std::move(platform), std::move(perConfig), locale);
+			    std::move(platform), std::move(perApplication), locale);
 		} else {
 			result.corpus = std::move(platform);
 		}

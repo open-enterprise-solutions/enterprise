@@ -39,14 +39,14 @@
 #include <vector>
 
 class ibValueModuleManager;
-class ibValueModuleManagerRuntimeConfiguration;
+class ibValueModuleManagerRuntimeApplication;
 class ibRuntimeModuleDataObject;
 class ibProcUnit;
 
 #include "backend/databaseLayer/connectionHolder.h"
 struct ibRunContext;
 class ibMetaData;
-class ibValueMetaObjectConfiguration;
+class ibValueMetaObjectApplication;
 class ibAccessPolicy;   // RLS — the L3 door pulls it opaquely; concrete impl is session-side
 class BACKEND_API ibBackendDocFrame;
 
@@ -86,7 +86,7 @@ enum class ibAuthState : int {
 // later. A number on disk (sys_session.kind): never renumbered.
 // ------------------------------------------------------------------
 enum class ibSessionKind : int {
-	Unknown    = 0,                    // nobody said — a row of a legacy schema, or one that slipped through
+	Unknown    = 0,                    // nobody said
 	Launcher   = 1,
 	Designer   = 2,
 	Enterprise = 3,
@@ -100,24 +100,24 @@ enum class ibSessionKind : int {
 	// THREE kinds rather than one, because an administrator looking at Active
 	// Users has a different decision for each. A stuck BackgroundJob has a user
 	// waiting on it and a form to tell. A stuck ScheduledJob belongs to the
-	// configuration — someone wrote it, and it will come back on its interval
+	// application — someone wrote it, and it will come back on its interval
 	// whether or not this run is killed. A stuck SystemJob is the engine's own
 	// housekeeping, which is safe to kill precisely because it is housekeeping
 	// (a skipped fold costs a slightly wider read and nothing else). Collapsing
 	// them into one row type would hide exactly the distinction that decides
 	// whether to wait or to kick.
 	BackgroundJob = 101,   // started by hand from script, under the caller's identity
-	ScheduledJob  = 102,   // declared by the configuration, runs on its interval
+	ScheduledJob  = 102,   // declared by the application, runs on its interval
 	SystemJob     = 103,   // the platform's own (totals fold, maintenance)
 
 	// A CLIENT OF THE PROTOCOL working in the application — the thin runtime, the web, the assistant (frmserver):
 	// a person at it, whatever process hosts it. Its run mode is its host's — a server's or a file base's — so the
 	// kind is what says what it is.
 	ThinClient    = 104,
-	// …working in the configuration — the thin designer. A designer as the desktop's is (IsDesignerSessionKind):
+	// …working in the application — the thin designer. A designer as the desktop's is (IsDesignerSessionKind):
 	// no runtime, the one designer of the base.
 	ThinDesigner  = 105,
-	// ONE REQUEST TO AN HTTP SERVICE of the configuration (backend/httpService/httpServiceCall.h): made for the
+	// ONE REQUEST TO AN HTTP SERVICE of the application (backend/httpService/httpServiceCall.h): made for the
 	// request, under the identity it came with, and ended once it is answered. Nobody sits at it.
 	HttpService   = 106,
 
@@ -265,9 +265,9 @@ public:
 	ibProcUnit* GetLambdaRuntime() { return m_lambdaRuntime.get(); }
 
 	// ⭐⭐ EVALUATE AN EXPRESSION AGAINST THIS SESSION'S ROOT, and answer with the VALUE. The scope is
-	// what makes it worth having: `Catalogs`, `Documents`, every common module and the platform's own
+	// what makes it worth having: `Catalogs`, `Documents`, every shared module and the platform's own
 	// functions are names on the root, so this is where a computed composition parameter is worked
-	// out — the current moment, a rate, a list a common module assembles. None of that is expressible
+	// out — the current moment, a rate, a list a shared module assembles. None of that is expressible
 	// in a query, and the parameter is the seam it enters through.
 	//
 	// 🛑 THE FRAME STAYS INSIDE. What an evaluation needs is the root's own run context, and it needs
@@ -314,7 +314,7 @@ public:
 	// the registry's NotifyAuthenticated phase right after Open() succeeds;
 	// stays nullptr for sessions that never run scripts (Designer,
 	// WebServer technical session, Launcher).
-	ibValueModuleManagerRuntimeConfiguration* GetManagerModule() const;
+	ibValueModuleManagerRuntimeApplication* GetManagerModule() const;
 
 	// The RLS access policy for this session. The L3 door (ibDataQueryBuilder)
 	// pulls it opaquely in its ctor and applies it to every read/write. Null on
@@ -348,14 +348,14 @@ public:
 	// InitializeObject sites). Null-safe when there's no current session.
 	static class ibValueModuleManager* EditModuleManagerFor(const class ibMetaData* metaData);
 
-	// Create the session's root module manager. The configuration's
+	// Create the session's root module manager. The application's
 	// commonMetaObject is taken directly from metaData (typed accessor —
 	// no dynamic_cast needed). Returns a pointer for immediate use;
 	// nullptr on failure. Calling twice replaces the old root — previous
 	// ibValuePtr releases its ref (delete-if-last) after running
 	// DestroyMainModule on it. CompileRoot is separate so callers can
-	// register common modules in metadata's storage between the two.
-	ibValueModuleManagerRuntimeConfiguration* CreateRoot(class ibMetaDataConfigurationBase* metaData);
+	// register shared modules in metadata's storage between the two.
+	ibValueModuleManagerRuntimeApplication* CreateRoot(class ibMetaDataApplicationBase* metaData);
 
 	// End this session — by asking whatever holds it to go. Close does
 	// NOT dismantle anything itself; it is the backend's equivalent of
@@ -409,27 +409,27 @@ public:
 		else                   m_server.reset();
 	}
 
-	// Exclusive (monopoly) mode — at most one session in the registry
+	// Single-user (monopoly) mode — at most one session in the registry
 	// holds it at a time. While held, every other Connect parks in
-	// ibSessionRegistry::m_pendingExclusive and only resumes when this
+	// ibSessionRegistry::m_pendingSingleUser and only resumes when this
 	// session releases or closes.
 	//
-	// SetExclusive(true)  — submits SetExclusive@Normal, waits for the
+	// SetSingleUser(true)  — submits SetSingleUser@Normal, waits for the
 	//                       registry handler. Throws ibBackendCoreException
 	//                       on rejection: another session already holds
-	//                       exclusive, or other live sessions are still
+	//                       the mode, or other live sessions are still
 	//                       attached to the registry (acquisition needs
 	//                       this session to be the sole live one).
-	// SetExclusive(false) — release. No-op when not currently exclusive.
+	// SetSingleUser(false) — release. No-op when the mode is not held.
 	//                       Drains parked Adds.
-	bool IsExclusive() const { return m_exclusive.load(std::memory_order_acquire); }
-	void SetExclusive(bool on);
+	bool IsSingleUser() const { return m_singleUser.load(std::memory_order_acquire); }
+	void SetSingleUser(bool on);
 
 	// Compile the root mm — runs CreateMainModule on the allocated
 	// m_root. Called after metadata->RunDatabase() has populated common-
 	// module descriptors in metadata's ibModuleStorage. Returns false
 	// if root isn't allocated or compile fails.
-	// Runs the configuration's session module (SetSessionParameters) inside a trusted
+	// Runs the application's session module (SetSessionParameters) inside a trusted
 	// window, before the access policy is built — the policy filters by what it sets.
 	// Every kind of session passes through here, including jobs, which never see
 	// beforeStart / onStart.
@@ -448,11 +448,11 @@ public:
 	// when the session never had a root.
 	void ClearRoot();
 
-	// Idempotent CreateRoot over the configuration this session acquired.
+	// Idempotent CreateRoot over the application this session acquired.
 	// Called by ibSessionRegistry::NotifyAuthenticated right after
 	// AcquireMetaData, before the OnAuthenticated phase (whose listeners —
 	// CompileRoot — need session->mm to already exist). No-op when m_root
-	// already set or the session holds no configuration.
+	// already set or the session holds no application.
 	void EnsureRoot();
 
 	// Read access — single overload, const only. The non-const reference
@@ -563,12 +563,12 @@ public:
 	bool IsProcessingBackendError()       const { return m_processingBackendError.load(std::memory_order_acquire); }
 	void SetProcessingBackendError(bool m)      { m_processingBackendError.store(m, std::memory_order_release); }
 
-	// Configuration-language code for this session — selects which
+	// Application-language code for this session — selects which
 	// metadata synonym / form-label translation is shown. Distinct from
 	// the process's locale (ibSetLocale, process-wide via --locale=).
 	// Lives in the session's translate state (GetTranslateState): the
 	// script's override (CurrentLanguage), else the user's preferred
-	// language, else the configuration's — each session its own.
+	// language, else the application's — each session its own.
 	//
 	// Hot path: this getter is hit per metadata-synonym lookup, hundreds
 	// of times during a single form open. m_resolvedLanguageCode is the
@@ -705,7 +705,7 @@ public:
 	static ibCompileState* CompileStateOf(ibSession* session);
 
 	// Per-session TRANSLATION state (ibTranslateState) — each session speaks its own language: the script's
-	// override, else the user's, else its configuration's. The current session's; a thread without one gets its
+	// override, else the user's, else its application's. The current session's; a thread without one gets its
 	// own, as with GetPUState.
 	static ibTranslateState* GetTranslateState() { return TranslateStateOf(Current()); }
 
@@ -809,10 +809,10 @@ private:
 	// Null for a session made outside any registry (tests, benchmarks) — it belongs to no base.
 	class ibSessionRegistry* m_registry = nullptr;
 
-	// THE CONFIGURATION IT WORKS IN — its own reference (GetMetaData), let go when it leaves (ReleaseMetaData).
+	// THE APPLICATION IT WORKS IN — its own reference (GetMetaData), let go when it leaves (ReleaseMetaData).
 	// Declared before everything the session builds over it — the root, the access policy, its locals: members die
-	// in reverse, so a session that never left lets the configuration go last of all.
-	std::shared_ptr<class ibMetaDataConfigurationBase> m_metaData;
+	// in reverse, so a session that never left lets the application go last of all.
+	std::shared_ptr<class ibMetaDataApplicationBase> m_metaData;
 
 public:
 	// …WHILE IT IS IN IT. A session its registry has let go (Gone — ProcessRemove's last word) answers none:
@@ -823,12 +823,12 @@ public:
 	}
 	ibApplicationInstance* GetApplicationInstance() const;   // through the registry
 
-	// ⭐ THE CONFIGURATION THIS SESSION WORKS IN — its own reference to its base's active one, taken when it is let
+	// ⭐ THE APPLICATION THIS SESSION WORKS IN — its own reference to its base's active one, taken when it is let
 	// in and kept for its whole life (Max, 2026-10-06: *"the session adds one to the count; if the active one
-	// changes, the session uses the old one"*). An update that replaces the base's active configuration does it for
+	// changes, the session uses the old one"*). An update that replaces the base's active application does it for
 	// the sessions to come. What `activeMetaData` answers on a thread this session works on. Null before it is let
 	// in, after it has left, and in a base that holds none (the launcher).
-	ibMetaDataConfigurationBase* GetMetaData() const { return m_metaData.get(); }
+	ibMetaDataApplicationBase* GetMetaData() const { return m_metaData.get(); }
 
 	// ⭐ IS THIS A RENTED READ? The registry row is the honest signature — a session minted to fetch
 	// one page on somebody's behalf takes none, and nothing else in the tree is unlisted. Asked by
@@ -869,14 +869,14 @@ private:
 	ibSessionState WaitForState(ibSessionState from, std::chrono::milliseconds timeout);
 	ibAuthState    WaitForAuth (ibAuthState    from, std::chrono::milliseconds timeout);
 
-	// Its +1 — the base's active configuration as it stands when the session is let in (GetMetaData); a designer's
-	// session makes one of its own instead, the configuration it edits (ibMetaDataConfigurationStorage), held by it
+	// Its +1 — the base's active application as it stands when the session is let in (GetMetaData); a designer's
+	// session makes one of its own instead, the application it edits (ibMetaDataApplicationStorage), held by it
 	// alone.
 	// Acquired once, by the registry (NotifyAuthenticated), before the root is built over it; a rented read takes
 	// its parent's instead (ibJobManager).
 	void AcquireMetaData();
 	// …and its −1, when it leaves (NotifyDisconnect): the root built over it first, then the reference. The last
-	// session working in a configuration the base has replaced closes it here, on the thread that takes it down.
+	// session working in an application the base has replaced closes it here, on the thread that takes it down.
 	void ReleaseMetaData();
 
 	// Identity / sys_session-row tracking. Identity is filled in by the
@@ -899,7 +899,7 @@ private:
 	void SetUserInfo(const ibUserInfo& info) {
 		m_userInfo = info;
 		// The new user's preferred language — under an explicit
-		// SetLanguageCode override, over the configuration's.
+		// SetLanguageCode override, over the application's.
 		m_translateState.m_userLanguageCode = info.m_strLanguageCode;
 		m_translateState.Resolve();
 	}
@@ -1003,9 +1003,9 @@ private:
 	ibSingleConnectionHolder m_dbHolder;
 	// Root runtime — intrusive-refcounted owner (ibValuePtr is the
 	// project convention for ibValue-derived types). Nested descriptors
-	// (common modules, object instances, forms) parent up through
+	// (shared modules, object instances, forms) parent up through
 	// m_parent chain. See project_runtime_facade_plan.md.
-	ibValuePtr<ibValueModuleManagerRuntimeConfiguration> m_root;
+	ibValuePtr<ibValueModuleManagerRuntimeApplication> m_root;
 	
 	ibDebugSession m_debug;   // made with the session — see Debug()
 
@@ -1047,7 +1047,7 @@ private:
 	// code may" would have to be checked, and every check has a way past it.
 	//
 	// It RAISES rather than ignoring the write: a silently dropped assignment leaves
-	// a configuration author certain the value was set, and the row filter says
+	// an application author certain the value was set, and the row filter says
 	// otherwise somewhere far away.
 	bool m_sessionParametersOpen = false;
 
@@ -1137,26 +1137,26 @@ private:
 	// Translation's — see GetTranslateState().
 	ibTranslateState          m_translateState;
 
-	// Exclusive mode — see SetExclusive(). True only on the session that
-	// currently holds monopoly. Atomic for lock-free IsExclusive() reads
+	// Single-user mode — see SetSingleUser(). True only on the session that
+	// currently holds monopoly. Atomic for lock-free IsSingleUser() reads
 	// from any thread (script-side, listeners). Mutated by the registry
-	// thread inside ProcessSetExclusive, with a notify_all on m_cv after
-	// the result lands so SetExclusive() callers can resume.
-	std::atomic<bool>          m_exclusive { false };
+	// thread inside ProcessSetSingleUser, with a notify_all on m_cv after
+	// the result lands so SetSingleUser() callers can resume.
+	std::atomic<bool>          m_singleUser { false };
 
-	// SetExclusive() handshake — Pending while a SetExclusive request is
-	// in the queue, set by ProcessSetExclusive to the final outcome.
-	// SetExclusive() reads it under m_mtx after WaitForState wakes up.
+	// SetSingleUser() handshake — Pending while a SetSingleUser request is
+	// in the queue, set by ProcessSetSingleUser to the final outcome.
+	// SetSingleUser() reads it under m_mtx after WaitForState wakes up.
 public:
-	enum class ibExclusiveResult : int {
+	enum class ibSingleUserResult : int {
 		Pending     = 0,
 		Granted     = 1,   // either acquire ok or release ok
-		HeldByOther = 2,   // another session is currently exclusive
+		HeldByOther = 2,   // another session holds the mode
 		NotSole     = 3,   // other live sessions present — can't acquire
 		JobRunning  = 4,   // only jobs present — each ends by itself, the request can be made again
 	};
 private:
-	ibExclusiveResult         m_exclusiveResult { ibExclusiveResult::Pending };
+	ibSingleUserResult         m_singleUserResult { ibSingleUserResult::Pending };
 
 	// Server (parent) session — non-owning back-link populated by the
 	// holder of the client after the server spawns it. See Server() /
@@ -1212,7 +1212,7 @@ private:
 // return null and therefore bypasses RLS, and every right on an object is granted
 // (ibValueMetaObject::IsFullAccess). Opened by a role module — which dissolves
 // re-entrancy, the module may read the very source it restricts — by the session
-// parameters' handler, and by every call into a privileged common module
+// parameters' handler, and by every call into a privileged shared module
 // (ibRuntimeModuleDataObject::ExecAsProc). Saves and restores the PRIOR value, so nested
 // trusted scopes compose; the dtor runs on every exit INCLUDING a handler throw, so
 // enforcement is always restored. The bypass is CONSTRUCTIVE (only this scope sets

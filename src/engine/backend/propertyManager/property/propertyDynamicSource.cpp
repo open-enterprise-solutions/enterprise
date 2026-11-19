@@ -1,7 +1,7 @@
 #include "propertyDynamicSource.h"
 
 #include "backend/appData.h"
-#include "backend/metaData.h"                 // ibMetaData::GetSourceFactory — resolve the source through the owner's config
+#include "backend/metaData.h"                 // ibMetaData::GetSourceFactory — resolve the source through the owner's application
 #include "backend/query/queryableFactory.h"
 #include "backend/query/queryable.h"
 #include "core/serialize/dataBuilder.h"
@@ -10,16 +10,16 @@
 #include "backend/metaCollection/genericData.h"  // ibValueMetaObjectGenericData — the metaobject a source reads
 
 
-// The factory the list resolves THROUGH — the metadata it runs ON BEHALF OF (its owner's config). Its per-config
-// factory descends to the global one INTERNALLY on a miss, so a bound list resolves ITS config's source (the fix for
+// The factory the list resolves THROUGH — the metadata it runs ON BEHALF OF (its owner's application). Its per-application
+// factory descends to the global one INTERNALLY on a miss, so a bound list resolves ITS application's source (the fix for
 // a copied list picking the original's columns). Entry is ALWAYS the metadata — no appData / active-metadata grab;
-// a null owner-config resolves nothing. (CONST owner: the non-const GetMetaData wxFAILs.)
+// a null owner-application resolves nothing. (CONST owner: the non-const GetMetaData wxFAILs.)
 static ibQueryableFactory* ibDynamicSourceFactory(const ibPropertyObject* owner)
 {
 	const ibMetaData* md = owner != nullptr ? owner->GetMetaData() : nullptr;
 	ibQueryableFactory* factory = md != nullptr ? md->GetSourceFactory() : nullptr;
-	// No owner config → knock on the global base factory (the common/plugin one). It is empty today, so this is a
-	// harmless safety net, not a source of the copy bug (which is fixed by resolving through the config when present).
+	// No owner application → knock on the global base factory (the common/plugin one). It is empty today, so this is a
+	// harmless safety net, not a source of the copy bug (which is fixed by resolving through the application when present).
 	return factory != nullptr ? factory : ibApplicationInstance::GetQueryableFactory();
 }
 
@@ -51,7 +51,7 @@ bool ibPropertyDynamicSource::GetDataValue(ibValue& pvarPropVal) const
 	return true;
 }
 
-// SAVE / LOAD — the source's table id VERBATIM (an Int; metadata-agnostic, stable within a config). On COPY the
+// SAVE / LOAD — the source's table id VERBATIM (an Int; metadata-agnostic, stable within an application). On COPY the
 // source already follows the main attribute's TYPE, which the standard metaobject copy
 // remaps to the copy's id — the list is re-materialised from that type, so its queryable points at the copy with
 // no remap here. A normal reopen resolves the stored id directly. (Deep dot-walk column bindings — the "leaves" —

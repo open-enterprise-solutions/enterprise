@@ -28,7 +28,7 @@ void ibValueMetaObjectAccountingRegister::OnPropertyChanged(ibProperty* property
 
 		// The dimension slots follow the binding too — a different chart declares a different
 		// NUMBER of them. Re-typing only Account here was the old asymmetry: the slots kept the
-		// previous chart's shape until the configuration happened to be run again.
+		// previous chart's shape until the application happened to be run again.
 		SyncAccountDimensionSlots();
 
 		// ⭐ AND THE CREDIT ACCOUNT, WHICH IS A REFERENCE INTO THE SAME CHART. One declaration types

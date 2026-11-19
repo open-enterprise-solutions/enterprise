@@ -2,7 +2,7 @@
 // LoadHelpCorpus — non-throwing JSON → ibHelpCorpus factory.
 //
 // Reads `data/help/<locale>/*.json` (platform corpus) and optionally
-// `<configCacheDir>/help/<locale>/*.json` (per-config corpus), parses
+// `<applicationCacheDir>/help/<locale>/*.json` (per-application corpus), parses
 // each bucket, builds two source corpora, and merges them through
 // ibHelpCorpus's merging constructor into a single immutable snapshot.
 //
@@ -41,7 +41,7 @@ constexpr int kIbHelpSchemaVersion = 1;
 // Format identifier in the bucket file header. Aligns with the
 // OES-JSON-1.0 / OES-XML-2.0 metadata-export convention so all OES
 // JSON-on-disk artifacts share the same "format + version" header
-// shape — see metadataConfigurationJSON.cpp for the metadata side.
+// shape — see metadataApplicationJSON.cpp for the metadata side.
 // Loader rejects buckets whose format identifier does not match.
 #define IB_HELP_FORMAT_NAME ibT("OES-HELP-1.0")
 
@@ -50,8 +50,8 @@ constexpr int kIbHelpSchemaVersion = 1;
 // `platformDir` — usually `appData->GetInstallDataDir() / "help"`. The
 // loader looks for `<platformDir>/<localeCode>/*.json`.
 //
-// `configCacheDir` — optional. When non-empty the loader also reads
-// `<configCacheDir>/<localeCode>/*.json` and overlays per-config entries
+// `applicationCacheDir` — optional. When non-empty the loader also reads
+// `<applicationCacheDir>/<localeCode>/*.json` and overlays per-application entries
 // over the platform corpus (§3.6 merge rule).
 //
 // `localeCode` — canonical OES locale string ("ru-RU", "uk-UA", "en-US").
@@ -64,7 +64,7 @@ constexpr int kIbHelpSchemaVersion = 1;
 CORE_API ibHelpLoadResult
 LoadHelpCorpus(const ibString& localeCode,
                const ibString& platformDir,
-               const ibString& configCacheDir = ibEmptyString,
+               const ibString& applicationCacheDir = ibEmptyString,
                const ibHelpClassName& className = ibHelpClassName());
 
 // Normalise any platform-locale string to the corpus's directory

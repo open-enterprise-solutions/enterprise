@@ -3,7 +3,7 @@
 
 // THE PREDEFINED VALUES EDITOR — the desktop's dialog over an object of the designer's tree (designer/win/dlg/
 // predefinedEditor), as the server holds it: the one schema of what the object declares (ibPredefinedDescription — the
-// items as the configuration keeps them and what an item is entered with), and its three edits, each the engine's own
+// items as the application keeps them and what an item is entered with), and its three edits, each the engine's own
 // (ibValueMetaObjectRecordDataHierarchyMutableRef). The designer's own.
 
 #include "frmserver/schema/clientSchema.h"
@@ -11,7 +11,7 @@
 class FRMSERVER_API ibSchemaPredefined : public ibClientSchema {
 public:
 
-	// The right to edit the configuration — the tree's (ibSchemaMetaData).
+	// The right to edit the application — the tree's (ibSchemaMetaData).
 	virtual bool AccessRight(const ibSession& session) const override;
 
 	// Of the object Id names (in Tab's tree): Type, its class; Declares — the one schema, items included; and Classes —

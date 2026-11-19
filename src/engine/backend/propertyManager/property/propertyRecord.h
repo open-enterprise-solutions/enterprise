@@ -40,7 +40,7 @@ protected:
 	// arriving from a NEIGHBOUR of the family is not a wrong value — it says exactly the right
 	// thing — but storing it as it comes leaves this property holding a variant it cannot read,
 	// and everything downstream raises "its value is not of the expected kind": the delete path,
-	// the diff, the save. One mis-set property made a whole configuration unsaveable.
+	// the diff, the save. One mis-set property made a whole application unsaveable.
 	//
 	// ⚠ AND IT ARRIVED THE HONEST WAY: CreateValueList builds every candidate as ibVariantOwner,
 	// so a caller that did the right thing — read GetValueList, pick, place the value it was

@@ -9,7 +9,7 @@
 #undef mainFrame
 #endif
 
-class ibConfigurationTree;
+class ibApplicationTree;
 class ibDebuggerClient;
 class ibStackWindow;
 class ibWatchWindow;
@@ -18,7 +18,7 @@ class ibLocalWindow;
 // The syntax helper's pane — the designer's alone; its commands —
 // the base's (the code editor posts them).
 #define ibAUI_PANE_HELP     wxT("syntaxHelperWindow")
-// …and the configuration's tree's.
+// …and the application's tree's.
 #define ibAUI_PANE_METADATA wxT("metadataWindow")
 
 // The desktop's (designer/mainFrame/mainFrameDesigner.h), by the same numbers: a person's keys are kept by them.
@@ -39,16 +39,16 @@ enum {
 	wxID_DESIGNER_DEBUG_NEXT_POINT,
 	wxID_DESIGNER_DEBUG_REMOVE_ALL_DEBUGPOINTS,
 
-	wxID_DESIGNER_CONFIGURATION_OPEN_DATABASE,
-	wxID_DESIGNER_CONFIGURATION_UPDATE_DATABASE,
-	wxID_DESIGNER_CONFIGURATION_ROLLBACK_DATABASE,
+	wxID_DESIGNER_APPLICATION_OPEN_DATABASE,
+	wxID_DESIGNER_APPLICATION_UPDATE_DATABASE,
+	wxID_DESIGNER_APPLICATION_ROLLBACK_DATABASE,
 
-	wxID_DESIGNER_CONFIGURATION_LOAD_FROM_FILE,
-	wxID_DESIGNER_CONFIGURATION_SAVE_TO_FILE,
-	wxID_DESIGNER_CONFIGURATION_EXPORT_JSON,   // EXPERIMENTAL — builder -> JSON dump
-	wxID_DESIGNER_CONFIGURATION_COMPARE_FILE,
-	wxID_DESIGNER_CONFIGURATION_COMPARE_DB,
-	wxID_DESIGNER_CONFIGURATION_COMPARE_TWO_FILES,
+	wxID_DESIGNER_APPLICATION_LOAD_FROM_FILE,
+	wxID_DESIGNER_APPLICATION_SAVE_TO_FILE,
+	wxID_DESIGNER_APPLICATION_EXPORT_JSON,   // EXPERIMENTAL — builder -> JSON dump
+	wxID_DESIGNER_APPLICATION_COMPARE_FILE,
+	wxID_DESIGNER_APPLICATION_COMPARE_DB,
+	wxID_DESIGNER_APPLICATION_COMPARE_TWO_FILES,
 
 	wxID_DESIGNER_DATABASE_LOAD_FROM_FILE,
 	wxID_DESIGNER_DATABASE_SAVE_TO_FILE,
@@ -57,9 +57,9 @@ enum {
 
 	wxID_DESIGNER_ABOUT,
 
-	// …and the configuration as a directory of files, one a part (ibFileProvider) — last, as every new one goes.
-	wxID_DESIGNER_CONFIGURATION_LOAD_FROM_FILES,
-	wxID_DESIGNER_CONFIGURATION_SAVE_TO_FILES,
+	// …and the application as a directory of files, one a part (ibFileProvider) — last, as every new one goes.
+	wxID_DESIGNER_APPLICATION_LOAD_FROM_FILES,
+	wxID_DESIGNER_APPLICATION_SAVE_TO_FILES,
 
 	// …and the measurement of the attached runtime, begun and ended by one checked item (ibDebuggerClient::StartProfile).
 	wxID_DESIGNER_DEBUG_PROFILE,
@@ -96,7 +96,7 @@ static_assert(wxID_APPLICATION_MCP_ASSISTANT == wxID_HIGHEST + 8, "append new ap
 
 // THE DESIGNER'S MAIN WINDOW — the desktop's ibFrontendMainFrameDesigner (designer/mainFrame) on the thin client.
 // The base draws what both modes share — the menu, the tabs, the messages; this one logs in to the designer, whose
-// configuration the server's session holds (ibClientFrameDesigner there).
+// application the server's session holds (ibClientFrameDesigner there).
 class ibFrontendMainFrameDesigner : public ibFrontendMainFrame {
 public:
 
@@ -111,15 +111,17 @@ public:
 		const wxSize& size = wxDefaultSize);
 	virtual ~ibFrontendMainFrameDesigner();
 
-	// Shown — logged in — its debugger made over the configuration logged in to, and the person's assistant access
+	// Shown — logged in — its debugger made over the application logged in to, and the person's assistant access
 	// started with it when they switched it on (the desktop's).
 	virtual bool Show(bool show = true) override;
 
 	// A metaobject opened on the server - the designer's schema MetaData, Open (ibFrontendMainFrame::OpenForm).
 	virtual bool OpenForm(ibMetaID id, const ibMetaData& metaData) override;
+	// …and a module at a failure's line - the tree's (ibMetaTreeBase::EditModule), not marked as the run line.
+	virtual void EditModule(const wxString& fileName, const ibGuid& moduleName, int line) override;
 
-	// The configuration's tree and the messages — the desktop's, where the debugger shows a stop and what was said.
-	ibConfigurationTree* GetMetaWindow() const { return m_metaWindow; }
+	// The application's tree and the messages — the desktop's, where the debugger shows a stop and what was said.
+	ibApplicationTree* GetMetaWindow() const { return m_metaWindow; }
 	ibOutputWindow* GetOutputWindow() const { return m_outputWindow; }
 
 	// The debugger's panes along the bottom — the desktop's, beside the messages.
@@ -139,17 +141,17 @@ public:
 protected:
 
 	// The base's parts, and the desktop designer's around them (its CreateWideGui): the Update database button on the
-	// main toolbar, the debug toolbar beside it, the configuration's tree on the left, version control's pane hidden.
+	// main toolbar, the debug toolbar beside it, the application's tree on the left, version control's pane hidden.
 	virtual void CreateGUI() override;
 	// …and the notebook along the bottom — the messages, then the debugger's three (the desktop's).
 	virtual void CreateBottomPane() override;
-	// …and the workspace while no tab is open: the greeting, and the keys of the commands a configuration is worked on with.
+	// …and the workspace while no tab is open: the greeting, and the keys of the commands an application is worked on with.
 	virtual ibWelcomeWindow* OnCreateWelcome(wxWindow* parent) override;
 
-	// THE CONFIGURATION'S TREE — the frame's MetaData, drawn when the patch changed it; its state on the pane's caption.
+	// THE APPLICATION'S TREE — the frame's MetaData, drawn when the patch changed it; its state on the pane's caption.
 	virtual void DrawFrame(const ibProtocolNode& frame, const ibProtocolNode& patch) override;
 
-	// May the window go down? An edited configuration is asked about first — the desktop's Save? — then the base's.
+	// May the window go down? An edited application is asked about first — the desktop's Save? — then the base's.
 	virtual bool AllowClose() override;
 
 	// The debugger's store, read in the login — not a call of its own at the start.
@@ -161,14 +163,14 @@ protected:
 	// kind of a form or a template just made (ibDialogSelectKind); the rest — the base's.
 	virtual void ShowRequest(const ibProtocolNode& request, ibProtocolNode& response) override;
 
-	// The designer's Configuration, Debug and Help — the desktop's — over the base's File and Edit.
+	// The designer's Application, Debug and Help — the desktop's — over the base's File and Edit.
 	virtual void InitializeDefaultMenu() override;
 	// …and their keys over the base's.
 	virtual void SetDefaultHotKeys() override;
 
 private:
 
-	// The configuration's tree's pane — the desktop's.
+	// The application's tree's pane — the desktop's.
 	void CreateMetadataPane();
 	// …and version control's, the desktop's: hidden, floating on the right, over the working copy beside the file base.
 	void CreateGitPane();
@@ -188,12 +190,12 @@ private:
 	void OnStartDebugWithoutDebugWeb(wxCommandEvent& event);
 	void OnAttachForDebugging(wxCommandEvent& event);
 
-	// The database's configuration, browsed in a tab of its own — the desktop's; ⚠ not in the thin yet, said so.
-	void OnOpenConfiguration(wxCommandEvent& event);
-	void OnRollbackConfiguration(wxCommandEvent& event);
-	void OnUpdateConfiguration(wxCommandEvent& event);
-	void OnConfiguration(wxCommandEvent& event);
-	// Rollback and Update — lit while the configuration differs from the base's (the desktop's ibDocManagerDesigner's).
+	// The database's application, browsed in a tab of its own — the desktop's; ⚠ not in the thin yet, said so.
+	void OnOpenApplication(wxCommandEvent& event);
+	void OnRollbackApplication(wxCommandEvent& event);
+	void OnUpdateApplication(wxCommandEvent& event);
+	void OnApplication(wxCommandEvent& event);
+	// Rollback and Update — lit while the application differs from the base's (the desktop's ibDocManagerDesigner's).
 	void OnUpdateSaveMetadata(wxUpdateUIEvent& event);
 
 	void OnRunDebugCommand(wxCommandEvent& event);
@@ -201,7 +203,7 @@ private:
 	// The connection's dialog — the desktop's (ibDialogConnection).
 	void OnConnection(wxCommandEvent& event);
 
-	ibConfigurationTree* m_metaWindow = nullptr;
+	ibApplicationTree* m_metaWindow = nullptr;
 	class ibGitPanel* m_gitPanel = nullptr;
 	class ibHelpPaneView* m_helpPane = nullptr;
 

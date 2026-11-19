@@ -32,7 +32,7 @@
 #include "backend/databaseLayer/connectionPool.h"
 #include "backend/databaseLayer/databaseQueryBuilder.h"
 #include "backend/databaseLayer/sqllite/sqliteDatabaseLayer.h"
-#include "backend/metadataConfiguration.h"
+#include "backend/metadataApplication.h"
 #include "backend/metaCollection/metaObject.h"
 #include "backend/metaCollection/partial/catalog.h"
 #include "backend/metaCollection/partial/reference/reference.h"
@@ -89,12 +89,12 @@ ibString SqliteTypeOf(const ibString& field)
 
 struct AcceptanceCatalogs : ::testing::Test {
 	wxInitializer m_wxInit;
-	// RunDatabase sets this thread's code style to the configuration's. The binary runs VES
+	// RunDatabase sets this thread's code style to the application's. The binary runs VES
 	// (test_compiler.cpp), so TearDown puts it back, as StyleGuard does.
 	const short m_codeStyle = ibCompileCode::GetCodeStyle();
 	std::shared_ptr<ibDatabaseLayerSQLite> db;
 	ibString dbPath;
-	std::unique_ptr<ibMetaDataConfigurationFile> cfg;
+	std::unique_ptr<ibMetaDataApplicationFile> cfg;
 	ibValueMetaObjectCatalog* goods = nullptr;
 	ibValueMetaObjectCatalog* parties = nullptr;
 	ibValueMetaObjectCatalog* contracts = nullptr;
@@ -123,8 +123,8 @@ struct AcceptanceCatalogs : ::testing::Test {
 		pool->Init(db, /*maxSize=*/4, /*minIdle=*/0);
 
 		fixture = LoadFixture(wxT("catalogs.json"));
-		cfg = std::make_unique<ibMetaDataConfigurationFile>();
-		ibValueMetaObjectConfiguration* root = cfg->GetCommonMetaObject();
+		cfg = std::make_unique<ibMetaDataApplicationFile>();
+		ibValueMetaObjectApplication* root = cfg->GetRootMetaObject();
 		ASSERT_NE(root, nullptr);
 
 		goods = dynamic_cast<ibValueMetaObjectCatalog*>(
@@ -143,7 +143,7 @@ struct AcceptanceCatalogs : ::testing::Test {
 		parties->SetHierarchyType(ibHierarchyType::eNone);
 		contracts->SetHierarchyType(ibHierarchyType::eNone);
 
-		// List owner, before the configuration runs. The value itself does not notify: the
+		// List owner, before the application runs. The value itself does not notify: the
 		// resolve pass reads it and types the Owner column from the reference constructor,
 		// which the register pass has just published. That constructor's class is what a
 		// stored reference carries, so a later Owner = comparison can match the row.
@@ -151,7 +151,7 @@ struct AcceptanceCatalogs : ::testing::Test {
 		ASSERT_NE(listOwner, nullptr);
 		listOwner->SetValue(ibMetaDescription(parties->GetMetaID()));
 
-		ASSERT_TRUE(cfg->RunDatabase()) << "the configuration in memory did not run";
+		ASSERT_TRUE(cfg->RunDatabase()) << "the application in memory did not run";
 		ASSERT_GT(contracts->GetCatalogOwner()->GetClsidCount(), 0u);
 
 		CreateTable(goods);
@@ -487,9 +487,9 @@ TEST_F(AcceptanceCatalogs, AContainsConditionOnAStoredListMatchesASubstring)
 	EXPECT_FALSE(rows.Next()) << "LIKE 'C' is not a substring match";
 }
 
-// ⭐ EVERY CONFIGURATION'S FACTORY FINDS THE REGISTRATION JOURNAL — by the name a query writes, with the period the
+// ⭐ EVERY APPLICATION'S FACTORY FINDS THE REGISTRATION JOURNAL — by the name a query writes, with the period the
 // turnovers take, and read by the computed provider: in memory, never in a statement of the base.
-TEST_F(AcceptanceCatalogs, EveryConfigurationsFactoryFindsTheJournal)
+TEST_F(AcceptanceCatalogs, EveryApplicationsFactoryFindsTheJournal)
 {
 	if (!ready) return;
 	ibQueryableFactory* const factory = cfg->GetSourceFactory();
@@ -520,7 +520,7 @@ TEST_F(AcceptanceCatalogs, EveryConfigurationsFactoryFindsTheJournal)
 	EXPECT_THROW(journal->CreateQueryable(args, 1, {}, ibQueryReadColumns()), ibCoreException);
 }
 
-// ⭐ …AND IT IS THE PLATFORM'S, NOT THE CONFIGURATION'S — the factory names it among its platform sources (a catalog it
+// ⭐ …AND IT IS THE PLATFORM'S, NOT THE APPLICATION'S — the factory names it among its platform sources (a catalog it
 // does not), the constructor's catalogue draws it under Platform, and LINQ reads it as Data.Platform.Journal.Events:
 // the same source, by the namespace and the name a query writes.
 TEST_F(AcceptanceCatalogs, TheJournalIsThePlatformsSource)
@@ -544,7 +544,7 @@ TEST_F(AcceptanceCatalogs, TheJournalIsThePlatformsSource)
 		}
 		if (source.Text() == ibString(wxT("Catalog.Contracts"))) {
 			++contractRows;
-			EXPECT_FALSE(source.m_platform) << "a catalog is the configuration's";
+			EXPECT_FALSE(source.m_platform) << "a catalog is the application's";
 		}
 	}
 	EXPECT_EQ(journalRows, 1);
@@ -569,10 +569,10 @@ TEST_F(AcceptanceCatalogs, TheJournalIsThePlatformsSource)
 	EXPECT_TRUE(queryable->GetQueryable()->GetProvider().IsComputedInRam()) << "read by the computed provider";
 }
 
-// ⭐ ITS OBJECT IS DECLARED ANY REFERENCE AND HOLDS THIS CONFIGURATION'S — as a field declared `AnyRef` does
+// ⭐ ITS OBJECT IS DECLARED ANY REFERENCE AND HOLDS THIS APPLICATION'S — as a field declared `AnyRef` does
 // (ibOpenBarriers), so a field tree opens it by type. It showed a [+] with nothing behind it (2026-11-17): the column
 // held the bare barrier, and the constructor's branches are asked per class.
-TEST_F(AcceptanceCatalogs, TheJournalsObjectHoldsTheConfigurationsReferences)
+TEST_F(AcceptanceCatalogs, TheJournalsObjectHoldsTheApplicationsReferences)
 {
 	if (!ready) return;
 	ibQueryableFactory* const factory = cfg->GetSourceFactory();
@@ -615,7 +615,7 @@ TEST_F(AcceptanceCatalogs, AQueryJoinsTheJournalToACatalog)
 {
 	if (!ready) return;
 	ibDataDBComposer composer;
-	composer.SetMetaData(cfg.get());   // the configuration its names resolve in — the journal is this one's
+	composer.SetMetaData(cfg.get());   // the application its names resolve in — the journal is this one's
 	composer.FromText(wxT("SELECT C.Code AS Code, J.Event AS Event FROM Catalog.Contracts AS C ")
 		wxT("LEFT JOIN Journal.Events AS J ON J.Object = C.Ref"));
 	std::vector<ibQueryLowering::ibQueryOutputColumn> schema;

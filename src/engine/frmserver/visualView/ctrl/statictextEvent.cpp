@@ -17,7 +17,7 @@ bool ibValueStaticText::OnClientEvent(ibProtocol::ibEvent::ibKind event, const i
 
 void ibValueStaticText::OnHyperlinkClicked()
 {
-	// The SAME shape the text box's open button has: raise Opening, and let the configuration turn
+	// The SAME shape the text box's open button has: raise Opening, and let the application turn
 	// the standard processing off if it means to open something of its own.
 	ibValue standartProcessing = true;
 	ibValueControl::CallAsEvent(m_eventOpening, GetValue(), standartProcessing);

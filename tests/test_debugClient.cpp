@@ -21,9 +21,9 @@
 #include "backend/databaseLayer/sqllite/sqliteDatabaseLayer.h"
 #include "backend/debugger/debugClient.h"
 
-// A debugger client with no configuration around it: its breakpoints and their store, and no runtime. With no
+// A debugger client with no application around it: its breakpoints and their store, and no runtime. With no
 // connection, what it would tell a runtime goes nowhere (SendCommand). In production only
-// ibMetaDataConfigurationStorage makes one.
+// ibMetaDataApplicationStorage makes one.
 class ibStandaloneDebuggerClient {
 public:
 	static std::unique_ptr<ibDebuggerClient> Make() {

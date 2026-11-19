@@ -98,7 +98,7 @@ using ibJobBody = std::function<bool(ibSession* session)>;
 //                a connection is the one thing that cannot be borrowed.
 //
 // The cost is the point. A standalone run pays Connect + InstallUser + a compile of
-// every common module; that amortises over a report and is absurd per scrolled page.
+// every shared module; that amortises over a report and is absurd per scrolled page.
 // A tenant pays a Connect and a checkout.
 enum class ibJobTenancy {
 	Standalone,
@@ -107,15 +107,15 @@ enum class ibJobTenancy {
 
 // Who a job belongs to. Decides the KIND of session it runs under, which is what
 // an administrator sees in Active Users — and the decision there differs: a
-// configuration's job will come back on its interval whether or not this run is
+// application's job will come back on its interval whether or not this run is
 // killed, while the platform's own housekeeping is safe to kill outright.
 enum class ibJobOrigin {
 	Platform,        // the engine's own — totals fold, maintenance
-	Configuration,   // declared by the applied configuration
+	Application,     // declared by the applied application
 };
 
 // A job's declaration. Registered by the platform at startup (system jobs) or,
-// later, built from metadata for configuration-owned scheduled jobs.
+// later, built from metadata for application-owned scheduled jobs.
 struct BACKEND_API ibJobDescription {
 	ibJobOrigin m_origin = ibJobOrigin::Platform;
 
@@ -127,8 +127,8 @@ struct BACKEND_API ibJobDescription {
 	// THE STABLE KEY — what the base stores its settings and its shared clock under, and what the
 	// cross-process claim names.
 	//
-	// It is NOT the name. A configuration's job is identified by its metaobject GUID — the identity
-	// that survives a rename, an unload / reload, and a copy of the configuration onto another
+	// It is NOT the name. An application's job is identified by its metaobject GUID — the identity
+	// that survives a rename, an unload / reload, and a copy of the application onto another
 	// base. Keying the row by the name would mean that renaming a job silently orphans its
 	// settings and its last-run — the job then looks brand new and fires at once, and the row that
 	// held "switched off" is still in the table pointing at nothing.
@@ -147,7 +147,7 @@ struct BACKEND_API ibJobDescription {
 	//                   is REQUIRED, not lax: a totals fold that read through a
 	//                   user's row filter would fold a subset and silently produce
 	//                   wrong sums. Leave this empty for a platform job.
-	//   Configuration — the user named HERE. A scheduled job belongs to whoever
+	//   Application — the user named HERE. A scheduled job belongs to whoever
 	//                   declared it, and it must see exactly what that user sees:
 	//                   same rights, same RLS, same result as if they had run it.
 	//   Background    — not this field at all. A background run adopts the caller
@@ -158,7 +158,7 @@ struct BACKEND_API ibJobDescription {
 	//
 	// No password: `Login` is already split into AuthenticateUser (the check) and
 	// InstallUser (the commit), and a job needs only the commit — nobody is typing
-	// anything, and storing a service password to re-verify what the configuration
+	// anything, and storing a service password to re-verify what the application
 	// already declared would be a secret kept for no reason.
 	ibGuid     m_runAsUser;
 
@@ -394,7 +394,7 @@ public:
 	// Cheap and side-effect-free: no session, no database, no metadata. That is
 	// deliberate, because the platform's own list is registered from
 	// ibApplicationInstance the moment the database opens — long before there is a
-	// user, a configuration or a reason to spend a Connect on a job that may not
+	// user, an application or a reason to spend a Connect on a job that may not
 	// come due for six hours. The session is built on first launch instead, so a
 	// job that never becomes due never costs anything.
 	bool Register(ibJobDescription desc);
@@ -406,7 +406,7 @@ public:
 
 	// Drop every job whose name starts with `prefix`; returns how many went. The parameterized
 	// scheduled job registers one entry PER ROW under "<JobName>.<rowGuid>", and when its
-	// configuration closes it has to withdraw all of them without re-reading a table it may no
+	// application closes it has to withdraw all of them without re-reading a table it may no
 	// longer be able to read. Same waiting rule as Unregister: a run in flight is not cancelled.
 	std::size_t UnregisterByPrefix(const ibString& prefix);
 
@@ -438,7 +438,7 @@ public:
 	// to the run. This is the BACKGROUND half of the manager: no schedule, an
 	// initiator, and a result somebody may be waiting for — RunBackground.
 	//
-	// THE METHOD IS `ModuleName.MethodName` — a PUBLIC method of a common module.
+	// THE METHOD IS `ModuleName.MethodName` — a PUBLIC method of a shared module.
 	// Required in that form, not merely accepted: the call is made by name from
 	// another session, so which module the author meant has to be in the name
 	// rather than in whatever was in scope where it was written. Visibility needs
@@ -473,7 +473,7 @@ public:
 	// Everything that makes a background run what it is — its own session, the
 	// initiator's identity (and therefore their RLS), the try/catch that turns a
 	// throw into a reported error, the handle somebody may watch or drop — is
-	// identical whether the work is a configuration's procedure or the engine's
+	// identical whether the work is an application's procedure or the engine's
 	// own reading. Only the payload differs, so this is the one implementation and
 	// the named-procedure form above is a body built over it.
 	//
@@ -556,7 +556,7 @@ public:
 
 	// Same check, but THROWS ibBackendCoreException naming the offending argument
 	// and its class. This is what a submission path calls: passing a mutable value
-	// to a job is a programming error in the configuration, and the author has to
+	// to a job is a programming error in the application, and the author has to
 	// see it — at the call, on their own stack, with the script's try/except as
 	// the natural handling point. Returning a quiet false would leave a job that
 	// either never runs or runs on values it must not touch, and nothing said why.

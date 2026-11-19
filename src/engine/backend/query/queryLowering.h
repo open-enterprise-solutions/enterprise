@@ -88,7 +88,7 @@ public:
 		ibString                    m_objectPrefix;
 		// WHAT IT IS FOR — see ibColumnRole. Detail unless the totals path says otherwise.
 		ibColumnRole                m_role = ibColumnRole::Detail;
-		// ⭐ WHETHER WHAT IT READS MAY BE SHOWN (functional options) — every column its expression reads,
+		// ⭐ WHETHER WHAT IT READS MAY BE SHOWN (feature options) — every column its expression reads,
 		// every hop of every walk (IsExprAvailable), and for a star each column it stands for. Its own:
 		// `m_col` may be a walk's LEAF, which answers for itself alone, so a nested query, a temp table
 		// and the shown columns of a run ask this rather than the column.
@@ -148,7 +148,7 @@ public:
 	// this pass, run whenever the query is refreshed, does not reach it and takes it out.
 	//
 	// One rule driven by RESOLUTION covers every way a path can break: a table removed, an attribute
-	// renamed in the configuration, a metaobject deleted, a temp table no longer made. A cleanup
+	// renamed in the application, a metaobject deleted, a temp table no longer made. A cleanup
 	// hung off the delete button covers exactly one of them.
 	//
 	// ⚠ Same promise as CheckNames: what cannot be VERIFIED is never touched. A select whose source

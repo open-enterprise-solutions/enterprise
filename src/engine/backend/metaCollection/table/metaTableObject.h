@@ -10,7 +10,7 @@
 #include <mutex>   // std::once_flag
 
 class ibValueMetaObjectRecordData;
-class ibValueMetaObjectTableData;       // RAM-only tabular section (processors / reports)
+class ibValueMetaObjectTableData;       // RAM-only tabular section (data tools / reports)
 class ibValueMetaObjectTableDataRef;    // DB-backed tabular section (reference owners: catalog / document / charts)
 
 // ibTabularQueryable — the L3 queryable for a DB-backed tabular section (uuid-keyed, line-number
@@ -77,8 +77,8 @@ public:
 	// base default vends NO queryable (no physical table); the DB leaf overrides this.
 	virtual std::shared_ptr<const ibBackendQueryable> GetQueryable() const override { return nullptr; }
 
-	// A tabular section a form binds a table to may belong to a functional option, and its fields with it.
-	virtual bool IsFunctionalOptionAllowed() const override { return true; }
+	// A tabular section a form binds a table to may belong to a feature option, and its fields with it.
+	virtual bool IsFeatureOptionAllowed() const override { return true; }
 
 	ibItemMode GetTableUse() const { return m_propertyUse->GetValueAsEnum(); }
 
@@ -140,7 +140,7 @@ public:
 
 	virtual std::vector<ibValueMetaObjectAttributeBase*> GetGenericAttributeArrayObject(
 		std::vector<ibValueMetaObjectAttributeBase*>& array) const {
-		// No common attributes here: a tabular section is not part of any composition
+		// No shared attributes here: a tabular section is not part of any composition
 		// (ResolveChild does not accept the copy, so one could be neither created nor saved
 		// in it). Calling the fill anyway would have looked like support and been a dead end.
 		FillArrayObjectByPredefinedAttribute(array);
@@ -154,7 +154,7 @@ public:
 	//any
 	std::vector<ibValueMetaObjectAttributeBase*> GetAnyAttributeArrayObject(
 		std::vector<ibValueMetaObjectAttributeBase*> array = std::vector<ibValueMetaObjectAttributeBase*>()) const {
-		// No common attributes here: a tabular section is not part of any composition
+		// No shared attributes here: a tabular section is not part of any composition
 		// (ResolveChild does not accept the copy, so one could be neither created nor saved
 		// in it). Calling the fill anyway would have looked like support and been a dead end.
 		FillArrayObjectByPredefinedAttribute(array);
@@ -209,12 +209,12 @@ private:
 	ibPropertyEnum<ibValueEnumItemMode>* m_propertyUse = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumItemMode>>(m_categoryGroup, ibT("ItemMode"), _("Item mode"),
 		_("In a catalog with folders: which nodes have this tabular section - items (the default), folders, or both. The other kind's form and record simply do not offer it."),
 		ibItemMode::ibItemMode_Item);
-	// The line number's length is the configuration's - shown and set as its type, a number alone (ibPropertyPredefinedType).
+	// The line number's length is the application's - shown and set as its type, a number alone (ibPropertyPredefinedType).
 	ibPropertyPredefinedType* m_propertyNumberLine = ibPropertyObject::CreateProperty<ibPropertyPredefinedType>(m_categoryPredefined, ibValueMetaObjectCompositeData::CreateNumber(ibT("NumberLine"), _("N"),
 		_("The row's number in the tabular section, 1-based, kept by the platform: renumbered when rows are added, deleted or moved, and written with the object. Read-only for code."), 6, 0), { g_valueNumberCLSID });
 };
 
-// ibValueMetaObjectTableDataRam — RAM-only tabular section (data processors / reports). A thin
+// ibValueMetaObjectTableDataRam — RAM-only tabular section (data tools / reports). A thin
 // leaf over the shared base: it adds nothing but its factory identity (MD_TBL) — no queryable,
 // no physical table, the plain tabular value-ctor (inherited base behaviour).
 class BACKEND_API ibValueMetaObjectTableDataRam : public ibValueMetaObjectTableData {

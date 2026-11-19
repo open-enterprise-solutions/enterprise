@@ -1,6 +1,6 @@
 
 #include "moduleManagerExt.h"
-#include "backend/metadataConfiguration.h"
+#include "backend/metadataApplication.h"
 
 #include "backend/appData.h"
 #include "backend/session/session.h"
@@ -8,34 +8,34 @@
 //////////////////////////////////////////////////////////////////////////////////
 #define thisObject ibT("ThisObject")
 //////////////////////////////////////////////////////////////////////////////////
-//  ibValueModuleRuntimeManagerExternalDataProcessor
+//  ibValueModuleRuntimeManagerExternalDataTool
 //////////////////////////////////////////////////////////////////////////////////
 
-// These delegate to the CONFIGURATION's module manager (an external DP inherits
-// the active config's context) — designer manager in the Designer, session root
-// mm at runtime. Resolved against the active config metadata, not the DP's own.
-const ibByteCode* ibValueModuleRuntimeManagerExternalDataProcessor::GetByteCode() const
+// These delegate to the APPLICATION's module manager (an external data tool inherits
+// the active application's context) — designer manager in the Designer, session root
+// mm at runtime. Resolved against the active application metadata, not the data tool's own.
+const ibByteCode* ibValueModuleRuntimeManagerExternalDataTool::GetByteCode() const
 {
 	ibValueModuleManager* moduleManager = ibSession::EditModuleManagerFor(appEnv::ActiveMetaData());
 	ibASSERT(moduleManager);
 	return moduleManager ? moduleManager->GetByteCode() : nullptr;
 }
 
-std::unique_ptr<ibCompileModule> ibValueModuleRuntimeManagerExternalDataProcessor::CreateCompiler() const
+std::unique_ptr<ibCompileModule> ibValueModuleRuntimeManagerExternalDataTool::CreateCompiler() const
 {
 	ibValueModuleManager* moduleManager = ibSession::EditModuleManagerFor(appEnv::ActiveMetaData());
 	ibASSERT(moduleManager);
 	return moduleManager ? moduleManager->CreateCompiler() : nullptr;
 }
 
-std::shared_ptr<ibProcUnit> ibValueModuleRuntimeManagerExternalDataProcessor::GetProcUnit() const
+std::shared_ptr<ibProcUnit> ibValueModuleRuntimeManagerExternalDataTool::GetProcUnit() const
 {
 	ibValueModuleManager* moduleManager = ibSession::EditModuleManagerFor(appEnv::ActiveMetaData());
 	ibASSERT(moduleManager);
 	return moduleManager ? moduleManager->GetProcUnit() : nullptr;
 }
 
-std::map<ibString, ibContextVar>& ibValueModuleRuntimeManagerExternalDataProcessor::GetContextVariables()
+std::map<ibString, ibContextVar>& ibValueModuleRuntimeManagerExternalDataTool::GetContextVariables()
 {
 	ibValueModuleManager* moduleManager = ibSession::EditModuleManagerFor(appEnv::ActiveMetaData());
 	ibASSERT(moduleManager);
@@ -49,10 +49,10 @@ std::map<ibString, ibContextVar>& ibValueModuleRuntimeManagerExternalDataProcess
 	return moduleManager->GetContextVariables();
 }
 
-std::map<ibString, ibValue*>& ibValueModuleRuntimeManagerExternalDataProcessor::GetGlobalVariables()
+std::map<ibString, ibValue*>& ibValueModuleRuntimeManagerExternalDataTool::GetGlobalVariables()
 {
-	// Same delegation as GetContextVariables: an external data processor's editor
-	// must see the configuration root's globals (Metadata + common modules
+	// Same delegation as GetContextVariables: an external data tool's editor
+	// must see the application root's globals (Metadata + shared modules
 	// surfaced as names), not its own extern map.
 	ibValueModuleManager* moduleManager = ibSession::EditModuleManagerFor(appEnv::ActiveMetaData());
 	ibASSERT(moduleManager);
@@ -63,12 +63,12 @@ std::map<ibString, ibValue*>& ibValueModuleRuntimeManagerExternalDataProcessor::
 	return moduleManager->GetGlobalVariables();
 }
 
-ibValueModuleRuntimeManagerExternalDataProcessor::ibValueModuleRuntimeManagerExternalDataProcessor(std::shared_ptr<ibMetaData> metadata, ibValueMetaObjectDataProcessor* metaObject)
+ibValueModuleRuntimeManagerExternalDataTool::ibValueModuleRuntimeManagerExternalDataTool(std::shared_ptr<ibMetaData> metadata, ibValueMetaObjectDataTool* metaObject)
 	: ibValueModuleRuntimeManager(appEnv::ActiveMetaData(), metaObject ? metaObject->GetObjectModule() : nullptr)
 {
 	// metadata is the container the object works in — LoadFromFile creates this manager and passes
 	// itself, and at runtime the object holds it. In designer the document holds it, never the object.
-	m_objectValue = new ibValueRecordDataObjectExternalDataProcessor(
+	m_objectValue = new ibValueRecordDataObjectExternalDataTool(
 		metaObject, appData->DesignerMode() ? nullptr : std::move(metadata));
 	// One module, so one set of binds and one bytecode: the object is the script-side wrapper around the same source.
 	m_byteCode = std::make_shared<ibByteCode>();
@@ -84,10 +84,10 @@ ibValueModuleRuntimeManagerExternalDataProcessor::ibValueModuleRuntimeManagerExt
 
 	// Surface = the external object value's methods/props (copied below), then module
 	// exports as the helper's tail (descriptor autobind in the base ctor).
-	m_members.Bind(this, &ibValueModuleRuntimeManagerExternalDataProcessor::FillMembers);
+	m_members.Bind(this, &ibValueModuleRuntimeManagerExternalDataTool::FillMembers);
 }
 
-ibValueModuleRuntimeManagerExternalDataProcessor::~ibValueModuleRuntimeManagerExternalDataProcessor()
+ibValueModuleRuntimeManagerExternalDataTool::~ibValueModuleRuntimeManagerExternalDataTool()
 {
 	// RAII protection: always tear down the runtime on release. Idempotent — guards
 	// on m_initialized, so it's a no-op if DestroyMainModule already ran and a
@@ -102,7 +102,7 @@ ibValueModuleRuntimeManagerExternalDataProcessor::~ibValueModuleRuntimeManagerEx
 	}
 }
 
-bool ibValueModuleRuntimeManagerExternalDataProcessor::CreateMainModule()
+bool ibValueModuleRuntimeManagerExternalDataTool::CreateMainModule()
 {
 	if (m_initialized)
 		return true;
@@ -119,13 +119,13 @@ bool ibValueModuleRuntimeManagerExternalDataProcessor::CreateMainModule()
 	m_objectValue->IncrRef();
 
 
-	// Imperative pipeline — SetParent wires the parent to configuration
+	// Imperative pipeline — SetParent wires the parent to application
 	// root; BindContextVariable wires thisObject;
 	// InitializeRuntime / Compile / Run drive the top-level.
 	ibRuntimeModuleDataObject::SetParent(moduleManager);
 	BindContextVariable(thisObject, m_objectValue);
 
-	// m_objectValue (the external DP's script-visible object) stands where
+	// m_objectValue (the external data tool's script-visible object) stands where
 	// this manager stands: a compile chain of its forms goes up through it.
 	m_objectValue->ibRuntimeModuleDataObject::SetParent(moduleManager);
 
@@ -162,9 +162,9 @@ bool ibValueModuleRuntimeManagerExternalDataProcessor::CreateMainModule()
 		};
 	}
 
-	//Setup common modules
-	for (auto& moduleValue : m_listCommonModuleManager) {
-		if (!moduleValue->CreateCommonModule()) {
+	//Setup shared modules
+	for (auto& moduleValue : m_listSharedModuleManager) {
+		if (!moduleValue->CreateSharedModule()) {
 			return false;
 		}
 	}
@@ -174,7 +174,7 @@ bool ibValueModuleRuntimeManagerExternalDataProcessor::CreateMainModule()
 	return true;
 }
 
-bool ibValueModuleRuntimeManagerExternalDataProcessor::DestroyMainModule()
+bool ibValueModuleRuntimeManagerExternalDataTool::DestroyMainModule()
 {
 	if (!m_initialized)
 		return true;
@@ -186,11 +186,11 @@ bool ibValueModuleRuntimeManagerExternalDataProcessor::DestroyMainModule()
 	if (m_objectValue != nullptr)
 		m_objectValue->m_procUnit = nullptr;
 
-	//Setup common modules — best-effort: destroy every module even if one
+	//Setup shared modules — best-effort: destroy every module even if one
 	//fails, so teardown never leaks the remainder; report the aggregate.
 	bool ok = true;
-	for (auto& moduleValue : m_listCommonModuleManager) {
-		if (!moduleValue->DestroyCommonModule())
+	for (auto& moduleValue : m_listSharedModuleManager) {
+		if (!moduleValue->DestroySharedModule())
 			ok = false;
 	}
 
@@ -199,7 +199,7 @@ bool ibValueModuleRuntimeManagerExternalDataProcessor::DestroyMainModule()
 }
 
 //main module - initialize
-bool ibValueModuleRuntimeManagerExternalDataProcessor::StartMainModule(const ibRuntimeRequest& request)
+bool ibValueModuleRuntimeManagerExternalDataTool::StartMainModule(const ibRuntimeRequest& request)
 {
 	if (!m_initialized)
 		return false;
@@ -212,7 +212,7 @@ bool ibValueModuleRuntimeManagerExternalDataProcessor::StartMainModule(const ibR
 
 	// ⭐ WHETHER A FORM TOOK THE OBJECT. At runtime nothing else holds it, so when none did the run's reference is
 	// the last one and the object goes with it — and the pointer to it is cleared, not left dangling (Max,
-	// 2026-11-03): ExternalDataProcessors.Create then hands back nothing instead of a freed object. In the designer
+	// 2026-11-03): ExternalDataTools.Create then hands back nothing instead of a freed object. In the designer
 	// the manager holds it (ctor), so it never goes here.
 	bool taken = false;
 
@@ -220,15 +220,15 @@ bool ibValueModuleRuntimeManagerExternalDataProcessor::StartMainModule(const ibR
 	ibASSERT(commonObject);
 	ibValueMetaObjectFormBase* defFormObject = commonObject->GetDefaultFormByID
 	(
-		ibValueMetaObjectDataProcessor::eFormDataProcessor
+		ibValueMetaObjectDataTool::eFormDataTool
 	);
 
 	if (defFormObject != nullptr) {
 
 		ibBackendValueForm* cached = nullptr;
-		// Cache lives on the form's own metadata (external DP for .otl, main config
-		// for embedded DP) — m_metaManager->GetMetaData() is the configuration
-		// passed to base ctor and would miss for external DPs.
+		// Cache lives on the form's own metadata (external data tool for .otl, main application
+		// for embedded data tool) — m_metaManager->GetMetaData() is the application
+		// passed to base ctor and would miss for external data tools.
 		ibCompileValueCache* cc = defFormObject->GetMetaData()->GetCompileCache();
 
 		if (!cc || !cc->FindCompileModule(defFormObject, cached)) {
@@ -250,7 +250,7 @@ bool ibValueModuleRuntimeManagerExternalDataProcessor::StartMainModule(const ibR
 	}
 	//else {
 	//	ibBackendValueForm* valueForm = ibBackendValueForm::CreateNewForm(nullptr, nullptr, m_objectValue, ibGuid::newGuid());
-	//	valueForm->BuildForm(ibValueMetaObjectDataProcessor::eFormDataProcessor);
+	//	valueForm->BuildForm(ibValueMetaObjectDataTool::eFormDataTool);
 	//	try {
 	//		valueForm->ShowForm();
 	//	}
@@ -275,7 +275,7 @@ bool ibValueModuleRuntimeManagerExternalDataProcessor::StartMainModule(const ibR
 }
 
 //main module - destroy
-bool ibValueModuleRuntimeManagerExternalDataProcessor::ExitMainModule(const ibRuntimeRequest& request)
+bool ibValueModuleRuntimeManagerExternalDataTool::ExitMainModule(const ibRuntimeRequest& request)
 {
 	if (request.m_flags & forceCloseFlag)
 		return true;
@@ -290,7 +290,7 @@ bool ibValueModuleRuntimeManagerExternalDataProcessor::ExitMainModule(const ibRu
 //  ibValueModuleRuntimeManagerExternalReport
 //////////////////////////////////////////////////////////////////////////////////
 
-// Delegate to the CONFIGURATION's module manager — see the DataProcessor variant.
+// Delegate to the APPLICATION's module manager — see the DataTool variant.
 const ibByteCode* ibValueModuleRuntimeManagerExternalReport::GetByteCode() const
 {
 	ibValueModuleManager* moduleManager = ibSession::EditModuleManagerFor(appEnv::ActiveMetaData());
@@ -328,7 +328,7 @@ std::map<ibString, ibContextVar>& ibValueModuleRuntimeManagerExternalReport::Get
 
 std::map<ibString, ibValue*>& ibValueModuleRuntimeManagerExternalReport::GetGlobalVariables()
 {
-	// Delegate to the configuration root — see DataProcessor::GetGlobalVariables.
+	// Delegate to the application root — see DataTool::GetGlobalVariables.
 	ibValueModuleManager* moduleManager = ibSession::EditModuleManagerFor(appEnv::ActiveMetaData());
 	ibASSERT(moduleManager);
 	if (moduleManager == nullptr) {
@@ -341,7 +341,7 @@ std::map<ibString, ibValue*>& ibValueModuleRuntimeManagerExternalReport::GetGlob
 ibValueModuleRuntimeManagerExternalReport::ibValueModuleRuntimeManagerExternalReport(std::shared_ptr<ibMetaData> metadata, ibValueMetaObjectReport* metaObject)
 	: ibValueModuleRuntimeManager(appEnv::ActiveMetaData(), metaObject ? metaObject->GetObjectModule() : nullptr)
 {
-	// See the data-processor manager above: metadata is the container (passed by LoadFromFile),
+	// See the data-tool manager above: metadata is the container (passed by LoadFromFile),
 	// held by the object at runtime, never in designer.
 	m_objectValue = new ibValueRecordDataObjectExternalReport(
 		metaObject, appData->DesignerMode() ? nullptr : std::move(metadata));
@@ -385,10 +385,10 @@ bool ibValueModuleRuntimeManagerExternalReport::CreateMainModule()
 	ibValueModuleManager* moduleManager = ibSession::EditModuleManagerFor(appEnv::ActiveMetaData());
 	ibASSERT(moduleManager);
 
-	// incrRef - for control delete — before the module's first line, as the data processor's twin says.
+	// incrRef - for control delete — before the module's first line, as the data tool's twin says.
 	m_objectValue->IncrRef();
 
-	// Imperative pipeline — see ExternalDataProcessor::CreateMainModule
+	// Imperative pipeline — see ExternalDataTool::CreateMainModule
 	// for the same shape; parent cascade, context var, shared procUnit
 	// with m_objectValue.
 	ibRuntimeModuleDataObject::SetParent(moduleManager);
@@ -406,7 +406,7 @@ bool ibValueModuleRuntimeManagerExternalReport::CreateMainModule()
 			Run();
 		}
 		catch (const ibCoreException& err) {
-			// Same rule as the data processor's twin above: the handler asks the METAOBJECT for a
+			// Same rule as the data tool's twin above: the handler asks the METAOBJECT for a
 			// name, because a value's class name is a registry lookup and the registry entry may
 			// already be gone on this very path — a reporting call that throws replaces the fault
 			// with a complaint about itself.
@@ -419,9 +419,9 @@ bool ibValueModuleRuntimeManagerExternalReport::CreateMainModule()
 		};
 	}
 
-	//Setup common modules
-	for (auto& moduleValue : m_listCommonModuleManager) {
-		if (!moduleValue->CreateCommonModule()) {
+	//Setup shared modules
+	for (auto& moduleValue : m_listSharedModuleManager) {
+		if (!moduleValue->CreateSharedModule()) {
 			return false;
 		}
 	}
@@ -443,11 +443,11 @@ bool ibValueModuleRuntimeManagerExternalReport::DestroyMainModule()
 	if (m_objectValue != nullptr)
 		m_objectValue->m_procUnit = nullptr;
 
-	//Setup common modules — best-effort: destroy every module even if one
+	//Setup shared modules — best-effort: destroy every module even if one
 	//fails, so teardown never leaks the remainder; report the aggregate.
 	bool ok = true;
-	for (auto& moduleValue : m_listCommonModuleManager) {
-		if (!moduleValue->DestroyCommonModule())
+	for (auto& moduleValue : m_listSharedModuleManager) {
+		if (!moduleValue->DestroySharedModule())
 			ok = false;
 	}
 
@@ -463,7 +463,7 @@ bool ibValueModuleRuntimeManagerExternalReport::StartMainModule(const ibRuntimeR
 
 	// (incrRef - for control delete: taken in CreateMainModule, before the module ran)
 
-	// The form is opened with the run's parameters — see the data processor's twin above.
+	// The form is opened with the run's parameters — see the data tool's twin above.
 	ibFormRequest formRequest;
 	formRequest.m_values = request.m_values;
 
@@ -481,7 +481,7 @@ bool ibValueModuleRuntimeManagerExternalReport::StartMainModule(const ibRuntimeR
 
 	if (defFormObject != nullptr) {
 		ibBackendValueForm* cached = nullptr;
-		// Cache lives on the form's own metadata — see the symmetric DataProcessor
+		// Cache lives on the form's own metadata — see the symmetric DataTool
 		// path above for rationale.
 		ibCompileValueCache* cc = defFormObject->GetMetaData()->GetCompileCache();
 		if (!cc || !cc->FindCompileModule(defFormObject, cached)) {
@@ -549,10 +549,10 @@ bool ibValueModuleRuntimeManagerExternalReport::ExitMainModule(const ibRuntimeRe
 }
 
 //****************************************************************************
-//*                      ibValueModuleRuntimeManagerExternalDataProcessor                 *
+//*                      ibValueModuleRuntimeManagerExternalDataTool                 *
 //****************************************************************************
 
-void ibValueModuleRuntimeManagerExternalDataProcessor::FillMembers(ibMemberTable& helper) const
+void ibValueModuleRuntimeManagerExternalDataTool::FillMembers(ibMemberTable& helper) const
 {
 	// Copy the external object value's surface; the module exports are appended after
 	// these (the helper's tail, autobound by the ibRuntimeModuleDataObject ctor).
@@ -568,7 +568,7 @@ void ibValueModuleRuntimeManagerExternalDataProcessor::FillMembers(ibMemberTable
 	}
 }
 
-bool ibValueModuleRuntimeManagerExternalDataProcessor::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray)
+bool ibValueModuleRuntimeManagerExternalDataTool::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray)
 {
 	if (m_objectValue &&
 		m_objectValue->FindMethod(GetMethodName(lMethodNum)) != ibNOT_FOUND) {
@@ -580,7 +580,7 @@ bool ibValueModuleRuntimeManagerExternalDataProcessor::CallAsFunc(const long lMe
 	);
 }
 
-bool ibValueModuleRuntimeManagerExternalDataProcessor::GetParamDefValue(const long lMethodNum, const long lParamNum, ibValue& pvarParamDefValue) const
+bool ibValueModuleRuntimeManagerExternalDataTool::GetParamDefValue(const long lMethodNum, const long lParamNum, ibValue& pvarParamDefValue) const
 {
 	if (m_objectValue &&
 		m_objectValue->FindMethod(GetMethodName(lMethodNum)) != ibNOT_FOUND) {
@@ -592,7 +592,7 @@ bool ibValueModuleRuntimeManagerExternalDataProcessor::GetParamDefValue(const lo
 	);
 }
 
-bool ibValueModuleRuntimeManagerExternalDataProcessor::SetPropVal(const long lPropNum, const ibValue& varPropVal)
+bool ibValueModuleRuntimeManagerExternalDataTool::SetPropVal(const long lPropNum, const ibValue& varPropVal)
 {
 	if (m_objectValue &&
 		m_objectValue->FindProp(GetPropName(lPropNum)) != ibNOT_FOUND) {
@@ -606,7 +606,7 @@ bool ibValueModuleRuntimeManagerExternalDataProcessor::SetPropVal(const long lPr
 	return false;
 }
 
-bool ibValueModuleRuntimeManagerExternalDataProcessor::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
+bool ibValueModuleRuntimeManagerExternalDataTool::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 {
 	if (m_objectValue &&
 		m_objectValue->FindProp(GetPropName(lPropNum)) != ibNOT_FOUND) {
@@ -620,7 +620,7 @@ bool ibValueModuleRuntimeManagerExternalDataProcessor::GetPropVal(const long lPr
 	return false;
 }
 
-long ibValueModuleRuntimeManagerExternalDataProcessor::FindProp(const ibString& strName) const
+long ibValueModuleRuntimeManagerExternalDataTool::FindProp(const ibString& strName) const
 {
 	if (m_objectValue &&
 		m_objectValue->FindProp(strName) != ibNOT_FOUND) {
@@ -724,5 +724,5 @@ long ibValueModuleRuntimeManagerExternalReport::FindProp(const ibString& strName
 //*                       Runtime register                             *
 //**********************************************************************
 
-SYSTEM_TYPE_REGISTER(ibValueModuleRuntimeManagerExternalDataProcessor, "ExternalDataProcessorModuleManager", system_to_clsid("SO_EDMM"));
+SYSTEM_TYPE_REGISTER(ibValueModuleRuntimeManagerExternalDataTool, "ExternalDataToolModuleManager", system_to_clsid("SO_EDMM"));
 SYSTEM_TYPE_REGISTER(ibValueModuleRuntimeManagerExternalReport, "ExternalReportModuleManager", system_to_clsid("SO_ERMM"));

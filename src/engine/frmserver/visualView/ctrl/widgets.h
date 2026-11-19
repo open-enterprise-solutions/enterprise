@@ -82,7 +82,7 @@ private:
 	// control's data source). A press RUNS the command through ibFrontendCommandReceiver::ExecuteValueByPath. Internal
 	// name MUST differ from any category name (wxPropertyGrid keys both in one map); lives in the Button category.
 	ibPropertyCommandSource* m_propertyCommand = ibPropertyObject::CreateProperty<ibPropertyCommandSource>(m_categoryButton, ibT("Command"), _("Command"),
-		_("The command a press runs: a form command, a standard command of the form or of one of its tables, or a command of the configuration. A button has no click event of its own - the code goes into the command's handler."));
+		_("The command a press runs: a form command, a standard command of the form or of one of its tables, or a command of the application. A button has no click event of its own - the code goes into the command's handler."));
 
 public:
 	// ibFrontendCommandReceiver gate — the button IS-A command door; the walk starts at its owner form. WalkCommand
@@ -196,7 +196,7 @@ protected:
 		ibValueTypes::TYPE_EMPTY);
 
 	// The SAME event the text box raises before it opens a value, with the same standard-processing
-	// switch: a configuration that wants to open something else — or nothing — says so here, and
+	// switch: an application that wants to open something else — or nothing — says so here, and
 	// does not have to learn a second name because this control is a label rather than an editor.
 	ibPropertyCategory* m_propertyEvent = ibPropertyObject::CreatePropertyCategory(ibT("Event"), _("Event"));
 	ibEventControl* m_eventOpening = ibPropertyObject::CreateEvent<ibEventControl>(m_propertyEvent, ibT("Opening"), _("Opening"), std::vector<ibString>{ ibT("Control"), ibT("StandardProcessing") });

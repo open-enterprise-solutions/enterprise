@@ -1,12 +1,12 @@
 # The query language
 
-**What.** A query is text in the configuration's words - `SELECT … FROM Document.Sales.Goods WHERE
+**What.** A query is text in the application's words - `SELECT … FROM Document.Sales.Goods WHERE
 Product.Manufacturer = &Maker TOTALS SUM(Amount) BY Product` - with parameters written `&Name`. The text is
 read, written and rewritten in the core (`core/query`), so the designer's query constructor and the server
 hold the same tree. On the server it is lowered into the one door every read goes through, and from
 there into the SQL of the base's DBMS.
 
-**Why.** The author of a configuration names objects and attributes, not tables and columns: a reference
+**Why.** The author of an application names objects and attributes, not tables and columns: a reference
 stored in several columns, a composite type in a tag and a value, a table whose name is an id. The text
 says the meaning; the engine knows the storage. And one door under every front-end - this text, LINQ in
 a script, a report, a list - is one place for rights, row restrictions, locks and the dialect.
@@ -17,7 +17,7 @@ a script, a report, a list - is one place for rights, row restrictions, locks an
   `SliceLast`, … - [registers.md](registers.md)); a temporary table made earlier in the package or held by
   a temporary tables manager (`FROM Goods`); a value table handed in as a parameter (`FROM &Goods`); the
   registration journal's events, `Journal.Events(&BeginOfPeriod, &EndOfPeriod)` - read from the journal's
-  own files, joined to the configuration's tables in memory, by the right that opens the journal. LINQ
+  own files, joined to the application's tables in memory, by the right that opens the journal. LINQ
   reads any of them by the same name: `Data.From("Journal.Events", Begin, End)`; the platform's own sources
   are also members, `Data.Platform.Journal.Events` (the whole journal).
 - **References.** `Product.Manufacturer.Name` follows the reference and joins by itself. `REFS` tests a
@@ -57,7 +57,7 @@ a script, a report, a list - is one place for rights, row restrictions, locks an
 
 ## Where it stops
 
-- The keywords are English; the names in a query are the configuration's.
+- The keywords are English; the names in a query are the application's.
 - A named result is a server-side `WITH` where the DBMS reads one and the select has a server-side form; a
   named result with `TOTALS` or `UNION`, or one over a source computed in memory, is taken as rows.
 - A dialect is sent only the forms it promised to take. The generic ODBC dialect promises neither window

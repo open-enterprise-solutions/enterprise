@@ -18,7 +18,7 @@ struct ibCompositionDescription;
 // shows the window over a copy read from it and hands the result back through SetValueInEvent as the same property's
 // value, the node the inspector sends.
 //
-// What the window asks of the configuration it asks of the owner's — on a form, the form's tab
+// What the window asks of the application it asks of the owner's — on a form, the form's tab
 // (ibQueryFieldsOfText: fetch {Tab, Request: {Kind: Fields, Text}}).
 // -----------------------------------------------------------------------
 
@@ -48,7 +48,7 @@ public:
 
 protected:
 
-	// The object whose row this cell shows — what the window asks (its configuration) and what is told.
+	// The object whose row this cell shows — what the window asks (its application) and what is told.
 	const ibPropertyObject* m_property = nullptr;
 
 	// Which window this cell opens — handed in at registration.

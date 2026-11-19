@@ -19,7 +19,7 @@
 // question the code has to answer out loud.
 //
 // DB-free: ibAccessObject is a plain object with a role table on it, so a
-// minimal subclass is the whole fixture — no configuration, no database.
+// minimal subclass is the whole fixture — no application, no database.
 // =============================================================================
 
 #include <gtest/gtest.h>
@@ -61,7 +61,7 @@ ibRoleUserInfo Roles(std::vector<ibUserRoleEntry> entries) { return ibRoleUserIn
 // -----------------------------------------------------------------------------
 
 // A user with no roles gets each right's OWN declared default. This is the case
-// every base starts in — a configuration with no accounts in it yet — and reading
+// every base starts in — an application with no accounts in it yet — and reading
 // it as "denied" would make an empty base unusable rather than permissive.
 TEST(RoleComposition, NoRoles_EachRightAnswersItsOwnDefault)
 {
@@ -118,7 +118,7 @@ TEST(RoleComposition, Union_AllDeny_StaysDenied)
 // A role SILENT about a right contributes the right's default, not whatever the
 // previously examined role said. "Never flipped in the editor" is a third state
 // beside allowed and denied, and it is what makes a role editable one right at a
-// time instead of having to restate the whole configuration.
+// time instead of having to restate the whole application.
 TEST(RoleComposition, Union_SilentRoleContributesTheDefault_NotTheNeighboursAnswer)
 {
 	RightsBearer obj;
@@ -170,7 +170,7 @@ TEST(RoleComposition, Intersection_ExplicitTrueIsNotAGrant)
 }
 
 // …and its SILENCE is neutral, which is what keeps a freshly created separator
-// from stripping every right in the configuration the moment it is assigned.
+// from stripping every right in the application the moment it is assigned.
 TEST(RoleComposition, Intersection_SilenceStripsNothing)
 {
 	RightsBearer obj;

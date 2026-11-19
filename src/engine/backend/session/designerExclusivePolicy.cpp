@@ -40,14 +40,8 @@ bool ibDesignerExclusivePolicy::CanAdd(const ibSession& session, ibString& reaso
 		std::vector<unsigned int> rows;
 		for (unsigned int i = 0; i < snap.GetSessionCount(); ++i) {
 			// A DESIGNER BY ITS KIND — a file base's or a thin one in a server alike; a job started BY a designer
-			// process is not one, so a peer's scheduled run does not veto a designer starting here. A row whose
-			// kind says nothing (legacy schema, back-fill missed) is a designer by the run mode such a row carried,
-			// the designer's 2 — the safe side of this particular question.
-			constexpr int kLegacyDesignerRunMode = 2;
-			const ibSessionKind kind = static_cast<ibSessionKind>(snap.GetSessionKind(i));
-			const bool legacyDesigner = kind == ibSessionKind::Unknown
-				&& static_cast<int>(snap.GetSessionApplication(i)) == kLegacyDesignerRunMode;
-			if (!IsDesignerSessionKind(kind) && !legacyDesigner)
+			// process is not one, so a peer's scheduled run does not veto a designer starting here.
+			if (!IsDesignerSessionKind(static_cast<ibSessionKind>(snap.GetSessionKind(i))))
 				continue;
 
 			if (snap.GetSession(i) == ownId)

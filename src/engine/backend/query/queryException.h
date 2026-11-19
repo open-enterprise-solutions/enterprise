@@ -136,7 +136,7 @@ private:
 		: ibBackendQuerySourceException(msg, line, col) {}
 };
 
-// IT READS, AND ASKS FOR SOMETHING THAT IS NOT THERE — the lowering. A table this configuration
+// IT READS, AND ASKS FOR SOMETHING THAT IS NOT THERE — the lowering. A table this application
 // does not have, a field that source does not offer, a form nothing can carry out. The text is
 // beyond reproach; what it names is the problem, and the remedy is to look up what the names are
 // (query_sources, query_fields) rather than to re-read the punctuation.

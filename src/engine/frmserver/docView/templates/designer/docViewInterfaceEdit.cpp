@@ -50,7 +50,7 @@ bool ibInterfaceCompositionView::OnClientEvent(ibProtocol::ibEvent::ibKind event
 ibDataNode& ibInterfaceCompositionView::GroupFor(ibDataNode& root, const ibClassID& clsid)
 {
 	// THE ICON FROM THE TYPE REGISTRY, THE CAPTION FROM THE GROUP'S OWN ANSWER (ibMetaGroupCaption) — the same one the
-	// configuration tree shows.
+	// application tree shows.
 	const ibCtorAbstractType* typeCtor = ibValue::GetAvailableCtor(clsid);
 	if (typeCtor == nullptr)
 		return root;
@@ -80,12 +80,12 @@ void ibInterfaceCompositionView::FillData(ibDataNode& root)
 {
 	const ibMetaData* metaData = GetDocument()->GetMetaObject()->GetMetaData();
 	ibASSERT(metaData);
-	const ibValueMetaObject* commonObject = metaData->GetCommonMetaObject();
-	ibASSERT(commonObject);
+	const ibValueMetaObject* rootObject = metaData->GetRootMetaObject();
+	ibASSERT(rootObject);
 
-	root.SetMetaId(commonObject->GetMetaID());
-	root.SetValue(ibProtocol::ibView::ibCheckTree::Title, commonObject->GetName());
-	root.SetValue(ibProtocol::ibView::ibCheckTree::Picture, ibBackendPicture::SendPicture(g_metaCommonMetadataCLSID));
+	root.SetMetaId(rootObject->GetMetaID());
+	root.SetValue(ibProtocol::ibView::ibCheckTree::Title, rootObject->GetName());
+	root.SetValue(ibProtocol::ibView::ibCheckTree::Picture, ibBackendPicture::SendPicture(g_metaApplicationMetadataCLSID));
 
 	// ASKED, NOT LISTED: every metaobject that says it can be checked into a section (IsInterfaceAllowed), in the order
 	// of its group's declared place (ibMetaGroupOrder); a stable sort leaves each group's own objects as the metadata

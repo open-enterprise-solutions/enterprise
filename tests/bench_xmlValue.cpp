@@ -2,7 +2,7 @@
 
 #include "activeMetaDataAccess.h"
 #include "backend/appData.h"
-#include "backend/metadataConfiguration.h"
+#include "backend/metadataApplication.h"
 #include "backend/system/systemManager.h"
 #include "backend/system/value/valueArray.h"
 #include "core/xml/xmlDocument.h"
@@ -27,7 +27,7 @@ TEST(XmlValueBench, DISABLED_AnArrayOfAHundredThousandNumbers)
 		GTEST_SKIP() << "wxBase init failed (no wxApp host)";
 	if (!ibApplicationInstance::CreateAppDataEnv(ibRunMode::eFILE_MODE))
 		GTEST_SKIP() << "appData env unavailable headless";
-	std::shared_ptr<ibMetaDataConfigurationFile> cfg = ibMetaData::MakeShared<ibMetaDataConfigurationFile>();
+	std::shared_ptr<ibMetaDataApplicationFile> cfg = ibMetaData::MakeShared<ibMetaDataApplicationFile>();
 	ActiveMetaDataAccess::Replace(cfg);
 	struct Release {
 		~Release() { ibApplicationInstance::DestroyAppDataEnv(); }

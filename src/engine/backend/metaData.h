@@ -18,7 +18,7 @@
 #include "backend/restructureInfo.h"   // ibRestructureInfo — per-metadata restructure ledger (member below)
 
 ///////////////////////////////////////////////////////////////////////////////
-class BACKEND_API ibValueMetaObjectCommonModule;
+class BACKEND_API ibValueMetaObjectSharedModule;
 class BACKEND_API ibValueMetaObjectModuleBase;
 class BACKEND_API ibValueMetaObjectGenericData;
 class BACKEND_API ibValueMetaObjectFormBase;
@@ -80,7 +80,7 @@ public:
 	// has a moment of being wrong. A watcher is told THAT it changed and reads WHAT it is -
 	// `IsModified()`, `IsEditable()`, right there on the object that is the authority for them.
 
-	// ⭐⭐ THE CONFIGURATION IS NO LONGER WHAT YOU LAST READ — the coarse one.
+	// ⭐⭐ THE APPLICATION IS NO LONGER WHAT YOU LAST READ — the coarse one.
 	//
 	// ibMetaData says it from Modify(), which every door that changes anything already ends in. So
 	// the engine never reaches for a viewer: whoever is watching put itself on the list.
@@ -149,14 +149,14 @@ public:
 		// a notification that something is happening — you do not need it for yourself, because you
 		// know you started it, but you do need to know when someone started it besides you."*
 		//
-		// So the ledger goes to the CALLER, through `decide` (metadataConfiguration.h), and these two
+		// So the ledger goes to the CALLER, through `decide` (metadataApplication.h), and these two
 		// go to everyone: a designer learns the assistant applied, the assistant learns the person
 		// at the keyboard did. The initiator hears its own and ignores them, which costs nothing.
 		Applying,    // the database is being restructured — do not read it until one of the next two
-		Applied,     // …and it now runs this configuration
+		Applied,     // …and it now runs this application
 		// …and it does not. TWO OCCASIONS, and they are the same fact from either end: an APPLY that
 		// declined, refused or threw (the transaction was rolled back), and a deliberate ROLLBACK —
-		// the configuration taken back from the database on purpose. Either way what is in memory
+		// the application taken back from the database on purpose. Either way what is in memory
 		// after it is the database's copy and not what the person had been editing, so a watcher
 		// holding anything of the old one is holding freed memory.
 		Reverted,
@@ -182,46 +182,46 @@ public:
 #pragma endregion
 
 #pragma region __home_page_h__
-	virtual void EditHomePage(class ibValueMetaObjectConfiguration* obj) {}
+	virtual void EditHomePage(class ibValueMetaObjectApplication* obj) {}
 #pragma endregion
 };
 
 ///////////////////////////////////////////////////////////////////////////////
 
-// Module-storage skeleton — list of common-module descriptors that
+// Module-storage skeleton — list of shared-module descriptors that
 // belong to the metadata. Designer-mutation API (Add/Rename/Remove) +
 // read-only iteration for runtime mm. One instance per metadata; held
 // by value on ibMetaData so the accessor never returns nullptr (empty
 // storage is the default for metadata kinds without init modules).
 class BACKEND_API ibModuleStorage {
 public:
-	bool AddCommonModule(ibValueMetaObjectCommonModule* commonModule);
-	bool RenameCommonModule(ibValueMetaObjectCommonModule* commonModule, const ibString& newName);
-	bool RemoveCommonModule(ibValueMetaObjectCommonModule* commonModule);
+	bool AddSharedModule(ibValueMetaObjectSharedModule* sharedModule);
+	bool RenameSharedModule(ibValueMetaObjectSharedModule* sharedModule, const ibString& newName);
+	bool RemoveSharedModule(ibValueMetaObjectSharedModule* sharedModule);
 
 	// Drop every registration — used on the RunDatabase bail-out path, where
-	// some common modules already registered (in OnBeforeRunMetaObject) before the
-	// failure, CloseDatabase won't run (m_configOpened stays false), and the next
+	// some shared modules already registered (in OnBeforeRunMetaObject) before the
+	// failure, CloseDatabase won't run (IsOpen() stays false), and the next
 	// load rebuilds the metaobject tree out from under these raw pointers.
 	void Clear() { m_initModules.clear(); }
 
-	const std::vector<ibValueMetaObjectCommonModule*>& GetCompileModules() const { return m_initModules; }
+	const std::vector<ibValueMetaObjectSharedModule*>& GetCompileModules() const { return m_initModules; }
 
 private:
-	std::vector<ibValueMetaObjectCommonModule*> m_initModules;
+	std::vector<ibValueMetaObjectSharedModule*> m_initModules;
 };
 
 ///////////////////////////////////////////////////////////////////////////////
 
-// ⭐ Bytecode storage — the compiled bytecode of the configuration, held in memory (Max, 2026-11-16). One
-// instance per open configuration, on its image beside the module storage. It reads the configuration's rows of
-// the AOT cache as the configuration opens — one statement — and every module of every session takes its code
+// ⭐ Bytecode storage — the compiled bytecode of the application, held in memory (Max, 2026-11-16). One
+// instance per open application, on its image beside the module storage. It reads the application's rows of
+// the AOT cache as the application opens — one statement — and every module of every session takes its code
 // from here: a module knows of no table, no key and no lock. The table is ibByteCodeCache's
 // (compiler/cache/byteCodeCache.h), the interface every row is read and saved through; this holds what was read
 // and decides what is taken, what is rebuilt and what stays off the table.
 //
 // Before it a module read its own row every time it was compiled, and a session compiles its root and some
-// fifteen common modules as it comes up — an HTTP request being a session (docs/private/load-million-rows.md § 13).
+// fifteen shared modules as it comes up — an HTTP request being a session (docs/private/load-million-rows.md § 13).
 //
 // TWO PROCESSES ON ONE BASE meet in the table. A module this one does not hold is looked for there again before
 // it is compiled, and compiled under the module's key — once, whoever else asks meanwhile (ibByteCodeCache::Load
@@ -229,7 +229,7 @@ private:
 // the dependency check asks.
 class BACKEND_API ibByteCodeStorage {
 public:
-	// Reads the rows of `owner`'s configuration. An owner with no digest — an external report or data processor —
+	// Reads the rows of `owner`'s application. An owner with no digest — an external report or data tool —
 	// has none, and nothing is held for it.
 	explicit ibByteCodeStorage(const ibMetaData* owner);
 
@@ -246,18 +246,18 @@ public:
 	// what is loaded.
 	void Invalidate(const ibGuid& descId);
 
-	// The configuration was replaced: the table is the new one's from here on. What this one's sessions still
+	// The application was replaced: the table is the new one's from here on. What this one's sessions still
 	// compile is held here and saved nowhere — the table holds one row a module, and theirs would take the new
-	// configuration's.
+	// application's.
 	void Detach();
 
 private:
-	// The owner's digest (ibMetaData::GetConfigMD5) — what the cache is asked under. Empty — nothing is held.
-	const ibString m_configMd5;
+	// The owner's digest (ibMetaData::GetApplicationMD5) — what the cache is asked under. Empty — nothing is held.
+	const ibString m_applicationMd5;
 	// The two below: readers together, a row kept or the mark set alone. Held for the lookup, never across a
 	// compile or a statement.
 	std::shared_mutex m_mutex;
-	// The rows by descriptor, as the blobs they were saved as: those read as the configuration opened, then each
+	// The rows by descriptor, as the blobs they were saved as: those read as the application opened, then each
 	// one a miss made.
 	std::map<ibGuid, class ibMemoryBuffer> m_rows;
 	// Detach was called.
@@ -273,8 +273,8 @@ private:
 
 // Compile-value cache — stores compiled ibValue pointers for designer's
 // intellisense / metadata-property previews. Created only on metadata
-// configurations that support designer editing (ibMetaDataConfigurationStorage);
-// runtime configurations leave m_compileCache nullptr → callsites use
+// applications that support designer editing (ibMetaDataApplicationStorage);
+// runtime applications leave m_compileCache nullptr → callsites use
 // `if (auto* cc = metaData->GetCompileCache())` instead of DesignerMode().
 //
 // Two AddCompileModule overloads share storage:
@@ -294,9 +294,9 @@ private:
 // changing the API contract for callers.
 class BACKEND_API ibCompileValueCache {
 public:
-	// Designer-own module manager (the pre-session-split config-level mm the
+	// Designer-own module manager (the pre-session-split application-level mm the
 	// Designer lost when runtime moved into per-session ibSession::m_root). Held
-	// here so the editor reads common-module units + named context from a manager
+	// here so the editor reads shared-module units + named context from a manager
 	// that tracks the CURRENT designer state, decoupled from the runtime session's
 	// CreateMainModule timing. Owned by this cache. See project_common_module_designer_cache.
 	explicit ibCompileValueCache(ibValueModuleManagerDesigner* moduleManager = nullptr);
@@ -305,15 +305,15 @@ public:
 	// assign/convert needs the COMPLETE designer type for its ref-count static_cast.
 	ibValueModuleManagerDesigner* GetModuleManager() const;
 	// Rebind the designer manager — driven by RunDatabase (fresh metaobject) /
-	// CloseDatabase (nullptr). The manager binds to the current common metaobject;
-	// holding one across a config reload would dangle (the old metaobject is freed).
+	// CloseDatabase (nullptr). The manager binds to the current root metaobject;
+	// holding one across an application reload would dangle (the old metaobject is freed).
 	void SetModuleManager(ibValueModuleManagerDesigner* moduleManager);
 
 	bool AddCompileModule(const ibValueMetaObject* moduleObject, ibValue* object);
 	// Generalized deferred: the builder is Constructed lazily on first lookup.
-	// Forms wrap ibDeferredForm (needs the session root mm compiled). Common
+	// Forms wrap ibDeferredForm (needs the session root mm compiled). Shared
 	// modules no longer use this path — they register into the designer-mgr
-	// directly via RuntimeRegisterCommonModule (see project_common_module_designer_cache).
+	// directly via RuntimeRegisterSharedModule (see project_common_module_designer_cache).
 	// insert_or_assign semantics (a re-run replaces the prior builder + drops
 	// the built value). The builder answers with the OWNER of what it built — a data object's
 	// creator does (born owned: its module runs inside the build).
@@ -337,14 +337,14 @@ public:
 private:
 	struct ibCompileEntry {
 		ibValuePtr<ibValue>           m_value;     // built value; null if pending or invalidated
-		std::function<ibValue()>      m_deferred;  // rebuilder; set for lazy entries (forms / common modules)
+		std::function<ibValue()>      m_deferred;  // rebuilder; set for lazy entries (forms / shared modules)
 		bool                          m_constructing = false; // recursion guard for FindCompileModuleRef
 	};
 	mutable std::map<const ibValueMetaObject*, ibCompileEntry> m_cache;
 
 	// Designer-own module manager — owning handle (ibValuePtr: IncrRef on bind,
-	// DecrRef on cache destruction). Null until ibMetaDataConfigurationStorage
-	// wires one in. Designer-only type: holds its OWN common-module registry with
+	// DecrRef on cache destruction). Null until ibMetaDataApplicationStorage
+	// wires one in. Designer-only type: holds its OWN shared-module registry with
 	// compiled lightweight units, independent of the runtime managers.
 	ibValuePtr<ibValueModuleManagerDesigner> m_moduleManager;
 };
@@ -352,7 +352,7 @@ private:
 ///////////////////////////////////////////////////////////////////////////////
 
 // Runtime-image — aggregates everything that "opening" a metadata fills and
-// "closing" discards: the metadata-defined type-ctor factory, the common-module
+// "closing" discards: the metadata-defined type-ctor factory, the shared-module
 // skeleton, and the (designer-only) compile cache. Held by shared_ptr on ibMetaData
 // (m_image): its PRESENCE is the open state — a run builds it (LoadGuard) and keeps
 // it on success or drops it on failure ("the load never happened"); close tears the
@@ -362,8 +362,8 @@ private:
 //
 // m_factoryCtorCountChanges (the monotonic invalidation counter) deliberately stays
 // OUTSIDE the image, on ibMetaData — dropping the image must not reset it.
-class ibQueryableFactory;         // per-config source factory lives on the snapshot (forward-decl: unique_ptr member)
-class ibMetaQueryableFactory;     // the concrete per-config factory (own registry → global fallback), allocated out of line
+class ibQueryableFactory;         // per-application source factory lives on the snapshot (forward-decl: unique_ptr member)
+class ibMetaQueryableFactory;     // the concrete per-application factory (own registry → global fallback), allocated out of line
 
 class BACKEND_API ibMetaImage {
 public:
@@ -388,7 +388,7 @@ public:
 
 	// --- ctor-factory facade ---
 	// The operations on m_factoryCtors, exposed as image methods so ibMetaData (and its
-	// DataProcessor / Report subclasses) call `m_image->X` (guarding m_image for the
+	// DataTool / Report subclasses) call `m_image->X` (guarding m_image for the
 	// closed state) instead of reaching into m_factoryCtors directly. Register/Unregister
 	// Ctor pair the ctor's lifecycle event with the registry mutation; the registry owns
 	// the ctor via shared_ptr (UnregisterCtor frees it). RegisterCtor / UnregisterCtor /
@@ -422,12 +422,12 @@ public:
 	const ibModuleStorage* ModuleStorage() const { return &m_moduleStorage; }
 	ibCompileValueCache*   CompileCache()  const { return m_compileCache.get(); }
 
-	// This config's OWN source factory (metadata-backed queryables register here; resolve descends to the global
+	// This application's OWN source factory (metadata-backed queryables register here; resolve descends to the global
 	// factory on a miss). Allocated in the image ctor. The base ptr is enough for callers (they use the virtual
 	// Resolve*). See ibMetaData::GetSourceFactory facade.
 	ibQueryableFactory*    SourceFactory() const { return m_sourceFactory.get(); }
 
-	// This configuration's bytecode, read as it opens — where every module of every session takes its compiled code
+	// This application's bytecode, read as it opens — where every module of every session takes its compiled code
 	// from. Null on a designer's own copy (it runs none) and on a bare image. See ibMetaData::GetByteCodeStorage facade.
 	ibByteCodeStorage*     ByteCodeStorage() const { return m_byteCodeStorage.get(); }
 
@@ -437,17 +437,17 @@ private:
 	// index stays empty (ibCtorMetaValueType has no concrete typeid — metaobjects
 	// self-id via their own GetClassType() override, not typeid).
 	ibCtorRegistry<ibCtorMetaValueType>  m_factoryCtors;
-	// Common-module skeleton — populated by descriptor's OnBeforeRunMetaObject
+	// Shared-module skeleton — populated by descriptor's OnBeforeRunMetaObject
 	// during RunDatabase. Empty for metadata kinds without init modules.
 	ibModuleStorage                      m_moduleStorage;
-	// Compile-value cache — designer-only. Allocated by ibMetaDataConfigurationStorage's
-	// ctor (and the external DP / report ctors); nullptr on runtime configurations.
+	// Compile-value cache — designer-only. Allocated by ibMetaDataApplicationStorage's
+	// ctor (and the external data tool / report ctors); nullptr on runtime applications.
 	std::unique_ptr<ibCompileValueCache> m_compileCache;
-	// Per-config source factory (ibMetaQueryableFactory) — this snapshot's OWN metadata-backed queryable descriptors;
+	// Per-application source factory (ibMetaQueryableFactory) — this snapshot's OWN metadata-backed queryable descriptors;
 	// resolve descends to the global factory on a miss. Allocated in the image ctor (out of line).
 	std::unique_ptr<ibQueryableFactory> m_sourceFactory;
-	// The configuration's bytecode held in memory — the rows of sys_bytecode_cache read in one statement as the
-	// configuration opens. Allocated in the image ctor, for a configuration that runs; nullptr on a designer's copy.
+	// The application's bytecode held in memory — the rows of sys_bytecode_cache read in one statement as the
+	// application opens. Allocated in the image ctor, for an application that runs; nullptr on a designer's copy.
 	std::unique_ptr<ibByteCodeStorage>  m_byteCodeStorage;
 };
 
@@ -474,15 +474,15 @@ struct ibNameRequest {
 ///////////////////////////////////////////////////////////////////////////////
 
 // ⭐ EVERY METADATA IS HELD BY A shared_ptr (Max, 2026-10-06: *"implement shared_from_this in the metadata, and hold
-// the reference properly, as a shared_ptr — all the metadata"*): a configuration, an external report or data
-// processor, a configuration file, both sides of a comparison. It is handed around as a plain pointer; whoever
+// the reference properly, as a shared_ptr — all the metadata"*): an application, an external report or data
+// tool, an application file, both sides of a comparison. It is handed around as a plain pointer; whoever
 // works in it holds `shared_from_this()` for as long as it works — a session, a document, a tree, an external
 // object — and it goes with the last of them.
 class BACKEND_API ibMetaData : public std::enable_shared_from_this<ibMetaData> {
 	void DoGenerateNewID(ibMetaID& id, const ibValueMetaObject* top) const;
 
 	// The next id to hand out — see GenerateNewID. 0 = not seeded yet (the first call walks the tree
-	// once); reset to 0 whenever a new image is built, because a different configuration numbers
+	// once); reset to 0 whenever a new image is built, because a different application numbers
 	// from its own tree. Minting one is a write, so GenerateNewID is not const: every caller holds the
 	// metadata it adds an object to.
 	ibMetaID m_nextMetaId = 0;
@@ -501,18 +501,18 @@ public:
 		return std::shared_ptr<T>(new T(std::forward<Args>(args)...), &ibMetaData::Dispose);
 	}
 
-	// The base it belongs to — a configuration's (ibMetaDataConfigurationBase); an external report or data processor
-	// and a configuration read from a file belong to none.
+	// The base it belongs to — an application's (ibMetaDataApplicationBase); an external report or data tool
+	// and an application read from a file belong to none.
 	virtual class ibApplicationInstance* GetApplicationInstance() const { return nullptr; }
 
 private:
 	static void Dispose(ibMetaData* metaData);
 public:
 
-	// Module-storage skeleton — list of common-module descriptors that
+	// Module-storage skeleton — list of shared-module descriptors that
 	// runtime mm reads in CreateMainModule to spawn its own instances.
 	// Always non-null (empty for metadata kinds without init modules,
-	// e.g. external data processor / report).
+	// e.g. external data tool / report).
 	// Facade over the image; null when closed (no image) — callers touch module
 	// storage only while open (run / close cascades, runtime mm bring-up).
 	ibModuleStorage* GetModuleStorage() { return m_image ? m_image->ModuleStorage() : nullptr; }
@@ -520,20 +520,20 @@ public:
 
 	// Compile-value cache — designer-only storage of compiled ibValue
 	// pointers used by intellisense / metadata-property previews. Created
-	// only on metadata configurations that support designer editing
-	// (ibMetaDataConfigurationStorage's ctor allocates it). Runtime-only
-	// configurations leave it nullptr — callers gate by null-check
+	// only on metadata applications that support designer editing
+	// (ibMetaDataApplicationStorage's ctor allocates it). Runtime-only
+	// applications leave it nullptr — callers gate by null-check
 	// (`if (auto* cc = metaData->GetCompileCache())`) instead of querying
 	// appData->DesignerMode().
 	ibCompileValueCache* GetCompileCache() const { return m_image ? m_image->CompileCache() : nullptr; }
 
-	// This configuration's bytecode storage (on the image; null when closed, and on a designer's own copy) — where a
+	// This application's bytecode storage (on the image; null when closed, and on a designer's own copy) — where a
 	// module takes its compiled code from (ibRuntimeModuleDataObject::Compile). It goes with the image: sessions that
-	// keep a replaced configuration keep its storage with it.
+	// keep a replaced application keep its storage with it.
 	ibByteCodeStorage* GetByteCodeStorage() const { return m_image ? m_image->ByteCodeStorage() : nullptr; }
 
-	// This config's OWN source factory (on the snapshot; null when closed). ONLY metadata-backed sources register here
-	// now — the global (application-data) factory is empty and is a FUTURE plugin seam (the per-config factory descends
+	// This application's OWN source factory (on the snapshot; null when closed). ONLY metadata-backed sources register here
+	// now — the global (application-data) factory is empty and is a FUTURE plugin seam (the per-application factory descends
 	// to it on a resolve miss). Every entry goes THROUGH metadata: registration via RegisterSource below, resolve via
 	// this factory. Callers get the factory from the metadata they run on behalf of — never appData / active metadata.
 	//
@@ -541,9 +541,9 @@ public:
 	// attributes, its forms, its composers — and never a catalog or a register, so its factory is empty and
 	// a query written there would be offered nothing to read (Max, 2026-08-23: "it stopped seeing the
 	// tables"). Whose tables those are is a question the container already answers — GetOwner, which an
-	// external report / data processor overrides and a configuration leaves as "nobody, I am the top".
+	// external report / data tool overrides and an application leaves as "nobody, I am the top".
 	// Asked here, so every caller of this factory gets the same answer: the query constructor, the
-	// composer's by-name FROM, a dynamic list inside an external processor.
+	// composer's by-name FROM, a dynamic list inside an external data tool.
 	class ibQueryableFactory* GetSourceFactory() const {
 		ibMetaData* owner = nullptr;
 		if (GetOwner(owner) && owner != nullptr && owner != this)
@@ -551,8 +551,8 @@ public:
 		return m_image ? m_image->SourceFactory() : nullptr;
 	}
 
-	// Register / unregister a metadata-backed source descriptor into THIS config's OWN factory. The metaobject calls it
-	// on run / close (GetMetaData()->RegisterSource(&m_queryable)) — each config keeps its own set of queryables. Out
+	// Register / unregister a metadata-backed source descriptor into THIS application's OWN factory. The metaobject calls it
+	// on run / close (GetMetaData()->RegisterSource(&m_queryable)) — each application keeps its own set of queryables. Out
 	// of line (metaData.cpp): keeps ibQueryableFactory out of the metaobject TUs. const — the factory, not the metadata,
 	// is mutated (the metadata is a stable identity; its snapshot holds the mutable registry).
 	void RegisterSource(class ibQueryableSourceDescriptor* descriptor) const;
@@ -562,23 +562,22 @@ public:
 	// ctor, which takes ownership (no bool flag on the metadata). Base returns none
 	// (runtime / non-designer kinds); the designer kinds override to build the
 	// compile-value cache WITH its module-manager already attached (Storage always;
-	// external DP / report in designer mode — manager bound to the common metaobject /
+	// external data tool / report in designer mode — manager bound to the root metaobject /
 	// object module). One method ⇒ each kind's whole designer setup lives in one place.
 	virtual std::unique_ptr<ibCompileValueCache> CreateDesignerCache() { return nullptr; }
 
 	// Open state — single source of truth, lives in the open-image (see ibMetaImage).
-	// Replaces the per-subclass m_configOpened on File / DataProcessor / Report; a
-	// metadata that never opens just keeps the default false. Virtual so existing
-	// `activeMetaData->IsConfigOpen()` call sites resolve here unchanged.
-	virtual bool IsConfigOpen() const { return m_image != nullptr; }
+	// One flag for File / DataTool / Report, each of which once kept its own; a
+	// metadata that never opens just keeps the default false.
+	virtual bool IsOpen() const { return m_image != nullptr; }
 
-	// (The restructure ledger lives on ibMetaDataConfigurationBase, not here — only a CONFIGURATION
-	//  restructures; an external data-processor / report metadata never does. Reach it through the static
-	//  ibMetaDataConfigurationBase::GetRestructureInfo(), which pulls the ACTIVE config's ledger.)
+	// (The restructure ledger lives on ibMetaDataApplicationBase, not here — only an APPLICATION
+	//  restructures; an external data-tool / report metadata never does. Reach it through the static
+	//  ibMetaDataApplicationBase::GetRestructureInfo(), which pulls the ACTIVE application's ledger.)
 
 	virtual bool IsModified() const { return m_metaModify; }
 
-	// ⭐⭐ THE ONE BROADCAST. Every door that changes the configuration already ends here —
+	// ⭐⭐ THE ONE BROADCAST. Every door that changes the application already ends here —
 	// CreateMetaObject, RenameMetaObject, RemoveMetaObject, every property write — so this is where
 	// "it is no longer what you last read" is known, and it is said to EVERY watcher rather than to
 	// a tree the engine had to know about.
@@ -591,8 +590,8 @@ public:
 
 		// ⭐⭐ THE SAME MECHANISM THAT WAS IN THE DESIGNER'S CAPTION, MOVED TO WHERE THE STATE IS.
 		// It worked; what was wrong was WHERE IT LIVED — a file-static in one window, so the answer
-		// belonged to a process rather than to a configuration, one copy shared by every frame and
-		// every configuration opened in turn, and nothing else could ask for it.
+		// belonged to a process rather than to an application, one copy shared by every frame and
+		// every application opened in turn, and nothing else could ask for it.
 		//
 		// ⚠ THE ORDER IS THE MECHANISM. The fact is taken from the latch AS IT STANDS, and only then
 		// is the latch moved — so a report is judged by the state that was true when it arrived.
@@ -608,7 +607,7 @@ public:
 		// ⚠ AND THAT IS ONLY HALF THE RULE. A SAVE also has to re-arm it, because a save reports
 		// `false` and then `true` — and without the re-arm that trailing `true` is heard as an edit
 		// and the mark never clears. Re-arming needs to know whether the DATABASE is now in step,
-		// which is a question about a CONFIGURATION and not about a metadata, so that half lives in
+		// which is a question about an APPLICATION and not about a metadata, so that half lives in
 		// the override.
 		if (!m_metaSetModify)
 			m_metaSetModify = true;
@@ -619,25 +618,25 @@ public:
 	virtual void SetVersion(const ibVersionID& version) = 0;
 	virtual ibVersionID GetVersion() const = 0;
 
-	// THE STATE OF THIS METADATA AS ONE VALUE — the MD5 of the serialised configuration, recomputed on
-	// every load and every save. A configuration answers with it; containers that have no such digest
-	// (external DataProcessor / Report, each its own file) answer empty. Anything derived FROM the
+	// THE STATE OF THIS METADATA AS ONE VALUE — the MD5 of the serialised application, recomputed on
+	// every load and every save. An application answers with it; containers that have no such digest
+	// (external DataTool / Report, each its own file) answer empty. Anything derived FROM the
 	// metadata and stored outside it — compiled bytecode, above all — keys on this, so a save produces
 	// a new key and every artefact of the previous state simply stops being found.
-	virtual ibString GetConfigMD5() const { return ibEmptyString; }
+	virtual ibString GetApplicationMD5() const { return ibEmptyString; }
 
 	virtual ibString GetFileName() const { return ibEmptyString; }
-	virtual const ibValueMetaObject* GetCommonMetaObject() const { return nullptr; }
-	virtual ibValueMetaObject* GetCommonMetaObject() { return nullptr; }
+	virtual const ibValueMetaObject* GetRootMetaObject() const { return nullptr; }
+	virtual ibValueMetaObject* GetRootMetaObject() { return nullptr; }
 
-	// THE WHOLE STRUCTURE THIS CONFIGURATION DECLARES — every table of every
+	// THE WHOLE STRUCTURE THIS APPLICATION DECLARES — every table of every
 	// metaobject in it, in one snapshot.
 	//
 	// One door, because there is one answer. Five callers used to reach for the
 	// common object and ask it themselves (the DDL differ, the full rebuild, the
-	// config dump and its restore, the totals fold), which is four chances to ask
+	// application dump and its restore, the totals fold), which is four chances to ask
 	// a slightly different question — and the fold, which walks what it is given,
-	// would simply have folded less. Nothing open (no configuration) yields an
+	// would simply have folded less. Nothing open (no application) yields an
 	// empty snapshot, which every caller already treats as "nothing to do".
 	//
 	// Out-of-line (metaData.cpp) — ibSchemaSnapshot is only forward-declared here.
@@ -715,7 +714,7 @@ public:
 
 	// ⭐⭐ THE WATCHERS ARE A LIST, AND THERE IS NO WAY TO ASK FOR ONE OF THEM.
 	//
-	// One configuration is watched by more than one thing — the designer's own navigator and
+	// One application is watched by more than one thing — the designer's own navigator and
 	// whatever the assistant has open — and until 2026-09-01 installing a second put out the first,
 	// exactly as the debugger's single bridge once did (debugger-architecture.md § 8.1).
 	//
@@ -724,7 +723,7 @@ public:
 	// `metaData->GetMetaTree()->DoSomething()` — which reaches the FIRST watcher, silently leaves
 	// every other one showing the old state, and does nothing at all in a process that has none.
 	// Every one of those is now a verb ON THE METADATA, below, that says what it means: do this
-	// wherever this configuration is being looked at.
+	// wherever this application is being looked at.
 	//
 	// ⭐ THE WATCHER PUTS ITSELF ON. The direction is the whole repair (Max, 2026-09-01: *"the other
 	// way round — you change something through the runtime, the tree SUBSCRIBED to the broadcast,
@@ -780,23 +779,23 @@ public:
 		SayToNotifiers([object](ibMetaDataNotifier* watching) { watching->EditPredefinedValues(object); });
 	}
 
-	void EditHomePage(class ibValueMetaObjectConfiguration* object) {
+	void EditHomePage(class ibValueMetaObjectApplication* object) {
 		SayToNotifiers([object](ibMetaDataNotifier* watching) { watching->EditHomePage(object); });
 	}
 
 	// ⭐⭐ READ-ONLY IS STATE, NOT A QUESTION — and this is where it lives now.
 	//
 	// It was a flag on each watcher, and `IsEditable` then asked the watchers back. That is a
-	// pull, and a wrong one: whether a configuration may be EDITED is a fact about the
-	// configuration, not about who happens to be showing it. Two views of one configuration
+	// pull, and a wrong one: whether an application may be EDITED is a fact about the
+	// application, not about who happens to be showing it. Two views of one application
 	// disagreeing about it is not a state that means anything.
 	//
 	// So the metadata keeps it, and the watchers are TOLD — they need it for their own chrome
 	// (greyed toolbars, a refused drag), but nobody is asked for it any more.
 	// 🛑 AND IT SAYS SO ONLY WHEN IT ACTUALLY CHANGED. The announcement means "it is no longer what
 	// you last read"; making it for a value that is already the current one says that of a metadata
-	// nothing happened to. Loading a configuration ends in `SetReadOnly(m_bReadOnly)` with the same
-	// value it already held (ibConfigurationTree::Load) — a flip that flips nothing — and the false
+	// nothing happened to. Loading an application ends in `SetReadOnly(m_bReadOnly)` with the same
+	// value it already held (ibApplicationTree::Load) — a flip that flips nothing — and the false
 	// signal that came out of it was doing visible damage: the designer's caption paints its
 	// modified mark on the SECOND report it hears, so this one arrived to draw a mark the first,
 	// truthful report had been suppressed for (Max, 2026-09-05: *"SetReadOnly — the mode did not
@@ -829,7 +828,7 @@ public:
 	ibValueMetaObject* CreateMetaObject(const ibClassID& clsid,
 		ibValueMetaObject* parentMetaObj, bool runObject = true);
 
-	// ⭐⭐ THE OTHER WAY AN OBJECT COMES INTO A CONFIGURATION, AND IT IS A DOOR OF THE METADATA TOO
+	// ⭐⭐ THE OTHER WAY AN OBJECT COMES INTO AN APPLICATION, AND IT IS A DOOR OF THE METADATA TOO
 	// (Max, 2026-09-01: *"the job is to make ONE door, so that the metadata has one entry point —
 	// that is where the door is"*).
 	//
@@ -841,11 +840,11 @@ public:
 	//
 	// ⚠ AND A PASTE THAT FAILS LEAVES NOTHING BEHIND. Every call site carried that rule as its own
 	// two lines and one of them forgot, so a bad payload left a half-object standing in the
-	// configuration, invisible and saved with it. The rule belongs to the door.
+	// application, invisible and saved with it. The rule belongs to the door.
 	ibValueMetaObject* PasteMetaObject(const ibClassID& clsid,
 		ibValueMetaObject* parentMetaObj, class ibReaderMemory& reader);
 
-	// …and its opposite. Nothing is announced by a copy — nothing in the configuration changed —
+	// …and its opposite. Nothing is announced by a copy — nothing in the application changed —
 	// but it stands here beside the paste because the pair is the door: ibValueMetaObject's own
 	// CopyObject / PasteObject are PROTECTED, and this class is the friend that may call them
 	// (Max, 2026-09-01: *"copy and paste on the metaobject become protected and only the metadata
@@ -855,7 +854,7 @@ public:
 
 	bool RenameMetaObject(ibValueMetaObject* object, const ibString& newName);
 	// Answers whether it went. It was void, so a refusal — a close phase that said no, a read-only
-	// configuration — was indistinguishable from a delete that happened, and the caller reported
+	// application — was indistinguishable from a delete that happened, and the caller reported
 	// success either way.
 	bool RemoveMetaObject(ibValueMetaObject* object, ibValueMetaObject* objParent = nullptr);
 
@@ -927,7 +926,7 @@ public:
 
 #pragma endregion
 
-	// Copy-aware identity resolve — a metaId is config-local (shifts on copy / reorder), the
+	// Copy-aware identity resolve — a metaId is application-local (shifts on copy / reorder), the
 	// metaobject's GUID is stable. Serialised references (source paths, meta-description lists,
 	// reference types) store the GUID and resolve back through these. One home for both the
 	// source- and meta-description memory serialisers (was a file-local duplicate). GetCommonGuid
@@ -935,7 +934,7 @@ public:
 	ibGuid  GuidByMetaId(const ibMetaID& id)  const;   // metaId -> stable guid (null if absent / not allowed)
 	ibMetaID MetaIdByGuid(const ibGuid& guid) const;   // guid -> live metaId (ibNOT_FOUND if unresolved)
 
-	// ⭐ A METAID IS HANDED OUT ONCE PER OPEN CONFIGURATION, AND NEVER AGAIN.
+	// ⭐ A METAID IS HANDED OUT ONCE PER OPEN APPLICATION, AND NEVER AGAIN.
 	//
 	// It used to be computed as max(every id in the live tree) + 1, on every call. Two things were
 	// wrong with that, and the second one broke databases:
@@ -943,19 +942,19 @@ public:
 	//   * it walked the WHOLE tree per new object — O(n) for a question a counter answers in O(1);
 	//   * an id came BACK INTO CIRCULATION the moment its object left the tree. A metaobject's
 	//     physical column is named after its id (`fld<id>`), so a recycled id is a recycled COLUMN
-	//     NAME. Check a common attribute out and back in and the new copy asks for the same
+	//     NAME. Check a shared attribute out and back in and the new copy asks for the same
 	//     `fld1073` the old one had — which is fine while every removal reaches the database, and
 	//     permanently fatal the moment one does not: from then on every apply tries to ADD a column
 	//     the table already has, and Firebird answers with a unique-key violation on
-	//     RDB$RELATION_FIELDS. Found by toggling one common attribute ten or fifteen times.
+	//     RDB$RELATION_FIELDS. Found by toggling one shared attribute ten or fifteen times.
 	//
 	// Deleted objects are MARKED, not detached, so the old walk did hold their ids — until
 	// DeleteSubtree purged them, and the id fell free again. A counter needs no such timing: it
 	// only ever goes up.
 	//
-	// Seeded lazily from the tree the first time it is asked (so a configuration just loaded
+	// Seeded lazily from the tree the first time it is asked (so an application just loaded
 	// continues after its highest id) and reset when a new image is built — a different
-	// configuration is a different numbering.
+	// application is a different numbering.
 	ibMetaID GenerateNewID();
 
 	//generate new name
@@ -967,15 +966,15 @@ public:
 	// and asks it; a value itself is BLIND to metadata and stays that way.
 	//
 	// What only a metadata can do is turn a class id back into an instance of a
-	// CONFIGURATION type — a catalog reference, a document reference, an enum
+	// APPLICATION type — a catalog reference, a document reference, an enum
 	// member — whose id is derived from a metaID no static table could know.
 	// Everything else it REDIRECTS to the value level
 	// (compiler/valueSerialization.h), which owns the reading mechanism and the
 	// built-in classes. A type nobody has reads back empty: schema-on-read.
 	//
 	// INSTANCE methods, not static: these run on the metadata the caller already
-	// chose, and it is THAT configuration's ctor registry a reference has to
-	// come from. Reaching for a global "active" configuration would be a second
+	// chose, and it is THAT application's ctor registry a reference has to
+	// come from. Reaching for a global "active" application would be a second
 	// answer to a question the caller already answered.
 	//
 	// The node is the same tree metadata itself is written through, so every
@@ -996,10 +995,10 @@ public:
 #pragma endregion
 
 	// ⭐ SOMEBODY HAS EDITED IT — as against a difference that was already there when the
-	// configuration was read, which is what IsModified() answers and is true of a perfectly
+	// application was read, which is what IsModified() answers and is true of a perfectly
 	// untouched one.
 	//
-	// Not a stored fact of its own: being modified is what says the configuration changed, and the
+	// Not a stored fact of its own: being modified is what says the application changed, and the
 	// only thing that has to be remembered beside it is whether the load has been heard yet.
 	bool IsEdited() const { return m_metaEdited; }
 
@@ -1012,9 +1011,9 @@ protected:
 		std::vector<_T1*>& array,
 		const std::initializer_list<ibClassID> filter) const
 	{
-		const auto commonObject = GetCommonMetaObject();
-		if (commonObject != nullptr)
-			return commonObject->FillArrayObjectByFilter(array, filter, false);
+		const auto rootObject = GetRootMetaObject();
+		if (rootObject != nullptr)
+			return rootObject->FillArrayObjectByFilter(array, filter, false);
 		return false;
 	}
 
@@ -1024,9 +1023,9 @@ protected:
 		const std::initializer_list<ibClassID> filter,
 		const bool use_child_filter) const
 	{
-		const auto commonObject = GetCommonMetaObject();
-		if (commonObject != nullptr)
-			return commonObject->FillArrayObjectByFilter(array, filter, use_child_filter);
+		const auto rootObject = GetRootMetaObject();
+		if (rootObject != nullptr)
+			return rootObject->FillArrayObjectByFilter(array, filter, use_child_filter);
 		return false;
 	}
 
@@ -1045,17 +1044,17 @@ protected:
 		const _T1& id,
 		const std::initializer_list<ibClassID> filter,
 		const bool use_child_filter) const {
-		const auto commonObject = GetCommonMetaObject();
-		if (commonObject != nullptr) {
-			if (_T3* const found = commonObject->FindObjectByFilter<_T3>(id, filter, use_child_filter))
+		const auto rootObject = GetRootMetaObject();
+		if (rootObject != nullptr) {
+			if (_T3* const found = rootObject->FindObjectByFilter<_T3>(id, filter, use_child_filter))
 				return found;
 		}
-		// ⭐ …AND NOT FOUND HERE, IN THE OWNER'S COMMON OBJECT, its root only: an external processor or report declares no
-		// catalog and no document, and what its fields' types name is its configuration's (GetTypeCtor answers there
+		// ⭐ …AND NOT FOUND HERE, IN THE OWNER'S COMMON OBJECT, its root only: an external data tool or report declares no
+		// catalog and no document, and what its fields' types name is its application's (GetTypeCtor answers there
 		// already) — asked of its own tree only, a reference attribute of its form opened empty (2026-10-19).
 		ibMetaData* owner = nullptr;
 		if (GetOwner(owner) && owner != nullptr && owner != this) {
-			const auto ownerObject = owner->GetCommonMetaObject();
+			const auto ownerObject = owner->GetRootMetaObject();
 			if (ownerObject != nullptr)
 				return ownerObject->FindObjectByFilter<_T3>(id, filter, false);
 		}
@@ -1081,13 +1080,13 @@ protected:
 
 	bool m_metaModify;
 
-	// Whether this configuration may be edited at all — a fact about IT, not about whoever is
+	// Whether this application may be edited at all — a fact about IT, not about whoever is
 	// showing it. See SetReadOnly. Default false: a metadata nobody has restricted is editable,
 	// which is what the old per-tree flag defaulted to as well.
 	bool m_metaReadOnly = false;
 
 	// --- the runtime-image IS the open state ---
-	// No image (m_image == nullptr) == CLOSED; a live image == OPEN. A config run
+	// No image (m_image == nullptr) == CLOSED; a live image == OPEN. An application run
 	// builds the image and either keeps it (success) or drops it (failure ⇒ the load
 	// "never happened"); close tears the registered objects down per-node and then
 	// drops the image. So the presence of the image replaces a separate "opened" flag,
@@ -1108,7 +1107,7 @@ protected:
 		explicit LoadGuard(ibMetaData* meta) : m_meta(meta) {
 			ibASSERT(m_meta->m_image == nullptr);   // must be closed first — else a run-without-close
 			// A NEW TREE NUMBERS ITSELF. The id counter is seeded from whatever this load brings in,
-			// so it must forget the previous configuration's high-water mark — otherwise a base
+			// so it must forget the previous application's high-water mark — otherwise a base
 			// opened after a larger one would start issuing ids from the OTHER one's ceiling.
 			m_meta->m_nextMetaId = 0;
 			// The image ctor builds its own designer infrastructure via the owner's
@@ -1120,7 +1119,7 @@ protected:
 				m_meta->m_image.reset();   // drop → load rolled back (frees ctors + cache + manager)
 		}
 		void Commit() {
-			m_committed = true;   // keep the image — it is now the live config
+			m_committed = true;   // keep the image — it is now the live application
 			// ⚠⚠ AND FORGET THE SEED, because a seed taken DURING the load was taken from a tree that
 			// was not finished. The counter is filled lazily on the first request; if that request
 			// arrives mid-load (something creating a default object while the rest is still being
@@ -1148,12 +1147,12 @@ protected:
 protected:
 
 	// 🛑 THIS WAS A FILE-STATIC IN THE DESIGNER'S FRAME (`s_setModify`), which made the answer belong
-	// to the PROCESS instead of to a configuration: one copy shared by every frame and every
-	// configuration opened in turn, and unreachable by anything but the caption. Its twin
+	// to the PROCESS instead of to an application: one copy shared by every frame and every
+	// application opened in turn, and unreachable by anything but the caption. Its twin
 	// (`s_modified`) is gone entirely — it held what IsModified() already says.
 	//
-	// Protected, not private: a CONFIGURATION re-arms it after a save, which is a fact only that
-	// class can establish — see ibMetaDataConfigurationBase::Modify.
+	// Protected, not private: an APPLICATION re-arms it after a save, which is a fact only that
+	// class can establish — see ibMetaDataApplicationBase::Modify.
 	bool m_metaSetModify = false;
 
 	// The `s_modified` twin — the answer as it stood when the report arrived, taken before the

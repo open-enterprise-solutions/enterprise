@@ -5,7 +5,7 @@
 // ibDialogSavedSettings — WHAT THIS PERSON KEPT, and what may be done to it.
 //
 // ⭐⭐ ONE WINDOW FOR A LIST AND FOR A REPORT. It takes a COMPOSER and an ADDRESS,
-// never a model: a report's settings live under the composer the configuration
+// never a model: a report's settings live under the composer the application
 // declares, a list's under the control on the form, and the CATEGORY keeps the
 // two vocabularies apart (Max, 2026-08-26). Everything else — the shelf, the
 // verbs, the restore — is one piece of code, sitting at the root of

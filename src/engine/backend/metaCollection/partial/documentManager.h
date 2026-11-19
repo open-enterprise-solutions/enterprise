@@ -15,7 +15,7 @@ class ibValueManagerDataObjectDocument :
 	ibValueManagerDataObjectDocument(const ibValueMetaObjectDocument* metaObject = nullptr) : m_metaObject(metaObject) { m_members.Bind(this, &ibValueManagerDataObjectDocument::FillManagerMethods); }
 	virtual ~ibValueManagerDataObjectDocument() {}
 
-	virtual const ibValueMetaObjectCommonModule* GetManagerModule() const;
+	virtual const ibValueMetaObjectSharedModule* GetManagerModule() const;
 	virtual const ibValueMetaObjectDocument* GetMetaObject() const { return m_metaObject; }
 
 	void FillManagerMethods(ibMemberTable& helper) const;

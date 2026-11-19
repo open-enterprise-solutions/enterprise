@@ -10,7 +10,7 @@ public:
 	ibPropertyModuleLoader()
 	{
 		// ibPropertyInnerModule, whichever module: the server names a template without its arguments. The link opens the
-		// object the row names — the module — in its owner's configuration.
+		// object the row names — the module — in its owner's application.
 		ibPropertyRegistry::Register(wxT("ibPropertyInnerModule"), [](ibBackendProperty* property) -> ibPGProperty* {
 			ibDataNode row;
 			property->GetProtocolValue(row);

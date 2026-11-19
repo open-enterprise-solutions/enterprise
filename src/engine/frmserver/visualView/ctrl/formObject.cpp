@@ -244,7 +244,7 @@ void ibValueForm::InitializeForm(const ibValueMetaObjectFormBase* creator,
 	// Runtime-tree parent is determined here — srcObject is set only
 	// in this method, and the form's metadata + module-manager root
 	// are reachable through the creator. Form sits under the bound
-	// data-record descriptor (catalog/document/external DP object) if
+	// data-record descriptor (catalog/document/external data tool object) if
 	// any; otherwise directly under the metadata's root. Subsequent
 	// Compile / InitializeRuntime pick up this parent to wire
 	// their bytecode / procUnit scope chain.

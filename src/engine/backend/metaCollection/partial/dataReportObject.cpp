@@ -40,7 +40,7 @@ ibValueRecordDataObjectReport::ibValueRecordDataObjectReport(const ibValueRecord
 //
 // ONE LIVE COMPOSITION PER DECLARED COMPOSER, seeded from the metaobject's own: the metaobject holds
 // the DEFAULT of the user's settings, and the object gets its own copy so that running a report —
-// changing a filter, switching a variant — never writes into the configuration. The seed travels
+// changing a filter, switching a variant — never writes into the application. The seed travels
 // through the composition's own node pair, so whatever a composition consists of today (and whatever
 // is added later) is carried without this knowing what is inside.
 void ibValueRecordDataObjectReport::PrepareEmptyObject()
@@ -59,7 +59,7 @@ void ibValueRecordDataObjectReport::PrepareEmptyObject()
 		// 2026-08-23). Opening a report hands its object a COPY of what the metaobject declares —
 		// the user turns knobs on their own copy, saves it as theirs (storage side), and the
 		// author's variants are untouched by any of it. The designer works on the very description
-		// the configuration holds, because there the point IS to change what ships.
+		// the application holds, because there the point IS to change what ships.
 		//
 		// The copy is an assignment and nothing else. It used to travel through a node — write the
 		// declared one out, read it back into a fresh object — which is serialisation standing in

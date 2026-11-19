@@ -9,8 +9,8 @@
 #include <wx/sizer.h>
 
 // ----------------------------------------------------------------------------
-// THE PANEL ON A TAB — the desktop's ibComposerEditor, whose document answered the configuration and took the dirty
-// bit: here the configuration is the tab's (its fields asked of the server) and an edit is the composition sent.
+// THE PANEL ON A TAB — the desktop's ibComposerEditor, whose document answered the application and took the dirty
+// bit: here the application is the tab's (its fields asked of the server) and an edit is the composition sent.
 // ----------------------------------------------------------------------------
 class ibComposerTabEditor : public ibComposerSettingsPanel {
 public:
@@ -42,7 +42,7 @@ public:
 	void Remember() { m_sent = Held().Write(); }
 
 protected:
-	// THE DIRTY BIT IS THE SERVER'S DOCUMENT'S — the edit is sent, and the configuration is modified there.
+	// THE DIRTY BIT IS THE SERVER'S DOCUMENT'S — the edit is sent, and the application is modified there.
 	virtual void MarkModified() override
 	{
 		if (m_built)

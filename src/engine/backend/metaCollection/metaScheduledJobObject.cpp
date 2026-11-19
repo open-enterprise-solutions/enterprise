@@ -1,5 +1,5 @@
 ////////////////////////////////////////////////////////////////////////////
-//	Description : predefined scheduled job — the configuration's unattended work
+//	Description : predefined scheduled job — the application's unattended work
 ////////////////////////////////////////////////////////////////////////////
 
 #include "metaScheduledJobObject.h"
@@ -8,7 +8,7 @@
 #include "backend/appData.h"                       // appData->DesignerMode(), GetJobManager
 #include "backend/userInfo.h"                      // ibUserInfo — the identity a job inherits
 #include "backend/job/jobManager.h"                // ibJobManager / ibJobDescription
-#include "backend/moduleManager/moduleManager.h"   // ibValueModuleManagerRuntimeConfiguration
+#include "backend/moduleManager/moduleManager.h"   // ibValueModuleManagerRuntimeApplication
 #include "backend/session/session.h"               // ibSession::GetManagerModule
 
 //***********************************************************************
@@ -59,11 +59,11 @@ bool RunScheduledJobBody(ibSession* session, const ibValueMetaObjectScheduledJob
 
 	// The session's runtime root. A scheduled session is authenticated and therefore builds one, so
 	// a null here means the run has no runtime at all and there is nothing to call into.
-	ibValueModuleManagerRuntimeConfiguration* const mm = session->GetManagerModule();
+	ibValueModuleManagerRuntimeApplication* const mm = session->GetManagerModule();
 	if (mm == nullptr)
 		ibBackendCoreException::Error(_("the session has no runtime"));
 
-	ibValueModuleManager::ibValueModuleUnit* const unit = mm->FindCommonModule(jobModule);
+	ibValueModuleManager::ibValueModuleUnit* const unit = mm->FindSharedModule(jobModule);
 	if (unit == nullptr)
 		ibBackendCoreException::Error(_("the job module is not registered in this session"));
 
@@ -82,7 +82,7 @@ bool RunScheduledJobBody(ibSession* session, const ibValueMetaObjectScheduledJob
 
 bool ibValueMetaObjectScheduledJob::RegisterJob()
 {
-	// The Designer never runs a configuration's jobs. It edits them.
+	// The Designer never runs an application's jobs. It edits them.
 	if (appData == nullptr || appData->DesignerMode())
 		return true;
 
@@ -100,18 +100,18 @@ bool ibValueMetaObjectScheduledJob::RegisterJob()
 	// state from not-there: IsDue refuses it, Execute still finds it.
 	ibJobDescription desc;
 	desc.m_active   = IsUsed();
-	desc.m_origin   = ibJobOrigin::Configuration;
+	desc.m_origin   = ibJobOrigin::Application;
 	desc.m_name     = GetJobName();
 	// The base keys this job's settings and its clock by the metaobject's GUID — the identity that
-	// is unique across configurations and survives everything a name or a numeric id does not:
-	// a rename, an unload / reload, a copy of the configuration onto another base. The name is
+	// is unique across applications and survives everything a name or a numeric id does not:
+	// a rename, an unload / reload, a copy of the application onto another base. The name is
 	// what a person reads; the guid is what the row IS.
 	desc.m_key      = GetGuid();
 	desc.m_schedule = GetSchedule();
 	desc.m_retryCount = GetRetryCount();
 	desc.m_retryIntervalSeconds = GetRetryInterval();
 
-	// WHO IT RUNS AS. Whoever opened the configuration, when there is such a user — the same rule a
+	// WHO IT RUNS AS. Whoever opened the application, when there is such a user — the same rule a
 	// background run follows when it adopts its caller, and it keeps rights and RLS honest: the job
 	// sees exactly what that user sees.
 	//
@@ -131,14 +131,14 @@ bool ibValueMetaObjectScheduledJob::RegisterJob()
 
 	if (!manager->Register(std::move(desc))) {
 		// Register logs the reason itself. A job that could not be declared must not stop a
-		// configuration from opening — the failure belongs in the log, not in the user's face.
+		// application from opening — the failure belongs in the log, not in the user's face.
 		ibJournalInfo(ibT("metadata.job"),ibT("scheduled job '%s' was not registered"), GetJobName());
 		return true;
 	}
 
 	// THE BASE OWNS THE SWITCH HERE — Register adopts sys_job, and that is the point: switching a
-	// misbehaving job off must be possible in the enterprise, without editing a configuration on a
-	// production base. The one thing the base may NOT do is switch on what the configuration has
+	// misbehaving job off must be possible in the enterprise, without editing an application on a
+	// production base. The one thing the base may NOT do is switch on what the application has
 	// withdrawn: `Use = false` means this code is not to run at all, not "run it unless somebody
 	// says otherwise". So the withdrawal is restated after registering, and only the withdrawal.
 	if (!IsUsed())
@@ -268,7 +268,7 @@ bool ibValueMetaObjectScheduledJob::WriteData(ibDataNode& node) const
 //***********************************************************************
 
 // The registered NAME is the predefined kind's, not the family's: "ScheduledJob" now belongs to
-// the PARAMETERIZED metatype, which is the one a configuration mostly declares and the one a
+// the PARAMETERIZED metatype, which is the one an application mostly declares and the one a
 // script names (ScheduledJobs.<Name>). Only the name moved — the clsid is unchanged, so every
-// stored configuration keeps loading exactly as before.
+// stored application keeps loading exactly as before.
 METADATA_TYPE_REGISTER(ibValueMetaObjectScheduledJob, "PredefinedJob", g_metaScheduledJobCLSID);

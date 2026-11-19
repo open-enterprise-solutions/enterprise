@@ -200,7 +200,7 @@ bool ibParseCode::ParseModule(const ibString& sModule)
 			// compile the list of formal parameters + register them as local
 			//
 			// ⭐ THE NAMES ARE KEPT NOW. Everything below was already read and thrown away — the
-			// name, the `Val`, the default — leaving a bare count, which is why a configuration's
+			// name, the `Val`, the default — leaving a bare count, which is why an application's
 			// own methods offered no call form anywhere a caller could see one.
 			std::vector<ibModuleParam> params;
 
@@ -283,7 +283,7 @@ bool ibParseCode::ParseModule(const ibString& sModule)
 			// with anonymous lambdas as expressions it's now legitimate.
 			// ⭐⭐ IN CES THE BODY IS BRACES, AND THE WALK BELOW KNOWS ONLY `EndProcedure`.
 			//
-			// 🛑 So in a c-style configuration — which this platform now DEFAULTS to — the search for
+			// 🛑 So in a c-style application — which this platform now DEFAULTS to — the search for
 			// the end never found one: it consumed the rest of the module, `m_lineEnd` was never
 			// assigned (it stayed equal to `m_lineStart`), and every declaration after the first was
 			// swallowed with it. The code editor's function navigator, the function searcher and the

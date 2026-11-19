@@ -8,7 +8,7 @@
 
 // THE DESKTOP'S (designer/win/editor/interfaceEditor) OVER THE SERVER'S ROWS: the section's objects, ticked where it
 // keeps them, as the tab's view writes them (frmserver ibInterfaceCompositionView, ViewKind Interface) — the
-// configuration's row, a group per metatype, its objects. A tick goes to the server (Toggle) and comes back drawn.
+// application's row, a group per metatype, its objects. A tick goes to the server (Toggle) and comes back drawn.
 
 class ibInterfaceEditor : public wxWindow {
 

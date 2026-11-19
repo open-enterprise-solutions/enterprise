@@ -54,7 +54,7 @@ enum
 	enTableViewMode = enTableFind + 2,
 	// ⭐ THE READER'S OWN SETTINGS — a LIST HAS THEM TOO (Max, 2026-08-26). Not the variants question,
 	// which a list legitimately has none of: a variant is something the AUTHOR named in the
-	// configuration, while these are what THIS person arranged and chose to keep. They live under
+	// application, while these are what THIS person arranged and chose to keep. They live under
 	// their own category, addressed by this control's guid rather than by a composer's.
 	enTableSettingsRestore,
 	enTableSettingsSave,
@@ -137,7 +137,7 @@ ibValueModelTableBox::ibStandardCommandSet ibValueModelTableBox::GetStandardComm
 	// …and, last, Configure list — named for what it does: the reader's whole setting, filter, order, grouping,
 	// appearance, not one tab of it (Max, 2026-11-15). Its name stays Filter, what a script calls it by.
 	// (⚠ NO VARIANTS HERE, and it is a fact about the ENTITY rather than a gap in this band. A
-	//  variant is a setting the AUTHOR named and put in the configuration, and there is nowhere to
+	//  variant is a setting the AUTHOR named and put in the application, and there is nowhere to
 	//  name one for a list: the variants are edited in the composition's own window, which is the
 	//  report's. A list's setting is what the reader themselves narrowed to, and there is one of it.
 	//  Max, 2026-08-26, arriving at it while the button was being built: "for a report it is needed,
@@ -241,7 +241,7 @@ void ibValueModelTableBox::Command_Choose(ibBackendValueForm* srcForm)
 void ibValueModelTableBox::Command_ShowListSettings()
 {
 	// ⭐ A COPY OF THE ACTIVE SETTING GOES IN, AND ON OK IT IS SET BACK ON THE MODEL — that is the whole of it, and the
-	// window's own door does it (ibDialogListSettings::ShowUserSettings). …and the CONFIGURATION is handed in by the
+	// window's own door does it (ibDialogListSettings::ShowUserSettings). …and the APPLICATION is handed in by the
 	// box: it knows which one it is showing.
 	ibDialogListSettings::ShowUserSettings(m_tableModel, GetMetaData());
 }

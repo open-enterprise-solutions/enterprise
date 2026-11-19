@@ -11,7 +11,7 @@
 // and not on the value table, because a tabular section and a register's record set keep their rows
 // in the very same storage and are searched the same way. What each of them decides is only whether
 // it is ready to use one; the machinery is maintained at the top. These tests exercise it through
-// the value table because that is the one place a test can build rows without a configuration.
+// the value table because that is the one place a test can build rows without an application.
 //
 // An index is declared PER COLUMN (`Indexing`), built lazily on first use, and
 // rebuilt when the model's own change counter has moved. These tests pin the

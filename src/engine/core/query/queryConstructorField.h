@@ -5,7 +5,7 @@
 //	Description : ONE FIELD A QUERY MAY NAME - as the server describes it and every window reads it
 ////////////////////////////////////////////////////////////////////////////
 //
-// The server's model (backend/query/queryConstructorModel.h) asks the configuration and fills it; the
+// The server's model (backend/query/queryConstructorModel.h) asks the application and fills it; the
 // windows that offer fields read it — the desktop's beside the model, the client's from the server's
 // answer. One schema for both, so it lives here: nothing in it is a widget, and its picture is a
 // description a reader makes its own image from.
@@ -40,7 +40,7 @@ struct ibQueryConstructorField
 	// behind no column at all — the drawer then uses its default picture.
 	ibPictureDescription m_picture;
 	// WHETHER A PERSON IS OFFERED IT — asked of the COLUMN too (ibBackendQueryColumn::IsAvailable), so
-	// the functional options of the base answer, and a dot-walk is available only while every hop is.
+	// the feature options of the base answer, and a dot-walk is available only while every hop is.
 	// The query constructor does not read it: a query is written against the schema, which options leave
 	// alone. The settings pickers and a composition's run do, since what they offer or print is what a
 	// person may see.

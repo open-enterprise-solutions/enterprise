@@ -58,10 +58,10 @@
     <Filter Include="win\editor\visualEditor\res">
       <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f7a16}</UniqueIdentifier>
     </Filter>
-    <Filter Include="win\editor\commonAttributeEditor">
+    <Filter Include="win\editor\sharedAttributeEditor">
       <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f7a17}</UniqueIdentifier>
     </Filter>
-    <Filter Include="win\editor\functionalOptionEditor">
+    <Filter Include="win\editor\featureOptionEditor">
       <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f7a18}</UniqueIdentifier>
     </Filter>
     <Filter Include="win\editor\interfaceEditor">
@@ -76,7 +76,7 @@
     <Filter Include="backend\vcs">
       <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f7a1c}</UniqueIdentifier>
     </Filter>
-    <Filter Include="mainFrame\configCompare">
+    <Filter Include="mainFrame\applicationCompare">
       <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f7a1d}</UniqueIdentifier>
     </Filter>
     <Filter Include="mainFrame\vcs">
@@ -107,11 +107,11 @@
     <ClCompile Include="win\editor\codeEditor\codeEditorDesigner.cpp">
       <Filter>win\editor\codeEditor</Filter>
     </ClCompile>
-    <ClCompile Include="win\editor\commonAttributeEditor\commonAttributeEditor.cpp">
-      <Filter>win\editor\commonAttributeEditor</Filter>
+    <ClCompile Include="win\editor\sharedAttributeEditor\sharedAttributeEditor.cpp">
+      <Filter>win\editor\sharedAttributeEditor</Filter>
     </ClCompile>
-    <ClCompile Include="win\editor\functionalOptionEditor\functionalOptionEditor.cpp">
-      <Filter>win\editor\functionalOptionEditor</Filter>
+    <ClCompile Include="win\editor\featureOptionEditor\featureOptionEditor.cpp">
+      <Filter>win\editor\featureOptionEditor</Filter>
     </ClCompile>
     <ClCompile Include="win\editor\interfaceEditor\interfaceEditor.cpp">
       <Filter>win\editor\interfaceEditor</Filter>
@@ -161,22 +161,22 @@
     <ClCompile Include="mainFrame\mainFrameDesignerParts.cpp">
       <Filter>mainFrame</Filter>
     </ClCompile>
-    <ClCompile Include="mainFrame\metaTree\treeConfiguration.cpp">
+    <ClCompile Include="mainFrame\metaTree\treeApplication.cpp">
       <Filter>mainFrame\metaTree</Filter>
     </ClCompile>
-    <ClCompile Include="mainFrame\metaTree\treeConfigurationEvent.cpp">
+    <ClCompile Include="mainFrame\metaTree\treeApplicationEvent.cpp">
       <Filter>mainFrame\metaTree</Filter>
     </ClCompile>
-    <ClCompile Include="mainFrame\metaTree\treeConfiguration_impl.cpp">
+    <ClCompile Include="mainFrame\metaTree\treeApplication_impl.cpp">
       <Filter>mainFrame\metaTree</Filter>
     </ClCompile>
-    <ClCompile Include="mainFrame\metaTree\treeDataProcessor.cpp">
+    <ClCompile Include="mainFrame\metaTree\treeDataTool.cpp">
       <Filter>mainFrame\metaTree</Filter>
     </ClCompile>
-    <ClCompile Include="mainFrame\metaTree\treeDataProcessorEvent.cpp">
+    <ClCompile Include="mainFrame\metaTree\treeDataToolEvent.cpp">
       <Filter>mainFrame\metaTree</Filter>
     </ClCompile>
-    <ClCompile Include="mainFrame\metaTree\treeDataProcessor_impl.cpp">
+    <ClCompile Include="mainFrame\metaTree\treeDataTool_impl.cpp">
       <Filter>mainFrame\metaTree</Filter>
     </ClCompile>
     <ClCompile Include="mainFrame\metaTree\treeDataReport.cpp">
@@ -197,8 +197,8 @@
     <ClCompile Include="mainFrame\vcs\gitPanel.cpp">
       <Filter>mainFrame\vcs</Filter>
     </ClCompile>
-    <ClCompile Include="mainFrame\configCompare\configCompareModel.cpp">
-      <Filter>mainFrame\configCompare</Filter>
+    <ClCompile Include="mainFrame\applicationCompare\applicationCompareModel.cpp">
+      <Filter>mainFrame\applicationCompare</Filter>
     </ClCompile>
     <ClCompile Include="mainFrame\watch\watchWindow.cpp">
       <Filter>mainFrame\watch</Filter>
@@ -206,7 +206,7 @@
     <ClCompile Include="mainFrame\welcome\welcomeWindowDesigner.cpp">
       <Filter>mainFrame\welcome</Filter>
     </ClCompile>
-    <ClCompile Include="docManager\templates\docViewDataProcessorFile.cpp">
+    <ClCompile Include="docManager\templates\docViewDataToolFile.cpp">
       <Filter>docManager\templates</Filter>
     </ClCompile>
     <ClCompile Include="docManager\templates\docViewDataReportFile.cpp">
@@ -218,10 +218,10 @@
     <ClCompile Include="docManager\templates\docViewFormEditor.cpp">
       <Filter>docManager\templates</Filter>
     </ClCompile>
-    <ClCompile Include="docManager\templates\docViewCommonAttribute.cpp">
+    <ClCompile Include="docManager\templates\docViewSharedAttribute.cpp">
       <Filter>docManager\templates</Filter>
     </ClCompile>
-    <ClCompile Include="docManager\templates\docViewFunctionalOption.cpp">
+    <ClCompile Include="docManager\templates\docViewFeatureOption.cpp">
       <Filter>docManager\templates</Filter>
     </ClCompile>
     <ClCompile Include="docManager\templates\docViewComposer.cpp">
@@ -236,7 +236,7 @@
     <ClCompile Include="docManager\templates\docViewProfile.cpp">
       <Filter>docManager\templates</Filter>
     </ClCompile>
-    <ClCompile Include="docManager\templates\docViewConfigCompare.cpp">
+    <ClCompile Include="docManager\templates\docViewApplicationCompare.cpp">
       <Filter>docManager\templates</Filter>
     </ClCompile>
     <ClCompile Include="docManager\templates\docViewMetaFile.cpp">
@@ -299,11 +299,11 @@
     <ClInclude Include="win\editor\codeEditor\codeEditorDesigner.h">
       <Filter>win\editor\codeEditor</Filter>
     </ClInclude>
-    <ClInclude Include="win\editor\commonAttributeEditor\commonAttributeEditor.h">
-      <Filter>win\editor\commonAttributeEditor</Filter>
+    <ClInclude Include="win\editor\sharedAttributeEditor\sharedAttributeEditor.h">
+      <Filter>win\editor\sharedAttributeEditor</Filter>
     </ClInclude>
-    <ClInclude Include="win\editor\functionalOptionEditor\functionalOptionEditor.h">
-      <Filter>win\editor\functionalOptionEditor</Filter>
+    <ClInclude Include="win\editor\featureOptionEditor\featureOptionEditor.h">
+      <Filter>win\editor\featureOptionEditor</Filter>
     </ClInclude>
     <ClInclude Include="win\editor\interfaceEditor\interfaceEditor.h">
       <Filter>win\editor\interfaceEditor</Filter>
@@ -338,10 +338,10 @@
     <ClInclude Include="mainFrame\metaTree\clipboardLock.h">
       <Filter>mainFrame\metaTree</Filter>
     </ClInclude>
-    <ClInclude Include="mainFrame\metaTree\treeConfiguration.h">
+    <ClInclude Include="mainFrame\metaTree\treeApplication.h">
       <Filter>mainFrame\metaTree</Filter>
     </ClInclude>
-    <ClInclude Include="mainFrame\metaTree\treeDataProcessor.h">
+    <ClInclude Include="mainFrame\metaTree\treeDataTool.h">
       <Filter>mainFrame\metaTree</Filter>
     </ClInclude>
     <ClInclude Include="mainFrame\metaTree\treeDataReport.h">
@@ -356,8 +356,8 @@
     <ClInclude Include="mainFrame\vcs\gitPanel.h">
       <Filter>mainFrame\vcs</Filter>
     </ClInclude>
-    <ClInclude Include="mainFrame\configCompare\configCompareModel.h">
-      <Filter>mainFrame\configCompare</Filter>
+    <ClInclude Include="mainFrame\applicationCompare\applicationCompareModel.h">
+      <Filter>mainFrame\applicationCompare</Filter>
     </ClInclude>
     <ClInclude Include="mainFrame\watch\watchWindow.h">
       <Filter>mainFrame\watch</Filter>
@@ -365,7 +365,7 @@
     <ClInclude Include="mainFrame\welcome\welcomeWindowDesigner.h">
       <Filter>mainFrame\welcome</Filter>
     </ClInclude>
-    <ClInclude Include="docManager\templates\docViewDataProcessorFile.h">
+    <ClInclude Include="docManager\templates\docViewDataToolFile.h">
       <Filter>docManager\templates</Filter>
     </ClInclude>
     <ClInclude Include="docManager\templates\docViewDataReportFile.h">
@@ -377,10 +377,10 @@
     <ClInclude Include="docManager\templates\docViewFormEditor.h">
       <Filter>docManager\templates</Filter>
     </ClInclude>
-    <ClInclude Include="docManager\templates\docViewCommonAttribute.h">
+    <ClInclude Include="docManager\templates\docViewSharedAttribute.h">
       <Filter>docManager\templates</Filter>
     </ClInclude>
-    <ClInclude Include="docManager\templates\docViewFunctionalOption.h">
+    <ClInclude Include="docManager\templates\docViewFeatureOption.h">
       <Filter>docManager\templates</Filter>
     </ClInclude>
     <ClInclude Include="docManager\templates\docViewComposer.h">
@@ -395,7 +395,7 @@
     <ClInclude Include="docManager\templates\docViewProfile.h">
       <Filter>docManager\templates</Filter>
     </ClInclude>
-    <ClInclude Include="docManager\templates\docViewConfigCompare.h">
+    <ClInclude Include="docManager\templates\docViewApplicationCompare.h">
       <Filter>docManager\templates</Filter>
     </ClInclude>
     <ClInclude Include="docManager\templates\docViewMetaFile.h">

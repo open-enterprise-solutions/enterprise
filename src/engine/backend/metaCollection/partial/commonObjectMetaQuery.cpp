@@ -110,9 +110,9 @@ bool ibValueMetaObjectRecordDataHierarchyMutableRef::ResolveQueryConstant(const 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-// (Table-data dump / restore is NOT per-object — the orchestrator drives the whole config's
-//  ContributeTables snapshot through the L3-3 mover. See ibMetaDataConfigurationStorage::Dump/
-//  RestoreDataFromBuffer in metadataConfiguration.cpp.)
+// (Table-data dump / restore is NOT per-object — the orchestrator drives the whole application's
+//  ContributeTables snapshot through the L3-3 mover. See ibMetaDataApplicationStorage::Dump/
+//  RestoreDataFromBuffer in metadataApplication.cpp.)
 
 ibString ibValueMetaObjectRegisterData::GetPhysicalTableName() const
 {
@@ -125,7 +125,7 @@ ibString ibValueMetaObjectRegisterData::GetPhysicalTableName() const
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 // (RegisterData / RecordData dump & restore are GONE — the orchestrator moves every table's rows off
-//  the config's ContributeTables snapshot through the L3-3 mover. A register simply declares its table
+//  the application's ContributeTables snapshot through the L3-3 mover. A register simply declares its table
 //  there; the mover reads "no uuid scaffold -> INSERT" off that structure.)
 
 // --- vended queryables — the L3 navigation LIVES here, not on the metaobject ---

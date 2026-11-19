@@ -2,7 +2,7 @@
 
 **What.** The client a browser runs: the page the [web server](../ARCHITECTURE.md#the-web-server-webserverexe-srcenginewebserver)
 serves at `/<publication>/`, talking to the base through the [client protocol](client-protocol.md) over the socket
-beside it, `/<publication>/client`. Like [the thin client](thin-client.md), it runs nothing of the configuration.
+beside it, `/<publication>/client`. Like [the thin client](thin-client.md), it runs nothing of the application.
 
 **Why.** A person with a browser alone — another machine, a phone — works in the same base with the same forms. The
 thin client is its reference: what the thin client does with a frame, the page does the same.
@@ -49,7 +49,7 @@ by a patch is updated in place, so the focus and the caret stay where they were.
   frame, and its tab comes in that frame too. The first window has as long as its rows take, the splash being up. A tab
   gone back to comes at once. What did not change is not drawn again.
 - **The start page is a container of forms.** Its columns stand side by side and the cells of each one under the other, in
-  the shares the configuration gives, with a sash between them to drag. Each cell is a strip with its title over a form
+  the shares the application gives, with a sash between them to drag. Each cell is a strip with its title over a form
   that works as a tab's does and goes back to the server by its own `Key`; a form that would not open is said in its cell.
 - **As dense as a desktop form on a mouse**, the root's 13 px; a finger keeps 16 px and targets of 44 px.
 - **The thin client's rules.** The login first goes in with no name — a base with no users lets it in. A refused call

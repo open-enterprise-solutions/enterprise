@@ -165,12 +165,12 @@ msgstr ""
 #: src/engine/appstudio/backend/metaCollection/metaDiff.h:169
 #: src/engine/backend/metaCollection/metaDiff.cpp:78
 #: src/engine/backend/metaCollection/metaObject.h:1015
-#: src/engine/frmserver/metaTree/treeConfiguration.cpp:28
+#: src/engine/frmserver/metaTree/treeApplication.cpp:28
 msgid "Common"
 msgstr ""
 
 #: src/engine/appstudio/backend/metaCollection/metaDiff.h:170
-#: src/engine/appstudio/mainFrame/metaTree/treeConfiguration_impl.cpp:930
+#: src/engine/appstudio/mainFrame/metaTree/treeApplication_impl.cpp:930
 #: src/engine/appstudio/win/editor/visualEditor/visualEditorAttributeTree.cpp:482
 #: src/engine/appstudio/win/editor/visualEditor/visualEditorCmdProc.cpp:1216
 #: src/engine/appstudio/win/editor/visualEditor/visualEditorCommandTree.cpp:361
@@ -182,20 +182,20 @@ msgstr ""
 msgid "Properties"
 msgstr ""
 
-#: src/engine/appstudio/docManager/templates/docViewConfigCompare.cpp:41
+#: src/engine/appstudio/docManager/templates/docViewApplicationCompare.cpp:41
 #, c-format
 msgid "Compare: %s <-> %s"
 msgstr ""
 
-#: src/engine/appstudio/docManager/templates/docViewConfigCompare.cpp:83
+#: src/engine/appstudio/docManager/templates/docViewApplicationCompare.cpp:83
 msgid "Select all differences"
 msgstr ""
 
-#: src/engine/appstudio/docManager/templates/docViewConfigCompare.cpp:84
+#: src/engine/appstudio/docManager/templates/docViewApplicationCompare.cpp:84
 msgid "Mark every non-Same row for merge"
 msgstr ""
 
-#: src/engine/appstudio/docManager/templates/docViewConfigCompare.cpp:85
+#: src/engine/appstudio/docManager/templates/docViewApplicationCompare.cpp:85
 #: src/engine/deskgui/univ/stockItem.cpp:59
 #: src/engine/frmclient/docView/templates/docViewAuditLog.cpp:300
 #: src/engine/frmclient/mainFrame/output/outputWindow.cpp:146
@@ -203,46 +203,46 @@ msgstr ""
 msgid "Clear"
 msgstr ""
 
-#: src/engine/appstudio/docManager/templates/docViewConfigCompare.cpp:86
+#: src/engine/appstudio/docManager/templates/docViewApplicationCompare.cpp:86
 msgid "Unmark every row"
 msgstr ""
 
-#: src/engine/appstudio/docManager/templates/docViewConfigCompare.cpp:88
+#: src/engine/appstudio/docManager/templates/docViewApplicationCompare.cpp:88
 msgid "Expand all"
 msgstr ""
 
-#: src/engine/appstudio/docManager/templates/docViewConfigCompare.cpp:89
+#: src/engine/appstudio/docManager/templates/docViewApplicationCompare.cpp:89
 msgid "Expand every tree node"
 msgstr ""
 
-#: src/engine/appstudio/docManager/templates/docViewConfigCompare.cpp:90
+#: src/engine/appstudio/docManager/templates/docViewApplicationCompare.cpp:90
 msgid "Collapse all"
 msgstr ""
 
-#: src/engine/appstudio/docManager/templates/docViewConfigCompare.cpp:91
+#: src/engine/appstudio/docManager/templates/docViewApplicationCompare.cpp:91
 msgid "Collapse every tree node"
 msgstr ""
 
-#: src/engine/appstudio/docManager/templates/docViewConfigCompare.cpp:117
-#: src/engine/appstudio/docManager/templates/docViewConfigCompare.cpp:348
-#: src/engine/appstudio/docManager/templates/docViewConfigCompare.cpp:438
-#: src/engine/frmserver/schema/designer/configCompare.cpp:363
+#: src/engine/appstudio/docManager/templates/docViewApplicationCompare.cpp:117
+#: src/engine/appstudio/docManager/templates/docViewApplicationCompare.cpp:348
+#: src/engine/appstudio/docManager/templates/docViewApplicationCompare.cpp:438
+#: src/engine/frmserver/schema/designer/applicationCompare.cpp:363
 msgid "Merge"
 msgstr ""
 
-#: src/engine/appstudio/docManager/templates/docViewConfigCompare.cpp:126
+#: src/engine/appstudio/docManager/templates/docViewApplicationCompare.cpp:126
 msgid "Object"
 msgstr ""
 
-#: src/engine/appstudio/docManager/templates/docViewConfigCompare.cpp:138
+#: src/engine/appstudio/docManager/templates/docViewApplicationCompare.cpp:138
 msgid "Status"
 msgstr ""
 
-#: src/engine/appstudio/docManager/templates/docViewConfigCompare.cpp:180
+#: src/engine/appstudio/docManager/templates/docViewApplicationCompare.cpp:180
 msgid "Show:"
 msgstr ""
 
-#: src/engine/appstudio/docManager/templates/docViewConfigCompare.cpp:184
+#: src/engine/appstudio/docManager/templates/docViewApplicationCompare.cpp:184
 #: src/engine/frmclient/win/dlgs/queryConstructor/queryConstructor.cpp:972
 #: src/engine/frmclient/win/dlgs/queryConstructor/queryConstructor.cpp:978
 #: src/engine/frmclient/win/dlgs/queryConstructor/queryConstructor.cpp:1053
@@ -250,50 +250,50 @@ msgstr ""
 msgid "All"
 msgstr ""
 
-#: src/engine/appstudio/docManager/templates/docViewConfigCompare.cpp:185
+#: src/engine/appstudio/docManager/templates/docViewApplicationCompare.cpp:185
 msgid "Only differences"
 msgstr ""
 
-#: src/engine/appstudio/docManager/templates/docViewConfigCompare.cpp:186
+#: src/engine/appstudio/docManager/templates/docViewApplicationCompare.cpp:186
 msgid "Only unchanged"
 msgstr ""
 
-#: src/engine/appstudio/docManager/templates/docViewConfigCompare.cpp:193
+#: src/engine/appstudio/docManager/templates/docViewApplicationCompare.cpp:193
 msgid "Direction:"
 msgstr ""
 
-#: src/engine/appstudio/docManager/templates/docViewConfigCompare.cpp:204
+#: src/engine/appstudio/docManager/templates/docViewApplicationCompare.cpp:204
 msgid "Apply merge"
 msgstr ""
 
-#: src/engine/appstudio/docManager/templates/docViewConfigCompare.cpp:229
-#: src/engine/appstudio/docManager/templates/docViewConfigCompare.cpp:234
+#: src/engine/appstudio/docManager/templates/docViewApplicationCompare.cpp:229
+#: src/engine/appstudio/docManager/templates/docViewApplicationCompare.cpp:234
 #, c-format
 msgid "%s -> %s"
 msgstr ""
 
-#: src/engine/appstudio/docManager/templates/docViewConfigCompare.cpp:346
-msgid "Push direction has no save target - open the other configuration from a writable source first."
+#: src/engine/appstudio/docManager/templates/docViewApplicationCompare.cpp:346
+msgid "Push direction has no save target - open the other application from a writable source first."
 msgstr ""
 
-#: src/engine/appstudio/docManager/templates/docViewConfigCompare.cpp:419
+#: src/engine/appstudio/docManager/templates/docViewApplicationCompare.cpp:419
 msgid "Merge failed."
 msgstr ""
 
-#: src/engine/appstudio/docManager/templates/docViewConfigCompare.cpp:419
+#: src/engine/appstudio/docManager/templates/docViewApplicationCompare.cpp:419
 msgid "The server refused the merge."
 msgstr ""
 
-#: src/engine/appstudio/docManager/templates/docViewConfigCompare.cpp:427
+#: src/engine/appstudio/docManager/templates/docViewApplicationCompare.cpp:427
 msgid "The other-side file has been saved."
 msgstr ""
 
-#: src/engine/appstudio/docManager/templates/docViewConfigCompare.cpp:427
-#: src/engine/frmserver/schema/designer/configCompare.cpp:358
+#: src/engine/appstudio/docManager/templates/docViewApplicationCompare.cpp:427
+#: src/engine/frmserver/schema/designer/applicationCompare.cpp:358
 msgid "Warning: failed to save the other-side file."
 msgstr ""
 
-#: src/engine/appstudio/docManager/templates/docViewConfigCompare.cpp:433
+#: src/engine/appstudio/docManager/templates/docViewApplicationCompare.cpp:433
 #, c-format
 msgid "%d reorder-only change(s) skipped (not supported in V1)."
 msgstr ""
@@ -362,7 +362,7 @@ msgstr ""
 
 #: src/engine/appstudio/docManager/templates/docViewFormEditor.cpp:172
 #: src/engine/appstudio/docManager/templates/docViewModuleEditor.cpp:109
-#: src/engine/appstudio/mainFrame/metaTree/treeConfiguration_impl.cpp:919
+#: src/engine/appstudio/mainFrame/metaTree/treeApplication_impl.cpp:919
 #: src/engine/coderunner/coderunner.cpp:250
 #: src/engine/deskgui/univ/stockItem.cpp:99
 msgid "Remove"
@@ -447,7 +447,7 @@ msgid "Unindent"
 msgstr ""
 
 #: src/engine/appstudio/mainApp.cpp:91
-msgid "Select configuration database folder"
+msgid "Select application database folder"
 msgstr ""
 
 #: src/engine/appstudio/mainApp.cpp:113 src/engine/appstudio/mainApp.cpp:139
@@ -470,40 +470,40 @@ msgstr ""
 msgid "OES Application Studio"
 msgstr ""
 
-#: src/engine/appstudio/mainFrame/configCompare/configCompareModel.cpp:187
+#: src/engine/appstudio/mainFrame/applicationCompare/applicationCompareModel.cpp:187
 msgid "Same"
 msgstr ""
 
-#: src/engine/appstudio/mainFrame/configCompare/configCompareModel.cpp:188
+#: src/engine/appstudio/mainFrame/applicationCompare/applicationCompareModel.cpp:188
 msgid "Reordered"
 msgstr ""
 
-#: src/engine/appstudio/mainFrame/configCompare/configCompareModel.cpp:189
+#: src/engine/appstudio/mainFrame/applicationCompare/applicationCompareModel.cpp:189
 msgid "Changed"
 msgstr ""
 
-#: src/engine/appstudio/mainFrame/configCompare/configCompareModel.cpp:190
+#: src/engine/appstudio/mainFrame/applicationCompare/applicationCompareModel.cpp:190
 msgid "Only in current"
 msgstr ""
 
-#: src/engine/appstudio/mainFrame/configCompare/configCompareModel.cpp:191
+#: src/engine/appstudio/mainFrame/applicationCompare/applicationCompareModel.cpp:191
 msgid "Only in other"
 msgstr ""
 
-#: src/engine/appstudio/mainFrame/configCompare/configCompareModel.cpp:203
-#: src/engine/appstudio/mainFrame/configCompare/configCompareModel.cpp:295
-#: src/engine/appstudio/mainFrame/configCompare/configCompareModel.cpp:308
+#: src/engine/appstudio/mainFrame/applicationCompare/applicationCompareModel.cpp:203
+#: src/engine/appstudio/mainFrame/applicationCompare/applicationCompareModel.cpp:295
+#: src/engine/appstudio/mainFrame/applicationCompare/applicationCompareModel.cpp:308
 msgid "Missing"
 msgstr ""
 
-#: src/engine/appstudio/mainFrame/configCompare/configCompareModel.cpp:207
-#: src/engine/appstudio/mainFrame/configCompare/configCompareModel.cpp:293
-#: src/engine/appstudio/mainFrame/configCompare/configCompareModel.cpp:306
+#: src/engine/appstudio/mainFrame/applicationCompare/applicationCompareModel.cpp:207
+#: src/engine/appstudio/mainFrame/applicationCompare/applicationCompareModel.cpp:293
+#: src/engine/appstudio/mainFrame/applicationCompare/applicationCompareModel.cpp:306
 msgid "(unnamed)"
 msgstr ""
 
 #: src/engine/appstudio/mainFrame/local/localWindow.cpp:132
-#: src/engine/appstudio/mainFrame/metaTree/treeDataProcessor.cpp:18
+#: src/engine/appstudio/mainFrame/metaTree/treeDataTool.cpp:18
 #: src/engine/appstudio/mainFrame/metaTree/treeDataReport.cpp:18
 #: src/engine/appstudio/mainFrame/watch/watchWindow.cpp:50
 #: src/engine/appstudio/win/dlg/predefinedEditor.cpp:277
@@ -525,7 +525,7 @@ msgstr ""
 
 #: src/engine/appstudio/mainFrame/local/localWindow.cpp:133
 #: src/engine/appstudio/mainFrame/watch/watchWindow.cpp:51
-#: src/engine/backend/metaCollection/metaFunctionalOptionObject.h:82
+#: src/engine/backend/metaCollection/metaFeatureOptionObject.h:82
 #: src/engine/backend/metaCollection/partial/constant.h:38
 #: src/engine/backend/system/value/valueList.cpp:17
 #: src/engine/deskgui/univ/propgrid/manager.cpp:399
@@ -554,13 +554,15 @@ msgid "Type"
 msgstr ""
 
 #: src/engine/appstudio/mainFrame/mainFrameDesigner.cpp:51
+#: src/engine/appstudio/mainFrame/mainFrameDesignerMenu.cpp:85
+#: src/engine/backend/metaCollection/metaObjectMetadata.h:210
 msgid "Update database"
 msgstr ""
 
 #: src/engine/appstudio/mainFrame/mainFrameDesigner.cpp:120
 #: src/engine/appstudio/mainFrame/mainFrameDesignerParts.cpp:22
-#: src/engine/appstudio/win/editor/commonAttributeEditor/commonAttributeEditor.cpp:89
-#: src/engine/appstudio/win/editor/functionalOptionEditor/functionalOptionEditor.cpp:102
+#: src/engine/appstudio/win/editor/sharedAttributeEditor/sharedAttributeEditor.cpp:89
+#: src/engine/appstudio/win/editor/featureOptionEditor/featureOptionEditor.cpp:102
 #: src/engine/appstudio/win/editor/interfaceEditor/interfaceEditor.cpp:86
 #: src/engine/appstudio/win/editor/roleEditor/roleEditor.cpp:140
 #: src/engine/backend/metaCollection/metaObjectMetadata.h:14
@@ -568,14 +570,14 @@ msgstr ""
 #: src/engine/frmclient/mainFrame/mainFrame.cpp:1217
 #: src/engine/frmclient/propertyManager/property/advprop/advpropPicture.cpp:174
 #: src/engine/frmserver/docView/docManagerDesigner.cpp:37
-#: src/engine/frmserver/docView/templates/designer/docViewCommonAttributeEdit.cpp:92
-#: src/engine/frmserver/docView/templates/designer/docViewFunctionalOptionEdit.cpp:100
-msgid "Configuration"
+#: src/engine/frmserver/docView/templates/designer/docViewSharedAttributeEdit.cpp:92
+#: src/engine/frmserver/docView/templates/designer/docViewFeatureOptionEdit.cpp:100
+msgid "Application"
 msgstr ""
 
 #: src/engine/appstudio/mainFrame/mainFrameDesigner.cpp:178
 #, c-format
-msgid "Configuration '%s' has been changed. Save?"
+msgid "Application '%s' has been changed. Save?"
 msgstr ""
 
 #: src/engine/appstudio/mainFrame/mainFrameDesignerEvent.cpp:37
@@ -583,7 +585,7 @@ msgstr ""
 #: src/engine/appstudio/mainFrame/mainFrameDesignerEvent.cpp:283
 #, c-format
 msgid ""
-"Configuration '%s' has been changed.\n"
+"Application '%s' has been changed.\n"
 "Do you want to save?"
 msgstr ""
 
@@ -598,16 +600,16 @@ msgstr ""
 
 #: src/engine/appstudio/mainFrame/mainFrameDesignerEvent.cpp:150
 msgid ""
-"To update the database configuration you need stop debugging.\n"
+"To update the database you need to stop debugging.\n"
 "Do you want to continue?"
 msgstr ""
 
 #: src/engine/appstudio/mainFrame/mainFrameDesignerEvent.cpp:243
-msgid "Open configuration file"
+msgid "Open application file"
 msgstr ""
 
 #: src/engine/appstudio/mainFrame/mainFrameDesignerEvent.cpp:263
-msgid "Save configuration file"
+msgid "Save application file"
 msgstr ""
 
 #: src/engine/appstudio/mainFrame/mainFrameDesignerEvent.cpp:269
@@ -616,23 +618,23 @@ msgid "Successfully unloaded to: "
 msgstr ""
 
 #: src/engine/appstudio/mainFrame/mainFrameDesignerEvent.cpp:276
-msgid "Choose the directory the configuration was saved to"
+msgid "Choose the directory the application was saved to"
 msgstr ""
 
 #: src/engine/appstudio/mainFrame/mainFrameDesignerEvent.cpp:295
-msgid "Choose a directory of its own for the configuration's files"
+msgid "Choose a directory of its own for the application's files"
 msgstr ""
 
 #: src/engine/appstudio/mainFrame/mainFrameDesignerEvent.cpp:309
-msgid "Choose configuration file to compare with"
+msgid "Choose application file to compare with"
 msgstr ""
 
 #: src/engine/appstudio/mainFrame/mainFrameDesignerEvent.cpp:319
-msgid "Failed to upload configuration file."
+msgid "Failed to upload application file."
 msgstr ""
 
 #: src/engine/appstudio/mainFrame/mainFrameDesignerEvent.cpp:325
-msgid "Failed to compare with the configuration file."
+msgid "Failed to compare with the application file."
 msgstr ""
 
 #: src/engine/appstudio/mainFrame/mainFrameDesignerEvent.cpp:329
@@ -641,7 +643,7 @@ msgid "Current"
 msgstr ""
 
 #: src/engine/appstudio/mainFrame/mainFrameDesignerEvent.cpp:339
-msgid "Database configuration is not available."
+msgid "The database's application is not available."
 msgstr ""
 
 #: src/engine/appstudio/mainFrame/mainFrameDesignerEvent.cpp:344
@@ -650,19 +652,19 @@ msgid "Database"
 msgstr ""
 
 #: src/engine/appstudio/mainFrame/mainFrameDesignerEvent.cpp:350
-msgid "Choose left configuration file"
+msgid "Choose left application file"
 msgstr ""
 
 #: src/engine/appstudio/mainFrame/mainFrameDesignerEvent.cpp:355
-msgid "Choose right configuration file"
+msgid "Choose right application file"
 msgstr ""
 
 #: src/engine/appstudio/mainFrame/mainFrameDesignerEvent.cpp:366
-msgid "Failed to upload one of the configuration files."
+msgid "Failed to upload one of the application files."
 msgstr ""
 
 #: src/engine/appstudio/mainFrame/mainFrameDesignerEvent.cpp:373
-msgid "Failed to load one of the configuration files."
+msgid "Failed to load one of the application files."
 msgstr ""
 
 #: src/engine/appstudio/mainFrame/mainFrameDesignerMenu.cpp:48
@@ -739,32 +741,27 @@ msgid "Remove all breakpoints"
 msgstr ""
 
 #: src/engine/appstudio/mainFrame/mainFrameDesignerMenu.cpp:80
-msgid "Open database configuration"
+msgid "Open the database's application"
 msgstr ""
 
 #: src/engine/appstudio/mainFrame/mainFrameDesignerMenu.cpp:82
-msgid "Rollback to database configuration"
-msgstr ""
-
-#: src/engine/appstudio/mainFrame/mainFrameDesignerMenu.cpp:85
-#: src/engine/backend/metaCollection/metaObjectMetadata.h:210
-msgid "Update database configuration"
+msgid "Revert to the database's application"
 msgstr ""
 
 #: src/engine/appstudio/mainFrame/mainFrameDesignerMenu.cpp:90
-msgid "Load configuration"
+msgid "Load application"
 msgstr ""
 
 #: src/engine/appstudio/mainFrame/mainFrameDesignerMenu.cpp:91
-msgid "Save configuration"
+msgid "Save application"
 msgstr ""
 
 #: src/engine/appstudio/mainFrame/mainFrameDesignerMenu.cpp:96
-msgid "Load configuration from files..."
+msgid "Load application from files..."
 msgstr ""
 
 #: src/engine/appstudio/mainFrame/mainFrameDesignerMenu.cpp:97
-msgid "Save configuration to files..."
+msgid "Save application to files..."
 msgstr ""
 
 #: src/engine/appstudio/mainFrame/mainFrameDesignerMenu.cpp:106
@@ -772,7 +769,7 @@ msgid "With file..."
 msgstr ""
 
 #: src/engine/appstudio/mainFrame/mainFrameDesignerMenu.cpp:107
-msgid "With database configuration"
+msgid "With the database's application"
 msgstr ""
 
 #: src/engine/appstudio/mainFrame/mainFrameDesignerMenu.cpp:108
@@ -780,7 +777,7 @@ msgid "Two files..."
 msgstr ""
 
 #: src/engine/appstudio/mainFrame/mainFrameDesignerMenu.cpp:110
-msgid "Compare configurations"
+msgid "Compare applications"
 msgstr ""
 
 #: src/engine/appstudio/mainFrame/mainFrameDesignerMenu.cpp:116
@@ -825,23 +822,23 @@ msgstr ""
 msgid "Syntax Helper"
 msgstr ""
 
-#: src/engine/appstudio/mainFrame/metaTree/treeConfiguration.cpp:58
-#: src/engine/appstudio/mainFrame/metaTree/treeConfiguration_impl.cpp:914
-#: src/engine/appstudio/mainFrame/metaTree/treeConfiguration_impl.cpp:937
+#: src/engine/appstudio/mainFrame/metaTree/treeApplication.cpp:58
+#: src/engine/appstudio/mainFrame/metaTree/treeApplication_impl.cpp:914
+#: src/engine/appstudio/mainFrame/metaTree/treeApplication_impl.cpp:937
 #: src/engine/deskgui/univ/stockItem.cpp:88
 #: src/engine/frmclient/mainFrame/mainFrame.cpp:524
 msgid "New"
 msgstr ""
 
-#: src/engine/appstudio/mainFrame/metaTree/treeConfiguration.cpp:58
+#: src/engine/appstudio/mainFrame/metaTree/treeApplication.cpp:58
 #: src/engine/deskgui/univ/ctrl/editableListBox.cpp:137
 #: src/engine/frmclient/win/dlgs/settings/settingsFilterEditor.cpp:610
 #: src/engine/frmclient/win/dlgs/settings/settingsFilterEditor.cpp:1176
 msgid "New item"
 msgstr ""
 
-#: src/engine/appstudio/mainFrame/metaTree/treeConfiguration.cpp:59
-#: src/engine/appstudio/mainFrame/metaTree/treeConfiguration_impl.cpp:917
+#: src/engine/appstudio/mainFrame/metaTree/treeApplication.cpp:59
+#: src/engine/appstudio/mainFrame/metaTree/treeApplication_impl.cpp:917
 #: src/engine/appstudio/win/dlg/predefinedEditor.cpp:691
 #: src/engine/appstudio/win/editor/visualEditor/visualEditorAttributeTree.cpp:474
 #: src/engine/backend/metaCollection/partial/commonObjectAction.cpp:156
@@ -858,12 +855,12 @@ msgstr ""
 msgid "Edit"
 msgstr ""
 
-#: src/engine/appstudio/mainFrame/metaTree/treeConfiguration.cpp:59
+#: src/engine/appstudio/mainFrame/metaTree/treeApplication.cpp:59
 #: src/engine/deskgui/univ/ctrl/editableListBox.cpp:129
 msgid "Edit item"
 msgstr ""
 
-#: src/engine/appstudio/mainFrame/metaTree/treeConfiguration.cpp:60
+#: src/engine/appstudio/mainFrame/metaTree/treeApplication.cpp:60
 #: src/engine/appstudio/win/dlg/homePageEditor.cpp:70
 #: src/engine/appstudio/win/dlg/predefinedEditor.cpp:458
 #: src/engine/appstudio/win/dlg/predefinedEditor.cpp:692
@@ -921,34 +918,34 @@ msgstr ""
 msgid "Delete"
 msgstr ""
 
-#: src/engine/appstudio/mainFrame/metaTree/treeConfiguration.cpp:60
+#: src/engine/appstudio/mainFrame/metaTree/treeApplication.cpp:60
 #: src/engine/deskgui/univ/ctrl/editableListBox.cpp:145
 msgid "Delete item"
 msgstr ""
 
-#: src/engine/appstudio/mainFrame/metaTree/treeConfiguration.cpp:62
+#: src/engine/appstudio/mainFrame/metaTree/treeApplication.cpp:62
 #: src/engine/appstudio/win/dlg/homePageEditor.cpp:72
 #: src/engine/deskgui/univ/findReplaceDialog.cpp:131
 #: src/engine/deskgui/univ/stockItem.cpp:117
 msgid "Up"
 msgstr ""
 
-#: src/engine/appstudio/mainFrame/metaTree/treeConfiguration.cpp:62
+#: src/engine/appstudio/mainFrame/metaTree/treeApplication.cpp:62
 msgid "Up item"
 msgstr ""
 
-#: src/engine/appstudio/mainFrame/metaTree/treeConfiguration.cpp:63
+#: src/engine/appstudio/mainFrame/metaTree/treeApplication.cpp:63
 #: src/engine/appstudio/win/dlg/homePageEditor.cpp:73
 #: src/engine/deskgui/univ/findReplaceDialog.cpp:131
 #: src/engine/deskgui/univ/stockItem.cpp:65
 msgid "Down"
 msgstr ""
 
-#: src/engine/appstudio/mainFrame/metaTree/treeConfiguration.cpp:63
+#: src/engine/appstudio/mainFrame/metaTree/treeApplication.cpp:63
 msgid "Down item"
 msgstr ""
 
-#: src/engine/appstudio/mainFrame/metaTree/treeConfiguration.cpp:65
+#: src/engine/appstudio/mainFrame/metaTree/treeApplication.cpp:65
 #: src/engine/coderunner/win/dlgs/functionSearcher/functionSearcher.cpp:26
 #: src/engine/frmclient/win/dlgs/functionSearcher/functionSearcher.cpp:28
 #: src/engine/frmclient/win/dlgs/settings/composer/composerSettings.cpp:3159
@@ -956,20 +953,20 @@ msgstr ""
 msgid "Sort"
 msgstr ""
 
-#: src/engine/appstudio/mainFrame/metaTree/treeConfiguration.cpp:65
+#: src/engine/appstudio/mainFrame/metaTree/treeApplication.cpp:65
 msgid "Sort item"
 msgstr ""
 
-#: src/engine/appstudio/mainFrame/metaTree/treeConfigurationEvent.cpp:176
+#: src/engine/appstudio/mainFrame/metaTree/treeApplicationEvent.cpp:176
 msgid "Help information"
 msgstr ""
 
-#: src/engine/appstudio/mainFrame/metaTree/treeConfigurationEvent.cpp:176
+#: src/engine/appstudio/mainFrame/metaTree/treeApplicationEvent.cpp:176
 msgid "Technical information"
 msgstr ""
 
-#: src/engine/appstudio/mainFrame/metaTree/treeConfiguration_impl.cpp:344
-#: src/engine/appstudio/mainFrame/metaTree/treeDataProcessor.cpp:59
+#: src/engine/appstudio/mainFrame/metaTree/treeApplication_impl.cpp:344
+#: src/engine/appstudio/mainFrame/metaTree/treeDataTool.cpp:59
 #: src/engine/appstudio/mainFrame/metaTree/treeDataReport.cpp:65
 #: src/engine/appstudio/mainFrame/metaTree/treeDataReport.cpp:73
 #: src/engine/backend/propertyManager/property/variant/variantSource.cpp:110
@@ -977,38 +974,38 @@ msgstr ""
 msgid "<not selected>"
 msgstr ""
 
-#: src/engine/appstudio/mainFrame/metaTree/treeConfiguration_impl.cpp:758
-msgid "Open data processor file"
+#: src/engine/appstudio/mainFrame/metaTree/treeApplication_impl.cpp:758
+msgid "Open data tool file"
 msgstr ""
 
-#: src/engine/appstudio/mainFrame/metaTree/treeConfiguration_impl.cpp:758
+#: src/engine/appstudio/mainFrame/metaTree/treeApplication_impl.cpp:758
 msgid "Open report file"
 msgstr ""
 
-#: src/engine/appstudio/mainFrame/metaTree/treeConfiguration_impl.cpp:784
-msgid "Save data processor file"
+#: src/engine/appstudio/mainFrame/metaTree/treeApplication_impl.cpp:784
+msgid "Save data tool file"
 msgstr ""
 
-#: src/engine/appstudio/mainFrame/metaTree/treeConfiguration_impl.cpp:784
+#: src/engine/appstudio/mainFrame/metaTree/treeApplication_impl.cpp:784
 msgid "Save report file"
 msgstr ""
 
-#: src/engine/appstudio/mainFrame/metaTree/treeConfiguration_impl.cpp:927
+#: src/engine/appstudio/mainFrame/metaTree/treeApplication_impl.cpp:927
 msgid "Help information..."
 msgstr ""
 
-#: src/engine/appstudio/mainFrame/metaTree/treeConfiguration_impl.cpp:928
+#: src/engine/appstudio/mainFrame/metaTree/treeApplication_impl.cpp:928
 msgid "Technical information..."
 msgstr ""
 
-#: src/engine/appstudio/mainFrame/metaTree/treeDataProcessor.cpp:23
+#: src/engine/appstudio/mainFrame/metaTree/treeDataTool.cpp:23
 #: src/engine/appstudio/mainFrame/metaTree/treeDataReport.cpp:23
 #: src/engine/backend/metaCollection/metaObject.h:1017
 #: src/engine/frmclient/win/dlgs/kindSelector/kindSelector.cpp:53
 msgid "Synonym"
 msgstr ""
 
-#: src/engine/appstudio/mainFrame/metaTree/treeDataProcessor.cpp:28
+#: src/engine/appstudio/mainFrame/metaTree/treeDataTool.cpp:28
 #: src/engine/appstudio/mainFrame/metaTree/treeDataReport.cpp:28
 #: src/engine/backend/metaCollection/metaObject.h:1018
 #: src/engine/backend/system/systemManagerEnum.h:165
@@ -1018,12 +1015,12 @@ msgstr ""
 msgid "Comment"
 msgstr ""
 
-#: src/engine/appstudio/mainFrame/metaTree/treeDataProcessor.cpp:33
+#: src/engine/appstudio/mainFrame/metaTree/treeDataTool.cpp:33
 #: src/engine/appstudio/mainFrame/metaTree/treeDataReport.cpp:33
 msgid "Default form:"
 msgstr ""
 
-#: src/engine/appstudio/mainFrame/metaTree/treeDataProcessor.cpp:67
+#: src/engine/appstudio/mainFrame/metaTree/treeDataTool.cpp:67
 #: src/engine/appstudio/mainFrame/metaTree/treeDataReport.cpp:81
 #: src/engine/backend/metaCollection/metaModuleObjectMenu.cpp:11
 msgid "Open module"
@@ -1459,7 +1456,7 @@ msgstr ""
 
 #: src/engine/appstudio/win/dlg/homePageEditor.cpp:459
 #: src/engine/backend/metaCollection/metaGroups.cpp:23
-msgid "Common forms"
+msgid "Shared forms"
 msgstr ""
 
 #: src/engine/appstudio/win/dlg/predefinedEditor.cpp:35
@@ -1515,7 +1512,7 @@ msgid "Description"
 msgstr ""
 
 #: src/engine/appstudio/win/dlg/predefinedEditor.cpp:414
-msgid "Declared by the configuration"
+msgid "Declared by the application"
 msgstr ""
 
 #: src/engine/appstudio/win/dlg/predefinedEditor.cpp:462
@@ -1712,16 +1709,16 @@ msgstr ""
 
 #: src/engine/appstudio/win/editor/visualEditor/visualEditorPanel.cpp:83
 #: src/engine/backend/metaCollection/metaGroups.cpp:60
-#: src/engine/frmserver/metaTree/treeConfiguration.cpp:34
-#: src/engine/frmserver/metaTree/treeDataProcessor.cpp:63
+#: src/engine/frmserver/metaTree/treeApplication.cpp:34
+#: src/engine/frmserver/metaTree/treeDataTool.cpp:63
 #: src/engine/frmserver/metaTree/treeDataReport.cpp:62
 msgid "Attributes"
 msgstr ""
 
 #: src/engine/appstudio/win/editor/visualEditor/visualEditorPanel.cpp:84
 #: src/engine/backend/metaCollection/metaGroups.cpp:79
-#: src/engine/frmserver/metaTree/treeConfiguration.cpp:35
-#: src/engine/frmserver/metaTree/treeDataProcessor.cpp:92
+#: src/engine/frmserver/metaTree/treeApplication.cpp:35
+#: src/engine/frmserver/metaTree/treeDataTool.cpp:92
 #: src/engine/frmserver/metaTree/treeDataReport.cpp:91
 msgid "Commands"
 msgstr ""
@@ -1780,15 +1777,15 @@ msgstr ""
 
 #: src/engine/backend/appData.cpp:956
 #, c-format
-msgid "The configuration of the base %s could not be loaded."
+msgid "The application of the base %s could not be loaded."
 msgstr ""
 
 #: src/engine/backend/appData.cpp:1425
-msgid "The file carries data before the configuration - it cannot be loaded"
+msgid "The file carries data before the application - it cannot be loaded"
 msgstr ""
 
 #: src/engine/backend/appData.cpp:1476
-msgid "The configuration from the file could not be applied - the data was not loaded"
+msgid "The application from the file could not be applied - the data was not loaded"
 msgstr ""
 
 #: src/engine/backend/appData.h:307
@@ -2206,7 +2203,7 @@ msgid "The program was stopped by the user!"
 msgstr ""
 
 #: src/engine/backend/backend_exception.h:232
-#: src/engine/backend/metadataConfiguration.cpp:600
+#: src/engine/backend/metadataApplication.cpp:600
 msgid "Not enough access rights for this user!"
 msgstr ""
 
@@ -2265,6 +2262,34 @@ msgstr ""
 
 #: src/engine/backend/compiler/compileCode.cpp:4112
 msgid "'&&' is not an operator here - conditions join with the word And"
+msgstr ""
+
+#: src/engine/backend/compiler/compileCode.cpp:4185
+msgid "'||' is not an operator here - conditions join with the word Or"
+msgstr ""
+
+#: src/engine/backend/compiler/compileCode.cpp:3649
+msgid "'Not' is not an operator here - negation is written '!'"
+msgstr ""
+
+#: src/engine/backend/compiler/compileCode.cpp:4013
+msgid "'Mod' is not an operator here - the remainder is written '%'"
+msgstr ""
+
+#: src/engine/backend/compiler/compileCode.cpp:4034
+msgid "'And' is not an operator here - conditions join with '&&'"
+msgstr ""
+
+#: src/engine/backend/compiler/compileCode.cpp:4035
+msgid "'Or' is not an operator here - conditions join with '||'"
+msgstr ""
+
+#: src/engine/backend/compiler/compileCode.cpp:4135
+msgid "'<>' is not an operator here - inequality is written '!='"
+msgstr ""
+
+#: src/engine/backend/compiler/compileCode.cpp:4155
+msgid "'=' is not a comparison here - comparison is written '=='"
 msgstr ""
 
 #: src/engine/backend/compiler/compileCodeLINQ.cpp:2539
@@ -2921,7 +2946,7 @@ msgid "PostgreSQL: a parameter of kind %d cannot be rendered for binding"
 msgstr ""
 
 #: src/engine/backend/debugger/debugClient.cpp:296
-msgid "The running application does not have this line: the module has been edited and not applied, so its copy is a different text. Apply the configuration, or set the breakpoint on a line both copies share."
+msgid "The running application does not have this line: the module has been edited and not applied, so its copy is a different text. Apply the application, or set the breakpoint on a line both copies share."
 msgstr ""
 
 #: src/engine/backend/debugger/debugClientBridge.cpp:22
@@ -3005,7 +3030,7 @@ msgstr ""
 
 #: src/engine/backend/job/jobBackground.cpp:300
 #, c-format
-msgid "Background job: common module '%s' not found"
+msgid "Background job: shared module '%s' not found"
 msgstr ""
 
 #: src/engine/backend/job/jobBackground.cpp:310
@@ -3103,7 +3128,7 @@ msgstr ""
 #: src/engine/backend/job/jobManager.cpp:474
 #: src/engine/backend/metaCollection/partial/reference/referenceQuery.cpp:77
 #: src/engine/backend/metaCollection/partial/reference/referenceQuery.cpp:175
-#: src/engine/backend/metadataConfigurationQuery.cpp:289
+#: src/engine/backend/metadataApplicationQuery.cpp:289
 #: src/engine/deskgui/univ/dataview/datavgen.paged.cpp:1067
 msgid "unknown exception"
 msgstr ""
@@ -3144,7 +3169,7 @@ msgid "Running code: nothing to run - no code came with the request"
 msgstr ""
 
 #: src/engine/backend/job/jobRunByteCode.cpp:150
-msgid "Running code: a designer builds no runtime, so there is nothing here to run configuration code in"
+msgid "Running code: a designer builds no runtime, so there is nothing here to run application code in"
 msgstr ""
 
 #: src/engine/backend/job/jobRunByteCode.cpp:157
@@ -3168,7 +3193,7 @@ msgid "Running code: this application's root module is not compiled, so there is
 msgstr ""
 
 #: src/engine/backend/job/jobRunByteCode.cpp:228
-msgid "Running code: it did not compile here. The application is running a different configuration than the one it was written against."
+msgid "Running code: it did not compile here. The running application is not the one it was written against."
 msgstr ""
 
 #: src/engine/backend/job/jobRunByteCode.cpp:327
@@ -3424,7 +3449,7 @@ msgid "Category"
 msgstr ""
 
 #: src/engine/backend/metaCollection/metaCommandGroupObject.h:99
-msgid "Where the group is shown: the navigation panel of a section, beside Important and Normal; its actions panel, beside Create, Reports and Service; or the command bar of a form, as one button that opens a submenu of the group's commands - the object's own, and the common commands typed for that object."
+msgid "Where the group is shown: the navigation panel of a section, beside Important and Normal; its actions panel, beside Create, Reports and Service; or the command bar of a form, as one button that opens a submenu of the group's commands - the object's own, and the shared commands typed for that object."
 msgstr ""
 
 #: src/engine/backend/metaCollection/metaCommandGroupObject.h:101
@@ -3493,7 +3518,7 @@ msgid "Command"
 msgstr ""
 
 #: src/engine/backend/metaCollection/metaCommandObject.h:155
-msgid "Where the command is shown. A group of a section page - one of the platform's (Important, Normal, Create, Reports, Service) or a command group the configuration declares for a section - once a section includes the command; or a command group of the form command bar, which puts it in that group's submenu on the forms of its object: the owner's for an object's command, the one its Parameter type names for a common command. Normal by default."
+msgid "Where the command is shown. A group of a section page - one of the platform's (Important, Normal, Create, Reports, Service) or a command group the application declares for a section - once a section includes the command; or a command group of the form command bar, which puts it in that group's submenu on the forms of its object: the owner's for an object's command, the one its Parameter type names for a shared command. Normal by default."
 msgstr ""
 
 #: src/engine/backend/metaCollection/metaCommandObject.h:156
@@ -3541,12 +3566,12 @@ msgstr ""
 msgid "Open command module"
 msgstr ""
 
-#: src/engine/backend/metaCollection/metaCommonAttributeObjectMenu.cpp:18
-msgid "Open common attributes composition"
+#: src/engine/backend/metaCollection/metaSharedAttributeObjectMenu.cpp:18
+msgid "Open shared attributes composition"
 msgstr ""
 
-#: src/engine/backend/metaCollection/metaCommonAttributeObjectMenu.cpp:30
-msgid "Go to common attribute"
+#: src/engine/backend/metaCollection/metaSharedAttributeObjectMenu.cpp:30
+msgid "Go to shared attribute"
 msgstr ""
 
 #: src/engine/backend/metaCollection/metaEventHandlerObject.h:117
@@ -3614,39 +3639,39 @@ msgid "Which role the form plays for its owner (object form, list form, choice f
 msgstr ""
 
 #: src/engine/backend/metaCollection/metaFormObject.h:325
-msgid "The common form itself: its layout (controls, attributes, commands) and its module code, kept together in one cell. A common form belongs to no object; it is opened by name or from a section of the navigation panel."
+msgid "The shared form itself: its layout (controls, attributes, commands) and its module code, kept together in one cell. A shared form belongs to no object; it is opened by name or from a section of the navigation panel."
 msgstr ""
 
 #: src/engine/backend/metaCollection/metaFormObjectMenu.cpp:11
 msgid "Open form"
 msgstr ""
 
-#: src/engine/backend/metaCollection/metaFunctionalOptionObject.h:84
+#: src/engine/backend/metaCollection/metaFeatureOptionObject.h:84
 msgid "Initial value"
 msgstr ""
 
-#: src/engine/backend/metaCollection/metaFunctionalOptionObject.h:84
+#: src/engine/backend/metaCollection/metaFeatureOptionObject.h:84
 msgid "The value the option has in a base where nobody has switched it yet - an option arriving with an update. On by default, so a working part of the system does not disappear by itself; off for a new part the base should switch on deliberately."
 msgstr ""
 
-#: src/engine/backend/metaCollection/metaFunctionalOptionObject.h:85
+#: src/engine/backend/metaCollection/metaFeatureOptionObject.h:85
 msgid "Requires"
 msgstr ""
 
-#: src/engine/backend/metaCollection/metaFunctionalOptionObject.h:85
+#: src/engine/backend/metaCollection/metaFeatureOptionObject.h:85
 msgid "The option this one works under. While that one is off, this one counts as off too, whatever its own value - what belongs to it is not shown."
 msgstr ""
 
-#: src/engine/backend/metaCollection/metaFunctionalOptionObjectMenu.cpp:8
-msgid "Open functional option composition"
+#: src/engine/backend/metaCollection/metaFeatureOptionObjectMenu.cpp:8
+msgid "Open feature option composition"
 msgstr ""
 
 #: src/engine/backend/metaCollection/metaGroups.cpp:22
-msgid "Common modules"
+msgid "Shared modules"
 msgstr ""
 
 #: src/engine/backend/metaCollection/metaGroups.cpp:24
-msgid "Common commands"
+msgid "Shared commands"
 msgstr ""
 
 #: src/engine/backend/metaCollection/metaGroups.cpp:25
@@ -3654,7 +3679,7 @@ msgid "Command groups"
 msgstr ""
 
 #: src/engine/backend/metaCollection/metaGroups.cpp:26
-msgid "Common templates"
+msgid "Shared templates"
 msgstr ""
 
 #: src/engine/backend/metaCollection/metaGroups.cpp:29
@@ -3678,12 +3703,12 @@ msgstr ""
 #: src/engine/frmserver/schema/runtime/allFunctions.cpp:26
 #: src/engine/frmserver/visualView/ctrl/control.h:107
 #: src/engine/frmserver/visualView/layers/commandBar.h:171
-msgid "Functional options"
+msgid "Feature options"
 msgstr ""
 
 #: src/engine/backend/metaCollection/metaGroups.cpp:34
 #: src/engine/backend/metaCollection/metaGroups.cpp:64
-msgid "Common attributes"
+msgid "Shared attributes"
 msgstr ""
 
 #: src/engine/backend/metaCollection/metaGroups.cpp:35
@@ -3713,7 +3738,7 @@ msgid "Catalogs"
 msgstr ""
 
 #: src/engine/backend/metaCollection/metaGroups.cpp:37
-msgid "Functional option"
+msgid "Feature option"
 msgstr ""
 
 #: src/engine/backend/metaCollection/metaGroups.cpp:45
@@ -3733,7 +3758,7 @@ msgid "Enumeration"
 msgstr ""
 
 #: src/engine/backend/metaCollection/metaGroups.cpp:49
-msgid "Data processor"
+msgid "Data tool"
 msgstr ""
 
 #: src/engine/backend/metaCollection/metaGroups.cpp:55
@@ -3767,7 +3792,7 @@ msgstr ""
 
 #: src/engine/backend/metaCollection/metaGroups.cpp:45
 #: src/engine/frmserver/schema/runtime/allFunctions.cpp:30
-msgid "Data processors"
+msgid "Data tools"
 msgstr ""
 
 #: src/engine/backend/metaCollection/metaGroups.cpp:48
@@ -3811,13 +3836,13 @@ msgid "Sequences"
 msgstr ""
 
 #: src/engine/backend/metaCollection/metaGroups.cpp:65
-#: src/engine/frmserver/metaTree/treeConfiguration.cpp:38
+#: src/engine/frmserver/metaTree/treeApplication.cpp:38
 msgid "Dimensions"
 msgstr ""
 
 #: src/engine/backend/metaCollection/metaGroups.cpp:66
 #: src/engine/frmclient/win/dlgs/settings/composer/composerSettings.cpp:1750
-#: src/engine/frmserver/metaTree/treeConfiguration.cpp:39
+#: src/engine/frmserver/metaTree/treeApplication.cpp:39
 msgid "Resources"
 msgstr ""
 
@@ -3826,12 +3851,12 @@ msgid "Enum values"
 msgstr ""
 
 #: src/engine/backend/metaCollection/metaGroups.cpp:71
-#: src/engine/frmserver/metaTree/treeConfiguration.cpp:36
+#: src/engine/frmserver/metaTree/treeApplication.cpp:36
 msgid "Accounting kinds"
 msgstr ""
 
 #: src/engine/backend/metaCollection/metaGroups.cpp:72
-#: src/engine/frmserver/metaTree/treeConfiguration.cpp:37
+#: src/engine/frmserver/metaTree/treeApplication.cpp:37
 msgid "Account dimension accounting kinds"
 msgstr ""
 
@@ -3844,8 +3869,8 @@ msgstr ""
 #: src/engine/backend/metaCollection/metaGroups.cpp:75
 #: src/engine/frmclient/win/dlgs/linqConstructor/linqConstructor.cpp:241
 #: src/engine/frmclient/win/dlgs/queryConstructor/queryConstructor.cpp:746
-#: src/engine/frmserver/metaTree/treeConfiguration.cpp:41
-#: src/engine/frmserver/metaTree/treeDataProcessor.cpp:71
+#: src/engine/frmserver/metaTree/treeApplication.cpp:41
+#: src/engine/frmserver/metaTree/treeDataTool.cpp:71
 #: src/engine/frmserver/metaTree/treeDataReport.cpp:70
 msgid "Tables"
 msgstr ""
@@ -3854,20 +3879,16 @@ msgstr ""
 msgid "Account dimension kinds tables"
 msgstr ""
 
-#: src/engine/backend/metaCollection/metaGroups.cpp:77
-msgid "Recalculations"
-msgstr ""
-
 #: src/engine/backend/metaCollection/metaGroups.cpp:78
-#: src/engine/frmserver/metaTree/treeConfiguration.cpp:32
-#: src/engine/frmserver/metaTree/treeDataProcessor.cpp:84
+#: src/engine/frmserver/metaTree/treeApplication.cpp:32
+#: src/engine/frmserver/metaTree/treeDataTool.cpp:84
 #: src/engine/frmserver/metaTree/treeDataReport.cpp:83
 msgid "Forms"
 msgstr ""
 
 #: src/engine/backend/metaCollection/metaGroups.cpp:80
-#: src/engine/frmserver/metaTree/treeConfiguration.cpp:33
-#: src/engine/frmserver/metaTree/treeDataProcessor.cpp:97
+#: src/engine/frmserver/metaTree/treeApplication.cpp:33
+#: src/engine/frmserver/metaTree/treeDataTool.cpp:97
 #: src/engine/frmserver/metaTree/treeDataReport.cpp:96
 msgid "Templates"
 msgstr ""
@@ -3881,7 +3902,7 @@ msgid "Manager modules"
 msgstr ""
 
 #: src/engine/backend/metaCollection/metaLanguageObject.h:40
-msgid "The language's code (en, ru, uk and so on): the key its texts are stored under in multi-language strings (synonyms, captions, spreadsheet cells) and the code the session's interface language is set by when this language is the configuration's default. Unique among the configuration's languages - a pasted duplicate gets a number appended."
+msgid "The language's code (en, ru, uk and so on): the key its texts are stored under in multi-language strings (synonyms, captions, spreadsheet cells) and the code the session's interface language is set by when this language is the application's default. Unique among the application's languages - a pasted duplicate gets a number appended."
 msgstr ""
 
 #: src/engine/backend/metaCollection/metaModuleObject.h:230
@@ -3889,11 +3910,11 @@ msgid "The module's code: procedures, functions and variables of its owner (an o
 msgstr ""
 
 #: src/engine/backend/metaCollection/metaModuleObject.h:305
-msgid "The common module's code: procedures and functions shared by the whole configuration. Only exported methods are visible outside it, called as ModuleName.Method(...) (or by bare name when the module is global)."
+msgid "The shared module's code: procedures and functions shared by the whole application. Only exported methods are visible outside it, called as ModuleName.Method(...) (or by bare name when the module is global)."
 msgstr ""
 
 #: src/engine/backend/metaCollection/metaModuleObject.h:306
-msgid "Common module"
+msgid "Shared module"
 msgstr ""
 
 #: src/engine/backend/metaCollection/metaModuleObject.h:307
@@ -3913,7 +3934,7 @@ msgid "Whether a call into the module runs with no access checks - neither the r
 msgstr ""
 
 #: src/engine/backend/metaCollection/metaObject.cpp:399
-msgid "Another session holds exclusive mode."
+msgid "Another session holds single-user mode."
 msgstr ""
 
 #: src/engine/backend/metaCollection/metaObject.cpp:400
@@ -3930,7 +3951,7 @@ msgstr ""
 
 #: src/engine/backend/metaCollection/metaObject.cpp:404
 #, c-format
-msgid "Structure (DDL) changes require exclusive mode. %s Code-only changes (modules, forms) can be saved without it."
+msgid "Structure (DDL) changes require single-user mode. %s Code-only changes (modules, forms) can be saved without it."
 msgstr ""
 
 #: src/engine/backend/metaCollection/metaObject.h:1016
@@ -3954,7 +3975,7 @@ msgid "! Doesn't have default language "
 msgstr ""
 
 #: src/engine/backend/metaCollection/metaObjectMetadata.h:174
-msgid "Configuration module"
+msgid "Application module"
 msgstr ""
 
 #: src/engine/backend/metaCollection/metaObjectMetadata.h:174
@@ -3977,7 +3998,7 @@ msgstr ""
 #: src/engine/backend/metaCollection/partial/chartOfAccounts.h:314
 #: src/engine/backend/metaCollection/partial/chartOfCalculationTypes.h:269
 #: src/engine/backend/metaCollection/partial/chartOfCharacteristicTypes.h:227
-#: src/engine/backend/metaCollection/partial/dataProcessor.h:116
+#: src/engine/backend/metaCollection/partial/dataTool.h:116
 #: src/engine/backend/metaCollection/partial/dataReport.h:181
 #: src/engine/backend/metaCollection/partial/document.h:184
 #: src/engine/backend/metaCollection/partial/enumeration.h:129
@@ -3991,7 +4012,7 @@ msgid "Default role"
 msgstr ""
 
 #: src/engine/backend/metaCollection/metaObjectMetadata.h:196
-msgid "The role meant for users who have none of their own. Saved with the configuration, but no session reads it yet: a user without roles gets each right's own default."
+msgid "The role meant for users who have none of their own. Saved with the application, but no session reads it yet: a user without roles gets each right's own default."
 msgstr ""
 
 #: src/engine/backend/metaCollection/metaObjectMetadata.h:197
@@ -3999,7 +4020,7 @@ msgid "Default language"
 msgstr ""
 
 #: src/engine/backend/metaCollection/metaObjectMetadata.h:197
-msgid "The configuration's own language: captions written without naming a language go into it, and a user with no language of their own sees it."
+msgid "The application's own language: captions written without naming a language go into it, and a user with no language of their own sees it."
 msgstr ""
 
 #: src/engine/backend/metaCollection/metaObjectMetadata.h:199
@@ -4011,11 +4032,11 @@ msgid "Version"
 msgstr ""
 
 #: src/engine/backend/metaCollection/metaObjectMetadata.h:200
-msgid "The compatibility version: which platform behaviour the configuration asks for. Don't use compatibility (the default) runs the current behaviour. Saved with the configuration and reported by the tools; no behaviour is switched by it yet."
+msgid "The compatibility version: which platform behaviour the application asks for. Don't use compatibility (the default) runs the current behaviour. Saved with the application and reported by the tools; no behaviour is switched by it yet."
 msgstr ""
 
 #: src/engine/backend/metaCollection/metaObjectMetadata.h:205
-msgid "The dialect the configuration's modules are written in. CES (the default for new configurations): braces and semicolons. VES: the legacy word-based dialect, kept for migrated configurations."
+msgid "The dialect the application's modules are written in. CES (the default for new applications): braces and semicolons. VES: the legacy word-based dialect, kept for migrated applications."
 msgstr ""
 
 #: src/engine/backend/metaCollection/metaObjectMetadata.h:208
@@ -4036,7 +4057,7 @@ msgid "Active users"
 msgstr ""
 
 #: src/engine/backend/metaCollection/metaObjectMetadata.h:212
-msgid "Exclusive mode"
+msgid "Single-user mode"
 msgstr ""
 
 #: src/engine/backend/metaCollection/metaObjectMetadata.h:213
@@ -4067,7 +4088,7 @@ msgid "ces"
 msgstr ""
 
 #: src/engine/backend/metaCollection/metaObjectMetadataMenu.cpp:12
-msgid "Open configuration module"
+msgid "Open application module"
 msgstr ""
 
 #: src/engine/backend/metaCollection/metaObjectMetadataMenu.cpp:13
@@ -4104,7 +4125,7 @@ msgid "OnLoadMetaObject failed for '%s'"
 msgstr ""
 
 #: src/engine/backend/metaCollection/metaPictureObject.h:29
-msgid "The image this common picture holds, stored in the configuration. Commands, sections and form controls can take it as their picture by reference, so one image is kept in one place."
+msgid "The image this shared picture holds, stored in the application. Commands, sections and form controls can take it as their picture by reference, so one image is kept in one place."
 msgstr ""
 
 #: src/engine/backend/metaCollection/metaRoleObject.h:19
@@ -4211,7 +4232,7 @@ msgid "Job module"
 msgstr ""
 
 #: src/engine/backend/metaCollection/metaScheduledJobObject.h:110
-msgid "The job's code: the handler the job manager calls when the job runs, compiled with the session's modules so it can call common modules like any other code."
+msgid "The job's code: the handler the job manager calls when the job runs, compiled with the session's modules so it can call shared modules like any other code."
 msgstr ""
 
 #: src/engine/backend/metaCollection/metaScheduledJobObjectMenu.cpp:11
@@ -4220,7 +4241,7 @@ msgid "Open job module"
 msgstr ""
 
 #: src/engine/backend/metaCollection/metaSectionObject.h:111
-msgid "The section's icon in the navigation panel. Empty: the configuration's own icon is shown."
+msgid "The section's icon in the navigation panel. Empty: the application's own icon is shown."
 msgstr ""
 
 #: src/engine/backend/metaCollection/metaSectionObjectMenu.cpp:6
@@ -4358,7 +4379,7 @@ msgid "Template data"
 msgstr ""
 
 #: src/engine/backend/metaCollection/metaTemplateObject.h:57
-msgid "What the template holds, its kind chosen when it is added: a spreadsheet document (cells, named areas and parameters a print form is assembled from) or a data composer (its query, resources, parameters, structure and settings variants). Code gets a fresh value of it with the owner's GetTemplate(name), a common one with GetCommonTemplate(name)."
+msgid "What the template holds, its kind chosen when it is added: a spreadsheet document (cells, named areas and parameters a print form is assembled from) or a data composer (its query, resources, parameters, structure and settings variants). Code gets a fresh value of it with the owner's GetTemplate(name), a common one with GetSharedTemplate(name)."
 msgstr ""
 
 #: src/engine/backend/metaCollection/partial/accountingRegister.h:305
@@ -4412,7 +4433,7 @@ msgstr ""
 #: src/engine/backend/metaCollection/partial/chartOfAccounts.h:312
 #: src/engine/backend/metaCollection/partial/chartOfCalculationTypes.h:252
 #: src/engine/backend/metaCollection/partial/chartOfCharacteristicTypes.h:222
-#: src/engine/backend/metaCollection/partial/dataProcessor.h:114
+#: src/engine/backend/metaCollection/partial/dataTool.h:114
 #: src/engine/backend/metaCollection/partial/dataReport.h:164
 #: src/engine/backend/metaCollection/partial/document.h:182
 #: src/engine/backend/metaCollection/partial/enumeration.h:127
@@ -4536,7 +4557,7 @@ msgstr ""
 #: src/engine/backend/metaCollection/partial/chartOfAccountsMetadataMenu.cpp:12
 #: src/engine/backend/metaCollection/partial/chartOfCalculationTypesMetadataMenu.cpp:12
 #: src/engine/backend/metaCollection/partial/chartOfCharacteristicTypesMetadataMenu.cpp:12
-#: src/engine/backend/metaCollection/partial/dataProcessorMetadataMenu.cpp:13
+#: src/engine/backend/metaCollection/partial/dataToolMetadataMenu.cpp:13
 #: src/engine/backend/metaCollection/partial/dataReportMetadataMenu.cpp:13
 #: src/engine/backend/metaCollection/partial/documentMetadataMenu.cpp:12
 #: src/engine/backend/metaCollection/partial/enumerationMetadataMenu.cpp:11
@@ -4568,7 +4589,7 @@ msgstr ""
 
 #: src/engine/backend/metaCollection/partial/accountingRegisterMetadataSchema.cpp:175
 #, c-format
-msgid "Accounting register '%s': the %s side declares no %s - the configuration is inconsistent"
+msgid "Accounting register '%s': the %s side declares no %s - the application is inconsistent"
 msgstr ""
 
 #: src/engine/backend/metaCollection/partial/accountingRegisterMetadataSchema.cpp:177
@@ -5123,7 +5144,7 @@ msgstr ""
 #: src/engine/backend/metaCollection/partial/chartOfAccounts.h:311
 #: src/engine/backend/metaCollection/partial/chartOfCalculationTypes.h:251
 #: src/engine/backend/metaCollection/partial/chartOfCharacteristicTypes.h:221
-#: src/engine/backend/metaCollection/partial/dataProcessor.h:113
+#: src/engine/backend/metaCollection/partial/dataTool.h:113
 #: src/engine/backend/metaCollection/partial/dataReport.h:163
 #: src/engine/backend/metaCollection/partial/document.h:181
 #: src/engine/backend/metaCollection/partial/parameterizedJob.h:272
@@ -5142,7 +5163,7 @@ msgstr ""
 #: src/engine/backend/metaCollection/partial/chartOfAccounts.h:316
 #: src/engine/backend/metaCollection/partial/chartOfCalculationTypes.h:271
 #: src/engine/backend/metaCollection/partial/chartOfCharacteristicTypes.h:229
-#: src/engine/backend/metaCollection/partial/dataProcessor.h:117
+#: src/engine/backend/metaCollection/partial/dataTool.h:117
 #: src/engine/backend/metaCollection/partial/dataReport.h:182
 #: src/engine/backend/metaCollection/partial/document.h:186
 #: src/engine/backend/metaCollection/partial/parameterizedJob.h:277
@@ -5234,7 +5255,7 @@ msgstr ""
 #: src/engine/backend/metaCollection/partial/chartOfAccountsMetadataMenu.cpp:11
 #: src/engine/backend/metaCollection/partial/chartOfCalculationTypesMetadataMenu.cpp:11
 #: src/engine/backend/metaCollection/partial/chartOfCharacteristicTypesMetadataMenu.cpp:11
-#: src/engine/backend/metaCollection/partial/dataProcessorMetadataMenu.cpp:11
+#: src/engine/backend/metaCollection/partial/dataToolMetadataMenu.cpp:11
 #: src/engine/backend/metaCollection/partial/dataReportMetadataMenu.cpp:11
 #: src/engine/backend/metaCollection/partial/documentMetadataMenu.cpp:11
 #: src/engine/backend/metaCollection/partial/parameterizedJobMetadataMenu.cpp:11
@@ -5616,7 +5637,7 @@ msgstr ""
 
 #: src/engine/backend/metaCollection/partial/commonObject.cpp:2916
 #, c-format
-msgid "%s: line %i of the %s list is declared by the configuration and cannot be removed, moved or changed"
+msgid "%s: line %i of the %s list is declared by the application and cannot be removed, moved or changed"
 msgstr ""
 
 #: src/engine/backend/metaCollection/partial/commonObject.cpp:2947
@@ -5796,7 +5817,7 @@ msgid "Order"
 msgstr ""
 
 #: src/engine/backend/metaCollection/partial/commonObject.h:906
-msgid "The position of the value in its enumeration, as the values are listed in the configuration. Values compare and sort by it, so a query ordering by an enumeration field orders by the declared order, not by the name."
+msgid "The position of the value in its enumeration, as the values are listed in the application. Values compare and sort by it, so a query ordering by an enumeration field orders by the declared order, not by the name."
 msgstr ""
 
 #: src/engine/backend/metaCollection/partial/commonObject.h:923
@@ -5853,7 +5874,7 @@ msgid "Register records deletion"
 msgstr ""
 
 #: src/engine/backend/metaCollection/partial/commonObject.h:1297
-msgid "What the platform does with the document's movements when it is posted again or its posting is undone. Automatically (the default): cleared before the posting handler runs and when the posting is undone. On undo posting: kept when posted again, cleared on undo. Never: the configuration clears them. A deleted document always takes its movements with it."
+msgid "What the platform does with the document's movements when it is posted again or its posting is undone. Automatically (the default): cleared before the posting handler runs and when the posting is undone. On undo posting: kept when posted again, cleared on undo. Never: the application clears them. A deleted document always takes its movements with it."
 msgstr ""
 
 #: src/engine/backend/metaCollection/partial/commonObject.h:1299
@@ -5904,7 +5925,7 @@ msgid "Predefined name"
 msgstr ""
 
 #: src/engine/backend/metaCollection/partial/commonObject.h:1599
-msgid "The name of an item the configuration itself declares (a predefined item) - what code refers to it by, as Catalogs.<Name>.<PredefinedName>. Empty for items created by users; a predefined item cannot be deleted."
+msgid "The name of an item the application itself declares (a predefined item) - what code refers to it by, as Catalogs.<Name>.<PredefinedName>. Empty for items created by users; a predefined item cannot be deleted."
 msgstr ""
 
 #: src/engine/backend/metaCollection/partial/commonObject.h:1602
@@ -6117,7 +6138,7 @@ msgstr ""
 
 #: src/engine/backend/metaCollection/partial/commonObjectSchema.cpp:495
 #, c-format
-msgid "%s.%s %i: the configuration declares this line where the base already holds one - remove the lines held there first"
+msgid "%s.%s %i: the application declares this line where the base already holds one - remove the lines held there first"
 msgstr ""
 
 #: src/engine/backend/metaCollection/partial/constant.h:39
@@ -6128,25 +6149,25 @@ msgstr ""
 msgid "Refuse to write an empty value: the constant's form shows the field as required, and a write leaving it empty fails with a message naming it."
 msgstr ""
 
-#: src/engine/backend/metaCollection/partial/dataProcessor.h:25
-msgid "Form data processor"
+#: src/engine/backend/metaCollection/partial/dataTool.h:25
+msgid "Form data tool"
 msgstr ""
 
-#: src/engine/backend/metaCollection/partial/dataProcessor.h:113
-msgid "Code of one data processor object: the procedures that do its work over its attributes and tabular sections, called from its form or from other code."
+#: src/engine/backend/metaCollection/partial/dataTool.h:113
+msgid "Code of one data tool object: the procedures that do its work over its attributes and tabular sections, called from its form or from other code."
 msgstr ""
 
-#: src/engine/backend/metaCollection/partial/dataProcessor.h:114
-msgid "Code of the data processor kind as a whole: its exported procedures and functions are called on the manager, as DataProcessors.<Name>.<Function>()."
+#: src/engine/backend/metaCollection/partial/dataTool.h:114
+msgid "Code of the data tool kind as a whole: its exported procedures and functions are called on the manager, as DataTools.<Name>.<Function>()."
 msgstr ""
 
-#: src/engine/backend/metaCollection/partial/dataProcessor.h:117
-msgid "The form the data processor opens with. Empty: a form generated from its attributes."
+#: src/engine/backend/metaCollection/partial/dataTool.h:117
+msgid "The form the data tool opens with. Empty: a form generated from its attributes."
 msgstr ""
 
-#: src/engine/backend/metaCollection/partial/dataProcessorManager.cpp:76
+#: src/engine/backend/metaCollection/partial/dataToolManager.cpp:76
 #, c-format
-msgid "Failed to load data processor '%s'"
+msgid "Failed to load data tool '%s'"
 msgstr ""
 
 #: src/engine/backend/metaCollection/partial/dataReport.h:33
@@ -6556,7 +6577,7 @@ msgid "Automatic border"
 msgstr ""
 
 #: src/engine/backend/metaCollection/partial/sequence.h:302
-msgid "The platform takes the border BACK by itself: a document at or before it - written again, posted again, unposted, deleted - sends the border to the registration before it, by the keys the document's own registrations name. Off: the configuration says when the sequence is broken, through SetBorder; the border still moves forward as documents are posted in their turn. A retreat is what sets a mass reposting going, so a solution may want to decide that moment itself."
+msgid "The platform takes the border BACK by itself: a document at or before it - written again, posted again, unposted, deleted - sends the border to the registration before it, by the keys the document's own registrations name. Off: the application says when the sequence is broken, through SetBorder; the border still moves forward as documents are posted in their turn. A retreat is what sets a mass reposting going, so a solution may want to decide that moment itself."
 msgstr ""
 
 #: src/engine/backend/metaCollection/partial/sequence.h:310
@@ -6670,59 +6691,59 @@ msgstr ""
 msgid "The row's number in the tabular section, 1-based, kept by the platform: renumbered when rows are added, deleted or moved, and written with the object. Read-only for code."
 msgstr ""
 
-#: src/engine/backend/metadataConfiguration.cpp:79
-#: src/engine/backend/metadataConfiguration.cpp:825
-#: src/engine/backend/metadataConfiguration.cpp:863
-#: src/engine/backend/metadataConfiguration.cpp:993
-msgid "This configuration is open for reading only."
+#: src/engine/backend/metadataApplication.cpp:79
+#: src/engine/backend/metadataApplication.cpp:825
+#: src/engine/backend/metadataApplication.cpp:863
+#: src/engine/backend/metadataApplication.cpp:993
+msgid "This application is open for reading only."
 msgstr ""
 
-#: src/engine/backend/metadataConfiguration.cpp:84
-msgid "The directory does not contain a configuration."
+#: src/engine/backend/metadataApplication.cpp:84
+msgid "The directory does not contain an application."
 msgstr ""
 
-#: src/engine/backend/metadataConfiguration.cpp:445
-msgid "This configuration is stored in a format this build cannot read: it was written by an older or a different build. Nothing was loaded."
+#: src/engine/backend/metadataApplication.cpp:445
+msgid "This application is stored in a format this build cannot read: it was written by an older or a different build. Nothing was loaded."
 msgstr ""
 
-#: src/engine/backend/metadataDataProcessor.cpp:411
+#: src/engine/backend/metadataDataTool.cpp:411
 #: src/engine/backend/metadataReport.cpp:419
 #, c-format
 msgid "'%s' is stored in a format this build cannot read: it was written by an older or a different build. Nothing was loaded."
 msgstr ""
 
-#: src/engine/backend/metadataConfiguration.cpp:686
+#: src/engine/backend/metadataApplication.cpp:686
 #, c-format
-msgid "The data was saved by a newer build (date form %u) that this build cannot read. Nothing was loaded."
+msgid "The data was saved by another build (date form %u) that this build cannot read. Nothing was loaded."
 msgstr ""
 
-#: src/engine/backend/metadataConfiguration.cpp:847
-#: src/engine/backend/metadataConfiguration.cpp:911
-msgid "Failed to save the configuration."
+#: src/engine/backend/metadataApplication.cpp:847
+#: src/engine/backend/metadataApplication.cpp:911
+msgid "Failed to save the application."
 msgstr ""
 
-#: src/engine/backend/metadataConfiguration.cpp:940
+#: src/engine/backend/metadataApplication.cpp:940
 msgid "The update could not be started."
 msgstr ""
 
-#: src/engine/backend/metadataConfiguration.cpp:961
+#: src/engine/backend/metadataApplication.cpp:961
 msgid "Failed to update the database."
 msgstr ""
 
-#: src/engine/backend/metadataConfiguration.cpp:968
+#: src/engine/backend/metadataApplication.cpp:968
 msgid "Rolled back - nothing was applied."
 msgstr ""
 
-#: src/engine/backend/metadataConfiguration.cpp:998
-msgid "The configuration could not be taken back from the database."
+#: src/engine/backend/metadataApplication.cpp:998
+msgid "The application could not be taken back from the database."
 msgstr ""
 
-#: src/engine/backend/metadataConfigurationQuery.cpp:162
+#: src/engine/backend/metadataApplicationQuery.cpp:162
 msgid "Create new database"
 msgstr ""
 
-#: src/engine/backend/metadataConfigurationQuery.cpp:485
-msgid "The configuration was applied, but the base could not read it: the sessions to come work in the one before."
+#: src/engine/backend/metadataApplicationQuery.cpp:485
+msgid "The application was applied, but the base could not read it: the sessions to come work in the one before."
 msgstr ""
 
 #: src/engine/backend/metadataSerialization.cpp:52
@@ -6738,17 +6759,17 @@ msgstr ""
 
 #: src/engine/backend/moduleManager/moduleManager.cpp:138
 #, c-format
-msgid "Common module '%s' failed to compile: %s"
+msgid "Shared module '%s' failed to compile: %s"
 msgstr ""
 
 #: src/engine/backend/moduleManager/moduleManager.cpp:174
 #, c-format
-msgid "Rename of common module '%s' to '%s' left compile in failed state: %s"
+msgid "Rename of shared module '%s' to '%s' left compile in failed state: %s"
 msgstr ""
 
 #: src/engine/backend/moduleManager/moduleManager.cpp:399
 #, c-format
-msgid "Common module '%s' did not compile - the session cannot start"
+msgid "Shared module '%s' did not compile - the session cannot start"
 msgstr ""
 
 #: src/engine/backend/moduleManager/moduleManagerDataUnit.cpp:245
@@ -6796,7 +6817,7 @@ msgstr ""
 
 #: src/engine/backend/moduleManager/moduleManagerUnit.cpp:58
 #, c-format
-msgid "Common module init failed: %s"
+msgid "Shared module init failed: %s"
 msgstr ""
 
 #: src/engine/backend/propertyManager/property/variant/variantChoiceLink.cpp:382
@@ -6814,7 +6835,7 @@ msgstr ""
 
 #: src/engine/backend/propertyManager/property/variant/variantPicture.cpp:28
 #: src/engine/frmclient/propertyManager/property/advprop/advpropPicture.cpp:35
-msgid "Configuration picture"
+msgid "Application picture"
 msgstr ""
 
 #: src/engine/backend/propertyManager/property/variant/variantPicture.cpp:30
@@ -7708,19 +7729,19 @@ msgid "Session registry not initialised"
 msgstr ""
 
 #: src/engine/backend/session/session.cpp:877
-msgid "Another session is in exclusive mode"
+msgid "Another session is in single-user mode"
 msgstr ""
 
 #: src/engine/backend/session/session.cpp:880
-msgid "Cannot acquire exclusive mode: other sessions are active"
+msgid "Cannot acquire single-user mode: other sessions are active"
 msgstr ""
 
 #: src/engine/backend/session/session.cpp:885
-msgid "Cannot acquire exclusive mode while a job is running. Try again when it finishes."
+msgid "Cannot acquire single-user mode while a job is running. Try again when it finishes."
 msgstr ""
 
 #: src/engine/backend/session/session.cpp:887
-msgid "Exclusive mode request did not complete"
+msgid "Single-user mode request did not complete"
 msgstr ""
 
 #: src/engine/backend/session/session.cpp:990
@@ -7770,7 +7791,7 @@ msgstr ""
 #: src/engine/backend/session/sessionRegistry.cpp:1066
 #: src/engine/backend/session/sessionRegistry.cpp:1123
 #, c-format
-msgid "Another session holds exclusive mode (user '%s')"
+msgid "Another session holds single-user mode (user '%s')"
 msgstr ""
 
 #: src/engine/backend/session/sessionRegistry.cpp:1222
@@ -8100,7 +8121,7 @@ msgstr ""
 
 #: src/engine/backend/system/systemManagerFunc.cpp:851
 #: src/engine/backend/system/systemManagerFunc.cpp:908
-msgid "There is no open configuration to write this value against"
+msgid "There is no open application to write this value against"
 msgstr ""
 
 #: src/engine/backend/system/systemManagerFunc.cpp:861
@@ -8109,7 +8130,7 @@ msgstr ""
 
 #: src/engine/backend/system/systemManagerFunc.cpp:879
 #: src/engine/backend/system/systemManagerFunc.cpp:926
-msgid "There is no open configuration to read this value against"
+msgid "There is no open application to read this value against"
 msgstr ""
 
 #: src/engine/backend/system/systemManagerFunc.cpp:892
@@ -8135,12 +8156,12 @@ msgstr ""
 
 #: src/engine/backend/system/systemManagerFunc.cpp:1119
 #, c-format
-msgid "Common form not found '%s'"
+msgid "Shared form not found '%s'"
 msgstr ""
 
 #: src/engine/backend/system/systemManagerFunc.cpp:1160
 #, c-format
-msgid "Common template not found '%s'"
+msgid "Shared template not found '%s'"
 msgstr ""
 
 #: src/engine/backend/system/systemManagerFunc.cpp:1242
@@ -9785,10 +9806,6 @@ msgstr ""
 msgid "Recursive module call (#3)"
 msgstr ""
 
-#: src/engine/core/compiler/translateCode.cpp:1247
-msgid "'||' is not an operator here - conditions join with the word Or"
-msgstr ""
-
 #: src/engine/core/composition/compositionTheme.cpp:13
 msgid "Meadow"
 msgstr ""
@@ -10671,7 +10688,7 @@ msgstr ""
 
 #: src/engine/core/serialize/provider/fileProvider.cpp:40
 #, c-format
-msgid "Configuration files: %s"
+msgid "Application files: %s"
 msgstr ""
 
 #: src/engine/core/serialize/provider/fileProvider.cpp:46
@@ -10694,7 +10711,7 @@ msgid "an export directory cannot be a symbolic link"
 msgstr ""
 
 #: src/engine/core/serialize/provider/fileProvider.cpp:129
-msgid "a configuration file cannot be a symbolic link"
+msgid "an application file cannot be a symbolic link"
 msgstr ""
 
 #: src/engine/core/serialize/provider/fileProvider.cpp:138
@@ -10714,7 +10731,7 @@ msgstr ""
 
 #: src/engine/core/serialize/provider/fileProvider.cpp:186
 #, c-format
-msgid "two parts of the configuration are named '%s' - a name told apart only by case is the same folder"
+msgid "two parts of the application are named '%s' - a name told apart only by case is the same folder"
 msgstr ""
 
 #: src/engine/core/serialize/provider/fileProvider.cpp:227
@@ -10748,7 +10765,7 @@ msgid "'%s' is named more than once"
 msgstr ""
 
 #: src/engine/core/serialize/provider/fileProvider.cpp:415
-msgid "the directory holds no configuration export of a version this build reads"
+msgid "the directory holds no application export of a version this build reads"
 msgstr ""
 
 #: src/engine/core/serialize/provider/fileProvider.cpp:425
@@ -10762,7 +10779,7 @@ msgid "'%s' is missing"
 msgstr ""
 
 #: src/engine/core/serialize/provider/fileProvider.cpp:502
-msgid "there is no configuration export to write"
+msgid "there is no application export to write"
 msgstr ""
 
 #: src/engine/core/serialize/provider/fileProvider.cpp:512
@@ -12992,7 +13009,7 @@ msgid "Load from file"
 msgstr ""
 
 #: src/engine/frmclient/propertyManager/property/advprop/advpropPicture.cpp:160
-msgid "Load from configuration"
+msgid "Load from application"
 msgstr ""
 
 #: src/engine/frmclient/propertyManager/property/advprop/advpropPicture.cpp:164
@@ -13008,7 +13025,7 @@ msgid "Image from engine collections"
 msgstr ""
 
 #: src/engine/frmclient/propertyManager/property/advprop/advpropPicture.cpp:175
-msgid "Image from configuration"
+msgid "Image from application"
 msgstr ""
 
 #: src/engine/frmclient/propertyManager/property/advprop/advpropPicture.cpp:180
@@ -13115,7 +13132,7 @@ msgstr ""
 
 #: src/engine/frmclient/win/dlgs/about.cpp:83
 #: src/engine/frmclient/win/dlgs/activeUser.cpp:47
-msgid "Application"
+msgid "Program"
 msgstr ""
 
 #: src/engine/frmclient/win/dlgs/about.cpp:85
@@ -13998,7 +14015,7 @@ msgid "Query constructor"
 msgstr ""
 
 #: src/engine/frmclient/win/dlgs/queryConstructor/queryConstructor.cpp:459
-msgid "View only. This query belongs to a configuration that cannot be changed. Nothing edited here will be saved."
+msgid "View only. This query belongs to an application that cannot be changed. Nothing edited here will be saved."
 msgstr ""
 
 #: src/engine/frmclient/win/dlgs/queryConstructor/queryConstructor.cpp:500
@@ -15200,7 +15217,7 @@ msgid "Display mode"
 msgstr ""
 
 #: src/engine/frmclient/win/dlgs/translateConstructor/translateConstructor.cpp:96
-msgid "Also in this text, for codes this configuration has no language for. They are kept:"
+msgid "Also in this text, for codes this application has no language for. They are kept:"
 msgstr ""
 
 #: src/engine/frmclient/win/dlgs/translateConstructor/translateConstructor.cpp:97
@@ -15538,17 +15555,17 @@ msgstr ""
 
 #: src/engine/frmserver/docView/docManagerDesigner.cpp:35
 #: src/engine/frmserver/docView/docManagerRuntime.cpp:17
-msgid "External data processor"
+msgid "External data tool"
 msgstr ""
 
 #: src/engine/frmserver/docView/docManagerDesigner.cpp:35
 #: src/engine/frmserver/docView/docManagerRuntime.cpp:17
-msgid "Data processor Doc"
+msgid "Data tool Doc"
 msgstr ""
 
 #: src/engine/frmserver/docView/docManagerDesigner.cpp:35
 #: src/engine/frmserver/docView/docManagerRuntime.cpp:17
-msgid "Data processor View"
+msgid "Data tool View"
 msgstr ""
 
 #: src/engine/frmserver/docView/docManagerDesigner.cpp:36
@@ -15567,11 +15584,11 @@ msgid "Report View"
 msgstr ""
 
 #: src/engine/frmserver/docView/docManagerDesigner.cpp:37
-msgid "Configuration Doc"
+msgid "Application Doc"
 msgstr ""
 
 #: src/engine/frmserver/docView/docManagerDesigner.cpp:37
-msgid "Configuration View"
+msgid "Application View"
 msgstr ""
 
 #: src/engine/frmserver/docView/templates/designer/docViewFormEdit.cpp:267
@@ -15687,7 +15704,7 @@ msgstr ""
 
 #: src/engine/frmserver/mcp/mcpServer.cpp:617
 #, c-format
-msgid " Configuration '%s' is open."
+msgid " Application '%s' is open."
 msgstr ""
 
 #: src/engine/frmserver/mcp/mcpServer.cpp:623
@@ -15761,32 +15778,39 @@ msgstr ""
 msgid "The user list could not be read: %s"
 msgstr ""
 
-#: src/engine/frmserver/metaTree/treeConfiguration.cpp:42
+#: src/engine/frmserver/metaTree/treeApplication.cpp:42
 msgid "Enums"
 msgstr ""
 
-#: src/engine/frmserver/metaTree/treeConfiguration.cpp:272
+#: src/engine/frmserver/metaTree/treeApplication.cpp:272
 msgid " form wizard"
 msgstr ""
 
-#: src/engine/frmserver/metaTree/treeConfiguration.cpp:277
+#: src/engine/frmserver/metaTree/treeApplication.cpp:277
 msgid "Generic form"
 msgstr ""
 
-#: src/engine/frmserver/metaTree/treeConfiguration.cpp:323
+#: src/engine/frmserver/metaTree/treeApplication.cpp:323
 msgid " template wizard"
 msgstr ""
 
-#: src/engine/frmserver/metaTree/treeConfiguration.cpp:416
-msgid "Insert data processor, report..."
+#: src/engine/frmserver/metaTree/treeApplication.cpp:416
+msgid "Insert data tool, report..."
 msgstr ""
 
-#: src/engine/frmserver/metaTree/treeConfiguration.cpp:478
-msgid "Replace data processor, report..."
+#: src/engine/frmserver/metaTree/treeApplication.cpp:478
+msgid "Replace data tool, report..."
 msgstr ""
 
-#: src/engine/frmserver/metaTree/treeConfiguration.cpp:479
-msgid "Save data processor, report..."
+#: src/engine/frmserver/metaTree/treeApplication.cpp:479
+msgid "Save data tool, report..."
+msgstr ""
+
+#: src/engine/frmserver/metaTree/treeApplication.cpp:28
+#: src/engine/backend/metaCollection/metaDiff.cpp:78
+#: src/engine/appstudio/backend/metaCollection/metaDiff.h:169
+msgctxt "metadata branch"
+msgid "Shared"
 msgstr ""
 
 #: src/engine/frmserver/schema/activeUser.cpp:60
@@ -15834,17 +15858,17 @@ msgstr ""
 msgid "Failed to release lock %s"
 msgstr ""
 
-#: src/engine/frmserver/schema/designer/configCompare.cpp:354
+#: src/engine/frmserver/schema/designer/applicationCompare.cpp:354
 #, c-format
 msgid "Merge applied to %d item(s)."
 msgstr ""
 
-#: src/engine/frmserver/schema/designer/configCompare.cpp:356
+#: src/engine/frmserver/schema/designer/applicationCompare.cpp:356
 msgid "Not applied:"
 msgstr ""
 
-#: src/engine/frmserver/schema/designer/configCompare.cpp:360
-msgid "Use Configuration > Save configuration to persist the changes."
+#: src/engine/frmserver/schema/designer/applicationCompare.cpp:360
+msgid "Use Application > Save application to persist the changes."
 msgstr ""
 
 #: src/engine/frmserver/schema/designer/database.cpp:73
@@ -15892,15 +15916,15 @@ msgid "Error when trying to clear database!"
 msgstr ""
 
 #: src/engine/frmserver/schema/designer/metaData.cpp:294
-msgid "Successfully rolled back to database configuration!"
+msgid "Successfully reverted to the database's application!"
 msgstr ""
 
 #: src/engine/frmserver/schema/designer/metaData.cpp:350
-msgid "The data processor or report could not be read from the file."
+msgid "The data tool or report could not be read from the file."
 msgstr ""
 
 #: src/engine/frmserver/schema/designer/metaData.cpp:388
-msgid "The configuration could not be read from the file."
+msgid "The application could not be read from the file."
 msgstr ""
 
 #: src/engine/frmserver/schema/designer/userList.cpp:162
@@ -15953,7 +15977,7 @@ msgstr ""
 
 #: src/engine/frmserver/visualView/ctrl/control.h:107
 #: src/engine/frmserver/visualView/layers/commandBar.h:172
-msgid "The functional options this element is available under: while every one of them is off, it is neither shown nor offered, and neither is what it holds. Empty - available whatever the options are. Works together with Visible and does not change it."
+msgid "The feature options this element is available under: while every one of them is off, it is neither shown nor offered, and neither is what it holds. Empty - available whatever the options are. Works together with Visible and does not change it."
 msgstr ""
 
 #: src/engine/frmserver/visualView/ctrl/form.h:679
@@ -16747,7 +16771,7 @@ msgid "The line under a tile's title - a price, a count, a state. Shown only whe
 msgstr ""
 
 #: src/engine/frmserver/visualView/ctrl/widgets.h:85
-msgid "The command a press runs: a form command, a standard command of the form or of one of its tables, or a command of the configuration. A button has no click event of its own - the code goes into the command's handler."
+msgid "The command a press runs: a form command, a standard command of the form or of one of its tables, or a command of the application. A button has no click event of its own - the code goes into the command's handler."
 msgstr ""
 
 #: src/engine/frmserver/visualView/ctrl/widgets.h:178
@@ -17020,7 +17044,7 @@ msgid "Whether the item is the bar's default command: drawn standing out, in the
 msgstr ""
 
 #: src/engine/frmserver/visualView/layers/commandBar.h:168
-msgid "The command the item runs: a form command, a standard command of the form or of one of its tables, or a command of the form's object or of the configuration."
+msgid "The command the item runs: a form command, a standard command of the form or of one of its tables, or a command of the form's object or of the application."
 msgstr ""
 
 #: src/engine/frmserver/visualView/layers/commandBar.h:278
@@ -17479,7 +17503,7 @@ msgstr ""
 
 #: src/engine/backend/httpService/httpServiceCall.cpp
 #, c-format
-msgid "The web address %s '%s' is not registered: the configuration has no HTTP service %s."
+msgid "The web address %s '%s' is not registered: the application has no HTTP service %s."
 msgstr ""
 
 #: src/engine/frmserver/client/clientHost.cpp
@@ -17500,7 +17524,7 @@ msgstr ""
 msgid "HTTP services"
 msgstr ""
 
-#: src/engine/frmserver/metaTree/treeConfiguration.cpp:46 src/engine/backend/metaCollection/metaGroups.cpp:83
+#: src/engine/frmserver/metaTree/treeApplication.cpp:46 src/engine/backend/metaCollection/metaGroups.cpp:83
 msgid "URL templates"
 msgstr ""
 
@@ -17517,7 +17541,7 @@ msgid "Root URL"
 msgstr ""
 
 #: src/engine/backend/metaCollection/metaHttpServiceObject.h:109
-msgid "The service's address: one segment after /es/ in the address the web server publishes the base under - <publication>/es/<root URL>/... Unique in the configuration; it answers once registered among the base's web addresses."
+msgid "The service's address: one segment after /es/ in the address the web server publishes the base under - <publication>/es/<root URL>/... Unique in the application; it answers once registered among the base's web addresses."
 msgstr ""
 
 #: src/engine/backend/metaCollection/metaHttpServiceObject.h:114

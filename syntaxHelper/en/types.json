@@ -12,10 +12,10 @@
       "category_keys": ["value_types", "type_description"],
       "signature": "Type(name : string) / TypeOf(value : any)",
       "description": "A type as a value — what TypeOf answers about a value and Type(name) answers by name, and what a type comparison is made against: `TypeOf(Value) = Type(\"Number\")`. Two types are equal when they are the same class. String(type) is its registered name — \"Number\", \"Table\", \"CatalogRef.Goods\".\n\nA TypeDescription is built from types — one, or an Array of them — and its Types() answers with them.\n\nA Type is made by those two functions, not by New: `New Type(...)`, whatever it is given, makes a type that names no class, and the first use of it raises. A Type has no properties or methods of its own.",
-      "syntax_block": "T = Type(\"Number\");\nT = TypeOf(Value);\nIsNumber = TypeOf(Value) = Type(\"Number\");",
+      "syntax_block": "T = Type(\"Number\");\nT = TypeOf(Value);\nIsNumber = TypeOf(Value) == Type(\"Number\");",
       "parameters": "name — a registered type's name (Type).\nvalue — any value (TypeOf).",
       "return_descr": "Type.",
-      "example": "Value = 42;\nMessage(TypeOf(Value) = Type(\"Number\"));   // True\nMessage(String(TypeOf(New Table())));       // Table",
+      "example": "Value = 42;\nMessage(TypeOf(Value) == Type(\"Number\"));   // True\nMessage(String(TypeOf(New Table())));       // Table",
       "availability": "Client, Server",
       "see_also": ["fn.Type", "fn.TypeOf", "cls.TypeDescription", "cls.TypeDescription.Types"],
       "reviewed": false
@@ -269,7 +269,7 @@
       "syntax_block": "Key = New Guid();\nKey = New Guid(\"0f8fad5b-d9cb-469f-a165-70867728950e\");",
       "parameters": "text — the guid's text; left out, a new guid is made.",
       "return_descr": "Guid.",
-      "example": "Key = New Guid();\nText = String(Key);            // 36 characters\nMessage(New Guid(Text) = Key); // True",
+      "example": "Key = New Guid();\nText = String(Key);            // 36 characters\nMessage(New Guid(Text) == Key); // True",
       "availability": "Client, Server",
       "see_also": ["cls.Type", "fn.ValueIsFilled"],
       "reviewed": false

@@ -54,7 +54,7 @@ public:
 	// else (the database is never asked what it holds), and both copies — the one the database keeps
 	// and the one being edited — are loaded by the same code. Stamped in both, the section is in both
 	// snapshots, the diff is empty and the table is never created: MEASURED 2026-09-10, database_diff
-	// answered "the database already holds this configuration" over a Base section it had no table for.
+	// answered "the database already holds this application" over a Base section it had no table for.
 	// So the copy that mirrors the database leaves it at 0, and a part at 0 is not part of anything —
 	// no table (the chart's list), no column (below), no relation a reading joins — until the edited copy,
 	// which did stamp it, is applied and saved.

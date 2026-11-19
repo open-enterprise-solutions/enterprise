@@ -5,14 +5,14 @@
 #include "deskgui/univ/propgrid/advprops.h"
 
 #include "frmclient/backend/backend_core.h"
-#include "frmclient/backend/metaData.h"   // ibMetaData — the configuration of the object it opens
+#include "frmclient/backend/metaData.h"   // ibMetaData — the application of the object it opens
 
 // -----------------------------------------------------------------------
 // ibPGHyperLinkProperty
 // -----------------------------------------------------------------------
 
 // THE LINK OPENS AN OBJECT — a module, a form, a template, whichever the server named in the row (ibProperties::Object):
-// what OpenForm takes, its id in its configuration. What the object is, the link does not know.
+// what OpenForm takes, its id in its application. What the object is, the link does not know.
 class ibPGHyperLinkProperty : public ibPGProperty {
 public:
 

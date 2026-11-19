@@ -105,7 +105,7 @@ int ibSchemaBuilder::Execute(const ibDdlStatement& ddl)
 	// object, recorded from the statements themselves, never from reading the database. A two-phase
 	// apply can fail between its commits; the created tables are dropped wholesale (their undo below),
 	// and the ALTERs used to be the documented hole: the first commit had already dropped a column for
-	// good, the configuration was never published, and the next apply diffed the OLD baseline against
+	// good, the application was never published, and the next apply diffed the OLD baseline against
 	// the new target — a DROP of a column no longer there, refused, forever. The inverse action per
 	// statement closes that: replayed in reverse, the schema returns to what the unpublished baseline
 	// still describes. Objects THIS save created need no clause-level undo — dropping the table takes
@@ -174,7 +174,7 @@ int ibSchemaBuilder::Execute(const ibDdlStatement& ddl)
 		if (!onCreatedTable && !ddl.m_columns.empty()) {
 			// ⭐⭐ RE-CREATED FROM THE SHAPE THE STATEMENT CARRIED — EMPTY, as a dropped column comes back.
 			// Without it this was the one step the ledger could only apologise for, and the apology was not
-			// the end of it: the configuration is not published, the baseline still declares the table, and
+			// the end of it: the application is not published, the baseline still declares the table, and
 			// every later apply issued DROP TABLE against a table that was gone — refused, rolled back, on
 			// every retry, for good (measured 2026-09-15 on a copy: a table of a removed metatype dropped by
 			// the first commit, a deferred CREATE VIEW refused, and the base could not be applied again).

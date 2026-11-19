@@ -12,7 +12,7 @@ class ibValueManagerDataObjectEnumeration :
 	}
 	virtual ~ibValueManagerDataObjectEnumeration() {}
 
-	virtual const ibValueMetaObjectCommonModule* GetManagerModule() const;
+	virtual const ibValueMetaObjectSharedModule* GetManagerModule() const;
 	virtual const ibValueMetaObjectEnumeration* GetMetaObject() const { return m_metaObject; }
 
 	// The empty reference of this enumeration. Catalog and document managers

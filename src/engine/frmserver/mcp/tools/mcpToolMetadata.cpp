@@ -5,8 +5,8 @@
 // The verbs belong to the metadata (metaCollection/metaIntrospect.h); this file
 // is the door and the wording.
 //
-// THE CONFIGURATION IS THE ACTIVE ONE. A tool runs inside the session that
-// started the server, in a host that has exactly one configuration open, and
+// THE APPLICATION IS THE ACTIVE ONE. A tool runs inside the session that
+// started the server, in a host that has exactly one application open, and
 // changing THAT one is the job — so the entry point resolves it here and hands
 // it down. The mechanism below still takes it as an argument, which is what
 // keeps it testable and keeps the assumption in one visible place.
@@ -20,7 +20,7 @@
 #include "backend/metaCollection/metaIntrospect.h"
 #include "backend/metaCollection/metaModuleObject.h"   // the standard handlers a module may implement
 #include "backend/metaCollection/metaObject.h"
-#include "backend/metadataConfiguration.h"
+#include "backend/metadataApplication.h"
 #include "backend/propertyManager/propertyObject.h"   // GetProperty(idx) — what can be set
 #include "backend/propertyManager/property/variant/variantChoiceLink.h"   // how a field is chosen — what metadata_used_by reads
 #include "core/description/sourceDescription.h"       // a source's path — …and this
@@ -29,7 +29,7 @@ namespace {
 
 using namespace ibMcpMetadata;
 
-// ⚠ THE STORED NODE, ASKED FOR RATHER THAN GIVEN. It is how the configuration is SERIALISED - every
+// ⚠ THE STORED NODE, ASKED FOR RATHER THAN GIVEN. It is how the application is SERIALISED - every
 // internal field, and a base64 blob (Interface, Roles, Composition) on every predefined attribute -
 // so reading one synonym off a catalogue used to cost the whole storage form of the object
 // (measured while driving this server, 2026-09-03). What a caller needs is above it; whoever wants
@@ -71,7 +71,7 @@ const ibArg& ArgKindOptional()
 {
 	static const ibArg s_a(ibT("kind"), ibArg::Kind::Text,
 		ibMcpText("The kind, spelled the way a script writes it: Catalog, Document, Enumeration, "
-			  "InformationRegister, AccumulationRegister, Report, DataProcessor... "
+			  "InformationRegister, AccumulationRegister, Report, DataTool... "
 			  "Not needed when you ask by id."));
 	return s_a;
 }
@@ -81,7 +81,7 @@ const ibArg& ArgDepth()
 	static const ibArg s_a(ibT("depth"), ibArg::Kind::Whole,
 		ibMcpText("How many levels down to walk. 1 is the children of the node asked about, 2 their "
 		  "children too. Omit for 2, which is enough to see an object and what it holds; pass 0 "
-		  "for the whole subtree. ASK WITH 1 FIRST when the question is what this configuration "
+		  "for the whole subtree. ASK WITH 1 FIRST when the question is what this application "
 		  "holds at all - the default answers every attribute of every object, and eight of them "
 		  "on a catalog are predefined ones that are the same everywhere."));
 	return s_a;
@@ -146,10 +146,10 @@ public:
 
 	ibString GetDescription() const override
 	{
-		return ibMcpText("THE MAP: what this configuration holds, as a tree, with the id of every node. "
+		return ibMcpText("THE MAP: what this application holds, as a tree, with the id of every node. "
 			"Start here rather than guessing - one call shows the objects, their attributes, "
 			"tabular sections, forms, templates, commands and composers, each with the id every "
-			"other tool takes. Ask it of the whole configuration, or of one object to see inside "
+			"other tool takes. Ask it of the whole application, or of one object to see inside "
 			"it - and with depth 1 for the overview, since the default walks two levels and most "
 			"of that is the predefined attributes every catalog and document has. A node that does "
 			"not apply as its owner currently stands says so - a catalog with no owner disables "
@@ -177,22 +177,22 @@ public:
 
 			from = ibFindMetaObjectById(metaData, (ibMetaID)id->AsInt());
 			if (from == nullptr) {
-				refusal = ibString::Format(ibMcpText("Nothing in this configuration has id %s."),
+				refusal = ibString::Format(ibMcpText("Nothing in this application has id %s."),
 					id->AsNumber().ToString());
 				return false;
 			}
 		}
 		else {
-			from = metaData->GetCommonMetaObject();
+			from = metaData->GetRootMetaObject();
 		}
 
 		if (from == nullptr) {
-			refusal = ibMcpText("This configuration has no root to walk.");
+			refusal = ibMcpText("This application has no root to walk.");
 			return false;
 		}
 
 		// Two levels by default: an object and what it holds. Deep enough to act on, shallow
-		// enough that asking about the configuration does not answer with all of it.
+		// enough that asking about the application does not answer with all of it.
 		//
 		// ⚠ ZERO MEANS EVERYTHING to the caller and "go no further" to the walk, which is the same
 		// number carrying two opposite meanings — so it is turned into -1 here, once, rather than
@@ -225,7 +225,7 @@ public:
 private:
 
 	// ⚠ DELETED NODES ARE NOT THERE unless they were asked for. A metaobject marked deleted is
-	// still in the tree until the configuration is saved, and answering with it by default would
+	// still in the tree until the application is saved, and answering with it by default would
 	// offer an id that every other tool refuses — but a caller looking at a tree that does not add
 	// up needs to be able to see them, which is what `deleted` is for.
 	//
@@ -265,7 +265,7 @@ private:
 			// beside its name, in the property list a person opens it in. The map is exactly where a
 			// glance happens, and a tree of names alone cannot tell a live catalog from a probe left
 			// over from an experiment. Answered when there is one, so nothing is added to a
-			// configuration that does not use them.
+			// application that does not use them.
 			const ibString comment = child->GetComment();
 			if (!comment.IsEmpty())
 				entry->SetValue(ibT("comment"), comment);
@@ -305,13 +305,13 @@ public:
 	{
 		const ibString kind = ArgKind().Text(params);
 		return kind.IsEmpty()
-			? ibString(ibMcpText("looking through the configuration"))
+			? ibString(ibMcpText("looking through the application"))
 			: ibString::Format(ibMcpText("looking at the %s objects"), kind);
 	}
 
 	ibString GetDescription() const override
 	{
-		return ibMcpText("Every metadata object of a kind in the open configuration, each with the "
+		return ibMcpText("Every metadata object of a kind in the open application, each with the "
 			"NodeId the other verbs are addressed by - metadata_get, metadata_delete, "
 			"metadata_rename and the rest all take an id, and this is where one comes from.");
 	}
@@ -339,7 +339,7 @@ public:
 		// and a caller acting on the first would go on to create one.
 		if (ibResolveMetaKind(metaData, kind) == 0) {
 			refusal = ibString::Format(
-				ibMcpText("'%s' is not a kind of metadata object in this configuration."), kind);
+				ibMcpText("'%s' is not a kind of metadata object in this application."), kind);
 			return false;
 		}
 
@@ -452,7 +452,7 @@ public:
 				const ibMetaID metaId = (ibMetaID)id->AsInt();
 				found = ibFindMetaObjectById(metaData, metaId);
 				if (found == nullptr) {
-					refusal = ibString::Format(ibMcpText("Nothing in this configuration has id %s."),
+					refusal = ibString::Format(ibMcpText("Nothing in this application has id %s."),
 						id->AsNumber().ToString());
 					return false;
 				}
@@ -480,7 +480,7 @@ public:
 		// the object's own methods, not from the serializer.
 		//
 		// This answered ENTIRELY through ibBuildMetaObjectNode, which is BuildDataNode — how a
-		// configuration is STORED. Its keys are storage keys, it carries every internal name a
+		// application is STORED. Its keys are storage keys, it carries every internal name a
 		// metatype happens to have, and a property a metatype forgot to write in its `WriteData`
 		// is simply absent from the answer, silently. Max, 2026-09-01: *"you don't work with the
 		// metadata as such — you create it by type, fill in the header, and then you get the
@@ -558,7 +558,7 @@ public:
 	{
 		// This is where the right shape was written first — absent told apart from missing. It
 		// lives in ibMcpObjectNamed now, so all eight callsites have it, this one included:
-		// the open-configuration test that stood here said the same words the helper says.
+		// the open-application test that stood here said the same words the helper says.
 		ibValueMetaObject* object = ibMcpObjectNamed(params, refusal);
 		if (object == nullptr)
 			return false;
@@ -589,7 +589,7 @@ MCP_TOOL_REGISTER(ibMcpToolMetadataProperties);
 //---------------------------------------------------------------------------
 //
 // ⭐⭐ THE QUESTION THAT HAD NO VERB: WHO POINTS AT THIS. Everything here answers FORWARD — what an
-// object holds, what is under it, what it declares — and a configuration is read forward perfectly
+// object holds, what is under it, what it declares — and an application is read forward perfectly
 // well by a person who wrote it. Somebody arriving into a base they did not build asks the other
 // way round: *what breaks if I rename this*, *is this catalogue used at all*, *where did this
 // register get filled from*. Nothing answered it, so the honest options were to read every object
@@ -685,7 +685,7 @@ public:
 				continue;
 
 			// --- DECLARED OF THIS TYPE. Every attribute-shaped thing answers with a type
-			// description — an attribute, a dimension, a resource, a command's parameter, a common
+			// description — an attribute, a dimension, a resource, a command's parameter, a shared
 			// attribute — so one cast covers the lot and a metatype added later is covered too.
 			// ⚠ ConvertToValue, NOT ConvertToType — this is a QUESTION asked of every object in the
 			// tree, and the latter is an assertion that raises on a miss outside the designer
@@ -785,7 +785,7 @@ public:
 		// already knows what the lists mean.
 		if (types.empty() && mentions.empty() && links.empty())
 			result.SetValue(ibT("note"), ibString::Format(
-				ibMcpText("Nothing in this configuration declares a field of type '%s', names it in "
+				ibMcpText("Nothing in this application declares a field of type '%s', names it in "
 				  "a script or a query, or chooses by it. It can be renamed or removed freely - and if "
 				  "it was meant to be in use, that is the finding."), name));
 

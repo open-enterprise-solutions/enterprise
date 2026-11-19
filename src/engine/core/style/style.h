@@ -3,7 +3,7 @@
 
 ////////////////////////////////////////////////////////////////////////////
 // A STYLE — the values the platform's look is painted with: one set for the light look, one for the dark, over the
-// same items (styleItem.h). The platform's own is the default (ibStyle::Platform); a configuration's style lies over
+// same items (styleItem.h). The platform's own is the default (ibStyle::Platform); an application's style lies over
 // it, giving only what it changes - an item it leaves out is the platform's. The person's theme says which of the two
 // sets is in force.
 ////////////////////////////////////////////////////////////////////////////
@@ -34,7 +34,7 @@ public:
 	// ibBorder::kMaxWidth, a list of colours empty or with one of those in it. What is set is what is read back.
 	bool Set(ibStyleItem item, const ibStyleValue& value);
 
-	// …or given none: the platform's, in a configuration's style.
+	// …or given none: the platform's, in an application's style.
 	void Remove(ibStyleItem item) { m_values.erase(item); }
 
 	bool IsEmpty() const { return m_values.empty(); }

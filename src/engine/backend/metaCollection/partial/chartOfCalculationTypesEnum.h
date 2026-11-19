@@ -13,7 +13,7 @@ enum ibBaseDependence {
 // …and the calculation REGISTER's one enumeration, kept with its family's: THE REGISTER'S GRAIN. What a
 // registration period — and the month-for action period — names: a day, a month, a quarter or a year.
 // Read by the record-set write, which registers a record at the START of the period its date falls in
-// (calculationRegister.h, GetPeriodicityUnit). The numbers are what a saved configuration holds, so
+// (calculationRegister.h, GetPeriodicityUnit). The numbers are what a saved application holds, so
 // they are this enumeration's own and stable, not the calendar unit's (ibTotalsPeriod grows in the
 // middle).
 enum ibCalcPeriodicity {

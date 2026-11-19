@@ -71,7 +71,7 @@ ibMetaID ibBackendQueryable::GetQueryTableId() const
 
 // ⭐⭐ THE TWINS' IDs ARE NEGATIVE, like every id nothing declared.
 //
-// A metaID is a configuration number — positive and small. An id minted for a column nobody declared
+// A metaID is an application number — positive and small. An id minted for a column nobody declared
 // says so BY ITS SIGN (ibBackendQueryColumn::IsSyntheticId), which is what replaced five hand-carved
 // bands in the positive space: bands have to be read before every addition, and nothing makes anyone
 // read them — I walked into an occupied one adding a sixth (2026-09-06).

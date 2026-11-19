@@ -408,6 +408,12 @@ struct ibDialectDictionary
 	// against SUBSTR(…)). Empty = this engine is not asked to do it.
 	ibString m_substring;
 
+	// A REMAINDER, `a % b` — one template, {lhs} / {rhs}: the remainder a number in memory gives (ibNumber), its
+	// dividend's sign and its fraction kept, 7.5 % 2 = 1.5. PostgreSQL's `%` is that. Firebird has no `%` (the statement
+	// was refused) and its MOD() rounds a fraction first, 7.5 MOD 2 = 0; SQLite's `%` cuts both to integers, 1 — those
+	// two spell it out of the quotient cut to a whole number.
+	ibString m_modulo = ibT("({lhs} % {rhs})");
+
 	// --- behaviour slots (the small tail data cannot express) -------------
 	// Reserved for emulation rewrites (FULL OUTER -> LEFT UNION RIGHT, window ->
 	// correlated subquery) as strategy callbacks, so L2-1 still reads only the dictionary.
@@ -1173,7 +1179,7 @@ private:
 // RAII guard for an ibDatabaseResultSet* obtained from ibDatabaseLayer::RunQueryWithResults
 // or ibPreparedStatement::RunQueryWithResults. Calls rs->Close() and db->CloseResultSet(rs)
 // in the destructor so early returns and exceptions don't leak. The db parameter accepts
-// either a raw ibDatabaseLayer* or a std::shared_ptr<ibDatabaseLayer> (the common form
+// either a raw ibDatabaseLayer* or a std::shared_ptr<ibDatabaseLayer> (the shared form
 // across OES — e.g. the db_query macro returns shared_ptr by value).
 class BACKEND_API ibResultSetGuard {
 public:

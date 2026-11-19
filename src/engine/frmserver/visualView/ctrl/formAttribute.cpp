@@ -16,7 +16,7 @@
 #include "backend/metaData.h"                                // GetTypeCtor
 #include "backend/objCtor.h"                                 // ibCtorMetaValueType / ibCtorObjectMetaType
 #include "backend/appData.h"                                 // ibApplicationInstance::GetActiveMetaData (metadata fallback)
-#include "backend/metadataConfiguration.h"                   // ibMetaDataConfigurationBase : ibMetaData (upcast)
+#include "backend/metadataApplication.h"                     // ibMetaDataApplicationBase : ibMetaData (upcast)
 #include "core/clsid.h"
 #include "backend/metaCollection/metaFormObject.h"            // ibValueMetaObjectFormBase::SaveFormData — the live form back into its blob
 #include "backend/backend_exception.h"                       // ibBackendCoreException — a module asked for an attribute it cannot have
@@ -30,7 +30,7 @@
 bool ibValueForm::ReadAttributes(const ibDataNode& node)
 {
 	// An OBJECT form reconstructs its MAIN in the ctor (name List/Object + Type derive from the source, id
-	// stable); a COMMON form has NO source, so its main can only come from the blob. So: KEEP a ctor-built
+	// stable); a SHARED form has NO source, so its main can only come from the blob. So: KEEP a ctor-built
 	// main and REPLACE the rest; when there is NO ctor main, ADOPT the blob's main (with its Main flag) —
 	// otherwise a sourceless form loses its primary attribute on copy AND on a plain load. Never two mains.
 	bool hasMain = false;
@@ -66,7 +66,7 @@ bool ibValueForm::WriteAttributes(ibDataNode& node) const
 {
 	// Persist EVERY attribute, MAIN included (each entry carries its Main flag). An object form ignores the
 	// stored main on load and rebuilds it from the source (see ReadAttributes), so the stored copy is just
-	// redundant there; but a common form has NO source — without the stored main it loses its primary
+	// redundant there; but a shared form has NO source — without the stored main it loses its primary
 	// attribute on copy AND on a plain save/load. Keeping it also lets a sourceless form later be
 	// reconstructed into an object form by re-homing that main onto a real object.
 	ibDataNode& attrsNode = node.Child(ibProtocol::ibView::ibFormDesigner::Attributes);
@@ -539,7 +539,7 @@ bool ibValueForm::GetSourceList(ibSourceDataType kind, std::vector<ibBackendForm
 		if (kind == ibSourceDataType::ibSourceDataType_table && !include) {
 			// A TABLE control also reaches the MAIN (any kind) AND any COMPOSITE attribute (an object /
 			// reference — NOT a scalar primitive), so the picker can DESCEND into its tabular sections.
-			// Before, only the MAIN object descended; a plain object attribute on a common form was
+			// Before, only the MAIN object descended; a plain object attribute on a shared form was
 			// invisible to the tablebox picker (and its section-path head wouldn't resolve).
 			const ibTypeDescription& td = a.GetTypeDesc();
 			const bool scalar = td.ContainType(ibValueTypes::TYPE_STRING) || td.ContainType(ibValueTypes::TYPE_NUMBER)
@@ -811,14 +811,14 @@ ibFormAttributeValue::ibFormAttribute::~ibFormAttribute()
 
 const ibMetaData* ibFormAttributeValue::ibFormAttribute::GetMetaData() const
 {
-	// Through the form — now NON-recursive: ibValueForm::GetMetaData() resolves the creator config directly and
+	// Through the form — now NON-recursive: ibValueForm::GetMetaData() resolves the creator application directly and
 	// no longer delegates to the form's SOURCE object (which, for a held dynamic list, walked back here → stack
-	// overflow). A dynamically-created form yields null → fall back to the ACTIVE config (always correct).
+	// overflow). A dynamically-created form yields null → fall back to the ACTIVE application (always correct).
 	const ibMetaData* md = m_ownerForm != nullptr ? m_ownerForm->GetMetaData() : nullptr;
 	return md != nullptr ? md : ibApplicationInstance::GetActiveMetaData();
 }
 
-// Editable only when the owner form is — a form opened over a read-only metadata (a DB / file config, not the
+// Editable only when the owner form is — a form opened over a read-only metadata (a DB / file application, not the
 // designer's own storage) is view-only, so its attributes must present as read-only in the inspector.
 bool ibFormAttributeValue::ibFormAttribute::IsEditable() const
 {

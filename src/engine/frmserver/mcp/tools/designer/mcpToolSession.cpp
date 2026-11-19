@@ -6,11 +6,11 @@
 //
 //   WHO EXISTS is a table: the accounts of this installation, each with the
 //   roles it was given and the language it reads in. It answers "why can this
-//   person not open that document" and "which language is this configuration
+//   person not open that document" and "which language is this application
 //   actually used in" - and the second one decides how synonyms are written.
 //
 //   WHO IS HERE is a moment: the sessions connected right now, from which
-//   machine, under which application. It answers "why is the schema locked",
+//   machine, in which program. It answers "why is the schema locked",
 //   "who else is in the designer", and after a failure, "was anybody else even
 //   running".
 //
@@ -207,7 +207,7 @@ public:
 
 	ibString GetDescription() const override
 	{
-		return ibMcpText("Who is connected right now: the user, the machine, the application they are "
+		return ibMcpText("Who is connected right now: the user, the machine, the program they are "
 			"in, and when they started. Ask before anything that needs the installation to "
 			"itself - applying a schema, taking the designer exclusively - and after a "
 			"failure, to know whether anyone else was running at all.");
@@ -240,9 +240,9 @@ public:
 			std::shared_ptr<ibDataNode> entry = std::make_shared<ibDataNode>();
 			entry->SetValue(ibT("user"), snapshot.GetUserName(index));
 			entry->SetValue(ibT("computer"), snapshot.GetComputerName(index));
-			entry->SetValue(ibT("application"), snapshot.GetApplication(index));
+			entry->SetValue(ibT("program"), snapshot.GetProgram(index));
 
-			// Server or client — the same application name means different things
+			// Server or client — the same program name means different things
 			// on the two sides, and the label is already worked out for the
 			// designer's own Active Users list.
 			entry->SetValue(ibT("side"), snapshot.GetSessionKindDescr(index));
@@ -418,7 +418,7 @@ public:
 	ibString GetDescription() const override
 	{
 		return ibMcpText("Ask the process owning a session to evict ALL its web clients, so they log in "
-			"again and pick up the current configuration. Use after applying a change that web "
+			"again and pick up the current application. Use after applying a change that web "
 			"clients must see; use session_kick when the target is one person. The handle names "
 			"the PROCESS through any of its sessions - it is not the session that ends. Like a "
 			"kick this is a signal, acted on within a few seconds.");

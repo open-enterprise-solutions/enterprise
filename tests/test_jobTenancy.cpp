@@ -20,7 +20,7 @@
 //      tenant that leaks its pooled connection exhausts the pool after N
 //      scrolls, and the window stops answering with no error anywhere.
 //
-// Brings up the appData env the way codeRunner does, plus a SQLite pool, and
+// Brings up the appData env the way coderunner does, plus a SQLite pool, and
 // SKIPS (not fails) if the headless environment cannot come up. Its own target,
 // so that bring-up cannot perturb the main suite.
 // =============================================================================
@@ -238,7 +238,7 @@ TEST_F(JobTenancyFix, RentedRunsDoNotExhaustTheConnectionPool)
 // ---------------------------------------------------------------------------
 
 // ⭐ SetStatus IN A RUN WITH NO WINDOW IS WHERE THE RUN HAS GOT TO (#646) — its activity, which code_status and Active
-// Users read; it reached nothing before. A rented run, because it is the one that comes up here without a configuration;
+// Users read; it reached nothing before. A rented run, because it is the one that comes up here without an application;
 // the road is the same for every run.
 TEST_F(JobTenancyFix, SetStatusInARunIsItsActivity)
 {

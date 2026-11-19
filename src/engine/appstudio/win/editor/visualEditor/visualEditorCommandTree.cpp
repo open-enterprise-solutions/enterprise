@@ -396,7 +396,7 @@ void ibCommandTree::AddCommand()
 	RevealSelectedCommand();
 }
 
-// The selected tree node's FORM COMMAND — or null when the node is a group / a standard action / a global config
+// The selected tree node's FORM COMMAND — or null when the node is a group / a standard action / a global application
 // command (not ours to manage), or nothing is selected. A form-command node is a straight 1-hop [id] path; the id is
 // the form command's own, the holder's.
 ibFormCommandValue* ibCommandTree::SelectedFormCommand() const

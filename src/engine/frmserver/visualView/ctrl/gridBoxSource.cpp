@@ -63,7 +63,7 @@ bool ibValueGridBox::GetSourceList(std::vector<ibBackendFormAttributeValue*>& ou
 			continue;
 		for (unsigned int idx = 0; idx < explorer->GetHelperCount(); ++idx) {
 			const ibSourceExplorer* node = explorer->GetHelper(idx);
-			// …and so does one holding a SPREADSHEET DOCUMENT field (`Object.Sheet` on a data processor's
+			// …and so does one holding a SPREADSHEET DOCUMENT field (`Object.Sheet` on a data tool's
 			// form): the first of the two types the constructor declares, one hop down, exactly as the
 			// composition is. Without it the binding the picker made does not resolve at runtime, the box
 			// counts as unbound and is hidden.
@@ -162,7 +162,7 @@ void ibValueGridBox::RefreshModel()
 // ⭐ WHERE THIS BOX'S SAVED SETTINGS LIVE — the LEAF of its binding, as a stable guid. For a report
 // form that leaf is the COMPOSER, and a composer is a metaobject with a guid of its own; the
 // translation is the one every serialised binding in the tree already uses, because a metaID is
-// configuration-local and a guid is not.
+// application-local and a guid is not.
 //
 // ⚠ NOT the source object's guid: a composition answers with the guid of the TABLE it reads, so two
 // different reports over one table would silently share one person's shelf.

@@ -19,8 +19,8 @@ bool ibBackendPictureDescriptionMemory::ReadNode(const ibDataValue& value, ibPic
 	// 🛑 A PICTURE THE ENGINE HAS, ASKED OF THE PICTURE FACTORY — 0 is the empty picture and is one.
 	// Any other id nobody registered was taken without a word and drew nothing (measured 2026-09-22: a
 	// rounded Print id, sent back through `value`). On loading it refuses only what could not be drawn
-	// here anyway: the pictures register when the DLLs load, before any configuration is read, and a
-	// process without the front's controls (the daemon) never writes a configuration back.
+	// here anyway: the pictures register when the DLLs load, before any application is read, and a
+	// process without the front's controls (the daemon) never writes an application back.
 	if (read.m_type == ibPictureType::eFromBackend && read.m_class_identifier != 0
 		&& !ibBackendPicture::IsRegisterPicture(read.m_class_identifier))
 		return false;
@@ -75,11 +75,11 @@ ibPicture ibBackendPicture::CreatePicture(const ibExternalPictureDescription& pi
 	return ibPicture(ibMemoryBuffer(pictureDesc.m_img_buffer.data(), pictureDesc.m_img_buffer.size())).Scale(size);
 }
 
-#include "backend/metadataConfiguration.h"
+#include "backend/metadataApplication.h"
 #include "backend/metaCollection/metaPictureObject.h"
 
-// A CONFIGURATION'S PICTURE, where the configuration keeps it: in the one it extends when it extends one, else its own.
-static const ibValueMetaObjectPicture* FindConfigurationPicture(const ibMetaData& metaData, const ibGuid& guid)
+// AN APPLICATION'S PICTURE, where the application keeps it: in the one it extends when it extends one, else its own.
+static const ibValueMetaObjectPicture* FindApplicationPicture(const ibMetaData& metaData, const ibGuid& guid)
 {
 	ibMetaData* metaDataOwner = nullptr;
 	const ibMetaData& source = metaData.GetOwner(metaDataOwner) && metaDataOwner != nullptr ? *metaDataOwner : metaData;
@@ -91,9 +91,9 @@ ibPicture ibBackendPicture::CreatePicture(const ibPictureDescription& pictureDes
 	if (pictureDesc.m_type == ibPictureType::eFromBackend) {
 		return ibBackendPicture::GetPicture(pictureDesc.m_class_identifier);
 	}
-	else if (pictureDesc.m_type == ibPictureType::eFromConfiguration) {
+	else if (pictureDesc.m_type == ibPictureType::eFromApplication) {
 		if (metaData != nullptr && pictureDesc.m_meta_guid.isValid()) {
-			const ibValueMetaObjectPicture* picture = FindConfigurationPicture(*metaData, pictureDesc.m_meta_guid);
+			const ibValueMetaObjectPicture* picture = FindApplicationPicture(*metaData, pictureDesc.m_meta_guid);
 			return picture != nullptr && picture->IsAllowed() ? picture->GetValueAsPicture() : ibPicture();
 		}
 	}
@@ -121,13 +121,13 @@ ibPicture ibBackendPicture::GetServerPicture(const ibPictureDescription& picture
 		const ibPicture picture = GetPicture(pictureDesc.m_class_identifier);
 		if (picture.IsOk() || metaData == nullptr)
 			return s_made.emplace(pictureDesc.m_class_identifier, picture).first->second;
-		// …a type of the configuration's own (a catalog's reference) — its class's icon, as the configuration's
-		// constructor of it gives it: made anew, the configuration's only.
+		// …a type of the application's own (a catalog's reference) — its class's icon, as the application's
+		// constructor of it gives it: made anew, the application's only.
 		const ibCtorAbstractType* const ctor = metaData->GetAvailableCtor(pictureDesc.m_class_identifier);
 		return ctor != nullptr ? ctor->GetClassIcon() : ibPicture();
 	}
 
-	// A configuration's picture and a file's are made from the bytes they keep — anew, shared with nobody.
+	// An application's picture and a file's are made from the bytes they keep — anew, shared with nobody.
 	return CreatePicture(pictureDesc, metaData);
 }
 
@@ -146,11 +146,11 @@ ibDataValue ibBackendPicture::SendPicture(const ibPictureDescription& pictureDes
 		return !id.IsEmpty() ? ibDataValue::String(id) : ibDataValue();
 	}
 
-	// A configuration picture's guid and the version of what it holds now: a client keeps a picture by its guid with the
-	// version it was given, and asks anew for one named by another. One no configuration has — none given, or the
+	// An application picture's guid and the version of what it holds now: a client keeps a picture by its guid with the
+	// version it was given, and asks anew for one named by another. One no application has — none given, or the
 	// one given has none of it — is no picture.
 	const ibValueMetaObjectPicture* const picture =
-		metaData != nullptr ? FindConfigurationPicture(*metaData, pictureDesc.m_meta_guid) : nullptr;
+		metaData != nullptr ? FindApplicationPicture(*metaData, pictureDesc.m_meta_guid) : nullptr;
 	if (picture == nullptr)
 		return ibDataValue();
 	return ibDataValue::String(pictureDesc.m_meta_guid.str() + ibT('#') + picture->GetValueAsVersion().str());

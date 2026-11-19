@@ -2,7 +2,7 @@
 //	Description : what a predefined item declares beyond its name (#278) — a
 //	              characteristic's value Type, an account's side, off-balance
 //	              flag, accounting flags and analytics rows. Said through the
-//	              MCP verbs, kept by the configuration, written by the apply.
+//	              MCP verbs, kept by the application, written by the apply.
 ////////////////////////////////////////////////////////////////////////////
 
 #include <gtest/gtest.h>
@@ -13,8 +13,8 @@
 #include "backend/appData.h"
 #include "backend/backend_type.h"   // ibBackendTypeDescriptionMemory / ibBackendMetaDescriptionMemory - a property's value as its node
 #include "backend/compiler/compileCode.h"
-#include "backend/metadataConfiguration.h"
-#include "backend/metadataSerialization.h"   // ibDeserializeValue - a declared value, as the configuration keeps it
+#include "backend/metadataApplication.h"
+#include "backend/metadataSerialization.h"   // ibDeserializeValue - a declared value, as the application keeps it
 #include "backend/metaCollection/partial/chartOfAccounts.h"
 #include "backend/metaCollection/partial/chartOfCharacteristicTypes.h"
 #include "backend/metaCollection/accountingKind/metaAccountingKindObject.h"
@@ -31,21 +31,21 @@
 
 namespace {
 
-// A configuration run as the base's active one, and put back after — the MetadataBind fixture's steps.
-struct ActiveConfiguration {
-	std::shared_ptr<ibMetaDataConfigurationFile> m_cfg;
+// An application run as the base's active one, and put back after — the MetadataBind fixture's steps.
+struct ActiveApplication {
+	std::shared_ptr<ibMetaDataApplicationFile> m_cfg;
 	const short m_codeStyle = ibCompileCode::GetCodeStyle();
 	bool m_ok = false;
 
-	ActiveConfiguration()
+	ActiveApplication()
 	{
 		if (!ibApplicationInstance::CreateAppDataEnv(ibRunMode::eFILE_MODE))
 			return;
-		m_cfg = ibMetaData::MakeShared<ibMetaDataConfigurationFile>();
+		m_cfg = ibMetaData::MakeShared<ibMetaDataApplicationFile>();
 		ActiveMetaDataAccess::Replace(m_cfg);
 		m_ok = true;
 	}
-	~ActiveConfiguration()
+	~ActiveApplication()
 	{
 		if (!m_ok)
 			return;
@@ -116,13 +116,13 @@ TEST(PredefinedCells, ACharacteristicsTypeIsDeclaredSavedAndWritten) {
 	wxInitializer wx;
 	if (!wx.IsOk())
 		GTEST_SKIP() << "wxBase init failed (no wxApp host)";
-	ActiveConfiguration active;
+	ActiveApplication active;
 	if (!active.m_ok)
 		GTEST_SKIP() << "appData env unavailable headless";
-	ibMetaDataConfigurationFile* cfg = active.m_cfg.get();
+	ibMetaDataApplicationFile* cfg = active.m_cfg.get();
 
 	auto* chart = dynamic_cast<ibValueMetaObjectChartOfCharacteristicTypes*>(
-		cfg->CreateMetaObject(g_metaChartOfCharacteristicTypesCLSID, cfg->GetCommonMetaObject(), false));
+		cfg->CreateMetaObject(g_metaChartOfCharacteristicTypesCLSID, cfg->GetRootMetaObject(), false));
 	ASSERT_NE(chart, nullptr);
 	chart->SetName(wxT("UserSettings"));
 	// The contour the Type is picked within, set through the property's door as the designer sets it: a string, a number.
@@ -173,11 +173,11 @@ TEST(PredefinedCells, ACharacteristicsTypeIsDeclaredSavedAndWritten) {
 	EXPECT_EQ(type->GetTypeDesc().GetPrecision(), 15u);
 	EXPECT_EQ(type->GetTypeDesc().GetScale(), 2u);
 
-	// The configuration keeps it: written and read back, the item still says it.
+	// The application keeps it: written and read back, the item still says it.
 	ibDataNode saved;
 	ASSERT_TRUE(chart->SaveNode(saved));
 	auto* loaded = dynamic_cast<ibValueMetaObjectChartOfCharacteristicTypes*>(
-		cfg->CreateMetaObject(g_metaChartOfCharacteristicTypesCLSID, cfg->GetCommonMetaObject(), false));
+		cfg->CreateMetaObject(g_metaChartOfCharacteristicTypesCLSID, cfg->GetRootMetaObject(), false));
 	ASSERT_NE(loaded, nullptr);
 	ASSERT_TRUE(loaded->LoadNode(saved));
 	ASSERT_EQ(loaded->GetPredefinedValueArray().size(), 1u);
@@ -209,20 +209,20 @@ TEST(PredefinedCells, AnAccountsSideAndFlagsAreDeclaredAndWritten) {
 	wxInitializer wx;
 	if (!wx.IsOk())
 		GTEST_SKIP() << "wxBase init failed (no wxApp host)";
-	ActiveConfiguration active;
+	ActiveApplication active;
 	if (!active.m_ok)
 		GTEST_SKIP() << "appData env unavailable headless";
-	ibMetaDataConfigurationFile* cfg = active.m_cfg.get();
+	ibMetaDataApplicationFile* cfg = active.m_cfg.get();
 
 	auto* chart = dynamic_cast<ibValueMetaObjectChartOfAccounts*>(
-		cfg->CreateMetaObject(g_metaChartOfAccountsCLSID, cfg->GetCommonMetaObject(), false));
+		cfg->CreateMetaObject(g_metaChartOfAccountsCLSID, cfg->GetRootMetaObject(), false));
 	ASSERT_NE(chart, nullptr);
 	chart->SetName(wxT("Balance"));
 	auto* quantitative = dynamic_cast<ibValueMetaObjectAccountingKind*>(
 		cfg->CreateMetaObject(g_metaAccountingKindCLSID, chart, false));
 	ASSERT_NE(quantitative, nullptr);
 	quantitative->SetName(wxT("Quantitative"));
-	auto* catalog = cfg->CreateMetaObject(g_metaCatalogCLSID, cfg->GetCommonMetaObject(), false);
+	auto* catalog = cfg->CreateMetaObject(g_metaCatalogCLSID, cfg->GetRootMetaObject(), false);
 	ASSERT_NE(catalog, nullptr);
 	catalog->SetName(wxT("Warehouses"));
 	ASSERT_TRUE(cfg->RunDatabase());
@@ -318,13 +318,13 @@ TEST(PredefinedCells, ACatalogsOwnAttributeIsDeclaredAndWritten) {
 	wxInitializer wx;
 	if (!wx.IsOk())
 		GTEST_SKIP() << "wxBase init failed (no wxApp host)";
-	ActiveConfiguration active;
+	ActiveApplication active;
 	if (!active.m_ok)
 		GTEST_SKIP() << "appData env unavailable headless";
-	ibMetaDataConfigurationFile* cfg = active.m_cfg.get();
+	ibMetaDataApplicationFile* cfg = active.m_cfg.get();
 
 	auto* catalog = dynamic_cast<ibValueMetaObjectRecordDataHierarchyMutableRef*>(
-		cfg->CreateMetaObject(g_metaCatalogCLSID, cfg->GetCommonMetaObject(), false));
+		cfg->CreateMetaObject(g_metaCatalogCLSID, cfg->GetRootMetaObject(), false));
 	ASSERT_NE(catalog, nullptr);
 	catalog->SetName(wxT("Warehouses"));
 	ibValueMetaObject* address = cfg->CreateMetaObject(g_metaAttributeCLSID, catalog, false);
@@ -368,13 +368,13 @@ TEST(PredefinedCells, ACodesTypeIsChosenAndItsItemsFitIt) {
 	wxInitializer wx;
 	if (!wx.IsOk())
 		GTEST_SKIP() << "wxBase init failed (no wxApp host)";
-	ActiveConfiguration active;
+	ActiveApplication active;
 	if (!active.m_ok)
 		GTEST_SKIP() << "appData env unavailable headless";
-	ibMetaDataConfigurationFile* cfg = active.m_cfg.get();
+	ibMetaDataApplicationFile* cfg = active.m_cfg.get();
 
 	auto* catalog = dynamic_cast<ibValueMetaObjectRecordDataHierarchyMutableRef*>(
-		cfg->CreateMetaObject(g_metaCatalogCLSID, cfg->GetCommonMetaObject(), false));
+		cfg->CreateMetaObject(g_metaCatalogCLSID, cfg->GetRootMetaObject(), false));
 	ASSERT_NE(catalog, nullptr);
 	catalog->SetName(wxT("Units"));
 	ASSERT_TRUE(cfg->RunDatabase());
@@ -505,13 +505,13 @@ TEST(PredefinedCells, AnItemsCodeIsWrittenAsItsFieldHoldsIt) {
 	wxInitializer wx;
 	if (!wx.IsOk())
 		GTEST_SKIP() << "wxBase init failed (no wxApp host)";
-	ActiveConfiguration active;
+	ActiveApplication active;
 	if (!active.m_ok)
 		GTEST_SKIP() << "appData env unavailable headless";
-	ibMetaDataConfigurationFile* cfg = active.m_cfg.get();
+	ibMetaDataApplicationFile* cfg = active.m_cfg.get();
 
 	auto* firms = dynamic_cast<ibValueMetaObjectRecordDataHierarchyMutableRef*>(
-		cfg->CreateMetaObject(g_metaCatalogCLSID, cfg->GetCommonMetaObject(), false));
+		cfg->CreateMetaObject(g_metaCatalogCLSID, cfg->GetRootMetaObject(), false));
 	ASSERT_NE(firms, nullptr);
 	firms->SetName(wxT("Firms"));
 	ibTypeDescription& code = firms->GetDataCode()->GetTypeDesc();
@@ -560,23 +560,23 @@ TEST(PredefinedCells, AnItemsCodeIsWrittenAsItsFieldHoldsIt) {
 
 // ⭐ A CODE AND A DESCRIPTION ARE NOT NARROWED (#646), NOR A DOCUMENT'S NUMBER OR A FIELD A PERSON DECLARED (#414): no
 // shorter, no fewer digits, a code or a number not turned between a string and a number - measured against what the
-// APPLIED configuration declared, never against rows. Each level asks the fields it declares, in its own
-// ContributeTables. Two configurations of one shape, the way the apply reads its baseline off the saved one: the snapshot
+// APPLIED application declared, never against rows. Each level asks the fields it declares, in its own
+// ContributeTables. Two applications of one shape, the way the apply reads its baseline off the saved one: the snapshot
 // holds the live columns, so the one it was cannot be read off the one it is. A length or a count of digits of 0 holds
 // anything.
 TEST(PredefinedCells, ACodeANumberAndAFieldAreNotNarrowed) {
 	wxInitializer wx;
 	if (!wx.IsOk())
 		GTEST_SKIP() << "wxBase init failed (no wxApp host)";
-	ActiveConfiguration active;
+	ActiveApplication active;
 	if (!active.m_ok)
 		GTEST_SKIP() << "appData env unavailable headless";
 
-	ibMetaDataConfigurationFile applied;
-	ibMetaDataConfigurationFile edited;
-	const auto declare = [](ibMetaDataConfigurationFile& cfg) {
+	ibMetaDataApplicationFile applied;
+	ibMetaDataApplicationFile edited;
+	const auto declare = [](ibMetaDataApplicationFile& cfg) {
 		auto* catalog = dynamic_cast<ibValueMetaObjectRecordDataHierarchyMutableRef*>(
-			cfg.CreateMetaObject(g_metaCatalogCLSID, cfg.GetCommonMetaObject(), false));
+			cfg.CreateMetaObject(g_metaCatalogCLSID, cfg.GetRootMetaObject(), false));
 		if (catalog != nullptr)
 			catalog->SetName(wxT("Units"));
 		return catalog;
@@ -649,9 +649,9 @@ TEST(PredefinedCells, ACodeANumberAndAFieldAreNotNarrowed) {
 
 	// A document's number the same way (#414): made shorter on binding to a numerator (#661), it failed the apply on
 	// Firebird, naming a physical column.
-	const auto document = [](ibMetaDataConfigurationFile& cfg) {
+	const auto document = [](ibMetaDataApplicationFile& cfg) {
 		auto* declared = dynamic_cast<ibValueMetaObjectRecordDataRecorderRef*>(
-			cfg.CreateMetaObject(g_metaDocumentCLSID, cfg.GetCommonMetaObject(), false));
+			cfg.CreateMetaObject(g_metaDocumentCLSID, cfg.GetRootMetaObject(), false));
 		if (declared != nullptr)
 			declared->SetName(wxT("Invoice"));
 		return declared;
@@ -678,13 +678,13 @@ TEST(PredefinedCells, ACodeANumberAndAFieldAreNotNarrowed) {
 	// A section's field (#414), a catalog's section and a document's alike: a string no shorter, a number with no fewer
 	// whole and no fewer fractional digits. A type turned between a string and a number is no narrowing - the values of
 	// the type removed are cleared, and the ledger counts them.
-	const auto goods = [](ibMetaDataConfigurationFile& cfg, ibValueMetaObject* owner) {
+	const auto goods = [](ibMetaDataApplicationFile& cfg, ibValueMetaObject* owner) {
 		ibValueMetaObject* declared = cfg.CreateMetaObject(g_metaTableCLSID, owner, false);
 		if (declared != nullptr)
 			declared->SetName(wxT("Goods"));
 		return declared;
 	};
-	const auto field = [](ibMetaDataConfigurationFile& cfg, ibValueMetaObject* owner, const ibString& name) {
+	const auto field = [](ibMetaDataApplicationFile& cfg, ibValueMetaObject* owner, const ibString& name) {
 		auto* declared = dynamic_cast<ibValueMetaObjectAttributeBase*>(cfg.CreateMetaObject(g_metaAttributeCLSID, owner, false));
 		if (declared != nullptr)
 			declared->SetName(name);
@@ -744,19 +744,19 @@ TEST(PredefinedCells, AnAccountsAnalyticsAreLinesItOwns) {
 	wxInitializer wx;
 	if (!wx.IsOk())
 		GTEST_SKIP() << "wxBase init failed (no wxApp host)";
-	ActiveConfiguration active;
+	ActiveApplication active;
 	if (!active.m_ok)
 		GTEST_SKIP() << "appData env unavailable headless";
-	ibMetaDataConfigurationFile* cfg = active.m_cfg.get();
+	ibMetaDataApplicationFile* cfg = active.m_cfg.get();
 
 	auto* analytics = dynamic_cast<ibValueMetaObjectChartOfCharacteristicTypes*>(
-		cfg->CreateMetaObject(g_metaChartOfCharacteristicTypesCLSID, cfg->GetCommonMetaObject(), false));
+		cfg->CreateMetaObject(g_metaChartOfCharacteristicTypesCLSID, cfg->GetRootMetaObject(), false));
 	ASSERT_NE(analytics, nullptr);
 	analytics->SetName(wxT("Analytics"));
 	analytics->AppendPredefinedValue(Item(wxT("Counterparties"), wxT("1")));
 
 	auto* chart = dynamic_cast<ibValueMetaObjectChartOfAccounts*>(
-		cfg->CreateMetaObject(g_metaChartOfAccountsCLSID, cfg->GetCommonMetaObject(), false));
+		cfg->CreateMetaObject(g_metaChartOfAccountsCLSID, cfg->GetRootMetaObject(), false));
 	ASSERT_NE(chart, nullptr);
 	chart->SetName(wxT("Balance"));
 	// Bound through the property's door, as the designer binds it: the kinds column takes the chart's type there.
@@ -824,11 +824,11 @@ TEST(PredefinedCells, AnAccountsAnalyticsAreLinesItOwns) {
 	ASSERT_TRUE(unfolded->ConvertToValue(unfoldedRef));
 	EXPECT_EQ(ibGuid(unfoldedRef->GetGuid()), counterparties);
 
-	// The configuration keeps the rows.
+	// The application keeps the rows.
 	ibDataNode saved;
 	ASSERT_TRUE(chart->SaveNode(saved));
 	auto* loaded = dynamic_cast<ibValueMetaObjectChartOfAccounts*>(
-		cfg->CreateMetaObject(g_metaChartOfAccountsCLSID, cfg->GetCommonMetaObject(), false));
+		cfg->CreateMetaObject(g_metaChartOfAccountsCLSID, cfg->GetRootMetaObject(), false));
 	ASSERT_NE(loaded, nullptr);
 	ASSERT_TRUE(loaded->LoadNode(saved));
 	const auto& keptTables = loaded->FindPredefinedValue(wxT("Settlements"))->m_tables;

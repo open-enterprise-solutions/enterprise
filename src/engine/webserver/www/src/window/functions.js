@@ -1,6 +1,6 @@
 // ALL FUNCTIONS (schema 1) — the objects the person may open, grouped by kind, each by its Item, every kind open as the
 // thin client's (ExpandAll); one picked is opened as the navigation opens it: schema {Schema 1, Command 1 Open, Args
-// {Item, Type}}, Type 100 — the object's default. A configuration has hundreds of them: the search over the tree
+// {Item, Type}}, Type 100 — the object's default. An application has hundreds of them: the search over the tree
 // narrows it as it is typed.
 
 import { _ } from '../localization.js';

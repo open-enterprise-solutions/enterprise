@@ -1,6 +1,6 @@
 // An account holds its roles and its language by id and guid: sys_user keeps no names, and the
-// configuration may rename what it points at. What an assistant reads about the person is asked of
-// the configuration of the session it is asked in. Taken from the account, every role read "".
+// application may rename what it points at. What an assistant reads about the person is asked of
+// the application of the session it is asked in. Taken from the account, every role read "".
 //
 // A role with no right to the data refusing a tool is not here: the refusal stands behind chat_say,
 // and chat_say reaches its server through a client host, which this test does not have.
@@ -20,7 +20,7 @@
 #include "backend/databaseLayer/connectionPool.h"
 #include "backend/databaseLayer/sqllite/sqliteDatabaseLayer.h"
 #include "backend/metaCollection/metaObject.h"
-#include "backend/metadataConfiguration.h"
+#include "backend/metadataApplication.h"
 #include "backend/session/session.h"
 #include "backend/session/sessionHolder.h"
 #include "backend/session/sessionRegistry.h"
@@ -41,7 +41,7 @@ struct McpPersonNames : ::testing::Test {
 	wxInitializer m_wxInit;
 	std::shared_ptr<ibDatabaseLayerSQLite> m_db;
 	bool m_ownsApp = false;
-	// RunDatabase sets this thread's code style to the configuration's.
+	// RunDatabase sets this thread's code style to the application's.
 	const short m_codeStyle = ibCompileCode::GetCodeStyle();
 
 	ibSessionHolder m_holder;
@@ -59,7 +59,7 @@ struct McpPersonNames : ::testing::Test {
 				GTEST_SKIP() << "appData env unavailable headless";
 			m_ownsApp = true;
 		}
-		// The configuration a designer opens lives in the base. An in-memory SQLite is that base here.
+		// The application a designer opens lives in the base. An in-memory SQLite is that base here.
 		ibConnectionPool* pool = ibApplicationInstance::GetConnectionPool();
 		if (pool == nullptr)
 			GTEST_SKIP() << "no connection pool after CreateAppDataEnv";
@@ -67,9 +67,9 @@ struct McpPersonNames : ::testing::Test {
 		if (!m_db->Open(wxT(":memory:")))
 			GTEST_SKIP() << "in-memory SQLite open failed";
 		pool->Init(m_db, /*maxSize=*/1, /*minIdle=*/0);
-		ibMetaDataConfigurationStorage::CreateConfigTable();
-		ibMetaDataConfigurationStorage::CreateConfigSaveTable();
-		ibMetaDataConfigurationStorage::CreateConfigSequence();
+		ibMetaDataApplicationStorage::CreateApplicationTable();
+		ibMetaDataApplicationStorage::CreateApplicationSaveTable();
+		ibMetaDataApplicationStorage::CreateApplicationSequence();
 	}
 
 	void TearDown() override {
@@ -82,8 +82,8 @@ struct McpPersonNames : ::testing::Test {
 			ibApplicationInstance::DestroyAppDataEnv();
 	}
 
-	void Fill(ibMetaDataConfigurationBase* cfg) {
-		ibValueMetaObjectConfiguration* root = cfg->GetCommonMetaObject();
+	void Fill(ibMetaDataApplicationBase* cfg) {
+		ibValueMetaObjectApplication* root = cfg->GetRootMetaObject();
 		ASSERT_NE(root, nullptr);
 		ibValueMetaObject* clerk = cfg->CreateMetaObject(g_metaRoleCLSID, root, false);
 		ibValueMetaObject* auditor = cfg->CreateMetaObject(g_metaRoleCLSID, root, false);
@@ -99,7 +99,7 @@ struct McpPersonNames : ::testing::Test {
 		m_languageGuid = language->GetDocPath();
 	}
 
-	// A session of no base makes a configuration of none, so it is minted as the base's, unlisted: this base has no
+	// A session of no base makes an application of none, so it is minted as the base's, unlisted: this base has no
 	// system tables. On the stack it would not be current: the scope keeps a weak pointer.
 	void LetIn(ibSessionKind kind) {
 		ibSessionRegistry* const registry = ibApplicationInstance::GetSessionRegistry();
@@ -110,9 +110,9 @@ struct McpPersonNames : ::testing::Test {
 		registry->NotifyAuthenticated(m_holder.Get());
 	}
 
-	// An application's session takes the base's active configuration.
+	// A session of the running application takes the base's active application.
 	void EnterApplication() {
-		std::shared_ptr<ibMetaDataConfigurationFile> cfg = ibMetaData::MakeShared<ibMetaDataConfigurationFile>();
+		std::shared_ptr<ibMetaDataApplicationFile> cfg = ibMetaData::MakeShared<ibMetaDataApplicationFile>();
 		ActiveMetaDataAccess::Replace(cfg);
 		ASSERT_NO_FATAL_FAILURE(Fill(cfg.get()));
 		ASSERT_TRUE(cfg->RunDatabase());
@@ -123,9 +123,9 @@ struct McpPersonNames : ::testing::Test {
 	// A designer's session makes its own as it is let in.
 	void EnterDesigner() {
 		ASSERT_NO_FATAL_FAILURE(LetIn(ibSessionKind::Designer));
-		ibMetaDataConfigurationBase* const cfg = m_holder->GetMetaData();
+		ibMetaDataApplicationBase* const cfg = m_holder->GetMetaData();
 		ASSERT_NE(cfg, nullptr);
-		if (cfg->IsConfigOpen()) {
+		if (cfg->IsOpen()) {
 			ASSERT_TRUE(cfg->CloseDatabase(ibRuntimeRequest(forceCloseFlag)));
 		}
 		ASSERT_NO_FATAL_FAILURE(Fill(cfg));
@@ -167,7 +167,7 @@ struct McpPersonNames : ::testing::Test {
 
 } // namespace
 
-TEST_F(McpPersonNames, ARole_IsCalledWhatTheConfigurationCallsIt)
+TEST_F(McpPersonNames, ARole_IsCalledWhatTheApplicationCallsIt)
 {
 	ASSERT_NO_FATAL_FAILURE(EnterApplication());
 
@@ -178,7 +178,7 @@ TEST_F(McpPersonNames, ARole_IsCalledWhatTheConfigurationCallsIt)
 	EXPECT_EQ(names[1].ToStdString(), "Auditor (restricting)");
 }
 
-TEST_F(McpPersonNames, ARoleTheConfigurationNoLongerHas_IsSaidToBeGone)
+TEST_F(McpPersonNames, ARoleTheApplicationNoLongerHas_IsSaidToBeGone)
 {
 	ASSERT_NO_FATAL_FAILURE(EnterApplication());
 
@@ -190,17 +190,17 @@ TEST_F(McpPersonNames, ARoleTheConfigurationNoLongerHas_IsSaidToBeGone)
 	const std::vector<ibString> names = ibMcpRoleNames(who);
 
 	ASSERT_EQ(names.size(), 1u);
-	EXPECT_EQ(names[0].ToStdString(), "role 99999, no longer in the configuration");
+	EXPECT_EQ(names[0].ToStdString(), "role 99999, no longer in the application");
 }
 
-TEST_F(McpPersonNames, ALanguage_IsCalledWhatTheConfigurationCallsIt)
+TEST_F(McpPersonNames, ALanguage_IsCalledWhatTheApplicationCallsIt)
 {
 	ASSERT_NO_FATAL_FAILURE(EnterApplication());
 
 	EXPECT_EQ(ibMcpLanguageName(Account()).ToStdString(), "Ukrainian");
 }
 
-TEST_F(McpPersonNames, ALanguageTheConfigurationNoLongerHas_IsItsCode)
+TEST_F(McpPersonNames, ALanguageTheApplicationNoLongerHas_IsItsCode)
 {
 	ASSERT_NO_FATAL_FAILURE(EnterApplication());
 

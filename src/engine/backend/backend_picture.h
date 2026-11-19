@@ -26,16 +26,16 @@ public:
 		const class ibMetaData* metaData = nullptr, const ibSize& size = ibSize(16, 16));
 
 	// THE PICTURE A SERVER SENDS, by its description. A backend one (a registered picture, a class's icon) is made once
-	// and kept here; a type of the configuration's own (a catalog's reference), which no global class knows, is its
-	// constructor's icon in the configuration given; a configuration's picture and a file's are made from what they keep.
+	// and kept here; a type of the application's own (a catalog's reference), which no global class knows, is its
+	// constructor's icon in the application given; an application's picture and a file's are made from what they keep.
 	static ibPicture GetServerPicture(const ibPictureDescription& pictureDesc, const class ibMetaData* metaData = nullptr);
 
-	// ⭐ A PICTURE BY ITS ID — all an answer names a picture by: a backend picture's number, a configuration picture's
-	// guid and its version, `<guid>#<version>`, of the configuration given (none given: no configuration picture) — a
+	// ⭐ A PICTURE BY ITS ID — all an answer names a picture by: a backend picture's number, an application picture's
+	// guid and its version, `<guid>#<version>`, of the application given (none given: no application picture) — a
 	// String. The picture itself the client loads apart, by the id (ibProtocol::ibMethod::Picture), and keeps with its
 	// version; one held as a file's bytes has no id of its own and goes as itself, its PNG — a Binary. Empty: no picture.
 	static ibDataValue SendPicture(const ibPictureDescription& pictureDesc, const class ibMetaData* metaData);
-	// …a backend picture by its number alone — no configuration names it: a decimal (a std::uint64_t is past what a JSON number
+	// …a backend picture by its number alone — no application names it: a decimal (a std::uint64_t is past what a JSON number
 	// keeps). 0: no picture.
 	static ibString SendPicture(const ibPictureID& id);
 

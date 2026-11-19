@@ -413,10 +413,3 @@ void ibRecalculationMarkReversed(const ibValueMetaObjectCalculationRegister* reg
 	InsertMarks(reg, spec.m_mark, ibDistinct(ibProject(ibFilter(ibJoin(ibScan(records, ibT("s")),
 		ibScan(records, ibT("d")), position), And(ownStorno, reversed)), Carried(ibT("d"), spec.m_mark))));
 }
-
-//***********************************************************************
-//*                       Register in runtime                           *
-//***********************************************************************
-
-// A recalculation saved as an object of its own — loaded so the configuration opens, and let go (calculationRegister.h).
-METADATA_TYPE_REGISTER(ibValueMetaObjectCalculationRegister::ibValueMetaObjectRecalculation, "Recalculation", g_metaRecalculationCLSID);

@@ -1,11 +1,8 @@
 /////////////////////////////////////////////////////////////////////////////
 // Password hashing for OES user authentication.
 //
-// New passwords are stored as PBKDF2-HMAC-SHA256 with a per-user salt and
+// Passwords are stored as PBKDF2-HMAC-SHA256 with a per-user salt and
 // a modest iteration count (OWASP-recommended class of primitive).
-// Legacy 32-hex MD5 hashes are still recognised on login so existing
-// databases keep working; the caller should transparently re-hash to the
-// new format after a successful legacy verify (lazy upgrade).
 //
 // Output format (self-describing, single column):
 //   $pbkdf2-sha256$<iter>$<base64-salt>$<base64-hash>
@@ -23,17 +20,10 @@ public:
 	static ibString Hash(const ibString& password);
 
 	// Verify a plain-text password against a stored hash.
-	// Accepts both the new PBKDF2 format and a legacy 32-hex MD5 string.
-	// If the stored value looks like MD5, compares via ibMD5 — the caller
-	// should then call IsLegacy() and re-store with Hash() to upgrade.
 	static bool Verify(const ibString& password, const ibString& storedHash);
 
-	// True if storedHash is a legacy MD5 (32 hex chars) rather than PBKDF2.
-	static bool IsLegacy(const ibString& storedHash);
-
-	// True if storedHash should be replaced after a successful verify:
-	// legacy MD5, or PBKDF2 with a below-policy iteration count. Callers
-	// use this to drive lazy upgrade — re-hash with Hash() and re-store.
+	// True if storedHash should be replaced after a successful verify: a
+	// below-policy iteration count. Callers re-hash with Hash() and re-store.
 	static bool NeedsRehash(const ibString& storedHash);
 
 	// The hash the user dialog stores. Untouched keeps `stored`. A box the

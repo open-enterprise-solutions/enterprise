@@ -34,7 +34,7 @@ bool ibRoleRightsView::OnClientEvent(ibProtocol::ibEvent::ibKind event, const ib
 	if (metaRole == nullptr || event != ibProtocol::ibEvent::ibKind::Toggle || !metaRole->IsEditable())
 		return false;
 
-	// The object at any depth — a sub-section has rights of its own; the configuration's row is its common object.
+	// The object at any depth — a sub-section has rights of its own; the application's row is its common object.
 	ibMetaData* const metaData = metaRole->GetMetaData();
 	ibValueMetaObject* const metaObject = metaData != nullptr
 		? metaData->FindAnyObjectByFilter(args.GetMetaId(), true) : nullptr;   // NodeId: the node's identity, not a field
@@ -52,7 +52,7 @@ bool ibRoleRightsView::OnClientEvent(ibProtocol::ibEvent::ibKind event, const ib
 ibDataNode& ibRoleRightsView::GroupFor(ibDataNode& root, const ibClassID& clsid)
 {
 	// THE ICON FROM THE TYPE REGISTRY, THE CAPTION FROM THE GROUP'S OWN ANSWER (ibMetaGroupCaption) — the same one the
-	// configuration tree shows.
+	// application tree shows.
 	const ibCtorAbstractType* typeCtor = ibValue::GetAvailableCtor(clsid);
 	if (typeCtor == nullptr)
 		return root;
@@ -111,14 +111,14 @@ void ibRoleRightsView::FillData(ibDataNode& root)
 {
 	const ibMetaData* metaData = GetDocument()->GetMetaObject()->GetMetaData();
 	ibASSERT(metaData);
-	const ibValueMetaObject* commonObject = metaData->GetCommonMetaObject();
-	ibASSERT(commonObject);
+	const ibValueMetaObject* rootObject = metaData->GetRootMetaObject();
+	ibASSERT(rootObject);
 
-	// The configuration's row is its common object's — its rights are the configuration's own.
-	root.SetMetaId(commonObject->GetMetaID());
-	root.SetValue(ibProtocol::ibView::ibCheckTree::Title, commonObject->GetName());
-	root.SetValue(ibProtocol::ibView::ibCheckTree::Picture, ibBackendPicture::SendPicture(g_metaCommonMetadataCLSID));
-	AppendRoles(root, commonObject);
+	// The application's row is its common object's — its rights are the application's own.
+	root.SetMetaId(rootObject->GetMetaID());
+	root.SetValue(ibProtocol::ibView::ibCheckTree::Title, rootObject->GetName());
+	root.SetValue(ibProtocol::ibView::ibCheckTree::Picture, ibBackendPicture::SendPicture(g_metaApplicationMetadataCLSID));
+	AppendRoles(root, rootObject);
 
 	// ASKED, NOT LISTED — does this object HAVE any rights? One with none has nothing to grant or deny, so it has no row
 	// (GetRoleCount); in the order of its group's declared place (ibMetaGroupOrder), a stable sort leaving each group's

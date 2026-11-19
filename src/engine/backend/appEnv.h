@@ -25,7 +25,7 @@
 // MUST null-check — the signatures document the precondition explicitly.
 // Subsystems that are mode-gated (logger, metadata, debugger) also return
 // nullptr when the active runMode does not allocate them (e.g. launcher
-// has no metadata; designer has no debug server; codeRunner has no
+// has no metadata; designer has no debug server; coderunner has no
 // metadata + no debug server).
 
 #include "backend/backend.h"
@@ -35,7 +35,7 @@ class ibConnectionPool;
 class ibLockManager;
 class ibLogger;
 class ibPluginManager;
-class ibMetaDataConfigurationBase;
+class ibMetaDataApplicationBase;
 class ibDebuggerServer;
 class ibDebuggerClient;
 
@@ -59,19 +59,19 @@ BACKEND_API ibPluginManager*   PluginManager();
 // (enterprise / designer / appserver / wes); nullptr in launcher.
 BACKEND_API ibLogger* Logger();
 
-// Active configuration metadata — the one the engine has loaded into
-// appData. nullptr in launcher and in codeRunner (which opens metadata
-// lazily per-DataProcessor).
+// Active application metadata — the one the engine has loaded into
+// appData. nullptr in launcher and in coderunner (which opens metadata
+// lazily per-DataTool).
 //
-// External metadata (.otl DataProcessor files, .orp Report files, .oap
+// External metadata (.otl DataTool files, .orp Report files, .oap
 // snapshots opened from disk) are NOT covered by this accessor — they
-// live as runtime nodes under ibValueModuleRuntimeManagerExternalDataProcessor
+// live as runtime nodes under ibValueModuleRuntimeManagerExternalDataTool
 // / ibValueModuleRuntimeManagerExternalReport on each open session, with their
 // own per-instance ibMetaData. ActiveMetaData() is exclusively the
-// configuration the calling session works in — its own reference, taken
+// application the calling session works in — its own reference, taken
 // when it was let in (ibSession::GetMetaData); a thread working for its base
 // without a session gets the one its ibApplicationInstanceScope holds.
-BACKEND_API ibMetaDataConfigurationBase* ActiveMetaData();
+BACKEND_API ibMetaDataApplicationBase* ActiveMetaData();
 
 // Debugger endpoints — exclusive of each other. enterprise / wes own
 // the DebugServer (when started with --debug); designer owns the
@@ -85,7 +85,7 @@ BACKEND_API ibMetaDataConfigurationBase* ActiveMetaData();
 // but no code to debug.
 //
 // Practical effect for callers: nullptr when ActiveMetaData() is
-// nullptr (launcher / codeRunner / pre-init) AND nullptr when the
+// nullptr (launcher / coderunner / pre-init) AND nullptr when the
 // active mode doesn't host this endpoint (designer has no server,
 // runtime without --debug has no server, runtime has no client).
 BACKEND_API ibDebuggerServer* DebugServer();

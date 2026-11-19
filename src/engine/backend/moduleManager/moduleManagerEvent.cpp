@@ -22,7 +22,7 @@
 // — because two concurrent logins under rapid F5 had one session's
 // Execute hit operator[] on m_listCode while another session's Execute
 // was in the same function. Serializing startup is cheap (login is rare).
-bool ibValueModuleManagerRuntimeConfiguration::BeforeStart()
+bool ibValueModuleManagerRuntimeApplication::BeforeStart()
 {
 	if (appData->DesignerMode())
 		return true;
@@ -54,7 +54,7 @@ bool ibValueModuleManagerRuntimeConfiguration::BeforeStart()
 	}
 }
 
-void ibValueModuleManagerRuntimeConfiguration::OnStart()
+void ibValueModuleManagerRuntimeApplication::OnStart()
 {
 	if (appData->DesignerMode())
 		return;
@@ -79,7 +79,7 @@ void ibValueModuleManagerRuntimeConfiguration::OnStart()
 	}
 }
 
-bool ibValueModuleManagerRuntimeConfiguration::BeforeExit()
+bool ibValueModuleManagerRuntimeApplication::BeforeExit()
 {
 	if (appData->DesignerMode())
 		return true;
@@ -110,7 +110,7 @@ bool ibValueModuleManagerRuntimeConfiguration::BeforeExit()
 	}
 }
 
-void ibValueModuleManagerRuntimeConfiguration::OnExit()
+void ibValueModuleManagerRuntimeApplication::OnExit()
 {
 	if (appData->DesignerMode())
 		return;

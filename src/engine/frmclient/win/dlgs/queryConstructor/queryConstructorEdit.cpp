@@ -1846,7 +1846,7 @@ void ibDialogQueryConstructor::OnAddNestedTable(wxCommandEvent&)
 	// opening the same class over the inner select.
 	ibQuerySelectPtr inner = std::make_shared<ibQuerySelect>();
 	inner->m_selectAll = true;
-	// WHAT THIS OPENING LEAVES OUT TRAVELS DOWN, like the configuration beside it. A host that folds
+	// WHAT THIS OPENING LEAVES OUT TRAVELS DOWN, like the application beside it. A host that folds
 	// elsewhere excludes Totals; a nested select opened from inside it is part of the SAME query, so
 	// letting the tab back in there is the same leak by a longer road — and a TOTALS written in the
 	// nested one survives into the text the host was told could not carry any.

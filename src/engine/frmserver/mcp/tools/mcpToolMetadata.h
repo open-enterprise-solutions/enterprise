@@ -2,11 +2,11 @@
 #define __MCP_TOOL_METADATA_H__
 
 // What the metadata tools share: those that read (mcpToolMetadata.cpp, common) and those that change the
-// configuration (designer/mcpToolMetadataWrite.cpp).
+// application (designer/mcpToolMetadataWrite.cpp).
 
 #include "frmserver/mcp/mcpTool.h"
 
-#include "backend/metadataConfiguration.h"
+#include "backend/metadataApplication.h"
 
 namespace ibMcpMetadata {
 
@@ -18,13 +18,13 @@ inline const ibArg& ArgKind()
 {
 	// 🛑 THE EXAMPLES ENDED IN `Enum`, WHICH IS NOT A KIND ANYTHING MAY BE ADDED AS. The metaobject
 	// is an `Enumeration`; `Enum` is one VALUE inside one. A caller following this description to
-	// the letter was refused — "A Enum cannot be added to 'Configuration'" — by the tool whose own
+	// the letter was refused — "A Enum cannot be added to 'Application'" — by the tool whose own
 	// text had just told them to write it (2026-09-05, building a delivery note over this server).
 	// An example in a description is read as a promise, and naming a kind that does not exist costs
 	// more than naming none: the caller doubts the platform rather than the sentence.
 	static const ibArg s_a(ibT("kind"), ibArg::Kind::Text,
 		ibMcpText("The kind, spelled the way a script writes it: Catalog, Document, Enumeration, "
-			  "InformationRegister, AccumulationRegister, Report, DataProcessor... The kinds that "
+			  "InformationRegister, AccumulationRegister, Report, DataTool... The kinds that "
 			  "live INSIDE something are named the same way - Attribute, TabularSection, and the "
 			  "`Enum` that is one value of an Enumeration. metadata_accepts answers the exact list "
 			  "a given parent takes, which beats trying kinds until one is let through."), /*required*/ true);

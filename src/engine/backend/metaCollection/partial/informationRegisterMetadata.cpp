@@ -196,8 +196,8 @@ bool ibValueMetaObjectInformationRegister::OnAfterRunMetaObject(int flags)
 		return false;
 
 	// Custom virtual-table descriptors (slices). The base records descriptor is registered by
-	// ibValueMetaObjectRegisterData::OnAfterRunMetaObject below. Registered into the config's OWN
-	// factory — it is per-config, so a read-only DB load (onlyLoadFlag) still registers its own sources.
+	// ibValueMetaObjectRegisterData::OnAfterRunMetaObject below. Registered into the application's OWN
+	// factory — it is per-application, so a read-only DB load (onlyLoadFlag) still registers its own sources.
 	//
 	// ⚠ AND ONLY WHERE A SLICE MEANS ANYTHING. A slice is "the record in force AS OF a moment" — it
 	// is defined by the period, and a non-periodic register has none. Registering them anyway put

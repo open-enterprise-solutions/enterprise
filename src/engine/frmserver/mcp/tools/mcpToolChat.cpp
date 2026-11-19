@@ -67,13 +67,13 @@ public:
 	ibString GetDescription() const override
 	{
 		return ibMcpText("Collect what the person at the designer has written in the assistant window, and "
-			"what has HAPPENED in their configuration while you were not looking. Answers empty "
+			"what has HAPPENED in their application while you were not looking. Answers empty "
 			"lists when there is nothing new. Taking REMOVES both from the queue, so ask once and "
 			"answer what you got - chat_history reads the whole conversation back without "
 			"collecting anything, which is what to use for context.\n\n"
 			"THE TWO ANSWERS OBLIGE DIFFERENTLY. `messages` is what the person SAID: a request, "
 			"and it is addressed to you. `observed` is what the person DID - a metaobject created, "
-			"renamed, removed, a configuration saved or applied - forwarded as it happened. It is "
+			"renamed, removed, an application saved or applied - forwarded as it happened. It is "
 			"information you may read and act on when it matters; it asks you for nothing, and "
 			"answering it as though it were a message means replying to somebody who said nothing.");
 	}
@@ -184,7 +184,7 @@ public:
 		return ibMcpText("The whole conversation with the person at the designer, oldest first, WITHOUT "
 			"collecting anything - chat_take empties its queue, this does not. Read it when you "
 			"connect, or whenever you need the context of what was already discussed: what they "
-			"asked for earlier is usually why the configuration looks the way it does. Covers "
+			"asked for earlier is usually why the application looks the way it does. Covers "
 			"this run of the designer only.");
 	}
 

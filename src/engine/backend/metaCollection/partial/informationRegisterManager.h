@@ -19,7 +19,7 @@ class ibValueManagerDataObjectInformationRegister :
 	ibValueManagerDataObjectInformationRegister(const ibValueMetaObjectInformationRegister* metaObject = nullptr) : m_metaObject(metaObject) { m_members.Bind(this, &ibValueManagerDataObjectInformationRegister::FillManagerMethods); }
 	virtual ~ibValueManagerDataObjectInformationRegister() {}
 
-	virtual const ibValueMetaObjectCommonModule* GetManagerModule() const;
+	virtual const ibValueMetaObjectSharedModule* GetManagerModule() const;
 	virtual const ibValueMetaObjectInformationRegister* GetMetaObject() const { return m_metaObject; }
 
 	void FillManagerMethods(ibMemberTable& helper) const;

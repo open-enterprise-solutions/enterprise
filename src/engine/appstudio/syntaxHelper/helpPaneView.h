@@ -48,10 +48,10 @@ public:
 	void RefreshFromService();
 
 	// The code style an article's syntax and template are shown in —
-	// the configuration's (the desktop read the process's,
-	// ibCompileCode::GetCodeStyle). The configuration is the server's
+	// the application's (the desktop read the process's,
+	// ibCompileCode::GetCodeStyle). The application is the server's
 	// and its frame does not carry the syntax yet: CES, the compile
-	// state's default and a new configuration's.
+	// state's default and a new application's.
 	short GetCodeStyle() const;
 
 	// Activate the pane on a specific entry id. Records the previous

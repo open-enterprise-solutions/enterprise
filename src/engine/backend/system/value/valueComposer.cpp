@@ -8,7 +8,7 @@
 #include "backend/compiler/typeCtor.h"   // VALUE_TYPE_REGISTER
 #include "backend/appData.h"             // GetActiveMetaData
 #include "backend/backend_exception.h"   // IsEvalComplete — the caret's walk degrades instead of failing
-#include "backend/metadataConfiguration.h"  // ibMetaDataConfigurationBase — full def for the GetActiveMetaData() -> const ibMetaData* upcast
+#include "backend/metadataApplication.h"  // ibMetaDataApplicationBase — full def for the GetActiveMetaData() -> const ibMetaData* upcast
 
 void ibValueDataComposer_BindNames(ibValue::ibMemberTable& helper, const ibValue* /*ctx*/)
 {
@@ -27,9 +27,9 @@ bool ibValueDataComposer::Init(ibValue** paParams, const long lSizeArray)
 	if (source.IsEmpty())
 		return true;
 
-	// The query runs ON BEHALF OF the config the script executes in — resolve its by-name source there (per-config),
-	// not the global factory. A script value has no owner metadata of its own, so the running (active) config IS the
-	// query's config; the composer threads it into the lowering at Execute.
+	// The query runs ON BEHALF OF the application the script executes in — resolve its by-name source there (per-application),
+	// not the global factory. A script value has no owner metadata of its own, so the running (active) application IS the
+	// query's application; the composer threads it into the lowering at Execute.
 	m_composer.SetMetaData(ibApplicationInstance::GetActiveMetaData());
 
 	// Any whitespace => the author's verbatim query text; otherwise a registered source

@@ -14,9 +14,6 @@
     </None>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="mainAppEvents.cpp">
-      <Filter>src</Filter>
-    </ClCompile>
     <ClCompile Include="mainApp.cpp">
       <Filter>src</Filter>
     </ClCompile>

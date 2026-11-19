@@ -1267,7 +1267,7 @@ TEST(QueryL4Parser, Window_FrameWithoutOrderIsRefused)
 //
 // ⭐⭐ AND IT IS SPELLED `LINK <name> JOIN <name> ON …` (Max, 2026-08-27). The first form was
 // recognised by POSITION with no keyword at all — a bare top-level `JOIN A AND B ON …` — to avoid
-// taking the word away from configurations with an attribute called `Link`. At the START OF A
+// taking the word away from applications with an attribute called `Link`. At the START OF A
 // STATEMENT no name can stand, so nothing was ever at stake; and the word pays for itself by
 // letting the relation be written the way this language writes every relation, `AND` and all its
 // second spelling gone.

@@ -2,7 +2,7 @@
 #define _IB_META_INTROSPECT_H_
 
 ////////////////////////////////////////////////////////////////////////////
-//	Description : reading the SHAPE of a configuration — kinds, names, one
+//	Description : reading the SHAPE of an application — kinds, names, one
 //	              object as a node
 ////////////////////////////////////////////////////////////////////////////
 //
@@ -44,7 +44,7 @@
 class ibMetaData;
 class ibValueMetaObject;
 
-// KIND NAME → CLASS ID. Answers 0 when there is no configuration open, the
+// KIND NAME → CLASS ID. Answers 0 when there is no application open, the
 // name is unknown, or the name belongs to something that is not a metatype (a
 // value class, a control) — asking for "Array" must not return every array in
 // the tree.
@@ -73,20 +73,20 @@ BACKEND_API ibValueMetaObject* ibFindMetaObjectById(ibMetaData* metaData, const 
 // tabular sections, its children. False when the object cannot describe itself.
 BACKEND_API bool ibBuildMetaObjectNode(ibValueMetaObject* object, ibDataNode& node);
 
-// WHICH SYNTAX FORM THIS CONFIGURATION IS WRITTEN IN — true for the word-fenced
+// WHICH SYNTAX FORM THIS APPLICATION IS WRITTEN IN — true for the word-fenced
 // dialect (`If … Then … EndIf`), false for the C-style one (`if (…) { … }`).
 //
-// It is a question about a configuration, not a preference: the two are
+// It is a question about an application, not a preference: the two are
 // different languages to the compiler, and handing anyone the other one's
 // spelling produces code that reads correctly and does not compile. Answers the
-// C-style form when nothing is open — that is what a new configuration is
+// C-style form when nothing is open — that is what a new application is
 // created with, so it is the honest default rather than a coin toss.
-BACKEND_API bool ibConfigurationWritesInWords(const ibMetaData* metaData);
+BACKEND_API bool ibApplicationWritesInWords(const ibMetaData* metaData);
 
-// clsid → the portable type name a configuration writes ("CatalogRef.Goods").
+// clsid → the portable type name an application writes ("CatalogRef.Goods").
 // Handed to a JSON provider so a rendered answer says what a type IS instead of
 // printing a number that means nothing outside this process. Bound to the
-// configuration it was asked about: the same id names different types in two
+// application it was asked about: the same id names different types in two
 // open trees.
 BACKEND_API std::function<ibString(ibClassID)> ibMetaTypeResolver(const ibMetaData* metaData);
 

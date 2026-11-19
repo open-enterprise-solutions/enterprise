@@ -36,7 +36,7 @@ BACKEND_API bool ibCompositionCompare(const ibValue& cell, ibComparisonKind kind
 // ⭐⭐ DOES A CONDITION HOLD FOR THE ROW IN HAND. A condition names fields; `valueOf` answers a field's value in this
 // row — either side of a comparison may be one — null where the row does not carry it. `subtreeOf` answers what
 // «in hierarchy» of a named value admits for a field (ibQueryHierarchyScope) — the caller's to answer, since it
-// knows the field's catalog and reads its tree once — null where it cannot. `metaData` is the configuration a
+// knows the field's catalog and reads its tree once — null where it cannot. `metaData` is the application a
 // condition's literal is restored against (ibStoredValue) — the caller's, the one its rows are read in.
 //
 // `whenUnknown` — the answer where the condition cannot be read here: a field the row does not carry (absent, or
@@ -58,7 +58,7 @@ struct ibCompositionRule {
 	ibCompositionAttr                             m_attr;             // what it draws a cell with
 };
 // …a storey's rules made ready — the ticked ones that say anything a cell shows, in their order. `metaData` is the
-// configuration what they say is restored against (ibStoredValue) — the caller's, as for a condition above.
+// application what they say is restored against (ibStoredValue) — the caller's, as for a condition above.
 BACKEND_API std::vector<ibCompositionRule> ibCompositionRulesOf(const ibConditionalAppearanceDescription& rules, const class ibMetaData* metaData);
 
 // ⭐ …AND WHAT THEY SAY OF ONE ROW — each rule whose condition holds on it (a condition it cannot read marks nothing)

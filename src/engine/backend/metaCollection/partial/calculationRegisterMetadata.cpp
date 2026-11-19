@@ -213,17 +213,6 @@ bool ibValueMetaObjectCalculationRegister::OnLoadMetaObject(ibMetaData* metaData
 	if (!m_recalculation->OnLoadMetaObject(metaData)) return false;
 	if (!(*m_propertyAttributeCalculationType)->OnLoadMetaObject(metaData)) return false;
 
-	// A recalculation saved as an object of its own is let go, now that its children have loaded: the marks are the
-	// register's (calculationRegister.h, "A recalculation saved as an object"). Said in the journal, so whoever looks
-	// knows why — and only there: a note about a migration is not a box to click for every copy that loads.
-	std::vector<ibValueMetaObjectRecalculation*> saved;
-	FillArrayObjectByFilter<ibValueMetaObjectRecalculation>(saved, { g_metaRecalculationCLSID });
-	for (ibValueMetaObjectRecalculation* recalculation : saved) {
-		ibJournalInfo(ibT("metadata"), ibT("%s: the recalculation '%s' saved as an object of its own is let go - the register ")
-			ibT("keeps its marks itself now; switch 'Use recalculation' on, and drop the table it had"), GetName(), recalculation->GetName());
-		RemoveChild(recalculation);
-	}
-
 	return ibValueMetaObjectRegisterData::OnLoadMetaObject(metaData);
 }
 
@@ -235,7 +224,7 @@ bool ibValueMetaObjectCalculationRegister::OnSaveMetaObject(int flags)
 	// state produces a register nothing can be written into.
 	//
 	// It refuses the way the accounting register refuses a missing chart of accounts: a line in the
-	// ledger and a false return, with no exception leaving this function — so the configuration write
+	// ledger and a false return, with no exception leaving this function — so the application write
 	// transaction closes normally and the next save is not met by a deadlock.
 	if (m_propertyChartOfCalculationTypes->IsEmptyProperty()) {
 		RestructureError(ibString::Format(

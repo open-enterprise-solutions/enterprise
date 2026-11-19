@@ -20,7 +20,7 @@
 //   verdict = (union1 OR union2 …) AND intersection1 AND intersection2 …
 //
 // ⭐ WHY IT IS ITS OWN FUNCTION. Running a role's handler needs a script
-// runtime, a configuration and a live user; DECIDING what to do with what the
+// runtime, an application and a live user; DECIDING what to do with what the
 // handlers said needs none of those. Left inline, the rule could only be
 // exercised by standing the whole platform up — which is why it shipped
 // "compiles and starts, but the fold itself is unverified" and stayed that way
@@ -72,7 +72,7 @@ inline ibRolePolicyVerdict ibFoldRolePolicy(const ibRolePolicyInput& in)
 	// here - which is why an empty union is TRUE rather than the empty set: the door
 	// has a separate right-on-the-table stage, so a union role NARROWS an already
 	// permitted table instead of granting it. Reading it the other way is the
-	// migration-breaking answer: every existing configuration would go dark.
+	// migration-breaking answer: every existing application would go dark.
 	if (!in.m_unionParticipated || in.m_unionUnrestricted)
 		return out;
 

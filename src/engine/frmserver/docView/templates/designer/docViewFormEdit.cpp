@@ -3,8 +3,8 @@
 #include "backend/propertyManager/property/propertyDynamicSource.h"   // a list's Source, picked (SetProperty)
 
 #include "backend/metaCollection/metaFormObject.h"
-#include "backend/metaData.h"   // GetCompileCache — the form the configuration compiled, when it has one
-#include "backend/metadataConfiguration.h"   // the session's configuration — the form's object is in it
+#include "backend/metaData.h"   // GetCompileCache — the form the application compiled, when it has one
+#include "backend/metadataApplication.h"   // the session's application — the form's object is in it
 #include "backend/session/session.h"
 #include "backend/backend_picture.h"   // ibBackendPicture::SendPicture — a class's picture, by its id
 #include "core/diagnostics/journal.h"
@@ -66,7 +66,7 @@ void ibFormDesignView::OnDraw(ibDataNode& frame)
 	Fetch(request, state->Child(ibProtocol::ibView::ibFormDesigner::Opening));
 
 	// …and the form's object's rows, which its Code page shows in the inspector (the tree's row it was opened from): the
-	// configuration's tree names it by tab 0; an external file's tree is a tab of its own, and its page reads them.
+	// application's tree names it by tab 0; an external file's tree is a tab of its own, and its page reads them.
 	ibValueMetaObject* const metaObject = GetDocument()->GetMetaObject();
 	ibClientFrame* const clientFrame = ibClientFrame::GetFrame();
 	if (metaObject != nullptr && clientFrame != nullptr
@@ -117,9 +117,9 @@ bool ibFormDesignView::Fetch(const ibDataNode& request, ibDataNode& response)
 		break;
 	}
 
-	// …AND A COMPOSITION AN ATTRIBUTE HOLDS, as its cell's window asks the configuration (ibPropertyDataComposition): the
+	// …AND A COMPOSITION AN ATTRIBUTE HOLDS, as its cell's window asks the application (ibPropertyDataComposition): the
 	// fields of its query, of a reference's targets, of a dynamic list — the composer tab's own requests, over the form's
-	// configuration.
+	// application.
 	switch (static_cast<ibProtocol::ibView::ibComposer::ibRequest>(kind)) {
 	case ibProtocol::ibView::ibComposer::ibRequest::Fields:
 	case ibProtocol::ibView::ibComposer::ibRequest::Expand:
@@ -462,7 +462,7 @@ bool ibFormDesignView::OnClientEvent(ibProtocol::ibEvent::ibKind event, const ib
 	if (creator == nullptr || !creator->IsEditable() || !LoadForm(*form))
 		return false;
 
-	// …and written into its metaobject at once, the configuration modified: it is saved from its tree too, past this
+	// …and written into its metaobject at once, the application modified: it is saved from its tree too, past this
 	// document.
 	SaveForm();
 	document->Modify(true);
@@ -475,7 +475,7 @@ bool ibFormDesignView::OnClientEvent(ibProtocol::ibEvent::ibKind event, const ib
 
 bool ibFormDesignDocument::Save()
 {
-	// The server's save writes the configuration without asking the document (ibMetaDocument::Save) — so the form goes
+	// The server's save writes the application without asking the document (ibMetaDocument::Save) — so the form goes
 	// into its metaobject first, as the desktop's did on save.
 	if (ibFormDesignView* const view = GetFirstView())
 		view->SaveForm();

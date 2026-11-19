@@ -9,7 +9,7 @@
 #include "commonObject.h"
 
 
-const ibValueMetaObjectCommonModule* ibValueManagerDataObjectDocument::GetManagerModule() const
+const ibValueMetaObjectSharedModule* ibValueManagerDataObjectDocument::GetManagerModule() const
 {
 	return m_metaObject->GetManagerModule();
 }
@@ -52,7 +52,7 @@ bool ibValueManagerDataObjectDocument::CallAsFunc(const long lMethodNum, ibValue
 {
 	// 🛑 OUR OWN ORDINAL, NOT THE TABLE INDEX — see ibValueManagerDataObject::BuiltinMethodNum.
 	// The manager module's exported methods share this table, so the raw index means a
-	// different verb for every configuration that declares one.
+	// different verb for every application that declares one.
 	switch (BuiltinMethodNum(lMethodNum))
 	{
 	case eCreateDocument:

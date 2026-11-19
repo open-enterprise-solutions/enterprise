@@ -7,7 +7,7 @@
 //
 // NOT THE QUERY CONSTRUCTOR WITH ANOTHER SPELLING. A query text is data — a string with a parser and
 // a writer of its own. A LINQ block is CODE, standing at a place in a module, and what it can read is
-// what that place can see: the configuration's tables through `Data.`, and the module's own
+// what that place can see: the application's tables through `Data.`, and the module's own
 // variables — a table filled above, the result of another query, the object's own tabular section.
 // It LOOKS like the query constructor (tabs over the whole window, a tree of what can be read, lists
 // with their own small toolbars, arrows between), because a person should not have to learn two.

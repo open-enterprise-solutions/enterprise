@@ -11,7 +11,7 @@
 // It asks the declared type's gate now, the same one a typed variable is checked by, and the value door
 // answers a type with nothing of its own to make with the empty value instead of a refusal.
 //
-// No database and no configuration: the families are registered by the platform itself, and a member's
+// No database and no application: the families are registered by the platform itself, and a member's
 // class id is all the gate looks at, so a probe value that answers a class id stands in for a reference.
 // =============================================================================
 
@@ -175,7 +175,7 @@ TEST(TypeFamilyAdjust, AFamilyIsOfItsMembersKind)
 TEST(TypeFamilyAdjust, TheReferenceFilterOffersTheFamiliesAndAnyRef)
 {
 	std::vector<ibClassID> offered;
-	ibBackendTypeConfigFactory::GetTypesByFilter(ibSelectorDataType::ibSelectorDataType_reference, nullptr, offered);
+	ibBackendTypeApplicationFactory::GetTypesByFilter(ibSelectorDataType::ibSelectorDataType_reference, nullptr, offered);
 
 	const ibCtorMetaAnyKind* catalogRef = ib_find_meta_any_kind(wxT("Catalog"), ibCtorObjectMetaType_Reference);
 	const ibCtorMetaAnyKind* documentRef = ib_find_meta_any_kind(wxT("Document"), ibCtorObjectMetaType_Reference);

@@ -89,7 +89,7 @@ ibValue ibValue::CloneValue() const
 			GetClassName());
 	}
 
-	// THROUGH THE CONFIGURATION, as a container's elements are: a reference passed by value is a type only it has, and
+	// THROUGH THE APPLICATION, as a container's elements are: a reference passed by value is a type only it has, and
 	// the registry alone refused it (2026-10-30). The door throws on its own terms — a type registered nowhere, a
 	// creation that fails, contents that cannot be read — and they are reported once, there.
 	return ibDeserializeValue(node);
@@ -211,7 +211,7 @@ bool ibValue::DoDeserialize(const ibDataNode& node)
 // Creating a value out of a node — THE mechanism
 ////////////////////////////////////////////////////////////////////////////
 //
-// ONE mechanism, reached from two doors. A caller with no configuration in play
+// ONE mechanism, reached from two doors. A caller with no application in play
 // — a test, a tool, a headless run — calls this directly. A caller holding a
 // metadata calls that, and it creates the types only IT has (a catalog
 // reference, an enum member) and redirects everything else straight back here.
@@ -239,7 +239,7 @@ ibValue ibValue::FromNode(const ibDataNode& node)
 {
 	const ibClassID classType = ibReadNodeType(node);
 
-	// THE END OF THE LINE. Either nobody asked a configuration at all, or one
+	// THE END OF THE LINE. Either nobody asked an application at all, or one
 	// asked its own registry first and sent the type down here. If the value
 	// registry does not have it either, then nobody does. Returning an empty
 	// would look like a legitimately empty value and surface far away as a blank

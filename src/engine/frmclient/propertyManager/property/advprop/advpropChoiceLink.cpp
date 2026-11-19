@@ -70,7 +70,7 @@ bool ibPGChoiceLinkProperty::OnEvent(ibPropertyGrid* propgrid, wxWindow* WXUNUSE
 
 	// ⭐ THE WINDOW EDITS A COPY, and the value is posted only if it says something changed — the same
 	// arrangement as its companion below, for the same two reasons: Cancel stays a real cancel all the
-	// way up to the property, and an OK that changed nothing does not mark the configuration modified.
+	// way up to the property, and an OK that changed nothing does not mark the application modified.
 	ibChoiceTypeLinkDescription linkDesc = ReadDescription<ibChoiceTypeLinkDescription>(m_value);
 	if (!ibDialogChoiceLink::ShowChoiceLinkDialog(m_property, linkDesc))
 		return false;

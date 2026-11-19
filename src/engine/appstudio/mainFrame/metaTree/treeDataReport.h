@@ -6,10 +6,10 @@
 #include "deskgui/univ/ctrl/staticText.h"
 #include "deskgui/univ/ctrl/textCtrl.h"
 
-#include "treeConfiguration.h"
+#include "treeApplication.h"
 
 // THE EXTERNAL REPORT'S TREE — the desktop's ibDataReportTree (designer/mainFrame/metaTree), in its tab: the data
-// processor's (treeDataProcessor.h) and the report's other declaration beside its default form — which composer is the
+// tool's (treeDataTool.h) and the report's other declaration beside its default form — which composer is the
 // main one. The rows are its tab's View (frmserver ibDataReportTree); the header is its object's properties' rows.
 class ibDataReportTree : public ibMetaTreeBase {
 public:

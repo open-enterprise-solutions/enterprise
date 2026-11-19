@@ -10,11 +10,11 @@
 // may govern this one — comes as that row's choices.
 //
 // ⭐ THE REFERENCE TYPES OF A FIELD, AS ITS ROW BRINGS THEM. They are read off the field's type description and the
-// configuration, on the server, which writes them on the row of a link by type and of the choice parameters
+// application, on the server, which writes them on the row of a link by type and of the choice parameters
 // (ibPropertyInspector — the row's Targets). A row that brings none (an older server) answers none: the link's
 // window then asks no question of which type a link decides, and the parameters' window has no target.
 //
-// ⚠ ASKED OF THE PROPERTY, NOT OF ITS OWNER: the owner holds no configuration here, the row holds the answer.
+// ⚠ ASKED OF THE PROPERTY, NOT OF ITS OWNER: the owner holds no application here, the row holds the answer.
 FRMCLIENT_API void ibFieldReferenceTypes(const ibBackendProperty* property, ibPropertyChoiceList& list);
 
 // The class a reference type is registered under — what a link keeps (the desktop's
@@ -32,7 +32,7 @@ FRMCLIENT_API ibSourceDescription ibChoiceSourcePath(const ibBackendProperty* pr
 // Whether the row brought the lists the parameters' window is built of — the window is opened only then.
 FRMCLIENT_API bool ibChoiceHasLists(const ibBackendProperty* property);
 
-// THE PARAMETERS' WINDOW'S TWO QUESTIONS — the desktop's declarations, each a walk over the configuration from this
+// THE PARAMETERS' WINDOW'S TWO QUESTIONS — the desktop's declarations, each a walk over the application from this
 // field: what it stands in (the object or the tabular section whose other fields are its neighbours), and which fields
 // of what it refers to an attribute could fill, the likeliest first, and the one that is obvious. The server answers
 // both on the row (its Sources — ibPropertyInspector), so they are asked of the property; a row without them answers

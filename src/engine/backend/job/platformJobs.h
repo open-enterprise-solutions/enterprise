@@ -1,7 +1,7 @@
 #ifndef __IB_PLATFORM_JOBS_H__
 #define __IB_PLATFORM_JOBS_H__
 
-// The platform's OWN jobs — the ones a configuration neither declares nor can
+// The platform's OWN jobs — the ones an application neither declares nor can
 // remove, because they keep the engine's own state in shape.
 //
 // Kept apart from ibJobManager on purpose. The manager is a MECHANISM: a

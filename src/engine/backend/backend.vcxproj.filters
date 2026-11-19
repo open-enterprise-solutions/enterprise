@@ -272,7 +272,7 @@
     <ClInclude Include="backend_mainFrame.h" />
     <ClInclude Include="backend_exception.h" />
     <ClInclude Include="backend_diagnostic.h" />
-    <ClInclude Include="metadataConfiguration.h" />
+    <ClInclude Include="metadataApplication.h" />
     <ClInclude Include="metadataSerialization.h" />
     <ClInclude Include="roleHelper.h" />
     <ClInclude Include="databaseLayer\postgres\engine\libpq-fe.h">
@@ -410,10 +410,10 @@
     <ClInclude Include="metaCollection\partial\constantManager.h">
       <Filter>metaCollection\partial</Filter>
     </ClInclude>
-    <ClInclude Include="metaCollection\partial\dataProcessor.h">
+    <ClInclude Include="metaCollection\partial\dataTool.h">
       <Filter>metaCollection\partial</Filter>
     </ClInclude>
-    <ClInclude Include="metaCollection\partial\dataProcessorManager.h">
+    <ClInclude Include="metaCollection\partial\dataToolManager.h">
       <Filter>metaCollection\partial</Filter>
     </ClInclude>
     <ClInclude Include="metaCollection\partial\dataReport.h">
@@ -687,7 +687,7 @@
     <ClInclude Include="value_collection.h" />
     <ClInclude Include="interfaceHelper.h" />
     <ClInclude Include="compositionHelper.h" />
-    <ClInclude Include="functionalOptionHelper.h" />
+    <ClInclude Include="featureOptionHelper.h" />
     <ClInclude Include="metaCollection\metaSectionObject.h">
       <Filter>metaCollection</Filter>
     </ClInclude>
@@ -709,11 +709,11 @@
     <ClInclude Include="metaCollection\metaSessionParameterObject.h">
       <Filter>metaCollection</Filter>
     </ClInclude>
-    <ClInclude Include="metaCollection\metaFunctionalOptionObject.h">
+    <ClInclude Include="metaCollection\metaFeatureOptionObject.h">
       <Filter>metaCollection</Filter>
     </ClInclude>
-    <ClInclude Include="functionalOption\functionalOptionGate.h">
-      <Filter>functionalOption</Filter>
+    <ClInclude Include="featureOption\featureOptionGate.h">
+      <Filter>featureOption</Filter>
     </ClInclude>
     <ClInclude Include="metaCollection\metaStoredValueObject.h">
       <Filter>metaCollection</Filter>
@@ -721,10 +721,10 @@
     <ClInclude Include="metaCollection\metaQueryDescriptor.h">
       <Filter>metaCollection</Filter>
     </ClInclude>
-    <ClInclude Include="metaCollection\metaCommonAttributeObject.h">
+    <ClInclude Include="metaCollection\metaSharedAttributeObject.h">
       <Filter>metaCollection</Filter>
     </ClInclude>
-    <ClInclude Include="metadataDataProcessor.h" />
+    <ClInclude Include="metadataDataTool.h" />
     <ClInclude Include="metadataReport.h" />
     <ClInclude Include="propertyManager\property\variant\variantAction.h">
       <Filter>propertyManager\property\variant</Filter>
@@ -820,7 +820,7 @@
     <ClInclude Include="propertyManager\property\propertyChartOfCalculationTypes.h">
       <Filter>propertyManager\property</Filter>
     </ClInclude>
-    <ClInclude Include="propertyManager\property\propertyFunctionalOptions.h">
+    <ClInclude Include="propertyManager\property\propertyFeatureOptions.h">
       <Filter>propertyManager\property</Filter>
     </ClInclude>
     <ClInclude Include="propertyManager\property\propertyCalcSchedule.h">
@@ -1188,11 +1188,11 @@
     <ClCompile Include="backend_mainFrame.cpp" />
     <ClCompile Include="backend_exception.cpp" />
     <ClCompile Include="backend_diagnostic.cpp" />
-    <ClCompile Include="metadataConfiguration.cpp" />
+    <ClCompile Include="metadataApplication.cpp" />
     <ClCompile Include="roleHelper.cpp" />
     <ClCompile Include="appDataQuery.cpp" />
     <ClCompile Include="userInfo.cpp" />
-    <ClCompile Include="metadataConfigurationQuery.cpp" />
+    <ClCompile Include="metadataApplicationQuery.cpp" />
     <ClCompile Include="metaCollection\metaObjectMetadataQuery.cpp">
       <Filter>metaCollection</Filter>
     </ClCompile>
@@ -1508,9 +1508,6 @@
     <ClCompile Include="metaCollection\partial\calculationRegisterRecalculationMetadata.cpp">
       <Filter>metaCollection\partial</Filter>
     </ClCompile>
-    <ClCompile Include="metaCollection\partial\calculationRegisterRecalculationMetadata_res.cpp">
-      <Filter>metaCollection\partial</Filter>
-    </ClCompile>
     <ClCompile Include="calculation\calculation.cpp">
       <Filter>calculation</Filter>
     </ClCompile>
@@ -1574,19 +1571,19 @@
     <ClCompile Include="metaCollection\partial\constantMetadata_res.cpp">
       <Filter>metaCollection\partial</Filter>
     </ClCompile>
-    <ClCompile Include="metaCollection\partial\dataProcessorAction.cpp">
+    <ClCompile Include="metaCollection\partial\dataToolAction.cpp">
       <Filter>metaCollection\partial</Filter>
     </ClCompile>
-    <ClCompile Include="metaCollection\partial\dataProcessorManager.cpp">
+    <ClCompile Include="metaCollection\partial\dataToolManager.cpp">
       <Filter>metaCollection\partial</Filter>
     </ClCompile>
-    <ClCompile Include="metaCollection\partial\dataProcessorMetadata.cpp">
+    <ClCompile Include="metaCollection\partial\dataToolMetadata.cpp">
       <Filter>metaCollection\partial</Filter>
     </ClCompile>
-    <ClCompile Include="metaCollection\partial\dataProcessorMetadataMenu.cpp">
+    <ClCompile Include="metaCollection\partial\dataToolMetadataMenu.cpp">
       <Filter>metaCollection\partial</Filter>
     </ClCompile>
-    <ClCompile Include="metaCollection\partial\dataProcessorObject.cpp">
+    <ClCompile Include="metaCollection\partial\dataToolObject.cpp">
       <Filter>metaCollection\partial</Filter>
     </ClCompile>
     <ClCompile Include="metaCollection\partial\dataReportManager.cpp">
@@ -1902,14 +1899,14 @@
     <ClCompile Include="propertyManager\property\propertyForm.cpp">
       <Filter>propertyManager\property</Filter>
     </ClCompile>
-    <ClCompile Include="metaCollection\partial\dataProcessorMetadata_res.cpp">
+    <ClCompile Include="metaCollection\partial\dataToolMetadata_res.cpp">
       <Filter>metaCollection\partial</Filter>
     </ClCompile>
     <ClCompile Include="value_cast.cpp" />
     <ClCompile Include="value_collection.cpp" />
     <ClCompile Include="interfaceHelper.cpp" />
     <ClCompile Include="compositionHelper.cpp" />
-    <ClCompile Include="functionalOptionHelper.cpp" />
+    <ClCompile Include="featureOptionHelper.cpp" />
     <ClCompile Include="metaCollection\metaSectionObject_res.cpp">
       <Filter>metaCollection</Filter>
     </ClCompile>
@@ -1943,17 +1940,17 @@
     <ClCompile Include="metaCollection\metaSessionParameterObject.cpp">
       <Filter>metaCollection</Filter>
     </ClCompile>
-    <ClCompile Include="metaCollection\metaFunctionalOptionObject.cpp">
+    <ClCompile Include="metaCollection\metaFeatureOptionObject.cpp">
       <Filter>metaCollection</Filter>
     </ClCompile>
-    <ClCompile Include="metaCollection\metaFunctionalOptionObjectMenu.cpp">
+    <ClCompile Include="metaCollection\metaFeatureOptionObjectMenu.cpp">
       <Filter>metaCollection</Filter>
     </ClCompile>
-    <ClCompile Include="metaCollection\metaFunctionalOptionObject_res.cpp">
+    <ClCompile Include="metaCollection\metaFeatureOptionObject_res.cpp">
       <Filter>metaCollection</Filter>
     </ClCompile>
-    <ClCompile Include="functionalOption\functionalOptionGate.cpp">
-      <Filter>functionalOption</Filter>
+    <ClCompile Include="featureOption\featureOptionGate.cpp">
+      <Filter>featureOption</Filter>
     </ClCompile>
     <ClCompile Include="metaCollection\metaStoredValueObject.cpp">
       <Filter>metaCollection</Filter>
@@ -1976,13 +1973,13 @@
     <ClCompile Include="metaCollection\metaSessionParameterObject_res.cpp">
       <Filter>metaCollection</Filter>
     </ClCompile>
-    <ClCompile Include="metaCollection\metaCommonAttributeObject.cpp">
+    <ClCompile Include="metaCollection\metaSharedAttributeObject.cpp">
       <Filter>metaCollection</Filter>
     </ClCompile>
-    <ClCompile Include="metaCollection\metaCommonAttributeObjectMenu.cpp">
+    <ClCompile Include="metaCollection\metaSharedAttributeObjectMenu.cpp">
       <Filter>metaCollection</Filter>
     </ClCompile>
-    <ClCompile Include="metaCollection\metaCommonAttributeObject_res.cpp">
+    <ClCompile Include="metaCollection\metaSharedAttributeObject_res.cpp">
       <Filter>metaCollection</Filter>
     </ClCompile>
     <ClCompile Include="metaCollection\metaScheduledJobObjectMenu.cpp">
@@ -2009,10 +2006,10 @@
     <ClCompile Include="metaCollection\metaModuleObjectProperty.cpp">
       <Filter>metaCollection</Filter>
     </ClCompile>
-    <ClCompile Include="metadataDataProcessorFactory.cpp" />
+    <ClCompile Include="metadataDataToolFactory.cpp" />
     <ClCompile Include="metadataReport.cpp" />
     <ClCompile Include="metadataReportFactory.cpp" />
-    <ClCompile Include="metadataDataProcessor.cpp" />
+    <ClCompile Include="metadataDataTool.cpp" />
     <ClCompile Include="propertyManager\property\variant\variantAction.cpp">
       <Filter>propertyManager\property\variant</Filter>
     </ClCompile>
@@ -2134,7 +2131,7 @@
     <ClCompile Include="propertyManager\property\propertyChartOfCalculationTypes.cpp">
       <Filter>propertyManager\property</Filter>
     </ClCompile>
-    <ClCompile Include="propertyManager\property\propertyFunctionalOptions.cpp">
+    <ClCompile Include="propertyManager\property\propertyFeatureOptions.cpp">
       <Filter>propertyManager\property</Filter>
     </ClCompile>
     <ClCompile Include="propertyManager\property\propertyCalcSchedule.cpp">
@@ -2275,7 +2272,7 @@
     <Filter Include="composition">
       <UniqueIdentifier>{8f4d2a17-6c3e-4b9a-a52d-7e90c41f55b2}</UniqueIdentifier>
     </Filter>
-    <Filter Include="functionalOption">
+    <Filter Include="featureOption">
       <UniqueIdentifier>{dde010a6-35dc-4fb6-8c21-ccae9a9c760d}</UniqueIdentifier>
     </Filter>
     <Filter Include="composition\drivers">

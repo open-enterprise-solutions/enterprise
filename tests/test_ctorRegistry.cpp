@@ -14,7 +14,7 @@
 // This is what these tests pin down, because getting it wrong was expensive: a
 // rename used to leave the name index pointing at the old string, so the type was
 // unfindable under the name on screen, and teardown — which asked by NAME — raised
-// "Object '…' is not exist" in the middle of closing a configuration.
+// "Object '…' is not exist" in the middle of closing an application.
 // =============================================================================
 
 #include <gtest/gtest.h>

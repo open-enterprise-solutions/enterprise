@@ -395,7 +395,7 @@ TEST(JsonWriter, WhatMustBeEscapedIsAndTheRestGoesOutAsItself) {
 	EXPECT_EQ(writer.Close(), U("\"q\\\" b\\\\ n\\n t\\t \\u0001 \\u2028 \xD0\x91\xD0\xBE\xD1\x80\xD1\x89\""));
 }
 
-// HOW a string is spelled in JSON is said once for the backend (ibJsonText) - the configuration's JSON view and
+// HOW a string is spelled in JSON is said once for the backend (ibJsonText) - the application's JSON view and
 // the script's writer go through it. Asked directly: the short forms, everything below U+0020, the two line
 // separators, a NUL that is a character and not the end of the text, and the bytes of the UTF-8 form.
 TEST(JsonText, OneSpellingForTheWholeBackend) {

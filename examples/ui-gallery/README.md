@@ -1,7 +1,7 @@
 # UI Component Gallery
 
 A Storybook-style catalog of OES's form controls — one `NotebookPage` per control
-type, built as a `Form` on the `UIComponentGallery` `DataProcessor`, inside this
+type, built as a `Form` on the `UIComponentGallery` `DataTool`, inside this
 folder's base. It was built live through the Designer's MCP server (an assistant
 driving `metadata_create`/`form_add`/`form_bind`, not hand-authored), and is kept
 here as a worked example of what that looks like, plus a record of what it found.
@@ -173,7 +173,7 @@ Still open:
 ## Opening it
 
 - Desktop: `appstudio.exe --file=examples/ui-gallery` /
-  `appworkspace.exe --file=examples/ui-gallery`, then Operations → Data processors
+  `appworkspace.exe --file=examples/ui-gallery`, then Operations → Data tools
   → UI Component Gallery.
 - Web: `webserver --file=examples/ui-gallery`, then the publication's address it
   prints (`http://127.0.0.1:8080/ui-gallery/`). Per the section above, expect what

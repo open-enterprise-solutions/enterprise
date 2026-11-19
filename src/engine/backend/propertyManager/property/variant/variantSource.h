@@ -53,7 +53,7 @@ public:
 	// path) rather than a single direct column. Cheap — just the path length.
 	bool IsDotWalk() const { return m_sourceDesc.IsDotWalk(); }
 
-	// Every hop of the binding may be shown (functional options) — the leaf and each reference before it. Unbound,
+	// Every hop of the binding may be shown (feature options) — the leaf and each reference before it. Unbound,
 	// a whole-attribute binding or a broken path lands on no field and is not this question's: true.
 	bool IsSourceAvailable() const;
 
@@ -123,7 +123,7 @@ public:
 		return m_ownerProperty != nullptr ? m_ownerProperty->GetSourceList(out) : false;
 	}
 
-	// Config metadata behind this binding — drives the metaId<->guid resolution at save/load.
+	// Application metadata behind this binding — drives the metaId<->guid resolution at save/load.
 	const class ibMetaData* GetMetaData() const { return m_ownerProperty != nullptr ? m_ownerProperty->GetMetaData() : nullptr; }
 	// …and the owning factory (the control) itself — what it may be bound to, asked of it by the property's editor.
 	const ibBackendTypeSourceFactory* GetSourceFactory() const { return m_ownerProperty; }

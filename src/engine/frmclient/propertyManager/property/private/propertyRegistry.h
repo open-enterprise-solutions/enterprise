@@ -30,7 +30,7 @@ class FRMCLIENT_API ibPropertyRegistry {
 public:
 
 	// The widget showing the property — a window it opens asks the property's owner what it needs (a translated
-	// string's languages: the configuration the owner holds).
+	// string's languages: the application the owner holds).
 	using ibPropertyMaker = std::function<ibPGProperty* (ibBackendProperty* property)>;
 
 	static void Register(const wxString& type, ibPropertyMaker maker);

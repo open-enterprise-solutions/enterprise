@@ -6,13 +6,13 @@
 // registered by the platform itself, one for each kind a metatype HAS (s_features, metaObject.h):
 // `DocumentRef`, `DocumentObject`, `DocumentManager`, `AccumulationRegisterRecordSet`…
 //
-// What is pinned here, with no database and no configuration:
+// What is pinned here, with no database and no application:
 //
 //   1. a family is named by its metatype and its kind's prefix without the dot;
 //   2. a metatype has a family of each kind it has — and none of a kind it does not;
 //   3. a family admits its members and nobody else: the gate a handler's source asks;
-//   4. the event source filter offers only what raises an event, asked of the configuration's own types —
-//      with no configuration, nothing (a family is offered through a member that raises one);
+//   4. the event source filter offers only what raises an event, asked of the application's own types —
+//      with no application, nothing (a family is offered through a member that raises one);
 //   5. an event's number is its name's own: the same whoever asks, and different events differ.
 // =============================================================================
 
@@ -72,13 +72,13 @@ TEST(EventHandler, AFamilyAdmitsItsMembersOnly)
 	EXPECT_FALSE(ibValueTypeDescription::AllowValue(source, reference)) << "nor a document's reference";
 }
 
-// 4 - the event source filter asks the configuration
-TEST(EventHandler, TheSourceFilterAsksTheConfiguration)
+// 4 - the event source filter asks the application
+TEST(EventHandler, TheSourceFilterAsksTheApplication)
 {
 	std::vector<ibClassID> offered;
-	ibBackendTypeConfigFactory::GetTypesByFilter(ibSelectorDataType::ibSelectorDataType_eventSource, nullptr, offered);
+	ibBackendTypeApplicationFactory::GetTypesByFilter(ibSelectorDataType::ibSelectorDataType_eventSource, nullptr, offered);
 
-	EXPECT_TRUE(offered.empty()) << "what raises an event is asked of the configuration's own types - with none, nothing";
+	EXPECT_TRUE(offered.empty()) << "what raises an event is asked of the application's own types - with none, nothing";
 }
 
 // 5 - an event's number

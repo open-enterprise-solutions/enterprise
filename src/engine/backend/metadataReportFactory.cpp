@@ -1,10 +1,10 @@
 #include "metadataReport.h"
 
 #include "backend/objCtor.h"
-#include "backend/metadataConfiguration.h"
+#include "backend/metadataApplication.h"
 
 // (No CreateObject of its own: ibMetaData's asks GetTypeCtor below, which looks here first and then at
-// the configuration — the whole of what a second copy of the factory used to add.)
+// the application — the whole of what a second copy of the factory used to add.)
 
 bool ibMetaDataReport::IsRegisterCtor(const ibString& className) const
 {
@@ -60,7 +60,7 @@ ibCtorMetaValueType* ibMetaDataReport::GetTypeCtor(const ibClassID& clsid) const
 ibCtorMetaValueType* ibMetaDataReport::GetTypeCtor(const ibValueMetaObject* metaValue, ibCtorObjectMetaType refType) const
 {
 	// The id the pair spells, in the report's own image first (ibMetaImage::FindCtor — one probe; this was a copy
-	// of the walk that stood there), then the configuration's.
+	// of the walk that stood there), then the application's.
 	if (ibCtorMetaValueType* typeCtor = (m_image ? m_image->FindCtor(metaValue, refType) : nullptr))
 		return typeCtor;
 	return activeMetaData->GetTypeCtor(metaValue, refType);

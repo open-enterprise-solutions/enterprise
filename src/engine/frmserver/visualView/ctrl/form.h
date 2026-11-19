@@ -33,7 +33,7 @@ class BACKEND_API ibBackendFormAttribute;
 //*                                 define commom clsid									     *
 //********************************************************************************************
 
-//COMMON FORM
+//SHARED FORM
 constexpr ibClassID g_controlFormCLSID = control_to_clsid("CT_FRME");
 
 //********************************************************************************************
@@ -309,7 +309,7 @@ public:
 	ibFormCommandValue* FindFormCommandById(const ibMetaID& id) const;
 
 	// ibBackendCommandSender — the form is the command SOURCE / entry hop: resolve an id to a command-capable
-	// value. Either the id is a config command / object command (a command metaobject, itself command-capable, which
+	// value. Either the id is an application command / object command (a command metaobject, itself command-capable, which
 	// then hops its own sub-commands / a section its items), or the walk ends here. The front-end door starts
 	// ResolveCommandPath on the form; each further hop self-describes, exactly as a source path does.
 	virtual bool GetCommandByHop(const ibCommandHop& hop, ibValue& out) override;

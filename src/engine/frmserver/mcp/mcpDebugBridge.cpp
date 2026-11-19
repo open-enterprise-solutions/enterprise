@@ -633,7 +633,7 @@ void ibMcpDebugBridge::OnEvalMessage(const ibString& message, MessageType type)
 
 	// ⭐⭐ AND OUTSIDE ONE, THIS IS THE RUN'S OUTPUT BUFFER, KEPT — not announced. Everything not
 	// arriving inside a sandbox used to fall on the floor, so a `Message` from a posting handler —
-	// the ordinary way a configuration reports what it did — reached nobody at all.
+	// the ordinary way an application reports what it did — reached nobody at all.
 	//
 	// ⚠ KEPT RATHER THAN SAID, and that is the whole design (Max, 2026-09-04: *"this is you reading
 	// the output buffer; I do not need it — I read only the errors, when I press the button myself.

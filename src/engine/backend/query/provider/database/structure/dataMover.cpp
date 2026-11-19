@@ -156,7 +156,7 @@ bool RunDump(const ibString& tableName, const ibMetaData* metaData,
 bool RunRestore(const ibString& tableName, const ibMetaData* metaData,
 	const std::vector<std::shared_ptr<const ibBackendQueryColumn>>& columns,
 	const std::shared_ptr<const ibBackendQueryColumn>& keyColumn, bool upsert,
-	const ibReaderMemory& rows, ibDataMover::DateForm dates)
+	const ibReaderMemory& rows)
 {
 	// Build the bind layout once: the statement column list (the separate key first when there is one,
 	// then each column's physical field spread) + the column-id -> (start position, column) maps the
@@ -210,9 +210,9 @@ bool RunRestore(const ibString& tableName, const ibMetaData* metaData,
 
 			// col 0 = the row's separate key (when there is one); col > 0 = the column keyed by its id.
 			//
-			// ⭐ A COLUMN THE FILE HAS AND THIS CONFIGURATION DOES NOT IS AN ORDINARY EVENT. Dump and
+			// ⭐ A COLUMN THE FILE HAS AND THIS APPLICATION DOES NOT IS AN ORDINARY EVENT. Dump and
 			// restore exist to move data BETWEEN databases, so the file was written by some other
-			// configuration and may name a column since renamed, retired, or never present here. It
+			// application and may name a column since renamed, retired, or never present here. It
 			// used to be `columnOf[col]` — a std::map subscript, which INSERTS a null for the missing
 			// id and hands it on to be dereferenced. Its cell is skipped and said out loud instead: the
 			// row still restores, minus a column nothing here could hold anyway.
@@ -235,7 +235,7 @@ bool RunRestore(const ibString& tableName, const ibMetaData* metaData,
 				}
 				else {
 					int pos = positionOf[col];
-					ibDataMover::BinaryToStatement(*column, metaData, *colReader, &statement, pos, dates);
+					ibDataMover::BinaryToStatement(*column, metaData, *colReader, &statement, pos);
 				}
 			}
 			else if (keyColumn != nullptr) {
@@ -243,7 +243,7 @@ bool RunRestore(const ibString& tableName, const ibMetaData* metaData,
 				// written when the key rode BOTH ways carries this chunk for a table that no longer wants
 				// one — there is nothing to bind it to, and the row's own column already has the value.
 				int keyPosition = 1;
-				ibDataMover::BinaryToStatement(*keyColumn, metaData, *colReader, &statement, keyPosition, dates);
+				ibDataMover::BinaryToStatement(*keyColumn, metaData, *colReader, &statement, keyPosition);
 			}
 
 			colReaderPrev = colReader;
@@ -272,7 +272,7 @@ bool ibDataMover::Dump(const ibSchemaTable& table, ibWriterMemory& out)
 	return RunDump(table.m_name, MetaOf(table), ColumnsOf(table), KeyOf(table).col, out);
 }
 
-bool ibDataMover::Restore(const ibSchemaTable& table, const ibReaderMemory& rows, DateForm dates)
+bool ibDataMover::Restore(const ibSchemaTable& table, const ibReaderMemory& rows)
 {
 	// Nothing was dumped for a derived table, so there is nothing to load. It comes back through
 	// L3-4 regeneration once the source rows are in place — which is also the only order that can
@@ -282,7 +282,7 @@ bool ibDataMover::Restore(const ibSchemaTable& table, const ibReaderMemory& rows
 	if (table.m_columns.empty())
 		return true;
 	const KeyInfo key = KeyOf(table);
-	return RunRestore(table.m_name, MetaOf(table), ColumnsOf(table), key.col, key.unique, rows, dates);
+	return RunRestore(table.m_name, MetaOf(table), ColumnsOf(table), key.col, key.unique, rows);
 }
 
 // ==========================================================================
@@ -326,25 +326,8 @@ static bool RawFromResult(const ibBackendQueryColumn& col, ibWriterMemory& write
 	return true;
 }
 
-ibDateTime ibDataMover::DateOfWire(long long raw, DateForm form)
-{
-	switch (form) {
-	case DateForm::DateTime:
-		return ibDateTime(raw);
-	case DateForm::WallFrom1970:
-		return ibDateTime(1970, 1, 1).AddMilliseconds(raw);
-	case DateForm::Instant:
-		break;
-	}
-	if (raw == -62135604000000ll)   // the empty date as a build before 2026-09 wrote it
-		return ibDateTime();
-	if (raw == 0)
-		return ibDateTime(1970, 1, 1);   // read as the first wall form read it, not moved by this machine's zone
-	return ibDateTime::OfInstant(raw);   // the instant's parts on this machine's clock
-}
-
 static bool RawToStatement(const ibBackendQueryColumn& col, const ibReaderMemory& reader,
-	ibQueryStatement* statement, int& position, ibDataMover::DateForm dates)
+	ibQueryStatement* statement, int& position)
 {
 	const ibBackendColumnRawDB* const raw = col.AsRawColumn();   // asked of the column — see queryColumn.h
 	if (raw == nullptr)
@@ -358,7 +341,7 @@ static bool RawToStatement(const ibBackendQueryColumn& col, const ibReaderMemory
 		statement->SetParamNumber(position++, value);
 		break;
 	}
-	case ibBackendColumnRawDB::RawType::Date:    statement->SetParamDate(position++, ibDataMover::DateOfWire(static_cast<long long>(reader.r_u64()), dates)); break;
+	case ibBackendColumnRawDB::RawType::Date:    statement->SetParamDate(position++, ibDateTime(static_cast<long long>(reader.r_u64()))); break;
 	case ibBackendColumnRawDB::RawType::String:  statement->SetParamString(position++, reader.r_stringZ()); break;
 	default: {
 		ibMemoryBuffer buffer;
@@ -371,9 +354,9 @@ static bool RawToStatement(const ibBackendQueryColumn& col, const ibReaderMemory
 }
 
 void ibDataMover::BinaryToStatement(const ibBackendQueryColumn& col, const ibMetaData* /*metaData*/,
-	const ibReaderMemory& reader, ibQueryStatement* statement, int& position, DateForm dates)
+	const ibReaderMemory& reader, ibQueryStatement* statement, int& position)
 {
-	if (RawToStatement(col, reader, statement, position, dates))
+	if (RawToStatement(col, reader, statement, position))
 		return;
 
 	const int tag = reader.r_s32();
@@ -390,7 +373,7 @@ void ibDataMover::BinaryToStatement(const ibBackendQueryColumn& col, const ibMet
 				statement->SetParamNumber(p++, value);
 				break;
 			}
-			case ibColumnRole::Date:   statement->SetParamDate(p++, DateOfWire(static_cast<long long>(reader.r_u64()), dates)); break;
+			case ibColumnRole::Date:   statement->SetParamDate(p++, ibDateTime(static_cast<long long>(reader.r_u64()))); break;
 			case ibColumnRole::String: statement->SetParamString(p++, reader.r_stringZ()); break;
 			case ibColumnRole::Enum:   statement->SetParamInt(p++, reader.r_s32()); break;
 			case ibColumnRole::Schedule: {
@@ -410,7 +393,7 @@ void ibDataMover::BinaryToStatement(const ibBackendQueryColumn& col, const ibMet
 				statement->SetParamBlob(p++, typeDescBuffer.GetData(), typeDescBuffer.GetDataLen());
 				break;
 			}
-			// What a column of no declared type keeps as its node is never moved — no table of a configuration declares one —
+			// What a column of no declared type keeps as its node is never moved — no table of an application declares one —
 			// so its field is held in place, empty, and every field after it keeps its position.
 			case ibColumnRole::Value:  statement->SetParamNull(p++); break;
 			default:                                                                  break;

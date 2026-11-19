@@ -17,7 +17,7 @@
 // / Caption / Picture), its Action event, and its form-unique id.
 //
 // This is ONE of three "tables" the command navigator/picker splices together: form commands (this, managed) vs
-// standard actions vs global config commands (both id-hops, read-only). Their natures stay separate.
+// standard actions vs global application commands (both id-hops, read-only). Their natures stay separate.
 // -----------------------------------------------------------------------
 
 #include "frmserver/visualView/layerObject.h"                     // ibValueLayerObject — the shared base

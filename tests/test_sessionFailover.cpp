@@ -19,7 +19,7 @@
 #include <vector>
 
 #include "backend/compiler/byteCode.h"
-#include "backend/metadataConfiguration.h"
+#include "backend/metadataApplication.h"
 #include "backend/metaCollection/metaObjectMetadata.h"
 
 #include <wx/filename.h>
@@ -877,16 +877,16 @@ TEST_F(SessionFailover, AnotherConnectionDoesNotReadTheCachedAnswer)
 
 TEST_F(SessionFailover, StartModuleThatAsksDoesNotHangTheLogin)
 {
-	// The configuration is up as the base opens, before anybody logs in.
-	ibMetaDataConfigurationBase* const meta = ibApplicationInstance::GetActiveMetaData(g_base->app);
+	// The application is up as the base opens, before anybody logs in.
+	ibMetaDataApplicationBase* const meta = ibApplicationInstance::GetActiveMetaData(g_base->app);
 	ASSERT_NE(meta, nullptr);
-	ibValueMetaObjectConfiguration* const common = meta->GetCommonMetaObject();
-	ASSERT_NE(common, nullptr);
-	ibValueMetaObjectModule* const module = const_cast<ibValueMetaObjectModule*>(common->GetObjectModule());
+	ibValueMetaObjectApplication* const rootObject = meta->GetRootMetaObject();
+	ASSERT_NE(rootObject, nullptr);
+	ibValueMetaObjectModule* const module = const_cast<ibValueMetaObjectModule*>(rootObject->GetObjectModule());
 	ASSERT_NE(module, nullptr);
-	// The cache key is the configuration digest, not the module text. A login that already compiled
+	// The cache key is the application digest, not the module text. A login that already compiled
 	// the empty module would serve that bytecode again, and onStart would never ask. Drop the row —
-	// the one the configuration holds and the table's — whenever the text changes, the same way an
+	// the one the application holds and the table's — whenever the text changes, the same way an
 	// apply retires it.
 	ibByteCodeStorage* const storage = meta->GetByteCodeStorage();
 	ASSERT_NE(storage, nullptr);
@@ -900,7 +900,7 @@ TEST_F(SessionFailover, StartModuleThatAsksDoesNotHangTheLogin)
 			storage->Invalidate(module->GetGuid().GetGuid());
 		}
 	} restore{ module, storage, module->GetModuleText() };
-	const bool words = common->GetCompileSyntax() == ibProgramSyntax::syntax_ves;
+	const bool words = rootObject->GetCompileSyntax() == ibProgramSyntax::syntax_ves;
 	module->SetModuleText(words
 		? wxT("Procedure onStart()\n")
 		  wxT("\tQuestion(\"stay\", QuestionMode.Ok);\n")
@@ -937,16 +937,16 @@ TEST_F(SessionFailover, StartModuleThatAsksDoesNotHangTheLogin)
 
 TEST_F(SessionFailover, ByteCodeStorageHoldsWhatItCompiledAndDetachedSavesNothing)
 {
-	ibMetaDataConfigurationBase* const meta = ibApplicationInstance::GetActiveMetaData(g_base->app);
+	ibMetaDataApplicationBase* const meta = ibApplicationInstance::GetActiveMetaData(g_base->app);
 	ASSERT_NE(meta, nullptr);
-	ASSERT_NE(meta->GetByteCodeStorage(), nullptr) << "a configuration that runs holds its bytecode";
+	ASSERT_NE(meta->GetByteCodeStorage(), nullptr) << "an application that runs holds its bytecode";
 
-	// ⚠ A STORAGE HOLDS ONLY UNDER A DIGEST, and this base's configuration has none: it was made here and never saved,
-	// and the digest is computed from the saved blob (metadataConfigurationQuery.cpp). The designer saves a new
-	// configuration on its first load, so one that runs in a person's base has it. The storages below are made over a
-	// configuration that answers one — the only thing ibByteCodeStorage's constructor asks of it.
-	struct Saved : ibMetaDataConfigurationFile {
-		ibString GetConfigMD5() const override { return wxT("bytecode-storage-test"); }
+	// ⚠ A STORAGE HOLDS ONLY UNDER A DIGEST, and this base's application has none: it was made here and never saved,
+	// and the digest is computed from the saved blob (metadataApplicationQuery.cpp). The designer saves a new
+	// application on its first load, so one that runs in a person's base has it. The storages below are made over a
+	// application that answers one — the only thing ibByteCodeStorage's constructor asks of it.
+	struct Saved : ibMetaDataApplicationFile {
+		ibString GetApplicationMD5() const override { return wxT("bytecode-storage-test"); }
 	} saved;
 	ibByteCodeStorage storage(&saved);
 
@@ -975,8 +975,8 @@ TEST_F(SessionFailover, ByteCodeStorageHoldsWhatItCompiledAndDetachedSavesNothin
 	EXPECT_EQ(compiled, 1);
 	EXPECT_TRUE(second.m_version == first.m_version);
 
-	// It was saved as well. A storage made now — another process opening the same configuration — reads the row with
-	// the configuration's others, before anything is asked of it.
+	// It was saved as well. A storage made now — another process opening the same application — reads the row with
+	// the application's others, before anything is asked of it.
 	{
 		ibByteCodeStorage opened(&saved);
 		ibByteCode read;
@@ -1001,7 +1001,7 @@ TEST_F(SessionFailover, ByteCodeStorageHoldsWhatItCompiledAndDetachedSavesNothin
 
 	ibByteCodeStorage after(&saved);
 	ibByteCode none;
-	EXPECT_FALSE(after.Load(none, other)) << "a replaced configuration saved a row";
+	EXPECT_FALSE(after.Load(none, other)) << "a replaced application saved a row";
 }
 
 TEST_F(SessionFailover, DetachedSessionSaysUntilWhen)

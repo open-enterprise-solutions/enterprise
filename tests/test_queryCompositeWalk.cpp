@@ -20,7 +20,7 @@
 #include "backend/compiler/value.h"
 #include "backend/databaseLayer/connectionPool.h"
 #include "backend/databaseLayer/sqllite/sqliteDatabaseLayer.h"
-#include "backend/metadataConfiguration.h"
+#include "backend/metadataApplication.h"
 #include "backend/metaCollection/metaObject.h"
 #include "backend/metaCollection/dimension/metaDimensionObject.h"
 #include "backend/metaCollection/resource/metaResourceObject.h"
@@ -60,13 +60,13 @@ ibString SqliteTypeOf(const ibColumnType& type)
 
 struct QueryCompositeWalk : ::testing::Test {
 	wxInitializer m_wxInit;
-	// RunDatabase sets this thread's code style to the configuration's; TearDown puts it back.
+	// RunDatabase sets this thread's code style to the application's; TearDown puts it back.
 	const short m_codeStyle = ibCompileCode::GetCodeStyle();
 	std::shared_ptr<ibDatabaseLayerSQLite> db;
 	ibString dbPath;
 	std::shared_ptr<ibSession> session;
 	std::unique_ptr<ibSessionScope> scope;
-	std::shared_ptr<ibMetaDataConfigurationFile> cfg;
+	std::shared_ptr<ibMetaDataApplicationFile> cfg;
 	ibValueMetaObjectInformationRegister* reg = nullptr;
 	ibValueMetaObjectDimension* key = nullptr;
 	ibValueMetaObjectResource* resource = nullptr;
@@ -120,10 +120,10 @@ struct QueryCompositeWalk : ::testing::Test {
 	// holding a reference to EITHER document — a composite reference, the shape a settlement register's
 	// "credit document" has.
 	void Build(ibPeriodicity periodicity = ibPeriodicity::eNonPeriodic) {
-		cfg = ibMetaData::MakeShared<ibMetaDataConfigurationFile>();
-		// TYPE(<name>) names a type in the application's configuration.
+		cfg = ibMetaData::MakeShared<ibMetaDataApplicationFile>();
+		// TYPE(<name>) names a type in the application.
 		ActiveMetaDataAccess::Replace(cfg);
-		ibValueMetaObjectConfiguration* root = cfg->GetCommonMetaObject();
+		ibValueMetaObjectApplication* root = cfg->GetRootMetaObject();
 		ASSERT_NE(root, nullptr);
 		docA = dynamic_cast<ibValueMetaObjectRecordDataRecorderRef*>(cfg->CreateMetaObject(g_metaDocumentCLSID, root, false));
 		docB = dynamic_cast<ibValueMetaObjectRecordDataRecorderRef*>(cfg->CreateMetaObject(g_metaDocumentCLSID, root, false));
@@ -157,9 +157,9 @@ struct QueryCompositeWalk : ::testing::Test {
 	// An accumulation register of balances, Settlements: dimension Doc holding a reference to EITHER
 	// document, resource Amount; the invoice is the recorder. Its totals are installed as an apply does.
 	void BuildSettlements() {
-		cfg = ibMetaData::MakeShared<ibMetaDataConfigurationFile>();
+		cfg = ibMetaData::MakeShared<ibMetaDataApplicationFile>();
 		ActiveMetaDataAccess::Replace(cfg);
-		ibValueMetaObjectConfiguration* root = cfg->GetCommonMetaObject();
+		ibValueMetaObjectApplication* root = cfg->GetRootMetaObject();
 		ASSERT_NE(root, nullptr);
 		docA = dynamic_cast<ibValueMetaObjectRecordDataRecorderRef*>(cfg->CreateMetaObject(g_metaDocumentCLSID, root, false));
 		docB = dynamic_cast<ibValueMetaObjectRecordDataRecorderRef*>(cfg->CreateMetaObject(g_metaDocumentCLSID, root, false));
@@ -351,8 +351,8 @@ struct QueryCompositeWalk : ::testing::Test {
 
 	// The rows a query text gives, as a script reads them: New Query(text).Execute().Unload().
 	long Count(const ibString& text) const {
-		// A query resolves its sources in the configuration it runs on behalf of.
-		const ibSourceMetaDataScope configuration(cfg.get());
+		// A query resolves its sources in the application it runs on behalf of.
+		const ibSourceMetaDataScope application(cfg.get());
 		ibValuePtr<ibValueQueryExec> query(new ibValueQueryExec());
 		ibValue textValue(text);
 		ibValue* init[] = { &textValue };
@@ -381,8 +381,8 @@ struct QueryCompositeWalk : ::testing::Test {
 	std::vector<ibString> Column(const ibString& text, const ibString& column,
 	                             const std::map<ibString, ibValue>& parameters = {}) const {
 		std::vector<ibString> keys;
-		// A query resolves its sources in the configuration it runs on behalf of.
-		const ibSourceMetaDataScope configuration(cfg.get());
+		// A query resolves its sources in the application it runs on behalf of.
+		const ibSourceMetaDataScope application(cfg.get());
 		ibValuePtr<ibValueQueryExec> query(new ibValueQueryExec());
 		ibValue textValue(text);
 		ibValue* init[] = { &textValue };

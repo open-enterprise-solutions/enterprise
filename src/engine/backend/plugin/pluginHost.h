@@ -73,7 +73,7 @@ public:
 
 	// COMPILE ONLY, NEVER RUN. The text is put through the same compiler the
 	// designer uses and thrown away; nothing is stored, no module is replaced,
-	// no configuration is touched. Returns the diagnostics produced — empty
+	// no application is touched. Returns the diagnostics produced — empty
 	// means the text compiles.
 	//
 	// `moduleName` is what appears in the messages; pass the name of the module
@@ -86,15 +86,15 @@ public:
 };
 
 // ---------------------------------------------------------------------------
-// metadata — read the shape of the open configuration
+// metadata — read the shape of the open application
 // ---------------------------------------------------------------------------
 class ibPluginMetadata {
 public:
 	virtual ~ibPluginMetadata() = default;
 
-	// True when a configuration is open; everything below answers empty
+	// True when an application is open; everything below answers empty
 	// otherwise (a plugin may load long before, or entirely without, one).
-	virtual bool IsConfigurationOpen() const = 0;
+	virtual bool IsApplicationOpen() const = 0;
 
 	// Names of every metaobject of a kind — "Catalog", "Document",
 	// "InformationRegister"… Kind names are the ones the metatypes register

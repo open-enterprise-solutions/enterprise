@@ -1,6 +1,6 @@
-// A restore used to drop the configuration tables and every user, then open
+// A restore used to drop the application tables and every user, then open
 // the zip. An empty archive, a file that is not a zip, a missing or repeated
-// member, data written before the configuration, or a configuration this
+// member, data written before the application, or an application this
 // build cannot read must leave the base as it was.
 //
 // The sentinel is a sys_user row. ClearTableUser is the clear that runs even
@@ -24,7 +24,7 @@
 #include "backend/databaseLayer/databaseQueryBuilder.h"
 #include "backend/databaseLayer/sqllite/sqliteDatabaseLayer.h"
 #include "backend/metaCollection/metaObject.h"
-#include "backend/metadataConfiguration.h"
+#include "backend/metadataApplication.h"
 #include "backend/userInfo.h"
 #include "core/memory/memoryStream.h"
 
@@ -35,7 +35,7 @@ ibMemoryBuffer Bytes(const char* text)
 	return ibMemoryBuffer(text, std::strlen(text));
 }
 
-ibMemoryBuffer ConfigBlob(std::uint64_t sign, bool withBody)
+ibMemoryBuffer ApplicationBlob(std::uint64_t sign, bool withBody)
 {
 	ibWriterMemory header;
 	header.w_u64(sign);
@@ -46,7 +46,7 @@ ibMemoryBuffer ConfigBlob(std::uint64_t sign, bool withBody)
 	if (withBody) {
 		ibWriterMemory body;
 		body.w_u8(1);
-		all.w_chunk(g_metaCommonMetadataCLSID, body.pointer(), body.size());
+		all.w_chunk(g_metaApplicationMetadataCLSID, body.pointer(), body.size());
 	}
 	return all.buffer();
 }
@@ -172,13 +172,13 @@ TEST_F(BackupRestore, MissingMemberLeavesTheUser)
 	ExpectUserKept();
 }
 
-TEST_F(BackupRestore, UnreadableConfigLeavesTheUser)
+TEST_F(BackupRestore, UnreadableApplicationLeavesTheUser)
 {
 	if (!ready) GTEST_SKIP();
 	KeepUser();
 	TempFile file;
 	ASSERT_TRUE(WriteArchive(file.path, {
-		{ wxT("config"), Bytes("not-a-config") },
+		{ wxT("application"), Bytes("not-an-application") },
 		{ wxT("user"), ibMemoryBuffer() },
 		{ wxT("data"), ibMemoryBuffer() },
 	}));
@@ -186,28 +186,28 @@ TEST_F(BackupRestore, UnreadableConfigLeavesTheUser)
 	ExpectUserKept();
 }
 
-TEST_F(BackupRestore, DataBeforeConfigLeavesTheUser)
+TEST_F(BackupRestore, DataBeforeApplicationLeavesTheUser)
 {
 	if (!ready) GTEST_SKIP();
 	KeepUser();
 	TempFile file;
 	ASSERT_TRUE(WriteArchive(file.path, {
 		{ wxT("data"), ibMemoryBuffer() },
-		{ wxT("config"), ConfigBlob(sign_metadata, true) },
+		{ wxT("application"), ApplicationBlob(sign_metadata, true) },
 		{ wxT("user"), ibMemoryBuffer() },
 	}));
 	EXPECT_FALSE(appData->LoadDatabase(file.path));
 	ExpectUserKept();
 }
 
-TEST_F(BackupRestore, RepeatedConfigLeavesTheUser)
+TEST_F(BackupRestore, RepeatedApplicationLeavesTheUser)
 {
 	if (!ready) GTEST_SKIP();
 	KeepUser();
 	TempFile file;
 	ASSERT_TRUE(WriteArchive(file.path, {
-		{ wxT("config"), ConfigBlob(sign_metadata, true) },
-		{ wxT("config"), ConfigBlob(sign_metadata, true) },
+		{ wxT("application"), ApplicationBlob(sign_metadata, true) },
+		{ wxT("application"), ApplicationBlob(sign_metadata, true) },
 		{ wxT("user"), ibMemoryBuffer() },
 		{ wxT("data"), ibMemoryBuffer() },
 	}));
@@ -221,7 +221,7 @@ TEST_F(BackupRestore, ReadableArchiveWithoutMetadataLeavesTheUser)
 	KeepUser();
 	TempFile file;
 	ASSERT_TRUE(WriteArchive(file.path, {
-		{ wxT("config"), ConfigBlob(sign_metadata, true) },
+		{ wxT("application"), ApplicationBlob(sign_metadata, true) },
 		{ wxT("user"), ibMemoryBuffer() },
 		{ wxT("data"), ibMemoryBuffer() },
 	}));

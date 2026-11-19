@@ -19,7 +19,7 @@
 #include "backend/compiler/value.h"
 #include "backend/databaseLayer/connectionPool.h"
 #include "backend/databaseLayer/sqllite/sqliteDatabaseLayer.h"
-#include "backend/metadataConfiguration.h"
+#include "backend/metadataApplication.h"
 #include "backend/metaCollection/metaObject.h"
 #include "backend/metaCollection/dimension/metaDimensionObject.h"
 #include "backend/metaCollection/resource/metaResourceObject.h"
@@ -50,13 +50,13 @@ ibString SqliteTypeOf(const ibColumnType& type)
 
 struct InformationRegisterGet : ::testing::Test {
 	wxInitializer m_wxInit;
-	// RunDatabase sets this thread's code style to the configuration's; TearDown puts it back.
+	// RunDatabase sets this thread's code style to the application's; TearDown puts it back.
 	const short m_codeStyle = ibCompileCode::GetCodeStyle();
 	std::shared_ptr<ibDatabaseLayerSQLite> db;
 	ibString dbPath;
 	std::shared_ptr<ibSession> session;
 	std::unique_ptr<ibSessionScope> scope;
-	std::unique_ptr<ibMetaDataConfigurationFile> cfg;
+	std::unique_ptr<ibMetaDataApplicationFile> cfg;
 	ibValueMetaObjectInformationRegister* reg = nullptr;
 	ibValueMetaObjectDimension* key = nullptr;
 	ibValueMetaObjectResource* resource = nullptr;
@@ -99,8 +99,8 @@ struct InformationRegisterGet : ::testing::Test {
 
 	// An independent register, Settings: dimension Key (a string), resource Value (a number).
 	void Build(ibPeriodicity periodicity) {
-		cfg = std::make_unique<ibMetaDataConfigurationFile>();
-		ibValueMetaObjectConfiguration* root = cfg->GetCommonMetaObject();
+		cfg = std::make_unique<ibMetaDataApplicationFile>();
+		ibValueMetaObjectApplication* root = cfg->GetRootMetaObject();
 		ASSERT_NE(root, nullptr);
 		reg = dynamic_cast<ibValueMetaObjectInformationRegister*>(
 			cfg->CreateMetaObject(g_metaInformationRegisterCLSID, root, false));

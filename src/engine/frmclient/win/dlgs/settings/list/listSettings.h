@@ -77,7 +77,7 @@ public:
 
 	// ⭐⭐ THE READER'S ROAD — THE SCHEMA IS THE OWNER, AND IT IS CONST. That is the whole of the
 	// guarantee (Max, 2026-08-24: "the schema as the owner, but constant — you cannot change it,
-	// only the setting"): a window holding a `const&` cannot write the configuration, and no care
+	// only the setting"): a window holding a `const&` cannot write the application, and no care
 	// or convention is required for that to hold.
 	//
 	// It is read for one thing — what fields exist — and `settings` is the only thing written. A
@@ -146,7 +146,7 @@ private:
 
 	void LoadFromSettings();
 	void ApplyToSettings();
-	const ibMetaData* SourceMetaData() const;   // config that resolves reference targets (list's, else active)
+	const ibMetaData* SourceMetaData() const;   // application that resolves reference targets (list's, else active)
 
 	// Fill the shared field tree from whatever this panel was opened on — a source that
 	// describes itself, else the model's flat columns.

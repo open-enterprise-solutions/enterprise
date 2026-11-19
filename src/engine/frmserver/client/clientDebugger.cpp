@@ -56,7 +56,7 @@ bool ibClientDebugger::Command(ibProtocol::ibDebug::ibCommand command, const ibD
 {
 	if (debugClient == nullptr) {
 		refusal = ibProtocol::ibRefusal::NotFound;
-		error = ibT("the configuration has no debugger");
+		error = ibT("the application has no debugger");
 		return false;
 	}
 

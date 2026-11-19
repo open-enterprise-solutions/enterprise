@@ -7,7 +7,7 @@
 #include "backend/metaData.h"
 #include "core/serialize/dataBuilder.h"   // ibDataNode — per-type DescribeData
 #include "backend/metaCollection/partial/commonObject.h"   // the owners an attribute asks: generic data, a hierarchy
-#include "backend/functionalOption/functionalOptionGate.h"   // ibFunctionalOptionGate::IsAvailable — the column's IsAvailable
+#include "backend/featureOption/featureOptionGate.h"   // ibFeatureOptionGate::IsAvailable — the column's IsAvailable
 
 ////////////////////////////////////////////////////////////////////////////
 
@@ -42,7 +42,7 @@ ibTypeDescription& ibValueMetaObjectAttributeBase::ibMetaAttributeColumn::GetTyp
 }
 
 // The empty answers — a field that is not chosen within anything. Statics, so the reference handed back
-// outlives the call and every asker sees the same nothing (a predefined field, a common attribute).
+// outlives the call and every asker sees the same nothing (a predefined field, a shared attribute).
 const ibChoiceTypeLinkDescription& ibValueMetaObjectAttributeBase::GetTypeLink() const
 {
 	static const ibChoiceTypeLinkDescription s_none;
@@ -66,7 +66,7 @@ const ibTranslateString& ibValueMetaObjectAttributeBase::GetFormat() const
 // and so may every object its type can hold, which takes the field with them.
 bool ibValueMetaObjectAttributeBase::IsAvailable() const
 {
-	return ibFunctionalOptionGate::IsAvailable(this) && ibFunctionalOptionGate::IsTypeAvailable(GetMetaData(), GetTypeDesc());
+	return ibFeatureOptionGate::IsAvailable(this) && ibFeatureOptionGate::IsTypeAvailable(GetMetaData(), GetTypeDesc());
 }
 
 // WHAT A VALUE HERE MAY BE — the type factory's answer (backend_type.cpp: a characteristic stands for its
@@ -74,7 +74,7 @@ bool ibValueMetaObjectAttributeBase::IsAvailable() const
 // and each base declares the question: one overrider answers for both, with the factory's answer.
 ibTypeDescription& ibValueMetaObjectAttributeBase::GetTypeValueDesc() const
 {
-	return ibBackendTypeConfigFactory::GetTypeValueDesc();
+	return ibBackendTypeApplicationFactory::GetTypeValueDesc();
 }
 
 // …and through the type property, which stands a barrier (`AnyRef`, `CatalogRef`) for its members as it
@@ -140,7 +140,7 @@ ibSelectorDataType ibValueMetaObjectAttributeBase::GetFilterDataType() const
 ibValue ibValueMetaObjectAttributeBase::CreateValue() const
 {
 	if (m_defValue.IsEmpty())
-		return ibBackendTypeConfigFactory::CreateValue();
+		return ibBackendTypeApplicationFactory::CreateValue();
 	return m_defValue;
 }
 
@@ -233,12 +233,12 @@ bool ibValueMetaObjectAttribute::WriteData(ibDataNode& node) const
 // attribute; the storage stayed.
 //
 // Its shape comes from the METATYPE: the constructor states the type, the fill-check and the
-// indexing, and every configuration that opens tomorrow gets the same answers, because the answers
-// are in the code. Writing them into the configuration turned the declaration into a mere INITIAL
+// indexing, and every application that opens tomorrow gets the same answers, because the answers
+// are in the code. Writing them into the application turned the declaration into a mere INITIAL
 // value — the first save froze whatever the platform said that day, and from then on the file won,
 // silently, forever.
 //
-// It cost exactly that. `AccountType` was declared fill-checked; every configuration saved before
+// It cost exactly that. `AccountType` was declared fill-checked; every application saved before
 // that declaration existed simply had no `FillCheck` node, `GetValue<bool>` on a missing node is
 // `false`, and the read handed that `false` straight over the top of the `true` the constructor had
 // just set. An account with no side saved without a word, and no amount of looking at the write path
@@ -252,7 +252,7 @@ bool ibValueMetaObjectAttribute::WriteData(ibDataNode& node) const
 // inert, and the two owner-driven exceptions (`SetSelectMode`, `SetOwnerSynonym`) are restated by
 // the owner on every load for the same reason.
 //
-// Old configurations still carry the nodes; they are simply ignored now.
+// Old applications still carry the nodes; they are simply ignored now.
 bool ibValueMetaObjectAttributePredefined::WriteData(ibDataNode& node) const
 {
 	return true;

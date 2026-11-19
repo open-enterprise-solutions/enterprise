@@ -260,9 +260,9 @@ public:
 	// TERMINAL (no owner-walk), so a form's metadata may fall back to this list without recursing.
 	virtual const ibMetaData* GetSourceMetaData() const override;
 
-	// SELECTION — which config to PICK / resolve a source FROM: the owner form's config, via the attach owner
+	// SELECTION — which application to PICK / resolve a source FROM: the owner form's application, via the attach owner
 	// (m_owner->GetMetaData()). This is what GetSourceMetaData used to do; it lets the Source picker + the property
-	// factory resolve a source BY NAME through THIS config's OWN factory (a copied / other-config list resolves its
+	// factory resolve a source BY NAME through THIS application's OWN factory (a copied / other-application list resolves its
 	// columns). Split from GetSourceMetaData so READ (from the value) stays terminal — no attach-owner cycle.
 	virtual const ibMetaData* GetMetaData() const override;
 
@@ -324,10 +324,10 @@ private:
 	// metaobject's queryable column, handed in by ibCreateHierarchyList. Null on a flat / non-folder list.
 	std::shared_ptr<const ibBackendQueryColumn> m_folderColumn;
 
-	// The list's SOURCE config, STORED (the metadata VARIABLE GetSourceMetaData returns) — captured from the picked
+	// The list's SOURCE application, STORED (the metadata VARIABLE GetSourceMetaData returns) — captured from the picked
 	// queryable's metaobject in RebuildSource (fires on ctor / load / source-change / copy). Held so the READ never
 	// re-resolves the queryable through m_owner->GetMetaData (which walks the form → recurses). Null until a source
-	// is picked (GetSourceMetaData then yields the ACTIVE config). Non-owning — points at an open config's ibMetaData.
+	// is picked (GetSourceMetaData then yields the ACTIVE application). Non-owning — points at an open application's ibMetaData.
 	const ibMetaData* m_sourceMetaData = nullptr;
 
 	// Default view (Normal / Choice) — serialised as a hidden field by Read/WriteProperty; GetSourceExplorer stamps

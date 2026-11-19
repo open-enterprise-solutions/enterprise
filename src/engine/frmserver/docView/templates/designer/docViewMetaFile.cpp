@@ -1,5 +1,5 @@
 ////////////////////////////////////////////////////////////////////////////
-//	Description : configuration browsed read-only — File → Open / Open database configuration
+//	Description : application browsed read-only — File → Open / Open the database's application
 ////////////////////////////////////////////////////////////////////////////
 
 #include "docViewMetaFile.h"
@@ -14,7 +14,7 @@
 bool ibMetadataTreeView::OnCreate(ibDocument* doc, long flags)
 {
 	ibClientFrame* const frame = GetDocChildFrame() != nullptr ? GetDocChildFrame()->GetFrame() : nullptr;
-	m_metaTree = std::make_unique<ibConfigurationTree>(frame);
+	m_metaTree = std::make_unique<ibApplicationTree>(frame);
 	return ibView::OnCreate(doc, flags);
 }
 
@@ -27,10 +27,10 @@ void ibMetadataTreeView::OnDraw(ibDataNode& frame)
 ibPictureDescription ibMetadataBrowserDocument::GetIcon() const
 {
 	if (m_metaData != nullptr) {
-		if (ibValueMetaObject* const metaObject = m_metaData->GetCommonMetaObject())
+		if (ibValueMetaObject* const metaObject = m_metaData->GetRootMetaObject())
 			return ibPictureDescription(metaObject->GetClassType());
 	}
-	return ibPictureDescription(g_metaCommonMetadataCLSID);
+	return ibPictureDescription(g_metaApplicationMetadataCLSID);
 }
 
 bool ibMetadataBrowserDocument::OnCreate(const ibString& path, long flags)
@@ -47,16 +47,16 @@ ibView* ibMetadataBrowserDocument::DoCreateView()
 	return new ibMetadataTreeView();
 }
 
-ibConfigurationTree* ibMetadataBrowserDocument::GetMetaTree() const
+ibApplicationTree* ibMetadataBrowserDocument::GetMetaTree() const
 {
-	// GUARD THE CAST, not the pointer that went into it — see the twin in docViewDataProcessorEdit.cpp.
+	// GUARD THE CAST, not the pointer that went into it — see the twin in docViewDataToolEdit.cpp.
 	ibMetadataTreeView* view = dynamic_cast<ibMetadataTreeView*>(GetFirstView());
 	return view != nullptr ? view->GetMetaTree() : nullptr;
 }
 
 bool ibMetadataFileDocument::OnCreate(const ibString& path, long flags)
 {
-	m_metaData = ibMetaData::MakeShared<ibMetaDataConfigurationFile>();
+	m_metaData = ibMetaData::MakeShared<ibMetaDataApplicationFile>();
 	if (!ibMetaDocument::OnCreate(path, flags))
 		return false;
 	return true;
@@ -72,7 +72,7 @@ bool ibMetadataFileDocument::OnCloseDocument()
 bool ibMetadataFileDocument::DoOpenDocument(const ibString& filename)
 {
 	// A FILE OF THE SESSION'S — the one the client uploaded (File → Open), as an external file's is
-	// (ibDataProcessorEditDocument): the server opens no path of its own disk on a client's word.
+	// (ibDataToolEditDocument): the server opens no path of its own disk on a client's word.
 	const ibTempFile temp(filename);
 	if (!temp.IsOpened())
 		return false;
@@ -80,7 +80,7 @@ bool ibMetadataFileDocument::DoOpenDocument(const ibString& filename)
 	ibMemoryBuffer part;
 	for (int index = 0; temp.ReadPart(index, part); ++index)
 		bytes.AppendData(part.GetData(), part.GetDataLen());
-	if (!m_metaData->LoadConfigFromBuffer(bytes))
+	if (!m_metaData->LoadApplicationFromBuffer(bytes))
 		return false;
 	SetTitle(temp.GetName());
 	SetFilename(temp.GetName(), true);
@@ -89,14 +89,14 @@ bool ibMetadataFileDocument::DoOpenDocument(const ibString& filename)
 	if (!m_metaData->RunDatabase(ibRuntimeRequest(onlyLoadFlag)))
 		return false;
 
-	if (ibConfigurationTree* const tree = GetMetaTree()) {
+	if (ibApplicationTree* const tree = GetMetaTree()) {
 		if (!tree->Load(m_metaData))
 			return false;
 	}
 
-	// ⚠ NO METAOBJECT, as the desktop's file document has none: an editor's metaobject is what a configuration's Closed
-	// closes (ibMetaTreeBase::CloseDocuments), and this one closes its own configuration — it would close itself again.
-	if (ibValueMetaObject* const root = m_metaData->GetCommonMetaObject()) {
+	// ⚠ NO METAOBJECT, as the desktop's file document has none: an editor's metaobject is what an application's Closed
+	// closes (ibMetaTreeBase::CloseDocuments), and this one closes its own application — it would close itself again.
+	if (ibValueMetaObject* const root = m_metaData->GetRootMetaObject()) {
 		if (GetTitle().IsEmpty())
 			SetTitle(root->GetModuleName());
 	}

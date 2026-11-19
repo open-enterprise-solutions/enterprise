@@ -28,7 +28,7 @@
 // 🛑 A PLATFORM FUNCTION IS NOT RUN IN THE DESIGNER, and that is a wall somebody built on purpose,
 // not a gap here: `ibValueSystemFunction::CallAsFunc` opens with `if (!appData->DesignerMode())`,
 // because the designer has no runtime. So a chain that passes through `CurrentDate()`,
-// `String(x)` or `GetCommonTemplate(…)` ends there while designing, and the same walk answers it
+// `String(x)` or `GetSharedTemplate(…)` ends there while designing, and the same walk answers it
 // where a runtime exists. Measured 2026-09-07: this accounts for most of what still refuses in real
 // modules — and the walk reaches the call correctly, resolves the receiver (SystemManager), finds
 // the method and its arity; the dispatcher declines. Do not look for the defect in the walk.
@@ -56,12 +56,12 @@ class ibValueMetaObject;
 // time, and a second saying is a thing to keep in step.
 //
 // WHY IT IS ANSWERED AT ALL: most of these names are identical at every caret in every module of
-// every configuration. The few that make THIS place different are what somebody is looking for, and
+// every application. The few that make THIS place different are what somebody is looking for, and
 // without the origin they sit in the middle of the alphabet indistinguishable from `Chars`.
 enum class ibNameOrigin {
 	Declared = 0,   // written in this text — a `var`, a function, a parameter
 	Platform,       // the manager's context: Catalogs / Documents / Enumerations, and the system functions
-	Global,         // the manager's extern map: global constants, common modules reachable by name
+	Global,         // the manager's extern map: global constants, shared modules reachable by name
 	Context,        // a context bind on this module's descriptor: ThisObject / ThisForm
 	Bound,          // an export or local bind: RegisterRecords / Filter / DataSource / a constant's Value
 	Member,         // the object's own surface: its attributes and tabular sections
@@ -95,7 +95,7 @@ struct ibCaretName {
 	bool         m_callable = false;
 	bool         m_returnsValue = false;   // a procedure where a value is wanted is a compile error
 	bool         m_exported = false;
-	bool         m_protected = false;      // visible to the modules below, not to the configuration
+	bool         m_protected = false;      // visible to the modules below, not to the application
 	bool         m_local = false;
 };
 
@@ -106,12 +106,12 @@ struct ibCaretName {
 // what came out: the step is the only place that still knows. `Documents.GoodsIssue` and a form's
 // `ThisForm` and a document's own `Warehouse` all arrive as values that describe themselves
 // identically — a manager, a form, a reference — while the difference a reader wants is WHOSE they
-// are: the platform's, this module's binding, or the configuration object's own data.
+// are: the platform's, this module's binding, or the application object's own data.
 //
 //   Member   — the METADATA declares this field on the owner (an attribute, a dimension, a resource)
 //   Bound    — the module's own: an export or a native bind (ThisObject.RegisterRecords, Filter)
 //   Context  — a context handle of the module the caret stands in (ThisObject / ThisForm)
-//   Platform — the value's built-in surface, identical in every configuration
+//   Platform — the value's built-in surface, identical in every application
 //
 // 🛑 A BRANCH IS BUILT WHERE IT WILL LIVE. A copy of an ibValue that holds an object points AT THE
 // SOURCE and takes a reference on it (value.cpp, Copy) — so a branch assembled in a local and then
@@ -127,12 +127,12 @@ struct ibCaretValue {
 };
 
 // The value the expression at `caret` arrived at, or false when the caret stands on nothing that
-// resolves — an empty module, a name the configuration does not know, a step the walk refuses.
+// resolves — an empty module, a name the application does not know, a step the walk refuses.
 //
 // `moduleObject` is the module the text LIVES IN, and it is PASSED rather than reached for: several
-// configurations can be open and the active one is not necessarily the caller's. It is the whole
+// applications can be open and the active one is not necessarily the caller's. It is the whole
 // context — its own bindings (ThisObject, the object's own names) and, through its parent chain,
-// the common modules and the globals. A caller with no module in mind emulates one carrying the
+// the shared modules and the globals. A caller with no module in mind emulates one carrying the
 // text (ibScratchModule, mcpToolComplete.cpp); null answers about the bare language, which is the
 // most that can honestly be said about a text with no home.
 // ⭐⭐ AND THE BREAK COMES BACK. `outRefusal` is what the compile refused, one line per refusal with a
@@ -164,7 +164,7 @@ BACKEND_API bool ibValueAtCaret(const ibString& text, unsigned int caret,
 // lookup, and the walk cannot make a value out of a name.
 //
 // 🛑 THE NAME IS ASKED OF WHOEVER REGISTERED THE TYPE. `ibValue::GetNameObjectFromID` goes through
-// the PLATFORM registry, which does not know configuration types at all — and it does not answer
+// the PLATFORM registry, which does not know application types at all — and it does not answer
 // "no", it THROWS (`Object with id '…' is not exist`, valueFactory.cpp). Measured 2026-09-08: it
 // took out every chain whose object had a reference attribute.
 struct ibFieldType {
@@ -234,7 +234,7 @@ struct ibQueryOutlineBinding {
 
 	// ⭐⭐ WHAT THIS NAME OFFERS — the row's own fields, read by asking the source for a sample of
 	// what it yields, exactly as a `foreach` variable is answered after a dot. Empty when the source
-	// is not resolvable while designing (a platform call in the way, no configuration open), which
+	// is not resolvable while designing (a platform call in the way, no application open), which
 	// is a smaller answer rather than a wrong one.
 	//
 	// ⚠ ALWAYS EMPTY FOR A `restrict`, and for a structural reason rather than a missing feature: a
@@ -276,7 +276,7 @@ struct ibQueryOutline {
 // compiled TOLERANTLY: somebody writing a query is mid-text by definition, and the queries read
 // before a refusal are still what the compiler understood.
 //
-// `metaData` is the configuration the snippet is judged inside — passed, never reached for, since
+// `metaData` is the application the snippet is judged inside — passed, never reached for, since
 // several can be open. Null answers about the bare language.
 BACKEND_API std::vector<ibQueryOutline> ibOutlineScriptQueries(const ibString& text,
 	const ibString& moduleName = ibT("module"),
@@ -289,7 +289,7 @@ BACKEND_API std::vector<ibQueryOutline> ibOutlineScriptQueries(const ibString& t
 // 🛑 ONLY WHERE THE ANSWER IS SURE, because a check that refuses good code is worse than none:
 //   - the receiver is READ AS A MEMBER (`Catalogs.Products.`, `ThisObject.Ref.`) — one that came out of a call is
 //     passed by, so the check never runs a query to find out what a method returned;
-//   - it is a configuration's own value — a manager, an object, a reference — whose methods are all known while
+//   - it is an application's own value — a manager, an object, a reference — whose methods are all known while
 //     designing, its module's exports included (read off the text, moduleInfo.h);
 //   - the call is not a bare platform one (`Write()` in an object module), whose receiver slot nobody wrote.
 // The text is the module's, `moduleObject` the module it lives in — as for ibValueAtCaret. Empty means nothing to

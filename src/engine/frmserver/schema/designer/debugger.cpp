@@ -1,7 +1,7 @@
 #include "debugger.h"
 
 #include "backend/debugger/debugClient.h"
-#include "backend/metadataConfiguration.h"
+#include "backend/metadataApplication.h"
 #include "backend/session/session.h"
 #include "core/serialize/dataBuilder.h"
 #include "protocol/protocolDesigner.h"   // ibProtocol::ibSchema::ibDebugger
@@ -23,7 +23,7 @@ void WriteBreakpoints(const ibString& module, ibDataNode& node)
 
 bool ibSchemaDebugger::AccessRight(const ibSession& session) const
 {
-	const ibMetaDataConfigurationBase* const metaData = session.GetMetaData();
+	const ibMetaDataApplicationBase* const metaData = session.GetMetaData();
 	return metaData != nullptr && metaData->AccessRight_Administration();
 }
 
@@ -38,10 +38,10 @@ void ibSchemaDebugger::Build(const ibSession& session, const ibDataNode& args, i
 		return;
 	}
 
-	const ibMetaDataConfigurationBase* const metaData = session.GetMetaData();
+	const ibMetaDataApplicationBase* const metaData = session.GetMetaData();
 	if (metaData == nullptr)
 		return;
-	result.SetValue(ibProtocol::ibSchema::ibDebugger::Guid, metaData->GetConfigGuid().str());
+	result.SetValue(ibProtocol::ibSchema::ibDebugger::Guid, metaData->GetApplicationGuid().str());
 }
 
 std::function<void()> ibSchemaDebugger::Command(const ibSession& /*session*/, std::int32_t command,
@@ -49,7 +49,7 @@ std::function<void()> ibSchemaDebugger::Command(const ibSession& /*session*/, st
 {
 	if (debugClient == nullptr) {
 		refusal = ibProtocol::ibRefusal::NotFound;
-		error = ibT("the configuration has no debugger");
+		error = ibT("the application has no debugger");
 		return nullptr;
 	}
 

@@ -77,13 +77,13 @@ public:
 		// the dynamic list) so the bound tablebox reads its header / type through the SAME explorer ->
 		// WalkColumns -> GetSourceSynonym presentation seam a metadata field uses — the column's
 		// Caption IS its header (GetSynonym). ibValue stays the FIRST base via ibValueModelColumnInfo ->
-		// ibValueDynamicMembers -> ibValue (offset 0); ibPropertyObject + ibBackendTypeConfigFactory follow
+		// ibValueDynamicMembers -> ibValue (offset 0); ibPropertyObject + ibBackendTypeApplicationFactory follow
 		// (the base order ibFormAttribute uses); the type factory is mandatory (ibPropertyType resolves its
 		// owner through it, else a null variant crash).
 		class ibValueModelTableColumnInfo :
 			public ibValueModel::ibValueModelColumnCollection::ibValueModelColumnInfo,
 			public ibPropertyObject,
-			public ibBackendTypeConfigFactory,
+			public ibBackendTypeApplicationFactory,
 			public ibBackendSourceColumn {
 		public:
 
@@ -113,14 +113,14 @@ public:
 			virtual void SetColumnIndexed(bool on) { m_propertyIndexed->SetValue(on); }
 
 			// --- ibPropertyObject — inspector identity. GetClassName resolves through the registered clsid
-			// (VL_TVCLI) and DISAMBIGUATES the two same-name bases (ibValue + ibPropertyObject). --------------
+			// (VL_TCLI) and DISAMBIGUATES the two same-name bases (ibValue + ibPropertyObject). --------------
 			virtual ibString GetClassName() const override { return ibValue::GetClassName(); }
 			virtual ibString GetObjectTypeName() const override { return GetColumnName(); }
 			virtual bool IsEditable() const override { return true; }
 
-			// --- ibBackendTypeConfigFactory — the Type property's variant resolves through this (mirror
+			// --- ibBackendTypeApplicationFactory — the Type property's variant resolves through this (mirror
 			// ibFormAttribute). GetTypeDesc's signature ALSO closes ibBackendSourceColumn::GetTypeDesc (one
-			// final overrider). The column carries no metaobject → GetMetaData yields the active config. ------
+			// final overrider). The column carries no metaobject → GetMetaData yields the active application. ------
 			virtual ibTypeDescription& GetTypeDesc() const override { return m_propertyType->GetValueAsTypeDesc(); }
 			virtual ibSelectorDataType GetFilterDataType() const override { return ibSelectorDataType::ibSelectorDataType_reference; }
 			virtual const ibMetaData* GetMetaData() const override;
@@ -485,7 +485,7 @@ public:
 	//Get ref class
 	virtual ibClassID GetSourceClassType() const override { return g_valueTableCLSID; }
 
-	// A RAM table has no metaobject of its own; expose the active config so reference-typed columns still resolve.
+	// A RAM table has no metaobject of its own; expose the active application so reference-typed columns still resolve.
 	virtual const ibMetaData* GetSourceMetaData() const override;
 	virtual ibString GetSourceCaption() const override { return GetClassName(); }
 

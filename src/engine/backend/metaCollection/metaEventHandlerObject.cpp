@@ -29,7 +29,7 @@ long ibValueMetaObjectEventHandler::EventId(const ibString& eventName)
 {
 	// A long is what a list property keeps; the hash is 64 bits and the id a non-negative 31 — ibNOT_FOUND
 	// stays free for "none". Over the name's UTF-8, the bytes ib_clsid_hash has always read: the ids already
-	// kept in configurations do not move.
+	// kept in applications do not move.
 	return static_cast<long>(ib_clsid_hash(eventName.ToUtf8().c_str()) & 0x7FFFFFFF);
 }
 
@@ -205,7 +205,7 @@ bool ibValueMetaObjectEventHandler::ReadData(const ibDataNode& node)
 
 	// 🛑 THE EVENT BEFORE THE SOURCE, and the order is the fix. The event's door reads what it holds
 	// first, and a list reads that through its functor — the source's events. Asked while the
-	// configuration loads, the source names types nobody has registered yet (a catalog registers in its
+	// application loads, the source names types nobody has registered yet (a catalog registers in its
 	// run, after every load), and a type description drops what the registry does not know: a handler
 	// of `CatalogObject.Goods` came back as `String` and never fired. Read first, the event asks an
 	// empty source, and the source is asked again only in the run, when its types are there.

@@ -1,12 +1,11 @@
 /////////////////////////////////////////////////////////////////////////////
-// PBKDF2-HMAC-SHA256 password hashing + legacy MD5 compatibility.
+// PBKDF2-HMAC-SHA256 password hashing.
 /////////////////////////////////////////////////////////////////////////////
 
 #include "passwordHash.hpp"
 #include "core/crypto/sha256.hpp"
 #include "core/fstring.h"
 #include "core/utils/base64.h"
-#include "core/utils/md5.hpp"
 
 #include <cstdint>
 #include <cstring>
@@ -141,23 +140,8 @@ bool ConstTimeEqual(const uint8_t* a, const uint8_t* b, size_t len)
 
 } // namespace
 
-bool ibPasswordHash::IsLegacy(const ibString& storedHash)
-{
-	if (storedHash.length() != 32)
-		return false;
-	for (size_t i = 0; i < 32; ++i) {
-		const ibChar c = storedHash[i];
-		const bool hex = (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
-		if (!hex) return false;
-	}
-	return true;
-}
-
 bool ibPasswordHash::NeedsRehash(const ibString& storedHash)
 {
-	if (IsLegacy(storedHash))
-		return true;
-
 	if (!storedHash.StartsWith(kPrefix))
 		return false;
 
@@ -206,10 +190,6 @@ bool ibPasswordHash::Verify(const ibString& password, const ibString& storedHash
 	// logs that user in. A non-empty password does not.
 	if (storedHash.IsEmpty())
 		return password.IsEmpty();
-
-	// Legacy fast path: 32-hex MD5.
-	if (IsLegacy(storedHash))
-		return storedHash.IsSameAs(ibMD5::ComputeMd5(password), false);
 
 	if (!storedHash.StartsWith(kPrefix))
 		return false;

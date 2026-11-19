@@ -12,7 +12,7 @@
 //
 //	Read (JSON -> tree) is IMPLEMENTED and complete — a self-contained recursive-descent
 //	parser covering everything Write emits: nested children, arrays, base64 binaries, the
-//	structural keys, the synthetic ones. It reads MESSAGES, never a configuration: the client
+//	structural keys, the synthetic ones. It reads MESSAGES, never an application: the client
 //	protocol and MCP parse every JSON-RPC request through it (rpc/rpcMessage.cpp), as does the
 //	thin client; ibBinaryProvider stays the round-trip format.
 //
@@ -62,7 +62,7 @@ public:
 	// a structural key holds what it cannot. NodeChildren are not one: the reader descends into them itself.
 	bool ReadEntry(ibDataNode& node, const ibString& key, ibDataValue value) const;
 
-	// clsid -> readable type name. The names are the registry's — a configuration's own
+	// clsid -> readable type name. The names are the registry's — an application's own
 	// (CatalogRef.X, DocumentRef.Y) and the built-in ones (Number, String) alike — so the
 	// caller injects a resolver over it (ibMetaTypeResolver: ibMetaData::GetTypeCtor, then
 	// the static registry). Without a resolver no type is named: the clsid alone is written.
@@ -74,7 +74,7 @@ public:
 	// clsid 0; a numeric NodeType needs no lookup and always resolves.
 	void SetTypeLookup(std::function<ibClassID(const ibString&)> fn) { m_lookupType = std::move(fn); }
 	// …and after a reading, for the words it kept: each node's NodeType field the lookup knows becomes its clsid, all the
-	// way down. A text is read once by whoever does not hold the configuration yet (a call, before its caller is known),
+	// way down. A text is read once by whoever does not hold the application yet (a call, before its caller is known),
 	// and its types looked up by whoever does — not read again.
 	void LookupTypes(ibDataNode& node) const;
 

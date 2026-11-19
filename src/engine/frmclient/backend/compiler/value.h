@@ -90,7 +90,7 @@ public:
 
 // A VALUE OF A TYPE OF THE SERVER'S — a reference, a value of a type the client does not know: held as the server wrote
 // it, its node given back untouched, read as the server presents it (Presentation: the server's GetString — a
-// reference's name is the configuration's).
+// reference's name is the application's).
 class ibValueSerializable : public ibValue {
 public:
 

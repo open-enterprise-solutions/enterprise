@@ -9,14 +9,14 @@
 
 // A generic temp-table column — name + type + source-id. NO attribute behind it; the
 // source-id (GetColumnId) is the key the RAM table stores the column's value at.
-// `metaData` — the configuration whose values it holds (GetMetaData), its maker's.
+// `metaData` — the application whose values it holds (GetMetaData), its maker's.
 class ibTempColumn : public ibBackendQueryColumn
 {
 public:
 	ibTempColumn(const ibString& name, const ibTypeDescription& type, ibMetaID modelId, const ibMetaData* metaData)
 		: m_name(name), m_physical(name), m_type(type), m_modelId(modelId), m_metaData(metaData) {}
 	// …and one whose value is told apart from its declaration, as a declared field's is: `AnyRef` declared, the
-	// configuration's references held (ibOpenBarriers). The declaration is what it shows; what it holds is what a
+	// application's references held (ibOpenBarriers). The declaration is what it shows; what it holds is what a
 	// walk and a picker read (GetTypeValueDesc).
 	ibTempColumn(const ibString& name, const ibTypeDescription& type, const ibTypeDescription& typeValue, ibMetaID modelId,
 	             const ibMetaData* metaData)
@@ -68,7 +68,7 @@ public:
 	// its columns are named by whoever made it, and that name IS the caption.
 	ibString           GetSynonym()      const override { return m_synonym.IsEmpty() ? m_name : m_synonym; }
 
-	// ⭐ WHAT IT STANDS FOR, when that is something the configuration declared — a register's dimension,
+	// ⭐ WHAT IT STANDS FOR, when that is something the application declared — a register's dimension,
 	// resource or analytics slot published into a view: its QUERY face (the attribute's bridge), handed over by
 	// the publisher, and the road to the attribute from there — its picture, its availability.
 	ibTempColumn& StandsFor(const std::shared_ptr<const ibBackendQueryColumn>& declared) { m_standsFor = declared; return *this; }
@@ -80,7 +80,7 @@ public:
 	ibBalanceRole GetBalanceRole() const override { return m_balanceRole; }
 	int           GetPeriodRank()  const override { return m_periodRank; }
 
-	// ⭐ AVAILABLE AS WHAT IT STANDS FOR (functional options) — asked live, so a view column of a dimension this
+	// ⭐ AVAILABLE AS WHAT IT STANDS FOR (feature options) — asked live, so a view column of a dimension this
 	// base does not use goes with the dimension. An ordinary temp table's column stands for nothing: available.
 	bool IsAvailable() const override { return m_standsFor == nullptr || m_standsFor->IsAvailable(); }
 

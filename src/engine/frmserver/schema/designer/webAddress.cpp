@@ -3,7 +3,7 @@
 #include <algorithm>
 
 #include "backend/appData.h"
-#include "backend/metadataConfiguration.h"
+#include "backend/metadataApplication.h"
 #include "backend/served/servedAddressRegistry.h"
 #include "backend/session/session.h"
 #include "core/serialize/dataBuilder.h"
@@ -11,12 +11,12 @@
 
 namespace {
 
-// The object an entry answers for, by its name in the configuration; empty — none, or not there any more.
+// The object an entry answers for, by its name in the application; empty — none, or not there any more.
 ibString ObjectTitle(const ibSession& session, const ibGuid& object)
 {
 	if (!object.isValid())
 		return ibString();
-	const ibMetaDataConfigurationBase* const metaData = session.GetMetaData();
+	const ibMetaDataApplicationBase* const metaData = session.GetMetaData();
 	if (metaData == nullptr)
 		return ibString();
 	const ibMetaID id = metaData->MetaIdByGuid(object);
@@ -38,7 +38,7 @@ void Describe(const ibSession& session, const ibServedAddress& address, ibDataNo
 
 bool ibSchemaWebAddress::AccessRight(const ibSession& session) const
 {
-	const ibMetaDataConfigurationBase* const metaData = session.GetMetaData();
+	const ibMetaDataApplicationBase* const metaData = session.GetMetaData();
 	return metaData != nullptr && metaData->AccessRight_DataAdministration();
 }
 

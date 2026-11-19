@@ -163,7 +163,7 @@ bool ibValueRecordSetObjectAccountingRegister::ibValueAccountDimensions::SetAt(
 			account.GetString(), varKeyValue.GetString());
 
 	if (target >= static_cast<long>(meta->GetAccountDimensionCount())) {
-		// The number of slots is declared by the chart of accounts, so "no room" is a configuration
+		// The number of slots is declared by the chart of accounts, so "no room" is an application
 		// statement the author can act on.
 		ibBackendCoreException::Error(_("the kind \"%s\" is number %ld on account %s, and the chart of accounts declares %u account dimension slots"),
 			varKeyValue.GetString(), target + 1, account.GetString(), meta->GetAccountDimensionCount());

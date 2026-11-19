@@ -10,7 +10,7 @@
 #include "reference/reference.h"
 
 
-const ibValueMetaObjectCommonModule* ibValueManagerDataObjectEnumeration::GetManagerModule() const { return m_metaObject->GetManagerModule(); }
+const ibValueMetaObjectSharedModule* ibValueManagerDataObjectEnumeration::GetManagerModule() const { return m_metaObject->GetManagerModule(); }
 
 ibValueReferenceDataObject* ibValueManagerDataObjectEnumeration::EmptyRef() const
 {

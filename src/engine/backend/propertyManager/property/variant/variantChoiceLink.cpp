@@ -1,7 +1,7 @@
 #include "variantChoiceLink.h"   // …and, beside these two classes, the name lookups they draw with
 #include "backend/propertyManager/property/propertyChoiceLink.h"   // ibFieldReferenceTypes, ibChoiceOwnerRow — declared there
 #include "backend/choiceLinkResolver.h"                    // CanGovern — the reading this offer must agree with
-#include "backend/metaData.h"                              // …and the counter a configuration moves when something is removed
+#include "backend/metaData.h"                              // …and the counter an application moves when something is removed
 #include "backend/objCtor.h"                               // ibCtorMetaValueType — what a reference type names, by its id
 #include "backend/metaCollection/partial/commonObject.h"   // the objects and their fields
 #include "backend/metaCollection/partial/catalog.h"        // ListOwner and the Owner attribute it declares
@@ -31,7 +31,7 @@ const ibBackendTypeSourceFactory* SelfControl(const ibPropertyObject* owner)
 }
 
 // The form a control stands in — the top of its tree, the first SOURCE above it (a table and a group are none). Null
-// for an attribute of the configuration.
+// for an attribute of the application.
 const ibSourceDataObject* SelfForm(const ibPropertyObject* owner)
 {
 	if (SelfControl(owner) == nullptr)
@@ -44,7 +44,7 @@ const ibSourceDataObject* SelfForm(const ibPropertyObject* owner)
 }
 
 // ⭐⭐ THE FIELD AS A COLUMN — what its type, and its neighbours' names, synonyms, types and pictures are read off. An
-// attribute of the configuration IS one; a control stands on the column its binding reaches (the dot). One answer, so
+// attribute of the application IS one; a control stands on the column its binding reaches (the dot). One answer, so
 // this file does not ask two classes the same four questions (Max, 2026-11-09: "ibBackendFormAttributeValue and
 // ibValueMetaObjectAttributeBase already sit on ibBackendSourceColumn").
 const ibBackendSourceColumn* SelfColumn(const ibPropertyObject* owner)
@@ -94,13 +94,13 @@ std::vector<ibValueMetaObjectAttributeBase*> HolderAttributes(const ibPropertyOb
 	// it is; at run time the holder tries the ROW first and the object after it, which is the same two
 	// places in the same order (choiceLinkResolver.cpp, ibChoiceHolder::GetValue).
 	// ⚠ AND NO TEST FOR "IS THIS A SECTION" — the climb tests itself. Above an object stands the
-	// configuration, which is no composite and answers nothing; only a section has an object up there.
+	// application, which is no composite and answers nothing; only a section has an object up there.
 	// A cast written to ask a question another cast already answers is one cast too many.
 	if (const ibValueMetaObjectCompositeData* above =
 		dynamic_cast<const ibValueMetaObjectCompositeData*>(holder->GetParent()))
 		above->GetGenericAttributeArrayObject(array);
 
-	// ⚠ A DELETED FIELD STANDS NOWHERE. Deleting only MARKS a field until the configuration is saved, and the
+	// ⚠ A DELETED FIELD STANDS NOWHERE. Deleting only MARKS a field until the application is saved, and the
 	// arrays still carry it. The lists below asked it one by one and the names did not, so a row whose source
 	// had just been deleted read on the inspector's line as a live `Export` (2026-09-24). Said here, once, for
 	// every question this file asks about the neighbourhood.
@@ -344,7 +344,7 @@ bool ibChoiceOwnerRow(const ibPropertyObject* owner, ibChoiceParameterRowDescrip
 //*************************************************************************************************
 
 // Asked on the counter a type description is asked on (ibVariantAttribute::DoRefreshTypeDesc): it moves when
-// a type comes or goes and when anything is removed, so a configuration that stands still is judged once. What is
+// a type comes or goes and when anything is removed, so an application that stands still is judged once. What is
 // gone is asked with the questions already here — a source by its neighbour's name, empty only when the field is
 // genuinely gone; a parameter by the resolver's own deep find. A field standing in no holder has no neighbours to
 // ask about, and is left as it is.
@@ -382,7 +382,7 @@ ibString ibVariantChoiceLink::GetString() const
 	return !name.IsEmpty() ? name : ibString(_("<the field it named is gone>"));
 }
 
-// ⚠ THE METADATA COMES FROM THE PROPERTY'S OWNER, never from the active configuration: several are open
+// ⚠ THE METADATA COMES FROM THE PROPERTY'S OWNER, never from the active application: several are open
 // at once, and the one that matters is the one this property was created inside. Taking the active one
 // answers plausibly and wrongly.
 //
@@ -445,7 +445,7 @@ void ibVariantChoiceParameters::RefreshParametersDesc() const
 // dialog's business, not the summary's.
 //
 // 🛑 A ROW WHOSE PARAMETER COULD NOT BE NAMED USED TO BE SKIPPED, and with the name looked up in the
-// configuration at large that was EVERY predefined field — so a property with rows in it read as an
+// application at large that was EVERY predefined field — so a property with rows in it read as an
 // empty property. A row that cannot be named is now shown as unnamed: "something is set here" is the
 // fact the row exists to carry (Max, 2026-09-23).
 ibString ibVariantChoiceParameters::GetString() const

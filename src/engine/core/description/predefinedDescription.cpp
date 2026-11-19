@@ -271,7 +271,7 @@ bool ibPredefinedDescriptionMemory::ReadNode(const ibDataValue& value, ibPredefi
 {
 	description = ibPredefinedDescription();
 
-	// A configuration saved before the one schema kept its items alone, an Array of them.
+	// An application saved before the one schema kept its items alone, an Array of them.
 	if (value.Kind() == ibDataKind::Array) {
 		for (const ibDataValue& entry : value.AsArray())
 			if (!ibPredefinedItemDescriptionMemory::ReadNode(entry, description.m_items.emplace_back()))

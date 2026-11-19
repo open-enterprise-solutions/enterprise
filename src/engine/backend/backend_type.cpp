@@ -9,7 +9,7 @@
 //***********************************************************************
 
 // ⭐ A BINDING WRITES THE OBJECTS IT NAMES THAT ARE STILL THERE. Deleting an object marks it and leaves
-// it standing until the configuration is saved; nothing took its id out of the bindings that named it,
+// it standing until the application is saved; nothing took its id out of the bindings that named it,
 // so a document went on posting "into" a register that no longer existed — `#<id> (missing)` in its
 // register list for good, and the same for an owner, a generation target or a chart. This is the one
 // door all six bindings save through, so the rule is said once: an id that names no object, or names
@@ -116,7 +116,7 @@ ibValue ibBackendTypeFactory::CreateValue() const
 // this chart admits" as one type and expands to the chart's list on demand. Adjusted to the declaration, a
 // counterparty written into a slot declared as the chart's characteristic matched nothing and came out
 // EMPTY: every account dimension of every posting was stored as its kind with no value (measured
-// 2026-09-15 on a fresh accounting configuration — the kind landed, the value did not, already in memory).
+// 2026-09-15 on a fresh accounting application — the kind landed, the value did not, already in memory).
 // For every other declaration the two answers are the same object, so nothing else moves.
 ibValue ibBackendTypeFactory::AdjustValue() const
 {
@@ -138,7 +138,7 @@ ibValue ibBackendTypeFactory::AdjustValue(const ibValue& varValue, const ibTypeD
 #include "backend/metaData.h"
 #include "backend/objCtor.h"
 
-ibValue ibBackendTypeConfigFactory::CreateValue() const
+ibValue ibBackendTypeApplicationFactory::CreateValue() const
 {
 	ibMetaData const* metaData = GetMetaData();
 	ibASSERT(metaData);
@@ -157,8 +157,8 @@ ibValue ibBackendTypeConfigFactory::CreateValue() const
 	return ibBackendTypeFactory::CreateValue();
 }
 
-// …the same rule for a configuration's declarations, where a characteristic actually occurs.
-ibValue ibBackendTypeConfigFactory::AdjustValue() const
+// …the same rule for an application's declarations, where a characteristic actually occurs.
+ibValue ibBackendTypeApplicationFactory::AdjustValue() const
 {
 	return ibValueTypeDescription::AdjustValue(
 		GetTypeValueDesc(),
@@ -166,7 +166,7 @@ ibValue ibBackendTypeConfigFactory::AdjustValue() const
 	);
 }
 
-ibValue ibBackendTypeConfigFactory::AdjustValue(const ibValue& varValue) const
+ibValue ibBackendTypeApplicationFactory::AdjustValue(const ibValue& varValue) const
 {
 	return ibValueTypeDescription::AdjustValue(
 		GetTypeValueDesc(),
@@ -175,7 +175,7 @@ ibValue ibBackendTypeConfigFactory::AdjustValue(const ibValue& varValue) const
 	);
 }
 
-ibValue ibBackendTypeConfigFactory::AdjustValue(const ibValue& varValue, const ibTypeDescription& limit) const
+ibValue ibBackendTypeApplicationFactory::AdjustValue(const ibValue& varValue, const ibTypeDescription& limit) const
 {
 	return ibValueTypeDescription::AdjustValue(
 		limit,
@@ -195,15 +195,15 @@ ibValue ibBackendTypeConfigFactory::AdjustValue(const ibValue& varValue, const i
 // filter cell, a form's own attribute — answered with the one class no value carries: a stored `True`
 // read back through the control as nothing, and an empty kind offered no type to choose. The control
 // then asked the FIELD through its binding for the answer, a second road to the same rule (Max,
-// 2026-09-24: "what is the point of this"). A factory has its configuration, so it answers itself.
+// 2026-09-24: "what is the point of this"). A factory has its application, so it answers itself.
 //
-// The chart is the factory's own configuration's, never the active one's. The registry is asked first,
-// and answers in one step; a configuration that is only LOADED has no registry, and there the chart is
+// The chart is the factory's own application's, never the active one's. The registry is asked first,
+// and answers in one step; an application that is only LOADED has no registry, and there the chart is
 // found in the tree, by the id the characteristic's class carries. A chart that cannot be found leaves
 // the declaration standing.
 //
-// 🛑 THE LOADED-ONLY COPY IS NOT A CORNER CASE. It is the APPLIED configuration an apply compares the
-// edited one against (ibMetaDataConfigurationStorage::OnSaveDatabase). Answering there with the
+// 🛑 THE LOADED-ONLY COPY IS NOT A CORNER CASE. It is the APPLIED application an apply compares the
+// edited one against (ibMetaDataApplicationStorage::OnSaveDatabase). Answering there with the
 // declaration while the edited copy answered with the chart's list would lay one field out two ways
 // in a single comparison.
 //
@@ -212,7 +212,7 @@ ibValue ibBackendTypeConfigFactory::AdjustValue(const ibValue& varValue, const i
 // (ibChoiceLinkResolver). Followed statically, the link hands back the governing field's declaration —
 // for a kind, "a reference to the chart" — and every value adjusted to that was written empty
 // (2026-09-23: characteristics lost on write, a cell that did not react).
-ibTypeDescription& ibBackendTypeConfigFactory::GetTypeValueDesc() const
+ibTypeDescription& ibBackendTypeApplicationFactory::GetTypeValueDesc() const
 {
 	ibTypeDescription& declared = GetTypeDesc();
 	const ibMetaData* metaData = GetMetaData();
@@ -234,14 +234,14 @@ ibTypeDescription& ibBackendTypeConfigFactory::GetTypeValueDesc() const
 	// The chart's list, BORROWED: the owner keeps it, the holder only points at it.
 	//
 	// Non-const on purpose. Reaching it THROUGH THE METADATA is the legal way to get at a live
-	// declaration — a configuration is edited, so its type descriptions are state, not a frozen
+	// declaration — an application is edited, so its type descriptions are state, not a frozen
 	// snapshot. Constifying the borrow here would only force a cast at the first editor that needs it.
 	return chart->GetTypesOfCharacteristics();
 }
 
 // The one filter-kind -> default value clsid mapping. Static so both ibVariantAttribute::DoSetDefault-
 // MetaType and ibValueControl::AutoBindNewSource resolve the SAME default type for a given filter kind.
-ibClassID ibBackendTypeConfigFactory::GetDefaultTypeByFilter(ibSelectorDataType filterDataType)
+ibClassID ibBackendTypeApplicationFactory::GetDefaultTypeByFilter(ibSelectorDataType filterDataType)
 {
 	switch (filterDataType) {
 	case ibSelectorDataType::ibSelectorDataType_boolean:  return g_valueBooleanCLSID;
@@ -277,14 +277,14 @@ static void AppendMetaAnyKinds(ibCtorObjectMetaType kind, std::vector<ibClassID>
 // 🛑 THE BODY CAME FROM THE OLD DESKTOP'S TYPE PICKER, where it was a static
 // function only that dialog could reach — which is why the MCP door, in this very library, could set a
 // type the designer does not offer. The type property now asks this (propertyType.cpp).
-void ibBackendTypeConfigFactory::GetTypesByFilter(ibSelectorDataType filterDataType,
+void ibBackendTypeApplicationFactory::GetTypesByFilter(ibSelectorDataType filterDataType,
 	const ibMetaData* metaData, std::vector<ibClassID>& out)
 {
 	// ⭐ AN EVENT'S SOURCE is nothing a field holds: an object, a manager, a record set of a metaobject that
-	// RAISES an event — its event module declares one. A report's object or a data processor's declares none,
+	// RAISES an event — its event module declares one. A report's object or a data tool's declares none,
 	// and offered, it would be a source with an empty list of events. The FAMILY (`DocumentObject` is every
 	// document's object) comes before them, offered through such a member: a metatype's types all raise the
-	// events its metaobject declares. So the configuration is asked, and without one nothing is offered.
+	// events its metaobject declares. So the application is asked, and without one nothing is offered.
 	if (filterDataType == ibSelectorDataType::ibSelectorDataType_eventSource) {
 		if (metaData == nullptr)
 			return;
@@ -332,7 +332,7 @@ void ibBackendTypeConfigFactory::GetTypesByFilter(ibSelectorDataType filterDataT
 
 	// ⭐ THE CONTAINER KINDS — what a field may BE when it holds ROWS rather than one value: a table, a
 	// dynamic list, a data composition. They need no metadata: they are registered value types, not
-	// something a configuration declares.
+	// something an application declares.
 	if (anyType || filterDataType == ibSelectorDataType::ibSelectorDataType_table) {
 		out.push_back(g_valueTableCLSID);
 		out.push_back(g_valueListCLSID);
@@ -345,7 +345,7 @@ void ibBackendTypeConfigFactory::GetTypesByFilter(ibSelectorDataType filterDataT
 
 	// ⭐ AN OBJECT — what a form edits (an object form's attribute is `CatalogObject.Goods`). A slot of any kind takes
 	// the objects of every metaclass that keeps their FAMILY (`CatalogObject` — catalogs, documents, the charts, data
-	// processors, reports: the desktop's own list in the cell, ibPGTypeProperty::FillByClsid), before the references;
+	// tools, reports: the desktop's own list in the cell, ibPGTypeProperty::FillByClsid), before the references;
 	// the picker and the thin's offer, asked here, had lost them (Max, 2026-10-15: "a form's attributes must be with
 	// objects"). Offered as an event's source is — the family first, the picker puts its members under it ("the
 	// objects are not grouped"); a value of the family itself is any of them.
@@ -388,7 +388,7 @@ void ibBackendTypeConfigFactory::GetTypesByFilter(ibSelectorDataType filterDataT
 
 #include "core/formatString.h"   // ibFormatString — what the type description gives
 
-const ibFormatString& ibBackendTypeConfigFactory::GetFormatFromColumn(const ibTranslateString& format, const ibTypeDescription& type)
+const ibFormatString& ibBackendTypeApplicationFactory::GetFormatFromColumn(const ibTranslateString& format, const ibTypeDescription& type)
 {
 	// Compared by what they say, not by whose they are: an attribute edited in the designer keeps its
 	// address, and a column's type in a value table is changed in place.

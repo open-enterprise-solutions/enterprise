@@ -11,7 +11,7 @@
 //
 // The table keeps the two spellings apart - the trigger matches a key field by field - and the fold now
 // works where the trigger works: on the physical fields, one row named by all of them. The register below
-// is declared by ContributeTables exactly as a configuration declares one; only the split is set here.
+// is declared by ContributeTables exactly as an application declares one; only the split is set here.
 //
 // Firebird, not SQLite: the fold is one MERGE (ibFoldShards), and an engine that never splits — SQLite has no
 // connection to hash — has nothing to fold and no MERGE to fold with. The rows sit in the period that closed
@@ -38,7 +38,7 @@
 #include "backend/databaseLayer/databaseMaterializeBuilder.h"   // ShardColumnName
 #include "backend/databaseLayer/databaseQueryBuilder.h"
 #include "backend/databaseLayer/firebird/firebirdDatabaseLayer.h"
-#include "backend/metadataConfiguration.h"
+#include "backend/metadataApplication.h"
 #include "backend/metaCollection/metaObject.h"
 #include "backend/metaCollection/dimension/metaDimensionObject.h"
 #include "backend/metaCollection/partial/accumulationRegister.h"
@@ -58,7 +58,7 @@ struct FirebirdTotalsFold : ::testing::Test {
 
 	// An accumulation register with one dimension - a reference to a catalog, the shape the ledger's currency
 	// has - and one resource, its totals split in four.
-	ibMetaDataConfigurationFile cfg;
+	ibMetaDataApplicationFile cfg;
 	ibValueMetaObject*          catalog = nullptr;
 	ibSchemaSnapshot            snapshot;
 	ibSchemaTable               totals;
@@ -90,7 +90,7 @@ struct FirebirdTotalsFold : ::testing::Test {
 			GTEST_SKIP() << "no Firebird client on this machine (" << dbPath.ToStdString() << ")";
 		pool->Init(db, /*maxSize=*/1, /*minIdle=*/0);
 
-		ibValueMetaObjectConfiguration* root = cfg.GetCommonMetaObject();
+		ibValueMetaObjectApplication* root = cfg.GetRootMetaObject();
 		ASSERT_NE(root, nullptr);
 		catalog = cfg.CreateMetaObject(g_metaCatalogCLSID, root, /*runObject*/ false);
 		auto* reg = dynamic_cast<ibValueMetaObjectAccumulationRegister*>(
@@ -100,7 +100,7 @@ struct FirebirdTotalsFold : ::testing::Test {
 		auto* dimension = dynamic_cast<ibValueMetaObjectDimension*>(cfg.CreateMetaObject(g_metaDimensionCLSID, reg, false));
 		ASSERT_NE(dimension, nullptr);
 		cfg.CreateMetaObject(g_metaResourceCLSID, reg, false);
-		// Typed LAST: a creation moves the configuration's version, a type is read again at the next one and keeps only
+		// Typed LAST: a creation moves the application's version, a type is read again at the next one and keeps only
 		// what is registered — and a catalog never run (a shell, as here) registers no type, so typed before the resource
 		// the dimension lost its reference and was laid out as a string (2026-10-19).
 		dimension->GetTypeDesc().SetDefaultMetaType(reference_to_clsid(catalog->GetMetaID(), clsid_metaclass(catalog->GetClassType())));

@@ -15,23 +15,23 @@
       "syntax_block": "Sheet = New SpreadsheetDocument();",
       "parameters": "Нет.",
       "return_descr": "SpreadsheetDocument.",
-      "example": "Template = GetCommonTemplate(\"InvoiceKO1\");\nSheet = New SpreadsheetDocument();\nSheet.Put(Template.GetArea(\"Header\"));\nSheet.Show(\"Invoice\");",
+      "example": "Template = GetSharedTemplate(\"InvoiceKO1\");\nSheet = New SpreadsheetDocument();\nSheet.Put(Template.GetArea(\"Header\"));\nSheet.Show(\"Invoice\");",
       "availability": "Клиент, Сервер",
-      "see_also": ["fn.GetCommonTemplate", "cls.SpreadsheetDocument.GetArea", "cls.SpreadsheetDocument.Put", "cls.SpreadsheetDocument.Join"],
+      "see_also": ["fn.GetSharedTemplate", "cls.SpreadsheetDocument.GetArea", "cls.SpreadsheetDocument.Put", "cls.SpreadsheetDocument.Join"],
       "reviewed": true
     },
     {
-      "id": "fn.GetCommonTemplate",
-      "name_local": "GetCommonTemplate",
-      "name_en": "GetCommonTemplate",
+      "id": "fn.GetSharedTemplate",
+      "name_local": "GetSharedTemplate",
+      "name_en": "GetSharedTemplate",
       "kind": "system_function",
       "category_keys": ["global_context", "global_functions"],
-      "signature": "GetCommonTemplate(name : string)",
+      "signature": "GetSharedTemplate(name : string)",
       "description": "Открывает макет из общих макетов и отдаёт его как SpreadsheetDocument. Если макета нет — исключение: имя проверяется во время выполнения, а не при компиляции. Собственный макет метаобъекта берётся у его менеджера: Documents.GoodsIssue.GetTemplate(\"Waybill\").",
-      "syntax_block": "GetCommonTemplate(name : string)",
+      "syntax_block": "GetSharedTemplate(name : string)",
       "parameters": "name — имя макета в общих макетах.",
       "return_descr": "SpreadsheetDocument — макет. В пакетной печати берите его заново на каждый документ: вывод областей может менять ширины колонок самого макета.",
-      "example": "Template = GetCommonTemplate(\"InvoiceKO1_2018\");",
+      "example": "Template = GetSharedTemplate(\"InvoiceKO1_2018\");",
       "availability": "Клиент, Сервер",
       "see_also": ["cls.SpreadsheetDocument", "cls.SpreadsheetDocument.GetArea"],
       "reviewed": true
@@ -206,10 +206,10 @@
       "description": "На каком языке читается МАКЕТ. Задайте один раз до того, как взята первая область: каждая область, взятая после этого, несёт его с собой, и все переводимые надписи внутри переключатся; отдельно останутся только строки, которые процедура строит сама. Бланк для иностранного контрагента — это одно присваивание, а не второй макет. Заданный у заполняемого документа, он важнее языка макета; не заданный нигде — надписи читаются на языке пользователя.",
       "syntax_block": "Template.LanguageCode = code;",
       "parameters": "Нет.",
-      "return_descr": "Строка — код языка конфигурации.",
-      "example": "Template = GetCommonTemplate(\"Waybill\");\nTemplate.LanguageCode = Counterparty.CorrespondenceLanguage;",
+      "return_descr": "Строка — код языка приложения.",
+      "example": "Template = GetSharedTemplate(\"Waybill\");\nTemplate.LanguageCode = Counterparty.CorrespondenceLanguage;",
       "availability": "Клиент, Сервер",
-      "see_also": ["fn.GetCommonTemplate", "cls.SpreadsheetDocument.GetArea"],
+      "see_also": ["fn.GetSharedTemplate", "cls.SpreadsheetDocument.GetArea"],
       "reviewed": true
     },
     {
@@ -433,7 +433,7 @@
       "syntax_block": "Orient = Cell.TextOrient;",
       "parameters": "Нет.",
       "return_descr": "SpreadsheetOrient.",
-      "example": "Vertical = (Sheet.Area(0, 0).TextOrient = SpreadsheetOrient.Vertical);",
+      "example": "Vertical = (Sheet.Area(0, 0).TextOrient == SpreadsheetOrient.Vertical);",
       "availability": "Клиент, Сервер",
       "see_also": ["enum.SpreadsheetOrient", "cls.SpreadsheetArea.AlignHorizontal"],
       "reviewed": false
@@ -465,7 +465,7 @@
       "syntax_block": "Alignment = Cell.AlignHorizontal;",
       "parameters": "Нет.",
       "return_descr": "SpreadsheetHorizontalAlignment.",
-      "example": "AtLeft = (Sheet.Area(0, 0).AlignHorizontal = SpreadsheetHorizontalAlignment.Left);",
+      "example": "AtLeft = (Sheet.Area(0, 0).AlignHorizontal == SpreadsheetHorizontalAlignment.Left);",
       "availability": "Клиент, Сервер",
       "see_also": ["enum.SpreadsheetHorizontalAlignment", "cls.SpreadsheetArea.AlignVertical"],
       "reviewed": false
@@ -481,7 +481,7 @@
       "syntax_block": "Alignment = Cell.AlignVertical;",
       "parameters": "Нет.",
       "return_descr": "SpreadsheetVerticalAlignment.",
-      "example": "AtTop = (Sheet.Area(0, 0).AlignVertical = SpreadsheetVerticalAlignment.Top);",
+      "example": "AtTop = (Sheet.Area(0, 0).AlignVertical == SpreadsheetVerticalAlignment.Top);",
       "availability": "Клиент, Сервер",
       "see_also": ["enum.SpreadsheetVerticalAlignment", "cls.SpreadsheetArea.AlignHorizontal"],
       "reviewed": false
@@ -841,7 +841,7 @@
       "syntax_block": "Line = Border.Style;",
       "parameters": "Нет.",
       "return_descr": "SpreadsheetBorder.",
-      "example": "Ruled = (Sheet.Area(0, 0).BorderBottom.Style <> SpreadsheetBorder.None);",
+      "example": "Ruled = (Sheet.Area(0, 0).BorderBottom.Style != SpreadsheetBorder.None);",
       "availability": "Клиент, Сервер",
       "see_also": ["enum.SpreadsheetBorder", "cls.SpreadsheetBorderRow"],
       "reviewed": false
@@ -923,7 +923,7 @@
       "syntax_block": "Kind = Details.Kind;",
       "parameters": "Нет.",
       "return_descr": "SpreadsheetFieldKind.",
-      "example": "IsHeading = (Details.Kind = SpreadsheetFieldKind.Dimension);",
+      "example": "IsHeading = (Details.Kind == SpreadsheetFieldKind.Dimension);",
       "availability": "Клиент, Сервер",
       "see_also": ["enum.SpreadsheetFieldKind", "cls.SpreadsheetDetails.Field"],
       "reviewed": false
@@ -957,7 +957,7 @@
       "syntax_block": "Orient = Cell.TextOrient;",
       "parameters": "",
       "return_descr": "SpreadsheetOrient.",
-      "example": "Vertical = (Sheet.Area(0, 0).TextOrient = SpreadsheetOrient.Vertical);",
+      "example": "Vertical = (Sheet.Area(0, 0).TextOrient == SpreadsheetOrient.Vertical);",
       "availability": "Клиент, Сервер",
       "see_also": ["enum.SpreadsheetOrient.Horizontal", "enum.SpreadsheetOrient.Vertical", "cls.SpreadsheetArea.TextOrient"],
       "reviewed": false
@@ -973,7 +973,7 @@
       "syntax_block": "SpreadsheetOrient.Horizontal",
       "parameters": "",
       "return_descr": "SpreadsheetOrient.",
-      "example": "Along = (Cell.TextOrient = SpreadsheetOrient.Horizontal);",
+      "example": "Along = (Cell.TextOrient == SpreadsheetOrient.Horizontal);",
       "availability": "Клиент, Сервер",
       "see_also": ["enum.SpreadsheetOrient"],
       "reviewed": false
@@ -989,7 +989,7 @@
       "syntax_block": "SpreadsheetOrient.Vertical",
       "parameters": "",
       "return_descr": "SpreadsheetOrient.",
-      "example": "Turned = (Cell.TextOrient = SpreadsheetOrient.Vertical);",
+      "example": "Turned = (Cell.TextOrient == SpreadsheetOrient.Vertical);",
       "availability": "Клиент, Сервер",
       "see_also": ["enum.SpreadsheetOrient"],
       "reviewed": false
@@ -1007,7 +1007,7 @@
       "syntax_block": "Alignment = Cell.AlignHorizontal;",
       "parameters": "",
       "return_descr": "SpreadsheetHorizontalAlignment.",
-      "example": "AtRight = (Cell.AlignHorizontal = SpreadsheetHorizontalAlignment.Right);",
+      "example": "AtRight = (Cell.AlignHorizontal == SpreadsheetHorizontalAlignment.Right);",
       "availability": "Клиент, Сервер",
       "see_also": ["enum.SpreadsheetHorizontalAlignment.Left", "enum.SpreadsheetHorizontalAlignment.Center", "enum.SpreadsheetHorizontalAlignment.Right", "cls.SpreadsheetArea.AlignHorizontal"],
       "reviewed": false
@@ -1023,7 +1023,7 @@
       "syntax_block": "SpreadsheetHorizontalAlignment.Left",
       "parameters": "",
       "return_descr": "SpreadsheetHorizontalAlignment.",
-      "example": "AtLeft = (Cell.AlignHorizontal = SpreadsheetHorizontalAlignment.Left);",
+      "example": "AtLeft = (Cell.AlignHorizontal == SpreadsheetHorizontalAlignment.Left);",
       "availability": "Клиент, Сервер",
       "see_also": ["enum.SpreadsheetHorizontalAlignment"],
       "reviewed": false
@@ -1039,7 +1039,7 @@
       "syntax_block": "SpreadsheetHorizontalAlignment.Center",
       "parameters": "",
       "return_descr": "SpreadsheetHorizontalAlignment.",
-      "example": "Centred = (Cell.AlignHorizontal = SpreadsheetHorizontalAlignment.Center);",
+      "example": "Centred = (Cell.AlignHorizontal == SpreadsheetHorizontalAlignment.Center);",
       "availability": "Клиент, Сервер",
       "see_also": ["enum.SpreadsheetHorizontalAlignment"],
       "reviewed": false
@@ -1055,7 +1055,7 @@
       "syntax_block": "SpreadsheetHorizontalAlignment.Right",
       "parameters": "",
       "return_descr": "SpreadsheetHorizontalAlignment.",
-      "example": "AtRight = (Cell.AlignHorizontal = SpreadsheetHorizontalAlignment.Right);",
+      "example": "AtRight = (Cell.AlignHorizontal == SpreadsheetHorizontalAlignment.Right);",
       "availability": "Клиент, Сервер",
       "see_also": ["enum.SpreadsheetHorizontalAlignment"],
       "reviewed": false
@@ -1073,7 +1073,7 @@
       "syntax_block": "Alignment = Cell.AlignVertical;",
       "parameters": "",
       "return_descr": "SpreadsheetVerticalAlignment.",
-      "example": "AtTop = (Cell.AlignVertical = SpreadsheetVerticalAlignment.Top);",
+      "example": "AtTop = (Cell.AlignVertical == SpreadsheetVerticalAlignment.Top);",
       "availability": "Клиент, Сервер",
       "see_also": ["enum.SpreadsheetVerticalAlignment.Top", "enum.SpreadsheetVerticalAlignment.Center", "enum.SpreadsheetVerticalAlignment.Bottom", "cls.SpreadsheetArea.AlignVertical"],
       "reviewed": false
@@ -1089,7 +1089,7 @@
       "syntax_block": "SpreadsheetVerticalAlignment.Top",
       "parameters": "",
       "return_descr": "SpreadsheetVerticalAlignment.",
-      "example": "AtTop = (Cell.AlignVertical = SpreadsheetVerticalAlignment.Top);",
+      "example": "AtTop = (Cell.AlignVertical == SpreadsheetVerticalAlignment.Top);",
       "availability": "Клиент, Сервер",
       "see_also": ["enum.SpreadsheetVerticalAlignment"],
       "reviewed": false
@@ -1105,7 +1105,7 @@
       "syntax_block": "SpreadsheetVerticalAlignment.Center",
       "parameters": "",
       "return_descr": "SpreadsheetVerticalAlignment.",
-      "example": "Middle = (Cell.AlignVertical = SpreadsheetVerticalAlignment.Center);",
+      "example": "Middle = (Cell.AlignVertical == SpreadsheetVerticalAlignment.Center);",
       "availability": "Клиент, Сервер",
       "see_also": ["enum.SpreadsheetVerticalAlignment"],
       "reviewed": false
@@ -1121,7 +1121,7 @@
       "syntax_block": "SpreadsheetVerticalAlignment.Bottom",
       "parameters": "",
       "return_descr": "SpreadsheetVerticalAlignment.",
-      "example": "AtBottom = (Cell.AlignVertical = SpreadsheetVerticalAlignment.Bottom);",
+      "example": "AtBottom = (Cell.AlignVertical == SpreadsheetVerticalAlignment.Bottom);",
       "availability": "Клиент, Сервер",
       "see_also": ["enum.SpreadsheetVerticalAlignment"],
       "reviewed": false
@@ -1139,7 +1139,7 @@
       "syntax_block": "Line = Cell.BorderBottom.Style;",
       "parameters": "",
       "return_descr": "SpreadsheetBorder.",
-      "example": "Ruled = (Cell.BorderBottom.Style <> SpreadsheetBorder.None);",
+      "example": "Ruled = (Cell.BorderBottom.Style != SpreadsheetBorder.None);",
       "availability": "Клиент, Сервер",
       "see_also": ["enum.SpreadsheetBorder.None", "enum.SpreadsheetBorder.Solid", "enum.SpreadsheetBorder.Dotted", "enum.SpreadsheetBorder.ThinDashed", "enum.SpreadsheetBorder.ThickDashed", "enum.SpreadsheetBorder.LargeDashed", "cls.SpreadsheetBorderRow.Style"],
       "reviewed": false
@@ -1155,7 +1155,7 @@
       "syntax_block": "SpreadsheetBorder.None",
       "parameters": "",
       "return_descr": "SpreadsheetBorder.",
-      "example": "Bare = (Cell.BorderTop.Style = SpreadsheetBorder.None);",
+      "example": "Bare = (Cell.BorderTop.Style == SpreadsheetBorder.None);",
       "availability": "Клиент, Сервер",
       "see_also": ["enum.SpreadsheetBorder"],
       "reviewed": false
@@ -1171,7 +1171,7 @@
       "syntax_block": "SpreadsheetBorder.Solid",
       "parameters": "",
       "return_descr": "SpreadsheetBorder.",
-      "example": "Solid = (Cell.BorderTop.Style = SpreadsheetBorder.Solid);",
+      "example": "Solid = (Cell.BorderTop.Style == SpreadsheetBorder.Solid);",
       "availability": "Клиент, Сервер",
       "see_also": ["enum.SpreadsheetBorder"],
       "reviewed": false
@@ -1187,7 +1187,7 @@
       "syntax_block": "SpreadsheetBorder.Dotted",
       "parameters": "",
       "return_descr": "SpreadsheetBorder.",
-      "example": "Dotted = (Cell.BorderTop.Style = SpreadsheetBorder.Dotted);",
+      "example": "Dotted = (Cell.BorderTop.Style == SpreadsheetBorder.Dotted);",
       "availability": "Клиент, Сервер",
       "see_also": ["enum.SpreadsheetBorder"],
       "reviewed": false
@@ -1203,7 +1203,7 @@
       "syntax_block": "SpreadsheetBorder.ThinDashed",
       "parameters": "",
       "return_descr": "SpreadsheetBorder.",
-      "example": "Dashed = (Cell.BorderTop.Style = SpreadsheetBorder.ThinDashed);",
+      "example": "Dashed = (Cell.BorderTop.Style == SpreadsheetBorder.ThinDashed);",
       "availability": "Клиент, Сервер",
       "see_also": ["enum.SpreadsheetBorder"],
       "reviewed": false
@@ -1219,7 +1219,7 @@
       "syntax_block": "SpreadsheetBorder.ThickDashed",
       "parameters": "",
       "return_descr": "SpreadsheetBorder.",
-      "example": "DashDot = (Cell.BorderTop.Style = SpreadsheetBorder.ThickDashed);",
+      "example": "DashDot = (Cell.BorderTop.Style == SpreadsheetBorder.ThickDashed);",
       "availability": "Клиент, Сервер",
       "see_also": ["enum.SpreadsheetBorder"],
       "reviewed": false
@@ -1235,7 +1235,7 @@
       "syntax_block": "SpreadsheetBorder.LargeDashed",
       "parameters": "",
       "return_descr": "SpreadsheetBorder.",
-      "example": "LongDashes = (Cell.BorderTop.Style = SpreadsheetBorder.LargeDashed);",
+      "example": "LongDashes = (Cell.BorderTop.Style == SpreadsheetBorder.LargeDashed);",
       "availability": "Клиент, Сервер",
       "see_also": ["enum.SpreadsheetBorder"],
       "reviewed": false
@@ -1385,7 +1385,7 @@
       "syntax_block": "Kind = Details.Kind;",
       "parameters": "",
       "return_descr": "SpreadsheetFieldKind.",
-      "example": "IsFigure = (Details.Kind = SpreadsheetFieldKind.Resource);",
+      "example": "IsFigure = (Details.Kind == SpreadsheetFieldKind.Resource);",
       "availability": "Клиент, Сервер",
       "see_also": ["enum.SpreadsheetFieldKind.Field", "enum.SpreadsheetFieldKind.Dimension", "enum.SpreadsheetFieldKind.Resource", "cls.SpreadsheetDetails.Kind"],
       "reviewed": false
@@ -1401,7 +1401,7 @@
       "syntax_block": "SpreadsheetFieldKind.Field",
       "parameters": "",
       "return_descr": "SpreadsheetFieldKind.",
-      "example": "Plain = (Details.Kind = SpreadsheetFieldKind.Field);",
+      "example": "Plain = (Details.Kind == SpreadsheetFieldKind.Field);",
       "availability": "Клиент, Сервер",
       "see_also": ["enum.SpreadsheetFieldKind"],
       "reviewed": false
@@ -1417,7 +1417,7 @@
       "syntax_block": "SpreadsheetFieldKind.Dimension",
       "parameters": "",
       "return_descr": "SpreadsheetFieldKind.",
-      "example": "IsHeading = (Details.Kind = SpreadsheetFieldKind.Dimension);",
+      "example": "IsHeading = (Details.Kind == SpreadsheetFieldKind.Dimension);",
       "availability": "Клиент, Сервер",
       "see_also": ["enum.SpreadsheetFieldKind"],
       "reviewed": false
@@ -1433,7 +1433,7 @@
       "syntax_block": "SpreadsheetFieldKind.Resource",
       "parameters": "",
       "return_descr": "SpreadsheetFieldKind.",
-      "example": "IsFigure = (Details.Kind = SpreadsheetFieldKind.Resource);",
+      "example": "IsFigure = (Details.Kind == SpreadsheetFieldKind.Resource);",
       "availability": "Клиент, Сервер",
       "see_also": ["enum.SpreadsheetFieldKind"],
       "reviewed": false

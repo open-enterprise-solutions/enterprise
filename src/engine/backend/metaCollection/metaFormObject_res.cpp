@@ -15,12 +15,12 @@ ibPicture ibValueMetaObjectForm::GetIconGroup()
 	return picture;
 }
 
-ibPicture ibValueMetaObjectCommonForm::GetIcon() const
+ibPicture ibValueMetaObjectSharedForm::GetIcon() const
 {
 	return GetIconGroup();
 }
 
-ibPicture ibValueMetaObjectCommonForm::GetIconGroup()
+ibPicture ibValueMetaObjectSharedForm::GetIconGroup()
 {
 	static const ibPicture picture = ibPicture::FromBase64(s_form_16_png, ibSize(16, 16));
 

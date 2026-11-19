@@ -76,7 +76,7 @@ enterprise/
 │       ├── command-interface.md  # Interface metaobject = subsystem + command bar
 │       ├── job-manager.md        # scheduled + background work — the engine (built)
 │       ├── session-parameters.md # values that exist once per session — metatype, module, write window
-│       ├── common-attributes.md  # one declaration, many objects — composition, the copy, propagation
+│       ├── shared-attributes.md  # one declaration, many objects — composition, the copy, propagation
 │       ├── query-constructor.md  # the shell over the AST: nine tabs, package, temp tables, ALLOWED (BUILT)
 │       ├── scheduled-jobs.md     # the metadata over it: two metatypes, one verb (BUILT)
 │       ├── plugins.md            # plugin ABI 2 — capability boundary (diagnostics / script / metadata)
@@ -88,10 +88,10 @@ enterprise/
 │       ├── view-only.md          # read-only forms — rights matryoshka, control read-only, command greying
 │       ├── user-form-editor.md   # "Change form" — the USER re-arranges an open form (whitelisted props, queued commands)
 │       ├── property-system.md    # ibPropertyObject + object inspector — the skeleton (5 surfaces)
-│       ├── metadata-tree.md      # Designer navigator + external reports/processors
-│       ├── compatibility-version.md # the version a configuration declares — the USER's step up, gating code AND schema
-│       ├── metadata-lifecycle.md # load/run/save/close — the metaobject events in order + external DP/Report
-│       ├── metadata-containers.md # the ibMetaData family — mechanism + varieties (config vs external DP/Report)
+│       ├── metadata-tree.md      # Designer navigator + external reports/data tools
+│       ├── compatibility-version.md # the version an application declares — the USER's step up, gating code AND schema
+│       ├── metadata-lifecycle.md # load/run/save/close — the metaobject events in order + external DataTool/Report
+│       ├── metadata-containers.md # the ibMetaData family — mechanism + varieties (application vs external DataTool/Report)
 │       ├── form-editor.md        # visual designer — panels, undo/redo, drag-to-create
 │       ├── spreadsheet-document.md # the SERVER-side document — cells, parameters, areas, notifiers
 │       ├── spreadsheet-editor.md # the grid behind templates and report output
@@ -120,7 +120,7 @@ enterprise/
 │       ├── naming-plan.md        # PLAN — file/folder renames (nothing applied)
 │       ├── metaobject-naming.md  # PLAN — user-visible taxonomy: designer labels, script names, tree order
 │       ├── restructure-plan.md   # PLAN — grouping, declaration order, naming (nothing applied)
-│       └── configuration-compare.md  # Compare/Merge feature — walker, model, Apply paths
+│       └── application-compare.md  # Compare/Merge feature — walker, model, Apply paths
 └── src/
     ├── 3rdparty/wxWidgets/  # Submodule (wxWidgets 3.3.4)
     └── engine/
@@ -247,15 +247,15 @@ propagate the same exception object.
 
 Every class in the metadata and value system is identified by an `ibClassID` (`uint64_t`). It is **KIND-TYPED**: the high byte is a class KIND (`ibClassKind` enum in `clsid.h`), the low 56 bits are the body. This lets stateless helpers — `IsReference(clsid)` / `IsObject` / `IsManager` / `IsEnum` / `IsControl` / `IsMetadata` / … — read a class's kind straight from the id, with **no `ibMetaData` lookup** (used heavily by L3 to classify columns by bit instead of pulling the metadata).
 
-- **Static types**: body = `ib_clsid_hash(name)` (FNV-1a 64) masked to 56 bits; kind = the **registrar** (the `*_TYPE_REGISTER` macro family — `metadata_to_clsid` / `value_to_clsid` / `control_to_clsid` / `system_to_clsid` / `enum_to_clsid` / `context_to_clsid` / `primitive_to_clsid` / `picture_to_clsid`). The kind comes from WHERE a type is registered, **never** from the string prefix (a `"VL_TVROW"` registered via `SYSTEM_TYPE_REGISTER` is System-kinded). The legacy `"XX_YYY"` string is kept only as an opaque unique KEY for the body; PascalCase names (`"Catalog"`, `"Number"`, `"Button"`) feed the 2-arg macro form (clsid = `<kind>_to_clsid(hash(name))`).
+- **Static types**: body = `ib_clsid_hash(name)` (FNV-1a 64) masked to 56 bits; kind = the **registrar** (the `*_TYPE_REGISTER` macro family — `metadata_to_clsid` / `value_to_clsid` / `control_to_clsid` / `system_to_clsid` / `enum_to_clsid` / `context_to_clsid` / `primitive_to_clsid` / `picture_to_clsid`). The kind comes from WHERE a type is registered, **never** from the string prefix (a `"VL_TROW"` registered via `SYSTEM_TYPE_REGISTER` is System-kinded). The legacy `"XX_YYY"` string is kept only as an opaque unique KEY for the body; PascalCase names (`"Catalog"`, `"Number"`, `"Button"`) feed the 2-arg macro form (clsid = `<kind>_to_clsid(hash(name))`).
 - **Dynamic metaobject values**: body = the **metaID itself** (constructive, no hash → `(kind, metaID)` unique BY CONSTRUCTION); kind = the metatype (`reference_to_clsid(metaID)` / `object_to_clsid` / `manager_to_clsid` / `list_to_clsid` / … / `externalObject_to_clsid`, mirroring `ibCtorObjectMetaType`). The old `"R_42"` name-hash grammar is gone.
-- `string_to_clsid()` is **removed** — every callsite uses a per-kind generator. `make_clsid(name, kind)` is the common entry; `make_clsid(name, ibClassKind_None)` is the escape for synthetic, unregistered ids (config-compare umbrellas, tool ids).
+- `string_to_clsid()` is **removed** — every callsite uses a per-kind generator. `make_clsid(name, kind)` is the common entry; `make_clsid(name, ibClassKind_None)` is the escape for synthetic, unregistered ids (application-compare umbrellas, tool ids).
 
-CLSIDs appear in serialised configuration files and the DB; the kind-typing changed every value, so the AOT cache version was bumped to `kAOTFormatVersion` = 16 (now 38 — the constant lives in `compiler/byteCodeFormat.h`, every bump is recorded with its reason in the version history of `byteCodeAOT.cpp`, and `tests/test_byteCodeFormat.cpp` fails when the opcode list moves without one) and persisted CLSID blobs regenerate. Uniqueness: dynamic is constructive (impossible to collide); static is hash-bodied but collision is only possible WITHIN a kind among the tens of names there (negligible) and is caught by the registry's duplicate-clsid check. Tests: `tests/test_clsid.cpp`.
+CLSIDs appear in serialised application files and the DB; the kind-typing changed every value, so the AOT cache version was bumped to `kAOTFormatVersion` = 16 (now 38 — the constant lives in `compiler/byteCodeFormat.h`, every bump is recorded with its reason in the version history of `byteCodeAOT.cpp`, and `tests/test_byteCodeFormat.cpp` fails when the opcode list moves without one) and persisted CLSID blobs regenerate. Uniqueness: dynamic is constructive (impossible to collide); static is hash-bodied but collision is only possible WITHIN a kind among the tens of names there (negligible) and is caught by the registry's duplicate-clsid check. Tests: `tests/test_clsid.cpp`.
 
 ### 7. Metadata open/close — `ibMetaImage`
 
-`ibMetaData` (`src/engine/backend/metaData.h`) holds an open configuration as a single runtime image: `std::shared_ptr<ibMetaImage> m_image`. **Its presence is the open state** — `IsConfigOpen()` is just `m_image != nullptr`. A `LoadGuard` RAII transaction creates the image at the start of a run and drops it (rolling the load back) if the run does not complete. The image owns the type-ctor registry (`ibCtorRegistry<ibCtorMetaValueType> m_factoryCtors`, which owns ctors via `shared_ptr`), the module storage, and the compile-value cache built by `CreateDesignerCache()` (designer kinds only; `nullptr` otherwise). Subclass accessors (`GetModuleStorage`, `GetCompileCache`, …) all guard `m_image`.
+`ibMetaData` (`src/engine/backend/metaData.h`) holds an open application as a single runtime image: `std::shared_ptr<ibMetaImage> m_image`. **Its presence is the open state** — `IsOpen()` is just `m_image != nullptr`. A `LoadGuard` RAII transaction creates the image at the start of a run and drops it (rolling the load back) if the run does not complete. The image owns the type-ctor registry (`ibCtorRegistry<ibCtorMetaValueType> m_factoryCtors`, which owns ctors via `shared_ptr`), the module storage, and the compile-value cache built by `CreateDesignerCache()` (designer kinds only; `nullptr` otherwise). Subclass accessors (`GetModuleStorage`, `GetCompileCache`, …) all guard `m_image`.
 
 ---
 
@@ -282,7 +282,7 @@ and no bound base gets an exception (`ibApplicationInstance::Get(false)` answers
 appData->GetAppMode();           // ibRunMode enum (static GetAppMode())
 db_query;                        // std::shared_ptr<ibDatabaseLayer> (macro = GetDatabaseLayer()), the thread's base
 appData->GetUserInfo();          // const ibUserInfo& — current logged-in user
-activeMetaData->GetCommonMetaObject();  // root of the metadata tree (ibValueMetaObjectConfiguration*)
+activeMetaData->GetRootMetaObject();  // root of the metadata tree (ibValueMetaObjectApplication*)
 ```
 
 A base's own service (the registry, the job manager, the MCP server) holds its base — it is built with
@@ -314,7 +314,7 @@ ibFormPtr<ibBackendValueForm> form = ibBackendValueForm::CreateNewForm(   // bor
 
 ### Password Hashing — PBKDF2-HMAC-SHA256
 
-New passwords are hashed via `ibPasswordHash::Hash` (`src/engine/backend/utils/passwordHash.{hpp,cpp}`) using PBKDF2-HMAC-SHA256 at 600k iterations (OWASP 2023) with a 16-byte system-RNG salt, stored in PHC-style format `$pbkdf2-sha256$<iter>$<saltB64>$<hashB64>`. `Verify` additionally accepts legacy 32-hex MD5 hashes from pre-migration databases; callers use `NeedsRehash` + `Hash` to upgrade silently on successful login (see `ibApplicationInstance::AuthenticateUser`). MD5 stays in-tree for metadata integrity (`ibMD5::ComputeMd5`) — **never** reuse it for passwords.
+New passwords are hashed via `ibPasswordHash::Hash` (`src/engine/backend/utils/passwordHash.{hpp,cpp}`) using PBKDF2-HMAC-SHA256 at 600k iterations (OWASP 2023) with a 16-byte system-RNG salt, stored in PHC-style format `$pbkdf2-sha256$<iter>$<saltB64>$<hashB64>`. `Verify` knows this form only — a bare MD5 is no password; callers use `NeedsRehash` + `Hash` to re-hash one below the policy's iterations on a successful login (see `ibApplicationInstance::AuthenticateUser`). MD5 stays in-tree for metadata integrity (`ibMD5::ComputeMd5`) — **never** reuse it for passwords.
 
 Argon2id (OWASP #1, memory-hard) would be the stronger option but requires vendoring an external library; revisit when the threat model calls for it.
 
@@ -393,7 +393,7 @@ application on 7375 (`ibPort::Assistant`, `core/net/ports.h`) — and carries ev
 over a connection of its own (`ibProtocol::ibMcp`) to the engine's MCP server (`frmserver/mcp`, one per
 client, `ibClientHost::GetMcpServer`): in the designer's own process for a file base (fileserver), in the
 application server for a base it serves. What a message means, the tools and their rights are all the
-engine's. Nothing answers until that client is running with a configuration open — a refused
+engine's. Nothing answers until that client is running with an application open — a refused
 connection means the process is not up, not that the feature is missing. The port is off until a person
 turns it on; the address, the port and the token are in the client's MCP settings, kept on that machine
 for that person. The token is made the first time the settings are read and never made again behind
@@ -401,7 +401,7 @@ anyone's back.
 
 **The first call must be `chat_say`.** Every other verb is refused until an assistant has said who
 it is, what it sees and what it means to do — because the person at that designer is watching a
-window that would otherwise stay silent while their configuration is read and changed. The refusal
+window that would otherwise stay silent while their application is read and changed. The refusal
 text says exactly this, so the rule teaches itself.
 
 Then the ones worth knowing before starting: `platform_state` (what is open, which dialect),
@@ -454,7 +454,7 @@ rules attached to the tables it declares — so the schema story for a metatype 
 section of a large one. A metatype has one only when it declares something of its own:
 `commonObjectSchema.cpp` (the record / enum / register / hierarchy families — where a catalog's
 and a document's tables come from), `metaStoredValueObjectSchema.cpp` (the stored-value family's
-column in `sys_const` — a constant, a functional option), and `accountingRegister`, `accumulationRegister`, `calculationRegister`,
+column in `sys_const` — a constant, a feature option), and `accountingRegister`, `accumulationRegister`, `calculationRegister`,
 `chartOfAccounts`, `chartOfCalculationTypes`, `chartOfCharacteristicTypesMetadataSchema.cpp`. Full aspect table:
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) § `src/engine/backend/metaCollection/`.
 
@@ -472,7 +472,7 @@ The 13 business object types and their C++ classes (the registered set is `METAD
 | Constant | `ibValueMetaObjectConstant` | `metaCollection/partial/constant.h` |
 | InformationRegister | `ibValueMetaObjectInformationRegister` | `metaCollection/partial/informationRegister.h` |
 | AccumulationRegister | `ibValueMetaObjectAccumulationRegister` | `metaCollection/partial/accumulationRegister.h` |
-| DataProcessor | `ibValueMetaObjectDataProcessor` | `metaCollection/partial/dataProcessor.h` |
+| DataTool | `ibValueMetaObjectDataTool` | `metaCollection/partial/dataTool.h` |
 | Report | `ibValueMetaObjectReport` | `metaCollection/partial/dataReport.h` |
 | ChartOfCharacteristicTypes | `ibValueMetaObjectChartOfCharacteristicTypes` | `metaCollection/partial/chartOfCharacteristicTypes.h` |
 | ChartOfAccounts | `ibValueMetaObjectChartOfAccounts` | `metaCollection/partial/chartOfAccounts.h` |
@@ -480,31 +480,31 @@ The 13 business object types and their C++ classes (the registered set is `METAD
 | ChartOfCalculationTypes | `ibValueMetaObjectChartOfCalculationTypes` | `metaCollection/partial/chartOfCalculationTypes.h` |
 | CalculationRegister | `ibValueMetaObjectCalculationRegister` | `metaCollection/partial/calculationRegister.h` |
 
-A **`CommonAttribute`** is declared once under Common and then exists as a real attribute inside
+A **`SharedAttribute`** is declared once under Shared and then exists as a real attribute inside
 every object checked into its **composition** — its own metaID, its own column, its own place in
-restructuring. The copy (`CommonAttributeColumn`) delegates its type to the declaration and cannot
+restructuring. The copy (`SharedAttributeColumn`) delegates its type to the declaration and cannot
 be edited where it sits. Membership rides `ibCompositionObject` (`backend/compositionHelper.h`) — a
-mechanism of its own, deliberately not the section one ([docs/private/common-attributes.md](docs/private/common-attributes.md)).
+mechanism of its own, deliberately not the section one ([docs/private/shared-attributes.md](docs/private/shared-attributes.md)).
 
 One further metatype is neither a business object nor stored anywhere: **`SessionParameter`** — an
-`ibValueMetaObjectAttribute` whose owner is the SESSION rather than a table. Declared under Common
+`ibValueMetaObjectAttribute` whose owner is the SESSION rather than a table. Declared under Shared
 beside the jobs, set once per session by the **session module** (a second module property on the
-configuration root, `SetSessionParameters`), and writable nowhere else — a write outside that module
+application root, `SetSessionParameters`), and writable nowhere else — a write outside that module
 raises, which is what row-level access can be filtered by safely. Reached as `SessionParameters.<Name>`
 ([docs/private/session-parameters.md](docs/private/session-parameters.md)).
 
-**`FunctionalOption`** (Common, `MD_FOPT`) is a stored value like a constant — both derive
+**`FeatureOption`** (Shared, `MD_FOPT`) is a stored value like a constant — both derive
 `ibValueMetaObjectStoredValue` (`metaCollection/metaStoredValueObject.h`; the constant adds `Type` and
 `FillCheck`) — Boolean, one value per base, kept in `sys_const`, that also decides what the interface
-SHOWS. Membership lives on the MEMBER, like a section's (`ibFunctionalOptionObject`,
-`functionalOptionHelper.h`); opening an option shows them as a check tree, as a section or a common
+SHOWS. Membership lives on the MEMBER, like a section's (`ibFeatureOptionObject`,
+`featureOptionHelper.h`); opening an option shows them as a check tree, as a section or a shared
 attribute does (MCP: `option_include`). Switched off, its members are **not available** — a third state
 beside deleted and disabled, and deliberately NOT `IsAllowed`: the metadata, the schema and every query
-stay as they are. ONE VERB everywhere: `IsAvailable()` — the gate `ibFunctionalOptionGate`
-(`functionalOption/functionalOptionGate.h`), a column (`ibBackendSourceColumn`; a model's column in its family's
+stay as they are. ONE VERB everywhere: `IsAvailable()` — the gate `ibFeatureOptionGate`
+(`featureOption/featureOptionGate.h`), a column (`ibBackendSourceColumn`; a model's column in its family's
 words, `ibValueModelColumnInfo::IsColumnAvailable`),
 a binding (asked of the columns it walks through, never of a path's numbers: the first hop is a form-local id),
-a form element (its own *User visibility → Functional options* AND its parent's answer; "no source picked"
+a form element (its own *User visibility → Feature options* AND its parent's answer; "no source picked"
 is the other question, `IsUnbound`), a settings path (`ibSettingsFieldTree::IsAvailable`; a quick filter
 asks the composer) and the composers' own (`ibDataComposer::IsAvailable` — L5-1 over its source's fields,
 L5-2 over its storage's columns) — the path laid out as hops by `ibQueryColumnFromPath`, walked by
@@ -514,24 +514,24 @@ view's column `StandsFor` its attribute, an alias forwards, a nested query's and
 it when made. A user's setting on an unavailable field STAYS: a grouping or a selected field on it is not
 printed (`ApplyAvailableStructure`, `GetAvailableGroupDesc`, `SelectedFor`), a filter or a sort still applies. The
 designer sees everything it EDITS; a composer answers as the application wherever it runs (it opens
-`ibFunctionalOptionGate::AsApplication` itself — in the designer the outermost scope reads the values afresh). An option may `Require` another (off above = off here); `InitialValue` answers while nothing
+`ibFeatureOptionGate::AsApplication` itself — in the designer the outermost scope reads the values afresh). An option may `Require` another (off above = off here); `InitialValue` answers while nothing
 was ever written (the value column is created holding it: a field's DEFAULT is the column's write of the value a
 fresh row holds — `ibBackendQueryColumn::CreateValue`, the type factory's pair repeated on the column: an attribute's
-column makes it as its attribute does, any other of its type over its configuration, `GetMetaData`; structureBatch.cpp). Reached as `FunctionalOptions.<Name>.Get()` ([docs/public/functional-options.md](docs/public/functional-options.md)).
+column makes it as its attribute does, any other of its type over its application, `GetMetaData`; structureBatch.cpp). Reached as `FeatureOptions.<Name>.Get()` ([docs/public/feature-options.md](docs/public/feature-options.md)).
 
 A report's **composer** — a data composer declared inside the report: what to read and how to fold it — is
 a `Template` of the `Composer` kind. What a template holds is ONE `ibTemplateDescription`
 (core/description/templateDescription.h): its kind and the live schema of that kind, written by the schema's own
 `*Memory` with the kind added; the other kind's schema asked for raises (2026-11-03; a composer was a metatype of
-its own, `MD_CMPS`, whose file nodes are read as templates). What a template of a kind DOES — its events, its
+its own, `MD_CMPS`). What a template of a kind DOES — its events, its
 menu, the value code is handed — is the kind's `ibTemplateProvider` (metaTemplateObject.h), not an `if` in the
 template. The kind is chosen in a dialog when the template is added, as a form's is, and once — under any
-owner, a document's or a data processor's too; `GetTemplate(name)` returns a fresh composition. The report names one
+owner, a document's or a data tool's too; `GetTemplate(name)` returns a fresh composition. The report names one
 of them `DefaultComposer`, and a report that declares one needs no form — the generated form is a gridbox
 bound to that composer. Embedded and external reports both have them, being the same metaobject. See
 [docs/private/report-engine.md](docs/private/report-engine.md) §4f.
 
-Other registered metatypes are **not** top-level business objects either; among them `ExternalDataProcessor`,
+Other registered metatypes are **not** top-level business objects either; among them `ExternalDataTool`,
 `ExternalReport`,
 `AccountDimensionKindsTable` (renamed from `SubcontoKindsTable` on 2026-08-12 —
 *subconto* was a calque; the concept is an **account dimension**, and its KIND is a
@@ -544,15 +544,15 @@ not derive from).
 
 ---
 
-## Configuration Serialization
+## Application Serialization
 
 Metadata is serialized through the format-agnostic **`ibDataNode`** tree
 (`src/engine/core/serialize/dataBuilder.h`). A metaobject contributes its
 state into an `ibDataNode` tree; a pluggable **`ibFormatProvider`** then writes
 that tree to bytes (and reads it back).
 
-- **Entry points:** `ibMetaDataConfigurationBase::LoadConfigFromFile(fileName)` /
-  `SaveConfigToFile(fileName)` (`metadataConfiguration.h`).
+- **Entry points:** `ibMetaDataApplicationBase::LoadApplicationFromFile(fileName)` /
+  `SaveApplicationToFile(fileName)` (`metadataApplication.h`).
 - **`ibBinaryProvider`** (`dataBuilder.{h,cpp}`) — the packet, OES-RPC 1.0: the node's own
   bytes, the same in memory, in storage and on the client protocol's WebSocket (its layout in
   `dataBuilder.h`'s header). This is the round-trip path (Write + Read).
@@ -560,7 +560,7 @@ that tree to bytes (and reads it back).
   diff/inspection; `Read` is a full parser: MCP and the client protocol's HTTP `POST` parse every
   JSON-RPC request through it (`rpc/rpcMessage.cpp`, before any login), as does the thin client
   (`frmclient/backend/serialize/dataProtocol.cpp`), so it refuses nesting past
-  `ibJsonProvider::kMaxNesting` (256); `ibFileProvider` reads a configuration's node files through it.
+  `ibJsonProvider::kMaxNesting` (256); `ibFileProvider` reads an application's node files through it.
   The view is lossy by design (Date → ISO string, Guid → its text, the type by name with a synthetic
   `TypeDesc`): a typed reader gets a date or a guid back from its text, but Write→Read does not give
   the same bytes — use `ibBinaryProvider`, or `ibXmlProvider` for text.
@@ -573,15 +573,15 @@ that tree to bytes (and reads it back).
   milliseconds, a string XML 1.0 cannot hold goes as base64 — Write→Read→Write gives the same text.
   Refuses nesting past `ibXmlProvider::kMaxNesting` (256); types by the same `SetTypeResolver` /
   `SetTypeLookup`. Tests: `tests/test_xmlProvider.cpp`.
-- **`ibFileProvider`** (`serialize/provider/fileProvider.{h,cpp}`) — a configuration as a directory
+- **`ibFileProvider`** (`serialize/provider/fileProvider.{h,cpp}`) — an application as a directory
   of files: `Catalog/Goods/node.json` (the node in `ibJsonProvider`'s form), module texts and
   binaries beside it, from any depth of a value (`ObjectModule.Module.txt`). Laid out in memory (`files`, one field a file); `Publish` / `Collect`
-  touch the disk. Entry points: `SaveConfigToFiles` / `LoadConfigFromFiles` (a directory, or
-  the set of files), the Designer's *Configuration* menu, MCP `config_export_files` /
-  `config_import_files`. Records and user accounts are excluded.
-  See [configuration-files.md](docs/public/configuration-files.md). Tests: `tests/test_fileProvider.cpp`.
-- The old XML/JSON config layer is **gone**: `metadataConfigurationXML.cpp` /
-  `metadataConfigurationJSON.cpp` and the `SaveConfigToXML` / `LoadConfigFromXML`
+  touch the disk. Entry points: `SaveApplicationToFiles` / `LoadApplicationFromFiles` (a directory, or
+  the set of files), the Designer's *Application* menu, MCP `app_export_files` /
+  `app_import_files`. Records and user accounts are excluded.
+  See [application-files.md](docs/public/application-files.md). Tests: `tests/test_fileProvider.cpp`.
+- The old XML/JSON application layer is **gone**: `metadataApplicationXML.cpp` /
+  `metadataApplicationJSON.cpp` and the `SaveConfigToXML` / `LoadConfigFromXML`
   / `SaveConfigToJSON` / `LoadConfigFromJSON` methods no longer exist.
 
 ### What is serialized
@@ -599,7 +599,7 @@ A value packs itself into an **`ibDataNode`** — the same tree metadata is writ
 
 - `compiler/value.h` — `Serialize(node)` / `Deserialize(node)` write and read the HEADER (the `IsTransferable` gate, then the type); the virtual `DoSerialize` / `DoDeserialize` are the CHILD's contents. The default knows the primitives only; composites override and ask their elements the same question.
 - `compiler/valueSerialization.cpp` — `ibValue::FromNode(node)`, THE mechanism for turning a node into a value: read the type, create through the value registry, hand over the whole node.
-- `metadataSerialization.cpp` — `ibMetaData::Serialize(value, node)` / `Deserialize(node)`, the DOOR. It creates the types only a configuration has (references, enum members — ids derived from metaIDs) and redirects everything else to `ibValue::FromNode`. A value is blind to metadata.
+- `metadataSerialization.cpp` — `ibMetaData::Serialize(value, node)` / `Deserialize(node)`, the DOOR. It creates the types only an application has (references, enum members — ids derived from metaIDs) and redirects everything else to `ibValue::FromNode`. A value is blind to metadata.
 - **Failure raises** (`ibBackendCoreException`): a type nobody has, a value that cannot be created or read, a value with no packed form. Never a quiet empty — that is indistinguishable from a legitimately empty value.
 - Bytes are the provider's choice at the callsite (`ibBinaryProvider` / `ibJsonProvider`), not a second pair of methods.
 
@@ -612,7 +612,7 @@ See `docs/private/serialization-io.md` §4a.
 - **Opcodes:** defined in `src/engine/core/compiler/codeDef.h` as `OPER_*` enumerators. Call-family: `OPER_CALL` (named call — its frame is the call, whatever lambdas the body makes), `OPER_CALL_METHOD` (per-class method; a context method's call carries its number and its name's hash — `ibMemberTable::NameHash` — so the interpreter compares two integers and asks by name only when they differ), `OPER_CALL_LINQ` (universal pipeline op dispatched by `ibLinqMethod` enum id, no string lookup), `OPER_CALL_LAMBDA` (dynamic call — target read from a slot at runtime, must wrap an `ibValueFunction`). Lambda body fences `OPER_LFUNC` (the active materialiser) / `OPER_ENDLFUNC`. (`OPER_FUNC_PTR` is retired — `OPER_LFUNC` materialises the lambda value.) The ternary `?(cond, a, b)` has no opcode of its own: it compiles as If does (`OPER_IF`, the chosen branch writes the result, `OPER_GOTO` over the other), so only the chosen branch runs — a call or a raise in the other one does not happen. (`OPER_ITER`, which computed both, is gone — 2026-10-09.)
 - **Keywords:** 63, defined as `KEY_*` enumerators (`KEY_IF`=0 … `KEY_RESTRICT`) in the same file — includes access modifiers (`Public`/`Private`/`Protected`), the memoisation modifier (`Cached` — a SECOND axis that combines with an access one, legal on a Function only), preprocessor (`#Define`/`#Ifdef`/…), the LINQ block (`From`/`Where`/`Select`/`Join`/`Group`/…) and the access-policy filter (`Restrict`). The matching token strings are `s_listKeyWord[]` in `translateCode.cpp`, in lock-step index order with the enum.
 - **Built-in globals:** 106 functions + 8 procedures = 114 as of 2026-11-05, registered in `ibValueSystemFunction` (`src/engine/backend/system/systemManager.cpp`); count drifts as features land — grep `AppendFunc\|AppendProc` for the live total
-- **Syntax modes:** VES (`If…Then…EndIf`, Visual-Basic-style, a legacy business-scripting dialect) and CES (`if (…) { … }`, C-flavoured); both compile to the same bytecode. The mode is the session's (`ibCompileState`, `compiler/compileState.h` — its configuration's, taken when its runtime is built; a thread with no session has its own): a process may hold bases written in different syntaxes. **CES is the default** for new configurations (2026-05-10); existing serialised configs preserve their stored Syntax. Wire token in metadata enum still reads `vbs` for back-compat — user-visible label is `ves`.
+- **Syntax modes:** VES (`If…Then…EndIf`, Visual-Basic-style, a legacy business-scripting dialect) and CES (`if (…) { … }`, C-flavoured); both compile to the same bytecode. The mode is the session's (`ibCompileState`, `compiler/compileState.h` — its application's, taken when its runtime is built; a thread with no session has its own): a process may hold bases written in different syntaxes. **CES is the default** for new applications (2026-05-10); existing serialised applications preserve their stored Syntax. The stored token is `ves` / `ces` (`ProgramSyntax.ves` / `.ces`; `vbs` was renamed on 2026-11-19 and is not read).
 - **Anonymous functions:** `Function(args) ... EndFunction` and `Procedure(args) ... EndProcedure` (or CES `Function(args) { … }`) work as expressions — assignable to slots, callable through variables. Backed by `ibValueFunction` (`compiler/procUnitLambda.h`, CLSID `VL_FUNC`). Lambda's compile-context return kind is `RETURN_LAMBDA_FUNCTION` / `RETURN_LAMBDA_PROCEDURE` (`compileCode.h`). Eval-in-lambda resolves outer frames via splice in `CompileExpression` (lambda-shim's `m_pppArrayList[1..]` → eval's `[2..]`). **Closure capture: a lambda takes the variables it references, not the frames** (2026-11-03; it took whole frames from 2026-05-11). The compiler lists them in `ibByteFunction::m_listCaptured` as (depth, slot) — depth 0 on the function they live in, which makes them cells (heap `ibValue`s) on entry (`ibRunContext::Capture`), depth ≥ 1 on each lambda that takes them; at runtime the lambda holds, per outer frame, an `ibRunCaptureContext` with just those cells, and outer-function locals resolve at depth ≥ 1 as before. See `docs/private/lambda.md`, `docs/private/closure-capture.md`.
 - **Debugger ports:** 7700–7709 (`ibPort::Debugger`, `src/engine/core/net/ports.h`) — every process that can be debugged listens on the first free one, the designer looks in all of them
 
@@ -633,8 +633,8 @@ See `docs/private/eval-scope-refactor.md` for the full architecture.
 ### Runtime infrastructure (landed)
 
 - **Worker pool** — `ibWorkerPool` (`src/engine/backend/session/workerPool.h`) + headless implementation (`workerPoolHeadless.{h,cpp}`). Each session has a queue + an atomic "leased" flag (`workerPoolHeadless.h`); sessionless callers fall back to a `thread_local ibProcUnitState ts_fallbackPUState` in `session.cpp` (`ibSession::GetPUState`).
-- **AOT bytecode cache** — `byteCodeAOT.cpp` serialises a compiled `ibByteCode` to a memory stream; deserialisation reverses the compile step without re-running the parser. Persisted in `sys_bytecode_cache`, looked up by **`(descriptor_id, config_md5)`**, where `config_md5` holds `ibByteCodeCache::CacheKey` — an MD5 of three things: `kAOTFormatVersion` (`compiler/byteCodeFormat.h`), `kEngineFingerprint` (a SHA-256 of every file under `backend/compiler/`, `backend/system/` and `core/compiler/` — the compiler, the interpreter, the built-in registry, the translator — written at build time into a generated `engineFingerprintBuild.h` — by `compiler/engineFingerprint.cmake` under CMake, by the `EngineFingerprint` task of `backend.vcxproj` under MSBuild, one rule and one hash), and the configuration's own digest (`ibMetaData::GetConfigMD5()`). So a configuration save, a compiler change or a new built-in each make every older row unreachable, and `Invalidate()` is hygiene rather than correctness. The build stamp is no longer part of the key (2026-10-10): `core` is not rebuilt when the compiler changes, so a stale blob kept its key. Written by the RUNTIME lazily on first call to a descriptor; the Designer never writes it. See [docs/private/compiler-pipeline.md](docs/private/compiler-pipeline.md) §4a.
-- **Per-session runtime image** — each `ibSession` owns `m_root : ibValuePtr<ibValueModuleManagerRuntimeConfiguration>` (built in `CreateRoot`; `GetManagerModule()`) and `m_lambdaRuntime : std::unique_ptr<ibProcUnit>` (wired to `m_root`'s procUnit on first `GetLambdaRuntime()`). Designer / coderunner edit-time managers come from `GetEditModuleManager(metaData)` / `EditModuleManagerFor(metaData)`, kept separate from the per-session runtime root.
+- **AOT bytecode cache** — `byteCodeAOT.cpp` serialises a compiled `ibByteCode` to a memory stream; deserialisation reverses the compile step without re-running the parser. Persisted in `sys_bytecode_cache`, looked up by **`(descriptor_id, application_md5)`**, where `application_md5` holds `ibByteCodeCache::CacheKey` — an MD5 of three things: `kAOTFormatVersion` (`compiler/byteCodeFormat.h`), `kEngineFingerprint` (a SHA-256 of every file under `backend/compiler/`, `backend/system/` and `core/compiler/` — the compiler, the interpreter, the built-in registry, the translator — written at build time into a generated `engineFingerprintBuild.h` — by `compiler/engineFingerprint.cmake` under CMake, by the `EngineFingerprint` task of `backend.vcxproj` under MSBuild, one rule and one hash), and the application's own digest (`ibMetaData::GetApplicationMD5()`). So an application save, a compiler change or a new built-in each make every older row unreachable, and `Invalidate()` is hygiene rather than correctness. The build stamp is no longer part of the key (2026-10-10): `core` is not rebuilt when the compiler changes, so a stale blob kept its key. Written by the RUNTIME lazily on first call to a descriptor; the Designer never writes it. See [docs/private/compiler-pipeline.md](docs/private/compiler-pipeline.md) §4a.
+- **Per-session runtime image** — each `ibSession` owns `m_root : ibValuePtr<ibValueModuleManagerRuntimeApplication>` (built in `CreateRoot`; `GetManagerModule()`) and `m_lambdaRuntime : std::unique_ptr<ibProcUnit>` (wired to `m_root`'s procUnit on first `GetLambdaRuntime()`). Designer / coderunner edit-time managers come from `GetEditModuleManager(metaData)` / `EditModuleManagerFor(metaData)`, kept separate from the per-session runtime root.
 
 ---
 

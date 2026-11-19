@@ -2,7 +2,7 @@
 #define __SCHEMA_DEBUGGER_H__
 
 // THE DESIGNER'S DEBUGGER'S STORE — the breakpoints of the designer's session's ibDebuggerClient, in the base the
-// configuration is in, by the verbs that client writes them with (ibProtocol::ibSchema::ibDebugger::ibCommand): the
+// application is in, by the verbs that client writes them with (ibProtocol::ibSchema::ibDebugger::ibCommand): the
 // committed lines — the editor's edits since are the client's to count (appstudio/backend/debugger). The debugger
 // itself — the runtimes, the stops, the watches — is that same engine's client, heard over its own connection
 // (ibClientDebugger, ibProtocol::ibDebug).
@@ -12,14 +12,14 @@
 class FRMSERVER_API ibSchemaDebugger : public ibClientSchema {
 public:
 
-	// The right to edit the configuration — the tree's (ibSchemaMetaData): debugging is the designer's.
+	// The right to edit the application — the tree's (ibSchemaMetaData): debugging is the designer's.
 	virtual bool AccessRight(const ibSession& session) const override;
 
-	// The configuration's Guid (what a runtime is verified by); with Module (the address a runtime stops at) — that
+	// The application's Guid (what a runtime is verified by); with Module (the address a runtime stops at) — that
 	// module's Breakpoints (Line, from 0, as the editor's margin has it now; Condition).
 	virtual void Build(const ibSession& session, const ibDataNode& args, ibDataNode& result) const override;
 
-	// The store's verbs (ibProtocol::ibSchema::ibDebugger::ibCommand). Refused: no debugger, a breakpoint on a line the configuration does
+	// The store's verbs (ibProtocol::ibSchema::ibDebugger::ibCommand). Refused: no debugger, a breakpoint on a line the application does
 	// not have (its reason).
 	virtual std::function<void()> Command(const ibSession& session, std::int32_t command,
 		const ibDataNode& args, ibProtocol::ibRefusal& refusal, ibString& error) const override;

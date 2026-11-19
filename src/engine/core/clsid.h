@@ -87,7 +87,7 @@ inline ibString clsid_to_string(const ibClassID& clsid) {
 //   …a metaclass's:     [63:56] Metadata   |   [55:32] itself   |   [31:0] 0
 //
 // The KIND is the class OF the id — read straight from the id, statelessly, with NO
-// ibMetaData lookup (the old GetVTByID hung on one config image; a kind read is global).
+// ibMetaData lookup (the old GetVTByID hung on one application image; a kind read is global).
 // The BODY carries identity: the name-derived FNV hash (static types, masked to 56 bits;
 // a metaclass's folded to 24) or the metaclass and the metaID (dynamic types). Uniqueness
 // lives in the body — the kind is CLASSIFICATION, not identity. `IsReference(id)` etc. just
@@ -125,7 +125,7 @@ enum ibClassKind : unsigned char {
 	ibClassKind_RecordKey            = 0x1A,   // _RecordKey          (was "A_")
 	ibClassKind_RecordManager        = 0x1B,   // _RecordManager      (was "D_")
 
-	// external (file-loaded) DataProcessor/Report variants — same metaID AND meta-kind as the
+	// external (file-loaded) DataTool/Report variants — same metaID AND meta-kind as the
 	// internal Object/Manager, so they need their OWN kind to stay collision-free under a
 	// constructive (metaID) body (the old "EO_"/"EM_" prefixes; GetMetaTypeCtor still reports
 	// Object/Manager).
@@ -158,7 +158,7 @@ inline ibClassID make_clsid(const ibString& name, ibClassKind kind) {
 // Dynamic (CONSTRUCTIVE) id: [63:56] kind | [55:32] metaclass | [31:0] metaID. (kind, metaID) is unique by
 // construction, no hash, no possible collision; the metaclass says what the metaID is of.
 //
-// ⭐ ANY: A FIELD LEFT AT 0 IS EVERY VALUE IT COULD HOLD. A metaID of 0 is no metaobject's — a configuration
+// ⭐ ANY: A FIELD LEFT AT 0 IS EVERY VALUE IT COULD HOLD. A metaID of 0 is no metaobject's — an application
 // numbers from its root's 1000 up, a synthetic object's is negative — so it is EVERY one of its kind and
 // metaclass, and a metaclass of 0 besides makes it every one of its kind. `CatalogRef` is Reference | Catalog | 0,
 // `AnyRef` Reference | 0 | 0: a barrier is spelled in the bits of what it admits, and whether it admits a value

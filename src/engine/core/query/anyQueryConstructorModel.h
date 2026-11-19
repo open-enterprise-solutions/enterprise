@@ -5,8 +5,8 @@
 //	Description : THE QUERY CONSTRUCTOR'S MODEL, AS EITHER SIDE HOLDS IT - what it derives over a query
 ////////////////////////////////////////////////////////////////////////////
 //
-// The constructor's model has two halves. What a TABLE of the configuration offers — its fields, the reference type it
-// is, the table a reference points at — is the configuration's, and each side answers it its own way: the engine's
+// The constructor's model has two halves. What a TABLE of the application offers — its fields, the reference type it
+// is, the table a reference points at — is the application's, and each side answers it its own way: the engine's
 // model (backend/query/queryConstructorModel.h) through the descriptors its factory holds, the client's
 // (frmclient/backend/query/queryConstructorModel.h) by asking the tab the window was opened from. Everything the windows
 // DERIVE from those answers — a temporary table's fields, a nested query's, the walk of a path, the type a CAST says —
@@ -35,8 +35,8 @@ struct ibQueryConstructorSource
 	// later statement may read — a query result link). They behave the same in a FROM, so they share
 	// m_temp; they are different things to a person, so the catalogue shows them apart.
 	bool                  m_namedResult = false;
-	// Declared by the PLATFORM in every configuration (ibPlatformSourceRegister — the registration journal), not by
-	// the configuration: the catalogue draws its kind under Platform, the heading `Data.Platform` is in LINQ.
+	// Declared by the PLATFORM in every application (ibPlatformSourceRegister — the registration journal), not by
+	// the application: the catalogue draws its kind under Platform, the heading `Data.Platform` is in LINQ.
 	bool                  m_platform = false;
 	// What it is drawn with — its descriptor's answer (ibQueryableSourceDescriptor::GetPicture), on the engine's side;
 	// the client's draws a table by its kind's row of the server's answer instead. 0 = none.
@@ -72,7 +72,7 @@ public:
 	                                                            size_t beforeStatement);
 
 	// THE FIELDS OF A SOURCE — one question, and the source decides how it is answered:
-	// a nested table (m_subquery set) answers with its own projections, a table of the configuration
+	// a nested table (m_subquery set) answers with its own projections, a table of the application
 	// through the side (GetTableFields), a temp table with the projections of the statement that made it.
 	// `package` + `beforeStatement` let a temp-table source find its maker; pass an empty package when
 	// there is none.
@@ -167,7 +167,7 @@ public:
 	                                    const ibQueryPackage& package, size_t beforeStatement) const;
 	// …AND THE HOPS OF IT, from a field already in hand — each segment found among the fields of the one
 	// before, a reference walked by its TYPE (GetReferenceFields: the target's table, no value made).
-	// The leaf answers with its type and with whether EVERY hop is available (functional options).
+	// The leaf answers with its type and with whether EVERY hop is available (feature options).
 	// FieldOfPath runs it once it has found where a path starts; a host that holds the start itself (a
 	// setting over a known source) runs it directly. A hop nothing answers yields an EMPTY field that keeps
 	// only what the walk knew up to there — silence, never a guess.
@@ -209,16 +209,16 @@ public:
 	                                                    size_t beforeStatement) const;
 
 	// ⭐ A TABLE'S OWN REFERENCE TYPE — what a CAST to it brings a value to (`CAST(x AS Catalog.Goods)`); 0 for a table
-	// no reference points at (a register, a virtual table). The configuration's answer, the side's — and asked outright:
+	// no reference points at (a register, a virtual table). The application's answer, the side's — and asked outright:
 	// the server writes it into the catalogue it sends (request Sources).
 	virtual ibClassID ReferenceOfTable(const std::vector<ibString>& path) const = 0;
 	// …AND THE OTHER WAY: the table a reference type names, as a query names it (`Catalog.Goods`); empty for a type
-	// no table stands behind (a report, a data processor).
+	// no table stands behind (a report, a data tool).
 	virtual ibString TableOfReference(ibClassID reference) const = 0;
 
 protected:
 
-	// THE FIELDS OF A TABLE OF THE CONFIGURATION, the side's answer — by the source as a FROM writes it, asked with its
+	// THE FIELDS OF A TABLE OF THE APPLICATION, the side's answer — by the source as a FROM writes it, asked with its
 	// arguments, which decide a virtual table's columns…
 	virtual std::vector<ibQueryConstructorField> GetTableFields(const ibQuerySource& source) const = 0;
 	// …and by its id: the table a reference points at (ConvertToMetaIds), one level down the dot walk.

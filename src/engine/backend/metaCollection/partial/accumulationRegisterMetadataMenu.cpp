@@ -4,7 +4,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "accumulationRegister.h"
-#include "backend/metadataConfiguration.h"
+#include "backend/metadataApplication.h"
 
 bool ibValueMetaObjectAccumulationRegister::CollectContextMenu(std::vector<ibMetaMenuItem>& items)
 {

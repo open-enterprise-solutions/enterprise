@@ -121,7 +121,7 @@ void ibQueryLowering::PreparePackage(const ibQueryPackage& package,
 			if (column && !column->m_path.empty())
 				indexed.push_back(column->m_path.back());
 
-		store.Put(ast.m_intoTemp, std::move(snapshot), indexed, ibSourceMetaDataScope::Get());   // its references are the query's config's
+		store.Put(ast.m_intoTemp, std::move(snapshot), indexed, ibSourceMetaDataScope::Get());   // its references are the query's application's
 
 		// ⭐ AND INTO THE REGISTRY THE SCOPE IS OPEN OVER, so the next statement — and the query this
 		// was all prepared for — resolve the name straight to the table.
@@ -600,7 +600,7 @@ std::vector<ibQueryLowering::ibQueryPackageResult> ibQueryLowering::ExecutePacka
 			if (column && !column->m_path.empty())
 				indexed.push_back(column->m_path.back());
 
-		temps.Put(ast.m_intoTemp, std::move(snapshot), indexed, ibSourceMetaDataScope::Get());   // its references are the query's config's
+		temps.Put(ast.m_intoTemp, std::move(snapshot), indexed, ibSourceMetaDataScope::Get());   // its references are the query's application's
 
 		// WHAT A CREATE-TEMP STATEMENT HANDS BACK: a RESULT of one column and one row, holding the
 		// number of records placed in the table — not a bare number.

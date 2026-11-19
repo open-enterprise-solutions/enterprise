@@ -66,7 +66,7 @@ bool ibTypeControlFactory::ChooseValue(ibControlFrame* ownerValue, const ibValue
 		}
 		else if (metaData != nullptr) {
 			std::vector<ibClassID> shape;
-			ibBackendTypeConfigFactory::GetTypesByFilter(ibSelectorDataType::ibSelectorDataType_reference, metaData, shape);
+			ibBackendTypeApplicationFactory::GetTypesByFilter(ibSelectorDataType::ibSelectorDataType_reference, metaData, shape);
 			offered.SetDefaultMetaType(shape);
 		}
 		return ibShowTypeSelector(ownerValue, offered, metaData);

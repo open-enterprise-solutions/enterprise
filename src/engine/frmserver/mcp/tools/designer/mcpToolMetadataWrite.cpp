@@ -6,8 +6,8 @@
 // is the door and the wording. Reading lies beside the common tools
 // (mcpToolMetadata.cpp), where a person in the application can ask too.
 //
-// THE CONFIGURATION IS THE ACTIVE ONE. A tool runs inside the session that
-// started the server, in a host that has exactly one configuration open, and
+// THE APPLICATION IS THE ACTIVE ONE. A tool runs inside the session that
+// started the server, in a host that has exactly one application open, and
 // changing THAT one is the job — so the entry point resolves it here and hands
 // it down. The mechanism below still takes it as an argument, which is what
 // keeps it testable and keeps the assumption in one visible place.
@@ -24,7 +24,7 @@
 #include "backend/metaCollection/metaIntrospect.h"
 #include "backend/metaCollection/metaModuleObject.h"   // the standard handlers a module may implement
 #include "backend/metaCollection/metaObject.h"
-#include "backend/metadataConfiguration.h"
+#include "backend/metadataApplication.h"
 #include "backend/metadataSerialization.h"
 #include "backend/objCtor.h"                          // ibCtorMetaValueType — a reference type by name
 #include "backend/propertyManager/property/propertyList.h"   // a form is asked WHICH KIND — the owner fills the list
@@ -64,7 +64,7 @@ std::vector<ibString> Complaints(ibValueMetaObject* object)
 	if (object == nullptr)
 		return found;
 
-	ibRestructureInfo& ledger = ibMetaDataConfigurationBase::GetRestructureInfo();
+	ibRestructureInfo& ledger = ibMetaDataApplicationBase::GetRestructureInfo();
 	ledger.Clear();
 
 	try {
@@ -98,7 +98,7 @@ const ibArg& ArgAcceptsId()
 {
 	static const ibArg s_id(ibT("id"), ibArg::Kind::Whole,
 		ibMcpText("An existing object, as NodeId - what IT holds and what it is still missing. Omit for "
-		  "the configuration root, or pass `kind` instead to ask about a kind."));
+		  "the application root, or pass `kind` instead to ask about a kind."));
 	return s_id;
 }
 
@@ -107,7 +107,7 @@ const ibArg& ArgAcceptsKind()
 	static const ibArg s_kind(ibT("kind"), ibArg::Kind::Text,
 		ibMcpText("A KIND, spelled the way a script writes it - Catalog, Document, Attribute. Answers what "
 		  "one of those would hold BEFORE you make one: an empty one is built where it would live, "
-		  "asked, and dropped, so nothing is created in the configuration. Metadata is built "
+		  "asked, and dropped, so nothing is created in the application. Metadata is built "
 		  "tree-wise, so a kind that lives INSIDE something needs `parentId` - an attribute under "
 		  "a catalog holds different things from one under a register."));
 	return s_kind;
@@ -140,7 +140,7 @@ const ibArg& ArgParentId()
 // is called; what an omitted name actually buys is a CREATE WITH NO IDENTITY, and a call with no
 // identity cannot be recognised as one that already happened.
 //
-// 🛑 Which is how three unnamed common modules were left in somebody's configuration (2026-08-31):
+// 🛑 Which is how three unnamed shared modules were left in somebody's application (2026-08-31):
 // the call timed out, the caller read a refusal, asked again, and nothing about the second request
 // said it was the first one. Of every writing verb on this server only the CREATING ones can do
 // that — the rest are addressed by id or by content, so a repeat lands on the same state — and of
@@ -150,7 +150,7 @@ const ibArg& ArgNameRequired()
 	static const ibArg s_a(ibT("name"), ibArg::Kind::Text,
 		ibMcpText("What to call it. REQUIRED here: the object is addressed by this name afterwards, "
 			  "and a create carrying no name cannot be told apart from a repeat of itself - which "
-			  "is how a configuration ends up with two of something. The designer's own Add makes "
+			  "is how an application ends up with two of something. The designer's own Add makes "
 			  "one up because a person is about to type over it; you are not."), /*required*/ true);
 	return s_a;
 }
@@ -159,7 +159,7 @@ const ibArg& ArgNote()
 {
 	static const ibArg s_a(ibT("note"), ibArg::Kind::Text,
 		ibMcpText("Why this object exists, how it works inside and what was decided - markdown, for "
-			  "whoever builds the configuration next. Write it AS you create: the reasons are never "
+			  "whoever builds the application next. Write it AS you create: the reasons are never "
 			  "cheaper to record than now, and mcp_search reads it - a question about this object's "
 			  "job lands here."));
 	return s_a;
@@ -254,7 +254,7 @@ const ibArg& ArgNonNegative()
 {
 	static const ibArg s_a(ibT("nonNegative"), ibArg::Kind::Flag,
 		ibMcpText("For Number - true takes no value below zero: one is written as 0, and the values already stored are "
-			"made 0 when the configuration is applied. Not given, the field keeps the one it has."));
+			"made 0 when the application is applied. Not given, the field keeps the one it has."));
 	return s_a;
 }
 
@@ -329,7 +329,7 @@ ibString BindAtCreation(ibValueMetaObject* created, const ibString& property, co
 //---------------------------------------------------------------------------
 //
 // THE SAME DOOR THE BUTTON USES. ibMetaData::CreateMetaObject is what
-// ibConfigurationTree::NewItem calls when a person picks *Add* — naming,
+// ibApplicationTree::NewItem calls when a person picks *Add* — naming,
 // lifecycle hooks, the modified flag, all of it. Nothing is re-implemented here;
 // what this adds is only the two things a click gets from its surroundings: WHO
 // the parent is (a selection, for a person) and telling the tree afterwards.
@@ -395,18 +395,18 @@ void SayNeighbours(ibMetaData* metaData, const ibValueMetaObject* created, ibDat
 		return;
 
 	std::vector<ibDataValue> neighbours;
-	CollectNeighbours(metaData->GetCommonMetaObject(), created, created->GetName(), neighbours);
+	CollectNeighbours(metaData->GetRootMetaObject(), created, created->GetName(), neighbours);
 	if (neighbours.empty())
 		return;
 
 	result.AddField(ibT("similar"), ibDataValue::Array(neighbours));
 	// ⚠ A REMARK, NOT A REFUSAL. The object is made and the name is legal; this is the one thing the
-	// configuration knows that the caller may not, said once, in the only breath where acting on it
+	// application knows that the caller may not, said once, in the only breath where acting on it
 	// is still cheap. Stating the reference spelling as a PATTERN rather than as advice about this
 	// particular object keeps it honest: whether the new thing should point at a neighbour is a
 	// question about the model, and nothing here is entitled to answer it.
 	result.SetValue(ibT("similarNote"), ibMcpText(
-		"This configuration already holds objects by nearly this name - listed above with their kind "
+		"This application already holds objects by nearly this name - listed above with their kind "
 		"and where they live. If the new object was meant to POINT AT one of them rather than stand "
 		"beside it, that is a type: `<kind>Ref.<name>`, set with metadata_set_type. If it was meant "
 		"to be its own thing, nothing here is wrong."));
@@ -489,19 +489,19 @@ public:
 		const ibClassID clsid = composerKind ? g_metaTemplateCLSID : ibResolveMetaKind(metaData, kind);
 		if (clsid == 0) {
 			refusal = ibString::Format(
-				ibMcpText("'%s' is not a kind of metadata object in this configuration."), kind);
+				ibMcpText("'%s' is not a kind of metadata object in this application."), kind);
 			return false;
 		}
 
 		// WHERE IT GOES. No parent named means the top level, which is the
-		// configuration's own root object — the same thing a click gets by
+		// application's own root object — the same thing a click gets by
 		// walking up from a group row.
 		ibValueMetaObject* parent = nullptr;
 		if (auto parentId = params.FindField(ArgParentId().Name())) {
 			if (parentId->Kind() == ibDataKind::Number) {
 				parent = ibFindMetaObjectById(metaData, (ibMetaID)parentId->AsInt());
 				if (parent == nullptr) {
-					refusal = ibString::Format(ibMcpText("Nothing in this configuration has id %s."),
+					refusal = ibString::Format(ibMcpText("Nothing in this application has id %s."),
 						parentId->AsNumber().ToString());
 					return false;
 				}
@@ -509,10 +509,10 @@ public:
 		}
 
 		if (parent == nullptr)
-			parent = metaData->GetCommonMetaObject();
+			parent = metaData->GetRootMetaObject();
 
 		if (parent == nullptr) {
-			refusal = ibMcpText("This configuration has no root to add to.");
+			refusal = ibMcpText("This application has no root to add to.");
 			return false;
 		}
 
@@ -774,14 +774,14 @@ public:
 		result.AddField(ibT("created"), ibDataValue::Bool(true));
 		ibMcpSayObject(created, result);
 
-		// ⭐⭐ AND WHAT THIS CONFIGURATION ALREADY HAS BY NEARLY THAT NAME — said at the one moment it
+		// ⭐⭐ AND WHAT THIS APPLICATION ALREADY HAS BY NEARLY THAT NAME — said at the one moment it
 		// can still change the caller's mind, and said whether or not it was asked for.
 		//
 		// 🛑 THE MISTAKE IT EXISTS TO PREVENT (measured over this wire, 2026-09-09): a separator
-		// attribute called `Organization` was created and typed as a STRING while the configuration
+		// attribute called `Organization` was created and typed as a STRING while the application
 		// already carried a catalog `Organisations`. Nothing refused it — a string is a perfectly
 		// good type — and the result was a parallel vocabulary for something the model already had.
-		// Only a person reading the tree caught it - Max, looking at the same configuration: you are
+		// Only a person reading the tree caught it - Max, looking at the same application: you are
 		// adding a catalog when the base already has one. A create that answers "made" and nothing
 		// else cannot be told apart
 		// from a create that was a good idea.
@@ -824,7 +824,7 @@ public:
 		// was 7 KB of which the useful part was already above: `properties` lists every property
 		// with what it holds, while the node repeats them and adds a base64 blob (Interface, Roles,
 		// Composition) on every predefined attribute. Creating one catalogue answered with more
-		// text than the map of the entire configuration, and the `id` had to be found by eye
+		// text than the map of the entire application, and the `id` had to be found by eye
 		// (measured over MCP, 2026-09-03). metadata_get still hands the node over to anyone who
 		// wants it.
 		ibDataNode described;
@@ -848,7 +848,7 @@ public:
 		// learns to skip the answer's prose.
 		result.SetValue(ibT("record"),
 			ibMcpText("Why does it exist, and which shape was rejected? Write it on the object now - "
-			  "note_write {id, target: \"notes\", text}. A configuration records what was built and "
+			  "note_write {id, target: \"notes\", text}. An application records what was built and "
 			  "never why, so this is lost when your session ends."));
 
 		return true;
@@ -888,7 +888,7 @@ public:
 
 		const ibString named = ibMcpNameOf(params);
 		return named.IsEmpty()
-			? ibString(ibMcpText("checking what can go inside the configuration"))
+			? ibString(ibMcpText("checking what can go inside the application"))
 			: ibString::Format(ibMcpText("checking what can go inside '%s'"), named);
 	}
 
@@ -897,7 +897,7 @@ public:
 		return ibMcpText("What can be added inside - attributes, tabular sections, dimensions, resources - "
 			"with the properties it holds, and, for an existing object, what it is still missing "
 			"to be valid. Ask it of a KIND before creating anything (an empty one is built, asked "
-			"and dropped, so nothing is added to the configuration), or of an OBJECT by id. Ask "
+			"and dropped, so nothing is added to the application), or of an OBJECT by id. Ask "
 			"this before building, instead of trying kinds until one is accepted.");
 	}
 
@@ -914,7 +914,7 @@ public:
 			return false;
 
 		// ⭐⭐ ASKED OF A KIND, BY MAKING ONE. To learn what a Catalog holds there used to be no way
-		// but to create a real Catalog in the configuration and look at it — so a caller had to
+		// but to create a real Catalog in the application and look at it — so a caller had to
 		// commit before it could ask, and anything that wanted the answer in advance needed a table
 		// of kinds written here, which is the hardcode this whole file has been shedding.
 		//
@@ -923,7 +923,7 @@ public:
 		// list of what it accepts."*
 		//
 		// ⚠ UNATTACHED IS THE WHOLE TRICK. Parent is null, so it is created through the value
-		// registry and never enters the configuration: no metaID is spent, no lifecycle event
+		// registry and never enters the application: no metaID is spent, no lifecycle event
 		// fires, the tree is told nothing and there is nothing to undo. It is a question, not a
 		// creation — which is why this does not go through ibMetaData::CreateMetaObject.
 		const ibString askedKind = ArgAcceptsKind().Text(params);
@@ -933,7 +933,7 @@ public:
 			const ibClassID clsid = ibResolveMetaKind(metaData, askedKind);
 			if (clsid == 0) {
 				refusal = ibString::Format(
-					ibMcpText("'%s' is not a kind of metadata object in this configuration."), askedKind);
+					ibMcpText("'%s' is not a kind of metadata object in this application."), askedKind);
 				return false;
 			}
 
@@ -956,23 +956,23 @@ public:
 			// none, which is where the top-level kinds live — and taken straight back out. Nothing
 			// else is told: this does not go through ibMetaData::CreateMetaObject, so no id is
 			// minted, no lifecycle event fires and the tree hears nothing. RemoveChild destroys it
-			// and the configuration is as it was.
+			// and the application is as it was.
 			ibValueMetaObject* root = nullptr;
 
 			if (ArgParentId().Given(params)) {
 				root = ibFindMetaObjectById(metaData, (ibMetaID)ArgParentId().Whole(params));
 				if (root == nullptr) {
-					refusal = ibString::Format(ibMcpText("Nothing in this configuration has id %i."),
+					refusal = ibString::Format(ibMcpText("Nothing in this application has id %i."),
 						(int)ArgParentId().Whole(params));
 					return false;
 				}
 			}
 			else {
-				root = metaData->GetCommonMetaObject();
+				root = metaData->GetRootMetaObject();
 			}
 
 			if (root == nullptr) {
-				refusal = ibMcpText("This configuration has no root to build against.");
+				refusal = ibMcpText("This application has no root to build against.");
 				return false;
 			}
 
@@ -999,7 +999,7 @@ public:
 				return false;
 			}
 
-			// ⚠ AND IT NEEDS TO KNOW WHICH CONFIGURATION IT BELONGS TO — not to enter it, but to be
+			// ⚠ AND IT NEEDS TO KNOW WHICH APPLICATION IT BELONGS TO — not to enter it, but to be
 			// ASKED anything: ibValueMetaObject::IsEditable dereferences m_metaData without a guard,
 			// and the property walk asks every property whether it can be edited. Told here, so the
 			// sample can answer; it is still attached to nothing and still dropped below.
@@ -1031,7 +1031,7 @@ public:
 			if (id->Kind() == ibDataKind::Number) {
 				object = ibFindMetaObjectById(metaData, (ibMetaID)id->AsInt());
 				if (object == nullptr) {
-					refusal = ibString::Format(ibMcpText("Nothing in this configuration has id %s."),
+					refusal = ibString::Format(ibMcpText("Nothing in this application has id %s."),
 						id->AsNumber().ToString());
 					return false;
 				}
@@ -1039,10 +1039,10 @@ public:
 		}
 
 		if (object == nullptr)
-			object = metaData->GetCommonMetaObject();
+			object = metaData->GetRootMetaObject();
 
 		if (object == nullptr) {
-			refusal = ibMcpText("This configuration has no root.");
+			refusal = ibMcpText("This application has no root.");
 			return false;
 		}
 
@@ -1128,8 +1128,8 @@ MCP_TOOL_REGISTER_DESIGNER(ibMcpToolMetadataAccepts);
 //
 // THE OTHER HALF OF CREATE, and it was missing — which is not a small gap. A
 // caller that can only add has no way back from its own mistake, and a
-// configuration that cannot be saved because of a half-built object left behind
-// is a configuration nobody can work in until somebody clicks Delete by hand.
+// application that cannot be saved because of a half-built object left behind
+// is an application nobody can work in until somebody clicks Delete by hand.
 //
 // It takes the SAME road the toolbar's Delete takes: announce it so whatever is
 // showing the object stops showing it, then remove. Not a second remover — one
@@ -1147,9 +1147,9 @@ public:
 
 	ibString GetDescription() const override
 	{
-		return ibMcpText("Remove an object from the configuration, with everything under it - exactly "
+		return ibMcpText("Remove an object from the application, with everything under it - exactly "
 			"as pressing Delete in the tree would. Use it to undo a mistake: a half-built "
-			"object left behind will block the configuration from being saved at all.");
+			"object left behind will block the application from being saved at all.");
 	}
 
 	const std::vector<ibMcpArgument>& Arguments() const override
@@ -1173,7 +1173,7 @@ public:
 		ibValueMetaObject* object = ibFindMetaObjectById(metaData, (ibMetaID)asked);
 		if (object == nullptr) {
 			refusal = ibString::Format(
-				ibMcpText("Nothing in this configuration has id %i."), (int)asked);
+				ibMcpText("Nothing in this application has id %i."), (int)asked);
 			return false;
 		}
 
@@ -1181,11 +1181,11 @@ public:
 		const ibString name = object->GetName();
 		const std::int32_t      id = (std::int32_t)object->GetMetaID();
 
-		// A CONFIGURATION IS NOT AN OBJECT, and deleting the root would take the
+		// AN APPLICATION IS NOT AN OBJECT, and deleting the root would take the
 		// whole tree with it. There is no legitimate caller for that here.
 		if (object->GetParent() == nullptr) {
 			refusal = ibString::Format(
-				ibMcpText("'%s' is the root of the configuration and cannot be removed."), name);
+				ibMcpText("'%s' is the root of the application and cannot be removed."), name);
 			return false;
 		}
 
@@ -1220,7 +1220,7 @@ public:
 		return ibMcpText("Change the place of an object among its siblings of the same kind - the order of "
 			"the sections in the navigation panel, of the forms under an object, of what the tree shows. "
 			"`position` is its place in that list, from 0. Answers with `order`, the siblings of the same "
-			"kind as they now stand. The order is part of what config_save keeps and config_apply hands to "
+			"kind as they now stand. The order is part of what app_save keeps and app_apply hands to "
 			"the running application.");
 	}
 
@@ -1245,14 +1245,14 @@ public:
 		ibValueMetaObject* object = ibFindMetaObjectById(metaData, (ibMetaID)asked);
 		if (object == nullptr) {
 			refusal = ibString::Format(
-				ibMcpText("Nothing in this configuration has id %i."), (int)asked);
+				ibMcpText("Nothing in this application has id %i."), (int)asked);
 			return false;
 		}
 
 		ibValueMetaObject* const parent = object->GetParent();
 		if (parent == nullptr) {
 			refusal = ibString::Format(
-				ibMcpText("'%s' is the root of the configuration and has no siblings."), object->GetName());
+				ibMcpText("'%s' is the root of the application and has no siblings."), object->GetName());
 			return false;
 		}
 
@@ -1273,11 +1273,11 @@ public:
 			return false;
 		}
 
-		// The parent's door moves it, marks the configuration modified and announces `Moved` — or
+		// The parent's door moves it, marks the application modified and announces `Moved` — or
 		// refuses a read-only one, and nothing has moved.
 		const unsigned int from = parent->GetChildPosition(object);
 		if (!parent->ChangeChildPosition(object, parent->GetChildPosition(kind[position]))) {
-			refusal = ibMcpText("The configuration refused the move - it is read-only. Nothing was moved.");
+			refusal = ibMcpText("The application refused the move - it is read-only. Nothing was moved.");
 			return false;
 		}
 
@@ -1385,7 +1385,7 @@ public:
 
 		// ⚠ A NAME IS NOT AN ORDINARY PROPERTY. Writing it straight through the
 		// property would walk past the check that keeps two siblings from
-		// sharing one — a configuration where that happens is broken in a way
+		// sharing one — an application where that happens is broken in a way
 		// nothing downstream expects. So the same question the designer asks on
 		// a rename is asked here, whichever door the name comes through.
 		if (name.IsSameAs(ibT("Name"), false)) {
@@ -1455,7 +1455,7 @@ public:
 		// branch exists to prevent (measured over MCP, 2026-09-03).
 		//
 		// What stays here is what belongs to this tool rather than to the placing: the rename gate
-		// above, the "no such property" sentence that names metadata_get, marking the configuration
+		// above, the "no such property" sentence that names metadata_get, marking the application
 		// modified, and the object's own complaints.
 		if (!ibMcpSetProperty(property, params, result, refusal))
 			return false;
@@ -1657,7 +1657,7 @@ public:
 
 		const ibString typeName = ArgType().Text(params);
 
-		// A NAME RESOLVES TWO WAYS, and the configuration's own goes first: a
+		// A NAME RESOLVES TWO WAYS, and the application's own goes first: a
 		// reference type ("CatalogRef.Goods") exists only against the tree that
 		// declared it, while a primitive is registered process-wide.
 		// ⭐ AN ID IS ACCEPTED TOO, AND IT IS THE STABLE HALF. A name like
@@ -1687,7 +1687,7 @@ public:
 					// The reader takes the id alone and passed such an entry over without a word: a chart's
 					// TypesOfCharacteristics given {"TypeDesc": "CatalogRef.Counterparties"} came back String, the call
 					// answered as done, and the apply then refused every characteristic for a type the chart could not
-					// hold (2026-11-14, a configuration built by script, measured)
+					// hold (2026-11-14, an application built by script, measured)
 					ibDataValue said = item;
 					if (item.Kind() == ibDataKind::Child) {
 						const std::optional<ibDataNode> object = item.AsChild();
@@ -1713,7 +1713,7 @@ public:
 					const ibClassID named = ctor != nullptr ? ctor->GetClassType() : 0;
 					if (named == 0) {
 						refusal = ibString::Format(
-							ibMcpText("'%s' in Types is not a type this configuration knows. type_list shows the names."), name);
+							ibMcpText("'%s' in Types is not a type this application knows. type_list shows the names."), name);
 						return false;
 					}
 					const std::shared_ptr<ibDataNode> entry = std::make_shared<ibDataNode>();
@@ -1765,13 +1765,13 @@ public:
 
 		if (clsid == 0) {
 			refusal = ibString::Format(
-				ibMcpText("'%s' is not a type this configuration knows. type_list shows the names."),
+				ibMcpText("'%s' is not a type this application knows. type_list shows the names."),
 				typeName);
 			return false;
 		}
 
 		// ⭐⭐ AND A TYPE THIS FIELD MAY NOT HOLD IS REFUSED — by the SAME rule the designer's type
-		// picker offers by (ibBackendTypeConfigFactory::GetTypesByFilter). A field says what KIND of
+		// picker offers by (ibBackendTypeApplicationFactory::GetTypesByFilter). A field says what KIND of
 		// slot it is (a resource takes numbers, a boolean flag takes a flag, a reference field takes
 		// references and primitives), and the picker has always thrown the rest out while building its
 		// list.
@@ -1779,18 +1779,18 @@ public:
 		// 🛑 THIS DOOR DID NOT ASK, because the rule lived inside that dialog and nothing here could
 		// reach it. So `TypeDescription` — which belongs to exactly one place in the platform, a chart
 		// of characteristic types' own Type — could be set on an ordinary attribute over MCP, making a
-		// configuration the editor cannot produce and does not mean to have (Max, 2026-09-23: "it is
+		// application the editor cannot produce and does not mean to have (Max, 2026-09-23: "it is
 		// the wrong type, you cannot put it here at all — the question is how you got here").
 		//
 		// The rule moved to the backend for this: two doors, one answer.
 		//
 		// The KIND of slot is the field's own answer — every attribute, dimension and resource is an
-		// ibBackendTypeConfigFactory. Something that is not one cannot be asked, and is not refused for
+		// ibBackendTypeApplicationFactory. Something that is not one cannot be asked, and is not refused for
 		// failing to answer a question it was never given.
-		const ibBackendTypeConfigFactory* field = dynamic_cast<const ibBackendTypeConfigFactory*>(object);
+		const ibBackendTypeApplicationFactory* field = dynamic_cast<const ibBackendTypeApplicationFactory*>(object);
 		std::vector<ibClassID> allowed;
 		if (field != nullptr)
-			ibBackendTypeConfigFactory::GetTypesByFilter(field->GetFilterDataType(), metaData, allowed);
+			ibBackendTypeApplicationFactory::GetTypesByFilter(field->GetFilterDataType(), metaData, allowed);
 		if (!allowed.empty() && std::find(allowed.begin(), allowed.end(), clsid) == allowed.end()) {
 			ibString offered;
 			for (const ibClassID& may : allowed) {
@@ -1938,7 +1938,7 @@ class ibMcpToolMetadataSetSchedule : public ibMcpTool {
 		static const ibArg a(ibT("links"), ibArg::Kind::Node,
 			ibMcpText("How a record finds its schedule rows: {\"<schedule dimension>\": \"<field of the calculation register>\"} - "
 				"a dimension of the calculation register whose type meets the schedule dimension's. Every dimension of the schedule but its date "
-				"is linked: a schedule with a link left out is refused when the configuration is saved."));
+				"is linked: a schedule with a link left out is refused when the application is saved."));
 		return a;
 	}
 
@@ -2017,8 +2017,8 @@ public:
 			const ibMetaID schedule = Named(registers, registerName, offered);
 			if (schedule == 0) {
 				refusal = offered.IsEmpty()
-					? ibMcpText("This configuration has no information register to hold a schedule.")
-					: ibString::Format(ibMcpText("'%s' is not an information register of this configuration. It has: %s."), registerName, offered);
+					? ibMcpText("This application has no information register to hold a schedule.")
+					: ibString::Format(ibMcpText("'%s' is not an information register of this application. It has: %s."), registerName, offered);
 				return false;
 			}
 			scheduleDesc.SetSchedule(schedule, 0, 0);
@@ -2614,7 +2614,7 @@ public:
 		const ibValueMetaObject* target = ctor != nullptr ? ctor->GetMetaObject() : nullptr;
 		ibValueMetaObjectRecordDataRef* reference = nullptr;
 		if (target == nullptr || !target->ConvertToValue(reference)) {
-			refusal = ibString::Format(ibMcpText("'%s' is not a list this configuration can open."),
+			refusal = ibString::Format(ibMcpText("'%s' is not a list this application can open."),
 				metaData->GetNameObjectFromID(chosen));
 			return false;
 		}

@@ -19,7 +19,7 @@
       "syntax_block": "Hashing = New DataHashing(HashFunction.SHA256);\nHashing.Append(Text);\nSum = Hashing.HashSum;                 // BinaryData\n\nSigning = New DataHashing(HashFunction.SHA256, Key);   // HMAC",
       "parameters": "function — значение HashFunction: MD5, SHA1, SHA256, SHA384 или SHA512.\nkey — строка или BinaryData; если задан, объект считает с ним HMAC. Опущен — простой хеш.",
       "return_descr": "DataHashing.",
-      "example": "// вебхук: HMAC-SHA256 тела, сравнение в hex\nCheck = New DataHashing(HashFunction.SHA256, Secret);\nCheck.Append(Body);\nif (Lower(HexString(Check.HashSum)) <> Signature) { Raise(\"подпись не совпала\"); }",
+      "example": "// вебхук: HMAC-SHA256 тела, сравнение в hex\nCheck = New DataHashing(HashFunction.SHA256, Secret);\nCheck.Append(Body);\nif (Lower(HexString(Check.HashSum)) != Signature) { Raise(\"подпись не совпала\"); }",
       "availability": "Клиент, Сервер",
       "see_also": [
         "cls.DataHashing.Append",
@@ -118,7 +118,7 @@
       "syntax_block": "Function = Hashing.HashFunction;",
       "parameters": "",
       "return_descr": "HashFunction.",
-      "example": "if (Hashing.HashFunction = HashFunction.MD5) { Message(\"MD5 - for a checksum only\"); }",
+      "example": "if (Hashing.HashFunction == HashFunction.MD5) { Message(\"MD5 - for a checksum only\"); }",
       "availability": "Клиент, Сервер",
       "see_also": [
         "cls.DataHashing",

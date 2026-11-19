@@ -6,7 +6,7 @@
 ////////////////////////////////////////////////////////////////////////////
 //
 // ⭐ NOT THE SYSTEM CLIPBOARD, deliberately. The designer's copy goes to the OS
-// one (see treeConfigurationEvent.cpp), which is a single shared slot behind an
+// one (see treeApplicationEvent.cpp), which is a single shared slot behind an
 // exclusive lock: a tool writing there would overwrite whatever the developer
 // standing at the keyboard had just copied, and would block on the lock while a
 // window holds it. Two callers, one board, no way to tell whose turn it is.

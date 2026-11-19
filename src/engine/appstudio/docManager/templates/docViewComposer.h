@@ -14,7 +14,7 @@
 class ibComposerEditView : public ibFrontendView {
 	class ibComposerTabEditor* m_composerPanel = nullptr;
 	ibCompositionDescription m_composition;   // what the panel edits in place — the view's, built once
-	ibMetaData m_metaData;                    // the tab's configuration: the fields of a text are asked of it
+	ibMetaData m_metaData;                    // the tab's application: the fields of a text are asked of it
 public:
 	ibComposerEditView() : ibFrontendView() {}
 

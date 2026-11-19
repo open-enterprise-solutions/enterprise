@@ -1,7 +1,7 @@
 #include "backend/system/value/composition/valueComposerField.h"
 #include "core/serialize/dataBuilder.h"
 #include "backend/compiler/typeCtor.h"
-#include "backend/metaData.h"                                        // the configuration a declaration is built against
+#include "backend/metaData.h"                                        // the application a declaration is built against
 #include "backend/metaCollection/partial/reference/reference.h"      // …and what it is built INTO, at execution
 #include "backend/backend_localization.h"                            // a presentation read in the reader's language
 

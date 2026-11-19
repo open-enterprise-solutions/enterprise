@@ -174,9 +174,9 @@ ibCodeEditor::ibCodeEditor(ibTabDocument* document, wxWindow* parent, wxWindowID
 	MarkerEnableHighlight(true);
 
 	// The stream needs no module and no metadata: what the text MEANS is asked of the compiler, and
-	// the module is passed at the moment of asking. So a sessionless host (codeRunner, which has no
+	// the module is passed at the moment of asking. So a sessionless host (coderunner, which has no
 	// document) gets the same stream as any other — folding, brace matching and the caret question
-	// all work; only the answers that need a configuration are absent, and they are absent there
+	// all work; only the answers that need an application are absent, and they are absent there
 	// anyway.
 	m_tc.SetLexemMode(ibLexemMode::Editing);
 
@@ -225,7 +225,7 @@ bool ibCodeEditor::TryBefore(wxEvent& event)
 void ibCodeEditor::EditDebugPoint(int line_to_edit)
 {
 	// Forward to the (designer-side) debugger override; sessionless
-	// hosts (codeRunner) get the default no-op.
+	// hosts (coderunner) get the default no-op.
 	OnEditDebugPoint(line_to_edit);
 }
 
@@ -703,7 +703,7 @@ void ibCodeEditor::OnTextChange(ibStyledTextEvent& event)
 	const wxString& codeText = GetText();
 	const int line = LineFromPosition(event.GetPosition());
 
-	// Re-lex — fires for every host (codeRunner included). The stream feeds folding, brace
+	// Re-lex — fires for every host (coderunner included). The stream feeds folding, brace
 	// matching and the caret question; nothing here compiles anything.
 	m_tc.Load(codeText);
 
@@ -730,7 +730,7 @@ void ibCodeEditor::OnTextChange(ibStyledTextEvent& event)
 
 	try {
 #if _USE_OLD_TEXT_PARSER_IN_CODE_EDITOR == 0
-		// First-time-empty buffer (codeRunner initial SetText, or any host that hasn't called
+		// First-time-empty buffer (coderunner initial SetText, or any host that hasn't called
 		// LoadModule) — a patch has no baseline to work from, so bootstrap with a full pass and
 		// let subsequent edits patch it.
 		if (!m_tc.HasLexem()) {
@@ -1061,8 +1061,8 @@ void ibCodeEditor::OnContextMenu(wxContextMenuEvent& event)
 	// (A module that cannot be changed still opens it, read-only: a query one may not edit is still
 	// one worth reading, and refusing would hide the only view of it there is.)
 	//
-	// THE CONFIGURATION IS THE SERVER'S: the constructor asks it of this editor's tab (ibView::ibQueryConstructor). An
-	// editor on no tab (a window's own) has nobody to ask — the desktop's "no configuration open".
+	// THE APPLICATION IS THE SERVER'S: the constructor asks it of this editor's tab (ibView::ibQueryConstructor). An
+	// editor on no tab (a window's own) has nobody to ask — the desktop's "no application open".
 	menu.Bind(wxEVT_MENU, [this, literal, caret](wxCommandEvent&) {
 		wxString text = literal.m_text;
 		const ibMetaData metaData = m_document != nullptr ? m_document->GetMetaData() : ibMetaData();
@@ -1074,7 +1074,7 @@ void ibCodeEditor::OnContextMenu(wxContextMenuEvent& event)
 
 	// AND THE TRANSLATION CONSTRUCTOR, on the same literal and by the same rule: a module's messages
 	// are texts a person reads, written once per language like any caption — and the window is the
-	// caption's own (ibDialogTranslateConstructor), over the languages of the configuration THIS module belongs to —
+	// caption's own (ibDialogTranslateConstructor), over the languages of the application THIS module belongs to —
 	// of its document, the tab it is in (none, a query's text: the session's).
 	wxMenuItem* miTranslate = menu.Append(wxID_ANY, _("Translation constructor"));
 	miTranslate->SetBitmap(wxArtProvider::GetBitmap(wxART_TRANSLATION_CONSTRUCTOR, wxART_FRONTEND, FromDIP(wxSize(16, 16))));

@@ -46,13 +46,17 @@ void ibApplicationInstance::CreateTableSession()
 	ibDatabaseQueryBuilder q;
 	if (!q.TableExists(session_table)) {
 
-		// session-registry extensions (2026-04-20) are nullable so legacy rows stay valid:
+		// What the registry keeps beside who and when:
 		//   pid             = owner process id (admin / kick / debugger attach)
 		//   address         = "host:port" for web processes; "" for desktop
 		//   currentActivity = last scripted/engine label ("idle", "running:OnStart", "reload", ...)
-		//   exclusive       = 1 when this session holds process-wide monopoly mode; 0 otherwise.
-		//                     Cluster-aware exclusive gate reads this column from peer rows to block
-		//                     new Connects when another process is exclusive.
+		//   kind            = ibSessionKind, the session's role (WebServer=5, WebClient=100; desktop kinds share
+		//                     numeric values with ibRunMode) — distinct from `application`, the process's ibRunMode
+		//   signal          = admin → registry control channel, picked up on the next JobCheckSignal tick and
+		//                     cleared by the handler ("kick" is the first value)
+		//   singleUser      = 1 when this session holds process-wide single-user mode; 0 otherwise.
+		//                     Cluster-aware single-user gate reads this column from peer rows to block
+		//                     new Connects when another process holds the mode.
 		q.Execute(ibCreateTable(session_table, {
 			{ ibT("session"),         ibTypeString(36),  false, true,  nullptr },
 			{ ibT("userName"),        ibTypeString(64),  true,  false, nullptr },
@@ -63,10 +67,12 @@ void ibApplicationInstance::CreateTableSession()
 			{ ibT("pid"),             ibTypeInteger(),   false, false, nullptr },
 			{ ibT("address"),         ibTypeString(256), false, false, nullptr },
 			{ ibT("currentActivity"), ibTypeString(ibSessionRegistry::kActivityWidth), false, false, nullptr },
-			// NOT NULL with a default: "not exclusive" gets ONE spelling, decided by the column rather
+			{ ibT("kind"),            ibTypeInteger(),   false, false, nullptr },
+			{ ibT("signal"),          ibTypeString(32),  false, false, nullptr },
+			// NOT NULL with a default: "not single-user" gets ONE spelling, decided by the column rather
 			// than by whoever wrote the row. A nullable flag has two (NULL and 0) and they agree only
 			// as long as every reader remembers to make them agree.
-			{ ibT("exclusive"),       ibTypeInteger(),   true,  false, ibConst(ibValue(0)) },
+			{ ibT("singleUser"),       ibTypeInteger(),   true,  false, ibConst(ibValue(0)) },
 			// tokenHash — SHA-256 hex of the thin client's bearer token. The token itself is never stored.
 			// Null: a session with nothing to resume (every kind but a thin client that has logged in).
 			{ ibT("tokenHash"),       ibTypeString(64),  false, false, nullptr },
@@ -104,7 +110,6 @@ void ibApplicationInstance::CreateTableLock()
 {
 	ibDatabaseQueryBuilder q;
 	if (!q.TableExists(lock_table)) {
-
 		q.Execute(ibCreateTable(lock_table, {
 			{ ibT("lockGuid"),    ibTypeString(36),   false, true,  nullptr },
 			{ ibT("sessionGuid"), ibTypeString(36),   true,  false, nullptr },   // owner identity (session.GUID or custom holder)
@@ -120,10 +125,7 @@ void ibApplicationInstance::CreateTableLock()
 		// sessionGuid drives the session-end cascade. No per-driver fork — see CreateTableSession.
 		q.Execute(ibCreateIndex(lock_table, ibT("lock_index_1"), { ibT("namespace"), ibT("keyHash") }));
 		q.Execute(ibCreateIndex(lock_table, ibT("lock_index_2"), { ibT("sessionGuid") }));
-	}
-
-	// The header outlives the lock. Release does not delete it.
-	if (!q.TableExists(lock_key_table)) {
+		// The header outlives the lock. Release does not delete it.
 		q.Execute(ibCreateTable(lock_key_table, {
 			{ ibT("namespace"), ibTypeString(128), true, true, nullptr },
 			{ ibT("keyHash"),   ibTypeString(64),  true, true, nullptr },
@@ -150,7 +152,7 @@ void ibApplicationInstance::CreateTableJob()
 	if (!q.TableExists(job_table)) {
 
 		q.Execute(ibCreateTable(job_table, {
-			// PRIMARY KEY — the job's GUID, not its name. A configuration's job carries its
+			// PRIMARY KEY — the job's GUID, not its name. An application's job carries its
 			// metaobject's guid (which survives a rename, an unload / reload and a copy onto
 			// another base); a platform job carries a fixed one minted once in platformJobs.cpp.
 			// One kind of value in the column, so no reader has to ask which sort of key it is
@@ -159,13 +161,10 @@ void ibApplicationInstance::CreateTableJob()
 			// Native UUID on PostgreSQL, CHAR(36) elsewhere — the dialect TYPE-MAP picks.
 			{ ibT("jobKey"),   ibTypeGuid(),      false, true,  nullptr },
 			{ ibT("jobName"),  ibTypeString(128), true,  false, nullptr },   // display name, for a person reading the table
-			// ⚠⚠ THE THIRD FLAG IS `m_notNull`, NOT "nullable" — and the four columns below were
-			// written as though it were the latter. Every one of them describes something a job
-			// that has NEVER RUN does not have, so every one of them must ACCEPT NULL:
-			//
-			//   lastRun  — there is no clock reading before the first run;
-			//   active   — its own comment says "NULL = on (a row older than the column)";
-			//   schedule — a row written before the column existed carries none.
+			// ⚠⚠ THE THIRD FLAG IS `m_notNull`, NOT "nullable" — and the columns below were once
+			// written as though it were the latter. lastRun and computer describe something a job
+			// that has NEVER RUN does not have, so they must ACCEPT NULL: there is no clock reading
+			// before the first run.
 			//
 			// Declared NOT NULL, the seed INSERT that Register() writes for a job it has never seen
 			// died on the first one: "validation error for column SYS_JOB.LASTRUN, value *** null
@@ -175,9 +174,9 @@ void ibApplicationInstance::CreateTableJob()
 			{ ibT("computer"), ibTypeString(128), false, false, nullptr },   // who ran it last, for diagnostics
 			// The two SETTINGS a base holds — what the enterprise may change without opening the
 			// Designer. They are here and not in the metadata because switching a misbehaving job
-			// off at 3 a.m. must not mean editing the configuration on a production base; and for
-			// the engine's OWN jobs there is no configuration to edit at all.
-			{ ibT("active"),   ibTypeBoolean(),   false, false, nullptr },   // NULL = on (a row older than the column)
+			// off at 3 a.m. must not mean editing the application on a production base; and for
+			// the engine's OWN jobs there is no application to edit at all.
+			{ ibT("active"),   ibTypeBoolean(),   false, false, nullptr },   // stated by every write of the settings
 			{ ibT("schedule"), ibTypeBlob(),      false, false, nullptr },   // ibJobScheduleDescriptionMemory blob
 		}));
 	}
@@ -200,8 +199,8 @@ void ibApplicationInstance::CreateTableJob()
 // and a second one here would be a version of nothing.
 //
 // 🛑 AND WHEN THIS SCHEMA CHANGES, IT MAY NOT BE DROPPED AND REBUILT. sys_job and
-// sys_bytecode_cache are migrated that way and are right to be: a job's settings re-seed from
-// its declaration and a cache recomputes, so nothing a person did is in them. THIS table is the
+// sys_bytecode_cache could be, and be right: a job's settings re-seed from its declaration and a
+// cache recomputes, so nothing a person did is in them. THIS table is the
 // opposite — every row is something somebody arranged and asked to keep, and it exists nowhere
 // else. A schema change here is ADD COLUMN (nullable, read as absent by an older row), never a
 // DROP. That is not an alpha-vs-release distinction; it is what the table holds.
@@ -263,135 +262,21 @@ void ibApplicationInstance::CreateTableFile()
 	}
 }
 
-// sys_job schema move — the key went from the display NAME to the job's stable key, and the table
-// gained its settings columns (active / schedule) on 2026-08-04.
-//
-// The old rows are DROPPED rather than converted, and deliberately: everything sys_job holds is
-// re-derivable — the settings are re-seeded from the declaration on the next Register, and the
-// clock's only loss is that each job may run once more than it strictly had to. A conversion would
-// have to guess which metaobject an old name meant, and a wrong guess silently applies one job's
-// "switched off" to another. (Alpha: there is no installed base to migrate.)
-void ibApplicationInstance::MigrateTableJob()
-{
-	ibDatabaseQueryBuilder qi;
-	if (!qi.TableExists(job_table))
-		return;
-
-	std::vector<ibString> cols = qi.GetColumns(job_table);
-	for (const ibString& c : cols)
-		if (c.IsSameAs(ibT("jobKey"), false))
-			return;   // already on the keyed schema
-
-	qi.Execute(ibDropTable(job_table));
-	CreateTableJob();
-}
-
-// Additive column migration for sys_session. Existing databases created
-// before the session-registry refactor (pid / address / currentActivity
-// added 2026-04-20) are transparently upgraded on startup — registry
-// writes / reads assume these columns exist, so an old schema would
-// trip INSERT and snapshot SELECT otherwise. Columns are nullable, so
-// legacy rows stay valid until the next heartbeat rewrite.
-void ibApplicationInstance::MigrateTableSession()
-{
-	ibDatabaseQueryBuilder qi;
-	if (!qi.TableExists(session_table))
-		return;
-
-	std::vector<ibString> cols = qi.GetColumns(session_table);
-	auto has = [&](const ibString& col) {
-		for (std::size_t i = 0; i < cols.size(); ++i)
-			if (cols[i].CmpNoCase(col) == 0) return true;
-		return false;
-	};
-
-	// Each ADD is best-effort and independent — a fresh builder per column so one driver's
-	// rejection (caught below) never poisons the next column's statement.
-	auto addColumn = [&](const ibString& name, ibColumnType type) {
-		try { ibDatabaseQueryBuilder q; q.Execute(ibAddColumn(session_table, { name, type, false, false, nullptr })); }
-		catch (...) { /* swallowed: best-effort migration; driver may not support this DDL */ }
-	};
-
-	if (!has(ibT("pid")))             addColumn(ibT("pid"),             ibTypeInteger());
-	if (!has(ibT("address")))         addColumn(ibT("address"),         ibTypeString(256));
-	if (!has(ibT("currentActivity"))) addColumn(ibT("currentActivity"), ibTypeString(ibSessionRegistry::kActivityWidth));
-	// kind — ibSessionKind session-level role (WebServer=5, WebClient=100; desktop kinds share
-	// numeric values with ibRunMode). Distinct from `application` (process-level ibRunMode).
-	if (!has(ibT("kind")))            addColumn(ibT("kind"),            ibTypeInteger());
-	// signal — admin → registry control channel; picked up on the next JobCheckSignal tick, then
-	// cleared by the handler. "kick" is the first supported value (reload / refresh may follow).
-	if (!has(ibT("signal")))          addColumn(ibT("signal"),          ibTypeString(32));
-	// exclusive — process-wide monopoly marker; cluster-aware gate in ProcessAdd /
-	// ProcessSetExclusive reads peer rows to detect another process holding it.
-	if (!has(ibT("exclusive")))       addColumn(ibT("exclusive"),       ibTypeInteger());
-	// tokenHash — the bearer token's SHA-256, never the token. Added with the resume window. Null on a
-	// row that predates it, and that row cannot be resumed.
-	if (!has(ibT("tokenHash"))) {
-		addColumn(ibT("tokenHash"), ibTypeString(64));
-		try {
-			ibDatabaseQueryBuilder q;
-			q.Execute(ibCreateIndex(session_table, ibT("session_index_4"), { ibT("tokenHash") }));
-		}
-		catch (const ibCoreException& err) {
-			// The column is enough to resume. The index is only the lookup, and a driver that refuses it is said.
-			ibJournalWarning(ibT("engine"), ibT("sys_session tokenHash index was not created: %s"), err.GetErrorDescription());
-		}
-		catch (...) {
-			ibJournalWarning(ibT("engine"), ibT("sys_session tokenHash index was not created"));
-		}
-	}
-
-	// NO BACK-FILL FOR THE ROWS. A column added to a populated table arrives NULL everywhere, which
-	// normally means an old base carries two spellings of one fact for good — but not this table: every
-	// row here belongs to a LIVE session and is deleted when that session ends (or swept when its
-	// heartbeat stops). The NULLs empty themselves within seconds of a restart, and the writer states
-	// the value from birth, so there is nothing left for a migration to repair.
-}
-
-// Bring up sys_bytecode_cache. Independent of the user/session/event
-// triple — runs in any runMode after the existing-tables gate, so DBs
-// initialised before AOT cache landed pick the table up on the next
-// open of any process. Idempotent; second call is a no-op once the
-// table exists.
-//
-// Per-driver column types: PostgreSQL uses BYTEA for the binary blob,
-// every other driver (Firebird embedded, SQLite, ODBC) takes
-// plain BLOB. Firebird's BLOB SUB_TYPE 0 is implicit when no sub-type
-// is named.
-void ibApplicationInstance::MigrateTableBytecodeCache()
+// sys_bytecode_cache — the compiled modules, by descriptor. bc_blob's BLOB renders as BYTEA on PostgreSQL and BLOB on
+// every other driver (Firebird embedded, SQLite, ODBC) via the dialect TYPE-MAP — no fork here.
+void ibApplicationInstance::CreateTableBytecodeCache()
 {
 	ibDatabaseQueryBuilder q;
-	if (q.TableExists(bytecode_cache_table)) {
-		// …UNLESS IT IS THE OLD SHAPE. A cache has no history worth migrating: every row can be
-		// recomputed from the source it was derived from, so a table that predates `config_md5` is
-		// DROPPED and rebuilt rather than ALTERed. One statement, no back-fill, and no base can carry
-		// rows whose validity nothing can judge.
-		std::vector<ibString> cols = q.GetColumns(bytecode_cache_table);
-		bool hasFingerprint = false;
-		for (std::size_t i = 0; i < cols.size(); ++i)
-			if (cols[i].CmpNoCase(ibT("config_md5")) == 0) { hasFingerprint = true; break; }
-		if (hasFingerprint)
-			return;
-		try { q.Execute(ibDropTable(bytecode_cache_table)); }
-		catch (...) { return; }   // cannot drop → leave the old table; Load/Save degrade to a miss
-	}
-
-	try {
-		// bc_blob's BLOB renders as BYTEA on PostgreSQL and BLOB on every other driver
-		// (Firebird embedded, SQLite, ODBC) via the dialect TYPE-MAP — no fork here.
+	if (!q.TableExists(bytecode_cache_table)) {
 		q.Execute(ibCreateTable(bytecode_cache_table, {
 			{ ibT("descriptor_id"),    ibTypeString(36), false, true,  nullptr },
 			{ ibT("bytecode_version"), ibTypeString(36), true,  false, nullptr },
-			// WHAT THE BYTECODE WAS COMPILED AGAINST — the configuration's own digest, recomputed on
+			// WHAT THE BYTECODE WAS COMPILED AGAINST — the application's own digest, recomputed on
 			// every save. It is part of the LOOKUP, not a field somebody has to remember to compare:
-			// a row written under an earlier configuration is simply not found. See byteCodeCache.h.
-			{ ibT("config_md5"),       ibTypeString(32), true,  false, nullptr },
+			// a row written under an earlier application is simply not found. See byteCodeCache.h.
+			{ ibT("application_md5"),  ibTypeString(32), true,  false, nullptr },
 			{ ibT("bc_blob"),          ibTypeBlob(),     true,  false, nullptr },
 		}));
-	}
-	catch (...) {
-		// Best-effort — DDL failure leaves Save / Load in their
-		// "no table" no-op branch; runtime falls back to compile path.
 	}
 }
 

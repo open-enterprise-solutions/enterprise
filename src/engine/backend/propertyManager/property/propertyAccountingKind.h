@@ -14,7 +14,7 @@ class ibValueMetaObjectChartOfAccounts;
 // figure is not zero but absent.
 //
 // 🛑 THE LIST IS THIS REGISTER'S CHART'S, AND NOT EVERY CHART'S. The shared CreateValueList walks the
-// whole configuration by clsid, which here would offer the kinds of a chart this register has nothing
+// whole application by clsid, which here would offer the kinds of a chart this register has nothing
 // to do with — a choice that can mean nothing and would be stored all the same.
 //
 // ⭐⭐ AND THE CHART IS HANDED IN, NOT LOOKED FOR. The field that declares this property — a dimension,

@@ -6,10 +6,10 @@
 #include <vector>
 
 // THE ENGINE'S COMPARISON (backend/metaCollection/metaDiff.h) AS THE THIN DESIGNER'S COMPARE TAB NAMES IT
-// (appstudio/mainFrame/configCompare): the record and its status whole. Records arrive from schema ConfigCompare
+// (appstudio/mainFrame/applicationCompare): the record and its status whole. Records arrive from schema ApplicationCompare
 // Build (the server's Walk); m_left/m_right stay null — Name, Picture, LeftId, RightId and the side strings name each row.
 //
-// Configuration comparison primitive.
+// Application comparison primitive.
 //
 // Pairs two ibValueMetaObject trees side by side and classifies each node
 // pair against the existing ibValueMetaObject::CompareObject() identity
@@ -26,13 +26,13 @@
 // shows up as one OnlyInLeft + one OnlyInRight, which is what the merge
 // UI needs to represent anyway.
 
-// Sentinel CLSID for the synthetic "Common" umbrella node the walker
-// inserts under the root config. Not a real metadata class — just a
+// Sentinel CLSID for the synthetic "Shared" umbrella node the walker
+// inserts under the root application. Not a real metadata class — just a
 // marker so the dataview model knows to render the umbrella with the
 // generic folder art (wxART_COMMON_FOLDER) instead of looking up a
-// per-class glyph. Mirrors the m_treeCOMMON umbrella in
-// treeConfiguration_impl.cpp (line 1473).
-inline constexpr ibClassID g_diffCommonUmbrellaClsid = make_clsid("UI_COMN", ibClassKind_None);   // header-defined: constexpr + ODR-safe
+// per-class glyph. Mirrors the m_treeSHARED umbrella in
+// treeApplication_impl.cpp (line 1473).
+inline constexpr ibClassID g_diffSharedUmbrellaClsid = make_clsid("UI_COMN", ibClassKind_None);   // header-defined: constexpr + ODR-safe
 
 // Sentinel CLSID for the synthetic "Properties" group node the walker
 // inserts under every paired metadata object. Contains one child row
@@ -61,10 +61,10 @@ enum class ibMetaDiffStatus {
 	// rolled up.
 	Changed,
 
-	// Present in left config, no GUID match in right.
+	// Present in left application, no GUID match in right.
 	OnlyInLeft,
 
-	// Present in right config, no GUID match in left.
+	// Present in right application, no GUID match in left.
 	OnlyInRight,
 };
 
@@ -92,7 +92,7 @@ struct ibMetaDiffRecord {
 	// null, m_status is computed from descendants. The walker inserts
 	// these between every pair node and its actual object children, so
 	// the diff tree mirrors the standard metadata-tree shape (see
-	// treeConfiguration_impl.cpp FillData).
+	// treeApplication_impl.cpp FillData).
 	ibClassID m_groupClsid = 0;
 
 	// Property-row mode. When non-empty, this record represents a
@@ -104,7 +104,7 @@ struct ibMetaDiffRecord {
 	wxString m_leftValue;
 	wxString m_rightValue;
 
-	// Filled from schema ConfigCompare Records — the server's Walk has no live pointers on the client.
+	// Filled from schema ApplicationCompare Records — the server's Walk has no live pointers on the client.
 	wxString m_name;
 	ibClassID m_iconClsid = 0;
 	ibMetaID m_leftId = 0;
@@ -150,7 +150,7 @@ public:
 	// synthetic group rows under every paired object, partitioning its
 	// children by CLSID, so the result mirrors the standard metadata-
 	// tree shape (Catalogs / Documents / Attributes / ...).
-	// The walk is the server's (schema ConfigCompare Build). The thin designer never walks local trees — the client's
+	// The walk is the server's (schema ApplicationCompare Build). The thin designer never walks local trees — the client's
 	// metaobjects hold no children. Kept so the header matches the engine's; callers use wire Records instead.
 	static std::vector<ibMetaDiffRecord> Walk(
 		ibValueMetaObject* WXUNUSED(leftRoot),
@@ -161,12 +161,12 @@ public:
 
 	// Localized group label for a metadata CLSID (Catalogs, Documents,
 	// Attributes, ...). Mirrors the constants in
-	// treeConfiguration_impl.cpp. Returns a hex-formatted fallback for
+	// treeApplication_impl.cpp. Returns a hex-formatted fallback for
 	// unknown CLSIDs so the UI never shows an empty string.
 	// The two rows the comparison adds itself; a metatype's group caption (the engine's ibMetaGroupCaption) is the
 	// server's — its row would carry it, the raw symbol until then.
 	static wxString GroupLabelFor(ibClassID clsid) {
-		if (clsid == g_diffCommonUmbrellaClsid)             return _("Common");
+		if (clsid == g_diffSharedUmbrellaClsid)             return ibGETTEXT_IN_CONTEXT("metadata branch", "Shared");
 		if (clsid == g_diffPropertiesGroupClsid)            return _("Properties");
 
 		// Unknown CLSID — show its raw symbol so the UI never blanks.
@@ -175,13 +175,13 @@ public:
 	}
 
 	// Canonical sort rank for a group CLSID. Lower rank = appears first
-	// in the standard metadata tree (see treeConfiguration_impl.cpp).
+	// in the standard metadata tree (see treeApplication_impl.cpp).
 	// Used by the walker to emit groups in the same order the designer
 	// shows them. Unknown CLSIDs sort after the known ones.
 	// The two rows the comparison adds itself ahead; a metatype's declared place (the engine's ibMetaGroupOrder) is the
 	// server's walk's.
 	static int GroupOrderRank(ibClassID clsid) {
-		if (clsid == g_diffCommonUmbrellaClsid)             return -2;
+		if (clsid == g_diffSharedUmbrellaClsid)             return -2;
 		if (clsid == g_diffPropertiesGroupClsid)            return -1;
 		return 0;
 	}

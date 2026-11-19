@@ -25,7 +25,7 @@ namespace {
 // THE LADDER, NEAREST FIRST — the compile modules a name can be resolved against, which is the
 // same chain the compiler walked when it bound the name and the same one the runtime lays out as
 // m_ppArrayContext. [0] is the caret's own compile; then the module the text lives in, then its
-// parent, up to the configuration root.
+// parent, up to the application root.
 using ibCompileChain = std::vector<const ibCompileCode*>;
 
 // THE FRAME AN OPERAND NAMES, AS THE RUNTIME READS IT (procUnit.cpp, ResolveRead/ResolveWrite —
@@ -77,7 +77,7 @@ bool FieldTypesOf(const ibMetaData* metaData, const ibValue& owner, const ibStri
 
 		for (const ibClassID& clsid : attribute->GetTypeValueDesc().GetClsidList()) {
 
-			// TWO REGISTRIES, ASKED IN THE ORDER THAT MATTERS. A configuration type
+			// TWO REGISTRIES, ASKED IN THE ORDER THAT MATTERS. An application type
 			// (CatalogRef.X, DocumentObject.Y) is the METADATA's and the platform has never heard
 			// of it; a String or a Date is the platform's. Asking the platform first is what
 			// `ibValue::GetNameObjectFromID` does, and it does not answer "no" — it throws.
@@ -300,7 +300,7 @@ public:
 			// claims the argument it merely names. Matching by SLOT alone is not enough; the opcode
 			// has to say it is a step, and the scan goes on past anything that is not one.
 			//
-			// Measured 2026-09-07 on this configuration's own modules: with the slot-only rule, 19%
+			// Measured 2026-09-07 on this application's own modules: with the slot-only rule, 19%
 			// of carets in real code answered. `a = New Array(); if (true) { a.` was enough to see
 			// it — `OPER_CTX_BEGIN` sat between the assignment and the caret with p1 = (0,0).
 			const ibStep step = StepValues(code, ip, out, depth);
@@ -338,7 +338,7 @@ public:
 
 		// ⭐ NOTHING WROTE IT, AND THAT IS ITSELF THE ANSWER: code always writes a variable before
 		// reading it, so a slot with no producer is not a variable the module computed — it is a
-		// handle the module was GIVEN (Manager, ThisObject, a common module under its own name).
+		// handle the module was GIVEN (Manager, ThisObject, a shared module under its own name).
 		// Being given is exactly what kind=External/Context records, so the walk asks for the name
 		// under that rule rather than against a list of names that would need keeping in step.
 		//
@@ -598,7 +598,7 @@ private:
 		// and a step the walk does not know is not a refusal: the search for the slot's producer
 		// simply carried on past it and answered with whatever ELSE had written that cell — the
 		// global context, offered confidently. Measured 2026-09-08: `a[0].` and `t[0].` both listed
-		// `CommonModules, CommonForms, Constants, Catalogs`, while the same row reached through a
+		// `SharedModules, SharedForms, Constants, Catalogs`, while the same row reached through a
 		// `foreach` answered with its own columns. Answering wrong is worse than answering nothing,
 		// which is why an unknown opcode must not be able to leave a plausible trail.
 		//
@@ -903,7 +903,7 @@ private:
 		// because it looks exactly like one. `m_numArray` counts CONTEXTS the way the runtime
 		// stacks them — and a block scope is a context too (`if`, `foreach`: RETURN_BLOCK in
 		// compileContext.cpp), so the number grows with nesting and has no fixed relation to how
-		// many MODULES up the name lives. Measured 2026-09-07 on this configuration's own modules:
+		// many MODULES up the name lives. Measured 2026-09-07 on this application's own modules:
 		// reading the depth as a chain index took the answer rate from 66% down to 57%.
 		//
 		// So the name is found by SLOT across the ladder, nearest table first — the frame the caret
@@ -961,10 +961,10 @@ private:
 
 	// ⭐⭐ THE ARGUMENTS THAT ARE CONSTANTS ARE PASSED, and the rest arrive empty. A literal is not
 	// "arbitrary code to run" — it is a value the compiler already wrote into the pool, so handing
-	// it over executes nothing, and it is exactly what the answer turns on: `GetCommonTemplate("")`
-	// is nothing, `GetCommonTemplate("DeliveryNote")` is a template with an area to complete
+	// it over executes nothing, and it is exactly what the answer turns on: `GetSharedTemplate("")`
+	// is nothing, `GetSharedTemplate("DeliveryNote")` is a template with an area to complete
 	// against. The designer's own dispatcher branch takes four such functions by name — Type,
-	// TypeOf, GetCommonForm, GetCommonTemplate — and every one of them reads its first argument.
+	// TypeOf, GetSharedForm, GetSharedTemplate — and every one of them reads its first argument.
 	//
 	// The tape is read the way the runtime reads it (procUnit.cpp, LOAD_ARG_CONST): the `count`
 	// instructions after the call, a constant recognised by OPER_SETCONST with its pool index in
@@ -1141,7 +1141,7 @@ private:
 	}
 
 	// ⭐⭐ A BARE-NAME PLATFORM CALL NAMES ITS RECEIVER ON THE METHOD, not in the operand.
-	// `CurrentDate()` / `String(x)` / `GetCommonTemplate(…)` are methods OF a context binding, and
+	// `CurrentDate()` / `String(x)` / `GetSharedTemplate(…)` are methods OF a context binding, and
 	// the compiler resolved the bare name through the ladder before emitting a method call on that
 	// binding's slot — a slot no instruction ever wrote and whose number alone does not say whose
 	// table it belongs to. The binding's NAME, though, is recorded right on the function entry
@@ -1149,7 +1149,7 @@ private:
 	// by name, exactly as the compiler looked it up, and its owner is asked for the value.
 	//
 	// Measured 2026-09-07: this one shape was 55 of the 96 positions still refusing in real modules —
-	// `template = GetCommonTemplate("DeliveryNote")` and everything downstream of it.
+	// `template = GetSharedTemplate("DeliveryNote")` and everything downstream of it.
 	bool ReceiverOfContextMethod(const ibString& method, ibValue& out) const
 	{
 		if (method.IsEmpty())
@@ -1399,7 +1399,7 @@ private:
 
 	// ⭐ WHICH MAP ANSWERED IS THE ORIGIN. The two are different facts about a name and the caller
 	// has no other way to tell them apart afterwards: an export or a native bind (`RegisterRecords`,
-	// `Filter`, a common module under its own name) against a CONTEXT handle of the module the caret
+	// `Filter`, a shared module under its own name) against a CONTEXT handle of the module the caret
 	// stands in (`ThisObject`, `ThisForm`). Optional, because the steps that only want the value
 	// have nothing to do with the answer.
 	bool BoundValue(const ibString& name, ibValue& out, ibNameOrigin* outOrigin = nullptr) const
@@ -1437,7 +1437,7 @@ private:
 	const ibByteCode::ibByteFunction*  m_frame;
 	const long                         m_lastCode;
 
-	// The configuration this caret belongs to — where a DECLARATION is asked about, and where a
+	// The application this caret belongs to — where a DECLARATION is asked about, and where a
 	// value of a declared type is made. Null for a text with no module.
 	const ibMetaData*                  m_metaData = nullptr;
 
@@ -1451,7 +1451,7 @@ private:
 };
 
 // The compile the text is judged against — the module it LIVES in, whose own bindings (ThisObject,
-// the object's context) and whose parent chain (the common modules, the globals) are the language
+// the object's context) and whose parent chain (the shared modules, the globals) are the language
 // the caret stands in. Null is ordinary: a text with no home is judged against the bare language.
 std::unique_ptr<ibCompileModule> HostModuleOf(const ibValueMetaObject* moduleObject)
 {
@@ -1519,7 +1519,7 @@ public:
 		if (ibCompileModule* host = m_host.get()) {
 			try { host->Compile(); }
 			catch (const ibCoreException&) {
-				// A configuration whose own modules do not compile is not this walk's complaint to
+				// An application whose own modules do not compile is not this walk's complaint to
 				// make — it was asked about the CARET. It answers with whatever did resolve.
 			}
 
@@ -1527,7 +1527,7 @@ public:
 			// beside it, not under it. Parenting it to the module itself put every declaration in
 			// the text up against its own older copy: "a procedure with this name is already
 			// defined", which ends the declaration, and the first function of a real module ended
-			// the lot. Measured on this configuration's own modules, 2026-09-07: 12% of carets in
+			// the lot. Measured on this application's own modules, 2026-09-07: 12% of carets in
 			// real code answered, against 100% of a battery of one-liners that declared nothing.
 			// The one-liners could not see it, which is exactly what made the battery agreeable.
 			//
@@ -1593,7 +1593,7 @@ private:
 	// is set before anything is compiled and released only after every value has been worked out.
 	//
 	// 🛑 A SCOPE AROUND THE COMPILE ALONE WOULD MISS THE POINT, and did: the compile emits
-	// instructions, and it is the WALK OVER THEM that calls into the platform — `GetCommonTemplate`,
+	// instructions, and it is the WALK OVER THEM that calls into the platform — `GetSharedTemplate`,
 	// a constructor, a method on a value. Those run after this object is built, so a guard living
 	// only in the constructor would be gone by the time it mattered. Every evaluation this object
 	// serves happens inside its lifetime; the mode has to as well.
@@ -1613,10 +1613,10 @@ private:
 // KIND of thing it is (a local, an export, a bound handle, a context, a property of one) and its
 // place in the ladder says WHOSE it is (this text, the module it lives in, an ancestor, the root).
 //
-// The ladder, as Max put it: root (code, global vars, contexts) → common modules, which see the
+// The ladder, as Max put it: root (code, global vars, contexts) → shared modules, which see the
 // root entire and register themselves back on it → an object module, which adds its own exports and
 // contexts → a form on top. So `depth == 0` is the text being typed, the LAST link is the
-// configuration's own manager, and everything between is an ancestor module.
+// application's own manager, and everything between is an ancestor module.
 ibNameOrigin OriginOfVar(ibVarKind kind, size_t depth, size_t chainSize)
 {
 	const bool own  = depth == 0;
@@ -1809,7 +1809,7 @@ bool ibNamesAtCaret(const ibString& text, unsigned int caret,
 	const ibValueMetaObject* moduleObject, std::vector<ibCaretName>& outNames)
 {
 	// ⚠ AN EMPTY TEXT IS AN ORDINARY QUESTION HERE, and the opposite of the one above: standing at
-	// the start of a blank module, EVERYTHING the configuration offers is in scope. The path door
+	// the start of a blank module, EVERYTHING the application offers is in scope. The path door
 	// refuses an empty text because there is no expression; this one answers with the ladder.
 	const ibCaretCompile compiled(text, caret, moduleObject, /*upToCaret*/ false);
 
@@ -1913,7 +1913,7 @@ bool ibNamesAtCaret(const ibString& text, unsigned int caret,
 		// answer: the scan below counts ANY operand of frame 0 as a touch of that cell, an instruction
 		// at the very start of the tape touches cell 0, and whichever binding sat in cell 0 was judged
 		// "written at the caret" and dropped. That was `ThisObject` in every module with no export of
-		// its own — a catalog's, a report's, an external data processor's once its borrowed `Metadata`
+		// its own — a catalog's, a report's, an external data tool's once its borrowed `Metadata`
 		// and `Data` exports were gone — while a document kept it only because `RegisterRecords` took
 		// cell 0 (measured 2026-09-21).
 		if (var.IsContext() || var.IsContextProp() || var.IsExternal())
@@ -1971,8 +1971,8 @@ bool ibNamesAtCaret(const ibString& text, unsigned int caret,
 	// the nearer rung SHADOWS, exactly as the runtime resolves it. Without this the dropdown
 	// printed the same word twice with the same icon, and a reader could only wonder which to pick.
 	//
-	// Measured 2026-09-08, from Max's own screen: an external data processor's module is one rung
-	// further out than a configuration module, so `Data` and `Metadata` — reachable from both —
+	// Measured 2026-09-08, from Max's own screen: an external data tool's module is one rung
+	// further out than an application module, so `Data` and `Metadata` — reachable from both —
 	// were offered twice. My own texts, compiled with a shorter chain, never showed it.
 	//
 	// ⚠ CASE-INSENSITIVELY, because the language is: `Data` and `data` are the same name here, and
@@ -2025,8 +2025,8 @@ bool ibNamesAtCaret(const ibString& text, unsigned int caret,
 			// `ibByteCode::FindVariable` opens with `if (v.IsLocal()) return false;`. Everything
 			// else passes — Export, PROTECTED (which exists to be visible to the modules below),
 			// External, Context, ContextProp — so this is the ladder as the language draws it
-			// rather than a list to keep in step. Measured 2026-09-07 on this configuration:
-			// `Procedure BeforeStart(Cancel)` in the ConfigurationModule carries no `Public`, and
+			// rather than a list to keep in step. Measured 2026-09-07 on this application:
+			// `Procedure BeforeStart(Cancel)` in the ApplicationModule carries no `Public`, and
 			// the list offered it inside a document's object module — a name the compiler would
 			// have refused had anyone written it.
 			if (depth > 0 && var.IsLocal())
@@ -2321,7 +2321,7 @@ std::vector<ibQueryOutline> ibOutlineScriptQueries(const ibString& text, const i
 	ibCompileChain chain;
 	chain.push_back(&compiler);
 
-	// ⭐ NOT IN A VACUUM, when a configuration was named — the module manager it compiles against is
+	// ⭐ NOT IN A VACUUM, when an application was named — the module manager it compiles against is
 	// the context every module of it is parented to, and without it `Catalogs` is not a name. Same
 	// reasoning, and the same trap, as ibCheckScript documents: a manager nobody compiled carries
 	// an empty bytecode, so it is compiled first.
@@ -2492,7 +2492,7 @@ std::vector<ibDiagnostic> ibCheckMethodCalls(const ibString& text, const ibValue
 			continue;   // a speculative question must not surface as an error
 		}
 
-		// Every branch a configuration's value, and none of them with the method.
+		// Every branch an application's value, and none of them with the method.
 		bool judged = !receivers.empty();
 		for (const ibCaretValue& receiver : receivers) {
 			const ibClassID clsid = receiver.m_value.GetClassType();

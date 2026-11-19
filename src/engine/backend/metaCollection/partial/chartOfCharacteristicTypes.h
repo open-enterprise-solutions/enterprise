@@ -11,7 +11,7 @@
 
 class ibValueMetaObjectChartOfCharacteristicTypes :
 	public ibValueMetaObjectRecordDataHierarchyMutableRef,
-	public ibBackendTypeConfigFactory {
+	public ibBackendTypeApplicationFactory {
 	public:
 private:
 	enum
@@ -109,7 +109,7 @@ public:
 
 	//get module object in compose object
 	virtual const ibValueMetaObjectModule* GetObjectModule() const { return m_propertyObjectModule->GetMetaObject(); }
-	virtual const ibValueMetaObjectCommonModule* GetManagerModule() const { return m_propertyManagerModule->GetMetaObject(); }
+	virtual const ibValueMetaObjectSharedModule* GetManagerModule() const { return m_propertyManagerModule->GetMetaObject(); }
 
 	/**
 	* Property events

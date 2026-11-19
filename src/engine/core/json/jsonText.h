@@ -9,7 +9,7 @@
 
 class ibString;   // core/fstring.h — the engine's text, written into
 
-// ⭐ HOW A STRING IS SPELLED IN JSON - said ONCE. There were two escapers, the configuration's JSON view
+// ⭐ HOW A STRING IS SPELLED IN JSON - said ONCE. There were two escapers, the application's JSON view
 // (jsonProvider.cpp) and the script's JSONWriter, each private to its file and already escaping different
 // sets: a fix made in one would not have reached the other, and the two outputs would have drifted apart.
 //

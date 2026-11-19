@@ -102,16 +102,16 @@ enum
 	enUserDir,
 	enUserName,
 	enUserPassword,
-	enExclusiveMode,
-	enSetExclusive,
+	enSingleUserMode,
+	enSetSingleUserMode,
 	enGeneralLanguage,
 	enEndJob,
 	enUserInterruptProcessing,
 	enAccessRight,
 	enIsInRole,
-	enGetCommonForm,
-	enShowCommonForm,
-	enGetCommonTemplate,
+	enGetSharedForm,
+	enShowSharedForm,
+	enGetSharedTemplate,
 	enBeginTransaction,
 	enCommitTransaction,
 	enRollBackTransaction,
@@ -247,16 +247,16 @@ void ibValueSystemFunction_BindNames(ibValue::ibMemberTable& helper, const ibVal
 	helper.AppendFunc(ibT("UserDir"), ibT("UserDir()"));
 	helper.AppendFunc(ibT("UserName"), ibT("UserName()"));
 	helper.AppendFunc(ibT("UserPassword"), ibT("UserPassword()"));
-	helper.AppendFunc(ibT("ExclusiveMode"), ibT("ExclusiveMode()"));
-	helper.AppendProc(ibT("SetExclusive"), 1, ibT("SetExclusive(on : boolean)"));
+	helper.AppendFunc(ibT("SingleUserMode"), ibT("SingleUserMode()"));
+	helper.AppendProc(ibT("SetSingleUserMode"), 1, ibT("SetSingleUserMode(on : boolean)"));
 	helper.AppendFunc(ibT("GeneralLanguage"), ibT("GeneralLanguage()"));
 	helper.AppendFunc(ibT("EndJob"), 1, ibT("EndJob(force : boolean)"));
 	helper.AppendFunc(ibT("UserInterruptProcessing"), ibT("UserInterruptProcessing()"));
 	helper.AppendFunc(ibT("AccessRight"), 2, ibT("AccessRight(strRole : string, metadata)"));
 	helper.AppendFunc(ibT("IsInRole"), 1, ibT("IsInRole(strRole : string)"));
-	helper.AppendFunc(ibT("GetCommonForm"), 3, ibT("GetCommonForm(name : string, owner : any, id : guid)"));
-	helper.AppendProc(ibT("ShowCommonForm"), 3, ibT("ShowCommonForm(name : string, owner : any, id : guid)"));
-	helper.AppendFunc(ibT("GetCommonTemplate"), 1, ibT("GetCommonTemplate(name : string)"));
+	helper.AppendFunc(ibT("GetSharedForm"), 3, ibT("GetSharedForm(name : string, owner : any, id : guid)"));
+	helper.AppendProc(ibT("ShowSharedForm"), 3, ibT("ShowSharedForm(name : string, owner : any, id : guid)"));
+	helper.AppendFunc(ibT("GetSharedTemplate"), 1, ibT("GetSharedTemplate(name : string)"));
 	helper.AppendProc(ibT("BeginTransaction"), ibT("BeginTransaction()"));
 	helper.AppendProc(ibT("CommitTransaction"), ibT("CommitTransaction()"));
 	helper.AppendProc(ibT("RollBackTransaction"), ibT("RollBackTransaction()"));
@@ -454,7 +454,7 @@ bool ibValueSystemFunction::CallAsFunc(const long lMethodNum, ibValue& pvarRetVa
 		case enUserDir: pvarRetValue = UserDir(); return true;
 		case enUserName: pvarRetValue = UserName(); return true;
 		case enUserPassword: pvarRetValue = UserPassword(); return true;
-		case enExclusiveMode: pvarRetValue = ExclusiveMode(); return true;
+		case enSingleUserMode: pvarRetValue = SingleUserMode(); return true;
 		case enGeneralLanguage: pvarRetValue = GeneralLanguage(); return true;
 		case enEndJob: EndJob(paParams[0]->GetInteger()); return true;
 		case enUserInterruptProcessing: UserInterruptProcessing(); return true;
@@ -466,18 +466,18 @@ bool ibValueSystemFunction::CallAsFunc(const long lMethodNum, ibValue& pvarRetVa
 			if (lSizeArray > 0)
 				pvarRetValue = IsInRole(*paParams[0]);
 			return lSizeArray > 0;
-		case enGetCommonForm: pvarRetValue = GetCommonForm(
+		case enGetSharedForm: pvarRetValue = GetSharedForm(
 			ibFormRequest(paParams[0]->GetString()),
 			lSizeArray > 1 ? paParams[1]->ConvertToType<ibBackendControlFrame>() : nullptr,
 			lSizeArray > 2 ? paParams[2]->ConvertToType<ibValueGuid>() : nullptr);
 			return true;
-		case enShowCommonForm: ShowCommonForm(
+		case enShowSharedForm: ShowSharedForm(
 			ibFormRequest(paParams[0]->GetString()),
 			lSizeArray > 1 ? paParams[1]->ConvertToType<ibBackendControlFrame>() : nullptr,
 			lSizeArray > 2 ? paParams[2]->ConvertToType<ibValueGuid>() : nullptr);
 			return true;
-		case enGetCommonTemplate:
-			pvarRetValue = GetCommonTemplate(paParams[0]->GetString());
+		case enGetSharedTemplate:
+			pvarRetValue = GetSharedTemplate(paParams[0]->GetString());
 			return true;
 			//--- Transactions:
 		case enBeginTransaction: BeginTransaction(); return true;
@@ -497,14 +497,14 @@ bool ibValueSystemFunction::CallAsFunc(const long lMethodNum, ibValue& pvarRetVa
 			pvarRetValue = TypeOf(*paParams[0]);
 			return true;
 
-		case enGetCommonForm:
-			pvarRetValue = GetCommonForm(ibFormRequest(paParams[0]->GetString()),
+		case enGetSharedForm:
+			pvarRetValue = GetSharedForm(ibFormRequest(paParams[0]->GetString()),
 				lSizeArray > 1 ? paParams[1]->ConvertToType<ibBackendControlFrame>() : nullptr,
 				lSizeArray > 2 ? paParams[2]->ConvertToType<ibValueGuid>() : nullptr);
 			return true;
 
-		case enGetCommonTemplate:
-			pvarRetValue = GetCommonTemplate(paParams[0]->GetString());
+		case enGetSharedTemplate:
+			pvarRetValue = GetSharedTemplate(paParams[0]->GetString());
 			return true;
 		}
 	}
@@ -536,10 +536,10 @@ bool ibValueSystemFunction::CallAsProc(const long lMethodNum, ibValue** paParams
 		case enExecute: Execute(paParams[0]->GetString()); return true;
 		case enRunApp: RunApp(paParams[0]->GetString()); return true;
 		case enSetAppTitle: SetAppTitle(paParams[0]->GetString()); return true;
-		case enSetExclusive: SetExclusive(paParams[0]->GetBoolean()); return true;
+		case enSetSingleUserMode: SetSingleUserMode(paParams[0]->GetBoolean()); return true;
 		case enEndJob: EndJob(paParams[0]->GetInteger()); return true;
 		case enUserInterruptProcessing: UserInterruptProcessing(); return true;
-		case enShowCommonForm: ShowCommonForm(
+		case enShowSharedForm: ShowSharedForm(
 			ibFormRequest(paParams[0]->GetString()),
 			lSizeArray > 1 ? paParams[1]->ConvertToType<ibBackendControlFrame>() : nullptr,
 			lSizeArray > 2 ? paParams[2]->ConvertToType<ibValueGuid>() : nullptr);
@@ -561,16 +561,16 @@ bool ibValueSystemFunction::CallAsProc(const long lMethodNum, ibValue** paParams
 		switch (lMethodNum)
 		{
 			//--- Special:
-		case enShowCommonForm:
-			ShowCommonForm(ibFormRequest(paParams[0]->GetString()),
+		case enShowSharedForm:
+			ShowSharedForm(ibFormRequest(paParams[0]->GetString()),
 				lSizeArray > 1 ? paParams[1]->ConvertToType<ibBackendControlFrame>() : nullptr,
 				lSizeArray > 2 ? paParams[2]->ConvertToType<ibValueGuid>() : nullptr);
 			return true;
-			// In the designer these are deliberately nothing — no running configuration's messages, journal or
+			// In the designer these are deliberately nothing — no running application's messages, journal or
 			// transaction — and a call to one is done, not refused.
 		case enMessage:
 		case enWriteJournalEvent:
-		case enSetExclusive:
+		case enSetSingleUserMode:
 		case enBeginTransaction:
 		case enCommitTransaction:
 		case enRollBackTransaction:

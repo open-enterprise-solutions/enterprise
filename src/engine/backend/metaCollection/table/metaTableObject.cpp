@@ -236,8 +236,8 @@ bool ibValueMetaObjectTableDataRef::OnBeforeRunMetaObject(int flags)
 bool ibValueMetaObjectTableDataRef::OnAfterRunMetaObject(int flags)
 {
 	// Register the tabular section as an L4 query source (parent-qualified "<Parent>.<Section>"). Register
-	// ALWAYS — the factory is PER-CONFIG (in the metadata), so a read-only DB load (onlyLoadFlag) still
-	// registers its OWN sources into its OWN factory or the section can't resolve on that config's forms.
+	// ALWAYS — the factory is PER-APPLICATION (in the metadata), so a read-only DB load (onlyLoadFlag) still
+	// registers its OWN sources into its OWN factory or the section can't resolve on that application's forms.
 	m_metaData->RegisterSource(&m_queryable);
 	return ibValueMetaObjectTableData::OnAfterRunMetaObject(flags);
 }

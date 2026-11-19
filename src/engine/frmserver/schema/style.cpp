@@ -12,7 +12,7 @@
 namespace {
 
 // THE PLATFORM'S LOOK - the one object the row of the style is kept under; what is configured here is the platform's,
-// not something of the configuration's tree.
+// not something of the application's tree.
 const ibGuid& StyleObject()
 {
 	static const ibGuid s_object(ibT("7374796c-6500-0000-0000-000000000001"));

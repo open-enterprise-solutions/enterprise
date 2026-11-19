@@ -15,7 +15,7 @@
 #include "backend/metaCollection/partial/tabularSection/tabularSection.h"
 #include "backend/metaCollection/attribute/metaAttributeObject.h"
 #include "backend/metaCollection/partial/reference/reference.h"       // ibValueReferenceDataObject - the seed's reference cells
-#include "backend/metadataSerialization.h"                            // ibDeserializeValue - a declared value, read with this configuration
+#include "backend/metadataSerialization.h"                            // ibDeserializeValue - a declared value, read with this application
 #include "backend/system/value/composition/valueComposerField.h"      // ibMaterializeCompositionValue - a declared value made live
 #include "backend/system/value/valueGuid.h"                           // ibValueGuid - a declared line's owner, its key
 #include "backend/backend_exception.h"                                // ibBackendCoreException - a section that cannot take its lines
@@ -30,7 +30,7 @@
 #include <map>         // the lines each owner already holds
 
 // (SnapshotOf removed: building a snapshot is just `common->ContributeTables(snap)` — the metadata side
-//  does it directly where it drives the builder, keeping the builder itself config-agnostic.)
+//  does it directly where it drives the builder, keeping the builder itself application-agnostic.)
 
 namespace {
 // One secondary DB index per indexed attribute. Index -> the attribute alone; IndexWithAdditionalOrder ->
@@ -79,10 +79,10 @@ void ibValueMetaObjectRecordDataMutableRef::ContributeTables(ibSchemaSnapshot& o
 	// so the differ never tracked it and will not drop it.
 	ibSchemaTable& t = out.CreateSchemaTable(GetQueryable());
 
-	// THE GENERIC LIST, not predefined + own: it is the one that also carries the common
+	// THE GENERIC LIST, not predefined + own: it is the one that also carries the shared
 	// attributes this object was checked into. They are columns like any other — but they
 	// are NOT in GetAttributeArrayObject, because that list answers "what did a person add
-	// to this object", and the designer tree shows it. A common attribute is not shown
+	// to this object", and the designer tree shows it. A shared attribute is not shown
 	// there, for the same reason Code and Description are not: it belongs to the
 	// declaration, not to this object.
 	for (const auto object : GetGenericAttributeArrayObject())
@@ -94,7 +94,7 @@ void ibValueMetaObjectRecordDataMutableRef::ContributeTables(ibSchemaSnapshot& o
 	// Per-attribute secondary indexes (plain + predefined: Code / Description / Parent / ...) —
 	// the row reference is the additional-order column. Each carries its own Indexing flag.
 	// Same list as the columns above — each attribute carries its own Indexing flag, and a
-	// common attribute may be indexed exactly like the object's own.
+	// shared attribute may be indexed exactly like the object's own.
 	ContributeAttributeIndexes(t, GetGenericAttributeArrayObject(), { GetDataReference()->GetQueryColumn() });
 
 	// ⭐ A FIELD A PERSON DECLARED IS NOT NARROWED (#414) - the object's own and each tabular section's, the same in a
@@ -103,7 +103,7 @@ void ibValueMetaObjectRecordDataMutableRef::ContributeTables(ibSchemaSnapshot& o
 	// rows hold ("New scale specified for column ... must be at most 0"), and the apply failed on a statement naming a
 	// physical column; asked here, it is refused before the first statement, naming the object and the field. A type
 	// turned between a string and a number is no narrowing: the values of the type removed are cleared, and the ledger
-	// counts them. Compared with what the APPLIED configuration declared (`baseline`), never with the rows. (A code, a
+	// counts them. Compared with what the APPLIED application declared (`baseline`), never with the rows. (A code, a
 	// description and a document's number are their kind's to ask, with a rule of their own: #646.)
 	const auto notNarrowed = [](const ibString& owner, std::vector<ibValueMetaObjectAttributeBase*> attributes) {
 		return [owner, attributes = std::move(attributes)](const ibSchemaTable* baseline, ibRestructureInfo* report) -> bool {
@@ -318,9 +318,9 @@ void ibValueMetaObjectRecordDataHierarchyMutableRef::ContributeTables(ibSchemaSn
 	};
 
 	// ⭐ …AND A CODE AND A DESCRIPTION ARE NOT NARROWED (#646): no shorter, no fewer digits, a code not turned from a string
-	// into a number or back. Compared with what the APPLIED configuration declared (`baseline`), never with the rows: the
+	// into a number or back. Compared with what the APPLIED application declared (`baseline`), never with the rows: the
 	// schema is what the base is built from, and rows a change would cut are the rehearsal's to meet (Max, 2026-11-04). A
-	// table new to the applied configuration has nothing to narrow.
+	// table new to the applied application has nothing to narrow.
 	t.m_beforeChange += [this](const ibSchemaTable* baseline, ibRestructureInfo* report) -> bool {
 		if (baseline == nullptr)
 			return true;
@@ -374,7 +374,7 @@ void ibValueMetaObjectRecordDataHierarchyMutableRef::ContributeTables(ibSchemaSn
 	// in the resultset", twelve times over, in front of the real failure.)
 	//
 	// It is also the schema-authority rule (docs/private/schema-authority.md): what DDL to emit is decided by
-	// the two configurations, never by asking the database what it currently holds.
+	// the two applications, never by asking the database what it currently holds.
 	for (const ibPredefinedItemDescription& object : m_predefinedDesc.m_items) {
 		ibSchemaSeedRow& row = t.AddRow(object.m_guid, object.m_name);
 		row.Set(GetDataReference()->GetQueryColumn(),
@@ -389,7 +389,7 @@ void ibValueMetaObjectRecordDataHierarchyMutableRef::ContributeTables(ibSchemaSn
 				ibValuePtr<ibValueReferenceDataObject>(
 					ibValueReferenceDataObject::Create(this, object.m_parent, ibReferenceLoad::OnDemand)));
 
-		// …AND EVERY OTHER VALUE IT DECLARES, into the column of the same id, read with this configuration and a declared
+		// …AND EVERY OTHER VALUE IT DECLARES, into the column of the same id, read with this application and a declared
 		// reference made live here (ibMaterializeCompositionValue). Only the cells it names: a cell it never declared stays
 		// whatever the data holds, as before. A cell of an attribute deleted since is not written - the item still says it,
 		// the table no longer has it. What the item must declare is the table's check above, and each kind's on top of it.
@@ -434,8 +434,8 @@ void ibValueMetaObjectRecordDataHierarchyMutableRef::ContributeTables(ibSchemaSn
 	}
 
 	// ⭐ A DECLARED LINE TAKES ITS PLACE ONLY WHERE NOTHING STANDS. A line is found by its owner and its position, so one the
-	// applied configuration did not declare is written over whatever the base holds at that place: a line a person entered
-	// after the declared ones, or one the configuration declared once and let go (the apply keeps those). Both are the data's,
+	// applied application did not declare is written over whatever the base holds at that place: a line a person entered
+	// after the declared ones, or one the application declared once and let go (the apply keeps those). Both are the data's,
 	// and nothing would say they were lost; so the section's check before the update refuses, naming the line, for the old
 	// ones to be taken out first (Max, 2026-11-02). A section's lines stand at 1..N with no gap (its save numbers them, the
 	// seed writes 1..K): the places declared before are the first as many as the baseline declared for the owner, and the
@@ -447,7 +447,7 @@ void ibValueMetaObjectRecordDataHierarchyMutableRef::ContributeTables(ibSchemaSn
 			continue;
 		lines.m_beforeChange += [this, section, tableName = queryable->GetQueryTableName()](
 			const ibSchemaTable* baseline, ibRestructureInfo* report) -> bool {
-			// The items that declare more lines here than the applied configuration did, and how many it did.
+			// The items that declare more lines here than the applied application did, and how many it did.
 			std::vector<std::pair<const ibPredefinedItemDescription*, std::size_t>> anew;
 			for (const ibPredefinedItemDescription& item : m_predefinedDesc.m_items) {
 				const auto declared = item.m_tables.find(section->GetMetaID());
@@ -492,7 +492,7 @@ void ibValueMetaObjectRecordDataHierarchyMutableRef::ContributeTables(ibSchemaSn
 					continue;
 				if (report != nullptr)
 					report->AppendError(ibString::Format(
-						_("%s.%s %i: the configuration declares this line where the base already holds one - remove the lines held there first"),
+						_("%s.%s %i: the application declares this line where the base already holds one - remove the lines held there first"),
 						item->m_name, section->GetName(), static_cast<int>(before) + 1));
 				passed = false;
 			}
@@ -510,8 +510,8 @@ void ibValueMetaObjectRecordDataRecorderRef::ContributeTables(ibSchemaSnapshot& 
 	// ⭐ A DOCUMENT'S NUMBER IS NOT NARROWED (#414), as a catalog's code is not (#646): no shorter, no fewer digits, not
 	// turned from a string into a number or back. Made shorter - bound to the numerator of a shorter number (#661) - it
 	// reached the base as an in-place type change, which Firebird refuses, and the apply failed on a physical column.
-	// Compared with what the APPLIED configuration declared (`baseline`), never with the rows. A table new to the applied
-	// configuration has nothing to narrow.
+	// Compared with what the APPLIED application declared (`baseline`), never with the rows. A table new to the applied
+	// application has nothing to narrow.
 	t.m_beforeChange += [this](const ibSchemaTable* baseline, ibRestructureInfo* report) -> bool {
 		if (baseline == nullptr)
 			return true;

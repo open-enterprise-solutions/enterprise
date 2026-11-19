@@ -1,7 +1,7 @@
 # =============================================================================
 # OES Enterprise — core shared library
 # The shared meanings under the engine (backend) and its clients (frmclient): the class ids and the ids of the
-# configuration, the kinds of a value, a text, a number, a date, a guid, a block of bytes read and written, the core's
+# application, the kinds of a value, a text, a number, a date, a guid, a block of bytes read and written, the core's
 # refusal, the build's number. No wx: ibString's boundary to wxString is templates, made in a program that includes wx
 # (fstring.h); of wx's tree only its zlib, where the system has none.
 # =============================================================================

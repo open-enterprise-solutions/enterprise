@@ -104,8 +104,8 @@ enum ibQueryConstructorExclude {
 class FRMCLIENT_API ibDialogQueryConstructor : public ibDialog
 {
 public:
-	// `metaData` — the config the query is written against, HANDED IN. The dialog never reaches for
-	// the active configuration itself: which config a query belongs to is the host's knowledge (a
+	// `metaData` — the application the query is written against, HANDED IN. The dialog never reaches for
+	// the active application itself: which application a query belongs to is the host's knowledge (a
 	// list has its source's, a module editor has its document's), and a window that went looking
 	// would sooner or later find a different one than the caller meant.
 	//
@@ -114,14 +114,14 @@ public:
 	// a query belonging to something the user may not change looks like — visible, not hidden.
 	//
 	// ⚠ The parameter only ever ADDS the restriction. Read-only is ASKED OF THE METADATA first
-	// (IsMetaDataReadOnly below) — a configuration opened without the right to change it already
+	// (IsMetaDataReadOnly below) — an application opened without the right to change it already
 	// says so, and a window that could be told "no, it is editable" would be a way around that.
 	ibDialogQueryConstructor(wxWindow* parent, const ibQueryPackage& package,
 	                         const ibMetaData* metaData, bool readOnly = false,
 	                         int exclude = ibQueryExclude_None);
 
-	// Does this configuration allow its structure to be changed? The answer lives on the metadata's
-	// own configuration (ibMetaData::IsEditable) — the same question the designer asks before it
+	// Does this application allow its structure to be changed? The answer lives on the metadata's
+	// own application (ibMetaData::IsEditable) — the same question the designer asks before it
 	// lets anything be edited, so the constructor inherits the answer instead of inventing one.
 	// No tree at all = a runtime host with no designer surface, which does not make a query
 	// unreadable — so: editable.
@@ -540,7 +540,7 @@ private:
 	// and the resolution pass on the next refill does not reach them, so they are neither shown nor
 	// written. One rule driven by RESOLUTION, instead of a cleanup hung off every verb that can
 	// break something. See ibQueryLowering::PruneUnresolved.)
-	// A metatype's own picture, by its registered name. wxNOT_FOUND when the config has no such type.
+	// A metatype's own picture, by its registered name. wxNOT_FOUND when the application has no such type.
 	// EVERY TREE IS DRESSED THE SAME WAY — one helper, so "the catalogue has pictures and the
 	// chosen tables do not" cannot happen.
 	struct TreeIcons {
@@ -750,9 +750,9 @@ private:
 // by the rendered package; false on Cancel or in read-only mode, with the text untouched. Empty
 // text opens on a blank package — building from nothing is the same road as building from something.
 //
-// `metaData` is REQUIRED, deliberately: the caller knows which config the query belongs to, and a
+// `metaData` is REQUIRED, deliberately: the caller knows which application the query belongs to, and a
 // default that quietly fell back to the active one would resolve a copied query's tables against
-// somebody else's configuration.
+// somebody else's application.
 FRMCLIENT_API bool ibShowQueryConstructor(wxWindow* parent, wxString& queryText,
                                          const ibMetaData* metaData, bool readOnly = false,
                                          int exclude = ibQueryExclude_None);

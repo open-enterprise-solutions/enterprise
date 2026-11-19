@@ -1,6 +1,6 @@
 # Event handlers
 
-**What.** An `EventHandler` is a configuration object that handles one event of the objects it names,
+**What.** An `EventHandler` is an application object that handles one event of the objects it names,
 in a module of its own. It sits under *Common → Event handlers*.
 
 **Why.** A rule that holds for many objects — check every document before it is written, stamp every
@@ -79,13 +79,13 @@ raised only for a user who may see the object's data.
 - **A family reaches objects added later.** `DocumentObject` admits a document created after the handler.
 - **The choice of event survives a change of source.** `Event` keeps a number made from the event's name,
   not its position in the list.
-- **Only what raises an event is offered as a source.** A report's or a data processor's object declares
+- **Only what raises an event is offered as a source.** A report's or a data tool's object declares
   none and is not offered.
 
 ## Where it stops
 
 - Several types are matched by the name and the number of arguments. Argument names are not compared.
-- Handlers of one event run in the configuration's order. There is no priority.
+- Handlers of one event run in the application's order. There is no priority.
 - Nothing guards against a handler raising its own event again, the same as in an object's module.
 - A manager event needs the object's manager module. An object without one, such as a constant, raises
   no manager events.

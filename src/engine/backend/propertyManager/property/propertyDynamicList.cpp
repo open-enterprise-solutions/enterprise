@@ -2,7 +2,7 @@
 
 
 #include "backend/propertyManager/property/variant/variantComposition.h"
-#include "backend/backend_composition.h"   // ibBackendCompositionDescriptionMemory — read against the configuration
+#include "backend/backend_composition.h"   // ibBackendCompositionDescriptionMemory — read against the application
 
 ////////////////////////////////////////////////////////////////////////
 

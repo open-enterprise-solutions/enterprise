@@ -6,12 +6,12 @@
 // on F1. NOTES are the ENGINEERING INTENT in markdown — why the object exists, what it was
 // decided to be, what was tried and rejected — read by whoever picks the work up next.
 //
-// ⭐ THE READ ANSWERS ABOUT THE WHOLE CONFIGURATION AT ONCE, and that is the point of it. A
-// per-object getter would mean sixty calls to learn what a configuration is about, so nobody
+// ⭐ THE READ ANSWERS ABOUT THE WHOLE APPLICATION AT ONCE, and that is the point of it. A
+// per-object getter would mean sixty calls to learn what an application is about, so nobody
 // would make them and the notes would be written and never read. One call at the start of a
 // session is a thing that actually happens.
 //
-// ⭐ AND IT EXISTS BECAUSE THE REASONS DO NOT SURVIVE OTHERWISE. A configuration records what was
+// ⭐ AND IT EXISTS BECAUSE THE REASONS DO NOT SURVIVE OTHERWISE. An application records what was
 // built and never why: which of two shapes was chosen, what a register is for, which rejected
 // idea must not be proposed again. That knowledge lived only in whoever was in the room, and it
 // is exactly what is lost between one session and the next.
@@ -27,7 +27,7 @@
 
 #include "backend/metaCollection/metaIntrospect.h"
 #include "backend/metaCollection/metaObject.h"
-#include "backend/metadataConfiguration.h"
+#include "backend/metadataApplication.h"
 
 #include <algorithm> // std::max - the best score there was
 #include <set>       // the link check keeps one entry per id
@@ -35,12 +35,12 @@
 
 namespace {
 
-ibMetaData* OpenConfiguration(ibString& refusal)
+ibMetaData* OpenApplication(ibString& refusal)
 {
 	ibMetaData* metaData = activeMetaData;
 
-	if (metaData == nullptr || !metaData->IsConfigOpen()) {
-		refusal = ibMcpText("No configuration is open.");
+	if (metaData == nullptr || !metaData->IsOpen()) {
+		refusal = ibMcpText("No application is open.");
 		return nullptr;
 	}
 
@@ -116,7 +116,7 @@ const ibArg& ArgHelp()
 const ibArg& ArgId()
 {
 	static const ibArg s_a(ibT("id"), ibArg::Kind::Whole,
-		ibMcpText("One object's NodeId, and everything under it. Omit for the whole configuration - "
+		ibMcpText("One object's NodeId, and everything under it. Omit for the whole application - "
 			  "which is the usual way to ask."));
 	return s_a;
 }
@@ -131,7 +131,7 @@ const ibArg& ArgText()
 const ibArg& ArgTarget()
 {
 	static const ibArg s_a(ibT("target"), ibArg::Kind::Text,
-		ibMcpText("Which text: `notes` - why this exists, for whoever builds the configuration; or "
+		ibMcpText("Which text: `notes` - why this exists, for whoever builds the application; or "
 			  "`help` - what this is and what to put in it, shown to the person USING the "
 			  "application when they press F1. Different readers, different words."),
 			/*required*/ true, { ibT("notes"), ibT("help") });
@@ -151,15 +151,15 @@ public:
 
 	ibString GetActivity(const ibDataNode& params) const override
 	{
-		return ibMcpText("reading what is known about this configuration");
+		return ibMcpText("reading what is known about this application");
 	}
 
 	ibString GetDescription() const override
 	{
-		return ibMcpText("Everything recorded ABOUT this configuration, in one answer: the markdown NOTES - "
+		return ibMcpText("Everything recorded ABOUT this application, in one answer: the markdown NOTES - "
 			"how each thing actually works inside, what was decided, what was tried and rejected - "
 			"and optionally the user-facing help beside them. READ THIS FIRST when picking work "
-			"up: it is where the FINDINGS from earlier work are kept, and a configuration records "
+			"up: it is where the FINDINGS from earlier work are kept, and an application records "
 			"what was built and never what was learned building it. Answers only the objects that "
 			"carry something.");
 	}
@@ -170,8 +170,8 @@ public:
 		return s_arguments;
 	}
 
-	// ⭐⭐ THE CONFIGURATION'S OWN ANSWER, ASKED BESIDE THE VERBS. A question in the words of the trade - "how
-	// much is left in stock" - is answered best by what THIS configuration built for it, and the object that
+	// ⭐⭐ THE APPLICATION'S OWN ANSWER, ASKED BESIDE THE VERBS. A question in the words of the trade - "how
+	// much is left in stock" - is answered best by what THIS application built for it, and the object that
 	// answers it says so in the texts it carries: its help, in the words of the person using it, and its notes.
 	// So mcp_search asks here too, and an object whose texts meet the words comes back as a place: which
 	// object, which of its texts, and the line that met them (Max, 2026-09-11: *"you write it every time you
@@ -185,16 +185,16 @@ public:
 		if (query.IsEmpty())
 			return;
 
-		// Through the notes' one door to the configuration, as the notes' own commands go; with nothing open
-		// there is simply nothing of this configuration to offer, and the refusal is nobody's to hear.
+		// Through the notes' one door to the application, as the notes' own commands go; with nothing open
+		// there is simply nothing of this application to offer, and the refusal is nobody's to hear.
 		ibString refusal;
-		ibMetaData* const metaData = OpenConfiguration(refusal);
+		ibMetaData* const metaData = OpenApplication(refusal);
 		if (metaData == nullptr)
 			return;
 
 		std::vector<ibNotedPlace> scored;
 		size_t asked = 0, best = 0;
-		Score(metaData->GetCommonMetaObject(), query, asked, best, scored);
+		Score(metaData->GetRootMetaObject(), query, asked, best, scored);
 
 		const bool partial = best > 0 && best < asked;
 		size_t given = 0;
@@ -232,7 +232,7 @@ public:
 
 	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
-		ibMetaData* metaData = OpenConfiguration(refusal);
+		ibMetaData* metaData = OpenApplication(refusal);
 		if (metaData == nullptr)
 			return false;
 
@@ -242,7 +242,7 @@ public:
 			if (asked->Kind() == ibDataKind::Number) {
 				from = ibFindMetaObjectById(metaData, (ibMetaID)asked->AsInt());
 				if (from == nullptr) {
-					refusal = ibString::Format(ibMcpText("Nothing in this configuration has id %s."),
+					refusal = ibString::Format(ibMcpText("Nothing in this application has id %s."),
 						asked->AsNumber().ToString());
 					return false;
 				}
@@ -250,10 +250,10 @@ public:
 		}
 
 		if (from == nullptr)
-			from = metaData->GetCommonMetaObject();
+			from = metaData->GetRootMetaObject();
 
 		if (from == nullptr) {
-			refusal = ibMcpText("This configuration has no root to read from.");
+			refusal = ibMcpText("This application has no root to read from.");
 			return false;
 		}
 
@@ -323,7 +323,7 @@ public:
 
 	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
-		ibMetaData* metaData = OpenConfiguration(refusal);
+		ibMetaData* metaData = OpenApplication(refusal);
 		if (metaData == nullptr)
 			return false;
 
@@ -335,7 +335,7 @@ public:
 
 		ibValueMetaObject* object = ibFindMetaObjectById(metaData, (ibMetaID)asked->AsInt());
 		if (object == nullptr) {
-			refusal = ibString::Format(ibMcpText("Nothing in this configuration has id %s."),
+			refusal = ibString::Format(ibMcpText("Nothing in this application has id %s."),
 				asked->AsNumber().ToString());
 			return false;
 		}
@@ -362,7 +362,7 @@ public:
 
 		// ⭐⭐ A LINK IS CHECKED WHEN IT IS WRITTEN, not counted forever afterwards on every read.
 		//
-		// The root note of this very configuration carried FOURTEEN `oes:` links of which THIRTEEN
+		// The root note of this very application carried FOURTEEN `oes:` links of which THIRTEEN
 		// named something else — `Warehouses` opening UnitsOfMeasure, `GoodsInWarehouses` opening a
 		// resource, `Stock` opening a predefined attribute (measured 2026-09-09). Not one of them
 		// was broken; every one resolved, to the wrong thing, and read as perfectly normal.
@@ -371,7 +371,7 @@ public:
 		// assigned once at creation and restored from storage on load, so a live object's number is
 		// stable. The drift was structural — 0, then +12, then +24, exactly one catalog's span each
 		// time — which is not ids sliding but a note written against a DIFFERENT BUILD of the
-		// configuration and carried across when it was rebuilt. Nothing connected the two, so the
+		// application and carried across when it was rebuilt. Nothing connected the two, so the
 		// text outlived the tree it described.
 		//
 		// That is what makes the write the right place to ask: at the read there is nobody left who
@@ -400,7 +400,7 @@ public:
 
 				if (link->Has(ibT("broken"))) {
 					says << ibT("\n  ") << said
-						 << ibT(" - nothing in this configuration carries that id");
+						 << ibT(" - nothing in this application carries that id");
 				}
 				else if (link->Has(ibT("agrees"))) {
 					says << ibT("\n  ") << said << ibT(" - that id is ")

@@ -8,7 +8,7 @@
 #include "backend/propertyManager/property/propertyCommandSource.h" // ibPropertyCommandSource — the button's command SOURCE property (real picker)
 #include "backend/backend_command.h"                                // ibBackendCommandReceiver — a bar item is a receiver (via the door it inherits)
 #include "backend/propertyManager/property/propertyPicture.h"// ibPropertyPicture
-#include "backend/propertyManager/property/propertyFunctionalOptions.h" // ibPropertyFunctionalOptions — the item's functional options
+#include "backend/propertyManager/property/propertyFeatureOptions.h" // ibPropertyFeatureOptions — the item's feature options
 #include "frmserver/visualView/controlEnum.h"   // ibRepresentation / ibValueEnumRepresentation
 #include "frmserver/visualView/layers/commandReceiver.h"   // ibFrontendCommandReceiver — the command door the bar IS-A
 
@@ -91,9 +91,9 @@ public:
 	void SetEnabled(bool value) { m_propertyEnabled->SetValue(value); }
 	bool IsVisible() const { return m_propertyVisible->GetValueAsBoolean(); }
 	bool IsDefault() const { return m_propertyDefault->GetValueAsBoolean(); }
-	// Available by the functional options it names — false while all of them are off in this base. Beside
+	// Available by the feature options it names — false while all of them are off in this base. Beside
 	// Visible, never written into it.
-	bool IsAvailable() const { return m_propertyFunctionalOptions->IsAvailable(); }
+	bool IsAvailable() const { return m_propertyFeatureOptions->IsAvailable(); }
 	// "Modifies data" is NOT the item's to own — it is a COMMAND attribute (a view-only form greys a data-changing
 	// command). The item obeys: BuildCommands reads the flag off the bound command through the door, never here.
 
@@ -166,11 +166,11 @@ private:
 	// Internal name MUST differ from the category name ("Command") — wxPropertyGrid keys categories and
 	// properties in ONE per-page name map (a collision asserts in PrepareToAddItem). Label stays _("Command").
 	ibPropertyCommandSource* m_propertyCommand = ibPropertyObject::CreateProperty<ibPropertyCommandSource>(m_category, ibT("BoundCommand"), _("Command"),
-		_("The command the item runs: a form command, a standard command of the form or of one of its tables, or a command of the form's object or of the configuration."));
+		_("The command the item runs: a form command, a standard command of the form or of one of its tables, or a command of the form's object or of the application."));
 	// USER VISIBILITY — a group of its own, as on an element of a form (control.h).
 	ibPropertyCategory* m_categoryUserVisibility = ibPropertyObject::CreatePropertyCategory(ibT("UserVisibility"), _("User visibility"));
-	ibPropertyFunctionalOptions* m_propertyFunctionalOptions = ibPropertyObject::CreateProperty<ibPropertyFunctionalOptions>(m_categoryUserVisibility, ibT("FunctionalOptions"), _("Functional options"),
-		_("The functional options this element is available under: while every one of them is off, it is neither shown nor offered, and neither is what it holds. Empty - available whatever the options are. Works together with Visible and does not change it."));
+	ibPropertyFeatureOptions* m_propertyFeatureOptions = ibPropertyObject::CreateProperty<ibPropertyFeatureOptions>(m_categoryUserVisibility, ibT("FeatureOptions"), _("Feature options"),
+		_("The feature options this element is available under: while every one of them is off, it is neither shown nor offered, and neither is what it holds. Empty - available whatever the options are. Works together with Visible and does not change it."));
 };
 
 // A command bar is a CONTAINER layer object (ibValueLayerObject) — NOT a control; it is PART OF a
@@ -344,7 +344,7 @@ FRMSERVER_API std::vector<ibString> GetCommandSections();
 // Gather every command available to `form`, grouped into the three sections above:
 //   [0] the form's own object commands (manually-added commands),
 //   [1] the standard actions of the form's source AND of every tablebox control,
-//   [2] every OTHER command metaobject in the config (common + section commands, recursive by classid).
+//   [2] every OTHER command metaobject in the application (common + section commands, recursive by classid).
 // The command-door twin of walking the form's source explorers. Empty when form is null.
 FRMSERVER_API std::vector<ibCommandSourceEntry> GatherFormCommands(ibValueForm* form);
 

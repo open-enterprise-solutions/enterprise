@@ -24,14 +24,14 @@
 // That is not guessing: the caller said which type they meant. Where nothing was given, the answer is
 // the EMPTY packed form of that type, which is the shape to fill in and send back.
 //
-// ⭐⭐ AND COVERAGE GROWS WITHOUT THIS FILE CHANGING. It is the configuration's own serialiser
+// ⭐⭐ AND COVERAGE GROWS WITHOUT THIS FILE CHANGING. It is the application's own serialiser
 // underneath (`ibSerializeValue` / `ibDeserializeValue`), of which the platform already says:
 // "whatever learns to pack itself is in here the day it does, with nothing to add". A new type is
 // CONNECTED there; nothing here is written again for it.
 
 #include "frmserver/mcp/mcpTool.h"
 
-#include "backend/metadataConfiguration.h"
+#include "backend/metadataApplication.h"
 #include "backend/metadataSerialization.h"
 #include "core/description/typeDescription.h"
 #include "backend/system/value/valueType.h"
@@ -74,8 +74,8 @@ const ibArg& ArgPacked()
 // is a refusal rather than a default: making 'whatever this looks like' is the thing being avoided.
 bool TypeNamed(const ibDataNode& params, ibTypeDescription& into, ibString& refusal)
 {
-	if (activeMetaData == nullptr || !activeMetaData->IsConfigOpen()) {
-		refusal = ibMcpText("No configuration is open, so there is no vocabulary of types to name one in.");
+	if (activeMetaData == nullptr || !activeMetaData->IsOpen()) {
+		refusal = ibMcpText("No application is open, so there is no vocabulary of types to name one in.");
 		return false;
 	}
 
@@ -83,8 +83,8 @@ bool TypeNamed(const ibDataNode& params, ibTypeDescription& into, ibString& refu
 	const ibClassID clsid = activeMetaData->GetIDObjectFromString(name);
 	if (clsid == ibClassID(0)) {
 		refusal = ibString::Format(
-			ibMcpText("'%s' is not a type in this configuration. type_list says what there is - and the "
-				  "vocabulary is this configuration's, not a general one."), name);
+			ibMcpText("'%s' is not a type in this application. type_list says what there is - and the "
+				  "vocabulary is this application's, not a general one."), name);
 		return false;
 	}
 
@@ -242,7 +242,7 @@ public:
 			"has one - its identifier. That last is what a REFERENCE actually is, and the reason a "
 			"reference cannot be written as a scalar anywhere.\n"
 			  "\n"
-			"A designer holds the CONFIGURATION, not the data: a PREDEFINED item can be named "
+			"A designer holds the APPLICATION, not the data: a PREDEFINED item can be named "
 			"here, an ordinary one is a row in somebody's application and this can only say what "
 			"the packed value claims about it.");
 	}
@@ -255,9 +255,9 @@ public:
 
 	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
-		if (activeMetaData == nullptr || !activeMetaData->IsConfigOpen()) {
-			refusal = ibMcpText("No configuration is open, and a packed value means nothing without one: "
-				"its type lives in the configuration's registry.");
+		if (activeMetaData == nullptr || !activeMetaData->IsOpen()) {
+			refusal = ibMcpText("No application is open, and a packed value means nothing without one: "
+				"its type lives in the application's registry.");
 			return false;
 		}
 

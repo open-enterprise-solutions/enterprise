@@ -6,7 +6,7 @@
 #pragma warning(disable : 4018)
 
 ibCompileModule::ibCompileModule(const ibCompilableSourceCode* sourceCode, const ibBindTable& binds, std::unique_ptr<ibCompileModule> parent) :
-	ibCompileCode(sourceCode->GetFullName(), sourceCode->GetDocPath(), sourceCode->IsCommonModule()),
+	ibCompileCode(sourceCode->GetFullName(), sourceCode->GetDocPath(), sourceCode->IsSharedModule()),
 	m_sourceCode(sourceCode),
 	m_parentModule(std::move(parent))
 {

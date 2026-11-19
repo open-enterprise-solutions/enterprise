@@ -19,11 +19,8 @@ class ibValueEnumSyntax : public ibValueEnumeration<ibProgramSyntax> {
 	ibValueEnumSyntax() : ibValueEnumeration<ibProgramSyntax>() {}
 
 	virtual void CreateEnumeration() {
-		// Wire string stays "vbs" for back-compat with existing serialised
-		// configs; the user-visible label is "ves" — Visual Basic-style
-		// ES, a legacy business-scripting dialect. Renaming the wire token would force migration
-		// of every stored module's syntax property.
-		this->AddEnumeration(syntax_ves, ibT("vbs"), ibTRANSLATE("ves"));
+		// "ves" — Visual Basic-style ES, the word-based dialect.
+		this->AddEnumeration(syntax_ves, ibT("ves"), ibTRANSLATE("ves"));
 		this->AddEnumeration(syntax_ces, ibT("ces"), ibTRANSLATE("ces"));
 	};
 };

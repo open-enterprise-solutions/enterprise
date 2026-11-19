@@ -253,7 +253,7 @@ ibSelector ibDataQueryResult::Select(ibSelectKind mode)
 	s.WithSource(m_srcHolder, m_srcQueryable, m_srcSelectCols, m_srcConditions);  // enable lazy sub-selections
 	// ⚠ AND IT IS NOT FOLDED HERE. A selection is configured AFTER it is made — MakeChild adds
 	// ByParentRef / ByGroups / Aggregating to what this hands back — so folding at this point would
-	// fold by a configuration that is not complete yet, and the settings arriving next would have
+	// fold by an application that is not complete yet, and the settings arriving next would have
 	// nothing left to change. Whoever finishes configuring is the one who says ReadRows().
 	return s;
 }

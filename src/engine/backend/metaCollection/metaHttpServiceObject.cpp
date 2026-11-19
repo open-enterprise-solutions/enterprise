@@ -1,5 +1,5 @@
 ////////////////////////////////////////////////////////////////////////////
-//	Description : HTTP service — the addresses a configuration answers, and the code that answers them
+//	Description : HTTP service — the addresses an application answers, and the code that answers them
 ////////////////////////////////////////////////////////////////////////////
 
 #include "metaHttpServiceObject.h"
@@ -114,7 +114,7 @@ bool ibValueMetaObjectHttpService::OnPropertyChanging(ibProperty* property, cons
 		ibString why;
 		if (root.IsEmpty() || root.Find(ibT('/')) != ibNOT_FOUND || !ibServedAddress::IsPath(GetServedPath(root), why))
 			return false;
-		// …and the configuration's alone: a request names its service by it.
+		// …and the application's alone: a request names its service by it.
 		if (m_metaData != nullptr) {
 			for (const ibValueMetaObject* other : m_metaData->GetAnyArrayObject(g_metaHttpServiceCLSID)) {
 				if (other != this && !other->IsDeleted()
@@ -156,7 +156,7 @@ bool ibValueMetaObjectHttpService::OnSaveMetaObject(int flags)
 	// of — Function <Handler>(Request) — would be a 500 a stranger's system meets, with its reason in a journal it
 	// cannot read. Read off the module's TEXT, as the designer reads a module's exports (ibExportNamesFromText): a
 	// text that does not parse yet says nothing here, its compile says it. Into the ledger, every one of them, so
-	// config_check (ibMcpComplaints) and the designer's save read the same sentences.
+	// app_check (ibMcpComplaints) and the designer's save read the same sentences.
 	bool answered = true;
 	const ibValueMetaObjectManagerModule* const module = GetServiceModule();
 	ibParseCode parser(ibCompileCode::GetCodeStyle());

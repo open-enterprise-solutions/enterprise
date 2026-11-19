@@ -175,9 +175,9 @@ ibPropertyChoiceMode ibBackendProperty::CreateValueList(ibPropertyChoiceList& li
 	}
 
 	// THE MODE EVEN WHEN THE LIST CAME OUT EMPTY. "There is nothing of that kind in this
-	// configuration yet" is a real answer — it is what a caller sees before the first chart of
+	// application yet" is a real answer — it is what a caller sees before the first chart of
 	// accounts exists — and it is NOT "this property is not chosen from a list". Collapsing the two
-	// would make an empty configuration look like an unsupported property.
+	// would make an empty application look like an unsupported property.
 	return mode;
 }
 
@@ -240,7 +240,7 @@ bool ibBackendProperty::SetNodeValue(const ibDataValue& value)
 	// `ibDataValue: wrong value kind (expected 6, got 4)` — numbers, about a serialised shape — and
 	// the object it had ALREADY created was never mentioned, so a dimension nobody knew about
 	// stayed behind in the register (measured over MCP, 2026-09-03; a half-built object blocks the
-	// configuration from being saved at all).
+	// application from being saved at all).
 	//
 	// The comparison is with what the property HOLDS, which is the same fact the refusal upstairs
 	// already prints ("It holds a %s - send one of that shape"). A property whose value is not

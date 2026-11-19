@@ -82,7 +82,7 @@ public:
 
 	// Open the run's file. Called once, from ibCrashGuard::Install, before any other subsystem starts —
 	// so the journal is alive from the process's first line and needs no database, no session and no
-	// configuration.
+	// application.
 	//
 	// Failures are silent by design: a machine with no writable directory beside the binary must
 	// still run. IsOpen() then answers false and every write is a no-op — but for the console's echo

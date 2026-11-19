@@ -4,7 +4,7 @@
 #include "core/serialize/dataBuilder.h"   // ibDataValue — node value (Binary)
 #include "core/description/sourceDescription.h"       // ibSourceDescription / ibSourceHop (the id path the variant holds)
 #include "core/memory/memoryStream.h"           // ibReaderMemory / ibWriterMemory — the guid-keyed node blob
-#include "backend/functionalOption/functionalOptionGate.h"   // ibFunctionalOptionGate::AnyUnavailable — IsAvailable
+#include "backend/featureOption/featureOptionGate.h"   // ibFeatureOptionGate::AnyUnavailable — IsAvailable
 
 
 ////////////////////////////////////////////////////////////////////////
@@ -89,7 +89,7 @@ bool ibPropertySource::IsEmptyProperty() const {
 
 bool ibPropertySource::IsAvailable() const {
 	const ibPropertyObject* owner = m_owner;   // CONST overload — the non-const one returns null (see propertyObject.h)
-	if (owner == nullptr || !ibFunctionalOptionGate::AnyUnavailable(owner->GetMetaData()))
+	if (owner == nullptr || !ibFeatureOptionGate::AnyUnavailable(owner->GetMetaData()))
 		return true;
 	return get_cell_variant<ibVariantSource>()->IsSourceAvailable();
 }
@@ -135,7 +135,7 @@ bool ibPropertySource::WriteNodeValue(ibDataValue& value) const
 
 // COPY / PASTE — their OWN binary of the source description: each metaobject hop rides its GUID instead of a raw id.
 // GetGuidByID == the metaobject's GetCommonGuid, which auto-picks the copy-guid while the object is marked for copy.
-// PASTE resolves each guid back through GetIdByGuid → THIS config's live id: on a paste the mark landed on the NEW
+// PASTE resolves each guid back through GetIdByGuid → THIS application's live id: on a paste the mark landed on the NEW
 // object (paste-guid == copy-guid, ibControlPasteGuard), so it lands on IT, not the surviving original. HEAD (idx 0)
 // is a form-local attribute id → always raw. This format is TRANSIENT — it lives only in the clipboard / paste
 // transaction; the first normal WriteNodeValue re-emits the plain raw path.
@@ -214,7 +214,7 @@ bool ibPropertySource::PasteNodeValue(const ibDataValue& value)
 #include "backend/backend_type.h"   // ibBackendTypeSourceFactory — what the control may be bound to
 #include "backend/srcObject.h"        // ibSourceObject — complete for the cast of GetSourceObject (a column's table)
 #include "backend/backend_picture.h"   // ibBackendPicture::SendPicture — a class's picture, by its id
-#include "backend/metaData.h"          // GetAvailableCtor — a class, named as its configuration names it
+#include "backend/metaData.h"          // GetAvailableCtor — a class, named as its application names it
 #include "backend/objCtor.h"
 #include "backend/metaCollection/partial/reference/reference.h"   // ConvertToMetaIds — a field's reference targets
 #include "backend/srcDataObject.h"     // ibSourceDataObject / ibSourceExplorer — an attribute's fields
@@ -324,10 +324,10 @@ bool ibPropertySource::GetProtocolValue(ibDataNode& row, ibReader reader)
 			sourceType.SetValue(ibProtocol::ibSchema::ibProperties::Multiple, shape != ibSelectorDataType::ibSelectorDataType_table);
 
 			// …and the classes the desktop's Type row offered (GetTypesByFilter by the control's shape, with what it
-			// holds), in that order (Classes — Type, Name, Picture), as the configuration names them: the client has none
+			// holds), in that order (Classes — Type, Name, Picture), as the application names them: the client has none
 			// to name a type by, and the Type row and its window read them so.
 			std::vector<ibClassID> offered;
-			ibBackendTypeConfigFactory::GetTypesByFilter(shape, metaData, offered);
+			ibBackendTypeApplicationFactory::GetTypesByFilter(shape, metaData, offered);
 			for (const ibClassID& clsid : GetValueAsTypeDesc().GetClsidList()) {
 				if (std::find(offered.begin(), offered.end(), clsid) == offered.end())
 					offered.push_back(clsid);

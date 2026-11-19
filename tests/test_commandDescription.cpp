@@ -5,7 +5,7 @@
 // Two halves. The reader reads the shape it writes, whole, or refuses and leaves the binding as it was. And form_set,
 // the general property door, refuses a name and says which verb binds a command by it: form_bind.
 //
-// The configuration is the one a designer session opens, as in test_mcpPictureSet.cpp.
+// The application is the one a designer session opens, as in test_mcpPictureSet.cpp.
 
 #include <gtest/gtest.h>
 #include <wx/string.h>   // wxT, wxString - the engine's headers include no wx
@@ -19,7 +19,7 @@
 #include "backend/databaseLayer/connectionPool.h"
 #include "backend/databaseLayer/sqllite/sqliteDatabaseLayer.h"
 #include "backend/metaCollection/metaFormObject.h"
-#include "backend/metadataConfiguration.h"
+#include "backend/metadataApplication.h"
 #include "backend/session/session.h"
 #include "backend/session/sessionRegistry.h"
 #include "core/description/commandDescription.h"
@@ -116,9 +116,9 @@ struct McpFormSetCommand : ::testing::Test {
 		if (!m_db->Open(wxT(":memory:")))
 			GTEST_SKIP() << "in-memory SQLite open failed";
 		pool->Init(m_db, /*maxSize=*/1, /*minIdle=*/0);
-		ibMetaDataConfigurationStorage::CreateConfigTable();
-		ibMetaDataConfigurationStorage::CreateConfigSaveTable();
-		ibMetaDataConfigurationStorage::CreateConfigSequence();
+		ibMetaDataApplicationStorage::CreateApplicationTable();
+		ibMetaDataApplicationStorage::CreateApplicationSaveTable();
+		ibMetaDataApplicationStorage::CreateApplicationSequence();
 	}
 
 	void TearDown() override {
@@ -152,15 +152,15 @@ TEST_F(McpFormSetCommand, ANameForAButtonsCommand_IsRefusedWithTheVerbThatBindsI
 		~Leave() { m_registry->NotifyDisconnect(m_session); }
 	} leave{ registry, session };
 
-	ibMetaDataConfigurationBase* cfg = session->GetMetaData();
+	ibMetaDataApplicationBase* cfg = session->GetMetaData();
 	ASSERT_NE(cfg, nullptr);
-	if (cfg->IsConfigOpen()) {
+	if (cfg->IsOpen()) {
 		ASSERT_TRUE(cfg->CloseDatabase(ibRuntimeRequest(forceCloseFlag)));
 	}
 
-	ibValueMetaObjectConfiguration* root = cfg->GetCommonMetaObject();
+	ibValueMetaObjectApplication* root = cfg->GetRootMetaObject();
 	ASSERT_NE(root, nullptr);
-	auto* creator = dynamic_cast<ibValueMetaObjectFormBase*>(cfg->CreateMetaObject(g_metaCommonFormCLSID, root, false));
+	auto* creator = dynamic_cast<ibValueMetaObjectFormBase*>(cfg->CreateMetaObject(g_metaSharedFormCLSID, root, false));
 	ASSERT_NE(creator, nullptr);
 	cfg->RenameMetaObject(creator, wxT("Panel"));
 	ASSERT_TRUE(cfg->RunDatabase());

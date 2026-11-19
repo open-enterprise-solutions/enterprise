@@ -21,7 +21,7 @@
 #include "frmserver/mcp/mcpTool.h"
 
 #include "core/compiler/translateCode.h"  // ibTranslateCode::GetKeyWord — the language spells its own words
-#include "backend/metadataConfiguration.h"   // the configuration's own type registry
+#include "backend/metadataApplication.h"   // the application's own type registry
 #include "backend/objCtor.h"
 
 namespace {
@@ -44,7 +44,7 @@ const KindRow s_kinds[] = {
 	{ ibT("metaValue"), ibCtorObjectType_object_meta_value },
 };
 
-// The name filter, in one place so the engine's types and the configuration's own are narrowed by
+// The name filter, in one place so the engine's types and the application's own are narrowed by
 // the same rule. An empty query keeps everything — "no filter" is not "match nothing".
 bool NameWanted(const ibString& name, const ibString& query)
 {
@@ -85,7 +85,7 @@ const ibArg& ArgName()
 // ⭐⭐ A TYPE ADDRESSED BY ITS CLASS ID — and the id is not a label, it is the whole handle.
 //
 // type_list answers with an `id` beside every name and there was no door that took one back. For a
-// configuration type that matters twice over: the NAME of a reference type carries the object's own
+// application type that matters twice over: the NAME of a reference type carries the object's own
 // name (`CatalogRef.Goods`), so a rename breaks every note that quoted it, while the id does not
 // move (Max, 2026-09-09: *"a converter from classID to metaID, name, kind and so on"*).
 //
@@ -132,7 +132,7 @@ public:
 		return ibMcpText("Every type this platform knows, with what each one IS: a primitive, a value "
 			"class you can construct, a metadata kind you can create, a control, an "
 			"enumeration. Ask before writing a type name - the vocabulary is this "
-			"configuration's, not a general one.");
+			"application's, not a general one.");
 	}
 
 	// 🛑 AN ARGUMENT THE TOOL READS AND DOES NOT DECLARE IS AN ARGUMENT NOBODY CAN USE — and worse,
@@ -143,7 +143,7 @@ public:
 	{
 		static const ibMcpArgument s_kind(ibT("kind"), ibMcpArgument::Kind::Text,
 			ibMcpText("Narrow it to one kind of type: primitive, value, control, system, enum, "
-				"context, metadata, metaValue, configuration. Omit for all of them. This is not a "
+				"context, metadata, metaValue, application. Omit for all of them. This is not a "
 				"search - it filters by kind, and a word that is not one of these is refused."));
 
 		// ⭐ NARROWING BY NAME, because the question is almost never "list everything" — it is
@@ -182,25 +182,25 @@ public:
 		// A KIND NOBODY HAS IS A REFUSAL, not an empty answer: "there are no
 		// controls" and "control is not a word here" are different, and only one
 		// of them means try again differently.
-		if (!matched && !wanted.IsSameAs(ibT("configuration"), false)) {
+		if (!matched && !wanted.IsSameAs(ibT("application"), false)) {
 			refusal = ibString::Format(
 				ibMcpText("'%s' is not a kind of type. Try: primitive, value, control, system, enum, "
-				  "context, metadata, metaValue, configuration."), wanted);
+				  "context, metadata, metaValue, application."), wanted);
 			return false;
 		}
 
-		// ⚠ AND THE CONFIGURATION'S OWN, which the loop above cannot see.
+		// ⚠ AND THE APPLICATION'S OWN, which the loop above cannot see.
 		//
-		// The global factory holds what the ENGINE registers; a configuration's
+		// The global factory holds what the ENGINE registers; an application's
 		// types — CatalogRef.Goods, a document's object, a register's record set —
 		// live in the metadata's own registry, because they exist only against the
 		// tree that declared them. Asked only of the factory, this answered with
-		// 43 metatypes and not one type of the configuration in front of it, while
+		// 43 metatypes and not one type of the application in front of it, while
 		// `CatalogRef.Goods` resolved perfectly well by name: the vocabulary was
 		// there and the listing did not show it.
-		if (wanted.IsEmpty() || wanted.IsSameAs(ibT("configuration"), false)) {
+		if (wanted.IsEmpty() || wanted.IsSameAs(ibT("application"), false)) {
 
-			if (activeMetaData != nullptr && activeMetaData->IsConfigOpen()) {
+			if (activeMetaData != nullptr && activeMetaData->IsOpen()) {
 				for (const ibCtorMetaValueType* ctor : activeMetaData->GetListCtorsByType()) {
 
 					if (ctor == nullptr)
@@ -211,7 +211,7 @@ public:
 
 					std::shared_ptr<ibDataNode> entry = std::make_shared<ibDataNode>();
 					entry->SetValue(ibT("name"), ctor->GetClassName());
-					entry->SetValue(ibT("kind"), ibString(ibT("configuration")));
+					entry->SetValue(ibT("kind"), ibString(ibT("application")));
 					entry->AddField(ibT("id"), ibDataValue::UInt((std::uint64_t)ctor->GetClassType()));
 
 					types.push_back(ibDataValue::Child(entry));
@@ -289,7 +289,7 @@ public:
 
 			const ibClassID clsid = (ibClassID)asked->AsUInt();
 
-			if (activeMetaData != nullptr && activeMetaData->IsConfigOpen())
+			if (activeMetaData != nullptr && activeMetaData->IsOpen())
 				if (const ibCtorMetaValueType* byId = activeMetaData->GetTypeCtor(clsid))
 					name = byId->GetClassName();
 
@@ -315,14 +315,14 @@ public:
 
 		result.SetValue(ibT("name"), name);
 
-		// ⭐⭐ ONE DOOR FOR BOTH REGISTRIES. The configuration's own types (`CatalogManager.Goods`,
+		// ⭐⭐ ONE DOOR FOR BOTH REGISTRIES. The application's own types (`CatalogManager.Goods`,
 		// `DocumentObject.GoodsReceipt`) live in the metadata's registry and the platform's in the value
 		// registry — and the metadata answers for its own image and falls through to the value registry
 		// itself (ibMetaData::GetAvailableCtor). So a name is asked where a script names it: the open
-		// configuration, else the platform alone. A concrete reference exists only in the first.
+		// application, else the platform alone. A concrete reference exists only in the first.
 		//
 		// 🛑 TWO REGISTRIES, ONE VOCABULARY — and this verb used to answer out of one of them and
-		// REFUSE the other. type_list lists the configuration's types because they are real names a
+		// REFUSE the other. type_list lists the application's types because they are real names a
 		// script writes, so asking the engine alone answered "not a type this platform knows" about a
 		// name type_list had just given.
 		//
@@ -333,7 +333,7 @@ public:
 		// runtime, and guess again. A vocabulary that cannot be asked is a vocabulary somebody
 		// brings from another platform.
 		const ibMetaData* const metaData =
-			(activeMetaData != nullptr && activeMetaData->IsConfigOpen()) ? activeMetaData : nullptr;
+			(activeMetaData != nullptr && activeMetaData->IsOpen()) ? activeMetaData : nullptr;
 		const ibCtorAbstractType* const ctor = metaData != nullptr
 			? metaData->GetAvailableCtor(name) : ibValue::GetAvailableCtor(name);
 
@@ -343,7 +343,7 @@ public:
 			return false;
 		}
 
-		// WHETHER IT IS THE CONFIGURATION'S — asked of the configuration's registry, which answers for
+		// WHETHER IT IS THE APPLICATION'S — asked of the application's registry, which answers for
 		// its own types only. It says what kind of thing this is and who declares it, below.
 		const ibCtorMetaValueType* const ownCtor =
 			metaData != nullptr ? metaData->GetTypeCtor(ctor->GetClassType()) : nullptr;
@@ -368,7 +368,7 @@ public:
 			// a limitation of this verb and sends a caller looking for the arguments. There are none.
 			refusal = ownCtor != nullptr
 				? ibString::Format(
-					ibMcpText("'%s' is a type of this configuration, but one cannot be built to ask - it "
+					ibMcpText("'%s' is a type of this application, but one cannot be built to ask - it "
 					  "exists only against the object that declares it. Read that object with "
 					  "metadata_get, its fields with query_fields."), name)
 				: ibString::Format(
@@ -550,7 +550,7 @@ public:
 			"clause keywords that position admits), `code_run` (run it against the live base), and "
 			"`role_restrict` for composing a restriction into a role's handler.\n\n"
 			"FOUR THINGS THAT COST A RUN TO FIND OUT (measured 2026-09-08 against a live base):\n"
-			"  * A QUERY'S ANSWER IS A TABLE - `TypeOf` says `Table`, its rows are `TableValueRow`, "
+			"  * A QUERY'S ANSWER IS A TABLE - `TypeOf` says `Table`, its rows are `TableRow`, "
 			"and its columns are what `select` named. So `Count()`, `Columns`, `Sort`, `[i]` and "
 			"`foreach` all work on it; `First()` does not - a table has no such method.\n"
 			"  * PUT THE ANSWER IN A VARIABLE BEFORE ASKING IT ANYTHING. A parenthesised expression "
@@ -565,8 +565,8 @@ public:
 			"BUILDING ONE YOURSELF, END TO END - there is a road for this and it needs no new verb:\n"
 			"  1. this tool for the vocabulary, the clause order and which form the job wants;\n"
 			"  2. write the query IN KEYWORDS (shorter than the chain, and no lambda per verb);\n"
-			"  3. `script_check` - does it compile (the verdict is about YOUR text; a configuration "
-			"module that is mid-edit reports separately, under `inTheConfiguration`);\n"
+			"  3. `script_check` - does it compile (the verdict is about YOUR text; an application "
+			"module that is mid-edit reports separately, under `inTheApplication`);\n"
 			"  4. `script_query` - what the compiler UNDERSTOOD: the bindings and where each came "
 			"from, the columns the answer will have, whether it groups or orders, and how far the "
 			"parse got. Compare that against what you meant - a query that reads correctly and "

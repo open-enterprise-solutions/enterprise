@@ -1,5 +1,5 @@
 // A STYLE IN THE CORE - the items the platform's look is made of, the platform's own values for both looks, a
-// configuration's style lying over them, and a style as a node: what is written is read back, what an older build
+// application's style lying over them, and a style as a node: what is written is read back, what an older build
 // does not know is left out, a value of another kind is refused.
 
 #include <gtest/gtest.h>
@@ -92,7 +92,7 @@ TEST(Style, ThePlatformsHasEveryItemInBothLooks) {
 	EXPECT_EQ(std::get<std::vector<ibColour>>(platform.Get(ibStyleItem::ReportGroup, false)).size(), 3u);
 }
 
-// A configuration's style gives only what it changes: the rest is the platform's, look by look.
+// An application's style gives only what it changes: the rest is the platform's, look by look.
 TEST(Style, AStyleLiesOverThePlatforms) {
 	ibStyle own;
 	ASSERT_TRUE(own.m_dark.Set(ibStyleItem::Accent, ibColour(1, 2, 3)));

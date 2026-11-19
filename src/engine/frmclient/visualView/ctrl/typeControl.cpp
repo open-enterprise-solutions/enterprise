@@ -36,7 +36,7 @@ bool ibTypeControlFactory::ChooseValue(ibControlFrame* ownerValue, const ibChoos
 
 	// UNDEFINED = the type is not settled yet. A cell of ONE type stands on it here, and its value is chosen in this very
 	// call. A cell of several — or of a family, `CatalogRef`, `AnyRef` — puts the type to the user, and that is the
-	// server's question, as it was the desktop's (ShowSelectType there): the classes are named in its configuration, and
+	// server's question, as it was the desktop's (ShowSelectType there): the classes are named in its application, and
 	// the value of the type picked is chosen in the same press. Asked here, the window had no class named and came up
 	// empty, unseen: the «...» of an empty composite cell did nothing (2026-11-17). Only a cell has one to settle: the
 	// holder of a server's question carries a value.

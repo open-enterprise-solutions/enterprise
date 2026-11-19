@@ -201,6 +201,29 @@ TEST(QueryL2_Expr, Arithmetic)
 		"SELECT * FROM T WHERE ((a + b) > ?)");
 }
 
+// A remainder is the dialect's template (m_modulo), a number in memory's: Firebird has no `%` and its MOD() rounds a
+// fraction first, SQLite's `%` cuts both operands to integers - those two take the quotient cut toward zero. A constant
+// fraction is pinned to its own scale; the plan binds in text order.
+TEST(QueryL2_Expr, RemainderIsSpelledByTheDialect)
+{
+	const ibQueryExprPtr remainder =
+		ibBinOp(ibQueryBinOp::Mod, ibParam(0), ibConst(ibValue(ibNumber(ibString(wxT("2.5"))))));
+	const ibQueryIR ir(ibProject(ibScan(wxT("T")), { { remainder, wxT("v") } }));
+
+	EXPECT_EQ(Sql(ibQueryRenderer(PgDialect()).Render(ir)),
+		"SELECT ($1 % CAST($2 AS NUMERIC(1000,1))) AS v FROM T");
+	EXPECT_EQ(Lite(ir),
+		"SELECT (? - CAST(? / CAST(? AS DECIMAL(2,1)) AS INTEGER) * CAST(? AS DECIMAL(2,1))) AS v FROM T");
+	const ibRenderedQuery fb = ibQueryRenderer(FbDialect()).Render(ir);
+	EXPECT_EQ(Sql(fb),
+		"SELECT (? - CAST(TRUNC(? / CAST(? AS NUMERIC(38,1))) AS BIGINT) * CAST(? AS NUMERIC(38,1))) AS v FROM T");
+	ASSERT_EQ(fb.m_params.size(), 4u);
+	EXPECT_TRUE(fb.m_params[0].m_external);
+	EXPECT_TRUE(fb.m_params[1].m_external);
+	EXPECT_FALSE(fb.m_params[2].m_external);
+	EXPECT_FALSE(fb.m_params[3].m_external);
+}
+
 // ===========================================================================
 // Bind plan — Const + Param in placeholder order, left to right
 // ===========================================================================

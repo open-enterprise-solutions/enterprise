@@ -9,7 +9,7 @@
 // That is not hypothetical. The accounting register's `Correspondence` and
 // `SplitTotals` were declared, edited, and used to BUILD THE SCHEMA, but named
 // in neither ReadData nor WriteData. They lived as long as the designer held the
-// object and came back at their defaults whenever the saved configuration was
+// object and came back at their defaults whenever the saved application was
 // re-read — and that re-read produces the BASELINE the next apply diffs against.
 // So a switch turned OFF applied, came back ON, and the next apply compared ON
 // with ON, emitted nothing, and left the physical table without the column its

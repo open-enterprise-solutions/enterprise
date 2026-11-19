@@ -28,7 +28,7 @@ void ibValueMetaObjectForm::OnPropertyChanged(ibProperty* property, const ibVari
 			// pair of stages the two lines below perform on the compile cache. Said as those stages,
 			// this needs no verb of its own: a watcher shuts the editor showing the old form on
 			// `Removed`, and `Created` asks nothing of it (the kind is already chosen, so the
-			// configuration tree's form-kind dialog is skipped by its own guard).
+			// application tree's form-kind dialog is skipped by its own guard).
 			//
 			// 🛑 It used to call CloseMetaObject, which is a verb for something that is going away
 			// for good. This form is not: it is being rebuilt, and saying the wrong one meant every

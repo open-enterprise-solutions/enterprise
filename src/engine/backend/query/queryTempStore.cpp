@@ -25,11 +25,11 @@ public:
 	ibString           GetPhysicalName() const override { return m_name; }
 	ibTypeDescription& GetTypeDesc()     const override { return m_type; }
 	ibMetaID           GetColumnId()     const override { return m_id; }
-	// ⭐ WHETHER WHAT IT WAS MADE FROM MAY BE SHOWN (functional options) — the select that made the table
+	// ⭐ WHETHER WHAT IT WAS MADE FROM MAY BE SHOWN (feature options) — the select that made the table
 	// answered it (ibQueryOutputColumn::m_available), and the table keeps the answer. It answered yes for
 	// everything before, so a report reading a temp table showed what the base does not use.
 	bool               IsAvailable()     const override { return m_available; }
-	// …and its values are the configuration's the table was stored with.
+	// …and its values are the application's the table was stored with.
 	const ibMetaData*  GetMetaData()     const override { return m_metaData; }
 
 private:
@@ -137,7 +137,7 @@ public:
 	ibString GetQueryTableName() const override { return ibEmptyString; }
 	ibMetaID GetQueryTableId()   const override { return 0; }
 
-	// ⭐ THE CONFIGURATION ITS REFERENCES BELONG TO — the query's, handed in when the table is stored, as the
+	// ⭐ THE APPLICATION ITS REFERENCES BELONG TO — the query's, handed in when the table is stored, as the
 	// named query takes it (ibCteQueryable). With none, a reference column could not say which catalog it
 	// points at, and «IN HIERARCHY» over it stood for the named values alone: not one row under the group
 	// was found, and nothing said so (2026-09-29).

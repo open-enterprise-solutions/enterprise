@@ -2,14 +2,14 @@
 #define __IMAGE_HELPER_H__
 
 #include "core/core.h"    // CORE_API, ibPictureID
-#include "core/guid.h"    // ibGuid — a configuration's picture
+#include "core/guid.h"    // ibGuid — an application's picture
 
 #include <string>
 
 enum ibPictureType
 {
 	eFromBackend = 1,
-	eFromConfiguration,
+	eFromApplication,
 	eFromFile,
 };
 
@@ -40,7 +40,7 @@ struct ibPictureDescription {
 
 	ibPictureDescription() : m_type(eFromBackend) {}
 	ibPictureDescription(const ibPictureID& id) : m_type(eFromBackend), m_class_identifier(id) {}
-	ibPictureDescription(const ibGuid& id) : m_type(eFromConfiguration), m_meta_guid(id) {}
+	ibPictureDescription(const ibGuid& id) : m_type(eFromApplication), m_meta_guid(id) {}
 	ibPictureDescription(const ibExternalPictureDescription& data) : m_type(eFromFile), m_img_data(data) {}
 	
 	~ibPictureDescription() {}
@@ -48,7 +48,7 @@ struct ibPictureDescription {
 	bool IsEmptyPicture() const {
 		if (m_type == eFromBackend)
 			return m_class_identifier == 0;
-		else if (m_type == eFromConfiguration)
+		else if (m_type == eFromApplication)
 			return !m_meta_guid.isValid();
 		else if (m_type == eFromFile)
 			return m_img_data.m_height == 0 && m_img_data.m_width == 0;
@@ -61,7 +61,7 @@ struct ibPictureDescription {
 			if (m_type == eFromBackend) {
 				return m_class_identifier == rhs.m_class_identifier;
 			}
-			else if (m_type == eFromConfiguration) {
+			else if (m_type == eFromApplication) {
 				return m_meta_guid == rhs.m_meta_guid;
 			}
 			else if (m_type == eFromFile) {

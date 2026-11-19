@@ -381,7 +381,7 @@ public:
 	// Handing that straight to the type meant each type decided for itself what "nothing" means,
 	// and each answered with its own zero: false for a boolean, 0 for a number, the first member
 	// for an enum. So a property DECLARED with a non-zero default arrived unset the first time an
-	// older configuration was opened, silently, because an assigned zero is indistinguishable from
+	// older application was opened, silently, because an assigned zero is indistinguishable from
 	// a read one.
 	//
 	// What it cost, once: the accounting register's `Correspondence` and `SplitTotals` are both
@@ -415,7 +415,7 @@ public:
 
 	// ⭐ PROPERTY -> PROTOCOL VALUE — the property as a client's inspector receives it, its row: its name, title, help and
 	// class (what the client shows it by, ibPropertyRegistry), its value as GetNodeValue writes it and how it reads, and
-	// whether it may be edited. A property whose editor asks more of the configuration than its value — the lists its
+	// whether it may be edited. A property whose editor asks more of the application than its value — the lists its
 	// window offers — adds that here, so the inspector asks every property the one question and knows none of them; what
 	// it may be set to is GetValueList's, which the inspector asks every property itself. False: it has no row (a
 	// composition, which the desktop's grid draws none for either).
@@ -432,7 +432,7 @@ protected:
 	//
 	// Protected rather than public so the gate in SetNodeValue cannot be walked around: a caller
 	// reaching for ReadNodeValue directly would hand a property type the empty value the door
-	// exists to intercept, and the compiler now says so instead of the configuration losing a
+	// exists to intercept, and the compiler now says so instead of the application losing a
 	// default three layers away. GetNodeValue / SetNodeValue are the surface; these are the
 	// implementation, and the pair reads Read/Write while the doors read Get/Set.
 	virtual bool ReadNodeValue(const ibDataValue& value) = 0;
@@ -892,7 +892,7 @@ public:
 protected:
 
 	// THE MECHANISM, NOT THE DOOR. Moving a child is a change its owner has to answer for — a
-	// metaobject marks its configuration modified and announces the move (ibValueMetaObject), a
+	// metaobject marks its application modified and announces the move (ibValueMetaObject), a
 	// frame re-lays its controls (ibValueFrame) — so each owner opens its own ChangeChildPosition
 	// over this one, and a caller holding the helper's name could otherwise step round all of it.
 	bool ChangeChildPosition(propertyType* obj, unsigned int pos) {
@@ -1013,7 +1013,7 @@ protected:
 // changed with the value it had, and tell the property's REAL owner that a child changed. Miss any
 // of them and the object is never told its own property moved — a binding updates one of its two
 // sides, an owner that would have refused is never asked, a nested child never initialises. The
-// configuration comes out looking edited and behaving as though it were not.
+// application comes out looking edited and behaving as though it were not.
 //
 // 🛑 IT EXISTED TWICE. `ibObjectInspector::ModifyProperty` in the FRONT was the authority, and the
 // MCP server carried a second copy of the same sequence because it has no inspector to call. Two

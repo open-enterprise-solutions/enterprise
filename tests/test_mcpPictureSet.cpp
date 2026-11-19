@@ -1,12 +1,12 @@
-// picture_set fills a configuration's Picture object (#190). A common picture
+// picture_set fills an application's Picture object (#190). A shared picture
 // is declared with metadata_create, and until now nothing over MCP could give
 // it an image: picture_set refused it as having "no picture of its own", and
 // its Picture property is a {Name, Buffer, Width, Height} structure nobody
 // assembles by hand. It now takes `data` (base64 PNG) or `svg`, and what it
-// stored is what the configuration saves.
+// stored is what the application saves.
 //
-// The configuration is the one a designer session opens, as in
-// test_commonModuleCheck.cpp.
+// The application is the one a designer session opens, as in
+// test_sharedModuleCheck.cpp.
 
 #include <gtest/gtest.h>
 #include <wx/string.h>   // wxT, wxString - the engine's headers include no wx
@@ -23,7 +23,7 @@
 #include "frmserver/mcp/mcpTool.h"
 #include "backend/metaCollection/metaPictureObject.h"
 #include "backend/propertyManager/property/propertyPicture.h"
-#include "backend/metadataConfiguration.h"
+#include "backend/metadataApplication.h"
 #include "backend/session/session.h"
 #include "backend/session/sessionRegistry.h"
 #include "core/utils/base64.h"
@@ -50,9 +50,9 @@ struct McpPictureSet : ::testing::Test {
 		if (!m_db->Open(wxT(":memory:")))
 			GTEST_SKIP() << "in-memory SQLite open failed";
 		pool->Init(m_db, /*maxSize=*/1, /*minIdle=*/0);
-		ibMetaDataConfigurationStorage::CreateConfigTable();
-		ibMetaDataConfigurationStorage::CreateConfigSaveTable();
-		ibMetaDataConfigurationStorage::CreateConfigSequence();
+		ibMetaDataApplicationStorage::CreateApplicationTable();
+		ibMetaDataApplicationStorage::CreateApplicationSaveTable();
+		ibMetaDataApplicationStorage::CreateApplicationSequence();
 	}
 
 	void TearDown() override {
@@ -89,7 +89,7 @@ bool CallTool(const wxChar* name, const ibDataNode& params, ibDataNode& result, 
 
 } // namespace
 
-TEST_F(McpPictureSet, FillsAConfigurationPictureFromDataOrSvg_AndTheConfigurationKeepsIt)
+TEST_F(McpPictureSet, FillsAnApplicationPictureFromDataOrSvg_AndTheApplicationKeepsIt)
 {
 	ibSessionRegistry* const registry = ibApplicationInstance::GetSessionRegistry();
 	ASSERT_NE(registry, nullptr);
@@ -106,13 +106,13 @@ TEST_F(McpPictureSet, FillsAConfigurationPictureFromDataOrSvg_AndTheConfiguratio
 		~Leave() { m_registry->NotifyDisconnect(m_session); }
 	} leave{ registry, session };
 
-	ibMetaDataConfigurationBase* cfg = session->GetMetaData();
+	ibMetaDataApplicationBase* cfg = session->GetMetaData();
 	ASSERT_NE(cfg, nullptr);
-	if (cfg->IsConfigOpen()) {
+	if (cfg->IsOpen()) {
 		ASSERT_TRUE(cfg->CloseDatabase(ibRuntimeRequest(forceCloseFlag)));
 	}
 
-	ibValueMetaObjectConfiguration* root = cfg->GetCommonMetaObject();
+	ibValueMetaObjectApplication* root = cfg->GetRootMetaObject();
 	ASSERT_NE(root, nullptr);
 
 	auto* fromData = dynamic_cast<ibValueMetaObjectPicture*>(
@@ -154,7 +154,7 @@ TEST_F(McpPictureSet, FillsAConfigurationPictureFromDataOrSvg_AndTheConfiguratio
 	}
 	EXPECT_EQ(HeldSize(fromSvg), ibSize(64, 64));
 
-	// A common picture holds an image; naming an engine one is refused, not copied.
+	// A shared picture holds an image; naming an engine one is refused, not copied.
 	{
 		ibDataNode params, result;
 		params.AddField(ibT("id"), ibDataValue::Int((std::int64_t)fromData->GetMetaID()));
@@ -176,12 +176,12 @@ TEST_F(McpPictureSet, FillsAConfigurationPictureFromDataOrSvg_AndTheConfiguratio
 	}
 	EXPECT_EQ(HeldSize(fromData), ibSize(24, 20));
 
-	// It is listed as the configuration's own…
+	// It is listed as the application's own…
 	{
 		ibDataNode params, result;
 		ibString refusal;
 		ASSERT_TRUE(CallTool(wxT("picture_list"), params, result, refusal)) << refusal.ToStdString();
-		auto declared = result.FindField(ibT("configuration"));
+		auto declared = result.FindField(ibT("application"));
 		ASSERT_TRUE(declared);
 		bool listed = false;
 		for (const ibDataValue& line : declared->AsArray())
@@ -189,11 +189,11 @@ TEST_F(McpPictureSet, FillsAConfigurationPictureFromDataOrSvg_AndTheConfiguratio
 		EXPECT_TRUE(listed);
 	}
 
-	// …and the configuration keeps the bytes it was given.
+	// …and the application keeps the bytes it was given.
 	ibDataNode files;
-	ASSERT_TRUE(cfg->SaveConfigToFiles(files));
-	ibMetaDataConfigurationFile reread;
-	ASSERT_TRUE(reread.LoadConfigFromFiles(files));
+	ASSERT_TRUE(cfg->SaveApplicationToFiles(files));
+	ibMetaDataApplicationFile reread;
+	ASSERT_TRUE(reread.LoadApplicationFromFiles(files));
 	const ibValueMetaObjectPicture* kept =
 		reread.FindAnyObjectByFilter<ibValueMetaObjectPicture>(ibGuid(fromData->GetGuid()));
 	ASSERT_NE(kept, nullptr);

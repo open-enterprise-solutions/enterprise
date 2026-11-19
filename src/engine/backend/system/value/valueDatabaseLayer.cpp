@@ -33,7 +33,7 @@ void ibValueDatabaseLayer_BindNames(ibValue::ibMemberTable& helper, const ibValu
 }
 
 #include "backend/backend_exception.h"
-#include "backend/metadataConfiguration.h"   // activeMetaData — whose rights the running session folds
+#include "backend/metadataApplication.h"   // activeMetaData — whose rights the running session folds
 
 bool ibValueDatabaseLayer::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray) //function call
 {

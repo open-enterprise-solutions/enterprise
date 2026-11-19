@@ -50,9 +50,9 @@ ibValuePtr<ibValueManagerDataObject> ibValueMetaObjectReport::CreateManagerDataO
 ibValuePtr<ibValueRecordDataObjectExt> ibValueMetaObjectReport::CreateObjectExtValue() const
 {
 	if (IsExternalCreate()) {
-		// External DP — m_objectValue lives on the DP's own moduleManager,
-		// not on session's main-config mm. Pull it from m_metaData
-		// (= ibMetaDataDataProcessor for external DPs).
+		// External data tool — m_objectValue lives on the data tool's own moduleManager,
+		// not on session's main-application mm. Pull it from m_metaData
+		// (= ibMetaDataDataTool for external data tools).
 		auto* extMeta = dynamic_cast<ibMetaDataReport*>(m_metaData);
 		ibValueModuleManager* mm = extMeta ? extMeta->GetManagerModule() : nullptr;
 		return ibValuePtr<ibValueRecordDataObjectExt>(mm ? dynamic_cast<ibValueRecordDataObjectExt*>(mm->GetObjectValue()) : nullptr);
@@ -106,7 +106,7 @@ bool ibValueMetaObjectReport::WriteData(ibDataNode& node) const
 	// "<not selected>" on the next open.
 	//
 	// BY GUID, not by metaID: an id is only unique inside the container that stamped it, and an
-	// external report is carried between configurations — which is exactly why the form beside it
+	// external report is carried between applications — which is exactly why the form beside it
 	// travels this way.
 	node.SetValue(m_propertyDefComposer->GetName(), GetGuidByID(m_propertyDefComposer->GetValueAsInteger()).str());
 

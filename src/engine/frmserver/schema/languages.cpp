@@ -2,16 +2,16 @@
 
 #include "backend/metaData.h"
 #include "backend/metaCollection/metaLanguageObject.h"
-#include "core/exception.h"   // ibCoreException — a tab that shows no configuration, the person's refusal
+#include "core/exception.h"   // ibCoreException — a tab that shows no application, the person's refusal
 #include "core/serialize/dataBuilder.h"
 
-#include "frmserver/schema/designer/metaData.h"   // the tab's configuration — as the tree's doors find it
+#include "frmserver/schema/designer/metaData.h"   // the tab's application — as the tree's doors find it
 
 void ibSchemaLanguages::Build(const ibSession& session, const ibDataNode& args, ibDataNode& result) const
 {
 	ibDataNode& languages = result.Child(ibProtocol::ibSchema::ibLanguages::Languages);
 
-	// The configuration of the tab the text is edited in (Tab); none named — the session's. An extension's languages
+	// The application of the tab the text is edited in (Tab); none named — the session's. An extension's languages
 	// are its owner's.
 	ibProtocol::ibRefusal refusal = ibProtocol::ibRefusal::None;
 	ibString error;
@@ -26,7 +26,7 @@ void ibSchemaLanguages::Build(const ibSession& session, const ibDataNode& args, 
 	metaData->GetOwner(ownerRaw);
 	const ibMetaData* const owner = ownerRaw != nullptr ? ownerRaw : metaData;
 
-	// The configuration's own language (DefaultLanguage) is told by its code, as the desktop's user record finds it
+	// The application's own language (DefaultLanguage) is told by its code, as the desktop's user record finds it
 	// (activeMetaData->GetLangCode()).
 	const ibString defaultCode = owner->GetLangCode();
 	ibMetaID idx = 0;

@@ -11,10 +11,10 @@
 // windows would be two rules about what OK does to a text, and the grid's own already had three
 // quiet ones, all fixed here:
 //
-//   * A CODE THE CONFIGURATION HAS NO LANGUAGE FOR WAS DROPPED. The text was rebuilt from the
-//     configuration's languages alone, so a `de = '...'` written by hand, or brought in with a
+//   * A CODE THE APPLICATION HAS NO LANGUAGE FOR WAS DROPPED. The text was rebuilt from the
+//     application's languages alone, so a `de = '...'` written by hand, or brought in with a
 //     module, was gone after the first OK. Such codes get boxes of their own, apart from the
-//     configuration's, and are kept.
+//     application's, and are kept.
 //   * AN EMPTY BOX WAS WRITTEN AS AN EMPTY TRANSLATION. A language the text has no cell for opens
 //     empty; writing `uk = ''` back made Tstr answer nothing for uk instead of falling back to
 //     another language - a message that vanished because a window was opened and closed. An empty
@@ -46,7 +46,7 @@ public:
 	// This window knows nothing about what the text is.
 	using ibBoxEditor = std::function<bool(wxWindow* parent, const wxString& language, wxString& text)>;
 
-	// `metaData` names the languages — the server's answer for the configuration it is the door to (an extension's
+	// `metaData` names the languages — the server's answer for the application it is the door to (an extension's
 	// are its owner's; null — the session's); without any there is a single box, for the language in force, beside
 	// whatever codes the text already holds.
 	ibDialogTranslateConstructor(wxWindow* parent, const wxString& title, const ibTranslateString& text,

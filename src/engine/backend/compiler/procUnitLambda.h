@@ -190,7 +190,7 @@ class ibValueFunction : public ibValue, public ibEventDispatcher {
 
 	// Dispatch the lambda body. Resolves the session's lambda runtime
 	// (root mm's procUnit when session-bound; current dispatching
-	// ProcUnit on codeRunner sandbox), swaps m_pByteCode = parentBc
+	// ProcUnit on coderunner sandbox), swaps m_pByteCode = parentBc
 	// for the call duration, runs Execute, restores bc on exit (incl.
 	// exceptions). Re-entrant lambda-in-lambda calls are safe because
 	// ProcUnit::Execute snapshots m_pByteCode at entry.
@@ -219,7 +219,7 @@ class ibValueFunction : public ibValue, public ibEventDispatcher {
 		// extra layers in shim's m_ppArrayContext for the call
 		// duration. Lambda body OPER_GET / OPER_SET at depth k+1
 		// (k in [0, N)) reads/writes through CapturedAt(k)'s
-		// m_pRefLocVars. Pre-existing parent layers (root, common
+		// m_pRefLocVars. Pre-existing parent layers (root, shared
 		// modules) shift from positions [1..] to [N+1..] so the
 		// previously-emitted depths still hit the correct frames.
 		// Allocation done per invoke (could pool later); freed on

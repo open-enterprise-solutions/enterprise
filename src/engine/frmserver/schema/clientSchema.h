@@ -36,7 +36,7 @@ public:
 	// its own is everybody's.
 	virtual bool AccessRight(const ibSession& /*session*/) const { return true; }
 
-	// What the schema shows, into `result` — of the client's session, handed in: the configuration it works in, the
+	// What the schema shows, into `result` — of the client's session, handed in: the application it works in, the
 	// base it works in — and of what its arguments name (the predefined items of that object), as Command takes them.
 	// Asked on that session: what a schema lists may depend on the person's rights.
 	virtual void Build(const ibSession& session, const ibDataNode& args, ibDataNode& result) const = 0;

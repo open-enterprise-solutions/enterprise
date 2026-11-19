@@ -5,7 +5,7 @@
 // returns the edited one, true when the person accepted, false on cancel — and on cancel `inOut` is untouched.
 //
 // WHAT IS ON OFFER is `filter` here, the types the server offered, each named as it offered it (ibValue::RegisterCtor):
-// the desktop asked its configuration for what a field of the shape `kind` may hold (GetTypesByFilter), and the client
+// the desktop asked its application for what a field of the shape `kind` may hold (GetTypesByFilter), and the client
 // has none to ask. A type the value already holds is offered either way. `single` — one type, not several.
 //
 // ⚠ A reference-shaped picker given no offer asks `metaData`'s tab for one (Kind Types) — a parameter's type, a temporary

@@ -5,17 +5,17 @@
 
 #include "metaObject.h"
 #include "backend/appData.h"
-#include "backend/metadataConfiguration.h"   // ibMetaDataConfigurationBase::GetRestructureInfo (the static ledger accessor)
+#include "backend/metadataApplication.h"   // ibMetaDataApplicationBase::GetRestructureInfo (the static ledger accessor)
 
 #include "backend/metaData.h"
 #include "backend/session/session.h"       // AccessTrusted — the trusted window lets every right through
 #include "core/diagnostics/debugTrace.h"   // ibDebugTraceEnabled — per-object id tracing is opt-in
 #include "backend/databaseLayer/databaseErrorCodes.h"
 
-// Restructure-ledger facade — one call onto the active config's ledger (the static accessor).
-void ibValueMetaObject::RestructureInfo   (const ibString& message) { ibMetaDataConfigurationBase::GetRestructureInfo().AppendInfo(message);    }
-void ibValueMetaObject::RestructureWarning(const ibString& message) { ibMetaDataConfigurationBase::GetRestructureInfo().AppendWarning(message); }
-void ibValueMetaObject::RestructureError  (const ibString& message) { ibMetaDataConfigurationBase::GetRestructureInfo().AppendError(message);   }
+// Restructure-ledger facade — one call onto the active application's ledger (the static accessor).
+void ibValueMetaObject::RestructureInfo   (const ibString& message) { ibMetaDataApplicationBase::GetRestructureInfo().AppendInfo(message);    }
+void ibValueMetaObject::RestructureWarning(const ibString& message) { ibMetaDataApplicationBase::GetRestructureInfo().AppendWarning(message); }
+void ibValueMetaObject::RestructureError  (const ibString& message) { ibMetaDataApplicationBase::GetRestructureInfo().AppendError(message);   }
 
 //*****************************************************************************************
 //*                                  MetaObject                                           *
@@ -70,7 +70,7 @@ ibValueMetaObject::~ibValueMetaObject()
 }
 
 // (CreateMetaTable / UpdateMetaTable / DeleteMetaTable + CreateAndUpdateTableDB removed: structure DDL
-//  is now the config-save differ's job — a metaobject DECLARES its tables AND their seed rows via
+//  is now the application-save differ's job — a metaobject DECLARES its tables AND their seed rows via
 //  ContributeTables; ibStructureBuilder snapshots + diffs both structure and data. query/provider/database/structure/schemaSnapshot.h.)
 
 bool ibValueMetaObject::OnCreateMetaObject(ibMetaData* metaData, int flags)
@@ -84,7 +84,7 @@ bool ibValueMetaObject::OnCreateMetaObject(ibMetaData* metaData, int flags)
 	// analytics slots and a dimension are indistinguishable by class alone, and it is precisely a
 	// slot and a dimension that were seen holding the same id.
 	// ⚠ OFF UNLESS ASKED FOR (`OES_TRACE_METAIDS=1`). This fires for EVERY object of every
-	// configuration load — two hundred lines before the first window appears — and a journal whose
+	// application load — two hundred lines before the first window appears — and a journal whose
 	// first half is a list of things that always happen is a journal whose second half nobody
 	// reaches. The counter it exists for is still one variable away when it is needed.
 	static const bool s_traceIds = ibDebugTraceEnabled("OES_TRACE_METAIDS");
@@ -110,7 +110,7 @@ bool ibValueMetaObject::OnAfterCloseMetaObject()
 	// two roads, and BOTH of them already say so: a deleted object broadcasts `Removed` one call
 	// earlier (ibMetaData::RemoveMetaObject) and a watcher shuts what it was showing of it; a whole
 	// container being let go broadcasts `Closed` before the teardown starts. Closing per NODE was a
-	// third road to the same state — it ran once for every object in a configuration on the way out,
+	// third road to the same state — it ran once for every object in an application on the way out,
 	// to do what one signal does once.
 	return true;
 }
@@ -121,8 +121,8 @@ void ibValueMetaObject::DoSetInterface(const ibMetaID& id, const bool& val)
 	m_metaData->Modify(true);
 }
 #pragma endregion
-#pragma region functional_option_h
-void ibValueMetaObject::DoSetFunctionalOption(const ibMetaID& id, const bool& val)
+#pragma region feature_option_h
+void ibValueMetaObject::DoSetFeatureOption(const ibMetaID& id, const bool& val)
 {
 	m_metaData->Modify(true);
 }
@@ -232,7 +232,7 @@ bool ibValueMetaObject::CompareObject(const ibValueMetaObject* compareObject) co
 					return false;
 			}
 
-			// The children the walker pairs (IsAcceptedByParent): a deleted one stays in the tree until the configuration
+			// The children the walker pairs (IsAcceptedByParent): a deleted one stays in the tree until the application
 			// is written, and counted, it made its parent differ over nothing the write keeps.
 			const auto accepted = [](const ibValueMetaObject* object) {
 				unsigned int count = 0;
@@ -272,7 +272,7 @@ void ibValueMetaObject::SetName(const ibString& strName)
 // verb metadata_move, anything that reorders. The order is data: the sections in the navigation panel,
 // the forms under an object, what a person reads down the tree. `pos` is where the child ENDS UP.
 //
-// 🛑 IT MARKED THE CONFIGURATION MODIFIED BEFORE ASKING, and said nothing: a refused move and a move to
+// 🛑 IT MARKED THE APPLICATION MODIFIED BEFORE ASKING, and said nothing: a refused move and a move to
 // where the child already stood both left "modified" behind, while a move nobody announced left every
 // watcher's picture of the order stale — the designer's tree shuffled its own rows by hand, and a move
 // from anywhere else was not drawn at all. Now a move that happened is marked and announced (`Moved`),
@@ -316,7 +316,7 @@ ibString ibValueMetaObject::GetFullName() const
 		strFullName = GetName();
 
 	while (parent != nullptr) {
-		if (g_metaCommonMetadataCLSID != parent->GetClassType()) {
+		if (g_metaApplicationMetadataCLSID != parent->GetClassType()) {
 			strFullName = parent->GetClassName() + '.' +
 				parent->GetName() + '.' +
 				strFullName;
@@ -361,34 +361,34 @@ bool ibValueMetaObject::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 #include "backend/session/sessionRegistry.h"
 
 namespace {
-	// True while the exclusive mode held on this thread was taken by
-	// RequireExclusiveForDDL. ReleaseAutoExclusive uses it to know
+	// True while the single-user mode held on this thread was taken by
+	// RequireSingleUserForDDL. ReleaseAutoSingleUser uses it to know
 	// whether to drop the flag (don't drop if the caller had it before).
 	thread_local bool ts_acquiredByGate = false;
 }
 
-void ibRestructureInfo::RequireExclusiveForDDL()
+void ibRestructureInfo::RequireSingleUserForDDL()
 {
-	// Already exclusive? Caller (or previous gate) holds it. Don't touch — the flag included. Every batch of an
+	// Already single-user? Caller (or previous gate) holds it. Don't touch — the flag included. Every batch of an
 	// apply asks (ibStructureBatch::Flush), and the second asking used to clear what the first had set, so the
-	// apply's end released nothing: the base stayed exclusive until the designer closed, and every later login
+	// apply's end released nothing: the base stayed single-user until the designer closed, and every later login
 	// parked behind it (2026-10-30, "registry did not answer to Add").
-	if (appData->ExclusiveMode()) return;
+	if (appData->SingleUserMode()) return;
 	ts_acquiredByGate = false;
 
 	// Bootstrap path — no current session / no registry yet (e.g. first-open
-	// auto-save triggered by m_configNew during LoadDatabase before the
+	// auto-save triggered by m_applicationNew during LoadDatabase before the
 	// session is attached). Nobody else can be connected at this stage, so
 	// skip the gate entirely.
 	auto* session  = ibSession::Current();
 	auto* registry = ibApplicationInstance::GetSessionRegistry();
 	if (session == nullptr || registry == nullptr) return;
 
-	// Normal apply — try to acquire exclusive. Succeeds only if we are the
+	// Normal apply — try to acquire single-user mode. Succeeds only if we are the
 	// sole live session in the cluster; holds the flag for the rest of the
 	// apply, blocking newcomers.
-	const auto verdict = registry->SetExclusive(session, true);
-	if (verdict == ibSession::ibExclusiveResult::Granted) {
+	const auto verdict = registry->SetSingleUser(session, true);
+	if (verdict == ibSession::ibSingleUserResult::Granted) {
 		ts_acquiredByGate = true;
 		return;
 	}
@@ -396,22 +396,22 @@ void ibRestructureInfo::RequireExclusiveForDDL()
 	// Each verdict says what it is: "not answered" read as "others connected" sent the person looking for
 	// a session that did not exist (2026-09-15).
 	const ibString why =
-		verdict == ibSession::ibExclusiveResult::HeldByOther  ? _("Another session holds exclusive mode.")
-		: verdict == ibSession::ibExclusiveResult::Pending    ? _("The session registry did not answer in time.")
-		: verdict == ibSession::ibExclusiveResult::JobRunning ? _("A job is running - try again when it finishes.")
+		verdict == ibSession::ibSingleUserResult::HeldByOther  ? _("Another session holds single-user mode.")
+		: verdict == ibSession::ibSingleUserResult::Pending    ? _("The session registry did not answer in time.")
+		: verdict == ibSession::ibSingleUserResult::JobRunning ? _("A job is running - try again when it finishes.")
 		:                                                       _("Other sessions are connected - disconnect them and try again.");
 	ibBackendCoreException::Error(ibString::Format(
-		_("Structure (DDL) changes require exclusive mode. %s "
+		_("Structure (DDL) changes require single-user mode. %s "
 		  "Code-only changes (modules, forms) can be saved without it."), why));
 }
 
-void ibRestructureInfo::ReleaseAutoExclusive()
+void ibRestructureInfo::ReleaseAutoSingleUser()
 {
 	if (!ts_acquiredByGate) return;
 	ts_acquiredByGate = false;
 	auto* session  = ibSession::Current();
 	auto* registry = ibApplicationInstance::GetSessionRegistry();
 	if (session != nullptr && registry != nullptr) {
-		registry->SetExclusive(session, false);
+		registry->SetSingleUser(session, false);
 	}
 }

@@ -8,7 +8,7 @@
 
 ibVariant ibPropertyType::CreateVariantData(ibPropertyObject* property, const ibValueTypes type)
 {
-	const ibBackendTypeConfigFactory* propFactory = dynamic_cast<const ibBackendTypeConfigFactory*>(property);
+	const ibBackendTypeApplicationFactory* propFactory = dynamic_cast<const ibBackendTypeApplicationFactory*>(property);
 	if (propFactory == nullptr)
 		return ibVariant();
 	return ibVariant(new ibVariantAttribute(propFactory, type));
@@ -16,7 +16,7 @@ ibVariant ibPropertyType::CreateVariantData(ibPropertyObject* property, const ib
 
 ibVariant ibPropertyType::CreateVariantData(ibPropertyObject* property, const ibClassID& clsid)
 {
-	const ibBackendTypeConfigFactory* propFactory = dynamic_cast<const ibBackendTypeConfigFactory*>(property);
+	const ibBackendTypeApplicationFactory* propFactory = dynamic_cast<const ibBackendTypeApplicationFactory*>(property);
 	if (propFactory == nullptr)
 		return ibVariant();
 	return ibVariant(new ibVariantAttribute(propFactory, clsid));
@@ -24,7 +24,7 @@ ibVariant ibPropertyType::CreateVariantData(ibPropertyObject* property, const ib
 
 ibVariant ibPropertyType::CreateVariantData(ibPropertyObject* property, const ibTypeDescription& typeDesc)
 {
-	const ibBackendTypeConfigFactory* propFactory = dynamic_cast<const ibBackendTypeConfigFactory*>(property);
+	const ibBackendTypeApplicationFactory* propFactory = dynamic_cast<const ibBackendTypeApplicationFactory*>(property);
 	if (propFactory == nullptr)
 		return ibVariant();
 	return ibVariant(new ibVariantAttribute(propFactory, typeDesc));
@@ -87,7 +87,7 @@ bool ibPropertyType::WriteNodeValue(ibDataValue& value) const
 
 #include "protocol/protocolDesigner.h"         // ibProtocol::ibSchema::ibProperties — the row's keys
 #include "backend/backend_picture.h"   // ibBackendPicture::SendPicture — a type's picture, by its class
-#include "backend/metaData.h"          // GetAvailableCtor — a type, named as its configuration names it
+#include "backend/metaData.h"          // GetAvailableCtor — a type, named as its application names it
 #include "backend/objCtor.h"
 
 #include <algorithm>
@@ -102,7 +102,7 @@ bool ibPropertyType::GetProtocolValue(ibDataNode& row, ibReader reader)
 	const ibMetaData* const metaData = owner != nullptr ? owner->GetMetaData() : nullptr;
 
 	std::vector<ibClassID> offered;
-	ibBackendTypeConfigFactory::GetTypesByFilter(filter, metaData, offered);
+	ibBackendTypeApplicationFactory::GetTypesByFilter(filter, metaData, offered);
 	for (const ibClassID& held : GetValueAsTypeDesc().GetClsidList()) {
 		if (std::find(offered.begin(), offered.end(), held) == offered.end())
 			offered.push_back(held);

@@ -1,7 +1,7 @@
 ﻿#include "metaData.h"
 #include "backend/objCtor.h"
 #include "core/diagnostics/debugTrace.h"   // ibDebugTraceEnabled — class-registration tracing is opt-in
-#include "backend/query/queryableFactory.h"   // ibMetaQueryableFactory — the per-config source factory (complete here)
+#include "backend/query/queryableFactory.h"   // ibMetaQueryableFactory — the per-application source factory (complete here)
 
 // The image's designer infrastructure (compile cache + its module-manager) is built by the owner metadata's
 // CreateDesignerCache() — each kind decides (designer-only, nullptr otherwise). Dropping the image later releases
@@ -11,10 +11,10 @@ ibMetaImage::ibMetaImage(ibMetaData* owner)
 	if (owner != nullptr)
 		m_compileCache = owner->CreateDesignerCache();   // nullptr ⇒ no designer infra for this kind
 	// Every open snapshot gets its OWN source factory — metadata-backed queryables register into it, the platform's
-	// sources are made for this configuration in it, and resolve descends to the global factory on a miss. Dropping
+	// sources are made for this application in it, and resolve descends to the global factory on a miss. Dropping
 	// the image frees it (RAII), same lifecycle as the compile cache.
 	m_sourceFactory = std::make_unique<ibMetaQueryableFactory>(owner);
-	// The bytecode of a configuration that RUNS is read here — once, as it opens — and held for every session's
+	// The bytecode of an application that RUNS is read here — once, as it opens — and held for every session's
 	// modules (ibByteCodeStorage). A designer's own copy has the compile cache above and runs none.
 	if (owner != nullptr && m_compileCache == nullptr)
 		m_byteCodeStorage = std::make_unique<ibByteCodeStorage>(owner);
@@ -40,10 +40,10 @@ void ibMetaImage::UnregisterCtor(ibCtorMetaValueType* typeCtor)
 
 // ⭐ BY THE ID THE PAIR SPELLS. A metaobject's type is registered under `kind | metaclass | metaID` (objCtor.h):
 // the kind of refType, the metaobject's metaclass — its class's id — and its metaID. So the id is built
-// and looked up; this walked every type of the configuration instead, and was asked on every GetClassType of
-// an object, a record set, a manager — every event raised. An external processor files its object and manager
+// and looked up; this walked every type of the application instead, and was asked on every GetClassType of
+// an object, a record set, a manager — every event raised. An external data tool files its object and manager
 // under kinds of their own, the second probe. What is found is checked to be this metaobject's: an id names
-// one within a configuration, and the metaobject handed in may be another configuration's.
+// one within an application, and the metaobject handed in may be another application's.
 ibCtorMetaValueType* ibMetaImage::FindCtor(const ibValueMetaObject* metaValue, ibCtorObjectMetaType refType) const
 {
 	if (metaValue == nullptr)
@@ -126,7 +126,7 @@ void ibMetaData::UnRegisterCtor(ibCtorMetaValueType*& typeCtor)
 	if (typeCtor != nullptr && ibMetaData::IsRegisterCtor(typeCtor->GetClassType())) {
 
 		// Behind the same gate as its twin above, and it should have been from the start: closing a
-		// configuration unregisters every class it declared, so this was a hundred lines of "as
+		// application unregisters every class it declared, so this was a hundred lines of "as
 		// expected" at every shutdown while the REGISTER side of the same pair stayed quiet.
 		static const bool s_traceTypes = ibDebugTraceEnabled("OES_TRACE_TYPES");
 		if (s_traceTypes)
@@ -172,8 +172,8 @@ void ibMetaData::UnRegisterCtor(const ibClassID& clsid)
 
 void ibMetaData::InvalidateCtorNames() const
 {
-	// No image ⇒ the configuration is closed ⇒ nothing of this metadata is registered, so there is
-	// no cache to bring up to date. (IsConfigOpen() is exactly `m_image != nullptr`.)
+	// No image ⇒ the application is closed ⇒ nothing of this metadata is registered, so there is
+	// no cache to bring up to date. (IsOpen() is exactly `m_image != nullptr`.)
 	if (m_image)
 		m_image->InvalidateCtorNames();
 }
@@ -305,7 +305,7 @@ std::vector<ibCtorMetaValueType*> ibMetaData::GetListCtorsByType(const ibClassID
 	// Note: clsid here is the METACLASS's id (g_metaCatalogCLSID), NOT a ctor's — shared across refType variants,
 	// so it's a separate (non-unique) key kept linear. A ctor's own id carries its metaobject's metaclass
 	// (clsid.h), so it is compared as bits: asking each metaobject its class went to the class registry (by its
-	// C++ type) once per type of the configuration.
+	// C++ type) once per type of the application.
 	const ibClassMetaclass metaclass = clsid_metaclass(clsid);
 	if (m_image) m_image->ForEachCtor([&](ibCtorMetaValueType* t) {
 		if (refType == t->GetMetaTypeCtor() && clsid_metaclass(t->GetClassType()) == metaclass)

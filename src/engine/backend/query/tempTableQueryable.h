@@ -29,7 +29,7 @@ public:
 	// Build from a pre-filled RAM table (an ibValue wrapping ibValueModelTable): derive
 	// the generic columns from its collection (name / id / type), each keyed by the SAME
 	// id the rows are stored at — so the RAM source reads every column by GetColumnId().
-	// `metaData` — the configuration its references belong to (see GetMetaData).
+	// `metaData` — the application its references belong to (see GetMetaData).
 	explicit ibTempTableQueryable(ibValue table, const ibMetaData* metaData = nullptr)
 		: m_table(std::move(table)), m_metaData(metaData)
 	{
@@ -102,7 +102,7 @@ public:
 	ibString GetQueryTableName() const override { return ibEmptyString; }
 	ibMetaID GetQueryTableId()    const override { return 0; }
 
-	// ⭐ THE CONFIGURATION ITS REFERENCES BELONG TO — handed in by whoever wraps the table (the query it is
+	// ⭐ THE APPLICATION ITS REFERENCES BELONG TO — handed in by whoever wraps the table (the query it is
 	// read by, the Data unit, the other side of a join). With none, a reference column could not say which
 	// catalog it points at, and «IN HIERARCHY» over it stood for the named values alone (2026-09-29).
 	const ibMetaData* GetMetaData() const override { return m_metaData; }
@@ -189,7 +189,7 @@ private:
 // ⭐ IT KNOWS ITS OWN KEY, because the schema that declared the table hands it over — the very list
 // the unique index is built from (ibDeclareDerivedKey). A derived table used to report none, which
 // left an upsert with nothing to match on and the statement came out as `MATCHING ()`: a
-// configuration could not be applied at all. Everything that needed the key then composed one out of
+// application could not be applied at all. Everything that needed the key then composed one out of
 // the parts it could see (a period here, a shard column found by name there), which is three copies
 // of one fact and two ways for them to disagree.
 //
@@ -228,7 +228,7 @@ private:
 	ibString                                 m_tableName;
 	ibUniqueKey                              m_tableGuid;
 	ibMetaID                                 m_tableId;
-	std::vector<std::shared_ptr<const ibBackendQueryColumn>> m_columns;    // shared with the schema table / the config
+	std::vector<std::shared_ptr<const ibBackendQueryColumn>> m_columns;    // shared with the schema table / the application
 	const ibMetaData*                        m_metaData;   // reference / enum reconstruction context
 	std::vector<std::shared_ptr<const ibBackendQueryColumn>> m_keyColumns; // what makes a row unique — the declared key
 };

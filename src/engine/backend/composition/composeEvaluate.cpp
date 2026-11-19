@@ -29,7 +29,7 @@ bool ibEvaluateInRoot(const ibString& expression, ibValue& produced, const ibMet
 	// ⭐⭐ ASKED OF THE SESSION, WHICH OWNS THE ROOT. `EvaluateInRoot` runs the expression against the
 	// root's own frame and answers with a value; the frame itself never comes out here (session.h
 	// carries the why). That scope is the whole point of a computed parameter: `Catalogs`,
-	// `Documents`, every common module and the platform's own functions are names on the root, and
+	// `Documents`, every shared module and the platform's own functions are names on the root, and
 	// none of them is expressible in a query.
 	//
 	// 🛑 TWO WRONG SHAPES WERE TRIED HERE FIRST, and they fail at opposite ends. A BARE ibRunContext

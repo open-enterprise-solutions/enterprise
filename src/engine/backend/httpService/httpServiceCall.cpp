@@ -1,5 +1,5 @@
 ////////////////////////////////////////////////////////////////////////////
-//	Description : a request to an HTTP service of the configuration, answered
+//	Description : a request to an HTTP service of the application, answered
 ////////////////////////////////////////////////////////////////////////////
 
 #include "httpServiceCall.h"
@@ -8,8 +8,8 @@
 #include "backend/backend_exception.h"
 #include "backend/logger/logger.h"                       // what went wrong in a handler, where an administrator reads it
 #include "backend/metaCollection/metaHttpServiceObject.h"
-#include "backend/metadataConfiguration.h"
-#include "backend/moduleManager/moduleManager.h"         // ibValueModuleManagerRuntimeConfiguration::FindCommonModule
+#include "backend/metadataApplication.h"
+#include "backend/moduleManager/moduleManager.h"         // ibValueModuleManagerRuntimeApplication::FindSharedModule
 #include "backend/served/servedKind.h"                   // the kind this file registers
 #include "backend/session/session.h"
 #include "backend/session/sessionRegistry.h"             // CreateSession<T> — its body; InstallUser, NotifyAuthenticated
@@ -53,22 +53,22 @@ void ReadCredentials(const ibHttpRequest& request, ibString& user, ibString& pas
 	password = pair.Mid(colon + 1);
 }
 
-// THE SERVICE AN ENTRY NAMES, in that configuration — null when it is not there: deleted, or not an HTTP service.
-const ibValueMetaObjectHttpService* FindService(const ibMetaDataConfigurationBase* metaData, const ibGuid& service)
+// THE SERVICE AN ENTRY NAMES, in that application — null when it is not there: deleted, or not an HTTP service.
+const ibValueMetaObjectHttpService* FindService(const ibMetaDataApplicationBase* metaData, const ibGuid& service)
 {
 	return metaData != nullptr ? metaData->FindAnyObjectByFilter<ibValueMetaObjectHttpService>(service, g_metaHttpServiceCLSID) : nullptr;
 }
 
-// The handler called — on the session's worker, in the session's configuration: the one the service and its method
+// The handler called — on the session's worker, in the session's application: the one the service and its method
 // were found in (Answer); `rest` and `parameters` what the template made of the path.
 ibHttpResponse Run(ibSession* session, const ibValueMetaObjectHttpService* service, const ibValueMetaObjectHttpServiceMethod* method,
 	const ibHttpRequest& request, const ibString& prefix, const ibString& rest, const std::vector<std::pair<ibString, ibString>>& parameters)
 {
 	// EVERY REFUSAL BELOW THROWS: the caller is told 500 and the journal why.
-	ibValueModuleManagerRuntimeConfiguration* const manager = session->GetManagerModule();
+	ibValueModuleManagerRuntimeApplication* const manager = session->GetManagerModule();
 	if (manager == nullptr)
 		ibBackendCoreException::Error(_("the session has no runtime"));
-	ibValueModuleManager::ibValueModuleUnit* const unit = manager->FindCommonModule(service->GetServiceModule());
+	ibValueModuleManager::ibValueModuleUnit* const unit = manager->FindSharedModule(service->GetServiceModule());
 	if (unit == nullptr)
 		ibBackendCoreException::Error(_("the module of the HTTP service '%s' is not registered in this session"), service->GetName());
 
@@ -85,7 +85,7 @@ ibHttpResponse Run(ibSession* session, const ibValueMetaObjectHttpService* servi
 	return response->ToResponse();
 }
 
-// THE KIND — an entry names its service by its object; the configuration offers each service it declares at
+// THE KIND — an entry names its service by its object; the application offers each service it declares at
 // es/<RootURL>.
 class ibServedHttpService : public ibServedKind {
 public:
@@ -98,14 +98,14 @@ public:
 	virtual void Check(const ibServedAddress& address) const override
 	{
 		if (FindService(ibApplicationInstance::GetActiveMetaData(), address.m_object) == nullptr)
-			ibBackendCoreException::Error(_("The web address %s '%s' is not registered: the configuration has no HTTP service %s."),
+			ibBackendCoreException::Error(_("The web address %s '%s' is not registered: the application has no HTTP service %s."),
 				address.m_kind, address.m_path, address.m_object.str());
 	}
 
 	virtual std::vector<ibServedAddress> Offer() const override
 	{
 		std::vector<ibServedAddress> offers;
-		const ibMetaDataConfigurationBase* const metaData = ibApplicationInstance::GetActiveMetaData();
+		const ibMetaDataApplicationBase* const metaData = ibApplicationInstance::GetActiveMetaData();
 		if (metaData == nullptr)
 			return offers;
 		for (const ibValueMetaObject* candidate : metaData->GetAnyArrayObject(g_metaHttpServiceCLSID)) {
@@ -140,13 +140,13 @@ ibHttpResponse ibHttpServiceCall::Answer(ibApplicationInstance* applicationInsta
 		return Unauthorized();
 
 	// ⭐ WHAT ANSWERS IT, BEFORE ANY SESSION — the service by the entry's object, the template by the rest of the path,
-	// the method by the request's, in the configuration the base runs, held while the request lasts: a path or a method
-	// nothing answers is told so with no session made for it (a session brings up every common module).
-	ibMetaDataConfigurationBase* const active = ibApplicationInstance::GetActiveMetaData(applicationInstance);
+	// the method by the request's, in the application the base runs, held while the request lasts: a path or a method
+	// nothing answers is told so with no session made for it (a session brings up every shared module).
+	ibMetaDataApplicationBase* const active = ibApplicationInstance::GetActiveMetaData(applicationInstance);
 	if (active == nullptr)
 		return Status(503);
-	const std::shared_ptr<ibMetaDataConfigurationBase> metaData =
-		std::static_pointer_cast<ibMetaDataConfigurationBase>(active->shared_from_this());
+	const std::shared_ptr<ibMetaDataApplicationBase> metaData =
+		std::static_pointer_cast<ibMetaDataApplicationBase>(active->shared_from_this());
 	const ibValueMetaObjectHttpService* const service = FindService(metaData.get(), object);
 	if (service == nullptr)
 		return Status(404);
@@ -179,13 +179,13 @@ ibHttpResponse ibHttpServiceCall::Answer(ibApplicationInstance* applicationInsta
 	ibHttpResponse response;
 	try {
 		// ⭐ ON THE SESSION'S OWN WORKER — the user installed and the session brought up (its runtime built, the
-		// configuration's session module run), then the handler: everything a session does runs on its worker. The
+		// application's session module run), then the handler: everything a session does runs on its worker. The
 		// commit half of a login, as a job's run-as user is (ibJobManager): the check was made above.
 		session->Submit([&]() {
 			if (info.IsOk())
 				registry->InstallUser(session, info, ibEmptyString);
 			registry->NotifyAuthenticated(session);
-			// The session took the configuration the base runs now — the one looked in above, unless an apply came in
+			// The session took the application the base runs now — the one looked in above, unless an apply came in
 			// between: then what was found is not this session's to call, and the caller asks again.
 			if (session->GetMetaData() != metaData.get()) {
 				response = Status(503);
@@ -195,7 +195,7 @@ ibHttpResponse ibHttpServiceCall::Answer(ibApplicationInstance* applicationInsta
 		}).get();
 	}
 	catch (const ibCoreException& err) {
-		// The configuration's code talking: said where an administrator reads it, and the caller told no more than 500.
+		// The application's code talking: said where an administrator reads it, and the caller told no more than 500.
 		if (ibLogger* const log = ibApplicationInstance::GetLogger(applicationInstance))
 			log->Error(ibT("http"), ibT("failed"), ibString::Format(_("HTTP service %s %s: %s"),
 				ibString::FromUTF8(request.m_method), ibString::FromUTF8(request.m_path), err.GetErrorDescription()));

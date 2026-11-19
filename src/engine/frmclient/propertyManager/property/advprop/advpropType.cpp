@@ -250,7 +250,7 @@ ibPGEditorDialogAdapter* ibPGTypeProperty::GetEditorDialog() const
 
 			const ibVariant value = dlgProp->GetValue();
 
-			// WHAT IS ON OFFER is the property's, as the server offered it — the desktop asked the configuration for it by
+			// WHAT IS ON OFFER is the property's, as the server offered it — the desktop asked the application for it by
 			// the shape (GetTypesByFilter); so is SINGLE OR COMPOSITE: a table slot takes one type, everything else may be
 			// composite.
 			const bool singleChoice = !dlgProp->IsMultiple();

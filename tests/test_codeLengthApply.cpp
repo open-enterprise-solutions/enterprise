@@ -1,6 +1,6 @@
 // A longer code alters its column and keeps the codes stored (#646, the case #626 brought). SQLite holds any length in any
 // column, so the ALTER is met where it is real: Firebird, in the job that carries the kit (its filter is `Firebird*`, and
-// a skip there fails the job). Two configurations of one shape, the applied and the edited, as the apply reads them — the
+// a skip there fails the job). Two applications of one shape, the applied and the edited, as the apply reads them — the
 // snapshot holds the live columns, so the one it was cannot be read off the one it is. The rows are the seed's: an item of
 // one guid in both, and one more with the longer code in the edited.
 
@@ -24,7 +24,7 @@
 #include "backend/databaseLayer/firebird/firebirdDatabaseLayer.h"
 #endif
 #include "backend/metaCollection/partial/commonObject.h"
-#include "backend/metadataConfiguration.h"
+#include "backend/metadataApplication.h"
 #include "backend/metadataSerialization.h"   // ibSerializeValue - a declared code, as it is kept
 #include "backend/query/columnLayout.h"
 #include "backend/query/provider/database/structure/schemaBuilder.h"
@@ -85,10 +85,10 @@ ibPredefinedItemDescription Item(const ibGuid& guid, const ibString& name, const
 }
 
 // A catalog whose code is a string of `length`.
-ibValueMetaObjectRecordDataHierarchyMutableRef* Declare(ibMetaDataConfigurationFile& cfg, unsigned short length)
+ibValueMetaObjectRecordDataHierarchyMutableRef* Declare(ibMetaDataApplicationFile& cfg, unsigned short length)
 {
 	auto* firms = dynamic_cast<ibValueMetaObjectRecordDataHierarchyMutableRef*>(
-		cfg.CreateMetaObject(g_metaCatalogCLSID, cfg.GetCommonMetaObject(), false));
+		cfg.CreateMetaObject(g_metaCatalogCLSID, cfg.GetRootMetaObject(), false));
 	if (firms == nullptr)
 		return nullptr;
 	firms->SetName(wxT("Firms"));
@@ -122,8 +122,8 @@ TEST_F(FirebirdCodeLength, ALongerCodeAltersTheColumnAndKeepsTheCodes)
 		GTEST_SKIP() << "no Firebird client on this machine";
 	pool->Init(db, /*maxSize=*/1, /*minIdle=*/0);
 
-	ibMetaDataConfigurationFile applied;
-	ibMetaDataConfigurationFile edited;
+	ibMetaDataApplicationFile applied;
+	ibMetaDataApplicationFile edited;
 	ibValueMetaObjectRecordDataHierarchyMutableRef* const was = Declare(applied, 8);
 	ibValueMetaObjectRecordDataHierarchyMutableRef* const now = Declare(edited, 9);
 	ASSERT_NE(was, nullptr);

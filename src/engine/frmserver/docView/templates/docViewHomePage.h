@@ -5,11 +5,11 @@
 //
 // Every other document a client has open is one tab showing one thing: a form, a document. The home page is the
 // exception the platform needs — ONE tab showing SEVERAL runtime forms at once (a sales funnel next to a task list
-// next to "create a document"), in the columns and proportions the configuration asks for.
+// next to "create a document"), in the columns and proportions the application asks for.
 //
 // It is built out of the machinery that already exists, not beside it — a COMPOSITE document:
 //
-//   ibHomePageDocument (ibDocument — the configuration's metaobject is its own)
+//   ibHomePageDocument (ibDocument — the application's metaobject is its own)
 //     └── ibHomePageView — draws the page into its tab's frame, column by column
 //           ├── column 1: form, form, … form
 //           └── column 2: form, form, … form
@@ -25,7 +25,7 @@
 // own metaobject (a list form gets the list, an object form gets a NEW object). The composite adds placement, and
 // nothing else.
 //
-// WHAT is shown comes from the configuration (ibHomePageDescription on ibValueMetaObjectConfiguration), edited in
+// WHAT is shown comes from the application (ibHomePageDescription on ibValueMetaObjectApplication), edited in
 // the designer through the workspace editor. See docs/private/home-page.md.
 
 #include "frmserver/docView/docView.h"
@@ -35,21 +35,21 @@
 
 #include <vector>
 
-class ibValueMetaObjectConfiguration;
+class ibValueMetaObjectApplication;
 class ibValueMetaObjectFormBase;
 
 class FRMSERVER_API ibHomePageDocument : public ibDocument {
 public:
 
-	// The page belongs to the configuration's metaobject — the workspace is read from it, and so is the metadata
+	// The page belongs to the application's metaobject — the workspace is read from it, and so is the metadata
 	// its forms are found in (GetMetaData): handed in by whoever opens the page, never reached for.
-	explicit ibHomePageDocument(const ibValueMetaObjectConfiguration* configuration = nullptr);
+	explicit ibHomePageDocument(const ibValueMetaObjectApplication* application = nullptr);
 	virtual ~ibHomePageDocument();
 
 	// THE start page of this client. Opens it on first call and activates it afterwards, so a second caller (a
-	// script, a menu item) never gets a second copy. Returns nullptr when the configuration attaches no forms — an
+	// script, a menu item) never gets a second copy. Returns nullptr when the application attaches no forms — an
 	// empty workspace is NO tab, not a blank one.
-	static ibHomePageDocument* ShowHomePage(const ibValueMetaObjectConfiguration* configuration);
+	static ibHomePageDocument* ShowHomePage(const ibValueMetaObjectApplication* application);
 
 	// Pin the page's tab: locked = always ahead of the normal tabs, never closed by hand. Called once the tab
 	// exists (ShowHomePage, right after OnCreate).
@@ -94,7 +94,7 @@ protected:
 
 private:
 
-	const ibValueMetaObjectConfiguration* m_configuration;
+	const ibValueMetaObjectApplication* m_application;
 	ibHomePageDescription m_description;
 
 	// Raised while the page tears its own children down (see IsClosingChildren).

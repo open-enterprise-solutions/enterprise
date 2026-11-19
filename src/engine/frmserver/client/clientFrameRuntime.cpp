@@ -1,7 +1,7 @@
 #include "clientFrameRuntime.h"
 
 #include "backend/appData.h"
-#include "backend/metadataConfiguration.h"   // the configuration the start page is the metaobject's of
+#include "backend/metadataApplication.h"   // the application the start page is the metaobject's of
 #include "backend/moduleManager/moduleManager.h"
 #include "backend/session/session.h"
 #include "core/picturePredefined.h"   // the assistant's picture
@@ -62,13 +62,13 @@ void ibClientFrameRuntime::InitializeDefaultMenu()
 
 bool ibClientFrameRuntime::AllowRun()
 {
-	ibValueModuleManagerRuntimeConfiguration* const manager = GetSession()->GetManagerModule();
+	ibValueModuleManagerRuntimeApplication* const manager = GetSession()->GetManagerModule();
 	return manager != nullptr && manager->StartMainModule();
 }
 
 void ibClientFrameRuntime::CreateStartupPage()
 {
-	// The page is the configuration's: its metaobject is handed in from the configuration this client works in.
-	if (const ibMetaDataConfigurationBase* const metaData = GetSession()->GetMetaData())
-		ibHomePageDocument::ShowHomePage(metaData->GetCommonMetaObject());
+	// The page is the application's: its metaobject is handed in from the application this client works in.
+	if (const ibMetaDataApplicationBase* const metaData = GetSession()->GetMetaData())
+		ibHomePageDocument::ShowHomePage(metaData->GetRootMetaObject());
 }

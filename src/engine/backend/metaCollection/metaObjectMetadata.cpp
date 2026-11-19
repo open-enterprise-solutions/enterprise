@@ -1,6 +1,6 @@
 ////////////////////////////////////////////////////////////////////////////
 //	Author		: Maxim Kornienko
-//	Description : metaobject common metaData
+//	Description : metaobject root metadata
 ////////////////////////////////////////////////////////////////////////////
 
 #include "metaObjectMetadata.h"
@@ -20,7 +20,7 @@
 
 #include "backend/metaCollection/metaLanguageObject.h"
 
-ibString ibValueMetaObjectConfiguration::GetLangCode() const
+ibString ibValueMetaObjectApplication::GetLangCode() const
 {
 	const ibValueMetaObjectLanguage* language =
 		FindAnyObjectByFilter<ibValueMetaObjectLanguage>(GetLanguage());
@@ -31,13 +31,13 @@ ibString ibValueMetaObjectConfiguration::GetLangCode() const
 	return ibT("");
 }
 
-ibValueMetaObjectConfiguration::ibValueMetaObjectConfiguration() : ibValueMetaObject(configurationDefaultName)
+ibValueMetaObjectApplication::ibValueMetaObjectApplication() : ibValueMetaObject(applicationDefaultName)
 {
 	//set default proc
-	(*m_propertyModuleConfiguration)->SetDefaultProcedure(ibT("BeforeStart"), ibContentHelper::eProcedureHelper, { ibT("Cancel") });
-	(*m_propertyModuleConfiguration)->SetDefaultProcedure(ibT("OnStart"), ibContentHelper::eProcedureHelper);
-	(*m_propertyModuleConfiguration)->SetDefaultProcedure(ibT("BeforeExit"), ibContentHelper::eProcedureHelper, { ibT("Cancel") });
-	(*m_propertyModuleConfiguration)->SetDefaultProcedure(ibT("OnExit"), ibContentHelper::eProcedureHelper);
+	(*m_propertyModuleApplication)->SetDefaultProcedure(ibT("BeforeStart"), ibContentHelper::eProcedureHelper, { ibT("Cancel") });
+	(*m_propertyModuleApplication)->SetDefaultProcedure(ibT("OnStart"), ibContentHelper::eProcedureHelper);
+	(*m_propertyModuleApplication)->SetDefaultProcedure(ibT("BeforeExit"), ibContentHelper::eProcedureHelper, { ibT("Cancel") });
+	(*m_propertyModuleApplication)->SetDefaultProcedure(ibT("OnExit"), ibContentHelper::eProcedureHelper);
 
 	// ONE procedure, and it is the module's whole purpose: fill the session
 	// parameters. It runs for every session — client, web and background job alike —
@@ -49,17 +49,17 @@ ibValueMetaObjectConfiguration::ibValueMetaObjectConfiguration() : ibValueMetaOb
 	m_metaId = defaultMetaID;
 }
 
-ibValueMetaObjectConfiguration::~ibValueMetaObjectConfiguration()
+ibValueMetaObjectApplication::~ibValueMetaObjectApplication()
 {
 }
 
-bool ibValueMetaObjectConfiguration::ReadData(const ibDataNode& node)
+bool ibValueMetaObjectApplication::ReadData(const ibDataNode& node)
 {
 	m_propertyVersion->SetNodeValue(node.GetProperty(m_propertyVersion->GetName()));
 
 	m_propertyDefRole->SetNodeValue(node.GetProperty(m_propertyDefRole->GetName()));
 	m_propertyDefLanguage->SetNodeValue(node.GetProperty(m_propertyDefLanguage->GetName()));
-	m_propertyModuleConfiguration->SetNodeValue(node.GetProperty(m_propertyModuleConfiguration->GetName()));
+	m_propertyModuleApplication->SetNodeValue(node.GetProperty(m_propertyModuleApplication->GetName()));
 	m_propertyModuleSession->SetNodeValue(node.GetProperty(m_propertyModuleSession->GetName()));
 	m_propertySyntax->SetNodeValue(node.GetProperty(m_propertySyntax->GetName()));
 
@@ -68,13 +68,13 @@ bool ibValueMetaObjectConfiguration::ReadData(const ibDataNode& node)
 	return true;
 }
 
-bool ibValueMetaObjectConfiguration::WriteData(ibDataNode& node) const
+bool ibValueMetaObjectApplication::WriteData(ibDataNode& node) const
 {
 	node.SetProperty(m_propertyVersion->GetName(), m_propertyVersion->GetNodeValue());
 
 	node.SetProperty(m_propertyDefRole->GetName(), m_propertyDefRole->GetNodeValue());
 	node.SetProperty(m_propertyDefLanguage->GetName(), m_propertyDefLanguage->GetNodeValue());
-	node.SetProperty(m_propertyModuleConfiguration->GetName(), m_propertyModuleConfiguration->GetNodeValue());
+	node.SetProperty(m_propertyModuleApplication->GetName(), m_propertyModuleApplication->GetNodeValue());
 	node.SetProperty(m_propertyModuleSession->GetName(), m_propertyModuleSession->GetNodeValue());
 	node.SetProperty(m_propertySyntax->GetName(), m_propertySyntax->GetNodeValue());
 
@@ -91,9 +91,9 @@ bool ibValueMetaObjectConfiguration::WriteData(ibDataNode& node) const
 
 #include "backend/metaData.h"
 
-bool ibValueMetaObjectConfiguration::OnCreateMetaObject(ibMetaData* metaData, int flags)
+bool ibValueMetaObjectApplication::OnCreateMetaObject(ibMetaData* metaData, int flags)
 {
-	if (!(*m_propertyModuleConfiguration)->OnCreateMetaObject(metaData, flags)) {
+	if (!(*m_propertyModuleApplication)->OnCreateMetaObject(metaData, flags)) {
 		return false;
 	}
 
@@ -104,9 +104,9 @@ bool ibValueMetaObjectConfiguration::OnCreateMetaObject(ibMetaData* metaData, in
 	return ibValueMetaObject::OnCreateMetaObject(metaData, flags);
 }
 
-bool ibValueMetaObjectConfiguration::OnLoadMetaObject(ibMetaData* metaData)
+bool ibValueMetaObjectApplication::OnLoadMetaObject(ibMetaData* metaData)
 {
-	if (!(*m_propertyModuleConfiguration)->OnLoadMetaObject(metaData)) {
+	if (!(*m_propertyModuleApplication)->OnLoadMetaObject(metaData)) {
 		return false;
 	}
 
@@ -117,9 +117,9 @@ bool ibValueMetaObjectConfiguration::OnLoadMetaObject(ibMetaData* metaData)
 	return ibValueMetaObject::OnLoadMetaObject(metaData);
 }
 
-bool ibValueMetaObjectConfiguration::OnSaveMetaObject(int flags)
+bool ibValueMetaObjectApplication::OnSaveMetaObject(int flags)
 {
-	if (!(*m_propertyModuleConfiguration)->OnSaveMetaObject(flags)) {
+	if (!(*m_propertyModuleApplication)->OnSaveMetaObject(flags)) {
 		return false;
 	}
 
@@ -135,9 +135,9 @@ bool ibValueMetaObjectConfiguration::OnSaveMetaObject(int flags)
 	return ibValueMetaObject::OnSaveMetaObject(flags);
 }
 
-bool ibValueMetaObjectConfiguration::OnDeleteMetaObject()
+bool ibValueMetaObjectApplication::OnDeleteMetaObject()
 {
-	if (!(*m_propertyModuleConfiguration)->OnDeleteMetaObject()) {
+	if (!(*m_propertyModuleApplication)->OnDeleteMetaObject()) {
 		return false;
 	}
 
@@ -148,27 +148,27 @@ bool ibValueMetaObjectConfiguration::OnDeleteMetaObject()
 	return ibValueMetaObject::OnDeleteMetaObject();
 }
 
-bool ibValueMetaObjectConfiguration::OnBeforeRunMetaObject(int flags)
+bool ibValueMetaObjectApplication::OnBeforeRunMetaObject(int flags)
 {
-	if (!(*m_propertyModuleConfiguration)->OnBeforeRunMetaObject(flags))
+	if (!(*m_propertyModuleApplication)->OnBeforeRunMetaObject(flags))
 		return false;
 
 	// Designer's compile-cache holds its OWN module manager (the mm the Designer lost
-	// when runtime moved into per-session managers). Register THAT under the config
-	// module — not the per-session runtime mm — so the editor reads common-module
+	// when runtime moved into per-session managers). Register THAT under the application
+	// module — not the per-session runtime mm — so the editor reads shared-module
 	// units + named context from a manager that tracks the current designer state,
-	// decoupled from session timing. Runtime configs have null cache → skip.
+	// decoupled from session timing. Runtime applications have null cache → skip.
 	if (auto* cc = m_metaData->GetCompileCache()) {
-		// Register the designer holder under the config module so the editor reads
+		// Register the designer holder under the application module so the editor reads
 		// the "Manager" singleton + named context from it. The holder is STARTED
-		// (CreateMainModule) by ibMetaDataConfigurationFile::RunDatabase, as the
-		// common module did historically — not here.
-		if (!cc->AddCompileModule(m_propertyModuleConfiguration->GetMetaObject(), cc->GetModuleManager()))
+		// (CreateMainModule) by ibMetaDataApplicationFile::RunDatabase, as the
+		// shared module did historically — not here.
+		if (!cc->AddCompileModule(m_propertyModuleApplication->GetMetaObject(), cc->GetModuleManager()))
 			return false;
 	}
 
 	// AFTER the main module is in the cache, and the order is the whole point. The
-	// session module is an ordinary common module — its one peculiarity is that it
+	// session module is an ordinary shared module — its one peculiarity is that it
 	// starts EARLIER than the before-start events, and registering it above put it
 	// into a manager that had no main module yet, so the editor's syntax check found
 	// no global name in it: `SessionParameters`, `ScheduledJobs`, `Catalogs` alike
@@ -180,14 +180,14 @@ bool ibValueMetaObjectConfiguration::OnBeforeRunMetaObject(int flags)
 	return ibValueMetaObject::OnBeforeRunMetaObject(flags);
 }
 
-bool ibValueMetaObjectConfiguration::OnBeforeCloseMetaObject()
+bool ibValueMetaObjectApplication::OnBeforeCloseMetaObject()
 {
-	// CLOSE-BEFORE unloads forms and MODULES — the configuration module goes here,
-	// alongside the form's RemoveCompileModule and the common module's
-	// RemoveCommonModule. It used to run in CLOSE-AFTER, which dropped the module
+	// CLOSE-BEFORE unloads forms and MODULES — the application module goes here,
+	// alongside the form's RemoveCompileModule and the shared module's
+	// RemoveSharedModule. It used to run in CLOSE-AFTER, which dropped the module
 	// before the un-register phase could still reach it.
 	if (auto* cc = m_metaData->GetCompileCache()) {
-		cc->RemoveCompileModule(m_propertyModuleConfiguration->GetMetaObject());
+		cc->RemoveCompileModule(m_propertyModuleApplication->GetMetaObject());
 		// Holder teardown (DestroyMainModule) is driven by CloseDatabase, symmetric
 		// with the RunDatabase start — not here.
 	}
@@ -195,10 +195,10 @@ bool ibValueMetaObjectConfiguration::OnBeforeCloseMetaObject()
 	return ibValueMetaObject::OnBeforeCloseMetaObject();
 }
 
-bool ibValueMetaObjectConfiguration::OnAfterCloseMetaObject()
+bool ibValueMetaObjectApplication::OnAfterCloseMetaObject()
 {
 	// CLOSE-AFTER un-registers the runtime only.
-	if (!(*m_propertyModuleConfiguration)->OnAfterCloseMetaObject())
+	if (!(*m_propertyModuleApplication)->OnAfterCloseMetaObject())
 		return false;
 
 	if (!(*m_propertyModuleSession)->OnAfterCloseMetaObject())
@@ -211,4 +211,4 @@ bool ibValueMetaObjectConfiguration::OnAfterCloseMetaObject()
 //*                       Register in runtime                           *
 //***********************************************************************
 
-METADATA_TYPE_REGISTER(ibValueMetaObjectConfiguration, "CommonMetadata", g_metaCommonMetadataCLSID);
+METADATA_TYPE_REGISTER(ibValueMetaObjectApplication, "ApplicationMetadata", g_metaApplicationMetadataCLSID);

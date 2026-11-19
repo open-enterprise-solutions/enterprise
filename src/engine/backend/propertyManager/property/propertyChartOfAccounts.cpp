@@ -29,7 +29,7 @@ void ibPropertyChartOfAccounts::DoSetValue(const ibVariant& val)
 	ibProperty::DoSetValue(val);
 }
 
-// The charts of accounts in this configuration. The list used to sit in advpropChartOfAccounts.cpp.
+// The charts of accounts in this application. The list used to sit in advpropChartOfAccounts.cpp.
 ibPropertyChoiceMode ibPropertyChartOfAccounts::GetValueList(ibPropertyChoiceList& list)
 {
 	return CreateValueList(list, ibPropertyChoiceMode::Single, { g_metaChartOfAccountsCLSID });

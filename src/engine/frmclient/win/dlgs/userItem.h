@@ -31,7 +31,7 @@
 #include "deskgui/univ/panel.h"
 
 // A USER — the old desktop's dialog as it was, on ibUserInfo: its roles and languages offered
-// as the server lists them, where the desktop's took the active configuration. What its OK checked before it saved — that
+// as the server lists them, where the desktop's took the active application. What its OK checked before it saved — that
 // some user keeps a role with the administration rights — and the password's hash are the server's: a refusal comes
 // back with the desktop's text.
 class ibDialogUserItem : public ibDialog {
@@ -67,7 +67,7 @@ private:
 
 	std::map<wxTreeItemId, ibDataUserRole> m_roleArray;
 	std::map<int, ibDataUserLanguageItem> m_languageArray;
-	// The configuration's own language (the row the server marks Default) — the desktop's activeMetaData->GetLangCode().
+	// The application's own language (the row the server marks Default) — the desktop's activeMetaData->GetLangCode().
 	wxString m_strDefaultLanguageCode;
 
 	ibAuiNotebook* m_mainNotebook;

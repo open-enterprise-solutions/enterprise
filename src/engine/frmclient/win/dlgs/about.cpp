@@ -80,7 +80,7 @@ ibDialogAbout::ibDialogAbout(wxWindow* parent, const ibProtocolNode& shown, int 
 	const wxString database = shown.GetString(ibProtocol::ibSchema::ibAbout::Database);   // empty — no base
 	m_textCtrl1 = !database.IsEmpty() ? AddInfoRow(infoHost, grid, _("Database"), database) : nullptr;
 
-	m_textCtrl2 = AddInfoRow(infoHost, grid, _("Application"), shown.GetString(ibProtocol::ibSchema::ibAbout::Application));
+	m_textCtrl2 = AddInfoRow(infoHost, grid, _("Program"), shown.GetString(ibProtocol::ibSchema::ibAbout::Program));
 	m_textCtrl3 = AddInfoRow(infoHost, grid, _("User"),        shown.GetString(ibProtocol::ibSchema::ibAbout::User));
 	m_textCtrl4 = AddInfoRow(infoHost, grid, _("Locale"),      shown.GetString(ibProtocol::ibSchema::ibAbout::Locale));
 

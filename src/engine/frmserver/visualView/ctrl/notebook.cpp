@@ -42,7 +42,7 @@ void ibValueNotebook::OnCreated(ibVisualHost* host, bool firstCreated)
 
 ibValueNotebookPage* ibValueNotebook::GetActivePage() const
 {
-	// A page taken off the notebook (hidden, or switched off by the functional options) leaves the
+	// A page taken off the notebook (hidden, or switched off by the feature options) leaves the
 	// selection on the first page that is still on it.
 	if (m_activePage != nullptr && m_activePage->IsPageShown())
 		return m_activePage;

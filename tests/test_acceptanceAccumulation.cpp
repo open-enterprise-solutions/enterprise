@@ -37,7 +37,7 @@
 #include "backend/databaseLayer/databaseMaterializeBuilder.h"
 #include "backend/databaseLayer/databaseQueryBuilder.h"
 #include "backend/databaseLayer/sqllite/sqliteDatabaseLayer.h"
-#include "backend/metadataConfiguration.h"
+#include "backend/metadataApplication.h"
 #include "backend/metaCollection/metaObject.h"
 #include "backend/metaCollection/dimension/metaDimensionObject.h"
 #include "backend/metaCollection/resource/metaResourceObject.h"
@@ -126,12 +126,12 @@ private:
 
 struct AcceptanceAccumulation : ::testing::Test {
 	wxInitializer m_wxInit;
-	// RunDatabase sets this thread's code style to the configuration's. The binary runs VES
+	// RunDatabase sets this thread's code style to the application's. The binary runs VES
 	// (test_compiler.cpp), so TearDown puts it back, as StyleGuard does.
 	const short m_codeStyle = ibCompileCode::GetCodeStyle();
 	std::shared_ptr<ibDatabaseLayerSQLite> db;
 	ibString dbPath;
-	std::unique_ptr<ibMetaDataConfigurationFile> cfg;
+	std::unique_ptr<ibMetaDataApplicationFile> cfg;
 	ibValueMetaObject* document = nullptr;
 	ibValueMetaObjectAccumulationRegister* reg = nullptr;
 	ibValueMetaObjectDimension* warehouse = nullptr;
@@ -167,8 +167,8 @@ struct AcceptanceAccumulation : ::testing::Test {
 		pool->Init(db, /*maxSize=*/4, /*minIdle=*/0);
 
 		fixture = LoadFixture(wxT("accumulation.json"));
-		cfg = std::make_unique<ibMetaDataConfigurationFile>();
-		ibValueMetaObjectConfiguration* root = cfg->GetCommonMetaObject();
+		cfg = std::make_unique<ibMetaDataApplicationFile>();
+		ibValueMetaObjectApplication* root = cfg->GetRootMetaObject();
 		ASSERT_NE(root, nullptr);
 		document = cfg->CreateMetaObject(g_metaDocumentCLSID, root, false);
 		reg = dynamic_cast<ibValueMetaObjectAccumulationRegister*>(

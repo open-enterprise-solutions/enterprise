@@ -11,7 +11,7 @@
 #include <thread>   // each connection's thread
 #include <vector>
 
-// Lifecycle: owned by ibMetaDataConfigurationStorage as a unique_ptr
+// Lifecycle: owned by ibMetaDataApplicationStorage as a unique_ptr
 // field (private ctor + friend). Same cache-pointer pattern as
 // ibDebuggerServer — designer / codeEditor hot paths read the static
 // slot directly through the macro.
@@ -163,17 +163,17 @@ class BACKEND_API ibDebuggerClient {
 		const ibString& GetUserName() const { return m_userName; }
 
 		// ⭐⭐ WHICH REVISION THE PROCESS OVER THERE IS RUNNING. The handshake has always carried
-		// both halves — the configuration's GUID and its digest — and only the GUID was ever asked:
-		// `m_verifiedConnection` answers "the same configuration", which is the right question for
+		// both halves — the application's GUID and its digest — and only the GUID was ever asked:
+		// `m_verifiedConnection` answers "the same application", which is the right question for
 		// deciding whether to attach at all, and says nothing about whether it is the same VERSION
 		// of it. An application keeps what it read at startup — metadata, bytecode, which registers
 		// a document posts to — so a change applied afterwards leaves it correct for a
-		// configuration nobody is looking at any more.
+		// application nobody is looking at any more.
 		//
 		// That is the one failure this surface cannot show as a failure: the code runs, nothing
 		// raises, and the change simply does not appear. The digest was on the wire all along
 		// (debugClient.cpp, CommandId_VerifyConnection); it only needed asking.
-		const ibString& GetConfigMD5() const { return m_md5Hash; }
+		const ibString& GetApplicationMD5() const { return m_md5Hash; }
 
 		ConnectionType GetConnectionType() const { return m_connectionType; }
 
@@ -230,7 +230,7 @@ class BACKEND_API ibDebuggerClient {
 		std::shared_ptr<ibWebSocketClient>   m_socketClient;
 		std::shared_ptr<ibDebugCommandQueue> m_commandQueue;
 
-		ibString		m_confGuid;
+		ibString		m_applicationGuid;
 		ibString		m_md5Hash;
 		ibString		m_userName;
 		ibString		m_compName;
@@ -244,15 +244,15 @@ class BACKEND_API ibDebuggerClient {
 		friend class ibDebuggerClient;
 	};
 
-	// metaData — the configuration that made it and owns it; a connection's thread asks it, never "the
+	// metaData — the application that made it and owns it; a connection's thread asks it, never "the
 	// current one" (docs/private/multi-base-process.md).
-	explicit ibDebuggerClient(class ibMetaDataConfigurationBase* metaData);
-	friend class ibMetaDataConfigurationStorage;
-	friend class ibStandaloneDebuggerClient;   // a test's client with no configuration around it (test_debugClient.cpp)
+	explicit ibDebuggerClient(class ibMetaDataApplicationBase* metaData);
+	friend class ibMetaDataApplicationStorage;
+	friend class ibStandaloneDebuggerClient;   // a test's client with no application around it (test_debugClient.cpp)
 
 public:
 
-	class ibMetaDataConfigurationBase* GetMetaData() const { return m_metaData; }
+	class ibMetaDataApplicationBase* GetMetaData() const { return m_metaData; }
 
 	void SetBridge(ibDebuggerClientBridge* bridge) { m_adapter->SetBridge(bridge); }
 
@@ -389,14 +389,14 @@ public:
 	// Unlike everything above it, this does not need the runtime to be stopped.
 	void RequestScreenshot(const ibString& reason, const ibString& area, const ibString& format);
 
-	// ⭐⭐ PUTTING DATA IN — start a configuration procedure over there as a background job, then
+	// ⭐⭐ PUTTING DATA IN — start an application procedure over there as a background job, then
 	// watch it and stop it by the token that comes back. All three answer as OnFillState.
 	//
 	// ⚠ LIKE THE SCREENSHOT AND UNLIKE THE SANDBOX, these do not need a stop: what is asked for is a
 	// job in a session of its own, which a running application can start at any moment. Which is
 	// also why a fill cannot be stepped through — there is no frame to stop in. See debugDefs.h.
 	//
-	// ⚠ THE CODE GOES OVER AS TEXT and is compiled at the far end, against the configuration that
+	// ⚠ THE CODE GOES OVER AS TEXT and is compiled at the far end, against the application that
 	// will run it. This side compiles it too, but only to CHECK it — see jobRunByteCode.h.
 	void StartJob(const struct ibJobRunRequest& request);
 	void AskJobStatus(const ibString& token);
@@ -598,7 +598,7 @@ private:
 
 	static ibDebuggerClient* ms_debugClient;
 
-	class ibMetaDataConfigurationBase* const m_metaData;
+	class ibMetaDataApplicationBase* const m_metaData;
 
 	// Shared only to be watched: what is queued for it holds it weakly (CallAfter).
 	std::shared_ptr<ibDebuggerClientAdapter> m_adapter;

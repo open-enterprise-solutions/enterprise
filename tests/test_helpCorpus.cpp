@@ -247,9 +247,9 @@ TEST(HelpCorpus, AnArticleStandsUnderTheOwnerItNames) {
 	EXPECT_FALSE(saysOf(wxT("enum.ButtonView")));
 }
 
-// The merge carries the dictionary too. A per-configuration corpus may rename a
+// The merge carries the dictionary too. A per-application corpus may rename a
 // section for its own corpus, the same overlay rule its entries follow.
-TEST(HelpCorpus, MergingKeepsPlatformNamesAndLetsAConfigurationOverlayThem) {
+TEST(HelpCorpus, MergingKeepsPlatformNamesAndLetsAnApplicationOverlayThem) {
 	std::vector<ibHelpEntry> platformEntries;
 	platformEntries.push_back(MakeEntry(wxT("fn.Round"), { wxT("global_functions") }));
 	std::map<ibString, ibString> platformNames;
@@ -265,11 +265,11 @@ TEST(HelpCorpus, MergingKeepsPlatformNamesAndLetsAConfigurationOverlayThem) {
 	std::map<ibString, ibString> configNames;
 	configNames[wxT("date")] = wxT("Даты и периоды");
 
-	auto perConfig = std::make_shared<const ibHelpCorpus>(
-		wxT("ru"), ibHelpCorpus::Source::kPerConfiguration,
+	auto perApplication = std::make_shared<const ibHelpCorpus>(
+		wxT("ru"), ibHelpCorpus::Source::kPerApplication,
 		std::move(configEntries), std::vector<ibHelpLoadError>{}, std::move(configNames));
 
-	ibHelpCorpus merged(platform, perConfig, wxT("ru"));
+	ibHelpCorpus merged(platform, perApplication, wxT("ru"));
 
 	const ibHelpCategory* functions = ChildByKey(merged.GetRoot(), wxT("global_functions"));
 	ASSERT_NE(functions, nullptr);
@@ -279,7 +279,7 @@ TEST(HelpCorpus, MergingKeepsPlatformNamesAndLetsAConfigurationOverlayThem) {
 	const ibHelpCategory* dates = ChildByKey(merged.GetRoot(), wxT("date"));
 	ASSERT_NE(dates, nullptr);
 	EXPECT_EQ(dates->displayName, wxT("Даты и периоды"))
-		<< "the configuration's own name did not overlay the platform's";
+		<< "the application's own name did not overlay the platform's";
 }
 
 // =============================================================================

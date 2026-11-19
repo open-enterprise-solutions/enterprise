@@ -47,7 +47,7 @@ enum class ibVarKind : uint8_t {
 	External,
 	Context,
 	ContextProp,
-	Protected,   // appended (AOT-stable) — visible to children, not config-wide
+	Protected,   // appended (AOT-stable) — visible to children, not application-wide
 };
 
 // Function-side discriminator. Three categories — matches the
@@ -73,7 +73,7 @@ enum class ibFnKind : uint8_t {
 	// safe even if the filter is missed (no valid identifier starts
 	// with it). Cross-bc invisible by definition (anonymous).
 	Lambda,
-	Protected,   // appended (AOT-stable) — visible to children, not config-wide
+	Protected,   // appended (AOT-stable) — visible to children, not application-wide
 };
 
 // Forward decl — full definition lives after ibByteCode so the
@@ -292,7 +292,7 @@ struct ibByteCode {
 		// `Cached` — the result is kept per argument tuple, on the ProcUnit
 		// that owns this function. THE LIFETIME IS OWNERSHIP, not a clock:
 		// the store dies with its ProcUnit, so an object module's cache
-		// lasts as long as that object and a common module's lasts as long
+		// lasts as long as that object and a shared module's lasts as long
 		// as the root it hangs from. That is why there is no invalidation
 		// call anywhere — nothing can go stale that outlives its holder.
 		bool      m_valueCached = false;
@@ -654,7 +654,7 @@ public:
 	//Attributes:
 
 	// Stable identifier for this bytecode. Equals the GUID of the
-	// owning module descriptor (catalog/document module, common
+	// owning module descriptor (catalog/document module, shared
 	// module, form module, …). One bytecode per descriptor at any
 	// moment in time — recompile replaces the bytecode body but
 	// reuses the same `m_id`, so dependents pointing at this ID via
@@ -675,7 +675,7 @@ public:
 	// `ibGuid` and survives renames.
 	ibGuid m_id;
 
-	// Kind of descriptor this bytecode was compiled for (CommonModule
+	// Kind of descriptor this bytecode was compiled for (SharedModule
 	// / CatalogObjectModule / FormModule / etc. — one of the
 	// `g_meta*CLSID` family). Informational + sanity check rather
 	// than a strict invariant:
@@ -683,13 +683,13 @@ public:
 	//  - On load from cache: verify that a bytecode wired into a
 	//    "Form" slot was actually compiled for FormModule kind. If
 	//    not, the cache row was deployed against a different shape
-	//    of host configuration — reject and recompile.
+	//    of host application — reject and recompile.
 	//  - On AOT upgrade: when OES introduces / changes / splits a
 	//    descriptor CLSID, old cache rows are detectable here and
 	//    can be migrated or rebuilt explicitly.
 	//  - For audit / diag: `gfix-bytecode --list` can group
 	//    bytecodes by kind. Useful when chasing "why is this
-	//    common-module bytecode 50× larger than typical?".
+	//    shared-module bytecode 50× larger than typical?".
 	//
 	// 0 (uninitialised) means "compiled before the field existed" —
 	// treated as "any kind" by validators; only opt-in checks fire.
@@ -724,7 +724,7 @@ public:
 	// Dependency list — bytecodes whose EXPORT symbols are visible from
 	// this bytecode at compile / eval time. Today populated only by the
 	// runtime tree wiring (parent module of current eval/object/form).
-	// Tomorrow: a common module that imports several others contributes
+	// Tomorrow: a shared module that imports several others contributes
 	// each as a separate entry, so a single name lookup can hit
 	// multiple module's exports.
 	//
@@ -779,7 +779,7 @@ public:
 	//            miss on A even if A's own source_hash didn't
 	//            change).
 	// This gives proper transitive cache invalidation through the
-	// dependency graph — without it, a recompile of common-module B
+	// dependency graph — without it, a recompile of shared-module B
 	// wouldn't invalidate any of its caller's bytecodes.
 	std::vector<ibGuid> m_dependencyVersions;
 

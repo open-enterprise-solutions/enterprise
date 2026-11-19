@@ -12,7 +12,7 @@
 // WHAT A PERSON SET for the port on their machine — a value, so a settings page edits it and hands it over.
 struct ibMcpSettings {
 
-	// Off unless somebody turned it on. An open port that describes and edits a configuration is not something a
+	// Off unless somebody turned it on. An open port that describes and edits an application is not something a
 	// platform should acquire by upgrading.
 	bool           m_enabled = false;
 

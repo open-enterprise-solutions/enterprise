@@ -10,7 +10,7 @@
 //
 // WHY IT MATTERS MORE THAN IT LOOKS. Everything built without it is FACELESS: a
 // catalog with no form is a table nobody sees. A developer judges a
-// configuration by reading the tree; the person the configuration is FOR judges
+// application by reading the tree; the person the application is FOR judges
 // it by looking at a form. Until this exists, the loop ends one step before the
 // only place that person lives.
 //
@@ -32,7 +32,7 @@
 #include "backend/metaCollection/partial/commonObject.h"   // ibValueMetaObjectRecordData::GetObjectForm — the form an object opens with
 #include "backend/metaCollection/metaFormObject.h"
 #include "backend/metaCollection/metaIntrospect.h"
-#include "backend/metadataConfiguration.h"
+#include "backend/metadataApplication.h"
 #include "backend/objCtor.h"   // ibCtorMetaValueType — what a reference type points at, by its id
 #include "backend/backend_command.h"                            // WalkCommand — the receiver judges a binding
 #include "core/description/commandDescription.h"
@@ -152,7 +152,7 @@ const ibArg& ArgPropertyToBind()
 	static const ibArg s_a(ibT("property"), ibArg::Kind::Text,
 		ibMcpText("Which binding property. Omitted: Source - what a field or a table shows. A Button's is Command, and "
 			  "`path` names the command as the designer's picker offers it: a standard action 'Form.Close', a table's "
-			  "'Form.<table>.Add', a form command or a configuration's command by its name."));
+			  "'Form.<table>.Add', a form command or an application's command by its name."));
 	return s_a;
 }
 
@@ -205,7 +205,7 @@ ibValueForm* OpenForm(const ibDataNode& params, ibString& refusal,
 
 	ibValueMetaObject* object = ibFindMetaObjectById(metaData, (ibMetaID)id);
 	if (object == nullptr) {
-		refusal = ibString::Format(ibMcpText("Nothing in this configuration has id %i."), (int)id);
+		refusal = ibString::Format(ibMcpText("Nothing in this application has id %i."), (int)id);
 		return nullptr;
 	}
 
@@ -229,7 +229,7 @@ ibValueForm* OpenForm(const ibDataNode& params, ibString& refusal,
 	// There are two kinds of form and they enter differently: a form declared
 	// under an object goes through that object, which builds the SOURCE its kind
 	// implies — a list form gets the list, an object form a new object — and a
-	// COMMON form, standing under Common, builds standalone. Both land on
+	// SHARED form, standing under Shared, builds standalone. Both land on
 	// CreateAndBuildForm underneath; the difference is entirely the source.
 	//
 	// The first version called CreateAndBuildForm directly and passed nullptr for
@@ -265,7 +265,7 @@ ibValueForm* OpenForm(const ibDataNode& params, ibString& refusal,
 
 // …OR THE FORM AN OBJECT OPENS WITH, when the id is the object's own: its default object form, or the one the
 // platform GENERATES when it declares none — built by the object itself (GetObjectForm), the very call the running
-// application opens it with. A configuration built from command groups and commands needs no form of its own for
+// application opens it with. An application built from command groups and commands needs no form of its own for
 // its commands to stand on the bar, so the form worth reading is often one nobody created.
 //
 // Answers nullptr with NO refusal when the id is not such an object — OpenForm then answers for it.
@@ -482,7 +482,7 @@ public:
 			"each runs. The ids are what every other form verb addresses a part by.\n"
 			"And its COMMAND BAR as a person will see it (`commandBar`): the standard actions, the "
 			"object's own commands, and each CommandGroup of the category FormCommandBar as ONE entry "
-			"with its `submenu` - the object's commands filed under it and the common commands typed "
+			"with its `submenu` - the object's commands filed under it and the shared commands typed "
 			"for the object this form shows.");
 	}
 
@@ -822,7 +822,7 @@ public:
 			created->SetControlName(name);
 
 		// ⚠ SAVED, OR IT NEVER HAPPENED. The value form is ours for the length of
-		// this call; the configuration keeps the LAYOUT, and nothing reaches it
+		// this call; the application keeps the LAYOUT, and nothing reaches it
 		// until the form is written back.
 		if (!StoreForm(creator, form, result, refusal, ibMcpText("The control was added"))) {
 			form->DecrRef();
@@ -918,12 +918,12 @@ public:
 			"to - or one EVENT, whose value is the name of a procedure in the form's module. "
 			"form_control lists both and what each holds now; a property whose values are a "
 			"closed set is set by its word, and one that holds several (`select: multiple`) by an array "
-			"of them - the whole set, an empty array clears it. `FunctionalOptions` is such a set: the "
-			"functional options a control is available under; while all of them are off it is not available - "
+			"of them - the whole set, an empty array clears it. `FeatureOptions` is such a set: the "
+			"feature options a control is available under; while all of them are off it is not available - "
 			"neither shown nor offered, and neither is what it holds.\n"
 			"A PICTURE goes in `value` in its own shape, the one form_control reads it in: {Type: 1, ClassId} "
-			"for an engine picture (picture_list -> engine `id`), {Type: 2, Guid} for one the configuration "
-			"declares (picture_list -> configuration `guid`), {Type: 3, Image: {Name, Buffer, Width, Height}} "
+			"for an engine picture (picture_list -> engine `id`), {Type: 2, Guid} for one the application "
+			"declares (picture_list -> application `guid`), {Type: 3, Image: {Name, Buffer, Width, Height}} "
 			"for an image of its own - Buffer is the PNG file's bytes in base64 written \"base64:<...>\".\n"
 			"`attribute` or `command` instead of `control` sets that part the same way: an attribute's Type in words "
 			"(DynamicList, DataComposition, CatalogRef.Goods), its `Settings` - a list's or a composition's whole "
@@ -1151,7 +1151,7 @@ MCP_TOOL_REGISTER_DESIGNER(ibMcpToolFormRemove);
 // form_move — the order of a control among its siblings
 //---------------------------------------------------------------------------
 //
-// The same question metadata_move answers for a configuration's objects, asked of a form: which
+// The same question metadata_move answers for an application's objects, asked of a form: which
 // control comes first in its group, which column stands left in a table, which page opens first.
 // The editor does it with a drag; this is the drag.
 //
@@ -1227,7 +1227,7 @@ public:
 				form->DecrRef();
 				return false;
 			}
-			// The configuration the form BELONGS to — asked of its creator, not of whichever is active.
+			// The application the form BELONGS to — asked of its creator, not of whichever is active.
 			if (ibMetaData* const metaData = creator->GetMetaData())
 				metaData->Modify(true);
 		}
@@ -1402,7 +1402,7 @@ public:
 		const ibSourceDataObject* source = head != nullptr ? head->GetSourceValue() : nullptr;
 
 		if (source == nullptr) {
-			// NOTHING TO UNFOLD is a state rather than a fault: a common form has no main attribute, and an
+			// NOTHING TO UNFOLD is a state rather than a fault: a shared form has no main attribute, and an
 			// attribute of a primitive type is a leaf a control binds to as it is.
 			result.SetValue(ibT("note"), named
 				? ibString::Format(ibMcpText("'%s' holds nothing to unfold - a control binds to it as it is."), head->GetName())
@@ -1419,7 +1419,7 @@ public:
 		// that is not there raises with what that level offers — said back as the refusal.
 		//
 		// 🛑 IT WAS WALKED HERE TOO, a third copy beside the engine's two, stepping across a reference through an
-		// empty reference built from the ACTIVE configuration rather than through the object the walk stood on.
+		// empty reference built from the ACTIVE application rather than through the object the walk stood on.
 		const ibString walked = !named ? path
 			: path.IsEmpty() ? head->GetName() : head->GetName() + ibT(".") + path;
 		ibSourceDescription hops;
@@ -1626,7 +1626,7 @@ public:
 			ibString available;
 
 			// ⭐⭐ THE COMMANDS THE INSPECTOR OFFERS — the form's one gather (GatherFormCommands), the picker's and the
-			// navigator's: the form's own, the standard actions of the form and of its tables, the configuration's.
+			// navigator's: the form's own, the standard actions of the form and of its tables, the application's.
 			// Named by its path, as the button's cell shows it ('Form.Close', 'Form.<table>.Add'), or by its name in
 			// the tree; the first in the gather's order wins, the form's own first. A list of its own here offered the
 			// form's commands and the object's alone (2026-11-02: "Update" - "Available: none").
@@ -1933,7 +1933,7 @@ public:
 		if (!name.IsEmpty())
 			created->SetControlName(name);
 
-		// ⚠ SAVED, OR IT NEVER HAPPENED — the configuration keeps the layout, and
+		// ⚠ SAVED, OR IT NEVER HAPPENED — the application keeps the layout, and
 		// the value form is ours only for the length of this call.
 		if (!StoreForm(creator, form, result, refusal, ibMcpText("The control was pasted"))) {
 			form->DecrRef();
@@ -2052,7 +2052,7 @@ public:
 		result.AddField(ibT("events"), ibDataValue::Array(events));
 
 		// TAKEN BACK OUT, the way form_remove takes one out. The form was never saved, so the
-		// configuration is as it was.
+		// application is as it was.
 		form->RemoveControl(sample);
 		form->DecrRef();
 		return true;
@@ -2062,13 +2062,13 @@ public:
 MCP_TOOL_REGISTER_DESIGNER(ibMcpToolFormAccepts);
 
 //---------------------------------------------------------------------------
-// what a FORM can be half-built into — config_check asks this too
+// what a FORM can be half-built into — app_check asks this too
 //---------------------------------------------------------------------------
 //
 // ⭐⭐ A COMPOSITION DOES NOT ONLY LIVE IN THE METADATA. It lives on FORMS as well — a list, a
 // composer dropped onto a gridbox, a table — and anything on a form can hold one (Max, 2026-09-02:
 // *"a composer can be on a form too, like a list"*, *"anything can live there — tables, a composer,
-// a list"*). The configuration-wide check walks metaobjects, and metaobjects are exactly where
+// a list"*). The application-wide check walks metaobjects, and metaobjects are exactly where
 // these are NOT: a form keeps its controls as a blob, which is unreadable to anything that cannot
 // build them.
 //
@@ -2089,7 +2089,7 @@ class ibMcpAuditForms : public ibMcpAudit {
 	//
 	// AND THE TWO KINDS ARE JUDGED DIFFERENTLY. A report composition owes outputs and selected
 	// fields; a LIST is a degenerate composer and owes neither — demanding an output of it would
-	// report every list in the configuration as broken, which is how an audit teaches people to
+	// report every list in the application as broken, which is how an audit teaches people to
 	// ignore it.
 	// ⭐ THE COMPOSITION A PROPERTY CARRIES, ASKED ONCE — and with it the second fact the caller
 	// needs: which rules to judge it by. Two classes on a control carry one: a report's composition,
@@ -2158,7 +2158,7 @@ public:
 
 	void Check(ibMetaData* metaData, const ibComplain& complain) const override
 	{
-		if (metaData == nullptr || !metaData->IsConfigOpen())
+		if (metaData == nullptr || !metaData->IsOpen())
 			return;
 
 		for (ibValueMetaObject* object : metaData->GetAnyArrayObject<ibValueMetaObject>(true)) {
@@ -2171,7 +2171,7 @@ public:
 
 			// AN EMPTY BLOB IS A GENERATED FORM — the platform lays it out when it is opened, and
 			// there is nothing stored to find fault with. Not a complaint: it is how most forms in
-			// a young configuration legitimately are.
+			// a young application legitimately are.
 			const ibMemoryBuffer data = creator->GetFormData();
 			if (data.GetDataLen() == 0)
 				continue;

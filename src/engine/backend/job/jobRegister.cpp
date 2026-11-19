@@ -101,9 +101,9 @@ void ibJobManager::WriteSharedLastRun(const ibGuid& key, const ibString& name, c
 // The declaration is the STARTING POINT: the first time a job is seen on a base,
 // its metadata schedule seeds the row; from then on the row wins. That is what
 // makes "switch this misbehaving job off" an action in the enterprise rather
-// than an edit of the configuration on a production base — and it is also the
+// than an edit of the application on a production base — and it is also the
 // only place the engine's OWN jobs can have their cadence changed, since there
-// is no configuration behind them to edit.
+// is no application behind them to edit.
 // ---------------------------------------------------------------------------
 
 ibJobManager::ibJobSettings ibJobManager::ReadSharedSettings(const ibGuid& key)
@@ -133,15 +133,8 @@ ibJobManager::ibJobSettings ibJobManager::ReadSharedSettings(const ibGuid& key)
 			if (!computer.IsNull())
 				settings.m_computer = computer.GetString();
 
-			// An absent / NULL active reads as ON. A row written before the column existed must
-			// not turn its job off — silence is not a refusal.
-			//
-			// ⚠ ABSENT, NOT EMPTY: a False is an empty value (IsEmpty answers true for it, and for a
-			// stored 0), so asking IsEmpty read every switched-off job back as switched on — `Write()`
-			// of Active = False held until the next read of the row.
-			const ibValue active = rs.GetValue(3);
-			const bool absent = active.IsNull() || active.GetType() == ibValueTypes::TYPE_EMPTY;
-			settings.m_active = absent ? true : active.GetBoolean();
+			// Every row is made by WriteSharedSettings, which states `active` — read as it lies.
+			settings.m_active = rs.GetValue(3).GetBoolean();
 
 			// The schedule rides as opaque bytes — read through the blob door, not as a value: it
 			// is a description, and its format belongs to ibJobScheduleDescriptionMemory alone.

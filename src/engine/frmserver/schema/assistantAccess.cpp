@@ -1,6 +1,6 @@
 #include "assistantAccess.h"
 
-#include "backend/metadataConfiguration.h"   // AccessRight_Assistant
+#include "backend/metadataApplication.h"   // AccessRight_Assistant
 #include "frmserver/client/clientHost.h"
 #include "frmserver/mcp/mcpServer.h"   // IsRunning — Running
 #include "backend/session/session.h"
@@ -11,7 +11,7 @@ bool ibSchemaMcpServer::AccessRight(const ibSession& session) const
 	if (IsDesignerSessionKind(session.GetKind()))
 		return true;
 
-	const ibMetaDataConfigurationBase* const metaData = session.GetMetaData();
+	const ibMetaDataApplicationBase* const metaData = session.GetMetaData();
 	return metaData != nullptr && metaData->AccessRight_Assistant();
 }
 

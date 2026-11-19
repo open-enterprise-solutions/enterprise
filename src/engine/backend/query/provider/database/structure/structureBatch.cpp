@@ -5,7 +5,7 @@
 #include "backend/query/queryColumn.h"                               // ibBackendQueryColumn — GetTypeDesc / GetPhysicalName
 #include "backend/query/provider/database/columnCodec.h"             // BindWriteValue — a field's DEFAULT is the column's write of a fresh value
 #include "backend/databaseLayer/databaseQueryBuilder.h"              // L2 door — ibUpdate / ibDelete / Execute (the type-removal data cleanups)
-#include "backend/restructureInfo.h"                                 // RequireExclusiveForDDL — demanded here, by the code that writes DDL
+#include "backend/restructureInfo.h"                                 // RequireSingleUserForDDL — demanded here, by the code that writes DDL
 #include "backend/backend_exception.h"                               // ibBackendCoreException — a refused write stops the apply
 
 #include <set>
@@ -38,7 +38,7 @@ ibDdlColumn ColumnOf(const ibColumnSlot& slot)
 
 // ⭐ A LOGICAL COLUMN'S FIELDS AS THE L2 COLUMNS THEY RENDER AS, in its layout's order — each created holding what the
 // column's write puts there for the value a fresh row of it holds: its DEFAULT, so a row a seed fills in part, or one
-// already in the table when the field is added, reads as that value written — a functional option nobody switched as
+// already in the table when the field is added, reads as that value written — a feature option nobody switched as
 // its initial value, a dimension kind a predefined account's seed left out as the empty value of its type. The value is
 // the column's (ibBackendQueryColumn::CreateValue — an attribute's column makes it as its attribute does, any other
 // from its type). Asked of the codec, the DEFAULT cannot be a second spelling of a write. A raw field is written as it is by whoever writes it and gets none; nor does a field the write leaves NULL (a
@@ -210,7 +210,7 @@ void ibStructureBatch::Ddl(const ibDdlStatement& ddl)
 int ibStructureBatch::Flush(ibSchemaBuilder& schema)
 {
 	// MONOPOLY IS OWED BY WHOEVER WRITES DDL, NOT BY WHOEVER PRESSED "UPDATE". The gate used to sit at the
-	// top of the save (ibStructureBuilder::OnBeforeSave), so editing a module demanded exclusive mode as
+	// top of the save (ibStructureBuilder::OnBeforeSave), so editing a module demanded single-user mode as
 	// loudly as adding a dimension — and the error message promised the opposite ("code-only changes can be
 	// saved without it"). Here the question answers itself: a batch with no steps has nothing to execute, so
 	// nobody asks, and a code-only apply goes through while people work.
@@ -222,10 +222,10 @@ int ibStructureBatch::Flush(ibSchemaBuilder& schema)
 	// the truth.
 	//
 	// Idempotent per apply: the gate returns immediately once exclusive is held (ts_acquiredByGate /
-	// ExclusiveMode), so the per-table flushes after the first cost nothing. Seed INSERTs are not counted —
-	// they are DML, and data writes are what exclusive mode exists to keep OTHERS from doing, not us.
+	// SingleUserMode), so the per-table flushes after the first cost nothing. Seed INSERTs are not counted —
+	// they are DML, and data writes are what single-user mode exists to keep OTHERS from doing, not us.
 	if (!m_steps.empty())
-		ibRestructureInfo::RequireExclusiveForDDL();
+		ibRestructureInfo::RequireSingleUserForDDL();
 
 	const bool multiClause = schema.AlterTableMultiClause();
 
@@ -235,7 +235,7 @@ int ibStructureBatch::Flush(ibSchemaBuilder& schema)
 
 	// ⚠ NO EXISTENCE PROBE HERE, ON PURPOSE. A guard that read the table's physical columns and
 	// skipped the DROP of an absent one lived here briefly (2026-08-17) and was removed the same
-	// day: the base is a function of the configuration BY CONSTRUCTION, and reading it to decide
+	// day: the base is a function of the application BY CONSTRUCTION, and reading it to decide
 	// which DDL to emit legalises exactly the drift it papers over. The view / trigger probes are
 	// the boundary, not a precedent — those are DERIVED objects whose replacement is the normal
 	// path. A drop that meets a missing column is a DEFECT upstream (or an outside edit, which is

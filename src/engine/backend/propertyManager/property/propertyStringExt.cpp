@@ -37,7 +37,7 @@ bool ibPropertyTString::GetDataValue(ibValue& pvarPropVal) const
 	return true;
 }
 
-// ⚠ STORED AS THE RAW FORM, unchanged. A configuration written before this reads as it always did,
+// ⚠ STORED AS THE RAW FORM, unchanged. An application written before this reads as it always did,
 // and one written now is still read by everything that speaks the format — the value moved into a
 // type of its own, the file did not move with it.
 bool ibPropertyTString::ReadNodeValue(const ibDataValue& value)

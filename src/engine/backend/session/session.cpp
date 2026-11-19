@@ -1,9 +1,9 @@
 #include "session.h"
 #include "sessionRegistry.h"
-#include "sessionException.h"   // the session's own refusals — exclusive held / others active
+#include "sessionException.h"   // the session's own refusals — single-user mode held / others active
 
 #include "backend/moduleManager/moduleManager.h"
-#include "backend/metadataConfiguration.h"
+#include "backend/metadataApplication.h"
 #include "backend/compiler/procUnit.h"
 #include "backend/compiler/procUnitState.h"
 #include "backend/databaseLayer/databaseLayer.h"
@@ -31,7 +31,7 @@
 #include "backend/system/value/valueQueryable.h"     // ibValueQueryable — a role-module restriction returned as a set
 #include "backend/metaCollection/metaRoleObject.h"   // ibValueMetaObjectRole — GetRoleModule()
 #include "backend/metaCollection/genericData.h"      // AccessRight_Show / _Modify / _Erase — the rights, as the metadata already answers them
-#include "backend/metaCollection/metaIntrospect.h"   // ibConfigurationWritesInWords — the session's code style
+#include "backend/metaCollection/metaIntrospect.h"   // ibApplicationWritesInWords — the session's code style
 #include "backend/backend_exception.h"               // ibBackendAccessException
 #include "backend/job/jobManager.h"                  // TenantsOf — a cancel reaches the runs reading for this session
 
@@ -81,12 +81,12 @@ public:
 		: m_session(session), m_metaData(metaData)
 	{
 		// Resolve the current user's role-module procUnits ONCE, right here. The policy is built in
-		// CompileRoot right AFTER AttachRuntime, so the role modules are attached (as common modules) and
+		// CompileRoot right AFTER AttachRuntime, so the role modules are attached (as shared modules) and
 		// their procUnits are LIVE — yet no query has fired yet, so the policy is in place before anything
 		// it must guard. Roles are fixed while the session lives, so this vector is valid for the whole
 		// life; re-resolving it per query would only cost (hot path) and risk a desync. Empty = no
 		// restricting role (default-allow); a role with no module adds no restriction.
-		ibValueModuleManagerRuntimeConfiguration* mm = m_session != nullptr ? m_session->GetManagerModule() : nullptr;
+		ibValueModuleManagerRuntimeApplication* mm = m_session != nullptr ? m_session->GetManagerModule() : nullptr;
 		if (mm == nullptr || m_metaData == nullptr)
 			return;
 		for (const ibUserInfo::ibUserRole& userRole : appData->GetUserRoleArray()) {
@@ -97,7 +97,7 @@ public:
 			const ibValueMetaObjectManagerModule* roleModule = role->GetRoleModule();
 			if (roleModule == nullptr)
 				continue;                                 // no RLS module on this role
-			ibValueModuleManager::ibValueModuleUnit* unit = mm->FindCommonModule(roleModule);
+			ibValueModuleManager::ibValueModuleUnit* unit = mm->FindSharedModule(roleModule);
 			if (unit == nullptr)
 				continue;
 			if (const std::shared_ptr<ibProcUnit> proc = unit->GetProcUnit())
@@ -453,7 +453,7 @@ private:
 		// an empty union is TRUE rather than the empty set: the door has a separate right-on-the-table
 		// stage, so a union role narrows an already-permitted table instead of granting it.
 		// ⭐ THE VERDICT IS ASKED, NOT COMPUTED HERE. Running the handlers needs a runtime, a
-		// configuration and a live user; deciding what their answers ADD UP TO needs none of those,
+		// application and a live user; deciding what their answers ADD UP TO needs none of those,
 		// and while the two lived in one body only the whole platform could exercise the rule — which
 		// is why it shipped "compiles and starts, but the fold itself is unverified". The rule now
 		// lives in `ibFoldRolePolicy` (query/rolePolicyFold.h), where a test can ask it directly, and
@@ -483,7 +483,7 @@ private:
 	}
 
 	ibSession*        m_session;
-	const ibMetaData* m_metaData;   // the session's config metadata — resolves role metaobjects (config-level)
+	const ibMetaData* m_metaData;   // the session's application metadata — resolves role metaobjects (application-level)
 	// The current user's role-module procUnits, each with its composition mode — resolved ONCE in the
 	// ctor (built post-compile, pre-run) and held for the session's whole life (roles are fixed while
 	// it lives). Empty = no restricting role.
@@ -633,7 +633,7 @@ ibSession::~ibSession()
 	ClearRoot();
 }
 
-ibValueModuleManagerRuntimeConfiguration* ibSession::GetManagerModule() const
+ibValueModuleManagerRuntimeApplication* ibSession::GetManagerModule() const
 {
 	return m_root;   // ibValuePtr's implicit operator T*()
 }
@@ -771,7 +771,7 @@ void ibSession::Teardown()
 	auto& reg = *regPtr;
 
 	// TAKE OUR RUNTIME DOWN OURSELVES, on this thread — the mirror of Open, which brought it up here. The
-	// listeners detach the runtime and destroy the root, and the last one out closes the configuration.
+	// listeners detach the runtime and destroy the root, and the last one out closes the application.
 	// Left to the Remove, the registry thread did it, and the designer's cached forms died off the main
 	// thread at exit (dump of 2026-10-04). Before IsFatal: a dead registry thread does not excuse us.
 	reg.NotifyDisconnect(this);
@@ -860,7 +860,7 @@ bool ibSession::SetTokenHash(const ibString& tokenHash)
 	}
 }
 
-void ibSession::SetExclusive(bool on)
+void ibSession::SetSingleUser(bool on)
 {
 	// Registry runs the queue handshake + wait and gives us back the
 	// verdict; we only translate it into an exception for the script
@@ -868,9 +868,9 @@ void ibSession::SetExclusive(bool on)
 	ibSessionRegistry* const regPtr = RegistryOf(*this);
 	if (regPtr == nullptr)
 		ibBackendCoreException::Error(_("Session registry not initialised"));
-	const ibExclusiveResult r = regPtr->SetExclusive(this, on);
+	const ibSingleUserResult r = regPtr->SetSingleUser(this, on);
 	switch (r) {
-	case ibExclusiveResult::Granted:
+	case ibSingleUserResult::Granted:
 		return;
 	// ⭐⭐ THE SESSION'S OWN VARIETY, because these are not malfunctions and the caller can act on them.
 	//
@@ -879,40 +879,40 @@ void ibSession::SetExclusive(bool on)
 	// and the Kind says which of the two situations it is, so a caller can wait, or offer to ask the
 	// other user to leave, or (the restructuring's case) explain that the apply needs the base to
 	// itself. Told apart by Kind rather than by matching the message text.
-	case ibExclusiveResult::HeldByOther:
-		ibBackendSessionException::Throw(ibBackendSessionException::Kind::ExclusiveHeld,
-			_("Another session is in exclusive mode"));
-	case ibExclusiveResult::NotSole:
+	case ibSingleUserResult::HeldByOther:
+		ibBackendSessionException::Throw(ibBackendSessionException::Kind::SingleUserHeld,
+			_("Another session is in single-user mode"));
+	case ibSingleUserResult::NotSole:
 		ibBackendSessionException::Throw(ibBackendSessionException::Kind::OthersActive,
-			_("Cannot acquire exclusive mode: other sessions are active"));
-	case ibExclusiveResult::JobRunning:
+			_("Cannot acquire single-user mode: other sessions are active"));
+	case ibSingleUserResult::JobRunning:
 		// Only jobs in the way — each ends by itself, so the request can be made again. Which one runs is in Active
 		// Users (its activity); the refusal does not name it.
 		ibBackendSessionException::Throw(ibBackendSessionException::Kind::OthersActive,
-			_("Cannot acquire exclusive mode while a job is running. Try again when it finishes."));
-	case ibExclusiveResult::Pending:
-		ibBackendCoreException::Error(_("Exclusive mode request did not complete"));
+			_("Cannot acquire single-user mode while a job is running. Try again when it finishes."));
+	case ibSingleUserResult::Pending:
+		ibBackendCoreException::Error(_("Single-user mode request did not complete"));
 	}
 }
 
-ibValueModuleManagerRuntimeConfiguration* ibSession::CreateRoot(ibMetaDataConfigurationBase* metaData)
+ibValueModuleManagerRuntimeApplication* ibSession::CreateRoot(ibMetaDataApplicationBase* metaData)
 {
-	// Per-session root mm — replaces the legacy ibMetaDataConfigurationFile
+	// Per-session root mm — replaces the legacy ibMetaDataApplicationFile
 	// process-singleton. Each session owns its own copy of the metadata
 	// tree's runtime state. CreateRoot only allocates; CreateMainModule
-	// (compile) runs from RunDatabase after common-module descriptors are
+	// (compile) runs from RunDatabase after shared-module descriptors are
 	// registered via OnBeforeRunMetaObject. Idempotent — second call with
 	// the same metadata returns the existing root unchanged.
 	if (metaData == nullptr)
 		return nullptr;
 	if (m_root)
 		return m_root;
-	auto* commonMeta = metaData->GetCommonMetaObject();
-	if (commonMeta == nullptr)
+	auto* rootObject = metaData->GetRootMetaObject();
+	if (rootObject == nullptr)
 		return nullptr;
 
-	m_root = ibValuePtr<ibValueModuleManagerRuntimeConfiguration>(
-		new ibValueModuleManagerRuntimeConfiguration(metaData, commonMeta));
+	m_root = ibValuePtr<ibValueModuleManagerRuntimeApplication>(
+		new ibValueModuleManagerRuntimeApplication(metaData, rootObject));
 
 	return m_root;
 }
@@ -920,11 +920,11 @@ ibValueModuleManagerRuntimeConfiguration* ibSession::CreateRoot(ibMetaDataConfig
 bool ibSession::CompileRoot()
 {
 	if (!m_root) return false;
-	// This session's modules are compiled in ITS configuration's syntax, and it speaks its configuration's main
+	// This session's modules are compiled in ITS application's syntax, and it speaks its application's main
 	// language when its user has none — the one it acquired, taken before the first compile. One server may hold
 	// bases written in different syntaxes and different languages.
-	const ibMetaDataConfigurationBase* const metaData = GetMetaData();
-	CompileStateOf(this)->m_codeStyle = ibConfigurationWritesInWords(metaData)
+	const ibMetaDataApplicationBase* const metaData = GetMetaData();
+	CompileStateOf(this)->m_codeStyle = ibApplicationWritesInWords(metaData)
 		? ibProgramSyntax::syntax_ves : ibProgramSyntax::syntax_ces;
 	if (metaData != nullptr) {
 		TranslateStateOf(this)->m_defLanguageCode = metaData->GetLangCode();
@@ -938,7 +938,7 @@ bool ibSession::CompileRoot()
 	// session's own responsibility. AttachRuntime self-gates by
 	// session kind (Enterprise / WebClient / Service execute; others
 	// short-circuit), so no external wantsRuntime check is needed.
-	// A configuration that does not start THROWS here (and from CreateMainModule above), and the
+	// An application that does not start THROWS here (and from CreateMainModule above), and the
 	// session is refused by whoever opens it — nothing below is built over a half-raised runtime.
 	m_root->AttachRuntime(this);
 
@@ -949,20 +949,20 @@ bool ibSession::CompileRoot()
 	// ever fires.
 	//
 	// Inside a TRUSTED window: the module reads data itself (find the organisation for this user,
-	// the period, whatever this configuration parameterises access by), and at this moment there is
+	// the period, whatever this application parameterises access by), and at this moment there is
 	// nothing to filter that read by. Without the scope it would either be refused or, worse,
 	// filtered by half-set values. The same door the role modules use for the same reason.
 	SetSessionParameters();
 
 	// RLS — build the session's access policy HERE, right AFTER runtime bring-up: the role modules
-	// attach as common modules DURING AttachRuntime, so their procUnits (FindCommonModule -> GetProcUnit)
+	// attach as shared modules DURING AttachRuntime, so their procUnits (FindSharedModule -> GetProcUnit)
 	// are only live NOW — the policy ctor resolves + caches them once. Still before the session serves
 	// any user query (CompileRoot finishes first), so it is in place before anything it must guard.
 	// Designer never enforces (it runs off the edit-time manager, not this runtime root).
 	if (!m_accessPolicy && !appData->DesignerMode()) {
-		// The registry's session already holds the configuration it was let in on. A session
-		// built over a configuration it has not acquired yet (a test, a root created first)
-		// still enforces the roles of the configuration its root was compiled against.
+		// The registry's session already holds the application it was let in on. A session
+		// built over an application it has not acquired yet (a test, a root created first)
+		// still enforces the roles of the application its root was compiled against.
 		const ibMetaData* meta = GetMetaData();
 		if (meta == nullptr && m_root != nullptr && m_root->GetMetaManager() != nullptr)
 			meta = m_root->GetMetaManager()->GetMetaData();
@@ -990,7 +990,7 @@ bool ibSession::EvaluateInRoot(const ibString& expression, ibValue& produced)
 	if (expression.IsEmpty())
 		return true;   // nothing to evaluate is not a failure
 
-	ibValueModuleManagerRuntimeConfiguration* const root = GetManagerModule();
+	ibValueModuleManagerRuntimeApplication* const root = GetManagerModule();
 	const std::shared_ptr<ibProcUnit> rootUnit = root != nullptr ? root->GetProcUnit() : nullptr;
 
 	if (!rootUnit) {
@@ -1015,7 +1015,7 @@ bool ibSession::DestroyRoot()
 	// CompileRoot rebuilds it against the recompiled modules (no stale procUnits after a reload).
 	m_accessPolicy.reset();
 	// Symmetric to CompileRoot: detach runtime before destroying the
-	// main module so common-module ProcUnits drop in order. Formerly
+	// main module so shared-module ProcUnits drop in order. Formerly
 	// an explicit mm->DetachRuntime(s) call from webSession.
 	m_root->DetachRuntime(this);
 	return m_root->DestroyMainModule();
@@ -1040,22 +1040,22 @@ void ibSession::AcquireMetaData()
 	if (m_metaData)
 		return;
 	// ⭐ A DESIGNER'S SESSION WORKS IN A WORLD OF ITS OWN (Max, 2026-10-20: *"the designer's metadata is held only
-	// by the designer's session; the rest live with the active one, by reference count"*) — the configuration it
+	// by the designer's session; the rest live with the active one, by reference count"*) — the application it
 	// edits, made for it and held by it alone. The base's active one it leaves to the rest, and only an apply
 	// replaces it.
 	if (IsDesignerSessionKind(GetKind())) {
 
-		// Held BEFORE it loads — a session's own configuration is the first answer `activeMetaData` gives on its
+		// Held BEFORE it loads — a session's own application is the first answer `activeMetaData` gives on its
 		// thread (ibApplicationInstance::GetActiveMetaData), and its loading asks for it. The session is bound to the
 		// thread for its bring-up (NotifyAuthenticated), so the rights checked and the language pinned are its user's.
-		m_metaData = ibMetaData::MakeShared<ibMetaDataConfigurationStorage>(ib::AppDataCtorToken{ GetApplicationInstance(), GetKind() });
+		m_metaData = ibMetaData::MakeShared<ibMetaDataApplicationStorage>(ib::AppDataCtorToken{ GetApplicationInstance(), GetKind() });
 
 		// …and one that did not come up goes with the reference: nobody else holds it.
 		if (!m_metaData->OnInitialize(_app_start_default_flag) || !m_metaData->RunDatabase())
 			m_metaData.reset();
 	}
-	else if (ibMetaDataConfigurationBase* const active = ibApplicationInstance::GetActiveMetaData(GetApplicationInstance()))
-		m_metaData = std::static_pointer_cast<ibMetaDataConfigurationBase>(active->shared_from_this());
+	else if (ibMetaDataApplicationBase* const active = ibApplicationInstance::GetActiveMetaData(GetApplicationInstance()))
+		m_metaData = std::static_pointer_cast<ibMetaDataApplicationBase>(active->shared_from_this());
 }
 
 void ibSession::ReleaseMetaData()
@@ -1069,7 +1069,7 @@ void ibSession::EnsureRoot()
 	// Wired by ibSessionRegistry::NotifyAuthenticated to land between
 	// AcquireMetaData and OnAuthenticated (CompileRoot).
 	// CreateRoot itself is idempotent; this wrapper just
-	// guards on the acquired configuration so headless sessions
+	// guards on the acquired application so headless sessions
 	// (Launcher, technical) without metadata don't fault.
 	if (m_root) return;
 	if (GetMetaData() == nullptr) return;
@@ -1594,7 +1594,7 @@ ibSession::OpenResult ibSession::Open(const ibString& user, const ibString& pass
 	if (res == ibAuthState::Authenticated) {
 		// NotifyAuthenticated fires three phases in order:
 		//   1. OnFirstConnect listeners, on the first auth (the base's
-		//      configuration ran as it opened, before anybody came in).
+		//      application ran as it opened, before anybody came in).
 		//   2. session->AcquireMetaData + EnsureRoot — the session's own reference
 		//      to it (a designer's: one of its own), and the per-session root mm
 		//      allocated over it NOW so step 3's listeners can rely on

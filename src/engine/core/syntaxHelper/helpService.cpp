@@ -102,7 +102,7 @@ void ibHelpService::Rebuild()
 {
 	// Serialise concurrent rebuild requests so two builders don't
 	// publish in arbitrary order (Phase 5 may fire reload from a
-	// configuration save while a manual hot-key also triggers it).
+	// application save while a manual hot-key also triggers it).
 	// The mutex covers BOTH the build AND the atomic_store —
 	// latest waiter wins.
 	std::lock_guard<std::mutex> lk(m_mutex);

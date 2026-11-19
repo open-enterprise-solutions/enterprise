@@ -26,11 +26,11 @@
 #include "backend/metaCollection/metaIntrospect.h"
 #include "backend/compiler/scriptCheck.h"   // ibCheckModule — the verdict the designer's Syntax gives
 #include "backend/metaCollection/metaModuleObject.h"
-#include "backend/metadataConfiguration.h"
+#include "backend/metadataApplication.h"
 
 namespace {
 
-// ⭐⭐ THE ONE WAY A MODULE IS WRITTEN — store the text, mark the configuration, compile it WHERE IT
+// ⭐⭐ THE ONE WAY A MODULE IS WRITTEN — store the text, mark the application, compile it WHERE IT
 // LIVES, and answer with what came of it.
 //
 // Both verbs in this file end here: module_write decides the text from an argument, module_patch
@@ -54,7 +54,7 @@ bool ibMcpWriteModule(ibValueMetaObjectModuleBase* module, const ibString& text,
 	module->GetMetaData()->Modify(true);
 
 	// CHECKED WHERE IT LIVES, not as a loose string: the module sees its owner's attributes and
-	// every exported name in the configuration, so this is the same verdict the designer's Syntax
+	// every exported name in the application, so this is the same verdict the designer's Syntax
 	// control gives.
 	const ibScriptCheckAnswer checked = ibCheckModule(module);
 
@@ -71,7 +71,7 @@ bool ibMcpWriteModule(ibValueMetaObjectModuleBase* module, const ibString& text,
 
 	// 🛑 `checked: false` IS NOT `diagnostics: []` — AND A BARE FLAG LETS IT BE READ AS ONE. Nothing
 	// was compiled: no verdict was reached, and the empty diagnostics list beside it says only that
-	// nobody looked. Measured on a live configuration, four documents answered `true` and the fifth
+	// nobody looked. Measured on a live application, four documents answered `true` and the fifth
 	// `false`, with no visible difference between them and nothing to act on.
 	//
 	// ⭐ AND THE REASON IS ALWAYS THE SAME ONE: a module reaches the compile cache in its owner's
@@ -83,7 +83,7 @@ bool ibMcpWriteModule(ibValueMetaObjectModuleBase* module, const ibString& text,
 			ibMcpText("The text is written, and NOTHING WAS COMPILED - so the empty `diagnostics` "
 			  "means nobody looked, not that the module is clean. A module is compiled where it "
 			  "lives, and it gets there when its owner is run; an object created but never run has "
-			  "no compile module yet. Re-open the object (or apply the configuration) and write "
+			  "no compile module yet. Re-open the object (or apply the application) and write "
 			  "again to get a verdict, and until then treat this module as unverified."));
 
 	std::vector<ibDataValue> diagnostics;
@@ -106,10 +106,10 @@ bool ibMcpWriteModule(ibValueMetaObjectModuleBase* module, const ibString& text,
 	// base holds and keeps the bytecode it came up with, so a module written here runs nowhere yet — and a
 	// restart alone brought the OLD text up with nothing said (measured 2026-09-11). The path is two calls.
 	result.SetValue(ibT("toRun"),
-		ibMcpText("Written here, not where it runs. A configuration's module: the application runs it after "
-		  "config_apply (a module's text needs no exclusive mode) and a restart - app_run restart: true. An "
-		  "external's: the bytes external_processor_save / external_report_save hands back are what the "
-		  "application runs (external_processor_open / external_report_open there)."));
+		ibMcpText("Written here, not where it runs. An application's module runs after "
+		  "app_apply (a module's text needs no single-user mode) and a restart - app_run restart: true. An "
+		  "external's: the bytes external_data_tool_save / external_report_save hands back are what the "
+		  "application runs (external_data_tool_open / external_report_open there)."));
 	return true;
 }
 
@@ -148,7 +148,7 @@ const ibArg& ArgText()
 	static const ibArg s_a(ibT("text"), ibArg::Kind::Text,
 		ibMcpText("The whole module text - this REPLACES what is there, it does not add to it "
 			  "(module_patch edits a part, module_read shows what is there now). Write it in "
-			  "the syntax form this configuration uses - syntax_search answers which one that is."),
+			  "the syntax form this application uses - syntax_search answers which one that is."),
 		/*required*/ true);
 	return s_a;
 }
@@ -291,7 +291,7 @@ public:
 	ibString GetDescription() const override
 	{
 		return ibMcpText("The text of a module, as it stands - an object module, a manager module, a "
-			"common module. Line numbers are the ones the editor and debug_breakpoint count "
+			"shared module. Line numbers are the ones the editor and debug_breakpoint count "
 			"by, so a line read here is the line a breakpoint goes on. Read before writing: "
 			"module_write REPLACES the whole text, and module_patch is the one that edits a "
 			"part of it.");
@@ -334,7 +334,7 @@ public:
 		// SOURCE - which is not a road a caller of this door has.
 		//
 		// ⭐ AND IT IS THE SAME TABLE FOR EVERY KIND. A form's BeforeOpen / OnOpen / ChoiceProcessing,
-		// the configuration module's BeforeStart, a command's CommandProcessing: one reader, so a
+		// the application module's BeforeStart, a command's CommandProcessing: one reader, so a
 		// kind that grows a handler tomorrow answers here without this verb being touched.
 		std::vector<ibDataValue> handlers;
 
@@ -421,7 +421,7 @@ public:
 
 	ibString GetDescription() const override
 	{
-		return ibMcpText("REPLACE the text of a module - a document's object module, a common module, a "
+		return ibMcpText("REPLACE the text of a module - a document's object module, a shared module, a "
 			"manager module. The whole text, not an addition: module_patch edits a part and "
 			"module_read shows what is there now. Compiled afterwards IN ITS OWN CONTEXT and "
 			"the diagnostics come back, so a mistake is known immediately. The text is kept "
@@ -446,7 +446,7 @@ public:
 	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
 		// The shared door, as module_patch beside it uses — one lookup, one refusal, and the
-		// open-configuration test comes with it.
+		// open-application test comes with it.
 		ibValueMetaObject* object = ibMcpObjectNamed(params, refusal);
 		if (object == nullptr)
 			return false;

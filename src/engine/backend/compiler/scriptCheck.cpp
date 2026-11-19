@@ -65,11 +65,11 @@ std::vector<ibDiagnostic> CollectFrom(Compile compile)
 	return std::move(collector.m_found);
 }
 
-// ⭐ …BUT NOT IN A VACUUM, when a configuration was named. The module manager this configuration compiles against IS the
+// ⭐ …BUT NOT IN A VACUUM, when an application was named. The module manager this application compiles against IS the
 // context every module of it is parented to — the globals among them — so a text judged without it is judged against a
 // language that has no Message, no Query and no ValueTable. See the note in the header.
 //
-// ⚠ NULL IS ORDINARY: a plugin checking a text with no configuration open gets the old behaviour, which is the most that
+// ⚠ NULL IS ORDINARY: a plugin checking a text with no application open gets the old behaviour, which is the most that
 // can honestly be said about a text with no home.
 //
 // What comes back is the parent the compiler now stands under: the caller holds it for as long as it compiles and reads.
@@ -87,7 +87,7 @@ std::unique_ptr<ibCompileModule> ParentToModuleManager(ibCompileCode& compiler, 
 	// world. The desktop's composer window learned this the hard way and did exactly this as it opened, before it checked
 	// anything; Max pointed here: *"that is where we hunted a bug for a very long time"*.
 	//
-	// ⚠ SWALLOWED. A configuration whose own modules do not compile is not this checker's complaint to make — it was
+	// ⚠ SWALLOWED. An application whose own modules do not compile is not this checker's complaint to make — it was
 	// asked about the TEXT. The reason is written down instead, because "the check knows fewer names than it should" is
 	// invisible otherwise.
 	try { context->Compile(); }
@@ -109,7 +109,7 @@ std::vector<ibDiagnostic> ibCheckScript(const ibString& text, const ibString& mo
 	return CollectFrom([&] {
 		// COMPILED AND DISCARDED. The compiler is constructed here and dies
 		// here: nothing is registered, no module is replaced, the open
-		// configuration never learns this happened.
+		// application never learns this happened.
 		ibCompileCode compiler(moduleName, ibT("check"), false);
 
 		// ⚠ AND IT COMPILES THE ORDINARY WAY — the first refusal ends it, exactly as the designer's
@@ -183,7 +183,7 @@ ibScriptCheckAnswer ibCheckModule(const ibValueMetaObject* metaObject)
 	if (metaData == nullptr)
 		return answer;
 
-	// The cache exists only where the configuration supports designer editing,
+	// The cache exists only where the application supports designer editing,
 	// which is the same test the rest of the tree spells as
 	// `if (auto* cc = metaData->GetCompileCache())` rather than by asking what
 	// mode we are in.

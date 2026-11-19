@@ -24,16 +24,16 @@ public:
 	ibPicture GetPicture() const {
 		if (!m_propertyPicture->IsEmptyProperty())
 			return m_propertyPicture->GetValueAsPicture();
-		return ibBackendPicture::CreatePicture(g_metaCommonMetadataCLSID);
+		return ibBackendPicture::CreatePicture(g_metaApplicationMetadataCLSID);
 	}
 	// …and what the picture IS — what a server sends it by (ibBackendPicture::GetServerPicture), as a command's; none —
-	// the section shows the configuration's picture, as above.
+	// the section shows the application's picture, as above.
 	ibPictureDescription GetPictureDesc() const { return m_propertyPicture->GetValueAsPictureDesc(); }
 	bool IsEmptyPicture() const { return m_propertyPicture->IsEmptyProperty(); }
 
 	virtual ibClassID ResolveChild(const ibClassID& clsid) const {
 		if (clsid == g_metaSectionCLSID ||
-			clsid == g_metaCommonCommandCLSID)   // a section owns its own commands (config-scope, common command)
+			clsid == g_metaSharedCommandCLSID)   // a section owns its own commands (application-scope, shared command)
 			return clsid;
 		return 0;
 	}
@@ -64,7 +64,7 @@ public:
 	//commands (section scope) — a section owns its own commands, like a business object
 	std::vector<ibValueMetaObjectCommand*> GetCommandArrayObject(
 		std::vector<ibValueMetaObjectCommand*> array = std::vector<ibValueMetaObjectCommand*>()) const {
-		FillArrayObjectByFilter<ibValueMetaObjectCommand>(array, { g_metaCommonCommandCLSID });
+		FillArrayObjectByFilter<ibValueMetaObjectCommand>(array, { g_metaSharedCommandCLSID });
 		return array;
 	}
 
@@ -74,7 +74,7 @@ public:
 	bool GetInterfaceItemArrayObject(ibInterfaceCommandSection page,
 		std::vector<ibValueMetaObject*>& array) const;
 
-	// …and the items filed under a group the configuration DECLARES — a command that names it in its Group.
+	// …and the items filed under a group the application DECLARES — a command that names it in its Group.
 	// Such a command sits in no platform area, so the overload above leaves it out and this one takes it in.
 	bool GetInterfaceItemArrayObject(const class ibValueMetaObjectCommandGroup* group,
 		std::vector<ibValueMetaObject*>& array) const;
@@ -108,7 +108,7 @@ protected:
 
 private:
 	ibPropertyPicture* m_propertyPicture = ibPropertyObject::CreateProperty<ibPropertyPicture>(m_categoryContext, ibT("Picture"), _("Picture"),
-		_("The section's icon in the navigation panel. Empty: the configuration's own icon is shown."));
+		_("The section's icon in the navigation panel. Empty: the application's own icon is shown."));
 #pragma region role
 	ibRole* m_roleUse = ibValueMetaObject::CreateRole(ibT("Use"), ibGETTEXT_IN_CONTEXT("access right", "Use"));
 #pragma endregion

@@ -10,9 +10,9 @@
 constexpr ibClassID g_metaAttributeCLSID = metadata_to_clsid("MD_ATTR");
 constexpr ibClassID g_metaRoleCLSID = metadata_to_clsid("MD_ROLE");
 
-// ⭐ A METAOBJECT OF THE CONFIGURATION — the engine's ibValueMetaObject (backend/metaCollection/metaObject.h), as the
+// ⭐ A METAOBJECT OF THE APPLICATION — the engine's ibValueMetaObject (backend/metaCollection/metaObject.h), as the
 // thin client holds it: ONE CLASS for every kind, no heir. What it is made of — its properties, how they read, what they
-// may be set to — is the server's to say (Max, 2026-10-14): it holds only its id and the link to the configuration it
+// may be set to — is the server's to say (Max, 2026-10-14): it holds only its id and the link to the application it
 // was opened from (ibMetaData: the tab — two bases open, an edit goes to the one it came from), and fills its
 // properties from the server's rows (ibPropertySerializable), one per row, kept — an edit running through one outlives the
 // answer that brings the rows back. The designer's tree makes one for the row it selects, and drops it for the next
@@ -39,7 +39,7 @@ public:
 	void SetNoteContent(const ibString& strNoteContent);
 
 	// ⭐ AN EDIT GOES TO THE SERVER — its property of that name given that value (as the property's node holds it), on the
-	// object of this id in the configuration it was opened from: schema Properties, Save. False: refused.
+	// object of this id in the application it was opened from: schema Properties, Save. False: refused.
 	bool Send(const ibString& name, const ibDataValue& value) const;
 	// …the value an edit in the inspector gives, the node its variant holds.
 	bool Send(const ibString& name, const ibVariant& value) const;

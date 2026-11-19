@@ -7,7 +7,7 @@
 // life — start, work, exit. Not a connection (a transport's connection comes and goes; the instance stays, by
 // its id) and not the session: the frame owns the session (ibClientFrame), and the instance's life is the
 // frame's — the session and its frame (made together, before any login), open (the login, on the session's
-// worker), start (the configuration's start), exit (the documents, the configuration's exit, the runtime — on the
+// worker), start (the application's start), exit (the documents, the application's exit, the runtime — on the
 // worker — then the frame, which ends the session).
 
 #include <atomic>
@@ -44,7 +44,7 @@ public:
 	// work — so the person is told why, not asked to log in again.
 	bool CreateSession();
 
-	// ON THE SESSION'S WORKER, inside the host's Run: the login as `user` — and with it the configuration compiled for
+	// ON THE SESSION'S WORKER, inside the host's Run: the login as `user` — and with it the application compiled for
 	// the session (ibSession::CompileRoot, at OnAuthenticated). Run, because the error window is a question to the
 	// person, and a question is answered only from work the host runs. Not authenticated, or thrown, the frame goes and
 	// the session with it.
@@ -70,7 +70,7 @@ public:
 	std::int64_t LastActiveMs() const;
 	void         Touch();
 
-	// THE INSTANCE ASKS TO GO — its session closing (a kick, the configuration's own exit). Not done here: the
+	// THE INSTANCE ASKS TO GO — its session closing (a kick, the application's own exit). Not done here: the
 	// caller is usually the session's own worker, and the exit drains that worker. The host takes the instance
 	// down on its next round (ibClientHost).
 	bool RequestClose();

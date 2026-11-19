@@ -3,7 +3,7 @@
 
 // THE TYPE FACTORIES — the engine's (backend/backend_type.h) as a value cell of the client's settings windows asks them:
 // what type the cell holds, the value it makes and adjusts, the format a type is shown through. What the engine asks of
-// the configuration — a characteristic's types, the types a filter offers — is the server's.
+// the application — a characteristic's types, the types a filter offers — is the server's.
 
 #include <vector>
 
@@ -31,13 +31,13 @@ public:
 
 	virtual ibTypeDescription& GetTypeDesc() const = 0;
 	// What may be STORED, compared, offered and adjusted — the declared type on the client (a characteristic's types are
-	// the configuration's).
+	// the application's).
 	virtual ibTypeDescription& GetTypeValueDesc() const { return GetTypeDesc(); }
 
 	bool IsEmptyTypeDesc() const { return !GetTypeDesc().IsOk(); }
 };
 
-class FRMCLIENT_API ibBackendTypeConfigFactory :
+class FRMCLIENT_API ibBackendTypeApplicationFactory :
 	public ibBackendTypeFactory {
 public:
 
@@ -49,7 +49,7 @@ public:
 };
 
 class FRMCLIENT_API ibBackendTypeSourceFactory :
-	public ibBackendTypeConfigFactory {
+	public ibBackendTypeApplicationFactory {
 public:
 
 	virtual class ibSourceObject* GetSourceObject() const = 0;

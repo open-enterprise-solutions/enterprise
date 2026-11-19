@@ -298,7 +298,7 @@ public:
 
 	// Long-held sys_lock acquire/release for form-open hold pattern.
 	// Default = no-op (sources without a meaningful lock identity
-	// — DataProcessor, Report — just silently succeed). Concrete
+	// — DataTool, Report — just silently succeed). Concrete
 	// data-bound sources override:
 	//   ibValueRecordDataObjectRef → keys by ref guid
 	//   (future) ibValueRecordSetObject → keys by m_keyValues
@@ -432,7 +432,7 @@ public:
 	// (optional) accumulates the dotted display name. `outLeafIsTable` / `outContainerIsTable` (optional)
 	// report the leaf's own table-ness and whether the container it sits in is a table (then the leaf is
 	// that table's per-row COLUMN) — the facts a control-class choice needs but `leaf` (null for a section)
-	// cannot carry. `outAvailable` (optional) — every hop may be shown (functional options): a reference the
+	// cannot carry. `outAvailable` (optional) — every hop may be shown (feature options): a reference the
 	// options take away takes the field behind it too, so the leaf alone does not answer.
 	bool WalkColumns(const std::vector<ibSourceHop>& path, size_t from, const ibBackendSourceColumn*& leaf,
 		ibString* outText = nullptr, bool* outLeafIsTable = nullptr, bool* outContainerIsTable = nullptr,

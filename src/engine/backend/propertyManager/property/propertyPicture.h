@@ -40,8 +40,8 @@ public:
 	virtual bool ReadNodeValue(const ibDataValue& value) override;
 	virtual bool WriteNodeValue(ibDataValue& value) const override;
 
-	// …and the configuration's pictures it may be loaded from, as the desktop's cell listed them (advpropPicture.cpp):
-	// Pictures — the picture metaobjects of the owner's configuration, or of the one it extends, each by its Name, its
+	// …and the application's pictures it may be loaded from, as the desktop's cell listed them (advpropPicture.cpp):
+	// Pictures — the picture metaobjects of the owner's application, or of the one it extends, each by its Name, its
 	// Guid and the Id it is drawn by, not as a Picture: a picture named in an answer is fetched before the answer is drawn.
 	virtual bool GetProtocolValue(ibDataNode& row, ibReader reader) override;
 

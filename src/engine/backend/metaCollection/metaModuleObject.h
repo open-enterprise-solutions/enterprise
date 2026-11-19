@@ -83,7 +83,7 @@ public:
 	// owner's bytecode -> "Binding type mismatch for 'ThisObject'".
 	//
 	// ⚠ AND THE ID, which was the half left behind. A copied document's modules kept the SOURCE's
-	// metaIDs — two objects in one configuration answering to the same number, with the copy
+	// metaIDs — two objects in one application answering to the same number, with the copy
 	// shadowed: ibFindMetaObjectById returned the original for both. It is not cosmetic, because
 	// the physical column is named `fld<id>` (see ibMetaData::GenerateNewID, which never re-issues
 	// one for exactly that reason). Found 2026-08-31 by copying a document through metadata_copy
@@ -190,7 +190,7 @@ public:
 	// offers the procedure of the event it is set to, and only that one.
 	void ClearDefaultProcedures() { m_contentHelper.clear(); }
 
-	virtual bool IsCommonModule() const override { return false; }
+	virtual bool IsSharedModule() const override { return false; }
 	virtual bool IsGlobalModule() const override { return false; }
 	virtual bool IsPrivilegedModule() const { return false; }
 
@@ -230,13 +230,13 @@ private:
 		_("The module's code: procedures, functions and variables of its owner (an object, manager, record set or command). Its event handlers are called by the platform by name; its exported methods are callable on the owner's values."));
 };
 
-class BACKEND_API ibValueMetaObjectCommonModule : public ibValueMetaObjectModuleBase {
+class BACKEND_API ibValueMetaObjectSharedModule : public ibValueMetaObjectModuleBase {
 	public:
 private:
 
 public:
 
-	ibValueMetaObjectCommonModule(const ibString& name = ibEmptyString, const ibString& synonym = ibEmptyString, const ibString& comment = ibEmptyString);
+	ibValueMetaObjectSharedModule(const ibString& name = ibEmptyString, const ibString& synonym = ibEmptyString, const ibString& comment = ibEmptyString);
 
 	//support icons
 	virtual ibPicture GetIcon() const;
@@ -269,8 +269,8 @@ public:
 	//prepare menu for item
 	virtual bool CollectContextMenu(std::vector<ibMetaMenuItem>& items);
 
-	// Only functions: a common module's text holds no statements of its own.
-	virtual bool IsCommonModule() const override { return true; }
+	// Only functions: a shared module's text holds no statements of its own.
+	virtual bool IsSharedModule() const override { return true; }
 
 	// check gm
 	virtual bool IsGlobalModule() const override {
@@ -278,15 +278,15 @@ public:
 	}
 
 	// A call into it runs in the session's trusted window, checking no access (ibRuntimeModuleDataObject::ExecAsProc).
-	// Never a global module: that one is compiled into the configuration's module and called by bare name, past the
+	// Never a global module: that one is compiled into the application's module and called by bare name, past the
 	// door that opens the window.
 	virtual bool IsPrivilegedModule() const {
 		return m_propertyPrivilegedModule->GetValueAsBoolean() && !IsGlobalModule();
 	}
 
-	// Manager-module flag — false on plain common module, true on
+	// Manager-module flag — false on plain shared module, true on
 	// ibValueMetaObjectManagerModule. Replaces the explicit managerModule
-	// argument that was passed to mm->AddCommonModule.
+	// argument that was passed to mm->AddSharedModule.
 	virtual bool IsManagerModule() const { return false; }
 
 	/**
@@ -302,8 +302,8 @@ protected:
 
 private:
 	ibPropertyModule* m_propertyModule = ibPropertyObject::CreateProperty<ibPropertyModule>(m_categoryContext, ibT("Module"), _("Module"),
-		_("The common module's code: procedures and functions shared by the whole configuration. Only exported methods are visible outside it, called as ModuleName.Method(...) (or by bare name when the module is global)."));
-	ibPropertyCategory* m_moduleCategory = ibPropertyObject::CreatePropertyCategory(ibT("Common module"), _("Common module"));
+		_("The shared module's code: procedures and functions shared by the whole application. Only exported methods are visible outside it, called as ModuleName.Method(...) (or by bare name when the module is global)."));
+	ibPropertyCategory* m_moduleCategory = ibPropertyObject::CreatePropertyCategory(ibT("Shared module"), _("Shared module"));
 	ibPropertyBoolean* m_propertyGlobalModule = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_moduleCategory, ibT("GlobalModule"), _("Global module"),
 		_("Whether the module's exported methods are callable by bare name from any code, without the ModuleName. prefix. Off by default: a global module's names share one namespace with every other global name."),
 		false);
@@ -312,10 +312,10 @@ private:
 		false);
 };
 
-class BACKEND_API ibValueMetaObjectManagerModule : public ibValueMetaObjectCommonModule {
+class BACKEND_API ibValueMetaObjectManagerModule : public ibValueMetaObjectSharedModule {
 	public:
 	ibValueMetaObjectManagerModule(const ibString& name = ibEmptyString, const ibString& synonym = ibEmptyString, const ibString& comment = ibEmptyString)
-		: ibValueMetaObjectCommonModule(name, synonym, comment)
+		: ibValueMetaObjectSharedModule(name, synonym, comment)
 	{
 	}
 

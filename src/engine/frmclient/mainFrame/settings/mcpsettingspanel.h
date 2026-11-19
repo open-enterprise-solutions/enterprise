@@ -11,7 +11,7 @@
 //
 // The endpoint field is READ-ONLY on purpose. It is not a setting — it is what
 // the platform HANDS OUT: the address a person pastes into their tool's own
-// configuration. Showing it beside the port is what makes "configured" mean
+// application. Showing it beside the port is what makes "configured" mean
 // something a person can act on.
 /////////////////////////////////////////////////////////////////////////////
 
@@ -73,7 +73,7 @@ private:
 	// and no client could ever connect, which is why nothing ever woke one.
 	//
 	// Composed rather than shown field by field, because what a person needs is not four values —
-	// it is the block their tool's configuration takes, ready to paste.
+	// it is the block their tool's application takes, ready to paste.
 	void RefreshHandout();
 
 	// One place that puts a field on the clipboard, so both buttons cannot drift apart.
@@ -97,7 +97,7 @@ private:
 	ibTextCtrl* m_portCtrl    = nullptr;
 
 	// The easy road and the manual one — a one-line command to paste into an assistant's
-	// terminal, and the configuration block for a client that takes a file instead.
+	// terminal, and the application block for a client that takes a file instead.
 	ibTextCtrl* m_commandCtrl  = nullptr;
 	ibTextCtrl* m_endpointCtrl = nullptr;
 

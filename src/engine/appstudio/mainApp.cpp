@@ -88,7 +88,7 @@ bool ibAppDesigner::DoOnInit()
 	// NO BASE NAMED — the desktop designer's: the person picks the folder of a file base, which is made there when
 	// there is none yet.
 	if (appData->m_strAddress.IsEmpty() && appData->m_strFile.IsEmpty() && appData->m_strServer.IsEmpty()) {
-		wxDirDialog dlg(nullptr, _("Select configuration database folder"),
+		wxDirDialog dlg(nullptr, _("Select application database folder"),
 			wxStandardPaths::Get().GetDocumentsDir(),
 			wxDD_DEFAULT_STYLE | wxDD_DIR_MUST_EXIST | wxDD_NEW_DIR_BUTTON);
 		if (dlg.ShowModal() != wxID_OK)

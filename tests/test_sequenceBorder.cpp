@@ -1,7 +1,7 @@
 // =============================================================================
 // THE BORDER OF A SEQUENCE, MOVED BY THE ENGINE'S OWN RULES — live, on SQLite.
 //
-// A sequence in a configuration in memory, its two tables made out of the fields the metaobject itself
+// A sequence in an application in memory, its two tables made out of the fields the metaobject itself
 // lays out, registrations written the way a posting writes them, and the two doors the write path knocks
 // on (ibSequenceBorderWritten / ibSequenceBorderCleared) called after each.
 //
@@ -30,7 +30,7 @@
 #include "backend/databaseLayer/connectionHolder.h"
 #include "backend/databaseLayer/databaseQueryBuilder.h"
 #include "backend/databaseLayer/sqllite/sqliteDatabaseLayer.h"
-#include "backend/metadataConfiguration.h"
+#include "backend/metadataApplication.h"
 #include "backend/metaCollection/metaObject.h"
 #include "backend/metaCollection/dimension/metaDimensionObject.h"
 #include "backend/metaCollection/partial/sequence.h"
@@ -48,12 +48,12 @@ namespace {
 
 struct SequenceBorderFix : ::testing::Test {
 	wxInitializer                          m_wxInit;
-	// RunDatabase sets this thread's code style to the configuration's. The binary runs VES
+	// RunDatabase sets this thread's code style to the application's. The binary runs VES
 	// (test_compiler.cpp), so TearDown puts it back, as StyleGuard does.
 	const short                            m_codeStyle = ibCompileCode::GetCodeStyle();
 	std::shared_ptr<ibDatabaseLayerSQLite> db;
 
-	std::unique_ptr<ibMetaDataConfigurationFile> cfg;
+	std::unique_ptr<ibMetaDataApplicationFile> cfg;
 	ibValueMetaObject*          document = nullptr;
 	ibValueMetaObjectSequence*  seq      = nullptr;
 	int                         line     = 0;
@@ -72,8 +72,8 @@ struct SequenceBorderFix : ::testing::Test {
 			GTEST_SKIP() << "in-memory SQLite open failed";
 		pool->Init(db, /*maxSize=*/1, /*minIdle=*/0);
 
-		cfg = std::make_unique<ibMetaDataConfigurationFile>();
-		ibValueMetaObjectConfiguration* root = cfg->GetCommonMetaObject();
+		cfg = std::make_unique<ibMetaDataApplicationFile>();
+		ibValueMetaObjectApplication* root = cfg->GetRootMetaObject();
 		ASSERT_NE(root, nullptr);
 		document = cfg->CreateMetaObject(g_metaDocumentCLSID, root, /*runObject*/ false);
 		seq = dynamic_cast<ibValueMetaObjectSequence*>(cfg->CreateMetaObject(g_metaSequenceCLSID, root, false));
@@ -91,10 +91,10 @@ struct SequenceBorderFix : ::testing::Test {
 		seq->GetRegisterRecorder()->GetTypeDesc().AppendMetaType(reference_to_clsid(document->GetMetaID(), clsid_metaclass(document->GetClassType())));
 		ASSERT_TRUE(seq->HasBorders()) << "the borders' holder is numbered with the sequence";
 
-		// ⭐ RUN IT. A reference read back from a row is created through the configuration's TYPE registry,
-		// and that registry exists only while the configuration runs: left unrun, a registration's recorder
+		// ⭐ RUN IT. A reference read back from a row is created through the application's TYPE registry,
+		// and that registry exists only while the application runs: left unrun, a registration's recorder
 		// reads back empty and the border is written with nobody standing on it.
-		ASSERT_TRUE(cfg->RunDatabase()) << "the configuration in memory did not run";
+		ASSERT_TRUE(cfg->RunDatabase()) << "the application in memory did not run";
 
 		// The two tables, made of exactly the fields the metaobject lays out - SQLite asks for no types.
 		std::vector<std::shared_ptr<const ibBackendQueryColumn>> registration = {
@@ -134,7 +134,7 @@ struct SequenceBorderFix : ::testing::Test {
 		return list;
 	}
 	// Declared by what each field holds, as the platform's own DDL declares them - a table of untyped
-	// columns would be a table no configuration ever has.
+	// columns would be a table no application ever has.
 	static ibString SqliteTypeOf(const ibString& field) {
 		if (field.EndsWith(wxT("_RRRef"))) return wxT(" BLOB");
 		if (field.EndsWith(wxT("_D")) || field.EndsWith(wxT("_S"))) return wxT(" TEXT");
@@ -303,7 +303,7 @@ TEST_F(SequenceOneBorderFix, PostedInTurnTheOneBorderStepsForward) {
 // (ibSequencePendingRecorders), posted here the way a document's Posting handler does it - its
 // registrations cleared, then written again - and where the border lands after it.
 //
-// The stop at the first failure is the run's own loop around a REAL posting, which a configuration
+// The stop at the first failure is the run's own loop around a REAL posting, which an application
 // in memory with no document tables cannot carry out: it is checked on the stand.
 // =============================================================================
 
@@ -463,7 +463,7 @@ TEST(SqliteNumberBinding, ANumberReadsBackAsTheDecimalItWasWrittenAs) {
 
 // A sequence with nothing but its documents is one border. The register save used to refuse that
 // shape ("Doesn't have any dimension, resource or attribute") and the refusal aborted the whole
-// configuration. An information register with the same empty body is still refused: that table
+// application. An information register with the same empty body is still refused: that table
 // really would have no column of its own.
 TEST(SequenceWithoutDimensions, SavesAndKeepsOneBorderWhileAnEmptyRegisterDoesNot) {
 	wxInitializer wx;
@@ -472,17 +472,17 @@ TEST(SequenceWithoutDimensions, SavesAndKeepsOneBorderWhileAnEmptyRegisterDoesNo
 	if (!ibApplicationInstance::CreateAppDataEnv(ibRunMode::eFILE_MODE))
 		GTEST_SKIP() << "appData env unavailable headless";
 
-	std::shared_ptr<ibMetaDataConfigurationFile> cfg = ibMetaData::MakeShared<ibMetaDataConfigurationFile>();
+	std::shared_ptr<ibMetaDataApplicationFile> cfg = ibMetaData::MakeShared<ibMetaDataApplicationFile>();
 	ActiveMetaDataAccess::Replace(cfg);
 	struct Release {
 		~Release() {
-			// The active configuration is this test's file config. Destroying the base drops
+			// The active application is this test's file application. Destroying the base drops
 			// that reference; ReplaceActiveMetaData does not accept an empty one.
 			ibApplicationInstance::DestroyAppDataEnv();
 		}
 	} release;
 
-	ibValueMetaObjectConfiguration* root = cfg->GetCommonMetaObject();
+	ibValueMetaObjectApplication* root = cfg->GetRootMetaObject();
 	ASSERT_NE(root, nullptr);
 
 	ibValueMetaObject* document = cfg->CreateMetaObject(g_metaDocumentCLSID, root, false);
@@ -512,7 +512,7 @@ TEST(SequenceWithoutDimensions, SavesAndKeepsOneBorderWhileAnEmptyRegisterDoesNo
 	EXPECT_GE(registrations->m_columns.size(), 4u);
 	EXPECT_FALSE(borders->m_columns.empty());
 
-	ibRestructureInfo& ledger = ibMetaDataConfigurationBase::GetRestructureInfo();
+	ibRestructureInfo& ledger = ibMetaDataApplicationBase::GetRestructureInfo();
 	ledger.Clear();
 
 	// No document bound yet: still a sequence, and the refusal names the recorder, not an empty body.

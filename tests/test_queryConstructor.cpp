@@ -189,9 +189,9 @@ TEST(QueryConstructorModel, QualifiedFieldsCarryTheAliasTheQueryWrites)
 	EXPECT_EQ(wxT("p.Code"), fields[0]);
 }
 
-TEST(QueryConstructorModel, WithNoConfigTheCatalogueIsEmptyRatherThanAFailure)
+TEST(QueryConstructorModel, WithNoApplicationTheCatalogueIsEmptyRatherThanAFailure)
 {
-	// No application data, no config: the constructor still opens, and its table list is simply
+	// No application data, no application: the constructor still opens, and its table list is simply
 	// empty. A catalogue that threw here would make the window unopenable in exactly the situation
 	// where somebody is trying to look at a query.
 	ibQueryConstructorModel model(nullptr);
@@ -239,7 +239,7 @@ TEST(QueryConstructorModel, APathNoFieldStartsIsNoVerdict)
 TEST(QueryConstructorModel, AHiddenStartHidesTheWalkPastAHopNobodyAnswers)
 {
 	// What the walk KNEW stands: a hop past a hidden field that nothing resolves (here there is no
-	// configuration to walk into) does not bring the hidden field back.
+	// application to walk into) does not bring the hidden field back.
 	ibQueryConstructorModel model(nullptr);
 	const ibQueryConstructorField leaf = model.WalkPath({ Field(wxT("Warehouse"), false) }, { wxT("Warehouse"), wxT("Code") });
 	EXPECT_FALSE(leaf.m_available);

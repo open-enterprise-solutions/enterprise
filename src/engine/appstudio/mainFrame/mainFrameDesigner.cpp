@@ -11,7 +11,7 @@
 #include "appstudio/mainFrame/stack/stackWindow.h"
 #include "appstudio/mainFrame/watch/watchWindow.h"
 #include "protocol/protocolDesigner.h"   // ibProtocol::ibRequest::ibApplyChange, ibProtocol::ibSchema::ibMetaData
-#include "frmclient/backend/metaData.h"   // the configuration a metaobject opens in - its tab (OpenForm)
+#include "frmclient/backend/metaData.h"   // the application a metaobject opens in - its tab (OpenForm)
 #include "deskgui/univ/messageDialog.h"
 
 ibFrontendMainFrameDesigner* ibFrontendMainFrameDesigner::GetFrame() {
@@ -45,10 +45,10 @@ void ibFrontendMainFrameDesigner::CreateGUI()
 {
 	ibFrontendMainFrame::CreateGUI();
 
-	// The desktop designer's last button on the main toolbar — Configuration's Update database, the same command.
+	// The desktop designer's last button on the main toolbar — Application's Update database, the same command.
 	ibAuiToolBar* const mainFrameToolbar = GetMainFrameToolbar();
 	mainFrameToolbar->AddSeparator();
-	mainFrameToolbar->AddTool(wxID_DESIGNER_CONFIGURATION_UPDATE_DATABASE, _("Update database"), wxArtProvider::GetBitmapBundle(wxART_DATABASE_APPLY, wxART_FRONTEND, wxSize(16, 16)), _("Update database"), wxItemKind::wxITEM_NORMAL);
+	mainFrameToolbar->AddTool(wxID_DESIGNER_APPLICATION_UPDATE_DATABASE, _("Update database"), wxArtProvider::GetBitmapBundle(wxART_DATABASE_APPLY, wxART_FRONTEND, wxSize(16, 16)), _("Update database"), wxItemKind::wxITEM_NORMAL);
 	mainFrameToolbar->Realize();
 	m_mgr.GetPane(mainFrameToolbar).BestSize(mainFrameToolbar->GetSize());
 
@@ -92,14 +92,14 @@ void ibFrontendMainFrameDesigner::ShowRequest(const ibProtocolNode& request, ibP
 	}
 }
 
-#include "appstudio/mainFrame/metaTree/treeConfiguration.h"
+#include "appstudio/mainFrame/metaTree/treeApplication.h"
 
 void ibFrontendMainFrameDesigner::DrawFrame(const ibProtocolNode& frame, const ibProtocolNode& patch)
 {
 	if (m_metaWindow == nullptr)
 		return;
 
-	// THE LAST TAB CLOSED — the focus goes back to the configuration's tree, and the inspector shows its row: the owner of
+	// THE LAST TAB CLOSED — the focus goes back to the application's tree, and the inspector shows its row: the owner of
 	// the editor closed, as the desktop's went back to the tree the editor came from (ibMetaTreeBase::Activate). A frame
 	// sent whole is the start, not a close.
 	if (patch.Has(ibProtocol::ibFrame::ActiveTab) && frame.GetInt(ibProtocol::ibFrame::ActiveTab) == 0)
@@ -111,18 +111,18 @@ void ibFrontendMainFrameDesigner::DrawFrame(const ibProtocolNode& frame, const i
 	const ibProtocolNode root = frame.FindChild(ibProtocol::ibFrame::MetaData);
 	m_metaWindow->Draw(root);
 
-	// THE CAPTION — the desktop's Modify: "*" while somebody edited the configuration, "<!>" while the base does not hold
+	// THE CAPTION — the desktop's Modify: "*" while somebody edited the application, "<!>" while the base does not hold
 	// it; as the root row says.
 	ibAuiPaneInfo& paneInfo = m_mgr.GetPane(ibAUI_PANE_METADATA);
 	if (!paneInfo.IsOk())
 		return;
 
-	wxString caption = _("Configuration") + ' ';
+	wxString caption = _("Application") + ' ';
 
 	if (root.GetBool(ibProtocol::ibSchema::ibMetaData::Edited))
 		caption += wxT('*');
 
-	if (root.IsNode() && !root.GetBool(ibProtocol::ibSchema::ibMetaData::ConfigSave, true))
+	if (root.IsNode() && !root.GetBool(ibProtocol::ibSchema::ibMetaData::ApplicationSave, true))
 		caption += wxT("<!>");
 
 	if (caption != paneInfo.caption) {
@@ -168,14 +168,20 @@ bool ibFrontendMainFrameDesigner::OpenForm(ibMetaID id, const ibMetaData& metaDa
 	return Call(ibProtocol::ibMethod::Schema, params, answer);
 }
 
+void ibFrontendMainFrameDesigner::EditModule(const wxString& fileName, const ibGuid& moduleName, int line)
+{
+	if (m_metaWindow != nullptr)
+		m_metaWindow->EditModule(fileName, moduleName, line, false);
+}
+
 bool ibFrontendMainFrameDesigner::AllowClose()
 {
-	// ⭐ THE CONFIGURATION IS ASKED ABOUT BEFORE THE TABS, where the desktop asked after them: the base's Exit is the
+	// ⭐ THE APPLICATION IS ASKED ABOUT BEFORE THE TABS, where the desktop asked after them: the base's Exit is the
 	// server's, and once it says Exit the window goes (CallSettled) — a Cancel said after it could not keep it. Not asked,
 	// an edit nobody saved went with the window (2026-10-28). A session already gone has nothing to save.
 	if (m_metaWindow != nullptr && GetCommunicator().IsLoggedIn() && m_metaWindow->IsEdited()) {
 		const int answer = ibMessageBox(
-			ibString::Format(_("Configuration '%s' has been changed. Save?"), m_metaWindow->GetConfigName()),
+			ibString::Format(_("Application '%s' has been changed. Save?"), m_metaWindow->GetApplicationName()),
 			wxTheApp->GetAppDisplayName(), wxYES | wxNO | wxCANCEL | wxCENTRE | wxICON_QUESTION, this);
 		if (answer == wxCANCEL)
 			return false;
@@ -194,8 +200,8 @@ bool ibFrontendMainFrameDesigner::Show(bool show)
 {
 	bool ret = ibFrontendMainFrame::Show(show);
 	if (ret && show) {
-		// The debugger, over the configuration now logged in to — the desktop's was made with its configuration
-		// (ibMetaDataConfigurationStorage::OnInitialize): made over its store as the login read it (ShowSchema), else
+		// The debugger, over the application now logged in to — the desktop's was made with its application
+		// (ibMetaDataApplicationStorage::OnInitialize): made over its store as the login read it (ShowSchema), else
 		// asked for it.
 		if (m_debugClient == nullptr)
 			m_debugClient.reset(new ibDebuggerClient);

@@ -13,11 +13,11 @@
         "control_flow"
       ],
       "signature": "If <Expression> Then ... [ElsIf ... Then ...] [Else ...] EndIf",
-      "description": "Conditional execution. Evaluates the boolean expression; runs the Then branch when true, otherwise an optional ElsIf branch with its own expression, otherwise an optional Else branch.",
-      "syntax_block": "if (<Expression1>) {\n    // statements\n} elsif (<Expression2>) {\n    // statements\n} else {\n    // statements\n}",
-      "parameters": "<Expression1>, <Expression2> — boolean expressions.",
+      "description": "Conditional execution. Evaluates the boolean expression; runs the Then branch when true, otherwise an optional ElsIf branch with its own expression, otherwise an optional Else branch.\n\nIn CES a body without braces is one statement — an assignment, a call, a return, or a while / try / if of its own; the same holds for else, while, for and foreach.",
+      "syntax_block": "if (<Expression1>) {\n    // statements\n} elseif (<Expression2>) {\n    // statements\n} else {\n    // statements\n}\n\nif (<Expression>) <Statement>; else <Statement>;",
+      "parameters": "<Expression1>, <Expression2> — boolean expressions.\n<Statement> — one statement, the body without braces.",
       "return_descr": "",
-      "example": "if (userInfo.IsAdmin) {\n    EnableAdminMenu();\n} else {\n    HideAdminMenu();\n}",
+      "example": "if (userInfo.IsAdmin) {\n    EnableAdminMenu();\n} else {\n    HideAdminMenu();\n}\n\nif (Qty == 0) return;\nif (Doc.Posted) Status = \"posted\"; else Status = \"draft\";",
       "availability": "Client, Server",
       "see_also": [
         "kw.Else",
@@ -150,7 +150,7 @@
         "control_flow"
       ],
       "signature": "?(<Condition>, <ValueIfTrue>, <ValueIfFalse>)",
-      "description": "Conditional (ternary) expression — an If that answers with a value. When <Condition> holds, the expression is <ValueIfTrue>, otherwise <ValueIfFalse>. Spelled the same in both dialects, it stands wherever a value does: an assignment, an argument, a return, a part of another expression; it nests.\n\nThe condition is tested as If tests it: a Boolean is read as it is, any other value counts as true when it is not empty.\n\nONLY THE CHOSEN VALUE IS EVALUATED. The condition runs first, and the branch it does not pick is not computed, so a value that would fail there does not: `?(doc <> Undefined, doc.Description, \"\")` answers \"\" when doc is Undefined, and a call in the branch not taken does not run.",
+      "description": "Conditional (ternary) expression — an If that answers with a value. When <Condition> holds, the expression is <ValueIfTrue>, otherwise <ValueIfFalse>. Spelled the same in both dialects, it stands wherever a value does: an assignment, an argument, a return, a part of another expression; it nests.\n\nThe condition is tested as If tests it: a Boolean is read as it is, any other value counts as true when it is not empty.\n\nONLY THE CHOSEN VALUE IS EVALUATED. The condition runs first, and the branch it does not pick is not computed, so a value that would fail there does not: `?(doc != Undefined, doc.Description, \"\")` answers \"\" when doc is Undefined, and a call in the branch not taken does not run.",
       "syntax_block": "var <Result> = ?(<Condition>, <ValueIfTrue>, <ValueIfFalse>);",
       "parameters": "<Condition> — the test: a Boolean, or any value, true when it is not empty.\n<ValueIfTrue> — the result when the condition holds.\n<ValueIfFalse> — the result otherwise.",
       "return_descr": "<ValueIfTrue> or <ValueIfFalse>, whichever the condition chose.",
@@ -393,7 +393,7 @@
         "control_flow"
       ],
       "signature": "",
-      "description": "Logical negation.",
+      "description": "Logical negation. VES; CES writes !.",
       "syntax_block": "Not <Expression>",
       "parameters": "",
       "return_descr": "",
@@ -401,12 +401,12 @@
       "availability": "Client, Server",
       "see_also": [
         "kw.And",
-        "kw.Or"
+        "kw.Or",
+        "op.Logic"
       ],
       "reviewed": true,
       "modes": [
-        "ves",
-        "ces"
+        "ves"
       ]
     },
     {
@@ -419,7 +419,7 @@
         "control_flow"
       ],
       "signature": "",
-      "description": "Logical conjunction. Short-circuits: the right operand is not evaluated when the left is false.",
+      "description": "Logical conjunction. Short-circuits: the right operand is not evaluated when the left is false. VES; CES writes &&.",
       "syntax_block": "<LeftExpr> And <RightExpr>",
       "parameters": "",
       "return_descr": "",
@@ -427,12 +427,12 @@
       "availability": "Client, Server",
       "see_also": [
         "kw.Or",
-        "kw.Not"
+        "kw.Not",
+        "op.Logic"
       ],
       "reviewed": true,
       "modes": [
-        "ves",
-        "ces"
+        "ves"
       ]
     },
     {
@@ -445,7 +445,7 @@
         "control_flow"
       ],
       "signature": "",
-      "description": "Logical disjunction. Short-circuits: the right operand is not evaluated when the left is true.",
+      "description": "Logical disjunction. Short-circuits: the right operand is not evaluated when the left is true. VES; CES writes ||.",
       "syntax_block": "<LeftExpr> Or <RightExpr>",
       "parameters": "",
       "return_descr": "",
@@ -453,11 +453,63 @@
       "availability": "Client, Server",
       "see_also": [
         "kw.And",
+        "kw.Not",
+        "op.Logic"
+      ],
+      "reviewed": true,
+      "modes": [
+        "ves"
+      ]
+    },
+    {
+      "id": "op.Compare",
+      "name_local": "== !=",
+      "name_en": "== !=",
+      "kind": "operator",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "<Left> == <Right>",
+      "description": "Comparison in CES, written as in C: == equal, != not equal, beside < <= > >=. A single = in an expression is refused — it assigns. VES compares with = and <>.",
+      "syntax_block": "<Left> == <Right>\n<Left> != <Right>",
+      "parameters": "",
+      "return_descr": "Boolean.",
+      "example": "if (Doc.Status == \"Posted\" && Doc.Sum != 0) {\n    Message(Doc.Number);\n}",
+      "availability": "Client, Server",
+      "see_also": [
+        "op.Logic",
+        "kw.If"
+      ],
+      "reviewed": true,
+      "modes": [
+        "ces"
+      ]
+    },
+    {
+      "id": "op.Logic",
+      "name_local": "&& || !",
+      "name_en": "&& || !",
+      "kind": "operator",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "<Left> && <Right>",
+      "description": "Logic in CES, written as in C: && and, || or, ! not. && and || short-circuit: the right side is not evaluated when the left already decides, so Doc != Undefined && Doc.Posted is a guard. ! binds looser than a comparison: !x == 5 is !(x == 5). VES writes And, Or, Not.",
+      "syntax_block": "<Left> && <Right>\n<Left> || <Right>\n!<Expression>",
+      "parameters": "",
+      "return_descr": "Boolean.",
+      "example": "if (!User.IsLoggedIn || User.Role != \"admin\") {\n    return;\n}",
+      "availability": "Client, Server",
+      "see_also": [
+        "op.Compare",
+        "kw.And",
+        "kw.Or",
         "kw.Not"
       ],
       "reviewed": true,
       "modes": [
-        "ves",
         "ces"
       ]
     },
@@ -641,7 +693,7 @@
         "control_flow"
       ],
       "signature": "",
-      "description": "Access modifier: the symbol is visible to the module's children — an object module exposes it to the forms of that object — but not to the whole configuration. Written AFTER the parameter list — after the closing bracket for a procedure or function, after the name for a variable — the same position as Public and Private.",
+      "description": "Access modifier: the symbol is visible to the module's children — an object module exposes it to the forms of that object — but not to the whole application. Written AFTER the parameter list — after the closing bracket for a procedure or function, after the name for a variable — the same position as Public and Private.",
       "syntax_block": "Procedure Recalculate() Protected {\n    // visible to this object's forms\n}",
       "syntax_block_ves": "Procedure Recalculate() Protected\n    // visible to this object's forms\nEndProcedure",
       "parameters": "",
@@ -670,7 +722,7 @@
         "control_flow"
       ],
       "signature": "",
-      "description": "Keeps the function's result per combination of argument values: the first call with a given combination runs the body, every later call with the same combination returns the kept result without entering the function at all. Legal on a Function only — a Procedure has no result to keep, and the modifier is refused there rather than ignored. It is a SECOND axis, not a fourth access modifier: it combines with Public, Private or Protected, and the order between them does not matter. Written in the same place as they are, after the parameter list. The kept results live on the module that runs the function and die with it — an object module's results last as long as that object, a common module's as long as the session root — so there is nothing to clear and no expiry to set. A call that raised is not kept.",
+      "description": "Keeps the function's result per combination of argument values: the first call with a given combination runs the body, every later call with the same combination returns the kept result without entering the function at all. Legal on a Function only — a Procedure has no result to keep, and the modifier is refused there rather than ignored. It is a SECOND axis, not a fourth access modifier: it combines with Public, Private or Protected, and the order between them does not matter. Written in the same place as they are, after the parameter list. The kept results live on the module that runs the function and die with it — an object module's results last as long as that object, a shared module's as long as the session root — so there is nothing to clear and no expiry to set. A call that raised is not kept.",
       "syntax_block": "Function Rate(Val CurrencyCode, Val OnDate) Public Cached {\n    // read the rate once per (currency, date)\n    Return <Value>;\n}",
       "syntax_block_ves": "Function Rate(Val CurrencyCode, Val OnDate) Public Cached\n    // read the rate once per (currency, date)\n    Return <Value>;\nEndFunction",
       "parameters": "Argument values form the key, and they are compared BY VALUE: the number 1 and the string \"1\" are different keys. A function without arguments is computed once.",
@@ -1662,8 +1714,8 @@
         "rls"
       ],
       "signature": "restrict <Var> in <Source> [join <Var2> in <Table> on <Var.Key> <Op> <Var2.Key>]* [where <Condition>]",
-      "description": "The concise form of an access restriction in a Role's module: narrows a source and returns it — assign the result back to `Source` so the intent to narrow is visible.\n\nIt compiles to the same `Source.Join(…).Where(…)` chain as the explicit form: every clause folds **straight into the query** and pushes down to the database. It is **not** RAM iteration.\n\n- **join** — one `on <Var.Key> <Op> <Var2.Key>` condition; the operators `= <> < <= > >=` come from the shared expression grammar. The joined table is any expression: a `Data.*` source, a computed value table, or a source carrying its own `.Where(…)` (handy to pre-filter the joined table by the current user). The join acts as a **semi-join** — it filters without multiplying rows.\n- **where** — one condition against the source alias; every operator, `and` / `or` / `not`, dot-walk, a captured local (pushed into the query as a parameter), and `in` — `<Field> in (value, …)` or `<Field> in <Array>`.\n- **There is no `select`** — a restriction carries conditions only; it projects nothing.\n\n**Limitation:** `where` sees only the **source** alias; a condition on a joined alias (`where a.Field = …`) does not resolve — pre-filter that table instead via `join a in Table.Where(…)`.",
-      "syntax_block": "Source = restrict s in Source\n             join a in Data.Registers.WarehouseAccess.Where(Function(a) { Return a.User = CurrentUser(); })\n                 on s.Warehouse = a.Warehouse\n         where s.Code in (myCodes);",
+      "description": "The concise form of an access restriction in a Role's module: narrows a source and returns it — assign the result back to `Source` so the intent to narrow is visible.\n\nIt compiles to the same `Source.Join(…).Where(…)` chain as the explicit form: every clause folds **straight into the query** and pushes down to the database. It is **not** RAM iteration.\n\n- **join** — one `on <Var.Key> <Op> <Var2.Key>` condition; the operators `== != < <= > >=` (VES: `= <>`) come from the shared expression grammar. The joined table is any expression: a `Data.*` source, a computed value table, or a source carrying its own `.Where(…)` (handy to pre-filter the joined table by the current user). The join acts as a **semi-join** — it filters without multiplying rows.\n- **where** — one condition against the source alias; every operator, `and` / `or` / `not`, dot-walk, a captured local (pushed into the query as a parameter), and `in` — `<Field> in (value, …)` or `<Field> in <Array>`.\n- **There is no `select`** — a restriction carries conditions only; it projects nothing.\n\n**Limitation:** `where` sees only the **source** alias; a condition on a joined alias (`where a.Field = …`) does not resolve — pre-filter that table instead via `join a in Table.Where(…)`.",
+      "syntax_block": "Source = restrict s in Source\n             join a in Data.Registers.WarehouseAccess.Where(Function(a) { Return a.User == CurrentUser(); })\n                 on s.Warehouse == a.Warehouse\n         where s.Code in (myCodes);",
       "syntax_block_ves": "Source = restrict s in Source\n             join a in Data.Registers.WarehouseAccess.Where(Function(a) Return a.User = CurrentUser(); EndFunction)\n                 on s.Warehouse = a.Warehouse\n         where s.Code in (myCodes);",
       "parameters": "",
       "return_descr": "Returns the same source carrying the folded restriction.",

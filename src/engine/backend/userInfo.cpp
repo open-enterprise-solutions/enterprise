@@ -8,8 +8,8 @@
 namespace {
 
 // Chunk tags inside binaryData (DB) and the per-record blob (export buffer).
-// Same numeric values for both — the on-disk format is shared so import
-// from old configurations keeps working.
+// Same numeric values for both — the format is shared, so an exported
+// user imports back as it was.
 constexpr unsigned int eBlockPswd = 0x0234530;
 constexpr unsigned int eBlockRole = 0x0234540;
 constexpr unsigned int eBlockLang = 0x0234550;
@@ -41,28 +41,13 @@ void ReadRoleChunk(const ibMemoryBuffer& buffer, ibUserInfo& info)
 	info.m_roleArray.reserve(count);
 	for (unsigned int idx = 0; idx < count; idx++) {
 		ibUserInfo::ibUserRole entry;
-		// Read defensively — a sys_user row written before a metadata
-		// version that removed the role's class will have stale guid /
-		// truncated payload. Catch reader exceptions per-entry so one
-		// bad role doesn't brick the whole sys_user Read (and therefore
-		// the login flow).  Subsequent loop turns try the next role;
-		// downstream code resolves roles from m_roleArray, so unknown
-		// guids just degrade to "no access" instead of throwing.
-		try {
-			entry.m_strRoleGuid = reader.r_stringZ();
-			entry.m_miRoleId    = reader.r_s32();
-			// The composition mode travels WITH the membership, exactly like the id. Rows written
-			// before it exists simply end here, and the entry keeps its Union default — which is the
-			// behaviour those rows had. Checked rather than caught so one short row does not abandon
-			// the roles that follow it.
-			if (!reader.eof())
-				entry.m_mode = static_cast<ibRoleCompositionMode>(reader.r_s32());
-			info.m_roleArray.emplace_back(std::move(entry));
-		} catch (...) {
-			// Buffer truncated or malformed past this point — stop
-			// reading roles; whatever was already collected stays.
-			break;
-		}
+		// The guid, the id and HOW the role combines with the user's others — the composition mode travels WITH
+		// the membership, exactly like the id. A role the application no longer has keeps its guid here, and
+		// downstream code resolves roles from m_roleArray, so an unknown guid degrades to "no access".
+		entry.m_strRoleGuid = reader.r_stringZ();
+		entry.m_miRoleId    = reader.r_s32();
+		entry.m_mode        = static_cast<ibRoleCompositionMode>(reader.r_s32());
+		info.m_roleArray.emplace_back(std::move(entry));
 	}
 }
 

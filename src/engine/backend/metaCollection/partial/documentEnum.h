@@ -14,15 +14,15 @@ enum ibDocumentPostingMode {
 
 // WHAT THE PLATFORM DOES WITH A DOCUMENT'S MOVEMENTS when it is posted again or its posting undone (Max, 2026-09-14).
 // A deleted document takes them with it whatever this says (Max, 2026-09-15). The numbers are what a saved
-// configuration holds.
+// application holds.
 enum ibDocumentRecordsDeletion {
 	ibDocumentRecordsDeletion_Automatically,    // cleared before a posting again and when a posting is undone
 	ibDocumentRecordsDeletion_OnUndoPosting,    // kept when posted again — a set the handler writes replaces its own —
 	                                            // and cleared when a posting is undone
-	ibDocumentRecordsDeletion_Never             // not cleared by the platform on either: the configuration clears them
+	ibDocumentRecordsDeletion_Never             // not cleared by the platform on either: the application clears them
 };
 
-// When a document's numbers start again. The numbers are what a saved configuration holds, so a new
+// When a document's numbers start again. The numbers are what a saved application holds, so a new
 // one goes at the end. Nonperiodical is zero: a document saved before the setting existed, and every
 // new document, stays on the one series it already had.
 enum ibNumberPeriodicity {

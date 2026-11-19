@@ -207,7 +207,7 @@ bool ibBackendProperty::SetNodeValue(const ibDataValue& value)
 	// `ibDataValue: wrong value kind (expected 6, got 4)` — numbers, about a serialised shape — and
 	// the object it had ALREADY created was never mentioned, so a dimension nobody knew about
 	// stayed behind in the register (measured over MCP, 2026-09-03; a half-built object blocks the
-	// configuration from being saved at all).
+	// application from being saved at all).
 	//
 	// The comparison is with what the property HOLDS, which is the same fact the refusal upstairs
 	// already prints ("It holds a %s - send one of that shape"). A property whose value is not

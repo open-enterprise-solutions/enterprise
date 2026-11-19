@@ -29,7 +29,7 @@
 // registration row means knowing WHICH dimension value to write — which organization, which
 // warehouse — and the engine cannot know: it would write an empty one and fold the whole base onto
 // one key. The reference system offers that switch and every packaged solution turns it off. What
-// the engine does instead is READ the rows the configuration wrote, which is what makes the border's
+// the engine does instead is READ the rows the application wrote, which is what makes the border's
 // two automatic moves safe: the keys of a touched document are its own registrations.
 //
 ////////////////////////////////////////////////////////////////////////////
@@ -190,10 +190,10 @@ public:
 
 	// ⭐ A FULL RECORD SET, with the two modules a register's set has (Max, 2026-09-18: "it is a
 	// record set in full"): the set's own code runs for every registration written, whoever writes it,
-	// and the manager's is the sequence as a whole — where a configuration puts what it wants said
+	// and the manager's is the sequence as a whole — where an application puts what it wants said
 	// about the border beside GetBorder / SetBorder.
 	virtual const ibValueMetaObjectModule* GetObjectModule() const override { return m_propertyObjectModule->GetMetaObject(); }
-	virtual const ibValueMetaObjectCommonModule* GetManagerModule() const override { return m_propertyManagerModule->GetMetaObject(); }
+	virtual const ibValueMetaObjectSharedModule* GetManagerModule() const override { return m_propertyManagerModule->GetMetaObject(); }
 
 	// …and the two of them in the context menu, where every kind with modules offers them.
 	virtual bool CollectContextMenu(std::vector<ibMetaMenuItem>& items) override;
@@ -214,7 +214,7 @@ public:
 	virtual void CallAsCommand(ibActionID id, const ibUniqueKey& anchor, const ibUniqueKey& key, ibBackendValueForm* srcForm) const override;
 
 	// ⭐ WHO TAKES THE BORDER BACK. On (the default) the platform does it itself, by the rows the
-	// document already carries. Off, it does not — and the configuration says when the sequence is
+	// document already carries. Off, it does not — and the application says when the sequence is
 	// broken, through SetBorder. That is a real choice rather than a switch nobody touches: a retreat
 	// is what sets a mass reposting going, and a solution may want to decide the moment itself
 	// (Max, 2026-09-18).
@@ -303,7 +303,7 @@ private:
 		m_categoryData, ibT("AutomaticBorder"), _("Automatic border"),
 		_("The platform takes the border BACK by itself: a document at or before it - written again, posted again, "
 		  "unposted, deleted - sends the border to the registration before it, by the keys the document's own "
-		  "registrations name. Off: the configuration says when the sequence is broken, through SetBorder; the border "
+		  "registrations name. Off: the application says when the sequence is broken, through SetBorder; the border "
 		  "still moves forward as documents are posted in their turn. A retreat is what sets a mass reposting going, "
 		  "so a solution may want to decide that moment itself."), true);
 

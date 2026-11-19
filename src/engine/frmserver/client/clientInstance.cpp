@@ -62,7 +62,7 @@ bool ibClientInstance::CreateSession()
 	// THE FRAME AT ONCE, of the client's mode, and published before the login runs anything: the login's compile may
 	// say a failure in the frame's error window, a start may open forms or ask the person something — the client
 	// reaches all of it through the frame. Its menus and the designer's debugger come with the start (OnCreate): they
-	// read the rights and the configuration the login brings.
+	// read the rights and the application the login brings.
 	m_session = ibSessionWatch(holder);
 	m_frame = ibClientFrame::Create(m_mode, std::move(holder), this);
 	if (m_frame == nullptr) {
@@ -82,7 +82,7 @@ ibSession::OpenResult ibClientInstance::Open(const ibString& user, const ibStrin
 	if (session == nullptr)
 		return ibSession::OpenResult::Failed;
 
-	// ⭐ THROWN ON, SAID AS IT IS — Failed is the name or the password, nothing else. A configuration that does not
+	// ⭐ THROWN ON, SAID AS IT IS — Failed is the name or the password, nothing else. An application that does not
 	// compile (ibSession::CompileRoot throws), a base held exclusively, a pool that gave no connection: caught and
 	// turned into a refused password they reached the client as one, and its login window asked for a name nobody
 	// questioned (Max, 2026-11-13: a module that does not compile opens the login window). The host says them.
@@ -143,7 +143,7 @@ void ibClientInstance::OnExit()
 		session->WakeDebugLoop();
 		session->Cancel();
 
-		// THE TEARDOWN ON THE WORKER — the documents' views close the forms, the configuration's exit and the
+		// THE TEARDOWN ON THE WORKER — the documents' views close the forms, the application's exit and the
 		// runtime are the session's, and the session's state is reached through its worker's binding. The
 		// worker's queue is FIFO, so this runs after everything the cancelled script left behind.
 		try {
@@ -152,7 +152,7 @@ void ibClientInstance::OnExit()
 				// documents: the frame closes each one — its views told (OnClosingDocument), its form let go.
 				if (m_frame != nullptr)
 					m_frame->CloseDocuments();
-				if (ibValueModuleManagerRuntimeConfiguration* const manager = session->GetManagerModule())
+				if (ibValueModuleManagerRuntimeApplication* const manager = session->GetManagerModule())
 					manager->ExitMainModule();
 				session->ClearRoot();
 			}).get();

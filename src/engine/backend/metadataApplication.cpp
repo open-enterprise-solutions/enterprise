@@ -1,0 +1,1036 @@
+#include "metadataApplication.h"
+
+#include "backend/debugger/debugClient.h"
+#include "backend/debugger/debugServer.h"
+
+#include "backend/backend_mainFrame.h"
+#include "backend/appData.h"
+#include "backend/session/session.h"   // IsDesignerSessionKind — whom an application was made for
+#include "backend/session/sessionRegistry.h"   // an apply that moves the structure lets the session's single-user mode go
+#include "backend/job/jobManager.h"   // the job records are swept once the surviving jobs are known
+
+// ms_instance / Get / Initialize / Destroy retired — ownership moved
+// to ibApplicationInstance::m_activeMetaData, shared with every session let
+// in while it was active (ibSession::GetMetaData). The fabric
+// lives on ibApplicationInstance::CreateActiveMetaData (a designer's session's own: ibSession::AcquireMetaData),
+// its tear-down in the base's Close;
+// callers reach the active metadata through `appEnv::ActiveMetaData()`
+// (which the legacy `activeMetaData` macro now redirects to).
+//
+// Subclass ctors are private + friend ibApplicationInstance, so `new
+// ibMetaDataApplication()` outside that fabric is a compile error —
+// matches the strict ownership rule used by the rest of the appEnv
+// subsystems (sessionRegistry / lockManager / ...).
+
+#include <fstream>
+#include <filesystem>
+#include <utility>   // std::exchange — Replace
+
+#include "core/fileSystem.h"             // ibPathOf
+#include "backend/backend_exception.h"   // catch ibBackendException at the LoadRootTree boundary
+#include "backend/query/provider/database/structure/schemaSnapshot.h" // ibSchemaSnapshot / ibSchemaTable — ContributeTables drives data dump
+#include "backend/query/provider/database/structure/dataMover.h" // ibDataMover::Dump / Restore (L3-3 row mover)
+#include "core/serialize/provider/fileProvider.h"
+#include "core/serialize/dataBuilder.h"      // ibDataBuilder / ibBinaryProvider — top-level structure builder
+#include "backend/objCtor.h"                       // ibCtorMetaValueType::GetClassName — clsid -> type name
+
+namespace {
+
+// ⭐ THE TYPES A DIRECTORY NAMES ARE THE REGISTRY'S — Catalog, Attribute, Form: the same in every application, so an
+// export reads into any one. An application's own (CatalogRef.Goods) would read back into that one alone.
+ibFileProvider ApplicationFiles()
+{
+	ibFileProvider provider;
+	provider.SetTypeResolver([](ibClassID clsid) {
+		const ibCtorAbstractType* ctor = ibValue::GetAvailableCtor(clsid);
+		return ctor != nullptr ? ctor->GetClassName() : ibString();
+	});
+	provider.SetTypeLookup([](const ibString& name) {
+		const ibCtorAbstractType* ctor = ibValue::GetAvailableCtor(name);
+		return ctor != nullptr ? ctor->GetClassType() : ibClassID(0);
+	});
+	return provider;
+}
+
+} // namespace
+
+std::shared_ptr<ibMetaDataApplicationBase> ibMetaDataApplicationBase::Replace(
+	std::shared_ptr<ibMetaDataApplicationBase>& active, std::shared_ptr<ibMetaDataApplicationBase> metaData)
+{
+	std::shared_ptr<ibMetaDataApplicationBase> previous = std::exchange(active, std::move(metaData));
+
+	// The table of compiled bytecode is the new application's from here. It holds one row a module, so what the
+	// sessions still working in the one before compile stays with them and is not saved.
+	if (previous != nullptr && previous != active) {
+		if (ibByteCodeStorage* const storage = previous->GetByteCodeStorage())
+			storage->Detach();
+	}
+	return previous;
+}
+
+bool ibMetaDataApplicationBase::SaveApplicationToFiles(const ibString& directory)
+{
+	ibDataNode files;
+	return SaveApplicationToFiles(files) && ibFileProvider::Publish(files, directory);
+}
+
+bool ibMetaDataApplicationBase::SaveApplicationToFiles(ibDataNode& files)
+{
+	ibDataNode root;
+	if (!GetRootMetaObject()->BuildDataNode(root, saveToFileFlag))
+		return false;
+	return ApplicationFiles().Write(root, files);
+}
+
+bool ibMetaDataApplicationBase::LoadApplicationFromFiles(const ibString& directory)
+{
+	ibDataNode files;
+	return ibFileProvider::Collect(directory, files) && LoadApplicationFromFiles(files);
+}
+
+bool ibMetaDataApplicationBase::LoadApplicationFromFiles(const ibDataNode& files)
+{
+	if (!IsEditable())
+		ibBackendCoreException::Error(_("This application is open for reading only."));
+	ibDataNode root;
+	if (!ApplicationFiles().Read(files, root))
+		return false;
+	if (root.GetClsid() != g_metaApplicationMetadataCLSID)
+		ibBackendCoreException::Error(_("The directory does not contain an application."));
+
+	// Enter through the same detached-root load as an application file. Parsing all
+	// files finishes before that door closes editors or replaces any live metadata.
+	ibWriterMemory inner;
+	ibBinaryProvider provider;
+	if (!provider.Write(root, inner))
+		return false;
+	ibWriterMemory header;
+	header.w_u64(sign_metadata);
+	header.w_stringZ(root.GetValue<ibString>(ibT("Guid")));
+	ibWriterMemory metadata;
+	metadata.w_chunk(static_cast<std::uint64_t>(root.GetMetaId()), inner.buffer());
+	ibWriterMemory application;
+	application.w_chunk(eHeaderBlock, header.buffer());
+	application.w_chunk(root.GetClsid(), metadata.buffer());
+	return LoadApplicationFromBuffer(application.buffer());
+}
+
+bool ibMetaDataApplicationBase::LoadApplicationFromFile(const ibString& strFileName)
+{
+	std::ifstream in(strFileName.ToStdString(), std::ios::in | std::ios::binary);
+
+	if (!in.is_open())
+		return false;
+
+	//go to end
+	in.seekg(0, in.end);
+
+	//get size of file
+	std::streamsize fsize = in.tellg();
+
+	//go to beginning
+	in.seekg(0, in.beg);
+
+	ibMemoryBuffer buffer(fsize);
+
+	in.read((char*)buffer.GetWriteBuf(fsize), fsize);
+	buffer.UngetWriteBuf(fsize);
+	in.close();
+
+	return LoadApplicationFromBuffer(buffer);
+}
+
+bool ibMetaDataApplicationBase::SaveApplicationToFile(const ibString& strFileName)
+{
+	//common data
+	ibMemoryBuffer buffer;
+
+	if (!SaveApplicationToBuffer(buffer))
+		return false;
+
+	// Atomic export (Step 5 single-commit model): build the full blob in a
+	// buffer, write it to a sibling temp file, then rename over the target. The
+	// rename is the one commit point — a failed or partial write never replaces
+	// a good existing application file. Temp sits next to the target so the rename
+	// stays on one filesystem (atomic). std::filesystem, no wx.
+	namespace fs = std::filesystem;
+	const fs::path dstPath = ibPathOf(strFileName);
+	fs::path tmpPath = dstPath;
+	tmpPath += L".tmp";
+
+	{
+		std::ofstream datafile(tmpPath, std::ios::binary | std::ios::trunc);
+		if (!datafile.is_open())
+			return false;
+
+		datafile.write(reinterpret_cast<char*>(buffer.GetData()), buffer.GetDataLen());
+		datafile.flush();
+
+		const bool ok = datafile.good();
+		datafile.close();
+		if (!ok) {
+			std::error_code ec;
+			fs::remove(tmpPath, ec);
+			return false;
+		}
+	}
+
+	// fs::rename is the atomic commit (replaces the target on the same volume).
+	std::error_code ec;
+	fs::rename(tmpPath, dstPath, ec);
+	if (ec) {
+		std::error_code rmEc;
+		fs::remove(tmpPath, rmEc);
+		return false;
+	}
+
+	return true;
+}
+
+#include "backend/metaCollection/metaLanguageObject.h"
+
+//**************************************************************************************************
+//*                                          ApplicationMetadata                                   *
+//**************************************************************************************************
+
+ibMetaDataApplicationFile::ibMetaDataApplicationFile() : ibMetaDataApplicationBase(),
+m_rootObject(nullptr)
+{
+	//create main metaObject
+	m_rootObject = new ibValueMetaObjectApplication();
+	//m_rootObject->SetReadOnly(!m_metaReadOnly);
+
+	if (m_rootObject->OnCreateMetaObject(this, newObjectFlag)) {
+		if (!m_rootObject->OnLoadMetaObject(this)) {
+			ibASSERT_MSG(false, "m_rootObject->OnLoadMetaObject() == false");
+		}
+	}
+
+	m_rootObject->InvalidateNames();
+	// m_rootObject is an ibValuePtr — the assignment above already holds the ref.
+
+	{
+		ibValue* ppParams[] = { m_rootObject };
+		const ibValuePtr<ibValueMetaObjectLanguage> commonLanguage =
+			ibValue::CreateObject(g_metaLanguageCLSID, ppParams, 1);
+
+		if (commonLanguage->OnCreateMetaObject(this, newObjectFlag)) {
+
+			if (!commonLanguage->OnLoadMetaObject(this)) {
+				ibASSERT_MSG(false, "commonLanguage->OnLoadMetaObject() == false");
+			}
+
+			commonLanguage->SetName(ibT("English"));
+		}
+
+		commonLanguage->InvalidateNames();
+		// owned by m_rootObject's child vector (AddChild inside Init) — the holder here only covers the build
+
+		m_rootObject->SetLanguage(commonLanguage->GetMetaID());
+	}
+}
+
+ibMetaDataApplicationFile::~ibMetaDataApplicationFile()
+{
+	//clear data
+	if (!ClearDatabase()) {
+		ibASSERT_MSG(false, "ClearDatabase() == false");
+	}
+
+	// m_rootObject (ibValuePtr) releases the root automatically on destruction
+	// (DecrRef → cascade). For an unshared root that destroys it; a still-shared
+	// root (e.g. designer UI holding a ref) survives until the last holder drops.
+}
+
+////////////////////////////////////////////////////////////////////
+
+const ibValueMetaObjectApplication* ibMetaDataApplicationFile::GetRootMetaObject() const
+{
+	return m_rootObject; // ibValuePtr operator T* -> raw root
+}
+
+ibValueMetaObjectApplication* ibMetaDataApplicationFile::GetRootMetaObject()
+{
+	return m_rootObject;
+}
+
+ibString ibMetaDataApplicationFile::GetLangCode() const
+{
+	if (m_rootObject != nullptr)
+		return m_rootObject->GetLangCode();
+
+	return ibT("");
+}
+
+bool ibMetaDataApplicationFile::IsFullAccess() const
+{
+	// A loop that only asked whether the collection is EMPTY, and said so through a flag: the
+	// question spelled as itself. (It also read as unreachable code to MSVC.)
+	if (GetAnyArrayObject(g_metaRoleCLSID).empty())
+		return true;   // no roles declared at all — access is not governed by them
+
+	if (m_rootObject != nullptr)
+		return m_rootObject->AccessRight_Administration();
+
+	return true;
+}
+
+////////////////////////////////////////////////////////////////////
+
+bool ibMetaDataApplicationFile::RunDatabase(const ibRuntimeRequest& request)
+{
+
+	ibASSERT(!IsOpen());
+
+	if ((request.m_flags & loadApplicationFlag) == 0)
+		ibCompileCode::SetCodeStyle(m_rootObject->GetCompileSyntax());
+
+	// Transactional open as RAII (image presence == open): LoadGuard CREATES the
+	// runtime image — and, for a designer-edit application, its compile cache + designer
+	// module-manager (bound to the root metaobject, via CreateDesignerModuleManager),
+	// so shared modules can register into the manager during RunSubtree(true). The
+	// guard's dtor ROLLS BACK on ANY exit that isn't Commit() — a failed RunSubtree
+	// return OR a raised ibBackendException unwinding the stack — by dropping the image,
+	// which frees the half-built ctors + cache + manager, leaving the metadata closed
+	// (the load "never happened"). The run fills the SAME metaobject tree, so the
+	// image's ctors point at live nodes.
+	LoadGuard load(this);
+
+	// RunSubtree fires OnBeforeRun/OnAfterRun on the root itself + every descendant
+	// (top-down). Drive the two phases; any failure just returns false and the guard
+	// rolls back. A metaobject may also RAISE during the cascade (e.g. a typed-parent
+	// mismatch from ibValueMetaObject::GetParentAsType — a malformed application):
+	// exception == rollback (the guard's dtor aborts as the stack unwinds). We still
+	// catch it to log + return false so it doesn't escape onto the worker thread.
+	try {
+		// Phase 1 — REGISTER: every object announces its identity / type ctor.
+		if (!m_rootObject->RunSubtree(request.m_flags, ibValueMetaObject::ibRunPhase::Before))
+			return false;
+
+		// Seed the editor's context (Manager + Catalogs/Documents/Enums + globals)
+		// AFTER the register pass — the ctor-context factories register while the
+		// subtree runs, so CreateMainModule must run once they're available. Common-
+		// module registration already happened above (in OnBeforeRunMetaObject).
+		if (auto* cc = GetCompileCache()) {
+			if (auto* mgr = cc->GetModuleManager())
+				mgr->CreateMainModule();
+		}
+
+		// Phase 2 — RESOLVE: cross-object references + source registration + forms /
+		// object-module values (all identities now present).
+		if (!m_rootObject->RunSubtree(request.m_flags, ibValueMetaObject::ibRunPhase::After))
+			return false;
+	}
+	catch (const ibCoreException& err) {
+		ibJournalError(ibT("metadata.application"),err.GetErrorDescription());
+		return false;
+	}
+
+	// SWEEP THE JOB RECORDS — here, and nowhere earlier.
+	//
+	// sys_job holds a row per job: its schedule, its switch, when it last ran. A job that was
+	// deleted in the Designer leaves one behind, and the moment to notice is exactly this one —
+	// the resolve pass has just finished, so every job that still exists has announced itself,
+	// and whatever is left in the table belongs to something that did not survive the
+	// restructuring. Doing it at the Designer's delete instead would throw the record away while
+	// the user could still walk away without saving.
+	if (ibJobManager* const jobs = ibApplicationInstance::GetJobManager())
+		jobs->PurgeSharedState();
+
+	// Success — keep the image (LoadGuard.Commit): its presence IS the open state.
+	load.Commit();
+	// ⭐ ALIVE — said after Commit, because a run that did not survive its own phases never
+	// happened. The mirror of Closed below.
+	MetaObjectStage(ibMetaDataNotifier::ibMetaStage::Run, GetRootMetaObject());
+	return true;
+}
+
+bool ibMetaDataApplicationFile::CloseDatabase(const ibRuntimeRequest& request)
+{
+
+	// The assert warns (Debug), the close happens anyway — see the report's twin
+	// (metadataReport.cpp). An application whose open failed is torn down through this same road,
+	// and it must not leave a session that cannot be shut down over a file it already refused.
+	ibASSERT(IsOpen());
+	if (!IsOpen())
+		return true;
+
+	// ⭐⭐ THE WHOLE CONTAINER IS GOING — said BEFORE the teardown, for the same reason `Removed`
+	// is: a watcher's business with this is to shut what it is showing OF the tree, and after
+	// CloseSubtree there is nothing left to find. This one signal replaces the per-NODE close
+	// that used to run inside every object's OnAfterCloseMetaObject.
+	MetaObjectStage(ibMetaDataNotifier::ibMetaStage::Closed, GetRootMetaObject());
+
+	//if (!ExitMainModule(request))
+	//	return false;
+
+	// CloseSubtree closes every descendant then the root's own hook (bottom-up),
+	// unregistering ctors / queryables per node while the image is still live.
+	// Close is the LIFO mirror of run: un-resolve → un-register.
+	if (!m_rootObject->CloseSubtree(ibValueMetaObject::ibRunPhase::Before))   // un-resolve
+		return false;
+
+	// Tear down the designer manager AND release it BEFORE the un-register phase. The
+	// metaobject it binds to is about to be reset; dropping the manager now prevents a
+	// dangling reference (the next RunDatabase makes a fresh one). Mirrors CreateMainModule.
+	if (auto* cc = GetCompileCache()) {
+		if (auto* mgr = cc->GetModuleManager())
+			mgr->DestroyMainModule();
+		cc->SetModuleManager(nullptr);   // ibValuePtr: releases (DecrRef → delete)
+	}
+
+	if (!m_rootObject->CloseSubtree(ibValueMetaObject::ibRunPhase::After))    // un-register
+		return false;
+
+	// Per-node teardown done — drop the runtime image: frees whatever ctors remain +
+	// the module skeleton + the compile cache. Image gone ⇒ closed.
+	m_image.reset();
+	return true;
+}
+
+bool ibMetaDataApplicationFile::ClearDatabase()
+{
+	// Full force-replace unload: just drop the tree — the owning child handles
+	// cascade the destruction down the subtree. No OnDeleteMetaObject cascade here:
+	// the metadata is wholly replaced, and the incoming application reconciles against
+	// the old one during the DDL update. (ibValueMetaObject::ClearSubtree can fire
+	// the delete events explicitly before a load, if a caller ever wants that.)
+	// keepPinned: the predefined application module is bound to the root for
+	// life — drop only the loaded tree, keep it so the metadata finder (and the
+	// debugger's EditModule) can still resolve it after reload.
+	m_rootObject->RemoveAllChildren(true);
+	return true;
+}
+
+bool ibMetaDataApplicationFile::LoadApplicationFromBuffer(const ibMemoryBuffer& buffer)
+{
+	// Close the old tree's run-state first (unregisters its ctors). For the
+	// storage subclass this is virtual and also closes the saved baseline, which
+	// the post-load RunDatabase re-runs — leaving that orchestration intact. We
+	// do NOT pre-clear the tree: LoadRootTree builds a fresh detached root and
+	// only swaps it in on success, so a failed load leaves the old tree's data
+	// in place (all-or-nothing) instead of wiping it up front.
+	if (IsOpen()) {
+		if (!CloseDatabase(ibRuntimeRequest(forceCloseFlag))) {
+			ibASSERT_MSG(false, "CloseDatabase() == false");
+			return false;
+		}
+	}
+
+	ibReaderMemory readerData(buffer);
+
+	if (readerData.eof())
+		return false;
+
+	// Detached-root: on failure the live tree is untouched; on success the old
+	// root is swapped out and released inside LoadRootTree.
+	return LoadRootTree(g_metaApplicationMetadataCLSID, readerData);
+}
+
+ibValueMetaObjectApplication* ibMetaDataApplicationFile::BuildFreshRoot()
+{
+	// Same root setup the ctor gives m_rootObject — OnCreateMetaObject wires the
+	// application-module property + any predefined children — minus the default
+	// Language: LoadSubtree re-creates the serialized Language (and every top-level
+	// object) as it loads. Returned at refcount 0 — the caller's ibValuePtr adopts it.
+	auto* root = new ibValueMetaObjectApplication();
+	if (root->OnCreateMetaObject(this, newObjectFlag)) {
+		if (!root->OnLoadMetaObject(this)) {
+			ibASSERT_MSG(false, "BuildFreshRoot: OnLoadMetaObject() == false");
+		}
+	}
+	root->InvalidateNames();
+	return root;
+}
+
+bool ibMetaDataApplicationFile::LoadRootTree(const ibClassID& clsid, ibReaderMemory& readerData)
+{
+	// Header (sign + application guid) leads the tree blob in the same stream — read and
+	// validate it here so the common-tree blob stays self-describing (was the
+	// separate LoadHeader). Application keeps no version in the header (version lives in
+	// the common object's data).
+	//
+	// 🛑 BYTES THIS BUILD CANNOT READ ARE REFUSED IN WORDS — never a quiet false. Every caller hands in
+	// a blob it has already checked is not empty, so a missing header, a foreign sign or a missing
+	// application block means one thing: another format. Returned as false, the designer's start
+	// swallowed it and opened the DEFAULT application over an old base — an empty tree that one
+	// "Update database" would have written over the real one (2026-09-28, a base of
+	// 2026-09-27). Raised, it reaches the start's message box and every menu's error window.
+	const auto unreadable = []() {
+		ibBackendCoreException::Error(_("This application is stored in a format this build cannot read: "
+			"it was written by an older or a different build. Nothing was loaded."));
+	};
+	{
+		std::shared_ptr<ibReaderMemory> headerReader(readerData.open_chunk(eHeaderBlock));
+		if (!headerReader || headerReader->elapsed() < (int)sizeof(std::uint64_t) || headerReader->r_u64() != sign_metadata)
+			unreadable();
+		ibString metaGuid;
+		headerReader->r_stringZ(metaGuid);
+	}
+
+	// Application is a single kind (MD_MTD == the passed clsid == GetClassType()), so the
+	// data block IS keyed by the passed clsid — no external/base split like DataTool/Report.
+	std::shared_ptr<ibReaderMemory> readerMemory(readerData.open_chunk(clsid));
+
+	if (!readerMemory)
+		unreadable();
+
+	std::uint64_t meta_id = 0;
+	std::shared_ptr <ibReaderMemory> readerMetaMemory(readerMemory->open_chunk_iterator(meta_id));
+
+	if (!readerMetaMemory)
+		return true; // empty application — keep the existing root
+
+	// Parse the stream into the universal structure tree. readerMetaMemory is the
+	// root's INNER content ({ eDataBlock, eChildBlock }) — clsid/metaId already
+	// peeled above — so the binary provider reads exactly what BuildDataNode wrote.
+	ibValuePtr<ibValueMetaObjectApplication> fresh(BuildFreshRoot()); // adopt (refcount 0 -> 1)
+	if (!fresh)
+		return false;
+	ibDataNode rootNode(clsid, (ibMetaID)meta_id);
+	ibBinaryProvider provider;
+	provider.Read(*readerMetaMemory, rootNode);
+
+	// Detached-root atomic swap: apply into the freshly-built root, not the live one.
+	// ApplyDataNode throws ibBackendException on a factory miss or bad data — on a
+	// throw the fresh root is discarded and m_rootObject is untouched
+	// (all-or-nothing). On success, swap it in and release the old root. The caller
+	// has already closed the old tree's run-state (or it was never run), so the
+	// DecrRef below can't leave dangling entries in the active image's factory.
+	try {
+		fresh->ApplyDataNode(rootNode);
+	}
+	catch (const ibCoreException& err) {
+		// ⭐ THE ENGINE'S WORDS REACH THE USER — the twin of the report / data-tool catches.
+		// An application that refuses to load is the costliest of the three to face in silence.
+		ibJournalError(ibT("metadata.application"),ibT("%s"), err.GetErrorDescription());
+		return false; // fresh (ibValuePtr) discards the root automatically
+	}
+
+	// Swap: the ibValuePtr assignment releases the old root (DecrRef -> cascade) and
+	// IncrRefs the fresh one; the local `fresh` drops its own ref at scope exit, so
+	// m_rootObject ends as the sole owner. No manual refcount.
+	m_rootObject = fresh;
+
+	// ⭐ AND EVERYONE WATCHING IS TOLD IT IS READ IN — the stage a tree answers by drawing the
+	// whole thing. Said HERE rather than by each caller of the load, because there are several
+	// (a file, the database, a fresh root) and a stage nobody sends is a stage that does not exist.
+	MetaObjectStage(ibMetaDataNotifier::ibMetaStage::Loaded, GetRootMetaObject());
+	return true;
+}
+
+//**************************************************************************************************
+//*                                          ApplicationMetadata                                   *
+//**************************************************************************************************
+
+bool ibMetaDataApplication::OnInitialize(const int flags)
+{
+	m_metaGuid = ibGuid::newGuid();
+
+	if (!ibMetaDataApplicationStorage::TableAlreadyCreated())
+		return false;
+
+	// One debug server per process — for now bound to the active
+	// metadata application. Per-session debug context
+	// (ibSession::Debug) layers on top — handshake is process-level,
+	// EnterLoop / step routing is per-session via sessionGuid.
+	//
+	// Conceptually the debugger lives *above* metadata (it would
+	// remain shared if a process ever hosted multiple applications
+	// simultaneously). Today the runtime stays 1:1, so owning it here
+	// keeps the lifecycle close to where flags arrive. Move up to
+	// ibApplicationInstance::m_debugServer if multi-metadata lands.
+	m_debugServer.reset(new ibDebuggerServer(this));
+
+	if (!LoadDatabase())
+		return false;
+
+	// Localization: pin the application's main language code (metadata
+	// short-code form ru/en/uk) into the translate state of whoever loads
+	// it — the base's opening. Every session takes its base's in CompileRoot;
+	// the user's preferred language is assigned by SetUserInfo on
+	// authentication and wins.
+	ibBackendLocalization::SetUserLanguage(GetLangCode());
+
+	if ((flags & _app_start_create_debug_server_flag) != 0) {
+		// wait=true blocks bootstrap until the designer's debugClient
+		// connects (OnStart must not run before breakpoints arrive).
+		// For wes that's a deadlock — wes needs to bind HTTP and start
+		// serving immediately; the designer attaches later through the
+		// per-process search. Per-tab WebClient sessions stop at their
+		// own OnStart only after the listener exists.
+		const bool waitForClient = !appData->WebEnterpriseMode();
+		debugServer->CreateServer(defaultHost, ibPort::Debugger.m_first, waitForClient);
+	}
+
+	return true;
+}
+
+bool ibMetaDataApplication::OnDestroy()
+{
+	// Dtor would do this anyway; explicit reset keeps the order
+	// deterministic — debug server is shut down before m_rootObject
+	// and friends start unwinding, mirroring the symmetric order of
+	// OnInitialize.
+	m_debugServer.reset();
+	return true;
+}
+
+// Out-of-line — m_debugServer holds a unique_ptr<ibDebuggerServer>
+// (forward-declared in metadataApplication.h). default_delete needs
+// the full type here.
+ibMetaDataApplication::~ibMetaDataApplication() = default;
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////
+
+ibMetaDataApplication::ibMetaDataApplication(ib::AppDataCtorToken owner) :
+	ibMetaDataApplicationFile(), m_owner(owner), m_applicationNew(true)
+{
+	m_applicationInstance = owner.GetApplicationInstance();
+}
+
+//**************************************************************************************************
+//*                                          ApplicationSaveMetadata                               *
+//**************************************************************************************************
+
+bool ibMetaDataApplicationStorage::OnInitialize(const int flags)
+{
+	m_metaGuid = ibGuid::newGuid();
+
+	// (Its tables are the base's, made as it opens — ibApplicationInstance::Open.)
+
+	// Designer-side debugger client. Same 1:1-with-metadata footing as
+	// m_debugServer above — promoted to ibApplicationInstance if multi-metadata
+	// hosting becomes a thing.
+	m_debugClient.reset(new ibDebuggerClient(this));
+
+	// Load database
+	if (!LoadDatabase())
+		return false;
+
+#pragma region access
+	if (!AccessRight_Administration()) {
+
+		try {
+			ibBackendCoreException::Error(_("Not enough access rights for this user!"));
+		}
+		catch (...) {
+		}
+
+		return false;
+	}
+#pragma endregion
+
+	// Localization: pin the process-wide default to the application's
+	// main language code — designer always works with the editorial
+	// baseline of the application regardless of OS locale.
+	ibBackendLocalization::SetUserLanguage(GetLangCode());
+
+	return true;
+}
+
+bool ibMetaDataApplicationStorage::OnDestroy()
+{
+	m_debugClient.reset();
+	return true;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+ibMetaDataApplicationStorage::ibMetaDataApplicationStorage(ib::AppDataCtorToken owner) :
+	ibMetaDataApplication(owner),
+	m_applicationMetadata(MakeShared<ibMetaDataApplication>(owner)) {
+	// Designer-edit application carries a compile-value cache + its module-manager —
+	// built with the runtime image (CreateDesignerCache below); callsites gate on
+	// `if (auto* cc = metaData->GetCompileCache())` rather than appData->DesignerMode().
+}
+
+// Designer-edit application: compile cache + its module-manager (bound to the common
+// metaobject, rebuilt fresh with the image each run). Built by the image ctor; dropping
+// the image releases the manager (RAII → DestroyMainModule).
+std::unique_ptr<ibCompileValueCache> ibMetaDataApplication::CreateDesignerCache()
+{
+	if (!IsDesignerSessionKind(m_owner.GetSessionKind()))
+		return nullptr;
+	auto cache = std::make_unique<ibCompileValueCache>();
+	cache->SetModuleManager(new ibValueModuleManagerDesigner(this, GetRootMetaObject()));
+	return cache;
+}
+
+ibMetaDataApplicationStorage::~ibMetaDataApplicationStorage() = default;   // the database's copy goes with its last holder
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+bool ibMetaDataApplicationStorage::LoadDatabase(int flags)
+{
+	// The database's copy is read here once, the first time; a rollback leaves it as it is (the database still
+	// publishes it), and an apply replaces it whole — never re-read in place under the sessions working in it.
+	if (m_applicationMetadata->IsOpen() || m_applicationMetadata->LoadDatabase(onlyLoadFlag)) {
+
+		//close if opened
+		if (ibMetaDataApplication::IsOpen()
+			&& !CloseDatabase(ibRuntimeRequest(forceCloseFlag))) {
+			return false;
+		}
+
+		if (ibMetaDataApplication::LoadDatabase()) {
+			Modify(!CompareMetadata(GetApplication()));
+			if (m_applicationNew)
+				SaveDatabase(saveApplicationFlag);
+			m_applicationNew = false;
+			return true;
+		}
+	}
+
+	return false;
+}
+
+bool ibMetaDataApplicationStorage::RestoreDataFromBuffer(const ibMemoryBuffer& buffer)
+{
+	ibReaderMemory reader(buffer);
+
+	// The form of the dates in the rows (chunk 3, DumpDataToBuffer) — the one this build writes, or the dump is
+	// another build's and is refused whole.
+	std::uint32_t form = 0;
+	ibMemoryBuffer bufferForm;
+	if (reader.r_chunk(3, bufferForm)) {
+		ibReaderMemory readerForm(bufferForm);
+		form = readerForm.r_u32();
+	}
+	if (form != static_cast<std::uint32_t>(ibDataMover::DateForm::DateTime))
+		ibBackendCoreException::Error(_("The data was saved by another build (date form %u) that this build cannot read. Nothing was loaded."), form);
+
+	//common data
+	ibMemoryBuffer bufferData;
+
+	if (reader.r_chunk(1, bufferData)) {
+
+		// The SAME snapshot the dump used — read each table's rows back by its metaID and RESTORE through
+		// the L3-3 mover (UPSERT / INSERT / external-UPDATE chosen off the structure).
+		const ibSchemaSnapshot snapshot = m_applicationMetadata->BuildSchemaSnapshot();
+
+		ibReaderMemory readerData(bufferData);
+		for (const ibSchemaTable& table : snapshot.Tables()) {
+			if (table.m_columns.empty())   // a pure scaffold / seed table (an enum) — no data to move
+				continue;
+			ibMemoryBuffer tableBuffer;
+			if (readerData.r_chunk(table.m_id, tableBuffer)) {
+				ibReaderMemory rows(tableBuffer);
+				if (!ibDataMover::Restore(table, rows))
+					return false;
+			}
+		}
+	}
+
+	//sequence
+	ibMemoryBuffer bufferSequence;
+
+	if (reader.r_chunk(2, bufferSequence)) {
+		ibReaderMemory readerSequence(bufferSequence);
+		LoadSequenceFromBuffer(readerSequence);
+	}
+
+	return true;
+}
+
+bool ibMetaDataApplicationFile::SaveApplicationToBuffer(ibMemoryBuffer& buffer)
+{
+	//common data
+	ibWriterMemory writer;
+
+	//Save common object (header is written inside SaveRootTree)
+	if (!SaveRootTree(g_metaApplicationMetadataCLSID, writer, saveToFileFlag))
+		return false;
+
+	buffer = writer.buffer();
+	return true;
+}
+
+bool ibMetaDataApplicationStorage::DumpDataToBuffer(ibMemoryBuffer& buffer)
+{
+	ibWriterMemory writer;
+
+	//common data
+	ibWriterMemory writerData;
+
+	// ONE source of truth: the whole application's structure — the SAME snapshot the DDL differ consumes —
+	// drives the data dump too. Every declared table SELECTs its rows through the L3-3 mover, framed by
+	// the table's metaID (a pure scaffold / seed table, e.g. an enum, is skipped).
+	const ibSchemaSnapshot snapshot = m_applicationMetadata->BuildSchemaSnapshot();
+	for (const ibSchemaTable& table : snapshot.Tables()) {
+		if (table.m_columns.empty())
+			continue;
+		ibWriterMemory tableWriter;
+		if (!ibDataMover::Dump(table, tableWriter))
+			return false;
+		writerData.w_chunk(table.m_id, tableWriter.buffer());
+	}
+
+	writer.w_chunk(1, writerData.buffer());
+
+	//sequence 
+	ibWriterMemory writerSequence;
+	if (SaveSequenceToBuffer(writerSequence))
+		writer.w_chunk(2, writerSequence.buffer());
+
+	// The form of the dates in chunk 1 (ibDataMover::DateForm): an ibDateTime's count.
+	ibWriterMemory writerForm;
+	writerForm.w_u32(static_cast<std::uint32_t>(ibDataMover::DateForm::DateTime));
+	writer.w_chunk(3, writerForm.buffer());
+
+	buffer = writer.buffer();
+	return true;
+}
+
+bool ibMetaDataApplicationFile::SaveRootTree(const ibClassID& clsid, ibWriterMemory& writerData, int flags)
+{
+	// Header (sign + application guid) leads the tree blob (was the separate SaveHeader).
+	{
+		ibWriterMemory headerWriter;
+		headerWriter.w_u64(sign_metadata); //sign
+		headerWriter.w_stringZ(m_rootObject->GetDocPath()); //guid conf
+		writerData.w_chunk(eHeaderBlock, headerWriter.pointer(), headerWriter.size());
+	}
+
+	// Top-level structure builder: the tree is built into a universal ibDataNode
+	// (BuildDataNode, which fills the root's clsid/metaId from the object itself) and
+	// serialized through the binary provider.
+	(void)clsid; // root identity now comes from the object, not this hint
+	ibDataBuilder builder;
+	if (!m_rootObject->BuildDataNode(builder.Root(), flags))
+		return false;
+
+	// The provider writes the root's INNER content; the container owns the identity frame.
+	// Wrap it in chunk(clsid){ chunk(metaId){ inner } } — exactly what LoadRootTree peels
+	// (open_chunk(clsid) -> open_chunk_iterator(metaId) -> provider.Read). Identity comes
+	// from the built root, mirroring how children are framed inside the tree.
+	ibBinaryProvider provider;
+	ibWriterMemory innerWriter;
+	if (!builder.Save(provider, innerWriter))
+		return false;
+
+	ibWriterMemory metaWriter;
+	metaWriter.w_chunk((std::uint64_t)builder.Root().GetMetaId(), innerWriter.pointer(), innerWriter.size());
+	writerData.w_chunk((std::uint64_t)builder.Root().GetClsid(), metaWriter.pointer(), metaWriter.size());
+
+	// ⭐ …and that it has been written out. A watcher shows this as "no longer modified"; nothing
+	// in the tree changed, which is why this is a stage of its own and not MetaDataChanged.
+	MetaObjectStage(ibMetaDataNotifier::ibMetaStage::Saved, GetRootMetaObject());
+	return true;
+}
+
+bool ibMetaDataApplicationStorage::DeleteRootTree(const ibClassID& clsid)
+{
+	// Deleted-node purge is owned by the node (ibValueMetaObject::DeleteSubtree).
+	return m_rootObject->DeleteSubtree();
+}
+
+
+
+//**************************************************************************************************
+//*      the three application verbs — see the note in metadataApplication.h                   *
+//**************************************************************************************************
+
+bool ibMetaDataApplicationBase::SaveApplication(ibString& refusal)
+{
+	if (!IsEditable()) {
+		refusal = _("This application is open for reading only.");
+		return false;
+	}
+
+	try {
+		// THE DISKETTE IS ONE CALL. It persists the application so it survives a re-login and leaves
+		// the LIVE one alone — that is what applying is for, and they are two buttons because they are
+		// two intentions.
+		//
+		// 🛑 AND IT PASSES defaultFlag, WHICH IT STOPPED DOING FOR TWO DAYS. saveApplicationFlag does not
+		// mean "the text changed"; it is what opens the RESTRUCTURE branch in OnSaveDatabase, and
+		// handing it to a plain save turned the diskette into a full apply — ten CREATE TABLE and six
+		// ALTER TABLE during saves alone (measured by DitriXNew, 2026-09-05, issue #85). Worse, it
+		// took the SAFEGUARD with it: ApplyApplication's own step 1 called this same road, so the
+		// consent point below was offered a ledger for work it had already committed.
+		//
+		// ⭐ THE CACHE IS RETIRED BY THE KEY, NOT BY THIS FLAG. An AOT row is keyed by the build stamp
+		// and the APPLICATION DIGEST, and the digest moves only when a restructure succeeds — so a
+		// plain save leaves every row still true, which is correct: the runtime reads `application`, and a
+		// plain save does not publish it. Chasing a stale row from here was solving a problem the key
+		// already solves, and it cost the two things above.
+		if (!SaveDatabase(defaultFlag)) {
+			refusal = _("Failed to save the application.");
+			return false;
+		}
+	}
+	catch (const ibCoreException& e) {
+		refusal = e.GetErrorDescription();
+		return false;
+	}
+
+	return true;
+}
+
+bool ibMetaDataApplicationBase::ApplyApplication(ibString& refusal,
+	const std::function<bool(const ibRestructureInfo&)>& decide)
+{
+	if (!IsEditable()) {
+		refusal = _("This application is open for reading only.");
+		return false;
+	}
+
+	// ⭐ THE BASE HOLDS THIS APPLICATION ALREADY — the question app_run asks before it launches. Nothing to apply is
+	// nothing to do: it took the base in single-user mode, rewrote the whole application and restructured nothing, about eight
+	// seconds each, and the file grew by what it rewrote (measured 2026-10-30: 35.1 to 41.5 MB over three applies).
+	if (!IsModified() && IsApplicationSave()) {
+		GetRestructureInfo().Clear();
+		return true;
+	}
+
+	try {
+		// 0 — ⭐ SINGLE-USER MODE BEFORE THE WORK, WHEN THE STRUCTURE MOVES (#404). The first batch with DDL used
+		// to be the first to ask (ibStructureBatch::Flush) — 45 to 70 seconds into an apply on a real base,
+		// after the save below and the diff — and a session that connected in that window threw the whole
+		// apply away. Whether the structure moves is known now, from the application in memory (the
+		// differ's own snapshots, compared), so the refusal comes at once and the base stays closed to
+		// newcomers until the apply ends. A code-only apply asks nothing, as before.
+		//
+		// THE SESSION'S OWN SINGLE-USER MODE, the one a script sets (ibSession::SetSingleUser) - not the gate's: every
+		// save lets the gate's go (ibStructureBuilder::OnAfterSave), and step 1 is a save of its own. The gate finds
+		// this one held and leaves it; the guard lets it go however the apply ends, as the gate lets its own go.
+		struct ibApplySingleUser {
+			ibSession* m_session = nullptr;
+			~ibApplySingleUser() {
+				ibSessionRegistry* const registry = ibApplicationInstance::GetSessionRegistry();
+				if (m_session != nullptr && registry != nullptr)
+					registry->SetSingleUser(m_session, false);
+			}
+		} singleUser;
+		ibSession* const session = ibSession::Current();
+		if (session != nullptr && !session->IsSingleUser() && ibApplicationInstance::GetSessionRegistry() != nullptr
+			&& !IsDynamicUpdateAvailable()) {
+			session->SetSingleUser(true);   // refused in the session's words, which the catch below hands back
+			singleUser.m_session = session;
+		}
+
+		// 1 — the application itself, PERSISTED AND NOTHING MORE. The restructure is steps 2-5,
+		// and it is the whole reason this verb is separate from the save above.
+		//
+		// 🛑 THIS CARRIED saveApplicationFlag FOR TWO DAYS, and that made the apply do everything TWICE:
+		// SaveDatabase is OnBefore + OnSave + OnAfter, the same trio spelled out below, so the DDL
+		// ran here, `application` was published here, and the baseline was re-read here. By the time step
+		// 4 offered "the one moment 'no' is free", baseline and target were equal and the ledger it
+		// showed was empty. The consent point guarded nothing, and `app_apply {confirm: false}` —
+		// documented as the only way to see the DDL in advance — could not work by construction.
+		if (!SaveDatabase(defaultFlag)) {
+			refusal = _("Failed to save the application.");
+			return false;
+		}
+
+		// 2 — open the apply, AND SAY SO. Whoever asked for this knows already; whoever did NOT is the
+		// reason the signal exists — the schema is about to move under them.
+		//
+		// ⭐⭐ THE ANSWER COMES BACK EITHER WAY (Max, 2026-09-01: *"you still get the event that says
+		// the application was updated, or was not updated, and you cannot interrupt it — it is simply
+		// a notification that arrives"*). A watcher that stopped reading on `Applying` has to be let go
+		// on BOTH branches, so the pair is closed by a guard rather than by remembering to say it at
+		// each of the exits below — two of which are throws.
+		//
+		// ⚠ WHAT CHANGED GOES TO THE CALLER ONLY, through `decide`. These two carry the application
+		// root and nothing else: a watcher that did not start this has no business reading a ledger it
+		// cannot act on, and re-reading is the only thing it can do about the news.
+		struct ibApplyOutcome {
+			ibMetaDataApplicationBase* const m_config;
+			bool m_applied = false;
+			~ibApplyOutcome() {
+				m_config->MetaObjectStage(m_applied
+					? ibMetaDataNotifier::ibMetaStage::Applied
+					: ibMetaDataNotifier::ibMetaStage::Reverted, m_config->GetRootMetaObject());
+			}
+		} outcome{ this };
+
+		MetaObjectStage(ibMetaDataNotifier::ibMetaStage::Applying, GetRootMetaObject());
+
+		if (!OnBeforeSaveDatabase(saveApplicationFlag)) {
+			refusal = _("The update could not be started.");
+			return false;
+		}
+
+		// 3 — do it; the restructure ledger fills here
+		const bool saved = OnSaveDatabase(saveApplicationFlag);
+
+		// 4 — ⭐ THE ONE MOMENT "NO" IS FREE, and it belongs to WHOEVER CALLED. The ledger is
+		// complete and the transaction is still open, which is why the designer can show it and be
+		// answered — and why an assistant answers from an argument instead. A caller that declines gets
+		// everything rolled back and keeps the ledger it declined: a real pass, not a rehearsal
+		// (schemaSnapshot.h explains why the differ has no rehearsal mode).
+		//
+		// ⚠ THE DATABASE IS HELD WHILE THIS RUNS. It must answer at once — a dialog is the outer
+		// limit, and anything that asks back over a socket holds the base open while it waits.
+		const bool declined = saved && decide
+			&& !decide(ibMetaDataApplicationBase::GetRestructureInfo());
+
+		// 5 — commit or roll back. Reached on BOTH branches: this is what closes the transaction, so a
+		// path that skipped it would leave the database open.
+		if (!OnAfterSaveDatabase(declined || !saved, saveApplicationFlag) || !saved) {
+			refusal = _("Failed to update the database.");
+			return false;
+		}
+
+		// A DECLINE IS NOT A FAILURE — it did exactly what was asked. Reported apart from one, or a
+		// caller cannot tell whether to fix something or simply to say yes.
+		if (declined) {
+			refusal = _("Rolled back - nothing was applied.");
+			return false;
+		}
+
+		// …and it is done. Said by the guard on the way out, so `Applied` cannot arrive for an apply
+		// that did not happen — which is the whole value of it to a watcher that did not start it.
+		outcome.m_applied = true;
+	}
+	catch (const ibCoreException& e) {
+		// OnSaveDatabase self-rolls-back and releases single-user mode on a thrown DDL error (its own
+		// try/catch), so there is no transaction left open here — only a message to carry out.
+		refusal = e.GetErrorDescription();
+		return false;
+	}
+	catch (const std::exception& e) {
+		refusal = ibString::FromUTF8(e.what());
+		return false;
+	}
+
+	return true;
+}
+
+bool ibMetaDataApplicationBase::RollbackApplication(ibString& refusal)
+{
+	if (!IsEditable()) {
+		refusal = _("This application is open for reading only.");
+		return false;
+	}
+
+	if (!RollbackDatabase()) {
+		refusal = _("The application could not be taken back from the database.");
+		return false;
+	}
+
+	// ⭐⭐ AND NOW EVERYONE IS TOLD IT IS READ IN AGAIN.
+	//
+	// 🛑 THIS USED TO SAY NOTHING, on the reasoning that RollbackDatabase closes, clears, loads and
+	// runs — so each of those four announces its own stage and a navigator rebuilds because it
+	// HEARD. Every step of that is true and the result was still an empty tree: the rows went with
+	// the clear and nothing put them back (Max, 2026-09-01: *"the tree clears, the event is there,
+	// it just does not refill — press the × in the search box and the tree comes back"*, which is
+	// the proof that the metadata was fine and only the signal was missing).
+	//
+	// A ROLLBACK IS ONE ACT, and this is the verb that knows it finished. Relying on the stages of
+	// its parts means relying on every one of those paths to have kept its announce — and one of
+	// them has not.
+	//
+	// ⚠ Harmless if a part did announce: the stage a tree answers by re-reading is idempotent, and
+	// a second full read costs one draw.
+	//
+	// ⭐ AND IT IS ITS OWN STAGE. `Reverted` says what actually happened — this application is the
+	// database's again — where `Run` would only say that something is running, which was already
+	// true a moment before. A watcher that wants to tell a rollback from an ordinary load can;
+	// one that does not care answers them the same way, which the navigator does.
+	MetaObjectStage(ibMetaDataNotifier::ibMetaStage::Reverted, GetRootMetaObject());
+	return true;
+}

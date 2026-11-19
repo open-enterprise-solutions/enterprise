@@ -2,7 +2,7 @@
 #define __SERVED_KIND_H__
 
 // HOW ONE KIND OF WEB ADDRESS ANSWERS — the engine's half of an entry (core/net/servedAddress.h): an HTTP service of
-// the configuration, an assistant's channel. The web server knows no kind: it hands what comes to an entry's path to
+// the application, an assistant's channel. The web server knows no kind: it hands what comes to an entry's path to
 // the base (protocol `serve`), the base's list (servedAddressRegistry.h) finds the entry, and its kind answers.
 
 #include "backend/backend.h"
@@ -23,10 +23,10 @@ public:
 	virtual ibHttpResponse Answer(const ibServedAddress& address, const ibHttpRequest& request, const ibString& prefix) const = 0;
 
 	// An entry this kind cannot answer, refused before it is registered: throws ibBackendCoreException naming why (an
-	// object that is not in the configuration). The default takes every entry.
+	// object that is not in the application). The default takes every entry.
 	virtual void Check(const ibServedAddress& address) const;
 
-	// THE ENTRIES THIS KIND OFFERS TO REGISTER — what the configuration declares for it (an HTTP service: its RootURL
+	// THE ENTRIES THIS KIND OFFERS TO REGISTER — what the application declares for it (an HTTP service: its RootURL
 	// under es/), each with its path and its object and no id. The administration's form lists them. The default:
 	// none, the kind is registered by a session.
 	virtual std::vector<ibServedAddress> Offer() const;

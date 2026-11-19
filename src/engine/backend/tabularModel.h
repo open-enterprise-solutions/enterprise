@@ -319,7 +319,7 @@ public:
 			virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal);
 			virtual bool SetPropVal(const long lPropNum, const ibValue& varPropVal);
 
-			// WHETHER A PERSON IS OFFERED THIS COLUMN — the functional options of the base. A column that
+			// WHETHER A PERSON IS OFFERED THIS COLUMN — the feature options of the base. A column that
 			// WRAPS an attribute or a queryable column passes the question on; one that declares itself
 			// (a value table's) has no option over it. Last in the class, so no slot above it moves.
 			virtual bool IsColumnAvailable() const { return true; }

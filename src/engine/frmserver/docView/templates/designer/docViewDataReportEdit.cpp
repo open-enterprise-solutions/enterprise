@@ -24,7 +24,7 @@ static int s_defaultReportNameCounter = 1;
 ibPictureDescription ibReportEditDocument::GetIcon() const
 {
 	if (m_metaData != nullptr) {
-		ibValueMetaObject* metaObject = m_metaData->GetCommonMetaObject();
+		ibValueMetaObject* metaObject = m_metaData->GetRootMetaObject();
 		ibASSERT(metaObject);
 		return ibPictureDescription(metaObject->GetClassType());
 	}
@@ -41,8 +41,8 @@ bool ibReportEditDocument::OnCreate(const ibString& path, long flags)
 
 bool ibReportEditDocument::OnNewDocument()
 {
-	ibValueMetaObject* commonObject = m_metaData->GetCommonMetaObject();
-	ibASSERT(commonObject);
+	ibValueMetaObject* rootObject = m_metaData->GetRootMetaObject();
+	ibASSERT(rootObject);
 
 	// notice that there is no need to neither reset nor even check the
 	// modified flag here as the document itself is a new object (this is only
@@ -54,12 +54,12 @@ bool ibReportEditDocument::OnNewDocument()
 	SetDocumentSaved(false);
 
 	const ibString name =
-		ibString::Format(commonObject->GetClassName() + ibT("%d"), s_defaultReportNameCounter++);
+		ibString::Format(rootObject->GetClassName() + ibT("%d"), s_defaultReportNameCounter++);
 
 	SetTitle(name);
 	SetFilename(name, true);
 
-	commonObject->SetName(name);
+	rootObject->SetName(name);
 
 	m_metaData->Modify(true);
 
@@ -104,7 +104,7 @@ bool ibReportEditDocument::DoSaveDocument(const ibString& filename)
 	return true;
 }
 
-// ⭐ ITS METADATA'S MARK, NOT A SECOND ONE — see ibDataProcessorEditDocument::IsModified.
+// ⭐ ITS METADATA'S MARK, NOT A SECOND ONE — see ibDataToolEditDocument::IsModified.
 bool ibReportEditDocument::IsModified() const
 {
 	return m_metaData != nullptr && m_metaData->IsModified();
@@ -118,7 +118,7 @@ void ibReportEditDocument::Modify(bool modified)
 
 ibDataReportTree* ibReportEditDocument::GetMetaTree() const
 {
-	// GUARD THE CAST, not the pointer that went into it — see the twin in docViewDataProcessorEdit.cpp.
+	// GUARD THE CAST, not the pointer that went into it — see the twin in docViewDataToolEdit.cpp.
 	ibReportTreeView* view = dynamic_cast<ibReportTreeView*>(GetFirstView());
 	return view != nullptr ? view->GetMetaTree() : nullptr;
 }

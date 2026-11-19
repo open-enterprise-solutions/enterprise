@@ -9,7 +9,7 @@
 #include "commonObject.h"
 
 
-const ibValueMetaObjectCommonModule* ibValueManagerDataObjectAccumulationRegister::GetManagerModule() const
+const ibValueMetaObjectSharedModule* ibValueManagerDataObjectAccumulationRegister::GetManagerModule() const
 {
 	return m_metaObject->GetManagerModule();
 }

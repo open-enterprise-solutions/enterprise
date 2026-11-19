@@ -27,7 +27,7 @@
 
 #include "backend/metaCollection/metaIntrospect.h"
 #include "backend/metaCollection/metaTemplateObject.h"
-#include "backend/metadataConfiguration.h"
+#include "backend/metadataApplication.h"
 #include "backend/sheetFormat/sheetFormat.h"   // a format registers itself and says what it reads
 #include "core/description/spreadsheetDescription.h"
 #include "core/fileSystem.h"   // ibFileExists
@@ -37,7 +37,7 @@ namespace {
 // The template a caller named, refused in words when it is something else.
 ibValueMetaObjectTemplateBase* FindTemplate(const ibDataNode& params, ibString& refusal)
 {
-	// The configuration check, the missing-argument refusal and the not-found refusal, in one
+	// The application check, the missing-argument refusal and the not-found refusal, in one
 	// call — see ibMcpObjectNamed for why they belong together.
 	ibValueMetaObject* object = ibMcpObjectNamed(params, refusal);
 	if (object == nullptr)
@@ -48,7 +48,7 @@ ibValueMetaObjectTemplateBase* FindTemplate(const ibDataNode& params, ibString& 
 	if (sheet == nullptr) {
 		refusal = ibString::Format(
 			ibMcpText("'%s' is not a template. Create one with metadata_create kind=Template under an "
-			  "object, or kind=CommonTemplate under Common."), object->GetName());
+			  "object, or kind=SharedTemplate under Shared."), object->GetName());
 		return nullptr;
 	}
 
@@ -154,10 +154,10 @@ const ibArg& ArgValue()
 {
 	static const ibArg s_a(ibT("value"), ibArg::Kind::Text,
 		ibMcpText("The text shown. For a caption this is all there is - and it is a LOCALISED string: "
-			  "it is translated when the sheet is put out, so it carries EVERY language the configuration "
+			  "it is translated when the sheet is put out, so it carries EVERY language the application "
 			  "declares, in one string (`en = 'Goods'; ru = 'Tovary'; uk = 'Tovary';`), exactly as a "
-			  "synonym does. A plain text is REFUSED where the configuration has several languages: it "
-			  "would be stored as the configuration's own language and leave the others blank. A "
+			  "synonym does. A plain text is REFUSED where the application has several languages: it "
+			  "would be stored as the application's own language and leave the others blank. A "
 			  "`template` text is translated the same way, before its [holes] are filled."));
 	return s_a;
 }
@@ -320,7 +320,7 @@ const ibArg& ArgBorder()
 // a grey mesh with no structure in it.
 //
 // 🛑 THIS TOOL RULED EVERYTHING AT 1 and offered no way to say otherwise, so every form built
-// through this door came out flat. Counted in a working configuration's own templates (2026-09-05,
+// through this door came out flat. Counted in a working application's own templates (2026-09-05,
 // a cash order): of twenty left borders, ELEVEN are width 3, two are 2, two are 1 and five are 0 —
 // the heavy line is the COMMON case, not the exception, and the one this door could not draw.
 const ibArg& ArgBorderWidth()
@@ -911,9 +911,9 @@ public:
 		const bool gaveValue     = params.Has(ArgValue().Name());
 		const bool gaveParameter = params.Has(ArgParameter().Name());
 
-		// ⭐ A CELL'S TEXT IS A CAPTION, and it goes in every language the configuration declares — the
+		// ⭐ A CELL'S TEXT IS A CAPTION, and it goes in every language the application declares — the
 		// rule every caption follows (ibMcpCaptionInEveryLanguage). A Russian word sent bare was stored
-		// as the English text of a configuration whose own language is English (2026-09-10). A PARAMETER
+		// as the English text of an application whose own language is English (2026-09-10). A PARAMETER
 		// cell's text is a name the module fills in, not a caption, and is not asked.
 		if (gaveValue && !gaveParameter
 		    && !ibMcpCaptionInEveryLanguage(sheet->GetMetaData(), ArgValue().Text(params),
@@ -1314,7 +1314,7 @@ MCP_TOOL_REGISTER_DESIGNER(ibMcpToolSheetArea);
 // sheet_import
 //---------------------------------------------------------------------------
 //
-// ⭐ A PRINTED FORM USUALLY EXISTS BEFORE THE CONFIGURATION DOES. Somebody has an
+// ⭐ A PRINTED FORM USUALLY EXISTS BEFORE THE APPLICATION DOES. Somebody has an
 // invoice in Excel, a contract in Word, an act the accountant has been filling in
 // by hand for years — and the job is not to draw it again, it is to turn THAT
 // into a template: the same layout, with the changing parts made into parameters
@@ -1345,7 +1345,7 @@ public:
 		return ibMcpText("Read a spreadsheet or document file INTO a template - an existing invoice, "
 			"act or contract becomes the layout, and what changes in it becomes parameters "
 			"afterwards with sheet_cell. This is how a printed form that already exists on "
-			"paper gets into the configuration without being drawn again.");
+			"paper gets into the application without being drawn again.");
 	}
 
 	const std::vector<ibMcpArgument>& Arguments() const override
@@ -2118,7 +2118,7 @@ public:
 		}
 
 		// ⭐ THE TEMPLATE'S OWN DESCRIPTION, NOT A COPY THROUGH A WINDOW. That is the point of
-		// having this here: the file then answers for what the CONFIGURATION holds, and a
+		// having this here: the file then answers for what the APPLICATION holds, and a
 		// difference between this file and one saved from an editor says the editor's road is
 		// where something is lost.
 		if (!format->WriteFile(fileName, sheet->GetTemplateDesc().GetSpreadsheetDesc())) {

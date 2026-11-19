@@ -32,7 +32,7 @@ bool ibSpreadsheetTemplateView::Fetch(const ibDataNode& /*request*/, ibDataNode&
 	if (!ibSpreadsheetDescriptionMemory::WriteNode(sheet, creator->GetTemplateDesc().GetSpreadsheetDesc()))
 		return false;
 	response.SetField(ibProtocol::ibForm::ibSpreadsheet::Sheet, sheet);
-	// …and read-only where the configuration may not be edited, as the desktop's editor was.
+	// …and read-only where the application may not be edited, as the desktop's editor was.
 	if (!creator->IsEditable())
 		response.SetValue(ibProtocol::ibForm::ibSpreadsheet::ReadOnly, true);
 	return true;
@@ -54,7 +54,7 @@ bool ibSpreadsheetTemplateView::OnClientEvent(ibProtocol::ibEvent::ibKind event,
 		ibSpreadsheetDescription sheet;
 		if (!creator->IsEditable() || !ibSpreadsheetDescriptionMemory::ReadNode(args.GetProperty(ibProtocol::ibForm::ibSpreadsheet::Sheet), sheet))
 			return false;
-		// Where the desktop's editor wrote — the metaobject's sheet — and the configuration modified (ibMetaDocument::Modify).
+		// Where the desktop's editor wrote — the metaobject's sheet — and the application modified (ibMetaDocument::Modify).
 		creator->SetTemplateDesc(sheet);
 		document->Modify(true);
 		return true;

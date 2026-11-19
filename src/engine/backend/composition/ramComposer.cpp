@@ -152,7 +152,7 @@ std::vector<long> ibDataRamComposer::ComputeOrder() const
 // ⭐ WHAT THIS BASE DOES NOT USE IS NOT SHOWN — the question the DB side asks its source (see
 // ibDataComposer::IsAvailable), asked of the storage the same way: the first hop is the storage's column (a
 // storage names its columns singly), the rest are hops by TYPE through the query model's walk, one hidden hop
-// hiding the walk. A value table belongs to no configuration, so the door never walks for one. A name the
+// hiding the walk. A value table belongs to no application, so the door never walks for one. A name the
 // storage does not have is not this question. …And the leaf's TYPE comes off the same walk (SubtreeAt asks it).
 ibQueryConstructorField ibDataRamComposer::WalkPath(const std::vector<ibString>& hops) const
 {

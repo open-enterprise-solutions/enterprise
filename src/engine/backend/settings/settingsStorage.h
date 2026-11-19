@@ -15,7 +15,7 @@
 // (ibValue::FromNode / the metadata door) — that is the VALUE's business, and
 // whoever saves values does it on their own side, under a category of their own.
 // A pair of value overloads here would put a second question in the storage —
-// "which configuration do I read this through" — that it has no business
+// "which application do I read this through" — that it has no business
 // answering: the caller reads the node back with whatever it stored.
 //
 // The same for a setting: what a composition saves is the node its own *Memory
@@ -111,7 +111,7 @@ public:
 	// touched their settings yet.
 	//
 	// What the node MEANS is the caller's: a composition reads it back through its
-	// *Memory pair and its own configuration, a value through ibValue::FromNode or
+	// *Memory pair and its own application, a value through ibValue::FromNode or
 	// the metadata door. Both already exist; neither belongs here.
 	bool Restore(const ibSettingsKey& key, ibDataNode& node) const;
 

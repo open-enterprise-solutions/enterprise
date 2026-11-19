@@ -28,7 +28,7 @@ public:
 	void SetCompositionDesc(const ibCompositionDescription& desc) { m_description = desc; }
 
 	// WHOSE CELL THIS IS — the property object that declared the property. Asked for the one thing a
-	// description cannot answer by itself: which CONFIGURATION its names mean.
+	// description cannot answer by itself: which APPLICATION its names mean.
 	const ibPropertyObject* GetOwnerProperty() const { return m_ownerProperty; }
 
 	/////////////////////////////////////////////////////////////////////////////////////////

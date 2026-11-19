@@ -23,7 +23,7 @@ class ibValueManagerDataObjectJob :
 	}
 	virtual ~ibValueManagerDataObjectJob() {}
 
-	virtual const ibValueMetaObjectCommonModule* GetManagerModule() const;
+	virtual const ibValueMetaObjectSharedModule* GetManagerModule() const;
 	virtual const ibValueMetaObjectParameterizedJob* GetMetaObject() const { return m_metaObject; }
 
 	void FillManagerMethods(ibMemberTable& helper) const;

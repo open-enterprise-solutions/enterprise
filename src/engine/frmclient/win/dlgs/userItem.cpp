@@ -28,7 +28,7 @@ bool ibDialogUserItem::ReadUserData(const ibGuid& userGuid, bool copy)
 			auto iterator = std::find_if(m_languageArray.begin(), m_languageArray.end(),
 				[userInfo](const auto& pair) { return userInfo.m_strLanguageGuid == pair.second.m_strLanguageGuid; });
 
-			// A language the configuration no longer has: the configuration's own language, as the desktop's; none
+			// A language the application no longer has: the application's own language, as the desktop's; none
 			// marked, the first one.
 			if (iterator != m_languageArray.end()) {
 				m_choiceLanguage->SetSelection(iterator->first);
@@ -129,8 +129,8 @@ ibDialogUserItem::ibDialogUserItem(wxWindow* parent, wxWindowID id, const wxStri
 
 	m_choiceLanguage = new ibChoice(m_other, wxID_ANY, wxDefaultPosition, wxDefaultSize);
 
-	// The configuration's roles and languages — the server's, listed beside the users (the desktop's read them off the
-	// active configuration). A role's picture is its class's (ibValueMetaObjectRole::GetIcon is GetIconGroup), asked of
+	// The application's roles and languages — the server's, listed beside the users (the desktop's read them off the
+	// active application). A role's picture is its class's (ibValueMetaObjectRole::GetIcon is GetIconGroup), asked of
 	// the server by the class id once and kept by the client (ibProtocolPicture). One picture, so one image for all.
 	const wxBitmap picture = ibBackendPicture::GetPicture(g_metaRoleCLSID);
 	const int image = picture.IsOk() ? imageList->Add(picture) : wxNOT_FOUND;
@@ -145,7 +145,7 @@ ibDialogUserItem::ibDialogUserItem(wxWindow* parent, wxWindowID id, const wxStri
 		m_roleArray.insert_or_assign(id, entry);
 	}
 
-	// The base's users choose among the session's configuration's languages — the one they log in to.
+	// The base's users choose among the session's application's languages — the one they log in to.
 	for (const ibUserInfo::LanguageBrief& language : ibUserInfo::ListLanguages(nullptr)) {
 
 		ibDataUserLanguageItem entry;

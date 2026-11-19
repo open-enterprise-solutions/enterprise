@@ -2,7 +2,7 @@
 #include "core/graphics/picture.h"   // ibPicture — a master read and scaled by the core
 
 // The launcher's pictures (see launcher.h). Each is a drawing the set already has for the same act — the
-// application is STARTED (run without debugging), the designer opens the CONFIGURATION, a base is added,
+// application is STARTED (run without debugging), the designer opens the APPLICATION, a base is added,
 // edited, deleted, the launcher is left — and the web client's globe, which is its own.
 
 /* PNG */

@@ -147,14 +147,14 @@ ibParamUnit ibCompileContext::GetVariable(const ibString& strVarName, bool bFind
 		auto tryEmit = [&](const std::shared_ptr<ibVariable>& cur, int depth, bool blockReturn, ibParamUnit& out) {
 			// Public and Protected are both visible up the parent chain (children
 			// see them). The difference is the cross-module export registry:
-			// Public is in it (config-wide); Protected is NOT.
-			// ⭐⭐ AN EXTERNAL NAME IS VISIBLE FROM ANYWHERE — that is what makes it external. Common
-			// modules are bound onto the configuration root with BindExportVariable (kind=External),
+			// Public is in it (application-wide); Protected is NOT.
+			// ⭐⭐ AN EXTERNAL NAME IS VISIBLE FROM ANYWHERE — that is what makes it external. Shared
+			// modules are bound onto the application root with BindExportVariable (kind=External),
 			// and `StockManagement.CheckFreeBalance(…)` inside a document's object module is the
 			// ordinary way to call one.
 			//
 			// 🛑 IT ONLY SURFACED WHEN THE AOT CACHE STARTED WORKING (2026-09-04). With a live
-			// compile context on the configuration root, the name resolved on the FIRST walk — the
+			// compile context on the application root, the name resolved on the FIRST walk — the
 			// compile-context chain — which does not ask this question. A cache HIT skips Compile()
 			// entirely, so there is no live context and the search falls through to the BYTECODE
 			// chain, where the visibility budget is asked about instead. `numCanUseLocalInParent`
@@ -162,7 +162,7 @@ ibParamUnit ibCompileContext::GetVariable(const ibString& strVarName, bool bFind
 			// name that is global by construction, and until the cache worked nothing ever asked it
 			// to. Probes: the name was in the parent bytecode ("externs: … StockManagement") and
 			// still reported "Var is not found".
-			// ⭐ THE LADDER (Max, 2026-09-04): root (code, global vars, contexts) → common modules,
+			// ⭐ THE LADDER (Max, 2026-09-04): root (code, global vars, contexts) → shared modules,
 			// which see the root ENTIRE and register themselves back on it as exports → an object
 			// module, which sees the root and everything registered on it and adds its own exports
 			// and contexts → a form, adding its own on top. Each step sees its parent WHOLE and
@@ -294,7 +294,7 @@ ibParamUnit ibCompileContext::GetVariable(const ibString& strVarName, bool bFind
 			     pCurByteCode != nullptr; pCurByteCode = pCurByteCode->m_parent) {
 
 				// Lambda discipline: only consult the topmost bc
-				// (m_parent == nullptr — root configuration). Skip
+				// (m_parent == nullptr — root application). Skip
 				// every intermediate ancestor — lambda body sees only
 				// root-level Context bindings, not its definition site's
 				// module-level vars.
@@ -493,7 +493,7 @@ bool ibCompileContext::FindVariable(const ibString& strVarName, std::shared_ptr<
 		// BYTECODE chain and walk it looking for a context-related
 		// entry. Single-hop wouldn't be enough — there may be an
 		// intermediate bc (form bc, object bc) between the eval and
-		// the root common module that holds the bindings. First match
+		// the root shared module that holds the bindings. First match
 		// in any ancestor wins; emitter (compileCode.cpp) checks
 		// foundedVar->m_strContext to decide direct vs OPER_GET_A.
 		if (m_parentContext == nullptr) {

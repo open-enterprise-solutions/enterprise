@@ -12,7 +12,7 @@ class ibValueManagerDataObjectReport :
 	}
 	virtual ~ibValueManagerDataObjectReport() {}
 
-	virtual const ibValueMetaObjectCommonModule* GetManagerModule() const;
+	virtual const ibValueMetaObjectSharedModule* GetManagerModule() const;
 	virtual const ibValueMetaObjectReport* GetMetaObject() const { return m_metaObject; }
 
 	void FillManagerMethods(ibMemberTable& helper) const;

@@ -18,10 +18,10 @@
 #define version_generate(major, minor, release) \
 		( (major * 1000) + (minor * 100) + release )
 
-// The compatibility ladder (compatibility-version.md): a rung per behaviour a configuration may still ask for. Its
-// number is what a configuration saves, so it is written out here and does not follow the platform's version: a rung
+// The compatibility ladder (compatibility-version.md): a rung per behaviour an application may still ask for. Its
+// number is what an application saves, so it is written out here and does not follow the platform's version: a rung
 // is added by a change of behaviour, not by a release. The alpha's rungs, 1.0.0 and 1.0.1, went with 2.0.0
-// (2026-10-28) — a configuration of the alpha is not carried over.
+// (2026-10-28) — an application of the alpha is not carried over.
 enum ibProgramVersion {
 	version_oes_last  = version_generate(2, 0, 0)
 };

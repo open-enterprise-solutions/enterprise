@@ -4,10 +4,10 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "control.h"
-#include "typeControl.h"   // ibTypeControlFactory + ibBackendTypeConfigFactory::GetDefaultTypeByFilter (AutoBindNewSource)
+#include "typeControl.h"   // ibTypeControlFactory + ibBackendTypeApplicationFactory::GetDefaultTypeByFilter (AutoBindNewSource)
 #include "form.h"
-#include "backend/appData.h"                 // ibApplicationInstance::GetActiveMetaData — GetMetaData fallback (common form / metadata-free source)
-#include "backend/metadataConfiguration.h"   // ibMetaDataConfigurationBase : ibMetaData — the GetActiveMetaData() base cast
+#include "backend/appData.h"                 // ibApplicationInstance::GetActiveMetaData — GetMetaData fallback (shared form / metadata-free source)
+#include "backend/metadataApplication.h"     // ibMetaDataApplicationBase : ibMetaData — the GetActiveMetaData() base cast
 
 
 //*************************************************************************
@@ -31,7 +31,7 @@ ibValueControl::~ibValueControl()
 bool ibValueControl::IsAvailable() const
 {
 	const ibValueFrame* parent = GetParent();
-	return m_propertyFunctionalOptions->IsAvailable() && (parent == nullptr || parent->IsAvailable());
+	return m_propertyFeatureOptions->IsAvailable() && (parent == nullptr || parent->IsAvailable());
 }
 
 void ibValueControl::SetOwnerForm(ibValueForm* ownerForm)
@@ -92,7 +92,7 @@ void ibValueControl::AutoBindNewSource(ibTypeControlFactory* factory)
 	// answered for exactly one control.
 	//
 	// Where a control declares nothing, the shared filter-kind -> clsid mapping stands
-	// (ibBackendTypeConfigFactory::GetDefaultTypeByFilter) — the SAME mapping
+	// (ibBackendTypeApplicationFactory::GetDefaultTypeByFilter) — the SAME mapping
 	// ibVariantAttribute::DoSetDefaultMetaType uses, so a control's auto-attribute and a variant's
 	// default never diverge.
 	if (factory == nullptr || m_formOwner == nullptr || !IsUnbound())
@@ -101,7 +101,7 @@ void ibValueControl::AutoBindNewSource(ibTypeControlFactory* factory)
 	ibTypeDescription typeDesc;
 	typeDesc.SetDefaultMetaType(declared.GetClsidCount() > 0
 		? declared.GetFirstClsid()
-		: ibBackendTypeConfigFactory::GetDefaultTypeByFilter(factory->GetFilterDataType()));
+		: ibBackendTypeApplicationFactory::GetDefaultTypeByFilter(factory->GetFilterDataType()));
 	const ibMetaID id = m_formOwner->AddAutoAttribute(GetControlName(), typeDesc);
 	if (id != ibNOT_FOUND)
 		factory->SetDefaultSourceType(id);   // one-hop bind, over the mutable GetSourceDesc (twin of SetDefaultMetaType over GetTypeDesc)
@@ -111,12 +111,12 @@ void ibValueControl::AutoBindNewSource(ibTypeControlFactory* factory)
 
 bool ibValueControl::ReadData(const ibDataNode& node)
 {
-	m_propertyFunctionalOptions->SetNodeValue(node.GetProperty(m_propertyFunctionalOptions->GetName()));
+	m_propertyFeatureOptions->SetNodeValue(node.GetProperty(m_propertyFeatureOptions->GetName()));
 	return ibValueFrame::ReadData(node);
 }
 
 bool ibValueControl::WriteData(ibDataNode& node) const
 {
-	node.SetProperty(m_propertyFunctionalOptions->GetName(), m_propertyFunctionalOptions->GetNodeValue());
+	node.SetProperty(m_propertyFeatureOptions->GetName(), m_propertyFeatureOptions->GetNodeValue());
 	return ibValueFrame::WriteData(node);
 }

@@ -1,5 +1,5 @@
 // WHAT THE QUERY CONSTRUCTOR ASKS A DESIGNER TAB — ibProtocol::ibView::ibQueryConstructor, the server's half
-// (frmserver/docView/templates/designer/queryConstructorRequest.h). Asked with no configuration open, the answers are
+// (frmserver/docView/templates/designer/queryConstructorRequest.h). Asked with no application open, the answers are
 // the desktop model's own for that case: an empty catalogue, no fields, no parameters — never a failure.
 
 #include <gtest/gtest.h>
@@ -11,9 +11,9 @@
 #include "frmserver/docView/templates/designer/queryConstructorRequest.h"
 #include "protocol/protocol.h"
 #include "protocol/protocolDesigner.h"   // ibProtocol::ibView::ibQueryConstructor
-#include "backend/query/queryableFactory.h"        // ibQueryableSourceDescriptor — a table the configuration offers
+#include "backend/query/queryableFactory.h"        // ibQueryableSourceDescriptor — a table the application offers
 #include "backend/query/tempTableQueryable.h"      // ibTempTableQueryable — its columns, from a table in memory
-#include "backend/metadataConfiguration.h"         // ibMetaDataConfigurationFile — the open configuration it registers in
+#include "backend/metadataApplication.h"           // ibMetaDataApplicationFile — the open application it registers in
 #include "backend/query/queryLowering.h"           // the desktop's CheckNames / UngroupedProjections — the reference
 #include "backend/query/queryConstructorModel.h"   // the desktop's GetSources — the kinds' reference
 #include "backend/query/queryable.h"               // ibSourceMetaDataScope
@@ -51,7 +51,7 @@ ibDataNode UngroupedRequest(const ibString& text, std::int32_t statement, std::i
 	return request;
 }
 
-// THE DESKTOP'S ANSWER — the window's own calls, made here inside the configuration's scope: the reference the request's
+// THE DESKTOP'S ANSWER — the window's own calls, made here inside the application's scope: the reference the request's
 // answer is compared with, word for word.
 ibString DesktopCheckNames(const ibString& text, const ibMetaData& metaData)
 {
@@ -84,7 +84,7 @@ ibValue TableWith(std::initializer_list<const wxChar*> names)
 	return held;
 }
 
-// A document the configuration offers — what the engine's lowering resolves the names of a query against.
+// A document the application offers — what the engine's lowering resolves the names of a query against.
 class Sales : public ibQueryableSourceDescriptor
 {
 public:
@@ -115,8 +115,8 @@ private:
 	ibString m_name;
 };
 
-// An OPEN configuration — only an open one has a source factory to register into.
-struct OpenConfiguration : ibMetaDataConfigurationFile
+// An OPEN application — only an open one has a source factory to register into.
+struct OpenApplication : ibMetaDataApplicationFile
 {
 	LoadGuard m_open{ this };
 };
@@ -150,7 +150,7 @@ TEST(QueryConstructorRequest, TheNumbersFollowTheComposers)
 	EXPECT_EQ(23, static_cast<int>(ibProtocol::ibView::ibComposer::ibRequest::Source));
 }
 
-TEST(QueryConstructorRequest, WithNoConfigurationTheSourcesAreAnsweredEmpty)
+TEST(QueryConstructorRequest, WithNoApplicationTheSourcesAreAnsweredEmpty)
 {
 	ibDataNode response;
 	ASSERT_TRUE(ibFetchQueryConstructorRequest(Request(qc::ibRequest::Sources), response, nullptr));
@@ -167,7 +167,7 @@ TEST(QueryConstructorRequest, EachKindIsOneRowWithItsTablesPicture)
 	// The kinds' rows are the sources' first segments, once each, and a kind wears its tables' picture: the class
 	// behind the kind (LINQ's Kinds), or - where no class stands behind it - what its table declares (the journal's).
 	Sales sales;
-	OpenConfiguration cfg;
+	OpenApplication cfg;
 	ASSERT_NE(nullptr, cfg.GetSourceFactory());
 	cfg.RegisterSource(&sales);
 
@@ -195,14 +195,14 @@ TEST(QueryConstructorRequest, EachKindIsOneRowWithItsTablesPicture)
 	EXPECT_NE(expected.end(), expected.find(wxT("Document")));
 }
 
-TEST(QueryConstructorRequest, TheKindsStandAsAConfigurationIsRead)
+TEST(QueryConstructorRequest, TheKindsStandAsAnApplicationIsRead)
 {
-	// The catalogue's kinds in the configuration tree's order (ibMetaGroupOrder) — LINQ's `Data` too — not by their names:
+	// The catalogue's kinds in the application tree's order (ibMetaGroupOrder) — LINQ's `Data` too — not by their names:
 	// the charts before the registers; a kind's tables by name.
 	Table stock(wxT("AccumulationRegister"), wxT("Stock")), prices(wxT("InformationRegister"), wxT("Prices")),
 		accounts(wxT("ChartOfAccounts"), wxT("Main")), sales(wxT("Document"), wxT("Sales")),
 		goods(wxT("Catalog"), wxT("Goods")), banks(wxT("Catalog"), wxT("Banks"));
-	OpenConfiguration cfg;
+	OpenApplication cfg;
 	ASSERT_NE(nullptr, cfg.GetSourceFactory());
 	for (Table* table : { &stock, &prices, &accounts, &sales, &goods, &banks })
 		cfg.RegisterSource(table);
@@ -233,7 +233,7 @@ TEST(QueryConstructorRequest, CheckSaysWhyATextDoesNotParse)
 TEST(QueryConstructorRequest, CheckAnswersTheDesktopsCheckNames)
 {
 	Sales sales;
-	OpenConfiguration cfg;
+	OpenApplication cfg;
 	ASSERT_NE(nullptr, cfg.GetSourceFactory());
 	cfg.RegisterSource(&sales);
 
@@ -256,7 +256,7 @@ TEST(QueryConstructorRequest, CheckAnswersTheDesktopsCheckNames)
 TEST(QueryConstructorRequest, CheckWithTheSelectNamedAnswersTheDesktopsUngroupedProjections)
 {
 	Sales sales;
-	OpenConfiguration cfg;
+	OpenApplication cfg;
 	ASSERT_NE(nullptr, cfg.GetSourceFactory());
 	cfg.RegisterSource(&sales);
 

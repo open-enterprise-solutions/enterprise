@@ -30,8 +30,7 @@ struct BACKEND_API ibUserInfo {
 		ibRoleID m_miRoleId = ibNOT_FOUND;
 		// HOW this role combines with the user's others (ibRoleCompositionMode) — it travels WITH the
 		// membership, in the same chunk as the id, so a reader gets the identifier and how to compare
-		// it in one read and resolves nothing. A row written before this field ends after the id and
-		// the entry keeps Union, which is the behaviour that row had.
+		// it in one read and resolves nothing.
 		ibRoleCompositionMode m_mode = ibRoleCompositionMode_Union;
 	};
 
@@ -86,7 +85,7 @@ struct BACKEND_API ibUserInfo {
 	static std::vector<Brief>  ListAll();
 
 	// Buffer-level serialization — header + role/language/password chunks.
-	// Used by configuration export/import paths that aggregate every
+	// Used by application export/import paths that aggregate every
 	// sys_user row into a single migration blob.
 	void              Serialize(ibWriterMemory& writer) const;
 	static ibUserInfo Deserialize(ibReaderMemory& reader);

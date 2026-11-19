@@ -6,13 +6,13 @@ in a session of its own. Three kinds come into one manager:
 | Kind | Declared by | Runs |
 |---|---|---|
 | Platform | the engine, as a base opens: folding register totals, Firebird's sweep and backup | by its schedule |
-| Scheduled | the configuration: a **predefined job** (`PredefinedJob`, under Common - the metaobject is the job) or a **parameterized job** (`ScheduledJob` - a reference whose every row is a job with its own schedule) | by its schedule, or `Execute` by hand |
+| Scheduled | the application: a **predefined job** (`PredefinedJob`, under Shared - the metaobject is the job) or a **parameterized job** (`ScheduledJob` - a reference whose every row is a job with its own schedule) | by its schedule, or `Execute` by hand |
 | Background | a script, `RunBackground("Module.Method", args, key, description)` | once, now |
 
 **Why.** Housekeeping, an overnight recalculation and a form's heavy read all want their work off the
 thread that asked. They differ only in who decides when, and whether the work outlives whoever started
 it; one manager gives all of them one claim, one journal and one list. A predefined job serves the
-configuration, a parameterized one serves the data: ten near-identical predefined jobs should have been
+application, a parameterized one serves the data: ten near-identical predefined jobs should have been
 ten rows.
 
 ## The schedule
@@ -40,7 +40,7 @@ job.Cancel();            // asks; the run stops at its next loop boundary
 jobs = BackgroundJobs.GetBackgroundJobs(New Structure("Key, State", "upload", BackgroundJobState.Active));
 ```
 
-- **The method is `Module.Method`**, a public method of a common module: the call is made by name in
+- **The method is `Module.Method`**, a public method of a shared module: the call is made by name in
   another session, so the module has to be in the name.
 - **A key is a guard.** While a run of a method under a key is active, a second start under the same key
   is refused; the check and the holding are one step.

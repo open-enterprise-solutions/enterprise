@@ -588,7 +588,7 @@ bool ibValueStructure::Property(const ibValue& varKeyValue, ibValue& cValueFound
 // not in how it is written, and the header already says which of the two it was.
 
 #include "core/serialize/dataBuilder.h"
-#include "backend/metadataSerialization.h"   // ibDeserializeValue — an entry, as the configuration reads it
+#include "backend/metadataSerialization.h"   // ibDeserializeValue — an entry, as the application reads it
 
 
 bool ibValueMap::DoSerialize(ibDataNode& node) const

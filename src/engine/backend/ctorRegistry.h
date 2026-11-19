@@ -38,7 +38,7 @@
 // DISABLED_RecordParts). See docs/private/runtime-perf.md §5.9.
 //
 // First user: the ibValue factory (valueFactory.cpp). The per-metadata factories
-// (ibMetaDataDataProcessor / ibMetaDataReport — today raw std::find_if over their
+// (ibMetaDataDataTool / ibMetaDataReport — today raw std::find_if over their
 // own m_factoryCtors with an activeMetaData fallback) are the next adopters: same
 // three lookups, same shape. Templated so they can reuse it without copying.
 // =============================================================================

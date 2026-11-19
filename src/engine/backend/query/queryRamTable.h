@@ -26,7 +26,7 @@ struct ibQueryRamColumn
 	ibString          m_name;
 	ibTypeDescription m_type;
 	ibString          m_caption;   // what the column is shown as (a register's figure: `<resource> Balance`); empty = its name
-	bool              m_available = true;   // whether what it was made from may be shown (functional options) — a temp table's column answers by it
+	bool              m_available = true;   // whether what it was made from may be shown (feature options) — a temp table's column answers by it
 };
 
 class BACKEND_API ibQueryRamTable

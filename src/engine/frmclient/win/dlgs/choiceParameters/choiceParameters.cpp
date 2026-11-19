@@ -101,7 +101,7 @@ void ibDialogChoiceParameters::BuildCatalogue()
 		m_targets += (m_targets.IsEmpty() ? wxT("") : wxT(", ")) + targets.GetName(type);
 
 		// The fields of a type are the server property's answer (ibPropertyChoiceParameters::GetParameterList, asked
-		// with the class the configuration registered the type's reference under), brought on the row under the type.
+		// with the class the application registered the type's reference under), brought on the row under the type.
 		ibPropertyChoiceList fields;
 		ibChoiceParameterList(m_property, (ibMetaID)targets.GetId(type), fields);
 		for (unsigned int idx = 0; idx < fields.GetCount(); idx++) {

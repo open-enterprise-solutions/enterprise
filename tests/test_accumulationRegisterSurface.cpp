@@ -9,7 +9,7 @@
 // Measured on Firebird over three months of a ten-warehouse base: 0.6 s a balance, every posting; 0.04 s
 // once the register declared what these tests pin.
 //
-// DB-free: a fresh in-memory configuration, never run — ContributeTables only DECLARES.
+// DB-free: a fresh in-memory application, never run — ContributeTables only DECLARES.
 // =============================================================================
 
 #include <gtest/gtest.h>
@@ -19,7 +19,7 @@
 
 #include <wx/string.h>   // wxT — the engine's headers include no wx
 
-#include "backend/metadataConfiguration.h"
+#include "backend/metadataApplication.h"
 #include "backend/metaCollection/metaObject.h"
 #include "backend/metaCollection/partial/accumulationRegister.h"
 #include "backend/query/provider/database/registerQueryLowering.h"  // ibRegFinerThanStored — which units the totals answer
@@ -32,13 +32,13 @@
 namespace {
 
 struct RegisterSurfaceFix {
-	ibMetaDataConfigurationFile cfg;
+	ibMetaDataApplicationFile cfg;
 	ibValueMetaObjectAccumulationRegister* reg = nullptr;
 	ibSchemaSnapshot snapshot;
 	const ibSchemaTable* totals = nullptr;
 
 	RegisterSurfaceFix() {
-		ibValueMetaObjectConfiguration* root = cfg.GetCommonMetaObject();
+		ibValueMetaObjectApplication* root = cfg.GetRootMetaObject();
 		if (root == nullptr) return;
 		reg = dynamic_cast<ibValueMetaObjectAccumulationRegister*>(
 			cfg.CreateMetaObject(g_metaAccumulationRegisterCLSID, root, /*runObject*/ false));
@@ -162,8 +162,8 @@ TEST(AccumulationRegisterSurface, WhenTheKeyIsTooWideTheDimensionsAreCutAndThePe
 // A register with NO dimensions has nothing to put first: the index would be the period alone, which is how
 // the key already opens - one more index for the trigger to keep on every movement, serving no reading.
 TEST(AccumulationRegisterSurface, ARegisterWithoutDimensionsGetsNoDimensionFirstIndex) {
-	ibMetaDataConfigurationFile cfg;
-	ibValueMetaObjectConfiguration* root = cfg.GetCommonMetaObject();
+	ibMetaDataApplicationFile cfg;
+	ibValueMetaObjectApplication* root = cfg.GetRootMetaObject();
 	ASSERT_NE(root, nullptr);
 	auto* reg = dynamic_cast<ibValueMetaObjectAccumulationRegister*>(
 		cfg.CreateMetaObject(g_metaAccumulationRegisterCLSID, root, /*runObject*/ false));

@@ -14,7 +14,7 @@
 // The tabular section is uuid-keyed (1 parent -> N lines), ordered by line number.
 // The adapter is parent-agnostic — the parent uuid is a query filter (WhereKey at
 // read time) — so the persistent meta vends it via the common GetQueryable() interface
-// and a transient (data-processor / report) parent simply never queries it.
+// and a transient (data-tool / report) parent simply never queries it.
 // ⭐⭐ THE OWNER, AS A FIELD OF THE SECTION.
 //
 // A section's rows are tied to their owner by the owner reference each line stores — the SAME sixteen bytes the

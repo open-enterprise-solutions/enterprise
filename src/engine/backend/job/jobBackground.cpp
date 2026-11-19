@@ -9,7 +9,7 @@
 #include "backend/session/session.h"
 #include "backend/session/sessionRegistry.h"
 #include "backend/moduleManager/moduleManager.h"   // root module manager -> GetProcUnit
-#include "backend/metaData.h"                      // ibMetaData::FindAnyObjectByFilter — a common module by its name
+#include "backend/metaData.h"                      // ibMetaData::FindAnyObjectByFilter — a shared module by its name
 #include "backend/compiler/procUnit.h"             // CallAsFunc by name
 #include "backend/backend_exception.h"
 #include "backend/system/systemManager.h"          // WriteJournalEvent - the run's own record
@@ -269,7 +269,7 @@ std::shared_ptr<ibBackgroundRun> ibJobManager::StartBackground(const ibBackgroun
 			// name from another session, so "which module did the author mean" has
 			// to be in the name rather than in whatever happened to be in scope
 			// where it was written.
-			ibValueModuleManagerRuntimeConfiguration* const mm = session->GetManagerModule();
+			ibValueModuleManagerRuntimeApplication* const mm = session->GetManagerModule();
 			if (mm == nullptr)
 				ibBackendCoreException::Error(_("Background job: the session has no runtime"));
 
@@ -286,30 +286,30 @@ std::shared_ptr<ibBackgroundRun> ibJobManager::StartBackground(const ibBackgroun
 			const ibString moduleName = procedureName.Left(dot);
 			const ibString methodName = procedureName.Mid(dot + 1);
 
-			// ⭐ A COMMON MODULE IS FOUND AMONG THE SESSION'S COMMON MODULES, not among the root's properties.
+			// ⭐ A SHARED MODULE IS FOUND AMONG THE SESSION'S SHARED MODULES, not among the root's properties.
 			// `GetPropVal(name)` answers only for EXPORT variables of the root module (ibProcUnit::FindProp
-			// skips External / Context on purpose — jobRunByteCode.cpp spells out why), and a common module
+			// skips External / Context on purpose — jobRunByteCode.cpp spells out why), and a shared module
 			// is bound into a session as exactly such an ambient name. So the one thing this door exists
-			// for — `RunBackground("StockManagement.RecalculateTotals", …)` — answered "common module not
-			// found" for every common module there is (measured 2026-09-19; no test called it by name).
+			// for — `RunBackground("StockManagement.RecalculateTotals", …)` — answered "shared module not
+			// found" for every shared module there is (measured 2026-09-19; no test called it by name).
 			// The root's own export of that name still wins, which keeps whatever relied on it.
 			//
-			// Asked as the scheduled job asks it (metaScheduledJobObject.cpp): the COMMON MODULE by its name in
-			// this session's own configuration, then its unit from the session — FindCommonModule, the one door
+			// Asked as the scheduled job asks it (metaScheduledJobObject.cpp): the SHARED MODULE by its name in
+			// this session's own application, then its unit from the session — FindSharedModule, the one door
 			// that answers "which unit runs this module here". A name compared along the list of units would be
 			// a second answer to it, and that list holds every object's manager module too.
 			ibValue moduleValue;
 			if (!unit->GetPropVal(moduleName, moduleValue) || moduleValue.IsEmpty()) {
 				const ibMetaData* const metaData = mm->GetMetaManager() != nullptr ? mm->GetMetaManager()->GetMetaData() : nullptr;
-				const ibValueMetaObjectCommonModule* const commonModule = metaData != nullptr
-					? metaData->FindAnyObjectByFilter<ibValueMetaObjectCommonModule>(moduleName, g_metaCommonModuleCLSID)
+				const ibValueMetaObjectSharedModule* const sharedModule = metaData != nullptr
+					? metaData->FindAnyObjectByFilter<ibValueMetaObjectSharedModule>(moduleName, g_metaSharedModuleCLSID)
 					: nullptr;
-				if (commonModule != nullptr)
-					if (ibValueModuleManager::ibValueModuleUnit* const found = mm->FindCommonModule(commonModule))
+				if (sharedModule != nullptr)
+					if (ibValueModuleManager::ibValueModuleUnit* const found = mm->FindSharedModule(sharedModule))
 						moduleValue = ibValue(found);
 			}
 			if (moduleValue.IsEmpty())
-				ibBackendCoreException::Error(_("Background job: common module '%s' not found"), moduleName);
+				ibBackendCoreException::Error(_("Background job: shared module '%s' not found"), moduleName);
 
 			// Only PUBLIC methods are on a module value's surface at all — that is
 			// what a module value exposes ("exports are the whole surface",
@@ -460,12 +460,12 @@ std::shared_ptr<ibBackgroundRun> ibJobManager::Launch(ibBackgroundBody body, con
 		// reads m_listed).
 		auto minted = std::make_shared<ibSession>(ibString(ibNewUniqueGuid),
 		                                          ibSessionKind::BackgroundJob);
-		// It reads in its parent's configuration — the one the parent works in, not the base's newest: a read for
+		// It reads in its parent's application — the one the parent works in, not the base's newest: a read for
 		// a session is read the way that session reads.
 		minted->m_metaData = launch->m_parent->m_metaData;
 		// …and in its parent's LANGUAGE, for the same reason. Nothing else gives a tenant one — it installs no
 		// identity and compiles no root — so it answered the empty state's "en": a report composed on a Russian
-		// configuration under a Ukrainian user titled itself "Sales by day" (Max, 2026-11-14).
+		// application under a Ukrainian user titled itself "Sales by day" (Max, 2026-11-14).
 		minted->m_translateState = launch->m_parent->m_translateState;
 		// …for its parent in this manager's base: the base's registry is its owner, and the base's pool gives its
 		// connection — and takes it back on whatever thread the session dies.
@@ -586,7 +586,7 @@ std::shared_ptr<ibBackgroundRun> ibJobManager::Launch(ibBackgroundBody body, con
 			//    root module and nothing to execute.
 			//
 			// A TENANT DOES NEITHER, and that is the whole saving. It runs no script,
-			// so a compile of every common module would buy nothing; it acts for the
+			// so a compile of every shared module would buy nothing; it acts for the
 			// parent rather than as the user, so an identity of its own would be a
 			// second answer to a question already answered next door. What RLS needs
 			// — the policy — it borrows through Server() (ibSession::GetAccessPolicy).
@@ -598,7 +598,7 @@ std::shared_ptr<ibBackgroundRun> ibJobManager::Launch(ibBackgroundBody body, con
 
 			run->Activity(l.m_activity);
 
-			// 3. The work itself. Whatever it is — a configuration's procedure
+			// 3. The work itself. Whatever it is — an application's procedure
 			//    resolved by name, or an engine read — it is a function of the
 			//    session, and this layer neither knows nor needs to know which.
 			//    While it runs, this thread is doing THIS run: what its code says

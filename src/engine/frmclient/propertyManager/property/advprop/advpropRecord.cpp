@@ -78,7 +78,7 @@ ibPGRecordProperty::ibPGRecordProperty(const ibPropertyObject* property, const w
 
 wxString ibPGRecordProperty::ValueToString(ibVariant& value, ibPGPropValFormatFlags flags) const
 {
-	// ⚠ NAMED BY THE CHOICES — the client holds no configuration to name an id by (ibPGChartBindingProperty).
+	// ⚠ NAMED BY THE CHOICES — the client holds no application to name an id by (ibPGChartBindingProperty).
 	wxString strDescr;
 	const ibMetaDescription md = ReadMeta(value);
 	for (unsigned int idx = 0; idx < md.GetTypeCount(); idx++) {

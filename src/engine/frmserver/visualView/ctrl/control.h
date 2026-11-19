@@ -2,7 +2,7 @@
 #define _BASE_CONTROL_H_
 
 #include "frame.h"
-#include "backend/propertyManager/property/propertyFunctionalOptions.h"
+#include "backend/propertyManager/property/propertyFeatureOptions.h"
 
 class FRMSERVER_API ibTypeControlFactory;   // AutoBindNewSource binds through the caller's factory subobject
 
@@ -63,12 +63,12 @@ class FRMSERVER_API ibValueControl : public ibValueFrame {
 	virtual ibFormID GetTypeForm() const;
 
 	
-	// ⭐ AVAILABLE — what the functional options of this base say, asked by every place that draws or offers an
+	// ⭐ AVAILABLE — what the feature options of this base say, asked by every place that draws or offers an
 	// element beside its own Visible, and ANDed in rather than written into it, so neither the code nor the
 	// user's "Change form" can bring such an element back. Here: the options the element names are not all
 	// off, and the element it stands inside is available (a plain sizer too — switched off, it takes what it
 	// lays out with it). A source control (textbox / checkbox / tablebox) overrides it and adds the field it is
-	// bound to: a field this base does not use (functionalOptionGate.h) takes the control with it.
+	// bound to: a field this base does not use (featureOptionGate.h) takes the control with it.
 	virtual bool IsAvailable() const override;
 
 protected:
@@ -101,10 +101,10 @@ protected:
 
 	ibPropertyUString* m_propertyName = ibPropertyObject::CreateProperty<ibPropertyUString>(m_category, ibT("Name"), _("Name"), _("Object name"), ibT(""));
 
-	// USER VISIBILITY — a group of its own: the functional options the element is available under. Empty =
+	// USER VISIBILITY — a group of its own: the feature options the element is available under. Empty =
 	// available whatever the options are.
 	ibPropertyCategory* m_categoryUserVisibility = ibPropertyObject::CreatePropertyCategory(ibT("UserVisibility"), _("User visibility"));
-	ibPropertyFunctionalOptions* m_propertyFunctionalOptions = ibPropertyObject::CreateProperty<ibPropertyFunctionalOptions>(m_categoryUserVisibility, ibT("FunctionalOptions"), _("Functional options"), _("The functional options this element is available under: while every one of them is off, it is neither shown nor offered, and neither is what it holds. Empty - available whatever the options are. Works together with Visible and does not change it."));
+	ibPropertyFeatureOptions* m_propertyFeatureOptions = ibPropertyObject::CreateProperty<ibPropertyFeatureOptions>(m_categoryUserVisibility, ibT("FeatureOptions"), _("Feature options"), _("The feature options this element is available under: while every one of them is off, it is neither shown nor offered, and neither is what it holds. Empty - available whatever the options are. Works together with Visible and does not change it."));
 };
 
 #endif // !_BASE_H_

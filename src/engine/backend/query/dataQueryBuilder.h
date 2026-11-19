@@ -257,7 +257,7 @@ struct ibDotWalkColumn
 	ibString                                 m_alias;   // output name (read via GetColumn)
 };
 
-// ⭐ A WALK MAY BE SHOWN WHILE EVERY HOP OF IT MAY BE (functional options, IsAvailable) — a hop the options
+// ⭐ A WALK MAY BE SHOWN WHILE EVERY HOP OF IT MAY BE (feature options, IsAvailable) — a hop the options
 // take away takes what stands behind it too. Asked of a dot-walk's path and of a resolved column path alike.
 inline bool ibIsWalkAvailable(const std::vector<std::shared_ptr<const ibBackendQueryColumn>>& path)
 {
@@ -892,7 +892,7 @@ public:
 	ibDataQueryBuilder& OrderByOutput(const ibString& alias, bool ascending);
 	// ⭐⭐ AN ID FOR A COLUMN NOTHING DECLARED — minted HERE, and always NEGATIVE.
 	//
-	// A metaID is a configuration number: positive, small, handed out by the metadata tree. A query
+	// A metaID is an application number: positive, small, handed out by the metadata tree. A query
 	// also needs ids for columns nobody declared — an aggregate's figure, a computed projection, a
 	// second reading of one table — and the SIGN is what tells the two apart, so a check is
 	// `id < 0` (ibBackendQueryColumn::IsSyntheticId) and never a range against a table of bands.

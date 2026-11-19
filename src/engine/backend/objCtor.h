@@ -398,9 +398,9 @@ protected:
 
 // ⭐ A TYPE WITH ITS BARRIERS OPENED — `AnyRef`, `CatalogRef`, `DocumentRef` replaced by the references of `metaData`
 // they admit (clsid_admits), the way every picker opens one, so a reference added later is in it. A barrier with
-// none to stand for (no document yet, a configuration only loading) stays itself, as every other class does; the
+// none to stand for (no document yet, an application only loading) stays itself, as every other class does; the
 // qualifiers go with every class. What a value of the declared type may be — an attribute's value type, a picker's
-// offer, a walk's targets read it. No configuration: the declaration as it is. (objCtor.cpp)
+// offer, a walk's targets read it. No application: the declaration as it is. (objCtor.cpp)
 BACKEND_API ibTypeDescription ibOpenBarriers(const ibTypeDescription& declared, const class ibMetaData* metaData);
 
 #endif

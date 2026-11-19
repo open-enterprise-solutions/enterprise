@@ -100,14 +100,14 @@ public:
 #pragma region access_generic
 	virtual bool AccessRight_Show() const { return true; }
 	// MODIFY right — the GENERIC "can change this" predicate, the write-side twin of AccessRight_Show (which
-	// generalises "can view": a common form maps it to Use, a catalog to Read). Each object maps Modify to its
+	// generalises "can view": a shared form maps it to Use, a catalog to Read). Each object maps Modify to its
 	// own concrete right — a record / register / constant to its Write role — so a read-only role denies it.
 	// Virtual on the base so a form reads it polymorphically off GetSourceMetaObject() (view-only mode) without
-	// knowing the concrete metaobject. Default true: a metaobject with no modify concept (data processor /
+	// knowing the concrete metaobject. Default true: a metaobject with no modify concept (data tool /
 	// report) is never view-only-gated.
 	virtual bool AccessRight_Modify() const { return true; }
 	// ERASE right — the third of the same row: the generic "can remove this". A record / register
-	// maps it to its Delete role; an object with no deletion concept (a data processor, a form)
+	// maps it to its Delete role; an object with no deletion concept (a data tool, a form)
 	// keeps the default and is never gated by it. Same shape as Show / Modify so the access policy
 	// reads all three the same way, off the metaobject, with IsFullAccess and the roles already
 	// answered inside.
@@ -166,7 +166,7 @@ public:
 	// manager's; null where it has none. Here, on the base, because an event handler asks it of
 	// whatever its source names — a catalog's manager as readily as a register's record set.
 	virtual const class ibValueMetaObjectModule* GetObjectModule() const { return nullptr; }
-	virtual const class ibValueMetaObjectCommonModule* GetManagerModule() const { return nullptr; }
+	virtual const class ibValueMetaObjectSharedModule* GetManagerModule() const { return nullptr; }
 
 	//get data selector
 	virtual ibSelectorDataType GetFilterDataType() const {
@@ -203,7 +203,7 @@ public:
 	//form
 	template <typename _T1>
 	ibValueMetaObjectFormBase* FindFormObjectByFilter(const _T1& id, const ibFormID& form_id = ibNOT_FOUND) const {
-		ibValueMetaObjectFormBase* founded = FindObjectByFilter<ibValueMetaObjectFormBase>(id, { g_metaCommonFormCLSID, g_metaFormCLSID });
+		ibValueMetaObjectFormBase* founded = FindObjectByFilter<ibValueMetaObjectFormBase>(id, { g_metaSharedFormCLSID, g_metaFormCLSID });
 		if ((founded != nullptr && form_id == founded->GetTypeForm()) || form_id == ibNOT_FOUND)
 			return founded;
 		return nullptr;
@@ -212,7 +212,7 @@ public:
 	//grid
 	template <typename _T1>
 	ibValueMetaObjectTemplateBase* FindTemplateObjectByFilter(const _T1& id) const {
-		return FindObjectByFilter<ibValueMetaObjectTemplateBase>(id, { g_metaCommonTemplateCLSID, g_metaTemplateCLSID });
+		return FindObjectByFilter<ibValueMetaObjectTemplateBase>(id, { g_metaSharedTemplateCLSID, g_metaTemplateCLSID });
 	}
 
 #pragma endregion 

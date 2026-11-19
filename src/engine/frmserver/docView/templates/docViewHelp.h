@@ -27,7 +27,7 @@ private:
 // ibHelpDocument: ibDocument and its text married
 // ----------------------------------------------------------------------------
 
-// metaModuleObject.h is included for g_metaCommonModuleCLSID (icon lookup
+// metaModuleObject.h is included for g_metaSharedModuleCLSID (icon lookup
 // only — not for metadata binding; ibHelpDocument is a plain file document).
 #include "backend/metaCollection/metaModuleObject.h"
 
@@ -36,7 +36,7 @@ class FRMSERVER_API ibHelpDocument : public ibDocument
 public:
 
 	virtual ibPictureDescription GetIcon() const {
-		return ibPictureDescription(g_metaCommonModuleCLSID);
+		return ibPictureDescription(g_metaSharedModuleCLSID);
 	}
 
 	ibHelpDocument() : ibDocument() {}

@@ -378,7 +378,7 @@ private:
 	// calls on every number operation the interpreter performs, to run a shift
 	// and a mask. Whole-program optimisation removes those calls, but only where
 	// it is enabled (MSVC Release); the header form holds on every toolchain and
-	// every configuration, which is the point.
+	// every application, which is the point.
 	int64_t ImmMantissa() const noexcept {
 		// Arithmetic right-shift on int64_t sign-extends, restoring the 47-bit
 		// signed mantissa to a full int64_t value.

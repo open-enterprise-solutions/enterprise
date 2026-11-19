@@ -159,7 +159,7 @@ ibSessionWatch ibSessionRegistry::Find(const ibString& id)
 	return it->second;
 }
 
-ibSessionWatch ibSessionRegistry::FindSessionByRoot(ibValueModuleManagerRuntimeConfiguration* mm) const
+ibSessionWatch ibSessionRegistry::FindSessionByRoot(ibValueModuleManagerRuntimeApplication* mm) const
 {
 	if (mm == nullptr) return ibSessionWatch();
 	std::shared_lock<std::shared_mutex> lock(m_ownMutex);
@@ -224,7 +224,7 @@ ibSessionHolder ibSessionRegistry::CreateSessionOfKind(ibRunMode runMode,
 	auto result = Connect(req);
 	if (result.m_code != ibConnectResult::Ok) {
 		// Surface the actual rejection reason (e.g. designer-exclusive
-		// policy veto, exclusive-mode block, registry-down) so the caller's
+		// policy veto, single-user-mode block, registry-down) so the caller's
 		// catch shows something better than the generic "Failed to create
 		// session" wrapper in FinishCreateSession.
 		if (!result.m_reason.IsEmpty())
@@ -510,7 +510,7 @@ ibConnectResult ibSessionRegistry::Connect(const ibConnectRequest& req,
 	}
 	ibSessionState st = session->WaitForState(ibSessionState::Created, timeout);
 	if (st == ibSessionState::Created) {
-		// A parked Add says why it waits (ProcessAdd: exclusive mode); only an Add nobody took is the registry's silence.
+		// A parked Add says why it waits (ProcessAdd: single-user mode); only an Add nobody took is the registry's silence.
 		const ibString parked = session->Reason();
 		r.m_code   = ibConnectResult::Timeout;
 		r.m_reason = parked.IsEmpty() ? _("registry did not answer to Add") : parked;
@@ -744,7 +744,7 @@ void ibSessionRegistry::NotifyAuthenticated(ibSession* s)
 			if (cb) cb(s);
 	}
 	// Between phases — the session acquires its own reference to the base's
-	// active configuration NOW (a designer's session: one of its own): the one
+	// active application NOW (a designer's session: one of its own): the one
 	// it works in for its whole life, whatever replaces the active one later.
 	// OnAuthenticated's listeners (CompileRoot) need session->mm to exist.
 	// Session creates its root here so ownership stays in ibSession (see EnsureRoot).
@@ -776,22 +776,22 @@ void ibSessionRegistry::NotifyDisconnect(ibSession* s)
 		}
 	}
 	// THROUGH THE SESSION THAT IS LEAVING — the listeners take its runtime down and, for the last one out,
-	// close its base's configuration; what they reach they reach through that session (its base), as the
+	// close its base's application; what they reach they reach through that session (its base), as the
 	// login reached it through the session logging in.
 	{
 		ibSessionScope leaving(s);
 		for (const auto& cb : disconnects)
 			if (cb) cb(s);
-		// …and it lets go of the configuration it worked in — the mirror of NotifyAuthenticated's acquire. The last
-		// session in a configuration the base has replaced closes it right here, on this thread, before the last
+		// …and it lets go of the application it worked in — the mirror of NotifyAuthenticated's acquire. The last
+		// session in an application the base has replaced closes it right here, on this thread, before the last
 		// one out below closes the active one.
 		s->ReleaseMetaData();
 	}
 	// ⚠ …AND BOUND AGAIN FOR THE LAST ONE OUT. A disconnect listener unbinds the session from every thread
 	// (ibSession::UnbindSession) — this one too, which a scope does not undo until it ends. The last-out
-	// listeners then closed the configuration on a thread that worked for nothing: a scheduled job's
+	// listeners then closed the application on a thread that worked for nothing: a scheduled job's
 	// Unregister asked "the current base", the throw left ThreadBody, and Die stopped the process — on
-	// every exit of a configuration that declares a job (census of the registry thread, 2026-10-01).
+	// every exit of an application that declares a job (census of the registry thread, 2026-10-01).
 	if (fireLast) {
 		ibSessionScope leaving(s);
 		for (const auto& cb : lasts)
@@ -890,7 +890,7 @@ ibSessionWatch ibSessionRegistry::GetActiveDebugTarget() const
 
 // The registry thread is the one Connect waits on. Firebird's ordinary transaction waits up to
 // 30 seconds for a lock, and Connect gives up at 20, so a statement that waits is what the caller
-// hears as "registry did not answer to Add". A configuration apply holds its transaction open for
+// hears as "registry did not answer to Add". An application apply holds its transaction open for
 // the whole restructuring, and that lock — a row of sys_session, or the metadata a statement has
 // to prepare against — is what these statements meet on the second apply. Ask, and if somebody
 // else still holds it, leave the work for the next tick.
@@ -948,14 +948,7 @@ static bool InsertSessionRow(ibDatabaseConnectionHolder& holder, const ibSession
 {
 	const ibSessionIdentity& id = s.Identity();
 
-	// Primary INSERT — core 6 columns present in every sys_session
-	// since the original schema. Additional columns (pid / address /
-	// currentActivity), added 2026-04-20, are filled by a separate
-	// UPDATE below. Splitting these avoids a single INSERT failure
-	// when the DB was created before the migration ran (the 9-column
-	// INSERT would throw on unknown column and leave the session
-	// unregistered, which breaks Active Users listings across the
-	// cluster).
+	// ONE INSERT, the row whole: who, where, which process and which kind of session.
 	try {
 		ibRegistryNoWait tx(holder);   // the holder's bound conn (= m_writeConn); a locked table comes back at once
 		tx.Query().Execute(ibInsert(session_table, {
@@ -965,6 +958,12 @@ static bool InsertSessionRow(ibDatabaseConnectionHolder& holder, const ibSession
 			{ ibT("started"),     ibConst(ibValue(id.m_started)) },
 			{ ibT("lastActive"),  ibConst(ibValue(id.m_started)) },
 			{ ibT("computer"),    ibConst(ibValue(id.m_computer)) },
+			{ ibT("pid"),         ibConst(ibValue(id.m_pid)) },
+			{ ibT("address"),     ibConst(ibValue(id.m_address)) },
+			{ ibT("kind"),        ibConst(ibValue(int(s.GetKind()))) },
+			// …AND `singleUser` = 0, EXPLICITLY — one spelling of "not single-user" from birth: the column's default says
+			// the same, and the row does not leave the answer to whoever reads it next.
+			{ ibT("singleUser"),   ibConst(ibValue(0)) },
 		}));
 		tx.Commit();
 		SESSION_LOG("[session INSERT] ok guid=" << s.GetId().ToUtf8()
@@ -980,30 +979,6 @@ static bool InsertSessionRow(ibDatabaseConnectionHolder& holder, const ibSession
 		SESSION_LOG("[session INSERT] FAILED: unknown exception");
 		return false;
 	}
-
-	// Best-effort population of extension columns — silently skipped
-	// when the schema pre-dates them. MigrateTableSession tries to
-	// add the columns on startup; this is the follow-up writer.
-	//
-	// IN A TRANSACTION OF ITS OWN, after the row is committed. On PostgreSQL a failed statement aborts
-	// the transaction it runs in, and the COMMIT of an aborted one is a rollback: an UPDATE refused by
-	// a legacy schema took the INSERT above down with it, while this function answered true.
-	try {
-		ibRegistryNoWait tx(holder);
-		tx.Query().Execute(ibUpdate(session_table, {
-			{ ibT("pid"),     ibConst(ibValue(id.m_pid)) },
-			{ ibT("address"), ibConst(ibValue(id.m_address)) },
-			{ ibT("kind"),    ibConst(ibValue(int(s.GetKind()))) },
-			// …AND `exclusive` = 0, EXPLICITLY. A session that never takes monopoly mode used to leave
-			// this column NULL for its whole life, while one that took it and let it go left 0 — two
-			// spellings of "not exclusive" in one table. Nothing reads them apart TODAY (the driver
-			// reports NULL as 0), but a fact with two spellings is answered by whoever asks NEXT, and
-			// the next asker may be SQL, where `exclusive <> 1` and `IS NULL` part company. The row
-			// says it from birth instead of acquiring the answer later.
-			{ ibT("exclusive"), ibConst(ibValue(0)) },
-		}, ibBinOp(ibQueryBinOp::Eq, ibCol(ibT("session")), ibConst(ibValue(s.GetId())))));
-		tx.Commit();
-	} catch (...) { /* legacy schema — fine */ }
 
 	return true;
 }
@@ -1055,27 +1030,27 @@ void ibSessionRegistry::ProcessAdd(ibRegistryRequest& req)
 		if (srv) s.SetServer(srv.get());
 	}
 
-	// Exclusive (monopoly) gate — if another session holds the IB in
-	// exclusive mode, park the request. The session stays in Created
+	// Single-user (monopoly) gate — if another session holds the IB in
+	// single-user mode, park the request. The session stays in Created
 	// state; the producer's WaitForState in Connect blocks until either
-	// the holder releases (ProcessSetExclusive(off)) or the holder's
-	// Remove fires — both drain m_pendingExclusive and re-run ProcessAdd
+	// the holder releases (ProcessSetSingleUser(off)) or the holder's
+	// Remove fires — both drain m_pendingSingleUser and re-run ProcessAdd
 	// on the parked requests.
 	std::shared_ptr<ibSession> holder;
 	{
-		std::shared_lock<std::shared_mutex> lk(m_exclusiveMutex);
-		holder = m_exclusiveSession.lock();
+		std::shared_lock<std::shared_mutex> lk(m_singleUserMutex);
+		holder = m_singleUserSession.lock();
 	}
 	if (holder && holder.get() != &s) {
 		// Said while it waits: a Connect that gives up on a parked Add heard "registry did not answer" and went
 		// looking for a stalled registry, not for the session holding the base (2026-10-30).
-		s.SetReason(ibString::Format(_("Another session holds exclusive mode (user '%s')"), holder->Identity().m_userName));
-		m_pendingExclusive.push_back(std::move(req));
+		s.SetReason(ibString::Format(_("Another session holds single-user mode (user '%s')"), holder->Identity().m_userName));
+		m_pendingSingleUser.push_back(std::move(req));
 		return;
 	}
 
 	// ⭐ REFRESH BEFORE REFUSING. This gate used to read the CACHED snapshot while the refresh below sat
-	// after it, so a row that had already gone — the previous designer run's own exclusive row, released
+	// after it, so a row that had already gone — the previous designer run's own single-user row, released
 	// on exit — kept rejecting the next start until something else rebuilt the cache. Restarting the
 	// application "fixed" it, which is the signature of a stale read rather than a busy database.
 	//
@@ -1096,7 +1071,7 @@ void ibSessionRegistry::ProcessAdd(ibRegistryRequest& req)
 		try { JobRefreshSnapshot(); } catch (...) { /* best-effort: an unrefreshed snapshot still gates below */ }
 	}
 
-	// Cross-process gate — peer process holds exclusive (visible in our
+	// Cross-process gate — peer process holds single-user mode (visible in our
 	// snapshot). Reject with policy veto: peer holders aren't tied to
 	// our event loop, so parking would deadlock if the peer's release
 	// never reaches us (e.g. peer crashed, sweep hasn't fired yet).
@@ -1110,7 +1085,7 @@ void ibSessionRegistry::ProcessAdd(ibRegistryRequest& req)
 
 			for (unsigned int i = 0; i < n; ++i) {
 				if (m_snapshot->GetSession(i) == ownId) continue;
-				if (m_snapshot->IsExclusive(i)) {
+				if (m_snapshot->IsSingleUser(i)) {
 					// ⭐⭐ A HOLDER WITH NO USER IS NOBODY, AND NOBODY IS NOT WAITED FOR.
 					//
 					// The row is written with the user that opened the session, so an empty name means
@@ -1126,7 +1101,7 @@ void ibSessionRegistry::ProcessAdd(ibRegistryRequest& req)
 						continue;
 
 					ibString reason = ibString::Format(
-						_("Another session holds exclusive mode (user '%s')"),
+						_("Another session holds single-user mode (user '%s')"),
 						m_snapshot->GetUserName(i));
 					s.Transition(ibSessionState::Rejected, reason);
 					return;
@@ -1344,22 +1319,22 @@ void ibSessionRegistry::ProcessRemove(ibRegistryRequest& req)
 	// entry from the pool's per-session map.
 	if (ibWorkerPool* const pool = GetWorkerPool()) pool->Drop(&s);
 
-	// If this session was holding exclusive mode, release it before the
+	// If this session was holding single-user mode, release it before the
 	// row teardown so any parked Adds resume. Drop the weak under the
-	// dedicated mutex, then drain outside the lock — DrainPendingExclusive
-	// re-enters ProcessAdd which acquires m_exclusiveMutex shared.
-	bool wasExclusiveHolder = false;
+	// dedicated mutex, then drain outside the lock — DrainPendingSingleUser
+	// re-enters ProcessAdd which acquires m_singleUserMutex shared.
+	bool wasSingleUserHolder = false;
 	{
-		std::unique_lock<std::shared_mutex> lk(m_exclusiveMutex);
-		auto cur = m_exclusiveSession.lock();
+		std::unique_lock<std::shared_mutex> lk(m_singleUserMutex);
+		auto cur = m_singleUserSession.lock();
 		if (cur && cur.get() == &s) {
-			m_exclusiveSession.reset();
-			wasExclusiveHolder = true;
+			m_singleUserSession.reset();
+			wasSingleUserHolder = true;
 		}
 	}
-	if (wasExclusiveHolder) {
-		s.m_exclusive.store(false, std::memory_order_release);
-		DrainPendingExclusive();
+	if (wasSingleUserHolder) {
+		s.m_singleUser.store(false, std::memory_order_release);
+		DrainPendingSingleUser();
 	}
 
 	// If the leaving session was the registered server, drop the
@@ -1426,9 +1401,9 @@ void ibSessionRegistry::ProcessRemove(ibRegistryRequest& req)
 	s.Transition(ibSessionState::Gone);
 }
 
-ibSession::ibExclusiveResult ibSessionRegistry::SetExclusive(ibSession* session, bool on)
+ibSession::ibSingleUserResult ibSessionRegistry::SetSingleUser(ibSession* session, bool on)
 {
-	using R = ibSession::ibExclusiveResult;
+	using R = ibSession::ibSingleUserResult;
 	if (session == nullptr) return R::Pending;
 	if (IsFatal())          return R::Pending;
 
@@ -1436,73 +1411,72 @@ ibSession::ibExclusiveResult ibSessionRegistry::SetExclusive(ibSession* session,
 	// when the handler has filled it.
 	{
 		std::lock_guard<std::mutex> lk(session->m_mtx);
-		session->m_exclusiveResult = R::Pending;
+		session->m_singleUserResult = R::Pending;
 	}
 
 	ibRegistryRequest req;
-	req.kind        = ibRegistryRequestKind::SetExclusive;
+	req.kind        = ibRegistryRequestKind::SetSingleUser;
 	req.session     = session->shared_from_this();
-	req.exclusiveOn = on;
+	req.singleUserOn = on;
 	Submit(std::move(req), ibPriority::Normal);
 
 	std::unique_lock<std::mutex> lk(session->m_mtx);
 	session->m_cv.wait_for(lk, std::chrono::seconds(5),
-		[&]{ return session->m_exclusiveResult != R::Pending; });
-	return session->m_exclusiveResult;
+		[&]{ return session->m_singleUserResult != R::Pending; });
+	return session->m_singleUserResult;
 }
 
-void ibSessionRegistry::ProcessSetExclusive(ibRegistryRequest& req)
+void ibSessionRegistry::ProcessSetSingleUser(ibRegistryRequest& req)
 {
 	if (!req.session) return;
 	ibSession& s = *req.session;
 
-	auto setResult = [&](ibSession::ibExclusiveResult r) {
+	auto setResult = [&](ibSession::ibSingleUserResult r) {
 		std::lock_guard<std::mutex> lk(s.m_mtx);
-		s.m_exclusiveResult = r;
+		s.m_singleUserResult = r;
 		s.m_cv.notify_all();
 	};
 
 	// WHO STANDS IN THE WAY — another session, by its kind; both checks of the acquire ask it. A job ends by itself, so
 	// the request can be made again (JobRunning); anyone else refuses outright (NotSole), and outweighs a job. A job
 	// cannot START once the mode is held (ProcessAdd parks it), so only one running now is in question.
-	auto inTheWay = [](ibSessionKind kind, ibSession::ibExclusiveResult verdict) {
-		using R = ibSession::ibExclusiveResult;
+	auto inTheWay = [](ibSessionKind kind, ibSession::ibSingleUserResult verdict) {
+		using R = ibSession::ibSingleUserResult;
 		return IsJobSessionKind(kind) && verdict != R::NotSole ? R::JobRunning : R::NotSole;
 	};
 
-	// DB-side flip helper — UPDATE sys_session.exclusive on the row this
-	// session owns. No-op for tests / embedders that don't own sys_session
-	// or whose schema predates the column. Best-effort; failure here
-	// doesn't roll back the in-process state since cluster sweep cleans
-	// up zombie rows anyway.
+	// DB-side flip helper — UPDATE sys_session.singleUser on the row this
+	// session owns. No-op for tests / embedders that don't own sys_session.
+	// Best-effort; failure here doesn't roll back the in-process state
+	// since cluster sweep cleans up zombie rows anyway.
 	//
 	// ⚠ THIS ONE WAITS, unlike the ticks around it. The column is what the other nodes refuse Add by,
 	// and nothing writes it again on a later tick: a write skipped on a lock would grant a monopoly the
 	// cluster cannot see, or leave a released one standing for every node.
-	auto writeExclusiveColumn = [&](int value) {
+	auto writeSingleUserColumn = [&](int value) {
 		if (!m_ownsSysSession || !m_writeConn || !s.Inserted()) return;
 		try {
 			ibDatabaseQueryBuilder q(&m_writeHolder);
 			q.Execute(ibUpdate(session_table,
-				{ { ibT("exclusive"), ibConst(ibValue(value)) } },
+				{ { ibT("singleUser"), ibConst(ibValue(value)) } },
 				ibBinOp(ibQueryBinOp::Eq, ibCol(ibT("session")), ibConst(ibValue(s.GetId())))));
-		} catch (...) { /* legacy schema — silent */ }
+		} catch (...) { /* the write refused — the sweep settles the row */ }
 	};
 
-	if (req.exclusiveOn) {
+	if (req.singleUserOn) {
 		// Acquire path.
 		std::shared_ptr<ibSession> holder;
 		{
-			std::shared_lock<std::shared_mutex> lk(m_exclusiveMutex);
-			holder = m_exclusiveSession.lock();
+			std::shared_lock<std::shared_mutex> lk(m_singleUserMutex);
+			holder = m_singleUserSession.lock();
 		}
 		if (holder) {
 			if (holder.get() == &s) {
 				// Re-acquiring our own — idempotent success.
-				setResult(ibSession::ibExclusiveResult::Granted);
+				setResult(ibSession::ibSingleUserResult::Granted);
 				return;
 			}
-			setResult(ibSession::ibExclusiveResult::HeldByOther);
+			setResult(ibSession::ibSingleUserResult::HeldByOther);
 			return;
 		}
 
@@ -1512,7 +1486,7 @@ void ibSessionRegistry::ProcessSetExclusive(ibRegistryRequest& req)
 		// the asking one among them (#649). Iterate m_own under shared lock;
 		// only the registry thread writes m_own so the snapshot is
 		// consistent for the duration of this call.
-		ibSession::ibExclusiveResult verdict = ibSession::ibExclusiveResult::Granted;
+		ibSession::ibSingleUserResult verdict = ibSession::ibSingleUserResult::Granted;
 		{
 			std::shared_lock<std::shared_mutex> lock(m_ownMutex);
 			for (const auto& kv : m_own) {
@@ -1522,14 +1496,14 @@ void ibSessionRegistry::ProcessSetExclusive(ibRegistryRequest& req)
 					verdict = inTheWay(other->GetKind(), verdict);
 			}
 		}
-		if (verdict != ibSession::ibExclusiveResult::Granted) {
+		if (verdict != ibSession::ibSingleUserResult::Granted) {
 			setResult(verdict);
 			return;
 		}
 
 		// ASK THE TABLE, DON'T ASK LAST SECOND'S MEMORY OF IT. The check below reads m_snapshot, which a
 		// job refreshes on its own tick — so a peer that disconnected a moment ago is still standing in it
-		// and the acquire is refused for a session that no longer exists. What the user sees is "exclusive
+		// and the acquire is refused for a session that no longer exists. What the user sees is "single-user
 		// mode refused while nobody is connected", and then it works on the second or third press, once a
 		// tick has passed. Refresh first: this runs ON the registry thread (the same thread that owns the
 		// refresh), so it cannot deadlock with itself, and a failure just leaves the previous snapshot in
@@ -1539,7 +1513,7 @@ void ibSessionRegistry::ProcessSetExclusive(ibRegistryRequest& req)
 
 		// ⭐ …AND ASK WHETHER THE PEERS IT HOLDS BREATHE. A process killed a moment ago still has its row, and
 		// "other sessions are active" was the answer until the sweep's cutoff passed: an apply refused for
-		// nobody (2026-09-11, after an application was killed — config_apply refused until the row expired).
+		// nobody (2026-09-11, after an application was killed — app_apply refused until the row expired).
 		// A row that stands still for a few beats is removed first (SettleSilentPeers); a live peer answers
 		// within a beat and still blocks, below.
 		{
@@ -1554,7 +1528,7 @@ void ibSessionRegistry::ProcessSetExclusive(ibRegistryRequest& req)
 			SettleSilentPeers(peers);   // refreshes the snapshot when it removes any
 		}
 
-		// Cluster sole-live check + cross-process exclusive scan — peer
+		// Cluster sole-live check + cross-process single-user scan — peer
 		// processes' rows live in m_snapshot, beside this registry's own:
 		// those asked above (Added) are not asked again, so the host's own
 		// login passes here too, while another process's Service row is
@@ -1564,23 +1538,23 @@ void ibSessionRegistry::ProcessSetExclusive(ibRegistryRequest& req)
 			if (m_snapshot) {
 				const ibString ownId = s.GetId();
 				const unsigned int n = m_snapshot->GetSessionCount();
-				bool peerExclusive = false;
+				bool peerSingleUser = false;
 				for (unsigned int i = 0; i < n; ++i) {
 					const ibString id = m_snapshot->GetSession(i);
 					if (id == ownId) continue;
 					const auto own = Find(id).Share();
 					if (own && own->State() == ibSessionState::Added) continue;   // asked above
 					verdict = inTheWay(static_cast<ibSessionKind>(m_snapshot->GetSessionKind(i)), verdict);
-					if (m_snapshot->IsExclusive(i)) {
-						peerExclusive = true;
+					if (m_snapshot->IsSingleUser(i)) {
+						peerSingleUser = true;
 						break;
 					}
 				}
-				if (peerExclusive) {
-					setResult(ibSession::ibExclusiveResult::HeldByOther);
+				if (peerSingleUser) {
+					setResult(ibSession::ibSingleUserResult::HeldByOther);
 					return;
 				}
-				if (verdict != ibSession::ibExclusiveResult::Granted) {
+				if (verdict != ibSession::ibSingleUserResult::Granted) {
 					setResult(verdict);
 					return;
 				}
@@ -1588,41 +1562,41 @@ void ibSessionRegistry::ProcessSetExclusive(ibRegistryRequest& req)
 		}
 
 		{
-			std::unique_lock<std::shared_mutex> lk(m_exclusiveMutex);
-			m_exclusiveSession = s.weak_from_this();
+			std::unique_lock<std::shared_mutex> lk(m_singleUserMutex);
+			m_singleUserSession = s.weak_from_this();
 		}
-		s.m_exclusive.store(true, std::memory_order_release);
-		writeExclusiveColumn(1);
-		setResult(ibSession::ibExclusiveResult::Granted);
+		s.m_singleUser.store(true, std::memory_order_release);
+		writeSingleUserColumn(1);
+		setResult(ibSession::ibSingleUserResult::Granted);
 		return;
 	}
 
 	// Release path — only the holder can release. Releasing while not
 	// the holder is a silent success (idempotent). Drain outside the
-	// lock (DrainPendingExclusive re-enters ProcessAdd).
+	// lock (DrainPendingSingleUser re-enters ProcessAdd).
 	bool wasHolder = false;
 	{
-		std::unique_lock<std::shared_mutex> lk(m_exclusiveMutex);
-		auto cur = m_exclusiveSession.lock();
+		std::unique_lock<std::shared_mutex> lk(m_singleUserMutex);
+		auto cur = m_singleUserSession.lock();
 		if (cur && cur.get() == &s) {
-			m_exclusiveSession.reset();
+			m_singleUserSession.reset();
 			wasHolder = true;
 		}
 	}
 	if (wasHolder) {
-		s.m_exclusive.store(false, std::memory_order_release);
-		writeExclusiveColumn(0);
-		DrainPendingExclusive();
+		s.m_singleUser.store(false, std::memory_order_release);
+		writeSingleUserColumn(0);
+		DrainPendingSingleUser();
 	}
-	setResult(ibSession::ibExclusiveResult::Granted);
+	setResult(ibSession::ibSingleUserResult::Granted);
 }
 
-void ibSessionRegistry::DrainPendingExclusive()
+void ibSessionRegistry::DrainPendingSingleUser()
 {
 	// Move out so a re-park during the loop body (shouldn't happen — the
 	// holder is gone — but defensive) doesn't iterate a moving deque.
 	std::deque<ibRegistryRequest> pending;
-	pending.swap(m_pendingExclusive);
+	pending.swap(m_pendingSingleUser);
 	for (auto& r : pending) {
 		if (r.session)
 			r.session->SetReason(ibEmptyString);   // the wait is over: what it said no longer holds
@@ -2005,7 +1979,7 @@ void ibSessionRegistry::JobCheckSignal()
 			}
 		}
 		tx.Commit();
-	} catch (...) { /* signal column may be missing on legacy schema, or the table is locked */ return; }
+	} catch (...) { /* the table is locked — the next tick asks again */ return; }
 
 	if (pending.empty()) return;
 
@@ -2096,154 +2070,32 @@ void ibSessionRegistry::JobRefreshSnapshot()
 	auto fresh = std::make_unique<ibSessionSnapshot>();
 	unsigned rowCount = 0;
 	try {
-		// One no-wait transaction for the whole read. The builders below join it, so a
-		// metadata lock held by a configuration apply comes back at once instead of the
+		// One no-wait transaction for the whole read. The builder below joins it, so a
+		// metadata lock held by an application apply comes back at once instead of the
 		// driver's 30-second wait — longer than Connect is willing to wait for Add.
 		ibRegistryNoWait tx(m_writeHolder);
-		// kind column may be missing on pre-migration schemas — fall back
-		// to reading it via a second pass-tolerant lookup. SELECT itself
-		// stays restricted to core columns so the query parses everywhere;
-		// kind is read best-effort (missing column would throw from some
-		// drivers mid-stream and abort the snapshot).
-		// ⭐⭐ ONE READ WHEN THE SCHEMA ALLOWS IT. `kind` and `exclusive` are optional — a pre-migration
-		// base has neither — so the three passes below ask about them separately and tolerate their
-		// absence. That answer never changes while the process runs, and asking it every second cost
-		// three full scans of the session table per tick, on an idle client, forever.
-		//
-		// So: try the wide read once. If it works, every later tick is a single query; if the schema
-		// is legacy, remember that and take the three-pass road, which stays exactly as it was.
-		//
-		// ⚠ READ WHOLE BEFORE ANYTHING IS APPENDED. A schema that lacks the column fails inside the
-		// read, and a snapshot half-filled by a read that then threw is worse than one never started:
-		// the rows are gathered locally and handed over only once the read has finished.
-		bool wideRead = false;
-		if (m_sessionHasOptionalColumns.load(std::memory_order_relaxed) >= 0) {
-			struct WideRow {
-				ibRunMode  m_application;
-				ibDateTime m_started;
-				ibString   m_userName, m_computer, m_session;
-				int        m_kind;
-				bool       m_exclusive;
-			};
-			std::vector<WideRow> wide;
-			try {
-				ibDatabaseQueryBuilder qw(&m_writeHolder);
-				ibQueryResult rw = qw.From(session_table)
-					.Select({ ibT("userName"), ibT("application"), ibT("started"), ibT("computer"),
-					          ibT("session"), ibT("kind"), ibT("exclusive") })
-					.OrderBy(ibT("started")).OrderBy(ibT("session"))
-					.Execute();
-				while (rw.Next())
-					wide.push_back(WideRow{
-						static_cast<ibRunMode>(rw.GetResultInt("application")),
-						rw.GetResultDate  ("started"),
-						rw.GetResultString("userName"),
-						rw.GetResultString("computer"),
-						rw.GetResultString("session"),
-						rw.GetResultInt   ("kind"),
-						rw.GetResultInt   ("exclusive") != 0 });
-				wideRead = true;
-			}
-			catch (const ibBackendDatabaseException& err) {
-				// A column this schema does not have is a syntax error. A lock is not: recording
-				// the schema as legacy because an apply still holds the table would stick for the
-				// life of the process. Said once, then never asked again.
-				if (err.GetKind() != ibBackendDatabaseException::Kind::Syntax)
-					throw;
-				if (m_sessionHasOptionalColumns.exchange(-1, std::memory_order_relaxed) == 0)
-					ibJournalInfo(ibT("session"), ibT("session table has no kind/exclusive ")
-						ibT("- the snapshot refresh falls back to three reads (legacy schema)"));
-			}
-
-			if (wideRead) {
-				std::unordered_map<ibString, int>  kindBySession;
-				std::unordered_map<ibString, bool> exclusiveBySession;
-				for (const WideRow& r : wide) {
-					fresh->AppendSession(r.m_application, 0, r.m_started,
-						r.m_userName, r.m_computer, r.m_session);
-					kindBySession[r.m_session]      = r.m_kind;
-					exclusiveBySession[r.m_session] = r.m_exclusive;
-					++rowCount;
-				}
-				fresh->SetKindsFromMap(kindBySession);
-				fresh->SetExclusiveFromMap(exclusiveBySession);
-
-				if (m_sessionHasOptionalColumns.exchange(1, std::memory_order_relaxed) == 0)
-					ibJournalInfo(ibT("session"), ibT("session table carries kind/exclusive ")
-						ibT("- the snapshot refresh reads it in one query"));
-			}
-		}
-
-		if (!wideRead) {
-		ibDatabaseQueryBuilder q(&m_writeHolder);
-		ibQueryResult rs = q.From(session_table)
-			.Select({ ibT("userName"), ibT("application"), ibT("started"), ibT("computer"), ibT("session") })
-			.OrderBy(ibT("started")).OrderBy(ibT("session"))
-			.Execute();
-		while (rs.Next()) {
-			fresh->AppendSession(
-				static_cast<ibRunMode>(rs.GetResultInt("application")),
-				0,  // kind filled in below for legacy-schema safety
-				rs.GetResultDate  ("started"),
-				rs.GetResultString("userName"),
-				rs.GetResultString("computer"),
-				rs.GetResultString("session"));
-			++rowCount;
-		}
-		// Second pass: augment with kind where the column exists. Wrapped
-		// in its own try/catch so a legacy schema missing `kind` doesn't
-		// torpedo the snapshot built above.
-		try {
-			ibDatabaseQueryBuilder qk(&m_writeHolder);
-			ibQueryResult rsk = qk.ExecuteIR(ibQueryIR(ibProject(ibScan(session_table),
-				{ { ibCol(ibT("session")), ibEmptyString }, { ibCol(ibT("kind")), ibEmptyString } })));
-			std::unordered_map<ibString, int> kindBySession;
-			while (rsk.Next()) {
-				kindBySession[rsk.GetResultString("session")]
-					= rsk.GetResultInt("kind");
-			}
-			fresh->SetKindsFromMap(kindBySession);
-		} catch (const ibBackendDatabaseException& err) {
-			if (err.GetKind() != ibBackendDatabaseException::Kind::Syntax)
-				throw;
-			/* legacy schema — fine, kinds stay 0 */
-		}
-
-		// Third pass: exclusive flag — same legacy-tolerant pattern as
-		// kind. Pre-migration schemas keep m_exclusive=false everywhere
-		// (default-constructed) which means cluster gates degrade
-		// gracefully to "no monopoly anywhere".
-		try {
-			ibDatabaseQueryBuilder qx(&m_writeHolder);
-			ibQueryResult rsx = qx.ExecuteIR(ibQueryIR(ibProject(ibScan(session_table),
-				{ { ibCol(ibT("session")), ibEmptyString }, { ibCol(ibT("exclusive")), ibEmptyString } })));
-			std::unordered_map<ibString, bool> exclusiveBySession;
-			while (rsx.Next()) {
-				exclusiveBySession[rsx.GetResultString("session")]
-					= rsx.GetResultInt("exclusive") != 0;
-			}
-			fresh->SetExclusiveFromMap(exclusiveBySession);
-		} catch (const ibBackendDatabaseException& err) {
-			if (err.GetKind() != ibBackendDatabaseException::Kind::Syntax)
-				throw;
-			/* legacy schema — fine, exclusive stays false */
-		}
-		}   // !wideRead — the legacy three-pass road
-
-		// currentActivity is optional on a base created before the column. A missing column must not
-		// throw away the snapshot just built. A detached thin client writes "detached until HH:MM:SS".
-		try {
-			ibDatabaseQueryBuilder qa(&m_writeHolder);
-			ibQueryResult rsa = qa.From(session_table)
-				.Select({ ibT("session"), ibT("currentActivity") })
+		// ⭐ ONE READ A TICK: every column the snapshot shows, each row whole.
+		{
+			ibDatabaseQueryBuilder q(&m_writeHolder);
+			ibQueryResult rs = q.From(session_table)
+				.Select({ ibT("userName"), ibT("application"), ibT("started"), ibT("computer"), ibT("session"),
+				          ibT("kind"), ibT("singleUser"), ibT("currentActivity") })
+				.OrderBy(ibT("started")).OrderBy(ibT("session"))
 				.Execute();
-			std::unordered_map<ibString, ibString> activityBySession;
-			while (rsa.Next())
-				activityBySession[rsa.GetResultString(ibT("session"))]
-					= rsa.GetResultString(ibT("currentActivity"));
-			fresh->SetActivityFromMap(activityBySession);
-		} catch (...) { /* legacy schema — the row shows no activity */ }
-		tx.Commit();   // cursors above are already dead
+			while (rs.Next()) {
+				fresh->AppendSession(
+					static_cast<ibRunMode>(rs.GetResultInt("application")),
+					rs.GetResultInt   ("kind"),
+					rs.GetResultDate  ("started"),
+					rs.GetResultString("userName"),
+					rs.GetResultString("computer"),
+					rs.GetResultString("session"),
+					rs.GetResultInt   ("singleUser") != 0,
+					rs.GetResultString("currentActivity"));   // a detached thin client writes "detached until HH:MM:SS"
+				++rowCount;
+			}
+		}   // the cursor dies here, before the commit
+		tx.Commit();
 	}
 	catch (const ibCoreException& err) {
 		SESSION_LOG("[session REFRESH] SELECT failed: "
@@ -2355,13 +2207,13 @@ void ibSessionRegistry::ThreadBody() noexcept
 			bool rowsWritten = false;
 			for (auto& req : batch) {
 				switch (req.kind) {
-					case ibRegistryRequestKind::Add:          ProcessAdd(req);          break;
-					case ibRegistryRequestKind::Attach:       ProcessAttach(req);       break;
-					case ibRegistryRequestKind::Detach:       ProcessDetach(req);       break;
-					case ibRegistryRequestKind::Remove:       ProcessRemove(req);       break;
-					case ibRegistryRequestKind::SetActivity:  ProcessSetActivity(req);  break;
-					case ibRegistryRequestKind::SetTokenHash: ProcessSetTokenHash(req); break;
-					case ibRegistryRequestKind::SetExclusive: ProcessSetExclusive(req); break;
+					case ibRegistryRequestKind::Add:           ProcessAdd(req);           break;
+					case ibRegistryRequestKind::Attach:        ProcessAttach(req);        break;
+					case ibRegistryRequestKind::Detach:        ProcessDetach(req);        break;
+					case ibRegistryRequestKind::Remove:        ProcessRemove(req);        break;
+					case ibRegistryRequestKind::SetActivity:   ProcessSetActivity(req);   break;
+					case ibRegistryRequestKind::SetTokenHash:  ProcessSetTokenHash(req);  break;
+					case ibRegistryRequestKind::SetSingleUser: ProcessSetSingleUser(req); break;
 				}
 				// Every request but an activity label and a token's digest may add, sign in, take out or mark a row
 				// the snapshot shows; those two are not in it.

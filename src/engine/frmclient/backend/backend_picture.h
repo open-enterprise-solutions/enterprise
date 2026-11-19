@@ -41,13 +41,13 @@ public:
 		return icon;
 	}
 
-	// A PICTURE AS A DESCRIPTION SAYS IT — the desktop's. One of the engine's pictures by its number; a configuration's
+	// A PICTURE AS A DESCRIPTION SAYS IT — the desktop's. One of the engine's pictures by its number; an application's
 	// by its guid, as the server names it (ibBackendPicture::SendPicture) and the client receives it (ibProtocolPicture).
 	static wxIcon GetPictureAsIcon(const ibPictureDescription& pictureDesc, const class ibMetaData* WXUNUSED(metaData) = nullptr) {
 		if (pictureDesc.m_type == ibPictureType::eFromBackend)
 			return GetPictureAsIcon(pictureDesc.m_class_identifier);
 		wxIcon icon;
-		if (pictureDesc.m_type == ibPictureType::eFromConfiguration && pictureDesc.m_meta_guid.isValid()) {
+		if (pictureDesc.m_type == ibPictureType::eFromApplication && pictureDesc.m_meta_guid.isValid()) {
 			const wxBitmap picture = ibProtocolPicture(pictureDesc.m_meta_guid.str());
 			if (picture.IsOk())
 				icon.CopyFromBitmap(picture);

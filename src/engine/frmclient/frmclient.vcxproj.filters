@@ -719,7 +719,7 @@
     <ClInclude Include="backend\metaData.h">
       <Filter>backend</Filter>
     </ClInclude>
-    <ClInclude Include="backend\metadataConfiguration.h">
+    <ClInclude Include="backend\metadataApplication.h">
       <Filter>backend</Filter>
     </ClInclude>
     <ClInclude Include="backend\propertyManager\propertyManager.h">

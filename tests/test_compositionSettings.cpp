@@ -502,7 +502,7 @@ TEST(CompositionDescription, Equality_NoticesAChangedStructure)
 	EXPECT_TRUE(before == after);
 
 	// ⭐ EQUALITY IS HOW "MODIFIED" IS DECIDED — a property asks it to tell a change from a
-	// re-open, and a member left out of it is an edit that leaves the configuration looking
+	// re-open, and a member left out of it is an edit that leaves the application looking
 	// untouched, with Save having nothing to do.
 	ibOutputDescription output;
 	after.m_variants[0].m_settings.m_structure.push_back(output);
@@ -555,8 +555,7 @@ TEST(CompositionDescription, ReadAlwaysLeavesOneVariant)
 	ibCompositionDescription born;
 	EXPECT_EQ(1u, born.m_variants.size());   // …by construction, before anything is read
 
-	// A NODE WITH NO VARIANT CHILDREN AT ALL — what a record written before variants existed looks
-	// like, and what an empty vector would write.
+	// A NODE WITH NO VARIANT CHILDREN AT ALL — what an empty vector would write.
 	ibDataNode empty;
 	ibCompositionDescription read;
 	read.m_variants.clear();

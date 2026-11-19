@@ -23,11 +23,11 @@ class BACKEND_API ibBackendSessionException : public ibBackendException
 {
 public:
 	enum class Kind {
-		// Somebody holds the exclusive lock. The caller waits or asks them to release it.
-		ExclusiveHeld,
+		// Somebody holds single-user mode. The caller waits or asks them to release it.
+		SingleUserHeld,
 
 		// Others are connected, and the operation needs the base to itself (a restructuring that
-		// executes DDL). Distinct from ExclusiveHeld: nobody has TAKEN anything, there are simply
+		// executes DDL). Distinct from SingleUserHeld: nobody has TAKEN anything, there are simply
 		// other people in the base — a different sentence to the user and a different remedy.
 		OthersActive,
 

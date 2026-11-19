@@ -9,7 +9,7 @@
 #include "commonObject.h"
 
 
-const ibValueMetaObjectCommonModule* ibValueManagerDataObjectChartOfCharacteristicTypes::GetManagerModule() const { return m_metaObject->GetManagerModule(); }
+const ibValueMetaObjectSharedModule* ibValueManagerDataObjectChartOfCharacteristicTypes::GetManagerModule() const { return m_metaObject->GetManagerModule(); }
 
 #include "reference/reference.h"
 

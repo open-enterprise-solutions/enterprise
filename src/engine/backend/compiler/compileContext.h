@@ -27,7 +27,7 @@ enum {
 // Public is the export level, Protected is the new child-visible middle tier.
 enum {
 	ACCESS_PRIVATE = 0,   // default — module-local, not visible outside
-	ACCESS_PUBLIC,        // exported — visible config-wide (was `Export`)
+	ACCESS_PUBLIC,        // exported — visible application-wide (was `Export`)
 	ACCESS_PROTECTED,     // visible to children (object -> its forms)
 };
 

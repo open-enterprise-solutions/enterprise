@@ -5,7 +5,7 @@
 // and until this file there was no test of any of them. The battery that drove
 // the work was a live one (a running designer answering over MCP), which is the
 // right instrument for measuring coverage over real modules and the wrong one
-// for CI: it needs an application, a configuration and a database.
+// for CI: it needs a running application and a database.
 //
 // These need none of the three. `moduleObject` is passed rather than reached
 // for, and null answers about the bare language (scriptComplete.h) — so a text,

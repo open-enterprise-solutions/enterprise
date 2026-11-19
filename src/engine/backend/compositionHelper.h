@@ -10,7 +10,7 @@
 //*                        Composition — "which sets am I part of"                           *
 //********************************************************************************************
 //
-// A metaobject can be checked INTO things: a common attribute's composition today, and
+// A metaobject can be checked INTO things: a shared attribute's composition today, and
 // whatever else needs the same shape tomorrow. This is that mechanism, and it is its own
 // on purpose.
 //

@@ -5,7 +5,7 @@
 
 // THE DESKTOP'S (designer/docManager/templates/docViewInterface.h) IN A TAB THE SERVER RAISED (Kind Interface): the
 // section is the server's document (frmserver ibInterfaceCompositionDocument) — its composition kept in the objects,
-// saved with the configuration there; this one shows it in the editor, the rows its view brings (DrawView).
+// saved with the application there; this one shows it in the editor, the rows its view brings (DrawView).
 
 class ibInterfaceEditView : public ibFrontendView {
 	class ibInterfaceEditor* m_interfaceEditor = nullptr;

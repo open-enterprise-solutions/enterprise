@@ -7,7 +7,7 @@ enum ibWriteRegisterMode {
 };
 
 // What a record's period is truncated to (ibValueMetaObjectInformationRegister::GetPeriodicityUnit). The numbers are
-// what a saved configuration holds, so a new one goes at the end.
+// what a saved application holds, so a new one goes at the end.
 enum ibPeriodicity {
 	eNonPeriodic,
 	eWithinSecond,

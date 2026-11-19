@@ -2,7 +2,7 @@
 #define __SECTIONS_H__
 
 // SECTIONS — the enterprise's section panel (enterprise/mainFrame/mainFrameEnterpriseInterface.cpp, ibSubSystemWindow)
-// as the server holds it: the configuration's sections this person may use, each with its page — the blocks of
+// as the server holds it: the application's sections this person may use, each with its page — the blocks of
 // commands in the panel's two columns, in its order — and what is picked there opened by the schema itself, as the
 // panel's link opened it (ibBackendCommandItem::Execute). The runtime's own: it opens what the runtime runs.
 

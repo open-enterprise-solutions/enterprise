@@ -23,7 +23,7 @@ class ibOutputParametersModel;
 
 class ibOutputParametersEditor : public ibPanel {
 public:
-	// `metaOf` names the configuration whose languages a title is written in — ASKED when a title is edited,
+	// `metaOf` names the application whose languages a title is written in — ASKED when a title is edited,
 	// the way the appearance window is handed it at the click: the window that holds this page may not know it
 	// yet while it is being built.
 	using MetaOf = std::function<const ibMetaData*()>;

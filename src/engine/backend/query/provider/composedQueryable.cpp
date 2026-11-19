@@ -270,7 +270,7 @@ std::vector<std::shared_ptr<const ibBackendQueryColumn>> ibComposedQueryable::Ge
 	return { m_twins.begin(), m_twins.end() };
 }
 
-// The leaves are of one configuration; the first that has one reads a reference or an enum back.
+// The leaves are of one application; the first that has one reads a reference or an enum back.
 const ibMetaData* ibComposedQueryable::GetMetaData() const
 {
 	for (const std::shared_ptr<const ibBackendQueryable>& leaf : m_leaves)

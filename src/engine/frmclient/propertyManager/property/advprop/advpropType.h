@@ -13,7 +13,7 @@
 
 // THE TYPE EDITOR:the list of types, the qualifiers
 // under it, the picker behind its button. What it lists is the property's — the types the server offered it (the
-// row's, ibPropertySerializable::GetValueList) — where the desktop's asked the configuration for them (FillByClsid).
+// row's, ibPropertySerializable::GetValueList) — where the desktop's asked the application for them (FillByClsid).
 class ibPGTypeProperty : public ibPGProperty {
 	IB_PG_DECLARE_PROPERTY_CLASS(ibPGTypeProperty);
 private:

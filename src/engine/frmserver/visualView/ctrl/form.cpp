@@ -190,7 +190,7 @@ ibSourceDataObject* ibValueForm::GetSourceObject() const
 
 const ibMetaData* ibValueForm::GetMetaData() const
 {
-	// The form metaobject (creator) is the SKELETON — its config is authoritative, so consult it FIRST. The
+	// The form metaobject (creator) is the SKELETON — its application is authoritative, so consult it FIRST. The
 	// SOURCE object provides the metadata ONLY as a fallback, when the form has NO metaobject (a dynamically-
 	// built form with no skeleton). Order matters: asking the SOURCE first recursed — a form-local dynamic-list
 	// source resolves its OWN metadata back THROUGH this form (attach-owner holder → attribute → owner form →
@@ -241,7 +241,7 @@ bool ibValueForm::IsViewOnly() const
 		return true;
 
 	// Gate 2 — the MAIN source's metaobject. A record maps Modify to its Write role; an object with no modify
-	// concept (data processor / report) stays true (never gated).
+	// concept (data tool / report) stays true (never gated).
 	const ibSourceDataObject* sourceObject = GetSourceObject();
 	if (sourceObject != nullptr) {
 		const ibValueMetaObjectGenericData* metaObject = sourceObject->GetSourceMetaObject();

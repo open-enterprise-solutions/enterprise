@@ -7,9 +7,7 @@
 #include <unordered_map>
 #include <string>
 
-// "VL_CONTR" is the Map's id still, as it was the Container's: the id is what a packed map is read back
-// by (kValueFieldClsid), and every one packed before the rename says it.
-constexpr ibClassID g_valueMapCLSID       = value_to_clsid("VL_CONTR");
+constexpr ibClassID g_valueMapCLSID       = value_to_clsid("VL_MAP");
 constexpr ibClassID g_valueKeyValueCLSID  = system_to_clsid("VL_KEVAL");
 constexpr ibClassID g_valueStructureCLSID = value_to_clsid("VL_STRUT");
 

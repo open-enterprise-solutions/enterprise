@@ -20,7 +20,7 @@
 //
 // …AND THE ITEMS THEMSELVES, each value packed as every value travels — the one schema of an object's predefined items,
 // as a composition is a report's (compositionDescription.h). The object KEEPS it (ibValueMetaObjectRecordDataHierarchy-
-// MutableRef::m_predefinedDesc), read and written with the configuration whole (ibPredefinedDescriptionMemory): its
+// MutableRef::m_predefinedDesc), read and written with the application whole (ibPredefinedDescriptionMemory): its
 // items, and what its kind alone knows, set by the kind when its property changes — how many rows a section takes, the
 // types a type is chosen among; the rest of the columns is read off the tables the object declares whenever it is asked
 // (GetPredefinedDesc). The seed is built of it, the designer's schema sends it whole, the thin designer draws it, edits
@@ -52,7 +52,7 @@ struct ibPredefinedAttributeDescription {
 	// …the value a new item declares: the attribute's own default, where it has one.
 	std::optional<ibPredefinedChoiceDescription> m_default;
 
-	// A TYPE THE ATTRIBUTE HOLDS NAMES ONE OF THESE — the types the configuration has, which a window cannot ask for
+	// A TYPE THE ATTRIBUTE HOLDS NAMES ONE OF THESE — the types the application has, which a window cannot ask for
 	// itself: what its picker offers. Empty where the attribute holds no type.
 	std::vector<ibClassID> m_offered;
 
@@ -109,7 +109,7 @@ class CORE_API ibPredefinedItemDescriptionMemory {
 public:
 	// node form: a Child — Guid, Name, Code and Description ({Title, Value} each), IsFolder, Parent (absent at the top),
 	// Row — an Array of {Id, Title, Value} — and Tables — an Array of {Table, Rows: an Array of {Row}}; Row and Tables
-	// absent where it declares nothing. As a configuration keeps an item and a command carries one. Read, a Code or a
+	// absent where it declares nothing. As an application keeps an item and a command carries one. Read, a Code or a
 	// Description that is a string is one saved before they were values: a string value. False: a value it holds cannot
 	// be read.
 	static bool ReadNode(const ibDataValue& value, ibPredefinedItemDescription& item);
@@ -164,7 +164,7 @@ public:
 	// node form: a Child — Parent, Folders, NextCode (a cell), the Code and the Description (an attribute each), an
 	// Attributes Array and a Tables Array, each attribute with its Type (ibTypeDescriptionMemory), its Offered ids and its
 	// Choices — and an Items Array, each item in its own form (ibPredefinedItemDescriptionMemory). Read, an Array is the
-	// items alone: a configuration saved before kept them so.
+	// items alone: an application saved before kept them so.
 	static bool ReadNode(const ibDataValue& value, ibPredefinedDescription& description);
 	static bool WriteNode(ibDataValue& value, const ibPredefinedDescription& description);
 };

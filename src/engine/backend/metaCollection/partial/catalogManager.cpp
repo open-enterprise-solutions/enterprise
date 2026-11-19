@@ -9,7 +9,7 @@
 #include "commonObject.h"
 
 
-const ibValueMetaObjectCommonModule* ibValueManagerDataObjectCatalog::GetManagerModule() const { return m_metaObject->GetManagerModule(); }
+const ibValueMetaObjectSharedModule* ibValueManagerDataObjectCatalog::GetManagerModule() const { return m_metaObject->GetManagerModule(); }
 
 #include "reference/reference.h"
 
@@ -33,7 +33,7 @@ enum Func {
 
 void ibValueManagerDataObjectCatalog::FillManagerMethods(ibMemberTable& helper) const
 {
-	// Composes after FillMembers (common-module methods) + FillPredefined (props),
+	// Composes after FillMembers (shared-module methods) + FillPredefined (props),
 	// bound earlier in the ctor chain. Order is load-bearing — CallAsFunc switches
 	// on the method index (eCreateItem = 0 …, relative to these appends).
 	helper.AppendFunc(ibT("CreateItem"), ibT("CreateItem()"));

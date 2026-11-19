@@ -1,7 +1,7 @@
 #include "backend_composition.h"
 
 #include "frmclient/backend/backend_exception.h"     // ibBackendCoreException — a setting that cannot apply is refused
-#include "frmclient/backend/backend_localization.h"  // a variant's caption is read in the configuration's language
+#include "frmclient/backend/backend_localization.h"  // a variant's caption is read in the application's language
 
 #include <algorithm>                                  // std::none_of — is this value one the field admits?
 
@@ -33,7 +33,7 @@ ibDataNode ibStoreValue(const ibValue& value)
 	return stored;
 }
 
-// A VARIANT'S CAPTION, in the CONFIGURATION's language — see the note beside the declaration.
+// A VARIANT'S CAPTION, in the APPLICATION's language — see the note beside the declaration.
 ibString ibVariantCaption(const ibVariantDescription& variant)
 {
 	const ibString caption = ibBackendLocalization::GetTranslateGetRawLocText(variant.m_synonym);

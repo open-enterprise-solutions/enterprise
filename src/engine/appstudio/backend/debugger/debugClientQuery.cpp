@@ -8,7 +8,7 @@
 #include "appstudio/mainFrame/mainFrameDesigner.h"
 #include "protocol/protocolDesigner.h"   // ibProtocol::ibSchema::ibDebugger
 
-// THE STORE IS THE SERVER'S — the engine's sys_dbg, of the base the configuration is in (ibSchemaDebugger,
+// THE STORE IS THE SERVER'S — the engine's sys_dbg, of the base the application is in (ibSchemaDebugger,
 // frmserver/schema/designer/debugger.cpp): what the engine's client asked its builder here is asked of the schema, by the
 // same verbs. And so are the lines: the server's client keeps the breakpoints at the editor's lines, moved by the edits
 // the editor's text carries (ibModuleTextView, Change) — one map, as the desktop's one process had it; none here.
@@ -44,7 +44,7 @@ namespace {
 
 ///////////////////////////////////////////////////////////////////////////////////////
 
-// THE CONFIGURATION THE DEBUGGER IS OF: its guid, the runtime's verify — asked of the store…
+// THE APPLICATION THE DEBUGGER IS OF: its guid, the runtime's verify — asked of the store…
 ibDebuggerClient::ibDebuggerClient() :
 	m_adapter(new ibDebuggerClientAdapter)
 {
@@ -54,7 +54,7 @@ ibDebuggerClient::ibDebuggerClient() :
 	ibProtocolNode store;
 	wxString said;
 	if (AskStore(ibProtocolNode(), store, 0, said))
-		m_configGuid = ibGuid(store.GetString(ibProtocol::ibSchema::ibDebugger::Guid));
+		m_applicationGuid = ibGuid(store.GetString(ibProtocol::ibSchema::ibDebugger::Guid));
 	Listen();
 }
 
@@ -65,11 +65,11 @@ ibDebuggerClient::ibDebuggerClient(const ibProtocolNode& store) :
 	ibDebuggerClient::CreateBreakpointDatabase();
 	ms_debugClient = this;
 
-	m_configGuid = ibGuid(store.GetString(ibProtocol::ibSchema::ibDebugger::Guid));
+	m_applicationGuid = ibGuid(store.GetString(ibProtocol::ibSchema::ibDebugger::Guid));
 	Listen();
 }
 
-// The table is the server's, made by its own client with the configuration (CreateBreakpointDatabase there).
+// The table is the server's, made by its own client with the application (CreateBreakpointDatabase there).
 bool ibDebuggerClient::TableAlreadyCreated()
 {
 	return true;

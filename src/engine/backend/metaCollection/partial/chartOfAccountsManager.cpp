@@ -8,7 +8,7 @@
 #include "commonObject.h"
 
 
-const ibValueMetaObjectCommonModule* ibValueManagerDataObjectChartOfAccounts::GetManagerModule() const { return m_metaObject->GetManagerModule(); }
+const ibValueMetaObjectSharedModule* ibValueManagerDataObjectChartOfAccounts::GetManagerModule() const { return m_metaObject->GetManagerModule(); }
 
 #include "reference/reference.h"
 

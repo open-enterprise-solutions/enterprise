@@ -508,7 +508,7 @@
       "syntax_block_ves": "Narrowed = Source.Where(Function(x) Return <condition>; EndFunction);",
       "parameters": "predicate — функция одной строки, отвечающая булевым значением.",
       "return_descr": "Queryable; если выполнялось в памяти — последовательность LINQ (LinqQuery): её читают Foreach, Count и ToArray.",
-      "example": "Mine = Data.Documents.Sale.Where(Function(d) { return d.Counterparty = Client And d.Posted; });",
+      "example": "Mine = Data.Documents.Sale.Where(Function(d) { return d.Counterparty == Client && d.Posted; });",
       "availability": "Клиент, Сервер",
       "see_also": ["cls.Queryable", "guide.lambda", "kw.Where"],
       "reviewed": false
@@ -623,7 +623,7 @@
       "syntax_block": "Exists = Source.Any();",
       "parameters": "Нет.",
       "return_descr": "Boolean.",
-      "example": "if (Data.Documents.Sale.Where(Function(d) { return d.Counterparty = Client; }).Any()) {\n    Message(\"У этого клиента есть продажи\");\n}",
+      "example": "if (Data.Documents.Sale.Where(Function(d) { return d.Counterparty == Client; }).Any()) {\n    Message(\"У этого клиента есть продажи\");\n}",
       "availability": "Клиент, Сервер",
       "see_also": ["cls.Queryable.Count", "cls.Queryable.First"],
       "reviewed": false
@@ -655,7 +655,7 @@
       "syntax_block": "Row = Source.FirstOrDefault();",
       "parameters": "Нет.",
       "return_descr": "Строка (ссылка или Structure) или Undefined.",
-      "example": "Found = Data.Catalogs.Goods.Where(Function(g) { return g.Code = Code; }).FirstOrDefault();",
+      "example": "Found = Data.Catalogs.Goods.Where(Function(g) { return g.Code == Code; }).FirstOrDefault();",
       "availability": "Клиент, Сервер",
       "see_also": ["cls.Queryable.First"],
       "reviewed": false
@@ -716,7 +716,7 @@
       "kind": "method",
       "category_keys": ["query"],
       "signature": "Count() : number",
-      "description": "Сколько источников этого вида есть в конфигурации.",
+      "description": "Сколько источников этого вида есть в приложении.",
       "syntax_block": "N = Data.Catalogs.Count();",
       "parameters": "Нет.",
       "return_descr": "Число.",
@@ -753,7 +753,7 @@
       "syntax_block_ves": "Source = Source.Where(Function(x) Return <condition>; EndFunction);",
       "parameters": "predicate — функция одной строки источника, отвечающая булевым значением.",
       "return_descr": "QueryDecorator — тот же запрос, суженный.",
-      "example": "if (Source = \"Document.Sale\") {\n    Source = Source.Where(Function(d) { return d.Company = SessionParameters.Company; });\n}",
+      "example": "if (Source == \"Document.Sale\") {\n    Source = Source.Where(Function(d) { return d.Company == SessionParameters.Company; });\n}",
       "availability": "Сервер",
       "see_also": ["cls.QueryDecorator", "cls.QueryDecorator.Join", "guide.rls"],
       "reviewed": false
@@ -766,11 +766,11 @@
       "category_keys": ["rls"],
       "signature": "Source.Join(inner, on : Function) | Source.Join(inner, leftKey : Function, rightKey : Function, op : string = \"=\") : QueryDecorator",
       "description": "Пропускает строку ограничиваемого запроса, только когда в `inner` СУЩЕСТВУЕТ разрешающая строка, — полусоединение: оно фильтрует и никогда не размножает строки. `inner` — источник данных (`Data.InformationRegisters.Access`, вместе с его собственным Where) или таблица значений.\n\nДве формы: одно сравнение `on` ключа источника с ключом inner, `Function(s, a) { return s.Warehouse = a.Warehouse; }`; или два селектора ключей и сравнение строкой — \"=\", \"<>\" (или \"!=\"), \"<\", \"<=\", \">\", \">=\"; любая другая строка читается как \"=\". Каждый ключ должен быть ОДНОЙ колонкой — для ключа, достигаемого через ссылку, ограничивайте через Where.\n\nInner из одного источника выполняется как EXISTS внутри одного оператора; таблица значений или inner, соединяющий собственные источники, сначала помещается во временную таблицу. Где у базы нет временных таблиц, такой inner соединяется обычным соединением, которое может повторять строки.",
-      "syntax_block": "Source = Source.Join(Inner, Function(s, a) { return s.<Key> = a.<Key>; });\nSource = Source.Join(Inner, Function(s) { return s.<Key>; }, Function(a) { return a.<Key>; }, \"=\");",
+      "syntax_block": "Source = Source.Join(Inner, Function(s, a) { return s.<Key> == a.<Key>; });\nSource = Source.Join(Inner, Function(s) { return s.<Key>; }, Function(a) { return a.<Key>; }, \"=\");",
       "syntax_block_ves": "Source = Source.Join(Inner, Function(s, a) Return s.<Key> = a.<Key>; EndFunction);\nSource = Source.Join(Inner, Function(s) Return s.<Key>; EndFunction, Function(a) Return a.<Key>; EndFunction, \"=\");",
       "parameters": "inner — Queryable (Data.<Kind>.<Name>, по желанию со своим Where) или таблица значений Table.\non — функция (sourceRow, innerRow), сравнивающая по одному ключу каждой.\nleftKey, rightKey — функции, называющие по одной ключевой колонке с каждой стороны.\nop — сравнение строкой; если не указано, \"=\".",
       "return_descr": "QueryDecorator — тот же запрос, суженный.",
-      "example": "Allowed = Data.InformationRegisters.WarehouseAccess.Where(Function(a) { return a.User = SessionParameters.User; });\nSource = Source.Join(Allowed, Function(s, a) { return s.Warehouse = a.Warehouse; });",
+      "example": "Allowed = Data.InformationRegisters.WarehouseAccess.Where(Function(a) { return a.User == SessionParameters.User; });\nSource = Source.Join(Allowed, Function(s, a) { return s.Warehouse == a.Warehouse; });",
       "availability": "Сервер",
       "see_also": ["cls.QueryDecorator", "cls.QueryDecorator.Where", "kw.Restrict"],
       "reviewed": false

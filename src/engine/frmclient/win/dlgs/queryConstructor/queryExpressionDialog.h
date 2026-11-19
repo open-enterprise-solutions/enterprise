@@ -54,7 +54,7 @@ class ibDialogQueryExpression : public ibDialog
 public:
 	// `existing` — the expression being edited (null when writing a new one). `fields` — what the
 	// query offers, shown on the left. `metaData` / `readOnly` are carried only so a nested query
-	// opens against the same configuration and under the same rights.
+	// opens against the same application and under the same rights.
 	// ⭐ `allowWindows` — WHICH STOREY THIS EXPRESSION BELONGS TO. A window is computed in the
 	// SELECTION, over rows; TOTALS folds NODES and its parser takes aggregates only. Offering a
 	// window where the engine refuses one is how a window teaches people to distrust it, so the

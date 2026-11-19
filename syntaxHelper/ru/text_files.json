@@ -16,11 +16,11 @@
       ],
       "signature": "New TextReader(path : string [, encoding : TextEncoding | string = UTF8])",
       "description": "Текст файла, читаемый построчно. Файл декодируется ЦЕЛИКОМ и ОДИН раз — при открытии: это про файлы обмена — продажи из кассы, прайс-лист, накладная другой системы, — а не про журналы на гигабайты.\n\nФАЙЛ НЕ ДЕРЖИТСЯ ОТКРЫТЫМ между открытием и Close. Его байты читаются целиком, и дескриптор отпускается внутри самого вызова открытия; Close() отпускает раскодированный текст — то есть освобождает память, а не дескриптор на диске.\n\nOpen, ReadLine, Read, LineCount, GetLine и Close — это вся поверхность: свойств у читателя нет. ReadLine и GetLine ходят по ОДНОЙ разметке файла, поэтому цикл до LineCount() и цикл до Undefined видят одни и те же строки, а GetLine не сдвигает место, где стоит ReadLine.\n\nКОНЕЦ ФАЙЛА — ЭТО Undefined, А НЕ ПУСТАЯ СТРОКА. Пустая строка — тоже строка: цикл, написанный против \"\", остановится на первой пустой строке файла, а написанный наоборот — не остановится никогда. Read() — вторая половина того же правила: когда ничего не осталось, он отдаёт \"\", а не Undefined.\n\nКОДИРОВКУ НАЗЫВАЕТ СКРИПТ — член TextEncoding или имя страницы, а если аргумент опущен или пуст, то UTF8. Байты, которые не складываются в текст в этой кодировке, — это ОТКАЗ, а не текст с дырами: \"TextReader: the file '<path>' cannot be read in the encoding given\". Метка порядка байтов в начале файла UTF-8 или UTF-16 читается как метка и текстом не отдаётся, а метка UTF-16 ещё и говорит, какой конец идёт первым.\n\nФайл, который не удалось открыть, файл, не помещающийся в память, и файл, который не дочитался, — каждый отдельный отказ, и в каждом названо имя файла. Любой глагол читателя, у которого файл не открыт, отказывает словами \"TextReader: no file is open\"; построенный вообще без аргументов читатель файла не держит — его даёт Open. ValueIsFilled отвечает, открыт ли файл.",
-      "syntax_block": "Reader = New TextReader(path, TextEncoding.UTF8);\n\nLine = Reader.ReadLine();\nwhile (Line <> Undefined) {        // Undefined, not \"\": an empty line is a line\n    Line = Reader.ReadLine();\n}\nReader.Close();",
+      "syntax_block": "Reader = New TextReader(path, TextEncoding.UTF8);\n\nLine = Reader.ReadLine();\nwhile (Line != Undefined) {        // Undefined, not \"\": an empty line is a line\n    Line = Reader.ReadLine();\n}\nReader.Close();",
       "syntax_block_ves": "Reader = New TextReader(path, TextEncoding.UTF8);\n\nLine = Reader.ReadLine();\nWhile Line <> Undefined Do        // Undefined, not \"\": an empty line is a line\n    Line = Reader.ReadLine();\nEndDo;\nReader.Close();",
       "parameters": "path — файл, который читаем. Файл, который не удалось открыть, — отказ, и в сообщении названо его имя.\nencoding — член TextEncoding или имя страницы (\"windows-1251\", \"cp866\", \"UTF-8\", \"UTF-16\"); если опущен или пуст — UTF8, а он СТРОГИЙ: байты, которые не UTF-8, отвергаются, а не читаются с дырами.",
       "return_descr": "TextReader.",
-      "example": "Reader = New TextReader(\"C:\\in\\sales.csv\", TextEncoding.UTF8);\nLine = Reader.ReadLine();\nwhile (Line <> Undefined) {              // Undefined, а не \"\": пустая строка — это строка\n    if (Line <> \"\") {\n        Cut = Find(Line, \";\");\n        Code = Left(Line, Cut - 1);      // первое поле\n    }\n    Line = Reader.ReadLine();\n}\nReader.Close();",
+      "example": "Reader = New TextReader(\"C:\\in\\sales.csv\", TextEncoding.UTF8);\nLine = Reader.ReadLine();\nwhile (Line != Undefined) {              // Undefined, а не \"\": пустая строка — это строка\n    if (Line != \"\") {\n        Cut = Find(Line, \";\");\n        Code = Left(Line, Cut - 1);      // первое поле\n    }\n    Line = Reader.ReadLine();\n}\nReader.Close();",
       "availability": "Клиент, Сервер",
       "see_also": [
         "cls.TextReader.ReadLine",
@@ -72,7 +72,7 @@
       "syntax_block": "Line = Reader.ReadLine();",
       "parameters": "Нет.",
       "return_descr": "Строка — или Undefined в конце файла.",
-      "example": "Line = Reader.ReadLine();\nwhile (Line <> Undefined) {       // а не while (Line <> \"\")\n    Message(Line);\n    Line = Reader.ReadLine();\n}",
+      "example": "Line = Reader.ReadLine();\nwhile (Line != Undefined) {       // а не while (Line <> \"\")\n    Message(Line);\n    Line = Reader.ReadLine();\n}",
       "availability": "Клиент, Сервер",
       "see_also": [
         "cls.TextReader",
@@ -353,7 +353,7 @@
       "syntax_block": "Count = Bytes.Size();",
       "parameters": "Нет.",
       "return_descr": "Число.",
-      "example": "Bytes.Read(path);\nif (Bytes.Size() = 0) { Message(\"файл пуст\"); }",
+      "example": "Bytes.Read(path);\nif (Bytes.Size() == 0) { Message(\"файл пуст\"); }",
       "availability": "Клиент, Сервер",
       "see_also": [
         "cls.BinaryData",

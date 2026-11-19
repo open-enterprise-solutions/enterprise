@@ -1,9 +1,9 @@
 ﻿#include "accumulationRegister.h"
 #include "core/serialize/dataBuilder.h"
 #include "backend/system/value/valueDynamicList.h"   // ibValueDynamicList — the standard list migrates onto the universal dynamic list
-#include "backend/metadataConfiguration.h"
+#include "backend/metadataApplication.h"
 #include "backend/moduleManager/moduleManager.h"
-#include "backend/metaData.h"   // ibMetaData::RegisterSource — the register registers its balance / turnover into its OWN config
+#include "backend/metaData.h"   // ibMetaData::RegisterSource — the register registers its balance / turnover into its OWN application
 
 //***********************************************************************
 //*                         metaData                                    * 
@@ -92,7 +92,7 @@ bool ibValueMetaObjectAccumulationRegister::ReadData(const ibDataNode& node)
 
 	m_propertySplitTotals->SetNodeValue(node.GetProperty(m_propertySplitTotals->GetName()));
 
-	// Absent sub-node = a configuration written before the totals tables existed. The object keeps
+	// Absent sub-node = an application written before the totals tables existed. The object keeps
 	// the id it was given at construction rather than being left at zero.
 	if (auto totals = node.FindChild(ibT("BalanceTotals")))
 		m_totalsBalances->LoadNode(*totals);
@@ -117,7 +117,7 @@ bool ibValueMetaObjectAccumulationRegister::OnCreateMetaObject(ibMetaData* metaD
 		return false;
 
 	// The totals tables are stamped HERE and only here: this is where a predefined child takes its
-	// metaID from the configuration's counter, which is also what reserves it against every later
+	// metaID from the application's counter, which is also what reserves it against every later
 	// GenerateNewID. On a load the id comes from the saved sub-node instead, which is why both
 	// directions of WriteData / ReadData carry them.
 	return (*m_propertyAttributeRecordType)->OnCreateMetaObject(metaData, flags) &&
@@ -251,8 +251,8 @@ bool ibValueMetaObjectAccumulationRegister::OnAfterRunMetaObject(int flags)
 		return false;
 
 	// Custom virtual-table descriptors (balances / turnovers). The base records descriptor is registered by
-	// ibValueMetaObjectRegisterData::OnAfterRunMetaObject below. Registered into the config's OWN factory —
-	// it is per-config, so a read-only DB load (onlyLoadFlag) still registers its own sources.
+	// ibValueMetaObjectRegisterData::OnAfterRunMetaObject below. Registered into the application's OWN factory —
+	// it is per-application, so a read-only DB load (onlyLoadFlag) still registers its own sources.
 	//
 	// ⚠ ONLY THE TABLES THIS REGISTER ACTUALLY HAS. A turnover-only register keeps no balance: its
 	// view carries no opening / closing / expense column at all (accumulationRegisterSchema.cpp gates
@@ -282,7 +282,7 @@ bool ibValueMetaObjectAccumulationRegister::OnAfterRunMetaObject(int flags)
 bool ibValueMetaObjectAccumulationRegister::OnBeforeCloseMetaObject()
 {
 	// ⚠ ALL THREE, UNCONDITIONALLY — deliberately not mirroring the registration's condition. The
-	// register type can be changed while the configuration is open, and a close that asked the
+	// register type can be changed while the application is open, and a close that asked the
 	// CURRENT type would leave behind whatever was registered under the previous one. Unregistering
 	// something never registered is a no-op (the factory just does not find it), so the asymmetry
 	// costs nothing and removes a whole class of dangling descriptor.

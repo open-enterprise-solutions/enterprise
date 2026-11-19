@@ -13,7 +13,7 @@
 // moved to another field does not open there.
 //
 // Its first tenant is the application server's config — the passwords of the bases it serves (multi-base-process.md
-// § 5.4); sys_config and the fields of a configuration come after, on the same floor.
+// § 5.4); sys_application and the fields of an application come after, on the same floor.
 
 #include "core/core.h"
 

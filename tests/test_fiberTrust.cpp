@@ -18,7 +18,7 @@
 #include "backend/backend_exception.h"
 #include "backend/backend_mainFrame.h"
 #include "backend/compiler/compileCode.h"
-#include "backend/metadataConfiguration.h"
+#include "backend/metadataApplication.h"
 #include "backend/metaCollection/metaObject.h"
 #include "backend/metaCollection/metaRoleObject.h"
 #include "backend/metaCollection/partial/catalog.h"
@@ -82,7 +82,7 @@ public:
 private:
 	wxInitializer m_wxInit;
 	bool          m_owns = false;
-	// RunDatabase sets this thread's code style to the configuration's. The binary runs VES
+	// RunDatabase sets this thread's code style to the application's. The binary runs VES
 	// (test_compiler.cpp), so the destructor puts it back, as StyleGuard does.
 	const short   m_codeStyle = ibCompileCode::GetCodeStyle();
 };
@@ -102,7 +102,7 @@ bool SetModuleText(const ibValueMetaObjectManagerModule* module, const ibString&
 	return true;
 }
 
-bool Compile(ibSession& session, ibMetaDataConfigurationFile& cfg, ibString& error)
+bool Compile(ibSession& session, ibMetaDataApplicationFile& cfg, ibString& error)
 {
 	if (session.CreateRoot(&cfg) == nullptr) {
 		error = wxT("CreateRoot returned null");
@@ -249,8 +249,8 @@ TEST(FiberTrust, ARoleHandlerThatAsksThroughTheGateDoesNotHang)
 	ibBaseForTest base;
 	ASSERT_TRUE(base.IsOpen());
 
-	ibMetaDataConfigurationFile cfg;
-	ibValueMetaObjectConfiguration* root = cfg.GetCommonMetaObject();
+	ibMetaDataApplicationFile cfg;
+	ibValueMetaObjectApplication* root = cfg.GetRootMetaObject();
 	ASSERT_NE(root, nullptr);
 	auto* role = dynamic_cast<ibValueMetaObjectRole*>(
 		cfg.CreateMetaObject(g_metaRoleCLSID, root, /*runObject*/ false));
@@ -264,7 +264,7 @@ TEST(FiberTrust, ARoleHandlerThatAsksThroughTheGateDoesNotHang)
 	// Full access would skip the handler. This role objects to administration,
 	// so the policy runs it, and it does not object to reading the catalog.
 	ASSERT_TRUE(root->SetRight(wxT("Administration"), role->GetMetaID(), false));
-	ASSERT_TRUE(cfg.RunDatabase()) << "the configuration in memory did not run";
+	ASSERT_TRUE(cfg.RunDatabase()) << "the application in memory did not run";
 
 	auto session = std::make_shared<ibRoleSession>(wxT("role-gate"), ibSessionKind::Enterprise);
 	ibUserInfo user;
@@ -353,11 +353,11 @@ TEST(FiberTrust, SetSessionParametersPausesTrustWhileItAsks)
 	ibBaseForTest base;
 	ASSERT_TRUE(base.IsOpen());
 
-	ibMetaDataConfigurationFile cfg;
-	ibValueMetaObjectConfiguration* root = cfg.GetCommonMetaObject();
+	ibMetaDataApplicationFile cfg;
+	ibValueMetaObjectApplication* root = cfg.GetRootMetaObject();
 	ASSERT_NE(root, nullptr);
 	ASSERT_TRUE(SetModuleText(root->GetSessionModule(), kSessionAsks));
-	ASSERT_TRUE(cfg.RunDatabase()) << "the configuration in memory did not run";
+	ASSERT_TRUE(cfg.RunDatabase()) << "the application in memory did not run";
 
 	auto session = std::make_shared<ibRoleSession>(wxT("session-params"), ibSessionKind::Enterprise);
 	{

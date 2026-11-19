@@ -11,7 +11,7 @@
 class FRMSERVER_API ibSchemaWebAddress : public ibClientSchema {
 public:
 
-	// The configuration's right to administer the data — the base's addresses are the administrator's.
+	// The application's right to administer the data — the base's addresses are the administrator's.
 	virtual bool AccessRight(const ibSession& session) const override;
 
 	// Addresses {Id, Kind, Path, Object, Title, Kept}, Offers {Kind, Path, Object, Title} — every kind's (ibServedKind::

@@ -14,7 +14,7 @@
 #include "backend/job/jobManager.h"             // ibJobManager / ibJobTenancy — the rented run a portion reads on
 #include "backend/backend_exception.h"          // ibBackendException — a refusal to rent falls back to inline
 #include "backend/appHost.h"                    // ibApplicationInstanceScope — a plain-thread read works for the asker's base
-#include "backend/system/value/valueType.h"     // ibValueTypeDescription (a column's Types), ibBackendTypeConfigFactory (its format)
+#include "backend/system/value/valueType.h"     // ibValueTypeDescription (a column's Types), ibBackendTypeApplicationFactory (its format)
 #include "core/tabular/tabularModelView.h"      // ibDataViewModel / ibDataViewItem — the base view types
 #include "backend/composition/dataComposer.h"  // ibDataComposer — IsGroupedModel reads GroupCount() off the composer
 #include "backend/uniqueKey.h"                  // ibUniqueKey — GetItemKey return (base default = no key)
@@ -692,7 +692,7 @@ bool ibValueModel::ibValueModelColumnCollection::ibValueModelColumnInfo::SetProp
 const ibFormatString& ibValueModel::ibValueModelColumnCollection::ibValueModelColumnInfo::GetColumnFormat() const
 {
 	static const ibTranslateString s_none;
-	return ibBackendTypeConfigFactory::GetFormatFromColumn(s_none, GetColumnType());
+	return ibBackendTypeApplicationFactory::GetFormatFromColumn(s_none, GetColumnType());
 }
 
 const ibFormatString& ibValueModel::ibValueModelColumnCollection::GetColumnFormat(unsigned int col) const

@@ -9,7 +9,7 @@ class ibValueNotebookPage;
 //*                                 define commom clsid									     *
 //********************************************************************************************
 
-//COMMON FORM
+//SHARED FORM
 constexpr ibClassID g_controlNotebookCLSID = control_to_clsid("CT_NTBK");
 constexpr ibClassID g_controlNotebookPageCLSID = control_to_clsid("CT_NTPG");
 
@@ -121,7 +121,7 @@ public:
 
 private:
 
-	// On the notebook: its own Visible, and available by the functional options of this base — a page they
+	// On the notebook: its own Visible, and available by the feature options of this base — a page they
 	// switch off is off the notebook the way an invisible one is. Asked by the page and by its notebook.
 	bool IsPageShown() const { return m_propertyVisible->GetValueAsBoolean() && IsAvailable(); }
 

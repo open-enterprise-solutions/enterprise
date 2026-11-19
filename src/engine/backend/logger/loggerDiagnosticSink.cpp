@@ -49,7 +49,7 @@ void ibLoggerDiagnosticSink::OnDiagnostic(const ibDiagnostic& diagnostic)
 		}
 	}
 
-	// An external report carries its file; a module inside the configuration
+	// An external report carries its file; a module inside the application
 	// carries nothing there, and the empty field is the difference.
 	if (!diagnostic.m_fileName.IsEmpty())
 		message << ibT("\nfile: ") << diagnostic.m_fileName;

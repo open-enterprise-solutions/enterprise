@@ -7,7 +7,7 @@
 #include "backend/system/value/valueArray.h"   // the references a search's text finds, as one list
 #include "backend/metaCollection/partial/commonObject.h"
 #include "backend/metaData.h"                 // FindAnyObjectByFilter (dot-path metaID -> name)
-#include "backend/functionalOption/functionalOptionGate.h"   // ibFunctionalOptionGate::IsAvailable — a tabular section this base does not use
+#include "backend/featureOption/featureOptionGate.h"   // ibFeatureOptionGate::IsAvailable — a tabular section this base does not use
 #include "backend/settings/settingsComposer.h"          // the reader's shelf — the setting marked "restore on open" goes on here
 #include "backend/system/systemManager.h"               // ibValueSystemFunction::Message — a mark whose setting is gone is said
 #include "backend/composition/dataComposer.h"           // the composer a header click sorts through
@@ -434,7 +434,7 @@ bool ibValueModelTableBox::IsAvailable() const
 		return false;
 	if (m_tableModel == nullptr || m_propertySource->GetValueAsSourceDesc().GetHopCount() < 2)
 		return true;
-	return ibFunctionalOptionGate::IsAvailable(m_tableModel->GetSourceMetaObject());
+	return ibFeatureOptionGate::IsAvailable(m_tableModel->GetSourceMetaObject());
 }
 
 const ibValueMetaObjectCompositeData* ibValueModelTableBox::GetSourceMetaObject() const

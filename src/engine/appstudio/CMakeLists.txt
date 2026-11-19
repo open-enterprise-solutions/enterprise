@@ -12,8 +12,8 @@ set(DESIGNER_THIN_SOURCES
     backend/vcs/gitService.cpp
     mainFrame/debugger/debugClientImpl.cpp
     win/editor/codeEditor/codeEditorDesigner.cpp
-    win/editor/commonAttributeEditor/commonAttributeEditor.cpp
-    win/editor/functionalOptionEditor/functionalOptionEditor.cpp
+    win/editor/sharedAttributeEditor/sharedAttributeEditor.cpp
+    win/editor/featureOptionEditor/featureOptionEditor.cpp
     win/editor/interfaceEditor/interfaceEditor.cpp
     win/editor/roleEditor/roleEditor.cpp
     win/editor/visualEditor/innerFrame.cpp
@@ -26,30 +26,30 @@ set(DESIGNER_THIN_SOURCES
     win/editor/visualEditor/visualEditorNotebook.cpp
     win/editor/visualEditor/visualEditorObjectTree.cpp
     win/editor/visualEditor/visualEditorPanel.cpp
-    docManager/templates/docViewDataProcessorFile.cpp
+    docManager/templates/docViewDataToolFile.cpp
     docManager/templates/docViewDataReportFile.cpp
     docManager/templates/docViewModuleEditor.cpp
     docManager/templates/docViewFormEditor.cpp
-    docManager/templates/docViewCommonAttribute.cpp
-    docManager/templates/docViewFunctionalOption.cpp
+    docManager/templates/docViewSharedAttribute.cpp
+    docManager/templates/docViewFeatureOption.cpp
     docManager/templates/docViewComposer.cpp
     docManager/templates/docViewInterface.cpp
     docManager/templates/docViewRole.cpp
     docManager/templates/docViewProfile.cpp
-    docManager/templates/docViewConfigCompare.cpp
+    docManager/templates/docViewApplicationCompare.cpp
     docManager/templates/docViewMetaFile.cpp
-    mainFrame/configCompare/configCompareModel.cpp
+    mainFrame/applicationCompare/applicationCompareModel.cpp
     mainFrame/local/localWindow.cpp
     mainFrame/mainFrameDesigner.cpp
     mainFrame/mainFrameDesignerEvent.cpp
     mainFrame/mainFrameDesignerMenu.cpp
     mainFrame/mainFrameDesignerParts.cpp
-    mainFrame/metaTree/treeConfiguration.cpp
-    mainFrame/metaTree/treeConfigurationEvent.cpp
-    mainFrame/metaTree/treeConfiguration_impl.cpp
-    mainFrame/metaTree/treeDataProcessor.cpp
-    mainFrame/metaTree/treeDataProcessorEvent.cpp
-    mainFrame/metaTree/treeDataProcessor_impl.cpp
+    mainFrame/metaTree/treeApplication.cpp
+    mainFrame/metaTree/treeApplicationEvent.cpp
+    mainFrame/metaTree/treeApplication_impl.cpp
+    mainFrame/metaTree/treeDataTool.cpp
+    mainFrame/metaTree/treeDataToolEvent.cpp
+    mainFrame/metaTree/treeDataTool_impl.cpp
     mainFrame/metaTree/treeDataReport.cpp
     mainFrame/metaTree/treeDataReportEvent.cpp
     mainFrame/metaTree/treeDataReport_impl.cpp

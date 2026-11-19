@@ -15,7 +15,7 @@
 
 namespace {
 
-// A picture kept, with the id it was given by — a configuration's carries its version (`<guid>#<version>`).
+// A picture kept, with the id it was given by — an application's carries its version (`<guid>#<version>`).
 struct ibKeptPicture {
 	wxString id;
 	wxBitmap bitmap;

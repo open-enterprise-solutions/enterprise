@@ -5,7 +5,7 @@
 #include "deskgui/univ/propgrid/advprops.h"
 
 #include <map>
-#include <optional>   // the configuration's pictures, as the row brings them
+#include <optional>   // the application's pictures, as the row brings them
 
 #include "frmclient/backend/backend_core.h"
 #include "core/description/pictureDescription.h"
@@ -17,7 +17,7 @@
 
 // THE PICTURE CELLS:a picture of a file, read
 // whole into the value (ibPGExternalImageProperty), and a picture by where it comes from — the engine's, the
-// configuration's, a file's (ibPGPictureProperty).
+// application's, a file's (ibPGPictureProperty).
 class ibPGExternalImageProperty : public ibEditorDialogProperty {
 
 public:
@@ -85,11 +85,11 @@ protected:
 	ibEnumProperty* m_propertySource;
 
 	ibEditEnumProperty* m_propertyBackend;
-	ibEditEnumProperty* m_propertyConfiguration;
+	ibEditEnumProperty* m_propertyApplication;
 	ibPGExternalImageProperty* m_propertyFile;
 
 	std::map<int, ibClassID> m_valChoices;
-	std::map<int, ibGuid> m_confChoices;
+	std::map<int, ibGuid> m_applicationChoices;
 
 private:
 	IB_PG_DECLARE_PROPERTY_CLASS(ibPGPictureProperty);

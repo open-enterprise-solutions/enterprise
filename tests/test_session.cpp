@@ -13,7 +13,7 @@
 #include "backend/session/session.h"
 #include "backend/databaseLayer/connectionHolder.h"
 #include "backend/appData.h"
-#include "backend/metadataConfiguration.h"
+#include "backend/metadataApplication.h"
 #include "backend/metaCollection/metaSessionParameterObject.h"
 #include "backend/system/value/valueArray.h"
 #include "backend/databaseLayer/sqllite/sqliteDatabaseLayer.h"
@@ -95,7 +95,7 @@ namespace {
 struct SessionParameterRead : ::testing::Test {
 	std::shared_ptr<ibSession> session;
 	std::unique_ptr<ibSessionScope> scope;
-	std::unique_ptr<ibMetaDataConfigurationFile> cfg;
+	std::unique_ptr<ibMetaDataApplicationFile> cfg;
 	std::unique_ptr<ibValueSessionParameters> parameters;
 	long index = -1;
 
@@ -105,8 +105,8 @@ struct SessionParameterRead : ::testing::Test {
 			GTEST_SKIP() << "appData env unavailable";
 		session = std::make_shared<ibSession>(wxT("session-params"), ibSessionKind::Designer);
 		scope = std::make_unique<ibSessionScope>(session.get());
-		cfg = std::make_unique<ibMetaDataConfigurationFile>();
-		ibValueMetaObjectConfiguration* root = cfg->GetCommonMetaObject();
+		cfg = std::make_unique<ibMetaDataApplicationFile>();
+		ibValueMetaObjectApplication* root = cfg->GetRootMetaObject();
 		ASSERT_NE(root, nullptr);
 		ibValueMetaObject* created = cfg->CreateMetaObject(g_metaSessionParameterCLSID, root, /*runObject*/ false);
 		ASSERT_NE(created, nullptr);

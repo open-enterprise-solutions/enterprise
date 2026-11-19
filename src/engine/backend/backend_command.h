@@ -16,7 +16,7 @@
 //  metaobject. The exact twin of ibSourceDataObject on the command side. A source path hops through
 //  GetValueBySourceHop and each step's VALUE is again a source (self-describing) → the walk is uniform.
 //  A command path hops through GetCommandByHop and each step's value is again an ibBackendCommandSender
-//  → the walk climbs the SAME way: form → its command / a control's command / up to the common commands
+//  → the walk climbs the SAME way: form → its command / a control's command / up to the shared commands
 //  (a "melting pot"), a section id that hops WITHIN itself. No front-end ladder of special cases: each
 //  object resolves its OWN hop, exactly as a source object does.
 // ---------------------------------------------------------------------------------------------------

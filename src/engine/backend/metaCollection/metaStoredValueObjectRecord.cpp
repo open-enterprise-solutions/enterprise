@@ -306,7 +306,7 @@ ibValue ibValueMetaObjectStoredValue::ReadStoredValue() const
 			ibDataQueryResult selection = q.Execute(page);
 
 			// The value as it lies. A column nobody wrote holds what it was created holding — a fresh value of this kind,
-			// its DEFAULT (structureBatch.cpp), a functional option's initial value among them — so an option that was
+			// its DEFAULT (structureBatch.cpp), a feature option's initial value among them — so an option that was
 			// never switched reads as its author said, the row there or added later.
 			if (selection.Next())
 				return AdjustValue(selection.GetValue(GetValueColumn()->GetQueryColumn()));

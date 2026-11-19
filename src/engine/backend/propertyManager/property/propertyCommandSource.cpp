@@ -70,7 +70,7 @@ bool ibPropertyCommandSource::WriteNodeValue(ibDataValue& value) const
 #include "core/memory/memoryStream.h"                   // ibReaderMemory / ibWriterMemory — the guid-keyed blob
 
 // COPY / PASTE — ibPropertySource's pair on the command side. A hop is asked as the walk asks it
-// (ibValueForm::GetCommandByHop): a COMMAND, config-wide, by its id; one that is rides its guid — GetCommonGuid, the
+// (ibValueForm::GetCommandByHop): a COMMAND, application-wide, by its id; one that is rides its guid — GetCommonGuid, the
 // copy-guid while its object is being copied — and the paste resolves it back through MetaIdByGuid onto the pasted
 // command. Every other hop stays as it is: the form's own command (its ids are a range of their own,
 // kFormCommandIdBase), a control, a standard action.
@@ -85,7 +85,7 @@ bool ibPropertyCommandSource::CopyNodeValue(ibDataValue& value) const
 	writer.w_u32((unsigned int)desc.GetHopCount());
 	for (const ibCommandHop& hop : desc.GetPath()) {
 		const ibValueMetaObjectCommand* const command = metaData != nullptr
-			? metaData->FindAnyObjectByFilter<ibValueMetaObjectCommand>(hop.m_id, { g_metaCommonCommandCLSID, g_metaCommandCLSID }, true)
+			? metaData->FindAnyObjectByFilter<ibValueMetaObjectCommand>(hop.m_id, { g_metaSharedCommandCLSID, g_metaCommandCLSID }, true)
 			: nullptr;
 		if (command != nullptr) { writer.w_u8(kHopGuid); writer.w_stringZ(command->GetCommonGuid().str()); }
 		else                    { writer.w_u8(kHopRaw);  writer.w_u32((unsigned int)hop.m_id); }

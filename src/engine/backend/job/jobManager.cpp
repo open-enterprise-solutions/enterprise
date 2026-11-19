@@ -322,7 +322,7 @@ bool ibJobManager::Launch(ibJobEntry& e)
 		}
 	}
 
-	// A SESSION THAT REFUSED TO COME UP is this run's failure: its configuration did not start — a module
+	// A SESSION THAT REFUSED TO COME UP is this run's failure: its application did not start — a module
 	// that does not compile, a module body that throws (ibSession::CompileRoot). Said where a run's failure
 	// is said, the job's outcome and the journal's error row, and the next attempt waits for the schedule
 	// as after any run instead of coming back every tick. The tick's catch around Launch says nothing.
@@ -596,19 +596,19 @@ bool ibJobManager::Register(ibJobDescription desc)
 	//
 	// ⚠ A schedule changed in the Designer therefore does NOT reach a base that already has the
 	// row. Correct for a default, surprising in practice — the job list needs a "reset to the
-	// configuration's value" action, or the first support call is about exactly this.
+	// application's value" action, or the first support call is about exactly this.
 	//
 	// ASKED, NOT ASSUMED: the row is found BY THE KEY, so a job that has none has no row to read
 	// and none to seed — the register is keyed by guid, and a name is a caption. Every job the
 	// platform declares carries one (a minted literal for the engine's own, the metaobject's guid
-	// for a configuration's, the row's own for a parameterized one), so this skips nothing real;
+	// for an application's, the row's own for a parameterized one), so this skips nothing real;
 	// what it stops is asking the base a question that has no subject.
 	if (KeyOf(desc).isValid()) {
 		const ibJobSettings stored = ReadSharedSettings(KeyOf(desc));
 		if (stored.m_found) {
 			desc.m_active = stored.m_active;
-			// An empty stored schedule (a row written by an older build) is not an opinion —
-			// keeping the declaration's is better than scheduling nothing.
+			// An empty stored schedule is not an opinion — keeping the declaration's is better than
+			// scheduling nothing.
 			if (ibJobScheduleRules::IsValid(stored.m_schedule))
 				desc.m_schedule = stored.m_schedule;
 		}
@@ -688,7 +688,7 @@ ibSessionHolder ibJobManager::OpenRunSession(const ibJobDescription& desc)
 	// ⭐ THE TICK WORKS FOR THIS RUN'S SESSION while it makes it ready — the user read from sys_user through
 	// `db_query`, the identity installed, the Authenticated notification that builds its runtime. The tick's
 	// own thread works for no base: read without the session, the user came back "not found", and a
-	// configuration's job with a run-as user never ran (2026-10-01, the census of threads without a base).
+	// application's job with a run-as user never ran (2026-10-01, the census of threads without a base).
 	// Scoped, because the notification binds the session to the thread, and the scope gives that back.
 	const ibSessionScope preparing(holder.Get());
 
@@ -699,7 +699,7 @@ ibSessionHolder ibJobManager::OpenRunSession(const ibJobDescription& desc)
 	// requirement rather than a convenience: reading through somebody's row filter
 	// would fold a subset and write wrong sums.
 	//
-	// A configuration's job names its user, and gets exactly that user's rights —
+	// An application's job names its user, and gets exactly that user's rights —
 	// same RLS, same result as if they had run it themselves. The identity is
 	// installed without a password: `Login` is already split into the check and the
 	// commit, and only the commit applies here.
@@ -722,13 +722,13 @@ ibSessionHolder ibJobManager::OpenRunSession(const ibJobDescription& desc)
 		registry->InstallUser(holder.Get(), info, ibEmptyString);
 		registry->NotifyAuthenticated(holder.Get());
 	}
-	else if (desc.m_origin == ibJobOrigin::Configuration && registry != nullptr) {
+	else if (desc.m_origin == ibJobOrigin::Application && registry != nullptr) {
 		// NO USER NAMED — and that is a legitimate state, not an error: nobody's job runs with the
 		// FULL view, because no identity means no RLS policy is built for it. Same reading as a
 		// platform job, arrived at from the other side.
 		//
 		// It still needs a RUNTIME, though, and that is the whole reason this branch exists. A
-		// configuration's body is SCRIPT, and the root module is built on the Authenticated
+		// application's body is SCRIPT, and the root module is built on the Authenticated
 		// notification — so an anonymous job that skipped this call had nothing to call into and
 		// failed every tick with "the session has no runtime". Notify without installing anyone:
 		// authenticated as nobody is exactly what is meant here.
@@ -918,7 +918,7 @@ int ibJobManager::Tick()
 		}
 
 		// HOW MANY MAY RUN AT ONCE — the cap is about RESOURCES, not about how many jobs a
-		// configuration is allowed to declare. Every run holds a session and a session holds a
+		// application is allowed to declare. Every run holds a session and a session holds a
 		// pooled connection, so a hundred and fifty parameterized rows must not start together;
 		// they may certainly all be REGISTERED, and each comes due on its own schedule.
 		std::size_t running = 0;

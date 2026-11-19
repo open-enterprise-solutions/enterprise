@@ -11,7 +11,7 @@
 class FRMSERVER_API ibSchemaActiveUser : public ibClientSchema {
 public:
 
-	// The configuration's right to active users — what the desktop's menu item stood on.
+	// The application's right to active users — what the desktop's menu item stood on.
 	virtual bool AccessRight(const ibSession& session) const override;
 
 	// Sessions {User, Application, Type, Started, Computer, Session} and Locks {Namespace, Key, Mode, User,

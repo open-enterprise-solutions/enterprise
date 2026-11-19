@@ -1,6 +1,6 @@
 #include "value_cast.h"
 #include "backend/backend_exception.h"
-#include "backend/metadataConfiguration.h"
+#include "backend/metadataApplication.h"
 #include "backend/appData.h"
 
 #if defined(_USE_CONTROL_VALUECAST)

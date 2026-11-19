@@ -1,6 +1,6 @@
 // L3 composer — the ROADS a read takes and the folds of a result (docs/private/query-one-road.md §7).
 //
-// PURE: no database of a configuration, no appData. Three layers:
+// PURE: no database of an application, no appData. Three layers:
 //   1. Which road: one statement of the base reads a tree whose every leaf it joins (ibCanJoinOn); a tree with a
 //      leaf computed in memory, or one another connection reads, is read in a base in memory — each leaf by its own
 //      provider, a join's later side only for the keys the side before it holds.

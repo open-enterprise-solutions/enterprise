@@ -113,7 +113,7 @@ ibPGCalcScheduleProperty::ibPGCalcScheduleProperty(ibBackendProperty* property, 
 		std::vector<ibDataNode> fields;
 		for (const ibDataNode& field : link.Children())
 			fields.push_back(field);
-		// Named as its neighbours are — what the row IS, not the field a configuration happens to link.
+		// Named as its neighbours are — what the row IS, not the field an application happens to link.
 		const wxString rowLabel = links.size() == 1 ? _("Schedule link")
 			: wxString::Format(_("Schedule link %u"), static_cast<unsigned>(idx + 1));
 		ibPGChoices fieldChoices = GetChoices(fields);
@@ -135,7 +135,7 @@ ibPGCalcScheduleProperty::ibPGCalcScheduleProperty(ibBackendProperty* property, 
 
 wxString ibPGCalcScheduleProperty::ValueToString(ibVariant& value, ibPGPropValFormatFlags flags) const
 {
-	// ⚠ NAMED BY THE CHOICES — the client holds no configuration to name the register by (the engine's variant asked
+	// ⚠ NAMED BY THE CHOICES — the client holds no application to name the register by (the engine's variant asked
 	// it); the row's choices are named as the server named them.
 	const ibCalcScheduleDescription sd = ReadSchedule(value);
 	if (!sd.IsOk())

@@ -4,7 +4,7 @@
 #include "backend/system/value/valueArray.h"
 #include "backend/system/value/valuePicture.h"   // g_valuePictureCLSID — the picture column's type
 #include "backend/appData.h"                 // ibApplicationInstance::GetActiveMetaData — a picked reference resolves there
-#include "backend/metadataConfiguration.h"   // ibMetaDataConfigurationBase : ibMetaData — the active one, as a base
+#include "backend/metadataApplication.h"     // ibMetaDataApplicationBase : ibMetaData — the active one, as a base
 #include "core/picturePredefined.h"          // g_pic*CLSID — the table's command icons
 
 //////////////////////////////////////////////////////////////////////
@@ -341,7 +341,7 @@ bool ibValueValueList::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, 
 
 const ibMetaData* ibValueValueList::GetSourceMetaData() const
 {
-	// A list belongs to no configuration; a reference it holds resolves in the active one, as a value table's does.
+	// A list belongs to no application; a reference it holds resolves in the active one, as a value table's does.
 	return ibApplicationInstance::GetActiveMetaData();
 }
 

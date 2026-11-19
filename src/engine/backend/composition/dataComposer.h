@@ -40,7 +40,7 @@
 #include "compositionCondition.h"                  // the evaluator — how a row in hand is read against a condition (SubtreeOf feeds it)
 #include "backend/backend_composition.h"       // ibFilterDescription — a level's filter is the stored one; ibStoredValue
 #include "core/composition/compositionTheme.h"   // ibCompositionTheme — the palette a run hands its driver
-#include "backend/functionalOption/functionalOptionGate.h"   // AsApplication — a run shows what the base uses
+#include "backend/featureOption/featureOptionGate.h"   // AsApplication — a run shows what the base uses
 
 // A LEVEL'S ORDER IS THE SELECTION'S — declared, not included: querySelector.h drags the whole query
 // tier in, and a header that only NAMES the key needs the name (the walk itself is in the .cpp).
@@ -677,9 +677,9 @@ public:
 
 	// --- output -------------------------------------------------------------------
 
-	// The config this query runs ON BEHALF OF — threaded into the lowering so a by-name metaobject source resolves
-	// through THIS config's factory (sources register per-config). Set by whoever binds the source (the dynamic list
-	// from its own config; the script query from the running one). Null = a sourceless / transient-only composer.
+	// The application this query runs ON BEHALF OF — threaded into the lowering so a by-name metaobject source resolves
+	// through THIS application's factory (sources register per-application). Set by whoever binds the source (the dynamic list
+	// from its own application; the script query from the running one). Null = a sourceless / transient-only composer.
 	ibDataComposer& SetMetaData(const class ibMetaData* metaData) { m_metaData = metaData; DropMemos(); return *this; }
 	const class ibMetaData* GetMetaData() const { return m_metaData; }
 
@@ -734,9 +734,9 @@ public:
 	// The one-argument Run below is the SHORT WAY IN for a caller holding a single driver — a list,
 	// which has one output and says so at the call instead of setting it beforehand.
 	bool Run() {
-		// ONE VIEW OF THE FUNCTIONAL OPTIONS FOR THE WHOLE RUN — what every output asks (IsAvailable) is
+		// ONE VIEW OF THE FEATURE OPTIONS FOR THE WHOLE RUN — what every output asks (IsAvailable) is
 		// answered as the application answers it, and in the designer from one reading of the base.
-		const ibFunctionalOptionGate::AsApplication asTheApplication;
+		const ibFeatureOptionGate::AsApplication asTheApplication;
 
 		bool read = false;
 		for (Output& output : m_outputs) {
@@ -994,7 +994,7 @@ public:
 		std::vector<ibCompositionRule>                             m_rules;       // the setting's, then the output's
 		std::map<const GroupNode*, std::vector<ibCompositionRule>> m_nodes;       // each node's own
 		ibCompositionSubtreeOf                                     m_subtreeOf;   // «in hierarchy», as the composer reads it
-		const class ibMetaData*                                    m_metaData = nullptr;   // …and the configuration it reads in
+		const class ibMetaData*                                    m_metaData = nullptr;   // …and the application it reads in
 
 		bool IsEmpty() const { return m_rules.empty() && m_nodes.empty(); }
 
@@ -1287,12 +1287,12 @@ protected:
 	std::map<ibString, ibValue> m_params;   // the rendered query's own values — filled while a query is being made
 	int                         m_autoParam = 0;   // auto-name counter for filter values (see m_params)
 
-	const class ibMetaData* m_metaData = nullptr;   // config the query resolves by-name sources against (SetMetaData)
+	const class ibMetaData* m_metaData = nullptr;   // application the query resolves by-name sources against (SetMetaData)
 
 	// ⭐ A MEMO, and `mutable` for that reason alone: IsAvailable is a question whose answer for a path does not
 	// change within one reading of the options, and a run asks the same few paths again and again (every
 	// GetAvailableGroupDesc, SelectedFor, level of the ladder). Each different path is laid out and walked once.
-	// Dropped wherever an answer can change: a new source or configuration (RefreshSourceFields, SetMetaData,
+	// Dropped wherever an answer can change: a new source or application (RefreshSourceFields, SetMetaData,
 	// the RAM composer's FromStorage) and a run starting (ApplyAvailableStructure, the RAM composer's ComputeOrder
 	// and Run).
 	mutable std::map<ibString, bool> m_availablePaths;
@@ -1308,7 +1308,7 @@ protected:
 
 public:
 
-	// ⭐ WHETHER A FIELD MAY BE SHOWN IN THIS BASE (functional options) — asked of the SOURCE this composer reads:
+	// ⭐ WHETHER A FIELD MAY BE SHOWN IN THIS BASE (feature options) — asked of the SOURCE this composer reads:
 	// the DB composer asks its query or its table (a column answers, a computed one for everything it reads, a
 	// temp table's for the select that made it), the RAM one the columns of its storage. A grouping or a
 	// selected field on an unavailable one is not printed; a filter or a sort on one still applies — it shows
@@ -1686,7 +1686,7 @@ private:
 	// keyed by the unique local name rendered into the text (t0, t1, …). Held: the composer reads them.
 	std::map<ibString, std::shared_ptr<const ibBackendQueryable>> m_directSources;
 
-	// ⭐ WHAT THE SOURCE'S FIELDS ARE, and what the source says of each — whether this base's functional options
+	// ⭐ WHAT THE SOURCE'S FIELDS ARE, and what the source says of each — whether this base's feature options
 	// leave it available, what it is called, what it is in a balance. Worked out when the source is bound
 	// (FromText / FromSource). A path is walked from them the way every holder of fields walks one
 	// (ibQueryConstructorModel::WalkPath). Held by pointer, so this header does not pull the query model in

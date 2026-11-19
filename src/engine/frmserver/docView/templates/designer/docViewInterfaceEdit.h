@@ -14,7 +14,7 @@ public:
 
 	ibInterfaceCompositionView() : ibMetaView() {}
 
-	// The section's composition — the configuration's row, under it a group per metatype, under each the objects of it
+	// The section's composition — the application's row, under it a group per metatype, under each the objects of it
 	// that may be in a section, ticked where this one keeps them.
 	virtual void OnDraw(ibDataNode& frame) override;
 	virtual ibProtocol::ibView::ibKind GetViewKind() const override { return ibProtocol::ibView::ibKind::Interface; }
@@ -23,7 +23,7 @@ public:
 
 private:
 
-	// A metatype's group row — the configuration's row itself for a metatype with no constructor, as the desktop's.
+	// A metatype's group row — the application's row itself for a metatype with no constructor, as the desktop's.
 	ibDataNode& GroupFor(ibDataNode& root, const ibClassID& clsid);
 
 	ibDataNode& AppendItem(ibDataNode& parent, ibValueMetaObject* metaObject);
@@ -32,8 +32,8 @@ private:
 };
 
 // Its document — the section metaobject's (ibMetaDocument::GetMetaObject); the composition lives in the objects, saved
-// with the configuration — nothing of its own to hold. So its Save is the configuration's (ibMetaDocument::Save): the
-// desktop's m_childDoc = false sent it to a SaveAs that writes nothing, and the configuration's «*» stayed.
+// with the application — nothing of its own to hold. So its Save is the application's (ibMetaDocument::Save): the
+// desktop's m_childDoc = false sent it to a SaveAs that writes nothing, and the application's «*» stayed.
 class FRMSERVER_API ibInterfaceCompositionDocument : public ibMetaDocument {
 public:
 

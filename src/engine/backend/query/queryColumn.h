@@ -59,7 +59,7 @@ enum class ibColumnRole : uint8_t {
 	                 //          widest composite — it holds what has no field of its own there: an object, a
 	                 //          member of an enumeration, a schedule. Like the two above, the base keeps its
 	                 //          bytes and nothing else — the codec writes the node and reads it back against
-	                 //          the configuration (its bytes by SetParamBlob and GetResultBlob).
+	                 //          the application (its bytes by SetParamBlob and GetResultBlob).
 };
 
 // One physical field of a logical column (the layout decomposition unit). Its DEFAULT is not here: it is what the
@@ -112,7 +112,7 @@ enum ibFieldTypes {
 // `std::shared_ptr<const ibBackendQueryColumn>`, from the source that publishes it to whatever keeps it.
 //
 // A raw pointer to it is a holder somebody is missing (Max, 2026-11-16). Eight different owners stood behind one
-// `const ibBackendQueryColumn*` — the configuration, the run, a wrapper, a static cache — and the side doors grew
+// `const ibBackendQueryColumn*` — the application, the run, a wrapper, a static cache — and the side doors grew
 // for each one that crashed: a source asked "did you mint this, then give me its storage" (ShareColumn), an
 // output column carried its owning twin beside the bare one (m_ownedCol), a column kept a weak reference to its
 // own control block for whoever had only the bare pointer. With nothing handed out bare, none of them is needed.
@@ -147,7 +147,7 @@ public:
 	// Is the column THERE — a deleted or access-denied field is not: the schema does not keep it, and nothing lists it.
 	virtual bool IsAllowed() const { return true; }
 
-	// Is it AVAILABLE in this base — a functional option's question, and NOT IsAllowed: a column that is not
+	// Is it AVAILABLE in this base — a feature option's question, and NOT IsAllowed: a column that is not
 	// available is read and written like any other, and only what is computed from it is not shown (IsExprAvailable).
 	virtual bool IsAvailable() const { return true; }
 
@@ -174,7 +174,7 @@ public:
 
 	// ⭐⭐ …AND AN ID NOTHING DECLARED IS A NEGATIVE ONE — the sign carries the classification.
 	//
-	// The id above is a CONFIGURATION number wherever a metaobject stands behind the column: the
+	// The id above is an APPLICATION number wherever a metaobject stands behind the column: the
 	// metadata tree hands those out, and they are positive and small. A query also needs ids for
 	// columns nothing declared — an aggregate's figure, a computed projection, a second reading of one
 	// table — and those are minted NEGATIVE, so no query column can ever be mistaken for a declared
@@ -194,7 +194,7 @@ public:
 	// a position it is already walking, a running count of its own. The synthetic column then STORES it with
 	// its own kind composed onto it, because the class is the thing that knows which kind it is
 	// (Max, 2026-09-06: *"the synthetic takes an id in its argument, and when it stores it, it adds
-	// its own kind"*). The result is negative, so no minted id can ever be a configuration number.
+	// its own kind"*). The result is negative, so no minted id can ever be an application number.
 	//
 	// 🛑 This replaced five hand-carved BANDS in the positive space — one of which already held two
 	// tenants, against a ceiling made by the sign bit. A band map has to be READ before every
@@ -372,9 +372,9 @@ public:
 	// there is no cast.
 	virtual const class ibBackendColumnRawDB* AsRawColumn() const { return nullptr; }
 
-	// ⭐ A VALUE OF THIS COLUMN — the type factory's pair, repeated (ibBackendTypeConfigFactory): of its type
-	// (GetTypeValueDesc), made by its configuration (GetMetaData). A column over an attribute answers as its attribute
-	// does, through the bridge (ibValueMetaObjectAttributeBase::CreateValue — a functional option's initial value); one
+	// ⭐ A VALUE OF THIS COLUMN — the type factory's pair, repeated (ibBackendTypeApplicationFactory): of its type
+	// (GetTypeValueDesc), made by its application (GetMetaData). A column over an attribute answers as its attribute
+	// does, through the bridge (ibValueMetaObjectAttributeBase::CreateValue — a feature option's initial value); one
 	// that stands for another, as that one. What a fresh row holds is what a field nobody wrote is created holding: its
 	// DEFAULT, the column's own write of this value (structureBatch.cpp).
 	//
@@ -384,7 +384,7 @@ public:
 	virtual class ibValue AdjustValue() const;                                // the type's empty
 	virtual class ibValue AdjustValue(const class ibValue& varValue) const;   // a value narrowed to the type
 
-	// …and the configuration it is a column of — what makes its type's values. Every column says whose it is: an
+	// …and the application it is a column of — what makes its type's values. Every column says whose it is: an
 	// attribute's, its attribute's; one that stands for another, that one's; one the engine makes, the one it was made with.
 	virtual const class ibMetaData* GetMetaData() const = 0;
 };
@@ -427,7 +427,7 @@ public:
 	Kind                  GetColumnKind()   const override { return Kind::Raw; }
 	// …and it IS one, which is the whole of the answer nobody else can give.
 	const ibBackendColumnRawDB* AsRawColumn() const override { return this; }
-	// Whose type it holds: a reference's (Reference), the configuration it was made with; a primitive's, none — the
+	// Whose type it holds: a reference's (Reference), the application it was made with; a primitive's, none — the
 	// value registry makes one by itself (ibValueTypeDescription::AdjustValue).
 	const ibMetaData*     GetMetaData()     const override { return m_metaData; }
 
@@ -464,7 +464,7 @@ public:
 	// because the value may point at several kinds. This one cannot: a tabular section belongs to
 	// exactly one owner, so the type is known from the metadata and storing it per row would be a
 	// column repeating one constant a million times. The target rides on the column instead, and the
-	// codec reads a real reference out of the sixteen bytes it finds. `metaData` — the configuration the target is
+	// codec reads a real reference out of the sixteen bytes it finds. `metaData` — the application the target is
 	// a type of (GetMetaData).
 	static std::shared_ptr<const ibBackendColumnRawDB> Reference(const ibString& field, const ibClassID& target,
 	                                                             const ibMetaData* metaData,

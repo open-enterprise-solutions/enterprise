@@ -11,7 +11,7 @@
 // ⭐⭐ AND THE CONNECTION HAS TWO ENDS. Max, 2026-08-31: "when you add a property it changes two
 // properties at once — its own and the other one's". A document knowing its register is the same
 // fact as the register knowing its recorder, and writing one side by hand leaves the other stale —
-// silently, because the configuration still builds. So nothing here writes a node: the value is
+// silently, because the application still builds. So nothing here writes a node: the value is
 // handed to the property's own typed setter and the object is then told, exactly as the object
 // inspector tells it, and the object updates whatever else that means.
 //
@@ -28,7 +28,7 @@
 
 #include "backend/metaCollection/metaIntrospect.h"
 #include "backend/metaCollection/metaObject.h"
-#include "backend/metadataConfiguration.h"
+#include "backend/metadataApplication.h"
 #include "core/stringUtils.h"
 #include "core/description/typeDescription.h"              // ibMetaDescription — what these properties hold
 #include "backend/propertyManager/property/variant/variantMetaDesc.h"   // the one shape that holds it
@@ -68,7 +68,7 @@ struct Binding {
 // ⭐ ONE QUESTION, ASKED OF THE VALUE. It used to be three `dynamic_cast`s over PROPERTY classes —
 // Owner, Record, Generation — written out here, and the family is five: a chart of accounts' binding
 // and a chart of characteristic types' binding were simply not in the list, so `metadata_bind`
-// answered "no such binding" for two relationships that exist. Building an accounting configuration
+// answered "no such binding" for two relationships that exist. Building an accounting application
 // hit both in one sitting, because those two are exactly what a chart of accounts and an accounting
 // register are wired with.
 //
@@ -143,7 +143,7 @@ std::vector<ibDataValue> BoundNames(ibMetaData* metaData, const ibMetaDescriptio
 
 		// AN ID THAT RESOLVES TO NOTHING IS STILL REPORTED. A binding pointing at a deleted object
 		// is exactly the thing somebody would want to see, and hiding it would make the list look
-		// healthy while the configuration is not.
+		// healthy while the application is not.
 		names.push_back(ibDataValue::String(bound != nullptr
 			? bound->GetName()
 			: ibString::Format(ibMcpText("#%i (missing)"), (int)id)));
@@ -295,7 +295,7 @@ public:
 		// notification path reads pointed at the very object just edited — old and new were one
 		// description, the difference was empty, and ibValueMetaObjectDocument::OnPropertyChanged,
 		// which puts the document's reference into the register's Recorder, walked an empty list. The
-		// binding read back correctly and the OTHER END was never made: the configuration stood, and
+		// binding read back correctly and the OTHER END was never made: the application stood, and
 		// refused to save with "Doesn't have any recorder".
 		ibPropertyChoiceList choices;
 		const ibPropertyChoiceMode mode = binding.property->GetValueList(choices);
@@ -318,7 +318,7 @@ public:
 			ibValueMetaObject* other = ibFindMetaObjectById(activeMetaData, (ibMetaID)choices.GetId(index));
 			if (other == nullptr) {
 				refusal = ibString::Format(
-					ibMcpText("Nothing in this configuration has id %ld."), choices.GetId(index));
+					ibMcpText("Nothing in this application has id %ld."), choices.GetId(index));
 				return false;
 			}
 

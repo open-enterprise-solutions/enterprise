@@ -5,10 +5,10 @@
 
 // WHICH PANEL a command group is shown in. Every group belongs to one: the platform's own by what they are —
 // Important and Normal to the navigation panel, Create, Reports and Service to the actions panel — and a
-// group the configuration declares by its Category.
+// group the application declares by its Category.
 //
 // The FORM COMMAND BAR is the third: a group there is not a heading on a section page but ONE BUTTON on the
-// bar of a form, and pressing it opens a submenu of its commands — the object's own, and every common command
+// bar of a form, and pressing it opens a submenu of its commands — the object's own, and every shared command
 // typed for the object the form shows. That is how commands of many origins end up under one "Print".
 enum ibCommandGroupCategory {
 	ibCommandGroupCategory_Navigation = 0,
@@ -96,7 +96,7 @@ private:
 
 	ibPropertyCategory* m_categoryGroup = ibPropertyObject::CreatePropertyCategory(ibT("CommandGroup"), _("Command group"));
 	ibPropertyEnum<ibValueEnumCommandGroupCategory>* m_propertyCategory = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumCommandGroupCategory>>(m_categoryGroup, ibT("Category"), _("Category"),
-		_("Where the group is shown: the navigation panel of a section, beside Important and Normal; its actions panel, beside Create, Reports and Service; or the command bar of a form, as one button that opens a submenu of the group's commands - the object's own, and the common commands typed for that object."),
+		_("Where the group is shown: the navigation panel of a section, beside Important and Normal; its actions panel, beside Create, Reports and Service; or the command bar of a form, as one button that opens a submenu of the group's commands - the object's own, and the shared commands typed for that object."),
 		ibCommandGroupCategory_Navigation);
 	ibPropertyPicture* m_propertyPicture = ibPropertyObject::CreateProperty<ibPropertyPicture>(m_categoryGroup, ibT("Picture"), _("Picture"),
 		_("The icon beside the group's caption: at its heading on a section page, and on its button on a form command bar. Empty: caption only."));

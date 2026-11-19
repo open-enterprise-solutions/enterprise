@@ -60,8 +60,8 @@ ibFileBase* ibFileBaseOpen(const ibString& request, ibString& error)
 	opening.m_password  = where.GetValue<ibString>(ibProtocol::ibFileBase::Password);
 	opening.m_database  = where.GetValue<ibString>(ibProtocol::ibFileBase::Database);
 	opening.m_create    = where.GetValue<bool>(ibProtocol::ibFileBase::Create);
-	// THE DEBUG SERVER — as appworkspace.exe's `--debug`: it comes up with the base's configuration
-	// (ibMetaDataConfiguration::OnInitialize) and listens from the start. Without it the client turns it on
+	// THE DEBUG SERVER — as appworkspace.exe's `--debug`: it comes up with the base's application
+	// (ibMetaDataApplication::OnInitialize) and listens from the start. Without it the client turns it on
 	// later; a session stops for it either way (ibSession::Debug — made with the session).
 	if (where.GetValue<bool>(ibProtocol::ibFileBase::Debug))
 		opening.m_loadMetadataFlags = _app_start_create_debug_server_flag;

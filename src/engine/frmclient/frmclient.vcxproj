@@ -445,7 +445,7 @@
     <ClInclude Include="win\dlgs\typeSelector.h" />
     <ClInclude Include="win\dlgs\formatConstructor\formatConstructor.h" />
     <ClInclude Include="win\dlgs\linqConstructor\linqConstructor.h" />
-    <ClInclude Include="backend\metadataConfiguration.h" />
+    <ClInclude Include="backend\metadataApplication.h" />
     <ClInclude Include="backend\metaCollection\metaTemplateObject.h" />
     <ClInclude Include="backend\metaCollection\resource\metaResourceObject.h" />
     <ClInclude Include="backend\logger\loggerReader.h" />

@@ -1,7 +1,7 @@
 #include "metaSessionParameterObject.h"
 
 #include "backend/metaData.h"
-#include "backend/metadataConfiguration.h"   // activeMetaData
+#include "backend/metadataApplication.h"   // activeMetaData
 #include "backend/session/session.h"
 #include "backend/backend_exception.h"
 

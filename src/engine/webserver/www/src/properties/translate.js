@@ -1,9 +1,9 @@
 // A TRANSLATED TEXT — `code = 'text';`, a language each (ibLocalization's format), read in a language and edited in a
-// window of its own: a box for each of the configuration's languages, then the codes the text holds beyond them, apart
+// window of its own: a box for each of the application's languages, then the codes the text holds beyond them, apart
 // and kept (the thin client's translation constructor, ibDialogTranslateConstructor — the window under a translated
 // property's «…»). OK writes each box into the text that came in: its order stays, an empty box takes its language out
 // — «not translated», so a reader falls back to another language, not to nothing. The languages are the
-// configuration's, asked of the server once a session (the schema Languages); a text in no format is the text in the
+// application's, asked of the server once a session (the schema Languages); a text in no format is the text in the
 // language in force.
 
 import { _, language } from '../localization.js';
@@ -13,14 +13,14 @@ import { editWindow } from '../settings/settingsWindow.js';
 /** @typedef {import('../protocol/session.js').Session} Session */
 /** A language of a text — its code, what it says. @typedef {{code: string, text: string}} Translation */
 
-// The schema the configuration's languages are asked by (ibSchema::ibKind::Languages).
+// The schema the application's languages are asked by (ibSchema::ibKind::Languages).
 const schema = 11;
 
-/** @type {{code: string, title: string}[]} the configuration's languages, in its order — what a person calls each */
+/** @type {{code: string, title: string}[]} the application's languages, in its order — what a person calls each */
 let languages = [];
 
 /**
- * The configuration's languages, read once the person is in (ibUserInfo::ListLanguages) — when the server offers the
+ * The application's languages, read once the person is in (ibUserInfo::ListLanguages) — when the server offers the
  * schema (the frame's Schemas). A read that fails, or none offered, leaves none: the window then has the one box every
  * text has, the language in force.
  * @param {Session} session
@@ -79,7 +79,7 @@ export async function editTranslate(caption, raw) {
 	if (other.length > 0) {
 		const said = document.createElement('p');
 		said.textContent = languages.length > 0
-			? _('Also in this text, for codes this configuration has no language for. They are kept:')
+			? _('Also in this text, for codes this application has no language for. They are kept:')
 			: _('Also in this text:');
 		content.append(said, grid(other.map((one) => [one.code, one.code])));
 	}

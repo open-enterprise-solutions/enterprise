@@ -42,7 +42,7 @@ export async function showAbout(session) {
 
 	const info = document.createElement('dl');
 	// No base, no line for it.
-	for (const [label, value] of [[_('Database'), answer.Database], [_('Application'), answer.Application],
+	for (const [label, value] of [[_('Database'), answer.Database], [_('Program'), answer.Program],
 		[_('User'), answer.User], [_('Locale'), answer.Locale]]) {
 		if (label === _('Database') && !value)
 			continue;

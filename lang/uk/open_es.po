@@ -162,12 +162,12 @@ msgstr "SetDebuggerClientBridge: debugClient не ініціалізовано (
 #: src/engine/appstudio/backend/metaCollection/metaDiff.h:169
 #: src/engine/backend/metaCollection/metaDiff.cpp:78
 #: src/engine/backend/metaCollection/metaObject.h:1015
-#: src/engine/frmserver/metaTree/treeConfiguration.cpp:28
+#: src/engine/frmserver/metaTree/treeApplication.cpp:28
 msgid "Common"
 msgstr "Загальні"
 
 #: src/engine/appstudio/backend/metaCollection/metaDiff.h:170
-#: src/engine/appstudio/mainFrame/metaTree/treeConfiguration_impl.cpp:930
+#: src/engine/appstudio/mainFrame/metaTree/treeApplication_impl.cpp:930
 #: src/engine/appstudio/win/editor/visualEditor/visualEditorAttributeTree.cpp:482
 #: src/engine/appstudio/win/editor/visualEditor/visualEditorCmdProc.cpp:1216
 #: src/engine/appstudio/win/editor/visualEditor/visualEditorCommandTree.cpp:361
@@ -179,20 +179,20 @@ msgstr "Загальні"
 msgid "Properties"
 msgstr "Властивості"
 
-#: src/engine/appstudio/docManager/templates/docViewConfigCompare.cpp:41
+#: src/engine/appstudio/docManager/templates/docViewApplicationCompare.cpp:41
 #, c-format
 msgid "Compare: %s <-> %s"
 msgstr "Порівняння: %s <-> %s"
 
-#: src/engine/appstudio/docManager/templates/docViewConfigCompare.cpp:83
+#: src/engine/appstudio/docManager/templates/docViewApplicationCompare.cpp:83
 msgid "Select all differences"
 msgstr "Вибрати всі відмінності"
 
-#: src/engine/appstudio/docManager/templates/docViewConfigCompare.cpp:84
+#: src/engine/appstudio/docManager/templates/docViewApplicationCompare.cpp:84
 msgid "Mark every non-Same row for merge"
 msgstr "Позначити для об'єднання всі рядки, крім однакових"
 
-#: src/engine/appstudio/docManager/templates/docViewConfigCompare.cpp:85
+#: src/engine/appstudio/docManager/templates/docViewApplicationCompare.cpp:85
 #: src/engine/deskgui/univ/stockItem.cpp:59
 #: src/engine/frmclient/docView/templates/docViewAuditLog.cpp:300
 #: src/engine/frmclient/mainFrame/output/outputWindow.cpp:146
@@ -200,46 +200,46 @@ msgstr "Позначити для об'єднання всі рядки, крі�
 msgid "Clear"
 msgstr "Очистити"
 
-#: src/engine/appstudio/docManager/templates/docViewConfigCompare.cpp:86
+#: src/engine/appstudio/docManager/templates/docViewApplicationCompare.cpp:86
 msgid "Unmark every row"
 msgstr "Зняти позначку з усіх рядків"
 
-#: src/engine/appstudio/docManager/templates/docViewConfigCompare.cpp:88
+#: src/engine/appstudio/docManager/templates/docViewApplicationCompare.cpp:88
 msgid "Expand all"
 msgstr "Розгорнути все"
 
-#: src/engine/appstudio/docManager/templates/docViewConfigCompare.cpp:89
+#: src/engine/appstudio/docManager/templates/docViewApplicationCompare.cpp:89
 msgid "Expand every tree node"
 msgstr "Розгорнути всі вузли дерева"
 
-#: src/engine/appstudio/docManager/templates/docViewConfigCompare.cpp:90
+#: src/engine/appstudio/docManager/templates/docViewApplicationCompare.cpp:90
 msgid "Collapse all"
 msgstr "Згорнути все"
 
-#: src/engine/appstudio/docManager/templates/docViewConfigCompare.cpp:91
+#: src/engine/appstudio/docManager/templates/docViewApplicationCompare.cpp:91
 msgid "Collapse every tree node"
 msgstr "Згорнути всі вузли дерева"
 
-#: src/engine/appstudio/docManager/templates/docViewConfigCompare.cpp:117
-#: src/engine/appstudio/docManager/templates/docViewConfigCompare.cpp:348
-#: src/engine/appstudio/docManager/templates/docViewConfigCompare.cpp:438
-#: src/engine/frmserver/schema/designer/configCompare.cpp:363
+#: src/engine/appstudio/docManager/templates/docViewApplicationCompare.cpp:117
+#: src/engine/appstudio/docManager/templates/docViewApplicationCompare.cpp:348
+#: src/engine/appstudio/docManager/templates/docViewApplicationCompare.cpp:438
+#: src/engine/frmserver/schema/designer/applicationCompare.cpp:363
 msgid "Merge"
 msgstr "Об'єднання"
 
-#: src/engine/appstudio/docManager/templates/docViewConfigCompare.cpp:126
+#: src/engine/appstudio/docManager/templates/docViewApplicationCompare.cpp:126
 msgid "Object"
 msgstr "Об'єкт"
 
-#: src/engine/appstudio/docManager/templates/docViewConfigCompare.cpp:138
+#: src/engine/appstudio/docManager/templates/docViewApplicationCompare.cpp:138
 msgid "Status"
 msgstr "Стан"
 
-#: src/engine/appstudio/docManager/templates/docViewConfigCompare.cpp:180
+#: src/engine/appstudio/docManager/templates/docViewApplicationCompare.cpp:180
 msgid "Show:"
 msgstr "Показати:"
 
-#: src/engine/appstudio/docManager/templates/docViewConfigCompare.cpp:184
+#: src/engine/appstudio/docManager/templates/docViewApplicationCompare.cpp:184
 #: src/engine/frmclient/win/dlgs/queryConstructor/queryConstructor.cpp:972
 #: src/engine/frmclient/win/dlgs/queryConstructor/queryConstructor.cpp:978
 #: src/engine/frmclient/win/dlgs/queryConstructor/queryConstructor.cpp:1053
@@ -247,50 +247,50 @@ msgstr "Показати:"
 msgid "All"
 msgstr "Усі"
 
-#: src/engine/appstudio/docManager/templates/docViewConfigCompare.cpp:185
+#: src/engine/appstudio/docManager/templates/docViewApplicationCompare.cpp:185
 msgid "Only differences"
 msgstr "Лише відмінності"
 
-#: src/engine/appstudio/docManager/templates/docViewConfigCompare.cpp:186
+#: src/engine/appstudio/docManager/templates/docViewApplicationCompare.cpp:186
 msgid "Only unchanged"
 msgstr "Лише незмінені"
 
-#: src/engine/appstudio/docManager/templates/docViewConfigCompare.cpp:193
+#: src/engine/appstudio/docManager/templates/docViewApplicationCompare.cpp:193
 msgid "Direction:"
 msgstr "Напрямок:"
 
-#: src/engine/appstudio/docManager/templates/docViewConfigCompare.cpp:204
+#: src/engine/appstudio/docManager/templates/docViewApplicationCompare.cpp:204
 msgid "Apply merge"
 msgstr "Застосувати об'єднання"
 
-#: src/engine/appstudio/docManager/templates/docViewConfigCompare.cpp:229
-#: src/engine/appstudio/docManager/templates/docViewConfigCompare.cpp:234
+#: src/engine/appstudio/docManager/templates/docViewApplicationCompare.cpp:229
+#: src/engine/appstudio/docManager/templates/docViewApplicationCompare.cpp:234
 #, c-format
 msgid "%s -> %s"
 msgstr "%s -> %s"
 
-#: src/engine/appstudio/docManager/templates/docViewConfigCompare.cpp:346
-msgid "Push direction has no save target - open the other configuration from a writable source first."
-msgstr "Для напрямку передачі немає місця збереження - спершу відкрийте іншу конфігурацію з джерела, доступного для запису."
+#: src/engine/appstudio/docManager/templates/docViewApplicationCompare.cpp:346
+msgid "Push direction has no save target - open the other application from a writable source first."
+msgstr "Для напрямку передачі немає місця збереження - спершу відкрийте інший застосунок з джерела, доступного для запису."
 
-#: src/engine/appstudio/docManager/templates/docViewConfigCompare.cpp:419
+#: src/engine/appstudio/docManager/templates/docViewApplicationCompare.cpp:419
 msgid "Merge failed."
 msgstr "Не вдалося об'єднати."
 
-#: src/engine/appstudio/docManager/templates/docViewConfigCompare.cpp:419
+#: src/engine/appstudio/docManager/templates/docViewApplicationCompare.cpp:419
 msgid "The server refused the merge."
 msgstr "Сервер відмовив в об'єднанні."
 
-#: src/engine/appstudio/docManager/templates/docViewConfigCompare.cpp:427
+#: src/engine/appstudio/docManager/templates/docViewApplicationCompare.cpp:427
 msgid "The other-side file has been saved."
 msgstr "Файл іншої сторони збережено."
 
-#: src/engine/appstudio/docManager/templates/docViewConfigCompare.cpp:427
-#: src/engine/frmserver/schema/designer/configCompare.cpp:358
+#: src/engine/appstudio/docManager/templates/docViewApplicationCompare.cpp:427
+#: src/engine/frmserver/schema/designer/applicationCompare.cpp:358
 msgid "Warning: failed to save the other-side file."
 msgstr "Попередження: не вдалося зберегти файл іншої сторони."
 
-#: src/engine/appstudio/docManager/templates/docViewConfigCompare.cpp:433
+#: src/engine/appstudio/docManager/templates/docViewApplicationCompare.cpp:433
 #, c-format
 msgid "%d reorder-only change(s) skipped (not supported in V1)."
 msgstr "Пропущено змін лише порядку: %d (не підтримується у V1)."
@@ -359,7 +359,7 @@ msgstr "Видалити коментарі"
 
 #: src/engine/appstudio/docManager/templates/docViewFormEditor.cpp:172
 #: src/engine/appstudio/docManager/templates/docViewModuleEditor.cpp:109
-#: src/engine/appstudio/mainFrame/metaTree/treeConfiguration_impl.cpp:919
+#: src/engine/appstudio/mainFrame/metaTree/treeApplication_impl.cpp:919
 #: src/engine/coderunner/coderunner.cpp:250
 #: src/engine/deskgui/univ/stockItem.cpp:99
 msgid "Remove"
@@ -444,8 +444,8 @@ msgid "Unindent"
 msgstr "Прибрати відступ"
 
 #: src/engine/appstudio/mainApp.cpp:91
-msgid "Select configuration database folder"
-msgstr "Виберіть папку бази даних конфігурації"
+msgid "Select application database folder"
+msgstr "Виберіть папку бази даних застосунку"
 
 #: src/engine/appstudio/mainApp.cpp:113 src/engine/appstudio/mainApp.cpp:139
 msgid "OES Application Studio - startup error"
@@ -474,40 +474,40 @@ msgstr ""
 msgid "OES Application Studio"
 msgstr "OES Application Studio"
 
-#: src/engine/appstudio/mainFrame/configCompare/configCompareModel.cpp:187
+#: src/engine/appstudio/mainFrame/applicationCompare/applicationCompareModel.cpp:187
 msgid "Same"
 msgstr "Збігається"
 
-#: src/engine/appstudio/mainFrame/configCompare/configCompareModel.cpp:188
+#: src/engine/appstudio/mainFrame/applicationCompare/applicationCompareModel.cpp:188
 msgid "Reordered"
 msgstr "Змінено порядок"
 
-#: src/engine/appstudio/mainFrame/configCompare/configCompareModel.cpp:189
+#: src/engine/appstudio/mainFrame/applicationCompare/applicationCompareModel.cpp:189
 msgid "Changed"
 msgstr "Змінено"
 
-#: src/engine/appstudio/mainFrame/configCompare/configCompareModel.cpp:190
+#: src/engine/appstudio/mainFrame/applicationCompare/applicationCompareModel.cpp:190
 msgid "Only in current"
 msgstr "Лише в поточній"
 
-#: src/engine/appstudio/mainFrame/configCompare/configCompareModel.cpp:191
+#: src/engine/appstudio/mainFrame/applicationCompare/applicationCompareModel.cpp:191
 msgid "Only in other"
 msgstr "Лише в іншій"
 
-#: src/engine/appstudio/mainFrame/configCompare/configCompareModel.cpp:203
-#: src/engine/appstudio/mainFrame/configCompare/configCompareModel.cpp:295
-#: src/engine/appstudio/mainFrame/configCompare/configCompareModel.cpp:308
+#: src/engine/appstudio/mainFrame/applicationCompare/applicationCompareModel.cpp:203
+#: src/engine/appstudio/mainFrame/applicationCompare/applicationCompareModel.cpp:295
+#: src/engine/appstudio/mainFrame/applicationCompare/applicationCompareModel.cpp:308
 msgid "Missing"
 msgstr "Відсутній"
 
-#: src/engine/appstudio/mainFrame/configCompare/configCompareModel.cpp:207
-#: src/engine/appstudio/mainFrame/configCompare/configCompareModel.cpp:293
-#: src/engine/appstudio/mainFrame/configCompare/configCompareModel.cpp:306
+#: src/engine/appstudio/mainFrame/applicationCompare/applicationCompareModel.cpp:207
+#: src/engine/appstudio/mainFrame/applicationCompare/applicationCompareModel.cpp:293
+#: src/engine/appstudio/mainFrame/applicationCompare/applicationCompareModel.cpp:306
 msgid "(unnamed)"
 msgstr "(без імені)"
 
 #: src/engine/appstudio/mainFrame/local/localWindow.cpp:132
-#: src/engine/appstudio/mainFrame/metaTree/treeDataProcessor.cpp:18
+#: src/engine/appstudio/mainFrame/metaTree/treeDataTool.cpp:18
 #: src/engine/appstudio/mainFrame/metaTree/treeDataReport.cpp:18
 #: src/engine/appstudio/mainFrame/watch/watchWindow.cpp:50
 #: src/engine/appstudio/win/dlg/predefinedEditor.cpp:277
@@ -529,7 +529,7 @@ msgstr "Ім'я"
 
 #: src/engine/appstudio/mainFrame/local/localWindow.cpp:133
 #: src/engine/appstudio/mainFrame/watch/watchWindow.cpp:51
-#: src/engine/backend/metaCollection/metaFunctionalOptionObject.h:82
+#: src/engine/backend/metaCollection/metaFeatureOptionObject.h:82
 #: src/engine/backend/metaCollection/partial/constant.h:38
 #: src/engine/backend/system/value/valueList.cpp:17
 #: src/engine/deskgui/univ/propgrid/manager.cpp:399
@@ -558,13 +558,15 @@ msgid "Type"
 msgstr "Тип"
 
 #: src/engine/appstudio/mainFrame/mainFrameDesigner.cpp:51
+#: src/engine/appstudio/mainFrame/mainFrameDesignerMenu.cpp:85
+#: src/engine/backend/metaCollection/metaObjectMetadata.h:210
 msgid "Update database"
 msgstr "Оновити базу даних"
 
 #: src/engine/appstudio/mainFrame/mainFrameDesigner.cpp:120
 #: src/engine/appstudio/mainFrame/mainFrameDesignerParts.cpp:22
-#: src/engine/appstudio/win/editor/commonAttributeEditor/commonAttributeEditor.cpp:89
-#: src/engine/appstudio/win/editor/functionalOptionEditor/functionalOptionEditor.cpp:102
+#: src/engine/appstudio/win/editor/sharedAttributeEditor/sharedAttributeEditor.cpp:89
+#: src/engine/appstudio/win/editor/featureOptionEditor/featureOptionEditor.cpp:102
 #: src/engine/appstudio/win/editor/interfaceEditor/interfaceEditor.cpp:86
 #: src/engine/appstudio/win/editor/roleEditor/roleEditor.cpp:140
 #: src/engine/backend/metaCollection/metaObjectMetadata.h:14
@@ -572,26 +574,24 @@ msgstr "Оновити базу даних"
 #: src/engine/frmclient/mainFrame/mainFrame.cpp:1217
 #: src/engine/frmclient/propertyManager/property/advprop/advpropPicture.cpp:174
 #: src/engine/frmserver/docView/docManagerDesigner.cpp:37
-#: src/engine/frmserver/docView/templates/designer/docViewCommonAttributeEdit.cpp:92
-#: src/engine/frmserver/docView/templates/designer/docViewFunctionalOptionEdit.cpp:100
-msgid "Configuration"
-msgstr "Конфігурація"
+#: src/engine/frmserver/docView/templates/designer/docViewSharedAttributeEdit.cpp:92
+#: src/engine/frmserver/docView/templates/designer/docViewFeatureOptionEdit.cpp:100
+msgid "Application"
+msgstr "Застосунок"
 
 #: src/engine/appstudio/mainFrame/mainFrameDesigner.cpp:178
 #, c-format
-msgid "Configuration '%s' has been changed. Save?"
-msgstr "Конфігурацію '%s' було змінено. Зберегти?"
+msgid "Application '%s' has been changed. Save?"
+msgstr "Застосунок '%s' було змінено. Зберегти?"
 
 #: src/engine/appstudio/mainFrame/mainFrameDesignerEvent.cpp:37
 #: src/engine/appstudio/mainFrame/mainFrameDesignerEvent.cpp:254
 #: src/engine/appstudio/mainFrame/mainFrameDesignerEvent.cpp:283
 #, c-format
 msgid ""
-"Configuration '%s' has been changed.\n"
+"Application '%s' has been changed.\n"
 "Do you want to save?"
-msgstr ""
-"Конфігурацію '%s' було змінено.\n"
-"Зберегти?"
+msgstr "Застосунок '%s' було змінено.\nЗберегти?"
 
 #: src/engine/appstudio/mainFrame/mainFrameDesignerEvent.cpp:52
 #: src/engine/appstudio/mainFrame/mainFrameDesignerEvent.cpp:91
@@ -604,19 +604,17 @@ msgstr "Не вдалося запустити webserver"
 
 #: src/engine/appstudio/mainFrame/mainFrameDesignerEvent.cpp:150
 msgid ""
-"To update the database configuration you need stop debugging.\n"
+"To update the database you need to stop debugging.\n"
 "Do you want to continue?"
-msgstr ""
-"Щоб оновити конфігурацію бази даних, зупиніть налагодження.\n"
-"Продовжити?"
+msgstr "Щоб оновити базу даних, зупиніть налагодження.\nПродовжити?"
 
 #: src/engine/appstudio/mainFrame/mainFrameDesignerEvent.cpp:243
-msgid "Open configuration file"
-msgstr "Відкрити файл конфігурації"
+msgid "Open application file"
+msgstr "Відкрити файл застосунку"
 
 #: src/engine/appstudio/mainFrame/mainFrameDesignerEvent.cpp:263
-msgid "Save configuration file"
-msgstr "Зберегти файл конфігурації"
+msgid "Save application file"
+msgstr "Зберегти файл застосунку"
 
 #: src/engine/appstudio/mainFrame/mainFrameDesignerEvent.cpp:269
 #: src/engine/appstudio/mainFrame/mainFrameDesignerEvent.cpp:301
@@ -624,24 +622,24 @@ msgid "Successfully unloaded to: "
 msgstr "Успішно вивантажено до: "
 
 #: src/engine/appstudio/mainFrame/mainFrameDesignerEvent.cpp:276
-msgid "Choose the directory the configuration was saved to"
-msgstr "Виберіть теку, у яку конфігурацію було збережено"
+msgid "Choose the directory the application was saved to"
+msgstr "Виберіть теку, у яку застосунок було збережено"
 
 #: src/engine/appstudio/mainFrame/mainFrameDesignerEvent.cpp:295
-msgid "Choose a directory of its own for the configuration's files"
-msgstr "Виберіть окрему теку для файлів конфігурації"
+msgid "Choose a directory of its own for the application's files"
+msgstr "Виберіть окрему теку для файлів застосунку"
 
 #: src/engine/appstudio/mainFrame/mainFrameDesignerEvent.cpp:309
-msgid "Choose configuration file to compare with"
-msgstr "Виберіть файл конфігурації для порівняння"
+msgid "Choose application file to compare with"
+msgstr "Виберіть файл застосунку для порівняння"
 
 #: src/engine/appstudio/mainFrame/mainFrameDesignerEvent.cpp:319
-msgid "Failed to upload configuration file."
-msgstr "Не вдалося вивантажити файл конфігурації."
+msgid "Failed to upload application file."
+msgstr "Не вдалося вивантажити файл застосунку."
 
 #: src/engine/appstudio/mainFrame/mainFrameDesignerEvent.cpp:325
-msgid "Failed to compare with the configuration file."
-msgstr "Не вдалося порівняти з файлом конфігурації."
+msgid "Failed to compare with the application file."
+msgstr "Не вдалося порівняти з файлом застосунку."
 
 #: src/engine/appstudio/mainFrame/mainFrameDesignerEvent.cpp:329
 #: src/engine/appstudio/mainFrame/mainFrameDesignerEvent.cpp:344
@@ -649,8 +647,8 @@ msgid "Current"
 msgstr "Поточна"
 
 #: src/engine/appstudio/mainFrame/mainFrameDesignerEvent.cpp:339
-msgid "Database configuration is not available."
-msgstr "Конфігурація бази даних недоступна."
+msgid "The database's application is not available."
+msgstr "Застосунок бази даних недоступний."
 
 #: src/engine/appstudio/mainFrame/mainFrameDesignerEvent.cpp:344
 #: src/engine/frmclient/win/dlgs/about.cpp:81
@@ -658,20 +656,20 @@ msgid "Database"
 msgstr "База даних"
 
 #: src/engine/appstudio/mainFrame/mainFrameDesignerEvent.cpp:350
-msgid "Choose left configuration file"
-msgstr "Виберіть лівий файл конфігурації"
+msgid "Choose left application file"
+msgstr "Виберіть лівий файл застосунку"
 
 #: src/engine/appstudio/mainFrame/mainFrameDesignerEvent.cpp:355
-msgid "Choose right configuration file"
-msgstr "Виберіть правий файл конфігурації"
+msgid "Choose right application file"
+msgstr "Виберіть правий файл застосунку"
 
 #: src/engine/appstudio/mainFrame/mainFrameDesignerEvent.cpp:366
-msgid "Failed to upload one of the configuration files."
-msgstr "Не вдалося вивантажити один із файлів конфігурації."
+msgid "Failed to upload one of the application files."
+msgstr "Не вдалося вивантажити один із файлів застосунку."
 
 #: src/engine/appstudio/mainFrame/mainFrameDesignerEvent.cpp:373
-msgid "Failed to load one of the configuration files."
-msgstr "Не вдалося завантажити один із файлів конфігурації."
+msgid "Failed to load one of the application files."
+msgstr "Не вдалося завантажити один із файлів застосунку."
 
 #: src/engine/appstudio/mainFrame/mainFrameDesignerMenu.cpp:48
 #: src/engine/appstudio/mainFrame/mainFrameDesignerMenu.cpp:54
@@ -747,49 +745,44 @@ msgid "Remove all breakpoints"
 msgstr "Видалити всі точки зупинки"
 
 #: src/engine/appstudio/mainFrame/mainFrameDesignerMenu.cpp:80
-msgid "Open database configuration"
-msgstr "Відкрити конфігурацію бази даних"
+msgid "Open the database's application"
+msgstr "Відкрити застосунок бази даних"
 
 #: src/engine/appstudio/mainFrame/mainFrameDesignerMenu.cpp:82
-msgid "Rollback to database configuration"
-msgstr "Відкат до конфігурації бази даних"
-
-#: src/engine/appstudio/mainFrame/mainFrameDesignerMenu.cpp:85
-#: src/engine/backend/metaCollection/metaObjectMetadata.h:210
-msgid "Update database configuration"
-msgstr "Оновити конфігурацію бази даних"
+msgid "Revert to the database's application"
+msgstr "Повернути застосунок бази даних"
 
 #: src/engine/appstudio/mainFrame/mainFrameDesignerMenu.cpp:90
-msgid "Load configuration"
-msgstr "Завантажити конфігурацію"
+msgid "Load application"
+msgstr "Завантажити застосунок"
 
 #: src/engine/appstudio/mainFrame/mainFrameDesignerMenu.cpp:91
-msgid "Save configuration"
-msgstr "Зберегти конфігурацію"
+msgid "Save application"
+msgstr "Зберегти застосунок"
 
 #: src/engine/appstudio/mainFrame/mainFrameDesignerMenu.cpp:96
-msgid "Load configuration from files..."
-msgstr "Завантажити конфігурацію з файлів..."
+msgid "Load application from files..."
+msgstr "Завантажити застосунок з файлів..."
 
 #: src/engine/appstudio/mainFrame/mainFrameDesignerMenu.cpp:97
-msgid "Save configuration to files..."
-msgstr "Зберегти конфігурацію у файли..."
+msgid "Save application to files..."
+msgstr "Зберегти застосунок у файли..."
 
 #: src/engine/appstudio/mainFrame/mainFrameDesignerMenu.cpp:106
 msgid "With file..."
 msgstr "З файлом..."
 
 #: src/engine/appstudio/mainFrame/mainFrameDesignerMenu.cpp:107
-msgid "With database configuration"
-msgstr "З конфігурацією бази даних"
+msgid "With the database's application"
+msgstr "Із застосунком бази даних"
 
 #: src/engine/appstudio/mainFrame/mainFrameDesignerMenu.cpp:108
 msgid "Two files..."
 msgstr "Два файли..."
 
 #: src/engine/appstudio/mainFrame/mainFrameDesignerMenu.cpp:110
-msgid "Compare configurations"
-msgstr "Порівняти конфігурації"
+msgid "Compare applications"
+msgstr "Порівняти застосунки"
 
 #: src/engine/appstudio/mainFrame/mainFrameDesignerMenu.cpp:116
 msgid "Syntax Helper\tRawCtrl+Alt+F1"
@@ -833,23 +826,23 @@ msgstr "Налагодження"
 msgid "Syntax Helper"
 msgstr "Синтакс-помічник"
 
-#: src/engine/appstudio/mainFrame/metaTree/treeConfiguration.cpp:58
-#: src/engine/appstudio/mainFrame/metaTree/treeConfiguration_impl.cpp:914
-#: src/engine/appstudio/mainFrame/metaTree/treeConfiguration_impl.cpp:937
+#: src/engine/appstudio/mainFrame/metaTree/treeApplication.cpp:58
+#: src/engine/appstudio/mainFrame/metaTree/treeApplication_impl.cpp:914
+#: src/engine/appstudio/mainFrame/metaTree/treeApplication_impl.cpp:937
 #: src/engine/deskgui/univ/stockItem.cpp:88
 #: src/engine/frmclient/mainFrame/mainFrame.cpp:524
 msgid "New"
 msgstr "Новий"
 
-#: src/engine/appstudio/mainFrame/metaTree/treeConfiguration.cpp:58
+#: src/engine/appstudio/mainFrame/metaTree/treeApplication.cpp:58
 #: src/engine/deskgui/univ/ctrl/editableListBox.cpp:137
 #: src/engine/frmclient/win/dlgs/settings/settingsFilterEditor.cpp:610
 #: src/engine/frmclient/win/dlgs/settings/settingsFilterEditor.cpp:1176
 msgid "New item"
 msgstr "Новий елемент"
 
-#: src/engine/appstudio/mainFrame/metaTree/treeConfiguration.cpp:59
-#: src/engine/appstudio/mainFrame/metaTree/treeConfiguration_impl.cpp:917
+#: src/engine/appstudio/mainFrame/metaTree/treeApplication.cpp:59
+#: src/engine/appstudio/mainFrame/metaTree/treeApplication_impl.cpp:917
 #: src/engine/appstudio/win/dlg/predefinedEditor.cpp:691
 #: src/engine/appstudio/win/editor/visualEditor/visualEditorAttributeTree.cpp:474
 #: src/engine/backend/metaCollection/partial/commonObjectAction.cpp:156
@@ -866,12 +859,12 @@ msgstr "Новий елемент"
 msgid "Edit"
 msgstr "Редагувати"
 
-#: src/engine/appstudio/mainFrame/metaTree/treeConfiguration.cpp:59
+#: src/engine/appstudio/mainFrame/metaTree/treeApplication.cpp:59
 #: src/engine/deskgui/univ/ctrl/editableListBox.cpp:129
 msgid "Edit item"
 msgstr "Редагувати елемент"
 
-#: src/engine/appstudio/mainFrame/metaTree/treeConfiguration.cpp:60
+#: src/engine/appstudio/mainFrame/metaTree/treeApplication.cpp:60
 #: src/engine/appstudio/win/dlg/homePageEditor.cpp:70
 #: src/engine/appstudio/win/dlg/predefinedEditor.cpp:458
 #: src/engine/appstudio/win/dlg/predefinedEditor.cpp:692
@@ -929,34 +922,34 @@ msgstr "Редагувати елемент"
 msgid "Delete"
 msgstr "Видалити"
 
-#: src/engine/appstudio/mainFrame/metaTree/treeConfiguration.cpp:60
+#: src/engine/appstudio/mainFrame/metaTree/treeApplication.cpp:60
 #: src/engine/deskgui/univ/ctrl/editableListBox.cpp:145
 msgid "Delete item"
 msgstr "Видалити елемент"
 
-#: src/engine/appstudio/mainFrame/metaTree/treeConfiguration.cpp:62
+#: src/engine/appstudio/mainFrame/metaTree/treeApplication.cpp:62
 #: src/engine/appstudio/win/dlg/homePageEditor.cpp:72
 #: src/engine/deskgui/univ/findReplaceDialog.cpp:131
 #: src/engine/deskgui/univ/stockItem.cpp:117
 msgid "Up"
 msgstr "Вгору"
 
-#: src/engine/appstudio/mainFrame/metaTree/treeConfiguration.cpp:62
+#: src/engine/appstudio/mainFrame/metaTree/treeApplication.cpp:62
 msgid "Up item"
 msgstr "Елемент вгору"
 
-#: src/engine/appstudio/mainFrame/metaTree/treeConfiguration.cpp:63
+#: src/engine/appstudio/mainFrame/metaTree/treeApplication.cpp:63
 #: src/engine/appstudio/win/dlg/homePageEditor.cpp:73
 #: src/engine/deskgui/univ/findReplaceDialog.cpp:131
 #: src/engine/deskgui/univ/stockItem.cpp:65
 msgid "Down"
 msgstr "Вниз"
 
-#: src/engine/appstudio/mainFrame/metaTree/treeConfiguration.cpp:63
+#: src/engine/appstudio/mainFrame/metaTree/treeApplication.cpp:63
 msgid "Down item"
 msgstr "Елемент вниз"
 
-#: src/engine/appstudio/mainFrame/metaTree/treeConfiguration.cpp:65
+#: src/engine/appstudio/mainFrame/metaTree/treeApplication.cpp:65
 #: src/engine/coderunner/win/dlgs/functionSearcher/functionSearcher.cpp:26
 #: src/engine/frmclient/win/dlgs/functionSearcher/functionSearcher.cpp:28
 #: src/engine/frmclient/win/dlgs/settings/composer/composerSettings.cpp:3159
@@ -964,20 +957,20 @@ msgstr "Елемент вниз"
 msgid "Sort"
 msgstr "Сортувати"
 
-#: src/engine/appstudio/mainFrame/metaTree/treeConfiguration.cpp:65
+#: src/engine/appstudio/mainFrame/metaTree/treeApplication.cpp:65
 msgid "Sort item"
 msgstr "Сортувати елементи"
 
-#: src/engine/appstudio/mainFrame/metaTree/treeConfigurationEvent.cpp:176
+#: src/engine/appstudio/mainFrame/metaTree/treeApplicationEvent.cpp:176
 msgid "Help information"
 msgstr "Довідкова інформація"
 
-#: src/engine/appstudio/mainFrame/metaTree/treeConfigurationEvent.cpp:176
+#: src/engine/appstudio/mainFrame/metaTree/treeApplicationEvent.cpp:176
 msgid "Technical information"
 msgstr "Технічна інформація"
 
-#: src/engine/appstudio/mainFrame/metaTree/treeConfiguration_impl.cpp:344
-#: src/engine/appstudio/mainFrame/metaTree/treeDataProcessor.cpp:59
+#: src/engine/appstudio/mainFrame/metaTree/treeApplication_impl.cpp:344
+#: src/engine/appstudio/mainFrame/metaTree/treeDataTool.cpp:59
 #: src/engine/appstudio/mainFrame/metaTree/treeDataReport.cpp:65
 #: src/engine/appstudio/mainFrame/metaTree/treeDataReport.cpp:73
 #: src/engine/backend/propertyManager/property/variant/variantSource.cpp:110
@@ -985,38 +978,38 @@ msgstr "Технічна інформація"
 msgid "<not selected>"
 msgstr "<не вибрано>"
 
-#: src/engine/appstudio/mainFrame/metaTree/treeConfiguration_impl.cpp:758
-msgid "Open data processor file"
+#: src/engine/appstudio/mainFrame/metaTree/treeApplication_impl.cpp:758
+msgid "Open data tool file"
 msgstr "Відкрити файл обробки"
 
-#: src/engine/appstudio/mainFrame/metaTree/treeConfiguration_impl.cpp:758
+#: src/engine/appstudio/mainFrame/metaTree/treeApplication_impl.cpp:758
 msgid "Open report file"
 msgstr "Відкрити файл звіту"
 
-#: src/engine/appstudio/mainFrame/metaTree/treeConfiguration_impl.cpp:784
-msgid "Save data processor file"
+#: src/engine/appstudio/mainFrame/metaTree/treeApplication_impl.cpp:784
+msgid "Save data tool file"
 msgstr "Зберегти файл обробки"
 
-#: src/engine/appstudio/mainFrame/metaTree/treeConfiguration_impl.cpp:784
+#: src/engine/appstudio/mainFrame/metaTree/treeApplication_impl.cpp:784
 msgid "Save report file"
 msgstr "Зберегти файл звіту"
 
-#: src/engine/appstudio/mainFrame/metaTree/treeConfiguration_impl.cpp:927
+#: src/engine/appstudio/mainFrame/metaTree/treeApplication_impl.cpp:927
 msgid "Help information..."
 msgstr "Довідкова інформація..."
 
-#: src/engine/appstudio/mainFrame/metaTree/treeConfiguration_impl.cpp:928
+#: src/engine/appstudio/mainFrame/metaTree/treeApplication_impl.cpp:928
 msgid "Technical information..."
 msgstr "Технічна інформація..."
 
-#: src/engine/appstudio/mainFrame/metaTree/treeDataProcessor.cpp:23
+#: src/engine/appstudio/mainFrame/metaTree/treeDataTool.cpp:23
 #: src/engine/appstudio/mainFrame/metaTree/treeDataReport.cpp:23
 #: src/engine/backend/metaCollection/metaObject.h:1017
 #: src/engine/frmclient/win/dlgs/kindSelector/kindSelector.cpp:53
 msgid "Synonym"
 msgstr "Синонім"
 
-#: src/engine/appstudio/mainFrame/metaTree/treeDataProcessor.cpp:28
+#: src/engine/appstudio/mainFrame/metaTree/treeDataTool.cpp:28
 #: src/engine/appstudio/mainFrame/metaTree/treeDataReport.cpp:28
 #: src/engine/backend/metaCollection/metaObject.h:1018
 #: src/engine/backend/system/systemManagerEnum.h:165
@@ -1026,12 +1019,12 @@ msgstr "Синонім"
 msgid "Comment"
 msgstr "Коментар"
 
-#: src/engine/appstudio/mainFrame/metaTree/treeDataProcessor.cpp:33
+#: src/engine/appstudio/mainFrame/metaTree/treeDataTool.cpp:33
 #: src/engine/appstudio/mainFrame/metaTree/treeDataReport.cpp:33
 msgid "Default form:"
 msgstr "Форма за замовчуванням:"
 
-#: src/engine/appstudio/mainFrame/metaTree/treeDataProcessor.cpp:67
+#: src/engine/appstudio/mainFrame/metaTree/treeDataTool.cpp:67
 #: src/engine/appstudio/mainFrame/metaTree/treeDataReport.cpp:81
 #: src/engine/backend/metaCollection/metaModuleObjectMenu.cpp:11
 msgid "Open module"
@@ -1467,7 +1460,7 @@ msgstr "Вибір форми"
 
 #: src/engine/appstudio/win/dlg/homePageEditor.cpp:459
 #: src/engine/backend/metaCollection/metaGroups.cpp:23
-msgid "Common forms"
+msgid "Shared forms"
 msgstr "Загальні форми"
 
 #: src/engine/appstudio/win/dlg/predefinedEditor.cpp:35
@@ -1523,8 +1516,8 @@ msgid "Description"
 msgstr "Найменування"
 
 #: src/engine/appstudio/win/dlg/predefinedEditor.cpp:414
-msgid "Declared by the configuration"
-msgstr "Оголошено конфігурацією"
+msgid "Declared by the application"
+msgstr "Оголошено застосунком"
 
 #: src/engine/appstudio/win/dlg/predefinedEditor.cpp:462
 #: src/engine/backend/metaCollection/partial/tabularSection/tabularSection.h:258
@@ -1720,16 +1713,16 @@ msgstr "Командний інтерфейс"
 
 #: src/engine/appstudio/win/editor/visualEditor/visualEditorPanel.cpp:83
 #: src/engine/backend/metaCollection/metaGroups.cpp:60
-#: src/engine/frmserver/metaTree/treeConfiguration.cpp:34
-#: src/engine/frmserver/metaTree/treeDataProcessor.cpp:63
+#: src/engine/frmserver/metaTree/treeApplication.cpp:34
+#: src/engine/frmserver/metaTree/treeDataTool.cpp:63
 #: src/engine/frmserver/metaTree/treeDataReport.cpp:62
 msgid "Attributes"
 msgstr "Реквізити"
 
 #: src/engine/appstudio/win/editor/visualEditor/visualEditorPanel.cpp:84
 #: src/engine/backend/metaCollection/metaGroups.cpp:79
-#: src/engine/frmserver/metaTree/treeConfiguration.cpp:35
-#: src/engine/frmserver/metaTree/treeDataProcessor.cpp:92
+#: src/engine/frmserver/metaTree/treeApplication.cpp:35
+#: src/engine/frmserver/metaTree/treeDataTool.cpp:92
 #: src/engine/frmserver/metaTree/treeDataReport.cpp:91
 msgid "Commands"
 msgstr "Команди"
@@ -1795,16 +1788,16 @@ msgstr "База %s порожня (у ній немає системних та
 
 #: src/engine/backend/appData.cpp:956
 #, c-format
-msgid "The configuration of the base %s could not be loaded."
-msgstr "Не вдалося завантажити конфігурацію бази %s."
+msgid "The application of the base %s could not be loaded."
+msgstr "Не вдалося завантажити застосунок бази %s."
 
 #: src/engine/backend/appData.cpp:1425
-msgid "The file carries data before the configuration - it cannot be loaded"
-msgstr "У файлі дані йдуть раніше за конфігурацію - його не можна завантажити"
+msgid "The file carries data before the application - it cannot be loaded"
+msgstr "У файлі дані йдуть раніше за застосунок - його не можна завантажити"
 
 #: src/engine/backend/appData.cpp:1476
-msgid "The configuration from the file could not be applied - the data was not loaded"
-msgstr "Не вдалося застосувати конфігурацію з файлу - дані не завантажено"
+msgid "The application from the file could not be applied - the data was not loaded"
+msgstr "Не вдалося прийняти застосунок із файлу - дані не завантажено"
 
 #: src/engine/backend/appData.h:307
 #: src/engine/backend/session/sessionSnapshot.cpp:52
@@ -2235,7 +2228,7 @@ msgid "The program was stopped by the user!"
 msgstr "Програма зупинена користувачем!"
 
 #: src/engine/backend/backend_exception.h:232
-#: src/engine/backend/metadataConfiguration.cpp:600
+#: src/engine/backend/metadataApplication.cpp:600
 msgid "Not enough access rights for this user!"
 msgstr "Недостатньо прав доступу для цього користувача!"
 
@@ -2295,6 +2288,34 @@ msgstr "'!=' тут не оператор - нерівність записує�
 #: src/engine/backend/compiler/compileCode.cpp:4112
 msgid "'&&' is not an operator here - conditions join with the word And"
 msgstr "'&&' тут не оператор - умови з'єднуються словом And"
+
+#: src/engine/backend/compiler/compileCode.cpp:4185
+msgid "'||' is not an operator here - conditions join with the word Or"
+msgstr "'||' тут не оператор - умови з'єднуються словом Or"
+
+#: src/engine/backend/compiler/compileCode.cpp:3649
+msgid "'Not' is not an operator here - negation is written '!'"
+msgstr "'Not' тут не оператор - заперечення записується '!'"
+
+#: src/engine/backend/compiler/compileCode.cpp:4013
+msgid "'Mod' is not an operator here - the remainder is written '%'"
+msgstr "'Mod' тут не оператор - остача записується '%'"
+
+#: src/engine/backend/compiler/compileCode.cpp:4034
+msgid "'And' is not an operator here - conditions join with '&&'"
+msgstr "'And' тут не оператор - умови з'єднуються '&&'"
+
+#: src/engine/backend/compiler/compileCode.cpp:4035
+msgid "'Or' is not an operator here - conditions join with '||'"
+msgstr "'Or' тут не оператор - умови з'єднуються '||'"
+
+#: src/engine/backend/compiler/compileCode.cpp:4135
+msgid "'<>' is not an operator here - inequality is written '!='"
+msgstr "'<>' тут не оператор - нерівність записується '!='"
+
+#: src/engine/backend/compiler/compileCode.cpp:4155
+msgid "'=' is not a comparison here - comparison is written '=='"
+msgstr "'=' тут не порівняння - порівняння записується '=='"
 
 #: src/engine/backend/compiler/compileCodeLINQ.cpp:2539
 msgid "Single: the source has more than one element"
@@ -2963,8 +2984,8 @@ msgid "PostgreSQL: a parameter of kind %d cannot be rendered for binding"
 msgstr "PostgreSQL: параметр виду %d не можна подати для прив'язки"
 
 #: src/engine/backend/debugger/debugClient.cpp:296
-msgid "The running application does not have this line: the module has been edited and not applied, so its copy is a different text. Apply the configuration, or set the breakpoint on a line both copies share."
-msgstr "У запущеному застосунку немає цього рядка: модуль змінено, але не застосовано, тому його копія містить інший текст. Застосуйте конфігурацію або поставте точку зупинки на рядок, спільний для обох копій."
+msgid "The running application does not have this line: the module has been edited and not applied, so its copy is a different text. Apply the application, or set the breakpoint on a line both copies share."
+msgstr "У запущеному застосунку немає цього рядка: модуль змінено, але не застосовано, тому його копія містить інший текст. Застосуйте зміни або поставте точку зупинки на рядок, спільний для обох копій."
 
 #: src/engine/backend/debugger/debugClientBridge.cpp:22
 msgid "SetDebuggerClientBridge: debugClient is null (call after metadataCreate)"
@@ -3047,7 +3068,7 @@ msgstr "Фонове завдання: у '%s' потрібно вказати �
 
 #: src/engine/backend/job/jobBackground.cpp:300
 #, c-format
-msgid "Background job: common module '%s' not found"
+msgid "Background job: shared module '%s' not found"
 msgstr "Фонове завдання: загальний модуль '%s' не знайдено"
 
 #: src/engine/backend/job/jobBackground.cpp:310
@@ -3148,7 +3169,7 @@ msgstr ""
 #: src/engine/backend/job/jobManager.cpp:474
 #: src/engine/backend/metaCollection/partial/reference/referenceQuery.cpp:77
 #: src/engine/backend/metaCollection/partial/reference/referenceQuery.cpp:175
-#: src/engine/backend/metadataConfigurationQuery.cpp:289
+#: src/engine/backend/metadataApplicationQuery.cpp:289
 #: src/engine/deskgui/univ/dataview/datavgen.paged.cpp:1067
 msgid "unknown exception"
 msgstr "невідомий виняток"
@@ -3189,8 +3210,8 @@ msgid "Running code: nothing to run - no code came with the request"
 msgstr "Виконання коду: нічого виконувати - у запиті немає коду"
 
 #: src/engine/backend/job/jobRunByteCode.cpp:150
-msgid "Running code: a designer builds no runtime, so there is nothing here to run configuration code in"
-msgstr "Виконання коду: Application Studio не створює середовища виконання, тому тут ніде виконати код конфігурації"
+msgid "Running code: a designer builds no runtime, so there is nothing here to run application code in"
+msgstr "Виконання коду: Application Studio не створює середовища виконання, тому тут ніде виконати код застосунку"
 
 #: src/engine/backend/job/jobRunByteCode.cpp:157
 msgid "Running code: the application is not running"
@@ -3213,8 +3234,8 @@ msgid "Running code: this application's root module is not compiled, so there is
 msgstr "Виконання коду: кореневий модуль цього застосунку не скомпільовано, тому коду нема за чим розв'язувати імена"
 
 #: src/engine/backend/job/jobRunByteCode.cpp:228
-msgid "Running code: it did not compile here. The application is running a different configuration than the one it was written against."
-msgstr "Виконання коду: код тут не скомпілювався. Застосунок працює з іншою конфігурацією, ніж та, для якої його написано."
+msgid "Running code: it did not compile here. The running application is not the one it was written against."
+msgstr "Виконання коду: код тут не скомпілювався. Запущено не той застосунок, для якого його написано."
 
 #: src/engine/backend/job/jobRunByteCode.cpp:327
 #, c-format
@@ -3469,7 +3490,7 @@ msgid "Category"
 msgstr "Категорія"
 
 #: src/engine/backend/metaCollection/metaCommandGroupObject.h:99
-msgid "Where the group is shown: the navigation panel of a section, beside Important and Normal; its actions panel, beside Create, Reports and Service; or the command bar of a form, as one button that opens a submenu of the group's commands - the object's own, and the common commands typed for that object."
+msgid "Where the group is shown: the navigation panel of a section, beside Important and Normal; its actions panel, beside Create, Reports and Service; or the command bar of a form, as one button that opens a submenu of the group's commands - the object's own, and the shared commands typed for that object."
 msgstr "Де показується група: на панелі навігації розділу, поруч із Важливим і Звичайним; на його панелі дій, поруч зі Створити, Звітами й Сервісом; або на командній панелі форми - однією кнопкою, що відкриває підменю команд групи: власних команд об'єкта і загальних команд, типізованих під цей об'єкт."
 
 #: src/engine/backend/metaCollection/metaCommandGroupObject.h:101
@@ -3538,8 +3559,8 @@ msgid "Command"
 msgstr "Команда"
 
 #: src/engine/backend/metaCollection/metaCommandObject.h:155
-msgid "Where the command is shown. A group of a section page - one of the platform's (Important, Normal, Create, Reports, Service) or a command group the configuration declares for a section - once a section includes the command; or a command group of the form command bar, which puts it in that group's submenu on the forms of its object: the owner's for an object's command, the one its Parameter type names for a common command. Normal by default."
-msgstr "Де показується команда. Група сторінки розділу - одна з платформних (Важливе, Звичайне, Створити, Звіти, Сервіс) або група команд, оголошена конфігурацією для розділу, - коли розділ включає команду; або група команд командної панелі форми, яка поміщає її в підменю цієї групи на формах її об'єкта: власника для команди об'єкта, того, що вказаний у типі параметра, для загальної команди. За замовчуванням - Звичайне."
+msgid "Where the command is shown. A group of a section page - one of the platform's (Important, Normal, Create, Reports, Service) or a command group the application declares for a section - once a section includes the command; or a command group of the form command bar, which puts it in that group's submenu on the forms of its object: the owner's for an object's command, the one its Parameter type names for a shared command. Normal by default."
+msgstr "Де показується команда. Група сторінки розділу - одна з платформних (Важливе, Звичайне, Створити, Звіти, Сервіс) або група команд, оголошена застосунком для розділу, - коли розділ включає команду; або група команд командної панелі форми, яка поміщає її в підменю цієї групи на формах її об'єкта: власника для команди об'єкта, того, що вказаний у типі параметра, для загальної команди. За замовчуванням - Звичайне."
 
 #: src/engine/backend/metaCollection/metaCommandObject.h:156
 msgid "The icon shown beside the command's caption in a section, a command bar or a menu. Empty: caption only."
@@ -3586,12 +3607,12 @@ msgstr "Використання"
 msgid "Open command module"
 msgstr "Відкрити модуль команди"
 
-#: src/engine/backend/metaCollection/metaCommonAttributeObjectMenu.cpp:18
-msgid "Open common attributes composition"
+#: src/engine/backend/metaCollection/metaSharedAttributeObjectMenu.cpp:18
+msgid "Open shared attributes composition"
 msgstr "Відкрити склад загальних реквізитів"
 
-#: src/engine/backend/metaCollection/metaCommonAttributeObjectMenu.cpp:30
-msgid "Go to common attribute"
+#: src/engine/backend/metaCollection/metaSharedAttributeObjectMenu.cpp:30
+msgid "Go to shared attribute"
 msgstr "Перейти до загального реквізиту"
 
 #: src/engine/backend/metaCollection/metaEventHandlerObject.h:117
@@ -3659,39 +3680,39 @@ msgid "Which role the form plays for its owner (object form, list form, choice f
 msgstr "Яку роль форма відіграє для свого власника (форма об'єкта, форма списку, форма вибору, форма папки тощо). Від типу залежить, яке джерело даних форма отримує під час відкриття - форма списку отримує список, форма об'єкта - об'єкт, - і яке місце форми за замовчуванням у власника вона може зайняти."
 
 #: src/engine/backend/metaCollection/metaFormObject.h:325
-msgid "The common form itself: its layout (controls, attributes, commands) and its module code, kept together in one cell. A common form belongs to no object; it is opened by name or from a section of the navigation panel."
+msgid "The shared form itself: its layout (controls, attributes, commands) and its module code, kept together in one cell. A shared form belongs to no object; it is opened by name or from a section of the navigation panel."
 msgstr "Сама загальна форма: її макет (елементи керування, реквізити, команди) і код її модуля, що зберігаються разом в одній комірці. Загальна форма не належить жодному об'єкту; вона відкривається за іменем або з розділу панелі навігації."
 
 #: src/engine/backend/metaCollection/metaFormObjectMenu.cpp:11
 msgid "Open form"
 msgstr "Відкрити форму"
 
-#: src/engine/backend/metaCollection/metaFunctionalOptionObject.h:84
+#: src/engine/backend/metaCollection/metaFeatureOptionObject.h:84
 msgid "Initial value"
 msgstr "Початкове значення"
 
-#: src/engine/backend/metaCollection/metaFunctionalOptionObject.h:84
+#: src/engine/backend/metaCollection/metaFeatureOptionObject.h:84
 msgid "The value the option has in a base where nobody has switched it yet - an option arriving with an update. On by default, so a working part of the system does not disappear by itself; off for a new part the base should switch on deliberately."
 msgstr "Значення опції в базі, де її ще ніхто не перемикав, - опція, що прийшла з оновленням. Типово увімкнена, щоб робоча частина системи не зникла сама собою; вимкнена - для нової частини, яку база має увімкнути свідомо."
 
-#: src/engine/backend/metaCollection/metaFunctionalOptionObject.h:85
+#: src/engine/backend/metaCollection/metaFeatureOptionObject.h:85
 msgid "Requires"
 msgstr "Залежить від"
 
-#: src/engine/backend/metaCollection/metaFunctionalOptionObject.h:85
+#: src/engine/backend/metaCollection/metaFeatureOptionObject.h:85
 msgid "The option this one works under. While that one is off, this one counts as off too, whatever its own value - what belongs to it is not shown."
 msgstr "Опція, під якою працює ця. Поки та вимкнена, ця теж вважається вимкненою, яким би не було її власне значення, - те, що до неї входить, не показується."
 
-#: src/engine/backend/metaCollection/metaFunctionalOptionObjectMenu.cpp:8
-msgid "Open functional option composition"
+#: src/engine/backend/metaCollection/metaFeatureOptionObjectMenu.cpp:8
+msgid "Open feature option composition"
 msgstr "Відкрити склад функціональної опції"
 
 #: src/engine/backend/metaCollection/metaGroups.cpp:22
-msgid "Common modules"
+msgid "Shared modules"
 msgstr "Загальні модулі"
 
 #: src/engine/backend/metaCollection/metaGroups.cpp:24
-msgid "Common commands"
+msgid "Shared commands"
 msgstr "Загальні команди"
 
 #: src/engine/backend/metaCollection/metaGroups.cpp:25
@@ -3699,7 +3720,7 @@ msgid "Command groups"
 msgstr "Групи команд"
 
 #: src/engine/backend/metaCollection/metaGroups.cpp:26
-msgid "Common templates"
+msgid "Shared templates"
 msgstr "Загальні шаблони"
 
 #: src/engine/backend/metaCollection/metaGroups.cpp:29
@@ -3723,12 +3744,12 @@ msgstr "Параметри сеансу"
 #: src/engine/frmserver/schema/runtime/allFunctions.cpp:26
 #: src/engine/frmserver/visualView/ctrl/control.h:107
 #: src/engine/frmserver/visualView/layers/commandBar.h:171
-msgid "Functional options"
+msgid "Feature options"
 msgstr "Функціональні опції"
 
 #: src/engine/backend/metaCollection/metaGroups.cpp:34
 #: src/engine/backend/metaCollection/metaGroups.cpp:64
-msgid "Common attributes"
+msgid "Shared attributes"
 msgstr "Загальні реквізити"
 
 #: src/engine/backend/metaCollection/metaGroups.cpp:35
@@ -3758,7 +3779,7 @@ msgid "Catalogs"
 msgstr "Довідники"
 
 #: src/engine/backend/metaCollection/metaGroups.cpp:37
-msgid "Functional option"
+msgid "Feature option"
 msgstr "Функціональна опція"
 
 #: src/engine/backend/metaCollection/metaGroups.cpp:45
@@ -3778,7 +3799,7 @@ msgid "Enumeration"
 msgstr "Перерахування"
 
 #: src/engine/backend/metaCollection/metaGroups.cpp:49
-msgid "Data processor"
+msgid "Data tool"
 msgstr "Обробка"
 
 #: src/engine/backend/metaCollection/metaGroups.cpp:55
@@ -3812,7 +3833,7 @@ msgstr "Перерахування"
 
 #: src/engine/backend/metaCollection/metaGroups.cpp:45
 #: src/engine/frmserver/schema/runtime/allFunctions.cpp:30
-msgid "Data processors"
+msgid "Data tools"
 msgstr "Обробки"
 
 #: src/engine/backend/metaCollection/metaGroups.cpp:48
@@ -3856,13 +3877,13 @@ msgid "Sequences"
 msgstr "Послідовності"
 
 #: src/engine/backend/metaCollection/metaGroups.cpp:65
-#: src/engine/frmserver/metaTree/treeConfiguration.cpp:38
+#: src/engine/frmserver/metaTree/treeApplication.cpp:38
 msgid "Dimensions"
 msgstr "Виміри"
 
 #: src/engine/backend/metaCollection/metaGroups.cpp:66
 #: src/engine/frmclient/win/dlgs/settings/composer/composerSettings.cpp:1750
-#: src/engine/frmserver/metaTree/treeConfiguration.cpp:39
+#: src/engine/frmserver/metaTree/treeApplication.cpp:39
 msgid "Resources"
 msgstr "Ресурси"
 
@@ -3871,12 +3892,12 @@ msgid "Enum values"
 msgstr "Значення перерахування"
 
 #: src/engine/backend/metaCollection/metaGroups.cpp:71
-#: src/engine/frmserver/metaTree/treeConfiguration.cpp:36
+#: src/engine/frmserver/metaTree/treeApplication.cpp:36
 msgid "Accounting kinds"
 msgstr "Види обліку"
 
 #: src/engine/backend/metaCollection/metaGroups.cpp:72
-#: src/engine/frmserver/metaTree/treeConfiguration.cpp:37
+#: src/engine/frmserver/metaTree/treeApplication.cpp:37
 msgid "Account dimension accounting kinds"
 msgstr "Види обліку аналітики"
 
@@ -3889,8 +3910,8 @@ msgstr "Визначені реквізити"
 #: src/engine/backend/metaCollection/metaGroups.cpp:75
 #: src/engine/frmclient/win/dlgs/linqConstructor/linqConstructor.cpp:241
 #: src/engine/frmclient/win/dlgs/queryConstructor/queryConstructor.cpp:746
-#: src/engine/frmserver/metaTree/treeConfiguration.cpp:41
-#: src/engine/frmserver/metaTree/treeDataProcessor.cpp:71
+#: src/engine/frmserver/metaTree/treeApplication.cpp:41
+#: src/engine/frmserver/metaTree/treeDataTool.cpp:71
 #: src/engine/frmserver/metaTree/treeDataReport.cpp:70
 msgid "Tables"
 msgstr "Таблиці"
@@ -3899,20 +3920,16 @@ msgstr "Таблиці"
 msgid "Account dimension kinds tables"
 msgstr "Таблиці видів аналітики"
 
-#: src/engine/backend/metaCollection/metaGroups.cpp:77
-msgid "Recalculations"
-msgstr "Перерахунки"
-
 #: src/engine/backend/metaCollection/metaGroups.cpp:78
-#: src/engine/frmserver/metaTree/treeConfiguration.cpp:32
-#: src/engine/frmserver/metaTree/treeDataProcessor.cpp:84
+#: src/engine/frmserver/metaTree/treeApplication.cpp:32
+#: src/engine/frmserver/metaTree/treeDataTool.cpp:84
 #: src/engine/frmserver/metaTree/treeDataReport.cpp:83
 msgid "Forms"
 msgstr "Форми"
 
 #: src/engine/backend/metaCollection/metaGroups.cpp:80
-#: src/engine/frmserver/metaTree/treeConfiguration.cpp:33
-#: src/engine/frmserver/metaTree/treeDataProcessor.cpp:97
+#: src/engine/frmserver/metaTree/treeApplication.cpp:33
+#: src/engine/frmserver/metaTree/treeDataTool.cpp:97
 #: src/engine/frmserver/metaTree/treeDataReport.cpp:96
 msgid "Templates"
 msgstr "Шаблони"
@@ -3926,19 +3943,19 @@ msgid "Manager modules"
 msgstr "Модулі менеджерів"
 
 #: src/engine/backend/metaCollection/metaLanguageObject.h:40
-msgid "The language's code (en, ru, uk and so on): the key its texts are stored under in multi-language strings (synonyms, captions, spreadsheet cells) and the code the session's interface language is set by when this language is the configuration's default. Unique among the configuration's languages - a pasted duplicate gets a number appended."
-msgstr "Код мови (en, ru, uk тощо): ключ, під яким зберігаються її тексти в багатомовних рядках (синоніми, заголовки, клітинки табличних документів), і код, за яким задається мова інтерфейсу сеансу, коли ця мова є мовою конфігурації за замовчуванням. Унікальний серед мов конфігурації - до вставленого дубліката додається номер."
+msgid "The language's code (en, ru, uk and so on): the key its texts are stored under in multi-language strings (synonyms, captions, spreadsheet cells) and the code the session's interface language is set by when this language is the application's default. Unique among the application's languages - a pasted duplicate gets a number appended."
+msgstr "Код мови (en, ru, uk тощо): ключ, під яким зберігаються її тексти в багатомовних рядках (синоніми, заголовки, клітинки табличних документів), і код, за яким задається мова інтерфейсу сеансу, коли ця мова є мовою застосунку за замовчуванням. Унікальний серед мов застосунку - до вставленого дубліката додається номер."
 
 #: src/engine/backend/metaCollection/metaModuleObject.h:230
 msgid "The module's code: procedures, functions and variables of its owner (an object, manager, record set or command). Its event handlers are called by the platform by name; its exported methods are callable on the owner's values."
 msgstr "Код модуля: процедури, функції та змінні його власника (об'єкта, менеджера, набору записів або команди). Його обробники подій платформа викликає за іменем; його експортні методи можна викликати в значень власника."
 
 #: src/engine/backend/metaCollection/metaModuleObject.h:305
-msgid "The common module's code: procedures and functions shared by the whole configuration. Only exported methods are visible outside it, called as ModuleName.Method(...) (or by bare name when the module is global)."
-msgstr "Код загального модуля: процедури та функції, спільні для всієї конфігурації. Поза модулем видимі лише експортні методи, вони викликаються як ModuleName.Method(...) (або просто за іменем, якщо модуль глобальний)."
+msgid "The shared module's code: procedures and functions shared by the whole application. Only exported methods are visible outside it, called as ModuleName.Method(...) (or by bare name when the module is global)."
+msgstr "Код загального модуля: процедури та функції, спільні для всього застосунку. Поза модулем видимі лише експортні методи, вони викликаються як ModuleName.Method(...) (або просто за іменем, якщо модуль глобальний)."
 
 #: src/engine/backend/metaCollection/metaModuleObject.h:306
-msgid "Common module"
+msgid "Shared module"
 msgstr "Загальний модуль"
 
 #: src/engine/backend/metaCollection/metaModuleObject.h:307
@@ -3958,7 +3975,7 @@ msgid "Whether a call into the module runs with no access checks - neither the r
 msgstr "Чи виконується виклик модуля без перевірок доступу - ні прав на об'єкти, ні обмежень на рівні записів - для всього, що цей виклик виконує. Для коду, якому треба бачити більше, ніж дозволено користувачеві, наприклад щоб перевірити його права. Модуль або глобальний, або привілейований, не обидва одразу: увімкнення одного вимикає інший."
 
 #: src/engine/backend/metaCollection/metaObject.cpp:399
-msgid "Another session holds exclusive mode."
+msgid "Another session holds single-user mode."
 msgstr "Монопольний режим зайнятий іншим сеансом."
 
 #: src/engine/backend/metaCollection/metaObject.cpp:400
@@ -3975,7 +3992,7 @@ msgstr "Підключено інші сеанси - від'єднайте їх 
 
 #: src/engine/backend/metaCollection/metaObject.cpp:404
 #, c-format
-msgid "Structure (DDL) changes require exclusive mode. %s Code-only changes (modules, forms) can be saved without it."
+msgid "Structure (DDL) changes require single-user mode. %s Code-only changes (modules, forms) can be saved without it."
 msgstr "Структурні зміни (DDL) вимагають монопольного режиму. %s Зміни лише коду (модулі, форми) можна зберігати без нього."
 
 #: src/engine/backend/metaCollection/metaObject.h:1016
@@ -3999,8 +4016,8 @@ msgid "! Doesn't have default language "
 msgstr "! Немає мови за замовчуванням "
 
 #: src/engine/backend/metaCollection/metaObjectMetadata.h:174
-msgid "Configuration module"
-msgstr "Модуль конфігурації"
+msgid "Application module"
+msgstr "Модуль застосунку"
 
 #: src/engine/backend/metaCollection/metaObjectMetadata.h:174
 msgid "The interactive client's application module: BeforeStart (may refuse the login), OnStart (opens the desktop), BeforeExit / OnExit, and its exported procedures and variables, visible to every form. Not run for background jobs."
@@ -4022,7 +4039,7 @@ msgstr "Виконує SetSessionParameters один раз на сеанс - і
 #: src/engine/backend/metaCollection/partial/chartOfAccounts.h:314
 #: src/engine/backend/metaCollection/partial/chartOfCalculationTypes.h:269
 #: src/engine/backend/metaCollection/partial/chartOfCharacteristicTypes.h:227
-#: src/engine/backend/metaCollection/partial/dataProcessor.h:116
+#: src/engine/backend/metaCollection/partial/dataTool.h:116
 #: src/engine/backend/metaCollection/partial/dataReport.h:181
 #: src/engine/backend/metaCollection/partial/document.h:184
 #: src/engine/backend/metaCollection/partial/enumeration.h:129
@@ -4036,16 +4053,16 @@ msgid "Default role"
 msgstr "Роль за замовчуванням"
 
 #: src/engine/backend/metaCollection/metaObjectMetadata.h:196
-msgid "The role meant for users who have none of their own. Saved with the configuration, but no session reads it yet: a user without roles gets each right's own default."
-msgstr "Роль для користувачів, які не мають власних ролей. Зберігається з конфігурацією, але поки жоден сеанс її не читає: користувач без ролей отримує для кожного права його власне значення за замовчуванням."
+msgid "The role meant for users who have none of their own. Saved with the application, but no session reads it yet: a user without roles gets each right's own default."
+msgstr "Роль для користувачів, які не мають власних ролей. Зберігається із застосунком, але поки жоден сеанс її не читає: користувач без ролей отримує для кожного права його власне значення за замовчуванням."
 
 #: src/engine/backend/metaCollection/metaObjectMetadata.h:197
 msgid "Default language"
 msgstr "Мова за замовчуванням"
 
 #: src/engine/backend/metaCollection/metaObjectMetadata.h:197
-msgid "The configuration's own language: captions written without naming a language go into it, and a user with no language of their own sees it."
-msgstr "Власна мова конфігурації: заголовки, записані без зазначення мови, належать до неї, і її бачить користувач, який не має власної мови."
+msgid "The application's own language: captions written without naming a language go into it, and a user with no language of their own sees it."
+msgstr "Власна мова застосунку: заголовки, записані без зазначення мови, належать до неї, і її бачить користувач, який не має власної мови."
 
 #: src/engine/backend/metaCollection/metaObjectMetadata.h:199
 msgid "Compatibility"
@@ -4056,12 +4073,12 @@ msgid "Version"
 msgstr "Версія"
 
 #: src/engine/backend/metaCollection/metaObjectMetadata.h:200
-msgid "The compatibility version: which platform behaviour the configuration asks for. Don't use compatibility (the default) runs the current behaviour. Saved with the configuration and reported by the tools; no behaviour is switched by it yet."
-msgstr "Версія сумісності: яку поведінку платформи запитує конфігурація. Не використовувати сумісність (за замовчуванням) означає поточну поведінку. Зберігається з конфігурацією і повідомляється інструментами; поки жодна поведінка від неї не перемикається."
+msgid "The compatibility version: which platform behaviour the application asks for. Don't use compatibility (the default) runs the current behaviour. Saved with the application and reported by the tools; no behaviour is switched by it yet."
+msgstr "Версія сумісності: яку поведінку платформи запитує застосунок. Не використовувати сумісність (за замовчуванням) означає поточну поведінку. Зберігається із застосунком і повідомляється інструментами; поки жодна поведінка від неї не перемикається."
 
 #: src/engine/backend/metaCollection/metaObjectMetadata.h:205
-msgid "The dialect the configuration's modules are written in. CES (the default for new configurations): braces and semicolons. VES: the legacy word-based dialect, kept for migrated configurations."
-msgstr "Діалект, яким написано модулі конфігурації. CES (за замовчуванням для нових конфігурацій): фігурні дужки та крапки з комою. VES: застарілий діалект на ключових словах, збережений для перенесених конфігурацій."
+msgid "The dialect the application's modules are written in. CES (the default for new applications): braces and semicolons. VES: the legacy word-based dialect, kept for migrated applications."
+msgstr "Діалект, яким написано модулі застосунку. CES (за замовчуванням для нових застосунків): фігурні дужки та крапки з комою. VES: застарілий діалект на ключових словах, збережений для перенесених застосунків."
 
 #: src/engine/backend/metaCollection/metaObjectMetadata.h:208
 #: src/engine/frmserver/client/clientFrameDesigner.cpp:78
@@ -4081,7 +4098,7 @@ msgid "Active users"
 msgstr "Активні користувачі"
 
 #: src/engine/backend/metaCollection/metaObjectMetadata.h:212
-msgid "Exclusive mode"
+msgid "Single-user mode"
 msgstr "Монопольний режим"
 
 #: src/engine/backend/metaCollection/metaObjectMetadata.h:213
@@ -4112,8 +4129,8 @@ msgid "ces"
 msgstr "ces"
 
 #: src/engine/backend/metaCollection/metaObjectMetadataMenu.cpp:12
-msgid "Open configuration module"
-msgstr "Відкрити модуль конфігурації"
+msgid "Open application module"
+msgstr "Відкрити модуль застосунку"
 
 #: src/engine/backend/metaCollection/metaObjectMetadataMenu.cpp:13
 msgid "Open session module"
@@ -4149,8 +4166,8 @@ msgid "OnLoadMetaObject failed for '%s'"
 msgstr "Помилка OnLoadMetaObject для '%s'"
 
 #: src/engine/backend/metaCollection/metaPictureObject.h:29
-msgid "The image this common picture holds, stored in the configuration. Commands, sections and form controls can take it as their picture by reference, so one image is kept in one place."
-msgstr "Зображення цієї загальної картинки, що зберігається в конфігурації. Команди, розділи й елементи форм можуть посилатися на нього як на свою картинку, тому одне зображення зберігається в одному місці."
+msgid "The image this shared picture holds, stored in the application. Commands, sections and form controls can take it as their picture by reference, so one image is kept in one place."
+msgstr "Зображення цієї загальної картинки, що зберігається в застосунку. Команди, розділи й елементи форм можуть посилатися на нього як на свою картинку, тому одне зображення зберігається в одному місці."
 
 #: src/engine/backend/metaCollection/metaRoleObject.h:19
 msgid "Permitting"
@@ -4256,7 +4273,7 @@ msgid "Job module"
 msgstr "Модуль завдання"
 
 #: src/engine/backend/metaCollection/metaScheduledJobObject.h:110
-msgid "The job's code: the handler the job manager calls when the job runs, compiled with the session's modules so it can call common modules like any other code."
+msgid "The job's code: the handler the job manager calls when the job runs, compiled with the session's modules so it can call shared modules like any other code."
 msgstr "Код завдання: обробник, який менеджер завдань викликає під час виконання завдання; компілюється разом із модулями сеансу, тому може викликати загальні модулі, як будь-який інший код."
 
 #: src/engine/backend/metaCollection/metaScheduledJobObjectMenu.cpp:11
@@ -4265,8 +4282,8 @@ msgid "Open job module"
 msgstr "Відкрити модуль завдання"
 
 #: src/engine/backend/metaCollection/metaSectionObject.h:111
-msgid "The section's icon in the navigation panel. Empty: the configuration's own icon is shown."
-msgstr "Значок розділу в панелі навігації. Порожньо: показується значок самої конфігурації."
+msgid "The section's icon in the navigation panel. Empty: the application's own icon is shown."
+msgstr "Значок розділу в панелі навігації. Порожньо: показується значок самого застосунку."
 
 #: src/engine/backend/metaCollection/metaSectionObjectMenu.cpp:6
 msgid "Open interface"
@@ -4403,8 +4420,8 @@ msgid "Template data"
 msgstr "Дані шаблону"
 
 #: src/engine/backend/metaCollection/metaTemplateObject.h:57
-msgid "What the template holds, its kind chosen when it is added: a spreadsheet document (cells, named areas and parameters a print form is assembled from) or a data composer (its query, resources, parameters, structure and settings variants). Code gets a fresh value of it with the owner's GetTemplate(name), a common one with GetCommonTemplate(name)."
-msgstr "Що зберігає шаблон, вид обирається під час додавання: табличний документ (комірки, іменовані області та параметри, з яких збирається друкована форма) або компонувальник даних (його запит, ресурси, параметри, структура та варіанти налаштувань). Код отримує нове значення функцією GetTemplate(name) власника, загального шаблону — GetCommonTemplate(name)."
+msgid "What the template holds, its kind chosen when it is added: a spreadsheet document (cells, named areas and parameters a print form is assembled from) or a data composer (its query, resources, parameters, structure and settings variants). Code gets a fresh value of it with the owner's GetTemplate(name), a common one with GetSharedTemplate(name)."
+msgstr "Що зберігає шаблон, вид обирається під час додавання: табличний документ (комірки, іменовані області та параметри, з яких збирається друкована форма) або компонувальник даних (його запит, ресурси, параметри, структура та варіанти налаштувань). Код отримує нове значення функцією GetTemplate(name) власника, загального шаблону — GetSharedTemplate(name)."
 
 #: src/engine/backend/metaCollection/partial/accountingRegister.h:305
 #: src/engine/backend/metaCollection/partial/accumulationRegister.h:119
@@ -4457,7 +4474,7 @@ msgstr "Код, що виконується з набором записів р�
 #: src/engine/backend/metaCollection/partial/chartOfAccounts.h:312
 #: src/engine/backend/metaCollection/partial/chartOfCalculationTypes.h:252
 #: src/engine/backend/metaCollection/partial/chartOfCharacteristicTypes.h:222
-#: src/engine/backend/metaCollection/partial/dataProcessor.h:114
+#: src/engine/backend/metaCollection/partial/dataTool.h:114
 #: src/engine/backend/metaCollection/partial/dataReport.h:164
 #: src/engine/backend/metaCollection/partial/document.h:182
 #: src/engine/backend/metaCollection/partial/enumeration.h:127
@@ -4581,7 +4598,7 @@ msgstr "Відкрити модуль набору записів"
 #: src/engine/backend/metaCollection/partial/chartOfAccountsMetadataMenu.cpp:12
 #: src/engine/backend/metaCollection/partial/chartOfCalculationTypesMetadataMenu.cpp:12
 #: src/engine/backend/metaCollection/partial/chartOfCharacteristicTypesMetadataMenu.cpp:12
-#: src/engine/backend/metaCollection/partial/dataProcessorMetadataMenu.cpp:13
+#: src/engine/backend/metaCollection/partial/dataToolMetadataMenu.cpp:13
 #: src/engine/backend/metaCollection/partial/dataReportMetadataMenu.cpp:13
 #: src/engine/backend/metaCollection/partial/documentMetadataMenu.cpp:12
 #: src/engine/backend/metaCollection/partial/enumerationMetadataMenu.cpp:11
@@ -4613,8 +4630,8 @@ msgstr "Регістр '%s': слоти аналітики (%u) не мають 
 
 #: src/engine/backend/metaCollection/partial/accountingRegisterMetadataSchema.cpp:175
 #, c-format
-msgid "Accounting register '%s': the %s side declares no %s - the configuration is inconsistent"
-msgstr "Регістр бухгалтерії '%s': сторона %s не оголошує %s - конфігурація неузгоджена"
+msgid "Accounting register '%s': the %s side declares no %s - the application is inconsistent"
+msgstr "Регістр бухгалтерії '%s': сторона %s не оголошує %s - застосунок неузгоджений"
 
 #: src/engine/backend/metaCollection/partial/accountingRegisterMetadataSchema.cpp:177
 msgid "credit"
@@ -5168,7 +5185,7 @@ msgstr "Форма вибору групи"
 #: src/engine/backend/metaCollection/partial/chartOfAccounts.h:311
 #: src/engine/backend/metaCollection/partial/chartOfCalculationTypes.h:251
 #: src/engine/backend/metaCollection/partial/chartOfCharacteristicTypes.h:221
-#: src/engine/backend/metaCollection/partial/dataProcessor.h:113
+#: src/engine/backend/metaCollection/partial/dataTool.h:113
 #: src/engine/backend/metaCollection/partial/dataReport.h:163
 #: src/engine/backend/metaCollection/partial/document.h:181
 #: src/engine/backend/metaCollection/partial/parameterizedJob.h:272
@@ -5187,7 +5204,7 @@ msgstr "Код довідника в цілому, а не одного елем
 #: src/engine/backend/metaCollection/partial/chartOfAccounts.h:316
 #: src/engine/backend/metaCollection/partial/chartOfCalculationTypes.h:271
 #: src/engine/backend/metaCollection/partial/chartOfCharacteristicTypes.h:229
-#: src/engine/backend/metaCollection/partial/dataProcessor.h:117
+#: src/engine/backend/metaCollection/partial/dataTool.h:117
 #: src/engine/backend/metaCollection/partial/dataReport.h:182
 #: src/engine/backend/metaCollection/partial/document.h:186
 #: src/engine/backend/metaCollection/partial/parameterizedJob.h:277
@@ -5279,7 +5296,7 @@ msgstr "Клонувати"
 #: src/engine/backend/metaCollection/partial/chartOfAccountsMetadataMenu.cpp:11
 #: src/engine/backend/metaCollection/partial/chartOfCalculationTypesMetadataMenu.cpp:11
 #: src/engine/backend/metaCollection/partial/chartOfCharacteristicTypesMetadataMenu.cpp:11
-#: src/engine/backend/metaCollection/partial/dataProcessorMetadataMenu.cpp:11
+#: src/engine/backend/metaCollection/partial/dataToolMetadataMenu.cpp:11
 #: src/engine/backend/metaCollection/partial/dataReportMetadataMenu.cpp:11
 #: src/engine/backend/metaCollection/partial/documentMetadataMenu.cpp:11
 #: src/engine/backend/metaCollection/partial/parameterizedJobMetadataMenu.cpp:11
@@ -5661,8 +5678,8 @@ msgstr "Не можна змінити визначене значення!"
 
 #: src/engine/backend/metaCollection/partial/commonObject.cpp:2916
 #, c-format
-msgid "%s: line %i of the %s list is declared by the configuration and cannot be removed, moved or changed"
-msgstr "%s: рядок %i списку %s оголошено конфігурацією - його не можна видалити, перемістити або змінити"
+msgid "%s: line %i of the %s list is declared by the application and cannot be removed, moved or changed"
+msgstr "%s: рядок %i списку %s оголошено застосунком - його не можна видалити, перемістити або змінити"
 
 #: src/engine/backend/metaCollection/partial/commonObject.cpp:2947
 #: src/engine/backend/metaCollection/partial/commonObject.cpp:3314
@@ -5841,8 +5858,8 @@ msgid "Order"
 msgstr "Порядок"
 
 #: src/engine/backend/metaCollection/partial/commonObject.h:906
-msgid "The position of the value in its enumeration, as the values are listed in the configuration. Values compare and sort by it, so a query ordering by an enumeration field orders by the declared order, not by the name."
-msgstr "Позиція значення в його перерахуванні, у тому порядку, в якому значення перелічено в конфігурації. Значення порівнюються і сортуються за нею, тому запит із сортуванням за полем-перерахуванням упорядковує за оголошеним порядком, а не за іменем."
+msgid "The position of the value in its enumeration, as the values are listed in the application. Values compare and sort by it, so a query ordering by an enumeration field orders by the declared order, not by the name."
+msgstr "Позиція значення в його перерахуванні, у тому порядку, в якому значення перелічено в застосунку. Значення порівнюються і сортуються за нею, тому запит із сортуванням за полем-перерахуванням упорядковує за оголошеним порядком, а не за іменем."
 
 #: src/engine/backend/metaCollection/partial/commonObject.h:923
 msgctxt "access right"
@@ -5898,8 +5915,8 @@ msgid "Register records deletion"
 msgstr "Видалення рухів"
 
 #: src/engine/backend/metaCollection/partial/commonObject.h:1297
-msgid "What the platform does with the document's movements when it is posted again or its posting is undone. Automatically (the default): cleared before the posting handler runs and when the posting is undone. On undo posting: kept when posted again, cleared on undo. Never: the configuration clears them. A deleted document always takes its movements with it."
-msgstr "Що платформа робить із рухами документа під час повторного проведення або скасування проведення. Автоматично (за замовчуванням): очищуються перед запуском обробника проведення і під час скасування проведення. Під час скасування проведення: зберігаються під час повторного проведення, очищуються під час скасування. Ніколи: їх очищує конфігурація. Видалений документ завжди забирає свої рухи із собою."
+msgid "What the platform does with the document's movements when it is posted again or its posting is undone. Automatically (the default): cleared before the posting handler runs and when the posting is undone. On undo posting: kept when posted again, cleared on undo. Never: the application clears them. A deleted document always takes its movements with it."
+msgstr "Що платформа робить із рухами документа під час повторного проведення або скасування проведення. Автоматично (за замовчуванням): очищуються перед запуском обробника проведення і під час скасування проведення. Під час скасування проведення: зберігаються під час повторного проведення, очищуються під час скасування. Ніколи: їх очищує застосунок. Видалений документ завжди забирає свої рухи із собою."
 
 #: src/engine/backend/metaCollection/partial/commonObject.h:1299
 msgctxt "document attribute"
@@ -5949,8 +5966,8 @@ msgid "Predefined name"
 msgstr "Ім'я визначеного елемента"
 
 #: src/engine/backend/metaCollection/partial/commonObject.h:1599
-msgid "The name of an item the configuration itself declares (a predefined item) - what code refers to it by, as Catalogs.<Name>.<PredefinedName>. Empty for items created by users; a predefined item cannot be deleted."
-msgstr "Ім'я елемента, який оголошує сама конфігурація (визначеного елемента), - те, за чим код до нього звертається, як Catalogs.<Name>.<PredefinedName>. Порожнє в елементів, створених користувачами; визначений елемент не можна видалити."
+msgid "The name of an item the application itself declares (a predefined item) - what code refers to it by, as Catalogs.<Name>.<PredefinedName>. Empty for items created by users; a predefined item cannot be deleted."
+msgstr "Ім'я елемента, який оголошує сам застосунок (визначеного елемента), - те, за чим код до нього звертається, як Catalogs.<Name>.<PredefinedName>. Порожнє в елементів, створених користувачами; визначений елемент не можна видалити."
 
 #: src/engine/backend/metaCollection/partial/commonObject.h:1602
 msgid "The item's code - a short identifier a person types or searches by. Indexed. Left empty, it is generated when the item is written; the object module's SetNewCode handler may give it a prefix or take the numbering over."
@@ -6162,8 +6179,8 @@ msgstr "%s: оголошені рядки не можна записати - у 
 
 #: src/engine/backend/metaCollection/partial/commonObjectSchema.cpp:495
 #, c-format
-msgid "%s.%s %i: the configuration declares this line where the base already holds one - remove the lines held there first"
-msgstr "%s.%s %i: конфігурація оголошує цей рядок там, де в базі вже є рядок - спочатку видаліть рядки, що там стоять"
+msgid "%s.%s %i: the application declares this line where the base already holds one - remove the lines held there first"
+msgstr "%s.%s %i: застосунок оголошує цей рядок там, де в базі вже є рядок - спочатку видаліть рядки, що там стоять"
 
 #: src/engine/backend/metaCollection/partial/constant.h:39
 msgid "The type of the constant's value - a primitive (string, number, date, boolean) or a reference. The one stored value is kept in the system table of constants and converted to this type when read."
@@ -6173,25 +6190,25 @@ msgstr "Тип значення константи - примітивний (р�
 msgid "Refuse to write an empty value: the constant's form shows the field as required, and a write leaving it empty fails with a message naming it."
 msgstr "Не записувати порожнє значення: форма константи показує поле як обов'язкове, а запис із порожнім значенням завершується помилкою з повідомленням, у якому його названо."
 
-#: src/engine/backend/metaCollection/partial/dataProcessor.h:25
-msgid "Form data processor"
+#: src/engine/backend/metaCollection/partial/dataTool.h:25
+msgid "Form data tool"
 msgstr "Форма обробки"
 
-#: src/engine/backend/metaCollection/partial/dataProcessor.h:113
-msgid "Code of one data processor object: the procedures that do its work over its attributes and tabular sections, called from its form or from other code."
+#: src/engine/backend/metaCollection/partial/dataTool.h:113
+msgid "Code of one data tool object: the procedures that do its work over its attributes and tabular sections, called from its form or from other code."
 msgstr "Код одного об'єкта обробки: процедури, що виконують її роботу над її реквізитами та табличними частинами; викликаються з її форми або з іншого коду."
 
-#: src/engine/backend/metaCollection/partial/dataProcessor.h:114
-msgid "Code of the data processor kind as a whole: its exported procedures and functions are called on the manager, as DataProcessors.<Name>.<Function>()."
-msgstr "Код виду обробки в цілому: його експортні процедури та функції викликаються в менеджера, як DataProcessors.<Name>.<Function>()."
+#: src/engine/backend/metaCollection/partial/dataTool.h:114
+msgid "Code of the data tool kind as a whole: its exported procedures and functions are called on the manager, as DataTools.<Name>.<Function>()."
+msgstr "Код виду обробки в цілому: його експортні процедури та функції викликаються в менеджера, як DataTools.<Name>.<Function>()."
 
-#: src/engine/backend/metaCollection/partial/dataProcessor.h:117
-msgid "The form the data processor opens with. Empty: a form generated from its attributes."
+#: src/engine/backend/metaCollection/partial/dataTool.h:117
+msgid "The form the data tool opens with. Empty: a form generated from its attributes."
 msgstr "Форма, якою відкривається обробка. Порожньо: форма, згенерована за її реквізитами."
 
-#: src/engine/backend/metaCollection/partial/dataProcessorManager.cpp:76
+#: src/engine/backend/metaCollection/partial/dataToolManager.cpp:76
 #, c-format
-msgid "Failed to load data processor '%s'"
+msgid "Failed to load data tool '%s'"
 msgstr "Не вдалося завантажити обробку '%s'"
 
 #: src/engine/backend/metaCollection/partial/dataReport.h:33
@@ -6601,8 +6618,8 @@ msgid "Automatic border"
 msgstr "Автоматична межа"
 
 #: src/engine/backend/metaCollection/partial/sequence.h:302
-msgid "The platform takes the border BACK by itself: a document at or before it - written again, posted again, unposted, deleted - sends the border to the registration before it, by the keys the document's own registrations name. Off: the configuration says when the sequence is broken, through SetBorder; the border still moves forward as documents are posted in their turn. A retreat is what sets a mass reposting going, so a solution may want to decide that moment itself."
-msgstr "Платформа сама зсуває межу НАЗАД: документ на межі або до неї - перезаписаний, перепроведений, зі скасованим проведенням, видалений - переносить межу на реєстрацію перед ним, за ключами, які вказано у власних реєстраціях документа. Якщо вимкнено: коли послідовність порушено, повідомляє конфігурація через SetBorder; межа так само рухається вперед у міру проведення документів у своїй черзі. Саме відкат запускає масове перепроведення, тому прикладне рішення може захотіти саме обирати цей момент."
+msgid "The platform takes the border BACK by itself: a document at or before it - written again, posted again, unposted, deleted - sends the border to the registration before it, by the keys the document's own registrations name. Off: the application says when the sequence is broken, through SetBorder; the border still moves forward as documents are posted in their turn. A retreat is what sets a mass reposting going, so a solution may want to decide that moment itself."
+msgstr "Платформа сама зсуває межу НАЗАД: документ на межі або до неї - перезаписаний, перепроведений, зі скасованим проведенням, видалений - переносить межу на реєстрацію перед ним, за ключами, які вказано у власних реєстраціях документа. Якщо вимкнено: коли послідовність порушено, повідомляє застосунок через SetBorder; межа так само рухається вперед у міру проведення документів у своїй черзі. Саме відкат запускає масове перепроведення, тому прикладне рішення може захотіти саме обирати цей момент."
 
 #: src/engine/backend/metaCollection/partial/sequence.h:310
 msgid "Code that runs with a set of registrations: its BeforeWrite and OnWrite handlers, and the procedures they call. It runs for every set written, whoever writes it - a document's posting or a script."
@@ -6715,60 +6732,60 @@ msgstr "№"
 msgid "The row's number in the tabular section, 1-based, kept by the platform: renumbered when rows are added, deleted or moved, and written with the object. Read-only for code."
 msgstr "Номер рядка в табличній частині, починаючи з 1, ведеться платформою: перенумеровується при додаванні, видаленні чи переміщенні рядків і записується разом з об'єктом. Для коду лише для читання."
 
-#: src/engine/backend/metadataConfiguration.cpp:79
-#: src/engine/backend/metadataConfiguration.cpp:825
-#: src/engine/backend/metadataConfiguration.cpp:863
-#: src/engine/backend/metadataConfiguration.cpp:993
-msgid "This configuration is open for reading only."
-msgstr "Цю конфігурацію відкрито лише для читання."
+#: src/engine/backend/metadataApplication.cpp:79
+#: src/engine/backend/metadataApplication.cpp:825
+#: src/engine/backend/metadataApplication.cpp:863
+#: src/engine/backend/metadataApplication.cpp:993
+msgid "This application is open for reading only."
+msgstr "Цей застосунок відкрито лише для читання."
 
-#: src/engine/backend/metadataConfiguration.cpp:84
-msgid "The directory does not contain a configuration."
-msgstr "У теці немає конфігурації."
+#: src/engine/backend/metadataApplication.cpp:84
+msgid "The directory does not contain an application."
+msgstr "У теці немає застосунку."
 
-#: src/engine/backend/metadataConfiguration.cpp:445
-msgid "This configuration is stored in a format this build cannot read: it was written by an older or a different build. Nothing was loaded."
-msgstr "Цю конфігурацію збережено у форматі, який ця збірка не може прочитати: її записано старішою або іншою збіркою. Нічого не завантажено."
+#: src/engine/backend/metadataApplication.cpp:445
+msgid "This application is stored in a format this build cannot read: it was written by an older or a different build. Nothing was loaded."
+msgstr "Цей застосунок збережено у форматі, який ця збірка не може прочитати: його записано старішою або іншою збіркою. Нічого не завантажено."
 
-#: src/engine/backend/metadataDataProcessor.cpp:411
+#: src/engine/backend/metadataDataTool.cpp:411
 #: src/engine/backend/metadataReport.cpp:419
 #, c-format
 msgid "'%s' is stored in a format this build cannot read: it was written by an older or a different build. Nothing was loaded."
 msgstr "'%s' збережено у форматі, який ця збірка не може прочитати: його записано старішою або іншою збіркою. Нічого не завантажено."
 
-#: src/engine/backend/metadataConfiguration.cpp:686
+#: src/engine/backend/metadataApplication.cpp:686
 #, c-format
-msgid "The data was saved by a newer build (date form %u) that this build cannot read. Nothing was loaded."
-msgstr "Дані збережено новішою збіркою (форма дат %u), і ця збірка не може їх прочитати. Нічого не завантажено."
+msgid "The data was saved by another build (date form %u) that this build cannot read. Nothing was loaded."
+msgstr "Дані збережено іншою збіркою (форма дат %u), і ця збірка не може їх прочитати. Нічого не завантажено."
 
-#: src/engine/backend/metadataConfiguration.cpp:847
-#: src/engine/backend/metadataConfiguration.cpp:911
-msgid "Failed to save the configuration."
-msgstr "Не вдалося зберегти конфігурацію."
+#: src/engine/backend/metadataApplication.cpp:847
+#: src/engine/backend/metadataApplication.cpp:911
+msgid "Failed to save the application."
+msgstr "Не вдалося зберегти застосунок."
 
-#: src/engine/backend/metadataConfiguration.cpp:940
+#: src/engine/backend/metadataApplication.cpp:940
 msgid "The update could not be started."
 msgstr "Не вдалося розпочати оновлення."
 
-#: src/engine/backend/metadataConfiguration.cpp:961
+#: src/engine/backend/metadataApplication.cpp:961
 msgid "Failed to update the database."
 msgstr "Не вдалося оновити базу даних."
 
-#: src/engine/backend/metadataConfiguration.cpp:968
+#: src/engine/backend/metadataApplication.cpp:968
 msgid "Rolled back - nothing was applied."
 msgstr "Відкат виконано - нічого не застосовано."
 
-#: src/engine/backend/metadataConfiguration.cpp:998
-msgid "The configuration could not be taken back from the database."
-msgstr "Не вдалося повернути конфігурацію з бази даних."
+#: src/engine/backend/metadataApplication.cpp:998
+msgid "The application could not be taken back from the database."
+msgstr "Не вдалося повернути застосунок з бази даних."
 
-#: src/engine/backend/metadataConfigurationQuery.cpp:162
+#: src/engine/backend/metadataApplicationQuery.cpp:162
 msgid "Create new database"
 msgstr "Створити нову базу даних"
 
-#: src/engine/backend/metadataConfigurationQuery.cpp:485
-msgid "The configuration was applied, but the base could not read it: the sessions to come work in the one before."
-msgstr "Конфігурацію застосовано, але база не змогла її прочитати: нові сеанси працюють у попередній."
+#: src/engine/backend/metadataApplicationQuery.cpp:485
+msgid "The application was applied, but the base could not read it: the sessions to come work in the one before."
+msgstr "Застосунок записано в базу, але база не змогла його прочитати: нові сеанси працюють у попередньому."
 
 #: src/engine/backend/metadataSerialization.cpp:52
 #, c-format
@@ -6783,17 +6800,17 @@ msgstr "Ключ '%s' не знайдено!"
 
 #: src/engine/backend/moduleManager/moduleManager.cpp:138
 #, c-format
-msgid "Common module '%s' failed to compile: %s"
+msgid "Shared module '%s' failed to compile: %s"
 msgstr "Загальний модуль '%s' не скомпілювався: %s"
 
 #: src/engine/backend/moduleManager/moduleManager.cpp:174
 #, c-format
-msgid "Rename of common module '%s' to '%s' left compile in failed state: %s"
+msgid "Rename of shared module '%s' to '%s' left compile in failed state: %s"
 msgstr "Перейменування загального модуля '%s' на '%s' залишило компіляцію в помилковому стані: %s"
 
 #: src/engine/backend/moduleManager/moduleManager.cpp:399
 #, c-format
-msgid "Common module '%s' did not compile - the session cannot start"
+msgid "Shared module '%s' did not compile - the session cannot start"
 msgstr "Загальний модуль '%s' не скомпілювався - сеанс не може розпочатися"
 
 #: src/engine/backend/moduleManager/moduleManagerDataUnit.cpp:245
@@ -6841,7 +6858,7 @@ msgstr "Не вдалося переініціалізувати зовнішн�
 
 #: src/engine/backend/moduleManager/moduleManagerUnit.cpp:58
 #, c-format
-msgid "Common module init failed: %s"
+msgid "Shared module init failed: %s"
 msgstr "Не вдалося ініціалізувати загальний модуль: %s"
 
 #: src/engine/backend/propertyManager/property/variant/variantChoiceLink.cpp:382
@@ -6859,8 +6876,8 @@ msgstr "Картинка бекенду"
 
 #: src/engine/backend/propertyManager/property/variant/variantPicture.cpp:28
 #: src/engine/frmclient/propertyManager/property/advprop/advpropPicture.cpp:35
-msgid "Configuration picture"
-msgstr "Картинка конфігурації"
+msgid "Application picture"
+msgstr "Картинка застосунку"
 
 #: src/engine/backend/propertyManager/property/variant/variantPicture.cpp:30
 #: src/engine/frmclient/propertyManager/property/advprop/advpropPicture.cpp:37
@@ -7757,19 +7774,19 @@ msgid "Session registry not initialised"
 msgstr "Реєстр сеансів не ініціалізовано"
 
 #: src/engine/backend/session/session.cpp:877
-msgid "Another session is in exclusive mode"
+msgid "Another session is in single-user mode"
 msgstr "Інший сеанс працює у монопольному режимі"
 
 #: src/engine/backend/session/session.cpp:880
-msgid "Cannot acquire exclusive mode: other sessions are active"
+msgid "Cannot acquire single-user mode: other sessions are active"
 msgstr "Неможливо отримати монопольний режим: активні інші сеанси"
 
 #: src/engine/backend/session/session.cpp:885
-msgid "Cannot acquire exclusive mode while a job is running. Try again when it finishes."
+msgid "Cannot acquire single-user mode while a job is running. Try again when it finishes."
 msgstr "Неможливо отримати монопольний режим, поки виконується завдання. Повторіть, коли воно завершиться."
 
 #: src/engine/backend/session/session.cpp:887
-msgid "Exclusive mode request did not complete"
+msgid "Single-user mode request did not complete"
 msgstr "Запит монопольного режиму не виконано"
 
 #: src/engine/backend/session/session.cpp:990
@@ -7819,7 +7836,7 @@ msgstr "реєстр не відповів на Attach"
 #: src/engine/backend/session/sessionRegistry.cpp:1066
 #: src/engine/backend/session/sessionRegistry.cpp:1123
 #, c-format
-msgid "Another session holds exclusive mode (user '%s')"
+msgid "Another session holds single-user mode (user '%s')"
 msgstr "Монопольний режим зайнятий іншим сеансом (користувач '%s')"
 
 #: src/engine/backend/session/sessionRegistry.cpp:1222
@@ -8149,8 +8166,8 @@ msgstr "Запитання"
 
 #: src/engine/backend/system/systemManagerFunc.cpp:851
 #: src/engine/backend/system/systemManagerFunc.cpp:908
-msgid "There is no open configuration to write this value against"
-msgstr "Немає відкритої конфігурації, за якою можна записати це значення"
+msgid "There is no open application to write this value against"
+msgstr "Немає відкритого застосунку, за яким можна записати це значення"
 
 #: src/engine/backend/system/systemManagerFunc.cpp:861
 msgid "This value could not be written as JSON"
@@ -8158,8 +8175,8 @@ msgstr "Це значення не вдалося записати в JSON"
 
 #: src/engine/backend/system/systemManagerFunc.cpp:879
 #: src/engine/backend/system/systemManagerFunc.cpp:926
-msgid "There is no open configuration to read this value against"
-msgstr "Немає відкритої конфігурації, за якою можна прочитати це значення"
+msgid "There is no open application to read this value against"
+msgstr "Немає відкритого застосунку, за яким можна прочитати це значення"
 
 #: src/engine/backend/system/systemManagerFunc.cpp:892
 msgid "This text is not JSON a value can be read from"
@@ -8184,12 +8201,12 @@ msgstr "Немає активного сеансу"
 
 #: src/engine/backend/system/systemManagerFunc.cpp:1119
 #, c-format
-msgid "Common form not found '%s'"
+msgid "Shared form not found '%s'"
 msgstr "Загальну форму '%s' не знайдено"
 
 #: src/engine/backend/system/systemManagerFunc.cpp:1160
 #, c-format
-msgid "Common template not found '%s'"
+msgid "Shared template not found '%s'"
 msgstr "Загальний шаблон \"%s\" не знайдено"
 
 #: src/engine/backend/system/systemManagerFunc.cpp:1242
@@ -9834,10 +9851,6 @@ msgstr "Запит впорядковує або обрізає рядки до 
 msgid "Recursive module call (#3)"
 msgstr "Рекурсивний виклик модуля (#3)"
 
-#: src/engine/core/compiler/translateCode.cpp:1247
-msgid "'||' is not an operator here - conditions join with the word Or"
-msgstr "'||' тут не оператор - умови з'єднуються словом Or"
-
 #: src/engine/core/composition/compositionTheme.cpp:13
 msgid "Meadow"
 msgstr "Луг"
@@ -10720,8 +10733,8 @@ msgstr "ibBinaryProvider: пакет має версію OES-RPC %u, ця сто
 
 #: src/engine/core/serialize/provider/fileProvider.cpp:40
 #, c-format
-msgid "Configuration files: %s"
-msgstr "Файли конфігурації: %s"
+msgid "Application files: %s"
+msgstr "Файли застосунку: %s"
 
 #: src/engine/core/serialize/provider/fileProvider.cpp:46
 msgid "the structure is nested too deeply"
@@ -10743,8 +10756,8 @@ msgid "an export directory cannot be a symbolic link"
 msgstr "тека вивантаження не може бути символічним посиланням"
 
 #: src/engine/core/serialize/provider/fileProvider.cpp:129
-msgid "a configuration file cannot be a symbolic link"
-msgstr "файл конфігурації не може бути символічним посиланням"
+msgid "an application file cannot be a symbolic link"
+msgstr "файл застосунку не може бути символічним посиланням"
 
 #: src/engine/core/serialize/provider/fileProvider.cpp:138
 #, c-format
@@ -10763,8 +10776,8 @@ msgstr "не вдалося записати '%s'"
 
 #: src/engine/core/serialize/provider/fileProvider.cpp:186
 #, c-format
-msgid "two parts of the configuration are named '%s' - a name told apart only by case is the same folder"
-msgstr "дві частини конфігурації названо '%s' - імена, що відрізняються лише регістром, дають одну теку"
+msgid "two parts of the application are named '%s' - a name told apart only by case is the same folder"
+msgstr "дві частини застосунку названо '%s' - імена, що відрізняються лише регістром, дають одну теку"
 
 #: src/engine/core/serialize/provider/fileProvider.cpp:227
 #, c-format
@@ -10797,8 +10810,8 @@ msgid "'%s' is named more than once"
 msgstr "'%s' зазначено більше одного разу"
 
 #: src/engine/core/serialize/provider/fileProvider.cpp:415
-msgid "the directory holds no configuration export of a version this build reads"
-msgstr "у теці немає вивантаження конфігурації у версії, яку читає ця збірка"
+msgid "the directory holds no application export of a version this build reads"
+msgstr "у теці немає вивантаження застосунку у версії, яку читає ця збірка"
 
 #: src/engine/core/serialize/provider/fileProvider.cpp:425
 #, c-format
@@ -10811,8 +10824,8 @@ msgid "'%s' is missing"
 msgstr "'%s' відсутній"
 
 #: src/engine/core/serialize/provider/fileProvider.cpp:502
-msgid "there is no configuration export to write"
-msgstr "немає вивантаження конфігурації для запису"
+msgid "there is no application export to write"
+msgstr "немає вивантаження застосунку для запису"
 
 #: src/engine/core/serialize/provider/fileProvider.cpp:512
 msgid "choose a directory of its own for the export"
@@ -13049,8 +13062,8 @@ msgid "Load from file"
 msgstr "Завантажити з файлу"
 
 #: src/engine/frmclient/propertyManager/property/advprop/advpropPicture.cpp:160
-msgid "Load from configuration"
-msgstr "Завантажити з конфігурації"
+msgid "Load from application"
+msgstr "Завантажити із застосунку"
 
 #: src/engine/frmclient/propertyManager/property/advprop/advpropPicture.cpp:164
 msgid "Select a source picture"
@@ -13065,8 +13078,8 @@ msgid "Image from engine collections"
 msgstr "Зображення з колекцій рушія"
 
 #: src/engine/frmclient/propertyManager/property/advprop/advpropPicture.cpp:175
-msgid "Image from configuration"
-msgstr "Зображення з конфігурації"
+msgid "Image from application"
+msgstr "Зображення із застосунку"
 
 #: src/engine/frmclient/propertyManager/property/advprop/advpropPicture.cpp:180
 msgid "File path"
@@ -13172,8 +13185,8 @@ msgstr "Про програму..."
 
 #: src/engine/frmclient/win/dlgs/about.cpp:83
 #: src/engine/frmclient/win/dlgs/activeUser.cpp:47
-msgid "Application"
-msgstr "Застосунок"
+msgid "Program"
+msgstr "Програма"
 
 #: src/engine/frmclient/win/dlgs/about.cpp:85
 msgid "Locale"
@@ -14061,8 +14074,8 @@ msgid "Query constructor"
 msgstr "Конструктор запиту"
 
 #: src/engine/frmclient/win/dlgs/queryConstructor/queryConstructor.cpp:459
-msgid "View only. This query belongs to a configuration that cannot be changed. Nothing edited here will be saved."
-msgstr "Лише перегляд. Цей запит належить конфігурації, яку не можна змінити. Нічого зі зміненого тут не буде збережено."
+msgid "View only. This query belongs to an application that cannot be changed. Nothing edited here will be saved."
+msgstr "Лише перегляд. Цей запит належить застосунку, який не можна змінити. Нічого зі зміненого тут не буде збережено."
 
 #: src/engine/frmclient/win/dlgs/queryConstructor/queryConstructor.cpp:500
 msgid "Links"
@@ -15294,8 +15307,8 @@ msgid "Display mode"
 msgstr "Режим відображення"
 
 #: src/engine/frmclient/win/dlgs/translateConstructor/translateConstructor.cpp:96
-msgid "Also in this text, for codes this configuration has no language for. They are kept:"
-msgstr "Ще в цьому тексті, для кодів, яких немає серед мов конфігурації. Вони зберігаються:"
+msgid "Also in this text, for codes this application has no language for. They are kept:"
+msgstr "Ще в цьому тексті, для кодів, яких немає серед мов застосунку. Вони зберігаються:"
 
 #: src/engine/frmclient/win/dlgs/translateConstructor/translateConstructor.cpp:97
 msgid "Also in this text:"
@@ -15632,17 +15645,17 @@ msgstr "Зберегти як..."
 
 #: src/engine/frmserver/docView/docManagerDesigner.cpp:35
 #: src/engine/frmserver/docView/docManagerRuntime.cpp:17
-msgid "External data processor"
+msgid "External data tool"
 msgstr "Зовнішня обробка"
 
 #: src/engine/frmserver/docView/docManagerDesigner.cpp:35
 #: src/engine/frmserver/docView/docManagerRuntime.cpp:17
-msgid "Data processor Doc"
+msgid "Data tool Doc"
 msgstr "Документ обробки"
 
 #: src/engine/frmserver/docView/docManagerDesigner.cpp:35
 #: src/engine/frmserver/docView/docManagerRuntime.cpp:17
-msgid "Data processor View"
+msgid "Data tool View"
 msgstr "Перегляд обробки"
 
 #: src/engine/frmserver/docView/docManagerDesigner.cpp:36
@@ -15661,12 +15674,12 @@ msgid "Report View"
 msgstr "Перегляд звіту"
 
 #: src/engine/frmserver/docView/docManagerDesigner.cpp:37
-msgid "Configuration Doc"
-msgstr "Документ конфігурації"
+msgid "Application Doc"
+msgstr "Документ застосунку"
 
 #: src/engine/frmserver/docView/docManagerDesigner.cpp:37
-msgid "Configuration View"
-msgstr "Перегляд конфігурації"
+msgid "Application View"
+msgstr "Перегляд застосунку"
 
 #: src/engine/frmserver/docView/templates/designer/docViewFormEdit.cpp:267
 #, c-format
@@ -15781,8 +15794,8 @@ msgstr "Доступ для асистента запущено (збірка %u
 
 #: src/engine/frmserver/mcp/mcpServer.cpp:617
 #, c-format
-msgid " Configuration '%s' is open."
-msgstr " Відкрито конфігурацію '%s'."
+msgid " Application '%s' is open."
+msgstr " Відкрито застосунок '%s'."
 
 #: src/engine/frmserver/mcp/mcpServer.cpp:623
 msgid ""
@@ -15861,33 +15874,40 @@ msgstr "відмовлено"
 msgid "The user list could not be read: %s"
 msgstr "Не вдалося прочитати список користувачів: %s"
 
-#: src/engine/frmserver/metaTree/treeConfiguration.cpp:42
+#: src/engine/frmserver/metaTree/treeApplication.cpp:42
 msgid "Enums"
 msgstr "Перерахування"
 
-#: src/engine/frmserver/metaTree/treeConfiguration.cpp:272
+#: src/engine/frmserver/metaTree/treeApplication.cpp:272
 msgid " form wizard"
 msgstr " майстер форм"
 
-#: src/engine/frmserver/metaTree/treeConfiguration.cpp:277
+#: src/engine/frmserver/metaTree/treeApplication.cpp:277
 msgid "Generic form"
 msgstr "Загальна форма"
 
-#: src/engine/frmserver/metaTree/treeConfiguration.cpp:323
+#: src/engine/frmserver/metaTree/treeApplication.cpp:323
 msgid " template wizard"
 msgstr " майстер шаблонів"
 
-#: src/engine/frmserver/metaTree/treeConfiguration.cpp:416
-msgid "Insert data processor, report..."
+#: src/engine/frmserver/metaTree/treeApplication.cpp:416
+msgid "Insert data tool, report..."
 msgstr "Вставити обробку, звіт..."
 
-#: src/engine/frmserver/metaTree/treeConfiguration.cpp:478
-msgid "Replace data processor, report..."
+#: src/engine/frmserver/metaTree/treeApplication.cpp:478
+msgid "Replace data tool, report..."
 msgstr "Замінити обробку, звіт..."
 
-#: src/engine/frmserver/metaTree/treeConfiguration.cpp:479
-msgid "Save data processor, report..."
+#: src/engine/frmserver/metaTree/treeApplication.cpp:479
+msgid "Save data tool, report..."
 msgstr "Зберегти обробку, звіт..."
+
+#: src/engine/frmserver/metaTree/treeApplication.cpp:28
+#: src/engine/backend/metaCollection/metaDiff.cpp:78
+#: src/engine/appstudio/backend/metaCollection/metaDiff.h:169
+msgctxt "metadata branch"
+msgid "Shared"
+msgstr "Загальні"
 
 #: src/engine/frmserver/schema/activeUser.cpp:60
 msgid "Shared"
@@ -15934,18 +15954,18 @@ msgstr "Не вдалося зняти блокування %s: %s"
 msgid "Failed to release lock %s"
 msgstr "Не вдалося зняти блокування %s"
 
-#: src/engine/frmserver/schema/designer/configCompare.cpp:354
+#: src/engine/frmserver/schema/designer/applicationCompare.cpp:354
 #, c-format
 msgid "Merge applied to %d item(s)."
 msgstr "Об'єднання застосовано до елементів: %d."
 
-#: src/engine/frmserver/schema/designer/configCompare.cpp:356
+#: src/engine/frmserver/schema/designer/applicationCompare.cpp:356
 msgid "Not applied:"
 msgstr "Не застосовано:"
 
-#: src/engine/frmserver/schema/designer/configCompare.cpp:360
-msgid "Use Configuration > Save configuration to persist the changes."
-msgstr "Щоб зберегти зміни, скористайтеся Конфігурація > Зберегти конфігурацію."
+#: src/engine/frmserver/schema/designer/applicationCompare.cpp:360
+msgid "Use Application > Save application to persist the changes."
+msgstr "Щоб зберегти зміни, скористайтеся Застосунок > Зберегти застосунок."
 
 #: src/engine/frmserver/schema/designer/database.cpp:73
 msgid "Open database file"
@@ -15992,16 +16012,16 @@ msgid "Error when trying to clear database!"
 msgstr "Помилка при спробі очистити базу даних!"
 
 #: src/engine/frmserver/schema/designer/metaData.cpp:294
-msgid "Successfully rolled back to database configuration!"
-msgstr "Успішно повернуто до конфігурації бази даних!"
+msgid "Successfully reverted to the database's application!"
+msgstr "Застосунок бази даних успішно повернуто!"
 
 #: src/engine/frmserver/schema/designer/metaData.cpp:350
-msgid "The data processor or report could not be read from the file."
+msgid "The data tool or report could not be read from the file."
 msgstr "Не вдалося прочитати обробку або звіт із файлу."
 
 #: src/engine/frmserver/schema/designer/metaData.cpp:388
-msgid "The configuration could not be read from the file."
-msgstr "Не вдалося прочитати конфігурацію з файлу."
+msgid "The application could not be read from the file."
+msgstr "Не вдалося прочитати застосунок з файлу."
 
 #: src/engine/frmserver/schema/designer/userList.cpp:162
 msgid "After recording, there would not be a single role with admin rights. The action is impossible!"
@@ -16053,7 +16073,7 @@ msgstr "Видимість для користувача"
 
 #: src/engine/frmserver/visualView/ctrl/control.h:107
 #: src/engine/frmserver/visualView/layers/commandBar.h:172
-msgid "The functional options this element is available under: while every one of them is off, it is neither shown nor offered, and neither is what it holds. Empty - available whatever the options are. Works together with Visible and does not change it."
+msgid "The feature options this element is available under: while every one of them is off, it is neither shown nor offered, and neither is what it holds. Empty - available whatever the options are. Works together with Visible and does not change it."
 msgstr "Функціональні опції, за яких елемент доступний: поки всі вони вимкнені, ні він, ні те, що в ньому лежить, не показується і не пропонується. Порожньо - доступний за будь-яких опцій. Діє разом із властивістю Видимість і не змінює її."
 
 #: src/engine/frmserver/visualView/ctrl/form.h:679
@@ -16847,8 +16867,8 @@ msgid "The line under a tile's title - a price, a count, a state. Shown only whe
 msgstr "Рядок під заголовком плитки - ціна, кількість, стан. Показується лише при положенні картинки «Плитка». Може бути написаний кожною мовою й змінюватися з коду, поки форма відкрита."
 
 #: src/engine/frmserver/visualView/ctrl/widgets.h:85
-msgid "The command a press runs: a form command, a standard command of the form or of one of its tables, or a command of the configuration. A button has no click event of its own - the code goes into the command's handler."
-msgstr "Команда, що виконується під час натискання: команда форми, стандартна команда форми або однієї з її таблиць чи команда конфігурації. Кнопка не має власної події натискання - код пишеться в обробнику команди."
+msgid "The command a press runs: a form command, a standard command of the form or of one of its tables, or a command of the application. A button has no click event of its own - the code goes into the command's handler."
+msgstr "Команда, що виконується під час натискання: команда форми, стандартна команда форми або однієї з її таблиць чи команда застосунку. Кнопка не має власної події натискання - код пишеться в обробнику команди."
 
 #: src/engine/frmserver/visualView/ctrl/widgets.h:178
 msgid "Static text"
@@ -17120,8 +17140,8 @@ msgid "Whether the item is the bar's default command: drawn standing out, in the
 msgstr "Чи є елемент командою панелі за замовчуванням: виділяється кольорами акценту, як кнопка діалогу за замовчуванням."
 
 #: src/engine/frmserver/visualView/layers/commandBar.h:168
-msgid "The command the item runs: a form command, a standard command of the form or of one of its tables, or a command of the form's object or of the configuration."
-msgstr "Команда, яку виконує елемент: команда форми, стандартна команда форми або однієї з її таблиць чи команда об'єкта форми або конфігурації."
+msgid "The command the item runs: a form command, a standard command of the form or of one of its tables, or a command of the form's object or of the application."
+msgstr "Команда, яку виконує елемент: команда форми, стандартна команда форми або однієї з її таблиць чи команда об'єкта форми або застосунку."
 
 #: src/engine/frmserver/visualView/layers/commandBar.h:278
 #: src/engine/frmserver/visualView/layers/commandBar.h:302
@@ -17260,67 +17280,47 @@ msgstr "Усі файли зображень"
 
 #~ msgid "Client (GUI)"
 #~ msgstr "Клієнт (GUI)"
-
 #~ msgid "Client (Studio)"
 #~ msgstr "Клієнт (студія)"
-
 #~ msgid "Client (Web)"
 #~ msgstr "Клієнт (веб)"
-
 #~ msgid "Workspace"
 #~ msgstr "Workspace"
-
 #~ msgid "Studio"
 #~ msgstr "Studio"
-
 #~ msgid "Web"
 #~ msgstr "Web"
-
 #~ msgid "Runtime"
 #~ msgstr "Підприємство"
-
 #~ msgid "OES Designer - startup error"
 #~ msgstr "OES Конфігуратор - помилка запуску"
-
 #~ msgid "OES Designer"
 #~ msgstr "OES Конфігуратор"
-
 #~ msgid "OES Enterprise - startup error"
 #~ msgstr "OES Підприємство - помилка запуску"
-
 #~ msgid "OES Enterprise"
 #~ msgstr "OES Підприємство"
-
 #~ msgid "Enterprise"
 #~ msgstr "Підприємство"
-
 #~ msgid "Editing the choice parameters is not available in the thin designer yet."
 #~ msgstr "Редагування параметрів вибору в тонкому конфігураторі поки недоступне."
-
 #~ msgid "Choosing a command is not available in the thin designer yet."
 #~ msgstr "Вибір команди в тонкому конфігураторі поки недоступний."
-
 #~ msgid "Choosing a data source is not available in the thin designer yet."
 #~ msgstr "Вибір джерела даних у тонкому конфігураторі поки недоступний."
-
 #~ msgid "Go to designer"
 #~ msgstr "Перейти до конфігуратора"
-
 #, c-format
 #~ msgid "Lambda call: m_listParam shorter than paramCount at param %ld"
 #~ msgstr "Виклик лямбди: m_listParam коротший за paramCount на параметрі %ld"
-
 #, c-format
 #~ msgid "Missing required argument '%s' to function value"
 #~ msgstr "Не передано обов'язковий аргумент '%s' значення-функції"
-
 #, c-format
 #~ msgid "Lambda missing required argument '%s'"
 #~ msgstr "У лямбді немає обов'язкового аргументу '%s'"
-
 #~ msgid "Failed to initialise COM on the debug thread"
 #~ msgstr "Не вдалося ініціалізувати COM у потоці налагодження"
-
 #, c-format
 #~ msgid ""
 #~ "Assistant access did not start: port %u on %s is already taken.\n"
@@ -17330,94 +17330,66 @@ msgstr "Усі файли зображень"
 #~ "Доступ для асистента не запущено: порт %u на %s уже зайнятий.\n"
 #~ "\n"
 #~ "Імовірно, відкрито інший конфігуратор, і порт зайнятий ним - зайняти його може лише один. Закрийте його або задайте цьому конфігуратору власний порт в Інструменти > Параметри > Доступ для асистента."
-
 #~ msgid "There is no session to work in"
 #~ msgstr "Немає сеансу для роботи"
-
 #~ msgid "The request is not UTF-8. Send its body as UTF-8 bytes - from a file or a pipe: a shell hands its arguments over in its own code page."
 #~ msgstr "Запит не в UTF-8. Передайте його тіло байтами UTF-8 - з файлу або через канал: оболонка передає свої аргументи у власній кодовій сторінці."
-
 #, c-format
 #~ msgid "The designer is waiting on a dialog ('%s'), so it cannot take this now. Nothing was done. Read it with window_dismiss, ask the person to answer it, or dismiss it with window_dismiss {close: true} - it is answered as Cancel."
 #~ msgstr "Конфігуратор чекає на відповідь у діалозі ('%s'), тому зараз не може це прийняти. Нічого не зроблено. Прочитайте діалог через window_dismiss, попросіть людину відповісти на нього або закрийте його через window_dismiss {close: true} - це рівнозначно натисканню Скасувати."
-
 #~ msgid "Composer"
 #~ msgstr "Компонувальник"
-
 #~ msgid "Composition data"
 #~ msgstr "Дані компонування"
-
 #~ msgid "The composition this composer declares: its query (the data), resources (what is totalled), parameters, structure (groupings, table, charts) and settings variants. It is the DEFAULT of the user's settings - saved user settings replace it. The report's first composer is its default one: its generated form is built from it, so such a report needs no form of its own."
 #~ msgstr "Компонування, яке оголошує цей компонувальник: його запит (дані), ресурси (що підсумовується), параметри, структура (групування, таблиця, діаграми) і варіанти налаштувань. Це налаштування користувача ЗА ЗАМОВЧУВАННЯМ - збережені налаштування користувача замінюють їх. Перший компонувальник звіту - компонувальник за замовчуванням: за ним будується згенерована форма, тому такому звіту не потрібна власна форма."
-
 #~ msgid "Composers"
 #~ msgstr "Компонувальники"
-
 #~ msgid "1.0.0"
 #~ msgstr "1.0.0"
-
 #~ msgid "The template's spreadsheet: cells, named areas and parameters a print form is assembled from. Code gets it with the owner's GetTemplate(name), takes areas by name, fills their parameters and puts them into an output spreadsheet."
 #~ msgstr "Табличний документ шаблону: клітинки, іменовані області та параметри, з яких збирається друкована форма. Код отримує його через GetTemplate(name) власника, бере області за іменем, заповнює їхні параметри і виводить їх у результуючий табличний документ."
-
-#~ msgid "Common template"
+#~ msgid "Shared template"
 #~ msgstr "Загальний шаблон"
-
-#~ msgid "The common template's spreadsheet: cells, named areas and parameters shared by the whole configuration. Code gets it with GetCommonTemplate(name), takes areas by name, fills their parameters and puts them into an output spreadsheet."
-#~ msgstr "Табличний документ загального шаблону: клітинки, іменовані області та параметри, спільні для всієї конфігурації. Код отримує його через GetCommonTemplate(name), бере області за іменем, заповнює їхні параметри і виводить їх у результуючий табличний документ."
-
+#~ msgid "The shared template's spreadsheet: cells, named areas and parameters shared by the whole configuration. Code gets it with GetSharedTemplate(name), takes areas by name, fills their parameters and puts them into an output spreadsheet."
+#~ msgstr "Табличний документ загального шаблону: клітинки, іменовані області та параметри, спільні для всієї конфігурації. Код отримує його через GetSharedTemplate(name), бере області за іменем, заповнює їхні параметри і виводить їх у результуючий табличний документ."
 #~ msgid "! Doesn't have any recorder "
 #~ msgstr "! Немає реєстратора "
-
 #, c-format
 #~ msgid "The %s is required on line %i of the %s"
 #~ msgstr "%s необхідно вказати в рядку %i %s"
-
 #, c-format
 #~ msgid "The %s is required on line %i of the %s list"
 #~ msgstr "%s необхідно вказати в рядку %i списку %s"
-
 #, c-format
 #~ msgid "WHERE %s filters %s AS %s after the table has read and folded everything - write it into the table's own parameter %s (without the '%s.' prefix), so the rows are selected before the fold and the table arrives already narrowed"
 #~ msgstr "WHERE %s відбирає %s AS %s після того, як таблиця прочитала і згорнула все - запишіть його у власний параметр таблиці %s (без префікса '%s.'), щоб рядки відбиралися до згортки і таблиця надходила вже звуженою"
-
 #~ msgid "HTTPConnection: a secure connection could not be prepared"
 #~ msgstr "HTTPConnection: не вдалося підготувати захищене з'єднання"
-
 #~ msgid "HTTPConnection: this build has no TLS - a secure connection cannot be made"
 #~ msgstr "HTTPConnection: у цій збірці немає TLS - захищене з'єднання неможливе"
-
 #, c-format
 #~ msgid "the connection was lost before the answer was whole, or the answer is larger than the %u MB held"
 #~ msgstr "з'єднання перервалося до отримання повної відповіді, або відповідь більша за допустимі %u МБ"
-
 #~ msgid "the server's certificate is not trusted - not signed by a trusted authority, expired, or not a certificate; name the authority's file in TrustedCertificates"
 #~ msgstr "сертифікат сервера не є довіреним - не підписаний довіреним центром, прострочений або не є сертифікатом; вкажіть файл центру сертифікації в TrustedCertificates"
-
 #, c-format
 #~ msgid "the trusted certificates could not be read from the certificate file '%s' - not a PEM"
 #~ msgstr "не вдалося прочитати довірені сертифікати з файлу сертифікатів '%s' - це не PEM"
-
 #~ msgid "Load From Art Provider"
 #~ msgstr "Завантажити з провайдера зображень"
-
 #~ msgid "Load From File"
 #~ msgstr "Завантажити з файлу"
-
 #~ msgid "an unknown failure"
 #~ msgstr "невідомий збій"
-
 #~ msgid "Authentication failed"
 #~ msgstr "Помилка автентифікації"
-
 #~ msgid "Failed to save configuration before launching the runtime."
 #~ msgstr "Не вдалося зберегти конфігурацію перед запуском режиму виконання."
-
 #~ msgid "Pre-launch save aborted by a backend error."
 #~ msgstr "Збереження перед запуском перервано помилкою backend."
-
 #~ msgid "Pre-launch save aborted by an internal error."
 #~ msgstr "Збереження перед запуском перервано внутрішньою помилкою."
-
 #, c-format
 #~ msgid ""
 #~ "%d other session(s) are connected.\n"
@@ -17427,44 +17399,33 @@ msgstr "Усі файли зображень"
 #~ "Підключено інших сеансів: %d.\n"
 #~ "\n"
 #~ "Це оновлення не змінює структуру бази даних, тому його можна застосувати динамічно. Підключені користувачі продовжують роботу й отримають нову конфігурацію під час наступного входу."
-
 #~ msgid "Update dynamically"
 #~ msgstr "Оновити динамічно"
-
 #~ msgid "Try again"
 #~ msgstr "Спробувати ще раз"
-
 #, c-format
 #~ msgid ""
 #~ "%d other session(s) are connected.\n"
 #~ "\n"
-#~ "This update changes the database structure, which requires exclusive mode. It cannot be applied dynamically."
+#~ "This update changes the database structure, which requires single-user mode. It cannot be applied dynamically."
 #~ msgstr ""
 #~ "Підключено інших сеансів: %d.\n"
 #~ "\n"
 #~ "Це оновлення змінює структуру бази даних, для чого потрібен монопольний режим. Застосувати його динамічно не можна."
-
 #~ msgid "Failed to load configuration file."
 #~ msgstr "Не вдалося завантажити файл конфігурації."
-
 #~ msgid "Save metadata"
 #~ msgstr "Зберегти метадані"
-
 #~ msgid "Configuration '"
 #~ msgstr "Конфігурація '"
-
 #~ msgid "Save project"
 #~ msgstr "Зберегти проект"
-
 #~ msgid "Remove all breakpoits"
 #~ msgstr "Видалити всі точки зупинки"
-
 #~ msgid "Return to database configuration"
 #~ msgstr "Повернутися до конфігурації бази даних"
-
 #~ msgid "Load configuraion"
 #~ msgstr "Завантажити конфігурацію"
-
 #~ msgid ""
 #~ "Cannot start enterprise.exe - no infobase specified.\n"
 #~ "\n"
@@ -17481,13 +17442,10 @@ msgstr "Усі файли зображень"
 #~ "  --server=<host> --db=<name> [--dbport=...] [--user=...] [--password=...]\n"
 #~ "\n"
 #~ "Або запустіть через launcher.exe, щоб вибрати збережену інформаційну базу."
-
 #~ msgid "Options"
 #~ msgstr "Параметри"
-
 #~ msgid "Session reloaded by an administrator. The application will restart."
 #~ msgstr "Сеанс перезавантажено адміністратором. Застосунок буде перезапущено."
-
 #~ msgid ""
 #~ "The configuration has been updated by an administrator.\n"
 #~ "\n"
@@ -17496,7 +17454,6 @@ msgstr "Усі файли зображень"
 #~ "Конфігурацію оновлено адміністратором.\n"
 #~ "\n"
 #~ "Ви все ще працюєте з версією, з якою почався цей сеанс. Перезапустити зараз, щоб отримати нову?"
-
 #, c-format
 #~ msgid ""
 #~ "The assistant asks for a picture of this window:\n"
@@ -17510,233 +17467,157 @@ msgstr "Усі файли зображень"
 #~ "%s\n"
 #~ "\n"
 #~ "Усе, що зараз видно в ньому, буде надіслано. Дозволити?"
-
 #~ msgid "Picture of the window"
 #~ msgstr "Знімок вікна"
-
 #~ msgid "control: "
 #~ msgstr "елемент керування: "
-
 #~ msgid "window: '"
 #~ msgstr "вікно: '"
-
 #, c-format
 #~ msgid "pointer at %d,%d"
 #~ msgstr "вказівник у точці %d,%d"
-
 #~ msgid "Convert tabs to spaces when loading a file"
 #~ msgstr "Перетворювати табуляцію на пробіли при завантаженні файлу"
-
 #~ msgid "Show line numbers in the margin"
 #~ msgstr "Показувати номери рядків на полях"
-
 #~ msgid "Environment"
 #~ msgstr "Середовище"
-
 #~ msgid "Dark green"
 #~ msgstr "Темно-зелений"
-
 #~ msgid "Dark blue"
 #~ msgstr "Темно-синій"
-
 #~ msgid "Aquamarine"
 #~ msgstr "Аквамарин"
-
 #~ msgid "Light gray"
 #~ msgstr "Світло-сірий"
-
 #~ msgid "Dark gray"
 #~ msgstr "Темно-сірий"
-
 #~ msgid "Magenta"
 #~ msgstr "Пурпуровий"
-
 #~ msgid "Cyan"
 #~ msgstr "Блакитний"
-
 #~ msgid "Select..."
 #~ msgstr "Вибрати..."
-
 #~ msgid "Display items:"
 #~ msgstr "Елементи відображення:"
-
 #~ msgid "Item foreground:"
 #~ msgstr "Колір переднього плану:"
-
 #~ msgid "Custom..."
 #~ msgstr "Інший..."
-
 #~ msgid "Item background:"
 #~ msgstr "Колір фону:"
-
 #~ msgid "Commands:"
 #~ msgstr "Команди:"
-
 #~ msgid "Current Shortcuts:"
 #~ msgstr "Поточні комбінації:"
-
 #~ msgid "Remove All"
 #~ msgstr "Видалити все"
-
 #~ msgid "New:"
 #~ msgstr "Нова:"
-
 #~ msgid "Currently Assigned:"
 #~ msgstr "Зараз призначено:"
-
 #~ msgid "Description:"
 #~ msgstr "Опис:"
-
 #~ msgid "New command..."
 #~ msgstr "Нова команда..."
-
 #~ msgid "Select source"
 #~ msgstr "Вибрати джерело"
-
 #~ msgid "Win32 theme"
 #~ msgstr "Тема Win32"
-
 #~ msgid "&Restore"
 #~ msgstr "&Відновити"
-
 #~ msgid "&Move"
 #~ msgstr "&Перемістити"
-
 #~ msgid "&Size"
 #~ msgstr "&Розмір"
-
 #~ msgid "Mi&nimize"
 #~ msgstr "З&горнути"
-
 #~ msgid "Ma&ximize"
 #~ msgstr "Ро&згорнути"
-
 #~ msgid "Alt+"
 #~ msgstr "Alt+"
-
 #~ msgid "Where the page tabs are drawn: above the pages (the default) or below them."
 #~ msgstr "Де відображаються вкладки сторінок: над сторінками (за замовчуванням) або під ними."
-
 #~ msgid "Add page\tInsert"
 #~ msgstr "Додати сторінку\tInsert"
-
 #~ msgid "Add column\tInsert"
 #~ msgstr "Додати колонку\tInsert"
-
 #~ msgid "The data source has been changed. Refill columns?"
 #~ msgstr "Джерело даних змінилось. Перезаповнити колонки?"
-
 #~ msgid "ToolBar"
 #~ msgstr "Панель інструментів"
-
 #~ msgid "Toolbar"
 #~ msgstr "Панель інструментів"
-
 #~ msgid "Whose standard commands the toolbar's items can run: the form itself (Write, Close and so on) or one of the form's tables (Add, Copy, Delete and so on). An item picks its command from this source's list."
 #~ msgstr "Чиї стандартні команди можуть виконувати елементи панелі інструментів: самої форми (Записати, Закрити тощо) або однієї з таблиць форми (Додати, Копіювати, Видалити тощо). Елемент вибирає свою команду зі списку цього джерела."
-
 #~ msgid "Item"
 #~ msgstr "Елемент"
-
 #~ msgid "The item's caption. Empty: the caption of the standard command it runs. Can be written per language."
 #~ msgstr "Заголовок елемента. Якщо порожньо, використовується заголовок стандартної команди, яку він виконує. Можна задати для кожної мови."
-
 #~ msgid "What the item shows: text, picture, or both. Auto: what its standard command prefers (Close is a picture alone, Add a picture with text); picture and text when it runs no standard command."
 #~ msgstr "Що показує елемент: текст, картинку або те й інше. Авто: те, чому віддає перевагу його стандартна команда (Закрити - лише картинка, Додати - картинка з текстом); картинка й текст, якщо стандартна команда не виконується."
-
 #~ msgid "The item's icon. Empty: the picture of the standard command it runs."
 #~ msgstr "Значок елемента. Якщо порожньо, використовується картинка стандартної команди, яку він виконує."
-
 #~ msgid "Whether the item gets a drop-down arrow beside it. The menu the arrow opens is a placeholder for now, with no items of its own."
 #~ msgstr "Чи є поруч з елементом стрілка розкривного меню. Меню, яке відкриває стрілка, поки що заглушка без власних пунктів."
-
 #~ msgid "Text shown when the mouse pointer rests over the item. Empty: the caption of the standard command it runs."
 #~ msgstr "Текст, що показується, коли вказівник миші затримується над елементом. Якщо порожньо, використовується заголовок стандартної команди, яку він виконує."
-
 #~ msgid "Separator"
 #~ msgstr "Розділювач"
-
 #~ msgid "Test"
 #~ msgstr "Тест"
-
 #~ msgid "Add tool\tInsert"
 #~ msgstr "Додати інструмент\tInsert"
-
 #~ msgid "Add separator\tInsert"
 #~ msgstr "Додати розділювач\tInsert"
-
 #~ msgid "The data source has been changed. Refill Tools?"
 #~ msgstr "Джерело даних змінилось. Перезаповнити інструменти?"
-
 #~ msgid "Some controls of this form could not be built:"
 #~ msgstr "Не вдалося побудувати деякі елементи цієї форми:"
-
 #~ msgid "Loading..."
 #~ msgstr "Завантаження..."
-
 #~ msgid "Debug mode"
 #~ msgstr "У режимі налагодження"
-
 #~ msgid "Debugger: paused"
 #~ msgstr "Налагоджувач: пауза"
-
 #~ msgid "No connection to the server"
 #~ msgstr "Немає зв'язку із сервером"
-
 #~ msgid "Version conflict"
 #~ msgstr "Конфлікт версій"
-
 #~ msgid "The object was changed by another user. Re-read it."
 #~ msgstr "Об'єкт було змінено іншим користувачем. Перечитайте."
-
 #~ msgid "The object is being edited by another user. Try again later."
 #~ msgstr "Об'єкт зараз редагує інший користувач. Спробуйте пізніше."
-
 #~ msgid "Access denied"
 #~ msgstr "Доступ заборонено"
-
 #~ msgid "You do not have the rights to perform this operation."
 #~ msgstr "Недостатньо прав для виконання операції."
-
 #~ msgid "The operation failed."
 #~ msgstr "Помилка виконання операції."
-
 #~ msgid "The configuration has been updated. Reload the page to continue with the new version."
 #~ msgstr "Конфігурацію оновлено. Оновіть сторінку, щоб продовжити роботу з новою версією."
-
 #~ msgid "The session was lost. The server restarted or the session expired."
 #~ msgstr "Сеанс втрачено. Сервер перезапущено або час сеансу минув."
-
 #~ msgid "Reload page"
 #~ msgstr "Оновити сторінку"
-
 #~ msgid "Save file"
 #~ msgstr "Зберегти файл"
-
 #~ msgid "Connection established"
 #~ msgstr "З'єднання встановлено"
-
 #~ msgid "Could not connect with these settings"
 #~ msgstr "Не вдалося підключитися з цими налаштуваннями"
-
 #~ msgid "PostgreSQL driver not available"
 #~ msgstr "Драйвер PostgreSQL недоступний"
-
 #~ msgid "Select form type"
 #~ msgstr "Виберіть тип форми"
-
 #~ msgid "The composition to edit is not a composition"
 #~ msgstr "Компонування, що редагується, не є компонуванням"
-
 #~ msgid "No database driver available"
 #~ msgstr "Немає доступного драйвера бази даних"
-
 #~ msgid "The web server publishes a file base, and this base is on a DBMS server."
 #~ msgstr "Веб-сервер публікує файлову базу, а ця база — на сервері СУБД."
-
 #~ msgid "No settings have been saved here yet."
 #~ msgstr "Тут ще не збережено жодного налаштування."
-
 #: src/engine/appstudio/mainFrame/mainFrameDesignerMenu.cpp:71
 msgid "Performance measurement"
 msgstr "Замір продуктивності"
@@ -18061,8 +17942,8 @@ msgstr "Інтеграція"
 
 #: src/engine/backend/httpService/httpServiceCall.cpp
 #, c-format
-msgid "The web address %s '%s' is not registered: the configuration has no HTTP service %s."
-msgstr "Веб-адресу %s '%s' не зареєстровано: у конфігурації немає HTTP-сервісу %s."
+msgid "The web address %s '%s' is not registered: the application has no HTTP service %s."
+msgstr "Веб-адресу %s '%s' не зареєстровано: у застосунку немає HTTP-сервісу %s."
 
 #: src/engine/frmserver/client/clientHost.cpp
 #, c-format
@@ -18082,7 +17963,7 @@ msgstr "%s.%s.%s: у модулі сервісу немає функції '%s',
 msgid "HTTP services"
 msgstr "HTTP-сервіси"
 
-#: src/engine/frmserver/metaTree/treeConfiguration.cpp:46 src/engine/backend/metaCollection/metaGroups.cpp:83
+#: src/engine/frmserver/metaTree/treeApplication.cpp:46 src/engine/backend/metaCollection/metaGroups.cpp:83
 msgid "URL templates"
 msgstr "Шаблони URL"
 
@@ -18099,8 +17980,8 @@ msgid "Root URL"
 msgstr "Кореневий URL"
 
 #: src/engine/backend/metaCollection/metaHttpServiceObject.h:109
-msgid "The service's address: one segment after /es/ in the address the web server publishes the base under - <publication>/es/<root URL>/... Unique in the configuration; it answers once registered among the base's web addresses."
-msgstr "Адреса сервісу: один сегмент після /es/ в адресі, під якою веб-сервер публікує базу, - <публікація>/es/<кореневий URL>/... Унікальна в конфігурації; відповідає, коли зареєстрована серед веб-адрес бази."
+msgid "The service's address: one segment after /es/ in the address the web server publishes the base under - <publication>/es/<root URL>/... Unique in the application; it answers once registered among the base's web addresses."
+msgstr "Адреса сервісу: один сегмент після /es/ в адресі, під якою веб-сервер публікує базу, - <публікація>/es/<кореневий URL>/... Унікальна в застосунку; відповідає, коли зареєстрована серед веб-адрес бази."
 
 #: src/engine/backend/metaCollection/metaHttpServiceObject.h:114
 msgid "Service module"

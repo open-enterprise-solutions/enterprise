@@ -23,7 +23,7 @@
 
 #include "frmserver/mcp/mcpTool.h"
 
-#include "backend/metadataConfiguration.h"
+#include "backend/metadataApplication.h"
 #include "backend/query/queryConstructorModel.h"
 #include "backend/query/queryableFactory.h"      // ibQuerySourceParameter — what a virtual table takes
 #include "backend/query/queryException.h"
@@ -101,9 +101,9 @@ public:
 
 	ibString GetDescription() const override
 	{
-		return ibMcpText("Everything a query may read from in this configuration, by the dotted path a "
+		return ibMcpText("Everything a query may read from in this application, by the dotted path a "
 			"query names it with - Catalog.Goods, AccumulationRegister.StockBalance.Balance and "
-			"the rest. Ask this before writing a FROM: the names are this configuration's, and "
+			"the rest. Ask this before writing a FROM: the names are this application's, and "
 			"a virtual table is not guessable from the register's name.");
 	}
 
@@ -115,8 +115,8 @@ public:
 
 	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
-		if (activeMetaData == nullptr || !activeMetaData->IsConfigOpen()) {
-			refusal = ibMcpText("No configuration is open.");
+		if (activeMetaData == nullptr || !activeMetaData->IsOpen()) {
+			refusal = ibMcpText("No application is open.");
 			return false;
 		}
 
@@ -178,8 +178,8 @@ public:
 
 	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
-		if (activeMetaData == nullptr || !activeMetaData->IsConfigOpen()) {
-			refusal = ibMcpText("No configuration is open.");
+		if (activeMetaData == nullptr || !activeMetaData->IsOpen()) {
+			refusal = ibMcpText("No application is open.");
 			return false;
 		}
 
@@ -322,7 +322,7 @@ MCP_TOOL_REGISTER(ibMcpToolQueryFields);
 // could only be verified by running it in front of somebody.
 //
 // THE CHECK ALREADY EXISTED. It is the gate the constructor passes before it
-// opens a stored query: parse, then resolve the names against the configuration.
+// opens a stored query: parse, then resolve the names against the application.
 // Two calls. Nothing here is new work; what was missing was a door.
 //
 // TWO FAILURES, AND THEY ARE DIFFERENT. A query may not PARSE - a comma in the
@@ -344,13 +344,13 @@ public:
 
 	ibString GetActivity(const ibDataNode& params) const override
 	{
-		return ibMcpText("checking a query against the configuration");
+		return ibMcpText("checking a query against the application");
 	}
 
 	ibString GetDescription() const override
 	{
 		return ibMcpText("Read a query the way the engine will: parse it, then resolve every name in it "
-			"against this configuration. ALWAYS ASK THIS BEFORE PUTTING A QUERY IN A MODULE - "
+			"against this application. ALWAYS ASK THIS BEFORE PUTTING A QUERY IN A MODULE - "
 			"a query lives inside a string, so script_check answers 'ok' for a module whose "
 			"query names a table that does not exist.\n"
 			"It also answers `composer`: whether a COMPOSER could read this query. That is a "
@@ -373,8 +373,8 @@ public:
 
 	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
-		if (activeMetaData == nullptr || !activeMetaData->IsConfigOpen()) {
-			refusal = ibMcpText("No configuration is open.");
+		if (activeMetaData == nullptr || !activeMetaData->IsOpen()) {
+			refusal = ibMcpText("No application is open.");
 			return false;
 		}
 
@@ -399,14 +399,14 @@ public:
 			try { package = parser.ParsePackage(text); }
 			catch (const ibQueryRefusal& refusal) { ibBackendQuerySyntaxException::Raise(refusal); }
 
-			// AGAINST THIS CONFIGURATION, and said so explicitly. A query in a
+			// AGAINST THIS APPLICATION, and said so explicitly. A query in a
 			// module sets no scope of its own and still means the tree it lives in;
 			// here the tree is named, because a tool is not standing inside one.
 			const ibSourceMetaDataScope resolveAgainst(activeMetaData);
 			ibQueryLowering::CheckNames(package, std::map<ibString, ibValue>());
 		}
 		// ⚠ TWO DIFFERENT FAILURES, TWO VARIETIES, TOLD APART BY WHICH ARRIVED. The
-		// lowering raises a NAME refusal (the text reads and this configuration refuses it:
+		// lowering raises a NAME refusal (the text reads and this application refuses it:
 		// a name that is not there, or a rule the names break); the lexer and parser raise
 		// a SYNTAX one. Both carry the span, which is the whole value of this branch of the
 		// family existing.
@@ -497,7 +497,7 @@ public:
 		// failures have different remedies and pointing at the wrong one costs a
 		// round trip every time.
 		result.SetValue(ibT("nextStep"), stage == ibT("names")
-			? ibMcpText("The query reads, and this configuration refuses it - the problem says why. For "
+			? ibMcpText("The query reads, and this application refuses it - the problem says why. For "
 			    "a name that is not there, query_sources lists what can be read from, query_fields "
 			    "what a source has.")
 			: ibMcpText("The engine could not read the text at that position."));

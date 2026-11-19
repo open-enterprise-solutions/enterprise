@@ -1,8 +1,8 @@
 #include "homePage.h"
 
-#include "backend/metadataConfiguration.h"
+#include "backend/metadataApplication.h"
 #include "backend/metaCollection/metaFormObject.h"         // ibValueMetaObjectFormBase — what the start page shows
-#include "backend/metaCollection/metaObjectMetadata.h"     // ibValueMetaObjectConfiguration — whose workspace it is
+#include "backend/metaCollection/metaObjectMetadata.h"     // ibValueMetaObjectApplication — whose workspace it is
 #include "backend/session/session.h"
 #include "core/serialize/dataBuilder.h"
 
@@ -12,8 +12,8 @@
 
 namespace {
 
-// The root Id names — refused, null, when there is no such, or it is no configuration's root.
-ibValueMetaObjectConfiguration* FindRoot(const ibSession& session, const ibDataNode& args, ibProtocol::ibRefusal& refusal,
+// The root Id names — refused, null, when there is no such, or it is no application's root.
+ibValueMetaObjectApplication* FindRoot(const ibSession& session, const ibDataNode& args, ibProtocol::ibRefusal& refusal,
 	ibString& error)
 {
 	ibMetaData* const metaData = ibSchemaMetaData::FindMetaData(session, args, refusal, error);
@@ -22,7 +22,7 @@ ibValueMetaObjectConfiguration* FindRoot(const ibSession& session, const ibDataN
 	if (object == nullptr)
 		return nullptr;
 
-	ibValueMetaObjectConfiguration* const root = dynamic_cast<ibValueMetaObjectConfiguration*>(object);
+	ibValueMetaObjectApplication* const root = dynamic_cast<ibValueMetaObjectApplication*>(object);
 	if (root == nullptr) {
 		refusal = ibProtocol::ibRefusal::BadParameter;
 		error = ibString::Format(ibT("'%s' has no home page"), object->GetName());
@@ -34,7 +34,7 @@ ibValueMetaObjectConfiguration* FindRoot(const ibSession& session, const ibDataN
 
 bool ibSchemaHomePage::AccessRight(const ibSession& session) const
 {
-	const ibMetaDataConfigurationBase* const metaData = session.GetMetaData();
+	const ibMetaDataApplicationBase* const metaData = session.GetMetaData();
 	return metaData != nullptr && metaData->AccessRight_Administration();
 }
 
@@ -42,7 +42,7 @@ void ibSchemaHomePage::Build(const ibSession& session, const ibDataNode& args, i
 {
 	ibProtocol::ibRefusal refusal = ibProtocol::ibRefusal::None;
 	ibString error;
-	const ibValueMetaObjectConfiguration* const root = FindRoot(session, args, refusal, error);
+	const ibValueMetaObjectApplication* const root = FindRoot(session, args, refusal, error);
 	if (root == nullptr)
 		return;
 
@@ -53,11 +53,11 @@ void ibSchemaHomePage::Build(const ibSession& session, const ibDataNode& args, i
 		result.SetValue(ibProtocol::ibSchema::ibHomePage::ReadOnly, true);
 
 	// The forms the desktop's picker listed (ibDialogHomePageFormSelect::FillTree), and the workspace's rows named by:
-	// every form the configuration allows, a common one among the common, any other under its owner.
+	// every form the application allows, a common one among the common, any other under its owner.
 	const ibMetaData* const metaData = root->GetMetaData();
 	ibDataNode& forms = result.Child(ibProtocol::ibSchema::ibHomePage::Forms);
 	for (const ibValueMetaObjectFormBase* metaForm :
-		metaData->GetAnyArrayObject<ibValueMetaObjectFormBase>({ g_metaCommonFormCLSID, g_metaFormCLSID }, true)) {
+		metaData->GetAnyArrayObject<ibValueMetaObjectFormBase>({ g_metaSharedFormCLSID, g_metaFormCLSID }, true)) {
 
 		if (metaForm == nullptr || !metaForm->IsAllowed())
 			continue;
@@ -67,8 +67,8 @@ void ibSchemaHomePage::Build(const ibSession& session, const ibDataNode& args, i
 		row.SetValue(ibProtocol::ibSchema::ibHomePage::Name, metaForm->GetName());
 		row.SetValue(ibProtocol::ibSchema::ibHomePage::FullName, metaForm->GetFullName());
 		row.SetValue(ibProtocol::ibSchema::ibHomePage::Picture, ibBackendPicture::SendPicture(metaForm->GetClassType()));
-		if (metaForm->GetClassType() == g_metaCommonFormCLSID) {
-			row.SetValue(ibProtocol::ibSchema::ibHomePage::Common, true);
+		if (metaForm->GetClassType() == g_metaSharedFormCLSID) {
+			row.SetValue(ibProtocol::ibSchema::ibHomePage::Shared, true);
 			continue;
 		}
 		if (const ibValueMetaObject* const owner = metaForm->GetParent()) {
@@ -88,7 +88,7 @@ std::function<void()> ibSchemaHomePage::Command(const ibSession& session, std::i
 		return nullptr;
 	}
 
-	ibValueMetaObjectConfiguration* const root = FindRoot(session, args, refusal, error);
+	ibValueMetaObjectApplication* const root = FindRoot(session, args, refusal, error);
 	if (root == nullptr)
 		return nullptr;
 
@@ -106,7 +106,7 @@ std::function<void()> ibSchemaHomePage::Command(const ibSession& session, std::i
 		return nullptr;
 	}
 
-	// …and the configuration modified by it — the desktop's dialog marked it on OK.
+	// …and the application modified by it — the desktop's dialog marked it on OK.
 	return [root, homePage]() {
 		if (root->GetHomePage() == homePage)
 			return;

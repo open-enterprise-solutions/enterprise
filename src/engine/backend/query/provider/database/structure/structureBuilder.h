@@ -1,8 +1,8 @@
 #ifndef __STRUCTURE_BUILDER_H__
 #define __STRUCTURE_BUILDER_H__
 
-// ibStructureBuilder — the config-save STRUCTURE + SEED engine (the L3-2 tier). It is METADATA-AGNOSTIC:
-// it works only on ibSchemaSnapshot (the declarative "what the schema is"), never on a configuration. It
+// ibStructureBuilder — the application-save STRUCTURE + SEED engine (the L3-2 tier). It is METADATA-AGNOSTIC:
+// it works only on ibSchemaSnapshot (the declarative "what the schema is"), never on an application. It
 // OWNS the restructuring transaction: at write-start it discards any leftover unfinished build (rolls back
 // a straggling transaction) and opens a transaction on its HOLDER's connection, held until the save
 // finishes (commit / rollback). The holder is the connection lifetime anchor (same seam as L2

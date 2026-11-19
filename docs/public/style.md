@@ -24,7 +24,7 @@ appended to its kind's run.
 - **The platform's style is the default** (`ibStyle::Platform`): a value for every item in both looks. Its light look
   keeps what the platform painted with — the forms' ink on cream, the Luna theme's chrome, field, border, accent and
   button colours; the items it had no colour for, and the dark look, are new.
-- **A configuration's style lies over it**, giving only what it changes: an item it leaves out is the platform's
+- **An application's style lies over it**, giving only what it changes: an item it leaves out is the platform's
   (`ibStyle::Get`). So a style saved before an item existed reads whole.
 - **An item takes a value of its own kind**, and only one its text reads back as — an opaque colour, a font its
   text keeps whole, a border no wider than 64, a list of at least one colour; `Set` refuses the rest, so what is set
@@ -38,5 +38,5 @@ appended to its kind's run.
 
 The person's theme says which set is in force; a report deeper than its grouping list takes the last
 level; a control's colour may name an item instead of holding a colour, and a
-client resolves it through the values in force; a configuration holds its own styles, and the designer edits one with
+client resolves it through the values in force; an application holds its own styles, and the designer edits one with
 a live preview. Those are built on this list.

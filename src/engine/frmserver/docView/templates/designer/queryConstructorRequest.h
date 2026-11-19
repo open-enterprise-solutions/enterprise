@@ -1,7 +1,7 @@
 #ifndef _DESIGNER_QUERY_CONSTRUCTOR_REQUEST_H__
 #define _DESIGNER_QUERY_CONSTRUCTOR_REQUEST_H__
 
-// WHAT THE QUERY CONSTRUCTOR ASKS THE CONFIGURATION — ibProtocol::ibView::ibQueryConstructor, answered by any designer
+// WHAT THE QUERY CONSTRUCTOR ASKS THE APPLICATION — ibProtocol::ibView::ibQueryConstructor, answered by any designer
 // tab whose document has one (a module's, a form's, a composer's). The thin client's ibQueryConstructorModel asks; the
 // desktop's model (backend/query/queryConstructorModel.h) answers here, the same calls the desktop window makes.
 

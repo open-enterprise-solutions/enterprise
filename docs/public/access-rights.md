@@ -1,6 +1,6 @@
 # Access rights
 
-**What.** What a user may do in a base is said in two parts, both on the configuration's **roles**: the
+**What.** What a user may do in a base is said in two parts, both on the application's **roles**: the
 **rights** - may this user read, write, delete objects of this kind at all - and the **row restriction** -
 which of their rows. A user is given roles; a session carries them from login to logout.
 
@@ -14,10 +14,10 @@ show why.
 
 - **On an object kind:** `Read`, `Write`, `Delete` on catalogs, documents, charts and registers; `Use` on
   commands, forms, sections and predefined jobs.
-- **On the configuration:** `Administration`, `DataAdministration`, `UpdateDatabaseConfiguration`,
-  `ActiveUsers`, `ExclusiveMode`, `ModeAllFunctions`, and `Assistant` / `DataAssistant` - the two an
+- **On the application:** `Administration`, `DataAdministration`, `UpdateDatabase`,
+  `ActiveUsers`, `SingleUserMode`, `ModeAllFunctions`, and `Assistant` / `DataAssistant` - the two an
   assistant over MCP needs, off until granted.
-- **Full access.** A configuration that declares no roles is not governed by them; a user with
+- **Full access.** An application that declares no roles is not governed by them; a user with
   `Administration` has every right.
 - **The right comes first.** A query names its tables; each is asked for its right before any row is
   read, and the first refusal ends the query. A refusal is an error naming what was refused, never an
@@ -33,8 +33,8 @@ The handler narrows the source and grants:
 ```
 Procedure OnAccessRead(Source, Operation, Allowed)
 {
-    if (Source = "Document.Invoice") {
-        Source = Source.Where(Function(x) { Return x.Organisation = SessionParameters.Organisation; });
+    if (Source == "Document.Invoice") {
+        Source = Source.Where(Function(x) { Return x.Organisation == SessionParameters.Organisation; });
     }
     Allowed = True;
 }

@@ -14,7 +14,7 @@ class ibValueManagerDataObjectCatalog :
 	}
 	virtual ~ibValueManagerDataObjectCatalog() {}
 
-	virtual const ibValueMetaObjectCommonModule* GetManagerModule() const;
+	virtual const ibValueMetaObjectSharedModule* GetManagerModule() const;
 	virtual const ibValueMetaObjectCatalog* GetMetaObject() const { return m_metaObject; }
 
 	void FillManagerMethods(ibMemberTable& helper) const;  // composes onto FillMembers + FillPredefined

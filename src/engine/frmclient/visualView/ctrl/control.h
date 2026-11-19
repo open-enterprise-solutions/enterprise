@@ -4,7 +4,7 @@
 #include "frame.h"
 
 // THE CONTROL — the old desktop's ibValueControl.Its name is the frame's
-// (ibValueFrame::GetControlName); its functional options are the server's: what it offers, the frame draws.
+// (ibValueFrame::GetControlName); its feature options are the server's: what it offers, the frame draws.
 class ibValueControl : public ibValueFrame {
 public:
 

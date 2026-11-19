@@ -68,7 +68,7 @@ std::vector<std::shared_ptr<const ibBackendQueryable>> TargetsOfColumn(const std
 		targets = provider.ResolveReferenceTargets(source, column);
 
 	// ⚠ A COLUMN THAT NAMES NO CATALOG CANNOT BE WALKED — a value table's column declared with no type, a
-	// source that answers no configuration. Standing for the named values alone, it found not one row under
+	// source that answers no application. Standing for the named values alone, it found not one row under
 	// a group and said nothing (2026-09-29); refused instead, with the way out: the column is given a type.
 	if (targets.empty())
 		for (const ibValue& value : named)

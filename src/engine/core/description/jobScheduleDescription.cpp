@@ -117,14 +117,8 @@ namespace {
 // SAME meaning of the fields must load in an earlier one rather than fail, so the reader stops
 // where its knowledge ends and every unread field keeps its default - and every default here
 // reads as "not restricted". A byte the reader does not know is refused as a whole.
-// A date travels, by the version: 3 (2026-09-30) - an ibDateTime's count, the wall-clock reading of
-// its local parts (fdatetime.h); 2 - the same reading counted from 1970-01-01, the first form of it
-// (PR #217); 1 - an instant, ms of real time from the wxDateTime epoch, read as one and kept as the
-// reading of its local parts. The other way round a build before this one refuses a version-3 blob
-// and keeps its defaults: rolling back loses stored schedules to their defaults.
+// A date travels as an ibDateTime's count, the wall-clock reading of its local parts (fdatetime.h).
 constexpr std::uint8_t kScheduleBufferVersion = 3;
-constexpr std::uint8_t kScheduleBufferWallFrom1970 = 2;
-constexpr std::uint8_t kScheduleBufferInstants = 1;
 
 void PutU32(ibMemoryBuffer& out, std::uint32_t value)
 {
@@ -207,9 +201,8 @@ bool ibJobScheduleDescriptionMemory::ReadBuffer(const void* data, size_t length,
 		return false;
 
 	BufferCursor cursor{ static_cast<const std::uint8_t*>(data), length, 1 };
-	const std::uint8_t version = cursor.m_data[0];
-	if (version != kScheduleBufferVersion && version != kScheduleBufferWallFrom1970 && version != kScheduleBufferInstants)
-		return false;   // a version this build does not know — leave the caller's value alone
+	if (cursor.m_data[0] != kScheduleBufferVersion)
+		return false;   // a version this build does not write — leave the caller's value alone
 
 	// Read into a FRESH description: a partial blob then yields defaults for what it did not
 	// carry, rather than a mix of the caller's previous value and this one.
@@ -222,18 +215,10 @@ bool ibJobScheduleDescriptionMemory::ReadBuffer(const void* data, size_t length,
 		return true;
 	};
 
-	const auto takeDate = [&cursor, version](ibDateTime& target) {
+	const auto takeDate = [&cursor](ibDateTime& target) {
 		std::int64_t ticks = 0;
 		if (!cursor.Take(ticks)) return false;
-		// A version-1 blob holds an instant: it is read as the one it is and kept as the reading of its
-		// local parts - the old format's reader, and the one place the bridge is crossed here.
-		// 0 is "unbounded" in every version.
-		if (version == kScheduleBufferInstants)
-			target = ticks != 0 ? ibDateTime::OfInstant(ticks) : ibDateTime();
-		else if (version == kScheduleBufferWallFrom1970)
-			target = ticks != 0 ? ibDateTime(1970, 1, 1).AddMilliseconds(ticks) : ibDateTime();
-		else
-			target = ibDateTime(ticks);
+		target = ibDateTime(ticks);   // 0 is the empty date, "unbounded"
 		return true;
 	};
 

@@ -88,7 +88,7 @@ bool ibValueFrame::LoadControl(const ibValueMetaObjectFormBase* metaForm, ibRead
 		return false;
 	// Route by the blob's OWN format tag (SELF-DESCRIBING), not a transient paste mark: a copy blob — a pasted form,
 	// possibly saved to disk and reloaded long after the paste mark cleared — re-homes its source hops (guid→id) onto
-	// the pasted objects; a raw blob (incl. every OLD config, no tag) loads plainly. No copy→raw normalization anywhere.
+	// the pasted objects; a raw blob (incl. every OLD application, no tag) loads plainly. No copy→raw normalization anywhere.
 	if (builder.Root().GetValue<bool>(ibT("PasteFormat")))
 		return PasteNode(builder.Root());
 	return LoadNode(builder.Root());
@@ -104,7 +104,7 @@ bool ibValueFrame::SaveControl(const ibValueMetaObjectFormBase* metaForm, ibWrit
 	if (!ok)
 		return false;
 	// SELF-DESCRIBING tag: a copy blob stamps its root so LoadControl re-homes it (PasteNode) by CONTENT, independent of
-	// any live paste mark. Absent on a raw save (and on every old config) → back-compat load as raw. A pasted form keeps
+	// any live paste mark. Absent on a raw save (and on every old application) → back-compat load as raw. A pasted form keeps
 	// its copy blob on disk and re-homes on each load; editing+saving it writes raw (no tag) — self-healing.
 	if (copy)
 		builder.Root().SetValue(ibT("PasteFormat"), true);

@@ -13,7 +13,7 @@
 #include "backend/system/value/valueBackgroundJob.h"   // LastJob
 #include "backend/job/jobManager.h"                    // LastJob
 
-const ibValueMetaObjectCommonModule* ibValueManagerDataObjectJob::GetManagerModule() const
+const ibValueMetaObjectSharedModule* ibValueManagerDataObjectJob::GetManagerModule() const
 {
 	return m_metaObject->GetManagerModule();
 }

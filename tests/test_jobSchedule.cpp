@@ -358,56 +358,27 @@ TEST(JobSchedule, Buffer_RoundTripsEveryField)
 	EXPECT_EQ(dst.m_activeTo,     src.m_activeTo);
 }
 
-// A blob written under version 1 (before 2026-09) holds instants - ms of real time - and one written
-// under version 2 the wall reading counted from 1970, where version 3 holds an ibDateTime's count. Each
-// reads its dates by its byte, and an empty one stays empty. The older blobs here are the version-3 one
-// with its byte lowered: the numbers stay, their meaning changes with the byte, which is what the byte
-// is for.
-TEST(JobSchedule, Buffer_ReadsAVersionOneBlobsDatesAsInstants)
+// One version is written and one is read: a blob under any other byte is refused whole, and the
+// caller's value is left alone.
+TEST(JobSchedule, Buffer_RefusesAVersionItDoesNotWrite)
 {
 	ibJobScheduleDescription src = ibJobScheduleDescription::EverySeconds(600);
 	src.m_periodAnchor = At(2026, wxDateTime::Jan, 5, 12, 0);
-	src.m_activeFrom   = At(2026, wxDateTime::Jan, 1);
-	ASSERT_TRUE(src.m_activeTo.IsEmpty());
 
 	ibMemoryBuffer blob;
 	ibJobScheduleDescriptionMemory::WriteBuffer(blob, src);
 	ASSERT_GT(blob.GetDataLen(), 0u);
 	unsigned char* bytes = static_cast<unsigned char*>(blob.GetData());
 	ASSERT_EQ(3u, bytes[0]) << "written under version 3";
-	bytes[0] = 1;
 
 	ibJobScheduleDescription dst;
 	ASSERT_TRUE(ibJobScheduleDescriptionMemory::ReadBuffer(blob.GetData(), blob.GetDataLen(), dst));
-	// The stored number is the count of the anchor's reading; under version 1 it is an instant, read
-	// back as the reading of its local parts.
-	EXPECT_EQ(typeConv::WxDateTimeToDateTime(wxDateTime(wxLongLong(src.m_periodAnchor.GetValue()))), dst.m_periodAnchor);
-	EXPECT_EQ(typeConv::WxDateTimeToDateTime(wxDateTime(wxLongLong(src.m_activeFrom.GetValue()))), dst.m_activeFrom);
-	EXPECT_TRUE(dst.m_activeTo.IsEmpty());
-	EXPECT_EQ(src.m_intervalSeconds, dst.m_intervalSeconds);
+	EXPECT_EQ(src.m_periodAnchor, dst.m_periodAnchor);
 
-	bytes[0] = 4;
-	EXPECT_FALSE(ibJobScheduleDescriptionMemory::ReadBuffer(blob.GetData(), blob.GetDataLen(), dst)) << "a version this build does not know";
-}
-
-TEST(JobSchedule, Buffer_ReadsAVersionTwoBlobsDatesFrom1970)
-{
-	ibJobScheduleDescription src = ibJobScheduleDescription::EverySeconds(600);
-	src.m_periodAnchor = At(2026, wxDateTime::Jan, 5, 12, 0);
-	ASSERT_TRUE(src.m_activeTo.IsEmpty());
-
-	ibMemoryBuffer blob;
-	ibJobScheduleDescriptionMemory::WriteBuffer(blob, src);
-	unsigned char* bytes = static_cast<unsigned char*>(blob.GetData());
-	ASSERT_EQ(3u, bytes[0]) << "written under version 3";
-	bytes[0] = 2;
-
-	ibJobScheduleDescription dst;
-	ASSERT_TRUE(ibJobScheduleDescriptionMemory::ReadBuffer(blob.GetData(), blob.GetDataLen(), dst));
-	// The same number, counted from 1970-01-01 instead of from the empty date.
-	const long long stored = src.m_periodAnchor.GetValue();
-	EXPECT_EQ(ibDateTime(1970, 1, 1).AddMilliseconds(stored), dst.m_periodAnchor);
-	EXPECT_TRUE(dst.m_activeTo.IsEmpty()) << "0 is unbounded in every version";
+	for (const int other : { 1, 2, 4 }) {
+		bytes[0] = static_cast<unsigned char>(other);
+		EXPECT_FALSE(ibJobScheduleDescriptionMemory::ReadBuffer(blob.GetData(), blob.GetDataLen(), dst)) << "version " << other;
+	}
 }
 
 TEST(JobSchedule, Buffer_KeepsAnInvalidDateInvalid)

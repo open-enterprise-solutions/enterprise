@@ -40,7 +40,7 @@
 #include "backend/appData.h"
 #include "backend/compiler/compileCode.h"   // ibCompileCode::GetCodeStyle — put back as it was found
 #include "backend/tabularModel.h"   // ibValueModel::ibComposerNode
-#include "backend/metadataConfiguration.h"
+#include "backend/metadataApplication.h"
 #include "backend/metaCollection/metaObject.h"
 #include "backend/metaCollection/partial/enumeration.h"
 #include "backend/metaCollection/enumeration/metaEnumObject.h"
@@ -63,12 +63,12 @@ struct TabularEnumPersist : ::testing::Test {
 	wxInitializer m_wxInit;
 	std::shared_ptr<ibDatabaseLayerSQLite> db;
 	ibString dbPath;
-	std::unique_ptr<ibMetaDataConfigurationFile> cfg;
+	std::unique_ptr<ibMetaDataApplicationFile> cfg;
 	ibValueMetaObjectEnumeration* vatRates = nullptr;
 	ibValueMetaObjectEnum* vat10 = nullptr;
 	ibValueMetaObjectEnum* vat20 = nullptr;
-	// RunDatabase sets this thread's code style to the configuration's. The binary runs VES (test_compiler.cpp), so
-	// TearDown puts it back, as the other fixtures that run a configuration do (AcceptanceCatalogs, FiberTrust).
+	// RunDatabase sets this thread's code style to the application's. The binary runs VES (test_compiler.cpp), so
+	// TearDown puts it back, as the other fixtures that run an application do (AcceptanceCatalogs, FiberTrust).
 	const short m_codeStyle = ibCompileCode::GetCodeStyle();
 
 	void SetUp() override {
@@ -85,8 +85,8 @@ struct TabularEnumPersist : ::testing::Test {
 			GTEST_SKIP() << "SQLite open failed";
 		pool->Init(db, /*maxSize=*/4, /*minIdle=*/0);
 
-		cfg = std::make_unique<ibMetaDataConfigurationFile>();
-		ibValueMetaObjectConfiguration* root = cfg->GetCommonMetaObject();
+		cfg = std::make_unique<ibMetaDataApplicationFile>();
+		ibValueMetaObjectApplication* root = cfg->GetRootMetaObject();
 		ASSERT_NE(root, nullptr);
 
 		vatRates = dynamic_cast<ibValueMetaObjectEnumeration*>(
@@ -103,7 +103,7 @@ struct TabularEnumPersist : ::testing::Test {
 		vat10->SetName(wxT("Vat10"));
 		vat20->SetName(wxT("Vat20"));
 
-		ASSERT_TRUE(cfg->RunDatabase()) << "the configuration in memory did not run";
+		ASSERT_TRUE(cfg->RunDatabase()) << "the application in memory did not run";
 
 		CreateTable();
 		SeedRows();

@@ -56,7 +56,7 @@ bool ibValueMetaObjectCommand::OnDeleteMetaObject()
 bool ibValueMetaObjectCommand::OnBeforeRunMetaObject(int flags)
 {
 	// forwards to the inner module so the designer code editor sees it; a PLAIN module does NOT
-	// register with the module manager (that is only CommonModule / ManagerModule).
+	// register with the module manager (that is only SharedModule / ManagerModule).
 	if (!(*m_propertyCommandModule)->OnBeforeRunMetaObject(flags))
 		return false;
 	return ibValueMetaObject::OnBeforeRunMetaObject(flags);
@@ -65,7 +65,7 @@ bool ibValueMetaObjectCommand::OnBeforeRunMetaObject(int flags)
 // ⭐ THE COMMAND'S MODULE, MADE CHECKABLE.
 //
 // Eleven metatypes register a compile module with the designer's cache here — object modules,
-// manager modules, record modules, forms, common modules. A command did not, and the consequence
+// manager modules, record modules, forms, shared modules. A command did not, and the consequence
 // was quiet: ibCheckModule found no compile module and answered Unreachable, so the designer's
 // Syntax button and every tool over it reported "nothing wrong" about a module that had never been
 // compiled. An empty diagnostics list from an unchecked module is not a pass — which is exactly why
@@ -83,7 +83,7 @@ bool ibValueMetaObjectCommand::OnAfterRunMetaObject(int flags)
 	if (!(*m_propertyCommandModule)->OnAfterRunMetaObject(flags))
 		return false;
 
-	// Designer kinds only — a runtime configuration has no compile cache, and asking for one is how
+	// Designer kinds only — a runtime application has no compile cache, and asking for one is how
 	// the callsites in this tree decide, rather than by testing the mode.
 	if (auto* cc = m_metaData->GetCompileCache()) {
 
@@ -131,7 +131,7 @@ bool ibValueMetaObjectCommand::OnAfterCloseMetaObject()
 
 bool ibValueMetaObjectCommand::Execute(ibInterfaceCommandType /*cmdType*/, ibBackendValueForm* srcForm, ibValue* commandParameter) const
 {
-	// Run the handler through the command's OWN descriptor — private, no common-module registration,
+	// Run the handler through the command's OWN descriptor — private, no shared-module registration,
 	// no name-resolvable exports (a command handler is never called by name from script).
 	// Direct-initialised: ibValuePtr's pointer constructor is explicit, so `= new …` is
 	// copy-initialisation and ill-formed. MSVC accepts it anyway; GCC does not.
@@ -161,7 +161,7 @@ bool ibValueMetaObjectCommand::GetCommandByHop(const ibCommandHop& hop, ibValue&
 //***********************************************************************
 
 // ⭐ ONE NUMBER SAYS WHICH GROUP, AND IT IS A NUMBER THE GROUP ALREADY HAS. A platform group's is its area
-// (ibInterfaceCommandSection, 100 to 153); a declared group's is its metaID. The configuration root takes
+// (ibInterfaceCommandSection, 100 to 153); a declared group's is its metaID. The application root takes
 // defaultMetaID (1000) and every other object is numbered after it, so the two ranges cannot meet — and
 // ibPropertyChoiceList defines a choice's id as exactly these two kinds of number. Nothing is minted for it.
 //
@@ -190,15 +190,15 @@ ibInterfaceCommandSection ibValueMetaObjectCommand::GetCommandSection() const
 	return ibInterfaceCommandSection_Default;   // a declared group, or one that is gone — see the header
 }
 
-// ⭐ A COMMON COMMAND FILED UNDER A GROUP OF THE FORM COMMAND BAR IS REACHED FROM FORMS, not from a section: it
+// ⭐ A SHARED COMMAND FILED UNDER A GROUP OF THE FORM COMMAND BAR IS REACHED FROM FORMS, not from a section: it
 // stands in that group's submenu on every form of the object its ParameterType names. Reported as "in no section"
 // it read as "nobody can open it" about a print command that was one click away (measured 2026-09-22, the first
-// common command filed under Print).
+// shared command filed under Print).
 //
 // ⚠ ONLY WHEN IT IS TYPED FOR SOMETHING. The forms it stands on are those of the objects its ParameterType names;
 // left with the default String it names none, stands on no form and in no section — and is exactly the command
 // the audits exist to report (the audit, 2026-09-22).
-bool ibValueMetaObjectCommonCommand::IsInterfaceRequired() const
+bool ibValueMetaObjectSharedCommand::IsInterfaceRequired() const
 {
 	const ibValueMetaObjectCommandGroup* group = GetCommandGroup();
 	if (group == nullptr || group->GetCategory() != ibCommandGroupCategory_FormCommandBar)
@@ -238,10 +238,7 @@ bool ibValueMetaObjectCommand::ReadData(const ibDataNode& node)
 		return false;
 
 	m_propertyCommandModule->SetNodeValue(node.GetProperty(m_propertyCommandModule->GetName()));
-	// A configuration written before command groups keeps the platform area under "InterfaceArea" — the same
-	// number Group holds for a platform group, so it is read into Group as it stands.
-	if (!m_propertyGroup->SetNodeValue(node.GetProperty(m_propertyGroup->GetName())))
-		m_propertyGroup->SetNodeValue(node.GetProperty(ibT("InterfaceArea")));
+	m_propertyGroup->SetNodeValue(node.GetProperty(m_propertyGroup->GetName()));
 	m_propertyPicture->SetNodeValue(node.GetProperty(m_propertyPicture->GetName()));
 	m_propertyTooltip->SetNodeValue(node.GetProperty(m_propertyTooltip->GetName()));
 	m_propertyModifiesData->SetNodeValue(node.GetProperty(m_propertyModifiesData->GetName()));
@@ -306,7 +303,7 @@ bool ibValueCommandDataObject::RunHandler(ibValue& commandParameter, ibValue& ex
 //***********************************************************************
 
 METADATA_TYPE_REGISTER(ibValueMetaObjectCommand,       "Command",       g_metaCommandCLSID);          // under an object (plain, like Form)
-METADATA_TYPE_REGISTER(ibValueMetaObjectCommonCommand, "CommonCommand", g_metaCommonCommandCLSID);   // config-level (like CommonForm)
+METADATA_TYPE_REGISTER(ibValueMetaObjectSharedCommand, "SharedCommand", g_metaSharedCommandCLSID);   // application-level (like SharedForm)
 
 // the command interface-area enum — one line makes it a script value, a dropdown and a serialisable property
 ENUM_TYPE_REGISTER(ibValueEnumInterfaceCommandSection, "CommandInterfaceArea", enum_to_clsid("EN_CIAR"));

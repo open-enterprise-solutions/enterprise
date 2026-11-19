@@ -15,7 +15,7 @@ bool ibValueTextCtrl::GetChoiceForm(ibPropertyList* property)
 	if (metaData != nullptr) {
 		const ibValueMetaObjectRecordDataRef* metaObject = nullptr;
 		if (!m_propertySource->IsEmptyProperty()) {
-			// Resolve the bound attribute config-wide — a dotted path's leaf lives in a
+			// Resolve the bound attribute application-wide — a dotted path's leaf lives in a
 			// referenced type, not the form's own metaobject (so the source-scoped lookup
 			// here would miss it and assert). The dot (WalkSource) handles both.
 			const ibBackendSourceColumn* attribute = WalkSource(GetSourceDesc());

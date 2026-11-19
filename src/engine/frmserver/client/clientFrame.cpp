@@ -141,6 +141,13 @@ void ibClientFrame::Message(const ibString& strMessage, ibStatusMessage status)
 	m_pendingMessages.push_back({ status, strMessage });
 }
 
+void ibClientFrame::Message(const ibString& strMessage, ibStatusMessage status,
+	const ibString& strFileName, const ibString& strDocPath, long line)
+{
+	std::lock_guard<std::mutex> lock(m_msgMutex);
+	m_pendingMessages.push_back({ status, strMessage, strFileName, strDocPath, line });
+}
+
 void ibClientFrame::ClearMessage()
 {
 	// The unread lines go, and the client is told to clear what it shows: a one-shot flag (TakeClearPending).
@@ -177,6 +184,13 @@ void ibClientFrame::BackendError(const ibString& strFileName,
 
 	if (act == static_cast<std::int32_t>(ibProtocol::ibRequest::ibError::ibAct::CloseProgram))
 		ExitClient(true);
+}
+
+ibMetaData* ibClientFrame::FindMetadataByPath(const ibString& strFileName) const
+{
+	ibDocManager* const manager = GetDocumentManager();
+	ibMetaDataDocument* const document = manager != nullptr ? manager->FindMetaDataDocument(strFileName) : nullptr;
+	return document != nullptr ? document->GetMetaData() : nullptr;
 }
 
 std::vector<ibClientFrame::PendingMessage> ibClientFrame::DrainPendingMessages()

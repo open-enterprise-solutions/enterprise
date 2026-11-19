@@ -265,7 +265,7 @@ bool ReadFieldOf(ibCellFields& cell, ibColumnRole valueRole, int fieldType,
 	}
 	case ibFieldTypes_Value: {
 		// What a column of no type holds with no field of its own: the bytes of the node it was written as
-		// (WriteValue binds them, SetParamBlob), read here, where the configuration a reference inside it belongs to is
+		// (WriteValue binds them, SetParamBlob), read here, where the application a reference inside it belongs to is
 		// known — the base kept only the bytes.
 		ibMemoryBuffer bytes;
 		ibDataNode node;

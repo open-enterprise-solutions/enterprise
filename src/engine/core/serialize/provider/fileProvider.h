@@ -4,13 +4,13 @@
 #include "core/serialize/dataBuilder.h"
 #include <functional>
 
-// ⭐ A CONFIGURATION AS A DIRECTORY OF FILES — for a repository and its diffs. A node is a file, written in the
-// engine's one JSON form of a node (ibJsonProvider), and named by what it is: `CommonModule/Main/node.json`, its
+// ⭐ AN APPLICATION AS A DIRECTORY OF FILES — for a repository and its diffs. A node is a file, written in the
+// engine's one JSON form of a node (ibJsonProvider), and named by what it is: `SharedModule/Main/node.json`, its
 // children in folders under it, a text of several lines and a binary beside it in a file of its own (`Module.txt`;
-// from inside a value — the names on the way, `ObjectModule.Module.txt`). The root is `configuration.json`.
+// from inside a value — the names on the way, `ObjectModule.Module.txt`). The root is `application.json`.
 //
 // ⭐ LAID OUT IN MEMORY FIRST — `files`, a node holding one field a file: its path and its bytes. The files are written
-// where the directory is and the tree is read where the configuration is, and in a thin designer those are two
+// where the directory is and the tree is read where the application is, and in a thin designer those are two
 // machines: the set travels between them as one node (its binary form), and only Publish and Collect touch a disk.
 class CORE_API ibFileProvider {
 public:

@@ -16,11 +16,11 @@
       ],
       "signature": "New TextReader(path : string [, encoding : TextEncoding | string = UTF8])",
       "description": "A file's text, read line by line. The whole file is decoded ONCE, when it is opened - these are exchange files: sales out of a cash register, a price list, an invoice from another system, not logs of gigabytes.\n\nTHE FILE IS NOT HELD OPEN between opening and Close. Its bytes are read whole and the handle let go inside the opening call itself; Close() lets the decoded text go, so what it frees is memory, not a handle on disk.\n\nOpen, ReadLine, Read, LineCount, GetLine and Close are the whole surface - a reader has no properties. ReadLine and GetLine walk ONE cut of the file, so a loop to LineCount() and a loop to Undefined see the same lines, and GetLine does not move where ReadLine stands.\n\nTHE END OF THE FILE IS Undefined, NOT AN EMPTY STRING. An empty line is a line: a loop written against \"\" stops at the first blank line of the file, and written the other way round it never stops. Read() is the other half of that rule - with nothing left it hands over \"\", not Undefined.\n\nTHE ENCODING IS THE SCRIPT'S TO SAY - a member of TextEncoding or a page's name, UTF8 when the argument is left out or given empty. Bytes that do not spell text in it are a REFUSAL, not a text with holes in it: \"TextReader: the file '<path>' cannot be read in the encoding given\". A byte-order mark at the head of a UTF-8 or UTF-16 file is read as a mark and never handed over as text, and a UTF-16 mark also says which end comes first.\n\nA file that cannot be opened, one too large to be held in memory, and one that cannot be read to the end are refusals of their own, each naming the file. Every verb of a reader with no file open refuses with \"TextReader: no file is open\"; built with no argument at all a reader holds none, and Open gives it one. ValueIsFilled answers whether a file is open.",
-      "syntax_block": "Reader = New TextReader(path, TextEncoding.UTF8);\n\nLine = Reader.ReadLine();\nwhile (Line <> Undefined) {        // Undefined, not \"\": an empty line is a line\n    Line = Reader.ReadLine();\n}\nReader.Close();",
+      "syntax_block": "Reader = New TextReader(path, TextEncoding.UTF8);\n\nLine = Reader.ReadLine();\nwhile (Line != Undefined) {        // Undefined, not \"\": an empty line is a line\n    Line = Reader.ReadLine();\n}\nReader.Close();",
       "syntax_block_ves": "Reader = New TextReader(path, TextEncoding.UTF8);\n\nLine = Reader.ReadLine();\nWhile Line <> Undefined Do        // Undefined, not \"\": an empty line is a line\n    Line = Reader.ReadLine();\nEndDo;\nReader.Close();",
       "parameters": "path - the file to read. One that cannot be opened is refused, and the message names it.\nencoding - a member of TextEncoding or a page's name (\"windows-1251\", \"cp866\", \"UTF-8\", \"UTF-16\"); left out or given empty it is UTF8, which is STRICT: bytes that are not UTF-8 are refused rather than read with holes in them.",
       "return_descr": "TextReader.",
-      "example": "Reader = New TextReader(\"C:\\in\\sales.csv\", TextEncoding.UTF8);\nLine = Reader.ReadLine();\nwhile (Line <> Undefined) {              // Undefined, not \"\": an empty line is a line\n    if (Line <> \"\") {\n        Cut = Find(Line, \";\");\n        Code = Left(Line, Cut - 1);      // the first field\n    }\n    Line = Reader.ReadLine();\n}\nReader.Close();",
+      "example": "Reader = New TextReader(\"C:\\in\\sales.csv\", TextEncoding.UTF8);\nLine = Reader.ReadLine();\nwhile (Line != Undefined) {              // Undefined, not \"\": an empty line is a line\n    if (Line != \"\") {\n        Cut = Find(Line, \";\");\n        Code = Left(Line, Cut - 1);      // the first field\n    }\n    Line = Reader.ReadLine();\n}\nReader.Close();",
       "availability": "Client, Server",
       "see_also": [
         "cls.TextReader.ReadLine",
@@ -72,7 +72,7 @@
       "syntax_block": "Line = Reader.ReadLine();",
       "parameters": "None.",
       "return_descr": "String - or Undefined at the end of the file.",
-      "example": "Line = Reader.ReadLine();\nwhile (Line <> Undefined) {       // not while (Line <> \"\")\n    Message(Line);\n    Line = Reader.ReadLine();\n}",
+      "example": "Line = Reader.ReadLine();\nwhile (Line != Undefined) {       // not while (Line <> \"\")\n    Message(Line);\n    Line = Reader.ReadLine();\n}",
       "availability": "Client, Server",
       "see_also": [
         "cls.TextReader",
@@ -353,7 +353,7 @@
       "syntax_block": "Count = Bytes.Size();",
       "parameters": "None.",
       "return_descr": "Number.",
-      "example": "Bytes.Read(path);\nif (Bytes.Size() = 0) { Message(\"the file is empty\"); }",
+      "example": "Bytes.Read(path);\nif (Bytes.Size() == 0) { Message(\"the file is empty\"); }",
       "availability": "Client, Server",
       "see_also": [
         "cls.BinaryData",

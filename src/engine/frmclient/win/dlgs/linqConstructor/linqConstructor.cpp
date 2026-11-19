@@ -698,7 +698,7 @@ ibTreeCtrl* ibDialogLinqConstructor::MakeSourceTree(wxWindow* parent)
 
 	const wxTreeItemId root = tree->AddRoot(wxEmptyString);
 
-	// ⭐ THE CONFIGURATION'S TABLES FIRST, the way the query constructor opens on its kinds: `Data`'s
+	// ⭐ THE APPLICATION'S TABLES FIRST, the way the query constructor opens on its kinds: `Data`'s
 	// sections at the top, each in its kind's picture, their tables inside. The expression each stands
 	// for is the one LINQ reads by - `Data.Catalogs.Goods`.
 	for (const wxString& section : m_sections) {
@@ -806,7 +806,7 @@ void ibDialogLinqConstructor::OnExpanding(wxTreeEvent& event)
 			AddPlace(tree, item, member, node->m_expression + wxT(".") + member, icon, /*probe*/ !underData);
 	}
 	else if (structure) {
-		// A section with nothing in it - a configuration with no constants - is empty, not a table.
+		// A section with nothing in it - an application with no constants - is empty, not a table.
 		tree->AppendItem(item, _("(nothing here)"), -1, -1, new ibLinqNode(ibNodeKind::Hint, wxString()));
 	}
 	else {

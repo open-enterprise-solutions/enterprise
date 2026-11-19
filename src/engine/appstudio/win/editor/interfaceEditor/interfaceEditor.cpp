@@ -83,7 +83,7 @@ void ibInterfaceEditor::InitInterface()
 {
 	m_interfaceCtrl->GetImageList()->RemoveAll();
 
-	m_treeMETADATA = m_interfaceCtrl->AddRoot(_("Configuration"));
+	m_treeMETADATA = m_interfaceCtrl->AddRoot(_("Application"));
 
 	m_interfaceCtrl->SetItemBold(m_treeMETADATA);
 }
@@ -98,7 +98,7 @@ void ibInterfaceEditor::ClearInterface() {
 wxTreeItemId ibInterfaceEditor::GroupFor(const ibProtocolNode& row)
 {
 	// The icon and the caption the server's row carries — the type registry's and the group's own answer there
-	// (ibMetaGroupCaption), the same the configuration tree shows.
+	// (ibMetaGroupCaption), the same the application tree shows.
 	wxImageList* imageList = m_interfaceCtrl->GetImageList();
 	wxASSERT(imageList);
 	const wxBitmap picture = ibProtocolPicture(row, ibProtocol::ibView::ibCheckTree::Picture);
@@ -140,7 +140,7 @@ void ibInterfaceEditor::FillData(const ibProtocolNode& view)
 	// The rows' pictures asked of the server at once — not a call per row drawn.
 	ibProtocolPictureReceive(root);
 
-	// The configuration's row — its name and its picture, as the server's row has them.
+	// The application's row — its name and its picture, as the server's row has them.
 	wxImageList* imageList = m_interfaceCtrl->GetImageList();
 	const wxBitmap picture = ibProtocolPicture(root, ibProtocol::ibView::ibCheckTree::Picture);
 	if (picture.IsOk()) {
@@ -152,7 +152,7 @@ void ibInterfaceEditor::FillData(const ibProtocolNode& view)
 	m_interfaceCtrl->SetItemData(m_treeMETADATA, new ibTreeItemObject(root.GetId()));
 
 	// The server's walk — every object that may be in a section, under its group (a group row: below 0); an object of a
-	// metatype with no group stands under the configuration's row, as on the desktop's.
+	// metatype with no group stands under the application's row, as on the desktop's.
 	for (const ibProtocolNode& row : root.Children()) {
 		if (row.GetId() < 0) {
 			const wxTreeItemId group = GroupFor(row);

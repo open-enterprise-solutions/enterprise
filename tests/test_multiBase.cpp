@@ -13,7 +13,7 @@
 //   4. the thread that OPENED a base works for it — every host of today opens its
 //      base and goes on to log in from the same thread.
 //
-// Each base is opened the way codeRunner opens one, plus its own in-memory SQLite
+// Each base is opened the way coderunner opens one, plus its own in-memory SQLite
 // pool, and the fixture SKIPS (not fails) if the headless environment cannot come
 // up. Its own target, like oes_job_tenancy_test: an appData bring-up must not
 // perturb the main suite.
@@ -36,7 +36,7 @@
 #include "backend/session/session.h"
 #include "backend/session/sessionHolder.h"
 #include "backend/session/sessionRegistry.h"           // Start — a base put together by hand starts its registry
-#include "backend/session/sessionException.h"          // exclusive mode refused: OthersActive
+#include "backend/session/sessionException.h"          // single-user mode refused: OthersActive
 #include "backend/session/sessionSnapshot.h"           // the rows the acquire read
 
 namespace {
@@ -289,17 +289,17 @@ TEST_F(OneBaseFix, AnEmptyUserListOpensAndAnUnreadableOneRefuses)
 	wxRemoveFile(path);
 }
 
-// #649 — a thin designer in an application server asks for exclusive mode beside the server's own login
+// #649 — a thin designer in an application server asks for single-user mode beside the server's own login
 // (ibSessionKind::Service, appServer.cpp). The login is the HOST'S: it passes both of the acquire's checks — this
 // process's sessions, and the snapshot's rows, where the registry wrote its row. A job running at that moment refuses
 // as one to wait for (JobRunning: it ends by itself), a second client refuses outright (NotSole) and outweighs a job.
-TEST(ExclusiveBesideTheHost, TheHostsOwnLoginPassesAJobAndASecondClientDoNot)
+TEST(SingleUserBesideTheHost, TheHostsOwnLoginPassesAJobAndASecondClientDoNot)
 {
 	wxInitializer wxInit;
 	if (!wxInit.IsOk())
 		GTEST_SKIP() << "wxBase init failed (no wxApp host)";
 
-	const ibString path = wxFileName::CreateTempFileName(wxT("oes-exclusive"));
+	const ibString path = wxFileName::CreateTempFileName(wxT("oes-single-user"));
 	ASSERT_FALSE(path.IsEmpty());
 	struct Gone {
 		ibString path;
@@ -318,7 +318,7 @@ TEST(ExclusiveBesideTheHost, TheHostsOwnLoginPassesAJobAndASecondClientDoNot)
 		"CREATE TABLE sys_session ("
 		"session TEXT PRIMARY KEY, userName TEXT, application INTEGER, started TEXT, lastActive TEXT, "
 		"computer TEXT, pid INTEGER, address TEXT, currentActivity TEXT, kind INTEGER, signal TEXT, "
-		"exclusive INTEGER NOT NULL DEFAULT 0, tokenHash TEXT)")), -1);
+		"singleUser INTEGER NOT NULL DEFAULT 0, tokenHash TEXT)")), -1);
 	ibSessionRegistry* const registry = ibApplicationInstance::GetSessionRegistry();
 	registry->Start();
 
@@ -327,12 +327,12 @@ TEST(ExclusiveBesideTheHost, TheHostsOwnLoginPassesAJobAndASecondClientDoNot)
 	ASSERT_NE(host.Get(), nullptr);
 	ASSERT_NE(designer.Get(), nullptr);
 
-	// The registry's verdict, asked as an apply asks it (ibRestructureInfo::RequireExclusiveForDDL); a grant is let go.
-	using R = ibSession::ibExclusiveResult;
+	// The registry's verdict, asked as an apply asks it (ibRestructureInfo::RequireSingleUserForDDL); a grant is let go.
+	using R = ibSession::ibSingleUserResult;
 	const auto acquire = [&]() {
-		const R verdict = registry->SetExclusive(designer.Get(), true);
+		const R verdict = registry->SetSingleUser(designer.Get(), true);
 		if (verdict == R::Granted)
-			registry->SetExclusive(designer.Get(), false);
+			registry->SetSingleUser(designer.Get(), false);
 		return verdict;
 	};
 
@@ -344,7 +344,7 @@ TEST(ExclusiveBesideTheHost, TheHostsOwnLoginPassesAJobAndASecondClientDoNot)
 		ibSessionHolder job = base->CreateSession(ibSessionKind::SystemJob);
 		ASSERT_NE(job.Get(), nullptr);
 		EXPECT_EQ(acquire(), R::JobRunning) << "a running job refuses, as one to wait for";
-		EXPECT_THROW(designer.Get()->SetExclusive(true), ibBackendSessionException)
+		EXPECT_THROW(designer.Get()->SetSingleUser(true), ibBackendSessionException)
 			<< "and the session's door refuses with it";
 
 		ibSessionHolder client = base->CreateSession(ibSessionKind::ThinClient);
@@ -355,17 +355,17 @@ TEST(ExclusiveBesideTheHost, TheHostsOwnLoginPassesAJobAndASecondClientDoNot)
 	EXPECT_EQ(acquire(), R::Granted) << "the job and the client gone, the request made again is granted";
 }
 
-// #404 — an apply that will run DDL takes the session's OWN exclusive mode before its first step (ApplyConfiguration),
+// #404 — an apply that will run DDL takes the session's OWN single-user mode before its first step (ApplyApplication),
 // not the gate's at its first DDL tens of seconds in. What that rests on: every save lets the gate's go
 // (ibStructureBuilder::OnAfterSave), and the apply's first step is a save of its own — the session's survives them.
 // Refused beside another client: TheHostsOwnLoginPassesAJobAndASecondClientDoNot, above.
-TEST(ExclusiveBesideTheHost, TheSessionsExclusiveOutlivesASavesGate)
+TEST(SingleUserBesideTheHost, TheSessionsSingleUserOutlivesASavesGate)
 {
 	wxInitializer wxInit;
 	if (!wxInit.IsOk())
 		GTEST_SKIP() << "wxBase init failed (no wxApp host)";
 
-	const ibString path = wxFileName::CreateTempFileName(wxT("oes-apply-exclusive"));
+	const ibString path = wxFileName::CreateTempFileName(wxT("oes-apply-single-user"));
 	ASSERT_FALSE(path.IsEmpty());
 	struct Gone {
 		ibString path;
@@ -383,21 +383,21 @@ TEST(ExclusiveBesideTheHost, TheSessionsExclusiveOutlivesASavesGate)
 		"CREATE TABLE sys_session ("
 		"session TEXT PRIMARY KEY, userName TEXT, application INTEGER, started TEXT, lastActive TEXT, "
 		"computer TEXT, pid INTEGER, address TEXT, currentActivity TEXT, kind INTEGER, signal TEXT, "
-		"exclusive INTEGER NOT NULL DEFAULT 0, tokenHash TEXT)")), -1);
+		"singleUser INTEGER NOT NULL DEFAULT 0, tokenHash TEXT)")), -1);
 	ibApplicationInstance::GetSessionRegistry()->Start();
 
 	ibSessionHolder designer = base->CreateSession(ibSessionKind::ThinDesigner);
 	ASSERT_NE(designer.Get(), nullptr);
 	ibSessionScope bound(designer.Get());
 
-	designer.Get()->SetExclusive(true);
-	EXPECT_TRUE(appData->ExclusiveMode()) << "the designer alone: held from the start";
+	designer.Get()->SetSingleUser(true);
+	EXPECT_TRUE(appData->SingleUserMode()) << "the designer alone: held from the start";
 
 	// A save inside the apply: its first DDL asks the gate, its OnAfterSave lets the gate's own go.
-	ibRestructureInfo::RequireExclusiveForDDL();
-	ibRestructureInfo::ReleaseAutoExclusive();
-	EXPECT_TRUE(appData->ExclusiveMode()) << "the save found it held and left it — the apply still holds it";
+	ibRestructureInfo::RequireSingleUserForDDL();
+	ibRestructureInfo::ReleaseAutoSingleUser();
+	EXPECT_TRUE(appData->SingleUserMode()) << "the save found it held and left it — the apply still holds it";
 
-	designer.Get()->SetExclusive(false);
-	EXPECT_FALSE(appData->ExclusiveMode()) << "the apply over, it is let go";
+	designer.Get()->SetSingleUser(false);
+	EXPECT_FALSE(appData->SingleUserMode()) << "the apply over, it is let go";
 }

@@ -68,7 +68,7 @@ private:
 //                                     object gets: Select(), FindByDescription(), Execute(ref).
 //
 // Two forks rather than "predefined here, job names directly there": a name at the top level
-// would put the platform's own member and a configuration's job in one namespace, where the first
+// would put the platform's own member and an application's job in one namespace, where the first
 // job called Predefined shadows the way to reach every other one. Naming both sides also says
 // which kind one is looking at, which is the question a reader of the script actually has.
 //
@@ -121,8 +121,8 @@ enum
 	enCatalogs,
 	enDocuments,
 	enEnumerations,
-	enDataProcessors,
-	enExternalDataProcessors,
+	enDataTools,
+	enExternalDataTools,
 	enReports,
 	enExternalReports,
 	enInformationRegisters,
@@ -135,7 +135,7 @@ enum
 	enSequences,
 	enScheduledJobs,
 	enSessionParameters,
-	enFunctionalOptions,
+	enFeatureOptions,
 	enBackgroundJobs
 };
 
@@ -145,8 +145,8 @@ void ibValueGlobalContextManager::FillMembers(ibMemberTable& helper) const
 	helper.AppendProp(ibT("Catalogs"));
 	helper.AppendProp(ibT("Documents"));
 	helper.AppendProp(ibT("Enumerations"));
-	helper.AppendProp(ibT("DataProcessors"));
-	helper.AppendProp(ibT("ExternalDataProcessors"));
+	helper.AppendProp(ibT("DataTools"));
+	helper.AppendProp(ibT("ExternalDataTools"));
 	helper.AppendProp(ibT("Reports"));
 	helper.AppendProp(ibT("ExternalReports"));
 	helper.AppendProp(ibT("InformationRegisters"));
@@ -161,19 +161,19 @@ void ibValueGlobalContextManager::FillMembers(ibMemberTable& helper) const
 	// ONE entry point for scheduled work, two forks inside it — Predefined and Parameterized. See
 	// ibValueScheduledJobsManager above for why both live behind one name.
 	helper.AppendProp(ibT("ScheduledJobs"));
-	// The configuration's own declared parameters of this session. Read anywhere,
+	// The application's own declared parameters of this session. Read anywhere,
 	// written only by the session module (metaSessionParameterObject.h).
 	helper.AppendProp(ibT("SessionParameters"));
-	// Whether a part of the configuration is used in this base — `FunctionalOptions.<Name>.Get()`. Each
-	// option IS a constant, so the manager a name yields is the constant's own (metaFunctionalOptionObject.h).
-	helper.AppendProp(ibT("FunctionalOptions"));
+	// Whether a part of the application is used in this base — `FeatureOptions.<Name>.Get()`. Each
+	// option IS a constant, so the manager a name yields is the constant's own (metaFeatureOptionObject.h).
+	helper.AppendProp(ibT("FeatureOptions"));
 	// Work running on its own, found again — `BackgroundJobs.GetBackgroundJobs(…)`, `FindByUUID(…)`; started by
-	// RunBackground. Not metadata: the jobs are the base's, whatever the configuration declares.
+	// RunBackground. Not metadata: the jobs are the base's, whatever the application declares.
 	helper.AppendProp(ibT("BackgroundJobs"));
 }
 
 #include "backend/metaCollection/metaSessionParameterObject.h"   // the metatype AND the value it yields
-#include "backend/metaCollection/partial/dataProcessorManager.h"
+#include "backend/metaCollection/partial/dataToolManager.h"
 #include "backend/metaCollection/partial/dataReportManager.h"
 
 bool ibValueGlobalContextManager::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
@@ -192,11 +192,11 @@ bool ibValueGlobalContextManager::GetPropVal(const long lPropNum, ibValue& pvarP
 	case enEnumerations:
 		pvarPropVal = new ibValueManagerCollection(g_metaEnumerationCLSID, m_metaData);
 		return true;
-	case enDataProcessors:
-		pvarPropVal = new ibValueManagerCollection(g_metaDataProcessorCLSID, m_metaData);
+	case enDataTools:
+		pvarPropVal = new ibValueManagerCollection(g_metaDataToolCLSID, m_metaData);
 		return true;
-	case enExternalDataProcessors:
-		pvarPropVal = new ibValueManagerDataObjectExternalDataProcessor();
+	case enExternalDataTools:
+		pvarPropVal = new ibValueManagerDataObjectExternalDataTool();
 		return true;
 	case enReports:
 		pvarPropVal = new ibValueManagerCollection(g_metaReportCLSID, m_metaData);
@@ -234,8 +234,8 @@ bool ibValueGlobalContextManager::GetPropVal(const long lPropNum, ibValue& pvarP
 	case enSessionParameters:
 		pvarPropVal = new ibValueSessionParameters(m_metaData);
 		return true;
-	case enFunctionalOptions:
-		pvarPropVal = new ibValueManagerCollection(g_metaFunctionalOptionCLSID, m_metaData);
+	case enFeatureOptions:
+		pvarPropVal = new ibValueManagerCollection(g_metaFeatureOptionCLSID, m_metaData);
 		return true;
 	case enBackgroundJobs:
 		pvarPropVal = new ibValueBackgroundJobsManager();

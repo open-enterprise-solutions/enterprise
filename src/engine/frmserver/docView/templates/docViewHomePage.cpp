@@ -11,7 +11,7 @@
 #include "core/picturePredefined.h"                       // g_picHomePageCLSID — the page's glyph
 #include "core/fnumber.h"                               // the column's share, a fraction
 #include "backend/metaCollection/metaObjectMetadata.h"     // GetHomePage()
-#include "backend/metaCollection/metaFormObject.h"         // ibValueMetaObjectFormBase / ibValueMetaObjectCommonForm
+#include "backend/metaCollection/metaFormObject.h"         // ibValueMetaObjectFormBase / ibValueMetaObjectSharedForm
 #include "backend/metaCollection/partial/dataReport.h"     // ibReportParameter::ComposeOnOpen — a report on the page opens built
 #include "backend/metaData.h"                              // FindAnyObjectByFilter
 #include "backend/backend_exception.h"                     // ibBackendException — a cell that fails must not take the page down
@@ -21,15 +21,15 @@
 //*                                       Document                                           *
 //********************************************************************************************
 
-ibHomePageDocument::ibHomePageDocument(const ibValueMetaObjectConfiguration* configuration)
-	: ibDocument(), m_configuration(configuration)
+ibHomePageDocument::ibHomePageDocument(const ibValueMetaObjectApplication* application)
+	: ibDocument(), m_application(application)
 {
 	m_documentModified = false;
 
 	// The workspace is read ONCE, here — the tab is a running layout of live forms from this point on (see
 	// GetDescription).
-	if (m_configuration != nullptr)
-		m_description = m_configuration->GetHomePage();
+	if (m_application != nullptr)
+		m_description = m_application->GetHomePage();
 }
 
 ibHomePageDocument::~ibHomePageDocument()
@@ -38,10 +38,10 @@ ibHomePageDocument::~ibHomePageDocument()
 
 const ibMetaData* ibHomePageDocument::GetMetaData() const
 {
-	return m_configuration != nullptr ? m_configuration->GetMetaData() : nullptr;
+	return m_application != nullptr ? m_application->GetMetaData() : nullptr;
 }
 
-ibHomePageDocument* ibHomePageDocument::ShowHomePage(const ibValueMetaObjectConfiguration* configuration)
+ibHomePageDocument* ibHomePageDocument::ShowHomePage(const ibValueMetaObjectApplication* application)
 {
 	ibDocManager* const documentManager = ibDocManager::GetDocumentManager();
 	if (documentManager == nullptr)
@@ -55,11 +55,11 @@ ibHomePageDocument* ibHomePageDocument::ShowHomePage(const ibValueMetaObjectConf
 		}
 	}
 
-	ibHomePageDocument* homeDoc = documentManager->CreateDocument<ibHomePageDocument>(configuration);
+	ibHomePageDocument* homeDoc = documentManager->CreateDocument<ibHomePageDocument>(application);
 	if (homeDoc == nullptr)
 		return nullptr;
 
-	// Nothing to SHOW — no tab at all. A configuration that does not use the start page (or that switched every
+	// Nothing to SHOW — no tab at all. An application that does not use the start page (or that switched every
 	// attachment off) should not pay an empty one. The question is asked of the shown items, not of the stored
 	// ones: an invisible attachment renders nothing.
 	if (homeDoc->GetDescription().GetShownItems(eHomePageColumn_Left).empty() &&
@@ -238,10 +238,10 @@ const ibValueMetaObjectFormBase* ibHomePageView::FindItemForm(const ibHomePageIt
 	if (metaData == nullptr)
 		return nullptr;
 
-	// The attached form is addressed by metaId; the clsid filter keeps the typed find honest (a common form and an
+	// The attached form is addressed by metaId; the clsid filter keeps the typed find honest (a shared form and an
 	// object form are both form metaobjects, nothing else is).
 	return metaData->FindAnyObjectByFilter<ibValueMetaObjectFormBase>(item.m_formId,
-		{ g_metaCommonFormCLSID, g_metaFormCLSID }, true);
+		{ g_metaSharedFormCLSID, g_metaFormCLSID }, true);
 }
 
 ibValuePtr<ibValueForm> ibHomePageView::CreateFormValue(const ibValueMetaObjectFormBase* metaForm) const
@@ -264,7 +264,7 @@ ibValuePtr<ibValueForm> ibHomePageView::CreateFormValue(const ibValueMetaObjectF
 	request.Set(ibReportParameter::ComposeOnOpen, true);
 
 	try {
-		// One verb, answered by the form's own kind — an object form asks the object that owns it, a common form
+		// One verb, answered by the form's own kind — an object form asks the object that owns it, a shared form
 		// stands alone, and the access right comes back with the same call. No branch here, no cast: the page does
 		// not care which kind it is holding.
 		backendForm = metaForm->GetObjectForm(request);

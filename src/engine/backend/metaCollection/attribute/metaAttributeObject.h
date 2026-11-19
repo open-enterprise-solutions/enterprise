@@ -59,7 +59,7 @@ inline ibString ibPhysicalFieldName(int metaId)
 // member they have exactly one point of contact: when the attribute dies, its destructor destroys
 // the member, which is one `-1` in the control block. Nobody sweeps and nobody is notified.
 class BACKEND_API ibValueMetaObjectAttributeBase :
-	public ibValueMetaObject, public ibBackendTypeConfigFactory, public ibBackendSourceColumn {
+	public ibValueMetaObject, public ibBackendTypeApplicationFactory, public ibBackendSourceColumn {
 	public:
 
 	// ⭐ THE QUERY FACE OF THIS ATTRIBUTE — and nothing else. It IS an ibBackendQueryColumn, so the
@@ -70,7 +70,7 @@ class BACKEND_API ibValueMetaObjectAttributeBase :
 	//
 	// The way back is NON-OWNING and the attribute CLEARS it as it dies. An attribute lives as long
 	// as the metadata does, so for every ordinary read this pointer is exactly as good as the
-	// attribute's own address; but a query RESULT may outlive the configuration it was read from,
+	// attribute's own address; but a query RESULT may outlive the application it was read from,
 	// and it holds this facade by shared_ptr. Detached, the facade answers as a column with nothing
 	// behind it rather than reading freed memory. It must never keep the attribute alive: that would
 	// put the runtime's count under the shared_ptr's, one indirection away from the very mixture
@@ -96,7 +96,7 @@ class BACKEND_API ibValueMetaObjectAttributeBase :
 		// which is already true of every type description a column hands out.
 		ibTypeDescription& GetTypeDesc() const override;
 		ibTypeDescription& GetTypeValueDesc() const override;
-		// The type factory's pair, the attribute's own — a fresh value as the attribute makes one (a functional option's
+		// The type factory's pair, the attribute's own — a fresh value as the attribute makes one (a feature option's
 		// initial value), adjusted as it adjusts; a detached column answers from its empty type.
 		ibValue  CreateValue() const override                        { return m_owner != nullptr ? m_owner->CreateValue() : ibBackendQueryColumn::CreateValue(); }
 		ibValue  AdjustValue() const override                        { return m_owner != nullptr ? m_owner->AdjustValue() : ibBackendQueryColumn::AdjustValue(); }
@@ -177,7 +177,7 @@ class BACKEND_API ibValueMetaObjectAttributeBase :
 	// each of them what governs it by casting to the kind that holds the properties is the tree telling
 	// a caller to go and find out for itself (Max, 2026-09-23: "a pile of dynamic casts").
 	//
-	// The empty answers below are the honest ones for a predefined field and a common attribute: they
+	// The empty answers below are the honest ones for a predefined field and a shared attribute: they
 	// are not chosen within anything.
 	virtual const ibChoiceTypeLinkDescription& GetTypeLink() const;
 	virtual const ibChoiceParametersDescription& GetChoiceParameters() const;
@@ -187,7 +187,7 @@ class BACKEND_API ibValueMetaObjectAttributeBase :
 	// a predefined field — its values are shown as its type has them.
 	virtual const ibTranslateString& GetFormat() const;
 
-	// (IsEmptyTypeDesc lives on ibBackendTypeConfigFactory's base — backend_type.h — because that is
+	// (IsEmptyTypeDesc lives on ibBackendTypeApplicationFactory's base — backend_type.h — because that is
 	//  where the type description itself is declared, and therefore the only place that can answer
 	//  for every holder of one rather than for attributes alone.)
 
@@ -202,7 +202,7 @@ class BACKEND_API ibValueMetaObjectAttributeBase :
 	// IsAllowed (column base) routes to the metaobject's (IsEnabled && !IsDeleted) — so the source
 	// explorer skips deleted / disabled fields without touching the metaobject.
 	virtual bool IsAllowed() const override           { return ibValueMetaObject::IsAllowed(); }
-	// IsAvailable (column base) routes to the functional options of this base — the field, or the object it
+	// IsAvailable (column base) routes to the feature options of this base — the field, or the object it
 	// stands in, may belong to a part of the system the base does not use (metaAttributeObject.cpp).
 	virtual bool IsAvailable() const override;
 	// ⚠ NOT `override` ANY MORE, and deliberately still HERE. These two are the query face's
@@ -259,9 +259,9 @@ class BACKEND_API ibValueMetaObjectAttribute : public ibValueMetaObjectAttribute
 		m_propertyType->SetValue(ibValue::GetIDByVT(valType));
 	}
 
-	// A field a form binds to may belong to a functional option (the predefined ones are the object's
+	// A field a form binds to may belong to a feature option (the predefined ones are the object's
 	// identity, and do not).
-	virtual bool IsFunctionalOptionAllowed() const override { return true; }
+	virtual bool IsFeatureOptionAllowed() const override { return true; }
 
 	//support icons
 	virtual ibPicture GetIcon() const;
@@ -334,7 +334,7 @@ class BACKEND_API ibValueMetaObjectAttributePredefined : public ibValueMetaObjec
 	// (NOT SHOWN under its owner, and it needs no flag saying so: no owner ACCEPTS this
 	// clsid as a child — ResolveChild lists attribute, tabular section, form, template,
 	// command — so FilterChild already answers no. A predefined attribute is part of the
-	// metatype's definition, not of the configuration.)
+	// metatype's definition, not of the application.)
 private:
 
 	ibValueMetaObjectAttributePredefined(const ibString& name, const ibString& synonym, const ibString& comment, bool fillCheck, const ibValue& defValue, ibItemMode itemMode, ibSelectMode selectMode, ibIndexingMode indexingMode = ibIndexingMode::ibIndexingMode_DontIndex)

@@ -66,7 +66,7 @@ protected:
 
 private:
 
-	// Same inner-module property DataProcessor uses for its ManagerModule: a
+	// Same inner-module property DataTool uses for its ManagerModule: a
 	// nested manager-module metaobject that carries the code editor, serialises
 	// itself, and auto-registers with the module manager on run.
 	ibPropertyInnerModule<ibValueMetaObjectManagerModule>* m_propertyRoleModule =

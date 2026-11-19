@@ -72,7 +72,7 @@ ibPGOwnerProperty::ibPGOwnerProperty(const ibPropertyObject* property, const wxS
 
 wxString ibPGOwnerProperty::ValueToString(ibVariant& value, ibPGPropValFormatFlags flags) const
 {
-	// ⚠ NAMED BY THE CHOICES — the client holds no configuration to name an id by (ibPGChartBindingProperty).
+	// ⚠ NAMED BY THE CHOICES — the client holds no application to name an id by (ibPGChartBindingProperty).
 	wxString strDescr;
 	const ibMetaDescription md = ReadMeta(value);
 	for (unsigned int idx = 0; idx < md.GetTypeCount(); idx++) {
@@ -113,7 +113,7 @@ ibPGEditorDialogAdapter* ibPGOwnerProperty::GetEditorDialog() const
 		};
 
 		// ⭐ WHAT THE PROPERTY OFFERS — the choices it was built with, one item each, under a group of their class as the
-		// desktop's walked the configuration's catalogs (FillByClsid). Each one's kind is its data — its class, as the
+		// desktop's walked the application's catalogs (FillByClsid). Each one's kind is its data — its class, as the
 		// server's property listed it — named and drawn as the server registered it (the row's Classes).
 		void FillFromChoices(const ibPGChoices& choices, const std::vector<std::uint64_t>& choiceData,
 			ibCheckTree* tc, const ibMetaDescription& held) {

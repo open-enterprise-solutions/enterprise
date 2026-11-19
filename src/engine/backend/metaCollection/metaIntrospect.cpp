@@ -1,5 +1,5 @@
 ﻿////////////////////////////////////////////////////////////////////////////
-//	Description : reading the shape of a configuration
+//	Description : reading the shape of an application
 ////////////////////////////////////////////////////////////////////////////
 
 #include "backend/metaCollection/metaIntrospect.h"
@@ -7,18 +7,18 @@
 #include "core/memory/memoryStream.h"            // ibWriterMemory — the JSON sink
 #include "backend/metaData.h"
 #include "backend/metaCollection/metaObject.h"
-#include "backend/metaCollection/metaObjectMetadata.h"   // GetCompileSyntax — the configuration's dialect
+#include "backend/metaCollection/metaObjectMetadata.h"   // GetCompileSyntax — the application's dialect
 #include "backend/objCtor.h"                  // ibCtorMetaValueType — full type, for the type resolver
 #include "core/serialize/provider/jsonProvider.h"
 
 ibClassID ibResolveMetaKind(const ibMetaData* metaData, const ibString& kind)
 {
-	if (metaData == nullptr || !metaData->IsConfigOpen())
+	if (metaData == nullptr || !metaData->IsOpen())
 		return 0;
 
 	// THE ONE REGISTRY every metatype registers itself in
 	// (METADATA_TYPE_REGISTER → ibValue::RegisterCtor). So "Catalog" here is the
-	// same "Catalog" a configuration writes, by construction rather than by a
+	// same "Catalog" an application writes, by construction rather than by a
 	// table somebody has to keep in step — and a metatype added tomorrow is
 	// answerable the day it registers, with nothing edited here.
 	const ibCtorAbstractType* ctor = ibValue::GetAvailableCtor(kind);
@@ -73,7 +73,7 @@ ibValueMetaObject* ibFindMetaObject(ibMetaData* metaData, const ibString& kind, 
 	// Naming the kind therefore costs nothing and buys the cheap answer.
 	//
 	// ⭐ AND IT DESCENDS. Without the child filter the walk sees only what hangs off the top of the
-	// configuration — so every NESTED kind was unfindable by name: a Template, a Form, a Composer, a
+	// application — so every NESTED kind was unfindable by name: a Template, a Form, a Composer, a
 	// Command, an Attribute. Told *"created Template 'Template1'"*, nothing could then look it up,
 	// and `metadata_get` answered "No Template is named 'Template1'" about one that plainly existed
 	// (2026-09-01). The debugger's own lookup has always passed `true` here, for the same reason —
@@ -83,19 +83,19 @@ ibValueMetaObject* ibFindMetaObject(ibMetaData* metaData, const ibString& kind, 
 
 ibValueMetaObject* ibFindMetaObjectById(ibMetaData* metaData, const ibMetaID& id)
 {
-	if (metaData == nullptr || !metaData->IsConfigOpen())
+	if (metaData == nullptr || !metaData->IsOpen())
 		return nullptr;
 
 	// 🛑 THE ROOT IS PART OF THE TREE AND IS NOT ONE OF ITS CHILDREN. The walk below starts AT the
 	// common object and descends, so the one object it can never return is the object it starts
-	// from — and the configuration root is a metaobject like any other: it has a metaID, it is
+	// from — and the application root is a metaobject like any other: it has a metaID, it is
 	// selectable in the designer's tree, it carries help and notes, and the notes on it are where
-	// the direction of the whole configuration belongs.
+	// the direction of the whole application belongs.
 	//
 	// Which meant every tool that addresses by id — read it, describe it, write a note on it —
 	// silently could not reach the one object a caller is most likely to be told to write on.
 	// Fixed HERE rather than in each of them: they all ask this one question.
-	if (ibValueMetaObject* root = metaData->GetCommonMetaObject())
+	if (ibValueMetaObject* root = metaData->GetRootMetaObject())
 		if (root->GetMetaID() == id)
 			return root;
 
@@ -122,17 +122,17 @@ bool ibBuildMetaObjectNode(ibValueMetaObject* object, ibDataNode& node)
 	return object->BuildDataNode(node, saveToFileFlag);
 }
 
-bool ibConfigurationWritesInWords(const ibMetaData* metaData)
+bool ibApplicationWritesInWords(const ibMetaData* metaData)
 {
-	if (metaData == nullptr || !metaData->IsConfigOpen())
+	if (metaData == nullptr || !metaData->IsOpen())
 		return false;
 
-	const ibValueMetaObjectConfiguration* configuration =
-		dynamic_cast<const ibValueMetaObjectConfiguration*>(metaData->GetCommonMetaObject());
-	if (configuration == nullptr)
+	const ibValueMetaObjectApplication* application =
+		dynamic_cast<const ibValueMetaObjectApplication*>(metaData->GetRootMetaObject());
+	if (application == nullptr)
 		return false;
 
-	return configuration->GetCompileSyntax() == ibProgramSyntax::syntax_ves;
+	return application->GetCompileSyntax() == ibProgramSyntax::syntax_ves;
 }
 
 std::function<ibString(ibClassID)> ibMetaTypeResolver(const ibMetaData* metaData)
@@ -145,8 +145,8 @@ std::function<ibString(ibClassID)> ibMetaTypeResolver(const ibMetaData* metaData
 		if (typeCtor != nullptr)
 			return typeCtor->GetClassName();
 
-		// ⭐ AND THE TYPES THAT ARE NOT A CONFIGURATION'S OWN still have names. A ctor answers for
-		// what a CONFIGURATION declares — a catalogue's reference, an enum member; ask it about
+		// ⭐ AND THE TYPES THAT ARE NOT AN APPLICATION'S OWN still have names. A ctor answers for
+		// what an APPLICATION declares — a catalogue's reference, an enum member; ask it about
 		// `Number` or `String` and it has nothing to say, so the id fell through as a bare number.
 		// Nobody reading `"t": "104754294576172486"` learns anything from it (measured 2026-09-02,
 		// the first value a sandbox serialized: the type of 42 came back as seventeen digits).

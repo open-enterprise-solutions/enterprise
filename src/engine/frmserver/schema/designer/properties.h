@@ -11,11 +11,11 @@
 class FRMSERVER_API ibSchemaProperties : public ibClientSchema {
 public:
 
-	// The right to edit the configuration — what the designer's frame lets a person in by.
+	// The right to edit the application — what the designer's frame lets a person in by.
 	virtual bool AccessRight(const ibSession& session) const override;
 
 	// `Args: {Id, Tab}` — the metaobject of that id in the tab's tree (Tab: an external file's; none: the
-	// configuration's), its Properties as the inspector writes them (ibPropertyInspector): what its state hides not sent.
+	// application's), its Properties as the inspector writes them (ibPropertyInspector): what its state hides not sent.
 	virtual void Build(const ibSession& session, const ibDataNode& args, ibDataNode& result) const override;
 
 	// Save {Id, Tab, Name, Value} — that metaobject's property or event of that name given that value, as its node holds

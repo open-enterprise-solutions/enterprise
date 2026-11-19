@@ -786,7 +786,7 @@ void ibQueryParser::ParseOrderBy(ibQuerySelect& sel)
 			it.m_expr = ibQueryAstExpr::Make(ibQueryAstExprKind::Column);
 			it.m_expr->m_line = tk.m_line; it.m_expr->m_col = tk.m_col;
 			// ⚠ IN AN ORDER BY ITEM, A KEYWORD IS A NAME — the same rule that already holds after a `.`,
-			// one position earlier. A configuration naming an attribute `Order`, `Value`, `Count` or
+			// one position earlier. An application naming an attribute `Order`, `Value`, `Count` or
 			// `Group` does not consult our keyword table first. Before this, an enumeration's own
 			// `Order` attribute made `ORDER BY Order` a syntax error, and the list that asked simply
 			// came back empty.
@@ -1077,7 +1077,7 @@ std::vector<ibString> ibQueryParser::ParseDottedName(bool firstMayBeKeyword)
 		//
 		// It is not a corner. `Document.Order` is an entirely ordinary metaobject — and `Order`,
 		// `Group`, `Index`, `Value`, `Update`, `Elements`, `Count` are all words this language
-		// reserves. A configuration names its documents and its attributes; it does not consult our
+		// reserves. An application names its documents and its attributes; it does not consult our
 		// keyword table first, and it should not have to. Before this, `CAST(Recorder AS
 		// Document.Order)` died as "expected a name after '.'", pointing at a word plainly there.
 		if (Cur().m_kind != ibQueryTokenKind::Ident && Cur().m_kind != ibQueryTokenKind::Keyword)
@@ -1450,7 +1450,7 @@ ibQueryAstExprPtr ibQueryParser::ParsePrimary()
 	//
 	// ⭐⭐ AN AGGREGATE NAME WITHOUT A `(` IS A COLUMN, and this is the FOURTH place that rule has
 	// been needed — ORDER BY items, names after a `.`, the keyword branch below, and now here. A
-	// configuration is entitled to call an attribute `Sum`, `Count` or `Min`; our grammar is not a
+	// application is entitled to call an attribute `Sum`, `Count` or `Min`; our grammar is not a
 	// fact about the user's data, and a document line that stores its total in a field called `Sum`
 	// is the most ordinary thing in an accounting base there is.
 	//
@@ -1512,7 +1512,7 @@ ibQueryAstExprPtr ibQueryParser::ParsePrimary()
 
 	// ⭐⭐ A SCALAR CALL IS RECOGNISED BY POSITION, NOT BY OWNING THE WORD.
 	//
-	// `YEAR`, `MONTH`, `DAY`, `TYPE` are words a configuration is entitled to use for its own
+	// `YEAR`, `MONTH`, `DAY`, `TYPE` are words an application is entitled to use for its own
 	// attributes, and a virtual table already spells its periodicity with them. So they are NOT in
 	// the keyword table (queryKeywords.h says why at length): a name followed by `(` is a call —
 	// nothing else can stand there, since a column is never invoked — and the very same name
@@ -1559,7 +1559,7 @@ ibQueryAstExprPtr ibQueryParser::ParsePrimary()
 	// question needs no list of exceptions to answer: the structure of this function has answered it.
 	//
 	// It is the same rule already written into ORDER BY items and into names after a `.`, arriving at
-	// the third place that needed it. A configuration is entitled to call an attribute `Order`, `Value`
+	// the third place that needed it. An application is entitled to call an attribute `Order`, `Value`
 	// or `Count` — those are ordinary words, and OUR grammar is not a fact about the user's data. An
 	// enumeration's own `Order` column made the list that selected it die on "expected a column,
 	// literal, or parameter", and the form came back empty with no visible reason.
@@ -1744,7 +1744,7 @@ void ibQueryParser::ParseWindowSuffix(ibQueryAstExpr& call)
 // VALUE( <Kind>.<Name>.<Member> ) — a LITERAL reference constant: the empty reference of a metaobject
 // (`value(Catalog.Currencies.EmptyRef)`) or one of its predefined items (`value(Catalog.Currencies.Dollar)`).
 // The name is NOT resolved here (the AST is metadata-free) — the dotted path is carried as-is and resolved at
-// lowering, where the config is in scope. The resolved value then flows as a bound
+// lowering, where the application is in scope. The resolved value then flows as a bound
 // value, exactly like a &parameter.
 ibQueryAstExprPtr ibQueryParser::ParseValueConstant()
 {

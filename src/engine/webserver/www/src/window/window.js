@@ -118,7 +118,7 @@ export class ClientWindow {
 		this.status = document.createElement('footer');
 		this.status.className = 'status';
 
-		// The sections are the configuration's and stay while the session lasts: read once, as the window comes up.
+		// The sections are the application's and stay while the session lasts: read once, as the window comes up.
 		this.sections = new Sections(session, pictures, (error) => this.refused(error));
 		/** @type {Promise<unknown>} */
 		this.sectionsRead = session.frame !== null

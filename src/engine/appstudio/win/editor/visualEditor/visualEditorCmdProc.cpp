@@ -900,7 +900,7 @@ bool ibVisualEditorNotebook::ibVisualEditor::SelectObject(ibValueFrame* obj, boo
 	if (obj == nullptr)
 		return false;
 	// THE SAME ONE ACTIVATED AGAIN — its selection does not change, yet the inspector may show another's (the
-	// configuration's tree, clicked after it): its properties activated all the same, as the desktop's tree activated an
+	// application's tree, clicked after it): its properties activated all the same, as the desktop's tree activated an
 	// item already selected (EVT_TREE_ITEM_ACTIVATED); the one shown — nothing.
 	if (obj->GetControlID() == m_selected && !force) {
 		objectInspector->SelectObject(obj);

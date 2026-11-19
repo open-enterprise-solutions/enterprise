@@ -66,7 +66,7 @@ void ibHelpTreeView::Rebuild(const std::shared_ptr<const ibHelpCorpus>& corpus) 
 void ibHelpTreeView::AddCategoryNode(const ibHelpCategory* node,
                                        const wxTreeItemId&    parent) {
 	// Skip nodes that contain nothing visible in the active syntax
-	// mode — keeps the tree compact in CES configurations where the
+	// mode — keeps the tree compact in CES applications where the
 	// "VES terminators" sub-category collapses to empty.
 	const short mode = m_pane->GetCodeStyle();
 	auto entryVisible = [mode](const ibHelpEntry* e) {

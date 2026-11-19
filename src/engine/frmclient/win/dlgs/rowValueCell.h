@@ -27,7 +27,7 @@
 #include <utility>
 
 #include "core/tabular/tabularModelView.h"                       // ibDataViewItem
-#include "frmclient/backend/metaData.h"                               // ibMetaData — the configuration a type is read against
+#include "frmclient/backend/metaData.h"                               // ibMetaData — the application a type is read against
 #include "frmclient/backend/system/value/composition/valueComposerSettings.h"           // ibValueCompositionField — the one value with a picker
 #include "frmclient/backend/system/value/valueType.h"                 // ibValueTypeDescription::AdjustValue — text shaped by the declared type
 #include "deskgui/univ/ctrl/textCtrl.h"
@@ -49,11 +49,11 @@ public:
 	// (ibTypeControlFactory::ChooseValue): settle the type from what is declared, then choose a value
 	// of it — which is also what puts the designer's predefined-value form under the same button.
 	using TypeOf = std::function<ibTypeDescription(const ibDataViewItem&)>;
-	// …AND THE CONFIGURATION THAT TYPE IS READ AGAINST. It travels WITH the type because it is the
+	// …AND THE APPLICATION THAT TYPE IS READ AGAINST. It travels WITH the type because it is the
 	// same question: whoever declares "this row may hold Catalog.Goods" is the one who knows which
-	// open configuration that name belongs to. There are always several — the base, the one being
+	// open application that name belongs to. There are always several — the base, the one being
 	// compared, one loaded from a file — so a cell that reached for the ACTIVE one would quietly
-	// resolve a name in somebody else's configuration.
+	// resolve a name in somebody else's application.
 	using MetaOf = std::function<const ibMetaData*()>;
 	// WHO KNOWS THE SOURCE opens the field picker. The cell does not: which fields exist is
 	// a question about the thing being configured, and the window that owns it answers.
@@ -73,7 +73,7 @@ public:
 	}
 
 	void SetExpand(Expand expand) { m_expand = std::move(expand); }
-	// …and where the declared type comes from, when the row has one — together with the configuration
+	// …and where the declared type comes from, when the row has one — together with the application
 	// it is read against. Unset = the value speaks for itself, which is how every caller before this
 	// one works.
 	void SetTypeSource(TypeOf typeOf, MetaOf metaOf) {
@@ -274,7 +274,7 @@ private:
 	Setter         m_set;
 	Expand         m_expand;    // set = the "…" opens the ROW's own window instead of the picker
 	TypeOf         m_typeOf;    // set = the row declares what it may hold; the cell then routes through ChooseValue
-	MetaOf         m_metaOf;    // …and in which open configuration that declaration is read
+	MetaOf         m_metaOf;    // …and in which open application that declaration is read
 	ibDataViewItem m_row;
 
 	// Storage for the two mutable-reference getters the type-factory line demands.

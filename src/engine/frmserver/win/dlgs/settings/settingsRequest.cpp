@@ -32,7 +32,7 @@ ibDataNode& ibWriteSettingsField(ibDataNode& fields, const ibString& name, const
 		field.SetValue(ibProtocol::ibRequest::ibListSettings::Presentation, presentation);
 	field.SetValue(ibProtocol::ibRequest::ibListSettings::Id, static_cast<std::int32_t>(id));
 	field.SetValue(ibProtocol::ibRequest::ibListSettings::Available, available);
-	// A field's picture is its source's, of the configuration the fields were read from.
+	// A field's picture is its source's, of the application the fields were read from.
 	if (!picture.IsEmptyPicture())
 		field.SetValue(ibProtocol::ibRequest::ibListSettings::Picture, ibBackendPicture::SendPicture(picture, metaData));
 	ibDataValue written;
@@ -101,7 +101,7 @@ bool ibFieldIsOfferable(const ibSourceDataObject::ibSourceExplorer* col)
 		&& (col->GetColumn() == nullptr || col->GetColumn()->IsAvailable());
 }
 
-// THE FIELDS OF A REFERENCE'S TARGETS — the desktop's ExpandSourceFieldNode, answered here where the configuration is.
+// THE FIELDS OF A REFERENCE'S TARGETS — the desktop's ExpandSourceFieldNode, answered here where the application is.
 // ⭐⭐ ONE NAME, ONE FIELD — AND ALL THE NAMES THERE ARE: a field several targets share is one field, COMPOSITE, its type
 // the union of what each declares; what is shown is the union of the names, in the order the targets declare them.
 void WriteTargetFields(ibDataNode& expanded, ibDataNode& references, const std::vector<ibMetaID>& targetIds,
@@ -219,7 +219,7 @@ void ibChooseSettingsValue(const ibDataNode& act, const ibMetaData* metaData, ib
 		ibTypeDescriptionMemory::ReadNode(ibDataValue::Child(std::make_shared<ibDataNode>(*written)), type);
 
 	// The value in the cell — the server's own node, given back; one held says its type: another of it is chosen. None,
-	// or one the configuration cannot read: the empty one of the type the cell stands on; a cell of several stays empty.
+	// or one the application cannot read: the empty one of the type the cell stands on; a cell of several stays empty.
 	ibValue value;
 	if (const auto written = act.FindChild(ibProtocol::ibRequest::ibListSettings::Value)) {
 		try {

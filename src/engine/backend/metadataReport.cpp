@@ -1,6 +1,6 @@
 ////////////////////////////////////////////////////////////////////////////
 //	Author		: Maxim Kornienko
-//	Description : external metaData - for dataProcessors, reports
+//	Description : external metaData - for dataTools, reports
 ////////////////////////////////////////////////////////////////////////////
 
 #include "metadataReport.h"
@@ -10,27 +10,27 @@
 ibMetaDataReport::ibMetaDataReport() : ibMetaData(),
 m_ownerMeta(nullptr),
 m_moduleManager(nullptr),
-m_commonObject(nullptr),
+m_rootObject(nullptr),
 m_version(version_oes_last)
 {
 	// Compile cache (designer mode only) is built by the image ctor via
-	// CreateCompileCache() below — see ibMetaDataDataProcessor.
+	// CreateCompileCache() below — see ibMetaDataDataTool.
 
 	//create main metaObject
-	m_commonObject = new ibValueMetaObjectExternalReport();
+	m_rootObject = new ibValueMetaObjectExternalReport();
 	ibNameRequest request;
 	request.m_clsid = g_metaExternalReportCLSID;
-	request.m_prefix = m_commonObject->GetClassName();
-	m_commonObject->SetName(ibMetaData::GetNewName(nullptr, request));
+	request.m_prefix = m_rootObject->GetClassName();
+	m_rootObject->SetName(ibMetaData::GetNewName(nullptr, request));
 
-	if (m_commonObject->OnCreateMetaObject(this, newObjectFlag)) {
-		if (!m_commonObject->OnLoadMetaObject(this)) {
-			ibASSERT_MSG(false, "m_commonObject->OnLoadMetaObject() == false");
+	if (m_rootObject->OnCreateMetaObject(this, newObjectFlag)) {
+		if (!m_rootObject->OnLoadMetaObject(this)) {
+			ibASSERT_MSG(false, "m_rootObject->OnLoadMetaObject() == false");
 		}
 	}
 
-	m_commonObject->InvalidateNames();
-	// m_commonObject is an ibValuePtr — the assignment above already holds the ref.
+	m_rootObject->InvalidateNames();
+	// m_rootObject is an ibValuePtr — the assignment above already holds the ref.
 
 	// ⚠ NO MODULE MANAGER YET — it is built where the report first runs (RunDatabase), on whichever road it came:
 	// the loader holds this container by then (ibMetaData::MakeShared), and the object the manager makes takes its
@@ -43,18 +43,18 @@ m_version(version_oes_last)
 ibMetaDataReport::ibMetaDataReport(ibMetaData* metaData, ibValueMetaObjectReport* srcReport) : ibMetaData(),
 m_ownerMeta(nullptr),
 m_moduleManager(nullptr),
-m_commonObject(srcReport),
+m_rootObject(srcReport),
 m_version(version_oes_last)
 {
-	// m_commonObject (ibValuePtr) holds the member ref beside the configuration's own.
-	m_commonObject->InvalidateNames();
+	// m_rootObject (ibValuePtr) holds the member ref beside the application's own.
+	m_rootObject->InvalidateNames();
 
 	m_ownerMeta = metaData;
 }
 
 ibMetaDataReport::~ibMetaDataReport()
 {
-	if (m_commonObject->IsExternalCreate()) {
+	if (m_rootObject->IsExternalCreate()) {
 
 		// Release the manager first, while the root is still alive — the manager
 		// references the root via m_objectValue, and its dtor runs DestroyMainModule
@@ -66,23 +66,23 @@ ibMetaDataReport::~ibMetaDataReport()
 			ibASSERT_MSG(false, "ClearDatabase() == false");
 		}
 
-		// m_commonObject (ibValuePtr) releases the root after this body.
+		// m_rootObject (ibValuePtr) releases the root after this body.
 	}
 }
 
 ibValueMetaObjectReport* ibMetaDataReport::GetReport() const
 {
-	return m_commonObject; // ibValuePtr operator T*
+	return m_rootObject; // ibValuePtr operator T*
 }
 
-const ibValueMetaObject* ibMetaDataReport::GetCommonMetaObject() const
+const ibValueMetaObject* ibMetaDataReport::GetRootMetaObject() const
 {
-	return m_commonObject; // ibValuePtr operator T* -> upcast to base
+	return m_rootObject; // ibValuePtr operator T* -> upcast to base
 }
 
-ibValueMetaObject* ibMetaDataReport::GetCommonMetaObject()
+ibValueMetaObject* ibMetaDataReport::GetRootMetaObject()
 {
-	return m_commonObject;
+	return m_rootObject;
 }
 
 bool ibMetaDataReport::LoadDatabase()
@@ -102,7 +102,7 @@ bool ibMetaDataReport::ClearDatabase()
 	// reconciliation happens on the next load). ClearSubtree is available if a
 	// caller ever wants to fire the delete events explicitly before a load.
 	// keepPinned: predefined object/manager modules are bound to the root for life.
-	m_commonObject->RemoveAllChildren(true);
+	m_rootObject->RemoveAllChildren(true);
 	return true;
 }
 
@@ -122,8 +122,8 @@ std::unique_ptr<ibCompileValueCache> ibMetaDataReport::CreateDesignerCache()
 	if (!appData->DesignerMode())
 		return nullptr;
 	auto cache = std::make_unique<ibCompileValueCache>();
-	if (m_commonObject->IsExternalCreate())
-		cache->SetModuleManager(new ibValueModuleManagerDesigner(this, m_commonObject->GetObjectModule()));
+	if (m_rootObject->IsExternalCreate())
+		cache->SetModuleManager(new ibValueModuleManagerDesigner(this, m_rootObject->GetObjectModule()));
 	return cache;
 }
 
@@ -131,7 +131,7 @@ bool ibMetaDataReport::RunDatabase(const ibRuntimeRequest& request)
 {
 	// RunSubtree fires the root's own OnBeforeRun/OnAfterRun + every descendant.
 	// CreateMainModule/StartMainModule stay interleaved between the two phases.
-	// Transactional like ibMetaDataConfigurationFile::RunDatabase via LoadGuard: it
+	// Transactional like ibMetaDataApplicationFile::RunDatabase via LoadGuard: it
 	// CREATES the runtime image and drops it on ANY exit that isn't Commit() — a failed
 	// return OR a raised exception (exception == rollback) — so a partial run leaves the
 	// metadata closed (the load "never happened"). StartMainModule runs during the build
@@ -139,19 +139,19 @@ bool ibMetaDataReport::RunDatabase(const ibRuntimeRequest& request)
 	// keeps the image only once it has succeeded, so a failed start rolls back cleanly.
 	LoadGuard load(this);
 
-	if (m_commonObject->IsExternalCreate()) {
+	if (m_rootObject->IsExternalCreate()) {
 
 		// The runtime module manager, on the root it runs — born here, on the first run of this root: the loader
 		// holds the container by now, so the object can take its own reference (see the ctor).
 		if (m_moduleManager == nullptr) {
-			m_moduleManager = new ibValueModuleRuntimeManagerExternalReport(weak_from_this().lock(), m_commonObject);
+			m_moduleManager = new ibValueModuleRuntimeManagerExternalReport(weak_from_this().lock(), m_rootObject);
 			m_moduleManager->InvalidateNames();
 		}
 
 		// The designer module-manager (for the report's compile cache) was already
-		// built by the image ctor via CreateDesignerModuleManager() — common modules
+		// built by the image ctor via CreateDesignerModuleManager() — shared modules
 		// register into it during RunSubtree(true) below.
-		if (!m_commonObject->RunSubtree(request.m_flags, ibValueMetaObject::ibRunPhase::Before))
+		if (!m_rootObject->RunSubtree(request.m_flags, ibValueMetaObject::ibRunPhase::Before))
 			return false;
 
 		if (auto* cc = GetCompileCache()) {
@@ -160,7 +160,7 @@ bool ibMetaDataReport::RunDatabase(const ibRuntimeRequest& request)
 		}
 
 		if (m_moduleManager->CreateMainModule()) {
-			if (!m_commonObject->RunSubtree(request.m_flags, ibValueMetaObject::ibRunPhase::After))
+			if (!m_rootObject->RunSubtree(request.m_flags, ibValueMetaObject::ibRunPhase::After))
 				return false;
 			if (!m_moduleManager->StartMainModule(request))
 				return false;
@@ -169,18 +169,18 @@ bool ibMetaDataReport::RunDatabase(const ibRuntimeRequest& request)
 		}
 		return false;
 	}
-	else if (!m_commonObject->IsExternalCreate()) {
+	else if (!m_rootObject->IsExternalCreate()) {
 
-		if (!m_commonObject->RunSubtree(request.m_flags, ibValueMetaObject::ibRunPhase::Before))
+		if (!m_rootObject->RunSubtree(request.m_flags, ibValueMetaObject::ibRunPhase::Before))
 			return false;
 
-		if (!m_commonObject->RunSubtree(request.m_flags, ibValueMetaObject::ibRunPhase::After))
+		if (!m_rootObject->RunSubtree(request.m_flags, ibValueMetaObject::ibRunPhase::After))
 			return false;
 
 		load.Commit();
 		// ⭐ ALIVE — said after Commit, because a run that did not survive its own phases never
 		// happened. The mirror of Closed below.
-		MetaObjectStage(ibMetaDataNotifier::ibMetaStage::Run, GetCommonMetaObject());
+		MetaObjectStage(ibMetaDataNotifier::ibMetaStage::Run, GetRootMetaObject());
 		return true;
 	}
 
@@ -198,22 +198,22 @@ bool ibMetaDataReport::CloseDatabase(const ibRuntimeRequest& request)
 	// it still come out — in the designer while debugging I want to know; in the runtime it does not
 	// matter"). Debug tells the developer, Release closes silently, and neither traps the user:
 	// nothing to close IS a successful close — the rule the destructors in this tree already follow.
-	ibASSERT(IsConfigOpen());
-	if (!IsConfigOpen())
+	ibASSERT(IsOpen());
+	if (!IsOpen())
 		return true;
 
 	// ⭐⭐ THE WHOLE CONTAINER IS GOING — said BEFORE the teardown, for the same reason `Removed`
 	// is: a watcher's business with this is to shut what it is showing OF the tree, and after
 	// CloseSubtree there is nothing left to find. This one signal replaces the per-NODE close
 	// that used to run inside every object's OnAfterCloseMetaObject.
-	MetaObjectStage(ibMetaDataNotifier::ibMetaStage::Closed, GetCommonMetaObject());
+	MetaObjectStage(ibMetaDataNotifier::ibMetaStage::Closed, GetRootMetaObject());
 
 	if (!ExitMainModule(request))
 		return false;
 
 	// CloseSubtree closes every descendant then the root's own hook (bottom-up);
 	// it self-skips a deleted node.
-	if (!m_commonObject->CloseSubtree(ibValueMetaObject::ibRunPhase::Before))   // un-resolve
+	if (!m_rootObject->CloseSubtree(ibValueMetaObject::ibRunPhase::Before))   // un-resolve
 		return false;
 
 	// Symmetric to RunDatabase — tear down + release the designer manager.
@@ -223,7 +223,7 @@ bool ibMetaDataReport::CloseDatabase(const ibRuntimeRequest& request)
 		cc->SetModuleManager(nullptr);
 	}
 
-	if (!m_commonObject->CloseSubtree(ibValueMetaObject::ibRunPhase::After))    // un-register
+	if (!m_rootObject->CloseSubtree(ibValueMetaObject::ibRunPhase::After))    // un-register
 		return false;
 
 	m_image.reset();   // drop the runtime image ⇒ closed (frees ctors + modules + cache)
@@ -234,7 +234,7 @@ bool ibMetaDataReport::CloseDatabase(const ibRuntimeRequest& request)
 #include <filesystem>
 
 #include "core/fileSystem.h"             // ibPathOf
-#include "backend/backend_exception.h"   // catch ibBackendException at the LoadCommonTree boundary
+#include "backend/backend_exception.h"   // catch ibBackendException at the LoadRootTree boundary
 #include "core/serialize/dataBuilder.h"  // ibDataBuilder / ibBinaryProvider — top-level structure builder
 #include "backend/temp/tempStorage.h"       // ibTempFile — LoadFromTempFile
 
@@ -304,7 +304,7 @@ bool ibMetaDataReport::LoadFromBuffer(const ibMemoryBuffer& buffer, const ibStri
 
 	m_fullPath = fullPath;
 
-	// (A file read INTO a configuration is read here on its own, with its own ids, and then pasted into it — the paste
+	// (A file read INTO an application is read here on its own, with its own ids, and then pasted into it — the paste
 	// gives its objects their ids and re-homes what holds them: ReadExternal, schema/designer/metaData.cpp, #578.)
 
 	// External (start from file): standalone report — detached-root swap. Build a
@@ -312,7 +312,7 @@ bool ibMetaDataReport::LoadFromBuffer(const ibMemoryBuffer& buffer, const ibStri
 	ibValuePtr<ibValueMetaObjectReport> fresh(BuildFreshRoot()); // adopt (refcount 0 -> 1)
 	if (!fresh)
 		return false;
-	if (!LoadCommonTree(fresh, g_metaExternalReportCLSID, readerData))
+	if (!LoadRootTree(fresh, g_metaExternalReportCLSID, readerData))
 		return false; // fresh (ibValuePtr) discards the root automatically
 
 	// Commit. Close the old tree's run-state first (unregisters its ctors). Then tear
@@ -320,7 +320,7 @@ bool ibMetaDataReport::LoadFromBuffer(const ibMemoryBuffer& buffer, const ibStri
 	// the old root, and the manager references it via m_objectValue (use-after-free if
 	// the manager outlives the root). Then swap (the assignment releases old + adopts
 	// fresh); the run builds the manager on the fresh root (RunDatabase).
-	if (IsConfigOpen() && !CloseDatabase(ibRuntimeRequest(forceCloseFlag)))
+	if (IsOpen() && !CloseDatabase(ibRuntimeRequest(forceCloseFlag)))
 		return false; // fresh discarded automatically
 
 	// Release the old manager first (its dtor runs DestroyMainModule via RAII) while
@@ -328,7 +328,7 @@ bool ibMetaDataReport::LoadFromBuffer(const ibMemoryBuffer& buffer, const ibStri
 	// swap the root; the new manager is built on the fresh root by its run (RunDatabase).
 	m_moduleManager = nullptr;
 
-	m_commonObject = fresh; // ibValuePtr: release old root (DecrRef -> cascade), adopt fresh
+	m_rootObject = fresh; // ibValuePtr: release old root (DecrRef -> cascade), adopt fresh
 
 	return LoadDatabase();
 }
@@ -394,25 +394,25 @@ bool ibMetaDataReport::SaveToBuffer(ibWriterMemory& writerData, const ibString& 
 {
 	m_fullPath = fullPath;
 
-	//Save common object (header is written inside SaveCommonTree)
-	if (!SaveCommonTree(g_metaExternalReportCLSID, writerData, saveConfigFlag))
+	//Save common object (header is written inside SaveRootTree)
+	if (!SaveRootTree(g_metaExternalReportCLSID, writerData, saveApplicationFlag))
 		return false;
 
 	//Delete common object
-	if (!DeleteCommonTree(g_metaExternalReportCLSID))
+	if (!DeleteRootTree(g_metaExternalReportCLSID))
 		return false;
 
 	return true;
 }
 
-bool ibMetaDataReport::LoadCommonTree(ibValueMetaObjectReport* root, const ibClassID& clsid, ibReaderMemory& readerData)
+bool ibMetaDataReport::LoadRootTree(ibValueMetaObjectReport* root, const ibClassID& clsid, ibReaderMemory& readerData)
 {
 	// Header (sign + version + guid) leads the tree blob in the same stream — read
 	// and validate it here so the common-tree blob stays self-describing (was the
 	// separate LoadHeader).
 	//
-	// 🛑 BYTES THIS BUILD CANNOT READ ARE REFUSED IN WORDS, as a configuration's are (ibMetaDataConfigurationFile::
-	// LoadCommonTree). A quiet false here was a file opened in the application with no tab and nothing said, and the
+	// 🛑 BYTES THIS BUILD CANNOT READ ARE REFUSED IN WORDS, as an application's are (ibMetaDataApplicationFile::
+	// LoadRootTree). A quiet false here was a file opened in the application with no tab and nothing said, and the
 	// designer's File → Open the same — a report saved before the kind-typed ids keeps its tree under an id this build
 	// does not look for (2026-11-15, ExternalReport1.orp of 2026-08-24).
 	const auto unreadable = [this]() {
@@ -428,15 +428,10 @@ bool ibMetaDataReport::LoadCommonTree(ibValueMetaObjectReport* root, const ibCla
 		headerReader->r_stringZ(metaGuid);
 	}
 
-	// The tree's data block is keyed by the root's GetClassType() AT SAVE TIME, which may be the
-	// EXTERNAL container clsid (MD_ERPT, files saved now) or the BASE metadata clsid (MD_RPT, files
-	// saved before the external kind was split out). Try the external clsid first, then fall back to
-	// the base — one is what Save wrote. open_chunk returns an OWNED reader (shared_ptr-safe). (Same
-	// fix as the DataProcessor reader.)
+	// The tree's data block is keyed by the root's GetClassType() at save time — the EXTERNAL container clsid
+	// (MD_ERPT). open_chunk returns an OWNED reader (shared_ptr-safe).
 	(void)clsid;
 	std::shared_ptr<ibReaderMemory> readerMemory(readerData.open_chunk(g_metaExternalReportCLSID));
-	if (!readerMemory)
-		readerMemory.reset(readerData.open_chunk(g_metaReportCLSID));
 
 	if (!readerMemory)
 		unreadable();
@@ -461,7 +456,7 @@ bool ibMetaDataReport::LoadCommonTree(ibValueMetaObjectReport* root, const ibCla
 		// ⭐ AND EVERYONE WATCHING IS TOLD IT IS READ IN — the stage a tree answers by drawing the
 		// whole thing. Said HERE rather than by each caller of the load, because there are several
 		// (a file, the database, a fresh root) and a stage nobody sends is a stage that does not exist.
-		MetaObjectStage(ibMetaDataNotifier::ibMetaStage::Loaded, GetCommonMetaObject());
+		MetaObjectStage(ibMetaDataNotifier::ibMetaStage::Loaded, GetRootMetaObject());
 		return true;
 	}
 	catch (const ibCoreException& err) {
@@ -474,24 +469,24 @@ bool ibMetaDataReport::LoadCommonTree(ibValueMetaObjectReport* root, const ibCla
 	}
 }
 
-bool ibMetaDataReport::SaveCommonTree(const ibClassID& clsid, ibWriterMemory& writerData, int flags)
+bool ibMetaDataReport::SaveRootTree(const ibClassID& clsid, ibWriterMemory& writerData, int flags)
 {
 	// Header (sign + version + guid) leads the tree blob (was the separate SaveHeader).
 	{
 		ibWriterMemory headerWriter;
 		headerWriter.w_u64(sign_dataReport); //sign
 		headerWriter.w_u32(m_version); // version 1 - DEFAULT
-		headerWriter.w_stringZ(m_commonObject->GetDocPath()); //guid conf
+		headerWriter.w_stringZ(m_rootObject->GetDocPath()); //guid conf
 		writerData.w_chunk(eHeaderBlock, headerWriter.pointer(), headerWriter.size());
 	}
 
 	// Top-level structure builder — BuildDataNode fills the root's clsid/metaId from the object.
 	ibDataBuilder builder;
-	if (!m_commonObject->BuildDataNode(builder.Root(), flags))
+	if (!m_rootObject->BuildDataNode(builder.Root(), flags))
 		return false;
 
 	// Provider writes the root's INNER; frame it with the root identity — chunk(clsid){
-	// chunk(metaId){ inner } } — exactly what LoadCommonTree peels above. Frame the OUTER block
+	// chunk(metaId){ inner } } — exactly what LoadRootTree peels above. Frame the OUTER block
 	// under the passed `clsid` — the EXTERNAL container class (MD_ERPT), fixed at the SaveToFile call
 	// site — NOT the object's own GetClassType() (its BASE metadata kind, MD_RPT). This makes the
 	// on-disk root class deterministic: the loader always peels the tree under the external clsid.
@@ -506,15 +501,15 @@ bool ibMetaDataReport::SaveCommonTree(const ibClassID& clsid, ibWriterMemory& wr
 
 	// ⭐ …and that it has been written out. A watcher shows this as "no longer modified"; nothing
 	// in the tree changed, which is why this is a stage of its own and not MetaDataChanged.
-	MetaObjectStage(ibMetaDataNotifier::ibMetaStage::Saved, GetCommonMetaObject());
+	MetaObjectStage(ibMetaDataNotifier::ibMetaStage::Saved, GetRootMetaObject());
 	return true;
 }
 
-bool ibMetaDataReport::DeleteCommonTree(const ibClassID& clsid)
+bool ibMetaDataReport::DeleteRootTree(const ibClassID& clsid)
 {
 	// Deleted-node purge (runs during save/apply to drop IsDeleted nodes from
 	// tree + DB) is owned by the node (ibValueMetaObject::DeleteSubtree).
-	return m_commonObject->DeleteSubtree();
+	return m_rootObject->DeleteSubtree();
 }
 
 // ⭐⭐ DETAIL IS A NEW REPORT OVER THE SAME SCHEMA — not this report re-drawn.
@@ -527,13 +522,13 @@ bool ibMetaDataReport::DeleteCommonTree(const ibClassID& clsid)
 //
 // ⭐ THE WHOLE CYCLE ALREADY EXISTS. `ibMetaDataReport`'s constructor builds the root, registers it
 // and stands up the module manager — "so a freshly created (not-from-file) report already has it".
-// Opening from a file is the same path with `LoadCommonTree` in the middle; here the middle is a
+// Opening from a file is the same path with `LoadRootTree` in the middle; here the middle is a
 // composer carrying a copy of the schema.
 bool ibOpenReportOver(const ibCompositionDescription& desc, const ibString& name, const ibString& synonym)
 {
 	// A report in memory, held from birth: the ctor has already made its root and its module manager.
 	const std::shared_ptr<ibMetaDataReport> detailMeta = ibMetaData::MakeShared<ibMetaDataReport>();
-	ibValueMetaObject* root = detailMeta->GetCommonMetaObject();
+	ibValueMetaObject* root = detailMeta->GetRootMetaObject();
 	if (root == nullptr)
 		return false;
 

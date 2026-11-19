@@ -205,7 +205,7 @@ void ibGridEditor::ibPropertyGridEditorSpreadsheet::OnPropertyChanged(ibProperty
 	}
 }
 
-#include "frmclient/backend/metadataConfiguration.h"
+#include "frmclient/backend/metadataApplication.h"
 
 ibMetaData* ibGridEditor::ibPropertyGridEditorSpreadsheet::GetMetaData() const
 {

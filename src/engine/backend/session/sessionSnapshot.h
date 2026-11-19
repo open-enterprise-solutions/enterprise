@@ -4,7 +4,7 @@
 // ibSessionSnapshot — point-in-time copy of every sys_session row in
 // the cluster, refreshed by ibSessionRegistry's JobRefreshSnapshot.
 // Read by the designer's Active Users dialog and by the registry
-// itself (cross-process exclusive-mode gate, sole-live check).
+// itself (cross-process single-user-mode gate, sole-live check).
 //
 // Was named ibApplicationDataSessionArray while it lived in appData.h;
 // the type is session-domain, not application-domain — sole writer is
@@ -29,9 +29,11 @@ class BACKEND_API ibSessionSnapshot {
 	struct Entry {
 
 		Entry(ibRunMode runMode, int kind, const ibDateTime& startedDateTime,
-			const ibString& strUserName, const ibString& strComputerName, const ibString& strSession)
+			const ibString& strUserName, const ibString& strComputerName, const ibString& strSession,
+			bool singleUser, const ibString& activity)
 			: m_runMode(runMode), m_kind(kind), m_startedDate(startedDateTime),
-			  m_strUserName(strUserName), m_strComputerName(strComputerName), m_strSession(strSession)
+			  m_strUserName(strUserName), m_strComputerName(strComputerName), m_strSession(strSession),
+			  m_activity(activity), m_singleUser(singleUser)
 		{
 		}
 
@@ -44,21 +46,24 @@ class BACKEND_API ibSessionSnapshot {
 		ibString   m_strUserName;
 		ibString   m_strComputerName;
 		ibString   m_strSession;
-		// sys_session.currentActivity. Empty when the column is absent. A dropped thin client
-		// says "detached until HH:MM:SS" for the resume window.
+		// sys_session.currentActivity, or empty. A dropped thin client says "detached until HH:MM:SS"
+		// for the resume window.
 		ibString   m_activity;
-		// Process-wide exclusive (monopoly) flag — true when this row
-		// holds it. Filled in by JobRefreshSnapshot from sys_session.exclusive.
-		bool       m_exclusive = false;
+		// Process-wide single-user (monopoly) flag — true when this row
+		// holds it. Filled in by JobRefreshSnapshot from sys_session.singleUser.
+		bool       m_singleUser = false;
 	};
 
 public:
 
 	ibSessionSnapshot() : m_sessionArrayHash(ibNewUniqueGuid) {}
 
+	// A row of sys_session, whole — the registry reads every column in one SELECT.
 	void AppendSession(ibRunMode runMode, int kind, const ibDateTime& startedTime,
-		const ibString& strUserName, const ibString& strComputerName, const ibString& strSession) {
-		m_listSession.emplace_back(runMode, kind, startedTime, strUserName, strComputerName, strSession);
+		const ibString& strUserName, const ibString& strComputerName, const ibString& strSession,
+		bool singleUser, const ibString& activity) {
+		m_listSession.emplace_back(runMode, kind, startedTime, strUserName, strComputerName, strSession,
+			singleUser, activity);
 	}
 
 	const ibGuid& GetSessionArrayHash() const { return m_sessionArrayHash; }
@@ -67,7 +72,7 @@ public:
 	ibString GetComputerName(unsigned int idx) const;
 	ibString GetSession     (unsigned int idx) const;
 	ibString GetStartedDate (unsigned int idx) const;
-	ibString GetApplication (unsigned int idx) const;
+	ibString GetProgram     (unsigned int idx) const;
 	// sys_session.currentActivity, or empty. A detached thin client reads "detached until …".
 	ibString GetActivity    (unsigned int idx) const;
 
@@ -82,28 +87,18 @@ public:
 	//   Service / WebServer → "Server"
 	//   ThinClient / ThinDesigner → "Thin client"
 	//   a job → "Job"
-	//   anything else, legacy 0 included → "Client"
+	//   anything else → "Client"
 	// Used by designer's Active Users dialog.
 	ibString  GetSessionKindDescr  (unsigned int idx) const;
 	unsigned int GetSessionCount() const { return static_cast<unsigned int>(m_listSession.size()); }
 
-	// Back-fill kinds after rows were appended — used by the registry
-	// snapshot builder to tolerate legacy schemas where the `kind`
-	// column lives in a second optional SELECT.
-	void SetKindsFromMap    (const std::unordered_map<ibString, int>&  kindBySession);
-	// Back-fill exclusive flags from a second optional SELECT — same
-	// pattern as kinds, tolerant of pre-migration schemas where the
-	// column doesn't exist yet.
-	void SetExclusiveFromMap(const std::unordered_map<ibString, bool>& exclusiveBySession);
-	void SetActivityFromMap (const std::unordered_map<ibString, ibString>& activityBySession);
-
-	// Per-row exclusive flag accessor — returns the holder session (the
-	// only one with m_exclusive==true), if any. Used by ProcessAdd's
-	// cross-process exclusive gate and by ProcessSetExclusive's
+	// Per-row single-user flag accessor — returns the holder session (the
+	// only one with m_singleUser==true), if any. Used by ProcessAdd's
+	// cross-process single-user gate and by ProcessSetSingleUser's
 	// sole-live check.
-	bool     IsExclusive(unsigned int idx) const;
-	ibString ExclusiveHolderSession() const;
-	ibString ExclusiveHolderUser   () const;
+	bool     IsSingleUser(unsigned int idx) const;
+	ibString SingleUserHolderSession() const;
+	ibString SingleUserHolderUser   () const;
 
 	// Cluster-wide aggregate queries. Predicate-style helpers built on
 	// top of the snapshot for callers that don't want to iterate

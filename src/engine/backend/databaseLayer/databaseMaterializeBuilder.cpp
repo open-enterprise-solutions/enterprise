@@ -1600,7 +1600,7 @@ bool ibMaterializeSql::Apply(ibDatabaseLayer& conn) const
 	//
 	// ⭐⭐ AND IT IS NOT SWALLOWED HERE. It used to be, turned into `false`, and `false` became a status
 	// nobody read — so a CREATE TRIGGER that could not compile ended like one that succeeded and the
-	// apply walked on, saving the configuration over a schema it had failed to build.
+	// apply walked on, saving the application over a schema it had failed to build.
 	//
 	// It travels as a QUERY-layer failure, not as a database one, and the distinction is the whole
 	// point of the variety: the engine merely REPORTED the fault, it did not commit it. The trigger

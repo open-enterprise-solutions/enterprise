@@ -14,7 +14,7 @@
 //     survive the form's save and load;
 //   * a Textctrl's own TypeLink and ChoiceParameters (#616) survive the save and load, a path through the dot whole.
 //
-// DB-FREE AND UI-FREE: a fresh ibMetaDataConfigurationFile that is never run, a form made in the test on a session with
+// DB-FREE AND UI-FREE: a fresh ibMetaDataApplicationFile that is never run, a form made in the test on a session with
 // a frame (framedSession.h), and a control made by its own ctor.
 // =============================================================================
 
@@ -23,7 +23,7 @@
 #include <wx/init.h>
 #include <wx/log.h>                                  // wxLogStderr — a warning must not become a modal box
 
-#include "backend/metadataConfiguration.h"
+#include "backend/metadataApplication.h"
 #include "backend/metaCollection/metaObject.h"
 #include "backend/metaCollection/attribute/metaAttributeObject.h"
 #include "backend/choiceLinkResolver.h"
@@ -55,7 +55,7 @@ ibChoiceParameterRowDescription Row(const ibMetaID& parameter, const ibMetaID& s
 	return row;
 }
 
-// A form made in the test answers with the test's configuration, as a form opened from one does.
+// A form made in the test answers with the test's application, as a form opened from one does.
 struct ChoiceForm : ibValueForm {
 	const ibMetaData* m_metaData = nullptr;
 	const ibMetaData* GetMetaData() const override { return m_metaData; }
@@ -65,7 +65,7 @@ struct ChoiceForm : ibValueForm {
 // counterparty, an organisation and a contract of its own.
 struct FormAttributeChoice : ::testing::Test {
 	wxInitializer m_wxInit;
-	ibMetaDataConfigurationFile cfg;
+	ibMetaDataApplicationFile cfg;
 
 	ibValueMetaObjectAttributeBase* contractCounterparty = nullptr;   // parameters: fields of the chosen contract
 	ibValueMetaObjectAttributeBase* contractOrganisation = nullptr;
@@ -96,7 +96,7 @@ struct FormAttributeChoice : ::testing::Test {
 		if (ibApplicationInstance::Get() == nullptr && !ibApplicationInstance::CreateAppDataEnv(ibRunMode::eFILE_MODE))
 			GTEST_SKIP() << "appData env unavailable headless";
 
-		ibValueMetaObject* contracts = cfg.CreateMetaObject(g_metaCatalogCLSID, cfg.GetCommonMetaObject(), /*runObject*/ false);
+		ibValueMetaObject* contracts = cfg.CreateMetaObject(g_metaCatalogCLSID, cfg.GetRootMetaObject(), /*runObject*/ false);
 		ASSERT_NE(contracts, nullptr);
 		contracts->SetName(wxT("Contracts"));
 		contractCounterparty = Attribute(contracts, wxT("Counterparty"));
@@ -254,7 +254,7 @@ TEST(FormFieldChoice, TextctrlSaysItsWordInItsDoors)
 	ASSERT_NE(quickChoice, nullptr);
 	ASSERT_NE(foldersAndItems, nullptr);
 
-	// Nothing said: the type's answer (no configuration here: none) and the holder's (items).
+	// Nothing said: the type's answer (no application here: none) and the holder's (items).
 	EXPECT_FALSE(written.m_frame->HasQuickChoice());
 	EXPECT_EQ(written.m_factory->GetSelectMode(), ibSelectMode::ibSelectMode_Items);
 

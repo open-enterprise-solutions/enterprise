@@ -10,7 +10,7 @@
 // PostingMode)`…). For several types, only an event every one of them raises, with as many arguments.
 //
 // The procedure lives in the handler's OWN module, as a job's does in its job module — the handler
-// is the whole of it, and nothing else in the configuration has to be edited to add one. The module
+// is the whole of it, and nothing else in the application has to be edited to add one. The module
 // is prepared with that one procedure, named as the event and taking `Source` — the value that
 // raised it — before the event's own arguments:
 //     Procedure BeforeWrite(Source, Cancel)
@@ -30,14 +30,14 @@
 #include <vector>
 
 // THE KINDS OF TYPE THAT RAISE EVENTS — an object, a manager, a record set: what a handler's Source is made
-// of, and what its filter offers (ibBackendTypeConfigFactory::GetTypesByFilter).
+// of, and what its filter offers (ibBackendTypeApplicationFactory::GetTypesByFilter).
 constexpr ibCtorObjectMetaType g_eventSourceKinds[] = {
 	ibCtorObjectMetaType::ibCtorObjectMetaType_Object,
 	ibCtorObjectMetaType::ibCtorObjectMetaType_Manager,
 	ibCtorObjectMetaType::ibCtorObjectMetaType_RecordSet,
 };
 
-class BACKEND_API ibValueMetaObjectEventHandler : public ibValueMetaObject, public ibBackendTypeConfigFactory {
+class BACKEND_API ibValueMetaObjectEventHandler : public ibValueMetaObject, public ibBackendTypeApplicationFactory {
 public:
 
 	ibValueMetaObjectEventHandler(const ibString& name = ibEmptyString, const ibString& synonym = ibEmptyString, const ibString& comment = ibEmptyString);
@@ -70,7 +70,7 @@ public:
 	// name and with as many arguments. Asked of each type's event module (ibCtorMetaValueType::GetEventModule).
 	std::map<ibString, ibSourceEvent> GetSourceEvents() const;
 
-	// --- ibBackendTypeConfigFactory: the Source property's type resolves through its owner (as a
+	// --- ibBackendTypeApplicationFactory: the Source property's type resolves through its owner (as a
 	// command's parameter type does). The filter offers what raises events. ---
 	virtual ibTypeDescription& GetTypeDesc() const override { return m_propertySource->GetValueAsTypeDesc(); }
 	virtual ibSelectorDataType GetFilterDataType() const override { return ibSelectorDataType::ibSelectorDataType_eventSource; }

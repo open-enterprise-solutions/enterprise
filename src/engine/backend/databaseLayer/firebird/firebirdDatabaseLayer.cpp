@@ -235,6 +235,10 @@ const ibDialectDictionary& ibDatabaseLayerFirebird::Dialect()
 		};
 
 		d.m_substring = ibT("SUBSTRING({expr} FROM {from} FOR {len})");
+		// No `%`, and MOD() rounds a fraction first: the dividend less the quotient cut toward zero times the divisor. The
+		// quotient is a BIGINT, so the product takes the divisor's scale and not the quotient's on top of it - a scale the
+		// sum of three would overflow 64 bits at a figure of ten digits.
+		d.m_modulo = ibT("({lhs} - CAST(TRUNC({lhs} / {rhs}) AS BIGINT) * {rhs})");
 		return d;
 	}();
 	return s_dialect;
@@ -1279,7 +1283,7 @@ int ibDatabaseLayerFirebird::DoRunQuery(const ibString& strQuery, bool bParseQue
 					// gone. The base's depth counter stayed up, IsActiveTransaction() kept answering
 					// true over a dead handle, the rollback in OnAfterSave rolled back nothing — and
 					// everything issued in between ran with no transaction at all, committing as it
-					// went. That is how a failed apply left the schema ahead of the configuration
+					// went. That is how a failed apply left the schema ahead of the application
 					// with no way back.
 					//
 					// Only OUR OWN transaction is ours to close, and that goes through the public

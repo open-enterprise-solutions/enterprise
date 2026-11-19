@@ -18,7 +18,7 @@
 #include "core/description/typeDescription.h"            // ibTypeDescription::GetClsidList — a command's parameter type
 #include "backend/tabularModel.h"               // ibValueModel::GetModelComposer — the setting a quick filter edits
 #include "backend/composition/dataComposer.h"   // the two settings sections + GetCurrentFilterDesc
-#include "backend/functionalOption/functionalOptionGate.h"   // ibFunctionalOptionGate — commands of a part this base does not use
+#include "backend/featureOption/featureOptionGate.h"   // ibFeatureOptionGate — commands of a part this base does not use
 #include "backend/backend_composition.h"        // ibFilterNodeDescription / ibFilterDisplayMode_QuickAccess + ibStoredValue
 #include <set>                                  // std::set — the form's reference-type set
 #include <map>
@@ -45,7 +45,7 @@ static void CollectTableboxes(ibValueFrame* frame, std::vector<ibValueFrame*>& o
 std::vector<ibString> GetCommandSections()
 {
 	// Three command SOURCES: [0] the form's own commands, [1] standard actions (form + tables),
-	// [2] global commands (config-wide: general commands + every object's own commands, by full name).
+	// [2] global commands (application-wide: general commands + every object's own commands, by full name).
 	return { _("Form commands"), _("Standard commands"), _("Global commands") };
 }
 
@@ -197,15 +197,15 @@ std::vector<ibCommandSourceEntry> GatherFormCommands(ibValueForm* form)
 		}
 	}
 
-	// 3 — GLOBAL COMMANDS: EVERY command metaobject in the config (recursive by classid). This is the flat "all
-	// commands" source (form commands in section 1 are a different type, so they never appear here). Read from the config the form's
+	// 3 — GLOBAL COMMANDS: EVERY command metaobject in the application (recursive by classid). This is the flat "all
+	// commands" source (form commands in section 1 are a different type, so they never appear here). Read from the application the form's
 	// DATA belongs to (form->GetMetaObject()->GetMetaData()), NOT the form metaobject's own metaData nor the global
 	// activeMetaData; fall back to the form's metaData only when the form has no data object. A PARAMETERIZED command
 	// (reference Parameter type) shows ONLY where the form carries a matching data type; an untyped one always.
 	const ibMetaData* globalMeta = form->GetMetaObject() != nullptr ? form->GetMetaObject()->GetMetaData() : metaData;
 	const std::set<ibClassID> formTypes = CollectFormDataTypes(form);
 	if (globalMeta != nullptr)
-		for (ibValueMetaObjectCommand* cmd : globalMeta->GetAnyArrayObject<ibValueMetaObjectCommand>({ g_metaCommonCommandCLSID, g_metaCommandCLSID }, /*use_child_filter*/ true))
+		for (ibValueMetaObjectCommand* cmd : globalMeta->GetAnyArrayObject<ibValueMetaObjectCommand>({ g_metaSharedCommandCLSID, g_metaCommandCLSID }, /*use_child_filter*/ true))
 			if (cmd != nullptr && !cmd->IsDeleted() && !CommandExcludedByType(cmd, formTypes))
 				out.push_back({ sGlobal, cmd->GetName(), ibCommandDescription(cmd->GetMetaID()), commandPicture(cmd), ibEmptyString, cmd->GetFullName() });
 
@@ -409,8 +409,8 @@ const std::vector<ibCommandEntry>& ibValueCommandBar::BuildCommands()
 			};
 
 			for (ibValueMetaObjectCommand* cmd : obj->GetCommandArrayObject()) {
-				// …nor a command of a part of the system this base does not use (functionalOptionGate.h).
-				if (cmd == nullptr || cmd->IsDeleted() || !ibFunctionalOptionGate::IsAvailable(cmd))
+				// …nor a command of a part of the system this base does not use (featureOptionGate.h).
+				if (cmd == nullptr || cmd->IsDeleted() || !ibFeatureOptionGate::IsAvailable(cmd))
 					continue;
 				ibValueCommandBarItem* item = transientItem(cmd);
 				if (const ibValueMetaObjectCommandGroup* group = formBarGroupOf(cmd)) {
@@ -424,9 +424,9 @@ const std::vector<ibCommandEntry>& ibValueCommandBar::BuildCommands()
 					ibRepresentation_PictureAndText, !(viewOnly && modifies), item);
 			}
 
-			// …AND THE COMMON COMMANDS FILED UNDER SUCH A GROUP, when they are typed FOR this form's OBJECT: a form
+			// …AND THE SHARED COMMANDS FILED UNDER SUCH A GROUP, when they are typed FOR this form's OBJECT: a form
 			// bar is where a command runs on the object in front of you, so an untyped one has no business here
-			// (it would stand on every form of the configuration). This is what puts a common «Print» of an
+			// (it would stand on every form of the application). This is what puts a common «Print» of an
 			// invoice beside the invoice's own commands.
 			//
 			// ⚠ THE OBJECT'S OWN TYPE, not every reference the form's data carries. The picker's wider set
@@ -435,8 +435,8 @@ const std::vector<ibCommandEntry>& ibValueCommandBar::BuildCommands()
 			// invoice with a parameter of the wrong kind (found by the audit, 2026-09-22).
 			if (const ibMetaData* metaData = obj->GetMetaData()) {
 				const std::set<ibClassID> formTypes = { reference_to_clsid(obj->GetMetaID(), clsid_metaclass(obj->GetClassType())) };
-				for (ibValueMetaObjectCommand* cmd : metaData->GetAnyArrayObject<ibValueMetaObjectCommand>({ g_metaCommonCommandCLSID }, /*use_child_filter*/ true)) {
-					if (cmd == nullptr || cmd->IsDeleted() || !CommandIsTypedFor(cmd, formTypes) || !ibFunctionalOptionGate::IsAvailable(cmd))
+				for (ibValueMetaObjectCommand* cmd : metaData->GetAnyArrayObject<ibValueMetaObjectCommand>({ g_metaSharedCommandCLSID }, /*use_child_filter*/ true)) {
+					if (cmd == nullptr || cmd->IsDeleted() || !CommandIsTypedFor(cmd, formTypes) || !ibFeatureOptionGate::IsAvailable(cmd))
 						continue;
 					if (const ibValueMetaObjectCommandGroup* group = formBarGroupOf(cmd))
 						fileUnder(group, transientItem(cmd));
@@ -552,7 +552,7 @@ const std::vector<ibCommandEntry>& ibValueCommandBar::BuildCommands()
 	// bar item, a bare button and the inspector cell can't drift on "is this command alive / what's its caption+icon".
 	ibActionID synthId = 32000;
 	for (const auto& item : m_items) {
-		// Hidden (Visible off) or hidden by the functional options it names — dropped the same way.
+		// Hidden (Visible off) or hidden by the feature options it names — dropped the same way.
 		if (item == nullptr || !item->IsVisible() || !item->IsAvailable())
 			continue;
 		const ibCommandDescription bindDesc = item->GetBindingDesc();
@@ -618,7 +618,7 @@ public:
 	}
 	virtual ibValueForm* GetOwnerForm() const override { return m_form; }
 	virtual ibClassID GetClassType() const override { return ibStoredValue(m_node.m_right.m_value, m_metaData).GetClassType(); }
-	// ⚠ THE METADATA IS HANDED IN, AND THERE IS NO FALLBACK. Several configurations are open at once
+	// ⚠ THE METADATA IS HANDED IN, AND THERE IS NO FALLBACK. Several applications are open at once
 	// (the base, a compared one, one from a file), so reaching for the "active" one would quietly
 	// answer out of somebody else's — the filter cell still does exactly that. No metadata means no
 	// ctor to ask, which is a truthful "no quick choice" rather than a guess.
@@ -825,7 +825,7 @@ bool ibValueCommandBarItem::WriteData(ibDataNode& node) const
 	node.SetProperty(m_propertyEnabled->GetName(), m_propertyEnabled->GetNodeValue());
 	node.SetProperty(m_propertyVisible->GetName(), m_propertyVisible->GetNodeValue());
 	node.SetProperty(m_propertyDefault->GetName(), m_propertyDefault->GetNodeValue());
-	node.SetProperty(m_propertyFunctionalOptions->GetName(), m_propertyFunctionalOptions->GetNodeValue());
+	node.SetProperty(m_propertyFeatureOptions->GetName(), m_propertyFeatureOptions->GetNodeValue());
 	node.SetProperty(m_propertyCommand->GetName(), m_propertyCommand->GetNodeValue());   // command SOURCE (the hop path)
 	return true;
 }
@@ -840,7 +840,7 @@ bool ibValueCommandBarItem::ReadData(const ibDataNode& node)
 	m_propertyEnabled->SetNodeValue(node.GetProperty(m_propertyEnabled->GetName()));
 	m_propertyVisible->SetNodeValue(node.GetProperty(m_propertyVisible->GetName()));
 	m_propertyDefault->SetNodeValue(node.GetProperty(m_propertyDefault->GetName()));
-	m_propertyFunctionalOptions->SetNodeValue(node.GetProperty(m_propertyFunctionalOptions->GetName()));
+	m_propertyFeatureOptions->SetNodeValue(node.GetProperty(m_propertyFeatureOptions->GetName()));
 	m_propertyCommand->SetNodeValue(node.GetProperty(m_propertyCommand->GetName()));   // command SOURCE (the hop path)
 	return true;
 }

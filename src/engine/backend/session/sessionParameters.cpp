@@ -21,7 +21,7 @@
 
 #include "backend/appData.h"
 #include "backend/backend_exception.h"
-#include "backend/metadataConfiguration.h"                 // the session's configuration (GetMetaData)
+#include "backend/metadataApplication.h"                   // the session's application (GetMetaData)
 #include "backend/metaCollection/metaObjectMetadata.h"     // GetSessionModule
 #include "backend/metaCollection/metaModuleObject.h"       // ibValueMetaObjectManagerModule
 #include "backend/moduleManager/moduleManager.h"
@@ -57,27 +57,27 @@ void ibSession::SetSessionParameters()
 	if (appData->DesignerMode())
 		return;   // the designer runs no application code
 
-	// THE CONFIGURATION THIS SESSION COMPILED, not only the one it was let in on.
-	// CompileRoot builds the root against that configuration when the session has
+	// THE APPLICATION THIS SESSION COMPILED, not only the one it was let in on.
+	// CompileRoot builds the root against that application when the session has
 	// not acquired one yet (a test, a root created first), and the policy reads it
 	// the same way. The session module lives there. Looking only at GetMetaData()
 	// skipped the module, so the parameters were never filled and a question in
 	// the module was never asked.
-	ibMetaDataConfigurationBase* meta = GetMetaData();
+	ibMetaDataApplicationBase* meta = GetMetaData();
 	if (meta == nullptr && m_root && m_root->GetMetaManager() != nullptr)
-		meta = dynamic_cast<ibMetaDataConfigurationBase*>(m_root->GetMetaManager()->GetMetaData());
-	ibValueMetaObjectConfiguration* const config = meta != nullptr
-		? meta->GetCommonMetaObject() : nullptr;
-	if (config == nullptr)
+		meta = dynamic_cast<ibMetaDataApplicationBase*>(m_root->GetMetaManager()->GetMetaData());
+	ibValueMetaObjectApplication* const application = meta != nullptr
+		? meta->GetRootMetaObject() : nullptr;
+	if (application == nullptr)
 		return;
 
-	const ibValueMetaObjectManagerModule* const sessionModule = config->GetSessionModule();
+	const ibValueMetaObjectManagerModule* const sessionModule = application->GetSessionModule();
 	if (sessionModule == nullptr || !m_root)
 		return;
 
-	ibValueModuleManager::ibValueModuleUnit* const unit = m_root->FindCommonModule(sessionModule);
+	ibValueModuleManager::ibValueModuleUnit* const unit = m_root->FindSharedModule(sessionModule);
 	if (unit == nullptr)
-		return;   // nothing declared — a configuration need not have session parameters
+		return;   // nothing declared — an application need not have session parameters
 
 	// TRUSTED: the module reads data to decide what to set, and what it sets is what
 	// those reads would otherwise be filtered by. The same door the role modules use.

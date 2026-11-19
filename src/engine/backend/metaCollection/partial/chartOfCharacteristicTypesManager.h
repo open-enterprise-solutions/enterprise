@@ -12,7 +12,7 @@ class ibValueManagerDataObjectChartOfCharacteristicTypes :
 	ibValueManagerDataObjectChartOfCharacteristicTypes(const ibValueMetaObjectChartOfCharacteristicTypes* metaObject = nullptr) : m_metaObject(metaObject) { m_members.Bind(this, &ibValueManagerDataObjectChartOfCharacteristicTypes::FillManagerMethods); }
 	virtual ~ibValueManagerDataObjectChartOfCharacteristicTypes() {}
 
-	virtual const ibValueMetaObjectCommonModule* GetManagerModule() const;
+	virtual const ibValueMetaObjectSharedModule* GetManagerModule() const;
 	virtual const ibValueMetaObjectChartOfCharacteristicTypes* GetMetaObject() const { return m_metaObject; }
 
 	void FillManagerMethods(ibMemberTable& helper) const;

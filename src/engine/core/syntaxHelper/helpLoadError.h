@@ -15,7 +15,7 @@
 //                    std exception). The entry is dropped; the rest of
 //                    the bucket loads.
 //   kWarning       — non-fatal anomaly: dangling see_also id, overlay
-//                    (per-config entry shadowing a platform entry),
+//                    (per-application entry shadowing a platform entry),
 //                    unknown category key. Entry still loads.
 //
 // See docs/private/syntax-helper-design.md §3.3 for the contract.

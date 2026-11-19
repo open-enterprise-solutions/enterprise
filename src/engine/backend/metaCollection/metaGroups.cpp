@@ -5,7 +5,7 @@
 
 namespace {
 
-// ONE ROW PER GROUP, in the order a configuration is read. The row's POSITION is the order — there
+// ONE ROW PER GROUP, in the order an application is read. The row's POSITION is the order — there
 // is no rank number to keep in step with the position, and none to leave a hole in when a kind is
 // inserted between two others.
 struct ibMetaGroupRow {
@@ -22,34 +22,34 @@ struct ibMetaGroupRow {
 
 const ibMetaGroupRow s_groups[] = {
 
-	// ——— what belongs to the configuration as a whole and to no business object ———
-	{ g_metaCommonModuleCLSID,     ibTRANSLATE("Common modules"),     ibMetaGroupBand::Common },
-	{ g_metaCommonFormCLSID,       ibTRANSLATE("Common forms"),       ibMetaGroupBand::Common },
-	{ g_metaCommonCommandCLSID,    ibTRANSLATE("Common commands"),    ibMetaGroupBand::Common },
-	{ g_metaCommandGroupCLSID,     ibTRANSLATE("Command groups"),     ibMetaGroupBand::Common },
-	{ g_metaCommonTemplateCLSID,   ibTRANSLATE("Common templates"),   ibMetaGroupBand::Common },
+	// ——— what belongs to the application as a whole and to no business object ———
+	{ g_metaSharedModuleCLSID,     ibTRANSLATE("Shared modules"),     ibMetaGroupBand::Shared },
+	{ g_metaSharedFormCLSID,       ibTRANSLATE("Shared forms"),       ibMetaGroupBand::Shared },
+	{ g_metaSharedCommandCLSID,    ibTRANSLATE("Shared commands"),    ibMetaGroupBand::Shared },
+	{ g_metaCommandGroupCLSID,     ibTRANSLATE("Command groups"),     ibMetaGroupBand::Shared },
+	{ g_metaSharedTemplateCLSID,   ibTRANSLATE("Shared templates"),   ibMetaGroupBand::Shared },
 	// The jobs branch holds the parameterized ones; the predefined sit in a sub-branch of it, so
 	// they are declared right after it.
-	{ g_metaParameterizedJobCLSID, ibTRANSLATE("Scheduled jobs"),     ibMetaGroupBand::Common },
-	{ g_metaScheduledJobCLSID,     ibTRANSLATE("Predefined jobs"),    ibMetaGroupBand::Common },
-	{ g_metaEventHandlerCLSID,     ibTRANSLATE("Event handlers"),     ibMetaGroupBand::Common },
-	{ g_metaSessionParameterCLSID, ibTRANSLATE("Session parameters"), ibMetaGroupBand::Common },
-	{ g_metaFunctionalOptionCLSID, ibTRANSLATE("Functional options"), ibMetaGroupBand::Common, ibTRANSLATE("Functional option") },
-	{ g_metaCommonAttributeCLSID,  ibTRANSLATE("Common attributes"),  ibMetaGroupBand::Common },
-	{ g_metaPictureCLSID,          ibTRANSLATE("Pictures"),           ibMetaGroupBand::Common },
-	{ g_metaSectionCLSID,          ibTRANSLATE("Sections"),           ibMetaGroupBand::Common },
-	{ g_metaRoleCLSID,             ibTRANSLATE("Roles"),              ibMetaGroupBand::Common },
-	{ g_metaLanguageCLSID,         ibTRANSLATE("Languages"),          ibMetaGroupBand::Common },
+	{ g_metaParameterizedJobCLSID, ibTRANSLATE("Scheduled jobs"),     ibMetaGroupBand::Shared },
+	{ g_metaScheduledJobCLSID,     ibTRANSLATE("Predefined jobs"),    ibMetaGroupBand::Shared },
+	{ g_metaEventHandlerCLSID,     ibTRANSLATE("Event handlers"),     ibMetaGroupBand::Shared },
+	{ g_metaSessionParameterCLSID, ibTRANSLATE("Session parameters"), ibMetaGroupBand::Shared },
+	{ g_metaFeatureOptionCLSID,    ibTRANSLATE("Feature options"),    ibMetaGroupBand::Shared, ibTRANSLATE("Feature option") },
+	{ g_metaSharedAttributeCLSID,  ibTRANSLATE("Shared attributes"),  ibMetaGroupBand::Shared },
+	{ g_metaPictureCLSID,          ibTRANSLATE("Pictures"),           ibMetaGroupBand::Shared },
+	{ g_metaSectionCLSID,          ibTRANSLATE("Sections"),           ibMetaGroupBand::Shared },
+	{ g_metaRoleCLSID,             ibTRANSLATE("Roles"),              ibMetaGroupBand::Shared },
+	{ g_metaLanguageCLSID,         ibTRANSLATE("Languages"),          ibMetaGroupBand::Shared },
 
-	// ——— straight under the configuration: first what another system talks to the base through — a folder of its own
-	// right after Common, its groups after it — then the business objects a configuration is made of ———
+	// ——— straight under the application: first what another system talks to the base through — a folder of its own
+	// right after Common, its groups after it — then the business objects an application is made of ———
 	{ g_metaIntegrationCLSID,                ibTRANSLATE("Integration"),     ibMetaGroupBand::Metadata },
 	{ g_metaHttpServiceCLSID,                ibTRANSLATE("HTTP services"),   ibMetaGroupBand::Metadata },
 	{ g_metaConstantCLSID,                  ibTRANSLATE("Constants"),       ibMetaGroupBand::Metadata, ibTRANSLATE("Constant") },
 	{ g_metaCatalogCLSID,                    ibTRANSLATE("Catalogs"),        ibMetaGroupBand::Metadata, ibTRANSLATE("Catalog") },
 	{ g_metaDocumentCLSID,                   ibTRANSLATE("Documents"),       ibMetaGroupBand::Metadata, ibTRANSLATE("Document") },
 	{ g_metaEnumerationCLSID,                ibTRANSLATE("Enumerations"),    ibMetaGroupBand::Metadata, ibTRANSLATE("Enumeration") },
-	{ g_metaDataProcessorCLSID,              ibTRANSLATE("Data processors"), ibMetaGroupBand::Metadata, ibTRANSLATE("Data processor") },
+	{ g_metaDataToolCLSID,                   ibTRANSLATE("Data tools"),      ibMetaGroupBand::Metadata, ibTRANSLATE("Data tool") },
 	{ g_metaReportCLSID,                     ibTRANSLATE("Reports"),         ibMetaGroupBand::Metadata, ibTRANSLATE("Report") },
 	// ⭐ THE CHARTS BEFORE THE REGISTERS, AND THE REGISTERS LAST — see the header.
 	{ g_metaChartOfCharacteristicTypesCLSID, ibTRANSLATE("Charts of characteristic types"), ibMetaGroupBand::Metadata, ibTRANSLATE("Chart of characteristic types") },
@@ -65,10 +65,10 @@ const ibMetaGroupRow s_groups[] = {
 
 	// ——— the groups INSIDE an object: what it IS, then what is done with it ———
 	{ g_metaAttributeCLSID,                      ibTRANSLATE("Attributes"),  ibMetaGroupBand::Inner },
-	// A common attribute's copy inside an object compares under the same caption as the declaration:
-	// what a reader wants to see there is "this object carries a common attribute", not a second
+	// A shared attribute's copy inside an object compares under the same caption as the declaration:
+	// what a reader wants to see there is "this object carries a shared attribute", not a second
 	// kind of thing.
-	{ g_metaCommonAttributeColumnCLSID,          ibTRANSLATE("Common attributes"), ibMetaGroupBand::Inner },
+	{ g_metaSharedAttributeColumnCLSID,          ibTRANSLATE("Shared attributes"), ibMetaGroupBand::Inner },
 	{ g_metaDimensionCLSID,                      ibTRANSLATE("Dimensions"),  ibMetaGroupBand::Inner },
 	{ g_metaResourceCLSID,                       ibTRANSLATE("Resources"),   ibMetaGroupBand::Inner },
 	{ g_metaEnumCLSID,                           ibTRANSLATE("Enum values"), ibMetaGroupBand::Inner },
@@ -81,7 +81,6 @@ const ibMetaGroupRow s_groups[] = {
 	{ g_metaTableCLSID,                          ibTRANSLATE("Tables"),      ibMetaGroupBand::Inner },
 	{ g_metaTableRefCLSID,                       ibTRANSLATE("Tables"),      ibMetaGroupBand::Inner },
 	{ g_metaAccountDimensionKindsTableCLSID,     ibTRANSLATE("Account dimension kinds tables"), ibMetaGroupBand::Inner },
-	{ g_metaRecalculationCLSID,                  ibTRANSLATE("Recalculations"), ibMetaGroupBand::Inner },
 	{ g_metaFormCLSID,                           ibTRANSLATE("Forms"),       ibMetaGroupBand::Inner },
 	{ g_metaCommandCLSID,                        ibTRANSLATE("Commands"),    ibMetaGroupBand::Inner },
 	{ g_metaTemplateCLSID,                       ibTRANSLATE("Templates"),   ibMetaGroupBand::Inner },
@@ -111,7 +110,7 @@ ibString ibMetaGroupCaption(const ibClassID& clsid)
 
 ibString ibMetaTypeCaption(const ibClassID& clsid)
 {
-	// A kind this table does not caption — an external data processor, a plugin's — is called by the name it
+	// A kind this table does not caption — an external data tool, a plugin's — is called by the name it
 	// registered, spelled as words and translated where the catalog has it ("External report").
 	const ibMetaGroupRow* row = RowFor(clsid);
 	return ibGetTranslation(row != nullptr && row->m_one != nullptr ? ibString::FromUTF8(row->m_one)

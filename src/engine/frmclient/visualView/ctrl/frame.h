@@ -109,7 +109,7 @@ public:
 	void SetSubscribedEvents(const std::vector<ibProtocolNode>& events);
 	bool IsSubscribed(ibProtocol::ibEvent::ibKind event) const { return (m_subscribedEvents & (1u << static_cast<int>(event))) != 0; }
 
-	// Open in the object tree; offered at all (the base's functional options are the server's: what it draws is offered).
+	// Open in the object tree; offered at all (the base's feature options are the server's: what it draws is offered).
 	void SetExpanded(bool expanded) { m_expanded = expanded; }
 	bool GetExpanded() const { return m_expanded; }
 	virtual bool IsAvailable() const { return true; }

@@ -32,7 +32,7 @@ void ibValueWindow::OnUpdate(ibDataNode& state, ibVisualHost* host)
 
 	// A source-bound control with NO source picked is never shown — it is unusable until bound. IsUnbound is
 	// a base virtual — false for plain windows, overridden by the source controls — so no cross-cast is
-	// needed. Nor is an element that is NOT AVAILABLE (control.h): the functional options of this base switch
+	// needed. Nor is an element that is NOT AVAILABLE (control.h): the feature options of this base switch
 	// it off, by the field it stands on or by the options it names itself. Two questions, asked side by side.
 	state.SetValue(ibProtocol::ibForm::ibState::Visible, m_propertyVisible->GetValueAsBoolean() && IsAvailable() && !IsUnbound());
 	state.SetValue(ibProtocol::ibForm::ibState::Tooltip, m_propertyTooltip->GetValueAsTranslateString());

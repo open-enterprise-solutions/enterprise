@@ -21,8 +21,8 @@
 #include "core/net/httpClient.h"
 #include "core/net/ioThreads.h"
 
-// A debugger server with no configuration around it — for the port tests below, which need the port and nothing
-// it would ask a configuration for. In production only ibMetaDataConfiguration makes one.
+// A debugger server with no application around it — for the port tests below, which need the port and nothing
+// it would ask an application for. In production only ibMetaDataApplication makes one.
 class ibStandaloneDebuggerServer {
 public:
 	static std::unique_ptr<ibDebuggerServer> Make() {

@@ -72,7 +72,7 @@ public:
 	//
 	// `SafeName` is what may stand anywhere. `AnyName` also draws words this language RESERVES —
 	// `Order`, `Group`, `Value`, `Count`, `Index`, `Update` — because those are entirely ordinary
-	// things to call a document or an attribute, and a configuration names them without consulting
+	// things to call a document or an attribute, and an application names them without consulting
 	// our keyword table. That is the defect that started this file.
 	//
 	// Where a reserved word is allowed:

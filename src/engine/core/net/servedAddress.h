@@ -5,7 +5,7 @@
 // kept as a node.
 //
 // A web server publishes a base under a name (/<publication>/) and carries its clients there. What else the base
-// answers under that name is the base's own list: an HTTP service of the configuration, an assistant's channel. The
+// answers under that name is the base's own list: an HTTP service of the application, an assistant's channel. The
 // web server knows no kind: it mounts each entry's path and hands what comes there to the base (protocol `serve`),
 // and the base hands it to the entry's kind. Who answers a kind, and the list itself, are the engine's
 // (backend/served/servedKind.h, servedAddressRegistry.h); what an entry IS, here.
@@ -25,7 +25,7 @@ struct CORE_API ibServedAddress {
 	ibGuid   m_id;       // the entry's identity, minted when it is registered
 	ibString m_kind;     // the kind's registered name: which code answers
 	ibString m_path;     // segments without a slash at either end: es/desk
-	ibGuid   m_object;   // the configuration's object it answers for, when the kind is declared there; empty — none
+	ibGuid   m_object;   // the application's object it answers for, when the kind is declared there; empty — none
 	ibGuid   m_owner;    // the session that registered it — the entry goes with it; empty — the administrator's, kept
 
 	// The administrator's entries are kept in the base; a session's live as long as it does.

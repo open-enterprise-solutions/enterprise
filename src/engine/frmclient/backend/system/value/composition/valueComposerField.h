@@ -3,7 +3,7 @@
 
 // The FIELD a composer setting points at — the engine's (backend/system/value/composition/valueComposerField.h) as the
 // client's settings windows hold one: a path, how it reads, the column it resolved to and its type, held in a value so a
-// condition's either side is a value that may or may not be a field. No script names one here, and no configuration
+// condition's either side is a value that may or may not be a field. No script names one here, and no application
 // builds a declared value into a reference: what is left is the data.
 
 #include "frmclient/backend/compiler/value.h"
@@ -43,7 +43,7 @@ private:
 	ibString m_written;                // how it reads: `CatalogRef.Goods.Chair`
 };
 
-// THE RUNTIME IS MADE HERE — the engine's: a declaration becomes a live reference against the configuration, which is
+// THE RUNTIME IS MADE HERE — the engine's: a declaration becomes a live reference against the application, which is
 // the server's. Here every value comes back untouched, a declaration as it reads.
 inline ibValue ibMaterializeCompositionValue(const ibValue& stored, const class ibMetaData* WXUNUSED(metaData))
 {

@@ -351,7 +351,7 @@ static ibQueryResult ibRunRendered(const std::shared_ptr<ibDatabaseLayer>& conn,
 	// position inside a statement nothing hands over, naming a column nobody typed. It IS journalled
 	// (query.sql, three lines up), but the technology journal is a file beside the binary and it is
 	// 87% session heartbeat: right for whoever builds the platform, useless to whoever is writing a
-	// configuration and has just been told their query failed (measured 2026-09-02).
+	// application and has just been told their query failed (measured 2026-09-02).
 	//
 	// So it goes where the failure goes. The KIND, the native code and the SQLSTATE travel unchanged —
 	// retry semantics belong to the driver's classification and must not be lost by re-raising.
@@ -1405,6 +1405,14 @@ ibString ibQueryRenderer::RenderExpr(const ibQueryExprPtr& expr)
 	}
 
 	case ibQueryExprKind::BinOp: {
+		// ⭐ A REMAINDER IS THE DIALECT'S TEMPLATE, not a sign between two operands (ibDialectDictionary::m_modulo): `%` was
+		// written for every engine, Firebird has none and refused the statement, and the engines that have one do not agree
+		// on a fraction. A constant operand is pinned as a compared one is — a fraction bound by the column it faces lost
+		// its scale. Each operand is rendered per occurrence (FillRepeated), every {lhs} before every {rhs}.
+		if (expr->m_binOp == ibQueryBinOp::Mod) {
+			const ibString half = FillRepeated(m_dialect.m_modulo, ibT("{lhs}"), ibPinnedConst(expr->m_lhs, m_dialect));
+			return FillRepeated(half, ibT("{rhs}"), ibPinnedConst(expr->m_rhs, m_dialect));
+		}
 		// RenderExpr has a side effect (appends to the bind plan), so the lhs
 		// MUST be rendered before the rhs to keep the plan in SQL-text /
 		// placeholder order. operator+ does NOT sequence its operands (MSVC
@@ -1674,7 +1682,7 @@ ibString ibQueryRenderer::BinOpText(ibQueryBinOp op)
 	case ibQueryBinOp::Sub:    return ibT("-");
 	case ibQueryBinOp::Mul: return ibT("*");
 	case ibQueryBinOp::Div: return ibT("/");
-	case ibQueryBinOp::Mod: return ibT("%");   // NB: Firebird wants MOD() — out of MVP scope
+	case ibQueryBinOp::Mod: return ibT("%");   // the renderer spells it through the dialect (m_modulo)
 	case ibQueryBinOp::Eq:  return ibT("=");
 	case ibQueryBinOp::Ne:  return ibT("<>");
 	case ibQueryBinOp::Lt:  return ibT("<");

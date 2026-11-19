@@ -119,7 +119,7 @@ constexpr uint32_t kAOTMagic         = 0x31434250u; // 'PBC1' little-endian
 // v16 (2026-06-28): ibClassID now carries a KIND in its high byte (clsid.h). Dynamic
 // metaobject ids changed from FNV("R_<metaID>"/…) to constructive (kind<<56 | metaID),
 // so every persisted/cached CLSID differs from v15. Bump rejects v15 → safe recompile +
-// repopulate (DB/config blobs holding old CLSIDs regenerate too).
+// repopulate (DB/application blobs holding old CLSIDs regenerate too).
 // v17 (2026-07-10): the `restrict` clause (KEY_RESTRICT) now records a pushdown AST for its
 // where / join-ON lambda (EmitRestrictBody span fix). This is a COMPILER-OUTPUT change, not a
 // format change — the payload layout is identical to v16 — but Load() keys only on descriptor_id
@@ -139,7 +139,7 @@ constexpr uint32_t kAOTMagic         = 0x31434250u; // 'PBC1' little-endian
 // the bytecode already carries the type as a class id, and a name is spelled from
 // that id only when a message needs one.
 // v20 (2026-08-05): the global context gained a member — `SessionParameters` — and
-// the configuration root gained a second module property, the session module. A blob
+// the application root gained a second module property, the session module. A blob
 // compiled before either existed resolved its names against the smaller context, and
 // a cached one is served without ever asking whether that context still holds. Bump
 // so every module recompiles against the context as it is now.
@@ -160,7 +160,7 @@ constexpr uint32_t kAOTMagic         = 0x31434250u; // 'PBC1' little-endian
 // while this was being tested.
 //
 // ⭐ THE VERSION IS ABOUT WHETHER THIS ENGINE MAY USE THIS BLOB, not about byte layout.
-// The cache key (byteCodeCache.cpp) is this number plus the configuration digest. The
+// The cache key (byteCodeCache.cpp) is this number plus the application digest. The
 // number lives in byteCodeFormat.h, which is what the compiler rebuilds; the old key
 // used core's build stamp, and core is not rebuilt when an opcode changes. The check
 // below still rejects a blob that was found under the wrong number.

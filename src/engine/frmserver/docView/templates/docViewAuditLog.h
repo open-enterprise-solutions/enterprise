@@ -17,7 +17,7 @@ class ibMetaData;
 
 class FRMSERVER_API ibAuditLogDocument : public ibDocument {
 public:
-	// The configuration a row's object is opened in (GetMetaData): handed in by whoever opens the journal, never
+	// The application a row's object is opened in (GetMetaData): handed in by whoever opens the journal, never
 	// reached for.
 	explicit ibAuditLogDocument(const ibMetaData* metaData = nullptr);
 
@@ -41,7 +41,7 @@ private:
 };
 
 // THE JOURNAL AS A CLIENT DRAWS IT — with a view of its own (the tab's Kind), the desktop's filter strip, toolbar and
-// table: the rows are read here, a page at a time, and a row's object is opened here, where the configuration is.
+// table: the rows are read here, a page at a time, and a row's object is opened here, where the application is.
 class FRMSERVER_API ibAuditLogView : public ibView {
 public:
 	ibAuditLogView() : ibView() {}

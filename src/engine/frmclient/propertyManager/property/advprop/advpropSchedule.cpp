@@ -88,10 +88,10 @@ bool ibPGScheduleProperty::OnEvent(ibPropertyGrid* WXUNUSED(propgrid), wxWindow*
 					return;
 
 				if (dlg.GetSchedule() == schedule)
-					return;   // nothing actually changed — do not mark the configuration modified
+					return;   // nothing actually changed — do not mark the application modified
 
 				// …written as an edit in the grid writes it (ibObjectInspector::ModifyProperty): the owner puts it before
-				// the server, which marks the configuration modified.
+				// the server, which marks the application modified.
 				property = inspector->GetSelectedObject() == owner ? owner->GetProperty(name) : nullptr;
 				ibDataValue node;
 				if (property != nullptr && ibJobScheduleDescriptionMemory::WriteNode(node, dlg.GetSchedule()))

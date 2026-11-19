@@ -87,7 +87,7 @@ enum { //instruction types
 	OPER_ENDTRY,
 	OPER_SET_TYPE,
 	// ⭐ CREATE A VALUE OF A BUILT-IN TYPE — `New Structure(…)`, `New Array`, and every other
-	// registered VALUE ctor. Configuration objects are not made this way; they come from their
+	// registered VALUE ctor. Application objects are not made this way; they come from their
 	// manager (`Catalogs.X.CreateItem()`), which is why the compiler refuses any name that is not
 	// an `ibCtorObjectType_object_value`.
 	//   m_param1            — the destination
@@ -114,7 +114,7 @@ enum { //instruction types
 	// range [LFUNC+1 .. ENDLFUNC-1] in the parent bytecode, copy body +
 	// referenced const-pool entries into a fresh self-contained
 	// ibByteCode (m_parent = current bc — bc parent walk reaches root
-	// Context bindings: Catalogs / Documents / CommonModules / system
+	// Context bindings: Catalogs / Documents / SharedModules / system
 	// functions), stash it in m_param3 and in parent's m_lambdaBcs. Then
 	// materialise an ibValueFunction wrapper into the dest slot and jump
 	// IP to m_param2.m_numIndex (past OPER_ENDLFUNC). On bDelta=true

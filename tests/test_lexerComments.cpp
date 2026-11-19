@@ -3,7 +3,7 @@
 //
 // ibTranslateCode::SkipSpaces skipped a comment line and then CALLED ITSELF for the next line - so a
 // block of n consecutive comment lines was n frames deep. A module that carries a big block of
-// commented-out code (a migrated configuration has them) overflowed the stack of the thread that
+// commented-out code (a migrated application has them) overflowed the stack of the thread that
 // compiles it: enterprise died with a crash report whose faulting thread was 511+ frames of
 // ibTranslateCode::SkipSpaces, one per line (2026-09-21).
 //

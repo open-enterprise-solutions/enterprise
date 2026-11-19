@@ -40,7 +40,7 @@ static wxIcon FormIcon(const ibDataNode& form, const ibString& name)
 //*                                    workspace editor                                      *
 //********************************************************************************************
 
-ibDialogHomePageEditor::ibDialogHomePageEditor(wxWindow* parent, ibValueMetaObjectConfiguration* metaObject)
+ibDialogHomePageEditor::ibDialogHomePageEditor(wxWindow* parent, ibValueMetaObjectApplication* metaObject)
 	: ibDialog(parent, wxID_ANY, _("Home page workspace"),
 		wxDefaultPosition, wxSize(760, 480), wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER),
 	m_metaObject(metaObject)
@@ -146,7 +146,7 @@ void ibDialogHomePageEditor::CreateDialogView()
 
 	mainSizer->Add(buttonSizer, 0, wxEXPAND | wxALL, FromDIP(5));
 
-	// A locked configuration (another user's exclusive edit) shows the workspace but commits
+	// A locked application (another user's exclusive edit) shows the workspace but commits
 	// nothing — the same read-only rule every other metadata editor obeys.
 	if (m_metaObject != nullptr && !m_metaObject->IsEditable()) {
 		m_buttonOK->Enable(false);
@@ -361,7 +361,7 @@ void ibDialogHomePageEditor::OnCommandOK(wxCommandEvent& event)
 
 		// The template is already on the working copy (OnTemplateChanged set it, and the
 		// column layout followed it) — only the commit is left. The server marks the
-		// configuration modified, as it takes it.
+		// application modified, as it takes it.
 		if (m_metaObject->GetHomePage() != m_description)
 			m_metaObject->SetHomePage(m_description);
 	}
@@ -373,7 +373,7 @@ void ibDialogHomePageEditor::OnCommandOK(wxCommandEvent& event)
 //*                                     form picker                                          *
 //********************************************************************************************
 
-ibDialogHomePageFormSelect::ibDialogHomePageFormSelect(wxWindow* parent, const ibValueMetaObjectConfiguration* metaObject)
+ibDialogHomePageFormSelect::ibDialogHomePageFormSelect(wxWindow* parent, const ibValueMetaObjectApplication* metaObject)
 	: ibDialog(parent, wxID_ANY, _("Select form"),
 		wxDefaultPosition, wxSize(420, 480), wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER),
 	m_metaObject(metaObject)
@@ -436,8 +436,8 @@ void ibDialogHomePageFormSelect::FillTree()
 	if (m_metaObject == nullptr)
 		return;
 
-	// Every form the configuration allows (the server listed them), grouped under its owner — a
-	// common form has none, so it files under its own group. Grouping is by owner identity, so
+	// Every form the application allows (the server listed them), grouped under its owner — a
+	// shared form has none, so it files under its own group. Grouping is by owner identity, so
 	// the tree follows the metadata tree without duplicating its walk.
 	std::map<std::int32_t, wxTreeItemId> groups;
 	wxTreeItemId commonGroup;
@@ -454,9 +454,9 @@ void ibDialogHomePageFormSelect::FillTree()
 
 		wxTreeItemId parentNode;
 
-		if (metaForm.GetValue<bool>(ibProtocol::ibSchema::ibHomePage::Common)) {
+		if (metaForm.GetValue<bool>(ibProtocol::ibSchema::ibHomePage::Shared)) {
 			if (!commonGroup.IsOk())
-				commonGroup = m_treeCtrl->AppendItem(root, _("Common forms"),
+				commonGroup = m_treeCtrl->AppendItem(root, _("Shared forms"),
 					AppendIcon(FormIcon(metaForm, ibProtocol::ibSchema::ibHomePage::Picture)),
 					AppendIcon(FormIcon(metaForm, ibProtocol::ibSchema::ibHomePage::Picture)));
 			parentNode = commonGroup;

@@ -34,7 +34,7 @@ class FRMSERVER_API ibSheetDocument : public ibMetaDocument {
 public:
 
 	virtual ibPictureDescription GetIcon() const {
-		return ibPictureDescription(g_metaCommonTemplateCLSID);
+		return ibPictureDescription(g_metaSharedTemplateCLSID);
 	}
 
 	ibSheetDocument() : ibMetaDocument() {}

@@ -14,7 +14,7 @@
 // `Restore` is the third, and it adds no rule of its own: it posts the documents after the border
 // again, in their order, and the border follows them by the rule it always follows (ibSequenceRestore).
 // Its loop is the platform's because the order, the stop at the first failure and the transaction per
-// document are what make it safe, and a configuration writing that loop itself gets them wrong.
+// document are what make it safe, and an application writing that loop itself gets them wrong.
 class ibValueManagerDataObjectSequence : public ibValueManagerDataObject {
 public:
 
@@ -24,7 +24,7 @@ public:
 	virtual ~ibValueManagerDataObjectSequence() {}
 
 	// The sequence's own manager module: its Public methods are this manager's too, beside its own verbs.
-	virtual const ibValueMetaObjectCommonModule* GetManagerModule() const override { return m_metaObject->GetManagerModule(); }
+	virtual const ibValueMetaObjectSharedModule* GetManagerModule() const override { return m_metaObject->GetManagerModule(); }
 	virtual const ibValueMetaObjectSequence* GetMetaObject() const override { return m_metaObject; }
 
 	// Restore is a procedure: it answers nothing, and a procedure is carried out here, not in CallAsFunc.

@@ -34,7 +34,7 @@
 // ibApplicationInstance. Resolves to nullptr before Init / after Destroy.
 #define ibLog     (ibApplicationInstance::GetLogger())
 
-// HOW THE PROCESS HOLDS ITS BASES — and nothing else. Whether a session designs the configuration or runs the
+// HOW THE PROCESS HOLDS ITS BASES — and nothing else. Whether a session designs the application or runs the
 // application is the session's (ibSessionKind): a file base has its designer, its runtime, its jobs exactly as a
 // server does. A number on disk (sys_session's appMode): never renumbered; 2, 3 and 5 were the designer, the
 // runtime and the web runtime, and are not taken again.
@@ -82,7 +82,7 @@ struct BACKEND_API ibInstanceRequest {
 	ibString  m_name;
 	ibString  m_locale;      // empty — the process's
 
-	// _app_start_* — read as the base's configuration is made, at its opening (the debug server comes up with it).
+	// _app_start_* — read as the base's application is made, at its opening (the debug server comes up with it).
 	int       m_loadMetadataFlags = _app_start_default_flag;
 };
 
@@ -328,7 +328,7 @@ public:
 	           ibUserInfo& outInfo);
 
 	// Pure credential check used by Login above. Looks up the user, verifies
-	// the password (PBKDF2 with silent MD5→PBKDF2 upgrade via NeedsRehash),
+	// the password (PBKDF2, re-hashed when below policy via NeedsRehash),
 	// fills `outInfo` on success, and does NOT mutate any session state.
 	// An empty name is open access only when the user list was read and is
 	// empty, on every host (outInfo stays empty). A list that could not be
@@ -350,10 +350,10 @@ public:
 	void InstallUser(const ibUserInfo& info,
 	                 const ibString& rawPassword);
 
-	// Process-wide exclusive (monopoly) mode — true when any session
+	// Process-wide single-user (monopoly) mode — true when any session
 	// currently holds it. Facade over ibSessionRegistry; out-of-line so
 	// this header doesn't have to pull sessionRegistry.h.
-	bool ExclusiveMode() const;
+	bool SingleUserMode() const;
 
 	// User-identity accessors — read from the current thread's `ibSession`
 	// (per-cookie on web, main user session on desktop). Without an active
@@ -439,9 +439,6 @@ private:
 	bool LoadUserInfoFromBuffer(ibMemoryBuffer& buffer);
 	bool SaveUserInfoToBuffer(ibMemoryBuffer& buffer) const;
 
-	ibString ComputeMd5() const;
-	ibString ComputeMd5(const ibString& userPassword) const;
-
 	static bool TableAlreadyCreated();
 	static void CreateTableUser();
 	static void CreateTableSession();
@@ -451,27 +448,15 @@ private:
 	friend struct LockSchemaAccess;   // the race test opens a base that already has sys_lock
 	friend struct JobSchemaAccess;    // the job runtime test writes job settings into a base it made
 #endif
-	// Additive — creates sys_job if missing. The shared last-run clock for
-	// scheduled jobs; independent table, not part of TableAlreadyCreated()'s
-	// init contract, so existing databases pick it up on next open.
+	// sys_job — the shared last-run clock for scheduled jobs and their settings (active / schedule).
 	static void CreateTableJob();
-	// Additive — gives sys_job its settings columns (active / schedule) on a base created before
-	// jobs had any. Nullable, and a NULL active reads as ON: silence must never switch a job off.
-	static void MigrateTableJob();
-	static void MigrateTableSession();
-	// Additive — creates sys_settings if missing. One row per saved setting,
-	// addressed by category + object + name + user. Independent table, not part
-	// of TableAlreadyCreated()'s init contract, so existing databases pick it up
-	// on next open. See backend/settings/settingsStorage.h.
+	// sys_settings — one row per saved setting, addressed by category + object + name + user. See
+	// backend/settings/settingsStorage.h.
 	static void CreateTableSettings();
-	// Additive — creates sys_file if missing. The sessions' temporary files, in parts; independent
-	// table, not part of TableAlreadyCreated()'s init contract. See backend/temp/tempStorage.h.
+	// sys_file — the sessions' temporary files, in parts. See backend/temp/tempStorage.h.
 	static void CreateTableFile();
-	// Additive — creates sys_bytecode_cache if missing. Runs in any
-	// runMode after the existing-tables gate, so DBs initialised before
-	// AOT cache landed pick the table up on next open. Independent
-	// table; not part of TableAlreadyCreated()'s init-contract.
-	static void MigrateTableBytecodeCache();
+	// sys_bytecode_cache — the compiled modules, keyed by the application's digest. See byteCodeCache.h.
+	static void CreateTableBytecodeCache();
 
 	static bool ClearTableUser();
 
@@ -502,7 +487,7 @@ private:
 	//   1. m_activeMetaData   — OnDestroy already ran above; the base
 	//                            lets its reference go BEFORE pool /
 	//                            registry, and the polymorphic dtor
-	//                            (Storage→Configuration→File→Base) runs
+	//                            (Storage→Application→File→Base) runs
 	//                            with the LAST holder: here, for the
 	//                            sessions let theirs go as they left.
 	//   2. m_sessionRegistry  — Stop() already drained workers; dtor
@@ -569,16 +554,16 @@ private:
 	// through the settings storage and the lock manager above, so it dies before them.
 	std::unique_ptr<class ibServedAddressRegistry> m_servedAddressRegistry;
 
-	// ⭐ THE ACTIVE CONFIGURATION — held FOR THE SESSIONS STILL TO COME (Max, 2026-10-06: *"the active metadata
+	// ⭐ THE ACTIVE APPLICATION — held FOR THE SESSIONS STILL TO COME (Max, 2026-10-06: *"the active metadata
 	// holds for new sessions"*). A session let in takes its own reference to it (ibSession::GetMetaData, +1) and
 	// works in that one for its whole life, so an update that puts another one here leaves every working session
-	// in the configuration it came in with; the old one goes with the last of them. A shared_ptr, swapped under the
+	// in the application it came in with; the old one goes with the last of them. A shared_ptr, swapped under the
 	// process's lock (ReplaceActiveMetaData).
-	// The application's — `ibMetaDataConfiguration`, loaded and run as the base opens (CreateActiveMetaData),
-	// before anybody comes in. A designer's session works in a configuration of its own, held by it alone
+	// The application's — `ibMetaDataApplication`, loaded and run as the base opens (CreateActiveMetaData),
+	// before anybody comes in. A designer's session works in an application of its own, held by it alone
 	// (ibSession::AcquireMetaData). nullptr in launcher / codeRunner (no DB-backed metadata). Declared last so
 	// reverse-order destruction lets it go first — OnDestroy ran already in the dtor above.
-	std::shared_ptr<class ibMetaDataConfigurationBase> m_activeMetaData;
+	std::shared_ptr<class ibMetaDataApplicationBase> m_activeMetaData;
 
 public:
 	// Static accessor — returns nullptr when no appData is alive.
@@ -609,21 +594,21 @@ public:
 	// after DestroyAppDataEnv. Callers MUST null-check.
 	static class ibHelpService* GetHelpService();
 
-	// Active configuration metadata accessor — the configuration this thread works in: its session's own, else the
+	// Active application metadata accessor — the application this thread works in: its session's own, else the
 	// one its scope holds, else the base's active one (held for the sessions to come). nullptr in launcher /
 	// codeRunner; nullptr while the base is still opening. The legacy `activeMetaData` macro
 	// redirects to `appEnv::ActiveMetaData()` which calls this. Whoever works in it holds `shared_from_this()`.
-	static class ibMetaDataConfigurationBase* GetActiveMetaData() { return GetActiveMetaData(Get()); }
-	static class ibMetaDataConfigurationBase* GetActiveMetaData(const ibApplicationInstance* applicationInstance);
+	static class ibMetaDataApplicationBase* GetActiveMetaData() { return GetActiveMetaData(Get()); }
+	static class ibMetaDataApplicationBase* GetActiveMetaData(const ibApplicationInstance* applicationInstance);
 
-	// The active configuration replaced — the base reads what the database now publishes, as its own (the designer's
+	// The active application replaced — the base reads what the database now publishes, as its own (the designer's
 	// apply asks it to; the designer's copy is the designer's). The sessions working in the old one keep it; it goes
 	// with the last of them. False when the database's copy could not be read: the old one stays.
 	bool ReplaceActiveMetaData();
 
-	// Fabric — the configuration the application runs, put in m_activeMetaData, loaded and run: the base's opening
+	// Fabric — the application the base runs, put in m_activeMetaData, loaded and run: the base's opening
 	// makes it, before any session is let in. Returns false if OnInitialize or the run failed.
-	// Replaces the historical `ibMetaDataConfigurationBase::Initialize` static.
+	// Replaces the historical `ibMetaDataApplicationBase::Initialize` static.
 	static bool CreateActiveMetaData(ibApplicationInstance* applicationInstance, int flags);
 	// (Its tear-down is the base's own Close: OnDestroy, then the base's reference let go — the last holder closes it.)
 
@@ -675,8 +660,8 @@ public:
 private:
 
 	// …the replacement itself — the one handed in put in m_activeMetaData, the one before let go; the public
-	// ReplaceActiveMetaData() hands in what it read from the database, a test — a configuration made in memory.
-	void ReplaceActiveMetaData(std::shared_ptr<class ibMetaDataConfigurationBase> metaData);
+	// ReplaceActiveMetaData() hands in what it read from the database, a test — an application made in memory.
+	void ReplaceActiveMetaData(std::shared_ptr<class ibMetaDataApplicationBase> metaData);
 #ifdef OES_TESTING
 	friend struct ActiveMetaDataAccess;
 #endif
@@ -695,7 +680,7 @@ private:
 
 	bool m_connected_to_db = false;
 
-	// The flags the base was opened with (ibInstanceRequest) — its configuration was made by them, and with the
+	// The flags the base was opened with (ibInstanceRequest) — its application was made by them, and with the
 	// debug server up every session let in is debuggable.
 	int  m_loadMetadataFlags = _app_start_default_flag;
 

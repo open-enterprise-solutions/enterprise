@@ -185,20 +185,8 @@ private:
 
 public:
 
-	// A recalculation a configuration saved before 2026-09-14 holds as an object of its own — loaded, and let go
-	// (the section "A recalculation saved as an object", below). Defined below this class, once it is complete.
-	class ibValueMetaObjectRecalculation;
-
 	ibValueMetaObjectCalculationRegister();
 	virtual ~ibValueMetaObjectCalculationRegister();
-
-	// …which is the one child a calculation register takes beyond the register-data base's: a configuration that
-	// holds one has to open. It is never created anew (the object refuses it).
-	virtual ibClassID ResolveChild(const ibClassID& clsid) const override {
-		if (clsid == g_metaRecalculationCLSID)
-			return clsid;
-		return ibValueMetaObjectRegisterData::ResolveChild(clsid);
-	}
 
 	// ⭐ ACTION PERIOD — the semantic heart of a calculation register. When on, a calculation record is
 	// not a point event but an INTERVAL [start, end] over which it is in force; records of competing
@@ -323,7 +311,7 @@ public:
 
 	//get module object in compose object
 	virtual const ibValueMetaObjectModule* GetObjectModule() const { return m_propertyObjectModule->GetMetaObject(); }
-	virtual const ibValueMetaObjectCommonModule* GetManagerModule() const { return m_propertyManagerModule->GetMetaObject(); }
+	virtual const ibValueMetaObjectSharedModule* GetManagerModule() const { return m_propertyManagerModule->GetMetaObject(); }
 
 	//create associate value
 	virtual ibValueMetaObjectFormBase* GetDefaultFormByID(const ibFormID& id) const;
@@ -446,12 +434,12 @@ private:
 		ibPropertyObject::CreateProperty<ibPropertyChartOfCalculationTypes>(m_categoryData, ibT("ChartOfCalculationTypes"), _("Chart of calculation types"), _("The chart of calculation types the register is bound to. Every record's CalculationType is a reference into it, and its sections decide the calculation: Displacing - which types cut a record's days, Base - which results its base is made of, Leading - which changes make it stale. Required: the register is not saved without it."));
 
 	// The grain of the registration period — see GetPeriodicity. A month unless said otherwise; a
-	// configuration saved before the property existed reads as a month too (ibProperty::SetNodeValue:
+	// application saved before the property existed reads as a month too (ibProperty::SetNodeValue:
 	// an absent value leaves the constructor's standing).
 	ibPropertyEnum<ibValueEnumCalcPeriodicity>* m_propertyPeriodicity =
 		ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumCalcPeriodicity>>(m_categoryData, ibT("Periodicity"), _("Periodicity"), _("The grain of the registration period: day, month (the default), quarter or year. A record is registered for the start of its period; a reading as of a moment takes the periods up to the one the moment falls in, and a base without a base period spans the record's registration period at this grain."), ibCalcPeriodicity::eCalcPeriodMonth);
 
-	// Action period configuration + its standard attributes (predefined). The attributes exist for the
+	// Action period application + its standard attributes (predefined). The attributes exist for the
 	// life of the register (stable metaIDs -> stable fld<metaID> columns), but only enter the schema
 	// when UseActionPeriod is on (see FillArrayObjectByPredefinedAttribute).
 	// ⭐ THE PERIODS ARE DAYS, and an END IS INCLUSIVE: a sick leave 12.06–16.06 is five days (Max's
@@ -507,34 +495,6 @@ private:
 };
 
 //********************************************************************************************
-//*                          A recalculation saved as an object                              *
-//********************************************************************************************
-
-// ⚠ A CONFIGURATION SAVED BEFORE 2026-09-14 HOLDS ITS RECALCULATIONS AS OBJECTS OF THEIR OWN, each with dimension
-// children, and a configuration has to open whatever it holds — the loader refuses a child nobody can build. This
-// builds them: a name and its dimensions and nothing more, never created anew (OnCreateMetaObject refuses), and let
-// go by its register as soon as the register has loaded (the register's OnLoadMetaObject, with a line in the
-// journal). The marks are the register's now, switched on by "Use recalculation"; the table the object had is
-// declared by nobody, and the schema's diff, which knows only what is declared, never drops it — the journal line
-// names it for whoever does.
-
-class ibValueMetaObjectCalculationRegister::ibValueMetaObjectRecalculation : public ibValueMetaObject {
-public:
-
-	//support icons
-	virtual ibPicture GetIcon() const override;
-	static ibPicture GetIconGroup();
-
-	// Its dimensions — what it was saved with, and what has to load under it.
-	virtual ibClassID ResolveChild(const ibClassID& clsid) const override {
-		return clsid == g_metaDimensionCLSID ? clsid : 0;
-	}
-
-	// Never made anew: the register's own recalculation is switched on instead.
-	virtual bool OnCreateMetaObject(ibMetaData* /*metaData*/, int /*flags*/) override { return false; }
-};
-
-//********************************************************************************************
 //*                              The recalculation's marks                                   *
 //********************************************************************************************
 
@@ -551,7 +511,7 @@ public:
 //     clearing the movements"): what the recorder held leads as it goes, what it holds leads as it comes in. A set
 //     written again as it was marks what its lines lead, as the reference does.
 //   * A mark is answered by the platform, never cleared by hand (Max, 2026-09-14 — simpler than the reference, where
-//     the configuration clears them): a recorder written again answers its own marks — its records were just computed
+//     the application clears them): a recorder written again answers its own marks — its records were just computed
 //     again; a STORNO answers the marks of its position — the run that wrote it computed the position anew beside it;
 //     and before a set holding stornos is replaced or deleted, the positions they reverse are marked again, so a
 //     correction taken back leaves its position as marked as it was before the correction came. A run therefore reads

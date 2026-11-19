@@ -11,7 +11,7 @@ XML. The parser is built into the engine (expat), the same on every platform.
 var reader = New XMLReader();
 reader.OpenFile(path);
 while (reader.Read()) {
-    if (reader.NodeType = XMLNodeType.StartElement And reader.Name = "Price") { reader.Read(); Message(reader.Value); }
+    if (reader.NodeType == XMLNodeType.StartElement && reader.Name == "Price") { reader.Read(); Message(reader.Value); }
 }
 reader.Close();
 

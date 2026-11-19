@@ -1,4 +1,4 @@
-// THE PICTURES — named by their id everywhere (a backend picture's number, a configuration picture's guid), never
+// THE PICTURES — named by their id everywhere (a backend picture's number, an application picture's guid), never
 // carried in an answer. The page asks for every id an answer names in one `picture` call before it draws it, and keeps
 // them for the session: an id that has none is kept too, so it is not asked again (docs/public/client-protocol.md). A
 // picture with no id of its own (a file's) is its PNG itself, the bytes in the field that names it: drawn as it is.

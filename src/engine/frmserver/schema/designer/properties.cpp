@@ -1,6 +1,6 @@
 #include "properties.h"
 
-#include "backend/metadataConfiguration.h"
+#include "backend/metadataApplication.h"
 #include "backend/metaCollection/metaObject.h"   // the metaobject an edit names by its id
 #include "backend/session/session.h"
 #include "core/serialize/dataBuilder.h"
@@ -32,7 +32,7 @@ bool ReadValue(const ibDataNode& args, ibDataValue& value)
 
 bool ibSchemaProperties::AccessRight(const ibSession& session) const
 {
-	const ibMetaDataConfigurationBase* const metaData = session.GetMetaData();
+	const ibMetaDataApplicationBase* const metaData = session.GetMetaData();
 	return metaData != nullptr && metaData->AccessRight_Administration();
 }
 

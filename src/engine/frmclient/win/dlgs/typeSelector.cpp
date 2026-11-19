@@ -65,7 +65,7 @@ bool ibShowTypeSelector(wxWindow* parent, ibSelectorDataType kind,
 	bool allowEdit, bool single)
 {
 	// The offer is the server's (the header says why): the caller's, or — a reference-shaped one not given — asked of the
-	// tab the configuration is (fetch {Tab, Request: {Kind: Types}}), named as it names them (Classes).
+	// tab the application is (fetch {Tab, Request: {Kind: Types}}), named as it names them (Classes).
 	std::vector<ibClassID> allowed = filter;
 	if (allowed.empty() && kind == ibSelectorDataType::ibSelectorDataType_reference && metaData != nullptr) {
 		ibProtocolNode request, answer;

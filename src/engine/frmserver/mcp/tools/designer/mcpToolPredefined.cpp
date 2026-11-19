@@ -1,9 +1,9 @@
 ﻿////////////////////////////////////////////////////////////////////////////
-//	Description : predefined items - rows a configuration declares itself
+//	Description : predefined items - rows an application declares itself
 ////////////////////////////////////////////////////////////////////////////
 //
-// A PREDEFINED ITEM IS DATA THAT THE CONFIGURATION OWNS. Not a row somebody
-// typed and may delete, but one the configuration declares must exist - a
+// A PREDEFINED ITEM IS DATA THAT THE APPLICATION OWNS. Not a row somebody
+// typed and may delete, but one the application declares must exist - a
 // warehouse called Main, a status called New - so that code can name it instead
 // of looking it up. That is why it lives in metadata and not in a table, and why
 // it is created here rather than by writing a record.
@@ -33,7 +33,7 @@
 
 #include "backend/metaCollection/metaIntrospect.h"
 #include "backend/metaCollection/partial/commonObject.h"
-#include "backend/metadataConfiguration.h"
+#include "backend/metadataApplication.h"
 #include "backend/metadataSerialization.h"            // ibSerializeValue / ibDeserializeValue — a declared value, as the description carries it
 #include "backend/objCtor.h"                          // ibCtorAbstractType — a type by its name
 #include "backend/system/value/valueType.h"           // ibValueTypeDescription — a characteristic's Type, as a value
@@ -46,7 +46,7 @@ using ibArg = ibMcpTool::ibMcpArgument;
 // The arguments this file's tools take — declared once, and read through the same
 // objects in Call, so the name a caller is told cannot drift from the name looked for.
 // ⭐ `id`, BECAUSE THAT IS WHAT IT IS. It was `object` — and `object` elsewhere in this server means
-// a NAME: lock_list takes 'Catalog.Products', role_grant takes 'Catalog.Goods' or 'Configuration'.
+// a NAME: lock_list takes 'Catalog.Products', role_grant takes 'Catalog.Goods' or 'Application'.
 // One word standing for a number here and a string there is the trap a caller falls into once and
 // then distrusts every argument. The rule this restores is worth more than either name: `id` IS a
 // NodeId, `object` and `name` ARE names.
@@ -60,14 +60,14 @@ const ibArg& ArgObject()
 const ibArg& ArgName()
 {
 	static const ibArg s_a(ibT("name"), ibArg::Kind::Text,
-		ibMcpText("The name code refers to it by. English, like every other name in a configuration."), /*required*/ true);
+		ibMcpText("The name code refers to it by. English, like every other name in an application."), /*required*/ true);
 	return s_a;
 }
 
 const ibArg& ArgDescription()
 {
 	static const ibArg s_a(ibT("description"), ibArg::Kind::Text,
-		ibMcpText("What a person sees. May be in the configuration's own language."));
+		ibMcpText("What a person sees. May be in the application's own language."));
 	return s_a;
 }
 
@@ -135,8 +135,8 @@ typedef ibValueMetaObjectRecordDataHierarchyMutableRef ibPredefinedOwner;
 // predefined items at all - which is a different answer from holding none.
 ibPredefinedOwner* Owner(const ibDataNode& params, ibString& refusal)
 {
-	if (activeMetaData == nullptr || !activeMetaData->IsConfigOpen()) {
-		refusal = ibMcpText("No configuration is open.");
+	if (activeMetaData == nullptr || !activeMetaData->IsOpen()) {
+		refusal = ibMcpText("No application is open.");
 		return nullptr;
 	}
 
@@ -148,7 +148,7 @@ ibPredefinedOwner* Owner(const ibDataNode& params, ibString& refusal)
 
 	ibValueMetaObject* object = ibFindMetaObjectById(activeMetaData, (ibMetaID)id);
 	if (object == nullptr) {
-		refusal = ibString::Format(ibMcpText("Nothing in this configuration has id %i."), (int)id);
+		refusal = ibString::Format(ibMcpText("Nothing in this application has id %i."), (int)id);
 		return nullptr;
 	}
 
@@ -204,7 +204,7 @@ bool ReadCell(const ibMetaData* metaData, const ibPredefinedAttributeDescription
 		if (given.Kind() == ibDataKind::String) {
 			const ibCtorAbstractType* const ctor = metaData->GetAvailableCtor(given.AsString());
 			if (ctor == nullptr) {
-				refusal = ibString::Format(ibMcpText("'%s' is not a type this configuration knows. type_list shows the names."),
+				refusal = ibString::Format(ibMcpText("'%s' is not a type this application knows. type_list shows the names."),
 					given.AsString());
 				return false;
 			}
@@ -222,7 +222,7 @@ bool ReadCell(const ibMetaData* metaData, const ibPredefinedAttributeDescription
 					}
 					const ibCtorAbstractType* const ctor = metaData->GetAvailableCtor(item.AsString());
 					if (ctor == nullptr) {
-						refusal = ibString::Format(ibMcpText("'%s' in Types is not a type this configuration knows."), item.AsString());
+						refusal = ibString::Format(ibMcpText("'%s' in Types is not a type this application knows."), item.AsString());
 						return false;
 					}
 					const std::shared_ptr<ibDataNode> entry = std::make_shared<ibDataNode>();
@@ -525,7 +525,7 @@ public:
 
 	ibString GetDescription() const override
 	{
-		return ibMcpText("The predefined items an object declares - the rows the configuration itself "
+		return ibMcpText("The predefined items an object declares - the rows the application itself "
 			"requires to exist, each with the name code refers to it by. Ask before writing "
 			"code that names one, and before adding one, since the name must be unique.");
 	}

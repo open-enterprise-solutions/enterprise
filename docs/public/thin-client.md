@@ -1,16 +1,16 @@
 # The thin client
 
-**What.** The desktop client that runs nothing of the configuration: a window, its document/view skeleton and its
+**What.** The desktop client that runs nothing of the application: a window, its document/view skeleton and its
 editors, talking to a base through the [client protocol](client-protocol.md). The runtime's is `appworkspace`, the
 designer's `appstudio`.
 
-**Why.** The configuration's code runs on the server only, so one platform serves many clients. The client keeps the
+**Why.** The application's code runs on the server only, so one platform serves many clients. The client keeps the
 routine the desktop window always kept — menus, toolbars, what may be pressed, file dialogs, recent files, print
 preview — so the server is not asked for it on every move.
 
 **Status.** The thin runtime is done: it does what the desktop runtime did. The thin designer has the desktop designer's
-windows: the configuration tree, the inspector, the form, module and composer editors, the role, interface, common
-attribute and functional option editors, configuration compare, the assistant and the debugger. What is left is tuning
+windows: the application tree, the inspector, the form, module and composer editors, the role, interface, shared
+attribute and feature option editors, application compare, the assistant and the debugger. What is left is tuning
 them in use. The desktop `frontend` and the thick applications built on it were removed on 2026-10-27 (branch
 `oes/thick_client`).
 
@@ -22,7 +22,7 @@ protocol between them; neither half is called a frontend.
 | Part | Holds |
 |---|---|
 | `protocol` | the contract — `protocol.h`: every name and number of the wire, depending on nothing, with the designer's own messages beside it in `protocolDesigner.h` — and the library of the sides that talk it: the wire's node, the connections (a server's socket, a file base in process), the protocol's journal |
-| `frmserver` | the server side: sessions, forms, the configuration's documents, the client host. It includes the contract only |
+| `frmserver` | the server side: sessions, forms, the application's documents, the client host. It includes the contract only |
 | `core` | under both the engine and the client: ids and value kinds, string, number, date, guid, the node with its JSON and binary forms, the refusal (`ibCoreException`), the translation engine (`ibLocalization`), the format string, the schemas (`description/`), a colour and a font as data, the table's model view (`tabular/`); of wx, the base only |
 | `deskgui` | the desktop's user interface library: the custom-drawn controls and dialogs, one theme (Luna), wx below only as the host. It links `core` |
 | `frmclient` | the client's graphics library: the communicator that keeps the frame it was answered, the main window, the document/view skeleton, the form's controls, the editors — drawn with `deskgui`. It links `core`, `protocol` and `deskgui` |
@@ -58,8 +58,8 @@ types.
 
 | On the client | On the server |
 |---|---|
-| File and Edit, the toolbars, what may be pressed (a tab's `Commands`), file dialogs, files opened last, print preview, the tabs | forms, the start page, external data processors and reports: their code, their data |
-| the file dialogs, the upload of a file the person picked | texts and spreadsheets opened from a file, external data processors and reports, and what a form shows — drawn by the client from the frame's `View` |
+| File and Edit, the toolbars, what may be pressed (a tab's `Commands`), file dialogs, files opened last, print preview, the tabs | forms, the start page, external data tools and reports: their code, their data |
+| the file dialogs, the upload of a file the person picked | texts and spreadsheets opened from a file, external data tools and reports, and what a form shows — drawn by the client from the frame's `View` |
 | cut, copy and paste in the field under the focus | save, undo, redo and close of its documents |
 | the person's options: keys, font and colours, the editor's settings | the default key of each command |
 
@@ -85,7 +85,7 @@ The desktop's document/view, without its metadata part. Four classes take other 
   (`TAB_DOCUMENT_REGISTER`); a form's tab names no Kind and gets a form's. A control is made the same way, by its
   node's type (`CONTROL_REGISTER`); a type nobody registered stands as a placeholder.
 - **A file goes to the server, by two calls.** `upload` puts it into the session's temporary storage and `open` makes
-  the document of it by its id — the server works with ids, not files. An external data processor or report runs its
+  the document of it by its id — the server works with ids, not files. An external data tool or report runs its
   form; a text or a spreadsheet is the server's document of its own template. The client's document goes once it has
   done that — what was opened is the server's, in a tab of its own.
 - **A view is the kind of what is shown.** The document is the bridge whatever the tab holds; the view decides how it is
@@ -94,9 +94,9 @@ The desktop's document/view, without its metadata part. Four classes take other 
 ## Forms
 
 - **A value is local or the server's.** A primitive — a flag, a number (exact, `ibNumber`), a date, a string, an
-  enumeration member — is held as it is. A value of a server's type — a reference, a configuration's enumeration — is
+  enumeration member — is held as it is. A value of a server's type — a reference, an application's enumeration — is
   the node the server wrote (`{t, v}`), carried and given back untouched. The client has no runtime, no database and no
-  configuration: it is never the designer, and no configuration is active in it.
+  application: it is never the designer, and no application is active in it.
 - **The form's tree owns its controls**, as the desktop's: `ibValueFrame` is a value with the property helper; a parent
   holds its children and their order. The host finds a control by its node id and owns none.
 - **A column dragged moves in the tree at once**, and goes to the server as `Move`.
@@ -138,7 +138,7 @@ over a server.
 
 ## What it guarantees
 
-- **No code of the configuration runs on the client.**
+- **No code of the application runs on the client.**
 - **The routine is not asked for.** A menu is opened, a button enabled, a file chosen without a call.
 - **The client keeps no second copy of the server's data.** A table fetches what it shows; a sheet is the one on show,
   and what is saved is the server's.

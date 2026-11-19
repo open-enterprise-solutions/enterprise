@@ -44,7 +44,7 @@ private:
 
 ibWatchWindow::ibWatchWindow(wxWindow* parent, wxWindowID id)
 	: ibTreeListCtrl(parent, id, wxDefaultPosition, wxDefaultSize,
-		// no lines between the nodes, as every other tree of the designer (treeConfiguration): a row of grey dots stood
+		// no lines between the nodes, as every other tree of the designer (treeApplication): a row of grey dots stood
 		// before the empty slot (2026-11-13, Max) - on Cocoa the control drops them itself
 		wxTR_HIDE_ROOT | wxTR_FULL_ROW_HIGHLIGHT | wxTR_ROW_LINES | wxTR_HAS_BUTTONS | wxTR_NO_LINES)
 {

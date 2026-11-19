@@ -26,7 +26,7 @@ class ibValueManagerDataObjectAccumulationRegister :
 	ibValueManagerDataObjectAccumulationRegister(const ibValueMetaObjectAccumulationRegister* metaObject = nullptr) : m_metaObject(metaObject) { m_members.Bind(this, &ibValueManagerDataObjectAccumulationRegister::FillManagerMethods); }
 	virtual ~ibValueManagerDataObjectAccumulationRegister() {}
 
-	virtual const ibValueMetaObjectCommonModule* GetManagerModule() const;
+	virtual const ibValueMetaObjectSharedModule* GetManagerModule() const;
 	virtual const ibValueMetaObjectAccumulationRegister* GetMetaObject() const { return m_metaObject; }
 
 	void FillManagerMethods(ibMemberTable& helper) const;

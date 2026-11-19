@@ -23,7 +23,7 @@ struct FRMCLIENT_API ibUserInfo {
 		ibString m_strRoleName;
 		ibRoleID m_miRoleId = wxNOT_FOUND;
 		// HOW this role combines with the user's others (ibRoleCompositionMode) — the server writes what its
-		// configuration says; the guid is what it is found by.
+		// application says; the guid is what it is found by.
 		ibRoleCompositionMode m_mode = ibRoleCompositionMode_Union;
 	};
 
@@ -65,8 +65,8 @@ struct FRMCLIENT_API ibUserInfo {
 	static bool       Save(const ibUserInfo& info);
 	static bool       Delete(const ibGuid& userGuid);
 
-	// What a record is chosen from — the configuration's roles and languages, which the client does not hold: listed by
-	// the server beside the users, as the desktop's item dialog listed them off the configuration.
+	// What a record is chosen from — the application's roles and languages, which the client does not hold: listed by
+	// the server beside the users, as the desktop's item dialog listed them off the application.
 	struct RoleBrief {
 		ibString m_strRoleGuid;
 		ibString m_strRoleName;
@@ -78,14 +78,14 @@ struct FRMCLIENT_API ibUserInfo {
 		ibString m_strLanguageGuid;
 		ibString m_strLanguageTitle;
 		ibString m_strLanguageCode;
-		bool m_default = false;   // the configuration's own language (its DefaultLanguage)
+		bool m_default = false;   // the application's own language (its DefaultLanguage)
 	};
 
 	// ListAll — every row projected to Brief. A list the server could not read is refused to the person, and comes back
 	// empty.
 	static std::vector<Brief>  ListAll();
 	// …and the roles and the languages a record is chosen from — the languages every translated text is written in too
-	// (ibDialogTranslateConstructor), asked of the server's schema Languages in every mode: of the configuration
+	// (ibDialogTranslateConstructor), asked of the server's schema Languages in every mode: of the application
 	// `metaData` is the door to (the tab that shows it); null — the session's.
 	static std::vector<RoleBrief>     ListRoles();
 	static std::vector<LanguageBrief> ListLanguages(const ibMetaData* metaData);

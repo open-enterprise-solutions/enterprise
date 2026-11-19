@@ -1,7 +1,7 @@
 #include "propertyTemplate.h"
 #include "backend/propertyManager/property/variant/variantTemplate.h"
 #include "core/serialize/dataBuilder.h"    // ibDataValue — the node value
-#include "backend/backend_composition.h"   // ibBackendTemplateDescriptionMemory — a composition read against the configuration
+#include "backend/backend_composition.h"   // ibBackendTemplateDescriptionMemory — a composition read against the application
 
 ////////////////////////////////////////////////////////////////////////
 
@@ -62,7 +62,7 @@ bool ibPropertyTemplate::SetDataValue(const ibValue& varPropVal)
 	return false;
 }
 
-// ⭐ THE OWNER'S GetTemplate(name) ROAD — the provider of the kind makes it, over the owner's configuration: through a
+// ⭐ THE OWNER'S GetTemplate(name) ROAD — the provider of the kind makes it, over the owner's application: through a
 // CONST owner, the non-const GetMetaData asserts and answers null (propertyObject.h). No kind chosen — nothing.
 bool ibPropertyTemplate::GetDataValue(ibValue& pvarPropVal) const
 {
@@ -78,7 +78,7 @@ bool ibPropertyTemplate::GetDataValue(ibValue& pvarPropVal) const
 ////////////////////////////////////////////////////////////////////////
 
 // ⚠ THROUGH A CONST OWNER, as above: what a composition reads back holds references and enum members, and those
-// types exist only in the configuration's own registry.
+// types exist only in the application's own registry.
 bool ibPropertyTemplate::ReadNodeValue(const ibDataValue& value)
 {
 	const ibPropertyObject* owner = m_owner;

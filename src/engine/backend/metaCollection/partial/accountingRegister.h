@@ -119,7 +119,7 @@ struct ibAcctArgs
 	// ⚠ A POSITIONAL LAYOUT IS A CONTRACT WITH EVERY EXISTING CALL. Moving a slot silently re-reads a
 	// query nobody edited — the neighbouring register was bitten by exactly this, when a declared
 	// periodicity pushed every call's condition into another slot and the condition was then read as a
-	// breakdown list and dropped. There are no third-party configurations yet; this is the window in
+	// breakdown list and dropped. There are no third-party applications yet; this is the window in
 	// which the order can still be made right.
 	static ibAcctArgs For(ibAcctShape shape, bool correspondence)
 	{
@@ -401,7 +401,7 @@ public:
 	void FillSourceExplorer(ibSourceDataObject::ibSourceExplorer& explorer) const override;
 
 	// Give the analytics slots the types their chart declares. Called from the RUN phase and from the
-	// moment the chart binding changes — both, because editing does not run a configuration and a slot
+	// moment the chart binding changes — both, because editing does not run an application and a slot
 	// left untyped between the two produces columns nothing can be written into (see the definition).
 	void ApplyAccountDimensionSlotTypes();
 
@@ -850,7 +850,7 @@ public:
 
 	//get module object in compose object
 	virtual const ibValueMetaObjectModule* GetObjectModule() const { return m_propertyObjectModule->GetMetaObject(); }
-	virtual const ibValueMetaObjectCommonModule* GetManagerModule() const { return m_propertyManagerModule->GetMetaObject(); }
+	virtual const ibValueMetaObjectSharedModule* GetManagerModule() const { return m_propertyManagerModule->GetMetaObject(); }
 
 	//create associate value
 	virtual ibValueMetaObjectFormBase* GetDefaultFormByID(const ibFormID& id) const;

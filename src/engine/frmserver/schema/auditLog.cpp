@@ -1,6 +1,6 @@
 #include "auditLog.h"
 
-#include "backend/metadataConfiguration.h"
+#include "backend/metadataApplication.h"
 #include "core/picturePredefined.h"
 #include "backend/session/session.h"
 
@@ -9,7 +9,7 @@
 
 bool ibSchemaAuditLog::AccessRight(const ibSession& session) const
 {
-	const ibMetaDataConfigurationBase* const metaData = session.GetMetaData();
+	const ibMetaDataApplicationBase* const metaData = session.GetMetaData();
 	return metaData != nullptr && metaData->AccessRight_ActiveUsers();
 }
 

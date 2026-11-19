@@ -511,7 +511,7 @@ class CORE_API ibTypeDescriptionMemory {
 public:
 	// node form: a Child (struct) — a "types" Array of { TypeId } + the number / date / string
 	// qualifier fields. The ids as they are held, nothing asked of anyone: what an id names is asked
-	// of the configuration by whoever reads it (Max, 2026-10-12: "the schema keeps the ids").
+	// of the application by whoever reads it (Max, 2026-10-12: "the schema keeps the ids").
 	static bool ReadNode(const ibDataValue& value, ibTypeDescription& typeDesc);
 	static bool WriteNode(ibDataValue& value, const ibTypeDescription& typeDesc);
 
@@ -526,8 +526,8 @@ public:
 	// it did not read keeps its default.
 	//
 	// The clsid is written RAW here, unlike the node form, which also carries a portable type name:
-	// a row belongs to the configuration it was written in, and the name exists for travel between
-	// configurations, which a data column never does.
+	// a row belongs to the application it was written in, and the name exists for travel between
+	// applications, which a data column never does.
 	static void WriteBuffer(ibMemoryBuffer& out, const ibTypeDescription& typeDesc);
 	static bool ReadBuffer(const void* data, size_t length, ibTypeDescription& typeDesc);
 };
@@ -573,11 +573,11 @@ public:
 class CORE_API ibMetaDescriptionMemory {
 public:
 	// node form: an Array of raw metaIds, written as given. Every property holding an ibMetaDescription
-	// (Owner, Generation, Record, the charts, FunctionalOptions) saves through the side's
+	// (Owner, Generation, Record, the charts, FeatureOptions) saves through the side's
 	// ibBackendMetaDescriptionMemory::WriteNode, which drops the ids that no longer name an object, then calls this.
 	// metaId, NOT guid (unlike ibSourceDescription / ibTypeDescription): a meta-desc lives
 	// INSIDE the metadata tree, so a guid->id resolve at load time hits refs not yet loaded
-	// → NOT_FOUND → broken init. metaId is config-local but consistent across a same-config
+	// → NOT_FOUND → broken init. metaId is application-local but consistent across a same-application
 	// save/load. Copy-awareness here would need a DEFERRED (post-tree) pass, not load-time.
 	static bool ReadNode(const ibDataValue& value, ibMetaDescription& metaDesc);
 	static bool WriteNode(ibDataValue& value, const ibMetaDescription& metaDesc);

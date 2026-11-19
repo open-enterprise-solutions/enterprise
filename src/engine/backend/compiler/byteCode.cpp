@@ -181,7 +181,7 @@ long ibByteCode::FindExportMethod(const ibString& strMethodName) const
 {
 	auto iterator = std::find_if(m_listFunc.begin(), m_listFunc.end(),
 		[&](const auto& fn) {
-			if (fn.IsLocal() || fn.IsProtected()) return false; // Protected isn't a config-wide export
+			if (fn.IsLocal() || fn.IsProtected()) return false; // Protected isn't an application-wide export
 			return strMethodName.IsSameAs(fn.m_strRealName, false);
 		});
 	if (iterator != m_listFunc.end())
@@ -202,7 +202,7 @@ long ibByteCode::FindExportFunction(const ibString& funcName) const
 {
 	auto iterator = std::find_if(m_listFunc.begin(), m_listFunc.end(),
 		[&](const auto& fn) {
-			if (fn.IsLocal() || fn.IsProtected()) return false; // Protected isn't a config-wide export
+			if (fn.IsLocal() || fn.IsProtected()) return false; // Protected isn't an application-wide export
 			return fn.m_bCodeRet && funcName.IsSameAs(fn.m_strRealName, false);
 		});
 	if (iterator != m_listFunc.end())
@@ -223,7 +223,7 @@ long ibByteCode::FindExportProcedure(const ibString& procName) const
 {
 	auto iterator = std::find_if(m_listFunc.begin(), m_listFunc.end(),
 		[&](const auto& fn) {
-			if (fn.IsLocal() || fn.IsProtected()) return false; // Protected isn't a config-wide export
+			if (fn.IsLocal() || fn.IsProtected()) return false; // Protected isn't an application-wide export
 			return !fn.m_bCodeRet && procName.IsSameAs(fn.m_strRealName, false);
 		});
 	if (iterator != m_listFunc.end())

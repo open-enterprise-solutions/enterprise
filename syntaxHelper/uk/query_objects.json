@@ -508,7 +508,7 @@
       "syntax_block_ves": "Narrowed = Source.Where(Function(x) Return <condition>; EndFunction);",
       "parameters": "predicate — функція одного рядка, що відповідає булевим значенням.",
       "return_descr": "Queryable; якщо виконувалося в пам'яті — послідовність LINQ (LinqQuery): її читають Foreach, Count і ToArray.",
-      "example": "Mine = Data.Documents.Sale.Where(Function(d) { return d.Counterparty = Client And d.Posted; });",
+      "example": "Mine = Data.Documents.Sale.Where(Function(d) { return d.Counterparty == Client && d.Posted; });",
       "availability": "Клієнт, Сервер",
       "see_also": ["cls.Queryable", "guide.lambda", "kw.Where"],
       "reviewed": false
@@ -623,7 +623,7 @@
       "syntax_block": "Exists = Source.Any();",
       "parameters": "Немає.",
       "return_descr": "Boolean.",
-      "example": "if (Data.Documents.Sale.Where(Function(d) { return d.Counterparty = Client; }).Any()) {\n    Message(\"У цього клієнта є продажі\");\n}",
+      "example": "if (Data.Documents.Sale.Where(Function(d) { return d.Counterparty == Client; }).Any()) {\n    Message(\"У цього клієнта є продажі\");\n}",
       "availability": "Клієнт, Сервер",
       "see_also": ["cls.Queryable.Count", "cls.Queryable.First"],
       "reviewed": false
@@ -655,7 +655,7 @@
       "syntax_block": "Row = Source.FirstOrDefault();",
       "parameters": "Немає.",
       "return_descr": "Рядок (посилання або Structure) або Undefined.",
-      "example": "Found = Data.Catalogs.Goods.Where(Function(g) { return g.Code = Code; }).FirstOrDefault();",
+      "example": "Found = Data.Catalogs.Goods.Where(Function(g) { return g.Code == Code; }).FirstOrDefault();",
       "availability": "Клієнт, Сервер",
       "see_also": ["cls.Queryable.First"],
       "reviewed": false
@@ -716,7 +716,7 @@
       "kind": "method",
       "category_keys": ["query"],
       "signature": "Count() : number",
-      "description": "Скільки джерел цього виду є в конфігурації.",
+      "description": "Скільки джерел цього виду є в застосунку.",
       "syntax_block": "N = Data.Catalogs.Count();",
       "parameters": "Немає.",
       "return_descr": "Число.",
@@ -753,7 +753,7 @@
       "syntax_block_ves": "Source = Source.Where(Function(x) Return <condition>; EndFunction);",
       "parameters": "predicate — функція одного рядка джерела, що відповідає булевим значенням.",
       "return_descr": "QueryDecorator — той самий запит, звужений.",
-      "example": "if (Source = \"Document.Sale\") {\n    Source = Source.Where(Function(d) { return d.Company = SessionParameters.Company; });\n}",
+      "example": "if (Source == \"Document.Sale\") {\n    Source = Source.Where(Function(d) { return d.Company == SessionParameters.Company; });\n}",
       "availability": "Сервер",
       "see_also": ["cls.QueryDecorator", "cls.QueryDecorator.Join", "guide.rls"],
       "reviewed": false
@@ -766,11 +766,11 @@
       "category_keys": ["rls"],
       "signature": "Source.Join(inner, on : Function) | Source.Join(inner, leftKey : Function, rightKey : Function, op : string = \"=\") : QueryDecorator",
       "description": "Пропускає рядок обмежуваного запиту, лише коли в `inner` ІСНУЄ дозвільний рядок, — напівз'єднання: воно фільтрує й ніколи не розмножує рядки. `inner` — джерело даних (`Data.InformationRegisters.Access`, разом з його власним Where) або таблиця значень.\n\nДві форми: одне порівняння `on` ключа джерела з ключем inner, `Function(s, a) { return s.Warehouse = a.Warehouse; }`; або два селектори ключів і порівняння рядком — \"=\", \"<>\" (або \"!=\"), \"<\", \"<=\", \">\", \">=\"; будь-який інший рядок читається як \"=\". Кожен ключ має бути ОДНІЄЮ колонкою — для ключа, що досягається через посилання, обмежуйте через Where.\n\nInner з одного джерела виконується як EXISTS усередині одного оператора; таблиця значень або inner, що з'єднує власні джерела, спершу поміщається в тимчасову таблицю. Де в бази немає тимчасових таблиць, такий inner з'єднується звичайним з'єднанням, яке може повторювати рядки.",
-      "syntax_block": "Source = Source.Join(Inner, Function(s, a) { return s.<Key> = a.<Key>; });\nSource = Source.Join(Inner, Function(s) { return s.<Key>; }, Function(a) { return a.<Key>; }, \"=\");",
+      "syntax_block": "Source = Source.Join(Inner, Function(s, a) { return s.<Key> == a.<Key>; });\nSource = Source.Join(Inner, Function(s) { return s.<Key>; }, Function(a) { return a.<Key>; }, \"=\");",
       "syntax_block_ves": "Source = Source.Join(Inner, Function(s, a) Return s.<Key> = a.<Key>; EndFunction);\nSource = Source.Join(Inner, Function(s) Return s.<Key>; EndFunction, Function(a) Return a.<Key>; EndFunction, \"=\");",
       "parameters": "inner — Queryable (Data.<Kind>.<Name>, за бажанням зі своїм Where) або таблиця значень Table.\non — функція (sourceRow, innerRow), що порівнює по одному ключу кожної.\nleftKey, rightKey — функції, що називають по одній ключовій колонці з кожного боку.\nop — порівняння рядком; якщо не вказано, \"=\".",
       "return_descr": "QueryDecorator — той самий запит, звужений.",
-      "example": "Allowed = Data.InformationRegisters.WarehouseAccess.Where(Function(a) { return a.User = SessionParameters.User; });\nSource = Source.Join(Allowed, Function(s, a) { return s.Warehouse = a.Warehouse; });",
+      "example": "Allowed = Data.InformationRegisters.WarehouseAccess.Where(Function(a) { return a.User == SessionParameters.User; });\nSource = Source.Join(Allowed, Function(s, a) { return s.Warehouse == a.Warehouse; });",
       "availability": "Сервер",
       "see_also": ["cls.QueryDecorator", "cls.QueryDecorator.Where", "kw.Restrict"],
       "reviewed": false

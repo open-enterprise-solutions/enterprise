@@ -108,7 +108,7 @@ void ibRoleEditor::RefreshRole(const ibProtocolNode& view)
 	if (m_keepSelNode.IsOk())
 		m_roleCtrl->SelectItem(m_keepSelNode);            // an object's row — restored by its id
 	else if (m_treeMETADATA.IsOk())
-		m_roleCtrl->SelectItem(m_treeMETADATA);           // the configuration's row (built in InitRole, not via AppendItem)
+		m_roleCtrl->SelectItem(m_treeMETADATA);           // the application's row (built in InitRole, not via AppendItem)
 	if (m_keepTopNode.IsOk())
 		m_roleCtrl->ScrollTo(m_keepTopNode);
 
@@ -137,7 +137,7 @@ void ibRoleEditor::InitRole()
 {
 	m_roleCtrl->GetImageList()->RemoveAll();
 
-	m_treeMETADATA = m_roleCtrl->AddRoot(_("Configuration"));
+	m_treeMETADATA = m_roleCtrl->AddRoot(_("Application"));
 
 	m_roleCtrl->SetItemBold(m_treeMETADATA);
 }
@@ -152,7 +152,7 @@ void ibRoleEditor::ClearRole() {
 
 wxTreeItemId ibRoleEditor::GroupFor(const ibProtocolNode& row)
 {
-	// The icon and the caption the server's row carries (ibMetaGroupCaption there) — the same one the configuration
+	// The icon and the caption the server's row carries (ibMetaGroupCaption there) — the same one the application
 	// tree shows.
 	wxImageList* imageList = m_roleCtrl->GetImageList();
 	wxASSERT(imageList);
@@ -189,7 +189,7 @@ void ibRoleEditor::FillData(const ibProtocolNode& view)
 	// The rows' pictures asked of the server at once — not a call per row drawn.
 	ibProtocolPictureReceive(root);
 
-	// The configuration's row — its rights are the configuration's own.
+	// The application's row — its rights are the application's own.
 	wxImageList* imageList = m_roleCtrl->GetImageList();
 	const wxBitmap picture = ibProtocolPicture(root, ibProtocol::ibView::ibCheckTree::Picture);
 	if (picture.IsOk()) {

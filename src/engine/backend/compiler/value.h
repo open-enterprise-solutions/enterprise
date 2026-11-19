@@ -27,7 +27,7 @@ class ibValue;
 
 // ⭐ THE CONDITION A FIELD IS CHOSEN UNDER, ANSWERED ONCE. Four callers ask it — the choice form, the
 // quick-choice drop-down, the adjustment of a value on write, and the filter of a list or column — and
-// four answers would drift, on somebody else's configuration, months later
+// four answers would drift, on somebody else's application, months later
 // (docs/private/choice-links.md § 7). ibChoiceLinkResolver produces it.
 //
 // ⭐ HERE, BESIDE THE VALUE, because a value is FOUND under it (FindValue): the text typed into a field finds no more
@@ -652,7 +652,7 @@ public:
 		// per owner (record objects: shape = metaobject). Built once per owner key,
 		// cached, thread-safe (worker pool). Contributor gets ctx = the owner key.
 		// unordered_map element refs are rehash-stable, so the returned pointer stays
-		// valid while other threads insert. Call InvalidateSharedByOwner() on config
+		// valid while other threads insert. Call InvalidateSharedByOwner() on application
 		// reload (metaobjects rebuilt → stale keys / address-reuse) — it bumps a
 		// generation that lazily clears every per-Binder cache.
 		static std::atomic<unsigned>& OwnerGeneration() { static std::atomic<unsigned> g{ 0 }; return g; }
@@ -1209,7 +1209,7 @@ public:
 	// the provider — a text form is a rendering, not a second implementation.
 	//
 	// A value is BLIND to metadata: it packs and unpacks ITSELF and never reaches
-	// for a configuration.
+	// for an application.
 	BACKEND_API bool Serialize(class ibDataNode& node) const;
 	BACKEND_API bool Deserialize(const class ibDataNode& node);
 
@@ -1218,7 +1218,7 @@ public:
 	// A reader holding a node has no value yet, so the type in the header has to
 	// become an instance. That is a registry question, and this answers it from
 	// the VALUE registry: the built-in classes, the ones that exist whether or
-	// not a configuration is open.
+	// not an application is open.
 	//
 	// A metadata is a step in FRONT of this, not a copy of it: it creates the
 	// types only it has — a catalog reference, an enum member, whose ids come
@@ -1658,7 +1658,7 @@ public:
 	// (an attribute, a command, a constant, a chart of characteristic types), so one word in both bases is
 	// ambiguous in four classes at once — and the `using` declarations that quiet it are noise in the
 	// headers that would carry them. The factory keeps the plain name: twenty callers, and the script
-	// language offers it to configurations by it.
+	// language offers it to applications by it.
 	//
 	// 🛑 A BOOL AND AN OUT VALUE, NOT A RETURNED ONE, for two reasons (Max, 2026-09-24). A returned
 	// value CANNOT SAY WHICH ANSWER IT IS: "not admitted" and "admitted, and it is empty" came back

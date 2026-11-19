@@ -3,14 +3,14 @@
 
 // THE TWO TEXTS OF AN OBJECT — the desktop's help and technical information editors over an object of the designer's tree
 // (designer/win/dlg/textEditor), as the server holds them: what the object carries (ibValueMetaObject's HelpContent and
-// NoteContent), and the one edit, the configuration modified by it. The designer's own.
+// NoteContent), and the one edit, the application modified by it. The designer's own.
 
 #include "frmserver/schema/clientSchema.h"
 
 class FRMSERVER_API ibSchemaObjectText : public ibClientSchema {
 public:
 
-	// The right to edit the configuration — the tree's (ibSchemaMetaData).
+	// The right to edit the application — the tree's (ibSchemaMetaData).
 	virtual bool AccessRight(const ibSession& session) const override;
 
 	// Of the object Id names (in Tab's tree): Help and Note. Nothing, when it is no such object.

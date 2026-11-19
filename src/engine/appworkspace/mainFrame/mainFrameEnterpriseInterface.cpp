@@ -25,7 +25,7 @@
 
 // THE SECTION PANEL — the desktop's (enterprise/mainFrame/mainFrameEnterpriseInterface.cpp) on the thin client: the
 // same buttons, the same page in its popup, drawn line for line; what it shows is the server's schema Sections
-// (frmserver/schema/runtime/sections.cpp) instead of the configuration read here, and a link opens its item through
+// (frmserver/schema/runtime/sections.cpp) instead of the application read here, and a link opens its item through
 // the schema's command — the window's call (ibFrontendMainFrameEnterprise::CreateSubSystem).
 
 // A link's picture as an icon — what a link draws.
@@ -615,7 +615,7 @@ class ibSubSystemWindow : public ibWindow {
 
 				// THE PAGE — the schema's blocks, in the panel's order (frmserver/schema/runtime/sections.cpp, PageOf). The
 				// left column: the section's own items at the top under no heading (Important first), the navigation
-				// groups the configuration declares, each subsection with what it and its own hold. The right column —
+				// groups the application declares, each subsection with what it and its own hold. The right column —
 				// THE ACTIONS PANEL: the platform's groups (Create, Reports, Service), then the declared ones.
 				for (const ibProtocolNode& block : m_popupWindow->GetSection().FindChild(ibProtocol::ibSchema::ibSections::Blocks).Children()) {
 					const wxString title = block.GetString(ibProtocol::ibSchema::ibSections::Title);

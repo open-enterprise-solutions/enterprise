@@ -32,7 +32,7 @@ export async function readDictionary(locale) {
 }
 
 /**
- * The language a translated text is read in — a configuration's own text, written in several (`uk = '…'; en = '…';`):
+ * The language a translated text is read in — an application's own text, written in several (`uk = '…'; en = '…';`):
  * the session's, as the server tells it with the frame (its Language — the thin client's SetUserLanguage), which is the
  * one the server reads such a text in too; none told, the page's — `uk` of `uk_UA`.
  */

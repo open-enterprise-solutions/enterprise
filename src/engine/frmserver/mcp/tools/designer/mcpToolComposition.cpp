@@ -1,27 +1,27 @@
 ﻿////////////////////////////////////////////////////////////////////////////
-//	Description : what an object is checked INTO - a common attribute's composition
+//	Description : what an object is checked INTO - a shared attribute's composition
 ////////////////////////////////////////////////////////////////////////////
 //
 // ⭐ THE OTHER TICK-BOX. A section's editor paints one column of checkboxes over the tree and the
-// OBJECT carries the set of section ids (`section_include`, mcpToolSection.cpp). A common
+// OBJECT carries the set of section ids (`section_include`, mcpToolSection.cpp). A shared
 // attribute's editor paints exactly the same picture - and the object carries a DIFFERENT set,
 // `ibCompositionObject::m_compositions` (backend/compositionHelper.h), because "which sections am I
 // in" and "whose column do I carry" have to stay tellable apart.
 //
 // ⭐ THE MECHANISM WAS THERE AND HAD NO DOOR - `SetComposition` / `IsInComposition` /
-// `GetCompositions` / `IsCompositionAllowed` have existed since common attributes landed
+// `GetCompositions` / `IsCompositionAllowed` have existed since shared attributes landed
 // (2026-08-06). Nothing here decides anything: it asks and it sets.
 //
-// 🛑 AND WITHOUT IT THE ASSISTANT COULD DECLARE A COMMON ATTRIBUTE AND NOT MAKE IT DO ANYTHING.
+// 🛑 AND WITHOUT IT THE ASSISTANT COULD DECLARE A SHARED ATTRIBUTE AND NOT MAKE IT DO ANYTHING.
 // Measured 2026-09-09 while assembling data separation over this wire: the declaration was created
 // and typed in two calls, and then there was no way to check a single object into it - the one step
 // that turns a declaration into a column. A separator nothing carries is not a half-built feature,
 // it is an INVISIBLE one: everything compiles, restructures and runs, and the separation quietly
 // does not happen. Max, the same day: the assistant has to be able to set the membership for roles,
-// for common attributes and for sections alike.
+// for shared attributes and for sections alike.
 //
 // ⚠ THREE EDITORS, THREE MECHANISMS, ONE VOCABULARY - which is why this is a verb of its own rather
-// than a flag on another. Sections store membership in `ibInterfaceObject`, a common attribute's
+// than a flag on another. Sections store membership in `ibInterfaceObject`, a shared attribute's
 // composition in `ibCompositionObject`, a role's rights in the role table on `ibAccessObject`.
 // compositionHelper.h states the reason for keeping the first two apart in so many words: one
 // container holding two meanings could no longer answer "checked in AS WHAT". Fusing the three
@@ -34,10 +34,10 @@
 #include "frmserver/mcp/mcpTool.h"
 
 #include "backend/compositionHelper.h"
-#include "backend/metaCollection/metaCommonAttributeObject.h"
+#include "backend/metaCollection/metaSharedAttributeObject.h"
 #include "backend/metaCollection/metaIntrospect.h"
 #include "backend/metaCollection/metaObject.h"
-#include "backend/metadataConfiguration.h"
+#include "backend/metadataApplication.h"
 
 namespace {
 
@@ -55,7 +55,7 @@ const ibArg& ArgId()
 const ibArg& ArgInto()
 {
 	static const ibArg s_a(ibT("into"), ibArg::Kind::Whole,
-		ibMcpText("The common attribute's declaration, as NodeId. Omit it to be TOLD instead: the "
+		ibMcpText("The shared attribute's declaration, as NodeId. Omit it to be TOLD instead: the "
 			  "answer is what this object is already checked into."));
 	return s_a;
 }
@@ -81,10 +81,10 @@ public:
 
 	ibString GetDescription() const override
 	{
-		return ibMcpText("CHECK AN OBJECT INTO A COMMON ATTRIBUTE'S COMPOSITION - the step that turns a "
-			"declaration into a real column on that object. A common attribute declares a name and a "
+		return ibMcpText("CHECK AN OBJECT INTO A SHARED ATTRIBUTE'S COMPOSITION - the step that turns a "
+			"declaration into a real column on that object. A shared attribute declares a name and a "
 			"type; until something is checked in it carries nothing and changes nothing, and every "
-			"answer about the configuration looks exactly as it would if the feature worked. "
+			"answer about the application looks exactly as it would if the feature worked. "
 			"THE SAME PICTURE the designer paints as a tick-box tree, and the same one section_include "
 			"paints for sections - a different store, because 'which sections am I in' and 'whose "
 			"column do I carry' have to stay tellable apart. Role rights are the third of the family "
@@ -95,7 +95,7 @@ public:
 
 	ibString GetSearchText() const override
 	{
-		return ibMcpText("composition common attribute check in membership separator data separation "
+		return ibMcpText("composition shared attribute check in membership separator data separation "
 			"tick box carrier declaration");
 	}
 
@@ -107,10 +107,10 @@ public:
 
 	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
-		ibMetaDataConfigurationBase* metaData = activeMetaData;
+		ibMetaDataApplicationBase* metaData = activeMetaData;
 
-		if (metaData == nullptr || !metaData->IsConfigOpen()) {
-			refusal = ibMcpText("No configuration is open, so there is nothing to check anything into.");
+		if (metaData == nullptr || !metaData->IsOpen()) {
+			refusal = ibMcpText("No application is open, so there is nothing to check anything into.");
 			return false;
 		}
 
@@ -119,7 +119,7 @@ public:
 
 		if (carrier == nullptr) {
 			refusal = ibString::Format(
-				ibMcpText("Nothing in this configuration has the id %d."), (int)carrierId);
+				ibMcpText("Nothing in this application has the id %d."), (int)carrierId);
 			return false;
 		}
 
@@ -130,7 +130,7 @@ public:
 
 		if (composition == nullptr || !composition->IsCompositionAllowed()) {
 			refusal = ibString::Format(
-				ibMcpText("'%s' cannot be part of a composition - it says so itself. A common attribute "
+				ibMcpText("'%s' cannot be part of a composition - it says so itself. A shared attribute "
 					  "needs somewhere to put the column it produces, so the catalog / document "
 					  "line accepts one and a register does not."), carrier->GetName());
 			return false;
@@ -159,17 +159,17 @@ public:
 
 		if (declaration == nullptr) {
 			refusal = ibString::Format(
-				ibMcpText("Nothing in this configuration has the id %d."), (int)declarationId);
+				ibMcpText("Nothing in this application has the id %d."), (int)declarationId);
 			return false;
 		}
 
 		const bool remove = ArgRemove().Flag(params);
-		// THROUGH THE DECLARATION when it is a common attribute: it is the one that keeps the
-		// flag and the column copy together (metaCommonAttributeObject.h). Setting only the
+		// THROUGH THE DECLARATION when it is a shared attribute: it is the one that keeps the
+		// flag and the column copy together (metaSharedAttributeObject.h). Setting only the
 		// flag here left the object "checked in" with no column - nothing to apply, nothing
 		// in queries or on the object, while this tool answered "included".
-		if (auto* const commonAttribute = dynamic_cast<ibValueMetaObjectCommonAttribute*>(declaration)) {
-			if (!commonAttribute->SetCompositionObject(carrier, !remove)) {
+		if (auto* const sharedAttribute = dynamic_cast<ibValueMetaObjectSharedAttribute*>(declaration)) {
+			if (!sharedAttribute->SetCompositionObject(carrier, !remove)) {
 				refusal = ibString::Format(
 					ibMcpText("'%s' could not be checked %s '%s'."), carrier->GetName(),
 					remove ? ibString(ibT("out of")) : ibString(ibT("into")), declaration->GetName());
@@ -183,10 +183,10 @@ public:
 		result.SetValue(ibT("declaration"), declaration->GetName());
 		result.SetValue(ibT("included"), !remove);
 		// ⚠ SAID OUT LOUD, because the two states read alike from here: the column does not exist
-		// until the configuration is applied. A caller that stops at this answer has changed the
-		// configuration and not the database.
-		result.SetValue(ibT("next"), ibMcpText("The column appears when the configuration is applied - "
-			"config_apply. Until then this is a declaration the database has not been told about."));
+		// until the application is applied. A caller that stops at this answer has changed the
+		// application and not the database.
+		result.SetValue(ibT("next"), ibMcpText("The column appears when the application is applied - "
+			"app_apply. Until then this is a declaration the database has not been told about."));
 		return true;
 	}
 };

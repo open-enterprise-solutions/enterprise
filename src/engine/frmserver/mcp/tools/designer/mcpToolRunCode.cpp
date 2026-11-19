@@ -23,7 +23,7 @@
 //   context          | visible: their locals, their frame| none - there is no frame to see
 //   CAN IT BE DEBUGGED| yes, step by step               | NO - there is no frame to stop in
 //   what it takes    | a snippet, compiled against the  | a snippet, compiled by the APPLICATION
-//                    | parked frame                     | against its own configuration
+//                    | parked frame                     | against its own application
 //   what survives    | nothing, the transaction is undone| whatever it committed
 //   the analogy      | a debugger stop                  | a scheduled job
 //
@@ -50,7 +50,7 @@
 // this connection.
 //
 // So it does NOT need the runtime parked. It needs one CONNECTED — a runtime is where a session and
-// a compiled configuration come from, and that is all it takes from it.
+// a compiled application come from, and that is all it takes from it.
 //
 // ⭐⭐ TWO STAGES, AND THE SECOND IS ONLY WORTH RUNNING AFTER THE FIRST (Max, 2026-09-06):
 //
@@ -92,7 +92,7 @@
 #include "backend/compiler/scriptCheck.h"     // the code is CHECKED here, before anything is sent
 #include "backend/session/session.h"          // ibSession::Current — whose worker the check is handed to
 #include "backend/session/workerPool.h"       // …on the thread that owns what it is checked against
-#include "backend/metadataConfiguration.h"    // activeMetaData - whose configuration it checks against
+#include "backend/metadataApplication.h"      // activeMetaData - whose application it checks against
 #include "backend/system/systemEnum.h"        // ibStatusMessage - the level of what the code said
 #include "backend/job/jobManager.h"           // ibJobManager::kKeptBackgroundJobs - how many ended runs are answered for
 #include "frmserver/docView/templates/designer/docViewProfile.h"   // ShowProfile - a measurement, as a tab of the person's
@@ -110,32 +110,32 @@ using ibArg = ibMcpTool::ibMcpArgument;
 // there is no frame on that side for a snippet to compile against a PERSON'S scope. The sandbox has
 // one — it borrows the parked person's — and that is exactly what this refuses to do.
 //
-// THE FIRST CONCLUSION was "so it has to be a NAMED PROCEDURE of a common module". That cost more
+// THE FIRST CONCLUSION was "so it has to be a NAMED PROCEDURE of a shared module". That cost more
 // than it looked: the name had to be matched over there against every registered module in turn, and
-// a run could not be TRIED without first becoming part of somebody's configuration.
+// a run could not be TRIED without first becoming part of somebody's application.
 //
-// ⭐⭐ THE THIRD ANSWER: there is a scope to compile against over there — the configuration's ROOT —
+// ⭐⭐ THE THIRD ANSWER: there is a scope to compile against over there — the application's ROOT —
 // and the application can use it. So the TEXT crosses and the application compiles it against its
-// own configuration, and nothing has to agree between two processes. This side compiles it too, but
+// own application, and nothing has to agree between two processes. This side compiles it too, but
 // only to CHECK it, which is where the line numbers come from.
 //
 // ⭐ AND THE NAMED CASE IS EXPRESSIBLE IN THIS ONE — `StockManagement.LoadBalances();` is a line of
 // code — where this one was not expressible in that. So there is one road rather than two. Writing
-// the code as a common module is still the better form when somebody will read it or run it again
-// next month; it is now a decision about the configuration instead of a toll on trying anything.
+// the code as a shared module is still the better form when somebody will read it or run it again
+// next month; it is now a decision about the application instead of a toll on trying anything.
 const ibArg& ArgText()
 {
 	static const ibArg s_a(ibT("text"), ibArg::Kind::Text,
-		ibMcpText("The code to run - whole statements, in the configuration's own dialect "
+		ibMcpText("The code to run - whole statements, in the application's own dialect "
 			  "(platform_state says which). It is CHECKED HERE before anything is sent, so a "
 			  "mistake in it comes back as a refusal with line numbers and never reaches the base "
 			  "at all.\n"
 			  "\n"
-			  "It can call anything the configuration has: `StockManagement.LoadOpeningBalances();` "
+			  "It can call anything the application has: `StockManagement.LoadOpeningBalances();` "
 			  "is a perfectly good run, and so is fifty lines that select documents and repost "
-			  "them. Writing the code as a common module first is still worth doing when somebody "
+			  "them. Writing the code as a shared module first is still worth doing when somebody "
 			  "will want to read it or run it again next month - but it is a choice about the "
-			  "configuration, not a toll on trying something once.\n"
+			  "application, not a toll on trying something once.\n"
 			  "\n"
 			  "TO HAND SOMETHING BACK, ASSIGN IT TO `Result` - `Result = someValue;` - and it comes "
 			  "back under `result` when the run finishes. `Return` does not work here and cannot: "
@@ -343,17 +343,17 @@ ibMcpDebugBridge* ProfileBridge(ibString& refusal)
 
 // ⭐⭐ CHECKED HERE, RUN THERE — and the check is the reason a mistake costs nothing. It is the same
 // compile the designer's Syntax control button performs (`ibCheckScript`), parented to the
-// configuration's module manager, so what it judges the code against is what the code will actually
+// application's module manager, so what it judges the code against is what the code will actually
 // see. A failure comes back as DIAGNOSTICS — line, position, message — which become the refusal,
 // and nothing crosses the wire.
 //
 // ⚠ IT IS A CHECK AND NOT THE COMPILE THAT MATTERS. The application compiles the text again, against
-// ITS OWN configuration, and that is the one whose result runs.
+// ITS OWN application, and that is the one whose result runs.
 //
 // ⚠ THE COMPILING IS NOT DONE HERE — `ibCheckScript` already does exactly this, and doing it a
 // second time would be a second answer to "what does a snippet see". It parents the compile to the
-// configuration's own module manager, which is what puts `Message`, `Query`, `ValueTable`, the
-// metatype collections and every common module in scope; and it carries the trap that road already
+// application's own module manager, which is what puts `Message`, `Query`, `ValueTable`, the
+// metatype collections and every shared module in scope; and it carries the trap that road already
 // paid for — the parent has to have been COMPILED, or the snippet is judged against an empty world.
 // Asking it for the bytecode as well was one line there (Max, 2026-09-06: *"you can reuse it — my
 // goal is that you can not just check syntax but get bytecode out"*).
@@ -362,7 +362,7 @@ ibMcpDebugBridge* ProfileBridge(ibString& refusal)
 // sentence this file invents about a failure it did not witness.
 //
 // 🛑 ON THE THREAD THAT OWNS WHAT IT IS CHECKED AGAINST. Before it judges the snippet, ibCheckScript compiles
-// the configuration's module manager — the designer's own, which its code editor uses as the session's task —
+// the application's module manager — the designer's own, which its code editor uses as the session's task —
 // and this tool runs on an MCP connection's thread (it waits for the application; see IsSessionTask). Two
 // runs asked at once compiled that one module on two threads: one cleared the bytecode the other was reading,
 // and the designer went down (2026-10-01, a dump with ibByteCode::Reset under ibCheckScript on an httplib
@@ -745,7 +745,7 @@ public:
 			"answers with the rows in ONE call and writes nothing. This one answers with a session id: the "
 			"value comes back only through code_status and the journal, and only while the application runs "
 			"with the debugger - four calls for one number. Reach for it to CHANGE data, or when the answer "
-			"needs the configuration's own code (a common module's function) rather than a query. (Measured "
+			"needs the application's own code (a shared module's function) rather than a query. (Measured "
 			"2026-09-15: a day of checks on a payroll base asked this way round, then filed as friction of "
 			"the platform.)\n"
 			  "\n"
@@ -758,14 +758,14 @@ public:
 			"APPLICATION'S runtime as a background job. It is checked here first, with the same "
 			"compiler the designer's Syntax control uses, so a mistake is answered as a refusal "
 			"with line numbers and never reaches the base; the application compiles it against its "
-			"own configuration and runs it. Calling something the configuration already has is one "
+			"own application and runs it. Calling something the application already has is one "
 			"line (`StockManagement.LoadOpeningBalances();`), so naming a procedure is a thing this "
 			"does, not a thing it requires.\n"
 			  "\n"
-			"WRITING IT AS A COMMON MODULE IS STILL THE BETTER FORM when the code matters beyond "
+			"WRITING IT AS A SHARED MODULE IS STILL THE BETTER FORM when the code matters beyond "
 			"today - somebody can read it before it runs, step through it in the debugger, and run "
-			"it again next month (metadata_create, module_write, config_save). That is now a "
-			"decision about the configuration rather than the price of trying anything once.\n"
+			"it again next month (metadata_create, module_write, app_save). That is now a "
+			"decision about the application rather than the price of trying anything once.\n"
 			  "\n"
 			"TWO STAGES. Run it with commit FALSE first whenever a file is being interpreted: the "
 			"code runs for real and is then undone, so what comes back is what actually happened "
@@ -920,7 +920,7 @@ public:
 		// ⭐⭐ CHECKED HERE, RUN THERE. This side compiles the code only to JUDGE it — same compiler
 		// the designer's Syntax control button uses, so the answer carries line numbers — and then
 		// sends the TEXT. Code that does not compile is refused without a byte crossing the wire; and
-		// what actually runs is compiled by the application, against the configuration it is running,
+		// what actually runs is compiled by the running application, against the application it runs,
 		// so there is nothing that has to agree between two processes.
 		if (!CheckCode(text, refusal))
 			return false;
@@ -945,25 +945,25 @@ public:
 					  "happened - read it before running the same thing with commit."));
 
 		// ⭐⭐ SAID WITH THE ANSWER, BECAUSE THE SYMPTOM IS AN ANSWER THAT LOOKS FINE. The application
-		// read the configuration as it came up and kept it — metadata, bytecode, which registers a
+		// read the application as it came up and kept it — metadata, bytecode, which registers a
 		// document posts to. Change any of that afterwards and the run over there goes on being
-		// right for the configuration it is holding: the code executes, nothing raises, and the
+		// right for the application it is holding: the code executes, nothing raises, and the
 		// change simply does not appear. That is the one failure this surface cannot show as a
 		// failure, so it is reported beside the result rather than instead of it.
 		//
 		// ⚠ A NOTE AND NOT A REFUSAL. Reading data, watching a journal, running a query against the
-		// base a colleague is using are all perfectly good things to do while a configuration is
+		// base a colleague is using are all perfectly good things to do while an application is
 		// half-edited here; refusing them would trade a rare wrong belief for a constant obstacle.
 		//
 		// TWO DIFFERENT STATES, AND THEY NEED DIFFERENT DOORS. Changes the base does not have yet
-		// cannot be reached by restarting anything — config_apply first. Changes the base HAS, made
+		// cannot be reached by restarting anything — app_apply first. Changes the base HAS, made
 		// after the run started, need the run to come up again.
 		// ⭐⭐ ASKED OF THE DEBUGGER, WHICH IS ALREADY HOLDING THE ANSWER. The run this verb speaks
-		// to is attached over that wire, and its handshake carries the configuration's GUID and its
+		// to is attached over that wire, and its handshake carries the application's GUID and its
 		// DIGEST (CommandId_VerifyConnection). The GUID has always been checked — it is the guard
 		// that stops two designers on physically different bases from attaching to one another,
 		// which is a question about IDENTITY. The digest, arriving in the same message, answers a
-		// different one: same configuration, is it the same VERSION. Nothing asked it.
+		// different one: same application, is it the same VERSION. Nothing asked it.
 		//
 		// 🛑 The first version of this remembered the digest at `app_run` in a static of its own —
 		// a second number for a fact already on the wire, and one that could not speak for a run
@@ -973,15 +973,15 @@ public:
 		if (debugClient != nullptr) {
 			debugClient->ForEachConnection([&running](const auto& connection) {
 				if (running.IsEmpty())
-					running = connection.GetConfigMD5();
+					running = connection.GetApplicationMD5();
 			});
 		}
 
 		// ⭐⭐ THE SAME PAIR THE DESIGNER'S OWN CAPTION PAINTS, and asked the same way round — so the
-		// window and this answer cannot say different things about one configuration. The metadata
-		// pane writes `Configuration *<!>`: the star for `IsEdited()`, edits that exist in THIS
-		// PROCESS and nowhere else; the `<!>` for `!IsConfigSave()`, the database not holding this
-		// configuration (mainFrameDesigner.cpp, and the state lives on the metadata precisely so
+		// window and this answer cannot say different things about one application. The metadata
+		// pane writes `Application *<!>`: the star for `IsEdited()`, edits that exist in THIS
+		// PROCESS and nowhere else; the `<!>` for `!IsApplicationSave()`, the database not holding this
+		// application (mainFrameDesigner.cpp, and the state lives on the metadata precisely so
 		// that anything else can reach it).
 		//
 		// 🛑 BOTH MARKS CAN BE LIT AT ONCE, which is the whole reason the caption paints two of them
@@ -989,14 +989,14 @@ public:
 		// combination"*). Written here as `if edited … else if …`, the second fact disappeared the
 		// moment the first held.
 		const bool edited     = activeMetaData != nullptr && activeMetaData->IsEdited();
-		const bool notApplied = activeMetaData != nullptr && !activeMetaData->IsConfigSave();
+		const bool notApplied = activeMetaData != nullptr && !activeMetaData->IsApplicationSave();
 
 		// …AND THE THIRD CASE, which neither flag can see: nothing pending at all, and the run
 		// simply older than the last applying. That comes off the debugger's own handshake, above.
 		const bool moved = !running.IsEmpty() && activeMetaData != nullptr
-			&& !running.IsSameAs(activeMetaData->GetConfigMD5());
+			&& !running.IsSameAs(activeMetaData->GetApplicationMD5());
 
-		// EACH FACT ITS OWN CLAUSE. "Edited here" and "the database has not got this configuration"
+		// EACH FACT ITS OWN CLAUSE. "Edited here" and "the database has not got this application"
 		// together are the ordinary state of an afternoon's work, not an exotic one — and a reader
 		// told only the first would apply their edits and expect to be level, being wrong by however
 		// much the base was behind to begin with.
@@ -1008,7 +1008,7 @@ public:
 		if (notApplied) {
 			if (!what.IsEmpty())
 				what += ibMcpText(", and besides that ");
-			what += ibMcpText("the database does not hold this configuration at all");
+			what += ibMcpText("the database does not hold this application at all");
 		}
 
 		if (what.IsEmpty() && moved)
@@ -1018,13 +1018,13 @@ public:
 			// ⭐ AND THE DOOR IS CHOSEN BY WHAT IS TRUE, not by which clause was written first. A
 			// restart alone is enough only when the base already holds everything; anything pending
 			// has to be published before a restart can pick it up.
-			result.SetValue(ibT("configuration"), ibString::Format(
+			result.SetValue(ibT("application"), ibString::Format(
 				ibMcpText("THE RUN IS NOT WORKING FROM WHAT IS OPEN HERE: %s. An application works "
 				  "from what the DATABASE holds and keeps what it read at startup - modules, and "
 				  "which registers a document posts to. %s"),
 				what,
 				(edited || notApplied)
-					? ibMcpText("database_diff says what of it reaches the schema, config_apply "
+					? ibMcpText("database_diff says what of it reaches the schema, app_apply "
 						  "publishes it, and app_run {restart: true} after that.")
 					: ibMcpText("app_run {restart: true} brings it up on the current one.")));
 		}

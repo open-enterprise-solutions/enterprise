@@ -14,13 +14,13 @@
 // byte-equality assertion.
 //
 // DB-free by construction:
-//   * ibMetaDataConfigurationFile has a public ctor (the standalone file-config
+//   * ibMetaDataApplicationFile has a public ctor (the standalone file-application
 //     holder; the appData-owned subclasses are private + friend ibApplicationInstance).
-//   * SaveConfigToBuffer serializes with saveToFileFlag, which makes SaveSubtree
+//   * SaveApplicationToBuffer serializes with saveToFileFlag, which makes SaveSubtree
 //     skip OnSaveMetaObject (the only DB-touching hook on the save path).
-//   * A freshly-built File is never "run" (m_configOpened == false), so
-//     LoadConfigFromBuffer skips CloseDatabase; the create/load hooks for the
-//     default tree (Configuration + Language) only set guid/id/m_metaData.
+//   * A freshly-built File is never "run" (IsOpen() == false), so
+//     LoadApplicationFromBuffer skips CloseDatabase; the create/load hooks for the
+//     default tree (Application + Language) only set guid/id/m_metaData.
 // So the round-trip needs no live ibDatabaseLayer / appData.
 // =============================================================================
 
@@ -31,7 +31,7 @@
 #include <wx/filename.h>   // wxFileName::CreateTempFileName
 #include <wx/filefn.h>     // wxRemoveFile
 
-#include "backend/metadataConfiguration.h"
+#include "backend/metadataApplication.h"
 #include "core/build.h"   // version_generate, version_oes_last
 #include "core/clsid.h"   // metadata_to_clsid("MD_CAT")
 
@@ -47,13 +47,13 @@ bool BuffersEqual(const ibMemoryBuffer& a, const ibMemoryBuffer& b) {
 
 // Save -> load (into a fresh holder) -> save again; true iff the two blobs are
 // byte-identical (the serialization fixed-point property).
-::testing::AssertionResult RoundTripsByteEqual(ibMetaDataConfigurationFile& cfg) {
+::testing::AssertionResult RoundTripsByteEqual(ibMetaDataApplicationFile& cfg) {
 	ibMemoryBuffer b1;
-	if (!cfg.SaveConfigToBuffer(b1))            return ::testing::AssertionFailure() << "first save failed";
-	ibMetaDataConfigurationFile cfg2;
-	if (!cfg2.LoadConfigFromBuffer(b1))         return ::testing::AssertionFailure() << "load failed";
+	if (!cfg.SaveApplicationToBuffer(b1))       return ::testing::AssertionFailure() << "first save failed";
+	ibMetaDataApplicationFile cfg2;
+	if (!cfg2.LoadApplicationFromBuffer(b1))    return ::testing::AssertionFailure() << "load failed";
 	ibMemoryBuffer b2;
-	if (!cfg2.SaveConfigToBuffer(b2))           return ::testing::AssertionFailure() << "re-save failed";
+	if (!cfg2.SaveApplicationToBuffer(b2))      return ::testing::AssertionFailure() << "re-save failed";
 	if (b1.GetDataLen() != b2.GetDataLen())     return ::testing::AssertionFailure() << "length drift";
 	if (!BuffersEqual(b1, b2))                  return ::testing::AssertionFailure() << "byte drift";
 	return ::testing::AssertionSuccess();
@@ -61,22 +61,22 @@ bool BuffersEqual(const ibMemoryBuffer& a, const ibMemoryBuffer& b) {
 
 } // namespace
 
-// The default config (Configuration root + English Language) saved by a fresh
+// The default application (Application root + English Language) saved by a fresh
 // holder, reloaded into a second holder, then re-saved — bytes must match.
 // This exercises SaveMeta/LoadMeta (guid, id, name/synonym/comment props,
 // interface, roles, help) and the SaveSubtree/LoadSubtree child walk.
-TEST(MetadataSerialize, DefaultConfig_RoundTrip_BytesEqual) {
-	ibMetaDataConfigurationFile cfg1;
+TEST(MetadataSerialize, DefaultApplication_RoundTrip_BytesEqual) {
+	ibMetaDataApplicationFile cfg1;
 
 	ibMemoryBuffer buf1;
-	ASSERT_TRUE(cfg1.SaveConfigToBuffer(buf1));
+	ASSERT_TRUE(cfg1.SaveApplicationToBuffer(buf1));
 	ASSERT_GT(buf1.GetDataLen(), 0u) << "save produced an empty blob";
 
-	ibMetaDataConfigurationFile cfg2;
-	ASSERT_TRUE(cfg2.LoadConfigFromBuffer(buf1));
+	ibMetaDataApplicationFile cfg2;
+	ASSERT_TRUE(cfg2.LoadApplicationFromBuffer(buf1));
 
 	ibMemoryBuffer buf2;
-	ASSERT_TRUE(cfg2.SaveConfigToBuffer(buf2));
+	ASSERT_TRUE(cfg2.SaveApplicationToBuffer(buf2));
 
 	ASSERT_EQ(buf1.GetDataLen(), buf2.GetDataLen())
 		<< "re-serialized blob has a different length — a Save/Load mirror drifted";
@@ -85,9 +85,9 @@ TEST(MetadataSerialize, DefaultConfig_RoundTrip_BytesEqual) {
 }
 
 // Same round-trip guard, now with a REAL business object in the tree for EVERY
-// business metaobject type, added under the configuration root (DB-free —
+// business metaobject type, added under the application root (DB-free —
 // runObject=false, never run). Extends the Save/Load mirror coverage from the
-// default Configuration + Language nodes to each type's own field list, so a
+// default Application + Language nodes to each type's own field list, so a
 // Save/Load drift in any one type's SaveData/LoadData body is caught.
 TEST(MetadataSerialize, EveryBusinessObjectType_RoundTrip_BytesEqual) {
 	struct Case { const char* clsid; const wxChar* name; };
@@ -98,16 +98,16 @@ TEST(MetadataSerialize, EveryBusinessObjectType_RoundTrip_BytesEqual) {
 		{ "MD_CONS", wxT("Const1") },   // Constant
 		{ "MD_INFR", wxT("Info1")  },   // InformationRegister
 		{ "MD_ACCR", wxT("Accum1") },   // AccumulationRegister
-		{ "MD_DPR",  wxT("Proc1")  },   // DataProcessor
+		{ "MD_DTL",  wxT("Proc1")  },   // DataTool
 		{ "MD_RPT",  wxT("Rep1")   },   // Report
 		{ "MD_CHRC", wxT("Char1")  },   // ChartOfCharacteristicTypes
 		{ "MD_CHOA", wxT("Acco1")  },   // ChartOfAccounts
 	};
 
 	for (const Case& c : cases) {
-		ibMetaDataConfigurationFile cfg1;
-		ibValueMetaObjectConfiguration* root = cfg1.GetCommonMetaObject();
-		ASSERT_NE(root, nullptr) << "fresh config has no root for " << c.clsid;
+		ibMetaDataApplicationFile cfg1;
+		ibValueMetaObjectApplication* root = cfg1.GetRootMetaObject();
+		ASSERT_NE(root, nullptr) << "fresh application has no root for " << c.clsid;
 
 		ibValueMetaObject* obj = cfg1.CreateMetaObject(
 			metadata_to_clsid(ibString::FromUTF8(c.clsid)), root, /*runObject*/ false);
@@ -115,13 +115,13 @@ TEST(MetadataSerialize, EveryBusinessObjectType_RoundTrip_BytesEqual) {
 		cfg1.RenameMetaObject(obj, ibString(c.name));
 
 		ibMemoryBuffer buf1;
-		ASSERT_TRUE(cfg1.SaveConfigToBuffer(buf1)) << "save failed for " << c.clsid;
+		ASSERT_TRUE(cfg1.SaveApplicationToBuffer(buf1)) << "save failed for " << c.clsid;
 
-		ibMetaDataConfigurationFile cfg2;
-		ASSERT_TRUE(cfg2.LoadConfigFromBuffer(buf1)) << "load failed for " << c.clsid;
+		ibMetaDataApplicationFile cfg2;
+		ASSERT_TRUE(cfg2.LoadApplicationFromBuffer(buf1)) << "load failed for " << c.clsid;
 
 		ibMemoryBuffer buf2;
-		ASSERT_TRUE(cfg2.SaveConfigToBuffer(buf2)) << "re-save failed for " << c.clsid;
+		ASSERT_TRUE(cfg2.SaveApplicationToBuffer(buf2)) << "re-save failed for " << c.clsid;
 
 		ASSERT_EQ(buf1.GetDataLen(), buf2.GetDataLen()) << "length drift for " << c.clsid;
 		EXPECT_TRUE(BuffersEqual(buf1, buf2))           << "byte drift for "   << c.clsid;
@@ -132,8 +132,8 @@ TEST(MetadataSerialize, EveryBusinessObjectType_RoundTrip_BytesEqual) {
 // `Schedule` into one node, and since a node holds one field of a name the save refused — every apply after it too.
 // The default is stored as `DefaultSchedule` now; saved, read and saved again it is the same bytes.
 TEST(MetadataSerialize, ScheduledJob_RoundTrip_BytesEqual) {
-	ibMetaDataConfigurationFile cfg;
-	ibValueMetaObjectConfiguration* root = cfg.GetCommonMetaObject();
+	ibMetaDataApplicationFile cfg;
+	ibValueMetaObjectApplication* root = cfg.GetRootMetaObject();
 	ASSERT_NE(root, nullptr);
 
 	ibValueMetaObject* job = cfg.CreateMetaObject(metadata_to_clsid(wxT("MD_SJOB")), root, /*runObject*/ false);
@@ -147,8 +147,8 @@ TEST(MetadataSerialize, ScheduledJob_RoundTrip_BytesEqual) {
 // (SaveSubtree/LoadSubtree) plus the attribute's own field list (type descriptor
 // + qualifiers), still DB-free.
 TEST(MetadataSerialize, CatalogWithAttribute_RoundTrip_BytesEqual) {
-	ibMetaDataConfigurationFile cfg1;
-	ibValueMetaObjectConfiguration* root = cfg1.GetCommonMetaObject();
+	ibMetaDataApplicationFile cfg1;
+	ibValueMetaObjectApplication* root = cfg1.GetRootMetaObject();
 	ASSERT_NE(root, nullptr);
 
 	ibValueMetaObject* cat =
@@ -162,13 +162,13 @@ TEST(MetadataSerialize, CatalogWithAttribute_RoundTrip_BytesEqual) {
 	cfg1.RenameMetaObject(attr, wxT("Price"));
 
 	ibMemoryBuffer buf1;
-	ASSERT_TRUE(cfg1.SaveConfigToBuffer(buf1));
+	ASSERT_TRUE(cfg1.SaveApplicationToBuffer(buf1));
 
-	ibMetaDataConfigurationFile cfg2;
-	ASSERT_TRUE(cfg2.LoadConfigFromBuffer(buf1));
+	ibMetaDataApplicationFile cfg2;
+	ASSERT_TRUE(cfg2.LoadApplicationFromBuffer(buf1));
 
 	ibMemoryBuffer buf2;
-	ASSERT_TRUE(cfg2.SaveConfigToBuffer(buf2));
+	ASSERT_TRUE(cfg2.SaveApplicationToBuffer(buf2));
 
 	ASSERT_EQ(buf1.GetDataLen(), buf2.GetDataLen())
 		<< "Catalog+attribute re-serialized to a different length";
@@ -178,8 +178,8 @@ TEST(MetadataSerialize, CatalogWithAttribute_RoundTrip_BytesEqual) {
 
 // A Document that owns a (DB-backed) tabular section.
 TEST(MetadataSerialize, DocumentWithTabularSection_RoundTrip_BytesEqual) {
-	ibMetaDataConfigurationFile cfg;
-	ibValueMetaObjectConfiguration* root = cfg.GetCommonMetaObject();
+	ibMetaDataApplicationFile cfg;
+	ibValueMetaObjectApplication* root = cfg.GetRootMetaObject();
 	ASSERT_NE(root, nullptr);
 
 	ibValueMetaObject* doc = cfg.CreateMetaObject(metadata_to_clsid(wxT("MD_DOC")), root, false);
@@ -193,11 +193,11 @@ TEST(MetadataSerialize, DocumentWithTabularSection_RoundTrip_BytesEqual) {
 	EXPECT_TRUE(RoundTripsByteEqual(cfg));
 }
 
-// Several sibling business objects in one config — exercises the sibling subtree
+// Several sibling business objects in one application — exercises the sibling subtree
 // walk, not just a single object.
 TEST(MetadataSerialize, MultipleSiblingObjects_RoundTrip_BytesEqual) {
-	ibMetaDataConfigurationFile cfg;
-	ibValueMetaObjectConfiguration* root = cfg.GetCommonMetaObject();
+	ibMetaDataApplicationFile cfg;
+	ibValueMetaObjectApplication* root = cfg.GetRootMetaObject();
 	ASSERT_NE(root, nullptr);
 
 	ibValueMetaObject* cat = cfg.CreateMetaObject(metadata_to_clsid(wxT("MD_CAT")), root, false);
@@ -216,20 +216,20 @@ TEST(MetadataSerialize, MultipleSiblingObjects_RoundTrip_BytesEqual) {
 // Reloading the same blob a second time must reproduce it again — the format is
 // a stable fixed point, not merely equal on the first pass (guards against a
 // load that consumes more/less than save wrote and only diverges on re-entry).
-TEST(MetadataSerialize, DefaultConfig_RoundTrip_Idempotent) {
-	ibMetaDataConfigurationFile cfg1;
+TEST(MetadataSerialize, DefaultApplication_RoundTrip_Idempotent) {
+	ibMetaDataApplicationFile cfg1;
 	ibMemoryBuffer buf1;
-	ASSERT_TRUE(cfg1.SaveConfigToBuffer(buf1));
+	ASSERT_TRUE(cfg1.SaveApplicationToBuffer(buf1));
 
-	ibMetaDataConfigurationFile cfg2;
-	ASSERT_TRUE(cfg2.LoadConfigFromBuffer(buf1));
+	ibMetaDataApplicationFile cfg2;
+	ASSERT_TRUE(cfg2.LoadApplicationFromBuffer(buf1));
 	ibMemoryBuffer buf2;
-	ASSERT_TRUE(cfg2.SaveConfigToBuffer(buf2));
+	ASSERT_TRUE(cfg2.SaveApplicationToBuffer(buf2));
 
-	ibMetaDataConfigurationFile cfg3;
-	ASSERT_TRUE(cfg3.LoadConfigFromBuffer(buf2));
+	ibMetaDataApplicationFile cfg3;
+	ASSERT_TRUE(cfg3.LoadApplicationFromBuffer(buf2));
 	ibMemoryBuffer buf3;
-	ASSERT_TRUE(cfg3.SaveConfigToBuffer(buf3));
+	ASSERT_TRUE(cfg3.SaveApplicationToBuffer(buf3));
 
 	EXPECT_TRUE(BuffersEqual(buf2, buf3))
 		<< "second reload diverged — load does not consume exactly what save wrote";
@@ -237,32 +237,32 @@ TEST(MetadataSerialize, DefaultConfig_RoundTrip_Idempotent) {
 
 // A version its enumeration has not registered is not read: the property keeps what it was constructed with.
 TEST(MetadataSerialize, AVersionTheEnumerationHasNotRegisteredIsNotRead) {
-	ibMetaDataConfigurationFile saved;
+	ibMetaDataApplicationFile saved;
 	saved.SetVersion(version_generate(99, 0, 0));
 	ibMemoryBuffer buffer;
-	ASSERT_TRUE(saved.SaveConfigToBuffer(buffer));
+	ASSERT_TRUE(saved.SaveApplicationToBuffer(buffer));
 
-	ibMetaDataConfigurationFile loaded;
-	ASSERT_TRUE(loaded.LoadConfigFromBuffer(buffer));
+	ibMetaDataApplicationFile loaded;
+	ASSERT_TRUE(loaded.LoadApplicationFromBuffer(buffer));
 	EXPECT_EQ(static_cast<ibVersionID>(version_oes_last), loaded.GetVersion());
 }
 
-// A blob that round-trips through file I/O (SaveConfigToFile → LoadConfigFromFile)
+// A blob that round-trips through file I/O (SaveApplicationToFile → LoadApplicationFromFile)
 // must match the in-memory buffer save — confirms the file path funnels through
-// the same SaveConfigToBuffer/LoadConfigFromBuffer seam with no extra framing.
-TEST(MetadataSerialize, DefaultConfig_FileRoundTrip_MatchesBuffer) {
-	ibMetaDataConfigurationFile cfg1;
+// the same SaveApplicationToBuffer/LoadApplicationFromBuffer seam with no extra framing.
+TEST(MetadataSerialize, DefaultApplication_FileRoundTrip_MatchesBuffer) {
+	ibMetaDataApplicationFile cfg1;
 	ibMemoryBuffer bufMem;
-	ASSERT_TRUE(cfg1.SaveConfigToBuffer(bufMem));
+	ASSERT_TRUE(cfg1.SaveApplicationToBuffer(bufMem));
 
 	const ibString path = wxFileName::CreateTempFileName(wxT("oes_meta_rt_"));
 	ASSERT_FALSE(path.IsEmpty());
-	ASSERT_TRUE(cfg1.SaveConfigToFile(path));
+	ASSERT_TRUE(cfg1.SaveApplicationToFile(path));
 
-	ibMetaDataConfigurationFile cfg2;
-	ASSERT_TRUE(cfg2.LoadConfigFromFile(path));
+	ibMetaDataApplicationFile cfg2;
+	ASSERT_TRUE(cfg2.LoadApplicationFromFile(path));
 	ibMemoryBuffer bufFromFile;
-	ASSERT_TRUE(cfg2.SaveConfigToBuffer(bufFromFile));
+	ASSERT_TRUE(cfg2.SaveApplicationToBuffer(bufFromFile));
 
 	wxRemoveFile(path);
 

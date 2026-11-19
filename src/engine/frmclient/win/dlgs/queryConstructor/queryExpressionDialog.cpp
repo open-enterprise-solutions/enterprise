@@ -59,7 +59,7 @@ ibDialogQueryExpression::ibDialogQueryExpression(wxWindow* parent, const wxStrin
 	, m_metaData(metaData)
 	, m_readOnly(readOnly)
 	, m_allowWindows(allowWindows)
-	, m_model(metaData)   // the same config the fields came from — so a reference can be walked here too
+	, m_model(metaData)   // the same application the fields came from — so a reference can be walked here too
 {
 	// The same picture the constructor wears: this window writes the same language, one level down.
 	{
@@ -530,7 +530,7 @@ void ibDialogQueryExpression::OnOk(wxCommandEvent& event)
 
 // The walk itself. Only what this window can answer for is checked — the fields it was handed and
 // the closed vocabularies of the language. A type name (`Catalog.Goods` after REFS / CAST / TYPE) is
-// checked for SHAPE only: whether that catalog exists is the configuration's answer, and the engine
+// checked for SHAPE only: whether that catalog exists is the application's answer, and the engine
 // gives it with the source span when the query is stored.
 wxString ibDialogQueryExpression::CheckExpressionNames(const ibQueryAstExprPtr& expression) const
 {

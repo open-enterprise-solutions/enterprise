@@ -3,8 +3,8 @@
 
 // A SETTINGS WINDOW PUT TO THE PERSON — a list's (ibDialogListSettings, ibProtocol::ibRequest::ibKind::ListSettings) and a
 // report's (ibDialogComposerSettings, ComposerSettings), through the current session's frame. The window edits a COPY
-// of the setting in force; on the way it asks the server what only the configuration answers (ibProtocol::ibRequest::ibListSettings::ibAct:
-// the fields of a reference's targets, a value chosen), and its answer is read against the configuration — one the
+// of the setting in force; on the way it asks the server what only the application answers (ibProtocol::ibRequest::ibListSettings::ibAct:
+// the fields of a reference's targets, a value chosen), and its answer is read against the application — one the
 // schema refuses is asked again, with why. What the window is told besides the setting — its fields, and what it
 // arranges — is the door's.
 
@@ -31,12 +31,12 @@ FRMSERVER_API ibDataNode& ibWriteSettingsField(ibDataNode& fields, const ibStrin
 	ibMetaID id, const ibTypeDescription& type, bool available, const ibPictureDescription& picture,
 	const ibMetaData* metaData);
 
-// WHICH OF THESE TYPES ARE REFERENCES, AND TO WHAT — the answer the desktop's field tree asks the configuration for
-// (ibValueReferenceDataObject::ConvertToMetaIds) before it gives a field its [+]; the client has no configuration to ask.
+// WHICH OF THESE TYPES ARE REFERENCES, AND TO WHAT — the answer the desktop's field tree asks the application for
+// (ibValueReferenceDataObject::ConvertToMetaIds) before it gives a field its [+]; the client has no application to ask.
 FRMSERVER_API void ibWriteSettingsReferences(ibDataNode& references, const std::vector<ibTypeDescription>& types,
 	const ibMetaData* metaData);
 
-// …AND WHAT THEY ARE CALLED — the classes of these types, each once, as the configuration names and draws them (Type,
+// …AND WHAT THEY ARE CALLED — the classes of these types, each once, as the application names and draws them (Type,
 // Name, Picture — as the inspector names its choices'): what a type cell reads, and the client has none to name a kind by.
 FRMSERVER_API void ibWriteSettingsClasses(ibDataNode& classes, const std::vector<ibTypeDescription>& types,
 	const ibMetaData* metaData);
@@ -78,7 +78,7 @@ public:
 	virtual const ibMetaData* GetMetaData() const override { return m_metaData; }
 	virtual ibTypeDescription& GetTypeDesc() const override { return m_typeDesc; }
 
-	// The value chosen, put into the window's question — how it reads with it, said by the configuration. A door that
+	// The value chosen, put into the window's question — how it reads with it, said by the application. A door that
 	// asks no window puts it where it answers (a composer's tab: its view's State).
 	void WriteChosen(ibDataNode& request) const;
 

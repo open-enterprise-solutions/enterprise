@@ -60,7 +60,7 @@ ibDataQueryResult ibDataDBComposer::Execute(std::vector<ibQueryLowering::ibQuery
 	// resolves at that moment (Max: INTO is for the ONTO selections to use).
 	EnsureTempTables();
 	ibTempSourceScope tempScope(m_prepared.m_sources);
-	// Thread THIS query's config into the lowering (parallel to the temp-source scope) — ResolveSource resolves a
+	// Thread THIS query's application into the lowering (parallel to the temp-source scope) — ResolveSource resolves a
 	// by-name metaobject source against it, not the global factory.
 	ibSourceMetaDataScope mdScope(m_metaData);
 	// ⭐ …AND THE SELECTIONS THIS COMPOSER'S QUERY NAMED, for the same reason and by the same means: a

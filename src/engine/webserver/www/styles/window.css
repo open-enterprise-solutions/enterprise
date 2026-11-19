@@ -47,7 +47,7 @@ html, body {
 	min-width: 0;
 }
 
-/* The platform's mark beside the configuration's name. */
+/* The platform's mark beside the application's name. */
 .client-window header .logo {
 	flex: 0 0 auto;
 	width: 20px;

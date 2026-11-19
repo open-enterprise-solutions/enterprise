@@ -9,7 +9,7 @@
 class BACKEND_API ibValueMetaObjectModuleBase;
 
 // Marker interface for descriptors that terminate a runtime tree.
-// Today: ibValueModuleManagerRuntimeConfiguration. Used by ibRuntimeModuleDataObject::GetRoot
+// Today: ibValueModuleManagerRuntimeApplication. Used by ibRuntimeModuleDataObject::GetRoot
 // parent walk to find "the root above this nested descriptor".
 class BACKEND_API ibRuntimeRoot {
 public:
@@ -96,7 +96,7 @@ public:
 	//     name NOT an identifier; only its members surface): Manager /
 	//     EnumManager / SystemManager. Replaces the old scopeContext=true flag.
 	//   BindExportVariable  — export variable (m_listExternValue, name VISIBLE):
-	//     global constants, common modules surfaced as module-valued names.
+	//     global constants, shared modules surfaced as module-valued names.
 	//   BindLocalVariable   — plain writable LOCAL (m_listLocalValue, kind=Local):
 	//     binder fills the frame slot at init, module reads/writes it as an ordinary
 	//     local — no required/type pre-flight, no member access. E.g. a constant's Value.
@@ -129,7 +129,7 @@ public:
 	// top-level body (the default — almost every descriptor wants its
 	// body to run on init: forms, constants, record objects). Pass false
 	// to register the module's functions WITHOUT running the body — only
-	// common modules do that (moduleManager.cpp), since a common module's
+	// shared modules do that (moduleManager.cpp), since a shared module's
 	// top-level is just declarations.
 	void Run(bool delta = true);
 
@@ -165,10 +165,10 @@ public:
 	//   - GetMetaForCompile()               → the single module inside
 	//     the container that drives THIS descriptor's bytecode
 	//     (usually container->GetObjectModule() for catalog/document
-	//     objects; form / common module are modules themselves and
+	//     objects; form / shared module are modules themselves and
 	//     return the metadata directly).
-	// Default reads what the ctor was given — subclasses (Unit, Configuration,
-	// External DP) that name their module there; the rest override.
+	// Default reads what the ctor was given — subclasses (Unit, Application,
+	// External data tool) that name their module there; the rest override.
 	virtual const ibValueMetaObjectModuleBase* GetMetaForCompile() const { return m_metaForCompile; }
 
 	// What a child of this descriptor compiles against and its ProcUnit runs under.
@@ -195,7 +195,7 @@ public:
 	// resolution and call-stack frame chain. Raw pointer because
 	// parent-outlives-child is an ownership invariant (session owns
 	// root through ibValuePtr, root owns nested through
-	// m_listCommonModuleManager / form tabs / script locals). Eval is
+	// m_listSharedModuleManager / form tabs / script locals). Eval is
 	// the only case where parent is a live runtime-executing node
 	// picked up via Current() at compile time.
 	//
@@ -206,8 +206,8 @@ public:
 	const ibRuntimeModuleDataObject* GetParent() const { return m_parent; }
 
 	// Walk the parent chain until we hit a node that acts as runtime
-	// root (implements ibRuntimeRoot). Configuration is today's sole
-	// root; external DPs / reports parent into it. Returns nullptr
+	// root (implements ibRuntimeRoot). Application is today's sole
+	// root; external data tools / reports parent into it. Returns nullptr
 	// for orphan descriptors — no root reachable upward.
 	virtual const ibRuntimeRoot* GetRoot() const;
 
@@ -268,7 +268,7 @@ protected:
 		return false;
 	}
 
-	// The event's array form — see the variadic above. Out of line: it asks the configuration for its
+	// The event's array form — see the variadic above. Out of line: it asks the application for its
 	// event handlers, and this header is included nearly everywhere.
 	void ExecAsEvent(const ibString& strEventName, ibValue** paParams, const long lSizeArray) const;
 
@@ -354,7 +354,7 @@ protected:
 	// drops the descriptor (project_refresh_execute_crash.md).
 	std::shared_ptr<ibProcUnit> m_procUnit;
 
-	// Parent descriptor — set by creation paths (AddCommonModule,
+	// Parent descriptor — set by creation paths (AddSharedModule,
 	// CreateNewForm, AddObject) so scope chain walks up correctly.
 	// Raw ptr; safe as long as parent outlives child (enforced by
 	// owning containers).

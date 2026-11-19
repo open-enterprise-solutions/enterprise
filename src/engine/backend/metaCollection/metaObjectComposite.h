@@ -80,7 +80,7 @@ private:
 	ibValuePtr<T> m_metaObject;
 };
 
-// ⭐ …AND ONE WITH A FACE (#646). An inner attribute whose type the configuration chooses - a catalog's code and
+// ⭐ …AND ONE WITH A FACE (#646). An inner attribute whose type the application chooses - a catalog's code and
 // description, a document's number, a tabular section's line number - is shown on its owner as that TYPE, one of those
 // it is offered, and its length: a string or a number for a code, a description and a document's number; a number alone
 // for a line number, which the platform counts. The attribute stays what it is and writes nothing of its own
@@ -97,7 +97,7 @@ public:
 	{
 	}
 
-	// The attribute's node, and the type chosen in it. A node with no type - a configuration saved before it could be
+	// The attribute's node, and the type chosen in it. A node with no type - an application saved before it could be
 	// chosen - keeps the one the metatype states; a type it is not offered, or several, is refused.
 	virtual bool ReadNodeValue(const ibDataValue& value) override;
 	virtual bool WriteNodeValue(ibDataValue& value) const override;
@@ -295,7 +295,7 @@ protected:
 		return false;
 	}
 
-	// COMMON ATTRIBUTES — the copies a declaration under Common has placed in this object.
+	// SHARED ATTRIBUTES — the copies a declaration under Shared has placed in this object.
 	// One function, not a per-class contract like the predefined one above: predefined
 	// attributes are named members of each class and every class must list its own, while
 	// these are ordinary children and one walk finds them everywhere.
@@ -303,10 +303,10 @@ protected:
 	// It sits beside the predefined fill and merges into the same generic list, so
 	// everything downstream — the table builder and its indexes, save and read, the query
 	// generator, the form — meets an attribute and asks it the usual questions.
-	virtual bool FillArrayObjectByCommonAttribute(
+	virtual bool FillArrayObjectBySharedAttribute(
 		std::vector<ibValueMetaObjectAttributeBase*>& array) const {
 		return FillArrayObjectByFilter<ibValueMetaObjectAttributeBase>(
-			array, { g_metaCommonAttributeColumnCLSID });
+			array, { g_metaSharedAttributeColumnCLSID });
 	}
 
 	// THE PREDEFINED ATTRIBUTES' PLACE in the inspector (ibPropertyPredefined) - Ref, Code, Description, Date, Period, … -

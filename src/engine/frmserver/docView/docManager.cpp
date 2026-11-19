@@ -26,7 +26,7 @@
 #include "frmserver/schema/languages.h"
 
 #include "backend/backend_picture.h"
-#include "backend/metadataConfiguration.h"
+#include "backend/metadataApplication.h"
 #include "backend/moduleManager/moduleManager.h"
 
 // The session's frame: ibClientFrame::CreateChildFrame gives a view going
@@ -324,7 +324,7 @@ ibDocManager::ibDocManager(long /*flags*/, bool initialize)
 	RegisterSchema(ibProtocol::ibSchema::ibKind::AuditLog, std::make_unique<ibSchemaAuditLog>());
 	// About — what the client works in; both applications' Help showed it.
 	RegisterSchema(ibProtocol::ibSchema::ibKind::About, std::make_unique<ibSchemaAbout>());
-	// The configuration's languages — what a translated text is written in; both applications' translation window.
+	// The application's languages — what a translated text is written in; both applications' translation window.
 	RegisterSchema(ibProtocol::ibSchema::ibKind::Languages, std::make_unique<ibSchemaLanguages>());
 	// The person's look - their theme; both applications' Tools offer it.
 	RegisterSchema(ibProtocol::ibSchema::ibKind::Style, std::make_unique<ibSchemaStyle>());
@@ -444,7 +444,7 @@ std::vector<ibClassID> ibDocManager::GetMetaTemplateClasses() const
 
 ibMetaDocument* ibDocManager::OpenForm(ibValueMetaObject* metaObject, long flags)
 {
-	// ⭐⭐ WHOSE IT IS, WORKED OUT HERE (the desktop's): an editor of the database's configuration or of a file's belongs
+	// ⭐⭐ WHOSE IT IS, WORKED OUT HERE (the desktop's): an editor of the database's application or of a file's belongs
 	// under the document that shows it, one of the session's own to the manager itself. The caller knows WHAT to open;
 	// the owner follows from the object.
 	ibMetaDocument* docParent = FindMetaDataDocument(metaObject->GetMetaData());

@@ -749,9 +749,12 @@ bool ibTranslateCode::GetNumber(ibString* strNumber) const
 * true,false
 */
 
+// `|` continues a string; `||` is the logical Or - two delimiters, which the compiler reads as a pair.
 bool ibTranslateCode::IsString() const
 {
-	return IsByte(ibT('\"')) || IsByte(ibT('|'));
+	if (IsByte(ibT('\"')))
+		return true;
+	return IsByte(ibT('|')) && (m_currentPos + 1 >= m_bufferSize || m_strBuffer[m_currentPos + 1] != ibT('|'));
 }
 
 /**
@@ -1232,21 +1235,6 @@ bool ibTranslateCode::Translate()
 
 				m_current_lex.m_strData = s;
 			}
-		}
-		// ⭐ `||` AFTER CODE IS C's OR, NOT A STRING. A bar opens a continued string only as the first thing on its
-		// line; met after an operand, `a || b` was read as a string and answered "constant string expected"
-		// (2026-10-30). Refused by name and read past, so the rest of the line is still checked.
-		else if (IsByte(ibT('|')) && m_currentPos + 1 < m_bufferSize && m_strBuffer[m_currentPos + 1] == ibT('|')
-			&& [this] {
-				unsigned int i = m_currentPos;
-				while (i > 0 && (m_strBuffer[i - 1] == ibT(' ') || m_strBuffer[i - 1] == ibT('\t')))
-					--i;
-				return i > 0 && m_strBuffer[i - 1] != ibT('\n') && m_strBuffer[i - 1] != ibT('\r');
-			}()) {
-			Refuse(ibScriptError_Expression, m_currentPos,
-				ibString(_("'||' is not an operator here - conditions join with the word Or")));
-			GetByte(); GetByte();
-			continue;
 		}
 		else if (IsNumber() || IsString() || IsDate()) {
 			m_current_lex.m_lexType = CONSTANT;
@@ -1747,7 +1735,7 @@ ibTranslateCode::ibCaretText ibTranslateCode::CaretAt(unsigned int caret) const
 	}
 
 	// ⭐ INSIDE A CALL'S ARGUMENTS, AND THE CALL IS ALL THIS SAYS. Which calls have names worth
-	// offering — `Type`, `GetCommonForm`, `ShowCommonForm` — is the CALLER's knowledge, and the
+	// offering — `Type`, `GetSharedForm`, `ShowSharedForm` — is the CALLER's knowledge, and the
 	// caller already holds that list; carrying a second copy here made the lexer know about
 	// platform functions, and made every OTHER call's argument answer with nothing at all.
 	{

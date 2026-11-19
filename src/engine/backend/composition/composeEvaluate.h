@@ -12,7 +12,7 @@
 // and it drifted: one had learnt the designer's edit manager and the other had not.
 //
 // ⚠ NOT IN `backend_composition.{h,cpp}`, though ibStoredValue lives there and looks like a
-// neighbour. A DESCRIPTION IS DATA — it is read while a configuration is still loading — and this
+// neighbour. A DESCRIPTION IS DATA — it is read while an application is still loading — and this
 // needs the runtime: a session, a module manager, a ProcUnit, a frame. Putting the two together
 // would drag the runtime into the load, which is the mistake that file's own notes are about.
 //
@@ -32,7 +32,7 @@ class ibMetaData;
 // legitimately came out empty are the same emptiness afterwards, and a report composed on an
 // unfilled parameter looks exactly like a report with no data.
 //
-// `metaData` is the configuration to fall back on when there is no runtime root — the designer's
+// `metaData` is the application to fall back on when there is no runtime root — the designer's
 // edit manager compiles against it (ibSession::EditModuleManagerFor). It may be null.
 BACKEND_API bool ibEvaluateInRoot(const ibString& expression, ibValue& produced,
 	const ibMetaData* metaData);

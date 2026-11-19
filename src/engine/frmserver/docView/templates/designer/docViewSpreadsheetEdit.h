@@ -3,7 +3,7 @@
 
 // A TEMPLATE AS THE DESIGNER EDITS IT — the old desktop designer's ibSpreadsheetEditDocument and ibSpreadsheetEditView
 // over a template metaobject: its sheet in a tab, edited where it is
-// kept — the metaobject — so what is modified and saved is the configuration. The sheet goes as it is stored: a
+// kept — the metaobject — so what is modified and saved is the application. The sheet goes as it is stored: a
 // parameter's cell as its name, not filled in (the file document's view fills it, ibFetchSpreadsheet), so what comes
 // back is the template and not one filling of it.
 

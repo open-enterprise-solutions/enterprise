@@ -2,9 +2,9 @@
 #define __SERVER_TREE_DATA_REPORT_H__
 
 // THE EXTERNAL REPORT'S TREE, AS THE SERVER HOLDS IT — the desktop's ibDataReportTree (designer/mainFrame/metaTree),
-// its fill and its watch: the twin of the data processor's (treeDataProcessor.h), plus the report's composers.
+// its fill and its watch: the twin of the data tool's (treeDataTool.h), plus the report's composers.
 
-#include "treeConfiguration.h"
+#include "treeApplication.h"
 
 #include "backend/metadataReport.h"
 

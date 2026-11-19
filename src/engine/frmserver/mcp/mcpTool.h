@@ -145,7 +145,7 @@ public:
 	virtual ibString GetName() const = 0;
 
 	// ⭐⭐ DOES THIS VERB RUN AS A TASK OF THE SESSION? Almost every one does: it touches the
-	// configuration, the session's objects, a window — all of which are the session's, which is why
+	// application, the session's objects, a window — all of which are the session's, which is why
 	// the server hands tools to its queue (ibMcpServer::RunTool). False runs it on the connection's thread.
 	//
 	// 🛑 AND ONE KIND MUST NOT BE THERE: a tool that WAITS for something the session's queue itself
@@ -203,7 +203,7 @@ public:
 	// WHAT TO SAY IN THE WINDOW A PERSON IS WATCHING. Not the protocol name —
 	// `metadata_create` is what a machine calls this, and it tells the developer
 	// sitting in the designer nothing about what is happening to their
-	// configuration. A sentence, in their language, naming the thing being acted
+	// application. A sentence, in their language, naming the thing being acted
 	// on: "creating catalog Goods", "reading the journal".
 	//
 	// ASKED OF THE TOOL because the tool is the only thing that knows what its
@@ -216,7 +216,7 @@ public:
 
 	// ⭐ THE HEADLINE ABOVE, AND THIS IS WHAT IS UNDER IT. "Writing 40 lines into the module
 	// 'ObjectModule'" says something happened and nothing about WHAT — and the person watching is
-	// the developer whose configuration it happened to. They want to read the code, the way they
+	// the developer whose application it happened to. They want to read the code, the way they
 	// would read it in the editor.
 	//
 	// ⚠ TWO QUESTIONS, NOT ONE LONGER ANSWER. A headline is scanned; a detail is read. Folding the
@@ -334,7 +334,7 @@ FRMSERVER_API ibString ibMcpMatchingLine(const ibString& body, const ibString& q
 
 // WHAT A COMPOSITION STILL LACKS to produce a report somebody can read — a nameless variant, no
 // output, nothing selected. Written where the report verbs live (mcpToolReport.cpp) and declared
-// here because the configuration-wide audit asks the same question of every composer there is: two
+// here because the application-wide audit asks the same question of every composer there is: two
 // implementations of "what is missing" would answer differently within a week.
 FRMSERVER_API void ibMcpComposerComplaints(const struct ibCompositionDescription& composition,
 	std::vector<ibString>& missing);
@@ -400,7 +400,7 @@ FRMSERVER_API bool ibMcpIsRegex(const ibString& query);
 // has to hold TWO vocabularies in mind at once, the metaobject's and this server's, and the second
 // one is not written down anywhere.
 //
-// ⭐ AND IT ASKS THE OBJECT, not the serializer. `BuildDataNode` is how a configuration is STORED —
+// ⭐ AND IT ASKS THE OBJECT, not the serializer. `BuildDataNode` is how an application is STORED —
 // its keys are storage keys, it carries every internal name a metatype happens to have, and it runs
 // the whole subtree. None of that is what a caller asked for, and binding to it means a storage
 // rename becomes a protocol change. The five facts below come from the object's own methods, which
@@ -428,8 +428,8 @@ FRMSERVER_API bool ibMcpIsRegex(const ibString& query);
 FRMSERVER_API const ibMcpTool::ibMcpArgument& ibMcpIdArgument();
 FRMSERVER_API const ibMcpTool::ibMcpArgument& ibMcpValueArgument();
 FRMSERVER_API const ibMcpTool::ibMcpArgument& ibMcpLanguageArgument();
-// `metadata` — which metadata a call works on: the name of an external data processor or report's file, open in the
-// designer (external_processor_open / external_report_open, or the person's File → Open); omitted, the configuration.
+// `metadata` — which metadata a call works on: the name of an external data tool or report's file, open in the
+// designer (external_data_tool_open / external_report_open, or the person's File → Open); omitted, the application.
 // A tool that edits an external takes it; its doors read it (ibMcpMetaDataNamed, below).
 FRMSERVER_API const ibMcpTool::ibMcpArgument& ibMcpMetaDataArgument();
 
@@ -534,7 +534,7 @@ FRMSERVER_API bool ibMcpSetProperty(class ibProperty* property,
 // already leaking.
 //
 // So it is a function: absent is refused as absent, missing is refused as missing, and the
-// configuration check every one of them opened with comes along.
+// application check every one of them opened with comes along.
 //
 // Null means refused, with words already in `refusal`.
 //
@@ -553,12 +553,12 @@ FRMSERVER_API class ibValueMetaObject* ibMcpObjectNamed(const ibDataNode& params
 FRMSERVER_API class ibValueMetaObjectTemplate* ibMcpComposerNamed(const ibDataNode& params,
 	ibString& refusal, const ibString& field = ibT("id"));
 
-// …and the metadata the call works on, which the two above look in: the external data processor or report its
-// `metadata` names, open in this designer — or the configuration, when it names none. nullptr, said in `refusal`,
+// …and the metadata the call works on, which the two above look in: the external data tool or report its
+// `metadata` names, open in this designer — or the application, when it names none. nullptr, said in `refusal`,
 // when what it names is not open.
 FRMSERVER_API class ibMetaData* ibMcpMetaDataNamed(const ibDataNode& params, ibString& refusal);
 
-// The external data processor or report open in this designer under the file's name `file` — its document, as the
+// The external data tool or report open in this designer under the file's name `file` — its document, as the
 // person's File → Open made it (a tab, its tree); nullptr when none is. The server knows no folder of the client's,
 // only the name the file was handed over under. Closing the tab closes it, and what was not saved goes with it.
 FRMSERVER_API class ibMetaDataDocument* ibMcpExternalNamed(const ibString& file);
@@ -566,10 +566,10 @@ FRMSERVER_API class ibMetaDataDocument* ibMcpExternalNamed(const ibString& file)
 FRMSERVER_API std::vector<ibString> ibMcpComplaints(class ibValueMetaObject* object);
 
 // ⭐ THE FACTS THAT DECIDE HOW TO WRITE ANYTHING — dialect, languages, compatibility version,
-// build, who is logged in, what the configuration is called.
+// build, who is logged in, what the application is called.
 //
 // ⚠ THEY CHANGE WHILE A CLIENT IS CONNECTED. The syntax dialect above all: it is a property of the
-// configuration and a person can switch it mid-session, after which everything the handshake said
+// application and a person can switch it mid-session, after which everything the handshake said
 // about it is wrong — and wrong in the way that produces code which reads correctly and does not
 // compile. So the orientation handed out at `initialize` is a SNAPSHOT, and this is the same
 // question asked again at any moment.
@@ -591,7 +591,7 @@ FRMSERVER_API void ibMcpDescribePlatform(const ibApplicationInstance* applicatio
 // and a JSON number on the far side is a double, so it comes back rounded and names no picture at all
 // (2026-09-22: `Print` read as …600 for …564). The conversion belongs HERE, at the door: the shape a
 // picture is stored in keeps a number (pictureDescription.cpp), because storage is not a transport and a
-// door's difficulty has no business in every saved configuration. One on the way out, one on the way
+// door's difficulty has no business in every saved application. One on the way out, one on the way
 // back: what this door sends as text it takes back as text, and the platform on either side of it sees
 // nothing but a number.
 FRMSERVER_API void ibMcpPictureIdAsText(class ibDataValue& shape);
@@ -604,16 +604,16 @@ FRMSERVER_API ibString ibMcpFencedExcerpt(const ibString& text, const ibString& 
 // is nothing to say, so a clean result stays clean.
 FRMSERVER_API void ibMcpReportComplaints(ibDataNode& result, class ibValueMetaObject* object);
 
-// ⭐⭐ WHOEVER KNOWS SOMETHING WORTH CHECKING REGISTERS IT. `config_check` asks what is half-built
-// in a configuration, and the answer is not one file's business: composers, fields and reports are
+// ⭐⭐ WHOEVER KNOWS SOMETHING WORTH CHECKING REGISTERS IT. `app_check` asks what is half-built
+// in an application, and the answer is not one file's business: composers, fields and reports are
 // the backend's, and a composition held BY A FORM — a list, a composer dropped onto a gridbox — is
 // the frontend's, because a form's controls are a blob to anything that cannot build them
 // (Max, 2026-09-02: *"a composer can be on a form too, like a list"*).
 //
 // 🛑 AND AN AUDIT THAT CANNOT SEE HALF THE WORLD IS WORSE THAN NONE, because it answers "nothing
-// half-built" about a configuration with a broken form in it — a false clean is acted on, an
+// half-built" about an application with a broken form in it — a false clean is acted on, an
 // absent check is not. So the checks are a registry rather than a function: the DLL that
-// understands a kind of object contributes the question, and config_check asks whoever is linked.
+// understands a kind of object contributes the question, and app_check asks whoever is linked.
 class FRMSERVER_API ibMcpAudit {
 public:
 	virtual ~ibMcpAudit() = default;
@@ -662,8 +662,8 @@ FRMSERVER_API long ibMcpStartedApplication();   // 0 when app_run has started no
 // started by somebody else), and "it is gone" when the process this designer started has exited.
 FRMSERVER_API ibString ibMcpNoAnswer(const ibString& usual);
 
-// ⭐⭐ A CAPTION GOES IN EVERY LANGUAGE THE CONFIGURATION DECLARES. True when `text` already carries
-// its languages (`en = '...'; ru = '...';`), is empty, or the configuration has one language at most;
+// ⭐⭐ A CAPTION GOES IN EVERY LANGUAGE THE APPLICATION DECLARES. True when `text` already carries
+// its languages (`en = '...'; ru = '...';`), is empty, or the application has one language at most;
 // otherwise false with a refusal naming the declared languages and the form. Asked by every road that
 // writes a caption without naming a language — a synonym through the setter, a template cell's text.
 FRMSERVER_API bool ibMcpCaptionInEveryLanguage(const class ibMetaData* owner, const ibString& text,
@@ -671,7 +671,7 @@ FRMSERVER_API bool ibMcpCaptionInEveryLanguage(const class ibMetaData* owner, co
 
 // ⭐⭐ WHAT MAY RUN BEFORE A CLIENT HAS SAID WHO IT IS — and the answer is: exactly what saying so
 // requires. There is a person in front of this designer, and a connection is invisible to them until
-// something speaks; a client reading their whole configuration in silence is indistinguishable from
+// something speaks; a client reading their whole application in silence is indistinguishable from
 // one that never arrived. Asking for a greeting did not work in any of its gentler shapes, so it is
 // a DOOR: everything else is refused, with the four verbs named, until `chat_say` has happened.
 //
@@ -709,7 +709,7 @@ public:
 private:
 	ibSession* const m_session;
 };
-// What an account's roles and language are called, asked of the session's configuration: the account's record keeps their
+// What an account's roles and language are called, asked of the session's application: the account's record keeps their
 // ids and no names. A restricting role says so: its name alone reads as "may do this" when it only subtracts.
 FRMSERVER_API std::vector<ibString> ibMcpRoleNames(const struct ibUserInfo& who);
 FRMSERVER_API ibString ibMcpLanguageName(const struct ibUserInfo& who);
@@ -717,7 +717,7 @@ FRMSERVER_API const std::vector<const ibMcpTool*>& ibMcpTools();
 FRMSERVER_API const ibMcpTool* ibFindMcpTool(const ibString& name);
 
 // The types the LANGUAGE has, whose names match `query` (ibMcpWordsFound; none - all): what a script builds, the platform's
-// enumerations, what it hands out. Rows as type_list's: name, kind, id. Not the configuration's own.
+// enumerations, what it hands out. Rows as type_list's: name, kind, id. Not the application's own.
 FRMSERVER_API void ibMcpLanguageTypes(const ibString& query, std::vector<ibDataValue>& types);
 
 //     MCP_TOOL_REGISTER(ibMcpToolScriptCheck);

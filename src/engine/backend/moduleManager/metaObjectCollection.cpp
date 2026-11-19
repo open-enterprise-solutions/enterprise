@@ -7,7 +7,7 @@
 #include "backend/metaCollection/metaObject.h"   // ibValueMetaObject::GetName
 #include "backend/backend_exception.h"
 
-// Count and Get, and nothing more: the objects are the configuration's.
+// Count and Get, and nothing more: the objects are the application's.
 void ibValueMetaObjectCollection_BindNames(ibValue::ibMemberTable& helper, const ibValue* /*ctx*/)
 {
 	ibValueMetaObjectCollection::FillCollection(helper, ibT("Get(index | name)"));

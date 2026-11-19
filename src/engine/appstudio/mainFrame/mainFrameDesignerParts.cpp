@@ -5,21 +5,21 @@
 
 #include "mainFrameDesigner.h"
 
-#include "appstudio/mainFrame/metaTree/treeConfiguration.h"
+#include "appstudio/mainFrame/metaTree/treeApplication.h"
 
 void ibFrontendMainFrameDesigner::CreateMetadataPane()
 {
 	if (m_mgr.GetPane(ibAUI_PANE_METADATA).IsOk())
 		return;
 
-	m_metaWindow = new ibConfigurationTree(this);
+	m_metaWindow = new ibApplicationTree(this);
 
 	ibAuiPaneInfo paneInfo;
 	paneInfo.Name(ibAUI_PANE_METADATA);
 	paneInfo.CloseButton(false);
 	paneInfo.MinimizeButton(false);
 	paneInfo.MaximizeButton(false);
-	paneInfo.Caption(_("Configuration"));
+	paneInfo.Caption(_("Application"));
 	paneInfo.MinSize(250, 0);
 
 	m_mgr.AddPane(m_metaWindow, paneInfo);
@@ -37,8 +37,8 @@ void ibFrontendMainFrameDesigner::CreateGitPane()
 
 	m_gitPanel = new ibGitPanel(this);
 
-	// Bind to the configuration working copy — the directory of the file-mode
-	// config/db path. In server mode there is no local working copy, so the
+	// Bind to the application working copy — the directory of the file-mode
+	// application/db path. In server mode there is no local working copy, so the
 	// pane simply shows "(no repository)".
 	if (appData != nullptr) {
 		const wxString file = appData->GetFile();

@@ -20,7 +20,7 @@ namespace {
 
 // ⭐ THE TAGS, WRITTEN ONCE. Every intrinsic below is spelled in SaveNode and spelled AGAIN in
 // LoadNode, and nothing but attention was keeping the two spellings equal — a name changed on one
-// side reads back empty on the other, silently, for every configuration already saved. Named here
+// side reads back empty on the other, silently, for every application already saved. Named here
 // they are one thing, and a rename is one edit the compiler checks.
 const ibString kTagGuid        = ibT("Guid");
 const ibString kTagId          = ibT("Id");
@@ -31,7 +31,7 @@ const ibString kTagPredefined  = ibT("NodePredefined");
 const ibString kTagInterface   = ibT("Interface");
 const ibString kTagRoles       = ibT("Roles");
 const ibString kTagComposition = ibT("Composition");
-const ibString kTagFunctionalOptions = ibT("FunctionalOptions");
+const ibString kTagFeatureOptions = ibT("FeatureOptions");
 
 } // namespace
 
@@ -75,18 +75,18 @@ bool ibValueMetaObject::SaveNode(ibDataNode& node) const
 		return false;
 	node.SetValue(kTagComposition, compositionWriter.buffer());
 
-	// functional options — the switches this object belongs to, beside the other two sets
-	ibWriterMemory functionalOptionWriter;
-	if (!SaveFunctionalOptions(functionalOptionWriter))
+	// feature options — the switches this object belongs to, beside the other two sets
+	ibWriterMemory featureOptionWriter;
+	if (!SaveFeatureOptions(featureOptionWriter))
 		return false;
-	node.SetValue(kTagFunctionalOptions, functionalOptionWriter.buffer());
+	node.SetValue(kTagFeatureOptions, featureOptionWriter.buffer());
 
 	if (!WriteData(node))
 		return false;
 
 	// ⭐ ONE NAME, ONE FIELD. A property is written into the same node as the intrinsics above, and a reader finds
 	// the FIRST field under a name: a property that shares one with an intrinsic reads the intrinsic's value back.
-	// A role's mode was named like the composition every object carries, so every configuration holding a role
+	// A role's mode was named like the composition every object carries, so every application holding a role
 	// saved and then refused to load ("expected 2, got 5", 2026-10-28). Refused here, it is the writer that is named.
 	std::vector<ibString> names;
 	for (const auto& field : node.Fields()) {
@@ -134,10 +134,10 @@ bool ibValueMetaObject::LoadNode(const ibDataNode& node)
 		if (!LoadComposition(reader))
 			return false;
 	}
-	ibMemoryBuffer functionalOptionBuf = node.GetValue<ibMemoryBuffer>(kTagFunctionalOptions);
-	if (functionalOptionBuf.GetDataLen()) {
-		ibReaderMemory reader(functionalOptionBuf);
-		if (!LoadFunctionalOptions(reader))
+	ibMemoryBuffer featureOptionBuf = node.GetValue<ibMemoryBuffer>(kTagFeatureOptions);
+	if (featureOptionBuf.GetDataLen()) {
+		ibReaderMemory reader(featureOptionBuf);
+		if (!LoadFeatureOptions(reader))
 			return false;
 	}
 
@@ -166,7 +166,7 @@ bool ibValueMetaObject::WriteData(ibDataNode& node) const
 bool ibValueMetaObject::BuildDataNode(ibDataNode& node, int flags)
 {
 	// The node's identity is THIS object's own — so a builder root fills itself from
-	// any root object (configuration / data processor / report), with no hardcoded
+	// any root object (application / data tool / report), with no hardcoded
 	// clsid at the call site. Children already get theirs via AddChild below.
 	node.SetClsid(GetClassType());
 	node.SetMetaId(GetMetaID());
@@ -222,9 +222,7 @@ bool ibValueMetaObject::ApplyDataNode(const ibDataNode& node)
 				  "children ARE metaobjects; its own data belongs in a named sub-node"),
 				GetName(), (long long)childNode.GetClsid());
 
-		// ⚠ A COMPOSER IS A TEMPLATE OF THE COMPOSER KIND since 2026-11-03 — a file written before keeps its
-		// MD_CMPS nodes, read as templates; the template tells its kind by the data it carries (ReadData).
-		const ibClassID clsid = childNode.GetClsid() == g_metaComposerCLSID ? g_metaTemplateCLSID : childNode.GetClsid();
+		const ibClassID clsid = childNode.GetClsid();
 
 		ibValue* ppParams[] = { this };
 		const ibValuePtr<ibValueMetaObject> newMetaObject =
@@ -326,7 +324,7 @@ bool ibValueMetaObject::CloseSubtree(ibRunPhase phase)
 		phase == ibRunPhase::Before ? OnBeforeCloseMetaObject()
 		                            : OnAfterCloseMetaObject();
 	// ⚠ A refusal here travels up as a bare `false` and arrives at the caller as
-	// "CloseDatabase() == false" — which says the configuration would not close, and nothing at all
+	// "CloseDatabase() == false" — which says the application would not close, and nothing at all
 	// about WHICH metaobject stopped it. If this starts happening again, the first thing to add
 	// back is the node's name at THIS line; the stack above only shows the victim.
 	return ok;

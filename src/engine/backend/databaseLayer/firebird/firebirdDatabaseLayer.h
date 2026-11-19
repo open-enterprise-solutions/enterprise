@@ -240,7 +240,7 @@ private:
 	// That silence is what made a failed apply unrecoverable. A statement arriving with no handle
 	// looks exactly like a statement arriving outside a transaction, so it opened a "quickie" TX of
 	// its own AND COMMITTED IT — every ALTER after the loss went durable one by one, and the RollBack
-	// the apply ended with rolled back nothing. The schema moved ahead of the configuration, and no
+	// the apply ended with rolled back nothing. The schema moved ahead of the application, and no
 	// later apply could bring them back together.
 	//
 	// So the loss is RECORDED rather than inferred. While set, a statement refuses instead of

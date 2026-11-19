@@ -252,7 +252,7 @@ void ibPanelMcpSettings::OnRun(wxCommandEvent& WXUNUSED(event))
 	server->SaveSettings(m_settings);
 
 	// IN THE NAME OF THIS SESSION. Everything the assistant then does, it does as the person who
-	// pressed this - same rights, same configuration - and it stops when their session ends.
+	// pressed this - same rights, same application - and it stops when their session ends.
 	ibString refusal;
 
 	if (!server->Start(refusal)) {

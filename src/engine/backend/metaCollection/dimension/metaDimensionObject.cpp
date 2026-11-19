@@ -22,7 +22,7 @@ bool ibValueMetaObjectDimension::OnDeleteMetaObject()
 	return ibValueMetaObjectAttribute::OnDeleteMetaObject();
 }
 
-// ⚠ AN ABSENT PROPERTY IS NOT A `false`. Every configuration written before these existed has no node
+// ⚠ AN ABSENT PROPERTY IS NOT A `false`. Every application written before these existed has no node
 // for them, and reading one anyway hands the property an EMPTY value — which a boolean reads as "no",
 // turning every stored dimension into a per-side one and changing the shape of every accounting
 // register in the base. So the file is ASKED whether it carries the property, and the declared default

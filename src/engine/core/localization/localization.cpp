@@ -294,7 +294,7 @@ bool ibLocalization::GetTranslateFromArray(const ibString& strLangCode, const ib
 	// INVISIBLE under another UI language — every notebook tab, every decoration, every group heading
 	// silently empty, with nothing on screen saying a translation was merely missing.
 	//
-	// ⚠ It matters here more than it looks: this configuration declares three languages, so a caption
+	// ⚠ It matters here more than it looks: this application declares three languages, so a caption
 	// written in two of them and read under the third hits this exact path. An object whose name a
 	// person cannot see is, from where they sit, an object without a name.
 	//

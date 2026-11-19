@@ -37,7 +37,7 @@ void ibChooseVariant(ibDataComposer& composer)
 	for (size_t i = 0; i < variants.size(); ++i) {
 		ibMenuItem item;
 		item.id = static_cast<std::int32_t>(i);
-		// WHAT THE PICKER SHOWS — the synonym in the configuration's language, else the name, else its place
+		// WHAT THE PICKER SHOWS — the synonym in the application's language, else the name, else its place
 		// in the list: not a caption anybody wrote, but what an unnamed variant HAS, and a blank line in a menu
 		// cannot be clicked with any confidence.
 		item.caption = ibVariantCaption(variants[i]);

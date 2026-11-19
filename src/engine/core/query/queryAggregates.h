@@ -5,7 +5,7 @@
 //	Description : WHICH AGGREGATES A TYPE ADMITS - the one answer every side reads
 ////////////////////////////////////////////////////////////////////////////
 //
-// A question of the TYPE and of the keyword table, nothing else: no source, no configuration, no
+// A question of the TYPE and of the keyword table, nothing else: no source, no application, no
 // lowering. So it lives in the core, and the lowering that refuses with it, the desktop's windows and
 // the client's, which offer with it, read one answer — a window cannot offer what the query refuses.
 

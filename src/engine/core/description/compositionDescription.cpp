@@ -12,7 +12,7 @@
 // composer part (both). A list is not a different breed — it uses half.
 //
 // ⚠ NOTHING HERE RESOLVES ANYTHING. No name is looked up, no source is opened, no query described.
-// Reading happens while the configuration is still loading, and whatever needs a finished world
+// Reading happens while the application is still loading, and whatever needs a finished world
 // belongs to the asking instead. That is the rule ibSourceDescription and ibTypeDescription follow,
 // and this is their third.
 
@@ -361,13 +361,13 @@ const ibChar* const kQueryName     = ibT("Query");
 //
 // ⭐ ONE NODE PER LINE, and the tree is the parent index. The filter used to be written as a live
 // object packing itself (a root ibValueFilterGroup with children), which meant reading it back was
-// creating objects — through the configuration's door, because a condition compares against
+// creating objects — through the application's door, because a condition compares against
 // references and enum members. As plain lines there is nothing to create: only the VALUE on the
 // right-hand side is a value, and it is kept as the node it was packed into.
 //
 // ⭐⭐ THE VALUE IS TAKEN AS IT IS, like a parameter's: a filter compares against references and enum
-// members, which only the configuration can build, so it is built by whoever runs the filter, against
-// the configuration it runs in (ibStoredValue, the side's backend_composition.h) — never here, while it loads.
+// members, which only the application can build, so it is built by whoever runs the filter, against
+// the application it runs in (ibStoredValue, the side's backend_composition.h) — never here, while it loads.
 namespace {
 void ibWriteOperand(ibDataNode& node, const ibString& prefix, const ibFilterOperandDescription& side)
 {
@@ -612,18 +612,13 @@ bool ibCompositionDescriptionMemory::ReadNode(const ibDataNode& node, ibComposit
 	node.GetValue<std::int32_t>(kMainTableName, composition.m_mainTable);   // …left as it is when the name is absent
 	composition.m_query     = node.GetValue<ibString>(kQueryName);
 
-	// ⭐ THE VARIANTS ARE THE SETTINGS. A record written before they existed carries ONE set and no
-	// variant nodes at all — it is read into the FIRST variant, which is where the settings live now,
-	// so nobody's saved work turns into a migration and there is no second member to land it in.
-	if (!ibVariantDescriptionMemory::ReadNode(node, composition.m_variants)) {
+	// ⭐ THE VARIANTS ARE THE SETTINGS. A record with none is given one, empty — a record can say anything; the
+	// invariant is ours (GetCompositionSettingsDesc hands out the front one).
+	if (!ibVariantDescriptionMemory::ReadNode(node, composition.m_variants))
 		composition.m_variants.assign(1, ibVariantDescription());
-		ibSettingsDescriptionMemory::ReadNode(node, composition.m_variants[0].m_settings);
-	}
-	if (composition.m_variants.empty())
-		composition.m_variants.emplace_back();   // a record can say anything; the invariant is ours
 
 	// A parameter holds references and enum members like a filter's right side does — packed, and built by
-	// whoever runs the composition against its configuration (Max, 2026-08-28; 2026-10-12).
+	// whoever runs the composition against its application (Max, 2026-08-28; 2026-10-12).
 	ibParameterDescriptionMemory::ReadNode(node, composition.m_parameters);
 	ibResourceDescriptionMemory::ReadNode(node, composition.m_resources);
 	ibSelectDescriptionMemory::ReadNode(node, composition.m_selects);
@@ -844,8 +839,8 @@ bool ibParameterDescriptionMemory::ReadNode(const ibDataNode& node,
 		parameter.m_fromQuery    = child.GetValue<std::int32_t>(kParamFromQuery) != 0;
 		// ⭐⭐ THE NODE IS TAKEN AS IT IS. Nothing is built here: a parameter's value is a BLOB in this
 		// tier, and it is read into a runtime value by whoever runs the composition, against the
-		// configuration it runs in. Building one here made a reference — a runtime object — in the
-		// middle of a configuration load, where the type it names may still be three branches away
+		// application it runs in. Building one here made a reference — a runtime object — in the
+		// middle of an application load, where the type it names may still be three branches away
 		// (Max, 2026-08-29: "the schema keeps the serialised node, and the runtime reads it and
 		// writes it back itself").
 		if (auto value = child.FindChild(kParamValue))
@@ -1212,12 +1207,12 @@ bool ibVariantDescriptionMemory::ReadNode(const ibDataNode& node,
 		// second list beside the composition's own and went with the member.
 		ibVariantDescription variant;
 		variant.m_name    = child.GetValue<ibString>(kVariantName);
-		variant.m_synonym = child.GetValue<ibString>(kVariantSynonym);   // absent in an older file
+		variant.m_synonym = child.GetValue<ibString>(kVariantSynonym);
 		ibSettingsDescriptionMemory::ReadNode(child, variant.m_settings);
 		read.push_back(variant);
 	}
 	if (read.empty())
-		return false;   // an older record — one set of settings, written before variants existed
+		return false;   // no variant at all — the caller keeps the invariant
 
 	variants = read;
 	return true;

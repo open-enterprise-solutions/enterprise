@@ -198,7 +198,7 @@ TEST(JsonProvider, NodeType_NameFormNeedsLookup) {
 	EXPECT_EQ(back.GetClsid(), (ibClassID)1001);
 }
 
-// …and without one the word is kept, for whoever holds the configuration to look up after (LookupTypes) — a call is
+// …and without one the word is kept, for whoever holds the application to look up after (LookupTypes) — a call is
 // read before its caller is known, and not read again. All the way down; the word gone once it is answered.
 TEST(JsonProvider, NodeType_KeptWordLookedUpAfter) {
 	ibJsonProvider provider;
@@ -540,7 +540,7 @@ TEST(JsonProvider, AFieldCalledTypeAnywhereElseStaysAField)
 
 TEST(JsonProvider, ALookupThatKnowsNoNameStillDropsTheNameBesideAValuesType)
 {
-	// The thin client's requests are read with a lookup that knows no configuration's names: it answers 0 for Number,
+	// The thin client's requests are read with a lookup that knows no application's names: it answers 0 for Number,
 	// and the courtesy is still told by its place - and the lookup is not asked about it at all.
 	ibString first;
 	ASSERT_TRUE(NamingNumbers().Write(AValueOfFive(), first));

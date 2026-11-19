@@ -16,7 +16,7 @@ namespace ibReportParameter {
 class BACKEND_API ibValueMetaObjectReport : public ibValueMetaObjectRecordDataExt {
 	public:
 
-	// Its own menu ids — see the twin in dataProcessor.h.
+	// Its own menu ids — see the twin in dataTool.h.
 	enum
 	{
 		ID_METATREE_OPEN_MODULE = 19000,
@@ -119,7 +119,7 @@ public:
 
 	//get module object in compose object
 	virtual const ibValueMetaObjectModule* GetObjectModule() const { return m_propertyObjectModule->GetMetaObject(); }
-	virtual const ibValueMetaObjectCommonModule* GetManagerModule() const { return m_propertyManagerModule->GetMetaObject(); }
+	virtual const ibValueMetaObjectSharedModule* GetManagerModule() const { return m_propertyManagerModule->GetMetaObject(); }
 
 	//prepare menu for item
 	virtual bool CollectContextMenu(std::vector<ibMetaMenuItem>& items);
@@ -278,7 +278,7 @@ protected:
 };
 
 // External report value object: regular report behaviour + a reference to the external metadata container it works
-// in, held at runtime (ibExternalOwnerHelper). Embedded / config reports use the plain ibValueRecordDataObjectReport.
+// in, held at runtime (ibExternalOwnerHelper). Embedded / application reports use the plain ibValueRecordDataObjectReport.
 class ibValueRecordDataObjectExternalReport :
 	public ibValueRecordDataObjectReport,
 	public ibExternalOwnerHelper {

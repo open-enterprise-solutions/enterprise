@@ -62,7 +62,7 @@ void ibVariantAttributeSource::DoRefreshTypeDesc()
 
 ////////////////////////////////////////////////////////////////////////////
 
-// Resolve a column id / guid CONFIG-WIDE through the metadata's own recursive search
+// Resolve a column id / guid APPLICATION-WIDE through the metadata's own recursive search
 // (use_child_filter = true) — a dotted reference path's leaf (and its intermediate
 // references) live in OTHER metaobjects, so a source-scoped lookup would miss them and
 // the binding would read back as "<not selected>".
@@ -76,8 +76,8 @@ static const ibValueMetaObject* ResolveMetaWide(const ibBackendTypeSourceFactory
 // Each binding starts at a form ATTRIBUTE (the GATE), then resolves its deeper
 // hops in the metadata. The canonical split: path[0] is gated to the FORM's own
 // attribute table (a form-local id — scoped so a COPIED form binds its OWN
-// attribute, never config-wide); path[i>0] are real config field / reference
-// metaIds resolved CONFIG-WIDE. The ids are config-unique and stored copy-aware
+// attribute, never application-wide); path[i>0] are real application field / reference
+// metaIds resolved APPLICATION-WIDE. The ids are application-unique and stored copy-aware
 // (copy-guids), so a metaobject COPY remaps the deeper hops here WITHOUT relying
 // on the attribute's stored Type (which a copy does not remap).
 
@@ -158,7 +158,7 @@ void ibVariantSource::RefreshTypeFromSource() const
 {
 	// Type FOLLOWS the source through the explorer walk (metadata-agnostic). WalkSource gates path[0] to the
 	// holder and walks the explorer to the leaf column, whose GetTypeDesc() is authoritative — so a value-table
-	// / dynamic-list column (no metaobject) gets its REAL type, never a config-wide FindAnyObjectByFilter
+	// / dynamic-list column (no metaobject) gets its REAL type, never an application-wide FindAnyObjectByFilter
 	// collision. A whole-attribute binding (path size 1) is its own leaf — the gate attribute, its OWN Type.
 	// No leaf — a path that no longer resolves → seeded from the gate attribute (SetFromMetaDesc(path[0]) resolves
 	// it in DoSetFromMetaId); an empty path clears the helper.

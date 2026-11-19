@@ -9,7 +9,7 @@
 #include "backend/compiler/value.h"            // ibValue::GetAvailableCtor — a built-in's name
 #include "backend/objCtor.h"                   // ibCtorAbstractType::GetClassName
 #include "core/description/compositionDescription.h"   // ibCompositionNodeName / …Clsid — a composition's parts, both ways
-#include "backend/metadataConfiguration.h"    // activeMetaData — the registered types, for the lookup
+#include "backend/metadataApplication.h"    // activeMetaData — the registered types, for the lookup
 #include "protocol/protocol.h"                 // ibProtocol::ibRpc::Types — where an answer names its types
 
 #include <set>
@@ -220,7 +220,7 @@ bool ibRpcParseRequest(const ibString& text, ibRpcRequest& request, ibString& er
 
 bool ibRpcParseRequest(const ibString& text, ibRpcRequest& request, ibString& error, bool& unknownType)
 {
-	// By no configuration, not the thread's — a thread that works for no base has none to ask.
+	// By no application, not the thread's — a thread that works for no base has none to ask.
 	unknownType = false;
 	ibJsonProvider provider;
 	provider.SetTypeLookup([&unknownType](const ibString& name) -> ibClassID {

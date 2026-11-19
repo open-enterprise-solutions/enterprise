@@ -23,7 +23,7 @@ void ibValueMetaObjectDocument::OnPropertyChanged(ibProperty* property, const ib
 	// it posts movements to and the sequences it registers in are two lists (they are two acts), and
 	// what happens when one of them changes is one act — each named table's Recorder learns or
 	// forgets this document's reference. Written once for both, or a sequence declared on a running
-	// configuration would refuse to save: "no recorder" (2026-09-18).
+	// application would refuse to save: "no recorder" (2026-09-18).
 	//
 	// ⭐ BY WHAT THE LISTS SAY NOW, not by what changed between two values. The inspector writes a list IN PLACE
 	// (SetNodeValue, propertyObject.cpp: "a cell read in place"), so the value before the change IS the value after

@@ -54,11 +54,13 @@ static constexpr std::array<int, 256> MakeOperPriority()
 	listPriority['/'] = 30;
 	listPriority['%'] = 30;
 	// `!` / `Not` as a PREFIX takes its operand up to the next `And` / `Or` — see the KEY_NOT branch of
-	// GetExpression. This entry is `!` met AFTER an operand, which the language refuses.
-	listPriority['!'] = 50;
-	// `&` likewise: C's `&&` met after an operand, refused by name in GetExpression. Without an entry the
-	// expression ended at it, and the author read "')' expected" about a line whose brackets are fine.
-	listPriority['&'] = 50;
+	// GetExpression. This entry is `!` met AFTER an operand: CES's `!=`, a comparison; VES refuses it by name.
+	listPriority['!'] = 3;
+	// `&&` / `||` — CES's And / Or, at their priorities; VES refuses both by name (GetExpression).
+	// Without an entry the expression ended at the sign, and the author read "')' expected" about a line whose
+	// brackets are fine.
+	listPriority['&'] = 2;
+	listPriority['|'] = 1;
 
 	listPriority[KEY_OR] = 1;
 	listPriority[KEY_AND] = 2;
@@ -136,11 +138,11 @@ ibCompileCode::~ibCompileCode()
 }
 
 // THE CODE STYLE IS THE COMPILE STATE'S (ibCompileState) — the current session's, which holds its
-// configuration's; a thread without a session its own: coderunner's syntax choice, a test. It used to be one
+// application's; a thread without a session its own: coderunner's syntax choice, a test. It used to be one
 // static for the process, and a process may hold bases written in different syntaxes.
 // CES is the default — modern brace/paren syntax with `;` terminators.
 // VES (Visual Basic-style ES, a legacy business-scripting dialect) remains supported for legacy ES
-// configurations migrated from a legacy business-scripting platform.
+// applications migrated from a legacy business-scripting platform.
 void ibCompileCode::SetCodeStyle(short codeStyle)
 {
 	ibSession::GetCompileState()->m_codeStyle = static_cast<ibProgramSyntax>(codeStyle);
@@ -870,8 +872,8 @@ ibClassID ibCompileCode::GetTypeVar(const ibString& strType)
 		name += ibT(".") + member;
 		written += ibT(".") + member;
 	}
-	// ⚠ A CONFIGURATION'S OWN TYPE (`CatalogRef.Goods`) IS NOT IN THIS REGISTRY. The configuration registers it
-	// with itself (ibMetaImage), and a compiler has no road to its module's configuration without a hook on
+	// ⚠ AN APPLICATION'S OWN TYPE (`CatalogRef.Goods`) IS NOT IN THIS REGISTRY. The application registers it
+	// with itself (ibMetaImage), and a compiler has no road to its module's application without a hook on
 	// ibCompileCode — a header under commonObject.h, so a question for Max (ROADMAP). Its FAMILY is here
 	// (`CatalogRef`, `AnyRef`), and the refusal names what a declaration takes.
 	if (!ibValue::IsRegisterCtor(name)) {
@@ -969,7 +971,7 @@ bool ibCompileCode::CompileDeclaration(ibCompileContext* context)
 
 		// Stamp the access enum onto the just-created variable so Protected is
 		// distinguishable from Private at resolve time. The parent-chain
-		// visibility gate honours Protected (visible to children, not config-
+		// visibility gate honours Protected (visible to children, not application-
 		// wide); Public already carries kind=Export + m_access=Public.
 		if (varAccess != ACCESS_PRIVATE) {
 			std::shared_ptr<ibCompileContext::ibVariable> declVar;
@@ -1068,7 +1070,7 @@ bool ibCompileCode::CompileModule()
 				// PreviewGetLexem, which looks ahead WITHOUT advancing, so an unqualified Refuse
 				// reports wherever the previous construct ended — and, when the module opens with
 				// the declaration, m_numCurrentCompile is still -1 and the message carries NO LINE
-				// AT ALL. Measured 2026-09-04 on a common module: `Var calls;` on line 1 was
+				// AT ALL. Measured 2026-09-04 on a shared module: `Var calls;` on line 1 was
 				// reported at line 5 (the end of the file), which reads as a broken last line and
 				// sends the reader to the wrong end of the module.
 				m_numCurrentCompile++;
@@ -3110,10 +3112,10 @@ bool ibCompileCode::CompileIf(ibCompileContext* context)
 		//
 		// An `else` therefore corrupted the module's opening instruction. Silently,
 		// because what it overwrote is m_param2.m_numIndex — an operand's slot number,
-		// which stays a plausible number: `Message("x" + CommonModule.Method())` on the
-		// first line began resolving CommonModule to slot 116 of a frame holding 69, and
+		// which stays a plausible number: `Message("x" + SharedModule.Method())` on the
+		// first line began resolving SharedModule to slot 116 of a frame holding 69, and
 		// the engine answered "a variable is not an aggregate object" about a name that
-		// is a common module. Where the first instruction's second operand happened not
+		// is a shared module. Where the first instruction's second operand happened not
 		// to matter, the corruption did nothing at all and waited.
 		nLastIFLine = ibNOT_FOUND;
 
@@ -3642,7 +3644,11 @@ ibParamUnit ibCompileCode::GetExpression(ibCompileContext* context, int nPriorit
 	// create variable 
 	ibParamUnit variable;
 
-	// first we process Left operators
+	// first we process Left operators. The word is VES's; CES writes the sign.
+	if (lex.m_lexType == KEYWORD && lex.m_numData == KEY_NOT && GetCodeStyle() == CODE_CES) {
+		Refuse(ibScriptError_Expression, ibString(_("'Not' is not an operator here - negation is written '!'")));
+		return ibParamUnit();
+	}
 	if ((lex.m_lexType == KEYWORD && lex.m_numData == KEY_NOT) || (lex.m_lexType == DELIMITER && lex.m_numData == '!')) {
 
 		variable = context->CreateVariable(DEF_VAR_TEMP_MOVE);
@@ -4000,8 +4006,13 @@ delimOperation:
 					SetOper(OPER_MOD);
 				}
 				// The word form of the same operator, beside And / Or which are
-				// already read here as keywords rather than delimiters.
+				// already read here as keywords rather than delimiters. VES's: CES writes the sign alone.
 				else if (next_lex.m_numData == KEY_MOD) {
+					if (GetCodeStyle() == CODE_CES) {
+						Refuse(ibScriptError_Expression, ibString(
+							_("'Mod' is not an operator here - the remainder is written '%'")));
+						return ibParamUnit();
+					}
 					SetOper(OPER_MOD);
 				}
 				// ⭐⭐ `and` / `or` DECIDE BEFORE THE RIGHT SIDE RUNS. Both operands used to be
@@ -4015,8 +4026,21 @@ delimOperation:
 				// with the answer a skipped side would have given (false for AND, true for OR) and
 				// overwritten only by the path that actually evaluates the right operand — so the
 				// last writer of that cell, which is what the query walk finds, is the real operand.
-				else if (next_lex.m_numData == KEY_AND || next_lex.m_numData == KEY_OR) {
-					const bool isOr = next_lex.m_numData == KEY_OR;
+				//
+				// The words are VES's. CES joins with C's signs: a bar and the bar after it, an ampersand and the
+				// ampersand after it, each a delimiter of its own.
+				else if (GetCodeStyle() == CODE_CES && (next_lex.m_numData == KEY_AND || next_lex.m_numData == KEY_OR)) {
+					Refuse(ibScriptError_Expression, ibString(next_lex.m_numData == KEY_AND
+						? _("'And' is not an operator here - conditions join with '&&'")
+						: _("'Or' is not an operator here - conditions join with '||'")));
+					return ibParamUnit();
+				}
+				else if (next_lex.m_numData == KEY_AND || next_lex.m_numData == KEY_OR
+					|| (GetCodeStyle() == CODE_CES && next_lex.m_numData == '&' && IsNextDelimiter('&'))
+					|| (GetCodeStyle() == CODE_CES && next_lex.m_numData == '|' && IsNextDelimiter('|'))) {
+					const bool isOr = next_lex.m_numData == KEY_OR || next_lex.m_numData == '|';
+					if (next_lex.m_lexType == DELIMITER)
+						ExpectDelimiter(isOr ? '|' : '&');
 
 					ibParamUnit result = context->CreateVariable(DEF_VAR_TEMP_MOVE);
 					result.m_clsid = g_valueBooleanCLSID;
@@ -4106,6 +4130,11 @@ delimOperation:
 						SetOper(OPER_LE);
 					}
 					else if (IsNextDelimiter('>')) {
+						if (GetCodeStyle() == CODE_CES) {
+							Refuse(ibScriptError_Expression, ibString(
+								_("'<>' is not an operator here - inequality is written '!='")));
+							return ibParamUnit();
+						}
 						ExpectDelimiter('>');
 						SetOper(OPER_NE);
 					}
@@ -4113,44 +4142,56 @@ delimOperation:
 				else if (next_lex.m_numData == '=') {
 					SetOper(OPER_EQ);
 
-					// ⭐⭐ `==` IS THE ONE SLIP EVERY C-TRAINED HAND MAKES HERE, and this is the only
-					// place that KNOWS it was made: the first `=` has just been read as the comparison,
-					// so a second one against it can be nothing else. Left to fall through, the doubled
-					// sign reaches the far end of the expression parser as "a token that cannot start
-					// an expression" and is reported as a bare `=` — true, and no help at all: the
-					// author is looking at the line they wrote and the message names a character that
-					// is in it twice.
-					//
-					// Braces and semicolons say C to a reader, so the assumption arrives with them; the
-					// language compares with a single `=`. Say WHICH spelling is meant, not merely that
-					// something is wrong (measured over MCP, 2026-09-02 — it cost a full round of
-					// bisecting a five-line block to find).
-					if (IsNextDelimiter('=')) {
+					// ⭐⭐ EACH DIALECT'S COMPARISON, AND THE OTHER ONE REFUSED BY NAME: VES compares with a single `=`,
+					// CES with C's `==` (2026-11-19). Each is the slip a hand trained on the other makes, and this is
+					// the only place that KNOWS it was made. Left to fall through, the sign reaches the far end of the
+					// expression parser as "a token that cannot start an expression" and is reported as a bare `=` —
+					// true, and no help at all: the author is looking at the line they wrote. Say WHICH spelling is
+					// meant, not merely that something is wrong (measured over MCP, 2026-09-02 — it cost a full round
+					// of bisecting a five-line block to find).
+					if (GetCodeStyle() == CODE_CES) {
+						if (!IsNextDelimiter('=')) {
+							Refuse(ibScriptError_Expression, ibString(
+								_("'=' is not a comparison here - comparison is written '=='")));
+							return ibParamUnit();
+						}
+						ExpectDelimiter('=');
+					}
+					else if (IsNextDelimiter('=')) {
 						Refuse(ibScriptError_Expression, ibString(
 							_("'==' is not an operator here - comparison is written with a single '='")));
 						return ibParamUnit();
 					}
 				}
-				// C's other spellings, refused by name as `==` is and for the same reason: `!=` was answered as a
-				// bare "!", `&&` as "')' expected" (an assistant building a payroll, 2026-10-30). `||` never gets
-				// here - a bar opens a continued string - and is refused by the lexer (ibTranslateCode).
+				// C's other spellings: CES's own (`&&` / `||` are read above), refused by VES by name as `==` is and
+				// for the same reason: `!=` was answered as a bare "!", `&&` as "')' expected", `||` as "constant
+				// string expected" (an assistant building a payroll, 2026-10-30).
 				else if (next_lex.m_numData == '!' && IsNextDelimiter('=')) {
-					Refuse(ibScriptError_Expression, ibString(
-						_("'!=' is not an operator here - inequality is written '<>'")));
-					return ibParamUnit();
+					if (GetCodeStyle() != CODE_CES) {
+						Refuse(ibScriptError_Expression, ibString(
+							_("'!=' is not an operator here - inequality is written '<>'")));
+						return ibParamUnit();
+					}
+					ExpectDelimiter('=');
+					SetOper(OPER_NE);
 				}
 				else if (next_lex.m_numData == '&' && IsNextDelimiter('&')) {
 					Refuse(ibScriptError_Expression, ibString(
 						_("'&&' is not an operator here - conditions join with the word And")));
 					return ibParamUnit();
 				}
+				else if (next_lex.m_numData == '|' && IsNextDelimiter('|')) {
+					Refuse(ibScriptError_Expression, ibString(
+						_("'||' is not an operator here - conditions join with the word Or")));
+					return ibParamUnit();
+				}
 				else {
 					// ⭐ SAY WHAT WAS FOUND. The message is "Error in expression:\n%s" and both raises
 					// of it passed nothing, so an author read a sentence that ends in a colon —
 					// promising the detail and then withholding it. Here the detail is the whole
-					// answer: `a == b` reaches this branch because comparison in this language is a
-					// single `=`, and a caller who writes the other spelling gets a compile error
-					// that names no operator, no token and nothing to change (measured 2026-09-02).
+					// answer: a sign no operator starts with reaches this branch, and without it the
+					// author got a compile error that names no operator, no token and nothing to change
+					// (measured 2026-09-02).
 					Refuse(ibScriptError_Expression, ibChar(next_lex.m_numData));
 					return ibParamUnit();
 				}

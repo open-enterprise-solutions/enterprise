@@ -28,7 +28,7 @@ void ibPropertyChartOfCalculationTypes::DoSetValue(const ibVariant& val)
 	ibProperty::DoSetValue(val);
 }
 
-// The charts of calculation types in this configuration — one of them, or any set, as this property says.
+// The charts of calculation types in this application — one of them, or any set, as this property says.
 ibPropertyChoiceMode ibPropertyChartOfCalculationTypes::GetValueList(ibPropertyChoiceList& list)
 {
 	return CreateValueList(list, m_choiceMode, { g_metaChartOfCalculationTypesCLSID });

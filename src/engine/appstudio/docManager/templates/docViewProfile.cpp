@@ -13,7 +13,7 @@
 #include "deskgui/univ/ctrl/checkBox.h"
 
 #include "appstudio/mainFrame/mainFrameDesigner.h"
-#include "appstudio/mainFrame/metaTree/treeConfiguration.h"   // EditModule — a row opens its line
+#include "appstudio/mainFrame/metaTree/treeApplication.h"   // EditModule — a row opens its line
 #include "core/localization/dictionary.h"                    // _() — the columns' words
 #include "protocol/protocolDesigner.h"                       // ibProtocol::ibView::ibProfile
 
@@ -631,7 +631,7 @@ void ibProfileView::OnItemActivated(wxTreeEvent& event)
 		event.Skip();
 		return;
 	}
-	mainFrame->GetMetaWindow()->EditModule(module, static_cast<int>(data->m_line), false);
+	mainFrame->GetMetaWindow()->EditModule(wxString(), module, static_cast<int>(data->m_line), false);
 }
 
 // A check turned: its level drawn or not, the tree made again. A plan and the values are a statement's: with the SQL

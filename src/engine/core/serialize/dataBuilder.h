@@ -17,8 +17,7 @@
 //	it holds, so a reader goes by those marks and never looks for anything. The same buffer is the node in memory, in
 //	storage and on the wire: handing a node over is one more owner of its buffer.
 //
-//	   packet = "OES1" · version u16 · flags u16 · length u32 · 0 u32         — the root node at 16; version 2, 1 read too
-//	            (a guid was its text then)
+//	   packet = "OES1" · version u16 · flags u16 · length u32 · 0 u32         — the root node at 16; version 2
 //	   node   = length u32 · fields' length u32 · fields u32 · children u32 · raw length u32 · metaId i32 · clsid u64
 //	            · raw (even) · fields · children
 //	   field  = kind u8 · 0 u8 · name (length u16, UTF-16LE) · value        — an even size
@@ -432,7 +431,7 @@ public:
 // ibBinaryProvider — THE NODE'S OWN BYTES — storage and the wire alike (OES-RPC 1.0, the header). Nothing is
 // converted either way: Write hands the node's buffer over (one more owner of it; a sub-node's bytes copied out into
 // a packet of their own), Read takes bytes as the node they are — checked first, never parsed. Old blobs are NOT
-// readable — no compatibility (Max, 2026-10-26): recreate the config.
+// readable — no compatibility (Max, 2026-10-26): recreate the application.
 ////////////////////////////////////////////////////////////////////////////
 class CORE_API ibBinaryProvider : public ibFormatProvider {
 public:
@@ -455,7 +454,7 @@ public:
 
 ////////////////////////////////////////////////////////////////////////////
 // ibDataBuilder — the top-level holder owned by ibMetaData (and, later, by an
-// external Report / DataProcessor / a form). It owns the root ibDataNode and
+// external Report / DataTool / a form). It owns the root ibDataNode and
 // drives save/load through a chosen provider. The consumer fills the tree
 // (Describe-walk) on save, and drains it on load; the builder hands the tree
 // to / from the provider. Nodes never see the format; the format never sees

@@ -340,10 +340,10 @@ ibButton* ibDialogQueryConstructor::AddMoveButton(wxWindow* parent, wxSizer* siz
 bool ibDialogQueryConstructor::IsMetaDataReadOnly(const ibMetaData* metaData)
 {
 	if (metaData == nullptr)
-		return false;   // no config in play (a runtime list's own query) — nothing forbids editing it
+		return false;   // no application in play (a runtime list's own query) — nothing forbids editing it
 
-	// The DESIGNER question, asked where it is already answered — OF THE CONFIGURATION. Read-only is
-	// a fact about the configuration, not about who happens to be showing it, so it is kept there
+	// The DESIGNER question, asked where it is already answered — OF THE APPLICATION. Read-only is
+	// a fact about the application, not about who happens to be showing it, so it is kept there
 	// and nobody is asked back (metaData.h, SetReadOnly).
 	return !metaData->IsEditable();
 }
@@ -405,7 +405,7 @@ ibDialogQueryConstructor::ibDialogQueryConstructor(wxWindow* parent, const ibQue
 	, m_package(package)
 	, m_metaData(metaData)
 	, m_model(metaData)
-	// The metadata is asked FIRST, and the caller can only add to its answer. A configuration
+	// The metadata is asked FIRST, and the caller can only add to its answer. An application
 	// opened without the right to change it stays unchangeable through this window too.
 	, m_readOnly(readOnly || IsMetaDataReadOnly(metaData))
 	, m_exclude(exclude)
@@ -456,7 +456,7 @@ ibDialogQueryConstructor::ibDialogQueryConstructor(wxWindow* parent, const ibQue
 		ibStaticText* banner = new ibStaticText(this, wxID_ANY,
 			// ASCII ONLY in this literal: the file is UTF-8 with no BOM, MSVC reads it in the
 			// system codepage, and an em dash typed here reaches the screen as two garbage glyphs.
-			_("View only. This query belongs to a configuration that cannot be changed. "
+			_("View only. This query belongs to an application that cannot be changed. "
 			  "Nothing edited here will be saved."));
 		banner->SetForegroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT));
 		outer->Add(banner, 0, wxEXPAND | wxLEFT | wxRIGHT | wxTOP, FromDIP(8));
@@ -712,7 +712,7 @@ wxWindow* ibDialogQueryConstructor::BuildTablesPage(wxWindow* parent)
 	ibPanel* leftPane = new ibPanel(splitterOuter);
 	wxBoxSizer* left = new wxBoxSizer(wxVERTICAL);
 	left->Add(new ibStaticText(leftPane, wxID_ANY, _("Available tables")), 0, wxALL, FromDIP(3));
-	// NO TOOLBAR HERE. This pane is the CATALOGUE — what the configuration has. Nothing is created
+	// NO TOOLBAR HERE. This pane is the CATALOGUE — what the application has. Nothing is created
 	// in it, so a verb standing over it had nothing to act on: "add a nested table" makes a table
 	// for THIS QUERY, which is the middle pane, and that is where it now lives beside "edit nested".
 	m_sourceTree = new ibTreeCtrl(leftPane, wxID_ANY, wxDefaultPosition, wxDefaultSize,

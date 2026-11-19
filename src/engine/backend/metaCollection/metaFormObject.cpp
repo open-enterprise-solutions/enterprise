@@ -144,9 +144,9 @@ ibFormPtr<ibBackendValueForm> ibValueMetaObjectFormBase::CreateAndBuildForm(cons
 
 		// ⭐ THE FORM IS GOT — FormGetProcessing(Form, Cancel) of its object's manager, in its module and in its event
 		// handlers: the form just made, its rights passed and its runtime initialised above, nothing of it shown yet.
-		// Every form of an object is made here, whatever shows it (a desktop, a web page), so a configuration catches
+		// Every form of an object is made here, whatever shows it (a desktop, a web page), so an application catches
 		// them all in one place — of one object, or of every one of a kind (`CatalogManager`). The owner is the one
-		// its source names; a common form has none, and no manager. Cancel: the form is not handed out.
+		// its source names; a shared form has none, and no manager. Cancel: the form is not handed out.
 		const ibSourceDataObject* const source = result->GetSourceObject();
 		if (const ibValueMetaObjectGenericData* const owner = source != nullptr ? source->GetSourceMetaObject() : nullptr) {
 			ibValue form = result;
@@ -330,7 +330,7 @@ bool ibValueMetaObjectForm::OnDeleteMetaObject()
 ibFormPtr<ibBackendValueForm> ibValueMetaObjectForm::GetObjectForm(const ibFormRequest& request, ibBackendControlFrame* ownerControl) const
 {
 	// The owner is what knows the source a form of this kind must be bound to (and it checks
-	// the access right on the way, exactly as the common form's own answer does). A form with
+	// the access right on the way, exactly as the shared form's own answer does). A form with
 	// no owning object cannot be materialised at all.
 	const ibValueMetaObjectGenericData* const owner =
 		dynamic_cast<const ibValueMetaObjectGenericData*>(GetParent());
@@ -384,19 +384,19 @@ bool ibValueMetaObjectForm::OnAfterCloseMetaObject()
 }
 
 //***********************************************************************
-//*                           CommonFormObject metaData                 *
+//*                           SharedFormObject metaData                 *
 //***********************************************************************
 
 
-ibValueMetaObjectCommonForm::ibValueMetaObjectCommonForm(const ibString& name, const ibString& synonym, const ibString& comment) : ibValueMetaObjectFormBase(name, synonym, comment) {}
+ibValueMetaObjectSharedForm::ibValueMetaObjectSharedForm(const ibString& name, const ibString& synonym, const ibString& comment) : ibValueMetaObjectFormBase(name, synonym, comment) {}
 
-bool ibValueMetaObjectCommonForm::ReadData(const ibDataNode& node)
+bool ibValueMetaObjectSharedForm::ReadData(const ibDataNode& node)
 {
 	m_propertyForm->SetNodeValue(node.GetProperty(m_propertyForm->GetName()));
 	return true;
 }
 
-bool ibValueMetaObjectCommonForm::WriteData(ibDataNode& node) const
+bool ibValueMetaObjectSharedForm::WriteData(ibDataNode& node) const
 {
 	node.SetProperty(m_propertyForm->GetName(), m_propertyForm->GetNodeValue());
 	return true;
@@ -404,7 +404,7 @@ bool ibValueMetaObjectCommonForm::WriteData(ibDataNode& node) const
 
 #include "backend/system/systemManager.h"
 
-ibFormPtr<ibBackendValueForm> ibValueMetaObjectCommonForm::GetObjectForm(const ibFormRequest& request, ibBackendControlFrame* ownerControl) const
+ibFormPtr<ibBackendValueForm> ibValueMetaObjectSharedForm::GetObjectForm(const ibFormRequest& request, ibBackendControlFrame* ownerControl) const
 {
 	if (!AccessRight_Use()) {
 		ibBackendAccessException::Error(ibString::Format(_("opening form '%s'"), GetSynonym()));
@@ -423,24 +423,24 @@ ibFormPtr<ibBackendValueForm> ibValueMetaObjectCommonForm::GetObjectForm(const i
 //*                             event object                            *
 //***********************************************************************
 
-bool ibValueMetaObjectCommonForm::OnCreateMetaObject(ibMetaData* metaData, int flags)
+bool ibValueMetaObjectSharedForm::OnCreateMetaObject(ibMetaData* metaData, int flags)
 {
 	return ibValueMetaObjectModuleBase::OnCreateMetaObject(metaData, flags);
 }
 
-bool ibValueMetaObjectCommonForm::OnBeforeRunMetaObject(int flags)
+bool ibValueMetaObjectSharedForm::OnBeforeRunMetaObject(int flags)
 {
 	return ibValueMetaObjectModuleBase::OnBeforeRunMetaObject(flags);
 }
 
-bool ibValueMetaObjectCommonForm::OnAfterRunMetaObject(int flags)
+bool ibValueMetaObjectSharedForm::OnAfterRunMetaObject(int flags)
 {
 	if (auto* cc = m_metaData->GetCompileCache()) {
 		// DEFER the build (same as an object form) — do NOT build eagerly here. OnAfterRun fires per-object mid-run,
 		// so an eager build would resolve the form's attribute types / source hops while metaobjects that register
 		// LATER in the pass are still invisible → an object-typed attribute silently collapsed to String. The deferred
-		// builder runs on first FindCompileModule, after the whole config has run and everything is registered. A
-		// common form is standalone (no owning GenericData / source object), so it builds through CreateAndBuildForm
+		// builder runs on first FindCompileModule, after the whole application has run and everything is registered. A
+		// shared form is standalone (no owning GenericData / source object), so it builds through CreateAndBuildForm
 		// directly; the paste RE-HOME is forced by ibValueMetaObject::PasteObject at paste end (mark still live).
 		if (cc->AddCompileModule(this, [deferred = ibDeferredForm(this, [this]() -> ibFormPtr<ibBackendValueForm> {
 				return ibValueMetaObjectFormBase::CreateAndBuildForm(ibFormRequest(), this, defaultFormType);
@@ -454,7 +454,7 @@ bool ibValueMetaObjectCommonForm::OnAfterRunMetaObject(int flags)
 	return ibValueMetaObjectModuleBase::OnAfterRunMetaObject(flags);
 }
 
-bool ibValueMetaObjectCommonForm::OnBeforeCloseMetaObject()
+bool ibValueMetaObjectSharedForm::OnBeforeCloseMetaObject()
 {
 	if (auto* cc = m_metaData->GetCompileCache()) {
 		if (cc->RemoveCompileModule(this)) {
@@ -466,7 +466,7 @@ bool ibValueMetaObjectCommonForm::OnBeforeCloseMetaObject()
 	return ibValueMetaObjectModuleBase::OnBeforeCloseMetaObject();
 }
 
-bool ibValueMetaObjectCommonForm::OnAfterCloseMetaObject()
+bool ibValueMetaObjectSharedForm::OnAfterCloseMetaObject()
 {
 	return ibValueMetaObjectModuleBase::OnAfterCloseMetaObject();
 }
@@ -477,4 +477,4 @@ bool ibValueMetaObjectCommonForm::OnAfterCloseMetaObject()
 //***********************************************************************
 
 METADATA_TYPE_REGISTER(ibValueMetaObjectForm, "Form", g_metaFormCLSID);
-METADATA_TYPE_REGISTER(ibValueMetaObjectCommonForm, "CommonForm", g_metaCommonFormCLSID);
+METADATA_TYPE_REGISTER(ibValueMetaObjectSharedForm, "SharedForm", g_metaSharedFormCLSID);

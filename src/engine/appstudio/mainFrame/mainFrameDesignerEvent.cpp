@@ -17,25 +17,25 @@
 
 #include "frmclient/backend/appData.h"
 #include "appstudio/backend/debugger/debugClient.h"
-#include "appstudio/mainFrame/metaTree/treeConfiguration.h"
+#include "appstudio/mainFrame/metaTree/treeApplication.h"
 #include "appstudio/backend/metaCollection/metaDiff.h"
-#include "appstudio/docManager/templates/docViewConfigCompare.h"
+#include "appstudio/docManager/templates/docViewApplicationCompare.h"
 #include "core/exception.h"   // ibCoreException — a directory of files refused on this computer, said here
-#include "protocol/protocolDesigner.h"   // ibProtocol::ibSchema::ibMetaData, ibProtocol::ibSchema::ibConfigCompare
+#include "protocol/protocolDesigner.h"   // ibProtocol::ibSchema::ibMetaData, ibProtocol::ibSchema::ibApplicationCompare
 
-// Common shape for the three places that save the configuration before
+// Common shape for the three places that save the application before
 // kicking off a child process (appworkspace.exe / webserver.exe
-// for debug). Returns true when the configuration is in a state safe to
+// for debug). Returns true when the application is in a state safe to
 // launch — either no save was needed, the user declined to save, or the
 // save succeeded. Returns false only when a save was attempted and it
 // failed (the server has said why — ibFrontendMainFrame::Call).
-static bool SaveBeforeChildLaunch(wxWindow* parent, const ibConfigurationTree* metaWindow)
+static bool SaveBeforeChildLaunch(wxWindow* parent, const ibApplicationTree* metaWindow)
 {
 	if (metaWindow == nullptr || !metaWindow->IsEdited())
 		return true;
 	const int ans = ibMessageBox(
-		ibString::Format(_("Configuration '%s' has been changed.\nDo you want to save?"),
-			metaWindow->GetConfigName()),
+		ibString::Format(_("Application '%s' has been changed.\nDo you want to save?"),
+			metaWindow->GetApplicationName()),
 		wxTheApp->GetAppDisplayName(),
 		wxYES_NO | wxCENTRE | wxICON_QUESTION, parent);
 	if (ans != wxYES)
@@ -113,21 +113,21 @@ void ibFrontendMainFrameDesigner::OnAttachForDebugging(wxCommandEvent& WXUNUSED(
 }
 
 //********************************************************************************
-//*                                Configuration                                 *
+//*                                Application                                 *
 //********************************************************************************
 
 #include "core/fileKind.h"   // extensions live in one table, not at each call site
 
 // ⭐ THE MENU REDIRECTS; THE WORK IS THE SERVER'S — the engine's verbs, which the assistant calls too (the doors of
-// schema MetaData, through the configuration's tree). The open editors are the server's: what replaces the
-// configuration takes them down there (its tree's Closed), as the desktop closed its MDI children first. And the
+// schema MetaData, through the application's tree). The open editors are the server's: what replaces the
+// application takes them down there (its tree's Closed), as the desktop closed its MDI children first. And the
 // message boxes the desktop showed when it was done the server asks — it alone knows how it went.
 
-void ibFrontendMainFrameDesigner::OnOpenConfiguration(wxCommandEvent& WXUNUSED(event))
+void ibFrontendMainFrameDesigner::OnOpenApplication(wxCommandEvent& WXUNUSED(event))
 {
-	// The desktop's raised the browser already open on the database's configuration, else opened one — its tree read-only
-	// in a tab (ibMetadataBrowserDocument). The database's configuration is the server's: its command does both, and the
-	// tab comes with the frame (ibView::ibKind::Configuration).
+	// The desktop's raised the browser already open on the database's application, else opened one — its tree read-only
+	// in a tab (ibMetadataBrowserDocument). The database's application is the server's: its command does both, and the
+	// tab comes with the frame (ibView::ibKind::Application).
 	ibProtocolNode params, answer;
 	params.SetValue(ibProtocol::ibSchema::Schema, static_cast<long long>(ibProtocol::ibSchema::ibKind::MetaData));
 	params.SetValue(ibProtocol::ibSchema::Command,
@@ -135,19 +135,19 @@ void ibFrontendMainFrameDesigner::OnOpenConfiguration(wxCommandEvent& WXUNUSED(e
 	Call(ibProtocol::ibMethod::Schema, params, answer);
 }
 
-void ibFrontendMainFrameDesigner::OnRollbackConfiguration(wxCommandEvent& WXUNUSED(event))
+void ibFrontendMainFrameDesigner::OnRollbackApplication(wxCommandEvent& WXUNUSED(event))
 {
-	m_metaWindow->RollbackConfiguration();
+	m_metaWindow->RollbackApplication();
 }
 
-void ibFrontendMainFrameDesigner::OnUpdateConfiguration(wxCommandEvent& WXUNUSED(event))
+void ibFrontendMainFrameDesigner::OnUpdateApplication(wxCommandEvent& WXUNUSED(event))
 {
-	// ⭐ WHAT STAYS HERE IS THE ASKING. The work is ApplyConfiguration, which the assistant calls
+	// ⭐ WHAT STAYS HERE IS THE ASKING. The work is ApplyApplication, which the assistant calls
 	// too — one road for the doing. What differs is only who answers the questions, and a person
 	// answers them in dialogs.
 	if (debugClient->HasConnections()) {
 		if (ibMessageBox(
-			_("To update the database configuration you need stop debugging.\nDo you want to continue?"), wxTheApp->GetAppDisplayName(),
+			_("To update the database you need to stop debugging.\nDo you want to continue?"), wxTheApp->GetAppDisplayName(),
 			wxYES_NO | wxCENTRE | wxICON_INFORMATION, this) == wxNO) {
 			return;
 		}
@@ -160,59 +160,59 @@ void ibFrontendMainFrameDesigner::OnUpdateConfiguration(wxCommandEvent& WXUNUSED
 	// …and the last question is the ledger itself, which the server puts to the person (ShowRequest, ApplyChange).
 	// The breakpoints go where the edits moved them with each module the apply saves — in the server's debugger, its one
 	// map (ibValueMetaObjectModuleBase::OnSaveMetaObject), as at an external file's save: nothing here.
-	m_metaWindow->ApplyConfiguration();
+	m_metaWindow->ApplyApplication();
 }
 
 
 namespace {
 
-// Records from schema ConfigCompare Build → ibMetaDiffRecord vector.
+// Records from schema ApplicationCompare Build → ibMetaDiffRecord vector.
 std::vector<ibMetaDiffRecord> ReadCompareRecords(const ibProtocolNode& answer)
 {
 	std::vector<ibMetaDiffRecord> records;
-	for (const ibProtocolNode& row : answer.FindChild(ibProtocol::ibSchema::ibConfigCompare::Records).Children()) {
+	for (const ibProtocolNode& row : answer.FindChild(ibProtocol::ibSchema::ibApplicationCompare::Records).Children()) {
 		ibMetaDiffRecord rec;
-		rec.m_status = static_cast<ibMetaDiffStatus>(row.GetInt(ibProtocol::ibSchema::ibConfigCompare::Status));
-		rec.m_parentIndex = static_cast<int>(row.GetInt(ibProtocol::ibSchema::ibConfigCompare::Parent, -1));
-		rec.m_depth = static_cast<int>(row.GetInt(ibProtocol::ibSchema::ibConfigCompare::Depth));
-		const wxString group = row.GetString(ibProtocol::ibSchema::ibConfigCompare::Group);
+		rec.m_status = static_cast<ibMetaDiffStatus>(row.GetInt(ibProtocol::ibSchema::ibApplicationCompare::Status));
+		rec.m_parentIndex = static_cast<int>(row.GetInt(ibProtocol::ibSchema::ibApplicationCompare::Parent, -1));
+		rec.m_depth = static_cast<int>(row.GetInt(ibProtocol::ibSchema::ibApplicationCompare::Depth));
+		const wxString group = row.GetString(ibProtocol::ibSchema::ibApplicationCompare::Group);
 		if (!group.IsEmpty()) {
 			unsigned long long clsid = 0;
 			group.ToULongLong(&clsid);
 			rec.m_groupClsid = static_cast<ibClassID>(clsid);
 		}
-		rec.m_propertyName = row.GetString(ibProtocol::ibSchema::ibConfigCompare::Property);
-		rec.m_leftValue = row.GetString(ibProtocol::ibSchema::ibConfigCompare::Left);
-		rec.m_rightValue = row.GetString(ibProtocol::ibSchema::ibConfigCompare::Right);
-		rec.m_name = row.GetString(ibProtocol::ibSchema::ibConfigCompare::Name);
-		const wxString picture = row.GetString(ibProtocol::ibSchema::ibConfigCompare::Picture);
+		rec.m_propertyName = row.GetString(ibProtocol::ibSchema::ibApplicationCompare::Property);
+		rec.m_leftValue = row.GetString(ibProtocol::ibSchema::ibApplicationCompare::Left);
+		rec.m_rightValue = row.GetString(ibProtocol::ibSchema::ibApplicationCompare::Right);
+		rec.m_name = row.GetString(ibProtocol::ibSchema::ibApplicationCompare::Name);
+		const wxString picture = row.GetString(ibProtocol::ibSchema::ibApplicationCompare::Picture);
 		if (!picture.IsEmpty()) {
 			unsigned long long clsid = 0;
 			picture.ToULongLong(&clsid);
 			rec.m_iconClsid = static_cast<ibClassID>(clsid);
 		}
-		rec.m_leftId = static_cast<ibMetaID>(row.GetInt(ibProtocol::ibSchema::ibConfigCompare::LeftId));
-		rec.m_rightId = static_cast<ibMetaID>(row.GetInt(ibProtocol::ibSchema::ibConfigCompare::RightId));
+		rec.m_leftId = static_cast<ibMetaID>(row.GetInt(ibProtocol::ibSchema::ibApplicationCompare::LeftId));
+		rec.m_rightId = static_cast<ibMetaID>(row.GetInt(ibProtocol::ibSchema::ibApplicationCompare::RightId));
 		records.push_back(std::move(rec));
 	}
 	return records;
 }
 
-bool CallCompareBuild(ibProtocol::ibSchema::ibConfigCompare::ibMode mode,
+bool CallCompareBuild(ibProtocol::ibSchema::ibApplicationCompare::ibMode mode,
 	const wxString& fileId, const wxString& file2Id, ibProtocolNode& answer)
 {
 	ibFrontendMainFrame* const frame = ibFrontendMainFrame::GetFrame();
 	if (frame == nullptr)
 		return false;
 	ibProtocolNode args;
-	args.SetValue(ibProtocol::ibSchema::ibConfigCompare::Mode, static_cast<int>(mode));
+	args.SetValue(ibProtocol::ibSchema::ibApplicationCompare::Mode, static_cast<int>(mode));
 	if (!fileId.IsEmpty())
-		args.SetValue(ibProtocol::ibSchema::ibConfigCompare::File, fileId);
+		args.SetValue(ibProtocol::ibSchema::ibApplicationCompare::File, fileId);
 	if (!file2Id.IsEmpty())
-		args.SetValue(ibProtocol::ibSchema::ibConfigCompare::File2, file2Id);
+		args.SetValue(ibProtocol::ibSchema::ibApplicationCompare::File2, file2Id);
 	ibProtocolNode params;
 	params.SetValue(ibProtocol::ibSchema::Schema,
-		static_cast<long long>(ibProtocol::ibSchema::ibKind::ConfigCompare));
+		static_cast<long long>(ibProtocol::ibSchema::ibKind::ApplicationCompare));
 	params.SetValue(ibProtocol::ibSchema::Args, args);
 	return frame->Call(ibProtocol::ibMethod::Schema, params, answer);
 }
@@ -220,13 +220,13 @@ bool CallCompareBuild(ibProtocol::ibSchema::ibConfigCompare::ibMode mode,
 void OpenCompareTab(ibFrontendDocManager* manager,
 	std::vector<ibMetaDiffRecord> records,
 	const wxString& leftLabel, const wxString& rightLabel,
-	ibProtocol::ibSchema::ibConfigCompare::ibMode mode,
+	ibProtocol::ibSchema::ibApplicationCompare::ibMode mode,
 	const wxString& fileId, const wxString& file2Id,
 	const wxString& localRightPath)
 {
 	if (manager == nullptr)
 		return;
-	auto* doc = new ibConfigCompareDocument();
+	auto* doc = new ibApplicationCompareDocument();
 	manager->AddDocument(doc);
 	doc->Configure(std::move(records), leftLabel, rightLabel, mode, fileId, file2Id, localRightPath,
 		{});  // Merge Call redraws MetaData in the frame; no separate tree reload.
@@ -236,53 +236,53 @@ void OpenCompareTab(ibFrontendDocManager* manager,
 
 } // namespace
 
-void ibFrontendMainFrameDesigner::OnConfiguration(wxCommandEvent& event)
+void ibFrontendMainFrameDesigner::OnApplication(wxCommandEvent& event)
 {
-	if (wxID_DESIGNER_CONFIGURATION_LOAD_FROM_FILE == event.GetId())
+	if (wxID_DESIGNER_APPLICATION_LOAD_FROM_FILE == event.GetId())
 	{
-		wxFileDialog openFileDialog(this, _("Open configuration file"), "", "",
+		wxFileDialog openFileDialog(this, _("Open application file"), "", "",
 			ibFileFilter(ibFileKind::Application), wxFD_OPEN | wxFD_FILE_MUST_EXIST);
 
 		if (openFileDialog.ShowModal() == wxID_CANCEL)
 			return;     // the user changed idea...
 
 		// proceed loading the file chosen by the user; the tree reads what it became with the answer's frame
-		if (m_metaWindow->LoadConfigFromFile(openFileDialog.GetPath())) {
-			// A configuration just read from a FILE lives nowhere but in the server's session, which is what makes the
+		if (m_metaWindow->LoadApplicationFromFile(openFileDialog.GetPath())) {
+			// An application just read from a FILE lives nowhere but in the server's session, which is what makes the
 			// question worth asking here (ibMetaData::IsEdited).
 			if (m_metaWindow->IsEdited()) {
-				if (ibMessageBox(ibString::Format(_("Configuration '%s' has been changed.\nDo you want to save?"),
-					m_metaWindow->GetConfigName()), wxTheApp->GetAppDisplayName(), wxYES_NO | wxCENTRE | wxICON_QUESTION, this) == wxYES) {
-					OnUpdateConfiguration(event);
+				if (ibMessageBox(ibString::Format(_("Application '%s' has been changed.\nDo you want to save?"),
+					m_metaWindow->GetApplicationName()), wxTheApp->GetAppDisplayName(), wxYES_NO | wxCENTRE | wxICON_QUESTION, this) == wxYES) {
+					OnUpdateApplication(event);
 				}
 			}
 		}
 	}
-	else if (wxID_DESIGNER_CONFIGURATION_SAVE_TO_FILE == event.GetId())
+	else if (wxID_DESIGNER_APPLICATION_SAVE_TO_FILE == event.GetId())
 	{
-		wxFileDialog saveFileDialog(this, _("Save configuration file"), "", "",
+		wxFileDialog saveFileDialog(this, _("Save application file"), "", "",
 			ibFileFilter(ibFileKind::Application), wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
 		if (saveFileDialog.ShowModal() == wxID_CANCEL)
 			return;     // the user changed idea...
 
-		if (m_metaWindow->SaveConfigToFile(saveFileDialog.GetPath())) {
+		if (m_metaWindow->SaveApplicationToFile(saveFileDialog.GetPath())) {
 			ibMessageBox(_("Successfully unloaded to: ") + saveFileDialog.GetPath());
 		}
 	}
 	// …and as a directory of files: read and written on this computer, so what refuses here (a directory that is no
 	// export, or holds other files) is said here.
-	else if (wxID_DESIGNER_CONFIGURATION_LOAD_FROM_FILES == event.GetId())
+	else if (wxID_DESIGNER_APPLICATION_LOAD_FROM_FILES == event.GetId())
 	{
-		wxDirDialog dirDialog(this, _("Choose the directory the configuration was saved to"), "",
+		wxDirDialog dirDialog(this, _("Choose the directory the application was saved to"), "",
 			wxDD_DEFAULT_STYLE | wxDD_DIR_MUST_EXIST);
 		if (dirDialog.ShowModal() == wxID_CANCEL)
 			return;
 
 		try {
-			if (m_metaWindow->LoadConfigFromFiles(dirDialog.GetPath()) && m_metaWindow->IsEdited()) {
-				if (ibMessageBox(ibString::Format(_("Configuration '%s' has been changed.\nDo you want to save?"),
-					m_metaWindow->GetConfigName()), wxTheApp->GetAppDisplayName(), wxYES_NO | wxCENTRE | wxICON_QUESTION, this) == wxYES) {
-					OnUpdateConfiguration(event);
+			if (m_metaWindow->LoadApplicationFromFiles(dirDialog.GetPath()) && m_metaWindow->IsEdited()) {
+				if (ibMessageBox(ibString::Format(_("Application '%s' has been changed.\nDo you want to save?"),
+					m_metaWindow->GetApplicationName()), wxTheApp->GetAppDisplayName(), wxYES_NO | wxCENTRE | wxICON_QUESTION, this) == wxYES) {
+					OnUpdateApplication(event);
 				}
 			}
 		}
@@ -290,23 +290,23 @@ void ibFrontendMainFrameDesigner::OnConfiguration(wxCommandEvent& event)
 			ibMessageBox(err.GetErrorDescription(), wxTheApp->GetAppDisplayName(), wxOK | wxICON_ERROR, this);
 		}
 	}
-	else if (wxID_DESIGNER_CONFIGURATION_SAVE_TO_FILES == event.GetId())
+	else if (wxID_DESIGNER_APPLICATION_SAVE_TO_FILES == event.GetId())
 	{
-		wxDirDialog dirDialog(this, _("Choose a directory of its own for the configuration's files"), "", wxDD_DEFAULT_STYLE);
+		wxDirDialog dirDialog(this, _("Choose a directory of its own for the application's files"), "", wxDD_DEFAULT_STYLE);
 		if (dirDialog.ShowModal() == wxID_CANCEL)
 			return;
 
 		try {
-			if (m_metaWindow->SaveConfigToFiles(dirDialog.GetPath()))
+			if (m_metaWindow->SaveApplicationToFiles(dirDialog.GetPath()))
 				ibMessageBox(_("Successfully unloaded to: ") + dirDialog.GetPath());
 		}
 		catch (const ibCoreException& err) {
 			ibMessageBox(err.GetErrorDescription(), wxTheApp->GetAppDisplayName(), wxOK | wxICON_ERROR, this);
 		}
 	}
-	else if (wxID_DESIGNER_CONFIGURATION_COMPARE_FILE == event.GetId())
+	else if (wxID_DESIGNER_APPLICATION_COMPARE_FILE == event.GetId())
 	{
-		wxFileDialog openFileDialog(this, _("Choose configuration file to compare with"),
+		wxFileDialog openFileDialog(this, _("Choose application file to compare with"),
 			"", "",
 			ibFileFilter(ibFileKind::Application),
 			wxFD_OPEN | wxFD_FILE_MUST_EXIST);
@@ -316,43 +316,43 @@ void ibFrontendMainFrameDesigner::OnConfiguration(wxCommandEvent& event)
 		ibFrontendMainFrame* const frame = ibFrontendMainFrame::GetFrame();
 		wxString fileId;
 		if (frame == nullptr || !frame->UploadFile(openFileDialog.GetPath(), fileId)) {
-			ibMessageBox(_("Failed to upload configuration file."),
+			ibMessageBox(_("Failed to upload application file."),
 				wxTheApp->GetAppDisplayName(), wxOK | wxICON_ERROR, this);
 			return;
 		}
 		ibProtocolNode answer;
-		if (!CallCompareBuild(ibProtocol::ibSchema::ibConfigCompare::ibMode::File, fileId, wxString(), answer)) {
-			ibMessageBox(_("Failed to compare with the configuration file."),
+		if (!CallCompareBuild(ibProtocol::ibSchema::ibApplicationCompare::ibMode::File, fileId, wxString(), answer)) {
+			ibMessageBox(_("Failed to compare with the application file."),
 				wxTheApp->GetAppDisplayName(), wxOK | wxICON_ERROR, this);
 			return;
 		}
 		OpenCompareTab(m_docManager, ReadCompareRecords(answer), _("Current"),
 			wxFileName(openFileDialog.GetPath()).GetFullName(),
-			ibProtocol::ibSchema::ibConfigCompare::ibMode::File,
+			ibProtocol::ibSchema::ibApplicationCompare::ibMode::File,
 			fileId, wxString(), openFileDialog.GetPath());
 	}
-	else if (wxID_DESIGNER_CONFIGURATION_COMPARE_DB == event.GetId())
+	else if (wxID_DESIGNER_APPLICATION_COMPARE_DB == event.GetId())
 	{
 		ibProtocolNode answer;
-		if (!CallCompareBuild(ibProtocol::ibSchema::ibConfigCompare::ibMode::Database,
+		if (!CallCompareBuild(ibProtocol::ibSchema::ibApplicationCompare::ibMode::Database,
 				wxString(), wxString(), answer)) {
-			ibMessageBox(_("Database configuration is not available."),
+			ibMessageBox(_("The database's application is not available."),
 				wxTheApp->GetAppDisplayName(), wxOK | wxICON_ERROR, this);
 			return;
 		}
 		// No Push — same as the desktop (no right-save callback).
 		OpenCompareTab(m_docManager, ReadCompareRecords(answer), _("Current"), _("Database"),
-			ibProtocol::ibSchema::ibConfigCompare::ibMode::Database,
+			ibProtocol::ibSchema::ibApplicationCompare::ibMode::Database,
 			wxString(), wxString(), wxString());
 	}
-	else if (wxID_DESIGNER_CONFIGURATION_COMPARE_TWO_FILES == event.GetId())
+	else if (wxID_DESIGNER_APPLICATION_COMPARE_TWO_FILES == event.GetId())
 	{
-		wxFileDialog dlgA(this, _("Choose left configuration file"),
+		wxFileDialog dlgA(this, _("Choose left application file"),
 			"", "", ibFileFilter(ibFileKind::Application),
 			wxFD_OPEN | wxFD_FILE_MUST_EXIST);
 		if (dlgA.ShowModal() == wxID_CANCEL)
 			return;
-		wxFileDialog dlgB(this, _("Choose right configuration file"),
+		wxFileDialog dlgB(this, _("Choose right application file"),
 			"", "", ibFileFilter(ibFileKind::Application),
 			wxFD_OPEN | wxFD_FILE_MUST_EXIST);
 		if (dlgB.ShowModal() == wxID_CANCEL)
@@ -363,21 +363,21 @@ void ibFrontendMainFrameDesigner::OnConfiguration(wxCommandEvent& event)
 		if (frame == nullptr
 			|| !frame->UploadFile(dlgA.GetPath(), fileId)
 			|| !frame->UploadFile(dlgB.GetPath(), file2Id)) {
-			ibMessageBox(_("Failed to upload one of the configuration files."),
+			ibMessageBox(_("Failed to upload one of the application files."),
 				wxTheApp->GetAppDisplayName(), wxOK | wxICON_ERROR, this);
 			return;
 		}
 		ibProtocolNode answer;
-		if (!CallCompareBuild(ibProtocol::ibSchema::ibConfigCompare::ibMode::TwoFiles,
+		if (!CallCompareBuild(ibProtocol::ibSchema::ibApplicationCompare::ibMode::TwoFiles,
 				fileId, file2Id, answer)) {
-			ibMessageBox(_("Failed to load one of the configuration files."),
+			ibMessageBox(_("Failed to load one of the application files."),
 				wxTheApp->GetAppDisplayName(), wxOK | wxICON_ERROR, this);
 			return;
 		}
 		OpenCompareTab(m_docManager, ReadCompareRecords(answer),
 			wxFileName(dlgA.GetPath()).GetFullName(),
 			wxFileName(dlgB.GetPath()).GetFullName(),
-			ibProtocol::ibSchema::ibConfigCompare::ibMode::TwoFiles,
+			ibProtocol::ibSchema::ibApplicationCompare::ibMode::TwoFiles,
 			fileId, file2Id, dlgB.GetPath());
 	}
 }

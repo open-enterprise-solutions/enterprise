@@ -138,12 +138,12 @@ public:
 	// A host that wants a TRANSACTION (the modal settings window, which offers Cancel) holds the copy
 	// ITSELF and hands a reference to it — a copy plus an assignment, decided where Cancel lives.
 	//
-	// ⭐⭐ AND NOTHING RUNNING COMES IN — the inputs are a DESCRIPTION and a CONFIGURATION, which with
+	// ⭐⭐ AND NOTHING RUNNING COMES IN — the inputs are a DESCRIPTION and an APPLICATION, which with
 	// the metaobject are the whole of what may reach a composer (Max, 2026-08-24: "the most that can
 	// leak in is the metaobject, the metadata and the composer description").
 	//
-	// ⚠ AND `metaData` IS THE CONTEXT THE SCHEMA RUNS IN — which configuration these names mean. It
-	// may be ABSENT, and that is a legitimate state rather than a broken one: with no configuration
+	// ⚠ AND `metaData` IS THE CONTEXT THE SCHEMA RUNS IN — which application these names mean. It
+	// may be ABSENT, and that is a legitimate state rather than a broken one: with no application
 	// to ask, nothing can be reached — no tables, no references — and what is left is the primitive
 	// types. A smaller window, not a disabled one, which is why nothing here guards on it.
 	//
@@ -224,10 +224,10 @@ protected:
 	// This class is the metadata mode; ibComposerEditor beside it is the document mode and gets both
 	// out of the document it holds, the shape ibGridEditor already has.
 	//
-	// ⚠ THE CONFIGURATION, NOT THE SOURCE'S. Two different questions live one letter apart:
-	//   * this one — the configuration the COMPOSER ITSELF belongs to, which is what an expression is
+	// ⚠ THE APPLICATION, NOT THE SOURCE'S. Two different questions live one letter apart:
+	//   * this one — the application the COMPOSER ITSELF belongs to, which is what an expression is
 	//     checked against and what a type is described in;
-	//   * GetSourceMetaData() on the composition — the configuration the QUERY resolves names in, set
+	//   * GetSourceMetaData() on the composition — the application the QUERY resolves names in, set
 	//     in RebuildSource from whatever queryable the source turned out to be.
 	// They coincide on most roads and are not the same question, so they are not merged here.
 	virtual const class ibMetaData* GetEditedMetaData() const;
@@ -236,7 +236,7 @@ protected:
 	// its attach owner; the document mode tells the DOCUMENT, because that is what has a dirty bit
 	// and a Save behind it (ibGridEditor calls Modify(true) for exactly this reason).
 	// ⭐ AND THIS IS THE OTHER HALF OF "no runtime": the panel's own read of the query. It fills
-	// m_fieldList and m_queryFault from the text and the configuration, and it is the only place either
+	// m_fieldList and m_queryFault from the text and the application, and it is the only place either
 	// is written.
 	void RefreshQueryFields();
 	// The red line under the query text — see the definition: said on OPEN as well as on a change,
@@ -406,11 +406,11 @@ private:
 
 	// ⭐⭐ NO RUNTIME OBJECT AT ALL. This panel held an ibValueDataComposition until 2026-08-24 and
 	// asked it four different sorts of question — three of which the DESCRIPTION already answered
-	// (the query text, the variants, the resources) and one which the CONFIGURATION does
+	// (the query text, the variants, the resources) and one which the APPLICATION does
 	// (ibQueryFieldsOfText: what fields the text offers, and what the parser complained about). What
 	// is left is these two members, and neither of them is running.
 	//
-	// THE CONFIGURATION THIS COMPOSER BELONGS TO — handed in, never reached for. The document mode
+	// THE APPLICATION THIS COMPOSER BELONGS TO — handed in, never reached for. The document mode
 	// overrides GetEditedMetaData and this stays null there, which is why every reader goes through
 	// the accessor rather than touching it.
 	const class ibMetaData* m_metaData = nullptr;
@@ -452,7 +452,7 @@ private:
 	//
 	// 🛑 THE PAGES USED TO BE NAILED TO `m_edited.GetCompositionSettingsDesc()` REGARDLESS. So a
 	// reader opened the window on the AUTHOR's section, typed into it — scribbling over what the
-	// configuration ships — and the copy they were supposed to be editing sat untouched beside it.
+	// application ships — and the copy they were supposed to be editing sat untouched beside it.
 	// ⭐⭐ THE SETTING THIS PANEL EDITS — the one it was HANDED, and the ZEROTH otherwise. No index
 	// enters the question (Max, 2026-08-24: *"you get some cursor there — it should always be zero;
 	// you just take the first element, the zeroth"*).
@@ -687,7 +687,7 @@ private:
 //
 // It is the same content: what a composer declares is one thing, and a setting cannot mean one
 // thing on a designer tab and another on a form. What the document adds is WHO IS ASKED — the
-// metaobject and its configuration come out of the document rather than out of a live composition,
+// metaobject and its application come out of the document rather than out of a live composition,
 // and "something changed" goes to the document, which is the thing that has a dirty bit and a Save
 // behind it.
 //
@@ -703,7 +703,7 @@ class FRMCLIENT_API ibComposerEditor : public ibComposerSettingsPanel {
 public:
 
 	// ⭐ THE DOCUMENT IS THE ONLY INPUT. It answers both of the others — which description is being
-	// edited and which configuration that description means — so the view that opens this tab hands
+	// edited and which application that description means — so the view that opens this tab hands
 	// over the document and nothing else, exactly as ibSpreadsheetEditView hands ibGridEditor one.
 	// THE DESIGNER'S TAB — always the author's road: it edits the composer metaobject's own
 	// description, so there is no setting to hand in and no reader to hand one.
@@ -713,8 +713,8 @@ public:
 
 protected:
 
-	// THE CONFIGURATION IS THE DOCUMENT'S — reached through its metaobject, which is what the tab was
-	// opened on. NEVER the active one: two configurations are open at once in the designer and the
+	// THE APPLICATION IS THE DOCUMENT'S — reached through its metaobject, which is what the tab was
+	// opened on. NEVER the active one: two applications are open at once in the designer and the
 	// document knows which of them is its own (the same reason docViewComposer builds its composition
 	// over `metaComposer->GetMetaData()`).
 	virtual const class ibMetaData* GetEditedMetaData() const override;
@@ -765,7 +765,7 @@ public:
 	// into it.
 	//
 	// ⭐ A REPORT'S MODEL, and only that. A variant is a setting the AUTHOR named and left in the
-	// configuration, and they are edited in THIS window — the composition's. A list has no such
+	// application, and they are edited in THIS window — the composition's. A list has no such
 	// door and no such thing: its setting is whatever the reader narrowed to, and there is one of
 	// it (Max, 2026-08-26: *"for a report it is needed, truly"*).
 	//
@@ -782,7 +782,7 @@ public:
 	// ⭐⭐ AND A LIST GOES THROUGH THE VERY SAME DOOR (Max, 2026-08-26: *"a list can have saved
 	// settings too"*) — which is why this takes a COMPOSER and an ADDRESS rather than a report's
 	// model. The two differ only in where their rows live: a report's under the composer the
-	// configuration declares, a list's under the control on the form, and the CATEGORY is what keeps
+	// application declares, a list's under the control on the form, and the CATEGORY is what keeps
 	// the two vocabularies from ever meeting. Everything else — the menu, the verbs, the restore —
 	// is one piece of code.
 	//
@@ -810,7 +810,7 @@ private:
 	static bool PickVariant(wxWindow* parent, class ibDataComposer& composer);
 public:
 
-	// ⭐⭐ ONE DOOR: A PARENT, A SNAPSHOT, AND THE CONFIGURATION ITS NAMES MEAN. Nothing running goes
+	// ⭐⭐ ONE DOOR: A PARENT, A SNAPSHOT, AND THE APPLICATION ITS NAMES MEAN. Nothing running goes
 	// in, and there is no second road — both hosts hand over a description and differ only in whose
 	// it is (Max, 2026-08-24: "we work with snapshots").
 	//
@@ -834,7 +834,7 @@ public:
 	// was edited, accepted and silently dropped (Max, 2026-08-24: "it has to be able to write itself
 	// too"). Two roads to one window, and the difference is WHAT IS WRITTEN.
 
-	// ⭐⭐ ONE CONSTRUCTOR, AND NOTHING RUNNING IN IT — a DESCRIPTION and the configuration its names
+	// ⭐⭐ ONE CONSTRUCTOR, AND NOTHING RUNNING IN IT — a DESCRIPTION and the application its names
 	// mean, edited in place. Both roads reach this: the author's hands over a clone of a property
 	// value, the user's hands over the description of the model it was opened on. A model is a thing
 	// `ShowUserSettings` deals with, not this window.

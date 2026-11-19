@@ -1,6 +1,6 @@
 #include "objectText.h"
 
-#include "backend/metadataConfiguration.h"
+#include "backend/metadataApplication.h"
 #include "backend/session/session.h"
 #include "core/serialize/dataBuilder.h"
 
@@ -9,7 +9,7 @@
 
 bool ibSchemaObjectText::AccessRight(const ibSession& session) const
 {
-	const ibMetaDataConfigurationBase* const metaData = session.GetMetaData();
+	const ibMetaDataApplicationBase* const metaData = session.GetMetaData();
 	return metaData != nullptr && metaData->AccessRight_Administration();
 }
 
@@ -42,7 +42,7 @@ std::function<void()> ibSchemaObjectText::Command(const ibSession& session, std:
 	if (object == nullptr)
 		return nullptr;
 
-	// …the one given, and the configuration modified by it — the desktop's editor marked its tree (EditOneText).
+	// …the one given, and the application modified by it — the desktop's editor marked its tree (EditOneText).
 	if (args.Has(ibProtocol::ibSchema::ibObjectText::Help)) {
 		const ibString text = args.GetValue<ibString>(ibProtocol::ibSchema::ibObjectText::Help);
 		return [metaData, object, text]() { object->SetHelpContent(text); metaData->Modify(true); };

@@ -214,7 +214,7 @@ ibDefaultSettingsOutcome ibRestoreDefaultComposerSettings(ibSettingsCategory cat
 		return ibDefaultSettingsOutcome::Restored;
 
 	// A MARK WITH NOTHING BEHIND IT. The row was dropped by another session, or its settings name a
-	// type this configuration no longer has — either way the person asked for something on open and
+	// type this application no longer has — either way the person asked for something on open and
 	// did not get it, so the caller says so instead of composing on something else in silence.
 	ibJournalWarning(ibT("settings"), ibT("default settings missing: category %d, object %s, id %s"),
 		static_cast<int>(category), objectKey.str(), id.str());

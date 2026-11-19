@@ -2,7 +2,7 @@
 
 #include "backend/appData.h"
 #include "backend/backend_core.h"   // GetBuildId
-#include "backend/metaCollection/metaObject.h"   // g_metaCommonMetadataCLSID — the configuration's picture
+#include "backend/metaCollection/metaObject.h"   // g_metaApplicationMetadataCLSID — the application's picture
 #include "backend/plugin/pluginManager.h"
 #include "core/serialize/dataBuilder.h"
 #include "backend/session/session.h"
@@ -13,13 +13,13 @@ void ibSchemaAbout::Build(const ibSession& session, const ibDataNode& /*args*/, 
 	const ibApplicationInstance* const applicationInstance = session.GetApplicationInstance();
 
 	result.SetValue(ibProtocol::ibSchema::ibAbout::Build, static_cast<std::int32_t>(GetBuildId()));
-	result.SetValue(ibProtocol::ibSchema::ibAbout::Picture, ibBackendPicture::SendPicture(g_metaCommonMetadataCLSID));
+	result.SetValue(ibProtocol::ibSchema::ibAbout::Picture, ibBackendPicture::SendPicture(g_metaApplicationMetadataCLSID));
 	result.SetValue(ibProtocol::ibSchema::ibAbout::User, session.GetUserInfo().m_strUserName);
 	if (applicationInstance == nullptr)
 		return;
 
 	result.SetValue(ibProtocol::ibSchema::ibAbout::Database, applicationInstance->GetDatabaseDescription());
-	result.SetValue(ibProtocol::ibSchema::ibAbout::Application, applicationInstance->GetRunModeDescr());
+	result.SetValue(ibProtocol::ibSchema::ibAbout::Program, applicationInstance->GetRunModeDescr());
 	result.SetValue(ibProtocol::ibSchema::ibAbout::Locale, applicationInstance->GetLocale());
 
 	// The plugins the process loaded — the dialog showed its block only when there were any.

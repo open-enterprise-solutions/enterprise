@@ -10,7 +10,7 @@ class ibValueMetaObject;
 // THE KIND OF AN OBJECT JUST MADE — a form's, as the old desktop's ibDialogSelectTypeForm asked it, and a template's
 // (2026-11-03); its window the client's (frmclient/win/dlgs/kindSelector): the kinds and the names they give are sent
 // (ibProtocol::ibRequest::ibKind::ObjectKind), the kind chosen and the object's Name, Synonym and Comment the person
-// typed come back and are put on the object, as the desktop's OK put them. The configuration's tree asks it as the
+// typed come back and are put on the object, as the desktop's OK put them. The application's tree asks it as the
 // desktop's does (ibMetaTreeBase::AskFormKind, AskTemplateKind), and names the window.
 class ibDialogSelectKind {
 public:

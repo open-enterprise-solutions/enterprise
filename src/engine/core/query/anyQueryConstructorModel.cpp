@@ -326,7 +326,7 @@ std::vector<ibQueryConstructorField> ibAnyQueryConstructorModel::GetFields(
 		return described();   // made by nobody here — the manager's, described where it is read
 	}
 
-	// A TABLE OF THE CONFIGURATION answers through the side — the engine's descriptor, the client's tab.
+	// A TABLE OF THE APPLICATION answers through the side — the engine's descriptor, the client's tab.
 	return stamp(GetTableFields(source));
 }
 
@@ -420,7 +420,7 @@ std::vector<ibQueryConstructorField> ibAnyQueryConstructorModel::GetReferenceBra
 	for (const ibClassID& clsid : typeDesc.GetClsidList()) {
 		const ibString table = TableOfReference(clsid);
 		if (table.IsEmpty())
-			continue;   // no table behind it — a primitive, a barrier, a report or a data processor
+			continue;   // no table behind it — a primitive, a barrier, a report or a data tool
 
 		ibQueryConstructorField branch;
 		branch.m_name           = table;

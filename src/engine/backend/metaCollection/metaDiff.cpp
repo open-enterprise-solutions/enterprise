@@ -60,14 +60,14 @@ bool IsStructuralProperty(const ibProperty* prop) {
 // designer tree can no longer drift apart, and a new kind of child needs no line here.)
 }
 
-// g_diffCommonUmbrellaClsid / g_diffPropertiesGroupClsid are now header-defined
+// g_diffSharedUmbrellaClsid / g_diffPropertiesGroupClsid are now header-defined
 // inline constexpr (metaDiff.h) — constexpr + ODR-safe across DLLs.
 
 // --- Group labels -----------------------------------------------------
 //
 // ⭐ BOTH ANSWERS COME FROM THE ONE DECLARATION — what a metatype's group is called and where it
 // stands (backend/metaCollection/metaGroups.h). They were two tables right here, copied from the
-// configuration tree, and copies drift: this tree listed calculation registers BEFORE information
+// application tree, and copies drift: this tree listed calculation registers BEFORE information
 // registers while the tree it was copied from listed them last, and the charts came in two
 // different orders (2026-09-17). What stays here is what only a comparison has — the two synthetic
 // rows it inserts itself.
@@ -75,7 +75,7 @@ bool IsStructuralProperty(const ibProperty* prop) {
 // static
 ibString ibMetaDiffWalker::GroupLabelFor(ibClassID clsid)
 {
-	if (clsid == g_diffCommonUmbrellaClsid)             return _("Common");
+	if (clsid == g_diffSharedUmbrellaClsid)             return ibGETTEXT_IN_CONTEXT("metadata branch", "Shared");
 	if (clsid == g_diffPropertiesGroupClsid)            return _("Properties");
 
 	const ibString caption = ibMetaGroupCaption(clsid);
@@ -92,7 +92,7 @@ int ibMetaDiffWalker::GroupOrderRank(ibClassID clsid)
 {
 	// The two rows the comparison adds itself stand ahead of every declared kind: the umbrella above
 	// what it gathers, and an object's properties before its children.
-	if (clsid == g_diffCommonUmbrellaClsid)             return -2;
+	if (clsid == g_diffSharedUmbrellaClsid)             return -2;
 	if (clsid == g_diffPropertiesGroupClsid)            return -1;
 	return ibMetaGroupOrder(clsid);
 }
@@ -248,10 +248,10 @@ void ibMetaDiffWalker::WalkPair(
 			return GroupOrderRank(a) < GroupOrderRank(b);
 		});
 
-	// At the root config (depth 0), wrap common-tier groups (modules /
+	// At the root application (depth 0), wrap common-tier groups (modules /
 	// forms / templates / pictures / interfaces / roles / languages)
-	// inside a synthetic "Common" umbrella row — mirrors the m_treeCOMMON
-	// node in treeConfiguration_impl.cpp. Inner pairs (Catalog,
+	// inside a synthetic "Shared" umbrella row — mirrors the m_treeSHARED
+	// node in treeApplication_impl.cpp. Inner pairs (Catalog,
 	// Document, ...) keep a flat group structure.
 	if (depth == 0) {
 		// WHICH BAND A GROUP BELONGS TO IS THE GROUP'S OWN ANSWER (ibMetaGroupBandOf) — it used to be
@@ -259,7 +259,7 @@ void ibMetaDiffWalker::WalkPair(
 		// that any renumbering would have broken silently.
 		std::vector<ibClassID> commonClsids, otherClsids;
 		for (ibClassID c : clsids) {
-			if (ibMetaGroupBandOf(c) == ibMetaGroupBand::Common)
+			if (ibMetaGroupBandOf(c) == ibMetaGroupBand::Shared)
 				commonClsids.push_back(c);
 			else
 				otherClsids.push_back(c);
@@ -268,7 +268,7 @@ void ibMetaDiffWalker::WalkPair(
 		if (!commonClsids.empty()) {
 			const int umbrellaIdx = static_cast<int>(out.size());
 			ibMetaDiffRecord umb;
-			umb.m_groupClsid = g_diffCommonUmbrellaClsid;
+			umb.m_groupClsid = g_diffSharedUmbrellaClsid;
 			umb.m_parentIndex = myIndex;
 			umb.m_depth = depth + 1;
 			umb.m_status = ibMetaDiffStatus::Same;

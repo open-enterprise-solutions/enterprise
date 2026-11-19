@@ -80,7 +80,7 @@ bool ibAccessObject::AccessRight(const ibRole* role, const ibRoleUserInfo& roleI
 	// the object-level twin of the RLS fold (docs/private/access-policy-rls.md, § Multi-role). An explicit
 	// True here means "I do not object", never "I allow": only an explicit False is an answer that
 	// changes anything, and silence stays neutral — otherwise a separator role would strip every
-	// right in the configuration the moment it was created.
+	// right in the application the moment it was created.
 	//
 	// Order is irrelevant: one denial is enough and denial is terminal, so the sequence a user's
 	// roles were assigned in cannot change the answer — the property an ACL with DENY does not have.

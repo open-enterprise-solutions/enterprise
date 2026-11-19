@@ -2,8 +2,8 @@
 #define _DESIGNER_DATA_REPORT_H__
 
 // THE EXTERNAL REPORT AS THE DESIGNER EDITS IT — the desktop designer's ibReportFileDocument and ibReportEditView
-// (designer/docManager/templates/docViewDataReportFile.h): the twin of the data processor's
-// (docViewDataProcessorEdit.h). The runtime's pair of the same file (../docViewDataReportFile.h) runs it instead.
+// (designer/docManager/templates/docViewDataReportFile.h): the twin of the data tool's
+// (docViewDataToolEdit.h). The runtime's pair of the same file (../docViewDataReportFile.h) runs it instead.
 
 #include "frmserver/docView/docView.h"
 #include "frmserver/metaTree/treeDataReport.h"

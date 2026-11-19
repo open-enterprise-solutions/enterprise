@@ -2,7 +2,7 @@
 //	Description : the three rules of a sequence's border (docs/private/sequence-arc.md)
 ////////////////////////////////////////////////////////////////////////////
 //
-// ⭐⭐ THE BORDER MOVES BY WHAT THE CONFIGURATION WROTE, AND BY NOTHING IT HAS TO GUESS. A document's
+// ⭐⭐ THE BORDER MOVES BY WHAT THE APPLICATION WROTE, AND BY NOTHING IT HAS TO GUESS. A document's
 // own registrations name the keys it belongs to; the engine reads them and moves those keys' borders.
 // It never invents a dimension value — which is the whole reason there is no auto-registration here.
 //
@@ -365,7 +365,7 @@ void ibSequenceBorderWritten(const ibValueMetaObjectSequence* seq, const ibValue
 		const ibValue border = BorderOf(seq, row.m_key);
 		if (!border.IsEmpty() && border.CompareValueLS(row.m_moment) >= 0) {
 			// It stands at or before the border: everything after it is in doubt again — unless the
-			// sequence says the configuration keeps that decision (IsAutomaticBorder).
+			// sequence says the application keeps that decision (IsAutomaticBorder).
 			if (seq->IsAutomaticBorder())
 				ibSequenceBorderSet(seq, row.m_key, LastBefore(seq, row.m_key, row.m_moment));
 			continue;
@@ -378,7 +378,7 @@ void ibSequenceBorderWritten(const ibValueMetaObjectSequence* seq, const ibValue
 void ibSequenceBorderCleared(const ibValueMetaObjectSequence* seq, const ibValue& recorder)
 {
 	// Clearing a document's registrations can only ever send the border BACK, so a sequence whose
-	// retreat the configuration keeps has nothing to do here.
+	// retreat the application keeps has nothing to do here.
 	if (seq == nullptr || !seq->HasBorders() || !seq->IsAutomaticBorder())
 		return;
 	for (const ibSequenceRegistration& row : RegistrationsOf(seq, recorder)) {

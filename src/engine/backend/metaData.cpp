@@ -11,7 +11,7 @@
 #include "backend/compiler/cache/byteCodeCache.h"   // ibByteCodeCache — the table ibByteCodeStorage reads and saves through
 #include "backend/metaCollection/metaModuleObject.h"
 #include "backend/metaCollection/metaFormObject.h"
-#include "backend/query/queryableFactory.h"                           // ibQueryableFactory::Register/Unregister — the per-config source registry
+#include "backend/query/queryableFactory.h"                           // ibQueryableFactory::Register/Unregister — the per-application source registry
 #include "backend/query/provider/database/structure/schemaSnapshot.h" // ibSchemaSnapshot — BuildSchemaSnapshot
 #include "core/serialize/dataBuilder.h"                               // ibDataBuilder / ibBinaryProvider — a copied object's properties, as bytes
 #include "core/memory/memoryStream.h"                                 // ibReaderMemory / ibWriterMemory — a bytecode row to and from its blob
@@ -35,12 +35,12 @@ void ibMetaData::Dispose(ibMetaData* metaData)
 		working.emplace(applicationInstance);
 	// A release never throws — it runs where the last reference drops, a destructor among them. A close that refused
 	// is said, and the metadata goes regardless.
-	const ibValueMetaObject* const root = metaData->GetCommonMetaObject();
+	const ibValueMetaObject* const root = metaData->GetRootMetaObject();
 	const ibString name = root != nullptr ? root->GetName() : ibString();
 	try {
-		if (metaData->IsConfigOpen()) {
+		if (metaData->IsOpen()) {
 			ibJournalInfo(ibT("metadata"), ibT("'%s' %s closed: its last holder let it go"), name,
-				metaData->GetConfigMD5());
+				metaData->GetApplicationMD5());
 			metaData->CloseDatabase(ibRuntimeRequest(forceCloseFlag));
 		}
 	}
@@ -71,20 +71,20 @@ ibMetaID ibMetaData::MetaIdByGuid(const ibGuid& guid) const
 	return meta != nullptr && meta->IsAllowed() ? meta->GetMetaID() : ibNOT_FOUND;
 }
 
-// The whole structure this configuration declares — see the header. The walk
+// The whole structure this application declares — see the header. The walk
 // itself belongs to the metaobjects (ibValueMetaObject::ContributeTables descends
 // its children); this only names WHERE it starts, which is the one thing every
 // caller was repeating.
 ibSchemaSnapshot ibMetaData::BuildSchemaSnapshot() const
 {
 	ibSchemaSnapshot snapshot;
-	if (const ibValueMetaObject* common = GetCommonMetaObject())
-		common->ContributeTables(snapshot);
+	if (const ibValueMetaObject* rootObject = GetRootMetaObject())
+		rootObject->ContributeTables(snapshot);
 	return snapshot;
 }
 
-// Register the source into THIS config's OWN factory (the metaobject calls it on run: GetMetaData()->RegisterSource).
-// Only metadata-backed sources register now; each config keeps its own set. No factory (closed) → no-op.
+// Register the source into THIS application's OWN factory (the metaobject calls it on run: GetMetaData()->RegisterSource).
+// Only metadata-backed sources register now; each application keeps its own set. No factory (closed) → no-op.
 void ibMetaData::RegisterSource(ibQueryableSourceDescriptor* descriptor) const
 {
 	if (ibQueryableFactory* factory = GetSourceFactory())
@@ -101,17 +101,17 @@ void ibMetaData::UnregisterSource(ibQueryableSourceDescriptor* descriptor) const
 //*                                       ibModuleStorage                                          *
 //**************************************************************************************************
 
-bool ibModuleStorage::AddCommonModule(ibValueMetaObjectCommonModule* commonModule)
+bool ibModuleStorage::AddSharedModule(ibValueMetaObjectSharedModule* sharedModule)
 {
-	if (commonModule == nullptr)
+	if (sharedModule == nullptr)
 		return false;
-	auto it = std::find(m_initModules.begin(), m_initModules.end(), commonModule);
+	auto it = std::find(m_initModules.begin(), m_initModules.end(), sharedModule);
 	if (it == m_initModules.end())
-		m_initModules.emplace_back(commonModule);
+		m_initModules.emplace_back(sharedModule);
 	return true;
 }
 
-bool ibModuleStorage::RenameCommonModule(ibValueMetaObjectCommonModule* /*commonModule*/, const ibString& /*newName*/)
+bool ibModuleStorage::RenameSharedModule(ibValueMetaObjectSharedModule* /*sharedModule*/, const ibString& /*newName*/)
 {
 	// Descriptor name is owned by the descriptor itself; storage indexes
 	// by raw pointer, so rename is a no-op. Kept on the API as a single
@@ -120,11 +120,11 @@ bool ibModuleStorage::RenameCommonModule(ibValueMetaObjectCommonModule* /*common
 	return true;
 }
 
-bool ibModuleStorage::RemoveCommonModule(ibValueMetaObjectCommonModule* commonModule)
+bool ibModuleStorage::RemoveSharedModule(ibValueMetaObjectSharedModule* sharedModule)
 {
-	if (commonModule == nullptr)
+	if (sharedModule == nullptr)
 		return false;
-	auto it = std::find(m_initModules.begin(), m_initModules.end(), commonModule);
+	auto it = std::find(m_initModules.begin(), m_initModules.end(), sharedModule);
 	if (it != m_initModules.end())
 		m_initModules.erase(it);
 	return true;
@@ -134,13 +134,13 @@ bool ibModuleStorage::RemoveCommonModule(ibValueMetaObjectCommonModule* commonMo
 //*                                    ibByteCodeStorage                                           *
 //**************************************************************************************************
 
-// ⭐ READ AS THE CONFIGURATION OPENS — ONCE, IN ONE STATEMENT (Max, 2026-11-16). The image that holds this is made
-// when a configuration is run: after it was loaded, so its digest is known, and before any session compiles in it.
+// ⭐ READ AS THE APPLICATION OPENS — ONCE, IN ONE STATEMENT (Max, 2026-11-16). The image that holds this is made
+// when an application is run: after it was loaded, so its digest is known, and before any session compiles in it.
 //
 // WHAT THE BYTECODE IS COMPILED AGAINST, as one value. It is part of the row KEY, so a row saved under any
-// earlier state of the configuration is not found at all — see byteCodeCache.h.
+// earlier state of the application is not found at all — see byteCodeCache.h.
 //
-// ⚠ THE KEY IS THE CONFIGURATION'S DIGEST, and it stays that. Mixing the module's own text into
+// ⚠ THE KEY IS THE APPLICATION'S DIGEST, and it stays that. Mixing the module's own text into
 // it was tried on 2026-09-04 and taken back out: it patches the symptom at the reader's end,
 // while the cause is a WRITER that changes metadata without going through the save the rest of
 // the product goes through (Max: you change a form, you change objects, and you go PAST the
@@ -148,21 +148,21 @@ bool ibModuleStorage::RemoveCommonModule(ibValueMetaObjectCommonModule* commonMo
 // the digest moves, the cache row retires by itself. A door that skips that has to be fixed at
 // the door.
 //
-// An external report or data processor has no digest: a row under an empty one would outlive its file's text, and
-// saving it weeds out every row of the base's configuration (byteCodeCache.cpp, WriteRow). It compiles when it is
+// An external report or data tool has no digest: a row under an empty one would outlive its file's text, and
+// saving it weeds out every row of the base's application (byteCodeCache.cpp, WriteRow). It compiles when it is
 // opened, and nothing is read or held for it.
 ibByteCodeStorage::ibByteCodeStorage(const ibMetaData* owner)
-	: m_configMd5(owner != nullptr ? owner->GetConfigMD5() : ibString())
+	: m_applicationMd5(owner != nullptr ? owner->GetApplicationMD5() : ibString())
 {
-	if (!m_configMd5.IsEmpty())
-		m_rows = ibByteCodeCache::LoadAll(m_configMd5);
+	if (!m_applicationMd5.IsEmpty())
+		m_rows = ibByteCodeCache::LoadAll(m_applicationMd5);
 }
 
 bool ibByteCodeStorage::Load(ibByteCode& outBc, const ibGuid& descId, const std::function<bool(ibByteCode&)>& compile)
 {
 	if (Load(outBc, descId))
 		return true;
-	if (m_configMd5.IsEmpty())
+	if (m_applicationMd5.IsEmpty())
 		return compile(outBc);   // nothing is held for it — see the constructor
 
 	bool detached = false;
@@ -172,12 +172,12 @@ bool ibByteCodeStorage::Load(ibByteCode& outBc, const ibGuid& descId, const std:
 	}
 
 	// ⭐ TWO PROCESSES ON ONE BASE MEET HERE. What is not held is asked of the cache, and the cache looks in the table
-	// again — another process may have saved the row since this configuration opened — and compiles only what is
+	// again — another process may have saved the row since this application opened — and compiles only what is
 	// not there either, under the module's key: whoever misses with it, in this process or another, stands in the
 	// database until that compile has saved it, and reads it then.
 	//
-	// A DETACHED STORAGE asks the table nothing and saves nothing: the table is the new configuration's (Detach).
-	const bool ready = detached ? compile(outBc) : ibByteCodeCache::Load(outBc, descId, m_configMd5, compile);
+	// A DETACHED STORAGE asks the table nothing and saves nothing: the table is the new application's (Detach).
+	const bool ready = detached ? compile(outBc) : ibByteCodeCache::Load(outBc, descId, m_applicationMd5, compile);
 	if (!ready)
 		return false;
 
@@ -226,11 +226,11 @@ void ibByteCodeStorage::Invalidate(const ibGuid& descId)
 		m_rows.erase(descId);
 		detached = m_detached;
 	}
-	if (!detached && !m_configMd5.IsEmpty())
+	if (!detached && !m_applicationMd5.IsEmpty())
 		ibByteCodeCache::Invalidate(descId);
 }
 
-// ⚠ A compile already under way when this is called still saves its row. That costs the new configuration one
+// ⚠ A compile already under way when this is called still saves its row. That costs the new application one
 // recompile of that module and never a wrong answer: a row is found by its key.
 void ibByteCodeStorage::Detach()
 {
@@ -305,7 +305,7 @@ bool ibCompileValueCache::InvalidateCompileModule(const ibValueMetaObject* modul
 	if (it == m_cache.end()) return false;
 
 	// No rebuilder — entry was registered as an already-built value (a catalog / document module,
-	// a common module's unit). The VALUE stays: it is owned by the registering side, and only a
+	// a shared module's unit). The VALUE stays: it is owned by the registering side, and only a
 	// fresh AddCompileModule(meta, value) replaces it.
 	//
 	// ⭐ BUT ITS NAMES CAN GO STALE ON THEIR OWN, and for such an entry that is the whole of what
@@ -374,14 +374,14 @@ ibValue* ibCompileValueCache::FindCompileModuleRef(const ibValueMetaObject* modu
 //ID's 
 ibMetaID ibMetaData::GenerateNewID()
 {
-	// SEED ONCE, THEN COUNT. The walk still decides where the numbering starts — a configuration
+	// SEED ONCE, THEN COUNT. The walk still decides where the numbering starts — an application
 	// just loaded must continue past its highest existing id — but it runs once per open image
 	// instead of once per new object, and what it produces is a floor, not an answer.
 	if (m_nextMetaId == 0) {
-		const ibValueMetaObject* commonObject = GetCommonMetaObject();
-		ibASSERT(commonObject);
-		ibMetaID id = commonObject->GetMetaID() + 1;
-		DoGenerateNewID(id, commonObject);
+		const ibValueMetaObject* rootObject = GetRootMetaObject();
+		ibASSERT(rootObject);
+		ibMetaID id = rootObject->GetMetaID() + 1;
+		DoGenerateNewID(id, rootObject);
 		m_nextMetaId = id;
 
 		// The seed is the whole question: it is the walk's answer about what the tree CURRENTLY holds,
@@ -409,7 +409,7 @@ void ibMetaData::DoGenerateNewID(ibMetaID& id, const ibValueMetaObject* top) con
 
 ibValueMetaObject* ibMetaData::CreateMetaObject(const ibClassID& clsidIn, ibValueMetaObject* parent, bool runObject)
 {
-	// ⭐ A CONFIGURATION THAT MAY NOT BE EDITED IS NOT EDITED — asked at the DOOR, not at the
+	// ⭐ AN APPLICATION THAT MAY NOT BE EDITED IS NOT EDITED — asked at the DOOR, not at the
 	// command that happens to have a person behind it (Max, 2026-09-01: *"if the metadata is in
 	// read mode, it should raise if something tries to change it — or at least return false"*).
 	// The designer's trees each carried their own check; a tool over MCP carried none.
@@ -556,7 +556,7 @@ ibString ibMetaData::GetNewName(ibValueMetaObject* parent, const ibNameRequest& 
 }
 
 // ⭐⭐ COPY AND PASTE, AS DOORS OF THE METADATA — the pair that completes the set. Five things can
-// happen to an object in a configuration and each is one entry point here, raising its own event:
+// happen to an object in an application and each is one entry point here, raising its own event:
 // CreateMetaObject, RenameMetaObject, CopyMetaObject, PasteMetaObject, RemoveMetaObject (Max,
 // 2026-09-01). Whoever wants to change something WITHOUT the event writes the property itself —
 // that is the only way round, and it is deliberate rather than accidental.
@@ -571,7 +571,7 @@ bool ibMetaData::CopyMetaObject(const ibValueMetaObject* object, ibWriterMemory&
 	if (object == nullptr)
 		return false;
 
-	// Nothing is announced: the configuration did not change.
+	// Nothing is announced: the application did not change.
 
 #pragma region _copy_guard_h_
 
@@ -791,7 +791,7 @@ ibValueMetaObject* ibMetaData::PasteMetaObject(const ibClassID& clsid,
 			// ibControlCopyGuard::Generate stamps the whole subtree ROOT + children, so IsCopyMode() holds and the
 			// form writes its blob in COPY format (per-hop guid/kind tags). On paste, only the recursive CHILD
 			// PasteObject stamps its objects; this ROOT entry did not — so a form copied AS PART OF a whole
-			// metaobject (a child) re-homed fine, but a form copied DIRECTLY (a common form, or a form within a
+			// metaobject (a child) re-homed fine, but a form copied DIRECTLY (a shared form, or a form within a
 			// group) — which arrives HERE as the root — had IsPasteMode() == false and read its COPY-format blob as
 			// RAW: the reader mis-parses the hop layout and drops the source-hop paths (and the attribute section).
 			// Keep the root's OWN m_metaGuid (it is the paste TARGET's identity — the source guid read above is
@@ -848,9 +848,9 @@ ibValueMetaObject* ibMetaData::PasteMetaObject(const ibClassID& clsid,
 	}
 
 	if (!filled) {
-		// A PASTE THAT FAILED LEAVES NOTHING BEHIND. The object was already in the configuration
+		// A PASTE THAT FAILED LEAVES NOTHING BEHIND. The object was already in the application
 		// before the payload was read, so a bad payload would otherwise leave it standing —
-		// unshown, because nothing announced it, and saved with the configuration all the same.
+		// unshown, because nothing announced it, and saved with the application all the same.
 		RemoveMetaObject(pasted, parentMetaObj);
 		return nullptr;
 	}
@@ -868,7 +868,7 @@ bool ibMetaData::RenameMetaObject(ibValueMetaObject* metaObject, const ibString&
 		return false;
 
 	// A name is unique among the siblings OF ITS KIND, and the siblings are the PARENT's to answer
-	// for. (This once searched the configuration's top level, so nothing nested had siblings at all:
+	// for. (This once searched the application's top level, so nothing nested had siblings at all:
 	// a document took a second tabular section `Goods`, 2026-09-15.) The search also answers with the
 	// parent itself when the parent carries the name, and that is not a sibling.
 	const ibValueMetaObject* parent = metaObject->GetParent();
@@ -878,8 +878,8 @@ bool ibMetaData::RenameMetaObject(ibValueMetaObject* metaObject, const ibString&
 	if (holder != nullptr && holder != metaObject && holder != parent)
 		return false;
 
-	// The hook runs BEFORE the name changes: it brings the rest of the configuration into step with
-	// the name about to be taken (a common attribute rewrites its copies, a common module is re-keyed
+	// The hook runs BEFORE the name changes: it brings the rest of the application into step with
+	// the name about to be taken (a shared attribute rewrites its copies, a shared module is re-keyed
 	// in the module storage), and its refusal means there is no rename.
 	if (!metaObject->OnRenameMetaObject(newName))
 		return false;
@@ -905,7 +905,7 @@ bool ibMetaData::RemoveMetaObject(ibValueMetaObject* object, ibValueMetaObject* 
 
 	// Both close phases — symmetric with CreateMetaObject's Before+After run phases.
 	// The before-hook carries the real teardown (RemoveCompileModule /
-	// RemoveCommonModule from the compile cache + module storage); skipping it left
+	// RemoveSharedModule from the compile cache + module storage); skipping it left
 	// stale module registrations that later asserted on an "empty registry".
 	if (!object->OnBeforeCloseMetaObject())
 		return false;
@@ -935,7 +935,7 @@ bool ibMetaData::RemoveMetaObject(ibValueMetaObject* object, ibValueMetaObject* 
 		//
 		// 🛑 IT WAS SAID FIRST, AND SO IT WAS SAID OF THINGS THAT DID NOT HAPPEN. Every early
 		// return above — a close phase that refuses, a delete hook that says no — leaves the object
-		// standing in the configuration, and the watchers had already been told it was gone: the
+		// standing in the application, and the watchers had already been told it was gone: the
 		// row taken away, the editors over it closed, while the object is still there and still
 		// gets saved. An announcement is a fact, not an intention.
 		//

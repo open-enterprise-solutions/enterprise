@@ -21,7 +21,7 @@ void ibPropertyInspector::AppendProperty(ibDataNode& parent, ibBackendProperty* 
 	if (!property->GetProtocolValue(row, ibBackendProperty::ibReader::Cell))
 		return;
 
-	// The pictures of the configuration of the object the property is of — an inspected object is one of a configuration
+	// The pictures of the application of the object the property is of — an inspected object is one of an application
 	// (a metaobject, a form's control, attribute or command).
 	const ibPropertyObject* const owner = property->GetPropertyObject();   // CONST: the non-const GetMetaData wxFAILs
 	const ibMetaData* const metaData = owner->GetMetaData();
@@ -46,7 +46,7 @@ void ibPropertyInspector::AppendProperty(ibDataNode& parent, ibBackendProperty* 
 	}
 
 	// …and the classes it names, each once (Type, Name, Picture), as the engine registers them: the client has no
-	// configuration to name a kind by, and a window groups the choices under them, as the desktop's did.
+	// application to name a kind by, and a window groups the choices under them, as the desktop's did.
 	if (!classes.empty()) {
 		ibDataNode& named = row.Child(ibProtocol::ibSchema::ibProperties::Classes);
 		for (const std::uint64_t clsid : classes) {

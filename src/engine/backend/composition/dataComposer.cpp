@@ -11,14 +11,14 @@
 #include "backend/query/dataQueryBuilder.h"   // ibDataQueryResult / ibSelectKind
 #include "backend/query/querySelector.h"      // ibSelector — the TOTALS pre-order walk
 #include "backend/appData.h"                  // ibApplicationInstance::GetQueryableFactory
-#include "backend/metaData.h"                 // ibMetaData::GetSourceFactory — resolve by-name sources per-config
+#include "backend/metaData.h"                 // ibMetaData::GetSourceFactory — resolve by-name sources per-application
 #include "backend/backend_exception.h"        // ibBackendCoreException
 #include "backend/query/queryReadState.h"  // ibQueryReadState — one build, one state of the data
 #include "core/query/queryRender.h"        // ibQueryColumnFromPath — a dotted path becomes a column, once
 #include "core/query/queryKeywords.h"         // ibQueryKeywordText — a grouping line is written in the query's own words
 #include "core/query/queryLexer.h"         // ibQueryLexer::IsIdentifier — what a NAME is, asked of the tier that defines it
 #include "backend/query/queryConstructorModel.h"   // ibQueryFieldsOfText / WalkPath — the author's fields and a path's walk, as the pickers read them
-#include "backend/functionalOption/functionalOptionGate.h"   // AnyUnavailable, AsApplication — a run shows what the base uses
+#include "backend/featureOption/featureOptionGate.h"   // AnyUnavailable, AsApplication — a run shows what the base uses
 #include "backend/system/value/valueType.h"   // ibValueTypeDescription::AdjustValue — the empty value of a type, for «filled»
 
 //////////////////////////////////////////////////////////////////////
@@ -103,7 +103,7 @@ void ibDataDBComposer::RefreshSourceFields()
 	// person sees (compose_run). The designer's own rule ("it sees everything") is for what an author EDITS, not
 	// for what a composition produces, so the composer works this out as the application does, by itself — no
 	// caller asks for it (2026-09-28: warehouses printed through the designer).
-	const ibFunctionalOptionGate::AsApplication asTheApplication;
+	const ibFeatureOptionGate::AsApplication asTheApplication;
 
 	m_sourceFields.reset();
 	DropMemos();   // a new source answers anew
@@ -178,9 +178,9 @@ bool ibDataComposer::IsAvailable(const ibString& path) const
 		return known->second;
 
 	// The hops are asked the way the fields were — as the application (see RefreshSourceFields).
-	const ibFunctionalOptionGate::AsApplication asTheApplication;
+	const ibFeatureOptionGate::AsApplication asTheApplication;
 	bool available = true;   // nothing is off in this base — no path is laid out, no walk is made
-	if (ibFunctionalOptionGate::AnyUnavailable(m_metaData)) {
+	if (ibFeatureOptionGate::AnyUnavailable(m_metaData)) {
 		// THE PATH AS HOPS — laid out the way the query carries it (ibQueryColumnFromPath), not by hand.
 		const ibQueryAstExprPtr column = ibQueryColumnFromPath(path);
 		available = !column || column->m_path.empty() || WalkPath(column->m_path).m_available;
@@ -938,7 +938,7 @@ static void ibDropUnavailableLevels(std::vector<ibLevelDescription>& levels, con
 
 void ibDataComposer::ApplyAvailableStructure()
 {
-	const ibFunctionalOptionGate::AsApplication asTheApplication;   // one view of the options for the whole load
+	const ibFeatureOptionGate::AsApplication asTheApplication;   // one view of the options for the whole load
 	DropMemos();   // a run reads the options — and the catalogs' trees — as they stand now
 
 	const std::vector<ibOutputDescription>& stored = GetCurrentStructure();
@@ -1283,7 +1283,7 @@ ibString ibDataDBComposer::RenderTextFor(const std::vector<const Output*>& outpu
 		const std::shared_ptr<const ibBackendQueryable> direct = dit != m_directSources.end() ? dit->second : nullptr;
 		const ibQueryableSourceDescriptor* descriptor = nullptr;
 		if (dit == m_directSources.end()) {
-			// Resolve through THIS query's OWN config factory (per-config sources); no config → the global base.
+			// Resolve through THIS query's OWN application factory (per-application sources); no application → the global base.
 			ibQueryableFactory* factory = m_metaData != nullptr ? m_metaData->GetSourceFactory() : nullptr;
 			if (factory == nullptr)
 				factory = ibApplicationInstance::GetQueryableFactory();

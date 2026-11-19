@@ -3,7 +3,7 @@
 
 // ibBackendSourceColumn — a COLUMN OF A SOURCE, as the form binding and the field lists see one: its name, synonym and
 // comment, its type, its picture. The dot (ibBackendTypeSourceFactory::WalkSource) returns THIS, blind to the concrete
-// class: an attribute of the configuration, a form's own attribute (ibBackendFormAttributeValue), a value table's
+// class: an attribute of the application, a form's own attribute (ibBackendFormAttributeValue), a value table's
 // column — each IS one, no adapter. A control reads its caption and its type off it without knowing
 // which it stands on.
 //
@@ -21,7 +21,7 @@ public:
 	// Logical identifier — what a script / the L4 parser refers to.
 	virtual ibString GetName() const = 0;
 
-	// Display caption. Defaults to the logical name; an attribute — of the configuration or of a form — overrides it
+	// Display caption. Defaults to the logical name; an attribute — of the application or of a form — overrides it
 	// with its synonym.
 	virtual ibString GetSynonym() const { return GetName(); }
 
@@ -43,9 +43,9 @@ public:
 	// gates on THIS instead of poking the metaobject.
 	virtual bool IsAllowed() const { return true; }
 
-	// Is the column AVAILABLE in this base — a functional option's question, and NOT IsAllowed. A column
+	// Is the column AVAILABLE in this base — a feature option's question, and NOT IsAllowed. A column
 	// that is not allowed is not there; one that is not available is there, read and written like any
-	// other, and only the interface does not offer it (functionalOptionGate.h). A plain column always is;
+	// other, and only the interface does not offer it (featureOptionGate.h). A plain column always is;
 	// a metaobject attribute asks its metaobject. Last in the class: a virtual added in the middle moves
 	// every slot after it for whatever was built before it.
 	virtual bool IsAvailable() const { return true; }

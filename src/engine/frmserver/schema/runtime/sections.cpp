@@ -4,9 +4,9 @@
 #include "backend/metaCollection/metaCommandGroupObject.h"    // the platform's groups + the declared ones, in order
 #include "backend/metaCollection/metaFormObject.h"            // ibBackendCommandItem — what a link executes
 #include "backend/metaCollection/metaSectionObject.h"
-#include "backend/metadataConfiguration.h"
+#include "backend/metadataApplication.h"
 #include "core/serialize/dataBuilder.h"
-#include "backend/session/session.h"                          // the configuration the session works in
+#include "backend/session/session.h"                          // the application the session works in
 #include "backend/backend_picture.h"                          // ibBackendPicture::SendPicture — the pictures, by their ids
 
 #include <vector>
@@ -44,7 +44,7 @@ void AppendNested(const ibValueMetaObjectSection* parent, std::vector<ibValueMet
 }
 
 // THE PAGE OF A SECTION — block by block, in the panel's order (the section popup's constructor): on the left the
-// section's own items (Important first, then Default), the navigation groups the configuration declares, then each
+// section's own items (Important first, then Default), the navigation groups the application declares, then each
 // subsection with what it and its own subsections hold; on the right the platform's action groups (Create, Reports,
 // Service), then the declared ones.
 std::vector<ibSectionBlock> PageOf(const ibValueMetaObjectSection* section)
@@ -115,7 +115,7 @@ std::vector<ibSectionBlock> PageOf(const ibValueMetaObjectSection* section)
 }
 
 // The sections this person may use — the panel's buttons.
-std::vector<const ibValueMetaObjectSection*> UsedSections(const ibMetaDataConfigurationBase* metaData)
+std::vector<const ibValueMetaObjectSection*> UsedSections(const ibMetaDataApplicationBase* metaData)
 {
 	std::vector<const ibValueMetaObjectSection*> used;
 	for (const ibValueMetaObjectSection* section : metaData->GetAnyArrayObject<ibValueMetaObjectSection>(g_metaSectionCLSID)) {
@@ -129,7 +129,7 @@ std::vector<const ibValueMetaObjectSection*> UsedSections(const ibMetaDataConfig
 
 void ibSchemaSections::Build(const ibSession& session, const ibDataNode& /*args*/, ibDataNode& result) const
 {
-	const ibMetaDataConfigurationBase* const metaData = session.GetMetaData();
+	const ibMetaDataApplicationBase* const metaData = session.GetMetaData();
 	if (metaData == nullptr)
 		return;
 
@@ -137,9 +137,9 @@ void ibSchemaSections::Build(const ibSession& session, const ibDataNode& /*args*
 	for (const ibValueMetaObjectSection* section : UsedSections(metaData)) {
 		ibDataNode& node = sections.AddChild(0, section->GetMetaID());
 		node.SetValue(ibProtocol::ibSchema::ibSections::Title, section->GetSynonym());
-		// Its own picture, or the configuration's — as its button drew it.
+		// Its own picture, or the application's — as its button drew it.
 		node.SetValue(ibProtocol::ibSchema::ibSections::Picture, ibBackendPicture::SendPicture(section->IsEmptyPicture()
-			? ibPictureDescription(g_metaCommonMetadataCLSID) : section->GetPictureDesc(), metaData));
+			? ibPictureDescription(g_metaApplicationMetadataCLSID) : section->GetPictureDesc(), metaData));
 
 		ibDataNode& blocks = node.Child(ibProtocol::ibSchema::ibSections::Blocks);
 		for (const ibSectionBlock& block : PageOf(section)) {
@@ -174,10 +174,10 @@ std::function<void()> ibSchemaSections::Command(const ibSession& session, std::i
 		return nullptr;
 	}
 
-	const ibMetaDataConfigurationBase* const metaData = session.GetMetaData();
+	const ibMetaDataApplicationBase* const metaData = session.GetMetaData();
 	if (metaData == nullptr) {
 		refusal = ibProtocol::ibRefusal::Failed;
-		error = ibT("the session has no configuration");
+		error = ibT("the session has no application");
 		return nullptr;
 	}
 

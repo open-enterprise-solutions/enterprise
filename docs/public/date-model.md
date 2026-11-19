@@ -58,12 +58,10 @@ drivers by parts, tests under three clocks.
 
 ## Stored forms
 
-A stored date is the count itself, under a version that says so: a data node (format 3), a data
-dump's date form (chunk 3), a job's schedule blob (version 3); the AOT cache regenerates. Older
-versions are still read: #217's count from 1970 (version 2) as the same parts, and an instant of the
-writing machine (version 1) through the bridge - right wherever the reader stands in the writer's
-zone, off by the difference elsewhere. The old empty literal reads as the empty date. A dump whose
-date form this build does not know is refused, not guessed.
+A stored date is the count itself, under a version that says so: a data packet (version 2), a data
+dump's date form (chunk 3), a job's schedule blob (version 3); the AOT cache regenerates. Another
+version is refused, not guessed - the format is not frozen, and a base or a file an earlier engine
+wrote is made anew.
 
 ## Time on the server
 

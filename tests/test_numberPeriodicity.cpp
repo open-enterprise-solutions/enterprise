@@ -1,4 +1,4 @@
-// A document's NumberPeriodicity: readable on the metadata object, kept when the configuration
+// A document's NumberPeriodicity: readable on the metadata object, kept when the application
 // is saved, and the series the next number is taken from. Nonperiodical stays on the bucket every
 // number allocated before the setting existed (20000101). Year, quarter, month and day each start
 // again when that period of the document's date changes.
@@ -11,7 +11,7 @@
 #include "backend/databaseLayer/connectionPool.h"
 #include "backend/databaseLayer/databaseQueryBuilder.h"
 #include "backend/databaseLayer/sqllite/sqliteDatabaseLayer.h"
-#include "backend/metadataConfiguration.h"
+#include "backend/metadataApplication.h"
 #include "backend/metaCollection/metaObject.h"
 #include "backend/metaCollection/partial/document.h"
 #include "backend/query/columnLayout.h"
@@ -23,9 +23,9 @@
 
 namespace {
 
-ibValueMetaObjectDocument* MakeDocument(ibMetaDataConfigurationFile& cfg)
+ibValueMetaObjectDocument* MakeDocument(ibMetaDataApplicationFile& cfg)
 {
-	ibValueMetaObjectConfiguration* root = cfg.GetCommonMetaObject();
+	ibValueMetaObjectApplication* root = cfg.GetRootMetaObject();
 	return dynamic_cast<ibValueMetaObjectDocument*>(
 		cfg.CreateMetaObject(g_metaDocumentCLSID, root, /*runObject*/ false));
 }
@@ -79,7 +79,7 @@ TEST(NumberPeriodicity, TheWordsFoldToTheBucketsAboveTheOldSeries)
 
 TEST(NumberPeriodicity, ANewDocumentReadsNonperiodical)
 {
-	ibMetaDataConfigurationFile cfg;
+	ibMetaDataApplicationFile cfg;
 	ibValueMetaObjectDocument* doc = MakeDocument(cfg);
 	ASSERT_NE(doc, nullptr);
 	EXPECT_EQ(ibNumberPeriodicity::ibNumberPeriodicity_Nonperiodical, doc->GetNumberPeriodicity());
@@ -88,7 +88,7 @@ TEST(NumberPeriodicity, ANewDocumentReadsNonperiodical)
 
 TEST(NumberPeriodicity, TheSettingRoundTrips)
 {
-	ibMetaDataConfigurationFile cfg;
+	ibMetaDataApplicationFile cfg;
 	ibValueMetaObjectDocument* doc = MakeDocument(cfg);
 	ASSERT_NE(doc, nullptr);
 	SetPeriod(doc, ibNumberPeriodicity::ibNumberPeriodicity_Year);
@@ -100,7 +100,7 @@ TEST(NumberPeriodicity, TheSettingRoundTrips)
 	EXPECT_EQ(ibNumberPeriodicity::ibNumberPeriodicity_Year, doc->GetNumberPeriodicity());
 	EXPECT_TRUE(SameEnum(ReadPeriod(doc), ibNumberPeriodicity::ibNumberPeriodicity_Year));
 
-	// Absent from a configuration saved before the setting existed. Loaded into a new document,
+	// Absent from an application saved before the setting existed. Loaded into a new document,
 	// whose constructor default is nonperiodical: an empty property does not write over that.
 	ibDataNode older;
 	for (const auto& field : saved.Fields()) {
@@ -136,7 +136,7 @@ public:
 struct NumberSeries : ::testing::Test {
 	wxInitializer                          m_wxInit;
 	std::shared_ptr<ibDatabaseLayerSQLite> db;
-	std::unique_ptr<ibMetaDataConfigurationFile> cfg;
+	std::unique_ptr<ibMetaDataApplicationFile> cfg;
 	ibValueMetaObjectDocument* doc = nullptr;
 	ibString numberField;
 	ibString dateField;
@@ -155,7 +155,7 @@ struct NumberSeries : ::testing::Test {
 			GTEST_SKIP() << "in-memory SQLite open failed";
 		pool->Init(db, /*maxSize=*/1, /*minIdle=*/0);
 
-		cfg = std::make_unique<ibMetaDataConfigurationFile>();
+		cfg = std::make_unique<ibMetaDataApplicationFile>();
 		doc = MakeDocument(*cfg);
 		ASSERT_NE(doc, nullptr);
 		ASSERT_TRUE(cfg->RunDatabase());

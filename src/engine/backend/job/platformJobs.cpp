@@ -7,7 +7,7 @@
 
 #include "backend/appData.h"
 #include "backend/metaData.h"
-#include "backend/metadataConfiguration.h"
+#include "backend/metadataApplication.h"
 #include "backend/session/session.h"
 
 #include "backend/query/provider/database/structure/schemaSnapshot.h"      // ibSchemaSnapshot + ContributeTables
@@ -49,12 +49,12 @@ bool FoldTotals(ibSession* session)
 
 	// The schema comes from the caller, not from the floor — L3-4 is
 	// metadata-blind by construction, and for a background job "the active
-	// configuration" has no ambient answer (a web process holds many sessions,
+	// application" has no ambient answer (a web process holds many sessions,
 	// a cluster many nodes). Here the answer is unambiguous: THIS process's open
-	// configuration, snapshotted at the moment the pass starts.
+	// application, snapshotted at the moment the pass starts.
 	const ibSchemaSnapshot snapshot = activeMetaData->BuildSchemaSnapshot();
 	if (snapshot.Tables().empty())
-		return false;   // no configuration open — nothing to fold, not an error
+		return false;   // no application open — nothing to fold, not an error
 
 	// The holder names WHOSE connection this runs on. It comes from the job's own
 	// session — falling back to "the calling thread's" would silently borrow

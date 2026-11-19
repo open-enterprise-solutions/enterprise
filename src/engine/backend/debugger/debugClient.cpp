@@ -7,7 +7,7 @@
 
 #include "core/net/httpClient.h"             // the socket to a runtime's debug port
 
-#include "backend/metadataConfiguration.h"
+#include "backend/metadataApplication.h"
 #include "backend/session/session.h"
 #include "backend/system/systemManager.h"   // Message — the standard door to whoever is watching
 
@@ -73,7 +73,7 @@ static void ShiftLineMap(std::map<unsigned int, Entry>& lines, unsigned int line
 } // namespace
 ///////////////////////////////////////////////////////////////////////
 
-ibDebuggerClient::ibDebuggerClient(ibMetaDataConfigurationBase* metaData) :
+ibDebuggerClient::ibDebuggerClient(ibMetaDataApplicationBase* metaData) :
 	m_metaData(metaData),
 	m_adapter(std::make_shared<ibDebuggerClientAdapter>()),
 	m_enterLoop(false), m_connectionSuccess(false), m_numberOfConnectionAttempts(numberOfConnectionAttempts)
@@ -294,7 +294,7 @@ bool ibDebuggerClient::ToggleBreakpoint(const ibString& strModuleName, unsigned 
 
 		const ibString said =
 			_("The running application does not have this line: the module has been edited "
-			  "and not applied, so its copy is a different text. Apply the configuration, "
+			  "and not applied, so its copy is a different text. Apply the application, "
 			  "or set the breakpoint on a line both copies share.");
 
 		// ⭐ AND WHEN NOBODY ASKED FOR THE REASON, IT GOES OUT THE STANDARD DOOR — the platform's own
@@ -691,7 +691,7 @@ void ibDebuggerClient::ibDebuggerClientConnection::DetachConnection(bool kill)
 
 		// 🔎 THIS END ASKED FOR IT — the only detach that is somebody's decision rather than a loop
 		// running out of reasons to go on. Written down so the journal can tell the two apart: a line
-		// here means the Debug menu, `app_run restart` or an apply of the configuration ended the
+		// here means the Debug menu, `app_run restart` or an apply of the application ended the
 		// session; no line here, and the session ended by itself.
 		ibJournalInfo(ibT("debugger"),
 			ibT("debug client: detaching because this process asked to (%s)"),
@@ -901,15 +901,15 @@ void ibDebuggerClient::ibDebuggerClientConnection::RecvCommand(void* pointer, un
 
 	if (commandFromServer == CommandId_VerifyConnection) {
 
-		commandReader.r_stringZ(m_confGuid);
+		commandReader.r_stringZ(m_applicationGuid);
 		commandReader.r_stringZ(m_md5Hash);
 		commandReader.r_stringZ(m_userName);
 		commandReader.r_stringZ(m_compName);
 
-		// Against the configuration that owns this debugger — down the chain: this is a connection's own
+		// Against the application that owns this debugger — down the chain: this is a connection's own
 		// thread, with no session to ask "the current one" through.
-		const ibMetaDataConfigurationBase* const ours = debugClient->GetMetaData();
-		m_verifiedConnection = ours->GetConfigGuid() == ibGuid(m_confGuid);
+		const ibMetaDataApplicationBase* const ours = debugClient->GetMetaData();
+		m_verifiedConnection = ours->GetApplicationGuid() == ibGuid(m_applicationGuid);
 
 		if (m_verifiedConnection && m_connectionType == ConnectionType::ConnectionType_Waiter)
 			m_connectionType = ConnectionType::ConnectionType_Debugger;
@@ -920,11 +920,11 @@ void ibDebuggerClient::ibDebuggerClientConnection::RecvCommand(void* pointer, un
 			// reads this (debugServer.cpp, CommandId_SetConnectionType), so the reason it is being
 			// said belongs in the journal next to it.
 			ibJournalWarning(ibT("debugger"),
-				ibT("debug client: answering 'unknown' to %s - %s (configuration over there %s, ours %s)"),
+				ibT("debug client: answering 'unknown' to %s - %s (application over there %s, ours %s)"),
 				m_hostName, m_verifiedConnection
 					? ibT("this connection is neither a waiter nor a scanner")
-					: ibT("it runs a different configuration"),
-				m_confGuid, ours->GetConfigGuid().str());
+					: ibT("it runs a different application"),
+				m_applicationGuid, ours->GetApplicationGuid().str());
 
 			m_connectionType = ConnectionType::ConnectionType_Unknown;
 		}

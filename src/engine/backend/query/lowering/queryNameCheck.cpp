@@ -6,7 +6,7 @@
 
 #include "queryLoweringInternal.h"
 
-#include "backend/query/queryException.h"           // ibBackendQueryNameException — a name the configuration does not have
+#include "backend/query/queryException.h"           // ibBackendQueryNameException — a name the application does not have
 #include "backend/query/columnLayout.h"             // DescribeColumnLayout — whether a field can be compared at all
 #include "core/query/queryRewrite.h"                // ibQueryRewrite — the check sees the query the execution runs
 #include "core/query/queryRender.h"                 // ibQueryOutputName — the ONE answer to "what is this field called"
@@ -113,7 +113,7 @@ bool BuildCheckSources(const ibQuerySelect& ast, const std::map<ibString, ibValu
 		// cannot see (another package, a caller's manager), so failing to resolve it means "cannot
 		// verify" — and inventing an error there would be worse than saying nothing.
 		//
-		// A QUALIFIED name (Kind.Name) is a metaobject, resolved through the config's own factory.
+		// A QUALIFIED name (Kind.Name) is a metaobject, resolved through the application's own factory.
 		// If the factory does not know it, the object is GONE — deleted or renamed — and that is not
 		// "cannot verify", that is the query naming something that does not exist. Swallowing it is
 		// how a query goes on looking healthy after the table under it was deleted: the fields are
@@ -282,7 +282,7 @@ void CheckUnlimitedStringsAreCast(const ibQuerySelect& ast, const std::vector<ib
 			return;
 		// A column of NO TYPE is no string of unlimited length: it holds any value, laid out as the widest composite, whose
 		// string field has no limit because nothing declared one (DescribeColumnLayout). Its keys order and group (Max,
-		// 2026-11-18). No table of a configuration has one — a value table's, a computed source's, a copy's — and those are
+		// 2026-11-18). No table of an application has one — a value table's, a computed source's, a copy's — and those are
 		// read where a text compares: a base in memory, a temporary table, never a Firebird blob.
 		if (cols.back()->GetTypeValueDesc().GetClsidCount() == 0)
 			return;

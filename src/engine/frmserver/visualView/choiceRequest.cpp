@@ -3,7 +3,7 @@
 #include "backend/backend_mainFrame.h"
 #include "core/serialize/dataBuilder.h"
 #include "backend/session/session.h"
-#include "backend/metadataConfiguration.h"   // the session's configuration, whose pictures these are
+#include "backend/metadataApplication.h"   // the session's application, whose pictures these are
 
 #include "backend/backend_picture.h"   // ibBackendPicture::SendPicture — an item's picture, by its id
 #include "protocol/protocol.h"      // ibProtocol::ibRequest::ibKind::Choice

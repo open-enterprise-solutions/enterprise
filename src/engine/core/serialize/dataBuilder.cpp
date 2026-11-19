@@ -211,8 +211,8 @@ void ibDataValue::Expect(ibDataKind expected) const
 
 ibString ibDataValue::AsString() const
 {
-	// A GUID READ AS A STRING IS ITS TEXT — what it was written as before it had a kind of its own (kVersion 1), and
-	// what a text form writes still: a reader that takes a guid's text takes it either way.
+	// A GUID READ AS A STRING IS ITS TEXT — what a text form writes: a reader that takes a guid's text takes it
+	// either way.
 	if (Kind() == ibDataKind::Guid)
 		return AsGuid().str();
 	Expect(ibDataKind::String);
@@ -277,9 +277,8 @@ ibDateTime ibDataValue::AsDate() const
 
 ibGuid ibDataValue::AsGuid() const
 {
-	// A GUID THAT CAME AS ITS TEXT is read the way a date that did is: the JSON view writes a guid as its text, a
-	// packet of version 1 held it so, and whoever asks for a guid can tell it from a string. "" is the nil guid, as
-	// the codec read it before; a text that names none refuses.
+	// A GUID THAT CAME AS ITS TEXT is read the way a date that did is: the JSON view writes a guid as its text, and
+	// whoever asks for a guid can tell it from a string. "" is the nil guid; a text that names none refuses.
 	if (Kind() == ibDataKind::String) {
 		ibGuid guid;
 		const ibString text = AsString();
@@ -1163,7 +1162,7 @@ bool ibBinaryProvider::Read(const ibMemoryBuffer& packet, ibDataNode& root) cons
 	if (!IsPacket(base, size))
 		ibCoreException::Error(_("ibBinaryProvider: the bytes are no OES-RPC packet: %s"), ibT("no OES1 at their start"));
 	const std::uint16_t version = Rd<std::uint16_t>(base, 4);
-	if (version < 1 || version > kVersion)
+	if (version != kVersion)
 		ibCoreException::Error(_("ibBinaryProvider: the packet is OES-RPC version %u, this end reads %u"),
 			(unsigned)version, (unsigned)kVersion);
 	if (Rd<std::uint32_t>(base, 8) != size)

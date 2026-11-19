@@ -81,7 +81,7 @@ void ibValueMetaObjectAccumulationRegister::ContributeTables(ibSchemaSnapshot& o
 	// ⭐⭐ THE INACTIVE KIND'S TABLE IS DECLARED TOO — EMPTY, AND WITHOUT MAINTENANCE.
 	//
 	// Both totals objects are PREDEFINED: whichever kind the register is, the other one is still in
-	// the configuration and visible to both sides of every diff. Declaring only the active table made
+	// the application and visible to both sides of every diff. Declaring only the active table made
 	// the two disagree — object present, table absent — and the disagreement outlived a save:
 	// switching the kind dropped one table, switching back produced "alter" rather than "create"
 	// (the baseline still knew the object), so nothing re-created it and the maintenance was built

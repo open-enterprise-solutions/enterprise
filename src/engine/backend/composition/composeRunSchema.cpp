@@ -9,7 +9,7 @@
 #include "backend/composition/composeEvaluate.h"   // a parameter WORKED OUT where the data is
 
 #include "backend/backend_composition.h"
-#include "backend/metadataConfiguration.h"
+#include "backend/metadataApplication.h"
 #include "backend/composition/dataComposer.h"                 // ibDataDBComposer - the composer this builds
 #include "backend/composition/drivers/tableComposeDriver.h"   // ...and the two readers of its walk
 #include "backend/appData.h"                                  // GetJobManager - who lends the thread
@@ -21,7 +21,6 @@
 #include "backend/compiler/procContext.h"                     // ibRunContext - the frame it is given
 #include "backend/system/value/valueType.h"                   // AdjustValue - the declared type wins
 #include "backend/system/value/valueDataComposition.h"        // ibSyncParameters - the text declares its parameters
-#include "backend/backend_exception.h"
 #include "core/stringUtils.h"                              // IsSameAs - how this tree compares a NAME
 
 #include <algorithm>
@@ -181,20 +180,20 @@ void WriteNodes(ibDataNode& into, const ibString& field, const std::vector<ibCom
 
 bool ibComposeRunSchema::Run(const ibDataNode& request, ibDataNode& result, ibString& refusal)
 {
-	if (activeMetaData == nullptr || !activeMetaData->IsConfigOpen()) {
-		refusal = ibComposeText("This application has no configuration open, so there is nothing to "
+	if (activeMetaData == nullptr || !activeMetaData->IsOpen()) {
+		refusal = ibComposeText("No application is open here, so there is nothing to "
 			"compose against.");
 		return false;
 	}
 
 	// ⭐ THE SCHEMA ARRIVED; NOTHING IS LOOKED UP. What the designer resolved - which composer, which
-	// variant, whose saved setting - was resolved where the configuration and the settings live. This
+	// variant, whose saved setting - was resolved where the application and the settings live. This
 	// end is handed the answer, which is why there is no metaobject and no settings table in sight.
 	//
 	// `activeMetaData` is still needed, and only for the setting's own VALUES: a filter's right-hand
-	// side may be a reference or an enum member, and those live in a configuration's registry rather
+	// side may be a reference or an enum member, and those live in an application's registry rather
 	// than in the node. The read keeps them packed; the composer restores them against the
-	// configuration it is given below.
+	// application it is given below.
 	auto schemaNode = request.FindChild(kComposeSchema);
 	if (!schemaNode) {
 		refusal = ibComposeText("No schema came with the request. Nothing was composed.");
@@ -317,7 +316,7 @@ bool ibComposeRunSchema::Run(const ibDataNode& request, ibDataNode& result, ibSt
 				const ibDataNode* stored = &parameter.m_value;
 				for (const ibParameterDescription& theirs : composer.GetUserParameters())
 					// ⚠ stringUtils::IsSameAs, which is how this tree compares a NAME — folding case
-					// is not the same operation in every alphabet, and a configuration's identifiers are
+					// is not the same operation in every alphabet, and an application's identifiers are
 					// written in the person's own. (valueDataComposition.cpp does this comparison with
 					// wxString::IsSameAs; the two can disagree on a Cyrillic name, and that file is the
 					// one to bring across, not this one to match.)
@@ -338,22 +337,13 @@ bool ibComposeRunSchema::Run(const ibDataNode& request, ibDataNode& result, ibSt
 				ibValue produced;
 				if (!ibEvaluateInRoot(expression, produced, activeMetaData)) {
 
-					// ⭐ AND THE COMPILER'S OWN WORDS BESIDE IT — the same cure the debugger's eval
-					// road already carries (debugServer.cpp, "the compiler's own words beside it"),
-					// which was never brought across to this one. The value slot holds a generic
-					// `<error: compile failed>` when the compile aborted before it could describe
-					// itself, so a caller was told THAT their expression failed and never WHY:
-					// `Date` misspelt as `DateTime` came back indistinguishable from a name that
-					// does not exist (measured 2026-09-09, and it cost a round trip).
-					ibString said = produced.GetString();
-
-					const ibString reason = ibBackendException::GetLastError();
-					if (!reason.IsEmpty())
-						said = said.IsEmpty() ? reason : (said + ibT(" ") + reason);
-
+					// ⭐ WHY, FROM THE VALUE: Evaluate writes the compiler's or the run's own words there and
+					// takes them off the error chain (procUnit.cpp) — so `Date` misspelt as `DateTime` says so,
+					// rather than coming back indistinguishable from a name that does not exist (measured
+					// 2026-09-09, and it cost a round trip).
 					refusal = ibString::Format(
 						ibComposeText("Parameter '%s' could not be evaluated: %s"),
-						parameter.m_name, said);
+						parameter.m_name, produced.GetString());
 					return false;
 				}
 				value = produced;

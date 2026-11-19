@@ -46,13 +46,13 @@ public:
 
 	/////////////////////////////////////////////////////////////////////////////////////////
 
-	ibVariantAttribute(const ibBackendTypeConfigFactory* prop) : ibVariant(ibValueTypes::TYPE_VALUE), m_ownerProperty(prop) {}
+	ibVariantAttribute(const ibBackendTypeApplicationFactory* prop) : ibVariant(ibValueTypes::TYPE_VALUE), m_ownerProperty(prop) {}
 
-	ibVariantAttribute(const ibBackendTypeConfigFactory* prop, const ibValueTypes type) : ibVariant(ibValueTypes::TYPE_VALUE), m_ownerProperty(prop) { m_typeDesc.SetDefaultMetaType(type); }
-	ibVariantAttribute(const ibBackendTypeConfigFactory* prop, const ibClassID& clsid) : ibVariant(ibValueTypes::TYPE_VALUE), m_ownerProperty(prop) { m_typeDesc.SetDefaultMetaType(clsid); }
+	ibVariantAttribute(const ibBackendTypeApplicationFactory* prop, const ibValueTypes type) : ibVariant(ibValueTypes::TYPE_VALUE), m_ownerProperty(prop) { m_typeDesc.SetDefaultMetaType(type); }
+	ibVariantAttribute(const ibBackendTypeApplicationFactory* prop, const ibClassID& clsid) : ibVariant(ibValueTypes::TYPE_VALUE), m_ownerProperty(prop) { m_typeDesc.SetDefaultMetaType(clsid); }
 
-	ibVariantAttribute(const ibBackendTypeConfigFactory* prop, const ibMetaID& id) : ibVariant(ibValueTypes::TYPE_VALUE), m_ownerProperty(prop) { DoSetFromMetaId(id); }
-	ibVariantAttribute(const ibBackendTypeConfigFactory* prop, const ibTypeDescription& typeDesc) : ibVariant(ibValueTypes::TYPE_VALUE), m_ownerProperty(prop), m_typeDesc(typeDesc) {}
+	ibVariantAttribute(const ibBackendTypeApplicationFactory* prop, const ibMetaID& id) : ibVariant(ibValueTypes::TYPE_VALUE), m_ownerProperty(prop) { DoSetFromMetaId(id); }
+	ibVariantAttribute(const ibBackendTypeApplicationFactory* prop, const ibTypeDescription& typeDesc) : ibVariant(ibValueTypes::TYPE_VALUE), m_ownerProperty(prop), m_typeDesc(typeDesc) {}
 
 	ibVariantAttribute(const ibVariantAttribute& list) : ibVariant(ibValueTypes::TYPE_VALUE), m_ownerProperty(list.m_ownerProperty), m_typeDesc(list.m_typeDesc) {}
 
@@ -67,8 +67,8 @@ public:
 
 protected:
 
-	const ibBackendTypeConfigFactory* m_ownerProperty = nullptr;
-	// ⚠ THE TYPES ARE REFRESHED ONE AT A TIME. A configuration's attribute is read by every session of the base, and
+	const ibBackendTypeApplicationFactory* m_ownerProperty = nullptr;
+	// ⚠ THE TYPES ARE REFRESHED ONE AT A TIME. An application's attribute is read by every session of the base, and
 	// the first read after the registered types changed refreshes it — four sessions doing so at once freed the same
 	// vector twice (2026-10-06). The load refreshes it before any session reads (ibValueMetaObject::RunSubtree); what
 	// changes the types later is refreshed under the lock, the version asked again inside it.

@@ -16,7 +16,7 @@
 
 namespace {
 
-// THE VALUE A PARAMETER KEEPS, ticked or not. (Never a reference: these read back without a configuration.)
+// THE VALUE A PARAMETER KEEPS, ticked or not. (Never a reference: these read back without an application.)
 ibValue Kept(const ibOutputParametersDescription& parameters, ibOutputParameter parameter)
 {
 	const ibParameterValueDescription<ibOutputParameter>* value = parameters.Find(parameter);

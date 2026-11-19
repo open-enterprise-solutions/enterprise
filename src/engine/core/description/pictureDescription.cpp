@@ -49,7 +49,7 @@ bool ibPictureDescriptionMemory::ReadNode(const ibDataValue& value, ibPictureDes
 		if (auto id = root->FindField(ibT("ClassId")))
 			read.m_class_identifier = (ibPictureID)id->AsUInt();
 	}
-	else if (read.m_type == ibPictureType::eFromConfiguration) {
+	else if (read.m_type == ibPictureType::eFromApplication) {
 		read.m_meta_guid = root->GetValue<ibGuid>(ibT("Guid"));
 	}
 	else if (read.m_type == ibPictureType::eFromFile) {
@@ -70,7 +70,7 @@ bool ibPictureDescriptionMemory::WriteNode(ibDataValue& value, const ibPictureDe
 	if (pictureDesc.m_type == ibPictureType::eFromBackend) {
 		root->AddField(ibT("ClassId"), ibDataValue::UInt(pictureDesc.m_class_identifier));
 	}
-	else if (pictureDesc.m_type == ibPictureType::eFromConfiguration) {
+	else if (pictureDesc.m_type == ibPictureType::eFromApplication) {
 		root->SetValue(ibT("Guid"), pictureDesc.m_meta_guid);
 	}
 	else if (pictureDesc.m_type == ibPictureType::eFromFile) {

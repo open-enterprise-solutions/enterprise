@@ -19,7 +19,7 @@
 //
 // IN WHOSE NAME. The client's session — a person logged in, the platform let them
 // in — bound around each message. So every door it calls answers exactly as it would
-// for that person: same rights, same roles, same configuration. There is no second
+// for that person: same rights, same roles, same application. There is no second
 // permission model to keep in step, which is the whole reason the session is the
 // unit rather than a token of our own invention.
 //
@@ -112,7 +112,7 @@ public:
 	// whoever connected: MCP's `sampling/createMessage` is the server asking the
 	// CLIENT to run a completion and hand back the text. So no key is stored
 	// here, no outbound TLS is needed, and the answer comes from the same
-	// assistant that is already working on this configuration rather than from a
+	// assistant that is already working on this application rather than from a
 	// second one configured elsewhere.
 	//
 	// True only when a client is connected AND declared the sampling capability
@@ -133,7 +133,7 @@ public:
 	// (no outbound TLS, no key, and neither belongs here); the assistant that
 	// CAN is the one already connected. So the window drops what was typed into
 	// this queue and whoever is connected picks it up with a tool and answers
-	// with another — the conversation happens inside the configuration, and
+	// with another — the conversation happens inside the application, and
 	// model access stays where it already lives.
 	//
 	// ⚠ This is the SHORT road, and it is honest about being one: the client has
@@ -148,7 +148,7 @@ public:
 	// do it"*).
 	//
 	// A person's message is an ASK: taken once, answered once. A note is CONTEXT: the person
-	// created a catalog, the configuration was saved, the database was applied. Both are useful to
+	// created a catalog, the application was saved, the database was applied. Both are useful to
 	// an assistant and only the first is a request — put them in one list and every observation
 	// starts reading like an instruction, which is how an assistant ends up answering a person who
 	// said nothing.
@@ -244,7 +244,7 @@ private:
 	//
 	// ⭐⭐ AND THERE ARE THREE OUTCOMES, NOT TWO. `outPending` is set when the wait expired with the
 	// call still QUEUED — it did not fail, and it did not finish; it will run. That is not a
-	// refusal, and answering one is what cost three unnamed common modules: the assistant read
+	// refusal, and answering one is what cost three unnamed shared modules: the assistant read
 	// `isError`, believed the work had not happened, called again, and the first call then landed
 	// too (2026-08-31). A false refusal is worse than a slow answer because it makes a caller ACT.
 	//
@@ -254,12 +254,12 @@ private:
 	bool RunTool(const class ibMcpTool* tool, const class ibDataNode& arguments,
 		class ibDataNode& payload, ibString& refusal, bool* outPending = nullptr);
 
-	// The configuration its session works in — what every answer here is about. Null while it is stopped.
-	class ibMetaDataConfigurationBase* GetMetaData() const;
+	// The application its session works in — what every answer here is about. Null while it is stopped.
+	class ibMetaDataApplicationBase* GetMetaData() const;
 
-	// Puts the bridge on the open configuration's list, moving it when that configuration is not
+	// Puts the bridge on the open application's list, moving it when that application is not
 	// the one it is already watching. Called from the one place every tool call passes through —
-	// a configuration can be opened, closed and reopened while the server runs.
+	// an application can be opened, closed and reopened while the server runs.
 	void WatchMetadata();
 
 	// How the transport is told (Listen). Under the lock: what two threads say reaches it in the order said.
@@ -268,7 +268,7 @@ private:
 
 	// ⭐⭐ THE ASSISTANT'S OWN SUBSCRIPTION TO THE METADATA — the twin of ibMcpDebugBridge, and the
 	// same idea: it watches ALONGSIDE the designer's navigator instead of asking the navigator
-	// anything, so a person building a configuration by hand and an assistant watching it see the
+	// anything, so a person building an application by hand and an assistant watching it see the
 	// same events at the same moment.
 	//
 	// What it does with them is forward them, one line each, down the road a chat message already
@@ -339,7 +339,7 @@ private:
 	std::set<ibString>           m_hinted;
 
 	// ⭐ AND THE ONE FACT THAT CHANGES HOW EVERY VISIBLE STRING IS WRITTEN, said once. A
-	// configuration with two declared languages needs every synonym, caption and heading in BOTH —
+	// application with two declared languages needs every synonym, caption and heading in BOTH —
 	// and a caller writing one of them cannot see that from the call it is making. The platform
 	// knows; the caller does not; so the platform says it.
 	bool                         m_saidLanguages = false;

@@ -53,7 +53,7 @@ public:
 
 	// A REFERENCE FIELD CAN BE UNFOLDED. The TYPE says both "this node has children" and what those
 	// children are asked for — so the tree needs no second question and no lookup of its own.
-	// Filled lazily: a config with deep reference chains would otherwise walk the whole graph to
+	// Filled lazily: an application with deep reference chains would otherwise walk the whole graph to
 	// draw one table.
 	//
 	// ⭐ THE WHOLE TYPE, not the one clsid it used to carry. A reference to SEVERAL types is walked

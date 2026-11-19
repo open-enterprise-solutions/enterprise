@@ -6,7 +6,7 @@
 // compiler or the interpreter changes, so a stale blob kept its key.
 //
 // The key is kAOTFormatVersion, the hash compiler/engineFingerprint.cmake
-// writes at build time from compiler/**, system/** and core/compiler/**, and the configuration
+// writes at build time from compiler/**, system/** and core/compiler/**, and the application
 // digest. The opcode fingerprint stays as a second guard: it fails when
 // codeDef.h moves and the version does not. A separate test shows that a
 // changed built-in source is a different hash, and therefore a different key.
@@ -171,8 +171,8 @@ ibString ScriptFingerprint(const ibString& substituteRel, const ibString& substi
 	return hash;
 }
 
-// The spelling is "<version>.<engine hash>.<configuration digest>", then MD5,
-// which is what fits in config_md5. The old key was the build stamp, which
+// The spelling is "<version>.<engine hash>.<application digest>", then MD5,
+// which is what fits in application_md5. The old key was the build stamp, which
 // does not move when the compiler does.
 TEST(ByteCodeCacheKey, CarriesTheFormatVersionAndTheEngineHash) {
 	const ibString digest = wxT("0123456789abcdef0123456789abcdef");

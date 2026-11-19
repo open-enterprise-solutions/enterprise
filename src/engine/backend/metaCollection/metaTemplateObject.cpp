@@ -6,7 +6,7 @@
 #include "metaTemplateObject.h"
 #include "backend/metaData.h"
 #include "core/serialize/dataBuilder.h"                    // ibDataNode — per-type node data
-#include "backend/backend_composition.h"                   // ibBackendCompositionDescriptionMemory — a composer from before the kinds
+#include "backend/backend_composition.h"                   // ibCompositionDescription — a composer template's composition
 #include "backend/propertyManager/property/variant/variantTemplate.h"   // the kind it was, told by the old cell
 #include "backend/metaCollection/partial/dataReport.h"     // the owner a composer may have, told about its default composer
 #include "backend/system/value/valueSpreadsheet.h"         // what a spreadsheet's code is handed
@@ -23,19 +23,8 @@ const ibTemplateProvider& ibValueMetaObjectTemplateBase::GetTemplateProvider() c
 
 // ⭐ THE DESCRIPTION SERIALISES ITSELF, WHOLE — its kind, and the schema of that kind by the schema's own rules
 // (ibTemplateDescriptionMemory). Through its property, so the node's CHILDREN stay the area of metaobjects alone.
-//
-// ⚠ A COMPOSER FROM BEFORE THE KINDS (MD_CMPS, read as a template — ApplyDataNode) kept its composition under a
-// key of its own; a spreadsheet's TemplateData is read as one, a node with no kind being a spreadsheet.
 bool ibValueMetaObjectTemplateBase::ReadData(const ibDataNode& node)
 {
-	if (const auto composition = node.FindProperty(ibT("CompositionData"))) {
-		ibCompositionDescription compositionDesc;
-		if (!ibBackendCompositionDescriptionMemory::ReadNode(*composition, compositionDesc, m_metaData))
-			return false;
-		SetTemplateDesc(compositionDesc);
-		return true;
-	}
-
 	m_propertyTemplate->SetNodeValue(node.GetProperty(m_propertyTemplate->GetName()));
 	return true;
 }
@@ -108,7 +97,7 @@ void ibValueMetaObjectTemplate::OnPropertyChanged(ibProperty* property, const ib
 	ibValueMetaObjectTemplateBase::OnPropertyChanged(property, oldValue, newValue);
 }
 
-// ⭐ THE ANSWER TO THE COMPOSITION'S CHANGE SIGNAL: the CONFIGURATION is modified. Which is where
+// ⭐ THE ANSWER TO THE COMPOSITION'S CHANGE SIGNAL: the APPLICATION is modified. Which is where
 // modified-ness lives (Max, 2026-08-20: "modified-ness is set on the metadata") — a metaobject does not
 // carry a dirty flag of its own, the container does, and the designer's Save reads it there.
 //
@@ -123,10 +112,10 @@ void ibValueMetaObjectTemplate::OnChildChanged()
 }
 
 //***********************************************************************
-//*                          Common template                            *
+//*                          Shared template                            *
 //***********************************************************************
 
-ibValueMetaObjectCommonTemplate::ibValueMetaObjectCommonTemplate()
+ibValueMetaObjectSharedTemplate::ibValueMetaObjectSharedTemplate()
 	: ibValueMetaObjectTemplateBase()
 {
 	SetTemplateDesc(ibTemplateDescription(ibTemplateType::Spreadsheet));
@@ -191,7 +180,7 @@ public:
 	// variant name, so it slaps your hands."*
 	//
 	// ⚠ REPORTED, NOT THROWN, and for the reason the accounting register documents at length: raising
-	// from inside a save leaves the configuration write transaction open, and the next save meets a
+	// from inside a save leaves the application write transaction open, and the next save meets a
 	// deadlock naming neither the rule nor the object. A message and a `false` refuse just as firmly
 	// and close cleanly.
 	virtual bool OnSaveMetaObject(ibValueMetaObjectTemplate* metaTemplate, int flags) const override {
@@ -209,10 +198,10 @@ public:
 			// greys its button out of it.
 			//
 			// 🛑 PRINTING IT HERE MADE THE OBJECT SPEAK TO A WINDOW IT KNOWS NOTHING ABOUT, and the cost
-			// showed up in the probe: metadata_create and config_check ask "what does this object still
+			// showed up in the probe: metadata_create and app_check ask "what does this object still
 			// lack" by calling OnSaveMetaObject, so a printed complaint stayed on the person's screen as
 			// an error that had already been fixed (2026-09-03 - two of these stood in the pane while the
-			// configuration saved cleanly).
+			// application saved cleanly).
 			//
 			// The FIRST one is the report as it opens, so it is worth saying which is meant when a
 			// composer has several - counted the way a person would, from one.
@@ -234,7 +223,7 @@ public:
 	// 🛑 THIS IS WHAT WAS MISSING (Max, 2026-08-20 — the assert on a dropped composer). A composition is
 	// a FIELD of the report object, created in PrepareEmptyObject beside the attributes; a composer
 	// declared AFTER the object was prepared therefore had no field, and the first walk into it met
-	// `ibASSERT(it != m_listObjectValue.end())`. In a configuration it was masked — a config object is
+	// `ibASSERT(it != m_listObjectValue.end())`. In an application it was masked — an application object is
 	// re-initialised on every CreateObjectValue — and showed itself on an EXTERNAL report, whose object
 	// is prepared ONCE when the container is opened.
 	virtual bool OnAfterRunMetaObject(ibValueMetaObjectTemplate* metaTemplate, int flags) const override {
@@ -255,7 +244,7 @@ public:
 	}
 
 	// A COMPOSITION OF ITS OWN — a copy of what the template declares, the way a report's object takes one
-	// (ibValueRecordDataObjectReport::PrepareEmptyObject), over the template's own configuration.
+	// (ibValueRecordDataObjectReport::PrepareEmptyObject), over the template's own application.
 	virtual ibValue GetDataValue(ibTemplateDescription& templateDesc, const ibMetaData* metaData) const override {
 		return new ibValueDataComposition(templateDesc.GetCompositionDesc(), metaData);
 	}
@@ -280,4 +269,4 @@ const ibTemplateProvider& ibTemplateProvider::Get(ibTemplateType type)
 //***********************************************************************
 
 METADATA_TYPE_REGISTER(ibValueMetaObjectTemplate, "Template", g_metaTemplateCLSID);
-METADATA_TYPE_REGISTER(ibValueMetaObjectCommonTemplate, "CommonTemplate", g_metaCommonTemplateCLSID);
+METADATA_TYPE_REGISTER(ibValueMetaObjectSharedTemplate, "SharedTemplate", g_metaSharedTemplateCLSID);

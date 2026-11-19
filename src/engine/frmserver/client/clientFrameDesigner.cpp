@@ -2,7 +2,7 @@
 
 #include "backend/appData.h"
 #include "backend/debugger/debugClient.h"
-#include "backend/metadataConfiguration.h"
+#include "backend/metadataApplication.h"
 #include "backend/session/session.h"
 
 #include "core/picturePredefined.h"   // the assistant's item's picture
@@ -37,10 +37,10 @@ void ibClientFrameDesigner::OnCreate()
 
 bool ibClientFrameDesigner::AllowRun()
 {
-	ibMetaDataConfigurationBase* const metaData = GetSession()->GetMetaData();
+	ibMetaDataApplicationBase* const metaData = GetSession()->GetMetaData();
 	if (metaData == nullptr || !metaData->AccessRight_Administration())
 		return false;
-	return m_metaTree.Load(std::static_pointer_cast<ibMetaDataConfigurationBase>(metaData->shared_from_this()));
+	return m_metaTree.Load(std::static_pointer_cast<ibMetaDataApplicationBase>(metaData->shared_from_this()));
 }
 
 void ibClientFrameDesigner::OnDraw(ibDataNode& state)
@@ -48,13 +48,13 @@ void ibClientFrameDesigner::OnDraw(ibDataNode& state)
 	m_metaTree.OnDraw(state.Child(ibProtocol::ibFrame::MetaData));
 }
 
-void ibClientFrameDesigner::BackendError(const ibString& /*strFileName*/,
-	const ibString& /*strDocPath*/, const long /*line*/,
+void ibClientFrameDesigner::BackendError(const ibString& strFileName,
+	const ibString& strDocPath, const long line,
 	const ibString& strErrorMessage)
 {
-	// ⚠ Without its place yet: the desktop's line opened the module at the error (ibOutputWindow), a message here is its
-	// text alone.
-	Message(strErrorMessage, ibStatusMessage::ibStatusMessage_Error);
+	// With its place: the client opens the module at the error when its line is double-clicked (the desktop's
+	// ibOutputWindow).
+	Message(strErrorMessage, ibStatusMessage::ibStatusMessage_Error, strFileName, strDocPath, line);
 }
 
 void ibClientFrameDesigner::InitializeDefaultMenu()

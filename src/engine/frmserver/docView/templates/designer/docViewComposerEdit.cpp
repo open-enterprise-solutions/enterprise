@@ -3,7 +3,7 @@
 #include "backend/backend_type.h"                        // GetTypesByFilter — what a parameter may be given
 #include "backend/compiler/scriptCheck.h"                // ibCheckExpression — a parameter's expression, compiled, not run
 #include "backend/metaData.h"
-#include "backend/metaCollection/metaTemplateObject.h"   // the composer — its description, its configuration
+#include "backend/metaCollection/metaTemplateObject.h"   // the composer — its description, its application
 #include "backend/query/queryConstructorModel.h"         // ibQueryFieldsOfText — the fields its query offers
 #include "backend/query/queryableFactory.h"              // a list's main table — its descriptor
 #include "backend/srcDataObject.h"                       // …which describes itself (ibSourceExplorer)
@@ -102,7 +102,7 @@ void ibComposerCompositionView::OnDraw(ibDataNode& frame)
 	if (metaComposer == nullptr)
 		return;
 
-	// Read-only where the configuration may not be edited — the desktop's panel took SetReadOnly(ibDOC_READONLY).
+	// Read-only where the application may not be edited — the desktop's panel took SetReadOnly(ibDOC_READONLY).
 	ibDataNode& state = frame.Child(ibProtocol::ibView::State);
 	state.SetValue(ibProtocol::ibView::ibComposer::ReadOnly, !metaComposer->IsEditable());
 
@@ -140,7 +140,7 @@ bool ibComposerCompositionView::OnClientEvent(ibProtocol::ibEvent::ibKind event,
 		ibCompositionDescription composition;
 		if (!node || !ibCompositionDescriptionMemory::ReadNode(*node, composition))
 			return false;
-		// Where the desktop's panel wrote — the composer's own description — and the configuration modified
+		// Where the desktop's panel wrote — the composer's own description — and the application modified
 		// (ibComposerEditor::MarkModified).
 		metaComposer->SetTemplateDesc(composition);
 		document->Modify(true);
@@ -148,7 +148,7 @@ bool ibComposerCompositionView::OnClientEvent(ibProtocol::ibEvent::ibKind event,
 	}
 	case ibProtocol::ibEvent::ibKind::Select:
 		// A CELL'S "..." — a parameter's value, a condition's right side: the desktop's panel chose it through the
-		// configuration (ChooseValue → the declared-value window), which is here; a settings window's Act Choose,
+		// application (ChooseValue → the declared-value window), which is here; a settings window's Act Choose,
 		// chosen as there (2026-10-29: the "..." opened nothing).
 		ibChooseSettingsValue(args, metaComposer->GetMetaData(), m_choosing.m_choice);
 		return true;
@@ -185,9 +185,9 @@ bool ibFetchComposerRequest(const ibDataNode& request, ibDataNode& response, con
 		return true;
 	case ibProtocol::ibView::ibComposer::ibRequest::Types: {
 		// What the desktop's type picker over a parameter offered — what a reference-shaped field may hold, asked of the
-		// configuration when the "..." is pressed; the client's picker shows only what the server offered.
+		// application when the "..." is pressed; the client's picker shows only what the server offered.
 		std::vector<ibClassID> offered;
-		ibBackendTypeConfigFactory::GetTypesByFilter(ibSelectorDataType::ibSelectorDataType_reference, metaData, offered);
+		ibBackendTypeApplicationFactory::GetTypesByFilter(ibSelectorDataType::ibSelectorDataType_reference, metaData, offered);
 		ibTypeDescription types;
 		std::vector<ibDataValue> ids;
 		for (const ibClassID& clsid : offered) {

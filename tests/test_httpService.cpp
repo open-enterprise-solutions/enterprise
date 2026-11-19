@@ -1,5 +1,5 @@
 // =============================================================================
-// HTTP services — a configuration answering a request (metaHttpServiceObject.h, httpServiceCall.h).
+// HTTP services — an application answering a request (metaHttpServiceObject.h, httpServiceCall.h).
 //
 //   1. a template's match, on its own: a literal, a {parameter}, the rest (*), the root;
 //   2. what is a template at all, and what is refused;
@@ -9,7 +9,7 @@
 //   5. the three kinds go through a save and a load whole;
 //   6. a request answered end to end, on SQLite, in a session of its own: the handler given the request, its
 //      response sent — and 401, 404, 405 and 500 where they are due, 401 before anything is looked up;
-//   7. the kind: what the configuration offers among the web addresses, an object it does not have refused, and a
+//   7. the kind: what the application offers among the web addresses, an object it does not have refused, and a
 //      registered service answered through the protocol's `serve` — and nothing once it is taken off;
 //   8. the save: a method whose Handler the module has no function for is refused, by its Service.Template.Method.
 // =============================================================================
@@ -26,7 +26,7 @@
 #include "backend/databaseLayer/databaseQueryBuilder.h"
 #include "backend/databaseLayer/sqllite/sqliteDatabaseLayer.h"
 #include "backend/httpService/httpServiceCall.h"
-#include "backend/metadataConfiguration.h"
+#include "backend/metadataApplication.h"
 #include "backend/metaCollection/metaHttpServiceObject.h"
 #include "backend/propertyManager/propertyObject.h"   // ibPropertyGate — a property set as a person sets it
 #include "backend/restructureInfo.h"                   // the save's ledger — what a refused save says
@@ -65,16 +65,16 @@ bool Set(ibValueMetaObject* object, const ibString& name, const ibVariant& value
 	return property != nullptr && ibPropertyGate::SetValue(object, property, value);
 }
 
-// A service in a configuration in memory: its templates, each with its methods — `GET:Handler`, `Any:Handler`.
+// A service in an application in memory: its templates, each with its methods — `GET:Handler`, `Any:Handler`.
 struct ibServiceShape {
 	ibString                                          m_template;
 	std::vector<std::pair<ibHttpMethod, ibString>>    m_methods;
 };
 
-ibValueMetaObjectHttpService* MakeService(ibMetaDataConfigurationFile& cfg, const ibString& name,
+ibValueMetaObjectHttpService* MakeService(ibMetaDataApplicationFile& cfg, const ibString& name,
 	const std::vector<ibServiceShape>& shape)
 {
-	ibValueMetaObjectConfiguration* const root = cfg.GetCommonMetaObject();
+	ibValueMetaObjectApplication* const root = cfg.GetRootMetaObject();
 	auto* service = dynamic_cast<ibValueMetaObjectHttpService*>(cfg.CreateMetaObject(g_metaHttpServiceCLSID, root, false));
 	if (service == nullptr)
 		return nullptr;
@@ -160,7 +160,7 @@ TEST(HttpService, ATemplateIsLiteralsParametersAndALastRest)
 // 3 and 4 - which template, and which method
 TEST(HttpService, TheMostParticularTemplateAnswersAndTheMethodByItsName)
 {
-	ibMetaDataConfigurationFile cfg;
+	ibMetaDataApplicationFile cfg;
 	const ibValueMetaObjectHttpService* const service = MakeService(cfg, ibT("Desk"), {
 		{ ibT("/*"),               { { ibHttpMethod_Any, ibT("Rest") } } },
 		{ ibT("/Transfer/{id}"),   { { ibHttpMethod_Get, ibT("OneTransfer") }, { ibHttpMethod_Delete, ibT("DropTransfer") } } },
@@ -188,13 +188,13 @@ TEST(HttpService, TheKindsGoThroughASaveAndALoad)
 {
 	const ibString file = wxFileName(wxStandardPaths::Get().GetTempDir(), wxT("oes-http-service.cfg")).GetFullPath();
 	{
-		ibMetaDataConfigurationFile cfg;
+		ibMetaDataApplicationFile cfg;
 		ASSERT_NE(MakeService(cfg, ibT("Desk"), { { ibT("/Transfer/{id}"), { { ibHttpMethod_Post, ibT("Reset") } } } }), nullptr);
-		ASSERT_TRUE(cfg.SaveConfigToFile(file));
+		ASSERT_TRUE(cfg.SaveApplicationToFile(file));
 	}
 
-	ibMetaDataConfigurationFile cfg;
-	ASSERT_TRUE(cfg.LoadConfigFromFile(file));
+	ibMetaDataApplicationFile cfg;
+	ASSERT_TRUE(cfg.LoadApplicationFromFile(file));
 	wxRemoveFile(file);
 
 	const std::vector<ibValueMetaObject*> services = cfg.GetAnyArrayObject(g_metaHttpServiceCLSID);
@@ -209,14 +209,14 @@ TEST(HttpService, TheKindsGoThroughASaveAndALoad)
 namespace {
 
 // THE BASE: SQLite in a file of its own — the session registry keeps a connection of its own, so the pool is wider
-// than one and every connection is the same database — and a configuration made here as its active one, what a
+// than one and every connection is the same database — and an application made here as its active one, what a
 // request's session comes in with (ibSession::GetMetaData).
 struct HttpServiceFix : ::testing::Test {
 	wxInitializer                                m_wxInit;
-	// RunDatabase sets this thread's code style to the configuration's; TearDown puts it back.
+	// RunDatabase sets this thread's code style to the application's; TearDown puts it back.
 	const short                                  m_codeStyle = ibCompileCode::GetCodeStyle();
 	ibString                                     m_file;
-	std::shared_ptr<ibMetaDataConfigurationFile> cfg;
+	std::shared_ptr<ibMetaDataApplicationFile> cfg;
 	ibGuid                                       m_service;   // Desk's object — what its web address names
 
 	void SetUp() override
@@ -251,7 +251,7 @@ struct HttpServiceFix : ::testing::Test {
 			"started TEXT, lastActive TEXT, computer TEXT)")), -1);
 		ibApplicationInstance::GetSessionRegistry()->Start();
 
-		cfg = ibMetaData::MakeShared<ibMetaDataConfigurationFile>();
+		cfg = ibMetaData::MakeShared<ibMetaDataApplicationFile>();
 		ActiveMetaDataAccess::Replace(cfg);
 
 		ibValueMetaObjectHttpService* const service = MakeService(*cfg, ibT("Desk"), {
@@ -274,7 +274,7 @@ struct HttpServiceFix : ::testing::Test {
 			wxT("Function NoResponse(Request) {\n")
 			wxT("\treturn \"a string\";\n")
 			wxT("}\n"));
-		ASSERT_TRUE(cfg->RunDatabase()) << "the configuration in memory did not run";
+		ASSERT_TRUE(cfg->RunDatabase()) << "the application in memory did not run";
 	}
 
 	// The base's one user, keeper, with the password given.
@@ -435,13 +435,13 @@ TEST_F(HttpServiceFix, ARegisteredServiceIsAnsweredThroughServe)
 	const ibServedKind* const kind = ibServedKind::Find(ibT("HTTPService"));
 	ASSERT_NE(kind, nullptr) << "the kind registers itself with the engine";
 
-	// What the configuration offers: the service at es/<RootURL>, by its object.
+	// What the application offers: the service at es/<RootURL>, by its object.
 	const std::vector<ibServedAddress> offers = kind->Offer();
 	ASSERT_EQ(offers.size(), 1u);
 	EXPECT_EQ(offers[0].m_path, ibString(ibT("es/desk")));
 	EXPECT_EQ(offers[0].m_object, m_service);
 
-	// An object the configuration does not have is refused by the kind, before anything is listed.
+	// An object the application does not have is refused by the kind, before anything is listed.
 	ibServedAddress stranger = offers[0];
 	stranger.m_object = ibGuid::newGuid();
 	stranger.m_owner = ibGuid::newGuid();
@@ -475,22 +475,22 @@ TEST_F(HttpServiceFix, ARegisteredServiceIsAnsweredThroughServe)
 // 8 - the save
 TEST(HttpService, AMethodNobodyAnswersIsNotSaved)
 {
-	// A SAVE WRITES ITS REFUSALS INTO THE ACTIVE CONFIGURATION'S LEDGER (ibMetaDataConfigurationBase::GetRestructureInfo),
-	// so the configuration saved here is made the active one, and put back after — test_predefinedCells' steps. With
+	// A SAVE WRITES ITS REFUSALS INTO THE ACTIVE APPLICATION'S LEDGER (ibMetaDataApplicationBase::GetRestructureInfo),
+	// so the application saved here is made the active one, and put back after — test_predefinedCells' steps. With
 	// none active the ledger was read through a null: an access violation on its first Clear, on every platform.
-	struct ActiveConfiguration {
-		std::shared_ptr<ibMetaDataConfigurationFile> m_cfg;
+	struct ActiveApplication {
+		std::shared_ptr<ibMetaDataApplicationFile> m_cfg;
 		const short m_codeStyle = ibCompileCode::GetCodeStyle();
 		bool m_ok = false;
-		ActiveConfiguration()
+		ActiveApplication()
 		{
 			if (!ibApplicationInstance::CreateAppDataEnv(ibRunMode::eFILE_MODE))
 				return;
-			m_cfg = ibMetaData::MakeShared<ibMetaDataConfigurationFile>();
+			m_cfg = ibMetaData::MakeShared<ibMetaDataApplicationFile>();
 			ActiveMetaDataAccess::Replace(m_cfg);
 			m_ok = true;
 		}
-		~ActiveConfiguration()
+		~ActiveApplication()
 		{
 			if (!m_ok)
 				return;
@@ -500,7 +500,7 @@ TEST(HttpService, AMethodNobodyAnswersIsNotSaved)
 	} active;
 	if (!active.m_ok)
 		GTEST_SKIP() << "appData env unavailable headless";
-	ibMetaDataConfigurationFile& cfg = *active.m_cfg;
+	ibMetaDataApplicationFile& cfg = *active.m_cfg;
 
 	ibValueMetaObjectHttpService* const service = MakeService(cfg, ibT("Desk"), {
 		{ ibT("/Transfer/{id}"), { { ibHttpMethod_Post, ibT("TransferPost") }, { ibHttpMethod_Get, ibT("Missing") } } },
@@ -511,7 +511,7 @@ TEST(HttpService, AMethodNobodyAnswersIsNotSaved)
 		wxT("\treturn New HTTPServiceResponse(200);\n")
 		wxT("}\n"));
 
-	ibRestructureInfo& ledger = ibMetaDataConfigurationBase::GetRestructureInfo();
+	ibRestructureInfo& ledger = ibMetaDataApplicationBase::GetRestructureInfo();
 	ledger.Clear();
 	EXPECT_FALSE(service->OnSaveMetaObject(0)) << "Missing has no function in the module";
 	ibString said;

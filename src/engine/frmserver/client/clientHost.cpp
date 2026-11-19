@@ -12,14 +12,14 @@
 
 #include "backend/appData.h"
 #include "backend/appHost.h"
-#include "backend/backend_exception.h"   // ibBackendException — a value the configuration cannot make
+#include "backend/backend_exception.h"   // ibBackendException — a value the application cannot make
 #include "backend/backend_localization.h"   // the session's language — said with the frame
 #include "backend/backend_picture.h"   // ibBackendPicture::GetServerPicture — a picture asked for by its id
 #include "core/exception.h"
 #include "core/fdatetime.h"           // ibDateTime — a detached session's end, as this clock reads it
 #include "core/formatString.h"        // ibFormatString — a value presented through Format()'s codes
 #include "frmserver/mcp/mcpServer.h"      // the person's assistant server
-#include "backend/metadataConfiguration.h"
+#include "backend/metadataApplication.h"
 #include "backend/metaCollection/metaFormObject.h"   // ibBackendCommandItem::Execute
 #include "backend/rpc/rpcMessage.h"
 #include "core/serialize/dataBuilder.h"
@@ -220,14 +220,14 @@ void OfferResume(ibDataNode& result, const ibString& id, int protocol, const ibS
 		result.SetValue(ibProtocol::ibLogin::Token, token);
 }
 
-// WHAT A CLIENT EXECUTES IS WHAT THE DESKTOP'S NAVIGATION DOES: an object of the configuration — a catalog, a
-// document, a common form, a command — found by its metadata id among the own objects of the configuration the
+// WHAT A CLIENT EXECUTES IS WHAT THE DESKTOP'S NAVIGATION DOES: an object of the application — a catalog, a
+// document, a shared form, a command — found by its metadata id among the own objects of the application the
 // client's session works in, and executed as a command item (enterprise's OnMenuItemClicked). An object's own forms
-// are reached through the object: it hands out its form for the command type, the configuration's or the one the
+// are reached through the object: it hands out its form for the command type, the application's or the one the
 // form builder makes.
 const ibBackendCommandItem* FindCommand(const ibSession& session, ibMetaID metaId)
 {
-	const ibMetaDataConfigurationBase* metaData = session.GetMetaData();
+	const ibMetaDataApplicationBase* metaData = session.GetMetaData();
 	return metaData != nullptr ? dynamic_cast<const ibBackendCommandItem*>(metaData->FindAnyObjectByFilter(metaId)) : nullptr;
 }
 
@@ -884,9 +884,9 @@ std::optional<ibDataNode> ibClientHost::Call(const ibRpcRequest& given, const vo
 {
 	// ⭐⭐ A CALL'S TYPES ARE ITS SESSION'S (Max, 2026-10-15: the metadata is taken from the session). A node a client hands back
 	// names its type by its clsid, or — read from a text (a JSON view, a clipboard's) — by a word (NodeType), and the word is
-	// a class of the configuration the CALLER's session works in. This thread works for none yet: the thread's lookup
+	// a class of the application the CALLER's session works in. This thread works for none yet: the thread's lookup
 	// (activeMetaData) threw "works for no base" at every such call. So the words a request kept are looked up in the
-	// configuration of that client's session (ibRpcLookupTypes) — a request that kept none is not written again.
+	// application of that client's session (ibRpcLookupTypes) — a request that kept none is not written again.
 	ibRpcRequest request = given;
 	const std::shared_ptr<Client> caller = FindClient(request.m_params.GetValue<ibString>(ibProtocol::ibLogin::Client));
 	const std::shared_ptr<ibSession> session = caller != nullptr ? caller->instance->ShareSession() : nullptr;
@@ -1165,7 +1165,7 @@ bool ibClientHost::Call(ibProtocol::ibMethod method, const ibDataNode& params, i
 			}
 			// WHAT THE CLIENT READS RIGHT AFTER ITS START, read in it (Read) — each schema it names, built as `schema`
 			// would build it, beside the frame: the designer's debugger store was a call of its own at every start, for
-			// an empty answer where the configuration has no debugger. Only once the start is done, not waiting.
+			// an empty answer where the application has no debugger. Only once the start is done, not waiting.
 			if (done && !client->unsettled.valid())
 				BuildSchema(*client->instance, params, result);
 			// The language the client's own words are said in: the base's, as the server says its own to it.
@@ -1325,7 +1325,7 @@ bool ibClientHost::Call(ibProtocol::ibMethod method, const ibDataNode& params, i
 				}
 			}
 			else if (method == ibProtocol::ibMethod::Execute) {
-				// What the configuration does not have is refused here, to the client: an empty frame would say
+				// What the application does not have is refused here, to the client: an empty frame would say
 				// nothing happened.
 				const ibMetaID metaId = params.GetValue<std::int32_t>(ibProtocol::ibExecute::Command);
 				std::int32_t type = ibInterfaceCommandType::ibInterfaceCommandType_Default;
@@ -1424,7 +1424,7 @@ bool ibClientHost::Call(ibProtocol::ibMethod method, const ibDataNode& params, i
 					refuse(ibProtocol::ibRefusal::NotFound, ibT("nothing to fetch there"));
 			}
 			else if (method == ibProtocol::ibMethod::Presentation) {
-				// A VALUE AS A PERSON READS IT — formatted here, where the configuration is (a reference's name is
+				// A VALUE AS A PERSON READS IT — formatted here, where the application is (a reference's name is
 				// its), on the client's session: a value the client holds itself (a date from its calendar, a value an
 				// answer carried) is shown the way the server shows any other.
 				std::shared_ptr<ibSession> session = client->instance->ShareSession();
@@ -1436,7 +1436,7 @@ bool ibClientHost::Call(ibProtocol::ibMethod method, const ibDataNode& params, i
 				else if (!value)
 					refuse(ibProtocol::ibRefusal::BadParameter, ibT("a presentation needs a Value"));
 				else if (metaData == nullptr)
-					refuse(ibProtocol::ibRefusal::Failed, ibT("the session has no configuration"));
+					refuse(ibProtocol::ibRefusal::Failed, ibT("the session has no application"));
 				else {
 					ibString text;
 					session->Submit([metaData, value, &format, &text, &done, &refuse]() {
@@ -1459,8 +1459,8 @@ bool ibClientHost::Call(ibProtocol::ibMethod method, const ibDataNode& params, i
 			}
 			else if (method == ibProtocol::ibMethod::Picture) {
 				// THE PICTURES OF THOSE IDS — an answer names a picture by its id alone (ibBackendPicture::SendPicture), and a
-				// client that has not got it asks for it here, several at once: a backend one by its number, a configuration's
-				// by the guid before its version (`<guid>#<version>`), of the session's configuration; made on the
+				// client that has not got it asks for it here, several at once: a backend one by its number, an application's
+				// by the guid before its version (`<guid>#<version>`), of the session's application; made on the
 				// session's worker. One there is none of comes back empty — the client keeps that too, and does not ask
 				// again.
 				std::shared_ptr<ibSession> session = client->instance->ShareSession();
@@ -1689,7 +1689,7 @@ bool ibClientHost::Mcp(Client& client, const ibDataNode& params, ibDataNode& res
 	const auto refuse = [&refusal, &error](ibProtocol::ibRefusal why, const ibString& text) { refusal = why; error = text; };
 	const ibProtocol::ibMcp::ibCommand command = static_cast<ibProtocol::ibMcp::ibCommand>(params.GetValue<std::int32_t>(ibProtocol::ibMcp::Command));
 
-	// ⭐ IN THE CLIENT'S SESSION — held for the call, and bound: metadata, rights and the configuration answer as for the
+	// ⭐ IN THE CLIENT'S SESSION — held for the call, and bound: metadata, rights and the application answer as for the
 	// person, whose connection this is. Held: a client going mid-call does not take the session from under a tool.
 	const std::shared_ptr<ibSession> session = client.instance->ShareSession();
 	ibClientFrame* const frame = client.instance->GetFrame();
@@ -2345,7 +2345,7 @@ void ibClientHost::DrawFrame(ibClientFrame* frame, ibDataNode& state, ibDataNode
 	state.SetValue(ibProtocol::ibFrame::Status, frame->GetStatusText());
 	const ibMetaData* const metaData = frame->GetSession()->GetMetaData();
 	// The language the session reads text in — drawn on its worker, so its own: a caption sent whole (an inspector's
-	// Synonym) is read by the client in it, as the desktop's grid read it in the configuration's.
+	// Synonym) is read by the client in it, as the desktop's grid read it in the application's.
 	state.SetValue(ibProtocol::ibFrame::Language, ibBackendLocalization::GetUserLanguage());
 	// The active tab by its id, as every tab is named on the wire; 0 — none.
 	const ibClientChildFrame* const active = frame->Tab(frame->ActiveTab());
@@ -2377,7 +2377,7 @@ void ibClientHost::DrawFrame(ibClientFrame* frame, ibDataNode& state, ibDataNode
 	DrawMenu(frame, frame->GetMenu().GetItems(), state.Child(ibProtocol::ibFrame::Menu));
 	const std::int64_t menus = NowMs();
 
-	// …and the mode's own part of it, beside the tabs — the designer's configuration tree.
+	// …and the mode's own part of it, beside the tabs — the designer's application tree.
 	frame->OnDraw(state);
 	const std::int64_t frameDrawn = NowMs();
 
@@ -2401,7 +2401,7 @@ void ibClientHost::DrawFrame(ibClientFrame* frame, ibDataNode& state, ibDataNode
 			node.SetValue(ibProtocol::ibFrame::ibTab::Icon, ibBackendPicture::SendPicture(tab->GetIcon(), metaData));
 		if (tab->IsLocked())
 			node.SetValue(ibProtocol::ibFrame::ibTab::Locked, true);
-		// What it shows takes no edit — the windows opened from it ask the client's configuration door, which reads this.
+		// What it shows takes no edit — the windows opened from it ask the client's application door, which reads this.
 		if (tab->GetDocument() != nullptr && !tab->GetDocument()->IsEditable())
 			node.SetValue(ibProtocol::ibFrame::ibTab::ReadOnly, true);
 		// What its view shows, when it is no form — the client draws it with the view of its own it has for that.
@@ -2449,6 +2449,11 @@ void ibClientHost::DrawFrame(ibClientFrame* frame, ibDataNode& state, ibDataNode
 		ibDataNode& node = messages.AddChild(0, 0);
 		node.SetValue(ibProtocol::ibFrame::ibMessage::Level, static_cast<std::int32_t>(message.level));
 		node.SetValue(ibProtocol::ibFrame::ibMessage::Text, message.text);
+		if (!message.docPath.IsEmpty()) {
+			node.SetValue(ibProtocol::ibFrame::ibMessage::File, message.fileName);
+			node.SetValue(ibProtocol::ibFrame::ibMessage::Module, message.docPath);
+			node.SetValue(ibProtocol::ibFrame::ibMessage::Line, static_cast<std::int32_t>(message.line));
+		}
 	}
 	if (frame->TakeClearPending())
 		events.SetValue(ibProtocol::ibFrame::Clear, true);

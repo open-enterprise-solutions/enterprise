@@ -206,14 +206,14 @@ std::vector<ibColumnSlot> ibBackendQueryColumn::DescribeLayout() const
 	}
 
 	// _V — what a column of no type holds and none of the fields above would, as its node's bytes (the codec writes
-	// them, WriteValue). Every declared attribute has a type, so no table of a configuration has one.
+	// them, WriteValue). Every declared attribute has a type, so no table of an application has one.
 	if (any)
 		slots.push_back(makeSlot(ibColumnRole::Value, ibTypeBlob(), false));
 
 	return slots;
 }
 
-// ⭐ THE TYPE FACTORY'S PAIR (ibBackendTypeConfigFactory) — of the column's type, made by its configuration. A fresh
+// ⭐ THE TYPE FACTORY'S PAIR (ibBackendTypeApplicationFactory) — of the column's type, made by its application. A fresh
 // value of a column with nothing behind it is its type's empty.
 ibValue ibBackendQueryColumn::CreateValue() const
 {

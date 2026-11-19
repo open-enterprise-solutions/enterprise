@@ -115,7 +115,7 @@ TEST(SourceDescription, ClearEmptiesPath) {
 // ---------------------------------------------------------------------------
 // Serialize round-trip (v2 raw layout): ids AND pinned types survive byte-for-
 // byte — no metadata touched. This is the whole point: the passport is a
-// self-contained address, so it (de)serialises without a config open.
+// self-contained address, so it (de)serialises without an application open.
 // ---------------------------------------------------------------------------
 TEST(SourceDescription, SerializeRoundTripPreservesIdAndType) {
     ibSourceDescription desc;

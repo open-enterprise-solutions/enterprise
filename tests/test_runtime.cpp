@@ -38,8 +38,8 @@
 #include "backend/backend_mainFrame.h"               // a frame so the form can be born
 #include "framedSession.h"                            // KeyFrame, FramedSession — the frame a form is born against
 #include "backend/metaCollection/metaModuleObject.h" // a form module, so the bind has somewhere to live
-#include "backend/metadataConfiguration.h"           // the module's file name is asked of its metadata
-#include "backend/metaCollection/metaFormObject.h"  // a common form: what a tile's form is created by
+#include "backend/metadataApplication.h"             // the module's file name is asked of its metadata
+#include "backend/metaCollection/metaFormObject.h"  // a shared form: what a tile's form is created by
 #include "backend/moduleManager/moduleManager.h"
 #include "backend/system/value/valueDynamicList.h"
 #include "backend/system/value/valueList.h"        // ibValueValueList — a value list is a table source
@@ -802,7 +802,7 @@ TEST(RuntimeTest, WhileLoopCountsToTen) {
 //
 // OPER_FOR left the loop when the counter EQUALLED the bound, which meant the
 // body ran for [from, to) while the language reference calls the range
-// inclusive — every counted loop in every configuration quietly dropped its
+// inclusive — every counted loop in every application quietly dropped its
 // last turn. A probe adding 0.01 a thousand times returned 9.99, which reads
 // as a defect in the money type rather than in the loop.
 //
@@ -1017,10 +1017,10 @@ TEST(RuntimeTest, AnOmittedArgumentTakesTheDeclaredDefault) {
 	EXPECT_EQ(kept.GetString(), wxT("other"));
 }
 
-// `Lib.Piece("X")` is a call on a common module's own unit. The default belongs
+// `Lib.Piece("X")` is a call on a shared module's own unit. The default belongs
 // to that module. A hole in the middle is filled there too, and a required
 // argument that was left out is refused.
-TEST_F(BuiltInRuntime, ACommonModuleUnitFillsAHoleInTheMiddle) {
+TEST_F(BuiltInRuntime, ASharedModuleUnitFillsAHoleInTheMiddle) {
 	ibSession session(wxT("mod-default"), ibSessionKind::Enterprise);
 	ibSessionScope scope(&session);
 
@@ -1033,11 +1033,11 @@ TEST_F(BuiltInRuntime, ACommonModuleUnitFillsAHoleInTheMiddle) {
 		~StyleRestore() { ibCompileCode::SetCodeStyle(saved); }
 	} styleRestore{ savedStyle };
 
-	ibMetaDataConfigurationFile cfg;
-	ibValueMetaObjectConfiguration* root = cfg.GetCommonMetaObject();
+	ibMetaDataApplicationFile cfg;
+	ibValueMetaObjectApplication* root = cfg.GetRootMetaObject();
 	ASSERT_NE(root, nullptr);
-	auto* mod = dynamic_cast<ibValueMetaObjectCommonModule*>(
-		cfg.CreateMetaObject(g_metaCommonModuleCLSID, root, false));
+	auto* mod = dynamic_cast<ibValueMetaObjectSharedModule*>(
+		cfg.CreateMetaObject(g_metaSharedModuleCLSID, root, false));
 	ASSERT_NE(mod, nullptr);
 	mod->SetModuleText(
 		wxT("Function Piece(text, sep = \",\") Public\n")
@@ -1057,12 +1057,12 @@ TEST_F(BuiltInRuntime, ACommonModuleUnitFillsAHoleInTheMiddle) {
 		wxT("EndFunction\n"));
 
 	ibValueModuleManagerDesigner manager(&cfg, root);
-	// The common module is compiled against the configuration module, so that
-	// module has to be compiled and running before the common module's own
+	// The shared module is compiled against the application module, so that
+	// module has to be compiled and running before the shared module's own
 	// frame will accept it.
 	ASSERT_TRUE(manager.Compile());
-	ASSERT_TRUE(manager.AddCommonModule(mod));
-	ibValueModuleManager::ibValueModuleUnit* unit = manager.FindCommonModule(mod);
+	ASSERT_TRUE(manager.AddSharedModule(mod));
+	ibValueModuleManager::ibValueModuleUnit* unit = manager.FindSharedModule(mod);
 	ASSERT_NE(unit, nullptr);
 	ASSERT_TRUE(unit->Compile());
 	manager.InitializeRuntime();
@@ -3275,7 +3275,7 @@ TEST(RuntimeTest, ACorrelatedJoinPairsEachKeyWithItsOwnRowsMeta) {
 		// row and the value is its column. `select m.Tag + k` is an expression with no natural
 		// name, so the column is `Field1` (queryRewrite.h's rule, shared with the written query
 		// language). This used to add `t` itself, which stringified the ROW: the answer read
-		// "TableValueRowTableValueRow…" instead of "AaBbCc".
+		// "TableRowTableRow…" instead of "AaBbCc".
 		wxT("Foreach t In q Do\n")
 		wxT("  r = r + t.Field1;\n")
 		wxT("EndDo\n")));
@@ -4216,7 +4216,7 @@ TEST_F(FormRuntime, AFormScriptAddsAndRemovesAnAttribute) {
 	EXPECT_THROW(pu.CallAsProc(wxT("Remove"), added), ibBackendCoreException);
 
 	// The table is bound by the path the script wrote, and what it shows is the attribute's own table, row and all.
-	// The table is made as ThisForm.Controls.CreateControl makes it: `Type("Tablebox")` would ask a configuration,
+	// The table is made as ThisForm.Controls.CreateControl makes it: `Type("Tablebox")` would ask an application,
 	// and this form has none.
 	ibValueModelTableBox* table = dynamic_cast<ibValueModelTableBox*>(form->CreateControl(ibT("Tablebox"), form));
 	ASSERT_NE(table, nullptr);
@@ -4264,14 +4264,14 @@ TEST_F(FormRuntime, AFormScriptAddsAndRemovesAnAttribute) {
 // A BUTTON AS A TILE - the representation a finger presses: the picture large over the caption and a note under
 // them. What the server says of it: the member of the button's own Representation, the note saved with the button,
 // and the state a client draws from - the note going with a tile alone. The buttons are made by a form born against
-// the session's frame, with the metadata a form lives on - a common form of a configuration is its creator - through
+// the session's frame, with the metadata a form lives on - a shared form of an application is its creator - through
 // the factory the designer's comes to (NewObject), and read through what every control answers; they stand on the
 // form itself, with no sizer between - their state does not ask for one.
 struct TileForm : FormRuntime {
 	std::shared_ptr<FramedSession> m_session;
 	std::unique_ptr<KeyFrame> m_frame;
 	std::unique_ptr<ibSessionScope> m_scope;
-	std::unique_ptr<ibMetaDataConfigurationFile> m_configuration;
+	std::unique_ptr<ibMetaDataApplicationFile> m_application;
 	ibValuePtr<ibValueForm> m_form;
 
 	void SetUp() override {
@@ -4282,16 +4282,16 @@ struct TileForm : FormRuntime {
 		m_frame = std::make_unique<KeyFrame>(ibApplicationInstance::GetSessionRegistry()->MintUnlisted(m_session));
 		m_session->Attach(m_frame.get());
 		m_scope = std::make_unique<ibSessionScope>(m_session.get());
-		m_configuration = std::make_unique<ibMetaDataConfigurationFile>();
+		m_application = std::make_unique<ibMetaDataApplicationFile>();
 		const ibValueMetaObjectFormBase* const creator = dynamic_cast<const ibValueMetaObjectFormBase*>(
-			m_configuration->CreateMetaObject(g_metaCommonFormCLSID, m_configuration->GetCommonMetaObject(), false));
+			m_application->CreateMetaObject(g_metaSharedFormCLSID, m_application->GetRootMetaObject(), false));
 		ASSERT_NE(creator, nullptr);
 		m_form = ibValuePtr<ibValueForm>(new ibValueForm(ibFormRequest(), creator));
-		ASSERT_EQ(m_form->GetMetaData(), m_configuration.get());
+		ASSERT_EQ(m_form->GetMetaData(), m_application.get());
 	}
 	void TearDown() override {
 		m_form = ibValuePtr<ibValueForm>();
-		m_configuration.reset();
+		m_application.reset();
 		m_scope.reset();
 		m_frame.reset();
 		m_session.reset();

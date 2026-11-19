@@ -55,7 +55,7 @@ enum EventId
 
 enum CommandId
 {
-	CommandId_VerifyConnection = 1, // verify configuration before connection
+	CommandId_VerifyConnection = 1, // verify application before connection
 	CommandId_SetConnectionType = 2, // return if connection not passed verify 
 
 	CommandId_StartSession = 3, // If verify is ok then start debugging 
@@ -154,11 +154,11 @@ enum CommandId
 	//
 	// ⭐⭐ AND WHAT TRAVELS ON FillStart IS COMPILED BYTECODE, not a name and not source — the only
 	// command on this wire that carries a program. Having no frame here to compile against was first
-	// read as "so the caller must name a procedure the configuration already has", which made trying
-	// a fill require editing somebody's configuration. The designer has the compiler; it compiles,
+	// read as "so the caller must name a procedure the application already has", which made trying
+	// a fill require editing somebody's application. The designer has the compiler; it compiles,
 	// and the far end runs what arrives (Max, 2026-09-06: *"you can pass the bytecode you compiled
 	// and send it there so it executes there — what's the problem?"*). Calls inside it bind at THIS
-	// end by module-descriptor guid, versions checked, so a program built against a configuration
+	// end by module-descriptor guid, versions checked, so a program built against an application
 	// this application is not running is refused rather than answered wrongly.
 	CommandId_JobStart  = 33,
 	CommandId_JobStatus = 34,
@@ -166,7 +166,7 @@ enum CommandId
 
 	// ⭐⭐ READING A REPORT, and it is here for a reason of RIGHTS rather than of plumbing (Max,
 	// 2026-09-06: *"we do not work with data in the designer, we get it through the wire — and the
-	// wire is what the user sees, that they really gave access"*). A designer holds a CONFIGURATION;
+	// wire is what the user sees, that they really gave access"*). A designer holds an APPLICATION;
 	// the rows belong to the application somebody started, and starting it with the debugger
 	// attached is the visible act that grants access. Reading them over the designer's own
 	// connection would take them by deciding to — which is what the screenshot command already

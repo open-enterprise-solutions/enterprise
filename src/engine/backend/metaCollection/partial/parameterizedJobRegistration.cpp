@@ -162,7 +162,7 @@ ibString ibValueMetaObjectParameterizedJob::GetRowJobName(const ibGuid& objGuid)
 bool ibValueMetaObjectParameterizedJob::RegisterRow(const ibGuid& objGuid, bool active,
 	const ibJobScheduleDescription& schedule, const ibString& presentation) const
 {
-	// The Designer never runs a configuration's jobs. It edits them.
+	// The Designer never runs an application's jobs. It edits them.
 	if (appData == nullptr || appData->DesignerMode())
 		return true;
 
@@ -210,7 +210,7 @@ bool ibValueMetaObjectParameterizedJob::RegisterRow(const ibGuid& objGuid, bool 
 		return true;
 
 	ibJobDescription desc;
-	desc.m_origin = ibJobOrigin::Configuration;
+	desc.m_origin = ibJobOrigin::Application;
 	desc.m_name = GetRowJobName(objGuid);
 	// THE ROW IS THE OWNER OF ITS OWN SWITCH — say so, rather than leaving the description's
 	// default (true) and trusting Register to overwrite it from the register a moment later.
@@ -242,7 +242,7 @@ bool ibValueMetaObjectParameterizedJob::RegisterRow(const ibGuid& objGuid, bool 
 	// happens to be one process holding the schedule.
 	desc.m_exclusive = true;
 
-	// WHO IT RUNS AS — whoever opened the configuration, when there is such a user. No user is a
+	// WHO IT RUNS AS — whoever opened the application, when there is such a user. No user is a
 	// legitimate state, not a refusal: no identity means no row filter, so the job sees everything,
 	// which is what most unattended work wants.
 	const ibUserInfo& user = appData->GetUserInfo();
@@ -259,7 +259,7 @@ bool ibValueMetaObjectParameterizedJob::RegisterRow(const ibGuid& objGuid, bool 
 
 	if (!manager->Register(std::move(desc))) {
 		// Register logs the reason itself. A row that could not be declared must not stop a
-		// configuration from opening — the failure belongs in the log, not in the user's face.
+		// application from opening — the failure belongs in the log, not in the user's face.
 		ibJournalInfo(ibT("job.register"),ibT("job row '%s' was not registered"), presentation);
 		return true;
 	}
@@ -299,7 +299,7 @@ bool ibValueMetaObjectParameterizedJob::UnregisterRow(const ibGuid& objGuid, boo
 
 bool ibValueMetaObjectParameterizedJob::RegisterJobs()
 {
-	// The Designer never runs a configuration's jobs. It edits them.
+	// The Designer never runs an application's jobs. It edits them.
 	if (appData == nullptr || appData->DesignerMode())
 		return true;
 	if (ibApplicationInstance::GetJobManager() == nullptr)
@@ -349,7 +349,7 @@ bool ibValueMetaObjectParameterizedJob::RegisterJobs()
 		}
 	}
 	catch (const ibCoreException& err) {
-		// A table that cannot be read at start-up must not stop the configuration from opening —
+		// A table that cannot be read at start-up must not stop the application from opening —
 		// the rows are still there and re-register themselves as they are written.
 		ibJournalInfo(ibT("job.register"),ibT("scheduled job '%s': rows were not registered: %s"),
 			GetJobName(), err.GetErrorDescription());
@@ -368,7 +368,7 @@ bool ibValueMetaObjectParameterizedJob::UnregisterJobs()
 		return true;
 
 	// Withdraw by PREFIX — the rows were registered as "<JobName>.<rowGuid>", and by the time a
-	// configuration closes the table may no longer be readable. Asking the manager what it holds
+	// application closes the table may no longer be readable. Asking the manager what it holds
 	// is both cheaper and safe.
 	manager->UnregisterByPrefix(GetJobName() + ibT("."));
 	return true;

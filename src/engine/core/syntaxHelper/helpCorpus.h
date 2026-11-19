@@ -9,7 +9,7 @@
 // Lifecycle:
 //   1. LoadHelpCorpus(locale, platformDir, configDir) — non-throwing
 //      factory in helpLoader.h. Builds two source corpora (platform +
-//      per-config) and merges them through the merging constructor below
+//      per-application) and merges them through the merging constructor below
 //      into a single immutable snapshot.
 //   2. appData publishes the resulting shared_ptr<const ibHelpCorpus>
 //      via atomic_store_explicit (§3.4). Readers grab a snapshot through
@@ -48,13 +48,13 @@ using ibHelpEntryIndex = std::uint32_t;
 class CORE_API ibHelpCorpus final {
 public:
 	// Source tag for the merging constructor. The platform corpus ships
-	// with OES (data/help/<locale>/), the per-config corpus is rebuilt
-	// from the active configuration (configCacheDir/help/<locale>/).
-	// On id collision the per-config entry wins as an overlay; the merge
+	// with OES (data/help/<locale>/), the per-application corpus is rebuilt
+	// from the active application (applicationCacheDir/help/<locale>/).
+	// On id collision the per-application entry wins as an overlay; the merge
 	// records a kWarning in the result's errors list. See §3.6.
 	enum class Source {
 		kPlatform,
-		kPerConfiguration,
+		kPerApplication,
 	};
 
 	// Construct an empty corpus. Used as the fallback when LoadHelpCorpus
@@ -63,7 +63,7 @@ public:
 	explicit ibHelpCorpus(const ibString& locale);
 
 	// Single-source constructor. The loader produces one of these per
-	// source (platform / per-config), then hands them to the merging
+	// source (platform / per-application), then hands them to the merging
 	// constructor below.
 	// `categoryNames` is the locale's `_categories.json` dictionary, key →
 	// display name. It is passed IN rather than read here because the corpus
@@ -74,13 +74,13 @@ public:
 	             std::vector<ibHelpLoadError>      loadErrors,
 	             std::map<ibString, ibString>      categoryNames = {});
 
-	// Merging constructor — composes platform + per-config into a single
-	// immutable snapshot. Platform entries are added first; per-config
+	// Merging constructor — composes platform + per-application into a single
+	// immutable snapshot. Platform entries are added first; per-application
 	// entries with the same id overlay the platform entry (recorded as
 	// kWarning in the merged errors list) and are tagged
-	// fromConfiguration=true.
+	// fromApplication=true.
 	ibHelpCorpus(std::shared_ptr<const ibHelpCorpus> platform,
-	             std::shared_ptr<const ibHelpCorpus> perConfig,
+	             std::shared_ptr<const ibHelpCorpus> perApplication,
 	             const ibString&                     locale);
 
 	// No copy / move — the corpus is owned through shared_ptr; accidental

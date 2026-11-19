@@ -174,7 +174,7 @@ void ibValueSchedule::ShowValue()
 //                        the collection                            //
 //////////////////////////////////////////////////////////////////////
 
-// Count and Get are the collection's, and nothing more: the jobs are the configuration's, not a caller's to add.
+// Count and Get are the collection's, and nothing more: the jobs are the application's, not a caller's to add.
 void ibValuePredefinedJobs_BindNames(ibValue::ibMemberTable& helper, const ibValue* /*ctx*/)
 {
 	ibValuePredefinedJobs::FillCollection(helper);
@@ -394,7 +394,7 @@ bool ibValueJobRow::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 //*                       Runtime register                             *
 //**********************************************************************
 
-// Both VENDED, never creatable: the collection exists because a configuration declares jobs, and a
+// Both VENDED, never creatable: the collection exists because an application declares jobs, and a
 // row exists because the collection produced it. `New JobSettings()` would refer to nothing — the
 // way in is ScheduledJobs.Predefined.
 SYSTEM_TYPE_REGISTER(ibValuePredefinedJobs, "PredefinedJobs", g_valuePredefinedJobsCLSID);

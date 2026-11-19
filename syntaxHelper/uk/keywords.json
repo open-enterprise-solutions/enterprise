@@ -13,11 +13,11 @@
         "control_flow"
       ],
       "signature": "Якщо <Вираз> Тоді ... [ІнакшеЯкщо ... Тоді ...] [Інакше ...] КінецьЯкщо",
-      "description": "Умовне виконання. Обчислює логічний вираз; за значення True виконує гілку Then, інакше — необовʼязкову гілку ElsIf з власним виразом, інакше — необовʼязкову гілку Else.",
-      "syntax_block": "if (<Expression1>) {\n    // statements\n} elsif (<Expression2>) {\n    // statements\n} else {\n    // statements\n}",
-      "parameters": "<Expression1>, <Expression2> — логічні вирази.",
+      "description": "Умовне виконання. Обчислює логічний вираз; за значення True виконує гілку Then, інакше — необовʼязкову гілку ElsIf з власним виразом, інакше — необовʼязкову гілку Else.\n\nУ CES тіло без фігурних дужок — один оператор: присвоювання, виклик, return або свій while / try / if; так само для else, while, for і foreach.",
+      "syntax_block": "if (<Expression1>) {\n    // statements\n} elseif (<Expression2>) {\n    // statements\n} else {\n    // statements\n}\n\nif (<Expression>) <Statement>; else <Statement>;",
+      "parameters": "<Expression1>, <Expression2> — логічні вирази.\n<Statement> — один оператор, тіло без фігурних дужок.",
       "return_descr": "",
-      "example": "if (userInfo.IsAdmin) {\n    EnableAdminMenu();\n} else {\n    HideAdminMenu();\n}",
+      "example": "if (userInfo.IsAdmin) {\n    EnableAdminMenu();\n} else {\n    HideAdminMenu();\n}\n\nif (Qty == 0) return;\nif (Doc.Posted) Status = \"posted\"; else Status = \"draft\";",
       "availability": "Клієнт, Сервер",
       "see_also": [
         "kw.Else",
@@ -150,7 +150,7 @@
         "control_flow"
       ],
       "signature": "?(<Condition>, <ValueIfTrue>, <ValueIfFalse>)",
-      "description": "Умовний (тернарний) вираз — Якщо, яке відповідає значенням. Коли <Condition> виконано, вираз дорівнює <ValueIfTrue>, інакше — <ValueIfFalse>. Пишеться однаково в обох діалектах і стоїть усюди, де стоїть значення: у присвоєнні, в аргументі, у поверненні, всередині іншого виразу; вкладається.\n\nУмова перевіряється так само, як у Якщо: логічне значення читається як є, будь-яке інше вважається істинним, коли воно не порожнє.\n\nОБЧИСЛЮЄТЬСЯ ЛИШЕ ОБРАНЕ ЗНАЧЕННЯ. Спочатку виконується умова, а гілка, яку вона не обрала, не рахується, тому значення, яке там упало б, не падає: `?(doc <> Undefined, doc.Description, \"\")` відповідає \"\", коли doc дорівнює Undefined, а виклик у необраній гілці не виконується.",
+      "description": "Умовний (тернарний) вираз — Якщо, яке відповідає значенням. Коли <Condition> виконано, вираз дорівнює <ValueIfTrue>, інакше — <ValueIfFalse>. Пишеться однаково в обох діалектах і стоїть усюди, де стоїть значення: у присвоєнні, в аргументі, у поверненні, всередині іншого виразу; вкладається.\n\nУмова перевіряється так само, як у Якщо: логічне значення читається як є, будь-яке інше вважається істинним, коли воно не порожнє.\n\nОБЧИСЛЮЄТЬСЯ ЛИШЕ ОБРАНЕ ЗНАЧЕННЯ. Спочатку виконується умова, а гілка, яку вона не обрала, не рахується, тому значення, яке там упало б, не падає: `?(doc != Undefined, doc.Description, \"\")` відповідає \"\", коли doc дорівнює Undefined, а виклик у необраній гілці не виконується.",
       "syntax_block": "var <Result> = ?(<Condition>, <ValueIfTrue>, <ValueIfFalse>);",
       "parameters": "<Condition> — перевірка: логічне значення або будь-яке інше, істинне, коли воно не порожнє.\n<ValueIfTrue> — результат, коли умову виконано.\n<ValueIfFalse> — результат в інших випадках.",
       "return_descr": "<ValueIfTrue> або <ValueIfFalse> — те, що обрала умова.",
@@ -393,7 +393,7 @@
         "control_flow"
       ],
       "signature": "",
-      "description": "Логічне заперечення.",
+      "description": "Логічне заперечення. VES; у CES пишеться !.",
       "syntax_block": "Not <Expression>",
       "parameters": "",
       "return_descr": "",
@@ -401,12 +401,12 @@
       "availability": "Клієнт, Сервер",
       "see_also": [
         "kw.And",
-        "kw.Or"
+        "kw.Or",
+        "op.Logic"
       ],
       "reviewed": true,
       "modes": [
-        "ves",
-        "ces"
+        "ves"
       ]
     },
     {
@@ -419,7 +419,7 @@
         "control_flow"
       ],
       "signature": "",
-      "description": "Логічне І. Коротке замикання: правий операнд не обчислюється, якщо лівий — False.",
+      "description": "Логічне І. Коротке замикання: правий операнд не обчислюється, якщо лівий — False. VES; у CES пишеться &&.",
       "syntax_block": "<LeftExpr> And <RightExpr>",
       "parameters": "",
       "return_descr": "",
@@ -427,12 +427,12 @@
       "availability": "Клієнт, Сервер",
       "see_also": [
         "kw.Or",
-        "kw.Not"
+        "kw.Not",
+        "op.Logic"
       ],
       "reviewed": true,
       "modes": [
-        "ves",
-        "ces"
+        "ves"
       ]
     },
     {
@@ -445,7 +445,7 @@
         "control_flow"
       ],
       "signature": "",
-      "description": "Логічне АБО. Коротке замикання: правий операнд не обчислюється, якщо лівий — True.",
+      "description": "Логічне АБО. Коротке замикання: правий операнд не обчислюється, якщо лівий — True. VES; у CES пишеться ||.",
       "syntax_block": "<LeftExpr> Or <RightExpr>",
       "parameters": "",
       "return_descr": "",
@@ -453,11 +453,63 @@
       "availability": "Клієнт, Сервер",
       "see_also": [
         "kw.And",
+        "kw.Not",
+        "op.Logic"
+      ],
+      "reviewed": true,
+      "modes": [
+        "ves"
+      ]
+    },
+    {
+      "id": "op.Compare",
+      "name_local": "== !=",
+      "name_en": "== !=",
+      "kind": "operator",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "<Left> == <Right>",
+      "description": "Порівняння в CES, як у C: == дорівнює, != не дорівнює, поряд із < <= > >=. Одиночний = у виразі відхиляється — це присвоювання. У VES порівнюють через = і <>.",
+      "syntax_block": "<Left> == <Right>\n<Left> != <Right>",
+      "parameters": "",
+      "return_descr": "Булеве.",
+      "example": "if (Doc.Status == \"Posted\" && Doc.Sum != 0) {\n    Message(Doc.Number);\n}",
+      "availability": "Клієнт, Сервер",
+      "see_also": [
+        "op.Logic",
+        "kw.If"
+      ],
+      "reviewed": true,
+      "modes": [
+        "ces"
+      ]
+    },
+    {
+      "id": "op.Logic",
+      "name_local": "&& || !",
+      "name_en": "&& || !",
+      "kind": "operator",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "<Left> && <Right>",
+      "description": "Логіка в CES, як у C: && — і, || — або, ! — не. && і || — коротке замикання: права частина не обчислюється, якщо ліва вже вирішила, тому Doc != Undefined && Doc.Posted — захист. ! слабший за порівняння: !x == 5 — це !(x == 5). У VES пишуть And, Or, Not.",
+      "syntax_block": "<Left> && <Right>\n<Left> || <Right>\n!<Expression>",
+      "parameters": "",
+      "return_descr": "Булеве.",
+      "example": "if (!User.IsLoggedIn || User.Role != \"admin\") {\n    return;\n}",
+      "availability": "Клієнт, Сервер",
+      "see_also": [
+        "op.Compare",
+        "kw.And",
+        "kw.Or",
         "kw.Not"
       ],
       "reviewed": true,
       "modes": [
-        "ves",
         "ces"
       ]
     },
@@ -641,7 +693,7 @@
         "control_flow"
       ],
       "signature": "",
-      "description": "Модифікатор доступу: символ видно нащадкам модуля — модуль об'єкта віддає його формам цього об'єкта, — але не всій конфігурації. Пишеться ПІСЛЯ списку параметрів — за закривною дужкою процедури чи функції, за іменем змінної, — там само, де Public і Private.",
+      "description": "Модифікатор доступу: символ видно нащадкам модуля — модуль об'єкта віддає його формам цього об'єкта, — але не всьому застосунку. Пишеться ПІСЛЯ списку параметрів — за закривною дужкою процедури чи функції, за іменем змінної, — там само, де Public і Private.",
       "syntax_block": "Procedure Recalculate() Protected {\n    // видно формам цього об'єкта\n}",
       "syntax_block_ves": "Procedure Recalculate() Protected\n    // видно формам цього об'єкта\nEndProcedure",
       "parameters": "",
@@ -1662,8 +1714,8 @@
         "rls"
       ],
       "signature": "restrict <Var> in <Source> [join <Var2> in <Table> on <Var.Key> <Op> <Var2.Key>]* [where <Condition>]",
-      "description": "Стислий запис обмеження доступу в модулі ролі: звужує джерело й повертає його ж — присвойте результат назад у `Source`, щоб намір звузити було видно.\n\nКомпілюється в той самий ланцюг `Source.Join(…).Where(…)`, що й явний запис: кожна клауза вкладається **просто в запит** і йде на сервер СУБД. Це **не** перебір у пам'яті.\n\n- **join** — одна умова `on <Var.Key> <Op> <Var2.Key>`; оператори `= <> < <= > >=` беруться зі спільної граматики виразів. Приєднувана таблиця — будь-який вираз: джерело `Data.*`, обчислена таблиця значень або джерело зі своїм `.Where(…)` (так зручно заздалегідь відібрати приєднувану таблицю за поточним користувачем). Приєднання працює як **напівз'єднання** — фільтрує, але не розмножує рядки.\n- **where** — одна умова за аліасом джерела; доступні всі оператори, `and` / `or` / `not`, розіменування через крапку, захоплена локальна змінна (їде в запит параметром) та `in` — `<Поле> in (значення, …)` або `<Поле> in <Масив>`.\n- **`select` відсутній** — обмеження несе лише умови, нічого не проєктує.\n\n**Обмеження:** `where` бачить лише аліас **джерела**; умова за аліасом приєднаної таблиці (`where a.Поле = …`) не розв'язується — відбирайте її заздалегідь через `join a in Таблиця.Where(…)`.",
-      "syntax_block": "Source = restrict s in Source\n             join a in Data.Registers.ДоступДоСкладів.Where(Function(a) { Return a.Користувач = CurrentUser(); })\n                 on s.Склад = a.Склад\n         where s.Код in (МоїКоди);",
+      "description": "Стислий запис обмеження доступу в модулі ролі: звужує джерело й повертає його ж — присвойте результат назад у `Source`, щоб намір звузити було видно.\n\nКомпілюється в той самий ланцюг `Source.Join(…).Where(…)`, що й явний запис: кожна клауза вкладається **просто в запит** і йде на сервер СУБД. Це **не** перебір у пам'яті.\n\n- **join** — одна умова `on <Var.Key> <Op> <Var2.Key>`; оператори `== != < <= > >=` (VES: `= <>`) беруться зі спільної граматики виразів. Приєднувана таблиця — будь-який вираз: джерело `Data.*`, обчислена таблиця значень або джерело зі своїм `.Where(…)` (так зручно заздалегідь відібрати приєднувану таблицю за поточним користувачем). Приєднання працює як **напівз'єднання** — фільтрує, але не розмножує рядки.\n- **where** — одна умова за аліасом джерела; доступні всі оператори, `and` / `or` / `not`, розіменування через крапку, захоплена локальна змінна (їде в запит параметром) та `in` — `<Поле> in (значення, …)` або `<Поле> in <Масив>`.\n- **`select` відсутній** — обмеження несе лише умови, нічого не проєктує.\n\n**Обмеження:** `where` бачить лише аліас **джерела**; умова за аліасом приєднаної таблиці (`where a.Поле = …`) не розв'язується — відбирайте її заздалегідь через `join a in Таблиця.Where(…)`.",
+      "syntax_block": "Source = restrict s in Source\n             join a in Data.Registers.ДоступДоСкладів.Where(Function(a) { Return a.Користувач == CurrentUser(); })\n                 on s.Склад == a.Склад\n         where s.Код in (МоїКоди);",
       "syntax_block_ves": "Source = restrict s in Source\n             join a in Data.Registers.ДоступДоСкладів.Where(Function(a) Return a.Користувач = CurrentUser(); EndFunction)\n                 on s.Склад = a.Склад\n         where s.Код in (МоїКоди);",
       "parameters": "",
       "return_descr": "Повертає те саме джерело зі вкладеним обмеженням.",

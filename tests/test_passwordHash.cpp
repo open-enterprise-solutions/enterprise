@@ -2,12 +2,12 @@
 // OES Enterprise — password hashing tests
 //
 // Covers ibPasswordHash (backend/utils/passwordHash.hpp): PBKDF2-HMAC-SHA256
-// storage format, verify (correct / wrong), per-hash salt, the legacy-MD5
-// accept path, and the lazy-upgrade predicates (IsLegacy / NeedsRehash).
+// storage format, verify (correct / wrong), per-hash salt, a bare MD5 refused,
+// and the re-hash predicate (NeedsRehash).
 //
 // Security-critical surface that previously had no coverage. See the
 // "Password Hashing" note in enterprise/CLAUDE.md and ibApplicationInstance::
-// AuthenticateUser for the live upgrade flow.
+// AuthenticateUser for the live re-hash flow.
 // =============================================================================
 
 #include <gtest/gtest.h>
@@ -102,36 +102,21 @@ TEST(PasswordHash, SaltMakesHashesUnique) {
 }
 
 // ---------------------------------------------------------------------------
-// Legacy MD5 accept path (pre-migration databases)
+// A bare MD5 is no stored form
 // ---------------------------------------------------------------------------
 
-TEST(PasswordHash, VerifyAcceptsLegacyMd5) {
-    // A pre-migration row stored a bare 32-hex MD5. Verify must still accept it
-    // so existing users can log in (and then be upgraded).
-    const ibString legacy = ibMD5::ComputeMd5(wxT("oldpass"));
-    ASSERT_EQ(legacy.length(), 32u);
-    EXPECT_TRUE(ibPasswordHash::Verify(wxT("oldpass"), legacy));
-    EXPECT_FALSE(ibPasswordHash::Verify(wxT("wrongpass"), legacy));
-}
-
-TEST(PasswordHash, IsLegacyDetectsMd5) {
-    const ibString legacy = ibMD5::ComputeMd5(wxT("x"));
-    EXPECT_TRUE(ibPasswordHash::IsLegacy(legacy));
-}
-
-TEST(PasswordHash, IsLegacyRejectsPbkdf2) {
-    const ibString modern = ibPasswordHash::Hash(wxT("x"));
-    EXPECT_FALSE(ibPasswordHash::IsLegacy(modern));
+TEST(PasswordHash, ABareMd5IsNoPassword) {
+    // The only stored form is PBKDF2: 32 hex digits of an MD5 log nobody in, and are not
+    // taken for something to re-hash either.
+    const ibString md5 = ibMD5::ComputeMd5(wxT("oldpass"));
+    ASSERT_EQ(md5.length(), 32u);
+    EXPECT_FALSE(ibPasswordHash::Verify(wxT("oldpass"), md5));
+    EXPECT_FALSE(ibPasswordHash::NeedsRehash(md5));
 }
 
 // ---------------------------------------------------------------------------
-// Lazy-upgrade predicate
+// Re-hash predicate
 // ---------------------------------------------------------------------------
-
-TEST(PasswordHash, NeedsRehashTrueForLegacy) {
-    const ibString legacy = ibMD5::ComputeMd5(wxT("x"));
-    EXPECT_TRUE(ibPasswordHash::NeedsRehash(legacy));
-}
 
 TEST(PasswordHash, NeedsRehashFalseForFreshHash) {
     const ibString modern = ibPasswordHash::Hash(wxT("x"));

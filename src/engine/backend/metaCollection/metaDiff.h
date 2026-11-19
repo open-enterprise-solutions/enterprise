@@ -5,7 +5,7 @@
 
 #include <vector>
 
-// Configuration comparison primitive.
+// Application comparison primitive.
 //
 // Pairs two ibValueMetaObject trees side by side and classifies each node
 // pair against the existing ibValueMetaObject::CompareObject() identity
@@ -22,13 +22,13 @@
 // shows up as one OnlyInLeft + one OnlyInRight, which is what the merge
 // UI needs to represent anyway.
 
-// Sentinel CLSID for the synthetic "Common" umbrella node the walker
-// inserts under the root config. Not a real metadata class — just a
+// Sentinel CLSID for the synthetic "Shared" umbrella node the walker
+// inserts under the root application. Not a real metadata class — just a
 // marker so the dataview model knows to render the umbrella with the
 // generic folder art (wxART_COMMON_FOLDER) instead of looking up a
-// per-class glyph. Mirrors the m_treeCOMMON umbrella in
-// treeConfiguration_impl.cpp (line 1473).
-inline constexpr ibClassID g_diffCommonUmbrellaClsid = make_clsid("UI_COMN", ibClassKind_None);   // header-defined: constexpr + ODR-safe
+// per-class glyph. Mirrors the m_treeSHARED umbrella in
+// treeApplication_impl.cpp (line 1473).
+inline constexpr ibClassID g_diffSharedUmbrellaClsid = make_clsid("UI_COMN", ibClassKind_None);   // header-defined: constexpr + ODR-safe
 
 // Sentinel CLSID for the synthetic "Properties" group node the walker
 // inserts under every paired metadata object. Contains one child row
@@ -57,10 +57,10 @@ enum class ibMetaDiffStatus {
 	// rolled up.
 	Changed,
 
-	// Present in left config, no GUID match in right.
+	// Present in left application, no GUID match in right.
 	OnlyInLeft,
 
-	// Present in right config, no GUID match in left.
+	// Present in right application, no GUID match in left.
 	OnlyInRight,
 };
 
@@ -88,7 +88,7 @@ struct BACKEND_API ibMetaDiffRecord {
 	// null, m_status is computed from descendants. The walker inserts
 	// these between every pair node and its actual object children, so
 	// the diff tree mirrors the standard metadata-tree shape (see
-	// treeConfiguration_impl.cpp FillData).
+	// treeApplication_impl.cpp FillData).
 	ibClassID m_groupClsid = 0;
 
 	// Property-row mode. When non-empty, this record represents a
@@ -150,12 +150,12 @@ public:
 
 	// Localized group label for a metadata CLSID (Catalogs, Documents,
 	// Attributes, ...). Mirrors the constants in
-	// treeConfiguration_impl.cpp. Returns a hex-formatted fallback for
+	// treeApplication_impl.cpp. Returns a hex-formatted fallback for
 	// unknown CLSIDs so the UI never shows an empty string.
 	static ibString GroupLabelFor(ibClassID clsid);
 
 	// Canonical sort rank for a group CLSID. Lower rank = appears first
-	// in the standard metadata tree (see treeConfiguration_impl.cpp).
+	// in the standard metadata tree (see treeApplication_impl.cpp).
 	// Used by the walker to emit groups in the same order the designer
 	// shows them. Unknown CLSIDs sort after the known ones.
 	static int GroupOrderRank(ibClassID clsid);

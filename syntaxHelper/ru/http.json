@@ -20,7 +20,7 @@
       "syntax_block_ves": "Connection = New HTTPConnection(host, port, user, password, timeout);\nConnection.Host   Connection.Port   Connection.Timeout = seconds;\n\nTry\n    Response = Connection.Get(Request);          // Post  Put  Patch  Delete  Head\n    Response = Connection.CallMethod(HTTPMethod.Options, Request);\nExcept\n    Message(ErrorDescription());                 // no answer at all\nEndTry;",
       "parameters": "host — имя машины, никогда не адрес: \"api.example\", \"10.0.0.5\", \"::1\".\nport — от 1 до 65535; если не указан — 80, а с заданным SecureConnection 443.\nuser, password — уходят как Basic-авторизация с каждым запросом, если запрос не говорит о себе сам.\ntimeout — секунды, от 1 до 86400 (сутки); 30, если не указан.",
       "return_descr": "HTTPConnection.",
-      "example": "Connection = New HTTPConnection(\"api.example\", 8080, \"user\", \"password\", 30);\nRequest = New HTTPRequest(\"/v1/sales?shift=42\");\nRequest.Headers.Insert(\"Accept\", \"application/json\");\n\ntry {\n    Response = Connection.Get(Request);\n    if (Response.StatusCode = 200) {            // 404 и 500 — ОТВЕТЫ, а не отказы\n        Message(Response.GetBodyAsString());\n    } else {\n        Message(\"ответил \" + Response.StatusCode);\n    }\n} except {\n    Message(\"ответа нет: \" + ErrorDescription());   // имя не разрешилось, порт закрыт или прошло 30 с\n}",
+      "example": "Connection = New HTTPConnection(\"api.example\", 8080, \"user\", \"password\", 30);\nRequest = New HTTPRequest(\"/v1/sales?shift=42\");\nRequest.Headers.Insert(\"Accept\", \"application/json\");\n\ntry {\n    Response = Connection.Get(Request);\n    if (Response.StatusCode == 200) {            // 404 и 500 — ОТВЕТЫ, а не отказы\n        Message(Response.GetBodyAsString());\n    } else {\n        Message(\"ответил \" + Response.StatusCode);\n    }\n} except {\n    Message(\"ответа нет: \" + ErrorDescription());   // имя не разрешилось, порт закрыт или прошло 30 с\n}",
       "availability": "Клиент, Сервер",
       "see_also": [
         "cls.HTTPConnection.SecureConnection",
@@ -461,7 +461,7 @@
       "syntax_block": "Response = Connection.Get(Request);\nResponse.StatusCode   Response.Headers[\"Location\"]\nResponse.GetBodyAsString(TextEncoding.UTF8)   Response.GetBodyAsBinaryData()",
       "parameters": "",
       "return_descr": "",
-      "example": "Response = Connection.Get(Request);\nif (Response.StatusCode = 200) {\n    Message(Response.GetBodyAsString());\n} elseif (Response.StatusCode = 302) {\n    Message(\"переехало на \" + Response.Headers[\"Location\"]);\n} else {\n    Message(\"ответил \" + Response.StatusCode);\n}",
+      "example": "Response = Connection.Get(Request);\nif (Response.StatusCode == 200) {\n    Message(Response.GetBodyAsString());\n} elseif (Response.StatusCode == 302) {\n    Message(\"переехало на \" + Response.Headers[\"Location\"]);\n} else {\n    Message(\"ответил \" + Response.StatusCode);\n}",
       "availability": "Клиент, Сервер",
       "see_also": [
         "cls.HTTPConnection",
@@ -483,11 +483,11 @@
         "http"
       ],
       "signature": "Response.StatusCode : number",
-      "description": "Статус, которым ответил сервер, — 200, 404, 500, 302. Только чтение. Это число, поэтому и сравнивается как число: `if (Response.StatusCode = 200)`.",
+      "description": "Статус, которым ответил сервер, — 200, 404, 500, 302. Только чтение. Это число, поэтому и сравнивается как число: `if (Response.StatusCode == 200)`.",
       "syntax_block": "Response.StatusCode",
       "parameters": "",
       "return_descr": "Число.",
-      "example": "if (Response.StatusCode <> 200) { Message(\"ответил \" + Response.StatusCode); }",
+      "example": "if (Response.StatusCode != 200) { Message(\"ответил \" + Response.StatusCode); }",
       "availability": "Клиент, Сервер",
       "see_also": [
         "cls.HTTPResponse",
@@ -774,7 +774,7 @@
         "http"
       ],
       "signature": "Function Handler(Request) : HTTPServiceResponse",
-      "description": "То, с чем пришёл запрос к HTTP-сервису конфигурации. СКРИПТ ЕГО НЕ СОЗДАЁТ — платформа передаёт его обработчику метода, функции модуля сервиса: Function <Handler>(Request).\n\nСвойства только для чтения. Заголовки названы строчными буквами, как их читает сервер; ключи Structure не различают регистр, поэтому Request.Headers[\"Content-Type\"] находит их так же. Тело держится в памяти целиком, до 4 МБ веб-сервера.",
+      "description": "То, с чем пришёл запрос к HTTP-сервису приложения. СКРИПТ ЕГО НЕ СОЗДАЁТ — платформа передаёт его обработчику метода, функции модуля сервиса: Function <Handler>(Request).\n\nСвойства только для чтения. Заголовки названы строчными буквами, как их читает сервер; ключи Structure не различают регистр, поэтому Request.Headers[\"Content-Type\"] находит их так же. Тело держится в памяти целиком, до 4 МБ веб-сервера.",
       "syntax_block": "Request.HTTPMethod   Request.BaseURL   Request.RelativeURL\nRequest.Headers   Request.QueryOptions   Request.URLParameters\nRequest.GetBodyAsString()   Request.GetBodyAsBinaryData()",
       "parameters": "",
       "return_descr": "",
@@ -804,7 +804,7 @@
       "syntax_block": "Request.HTTPMethod",
       "parameters": "",
       "return_descr": "Строка.",
-      "example": "if (Request.HTTPMethod = \"OPTIONS\") { return New HTTPServiceResponse(204); }",
+      "example": "if (Request.HTTPMethod == \"OPTIONS\") { return New HTTPServiceResponse(204); }",
       "availability": "Server",
       "see_also": [
         "cls.HTTPServiceRequest"

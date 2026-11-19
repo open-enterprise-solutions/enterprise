@@ -5,9 +5,9 @@
 
 #include "appData.h"
 
-bool ibValueMetaObjectConfiguration::ExecuteSystemSQLCommand()
+bool ibValueMetaObjectApplication::ExecuteSystemSQLCommand()
 {
-	RestructureWarning("Execute system sql command");   // static facade -> the active config's ledger
+	RestructureWarning("Execute system sql command");   // static facade -> the active application's ledger
 
 	// ⭐⭐ WHICH ROUTINES AN ENGINE IS MISSING IS THE ENGINE'S OWN BUSINESS. This asked
 	// `GetDatabaseLayerType() == DATABASELAYER_POSTGRESQL` and then wrote four PostgreSQL statements

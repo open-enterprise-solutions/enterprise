@@ -25,7 +25,7 @@
 //
 // ⭐ WHAT IT DERIVES IS THE CORE'S (core/query/anyQueryConstructorModel.h) — the walk of a path, the fields of a
 // select, a CAST's type: the client's model derives the same over the server's answers, so it is written once. What is
-// here is what only the configuration answers — the catalogue, a virtual table's parameters, a condition's fields — and
+// here is what only the application answers — the catalogue, a virtual table's parameters, a condition's fields — and
 // the four questions the core asks of a table, answered by the descriptors.
 //
 // See docs/private/query-constructor.md §4 / §5a / §5b.
@@ -43,8 +43,8 @@ class ibMetaData;
 class BACKEND_API ibQueryConstructorModel : public ibAnyQueryConstructorModel
 {
 public:
-	// `metaData` — the config the query runs on behalf of (its factory resolves the sources).
-	// Null falls back to the global factory, which is the right answer with no config open.
+	// `metaData` — the application the query runs on behalf of (its factory resolves the sources).
+	// Null falls back to the global factory, which is the right answer with no application open.
 	explicit ibQueryConstructorModel(const ibMetaData* metaData = nullptr);
 
 	// EVERY source a query may name, grouped by nothing — the caller groups by m_path[0], which is
@@ -75,7 +75,7 @@ public:
 
 protected:
 
-	// A TABLE OF THE CONFIGURATION answers through its descriptor (GetQueryColumns) — the columns a query reads it by —
+	// A TABLE OF THE APPLICATION answers through its descriptor (GetQueryColumns) — the columns a query reads it by —
 	// asked with the arguments the FROM writes, by its id with none.
 	virtual std::vector<ibQueryConstructorField> GetTableFields(const ibQuerySource& source) const override;
 	virtual std::vector<ibQueryConstructorField> GetTableFields(ibMetaID table) const override;
@@ -88,7 +88,7 @@ private:
 	const ibMetaData* m_metaData = nullptr;
 };
 
-// ⭐⭐ WHAT FIELDS A QUERY TEXT OFFERS — A TEXT AND A CONFIGURATION, AND NOTHING ELSE.
+// ⭐⭐ WHAT FIELDS A QUERY TEXT OFFERS — A TEXT AND AN APPLICATION, AND NOTHING ELSE.
 //
 // This is the whole of what "resolve the source" means for anything that edits a query rather than
 // runs one. It parses the package, takes the LAST statement — the one that produces the result, a
@@ -98,7 +98,7 @@ private:
 // It lives HERE because that is the tier the question belongs to. It used to be a method on
 // ibValueDataComposition, so a settings window had to hold a RUNNING composition to ask it — a
 // runtime object with a source binding, a sheet and a fetch, borrowed from whatever host happened
-// to have one — in order to learn something the text and the configuration already answer.
+// to have one — in order to learn something the text and the application already answer.
 //
 // `error` takes the parser's complaint when the caller shows one. Half-typed text is not a failure:
 // it offers no fields YET, so the list comes back empty and the caller decides whether that is worth

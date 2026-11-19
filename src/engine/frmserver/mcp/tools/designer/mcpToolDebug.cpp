@@ -31,7 +31,7 @@
 #include "frmserver/mcp/mcpDebugBridge.h"
 #include "backend/metaCollection/metaIntrospect.h"
 #include "backend/metaCollection/metaModuleObject.h"
-#include "backend/metadataConfiguration.h"
+#include "backend/metadataApplication.h"
 
 namespace {
 using ibArg = ibMcpTool::ibMcpArgument;
@@ -109,7 +109,7 @@ const ibArg& ArgText()
 	// is a BUSINESS FIELD: the Code of a catalog item, which is what predefined_* means by it. Two
 	// meanings under one name cost a step every time somebody guesses which one this is.
 	static const ibArg s_a(ibT("text"), ibArg::Kind::Text,
-		ibMcpText("Whole statements, in the configuration's own dialect - platform_state says which. "
+		ibMcpText("Whole statements, in the application's own dialect - platform_state says which. "
 			  "Everything it writes is rolled back, so read what you need INSIDE it: the last "
 			  "value, or `Result`, comes back as the answer - along with `microseconds`, how long "
 			  "it took, timed where it ran."), /*required*/ true);
@@ -180,8 +180,8 @@ ibMcpDebugBridge* Bridge(ibString& refusal)
 // object being renamed.
 ibString ModuleDocPath(const ibDataNode& params, ibString& moduleName, ibString& refusal)
 {
-	if (activeMetaData == nullptr || !activeMetaData->IsConfigOpen()) {
-		refusal = ibMcpText("No configuration is open.");
+	if (activeMetaData == nullptr || !activeMetaData->IsOpen()) {
+		refusal = ibMcpText("No application is open.");
 		return ibEmptyString;
 	}
 
@@ -193,7 +193,7 @@ ibString ModuleDocPath(const ibDataNode& params, ibString& moduleName, ibString&
 
 	ibValueMetaObject* object = ibFindMetaObjectById(activeMetaData, (ibMetaID)id);
 	if (object == nullptr) {
-		refusal = ibString::Format(ibMcpText("Nothing in this configuration has id %i."), (int)id);
+		refusal = ibString::Format(ibMcpText("Nothing in this application has id %i."), (int)id);
 		return ibEmptyString;
 	}
 
@@ -258,7 +258,7 @@ public:
 			"a variable has a certain value, on the 500th iteration of a loop (`i = 500`), for one record "
 			"(`Employee.Code = \"0042\"`). Set the breakpoints first, then ask for the application to be "
 			"run - the stop arrives as a message. A module edited in the designer gets to the running "
-			"application only after config_apply and a restart (app_run restart): until then a "
+			"application only after app_apply and a restart (app_run restart): until then a "
 			"breakpoint on an edited line is refused, and says so. "
 			"`all: true` with nothing else clears every breakpoint there is, which is the menu's "
 			"Remove all breakpoints and the way to leave a base as you found it.");
@@ -426,7 +426,7 @@ public:
 				// address the module again.
 				node->SetValue(ibT("module"), module.first);
 
-				if (activeMetaData != nullptr && activeMetaData->IsConfigOpen()) {
+				if (activeMetaData != nullptr && activeMetaData->IsOpen()) {
 					const ibMetaID id = activeMetaData->MetaIdByGuid(ibGuid(module.first));
 					if (id != ibNOT_FOUND) {
 						if (ibValueMetaObject* object = ibFindMetaObjectById(activeMetaData, id)) {
@@ -442,7 +442,7 @@ public:
 
 								const ibString step = owner->GetName();
 								if (step.IsEmpty())
-									break;               // the configuration root names nothing useful
+									break;               // the application root names nothing useful
 								path = step + ibT(".") + path;
 							}
 
@@ -762,7 +762,7 @@ public:
 		// written here even though the objects can be read. Deducing the type asks nothing of the
 		// name, and the alternative was widening a debugger header for a spelling.
 		//
-		// 🛑 A SESSION IS A RUNTIME THAT ANSWERED, as this configuration's (ibMcpDebugBridge::GetStop): a scanner's
+		// 🛑 A SESSION IS A RUNTIME THAT ANSWERED, as this application's (ibMcpDebugBridge::GetStop): a scanner's
 		// socket dialling a port nobody listens on was listed as one, "seen", with nothing behind it.
 		debugClient->ForEachConnection([&sessions, &attached](const auto& connection) {
 

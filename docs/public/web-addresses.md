@@ -4,7 +4,7 @@ A web server publishes a base under a name — `https://server/trade/` — and c
 the page and `/trade/client`. What else the base answers under that name is the base's own list of
 **web addresses**. Each entry is a path under the publication (`es/desk` is answered at
 `/trade/es/desk` and under it), a **kind** — which code answers there — and, for a kind that answers for
-one, the configuration's object it answers for.
+one, the application's object it answers for.
 
 ## Why the list is the base's
 
@@ -35,7 +35,7 @@ entry its kind does not take.
 ## Doing it
 
 - **Administration → Web addresses…** in the designer (the *Data administration* right): the list, with
-  **Add…** offering what the configuration declares for each kind, or another path typed by hand, and
+  **Add…** offering what the application declares for each kind, or another path typed by hand, and
   **Remove**.
 - Over MCP, in the designer: `address_list`, `address_register`, `address_unregister`.
 - On the wire: the client protocol's `addresses` and `serve` ([client-protocol.md](client-protocol.md#web-addresses)).

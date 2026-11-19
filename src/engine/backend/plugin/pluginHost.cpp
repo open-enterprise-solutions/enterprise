@@ -16,7 +16,7 @@
 #include "backend/compiler/scriptCheck.h"           // ibCheckScript — the door this window opens
 #include "backend/metaData.h"
 #include "backend/metaCollection/metaIntrospect.h"  // ibListMetaObjectNames / ibDescribeMetaObject
-#include "backend/metadataConfiguration.h"
+#include "backend/metadataApplication.h"
 
 #include <cstring>
 
@@ -51,14 +51,14 @@ public:
 //---------------------------------------------------------------------------
 class ibPluginMetadataImpl : public ibPluginMetadata {
 public:
-	bool IsConfigurationOpen() const override
+	bool IsApplicationOpen() const override
 	{
-		return activeMetaData != nullptr && activeMetaData->IsConfigOpen();
+		return activeMetaData != nullptr && activeMetaData->IsOpen();
 	}
 
 	std::vector<ibString> List(const ibString& kind) const override
 	{
-		// The plugin has no configuration of its own to name, so the window
+		// The plugin has no application of its own to name, so the window
 		// answers about the active one — see metaCollection/metaIntrospect.h for
 		// why the mechanism itself refuses to make that assumption.
 		return ibListMetaObjectNames(activeMetaData, kind);

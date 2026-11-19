@@ -137,7 +137,7 @@ public:
 	// Wire one bytecode dependency on this module's bytecode. Forward
 	// to ibByteCode::AddDependency, which atomically pushes pointer
 	// + id + version snapshot. Preferred entry point at compile-time
-	// call sites (CompileExpression eval setup, future common-module
+	// call sites (CompileExpression eval setup, future shared-module
 	// import wiring) — keeps callers from reaching into m_cByteCode
 	// directly.
 	void AddDependency(ibByteCode* dep) {

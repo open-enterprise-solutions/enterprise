@@ -10,7 +10,7 @@
 class FRMSERVER_API ibSchemaAbout : public ibClientSchema {
 public:
 
-	// Build, Picture (the configuration's), Database (none — no base), Application, User, Locale and Plugins {Name,
+	// Build, Picture (the application's), Database (none — no base), Application, User, Locale and Plugins {Name,
 	// Version} — the dialog's rows, row for row.
 	virtual void Build(const ibSession& session, const ibDataNode& args, ibDataNode& result) const override;
 };

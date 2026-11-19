@@ -23,10 +23,10 @@
 #include "frmclient/mainFrame/mainFrame.h"                // the shared editor / font-colour settings
 #include "frmclient/docView/docView.h"                    // ibMetaDocument — the composer editor's document mode
 #include "frmclient/backend/metaCollection/metaTemplateObject.h"   // ibValueMetaObjectTemplate — what a composer document was opened ON
-#include "frmclient/backend/appData.h"                              // the ACTIVE configuration, when the composition names none
+#include "frmclient/backend/appData.h"                              // the ACTIVE application, when the composition names none
 #include "frmclient/backend/system/value/composition/valueComposerField.h"   // a declaration becomes a value for the reader
 #include "frmclient/backend/metaData.h"                             // the compile cache the parent module comes from
-#include "frmclient/backend/metadataConfiguration.h"                // ibMetaDataConfigurationBase — the active configuration IS one
+#include "frmclient/backend/metadataApplication.h"                  // ibMetaDataApplicationBase — the active application IS one
 #include "frmclient/backend/backend_exception.h"
 #include "frmclient/backend/serialize/dataProtocol.h"         // the setting and the composition, as the server's question carries them
 #include "frmclient/backend/metaCollection/partial/reference/reference.h"   // which of the fields' types are references
@@ -277,7 +277,7 @@ static int ibSelectedRow(ibDataViewCtrl* view)
 }
 
 
-// THE TYPES A DECLARATION HOLDS, as the text a cell shows — the configuration's own names, joined.
+// THE TYPES A DECLARATION HOLDS, as the text a cell shows — the application's own names, joined.
 // Empty declaration reads as "any": that is what it MEANS (the expression decides), and a blank cell
 // would read as "not filled in yet".
 wxString ibDescribeTypes(const ibTypeDescription& typeDesc, const ibMetaData* metaData)
@@ -556,7 +556,7 @@ private:
 //                 next re-parse undoes.
 //   Value       — what it holds when no expression is given.
 //   Expression  — evaluated BEFORE the read; its result becomes the value. `CurrentDate()`, a call
-//                 into a common module — legitimate here precisely because it runs once, not per row.
+//                 into a shared module — legitimate here precisely because it runs once, not per row.
 //   For user    — whether the author fixes it or hands it to the person reading the report.
 //
 // Read straight from the composition: the window keeps no copy.
@@ -1959,7 +1959,7 @@ bool ibComposerSettingsPanel::Commit()
 	// 🛑 VIEW ONLY WRITES NOTHING — and answers YES, because there is nothing to object to. Closing
 	// a tab is accepting it (ibComposerEditView::OnClose), so without this a composer opened purely
 	// to LOOK at would write itself back on the way out and raise the change signal doing it: the
-	// configuration would come out modified from a session that changed none of it.
+	// application would come out modified from a session that changed none of it.
 	if (m_readOnly)
 		return true;
 
@@ -1988,7 +1988,7 @@ bool ibComposerSettingsPanel::Commit()
 
 	// 🛑 ONLY IF THE BUFFER WAS ACTUALLY EDITED. Closing a designer tab IS accepting it, so this runs
 	// every time a composer is merely LOOKED at — and announcing unconditionally meant an untouched
-	// tab came back as "the configuration changed", asterisk and all (found by the final audit,
+	// tab came back as "the application changed", asterisk and all (found by the final audit,
 	// 2026-08-20).
 	//
 	// (What used to happen here — capturing the composition into its active variant — is done inside
@@ -2060,7 +2060,7 @@ static ibCompositionDescription CompositionOf(ibMetaDocument* document)
 }
 
 // THE DOCUMENT IS THE ONLY INPUT. Both of the other two — which description is edited, and which
-// configuration it means — are reached from it here, so the view above hands over nothing else and
+// application it means — are reached from it here, so the view above hands over nothing else and
 // stores nothing itself.
 ibComposerEditor::ibComposerEditor(wxWindow* parent, ibMetaDocument* document)
 	: ibComposerSettingsPanel(parent, CompositionOf(document), MetaDataOf(document)),
@@ -2070,9 +2070,9 @@ ibComposerEditor::ibComposerEditor(wxWindow* parent, ibMetaDocument* document)
 
 const ibMetaData* ibComposerEditor::GetEditedMetaData() const
 {
-	// An absent configuration is a legitimate answer, not a broken one — see the base's constructor:
+	// An absent application is a legitimate answer, not a broken one — see the base's constructor:
 	// with nothing to ask, the primitive types are what a field can be. What it must never do is
-	// reach for the ACTIVE configuration, which in the designer is somebody else's.
+	// reach for the ACTIVE application, which in the designer is somebody else's.
 	return MetaDataOf(m_document);
 }
 
@@ -2218,7 +2218,7 @@ bool ibDialogComposerSettings::ShowComposerSettings(wxWindow* parent, ibComposit
 
 // THE SAME WINDOW OVER A BARE DESCRIPTION — edited IN PLACE, so this host keeps no copy of its own:
 // whoever handed the description in decided whether it is a clone (and therefore what Cancel drops).
-// ⭐⭐ ONE CONSTRUCTOR, OVER A SNAPSHOT — see the header. A description and the configuration its
+// ⭐⭐ ONE CONSTRUCTOR, OVER A SNAPSHOT — see the header. A description and the application its
 // names mean, edited IN PLACE, so this host keeps no copy of its own: whoever handed the description
 // in decided whether it is a clone, and that decides what Cancel drops.
 ibDialogComposerSettings::ibDialogComposerSettings(wxWindow* parent, ibCompositionDescription& desc,
@@ -3501,7 +3501,7 @@ wxWindow* ibComposerSettingsPanel::BuildResourcePage(wxWindow* parent)
 // THE PARAMETERS PAGE — what the query asks for, and how each one behaves.
 //
 // The list follows the TEXT: writing `&Period` puts Period here the moment the query is applied.
-// A parameter can also be added by hand — for a common module to read, or because the text is still
+// A parameter can also be added by hand — for a shared module to read, or because the text is still
 // being written — and only a hand-made one can be renamed or removed here (an auto one is named by
 // the query, and removing it would last exactly until the next re-parse).
 // ⭐⭐ TWO PAGES, ONE PAGE BUILDER. The AUTHOR declares parameters — their name, type, expression and
@@ -3600,7 +3600,7 @@ wxWindow* ibComposerSettingsPanel::BuildParameterPage(wxWindow* parent, bool for
 	}
 
 	// THE EXPRESSION IS EVALUATED BEFORE THE READ and its result becomes the value — which is why a
-	// call into a common module is legitimate here and a scripted FIELD is not: this runs once.
+	// call into a shared module is legitimate here and a scripted FIELD is not: this runs once.
 	// One line in the cell, and "..." opens the same text with room to write it.
 	m_parameterView->GetRootColumnGroup()->AppendColumn(new ibDataViewColumn(_("Expression"),
 		new ibTextWithDotsRenderer(this,
@@ -3730,7 +3730,7 @@ void ibComposerSettingsPanel::ReloadParameters()
 
 // THE "..." BEHIND THE EXPRESSION CELL — the same expression, with room to write it.
 //
-// A parameter is usually one line (`CurrentDate()`, a call into a common module), and one line is
+// A parameter is usually one line (`CurrentDate()`, a call into a shared module), and one line is
 // what the cell shows. What does not fit is written here: the SAME text, in a box big enough to read
 // it. No field tree, no palette — it is the LANGUAGE, not a query, and the value it produces is what
 // the parameter takes (see EvaluateParameters).
@@ -3738,7 +3738,7 @@ void ibComposerSettingsPanel::ReloadParameters()
 // THE TYPE PICKER — the product's own, the same dialog an attribute's Type opens. The cell hands us
 
 // COMPILE AN EXPRESSION AND SAY WHY NOT — the ONE check, used by the editor's OK and by the window's. The translator is
-// the server's: the tab the configuration is on is asked (fetch {Tab, Request: {Kind: Check, Text}}), and its Error is
+// the server's: the tab the application is on is asked (fetch {Tab, Request: {Kind: Check, Text}}), and its Error is
 // the complaint (2026-10-29: `1 + (` was accepted without a word). No tab to ask — nothing is said against it.
 bool ibComposerSettingsPanel::CheckExpression(const wxString& expression, wxString& complaint,
 	const ibMetaData* metaData)
@@ -3766,8 +3766,8 @@ wxString ibComposerSettingsPanel::CheckAllExpressions()
 
 	for (size_t i = 0; i < m_edited.m_parameters.size(); ++i) {
 		wxString complaint;
-		// ⭐ THE OBJECT'S OWN CONFIG, through the attach chain — NOT the query's SOURCE config. A
-		// parameter expression is SCRIPT, and the names it may call are the ones the configuration
+		// ⭐ THE OBJECT'S OWN APPLICATION, through the attach chain — NOT the query's SOURCE application. A
+		// parameter expression is SCRIPT, and the names it may call are the ones the application
 		// this composition lives in declares; where the query reads its rows from is a different
 		// question that happens to have the same answer most of the time (Max, 2026-08-21).
 		if (CheckExpression(m_edited.m_parameters[i].m_expression, complaint, GetEditedMetaData()))
@@ -3786,7 +3786,7 @@ bool ibComposerSettingsPanel::EditParameterType(wxString& text)
 	if ((size_t)idx >= m_edited.m_parameters.size())
 		return false;
 	// ⭐ THE REFERENCE FILTER, as asked (Max, 2026-08-28) — what may stand under it is the tab's to say: the desktop's
-	// picker asked its configuration, and the client has none — the picker asks the tab (Kind Types).
+	// picker asked its application, and the client has none — the picker asks the tab (Kind Types).
 	ibTypeDescription declared = m_edited.m_parameters[idx].m_type;
 	if (!ibShowTypeSelector(this, ibSelectorDataType::ibSelectorDataType_reference, std::vector<ibClassID>(),
 			declared, GetEditedMetaData(), /*allowEdit*/true, /*single*/false))
@@ -3837,7 +3837,7 @@ bool ibComposerSettingsPanel::EditParameterExpression(wxString& text)
 	dlg.Bind(wxEVT_INIT_DIALOG, [editor](wxInitDialogEvent& e) { editor->SetFocus(); e.Skip(); });
 	// OK COMPILES THE EXPRESSION — the same check the window runs on the way out, so the two cannot
 	// disagree about what is valid. A failure keeps this window open on the text that failed.
-	// The object's own config — see CheckAllExpressions: a parameter expression is script.
+	// The object's own application — see CheckAllExpressions: a parameter expression is script.
 	const ibMetaData* metaData = GetEditedMetaData();
 	dlg.Bind(wxEVT_BUTTON, [&dlg, editor, metaData](wxCommandEvent& e) {
 		wxString complaint;
@@ -4017,7 +4017,7 @@ void ibComposerSettingsPanel::BindFieldSource()
 
 	// ⭐ THE FIELDS AS THE QUERY GIVES THEM — a FLAT list, which is what a parsed text has to offer.
 	// A reference among them still unfolds: what a value may BE is a question about its TYPE, and the
-	// tree asks the configuration that (see SetPlainFields). With no configuration to ask, the
+	// tree asks the application that (see SetPlainFields). With no application to ask, the
 	// primitive types are all anything can be — which is a smaller window, not a broken one.
 	std::vector<ibSettingsPlainField> plain;
 	plain.reserve(m_fieldList.size());
@@ -4236,7 +4236,7 @@ ibTreeCtrl* ibComposerSettingsPanel::CreateFieldTree(wxWindow* parent)
 // EVERY TREE, ONE WALK. Which fields the composition has is one question, so a query change
 // refreshes all of them together — a page still offering a field another page has dropped is the
 // same defect as a setting pointing at a field that is gone.
-// ⭐ THE ONE PLACE THE QUERY IS READ. Text plus configuration in, fields plus the parser's complaint
+// ⭐ THE ONE PLACE THE QUERY IS READ. Text plus application in, fields plus the parser's complaint
 // out — no composition, no column schema, nothing kept between calls but the answer.
 void ibComposerSettingsPanel::RefreshQueryFields()
 {
@@ -5084,7 +5084,7 @@ void ibComposerSettingsPanel::OnRemoveResource(wxCommandEvent&)
 
 // THE COMPOSITION IS AUTHORED HERE. It has no main table to fall back on — the query IS its
 // source — so the constructor edits the one text everything else hangs off, and what it renders
-// comes straight back into the box. The names resolve against the composition's own config, never
+// comes straight back into the box. The names resolve against the composition's own application, never
 // a quietly-defaulted active one.
 void ibComposerSettingsPanel::OnBuildQuery(wxCommandEvent&)
 {
@@ -5213,7 +5213,7 @@ void ibComposerSettingsPanel::RefreshFromQueryText()
 // the window OPENING.
 //
 // 🛑 IT USED TO BE SAID ONLY ON A CHANGE. So a composition whose stored query no longer compiles —
-// a field renamed in the configuration, a table gone — opened looking perfectly fine, and only
+// a field renamed in the application, a table gone — opened looking perfectly fine, and only
 // admitted it after somebody typed into the text or pressed OK. The window has already parsed by
 // then (the constructor reads the fields), so it KNEW and was not saying (Max, 2026-08-24).
 void ibComposerSettingsPanel::ShowQueryFault()

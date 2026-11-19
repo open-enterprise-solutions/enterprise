@@ -811,7 +811,7 @@ public:
 		SetAlignment(wxALIGN_INVALID, wxALIGN_INVALID);
 	}
 
-	// ctor setting the most common attributes
+	// ctor setting the most shared attributes
 	ibGridCellAttr(const wxColour& colText,
 		const wxColour& colBack,
 		const wxFont& font,

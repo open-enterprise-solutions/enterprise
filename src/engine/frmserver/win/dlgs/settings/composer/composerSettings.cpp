@@ -2,7 +2,7 @@
 
 #include "core/description/compositionDescription.h"
 #include "backend/spreadsheetModel.h"                    // the model's composer — the setting in force, and the one set
-#include "backend/system/value/valueDataComposition.h"   // the composition the model is: what it arranges, its configuration
+#include "backend/system/value/valueDataComposition.h"   // the composition the model is: what it arranges, its application
 #include "backend/query/queryConstructorModel.h"         // ibQueryFieldsOfText — the fields its query offers
 #include "core/serialize/dataBuilder.h"
 
@@ -13,7 +13,7 @@
 namespace {
 
 // THE WINDOW'S QUESTION — the composition it arranges, and the fields its query offers: the desktop's panel reads them of
-// the text and the configuration (ibQueryFieldsOfText), and the configuration is here. Each reads as its source calls it.
+// the text and the application (ibQueryFieldsOfText), and the application is here. Each reads as its source calls it.
 ibDataNode SettingsRequest(const ibCompositionDescription& composition, const ibMetaData* metaData)
 {
 	ibDataNode request;

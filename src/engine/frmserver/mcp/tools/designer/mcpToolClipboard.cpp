@@ -34,16 +34,16 @@
 #include "core/memory/memoryStream.h"
 #include "backend/metaCollection/metaIntrospect.h"
 #include "backend/metaCollection/metaObject.h"
-#include "backend/metadataConfiguration.h"
+#include "backend/metadataApplication.h"
 
 namespace {
 
-ibMetaData* OpenConfiguration(ibString& refusal)
+ibMetaData* OpenApplication(ibString& refusal)
 {
 	ibMetaData* metaData = activeMetaData;
 
-	if (metaData == nullptr || !metaData->IsConfigOpen()) {
-		refusal = ibMcpText("No configuration is open.");
+	if (metaData == nullptr || !metaData->IsOpen()) {
+		refusal = ibMcpText("No application is open.");
 		return nullptr;
 	}
 
@@ -65,7 +65,7 @@ ibValueMetaObject* FindObject(ibMetaData* metaData, const ibDataNode& params,
 	ibValueMetaObject* found = ibFindMetaObjectById(metaData, (ibMetaID)asked->AsInt());
 
 	if (found == nullptr) {
-		refusal = ibString::Format(ibMcpText("Nothing in this configuration has id %s."),
+		refusal = ibString::Format(ibMcpText("Nothing in this application has id %s."),
 			asked->AsNumber().ToString());
 		return nullptr;
 	}
@@ -104,7 +104,7 @@ const ibArg& ArgSlot()
 const ibArg& ArgParentId()
 {
 	static const ibArg s_a(ibT("parentId"), ibArg::Kind::Whole,
-		ibMcpText("Where it goes. Omit for the top level of the configuration."));
+		ibMcpText("Where it goes. Omit for the top level of the application."));
 	return s_a;
 }
 
@@ -158,7 +158,7 @@ public:
 
 	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
-		ibMetaData* metaData = OpenConfiguration(refusal);
+		ibMetaData* metaData = OpenApplication(refusal);
 		if (metaData == nullptr)
 			return false;
 
@@ -229,7 +229,7 @@ public:
 
 	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
-		ibMetaData* metaData = OpenConfiguration(refusal);
+		ibMetaData* metaData = OpenApplication(refusal);
 		if (metaData == nullptr)
 			return false;
 
@@ -260,7 +260,7 @@ public:
 		const ibClassID clsid = ibResolveMetaKind(metaData, kind);
 		if (clsid == 0) {
 			refusal = ibString::Format(
-				ibMcpText("'%s' is not a kind of metadata object in this configuration."), kind);
+				ibMcpText("'%s' is not a kind of metadata object in this application."), kind);
 			return false;
 		}
 
@@ -270,7 +270,7 @@ public:
 			if (parentId->Kind() == ibDataKind::Number) {
 				parent = ibFindMetaObjectById(metaData, (ibMetaID)parentId->AsInt());
 				if (parent == nullptr) {
-					refusal = ibString::Format(ibMcpText("Nothing in this configuration has id %s."),
+					refusal = ibString::Format(ibMcpText("Nothing in this application has id %s."),
 						parentId->AsNumber().ToString());
 					return false;
 				}
@@ -278,10 +278,10 @@ public:
 		}
 
 		if (parent == nullptr)
-			parent = metaData->GetCommonMetaObject();
+			parent = metaData->GetRootMetaObject();
 
 		if (parent == nullptr) {
-			refusal = ibMcpText("This configuration has no root to add to.");
+			refusal = ibMcpText("This application has no root to add to.");
 			return false;
 		}
 
@@ -314,7 +314,7 @@ public:
 
 		// Neither Modify(true) nor telling the tree is repeated here — CreateMetaObject and
 		// RenameMetaObject do both. They used to be the caller's, and this verb is where that cost
-		// showed: a pasted object existed in the configuration and was INVISIBLE in the designer's
+		// showed: a pasted object existed in the application and was INVISIBLE in the designer's
 		// navigator until it was reopened, because the second caller had not copied what the first
 		// one remembered to do. mcpTool.h warns about exactly this shape.
 

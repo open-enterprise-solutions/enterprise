@@ -20,7 +20,7 @@
       "syntax_block_ves": "Connection = New HTTPConnection(host, port, user, password, timeout);\nConnection.Host   Connection.Port   Connection.Timeout = seconds;\n\nTry\n    Response = Connection.Get(Request);          // Post  Put  Patch  Delete  Head\n    Response = Connection.CallMethod(HTTPMethod.Options, Request);\nExcept\n    Message(ErrorDescription());                 // no answer at all\nEndTry;",
       "parameters": "host - the machine's name, never an address: \"api.example\", \"10.0.0.5\", \"::1\".\nport - 1 to 65535; left out it is 80, and 443 once a SecureConnection is set.\nuser, password - sent as Basic authorization with every request, unless the request says who it is itself.\ntimeout - seconds, 1 to 86400 (a day); 30 when it is left out.",
       "return_descr": "HTTPConnection.",
-      "example": "Connection = New HTTPConnection(\"api.example\", 8080, \"user\", \"password\", 30);\nRequest = New HTTPRequest(\"/v1/sales?shift=42\");\nRequest.Headers.Insert(\"Accept\", \"application/json\");\n\ntry {\n    Response = Connection.Get(Request);\n    if (Response.StatusCode = 200) {            // 404 and 500 are ANSWERS, not failures\n        Message(Response.GetBodyAsString());\n    } else {\n        Message(\"answered \" + Response.StatusCode);\n    }\n} except {\n    Message(\"no answer: \" + ErrorDescription());   // no resolve, no listener, or 30 s passed\n}",
+      "example": "Connection = New HTTPConnection(\"api.example\", 8080, \"user\", \"password\", 30);\nRequest = New HTTPRequest(\"/v1/sales?shift=42\");\nRequest.Headers.Insert(\"Accept\", \"application/json\");\n\ntry {\n    Response = Connection.Get(Request);\n    if (Response.StatusCode == 200) {            // 404 and 500 are ANSWERS, not failures\n        Message(Response.GetBodyAsString());\n    } else {\n        Message(\"answered \" + Response.StatusCode);\n    }\n} except {\n    Message(\"no answer: \" + ErrorDescription());   // no resolve, no listener, or 30 s passed\n}",
       "availability": "Client, Server",
       "see_also": [
         "cls.HTTPConnection.SecureConnection",
@@ -461,7 +461,7 @@
       "syntax_block": "Response = Connection.Get(Request);\nResponse.StatusCode   Response.Headers[\"Location\"]\nResponse.GetBodyAsString(TextEncoding.UTF8)   Response.GetBodyAsBinaryData()",
       "parameters": "",
       "return_descr": "",
-      "example": "Response = Connection.Get(Request);\nif (Response.StatusCode = 200) {\n    Message(Response.GetBodyAsString());\n} elseif (Response.StatusCode = 302) {\n    Message(\"it moved to \" + Response.Headers[\"Location\"]);\n} else {\n    Message(\"answered \" + Response.StatusCode);\n}",
+      "example": "Response = Connection.Get(Request);\nif (Response.StatusCode == 200) {\n    Message(Response.GetBodyAsString());\n} elseif (Response.StatusCode == 302) {\n    Message(\"it moved to \" + Response.Headers[\"Location\"]);\n} else {\n    Message(\"answered \" + Response.StatusCode);\n}",
       "availability": "Client, Server",
       "see_also": [
         "cls.HTTPConnection",
@@ -483,11 +483,11 @@
         "http"
       ],
       "signature": "Response.StatusCode : number",
-      "description": "The status the server answered with - 200, 404, 500, 302. Read-only. A number, so it compares as one: `if (Response.StatusCode = 200)`.",
+      "description": "The status the server answered with - 200, 404, 500, 302. Read-only. A number, so it compares as one: `if (Response.StatusCode == 200)`.",
       "syntax_block": "Response.StatusCode",
       "parameters": "",
       "return_descr": "Number.",
-      "example": "if (Response.StatusCode <> 200) { Message(\"answered \" + Response.StatusCode); }",
+      "example": "if (Response.StatusCode != 200) { Message(\"answered \" + Response.StatusCode); }",
       "availability": "Client, Server",
       "see_also": [
         "cls.HTTPResponse",
@@ -774,7 +774,7 @@
         "http"
       ],
       "signature": "Function Handler(Request) : HTTPServiceResponse",
-      "description": "What a request to an HTTP service of the configuration brought. A SCRIPT NEVER MAKES ONE - the platform hands it to the method's handler, a function of the service module: Function <Handler>(Request).\n\nIts properties are read-only. The headers are named in lower case, as the server reads them; a Structure's keys fold case, so Request.Headers[\"Content-Type\"] finds them all the same. The body is held in memory whole, up to the web server's 4 MB.",
+      "description": "What a request to an HTTP service of the application brought. A SCRIPT NEVER MAKES ONE - the platform hands it to the method's handler, a function of the service module: Function <Handler>(Request).\n\nIts properties are read-only. The headers are named in lower case, as the server reads them; a Structure's keys fold case, so Request.Headers[\"Content-Type\"] finds them all the same. The body is held in memory whole, up to the web server's 4 MB.",
       "syntax_block": "Request.HTTPMethod   Request.BaseURL   Request.RelativeURL\nRequest.Headers   Request.QueryOptions   Request.URLParameters\nRequest.GetBodyAsString()   Request.GetBodyAsBinaryData()",
       "parameters": "",
       "return_descr": "",
@@ -804,7 +804,7 @@
       "syntax_block": "Request.HTTPMethod",
       "parameters": "",
       "return_descr": "String.",
-      "example": "if (Request.HTTPMethod = \"OPTIONS\") { return New HTTPServiceResponse(204); }",
+      "example": "if (Request.HTTPMethod == \"OPTIONS\") { return New HTTPServiceResponse(204); }",
       "availability": "Server",
       "see_also": [
         "cls.HTTPServiceRequest"

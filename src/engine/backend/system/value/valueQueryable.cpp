@@ -206,7 +206,7 @@ public:
 				return false;   // composite: several shapes, and picking one would be picking for the reader
 
 			// 🛑 THE VALUE IS MADE FROM ITS TYPE DESCRIPTION, not from the platform's ctor registry:
-			// `ibValue::GetAvailableCtor` does not know configuration types at all, so a reference
+			// `ibValue::GetAvailableCtor` does not know application types at all, so a reference
 			// column would have produced nothing — silently. AdjustValue is the door the value table
 			// already uses to make an empty cell of a declared type.
 			ibValue made = ibValueTypeDescription::AdjustValue(declared);
@@ -503,7 +503,7 @@ bool ibValueQueryable::TryJoinThroughL3(ibValue& receiver, ibValue& ret, ibValue
 	// joins them in a base in memory, the inner read for the outer's keys. leftKey / rightKey /
 	// projection map 1:1 onto JoinPushDown's outer / inner / result-selector.
 	ibValueQueryable wrapped(std::make_shared<ibTempTableQueryable>(ibValue(&receiver), innerQV->GetQueryable()->GetMetaData()),
-	                         ibT("Join"));   // its references are read in the configuration of the side it joins
+	                         ibT("Join"));   // its references are read in the application of the side it joins
 	return wrapped.JoinPushDown(ret, args, n);
 }
 
@@ -964,7 +964,7 @@ void ibValueQueryDecorator::DispatchLinqMethod(ibLinqMethod method, ibValue& ret
 			// the outer row passes iff a permitting row EXISTS in the inner. FILTERS once/zero per row — never
 			// multiplies — and runs SERVER-SIDE in the one statement. The inner's OWN conditions (its .Where —
 			// incl. dot-walk and captured runtime Params) ride along via GetWherePredicate; the base is metadata
-			// (stable for the config's life), the leaf columns are its attributes, so the spec has no on-the-fly
+			// (stable for the application's life), the leaf columns are its attributes, so the spec has no on-the-fly
 			// ownership. A MULTI-source inner (its own Join/Union — NOT in GetWherePredicate) falls to the full
 			// subquery path below, so its inner joins are not silently dropped (which would weaken the filter).
 			ibSemiJoinExists sj;

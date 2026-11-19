@@ -7,7 +7,7 @@
 // Every read that hands a script its rows as a table ends at ONE place - ibQueryRamTable::ToValueTable:
 // Unload(), a queryable's ToTable(), a register's slices and figures, a LINQ answer each fill the fast
 // table and have it loaded. WHAT IS TESTED HERE is that loading, over a fast table filled by hand, so no
-// database, session or configuration is needed:
+// database, session or application is needed:
 //
 //   1. one table column per column of the fast table, in its order, named as it names them;
 //   2. a column's caption is the one it carries, and its name where it carries none;
@@ -142,7 +142,7 @@ TEST(QueryUnload, NoRows_StillHasTheColumns)
 
 // 5 - an untyped column keeps a number a number. (A DECLARED column type converts what it is given - that is
 // what a type is for - which is exactly why "the query does not know the type" must not be given one; creating a
-// typed column needs the configuration's metadata, which a headless test does not have.)
+// typed column needs the application's metadata, which a headless test does not have.)
 TEST(QueryUnload, UntypedColumn_KeepsTheValueItReceives)
 {
 	const ibValue result = Rows({ wxT("Sum") }, { { ibValue(12.5) }, { Str(wxT("text")) } }).ToValueTable();

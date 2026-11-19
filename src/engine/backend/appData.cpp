@@ -13,7 +13,7 @@
 #include <cstdlib>   // getenv — the person's own folder
 #include <fstream>   // infobase.conf — written for a new base
 #include <sstream>
-#include <utility>   // std::exchange — the active configuration handed over
+#include <utility>   // std::exchange — the active application handed over
 
 #include "core/fileConfig.h"              // infobase.conf — a base's own settings
 #include "core/fileSystem.h"
@@ -116,19 +116,14 @@ ibString ibApplicationInstance::ResolveLogDir() const
 			tag.Replace(ibT(":"),  ibT("_"));
 			return tag;
 		};
-		ibString legacy = m_strDatabase;
-		if (legacy.IsEmpty()) legacy = m_strServer;
-		if (legacy.IsEmpty()) legacy = ibT("default");
+		ibString name = m_strDatabase;
+		if (name.IsEmpty()) name = m_strServer;
+		if (name.IsEmpty()) name = ibT("default");
 		const ibString tag = (!m_strServer.IsEmpty() && !m_strDatabase.IsEmpty())
 			? sanitised(m_strServer + ibT("_") + m_strDatabase)
-			: sanitised(legacy);
+			: sanitised(name);
 
 		const ibString root = UserLocalDataFolder() + sep + ibT("OES") + sep;
-		// …and a journal kept under the name alone is MOVED to the new key once, so its history stays
-		// readable instead of starting over beside it. A move that fails (the folder in use) costs only that.
-		const ibString old = root + sanitised(legacy);
-		if (tag != sanitised(legacy) && !ibDirExists(root + tag) && ibDirExists(old))
-			ibRenameFile(old, root + tag);
 
 		return root + tag + sep + ibT("logs");
 	}
@@ -157,7 +152,7 @@ void ibApplicationInstance::CreateLogger()
 }
 
 //sandbox
-#include "metadataConfiguration.h"
+#include "metadataApplication.h"
 
 // ibSessionSnapshot moved to backend/session/sessionSnapshot.{h,cpp}
 // — implementation lives next to ibSessionRegistry that produces it.
@@ -195,7 +190,7 @@ ibString DescribeSessionKind(ibSessionKind k) {
 ibApplicationInstance* ibApplicationInstance::Get(bool required)
 {
 	// ⭐⭐ THROUGH THE SESSION (Max, 2026-09-30: `appData = GetSession()->GetAppData()`, `activeMetaData =
-	// … ->GetMetaData()`). There is no global current base and no global current configuration: `appData`
+	// … ->GetMetaData()`). There is no global current base and no global current application: `appData`
 	// and `activeMetaData` are those of the session this thread works for — session → its registry → base.
 	if (ibSession* const session = ibSession::Current())
 		if (ibApplicationInstance* const applicationInstance = session->GetApplicationInstance())
@@ -365,7 +360,7 @@ ibApplicationInstance::ibApplicationInstance(ibApplicationHost* host, ibRunMode 
 		WireSessionEvents();
 }
 
-// Fabric — replaces ibMetaDataConfigurationBase::Initialize. The configuration the application runs, put in
+// Fabric — replaces ibMetaDataApplicationBase::Initialize. The application the base runs, put in
 // `m_activeMetaData` for the sessions to come — each takes its own reference — loaded and run. On the application
 // data NAMED: the opening passes the base it opens rather than let the thread resolve one.
 bool ibApplicationInstance::CreateActiveMetaData(ibApplicationInstance* applicationInstance, int flags)
@@ -377,8 +372,8 @@ bool ibApplicationInstance::CreateActiveMetaData(ibApplicationInstance* applicat
 
 	// The metadata subclass ctors are gated on ib::AppDataCtorToken — this TU is ibApplicationInstance's, so it can
 	// mint the token; nobody outside can.
-	const std::shared_ptr<ibMetaDataConfigurationBase> metaData =
-		ibMetaData::MakeShared<ibMetaDataConfiguration>(ib::AppDataCtorToken{ applicationInstance });
+	const std::shared_ptr<ibMetaDataApplicationBase> metaData =
+		ibMetaData::MakeShared<ibMetaDataApplication>(ib::AppDataCtorToken{ applicationInstance });
 
 	// In place BEFORE it initialises — its loading asks for `activeMetaData`; the opening thread works in it through
 	// a scope meanwhile.
@@ -390,17 +385,17 @@ bool ibApplicationInstance::CreateActiveMetaData(ibApplicationInstance* applicat
 	return metaData->OnInitialize(flags) && metaData->RunDatabase();
 }
 
-ibMetaDataConfigurationBase* ibApplicationInstance::GetActiveMetaData(const ibApplicationInstance* applicationInstance)
+ibMetaDataApplicationBase* ibApplicationInstance::GetActiveMetaData(const ibApplicationInstance* applicationInstance)
 {
 	if (applicationInstance == nullptr)
 		return nullptr;
 	// The session's own, through its reference…
 	if (const ibSession* const session = ibSession::Current())
-		if (ibMetaDataConfigurationBase* const metaData = session->GetMetaData())
+		if (ibMetaDataApplicationBase* const metaData = session->GetMetaData())
 			if (metaData->GetApplicationInstance() == applicationInstance)
 				return metaData;
 	// …a thread working for the base without a session: the one its scope holds for the length of the work…
-	if (ibMetaDataConfigurationBase* const metaData = ibApplicationInstanceScope::GetMetaData())
+	if (ibMetaDataApplicationBase* const metaData = ibApplicationInstanceScope::GetMetaData())
 		if (metaData->GetApplicationInstance() == applicationInstance)
 			return metaData;
 	// …and a thread that said neither — a session being let in or already gone, the thread that opened the base:
@@ -413,27 +408,27 @@ bool ibApplicationInstance::ReplaceActiveMetaData()
 {
 	// ⭐ THE BASE READS ITS OWN, made with its own token — for no session, whatever thread asks: the designer's apply
 	// asks on its own, and what the designer reads there is the designer's (its compile cache with it). Read as the
-	// apply's copy is read, the mirror of the database (loadConfigFlag).
-	const std::shared_ptr<ibMetaDataConfiguration> metaData =
-		ibMetaData::MakeShared<ibMetaDataConfiguration>(ib::AppDataCtorToken{ this });
-	if (!metaData->LoadDatabase(onlyLoadFlag) || !metaData->RunDatabase(ibRuntimeRequest(loadConfigFlag)))
+	// apply's copy is read, the mirror of the database (loadApplicationFlag).
+	const std::shared_ptr<ibMetaDataApplication> metaData =
+		ibMetaData::MakeShared<ibMetaDataApplication>(ib::AppDataCtorToken{ this });
+	if (!metaData->LoadDatabase(onlyLoadFlag) || !metaData->RunDatabase(ibRuntimeRequest(loadApplicationFlag)))
 		return false;
 	ReplaceActiveMetaData(metaData);
 	return true;
 }
 
-void ibApplicationInstance::ReplaceActiveMetaData(std::shared_ptr<ibMetaDataConfigurationBase> metaData)
+void ibApplicationInstance::ReplaceActiveMetaData(std::shared_ptr<ibMetaDataApplicationBase> metaData)
 {
-	const ibString digest = metaData->GetConfigMD5();
-	std::shared_ptr<ibMetaDataConfigurationBase> previous;
+	const ibString digest = metaData->GetApplicationMD5();
+	std::shared_ptr<ibMetaDataApplicationBase> previous;
 	{
 		std::lock_guard<std::mutex> lk(ibApplicationHost::s_mutex);
-		previous = ibMetaDataConfigurationBase::Replace(m_activeMetaData, std::move(metaData));
+		previous = ibMetaDataApplicationBase::Replace(m_activeMetaData, std::move(metaData));
 	}
 
 	// …and the base lets the old one go. The sessions working in it hold it, each by its own reference, and the
 	// last of them closes it (ibMetaData::MakeShared) — or the end of this call does, when nobody works in it.
-	ibJournalInfo(ibT("metadata"), ibT("the active configuration is now %s; the one before stays with %ld holder(s)"),
+	ibJournalInfo(ibT("metadata"), ibT("the active application is now %s; the one before stays with %ld holder(s)"),
 		digest, previous != nullptr ? previous.use_count() - 1 : 0L);
 }
 
@@ -446,7 +441,7 @@ void ibApplicationInstance::WireSessionEvents()
 	// `activeMetaData` or `ibLog`: those answer the base of the thread that fires the listener, and with
 	// several bases in the process the registry thread of one base must not be asked which base it is.
 	//
-	// (The configuration is up already — loaded and run as the base opened (Open), before anybody was let in.)
+	// (The application is up already — loaded and run as the base opened (Open), before anybody was let in.)
 
 	// Every authenticated session (including the first) gets per-session
 	// bring-up: thread binding, root mm allocation + compile, runtime start
@@ -487,7 +482,7 @@ void ibApplicationInstance::WireSessionEvents()
 		if (s->GetMetaData() != nullptr) {
 			// Root mm is allocated by ibSession::EnsureRoot (called by the registry before this listener) for
 			// runtime sessions; the Designer has no root mm (it uses the lightweight designer manager in the
-			// compile cache). The session's configuration comes to it run: the active one ran as the base opened,
+			// compile cache). The session's application comes to it run: the active one ran as the base opened,
 			// a replacement arrives run (ReplaceActiveMetaData), a designer's own ran as it was made
 			// (ibSession::AcquireMetaData).
 			// CompileRoot folds compile + AttachRuntime + lambda runtime wire-up.
@@ -547,7 +542,7 @@ void ibApplicationInstance::WireSessionEvents()
 	});
 
 	// Last authenticated session out — request process exit; the keep-alive predicate (web tabs, etc.) can
-	// decline. The configuration stays: it is the base's, up while the base is open, and closes with it (Close).
+	// decline. The application stays: it is the base's, up while the base is open, and closes with it (Close).
 	registry->OnLastDisconnect([this]() {
 		// EndJob and other "no more work" paths route here. ForceExit
 		// goes through ProcessExitHook (wes' main → svr->stop()) or
@@ -667,12 +662,12 @@ const ibUserInfo& ibApplicationInstance::GetUserInfo() const
 	return s_empty;
 }
 
-bool ibApplicationInstance::ExclusiveMode() const
+bool ibApplicationInstance::SingleUserMode() const
 {
 	// Process-wide query through the registry — answers "is anyone in
-	// exclusive mode right now?". Cluster-aware variant adds the
-	// sys_session.exclusive snapshot in a follow-up.
-	return m_sessionRegistry != nullptr && m_sessionRegistry->HasExclusiveSession();
+	// single-user mode right now?". Cluster-aware variant adds the
+	// sys_session.singleUser snapshot in a follow-up.
+	return m_sessionRegistry != nullptr && m_sessionRegistry->HasSingleUserSession();
 }
 
 const ibString& ibApplicationInstance::GetUserName() const
@@ -696,11 +691,6 @@ ibApplicationInstance::GetUserRoleArray() const
 ibString ibApplicationInstance::GetUserLanguageCode() const
 {
 	return GetUserInfo().m_strLanguageCode;
-}
-
-ibString ibApplicationInstance::ComputeMd5() const
-{
-	return ComputeMd5(GetUserInfo().m_strUserPassword);
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -777,7 +767,7 @@ ibApplicationInstance* ibApplicationInstance::Open(ibRunMode runMode, const ibIn
 		//
 		// It cost a day. Release binaries were shipped for months with every OES_USE_* macro dropped
 		// (the Release ItemDefinitionGroups had lost `%(PreprocessorDefinitions)`, so nothing was
-		// inherited from ConfigurationDefs.props) — and the only symptom anyone could see was an
+		// inherited from ApplicationDefs.props) — and the only symptom anyone could see was an
 		// infobase that would not open, with no reason given, in Release but never in Debug.
 		ibBackendCoreException::Error(
 			_("This build has no Firebird driver (OES_USE_FIREBIRD is not defined), and a base kept in a folder is a Firebird one."));
@@ -914,11 +904,22 @@ ibApplicationInstance* ibApplicationInstance::Open(std::unique_ptr<ibApplication
 		if (TableAlreadyCreated() && !ibServiceExclusivePolicy::CanOpen(runMode, heldBy))
 			ibBackendCoreException::Error(ibT("%s"), heldBy);
 
+		// ⭐ A NEW BASE GETS EVERY TABLE, AND ONLY A NEW ONE. An existing base is opened as it stands: one an earlier
+		// engine shaped is not healed here — the format is not frozen, and such a base is made anew.
 		if (create && !TableAlreadyCreated()) {
 			CreateTableSession();
 			CreateTableUser();
 			CreateTableEvent();
-			CreateTableLock();
+			CreateTableLock();             // sys_lock — long-held pessimistic locks
+			CreateTableJob();              // sys_job — the shared last-run clock and the jobs' settings
+			CreateTableSettings();         // sys_settings — what people saved on their forms and their lists
+			CreateTableFile();             // sys_file — the sessions' temporary files
+			CreateTableBytecodeCache();    // sys_bytecode_cache — the compiled modules
+			// The application's own — what the database publishes, what a designer saves, its sequence: read at the
+			// end of this opening.
+			ibMetaDataApplicationStorage::CreateApplicationTable();
+			ibMetaDataApplicationStorage::CreateApplicationSaveTable();
+			ibMetaDataApplicationStorage::CreateApplicationSequence();
 			WriteInfobaseConf(folder);   // a new base — its own settings file, with the defaults
 		}
 		// A base with no tables is not opened empty — and says so: a bare refusal left its caller nothing to report
@@ -926,22 +927,6 @@ ibApplicationInstance* ibApplicationInstance::Open(std::unique_ptr<ibApplication
 		else if (!TableAlreadyCreated())
 			ibBackendCoreException::Error(_("The base %s is empty (it has no system tables), and this opening does not create them."),
 				applicationInstance->GetDatabaseDescription());
-
-		// Additive and idempotent — a base made before any of these picks them up at its next open.
-		MigrateTableSession();         // pid / address / currentActivity, which the registry's INSERT assumes
-		MigrateTableBytecodeCache();
-		CreateTableLock();             // sys_lock — long-held pessimistic locks
-		CreateTableJob();              // sys_job — the shared last-run clock…
-		MigrateTableJob();             // …and its settings columns
-		CreateTableSettings();         // sys_settings — what people saved on their forms and their lists
-		CreateTableFile();             // sys_file — the sessions' temporary files
-		// The configuration's own — what the database publishes, what a designer saves, its sequence: read at the
-		// end of this opening. A designer's first login used to make them, and it was the only one that read them.
-		if (!ibMetaDataConfigurationStorage::TableAlreadyCreated()) {
-			ibMetaDataConfigurationStorage::CreateConfigTable();
-			ibMetaDataConfigurationStorage::CreateConfigSaveTable();
-			ibMetaDataConfigurationStorage::CreateConfigSequence();
-		}
 
 		if (!SetLocaleAppDataEnv(request.m_locale))
 			return refuse();
@@ -972,14 +957,14 @@ ibApplicationInstance* ibApplicationInstance::Open(std::unique_ptr<ibApplication
 		// of CreateAppDataEnv and never reached a window.
 		ibRegisterPlatformJobs(applicationInstance);
 
-		// ⭐ THE CONFIGURATION, UP BEFORE ANYBODY COMES IN (Max, 2026-10-20: *"first the metadata is loaded, then the
+		// ⭐ THE APPLICATION, UP BEFORE ANYBODY COMES IN (Max, 2026-10-20: *"first the metadata is loaded, then the
 		// users connect — not the first user, as before"*). The base's first session used to make it and the first
-		// to be let in ran it, so two first logins at once ran it twice (`!IsConfigOpen()` in RunDatabase, under
+		// to be let in ran it, so two first logins at once ran it twice (`!IsOpen()` in RunDatabase, under
 		// the web server's load test). Now every session takes it ready, by its own reference; a designer's session
-		// works in one of its own (ibSession::AcquireMetaData). A configuration that does not come up refuses the base.
+		// works in one of its own (ibSession::AcquireMetaData). An application that does not come up refuses the base.
 		applicationInstance->m_loadMetadataFlags = request.m_loadMetadataFlags;
 		if (!CreateActiveMetaData(applicationInstance, request.m_loadMetadataFlags))
-			ibBackendCoreException::Error(_("The configuration of the base %s could not be loaded."),
+			ibBackendCoreException::Error(_("The application of the base %s could not be loaded."),
 				applicationInstance->GetDatabaseDescription());
 
 		// …THEN THE DOOR THE SESSIONS COME IN BY — the registry, its policies and its thread. It too used to start with
@@ -1289,8 +1274,8 @@ bool ibApplicationInstance::AuthenticateUser(const ibString& strUserName,
 		return false;
 	}
 
-	// Lazy upgrade: if we just verified a legacy MD5 hash or a PBKDF2 hash
-	// with a below-policy iteration count, re-store the password using the
+	// Re-hash: if we just verified a PBKDF2 hash with a below-policy
+	// iteration count, re-store the password using the
 	// current parameters. Silent — if the DB write fails we don't fail the
 	// login, just keep the old hash.
 	if (ibPasswordHash::NeedsRehash(outInfo.m_strUserPassword)) {
@@ -1403,23 +1388,23 @@ bool ibApplicationInstance::LoadDatabase(std::istream& stream)
 {
 	// The archive is read to the end, and refused, before either clear. An empty
 	// zip, a file that is not a zip, or a backup this build cannot read used to
-	// drop the configuration tables and every user, then return success.
+	// drop the application tables and every user, then return success.
 	ibZipReader zip(stream);
 
-	ibMemoryBuffer config;
+	ibMemoryBuffer application;
 	ibMemoryBuffer user;
 	ibMemoryBuffer data;
-	bool sawConfig = false;
+	bool sawApplication = false;
 	bool sawUser = false;
 	bool sawData = false;
 	bool duplicate = false;
-	bool dataBeforeConfig = false;
+	bool dataBeforeApplication = false;
 
 	for (ibString name; zip.GetNextEntry(name); ) {
-		const bool isConfig = name == ibT("config");
+		const bool isApplication = name == ibT("application");
 		const bool isUser = name == ibT("user");
 		const bool isData = name == ibT("data");
-		if (!isConfig && !isUser && !isData)
+		if (!isApplication && !isUser && !isData)
 			continue;
 
 		ibMemoryBuffer buffer;
@@ -1428,10 +1413,10 @@ bool ibApplicationInstance::LoadDatabase(std::istream& stream)
 			return false;
 		}
 
-		if (isConfig) {
-			duplicate = duplicate || sawConfig;
-			config = buffer;
-			sawConfig = true;
+		if (isApplication) {
+			duplicate = duplicate || sawApplication;
+			application = buffer;
+			sawApplication = true;
 		}
 		else if (isUser) {
 			duplicate = duplicate || sawUser;
@@ -1440,28 +1425,28 @@ bool ibApplicationInstance::LoadDatabase(std::istream& stream)
 		}
 		else {
 			duplicate = duplicate || sawData;
-			if (!sawConfig)
-				dataBeforeConfig = true;
+			if (!sawApplication)
+				dataBeforeApplication = true;
 			data = buffer;
 			sawData = true;
 		}
 	}
 
 	if (duplicate) {
-		ibJournalError(ibT("appdata"), "The archive repeats config, user or data. Nothing was cleared.");
+		ibJournalError(ibT("appdata"), "The archive repeats application, user or data. Nothing was cleared.");
 		return false;
 	}
 
 	// Rows can only be written once the structure holding them exists. Our own
-	// writer emits config before data; a file that says otherwise is refused
+	// writer emits application before data; a file that says otherwise is refused
 	// rather than landing rows in whatever structure the database already has.
-	if (dataBeforeConfig) {
-		ibJournalError(ibT("appdata"), _("The file carries data before the configuration - it cannot be loaded"));
+	if (dataBeforeApplication) {
+		ibJournalError(ibT("appdata"), _("The file carries data before the application - it cannot be loaded"));
 		return false;
 	}
 
-	if (!sawConfig || !sawUser || !sawData) {
-		ibJournalError(ibT("appdata"), "The archive must contain config, user and data. Nothing was cleared.");
+	if (!sawApplication || !sawUser || !sawData) {
+		ibJournalError(ibT("appdata"), "The archive must contain application, user and data. Nothing was cleared.");
 		return false;
 	}
 
@@ -1471,16 +1456,16 @@ bool ibApplicationInstance::LoadDatabase(std::istream& stream)
 	}
 
 	if (activeMetaData == nullptr) {
-		ibJournalError(ibT("appdata"), "There is no configuration to load the file into. Nothing was cleared.");
+		ibJournalError(ibT("appdata"), "There is no application to load the file into. Nothing was cleared.");
 		return false;
 	}
 
-	// The configuration is read first by the very reader that applies it below, into a
-	// separate configuration that nothing runs: a blob that reader refuses leaves the
+	// The application is read first by the very reader that applies it below, into a
+	// separate application that nothing runs: a blob that reader refuses leaves the
 	// base untouched.
 	try {
-		if (!ibMetaData::MakeShared<ibMetaDataConfigurationFile>()->LoadConfigFromBuffer(config)) {
-			ibJournalError(ibT("appdata"), "The file has no configuration this build can read. Nothing was cleared.");
+		if (!ibMetaData::MakeShared<ibMetaDataApplicationFile>()->LoadApplicationFromBuffer(application)) {
+			ibJournalError(ibT("appdata"), "The file has no application this build can read. Nothing was cleared.");
 			return false;
 		}
 	}
@@ -1497,17 +1482,17 @@ bool ibApplicationInstance::LoadDatabase(std::istream& stream)
 	if (!ClearTableUser())
 		CreateTableUser();
 
-	// LoadConfigFromBuffer already RUNs the loaded tree (the
-	// ibMetaDataConfiguration override). No separate RunDatabase here,
-	// that would be a double-run (asserts !m_configOpened).
-	if (!activeMetaData->LoadConfigFromBuffer(config))
+	// LoadApplicationFromBuffer already RUNs the loaded tree (the
+	// ibMetaDataApplication override). No separate RunDatabase here,
+	// that would be a double-run (asserts !IsOpen()).
+	if (!activeMetaData->LoadApplicationFromBuffer(application))
 		return false;
 
-	// The configuration is applied before the rows: it creates the tables,
+	// The application is applied before the rows: it creates the tables,
 	// with the column ids, that `data` is about to be written into. A failed
 	// apply stops the load.
-	if (!activeMetaData->SaveDatabase(saveConfigFlag)) {
-		ibJournalError(ibT("appdata"),_("The configuration from the file could not be applied - the data was not loaded"));
+	if (!activeMetaData->SaveDatabase(saveApplicationFlag)) {
+		ibJournalError(ibT("appdata"),_("The application from the file could not be applied - the data was not loaded"));
 		return false;
 	}
 
@@ -1538,14 +1523,14 @@ bool ibApplicationInstance::SaveDatabase(const ibString& strFullPath)
 
 bool ibApplicationInstance::SaveDatabase(std::ostream& out)
 {
-	// Three members, config first: a restore writes rows only into the structure the configuration made. A member that
+	// Three members, application first: a restore writes rows only into the structure the application made. A member that
 	// cannot be made is not written, and a backup without one restores nothing - so none is written then.
 	ibZipWriter zip(out);
 
-	ibMemoryBuffer bufferConfig;
-	if (!activeMetaData->SaveConfigToBuffer(bufferConfig))
+	ibMemoryBuffer bufferApplication;
+	if (!activeMetaData->SaveApplicationToBuffer(bufferApplication))
 		return false;
-	if (!zip.PutNextEntry(ibT("config")) || !zip.Write(bufferConfig.GetData(), bufferConfig.GetDataLen()))
+	if (!zip.PutNextEntry(ibT("application")) || !zip.Write(bufferApplication.GetData(), bufferApplication.GetDataLen()))
 		return false;
 
 	ibMemoryBuffer bufferUser;
@@ -1581,18 +1566,6 @@ ibString ibApplicationInstance::GetDatabaseDescription() const
 	if (!m_strServer.IsEmpty())
 		return m_strServer + ibT(":") + m_strPort + ibT("/") + m_strDatabase;
 	return m_strFile;
-}
-
-///////////////////////////////////////////////////////////////////////////////
-
-#include "core/utils/md5.hpp"
-
-ibString ibApplicationInstance::ComputeMd5(const ibString& userPassword) const
-{
-	if (userPassword.Length() > 0)
-		return ibMD5::ComputeMd5(userPassword);
-
-	return ibEmptyString;
 }
 
 ///////////////////////////////////////////////////////////////////////////////

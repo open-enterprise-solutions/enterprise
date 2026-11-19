@@ -2,7 +2,7 @@
 #define _CORE_CORE_H__
 
 // THE SHARED MEANINGS — what the engine (backend) and its clients (frmclient, the protocol's sides) mean by the same
-// words: the class ids and the ids of the configuration, the kinds of a value, a text, a date, a guid. Under both, and
+// words: the class ids and the ids of the application, the kinds of a value, a text, a date, a guid. Under both, and
 // knowing neither: nothing here reads a base, runs a script or draws a window (docs/private/client-protocol-arc.md).
 #include "core/coreApi.h"   // CORE_API, ibChar, ibT, IB_FORCEINLINE
 

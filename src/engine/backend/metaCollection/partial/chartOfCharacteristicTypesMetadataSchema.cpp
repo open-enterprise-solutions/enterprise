@@ -8,14 +8,14 @@
 
 #include "chartOfCharacteristicTypes.h"
 #include "backend/metaData.h"                                         // GetTypeCtor / IsRegisterCtor - the chart's characteristic, a type still there
-#include "backend/metadataSerialization.h"                            // ibDeserializeValue - a declared Type, read with this configuration
+#include "backend/metadataSerialization.h"                            // ibDeserializeValue - a declared Type, read with this application
 #include "backend/objCtor.h"                                          // ibCtorMetaValueType::AllowValue - what the contour takes
 #include "backend/query/provider/database/structure/schemaSnapshot.h" // ibSchemaTable::m_beforeChange - the rule the declaration carries
 #include "backend/restructureInfo.h"                                  // ibRestructureInfo - where that rule states its reason
 
 // ⭐ WHAT A PREDEFINED CHARACTERISTIC MUST DECLARE (#278), on top of what every item must have (the base's check of this
 // chart's table): its Type, filled in — what a field typed by the characteristic holds — and within the chart's contour:
-// every type in it one the configuration still has and the chart's Types of characteristics take (the characteristic's
+// every type in it one the application still has and the chart's Types of characteristics take (the characteristic's
 // own AllowValue; not Undefined, which it passes as an empty value). A type deleted since, or a contour that lost it (an emptied contour reads as String), would leave a
 // characteristic typed by what the chart does not hold. Refused before a statement, naming the characteristic. A folder
 // declares no Type (it is an item's attribute).

@@ -80,7 +80,7 @@ bool ibValueMetaObjectCalculationTypeRelationTable::OnDeleteMetaObject()
 	return ibValueMetaObjectTableDataRef::OnDeleteMetaObject();
 }
 
-// A SECTION NEVER SAVED DOES NOT RUN, CLOSE OR REGISTER ANYTHING — it is not part of this configuration
+// A SECTION NEVER SAVED DOES NOT RUN, CLOSE OR REGISTER ANYTHING — it is not part of this application
 // yet (StampIfNeverSaved). Said by the section, because two roads reach these doors: the chart's own
 // list, and the tree's walk (RunSubtree), which asks only whether a child is deleted. Run at id 0 it
 // would register its value ctors under 0, and so would the other never-saved section beside it.

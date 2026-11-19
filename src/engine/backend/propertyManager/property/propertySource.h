@@ -49,9 +49,9 @@ public:
 	// length on the variant. A dot-walk binding is READ-ONLY.
 	bool IsDotWalk() const;
 
-	// The field the binding lands on is available — false when a functional option has it, or a reference on the
+	// The field the binding lands on is available — false when a feature option has it, or a reference on the
 	// way to it, switched off; an empty binding lands on nothing and is not this question's (IsEmptyProperty).
-	// Asked of the COLUMNS, never of the path's numbers (functionalOptionGate.h). Cheap when nothing in the base
+	// Asked of the COLUMNS, never of the path's numbers (featureOptionGate.h). Cheap when nothing in the base
 	// is unavailable: the source is walked only when something is.
 	bool IsAvailable() const;
 

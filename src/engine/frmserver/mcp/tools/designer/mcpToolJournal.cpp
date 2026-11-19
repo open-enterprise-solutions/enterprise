@@ -40,7 +40,7 @@
 #include "backend/system/value/valueMap.h"   // ibValueStructure - what a sent object becomes
 #include "backend/logger/logger.h"
 #include "backend/logger/loggerReader.h"
-#include "backend/metadataSerialization.h"   // ibDeserializeValue - the door that knows configuration types
+#include "backend/metadataSerialization.h"   // ibDeserializeValue - the door that knows application types
 #include "core/fdatetime.h"           // ibDateTime - a line's moment
 #include "core/fileSystem.h"          // the journal lives in the diagnostic folder
 #include "core/serialize/dataBuilder.h"   // ibDataNode + ibBinaryProvider - the details payload
@@ -394,7 +394,7 @@ public:
 			"and this is how you watch what it is doing, since a background session can message "
 			"nobody. `level: error` for failures alone. `contains` or `event` for a MARKER somebody "
 			"put there on purpose. Narrow first, then read.\n\n"
-			"AND THE OTHER HALF OF IT IS `WriteJournalEvent`, the global procedure configuration "
+			"AND THE OTHER HALF OF IT IS `WriteJournalEvent`, the global procedure application "
 			"code calls to put a line here (syntax_get 'fn.WriteJournalEvent'). That is the pair: "
 			"code writes a marked line as it goes, this verb pulls the marked lines back out. Code "
 			"that runs unattended and writes nothing here cannot be followed at all.\n\n"
@@ -488,7 +488,7 @@ public:
 					//
 					// 🛑🛑 NOR IS `ibValue::FromNode` ON ITS OWN, AND THAT ONE MATTERS MORE. It reads the
 					// VALUE registry - the built-in classes, the ones that exist whether or not a
-					// configuration is open - and a REFERENCE is not among them: its clsid comes from
+					// application is open - and a REFERENCE is not among them: its clsid comes from
 					// a metaID no static table knows, so it THROWS. Which is exactly the payload worth
 					// journalling: "this document was written", "that item was retyped". Caught and
 					// reported as unreadable, the most valuable entries would have been the ones that
@@ -496,7 +496,7 @@ public:
 					//
 					// The metadata is the step IN FRONT of that registry, not a copy of it: it makes
 					// the types only it has and redirects everything else to the same mechanism. So
-					// the configuration answers when there is one, and the registry when there is not
+					// the application answers when there is one, and the registry when there is not
 					// - the shape backend_composition.cpp already uses at its own door.
 					std::shared_ptr<ibDataNode> carried = std::make_shared<ibDataNode>();
 					try {

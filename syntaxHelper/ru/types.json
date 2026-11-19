@@ -12,10 +12,10 @@
       "category_keys": ["value_types", "type_description"],
       "signature": "Type(name : string) / TypeOf(value : any)",
       "description": "Тип как значение — то, что TypeOf отвечает о значении, а Type(name) — по имени; с ним и сравнивают тип: `TypeOf(Value) = Type(\"Number\")`. Два типа равны, когда это один и тот же класс. String(тип) — его зарегистрированное имя: \"Number\", \"Table\", \"CatalogRef.Goods\".\n\nОписание типов (TypeDescription) строится из типов — одного или массива, — и его Types() отвечает ими.\n\nТип создают эти две функции, а не New: `New Type(...)`, что бы ему ни передали, создаёт тип, который не называет никакого класса, и первое же его использование вызывает ошибку. Собственных свойств и методов у типа нет.",
-      "syntax_block": "T = Type(\"Number\");\nT = TypeOf(Value);\nIsNumber = TypeOf(Value) = Type(\"Number\");",
+      "syntax_block": "T = Type(\"Number\");\nT = TypeOf(Value);\nIsNumber = TypeOf(Value) == Type(\"Number\");",
       "parameters": "name — имя зарегистрированного типа (Type).\nvalue — любое значение (TypeOf).",
       "return_descr": "Type.",
-      "example": "Value = 42;\nMessage(TypeOf(Value) = Type(\"Number\"));   // True\nMessage(String(TypeOf(New Table())));       // Table",
+      "example": "Value = 42;\nMessage(TypeOf(Value) == Type(\"Number\"));   // True\nMessage(String(TypeOf(New Table())));       // Table",
       "availability": "Клиент, Сервер",
       "see_also": ["fn.Type", "fn.TypeOf", "cls.TypeDescription", "cls.TypeDescription.Types"],
       "reviewed": false
@@ -269,7 +269,7 @@
       "syntax_block": "Key = New Guid();\nKey = New Guid(\"0f8fad5b-d9cb-469f-a165-70867728950e\");",
       "parameters": "text — текст GUID; если опущен, создаётся новый GUID.",
       "return_descr": "Guid.",
-      "example": "Key = New Guid();\nText = String(Key);            // 36 символов\nMessage(New Guid(Text) = Key); // True",
+      "example": "Key = New Guid();\nText = String(Key);            // 36 символов\nMessage(New Guid(Text) == Key); // True",
       "availability": "Клиент, Сервер",
       "see_also": ["cls.Type", "fn.ValueIsFilled"],
       "reviewed": false

@@ -23,8 +23,8 @@ struct BACKEND_API ibComEventSinkRelease {
 // through IDispatch: a member is looked up when it is used (GetIDsOfNames) and called through Invoke, so
 // nothing about the object has to be known when the module is compiled.
 //
-// ⭐ THE TYPE IS REGISTERED ON EVERY PLATFORM, and the object is made only on Windows. A configuration that
-// drives a scanner or a fiscal register through COM is the same configuration on a Mac: its modules have
+// ⭐ THE TYPE IS REGISTERED ON EVERY PLATFORM, and the object is made only on Windows. An application that
+// drives a scanner or a fiscal register through COM is the same application on a Mac: its modules have
 // to compile there, and a module that never runs the line must not be refused for containing it. Creating
 // one elsewhere raises the Windows-only refusal — at `New`, never at compile time.
 //

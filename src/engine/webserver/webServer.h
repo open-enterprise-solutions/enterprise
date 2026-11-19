@@ -13,7 +13,7 @@
 //   WS   /<publication>/client    a connection: each text message one JSON-RPC request, answered by its response
 //   POST /<publication>/client    one request, its response
 //   *    /<publication>/<path>/…  what the base itself answers there — its web addresses (backend/served/
-//                                 servedAddress.h): an HTTP service of its configuration, an assistant's channel. The
+//                                 servedAddress.h): an HTTP service of its application, an assistant's channel. The
 //                                 web server knows no kind: it asks the base for the list (protocol `addresses`, which
 //                                 also tells it every change), mounts each path, and hands what comes there to the base
 //                                 (`serve`) on threads of their own

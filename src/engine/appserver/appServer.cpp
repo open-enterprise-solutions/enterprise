@@ -178,7 +178,7 @@ bool ibAppServer::Open(const ibConfiguredInstance& instance)
 	}
 
 	// THE SERVER'S OWN SESSION IN THE BASE — made by the base in hand and opened while this thread still works
-	// for it (opening left it so), so the registry that makes it and the configuration it loads are the base's
+	// for it (opening left it so), so the registry that makes it and the application it loads are the base's
 	// own. Of kind Service: while it lives the base admits other application servers and no client process
 	// (ibServiceExclusivePolicy).
 	ibSessionHolder session;

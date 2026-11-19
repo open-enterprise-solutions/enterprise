@@ -29,10 +29,10 @@ ibSelectorDataType ibValueMetaObjectResource::GetFilterDataType() const
 	return ibSelectorDataType::ibSelectorDataType_resource;
 }
 
-// ⚠ AN ABSENT PROPERTY IS NOT A `false`. Every configuration written before this flag existed has no
+// ⚠ AN ABSENT PROPERTY IS NOT A `false`. Every application written before this flag existed has no
 // node for it, and reading one anyway hands the property an EMPTY value — which a boolean reads as
 // "no". The default here is TRUE (a posting balances in its amount, § the declaration above), so a
-// blind read turned every stored resource of every existing configuration into a non-balance one:
+// blind read turned every stored resource of every existing application into a non-balance one:
 // the balance columns vanish from the shape, the readings report turnovers alone, and nothing
 // anywhere says why. So the file is ASKED whether it carries the property, exactly as the accounting
 // register asks for its slots, and the declared default stands where it does not.

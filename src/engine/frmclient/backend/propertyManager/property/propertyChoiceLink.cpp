@@ -5,7 +5,7 @@
 #include "protocol/protocolDesigner.h"            // ibProtocol::ibSchema::ibProperties — the row's keys, as the server's property writes them
 
 // WHAT A FIELD'S CHOICE WINDOWS ASK, READ OFF ITS ROW — the server writes it where the desktop's windows asked the
-// configuration (its ibPropertyChoiceLink / ibPropertyChoiceParameters::GetProtocolValue): the row's Targets (the
+// application (its ibPropertyChoiceLink / ibPropertyChoiceParameters::GetProtocolValue): the row's Targets (the
 // field's reference types, each its fields a parameter may fill) and Sources (the fields beside it, each the
 // parameters it could fill).
 

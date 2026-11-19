@@ -1,6 +1,6 @@
 # Public design documents
 
-Design documents anyone may read: people building a configuration on the platform, people
+Design documents anyone may read: people building an application on the platform, people
 extending the engine, people deciding whether to adopt it. Written here rather than in
 `docs/private/` because nothing in them has to stay inside the organisation.
 
@@ -38,15 +38,15 @@ Add a row to the group it belongs to when you add a document, so this folder can
 
 ## Documents
 
-### Building a configuration
+### Building an application
 
 | Document | What it holds |
 |---|---|
-| [access-rights.md](access-rights.md) | Roles: the rights on an object kind and on the configuration, row restrictions as a debuggable handler, how several roles compose |
-| [ai-quickstart.md](ai-quickstart.md) | Building a configuration with an assistant: connecting it to the designer over MCP, the first request, where it stops |
-| [configuration-files.md](configuration-files.md) | A configuration as a directory of text files: the layout, the value kinds, export and import over MCP, publication and refusal |
+| [access-rights.md](access-rights.md) | Roles: the rights on an object kind and on the application, row restrictions as a debuggable handler, how several roles compose |
+| [ai-quickstart.md](ai-quickstart.md) | Building an application with an assistant: connecting it to the designer over MCP, the first request, where it stops |
+| [application-files.md](application-files.md) | An application as a directory of text files: the layout, the value kinds, export and import over MCP, publication and refusal |
 | [event-handlers.md](event-handlers.md) | Event handlers: one event of many objects handled in one module, the call order, the composite rule, the manager events |
-| [functional-options.md](functional-options.md) | Functional options: a constant that decides what is shown, membership kept on the member, the one rule, where it stops |
+| [feature-options.md](feature-options.md) | Feature options: a constant that decides what is shown, membership kept on the member, the one rule, where it stops |
 | [registers.md](registers.md) | The four registers: what each keeps and how it is read, a recorder's set, totals kept by the database, what a balance guarantees |
 | [reports.md](reports.md) | Reports and the data composer: a declared schema rendered to query text, composing as a background read, the reader's settings and variants |
 | [translations.md](translations.md) | The engine's own translations: one dictionary per language, chosen per thread by the base it works for; the base's locale; a language's name |
@@ -57,7 +57,7 @@ Add a row to the group it belongs to when you add a document, so this folder can
 |---|---|
 | [date-model.md](date-model.md) | The date: a wall-clock reading in `ibDateTime`, its calendar, its doors, stored forms, where it stops |
 | [http-client.md](http-client.md) | HTTP and HTTPS from a script: the values, what they guarantee, where they stop |
-| [http-services.md](http-services.md) | HTTP services: a configuration answering a request — the three kinds, the match, the handler, the session, where it stops |
+| [http-services.md](http-services.md) | HTTP services: an application answering a request — the three kinds, the match, the handler, the session, where it stops |
 | [json.md](json.md) | JSON from a script: what reading gives, what the writer guarantees, where it stops |
 | [number-model.md](number-model.md) | The number: an exact decimal in `ibNumber`, the one bounded step (division), the rounding rules, its doors |
 | [query-language.md](query-language.md) | The query language: sources, references, expressions, totals, the package; the one door under every front-end |
@@ -68,7 +68,7 @@ Add a row to the group it belongs to when you add a document, so this folder can
 | Document | What it holds |
 |---|---|
 | [application-cluster.md](application-cluster.md) | The application cluster: a process per base, the server folder, restarts, routing, TLS, sealed passwords, the memory wall |
-| [applying-a-configuration.md](applying-a-configuration.md) | Updating the database configuration: the schema as a function of two configurations, all or nothing, the dry run, where it stops |
+| [applying-an-application.md](applying-an-application.md) | Updating the database's application: the schema as a function of two applications, all or nothing, the dry run, where it stops |
 | [debugger.md](debugger.md) | The debugger: the debuggee listens, one debugger and many listeners, a stop per session, the sandbox that changes nothing |
 | [jobs.md](jobs.md) | Jobs: platform, scheduled and background work in one manager, the schedule, starting one from a script, one run across servers |
 | [record-locks.md](record-locks.md) | Record locks: the version on the object, the row lock while writing, the session's lock that names its holder |

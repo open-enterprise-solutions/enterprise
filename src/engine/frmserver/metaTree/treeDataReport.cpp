@@ -13,11 +13,11 @@ ibDataReportTree::ibDataReportTree(ibClientFrame* frame, ibMetaDocument* docPare
 {
 }
 
-// The title alone — see ibDataProcessorTree::MetaObjectChanged.
+// The title alone — see ibDataToolTree::MetaObjectChanged.
 void ibDataReportTree::MetaObjectChanged(ibMetaDataNotifier::ibMetaStage stage, ibValueMetaObject* object)
 {
 	if (ibClientFrame::GetFrame() == m_frame && m_docParent != nullptr && m_metaData != nullptr
-		&& object != nullptr && object == m_metaData->GetCommonMetaObject() && m_docParent->GetTitle() != object->GetName()) {
+		&& object != nullptr && object == m_metaData->GetRootMetaObject() && m_docParent->GetTitle() != object->GetName()) {
 		m_docParent->SetTitle(object->GetName());
 		m_docParent->OnChangeFilename(true);
 	}
@@ -38,8 +38,8 @@ void ibDataReportTree::OnDraw(ibDataNode& root)
 		FillData(root);
 }
 
-// THE DESKTOP'S GROUPS, IN ITS ORDER — a report is a data processor, its composers among its templates, exactly as in
-// the configuration's tree (ibConfigurationTree::AddDataProcessorItem): one report, one order, wherever it is opened from.
+// THE DESKTOP'S GROUPS, IN ITS ORDER — a report is a data tool, its composers among its templates, exactly as in
+// the application's tree (ibApplicationTree::AddDataToolItem): one report, one order, wherever it is opened from.
 void ibDataReportTree::FillData(ibDataNode& root)
 {
 	ibValueMetaObjectReport* commonMetadata = m_metaData->GetReport();

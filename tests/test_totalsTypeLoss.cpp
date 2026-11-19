@@ -2,9 +2,9 @@
 // CatalogRef.A|B and A share one reference pair; the differ clears every B the same way in
 // the movements and in the totals, because both tables declare the same column.
 //
-// DiffSnapshots is the call OnSaveDatabase makes once ApplyConfiguration has the two
+// DiffSnapshots is the call OnSaveDatabase makes once ApplyApplication has the two
 // snapshots. Driving that verb twice from a headless fixture does not get there: the
-// configuration reloaded from the blob describes the catalog's own reference with an _RTRef
+// application reloaded from the blob describes the catalog's own reference with an _RTRef
 // the first apply never created, and the second apply stops on that column. The diff below
 // is the restructuring itself, with both snapshots still in memory and the meta ids the same.
 //
@@ -44,7 +44,7 @@
 #include "backend/metaCollection/dimension/metaDimensionObject.h"
 #include "backend/metaCollection/partial/accumulationRegister.h"
 #include "backend/metaCollection/resource/metaResourceObject.h"
-#include "backend/metadataConfiguration.h"
+#include "backend/metadataApplication.h"
 #include "backend/propertyManager/property/propertyBoolean.h"
 #include "backend/query/provider/database/structure/schemaBuilder.h"
 #include "backend/restructureInfo.h"
@@ -169,10 +169,10 @@ struct RegisterShape {
 	ibClassID refDoc = 0;
 };
 
-RegisterShape Declare(ibMetaDataConfigurationFile& cfg)
+RegisterShape Declare(ibMetaDataApplicationFile& cfg)
 {
 	RegisterShape shape;
-	ibValueMetaObjectConfiguration* root = cfg.GetCommonMetaObject();
+	ibValueMetaObjectApplication* root = cfg.GetRootMetaObject();
 	shape.catalogA = cfg.CreateMetaObject(g_metaCatalogCLSID, root, false);
 	shape.catalogB = cfg.CreateMetaObject(g_metaCatalogCLSID, root, false);
 	shape.document = cfg.CreateMetaObject(g_metaDocumentCLSID, root, false);
@@ -289,14 +289,16 @@ TEST_P(TotalsTypeLossApply, ADimensionThatLosesATypeKeepsTotalsAtTheMovementSum)
 		GTEST_SKIP() << GetParam() << " is not available";
 	pool->Init(db, /*maxSize=*/1, /*minIdle=*/0);
 
-	ibMetaDataConfigurationFile wideCfg;
-	ibMetaDataConfigurationFile narrowCfg;
+	ibMetaDataApplicationFile wideCfg;
+	ibMetaDataApplicationFile narrowCfg;
 	const RegisterShape wide = Declare(wideCfg);
 	const RegisterShape narrow = Declare(narrowCfg);
 	ASSERT_NE(wide.reg, nullptr);
 	ASSERT_NE(narrow.dimension, nullptr);
 	ASSERT_EQ(wide.dimension->GetMetaID(), narrow.dimension->GetMetaID());
 	narrow.dimension->GetTypeDesc().ClearMetaType(narrow.refB);
+	ASSERT_TRUE(wideCfg.RunDatabase());     // run, as a saved one is: a catalog's Parent is typed on the run
+	ASSERT_TRUE(narrowCfg.RunDatabase());
 
 	const ibSchemaSnapshot wideSnap = wideCfg.BuildSchemaSnapshot();
 	ibRestructureInfo created;

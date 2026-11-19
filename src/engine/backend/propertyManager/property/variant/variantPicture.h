@@ -12,7 +12,7 @@ public:
 	bool IsEmptyPicture() const { return m_pictureExternalFile.IsEmptyPicture(); }
 
 	const ibExternalPictureDescription& GetExternalPictureDesc() const { return m_pictureExternalFile; }
-	// ⭐ WHICH PICTURE IT HOLDS — a guid new with each picture it is given and kept by its copies: what a configuration
+	// ⭐ WHICH PICTURE IT HOLDS — a guid new with each picture it is given and kept by its copies: what an application
 	// picture's id carries (ibBackendPicture::SendPicture), so a client asks anew for one changed since. Not written with
 	// the picture: one read is given a new one.
 	const ibGuid& GetPictureVersion() const { return m_version; }
@@ -61,7 +61,7 @@ public:
 	void SetPictureType(ibPictureType type) { m_pictureDesc.m_type = type; }
 
 	void SetFromBackendPicture(const ibClassID& id) { m_pictureDesc.m_class_identifier = id; }
-	void SetFromConfiguraion(const ibGuid& id) { m_pictureDesc.m_meta_guid = id; }
+	void SetFromApplication(const ibGuid& id) { m_pictureDesc.m_meta_guid = id; }
 	void SetFromExternalFile(const ibExternalPictureDescription& container) { m_pictureDesc.m_img_data = container; m_externalPicture->SetFromExternalFile(container); }
 
 	//Get owner value

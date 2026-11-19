@@ -11,7 +11,7 @@
 #include "backend/metaCollection/partial/reference/reference.h"   // ibValueReferenceDataObject::ConvertToMetaIds (main attr Type -> object)
 #include "backend/metaData.h"                                      // FindAnyObjectByFilter (resolve the object metaobject)
 #include "backend/metaCollection/metaCommandObject.h"              // ibValueMetaObjectCommand — command-capable leaf (GetCommandByHop)
-#include "backend/metaCollection/metaObject.h"                     // g_metaCommonCommandCLSID / g_metaCommandCLSID
+#include "backend/metaCollection/metaObject.h"                     // g_metaSharedCommandCLSID / g_metaCommandCLSID
 
 #include "backend/appData.h"
 
@@ -91,7 +91,7 @@ bool ibValueFrame::HasHandler(const ibEvent* event) const
 const ibValueMetaObjectGenericData* ibValueForm::GetMetaObject() const
 {
 	// The form's data object is ALWAYS its MAIN attribute's object — the one flagged main. Nothing else, no
-	// config-tree walk: the form asks its main attribute, exactly the "source OR metadata, no third variant" rule.
+	// application-tree walk: the form asks its main attribute, exactly the "source OR metadata, no third variant" rule.
 	ibFormAttributeValue* mainAttr = GetMainAttribute();
 	if (mainAttr == nullptr)
 		return nullptr;
@@ -100,7 +100,7 @@ const ibValueMetaObjectGenericData* ibValueForm::GetMetaObject() const
 		if (const ibValueMetaObjectGenericData* obj = src->GetSourceMetaObject())
 			return obj;
 	// (b) DESIGNER — no live value; resolve the main's TYPE (an object reference) to the object metaobject through
-	// the form's own config. Same resolve the attribute tree uses (ConvertToMetaIds) — metadata, not a live value.
+	// the form's own application. Same resolve the attribute tree uses (ConvertToMetaIds) — metadata, not a live value.
 	const ibMetaData* metaData = GetMetaData();
 	if (metaData != nullptr) {
 		const std::vector<ibMetaID> targets = ibValueReferenceDataObject::ConvertToMetaIds(mainAttr->GetTypeDesc().GetClsidList(), metaData);
@@ -110,7 +110,7 @@ const ibValueMetaObjectGenericData* ibValueForm::GetMetaObject() const
 	return nullptr;
 }
 
-// ibBackendCommandSender — the form is the ENTRY hop of a command path. Resolve the id to a config command /
+// ibBackendCommandSender — the form is the ENTRY hop of a command path. Resolve the id to an application command /
 // object command (a command METAOBJECT — itself command-capable, so a group / section then hops WITHIN itself),
 // through the form's OWN metadata (never the global active tree). CONST: walking / executing never mutates — the
 // command metaobject is const, Execute spawns a TRANSIENT runtime for the call. A form-command / action leaf is the
@@ -123,13 +123,13 @@ bool ibValueForm::GetCommandByHop(const ibCommandHop& hop, ibValue& out)
 		out = static_cast<const ibValue*>(fc);   // non-owning view — the form owns the command
 		return true;
 	}
-	// (2) else HAND CONTROL to the next hop: a config command / object command (a command metaobject — itself
+	// (2) else HAND CONTROL to the next hop: an application command / object command (a command metaobject — itself
 	// command-capable, so a group / section then hops WITHIN itself), resolved through the form's OWN metadata.
 	const ibMetaData* metaData = GetMetaData();
 	if (metaData == nullptr)
 		return false;
 	if (const ibValueMetaObjectCommand* cmd = metaData->FindAnyObjectByFilter<ibValueMetaObjectCommand>(
-			hop.m_id, { g_metaCommonCommandCLSID, g_metaCommandCLSID }, true)) {
+			hop.m_id, { g_metaSharedCommandCLSID, g_metaCommandCLSID }, true)) {
 		out = static_cast<const ibValue*>(cmd);   // const-ref to the command metaobject — itself command-capable
 		return true;
 	}
@@ -137,7 +137,7 @@ bool ibValueForm::GetCommandByHop(const ibCommandHop& hop, ibValue& out)
 	// command type. A command IS-A command-item too, so exclude commands by clsid (they went to (2)); the item is
 	// the leaf (a business object, an ibBackendCommandItem).
 	if (const ibValueMetaObject* obj = metaData->FindAnyObjectByFilter<ibValueMetaObject>(hop.m_id, true))
-		if (obj->GetClassType() != g_metaCommonCommandCLSID && obj->GetClassType() != g_metaCommandCLSID
+		if (obj->GetClassType() != g_metaSharedCommandCLSID && obj->GetClassType() != g_metaCommandCLSID
 			&& dynamic_cast<const ibBackendCommandItem*>(obj) != nullptr) {
 			out = static_cast<const ibValue*>(obj);
 			return true;

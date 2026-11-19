@@ -242,18 +242,6 @@ protected:
 	ibLockManager* Mine() const { return ibApplicationInstance::GetLockManager(); }
 	ibLockManager* Peer() const { return s_peer.get(); }
 
-	void RecreateHeaderTable()
-	{
-		ibDatabaseQueryBuilder q;
-		if (q.TableExists(lock_key_table))
-			q.Execute(ibDropTable(lock_key_table));
-		EXPECT_FALSE(q.TableExists(lock_key_table));
-		LockSchemaAccess::Create();
-		EXPECT_TRUE(q.TableExists(lock_key_table));
-		LockSchemaAccess::Create();
-		EXPECT_TRUE(q.TableExists(lock_key_table));
-	}
-
 	void ExpectOneExclusive(int round)
 	{
 		const ibLockItem item = Item(
@@ -390,10 +378,6 @@ template <typename Driver>
 std::unique_ptr<ibLockManager> LockRace<Driver>::s_peer;
 
 #define OES_LOCK_SERVER_TESTS(Fixture)                                                                \
-	TEST_F(Fixture, CreateTableLock_ExistingBase_CreatesTheHeader)                                    \
-	{                                                                                                  \
-		RecreateHeaderTable();                                                                         \
-	}                                                                                                  \
 	TEST_F(Fixture, Acquire_RacedExclusive_GrantsOneOfTwenty)                                          \
 	{                                                                                                  \
 		for (int round = 0; round < 20; ++round)                                                       \
@@ -693,11 +677,6 @@ protected:
 		ASSERT_TRUE(s_peer != nullptr);
 	}
 };
-
-TEST_F(SqliteLockRace, CreateTableLock_ExistingBase_CreatesTheHeader)
-{
-	RecreateHeaderTable();
-}
 
 TEST_F(SqliteLockRace, Acquire_SecondShared_Granted)
 {

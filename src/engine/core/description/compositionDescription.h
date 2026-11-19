@@ -305,7 +305,7 @@ struct ibGroupDescription {
 };
 
 // (THE TWO DOORS BETWEEN A STORE AND A RUNTIME VALUE — ibStoredValue / ibStoreValue — are each side's: a
-//  runtime value is the side's own, and so is the configuration it is read against. The side's backend_composition.h.)
+//  runtime value is the side's own, and so is the application it is read against. The side's backend_composition.h.)
 
 // --- PARAMETER VALUES ------------------------------------------------------
 // ⭐⭐ A FINITE LIST THE PLATFORM DEFINES, EACH TICKED AND GIVEN A VALUE — the shape a field's appearance has
@@ -316,7 +316,7 @@ struct ibGroupDescription {
 //
 // ONE PARAMETER A PERSON TOUCHED. Unticked keeps the value without applying it, the way a filter line is
 // switched off rather than deleted. The value is PACKED (ibStoreValue), for the reason a parameter's is: a
-// description is data. What goes here is never a reference, so it reads back without a configuration.
+// description is data. What goes here is never a reference, so it reads back without an application.
 template <class Parameter>
 struct ibParameterValueDescription {
 	Parameter  m_parameter{};
@@ -348,7 +348,7 @@ struct ibParameterValuesDescription {
 	}
 
 	// ⭐ WHAT IS IN FORCE — the stored value of a TICKED parameter, else an empty node. The side restores it
-	// (ibStoredValue), with no configuration: never a reference — see above.
+	// (ibStoredValue), with no application: never a reference — see above.
 	ibDataNode ValueInForce(Parameter parameter) const {
 		const ibParameterValueDescription<Parameter>* value = Find(parameter);
 		if (value == nullptr || !value->m_use)
@@ -586,12 +586,12 @@ struct ibParameterDescription {
 	//
 	// A description is DATA. A live `ibValue` here is runtime the moment somebody puts a reference in
 	// it: a session behind it, a register of identities, a row to read. And a description is read
-	// while the configuration is still LOADING — metaobject by metaobject — so building that runtime
+	// while the application is still LOADING — metaobject by metaobject — so building that runtime
 	// there asks for a type three branches away that does not exist yet, and the load dies on a value
 	// it wrote itself ("Unknown value type '<id>' in the data").
 	//
 	// So the store keeps what was written, and the runtime value is built FROM it at execution, by
-	// whoever is running the composition, against the configuration it runs in — ibStoredValue /
+	// whoever is running the composition, against the application it runs in — ibStoredValue /
 	// ibStoreValue below.
 	ibDataNode       m_value;
 
@@ -1071,7 +1071,7 @@ inline bool ibSettingsDescription::operator==(const ibSettingsDescription& o) co
 //
 // 🎯 THE USER REUSES ONE AS A STARTING POINT and then SAVES — and what they save is theirs, kept on
 // the storage side, over the author's variant rather than inside it. That is the whole reason this
-// description has to serialise on its own: the author's half travels with the configuration, the
+// description has to serialise on its own: the author's half travels with the application, the
 // user's half travels to the database, and both are the same shape.
 // ⭐⭐ A VARIANT IS A WRAPPER OVER A SETTING, and that is the whole of it (Max, 2026-08-24: *"a
 // variant differs from a setting only in that it lives on top of it, and it has a name and a synonym
@@ -1254,7 +1254,7 @@ struct ibCompositionDescription {
 		    && m_selects == o.m_selects
 		    && m_variants == o.m_variants
 		    // …AND THE COMPOSITION-WIDE SETS. A property asks this to tell "changed" from "the same",
-		    // so a member left out of here is a member whose edit leaves the configuration looking
+		    // so a member left out of here is a member whose edit leaves the application looking
 		    // unmodified — and Save with nothing to do.
 		    && m_selected == o.m_selected;
 	}

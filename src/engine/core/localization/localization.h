@@ -6,7 +6,7 @@
 
 #include "core/core.h"
 
-// ONE LANGUAGE'S TEXT of a translated text — its code (ru/en/uk, the configuration's short form) and the text.
+// ONE LANGUAGE'S TEXT of a translated text — its code (ru/en/uk, the application's short form) and the text.
 struct ibLocalizationEntry {
 	ibString m_code;
 	ibString m_data;

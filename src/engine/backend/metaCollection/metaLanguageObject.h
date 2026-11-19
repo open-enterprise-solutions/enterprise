@@ -37,7 +37,7 @@ protected:
 
 private:
 	ibPropertyUString* m_propertyCode = ibPropertyObject::CreateProperty<ibPropertyUString>(m_categoryContext, ibT("Code"), _("Code"),
-		_("The language's code (en, ru, uk and so on): the key its texts are stored under in multi-language strings (synonyms, captions, spreadsheet cells) and the code the session's interface language is set by when this language is the configuration's default. Unique among the configuration's languages - a pasted duplicate gets a number appended."),
+		_("The language's code (en, ru, uk and so on): the key its texts are stored under in multi-language strings (synonyms, captions, spreadsheet cells) and the code the session's interface language is set by when this language is the application's default. Unique among the application's languages - a pasted duplicate gets a number appended."),
 		ibT("en"));
 };
 

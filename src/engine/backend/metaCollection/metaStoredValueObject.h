@@ -5,14 +5,14 @@
 // it, a Read and a Write right, and a record module whose BeforeWrite / OnWrite run in the write door.
 //
 // The base of every kind of it: a constant (partial/constant.h) adds the type its author chooses and the
-// fill check; a functional option (metaFunctionalOptionObject.h) is Boolean and decides what is available.
+// fill check; a feature option (metaFeatureOptionObject.h) is Boolean and decides what is available.
 // Everything below is theirs alike, which is why neither has to hide what the other declares.
 
 #include "backend/metaCollection/genericData.h"                   // ibValueMetaObjectGenericData — what a stored value is at bottom
 #include "backend/metaCollection/metaQueryDescriptor.h"           // ibMetaQueryDescriptor — registered as a query source
 #include "backend/metaCollection/metaModuleObject.h"              // ibPropertyInnerModule / ibValueMetaObjectModule — the record module
 #include "backend/metaCollection/attribute/metaAttributeObject.h" // ibValueMetaObjectAttributeBase — the value column's base
-#include "backend/backend_type.h"                                 // ibBackendTypeConfigFactory — the value's type
+#include "backend/backend_type.h"                                 // ibBackendTypeApplicationFactory — the value's type
 #include "backend/metaCollection/metaGroups.h"                    // ibMetaTypeCaption — the record object's caption
 
 class BACKEND_API ibValueRecordDataObjectConstant;
@@ -39,7 +39,7 @@ private:
 };
 
 class BACKEND_API ibValueMetaObjectStoredValue :
-	public ibValueMetaObjectGenericData, public ibBackendTypeConfigFactory, public ibBackendQueryableHolder {
+	public ibValueMetaObjectGenericData, public ibBackendTypeApplicationFactory, public ibBackendQueryableHolder {
 	public:
 
 	// A constant belongs in a section too — it is a thing a person opens and edits.
@@ -161,7 +161,7 @@ class BACKEND_API ibValueMetaObjectStoredValue :
 	// --- the value's type — each kind says it --------------------------------------------------
 	//
 	// GetTypeDesc stays the type factory's own question, answered by the kind: a constant from the
-	// property its author edits, a functional option with Boolean. The value column reads it back
+	// property its author edits, a feature option with Boolean. The value column reads it back
 	// through here, so the type the author picks and the type the DDL renders are one value.
 	//
 	// A fill check asks whether a stored value may be empty. No by default; a constant lets its author say.
@@ -207,7 +207,7 @@ public:
 	ibValue ReadStoredValue() const;
 
 	// THE WRITE DOOR TELLS ITS OWNER, once the value is committed. Nothing to do for a plain constant; a
-	// functional option drops what it had answered about the interface (metaFunctionalOptionObject.h).
+	// feature option drops what it had answered about the interface (metaFeatureOptionObject.h).
 	virtual void OnAfterValueWrite() const {}
 
 	// GenericData's contract. A constant DOES have a manager (ibValueManagerDataObjectConstant), but

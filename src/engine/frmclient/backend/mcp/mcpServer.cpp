@@ -62,7 +62,7 @@ public:
 	bool Start(ibString& refusal)
 	{
 		// THE TRANSPORT IS THE PROCESS'S (core/server/listener.h), plain and so on this machine's own addresses
-		// only - an assistant edits a configuration, and a token sent in the clear across a network is a token
+		// only - an assistant edits an application, and a token sent in the clear across a network is a token
 		// given away.
 		ibHttpServerOptions options;
 		try {

@@ -7,7 +7,7 @@
 //
 // The desktop's dialog, asked of the thin client (frmclient/win/dlgs/typeSelector.h,
 // ibProtocol::ibRequest::ibKind::TypeSelector): a characteristic's Type is edited at run time in the window the designer
-// edits an attribute's in. What may be picked is `offered` — named here, since the client has no configuration to ask.
+// edits an attribute's in. What may be picked is `offered` — named here, since the client has no application to ask.
 ////////////////////////////////////////////////////////////////////////////
 
 #include "frmserver/frmserver.h"

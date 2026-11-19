@@ -1,0 +1,126 @@
+#include "docViewDataToolEdit.h"
+
+#include "core/serialize/dataBuilder.h"
+
+#include "backend/backend_picture.h"
+
+bool ibDataToolTreeView::OnCreate(ibDocument* doc, long flags)
+{
+	// Drawn for the client whose tab it is.
+	m_metaTree = std::make_unique<ibDataToolTree>(GetDocChildFrame() != nullptr ? GetDocChildFrame()->GetFrame() : nullptr,
+		GetDocument());
+
+	return ibView::OnCreate(doc, flags);
+}
+
+void ibDataToolTreeView::OnDraw(ibDataNode& frame)
+{
+	m_metaTree->OnDraw(frame.Child(ibProtocol::ibView::MetaData));
+}
+
+// A new one named as the desktop named it — its class and a number.
+static int s_defaultDataToolNameCounter = 1;
+
+ibPictureDescription ibDataToolEditDocument::GetIcon() const
+{
+	if (m_metaData != nullptr) {
+		ibValueMetaObject* metaObject = m_metaData->GetRootMetaObject();
+		ibASSERT(metaObject);
+		return ibPictureDescription(metaObject->GetClassType());
+	}
+	return ibMetaDataDocument::GetIcon();
+}
+
+bool ibDataToolEditDocument::OnCreate(const ibString& path, long flags)
+{
+	m_metaData = ibMetaData::MakeShared<ibMetaDataDataTool>();
+	if (!ibMetaDocument::OnCreate(path, flags))
+		return false;
+	return true;
+}
+
+bool ibDataToolEditDocument::OnNewDocument()
+{
+	ibValueMetaObject* rootObject = m_metaData->GetRootMetaObject();
+	ibASSERT(rootObject);
+
+	// notice that there is no need to neither reset nor even check the
+	// modified flag here as the document itself is a new object (this is only
+	// called from CreateDocument()) and so it shouldn't be saved anyhow even
+	// if it is modified -- this could happen if the user code creates
+	// documents pre-filled with some user-entered (and which hence must not be
+	// lost) information
+
+	SetDocumentSaved(false);
+
+	const ibString name =
+		ibString::Format(rootObject->GetClassName() + ibT("%d"), s_defaultDataToolNameCounter++);
+
+	SetTitle(name);
+	SetFilename(name, true);
+
+	rootObject->SetName(name);
+
+	m_metaData->Modify(true);
+
+	if (!m_metaData->RunDatabase())
+		return false;
+
+	if (!GetMetaTree()->Load(m_metaData))
+		return false;
+
+	return true;
+}
+
+bool ibDataToolEditDocument::OnCloseDocument()
+{
+	if (!m_metaData->CloseDatabase(ibRuntimeRequest(forceCloseFlag))) {
+		return false;
+	}
+	return ibMetaDocument::OnCloseDocument();
+}
+
+bool ibDataToolEditDocument::DoOpenDocument(const ibString& filename)
+{
+	if (!m_metaData->LoadFromTempFile(filename))
+		return false;
+
+	if (!GetMetaTree()->Load(m_metaData))
+		return false;
+
+	return true;
+}
+
+bool ibDataToolEditDocument::DoSaveDocument(const ibString& filename)
+{
+	// The desktop tree's Save — the metadata written, when there was something to write; nothing to write is no
+	// failure.
+	if (m_metaData->IsModified())
+		m_metaData->SaveDatabase();
+
+	if (!m_metaData->SaveToTempFile(filename))
+		return false;
+
+	return true;
+}
+
+// ⭐ ITS METADATA'S MARK, NOT A SECOND ONE — what the desktop's tree copied into its document on every signal is read
+// where it lives: the tab's "*" (ibClientChildFrame::GetTitle), a save, a close's question.
+bool ibDataToolEditDocument::IsModified() const
+{
+	return m_metaData != nullptr && m_metaData->IsModified();
+}
+
+void ibDataToolEditDocument::Modify(bool modified)
+{
+	if (m_metaData != nullptr)
+		m_metaData->Modify(modified);
+}
+
+ibDataToolTree* ibDataToolEditDocument::GetMetaTree() const
+{
+	// GUARD THE CAST, not the pointer that went into it: a first view of another kind makes
+	// dynamic_cast yield null, and the arrow was applied to it regardless.
+	ibDataToolTreeView* view = dynamic_cast<ibDataToolTreeView*>(GetFirstView());
+	return view != nullptr ? view->GetMetaTree() : nullptr;
+}

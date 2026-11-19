@@ -13,12 +13,12 @@
 
 struct ibRunContext;
 class ibSession;
-class ibMetaDataConfiguration;
+class ibMetaDataApplication;
 class ibStandaloneDebuggerServer;
 class ibHttpServer;
 class ibWebSocket;
 
-// Lifecycle: owned by ibMetaDataConfiguration as a unique_ptr field
+// Lifecycle: owned by ibMetaDataApplication as a unique_ptr field
 // (private ctor + friend). Ctor/dtor maintain the `ms_debugServer`
 // process-wide cache so the interpreter hot path keeps a single
 // indirect read, but ownership is strictly metadata's.
@@ -105,21 +105,21 @@ class BACKEND_API ibDebuggerServer {
 		friend class ibStandaloneDebuggerServer;   // the port the system chose for a test (test_debugServer.cpp)
 	};
 
-	// metaData — the configuration that made it and owns it; the debugger asks ITS base through it, never
+	// metaData — the application that made it and owns it; the debugger asks ITS base through it, never
 	// "the current one" (docs/private/multi-base-process.md).
-	explicit ibDebuggerServer(class ibMetaDataConfigurationBase* metaData);
-	friend class ibMetaDataConfiguration;
-	friend class ibStandaloneDebuggerServer;   // a test's server with no configuration around it (test_debugServer.cpp)
+	explicit ibDebuggerServer(class ibMetaDataApplicationBase* metaData);
+	friend class ibMetaDataApplication;
+	friend class ibStandaloneDebuggerServer;   // a test's server with no application around it (test_debugServer.cpp)
 
 public:
 
 	virtual ~ibDebuggerServer();
 
-	class ibMetaDataConfigurationBase* GetMetaData() const { return m_metaData; }
+	class ibMetaDataApplicationBase* GetMetaData() const { return m_metaData; }
 	class ibApplicationInstance* GetApplicationInstance() const;
 
 	// Process-wide cache. ms_debugServer is maintained by ctor/dtor —
-	// owner is always the active ibMetaDataConfiguration::m_debugServer
+	// owner is always the active ibMetaDataApplication::m_debugServer
 	// unique_ptr. Hot-path readers (procUnit interpreter, exception
 	// path) use `debugServer` macro which expands to this Get() —
 	// single inline indirect read; identical to pre-refactor cost.
@@ -229,7 +229,7 @@ private:
 	static ibDebuggerServer* ms_debugServer;
 	static ibProfileMaker    ms_profileMaker;
 
-	class ibMetaDataConfigurationBase* const m_metaData;
+	class ibMetaDataApplicationBase* const m_metaData;
 
 	std::atomic<bool> m_bUseDebug;
 	std::atomic<bool> m_bDebugStopLine;

@@ -18,14 +18,14 @@ ibValueMetaObjectSection::ibValueMetaObjectSection(const ibString& name, const i
 
 #include "backend/metaData.h"
 #include "metaCommandGroupObject.h"   // ibValueMetaObjectCommandGroup / g_platformCommandGroups
-#include "backend/functionalOption/functionalOptionGate.h"     //ibFunctionalOptionGate::IsAvailable — a part this base does not use is not offered
+#include "backend/featureOption/featureOptionGate.h"     //ibFeatureOptionGate::IsAvailable — a part this base does not use is not offered
 
 // The declared group a checked item is filed under. Only a command names one — every other kind is filed by
-// its area alone — so the kind is asked first and the command second, the way the configuration tree asks a
+// its area alone — so the kind is asked first and the command second, the way the application tree asks a
 // command for its sub-commands.
 static const ibValueMetaObjectCommandGroup* DeclaredGroupOf(const ibValueMetaObject* object)
 {
-	if (object->GetClassType() != g_metaCommonCommandCLSID && object->GetClassType() != g_metaCommandCLSID)
+	if (object->GetClassType() != g_metaSharedCommandCLSID && object->GetClassType() != g_metaCommandCLSID)
 		return nullptr;
 	return static_cast<const ibValueMetaObjectCommand*>(object)->GetCommandGroup();
 }
@@ -42,7 +42,7 @@ bool ibValueMetaObjectSection::GetInterfaceItemArrayObject(ibInterfaceCommandSec
 			continue;
 		// Not used in this base: not offered. The object itself stays — a form of it still opens from a
 		// reference that points at it; only the section does not lead there.
-		if (!ibFunctionalOptionGate::IsAvailable(object))
+		if (!ibFeatureOptionGate::IsAvailable(object))
 			continue;
 
 		const ibInterfaceCommandSection& object_type = object->GetCommandSection();
@@ -65,7 +65,7 @@ bool ibValueMetaObjectSection::GetInterfaceItemArrayObject(const ibValueMetaObje
 		return false;
 
 	for (const auto object : m_metaData->GetAnyArrayObject()) {
-		if (object->IsSetInterface(m_metaId) && DeclaredGroupOf(object) == group && ibFunctionalOptionGate::IsAvailable(object))
+		if (object->IsSetInterface(m_metaId) && DeclaredGroupOf(object) == group && ibFeatureOptionGate::IsAvailable(object))
 			array.emplace_back(object);
 	}
 

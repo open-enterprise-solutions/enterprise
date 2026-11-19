@@ -14,7 +14,7 @@
 
 // DB-BACKED, therefore ibValueMetaObjectTableDataRef and not the shared base. The base is abstract
 // about storage: its GetQueryable() answers null and it has no physical table name, because a RAM
-// section (a data processor's) genuinely has neither. This table's rows belong to a SAVED account,
+// section (a data tool's) genuinely has neither. This table's rows belong to a SAVED account,
 // so it needs the Ref variant's L4 source descriptor — the queryable it vends, the "<Parent><id>_VT<id>"
 // table, and the RegisterSource / UnregisterSource pair on run and close.
 //

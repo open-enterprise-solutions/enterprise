@@ -14,7 +14,7 @@
 
 #include "backend/interfaceHelper.h"
 #include "backend/compositionHelper.h"
-#include "backend/functionalOptionHelper.h"
+#include "backend/featureOptionHelper.h"
 #include "backend/roleHelper.h"
 
 #include "backend/createRequest.h"   // what ProcessChoice is asked with: mode, condition, form
@@ -30,28 +30,28 @@ class ibDataValue;  // serialize/dataBuilder.h — a node value (Child for a nes
 //*                          define commom clsid                                *
 //*******************************************************************************
 
-//COMMON METADATA
-constexpr ibClassID g_metaCommonMetadataCLSID = metadata_to_clsid("MD_MTD");
+//APPLICATION METADATA
+constexpr ibClassID g_metaApplicationMetadataCLSID = metadata_to_clsid("MD_MTD");
 
-//COMMON OBJECTS
-constexpr ibClassID g_metaCommonModuleCLSID = metadata_to_clsid("MD_CMOD");
-constexpr ibClassID g_metaCommonFormCLSID = metadata_to_clsid("MD_CFRM");
-constexpr ibClassID g_metaCommonTemplateCLSID = metadata_to_clsid("MD_CTMP");
-constexpr ibClassID g_metaCommonCommandCLSID = metadata_to_clsid("MD_CMD");    // COMMON command (config-level, like CommonForm)
+//SHARED OBJECTS
+constexpr ibClassID g_metaSharedModuleCLSID = metadata_to_clsid("MD_SMOD");
+constexpr ibClassID g_metaSharedFormCLSID = metadata_to_clsid("MD_SFRM");
+constexpr ibClassID g_metaSharedTemplateCLSID = metadata_to_clsid("MD_STMP");
+constexpr ibClassID g_metaSharedCommandCLSID = metadata_to_clsid("MD_SCMD");    // SHARED command (application-level, like SharedForm)
 // A COMMAND GROUP — a place in the command interface a command is filed under, beside the platform's own
 // (Important, Normal, Create, Reports, Service). It holds nothing; a command names it (metaCommandGroupObject.h).
 constexpr ibClassID g_metaCommandGroupCLSID = metadata_to_clsid("MD_CMDGR");
-constexpr ibClassID g_metaScheduledJobCLSID = metadata_to_clsid("MD_SJOB");   // PREDEFINED scheduled job — serves the configuration, one of it (docs/private/scheduled-jobs.md)
+constexpr ibClassID g_metaScheduledJobCLSID = metadata_to_clsid("MD_SJOB");   // PREDEFINED scheduled job — serves the application, one of it (docs/private/scheduled-jobs.md)
 constexpr ibClassID g_metaEventHandlerCLSID = metadata_to_clsid("MD_EHND");   // EVENT HANDLER — one event of the types it names, handled by its own module
 // A SESSION PARAMETER — an attribute whose owner is the session rather than a table. Declared
-// here beside the jobs because that is where it sits in the tree: configuration-level, no data
+// here beside the jobs because that is where it sits in the tree: application-level, no data
 // of its own, set once per session by the session module (docs/private/access-policy-rls.md).
 constexpr ibClassID g_metaSessionParameterCLSID = metadata_to_clsid("MD_SPRM");
-// A FUNCTIONAL OPTION — a Boolean stored value that also decides what the interface offers: one value per base,
+// A FEATURE OPTION — a Boolean stored value that also decides what the interface offers: one value per base,
 // and the objects and fields it governs. Switched off, they stay in the metadata and in every query, and are
-// simply not available (metaFunctionalOptionObject.h).
-constexpr ibClassID g_metaFunctionalOptionCLSID = metadata_to_clsid("MD_FOPT");
-// AN HTTP SERVICE — the addresses a configuration answers under its root, and the module whose functions answer
+// simply not available (metaFeatureOptionObject.h).
+constexpr ibClassID g_metaFeatureOptionCLSID = metadata_to_clsid("MD_FOPT");
+// AN HTTP SERVICE — the addresses an application answers under its root, and the module whose functions answer
 // them; its URL templates are its children, and each template's methods are the template's (metaHttpServiceObject.h).
 constexpr ibClassID g_metaHttpServiceCLSID = metadata_to_clsid("MD_HTTPS");
 constexpr ibClassID g_metaUrlTemplateCLSID = metadata_to_clsid("MD_HTTPT");
@@ -67,15 +67,11 @@ constexpr ibClassID g_metaAttributeCLSID = metadata_to_clsid("MD_ATTR");
 constexpr ibClassID g_metaFormCLSID = metadata_to_clsid("MD_FRM");
 constexpr ibClassID g_metaTemplateCLSID = metadata_to_clsid("MD_TMPL");
 constexpr ibClassID g_metaCommandCLSID       = metadata_to_clsid("MD_OCMD");   // OBJECT command (under a business object, like Form)
-// A COMPOSER AS IT WAS STORED before it became a template of the composer kind (2026-11-03,
-// ibTemplateType::Composer) — no class answers it any more; a file's node of it is read as a template
-// (ApplyDataNode).
-constexpr ibClassID g_metaComposerCLSID      = metadata_to_clsid("MD_CMPS");
 constexpr ibClassID g_metaModuleCLSID = metadata_to_clsid("MD_MOD");
 constexpr ibClassID g_metaManagerCLSID = metadata_to_clsid("MD_MNGR");
 constexpr ibClassID g_metaTableCLSID = metadata_to_clsid("MD_TBL");
-constexpr ibClassID g_metaTableRefCLSID = metadata_to_clsid("MD_TBLR");   // DB-backed tabular section (reference owner); MD_TBL stays RAM-only (processors/reports)
-// The KEY stays "MD_SKTB" deliberately: it is an opaque body key that stored configurations and
+constexpr ibClassID g_metaTableRefCLSID = metadata_to_clsid("MD_TBLR");   // DB-backed tabular section (reference owner); MD_TBL stays RAM-only (data tools/reports)
+// The KEY stays "MD_SKTB" deliberately: it is an opaque body key that stored applications and
 // DB rows already carry, not a name. Renaming it would change every id derived from it.
 constexpr ibClassID g_metaAccountDimensionKindsTableCLSID = metadata_to_clsid("MD_SKTB");
 // The relations of a chart of calculation types (Displacing, Base, Leading — one class, three
@@ -115,20 +111,20 @@ constexpr ibClassID g_metaAccountDimensionAccountingKindCLSID = metadata_to_clsi
 //SPECIAL OBJECTS
 constexpr ibClassID g_metaPredefinedAttributeCLSID = metadata_to_clsid("MD_DATT");
 
-// A COMMON ATTRIBUTE — declared once under Common, carried by many objects. Two ids, because
+// A SHARED ATTRIBUTE — declared once under Shared, carried by many objects. Two ids, because
 // there are two things: the DECLARATION a person writes, and the COPY it puts inside every
 // object that is checked into its composition. The copy is a real child with its own metaID —
 // that is what gives it a column of its own (fld<metaId>) and takes it through restructuring
 // with its owner, exactly as any attribute goes.
-constexpr ibClassID g_metaCommonAttributeCLSID = metadata_to_clsid("MD_CATT");
-constexpr ibClassID g_metaCommonAttributeColumnCLSID = metadata_to_clsid("MD_CATC");
+constexpr ibClassID g_metaSharedAttributeCLSID = metadata_to_clsid("MD_SATT");
+constexpr ibClassID g_metaSharedAttributeColumnCLSID = metadata_to_clsid("MD_SATC");
 
 //MAIN OBJECTS
 constexpr ibClassID g_metaConstantCLSID = metadata_to_clsid("MD_CONS");
 constexpr ibClassID g_metaCatalogCLSID = metadata_to_clsid("MD_CAT");
 constexpr ibClassID g_metaDocumentCLSID = metadata_to_clsid("MD_DOC");
 constexpr ibClassID g_metaEnumerationCLSID = metadata_to_clsid("MD_ENM");
-constexpr ibClassID g_metaDataProcessorCLSID = metadata_to_clsid("MD_DPR");
+constexpr ibClassID g_metaDataToolCLSID = metadata_to_clsid("MD_DTL");
 constexpr ibClassID g_metaReportCLSID = metadata_to_clsid("MD_RPT");
 constexpr ibClassID g_metaInformationRegisterCLSID = metadata_to_clsid("MD_INFR");
 constexpr ibClassID g_metaAccumulationRegisterCLSID = metadata_to_clsid("MD_ACCR");
@@ -145,13 +141,12 @@ constexpr ibClassID g_metaAccountingRegisterCLSID = metadata_to_clsid("MD_AREG")
 //CALCULATION OBJECTS
 constexpr ibClassID g_metaChartOfCalculationTypesCLSID = metadata_to_clsid("MD_CHCL");
 constexpr ibClassID g_metaCalculationRegisterCLSID = metadata_to_clsid("MD_CREG");
-constexpr ibClassID g_metaRecalculationCLSID = metadata_to_clsid("MD_RCLC");   // subordinate: Recalculation under a calc register
 
 // SEQUENCES — up to which point the documents of a key have been posted in order (sequence-arc.md)
 constexpr ibClassID g_metaSequenceCLSID = metadata_to_clsid("MD_SEQN");
 
 // EXTERNAL
-constexpr ibClassID g_metaExternalDataProcessorCLSID = metadata_to_clsid("MD_EDPR");
+constexpr ibClassID g_metaExternalDataToolCLSID = metadata_to_clsid("MD_EDTL");
 constexpr ibClassID g_metaExternalReportCLSID = metadata_to_clsid("MD_ERPT");
 
 //*******************************************************************************
@@ -166,8 +161,8 @@ enum metaObjectFlags {
 	defaultFlag = 0x0000,
 	onlyLoadFlag = 0x0001,
 
-	loadConfigFlag = 0x0002,
-	saveConfigFlag = 0x0004,
+	loadApplicationFlag = 0x0002,
+	saveApplicationFlag = 0x0004,
 
 	newObjectFlag = 0x0008,
 	forceRunFlag = 0x0010,
@@ -190,7 +185,7 @@ enum metaObjectFlags {
 // Predefined child: created in the owner's ctor via CreateMetaObjectAndSetParent
 // (predefined attributes, inner modules). Such a child is bound to its parent for
 // life - an in-place reset of the parent (RemoveAllChildren on a reused root:
-// configuration / external report / data processor) must NOT drop it, only the
+// application / external report / data tool) must NOT drop it, only the
 // parent's actual destruction does. Not serialized; re-set every construction.
 #define metaPredefinedFlag 0x0010000
 
@@ -259,7 +254,7 @@ class BACKEND_API ibValueMetaObject :
 	public ibValueDynamicMembers,
 
 	public ibPropertyObjectHelper<ibValueMetaObject>,
-	public ibAccessObject, public ibInterfaceObject, public ibCompositionObject, public ibFunctionalOptionObject {
+	public ibAccessObject, public ibInterfaceObject, public ibCompositionObject, public ibFeatureOptionObject {
 	public:
 
 	// WHAT THIS METATYPE HAS — one set of flags, declared by the class itself.
@@ -285,7 +280,7 @@ class BACKEND_API ibValueMetaObject :
 		ibMetaFeature_RecordSet = 1u << 3,   // has record sets (the registers)
 		// A SELECTION — a cursor over the stored rows. Deliberately its own bit
 		// and not derived from anything: an ENUMERATION has references and yet no
-		// selection (its values are written in the configuration, not rows to walk),
+		// selection (its values are written in the application, not rows to walk),
 		// while a REGISTER has no reference and does have one. Either derivation
 		// would have been wrong for one of them.
 		ibMetaFeature_Selection = 1u << 4,
@@ -337,7 +332,7 @@ public:
 	// and what do I put in it", it is written in their words, and it ships with the product.
 	//
 	// NOTES are the ENGINEERING INTENT — why this object exists, what it was decided to be, what
-	// was tried and rejected. Markdown, written and read by whoever is building the configuration
+	// was tried and rejected. Markdown, written and read by whoever is building the application
 	// (a developer, or the assistant), and read FIRST when work resumes: without it the modelling
 	// drifts between sessions, because the reasons live only in whoever was there.
 	//
@@ -356,7 +351,7 @@ public:
 	virtual ibMetaData* GetMetaData() { return m_metaData; }
 
 	// Restructure-ledger facade — one short call instead of the static ledger accessor at every save /
-	// validation site. STATIC (the ledger pulls the active config), so it works in this-less contexts too
+	// validation site. STATIC (the ledger pulls the active application), so it works in this-less contexts too
 	// (the static scaffold methods). Defined in metaObject.cpp.
 	static void RestructureInfo   (const ibString& message);
 	static void RestructureWarning(const ibString& message);
@@ -384,15 +379,15 @@ public:
 
 public:
 
-	// VIRTUAL, because a metaobject's liveness is not always its own. A common attribute's
-	// copy is allowed only while the declaration that put it there is (metaCommonAttributeObject.h),
+	// VIRTUAL, because a metaobject's liveness is not always its own. A shared attribute's
+	// copy is allowed only while the declaration that put it there is (metaSharedAttributeObject.h),
 	// and everything that builds anything filters on this — FillArrayObjectByFilter tests it
 	// first, so it is the one gate that makes a dropped declaration drop its columns.
 	//
 	// It was non-virtual, and the override further down (ibValueMetaObjectAttributeBase, from
 	// the column base) only caught calls made THROUGH a column pointer. Every metadata walk
 	// holds ibValueMetaObject*, so those calls went to this body and the override never ran —
-	// caught by CommonAttribute.CopyStopsBeingAllowedWithItsDeclaration, and the same shape as
+	// caught by SharedAttribute.CopyStopsBeingAllowedWithItsDeclaration, and the same shape as
 	// GetName, which is still non-virtual and is why the copy has to STORE its name.
 	virtual bool IsAllowed() const {
 		return IsEnabled()
@@ -502,7 +497,7 @@ public:
 	// -1 — is the "not allowed" sentinel (a real clsid is always > 0, see CreateMetaObject's
 	// ibASSERT(clsid != 0)). This is the single "may I host this child, and as what" gate — it
 	// replaces the old bool FilterChild + a separate remap. A tabular section comes in two clsids
-	// of the same kind: RAM (MD_TBL, processors/reports) and DB-backed reference (MD_TBLR,
+	// of the same kind: RAM (MD_TBL, data tools/reports) and DB-backed reference (MD_TBLR,
 	// catalogs/documents); each owner maps either input to ITS variant, so a tabular section
 	// copy/pastes across owner kinds. CreateMetaObject builds the RETURNED clsid. Owners override.
 	virtual ibClassID ResolveChild(const ibClassID& clsid) const { return 0; }
@@ -514,10 +509,10 @@ public:
 	// (May this object be part of a composition? — ibCompositionObject::IsCompositionAllowed,
 	// compositionHelper.h. The question lives with the mechanism that asks it.)
 
-	// MAY THIS BELONG TO A FUNCTIONAL OPTION — whatever the command interface may offer (a list, a command,
+	// MAY THIS BELONG TO A FEATURE OPTION — whatever the command interface may offer (a list, a command,
 	// a form), since what an option hides is what the interface shows. A field and a table say yes for
 	// themselves (they are what a form binds to); an option says no.
-	virtual bool IsFunctionalOptionAllowed() const override { return IsInterfaceAllowed(); }
+	virtual bool IsFeatureOptionAllowed() const override { return IsInterfaceAllowed(); }
 
 	// DOES THIS SHOW UP UNDER ITS OWNER? Not a new rule — FilterChild above already knows:
 	// a child the owner does not accept is one it never created and cannot host, so it has
@@ -526,7 +521,7 @@ public:
 	//
 	// This is only the convenience form, asked from the child's side. Before it, the
 	// designer tree spelled `GetClassType() == g_metaPredefinedAttributeCLSID` out TEN
-	// times, once per metatype branch, and configuration-compare kept a second list of
+	// times, once per metatype branch, and application-compare kept a second list of
 	// clsids whose own comment admitted it was mirroring the first.
 	// DELETED IS PART OF THE SAME ANSWER. Every caller paired this with an `IsDeleted()` line of its
 	// own — four trees, the compare walker — because a child that is gone shows up under its owner
@@ -596,10 +591,10 @@ public:
 	bool RunSubtree(int flags, ibRunPhase phase);
 	bool CloseSubtree(ibRunPhase phase);
 
-	// (CreateMetaTable / UpdateMetaTable / DeleteMetaTable removed — structure DDL is the config-save
+	// (CreateMetaTable / UpdateMetaTable / DeleteMetaTable removed — structure DDL is the application-save
 	//  differ's job; see ContributeTables below (declares both structure and seed) + query/provider/database/structure/schemaSnapshot.h.)
 
-	// (No per-object table-data dump / restore. Row data is moved off the config's ContributeTables
+	// (No per-object table-data dump / restore. Row data is moved off the application's ContributeTables
 	//  SNAPSHOT directly by the orchestrator (DumpDataToBuffer / RestoreDataFromBuffer) through the L3-3
 	//  mover — one source of truth, the same structure that drives the DDL. See query/provider/database/structure/dataMover.h.)
 
@@ -635,7 +630,7 @@ public:
 	//
 	// 🛑 AND THE NUMBERS WERE A HAND-KEPT LIST THAT HAD ALREADY FIRED. Twenty enumerations, nearly
 	// every one of them starting at 19000, unique only WITHIN one metaobject — see ID_METATREE_LAST
-	// in treeConfiguration.h, where two appended entries landed on top of Insert and Replace and
+	// in treeApplication.h, where two appended entries landed on top of Insert and Replace and
 	// asking for Help opened the "replace report" file dialog. Two enums, no compiler on earth to
 	// notice. With the item carrying the metaobject there is no number to collide: the ids are
 	// handed out by the ONE place that draws the menu, in order, and thrown away with it.
@@ -645,7 +640,7 @@ public:
 	// below, which have no metaobject to name — see ibMetaMenuItem.
 	//
 	// Returns TRUE when the standard tree commands — New / Edit / Remove / Properties — do NOT apply
-	// to this row (the configuration root, a common-attribute copy: neither can be created or
+	// to this row (the application root, a shared-attribute copy: neither can be created or
 	// deleted where it sits). It is not "I drew my own menu"; it never was.
 	virtual bool CollectContextMenu(std::vector<ibMetaMenuItem>& items) { return false; }
 
@@ -678,7 +673,7 @@ public:
 	virtual void OnPropertyChanged(ibProperty* property, const ibVariant& oldValue, const ibVariant& newValue) override;
 
 	// THE DOOR FOR THE ORDER OF THE CHILDREN — `pos` is where `obj` ends up. Refused on a read-only
-	// configuration; a move that happened marks the configuration modified and is announced as `Moved`.
+	// application; a move that happened marks the application modified and is announced as `Moved`.
 	bool ChangeChildPosition(ibValueMetaObject* obj, unsigned int pos);
 
 	// ⭐⭐ COPY & PASTE ARE NOT HERE ANY MORE — they are ibMetaData::CopyMetaObject and
@@ -748,17 +743,17 @@ public:
 	// container (folder / common) keeps this default and just descends.
 	//
 	// 🛑⭐ CHANGING WHAT AN EXISTING METATYPE DECLARES HERE IS INVISIBLE TO THE DIFF. Both snapshots — the
-	// baseline and the edited configuration — are projected by THIS code, so a column, an index or a
+	// baseline and the edited application — are projected by THIS code, so a column, an index or a
 	// condition that a new version starts declaring is in both, the diff is empty, and a base that already
 	// holds the object never gets it (schema-authority.md § 6). Two roads, and nothing else:
 	//   * a part with a SAVED id (a predefined section, a standard column) — give it an id only in the copy
 	//     that saves itself, in before-run (§ 6.1; StampIfNeverSaved, StampActionPeriodIfNeverSaved);
-	//   * anything else — a column made unconditional, an index, a key — branch on the configuration's
+	//   * anything else — a column made unconditional, an index, a key — branch on the application's
 	//     COMPATIBILITY VERSION (`GetMetaData()->GetVersion()`, a new rung in ibProgramVersion), here and in
 	//     the runtime together (§ 6.2, compatibility-version.md): the user raises the mode, and the next
 	//     apply is the migration. A metatype no released base holds yet needs neither.
 	//
-	// A DELETED CHILD DECLARES NOTHING. It stays in the tree until the configuration is written (DeleteSubtree),
+	// A DELETED CHILD DECLARES NOTHING. It stays in the tree until the application is written (DeleteSubtree),
 	// and a snapshot taken before that — IsDynamicUpdateAvailable, asked before an apply starts — kept its table, so
 	// deleting an applied object read as "the structure stays" (#404). The base's copy holds none.
 	virtual void ContributeTables(class ibSchemaSnapshot& out) const {
@@ -781,8 +776,8 @@ protected:
 	virtual void DoSetInterface(const ibMetaID& id, const bool& val = true) override;
 #pragma endregion
 
-#pragma region functional_option_h
-	virtual void DoSetFunctionalOption(const ibMetaID& id, const bool& val = true) override;
+#pragma region feature_option_h
+	virtual void DoSetFeatureOption(const ibMetaID& id, const bool& val = true) override;
 #pragma endregion
 
 #pragma region role_h

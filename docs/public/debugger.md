@@ -1,6 +1,6 @@
 # The debugger
 
-**What.** The designer debugs a configuration's code where it runs: breakpoints, step into, over and out,
+**What.** The designer debugs an application's code where it runs: breakpoints, step into, over and out,
 pause, the call stack, the locals, watch expressions evaluated in the stopped frame. The same stop serves
 a role's row restriction ([access-rights.md](access-rights.md)) and an event handler alike - they are
 modules like any other.
@@ -27,8 +27,8 @@ debugger is the platform's, not the designer's: the engine carries it, and the d
 
 ## What it guarantees
 
-- **The right code under the cursor.** On connecting, the debuggee says which configuration it runs;
-  the designer takes the connection only for the configuration it has open.
+- **The right code under the cursor.** On connecting, the debuggee says which application it runs;
+  the designer takes the connection only for the application it has open.
 - **A watch changes nothing.** A watch, a tooltip or a completion probe is evaluated so that no write,
   no handler and no message to the person can happen from it.
 - **The sandbox changes nothing either.** Whole statements run in the stopped session, inside a
@@ -43,10 +43,10 @@ debugger is the platform's, not the designer's: the engine carries it, and the d
 - An application server ([application-cluster.md](application-cluster.md)) opens its bases with no debug
   server, and no one session's person may switch on a server that would stop every base and session it
   holds. Code that runs there is debugged on a file base.
-- The debug server listens on this machine only. Its handshake checks the configuration, not the
+- The debug server listens on this machine only. Its handshake checks the application, not the
   person: it is not an authentication, and the loopback is what keeps a stranger out.
-- The handshake compares the configuration's identity, not its version: a debuggee still running an
-  older build of the same configuration is accepted, and its lines may not match the editor's.
+- The handshake compares the application's identity, not its version: a debuggee still running an
+  older build of the same application is accepted, and its lines may not match the editor's.
 - A breakpoint is a line: there is no condition on it, and no stop on an exception.
 - No stepping inside the sandbox: its code is the caller's own, and a breakpoint there would nest one
   stop inside another.

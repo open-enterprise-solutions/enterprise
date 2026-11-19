@@ -35,7 +35,7 @@ std::shared_ptr<ibProcUnit> ibRuntimeModuleDataObject::GetProcUnit() const
 #include "backend/metaCollection/metaEventHandlerObject.h"        // who handles an event
 #include "backend/metaCollection/partial/commonObject.h"          // ibValueManagerDataObject — a manager event's Source
 #include "backend/session/session.h"                              // ibSession::EditModuleManagerFor — where they run
-#include "backend/moduleManager/moduleManager.h"                  // FindCommonModule — an event handler's module
+#include "backend/moduleManager/moduleManager.h"                  // FindSharedModule — an event handler's module
 
 // A module value's method, a job, an owner's event, a manager's, an event handler: every call into a module
 // comes through here, so a privileged module's window is opened in one place and no road can miss it. For
@@ -85,7 +85,7 @@ void ibRuntimeModuleDataObject::ExecEventHandlers(const ibMetaData* metaData, co
 		return;
 
 	// An event handler's module is a MANAGER module, found where the manager value and a parameterized
-	// job find theirs (ibSession::EditModuleManagerFor): the modules registered for this configuration.
+	// job find theirs (ibSession::EditModuleManagerFor): the modules registered for this application.
 	// No such manager, nothing runs and nobody is called.
 	const ibValueModuleManager* const moduleManager = ibSession::EditModuleManagerFor(metaData);
 	if (moduleManager == nullptr)
@@ -100,7 +100,7 @@ void ibRuntimeModuleDataObject::ExecEventHandlers(const ibMetaData* metaData, co
 	params.insert(params.end(), paParams, paParams + lSizeArray);
 
 	for (const ibValueMetaObjectEventHandler* handler : taking) {
-		if (const ibRuntimeModuleDataObject* const unit = moduleManager->FindCommonModule(handler->GetHandlerModule()))
+		if (const ibRuntimeModuleDataObject* const unit = moduleManager->FindSharedModule(handler->GetHandlerModule()))
 			unit->ExecAsProc(strEventName, params.data(), static_cast<long>(params.size()));
 	}
 }
@@ -111,7 +111,7 @@ void ibRuntimeModuleDataObject::ExecAsEvent(const ibString& strEventName, ibValu
 	ExecAsProc(strEventName, paParams, lSizeArray);
 
 	// …then its event handlers, the runtime value this descriptor is a part of handed over as Source. The
-	// configuration is the owner's own, asked of the module it runs.
+	// application is the owner's own, asked of the module it runs.
 	if (const ibValueMetaObjectModuleBase* const module = GetMetaForCompile())
 		ExecEventHandlers(module->GetMetaData(), GetRuntimeOwner(), strEventName, paParams, lSizeArray);
 }
@@ -124,12 +124,12 @@ bool ibRuntimeModuleDataObject::ExecAsManagerEvent(const ibValueMetaObjectGeneri
 	const ibMetaData* const metaData = metaObject->GetMetaData();
 
 	// The manager module's own procedure first — found where the manager value finds it (EditModuleManagerFor),
-	// NOT in the session's runtime root. The root holds the configuration's common modules; a manager module is
+	// NOT in the session's runtime root. The root holds the application's shared modules; a manager module is
 	// registered where its metaobject's metadata lives, which in the Designer is a compile-cache manager with no
 	// root at all. Asked of the root, a job "ran" and did nothing.
-	const ibValueMetaObjectCommonModule* const module = metaObject->GetManagerModule();
+	const ibValueMetaObjectSharedModule* const module = metaObject->GetManagerModule();
 	const ibValueModuleManager* const moduleManager = module != nullptr ? ibSession::EditModuleManagerFor(metaData) : nullptr;
-	const ibRuntimeModuleDataObject* const unit = moduleManager != nullptr ? moduleManager->FindCommonModule(module) : nullptr;
+	const ibRuntimeModuleDataObject* const unit = moduleManager != nullptr ? moduleManager->FindSharedModule(module) : nullptr;
 	if (unit == nullptr)
 		return false;
 	unit->ExecAsProc(strEventName, paParams, lSizeArray);
@@ -179,7 +179,7 @@ std::unique_ptr<ibCompileModule> ibRuntimeModuleDataObject::CreateCompiler() con
 // THE NAMES A MODULE EXPORTS, AND THE TWO PLACES THEY COME FROM.
 //
 // ⭐⭐ THE DESIGNER HAS NO RUNTIME, so it cannot be asked for bytecode — and bytecode is the only
-// thing this used to read. Everything built on it therefore said NOTHING in the designer: a common
+// thing this used to read. Everything built on it therefore said NOTHING in the designer: a shared
 // module offered no exports after its dot, a manager host (Catalogs.Goods., commonObject.cpp)
 // missed its manager module's exports, an object module's own exported procedures were invisible
 // on ThisObject — while the designer's "Procedures and functions" window listed all of them,
@@ -211,7 +211,7 @@ static void ibExportNamesFromText(const ibValueMetaObjectModuleBase* moduleObjec
 		// something the compiler then refuses.
 		if (methods) {
 			// ⭐ THE CALL FORM, NOT ONLY THE ARITY. This passed an empty helper string, so every
-			// method a configuration declares arrived at a caller as a bare name while the
+			// method an application declares arrived at a caller as a bare name while the
 			// platform's own came with `GetTemplate(name : string)` beside them — the arity was
 			// known and the names were not shown (2026-09-09, reading a document manager's
 			// members: `Print` with nothing to say how to call it).
@@ -407,9 +407,9 @@ bool ibRuntimeModuleDataObject::Compile()
 
 	// Phase A — find a usable bytecode.
 	//
-	// (a) The configuration's bytecode storage first (ibByteCodeStorage, on
+	// (a) The application's bytecode storage first (ibByteCodeStorage, on
 	//     the metadata's image): it holds the rows of the AOT cache read
-	//     as the configuration opened, and runs DeserializeAOT into bc.
+	//     as the application opened, and runs DeserializeAOT into bc.
 	//     Magic / format-version mismatch is reported as miss so an
 	//     OES binary upgrade transparently triggers full recompile.
 	//     After load, ResolveAndVerifyDependencies walks
@@ -438,7 +438,7 @@ bool ibRuntimeModuleDataObject::Compile()
 		// Stamp the freshly-compiled bytecode with the descriptor
 		// identity. m_id is the descriptor's GUID — stable across
 		// renames in Designer; cache rows in sys_bytecode_cache key
-		// off it. m_descriptorClsid records the kind (CommonModule /
+		// off it. m_descriptorClsid records the kind (SharedModule /
 		// FormModule / etc.) for sanity checks at AOT-load time and
 		// for diag tooling.
 		outBc.m_id = meta->GetGuid();
@@ -453,7 +453,7 @@ bool ibRuntimeModuleDataObject::Compile()
 
 	// What the storage holds is taken; a miss compiles once, whoever else misses meanwhile, and the storage saves and
 	// holds what was compiled (ibByteCodeStorage::Load with `compile`). Best-effort: a save that fails leaves the live
-	// bc. No storage — a designer's own copy, a configuration not open — and it compiles for itself.
+	// bc. No storage — a designer's own copy, an application not open — and it compiles for itself.
 	//
 	// ⭐ NOT WHAT WAS COMPILED UNDER AN EVAL. A watch or a sandbox opens a compile inside its
 	// OWN host frame, and that frame is a rung: every operand this compile stamps carries a
@@ -476,9 +476,9 @@ bool ibRuntimeModuleDataObject::Compile()
 	// ⚠ NO COMPARISON AGAINST THE LOADED TABLE HERE. Checking the surface against
 	// bc.m_listVar on every hit was written and taken back out the same day: it turns the
 	// reader into the place that notices staleness, which is one place too late. A row that
-	// no longer matches the configuration must not be READABLE at all — it is thrown away
-	// where it goes stale (OnSaveMetaObject drops it on saveConfigFlag; the key retires
-	// every row of a previous configuration digest), and this branch may then trust what it
+	// no longer matches the application must not be READABLE at all — it is thrown away
+	// where it goes stale (OnSaveMetaObject drops it on saveApplicationFlag; the key retires
+	// every row of a previous application digest), and this branch may then trust what it
 	// gets (Max, 2026-09-04: a stale cache must be THROWN AWAY, not worked around).
 	bc.m_parent = parent;
 

@@ -2,7 +2,7 @@
 //	Description : what is checked into a section — the command interface
 ////////////////////////////////////////////////////////////////////////////
 //
-// ⭐ THE TICK-BOX, WHICH IS ALL A SECTION IS. A section (`Section` under Common) declares nothing
+// ⭐ THE TICK-BOX, WHICH IS ALL A SECTION IS. A section (`Section` under Shared) declares nothing
 // about its contents; the CONTENTS declare their sections. Every metaobject carries a set of
 // section ids (ibInterfaceObject::m_interfaces, backend/interfaceHelper.h) and the section's editor
 // simply paints one column of checkboxes over the whole tree — which is why "what is in this
@@ -24,7 +24,7 @@
 #include "backend/metaCollection/metaSectionObject.h"
 #include "backend/metaCollection/metaCommandGroupObject.h"   // where on the section page an item stands
 #include "core/description/typeDescription.h"   // a command's ParameterType — what it is typed FOR
-#include "backend/metadataConfiguration.h"
+#include "backend/metadataApplication.h"
 #include "core/stringUtils.h"
 
 #include <functional>
@@ -223,10 +223,10 @@ public:
 
 	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
-		ibMetaDataConfigurationBase* metaData = activeMetaData;
+		ibMetaDataApplicationBase* metaData = activeMetaData;
 
-		if (metaData == nullptr || !metaData->IsConfigOpen()) {
-			refusal = ibMcpText("No configuration is open.");
+		if (metaData == nullptr || !metaData->IsOpen()) {
+			refusal = ibMcpText("No application is open.");
 			return false;
 		}
 
@@ -240,7 +240,7 @@ public:
 			// ⭐ REFUSED WITH THE ANSWER. A caller that misspelled a section can act on this reply;
 			// one told only "not found" has to go and ask a second question.
 			refusal = known.empty()
-				? ibMcpText("This configuration declares no sections at all. Create one under "
+				? ibMcpText("This application declares no sections at all. Create one under "
 					"Common - Sections first (metadata_create kind=Section).")
 				: ibString::Format(ibMcpText("No section is called '%s'. There is: %s."),
 					sectionName, ListNames(known));
@@ -306,7 +306,7 @@ public:
 			}
 
 			// ALREADY WHERE IT WAS ASKED TO BE — reported as done rather than as a change, so a
-			// caller repeating itself does not see the configuration go modified for nothing.
+			// caller repeating itself does not see the application go modified for nothing.
 			if (object->IsSetInterface(section->GetMetaID()) == !remove) {
 				done.push_back(ibDataValue::String(object->GetName()));
 				continue;
@@ -364,7 +364,7 @@ public:
 			"separately: they are the ones nobody can open.\n"
 			"Each item says WHERE on the section page it stands (`shownIn`): the platform's groups - "
 			"'Navigation panel.Important', 'Navigation panel.Normal', 'Actions panel.Create', "
-			"'Actions panel.Reports', 'Actions panel.Service' - or a CommandGroup the configuration "
+			"'Actions panel.Reports', 'Actions panel.Service' - or a CommandGroup the application "
 			"declares. Those labels are the words a command's `Group` takes in metadata_set.");
 	}
 
@@ -376,10 +376,10 @@ public:
 
 	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
-		ibMetaDataConfigurationBase* metaData = activeMetaData;
+		ibMetaDataApplicationBase* metaData = activeMetaData;
 
-		if (metaData == nullptr || !metaData->IsConfigOpen()) {
-			refusal = ibMcpText("No configuration is open.");
+		if (metaData == nullptr || !metaData->IsOpen()) {
+			refusal = ibMcpText("No application is open.");
 			return false;
 		}
 
@@ -388,7 +388,7 @@ public:
 		if (!only.IsEmpty() && FindSection(metaData, only) == nullptr) {
 			const std::vector<ibString> known = AllSectionNames(metaData);
 			refusal = known.empty()
-				? ibMcpText("This configuration declares no sections at all.")
+				? ibMcpText("This application declares no sections at all.")
 				: ibString::Format(ibMcpText("No section is called '%s'. There is: %s."),
 					only, ListNames(known));
 			return false;
@@ -490,7 +490,7 @@ public:
 
 				// 🛑 ASKED OF THE OBJECT, which is what the section EDITOR already does. This used
 				// to report every metaobject that was not in a section — and most of them never
-				// could be: a common module, a language, a role are not things a person opens
+				// could be: a shared module, a language, a role are not things a person opens
 				// from a command interface. The count came out alarming and wrong, and it was
 				// repeated as if it meant something.
 				//
@@ -500,7 +500,7 @@ public:
 				// somebody forgot to extend. The section test that used to be here was one entry
 				// of exactly such a list.
 				// …and of those, only what is reached ONLY from a section (`IsInterfaceRequired`): an enumeration is
-				// picked in the fields that hold it, a common command filed under the form command bar stands on forms.
+				// picked in the fields that hold it, a shared command filed under the form command bar stands on forms.
 				// The object's answer, so the database audit (mcpToolDatabase) and this list cannot disagree.
 				if (!object->IsInterfaceRequired())
 					continue;
@@ -534,7 +534,7 @@ public:
 
 		if (sections.empty())
 			result.SetValue(ibT("note"),
-				ibMcpText("This configuration declares no sections - there is no command interface yet."));
+				ibMcpText("This application declares no sections - there is no command interface yet."));
 
 		return true;
 	}

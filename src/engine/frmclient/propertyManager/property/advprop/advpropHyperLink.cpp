@@ -47,7 +47,7 @@ bool ibPGHyperLinkProperty::OnEvent(ibPropertyGrid* WXUNUSED(propgrid), wxWindow
 	// THE CLICK (the hyperlink's editor, propertyEditor.cpp) — the cell's own value is `false` from its constructor,
 	// the click is not in it.
 	if (event.GetEventType() == wxEVT_LEFT_DOWN) {
-		// THE LINK CARRIES ITS OBJECT — the one the server named, in the configuration its owner was opened from; the
+		// THE LINK CARRIES ITS OBJECT — the one the server named, in the application its owner was opened from; the
 		// server opens it. Taken by value: the cell goes with the next selection.
 		if (m_metaId != 0) {
 
@@ -56,7 +56,7 @@ bool ibPGHyperLinkProperty::OnEvent(ibPropertyGrid* WXUNUSED(propgrid), wxWindow
 			wxTheApp->CallAfter(
 				[id = m_metaId, metaData = m_metaData]() {
 
-					// ⭐⭐ JUST OPEN IT. Whose it is — the document holding that configuration, or
+					// ⭐⭐ JUST OPEN IT. Whose it is — the document holding that application, or
 					// nobody's when it is the one the main window shows — is worked out INSIDE
 					// OpenForm, from the object itself (Max, 2026-09-01: *"it is a very complicated
 					// mechanism otherwise — you would have to track everywhere on whose behalf it

@@ -83,7 +83,7 @@ static bool ResolveCommandParameter(ibValueForm* form, const ibValueMetaObjectCo
 // The front-end door is now THIN — it does NOT resolve command paths (that is the SERVER walk's job). It STARTS
 // ibBackendCommandSender::ResolveCommandPath on the FORM (the command source) and switches on the resolved LEAF:
 // run it (execute), read its look (resolve), or expand it (sub-commands). The 5-case endpoint ladder is GONE — each
-// hop self-describes on the backend (form -> its command / a config command / a section / a tablebox's action),
+// hop self-describes on the backend (form -> its command / an application command / a section / a tablebox's action),
 // exactly as a source path self-describes through GetValueBySourceHop.
 
 // Start the SERVER walk on the form and RUN the resolved leaf.
@@ -229,7 +229,7 @@ bool ibFrontendCommandReceiver::ResolveCommand(const ibCommandDescription& desc,
 	bool picAndText = true;
 	const bool walked = ResolveValueByPath(desc, outCaption, outPicture, &modifies, &picAndText);
 	bool exists = walked && !outCaption.IsEmpty();
-	// The gather below is a FULL recursive config walk. Skip it on the hot path — the button's Update, the bar's
+	// The gather below is a FULL recursive application walk. Skip it on the hot path — the button's Update, the bar's
 	// BuildCommands, the inspector cell's OnSetValue all pass outPath == nullptr, and when the walk already resolved a
 	// real caption its icon / modifies / default-display are authoritative (the gather would only re-confirm existence).
 	// Only the fragile tablebox case (walk resolves the hop but vends an EMPTY caption) and WalkCommand (needs the full

@@ -26,7 +26,7 @@ protected:
 
 private:
 	ibPropertyExternalPicture* m_propertyPicture = ibPropertyObject::CreateProperty<ibPropertyExternalPicture>(m_categoryContext, ibT("Picture"), _("Picture"),
-		_("The image this common picture holds, stored in the configuration. Commands, sections and form controls can take it as their picture by reference, so one image is kept in one place."));
+		_("The image this shared picture holds, stored in the application. Commands, sections and form controls can take it as their picture by reference, so one image is kept in one place."));
 };
 
 #endif 

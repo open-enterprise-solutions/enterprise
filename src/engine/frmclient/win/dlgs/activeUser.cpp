@@ -44,7 +44,7 @@ void ibDialogActiveUser::RefreshActiveUserTable(const ibProtocolNode& shown)
 		wxImageList* imageList = new wxImageList(16, 16);
 
 		m_activeTable->AppendColumn(_("User"), wxLIST_FORMAT_LEFT, 190);
-		m_activeTable->AppendColumn(_("Application"), wxLIST_FORMAT_LEFT, 120);
+		m_activeTable->AppendColumn(_("Program"), wxLIST_FORMAT_LEFT, 120);
 		m_activeTable->AppendColumn(_("Type"), wxLIST_FORMAT_LEFT, 70);
 		m_activeTable->AppendColumn(_("Started"), wxLIST_FORMAT_LEFT, 120);
 		m_activeTable->AppendColumn(_("Computer"), wxLIST_FORMAT_LEFT, 145);
@@ -61,7 +61,7 @@ void ibDialogActiveUser::RefreshActiveUserTable(const ibProtocolNode& shown)
 			const long index = m_activeTable->InsertItem(m_activeTable->GetItemCount(), row.GetString(ibProtocol::ibSchema::ibActiveUser::User));
 
 			m_activeTable->SetItem(index, 0, row.GetString(ibProtocol::ibSchema::ibActiveUser::User), imageUser);
-			m_activeTable->SetItem(index, 1, row.GetString(ibProtocol::ibSchema::ibActiveUser::Application));
+			m_activeTable->SetItem(index, 1, row.GetString(ibProtocol::ibSchema::ibActiveUser::Program));
 			m_activeTable->SetItem(index, 2, row.GetString(ibProtocol::ibSchema::ibActiveUser::Type));
 			m_activeTable->SetItem(index, 3, row.GetString(ibProtocol::ibSchema::ibActiveUser::Started));
 			m_activeTable->SetItem(index, 4, row.GetString(ibProtocol::ibSchema::ibActiveUser::Computer));

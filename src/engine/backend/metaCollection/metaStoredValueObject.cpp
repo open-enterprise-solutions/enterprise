@@ -1,11 +1,11 @@
 ////////////////////////////////////////////////////////////////////////////
 //	Author		: Maxim Kornienko
-//	Description : a stored value - the base of a constant and a functional option
+//	Description : a stored value - the base of a constant and a feature option
 ////////////////////////////////////////////////////////////////////////////
 
 #include "metaStoredValueObject.h"
 #include "core/serialize/dataBuilder.h"
-#include "backend/metaData.h"   // ibMetaData::RegisterSource — the constant registers its source into its OWN config
+#include "backend/metaData.h"   // ibMetaData::RegisterSource — the constant registers its source into its OWN application
 
 //***********************************************************************
 //*                         metaData                                    *
@@ -104,7 +104,7 @@ bool ibValueMetaObjectStoredValue::OnAfterRunMetaObject(int flags)
 		return false;
 
 	// Register the constant as an L4 query source (its descriptor field, holding the single-row sys_const
-	// queryable). Register ALWAYS — the factory is PER-CONFIG (in the metadata), so a read-only DB load
+	// queryable). Register ALWAYS — the factory is PER-APPLICATION (in the metadata), so a read-only DB load
 	// (onlyLoadFlag) must still register its OWN source into its OWN factory or its forms can't resolve it.
 	m_metaData->RegisterSource(&m_queryable);
 
@@ -142,7 +142,7 @@ bool ibValueMetaObjectStoredValue::OnBeforeCloseMetaObject()
 		// is a bug worth knowing about but says nothing about whether this object can close. Read
 		// as a refusal it stopped CloseSubtree, which stopped CloseDatabase, which failed the whole
 		// rollback and left the designer half-open — one unregistered module taking the
-		// configuration down with it. The miss is traced instead (metaData.cpp), so it is still
+		// application down with it. The miss is traced instead (metaData.cpp), so it is still
 		// visible without being fatal.
 		if (ibValueMetaObjectGenericData::OnBeforeCloseMetaObject()) {
 			cc->RemoveCompileModule(m_propertyModule->GetMetaObject());

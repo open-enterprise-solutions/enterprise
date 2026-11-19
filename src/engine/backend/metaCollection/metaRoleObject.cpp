@@ -111,7 +111,7 @@ bool ibValueMetaObjectRole::ReadData(const ibDataNode& node)
 		return false;
 
 	m_propertyRoleModule->SetNodeValue(node.GetProperty(m_propertyRoleModule->GetName()));
-	// Absent in a configuration written before this property existed — the node returns an empty
+	// Absent in an application written before this property existed — the node returns an empty
 	// value and the property keeps its Union default, which is exactly the old behaviour. No
 	// compatibility-version branch is needed for that reason.
 	m_propertyComposition->SetNodeValue(node.GetProperty(m_propertyComposition->GetName()));

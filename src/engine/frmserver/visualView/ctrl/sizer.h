@@ -167,7 +167,7 @@ class ibValueStaticBoxSizer : public ibValueSizer {
 	virtual ibString GetControlTitle() const { return m_propertyTitle->GetValueAsTranslateString(); }
 
 	// The framed group is the one sizer that is also seen: its caption in the user's language, and whether
-	// the frame is enabled and shown — shown only while the functional options of this base leave it available.
+	// the frame is enabled and shown — shown only while the feature options of this base leave it available.
 	virtual void OnUpdate(ibDataNode& state, ibVisualHost* host) override;
 
 	//support icons

@@ -21,7 +21,7 @@
 #include "core/serialize/dataBuilder.h"
 #include "frmserver/client/clientFrame.h"   // IsClosingWindow — the client leaving vs a tab's cross
 #include "docViewComposerEdit.h"         // ibFetchComposerRequest — a reference's [+] (Expand), asked by the query constructor
-#include "queryConstructorRequest.h"     // ibFetchQueryConstructorRequest — what the query constructor asks the configuration
+#include "queryConstructorRequest.h"     // ibFetchQueryConstructorRequest — what the query constructor asks the application
 #include "protocol/protocolDesigner.h"   // ibProtocol::ibView::ibModule
 
 #include <algorithm>
@@ -38,14 +38,14 @@ void ibModuleTextView::OnDraw(ibDataNode& frame)
 		return;
 
 	// The syntax its words are coloured and completed in (the desktop's editor asked ibCompileCode::GetCodeStyle), and
-	// read-only where the configuration may not be edited (ibDOC_READONLY on the desktop's).
+	// read-only where the application may not be edited (ibDOC_READONLY on the desktop's).
 	// Added to the State already there — a form editor's frame is its form's, the form's State in it (Child gives the
 	// one there; a fresh one lost the form's title and command bar).
 	ibDataNode& state = frame.Child(ibProtocol::ibView::State);
 	state.SetValue(ibProtocol::ibView::ibModule::Syntax, static_cast<std::int32_t>(ibCompileCode::GetCodeStyle()));
 	if (!creator->IsEditable())
 		state.SetValue(ibProtocol::ibView::ibModule::ReadOnly, true);
-	// Whether the configuration the module is in is modified — the document itself never is (ibMetaDocument::IsModified),
+	// Whether the application the module is in is modified — the document itself never is (ibMetaDocument::IsModified),
 	// and Save is offered all along: what the desktop's editor marked on every key the client says once, on the first key
 	// while this is false (event Input).
 	const ibMetaData* const metaData = creator->GetMetaData();
@@ -61,8 +61,8 @@ void ibModuleTextView::OnDraw(ibDataNode& frame)
 }
 
 // ----------------------------------------------------------------------------
-// WHAT THE OLD DESKTOP'S CODE EDITOR ASKED THE CONFIGURATION (its codeEditorLoader.cpp) — its
-// loader's bodies, where the compiler and the configuration are: each a row {Kind, Name, Help} of the answer where the
+// WHAT THE OLD DESKTOP'S CODE EDITOR ASKED THE APPLICATION (its codeEditorLoader.cpp) — its
+// loader's bodies, where the compiler and the application are: each a row {Kind, Name, Help} of the answer where the
 // desktop's appended a word to its dropdown. The text and the caret are the editor's as they are now (the request's).
 // ----------------------------------------------------------------------------
 
@@ -187,13 +187,13 @@ bool LoadFromKeyWord(ibDataNode& response, const ibString& keyword, const ibValu
 		for (auto class_obj : metaData->GetListCtorsByType(ibCtorObjectMetaType::ibCtorObjectMetaType_Selection))
 			AppendName(response, ibContentType::eVariable, class_obj->GetClassName(), ibEmptyString);
 	}
-	else if (stringUtils::IsSameAs(keyword, ibT("showCommonForm"))
-		|| stringUtils::IsSameAs(keyword, ibT("getCommonForm")))
+	else if (stringUtils::IsSameAs(keyword, ibT("showSharedForm"))
+		|| stringUtils::IsSameAs(keyword, ibT("getSharedForm")))
 	{
 		const ibMetaData* metaData = moduleObject->GetMetaData();
 		ibASSERT(metaData);
 
-		for (const auto object : metaData->GetAnyArrayObject(g_metaCommonFormCLSID))
+		for (const auto object : metaData->GetAnyArrayObject(g_metaSharedFormCLSID))
 			AppendName(response, ibContentType::eVariable, object->GetName(), ibEmptyString);
 	}
 	else {
@@ -568,7 +568,7 @@ bool ibModuleTextView::Fetch(const ibDataNode& request, ibDataNode& response)
 	if (creator == nullptr)
 		return false;
 
-	// THE QUERY CONSTRUCTOR opened over this module's query asks the module's configuration — its sources, a source's
+	// THE QUERY CONSTRUCTOR opened over this module's query asks the module's application — its sources, a source's
 	// fields and parameters, a reference's fields one level down (the composer's Expand), and the types a temporary
 	// table's field may be given (the composer's Types — the type picker's offer).
 	if (ibFetchQueryConstructorRequest(request, response, creator->GetMetaData()))
@@ -647,7 +647,7 @@ bool ibModuleTextView::OnClientEvent(ibProtocol::ibEvent::ibKind event, const ib
 		return true;
 	case ibProtocol::ibEvent::ibKind::Change:
 		// Where the desktop's editor wrote on save (ibCodeEditorDesigner::SaveModule) — the metaobject's text — and the
-		// configuration modified (ibMetaDocument::Modify).
+		// application modified (ibMetaDocument::Modify).
 		creator->SetModuleText(args.GetValue<ibString>(ibProtocol::ibView::ibModule::Text));
 		// …AND THE EDIT THAT MOVED ITS LINES, where the text arrives: the breakpoints move in the debugger's one map, as
 		// the desktop's editor moved them in it (OnPatchModule) — the editor keeps none of its own.
@@ -701,7 +701,7 @@ bool ibModuleTextDocument::SyntaxControl(bool throwMessage) const
 	const ibValueMetaObject* metaObject = GetMetaObject();
 	ibASSERT(metaObject);
 
-	// ⭐ THE CHECK'S OWN ROAD (scriptCheck.h), the one module_write and config_check answer by: the button and an
+	// ⭐ THE CHECK'S OWN ROAD (scriptCheck.h), the one module_write and app_check answer by: the button and an
 	// assistant are told the same things - what the compile refused, and a method call it let through (#646).
 	const ibScriptCheckAnswer checked = ibCheckModule(metaObject);
 	if (checked.m_outcome != ibScriptCheckOutcome::Checked)

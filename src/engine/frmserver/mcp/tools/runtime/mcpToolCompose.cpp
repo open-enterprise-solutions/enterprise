@@ -30,7 +30,7 @@
 // 🛑⭐⭐ AND THE FIGURES ARE NOT READ HERE. The designer does not work with data — a rule about RIGHTS,
 // not about where a runtime happens to sit (Max, 2026-09-06: *"we do not work with data in the
 // designer, we get it through the wire; and the wire is what the user sees, that they really gave
-// access"*). This file resolves the schema and folds the settings, which are the CONFIGURATION and a
+// access"*). This file resolves the schema and folds the settings, which are the APPLICATION and a
 // person's own choices; then it sends them to the application, which runs them and answers with the
 // tables. There is no local road, deliberately: a fallback that read here when nothing was attached
 // would be the very thing this refuses to do. An application's own session IS that other end: there the
@@ -49,7 +49,7 @@
 
 #include "core/description/compositionDescription.h"
 #include "backend/metaCollection/metaTemplateObject.h"
-#include "backend/metadataConfiguration.h"
+#include "backend/metadataApplication.h"
 #include "backend/composition/dataComposer.h"                  // ibDataDBComposer — folding the settings
 #include "backend/composition/composeRunSchema.h"                     // …and the field names the far end reads
 #include "backend/settings/settingsComposer.h"                   // saved settings, restored INTO a composer
@@ -130,7 +130,7 @@ const ibArg& ArgParameters()
 			  "understanding of what is inside it. A REFERENCE can also be ASSEMBLED when its "
 			  "identifier is known - a packed reference is its type and that identifier, nothing "
 			  "more. Which is the only way to name one from here at all: a designer holds the "
-			  "CONFIGURATION, so a PREDEFINED item is there to be named and an ordinary one is not - "
+			  "APPLICATION, so a PREDEFINED item is there to be named and an ordinary one is not - "
 			  "it is data, and data lives in the application.\n"
 			  "\n"
 			  "* {\"expression\": \"...\"} - worked out in the APPLICATION, which is the only place "
@@ -151,7 +151,7 @@ const ibArg& ArgSchema()
 	static const ibArg s_a(ibT("schema"), ibArg::Kind::Node,
 		ibMcpText("A composition to run, given WHOLE, instead of naming a report with `id`. The shape is "
 			  "the one report_get answers with - a query, selected fields, an output with its "
-			  "groupings, resources, parameters. This is how you ask a question the configuration "
+			  "groupings, resources, parameters. This is how you ask a question the application "
 			  "has no report for: build the schema, run it, read the figures. Nothing is stored and "
 			  "no report is created.\n"
 			  "\n"
@@ -196,7 +196,7 @@ const ibArg& ArgQuery()
 			  "\n"
 			  "It is the whole of what a bare question needs. Anything more - groupings, totals, a "
 			  "period the person fills in - is a composition, and that is `schema`; `id` runs one "
-			  "the configuration already has. Parameters work here too: `parameters` applies to "
+			  "the application already has. Parameters work here too: `parameters` applies to "
 			  "this exactly as it does to the other two."));
 	return s_a;
 }
@@ -243,7 +243,7 @@ ibMcpDebugBridge* ComposeBridge(ibString& refusal)
 	ibMcpDebugBridge* const bridge = ibMcpDebug();
 	if (bridge == nullptr) {
 		refusal = ibMcpText("Not attached to a running application, so there is nothing to read the "
-			"figures from - and they are not read here. A designer holds the CONFIGURATION; the rows "
+			"figures from - and they are not read here. A designer holds the APPLICATION; the rows "
 			"belong to the application somebody started, and starting it with the debugger attached "
 			"(app_run with debug true) is the act that grants access to them. The schema, the "
 			"settings and the variants are all readable from here without it.");
@@ -288,7 +288,7 @@ public:
 	{
 		// ⚠ A COMPOSITION PASSED WHOLE HAS NO NAME, AND EMPTY QUOTES ARE NOT A NAME. This read
 		// `running the composer ''` on the person's own screen whenever a schema was handed over
-		// instead of a report id - which is the ordinary case for every question the configuration
+		// instead of a report id - which is the ordinary case for every question the application
 		// has no report for. What they need to know is not a name that does not exist, but WHERE the
 		// thing came from: it was built here, it is not one of their reports, and nothing was stored.
 		const ibString name = ibMcpNameOf(params);
@@ -306,12 +306,12 @@ public:
 			"many documents are unposted, what a register holds, what the largest payments are - "
 			"and not only when there is a report involved.\n"
 			  "\n"
-			"IT COMPOSES AS THE APPLICATION DOES: the functional options of the base apply here as they "
+			"IT COMPOSES AS THE APPLICATION DOES: the feature options of the base apply here as they "
 			"do on the person's screen - a grouping or a selected field on something this base does not "
 			"use is left out, while a filter or a sort on it still applies. What the AUTHOR declared, "
 			"whatever the options say, is report_get's answer.\n"
 			  "\n"
-			"THE OTHER ROAD IS THE WRONG ONE FOR A QUESTION. `code_run` executes configuration "
+			"THE OTHER ROAD IS THE WRONG ONE FOR A QUESTION. `code_run` executes application "
 			"code as a BACKGROUND JOB: it answers with a session id, never with a value, so the only "
 			"way to see what it worked out is to have it write journal lines and read them back - "
 			"three calls and a hand-parse for one number. That is right for WRITING (it is how 205 "
@@ -380,7 +380,7 @@ public:
 			  "\n"
 			"WHILE WRITING A REPORT, this is how you find out whether it works at all: take the "
 			"schema you are building and run it on its own, before there is a form, a variant or a "
-			"place for it in the configuration. It answers with figures or with the reason there are "
+			"place for it in the application. It answers with figures or with the reason there are "
 			"none.\n"
 			"  NOTE - THE LIMIT, stated so it is not discovered by trying: what a person has typed into a "
 			"report's form and NOT SAVED cannot be reached from here - no form can be opened and "
@@ -413,14 +413,14 @@ public:
 			"\n"
 			"* one YOU COMPOSED, here and now - pass `schema`. It IS a report, built the same way a "
 			"stored one is; the difference is only WHERE IT LIVES. A report made with the report_* "
-			"verbs goes into the CONFIGURATION and stays there, to be read, changed and run next "
+			"verbs goes into the APPLICATION and stays there, to be read, changed and run next "
 			"month. One passed here lives IN MEMORY ONLY: it runs, answers, and is gone, with "
 			"nothing stored and nothing created.\n"
 			"  Which is exactly what makes this the way to CHECK a report and to TRY one: a shape "
 			"can be run, read, altered and run again as many times as it takes, and none of it "
-			"touches anybody's configuration. Build it here until the figures are right; move it "
-			"into the configuration with the report_* verbs when it is worth keeping. It is also "
-			"how you ask a question the configuration has no report for at all.\n"
+			"touches anybody's application. Build it here until the figures are right; move it "
+			"into the application with the report_* verbs when it is worth keeping. It is also "
+			"how you ask a question the application has no report for at all.\n"
 			"\n"
 			"* an EXISTING REPORT - pass `id`. What it answers as its author wrote it.\n"
 			"\n"
@@ -454,11 +454,11 @@ public:
 			  "\n"
 			"OR RUN A SCHEMA THAT EXISTS NOWHERE. Pass `schema` instead of `id` and the composition "
 			"you hand over is run and thrown away - nothing is stored, no report is created. That is "
-			"how you ask a question the configuration has no report for.\n"
+			"how you ask a question the application has no report for.\n"
 			  "\n"
 			"WHERE IT RUNS: in the APPLICATION. Connected to an application's session, right there: "
 			"the rows are the ones that person may see. From a designer it is sent over: a designer "
-			"holds the configuration; the rows belong to the application somebody started, and "
+			"holds the application; the rows belong to the running application somebody started, and "
 			"starting it with the debugger attached (app_run with debug true) is the act that grants "
 			"access to them. So a designer needs one attached and is refused plainly without one.\n"
 			  "\n"
@@ -504,7 +504,7 @@ public:
 			+ (bareQuery.IsEmpty() ? 0 : 1);
 
 		if (given > 1) {
-			refusal = ibMcpText("Pass ONE of them: `id` runs a report the configuration has, `schema` runs "
+			refusal = ibMcpText("Pass ONE of them: `id` runs a report the application has, `schema` runs "
 				"a composition you are handing over, `query` runs a bare question. More than one is "
 				"more than one answer to 'what is being run'.");
 			return false;
@@ -695,7 +695,7 @@ MCP_TOOL_REGISTER(ibMcpToolComposeRun);
 // report_show
 //---------------------------------------------------------------------------
 // ⭐ WHAT A PERSON ASKED FOR, IN FRONT OF THEM (Max, 2026-10-31): the schema goes into an external report in memory, by
-// the road a cell's detail opens one (ibOpenReportOver), and that report opens its form. Nothing enters the configuration.
+// the road a cell's detail opens one (ibOpenReportOver), and that report opens its form. Nothing enters the application.
 class ibMcpToolReportShow : public ibMcpTool {
 public:
 
@@ -705,7 +705,7 @@ public:
 
 	ibString GetActivity(const ibDataNode& /*params*/) const override
 	{
-		return ibMcpText("opening a report built here - nothing is stored in the configuration");
+		return ibMcpText("opening a report built here - nothing is stored in the application");
 	}
 
 	ibString GetDescription() const override
@@ -718,10 +718,10 @@ public:
 			"TRY THE SCHEMA WITH compose_run FIRST: that one answers with the figures, so you know what they are about "
 			"to see. Nothing about how the report looks comes back here, only that it opened.\n"
 			"\n"
-			"NOTHING IS STORED: it lives while the tab is open and no report is created in the configuration. A report "
+			"NOTHING IS STORED: it lives while the tab is open and no report is created in the application. A report "
 			"that stays is the designer's work.\n"
 			"\n"
-			"ONLY IN THE APPLICATION: a designer holds the configuration and not the data.");
+			"ONLY IN THE APPLICATION: a designer holds the application and not the data.");
 	}
 
 	const std::vector<ibMcpArgument>& Arguments() const override
@@ -737,7 +737,7 @@ public:
 		ibBackendDocFrame* const frame = ibSession::CurrentFrame();
 		if (!ibIsMcpInApplication() || frame == nullptr) {
 			refusal = ibMcpText("A report is opened in the application, in front of the person using it. A designer "
-				"holds the configuration and not the data.");
+				"holds the application and not the data.");
 			return false;
 		}
 
@@ -813,7 +813,7 @@ public:
 			"an answer: they run it as its author wrote it. Feed an id or an index to compose_run to "
 			"reproduce exactly what they see.\n"
 			  "\n"
-			"NO RUNNING APPLICATION IS NEEDED FOR THIS. What it reads is the configuration's variants "
+			"NO RUNNING APPLICATION IS NEEDED FOR THIS. What it reads is the application's variants "
 			"and a person's own saved choices - only the FIGURES are data. So ask this first: it is free, and it says which of the two things "
 			"to reproduce before anything is started.");
 	}

@@ -12,7 +12,7 @@
 // not yet run under a live role", and the RIGHTS half was pinned on 2026-09-09.
 // The ROW half could not be: the decision lived inside the body that RUNS the
 // role handlers, so exercising the rule meant standing up a runtime, a
-// configuration and a live user. `ibFoldRolePolicy` (query/rolePolicyFold.h) is
+// application and a live user. `ibFoldRolePolicy` (query/rolePolicyFold.h) is
 // that decision lifted out — the caller still runs the handlers and sorts their
 // answers into the buckets; the fold only says what the answers add up to.
 //
@@ -60,7 +60,7 @@ int LeafCount(const ibQueryPredicatePtr& pred)
 // No roles at all. Nothing narrows, nothing refuses — and that is not the empty
 // set: the door has a separate right-on-the-table stage, so a union role NARROWS
 // an already permitted table rather than granting it. Reading an empty union as
-// FALSE is the answer that would take every existing configuration dark.
+// FALSE is the answer that would take every existing application dark.
 TEST(RolePolicyFold, NobodySpoke_NothingIsFolded)
 {
 	const ibRolePolicyVerdict v = ibFoldRolePolicy(ibRolePolicyInput());
@@ -71,7 +71,7 @@ TEST(RolePolicyFold, NobodySpoke_NothingIsFolded)
 }
 
 // A permitting role that declared no handler is SILENCE, not participation.
-// Handler-less roles are how every configuration written before this mode
+// Handler-less roles are how every application written before this mode
 // existed behaves, so they must fold to nothing.
 TEST(RolePolicyFold, HandlerlessRolesDoNotParticipate)
 {

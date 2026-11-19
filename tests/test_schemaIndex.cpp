@@ -1,7 +1,7 @@
 // =============================================================================
 // An index that covers a retyped column is not the same index.
 //
-// config_apply changed a register dimension's type and then ALTERed the column
+// app_apply changed a register dimension's type and then ALTERed the column
 // while the key index still stood on it. Firebird refuses that ("column ... is
 // referenced in index") and rolls the whole apply back. The differ already drops
 // an index and rebuilds it around a column change when it can see that the index

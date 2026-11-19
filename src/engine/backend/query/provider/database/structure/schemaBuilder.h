@@ -7,7 +7,7 @@
 // here — so the metaobject never renders SQL or names a dialect; the dialect dictionary closes the
 // per-DBMS forks inside the L2-1 render.
 //
-// Responsibility split: the metadata-config orchestrator BUILDS the DDL (through the metaobjects),
+// Responsibility split: the metadata-application orchestrator BUILDS the DDL (through the metaobjects),
 // VERIFIES it (the restructure ledger) and drives the TRANSACTION; this door is the shim it applies
 // DDL and the barrier through. L3-3 (the data mover) moves only the rows — no skeleton.
 //

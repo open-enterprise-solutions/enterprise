@@ -8,7 +8,7 @@
 #include "backend/logger/logger.h"                               // ibLogger::GetLogDir
 #include "backend/logger/loggerReader.h"                         // ibLoggerReader — the journal's one reader
 #include "backend/session/session.h"                             // ibSession::Current — whose right is asked
-#include "backend/metadataConfiguration.h"                       // ibMetaDataConfigurationBase::AccessRight_ActiveUsers
+#include "backend/metadataApplication.h"                         // ibMetaDataApplicationBase::AccessRight_ActiveUsers
 #include "backend/metaCollection/partial/reference/reference.h"  // ibValueReferenceDataObject — the Object of a row
 #include "backend/compiler/typeCtor.h"                           // ibCtorAbstractType::GetClassType — the AnyRef family
 #include "backend/objCtor.h"                                     // ibOpenBarriers — the references the Object may be
@@ -25,7 +25,7 @@
 static constexpr const ibChar* g_logNamespace = ibT("Journal");
 static constexpr const ibChar* g_logName      = ibT("Events");
 
-// AN EVENT'S DETAILS, as the value that was written — through the door that knows the configuration's types
+// AN EVENT'S DETAILS, as the value that was written — through the door that knows the application's types
 // (ibDeserializeValue), because the payload worth journalling is a reference as often as not, and the value registry
 // alone throws on one (journal_read found the same, mcpToolJournal.cpp). A payload this process cannot read — written
 // by a version that is gone — leaves the cell empty and says so in the technology journal: the event itself is still
@@ -46,7 +46,7 @@ static ibValue DetailsOf(const ibMemoryBuffer& details, const ibMetaData* metaDa
 	return ibValue();
 }
 
-// ⭐ THE ONE LINE THAT MAKES THE JOURNAL A SOURCE: every configuration's factory makes its own as it is made.
+// ⭐ THE ONE LINE THAT MAKES THE JOURNAL A SOURCE: every application's factory makes its own as it is made.
 static const ibPlatformSourceRegister s_logSource(
 	[](const ibMetaData* metaData) -> std::unique_ptr<ibQueryableSourceDescriptor> {
 		return std::make_unique<ibLogQueryDescriptor>(metaData);
@@ -61,7 +61,7 @@ ibLogQueryable::ibLogQueryable(const ibMetaData* metaData, const ibDateTime& beg
 {
 	const ibTypeDescription text(g_valueStringCLSID);
 	// The object an event is about is a reference of any kind — a catalog's item, a document: declared `AnyRef`, and
-	// holding the configuration's references, as a field declared so does — so a walk and a picker open it by type.
+	// holding the application's references, as a field declared so does — so a walk and a picker open it by type.
 	const ibCtorAbstractType* const anyRef = ibValue::GetAvailableCtor(ibT("AnyRef"));
 	const ibTypeDescription object = anyRef != nullptr ? ibTypeDescription(anyRef->GetClassType()) : ibTypeDescription();
 
@@ -105,8 +105,8 @@ ibString ibLogQueryable::GetQueryName() const
 bool ibLogQueryable::AccessRight_Show() const
 {
 	const ibSession* const session = ibSession::Current();
-	const ibMetaDataConfigurationBase* const configuration = session != nullptr ? session->GetMetaData() : nullptr;
-	return configuration != nullptr && configuration->AccessRight_ActiveUsers();
+	const ibMetaDataApplicationBase* const application = session != nullptr ? session->GetMetaData() : nullptr;
+	return application != nullptr && application->AccessRight_ActiveUsers();
 }
 
 ibQueryRamTable ibLogQueryable::ComputeRows(const std::vector<ibQueryCondition>& extra) const
@@ -194,7 +194,7 @@ ibQueryRamTable ibLogQueryable::ComputeRows(const std::vector<ibQueryCondition>&
 		rows.SetCell(r, m_source->GetColumnId(), ibValue(row.source));
 		rows.SetCell(r, m_event->GetColumnId(), ibValue(row.event_type));
 		rows.SetCell(r, m_message->GetColumnId(), ibValue(row.message));
-		// The object as a reference of this configuration — its key only, the row is read when it is asked for.
+		// The object as a reference of this application — its key only, the row is read when it is asked for.
 		if (row.ref_meta_id != 0 && !row.ref_guid.IsEmpty())
 			if (ibValueReferenceDataObject* const ref = ibValueReferenceDataObject::Create(m_metaData, row.ref_meta_id, ibGuid(row.ref_guid)))
 				rows.SetCell(r, m_object->GetColumnId(), ibValue(ref));

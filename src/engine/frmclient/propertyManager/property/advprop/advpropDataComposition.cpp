@@ -3,7 +3,7 @@
 #include "core/description/compositionDescription.h"                         // the composition, as the row holds it
 #include "core/serialize/dataBuilder.h"
 
-#include "frmclient/backend/metaData.h"                                       // the owner's configuration — its tab
+#include "frmclient/backend/metaData.h"                                       // the owner's application — its tab
 #include "frmclient/backend/propertyManager/property/variant/variantSerializable.h"   // the value — the composition's node
 #include "frmclient/backend/query/queryConstructorModel.h"                   // ibQueryFieldsForget — the window's fields
 #include "frmclient/propertyManager/property/private/prop.h"                 // ibPGPropertyFlags_* — the grid flags

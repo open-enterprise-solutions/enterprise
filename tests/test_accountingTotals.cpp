@@ -3,8 +3,8 @@
 // whether a movement moves a figure at all.
 //
 // The accounting register was rebuilt on 2026-08-13 and NOTHING covered it; the
-// only check it ever had was a person applying a configuration and looking at the
-// numbers. This is the half that can be pinned down without a configuration: the
+// only check it ever had was a person applying an application and looking at the
+// numbers. This is the half that can be pinned down without an application: the
 // declaration this register produces, rendered by the real L2-2 renderer and run
 // against a live engine, with movements posted through the triggers that ship.
 //

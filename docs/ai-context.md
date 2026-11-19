@@ -1,7 +1,7 @@
 # AI context — condensate for code-generating sessions
 
 > **Audience:** any LLM-driven session (Claude / Codex / GPT-class) that
-> opens this repository cold and is asked to extend a configuration —
+> opens this repository cold and is asked to extend an application —
 > add a metaobject, write a script module, draft a report. **Read this
 > file first**, then drill into the topic docs linked at the bottom.
 >
@@ -38,10 +38,10 @@ embedded by default; PostgreSQL also supported for production, ODBC as the MSSQL
             │
             │  Catalog / Document / Register definitions
             │  Posting handlers, report queries
-            │  → configuration metadata (serialized via ibDataNode)
+            │  → application metadata (serialized via ibDataNode)
             │  → OES script modules
             ▼
-   Architect (human) — reviews via Configuration Compare,
+   Architect (human) — reviews via Application Compare,
                        runs against test data,
                        merges to develop
             │
@@ -63,8 +63,8 @@ business behaviour. The architect validates by running.
 | OES script modules inside metadata | `*.vcxproj`, `CMakeLists.txt`, `Common.props` |
 | Form layouts (visual designer) | Plugin DLLs (`simple-plugin.dll` pattern) |
 | Spreadsheet templates (`SpreadsheetDocument`) | `enterprise.sln` solution structure |
-| Test configurations exercised by coderunner scripts | Build outputs, locale `.mo` / `.po` files |
-| Tests against generated configs (coderunner scripts) | DB driver code under `databaseLayer/` |
+| Test applications exercised by coderunner scripts | Build outputs, locale `.mo` / `.po` files |
+| Tests against generated applications (coderunner scripts) | DB driver code under `databaseLayer/` |
 
 **Reason:** OES enforces invariants in C++ (RAII, prepared statements,
 TX scopes, throw-by-value). When AI writes C++, those invariants
@@ -127,7 +127,7 @@ When you need a complex query, use **LINQ** (block or chain syntax):
 
 ```c
 var bigOrders = from o in Data.Documents.Orders
-                where o.Total > 10000 and o.Date >= BeginOfYear()
+                where o.Total > 10000 && o.Date >= BeginOfYear()
                 select o;
 ```
 
@@ -176,20 +176,22 @@ canonical spelling shown below.
 | `Var` (or implicit) | `Dim`, `Let` |
 
 CES (C-style) and VES (Visual-Basic-style) are two surface modes that
-compile to the same bytecode. **CES is the default for new configurations**
-since 2026-05-10. Pick CES unless the existing configuration is already VES.
+compile to the same bytecode. **CES is the default for new applications**
+since 2026-05-10. Pick CES unless the existing application is already VES.
 A code-style gate hides VES-only block fences (`Then` / `Do` / `End*`) when
 CES is active — they read as ordinary identifiers there, so do not mix VES
 fences into CES modules.
 
 ```c
-// CES (default for new configs)
+// CES (default for new applications) — compares and joins as C does: == != && || ! %
 function Compute(x) { return x * 2; }
 foreach (item in items) { Message(item.Name); }
+if (qty == 0 || !found) return;
 
-// VES (legacy / existing configs)
+// VES (legacy / existing applications) — with words: = <> And Or Not Mod
 Function Compute(x) Return x * 2 EndFunction
 Foreach item In items Do Message(item.Name) EndDo
+If qty = 0 Or Not found Then Return; EndIf
 ```
 
 ### 4.4 Designer = compile-only; runtime fetches data
@@ -212,15 +214,15 @@ happen. When generating control logic, remember:
 You can read metadata properties from any script: `meta =
 Document.Invoice.Metadata; Message(meta.Synonym);`. You cannot
 mutate metadata at runtime. To change a metaobject's properties,
-edit the metadata source (Designer or your generated config) and
+edit the metadata source (Designer or your generated application) and
 re-deploy. There is no `SetSynonym(...)` in script.
 
 ### 4.6 Captions — every declared language, in one string
 
 A caption (a synonym, a template cell's text, a report variant's name) is written in
-**every language the configuration declares**, as one string:
+**every language the application declares**, as one string:
 `en = 'Employee'; de = 'Mitarbeiter'; fr = 'Employé';` — an apostrophe inside a text is
-doubled (`en = 'the document''s date';`). A caption sent bare fills only the configuration's
+doubled (`en = 'the document''s date';`). A caption sent bare fills only the application's
 own language, and a word of another language sent that way is stored as the English caption; the MCP tools
 refuse it while more than one language is declared. What a module builds — a message, a sheet
 title, a month name — goes through `Tstr` with the same form (`Tstr(text)` reads the user's
@@ -245,21 +247,21 @@ The 13 metaobject types and their script-side namespace:
 | `ChartOfCharacteristicTypes` | `ChartsOfCharacteristicTypes.<Name>` | The KINDS an account dimension can be, each narrowing what values it admits |
 | `ChartOfCalculationTypes` | `ChartsOfCalculationTypes.<Name>` | The calculation TYPES a calculation register records (salary, bonus, sick leave, income tax) and how they interact — three relation sections on every type: `Displacing`, `Base`, `Leading` |
 | `CalculationRegister` | `CalculationRegisters.<Name>` | Calculation RESULTS (payroll accruals, deductions): records in force over days, cut by the types that displace them, computed on a base of other types, marked for recalculation when what they were computed from changes. Bound to exactly one chart of calculation types; always subordinate to a recorder |
-| `DataProcessor` | `DataProcessors.<Name>` | Interactive tooling (utilities, batch operations) |
+| `DataTool` | `DataTools.<Name>` | Interactive tooling (utilities, batch operations) |
 | `Report` | `Reports.<Name>` | Read-only output (analytics, statements) |
 
-Two further global namespaces exist for the external (out-of-configuration) variants:
-`ExternalDataProcessors.<Name>` and `ExternalReports.<Name>`. The full registered set is the
+Two further global namespaces exist for the external (out-of-application) variants:
+`ExternalDataTools.<Name>` and `ExternalReports.<Name>`. The full registered set is the
 `AppendProp` list in `backend/moduleManager/globalContextManager.cpp` — 20 namespaces (the 15
-metaobject ones plus `Sequences`, `ScheduledJobs`, `SessionParameters`, `FunctionalOptions` and
+metaobject ones plus `Sequences`, `ScheduledJobs`, `SessionParameters`, `FeatureOptions` and
 `BackgroundJobs`). The LINQ door has the same kinds under
 `Data.` — `Data.CalculationRegisters.<Name>`, `Data.ChartsOfCalculationTypes.<Name>`.
 
-Configuration is serialized through the `ibDataNode` tree: in storage as the node's own bytes
+Application is serialized through the `ibDataNode` tree: in storage as the node's own bytes
 (`ibBinaryProvider`), and as a directory of text files that loads back (`ibFileProvider`, see
-[configuration-files.md](public/configuration-files.md)). The JSON view of one node
-(`ibJsonProvider`) is lossy by design — read it, do not load a configuration from it. See
-`docs/private/configuration-compare.md` for the Compare/Merge feature.
+[application-files.md](public/application-files.md)). The JSON view of one node
+(`ibJsonProvider`) is lossy by design — read it, do not load an application from it. See
+`docs/private/application-compare.md` for the Compare/Merge feature.
 
 ### 5.1 Calculation register — what a generator must get right
 
@@ -515,14 +517,14 @@ Mapping common ERP / business-application concepts to their OES form:
 | Hours / work days of a schedule over a record's periods (the norm, what displacement leaves of it, the month's) | `CalculationRegister.<Reg>.ScheduleData` | One row per record; bind the `Schedule` first |
 | Base of a dependent calculation (e.g. bonus on salary) | `line.GetBase(Resources, Dimensions, Sections)` / `CalculationRegisters.<Reg>.GetBase(Filter, Resources, Dimensions, Sections)`; in a query `CalculationRegister.<Reg>.Base<BaseReg>` | Stored records only; types from the chart's `Base` section only |
 | Fixed-value enum | Enumeration | Closed set; no runtime add |
-| Singleton config value | Constant | One row, one value, typed |
-| Interactive utility / batch tool | DataProcessor | Forms + script, no persisted business data |
+| Singleton application value | Constant | One row, one value, typed |
+| Interactive utility / batch tool | DataTool | Forms + script, no persisted business data |
 | Read-only analytical output | Report | Form + LINQ / register query |
 | Save an object | `object.Write()` | Record-locks enforced; see `docs/private/record-locks.md` |
 | Add an accounting movement | `document.RegisterRecords.<RegisterName>.Add()` | Built 2026-08-13; see `accounting-register-arc.md`, `register-totals-strategy.md` |
 | Built-in query language | LINQ block / chain syntax | `from ... where ... select`; see `docs/private/linq.md` |
 | Document posting handler | `Procedure Posting(Cancel, PostingMode)` in the Document's object module; `UndoPosting(Cancel)` for undoing | Writes register movements. The name is the engine's: a procedure under any other name (`OnPosting`) is never called, and the document posts with no movements and no error |
-| What becomes of a document's movements when it is posted again or its posting undone | the document's property `RegisterRecordsDeletion` | `Automatically` (default) — cleared before the posting handler runs and when the posting is undone; `OnUndoPosting` — kept when posted again (a set the handler fills replaces its own), cleared on undo; `Never` — the platform clears nothing on either, the configuration does. A deleted document takes its movements with it whatever the property says. A write is a clearing and a writing: nothing compares the old movements with the new |
+| What becomes of a document's movements when it is posted again or its posting undone | the document's property `RegisterRecordsDeletion` | `Automatically` (default) — cleared before the posting handler runs and when the posting is undone; `OnUndoPosting` — kept when posted again (a set the handler fills replaces its own), cleared on undo; `Never` — the platform clears nothing on either, the application does. A deleted document takes its movements with it whatever the property says. A write is a clearing and a writing: nothing compares the old movements with the new |
 | Document date | `document.Date` | `ibDateTime` type |
 | Data-composition / pivot system | L5 data composer | Declarative filter/sort/grouping rendered into a query; see `docs/private/data-composer.md` |
 | Form model | Form / VisualHost | Single form layer, on the server (`frmserver.dll`); the same form is drawn by the thin client and the browser |
@@ -542,15 +544,15 @@ organisation (an empty folder for everyone else — [README.md](README.md)).
 | Project bootstrap, layers, modules | [ARCHITECTURE.md](ARCHITECTURE.md) | |
 | Build / clone / submodules | [BUILD.md](BUILD.md) | |
 | Working with an assistant over MCP | [ai-quickstart.md](public/ai-quickstart.md) | |
-| A configuration as text files | [configuration-files.md](public/configuration-files.md) | |
-| Configuration Compare / Merge (`.oap`) | | `private/configuration-compare.md` |
+| An application as text files | [application-files.md](public/application-files.md) | |
+| Application Compare / Merge (`.oap`) | | `private/application-compare.md` |
 | OES script — full language | | `private/script-language.md`, `private/lambda.md`, `private/closure-capture.md`, `private/linq.md`, `private/eval-scope-refactor.md` |
 | Script API: numbers, dates, JSON, XML, HTTP | [number-model.md](public/number-model.md), [date-model.md](public/date-model.md), [json.md](public/json.md), [xml.md](public/xml.md), [http-client.md](public/http-client.md) | `private/system-functions.md`, `private/fnumber.md` |
-| Event handlers, functional options | [event-handlers.md](public/event-handlers.md), [functional-options.md](public/functional-options.md) | |
+| Event handlers, feature options | [event-handlers.md](public/event-handlers.md), [feature-options.md](public/feature-options.md) | |
 | Query language / L2–L5 engine (LINQ → SQL) | [query-language.md](public/query-language.md) | `private/query-engine-layers.md`, `private/query-language-arc.md` |
 | Data composition (L5 filter/sort/group), reports | [reports.md](public/reports.md) | `private/data-composer.md`, `private/ram-composer-decoupling.md`, `private/report-engine.md` |
 | Roles, rights, row-level security (`restrict`) | [access-rights.md](public/access-rights.md) | `private/access-policy-rls.md`, `private/data-policy-arc.md` |
-| Applying a configuration to the database | [applying-a-configuration.md](public/applying-a-configuration.md) | `private/schema-authority.md` |
+| Applying an application to the database | [applying-an-application.md](public/applying-an-application.md) | `private/schema-authority.md` |
 | Application cluster, one base per process | [application-cluster.md](public/application-cluster.md) | `private/appcluster.md` |
 | Jobs: platform, scheduled, background | [jobs.md](public/jobs.md) | `private/job-manager.md`, `private/scheduled-jobs.md` |
 | Debugger | [debugger.md](public/debugger.md) | `private/debugger-architecture.md`, `private/debugger-per-session.md` |
@@ -577,10 +579,10 @@ organisation (an empty folder for everyone else — [README.md](README.md)).
 
 ## 8. Self-test path before submitting
 
-Before declaring "done", verify your generated configuration:
+Before declaring "done", verify your generated application:
 
 ```
-1. Load the config (appstudio.exe / appworkspace.exe)
+1. Load the application (appstudio.exe / appworkspace.exe)
      — metadata consistency: bindings resolve, no orphan refs,
        attribute types valid, predefined-attribute subclass lists
        are additive.
@@ -589,9 +591,9 @@ Before declaring "done", verify your generated configuration:
      — standalone GUI script runner (NO metadata, NO CLI flags):
        write a script in the editor and run it to smoke-test pure
        computations / language constructs. It cannot reference your
-       config's metaobjects.
+       application's metaobjects.
 
-3. appstudio.exe --file=<config-path>
+3. appstudio.exe --file=<application-path>
      — open in Designer for visual review and live debugging.
        Press F5 to start the thin client (appworkspace.exe) against the same DB; run
        postings / reports there against test data.
@@ -620,9 +622,9 @@ Stop and surface the issue rather than guessing:
 | Need to modify C++ source | Out of AI scope; needs human review for invariant preservation |
 | Need to add a plugin (.dll) | Same as above |
 | Schema change touches an existing populated table | Migration semantics need human judgement |
-| Cross-driver SQL portability concern (FB→PG fall-back) | `ibDialectDictionary` is partial; per-config workarounds need review |
+| Cross-driver SQL portability concern (FB→PG fall-back) | `ibDialectDictionary` is partial; per-application workarounds need review |
 | Conflicting requirements from BA prose | Loop with the analyst, not guess |
-| Existing config has VES syntax — should new module also be VES? | Confirm style consistency before mixing |
+| Existing application has VES syntax — should new module also be VES? | Confirm style consistency before mixing |
 | Performance / concurrency design decision | Architect picks (e.g. trigger-maintained totals vs LIVE aggregation) |
 | Security / access-rights model — new role definition | Architect approves before propagating |
 

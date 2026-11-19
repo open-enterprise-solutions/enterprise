@@ -1,10 +1,10 @@
 ////////////////////////////////////////////////////////////////////////////
 //	Description : Git service — a thin, GUI-free wrapper over the `git` CLI for
-//	              version-controlling a configuration working copy from the
+//	              version-controlling an application working copy from the
 //	              Designer. Lives in the backend (wxBase only) so the Designer,
 //	              the daemon, and the future web client can all reuse it.
 //
-//	Workflow it serves: the Designer exports the configuration to a working dir
+//	Workflow it serves: the Designer exports the application to a working dir
 //	as OES-XML / OES-JSON (already supported), git tracks those text files, and
 //	this service drives status / diff / commit / branch / push-pull from the IDE.
 ////////////////////////////////////////////////////////////////////////////
@@ -43,7 +43,7 @@ struct ibGitLogEntry {
 
 class BACKEND_API ibGitService {
 public:
-	// `workdir` is the configuration working copy (where XML/JSON is exported).
+	// `workdir` is the application working copy (where XML/JSON is exported).
 	explicit ibGitService(const ibString& workdir);
 
 	// `git` reachable on PATH at all?

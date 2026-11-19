@@ -273,7 +273,7 @@ public:
 	// ⭐ AND THE GUARD IS NOT A COMPROMISE, IT IS THE FACT. Of the 56 system types, 52 already
 	// carry an empty form — deliberately, and some say so in their own comment. The four that do
 	// not are one family: a value that exists only against its owner (a module unit, a list row,
-	// a runtime configuration manager), and ibValueModuleUnit states the reason in writing —
+	// a runtime application manager), and ibValueModuleUnit states the reason in writing —
 	// a managerless one "can only fail to resolve every name outside itself", and the variant
 	// that allowed it was REMOVED. Forcing a constructor on those would undo a decision; asking
 	// the type whether it HAS an empty form asks exactly the right question.
@@ -336,7 +336,7 @@ ENUM_TYPE_REGISTER_3(class_info, class_name, enum_to_clsid(class_name))
 #define ENUM_TYPE_REGISTER(...) IB_DISPATCH(ENUM_TYPE_REGISTER_, __VA_ARGS__)
 
 // A CONTEXT TYPE's object (EnumManager, SystemManager) is MADE for whoever asks — a module manager, for its main module —
-// never kept in here: one object per process was every session's and every configuration's at once, and 1000 sessions
+// never kept in here: one object per process was every session's and every application's at once, and 1000 sessions
 // raced on it (2026-10-20).
 template <std::derived_from<ibValue> T>
 class ibCtorContextType : public ibCtorSingleType {

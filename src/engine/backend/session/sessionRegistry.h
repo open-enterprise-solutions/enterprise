@@ -66,13 +66,13 @@ class BACKEND_API ibSessionRegistryConnectionHolder : public ibSingleConnectionH
 // strict descending-priority order.
 // -------------------------------------------------------------------
 enum class ibRegistryRequestKind {
-	Add,           // register a newly-constructed session (anonymous or creds-bound)
-	Attach,        // bind user identity to an already-Added session
-	Detach,        // drop user identity, session stays Anonymous
-	Remove,        // teardown — DELETE row, release lock, drop from m_own
-	SetActivity,   // update currentActivity column (scripts / handlers)
-	SetTokenHash,  // update tokenHash column — a thin client's resume token, its digest (ibSession::SetTokenHash)
-	SetExclusive,  // acquire/release process-wide exclusive (monopoly) mode
+	Add,            // register a newly-constructed session (anonymous or creds-bound)
+	Attach,         // bind user identity to an already-Added session
+	Detach,         // drop user identity, session stays Anonymous
+	Remove,         // teardown — DELETE row, release lock, drop from m_own
+	SetActivity,    // update currentActivity column (scripts / handlers)
+	SetTokenHash,   // update tokenHash column — a thin client's resume token, its digest (ibSession::SetTokenHash)
+	SetSingleUser,  // acquire/release process-wide single-user (monopoly) mode
 };
 
 struct BACKEND_API ibRegistryRequest {
@@ -91,8 +91,8 @@ struct BACKEND_API ibRegistryRequest {
 	ibString                            tokenHash;
 	std::shared_ptr<std::promise<bool>> written;
 
-	// SetExclusive payload — true acquires, false releases.
-	bool     exclusiveOn = false;
+	// SetSingleUser payload — true acquires, false releases.
+	bool     singleUserOn = false;
 };
 
 // -------------------------------------------------------------------
@@ -189,7 +189,7 @@ public:
 	// equals `mm`. Used by mm::CreateMainModule to recover its owning
 	// session deterministically (without going through ibSession::Current()
 	// which depends on the thread-binding state).
-	ibSessionWatch FindSessionByRoot(ibValueModuleManagerRuntimeConfiguration* mm) const;
+	ibSessionWatch FindSessionByRoot(ibValueModuleManagerRuntimeApplication* mm) const;
 
 	// Symmetric lookup by main-window pointer. The frame's own back-link
 	// is the cheap path; this is for backend code that has the frame
@@ -252,7 +252,7 @@ public:
 	// nobody reads. Imitating the session is the right answer there, not creating the table.
 	//
 	// Unlisted, and this base's all the same: the registry owns it and the base's pool gives its
-	// connection, as for a listed one (Connect). A session of no base makes a configuration of none.
+	// connection, as for a listed one (Connect). A session of no base makes an application of none.
 	//
 	// Ownership: the caller hands over a freshly built session and gets the only holder for
 	// it back, exactly as the registered factories do.
@@ -272,7 +272,7 @@ public:
 	// Start the consumer thread — sys_session ownership on and the policies
 	// added first. No-op if already running. Invariant: must be called
 	// once — and only once — before any Submit(): by its base as it opens
-	// (ibApplicationInstance::Open), after the configuration, before the jobs.
+	// (ibApplicationInstance::Open), after the application, before the jobs.
 	void Start();
 
 	// Signal stop, wake the thread, join it. The kill-switch — submits
@@ -331,7 +331,7 @@ public:
 	// across all processes / machines. Refreshed by JobRefreshSnapshot
 	// every sweep tick (~3s) and after every batch of requests that
 	// wrote rows (a session added, attached, detached, removed, made
-	// exclusive), so a session that has just come or gone is seen at
+	// single-user), so a session that has just come or gone is seen at
 	// once. Caller UI (Active Users dialog,
 	// admin endpoint) polls this; no blocking on the registry thread.
 	// Returns an empty array before the first refresh or when
@@ -351,7 +351,7 @@ public:
 	// the question is ASKED instead of waited out: the named rows are watched, a row that moves has an owner,
 	// and one that stands still until its last beat is as old as the sweep's own cutoff has none — it is
 	// removed then (the sweep's own DELETE), not at the sweep's next tick, and the snapshot refreshed. Returns
-	// how many went. REGISTRY THREAD ONLY — a policy (ProcessAdd) or ProcessSetExclusive asks it.
+	// how many went. REGISTRY THREAD ONLY — a policy (ProcessAdd) or ProcessSetSingleUser asks it.
 	size_t SettleSilentPeers(const std::vector<ibString>& peers);
 
 	// THE ONE SILENCE, in seconds of lastActive: a row whose last beat is this old has no owner. The sweep and
@@ -543,16 +543,16 @@ private:
 	void ProcessRemove(ibRegistryRequest& req);
 	void ProcessSetActivity(ibRegistryRequest& req);
 	void ProcessSetTokenHash(ibRegistryRequest& req);
-	void ProcessSetExclusive(ibRegistryRequest& req);
+	void ProcessSetSingleUser(ibRegistryRequest& req);
 
-	// Drains m_pendingExclusive — called from ProcessSetExclusive(off)
+	// Drains m_pendingSingleUser — called from ProcessSetSingleUser(off)
 	// and from ProcessRemove when the leaving session was the holder.
 	// Re-runs ProcessAdd on each parked request; if the request belongs
 	// to a session whose Created state has expired (timed out producer)
 	// the Add is harmless — Transition tries to move past Created
 	// regardless and the producer's WaitForState will already have
 	// returned Timeout.
-	void DrainPendingExclusive();
+	void DrainPendingSingleUser();
 
 	// Periodic jobs, driven from ThreadBody: refresh/heartbeat every 1 s,
 	// stale sweep every 3 s (kRefreshInterval / kSweepInterval).
@@ -590,25 +590,25 @@ public:
 		return m_reloadRequested.exchange(false, std::memory_order_acq_rel);
 	}
 
-	// Process-wide "is anyone exclusive?" — read by appData->ExclusiveMode()
+	// Process-wide "does anyone hold single-user mode?" — read by appData->SingleUserMode()
 	// facade. weak_ptr expiration check under shared lock, snapshot-style.
-	// Cluster-aware variant (sys_session.exclusive column) lands separately.
-	bool HasExclusiveSession() const {
-		std::shared_lock<std::shared_mutex> lk(m_exclusiveMutex);
-		return !m_exclusiveSession.expired();
+	// Cluster-aware variant (sys_session.singleUser column) lands separately.
+	bool HasSingleUserSession() const {
+		std::shared_lock<std::shared_mutex> lk(m_singleUserMutex);
+		return !m_singleUserSession.expired();
 	}
 
-	// Synchronous acquire/release of exclusive (monopoly) mode for the
-	// given session. Submits SetExclusive@Normal through the queue and
-	// blocks the caller until ProcessSetExclusive runs and writes the
-	// outcome back. Returns the verdict; ibSession::SetExclusive (the
+	// Synchronous acquire/release of single-user (monopoly) mode for the
+	// given session. Submits SetSingleUser@Normal through the queue and
+	// blocks the caller until ProcessSetSingleUser runs and writes the
+	// outcome back. Returns the verdict; ibSession::SetSingleUser (the
 	// script-facing path) maps this to ibBackendCoreException for
 	// non-Granted results.
 	//
 	//   on=true  → Granted iff this session is the sole live one and no
-	//              other session currently holds exclusive.
+	//              other session currently holds the mode.
 	//   on=false → always Granted (idempotent release).
-	ibSession::ibExclusiveResult SetExclusive(ibSession* session, bool on);
+	ibSession::ibSingleUserResult SetSingleUser(ibSession* session, bool on);
 
 private:
 
@@ -699,19 +699,19 @@ private:
 	mutable std::shared_mutex                                    m_serverMutex;
 	std::weak_ptr<ibSession>                                     m_currentServer;
 
-	// --- exclusive (monopoly) mode ---
+	// --- single-user (monopoly) mode ---
 	// Current holder. Writes happen on the registry thread (ProcessAdd /
-	// ProcessRemove / ProcessSetExclusive); the only cross-thread reader is
-	// HasExclusiveSession via appData->ExclusiveMode(). weak_ptr (not raw)
+	// ProcessRemove / ProcessSetSingleUser); the only cross-thread reader is
+	// HasSingleUserSession via appData->SingleUserMode(). weak_ptr (not raw)
 	// so a holder destroyed without an explicit release expires harmlessly;
 	// a dedicated shared_mutex guards weak_ptr's non-atomic members.
-	mutable std::shared_mutex                                    m_exclusiveMutex;
-	std::weak_ptr<ibSession>                                     m_exclusiveSession;
+	mutable std::shared_mutex                                    m_singleUserMutex;
+	std::weak_ptr<ibSession>                                     m_singleUserSession;
 
-	// Adds parked while m_exclusiveSession is held by another session.
-	// Drained on release (ProcessSetExclusive(off) or holder's Remove).
+	// Adds parked while m_singleUserSession is held by another session.
+	// Drained on release (ProcessSetSingleUser(off) or holder's Remove).
 	// Single-threaded access (registry consumer only), so no mutex.
-	std::deque<ibRegistryRequest>                                m_pendingExclusive;
+	std::deque<ibRegistryRequest>                                m_pendingSingleUser;
 
 	// --- sys_session ownership ----
 	// Off by default — handlers only drive state transitions. Start turns
@@ -778,17 +778,6 @@ private:
 	//     reconnect and re-heartbeat before any pruning happens.
 	std::atomic<bool>                            m_refreshFailedLastTick { false };
 
-	// ⭐ DOES THIS SCHEMA CARRY `kind` AND `exclusive`? 0 = not asked yet, 1 = yes, -1 = legacy.
-	//
-	// The snapshot refresh used to answer it EVERY TICK, by reading the whole session table three
-	// times — once for the base columns and once more for each optional one, each in its own
-	// try/catch so a missing column could not kill the snapshot. Correct, and paid for once a
-	// second, forever: an idle designer made three full scans and an UPDATE every second, which is
-	// what the technology journal showed the first evening it existed (61 of each in one sitting).
-	//
-	// A schema does not gain or lose a column while the process runs, so the question is asked once
-	// and the answer kept. After that the common case is ONE read.
-	std::atomic<int>                             m_sessionHasOptionalColumns { 0 };
 	std::atomic<std::int64_t>                    m_sweepSuppressUntilMs  { 0 };
 
 	// Priority bins — one deque per ibPriority value. Drain iterates

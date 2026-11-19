@@ -12,8 +12,8 @@
 #include "backend/metaCollection/metaGroups.h"         // ibMetaTypeCaption — the caption names the source's kind
 #include "backend/metaCollection/partial/reference/reference.h"   // ibValueReferenceDataObject — GetItemKey row guid
 #include "core/serialize/dataBuilder.h"            // ibDataNode (object-level save/load)
-#include "backend/backend_composition.h"             // ibBackendCompositionDescriptionMemory — read against its configuration
-#include "backend/metadataConfiguration.h"            // ibMetaDataConfigurationBase (GetSourceMetaData)
+#include "backend/backend_composition.h"             // ibBackendCompositionDescriptionMemory — read against its application
+#include "backend/metadataApplication.h"              // ibMetaDataApplicationBase (GetSourceMetaData)
 #include "core/picturePredefined.h"                // g_picRowFolderCLSID — what a grouping's heading wears
 
 #include <algorithm>                                  // std::find — a name's id already taken in the query's columns
@@ -168,17 +168,17 @@ ibValueDynamicList::ibValueDynamicList(const std::shared_ptr<const ibBackendQuer
 	: ibValueModelCursor(), ibSourceDataObject(),
 	  m_columns(nullptr), m_view(view)
 {
-	// ⚠ THE SOURCE'S OWN CONFIGURATION FIRST, the ACTIVE one only if there is no source to ask. A
-	// queryable lives in the configuration it was created in — the edited one in the designer, the
-	// copy's own on a copy — and resolving against the active configuration there would answer with
+	// ⚠ THE SOURCE'S OWN APPLICATION FIRST, the ACTIVE one only if there is no source to ask. A
+	// queryable lives in the application it was created in — the edited one in the designer, the
+	// copy's own on a copy — and resolving against the active application there would answer with
 	// somebody else's tables.
 	//
-	// ⚠⚠ A LIST BELONGING TO A CONFIGURATION MUST NEVER FALL BACK TO THE ACTIVE ONE — it would see THE
-	// WRONG TABLES. Two configurations are open in the designer at once, and the active one is not
+	// ⚠⚠ A LIST BELONGING TO AN APPLICATION MUST NEVER FALL BACK TO THE ACTIVE ONE — it would see THE
+	// WRONG TABLES. Two applications are open in the designer at once, and the active one is not
 	// necessarily this object's; a name resolved there answers with somebody else's metadata.
 	//
 	// The line below is INSURANCE, not the road: it catches the list CREATED IN CODE
-	// (`New DynamicList()` in a script, one a form builds), which has nowhere to take a configuration
+	// (`New DynamicList()` in a script, one a form builds), which has nowhere to take an application
 	// from and where exactly one is running anyway.
 	if (queryable != nullptr) {
 		if (const ibValueMetaObjectGenericData* mo = queryable->GetSourceMetaObject())
@@ -231,11 +231,11 @@ void ibValueDynamicList::SetSourceQueryable(const std::shared_ptr<const ibBacken
 
 void ibValueDynamicList::RebuildSource()
 {
-	// STORE the source config into the metadata VARIABLE, taken from the VALUE — the picked queryable's metaobject
-	// knows its config (the edited config in the designer, the copy's config on a copy). The list HOLDS it so
+	// STORE the source application into the metadata VARIABLE, taken from the VALUE — the picked queryable's metaobject
+	// knows its application (the edited application in the designer, the copy's application on a copy). The list HOLDS it so
 	// GetSourceMetaData is terminal (it never re-resolves the queryable through m_owner->GetMetaData, which walks the
 	// form → recurses). A metaobject-less source (arbitrary query / register virtual table / not yet picked) leaves
-	// the variable as-is; GetSourceMetaData then falls back to the ACTIVE config.
+	// the variable as-is; GetSourceMetaData then falls back to the ACTIVE application.
 	const std::shared_ptr<const ibBackendQueryable> queryable = GetSourceQueryable();
 	if (queryable != nullptr) {
 		if (const ibValueMetaObjectGenericData* mo = queryable->GetSourceMetaObject())
@@ -249,8 +249,8 @@ void ibValueDynamicList::RebuildSource()
 	// description went to the file without its anchor (Max, 2026-10-13).
 	GetCompositionDesc().m_mainTable = m_propertySource->GetTableId();
 
-	// Thread the stored source config into the composer so an arbitrary-query source (FromText) resolves its by-name
-	// FROM against THIS config, not the global factory. (A metaobject source binds by queryable below — no lookup.)
+	// Thread the stored source application into the composer so an arbitrary-query source (FromText) resolves its by-name
+	// FROM against THIS application, not the global factory. (A metaobject source binds by queryable below — no lookup.)
 	m_composer.SetMetaData(GetSourceMetaData());
 
 	// THE ARBITRARY QUERY, OVER THE MAIN TABLE. The query decides what is READ and therefore which
@@ -266,7 +266,7 @@ void ibValueDynamicList::RebuildSource()
 	if (IsArbitraryQuery()) {
 		m_composer.FromText(GetArbitraryQueryText());
 
-		// The names resolve against the SOURCE's config, the same one the composer was just handed.
+		// The names resolve against the SOURCE's application, the same one the composer was just handed.
 		const ibSourceMetaDataScope scope(GetSourceMetaData());
 		try {
 			ibQueryParser parser;
@@ -322,7 +322,7 @@ ibString ibValueDynamicList::SeedArbitraryQuery() const
 //
 // Taking the arbitrary query away takes its columns with it, and a filter, a sort or a grouping over
 // one of those is left pointing at nothing. Same for a table dropped out of the query, an attribute
-// renamed in the configuration, a metaobject deleted.
+// renamed in the application, a metaobject deleted.
 //
 // ⚠ NOTHING CHASES THE CHANGE. The list re-asks "does this still resolve?" after every rebuild, and
 // what does not, goes. A cleanup hung off the untick would cover the untick and nothing else.
@@ -698,7 +698,7 @@ ibString ibValueDynamicList::GetSourceCaption() const
 
 const ibMetaData* ibValueDynamicList::GetMetaData() const
 {
-	// SELECTION — which config to PICK / resolve a source FROM: the owner FORM's config, via the standard attach
+	// SELECTION — which application to PICK / resolve a source FROM: the owner FORM's application, via the standard attach
 	// chain (holder -> attribute -> form). This is what GetSourceMetaData used to do. The Source picker and the
 	// property factory resolve a source BY NAME through it. Non-cyclic: the form falls back to its SOURCE (this
 	// list) for metadata, and the list's GetSourceMetaData reads from the VALUE (terminal), so the walk ends.
@@ -710,11 +710,11 @@ const ibMetaData* ibValueDynamicList::GetMetaData() const
 
 const ibMetaData* ibValueDynamicList::GetSourceMetaData() const
 {
-	// READ — the STORED source config, captured from the picked queryable's metaobject when the source was set
+	// READ — the STORED source application, captured from the picked queryable's metaobject when the source was set
 	// (RebuildSource: ctor / load / source-change / copy). Returned straight from the field — NO owner-walk, NO
 	// queryable re-resolve (GetSourceQueryable -> GetQueryable re-resolves through m_owner->GetMetaData,
 	// which walks the form → would recurse here). TERMINAL, so a form's metadata may fall back to this list without
-	// looping. Nothing stored yet (no source picked) -> the ACTIVE config. Selection is GetMetaData.
+	// looping. Nothing stored yet (no source picked) -> the ACTIVE application. Selection is GetMetaData.
 	return m_sourceMetaData != nullptr ? m_sourceMetaData : ibApplicationInstance::GetActiveMetaData();
 }
 
@@ -823,7 +823,7 @@ bool ibValueDynamicList::ReadProperty(const ibDataNode& node)
 	// query and the same filter / sort / grouping, with the structure, resources and variants a
 	// report also has left empty. So it reads through the SAME description a report does — the parts
 	// it does not use come back empty rather than being a second format.
-	// …against its own configuration, like a report's (valueDataComposition.cpp): a saved filter
+	// …against its own application, like a report's (valueDataComposition.cpp): a saved filter
 	// compares against references, and only the metadata can build those.
 	//
 	// ⭐ A LIST THAT HAS ITS SOURCE ALREADY KEEPS IT — the main list of an object form, made from the
@@ -905,5 +905,5 @@ VALUE_TYPE_REGISTER(ibValueDynamicList, "DynamicList", g_valueDynamicListCLSID);
 // The row / return-line type. When a choice has NO source-command handler (holder == null →
 // GetItemSelectValue empty), the base ibValueModelReturnLine::GetSelectValue falls back to the row's
 // OWN value (GetValue → this), so its C++ type MUST be in the ctor registry or GetTypeIDByRef asserts.
-// Mirrors the value-table's VL_TVROW registration — missed in the dynamic-list migration.
+// Mirrors the value-table's VL_TROW registration — missed in the dynamic-list migration.
 SYSTEM_TYPE_REGISTER(ibDynamicListReturnLine, "DynamicListRow", system_to_clsid("VL_DLROW"));

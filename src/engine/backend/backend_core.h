@@ -8,7 +8,7 @@
 
 #include "core/build.h"   // GetBuildId / GetBuildStamp
 #include "core/guid.h"
-#include "core/core.h"    // the class ids, the ids of the configuration, the kinds of a value
+#include "core/core.h"    // the class ids, the ids of the application, the kinds of a value
 #include "core/fboolean.h"
 #include "core/fnumber.h"
 #include "core/fdatetime.h"
@@ -45,7 +45,7 @@
 //                container, an item is a leaf.
 //
 // …and one that is no longer offered: ParentOnly — a parent recorded as DATA, the list flat, nothing
-// built on it. A configuration that stored it reads back as it did; nobody chooses it any more (Max,
+// built on it. An application that stored it reads back as it did; nobody chooses it any more (Max,
 // 2026-09-29: "folders, items, and no hierarchy"). The modes were Subordination / Items / FoldersAndItems,
 // and Subordination — the chart's own — was the flat one, so a chart printed as a column of codes.
 //
@@ -129,7 +129,7 @@ enum ibEvalMode : unsigned char {
 	// ⭐ THE SAME KIND AS A WATCH, ONE DEGREE FINER — a reading evaluation, told apart from a watch
 	// only where the two would answer differently. A watch is a question about a RUN and its answer
 	// has to be exact; this is a question about a text somebody is still typing, where a name that
-	// is not there yet is ordinary rather than wrong. So `GetCommonTemplate(<a name nobody typed>)`
+	// is not there yet is ordinary rather than wrong. So `GetSharedTemplate(<a name nobody typed>)`
 	// raises for a watch and hands back an empty template here. Everywhere else it behaves as a
 	// watch does, which is why it sits in this family rather than opening an axis of its own.
 	eval_complete,

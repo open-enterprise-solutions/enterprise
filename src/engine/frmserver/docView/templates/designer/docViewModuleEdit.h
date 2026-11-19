@@ -3,7 +3,7 @@
 
 // A MODULE AS THE DESIGNER EDITS IT — the desktop designer's ibModuleEditDocument and ibModuleEditView
 // (designer/docManager/templates/docViewModuleEditor.h) over a module metaobject: its text in a tab, edited where it is
-// kept — the metaobject — so what is modified and saved is the configuration. The text is fetched by the tab, not
+// kept — the metaobject — so what is modified and saved is the application. The text is fetched by the tab, not
 // drawn: a frame that carried it would send the whole module back in every patch after a keystroke's Change.
 // Not the desktop's names: the client's tab copies them (appstudio), and frmserver is loaded into the client for a
 // file base — one wx class info per name.
@@ -19,10 +19,10 @@ public:
 
 	virtual void OnDraw(ibDataNode& frame) override;
 	virtual ibProtocol::ibView::ibKind GetViewKind() const override { return ibProtocol::ibView::ibKind::Module; }
-	// The text as the metaobject keeps it ({Text}); what the desktop's code editor asked the configuration, by the
+	// The text as the metaobject keeps it ({Text}); what the desktop's code editor asked the application, by the
 	// request's Kind (ibProtocol::ibView::ibModule::ibRequest) — the names at the editor's caret, a call's form, the default procedures.
 	virtual bool Fetch(const ibDataNode& request, ibDataNode& response) override;
-	// Typing started (Input) — the configuration modified, as the desktop's editor marked it on the first key; the
+	// Typing started (Input) — the application modified, as the desktop's editor marked it on the first key; the
 	// text the person typed, handed over (Change {Text}) — the module's from then on; the module checked (Command
 	// {Id: SyntaxControl}).
 	virtual bool OnClientEvent(ibProtocol::ibEvent::ibKind event, const ibDataNode& args) override;
@@ -48,7 +48,7 @@ public:
 	virtual bool Save() override;
 
 	// THE DESKTOP EDITOR'S CHECK (ibCodeEditor::SyntaxControl), where the module is compiled — the session's
-	// configuration: true when it compiles, or when the person goes on past its errors (throwMessage false — asked);
+	// application: true when it compiles, or when the person goes on past its errors (throwMessage false — asked);
 	// throwMessage true says "no errors" too.
 	bool SyntaxControl(bool throwMessage) const;
 

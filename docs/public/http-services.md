@@ -1,6 +1,6 @@
 # HTTP services
 
-**What.** A configuration answers an HTTP request with its own code. An `HTTPService` declares an
+**What.** An application answers an HTTP request with its own code. An `HTTPService` declares an
 address; its `URLTemplate`s declare the paths under it; each template's `HTTPServiceMethod`s say
 which request methods it answers and which function of the service module answers them.
 
@@ -13,7 +13,7 @@ writes over REST, another base pushes its changes. The outbound half is the
 
 | Kind | Properties | Children |
 |---|---|---|
-| `HTTPService` (in the tree's Integration folder, right after Common) | `RootURL` — one segment, unique in the configuration; `ServiceModule` — a manager module of its own | `URLTemplate` |
+| `HTTPService` (in the tree's Integration folder, right after Common) | `RootURL` — one segment, unique in the application; `ServiceModule` — a manager module of its own | `URLTemplate` |
 | `URLTemplate` | `Template` — `/Transfer/{id}/reset`, `/*` | `HTTPServiceMethod` |
 | `HTTPServiceMethod` | `HTTPMethod` — Get, Post, Put, Patch, Delete, Head, Options, or Any; `Handler` — a function of the service module | — |
 
@@ -35,7 +35,7 @@ Function TransferReset(Request) {
 
 The service module is prepared with one such function per method, named by its `Handler` (a new
 method is answered by `<template name><method name>` until it is named otherwise). It is a manager
-module: compiled with the session's modules, so a handler calls common modules as any code does.
+module: compiled with the session's modules, so a handler calls shared modules as any code does.
 
 | Value | Made with | Holds / does |
 |---|---|---|
@@ -49,9 +49,9 @@ The help corpus (`syntaxHelper/*/http.json`) has an article for every member.
 - **What is published is a choice.** A declared service answers nothing until it is registered:
   Administration → Web addresses in the designer, or the MCP `address_register`. The entry names the
   service by its object, so a renamed `RootURL` keeps the address it was registered at.
-- **A method nobody answers is not saved.** The configuration's save refuses a method whose `Handler`
+- **A method nobody answers is not saved.** The application's save refuses a method whose `Handler`
   the service module has no `Function <Handler>(Request)` for, naming `Service.Template.Method`;
-  `config_check` says the same.
+  `app_check` says the same.
 - **A template is segments, each one of three:** a literal (`Transfer`), a parameter (`{id}`, one
   whole segment, handed over in `URLParameters`), or `*` — the rest of the path, nothing included,
   and only as the last segment. Anything else is refused as a template.
@@ -82,7 +82,7 @@ The help corpus (`syntaxHelper/*/http.json`) has an article for every member.
 
 ## Where it stops
 
-- One session per request: nothing is kept between requests. Each brings up every common module
+- One session per request: nothing is kept between requests. Each brings up every shared module
   (read from the bytecode cache) and checks the password anew — PBKDF2, the same cost a person's
   login pays.
 - A body is held in memory, within the web server's 4 MB; nothing is streamed either way.

@@ -8,7 +8,7 @@
 
 class ibMetaData;
 
-// THE APPLICATION'S DATA as the copied windows ask it — it holds no configuration of its own: what an active one would
+// THE APPLICATION'S DATA as the copied windows ask it — it holds no application of its own: what an active one would
 // answer is the server's (a window is handed what it needs, or asks).
 class FRMCLIENT_API ibApplicationData {
 public:

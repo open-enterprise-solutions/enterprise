@@ -354,7 +354,7 @@ void ibReferenceRegistry::Forget(const ibValueReferenceDataObject* ref)
 // reference field, whose eager PrepareRef calls ReadData again, forever -> stack overflow.
 // While a ref identity (type + guid) is already being read up the stack, the nested re-read
 // is skipped (the field keeps its key, loads lazily on demand). A self-reference is a LEGAL
-// config, so this must terminate rather than crash.
+// application, so this must terminate rather than crash.
 //
 // A thread-local stack of identities (each worker reads on its own call stack): push on
 // entry, pop on exit (RAII — correct across the FB exceptions ReadData can throw). A linear
@@ -368,7 +368,7 @@ void ibReferenceRegistry::Forget(const ibValueReferenceDataObject* ref)
 // A fixed buffer has nothing to hand back. It is also trivially destructible, so no TLS
 // destructor is registered at all.
 namespace {
-	// Depth beyond this means a reference graph nested deeper than any real config; the guard
+	// Depth beyond this means a reference graph nested deeper than any real application; the guard
 	// then stops tracking rather than growing. Cycle detection degrades to "not detected" for
 	// those levels, which is the same answer it gave before any of them were pushed.
 	constexpr std::size_t kRefReadDepthMax = 64;
@@ -884,7 +884,7 @@ ibString ibValueReferenceDataObject::GetString() const
 	// ⭐⭐ IN THE DESIGNER A REFERENCE IS A TYPE AND A GUID, AND NOTHING ELSE — "what matters to the
 	// designer is that the reference has a guid, and that's it" (Max, 2026-08-28). There is no row to
 	// read and none is wanted, so the metaobject is asked straight away: it turns the guid into the
-	// form the configuration declares it in. PrepareRef and the found / not-found answers below are
+	// form the application declares it in. PrepareRef and the found / not-found answers below are
 	// statements about DATA, which is not what a reference stands for while one is being WRITTEN.
 	if (appData->DesignerMode()) {
 		ibString declared;
@@ -1126,7 +1126,7 @@ bool ibValueReferenceDataObject::DoSerialize(ibDataNode& node) const
 	// THE metaID, not only the class id.
 	//
 	// A reference's class id is DERIVED from the metaobject's metaID, so within
-	// one configuration either identifies the type. Across configurations they
+	// one application either identifies the type. Across applications they
 	// part company: the same catalog can carry a different id in a copy of the
 	// base, and a stored setting or an exchange parcel then restores a reference
 	// pointing at whatever type happens to hold that id — silently, and to the
@@ -1155,8 +1155,8 @@ bool ibValueReferenceDataObject::DoDeserialize(const ibDataNode& node)
 	// A mismatch means the id landed on a different metaobject in this base —
 	// refuse rather than hand back a reference into the wrong table.
 	//
-	// Absent (0) is not a mismatch: it is a value written before the metaID went
-	// into the payload, and the class id is all it ever had.
+	// Absent (0) is not a mismatch: a value with no metaobject writes none
+	// (DoSerialize above), and the class id is all it has.
 	const ibMetaID storedMetaId = (ibMetaID)node.GetValue<std::int32_t>(ibT("m"));
 	if (storedMetaId != 0 && m_metaObject != nullptr
 		&& storedMetaId != m_metaObject->GetMetaID())

@@ -21,6 +21,7 @@ enum
 };
 
 wxBEGIN_EVENT_TABLE(ibOutputWindow, ibStyledTextCtrl)
+EVT_LEFT_DCLICK(ibOutputWindow::OnDoubleClick)
 EVT_CONTEXT_MENU(ibOutputWindow::OnContextMenu)
 EVT_MENU(idcmdClear, ibOutputWindow::OnClearOutput)
 wxEND_EVENT_TABLE()
@@ -117,11 +118,32 @@ void ibOutputWindow::Output(const wxString& message, ibProtocol::ibFrame::ibMess
 	mainFrame->Update();
 }
 
+void ibOutputWindow::Output(const wxString& message, ibProtocol::ibFrame::ibMessage::ibLevel level,
+	const wxString& file, const wxString& module, int line)
+{
+	const int first = GetLineCount() - 1;
+	Output(message, level);
+	m_places[first] = Place{ file, module, line, GetLineCount() - 2 };
+}
+
 void ibOutputWindow::Clear()
 {
+	m_places.clear();
+
 	SetEditable(true);
 	ibStyledTextCtrl::ClearAll();
 	SetEditable(false);
+}
+
+void ibOutputWindow::OnDoubleClick(wxMouseEvent& event)
+{
+	// The message the line belongs to — the last one begun at or above it, if it reaches down to it.
+	const int row = LineFromPosition(PositionFromPoint(event.GetPosition()));
+	auto found = m_places.upper_bound(row);
+	if (found != m_places.begin() && row <= (--found)->second.last)
+		mainFrame->EditModule(found->second.file, ibGuid(found->second.module), found->second.line);
+
+	event.Skip();
 }
 
 void ibOutputWindow::OnContextMenu(wxContextMenuEvent& event)

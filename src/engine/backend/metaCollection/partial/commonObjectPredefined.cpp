@@ -1,7 +1,7 @@
 ////////////////////////////////////////////////////////////////////////////
 //	Author		: Maxim Kornienko
 //	Description : the record families' PREDEFINED ITEMS - declared, checked against the columns their kind
-//	              offers, written with the configuration and read back
+//	              offers, written with the application and read back
 //
 //	The items are one description the object keeps (m_predefinedDesc, core/description/predefinedDescription.h); what
 //	an item is entered with is read off the tables the object declares and written into it (GetPredefinedDesc). The
@@ -52,8 +52,8 @@ ibPredefinedCellDescription Adjusted(const ibMetaData* metaData, const ibValueMe
 }
 
 // ⭐ THE CODE A NEW ITEM IS GIVEN — the one after the greatest its kind declares, spelled as a written item's code is
-// (GenerateIdentifier). Asked of the declaration alone: what some base holds is no business of a configuration, and a
-// configuration numbers its own items as they are added (Max, 2026-11-02). A code that is not a whole number (`60.01`)
+// (GenerateIdentifier). Asked of the declaration alone: what some base holds is no business of an application, and a
+// application numbers its own items as they are added (Max, 2026-11-02). A code that is not a whole number (`60.01`)
 // is no counter and is passed over. A value of the code's type (#646); nothing reads in it where the kind has no code.
 ibPredefinedCellDescription NextPredefinedCode(const ibValueMetaObjectRecordDataHierarchyMutableRef& owner)
 {
@@ -104,7 +104,7 @@ ibPredefinedChoiceDescription DescribeChoice(const ibValue& value, const ibStrin
 	return choice;
 }
 
-// A DECLARED VALUE OF A REFERENCE, as a configuration holds one (ibValueCompositionPredefined): the metaobject, which of its
+// A DECLARED VALUE OF A REFERENCE, as an application holds one (ibValueCompositionPredefined): the metaobject, which of its
 // declared values, and how it reads — written as the designer's selector writes it (selectPredefined.cpp).
 ibValue DeclaredValue(const ibValueMetaObjectRecordDataRef* recordRef, const ibGuid& guid, const ibString& name)
 {
@@ -124,7 +124,7 @@ bool SameValue(const ibValue& given, const ibValue& offered)
 
 // ONE ATTRIBUTE AS THE FORM ASKS FOR IT: its name, its caption, its type, and the closed set it is chosen from — an
 // enumeration's members, and the values the references it admits declare (their predefined items, their members). A
-// configuration declares only what it declares, so a reference names nothing else.
+// application declares only what it declares, so a reference names nothing else.
 ibPredefinedAttributeDescription Describe(const ibMetaData* metaData, const ibValueMetaObjectAttributeBase* attribute)
 {
 	ibPredefinedAttributeDescription described;
@@ -135,7 +135,7 @@ ibPredefinedAttributeDescription Describe(const ibMetaData* metaData, const ibVa
 	described.m_type = attribute->GetTypeDesc();
 	described.m_holdsType = described.m_type.ContainType(g_valueTypeDescriptionCLSID);
 	if (described.m_holdsType)
-		ibBackendTypeConfigFactory::GetTypesByFilter(ibSelectorDataType::ibSelectorDataType_any, metaData, described.m_offered);
+		ibBackendTypeApplicationFactory::GetTypesByFilter(ibSelectorDataType::ibSelectorDataType_any, metaData, described.m_offered);
 	described.m_required = attribute->FillCheck();
 
 	for (const ibClassID& clsid : described.m_type.GetClsidList()) {
@@ -164,7 +164,7 @@ ibPredefinedAttributeDescription Describe(const ibMetaData* metaData, const ibVa
 
 	// ⭐ WHAT A NEW ITEM DECLARES WHERE IT MUST DECLARE — the attribute's own default, as the set carries it: of a closed
 	// set, the member it is (a declaration, never the live value); a value ticked or typed, itself. A type is picked, and
-	// so is a reference outside any set: a live one is runtime, and a configuration holds none.
+	// so is a reference outside any set: a live one is runtime, and an application holds none.
 	if (described.m_required && !described.m_holdsType) {
 		const ibValue defaulted = attribute->CreateValue();
 		const ibValueTypes held = defaulted.GetType();
@@ -183,7 +183,7 @@ ibPredefinedAttributeDescription Describe(const ibMetaData* metaData, const ibVa
 // ⭐ A VALUE THE ATTRIBUTE MAY BE GIVEN, or a refusal naming the item, the attribute and the value: one of the closed set
 // where the value is of a kind the set is made of, a type inside the offered ones, a value of the attribute's type
 // otherwise. ⚠ The set closes only its own kind: an attribute that holds a number OR an account takes any number, and a
-// declared reference is one of the set or nothing — the item it named may have left the configuration since.
+// declared reference is one of the set or nothing — the item it named may have left the application since.
 void CheckDeclaredValue(const ibMetaData* metaData, const ibString& item, const ibPredefinedAttributeDescription& attribute,
 	const ibPredefinedCellDescription& cell)
 {
@@ -408,7 +408,7 @@ bool ibValueMetaObjectRecordDataHierarchyMutableRef::WriteData(ibDataNode& node)
 
 bool ibValueMetaObjectRecordDataHierarchyMutableRef::ReadData(const ibDataNode& node)
 {
-	// ⭐ WHAT CANNOT BE READ RAISES, naming the object: read as nothing, a damaged configuration would load with items
+	// ⭐ WHAT CANNOT BE READ RAISES, naming the object: read as nothing, a damaged application would load with items
 	// that declare nothing, and the next apply would stop asserting what they declared.
 	const ibDataValue predefined = node.GetProperty(ibT("Predefined"));
 	if (predefined.Kind() != ibDataKind::Empty && !ibPredefinedDescriptionMemory::ReadNode(predefined, m_predefinedDesc))
@@ -422,10 +422,10 @@ bool ibValueMetaObjectRecordDataHierarchyMutableRef::ReadData(const ibDataNode& 
 
 	m_propertyHierarchyType->SetNodeValue(node.GetProperty(m_propertyHierarchyType->GetName()));
 	// Restate it on the Parent field at once: everything that asks what a parent may be asks the
-	// FIELD, so a configuration loaded and never edited must already say what it declares.
+	// FIELD, so an application loaded and never edited must already say what it declares.
 	ApplyHierarchyType();
 
-	// Absent from a configuration saved before it existed: the kind's own default stands (SetNodeValue
+	// Absent from an application saved before it existed: the kind's own default stands (SetNodeValue
 	// leaves an empty value alone) - Description for a catalog, Code for a chart of accounts.
 	m_propertyDataPresentation->SetNodeValue(node.GetProperty(m_propertyDataPresentation->GetName()));
 

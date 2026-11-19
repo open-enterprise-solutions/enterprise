@@ -4,7 +4,7 @@
 
 #include "queryableFactory.h"
 
-#include "backend/appData.h"             // ibApplicationInstance::GetQueryableFactory (the global fallback the per-config factory descends to)
+#include "backend/appData.h"             // ibApplicationInstance::GetQueryableFactory (the global fallback the per-application factory descends to)
 #include "backend/query/queryable.h"     // ibBackendQueryable::GetQueryTableId (IndexById, ResolveDescriptorById)
 #include "backend/compiler/typeCtor.h"   // ibCtorAbstractType::GetClassType — a kind's class, for a source's picture
 
@@ -105,7 +105,7 @@ ibQueryableSourceDescriptor* ibQueryableFactory::FindDescriptor(const ibString& 
 
 std::vector<ibQueryableSourceDescriptor*> ibQueryableFactory::GetDescriptors(ibQueryableSourceKind kind) const
 {
-	// Every one registered here — the platform's are made only by a configuration's factory (ibMetaQueryableFactory).
+	// Every one registered here — the platform's are made only by an application's factory (ibMetaQueryableFactory).
 	std::vector<ibQueryableSourceDescriptor*> result;
 	if (kind == ibQueryableSourceKind::Platform)
 		return result;
@@ -143,7 +143,7 @@ ibQueryableSourceDescriptor* ibQueryableFactory::ResolveDescriptorById(ibMetaID 
 }
 
 //////////////////////////////////////////////////////////////////////
-// ibPlatformSourceRegister — the makers every configuration's factory reads as it is made.
+// ibPlatformSourceRegister — the makers every application's factory reads as it is made.
 //////////////////////////////////////////////////////////////////////
 
 // Asked through a function, not a namespace-scope vector: the registers are statics in other translation units,
@@ -161,7 +161,7 @@ ibPlatformSourceRegister::ibPlatformSourceRegister(ibPlatformSourceMaker maker)
 }
 
 //////////////////////////////////////////////////////////////////////
-// ibMetaQueryableFactory — per-config: own registry FIRST, then DESCEND to the global factory on a miss.
+// ibMetaQueryableFactory — per-application: own registry FIRST, then DESCEND to the global factory on a miss.
 //////////////////////////////////////////////////////////////////////
 
 ibMetaQueryableFactory::ibMetaQueryableFactory(const ibMetaData* metaData)
@@ -192,4 +192,4 @@ ibQueryableSourceDescriptor* ibMetaQueryableFactory::ResolveDescriptorById(ibMet
 }
 
 // (Registration moved to ibMetaData::RegisterSource / UnregisterSource — the metadata is the facade over its own
-//  per-config factory; a metaobject registers via m_metaData->RegisterSource(&m_queryable). See metaData.cpp.)
+//  per-application factory; a metaobject registers via m_metaData->RegisterSource(&m_queryable). See metaData.cpp.)

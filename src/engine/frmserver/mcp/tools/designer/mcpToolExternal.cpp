@@ -1,10 +1,10 @@
 ////////////////////////////////////////////////////////////////////////////
-//	Description : an external data processor or report, handed over and opened where the person sees it
+//	Description : an external data tool or report, handed over and opened where the person sees it
 ////////////////////////////////////////////////////////////////////////////
 //
 // ⭐ THE PERSON'S ROAD, FILE → OPEN AND SAVE. The file is the client's; the server holds what was handed to it, by its
 // name. Its bytes go into the session's temporary storage under that name (the protocol's upload), and the doc manager
-// makes of it the document its extension says (open): in the designer the one that edits it (ibDataProcessorEditDocument,
+// makes of it the document its extension says (open): in the designer the one that edits it (ibDataToolEditDocument,
 // ibReportEditDocument) — a tab and a tree the person sees and can work in beside the assistant; in the application the
 // one that runs it. A save is the person's Save: the document written into its temporary file, whose bytes go back to
 // be kept where the caller keeps the file, as the client takes them down.
@@ -19,7 +19,7 @@
 #include "frmserver/client/clientFrame.h"    // ibClientFrame — whether the application's run showed a window
 #include "frmserver/docView/docView.h"
 #include "frmserver/docView/docManager.h"   // ibDocTemplate — what makes a new one
-#include "frmserver/docView/templates/designer/docViewDataProcessorEdit.h"
+#include "frmserver/docView/templates/designer/docViewDataToolEdit.h"
 #include "frmserver/docView/templates/designer/docViewDataReportEdit.h"
 
 #include "backend/appData.h"
@@ -38,13 +38,13 @@ namespace {
 
 using ibArg = ibMcpTool::ibMcpArgument;
 
-// What a data processor and a report differ in here — the rest is one road.
-struct ibProcessorKind {
-	using Document = ibDataProcessorEditDocument;
+// What a data tool and a report differ in here — the rest is one road.
+struct ibDataToolKind {
+	using Document = ibDataToolEditDocument;
 	static constexpr ibFileKind s_file = ibFileKind::Tool;
-	static ibString Open() { return ibT("external_processor_open"); }
-	static ibString Save() { return ibT("external_processor_save"); }
-	static ibString Word() { return ibMcpText("external data processor"); }
+	static ibString Open() { return ibT("external_data_tool_open"); }
+	static ibString Save() { return ibT("external_data_tool_save"); }
+	static ibString Word() { return ibMcpText("external data tool"); }
 	static ibString Other() { return ibT("external_report_open"); }
 };
 
@@ -54,7 +54,7 @@ struct ibReportKind {
 	static ibString Open() { return ibT("external_report_open"); }
 	static ibString Save() { return ibT("external_report_save"); }
 	static ibString Word() { return ibMcpText("external report"); }
-	static ibString Other() { return ibT("external_processor_open"); }
+	static ibString Other() { return ibT("external_data_tool_open"); }
 };
 
 const ibArg& ArgFile()
@@ -98,7 +98,7 @@ bool IsOfKind(const ibString& file, ibString& refusal)
 void SayExternal(const ibMetaDataDocument* document, ibDataNode& result)
 {
 	const ibMetaData* const metaData = document->GetMetaData();
-	const ibValueMetaObject* const root = metaData->GetCommonMetaObject();
+	const ibValueMetaObject* const root = metaData->GetRootMetaObject();
 	result.SetValue(ibT("file"), metaData->GetFileName());
 	if (root != nullptr) {
 		result.SetValue(ibT("name"), root->GetName());
@@ -110,7 +110,7 @@ void SayExternal(const ibMetaDataDocument* document, ibDataNode& result)
 } // namespace
 
 //---------------------------------------------------------------------------
-// external_processor_open / external_report_open
+// external_data_tool_open / external_report_open
 //---------------------------------------------------------------------------
 template <typename TKind>
 class ibMcpToolExternalOpen : public ibMcpTool {
@@ -130,7 +130,7 @@ public:
 	{
 		return ibString::Format(ibMcpText("Open an %s as File - Open does: its bytes in `data`, under its file name. "
 			"IN THE DESIGNER it gets its tab and its tree, so the person sees what you opened and can work in it too; "
-			"without `data` a new one is made under that name. Change it with the tools that change the configuration - "
+			"without `data` a new one is made under that name. Change it with the tools that change the application - "
 			"metadata_tree, metadata_create, metadata_set, module_write, form_*, sheet_* - passing `file` as "
 			"`metadata`; its NodeIds are its own. %s hands its bytes back, to keep where the file is. The tab is the "
 			"only copy: closed without a save, what was not saved is gone. IN THE APPLICATION it runs - its form opens "
@@ -195,7 +195,7 @@ public:
 				return false;
 			}
 			// …and its open: the document the name says. The application's runs it and is gone once it has
-			// (ibDataProcessorFileDocument::DoOpenDocument) — its form stays, in front of the person. One with no
+			// (ibDataToolFileDocument::DoOpenDocument) — its form stays, in front of the person. One with no
 			// default form runs its module and shows nothing, and the answer says which it was.
 			if (application) {
 				const ibClientFrame* const window = ibClientFrame::GetFrame();
@@ -257,7 +257,7 @@ public:
 };
 
 //---------------------------------------------------------------------------
-// external_processor_save / external_report_save
+// external_data_tool_save / external_report_save
 //---------------------------------------------------------------------------
 template <typename TKind>
 class ibMcpToolExternalSave : public ibMcpTool {
@@ -322,14 +322,14 @@ public:
 	}
 };
 
-using ibMcpToolExternalProcessorOpen = ibMcpToolExternalOpen<ibProcessorKind>;
-using ibMcpToolExternalProcessorSave = ibMcpToolExternalSave<ibProcessorKind>;
+using ibMcpToolExternalDataToolOpen = ibMcpToolExternalOpen<ibDataToolKind>;
+using ibMcpToolExternalDataToolSave = ibMcpToolExternalSave<ibDataToolKind>;
 using ibMcpToolExternalReportOpen = ibMcpToolExternalOpen<ibReportKind>;
 using ibMcpToolExternalReportSave = ibMcpToolExternalSave<ibReportKind>;
 
 // The open is the designer's and the application's both, as File - Open is: the document its name says edits it in one
 // and runs it in the other. The save is the designer's.
-MCP_TOOL_REGISTER(ibMcpToolExternalProcessorOpen);
-MCP_TOOL_REGISTER_DESIGNER(ibMcpToolExternalProcessorSave);
+MCP_TOOL_REGISTER(ibMcpToolExternalDataToolOpen);
+MCP_TOOL_REGISTER_DESIGNER(ibMcpToolExternalDataToolSave);
 MCP_TOOL_REGISTER(ibMcpToolExternalReportOpen);
 MCP_TOOL_REGISTER_DESIGNER(ibMcpToolExternalReportSave);

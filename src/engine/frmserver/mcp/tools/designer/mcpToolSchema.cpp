@@ -23,15 +23,15 @@
 // list's lives on a form and is not a metaobject at all. This is the address, and it is a PATH: the
 // indices of the children to descend, which is what a tree gives you instead of a name.
 //
-// ⚠ AND WRITING IT BACK DOES NOT SAVE THE CONFIGURATION. `schema_write` puts the schema into the
+// ⚠ AND WRITING IT BACK DOES NOT SAVE THE APPLICATION. `schema_write` puts the schema into the
 // form and stops there, because applying is a separate act somebody agrees to (§ 8e.1). What it
-// changes is pending until config_save, exactly like an edit made with a mouse.
+// changes is pending until app_save, exactly like an edit made with a mouse.
 
 #include "frmserver/mcp/mcpTool.h"
 
 #include "core/description/compositionDescription.h"
 #include "backend/metaCollection/metaFormObject.h"
-#include "backend/metadataConfiguration.h"
+#include "backend/metadataApplication.h"
 
 #include <memory>
 
@@ -251,8 +251,8 @@ public:
 			"It REPLACES what is at that path. Not a merge: whatever the old schema had and the new "
 			"one does not is gone.\n"
 			  "\n"
-			"It does NOT save the configuration. What this changes is pending, exactly like an "
-			"edit made with a mouse, until config_save applies it - and config_check says what is "
+			"It does NOT save the application. What this changes is pending, exactly like an "
+			"edit made with a mouse, until app_save applies it - and app_check says what is "
 			"pending before you do.");
 	}
 
@@ -310,8 +310,8 @@ public:
 
 		result.SetValue(ibT("written"), true);
 		result.SetValue(ibT("note"),
-			ibMcpText("Written into the form and NOT saved - config_check says what is now pending, "
-				  "config_save applies it. compose_run with the schema you wrote says what it "
+			ibMcpText("Written into the form and NOT saved - app_check says what is now pending, "
+				  "app_save applies it. compose_run with the schema you wrote says what it "
 				  "answers before you commit to it."));
 		return true;
 	}

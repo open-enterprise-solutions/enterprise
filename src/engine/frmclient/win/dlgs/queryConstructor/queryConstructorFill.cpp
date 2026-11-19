@@ -1058,7 +1058,7 @@ void ibDialogQueryConstructor::FillCatalogue(ibTreeCtrl* tree, bool withFields)
 
 	// THE CATALOGUE IS A WALK. The top level is whatever kinds the factory actually holds, so a
 	// metatype registered tomorrow appears here with nothing edited in this file.
-	// In the order the sources come — the application's as its configuration is read, then the platform's (the provider's,
+	// In the order the sources come — the application's as its application is read, then the platform's (the provider's,
 	// ibMetaQueryableFactory::GetDescriptors). A kind the PLATFORM declares (the registration journal) stands under a
 	// heading of its own, Platform: what `Data.Platform` is in LINQ. A heading, not a segment — the query still writes
 	// `Journal.Events`. Created on demand, as the temporary tables' below.
@@ -1095,7 +1095,7 @@ void ibDialogQueryConstructor::FillCatalogue(ibTreeCtrl* tree, bool withFields)
 		// ⚠ THIN: FILLED WHEN THE TABLE IS OPENED, not here. The desktop fills every table now because
 		// its model answers from the descriptor; here a table's fields are the server's answer (request
 		// Fields), and filling them all made opening the window one call per table in the
-		// configuration. The placeholder gives the [+]; OnFieldTreeExpanding asks once (the model
+		// application. The placeholder gives the [+]; OnFieldTreeExpanding asks once (the model
 		// keeps the answer) — FillCatalogueFields.
 		tree->AppendItem(table, wxT("..."));
 	}
@@ -1796,11 +1796,11 @@ bool ibDialogQueryConstructor::AskEngine(wxString& message) const
 		// back verbatim. It stays silent where it cannot verify (a temp table outside its package, a
 		// nested query's own tables) rather than inventing an error.
 		//
-		// ⚠ INSIDE THE METADATA SCOPE, or it verifies nothing. Sources register on the CONFIG'S own
-		// factory, and the resolver reads that config from ibSourceMetaDataScope — without the scope
+		// ⚠ INSIDE THE METADATA SCOPE, or it verifies nothing. Sources register on the APPLICATION'S own
+		// factory, and the resolver reads that application from ibSourceMetaDataScope — without the scope
 		// it knocks on the global factory, fails to find the metaclass at all, and the check falls
 		// silent by its own "never a false error" rule. Which is exactly how it managed to pass a
-		// query naming a field nothing has. The config was handed to this dialog for precisely this.
+		// query naming a field nothing has. The application was handed to this dialog for precisely this.
 		const ibSourceMetaDataScope resolveAgainst(m_metaData);
 		m_model.CheckNames(read);
 		return true;

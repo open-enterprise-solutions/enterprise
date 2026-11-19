@@ -29,12 +29,12 @@ public:
 	// ONE PROPERTY'S ROW, under `parent` — a property's or an event's, of any object: what it says of itself
 	// (ibBackendProperty::GetProtocolValue); what it may be set to its children (Id, Title, Picture), Multiple; none for
 	// a property with no row. What the rows below are made of — and the header above an external file's tree
-	// (ibDataProcessorTree).
+	// (ibDataToolTree).
 	static void AppendProperty(ibDataNode& parent, ibBackendProperty* property);
 
 	// THE OBJECT SHOWN — the desktop's verb, which took any property object: registered on it, and asked which of its
 	// properties it hides. `id` — what the edit names it by (a metaobject's id, a form control's); `tabId` — the tab it
-	// is in (0: the configuration's tree), said on the rows.
+	// is in (0: the application's tree), said on the rows.
 	void SelectObject(ibPropertyObject* object, ibMetaID id, std::int32_t tabId);
 	// …a metaobject of a tree, by its own id.
 	void SelectObject(ibValueMetaObject* object, std::int32_t tabId);

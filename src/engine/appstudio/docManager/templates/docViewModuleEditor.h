@@ -57,22 +57,22 @@ public:
 
 	explicit ibModuleEditDocument(long long tabId) : ibTabDocument(tabId) {}
 
-	// ⚠ MODIFIED IS THE CONFIGURATION'S, as the view's State says it — not the tab's Save, which a module's tab offers all
+	// ⚠ MODIFIED IS THE APPLICATION'S, as the view's State says it — not the tab's Save, which a module's tab offers all
 	// along (its document never modified, the desktop's either): Save read as "modified" sent no key's Input at all.
 	virtual bool IsModified() const override { return m_modified; }
-	// ⚠ THE FIRST KEY SAYS IT TO THE SERVER — the tab's Input: the configuration modified there, the text handed back
-	// later (SaveModule). Once the configuration is modified, the keys say nothing more.
+	// ⚠ THE FIRST KEY SAYS IT TO THE SERVER — the tab's Input: the application modified there, the text handed back
+	// later (SaveModule). Once the application is modified, the keys say nothing more.
 	virtual void Modify(bool modify) override;
 
 	// What was typed goes before the server saves or closes the tab — as the desktop wrote the module on save.
 	virtual bool Close() override;
 	// …and a module of an external file is saved as the file is, by the tab of it — its parent, where the person keeps
-	// it: the desktop's Save went to the parent first (ibMetaDocument::Save). A module of the configuration has none.
+	// it: the desktop's Save went to the parent first (ibMetaDocument::Save). A module of the application has none.
 	virtual bool Save() override;
 	virtual bool SaveAs() override;
 
-	// The view's State: the syntax the module is written in, read-only where the configuration may not be edited, and
-	// whether the configuration is modified.
+	// The view's State: the syntax the module is written in, read-only where the application may not be edited, and
+	// whether the application is modified.
 	virtual void DrawView(const ibProtocolNode& view, const ibProtocolNode& patch) override;
 
 	virtual wxCommandProcessor* OnCreateCommandProcessor() override;

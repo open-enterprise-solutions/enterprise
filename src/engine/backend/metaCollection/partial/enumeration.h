@@ -67,7 +67,7 @@ public:
 
 	//get module object in compose object 
 	virtual const ibValueMetaObjectModule* GetObjectModule() const { return nullptr; }
-	virtual const ibValueMetaObjectCommonModule* GetManagerModule() const { return m_propertyManagerModule->GetMetaObject(); }
+	virtual const ibValueMetaObjectSharedModule* GetManagerModule() const { return m_propertyManagerModule->GetMetaObject(); }
 
 	//prepare menu for item
 	virtual bool CollectContextMenu(std::vector<ibMetaMenuItem>& items);

@@ -17,7 +17,7 @@ class ibMemoryBuffer;
 class ibProtocolNode;
 
 // ⭐ A PICTURE AS THE WIRE NAMES IT — a field of a node: its id, a String — a backend picture's number in decimal, a
-// configuration's guid and its version, `<guid>#<version>` (ibBackendPicture::SendPicture) — or, a picture with no id of
+// application's guid and its version, `<guid>#<version>` (ibBackendPicture::SendPicture) — or, a picture with no id of
 // its own (a file's), its PNG itself, a Binary. Drawn from what this client keeps: the engine's own are the core's
 // (registered as it loads, core/picturePredefined.cpp), any other is asked of the server by its id the first time it is
 // named (ibProtocol::ibMethod::Picture) and kept with its version — one the server has none of as well, so it is not

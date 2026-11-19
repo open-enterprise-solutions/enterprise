@@ -10,7 +10,7 @@
 
 class ibMetaData;
 
-// A TEMPLATE OF THE CONFIGURATION — the engine's ibValueMetaObjectTemplateBase and ibValueMetaObjectTemplate
+// A TEMPLATE OF THE APPLICATION — the engine's ibValueMetaObjectTemplateBase and ibValueMetaObjectTemplate
 // (backend/metaCollection/metaTemplateObject.h): the designer's, where an area of the editor is written into a
 // spreadsheet template, and whose composer tab edits the composition a composer template stores (ibComposerEditor).
 // The client's documents have no metaobject — ConvertMetaObjectToType answers none — so nothing here is reached at
@@ -33,6 +33,6 @@ public:
 };
 
 // The template's picture — by the engine's clsid (backend/metaCollection/metaObject.h).
-constexpr ibClassID g_metaCommonTemplateCLSID = metadata_to_clsid("MD_CTMP");
+constexpr ibClassID g_metaSharedTemplateCLSID = metadata_to_clsid("MD_STMP");
 
 #endif

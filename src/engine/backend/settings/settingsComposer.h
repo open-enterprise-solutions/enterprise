@@ -8,7 +8,7 @@
 // a composer keeps settings and knows nothing about a base.
 //
 // ⭐⭐ A LIST AND A REPORT GO THROUGH THE SAME CALLS. They differ only in their
-// ADDRESS — a report's settings belong to the composer the configuration
+// ADDRESS — a report's settings belong to the composer the application
 // declares, a list's to the control on the form (Max, 2026-08-26: *"a list can
 // have saved settings too; on a form, on a list, that is a separate
 // category"*). So the address is an argument, and there is one mechanism.
@@ -37,12 +37,12 @@ class ibMetaData;
 
 // (⛔ NO "WHERE ARE THIS CONTROL'S SETTINGS" HELPER HERE, and there is no file below this one to put
 //  it in either. Working the address out means asking a SOURCE what metaobject it reads, or a
-//  configuration to turn a binding's leaf into a guid — and both drag metadata into a file whose
+//  application to turn a binding's leaf into a guid — and both drag metadata into a file whose
 //  whole point is that it has none: settings go in as nodes and come back as nodes (Max, 2026-08-26:
 //  *"we have no suitable file for it, and it would be a metadata leak"*).
 //
 //  So the ADDRESS is the caller's, computed where the metadata already is — a control knows its own
-//  binding, its own form and its own configuration.)
+//  binding, its own form and its own application.)
 
 // THE ADDRESS. `userKey` empty = THE CURRENT SESSION'S user, which is what every
 // desktop caller means and none of them should have to say.
@@ -53,7 +53,7 @@ class ibMetaData;
 // asking session: a job restoring somebody's settings, an admin reading them,
 // a web request answered off a pool thread. Reaching for "the current session"
 // inside would be the same class of mistake as reaching for the active
-// configuration — the caller knows whose, and says so.
+// application — the caller knows whose, and says so.
 //
 // A base with no users at all yields an invalid guid, which the storage reads as
 // "shared by everybody" — right for one person.
@@ -73,7 +73,7 @@ BACKEND_API ibGuid ibSaveComposerSettings(ibSettingsCategory category, const ibG
 //
 // `metaData` is NOT READ ANY MORE: the setting's own values (a filter's right-hand
 // side may be a reference or an enum member) stay packed in the description and
-// are restored by the composer, against the configuration it runs in.
+// are restored by the composer, against the application it runs in.
 BACKEND_API bool ibRestoreComposerSettings(ibSettingsCategory category, const ibGuid& objectKey,
                                            const ibGuid& id, ibDataComposer& composer,
                                            const ibMetaData* metaData, const ibUserInfo* user = nullptr);

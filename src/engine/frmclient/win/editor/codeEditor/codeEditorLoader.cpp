@@ -15,8 +15,8 @@
 #include <memory>
 
 // ⭐⭐ THE DESKTOP'S ANSWERS ARE THE SERVER'S NOW — the members of what the caret stands after (ibValueAtCaret), the names
-// in scope (ibNamesAtCaret), the classes a `new` or a `type` takes, the common forms, a call's form: the compiler and the
-// configuration were the desktop's process's, and are the server's. Asked of the tab's view, which answers as the
+// in scope (ibNamesAtCaret), the classes a `new` or a `type` takes, the shared forms, a call's form: the compiler and the
+// application were the desktop's process's, and are the server's. Asked of the tab's view, which answers as the
 // desktop's editor did (frmserver ibModuleTextView: FetchCompletion, FetchCallTip). The debugger's answer for a caret the
 // compiler could not resolve (the desktop's LoadFromDebugger, ShowAutoComplete) comes with the debugger.
 bool ibCodeEditor::FetchAtCaret(ibProtocol::ibView::ibModule::ibRequest kind, ibProtocolNode& answer)

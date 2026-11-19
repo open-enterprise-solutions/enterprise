@@ -35,7 +35,7 @@
 #include "backend/databaseLayer/connectionPool.h"
 #include "backend/databaseLayer/sqllite/sqliteDatabaseLayer.h"
 #include "backend/job/jobManager.h"
-#include "backend/metadataConfiguration.h"
+#include "backend/metadataApplication.h"
 #include "backend/metaCollection/metaScheduledJobObject.h"
 #include "backend/propertyManager/property/propertyBoolean.h"
 #include "backend/session/session.h"
@@ -43,7 +43,7 @@
 #include "backend/system/value/valueBackgroundJob.h"
 #include "backend/system/value/valueJob.h"
 
-// sys_job is the application's own table, made when a base opens; a configuration run in memory never
+// sys_job is the application's own table, made when a base opens; an application run in memory never
 // opens one, so the test makes it the way the opening does.
 struct JobSchemaAccess {
 	static void CreateTableJob() { ibApplicationInstance::CreateTableJob(); }
@@ -292,7 +292,7 @@ struct PredefinedJobsFix : ::testing::Test {
 	const short m_codeStyle = ibCompileCode::GetCodeStyle();
 	std::shared_ptr<ibDatabaseLayerSQLite> db;
 	ibString dbPath;
-	std::unique_ptr<ibMetaDataConfigurationFile> cfg;
+	std::unique_ptr<ibMetaDataApplicationFile> cfg;
 	ibValueMetaObjectScheduledJob* cleanup = nullptr;    // declared off
 	ibValueMetaObjectScheduledJob* backup = nullptr;     // declared on
 	bool ready = false;
@@ -311,8 +311,8 @@ struct PredefinedJobsFix : ::testing::Test {
 			GTEST_SKIP() << "SQLite open failed";
 		pool->Init(db, /*maxSize=*/2, /*minIdle=*/0);
 
-		cfg = std::make_unique<ibMetaDataConfigurationFile>();
-		ibValueMetaObjectConfiguration* root = cfg->GetCommonMetaObject();
+		cfg = std::make_unique<ibMetaDataApplicationFile>();
+		ibValueMetaObjectApplication* root = cfg->GetRootMetaObject();
 		ASSERT_NE(root, nullptr);
 		cleanup = dynamic_cast<ibValueMetaObjectScheduledJob*>(cfg->CreateMetaObject(g_metaScheduledJobCLSID, root, false));
 		backup = dynamic_cast<ibValueMetaObjectScheduledJob*>(cfg->CreateMetaObject(g_metaScheduledJobCLSID, root, false));
@@ -324,10 +324,10 @@ struct PredefinedJobsFix : ::testing::Test {
 		ASSERT_NE(use, nullptr);
 		use->SetValue(false);
 
-		// Before the run, as a base's opening has it: running the configuration registers its jobs, and
+		// Before the run, as a base's opening has it: running the application registers its jobs, and
 		// registering reads their settings.
 		JobSchemaAccess::CreateTableJob();
-		ASSERT_TRUE(cfg->RunDatabase()) << "the configuration in memory did not run";
+		ASSERT_TRUE(cfg->RunDatabase()) << "the application in memory did not run";
 		ready = true;
 	}
 

@@ -6,13 +6,13 @@
 //	⭐⭐ A PICTURE IS A REFERENCE, NOT BYTES, and that is the whole reason these exist.
 //
 //	`ibPictureDescription` is a TAGGED value with three kinds (pictureDescription.h): one of the
-//	engine's own pictures, one declared in the configuration, or an image carried inline. Setting
+//	engine's own pictures, one declared in the application, or an image carried inline. Setting
 //	one is therefore not "assign a string" — there is no string that could mean all three — which
 //	is why the generic property road cannot do it and this pair can.
 //
 //	⚠ AND THE TAG IS ANSWERED, NOT GUESSED. `picture_set` takes the source as its own argument
 //	rather than sniffing what the value looks like: a name that happens to match an engine picture
-//	AND a configuration one is a real possibility, and choosing silently would make the wrong
+//	AND an application one is a real possibility, and choosing silently would make the wrong
 //	choice invisibly. The caller says which, or is refused.
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -24,8 +24,8 @@
 #include "backend/propertyManager/property/propertyPicture.h"
 #include "backend/metaCollection/metaObject.h"              // ibValueMetaObject::GetGuid
 #include "backend/metaCollection/metaIntrospect.h"          // ibListMetaObjectNames / ibFindMetaObject — the shared road
-#include "backend/metadataConfiguration.h"                  // activeMetaData — the open configuration
-#include "backend/metaCollection/metaPictureObject.h"       // ibValueMetaObjectPicture — a configuration's own picture
+#include "backend/metadataApplication.h"                    // activeMetaData — the open application
+#include "backend/metaCollection/metaPictureObject.h"       // ibValueMetaObjectPicture — an application's own picture
 
 // The metatype's own name, resolved through ibResolveMetaKind like every other kind.
 static const ibChar* const kPictureKind = ibT("Picture");
@@ -79,10 +79,10 @@ const ibArg& ArgEngine()
 	return s_a;
 }
 
-const ibArg& ArgConfiguration()
+const ibArg& ArgApplication()
 {
-	static const ibArg s_a(ibT("configuration"), ibArg::Kind::Text,
-		ibMcpText("Name of a picture declared in this configuration (picture_list -> configuration)."));
+	static const ibArg s_a(ibT("application"), ibArg::Kind::Text,
+		ibMcpText("Name of a picture declared in this application (picture_list -> application)."));
 	return s_a;
 }
 
@@ -121,7 +121,7 @@ const ibArg& ArgHeight()
 // drawing is made at when no size is asked for.
 constexpr int kDrawnSide = 64;
 
-// The largest side a drawing is made at: a picture is kept inside the configuration, and one that size is
+// The largest side a drawing is made at: a picture is kept inside the application, and one that size is
 // already an illustration rather than an icon.
 constexpr int kLargestSide = 1024;
 
@@ -201,7 +201,7 @@ const ibArg& ArgPicture()
 	static const ibArg s_a(ibT("picture"), ibArg::Kind::Node,
 		ibMcpText("The picture in its own shape, as metadata_properties, form_control or picture_set give it: "
 			  "{Type: 1, ClassId}, {Type: 2, Guid} or {Type: 3, Image: {Name, Buffer, Width, Height}} - or the "
-			  "image a configuration's Picture object holds, {Name, Buffer, Width, Height}, as it reads."),
+			  "image an application's Picture object holds, {Name, Buffer, Width, Height}, as it reads."),
 		/*required*/ true);
 	return s_a;
 }
@@ -216,7 +216,7 @@ ibPicture ImageFromBytes(const std::string& bytes)
 
 // ⭐ AN IMAGE OF ITS OWN, from the caller: base64 PNG bytes in `data`, or SVG drawn here from `svg` - the two
 // roads that bring an image in rather than name one already there. Shared by an object's picture and by a
-// configuration's Picture object, which holds nothing BUT such an image.
+// application's Picture object, which holds nothing BUT such an image.
 bool ImageGiven(const ibDataNode& params, ibExternalPictureDescription& external, ibString& refusal)
 {
 	const ibString name = ArgName().Text(params);
@@ -280,13 +280,13 @@ public:
 	ibString GetDescription() const override
 	{
 		return ibMcpText("Every picture that can be used without supplying one: the engine's own set, "
-			"which is always there, and the pictures this configuration declares. Names from "
+			"which is always there, and the pictures this application declares. Names from "
 			"here are what `picture_set` takes. A third source needs nothing listed - an image "
 			"handed over as base64, or drawn as SVG - see picture_set and picture_from_svg.\n"
 			"The same entries spell a picture in its own shape, for `value`: an engine picture's `id` is its "
 			"`ClassId` (Type 1) - digits in a string, because sixty-four bits do not survive a JSON number, "
-			"and the shape takes them back that way - a configuration picture's `guid` is its `Guid` (Type 2).\n"
-			"A configuration picture is a COMMON one - kept once because several things show it - and its "
+			"and the shape takes them back that way - an application picture's `guid` is its `Guid` (Type 2).\n"
+			"An application picture is a COMMON one - kept once because several things show it - and its "
 			"`comment` says what it depicts and stands for; one without a comment says nothing a reader can "
 			"choose by. pattern_read `form-layout` has the rule.");
 	}
@@ -299,7 +299,7 @@ public:
 
 	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
-		// THE ENGINE'S SET. Always present - it does not depend on a configuration being open,
+		// THE ENGINE'S SET. Always present - it does not depend on an application being open,
 		// which is why it is listed first and unconditionally.
 		std::vector<ibDataValue> engine;
 
@@ -316,10 +316,10 @@ public:
 
 		result.AddField(ibT("engine"), ibDataValue::Array(engine));
 
-		// THE CONFIGURATION'S OWN. Absent rather than empty when nothing is open - the two are
+		// THE APPLICATION'S OWN. Absent rather than empty when nothing is open - the two are
 		// different answers, and a caller that cannot tell them apart will read "no pictures
 		// declared" off a base that is not loaded.
-		if (activeMetaData != nullptr && activeMetaData->IsConfigOpen()) {
+		if (activeMetaData != nullptr && activeMetaData->IsOpen()) {
 
 			std::vector<ibDataValue> declared;
 
@@ -335,7 +335,7 @@ public:
 					line->AddField(ibT("id"), ibDataValue::Int((std::int64_t)object->GetMetaID()));
 					line->SetValue(ibT("guid"), ibGuid(object->GetGuid()));
 
-					// ⭐ AND WHAT IT MEANS. A PNG cannot be read, and a common picture is chosen by the next thing
+					// ⭐ AND WHAT IT MEANS. A PNG cannot be read, and a shared picture is chosen by the next thing
 					// that needs one - its Comment is where it says what it depicts and what it stands for.
 					const ibString meaning = object->GetComment();
 					if (!meaning.IsEmpty())
@@ -345,7 +345,7 @@ public:
 				declared.push_back(ibDataValue::Child(line));
 			}
 
-			result.AddField(ibT("configuration"), ibDataValue::Array(declared));
+			result.AddField(ibT("application"), ibDataValue::Array(declared));
 		}
 
 		return true;
@@ -371,16 +371,16 @@ public:
 	ibString GetDescription() const override
 	{
 		return ibMcpText("Give an object its picture. Say WHERE it comes from: `engine` with a name from "
-			"picture_list, `configuration` with the name of a picture this configuration "
+			"picture_list, `application` with the name of a picture this application "
 			"declares, `data` with base64 PNG bytes and a `name` for it, or `svg` with a `name` - an image "
 			"DRAWN as SVG text, turned into a PNG here (64 x 64 unless `width` / `height` say otherwise) and "
 			"kept as an image of its own. When no engine picture fits, draw one: flat, a few colours, in the "
 			"manner of the engine's set. Objects that carry "
 			"a picture are the ones that show one - commands, command groups and sections; an object with no "
 			"picture of its own is refused rather than quietly ignored.\n"
-			"A Picture object of the configuration (a COMMON picture, metadata_create {kind: \"Picture\"}) is "
+			"A Picture object of the application (a COMMON picture, metadata_create {kind: \"Picture\"}) is "
 			"given its image the same way, with `data` or `svg` - it then appears in picture_list -> "
-			"configuration, and other objects take it through `configuration`.\n"
+			"application, and other objects take it through `application`.\n"
 			"The same picture can also be given through `value` of metadata_set or form_set in its OWN shape, "
 			"as metadata_properties / form_control read it - that is the road for a control on a form, and "
 			"picture_from_svg draws one in that shape.");
@@ -393,7 +393,7 @@ public:
 		// this list, so the server — which refuses any argument a tool did not declare — turned it away
 		// before Call ever saw it: the only route that takes an image from the caller could not be used at
 		// all ("needs a `name`" / "takes no argument called 'name'").
-		static const std::vector<ibMcpArgument> s_arguments = { ArgId(), ArgEngine(), ArgConfiguration(), ArgData(),
+		static const std::vector<ibMcpArgument> s_arguments = { ArgId(), ArgEngine(), ArgApplication(), ArgData(),
 			ArgSvg(), ArgWidth(), ArgHeight(), ArgName() };
 		return s_arguments;
 	}
@@ -405,12 +405,12 @@ public:
 			return false;
 
 		const ibString fromEngine = ArgEngine().Text(params);
-		const ibString fromConfig = ArgConfiguration().Text(params);
+		const ibString fromApplication = ArgApplication().Text(params);
 		const ibString fromData   = ArgData().Text(params);
 		const ibString fromSvg    = ArgSvg().Text(params);
 
 		const int said = (fromEngine.IsEmpty() ? 0 : 1)
-			+ (fromConfig.IsEmpty() ? 0 : 1)
+			+ (fromApplication.IsEmpty() ? 0 : 1)
 			+ (fromData.IsEmpty()   ? 0 : 1)
 			+ (fromSvg.IsEmpty()    ? 0 : 1);
 
@@ -419,15 +419,15 @@ public:
 		// half the time.
 		if (said != 1) {
 			refusal = said == 0
-				? ibMcpText("Say where the picture comes from: `engine`, `configuration`, `data` with "
+				? ibMcpText("Say where the picture comes from: `engine`, `application`, `data` with "
 					"base64 bytes, or `svg` drawn as text. Nothing was set.")
-				: ibMcpText("Say only ONE source - `engine`, `configuration`, `data` or `svg`. Nothing was set.");
+				: ibMcpText("Say only ONE source - `engine`, `application`, `data` or `svg`. Nothing was set.");
 			return false;
 		}
 
-		// ⭐ A CONFIGURATION'S OWN PICTURE IS FILLED HERE TOO. It holds no reference - it IS the image that
+		// ⭐ AN APPLICATION'S OWN PICTURE IS FILLED HERE TOO. It holds no reference - it IS the image that
 		// commands, sections and controls refer to by its Guid - so of the four sources only the two that
-		// bring an image in apply. Without this road a common picture could be declared over MCP and never
+		// bring an image in apply. Without this road a shared picture could be declared over MCP and never
 		// given anything to show (#190): picture_set refused it, and its Picture property is a structure no
 		// caller assembles by hand.
 		ibValueMetaObjectPicture* declared = nullptr;
@@ -441,7 +441,7 @@ public:
 		if (property == nullptr) {
 			refusal = ibString::Format(
 				ibMcpText("'%s' has no picture of its own - commands, command groups, sections and the "
-					"configuration's Picture objects do. Nothing was set."),
+					"application's Picture objects do. Nothing was set."),
 				object->GetName());
 			return false;
 		}
@@ -466,20 +466,20 @@ public:
 				return false;
 			}
 		}
-		else if (!fromConfig.IsEmpty()) {
+		else if (!fromApplication.IsEmpty()) {
 
-			// No open-configuration test here: the object this verb is about was already found by
+			// No open-application test here: the object this verb is about was already found by
 			// ibMcpObjectNamed above, which cannot answer with one when nothing is open.
 			ibValueMetaObject* declared =
-				ibFindMetaObject(activeMetaData, kPictureKind, fromConfig);
+				ibFindMetaObject(activeMetaData, kPictureKind, fromApplication);
 
 			if (declared == nullptr) {
 				refusal = ibString::Format(
-					ibMcpText("This configuration declares no picture called '%s'."), fromConfig);
+					ibMcpText("This application declares no picture called '%s'."), fromApplication);
 				return false;
 			}
 
-			// ⭐ BY GUID, which is what the description holds for a configuration picture: a name
+			// ⭐ BY GUID, which is what the description holds for an application picture: a name
 			// is what a person renames and a metaID is not what this tag carries.
 			description = ibPictureDescription(declared->GetGuid());
 		}
@@ -518,15 +518,15 @@ public:
 
 private:
 
-	// THE IMAGE A PICTURE OBJECT HOLDS, from `data` or `svg`. An engine picture or another configuration
-	// one is refused rather than copied: the first is shown by naming it, the second already is a common
+	// THE IMAGE A PICTURE OBJECT HOLDS, from `data` or `svg`. An engine picture or another application
+	// one is refused rather than copied: the first is shown by naming it, the second already is a shared
 	// picture, and a copy of either would be a second image kept under a new name.
 	static bool SetHeldImage(ibValueMetaObjectPicture* object,
 		const ibDataNode& params, ibDataNode& result, ibString& refusal)
 	{
 		if (ArgData().Text(params).IsEmpty() && ArgSvg().Text(params).IsEmpty()) {
 			refusal = ibString::Format(
-				ibMcpText("'%s' is a picture of the configuration: it holds an image of its own rather than "
+				ibMcpText("'%s' is a picture of the application: it holds an image of its own rather than "
 					"naming one, so it takes `data` (base64 PNG bytes) or `svg`, each with a `name`. Nothing was set."),
 				object->GetName());
 			return false;
@@ -653,7 +653,7 @@ public:
 		return ibMcpText("The way back from picture_from_svg: a picture, in its own shape as metadata_properties, "
 			"form_control or picture_set give it, said as SVG - to read it, or to change it and draw it again "
 			"with picture_from_svg at the same width and height. An engine picture (Type 1) or a "
-			"configuration's (Type 2) is said too, so one of the set can be the start of a new one.\n"
+			"application's (Type 2) is said too, so one of the set can be the start of a new one.\n"
 			"A PNG keeps no drawing, so the SVG is its pixels: every colour ONE path of rectangles - a "
 			"recolouring is one `fill` - and drawn back at the same size it gives the same image.");
 	}
@@ -674,7 +674,7 @@ public:
 			given = *field;
 
 		// ⭐ EITHER SHAPE A PICTURE IS READ IN: a picture property's {Type, ...}, or the bare image a
-		// configuration's Picture object holds - which has no Type, because it can only ever be an image.
+		// application's Picture object holds - which has no Type, because it can only ever be an image.
 		ibPictureDescription description;
 		bool read = given.Kind() == ibDataKind::Child;
 
@@ -700,14 +700,14 @@ public:
 			return false;
 		}
 
-		// EVERY PICTURE AT ITS OWN SIZE. An image of its own from its bytes; a configuration's from the bytes its
+		// EVERY PICTURE AT ITS OWN SIZE. An image of its own from its bytes; an application's from the bytes its
 		// Picture object keeps; one of the engine's set as the set holds it.
 		ibPicture image;
 
 		if (description.m_type == ibPictureType::eFromFile) {
 			image = ImageFromBytes(description.m_img_data.m_img_buffer);
 		}
-		else if (description.m_type == ibPictureType::eFromConfiguration) {
+		else if (description.m_type == ibPictureType::eFromApplication) {
 
 			// ⚠ NOT THROUGH CreatePicture, which answers at the size a picture is DRAWN at - 16 x 16 - and a
 			// 64 x 64 image came back said as 16 x 16 (measured 2026-09-22).
@@ -716,7 +716,7 @@ public:
 				: nullptr;
 
 			if (declared == nullptr) {
-				refusal = ibMcpText("This configuration declares no picture with that Guid - picture_list gives "
+				refusal = ibMcpText("This application declares no picture with that Guid - picture_list gives "
 					"the ones it has.");
 				return false;
 			}

@@ -11,7 +11,7 @@
 // ⭐⭐ JSON, READ AND WRITTEN BY A SCRIPT — two types, reading apart from writing, and the kinds of things said
 // with system enumerations rather than numbers or strings.
 //
-// The engine has spoken JSON for a long time - the assistant's door does, the configuration's diff view does -
+// The engine has spoken JSON for a long time - the assistant's door does, the application's diff view does -
 // and a script could not: an exchange with a cash register, a marketplace, a bank was a COM object or nothing.
 //
 // THE WHOLE VALUE, when the document is small enough to hold - which an exchange message is:

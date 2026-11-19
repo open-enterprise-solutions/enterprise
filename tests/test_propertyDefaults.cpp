@@ -6,7 +6,7 @@
 // no such property. That empty value used to reach the property TYPE, and each
 // type turned it into its own zero: false for a boolean, 0 for a number. So any
 // property DECLARED with a non-zero default arrived unset the first time an
-// older configuration was opened — silently, because an assigned zero is
+// older application was opened — silently, because an assigned zero is
 // indistinguishable from a read one.
 //
 // It cost a full diagnosis to find, because the symptom surfaced four layers
@@ -56,7 +56,7 @@ public:
 // ---------------------------------------------------------------------------
 TEST(PropertyDefaults, AbsentValueKeepsDeclaredDefault) {
 	DefaultsNode node;
-	ibDataNode empty;   // a configuration written before these properties existed
+	ibDataNode empty;   // an application written before these properties existed
 
 	// Exactly the call every metatype makes.
 	EXPECT_FALSE(node.m_propertyFlagOn->SetNodeValue(empty.GetProperty(ibT("FlagOn"))))

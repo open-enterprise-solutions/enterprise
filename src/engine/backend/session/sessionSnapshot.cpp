@@ -1,5 +1,5 @@
 #include "sessionSnapshot.h"
-#include "appData.h"   // appData->GetRunModeDescr in GetApplication
+#include "appData.h"   // appData->GetRunModeDescr in GetProgram
 #include "session.h"   // ibSessionKind for CountByKind
 
 ibString ibSessionSnapshot::GetUserName(unsigned int idx) const {
@@ -29,13 +29,13 @@ ibString ibSessionSnapshot::GetStartedDate(unsigned int idx) const {
 	return startedDate.ToString();
 }
 
-ibString ibSessionSnapshot::GetApplication(unsigned int idx) const {
+ibString ibSessionSnapshot::GetProgram(unsigned int idx) const {
 	if (idx > m_listSession.size())
 		return ibEmptyString;
 	const auto& row = m_listSession[idx];
 	// THE KIND SAYS WHAT A SESSION WORKS IN; the run mode only says whether its process is a server or a file
-	// base, and either hosts designers, clients and jobs alike. A row whose kind says nothing (Unknown, or a
-	// legacy schema without the column) falls back to the run-mode description.
+	// base, and either hosts designers, clients and jobs alike. A row whose kind says nothing (Unknown) falls back
+	// to the run-mode description.
 	// A JOB IS NOT AN APPLICATION. Its run mode says which executable happens to
 	// host it, which is exactly the wrong answer for the question this column
 	// asks — a fold running inside a thin client's file base is not a client, and
@@ -100,16 +100,6 @@ ibString ibSessionSnapshot::GetSessionKindDescr(unsigned int idx) const
 	return _("Client");
 }
 
-void ibSessionSnapshot::SetKindsFromMap(
-	const std::unordered_map<ibString, int>& kindBySession)
-{
-	for (auto& u : m_listSession) {
-		auto it = kindBySession.find(u.m_strSession);
-		if (it != kindBySession.end())
-			u.m_kind = it->second;
-	}
-}
-
 ibString ibSessionSnapshot::GetActivity(unsigned int idx) const
 {
 	if (idx >= m_listSession.size())
@@ -117,44 +107,24 @@ ibString ibSessionSnapshot::GetActivity(unsigned int idx) const
 	return m_listSession[idx].m_activity;
 }
 
-void ibSessionSnapshot::SetActivityFromMap(
-	const std::unordered_map<ibString, ibString>& activityBySession)
-{
-	for (auto& u : m_listSession) {
-		auto it = activityBySession.find(u.m_strSession);
-		if (it != activityBySession.end())
-			u.m_activity = it->second;
-	}
-}
-
-void ibSessionSnapshot::SetExclusiveFromMap(
-	const std::unordered_map<ibString, bool>& exclusiveBySession)
-{
-	for (auto& u : m_listSession) {
-		auto it = exclusiveBySession.find(u.m_strSession);
-		if (it != exclusiveBySession.end())
-			u.m_exclusive = it->second;
-	}
-}
-
-bool ibSessionSnapshot::IsExclusive(unsigned int idx) const
+bool ibSessionSnapshot::IsSingleUser(unsigned int idx) const
 {
 	if (idx >= m_listSession.size()) return false;
-	return m_listSession[idx].m_exclusive;
+	return m_listSession[idx].m_singleUser;
 }
 
-ibString ibSessionSnapshot::ExclusiveHolderSession() const
+ibString ibSessionSnapshot::SingleUserHolderSession() const
 {
 	for (const auto& u : m_listSession)
-		if (u.m_exclusive)
+		if (u.m_singleUser)
 			return u.m_strSession;
 	return ibEmptyString;
 }
 
-ibString ibSessionSnapshot::ExclusiveHolderUser() const
+ibString ibSessionSnapshot::SingleUserHolderUser() const
 {
 	for (const auto& u : m_listSession)
-		if (u.m_exclusive)
+		if (u.m_singleUser)
 			return u.m_strUserName;
 	return ibEmptyString;
 }
@@ -162,7 +132,7 @@ ibString ibSessionSnapshot::ExclusiveHolderUser() const
 // IS A PERSON WORKING HERE? Both predicates below answer that, and neither may
 // count a session that exists only to serve one — a background job carries the
 // user name of whoever started it, so counting it makes one person read as two.
-// The consequences are not cosmetic: an exclusive-mode gate built on these would
+// The consequences are not cosmetic: an single-user-mode gate built on these would
 // block on a job the blocking window itself started, and a licence count would
 // double every seat that happens to be reading.
 static bool ibIsPersonSession(int kind)

@@ -1,7 +1,7 @@
 // =============================================================================
 // COMObject — an object of another program, reached by name through IDispatch.
 //
-// On every platform: the type is registered, so `New COMObject("A.B")` COMPILES — a configuration that
+// On every platform: the type is registered, so `New COMObject("A.B")` COMPILES — an application that
 // drives equipment through COM has to compile on a Mac too. Elsewhere than Windows, creating one is
 // refused at New with the Windows-only message.
 //

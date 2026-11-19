@@ -26,7 +26,7 @@ class ibAuiToolBar;
 
 class ibConditionalAppearanceEditor : public ibPanel {
 public:
-	// `fields` — the tree a condition and the fields are picked from; `metaOf` — the configuration a text is
+	// `fields` — the tree a condition and the fields are picked from; `metaOf` — the application a text is
 	// written in, asked when a window opens.
 	using MetaOf = std::function<const ibMetaData*()>;
 	ibConditionalAppearanceEditor(wxWindow* parent, ibConditionalAppearanceDescription* rules,

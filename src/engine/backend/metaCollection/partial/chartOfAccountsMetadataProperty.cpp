@@ -3,7 +3,7 @@
 #include "backend/metaData.h"
 #include "backend/objCtor.h"
 
-// EVERY ACCOUNTING REGISTER IN THE CONFIGURATION, asked to rebuild its slot set.
+// EVERY ACCOUNTING REGISTER IN THE APPLICATION, asked to rebuild its slot set.
 //
 // The count lives here, on the chart, but the COLUMNS live on the registers — so a change made in
 // one place has to reach the other, and the registers are the ones that know whether they are bound
@@ -44,7 +44,7 @@ void ibValueMetaObjectChartOfAccounts::OnPropertyChanged(ibProperty* property, c
 	ibValueMetaObjectRecordDataHierarchyMutableRef::OnPropertyChanged(property, oldValue, newValue);
 
 	// The number of analytical slots, and which values they may hold, are both declared HERE and
-	// both build columns THERE. Waiting for the next configuration run would leave a register
+	// both build columns THERE. Waiting for the next application run would leave a register
 	// describing the previous shape while the designer already shows the new one.
 	if (property == m_propertyMaxAccountDimensionCount ||
 		property == m_propertyChartOfCharacteristicTypes) {
@@ -58,6 +58,6 @@ void ibValueMetaObjectChartOfAccounts::OnPropertyChanged(ibProperty* property, c
 		if (property == m_propertyChartOfCharacteristicTypes)
 			ApplyAccountDimensionKindType();
 		if (m_metaData != nullptr)
-			ibResyncAccountingRegisters(m_metaData->GetCommonMetaObject());
+			ibResyncAccountingRegisters(m_metaData->GetRootMetaObject());
 	}
 }

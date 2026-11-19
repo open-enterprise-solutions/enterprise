@@ -15,7 +15,7 @@
 #include "chartOfCharacteristicTypes.h"   // the CONTOUR — a slot's value type is the chart's own composition
 #include "backend/system/value/valueDynamicList.h"   // ibValueDynamicList — the standard list migrates onto the universal dynamic list
 #include "backend/system/systemManager.h"            // ibValueSystemFunction::Message — the message pane, not a dialog
-#include "backend/metadataConfiguration.h"
+#include "backend/metadataApplication.h"
 #include "backend/moduleManager/moduleManager.h"
 
 namespace {
@@ -91,7 +91,7 @@ bool ibValueMetaObjectAccountingRegister::ReadData(const ibDataNode& node)
 	// broke on the first iteration, and left the debit slots to be re-created from scratch.
 	//
 	// Re-created means NEW METAIDS — and a metaID is what the physical column is named after. Every
-	// load minted a fresh set: the saved configuration ended up holding slots the working one had
+	// load minted a fresh set: the saved application ended up holding slots the working one had
 	// never heard of, the id counter of each container marched on independently, and a dimension
 	// added afterwards was handed a number a slot in the other container already owned. The apply
 	// then tried to drop reference columns belonging to a slot nobody had created, which is the
@@ -198,7 +198,7 @@ bool ibValueMetaObjectAccountingRegister::ReadData(const ibDataNode& node)
 		for (const std::pair<ibString, ibDataValue>& entry : saved->Fields()) {
 			const bool credit = entry.first.StartsWith(ibT("Cr"));
 			long long field = 0;
-			// A metaID is an `int`: a number past it is not an id this configuration could have written.
+			// A metaID is an `int`: a number past it is not an id this application could have written.
 			if ((!credit && !entry.first.StartsWith(ibT("Dr"))) || !entry.first.Mid(2).ToLongLong(&field)
 			    || field <= 0 || field > std::numeric_limits<ibMetaID>::max())
 				continue;
@@ -229,7 +229,7 @@ bool ibValueMetaObjectAccountingRegister::ReadData(const ibDataNode& node)
 	//
 	// Correspondence and SplitTotals were declared, edited and USED to build the schema — and never
 	// written or read. So they lived for as long as the designer held the object in memory and were
-	// reborn at their DEFAULTS the moment the saved configuration was re-read. The re-read produces
+	// reborn at their DEFAULTS the moment the saved application was re-read. The re-read produces
 	// the BASELINE the next apply diffs against, which means:
 	//   * turning a switch OFF applied correctly, then the baseline came back saying ON;
 	//   * turning it ON again diffed ON against ON, emitted nothing, and left the physical table
@@ -240,12 +240,12 @@ bool ibValueMetaObjectAccountingRegister::ReadData(const ibDataNode& node)
 	// The accumulation register serialises its own SplitTotals (accumulationRegisterMetadata.cpp) and
 	// therefore never showed any of this — the difference between the two registers that named the bug.
 	//
-	// A configuration written before this reads no property and keeps the constructor's default, which
+	// An application written before this reads no property and keeps the constructor's default, which
 	// is the behaviour it already had.
 	m_propertyCorrespondence->SetNodeValue(node.GetProperty(m_propertyCorrespondence->GetName()));
 	m_propertySplitTotals->SetNodeValue(node.GetProperty(m_propertySplitTotals->GetName()));
 
-	// Absent sub-node = a configuration written before the totals tables existed. The object keeps the
+	// Absent sub-node = an application written before the totals tables existed. The object keeps the
 	// id it was given at construction rather than being left at zero — and a zero id is what makes the
 	// schema differ pour one register's columns into another's table.
 	if (auto totals = node.FindChild(ibT("DebitTotals")))
@@ -317,7 +317,7 @@ bool ibValueMetaObjectAccountingRegister::WriteData(ibDataNode& node) const
 	node.SetProperty(m_propertyChartOfAccounts->GetName(), m_propertyChartOfAccounts->GetNodeValue());
 
 	// The pair the reader above explains: a setting that BUILDS THE SCHEMA has to survive the save,
-	// or the baseline the next apply compares against is not the configuration that was applied.
+	// or the baseline the next apply compares against is not the application that was applied.
 	node.SetProperty(m_propertyCorrespondence->GetName(), m_propertyCorrespondence->GetNodeValue());
 	node.SetProperty(m_propertySplitTotals->GetName(), m_propertySplitTotals->GetNodeValue());
 
@@ -376,9 +376,9 @@ bool ibValueMetaObjectAccountingRegister::OnLoadMetaObject(ibMetaData* metaData)
 bool ibValueMetaObjectAccountingRegister::OnSaveMetaObject(int flags)
 {
 	// ⚠ THE "ONE CHART OF ACCOUNTS" RULE IS NOT CHECKED HERE, and that is a correction rather than an
-	// omission. Raising from inside the save leaves the configuration WRITE TRANSACTION open: the
+	// omission. Raising from inside the save leaves the application WRITE TRANSACTION open: the
 	// exception unwinds past the code that would have closed it, and the next attempt to save waits on
-	// the lock until it times out as a DEADLOCK on sys_config_save — an error that names neither the
+	// the lock until it times out as a DEADLOCK on sys_application_save — an error that names neither the
 	// rule nor the register. A refusal has to happen where refusing is free.
 	//
 	// It lives on the schema declaration instead (accountingRegisterMetadataSchema.cpp): every rule
@@ -391,7 +391,7 @@ bool ibValueMetaObjectAccountingRegister::OnSaveMetaObject(int flags)
 	// binding that names nothing. Saving that state produces a register nothing can be written into.
 	//
 	// It says so the way the chart of accounts says its own missing binding: a message in the pane
-	// under the editor and a refusal to save. No exception leaves this function, so the configuration
+	// under the editor and a refusal to save. No exception leaves this function, so the application
 	// write transaction closes normally and the next save is not met by a deadlock — which is the
 	// whole reason the rule above lives elsewhere.
 	if (m_propertyChartOfAccounts->IsEmptyProperty()) {
@@ -710,7 +710,7 @@ void ibValueMetaObjectAccountingRegister::SyncAccountDimensionSlots()
 	// Clearing the vectors removed the credit slots from every walk, so their COLUMNS were dropped at
 	// the next apply — with whatever had been filed in them. Switching the setting back produced the
 	// slots again, empty, under fresh ids, and the two snapshots disagreed about attributes that had
-	// never left the configuration. That is the same failure the accounts had, one level down.
+	// never left the application. That is the same failure the accounts had, one level down.
 	//
 	// So the slots stay. A one-sided register simply never writes into them, exactly as it never
 	// writes into AccountCr, and the columns stand empty — which costs storage and nothing else.
@@ -779,10 +779,10 @@ void ibValueMetaObjectAccountingRegister::SyncAccountDimensionSlots()
 // ⭐⭐ THE SLOTS' TYPES, AS A STEP OF ITS OWN — because two different moments need it.
 //
 // It used to live inside OnAfterRunMetaObject only, i.e. in the RUN phase. Editing does not run a
-// configuration: picking a chart of accounts creates the slots (SyncAccountDimensionSlots) and left
-// them UNTYPED until something happened to run the configuration again. Save in that window and the
+// application: picking a chart of accounts creates the slots (SyncAccountDimensionSlots) and left
+// them UNTYPED until something happened to run the application again. Save in that window and the
 // schema is built from typeless slots — each gets its discriminator column and nothing else — while
-// the configuration written moments later carries the types the run then supplied.
+// the application written moments later carries the types the run then supplied.
 //
 // From there the two never agree again: the next apply sees the slots typed on one side of the diff
 // and typeless on the other, and tries to drop reference columns that were never created. "column
@@ -881,7 +881,7 @@ bool ibValueMetaObjectAccountingRegister::OnAfterRunMetaObject(int flags)
 	// How many slots there are, and whether there is a credit account at all, is decided here — so a
 	// run that types what exists BEFORE this call types the previous state. The credit account is the
 	// case that bit: turning correspondence on creates it in this very call, and the typing above it
-	// had already run, so the new attribute stood in the table for a whole configuration run with no
+	// had already run, so the new attribute stood in the table for a whole application run with no
 	// type. Create, then declare — in that order, in one place.
 	//
 	// THE DIMENSION SLOTS — how many, and of what type. Two questions, two sources: the chart of
@@ -890,12 +890,12 @@ bool ibValueMetaObjectAccountingRegister::OnAfterRunMetaObject(int flags)
 	SyncAccountDimensionSlots();
 
 	// …and the sides of the fields kept per side: named and typed after their fields — and CREATED only by
-	// the copy that saves itself. Both copies of a configuration are loaded by the same code; a register
+	// the copy that saves itself. Both copies of an application are loaded by the same code; a register
 	// saved before its sides existed would get them in the copy that mirrors the database too, the diff
 	// of the two would be empty and their columns never created (measured 2026-09-16: the apply failed on
 	// the totals trigger, "Column unknown NEW.FLD1434_TYPE"). The same rule, for the same reason, as the
 	// sections of a chart of calculation types (StampIfNeverSaved).
-	SyncFieldSides(/*leaving*/ nullptr, /*createMissing*/ (flags & loadConfigFlag) == 0 && appData->DesignerMode());
+	SyncFieldSides(/*leaving*/ nullptr, /*createMissing*/ (flags & loadApplicationFlag) == 0 && appData->DesignerMode());
 
 	// Set Account field type from Chart of Accounts binding
 	const ibMetaDescription& metaDesc = m_propertyChartOfAccounts->GetValueAsMetaDesc();
@@ -945,7 +945,7 @@ bool ibValueMetaObjectAccountingRegister::OnAfterRunMetaObject(int flags)
 bool ibValueMetaObjectAccountingRegister::OnBeforeCloseMetaObject()
 {
 	// ⚠ ALL FIVE, UNCONDITIONALLY — deliberately not mirroring the registration's condition. The
-	// correspondence switch can be flipped while the configuration is open, and a close that asked the
+	// correspondence switch can be flipped while the application is open, and a close that asked the
 	// CURRENT mode would leave behind whatever was registered under the previous one. Unregistering
 	// something that was never registered is a no-op, so the asymmetry costs nothing and removes a
 	// whole class of dangling descriptor.

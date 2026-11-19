@@ -166,7 +166,7 @@ bool ibTStringProperty::DisplayEditorDialog(ibPropertyGrid* pg, ibVariant& value
 {
 	// THE SAME WINDOW the code editor opens on a string literal — see translateConstructor.h for what
 	// OK does to the text, and the three rules the window this one replaced broke quietly. Its languages are those of
-	// the configuration the property's owner holds (a metaobject: the one it was opened from).
+	// the application the property's owner holds (a metaobject: the one it was opened from).
 	ibDialogTranslateConstructor dlg(pg->GetPanel(), m_dlgTitle.empty() ? GetLabel() : m_dlgTitle,
 		ReadTranslate(value), m_ownerProperty != nullptr ? m_ownerProperty->GetMetaData() : nullptr,
 		HasFlag(ibPGFlags::ReadOnly), m_maxLen,

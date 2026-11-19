@@ -34,7 +34,7 @@
 // condition. `field = value` and `field = otherField` stop being different
 // cases: both sides are just a value that may or may not be a field.
 //
-// It is a value in the SCRIPT too, so a configuration can name a field without
+// It is a value in the SCRIPT too, so an application can name a field without
 // touching a dialog:
 //
 //   New CompositionField("Supplier.Region")
@@ -55,8 +55,8 @@ constexpr ibClassID g_compositionFieldCLSID = value_to_clsid("VL_CFLD");
 //
 // ⭐⭐ A TECHNICAL TYPE, AND ITS WHOLE JOB IS TO STAND IN A TYPE LIST. A parameter that admits
 // `CatalogRef.Banks, Date` asks two different questions: a DATE is typed in, and a reference — with
-// no data behind it while the configuration is being written — is one of the values the
-// configuration DECLARES. Listing every admitted reference type beside `Date` says the first half of
+// no data behind it while the application is being written — is one of the values the
+// application DECLARES. Listing every admitted reference type beside `Date` says the first half of
 // that badly and the second half not at all.
 //
 // So the references collapse into ONE entry: choose it, and the declared values of every admitted
@@ -74,14 +74,14 @@ constexpr ibClassID g_compositionPredefinedCLSID = system_to_clsid("VL_CPRV");
 // ⭐⭐ AND IT IS WHAT GETS STORED — A DECLARATION, NOT A LIVE REFERENCE.
 //
 // A reference object is RUNTIME: it belongs to a session, it has a register of its own, it reads
-// rows. Putting one into a description means creating runtime while a configuration is being
+// rows. Putting one into a description means creating runtime while an application is being
 // LOADED — the type it names may be three branches away and not exist yet, and the load dies on a
 // value that was saved perfectly well (Max, 2026-08-28: "the runtime must not leak in; the runtime
 // is made at execution").
 //
 // So what the designer writes is what it is: the metaobject this names and which of its declared
 // values — two plain fields, read and written like any other data. The RUNTIME reference is built
-// from them at execution, by whoever is running the composition, against the configuration it runs
+// from them at execution, by whoever is running the composition, against the application it runs
 // in (ibMaterializeCompositionValue below).
 class BACKEND_API ibValueCompositionPredefined : public ibValue {
 public:
@@ -94,7 +94,7 @@ public:
 
 	// WHAT A PERSON READS IN THE CELL — `CatalogRef.Goods.Chair`, as it was written. Held rather than
 	// recomputed: the name is what the designer chose, and it must read the same before there is any
-	// configuration to ask.
+	// application to ask.
 	virtual ibString GetString() const override { return m_written; }
 
 	// ⚠ AN EMPTY REFERENCE IS NOT AN EMPTY VALUE. `CatalogRef.Goods.EmptyRef` is a value of that type
@@ -117,7 +117,7 @@ private:
 };
 
 // ⭐ THE RUNTIME IS MADE HERE AND NOWHERE EARLIER. A declaration becomes a live reference against the
-// configuration handed in; anything else is already a value and comes back untouched. Called where a
+// application handed in; anything else is already a value and comes back untouched. Called where a
 // composition is EXECUTED — the parameters are worked out, the query is filled in.
 BACKEND_API ibValue ibMaterializeCompositionValue(const ibValue& stored, const class ibMetaData* metaData);
 

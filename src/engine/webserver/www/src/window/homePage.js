@@ -1,4 +1,4 @@
-// THE START PAGE — one tab showing the forms the configuration places on it, all of them live (docs/public/client-protocol.md,
+// THE START PAGE — one tab showing the forms the application places on it, all of them live (docs/public/client-protocol.md,
 // a tab's Kind; the thin client's ibHomePageView): its columns side by side, the cells of each one under the other, a
 // strip over each form saying what lives there, a sash between them to drag. The server reads its workspace as the page
 // opens and keeps it for its life, so it is laid out once; each cell's form is folded in after that as a tab's is.

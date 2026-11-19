@@ -81,7 +81,7 @@ struct ibCreateRequest {
 // about anything inside it.
 //
 // ⭐ THE PLATFORM KNOWS THE SHAPE OF THE FIRST and not of the second, and that is the whole reason
-// they are apart. A choice narrowing is the same arrangement in every configuration ever written, so
+// they are apart. A choice narrowing is the same arrangement in every application ever written, so
 // it is named and typed and a caller cannot spell it wrong. What a report hands its own form is not
 // the platform's to enumerate, and a structure that tried would grow a member per idea.
 struct ibFormRequest {
@@ -139,7 +139,7 @@ struct ibFormRequest {
 // knows nothing about forms; a run that opens one hands the parameters on to it.
 struct ibRuntimeRequest {
 
-	// metaObjectFlags (metaObject.h) — onlyLoadFlag, loadConfigFlag, forceRunFlag, forceCloseFlag…
+	// metaObjectFlags (metaObject.h) — onlyLoadFlag, loadApplicationFlag, forceRunFlag, forceCloseFlag…
 	int m_flags = 0;
 
 	// …and the parameters, by name: what a report is opened with (ibReportParameter).

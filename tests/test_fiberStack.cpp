@@ -68,7 +68,7 @@ ibString Refusal(const std::function<void()>& fn, std::size_t reserve = ibFiber:
 }
 
 // THE CODE THESE TESTS WRITE IS VES (If…Then…EndIf). The style is the current session's, and it is shared: a fixture
-// that runs a configuration sets it to the configuration's, and a suite that ran before this one could leave it so.
+// that runs an application sets it to the application's, and a suite that ran before this one could leave it so.
 // So each compile here pins the style for itself and puts back what it found — the order the suites run in decides
 // nothing.
 class ibVesCodeStyle {

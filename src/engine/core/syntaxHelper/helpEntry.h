@@ -64,7 +64,7 @@ enum class ibHelpKind {
 // the corpus held by appData reflects one locale at a time.
 struct CORE_API ibHelpEntry {
 	// Canonical, locale-independent. Loader rejects duplicates within a
-	// single source corpus (platform OR per-config); cross-source
+	// single source corpus (platform OR per-application); cross-source
 	// collisions become overlays (§3.6).
 	ibString id;
 
@@ -90,7 +90,7 @@ struct CORE_API ibHelpEntry {
 
 	// Multi-line formatted declaration / call form for the "Syntax"
 	// section of the detail pane. Holds the CES (C-style — `if (…) { … }`)
-	// form, which is the default mode for new configurations.
+	// form, which is the default mode for new applications.
 	ibString syntaxBlock;
 
 	// Alternative VES (Visual-style — `If … Then … EndIf`) syntax form.
@@ -151,22 +151,22 @@ struct CORE_API ibHelpEntry {
 	// Set after human review (Phase 7 help-editor). LLM-filled drafts
 	// ship with `reviewed=false`; the UI tags drafts with a "draft" badge,
 	// and the CI cutoff PR (Phase 7) starts refusing ship-builds with any
-	// `reviewed=false` entries in the platform corpus. Per-config
+	// `reviewed=false` entries in the platform corpus. Per-application
 	// corpora are exempt from the gate (user content).
 	bool reviewed = false;
 
-	// True when this entry comes from the per-configuration corpus
-	// (configCacheDir/help/<locale>/) rather than the platform corpus
+	// True when this entry comes from the per-application corpus
+	// (applicationCacheDir/help/<locale>/) rather than the platform corpus
 	// (installDataDir/help/<locale>/). The merging constructor in
-	// §3.6 sets this flag. UI uses it to tag config-derived entries
+	// §3.6 sets this flag. UI uses it to tag application-derived entries
 	// visually so authors can distinguish "OES platform docs" from
-	// "this configuration's docs".
-	bool fromConfiguration = false;
+	// "this application's docs".
+	bool fromApplication = false;
 
 	// Syntax-mode visibility bitmask. The CES compile mode replaces
 	// keywords like Then / EndIf / EndDo / EndProcedure / EndFunction /
 	// Endtry / Do with `{` `}` braces, so those VES terminator keywords
-	// are dead weight in CES configurations and the tree/index/search
+	// are dead weight in CES applications and the tree/index/search
 	// views hide them. JSON key `modes`: array of "ves" / "ces"; missing
 	// or empty means "both modes" (the default).
 	//   bit 0 = VES

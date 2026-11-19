@@ -1552,7 +1552,7 @@ inline bool ibRegisterFoldOffersColumn(const TReg* reg,
 // exactly why it is worth closing NOW: the first reader of the invariant would have been the one to
 // find out, on a register column, in whatever they were building.
 //
-// ⭐⭐ …AND NUMBERED OVER WHAT THE CONFIGURATION DECLARED, not over a running count. A derived column is
+// ⭐⭐ …AND NUMBERED OVER WHAT THE APPLICATION DECLARED, not over a running count. A derived column is
 // OF something with a real metaID: a column standing for an attribute (a collapsed account, a breakdown
 // slot, the correspondent's side of a dimension) is `no` 0 of that attribute; a column the attribute OWNS
 // (a figure of a resource, a coarser period of the period, a position of a date) is its `no` from 1. The

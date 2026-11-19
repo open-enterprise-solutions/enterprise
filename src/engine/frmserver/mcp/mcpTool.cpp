@@ -5,7 +5,7 @@
 #include "frmserver/mcp/mcpTool.h"
 
 #include "backend/metaCollection/metaIntrospect.h"
-#include "backend/metadataConfiguration.h"
+#include "backend/metadataApplication.h"
 #include "backend/propertyManager/property/propertyString.h"   // ibPropertyTString — the translatable one
 #include "backend/propertyManager/property/variant/variantTranslate.h"   // …and the cell it holds them in
 #include "backend/propertyManager/property/propertyType.h"     // ibPropertyType — the one with a verb of its own
@@ -19,7 +19,7 @@
 #include "backend/propertyManager/propertyObject.h"            // the whole property list, walked below
 
 #include "backend/backend_localization.h"                      // a caption is an array by language
-#include "backend/metaCollection/metaLanguageObject.h"         // …and the languages are the config's own
+#include "backend/metaCollection/metaLanguageObject.h"         // …and the languages are the application's own
 #include "backend/metaCollection/metaModuleObject.h"           // ibValueMetaObjectModuleBase — the module behind an id
 #include "backend/metaCollection/metaRoleObject.h"             // what an account's role is called
 #include "backend/metaCollection/metaTemplateObject.h"         // ibValueMetaObjectTemplate — the composer behind an id
@@ -226,7 +226,7 @@ const ibMcpTool::ibMcpArgument& ibMcpLanguageArgument()
 		ibMcpTool::ibMcpArgument::Kind::Text,
 		ibMcpText("WHICH LANGUAGE this caption is written in - the two-letter code of a declared Language "
 		  "(`en`, `ru`, `uk`). Fills that one and leaves the others alone.\n"
-		  "OMITTING IT IS NOT 'ALL LANGUAGES': the value goes into the configuration's OWN "
+		  "OMITTING IT IS NOT 'ALL LANGUAGES': the value goes into the application's OWN "
 		  "language, which in a fresh base is English - so a Russian caption written without this "
 		  "is stored as the English one, invisible to a Russian reader and wrong for the next "
 		  "developer. Say it every time; metadata_get on Synonym answers the whole set."));
@@ -236,9 +236,9 @@ const ibMcpTool::ibMcpArgument& ibMcpLanguageArgument()
 const ibMcpTool::ibMcpArgument& ibMcpMetaDataArgument()
 {
 	static const ibMcpTool::ibMcpArgument s_metaData(ibT("metadata"), ibMcpTool::ibMcpArgument::Kind::Text,
-		ibMcpText("Which metadata to work on: the file name of an external data processor or report open in the "
-		  "designer - the `file` external_processor_open / external_report_open answered with. Its NodeIds are its "
-		  "own - take them from metadata_tree with the same `metadata`. Omitted, the configuration."));
+		ibMcpText("Which metadata to work on: the file name of an external data tool or report open in the "
+		  "designer - the `file` external_data_tool_open / external_report_open answered with. Its NodeIds are its "
+		  "own - take them from metadata_tree with the same `metadata`. Omitted, the application."));
 	return s_metaData;
 }
 
@@ -306,14 +306,14 @@ ibFailureToCaller::~ibFailureToCaller()
 std::vector<ibString> ibMcpRoleNames(const ibUserInfo& who)
 {
 	const ibSession* const session = ibSession::Current();
-	const ibMetaDataConfigurationBase* const metaData = session != nullptr ? session->GetMetaData() : nullptr;
+	const ibMetaDataApplicationBase* const metaData = session != nullptr ? session->GetMetaData() : nullptr;
 
 	std::vector<ibString> names;
 	for (const ibUserInfo::ibUserRole& role : who.m_roleArray) {
 		const ibValueMetaObjectRole* const object = metaData != nullptr
 			? metaData->FindAnyObjectByFilter<ibValueMetaObjectRole>(role.m_miRoleId) : nullptr;
 		ibString name = object != nullptr ? object->GetName()
-			: ibString::Format(ibMcpText("role %d, no longer in the configuration"), static_cast<int>(role.m_miRoleId));
+			: ibString::Format(ibMcpText("role %d, no longer in the application"), static_cast<int>(role.m_miRoleId));
 		if (role.m_mode == ibRoleCompositionMode_Intersection)
 			name << ibMcpText(" (restricting)");
 		names.push_back(std::move(name));
@@ -324,7 +324,7 @@ std::vector<ibString> ibMcpRoleNames(const ibUserInfo& who)
 ibString ibMcpLanguageName(const ibUserInfo& who)
 {
 	const ibSession* const session = ibSession::Current();
-	if (const ibMetaDataConfigurationBase* const metaData = session != nullptr ? session->GetMetaData() : nullptr)
+	if (const ibMetaDataApplicationBase* const metaData = session != nullptr ? session->GetMetaData() : nullptr)
 		for (const auto object : metaData->GetAnyArrayObject<ibValueMetaObjectLanguage>(g_metaLanguageCLSID))
 			if (object->GetDocPath() == who.m_strLanguageGuid)
 				return object->GetName();
@@ -385,7 +385,7 @@ ibString ibMcpNoAnswer(const ibString& usual)
 
 // ⭐ THE GREETING'S OWN VERBS. Each one is here because the greeting cannot be made without it:
 // chat_history to know whether something is already in progress, platform_state and metadata_tree
-// to have anything true to SAY about the configuration, mcp_search to find the verb at all, and
+// to have anything true to SAY about the application, mcp_search to find the verb at all, and
 // chat_say to speak. Nothing else — the point is that a person learns somebody is here BEFORE
 // their base is read, not after.
 const std::vector<ibString>& ibMcpGreetingVerbs()
@@ -1070,7 +1070,7 @@ void ibMcpSayCaption(const ibPropertyTString* caption, ibDataNode& into)
 
 // ⭐ NAMED BY THE INSPECTOR'S OWN WORDS — ibChoiceHolderFieldName for a neighbour, ibChoiceTargetFieldName
 // for a field of what is chosen, `<gone>` where the inspector says `<gone>` — so MCP and the designer's line
-// cannot spell one field two ways. A field deleted from the configuration does not reach here: the choice has
+// cannot spell one field two ways. A field deleted from the application does not reach here: the choice has
 // dropped it already (variantChoiceLink.cpp).
 void ibMcpSayChoiceLink(const ibPropertyObject* field, const ibChoiceTypeLinkDescription& linkDesc, ibDataNode& into)
 {
@@ -1313,7 +1313,7 @@ void ibMcpSayProperties(const ibPropertyObject* object, ibDataNode& node,
 
 			// ⚠ A WIDE READ DOES NOT INLINE THEM ALL, and this is now the heaviest thing in an
 			// answer about an object. A RELATIONSHIP's choices are every metaobject that may fill
-			// it, so `ListOwner` and `ListGeneration` each carry the configuration's whole
+			// it, so `ListOwner` and `ListGeneration` each carry the application's whole
 			// catalogue list — twice in one answer, about one object, growing with the BASE rather
 			// than with the question. Measured while driving this server (2026-09-03): once the
 			// stored node became opt-in, those two were most of what was left.
@@ -1375,7 +1375,7 @@ void ibMcpSayProperties(const ibPropertyObject* object, ibDataNode& node,
 			// 🛑⭐⭐ A SET IS NEVER EQUAL TO ONE CANDIDATE. The loop above compares the held value
 			// against each choice in turn, which answers for a property that holds ONE of them and
 			// cannot answer for a property whose value IS the set: `current` stayed empty for every
-			// relationship in the configuration, so a document posting to two registers and a
+			// relationship in the application, so a document posting to two registers and a
 			// document posting to none read exactly alike (measured over this server, 2026-09-07,
 			// while wiring a shipment to the settlements register — the only way to see the binding
 			// was metadata_bind, and nothing here said so).
@@ -1384,7 +1384,7 @@ void ibMcpSayProperties(const ibPropertyObject* object, ibDataNode& node,
 			// VALUE — the variant renders the whole relationship itself, which is the same string
 			// the designer's property sheet shows; what it ACCEPTS, of the LIST, which is already
 			// beside it. Nothing here takes the value apart, and nothing resolves an id against the
-			// configuration: the value can say itself and the list is already the vocabulary.
+			// application: the value can say itself and the list is already the vocabulary.
 			entry->SetValue(ibT("value"),
 				mode == ibPropertyChoiceMode::Mult ? held.GetString() : current);
 		}
@@ -1411,7 +1411,7 @@ void ibMcpSayProperties(const ibPropertyObject* object, ibDataNode& node,
 			// 🛑 A TYPE IS NOT A NESTED METAOBJECT, AND THE BRANCH BELOW TREATED IT AS ONE. It is a
 			// Child like a catalog's `Code` is, so it fell into "a structure is NAMED, not
 			// unfolded" — and a type description has neither a Name nor an Id, so every attribute
-			// in this configuration reported its type as `{"name": ""}`. Set through
+			// in this application reported its type as `{"name": ""}`. Set through
 			// metadata_set_type, which answered with the type in full; read back through here,
 			// which said nothing. Checking your own work was impossible, and that is the one thing
 			// a reading side exists for (found while building a delivery note over this server,
@@ -1455,7 +1455,7 @@ void ibMcpSayProperties(const ibPropertyObject* object, ibDataNode& node,
 				"Send it back in this shape through `value`. Type 1: one of the engine's pictures, `ClassId` as "
 				"picture_list gives it - its DIGITS, as a string, because sixty-four bits do not survive a JSON "
 				"number; a number is read too, and a rounded one is refused rather than drawn blank. "
-				"Type 2: one the configuration declares, by its `Guid`. Type 3: an image of "
+				"Type 2: one the application declares, by its `Guid`. Type 3: an image of "
 				"its own - `Image` {Name, Buffer, Width, Height}, where Buffer is the PNG file's bytes in base64 "
 				"written \"base64:<...>\", and Width and Height are its size in pixels (0 x 0 is the empty picture). "
 				"To work in SVG instead: picture_to_svg says any picture as SVG, picture_from_svg draws SVG into "
@@ -1463,10 +1463,10 @@ void ibMcpSayProperties(const ibPropertyObject* object, ibDataNode& node,
 		}
 		else if (const ibPropertyExternalPicture* image = dynamic_cast<const ibPropertyExternalPicture*>(property)) {
 
-			// 🛑 AND THE SAME TRAP ONCE MORE, for the image a configuration's Picture object holds. Its node writes
+			// 🛑 AND THE SAME TRAP ONCE MORE, for the image an application's Picture object holds. Its node writes
 			// Name as a FIELD, and the branch below looks for a name among the PROPERTIES - so the picture read as
 			// {"name": ""} before it was set and after (measured 2026-09-22: an image placed through `value`, then
-			// metadata_get). The configuration's own pictures could be made and never seen.
+			// metadata_get). The application's own pictures could be made and never seen.
 			entry->SetValue(ibT("kind"), ibString(ibT("image")));
 
 			ibDataValue described;
@@ -1613,7 +1613,7 @@ ibValueMetaObject* ibMcpObjectNamed(const ibDataNode& params, ibString& refusal,
 	if (object == nullptr) {
 		const ibString external = params.GetValue<ibString>(ibMcpMetaDataArgument().Name());
 		refusal = external.IsEmpty()
-			? ibString::Format(ibMcpText("Nothing in this configuration has id %i."), (int)id)
+			? ibString::Format(ibMcpText("Nothing in this application has id %i."), (int)id)
 			: ibString::Format(ibMcpText("Nothing in '%s' has id %i - metadata_tree with the same `metadata` lists "
 				  "its own."), external, (int)id);
 		return nullptr;
@@ -1644,8 +1644,8 @@ ibMetaData* ibMcpMetaDataNamed(const ibDataNode& params, ibString& refusal)
 {
 	const ibString external = params.GetValue<ibString>(ibMcpMetaDataArgument().Name());
 	if (external.IsEmpty()) {
-		if (activeMetaData == nullptr || !activeMetaData->IsConfigOpen()) {
-			refusal = ibMcpText("No configuration is open.");
+		if (activeMetaData == nullptr || !activeMetaData->IsOpen()) {
+			refusal = ibMcpText("No application is open.");
 			return nullptr;
 		}
 		return activeMetaData;
@@ -1655,7 +1655,7 @@ ibMetaData* ibMcpMetaDataNamed(const ibDataNode& params, ibString& refusal)
 	// gone with what was not saved, and that is said rather than the file read again as it was.
 	ibMetaDataDocument* const document = ibMcpExternalNamed(external);
 	if (document == nullptr || document->GetMetaData() == nullptr) {
-		refusal = ibString::Format(ibMcpText("'%s' is not open in the designer - external_processor_open or "
+		refusal = ibString::Format(ibMcpText("'%s' is not open in the designer - external_data_tool_open or "
 			"external_report_open opens it. A tab closed takes with it what was not saved."), external);
 		return nullptr;
 	}
@@ -1665,16 +1665,7 @@ ibMetaData* ibMcpMetaDataNamed(const ibDataNode& params, ibString& refusal)
 ibMetaDataDocument* ibMcpExternalNamed(const ibString& file)
 {
 	ibDocManager* const manager = docManager;
-	if (manager == nullptr || file.IsEmpty())
-		return nullptr;
-
-	for (ibDocument* const document : manager->GetDocumentsVector()) {
-		ibMetaDataDocument* const external = dynamic_cast<ibMetaDataDocument*>(document);
-		const ibMetaData* const metaData = external != nullptr ? external->GetMetaData() : nullptr;
-		if (metaData != nullptr && metaData->GetFileName() == file)
-			return external;
-	}
-	return nullptr;
+	return manager != nullptr ? manager->FindMetaDataDocument(file) : nullptr;
 }
 
 // ⭐ WHAT THE CALL CARRIED, WHEN THE TOOL HAS NOTHING BETTER TO SHOW.
@@ -1832,7 +1823,7 @@ std::vector<ibString> ibMcpComplaints(ibValueMetaObject* object)
 	// after it. In a designer session nothing else is writing to it at that
 	// moment; a batch apply would want its own, which is a reason not to ask this
 	// during one.
-	ibRestructureInfo& ledger = ibMetaDataConfigurationBase::GetRestructureInfo();
+	ibRestructureInfo& ledger = ibMetaDataApplicationBase::GetRestructureInfo();
 	ledger.Clear();
 
 	// ⭐ AND THE OTHER HALF IS NOT HERE. Some metatypes complain into this ledger;
@@ -1875,9 +1866,9 @@ void ibMcpReportComplaints(ibDataNode& result, ibValueMetaObject* object)
 	result.AddField(ibT("incomplete"), ibDataValue::Array(out));
 
 	// WHAT IT MEANS, once, rather than a caller inferring it from the wording:
-	// the object stands, and the configuration will not save while it says this.
+	// the object stands, and the application will not save while it says this.
 	result.SetValue(ibT("incompleteNote"),
-		ibMcpText("The change was made. The object still reports this, and the configuration cannot "
+		ibMcpText("The change was made. The object still reports this, and the application cannot "
 		  "be saved to the database until it stops. Some objects complain through the "
 		  "message pane instead - those reach the designer's window, not this answer."));
 }
@@ -1906,9 +1897,9 @@ namespace {
 // is written without.
 //
 // 🛑 ASKED OF THE METADATA THE PROPERTY BELONGS TO, NOT OF THE ACTIVE ONE. Several containers are
-// open at a time — the configuration, and every external report or data processor beside it — and
+// open at a time — the application, and every external report or data tool beside it — and
 // each declares its own languages. Reaching for `activeMetaData` here would validate a caption of an
-// external report against the CONFIGURATION's list: a code the report declares would be refused, and
+// external report against the APPLICATION's list: a code the report declares would be refused, and
 // one it does not would be accepted and stored where nothing will ever read it. Neither shows up as
 // an error; the translation simply belongs to the wrong container.
 bool ibMcpLanguageDeclared(const ibMetaData* owner, const ibString& code, ibString& available)
@@ -1950,8 +1941,8 @@ bool ibMcpCaptionInEveryLanguage(const ibMetaData* owner, const ibString& text, 
 	if (!declared.Contains(ibT(",")))
 		return true;   // one language or none: a plain text IS every language there is
 	refusal = ibString::Format(
-		ibMcpText("%s is a caption, and this configuration declares %s. A text sent without a language "
-			  "fills only the configuration's own one and leaves the others BLANK for everybody who reads "
+		ibMcpText("%s is a caption, and this application declares %s. A text sent without a language "
+			  "fills only the application's own one and leaves the others BLANK for everybody who reads "
 			  "in them - a Russian word written this way is stored as the English caption. Send every "
 			  "language in one string: `en = '...'; ru = '...'; uk = '...';` - the form a synonym, a "
 			  "template cell and Tstr all read; an apostrophe inside a text is written doubled "
@@ -1981,7 +1972,7 @@ bool ibMcpSetProperty(ibProperty* property, const ibDataNode& params,
 	// `{en: …, ru: …, uk: …}`; sending that same object back fell through to the ordinary write,
 	// which reads `value` as a STRING — so the platform raised its own type mismatch, `wrong value
 	// kind (expected 4, got 6)`, at a caller who had returned exactly what it was handed. Naming
-	// every object of a configuration in three languages meant three calls per object, and the one
+	// every object of an application in three languages meant three calls per object, and the one
 	// obvious shortcut was answered with an internal error rather than a sentence.
 	//
 	// ⚠ A MAP MEANS THE CELLS IT NAMES, AND ONLY THOSE. A language the map leaves out keeps what it
@@ -1994,7 +1985,7 @@ bool ibMcpSetProperty(ibProperty* property, const ibDataNode& params,
 	// there is: a picture could be read here and not written back (found 2026-09-22 giving the Print group its
 	// printer; the way round built for it that day was the wrong fix, and this is the right one).
 	// ⭐ A CHOICE PARAMETERS TABLE TAKES ITS ROWS IN THE SHAPE IT IS READ IN — `{"Owner": "Counterparty"}` —
-	// through the one reading metadata_set_choice uses, whoever holds it: an attribute of the configuration, or a text
+	// through the one reading metadata_set_choice uses, whoever holds it: an attribute of the application, or a text
 	// field or a table column of a form (#616). An empty value empties the table.
 	if (ibPropertyChoiceParameters* asParameters = dynamic_cast<ibPropertyChoiceParameters*>(property)) {
 		ibChoiceParametersDescription paramsDesc;
@@ -2028,10 +2019,10 @@ bool ibMcpSetProperty(ibProperty* property, const ibDataNode& params,
 			ibString available;
 			if (!ibMcpLanguageDeclared(owner, cell.first, available)) {
 				refusal = available.IsEmpty()
-					? ibMcpText("This configuration declares no languages. Create one first: "
+					? ibMcpText("This application declares no languages. Create one first: "
 					    "metadata_create kind=Language.")
 					: ibString::Format(
-						ibMcpText("'%s' is not a language this configuration declares. It has: %s."),
+						ibMcpText("'%s' is not a language this application declares. It has: %s."),
 						cell.first, available);
 				return false;
 			}
@@ -2087,7 +2078,7 @@ bool ibMcpSetProperty(ibProperty* property, const ibDataNode& params,
 
 		const ibString code = language->AsString();
 
-		// ⚠ AGAINST THE CONFIGURATION'S OWN LANGUAGES. A code nobody declared stores a translation
+		// ⚠ AGAINST THE APPLICATION'S OWN LANGUAGES. A code nobody declared stores a translation
 		// nothing will ever read — silently, which is the worst way to be wrong.
 		//
 		// ⭐ HERE, not in the one verb that had it. This check lived in `metadata_synonym`, which
@@ -2098,10 +2089,10 @@ bool ibMcpSetProperty(ibProperty* property, const ibDataNode& params,
 
 		if (!ibMcpLanguageDeclared(owner, code, available)) {
 			refusal = available.IsEmpty()
-				? ibMcpText("This configuration declares no languages. Create one first: "
+				? ibMcpText("This application declares no languages. Create one first: "
 				    "metadata_create kind=Language.")
 				: ibString::Format(
-					ibMcpText("'%s' is not a language this configuration declares. It has: %s."),
+					ibMcpText("'%s' is not a language this application declares. It has: %s."),
 					code, available);
 			return false;
 		}
@@ -2181,7 +2172,7 @@ bool ibMcpSetProperty(ibProperty* property, const ibDataNode& params,
 		if (mode == ibPropertyChoiceMode::Mult && bySet) {
 
 			if (choices.GetCount() == 0) {
-				refusal = ibString::Format(ibMcpText("'%s' is chosen from the configuration, and there is "
+				refusal = ibString::Format(ibMcpText("'%s' is chosen from the application, and there is "
 					"nothing of that kind in it yet."), name);
 				return false;
 			}
@@ -2221,7 +2212,7 @@ bool ibMcpSetProperty(ibProperty* property, const ibDataNode& params,
 			ibVariantMetaDesc* carried = property->find_cell_variant<ibVariantMetaDesc>(placing);
 			if (carried == nullptr) {
 				refusal = ibString::Format(ibMcpText("'%s' holds several values, but not as a set of "
-					"configuration objects; send one at a time."), name);
+					"application objects; send one at a time."), name);
 				return false;
 			}
 
@@ -2264,10 +2255,10 @@ bool ibMcpSetProperty(ibProperty* property, const ibDataNode& params,
 			allowed << (allowed.IsEmpty() ? ibT("") : ibT(", ")) << choices.GetLabel(index);
 
 		// AND WHEN THERE IS NOTHING TO OFFER, SAY THAT INSTEAD. An empty list means the
-		// configuration holds nothing of the kind yet — "takes one of: " with nothing after the
+		// application holds nothing of the kind yet — "takes one of: " with nothing after the
 		// colon reads like a defect in the tool rather than an empty tree.
 		refusal = allowed.IsEmpty()
-			? ibString::Format(ibMcpText("'%s' is chosen from the configuration, and there is nothing of "
+			? ibString::Format(ibMcpText("'%s' is chosen from the application, and there is nothing of "
 			                     "that kind in it yet."), name)
 			: ibString::Format(ibMcpText("'%s' takes one of: %s."), name, allowed);
 		return false;
@@ -2283,11 +2274,11 @@ bool ibMcpSetProperty(ibProperty* property, const ibDataNode& params,
 	// the two sets became one: a picture of the engine's was refused in the shape form_control gives it (2026-11-02).
 	ibMcpPictureIdAsNumber(value);
 
-	// 🛑⭐⭐ A CAPTION IN ONE LANGUAGE, WHERE THE CONFIGURATION DECLARES SEVERAL, IS REFUSED — every
+	// 🛑⭐⭐ A CAPTION IN ONE LANGUAGE, WHERE THE APPLICATION DECLARES SEVERAL, IS REFUSED — every
 	// session meets this door, which is the only way every session knows the rule (Max, 2026-09-10:
 	// *"I should not have to remind you — you should know it yourself, in every session"*). Measured the
 	// evening it was written: a payroll demo's synonyms and template texts went in Russian without a
-	// language, landed in the English cells of a configuration whose own language is English, and the
+	// language, landed in the English cells of an application whose own language is English, and the
 	// Russian cells stayed empty — "you broke the translation".
 	if (dynamic_cast<const ibPropertyTString*>(property) != nullptr && value.Kind() == ibDataKind::String
 	    && !ibMcpCaptionInEveryLanguage(owner, value.AsString(), ibString::Format(ibT("'%s'"), name), refusal))
@@ -2295,15 +2286,15 @@ bool ibMcpSetProperty(ibProperty* property, const ibDataNode& params,
 
 	// ⭐ A TYPE BY ITS NAME — `String`, `CatalogRef.Goods`, `DynamicList` — is turned here into the node the property
 	// reads, and goes in by the same gate. A node is the property's serialization, and a word is not one: it is read at
-	// the door that reads what a caller sends, as the configuration names it (GetAvailableCtor — an external
-	// processor's falls through to its host's), and only a type the field's picker offers or it holds already
+	// the door that reads what a caller sends, as the application names it (GetAvailableCtor — an external
+	// data tool's falls through to its host's), and only a type the field's picker offers or it holds already
 	// (GetProtocolValue's list). Its length, precision, a composite: metadata_set_type's.
 	const ibPropertyType* const asType = dynamic_cast<const ibPropertyType*>(property);
 	if (asType != nullptr && value.Kind() == ibDataKind::String) {
 		const ibCtorAbstractType* const named = owner != nullptr
 			? owner->GetAvailableCtor(value.AsString()) : ibValue::GetAvailableCtor(value.AsString());
 		std::vector<ibClassID> offered;
-		ibBackendTypeConfigFactory::GetTypesByFilter(asType->GetFilterDataType(), owner, offered);
+		ibBackendTypeApplicationFactory::GetTypesByFilter(asType->GetFilterDataType(), owner, offered);
 		const std::vector<ibClassID>& held = asType->GetValueAsTypeDesc().GetClsidList();
 		if (named == nullptr || (std::find(offered.begin(), offered.end(), named->GetClassType()) == offered.end()
 				&& std::find(held.begin(), held.end(), named->GetClassType()) == held.end())) {
@@ -2364,7 +2355,7 @@ bool ibMcpSetProperty(ibProperty* property, const ibDataNode& params,
 			return false;
 		}
 
-		// ⭐ AND THE IMAGE A CONFIGURATION'S PICTURE OBJECT HOLDS has a verb too: picture_set takes it as base64
+		// ⭐ AND THE IMAGE AN APPLICATION'S PICTURE OBJECT HOLDS has a verb too: picture_set takes it as base64
 		// PNG bytes or as SVG, and measures it itself - the {Name, Buffer, Width, Height} it reads back in is not
 		// a shape to assemble by hand (#190).
 		if (dynamic_cast<const ibPropertyExternalPicture*>(property) != nullptr) {

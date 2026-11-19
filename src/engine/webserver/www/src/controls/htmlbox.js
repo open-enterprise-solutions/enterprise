@@ -1,4 +1,4 @@
-// AN HTML BOX — the page its State names, in a frame of its own: a sandbox with no scripts, so what a configuration
+// AN HTML BOX — the page its State names, in a frame of its own: a sandbox with no scripts, so what an application
 // writes there is shown and not run.
 
 import { Control, defineControl } from './control.js';

@@ -1,6 +1,6 @@
 #include "predefined.h"
 
-#include "backend/metadataConfiguration.h"
+#include "backend/metadataApplication.h"
 #include "backend/metaCollection/partial/commonObject.h"   // ibValueMetaObjectRecordDataHierarchyMutableRef — what declares them
 #include "backend/session/session.h"
 #include "core/description/predefinedDescription.h"        // ibPredefinedDescription — the items and what one is entered with
@@ -76,7 +76,7 @@ bool ReadGiven(const ibPredefinedOwner* owner, const ibDataNode& args, ibPredefi
 
 bool ibSchemaPredefined::AccessRight(const ibSession& session) const
 {
-	const ibMetaDataConfigurationBase* const metaData = session.GetMetaData();
+	const ibMetaDataApplicationBase* const metaData = session.GetMetaData();
 	return metaData != nullptr && metaData->AccessRight_Administration();
 }
 
@@ -90,7 +90,7 @@ void ibSchemaPredefined::Build(const ibSession& session, const ibDataNode& args,
 
 	result.SetValue(ibProtocol::ibSchema::ibPredefined::Type, ibString::Format(ibT("%llu"), static_cast<unsigned long long>(owner->GetClassType())));
 
-	// ⭐ THE ONE SCHEMA — the items as the configuration keeps them and what an item of this kind is entered with
+	// ⭐ THE ONE SCHEMA — the items as the application keeps them and what an item of this kind is entered with
 	// (GetPredefinedDesc); the window is built of it and knows no kind.
 	const ibPredefinedDescription& described = owner->GetPredefinedDesc();
 	ibDataValue declares;

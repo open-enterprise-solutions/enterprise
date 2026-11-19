@@ -38,16 +38,16 @@ public:
 		return get_cell_variant<ibVariantDynamicSource>()->GetDescriptor();
 	}
 	void SetQueryable(const std::shared_ptr<const ibBackendQueryable>& queryable) {
-		m_propValue = new ibVariantDynamicSource(queryable, m_owner);   // owner → re-resolve through ITS config factory
+		m_propValue = new ibVariantDynamicSource(queryable, m_owner);   // owner → re-resolve through ITS application factory
 	}
 
 	// ⭐ THE SOURCE AS THE ID IT IS — see the variant. Reading and writing both go through this, so a
 	// source that cannot be resolved AT THIS MOMENT is still carried: the number is the source, and
 	// resolving it is a question asked later, by whoever needs the object.
 	//
-	// 🛑 …AND IT IS RESOLVED THROUGH THE OWNER'S CONFIGURATION, the way SetQueryable's is. The id
+	// 🛑 …AND IT IS RESOLVED THROUGH THE OWNER'S APPLICATION, the way SetQueryable's is. The id
 	// used to go into the cell the property was created with — made before it had an owner, so with
-	// no configuration at all: after a reopen the number was there, the list's query was there, and
+	// no application at all: after a reopen the number was there, the list's query was there, and
 	// the Source showed nothing, because the id was asked of the empty global factory (Max, 2026-10-13).
 	void SetTableId(const ibMetaID& tableId) {
 		ibVariantDynamicSource* source = new ibVariantDynamicSource(nullptr, m_owner);
@@ -79,7 +79,7 @@ public:
 	virtual bool WriteNodeValue(ibDataValue& value) const override;
 
 	// …and the sources it may read, as the desktop's Source cell's drop-down offered them (ibPGDynamicSourceProperty):
-	// every source the owner's configuration registers, by its table id (what the property stores), named
+	// every source the owner's application registers, by its table id (what the property stores), named
 	// namespace.name. (Not GetValueList: the desktop's cell keeps its own list, by position, and its inspector would
 	// rebuild on every edit to match one by table id.)
 	virtual bool GetProtocolValue(ibDataNode& row, ibReader reader) override;

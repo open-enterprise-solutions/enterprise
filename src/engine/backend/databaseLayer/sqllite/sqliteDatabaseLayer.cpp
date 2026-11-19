@@ -141,6 +141,8 @@ const ibDialectDictionary& ibDatabaseLayerSQLite::Dialect()
 		};
 
 		d.m_substring = ibT("substr({expr}, {from}, {len})");
+		// `%` cuts both operands to integers: the dividend less the quotient cut toward zero (CAST AS INTEGER) times the divisor.
+		d.m_modulo = ibT("({lhs} - CAST({lhs} / {rhs} AS INTEGER) * {rhs})");
 		return d;
 	}();
 	return s_dialect;

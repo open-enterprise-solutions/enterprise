@@ -39,7 +39,7 @@
 // (tool, bridge, adapter, server) and four spellings of one list is four chances to put `said` where
 // `understood` goes. Both are strings; the compiler would not notice.
 struct BACKEND_API ibJobRunRequest {
-	ibString m_text;        // the code itself, in the configuration's own dialect
+	ibString m_text;        // the code itself, in the application's own dialect
 	ibString m_said;        // one line for the activity row the person reads
 	ibString m_understood;  // the caller's own account of what committing will change
 	bool     m_commit = false;

@@ -65,7 +65,7 @@ class Login(PageTest):
 
 
 class Header(PageTest):
-    def test_the_logo_stands_beside_the_name_of_the_configuration(self):
+    def test_the_logo_stands_beside_the_name_of_the_application(self):
         page = self.start({'tabs': [tab()], 'title': 'Trade'})
         page.wait_for_function("document.querySelector('header .logo').naturalWidth > 0")
         self.assertEqual(page.locator('header h1').inner_text(), 'Trade')

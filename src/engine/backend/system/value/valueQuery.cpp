@@ -10,8 +10,8 @@
 #include "valueArray.h"                  // ibValueArray — a package answers with results BY POSITION
 #include "backend/compiler/typeCtor.h"   // VALUE_TYPE_REGISTER / SYSTEM_TYPE_REGISTER / ENUM_TYPE_REGISTER
 #include "backend/backend_exception.h"   // ibBackendCoreException — a wrong TempTablesManager is told, not ignored
-#include "backend/session/session.h"     // ibSession::Current — the session knows WHICH config it was opened for
-#include "backend/moduleManager/moduleManager.h"  // GetMetaManager()->GetMetaData() — that config, held
+#include "backend/session/session.h"     // ibSession::Current — the session knows WHICH application it was opened for
+#include "backend/moduleManager/moduleManager.h"  // GetMetaManager()->GetMetaData() — that application, held
 
 //////////////////////////////////////////////////////////////////////
 // ibValueQueryExec — script "Query"
@@ -19,25 +19,25 @@
 
 // WHOSE sources a hand-written query sees.
 //
-// Metaobject sources register into the factory of the config they belong to (ibMetaData::RegisterSource
-// — "into THIS config's OWN factory"), and the resolver finds them through whatever config is in scope.
-// Three callers set that scope from a config they already hold: the composer, the dynamic list, the
+// Metaobject sources register into the factory of the application they belong to (ibMetaData::RegisterSource
+// — "into THIS application's OWN factory"), and the resolver finds them through whatever application is in scope.
+// Three callers set that scope from an application they already hold: the composer, the dynamic list, the
 // constructor. A query written by hand in a module — New Query("… FROM Catalog.Catalog1") — was the
 // fourth, and had nobody: it fell through to the global base factory, where no catalog has ever
 // registered, and came back "unknown metaobject kind 'Catalog'" for a name the constructor reads
 // without a murmur.
 //
 // It does not need a new field, and it must not consult anything process-wide. The SESSION was opened
-// FOR a configuration and holds it fixed — the same metadata the "Metadata" and "Data" globals are
-// built from. Two sessions on two configurations each answer with their own; a background job answers
+// FOR an application and holds it fixed — the same metadata the "Metadata" and "Data" globals are
+// built from. Two sessions on two applications each answer with their own; a background job answers
 // with the one it runs under.
-static const ibMetaData* ibQuerySessionConfig()
+static const ibMetaData* ibQuerySessionApplication()
 {
 	const ibSession* session = ibSession::Current();
 	if (session == nullptr)
 		return nullptr;   // designer eval / no session — the caller degrades, it does not guess
 
-	const ibValueModuleManagerRuntimeConfiguration* mm = session->GetManagerModule();
+	const ibValueModuleManagerRuntimeApplication* mm = session->GetManagerModule();
 	if (mm == nullptr)
 		return nullptr;
 
@@ -149,13 +149,13 @@ bool ibValueQueryExec::RunPackage(std::vector<ibValue>& out, std::vector<ibStrin
 	if (!m_tempTables.IsEmpty() && m_tempTables.ConvertToValue(manager) && manager != nullptr)
 		store = manager->GetStore();
 
-	// The config this query's by-name sources resolve against. An outer scope wins — a query run from
-	// inside something that already said which config it means (a composer) belongs to THAT one, not to
+	// The application this query's by-name sources resolve against. An outer scope wins — a query run from
+	// inside something that already said which application it means (a composer) belongs to THAT one, not to
 	// whatever session happens to be current.
-	const ibMetaData* config = ibSourceMetaDataScope::Get();
-	if (config == nullptr)
-		config = ibQuerySessionConfig();
-	const ibSourceMetaDataScope resolveAgainst(config);
+	const ibMetaData* application = ibSourceMetaDataScope::Get();
+	if (application == nullptr)
+		application = ibQuerySessionApplication();
+	const ibSourceMetaDataScope resolveAgainst(application);
 
 	// ⭐ ONE STATE FOR THE WHOLE PACKAGE, AND FOR THE ROWS DRAWN OUT OF IT AFTERWARDS. A package is
 	// several statements by construction, and each result it hands back is a LIVE cursor the script

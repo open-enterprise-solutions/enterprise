@@ -4,7 +4,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "commonObject.h"
-#include "backend/metaData.h"   // ibMetaData::RegisterSource — the metaobject registers its source into its OWN config
+#include "backend/metaData.h"   // ibMetaData::RegisterSource — the metaobject registers its source into its OWN application
 #include "backend/srcDataObject.h"
 #include "backend/system/systemManager.h"
 #include "backend/objCtor.h"
@@ -15,7 +15,7 @@
 #include "backend/metaCollection/partial/reference/reference.h"
 #include "backend/metaCollection/partial/declaredPresentation.h"   // how a reference reads in the designer
 #include "backend/system/value/composition/valueComposerField.h"   // ibMaterializeCompositionValue - a declared line's cell, made live
-#include "backend/metadataSerialization.h"                         // ibDeserializeValue - that cell, read with its configuration
+#include "backend/metadataSerialization.h"                         // ibDeserializeValue - that cell, read with its application
 
 //***********************************************************************
 //*								 metaData                               *
@@ -29,7 +29,7 @@
 // source itself (GetValueByMetaID, which each kind resolves its own way —
 // RAM / list / object / record set / manager). Each further id steps into the
 // previous reference value by attribute name: the source's metadata resolves the
-// id to its name (config-wide, so a nested reference's field is found) and member
+// id to its name (application-wide, so a nested reference's field is found) and member
 // access reads it off the value. Read-only navigation.
 
 
@@ -247,7 +247,7 @@ bool ibValueMetaObjectRecordDataExt::OnAfterCloseMetaObject()
 	// MIRROR OF THE RUN BRANCH ABOVE. A ctor is dropped by the identity it was filed under, and
 	// the external pair is filed under a different KIND (externalObject/externalManager), so the
 	// ordinary ids find nothing — UnRegisterCtor then raises "Object with id '…' is not exist",
-	// out of CloseSubtree, and the external processor never finishes closing.
+	// out of CloseSubtree, and the external data tool never finishes closing.
 	// This stayed invisible while the macros keyed on the NAME: the external ctors inherit
 	// GetClassName() from their non-external bases, so both spellings resolved to the same entry.
 	if (IsExternalCreate()) {
@@ -285,21 +285,7 @@ ibValueMetaObjectRecordDataRef::~ibValueMetaObjectRecordDataRef()
 bool ibValueMetaObjectRecordDataRef::ReadData(const ibDataNode& node)
 {
 	m_propertyQuickChoice->SetNodeValue(node.GetProperty(m_propertyQuickChoice->GetName()));
-
-	// ⭐⭐ THE NAME A PROPERTY IS STORED UNDER IS ITS KEY, NOT ITS LABEL.
-	//
-	// This field is called `Ref` now — one spelling for what a script writes, a query names and the
-	// field tree shows. But every configuration saved before that keeps the node under the OLD word,
-	// and a load that only asks for the new one finds nothing: the attribute stays in its default
-	// state, metaID and all, and the first symptom is a query against a column called `fld0_RRRef`
-	// that no table has. Two floors from the rename, in the server's words.
-	//
-	// So the old name is still READ and only the new one is WRITTEN: opening a configuration
-	// migrates it, saving it settles the migration, and nobody is asked to do anything.
-	ibDataValue reference = node.GetProperty(m_propertyAttributeReference->GetName());
-	if (reference.IsEmpty())
-		reference = node.GetProperty(ibT("Reference"));   // saved before the rename
-	m_propertyAttributeReference->SetNodeValue(reference);
+	m_propertyAttributeReference->SetNodeValue(node.GetProperty(m_propertyAttributeReference->GetName()));
 	return true;
 }
 
@@ -371,7 +357,7 @@ bool ibValueMetaObjectRecordDataRef::OnAfterRunMetaObject(int flags)
 		return false;
 	// Register this record (catalog / document / charts / enum — subtypes chain up here) as
 	// an L4 query source: it OWNS its descriptor field m_sourceDescriptor. Register ALWAYS — the factory
-	// lives PER-CONFIG in the metadata (not the old global singleton), so EVERY config, incl. a read-only DB
+	// lives PER-APPLICATION in the metadata (not the old global singleton), so EVERY application, incl. a read-only DB
 	// load (onlyLoadFlag), must register its OWN sources into its OWN factory or its forms can't resolve them.
 	// (NOTHING IS REGISTERED HERE. "A reference" is a base to mix into, not a readable source — the
 	//  KINDS below have the queryables: an enumeration, a hierarchy, a recorder. Each registers its
@@ -811,10 +797,10 @@ bool ibValueMetaObjectRecordDataRecorderRef::ReadData(const ibDataNode& node)
 	m_propertyAttributeDate->SetNodeValue(node.GetProperty(m_propertyAttributeDate->GetName()));
 	m_propertyAttributePointInTime->SetNodeValue(node.GetProperty(m_propertyAttributePointInTime->GetName()));
 	m_propertyRegisterRecord->SetNodeValue(node.GetProperty(m_propertyRegisterRecord->GetName()));
-	// …and the sequences, read back beside them. Absent from a configuration saved before sequences
+	// …and the sequences, read back beside them. Absent from an application saved before sequences
 	// existed, which reads as the empty list — a document that registers nowhere, which is right.
 	m_propertySequenceRecord->SetNodeValue(node.GetProperty(m_propertySequenceRecord->GetName()));
-	// Absent from a configuration saved before it existed: the default stays — the movements are cleared, as they were.
+	// Absent from an application saved before it existed: the default stays — the movements are cleared, as they were.
 	m_propertyRegisterRecordsDeletion->SetNodeValue(node.GetProperty(m_propertyRegisterRecordsDeletion->GetName()));
 	return ibValueMetaObjectRecordDataMutableRef::ReadData(node);
 }
@@ -1072,7 +1058,7 @@ bool ibValueMetaObjectRecordDataHierarchyMutableRef::GenerateDataDesc(const ibVa
 		return false;
 
 	// ⭐⭐ IN THE DESIGNER A REFERENCE IS A DECLARATION — there is no row to describe, and what it says is
-	// what the configuration declares: the empty reference, or one of the predefined values, written as
+	// what the application declares: the empty reference, or one of the predefined values, written as
 	// `CatalogRef.Goods.Chair`.
 	if (appData->DesignerMode()) {
 		const ibString empty = ibDeclaredEmptyRef(this, objValue->GetGuid());
@@ -1419,7 +1405,7 @@ bool ibValueMetaObjectRegisterData::OnSaveMetaObject(int flags)
 	// so the differ correctly computed "every column of this table is gone" and emitted
 	// `ALTER TABLE … DROP <all of them>` — which Firebird answers with "last column in a table
 	// cannot be deleted". That refusal aborts the WHOLE apply, so one half-built register blocked
-	// every other change in the configuration, and the message named neither the register nor the
+	// every other change in the application, and the message named neither the register nor the
 	// reason. Refusing at the door turns a dead end into one sentence naming the object.
 	//
 	// The question is the table's: any column of the record, the predefined ones (period, recorder,
@@ -1428,7 +1414,7 @@ bool ibValueMetaObjectRegisterData::OnSaveMetaObject(int flags)
 	// Same door and same shape as the enumeration with no values
 	// (`ibValueMetaObjectEnumeration::OnSaveMetaObject`): an empty metaobject is refused where it is
 	// SAVED, by the restructure report, so the message lands in the pane under the editor and no
-	// exception leaves the configuration write transaction open.
+	// exception leaves the application write transaction open.
 	if (GetAnyAttributeArrayObject().empty()) {
 		RestructureError(_("! Doesn't have any dimension, resource or attribute ") + GetFullName());
 		return false;
@@ -1444,7 +1430,7 @@ bool ibValueMetaObjectRegisterData::OnSaveMetaObject(int flags)
 	//
 	// Reported, not thrown, and here rather than on the schema declaration: the same reasoning as the
 	// chart of accounts' missing binding — the message belongs in the pane under the editor, the save
-	// refuses, and no exception leaves the configuration write transaction open.
+	// refuses, and no exception leaves the application write transaction open.
 	if (HasRecorder() && (*m_propertyAttributeRecorder)->IsEmptyTypeDesc()) {
 		// Into the LEDGER — see the note in metaTemplateObject.cpp: one road for a refusal, read by
 		// whoever asked. Printed here it also stayed on the screen after a probe that only asked.
@@ -1515,7 +1501,7 @@ bool ibValueMetaObjectRegisterData::OnAfterRunMetaObject(int flags)
 		return false;
 	// The register OWNS its main (records) descriptor field. On load it ADDITIONALLY registers
 	// its balance / turnover / slice descriptors (separate parameterized descriptors — TODO),
-	// and drops them on unload. Register ALWAYS — the factory is PER-CONFIG (in the metadata), so a
+	// and drops them on unload. Register ALWAYS — the factory is PER-APPLICATION (in the metadata), so a
 	// read-only DB load (onlyLoadFlag) must still register its OWN sources into its OWN factory.
 	m_metaData->RegisterSource(&m_queryable);
 	return true;
@@ -1634,7 +1620,7 @@ ibValuePtr<ibValueRecordManagerObject> ibValueMetaObjectRegisterData::CopyRecord
 //*                        ibValueManagerDataObject						*
 //***********************************************************************
 
-// Manager-module methods. Surfaces the common module's exported methods through its
+// Manager-module methods. Surfaces the shared module's exported methods through its
 // runtime descriptor (ExportMethodsToHelper) rather than copying its whole helper
 // table — the former CopyMethod wart. The bytecode-function index it keys on is
 // exactly what CallAsProc/Func below feed back into pRefData, so dispatch lines up
@@ -1648,9 +1634,9 @@ void ibValueManagerDataObject::FillMembers(ibMemberTable& helper) const
 	ibASSERT(metaData);
 
 	// Manager module's compiled unit — designer mm in the Designer, session root
-	// mm at runtime. FindCommonModule returns the typed descriptor (ibValueModuleUnit).
+	// mm at runtime. FindSharedModule returns the typed descriptor (ibValueModuleUnit).
 	auto* moduleManager = ibSession::EditModuleManagerFor(metaData);
-	auto* pRefData = moduleManager ? moduleManager->FindCommonModule(GetManagerModule()) : nullptr;
+	auto* pRefData = moduleManager ? moduleManager->FindSharedModule(GetManagerModule()) : nullptr;
 
 	if (pRefData != nullptr)
 		pRefData->ExportMethodsToHelper(&helper, g_aliasExport);
@@ -1688,7 +1674,7 @@ bool ibValueManagerDataObject::CallAsProc(const long lMethodNum, ibValue** paPar
 		return false;
 
 	auto* moduleManager = ibSession::EditModuleManagerFor(metaData);
-	auto* pRefData = moduleManager ? moduleManager->FindCommonModule(GetManagerModule()) : nullptr;
+	auto* pRefData = moduleManager ? moduleManager->FindSharedModule(GetManagerModule()) : nullptr;
 
 	if (pRefData != nullptr)
 		return pRefData->CallAsProc(ibModuleMethodNum(*pRefData, m_members.GetMethodName(lMethodNum)), paParams, lSizeArray);
@@ -1708,7 +1694,7 @@ bool ibValueManagerDataObject::CallAsFunc(const long lMethodNum, ibValue& pvarRe
 		return false;
 
 	auto* moduleManager = ibSession::EditModuleManagerFor(metaData);
-	auto* pRefData = moduleManager ? moduleManager->FindCommonModule(GetManagerModule()) : nullptr;
+	auto* pRefData = moduleManager ? moduleManager->FindSharedModule(GetManagerModule()) : nullptr;
 
 	if (pRefData != nullptr)
 		return pRefData->CallAsFunc(ibModuleMethodNum(*pRefData, m_members.GetMethodName(lMethodNum)), pvarRetValue, paParams, lSizeArray);
@@ -1728,7 +1714,7 @@ bool ibValueManagerDataObject::GetParamDefValue(const long lMethodNum, const lon
 		return false;
 
 	auto* moduleManager = ibSession::EditModuleManagerFor(metaData);
-	auto* pRefData = moduleManager ? moduleManager->FindCommonModule(GetManagerModule()) : nullptr;
+	auto* pRefData = moduleManager ? moduleManager->FindSharedModule(GetManagerModule()) : nullptr;
 
 	if (pRefData != nullptr)
 		return pRefData->GetParamDefValue(ibModuleMethodNum(*pRefData, m_members.GetMethodName(lMethodNum)), lParamNum, pvarParamDefValue);
@@ -1869,7 +1855,7 @@ ibBackendValueForm* ibValueRecordDataObject::GetForm() const
 //----------------------------------------------------------------------
 // Universal form-open trampolines (ShowFormValue / GetFormValue).
 // Promoted from the per-leaf duplicates in HierarchyRef, Document,
-// DataProcessor and Report. Per-leaf variation collapses to two
+// DataTool and Report. Per-leaf variation collapses to two
 // virtual hooks (GetCurrentObjectFormID + OnFormCreated). See header.
 //----------------------------------------------------------------------
 
@@ -1905,7 +1891,7 @@ ibFormPtr<ibBackendValueForm> ibValueRecordDataObject::GetFormValue(const ibForm
 		this
 	);
 	// Ref-flavour leaves used to set CloseOnOwnerClose(false) per-leaf;
-	// Ext (DataProcessor / Report) didn't. The flag is harmless when
+	// Ext (DataTool / Report) didn't. The flag is harmless when
 	// the form has no owner-close interplay — set unconditionally to
 	// keep the universal path simple.
 	if (createdForm)
@@ -2128,7 +2114,7 @@ void ibValueRecordDataObject::PrepareEmptyObject()
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////
 
-// Fixed methods for leaves with no API of their own (DataProcessor, Report); they
+// Fixed methods for leaves with no API of their own (DataTool, Report); they
 // bind this. Leaves with their own method set bind their own FillMethods instead.
 void ibValueRecordDataObject::FillBaseMethods(ibMemberTable& helper) const
 {
@@ -2279,7 +2265,7 @@ bool ibValueRecordDataObject::GetParamDefValue(const long lMethodNum, const long
 ibValueRecordDataObjectExt::ibValueRecordDataObjectExt(const ibValueMetaObjectRecordDataExt* metaObject) :
 	ibValueRecordDataObject(ibNewUniqueGuid, true), m_metaObject(metaObject)
 {
-	// External data objects (DataProcessor / Report) expose only the fixed methods;
+	// External data objects (DataTool / Report) expose only the fixed methods;
 	// the data members come from the base FillDataMembers.
 	m_members.Bind(this, &ibValueRecordDataObject::FillBaseMethods);
 }
@@ -2884,7 +2870,7 @@ void ibValueRecordDataObjectHierarchyRef::PrepareEmptyObject(const ibValueRecord
 
 namespace {
 
-// ⭐ THE LINES A PREDEFINED ITEM'S DECLARATION HOLDS ARE THE CONFIGURATION'S, NOT THE PERSON'S — an account's analytics.
+// ⭐ THE LINES A PREDEFINED ITEM'S DECLARATION HOLDS ARE THE APPLICATION'S, NOT THE PERSON'S — an account's analytics.
 // Lines 1..K of a section stand as declared (the cells it declares; a column it leaves out is the data's); a person adds
 // after them. A write that removed, moved or changed one of them is refused here (WriteObject). A line is its position
 // (the seed writes the declared ones at 1..K), so a removed or moved line shows as a changed one: what stands at N is
@@ -2908,12 +2894,12 @@ void CheckPredefinedTables(const ibValueRecordDataObjectHierarchyRef& object)
 		for (std::size_t idx = 0; idx < declared->second.size(); idx++) {
 			bool kept = static_cast<long>(idx) < section->GetRowCount();
 			for (auto cell = declared->second[idx].begin(); kept && cell != declared->second[idx].end(); ++cell) {
-				ibValue value;   // a column the configuration no longer has is not asked
+				ibValue value;   // a column the application no longer has is not asked
 				if (section->GetValueByMetaID(section->GetItem(static_cast<long>(idx)), cell->first, value))
 					kept = value.CompareValueEQ(ibMaterializeCompositionValue(ibDeserializeValue(cell->second.m_value, metaData), metaData));
 			}
 			if (!kept)
-				ibBackendCoreException::Error(_("%s: line %i of the %s list is declared by the configuration and cannot be removed, moved or changed"),
+				ibBackendCoreException::Error(_("%s: line %i of the %s list is declared by the application and cannot be removed, moved or changed"),
 					object.GetSourceCaption(), static_cast<int>(idx) + 1, table->GetSynonym());
 		}
 	}
@@ -3920,7 +3906,7 @@ m_objModified(false), m_selected(ibSelection::NotSelected),
 m_keyValues(uniqueKey.IsOk() ? ibRowMetaValues(uniqueKey) : ibRowMetaValues()), m_metaObject(metaObject),
 m_recordColumnCollection(new ibValueRecordSetObjectRegisterColumnCollection(this)), m_recordSetKeyValue(new ibValueRecordSetObjectRegisterKeyValue(this))
 {
-	// The composer knows what it reads from the start — the columns, and the register's configuration (see
+	// The composer knows what it reads from the start — the columns, and the register's application (see
 	// ibValueTabularSectionDataObjectBase).
 	Storage().SetColumns(m_recordColumnCollection);
 	GetModelComposer().SetMetaData(m_metaObject != nullptr ? m_metaObject->GetMetaData() : nullptr);

@@ -4,7 +4,7 @@
 #include "core/exception.h"
 #include "core/fileSystem.h"
 #include "backend/compiler/value.h"
-#include "backend/metadataConfiguration.h"
+#include "backend/metadataApplication.h"
 #include "backend/metaCollection/metaModuleObject.h"
 #include "backend/metaCollection/metaTemplateObject.h"   // a report's composer — a template of that kind
 #include "backend/metaCollection/metaDiff.h"
@@ -68,16 +68,16 @@ std::map<std::string, std::string> Files(const ibDataNode& files)
 class FileProvider : public ::testing::Test {
 protected:
 	fs::path m_folder = fs::temp_directory_path() / ("oes-files-" + ibGuid(ibGuid::newGuid()).str().ToStdString());
-	ibString Directory() const { return PathText(m_folder / "configuration"); }
+	ibString Directory() const { return PathText(m_folder / "application"); }
 	virtual void TearDown() override { std::error_code error; fs::remove_all(m_folder, error); }
 
 	std::map<std::string, std::string> Snapshot() const
 	{
 		std::map<std::string, std::string> result;
-		for (const auto& file : fs::recursive_directory_iterator(m_folder / "configuration")) {
+		for (const auto& file : fs::recursive_directory_iterator(m_folder / "application")) {
 			if (!file.is_regular_file()) continue;
 			std::ifstream input(file.path(), std::ios::binary);
-			const std::u8string name = fs::relative(file.path(), m_folder / "configuration").generic_u8string();
+			const std::u8string name = fs::relative(file.path(), m_folder / "application").generic_u8string();
 			result.emplace(std::string(reinterpret_cast<const char*>(name.data()), name.size()),
 				std::string(std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>()));
 		}
@@ -168,7 +168,7 @@ TEST_F(FileProvider, Write_TypeByNameOnlyWhereItReadsBack)
 	root.AddChild(7, 1);
 	ibDataNode files;
 	ASSERT_TRUE(Provider().Write(root, files));
-	EXPECT_TRUE(Text(files, ibT("configuration.json")).Contains(ibT("\"NodeType\": \"Catalog\"")));
+	EXPECT_TRUE(Text(files, ibT("application.json")).Contains(ibT("\"NodeType\": \"Catalog\"")));
 	EXPECT_TRUE(Text(files, ibT("7/item-0/node.json")).Contains(ibT("\"NodeType\": 7")));
 }
 
@@ -203,7 +203,7 @@ TEST_F(FileProvider, Write_TextInsideAValue_ByTheNamesOnTheWay)
 	EXPECT_TRUE(files.Has("ObjectModule.Module.txt"));
 	EXPECT_TRUE(files.Has("Forms.0.txt"));
 	EXPECT_TRUE(files.Has("field-2.0.txt"));
-	EXPECT_FALSE(Text(files, ibT("configuration.json")).Contains(ibT("EndProcedure")));
+	EXPECT_FALSE(Text(files, ibT("application.json")).Contains(ibT("EndProcedure")));
 
 	ASSERT_TRUE(Provider().Read(files, loaded));
 	EXPECT_EQ(loaded.FindChild("ObjectModule")->GetValue<ibString>("Module"), ibString("Procedure A()\nEndProcedure\n"));
@@ -234,15 +234,15 @@ TEST_F(FileProvider, Read_FileOutsideTheExport_Refuses)
 	ASSERT_TRUE(Provider().Write(root, files));
 
 	ibDataNode outside = files;
-	ibString manifest = Text(outside, ibT("configuration.json"));
+	ibString manifest = Text(outside, ibT("application.json"));
 	manifest.Replace(ibT("\"Module.txt\""), ibT("\"../secret.txt\""));
-	SetText(outside, ibT("configuration.json"), manifest);
+	SetText(outside, ibT("application.json"), manifest);
 	EXPECT_THROW(Provider().Read(outside, loaded), ibCoreException);
 
 	ibDataNode upward = files;
-	manifest = Text(upward, ibT("configuration.json"));
+	manifest = Text(upward, ibT("application.json"));
 	manifest.Replace(ibT("\"Catalog/Goods\""), ibT("\"..\""));
-	SetText(upward, ibT("configuration.json"), manifest);
+	SetText(upward, ibT("application.json"), manifest);
 	EXPECT_THROW(Provider().Read(upward, loaded), ibCoreException);
 }
 
@@ -264,9 +264,9 @@ TEST_F(FileProvider, Read_FolderNamedTwice_Refuses)
 	root.AddChild(1, 1).SetValue("Name", ibString("Goods"));
 	ibDataNode files, loaded;
 	ASSERT_TRUE(Provider().Write(root, files));
-	ibString manifest = Text(files, ibT("configuration.json"));
+	ibString manifest = Text(files, ibT("application.json"));
 	manifest.Replace(ibT("\"Catalog/Goods\""), ibT("\"Catalog/Goods\", \"Catalog/Goods\""));
-	SetText(files, ibT("configuration.json"), manifest);
+	SetText(files, ibT("application.json"), manifest);
 	EXPECT_THROW(Provider().Read(files, loaded), ibCoreException);
 }
 
@@ -274,10 +274,10 @@ TEST_F(FileProvider, Read_UnknownVersion_Refuses)
 {
 	ibDataNode files, loaded;
 	ASSERT_TRUE(Provider().Write(ibDataNode(), files));
-	ibString manifest = Text(files, ibT("configuration.json"));
+	ibString manifest = Text(files, ibT("application.json"));
 	ASSERT_TRUE(manifest.Contains(ibT("\"NodeVersion\": 1")));
 	manifest.Replace(ibT("\"NodeVersion\": 1"), ibT("\"NodeVersion\": 2"));
-	SetText(files, ibT("configuration.json"), manifest);
+	SetText(files, ibT("application.json"), manifest);
 	EXPECT_THROW(Provider().Read(files, loaded), ibCoreException);
 }
 
@@ -309,12 +309,12 @@ TEST_F(FileProvider, PublishCollect_TheSameFiles)
 
 TEST_F(FileProvider, Publish_UnrelatedFiles_RefusesAndPreservesThem)
 {
-	fs::create_directories(m_folder / "configuration");
-	std::ofstream(m_folder / "configuration/keep.txt") << "keep";
+	fs::create_directories(m_folder / "application");
+	std::ofstream(m_folder / "application/keep.txt") << "keep";
 	ibDataNode files;
 	ASSERT_TRUE(Provider().Write(ibDataNode(), files));
 	EXPECT_THROW(ibFileProvider::Publish(files, Directory()), ibCoreException);
-	EXPECT_TRUE(fs::exists(m_folder / "configuration/keep.txt"));
+	EXPECT_TRUE(fs::exists(m_folder / "application/keep.txt"));
 }
 
 TEST_F(FileProvider, Publish_UnrelatedFileInAnExport_RefusesAndPreservesIt)
@@ -323,12 +323,12 @@ TEST_F(FileProvider, Publish_UnrelatedFileInAnExport_RefusesAndPreservesIt)
 	root.AddChild(1, 1).SetValue("Name", ibString("Goods"));
 	ASSERT_TRUE(Provider().Write(root, files));
 	ASSERT_TRUE(ibFileProvider::Publish(files, Directory()));
-	fs::create_directories(m_folder / "configuration/.git");
-	std::ofstream(m_folder / "configuration/Catalog/Goods/keep.txt") << "keep";
+	fs::create_directories(m_folder / "application/.git");
+	std::ofstream(m_folder / "application/Catalog/Goods/keep.txt") << "keep";
 	const auto before = Snapshot();
 	EXPECT_THROW(ibFileProvider::Publish(files, Directory()), ibCoreException);
 	EXPECT_EQ(before, Snapshot());
-	EXPECT_TRUE(fs::exists(m_folder / "configuration/.git"));
+	EXPECT_TRUE(fs::exists(m_folder / "application/.git"));
 }
 
 TEST_F(FileProvider, Publish_RemovedPart_Disappears)
@@ -340,7 +340,7 @@ TEST_F(FileProvider, Publish_RemovedPart_Disappears)
 	root.RemoveChildren();
 	ASSERT_TRUE(Provider().Write(root, files));
 	ASSERT_TRUE(ibFileProvider::Publish(files, Directory()));
-	EXPECT_FALSE(fs::exists(m_folder / "configuration/Catalog"));
+	EXPECT_FALSE(fs::exists(m_folder / "application/Catalog"));
 }
 
 TEST_F(FileProvider, Publish_NoExport_Refuses)
@@ -348,7 +348,7 @@ TEST_F(FileProvider, Publish_NoExport_Refuses)
 	ibDataNode files;
 	files.AddField("note.txt", ibDataValue::Binary(ibMemoryBuffer()));
 	EXPECT_THROW(ibFileProvider::Publish(files, Directory()), ibCoreException);
-	EXPECT_FALSE(fs::exists(m_folder / "configuration"));
+	EXPECT_FALSE(fs::exists(m_folder / "application"));
 }
 
 TEST_F(FileProvider, Collect_SymbolicLink_Refuses)
@@ -357,7 +357,7 @@ TEST_F(FileProvider, Collect_SymbolicLink_Refuses)
 	root.SetValue("Module", ibString("line\n"));
 	ASSERT_TRUE(Provider().Write(root, files));
 	ASSERT_TRUE(ibFileProvider::Publish(files, Directory()));
-	const fs::path asset = m_folder / "configuration/Module.txt";
+	const fs::path asset = m_folder / "application/Module.txt";
 	fs::rename(asset, m_folder / "outside.txt");
 	std::error_code error;
 	fs::create_symlink(m_folder / "outside.txt", asset, error);
@@ -376,18 +376,18 @@ TEST_F(FileProvider, PublishCollect_UnicodeDirectory)
 	EXPECT_EQ(Files(files), Files(collected));
 }
 
-// ---- a configuration --------------------------------------------------------------------------------------------
+// ---- an application --------------------------------------------------------------------------------------------
 
-TEST_F(FileProvider, SaveLoadFiles_MetadataIntoFreshConfiguration_IsIdempotent)
+TEST_F(FileProvider, SaveLoadFiles_MetadataIntoFreshApplication_IsIdempotent)
 {
-	ibMetaDataConfigurationFile original;
+	ibMetaDataApplicationFile original;
 	for (const ibClassID type : {g_metaCatalogCLSID, g_metaDocumentCLSID, g_metaReportCLSID,
-		g_metaInformationRegisterCLSID, g_metaEnumerationCLSID, g_metaCommonModuleCLSID,
+		g_metaInformationRegisterCLSID, g_metaEnumerationCLSID, g_metaSharedModuleCLSID,
 		g_metaConstantCLSID, g_metaAccumulationRegisterCLSID, g_metaAccountingRegisterCLSID,
-		g_metaChartOfCharacteristicTypesCLSID, g_metaChartOfAccountsCLSID, g_metaDataProcessorCLSID,
-		g_metaRoleCLSID, g_metaCommonFormCLSID, g_metaCommonTemplateCLSID, g_metaSectionCLSID})
-		ASSERT_NE(original.CreateMetaObject(type, original.GetCommonMetaObject(), false), nullptr);
-	auto* module = static_cast<ibValueMetaObjectCommonModule*>(original.GetAnyArrayObject(g_metaCommonModuleCLSID).front());
+		g_metaChartOfCharacteristicTypesCLSID, g_metaChartOfAccountsCLSID, g_metaDataToolCLSID,
+		g_metaRoleCLSID, g_metaSharedFormCLSID, g_metaSharedTemplateCLSID, g_metaSectionCLSID})
+		ASSERT_NE(original.CreateMetaObject(type, original.GetRootMetaObject(), false), nullptr);
+	auto* module = static_cast<ibValueMetaObjectSharedModule*>(original.GetAnyArrayObject(g_metaSharedModuleCLSID).front());
 	module->SetModuleText("Function Answer() {\n    Return 42;\n}\n");
 	ibValueMetaObject* catalog = original.GetAnyArrayObject(g_metaCatalogCLSID).front();
 	for (const ibClassID type : {g_metaAttributeCLSID, g_metaFormCLSID, g_metaTemplateCLSID, g_metaTableRefCLSID})
@@ -396,47 +396,47 @@ TEST_F(FileProvider, SaveLoadFiles_MetadataIntoFreshConfiguration_IsIdempotent)
 	ibValueMetaObject* composer = original.CreateMetaObject(g_metaTemplateCLSID, report, false);
 	ASSERT_NE(composer, nullptr);
 	composer->ConvertToType<ibValueMetaObjectTemplate>()->SetTemplateDesc(ibTemplateDescription(ibTemplateType::Composer));
-	ASSERT_TRUE(original.SaveConfigToFiles(Directory()));
+	ASSERT_TRUE(original.SaveApplicationToFiles(Directory()));
 
 	// Each part in its name's folder, under its type's.
 	ibDataNode exported;
-	ASSERT_TRUE(original.GetCommonMetaObject()->BuildDataNode(exported, saveToFileFlag));
+	ASSERT_TRUE(original.GetRootMetaObject()->BuildDataNode(exported, saveToFileFlag));
 	for (const ibDataNode& part : exported.Children()) {
 		const ibCtorAbstractType* ctor = ibValue::GetAvailableCtor(part.GetClsid());
 		ASSERT_NE(ctor, nullptr);
 		const ibString folder = ctor->GetClassName() + ibT("/") + part.GetValue<ibString>("Name");
-		EXPECT_TRUE(fs::exists(m_folder / "configuration" / ibPathOf(folder) / "node.json")) << folder.ToUTF8();
+		EXPECT_TRUE(fs::exists(m_folder / "application" / ibPathOf(folder) / "node.json")) << folder.ToUTF8();
 	}
 
 	const auto before = Snapshot();
-	ibMetaDataConfigurationFile imported;
-	ASSERT_TRUE(imported.LoadConfigFromFiles(Directory()));
+	ibMetaDataApplicationFile imported;
+	ASSERT_TRUE(imported.LoadApplicationFromFiles(Directory()));
 	for (const ibMetaDiffRecord& difference : ibMetaDiffWalker::Walk(
-		original.GetCommonMetaObject(), imported.GetCommonMetaObject()))
+		original.GetRootMetaObject(), imported.GetRootMetaObject()))
 		EXPECT_EQ(difference.m_status, ibMetaDiffStatus::Same);
-	ASSERT_TRUE(imported.SaveConfigToFiles(Directory()));
+	ASSERT_TRUE(imported.SaveApplicationToFiles(Directory()));
 	EXPECT_EQ(before, Snapshot());
-	ASSERT_TRUE(imported.LoadConfigFromFiles(Directory()));
-	ASSERT_TRUE(imported.SaveConfigToFiles(Directory()));
+	ASSERT_TRUE(imported.LoadApplicationFromFiles(Directory()));
+	ASSERT_TRUE(imported.SaveApplicationToFiles(Directory()));
 	EXPECT_EQ(before, Snapshot());
 }
 
 TEST_F(FileProvider, LoadFiles_MissingFile_PreservesExistingMetadata)
 {
-	ibMetaDataConfigurationFile configuration;
-	ASSERT_NE(configuration.CreateMetaObject(g_metaCatalogCLSID, configuration.GetCommonMetaObject(), false), nullptr);
-	ASSERT_TRUE(configuration.SaveConfigToFiles(Directory()));
+	ibMetaDataApplicationFile application;
+	ASSERT_NE(application.CreateMetaObject(g_metaCatalogCLSID, application.GetRootMetaObject(), false), nullptr);
+	ASSERT_TRUE(application.SaveApplicationToFiles(Directory()));
 	const auto before = Snapshot();
 
 	// One part's file gone: the load refuses, and saving what is held gives the export it was.
 	fs::path part;
-	for (const auto& entry : fs::recursive_directory_iterator(m_folder / "configuration"))
+	for (const auto& entry : fs::recursive_directory_iterator(m_folder / "application"))
 		if (entry.is_regular_file() && entry.path().filename() == "node.json")
 			part = entry.path();
 	ASSERT_FALSE(part.empty());
 	fs::rename(part, m_folder / "aside.json");
-	EXPECT_THROW(configuration.LoadConfigFromFiles(Directory()), ibCoreException);
+	EXPECT_THROW(application.LoadApplicationFromFiles(Directory()), ibCoreException);
 	fs::rename(m_folder / "aside.json", part);
-	ASSERT_TRUE(configuration.SaveConfigToFiles(Directory()));
+	ASSERT_TRUE(application.SaveApplicationToFiles(Directory()));
 	EXPECT_EQ(before, Snapshot());
 }

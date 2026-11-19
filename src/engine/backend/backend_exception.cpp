@@ -6,7 +6,7 @@
 #include "backend/backend_exception.h"
 
 #include "backend/backend_diagnostic.h"   // the failure as DATA — built here, text assembled from it
-#include "backend/metadataConfiguration.h"
+#include "backend/metadataApplication.h"
 #include "backend/debugger/debugServer.h"
 #include "backend/appData.h"
 #include "backend/logger/logger.h"   // a runtime failure is recorded where it can be read tomorrow
@@ -275,7 +275,7 @@ void ibBackendException::ProcessError(const ibBackendException& err, const ibByt
 				const ibValueMetaObjectModuleBase* foundedDoc = activeMetaData->FindAnyObjectByFilter<ibValueMetaObjectModuleBase>(guidDocPath, true);
 				// 🛑⭐⭐ NOT EVERY FAILING BYTECODE BELONGS TO A MODULE, and this asserted that it
 				// did — then dereferenced. The module text is wanted for ONE thing: quoting the
-				// offending source line. A program that is not in the configuration has no line to
+				// offending source line. A program that is not in the application has no line to
 				// quote, which is a smaller loss than the crash: MEASURED 2026-09-06, `code_run`
 				// sending a compiled program that calls `Raise("...")` reached here with a docPath
 				// that names no metaobject, and the run died on the assert with the actual failure
@@ -370,8 +370,8 @@ void ibBackendException::ProcessError(const ibString& strFileName,
 	// naming the module that did it.
 	//
 	// ⚠ AND THE TRIGGER IS ORDINARY TEXT, not an edge case. `"discount 20 %"` in a string literal is
-	// enough, and a configuration written in Russian or Ukrainian hits it the same way — which is how
-	// it was found: by bisecting a whole imported configuration down to one manager module that crashed the
+	// enough, and an application written in Russian or Ukrainian hits it the same way — which is how
+	// it was found: by bisecting a whole imported application down to one manager module that crashed the
 	// compiler at base open (2026-08-24).
 	ibBackendCoreException::Error(ibT("%s"),
 		ibBackendException::ProcessExceptionError(strFileName, strModuleName, strDocPath, currPos, currLine, strCodeError, codeError, strErrorDesc,

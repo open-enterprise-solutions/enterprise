@@ -34,9 +34,9 @@
     "database": "Direct database access (SQL)",
     "composer": "Data composer",
     "system_enums": "System enumerations",
-    "metadata_enums": "Configuration object enumerations",
+    "metadata_enums": "Application object enumerations",
     "form_controls": "Form controls",
     "language_runtime": "Language runtime objects",
-    "configuration_runtime": "Configuration objects at run time"
+    "application_runtime": "Application objects at run time"
   }
 }

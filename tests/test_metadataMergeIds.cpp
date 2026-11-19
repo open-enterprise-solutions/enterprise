@@ -1,13 +1,13 @@
-// A data processor read from its file INTO a configuration (the designer's "read from file", ReadExternal) cannot keep
-// the file's ids: they would collide with the configuration's own. #578: the objects were renumbered, but what HOLDS
+// A data tool read from its file INTO an application (the designer's "read from file", ReadExternal) cannot keep
+// the file's ids: they would collide with the application's own. #578: the objects were renumbered, but what HOLDS
 // their ids inside a form was not — a button still named the file's command id, a field the file's attribute id, the
-// form's main attribute the file's root. In the same configuration the file was saved from, those are the ids of the
-// ORIGINAL data processor, so the copy's form quietly bound the original's command.
+// form's main attribute the file's root. In the same application the file was saved from, those are the ids of the
+// ORIGINAL data tool, so the copy's form quietly bound the original's command.
 //
 // ReadExternal reads the file on its own and pastes it in, as a copy made in the designer is pasted; the steps are
-// taken here as it takes them. The data processor is built through the MCP tools, saved to a file and read back into
-// the same configuration, and the copy's form — taken as the designer's editor takes it, from the compile cache — is
-// asked what it holds. The configuration is the one a designer session opens, as in test_commandDescription.cpp.
+// taken here as it takes them. The data tool is built through the MCP tools, saved to a file and read back into
+// the same application, and the copy's form — taken as the designer's editor takes it, from the compile cache — is
+// asked what it holds. The application is the one a designer session opens, as in test_commandDescription.cpp.
 
 #include <gtest/gtest.h>
 #include <wx/string.h>   // wxT, wxString - the engine's headers include no wx
@@ -24,8 +24,8 @@
 #include "backend/databaseLayer/connectionPool.h"
 #include "backend/databaseLayer/sqllite/sqliteDatabaseLayer.h"
 #include "backend/metaCollection/metaFormObject.h"
-#include "backend/metadataConfiguration.h"
-#include "backend/metadataDataProcessor.h"
+#include "backend/metadataApplication.h"
+#include "backend/metadataDataTool.h"
 #include "backend/metadataReport.h"
 #include "backend/propertyManager/property/propertyCommandSource.h"
 #include "backend/propertyManager/property/propertySource.h"
@@ -63,10 +63,10 @@ struct MetadataMergeIds : ::testing::Test {
 		if (!m_db->Open(wxT(":memory:")))
 			GTEST_SKIP() << "in-memory SQLite open failed";
 		pool->Init(m_db, /*maxSize=*/1, /*minIdle=*/0);
-		ibMetaDataConfigurationStorage::CreateConfigTable();
-		ibMetaDataConfigurationStorage::CreateConfigSaveTable();
-		ibMetaDataConfigurationStorage::CreateConfigSequence();
-		m_file = std::filesystem::temp_directory_path() / "oes_test_metadataMergeIds.epf";
+		ibMetaDataApplicationStorage::CreateApplicationTable();
+		ibMetaDataApplicationStorage::CreateApplicationSaveTable();
+		ibMetaDataApplicationStorage::CreateApplicationSequence();
+		m_file = std::filesystem::temp_directory_path() / "oes_test_metadataMergeIds.otl";
 	}
 
 	void TearDown() override {
@@ -118,7 +118,7 @@ bool NamesMetaID(const ibTypeDescription& type, ibMetaID id)
 	return false;
 }
 
-// An external file as SaveCommonTree lays it out: the header (sign, version, guid), then the tree under an id.
+// An external file as SaveRootTree lays it out: the header (sign, version, guid), then the tree under an id.
 ibMemoryBuffer ExternalFile(std::uint64_t sign, std::uint64_t treeId)
 {
 	ibWriterMemory header;
@@ -157,7 +157,7 @@ std::string RefusalOf(const ibMemoryBuffer& bytes, const char* name)
 
 } // namespace
 
-TEST_F(MetadataMergeIds, ADataProcessorReadIntoTheConfiguration_ItsFormHoldsTheNewIds)
+TEST_F(MetadataMergeIds, ADataToolReadIntoTheApplication_ItsFormHoldsTheNewIds)
 {
 	ibSessionRegistry* const registry = ibApplicationInstance::GetSessionRegistry();
 	ASSERT_NE(registry, nullptr);
@@ -174,19 +174,19 @@ TEST_F(MetadataMergeIds, ADataProcessorReadIntoTheConfiguration_ItsFormHoldsTheN
 		~Leave() { m_registry->NotifyDisconnect(m_session); }
 	} leave{ registry, session };
 
-	ibMetaDataConfigurationBase* cfg = session->GetMetaData();
+	ibMetaDataApplicationBase* cfg = session->GetMetaData();
 	ASSERT_NE(cfg, nullptr);
-	if (cfg->IsConfigOpen()) {
+	if (cfg->IsOpen()) {
 		ASSERT_TRUE(cfg->CloseDatabase(ibRuntimeRequest(forceCloseFlag)));
 	}
 	ASSERT_TRUE(cfg->RunDatabase());
 
 	// The original: an attribute, a command, an object form with a field on the attribute and a button on the command.
-	const std::int64_t dpId = Create(wxT("DataProcessor"), wxT("Mover"), 0);
-	ASSERT_GT(dpId, 0);
-	const std::int64_t amountId = Create(wxT("Attribute"), wxT("Amount"), dpId);
-	const std::int64_t actId = Create(wxT("Command"), wxT("Act"), dpId);
-	const std::int64_t formId = Create(wxT("Form"), wxT("Main"), dpId, wxT("FormDataProcessor"));
+	const std::int64_t toolId = Create(wxT("DataTool"), wxT("Mover"), 0);
+	ASSERT_GT(toolId, 0);
+	const std::int64_t amountId = Create(wxT("Attribute"), wxT("Amount"), toolId);
+	const std::int64_t actId = Create(wxT("Command"), wxT("Act"), toolId);
+	const std::int64_t formId = Create(wxT("Form"), wxT("Main"), toolId, wxT("FormDataTool"));
 	ASSERT_GT(amountId, 0);
 	ASSERT_GT(actId, 0);
 	ASSERT_GT(formId, 0);
@@ -215,30 +215,30 @@ TEST_F(MetadataMergeIds, ADataProcessorReadIntoTheConfiguration_ItsFormHoldsTheN
 	bind(buttonId, wxT("Command"), wxT("Act"));
 	bind(fieldId, wxT("Source"), wxT("Amount"));
 
-	ibValueMetaObjectDataProcessor* original = nullptr;
-	ibValueMetaObject* const root = cfg->GetCommonMetaObject();
+	ibValueMetaObjectDataTool* original = nullptr;
+	ibValueMetaObject* const root = cfg->GetRootMetaObject();
 	for (unsigned int idx = 0; idx < root->GetChildCount() && original == nullptr; idx++)
-		if (root->GetChild(idx)->GetMetaID() == (ibMetaID)dpId)
-			original = dynamic_cast<ibValueMetaObjectDataProcessor*>(root->GetChild(idx));
+		if (root->GetChild(idx)->GetMetaID() == (ibMetaID)toolId)
+			original = dynamic_cast<ibValueMetaObjectDataTool*>(root->GetChild(idx));
 	ASSERT_NE(original, nullptr);
 
 	// Written to its file, as the designer's "save to file" does…
-	ASSERT_TRUE(std::make_shared<ibMetaDataDataProcessor>(cfg, original)->SaveToFile(ibString(m_file.wstring())));
+	ASSERT_TRUE(std::make_shared<ibMetaDataDataTool>(cfg, original)->SaveToFile(ibString(m_file.wstring())));
 
-	// …and read back into the same configuration, as "read from file" does (ReadExternal): read on its own, copied, and
-	// pasted under the configuration's root.
+	// …and read back into the same application, as "read from file" does (ReadExternal): read on its own, copied, and
+	// pasted under the application's root.
 	ibWriterMemory copied;
 	{
-		const std::shared_ptr<ibMetaDataDataProcessor> reader = ibMetaData::MakeShared<ibMetaDataDataProcessor>();
+		const std::shared_ptr<ibMetaDataDataTool> reader = ibMetaData::MakeShared<ibMetaDataDataTool>();
 		ASSERT_TRUE(reader->LoadFromFile(ibString(m_file.wstring())));
-		ASSERT_TRUE(reader->CopyMetaObject(reader->GetDataProcessor(), copied));
+		ASSERT_TRUE(reader->CopyMetaObject(reader->GetDataTool(), copied));
 	}
 	ibReaderMemory pasted(copied.pointer(), copied.size());
-	ibValueMetaObject* const copy = cfg->PasteMetaObject(g_metaDataProcessorCLSID, cfg->GetCommonMetaObject(), pasted);
+	ibValueMetaObject* const copy = cfg->PasteMetaObject(g_metaDataToolCLSID, cfg->GetRootMetaObject(), pasted);
 	ASSERT_NE(copy, nullptr);
 
 	// Every object of the copy has an id of its own: the root, the parts, the predefined children (its modules).
-	EXPECT_NE(copy->GetMetaID(), (ibMetaID)dpId);
+	EXPECT_NE(copy->GetMetaID(), (ibMetaID)toolId);
 	ibValueMetaObject* const amount = ChildNamed(copy, g_metaAttributeCLSID, wxT("Amount"));
 	ibValueMetaObject* const act = ChildNamed(copy, g_metaCommandCLSID, wxT("Act"));
 	auto* const form = dynamic_cast<ibValueMetaObjectFormBase*>(ChildNamed(copy, g_metaFormCLSID, wxT("Main")));
@@ -284,7 +284,7 @@ TEST_F(MetadataMergeIds, ADataProcessorReadIntoTheConfiguration_ItsFormHoldsTheN
 	ibFormAttributeValue* const main = valueForm->GetMainAttribute();
 	ASSERT_NE(main, nullptr);
 	EXPECT_TRUE(NamesMetaID(main->GetTypeDesc(), copy->GetMetaID()));
-	EXPECT_FALSE(NamesMetaID(main->GetTypeDesc(), (ibMetaID)dpId));
+	EXPECT_FALSE(NamesMetaID(main->GetTypeDesc(), (ibMetaID)toolId));
 }
 
 // A file this build cannot read is refused in words that name it. A quiet false was a report opened in the application
@@ -294,15 +294,15 @@ TEST_F(MetadataMergeIds, AnExternalFileThisBuildCannotRead_IsRefusedInWords)
 {
 	const std::uint64_t unknownTree = 0x1234;   // no kind byte: no tree this build reads is kept under it
 
-	const std::string processor = RefusalOf<ibMetaDataDataProcessor>(ExternalFile(sign_dataProcessor, unknownTree), "Old.epf");
-	EXPECT_NE(std::string::npos, processor.find("cannot read")) << processor;
-	EXPECT_NE(std::string::npos, processor.find("Old.epf")) << processor;
+	const std::string tool = RefusalOf<ibMetaDataDataTool>(ExternalFile(sign_dataTool, unknownTree), "Old.otl");
+	EXPECT_NE(std::string::npos, tool.find("cannot read")) << tool;
+	EXPECT_NE(std::string::npos, tool.find("Old.otl")) << tool;
 
-	const std::string report = RefusalOf<ibMetaDataReport>(ExternalFile(sign_dataReport, unknownTree), "Old.erp");
+	const std::string report = RefusalOf<ibMetaDataReport>(ExternalFile(sign_dataReport, unknownTree), "Old.orp");
 	EXPECT_NE(std::string::npos, report.find("cannot read")) << report;
-	EXPECT_NE(std::string::npos, report.find("Old.erp")) << report;
+	EXPECT_NE(std::string::npos, report.find("Old.orp")) << report;
 
-	// A data processor's file opened as a report is not a report's at all — its header says so.
-	const std::string notReport = RefusalOf<ibMetaDataReport>(ExternalFile(sign_dataProcessor, g_metaExternalDataProcessorCLSID), "Processor.erp");
+	// A data tool's file opened as a report is not a report's at all — its header says so.
+	const std::string notReport = RefusalOf<ibMetaDataReport>(ExternalFile(sign_dataTool, g_metaExternalDataToolCLSID), "DataTool.orp");
 	EXPECT_NE(std::string::npos, notReport.find("cannot read")) << notReport;
 }

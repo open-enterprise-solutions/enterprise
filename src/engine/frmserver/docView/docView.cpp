@@ -45,7 +45,7 @@
 // FindTemplateForPath). The metadata-aware wiring (OpenForm, the meta-template
 // registry) lives in docManager.cpp.
 #include "frmserver/docView/docManager.h"   // ibDocTemplate / ibMetaDocTemplate
-#include "backend/metadataConfiguration.h"
+#include "backend/metadataApplication.h"
 
 // ============================================================================
 // implementation
@@ -909,13 +909,29 @@ ibMetaDataDocument* ibDocManager::FindMetaDataDocument(const ibMetaData* metaDat
     return nullptr;
 }
 
+ibMetaDataDocument* ibDocManager::FindMetaDataDocument(const ibString& fileName) const
+{
+    if ( fileName.IsEmpty() )
+        return nullptr;
+
+    for ( ibDocument* doc : GetDocumentsVector() )
+    {
+        ibMetaDataDocument * const metaDoc = dynamic_cast<ibMetaDataDocument*>(doc);
+        const ibMetaData * const metaData = metaDoc != nullptr ? metaDoc->GetMetaData() : nullptr;
+
+        if ( metaData != nullptr && metaData->GetFileName() == fileName )
+            return metaDoc;
+    }
+    return nullptr;
+}
+
 ibDocument* ibDocManager::FindOpenDocument(const ibString& identifier,
                                            const ibDocument* docParent) const
 {
-    // ⚠ AT THE OWNER, NOT MINE FIRST. The same guid is in every configuration open at once — the session's, the
+    // ⚠ AT THE OWNER, NOT MINE FIRST. The same guid is in every application open at once — the session's, the
     // database's, a file's — and mine first answered the session's editor about the others' objects: Common of the
     // database's and of an .oap raised the session's Common (2026-10-20). An editor opened from a tree is its
-    // document's child; mine are the session's configuration's, which has no document.
+    // document's child; mine are the session's application's, which has no document.
     return docParent != nullptr ? docParent->FindChildDocument(identifier) : FindDocumentByIdentifier(identifier);
 }
 
@@ -1213,7 +1229,7 @@ void ibDocManager::ActivateView(ibView *view, bool activate)
 #include "frmserver/client/clientFrame.h"   // ibClientFrame::CreateChildFrame
 
 #include "docManager.h"
-#include "backend/metadataConfiguration.h"
+#include "backend/metadataApplication.h"
 
 // ShowFrame() lifted to ibView in step-4 collapse.
 
@@ -1368,13 +1384,13 @@ bool ibMetaDocument::Save()
 		// reported as a failed save, and one that FAILED fell through to SaveAs() — which answers
 		// true for a metaobject document — and was reported as a success. The write itself always
 		// happened, which is why it went unnoticed: only the verdict was wrong.
-		// ⭐ AND IT IS A PLAIN SAVE, so it passes defaultFlag. Ctrl+S stores the working configuration;
-		// it does not move the schema, and saveConfigFlag is what opens the restructure branch rather
-		// than what says "the text changed" (metadataConfiguration.cpp, SaveConfiguration).
+		// ⭐ AND IT IS A PLAIN SAVE, so it passes defaultFlag. Ctrl+S stores the working application;
+		// it does not move the schema, and saveApplicationFlag is what opens the restructure branch rather
+		// than what says "the text changed" (metadataApplication.cpp, SaveApplication).
 		//
-		// The AOT row this used to chase is retired BY THE KEY — build stamp plus configuration
+		// The AOT row this used to chase is retired BY THE KEY — build stamp plus application
 		// digest — and the digest moves only when a restructure succeeds. Which is right: the runtime
-		// reads `config`, Ctrl+S does not publish it, so every cached row is still true.
+		// reads `application`, Ctrl+S does not publish it, so every cached row is still true.
 		if ((m_documentParent == nullptr && m_metaObject != nullptr) && IsChildDocument())
 			return activeMetaData->SaveDatabase(defaultFlag);
 

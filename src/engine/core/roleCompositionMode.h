@@ -14,7 +14,7 @@
 //
 //   Union        - the role ADDS to what is permitted; one of them granting is enough. An ordinary
 //                  right, and the DEFAULT — anything that does not say otherwise is one, so an
-//                  existing configuration behaves exactly as it did.
+//                  existing application behaves exactly as it did.
 //   Intersection - the role GRANTS NOTHING and SUBTRACTS: what it denies stays denied whatever the
 //                  union roles granted, and no further role can widen past it. This is what a data
 //                  SEPARATOR is (organisation / division / clearance): declared once instead of

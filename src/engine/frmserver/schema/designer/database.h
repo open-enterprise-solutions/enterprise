@@ -12,7 +12,7 @@
 class FRMSERVER_API ibSchemaDatabase : public ibClientSchema {
 public:
 
-	// The configuration's right to administer the data — what the desktop's three items stood on.
+	// The application's right to administer the data — what the desktop's three items stood on.
 	virtual bool AccessRight(const ibSession& session) const override;
 
 	// Nothing: the base is acted on, not shown.

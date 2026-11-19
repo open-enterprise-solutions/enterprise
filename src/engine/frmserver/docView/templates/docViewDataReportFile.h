@@ -44,9 +44,9 @@ public:
 		SetTitle(name);
 		SetFilename(name, true);
 
-		ibValueMetaObject* commonObject = m_metaData->GetCommonMetaObject();
-		ibASSERT(commonObject);
-		commonObject->SetName(name);
+		ibValueMetaObject* rootObject = m_metaData->GetRootMetaObject();
+		ibASSERT(rootObject);
+		rootObject->SetName(name);
 
 		if (!m_metaData->RunDatabase())
 			return false;

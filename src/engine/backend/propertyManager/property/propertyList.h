@@ -10,10 +10,10 @@
 //base property for "list"
 //
 // ⭐⭐ THE CHOICES ARE FILLED ONCE, AND A READ ONLY READS. The functor asks the owner what it offers and fills
-// m_listPropValue; it used to run on EVERY read of the value, so a read wrote. A configuration is one object for
+// m_listPropValue; it used to run on EVERY read of the value, so a read wrote. An application is one object for
 // all the sessions of a base, and two sessions reading its language at once (each compiling its root at login)
 // refilled the same vector under each other — the application server and the web host fell on six logins at
-// once (2026-10-06). So a configuration fills its lists when it loads (ibValueMetaObject::RunSubtree, the resolve
+// once (2026-10-06). So an application fills its lists when it loads (ibValueMetaObject::RunSubtree, the resolve
 // phase — sequential, every object present), anything else on its first read; afterwards a read takes the shared
 // lock and reads. The list is refilled where what is offered may have changed: when the value is SET (the next
 // read fills afresh) and when the choices are SHOWN (GetValueList — the designer has just been editing).
@@ -193,7 +193,7 @@ private:
 		return m_listOffered;
 	}
 
-	// A list nobody has filled yet — its owner is not loaded with a configuration (a form's control), or its value
+	// A list nobody has filled yet — its owner is not loaded with an application (a form's control), or its value
 	// has just been set — is filled on its first read, once.
 	void EnsureList() const {
 		if (m_listFilled.load(std::memory_order_acquire))
@@ -218,7 +218,7 @@ public:
 		return ibNOT_FOUND;
 	}
 
-	// The choices read afresh from the owner: by a configuration as it loads (every list of every object, once), and
+	// The choices read afresh from the owner: by an application as it loads (every list of every object, once), and
 	// by whoever knows what is offered has changed. A read waits for the fill and never sees half of it.
 	void FillList() {
 		std::unique_lock<std::shared_mutex> lock(m_listMutex);

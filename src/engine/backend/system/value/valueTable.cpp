@@ -52,7 +52,7 @@ m_tableColumnCollection(new ibValueModelTableColumnCollection(this))
 	m_members.Bind(this, &ibValueModelTable::FillMembers);
 	// (The RAM composer is auto-bound to this model's value-storage in ibValueModelStorage's ctor — no manual bind.)
 	// It knows the columns it reads from the start (see ibValueTabularSectionDataObjectBase); a value table
-	// belongs to no configuration, so there is none to hand it.
+	// belongs to no application, so there is none to hand it.
 	Storage().SetColumns(m_tableColumnCollection);
 }
 
@@ -288,12 +288,12 @@ bool ibValueModelTable::GetAt(const ibValue& varKeyValue, ibValue& pvarValue)
 
 #include "core/serialize/dataBuilder.h"   // ibDataNode — column collection round-trip
 #include "core/description/typeDescription.h"         // ibTypeDescriptionMemory — column type node round-trip
-#include "backend/metadataConfiguration.h"   // ibMetaDataConfigurationBase : ibMetaData — GetActiveMetaData() base cast
+#include "backend/metadataApplication.h"   // ibMetaDataApplicationBase : ibMetaData — GetActiveMetaData() base cast
 
 const ibMetaData* ibValueModelTable::GetSourceMetaData() const
 {
-	// A RAM table has no metaobject of its own → expose the ACTIVE config, so reference-typed columns resolve
-	// their targets. Mirrors the dynamic list, which gets real config metaData from its queryable; a value-table
+	// A RAM table has no metaobject of its own → expose the ACTIVE application, so reference-typed columns resolve
+	// their targets. Mirrors the dynamic list, which gets real application metaData from its queryable; a value-table
 	// has none of its own, so it falls to active.
 	return ibApplicationInstance::GetActiveMetaData();
 }
@@ -382,7 +382,7 @@ bool ibValueModelTable::WriteProperty(ibDataNode& node) const
 bool ibValueModelTable::ReadProperty(const ibDataNode& node)
 {
 	// …AND TAKEN BACK, so the table is the same table it was last time. Kept ONLY when something was
-	// written: a configuration saved before this existed carries no guid, and overwriting the minted one
+	// written: an application saved before this existed carries no guid, and overwriting the minted one
 	// with a null would give every such table one shared address — which is worse than a fresh one.
 	const ibGuid stored = node.GetValue<ibGuid>(ibT("Guid"));
 	if (stored.isValid())
@@ -518,7 +518,7 @@ ibValueModelTable::ibValueModelTableColumnCollection::ibValueModelTableColumnInf
 
 const ibMetaData* ibValueModelTable::ibValueModelTableColumnCollection::ibValueModelTableColumnInfo::GetMetaData() const
 {
-	// The column has no metaobject of its own — expose the active configuration so a reference-typed
+	// The column has no metaobject of its own — expose the active application so a reference-typed
 	// column resolves its targets (mirror ibValueModelTable::GetSourceMetaData / ibFormAttribute).
 	return ibApplicationInstance::GetActiveMetaData();
 }
@@ -884,6 +884,6 @@ void ibValueModelTable::Clear()
 
 VALUE_TYPE_REGISTER(ibValueModelTable, "Table", g_valueTableCLSID);
 
-SYSTEM_TYPE_REGISTER(ibValueModelTable::ibValueModelTableColumnCollection, "TableValueColumn", system_to_clsid("VL_TVCLM"));
-SYSTEM_TYPE_REGISTER(ibValueModelTable::ibValueModelTableColumnCollection::ibValueModelTableColumnInfo, "TableValueColumnInfo", system_to_clsid("VL_TVCLI"));
-SYSTEM_TYPE_REGISTER(ibValueModelTable::ibValueModelTableReturnLine, "TableValueRow", system_to_clsid("VL_TVROW"));
+SYSTEM_TYPE_REGISTER(ibValueModelTable::ibValueModelTableColumnCollection, "TableColumns", system_to_clsid("VL_TCLM"));
+SYSTEM_TYPE_REGISTER(ibValueModelTable::ibValueModelTableColumnCollection::ibValueModelTableColumnInfo, "TableColumn", system_to_clsid("VL_TCLI"));
+SYSTEM_TYPE_REGISTER(ibValueModelTable::ibValueModelTableReturnLine, "TableRow", system_to_clsid("VL_TROW"));

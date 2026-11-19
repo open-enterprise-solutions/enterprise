@@ -1,7 +1,7 @@
 ////////////////////////////////////////////////////////////////////////////
 //	Description : Git panel for the Designer — a dockable AUI pane that drives
-//	              ibGitService against the configuration working copy (the dir
-//	              where the config is exported to OES-XML / OES-JSON). First
+//	              ibGitService against the application working copy (the dir
+//	              where the application is exported to OES-XML / OES-JSON). First
 //	              increment: status list + Refresh / Commit / Push / Pull.
 //	              Diff view, log, and branch switching land as later steps.
 ////////////////////////////////////////////////////////////////////////////
@@ -22,7 +22,7 @@
 
 class ibGitPanel : public ibPanel {
 public:
-	// `workdir` is the configuration working copy. Empty until a config is
+	// `workdir` is the application working copy. Empty until an application is
 	// opened; SetWorkdir() rebinds the service and refreshes.
 	ibGitPanel(wxWindow* parent, const wxString& workdir = wxEmptyString);
 

@@ -10,7 +10,7 @@ the database in step with the description as it changes.
 It ships with everything that loop needs: a designer, a compiler and bytecode interpreter, a remote
 debugger, a multi-database layer, a job manager, an application server, a cluster that gives each base
 a server process of its own, a thin client and a web server — and a built-in **MCP server**, so an
-AI assistant can read, build and check a configuration alongside the developer, through the same
+AI assistant can read, build and check an application alongside the developer, through the same
 doors the developer uses.
 
 **Status: [2.0.0-preview.1](docs/release-notes/v2.0.0-preview.1.md)** — the first release after the alpha, on the
@@ -41,8 +41,8 @@ tree, forms, the language, queries and reports, and the pitfalls.
 | Operations | Document — written, posted into registers, reposted, marked for deletion |
 | Registers | **Information** (periodic, with slices) · **Accumulation** (balances and turnovers, trigger-maintained totals) · **Accounting** (chart of accounts, double entry, correspondence, analytics addressed by kind) · **Calculation** (payroll: displacement, base, recalculation) |
 | Charts | Chart of accounts · Chart of calculation types (displacing, base and leading types) |
-| Processing and reports | Data processor · Report with its own composers · external data processors and reports |
-| Configuration-wide | Common modules · common forms, templates and commands · common attributes · session parameters · functional options · roles · sections (the navigation panel) · languages · pictures · scheduled jobs |
+| Processing and reports | Data tool · Report with its own composers · external data tools and reports |
+| Application-wide | Shared modules · shared forms, templates and commands · shared attributes · session parameters · feature options · roles · sections (the navigation panel) · languages · pictures · scheduled jobs |
 
 ---
 
@@ -62,10 +62,10 @@ tree, forms, the language, queries and reports, and the pitfalls.
   keyword-fenced), procedures and functions, lambdas with closure capture, `try … except`,
   multi-line strings for query texts, **LINQ** (`from … where … join … group by … orderby … select`)
   compiled into the bytecode, 106 built-in functions and 8 procedures. Bytecode of 81 opcodes, kept
-  in an ahead-of-time cache so a module compiles once per configuration version and engine.
+  in an ahead-of-time cache so a module compiles once per application version and engine.
 - **Designer** — metadata tree, form designer (drag a field onto a form and a bound control
   appears), code editor with IntelliSense, a query constructor that edits the query inside the
-  literal the caret is in, a spreadsheet template editor, configuration compare, and a git panel.
+  literal the caret is in, a spreadsheet template editor, application compare, and a git panel.
   Every property carries its own help text.
 - **Debugger** — remote, over a WebSocket (ports 7700–7709): breakpoints with conditions, stepping, watches,
   evaluation in the stopped frame; the designer attaches to a client on a file base, to a thin
@@ -74,7 +74,7 @@ tree, forms, the language, queries and reports, and the pitfalls.
   *permits* (adds rights) or *restricts* (subtracts them, whatever the others grant), so a data
   separator is declared once instead of copied into every role. **Row-level security** is code in the
   role (`OnAccessRead` / `OnAccessWrite`) that narrows what a query may read or write — fail-closed.
-- **Schema management** — the configuration is applied to the database by a diff; a rehearsal shows
+- **Schema management** — the application is applied to the database by a diff; a rehearsal shows
   the exact DDL before anything moves; on Firebird a two-phase apply compensates its first commit if
   the second fails, so a refused apply leaves the database where it was.
 - **Jobs** — scheduled and background jobs in sessions of their own, with a cross-process claim so a
@@ -82,7 +82,7 @@ tree, forms, the language, queries and reports, and the pitfalls.
   Firebird sweep and backup) runs on the same manager.
 - **AI access over MCP** — an assistant's port in the designer and in the application client, the tools in
   the engine (one MCP server per client, on the file base's or the application server's side), 135 tools across the platform: read and
-  edit metadata and modules; apply the configuration with a rehearsal; run code on the
+  edit metadata and modules; apply the application with a rehearsal; run code on the
   application; ask the data questions and compose reports; drive the debugger; read and write the
   registration journal. Protected by a token, listening on loopback by default; every call is
   journalled.
@@ -96,7 +96,7 @@ tree, forms, the language, queries and reports, and the pitfalls.
   it and is started again; the other bases do not notice. A console program or a service of the system
   (`appcluster --install` on Windows, a systemd unit on Linux). `appcluster-tray` shows each base's
   server and starts, stops and restarts it — and starts the cluster itself when none runs.
-- **Thin client** — `appworkspace` runs no code of the configuration: the server holds the session,
+- **Thin client** — `appworkspace` runs no code of the application: the server holds the session,
   its forms and documents, the client draws what it is answered and sends what the person did. One
   [client protocol](docs/public/client-protocol.md) — binary OES-RPC packets over WebSocket, or JSON-RPC
   over HTTP, to an application server; a file base is the same protocol in the client's own process. The
@@ -104,7 +104,7 @@ tree, forms, the language, queries and reports, and the pitfalls.
 - **Databases** — Firebird (embedded, shipped with the distribution) and PostgreSQL for production;
   ODBC; SQLite for tests and logging.
 - **Localisation** — the whole interface in English, Russian and Ukrainian; every caption of a
-  configuration can be written per language.
+  application can be written per language.
 - **Web client** — `webserver` serves the application to a browser: it carries it to a file base or to
   an application server's base over the client protocol, with TLS. The page draws what the thin client
   draws — lists, forms, tables, reports and their settings, questions, print — in the person's language,
@@ -139,7 +139,7 @@ On a copy of a 40 000-employee payroll base (Release, x86): a month's payroll re
 4. Select configuration `Debug|Win32` or `Release|x64`.
 5. Build the solution (`Ctrl+Shift+B`). Binaries are placed in `bin\<Platform>\<Configuration>\`
    (`Win32` or `Win64`).
-6. Run `appstudio.exe` to build a configuration, `appworkspace.exe` to work in it — or
+6. Run `appstudio.exe` to build an application, `appworkspace.exe` to work in it — or
    `launcher.exe` to pick a base first (it starts the same two programs). `appcluster.exe` serves the bases of a server folder with no
    window, an `appserver.exe` process per base (`appcluster-tray.exe` shows and steers it); both
    clients work in a base it serves, or in a file base.
@@ -316,11 +316,11 @@ OES is **source-available, not open source**, under the
 acting as Open Enterprise Solutions until it is registered as a company ([NOTICE.md](NOTICE.md)).
 
 **Free, and meant to be used:** clone it, build it, break it, change it, run it on your own
-machine, write configurations for it, teach a course from it, write a thesis about it, publish
+machine, write applications for it, teach a course from it, write a thesis about it, publish
 what you learned. No notification, no permission, no explanation owed to anyone.
 
 **Also free: evaluation, for a business too.** A company or an implementer may install it and
-run it to decide whether to build on it — trial configurations, test data, its own people.
+run it to decide whether to build on it — trial applications, test data, its own people.
 Live work is not evaluation.
 
 **Needs a license from us:** earning from it. Running it in a business, providing a service

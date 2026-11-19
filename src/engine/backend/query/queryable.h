@@ -110,24 +110,24 @@ private:
 	const std::map<ibString, std::shared_ptr<ibQuerySelect>>* m_prev;
 };
 
-class ibMetaData;   // the config a query runs on behalf of — its factory resolves by-name metaobject sources
+class ibMetaData;   // the application a query runs on behalf of — its factory resolves by-name metaobject sources
 class ibQueryableFactory;
 
-// ibSourceMetaDataScope — the CONFIG a query runs ON BEHALF OF, for the duration of one execution. The composer sets
-// it (from its metadata) before lowering; ResolveSource resolves a by-name metaobject source through THIS config's
-// factory (sources register per-config), never the global one. Parallel to ibTempSourceScope; null outside a scope.
+// ibSourceMetaDataScope — the APPLICATION a query runs ON BEHALF OF, for the duration of one execution. The composer sets
+// it (from its metadata) before lowering; ResolveSource resolves a by-name metaobject source through THIS application's
+// factory (sources register per-application), never the global one. Parallel to ibTempSourceScope; null outside a scope.
 class BACKEND_API ibSourceMetaDataScope
 {
 public:
 	explicit ibSourceMetaDataScope(const ibMetaData* metaData);
 	~ibSourceMetaDataScope();
 
-	// The config in force for THIS execution, or null (no scope / a sourceless composer).
+	// The application in force for THIS execution, or null (no scope / a sourceless composer).
 	static const ibMetaData* Get();
 
-	// THE factory a by-name source resolves through: this scope, else the active configuration, else the global
+	// THE factory a by-name source resolves through: this scope, else the active application, else the global
 	// base one. Everything that resolves a source asks HERE — a hand-written query in a module sets no scope and
-	// still means the config it lives in.
+	// still means the application it lives in.
 	static ibQueryableFactory* GetFactory();
 
 	ibSourceMetaDataScope(const ibSourceMetaDataScope&) = delete;
@@ -650,7 +650,7 @@ struct ibSubqueryOutput
 	ibString                    m_objectPrefix;
 	ibTypeDescription           m_type;            // empty = unknown (a computed expression)
 
-	// ⭐ WHETHER WHAT IT READS MAY BE SHOWN (functional options) — the inner schema's answer
+	// ⭐ WHETHER WHAT IT READS MAY BE SHOWN (feature options) — the inner schema's answer
 	// (ibQueryOutputColumn::m_available). `m_col` may be a walk's leaf, which answers for itself alone.
 	bool                                  m_available = true;
 	// …and what it is in a balance — the inner schema's answer too (ibQueryOutputColumn::GetBalanceRole): the query's
@@ -693,7 +693,7 @@ public:
 		// Identity by model-id, NOT merely by name: two joined sources can each expose an attribute with
 		// the SAME name (e.g. "Reference"), and a name-only check would let BOTH claim the other's column —
 		// a join would then read a foreign field off this leaf's own SELECT * (fld<id>_TYPE not found).
-		// The model-id (attribute metaID) is config-unique, so each column belongs to exactly one.
+		// The model-id (attribute metaID) is application-unique, so each column belongs to exactly one.
 		if (col == nullptr) return false;
 		const std::shared_ptr<const ibBackendQueryColumn> mine = ResolveColumnByName(col->GetName());
 		return mine != nullptr && mine->GetColumnId() == col->GetColumnId();
@@ -975,9 +975,9 @@ public:
 	ibString GetQueryTableName() const override { return ibEmptyString; }
 	ibMetaID GetQueryTableId()    const override { return 0; }
 
-	// ⭐ BUT IT DOES KNOW WHICH CONFIGURATION IT READS — the inner query's own. Answering "no
+	// ⭐ BUT IT DOES KNOW WHICH APPLICATION IT READS — the inner query's own. Answering "no
 	// metadata" made every reference published by a subquery UNWALKABLE: resolving a reference to its
-	// target needs the configuration the target lives in, so `Ref.Attribute1` over
+	// target needs the application the target lives in, so `Ref.Attribute1` over
 	// `SELECT * FROM (SELECT Document1.Ref …)` came back as "'Ref' is not a single-target reference
 	// (cannot walk)" — about a column whose type says exactly which document it points at
 	// (2026-08-20). A wrapper is not a metadata-free source: it is a query over one.

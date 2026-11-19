@@ -229,7 +229,7 @@ bool ibValueMetaObjectChartOfAccounts::OnLoadMetaObject(ibMetaData* metaData)
 	// ⚠ NOT HERE. The binding is read by now, but the thing it resolves THROUGH is not: a reference
 	// type is registered when its metaobject RUNS, and at load time no metaobject has run yet. So this
 	// asked the type ctor registry for something that cannot be there — the assert fired on plain
-	// "open a configuration", and in a release build the next line dereferenced null.
+	// "open an application", and in a release build the next line dereferenced null.
 	//
 	// The window this was meant to cover — metadata describing a column between load and run, with a
 	// save happening in between — is closed by the call in OnSaveMetaObject, which runs immediately
@@ -244,7 +244,7 @@ bool ibValueMetaObjectChartOfAccounts::OnSaveMetaObject(int flags)
 	// A CHART OF ACCOUNTS WITHOUT A CHART OF CHARACTERISTIC TYPES IS NOT A HALF-CONFIGURED CHART, IT IS A
 	// CONTRADICTION: its analytics kinds table exists to hold ELEMENTS OF THAT CHART, and with no chart the
 	// column has no type, so the section is a set of rows that can name nothing. Refused here, where a data
-	// processor or an import cannot walk around it.
+	// tool or an import cannot walk around it.
 	// REPORTED, NOT THROWN. A metadata rule the user has not satisfied yet belongs in the message pane
 	// under the editor, the way an enumeration with no values reports itself — a modal box for something
 	// found while saving interrupts the work instead of describing it. The save still refuses.
@@ -319,7 +319,7 @@ bool ibValueMetaObjectChartOfAccounts::OnBeforeRunMetaObject(int flags)
 
 // THE KIND COLUMN'S TYPE COMES FROM THE BINDING, and must be applied wherever the binding can have
 // arrived: on load, when the user picks the chart, and on run. It used to be applied at RUN only, so
-// between picking a chart and the next configuration run the metadata said one thing and the schema
+// between picking a chart and the next application run the metadata said one thing and the schema
 // another — the apply then tried to ALTER away a reference slot the table had never grown
 // ("column FLD…_RTREF does not exist").
 //
@@ -426,7 +426,7 @@ bool ibValueMetaObjectChartOfAccounts::OnAfterRunMetaObject(int flags)
 	if (!(*m_propertyManagerModule)->OnAfterRunMetaObject(flags)) return false;
 
 	// THE COLUMN SET FIRST, THE TYPING AFTER IT — a run that types what exists before this call types
-	// the previous state, and a column created here would stand untyped for a whole configuration run.
+	// the previous state, and a column created here would stand untyped for a whole application run.
 	SyncAccountDimensionKindColumns();
 
 	for (ibValueMetaObjectAttributePredefined* column : m_accountDimensionKindColumns) {

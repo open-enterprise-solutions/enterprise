@@ -1248,7 +1248,7 @@ ibString FigureName(const ibValueMetaObjectAttributeBase* resource, const ibStri
 // BalanceDr` and `…Cr` both came back as `CURRENCYAMOUNTCLOSINGGROSSBALANC`, neither was found by its
 // name, and the continental ledger's gross currency balance read as zero while the same pair folded to
 // the right 200 (measured 2026-09-16). The resource's field is short by construction and is the name the
-// configuration's author never chooses — so a figure column is kept, and every server projection
+// application's author never chooses — so a figure column is kept, and every server projection
 // answers, under this one; FigureName stays what a query writes and what the RAM rows are poured by.
 ibString FigureField(const ibValueMetaObjectAttributeBase* resource, const ibString& suffix)
 {
@@ -1420,7 +1420,7 @@ int AccountTypeOf(const ibValue& account, ibAcctTypeCache& cache)
 // ⭐⭐ THE CHART ARRIVES AS METADATA, NOT OUT OF THE VALUE.
 //
 // Which chart this is, and which of its columns carry the kind and the flag, are facts of the
-// CONFIGURATION — the caller is a totals reading and holds them already. Digging them out of the
+// APPLICATION — the caller is a totals reading and holds them already. Digging them out of the
 // runtime account value meant asking a reference for its metaobject in order to learn something the
 // register had known all along, and it put a runtime object on the path of a question that has none.
 // ⭐⭐ ONE READING, NOT ONE PER ACCOUNT — WHICH IS WHY THERE IS NO CACHE.
@@ -5177,7 +5177,7 @@ bool AnyTurnoverOnlyKind(const ibValueMetaObjectChartOfAccounts* chart)
 	// reading failed".
 	//
 	// The failure that matters is a lock. A relation is built whenever a query is, including while a
-	// configuration is being APPLIED, with a DDL transaction open on another channel. A read issued into
+	// application is being APPLIED, with a DDL transaction open on another channel. A read issued into
 	// that answers with a deadlock, and unguarded it would abort the apply: an optimisation hint killing a
 	// restructuring is the wrong thing failing.
 	try {

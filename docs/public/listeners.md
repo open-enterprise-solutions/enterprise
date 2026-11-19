@@ -41,7 +41,7 @@ number, `::1`, `localhost` - and is refused on any other, with `backend.conf` na
 clear does not cross a network.
 
 - **The assistant access** - in the designer, and the one the application server starts for a base - edits
-  a configuration and runs code as the developer whose session it lives in, and a token sent in the clear
+  an application and runs code as the developer whose session it lives in, and a token sent in the clear
   across a network is a token given away. Widen the address, and the designer says that `backend.conf`
   must name a certificate first; the application server says it in its journal and serves the base
   without. With one named, the address it shows and the `claude mcp add` line it writes carry

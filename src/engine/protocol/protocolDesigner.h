@@ -4,7 +4,7 @@
 #include "protocol/protocol.h"
 
 // THE DESIGNER'S PART OF THE PROTOCOL — what only the designer speaks: its debugger's connection, the questions asked
-// while a configuration is written, its schemas (the configuration's tree, the inspector, the editors over an object)
+// while an application is written, its schemas (the application's tree, the inspector, the editors over an object)
 // and its tabs' views (a module, a form being designed, the check trees, the query constructor). Behind each the
 // server's door is the designer's (frmserver/schema/designer/, docView/templates/designer/, the debugger); a client of
 // the application — the thin client, the browser — speaks protocol.h alone. The numbers stay there, beside every
@@ -27,7 +27,7 @@ namespace ibProtocol {
 		inline constexpr const char* Kill       = "Kill";         // Detach, Stop: the runtime is ended too
 		inline constexpr const char* Rows       = "Rows";
 		inline constexpr const char* Type       = "Type";         // a connection's (the runtime's ConnectionType), a value's type
-		inline constexpr const char* Verified   = "Verified";     // a connection's: the runtime is of this configuration
+		inline constexpr const char* Verified   = "Verified";     // a connection's: the runtime is of this application
 		inline constexpr const char* Connected  = "Connected";    // a connection's: its socket is open; a session's news: a
 		                                                          // runtime is still attached
 		inline constexpr const char* User       = "User";
@@ -114,7 +114,7 @@ namespace ibProtocol {
 
 		}
 
-		// The desktop's ibShowPredefinedSelector, its second question — which DECLARED value, while a configuration is
+		// The desktop's ibShowPredefinedSelector, its second question — which DECLARED value, while an application is
 		// written and there is no data: Types — a branch per admitted reference (Title), its values as children (Name,
 		// Id), each holding what is declared under it (a predefined folder's items) → Id — the value chosen; none —
 		// closed. The first question, which type, is the type list every road asks (ibChoice).
@@ -131,13 +131,13 @@ namespace ibProtocol {
 
 	namespace ibSchema {
 
-		// THE DESIGNER'S CONFIGURATION COMPARE — Build {Mode, File?, File2?} walks two trees (ibMetaDiffWalker) →
+		// THE DESIGNER'S APPLICATION COMPARE — Build {Mode, File?, File2?} walks two trees (ibMetaDiffWalker) →
 		// Records (Status, Parent, Depth, Group, Name, Picture, Property, Left, Right, LeftId, RightId). Mode: File —
 		// active vs uploaded File; Database — active vs its baseline; TwoFiles — File vs File2. Command Merge {Mode,
 		// File?, File2?, Pull, Ops: [{Op, LeftId, RightId, ParentId}]} — CopyMetaObject / Remove / Paste on the server;
 		// ParentId — what an Add goes under on the side written (the desktop's FindTargetParent; none: the root). Push
 		// (Pull false) writes the right side back into File or File2.
-		namespace ibConfigCompare {
+		namespace ibApplicationCompare {
 
 			inline constexpr const char* Mode          = "Mode";
 			inline constexpr const char* File          = "File";
@@ -160,7 +160,7 @@ namespace ibProtocol {
 			inline constexpr const char* ParentId      = "ParentId";
 
 			enum class ibMode : int {
-				File     = 1,   // active configuration vs uploaded File
+				File     = 1,   // active application vs uploaded File
 				Database = 2,   // active vs its database baseline
 				TwoFiles = 3,   // File vs File2
 			};
@@ -174,7 +174,7 @@ namespace ibProtocol {
 		}
 
 		// The designer's users of the base — a user's record as the engine's ibUserInfo holds it: Users (Guid, Name,
-		// FullName), and the configuration's Roles (Guid, Name, Title, Mode) a user's record is chosen from (its languages —
+		// FullName), and the application's Roles (Guid, Name, Title, Mode) a user's record is chosen from (its languages —
 		// ibLanguages); `Args: {Guid}` — that one's User {Guid, Name, FullName, Password — whether one is stored (never the
 		// stored one), Language — its guid, Roles (Guid)}; commands Save {Guid, Name, FullName, Language, Roles (Guid)[,
 		// Password — a new one, hashed by the server; absent: the stored one kept]}, Remove {Guid}.
@@ -226,11 +226,11 @@ namespace ibProtocol {
 
 		}
 
-		// THE DESIGNER'S CONFIGURATION TREE — shows nothing: its rows ride the frame (ibFrame::MetaData), each row
+		// THE DESIGNER'S APPLICATION TREE — shows nothing: its rows ride the frame (ibFrame::MetaData), each row
 		// ibNode::Id — its object's id, or below 0 a group row's place among its siblings; Title, Picture, Group — what New
 		// makes under it, Type, Synonym, Position, Guid — its object's; a language's Code, a role's Mode; Menu. Its
 		// commands are its own (ibCommand), each with Tab in that tab's tree — an external file's (ibView::ibKind
-		// DataProcessor, Report) or a configuration browsed read-only (Configuration).
+		// DataTool, Report) or an application browsed read-only (Application).
 		namespace ibMetaData {
 
 			inline constexpr const char* Title      = "Title";
@@ -244,13 +244,13 @@ namespace ibProtocol {
 			inline constexpr const char* Mode       = "Mode";
 			inline constexpr const char* FormType   = "FormType";     // a form's row: its kind (the owner's form type)
 			inline constexpr const char* TemplateData = "TemplateData";   // a template's: what it holds, of its kind
-			// …the root row's: the configuration's state, as the engine answers it — Modified (ibMetaData::IsModified),
-			// Edited (IsEdited: somebody edited it), ConfigSave (ibMetaDataConfigurationBase::IsConfigSave: the database
-			// holds it), Syntax — the code style its modules are written in.
-			inline constexpr const char* Modified   = "Modified";
-			inline constexpr const char* Edited     = "Edited";
-			inline constexpr const char* ConfigSave = "ConfigSave";
-			inline constexpr const char* Syntax     = "Syntax";
+			// …the root row's: the application's state, as the engine answers it — Modified (ibMetaData::IsModified),
+			// Edited (IsEdited: somebody edited it), ApplicationSave (ibMetaDataApplicationBase::IsApplicationSave: the
+			// database holds it), Syntax — the code style its modules are written in.
+			inline constexpr const char* Modified        = "Modified";
+			inline constexpr const char* Edited          = "Edited";
+			inline constexpr const char* ApplicationSave = "ApplicationSave";
+			inline constexpr const char* Syntax          = "Syntax";
 			// …the root row's: the kinds whose objects open an editor (Open) — children Type; none: ask Open for any.
 			inline constexpr const char* Editors    = "Editors";
 			// …an external file's root row's: the header above its tree — its object's rows, as ibProperties' — and its
@@ -270,7 +270,7 @@ namespace ibProtocol {
 			inline constexpr const char* Name       = "Name";
 			inline constexpr const char* Object     = "Object";       // the metaobject an item opens, by its id
 			inline constexpr const char* Command    = "Command";
-			// …a Load or Unload item's — a data processor's or a report's row (Load, Unload), its group's (Load): the file
+			// …a Load or Unload item's — a data tool's or a report's row (Load, Unload), its group's (Load): the file
 			// it reads or writes, by its extension (ibFileExtension).
 			inline constexpr const char* Extension  = "Extension";
 			// …and its commands' Args.
@@ -285,14 +285,15 @@ namespace ibProtocol {
 			// Its doors by an object's id, each with Tab in an external file's tree. Numbered of their own: the schema reads
 			// them, no other.
 			enum class ibCommand : int {
-				Open     = 1,    // {Id} — the object's editor; or {Module} — the module of that address (a stop, a failure)
-				Create   = 2,    // {Type, Parent} — a new one of that class under that object (0: the configuration's own), opened
+				Open     = 1,    // {Id} — the object's editor; or {Module} — the module of that address (a stop, a failure),
+				                 // in that File's tree when it is given (an external data tool's or report's open in a tab)
+				Create   = 2,    // {Type, Parent} — a new one of that class under that object (0: the application's own), opened
 				Remove   = 3,    // {Id}
 				Move     = 4,    // {Id, Position} — put at that place among its parent's children
 				Copy     = 5,    // {Id, File} — written into that file (uploaded empty)
 				Paste    = 6,    // {Type, Parent, File} — read from that one
-				Save     = 8,    // the configuration written
-				// …the configuration's own (the desktop's Configuration menu), each said to the person by the server; refused
+				Save     = 8,    // the application written
+				// …the application's own (the desktop's Application menu), each said to the person by the server; refused
 				// in an external file's tree:
 				Rollback = 9,    // taken back from the base
 				Apply    = 10,   // written and the base restructured, its ledger asked first (ibRequest::ibApplyChange)
@@ -302,9 +303,9 @@ namespace ibProtocol {
 				// form, and the client writes them into the directory or reads them out of it.
 				LoadFiles   = 14,   // {File} — read from that uploaded node of files
 				UnloadFiles = 15,   // {File} — the node of files written into that one (uploaded empty)
-				Browse   = 13,   // the base's configuration in a tab, read-only (ibView::ibKind::Configuration): raised when
+				Browse   = 13,   // the base's application in a tab, read-only (ibView::ibKind::Application): raised when
 				                 // open, else opened
-				// …and Load and Unload over a data processor or a report, as the file it is kept in apart (the desktop's
+				// …and Load and Unload over a data tool or a report, as the file it is kept in apart (the desktop's
 				// tree's Insert, Replace and Save): Load {Type, Parent, File} — one read from that file under that object;
 				// Load {Id, File} — that one replaced by the one read; Unload {Id, File} — that one written into that file.
 			};
@@ -312,7 +313,7 @@ namespace ibProtocol {
 		}
 
 		// THE DESIGNER'S INSPECTOR: `Args: {Id, Tab}` — the metaobject of that id in the tab's tree (Tab: an external file's;
-		// none: the configuration's), its Properties (ibNode::Id, Tab; categories Name, Title; property rows). What its
+		// none: the application's), its Properties (ibNode::Id, Tab; categories Name, Title; property rows). What its
 		// object's state hides is not sent. Save `{Id, Tab, Name, Value}` — that object's property or event given that
 		// value.
 		namespace ibProperties {
@@ -380,7 +381,7 @@ namespace ibProtocol {
 
 		// The desktop's predefined values editor over an object of the designer's tree: `schema {Schema, Args: {Id[, Tab]}}`
 		// shows Type (the object's class), Declares — the one schema of the object's predefined items
-		// (ibPredefinedDescriptionMemory: the items as the configuration keeps them and what an item is entered with; the
+		// (ibPredefinedDescriptionMemory: the items as the application keeps them and what an item is entered with; the
 		// window is built of it) — and Classes — the types a type is picked from, named as ibProperties' rows name them.
 		// Commands Create {Id, an item in its node form (ibPredefinedItemDescriptionMemory)}, Set {Id, the item with
 		// its Guid} — the item of that Guid given this one (none of it: one more, of that Guid), Remove {Id, Guid}. Each
@@ -408,9 +409,9 @@ namespace ibProtocol {
 
 		}
 
-		// The desktop's home page workspace editor over the configuration's root: `Args: {Id}` shows HomePage — as the root
+		// The desktop's home page workspace editor over the application's root: `Args: {Id}` shows HomePage — as the root
 		// writes it (ibHomePageDescription), ReadOnly — when it takes no edit, and Forms, what it may show: Id, Name,
-		// FullName, Picture; Common — a common form, else its owner's Owner (its id), OwnerName, OwnerPicture; command
+		// FullName, Picture; Common — a shared form, else its owner's Owner (its id), OwnerName, OwnerPicture; command
 		// Save {Id, HomePage}.
 		namespace ibHomePage {
 
@@ -422,15 +423,15 @@ namespace ibProtocol {
 			inline constexpr const char* Name         = "Name";
 			inline constexpr const char* FullName     = "FullName";
 			inline constexpr const char* Picture      = "Picture";
-			inline constexpr const char* Common       = "Common";
+			inline constexpr const char* Shared       = "Shared";
 			inline constexpr const char* Owner        = "Owner";
 			inline constexpr const char* OwnerName    = "OwnerName";
 			inline constexpr const char* OwnerPicture = "OwnerPicture";
 
 		}
 
-		// The designer's debugger's store — the debugger is the server's (ibDebug), and the configuration and its sys_dbg
-		// are here: shows the configuration's Guid; `Args: {Module}` — that module's Breakpoints (Line, Condition), at the
+		// The designer's debugger's store — the debugger is the server's (ibDebug), and the application and its sys_dbg
+		// are here: shows the application's Guid; `Args: {Module}` — that module's Breakpoints (Line, Condition), at the
 		// editor's lines: the server's debugger keeps the one map, moved by the edits a module's Change carries
 		// (ibView::ibModule). A module view's State says its Module too.
 		namespace ibDebugger {
@@ -455,7 +456,7 @@ namespace ibProtocol {
 
 	namespace ibView {
 
-		// The designer's editor of a module: State {Syntax, ReadOnly, Modified — the configuration the module is in,
+		// The designer's editor of a module: State {Syntax, ReadOnly, Modified — the application the module is in,
 		// Module}; the text fetched by the tab (fetch {Tab} — {Text}; what else — ibRequest); what was typed — event
 		// {Tab, Event: Input} on the first key while not Modified, then {Tab, Event: Change, Args: {Text[, Line, Offset,
 		// AtLineStart]}} — with the edit that moved its lines, when one did: the server's debugger moves its breakpoints
@@ -479,7 +480,7 @@ namespace ibProtocol {
 			inline constexpr const char* AtLineStart = "AtLineStart";   // at the line's start: the line itself moved
 
 			// WHAT A MODULE'S TAB IS ASKED besides its text — `fetch {Tab, Request: {Kind, Text, Position}}`: what the
-			// desktop's code editor asked the configuration itself. Text — the editor's text as it is now (not handed back
+			// desktop's code editor asked the application itself. Text — the editor's text as it is now (not handed back
 			// yet), Position — the caret in it, in characters.
 			enum class ibRequest : int {
 				Text       = 0,   // {Text} — the module's, as the server holds it (the request may be absent)
@@ -694,8 +695,8 @@ namespace ibProtocol {
 
 		}
 
-		// THE DESIGNER'S CHECKABLE TREES over a metaobject (Interface, CommonAttribute, FunctionalOption, Role) — what it
-		// applies to, ticked: State {ReadOnly — the object takes no edit}, Rows — the configuration's row, and under it its
+		// THE DESIGNER'S CHECKABLE TREES over a metaobject (Interface, SharedAttribute, FeatureOption, Role) — what it
+		// applies to, ticked: State {ReadOnly — the object takes no edit}, Rows — the application's row, and under it its
 		// groups and under them its objects, each ibNode::Id — its object's id (a group: below 0, its place among its
 		// siblings), Title, Picture; an object's Checked, ReadOnly (its box greyed); a role's — its Roles (Name, Title,
 		// Checked — the right given by the role, ReadOnly). A tick — event {Tab, Event: Toggle, Args: {ibNode::Id,
@@ -712,7 +713,7 @@ namespace ibProtocol {
 
 		}
 
-		// THE DESIGNER'S QUERY CONSTRUCTOR — what its model (ibQueryConstructorModel) asks the configuration, of the tab
+		// THE DESIGNER'S QUERY CONSTRUCTOR — what its model (ibQueryConstructorModel) asks the application, of the tab
 		// it was opened from (a module's, a form's, a composer's; a list settings window — its form's): `fetch {Tab,
 		// Request: {Kind (ibRequest), …}}`, numbered past the composer's. The client keeps each answer for the tab: one
 		// question per source, never one per edit. A reference's [+] is the composer's Expand (22), asked of the same tab.

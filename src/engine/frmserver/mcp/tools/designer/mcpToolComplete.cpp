@@ -28,9 +28,9 @@
 #include "backend/compiler/scriptComplete.h"        // ibValueAtCaret / ibFieldTypesOf - off the bytecode and the metadata
 #include "backend/metaCollection/metaIntrospect.h"
 #include "backend/metaCollection/metaModuleObject.h"
-#include "backend/metadataConfiguration.h"
+#include "backend/metadataApplication.h"
 #include "backend/metaData.h"                      // ibCompileValueCache - where the descriptor is registered
-#include "backend/moduleManager/moduleManager.h"   // ibValueModuleManagerDesigner - AddCommonModule
+#include "backend/moduleManager/moduleManager.h"   // ibValueModuleManagerDesigner - AddSharedModule
 #include "backend/value_ptr.h"                     // ibValuePtr - metaobjects are reference-counted
 
 #include "core/compiler/translateCode.h"        // the lexem stream - what the caret stands in
@@ -47,18 +47,18 @@ using ibArg = ibMcpTool::ibMcpArgument;
 //---------------------------------------------------------------------------
 //
 // ⭐⭐ WHY COMPLETION DID NOT WORK ON ARBITRARY CODE, and it is not what it looks like. The walk is
-// perfectly able to complete a free-standing snippet — what it cannot do is reach the configuration
+// perfectly able to complete a free-standing snippet — what it cannot do is reach the application
 // without a METAOBJECT to reach it through. Every global it offers arrives by one road:
 // `moduleObject->GetMetaData()` → the compile cache → the designer's module manager → its global
-// names and its common modules' exports. With no module that road is not taken at all, and the
+// names and its shared modules' exports. With no module that road is not taken at all, and the
 // answer falls back to whatever the snippet itself declares. So the path breaks exactly between the
 // global functions and the text being written — which is why `Catalogs.` completed inside a module
 // and nowhere else (Max, 2026-09-06: *"your path breaks between the common functions and the
 // current module"*).
 //
-// ⭐ SO ONE IS MADE FOR THE DURATION. Shaped like a common module, because that is what a body of
+// ⭐ SO ONE IS MADE FOR THE DURATION. Shaped like a shared module, because that is what a body of
 // free-standing statements most resembles — with the one difference that it may declare variables
-// of its own. It is bound to the open configuration and to NOTHING else: not added to the tree,
+// of its own. It is bound to the open application and to NOTHING else: not added to the tree,
 // not written to the metadata, not visible to any other reader, and gone when this call returns
 // (Max: *"it just lives in the moment — you computed the value, it worked, goodbye"*).
 //
@@ -69,7 +69,7 @@ using ibArg = ibMcpTool::ibMcpArgument;
 // above contributes. An unregistered module has no descriptor, so that walk starts at null and the
 // chain to the root is simply not there.
 //
-// ⭐ SO IT IS REGISTERED AS A COMMON MODULE FOR THE DURATION. That is the call which builds the
+// ⭐ SO IT IS REGISTERED AS A SHARED MODULE FOR THE DURATION. That is the call which builds the
 // descriptor AND parents it on the root — the module object that holds Catalogs, Documents and the
 // rest — so the interpreter can bend upwards from a text that belongs to nobody. It owns nothing
 // up there and is written into nothing: the registration is undone on the way out, by every exit
@@ -81,9 +81,9 @@ public:
 	// it as when it runs (jobRunByteCode.cpp), so a diagnostic about it reads the same wherever it
 	// was produced.
 	ibScratchModule(ibMetaData* metaData, const ibString& text)
-		: m_module(new ibValueMetaObjectCommonModule(ibT("JobCode")))
+		: m_module(new ibValueMetaObjectSharedModule(ibT("JobCode")))
 	{
-		// The bridge to the configuration: through this the interpreter reaches the compile cache
+		// The bridge to the application: through this the interpreter reaches the compile cache
 		// and the designer's own module manager, and from there every global name there is.
 		m_module->SetMetaData(metaData);
 
@@ -108,7 +108,7 @@ public:
 			// module got registered and the descriptor exists; the interpreter compiles the text
 			// again itself, up to the caret and no further.
 			try {
-				m_registered = m_manager->AddCommonModule(m_module, /*managerModule*/ false,
+				m_registered = m_manager->AddSharedModule(m_module, /*managerModule*/ false,
 					/*runModule*/ true);
 			}
 			catch (...) {
@@ -123,21 +123,21 @@ public:
 	~ibScratchModule()
 	{
 		// 🛑 THE REGISTRY MUST NOT OUTLIVE THE QUESTION. A module left behind here is a phantom
-		// entry in the designer's own common-module list — parsed for exports on every later
+		// entry in the designer's own shared-module list — parsed for exports on every later
 		// completion, and named in a registry nobody can see it in.
 		if (m_registered && m_manager != nullptr)
-			m_manager->RemoveCommonModule(m_module);
+			m_manager->RemoveSharedModule(m_module);
 	}
 
 	ibScratchModule(const ibScratchModule&)            = delete;
 	ibScratchModule& operator=(const ibScratchModule&) = delete;
 
-	ibValueMetaObjectCommonModule* Get() const { return m_module; }
+	ibValueMetaObjectSharedModule* Get() const { return m_module; }
 
 private:
 	// Metaobjects are ibValues — reference-counted, with DecrRef deleting the last one out. This
 	// handle holds the only reference there is, so the module dies exactly when this does.
-	ibValuePtr<ibValueMetaObjectCommonModule> m_module;
+	ibValuePtr<ibValueMetaObjectSharedModule> m_module;
 	ibValueModuleManagerDesigner*             m_manager    = nullptr;
 	bool                                      m_registered = false;
 };
@@ -153,7 +153,7 @@ const ibArg& ArgId()
 			  "attributes are names, and they are names nowhere else.\n"
 			  "LEAVE IT OUT for code that belongs to no module - anything you are about to send to "
 			  "code_run, or a snippet you are working out. The text is then judged as free-standing "
-			  "statements against the configuration's globals, which is exactly how code_run "
+			  "statements against the application's globals, which is exactly how code_run "
 			  "compiles it."), /*required*/ false);
 	return s_a;
 }
@@ -256,7 +256,7 @@ bool ibAnswerWithScope(const ibString& text, int caretPos,
 
 		// ⭐ PROTECTED IS SAID ONLY WHEN IT IS TRUE, because it is the rare one and a field that is
 		// false on nine names in ten is noise on every one of them. It is not the opposite of
-		// `exported` either: exported reaches the whole configuration, protected reaches the
+		// `exported` either: exported reaches the whole application, protected reaches the
 		// modules BELOW this one and stops there, and what a list must never do is offer a name
 		// that cannot be written — see ibNamesAtCaret's note on the runtime's own rule.
 		if (name.m_protected)
@@ -317,12 +317,12 @@ public:
 			"ThisForm; `bound` is a handle this module was given, such as a constant's Value; "
 			"`declared` is written in this text (with `local` true when it belongs to the body you "
 			"are standing in); `inherited` comes from a module above this one. `platform` and `global` "
-			"are the ones you already know - the configuration's collections, "
-			"the system functions, global constants and common modules.\n\n"
+			"are the ones you already know - the application's collections, "
+			"the system functions, global constants and shared modules.\n\n"
 			"EVERY NAME IN IT CAN BE WRITTEN HERE - it is what the runtime itself sees at that "
 			"point, not everything that exists. This text's own names, the globals, and from each "
 			"module above only what that module lets out: its exports and its `protected` (flagged, "
-			"and reaching the modules below it rather than the whole configuration). A parent's "
+			"and reaching the modules below it rather than the whole application). A parent's "
 			"private names are absent, because writing one is an error rather than a completion.\n\n"
 			"USE IT INSTEAD OF GUESSING AN OBJECT'S API, and the reason is not politeness: the help "
 			"corpus covers functions and keywords, and THE OBJECT MODEL IS NOT IN IT. A catalog "
@@ -330,7 +330,7 @@ public:
 			"take - none of that is searchable by name anywhere. It is answerable only here, and "
 			"only by asking the object itself.\n\n"
 			"IT ALSO ANSWERS FOR CODE THAT BELONGS TO NO MODULE - leave `id` out and the text is "
-			"treated as free-standing statements against this configuration's globals, which is "
+			"treated as free-standing statements against this application's globals, which is "
 			"exactly how code_run compiles what you send it. So the code you are about to run can "
 			"be checked for names BEFORE it touches a base: script_check says whether it compiles, "
 			"this says what may follow the dot you are standing after.\n\n"
@@ -347,13 +347,13 @@ public:
 
 	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
-		if (activeMetaData == nullptr || !activeMetaData->IsConfigOpen()) {
-			refusal = ibMcpText("No configuration is open.");
+		if (activeMetaData == nullptr || !activeMetaData->IsOpen()) {
+			refusal = ibMcpText("No application is open.");
 			return false;
 		}
 
 		// ⭐⭐ EVERYTHING THIS CALL RUNS, RUNS AS A COMPLETION. Answering takes real execution — a
-		// module is registered and compiled to reach the configuration, values are constructed,
+		// module is registered and compiled to reach the application, values are constructed,
 		// methods on them are called — and each of those asks the session what kind of evaluation
 		// it is inside. Saying it once, here, means no evaluation started by this call can be
 		// mistaken for a watch or for ordinary work (backend_core.h, eval_complete).
@@ -372,7 +372,7 @@ public:
 
 		// TWO WAYS TO HAVE A MODULE, and the second one is why arbitrary code can be completed at
 		// all. Given an id, the text is judged where it will live. Given none, a module carrying
-		// this very text is made for the length of the call, so the walk up to the configuration's
+		// this very text is made for the length of the call, so the walk up to the application's
 		// globals has something to start from — see ibScratchModule.
 		std::unique_ptr<ibScratchModule> scratch;
 		ibValueMetaObjectModuleBase* module = nullptr;
@@ -393,7 +393,7 @@ public:
 		// same way the editor decides between its two lists. This verb only ever answered the first
 		// half, so standing anywhere but just after a dot produced an empty answer that read like
 		// "nothing here" — including at the very start of an empty module, where in fact the whole
-		// configuration is available.
+		// application is available.
 		//
 		// A lexer, not a compiler: what the text MEANS is asked below, of the compiler itself.
 		ibTranslateCode lexem(ibCompileCode::GetCodeStyle());
@@ -465,7 +465,7 @@ public:
 
 			// ⭐⭐ WHOSE THIS VALUE IS, said in the same words the name list uses. The members say
 			// what may be written next and the type says what it is; neither says whether the
-			// reader is looking at the configuration's own data, at something this module bound, or
+			// reader is looking at the application's own data, at something this module bound, or
 			// at the platform's built-in surface — and that is usually the first thing a reader
 			// wants to know. It is read off the STEP that produced the value, so it costs nothing
 			// and cannot be recovered anywhere else (scriptComplete.h).

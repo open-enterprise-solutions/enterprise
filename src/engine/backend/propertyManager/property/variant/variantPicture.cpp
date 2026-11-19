@@ -24,8 +24,8 @@ ibString ibVariantPicture::GetString() const
 {
 	if (m_pictureDesc.m_type == ibPictureType::eFromBackend)
 		return _("Backend picture");
-	else if (m_pictureDesc.m_type == ibPictureType::eFromConfiguration)
-		return _("Configuration picture");
+	else if (m_pictureDesc.m_type == ibPictureType::eFromApplication)
+		return _("Application picture");
 	else if (m_pictureDesc.m_type == ibPictureType::eFromFile)
 		return _("External picture");
 

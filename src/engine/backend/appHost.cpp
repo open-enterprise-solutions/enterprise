@@ -14,7 +14,7 @@
 
 #include "backend/backend_exception.h"   // a process with no room for another base refuses it
 #include "backend/backend_localization.h"
-#include "backend/metadataConfiguration.h"   // a scope holds the configuration it works in
+#include "backend/metadataApplication.h"   // a scope holds the application it works in
 #include "backend/plugin/pluginManager.h"
 #include "core/fiber/fiberLocals.h"
 #include "core/fileSystem.h"   // backend.conf and lang/ sit in the program folder, not inside a bundle
@@ -55,8 +55,8 @@ static std::unique_ptr<ibQueryMemoryManager> s_queryMemoryManager;
 // The base a thread with no session works for (ibApplicationInstanceScope, SetThreadInstance).
 static thread_local ibApplicationInstance* t_instance = nullptr;
 
-// …and the configuration it works in, held by its innermost ibApplicationInstanceScope.
-static thread_local ibMetaDataConfigurationBase* t_metaData = nullptr;
+// …and the application it works in, held by its innermost ibApplicationInstanceScope.
+static thread_local ibMetaDataApplicationBase* t_metaData = nullptr;
 
 // The base whose service runs on this thread (SetThreadOwner) — for the journal's lines only.
 static thread_local const ibApplicationInstance* t_owner = nullptr;
@@ -71,9 +71,9 @@ struct ibRegisterAppHostLocal {
 		ibFiberLocals::RegisterTrivial<ibApplicationInstance*>(
 			[](void* dst) { *static_cast<ibApplicationInstance**>(dst) = t_instance; },
 			[](const void* src) { t_instance = *static_cast<ibApplicationInstance* const*>(src); });
-		ibFiberLocals::RegisterTrivial<ibMetaDataConfigurationBase*>(
-			[](void* dst) { *static_cast<ibMetaDataConfigurationBase**>(dst) = t_metaData; },
-			[](const void* src) { t_metaData = *static_cast<ibMetaDataConfigurationBase* const*>(src); });
+		ibFiberLocals::RegisterTrivial<ibMetaDataApplicationBase*>(
+			[](void* dst) { *static_cast<ibMetaDataApplicationBase**>(dst) = t_metaData; },
+			[](const void* src) { t_metaData = *static_cast<ibMetaDataApplicationBase* const*>(src); });
 		ibFiberLocals::RegisterTrivial<const ibApplicationInstance*>(
 			[](void* dst) { *static_cast<const ibApplicationInstance**>(dst) = t_owner; },
 			[](const void* src) { t_owner = *static_cast<const ibApplicationInstance* const*>(src); });
@@ -269,7 +269,7 @@ void ibApplicationHost::Close(ibApplicationInstance* applicationInstance)
 
 	// With the closing thread working for it: its teardown reads the journal, the registry and the pool through
 	// `appData` and the accessors. The shell outlives the scope — what the scope holds of the base (its
-	// configuration) is let go while the base still stands.
+	// application) is let go while the base still stands.
 	std::unique_ptr<ibApplicationInstance> shell;
 	{
 		ibApplicationInstanceScope closing(applicationInstance);
@@ -522,8 +522,8 @@ ibApplicationInstanceScope::ibApplicationInstanceScope(ibApplicationInstance* ap
 	m_prev(t_instance),
 	m_prevMetaData(t_metaData)
 {
-	if (ibMetaDataConfigurationBase* const active = ibApplicationInstance::GetActiveMetaData(applicationInstance))
-		m_metaData = std::static_pointer_cast<ibMetaDataConfigurationBase>(active->shared_from_this());
+	if (ibMetaDataApplicationBase* const active = ibApplicationInstance::GetActiveMetaData(applicationInstance))
+		m_metaData = std::static_pointer_cast<ibMetaDataApplicationBase>(active->shared_from_this());
 	t_instance = applicationInstance;
 	t_metaData = m_metaData.get();
 }
@@ -539,7 +539,7 @@ ibApplicationInstance* ibApplicationInstanceScope::Current()
 	return t_instance;
 }
 
-ibMetaDataConfigurationBase* ibApplicationInstanceScope::GetMetaData()
+ibMetaDataApplicationBase* ibApplicationInstanceScope::GetMetaData()
 {
 	return t_metaData;
 }

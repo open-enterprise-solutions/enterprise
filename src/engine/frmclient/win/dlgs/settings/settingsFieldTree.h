@@ -39,7 +39,7 @@ struct ibSettingsPlainField {
 	wxString          m_name;
 	ibMetaID          m_id = wxNOT_FOUND;
 	ibTypeDescription m_type;
-	// The column's own answer (functional options): an unavailable field is known to the tree — a line
+	// The column's own answer (feature options): an unavailable field is known to the tree — a line
 	// standing on it is recognised — and not put up.
 	bool              m_available = true;
 	// WHAT A PERSON READS — the title the host gives the field (a composition: its title in force, the
@@ -66,7 +66,7 @@ class ibSettingsFieldTree {
 public:
 
 	// WHERE THE FIELDS COME FROM — on the client, a flat list: the server describes them (a source that describes
-	// itself is the configuration's to walk).
+	// itself is the application's to walk).
 	void SetPlainFields(std::vector<ibSettingsPlainField> fields, const ibMetaData* metaData) {
 		m_plain = std::move(fields);
 		m_metaData = metaData;
@@ -87,7 +87,7 @@ public:
 	//  only caller; what was left was a `std::function` threaded through seven call sites and two
 	//  guards that could never be true.)
 
-	// The config that resolves reference targets — the source's own, else the active one.
+	// The application that resolves reference targets — the source's own, else the active one.
 	const ibMetaData* GetMetaData() const;
 
 	// FILL a tree control. REBUILT, not built once: changing the query changes which

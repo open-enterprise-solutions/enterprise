@@ -88,7 +88,7 @@ public:
 			virtual ibString GetColumnCaption() const { return m_metaAttribute->GetSynonym(); }
 			virtual const ibTypeDescription GetColumnType() const { return m_metaAttribute->GetTypeDesc(); }
 			virtual const ibFormatString& GetColumnFormat() const {
-				return ibBackendTypeConfigFactory::GetFormatFromColumn(m_metaAttribute->GetFormat(), m_metaAttribute->GetTypeDesc());
+				return ibBackendTypeApplicationFactory::GetFormatFromColumn(m_metaAttribute->GetFormat(), m_metaAttribute->GetTypeDesc());
 			}
 			virtual bool IsColumnAvailable() const override { return m_metaAttribute->IsAvailable(); }
 
@@ -165,7 +165,7 @@ public:
 	//get metaData from object
 	virtual const ibValueMetaObjectCompositeData* GetSourceMetaObject() const { return m_metaTable; }
 
-	//get metaData: the section's own config via its meta object; no object -> the active config, so reference-
+	//get metaData: the section's own application via its meta object; no object -> the active application, so reference-
 	//typed columns still resolve their targets. Mirrors ibValueModelTable / the object list.
 	virtual const ibMetaData* GetSourceMetaData() const override {
 		const ibValueMetaObjectCompositeData* mo = GetSourceMetaObject();
@@ -200,7 +200,7 @@ public:
 		// (The RAM composer is auto-bound to this model's value-storage in ibValueModelStorage's ctor — no manual
 		// source binding needed; ibDataRamComposer reads the storage's nodes in place.) ⭐ AND IT KNOWS WHAT IT
 		// READS FROM THE START: the storage's columns — a question asked before the first page (IsGroupedModel, a
-		// quick filter) gets the answer a page gets — and the configuration its paths are walked in, the section's
+		// quick filter) gets the answer a page gets — and the application its paths are walked in, the section's
 		// own (ibDataRamComposer::IsAvailable).
 		Storage().SetColumns(m_recordColumnCollection);
 		GetModelComposer().SetMetaData(tableObject != nullptr ? tableObject->GetMetaData() : nullptr);

@@ -588,7 +588,7 @@ public:
 	// The tab's view activated again — its menu and toolbar asked anew, for the page now shown.
 	void Activate() const;
 
-	// View-only follows the configuration (the View's State.ReadOnly — opened read-only, or locked by another).
+	// View-only follows the application (the View's State.ReadOnly — opened read-only, or locked by another).
 	bool IsEditable() const { return !m_readOnly; }
 	void SetReadOnly(bool readOnly = true) { m_readOnly = readOnly; }
 
@@ -980,7 +980,7 @@ public:
 	virtual ibString GetObjectTypeName() const override { return m_name; }
 	virtual bool IsEditable() const override;
 
-	// ITS CONFIGURATION IS ITS FORM'S TAB — what a window its rows open asks the configuration (a composition's fields:
+	// ITS APPLICATION IS ITS FORM'S TAB — what a window its rows open asks the application (a composition's fields:
 	// fetch {Tab, Request: {Kind: Fields, Text}}) the form's tab answers.
 	virtual const ibMetaData* GetMetaData() const override { return &m_metaData; }
 

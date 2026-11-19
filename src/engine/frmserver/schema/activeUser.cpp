@@ -3,7 +3,7 @@
 #include "backend/appData.h"
 #include "core/picturePredefined.h"
 #include "backend/lock/lockManager.h"
-#include "backend/metadataConfiguration.h"
+#include "backend/metadataApplication.h"
 #include "core/diagnostics/journal.h"   // ibJournalWarning — a command that failed, as the desktop's dialog had it
 #include "core/serialize/dataBuilder.h"
 #include "backend/session/session.h"
@@ -13,7 +13,7 @@
 
 bool ibSchemaActiveUser::AccessRight(const ibSession& session) const
 {
-	const ibMetaDataConfigurationBase* const metaData = session.GetMetaData();
+	const ibMetaDataApplicationBase* const metaData = session.GetMetaData();
 	return metaData != nullptr && metaData->AccessRight_ActiveUsers();
 }
 
@@ -32,7 +32,7 @@ void ibSchemaActiveUser::Build(const ibSession& session, const ibDataNode& /*arg
 		for (unsigned int idx = 0; idx < snapshot.GetSessionCount(); idx++) {
 			ibDataNode& row = sessions.AddChild(0, static_cast<ibMetaID>(idx));
 			row.SetValue(ibProtocol::ibSchema::ibActiveUser::User, snapshot.GetUserName(idx));
-			row.SetValue(ibProtocol::ibSchema::ibActiveUser::Application, snapshot.GetApplication(idx));
+			row.SetValue(ibProtocol::ibSchema::ibActiveUser::Program, snapshot.GetProgram(idx));
 			row.SetValue(ibProtocol::ibSchema::ibActiveUser::Type, snapshot.GetSessionKindDescr(idx));
 			row.SetValue(ibProtocol::ibSchema::ibActiveUser::Started, snapshot.GetStartedDate(idx));
 			row.SetValue(ibProtocol::ibSchema::ibActiveUser::Computer, snapshot.GetComputerName(idx));

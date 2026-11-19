@@ -16,7 +16,7 @@
 //	              WantsAnswer() is the whole of that rule.
 //
 //	              Pure backend: strings in, strings out. No socket, no server, no
-//	              configuration.
+//	              application.
 ////////////////////////////////////////////////////////////////////////////
 
 #include <gtest/gtest.h>

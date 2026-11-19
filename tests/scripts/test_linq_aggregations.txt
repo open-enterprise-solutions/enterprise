@@ -82,4 +82,4 @@ Message("max of doubles=" + nums.Select(twice).Max());      // 10
 
 Message("--- aggregate over an empty pipeline ---");
 var none = Function(x) { return x > 100; };
-Message("empty sum is empty: " + (nums.Where(none).Sum() = Undefined));   // True
+Message("empty sum is empty: " + (nums.Where(none).Sum() == Undefined));   // True

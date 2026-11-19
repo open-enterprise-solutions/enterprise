@@ -39,7 +39,7 @@ const ibArg& ArgPath()
 const ibArg& ArgObject()
 {
 	static const ibArg s_a(ibT("object"), ibArg::Kind::Text,
-		ibMcpText("The configuration's object the entry answers for, by its guid - as address_list's `offered` "
+		ibMcpText("The application's object the entry answers for, by its guid - as address_list's `offered` "
 			"gives it. Omit for a kind that answers for none."));
 	return s_a;
 }
@@ -93,7 +93,7 @@ public:
 		return ibMcpText("What this base answers on every web server that publishes it, beside its clients: "
 			"each entry's kind, path and object, and whether it is kept in the base (registered by an "
 			"administrator) or a session's own (gone with it). Also the kinds this platform knows, and "
-			"what each offers to register - what the configuration declares for it - so address_register "
+			"what each offers to register - what the application declares for it - so address_register "
 			"can be called with exactly what is offered.");
 	}
 

@@ -488,8 +488,8 @@ TEST(CompileTree, ADuplicateVisibleFunctionIsRejected) {
 		wxT("Function F() Public\nEndFunction\n")));
 }
 
-TEST(CompileTree, ACommonModuleTakesFunctionsOnly) {
-	// `onlyFunction` — the third ctor argument, what ibCompileModule passes for a common module.
+TEST(CompileTree, ASharedModuleTakesFunctionsOnly) {
+	// `onlyFunction` — the third ctor argument, what ibCompileModule passes for a shared module.
 	ibCompileCode moduleVar(wxT("test"), wxT("memory"), true);
 	EXPECT_FALSE(Build(moduleVar, wxT("var a;\nFunction F()\nEndFunction\n")));
 
@@ -935,7 +935,7 @@ TEST(CompileTree, ALambdaArgumentClosesWithEndFunction) {
 
 	ibCompileCode compiler(wxT("test"), wxT("memory"));
 
-	// `Message` is a GLOBAL, and a host provides it — codeRunner binds the
+	// `Message` is a GLOBAL, and a host provides it — coderunner binds the
 	// system functions as a transparent scope and so does this. Rewriting the
 	// source to avoid the name would have hidden the shape the corpus dies on.
 	ibValuePtr<ibValueSystemFunction> valueSystem(new ibValueSystemFunction());
@@ -978,10 +978,10 @@ TEST(CompileTree, ALambdaIsAnOrdinaryArgument) {
 // FIRST instruction.
 //
 // It corrupted silently, because an operand's slot number stays a plausible
-// number: a first line reading `Message("x" + CommonModule.Method())` began
-// resolving CommonModule to slot 116 of a frame that holds 69, and the engine
+// number: a first line reading `Message("x" + SharedModule.Method())` began
+// resolving SharedModule to slot 116 of a frame that holds 69, and the engine
 // reported "a variable is not an aggregate object" about a name that is a
-// common module. Where the first instruction's second operand happened not to
+// shared module. Where the first instruction's second operand happened not to
 // matter, nothing showed at all.
 //
 // Pinned on the EMISSION rather than on a run, because the damaged value is

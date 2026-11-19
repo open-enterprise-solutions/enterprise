@@ -60,9 +60,9 @@ inline ibPropertyChoiceMode CreateValueList(ibPropertyObject* owner, ibPropertyC
 	}
 
 	// THE MODE EVEN WHEN THE LIST CAME OUT EMPTY. "There is nothing of that kind in this
-	// configuration yet" is a real and useful answer — it is what a caller sees before the first
+	// application yet" is a real and useful answer — it is what a caller sees before the first
 	// chart of accounts exists — and it is NOT the same as "this property is not chosen from a
-	// list". Collapsing the two would make an empty configuration look like an unsupported property.
+	// list". Collapsing the two would make an empty application look like an unsupported property.
 	return mode;
 }
 

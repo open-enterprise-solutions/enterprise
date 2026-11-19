@@ -2,10 +2,10 @@
 #define _MODULE_MANAGER_EXT_H__
 
 #include "backend/moduleManager/moduleManager.h"
-#include "backend/metaCollection/partial/dataProcessor.h"
+#include "backend/metaCollection/partial/dataTool.h"
 #include "backend/metaCollection/partial/dataReport.h"
 
-class BACKEND_API ibValueModuleRuntimeManagerExternalDataProcessor : public ibValueModuleRuntimeManager {
+class BACKEND_API ibValueModuleRuntimeManagerExternalDataTool : public ibValueModuleRuntimeManager {
 	public:
 
 	virtual const ibByteCode* GetByteCode() const override;
@@ -16,22 +16,22 @@ class BACKEND_API ibValueModuleRuntimeManagerExternalDataProcessor : public ibVa
 	virtual std::map<ibString, ibValue*>& GetGlobalVariables();
 
 	//metaData and external variant
-	ibValueModuleRuntimeManagerExternalDataProcessor(std::shared_ptr<ibMetaData> metaData = nullptr, ibValueMetaObjectDataProcessor* metaObject = nullptr);
-	virtual ~ibValueModuleRuntimeManagerExternalDataProcessor();
+	ibValueModuleRuntimeManagerExternalDataTool(std::shared_ptr<ibMetaData> metaData = nullptr, ibValueMetaObjectDataTool* metaObject = nullptr);
+	virtual ~ibValueModuleRuntimeManagerExternalDataTool();
 
 	//return external module
 	virtual ibValueRecordDataObjectExt* GetObjectValue() const { return m_objectValue; }
 
-	//Create common module
+	//Create shared module
 	virtual bool CreateMainModule();
 
-	//destroy common module
+	//destroy shared module
 	virtual bool DestroyMainModule();
 
-	//start common module
+	//start shared module
 	virtual bool StartMainModule(const ibRuntimeRequest& request = ibRuntimeRequest());
 
-	//exit common module
+	//exit shared module
 	virtual bool ExitMainModule(const ibRuntimeRequest& request = ibRuntimeRequest());
 
 	// Copies the external object value's surface; module exports follow as the
@@ -48,7 +48,7 @@ class BACKEND_API ibValueModuleRuntimeManagerExternalDataProcessor : public ibVa
 	virtual long FindProp(const ibString& strName) const override;
 
 private:
-	ibValueRecordDataObjectDataProcessor* m_objectValue;
+	ibValueRecordDataObjectDataTool* m_objectValue;
 };
 
 class BACKEND_API ibValueModuleRuntimeManagerExternalReport : public ibValueModuleRuntimeManager {
@@ -68,16 +68,16 @@ class BACKEND_API ibValueModuleRuntimeManagerExternalReport : public ibValueModu
 	//return external module
 	virtual ibValueRecordDataObjectExt* GetObjectValue() const { return m_objectValue; }
 
-	//Create common module
+	//Create shared module
 	virtual bool CreateMainModule();
 
-	//destroy common module
+	//destroy shared module
 	virtual bool DestroyMainModule();
 
-	//start common module
+	//start shared module
 	virtual bool StartMainModule(const ibRuntimeRequest& request = ibRuntimeRequest());
 
-	//exit common module
+	//exit shared module
 	virtual bool ExitMainModule(const ibRuntimeRequest& request = ibRuntimeRequest());
 
 	// Copies the external object value's surface; module exports follow as the

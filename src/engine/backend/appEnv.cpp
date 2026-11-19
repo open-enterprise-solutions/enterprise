@@ -39,7 +39,7 @@ ibPluginManager* PluginManager()
 	return nullptr;
 }
 
-ibMetaDataConfigurationBase* ActiveMetaData()
+ibMetaDataApplicationBase* ActiveMetaData()
 {
 	return ibApplicationInstance::GetActiveMetaData();
 }
@@ -52,7 +52,7 @@ ibDebuggerServer* DebugServer()
 	//
 	// TODO: switch to `auto* md = ActiveMetaData(); return md ?
 	// md->GetDebugServer() : nullptr;` once metadata refactor lands
-	// and ibMetaDataConfigurationBase exposes GetDebugServer().
+	// and ibMetaDataApplicationBase exposes GetDebugServer().
 	return nullptr;
 }
 

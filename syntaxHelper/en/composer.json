@@ -174,7 +174,7 @@
       "class_id": 346267113731680631,
       "category_keys": ["value_types", "runtime", "composer"],
       "signature": "CompositionPredefinedValue",
-      "description": "One of the values a configuration declares — a predefined item of a catalog, say — held as a name rather than read: which object, which of its declared values, and the text it was chosen as (`CatalogRef.Goods.Chair`). A composition's settings hold one where the designer chose a declared value for a parameter or a filter, and it becomes the live reference when the composition runs. An empty reference of a type is a value it can hold.\n\nA SCRIPT NEVER MAKES ONE — `New CompositionPredefinedValue()` does not compile — and it has no members; its string is the text it was chosen as.",
+      "description": "One of the values an application declares — a predefined item of a catalog, say — held as a name rather than read: which object, which of its declared values, and the text it was chosen as (`CatalogRef.Goods.Chair`). A composition's settings hold one where the designer chose a declared value for a parameter or a filter, and it becomes the live reference when the composition runs. An empty reference of a type is a value it can hold.\n\nA SCRIPT NEVER MAKES ONE — `New CompositionPredefinedValue()` does not compile — and it has no members; its string is the text it was chosen as.",
       "syntax_block": "",
       "parameters": "",
       "return_descr": "",

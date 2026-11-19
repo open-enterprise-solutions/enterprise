@@ -16,7 +16,7 @@
 //               second that was never given); a column that is not there raises and nothing moves. An order
 //               over several keys is not parsed out of the string: that is a query's (`orderby A, B`).
 //
-// Pure RAM: no database, no session, no configuration. Columns are untyped (typing one needs metadata).
+// Pure RAM: no database, no session, no application. Columns are untyped (typing one needs metadata).
 // =============================================================================
 
 #include <gtest/gtest.h>

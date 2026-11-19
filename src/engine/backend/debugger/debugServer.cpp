@@ -15,7 +15,7 @@
 #include "backend/logger/logger.h"            // the screenshot is written down before it is handed over
 
 #include "backend/compiler/procUnit.h"
-#include "backend/metadataConfiguration.h"
+#include "backend/metadataApplication.h"
 #include "backend/session/session.h"
 #include "backend/session/sessionRegistry.h"
 #include "backend/session/workerPool.h"
@@ -57,7 +57,7 @@ namespace {
 // a command from a designer that has not learnt to say which.
 std::shared_ptr<ibSession> ParkedSession(const ibString& sessionGuid)
 {
-	// The registry of the base whose configuration owns this debugger — asked down the chain, because this
+	// The registry of the base whose application owns this debugger — asked down the chain, because this
 	// runs on the debug thread, which has no session of its own.
 	auto* reg = debugServer != nullptr ? ibApplicationInstance::GetSessionRegistry(debugServer->GetApplicationInstance()) : nullptr;
 	if (reg == nullptr)
@@ -123,12 +123,12 @@ bool RunInParkedSession(const ibString& sessionGuid, const std::function<void(ib
 }
 } // namespace
 
-ibDebuggerServer::ibDebuggerServer(ibMetaDataConfigurationBase* metaData) :
+ibDebuggerServer::ibDebuggerServer(ibMetaDataApplicationBase* metaData) :
 	m_metaData(metaData),
 	m_bUseDebug(false), m_bDebugStopLine(false),
 	m_numCurrentNumberStopContext(0)
 {
-	// One per process — owned by ibMetaDataConfiguration. The static
+	// One per process — owned by ibMetaDataApplication. The static
 	// `ms_debugServer` is a hot-path cache (interpreter steps read it
 	// every opcode through the `debugServer` macro); ctor publishes,
 	// dtor retires. If somebody constructs a second one before the
@@ -564,9 +564,10 @@ void ibDebuggerServer::EnterDebugger(const ibProcUnitState* state, ibRunContext*
 							doLoop = answer.GetBoolean();
 						else {
 							doLoop = true;
+							// Why, from the value — Evaluate answers a failure there (procUnit.cpp).
 							SendErrorToClient(byteCode.m_strFileName, byteCode.m_strDocPath, byteCode.m_numLine + 1,
 								ibString::Format(_("The breakpoint condition '%s' could not be evaluated: %s"),
-									condition, ibBackendException::GetLastError()));
+									condition, answer.GetString()));
 						}
 					}
 				}
@@ -669,7 +670,9 @@ void ibDebuggerServer::SendExpressions(ibRunContext* runContext)
 				commandChannel.w_u32(vResult.GetNProps());
 			}
 			else {
-				commandChannel.w_stringZ(ibBackendException::GetLastError());
+				// Why, from the value — Evaluate answers a failure there and takes it off the error chain
+				// (procUnit.cpp), so the chain is empty by now.
+				commandChannel.w_stringZ(vResult.GetString());
 				commandChannel.w_stringZ(ibT("<error>"));
 				//array
 				commandChannel.w_u32(0);
@@ -1049,7 +1052,7 @@ void ibDebuggerServer::ibDebuggerServerConnection::Entry()
 	// ibSession to this thread directly). Symmetric Unregister at
 	// every exit path below.
 	//
-	// The registry is its OWNER's — the base whose configuration made this debugger — and the registration
+	// The registry is its OWNER's — the base whose application made this debugger — and the registration
 	// is what lets ibSession::Current() on this thread find that registry at all: the thread has no session
 	// and names no base (ibSessionRegistry::ForDebugThread).
 	const auto debugTid = std::this_thread::get_id();
@@ -1218,10 +1221,10 @@ void ibDebuggerServer::ibDebuggerServerConnection::RecvCommand(void* pointer, un
 
 		ibWriterMemory commandChannel_VerifyConnection;
 		commandChannel_VerifyConnection.w_u16(CommandId_VerifyConnection);
-		// The configuration that owns this debugger, and its base — down the chain, not "the current one":
+		// The application that owns this debugger, and its base — down the chain, not "the current one":
 		// this is the debug thread, which has no session of its own.
-		commandChannel_VerifyConnection.w_stringZ(debugServer->GetMetaData()->GetConfigGuid());
-		commandChannel_VerifyConnection.w_stringZ(debugServer->GetMetaData()->GetConfigMD5());
+		commandChannel_VerifyConnection.w_stringZ(debugServer->GetMetaData()->GetApplicationGuid());
+		commandChannel_VerifyConnection.w_stringZ(debugServer->GetMetaData()->GetApplicationMD5());
 		commandChannel_VerifyConnection.w_stringZ(debugServer->GetApplicationInstance()->GetUserName());
 		commandChannel_VerifyConnection.w_stringZ(debugServer->GetApplicationInstance()->GetComputerName());
 		SendCommand(commandChannel_VerifyConnection.pointer(), commandChannel_VerifyConnection.size());
@@ -1315,7 +1318,7 @@ void ibDebuggerServer::ibDebuggerServerConnection::RecvCommand(void* pointer, un
 					propCount = vResult.GetNProps();
 				}
 				else {
-					strValue = ibBackendException::GetLastError();
+					strValue = vResult.GetString();   // why, as SendExpressions sends it
 				}
 			});
 			commandChannel.w_stringZ(strValue);
@@ -1634,21 +1637,11 @@ void ibDebuggerServer::ibDebuggerServerConnection::RecvCommand(void* pointer, un
 					// success meant every refusal arrived as an empty answer, and "it did not
 					// compile" was indistinguishable from "it ran and produced nothing"
 					// (measured 2026-09-02, first live run: `2 + 2;` came back blank).
-					if (!ran) {
+					// The compiler's own words are in it too: Evaluate writes them there and takes them off the
+					// error chain (procUnit.cpp), so there is no second place to read them from (measured
+					// 2026-09-02: `JSONString(42)` compiled in the designer and failed here, with nothing to say why).
+					if (!ran)
 						answer = vResult.GetString();
-
-						// ⭐ AND THE COMPILER'S OWN WORDS BESIDE IT. The value slot carries a
-						// generic `<error: compile failed>` when the compile aborted before it
-						// could describe itself; the description is where every other failure in
-						// this process leaves it — GetLastError, which is exactly what the watch
-						// channel sends (SendExpressions, above). Without it a caller is told THAT
-						// their code did not compile and never WHY, which is a round trip they
-						// cannot make on their own (measured 2026-09-02: `JSONString(42)`
-						// compiled in the designer and failed here, with nothing to say why).
-						const ibString said = ibBackendException::GetLastError();
-						if (!said.IsEmpty())
-							answer = answer.IsEmpty() ? said : (answer + ibT(" ") + said);
-					}
 
 					if (ran) {
 						answer = vResult.GetString();
@@ -1967,7 +1960,7 @@ void ibDebuggerServer::ibDebuggerServerConnection::RecvCommand(void* pointer, un
 
 		if (commandFromClient == CommandId_JobStart) {
 			// ⭐⭐ THE CODE ARRIVES AS TEXT and is compiled HERE, against this application's own
-			// configuration. It was built the other way first — compiled in the designer and sent
+			// application. It was built the other way first — compiled in the designer and sent
 			// as bytecode, which worked — but that made four standing promises that two processes
 			// agree (format version, dependency guids, parent, slot numbering), and the day the
 			// compiler numbers something differently, sent bytecode points at the wrong thing

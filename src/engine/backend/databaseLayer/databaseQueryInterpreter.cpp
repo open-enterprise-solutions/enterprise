@@ -430,15 +430,20 @@ int CompareBytes(const void* a, size_t aLen, const void* b, size_t bLen)
 	return aLen < bLen ? -1 : aLen > bLen ? 1 : 0;
 }
 
-// Two texts where they lie, unit by unit — ibString::Cmp's order, with no text made.
+// Two texts where they lie, unit by unit — ibString::Cmp's order, with no text made. A unit is READ (Rd), not pointed at:
+// the cells of a row lie one after another, so a text's units start wherever the cell before ended, an odd byte as
+// often as not (UBSan, 2026-11-19: "load of misaligned address … for type 'const char16_t'").
 int CompareUnits(const ibMemoryCell& a, const ibMemoryCell& b)
 {
-	const ibChar* const x = static_cast<const ibChar*>(a.GetData());
-	const ibChar* const y = static_cast<const ibChar*>(b.GetData());
+	const unsigned char* const x = static_cast<const unsigned char*>(a.GetData());
+	const unsigned char* const y = static_cast<const unsigned char*>(b.GetData());
 	const size_t xn = a.GetDataLen() / sizeof(ibChar), yn = b.GetDataLen() / sizeof(ibChar);
-	for (size_t i = 0, n = std::min(xn, yn); i < n; ++i)
-		if (x[i] != y[i])
-			return x[i] < y[i] ? -1 : 1;
+	for (size_t i = 0, n = std::min(xn, yn); i < n; ++i) {
+		const std::uint32_t at = static_cast<std::uint32_t>(i * sizeof(ibChar));
+		const ibChar xu = Rd<ibChar>(x, at), yu = Rd<ibChar>(y, at);
+		if (xu != yu)
+			return xu < yu ? -1 : 1;
+	}
 	return xn < yn ? -1 : xn > yn ? 1 : 0;
 }
 

@@ -86,15 +86,15 @@ public:
 	ibValueDataComposition(const std::shared_ptr<const ibBackendQueryable>& queryable = nullptr);
 
 	// ⭐⭐ THE RUNNING COMPOSITION OVER A DESCRIPTION SOMEBODY ELSE HOLDS — and whoever wants one makes
-	// it, here, with the two things it needs: the data, and the configuration to resolve names in.
+	// it, here, with the two things it needs: the data, and the application to resolve names in.
 	// A metaobject does not keep one for you (it DECLARES; what it has is the description), and a
 	// property hands none out (it STORES). The designer builds one over the current description; a
 	// report builds one over its own copy of it.
 	//
-	// ⚠ A NULL CONFIGURATION MEANS THE ACTIVE ONE, and the substitution happens HERE, in the
+	// ⚠ A NULL APPLICATION MEANS THE ACTIVE ONE, and the substitution happens HERE, in the
 	// constructor — by the time this object exists it always has one. A caller that had nothing to
 	// pass (a value built from script, a headless tool) said so by passing null; making each of them
-	// reach for the active configuration itself is the same decision written in as many places as
+	// reach for the active application itself is the same decision written in as many places as
 	// there are callers.
 	ibValueDataComposition(ibCompositionDescription& desc, const class ibMetaData* metaData);
 	virtual ~ibValueDataComposition();
@@ -199,7 +199,7 @@ public:
 	//
 	// An expression is legitimate here in a way a scripted FIELD is not: it is evaluated ONCE, before
 	// the read, and what reaches the query is a plain value — so `CurrentDate()` or a call into a
-	// common module costs nothing per row and breaks no server-side paging. (The page cache signs
+	// shared module costs nothing per row and breaks no server-side paging. (The page cache signs
 	// itself with the EVALUATED value, or "today" would be one signature all day.)
 	// ⛔ AND THE TWELVE ACCESSORS OVER THEM ARE GONE (2026-08-24) — `ParameterCount`,
 	// `GetParameterName` / `Value` / `Expression` / `Type`, `IsParameterUserSettable`,
@@ -221,11 +221,11 @@ public:
 
 	// ⭐⭐ WHAT THE RUN IS GIVEN — the same names, with the expressions EVALUATED and the declarations
 	// built into live references. `Evaluate` is the language's own door, so a parameter may hold a
-	// call into a common module; the RESULT decides the parameter's type.
+	// call into a shared module; the RESULT decides the parameter's type.
 	//
 	// ⚠ IT RETURNS THEM. Nothing is written back into the description: a description is DATA, and an
 	// evaluated parameter is runtime — a reference with a session behind it. Writing runtime into a
-	// structure that is saved with the configuration is what made a later load fail on a value it had
+	// structure that is saved with the application is what made a later load fail on a value it had
 	// written itself (Max, 2026-08-29: "there is no runtime in a description, at all").
 	std::map<ibString, ibValue> EvaluatedParameterValues() const;
 
@@ -368,7 +368,7 @@ public:
 	// READ — the metadata OF THE CHOSEN SOURCE, taken straight from the VALUE.
 	// TERMINAL (no owner-walk), so a form's metadata may fall back here without recursing.
 	virtual const ibMetaData* GetSourceMetaData() const override;
-	// SELECTION — which config to PICK / resolve a source FROM: the owner form's config.
+	// SELECTION — which application to PICK / resolve a source FROM: the owner form's application.
 	virtual const ibMetaData* GetMetaData() const override;
 
 	// --- ibPropertyObject + serialization ------------------------------------
@@ -489,7 +489,7 @@ private:
 	std::vector<ibQueryLowering::ibQueryOutputColumn> m_querySchema;
 	ibString                                   m_queryError;   // the ENGINE's words, verbatim
 
-	// The SOURCE config, STORED (what GetSourceMetaData returns) — captured from the
+	// The SOURCE application, STORED (what GetSourceMetaData returns) — captured from the
 	// picked queryable's metaobject in RebuildSource. Held so the READ never re-resolves
 	// the queryable through the owner (which walks the form → recurses). Non-owning.
 

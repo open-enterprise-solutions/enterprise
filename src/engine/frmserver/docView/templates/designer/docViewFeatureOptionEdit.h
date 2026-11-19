@@ -1,0 +1,51 @@
+#ifndef _DESIGNER_FEATURE_OPTION_EDIT_H__
+#define _DESIGNER_FEATURE_OPTION_EDIT_H__
+
+// A FEATURE OPTION'S MEMBERS AS THE DESIGNER EDITS THEM — the desktop designer's ibFeatureOptionEditDocument and
+// ibFeatureOptionEditView (designer/docManager/templates/docViewFeatureOption.h) with its editor
+// (designer/win/editor/featureOptionEditor): what is not shown while the option is off, ticked. The walk is the
+// editor's (its FillData) — every object that may belong (IsFeatureOptionAllowed), under its group, with the fields
+// and tables inside it that say the same — writing the rows the client's copy of the editor draws (ViewKind
+// FeatureOption); a tick is its OnCheckItem. Not the desktop's names — see docViewModuleEdit.h.
+
+#include "frmserver/docView/docView.h"
+
+class FRMSERVER_API ibFeatureOptionMembersView : public ibMetaView {
+public:
+
+	ibFeatureOptionMembersView() : ibMetaView() {}
+
+	// The option's members — the application's row, under it a group per metatype, under each the objects of it that
+	// may belong, under each its fields and tables at every depth, ticked where they belong to this one.
+	virtual void OnDraw(ibDataNode& frame) override;
+	virtual ibProtocol::ibView::ibKind GetViewKind() const override { return ibProtocol::ibView::ibKind::FeatureOption; }
+	// An object, a field or a table ticked or not (Toggle {NodeId, Checked}) — in the option or out of it.
+	virtual bool OnClientEvent(ibProtocol::ibEvent::ibKind event, const ibDataNode& args) override;
+
+private:
+
+	// A metatype's group row — the application's row itself for a metatype with no constructor, as the desktop's.
+	ibDataNode& GroupFor(ibDataNode& root, const ibClassID& clsid);
+
+	ibDataNode& AppendItem(ibDataNode& parent, ibValueMetaObject* metaObject);
+
+	// The fields and tables inside an object that may belong on their own — at every depth, so a column of a tabular
+	// section can be ticked without its table.
+	void AppendChildren(ibDataNode& parent, ibValueMetaObject* metaObject);
+
+	void FillData(ibDataNode& root);
+};
+
+// Its document — the feature option metaobject's (ibMetaDocument::GetMetaObject); the membership lives in the
+// members, saved with the application — nothing of its own to hold; its Save is the application's (see
+// docViewInterfaceEdit.h).
+class FRMSERVER_API ibFeatureOptionMembersDocument : public ibMetaDocument {
+public:
+
+	ibFeatureOptionMembersDocument() : ibMetaDocument() {}
+
+	ibFeatureOptionMembersDocument(const ibFeatureOptionMembersDocument&) = delete;
+	ibFeatureOptionMembersDocument& operator=(const ibFeatureOptionMembersDocument&) = delete;
+};
+
+#endif

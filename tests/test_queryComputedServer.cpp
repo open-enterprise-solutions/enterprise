@@ -45,7 +45,7 @@
 #include "backend/compiler/lambdaQueryAST.h"  // ibBuildLambdaQueryAstFromCode (L4-2 recorder)
 
 #include "core/clsid.h"                                   // reference_to_clsid — a reference column's type
-#include "backend/metadataConfiguration.h"                   // ibMetaDataConfigurationFile — a catalog to point references at
+#include "backend/metadataApplication.h"                     // ibMetaDataApplicationFile — a catalog to point references at
 #include "backend/metaCollection/metaObject.h"               // g_metaCatalogCLSID
 #include "backend/metaCollection/partial/reference/reference.h"   // ibValueReferenceDataObject::Create
 #include "backend/query/provider/database/dbTableProvider.h" // ibDbTableProvider::BuildPredicateIR — the door that writes every WHERE
@@ -210,7 +210,7 @@ TEST_F(ComputedServerFix, Aggregate_IsTheStatementsGroupBy)
 // A LINQ lambda WHERE, lowered and run over a PHYSICAL DB source, executes as SERVER SQL on SQLite (not a
 // RAM fold): x.region == "North" -> door.Where(predicate) -> ExecuteRead -> SELECT ... FROM t WHERE
 // region = 'North'. Proves the LINQ front-end PUSHES to the DBMS, not just the memory parity test_queryLINQExec
-// proves. (The predicate is scalar, so no metaData is needed -- the config-layer wall is not hit here.)
+// proves. (The predicate is scalar, so no metaData is needed -- the application-layer wall is not hit here.)
 TEST_F(ComputedServerFix, Linq_WherePushesToServer)
 {
 	if (!ready) return;
@@ -467,11 +467,11 @@ MetaColFixture MakeMetaColTable(ibDatabaseLayerSQLite& db, const ibString& table
 // That is ibColumnCodec::ReadValue's documented answer to "field not in the result set": a caller that
 // projected one field of a metadata column (a MAX over its date, say) and read it back through the column.
 //
-// 🛑 It was an ACCESS VIOLATION in a process with no active configuration. The codec built the empty value
+// 🛑 It was an ACCESS VIOLATION in a process with no active application. The codec built the empty value
 // with AdjustValue(type) and left the metadata it had been handed behind, so AdjustValue went to
 // `activeMetaData->` - which a headless tool before it opens a base, and every test here, does not have.
-// Where a configuration IS active the same line quietly used THAT one instead of the caller's - wrong for a
-// second configuration held beside it (compare / merge, an external processor). Found through a sequence's
+// Where an application IS active the same line quietly used THAT one instead of the caller's - wrong for a
+// second application held beside it (compare / merge, an external data tool). Found through a sequence's
 // border, whose retreat read a lone MAX this way: on a file base it lost the border, under a test it crashed.
 // =============================================================================
 TEST_F(ComputedServerFix, Codec_ACellWhoseTagIsNotInTheResultReadsAsTheTypedEmptyValue)
@@ -593,7 +593,7 @@ TEST_F(ComputedServerFix, In_MetadataColumnEmptySetReturnsNoRows)
 // the first two alike. Said pair by pair, a hundred items were a hundred `(tag = ? AND table = ? AND id = ?)`
 // branches weighed one at a time against every row, folded as a chain as deep as the list is long (which the
 // renderer walks recursively: some 155 references ran a checked build out of stack). No database is needed:
-// a catalog in a configuration in memory is enough to mint references of it.
+// a catalog in an application in memory is enough to mint references of it.
 // =============================================================================
 namespace {
 
@@ -606,12 +606,12 @@ private:
 };
 
 struct ReferenceSetFix {
-	ibMetaDataConfigurationFile cfg;
+	ibMetaDataApplicationFile cfg;
 	ibValueMetaObject* items = nullptr;
 	ibValueMetaObject* units = nullptr;
 
 	ReferenceSetFix() {
-		ibValueMetaObjectConfiguration* root = cfg.GetCommonMetaObject();
+		ibValueMetaObjectApplication* root = cfg.GetRootMetaObject();
 		if (root == nullptr) return;
 		items = cfg.CreateMetaObject(g_metaCatalogCLSID, root, /*runObject*/ false);
 		units = cfg.CreateMetaObject(g_metaCatalogCLSID, root, /*runObject*/ false);
@@ -621,7 +621,7 @@ struct ReferenceSetFix {
 	ibValue RefTo(const ibValueMetaObject* catalog) const {
 		return ibValue(ibValueReferenceDataObject::Create(&cfg, catalog->GetMetaID(), ibGuid(ibGuid::newGuid())));
 	}
-	// `column IN (values)` over a table of this configuration, as the SQL the door writes for it.
+	// `column IN (values)` over a table of this application, as the SQL the door writes for it.
 	ibString SqlOfSet(const std::shared_ptr<const ibBackendQueryColumn>& column, ibMetaID tableId, const std::vector<ibValue>& values) const {
 		const auto table = std::make_shared<MetaPhysicalQ>(wxT("T"), tableId, &cfg);
 		table->AddCol(column);

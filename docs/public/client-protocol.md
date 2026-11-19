@@ -11,7 +11,7 @@ the browser one [the browser client](browser-client.md).
 **Where it is written.** Every name and number below is written once, in `src/engine/protocol/protocol.h` — a header
 that depends on nothing, included by the server (`frmserver`), the thin client and the web server alike. A number there
 is never renumbered. What only the designer speaks — its debugger, its schemas and views, the questions asked while a
-configuration is written — is written beside it, in `protocol/protocolDesigner.h`; its numbers stay in `protocol.h`,
+application is written — is written beside it, in `protocol/protocolDesigner.h`; its numbers stay in `protocol.h`,
 one numbering for the wire.
 
 ## Transports
@@ -58,7 +58,7 @@ browser's `DecompressionStream("deflate-raw")`); a packet begins `OES1`, a defla
 | `open` | `Client`, `File` or `Extension` | the frame — the file opened as a document; without a file, a new document of the template that opens `Extension` (File → New) |
 | `command` | `Client`, `Command` | the frame — the command done on the active tab's document |
 | `presentation` | `Client`, `Value`, `Format` | `Text` — the value as a person reads it, formatted by the server (`Format`: the codes `Format()` takes) |
-| `picture` | `Client`, `Pictures` — the ids: an engine picture's number, a configuration picture's `<guid>#<version>` (read by the guid) | `Pictures` — each `Id`, `Picture` (the PNG, a `Binary`; empty when there is none of that id) |
+| `picture` | `Client`, `Pictures` — the ids: an engine picture's number, an application picture's `<guid>#<version>` (read by the guid) | `Pictures` — each `Id`, `Picture` (the PNG, a `Binary`; empty when there is none of that id) |
 | `debug` | `Client`, `Command` and its fields (protocol 6) | at once, never the frame — [The debugger](#the-debugger) |
 | `mcp` | `Client`, `Command` and its fields (protocol 7) | never the frame — [The assistant](#the-assistant) |
 | `addresses` | — (no `Client`) | `Addresses` — the base's web addresses, each `Id`, `Path`; the connection is told each change — [Web addresses](#web-addresses) |
@@ -117,11 +117,11 @@ composed again when the person says so (Compose). When a composed sheet's `Versi
 also carry `Sheet` (and `ReadOnly`) — the same as `fetch` would give — so the client need not fetch; a server that
 does not put `Sheet` in the state is answered with `fetch`, as before.
 
-In the designer a configuration file opened with File → Open (`.oap`) is a tab of `Kind` 15. Its `View` holds
-`MetaData` — the configuration's tree, as an external data processor's does (Kind 5) — browsed read-only. Schema
+In the designer an application file opened with File → Open (`.oap`) is a tab of `Kind` 15. Its `View` holds
+`MetaData` — the application's tree, as an external data tool's does (Kind 5) — browsed read-only. Schema
 `MetaData` commands for that tab carry its `Tab`.
 
-A data processor's or a report's row in the tree, and their group's, carry `Menu` items `Load` / `Unload` with
+A data tool's or a report's row in the tree, and their group's, carry `Menu` items `Load` / `Unload` with
 `Extension` — the file the object is kept in apart. Schema `MetaData` `Load {Type, Parent, File}` reads one in from that
 uploaded file, `Load {Id, File}` replaces that object by the one read, `Unload {Id, File}` writes it into the file
 (uploaded empty). A property row whose cell is a link (a module, a form, a template) carries `Object` — the metaobject
@@ -131,7 +131,7 @@ In the designer a report's composer is a tab of `Kind` 14. Its `View` holds `Sta
 the composer's description in its node form — and `Fields`, `References`, `Error` — what its query offers, as the
 ComposerSettings question has them — and `Classes`, rows `{Type, Name, Picture}`: the classes its type cells name.
 The client edits the description itself and sends it back whole: event
-`Change {Composition}`; the configuration is modified, and the answer's `View` carries the fields of the query the
+`Change {Composition}`; the application is modified, and the answer's `View` carries the fields of the query the
 composition now has. The fields of another text are fetched by the tab: `fetch {Tab, Request: {Kind: 21, Text}}` —
 `Fields`, `References`, `Error`, `Classes`; the fields of a reference's targets — `fetch {Tab, Request: {Kind: 22,
 Targets}}` — `Expanded` and `References`, as a ListSettings window asked again has them; the types a parameter may be
@@ -146,7 +146,7 @@ An attribute of type DynamicList is edited the same way: its `ibPropertyDynamicL
 window (filter, sort, grouping, conditional appearance, its query) over the list's composition. The window asks the
 form's tab `Kind` 23 (Source) `{Id, Text}`: the fields of the list's main table (`Id`, its table id; omitted: none) and
 those its query text adds (`Text`, optional), answered as `Kind` 21 answers (`Fields`, `References`, `Error`); a
-reference opened is `Kind` 22. Its `ibPropertyDynamicSource` row carries the sources the configuration registers as
+reference opened is `Kind` 22. Its `ibPropertyDynamicSource` row carries the sources the application registers as
 choices (`Id` the table id, `Title` namespace.name); picking one is the row's `Set`, after which the list is rebuilt over
 that table. A list with no source keeps no settings in the form, as in the desktop designer.
 A scheduled job's `ibPropertySchedule` row carries the schedule node as its `Value` (`IntervalSeconds`,
@@ -166,17 +166,17 @@ its form it may name as an optional node `CommandTree`, in the shape of the form
 sections, each with a row per sub-group and per command (`Name`, `Picture`, `CommandPath` with children `Id`, `Kind`).
 The client's picker lists them; the chosen command's path goes back through the row's `Set`, and a cancelled picker, or
 the command bound already, sends nothing. Making a new form command is the form editor's command tree's own door.
-A picture's `ibPropertyPicture` row carries the configuration's pictures it may be loaded from (the picture
-metaobjects of the owner's configuration, or of the one it extends) as an optional node `Pictures`: children with
+A picture's `ibPropertyPicture` row carries the application's pictures it may be loaded from (the picture
+metaobjects of the owner's application, or of the one it extends) as an optional node `Pictures`: children with
 `Name`, `Guid` and `Id` (the id it is drawn by). They are named rather than sent as a `Picture`; the cell asks for them
 in one `picture` call. Picking one is the row's `Set` with the value `{Type 2, Guid}`. Beside them, as an optional
 node `ClassPictures`, come the engine's class icons, a metadata class's and a control's: children with `Name` and `Id`,
 the class id the icon is drawn and stored by. The core's own pictures are not among them; the client has those. Picking
 one is `{Type 1, Id}`.
-A configuration picture's version is a guid new with each picture its object is given; it is not stored. A client
+An application picture's version is a guid new with each picture its object is given; it is not stored. A client
 keeps a picture by its guid with the id it came by, and asks again when an answer names another version.
 A field's `ibPropertyChoiceLink` (link by type) and `ibPropertyChoiceParameters` rows carry what their windows ask of
-the configuration, as optional nodes. `Targets`, on both: the field's reference types, each `Id` (its metaobject),
+the application, as optional nodes. `Targets`, on both: the field's reference types, each `Id` (its metaobject),
 `Title`, `Type` (the class its reference is registered under, as a link keeps it) and `Picture`; on the parameters row
 each has as children the fields a parameter may fill (`Id`, `Title`, `Picture`). `Sources`, on the parameters row only:
 `Title` the object or tabular section the field stands in, and as children the fields beside it that may supply a
@@ -196,7 +196,7 @@ goes back through the row's `Set`; a cancelled window, or the binding already se
 no `SourceDataType` treats the row as an attribute.
 
 A picture is named by its id everywhere — in the view, a tab's `Icon`, a schema, a request, a list of choices: a
-backend picture's number, as a decimal (a class's own: its class id), or a configuration picture's guid. No answer
+backend picture's number, as a decimal (a class's own: its class id), or an application picture's guid. No answer
 carries the picture itself:
 
 - the platform's own pictures are compiled into the client — it never asks for them;
@@ -272,7 +272,7 @@ drawn empty.
 | `Tabs`, `ActiveTab` | the tabs, each by its id (`NodeId`, given when it opens, never another tab's): `Title` (a modified document's ends with `*`), `Icon`, `Locked` (the start page — first, never closed), `Commands` (the commands its document takes now), `Formats` (what its document saves as: `Title`, `Mask`), `File` (its document's file, once it has one), `Parent` (the tab whose document owns this one's — raised under it, closed with it); the active one by its id |
 | `Messages`, `Clear` | messages to the person since the last answer — events, never in a patch |
 | `Exit` | the client is to go: Exit done, every tab closed — an event, never in a patch |
-| `Properties` | the inspector's rows (as `Schema` 10 shows them) of each object a door acted on since the last answer, each by its `NodeId` and `Tab` (the tab whose tree holds it; absent: the configuration's) — an event, never in a patch |
+| `Properties` | the inspector's rows (as `Schema` 10 shows them) of each object a door acted on since the last answer, each by its `NodeId` and `Tab` (the tab whose tree holds it; absent: the application's) — an event, never in a patch |
 | `Request` | a question to the person, while one is pending |
 | `View` | the active tab drawn: a form — its `Key` and its controls as the designer saved them, each with a `State` of what it shows now; or the start page |
 
@@ -319,8 +319,8 @@ A schema is a dialog of the desktop held as data: the client shows it however it
 | 5 Registration journal | both | nothing | 1 Open — opens its tab (`Kind` 4) | active users |
 | 6 Debugging | the runtime | `Debugging` — the session's process listens for the designer; `Allowed` — it may be switched now (not on an application server, not while a start waits for the designer) | 2 Start, 3 Stop | — |
 | 7 Assistant access | both, in the application as the roles say | `Allowed`; the settings lie on the person's machine | — | — |
-| 8 Users | the designer | `Users` (`Guid`, `Name`, `FullName`), and what a record is chosen from: `Roles` (`Guid`, `Name`, `Title`, `Mode`), `Languages` (`Guid`, `Title`, `Code`, and `Default` on the configuration's own language); with `Args {Guid}` — that one's `User` (`Guid`, `Name`, `FullName`, `Password` — whether one is stored, `Language`, `Roles`) | 4 Save `{Guid, Name, FullName, Language, Roles[, Password]}` — the password hashed by the server, absent: kept; 8 Remove `{Guid}` | data administration |
-| 18 ConfigCompare | the designer | with `Args {Mode, File, File2}` (`Mode` 1 the configuration and a file, 2 and the base's, 3 two files): `Records` — the walk of the two; a side that cannot be read is refused | 13 Merge `{Mode, File, File2, Pull, Ops}` — Add/Delete/Replace; what was applied and what was not, said to the person by the server | administration |
+| 8 Users | the designer | `Users` (`Guid`, `Name`, `FullName`), and what a record is chosen from: `Roles` (`Guid`, `Name`, `Title`, `Mode`), `Languages` (`Guid`, `Title`, `Code`, and `Default` on the application's own language); with `Args {Guid}` — that one's `User` (`Guid`, `Name`, `FullName`, `Password` — whether one is stored, `Language`, `Roles`) | 4 Save `{Guid, Name, FullName, Language, Roles[, Password]}` — the password hashed by the server, absent: kept; 8 Remove `{Guid}` | data administration |
+| 18 ApplicationCompare | the designer | with `Args {Mode, File, File2}` (`Mode` 1 the application and a file, 2 and the base's, 3 two files): `Records` — the walk of the two; a side that cannot be read is refused | 13 Merge `{Mode, File, File2, Pull, Ops}` — Add/Delete/Replace; what was applied and what was not, said to the person by the server | administration |
 | 19 Types | the designer | the language's types, for the syntax helper: with `Args {Query}` — `Types` (`Name`), whose names match; with `Args {Name}` — what that one offers: `Methods` (`Name`, `Signature`) and `Properties` (`Name`), or `Note`, why it cannot be asked | — | — |
 | 20 Style | both | how the person's interface is painted: `Theme` — 0 as their machine is set, 1 light, 2 dark; theirs, kept in the base (0 until they choose; a base with no users keeps one for everybody) | 4 Save `{Theme}` — kept as theirs; a value that is not one of the three numbers is refused | — |
 
@@ -331,9 +331,9 @@ item's answer, and the client asks again only after one of the schema's commands
 access: Options is one exchange; Start now is the command and one read of the token and endpoint it settled on).
 The inspector's rows of an object a door acted on come as the event `Properties` (above), and the client takes them in
 for that object instead of reading them with `schema`: after the inspector's Save (`Schema` 10, `Command` 4 — an edit
-is one exchange), after the configuration tree's Create (`Schema` 9, `Command` 2 — the new object) and Remove
+is one exchange), after the application tree's Create (`Schema` 9, `Command` 2 — the new object) and Remove
 (`Command` 3, which takes `Select`: the id the tree selects after it), and when a form editor tab opens over a form of
-the configuration. When the work waits on a question (a form's type), they ride the answer to the `respond` that lets
+the application. When the work waits on a question (a form's type), they ride the answer to the `respond` that lets
 it finish. A server that sends none is read with `schema`, as before.
 
 A row's choices are its children, flat: `Id`, `Title`, `Picture`, and `Data` when the choice has any — a u64 as a
@@ -377,7 +377,7 @@ does the same: each act is done and asked again with `Result`.
 
 A ListSettings window asks on the way too: `Act` 1 Expand with `Targets` — a reference field opened — is asked again
 with `Expanded`, the fields of those targets (one per name, its type the union of theirs; shaped as `Fields`,
-`Presentation` the synonym), and their `References`. The setting answered is read against the configuration and
+`Presentation` the synonym), and their `References`. The setting answered is read against the application and
 checked: one refused is asked again as it was given, with `Error`; one taken becomes the table's user setting, and its
 rows are read again. `Act` 2 Choose — a condition's value of a type of the server's (`Type`, `Value` held, `Choice` —
 the client's number for it): the server opens its quick choice, or its choice form — a tab like any other; in the

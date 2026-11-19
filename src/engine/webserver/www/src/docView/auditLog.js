@@ -3,7 +3,7 @@
 // the filter over it: From and To (days, To inclusive), the Level from which («Audit only» at first), the Source, the
 // User, a part of the Message. Apply and Refresh read it again from the top, Clear puts the filter back as it was,
 // Live refresh reads it again every three seconds. A row's object — the row double-clicked, Enter, Open object — is
-// opened by the server, where the configuration is: event Open {Ref, RefMeta} on the tab.
+// opened by the server, where the application is: event Open {Ref, RefMeta} on the tab.
 //
 // Fetch {Tab, Request: {From, To, Level, User, Source, Search, Offset, Count}} → the rows, each {Time (ms), Level,
 // Session, User, Host, Source, Event, Message, Ref, RefMeta}.

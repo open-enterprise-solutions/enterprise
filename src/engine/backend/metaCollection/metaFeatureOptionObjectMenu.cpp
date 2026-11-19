@@ -1,0 +1,10 @@
+#include "metaFeatureOptionObject.h"
+
+// What an option offers first is its COMPOSITION — the members it takes away when it is off, as a tree to tick
+// (the option's own document, the designer's featureOptionEditor) — the way a role offers itself; the stored
+// value's module follows.
+bool ibValueMetaObjectFeatureOption::CollectContextMenu(std::vector<ibMetaMenuItem>& items)
+{
+	items.emplace_back(ibMetaMenuKind::Object, ibT("Composition"), _("Open feature option composition"), this);
+	return ibValueMetaObjectStoredValue::CollectContextMenu(items);
+}

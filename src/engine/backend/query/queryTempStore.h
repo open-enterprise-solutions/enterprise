@@ -61,7 +61,7 @@ public:
 	// nothing. Names the snapshot does not have are ignored — the statement that made the table
 	// decides its columns, and an index over a column it did not project is simply not there.
 	//
-	// `metaData` — the configuration the query ran on behalf of: the stored table answers it, so a reference
+	// `metaData` — the application the query ran on behalf of: the stored table answers it, so a reference
 	// in it can be followed to its catalog (a walk, «IN HIERARCHY»), as it can in the table it was read from.
 	void Put(const ibString& name, ibQueryRamTable&& rows,
 	         const std::vector<ibString>& indexedColumns = {}, const ibMetaData* metaData = nullptr);

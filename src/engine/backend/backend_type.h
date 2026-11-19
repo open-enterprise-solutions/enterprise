@@ -12,13 +12,13 @@
 //////////////////////////////////////////////////////////////
 
 // ⭐ A BINDING'S DOOR ON THIS SIDE — the core one writes every id as it is held; this one writes against the
-// configuration the binding belongs to, and asks it which ids still name an object.
+// application the binding belongs to, and asks it which ids still name an object.
 class BACKEND_API ibBackendMetaDescriptionMemory : public ibMetaDescriptionMemory {
 public:
 	static bool WriteNode(ibDataValue& value, const ibMetaDescription& metaDesc, const class ibMetaData* metaData = nullptr);
 };
 
-// …and a type's — written against the configuration it belongs to, the classes it no longer knows dropped.
+// …and a type's — written against the application it belongs to, the classes it no longer knows dropped.
 class BACKEND_API ibBackendTypeDescriptionMemory : public ibTypeDescriptionMemory {
 public:
 	static bool WriteNode(ibDataValue& value, const ibTypeDescription& typeDesc, const class ibMetaData* metaData = nullptr);
@@ -102,7 +102,7 @@ public:
 
 //////////////////////////////////////////////////////////////
 
-class BACKEND_API ibBackendTypeConfigFactory :
+class BACKEND_API ibBackendTypeApplicationFactory :
 	public ibBackendTypeFactory {
 public:
 
@@ -184,7 +184,7 @@ enum ibSourceDataType {
 // value type. The source is produced by the holder (it materialises the value from the
 // attribute's Type), so the attribute itself stays value-free.
 //
-// ⭐ A COLUMN OF A SOURCE, as an attribute of the configuration is (ibBackendSourceColumn): the form is the source
+// ⭐ A COLUMN OF A SOURCE, as an attribute of the application is (ibBackendSourceColumn): the form is the source
 // it stands in. Name, synonym, comment and Type are answered the column's way, so the dot (WalkSource) returns a
 // form's attribute bound whole the way it returns a field bound through one, and nobody asks which.
 class BACKEND_API ibBackendFormAttributeValue : public ibBackendSourceColumn {
@@ -205,7 +205,7 @@ public:
 //////////////////////////////////////////////////////////////
 
 class BACKEND_API ibBackendTypeSourceFactory :
-	public ibBackendTypeConfigFactory {
+	public ibBackendTypeApplicationFactory {
 public:
 
 	virtual ibSourceDataType GetFilterSourceDataType() const {

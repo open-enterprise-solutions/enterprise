@@ -19,7 +19,7 @@
 //	              wrong write at worst. Both of those happened on 2026-08-31.
 //
 //	              Pure backend: no server is started, no socket is opened, no
-//	              configuration is loaded. Every tool answers these questions
+//	              application is loaded. Every tool answers these questions
 //	              from its own declaration.
 //
 //	⚠ BACKEND TOOLS, PLUS WHAT ELSE IS LINKED. The registry is filled by the
@@ -36,7 +36,7 @@
 #include "core/serialize/dataBuilder.h"
 #include "backend/appData.h"
 #include "backend/compiler/compileCode.h"
-#include "backend/metadataConfiguration.h"
+#include "backend/metadataApplication.h"
 #include "backend/metaCollection/partial/commonObject.h"
 #include "core/clsid.h"
 
@@ -274,7 +274,7 @@ TEST(McpGreetingGate, WritingVerbs_WaitForTheGreeting)
 	EXPECT_FALSE(ibMcpRunsBeforeGreeting(wxT("metadata_set")));
 	EXPECT_FALSE(ibMcpRunsBeforeGreeting(wxT("metadata_bind")));
 	EXPECT_FALSE(ibMcpRunsBeforeGreeting(wxT("module_write")));
-	EXPECT_FALSE(ibMcpRunsBeforeGreeting(wxT("config_save")));
+	EXPECT_FALSE(ibMcpRunsBeforeGreeting(wxT("app_save")));
 	EXPECT_FALSE(ibMcpRunsBeforeGreeting(wxEmptyString));
 }
 
@@ -451,7 +451,7 @@ TEST(McpToolContract, PictureSet_DeclaresTheNameItAsksForWhenTheImageComesAsData
 	ASSERT_NE(tool, nullptr);
 
 	const std::set<ibString> declared = DeclaredArguments(SchemaOf(tool));
-	for (const ibString name : { wxT("id"), wxT("engine"), wxT("configuration"), wxT("data"), wxT("svg"),
+	for (const ibString name : { wxT("id"), wxT("engine"), wxT("application"), wxT("data"), wxT("svg"),
 		wxT("width"), wxT("height"), wxT("name") })
 		EXPECT_TRUE(declared.count(name) != 0) << "picture_set does not declare '" << ibString(name).ToStdString() << "'";
 }
@@ -584,7 +584,7 @@ TEST(McpToolContract, EveryNameSaidInADescription_IsANameThatExists)
 	}
 }
 
-// Who may be offered a tool: what changes the configuration is the designer's alone, what acts in a person's window the
+// Who may be offered a tool: what changes the application is the designer's alone, what acts in a person's window the
 // application's alone, and the rest is anybody's the assistant is given to.
 TEST(McpToolContract, ToolMode_IsWhatItWasRegisteredAs)
 {
@@ -798,7 +798,7 @@ TEST(McpSearch, AWordIsMetAtItsStem_SoTheFormOfTheNounDoesNotDecide)
 // a different word.
 TEST(McpSearch, AStemKeepsTwoThirdsOfItsWord_SoOneWordDoesNotBecomeAnother)
 {
-	const ibString commands = wxT("A command bar holds the common commands of a section.");
+	const ibString commands = wxT("A command bar holds the shared commands of a section.");
 
 	EXPECT_EQ(ibMcpWordsFound(commands, wxT("comment"), nullptr), 0u);
 	EXPECT_EQ(ibMcpWordsFound(commands, wxT("commission"), nullptr), 0u);
@@ -936,9 +936,9 @@ TEST(MetadataBind, ASharedNameResolvesAmongTheBindingsCandidates) {
 	if (!ibApplicationInstance::CreateAppDataEnv(ibRunMode::eFILE_MODE))
 		GTEST_SKIP() << "appData env unavailable headless";
 
-	std::shared_ptr<ibMetaDataConfigurationFile> cfg = ibMetaData::MakeShared<ibMetaDataConfigurationFile>();
+	std::shared_ptr<ibMetaDataApplicationFile> cfg = ibMetaData::MakeShared<ibMetaDataApplicationFile>();
 	ActiveMetaDataAccess::Replace(cfg);
-	// RunDatabase sets this thread's code style to the configuration's. The binary runs VES
+	// RunDatabase sets this thread's code style to the application's. The binary runs VES
 	// (test_compiler.cpp), so the release puts it back, as StyleGuard does.
 	struct Release {
 		const short codeStyle = ibCompileCode::GetCodeStyle();
@@ -949,7 +949,7 @@ TEST(MetadataBind, ASharedNameResolvesAmongTheBindingsCandidates) {
 		}
 	} release;
 
-	ibValueMetaObjectConfiguration* root = cfg->GetCommonMetaObject();
+	ibValueMetaObjectApplication* root = cfg->GetRootMetaObject();
 	ASSERT_NE(root, nullptr);
 
 	ibValueMetaObject* document = cfg->CreateMetaObject(g_metaDocumentCLSID, root, false);

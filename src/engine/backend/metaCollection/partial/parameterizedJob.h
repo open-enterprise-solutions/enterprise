@@ -180,7 +180,7 @@ public:
 
 	//get module object in compose object
 	virtual const ibValueMetaObjectModule* GetObjectModule() const { return m_propertyObjectModule->GetMetaObject(); }
-	virtual const ibValueMetaObjectCommonModule* GetManagerModule() const { return m_propertyManagerModule->GetMetaObject(); }
+	virtual const ibValueMetaObjectSharedModule* GetManagerModule() const { return m_propertyManagerModule->GetMetaObject(); }
 
 	//prepare menu for item
 	virtual bool CollectContextMenu(std::vector<ibMetaMenuItem>& items);
@@ -225,7 +225,7 @@ protected:
 	//
 	// ONE ENTRY PER ACTIVE ROW. A row IS the job: it carries the schedule, the last run and the
 	// switch, so it is what the manager watches. RegisterJobs walks the table once, when the
-	// configuration starts; a row that is written afterwards re-registers itself (RegisterRow), and
+	// application starts; a row that is written afterwards re-registers itself (RegisterRow), and
 	// one that is switched off or deleted withdraws.
 	//
 	// Registration costs nothing while a job sleeps — no session, no connection, two timestamp

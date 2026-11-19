@@ -52,7 +52,7 @@ bool ibStructureBuilder::OnBeforeSave()
 	// ⭐⭐ …AND ITS CONNECTION IS HELD FOR THE APPLY, NOT FOR THE SESSION'S LIFE. Asked with nothing bound, a
 	// holder binds what it checks out for good (EnsureConnection): the session kept the pool's connection
 	// after the apply, and with one connection in the pool every later read on the thread's channel waited
-	// out the checkout's 30 s (CommonModuleCheck: 211 s, the breakpoints' load among them). A scope binds it
+	// out the checkout's 30 s (SharedModuleCheck: 211 s, the breakpoints' load among them). A scope binds it
 	// instead, and OnAfterSave lets it go. A leftover build's hold is kept: its connection is the one with
 	// the straggling transaction rolled back below.
 	std::unique_ptr<ibConnectionScope> scope = std::move(m_scope);
@@ -76,7 +76,7 @@ bool ibStructureBuilder::OnBeforeSave()
 #if _USE_SAVE_METADATA_IN_TRANSACTION == 1
 	Conn()->BeginTransaction();   // hold the restructuring transaction on this connection until OnAfterSave
 	if (!Conn()->IsActiveTransaction()) {
-		ibRestructureInfo::ReleaseAutoExclusive();   // begin failed — drop the exclusive we just took
+		ibRestructureInfo::ReleaseAutoSingleUser();   // begin failed — drop the exclusive we just took
 		return false;
 	}
 #endif
@@ -95,7 +95,7 @@ int ibStructureBuilder::OnSave(const ibSchemaSnapshot* baseline, const ibSchemaS
 int ibStructureBuilder::OnAfterSave(bool rollback)
 {
 	// Pair the exclusive acquired in OnBeforeSave — released on EVERY exit (commit / rollback / error).
-	struct AutoRelease { ~AutoRelease() { ibRestructureInfo::ReleaseAutoExclusive(); } } autoRelease;
+	struct AutoRelease { ~AutoRelease() { ibRestructureInfo::ReleaseAutoSingleUser(); } } autoRelease;
 	// …and the connection OnBeforeSave held, the same way: after the last statement below, on every exit.
 	const std::unique_ptr<ibConnectionScope> scope = std::move(m_scope);
 
@@ -192,7 +192,7 @@ int ibStructureBuilder::FlushDeferred()
 //
 // Firebird cannot build the maintenance in the same transaction as the tables it addresses, so an
 // apply is TWO commits and can fail between them. The first is already durable at that point, and
-// nothing above rolls it back: the active configuration is not published (OnAfterSaveDatabase), so
+// nothing above rolls it back: the active application is not published (OnAfterSaveDatabase), so
 // the baseline still describes the database as it was BEFORE the apply — while the first commit's
 // DDL is all there. A differ working from that baseline then re-issues work already done and is
 // refused — "table already exists" for a create, and for a column the first commit DROPPED, a DROP
@@ -229,13 +229,13 @@ void ibStructureBuilder::UndoAppliedDdl()
 		// the REAL failure, and that is the one it reports. But it is WRITTEN DOWN — an undo that cannot
 		// run leaves the schema ahead of the baseline, and the next apply's refusal is then traceable
 		// only to this line. It used to be silent, which is how a failed apply could end with nothing
-		// in the journal about why the base no longer matches its configuration.
+		// in the journal about why the base no longer matches its application.
 		ibString why = ibT("an unknown failure");
 		try { throw; }
 		catch (const ibCoreException& err) { why = err.GetErrorDescription(); }
 		catch (...) {}
 		ibLog->Warn(ibT("restructure"), ibT("compensation"), ibString::Format(
-			ibT("the compensation of a failed apply could not run (%s) - the schema is ahead of the configuration"), why));
+			ibT("the compensation of a failed apply could not run (%s) - the schema is ahead of the application"), why));
 		if (Conn()->IsActiveTransaction()) {
 			try { Conn()->RollBack(); } catch (...) {}
 		}

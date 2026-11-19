@@ -70,7 +70,7 @@ class FRMSERVER_API ibFormAttributeValue :
 	class ibFormAttribute :
 		public ibValueDynamicMembers,
 		public ibPropertyObject,
-		public ibBackendTypeConfigFactory {
+		public ibBackendTypeApplicationFactory {
 	public:
 
 		ibFormAttribute(ibValueForm* ownerForm = nullptr);
@@ -79,10 +79,10 @@ class FRMSERVER_API ibFormAttributeValue :
 		virtual ibString GetClassName() const override { return ibValue::GetClassName(); }
 		virtual ibString GetObjectTypeName() const override { return GetName(); }
 		// A form attribute is only editable when its owner form is (a form opened over a read-only metadata — a DB /
-		// file config — is view-only). Out-of-line: ibValueForm is only forward-declared here.
+		// file application — is view-only). Out-of-line: ibValueForm is only forward-declared here.
 		virtual bool IsEditable() const override;
 
-		// ibBackendTypeConfigFactory = the Type-config factory the Type property's variant resolves
+		// ibBackendTypeApplicationFactory = the Type-application factory the Type property's variant resolves
 		// through (internal — the holder's FAÇADE re-exposes name / id / type, never this object):
 		virtual ibTypeDescription& GetTypeDesc() const override { return m_propertyType->GetValueAsTypeDesc(); }
 		virtual ibSelectorDataType GetFilterDataType() const override { return ibSelectorDataType::ibSelectorDataType_any; }
@@ -174,9 +174,9 @@ public:
 	virtual ibString GetObjectTypeName() const override { return m_attribute->GetObjectTypeName(); }
 	virtual bool IsEditable() const override { return m_attribute->IsEditable(); }   // → attribute → owner form
 	// Metadata flows THROUGH the form. The holder is the attach-owner a held dynamic list reaches from its
-	// GetSourceMetaData(); forward to the attribute, which reads m_ownerForm->GetMetaData() (active-config
+	// GetSourceMetaData(); forward to the attribute, which reads m_ownerForm->GetMetaData() (active-application
 	// fallback). Without this the base returns null, so the held list's Source picker resolves the WRONG
-	// (empty global) factory and lists nothing — even in the designer on the original config.
+	// (empty global) factory and lists nothing — even in the designer on the original application.
 	virtual const ibMetaData* GetMetaData() const override { return m_attribute->GetMetaData(); }
 	// Single interception point (the holder is what the inspector selects): forward the change
 	// to the property's REAL owner (attribute / value — each reacts to its own), and on the

@@ -63,7 +63,7 @@ public:
 	virtual ibString GetModuleText() const = 0;
 
 	// Only functions: its text holds no statements of its own.
-	virtual bool IsCommonModule() const = 0;
+	virtual bool IsSharedModule() const = 0;
 	// It has no compile of its own: its lexems are read in front of the text of whoever binds it.
 	virtual bool IsGlobalModule() const = 0;
 };

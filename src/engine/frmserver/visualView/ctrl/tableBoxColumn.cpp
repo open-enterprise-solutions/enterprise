@@ -116,7 +116,7 @@ bool ibValueModelTableBoxColumn::IsColumnShown() const
 	// unbound-source-control visibility gate. It stays selectable via the object tree while hidden, so its
 	// Source picker is reachable. (GetModelColumn can't gate this — it falls back to the control id.)
 	const bool sourceMissing = m_propertySource->IsEmptyProperty() && m_model_id == ibNOT_FOUND;
-	// …nor is a column the functional options of this base make unavailable (its field, or the options it names).
+	// …nor is a column the feature options of this base make unavailable (its field, or the options it names).
 	if (!m_propertyVisible->GetValueAsBoolean() || sourceMissing || !IsAvailable())
 		return false;
 
@@ -173,7 +173,7 @@ void ibValueModelTableBoxColumn::OnUpdate(ibDataNode& state, ibVisualHost* host)
 			state.SetValue(ibProtocol::ibForm::ibTable::FooterPicture, footer);
 	}
 
-	// Its own Visible, a binding, the functional options — the group above says its own (its Visible).
+	// Its own Visible, a binding, the feature options — the group above says its own (its Visible).
 	const bool sourceMissing = m_propertySource->IsEmptyProperty() && m_model_id == ibNOT_FOUND;
 	state.SetValue(ibProtocol::ibForm::ibState::Visible, m_propertyVisible->GetValueAsBoolean() && !sourceMissing && IsAvailable());
 	state.SetValue(ibProtocol::ibForm::ibTable::ReadOnly, IsReadOnly());
@@ -206,7 +206,7 @@ const ibFormatString* ibValueModelTableBoxColumn::GetCellFormat() const
 {
 	const ibTranslateString& format = GetFormat();
 	if (!format.IsEmpty())
-		return &ibBackendTypeConfigFactory::GetFormatFromColumn(format, GetTypeDesc());
+		return &ibBackendTypeApplicationFactory::GetFormatFromColumn(format, GetTypeDesc());
 	const ibValueModelTableBox* owner = GetOwner();
 	const ibValueModel* model = owner != nullptr ? owner->GetTableModel() : nullptr;
 	const ibValueModel::ibValueModelColumnCollection* columns = model != nullptr ? model->GetColumnCollection() : nullptr;

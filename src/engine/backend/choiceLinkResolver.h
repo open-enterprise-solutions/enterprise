@@ -36,7 +36,7 @@ struct BACKEND_API ibChoiceHolder {
 	// ⭐⭐ WHAT A FIELD STANDING HERE SAYS — by id, the ROW FIRST and the object after it, as GetValue reads:
 	// a column is the row's, and a column may also be bound to a field of the object above it. The source
 	// answers for its own fields (ibSourceDataObject::GetChoiceParameters) and says nothing of one it has
-	// not; ids are the configuration's own, so a row saying nothing is a row not having the field.
+	// not; ids are the application's own, so a row saying nothing is a row not having the field.
 	const ibChoiceParametersDescription& GetChoiceParameters(const ibMetaID& id) const;
 	const ibTranslateString& GetFormat(const ibMetaID& id) const;
 	ibSelectMode GetSelectMode(const ibMetaID& id) const;

@@ -6,8 +6,8 @@
 #include "systemManager.h"
 
 #include "backend/metaCollection/metaFormObject.h"
-#include "backend/metadataConfiguration.h"
-#include "backend/metadataSerialization.h"           // a value as text and back — the configuration's door
+#include "backend/metadataApplication.h"
+#include "backend/metadataSerialization.h"           // a value as text and back — the application's door
 
 #include "backend/backend_mainFrame.h"
 #include "backend/backend_form.h"
@@ -513,7 +513,7 @@ void ibValueSystemFunction::WriteJournalEvent(const ibString& strMessage, ibStat
 	if (logger == nullptr)
 		return;             // no journal in this process — saying so is not this function's business
 
-	// The category a caller did not give: "script" is where code written in the configuration lands,
+	// The category a caller did not give: "script" is where code written in the application lands,
 	// which is what a person filters by when they want to see what an assistant's run did.
 	const ibString source = ibT("script");
 	const ibString event  = strEvent.IsEmpty() ? ibString(ibT("script.event")) : strEvent;
@@ -825,7 +825,7 @@ void ibValueSystemFunction::FillPropertyValues(ibValue& receiver, ibValue& sourc
 
 namespace {
 
-// A type's name in a text, as the running configuration knows it - what it does not know it refuses.
+// A type's name in a text, as the running application knows it - what it does not know it refuses.
 ibClassID LookupType(const ibString& name)
 {
 	return activeMetaData != nullptr ? activeMetaData->GetIDObjectFromString(name) : ibClassID(0);
@@ -834,7 +834,7 @@ ibClassID LookupType(const ibString& name)
 } // namespace
 
 // ⭐⭐ A VALUE, AS TEXT — WRITTEN WHERE THE VALUE IS. Everything under this was already built: a
-// value packs itself into an ibDataNode, the configuration's door adds the types only it can make
+// value packs itself into an ibDataNode, the application's door adds the types only it can make
 // (references, enum members), and a provider writes that node as JSON. What was missing is the one
 // thing that matters in practice — a way to ask for it FROM SCRIPT, at the line where the value
 // exists (Max, 2026-09-02: *"the point is that you write it as a CALL — you have a selection there
@@ -845,10 +845,10 @@ ibClassID LookupType(const ibString& name)
 // with the types: whatever learns to pack itself is in here the day it does, with nothing to add.
 ibString ibValueSystemFunction::JSONString(const ibValue& cData)
 {
-	// THE CONFIGURATION IS THE RUNNING ONE — the same one every other function in this file asks
+	// THE APPLICATION IS THE RUNNING ONE — the same one every other function in this file asks
 	// for. A value's references mean nothing without it: their types exist in its registry alone.
-	if (activeMetaData == nullptr || !activeMetaData->IsConfigOpen())
-		ibBackendCoreException::Error(_("There is no open configuration to write this value against"));
+	if (activeMetaData == nullptr || !activeMetaData->IsOpen())
+		ibBackendCoreException::Error(_("There is no open application to write this value against"));
 
 	ibDataNode node;
 	ibSerializeValue(cData, node);   // raises on a value that cannot travel
@@ -865,7 +865,7 @@ ibString ibValueSystemFunction::JSONString(const ibValue& cData)
 
 // …AND BACK, which is the half that lets a value be MADE from outside. Text arrives — typed by
 // hand, produced by the function above, sent in over the debugger's sandbox — and becomes a value
-// this configuration understands.
+// this application understands.
 //
 // ⚠ NOT EVERY WRITING SURVIVES THE RETURN TRIP. The JSON view is a rendering: a date becomes an
 // ISO string, a type description is written out by name, and fields and properties flatten into one
@@ -875,8 +875,8 @@ ibString ibValueSystemFunction::JSONString(const ibValue& cData)
 // whatever used it next.
 ibValue ibValueSystemFunction::JSONValue(const ibString& strJson)
 {
-	if (activeMetaData == nullptr || !activeMetaData->IsConfigOpen())
-		ibBackendCoreException::Error(_("There is no open configuration to read this value against"));
+	if (activeMetaData == nullptr || !activeMetaData->IsOpen())
+		ibBackendCoreException::Error(_("There is no open application to read this value against"));
 
 	ibJsonProvider provider;
 	provider.SetTypeLookup(LookupType);
@@ -897,15 +897,15 @@ ibValue ibValueSystemFunction::JSONValue(const ibString& strJson)
 #include "core/serialize/provider/xmlProvider.h"   // the node as XML — the twins of the two verbs above
 
 // ⭐ A VALUE AS XML — JSONString's twin, with the XML provider where that one has the JSON view: the value packs
-// itself into a node, the configuration's door adds what only it can make (references, enumeration members), and
+// itself into a node, the application's door adds what only it can make (references, enumeration members), and
 // the provider writes the node. The XML form keeps every kind the node holds, so XMLValue reads the value back as
-// it went - a structure or an array too, its elements read through the configuration (ibDeserializeValue), a
+// it went - a structure or an array too, its elements read through the application (ibDeserializeValue), a
 // reference among them. A value that cannot pack itself is refused by the door; the
 // provider refuses on its own what it cannot write or read.
 ibString ibValueSystemFunction::XMLString(const ibValue& value)
 {
-	if (activeMetaData == nullptr || !activeMetaData->IsConfigOpen())
-		ibBackendCoreException::Error(_("There is no open configuration to write this value against"));
+	if (activeMetaData == nullptr || !activeMetaData->IsOpen())
+		ibBackendCoreException::Error(_("There is no open application to write this value against"));
 
 	ibDataNode node;
 	ibSerializeValue(value, node);   // raises on a value that cannot travel
@@ -922,8 +922,8 @@ ibString ibValueSystemFunction::XMLString(const ibValue& value)
 // JSONValue reads its own.
 ibValue ibValueSystemFunction::XMLValue(const ibString& text)
 {
-	if (activeMetaData == nullptr || !activeMetaData->IsConfigOpen())
-		ibBackendCoreException::Error(_("There is no open configuration to read this value against"));
+	if (activeMetaData == nullptr || !activeMetaData->IsOpen())
+		ibBackendCoreException::Error(_("There is no open application to read this value against"));
 
 	ibXmlProvider provider;
 	provider.SetTypeLookup(LookupType);
@@ -1043,18 +1043,18 @@ ibString ibValueSystemFunction::UserPassword() {
 	return appData->GetUserPassword();
 }
 
-bool ibValueSystemFunction::ExclusiveMode() {
-	return appData->ExclusiveMode();
+bool ibValueSystemFunction::SingleUserMode() {
+	return appData->SingleUserMode();
 }
 
-void ibValueSystemFunction::SetExclusive(bool on) {
-	// Acquire/release exclusive mode for the calling session. Throws
+void ibValueSystemFunction::SetSingleUserMode(bool on) {
+	// Acquire/release single-user mode for the calling session. Throws
 	// ibBackendCoreException with a localized reason on rejection — the
 	// script's try/except is the natural retry point.
 	auto* s = ibSession::Current();
 	if (s == nullptr)
 		ibBackendCoreException::Error(_("No active session"));
-	s->SetExclusive(on);
+	s->SetSingleUser(on);
 }
 
 ibString ibValueSystemFunction::GeneralLanguage() {
@@ -1105,27 +1105,27 @@ bool ibValueSystemFunction::IsInRole(const ibValue& cData)
 	return false;
 }
 
-ibValue ibValueSystemFunction::GetCommonForm(const ibFormRequest& request, ibBackendControlFrame* ownerControl, ibValueGuid* unique)
+ibValue ibValueSystemFunction::GetSharedForm(const ibFormRequest& request, ibBackendControlFrame* ownerControl, ibValueGuid* unique)
 {
 	if (!request.m_formName.IsEmpty()) {
 
-		const ibValueMetaObjectCommonForm* creator =
-			activeMetaData->FindAnyObjectByFilter<ibValueMetaObjectCommonForm>(request.m_formName, g_metaCommonFormCLSID);
+		const ibValueMetaObjectSharedForm* creator =
+			activeMetaData->FindAnyObjectByFilter<ibValueMetaObjectSharedForm>(request.m_formName, g_metaSharedFormCLSID);
 
 		if (creator != nullptr)
 			return creator->GetObjectForm(ibFormRequest(ibString(), unique ? ((ibGuid)*unique) : ibGuid()), ownerControl);
 	}
 
-	ibBackendCoreException::Error(_("Common form not found '%s'"), request.m_formName);
+	ibBackendCoreException::Error(_("Shared form not found '%s'"), request.m_formName);
 	return ibEmptyValue;
 }
 
-void ibValueSystemFunction::ShowCommonForm(const ibFormRequest& request, ibBackendControlFrame* ownerControl, ibValueGuid* unique)
+void ibValueSystemFunction::ShowSharedForm(const ibFormRequest& request, ibBackendControlFrame* ownerControl, ibValueGuid* unique)
 {
 	if (ibBackendException::IsEvalMode())
 		return;
 
-	const ibValue& cValue = GetCommonForm(request, ownerControl, unique);
+	const ibValue& cValue = GetSharedForm(request, ownerControl, unique);
 
 	ibBackendValueForm* valueForm = dynamic_cast<ibBackendValueForm*>(cValue.GetRef());
 	if (valueForm != nullptr) valueForm->ShowForm();
@@ -1133,12 +1133,12 @@ void ibValueSystemFunction::ShowCommonForm(const ibFormRequest& request, ibBacke
 
 #include "backend/system/value/valueSpreadsheet.h"
 
-ibValue ibValueSystemFunction::GetCommonTemplate(const ibString& strTemplateName)
+ibValue ibValueSystemFunction::GetSharedTemplate(const ibString& strTemplateName)
 {
 	if (!strTemplateName.IsEmpty()) {
 
-		const ibValueMetaObjectCommonTemplate* creator =
-			activeMetaData->FindAnyObjectByFilter<ibValueMetaObjectCommonTemplate>(strTemplateName, g_metaCommonTemplateCLSID);
+		const ibValueMetaObjectSharedTemplate* creator =
+			activeMetaData->FindAnyObjectByFilter<ibValueMetaObjectSharedTemplate>(strTemplateName, g_metaSharedTemplateCLSID);
 
 		if (creator != nullptr)
 			return creator->GetTemplateProvider().GetDataValue(creator->GetTemplateDesc(), creator->GetMetaData());
@@ -1157,7 +1157,7 @@ ibValue ibValueSystemFunction::GetCommonTemplate(const ibString& strTemplateName
 	if (ibBackendException::IsEvalComplete())
 		return new ibValueSpreadsheetDocument();
 
-	ibBackendCoreException::Error(_("Common template not found '%s'"), strTemplateName);
+	ibBackendCoreException::Error(_("Shared template not found '%s'"), strTemplateName);
 	return ibEmptyValue;
 }
 

@@ -420,7 +420,7 @@ TEST(JobManager, JobsAreFoundByKeyNotByName) {
 }
 
 TEST(JobManager, UnregisterByPrefixWithdrawsEveryRowOfOneMetaobject) {
-    // How a parameterized job leaves when its configuration closes: the rows were declared as
+    // How a parameterized job leaves when its application closes: the rows were declared as
     // "<JobName>.<rowGuid>", and by then the table may no longer be readable — so the manager is
     // asked what it holds instead of the database.
     ibJobManager manager(ib::AppDataCtorToken{});

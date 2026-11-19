@@ -331,13 +331,13 @@ protected:
 	//
 	// THERE IS NO INVALIDATION, AND THAT IS THE DESIGN. The store is a member,
 	// so its lifetime IS the unit's: an object module's results last exactly as
-	// long as that object, a common module's as long as the root it hangs from.
+	// long as that object, a shared module's as long as the root it hangs from.
 	// Nothing can go stale that cannot outlive its holder, so there is no clock
 	// to tune and no "drop the cache" call for a caller to forget.
 	//
 	// ⚠ HELD BEHIND A POINTER, AND MADE ONLY WHEN SOMETHING IS KEPT. The map
 	// itself is 40 bytes on x86, and a ProcUnit exists per module — object,
-	// manager, form, common — so a configuration carries hundreds of them. Every
+	// manager, form, common — so an application carries hundreds of them. Every
 	// one of those was paying for a store that the great majority never open:
 	// `Cached` is a modifier a few functions carry, not a property of running
 	// code. Measured off the layout of ibProcUnit (528 bytes: 448 of them the

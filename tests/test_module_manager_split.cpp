@@ -9,7 +9,7 @@
 //
 // These are pure structural/null-safety smoke tests — they need no database,
 // no appData wiring, no live session pool. The behavioural half (which manager
-// a real Catalog/Document object actually parents to, common-module
+// a real Catalog/Document object actually parents to, shared-module
 // registration through OnBeforeRunMetaObject, reload lifetime) is integration
 // scope and exercised by the designer at runtime, not here.
 // =============================================================================
@@ -19,7 +19,7 @@
 
 #include "backend/session/session.h"
 #include "backend/moduleManager/moduleManager.h"
-#include "backend/moduleManager/moduleManagerExt.h"   // external DP/Report managers
+#include "backend/moduleManager/moduleManagerExt.h"   // external DataTool/Report managers
 
 #include <type_traits>
 
@@ -29,20 +29,20 @@
 
 TEST(ModuleManagerSplit, RuntimeManagerDerivesLightweightBase) {
     // The heavy runtime manager is-a lightweight base — the base carries the
-    // editor-facing surface (context, FindCommonModule), the runtime branch
+    // editor-facing surface (context, FindSharedModule), the runtime branch
     // adds ProcUnit spin-up / Attach.
     EXPECT_TRUE((std::is_base_of_v<ibValueModuleManager, ibValueModuleRuntimeManager>));
 }
 
-TEST(ModuleManagerSplit, RuntimeConfigurationDerivesRuntimeManager) {
-    // The per-session root mm is a runtime configuration — three levels deep.
-    EXPECT_TRUE((std::is_base_of_v<ibValueModuleRuntimeManager, ibValueModuleManagerRuntimeConfiguration>));
-    EXPECT_TRUE((std::is_base_of_v<ibValueModuleManager, ibValueModuleManagerRuntimeConfiguration>));
+TEST(ModuleManagerSplit, RuntimeApplicationDerivesRuntimeManager) {
+    // The per-session root mm is a runtime application — three levels deep.
+    EXPECT_TRUE((std::is_base_of_v<ibValueModuleRuntimeManager, ibValueModuleManagerRuntimeApplication>));
+    EXPECT_TRUE((std::is_base_of_v<ibValueModuleManager, ibValueModuleManagerRuntimeApplication>));
 }
 
 TEST(ModuleManagerSplit, DesignerHolderDerivesLightweightBaseNotRuntime) {
     // The designer holder is-a lightweight base, but must NOT be-a runtime
-    // manager — it owns no ProcUnit / runtime common-module registry. This is
+    // manager — it owns no ProcUnit / runtime shared-module registry. This is
     // the whole point of the split: the editor's read path never touches a
     // fragile runtime unit.
     EXPECT_TRUE((std::is_base_of_v<ibValueModuleManager, ibValueModuleManagerDesigner>));
@@ -50,14 +50,14 @@ TEST(ModuleManagerSplit, DesignerHolderDerivesLightweightBaseNotRuntime) {
 }
 
 TEST(ModuleManagerSplit, ExternalManagersDeriveRuntimeManager) {
-    // External data-processor / report managers are runtime managers (they run
+    // External data-tool / report managers are runtime managers (they run
     // the .otl/.orp object's script).
-    EXPECT_TRUE((std::is_base_of_v<ibValueModuleRuntimeManager, ibValueModuleRuntimeManagerExternalDataProcessor>));
+    EXPECT_TRUE((std::is_base_of_v<ibValueModuleRuntimeManager, ibValueModuleRuntimeManagerExternalDataTool>));
     EXPECT_TRUE((std::is_base_of_v<ibValueModuleRuntimeManager, ibValueModuleRuntimeManagerExternalReport>));
 }
 
-TEST(ModuleManagerSplit, BaseIsAbstract_FindCommonModulePureVirtual) {
-    // FindCommonModule was lifted onto the base as a pure virtual (designer and
+TEST(ModuleManagerSplit, BaseIsAbstract_FindSharedModulePureVirtual) {
+    // FindSharedModule was lifted onto the base as a pure virtual (designer and
     // runtime resolve it from their own registries). The base must therefore be
     // abstract — never instantiated directly.
     EXPECT_TRUE(std::is_abstract_v<ibValueModuleManager>);
@@ -70,7 +70,7 @@ TEST(ModuleManagerSplit, BaseIsAbstract_FindCommonModulePureVirtual) {
 TEST(ModuleManagerSeam, StaticHelperNullWhenNoCurrentSession) {
     // EditModuleManagerFor resolves against ibSession::Current(). With no
     // session bound to this thread it must fold to null, not crash — the
-    // codeRunner / launcher sessionless path relies on this.
+    // coderunner / launcher sessionless path relies on this.
     EXPECT_EQ(ibSession::EditModuleManagerFor(nullptr), nullptr);
 }
 

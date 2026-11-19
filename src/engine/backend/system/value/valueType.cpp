@@ -17,7 +17,7 @@ ibValueType::ibValueType(const ibClassID& clsid) :
 	m_clsid = clsid;
 }
 
-#include "backend/metadataConfiguration.h"
+#include "backend/metadataApplication.h"
 #include "core/stringTokenizer.h"   // ibSplit — the type names a call lists
 #include "core/serialize/dataBuilder.h"   // the packed form (DoSerialize / DoDeserialize)
 
@@ -45,7 +45,7 @@ ibString ibValueType::GetString() const
 }
 
 // The same naming door a single type uses, once per admitted type. Asked of the METADATA, so a
-// configuration-specific reference reads as "CatalogRef.Goods" rather than a number.
+// application-specific reference reads as "CatalogRef.Goods" rather than a number.
 ibString ibValueTypeDescription::GetString() const
 {
 	ibString presentation;
@@ -95,20 +95,20 @@ ibValue ibValueTypeDescription::AdjustValue(const ibTypeDescription& typeDescrip
 
 		const ibClassID& clsid = typeDescription.GetFirstClsid();
 
-		// 🛑 THE PROCESS MAY HAVE NO ACTIVE CONFIGURATION AT ALL - a headless tool before it opens one, a test.
+		// 🛑 THE PROCESS MAY HAVE NO ACTIVE APPLICATION AT ALL - a headless tool before it opens one, a test.
 		// This went to `activeMetaData->` unasked, and the column codec reached here with the metadata it had
 		// been handed left behind (columnCodec.cpp), so reading a cell whose tag the result does not carry was
 		// an access violation instead of the typed empty value it is documented to answer (2026-09-20). What
-		// the value registry can make by itself - a primitive - it makes; anything that needs a configuration
+		// the value registry can make by itself - a primitive - it makes; anything that needs an application
 		// and has none is the empty value.
 		//
 		// ⭐ AND THE QUESTION IS ASKED ON EVERY ROAD, not only that one. A class the registry does not know
 		// cannot be made by any of the three, and asking for it anyway is a refusal thrown at a caller that
-		// only wanted to know what an empty cell of this column looks like: a configuration whose metaobjects
+		// only wanted to know what an empty cell of this column looks like: an application whose metaobjects
 		// were built without runtime objects has the type DESCRIBED and not REGISTERED, and the IN-set fold
 		// met exactly that (ComputedServerFix.In_AnEmptyReferenceAmongTheValuesGoesPairByPair, 2026-09-24).
 		//
-		// 🛑 …ASKED OF THE ONE THAT WILL MAKE IT, as the overload below already asks. A configuration's own
+		// 🛑 …ASKED OF THE ONE THAT WILL MAKE IT, as the overload below already asks. An application's own
 		// types - a catalog's reference, an enumeration's member - are registered in ITS image, and the value
 		// registry has never heard of them: asked there, every reference column's typed empty came back
 		// untyped, and a ledger balance split one item into two rows over a currency stored empty in two ways
@@ -287,7 +287,7 @@ bool ibValueTypeDescription::Init(ibValue** paParams, const long lSizeArray)
 		// "Number, String" is several types, not one constructor name. A single name is the
 		// one-element case of the same list. A name that is not a type fails the whole description.
 		//
-		// A name is asked of the configuration, which answers its own and the value registry's behind
+		// A name is asked of the application, which answers its own and the value registry's behind
 		// them (ibMetaData::IsRegisterCtor). A process with no base has the registry alone.
 		const ibMetaData* const metaData = ibApplicationInstance::GetActiveMetaData(ibApplicationInstance::Get(/*required*/ false));
 		std::vector<ibClassID> types;

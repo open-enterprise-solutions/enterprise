@@ -67,8 +67,8 @@ struct ibDiagnostic {
 	//   m_docPath   — the module's guid: the only one that is stable and the
 	//                 only one the designer can navigate by;
 	//   m_moduleName— what a person reads;
-	//   m_fileName  — the external file (external report / data processor),
-	//                 empty for a module inside the open configuration.
+	//   m_fileName  — the external file (external report / data tool),
+	//                 empty for a module inside the open application.
 	ibString     m_fileName;
 	ibString     m_moduleName;
 	ibString     m_docPath;

@@ -5,14 +5,14 @@
 // child under a parent, RenameMetaObject sets its name, RemoveMetaObject detaches
 // it, and GetAnyArrayObject<T>(clsid) enumerates a type. These are the operations
 // the Designer drives on every metaobject add/rename/delete. DB-free
-// (runObject=false on a fresh file config — see test_metadataSerialize).
+// (runObject=false on a fresh file application — see test_metadataSerialize).
 // =============================================================================
 
 #include <gtest/gtest.h>
 
 #include <iostream>
 #include <iterator>
-#include "backend/metadataConfiguration.h"
+#include "backend/metadataApplication.h"
 #include "backend/metaCollection/metaObject.h"   // ibValueMetaObject + g_meta*CLSID
 #include "backend/metaCollection/partial/selector/objectSelector.h"
 #include "backend/appData.h"
@@ -22,15 +22,15 @@
 #include <wx/init.h>
 #include <wx/log.h>
 
-TEST(MetadataTree, FreshConfigHasNoBusinessObjects) {
-    ibMetaDataConfigurationFile cfg;
+TEST(MetadataTree, FreshApplicationHasNoBusinessObjects) {
+    ibMetaDataApplicationFile cfg;
     EXPECT_EQ(cfg.GetAnyArrayObject(g_metaCatalogCLSID).size(), 0u);
     EXPECT_EQ(cfg.GetAnyArrayObject(g_metaDocumentCLSID).size(), 0u);
 }
 
 TEST(MetadataTree, CreateAttachesAndEnumerates) {
-    ibMetaDataConfigurationFile cfg;
-    ibValueMetaObjectConfiguration* root = cfg.GetCommonMetaObject();
+    ibMetaDataApplicationFile cfg;
+    ibValueMetaObjectApplication* root = cfg.GetRootMetaObject();
     ASSERT_NE(root, nullptr);
 
     ibValueMetaObject* cat = cfg.CreateMetaObject(g_metaCatalogCLSID, root, /*runObject*/ false);
@@ -47,8 +47,8 @@ TEST(MetadataTree, CreateAttachesAndEnumerates) {
 // belongs with a run-time metadata fixture, not this DB-free tree test.
 
 TEST(MetadataTree, SeveralTypesCoexist) {
-    ibMetaDataConfigurationFile cfg;
-    ibValueMetaObjectConfiguration* root = cfg.GetCommonMetaObject();
+    ibMetaDataApplicationFile cfg;
+    ibValueMetaObjectApplication* root = cfg.GetRootMetaObject();
     ASSERT_NE(root, nullptr);
 
     cfg.CreateMetaObject(g_metaCatalogCLSID,  root, false);
@@ -73,7 +73,7 @@ TEST(MetadataTree, SeveralTypesCoexist) {
 // covered the moment its CLSID is added below.
 //
 // ⚠ WHAT THIS DOES NOT COVER, said plainly: the crash that prompted it. That one
-// lives in ibConfigurationTree::ibMetaTreeCtrl::OnSetFocus — a focus handler in
+// lives in ibApplicationTree::ibMetaTreeCtrl::OnSetFocus — a focus handler in
 // `designer`, which is an add_executable, so no gtest target can link it. This
 // pins the half that is reachable: creating each kind must succeed rather than
 // return nullptr or raise.
@@ -97,14 +97,14 @@ const ibMetaKindCandidate kMetaKindCandidates[] = {
 	{ g_metaAccountingRegisterCLSID,           "AccountingRegister"           },
 	{ g_metaChartOfCharacteristicTypesCLSID,   "ChartOfCharacteristicTypes"   },
 	{ g_metaChartOfAccountsCLSID,              "ChartOfAccounts"              },
-	{ g_metaDataProcessorCLSID,                "DataProcessor"                },
+	{ g_metaDataToolCLSID,                     "DataTool"                     },
 	{ g_metaReportCLSID,                       "Report"                       },
-	{ g_metaCommonModuleCLSID,                 "CommonModule"                 },
-	{ g_metaCommonFormCLSID,                   "CommonForm"                   },
-	{ g_metaCommonCommandCLSID,                "CommonCommand"                },
+	{ g_metaSharedModuleCLSID,                 "SharedModule"                 },
+	{ g_metaSharedFormCLSID,                   "SharedForm"                   },
+	{ g_metaSharedCommandCLSID,                "SharedCommand"                },
 	{ g_metaCommandGroupCLSID,                 "CommandGroup"                 },
-	{ g_metaCommonTemplateCLSID,               "CommonTemplate"               },
-	{ g_metaCommonAttributeCLSID,              "CommonAttribute"              },
+	{ g_metaSharedTemplateCLSID,               "SharedTemplate"               },
+	{ g_metaSharedAttributeCLSID,              "SharedAttribute"              },
 	{ g_metaSessionParameterCLSID,             "SessionParameter"             },
 	{ g_metaScheduledJobCLSID,                 "ScheduledJob"                 },
 	{ g_metaHttpServiceCLSID,                  "HTTPService"                  },
@@ -117,8 +117,8 @@ const ibMetaKindCandidate kMetaKindCandidates[] = {
 } // namespace
 
 TEST(MetadataTree, EveryKindTheRootHostsCanBeCreated) {
-	ibMetaDataConfigurationFile cfg;
-	ibValueMetaObjectConfiguration* root = cfg.GetCommonMetaObject();
+	ibMetaDataApplicationFile cfg;
+	ibValueMetaObjectApplication* root = cfg.GetRootMetaObject();
 	ASSERT_NE(root, nullptr);
 
 	int hosted = 0;
@@ -136,7 +136,7 @@ TEST(MetadataTree, EveryKindTheRootHostsCanBeCreated) {
 			cfg.CreateMetaObject(candidate.clsid, root, /*runObject*/ false);
 
 		EXPECT_NE(created, nullptr)
-			<< "the configuration root hosts " << candidate.name
+			<< "the application root hosts " << candidate.name
 			<< ", but creating one returned nullptr";
 	}
 
@@ -144,19 +144,19 @@ TEST(MetadataTree, EveryKindTheRootHostsCanBeCreated) {
 	// the taxonomy was walked, and a silent drop from twenty kinds to two would
 	// still be a green run.
 	RecordProperty("hostedKinds", hosted);
-	std::cout << "[   INFO   ] configuration root hosted " << hosted
+	std::cout << "[   INFO   ] application root hosted " << hosted
 	          << " of " << std::size(kMetaKindCandidates) << " candidate kinds\n";
 
 	// Guards the test itself: a taxonomy change that made every candidate
 	// non-top-level would otherwise leave this passing while checking nothing.
 	EXPECT_GT(hosted, 0)
-		<< "the configuration root hosted none of the listed kinds — either the "
+		<< "the application root hosted none of the listed kinds — either the "
 		   "taxonomy moved or the candidate list has gone stale";
 }
 
 TEST(MetadataTree, CreatingEveryHostedKindTwiceKeepsBothAndNamesThemApart) {
-	ibMetaDataConfigurationFile cfg;
-	ibValueMetaObjectConfiguration* root = cfg.GetCommonMetaObject();
+	ibMetaDataApplicationFile cfg;
+	ibValueMetaObjectApplication* root = cfg.GetRootMetaObject();
 	ASSERT_NE(root, nullptr);
 
 	for (const ibMetaKindCandidate& candidate : kMetaKindCandidates) {
@@ -218,8 +218,8 @@ TEST(RecordSelection, StandardAttributesAreMembers) {
 	if (!EnsureAppData())
 		GTEST_SKIP() << "appData env unavailable";
 
-	ibMetaDataConfigurationFile cfg;
-	ibValueMetaObjectConfiguration* root = cfg.GetCommonMetaObject();
+	ibMetaDataApplicationFile cfg;
+	ibValueMetaObjectApplication* root = cfg.GetRootMetaObject();
 	ASSERT_NE(root, nullptr);
 
 	auto* catalog = dynamic_cast<ibValueMetaObjectRecordDataMutableRef*>(
@@ -250,8 +250,8 @@ TEST(RecordSelection, StandardAttributesAreMembers) {
 // type. An enumeration value is a reference too, so the manager answers the
 // same way, and a declared value stays a property beside that method.
 TEST(EnumerationManager, EmptyRefReturnsTheEmptyReference) {
-	ibMetaDataConfigurationFile cfg;
-	ibValueMetaObjectConfiguration* root = cfg.GetCommonMetaObject();
+	ibMetaDataApplicationFile cfg;
+	ibValueMetaObjectApplication* root = cfg.GetRootMetaObject();
 	ASSERT_NE(root, nullptr);
 
 	auto* enumeration = dynamic_cast<ibValueMetaObjectEnumeration*>(

@@ -26,7 +26,7 @@
 #include "core/compiler/translateCode.h"      // ibTranslateCode::GetKeyWord — the parser spells its words
 #include "backend/metaCollection/metaIntrospect.h"
 #include "backend/metaCollection/metaSectionObject.h"
-#include "backend/metadataConfiguration.h"
+#include "backend/metadataApplication.h"
 #include "backend/roleHelper.h"
 
 #include <functional>
@@ -48,7 +48,7 @@ const ibArg& ArgDifferingOnly()
 const ibArg& ArgRole()
 {
 	static const ibArg s_a(ibT("role"), ibArg::Kind::Text,
-		ibMcpText("One role's name, as it is called in the configuration."));
+		ibMcpText("One role's name, as it is called in the application."));
 	return s_a;
 }
 
@@ -63,7 +63,7 @@ const ibArg& ArgRoles()
 const ibArg& ArgObject()
 {
 	static const ibArg s_a(ibT("object"), ibArg::Kind::Text,
-		ibMcpText("One object by name - a catalog, a document, a section, or 'Configuration' for the "
+		ibMcpText("One object by name - a catalog, a document, a section, or 'Application' for the "
 			  "root, where the administration rights live. Omit for all of them."));
 	return s_a;
 }
@@ -118,7 +118,7 @@ public:
 			"the roles that grant it and the roles that refuse it, so comparing roles IS the "
 			"answer rather than something to work out from two separate readings. Name one role "
 			"to ask about that one, several to compare them, or none to ask about every role in "
-			"the configuration. Ask it when somebody cannot see or change something: user_list "
+			"the application. Ask it when somebody cannot see or change something: user_list "
 			"says which roles they hold, and this says what those roles let through.");
 	}
 
@@ -130,8 +130,8 @@ public:
 
 	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
-		if (activeMetaData == nullptr || !activeMetaData->IsConfigOpen()) {
-			refusal = ibMcpText("No configuration is open.");
+		if (activeMetaData == nullptr || !activeMetaData->IsOpen()) {
+			refusal = ibMcpText("No application is open.");
 			return false;
 		}
 
@@ -173,7 +173,7 @@ public:
 
 			if (roleObject == nullptr) {
 				refusal = ibString::Format(
-					ibMcpText("This configuration has no role named '%s'."), name);
+					ibMcpText("This application has no role named '%s'."), name);
 				return false;
 			}
 
@@ -199,7 +199,7 @@ public:
 					asked.push_back(describeRole(object));
 
 		if (asked.empty()) {
-			refusal = ibMcpText("This configuration declares no roles, so nothing is governed by them - "
+			refusal = ibMcpText("This application declares no roles, so nothing is governed by them - "
 				"everything falls back to each right's own default. metadata_rights says what "
 				"those defaults are.");
 			return false;
@@ -317,10 +317,10 @@ public:
 		};
 
 		// ⭐ THE ROOT COUNTS, AND IT IS NOT IN THE ARRAY. Administration, Update database
-		// configuration, Active users and Exclusive mode are declared on the CONFIGURATION object,
+		// application, Active users and Single-user mode are declared on the APPLICATION object,
 		// so a walk over the metaobject array alone answers "this role denies nothing" about
 		// precisely the rights an access question is usually about.
-		consider(activeMetaData->GetCommonMetaObject(), ibEmptyString);
+		consider(activeMetaData->GetRootMetaObject(), ibEmptyString);
 
 		for (ibValueMetaObject* object : activeMetaData->GetAnyArrayObject())
 			consider(object, ibEmptyString);
@@ -381,7 +381,7 @@ MCP_TOOL_REGISTER_DESIGNER(ibMcpToolRoleRights);
 // ⭐ WHAT AN OBJECT DECLARES, ASKED OF THE OBJECT. role_rights answers "what does this ROLE let
 // through", which presupposes knowing the names to look for; this is the other question, and the
 // one that comes first: a catalog declares Read / Write / Delete, a section declares Use, the
-// configuration root declares Administration and Update database configuration. Nothing shares a
+// application root declares Administration and Update database. Nothing shares a
 // list — every metatype states its own where it is built (CreateRole in the metaobject's header),
 // so the only honest answer is to ask each object.
 //
@@ -402,7 +402,7 @@ public:
 		const ibString object = ArgObject().Text(params);
 
 		return object.IsEmpty()
-			? ibMcpText("reading which rights the configuration declares")
+			? ibMcpText("reading which rights the application declares")
 			: ibString::Format(ibMcpText("reading which rights '%s' declares"), object);
 	}
 
@@ -410,9 +410,9 @@ public:
 	{
 		return ibMcpText("Which rights a metaobject declares, and what each one answers when no role ever "
 			"set it. Ask this BEFORE role_grant: every metatype declares its own rights (a catalog "
-			"has Read, Write, Delete; a section has Use; the configuration root has Administration "
-			"and Update database configuration) and there is no shared list. Without `object` it "
-			"answers for the whole configuration, grouped by the set of rights declared.");
+			"has Read, Write, Delete; a section has Use; the application root has Administration "
+			"and Update database) and there is no shared list. Without `object` it "
+			"answers for the whole application, grouped by the set of rights declared.");
 	}
 
 	const std::vector<ibMcpArgument>& Arguments() const override
@@ -423,8 +423,8 @@ public:
 
 	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
-		if (activeMetaData == nullptr || !activeMetaData->IsConfigOpen()) {
-			refusal = ibMcpText("No configuration is open.");
+		if (activeMetaData == nullptr || !activeMetaData->IsOpen()) {
+			refusal = ibMcpText("No application is open.");
 			return false;
 		}
 
@@ -497,14 +497,14 @@ public:
 
 		// The root first, and it is NOT in the array — see the note on role_grant. The rights that
 		// decide whether anybody may administer anything live only here.
-		describe(activeMetaData->GetCommonMetaObject(), ibEmptyString);
+		describe(activeMetaData->GetRootMetaObject(), ibEmptyString);
 
 		for (ibValueMetaObject* object : activeMetaData->GetAnyArrayObject())
 			describe(object, ibEmptyString);
 
 		if (!only.IsEmpty() && !foundNamed) {
 			refusal = ibString::Format(
-				ibMcpText("This configuration has no object named '%s'."), only);
+				ibMcpText("This application has no object named '%s'."), only);
 			return false;
 		}
 
@@ -532,12 +532,12 @@ MCP_TOOL_REGISTER_DESIGNER(ibMcpToolMetadataRights);
 // ⭐ WHY "EVERYTHING" IS THE FIRST THING A ROLE NEEDS. Rights are not stored per role: an object
 // keeps a map of what was SET, and a right nobody flipped falls back to the DEFAULT declared where
 // it was created (roleHelper.cpp, ibAccessObject::AccessRight). So a freshly created role is not
-// empty - it is SILENT, and silence reads as the default. That is fine until the configuration
+// empty - it is SILENT, and silence reads as the default. That is fine until the application
 // wants a real administrator: a role has to say so out loud, on every object, before a narrower
 // role beside it means anything. Granting object by object is a thousand calls; this is one, and
-// it is what the first role in a configuration is for.
+// it is what the first role in an application is for.
 //
-// ⚠ IT WRITES, AND SAYS HOW MUCH. Changed objects are COUNTED, not listed - a configuration-wide
+// ⚠ IT WRITES, AND SAYS HOW MUCH. Changed objects are COUNTED, not listed - an application-wide
 // grant would answer with the whole tree and drown the number that matters.
 //
 //---------------------------------------------------------------------------
@@ -578,8 +578,8 @@ public:
 
 	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
-		if (activeMetaData == nullptr || !activeMetaData->IsConfigOpen()) {
-			refusal = ibMcpText("No configuration is open.");
+		if (activeMetaData == nullptr || !activeMetaData->IsOpen()) {
+			refusal = ibMcpText("No application is open.");
 			return false;
 		}
 
@@ -587,7 +587,7 @@ public:
 		ibValueMetaObject* roleObject = ibFindMetaObject(activeMetaData, ibT("Role"), roleName);
 
 		if (roleObject == nullptr) {
-			refusal = ibString::Format(ibMcpText("This configuration has no role named '%s'."), roleName);
+			refusal = ibString::Format(ibMcpText("This application has no role named '%s'."), roleName);
 			return false;
 		}
 
@@ -681,17 +681,17 @@ public:
 		};
 
 		// ⭐ THE ROOT COUNTS, AND IT IS NOT IN THE ARRAY. Administration, Update database
-		// configuration, Active users and Exclusive mode are declared on the CONFIGURATION object
+		// application, Active users and Single-user mode are declared on the APPLICATION object
 		// - precisely the rights an administrator role exists to hold. A walk over the metaobject
 		// array alone would report success and grant none of them.
-		apply(activeMetaData->GetCommonMetaObject(), ibEmptyString);
+		apply(activeMetaData->GetRootMetaObject(), ibEmptyString);
 
 		for (ibValueMetaObject* object : activeMetaData->GetAnyArrayObject())
 			apply(object, ibEmptyString);
 
 		if (!only.IsEmpty() && !foundNamed) {
 			refusal = ibString::Format(
-				ibMcpText("This configuration has no object named '%s'."), only);
+				ibMcpText("This application has no object named '%s'."), only);
 			return false;
 		}
 
@@ -725,7 +725,7 @@ MCP_TOOL_REGISTER_DESIGNER(ibMcpToolRoleGrant);
 // CLOSED and reads to a user as "the data vanished"), the other dialect's block syntax, an alias
 // that is not bound. None of that is visible in a text editor and all of it is answerable here.
 //
-// So this composes the whole handler out of the clauses, compiles it in THIS configuration's
+// So this composes the whole handler out of the clauses, compiles it in THIS application's
 // context, and hands back the text with what the compiler made of it. Installing it is a separate
 // act (module_write): composing and installing are different amounts of consent.
 //
@@ -783,7 +783,7 @@ public:
 	{
 		return ibMcpText("WRITE A ROW-LEVEL RESTRICTION IN THE SHAPE THIS PLATFORM EXPECTS. Give it the "
 			"clauses - a condition, and the tables to join - and it composes the whole handler, "
-			"compiles it against this configuration, and answers with the text plus what the COMPILER "
+			"compiles it against this application, and answers with the text plus what the COMPILER "
 			"made of it: which names are bound, and any refusal.\n\n"
 			"WHAT A RESTRICTION IS HERE: not an SQL template woven into queries, but a PROCEDURE on a "
 			"Role - `OnAccessRead(Source, Operation, Allowed)` - that folds a filter into `Source` and "
@@ -807,8 +807,8 @@ public:
 
 	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
-		if (activeMetaData == nullptr || !activeMetaData->IsConfigOpen()) {
-			refusal = ibMcpText("No configuration is open, and a restriction is written against one.");
+		if (activeMetaData == nullptr || !activeMetaData->IsOpen()) {
+			refusal = ibMcpText("No application is open, and a restriction is written against one.");
 			return false;
 		}
 
@@ -820,7 +820,7 @@ public:
 			roleObject = ibFindMetaObject(activeMetaData, ibT("Role"), roleName);
 			if (roleObject == nullptr) {
 				refusal = ibString::Format(
-					ibMcpText("This configuration has no role named '%s'."), roleName);
+					ibMcpText("This application has no role named '%s'."), roleName);
 				return false;
 			}
 		}
@@ -847,11 +847,11 @@ public:
 		const ibString handler = forWrite ? ibT("OnAccessWrite") : ibT("OnAccessRead");
 
 		// 🛑 THE KEYWORDS COME FROM THE PARSER'S OWN TABLE, and the BLOCK SYNTAX from the
-		// configuration that will hold this. Composing a braced body for a configuration written in
+		// application that will hold this. Composing a braced body for an application written in
 		// words yields a text that cannot compile — and the failure would read as a mistake in the
 		// restriction rather than in the wrapper around it.
 		const auto word = [](int key) { return ibTranslateCode::GetKeyWord(key); };
-		const bool inWords = ibConfigurationWritesInWords(activeMetaData);
+		const bool inWords = ibApplicationWritesInWords(activeMetaData);
 
 		ibString restriction = word(KEY_RESTRICT) + ibT(" ") + alias
 			+ ibT(" ") + word(KEY_IN) + ibT(" Source");

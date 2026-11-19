@@ -21,14 +21,14 @@
 // saying nothing about it (docs/private/choice-links.md § 2a).
 //
 // 🛑 AND THE LISTS IT ANSWERED ARE KEPT, not asked for and thrown away. The first cut drew each row by
-// looking the parameter's NAME up again in the configuration — which finds no PREDEFINED field (Ref,
+// looking the parameter's NAME up again in the application — which finds no PREDEFINED field (Ref,
 // Data version, Code, Parent are not ordinary metaobjects), so every row read as a bare "Filter." and
 // the used ones were never taken off the offer. The catalogue below IS that answer, held: one source
 // for the name, the picture and the filtering, so the three cannot disagree.
 //
 // The old desktop's, over the client's row. ITS CATALOGUE IS THE SERVER'S — the
 // target's types and their fields, this field's neighbours, what each could fill: every list is a walk over the
-// configuration, written on the row (its Targets and Sources). A row without them would read every field as one that
+// application, written on the row (its Targets and Sources). A row without them would read every field as one that
 // refers to nothing, so the row opens the window only when it has them (advpropChoiceLink.cpp).
 
 #include "deskgui/univ/dialog.h"

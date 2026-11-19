@@ -36,11 +36,11 @@ bool ibValueMetaObjectModuleBase::OnSaveMetaObject(int flags)
 	// ⚠ ON THE DATABASE APPLY, AND DELIBERATELY NOT ON A PLAIN SAVE. A working variant is stored
 	// for the designer's own sake; the running application never reads it, so the cached blob has
 	// not diverged from anything and dropping it would discard a row that is still true. The
-	// configuration the runtime reads changes at the APPLY — restructuring and all — and that is
+	// application the runtime reads changes at the APPLY — restructuring and all — and that is
 	// the moment the two can disagree.
 	//
 	//save debugger client offset
-	if ((flags & saveConfigFlag) != 0 && appData->DesignerMode()) {
+	if ((flags & saveApplicationFlag) != 0 && appData->DesignerMode()) {
 		const ibString& strBuffer = GetModuleText();
 		debugClient->SaveModule(GetDocPath(),
 			1 + std::count(strBuffer.begin(), strBuffer.end(), ibT('\n')));
@@ -69,7 +69,7 @@ bool ibValueMetaObjectModuleBase::OnDeleteMetaObject()
 bool ibValueMetaObjectModuleBase::OnBeforeRunMetaObject(int flags)
 {
 	//initialize debugger client
-	if ((flags & loadConfigFlag) == 0 && (flags & newObjectFlag) == 0 && appData->DesignerMode()) {
+	if ((flags & loadApplicationFlag) == 0 && (flags & newObjectFlag) == 0 && appData->DesignerMode()) {
 		const ibString& strBuffer = GetModuleText();
 		debugClient->InitializeModule(GetDocPath(),
 			1 + std::count(strBuffer.begin(), strBuffer.end(), ibT('\n')));
@@ -136,12 +136,12 @@ bool ibValueMetaObjectModule::WriteData(ibDataNode& node) const
 //*                           Metamodule                                *
 //***********************************************************************
 
-ibValueMetaObjectCommonModule::ibValueMetaObjectCommonModule(const ibString& name, const ibString& synonym, const ibString& comment) :
+ibValueMetaObjectSharedModule::ibValueMetaObjectSharedModule(const ibString& name, const ibString& synonym, const ibString& comment) :
 	ibValueMetaObjectModuleBase(name, synonym, comment)
 {
 }
 
-bool ibValueMetaObjectCommonModule::ReadData(const ibDataNode& node)
+bool ibValueMetaObjectSharedModule::ReadData(const ibDataNode& node)
 {
 	m_propertyModule->SetNodeValue(node.GetProperty(m_propertyModule->GetName()));
 	m_propertyGlobalModule->SetNodeValue(node.GetProperty(m_propertyGlobalModule->GetName()));
@@ -149,7 +149,7 @@ bool ibValueMetaObjectCommonModule::ReadData(const ibDataNode& node)
 	return true;
 }
 
-bool ibValueMetaObjectCommonModule::WriteData(ibDataNode& node) const
+bool ibValueMetaObjectSharedModule::WriteData(ibDataNode& node) const
 {
 	node.SetProperty(m_propertyModule->GetName(), m_propertyModule->GetNodeValue());
 	node.SetProperty(m_propertyGlobalModule->GetName(), m_propertyGlobalModule->GetNodeValue());
@@ -163,47 +163,47 @@ bool ibValueMetaObjectCommonModule::WriteData(ibDataNode& node) const
 
 #include "backend/metaData.h"
 
-bool ibValueMetaObjectCommonModule::OnCreateMetaObject(ibMetaData* metaData, int flags)
+bool ibValueMetaObjectSharedModule::OnCreateMetaObject(ibMetaData* metaData, int flags)
 {
 	return ibValueMetaObjectModuleBase::OnCreateMetaObject(metaData, flags);
 }
 
-bool ibValueMetaObjectCommonModule::OnLoadMetaObject(ibMetaData* metaData)
+bool ibValueMetaObjectSharedModule::OnLoadMetaObject(ibMetaData* metaData)
 {
 	return ibValueMetaObjectModuleBase::OnLoadMetaObject(metaData);
 }
 
-bool ibValueMetaObjectCommonModule::OnSaveMetaObject(int flags)
+bool ibValueMetaObjectSharedModule::OnSaveMetaObject(int flags)
 {
 	return ibValueMetaObjectModuleBase::OnSaveMetaObject(flags);
 }
 
-bool ibValueMetaObjectCommonModule::OnDeleteMetaObject()
+bool ibValueMetaObjectSharedModule::OnDeleteMetaObject()
 {
 	return ibValueMetaObjectModuleBase::OnDeleteMetaObject();
 }
 
-bool ibValueMetaObjectCommonModule::OnRenameMetaObject(const ibString& newName)
+bool ibValueMetaObjectSharedModule::OnRenameMetaObject(const ibString& newName)
 {
 	// Runtime registry (metadata storage) — read by per-session managers.
 	if (auto* storage = m_metaData->GetModuleStorage()) {
-		if (!storage->RenameCommonModule(this, newName))
+		if (!storage->RenameSharedModule(this, newName))
 			return false;
 	}
 
 	// Designer registry — the editor's own compiled-unit holder.
 	if (auto* cc = m_metaData->GetCompileCache()) {
 		if (auto* mgr = cc->GetModuleManager())
-			mgr->RenameCommonModule(this, newName);
+			mgr->RenameSharedModule(this, newName);
 	}
 
 	return ibValueMetaObjectModuleBase::OnRenameMetaObject(newName);
 }
 
-bool ibValueMetaObjectCommonModule::OnBeforeRunMetaObject(int flags)
+bool ibValueMetaObjectSharedModule::OnBeforeRunMetaObject(int flags)
 {
 	if (auto* storage = m_metaData->GetModuleStorage()) {
-		if (!storage->AddCommonModule(this))
+		if (!storage->AddSharedModule(this))
 			return false;
 	}
 
@@ -212,28 +212,28 @@ bool ibValueMetaObjectCommonModule::OnBeforeRunMetaObject(int flags)
 	// the manager's CreateMainModule.
 	if (auto* cc = m_metaData->GetCompileCache()) {
 		if (auto* mgr = cc->GetModuleManager())
-			if (!mgr->AddCommonModule(this, /*managerModule=*/false, (flags & newObjectFlag) != 0))
+			if (!mgr->AddSharedModule(this, /*managerModule=*/false, (flags & newObjectFlag) != 0))
 				return false;
 	}
 
 	return ibValueMetaObjectModuleBase::OnBeforeRunMetaObject(flags);
 }
 
-bool ibValueMetaObjectCommonModule::OnAfterRunMetaObject(int flags)
+bool ibValueMetaObjectSharedModule::OnAfterRunMetaObject(int flags)
 {
 	return ibValueMetaObjectModuleBase::OnAfterRunMetaObject(flags);
 }
 
-bool ibValueMetaObjectCommonModule::OnBeforeCloseMetaObject()
+bool ibValueMetaObjectSharedModule::OnBeforeCloseMetaObject()
 {
 	if (auto* storage = m_metaData->GetModuleStorage()) {
-		if (!storage->RemoveCommonModule(this))
+		if (!storage->RemoveSharedModule(this))
 			return false;
 	}
 
 	if (auto* cc = m_metaData->GetCompileCache()) {
 		if (auto* mgr = cc->GetModuleManager())
-			mgr->RemoveCommonModule(this);
+			mgr->RemoveSharedModule(this);
 	}
 
 	// Was OnAfterCloseMetaObject — a long-standing copy/paste that fired the
@@ -242,7 +242,7 @@ bool ibValueMetaObjectCommonModule::OnBeforeCloseMetaObject()
 	return ibValueMetaObjectModuleBase::OnBeforeCloseMetaObject();
 }
 
-bool ibValueMetaObjectCommonModule::OnAfterCloseMetaObject()
+bool ibValueMetaObjectSharedModule::OnAfterCloseMetaObject()
 {
 	return ibValueMetaObjectModuleBase::OnAfterCloseMetaObject();
 }
@@ -254,14 +254,14 @@ bool ibValueMetaObjectCommonModule::OnAfterCloseMetaObject()
 bool ibValueMetaObjectManagerModule::OnBeforeRunMetaObject(int flags)
 {
 	if (auto* storage = m_metaData->GetModuleStorage()) {
-		if (!storage->AddCommonModule(this))
+		if (!storage->AddSharedModule(this))
 			return false;
 	}
 
 	// Designer registry — a manager module registers as managerModule=true.
 	if (auto* cc = m_metaData->GetCompileCache()) {
 		if (auto* mgr = cc->GetModuleManager())
-			if (!mgr->AddCommonModule(this, /*managerModule=*/true, (flags & newObjectFlag) != 0))
+			if (!mgr->AddSharedModule(this, /*managerModule=*/true, (flags & newObjectFlag) != 0))
 				return false;
 	}
 
@@ -276,13 +276,13 @@ bool ibValueMetaObjectManagerModule::OnAfterRunMetaObject(int flags)
 bool ibValueMetaObjectManagerModule::OnBeforeCloseMetaObject()
 {
 	if (auto* storage = m_metaData->GetModuleStorage()) {
-		if (!storage->RemoveCommonModule(this))
+		if (!storage->RemoveSharedModule(this))
 			return false;
 	}
 
 	if (auto* cc = m_metaData->GetCompileCache()) {
 		if (auto* mgr = cc->GetModuleManager())
-			mgr->RemoveCommonModule(this);
+			mgr->RemoveSharedModule(this);
 	}
 
 	return ibValueMetaObjectModuleBase::OnBeforeCloseMetaObject();
@@ -299,5 +299,5 @@ bool ibValueMetaObjectManagerModule::OnAfterCloseMetaObject()
 
 METADATA_TYPE_REGISTER(ibValueMetaObjectModule, "Module", g_metaModuleCLSID);
 
-METADATA_TYPE_REGISTER(ibValueMetaObjectCommonModule, "CommonModule", g_metaCommonModuleCLSID);
+METADATA_TYPE_REGISTER(ibValueMetaObjectSharedModule, "SharedModule", g_metaSharedModuleCLSID);
 METADATA_TYPE_REGISTER(ibValueMetaObjectManagerModule, "ManagerModule", g_metaManagerCLSID);

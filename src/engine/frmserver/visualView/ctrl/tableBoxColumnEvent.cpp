@@ -4,7 +4,7 @@
 #include "backend/metaData.h"
 #include "backend/metadataSerialization.h"
 #include "backend/objCtor.h"
-#include "backend/backend_exception.h"       // ibBackendException — a value of a type the configuration lacks
+#include "backend/backend_exception.h"       // ibBackendException — a value of a type the application lacks
 #include "core/serialize/dataBuilder.h"   // ibDataNode — the value as the client sent it
 
 // The typed text becomes a value of the cell's type, or is refused. A refused text leaves the cell as it
@@ -42,7 +42,7 @@ bool ibValueModelTableBoxColumn::TextProcessing(const ibString& strData)
 	return true;
 }
 
-// The value the client sent with its type becomes the cell's — made by the configuration (a reference is its), and
+// The value the client sent with its type becomes the cell's — made by the application (a reference is its), and
 // only of a type the column admits; anything else is refused as a text that is no value is.
 bool ibValueModelTableBoxColumn::ValueProcessing(const ibDataNode& node)
 {
@@ -57,7 +57,7 @@ bool ibValueModelTableBoxColumn::ValueProcessing(const ibDataNode& node)
 		newValue = ibDeserializeValue(node, metaData);
 	}
 	catch (const ibCoreException&) {
-		return false;   // a type this configuration does not have
+		return false;   // a type this application does not have
 	}
 	if (!GetTypeValueDesc().ContainType(newValue.GetClassType()))
 		return false;

@@ -46,7 +46,7 @@ public:
 		};
 		ibPropertyRegistry::Register(wxT("ibPropertyList"), maker);
 
-		// …and a DYNAMIC LIST'S SOURCE, the table it reads: the choices are the sources the configuration registers, the
+		// …and a DYNAMIC LIST'S SOURCE, the table it reads: the choices are the sources the application registers, the
 		// value the chosen one's table id (none picked: no value).
 		ibPropertyRegistry::Register(wxT("ibPropertyDynamicSource"), maker);
 	}

@@ -20,9 +20,9 @@
 // 1
 var hashing = New DataHashing(HashFunction.MD5);
 hashing.Append("abc");
-if (Lower(HexString(hashing.HashSum)) <> "900150983cd24fb0d6963f7d28e17f72") { Raise("MD5 of abc: " + HexString(hashing.HashSum)); }
-if (hashing.HashFunction <> HashFunction.MD5) { Raise("HashFunction is not the one it was built for"); }
-if (hashing.HashSum.Size() <> 16) { Raise("an MD5 sum is 16 bytes, got " + hashing.HashSum.Size()); }
+if (Lower(HexString(hashing.HashSum)) != "900150983cd24fb0d6963f7d28e17f72") { Raise("MD5 of abc: " + HexString(hashing.HashSum)); }
+if (hashing.HashFunction != HashFunction.MD5) { Raise("HashFunction is not the one it was built for"); }
+if (hashing.HashSum.Size() != 16) { Raise("an MD5 sum is 16 bytes, got " + hashing.HashSum.Size()); }
 
 // 2
 var expected = New Structure();
@@ -30,21 +30,21 @@ expected.Insert("SHA1", "A9993E364706816ABA3E25717850C26C9CD0D89D");
 expected.Insert("SHA256", "BA7816BF8F01CFEA414140DE5DAE2223B00361A396177A9CB410FF61F20015AD");
 var sha1 = New DataHashing(HashFunction.SHA1);
 sha1.Append(New BinaryData("abc", TextEncoding.UTF8));
-if (HexString(sha1.HashSum) <> expected.SHA1) { Raise("SHA-1 of abc: " + HexString(sha1.HashSum)); }
+if (HexString(sha1.HashSum) != expected.SHA1) { Raise("SHA-1 of abc: " + HexString(sha1.HashSum)); }
 var sha256 = New DataHashing(HashFunction.SHA256);
 sha256.Append("abc");
-if (HexString(sha256.HashSum) <> expected.SHA256) { Raise("SHA-256 of abc: " + HexString(sha256.HashSum)); }
+if (HexString(sha256.HashSum) != expected.SHA256) { Raise("SHA-256 of abc: " + HexString(sha256.HashSum)); }
 var sha384 = New DataHashing(HashFunction.SHA384);
 sha384.Append("abc");
-if (sha384.HashSum.Size() <> 48) { Raise("a SHA-384 sum is 48 bytes"); }
+if (sha384.HashSum.Size() != 48) { Raise("a SHA-384 sum is 48 bytes"); }
 var sha512 = New DataHashing(HashFunction.SHA512);
 sha512.Append("abc");
-if (sha512.HashSum.Size() <> 64) { Raise("a SHA-512 sum is 64 bytes"); }
+if (sha512.HashSum.Size() != 64) { Raise("a SHA-512 sum is 64 bytes"); }
 
 // 3 - RFC 4231, test case 2
 var hmac = New DataHashing(HashFunction.SHA256, "Jefe");
 hmac.Append("what do ya want for nothing?");
-if (Lower(HexString(hmac.HashSum)) <> "5bdcc146bf60754e6a042426089575c75a003f089d2739839dec58b964ec3843") {
+if (Lower(HexString(hmac.HashSum)) != "5bdcc146bf60754e6a042426089575c75a003f089d2739839dec58b964ec3843") {
 	Raise("HMAC-SHA256: " + HexString(hmac.HashSum));
 }
 
@@ -53,8 +53,8 @@ var running = New DataHashing(HashFunction.SHA1);
 running.Append("ab");
 var midway = running.HashSum;
 running.Append("c");
-if (HexString(running.HashSum) <> expected.SHA1) { Raise("appending after HashSum lost the state"); }
-if (midway = running.HashSum) { Raise("the sum midway is the sum of ab, not of abc"); }
+if (HexString(running.HashSum) != expected.SHA1) { Raise("appending after HashSum lost the state"); }
+if (midway == running.HashSum) { Raise("the sum midway is the sum of ab, not of abc"); }
 
 // 5
 var path = GetTempFileName();
@@ -64,70 +64,70 @@ writer.Close();
 var ofFile = New DataHashing(HashFunction.SHA256);
 ofFile.AppendFile(path);
 FileDelete(path);
-if (HexString(ofFile.HashSum) <> expected.SHA256) { Raise("SHA-256 of a file holding abc"); }
+if (HexString(ofFile.HashSum) != expected.SHA256) { Raise("SHA-256 of a file holding abc"); }
 
 // 6
 var bytes = New BinaryData("Борщ", TextEncoding.UTF8);
-if (bytes.Size() <> 8) { Raise("Борщ in UTF-8 is 8 bytes, got " + bytes.Size()); }
-if (bytes.GetString(TextEncoding.UTF8) <> "Борщ") { Raise("UTF-8 round trip"); }
+if (bytes.Size() != 8) { Raise("Борщ in UTF-8 is 8 bytes, got " + bytes.Size()); }
+if (bytes.GetString(TextEncoding.UTF8) != "Борщ") { Raise("UTF-8 round trip"); }
 var utf16 = New BinaryData("ab", TextEncoding.UTF16);
-if (HexString(utf16) <> "61006200") { Raise("UTF-16 is little-endian with no mark: " + HexString(utf16)); }
+if (HexString(utf16) != "61006200") { Raise("UTF-16 is little-endian with no mark: " + HexString(utf16)); }
 var marked = New BinaryData("ab", TextEncoding.UTF8, True);
-if (HexString(marked) <> "EFBBBF6162") { Raise("the mark asked for: " + HexString(marked)); }
-if (marked.GetString(TextEncoding.UTF8) <> "ab") { Raise("a mark is read as a mark"); }
+if (HexString(marked) != "EFBBBF6162") { Raise("the mark asked for: " + HexString(marked)); }
+if (marked.GetString(TextEncoding.UTF8) != "ab") { Raise("a mark is read as a mark"); }
 // a page by its name - the same table XML reads by, on every machine
 var named = New BinaryData("Борщ", "windows-1251");
-if (HexString(named) <> "C1EEF0F9") { Raise("Борщ in windows-1251: " + HexString(named)); }
-if (named.GetString("CP1251") <> "Борщ") { Raise("windows-1251 round trip, the name in another case and alias"); }
-if (New BinaryData("Борщ", "cp866").GetString("IBM866") <> "Борщ") { Raise("cp866 round trip"); }
-if (New BinaryData("ab", "UTF-16").Size() <> 4) { Raise("UTF-16 by its name"); }
+if (HexString(named) != "C1EEF0F9") { Raise("Борщ in windows-1251: " + HexString(named)); }
+if (named.GetString("CP1251") != "Борщ") { Raise("windows-1251 round trip, the name in another case and alias"); }
+if (New BinaryData("Борщ", "cp866").GetString("IBM866") != "Борщ") { Raise("cp866 round trip"); }
+if (New BinaryData("ab", "UTF-16").Size() != 4) { Raise("UTF-16 by its name"); }
 
 // 7
 var man = New BinaryData("Man", TextEncoding.UTF8);
-if (String(man) <> "TWFu") { Raise("base64 of Man"); }
-if (Base64String(man) <> "TWFu") { Raise("Base64String of Man"); }
+if (String(man) != "TWFu") { Raise("base64 of Man"); }
+if (Base64String(man) != "TWFu") { Raise("Base64String of Man"); }
 var fromBase64 = New BinaryData("TW Fu");
-if (fromBase64.GetString(TextEncoding.UTF8) <> "Man") { Raise("base64 back, the space skipped"); }
+if (fromBase64.GetString(TextEncoding.UTF8) != "Man") { Raise("base64 back, the space skipped"); }
 var fromBase64Value = Base64Value("TW Fu");
-if (fromBase64Value.GetString(TextEncoding.UTF8) <> "Man") { Raise("Base64Value back, the space skipped"); }
+if (fromBase64Value.GetString(TextEncoding.UTF8) != "Man") { Raise("Base64Value back, the space skipped"); }
 var fromHex = HexValue("4d 61 6E");
-if (fromHex.GetString(TextEncoding.UTF8) <> "Man") { Raise("hex back, any case, spaces skipped"); }
+if (fromHex.GetString(TextEncoding.UTF8) != "Man") { Raise("hex back, any case, spaces skipped"); }
 var refused = False;
 try { var notBase64 = New BinaryData("TW*u"); } except { refused = True; }
-if (Not refused) { Raise("a text that is not base64 must be refused"); }
+if (!refused) { Raise("a text that is not base64 must be refused"); }
 refused = False;
 try { Base64Value("TW*u"); } except { refused = True; }
-if (Not refused) { Raise("Base64Value: a text that is not base64 must be refused"); }
+if (!refused) { Raise("Base64Value: a text that is not base64 must be refused"); }
 refused = False;
 try { Base64String("Man"); } except { refused = True; }
-if (Not refused) { Raise("Base64String: a string is not BinaryData"); }
+if (!refused) { Raise("Base64String: a string is not BinaryData"); }
 refused = False;
 try { HexValue("ABC"); } except { refused = True; }
-if (Not refused) { Raise("hex digits that do not pair must be refused"); }
+if (!refused) { Raise("hex digits that do not pair must be refused"); }
 
 // 8
 var signing = New DataHashing(HashFunction.SHA1);
 signing.Append("merchant-17" + ";" + "1500.00" + ";" + "secret");
 var signature = String(signing.HashSum);
-if (StrLen(signature) <> 28) { Raise("a SHA-1 in base64 is 28 characters, got " + StrLen(signature)); }
+if (StrLen(signature) != 28) { Raise("a SHA-1 in base64 is 28 characters, got " + StrLen(signature)); }
 Message("signature: " + signature);
 
 // 9 - the cast raises by itself, and it needs a running application: these are here, not in tests/test_dataHashing.cpp
 refused = False;
 try { hashing.Append(12); } except { refused = True; }
-if (Not refused) { Raise("a number is not data"); }
+if (!refused) { Raise("a number is not data"); }
 refused = False;
 try { HexString("Man"); } except { refused = True; }
-if (Not refused) { Raise("HexString: a string is not BinaryData"); }
+if (!refused) { Raise("HexString: a string is not BinaryData"); }
 refused = False;
 try { var noFunction = New DataHashing(TextEncoding.UTF8); } except { refused = True; }
-if (Not refused) { Raise("a member of another enumeration is no hash function"); }
+if (!refused) { Raise("a member of another enumeration is no hash function"); }
 refused = False;
 try { var noEncoding = New BinaryData("abc", "koi8-x"); } except { refused = True; }
-if (Not refused) { Raise("a string that names no page is no encoding"); }
+if (!refused) { Raise("a string that names no page is no encoding"); }
 refused = False;
 try { var noByte = New BinaryData("中", "windows-1251"); } except { refused = True; }
-if (Not refused) { Raise("a character the page has no byte for is refused"); }
+if (!refused) { Raise("a character the page has no byte for is refused"); }
 refused = False;
 try { bytes.GetString(HashFunction.MD5); } except { refused = True; }
-if (Not refused) { Raise("a member of another enumeration is no encoding"); }
+if (!refused) { Raise("a member of another enumeration is no encoding"); }

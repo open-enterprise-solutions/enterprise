@@ -11,8 +11,8 @@
 // holder = null, the rows come from ComputeRows and the base in memory is the read's own. Its columns declare no type,
 // so the copy lays each out as the widest composite (a number in its _N, a reference as its pair).
 //
-// (A walk through a reference of a computed source joins the copy of its target, found by what the configuration says
-// the reference holds — the one answer the copies give, so it is checked on a configuration: test_queryCompositeWalk,
+// (A walk through a reference of a computed source joins the copy of its target, found by what the application says
+// the reference holds — the one answer the copies give, so it is checked on an application: test_queryCompositeWalk,
 // over a slice and over balances and turnovers.)
 // =============================================================================
 
@@ -229,7 +229,7 @@ TEST_F(ComputedFix, Having_DropsGroupBelowThreshold)
 	EXPECT_EQ(totals["K1"], 130);   // 100 + 30 > 100 -> kept
 }
 
-// A field whose functional option is off. IsAvailable is that question.
+// A field whose feature option is off. IsAvailable is that question.
 class OptionOffCol : public TestCol {
 public:
 	using TestCol::TestCol;

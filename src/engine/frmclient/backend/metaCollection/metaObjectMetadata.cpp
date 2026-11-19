@@ -33,7 +33,7 @@ ibDataValue HomePageValue(const ibDataNode& node)
 
 } // namespace
 
-void ibValueMetaObjectConfiguration::ReadHomePage()
+void ibValueMetaObjectApplication::ReadHomePage()
 {
 	m_homePage = ibHomePageDescription();
 	m_formArray = ibDataNode();
@@ -52,7 +52,7 @@ void ibValueMetaObjectConfiguration::ReadHomePage()
 		m_formArray = *forms;
 }
 
-void ibValueMetaObjectConfiguration::SetHomePage(const ibHomePageDescription& homePage)
+void ibValueMetaObjectApplication::SetHomePage(const ibHomePageDescription& homePage)
 {
 	ibFrontendMainFrame* const frame = ibFrontendMainFrame::GetFrame();
 	ibDataValue value;

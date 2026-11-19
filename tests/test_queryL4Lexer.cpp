@@ -174,6 +174,6 @@ TEST(QueryL4Lexer, DoubleDashIsNotAComment)
 }
 
 // NOTE: non-ASCII metaobject / attribute identifiers are
-// validated end-to-end by the runtime codeRunner smoke (step 5), where the real
-// config drives them — kept out of this gated golden test to avoid source-encoding
+// validated end-to-end by the runtime coderunner smoke (step 5), where the real
+// application drives them — kept out of this gated golden test to avoid source-encoding
 // fragility (MSVC reads non-BOM sources in the ANSI codepage unless /utf-8 is set).

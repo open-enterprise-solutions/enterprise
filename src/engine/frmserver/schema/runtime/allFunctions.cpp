@@ -1,10 +1,10 @@
 #include "allFunctions.h"
 
-#include "backend/functionalOption/functionalOptionGate.h"  // ibFunctionalOptionGate::IsAvailable
+#include "backend/featureOption/featureOptionGate.h"  // ibFeatureOptionGate::IsAvailable
 #include "backend/metaCollection/genericData.h"
-#include "backend/metadataConfiguration.h"
+#include "backend/metadataApplication.h"
 #include "core/serialize/dataBuilder.h"
-#include "backend/session/session.h"                       // the configuration the session works in
+#include "backend/session/session.h"                       // the application the session works in
 #include "backend/backend_picture.h"                       // ibBackendPicture::SendPicture — the icons, by their ids
 
 #include <vector>
@@ -17,17 +17,17 @@ struct ibFunctionGroup {
 	ibString  title;
 };
 
-// The dialog's groups, in its order: the functional options FIRST — they decide which parts of the system are there
+// The dialog's groups, in its order: the feature options FIRST — they decide which parts of the system are there
 // at all — then what a person works with, the registers after what they are expressed in, the scheduled jobs LAST
 // (they are administration, not the work this is opened for; the predefined half has no list to open).
 std::vector<ibFunctionGroup> FunctionGroups()
 {
 	return {
-		{ g_metaFunctionalOptionCLSID,           _("Functional options") },
+		{ g_metaFeatureOptionCLSID,              _("Feature options") },
 		{ g_metaConstantCLSID,                   _("Constants") },
 		{ g_metaCatalogCLSID,                    _("Catalogs") },
 		{ g_metaDocumentCLSID,                   _("Documents") },
-		{ g_metaDataProcessorCLSID,              _("Data processors") },
+		{ g_metaDataToolCLSID,                   _("Data tools") },
 		{ g_metaReportCLSID,                     _("Reports") },
 		{ g_metaChartOfCharacteristicTypesCLSID, _("Charts of characteristic types") },
 		{ g_metaChartOfAccountsCLSID,            _("Charts of accounts") },
@@ -42,13 +42,13 @@ std::vector<ibFunctionGroup> FunctionGroups()
 }
 
 // What a group offers this person — one filter for the tree and for what may be opened from it: available (no
-// functional option has switched it off) and shown to them (AccessRight_Show).
-std::vector<const ibValueMetaObjectGenericData*> OfferedObjects(const ibMetaDataConfigurationBase* metaData,
+// feature option has switched it off) and shown to them (AccessRight_Show).
+std::vector<const ibValueMetaObjectGenericData*> OfferedObjects(const ibMetaDataApplicationBase* metaData,
 	const ibClassID& clsid)
 {
 	std::vector<const ibValueMetaObjectGenericData*> offered;
 	for (const ibValueMetaObjectGenericData* object : metaData->GetAnyArrayObject<ibValueMetaObjectGenericData>(clsid)) {
-		if (ibFunctionalOptionGate::IsAvailable(object) && object->AccessRight_Show())
+		if (ibFeatureOptionGate::IsAvailable(object) && object->AccessRight_Show())
 			offered.push_back(object);
 	}
 	return offered;
@@ -58,13 +58,13 @@ std::vector<const ibValueMetaObjectGenericData*> OfferedObjects(const ibMetaData
 
 bool ibSchemaAllFunctions::AccessRight(const ibSession& session) const
 {
-	const ibMetaDataConfigurationBase* const metaData = session.GetMetaData();
+	const ibMetaDataApplicationBase* const metaData = session.GetMetaData();
 	return metaData != nullptr && metaData->AccessRight_ModeAllFunction();
 }
 
 void ibSchemaAllFunctions::Build(const ibSession& session, const ibDataNode& /*args*/, ibDataNode& tree) const
 {
-	const ibMetaDataConfigurationBase* const metaData = session.GetMetaData();
+	const ibMetaDataApplicationBase* const metaData = session.GetMetaData();
 	if (metaData == nullptr)
 		return;
 
@@ -93,10 +93,10 @@ std::function<void()> ibSchemaAllFunctions::Command(const ibSession& session, st
 		return nullptr;
 	}
 
-	const ibMetaDataConfigurationBase* const metaData = session.GetMetaData();
+	const ibMetaDataApplicationBase* const metaData = session.GetMetaData();
 	if (metaData == nullptr) {
 		refusal = ibProtocol::ibRefusal::Failed;
-		error = ibT("the session has no configuration");
+		error = ibT("the session has no application");
 		return nullptr;
 	}
 

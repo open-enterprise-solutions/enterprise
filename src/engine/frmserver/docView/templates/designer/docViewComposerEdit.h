@@ -23,13 +23,13 @@ public:
 	virtual ibProtocol::ibView::ibKind GetViewKind() const override { return ibProtocol::ibView::ibKind::Composer; }
 
 	// fetch {Tab, Request: {Kind: Fields, Text}} — the fields a query text offers, while it is being edited on the
-	// panel's Query tab (the desktop's panel read them of the text and the configuration, which are here); the rest of
+	// panel's Query tab (the desktop's panel read them of the text and the application, which are here); the rest of
 	// what the panel asks — ibFetchComposerRequest.
 	virtual bool Fetch(const ibDataNode& request, ibDataNode& response) override;
 
-	// Input — the panel was edited: the configuration is modified; Change {Composition} — what the panel holds, put on
+	// Input — the panel was edited: the application is modified; Change {Composition} — what the panel holds, put on
 	// the composer (the desktop's panel edited the metaobject's description in place); Select — a cell's "...", a
-	// settings window's Act Choose: chosen through the configuration, said back with the view (State Chosen).
+	// settings window's Act Choose: chosen through the application, said back with the view (State Chosen).
 	virtual bool OnClientEvent(ibProtocol::ibEvent::ibKind event, const ibDataNode& args) override;
 
 private:
@@ -37,7 +37,7 @@ private:
 	ibListSettingsChoosing m_choosing;   // the cell a value is being chosen for (Select), held while the tab is up
 };
 
-// WHAT A COMPOSITION'S PANEL ASKS OF THE CONFIGURATION, on whichever designer tab it is — a composer's own, or a form's
+// WHAT A COMPOSITION'S PANEL ASKS OF THE APPLICATION, on whichever designer tab it is — a composer's own, or a form's
 // whose attribute holds a composition (ibPropertyDataComposition): the fields of a query text (Kind Fields {Text}) and
 // of a reference's targets (Kind Expand {Targets}), a dynamic list's (Kind Source {Id, Text}), what a parameter may be
 // given (Kind Types) and what is wrong with its expression (Kind Check {Text} — Error, or nothing). False: not one of

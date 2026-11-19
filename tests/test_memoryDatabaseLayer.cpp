@@ -523,7 +523,7 @@ TEST(MemoryBase, ASpaceIsOneExecutionsAndGoesWithIt)
 
 // ⭐ A FIELD KEEPS A VALUE AS ITS NODE — the _V field of a column that declares no type (ibColumnRole::Value): the value
 // written as the bytes of the node it serialises to (SetParamBlob), kept as any base keeps bytes, and
-// its bytes read back (GetResultBlob) as the node by whoever has the configuration. A number, a text, a date and an object in one
+// its bytes read back (GetResultBlob) as the node by whoever has the application. A number, a text, a date and an object in one
 // field come back each as it was written, from either base — and neither knows what it holds.
 TEST_F(MemoryBaseParity, AFieldKeepsAValueAsItsNode)
 {

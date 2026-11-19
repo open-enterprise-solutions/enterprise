@@ -72,7 +72,7 @@ public:
 
 	// ⭐ SOMETHING IN HERE WAS CHANGED — told to whoever hosts this editor, the moment it happens
 	// (Max, 2026-08-20: "we changed the value, we do not have to press OK — it counts as changed
-	// already"). The host decides what that means: in the designer it ends as the configuration
+	// already"). The host decides what that means: in the designer it ends as the application
 	// being marked modified. Announced HERE rather than at the host's commit, because a commit that
 	// announces unconditionally also announces a window that was only opened and closed.
 	void SetOnChanged(std::function<void()> onChanged) { m_onChanged = std::move(onChanged); }
@@ -82,7 +82,7 @@ public:
 	ibFilterDescription* GetFilter() const { return m_filter; }
 
 	// The cell asks these of its editor — the view it paints in, the model it
-	// notifies, the config a value is adjusted by, and who opens the field picker.
+	// notifies, the application a value is adjusted by, and who opens the field picker.
 	ibDataViewCtrl*    GetFilterView() const { return m_view; }
 	ibFilterTreeModel* GetFilterModel() const { return m_model; }
 	const ibMetaData*  GetMetaData() const;

@@ -93,7 +93,7 @@ namespace {
 enum class ibConditionReading { False, True, Unknown };
 
 // WHAT THE CALLER KNOWS, carried down the tree as one: the row's values, the subtrees «in hierarchy» names, and the
-// configuration a literal is restored against.
+// application a literal is restored against.
 struct ibConditionRow {
 	const ibCompositionValueOf&   m_valueOf;
 	const ibCompositionSubtreeOf& m_subtreeOf;

@@ -6,15 +6,15 @@
 
 // Home-page workspace description — WHAT the start page shows and HOW it is split.
 //
-// The workspace is owned by the CONFIG ROOT (ibValueMetaObjectConfiguration): it is the one
+// The workspace is owned by the APPLICATION ROOT (ibValueMetaObjectApplication): it is the one
 // surface every session opens before anything else, so its description travels with the
-// configuration, not with a user setting. The description is deliberately DUMB — a template
+// application, not with a user setting. The description is deliberately DUMB — a template
 // (how many columns and in which ratio) plus, per column, an ordered list of FORM ids. It
 // holds no widgets and no runtime: the desktop composite doc/view (ibHomePageDocument) reads
 // it and builds the splitters; a headless / web host can read the same description and lay
 // the same forms out its own way.
 //
-// A single item is a metaobject FORM id (ibValueMetaObjectFormBase — a common form, or a
+// A single item is a metaobject FORM id (ibValueMetaObjectFormBase — a shared form, or a
 // form of a Catalog / Document / Report / …). Opening a list form yields the list; opening
 // an object form yields a form over a NEW object of that type — the same thing the
 // metaobject's own command does, so nothing here is form-kind aware.
@@ -90,7 +90,7 @@ public:
 	bool RemoveItem(ibHomePageColumn column, unsigned int index);
 	bool MoveItem(ibHomePageColumn column, unsigned int index, int offset);
 
-	// node form — one Child sub-node { Template, Left[], Right[] }. The owner (the config
+	// node form — one Child sub-node { Template, Left[], Right[] }. The owner (the application
 	// root) stores it as a single named property, so adding a field here is forward-compatible.
 	bool ReadNode(const class ibDataValue& value);
 	bool WriteNode(class ibDataValue& value) const;

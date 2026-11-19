@@ -4,15 +4,15 @@
 // Per-session state of TRANSLATION — the third of a session's slots, beside the interpreter's (ibProcUnitState)
 // and the compiler's (ibCompileState): every session may speak its own language, and one server may hold bases in
 // different languages. A session holds one (ibSession::GetTranslateState); a thread without a session —
-// codeRunner, a test — gets its own.
+// coderunner, a test — gets its own.
 
 struct ibTranslateState {
 	ibString m_languageCode;            // the script's override (SetLanguageCode); empty — none
 	ibString m_userLanguageCode;        // the user's, set at the login (SetUserInfo)
-	ibString m_defLanguageCode;         // the configuration's main language (SetUserLanguage, CompileRoot)
+	ibString m_defLanguageCode;         // the application's main language (SetUserLanguage, CompileRoot)
 
 	// THE ANSWER, kept ready — the hot path (ibBackendLocalization::GetUserLanguage) reads this one field: the
-	// override, else the user's, else the configuration's. Every writer above calls Resolve.
+	// override, else the user's, else the application's. Every writer above calls Resolve.
 	ibString m_resolvedLanguageCode;
 
 	void Resolve() {

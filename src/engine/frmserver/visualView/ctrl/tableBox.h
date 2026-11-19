@@ -591,7 +591,7 @@ public:
 	void SetGrouping(ibColumnGroupKind kind) { m_propertyGrouping->SetValue(kind); }
 	ibColumnGroupKind GetGrouping() const { return m_propertyGrouping->GetValueAsEnum(); }
 
-	// Shown — its own Visible and the functional options; what it holds goes with it.
+	// Shown — its own Visible and the feature options; what it holds goes with it.
 	bool IsGroupShown() const;
 
 	//support icons
@@ -715,7 +715,7 @@ public:
 	bool GetVisibleColumn() const { return m_propertyVisible->GetValueAsBoolean(); }
 
 	// SHOWN — its own Visible, a binding to show (a source, or a model column it stands on), the
-	// functional options, and every group above it shown. A column that is not shown has no cells
+	// feature options, and every group above it shown. A column that is not shown has no cells
 	// in a fetch.
 	bool IsColumnShown() const;
 
@@ -752,7 +752,7 @@ public:
 	// the row, else the model's own. `Text` — through the column's format (GetCellFormat); `Checked` —
 	// a boolean, drawn as a tick; `Number` — a number, aligned right; `Value` — in a cell that may be edited.
 	// A fetch passes what it found once for the column — its format, whether it is read-only (`readOnly`:
-	// asked per cell, the form's view-only walked the configuration's objects for every one); the short form
+	// asked per cell, the form's view-only walked the application's objects for every one); the short form
 	// finds them itself.
 	void UpdateCell(const ibDataViewItem& item, ibDataNode& cell) const;
 	void UpdateCell(const ibDataViewItem& item, ibDataNode& cell, const ibFormatString* format, bool readOnly) const;
@@ -802,7 +802,7 @@ public:
 
 	// The header as it shows now: Caption (its title, else the bound field's synonym, else its name),
 	// FooterText, Representation (Auto resolved: picture and text) with HeaderPicture / FooterPicture where
-	// pictures are shown, Visible (its own Visible, a binding, the functional options), ReadOnly, Sortable
+	// pictures are shown, Visible (its own Visible, a binding, the feature options), ReadOnly, Sortable
 	// (the model sorts and the column has a field to sort by) and Sort (1 ascending / -1 descending, when
 	// the composer's active sort is on this column's field). Width and alignment are the schema's.
 	virtual void OnUpdate(ibDataNode& state, ibVisualHost* host) override;

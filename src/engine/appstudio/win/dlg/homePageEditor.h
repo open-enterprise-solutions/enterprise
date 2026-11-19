@@ -3,7 +3,7 @@
 
 // Home-page workspace editor — the designer surface of ibHomePageDescription.
 //
-// Reached from the config root's context menu ("Open home page workspace"), through the same
+// Reached from the application root's context menu ("Open home page workspace"), through the same
 // seam the predefined-values editor uses: the metaobject asks (ibMetaDataNotifier::
 // EditHomePage), the designer owns the dialog.
 //
@@ -42,7 +42,7 @@ class ibDialogHomePageEditor : public ibDialog {
 
 public:
 
-	ibDialogHomePageEditor(wxWindow* parent, ibValueMetaObjectConfiguration* metaObject);
+	ibDialogHomePageEditor(wxWindow* parent, ibValueMetaObjectApplication* metaObject);
 
 protected:
 
@@ -81,7 +81,7 @@ protected:
 
 private:
 
-	ibValueMetaObjectConfiguration* m_metaObject;
+	ibValueMetaObjectApplication* m_metaObject;
 	ibHomePageDescription m_description;   // working copy — committed on OK
 
 	wxWindow*     m_pane[eHomePageColumn_Count] = { nullptr, nullptr };
@@ -93,12 +93,12 @@ private:
 	ibButton* m_buttonOK = nullptr;
 };
 
-// The form picker — the tree of every form the configuration owns, grouped by its owner
-// metaobject, plus the common forms. Answers ONE question: which form to attach.
+// The form picker — the tree of every form the application owns, grouped by its owner
+// metaobject, plus the shared forms. Answers ONE question: which form to attach.
 class ibDialogHomePageFormSelect : public ibDialog {
 public:
 
-	ibDialogHomePageFormSelect(wxWindow* parent, const ibValueMetaObjectConfiguration* metaObject);
+	ibDialogHomePageFormSelect(wxWindow* parent, const ibValueMetaObjectApplication* metaObject);
 
 	ibMetaID GetSelectedForm() const { return m_selectedForm; }
 
@@ -113,7 +113,7 @@ protected:
 
 private:
 
-	const ibValueMetaObjectConfiguration* m_metaObject;
+	const ibValueMetaObjectApplication* m_metaObject;
 	class ibTreeCtrl* m_treeCtrl = nullptr;
 	ibButton* m_buttonOK = nullptr;
 	ibMetaID m_selectedForm = wxNOT_FOUND;

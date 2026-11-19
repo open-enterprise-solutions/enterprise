@@ -1,7 +1,7 @@
 #include "compositionHelper.h"
 
 // Its own chunk id, next to the interface block but never the same one — the two sets are
-// written and read independently, so an object can be in a section AND carry a common
+// written and read independently, so an object can be in a section AND carry a shared
 // attribute without either mechanism seeing the other's ids.
 #define compositionBlock 0x200021
 
@@ -17,7 +17,7 @@ bool ibCompositionObject::LoadComposition(ibReaderMemory& dataReader)
 		return true;
 	}
 
-	// An absent chunk is not an error: configurations written before this mechanism
+	// An absent chunk is not an error: applications written before this mechanism
 	// existed simply have no compositions.
 	return true;
 }

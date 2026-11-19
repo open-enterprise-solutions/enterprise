@@ -15,11 +15,11 @@ enum class ibSchemaAllFunctionsCommand : std::int32_t {
 class FRMSERVER_API ibSchemaAllFunctions : public ibClientSchema {
 public:
 
-	// The configuration's right to the mode of all functions — what the desktop's Operations menu stood on.
+	// The application's right to the mode of all functions — what the desktop's Operations menu stood on.
 	virtual bool AccessRight(const ibSession& session) const override;
 
 	// THE TREE — the objects grouped by kind, in the dialog's order, each group with what this person may open:
-	// available (no functional option has switched it off — the gate the sections ask) and shown to them
+	// available (no feature option has switched it off — the gate the sections ask) and shown to them
 	// (AccessRight_Show — the right the form door asks before it opens anything). Each item by its Item id.
 	virtual void Build(const ibSession& session, const ibDataNode& args, ibDataNode& tree) const override;
 

@@ -29,7 +29,7 @@ void ibPropertyCalcSchedule::DoSetValue(const ibVariant& val)
 	ibProperty::DoSetValue(val);
 }
 
-// The information registers of this configuration: one entry per register, the metaID says WHICH, the variant is
+// The information registers of this application: one entry per register, the metaID says WHICH, the variant is
 // the schedule to place — a register chosen and nothing else of it yet.
 ibPropertyChoiceMode ibPropertyCalcSchedule::GetValueList(ibPropertyChoiceList& list)
 {

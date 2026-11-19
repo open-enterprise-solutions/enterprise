@@ -1,7 +1,7 @@
 #ifndef __META_DATA_REPORT_H__
 #define __META_DATA_REPORT_H__
 
-#include "backend/metadataConfiguration.h"
+#include "backend/metadataApplication.h"
 #include "backend/metaCollection/partial/dataReport.h"
 #include "backend/moduleManager/moduleManagerExt.h"
 
@@ -15,7 +15,7 @@ public:
 	ibMetaDataReport(ibMetaData* metaData, ibValueMetaObjectReport* report);
 	virtual ~ibMetaDataReport();
 
-	virtual ibValueMetaObjectReport* GetReport() const; // out-of-line: m_commonObject is ibValuePtr
+	virtual ibValueMetaObjectReport* GetReport() const; // out-of-line: m_rootObject is ibValuePtr
 	virtual ibValueModuleRuntimeManagerExternalReport* GetManagerModule() const { return m_moduleManager; }
 
 	virtual void SetVersion(const ibVersionID& version) { m_version = version; }
@@ -76,8 +76,8 @@ public:
 	// …and into one — what a thin client takes down to where the person keeps it.
 	bool SaveToTempFile(const ibString& id);
 
-	virtual const ibValueMetaObject* GetCommonMetaObject() const; // out-of-line: m_commonObject is ibValuePtr
-	virtual ibValueMetaObject* GetCommonMetaObject();
+	virtual const ibValueMetaObject* GetRootMetaObject() const; // out-of-line: m_rootObject is ibValuePtr
+	virtual ibValueMetaObject* GetRootMetaObject();
 
 	//start/exit module
 	virtual bool StartMainModule(const ibRuntimeRequest& request = ibRuntimeRequest()) { return m_moduleManager ? m_moduleManager->StartMainModule(request) : false; }
@@ -85,10 +85,10 @@ public:
 
 protected:
 
-	//loader/saver/deleter: (header sign/version/guid read+written inside LoadCommonTree/SaveCommonTree)
-	bool LoadCommonTree(ibValueMetaObjectReport* root, const ibClassID& clsid, ibReaderMemory& readerData);
-	bool SaveCommonTree(const ibClassID& clsid, ibWriterMemory& writerData, int flags = defaultFlag);
-	bool DeleteCommonTree(const ibClassID& clsid);
+	//loader/saver/deleter: (header sign/version/guid read+written inside LoadRootTree/SaveRootTree)
+	bool LoadRootTree(ibValueMetaObjectReport* root, const ibClassID& clsid, ibReaderMemory& readerData);
+	bool SaveRootTree(const ibClassID& clsid, ibWriterMemory& writerData, int flags = defaultFlag);
+	bool DeleteRootTree(const ibClassID& clsid);
 
 	// Build a detached external-report root for the start-from-file detached-root
 	// swap (LoadFromFile). nullptr on failure; otherwise refcount 1, caller owns it.
@@ -105,8 +105,8 @@ private:
 
 	ibMetaData* m_ownerMeta; //owner for saving/loading
 	ibValuePtr<ibValueModuleRuntimeManagerExternalReport> m_moduleManager; // owning handle; dtor runs DestroyMainModule (RAII)
-	ibValuePtr<ibValueMetaObjectReport> m_commonObject; 	//common meta object — owning handle (ibValuePtr)
-	// open flag now lives in ibMetaData's open-image (IsConfigOpen / SetConfigOpened)
+	ibValuePtr<ibValueMetaObjectReport> m_rootObject; 	//root metaobject — owning handle (ibValuePtr)
+	// open flag now lives in ibMetaData's open-image (IsOpen)
 	ibVersionID m_version;
 };
 

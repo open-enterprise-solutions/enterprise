@@ -9,7 +9,7 @@
 // header changed and every line kept a contract with the previous counterparty. Between two header
 // fields, and between two cells of one row, the same link worked.
 //
-// Built the way a person builds it: a configuration in memory, the parameter row written through the
+// Built the way a person builds it: an application in memory, the parameter row written through the
 // attribute's own `ChoiceParameters` property (what the designer writes), and the values set through
 // the object's and the section's own write — the road a form and a module both take.
 // =============================================================================
@@ -24,7 +24,7 @@
 #include "backend/compiler/value.h"
 #include "backend/databaseLayer/connectionPool.h"
 #include "backend/databaseLayer/sqllite/sqliteDatabaseLayer.h"
-#include "backend/metadataConfiguration.h"
+#include "backend/metadataApplication.h"
 #include "backend/metaCollection/metaObject.h"
 #include "backend/metaCollection/attribute/metaAttributeObject.h"
 #include "backend/metaCollection/partial/commonObject.h"
@@ -38,12 +38,12 @@ namespace {
 
 struct ChoiceLinkClear : ::testing::Test {
 	wxInitializer                          m_wxInit;
-	// RunDatabase sets this thread's code style to the configuration's. The binary runs VES
-	// (test_compiler.cpp), so TearDown puts it back, as the other fixtures that run a configuration do.
+	// RunDatabase sets this thread's code style to the application's. The binary runs VES
+	// (test_compiler.cpp), so TearDown puts it back, as the other fixtures that run an application do.
 	const short                            m_codeStyle = ibCompileCode::GetCodeStyle();
 	std::shared_ptr<ibDatabaseLayerSQLite> db;
 
-	std::unique_ptr<ibMetaDataConfigurationFile> cfg;
+	std::unique_ptr<ibMetaDataApplicationFile> cfg;
 	ibValueMetaObject*            counterparties = nullptr;
 	ibValueMetaObject*            contracts      = nullptr;
 	ibValueMetaObjectRecordData*  invoice        = nullptr;
@@ -82,8 +82,8 @@ struct ChoiceLinkClear : ::testing::Test {
 			GTEST_SKIP() << "in-memory SQLite open failed";
 		pool->Init(db, /*maxSize=*/1, /*minIdle=*/0);
 
-		cfg = std::make_unique<ibMetaDataConfigurationFile>();
-		ibValueMetaObjectConfiguration* root = cfg->GetCommonMetaObject();
+		cfg = std::make_unique<ibMetaDataApplicationFile>();
+		ibValueMetaObjectApplication* root = cfg->GetRootMetaObject();
 		ASSERT_NE(root, nullptr);
 
 		counterparties = cfg->CreateMetaObject(g_metaCatalogCLSID, root, false);
@@ -96,9 +96,9 @@ struct ChoiceLinkClear : ::testing::Test {
 		ASSERT_NE(contractOwner, nullptr);
 		contractOwner->GetTypeDesc().SetDefaultMetaType(ReferenceTo(counterparties));
 
-		// The object: a data processor holds its values in memory, through the same object write a
+		// The object: a data tool holds its values in memory, through the same object write a
 		// document's header goes through (ibValueRecordDataObject::SetValueByMetaID).
-		invoice = dynamic_cast<ibValueMetaObjectRecordData*>(cfg->CreateMetaObject(g_metaDataProcessorCLSID, root, false));
+		invoice = dynamic_cast<ibValueMetaObjectRecordData*>(cfg->CreateMetaObject(g_metaDataToolCLSID, root, false));
 		ASSERT_NE(invoice, nullptr);
 		invoice->SetName(wxT("Invoice"));
 
@@ -130,7 +130,7 @@ struct ChoiceLinkClear : ::testing::Test {
 		ASSERT_TRUE(property->SetNodeValue(node));
 		ASSERT_EQ(contract->GetChoiceParameters().m_rows.size(), 1u);
 
-		ASSERT_TRUE(cfg->RunDatabase()) << "the configuration in memory did not run";
+		ASSERT_TRUE(cfg->RunDatabase()) << "the application in memory did not run";
 
 		object = invoice->CreateRecordDataObjectValue();
 		ASSERT_TRUE(object);

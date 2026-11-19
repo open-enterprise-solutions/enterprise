@@ -84,7 +84,7 @@ class WindowMenu(PageTest):
 
     def test_new_with_one_template_makes_it_at_once(self):
         self.start({'tabs': [tab()], 'templates': [{'Title': 'Text', 'Extension': 'txt'},
-                                                   {'Title': 'Data processor', 'Extension': 'epf', 'OnlyOpen': True}]})
+                                                   {'Title': 'Data tool', 'Extension': 'epf', 'OnlyOpen': True}]})
         self.menu_item('File', 'New').click()
         self.assertEqual([call.get('Extension') for call in self.called('open')], ['txt'])
 

@@ -8,7 +8,7 @@
 ////////////////////////////////////////////////////////////////////////////
 //
 // 🛑 THE DESIGNER DOES NOT WORK WITH DATA — a rule about RIGHTS, not about where a runtime lives. A
-// designer holds a CONFIGURATION; a person's rows belong to the application they started, and
+// designer holds an APPLICATION; a person's rows belong to the running application they started, and
 // starting it with the debugger attached is the visible act of consent.
 //
 // So the split falls where the rights do:

@@ -154,7 +154,7 @@ bool ibWindow::Create(wxWindow *parent,
     // stopgap ("very expensive, we need to fix the code in OnSize() instead"), is gone: what the size moved of the frame
     // is painted again (OnSize), what it uncovered the system makes dirty. With it every window of a resized window's
     // tree was painted whole at every step - a container's native class redraws its children whole as it is sized
-    // (CS_HREDRAW | CS_VREDRAW): the configuration tree 6.5 ms of a step (2026-11-12, measured). A window whose picture
+    // (CS_HREDRAW | CS_VREDRAW): the application tree 6.5 ms of a step (2026-11-12, measured). A window whose picture
     // follows its size asks for it itself (ibStatusBar, ibStaticBox). On GTK3 the flag decides it the same way (wxPizza,
     // redraw on allocate); wxOSX reads no flag - a Cocoa view sized is drawn whole, the bands OnSize refreshes with it
 

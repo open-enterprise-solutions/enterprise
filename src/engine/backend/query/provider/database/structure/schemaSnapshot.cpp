@@ -297,7 +297,7 @@ const ibSchemaIndex* FindIndex(const std::vector<ibSchemaIndex>& indexes, const 
 }
 
 // Two same-named indexes are the SAME shape iff their uniqueness, their column list (by model id,
-// stable across config instances) and the PHYSICAL type of each column match. A mismatch (e.g.
+// stable across application instances) and the PHYSICAL type of each column match. A mismatch (e.g.
 // Index -> IndexWithAdditionalOrder adds the order column, a unique flip, or a dimension retyped
 // from string to a reference) means the index must be dropped and rebuilt, not left as-is.
 //
@@ -529,9 +529,9 @@ void EraseSeedRow(ibStructureBatch& batch, const ibSchemaTable& t, const ibSchem
 }
 
 // ⭐ THE SECOND SEED SCHEME — a section's declared lines, found by their place (ibSchemaTable::m_seedKey: the owner and
-// the position), not by a uuid. No unique index holds a line, so there is no upsert: the two configurations decide, as
+// the position), not by a uuid. No unique index holds a line, so there is no upsert: the two applications decide, as
 // they decide the structure — a line declared before is UPDATED (the cells it declares written, a cell it does not
-// declare left the data's, as an item's is), a new one INSERTED. A place is not an identity: a line the configuration
+// declare left the data's, as an item's is), a new one INSERTED. A place is not an identity: a line the application
 // stops declaring is not erased, it stays the data's, an ordinary line (Max, 2026-11-02). Whether a place may be taken
 // is not the write's question: it is the owner's check before the update (m_beforeChange).
 int DiffSeedLinesInto(ibStructureBatch& batch, const ibSchemaTable* old, const ibSchemaTable& cur, ibRestructureInfo* report, ibDatabaseConnectionHolder* holder)
@@ -613,7 +613,7 @@ int DiffSeedLinesInto(ibStructureBatch& batch, const ibSchemaTable* old, const i
 //
 // ⭐⭐ THE UNCHANGED ROWS ARE WRITTEN TOO, AND THAT IS THE POINT. A seed row is DATA, and the only writer
 // that ever puts it there is this batch — which on Firebird runs DEFERRED, past the DDL commit. A failure
-// in that second phase loses rows the diff can never mention again: both configurations agree the value
+// in that second phase loses rows the diff can never mention again: both applications agree the value
 // exists, so every later apply computes "nothing changed" and the row stays missing for good. That is the
 // data half of the hole docs/private/schema-authority.md § 4.3 patches for structure with a TableExists guard —
 // and data needs no guard, because an upsert is idempotent: repeating it IS the repair, and it decides
@@ -671,7 +671,7 @@ ibString ColName(const std::shared_ptr<const ibBackendQueryColumn>& col)
 int CreateTable(ibStructureBatch& batch, const ibSchemaTable& t, ibRestructureInfo* report)
 {
 	// A TABLE IS BORN WITH ITS SCAFFOLD, AND A TABLE WITHOUT ONE IS BORN WITH ITS OWN COLUMNS. SQL has no
-	// `CREATE TABLE x ()` — Firebird answers "Token unknown ... )" and the whole config apply aborts. That is
+	// `CREATE TABLE x ()` — Firebird answers "Token unknown ... )" and the whole application apply aborts. That is
 	// what a REGISTER became when its rowData-blob scaffold was dropped (2026-08-02): identity there floats over
 	// the dimensions, it has no row-key column, so the create carried nothing and no new register could be
 	// created at all (existing ones were unaffected — they diff through AlterTable). The logical columns then
@@ -829,7 +829,7 @@ bool ibSameSchemaIndex(const ibSchemaIndex& a, const ibSchemaIndex& b)
 // CREATE is a real error and propagates.
 // ...but only when the declaration actually CHANGED, or the installed objects went missing. An
 // apply that touched one register used to announce a rebuild for every register in the
-// configuration, which reads as "everything was recomputed" and buries the one line that matters.
+// application, which reads as "everything was recomputed" and buries the one line that matters.
 static void ApplyMaterialization(ibSchemaBuilder& schema, ibDatabaseConnectionHolder* holder,
                                  const ibSchemaTable* old, const ibSchemaTable& t,
                                  ibRestructureInfo* report)
@@ -885,7 +885,7 @@ static void ApplyMaterialization(ibSchemaBuilder& schema, ibDatabaseConnectionHo
 
 	// ⚠ REPORTED ONLY WHEN THE DECLARATION ACTUALLY CHANGED — the intent stated at the top of this
 	// function, which had never been carried out. Every apply announced a rebuild for EVERY register
-	// in the configuration, so adding an attribute (which no totals table even carries) printed a
+	// in the application, so adding an attribute (which no totals table even carries) printed a
 	// wall of "Rebuild totals maintenance for ..." and buried the one line that mattered. The bundle
 	// is still replaced whole underneath; what changes here is only what the user is told.
 	if (report != nullptr) {
@@ -993,9 +993,9 @@ int DiffSnapshots(const ibSchemaSnapshot* baseline, const ibSchemaSnapshot& targ
 		for (const ibSchemaTable& old : baseline->Tables()) {
 			if (target.Find(old.m_id) != nullptr)
 				continue;
-			// ⭐⭐ AN EXTERNAL TABLE IS NOT DROPPED — BUT ITS COLUMNS ARE STILL THE CONFIGURATION'S.
+			// ⭐⭐ AN EXTERNAL TABLE IS NOT DROPPED — BUT ITS COLUMNS ARE STILL THE APPLICATION'S.
 			//
-			// sys_const is created by the system scaffold and outlives every configuration, so the differ
+			// sys_const is created by the system scaffold and outlives every application, so the differ
 			// never drops the TABLE. It used to skip the whole table here, columns included — harmless on
 			// an incremental apply (sys_const is always in the target, so this branch is never reached),
 			// and wrong on the one path that does reach it: a full REBUILD diffs target -> empty, and
@@ -1187,7 +1187,7 @@ int DiffSnapshots(const ibSchemaSnapshot* baseline, const ibSchemaSnapshot& targ
 			// ⚠ A COPY, NOT A REFERENCE. The snapshot is EPHEMERAL — built at save, diffed, discarded —
 			// and a deferred rebuild runs after the DDL commit, which is past the point the caller still
 			// holds it. The table declaration copies cheaply and safely: its owned columns are
-			// shared_ptr and everything else points at the live configuration, which outlives the save.
+			// shared_ptr and everything else points at the live application, which outlives the save.
 			const ibString sourceTable = cur.m_materialize.SourceTable();
 			// The answer is READ. A deferred rebuild returns true here and reports for real in the
 			// post-commit drain (ibSchemaBuilder::Flush), where a failure is a data problem in tables

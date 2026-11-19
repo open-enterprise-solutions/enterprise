@@ -4,7 +4,7 @@
 #include "frmclient/docView/tabDocument.h"
 
 // THE DESKTOP'S (designer/docManager/templates/docViewRole.h) IN A TAB THE SERVER RAISED (Kind Role): the role is the
-// server's document (frmserver ibRoleRightsDocument) — its rights kept in the objects, saved with the configuration
+// server's document (frmserver ibRoleRightsDocument) — its rights kept in the objects, saved with the application
 // there; this one shows them in the editor, the rows its view brings (DrawView).
 
 class ibRoleEditView : public ibFrontendView {

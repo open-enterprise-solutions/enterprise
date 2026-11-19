@@ -7,9 +7,9 @@
 
 #include "frmclient/propertyManager/property/private/prop.h"             // ibPGPropertyFlags_*
 #include "frmclient/propertyManager/property/private/propertyRegistry.h"
-#include "core/serialize/dataBuilder.h"   // ibDataNode — the row the configuration's pictures come with
+#include "core/serialize/dataBuilder.h"   // ibDataNode — the row the application's pictures come with
 
-#include "frmclient/win/picture.h"   // ibProtocolPicture — a configuration's picture, by its id
+#include "frmclient/win/picture.h"   // ibProtocolPicture — an application's picture, by its id
 
 #include "protocol/protocolDesigner.h"   // ibProtocol::ibSchema::ibProperties — the row's keys
 
@@ -31,8 +31,8 @@ ibVariant WritePicture(const ibPictureDescription& pictureDesc)
 	wxString words;
 	if (pictureDesc.m_type == ibPictureType::eFromBackend)
 		words = _("Backend picture");
-	else if (pictureDesc.m_type == ibPictureType::eFromConfiguration)
-		words = _("Configuration picture");
+	else if (pictureDesc.m_type == ibPictureType::eFromApplication)
+		words = _("Application picture");
 	else if (pictureDesc.m_type == ibPictureType::eFromFile)
 		words = _("External picture");
 	return ibVariant(new ibVariantSerializable(node, words));
@@ -71,7 +71,7 @@ public:
 	ibPropertyPictureLoader()
 	{
 		ibPropertyRegistry::Register(wxT("ibPropertyPicture"), [](ibBackendProperty* property) -> ibPGProperty* {
-			// …and the configuration's pictures it may be loaded from, by name (the row's Pictures, its GetProtocolValue).
+			// …and the application's pictures it may be loaded from, by name (the row's Pictures, its GetProtocolValue).
 			ibDataNode row;
 			property->GetProtocolValue(row);
 			return new ibPGPictureProperty(property->GetLabel(), property->GetName(), property->GetValue(),
@@ -92,15 +92,15 @@ ibPGPictureProperty::ibPGPictureProperty(const wxString& label,
 	const std::optional<ibDataNode>& pictures,
 	const std::optional<ibDataNode>& classes) : ibPGProperty(label, strName),
 	m_propertySource(nullptr),
-	m_propertyBackend(nullptr), m_propertyConfiguration(nullptr), m_propertyFile(nullptr)
+	m_propertyBackend(nullptr), m_propertyApplication(nullptr), m_propertyFile(nullptr)
 {
-	ibPGChoices sourceChoices, systemChoices, configurationChoices;
+	ibPGChoices sourceChoices, systemChoices, applicationChoices;
 
 	// Add 'source' property (common for all other children)
 	sourceChoices.Add(_("Load from backend"), eFromBackend);
 	sourceChoices.Add(_("Load from file"), eFromFile);
 
-	unsigned int system_value = 0, system_config = 0;
+	unsigned int system_value = 0, system_application = 0;
 
 	ibPGChoiceEntry& entry =
 		systemChoices.AddAsSorted(wxEmptyString, system_value++);
@@ -134,12 +134,12 @@ ibPGPictureProperty::ibPGPictureProperty(const wxString& label,
 		}
 	}
 
-	// …and the configuration's — a server's property always has an owner, the object its row is of.
+	// …and the application's — a server's property always has an owner, the object its row is of.
 	{
-		ibPGChoiceEntry& entry = configurationChoices.AddAsSorted(wxEmptyString, system_config++);
-		m_confChoices.insert_or_assign(entry.GetValue(), ibNullGuid);
+		ibPGChoiceEntry& entry = applicationChoices.AddAsSorted(wxEmptyString, system_application++);
+		m_applicationChoices.insert_or_assign(entry.GetValue(), ibNullGuid);
 
-		// The configuration's pictures — the picture metaobjects of the owner's configuration, or of the one it extends:
+		// The application's pictures — the picture metaobjects of the owner's application, or of the one it extends:
 		// the server's, brought by the row by name and guid.
 		if (pictures) {
 			// …each drawn with its own picture, as the desktop's: the server's, asked for by its id all at once (picture
@@ -150,14 +150,14 @@ ibPGPictureProperty::ibPGPictureProperty(const wxString& label,
 			ibProtocolPictureReceive(ids);
 			for (const ibDataNode& item : pictures->Children()) {
 				const wxString guid = item.GetValue<ibString>(ibProtocol::ibSchema::ibProperties::Guid);
-				ibPGChoiceEntry& entry = configurationChoices.AddAsSorted(
-					item.GetValue<ibString>(ibProtocol::ibSchema::ibProperties::Name), system_config++);
+				ibPGChoiceEntry& entry = applicationChoices.AddAsSorted(
+					item.GetValue<ibString>(ibProtocol::ibSchema::ibProperties::Name), system_application++);
 				entry.SetBitmap(ibProtocolPicture(item.GetValue<ibString>(ibProtocol::ibSchema::ibProperties::Id)));
-				m_confChoices.insert_or_assign(entry.GetValue(), ibGuid(guid));
+				m_applicationChoices.insert_or_assign(entry.GetValue(), ibGuid(guid));
 			}
 		}
 
-		sourceChoices.Add(_("Load from configuration"), eFromConfiguration);
+		sourceChoices.Add(_("Load from application"), eFromApplication);
 	}
 
 	m_propertySource = new ibEnumProperty(_("Source"), wxT("source"), sourceChoices);
@@ -170,11 +170,11 @@ ibPGPictureProperty::ibPGPictureProperty(const wxString& label,
 
 	AddPrivateChild(m_propertyBackend);
 
-	// Add 'configuration' property (common for all other children)
-	m_propertyConfiguration = new ibEditEnumProperty(_("Configuration"), wxT("configuration"), configurationChoices);
-	m_propertyConfiguration->SetHelpString(_("Image from configuration"));
+	// Add 'application' property (common for all other children)
+	m_propertyApplication = new ibEditEnumProperty(_("Application"), wxT("application"), applicationChoices);
+	m_propertyApplication->SetHelpString(_("Image from application"));
 
-	AddPrivateChild(m_propertyConfiguration);
+	AddPrivateChild(m_propertyApplication);
 
 	// Add 'file_path' property (common for 'Load From File' and 'Load From Embedded File' choices)
 	m_propertyFile = new ibPGExternalImageProperty(_("File path"), wxT("file_path"),
@@ -200,7 +200,7 @@ ibVariant ibPGPictureProperty::ChildChanged(ibVariant& thisValue, const int chil
 		pictureDesc.m_class_identifier = m_valChoices.at(childValue.GetInteger());
 		break;
 	case 2:
-		pictureDesc.m_meta_guid = m_confChoices.at(childValue.GetInteger());
+		pictureDesc.m_meta_guid = m_applicationChoices.at(childValue.GetInteger());
 		break;
 	case 3:
 		pictureDesc.m_img_data = ReadExternalPicture(childValue);
@@ -221,24 +221,24 @@ void ibPGPictureProperty::RefreshChildren()
 		if (pd.m_type == ibPictureType::eFromBackend) {
 			m_propertyBackend->Hide(false);
 			m_propertyBackend->SetExpanded(true);
-			m_propertyConfiguration->Hide(true);
-			m_propertyConfiguration->SetExpanded(false);
+			m_propertyApplication->Hide(true);
+			m_propertyApplication->SetExpanded(false);
 			m_propertyFile->Hide(true);
 			m_propertyFile->SetExpanded(false);
 		}
-		else if (pd.m_type == ibPictureType::eFromConfiguration) {
+		else if (pd.m_type == ibPictureType::eFromApplication) {
 			m_propertyBackend->Hide(true);
 			m_propertyBackend->SetExpanded(false);
-			m_propertyConfiguration->Hide(false);
-			m_propertyConfiguration->SetExpanded(true);
+			m_propertyApplication->Hide(false);
+			m_propertyApplication->SetExpanded(true);
 			m_propertyFile->Hide(true);
 			m_propertyFile->SetExpanded(false);
 		}
 		else if (pd.m_type == ibPictureType::eFromFile) {
 			m_propertyBackend->Hide(true);
 			m_propertyBackend->SetExpanded(false);
-			m_propertyConfiguration->Hide(true);
-			m_propertyConfiguration->SetExpanded(false);
+			m_propertyApplication->Hide(true);
+			m_propertyApplication->SetExpanded(false);
 			m_propertyFile->Hide(false);
 			m_propertyFile->SetExpanded(true);
 		}
@@ -253,13 +253,13 @@ void ibPGPictureProperty::RefreshChildren()
 			else
 				m_propertyBackend->SetValue(wxNOT_FOUND);
 		}
-		else if (pd.m_type == ibPictureType::eFromConfiguration) {
-			auto iterator = std::find_if(m_confChoices.begin(), m_confChoices.end(),
+		else if (pd.m_type == ibPictureType::eFromApplication) {
+			auto iterator = std::find_if(m_applicationChoices.begin(), m_applicationChoices.end(),
 				[pd](const auto pair) { return pair.second == pd.m_meta_guid; });
-			if (iterator != m_confChoices.end())
-				m_propertyConfiguration->SetValue(iterator->first);
+			if (iterator != m_applicationChoices.end())
+				m_propertyApplication->SetValue(iterator->first);
 			else
-				m_propertyConfiguration->SetValue(wxNOT_FOUND);
+				m_propertyApplication->SetValue(wxNOT_FOUND);
 		}
 		else if (pd.m_type == ibPictureType::eFromFile) {
 			m_propertyFile->SetValue(WriteExternalPicture(pd.m_img_data));
@@ -273,8 +273,8 @@ void ibPGPictureProperty::RefreshChildren()
 		m_propertyBackend->Hide(true);
 		m_propertyBackend->SetExpanded(false);
 
-		m_propertyConfiguration->Hide(true);
-		m_propertyConfiguration->SetExpanded(false);
+		m_propertyApplication->Hide(true);
+		m_propertyApplication->SetExpanded(false);
 
 		m_propertyFile->Hide(true);
 		m_propertyFile->SetExpanded(false);

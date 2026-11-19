@@ -86,7 +86,7 @@ BACKEND_API bool ibRpcParseRequest(const ibString& text, ibRpcRequest& request, 
 // …and the request as a PACKET (OES-RPC 1.0, serialize/dataBuilder.h) — the client protocol's: its bytes checked and
 // taken as the node they are, nothing parsed; the envelope's words are JSON-RPC's (method, id, params), with no jsonrpc.
 BACKEND_API bool ibRpcParseRequest(const ibMemoryBuffer& packet, ibRpcRequest& request, ibString& error);
-// The words a reading kept, looked up in THAT configuration — the caller's session's: the text is not read again.
+// The words a reading kept, looked up in THAT application — the caller's session's: the text is not read again.
 BACKEND_API void ibRpcLookupTypes(ibDataNode& node, const class ibMetaData* metaData);
 // ⭐ A PACKET'S TYPES IN WORDS — a node's header says its clsid, and a client knows no classes: the answer carries the
 // names of the types its nodes are, once each (`types`: a field per clsid, named by its digits, holding the name), as
@@ -104,8 +104,8 @@ BACKEND_API void ibRpcNameTypes(ibDataNode& answer);
 BACKEND_API bool ibRpcParseResponse(const ibString& text, ibDataValue& id,
 	ibString& payload, bool& isError);
 
-// ANY node as JSON text. `typeResolver` turns config-specific class ids into
-// the portable names a configuration writes (metaIntrospect.h) — without one a
+// ANY node as JSON text. `typeResolver` turns application-specific class ids into
+// the portable names an application writes (metaIntrospect.h) — without one a
 // described object answers with numbers that mean nothing outside this process.
 // The envelope itself needs no resolver: it carries no types.
 // Written straight into the engine's text (ibJsonProvider::Write); bytes are the socket's to make.

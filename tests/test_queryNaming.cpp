@@ -26,7 +26,7 @@
 #include "backend/composition/dataComposer.h"
 #include "backend/query/queryableFactory.h"        // ibQueryableSourceDescriptor — a virtual table that consumes its condition
 #include "backend/query/tempTableQueryable.h"      // ibTempTableQueryable — its columns, from a table in memory
-#include "backend/metadataConfiguration.h"         // ibMetaDataConfigurationFile — the open configuration it registers in
+#include "backend/metadataApplication.h"           // ibMetaDataApplicationFile — the open application it registers in
 #include "backend/query/dataQueryBuilder.h"       // ibDataQueryResult — what a composer's run hands back
 #include "backend/query/querySelector.h"           // ibSelector — its totals, read at the root
 
@@ -285,8 +285,8 @@ private:
 	std::shared_ptr<ibTempTableQueryable> m_rows;
 };
 
-// An OPEN configuration — only an open one has a source factory to register into.
-struct OpenConfiguration : ibMetaDataConfigurationFile
+// An OPEN application — only an open one has a source factory to register into.
+struct OpenApplication : ibMetaDataApplicationFile
 {
 	LoadGuard m_open{ this };
 };
@@ -297,8 +297,8 @@ TEST(QueryDescribing, AnUnsetParameterInAConditionTheTableConsumesIsNotAMistake)
 {
 	// The query constructor would not open this query: "parameter '&Warehouse' is not set". The
 	// parameters of a query being WRITTEN are set by the code that later runs it, never here.
-	ConsumingBalance balance;   // before the configuration: its factory goes first, and never outlives what it holds
-	OpenConfiguration cfg;
+	ConsumingBalance balance;   // before the application: its factory goes first, and never outlives what it holds
+	OpenApplication cfg;
 	ASSERT_NE(nullptr, cfg.GetSourceFactory());
 	cfg.RegisterSource(&balance);
 	const ibSourceMetaDataScope scope(&cfg);
@@ -327,7 +327,7 @@ TEST(QueryDescribing, AConditionAskedForItsValueIsABooleanOutput)
 	// The language reads a condition where a value stands; the run refused it in three places —
 	// the selection, a CASE branch and one side of a comparison. It is a Boolean output now.
 	ConsumingBalance balance;
-	OpenConfiguration cfg;
+	OpenApplication cfg;
 	ASSERT_NE(nullptr, cfg.GetSourceFactory());
 	cfg.RegisterSource(&balance);
 	const ibSourceMetaDataScope scope(&cfg);
@@ -482,7 +482,7 @@ TEST(QueryGrouping, AnUnresolvableQueryIsNotJudged)
 TEST(QueryGrouping, AWindowAggregateDoesNotTurnTheSelectIntoAGroup)
 {
 	WindowSales sales;
-	OpenConfiguration cfg;
+	OpenApplication cfg;
 	ASSERT_NE(nullptr, cfg.GetSourceFactory());
 	cfg.RegisterSource(&sales);
 	const ibSourceMetaDataScope scope(&cfg);
@@ -499,7 +499,7 @@ TEST(QueryGrouping, AWindowAggregateDoesNotTurnTheSelectIntoAGroup)
 TEST(QueryGrouping, AWindowArgumentStillObeysAnOrdinaryGroupBesideIt)
 {
 	WindowSales sales;
-	OpenConfiguration cfg;
+	OpenApplication cfg;
 	ASSERT_NE(nullptr, cfg.GetSourceFactory());
 	cfg.RegisterSource(&sales);
 	const ibSourceMetaDataScope scope(&cfg);
@@ -520,7 +520,7 @@ TEST(QueryGrouping, ARunQueryIsRefusedAsTheCheckRefusesIt)
 	// (2026-10-01). Describing the output is filled through the same door as running it, and needs no
 	// database — so it answers here for every road, in the check's own sentence.
 	WindowSales sales;
-	OpenConfiguration cfg;
+	OpenApplication cfg;
 	ASSERT_NE(nullptr, cfg.GetSourceFactory());
 	cfg.RegisterSource(&sales);
 	const ibSourceMetaDataScope scope(&cfg);
@@ -1017,7 +1017,7 @@ TEST(QueryGroupingCompleteness, AFreeColumnInsideAComputedProjectionStillNeedsGr
 		wxT("SELECT SUM(Products.Price) / Products.Code FROM Catalog.Products AS Products"));
 	ASSERT_NE(nullptr, select);
 
-	// Resolution needs a configuration, so this pins the SHAPE the walk sees rather than the
+	// Resolution needs an application, so this pins the SHAPE the walk sees rather than the
 	// resolved answer: one folded column and one free one, in one projection.
 	ASSERT_EQ(1u, select->m_projections.size());
 	EXPECT_EQ(ibQueryAstExprKind::Arith, select->m_projections[0].m_expr->m_kind);
@@ -1557,14 +1557,14 @@ TEST(QueryComposerTotals, AResourceWrittenAsAnExpressionFoldsOverAUnion)
 	RowsInMemory payments(ibT("IncomingPayment"),
 		{ { ibT("Counterparty"), ibValueTypes::TYPE_STRING }, { ibT("Amount"), ibValueTypes::TYPE_NUMBER } },
 		{ { ibValue(ibString(ibT("North"))), ibValue(30) } });
-	OpenConfiguration cfg;
+	OpenApplication cfg;
 	ASSERT_NE(nullptr, cfg.GetSourceFactory());
 	cfg.RegisterSource(&invoices);
 	cfg.RegisterSource(&payments);
 	const ibSourceMetaDataScope scope(&cfg);
 
 	ibDataDBComposer composer;
-	composer.SetMetaData(&cfg);   // the configuration a report's composer reads its sources from
+	composer.SetMetaData(&cfg);   // the application a report's composer reads its sources from
 	composer.FromText(
 		ibT("SELECT Invoice.Counterparty AS Counterparty, Invoice.TotalWithVAT AS Charged, 0 AS Paid ")
 		ibT("FROM Document.Invoice AS Invoice ")
@@ -1630,7 +1630,7 @@ TEST(QueryComposerBranches, EachOutputKeepsItsOwnKeyWhenTheSelectionDoesNotCarry
 		{ { ibT("Partner"), ibValueTypes::TYPE_STRING }, { ibT("Warehouse"), ibValueTypes::TYPE_STRING }, { ibT("Amount"), ibValueTypes::TYPE_NUMBER } },
 		{ { ibValue(ibString(ibT("North"))), ibValue(ibString(ibT("Main"))), ibValue(100) },
 		  { ibValue(ibString(ibT("South"))), ibValue(ibString(ibT("Spare"))), ibValue(30) } });
-	OpenConfiguration cfg;
+	OpenApplication cfg;
 	ASSERT_NE(nullptr, cfg.GetSourceFactory());
 	cfg.RegisterSource(&sales);
 	const ibSourceMetaDataScope scope(&cfg);

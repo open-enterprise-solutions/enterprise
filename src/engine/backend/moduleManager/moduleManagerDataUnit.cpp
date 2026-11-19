@@ -6,9 +6,9 @@
 //	              query language reads through (one source registry, one world).
 //	              Only the QUERYABLE kinds are exposed (records with a
 //	              data-reference, registers, constants); modules / forms /
-//	              templates / reports / data processors are not data sources.
+//	              templates / reports / data tools are not data sources.
 //	              After them, Platform: the sources the platform declares in
-//	              every configuration (Data.Platform.Journal.Events).
+//	              every application (Data.Platform.Journal.Events).
 //	              Lazy by contract: vending a Queryable reads NOTHING.
 ////////////////////////////////////////////////////////////////////////////
 
@@ -22,7 +22,7 @@
 #include "backend/system/value/valueTable.h"        // ibValueModelTable — the From argument
 #include "backend/system/value/valueQueryable.h"    // ibValueQueryable — the vended leaf
 #include "backend/backend_exception.h"              // ibBackendCoreException — From argument validation
-#include "backend/metaCollection/metaGroups.h"      // ibMetaGroupOrder — the kinds in the order a configuration is read
+#include "backend/metaCollection/metaGroups.h"      // ibMetaGroupOrder — the kinds in the order an application is read
 
 #include <algorithm>  // std::find — a namespace named once; std::stable_sort — the kinds in their order
 #include <vector>
@@ -37,7 +37,7 @@ std::shared_ptr<const ibBackendQueryable> QueryableOf(const ibValueMetaObject* o
 }
 
 // A SOURCE NAMED AS THE QUERY LANGUAGE NAMES IT — "Journal.Events", "AccumulationRegister.Stock.Turnovers" — made
-// from these arguments by the descriptor the configuration's factory finds: the one a query text's FROM is read
+// from these arguments by the descriptor the application's factory finds: the one a query text's FROM is read
 // through, so a source a provider adds (ibPlatformSourceRegister) is reachable here with no line of its own.
 std::shared_ptr<const ibBackendQueryable> QueryableNamed(const ibMetaData* metaData, const ibString& name,
                                                          ibValue** paParams, long lSizeArray)
@@ -84,7 +84,7 @@ private:
 	ibString m_kindName;   // the member it was read through — "Catalogs"
 };
 
-// Data.Platform, Data.Platform.Journal — the sources the PLATFORM declares in every configuration
+// Data.Platform, Data.Platform.Journal — the sources the PLATFORM declares in every application
 // (ibPlatformSourceRegister), named as a query names them: a namespace, then a source in it. `Data.Platform.Journal.Events`
 // is `FROM Journal.Events`, all of it; `Data.From("Journal.Events", Begin, End)` reads it with its arguments. ONE CLASS,
 // TWO LEVELS: with no namespace it holds the namespaces (`Journal`), with one the names of its sources (`Events`). It
@@ -161,7 +161,7 @@ private:
 namespace {
 
 // THE QUERYABLE KINDS, one per member — mirrors the query language's source coverage (queryableFactory): data-reference
-// records, registers, constants. Which kinds, not their order: the members stand as a configuration is read (DataKinds).
+// records, registers, constants. Which kinds, not their order: the members stand as an application is read (DataKinds).
 struct ibQueryableKind {
 	const ibChar* m_name;
 	ibClassID     m_clsid;
@@ -182,7 +182,7 @@ constexpr ibQueryableKind s_dataKinds[] = {
 	{ ibT("Sequences"),                   g_metaSequenceCLSID },
 };
 
-// …in the order a configuration is read (ibMetaGroupOrder) — the configuration tree's, the query constructor's. A
+// …in the order an application is read (ibMetaGroupOrder) — the application tree's, the query constructor's. A
 // member's number is its position here, so FillMembers and GetPropVal read one list.
 const std::vector<const ibQueryableKind*>& DataKinds()
 {

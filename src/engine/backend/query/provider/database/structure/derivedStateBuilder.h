@@ -103,8 +103,8 @@ BACKEND_API bool Collapse(const ibSchemaTable& derived, ibDatabaseConnectionHold
 //
 // The SCHEMA COMES IN — this floor does not go looking for it. It is metadata-blind by construction
 // (its sibling Regenerate takes a ready ibSchemaTable for the same reason), and for a background job
-// "the active configuration" is not even a well-defined thing: a web process holds many sessions and
-// a cluster many nodes, so whose configuration is current at tick time has no answer. The caller owns
+// "the active application" is not even a well-defined thing: a web process holds many sessions and
+// a cluster many nodes, so whose application is current at tick time has no answer. The caller owns
 // that context and hands down the ContributeTables snapshot built from it.
 //
 // It DOES own the transactions — one per table, so an interrupted run leaves whole tables done and
@@ -147,7 +147,7 @@ struct ibTotalsMaintenance
 };
 
 // THE ONE CALL A SCHEDULED JOB MAKES — no arguments beyond its context, no modes, no policy.
-// Everything needed to keep a configuration's totals honest and compact, in the right order,
+// Everything needed to keep an application's totals honest and compact, in the right order,
 // deciding per table what it needs. Call it and forget it.
 //
 // Per derived table:

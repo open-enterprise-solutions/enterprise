@@ -6,7 +6,7 @@
 #include "backend/metaData.h"
 #include "backend/query/queryLowering.h"                  // CheckNames / UngroupedProjections — the desktop's verdict
 #include "backend/query/queryConstructorModel.h"          // the desktop's model — what is asked is answered by it
-#include "backend/query/queryable.h"                      // ibSourceMetaDataScope — the names resolve against THIS configuration
+#include "backend/query/queryable.h"                      // ibSourceMetaDataScope — the names resolve against THIS application
 #include "core/query/queryParser.h"                       // ibQueryParser — the source as the client wrote it
 #include "core/query/queryRender.h"                       // ibRenderQueryExpr — a projection, as the window reads it back
 #include "core/serialize/dataBuilder.h"

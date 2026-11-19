@@ -15,7 +15,7 @@
 // (Max, 2026-08-20: "an attribute you add by hand; this type lives in the object"). Declaring one is what makes
 // `Object.<Name>` exist. The report's DEFAULT composer decides what the report IS: the generated form is built
 // from it, so a report that declares one needs no form at all. (docs/private/report-engine.md §4b) Under any other
-// owner — a document, a data processor — it is what code takes with GetTemplate(name) and composes into a sheet.
+// owner — a document, a data tool — it is what code takes with GetTemplate(name) and composes into a sheet.
 //
 // ⚠ What a composer stores is the DEFAULT of the user's settings, not a separate "author's schema": saved
 // settings replace it as a SNAPSHOT, and what no longer resolves is dropped by
@@ -54,7 +54,7 @@ protected:
 
 	ibPropertyCategory* m_categoryTemplate = ibPropertyObject::CreatePropertyCategory(ibT("Template"), _("Template"));
 	ibPropertyTemplate* m_propertyTemplate = ibPropertyObject::CreateProperty<ibPropertyTemplate>(m_categoryTemplate, ibT("TemplateData"), _("Template data"),
-		_("What the template holds, its kind chosen when it is added: a spreadsheet document (cells, named areas and parameters a print form is assembled from) or a data composer (its query, resources, parameters, structure and settings variants). Code gets a fresh value of it with the owner's GetTemplate(name), a common one with GetCommonTemplate(name)."));
+		_("What the template holds, its kind chosen when it is added: a spreadsheet document (cells, named areas and parameters a print form is assembled from) or a data composer (its query, resources, parameters, structure and settings variants). Code gets a fresh value of it with the owner's GetTemplate(name), a common one with GetSharedTemplate(name)."));
 };
 
 // ⭐ AS A COMPOSER IT IS A COLUMN OF THE OBJECT THAT DECLARES IT — the same way an attribute is. The source-binding
@@ -89,7 +89,7 @@ public:
 	// THE KIND CHOSEN — the provider of the kind it was lets it go, the provider of the kind it is takes it.
 	virtual void OnPropertyChanged(ibProperty* property, const ibVariant& oldValue, const ibVariant& newValue) override;
 
-	// THE COMPOSITION BELOW SAID IT CHANGED — mark the configuration modified.
+	// THE COMPOSITION BELOW SAID IT CHANGED — mark the application modified.
 	virtual void OnChildChanged() override;
 
 private:
@@ -99,10 +99,10 @@ private:
 	mutable ibTypeDescription m_typeDesc;
 };
 
-// A common template is a spreadsheet, always.
-class BACKEND_API ibValueMetaObjectCommonTemplate : public ibValueMetaObjectTemplateBase {
+// A shared template is a spreadsheet, always.
+class BACKEND_API ibValueMetaObjectSharedTemplate : public ibValueMetaObjectTemplateBase {
 public:
-	ibValueMetaObjectCommonTemplate();
+	ibValueMetaObjectSharedTemplate();
 };
 
 // ⭐ WHAT A TEMPLATE OF ONE KIND DOES — the events of its kind and the value code is handed, beside its schema
@@ -125,8 +125,8 @@ public:
 	//prepare menu for item
 	virtual void CollectContextMenu(ibValueMetaObjectTemplateBase* metaTemplate, std::vector<ibMetaMenuItem>& items) const = 0;
 
-	// What code is handed — the owner's GetTemplate(name), GetCommonTemplate(name) and the property's GetDataValue,
-	// one road: a fresh value of the kind over a copy of its schema, made in the configuration the template belongs to.
+	// What code is handed — the owner's GetTemplate(name), GetSharedTemplate(name) and the property's GetDataValue,
+	// one road: a fresh value of the kind over a copy of its schema, made in the application the template belongs to.
 	virtual ibValue GetDataValue(ibTemplateDescription& templateDesc, const ibMetaData* metaData) const = 0;
 
 	// The kind's — one with none chosen yet has nothing of its own, as a spreadsheet has not.

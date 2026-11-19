@@ -8,7 +8,7 @@
 
 class BACKEND_API ibBackendQueryable;
 class ibQueryableSourceDescriptor;
-class ibPropertyObject;   // the OWNING property object — its GetMetaData() gives the SPECIFIC config to resolve through
+class ibPropertyObject;   // the OWNING property object — its GetMetaData() gives the SPECIFIC application to resolve through
 class BACKEND_API ibMetaData;
 
 // The property value holding the chosen SOURCE — kept as the source's STABLE table id, NOT a cached
@@ -22,10 +22,10 @@ class BACKEND_API ibVariantDynamicSource : public ibVariant {
 public:
 
 	// `owner` = the property object this cell belongs to; at construction we resolve owner→GetMetaData() ONCE and
-	// keep the SPECIFIC config (each metadata owns its own queryable set — the queryable lives in the config where
+	// keep the SPECIFIC application (each metadata owns its own queryable set — the queryable lives in the application where
 	// it was created, never in a global/active one). We keep the METADATA, not the owner pointer: a form-attribute's
 	// dynamic list is TRANSIENT (re-materialised on a Type change) while the grid's display cell (a COPY) outlives
-	// it — storing the owner would then dangle and crash on the next paint. The config metadata outlives the list.
+	// it — storing the owner would then dangle and crash on the next paint. The application metadata outlives the list.
 	ibVariantDynamicSource(const std::shared_ptr<const ibBackendQueryable>& queryable = nullptr, const ibPropertyObject* owner = nullptr);
 	ibVariantDynamicSource(const ibVariantDynamicSource& src)
 		: ibVariant(ibValueTypes::TYPE_VALUE), m_tableId(src.m_tableId), m_metaData(src.m_metaData) {}
@@ -65,7 +65,7 @@ public:
 
 private:
 	ibMetaID m_tableId = ibNOT_FOUND;   // the chosen source's stable table id (queryable re-resolved on demand)
-	const ibMetaData* m_metaData = nullptr;   // the SPECIFIC config this source lives in — resolved once from the owner
+	const ibMetaData* m_metaData = nullptr;   // the SPECIFIC application this source lives in — resolved once from the owner
 };
 
 #endif // __DYNAMIC_SOURCE_VARIANT_H__

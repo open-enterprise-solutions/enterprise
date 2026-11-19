@@ -411,7 +411,7 @@ wxSizer* ibDialogPredefinedEditor::ibDialogPredefinedItem::AppendSection(wxWindo
 	const auto declared = tables.find(table.m_id);
 
 	wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
-	section->m_declared = new ibCheckBox(parent, wxID_ANY, _("Declared by the configuration"));
+	section->m_declared = new ibCheckBox(parent, wxID_ANY, _("Declared by the application"));
 	section->m_declared->SetValue(declared != tables.end());
 	sizer->Add(section->m_declared, 0, wxALL, kPad);
 

@@ -457,7 +457,7 @@ void ibAttributeTree::OnContextMenu(wxContextMenuEvent& event)
 	// its row's menu says so, and its title.
 	const ibProtocolNode addColumn = selEntry != nullptr ?
 		FindMenuItem(selEntry->GetMenu(), ibProtocol::ibView::ibFormDesigner::Column) : ibProtocolNode();
-	// A LOCKED form (over read-only metadata — a config opened from a DB / file) can be VIEWED but not
+	// A LOCKED form (over read-only metadata — an application opened from a DB / file) can be VIEWED but not
 	// restructured: every MUTATING action is disabled; the read-only-safe ones (Copy, Properties) stay live.
 	const bool editable = m_formHandler->IsEditable();
 

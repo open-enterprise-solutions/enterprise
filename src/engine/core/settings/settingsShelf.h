@@ -24,7 +24,7 @@ enum class ibSettingsCategory : int {
 	Composer,     // a report composer's user settings
 	// ⭐ A LIST ON A FORM IS ITS OWN TENANT (Max, 2026-08-26). It saves settings exactly as a report
 	// does — that part is NOT the variants question, where a list legitimately has none — but what it
-	// saves belongs to a control on a form, not to a composer declared in the configuration. Two
+	// saves belongs to a control on a form, not to a composer declared in the application. Two
 	// addressing vocabularies, so two categories, and neither can collide with the other.
 	List,
 	// ⭐⭐ WHICH ONE COMES BACK BY ITSELF — a CATEGORY of its own rather than a column or a flag (Max,

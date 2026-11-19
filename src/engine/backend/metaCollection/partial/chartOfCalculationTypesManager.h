@@ -12,7 +12,7 @@ class ibValueManagerDataObjectChartOfCalculationTypes :
 	ibValueManagerDataObjectChartOfCalculationTypes(const ibValueMetaObjectChartOfCalculationTypes* metaObject = nullptr) : m_metaObject(metaObject) { m_members.Bind(this, &ibValueManagerDataObjectChartOfCalculationTypes::FillManagerMethods); }
 	virtual ~ibValueManagerDataObjectChartOfCalculationTypes() {}
 
-	virtual const ibValueMetaObjectCommonModule* GetManagerModule() const;
+	virtual const ibValueMetaObjectSharedModule* GetManagerModule() const;
 	virtual const ibValueMetaObjectChartOfCalculationTypes* GetMetaObject() const { return m_metaObject; }
 
 	void FillManagerMethods(ibMemberTable& helper) const;

@@ -11,7 +11,7 @@
 //     original's cache row and loads the wrong owner's bytecode
 //     ("Binding type mismatch for 'ThisObject'");
 //   * the METAID, which was the half left behind until 2026-08-31. A copied
-//     object's modules kept the SOURCE's ids — two objects in one configuration
+//     object's modules kept the SOURCE's ids — two objects in one application
 //     answering to the same number, with the copy shadowed
 //     (ibFindMetaObjectById returns the original for both). Not cosmetic: the
 //     physical column is named `fld<id>`, and ibMetaData::GenerateNewID never
@@ -23,17 +23,17 @@
 // holds pointers, not keys.
 //
 // DB-FREE AND UI-FREE by construction, the same way test_metadataSerialize is:
-// a fresh ibMetaDataConfigurationFile (public ctor, never "run"), objects created
+// a fresh ibMetaDataApplicationFile (public ctor, never "run"), objects created
 // with runObject=false, and the copy/paste exercised at the PROPERTY door
 // (CopyNodeValue / PasteNodeValue) — the same door ibValueMetaObject::PasteObject
 // drives through ibPropertyObject::PasteProperty, with none of the metaobject
-// RUN machinery a live configuration would bring.
+// RUN machinery a live application would bring.
 // =============================================================================
 
 #include <gtest/gtest.h>
 #include <wx/string.h>   // wxT, wxString - the engine's headers include no wx
 
-#include "backend/metadataConfiguration.h"
+#include "backend/metadataApplication.h"
 #include "backend/metaCollection/metaObject.h"        // ibValueMetaObject + g_meta*CLSID
 #include "backend/metaCollection/metaModuleObject.h"  // ibValueMetaObjectModule
 #include "core/serialize/dataBuilder.h"            // ibDataValue — the clipboard's shape
@@ -52,7 +52,7 @@ ibProperty* ModuleProperty(ibValueMetaObject* object) {
 // the tree rather than an accessor's opinion of it.
 //
 // The manager module is a different class (ibValueMetaObjectManagerModule derives
-// from ibValueMetaObjectCommonModule), so the cast alone already separates them;
+// from ibValueMetaObjectSharedModule), so the cast alone already separates them;
 // the name check says which one is meant.
 ibValueMetaObjectModule* ObjectModuleOf(ibValueMetaObject* owner) {
 	if (owner == nullptr)
@@ -66,15 +66,15 @@ ibValueMetaObjectModule* ObjectModuleOf(ibValueMetaObject* owner) {
 	return nullptr;
 }
 
-// Two catalogs in one fresh configuration — a source to copy from and a target
+// Two catalogs in one fresh application — a source to copy from and a target
 // to paste onto, which is what Ctrl+C / Ctrl+V in the designer amounts to.
 struct PasteFixture {
-	ibMetaDataConfigurationFile cfg;
+	ibMetaDataApplicationFile cfg;
 	ibValueMetaObject* source = nullptr;
 	ibValueMetaObject* target = nullptr;
 
 	PasteFixture() {
-		ibValueMetaObjectConfiguration* root = cfg.GetCommonMetaObject();
+		ibValueMetaObjectApplication* root = cfg.GetRootMetaObject();
 		if (root == nullptr)
 			return;
 		source = cfg.CreateMetaObject(g_metaCatalogCLSID, root, /*runObject*/ false);
@@ -85,7 +85,7 @@ struct PasteFixture {
 } // namespace
 
 // ⚠ THE DEFECT, fixed 2026-08-31 by making the paste call ResetAll() where it
-// called ResetGuid(). Two objects in one configuration answering to one metaID
+// called ResetGuid(). Two objects in one application answering to one metaID
 // is a silent wrong answer, not a refusal — and the number names a column.
 TEST(PropertyInnerModule, PasteNodeValue_ModuleCopiedFromAnotherObject_TakesAFreshMetaId)
 {

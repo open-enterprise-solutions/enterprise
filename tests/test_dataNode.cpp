@@ -33,7 +33,7 @@ ibDataNode MakeTree() {
 }
 
 ibMemoryBuffer WriteFull(const ibDataNode& root) {
-	// Frame the root with its clsid/metaId identity (what the config container adds),
+	// Frame the root with its clsid/metaId identity (what the application container adds),
 	// then the provider writes the INNER content — symmetric with ReadFull, which peels
 	// the same two frames before handing the inner to Read. (Provider.Write is content
 	// only: "Root CONTENT only — symmetric with Read".)
@@ -46,7 +46,7 @@ ibMemoryBuffer WriteFull(const ibDataNode& root) {
 	return w.buffer();
 }
 
-// Peel the root's clsid + metaId framing (as the config container does), then
+// Peel the root's clsid + metaId framing (as the application container does), then
 // hand the INNER content to provider.Read.
 ibDataNode ReadFull(const ibMemoryBuffer& buf, ibClassID& clsidOut, ibMetaID& metaOut) {
 	ibReaderMemory reader(buf);
@@ -115,7 +115,7 @@ TEST(DataNode, BinaryProvider_RoundTrip_StructurePreserved) {
 
 // ⭐ A NEW NODE KEEPS THE IDENTITY IT IS GIVEN — a builder's root (ibDataBuilder::Root) has no bytes until its first
 // write, and BuildDataNode's first is SetClsid: the clsid went over the node's counts, the root framed itself as
-// chunk(0), and a new base refused its own configuration as "another format".
+// chunk(0), and a new base refused its own application as "another format".
 TEST(DataNode, ANewNodeKeepsTheIdentityItIsGiven) {
 	ibDataNode root;
 	root.SetClsid(1001);
@@ -192,9 +192,8 @@ TEST(DataNode, AGuidIsStoredAsItsSixteenBytes) {
 	EXPECT_EQ(read.GetValue<ibGuid>(ibT("key")), key);
 }
 
-// ⭐ THE PACKET IS VERSION 2 since a guid has a kind of its own. Version 1 - what a base holds from before - is read
-// as it is; a version this end does not know yet is refused, naming both.
-TEST(DataNode, APacketOfVersionOneIsRead_ANewerOneRefused) {
+// ⭐ THE PACKET IS VERSION 2, and that is the one read: a packet of any other version is refused, naming both.
+TEST(DataNode, APacketOfAnotherVersionIsRefused) {
 	ibDataNode root(1001, 7);
 	root.AddField(ibT("name"), ibDataValue::String(wxT("Goods")));
 	ibMemoryBuffer packet;
@@ -203,11 +202,13 @@ TEST(DataNode, APacketOfVersionOneIsRead_ANewerOneRefused) {
 	const unsigned char* const written = static_cast<const unsigned char*>(packet.GetData());
 	EXPECT_EQ(written[4] | written[5] << 8, 2);
 
+	ibDataNode read;
+	ASSERT_TRUE(ibBinaryProvider().Read(packet, read));
+	EXPECT_EQ(read.GetValue<ibString>(ibT("name")), wxT("Goods"));
+
 	ibMemoryBuffer older(packet.GetData(), packet.GetDataLen());   // a copy of its own, to write the version into
 	static_cast<unsigned char*>(older.GetData())[4] = 1;
-	ibDataNode read;
-	ASSERT_TRUE(ibBinaryProvider().Read(older, read));
-	EXPECT_EQ(read.GetValue<ibString>(ibT("name")), wxT("Goods"));
+	EXPECT_ANY_THROW(ibBinaryProvider().Read(older, read));
 
 	ibMemoryBuffer newer(packet.GetData(), packet.GetDataLen());
 	static_cast<unsigned char*>(newer.GetData())[4] = 3;

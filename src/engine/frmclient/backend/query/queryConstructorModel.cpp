@@ -7,7 +7,7 @@
 #include "protocol/protocolDesigner.h"   // ibProtocol::ibView::ibQueryConstructor
 #include "core/query/queryRender.h"   // ibRenderQueryPackage — the package, as the server is asked about it
 #include "core/exception.h"           // ibCoreException — the engine's verdict, in its words
-#include "core/guid.h"                // a configuration picture's name
+#include "core/guid.h"                // an application picture's name
 #include "core/serialize/dataBuilder.h"   // a type, as the server wrote it
 #include "frmclient/backend/serialize/dataProtocol.h"   // ibReadProtocolNode — …read off the answer
 #include "frmclient/backend/compiler/value.h"           // ibValue::ReadClasses — the classes the answer names
@@ -114,7 +114,7 @@ std::vector<ibQueryConstructorField> ibQueryFieldsOfText(const ibString& text, c
 	if (frame == nullptr)
 		return {};
 
-	// ⭐ A TAB'S CONFIGURATION ASKS ITS TAB — a composer's panel: the text is the one being edited there, so its fields
+	// ⭐ A TAB'S APPLICATION ASKS ITS TAB — a composer's panel: the text is the one being edited there, so its fields
 	// are the tab's answer for it (fetch {Tab, Request: {Kind: Fields, Text}}); the text the tab's view was drawn with
 	// was said with the view, and asks nothing.
 	if (metaData != nullptr && metaData->GetTabId() != 0) {
@@ -165,7 +165,7 @@ struct ibQueryModelAnswers {
 namespace {
 
 // A FIELD'S PICTURE AS THE SERVER NAMED IT (ibBackendPicture::SendPicture): an engine picture by its number, a
-// configuration's by its guid. A picture sent as its PNG has no name to keep — the drawer's default.
+// application's by its guid. A picture sent as its PNG has no name to keep — the drawer's default.
 ibPictureDescription PictureOf(const ibDataValue& picture)
 {
 	const ibString sent = picture.Kind() == ibDataKind::String ? ibString(picture.AsString()) : ibString();

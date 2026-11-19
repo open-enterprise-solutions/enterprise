@@ -274,7 +274,7 @@
       "syntax_block": "Q = Source.SkipWhile(Function(x) { return <condition>; });",
       "parameters": "predicate — fn(element), що відповідає Boolean.",
       "return_descr": "LinqQuery.",
-      "example": "AfterHeader = Lines.SkipWhile(Function(s) { return Left(s, 1) = \"#\"; }).ToArray();",
+      "example": "AfterHeader = Lines.SkipWhile(Function(s) { return Left(s, 1) == \"#\"; }).ToArray();",
       "availability": "Клієнт, Сервер",
       "see_also": ["cls.LinqQuery.TakeWhile", "cls.LinqQuery.Skip"],
       "reviewed": false
@@ -530,7 +530,7 @@
       "syntax_block": "Value = Q.Aggregate(seed, Function(acc, x) { return <next acc>; });",
       "parameters": "seed — значення, з якого почати.\nreducer — fn(накопичене, елемент), що відповідає наступним накопиченим значенням.",
       "return_descr": "Останнє накопичене значення.",
-      "example": "List = Names.Aggregate(\"\", Function(acc, n) { return ?(acc = \"\", n, acc + \", \" + n); });",
+      "example": "List = Names.Aggregate(\"\", Function(acc, n) { return ?(acc == \"\", n, acc + \", \" + n); });",
       "availability": "Клієнт, Сервер",
       "see_also": ["cls.LinqQuery.Sum"],
       "reviewed": false
@@ -546,7 +546,7 @@
       "syntax_block": "Q = Source.WhereIndexed(Function(x, i) { return <condition>; });",
       "parameters": "predicate — fn(element, index), що відповідає Boolean.",
       "return_descr": "LinqQuery.",
-      "example": "EveryOther = arr.WhereIndexed(Function(x, i) { return i % 2 = 0; }).ToArray();",
+      "example": "EveryOther = arr.WhereIndexed(Function(x, i) { return i % 2 == 0; }).ToArray();",
       "availability": "Клієнт, Сервер",
       "see_also": ["cls.LinqQuery.Where", "cls.LinqQuery.SelectIndexed"],
       "reviewed": false
@@ -773,7 +773,7 @@
       "class_id": 500714230698570736,
       "category_keys": ["common_lang", "language_runtime"],
       "signature": "<Enumeration>.<Value>",
-      "description": "Звідки беруться системні переліки. Кожен перелік, який реєструє платформа, — TextEncoding, HTTPMethod, SortDirection, … — через нього стає глобальним ім'ям, а його значення читаються після крапки: `TextEncoding.UTF8`. У скрипті він ніколи не називається, власних членів у нього немає; у кожного переліку своя стаття. Власні переліки конфігурації доступні через Enumerations.",
+      "description": "Звідки беруться системні переліки. Кожен перелік, який реєструє платформа, — TextEncoding, HTTPMethod, SortDirection, … — через нього стає глобальним ім'ям, а його значення читаються після крапки: `TextEncoding.UTF8`. У скрипті він ніколи не називається, власних членів у нього немає; у кожного переліку своя стаття. Власні переліки застосунку доступні через Enumerations.",
       "syntax_block": "Encoding = TextEncoding.UTF8;",
       "parameters": "",
       "return_descr": "",

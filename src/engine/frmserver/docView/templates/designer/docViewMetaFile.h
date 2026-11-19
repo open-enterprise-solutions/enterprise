@@ -2,19 +2,19 @@
 #define __FRMSERVER_DOC_VIEW_META_FILE_H__
 
 ////////////////////////////////////////////////////////////////////////////
-// A CONFIGURATION BROWSED READ-ONLY — File → Open (.oap) or Open database configuration
+// AN APPLICATION BROWSED READ-ONLY — File → Open (.oap) or Open the database's application
 ////////////////////////////////////////////////////////////////////////////
 //
 // The desktop's ibMetadataFileDocument / ibMetadataBrowserDocument
-// (designer/docManager/templates/docViewMetaFile.h): a tab over a configuration that is not the
-// one being edited — a file's (ConfigurationFile, RunDatabase onlyLoadFlag) or the database's copy.
-// Its tree is drawn into the view's MetaData (ibView::ibKind::Configuration); the client's tab shows
+// (designer/docManager/templates/docViewMetaFile.h): a tab over an application that is not the
+// one being edited — a file's (ApplicationFile, RunDatabase onlyLoadFlag) or the database's copy.
+// Its tree is drawn into the view's MetaData (ibView::ibKind::Application); the client's tab shows
 // it read-only.
 ////////////////////////////////////////////////////////////////////////////
 
 #include "frmserver/docView/docView.h"
-#include "frmserver/metaTree/treeConfiguration.h"
-#include "backend/metadataConfiguration.h"
+#include "frmserver/metaTree/treeApplication.h"
+#include "backend/metadataApplication.h"
 
 #include <memory>
 
@@ -26,22 +26,22 @@ public:
 	virtual bool OnCreate(ibDocument* doc, long flags) override;
 	virtual void OnDraw(ibDataNode& frame) override;
 	virtual ibProtocol::ibView::ibKind GetViewKind() const override {
-		return ibProtocol::ibView::ibKind::Configuration;
+		return ibProtocol::ibView::ibKind::Application;
 	}
 
-	ibConfigurationTree* GetMetaTree() const { return m_metaTree.get(); }
+	ibApplicationTree* GetMetaTree() const { return m_metaTree.get(); }
 
 private:
 
-	std::unique_ptr<ibConfigurationTree> m_metaTree;
+	std::unique_ptr<ibApplicationTree> m_metaTree;
 };
 
-// A file's configuration, or the database's copy held for browsing — both are ConfigurationFile-shaped.
+// A file's application, or the database's copy held for browsing — both are ApplicationFile-shaped.
 class FRMSERVER_API ibMetadataBrowserDocument : public ibMetaDataDocument {
 public:
 
 	ibMetadataBrowserDocument() : ibMetaDataDocument() { m_childDoc = false; }
-	explicit ibMetadataBrowserDocument(std::shared_ptr<ibMetaDataConfigurationBase> metaData)
+	explicit ibMetadataBrowserDocument(std::shared_ptr<ibMetaDataApplicationBase> metaData)
 		: ibMetaDataDocument(), m_metaData(std::move(metaData)) { m_childDoc = false; }
 
 	virtual ibMetaData* GetMetaData() const override { return m_metaData.get(); }
@@ -49,14 +49,14 @@ public:
 
 	virtual bool OnCreate(const ibString& path, long flags) override;
 
-	ibConfigurationTree* GetMetaTree() const;
+	ibApplicationTree* GetMetaTree() const;
 
 protected:
 
 	// Its view without a template — the database's copy is opened by its command (Browse), not by File → Open.
 	virtual ibView* DoCreateView() override;
 
-	std::shared_ptr<ibMetaDataConfigurationBase> m_metaData;
+	std::shared_ptr<ibMetaDataApplicationBase> m_metaData;
 
 	ibMetadataBrowserDocument(const ibMetadataBrowserDocument&) = delete;
 	ibMetadataBrowserDocument& operator=(const ibMetadataBrowserDocument&) = delete;
@@ -68,7 +68,7 @@ public:
 	ibMetadataFileDocument() : ibMetadataBrowserDocument() {}
 
 	virtual bool OnCreate(const ibString& path, long flags) override;
-	// The file's configuration is its own, and goes with it (the desktop's); the database's copy is not the browser's to
+	// The file's application is its own, and goes with it (the desktop's); the database's copy is not the browser's to
 	// close.
 	virtual bool OnCloseDocument() override;
 

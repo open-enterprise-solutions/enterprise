@@ -40,7 +40,7 @@ protected:
 
 	// ⭐ A LINK TO A FIELD THAT IS GONE IS DROPPED BY THE VALUE ITSELF — the way a type description drops a
 	// type whose object is gone (ibVariantAttribute::GetTypeDesc), and asked on the same counter, so a
-	// configuration that does not change pays once.
+	// application that does not change pays once.
 	void RefreshLinkDesc() const;
 
 	const ibPropertyObject*              m_ownerProperty;
@@ -93,7 +93,7 @@ protected:
 // not the same place for the two: a link names a NEIGHBOUR of this field, a parameter names a field of
 // what this one REFERS TO. Two questions, so two names for them.
 //
-// 🛑 BOTH WERE ASKED OF THE CONFIGURATION AT LARGE (`FindAnyObjectByFilter`), and that finds no
+// 🛑 BOTH WERE ASKED OF THE APPLICATION AT LARGE (`FindAnyObjectByFilter`), and that finds no
 // PREDEFINED field — Ref, Data version, Code, Parent are not ordinary metaobjects. So a row on one of
 // them resolved to nothing and was silently DROPPED: the inspector showed an empty property over a
 // table that had rows in it (Max, 2026-09-23). Empty is the one answer a summary must never give by
@@ -110,7 +110,7 @@ BACKEND_API ibString ibChoiceHolderFieldName(const ibPropertyObject* owner, cons
 BACKEND_API ibString ibChoiceTargetFieldName(const ibPropertyObject* owner, const ibMetaID& id);
 
 // ⭐⭐ A FIELD STANDING BESIDE THIS ONE — the PATH a row or a link stores, the COLUMN it is (its name, synonym, type and
-// picture are the column's: an attribute of the configuration, a form's own attribute and a field reached through one
+// picture are the column's: an attribute of the application, a form's own attribute and a field reached through one
 // all are one), and how it is SPELLED from here. One shape for every owner, so the lists, the summaries and MCP read
 // the same fields the same way (#616).
 struct ibChoiceHolderField {

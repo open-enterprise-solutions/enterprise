@@ -30,7 +30,7 @@ void ibFrontendMainFrameDesigner::SetDefaultHotKeys()
 //*                                Default menu                                  *
 //********************************************************************************
 
-#include "deskgui/artProvider.h"   // the configuration's pictures — wxART_DATABASE…
+#include "deskgui/artProvider.h"   // the application's pictures — wxART_DATABASE…
 
 void ibFrontendMainFrameDesigner::InitializeDefaultMenu()
 {
@@ -76,42 +76,42 @@ void ibFrontendMainFrameDesigner::InitializeDefaultMenu()
 	wxMenuItem* menuItem = nullptr;
 
 	// ⚠ WHAT THE PERSON MAY DO IS THE SERVER'S TO SAY — its MetaData doors are refused without the right to the base, and
-	// the refusal is said; the desktop's items greyed by that right stand here. Open database configuration and the
-	// comparisons are the desktop's windows (docViewMetaFile, docViewConfigCompare): the first is MetaData's Browse,
-	// Walk/Merge go through schema ConfigCompare.
-	m_menuConfiguration = new ibMenu;
+	// the refusal is said; the desktop's items greyed by that right stand here. Open the database's application and the
+	// comparisons are the desktop's windows (docViewMetaFile, docViewApplicationCompare): the first is MetaData's Browse,
+	// Walk/Merge go through schema ApplicationCompare.
+	m_menuApplication = new ibMenu;
 
-	menuItem = m_menuConfiguration->Append(wxID_DESIGNER_CONFIGURATION_OPEN_DATABASE, _("Open database configuration"));
+	menuItem = m_menuApplication->Append(wxID_DESIGNER_APPLICATION_OPEN_DATABASE, _("Open the database's application"));
 	menuItem->SetBitmap(wxArtProvider::GetBitmapBundle(wxART_DATABASE, wxART_FRONTEND, wxSize(16, 16)));
-	menuItem = m_menuConfiguration->Append(wxID_DESIGNER_CONFIGURATION_ROLLBACK_DATABASE, _("Rollback to database configuration"));
+	menuItem = m_menuApplication->Append(wxID_DESIGNER_APPLICATION_ROLLBACK_DATABASE, _("Revert to the database's application"));
 	menuItem->SetBitmap(wxArtProvider::GetBitmapBundle(wxART_DATABASE_ROOLBACK, wxART_FRONTEND, wxSize(16, 16)));
 
-	menuItem = m_menuConfiguration->Append(wxID_DESIGNER_CONFIGURATION_UPDATE_DATABASE, _("Update database configuration"));
+	menuItem = m_menuApplication->Append(wxID_DESIGNER_APPLICATION_UPDATE_DATABASE, _("Update database"));
 	menuItem->SetBitmap(wxArtProvider::GetBitmapBundle(wxART_DATABASE_APPLY, wxART_FRONTEND, wxSize(16, 16)));
 
-	m_menuConfiguration->AppendSeparator();
+	m_menuApplication->AppendSeparator();
 
-	m_menuConfiguration->Append(wxID_DESIGNER_CONFIGURATION_LOAD_FROM_FILE, _("Load configuration"));
-	m_menuConfiguration->Append(wxID_DESIGNER_CONFIGURATION_SAVE_TO_FILE, _("Save configuration"));
+	m_menuApplication->Append(wxID_DESIGNER_APPLICATION_LOAD_FROM_FILE, _("Load application"));
+	m_menuApplication->Append(wxID_DESIGNER_APPLICATION_SAVE_TO_FILE, _("Save application"));
 
-	m_menuConfiguration->AppendSeparator();
+	m_menuApplication->AppendSeparator();
 
 	// …and as a directory of files, one a part — for a repository and its diffs.
-	m_menuConfiguration->Append(wxID_DESIGNER_CONFIGURATION_LOAD_FROM_FILES, _("Load configuration from files..."));
-	m_menuConfiguration->Append(wxID_DESIGNER_CONFIGURATION_SAVE_TO_FILES, _("Save configuration to files..."));
+	m_menuApplication->Append(wxID_DESIGNER_APPLICATION_LOAD_FROM_FILES, _("Load application from files..."));
+	m_menuApplication->Append(wxID_DESIGNER_APPLICATION_SAVE_TO_FILES, _("Save application to files..."));
 
-	m_menuConfiguration->AppendSeparator();
+	m_menuApplication->AppendSeparator();
 
-	// "Compare configurations" submenu — three entry points (file / DB
+	// "Compare applications" submenu — three entry points (file / DB
 	// baseline / two arbitrary files) grouped together so the parent
-	// Configuration menu stays compact.
+	// Application menu stays compact.
 	ibMenu* menuCompare = new ibMenu;
 
-	menuCompare->Append(wxID_DESIGNER_CONFIGURATION_COMPARE_FILE, _("With file..."));
-	menuCompare->Append(wxID_DESIGNER_CONFIGURATION_COMPARE_DB, _("With database configuration"));
-	menuCompare->Append(wxID_DESIGNER_CONFIGURATION_COMPARE_TWO_FILES, _("Two files..."));
+	menuCompare->Append(wxID_DESIGNER_APPLICATION_COMPARE_FILE, _("With file..."));
+	menuCompare->Append(wxID_DESIGNER_APPLICATION_COMPARE_DB, _("With the database's application"));
+	menuCompare->Append(wxID_DESIGNER_APPLICATION_COMPARE_TWO_FILES, _("Two files..."));
 
-	m_menuConfiguration->AppendSubMenu(menuCompare, _("Compare configurations"));
+	m_menuApplication->AppendSubMenu(menuCompare, _("Compare applications"));
 
 	m_menuHelp = new ibMenu;
 	// Syntax helper pane toggle. RawCtrl forces the literal Control key on
@@ -123,13 +123,13 @@ void ibFrontendMainFrameDesigner::InitializeDefaultMenu()
 
 	ibFrontendMainFrame::InitializeDefaultMenu();
 
-	Bind(wxEVT_MENU, &ibFrontendMainFrameDesigner::OnOpenConfiguration, this, wxID_DESIGNER_CONFIGURATION_OPEN_DATABASE);
-	Bind(wxEVT_MENU, &ibFrontendMainFrameDesigner::OnRollbackConfiguration, this, wxID_DESIGNER_CONFIGURATION_ROLLBACK_DATABASE);
-	Bind(wxEVT_MENU, &ibFrontendMainFrameDesigner::OnUpdateConfiguration, this, wxID_DESIGNER_CONFIGURATION_UPDATE_DATABASE);
-	Bind(wxEVT_MENU, &ibFrontendMainFrameDesigner::OnConfiguration, this, wxID_DESIGNER_CONFIGURATION_LOAD_FROM_FILE, wxID_DESIGNER_CONFIGURATION_COMPARE_TWO_FILES);
-	Bind(wxEVT_MENU, &ibFrontendMainFrameDesigner::OnConfiguration, this, wxID_DESIGNER_CONFIGURATION_LOAD_FROM_FILES, wxID_DESIGNER_CONFIGURATION_SAVE_TO_FILES);
-	Bind(wxEVT_UPDATE_UI, &ibFrontendMainFrameDesigner::OnUpdateSaveMetadata, this, wxID_DESIGNER_CONFIGURATION_ROLLBACK_DATABASE);
-	Bind(wxEVT_UPDATE_UI, &ibFrontendMainFrameDesigner::OnUpdateSaveMetadata, this, wxID_DESIGNER_CONFIGURATION_UPDATE_DATABASE);
+	Bind(wxEVT_MENU, &ibFrontendMainFrameDesigner::OnOpenApplication, this, wxID_DESIGNER_APPLICATION_OPEN_DATABASE);
+	Bind(wxEVT_MENU, &ibFrontendMainFrameDesigner::OnRollbackApplication, this, wxID_DESIGNER_APPLICATION_ROLLBACK_DATABASE);
+	Bind(wxEVT_MENU, &ibFrontendMainFrameDesigner::OnUpdateApplication, this, wxID_DESIGNER_APPLICATION_UPDATE_DATABASE);
+	Bind(wxEVT_MENU, &ibFrontendMainFrameDesigner::OnApplication, this, wxID_DESIGNER_APPLICATION_LOAD_FROM_FILE, wxID_DESIGNER_APPLICATION_COMPARE_TWO_FILES);
+	Bind(wxEVT_MENU, &ibFrontendMainFrameDesigner::OnApplication, this, wxID_DESIGNER_APPLICATION_LOAD_FROM_FILES, wxID_DESIGNER_APPLICATION_SAVE_TO_FILES);
+	Bind(wxEVT_UPDATE_UI, &ibFrontendMainFrameDesigner::OnUpdateSaveMetadata, this, wxID_DESIGNER_APPLICATION_ROLLBACK_DATABASE);
+	Bind(wxEVT_UPDATE_UI, &ibFrontendMainFrameDesigner::OnUpdateSaveMetadata, this, wxID_DESIGNER_APPLICATION_UPDATE_DATABASE);
 
 	Bind(wxEVT_MENU, &ibFrontendMainFrameDesigner::OnStartDebug, this, wxID_DESIGNER_DEBUG_START);
 	Bind(wxEVT_MENU, &ibFrontendMainFrameDesigner::OnStartDebugWithoutDebug, this, wxID_DESIGNER_DEBUG_START_WITHOUT_DEBUGGING);

@@ -2,7 +2,7 @@
 #define _FRMCLIENT_BACKEND_QUERY_CONSTRUCTOR_MODEL_H__
 
 // THE QUERY CONSTRUCTOR'S MODEL — the engine's (backend/query/queryConstructorModel.h): what may go into a query, its
-// sources and their fields, asked of the configuration — the server's. What the client's windows take of it is the
+// sources and their fields, asked of the application — the server's. What the client's windows take of it is the
 // answer: the fields a query text offers (ibQueryConstructorField, the core's), as the server described them with the
 // window's question.
 
@@ -17,9 +17,9 @@
 
 class ibMetaData;
 
-// ⭐⭐ WHAT FIELDS A QUERY TEXT OFFERS — on the client, as the server said: parsing the text and asking the configuration
+// ⭐⭐ WHAT FIELDS A QUERY TEXT OFFERS — on the client, as the server said: parsing the text and asking the application
 // are its, so it described the fields with the window's question (Fields — a field's name, its source's caption, its
-// type, whether the options leave it). A configuration that is a tab's (a composer's panel, ibMetaData::GetTabId) asks
+// type, whether the options leave it). An application that is a tab's (a composer's panel, ibMetaData::GetTabId) asks
 // that tab for `text` — the server parses it; `error` is why it offers none. Otherwise `text` is not read: the fields
 // are the question's.
 FRMCLIENT_API std::vector<ibQueryConstructorField> ibQueryFieldsOfText(const ibString& text,
@@ -38,7 +38,7 @@ FRMCLIENT_API std::vector<struct ibSettingsPlainField> ibListSourceFields(ibMeta
 	const ibMetaData* metaData, ibString* error = nullptr);
 
 // ⭐⭐ THE DESKTOP'S MODEL, UNDER ITS OWN NAME — the windows of win/dlgs/queryConstructor are the desktop's, ported whole,
-// and they ask this class what they ask there. What only the configuration answers is asked of the tab the window was
+// and they ask this class what they ask there. What only the application answers is asked of the tab the window was
 // opened from (ibProtocol::ibView::ibQueryConstructor): the sources, a source's fields, a virtual table's parameters —
 // and a reference's fields one level down, the composer's Expand. Everything the model DERIVES from those (qualified
 // fields, the walk of a path, the fields of a select) is the core's (ibAnyQueryConstructorModel), the desktop's too.
@@ -48,8 +48,8 @@ FRMCLIENT_API std::vector<struct ibSettingsPlainField> ibListSourceFields(ibMeta
 class FRMCLIENT_API ibQueryConstructorModel : public ibAnyQueryConstructorModel
 {
 public:
-	// `metaData` — the config the query runs on behalf of (its factory resolves the sources).
-	// Null falls back to the global factory, which is the right answer with no config open.
+	// `metaData` — the application the query runs on behalf of (its factory resolves the sources).
+	// Null falls back to the global factory, which is the right answer with no application open.
 	explicit ibQueryConstructorModel(const ibMetaData* metaData = nullptr);
 
 	// EVERY source a query may name, grouped by nothing — the caller groups by m_path[0], which is
@@ -95,7 +95,7 @@ protected:
 	virtual std::vector<ibMetaID> ConvertToMetaIds(const std::vector<ibClassID>& clsids) const override;
 
 private:
-	const ibMetaData* m_metaData = nullptr;   // which configuration the question is for — the server answers it
+	const ibMetaData* m_metaData = nullptr;   // which application the question is for — the server answers it
 	std::shared_ptr<struct ibQueryModelAnswers> m_known;   // what the tab already answered — kept for the window's life
 };
 

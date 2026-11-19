@@ -274,7 +274,7 @@
       "syntax_block": "Q = Source.SkipWhile(Function(x) { return <condition>; });",
       "parameters": "predicate — fn(element) answering a Boolean.",
       "return_descr": "LinqQuery.",
-      "example": "AfterHeader = Lines.SkipWhile(Function(s) { return Left(s, 1) = \"#\"; }).ToArray();",
+      "example": "AfterHeader = Lines.SkipWhile(Function(s) { return Left(s, 1) == \"#\"; }).ToArray();",
       "availability": "Client, Server",
       "see_also": ["cls.LinqQuery.TakeWhile", "cls.LinqQuery.Skip"],
       "reviewed": false
@@ -530,7 +530,7 @@
       "syntax_block": "Value = Q.Aggregate(seed, Function(acc, x) { return <next acc>; });",
       "parameters": "seed — the value to start from.\nreducer — fn(accumulated, element) answering the next accumulated value.",
       "return_descr": "The last accumulated value.",
-      "example": "List = Names.Aggregate(\"\", Function(acc, n) { return ?(acc = \"\", n, acc + \", \" + n); });",
+      "example": "List = Names.Aggregate(\"\", Function(acc, n) { return ?(acc == \"\", n, acc + \", \" + n); });",
       "availability": "Client, Server",
       "see_also": ["cls.LinqQuery.Sum"],
       "reviewed": false
@@ -546,7 +546,7 @@
       "syntax_block": "Q = Source.WhereIndexed(Function(x, i) { return <condition>; });",
       "parameters": "predicate — fn(element, index) answering a Boolean.",
       "return_descr": "LinqQuery.",
-      "example": "EveryOther = arr.WhereIndexed(Function(x, i) { return i % 2 = 0; }).ToArray();",
+      "example": "EveryOther = arr.WhereIndexed(Function(x, i) { return i % 2 == 0; }).ToArray();",
       "availability": "Client, Server",
       "see_also": ["cls.LinqQuery.Where", "cls.LinqQuery.SelectIndexed"],
       "reviewed": false
@@ -773,7 +773,7 @@
       "class_id": 500714230698570736,
       "category_keys": ["common_lang", "language_runtime"],
       "signature": "<Enumeration>.<Value>",
-      "description": "Where the system enumerations come from. Every enumeration the platform registers — TextEncoding, HTTPMethod, SortDirection, … — is a global name through it, and its values are read after a dot: `TextEncoding.UTF8`. It is never named in a script and has no members of its own; each enumeration has its own article. A configuration's own enumerations are reached through Enumerations.",
+      "description": "Where the system enumerations come from. Every enumeration the platform registers — TextEncoding, HTTPMethod, SortDirection, … — is a global name through it, and its values are read after a dot: `TextEncoding.UTF8`. It is never named in a script and has no members of its own; each enumeration has its own article. An application's own enumerations are reached through Enumerations.",
       "syntax_block": "Encoding = TextEncoding.UTF8;",
       "parameters": "",
       "return_descr": "",

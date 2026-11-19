@@ -92,8 +92,8 @@ ibQuerySelectPtr ibNamedResultScope::Find(const ibString& name)
 	return it != t_namedResults->end() ? it->second : nullptr;
 }
 
-// The config a query runs on behalf of, for one execution — the composer threads its metadata in through here (parallel
-// to the temp-source scope), so ResolveSource resolves by-name metaobject sources against THIS config's factory.
+// The application a query runs on behalf of, for one execution — the composer threads its metadata in through here (parallel
+// to the temp-source scope), so ResolveSource resolves by-name metaobject sources against THIS application's factory.
 static thread_local const ibMetaData* t_sourceMetaData = nullptr;
 
 ibSourceMetaDataScope::ibSourceMetaDataScope(const ibMetaData* metaData)
@@ -112,12 +112,12 @@ const ibMetaData* ibSourceMetaDataScope::Get()
 	return t_sourceMetaData;
 }
 
-// WHOSE sources this query sees: the config in scope, else the global base factory (common / plugin
+// WHOSE sources this query sees: the application in scope, else the global base factory (common / plugin
 // sources only — launcher, coderunner before it opens anything). Nothing process-wide is consulted in
-// between ON PURPOSE: "which configuration" is a question the CALLER can always answer, and every
+// between ON PURPOSE: "which application" is a question the CALLER can always answer, and every
 // caller now does — the composer and the dynamic list from their own metadata, the constructor from
 // the open one, a script query from the session it runs in. One place asks, so a new caller that
-// forgets fails the same way everywhere instead of quietly resolving against someone else's config.
+// forgets fails the same way everywhere instead of quietly resolving against someone else's application.
 ibQueryableFactory* ibSourceMetaDataScope::GetFactory()
 {
 	if (ibQueryableFactory* factory = GetSourceFactory(t_sourceMetaData))
@@ -236,7 +236,7 @@ void ThrowQueryException(unsigned int line, unsigned int col, const ibString& ms
 	// shifted. Printing both spellings of the same number was one of the two ways a position here
 	// could mislead.
 	// THE NAME VARIETY, not the syntax one: everything raised through here is the LOWERING refusing —
-	// the text read perfectly and the configuration refuses it, a name that is not there or a rule the
+	// the text read perfectly and the application refuses it, a name that is not there or a rule the
 	// names break. The lexer and the parser raise the other (queryException.h).
 	if (line == 0)
 		ibBackendQueryNameException::Error(_("Query: %s"), msg);
@@ -392,7 +392,7 @@ std::shared_ptr<const ibBackendQueryable> ResolveSource(const ibQuerySource& src
 			struct ibBoundTable {
 				const ibValueModelTable*              m_table = nullptr;
 				unsigned int                          m_columns = 0;
-				const ibMetaData*                     m_metaData = nullptr;   // the config its references are read in
+				const ibMetaData*                     m_metaData = nullptr;   // the application its references are read in
 				ibValue                               m_value;   // keeps the table the wrap reads alive
 				std::shared_ptr<ibTempTableQueryable> m_wrap;
 			};
@@ -431,7 +431,7 @@ std::shared_ptr<const ibBackendQueryable> ResolveSource(const ibQuerySource& src
 	for (size_t i = 2; i < src.m_name.size(); ++i)
 		name += ibT(".") + src.m_name[i];
 
-	// Resolve through the config the query runs ON BEHALF OF — see ibSourceMetaDataScope::GetFactory for the order.
+	// Resolve through the application the query runs ON BEHALF OF — see ibSourceMetaDataScope::GetFactory for the order.
 	ibQueryableFactory* factory = ibSourceMetaDataScope::GetFactory();
 
 	// The AUXILIARY per-query registry: a transient (RAM / temp) source the composer registered under a
@@ -442,9 +442,9 @@ std::shared_ptr<const ibBackendQueryable> ResolveSource(const ibQuerySource& src
 	// and holds the package's temporary tables too, so asked first it answered `Catalog.Goods` with the
 	// package's own `Goods` temporary table — a join of the two read the temporary table twice and the
 	// catalog's `Ref` was "unknown" (2026-09-28, a bench putting `&Goods` INTO `Goods`).
-	const bool configurationHasIt = factory != nullptr && factory->HasNamespace(ns)
+	const bool applicationHasIt = factory != nullptr && factory->HasNamespace(ns)
 		&& factory->FindDescriptor(ns, name) != nullptr;
-	if (!configurationHasIt)
+	if (!applicationHasIt)
 		if (const std::shared_ptr<const ibBackendQueryable> tmp = ibTempSourceScope::Find(name))
 			return tmp;
 	if (factory == nullptr) {
@@ -458,10 +458,10 @@ std::shared_ptr<const ibBackendQueryable> ResolveSource(const ibQuerySource& src
 		// such thing", with nothing to distinguish the two. The journal says which it was.
 		// …and WHICH source was asked for, because the kind alone cannot tell the two cases apart.
 		// A kind is registered by its metatype's own OnAfterRun, so a read that happens WHILE the
-		// configuration is still loading finds it missing and the same read succeeds seconds later
+		// application is still loading finds it missing and the same read succeeds seconds later
 		// (measured 2026-08-23: `ChartOfCharacteristicTypes` unregistered at 16:42:25, resolving at
 		// 16:42:28 in the same session). Naming the object says whose load order it is.
-		ibJournalInfo(ibT("query.road"), ibT("source '%s.%s': kind '%s' is not registered with this configuration"),
+		ibJournalInfo(ibT("query.road"), ibT("source '%s.%s': kind '%s' is not registered with this application"),
 		              ns, name, ns);
 		ThrowQueryException(0, 0, ibString::Format(_("unknown metaobject kind '%s'"), ns));
 		return nullptr;
@@ -2879,7 +2879,7 @@ ibQueryColumnExprPtr BuildColumnExprFromAst(const std::vector<ibSourceBinding>& 
 	}
 
 	// ⭐ THE SCALAR CALLS — read here rather than in the parser, because THIS is where a word can be
-	// checked against the configuration and refused with the position it was written at. The unit of
+	// checked against the application and refused with the position it was written at. The unit of
 	// a period call arrives as an ordinary name (`Month`), and it is looked up in the SAME vocabulary
 	// the virtual tables read their periodicity from: one list of calendar words for the language,
 	// not one per place that needed one.
@@ -3002,7 +3002,7 @@ public:
 	// clsid separates a reference from an object from a manager (clsid.h). The caller hands a plain
 	// number and knows nothing about the layout; the class is what knows which kind it is.
 	// `available` — whether what it is computed from may be shown (IsExprAvailable), taken when it is minted.
-	// `metaData` — the configuration whose values it holds (GetMetaData), the query's.
+	// `metaData` — the application whose values it holds (GetMetaData), the query's.
 	ibSyntheticOutputColumn(const ibString& name, const ibTypeDescription& type, ibMetaID id, const ibMetaData* metaData,
 	                        bool available = true)
 		: m_name(name), m_type(type), m_id(SyntheticId(SyntheticKind::Output, id)), m_metaData(metaData), m_available(available) {}
@@ -3026,7 +3026,7 @@ private:
 };
 
 // ⭐ WHETHER A COMPUTED OUTPUT MAY BE SHOWN — every column it reads, every hop of every walk, available in this
-// base (functional options, ibBackendQueryColumn::IsAvailable). One of them taken away and the result goes with
+// base (feature options, ibBackendQueryColumn::IsAvailable). One of them taken away and the result goes with
 // it: a value computed from a hidden field would show that field under another name. A name this select does not
 // resolve is not this question — the lowering refuses it on its own terms.
 bool IsExprAvailable(const std::vector<ibSourceBinding>& sources, const ibQueryAstExprPtr& e)
@@ -4719,7 +4719,7 @@ public:
 
 	ibQueryRamTable ComputeRows(const std::vector<ibQueryCondition>& /*extra*/) const override
 	{
-		const ibSourceMetaDataScope configuration(m_metaData);
+		const ibSourceMetaDataScope application(m_metaData);
 		std::vector<ibQueryOutputColumn> schema;
 		ibDataQueryResult read = ibQueryLowering::Execute(*m_sel, m_params, schema);
 		return DrainIntoSnapshot(read, schema);

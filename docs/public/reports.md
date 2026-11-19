@@ -24,8 +24,8 @@ reproduced by pasting its text into `New Query`.
   in one step, with every cell's value and its drill-down parameters - a report is never seen half-built.
 - **Every figure can be asked where it came from.** A cell keeps the value it was composed from: it opens
   that value, or asks the report's `OnDetailProcessing` for a detail.
-- **The reader's settings are a copy.** The settings the configuration holds are the default of the
-  reader's; running a report never writes into the configuration. A variant is a named setting: choosing
+- **The reader's settings are a copy.** The settings the application holds are the default of the
+  reader's; running a report never writes into the application. A variant is a named setting: choosing
   one sets the reader's setting, and a hand edit after it simply is no longer that variant.
 - **A refusal is seen where Compose was pressed**, in the engine's words, not in a log nobody opened.
 - **A list becomes a report for nothing.** Every list, tabular section and value table can print what is

@@ -70,9 +70,9 @@ void ibValueMetaObjectAccountingRegister::ContributeTables(ibSchemaSnapshot& out
 	// how many analytics slots exist, and — through the chart's own characteristic chart — what a slot
 	// may hold. None, and those are three unanswerable questions; two, and they are answered twice.
 	//
-	// ⚠ WHY HERE AND NOT ON SAVE. Raising from inside OnSaveMetaObject leaves the configuration write
+	// ⚠ WHY HERE AND NOT ON SAVE. Raising from inside OnSaveMetaObject leaves the application write
 	// transaction open — the exception unwinds past whatever would have closed it — and the NEXT save
-	// waits on that lock until it times out as a deadlock on sys_config_save, naming neither the rule
+	// waits on that lock until it times out as a deadlock on sys_application_save, naming neither the rule
 	// nor the register. A rule attached to the declaration runs before any statement, so a refusal
 	// costs nothing and says what it is about.
 	{
@@ -117,7 +117,7 @@ void ibValueMetaObjectAccountingRegister::ContributeTables(ibSchemaSnapshot& out
 	// columns that were never created — which is where "column FLDnnnn_RTRef does not exist" comes
 	// from, three edits away from the cause.
 	//
-	// A WARNING and not a refusal: a configuration is built up in steps, and a chart bound after the
+	// A WARNING and not a refusal: an application is built up in steps, and a chart bound after the
 	// register is an ordinary order of work. What must not happen is silence.
 	{
 		unsigned int untyped = 0;
@@ -172,7 +172,7 @@ void ibValueMetaObjectAccountingRegister::ContributeTables(ibSchemaSnapshot& out
 		// end of this function — so there is no legitimate "this side does not exist" case to allow.)
 		if (totals == nullptr || account == nullptr)
 			ibBackendCoreException::Error(
-				_("Accounting register '%s': the %s side declares no %s - the configuration is inconsistent"),
+				_("Accounting register '%s': the %s side declares no %s - the application is inconsistent"),
 				GetName(),
 				creditSide ? _("credit") : _("debit"),
 				totals == nullptr ? _("totals table") : _("account"));
@@ -342,7 +342,7 @@ void ibValueMetaObjectAccountingRegister::ContributeTables(ibSchemaSnapshot& out
 
 			if (!typeRefField.IsEmpty() && !idField.IsEmpty()) {
 				const ibString zeroId(ibT('0'), sizeof(ibReference) * 2);
-				// The empty account of THIS register's configuration - the one the schema is declared for, which
+				// The empty account of THIS register's application - the one the schema is declared for, which
 				// in the designer is not necessarily the active one.
 				const ibValue emptyAccount = ibValueTypeDescription::AdjustValue(account->GetQueryColumn()->GetTypeDesc(), account->GetMetaData());
 				m.Guard(ibT("({row}.") + typeRefField + ibT(" <> 0) AND ({row}.") + idField + ibT(" <> {binary:") + zeroId + ibT("})"),

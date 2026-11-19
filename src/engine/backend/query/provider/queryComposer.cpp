@@ -58,14 +58,14 @@ using namespace ibProvider;
 
 // Synthetic output column of an AGGREGATE subquery (SUM(x) AS total): a raw numeric field
 // named by the aggregate alias, under its OWN unique model id (the RAM-table read key). The
-// id is kind-stamped (SyntheticKind::Subquery), so it is negative and cannot be a configuration
+// id is kind-stamped (SyntheticKind::Subquery), so it is negative and cannot be an application
 // number nor collide with anything else this tier mints.
 namespace ibProvider {
 
 class ibSubqueryAggColumn final : public ibBackendColumnRawDB
 {
 public:
-	// `available` — whether what it folds may be shown (functional options), taken when it is made.
+	// `available` — whether what it folds may be shown (feature options), taken when it is made.
 	ibSubqueryAggColumn(const ibString& alias, ibMetaID id, bool available)
 		: ibBackendColumnRawDB(alias, RawType::Number), m_id(id), m_available(available) {}
 	ibMetaID GetColumnId() const override { return m_id; }
@@ -113,12 +113,12 @@ public:
 	// The TYPE is the column's own — an alias renames, it does not re-type — taken at construction.
 	ibTypeDescription& GetTypeDesc() const override { return m_type; }
 	ibMetaID GetColumnId() const override { return m_id; }
-	// …and so is whether it may be shown (functional options), for the same reason: taken, not pointed at.
+	// …and so is whether it may be shown (feature options), for the same reason: taken, not pointed at.
 	bool IsAvailable() const override { return m_available; }
 	// …and what it is in a balance: a renamed opening balance is still one.
 	ibBalanceRole GetBalanceRole() const override { return m_balanceRole; }
 	int           GetPeriodRank()  const override { return m_periodRank; }
-	// …and whose values it holds — its column's configuration, taken with its type.
+	// …and whose values it holds — its column's application, taken with its type.
 	const ibMetaData* GetMetaData() const override { return m_metaData; }
 
 private:
@@ -143,8 +143,8 @@ class ibSubqueryExprColumn final : public ibBackendQueryColumn
 public:
 	// …and WITH a type where the schema knows one — an aggregate over a typed column, a constant
 	// projection. Empty stays "unknown"; what is known travels. `available` — whether what it is
-	// computed from may be shown (functional options), taken when it is made: it keeps no inputs.
-	// `metaData` — the configuration whose values it holds (GetMetaData), the query's.
+	// computed from may be shown (feature options), taken when it is made: it keeps no inputs.
+	// `metaData` — the application whose values it holds (GetMetaData), the query's.
 	ibSubqueryExprColumn(const ibString& alias, ibMetaID id, const ibMetaData* metaData, const ibTypeDescription& type = ibTypeDescription(),
 	                     bool available = true, ibBalanceRole role = ibBalanceRole::None, int rank = 0)
 		: m_alias(alias), m_type(type), m_id(id), m_metaData(metaData), m_available(available), m_balanceRole(role), m_periodRank(rank) {}
@@ -332,7 +332,7 @@ bool PredicateAsksTheValue(const ibQueryPredicatePtr& p);
 void GatherConditionColumns(const ibQueryCondition& c, const std::function<void(const std::shared_ptr<const ibBackendQueryColumn>&)>& add);
 void GatherPredicateColumns(const ibQueryPredicatePtr& p, const std::function<void(const std::shared_ptr<const ibBackendQueryColumn>&)>& add);
 
-// A computed input may be shown (functional options) while every column it reads may be. Asked when a nested
+// A computed input may be shown (feature options) while every column it reads may be. Asked when a nested
 // table's column is made: the column keeps no inputs of its own.
 bool IsColumnExprAvailable(const ibQueryColumnExprPtr& e)
 {
@@ -545,7 +545,7 @@ ibBackendQueryProvider& ibSubqueryQueryable::GetProvider() const
 // Run the inner query (with the outer's pushed-down conditions) and materialise its rows
 // into a RAM table keyed by column model-id — the same leaf-materialise recipe. m_top > 0
 // limits the materialised rows (SELECT TOP n in the branch / subquery).
-// See the header: the configuration this wrapper reads is the inner query's own, and it is what a
+// See the header: the application this wrapper reads is the inner query's own, and it is what a
 // reference walk needs to find its target. Asked of the inner source rather than stored, so a
 // wrapper built over another wrapper answers through the chain and never goes stale.
 const ibMetaData* ibSubqueryQueryable::GetMetaData() const
@@ -2083,7 +2083,7 @@ void GatherColumnExprColumns(const ibQueryColumnExprPtr& e, const std::function<
 		case ibQueryColumnExprKind::OutputRef:
 			break;
 		// The question reads the value it is asked of. A nested query's PRESENTATION(Field) is offered
-		// out here only while Field is: a functional option that hides Field hides that column too.
+		// out here only while Field is: a feature option that hides Field hides that column too.
 		case ibQueryColumnExprKind::ValueAsk:
 			GatherColumnExprColumns(e->m_lhs, add);
 			break;
@@ -3586,7 +3586,7 @@ bool CanFoldByKeysFirst(const std::vector<ibTotalLevel>& levels,
 // ⭐ AN AVERAGE IS TWO PARTS: the sum in its slot and the count in a cell of its own beside it (an aggregate id
 // past the last real one, declared as no column, so it never reaches the tree's columns). Both are added by
 // the fold; `averages` names the pairs, and DivideAverages turns each into the average once the tree is built.
-// `source` — what the rows are read from, whose configuration the parts' columns hold values of.
+// `source` — what the rows are read from, whose application the parts' columns hold values of.
 ibQueryRamTable FoldByKeysFirst(ibQueryRowCursor& rows, const std::vector<ibTotalLevel>& levels,
 	const std::vector<ibDataQueryBuilder::AggregateItem>& aggregates, const std::shared_ptr<const ibBackendQueryable>& source,
 	std::vector<ibDataQueryBuilder::AggregateItem>& rolled,

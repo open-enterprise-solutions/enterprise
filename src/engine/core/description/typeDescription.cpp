@@ -89,7 +89,7 @@ ibDataValue ReadTypeList(const ibDataNode& root)
 ibClassID ReadTypeId(const ibDataNode& entry)
 {
 	// EITHER SPELLING OF THE ID. It is written as text now, so that it survives a trip
-	// through JSON (see WriteNode); a configuration written before that holds a number, and
+	// through JSON (see WriteNode); an application written before that holds a number, and
 	// both mean the same thing.
 	auto tid = entry.FindField(ibT("TypeId"));
 	if (!tid)
@@ -119,7 +119,7 @@ bool ibTypeDescriptionMemory::ReadNode(const ibDataValue& value, ibTypeDescripti
 	// 🛑 A QUALIFIER ITS FIELD CANNOT HOLD IS REFUSED, NOT CUT (#646). A length of 70000 was read as 4464 and
 	// 300 digits as 44 — a declaration nobody made, which the apply then built a column for. Asked before
 	// anything is touched, so a refused shape leaves the description as it was. The bound is the field's own and
-	// no more: a configuration loads through here, and its file reads as it was written — 44 digits saved before
+	// no more: an application loads through here, and its file reads as it was written — 44 digits saved before
 	// stay 44, for the apply's DDL to refuse; refused here, the attribute would keep its default type without a
 	// word. What a qualifier may say is its door's (QualifierNumber, the designer, metadata_set_type).
 	const std::int32_t precision = root->GetValue<std::int32_t>(ibT("Precision"));
@@ -162,7 +162,7 @@ bool ibTypeDescriptionMemory::WriteNode(ibDataValue& value, const ibTypeDescript
 	auto root = std::make_shared<ibDataNode>();
 
 	// the type list — one entry per clsid, in the description's order, the id alone: what it names is
-	// asked of the configuration by whoever reads it.
+	// asked of the application by whoever reads it.
 	std::vector<ibDataValue> types;
 	for (ibClassID clsid : typeDesc.GetClsidList()) {
 		auto entry = std::make_shared<ibDataNode>();
@@ -178,7 +178,7 @@ bool ibTypeDescriptionMemory::WriteNode(ibDataValue& value, const ibTypeDescript
 		// 2026-09-05: *"if you go looking by knowledge alone, your references will stop working"*).
 		// No name is written beside it: the id alone is what the schema keeps (Max, 2026-10-12).
 		//
-		// Read back as either — see ReadNode. A configuration written before this holds a number.
+		// Read back as either — see ReadNode. An application written before this holds a number.
 		entry->AddField(ibT("TypeId"),
 			ibDataValue::String(ibString::Format(ibT("%llu"), (unsigned long long)clsid)));
 		types.push_back(ibDataValue::Child(entry));
@@ -209,7 +209,7 @@ bool ibMetaDescriptionMemory::ReadNode(const ibDataValue& value, ibMetaDescripti
 	return true;
 }
 
-// Every id as it is held. Which of them still name an object is the configuration's question, asked on the
+// Every id as it is held. Which of them still name an object is the application's question, asked on the
 // side's way out (ibBackendMetaDescriptionMemory::WriteNode), not here.
 bool ibMetaDescriptionMemory::WriteNode(ibDataValue& value, const ibMetaDescription& metaDesc)
 {

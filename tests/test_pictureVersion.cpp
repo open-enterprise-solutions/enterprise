@@ -1,8 +1,8 @@
 ////////////////////////////////////////////////////////////////////////////
-//	Description : a configuration picture's version and the id it rides in
+//	Description : an application picture's version and the id it rides in
 ////////////////////////////////////////////////////////////////////////////
 //
-// A client keeps a picture by the id an answer names it with (ibBackendPicture::SendPicture). A configuration
+// A client keeps a picture by the id an answer names it with (ibBackendPicture::SendPicture). An application
 // picture's id is `<guid>#<version>`: the version a guid new with each picture its Picture is given — so a picture
 // changed since is named by another version and asked for anew, and one unchanged is the same id in every answer. The
 // Picture method reads the guid before the `#`.
@@ -13,7 +13,7 @@
 #include <cstring>
 
 #include "backend/backend_picture.h"
-#include "backend/metadataConfiguration.h"
+#include "backend/metadataApplication.h"
 #include "backend/metaCollection/metaObject.h"
 #include "backend/metaCollection/metaPictureObject.h"
 #include "backend/propertyManager/property/variant/variantPicture.h"
@@ -22,7 +22,7 @@
 
 namespace {
 
-// An image of its own, as a configuration's Picture object holds it: the file's bytes and its size.
+// An image of its own, as an application's Picture object holds it: the file's bytes and its size.
 ibExternalPictureDescription Image(const std::string& bytes, unsigned int width, unsigned int height)
 {
 	ibExternalPictureDescription image;
@@ -34,12 +34,12 @@ ibExternalPictureDescription Image(const std::string& bytes, unsigned int width,
 }
 
 struct PictureFixture {
-	ibMetaDataConfigurationFile cfg;
+	ibMetaDataApplicationFile cfg;
 	ibValueMetaObjectPicture* first = nullptr;
 	ibValueMetaObjectPicture* second = nullptr;
 
 	PictureFixture() {
-		ibValueMetaObjectConfiguration* root = cfg.GetCommonMetaObject();
+		ibValueMetaObjectApplication* root = cfg.GetRootMetaObject();
 		if (root == nullptr)
 			return;
 		first = dynamic_cast<ibValueMetaObjectPicture*>(cfg.CreateMetaObject(g_metaPictureCLSID, root, /*runObject*/ false));
@@ -97,7 +97,7 @@ TEST(ibValueMetaObjectPicture, GetValueAsVersion_ReadFromItsNode_NewVersion)
 	EXPECT_NE(f.second->GetValueAsVersion(), f.first->GetValueAsVersion());
 }
 
-TEST(ibBackendPicture, SendPicture_ConfigurationPicture_GuidAndVersion)
+TEST(ibBackendPicture, SendPicture_ApplicationPicture_GuidAndVersion)
 {
 	PictureFixture f;
 	ASSERT_NE(f.first, nullptr);
@@ -122,9 +122,9 @@ TEST(ibBackendPicture, SendPicture_PictureChanged_AnotherIdOfTheSameGuid)
 	EXPECT_EQ(after.BeforeFirst(wxT('#')), before.BeforeFirst(wxT('#')));
 }
 
-TEST(ibBackendPicture, SendPicture_NoConfiguration_ConfigurationPictureEmpty)
+TEST(ibBackendPicture, SendPicture_NoApplication_ApplicationPictureEmpty)
 {
-	// A form with no configuration (no metaobject, no source) names no configuration picture — and does not fall.
+	// A form with no application (no metaobject, no source) names no application picture — and does not fall.
 	PictureFixture f;
 	ASSERT_NE(f.first, nullptr);
 	ASSERT_TRUE(PictureFixture::Set(f.first, Image("\x89PNG one", 16, 16)));
@@ -139,7 +139,7 @@ TEST(ibBackendPicture, SendPicture_GuidOfNoPicture_Empty)
 
 TEST(ibBackendPicture, SendPicture_BackendPicture_NumberAlone)
 {
-	// …by its number alone, or described, with a configuration or without: a backend picture is the process's.
+	// …by its number alone, or described, with an application or without: a backend picture is the process's.
 	const ibString number = ibString::Format(wxT("%llu"), static_cast<unsigned long long>(g_picErrorCLSID));
 	PictureFixture f;
 	EXPECT_EQ(ibBackendPicture::SendPicture(g_picErrorCLSID), number);

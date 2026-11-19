@@ -36,19 +36,6 @@ bool ibDebuggerClient::CreateBreakpointDatabase()
 		}
 		catch (...) { return false; }
 	}
-	else {
-		// A BASE FROM BEFORE CONDITIONS (2026-09-11) has the table without the column - added in place, the
-		// way sys_session grows (MigrateTableSession). Its rows read back with no condition: they stop always,
-		// which is what they did.
-		bool hasCondition = false;
-		for (const ibString& column : q.GetColumns(dbg_table))
-			if (column.CmpNoCase(ibT("lineCondition")) == 0)
-				hasCondition = true;
-		if (!hasCondition) {
-			try { ibDatabaseQueryBuilder qa; qa.Execute(ibAddColumn(dbg_table, { ibT("lineCondition"), ibTypeString(1024), false, false, nullptr })); }
-			catch (...) { /* best-effort, as the session table's: without it a condition is not kept past the session */ }
-		}
-	}
 	return q.IsOpen();
 }
 

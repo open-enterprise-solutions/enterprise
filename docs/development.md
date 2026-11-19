@@ -98,7 +98,7 @@ queryable, a provider through the interface (`query/queryProvider.h`), the compo
 needs a body that only the kitchen can write, the face declares it and the kitchen defines it. The lowering parses
 and links doors: what a provider can do it asks through the interface, and a step no engine can take over the
 finished rows is a door over them. The named exceptions: the metadata side (`metaCollection/`, `metaData.cpp`,
-`metadataConfiguration*` — it answers the database provider's questions and holds its structure builder) and the
+`metadataApplication*` — it answers the database provider's questions and holds its structure builder) and the
 platform's jobs. `.github/lint.sh` refuses a new include anywhere else, however it is spelled.
 
 ---
@@ -187,16 +187,16 @@ registered type with its own rule, not a pattern in unused bits of an id or a sp
 every consumer. A hand-maintained list of what the system already knows is a defect. Two flags
 that are always set together are one state: make it an `enum`.
 
-**Never reach for the active configuration.** Several configurations are open in one process:
+**Never reach for the active application.** Several applications are open in one process:
 the working base, one being compared, one opened from a file, external reports. Whoever reads a
-value passes the configuration it belongs to. Taking the active one gives a silently wrong
+value passes the application it belongs to. Taking the active one gives a silently wrong
 answer, not an error. It is legitimate only in the running application and in the main frame.
 
 **A reference is identified by its metadata id, never by its name**, and a value is not done
 until it survives serialisation and a restart.
 
 **A value crosses the wire one way:** `ibSerializeValue`, and `ibDeserializeValue(node, metaData)`
-with the configuration passed by whoever knows it. A property, a control or a tool does not parse
+with the application passed by whoever knows it. A property, a control or a tool does not parse
 protocol ids or build a value from a node by itself.
 
 **An assistant comes in through the same doors.** MCP is a second entrance, not a second engine:
@@ -269,7 +269,7 @@ would have caught it, or says in the pull request why one is impractical.
 
 **Check the engine against a truth computed outside it.** A test that builds its expected answer
 with the machinery under test confirms itself. The reference answer comes from raw records (the
-postings, the movements), and synthetic cases are backed by runs over real configurations.
+postings, the movements), and synthetic cases are backed by runs over real applications.
 
 **A shape the server must answer asserts its road.** Both roads give the same answer, so a gate that
 stops letting a shape through makes a report slow, not wrong, and no check of the answer sees it.
@@ -353,6 +353,6 @@ the day X lands; "a report needs X, because …" stays true.
 
 Changes written with an AI assistant follow the same rules and the same review. Its context is
 [CLAUDE.md](../CLAUDE.md), and [ai-context.md](ai-context.md) if it generates metadata or
-scripts. The MCP server inside the designer lets it build and run a configuration itself; see
+scripts. The MCP server inside the designer lets it build and run an application itself; see
 [CLAUDE.md](../CLAUDE.md#running-it--and-the-door-an-assistant-comes-in-through). Check what it
 claims by running it, and keep its attribution lines out of commits.

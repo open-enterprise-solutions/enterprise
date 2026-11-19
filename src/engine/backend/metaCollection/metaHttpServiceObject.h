@@ -1,7 +1,7 @@
 #ifndef __META_HTTP_SERVICE_OBJECT_H__
 #define __META_HTTP_SERVICE_OBJECT_H__
 
-// AN HTTP SERVICE — the addresses a configuration answers, and the code that answers them.
+// AN HTTP SERVICE — the addresses an application answers, and the code that answers them.
 //
 //     HTTPService      RootURL "desk", a module of its own
 //       URLTemplate      Template "/Transfer/{id}/reset"
@@ -15,7 +15,7 @@
 // A service declared and not registered answers nothing: what is published is the administrator's choice.
 //
 // ⭐ BUILT ON THE PREDEFINED SCHEDULED JOB, which already pairs a metaobject with a MANAGER module of its own:
-// registered and compiled with the session's modules, so a handler calls common modules like any other code
+// registered and compiled with the session's modules, so a handler calls shared modules like any other code
 // and is debugged as any module is. The service module is prepared with one function per method, named by
 // its Handler and taking Request — what the module editor offers, as an event handler's procedure is offered.
 //
@@ -62,7 +62,7 @@ public:
 
 	ibValueMetaObjectHttpService(const ibString& name = ibEmptyString, const ibString& synonym = ibEmptyString, const ibString& comment = ibEmptyString);
 
-	// The segment after /es/ — one segment, unique in the configuration.
+	// The segment after /es/ — one segment, unique in the application.
 	ibString GetRootUrl() const { return m_propertyRootUrl->GetValueAsString(); }
 	// WHERE IT IS OFFERED AMONG THE WEB ADDRESSES — es/<RootURL> under the publication (core/net/servedAddress.h),
 	// held to the addresses' rule; …and where a root would be.
@@ -116,7 +116,7 @@ private:
 
 	ibPropertyCategory* m_categoryService = ibPropertyObject::CreatePropertyCategory(ibT("HTTPService"), _("HTTP service"));
 	ibPropertyString* m_propertyRootUrl = ibPropertyObject::CreateProperty<ibPropertyString>(m_categoryService, ibT("RootURL"), _("Root URL"),
-		_("The service's address: one segment after /es/ in the address the web server publishes the base under - <publication>/es/<root URL>/... Unique in the configuration; it answers once registered among the base's web addresses."), ibEmptyString);
+		_("The service's address: one segment after /es/ in the address the web server publishes the base under - <publication>/es/<root URL>/... Unique in the application; it answers once registered among the base's web addresses."), ibEmptyString);
 
 	// The service's module — a MANAGER module (registered, compiled with the session), as a job's is.
 	ibPropertyInnerModule<ibValueMetaObjectManagerModule>* m_propertyServiceModule =
@@ -144,7 +144,7 @@ public:
 	std::string GetAllowed() const;
 
 	// ⭐ THE MATCH, ON ITS OWN — what FindTemplate asks of each template, and what a test asks without a
-	// configuration. True when `path` is one of the template's; `rank` then says how particular the match is
+	// application. True when `path` is one of the template's; `rank` then says how particular the match is
 	// (lower is more particular: a literal segment counts before a parameter, a parameter before `*`), and
 	// `parameters` hold the template's parameters by name.
 	static bool Match(const ibString& urlTemplate, const ibString& path, std::vector<int>& rank,

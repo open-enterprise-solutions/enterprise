@@ -34,7 +34,7 @@
 #include <wx/init.h>                                           // wxInitializer - the live reading below
 #include "backend/appData.h"
 #include "core/clsid.h"                                     // reference_to_clsid - the recorder's type
-#include "backend/metadataConfiguration.h"                     // ibMetaDataConfigurationFile - a register in memory
+#include "backend/metadataApplication.h"                       // ibMetaDataApplicationFile - a register in memory
 #include "backend/metaCollection/metaObject.h"
 #include "backend/databaseLayer/connectionPool.h"
 #include "backend/databaseLayer/databaseMaterializeBuilder.h"  // ibMaterializeReadSpec / RenderMaterializedRead
@@ -313,13 +313,13 @@ TEST(RegisterBound, ABoundaryOverAMomentKeepsTheDocument)
 
 namespace {
 
-// A register in a configuration in memory, recorded by a document - what the cut is asked of.
+// A register in an application in memory, recorded by a document - what the cut is asked of.
 struct ArmCutFix {
-    ibMetaDataConfigurationFile cfg;
+    ibMetaDataApplicationFile cfg;
     ibValueMetaObjectAccumulationRegister* reg = nullptr;
 
     ArmCutFix() {
-        ibValueMetaObjectConfiguration* root = cfg.GetCommonMetaObject();
+        ibValueMetaObjectApplication* root = cfg.GetRootMetaObject();
         if (root == nullptr) return;
         ibValueMetaObject* document = cfg.CreateMetaObject(g_metaDocumentCLSID, root, /*runObject*/ false);
         reg = dynamic_cast<ibValueMetaObjectAccumulationRegister*>(
@@ -654,7 +654,7 @@ TEST(RegisterSurface, DerivedColumnIdsNeverMeetAndLeaveRoomForAnotherReading) {
         for (unsigned int no = 0; no < ibRegColumnsPerOwner; ++no)
             EXPECT_TRUE(ids.insert(ibRegDerivedColumnId(owner, no)).second) << "owner " << owner << " no " << no;
 
-    // …and a configuration's metaIDs leave room for a further reading of the surface (an alias twin wraps
+    // …and an application's metaIDs leave room for a further reading of the surface (an alias twin wraps
     // the id once more — queryColumn.h, CanComposeSyntheticId), up to about 130 000.
     EXPECT_TRUE(ibBackendQueryColumn::CanComposeSyntheticId(ibRegDerivedColumnId(130000, ibRegColumnsPerOwner - 1)));
 }

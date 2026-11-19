@@ -355,7 +355,7 @@ void ibProcUnit::BuildScopeChain(ibRunContext* localScope)
 
 	// ⭐ MEASURED 2026-09-04, worth keeping as a fact: the two ladders agree in length. The
 	// compiler counts rungs up the BYTECODE chain, this builds the frame array from the PROCUNIT
-	// chain, and for every module of the sample configuration both came out equal (an object
+	// chain, and for every module of the sample application both came out equal (an object
 	// module: 1 and 1). So the depth that lands past the end does NOT come from the descriptor
 	// hierarchy being shorter at run time — look at what ELSE adds a rung on the compile side
 	// (an eval's host frame does; see GetVariable step 2).
@@ -454,8 +454,8 @@ IB_NOINLINE void RaiseWithCallStack(ibProcUnitState* state, const ibString& reas
 	// hundred identical lines, tens of kilobytes of them, and a person had to scroll past
 	// all of it to learn nothing it had not said in the first two.
 	//
-	//     ConfigurationModule (#line 4)
-	//     CommonModule.CachedProbe (#line 9) x 197
+	//     ApplicationModule (#line 4)
+	//     SharedModule.CachedProbe (#line 9) x 197
 	//
 	// Consecutive identical frames only: a cycle through several functions still shows
 	// every one of them, because there the repetition IS the shape worth reading.
@@ -1276,7 +1276,7 @@ start_label:
 			//enter in debugger
 			//
 			// "Is anyone debugging?" is asked HERE, inline — it is EnterDebugger's own first line. A debug
-			// server exists whenever a configuration is loaded (metadataConfiguration.cpp), attached or
+			// server exists whenever an application is loaded (metadataApplication.cpp), attached or
 			// not, so every instruction of every run made an out-of-line call only to hear "no" (2026-09-28).
 			if (ibDebuggerServer* const dbg = debugServer; dbg != nullptr && !evalMode && dbg->IsDebugging())
 				dbg->EnterDebugger(state, pContext, curCode, lPrevLine);
@@ -1421,7 +1421,7 @@ start_label:
 				// `==` meant the body ran for [from, to) while the language reference
 				// says the range is INCLUSIVE (docs/private/script-language.md §"for (i = 1 To
 				// 10) — numeric range, inclusive") and the syntax helper shows the same
-				// shape. Every counted loop in every configuration silently dropped its
+				// shape. Every counted loop in every application silently dropped its
 				// last iteration: a probe function summing 0.01 a thousand times
 				// returned 9.99, which reads as a rounding bug in the money type rather
 				// than as an off-by-one in the loop.
@@ -2098,7 +2098,7 @@ start_label:
 				//
 				// ⭐ THIS IS WHERE EVERY ROAD INTO A BODY ARRIVES. A direct call
 				// (OPER_CALL), a call through a module value — which is what
-				// `CommonModule.Function(...)` is, arriving by name through
+				// `SharedModule.Function(...)` is, arriving by name through
 				// CallAsFunc — a manager's method, a handler fired from C++:
 				// they build a frame by different means and all of them execute
 				// the tape from the function's entry, which is this opcode. So
@@ -2640,7 +2640,7 @@ void ibProcUnit::Execute(const ibByteCode& cByteCode, ibByteBinder& br, ibValue*
 
 	// Pre-flight runs on EVERY Execute, including the reused-frame pass: it copies
 	// the binder's LIVE values into the frame. So a Run(true) following a Run(false)
-	// prepare pulls the CURRENT bindings (e.g. common-module values initialised in
+	// prepare pulls the CURRENT bindings (e.g. shared-module values initialised in
 	// between the two passes), not the stale ones captured on the first pass.
 	// Pre-flight: every required binding (m_listVar entry with
 	// kind ∈ {External, Context}) must be wired and its class type
@@ -3068,7 +3068,13 @@ bool ibProcUnit::Evaluate(const ibString& strExpression, ibRunContext* pRunConte
 	// row + silent `false` return. Watch handler in the designer prints
 	// the result via ibValue::ToString; a string-typed ibValue with
 	// "<error: msg>" reads naturally.
+	//
+	// ⭐ THE FAILURE IS ANSWERED HERE, AND ONLY HERE: taken off the thread's error chain as it goes into the value,
+	// so the value is the one place a caller reads it. The compile road always took it off (GetLastError below);
+	// the run road left it on, and the debugger's watch read the chain — which the compile road had emptied, so a
+	// watch that did not compile showed `<error>` and no reason (Max, 2026-11-19: `2 and 3` in a CES application).
 	auto reportFailure = [&pvarRetValue](const ibString& msg) {
+		ibBackendException::DrainLastErrors();
 		pvarRetValue = ibValue(ibString(ibT("<error: ")) + msg + ibT(">"));
 	};
 
@@ -3286,7 +3292,7 @@ bool ibProcUnit::CompileExpression(ibRunContext* pRunContext, ibValue& pvarRetVa
 			// Splice the shim's actual chain in at offset +1 (eval has one
 			// more own-frame layer above the shim) so depth ≥ 2 in the
 			// eval expression resolves into root mm's bound slots —
-			// Catalogs / Documents / Manager / common-module exports.
+			// Catalogs / Documents / Manager / shared-module exports.
 			if (pRunContext->m_currentFunction != nullptr
 				&& pRunContext->m_currentFunction->IsLambda())
 			{

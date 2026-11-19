@@ -4,7 +4,7 @@
 // The variant payload of a schedule property — an ibJobScheduleDescription living INSIDE the
 // variant, never beside it (docs/private/property-system.md § 3). That is what enrols a schedule in all
 // five property surfaces at once: the designer editor, script, serialization, clipboard and the
-// configuration diff.
+// application diff.
 //
 // Eq() is what makes the diff work, and it is one line because the description already has value
 // semantics — two schedules are equal when every field is.
@@ -25,7 +25,7 @@ public:
 	ibVariantSchedule(const ibVariantSchedule& src)
 		: ibVariant(ibValueTypes::TYPE_VALUE), m_schedule(src.m_schedule) {}
 
-	// Value equality, straight through the description — this is what the configuration
+	// Value equality, straight through the description — this is what the application
 	// compare reads (docs/private/property-system.md § 6.1).
 	virtual bool CompareValueEQ(const ibVariant& data) const override {
 		const ibVariantSchedule* src = dynamic_cast<const ibVariantSchedule*>(data.GetRef());

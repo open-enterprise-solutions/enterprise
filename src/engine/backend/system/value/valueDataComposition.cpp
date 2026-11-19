@@ -10,7 +10,7 @@
 #include "backend/system/systemManager.h"            // system functions
 #include "backend/compiler/procUnit.h"                // ibProcUnit::Evaluate — a parameter expression is run here
 #include "backend/compiler/procContext.h"             // ibRunContext — the frame an expression is evaluated in
-#include "backend/moduleManager/moduleManager.h"       // the session root: common modules + the environment
+#include "backend/moduleManager/moduleManager.h"       // the session root: shared modules + the environment
 #include "backend/session/session.h"                   // ibSession::Current / GetPUState — where the root lives
 #include "backend/system/value/valueType.h"           // ibValueTypeDescription::AdjustValue — the result decides the type
 #include "backend/query/queryConstructorModel.h"      // ibQueryConstructorModel — the fields a window offers; ibQueryTextOfSource — the seed
@@ -18,7 +18,7 @@
 #include "backend/srcDataObject.h"                   // ibSourceExplorer
 #include "backend/metaCollection/metaGroups.h"       // ibMetaTypeCaption — the caption names the source's kind
 #include "core/serialize/dataBuilder.h"           // ibDataNode (object-level save/load)
-#include "backend/metadataConfiguration.h"           // ibMetaDataConfigurationBase (GetSourceMetaData)
+#include "backend/metadataApplication.h"             // ibMetaDataApplicationBase (GetSourceMetaData)
 #include "backend/composition/drivers/spreadsheetComposeDriver.h"   // the OUTPUT — composition → document
 #include "backend/system/value/composition/valueComposerSettings.h"   // ibValueEnumComparisonKind — a condition's word
 #include "backend/system/value/composition/valueComposerField.h"      // a declared value becomes runtime here
@@ -54,21 +54,21 @@ namespace {
 ibValueDataComposition::ibValueDataComposition(const std::shared_ptr<const ibBackendQueryable>& queryable)
 	: ibValueSpreadsheetModel(), ibSourceDataObject()
 {
-	// ⚠ THE SOURCE'S OWN CONFIGURATION FIRST, the ACTIVE one only if there is no source to ask. A
-	// queryable lives in the configuration it was created in — the edited one in the designer, the
-	// copy's own on a copy — and resolving against the active configuration there would answer with
+	// ⚠ THE SOURCE'S OWN APPLICATION FIRST, the ACTIVE one only if there is no source to ask. A
+	// queryable lives in the application it was created in — the edited one in the designer, the
+	// copy's own on a copy — and resolving against the active application there would answer with
 	// somebody else's tables.
 	//
-	// ⚠⚠ A COMPOSITION BELONGING TO A CONFIGURATION MUST NEVER FALL BACK TO THE ACTIVE ONE — it would
-	// see THE WRONG TABLES. Two configurations are open in the designer at once (the edited one and
+	// ⚠⚠ A COMPOSITION BELONGING TO AN APPLICATION MUST NEVER FALL BACK TO THE ACTIVE ONE — it would
+	// see THE WRONG TABLES. Two applications are open in the designer at once (the edited one and
 	// the one being compared or copied from), and the active one is not necessarily this object's; a
 	// name resolved there answers with somebody else's metadata and everything downstream is quietly
 	// about the wrong report.
 	//
 	// The line below is INSURANCE, not the road: it catches the composition CREATED IN CODE
 	// (`New DataComposition()` in a script, one a form builds), which has nowhere to take a
-	// configuration from — no source was handed to it and it has no owner to ask — and where exactly
-	// one configuration is running anyway. Anything that HAS an owner or a source is expected to have
+	// application from — no source was handed to it and it has no owner to ask — and where exactly
+	// one application is running anyway. Anything that HAS an owner or a source is expected to have
 	// been answered above.
 	if (queryable != nullptr) {
 		if (const ibValueMetaObjectGenericData* mo = queryable->GetSourceMetaObject())
@@ -95,10 +95,10 @@ ibValueDataComposition::ibValueDataComposition(const std::shared_ptr<const ibBac
 }
 
 // THE RUNNING COMPOSITION OVER A DESCRIPTION SOMEBODY ELSE HOLDS — the two things it needs: the data,
-// and the configuration to resolve names in.
+// and the application to resolve names in.
 //
-// ⚠ NULL MEANS THE ACTIVE CONFIGURATION, decided here. A caller that has one passes it (a property
-// passes its owner's — the edited configuration in the designer, the copy's own on a copy); a caller
+// ⚠ NULL MEANS THE ACTIVE APPLICATION, decided here. A caller that has one passes it (a property
+// passes its owner's — the edited application in the designer, the copy's own on a copy); a caller
 // that has none passes null and says so. Leaving each of them to reach for the active one itself is
 // the same decision written in as many places as there are callers.
 ibValueDataComposition::ibValueDataComposition(ibCompositionDescription& desc, const ibMetaData* metaData)
@@ -192,8 +192,8 @@ void ibValueDataComposition::RebuildSource()
 	// there is nothing left to do. (A seed below may replace an empty text; it re-stamps it there.)
 	m_sourceBuiltFor = GetQueryText();
 
-	// STORE the source config into the metadata VARIABLE, taken from the VALUE — the picked queryable's
-	// metaobject knows its config (the edited one in the designer, the copy's on a copy). Held so
+	// STORE the source application into the metadata VARIABLE, taken from the VALUE — the picked queryable's
+	// metaobject knows its application (the edited one in the designer, the copy's on a copy). Held so
 	// GetSourceMetaData stays TERMINAL: it never re-resolves the queryable through the attach owner,
 	// which walks the form and would come back here.
 	const std::shared_ptr<const ibBackendQueryable> queryable = GetSourceQueryable();
@@ -202,8 +202,8 @@ void ibValueDataComposition::RebuildSource()
 			m_sourceMetaData = mo->GetMetaData();
 	}
 
-	// Thread the stored config into the composer so the query text resolves its by-name FROM against
-	// THIS config rather than the global factory.
+	// Thread the stored application into the composer so the query text resolves its by-name FROM against
+	// THIS application rather than the global factory.
 	GetModelComposer().SetMetaData(GetSourceMetaData());
 
 	// ⭐⭐ THE VARIANTS ARE PUT ON THE COMPOSER — the whole array, as a copy. Rebuilding the source
@@ -252,7 +252,7 @@ void ibValueDataComposition::RebuildSource()
 	if (!queryText.IsEmpty()) {
 		GetModelComposer().FromText(queryText);
 
-		// The names resolve against the SOURCE's config, the same one the composer was just handed.
+		// The names resolve against the SOURCE's application, the same one the composer was just handed.
 		const ibSourceMetaDataScope scope(GetSourceMetaData());
 		try {
 			ibQueryParser parser;
@@ -307,7 +307,7 @@ ibString ibValueDataComposition::SeedQuery() const
 std::vector<ibQueryConstructorField> ibValueDataComposition::GetConstructorFields() const
 {
 	// ONE IMPLEMENTATION, TWO CALLERS. The body moved to ibQueryFieldsOfText (query/queryConstructorModel)
-	// on 2026-08-24: it never needed a composition — the text and the configuration are the whole of
+	// on 2026-08-24: it never needed a composition — the text and the application are the whole of
 	// the question, and a settings window that had to hold a RUNNING composition to ask it was holding
 	// a runtime object for a metadata answer.
 	return ibQueryFieldsOfText(GetQueryText(), GetSourceMetaData());
@@ -315,7 +315,7 @@ std::vector<ibQueryConstructorField> ibValueDataComposition::GetConstructorField
 
 // DROP THE SETTINGS WHOSE FIELD THE COMPOSITION NO LONGER HAS — by RESOLUTION after every rebuild,
 // never by chasing the change. A field removed from the query leaves a filter, a sort or a grouping
-// pointing at nothing; so does an attribute renamed in the configuration. The answer comes from the
+// pointing at nothing; so does an attribute renamed in the application. The answer comes from the
 // SOURCE EXPLORER, the same list the pickers are built from, so what a person can still choose and what
 // the composer still keeps are one answer rather than two.
 void ibValueDataComposition::PruneUnresolvedSettings()
@@ -404,7 +404,7 @@ void ibValueDataComposition::EnsureVariant()
 // called Period, whether or not anybody added it — so the list follows the text: new names appear,
 // names the text stopped mentioning disappear, and what was already FILLED IN survives an edit.
 //
-// Hand-made parameters are untouched: they were added deliberately (a common module reads one, or
+// Hand-made parameters are untouched: they were added deliberately (a shared module reads one, or
 // the text is still being written), and a re-parse is not a reason to lose them.
 // ⭐⭐ THE LIST FOLLOWS THE TEXT — WRITTEN ONCE, over any list. `&Period` in a query means the
 // composition has a parameter called Period, so the text is one of the two authors of this list and
@@ -483,7 +483,7 @@ void ibValueDataComposition::SyncParametersWithQuery()
 // EVALUATE WHAT HAS AN EXPRESSION — once, before the read.
 //
 // ⭐ THE DOOR IS THE LANGUAGE'S OWN (Max, 2026-08-19): `Evaluate` — the same system function a script
-// calls, so a parameter can hold `CurrentDate()`, a call into a common module, arithmetic over
+// calls, so a parameter can hold `CurrentDate()`, a call into a shared module, arithmetic over
 // another value: anything the language can say. It is legitimate HERE and not in a computed field
 // for one reason — it runs ONCE, before the query, and what reaches the query is a plain value; a
 // scripted field would run per row and take the read into memory with it.
@@ -496,9 +496,9 @@ void ibValueDataComposition::SyncParametersWithQuery()
 //
 // A refusal is NOT swallowed: the expression is the author's, and an expression that cannot be
 // evaluated has to say so where it was written.
-// EVALUATE ONE EXPRESSION — through the SESSION'S ROOT, so the common modules and the whole
+// EVALUATE ONE EXPRESSION — through the SESSION'S ROOT, so the shared modules and the whole
 // environment answer (Max, 2026-08-19: "you have to attach to the root module, that is what makes
-// all the common functions and common modules available").
+// all the common functions and shared modules available").
 //
 // 🛑 WHY NOT PLAIN `Evaluate`: it runs against the CURRENT run context, and pressing "Generate" is
 // not a script — nothing is executing, the context stack is empty, and the call returns false
@@ -522,7 +522,7 @@ void ibValueDataComposition::SyncParametersWithQuery()
 // ⭐⭐ WHAT A RUN IS GIVEN — WORKED OUT HERE AND KEPT HERE. Nothing is written back into the
 // description: a description is DATA, and an evaluated parameter is a runtime value — a reference
 // with a session behind it, the result of an expression. Writing them into the description put
-// runtime into a structure that is saved with the configuration and read back while the next load is
+// runtime into a structure that is saved with the application and read back while the next load is
 // still building its tree, which is where "Unknown value type '<id>'" came from (Max, 2026-08-29:
 // "there is no runtime in a description, at all").
 //
@@ -968,7 +968,7 @@ void ibValueDataComposition::GetCommandCollection(const ibFormID& formType, std:
 	commands.push_back(ibCommandItem());   // separator — …and the reader's own shelf is another
 
 	// ⭐ …AND THE READER'S OWN, beside the author's. Same shape, different shelf: a variant ships
-	// with the configuration, a saved setting is what THIS person arranged and kept. Both show what
+	// with the application, a saved setting is what THIS person arranged and kept. Both show what
 	// is READ — nothing in the base's data changes — so they stay live on a view-only form.
 	commands.push_back(ibCommandItem(ibSpreadsheetModelCommand_RestoreSettings, ibT("RestoreSettings"), _("Restore settings"),
 		ibPictureDescription(g_picRestoreSettingsCLSID), true).SetModify(false));
@@ -1055,7 +1055,7 @@ ibString ibValueDataComposition::GetSourceCaption() const
 
 const ibMetaData* ibValueDataComposition::GetMetaData() const
 {
-	// SELECTION — which config to PICK / resolve a source FROM: the owner FORM's config, via the attach
+	// SELECTION — which application to PICK / resolve a source FROM: the owner FORM's application, via the attach
 	// chain. Non-cyclic: the form falls back to its SOURCE (this composer) for metadata, and the
 	// composer's GetSourceMetaData reads from the VALUE (terminal), so the walk ends.
 	if (const ibPropertyObject* o = GetAttachOwner())
@@ -1066,9 +1066,9 @@ const ibMetaData* ibValueDataComposition::GetMetaData() const
 
 const ibMetaData* ibValueDataComposition::GetSourceMetaData() const
 {
-	// READ — the STORED source config, captured in RebuildSource. Returned straight from the field: no
+	// READ — the STORED source application, captured in RebuildSource. Returned straight from the field: no
 	// owner-walk, no queryable re-resolve, so a form's metadata may fall back here without looping.
-	// Nothing stored yet → the ACTIVE config.
+	// Nothing stored yet → the ACTIVE application.
 	return m_sourceMetaData != nullptr ? m_sourceMetaData : ibApplicationInstance::GetActiveMetaData();
 }
 
@@ -1150,7 +1150,7 @@ bool ibValueDataComposition::ReadProperty(const ibDataNode& node)
 	// ⚠ AND NOTHING IS SYNCHRONISED HERE EITHER. If getting the composition needed something to be
 	// brought up to date on the side first, the split would not be a split at all — asking is the
 	// whole of it (Max). What the TEXT asks for is added by the refresh, at the asking.
-	// ⚠ AGAINST ITS OWN CONFIGURATION — the one this composition was made with. The values inside a
+	// ⚠ AGAINST ITS OWN APPLICATION — the one this composition was made with. The values inside a
 	// saved composition (a filter's right side, a parameter) are references and enum members, and
 	// those are built by the metadata, not by the value factory.
 	return ibBackendCompositionDescriptionMemory::ReadNode(node, GetCompositionDesc(), GetSourceMetaData());

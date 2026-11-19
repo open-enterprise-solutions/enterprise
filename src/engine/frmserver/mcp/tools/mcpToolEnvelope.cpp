@@ -176,7 +176,7 @@ public:
 	{
 		return ibMcpText("FIND THE TOOL FOR A JOB, then call it through mcp_call. This platform exposes "
 			"far more verbs than are worth handing over at once - metadata and forms, queries and "
-			"reports, the debugger, the journal, users and locks, spreadsheets, the configuration "
+			"reports, the debugger, the journal, users and locks, spreadsheets, the application "
 			"itself - so they are found rather than announced. Ask in the words of the job "
 			"('lock', 'print a report', 'what changed'), as a regular expression if that is "
 			"easier, or with no query at all to see everything. The answer carries each tool's "
@@ -266,7 +266,7 @@ public:
 			// ⭐ AND A WORD IN WHAT THE TOOL SAYS IT IS COUNTS TWICE - its name and the first sentence of its
 			// description (Identity). That is the tool saying what it is in a line; the rest says it in two
 			// hundred, and a word can stand there for any reason. When every word of a question is a common
-			// one - "read the text of the configuration module" - worth alone cannot tell the tools apart,
+			// one - "read the text of the application module" - worth alone cannot tell the tools apart,
 			// and module_read is the one whose NAME says both.
 			//
 			// ⭐ …AND A LONG TEXT MEETS WORDS BY CHANCE. What the description finds is scaled by its length,
@@ -339,7 +339,7 @@ public:
 				if (ibIsMcpToolOffered(tool))
 					tool->FindInside(query, places);
 
-		// ⭐ THIS CONFIGURATION'S OWN ANSWER FIRST. A place that names an object (it carries the object's `id` -
+		// ⭐ THIS APPLICATION'S OWN ANSWER FIRST. A place that names an object (it carries the object's `id` -
 		// note_read's) is where the thing asked about is built HERE; a pattern says how such a thing is built
 		// anywhere. Both are worth reading, but the trim below must not cut the first for the second.
 		std::stable_partition(places.begin(), places.end(), [](const ibDataValue& place) {
@@ -366,7 +366,7 @@ public:
 				  "given; pattern_read {query} with the same words lists them all.")
 				: ibMcpText("`places` are passages that answer this in words, not verbs to call. Read one "
 				  "with pattern_read {name, topic}, quoting the topic given."))
-				+ ibMcpText(" A place with an `id` is an object of THIS configuration whose help or notes "
+				+ ibMcpText(" A place with an `id` is an object of THIS application whose help or notes "
 				  "speak to the question - where it is built here: note_read {id, help: true} reads its "
 				  "texts, metadata_get the object itself, and when it is a report, compose_run reads the "
 				  "answer out of it."));

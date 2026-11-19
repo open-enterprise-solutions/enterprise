@@ -3,7 +3,7 @@
 
 // THE OLD DESKTOP'S SCRIPT EDITOR, copied whole: the lexer, the colouring,
 // the folds, the indent, the braces, the literals and their constructors are the client's. What the desktop asked the
-// configuration — the module's text, the names at the caret, a call's form, the syntax — is asked of the server's tab
+// application — the module's text, the names at the caret, a call's form, the syntax — is asked of the server's tab
 // (the designer's module tab, frmserver ibModuleTextView): its document is that tab's.
 
 #include "frmclient/frmclient.h"
@@ -281,7 +281,7 @@ private:
 
 	void PrepareTABs();
 
-	// ⭐ WHAT THE DESKTOP'S EDITOR ASKED THE CONFIGURATION — the names at the caret, a call's form — asked of the tab, with
+	// ⭐ WHAT THE DESKTOP'S EDITOR ASKED THE APPLICATION — the names at the caret, a call's form — asked of the tab, with
 	// the text as it is now and the caret in it (characters); false — no tab, or refused.
 	bool FetchAtCaret(ibProtocol::ibView::ibModule::ibRequest kind, ibProtocolNode& answer);
 

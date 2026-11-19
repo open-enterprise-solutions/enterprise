@@ -31,7 +31,7 @@
 // It stores nothing and creates nothing. No table is generated for it, and no
 // restructuring pass reaches it — not because it says so, but because a table
 // is built from the attributes of an OWNER that has one, and this one's owner is
-// the configuration.
+// the application.
 
 #include "attribute/metaAttributeObject.h"
 
@@ -86,7 +86,7 @@ class BACKEND_API ibValueSessionParameter : public ibValue {
 	private:
 
 	// ibValuePtr — a metaobject is a refcounted value; a raw pointer would outlive a
-	// configuration reload.
+	// application reload.
 	ibValuePtr<ibValueMetaObjectSessionParameter> m_metaObject;
 };
 
@@ -97,7 +97,7 @@ class BACKEND_API ibValueSessionParameter : public ibValue {
 //     SessionParameters.Organisation          // read — from anywhere
 //     SessionParameters.Organisation = org;   // write — only in the session module
 //
-// The members are whatever the configuration declared, so the name list is read
+// The members are whatever the application declared, so the name list is read
 // from the metadata every time it is asked: a parameter added in the designer
 // appears without a restart, and the editor completes exactly what the runtime
 // accepts.
@@ -113,7 +113,7 @@ class BACKEND_API ibValueSessionParameter : public ibValue {
 class BACKEND_API ibValueSessionParameters : public ibValueDynamicMembers {
 	public:
 
-	// WHICH configuration's parameters. Defaulted so the type registry can create
+	// WHICH application's parameters. Defaulted so the type registry can create
 	// one with no arguments; the global context hands over the metadata it already
 	// holds, and a null falls back to the active one.
 	ibValueSessionParameters(class ibMetaData* metaData = nullptr);

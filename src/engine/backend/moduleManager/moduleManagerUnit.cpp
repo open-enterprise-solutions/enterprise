@@ -1,6 +1,6 @@
 ////////////////////////////////////////////////////////////////////////////
 //	Author		: Maxim Kornienko
-//	Description : module manager - common modules
+//	Description : module manager - shared modules
 ////////////////////////////////////////////////////////////////////////////
 
 #include "moduleManager.h"
@@ -10,7 +10,7 @@
 #include "backend/session/session.h"
 
 
-// A common module sits directly under the manager that owns it, and it is the ctor
+// A shared module sits directly under the manager that owns it, and it is the ctor
 // that says so — for the runtime and the designer alike, because the chain does the
 // same work in both. Downwards it carries the scope a module compiles against
 // (the parent's bytecode, or its compiler in a chain); upwards it is what
@@ -18,7 +18,7 @@
 //
 // This used to be two ctors, one of them managerless, and the designer got that one:
 // its units stood outside the chain, so the editor's syntax check resolved no global
-// name in any common module while the runtime compiled the same text without a word.
+// name in any shared module while the runtime compiled the same text without a word.
 ibValueModuleManager::ibValueModuleUnit::ibValueModuleUnit(ibValueModuleManager *moduleManager, ibValueMetaObjectModuleBase *moduleObject, bool managerModule) :
 	ibValueDynamicMembers(ibValueTypes::TYPE_VALUE, true),
 	ibRuntimeModuleDataObject(m_members, this, moduleObject),
@@ -39,14 +39,14 @@ ibValueModuleManager::ibValueModuleUnit::~ibValueModuleUnit()
 
 #define objectManager ibT("Manager")
 
-//common module
-bool ibValueModuleRuntimeManager::ibValueRuntimeModuleUnit::CreateCommonModule()
+//shared module
+bool ibValueModuleRuntimeManager::ibValueRuntimeModuleUnit::CreateSharedModule()
 {
 	ibASSERT(m_moduleManager != nullptr);
 
 	// Parent already wired in ctor (SetParent(moduleManager)). Bind the
 	// module-scope "Manager" singleton that scripts reach via Manager.<method>()
-	// inside common modules — transparent scope container (name not an editor
+	// inside shared modules — transparent scope container (name not an editor
 	// identifier, only its members surface).
 	BindScopeVariable(objectManager, m_moduleManager->GetObjectManager());
 
@@ -55,7 +55,7 @@ bool ibValueModuleRuntimeManager::ibValueRuntimeModuleUnit::CreateCommonModule()
 		Compile();
 	}
 	catch (const ibCoreException& err) {
-		ibJournalWarning(ibT("module"),_("Common module init failed: %s"), err.GetErrorDescription());
+		ibJournalWarning(ibT("module"),_("Shared module init failed: %s"), err.GetErrorDescription());
 		return false;
 	};
 
@@ -65,7 +65,7 @@ bool ibValueModuleRuntimeManager::ibValueRuntimeModuleUnit::CreateCommonModule()
 	return true;
 }
 
-bool ibValueModuleRuntimeManager::ibValueRuntimeModuleUnit::DestroyCommonModule()
+bool ibValueModuleRuntimeManager::ibValueRuntimeModuleUnit::DestroySharedModule()
 {
 	ibASSERT(m_moduleManager != nullptr);
 

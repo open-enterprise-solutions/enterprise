@@ -4,6 +4,30 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
 
 ## Breaking changes
 
+- **Kinds, functions, rights and tools take plain English names, one word for each family.** A module, a query or
+  an assistant's call that names an old one no longer compiles or is refused: rename it.
+  - The configuration is the *application*: `CommonMetadata` → `ApplicationMetadata`, its module
+    `ConfigurationModule` → `ApplicationModule`, `ConfigModuleManager` → `ApplicationModuleManager`, the right
+    `UpdateDatabaseConfiguration` → `UpdateDatabase`. Over MCP `config_apply`, `config_check`, `config_save`,
+    `config_rollback`, `config_export_files`, `config_import_files` → `app_apply`, `app_check`, `app_save`,
+    `app_rollback`, `app_export_files`, `app_import_files`.
+  - The *Common* branch is *Shared*: `CommonModule`, `CommonForm`, `CommonTemplate`, `CommonCommand`,
+    `CommonAttribute`, `CommonAttributeColumn` → `SharedModule`, `SharedForm`, `SharedTemplate`, `SharedCommand`,
+    `SharedAttribute`, `SharedAttributeColumn`; `GetCommonForm()`, `ShowCommonForm()`, `GetCommonTemplate()` →
+    `GetSharedForm()`, `ShowSharedForm()`, `GetSharedTemplate()`.
+  - A data processor is a *data tool*: `DataProcessor` → `DataTool`, `DataProcessors.<Name>` → `DataTools.<Name>`,
+    `ExternalDataProcessor` → `ExternalDataTool`, `ExternalDataProcessors` → `ExternalDataTools`. Over MCP
+    `external_processor_open` and `external_processor_save` → `external_data_tool_open` and `external_data_tool_save`.
+  - A functional option is a *feature option*: `FunctionalOption` → `FeatureOption`, `FunctionalOptions.<Name>` →
+    `FeatureOptions.<Name>`.
+  - Exclusive mode is *single-user mode*: `ExclusiveMode()` → `SingleUserMode()`, `SetExclusive(on)` →
+    `SetSingleUserMode(on)`, the right `ExclusiveMode` → `SingleUserMode`.
+  - A value table's parts: `TableValueRow` → `TableRow`, `TableValueColumn` → `TableColumns`,
+    `TableValueColumnInfo` → `TableColumn`.
+  - The Visual-Basic-style syntax is stored as `ves`, not `vbs` (`ProgramSyntax.ves`).
+- **A base, an application file or an application folder written before this build is not read.** The stored names
+  changed with the ones above, and nothing reads the old ones: make the base again and load the application into it.
+
 - **In a date pattern `MM` is the month and `mm` the minutes**, as everywhere else they are written;
   the seconds are `ss`. It was the other way round. A stored format such as `DF=dd.mm.yyyy` now
   prints the minutes where the month was, and nothing reports it: change `mm` to `MM` (and `MM` to
@@ -13,9 +37,9 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
   `XMLString` and `XMLValue`. A module that calls the old names no longer compiles: rename the calls.
 - **A guid takes 16 bytes, and the packet is OES-RPC version 2.** Every guid a node holds — a
   reference's, a metadata object's, a `Guid` value — is its 16 bytes, not its text; XML and JSON
-  still show the text. A configuration, a form or a message written by this build is not read by an
+  still show the text. An application, a form or a message written by this build is not read by an
   earlier one (`the packet is OES-RPC version 2, this end reads 1`): update the thin clients with
-  the server. A base written before is read as it is.
+  the server.
 - **The assistant access (MCP) listens on the person's own machine, and each person has their own.**
   Their client opens the port and carries the messages to the base; the server opens none, and
   `McpPort` in `server.conf` is no longer read. Point an assistant that used it at the client's port.
@@ -32,10 +56,10 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
 - **An assistant in the application can work in your window.** It can open a report it wrote, as an
   external report in a tab; open a list or a document and put the cursor on a row; add or correct a
   value. All of it under your roles, with the *Data assistant* right. What it writes is really
-  written. Nothing is added to the configuration.
-- **An assistant opens external data processors and reports.** In the designer, one it makes or one you
+  written. Nothing is added to the application.
+- **An assistant opens external data tools and reports.** In the designer, one it makes or one you
   open opens in a tab you see. Its tree, modules and forms are changed with the same tools as the
-  configuration, and its Save hands the file back to the assistant, as Save hands it to you. In the
+  application, and its Save hands the file back to the assistant, as Save hands it to you. In the
   application it runs one under your roles, with the *Data assistant* right. The file stays where the
   assistant keeps it: the base never reads or writes that disk.
 - **Performance measurement.** *Debug → Performance measurement* times every client call and every line of script
@@ -77,11 +101,11 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
   `Quantity`, not `QuantityBalance`. A module that reads `QuantityBalance` from it raises "Table column not
   found": read `Quantity`. The query virtual table keeps `QuantityBalance` (#409).
 
-## Configuration
+## Application
 
-- **HTTP services: a configuration answers an HTTP request.** A new kind, `HTTPService`,
+- **HTTP services: an application answers an HTTP request.** A new kind, `HTTPService`,
   with `URLTemplate`s (`/Transfer/{id}/reset`, `/*`) and their `HTTPServiceMethod`s (Get, Post, …
-  or Any), shown in the tree's new Integration folder, right after Common. Registered among the base's web addresses, a
+  or Any), shown in the tree's new Integration folder, right after Shared. Registered among the base's web addresses, a
   request to `<publication>/es/<RootURL>/…` on the web server is answered by a function of the
   service's own module, given an `HTTPServiceRequest` and returning an `HTTPServiceResponse`. Each
   request is a session of its own, logged in by its `Authorization: Basic`, checked before the session
@@ -114,7 +138,7 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
   now the job's activity, which Active Users and `code_status` show.
 - **The module check names a method the manager, object or reference does not have.** `Catalogs.Products.CreateElement()`
   compiled and failed only when it ran, with "Aggregate object field not found". The designer's *Syntax control*, the
-  check on save, `module_write` and `config_check` now say "… has no method 'CreateElement'" at its line. A value that
+  check on save, `module_write` and `app_check` now say "… has no method 'CreateElement'" at its line. A value that
   came out of a call is not asked about, so the check runs no query.
 - **A form module adds an attribute to its open form and binds a control to it.**
   `ThisForm.Attributes` lists the form's attributes as `ThisForm.Controls` lists its controls: by index,
@@ -206,16 +230,16 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
   document and raises its error with the document's name. A sequence's list has a *Restore* command.
 - **The registration journal is a query source.** `SELECT … FROM Journal.Events(&BeginOfPeriod, &EndOfPeriod)`
   reads its events — `Date`, `Level` (`info`, `warn`, `error`, `audit`), `Session`, `User`, `Host`, `Source`,
-  `Event`, `Message`, `Object` (a reference of the configuration), `Details` (the value written with the event) —
-  and joins them to the configuration's tables like any other: `JOIN Catalog.Goods AS G ON E.Object = G.Ref`. Both
+  `Event`, `Message`, `Object` (a reference of the application), `Details` (the value written with the event) —
+  and joins them to the application's tables like any other: `JOIN Catalog.Goods AS G ON E.Object = G.Ref`. Both
   moments are inclusive and either may be left out. It is read by the right that opens the journal window, and
   `SELECT ALLOWED` reads a refusal as no rows.
 - **`Data.From(sourceName, arguments…)`** gives LINQ any source a query can name, with its arguments:
   `from e in Data.From("Journal.Events", Begin, End) select e`, or a register's
   `"AccumulationRegister.Stock.Turnovers"`. `Data.From(valueTable)` is as before.
-- **`Data.Platform`** holds the sources the platform declares in every configuration — `Data.Platform.Journal.Events`,
+- **`Data.Platform`** holds the sources the platform declares in every application — `Data.Platform.Journal.Events`,
   the whole registration journal — so the LINQ constructor's tree shows the journal. The query constructor shows it
-  under the same heading, *Platform*, after the configuration's kinds; the query still writes `Journal.Events`.
+  under the same heading, *Platform*, after the application's kinds; the query still writes `Journal.Events`.
 - **A query over the turnovers, or the balance and turnovers, of an accumulation or accounting register by
   `Recorder` or `Record` runs in the database.** They were read into memory, and with them everything the query
   does above them: the joins, the grouping and the totals. They are now one statement where the register's totals
@@ -268,8 +292,8 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
   cell's fill named with no ink is read with dark ink. A printout is light.
 - **The start**: the thin client's splash, with arrows and the stage of the start under it, is up from the first paint;
   a login asked takes its place, and it stays until the first window has its rows. The window's title has the OES logo
-  beside the configuration's name.
-- **The start page**: the forms the configuration places on it, live, in its columns, with sashes to drag between them.
+  beside the application's name.
+- **The start page**: the forms the application places on it, live, in its columns, with sashes to drag between them.
 - **A form comes whole**: one just opened is shown once it has its rows and its fields can be seen, the one before staying up
   meanwhile, and it replaces that one in a single frame, its tab with it. The splash stays until the first window has its
   rows, however long they take. The tabs are no longer drawn anew by every answer.
@@ -300,7 +324,7 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
   each a path under the publication and the code that answers there. Every web server that publishes the base
   mounts them within seconds and hands each request to the base; **Administration → Web addresses...** in the
   designer edits the list, and over MCP `address_list`, `address_register` and `address_unregister`. Two
-  kinds answer there: a configuration's HTTP service, and a person's assistant from the browser. `web.conf`
+  kinds answer there: an application's HTTP service, and a person's assistant from the browser. `web.conf`
   bounds the requests: `ServiceWorkers`, `ServiceCalls` (503 past it), `ServiceWait` (504 past it).
 - **An assistant works with the browser's session.** **Tools → Options…** in the browser is the thin client's
   assistant access page: *Let an assistant reach this session* starts it by itself at login, **Start now** and
@@ -322,22 +346,21 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
   String(150) and String(11) and could not be changed. A new code or number is generated in that type and length;
   a predefined item's code and description are values of that type — a number code takes a number in the designer
   and over MCP (`0042` is 42), a description is cut to its length — and are written as a type chosen later holds them.
-  A code or a description made shorter than the applied configuration has it, or a code turned between a string and
+  A code or a description made shorter than the base holds it, or a code turned between a string and
   a number, refuses the apply.
   Over MCP `metadata_get` shows each under the owner's property as a type, with the id `metadata_set_type` takes it
-  by. A configuration saved before keeps the old types.
+  by.
 - **A length or a precision a field cannot hold is refused, not cut.** `metadata_set_type` placed a length of 70000 as
   4464 and 300 digits as 44; it now refuses past the designer's bound (1024 characters, 32 digits) and a scale above
   the precision, given in words or as a whole description. A type description read from a node refuses a length or a
-  number of digits it would cut (past 65535 characters or 255 digits); a configuration saved before reads as it was
-  written.
+  number of digits it would cut (past 65535 characters or 255 digits).
 - **A string can have no limit.** Its length 0 — *Unlimited length* in the properties, *Unlimited* in the type dialog —
   stores text of any size, never indexed. A query compares, orders and groups it only cast to a length:
   `CAST(Comment AS String(100))`, cut by the database. Made unlimited, a field keeps its values; given a length back,
   each keeps its first characters, and the apply says how many it cuts.
 - **A refusal of a name in ORDER BY, TOTALS BY or INDEX BY says where the name is**, as everywhere else in a query.
   `INDEX BY` over a field the statement does not output is refused; before, it built no index and said nothing.
-  `VALUE(...)` naming a metaobject or a member the configuration does not have is refused by the check too, not only
+  `VALUE(...)` naming a metaobject or a member the application does not have is refused by the check too, not only
   when the query runs.
   Over MCP, `query_check` and `report_query` no longer call every refusal a missing name: a rule of the language
   (a field not grouped, a string of no limit compared bare) is reported as the refusal it is.
@@ -360,18 +383,17 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
   within its digits (`Number(5, 2)` holds 999.99), and the scale never passes the precision. Over MCP
   `metadata_set_type` takes `allowedLength`, `nonNegative` and `dateFraction`; what a call does not give, the field keeps.
 - **A report's composer is a template of the *Data composer* kind.** A template added to any object asks
-  what it holds, a spreadsheet document or a data composer, the way a new form asks its kind; a common
+  what it holds, a spreadsheet document or a data composer, the way a new form asks its kind; a shared
   template is a spreadsheet. The kind is chosen once; the template's row in the properties reads it and
   opens its editor. The report's *Composers* group is gone: its composers are among its
-  templates, and `GetTemplate(name)` returns a composer's composition, a new one each time. A configuration
-  or an external report written before opens with its composers as such templates. Over MCP
+  templates, and `GetTemplate(name)` returns a composer's composition, a new one each time. Over MCP
   `metadata_create` with the kind `Composer` still makes one.
 - **A predefined item declares what it is, not only what it is called.** A predefined characteristic
   of a chart of characteristic types declares its value `Type`; a predefined account declares its
   `AccountType`, whether it is `OffBalance`, the chart's accounting flags and its analytics — the rows
   of its `AccountDimensionKinds` section, each naming a predefined characteristic. They are kept in
-  the configuration with the item and written by the apply, as its parent is: set only as data, they
-  did not travel with the configuration. The analytics are unfolded into the account's kind columns
+  the application with the item and written by the apply, as its parent is: set only as data, they
+  did not travel with the application. The analytics are unfolded into the account's kind columns
   as saving an account does, and an account that declares none keeps the rows its data holds. Over
   MCP: `predefined_add` takes `values` and `lines`, `predefined_set` changes them on an item already
   declared (`lines: {Section: null}` stops declaring a section), `predefined_get` shows one item whole and
@@ -384,7 +406,7 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
   type deleted since included), an account with more analytics than its chart takes or a line
   naming a kind its chart of characteristic types no longer declares, a calculation type whose
   `Displacing`, `Base` or `Leading` line names no type the section may name, a new declared line
-  where the base already holds one (remove the lines held there first). A line the configuration
+  where the base already holds one (remove the lines held there first). A line the application
   stops declaring stays, an ordinary line.
 
 ## Forms
@@ -448,13 +470,13 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
   `Doc` may hold one of several document types, came back in whatever order the server liked: a sort that walked on
   from a group key was not grouped by, and the statement dropped it without a word. The walk is now a key of the
   statement as well — the groups stay the same, since the key fixes everything it walks into (#410).
-- **A thin designer in an application server gets exclusive mode.** The server's own login counted as another
-  session, so applying a configuration was refused with "other sessions are connected" when nobody else was. A job
+- **A thin designer in an application server gets single-user mode.** The server's own login counted as another
+  session, so an apply was refused with "other sessions are connected" when nobody else was. A job
   running at that moment still refuses, and now says so: it ends by itself, and the request can be made again.
-- **Applying a configuration that changes the structure asks for exclusive mode before it starts**, not at its
+- **An apply that changes the structure asks for single-user mode before it starts**, not at its
   first table change tens of seconds in. With another session connected the apply is refused at once, and nobody
   can come in while it runs. An apply of modules and forms only still asks nothing (#404). Deleting
-  an object the base holds counts as a change of structure from the start too: before the configuration was
+  an object the base holds counts as a change of structure from the start too: before the application was
   written, the deleted object's table was still counted.
 - **A document's number and an attribute are not narrowed, as a catalog's code is not.** A number made shorter -
   bound to the numerator of a shorter number (#661) - and an attribute of a catalog or a document, its own or a
@@ -490,12 +512,12 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
   and the attribute kept its old value.
 - **A scheduled job switched off stays off.** Its `Active = False` was written to the base and read back
   as on, so the job came back on its schedule at the next start.
-- **A breakpoint in an external processing's or report's module stops the run in the designer.** It was
+- **A breakpoint in an external data tool's or report's module stops the run in the designer.** It was
   refused as a line the running application does not have.
 - **Breakpoints moved by an edit are all kept when the module is saved.** Of two breakpoints moved by
   lines inserted above them, the base kept one.
-- **Save in a module of an external processing or report writes its file.** It saved nothing to the
-  file. The module is checked first, as a configuration's module is.
+- **Save in a module of an external data tool or report writes its file.** It saved nothing to the
+  file. The module is checked first, as an application's module is.
 
 - **A module nobody has compiled yet is compiled once.** Sessions entering a base together, with the
   bytecode cache empty, each compiled the same modules. The first now holds a lock in the database,
@@ -534,7 +556,7 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
 
 - **MCP: `app_stop` ends the application started from here**, with the debugger or without it, at a breakpoint
   or running. Only `app_run`'s restart could end it, so an application stopped at a breakpoint held the base and
-  `config_apply` waited behind it; its refusal now names `app_stop`.
+  `app_apply` waited behind it; its refusal now names `app_stop`.
 
 - **A value read from JSON no longer gains a `type` field.** The type's name the JSON view writes
   beside a value's type came back as a field, one more on each round.
@@ -543,9 +565,9 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
   charts published only `Ref` and the attributes a person added, so reading `Code`, `Description`,
   `DeletionMark` or `IsFolder` from a row was "field not found".
 
-- **`config_check` names a register that the save would refuse**: a register with nothing in it, or one
+- **`app_check` names a register that the save would refuse**: a register with nothing in it, or one
   written by a recorder that no document posts into, sequences included. The save refuses the whole
-  configuration over one of them, so every other change made in a session waited behind it, and the
+  application over one of them, so every other change made in a session waited behind it, and the
   first sign of it was that refusal. The check asks the question the save asks and reports it in the
   same words, before anything is saved. A sequence with no dimensions has one border and is saved;
   it is not reported.
@@ -598,19 +620,18 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
   and nobody was told. The workbook's XML is read by the engine's own parser, no longer by wx's.
 - **The thin designer's composer names its types and chooses its values.** Every Type cell read `<any>`, and the
   "..." of a parameter's type, of its value and of a condition's value opened nothing. The cells name the
-  configuration's types, and the "..." opens the type picker and the declared-value window, as the desktop's did.
+  application's types, and the "..." opens the type picker and the declared-value window, as the desktop's did.
   A condition's value chosen there is the reference chosen, a predefined element too; the desktop's made every one
   of them the empty reference. A parameter's expression is checked again, as the desktop checked it: `1 + (` or a
   name nobody declares is said when the editor or the window is closed, where it went into the cell without a word.
 - **A value declared in the designer reads as it was chosen when the composition is opened again**, where a
   parameter set to `CatalogRef.Goods.EmptyRef` or to a predefined element read as a number: its text was written
-  under the name the value's type is written under, and the type was read in its place. A composition saved before
-  reads such a value as nothing until it is chosen again; what it refers to is unchanged.
+  under the name the value's type is written under, and the type was read in its place.
 - **The thin designer does what the desktop did in these places**:
-  - A row dragged onto another in the configuration tree is copied there.
+  - A row dragged onto another in the application tree is copied there.
   - Clear database closes the open tabs first. A modified tab asks to be saved, and a tab that stays leaves the
     base as it was.
-  - A data processor or a report replaced from its file keeps its place in the tree.
+  - A data tool or a report replaced from its file keeps its place in the tree.
   - Tools → Options takes effect in the editors already open and in the output window.
   - A picture's System list offers the class icons too.
   - A control's Source window names fields by their synonyms.
@@ -618,23 +639,23 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
   - On macOS, Start without debugging starts the thin client. The designer looked for a plain file and missed the
     client's bundle.
   - A composer has no "Composition data" row in the inspector.
-- **MCP: a common picture takes its image through `picture_set`** — `data` (base64 PNG) or `svg`, with a
+- **MCP: a shared picture takes its image through `picture_set`** — `data` (base64 PNG) or `svg`, with a
   `name`. A `Picture` object could be declared with `metadata_create` and never given anything to show:
   `picture_set` refused it as having no picture of its own, and `metadata_set` on its `Picture` asked for
-  a structure. The image is kept in the configuration, the picture is listed under `picture_list` →
-  `configuration`, and `metadata_set` on that property now names `picture_set`.
+  a structure. The image is kept in the application, the picture is listed under `picture_list` →
+  `application`, and `metadata_set` on that property now names `picture_set`.
 - **A fold that opens on a module's first line has its marker**, in the designer's code editor and in the code
   runner's. The editors wrote the fold levels from the second line on.
-- **`ExternalDataProcessors.Create` and `ExternalReports.Create` no longer hand back a freed object.** A data
-  processor with no form, or a report with neither a form nor a composer, unloaded at the end of its own start,
+- **`ExternalDataTools.Create` and `ExternalReports.Create` no longer hand back a freed object.** A data
+  tool with no form, or a report with neither a form nor a composer, unloaded at the end of its own start,
   and the call returned what was left of it; it now returns nothing.
 - **MCP: `form_set` refuses a name for a button's `Command`** and names `form_bind`, which binds a command by its
   name. Sent `{name: …}`, it answered with a binding nobody asked for: the button kept the command it had and its
   item type became a number no type carries. A command binding now reads only the shape it is written in, `hops`
   and `commandType`, and replaces what it held.
-- **A data processor or a report read from its file into a configuration keeps its forms' bindings.** Its objects
+- **A data tool or a report read from its file into an application keeps its forms' bindings.** Its objects
   were given new ids, but its forms still held the file's: a button named the command of the object the file was
-  saved from, a field its attribute. Read into the configuration it came from, the copy's form ran the original's
+  saved from, a field its attribute. Read into the application it came from, the copy's form ran the original's
   command. The file is now read on its own and pasted in, as a copy made in the designer is pasted. And a pasted
   button names the pasted object's command — in the designer's copy and paste too, where it kept the original's.
 - **On macOS a text field shows every letter typed whole.** The left edge of each new letter stayed unpainted, in
@@ -649,8 +670,8 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
 - **On macOS closing a dialog no longer crashes the program** when the focus is in an empty field with a hint.
 - **On macOS menu icons stand level with their items' text.** On a Retina screen each icon sat half a line above
   its label, and the first one was cut by the menu's edge.
-- **MCP: `config_apply` says what it applied.** Its `changes` counted the structure work, so an apply of data
-  processors, reports, modules or forms, which live in no table, answered `changes: 0` with an empty ledger
+- **MCP: `app_apply` says what it applied.** Its `changes` counted the structure work, so an apply of data
+  tools, reports, modules or forms, which live in no table, answered `changes: 0` with an empty ledger
   while it applied them. `changes` and `objects` are now the objects the apply carried, in `database_diff`'s
   words; the structure work stays in `ledger`, `structureChanges` long.
 - **MCP: `code_run` says it needs the debugger.** It reaches an application only over the debugger's connection,
@@ -659,9 +680,9 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
   no debugger and names `app_run` with `restart: true`; `app_run`'s `debug` says which verbs need it. And `app_run`
   no longer starts a second application beside one it started without the debugger: it asks for `restart: true`,
   as it did beside a debug session.
-- **MCP: an object created and deleted before the configuration is written leaves no trace in `database_diff`.**
-  Its parents read "changed" and the change read as structural until the configuration was written; the same
-  count was in `config_apply`'s `changes`.
+- **MCP: an object created and deleted before the application is written leaves no trace in `database_diff`.**
+  Its parents read "changed" and the change read as structural until the application was written; the same
+  count was in `app_apply`'s `changes`.
 - **A missing property named like a global function is reported as a missing property.** `Doc.Date` or `P.Type`
   on a value that has no such property said "'Date' is a global function - it is not a member of this value",
   which read as `.Date` being taken for a call of `Date()`. That sentence is now kept for a method call such as

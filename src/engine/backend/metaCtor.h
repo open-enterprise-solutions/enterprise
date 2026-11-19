@@ -101,7 +101,7 @@ public:
 
 	// ⭐ THE "ANY" OF EACH KIND ARRIVES WITH THE METACLASS, on its registration — `Catalog` registers, `CatalogRef`
 	// appears — because it belongs to the METACLASS, not to any object of it: `CatalogRef` is a legal thing to
-	// declare in a configuration that has no catalogs yet. One per kind the metaclass HAS — a reference, an
+	// declare in an application that has no catalogs yet. One per kind the metaclass HAS — a reference, an
 	// object, a manager, a record set — and which it has is not a list anybody maintains: each class declares
 	// it (s_features, metaObject.h), asked as a CLASS constant rather than std::is_base_of so this header needs
 	// no metaobject definition. A kind it lacks is the empty branch and costs nothing.

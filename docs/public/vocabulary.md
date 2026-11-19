@@ -21,7 +21,7 @@ leaves the transaction open for its owner. Rules: development.md §3, §4.
 
 **Owner.** Whoever made a thing and keeps it. The owner decides what a door does not: retry, rollback,
 fallback, teardown. It hands its context down as a reference; nothing below reaches for it through a
-global or the active configuration.
+global or the active application.
 *Holds at* `ibApplicationInstance::Close` (`backend/appData.h`): a base's teardown is run by its owner,
 `ibApplicationHost::Close`, while the base is still listed. Rules: development.md §4, writing-code.md §10.
 
@@ -67,7 +67,7 @@ person.
 id, no longer its name. Rules: writing-code.md §6.
 
 **Description.** A schema as data, `ib…Description` in the core: copyable, comparable, storable as a
-version. It holds no live runtime object, so it can be read while a configuration is still loading.
+version. It holds no live runtime object, so it can be read while an application is still loading.
 *Holds at* `core/description/`: every description of the engine, with no runtime beside it. Rules:
 development.md §4, writing-code.md §7.
 

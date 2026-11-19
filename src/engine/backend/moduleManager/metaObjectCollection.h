@@ -15,10 +15,10 @@ void ibValueMetaObjectCollection_BindNames(ibValue::ibMemberTable& helper, const
 //
 // So the collection holds the METAOBJECTS, and what one is to a script is the heir's (ElementValue): its manager, the
 // object itself, its data source — made when it is asked for, so `Catalogs.Goods` makes one manager, not one for every
-// catalog of the configuration. Which objects of the kind are among them is the heir's too, answered as it fills itself.
+// catalog of the application. Which objects of the kind are among them is the heir's too, answered as it fills itself.
 //
 // A name is read after a dot or in brackets, and it is a NAME: case does not matter (`Catalogs.goods`). Two objects may
-// share one while a configuration is being edited (it is refused only when saved): the first answers it. Get and [ ]
+// share one while an application is being edited (it is refused only when saved): the first answers it. Get and [ ]
 // take a position as well; Count counts; For Each hands out the elements, not name-and-element pairs.
 class BACKEND_API ibValueMetaObjectCollection
 	: public ibValueCollection<ibValueMetaObject*, &ibValueMetaObjectCollection_BindNames> {

@@ -3,7 +3,7 @@
 
 // A REFERENCE — the engine's ibValueReferenceDataObject (backend/metaCollection/partial/reference/reference.h) as far as
 // a settings window's field tree asks it: which metaobjects a reference type points at, the question that gives a
-// field its [+]. A reference's value and its fields are the configuration's — the server's; what it answers for the
+// field its [+]. A reference's value and its fields are the application's — the server's; what it answers for the
 // types a window shows is kept here (ReadReferences), and asked as the engine is asked.
 
 #include <map>

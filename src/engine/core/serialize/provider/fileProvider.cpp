@@ -17,7 +17,7 @@ namespace fs = std::filesystem;
 
 // The file a node's own entries are written in, in its folder; the root's is the manifest at the top.
 const ibString kNodeFile = ibT("node.json");
-const ibString kManifest = ibT("configuration.json");
+const ibString kManifest = ibT("application.json");
 
 // The keys the layout adds to a node's JSON — structural, as ibJsonProvider's own are (`Node…`): the folders its
 // children are in, a value kept in a file beside it, and on the root what the directory is.
@@ -25,7 +25,7 @@ const ibString kNodeFolders = ibT("NodeFolders");
 const ibString kNodeFile_   = ibT("NodeFile");
 const ibString kNodeFormat  = ibT("NodeFormat");
 const ibString kNodeVersion = ibT("NodeVersion");
-const ibString kFormat      = ibT("OES-Configuration");
+const ibString kFormat      = ibT("OES-Application");
 constexpr int  kVersion     = 1;
 
 // A file's name is the same file whatever its case on the disks a repository is checked out on (Windows, macOS):
@@ -37,7 +37,7 @@ using ibNameSet = std::set<ibString, ibNoCaseLess>;
 
 void Refuse(const ibString& message)
 {
-	ibCoreException::Error(_("Configuration files: %s"), message);
+	ibCoreException::Error(_("Application files: %s"), message);
 }
 
 void CheckDepth(unsigned depth)
@@ -126,7 +126,7 @@ fs::path Path(const fs::path& directory, const ibString& name)
 			Refuse(ibString::Format(_("'%s' is not a file name inside the directory"), name));
 		path /= ibPathOf(step);
 		if (fs::is_symlink(fs::symlink_status(path)))
-			Refuse(_("a configuration file cannot be a symbolic link"));
+			Refuse(_("an application file cannot be a symbolic link"));
 		rest = after;
 	}
 	return path;
@@ -183,7 +183,7 @@ public:
 		for (const ibDataNode& child : node.Children()) {
 			const ibString name = FolderOf(child, position++);
 			if (!names.insert(name).second)
-				Refuse(ibString::Format(_("two parts of the configuration are named '%s' - a name told apart only by case "
+				Refuse(ibString::Format(_("two parts of the application are named '%s' - a name told apart only by case "
 					"is the same folder"), Join(folder, name)));
 			WriteNode(child, Join(folder, name), depth + 1);
 			folders.push_back(ibDataValue::String(name));
@@ -412,7 +412,7 @@ void CheckFormat(const ibDataNode& root)
 	const auto format = root.FindField(kNodeFormat), version = root.FindField(kNodeVersion);
 	if (!format || format->Kind() != ibDataKind::String || format->AsString() != kFormat
 		|| !version || version->Kind() != ibDataKind::Number || version->AsInt() != kVersion)
-		Refuse(_("the directory holds no configuration export of a version this build reads"));
+		Refuse(_("the directory holds no application export of a version this build reads"));
 }
 
 // A type named in a file and known to nobody here — the files were edited, or made by another build. Read on, the node
@@ -477,7 +477,7 @@ bool ibFileProvider::Read(const ibDataNode& files, ibDataNode& root) const
 bool ibFileProvider::Collect(const ibString& directory, ibDataNode& files)
 {
 	// The files the export names, followed as a reading follows them — and only those: whatever else the directory
-	// holds (a repository's own files) is not the configuration's.
+	// holds (a repository's own files) is not the application's.
 	const fs::path target = ibPathOf(directory);
 	ibDataNode taken;
 	ibJsonProvider json;
@@ -499,7 +499,7 @@ bool ibFileProvider::Collect(const ibString& directory, ibDataNode& files)
 bool ibFileProvider::Publish(const ibDataNode& files, const ibString& directory)
 {
 	if (!files.Has(kManifest))
-		Refuse(_("there is no configuration export to write"));
+		Refuse(_("there is no application export to write"));
 
 	const fs::path target = ibPathOf(directory);
 	fs::path stage = target;

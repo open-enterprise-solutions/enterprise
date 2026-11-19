@@ -119,8 +119,8 @@ ibHelpCorpus::ibHelpCorpus(const ibString&              locale,
 	// Tag every entry with its source so the merging constructor and the
 	// UI can distinguish later. Loader does not set this — keeping the
 	// invariant in one place avoids contradictions.
-	const bool fromCfg = (source == Source::kPerConfiguration);
-	for (auto& e : m_entries) e.fromConfiguration = fromCfg;
+	const bool fromCfg = (source == Source::kPerApplication);
+	for (auto& e : m_entries) e.fromApplication = fromCfg;
 
 	m_root        = std::make_unique<ibHelpCategory>();
 	m_fingerprint = HashEntries(m_entries, m_locale);
@@ -130,7 +130,7 @@ ibHelpCorpus::ibHelpCorpus(const ibString&              locale,
 }
 
 ibHelpCorpus::ibHelpCorpus(std::shared_ptr<const ibHelpCorpus> platform,
-                           std::shared_ptr<const ibHelpCorpus> perConfig,
+                           std::shared_ptr<const ibHelpCorpus> perApplication,
                            const ibString&                     locale)
     : m_locale(locale) {
 	// Carry forward source errors so callers see one combined diagnostics
@@ -142,9 +142,9 @@ ibHelpCorpus::ibHelpCorpus(std::shared_ptr<const ibHelpCorpus> platform,
 		for (const auto& err : src->m_loadErrors) m_loadErrors.push_back(err);
 	};
 	absorb(platform.get());
-	absorb(perConfig.get());
+	absorb(perApplication.get());
 
-	// Platform first — per-config entries with colliding ids overlay
+	// Platform first — per-application entries with colliding ids overlay
 	// (§3.6). Use a side index (id → slot in m_entries) for O(1) overlay
 	// lookups; the entry storage itself stays a std::vector so iteration
 	// order is deterministic across compilers / libstdc++ versions.
@@ -156,15 +156,15 @@ ibHelpCorpus::ibHelpCorpus(std::shared_ptr<const ibHelpCorpus> platform,
 			m_entries.push_back(e);
 		}
 	}
-	if (perConfig) {
-		for (const auto& e : perConfig->m_entries) {
+	if (perApplication) {
+		for (const auto& e : perApplication->m_entries) {
 			auto it = slotById.find(e.id);
 			if (it != slotById.end()) {
 				// Overlay — record warning, replace platform entry.
 				ibHelpLoadError w;
 				w.severity = ibHelpLoadSeverity::kWarning;
 				w.message  = ibString::Format(
-				    ibT("Per-configuration entry '%s' overlays platform entry."),
+				    ibT("Per-application entry '%s' overlays platform entry."),
 				    e.id);
 				m_loadErrors.push_back(std::move(w));
 				m_entries[it->second] = e;
@@ -176,12 +176,12 @@ ibHelpCorpus::ibHelpCorpus(std::shared_ptr<const ibHelpCorpus> platform,
 	}
 
 	// Category names travel with the entries, platform first so a
-	// per-configuration dictionary can rename a section for its own corpus —
+	// per-application dictionary can rename a section for its own corpus —
 	// the same overlay rule the entries themselves follow.
 	if (platform)
 		m_categoryNames = platform->m_categoryNames;
-	if (perConfig)
-		for (const auto& named : perConfig->m_categoryNames)
+	if (perApplication)
+		for (const auto& named : perApplication->m_categoryNames)
 			m_categoryNames[named.first] = named.second;
 
 	m_root        = std::make_unique<ibHelpCategory>();

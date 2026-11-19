@@ -247,7 +247,7 @@ public:
 	virtual void ContributeTables(ibSchemaSnapshot& out) const override;
 
 	// Physical names of the read views — the register's table plus a suffix, by convention. These
-	// are what a queryable points at, so they are API the moment a configuration is applied.
+	// are what a queryable points at, so they are API the moment an application is applied.
 	ibString GetBalanceViewName() const            { return GetPhysicalTableName() + ibT("_Balance"); }
 	ibString GetTurnoverViewName() const           { return GetPhysicalTableName() + ibT("_Turnovers"); }
 	// Whether the surface HAS a movement arm — the recorder and the line number a movement is told apart by.
@@ -342,7 +342,7 @@ public:
 
 	//get module object in compose object 
 	virtual const ibValueMetaObjectModule* GetObjectModule() const { return m_propertyObjectModule->GetMetaObject(); }
-	virtual const ibValueMetaObjectCommonModule* GetManagerModule() const { return m_propertyManagerModule->GetMetaObject(); }
+	virtual const ibValueMetaObjectSharedModule* GetManagerModule() const { return m_propertyManagerModule->GetMetaObject(); }
 
 	//create associate value 
 	virtual ibValueMetaObjectFormBase* GetDefaultFormByID(const ibFormID& id) const;
@@ -541,7 +541,7 @@ public:
 	// every movement sharing them.
 	//
 	// 🛑 Left unanswered, the base returned an empty list, the renderer built `MATCHING ()`, and
-	// Firebird refused the statement — so a configuration that merely added a dimension could not
+	// Firebird refused the statement — so an application that merely added a dimension could not
 	// be applied at all.
 	//
 	// ⚠ Resources are NOT here: they are what is being accumulated. Keying on a value would make
@@ -552,7 +552,7 @@ public:
 	// FillArrayObjectByDimension). So a totals surface answered "period + recorder", and since a read
 	// with no ORDER BY of its own is ordered BY THE PRIMARY KEY (ibDataQueryBuilder::EffectiveSort),
 	// every plain read of a balance was sorted by two columns that surface does not have. Firebird:
-	// "Column unknown FLD1043_D" — measured on a warehouse configuration, 2026-09-02.
+	// "Column unknown FLD1043_D" — measured on a warehouse application, 2026-09-02.
 	//
 	// The declared DIMENSIONS are what a total is folded by, and they are asked for by their own name.
 	//
@@ -829,7 +829,7 @@ namespace ibRegBalTurnArg   { enum { Begin = 0, End = 1, Periodicity = 2, FillMe
 // arguments run in different orders are two things to remember instead of one.
 //
 // A new parameter is therefore inserted where it BELONGS by subject, and every call is re-read
-// against the new order — which is safe today only because there are no third-party configurations
+// against the new order — which is safe today only because there are no third-party applications
 // yet. Moving a slot silently re-reads a query nobody edited: that is exactly how the periodicity
 // once pushed the filter aside and nobody noticed.
 //

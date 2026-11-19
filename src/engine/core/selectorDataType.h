@@ -7,7 +7,7 @@
 //
 // A field that holds a type says which kinds of type it may take — any, a flag, a reference, a table, a
 // figure, a source of events — and the type picker renders that shape. The factory that answers it is each
-// side's (backend_type.h: ibBackendTypeConfigFactory::GetFilterDataType); the vocabulary is one, so it
+// side's (backend_type.h: ibBackendTypeApplicationFactory::GetFilterDataType); the vocabulary is one, so it
 // lives alone here, as queryBalanceRole.h does.
 
 enum ibSelectorDataType {

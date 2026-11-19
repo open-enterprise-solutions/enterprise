@@ -185,7 +185,7 @@ public:
 
 	//get module object in compose object
 	virtual const ibValueMetaObjectModule* GetObjectModule() const { return m_propertyObjectModule->GetMetaObject(); }
-	virtual const ibValueMetaObjectCommonModule* GetManagerModule() const { return m_propertyManagerModule->GetMetaObject(); }
+	virtual const ibValueMetaObjectSharedModule* GetManagerModule() const { return m_propertyManagerModule->GetMetaObject(); }
 
 	/**
 	* Property events
@@ -404,7 +404,7 @@ public:
 	// accepting it would mean accepting a value with nowhere to go.
 	//
 	// Enforced on the WRITE, not in the form: a limit that lives only in the interface is not a
-	// limit — a data processor, an import or a paste writes the same table without passing through
+	// limit — a data tool, an import or a paste writes the same table without passing through
 	// it. The form may refuse earlier for comfort; this is what makes it true.
 	virtual bool SaveData() override;
 

@@ -3,11 +3,11 @@
 ////////////////////////////////////////////////////////////////////////////
 //
 // ⭐ THE SAME FUNCTION THE MENU CALLS, not a second one that agrees with it. The three verbs are
-// asked OF THE CONFIGURATION and answered by whatever is watching it — the designer's own tree, in
-// a process that has one; the Configuration menu redirects into them and so does this file. Nothing
+// asked OF THE APPLICATION and answered by whatever is watching it — the designer's own tree, in
+// a process that has one; the Application menu redirects into them and so does this file. Nothing
 // is re-implemented here — each of these tools is a refusal or two and one call.
 //
-// ⭐ AND WHETHER ANYTHING CAN DO IT IS THE CONFIGURATION'S ANSWER, not a test made here. A runtime
+// ⭐ AND WHETHER ANYTHING CAN DO IT IS THE APPLICATION'S ANSWER, not a test made here. A runtime
 // host has nothing watching, restructuring is not something it does, and the refusal comes back in
 // words — so there is no second "are we in the designer?" in this file to drift from the first.
 //
@@ -21,8 +21,8 @@
 
 #include "frmserver/mcp/mcpTool.h"
 
-#include "backend/metadataConfiguration.h"
-#include "backend/compiler/scriptCheck.h"   // a common module, compiled the way config_check asks
+#include "backend/metadataApplication.h"
+#include "backend/compiler/scriptCheck.h"   // a shared module, compiled the way app_check asks
 #include "backend/metaCollection/metaModuleObject.h"
 #include "backend/restructureInfo.h"
 #include "backend/metaCollection/metaDiff.h"
@@ -35,19 +35,19 @@
 
 namespace {
 
-// The configuration these three verbs are asked of, refused in words when there is none.
+// The application these three verbs are asked of, refused in words when there is none.
 //
 // ⭐ IT USED TO HAND BACK THE TREE. That made the tool one of sixty sites that reached into the
 // metadata for a watcher and called a method on it — so the tool could only run where a designer
-// existed, and reached only the FIRST of several. The verbs now live on the configuration itself
+// existed, and reached only the FIRST of several. The verbs now live on the application itself
 // (metaData.h), which is what a tool should be talking to; whether anything is watching, and which
 // of them can actually do it, is answered in there.
-ibMetaDataConfigurationBase* OpenConfiguration(ibString& refusal)
+ibMetaDataApplicationBase* OpenApplication(ibString& refusal)
 {
-	ibMetaDataConfigurationBase* metaData = activeMetaData;
+	ibMetaDataApplicationBase* metaData = activeMetaData;
 
-	if (metaData == nullptr || !metaData->IsConfigOpen()) {
-		refusal = ibMcpText("No configuration is open.");
+	if (metaData == nullptr || !metaData->IsOpen()) {
+		refusal = ibMcpText("No application is open.");
 		return nullptr;
 	}
 
@@ -58,15 +58,15 @@ using ibArg = ibMcpTool::ibMcpArgument;
 
 // database_diff's arguments — declared once and read through the same objects.
 const ibArg& ArgProperties() { static const ibArg a(ibT("properties"), ibArg::Kind::Flag, ibMcpText("Also list the individual PROPERTIES that differ on a changed object. Off by default: a rename shows as one changed object, and the property rows are the detail behind it.")); return a; }
-const ibArg& ArgLimit() { static const ibArg a(ibT("limit"), ibArg::Kind::Whole, ibMcpText("At most this many entries. A first apply of a fresh configuration differs in everything, and the whole list says less than its first page. Default 200.")); return a; }
+const ibArg& ArgLimit() { static const ibArg a(ibT("limit"), ibArg::Kind::Whole, ibMcpText("At most this many entries. A first apply of a fresh application differs in everything, and the whole list says less than its first page. Default 200.")); return a; }
 
-// The word a caller acts on. The enum's own spelling is about two configurations being compared
+// The word a caller acts on. The enum's own spelling is about two applications being compared
 // side by side; here one side IS the database, so left and right have names.
 ibString StatusWord(ibMetaDiffStatus status)
 {
 	switch (status) {
-	case ibMetaDiffStatus::OnlyInRight: return ibT("added");     // in the configuration, not in the base
-	case ibMetaDiffStatus::OnlyInLeft:  return ibT("removed");   // in the base, gone from the configuration
+	case ibMetaDiffStatus::OnlyInRight: return ibT("added");     // in the application, not in the base
+	case ibMetaDiffStatus::OnlyInLeft:  return ibT("removed");   // in the base, gone from the application
 	case ibMetaDiffStatus::Changed:     return ibT("changed");
 	case ibMetaDiffStatus::Reordered:   return ibT("reordered"); // the same children in another order
 	default:                            return ibT("same");
@@ -74,8 +74,8 @@ ibString StatusWord(ibMetaDiffStatus status)
 }
 
 
-// ⭐ WHAT DIFFERS BETWEEN THE BASE AND THE CONFIGURATION, in objects — database_diff's list, and the account
-// config_apply gives of what it carried (#311). One rendering for both, so what a caller was shown before an apply
+// ⭐ WHAT DIFFERS BETWEEN THE BASE AND THE APPLICATION, in objects — database_diff's list, and the account
+// app_apply gives of what it carried (#311). One rendering for both, so what a caller was shown before an apply
 // and what the apply says it did are the same words. Answers how many differ; at most `limit` of them are
 // rendered into `entries`, the rest only counted - a truncated list must not lie about the total.
 int ListDifferences(const std::vector<ibMetaDiffRecord>& records, bool withProperties, std::int32_t limit,
@@ -95,7 +95,7 @@ int ListDifferences(const std::vector<ibMetaDiffRecord>& records, bool withPrope
 			continue;
 
 		// 🛑 CREATED AND DELETED WITHOUT EVER BEING APPLIED IS NOT A DIFFERENCE. An object marked
-		// deleted stays in the tree until the configuration is written, so one that the database
+		// deleted stays in the tree until the application is written, so one that the database
 		// has never heard of shows up here as ADDED — and a caller reading the diff is told to
 		// expect a table for something metadata_get answers "nothing has this id" about. Anything
 		// the database DOES hold still reports, deleted or not: that is a removal, which is the
@@ -118,7 +118,7 @@ int ListDifferences(const std::vector<ibMetaDiffRecord>& records, bool withPrope
 		if (record.IsProperty()) {
 			entry->SetValue(ibT("property"), record.m_propertyName);
 			entry->SetValue(ibT("inDatabase"), record.m_leftValue);
-			entry->SetValue(ibT("inConfiguration"), record.m_rightValue);
+			entry->SetValue(ibT("inApplication"), record.m_rightValue);
 		}
 		else if (const ibValueMetaObject* object = record.GetAnyObject()) {
 			ibMcpSayObject(object, *entry);
@@ -147,23 +147,23 @@ const ibArg& ArgConfirm()
 } // namespace
 
 //---------------------------------------------------------------------------
-// config_save
+// app_save
 //---------------------------------------------------------------------------
 
-class ibMcpToolConfigSave : public ibMcpTool {
+class ibMcpToolAppSave : public ibMcpTool {
 public:
 
-	ibString GetName() const override { return ibT("config_save"); }
+	ibString GetName() const override { return ibT("app_save"); }
 
 	ibString GetActivity(const ibDataNode& params) const override
 	{
-		return ibMcpText("saving the configuration");
+		return ibMcpText("saving the application");
 	}
 
 	ibString GetDescription() const override
 	{
 		// 🛑 THIS TEXT WAS TRUE, THEN FALSE FOR TWO DAYS, THEN TRUE AGAIN, AND IT NEVER MOVED.
-		// SaveConfiguration was given saveConfigFlag on 2026-09-04 — the flag that opens the
+		// SaveApplication was given saveApplicationFlag on 2026-09-04 — the flag that opens the
 		// RESTRUCTURE branch, handed over to reach something else entirely — and from that moment a
 		// plain save issued DDL: ten CREATE TABLE and six ALTER TABLE during saves alone, measured
 		// 2026-09-05. The description was then corrected to say so, which was the right thing to do
@@ -172,13 +172,13 @@ public:
 		// ⭐ THE LESSON WORTH KEEPING IS NOT ABOUT THE WORDING. What a verb DOES is decided in the
 		// engine, and a description that follows it around is the second copy of a fact. Both times
 		// the text was wrong, the fix was in the save path.
-		return ibMcpText("Store the configuration as it stands, so it survives closing the designer and "
+		return ibMcpText("Store the application as it stands, so it survives closing the designer and "
 			"logging in again. It does NOT touch the database structure and does NOT become the "
-			"configuration the application runs - that is config_apply, and the two are separate "
+			"application the base runs - that is app_apply, and the two are separate "
 			"because they are two intentions. This is the diskette: cheap, safe, and the thing to "
 			"do before stopping work.\n"
 			"WHAT A SAVE LEAVES BEHIND IS A DIFFERENCE, and that is the point: the stored "
-			"configuration and the running one now disagree, database_diff says how, and the next "
+			"application and the running one now disagree, database_diff says how, and the next "
 			"apply - or the next time this base is opened - is what closes it. A restructure that "
 			"fails leaves the same difference rather than losing the work.");
 	}
@@ -191,13 +191,13 @@ public:
 
 	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
-		ibMetaDataConfigurationBase* config = OpenConfiguration(refusal);
-		if (config == nullptr)
+		ibMetaDataApplicationBase* application = OpenApplication(refusal);
+		if (application == nullptr)
 			return false;
 
 		// ⭐⭐ THE REASON IS NOT IN THE RETURN VALUE — it is in the LEDGER.
 		//
-		// SaveConfiguration answers false and fills `refusal` with what IT knows, but the objects
+		// SaveApplication answers false and fills `refusal` with what IT knows, but the objects
 		// that actually refused say so into the restructure ledger (and through the message pane,
 		// which is the same text arriving somewhere a tool cannot read). So a real, specific
 		// refusal — "the Warehouse attribute has no type", say — reached the person's window while
@@ -205,7 +205,7 @@ public:
 		//
 		// 🛑 AND THAT IS HOW A WRITE GOES MISSING. An assistant that cannot see WHY the save failed
 		// reads a vague refusal as a hiccup, carries on, and everything downstream is reasoning
-		// about a configuration the database never received — a chart of accounts was lost exactly
+		// about an application the database never received — a chart of accounts was lost exactly
 		// this way (2026-08-31).
 		//
 		// ⚠ AND THE LEDGER IS ONLY THE HALF THAT CAN BE READ FROM HERE. The rest is said through
@@ -215,10 +215,10 @@ public:
 		//
 		// Harvested with the same three lines metadata_list already uses for its readiness probe —
 		// clear, act, read — so there is one way of asking "what was said about this", not two.
-		ibRestructureInfo& ledger = ibMetaDataConfigurationBase::GetRestructureInfo();
+		ibRestructureInfo& ledger = ibMetaDataApplicationBase::GetRestructureInfo();
 		ledger.Clear();
 
-		if (!config->SaveConfiguration(refusal)) {
+		if (!application->SaveApplication(refusal)) {
 
 			ibString said;
 			for (const ibRestructureInfo::Entry& entry : ledger) {
@@ -246,43 +246,43 @@ public:
 		// this before, then said the opposite for the two days the save was restructuring, and says
 		// it again — see the description above for why the text was never the thing to fix.
 		result.SetValue(ibT("note"),
-			ibMcpText("Stored. The application still runs the previously applied configuration - "
+			ibMcpText("Stored. The base still runs the previously applied application - "
 			  "database_diff says what it does not yet have."));
 
 		return true;
 	}
 };
 
-MCP_TOOL_REGISTER_DESIGNER(ibMcpToolConfigSave);
+MCP_TOOL_REGISTER_DESIGNER(ibMcpToolAppSave);
 
 //---------------------------------------------------------------------------
-// Configuration directories use the same metadata door as the Designer menu.
+// Application directories use the same metadata door as the Designer menu.
 //---------------------------------------------------------------------------
 
 namespace {
 const ibArg& ArgDirectory()
 {
 	static const ibArg argument(ibT("directory"), ibArg::Kind::Text,
-		ibMcpText("A dedicated configuration export directory on the designer host. "
+		ibMcpText("A dedicated application export directory on the designer host. "
 			"Keep it inside a source repository, alongside the local database directory."), true);
 	return argument;
 }
 const ibArg& ArgImportConfirm()
 {
 	static const ibArg argument(ibT("confirm"), ibArg::Kind::Flag,
-		ibMcpText("true permits replacing the edited configuration with the selected files. "
+		ibMcpText("true permits replacing the edited application with the selected files. "
 			"false refuses without reading or changing metadata."), true);
 	return argument;
 }
 }
 
-class ibMcpToolConfigExportFiles : public ibMcpTool {
+class ibMcpToolAppExportFiles : public ibMcpTool {
 public:
-	virtual ibString GetName() const override { return ibT("config_export_files"); }
-	virtual ibString GetActivity(const ibDataNode&) const override { return ibMcpText("exporting configuration files"); }
+	virtual ibString GetName() const override { return ibT("app_export_files"); }
+	virtual ibString GetActivity(const ibDataNode&) const override { return ibMcpText("exporting application files"); }
 	virtual ibString GetDescription() const override
 	{
-		return ibMcpText("Export configuration metadata to text files for version control: a part is its name's folder "
+		return ibMcpText("Export application metadata to text files for version control: a part is its name's folder "
 			"under its type's (Catalog/Goods/node.json, the node in the engine's JSON form), a module's text and a "
 			"binary are files beside it. Replaces a dedicated export directory, refusing unrelated files. Does not "
 			"save or apply the database or export records.");
@@ -294,14 +294,14 @@ public:
 	}
 	virtual bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
-		ibMetaDataConfigurationBase* config = OpenConfiguration(refusal);
-		if (config == nullptr) return false;
-		if (!config->AccessRight_DataAdministration()) {
+		ibMetaDataApplicationBase* application = OpenApplication(refusal);
+		if (application == nullptr) return false;
+		if (!application->AccessRight_DataAdministration()) {
 			refusal = ibMcpText("Not enough access rights for this user.");
 			return false;
 		}
-		if (!config->SaveConfigToFiles(ArgDirectory().Text(params))) {
-			refusal = ibMcpText("The configuration files could not be exported.");
+		if (!application->SaveApplicationToFiles(ArgDirectory().Text(params))) {
+			refusal = ibMcpText("The application files could not be exported.");
 			return false;
 		}
 		result.SetValue(ibT("directory"), ArgDirectory().Text(params));
@@ -309,18 +309,18 @@ public:
 	}
 };
 
-MCP_TOOL_REGISTER_DESIGNER(ibMcpToolConfigExportFiles);
+MCP_TOOL_REGISTER_DESIGNER(ibMcpToolAppExportFiles);
 
-class ibMcpToolConfigImportFiles : public ibMcpTool {
+class ibMcpToolAppImportFiles : public ibMcpTool {
 public:
-	virtual ibString GetName() const override { return ibT("config_import_files"); }
-	virtual ibString GetActivity(const ibDataNode&) const override { return ibMcpText("importing configuration files"); }
+	virtual ibString GetName() const override { return ibT("app_import_files"); }
+	virtual ibString GetActivity(const ibDataNode&) const override { return ibMcpText("importing application files"); }
 	virtual ibString GetDescription() const override
 	{
-		return ibMcpText("Replace the edited configuration with metadata from a configuration export directory "
+		return ibMcpText("Replace the edited application with metadata from an application export directory "
 			"on the designer host. Reads and validates every referenced file before replacing metadata. "
 			"Requires confirm=true, closes open editors, and discards their edits. Does not save or apply: "
-			"use config_check, database_diff, config_save and config_apply afterwards.");
+			"use app_check, database_diff, app_save and app_apply afterwards.");
 	}
 	virtual const std::vector<ibMcpArgument>& Arguments() const override
 	{
@@ -329,18 +329,18 @@ public:
 	}
 	virtual bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
-		ibMetaDataConfigurationBase* config = OpenConfiguration(refusal);
-		if (config == nullptr) return false;
+		ibMetaDataApplicationBase* application = OpenApplication(refusal);
+		if (application == nullptr) return false;
 		if (!ArgImportConfirm().Flag(params)) {
-			refusal = ibMcpText("Importing replaces the edited configuration. Pass confirm=true to proceed.");
+			refusal = ibMcpText("Importing replaces the edited application. Pass confirm=true to proceed.");
 			return false;
 		}
-		if (!config->AccessRight_DataAdministration() || !config->IsEditable()) {
-			refusal = ibMcpText("The configuration is read-only or access is denied.");
+		if (!application->AccessRight_DataAdministration() || !application->IsEditable()) {
+			refusal = ibMcpText("The application is read-only or access is denied.");
 			return false;
 		}
-		if (!config->LoadConfigFromFiles(ArgDirectory().Text(params))) {
-			refusal = ibMcpText("The configuration files could not be imported.");
+		if (!application->LoadApplicationFromFiles(ArgDirectory().Text(params))) {
+			refusal = ibMcpText("The application files could not be imported.");
 			return false;
 		}
 		result.SetValue(ibT("directory"), ArgDirectory().Text(params));
@@ -348,43 +348,43 @@ public:
 	}
 };
 
-MCP_TOOL_REGISTER_DESIGNER(ibMcpToolConfigImportFiles);
+MCP_TOOL_REGISTER_DESIGNER(ibMcpToolAppImportFiles);
 
 //---------------------------------------------------------------------------
-// config_apply
+// app_apply
 //---------------------------------------------------------------------------
 
-class ibMcpToolConfigApply : public ibMcpTool {
+class ibMcpToolAppApply : public ibMcpTool {
 public:
 
-	ibString GetName() const override { return ibT("config_apply"); }
+	ibString GetName() const override { return ibT("app_apply"); }
 
 	ibString GetActivity(const ibDataNode& params) const override
 	{
 		return ArgConfirm().Flag(params)
-			? ibMcpText("applying the configuration to the database")
-			: ibMcpText("rehearsing what applying the configuration would do");
+			? ibMcpText("applying the application to the database")
+			: ibMcpText("rehearsing what applying the application would do");
 	}
 
 	ibString GetDescription() const override
 	{
-		return ibMcpText("Make the edited configuration the one the database holds - the designer's "
-			"Update database configuration. Code as much as structure: the application runs what the "
+		return ibMcpText("Make the edited application the one the database holds - the designer's "
+			"Update database. Code as much as structure: the application runs what the "
 			"database holds, so an edited module gets to the running application only through this, and "
 			"then after a restart (app_run restart). READ database_diff FIRST: this writes DDL and can "
 			"take the base exclusively - an application started from here holds it until app_stop ends it. "
 			"With confirm=false it goes all the way and then rolls "
 			"back, answering with the ledger of every CREATE, ALTER and DROP it would have made - "
 			"which is the only way to see the schema changes in advance, because the engine has "
-			"no rehearsal mode by design. What is rolled back is the structure: the configuration "
+			"no rehearsal mode by design. What is rolled back is the structure: the application "
 			"itself is stored first either way, as the designer's button stores it, and survives "
-			"closing the designer - config_rollback takes the database's copy back. Saving first "
-			"costs nothing here - config_save stores the configuration without touching the "
+			"closing the designer - app_rollback takes the database's copy back. Saving first "
+			"costs nothing here - app_save stores the application without touching the "
 			"structure, so the ledger this hands back still holds everything the base has not got.\n"
 			"THE ANSWER: `changes` counts the objects the apply carried - the list database_diff gave just "
 			"before it, in `objects` (`shown` when it is longer than that) - and `ledger` is the structure "
 			"work that needed, `structureChanges` long. They differ by design: a module, a form, a data "
-			"processor or a report lives in no table, so an apply of only those has many changes and an "
+			"tool or a report lives in no table, so an apply of only those has many changes and an "
 			"empty ledger.");
 	}
 
@@ -396,8 +396,8 @@ public:
 
 	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
-		ibMetaDataConfigurationBase* config = OpenConfiguration(refusal);
-		if (config == nullptr)
+		ibMetaDataApplicationBase* application = OpenApplication(refusal);
+		if (application == nullptr)
 			return false;
 
 		// ⚠ NO DEFAULT. A missing `confirm` is refused rather than read as either answer: assuming
@@ -415,13 +415,13 @@ public:
 
 		// ⭐⭐ WHAT THE APPLY CARRIES, IN OBJECTS - taken BEFORE it, because afterwards the base holds it and there is
 		// nothing left to compare (#311). The ledger below is the STRUCTURE the apply touched, and that is not the
-		// same question: seventy-six data processors, seventy-five reports and their attributes need no table, so a
+		// same question: seventy-six data tools, seventy-five reports and their attributes need no table, so a
 		// whole apply of them came back as `changes: 0` with an empty ledger while database_diff had listed every one
 		// a moment earlier and was empty a moment later. The caller could not tell whether its work got in.
 		std::vector<ibDataValue> objects;
 		int carried = 0;
-		if (ibMetaDataConfigurationBase* const baseline = config->GetConfiguration())
-			carried = ListDifferences(ibMetaDiffWalker::Walk(baseline->GetCommonMetaObject(), config->GetCommonMetaObject()),
+		if (ibMetaDataApplicationBase* const baseline = application->GetApplication())
+			carried = ListDifferences(ibMetaDiffWalker::Walk(baseline->GetRootMetaObject(), application->GetRootMetaObject()),
 				/*withProperties*/ false, /*limit*/ 200, objects);
 
 		// WHAT THE LEDGER SAID, captured as the decision is made — afterwards it belongs to the
@@ -456,7 +456,7 @@ public:
 			ledger.push_back(ibDataValue::Child(line));
 		};
 
-		const bool applied = config->ApplyConfiguration(refusal,
+		const bool applied = application->ApplyApplication(refusal,
 			[&appendEntry, &capturedUpTo, &sawErrors, &decisionReached, commit](const ibRestructureInfo& info) {
 
 				decisionReached = true;
@@ -483,7 +483,7 @@ public:
 		//
 		// Read from where the snapshot ended, so nothing is reported twice and nothing is lost.
 		{
-			const ibRestructureInfo& live = ibMetaDataConfigurationBase::GetRestructureInfo();
+			const ibRestructureInfo& live = ibMetaDataApplicationBase::GetRestructureInfo();
 			for (size_t i = capturedUpTo; i < live.Count(); ++i)
 				appendEntry(live.At(i));
 
@@ -501,7 +501,7 @@ public:
 
 		if (applied) {
 			if (!decisionReached)
-				result.SetValue(ibT("note"), ibMcpText("Nothing to apply: the base already holds this configuration. "
+				result.SetValue(ibT("note"), ibMcpText("Nothing to apply: the base already holds this application. "
 					"Nothing was written."));
 			return true;
 		}
@@ -512,17 +512,17 @@ public:
 		// ⚠ BUT ONLY IF THERE WAS A DECISION TO DECLINE. Everything that stops the apply before
 		// `decide` is a refusal with the engine's own words behind it, and it falls through.
 		if (decisionReached && (!commit || sawErrors)) {
-			// ⚠ THE CONFIGURATION ITSELF WAS STORED, whatever came of the rest: the apply's step 1 stores it
-			// before the restructure is decided (ApplyConfiguration). "Nothing was written" read as "closing the
+			// ⚠ THE APPLICATION ITSELF WAS STORED, whatever came of the rest: the apply's step 1 stores it
+			// before the restructure is decided (ApplyApplication). "Nothing was written" read as "closing the
 			// designer loses these edits" and a rehearsal's objects were in the stored copy at the next start
 			// (2026-11-03).
 			result.SetValue(ibT("note"), sawErrors
 				? ibMcpText("Rolled back: the ledger carries errors, so the database structure is untouched "
-					"whatever was confirmed. The configuration itself was stored, as applying stores it "
-					"first - config_rollback takes the database's copy back.")
+					"whatever was confirmed. The application itself was stored, as applying stores it "
+					"first - app_rollback takes the database's copy back.")
 				: ibMcpText("Rolled back as asked - the database structure is untouched; the ledger above is "
-					"what confirm: true would have done. The configuration itself was stored, as applying "
-					"stores it first - config_rollback takes the database's copy back."));
+					"what confirm: true would have done. The application itself was stored, as applying "
+					"stores it first - app_rollback takes the database's copy back."));
 			return true;
 		}
 
@@ -535,10 +535,10 @@ public:
 	}
 };
 
-MCP_TOOL_REGISTER_DESIGNER(ibMcpToolConfigApply);
+MCP_TOOL_REGISTER_DESIGNER(ibMcpToolAppApply);
 
 //---------------------------------------------------------------------------
-// config_rollback
+// app_rollback
 //---------------------------------------------------------------------------
 
 namespace {
@@ -551,14 +551,14 @@ const ibArg& ArgRollbackConfirm()
 }
 }
 
-class ibMcpToolConfigRollback : public ibMcpTool {
+class ibMcpToolAppRollback : public ibMcpTool {
 public:
 
-	ibString GetName() const override { return ibT("config_rollback"); }
+	ibString GetName() const override { return ibT("app_rollback"); }
 
 	ibString GetActivity(const ibDataNode& params) const override
 	{
-		return ibMcpText("taking the configuration back from the database");
+		return ibMcpText("taking the application back from the database");
 	}
 
 	ibString GetDescription() const override
@@ -577,8 +577,8 @@ public:
 
 	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
-		ibMetaDataConfigurationBase* config = OpenConfiguration(refusal);
-		if (config == nullptr)
+		ibMetaDataApplicationBase* application = OpenApplication(refusal);
+		if (application == nullptr)
 			return false;
 
 		if (!ArgRollbackConfirm().Flag(params)) {
@@ -587,19 +587,19 @@ public:
 			return false;
 		}
 
-		if (!config->RollbackConfiguration(refusal))
+		if (!application->RollbackApplication(refusal))
 			return false;
 
 		result.AddField(ibT("rolled_back"), ibDataValue::Bool(true));
 		result.SetValue(ibT("note"),
-			ibMcpText("The configuration is the database's copy again. Anything built and not applied is "
+			ibMcpText("The application is the database's copy again. Anything built and not applied is "
 			  "gone."));
 
 		return true;
 	}
 };
 
-MCP_TOOL_REGISTER_DESIGNER(ibMcpToolConfigRollback);
+MCP_TOOL_REGISTER_DESIGNER(ibMcpToolAppRollback);
 
 //---------------------------------------------------------------------------
 // database_diff — moved here from mcpToolDiff.cpp on 2026-09-01. It belongs beside
@@ -608,7 +608,7 @@ MCP_TOOL_REGISTER_DESIGNER(ibMcpToolConfigRollback);
 //
 //
 // ⭐ THE ONE THING A BUILDER COULD NOT SEE. Everything else here answers about
-// the configuration in memory: what objects exist, what a form holds, what a
+// the application in memory: what objects exist, what a form holds, what a
 // query offers. None of it says what would HAPPEN to the database — and since
 // applying is deliberately the developer's button and not a tool's, the caller
 // was building blind and asking a person to approve something neither of them
@@ -617,12 +617,12 @@ MCP_TOOL_REGISTER_DESIGNER(ibMcpToolConfigRollback);
 // ⭐ NOTHING IS COMPUTED HERE. Two things already existed and had never been
 // pointed at each other:
 //
-//   • ibMetaDataConfigurationStorage keeps m_configMetadata — the configuration
-//     AS THE DATABASE HAS IT. It is what IsConfigSave() compares against, and
-//     it is reachable through GetConfiguration().
+//   • ibMetaDataApplicationStorage keeps m_applicationMetadata — the application
+//     AS THE DATABASE HAS IT. It is what IsApplicationSave() compares against, and
+//     it is reachable through GetApplication().
 //   • ibMetaDiffWalker::Walk pairs two metadata trees by guid and returns a
 //     flat, pre-ordered list of what differs. It was written for comparing two
-//     configurations; the database's own copy IS a configuration.
+//     applications; the database's own copy IS an application.
 //
 // So this tool is one call and a rendering. That it did not exist is not a gap
 // in the engine — it is a question nobody had asked out loud.
@@ -650,10 +650,10 @@ public:
 
 	ibString GetDescription() const override
 	{
-		return ibMcpText("What would change in the database if the configuration were applied - object by "
+		return ibMcpText("What would change in the database if the application were applied - object by "
 			"object, in the words the metadata tree uses, plus whether the change touches the "
 			"database STRUCTURE at all. Ask it after building or editing anything, and ask it "
-			"BEFORE config_apply: a configuration is only a proposal until it is applied, and "
+			"BEFORE app_apply: an application is only a proposal until it is applied, and "
 			"this list is the only description of what applying would do. Answers nothing "
 			"changed when the base is already up to date.");
 	}
@@ -666,30 +666,30 @@ public:
 
 	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
-		// The BASE type, which is what the global actually is — a configuration open from a file
+		// The BASE type, which is what the global actually is — an application open from a file
 		// is one too, and narrowing here would have refused it for the wrong reason.
-		ibMetaDataConfigurationBase* metaData = activeMetaData;
+		ibMetaDataApplicationBase* metaData = activeMetaData;
 
-		if (metaData == nullptr || !metaData->IsConfigOpen()) {
-			refusal = ibMcpText("No configuration is open.");
+		if (metaData == nullptr || !metaData->IsOpen()) {
+			refusal = ibMcpText("No application is open.");
 			return false;
 		}
 
-		// ⭐ THE BASELINE IS A CONFIGURATION OF ITS OWN — the one the database holds. Only a
-		// STORAGE configuration has one: an external report or a data processor opened from a
+		// ⭐ THE BASELINE IS AN APPLICATION OF ITS OWN — the one the database holds. Only a
+		// STORAGE application has one: an external report or a data tool opened from a
 		// file answers to no database, and saying so is better than comparing it against itself
 		// and reporting "nothing changed".
-		// ⭐ ASKED, NOT RECOGNISED. GetConfiguration is virtual on ibMetaDataConfigurationBase and
+		// ⭐ ASKED, NOT RECOGNISED. GetApplication is virtual on ibMetaDataApplicationBase and
 		// answers null for exactly the containers that have no baseline — so the cast to the
 		// storage class was reaching past a question the base already answers.
-		ibMetaDataConfigurationBase* baseline = metaData->GetConfiguration();
+		ibMetaDataApplicationBase* baseline = metaData->GetApplication();
 
 		// ⚠ ONE NULL, TWO MEANINGS, AND THEY USED TO BE TWO CHECKS: a container that HAS no baseline
 		// (an external report answers to no database) and a baseline not loaded. The cast made the
 		// first, the null the second. With the cast gone they collapse into one answer, and the
 		// sentence says the thing a caller can act on.
 		if (baseline == nullptr) {
-			refusal = ibMcpText("This configuration is not held in a database, so there is nothing to "
+			refusal = ibMcpText("This application is not held in a database, so there is nothing to "
 				"compare it against.");
 			return false;
 		}
@@ -697,7 +697,7 @@ public:
 		// LEFT IS THE DATABASE, RIGHT IS WHAT IS BEING BUILT. Stated once, here, because every
 		// word below reads off it: what exists only on the right was ADDED.
 		const std::vector<ibMetaDiffRecord> records = ibMetaDiffWalker::Walk(
-			baseline->GetCommonMetaObject(), metaData->GetCommonMetaObject());
+			baseline->GetRootMetaObject(), metaData->GetRootMetaObject());
 
 		std::int32_t limit = (std::int32_t)ArgLimit().Whole(params);
 		if (limit <= 0)
@@ -719,7 +719,7 @@ public:
 		// — "one missed branch there writes to a live database during what the caller believed
 		// was a question". So this answers WHICH OBJECTS differ and WHETHER the schema is
 		// involved; what DDL falls out is the apply's own truth, shown by the apply's own dialog.
-		// Virtual on ibMetaDataConfigurationBase too — asked of the container it is, not of a class
+		// Virtual on ibMetaDataApplicationBase too — asked of the container it is, not of a class
 		// it was first converted into.
 		result.AddField(ibT("structural"),
 			ibDataValue::Bool(differing != 0 && !metaData->IsDynamicUpdateAvailable()));
@@ -736,15 +736,15 @@ public:
 		// empty list — which is also what an error looks like.
 		if (differing == 0) {
 			result.SetValue(ibT("note"),
-				ibMcpText("The database already holds this configuration - applying it would change "
+				ibMcpText("The database already holds this application - applying it would change "
 				  "nothing."));
 		}
 		else {
 			// Where the verb is, said here because a caller reading a list of pending changes
 			// will look for it next.
 			result.SetValue(ibT("apply"),
-				ibMcpText("config_apply writes these to the database - the same road the designer's "
-				  "Update database configuration button takes. Read this list first: it is the "
+				ibMcpText("app_apply writes these to the database - the same road the designer's "
+				  "Update database button takes. Read this list first: it is the "
 				  "only description of what that would do."));
 		}
 
@@ -755,14 +755,14 @@ public:
 MCP_TOOL_REGISTER_DESIGNER(ibMcpToolDatabaseDiff);
 
 //---------------------------------------------------------------------------
-// config_check
+// app_check
 //---------------------------------------------------------------------------
 //
-// ⭐⭐ WHAT IS HALF-BUILT, ASKED OF THE WHOLE CONFIGURATION. Every verb here already knows how to
+// ⭐⭐ WHAT IS HALF-BUILT, ASKED OF THE WHOLE APPLICATION. Every verb here already knows how to
 // complain about the thing it just touched — a composer says what it still lacks after every
 // change, and that one line is what stopped a report being finished with no columns (Max,
 // 2026-09-02). But it only ever speaks about the object under the caller's hand, and a
-// configuration is worked on across sessions, by more than one pair of hands, and read by somebody
+// application is worked on across sessions, by more than one pair of hands, and read by somebody
 // who did not build it.
 //
 // So the same questions are asked of everything, in one call. Not a style review: every line here
@@ -770,10 +770,10 @@ MCP_TOOL_REGISTER_DESIGNER(ibMcpToolDatabaseDiff);
 // composer nobody named, a field that can hold no type, a register that records nothing. Taste
 // stays out, because an audit that mixes "this is wrong" with "I would have done it differently"
 // is one nobody reads twice.
-class ibMcpToolConfigCheck : public ibMcpTool {
+class ibMcpToolAppCheck : public ibMcpTool {
 public:
 
-	ibString GetName() const override { return ibT("config_check"); }
+	ibString GetName() const override { return ibT("app_check"); }
 
 	ibString GetActivity(const ibDataNode& params) const override
 	{
@@ -782,7 +782,7 @@ public:
 
 	ibString GetDescription() const override
 	{
-		return ibMcpText("WHAT IS UNFINISHED IN THIS CONFIGURATION, object by object - the questions each "
+		return ibMcpText("WHAT IS UNFINISHED IN THIS APPLICATION, object by object - the questions each "
 			"verb asks about the thing it just touched, asked of everything at once. Only faults "
 			"that BITE: what will refuse to save (a composer with a nameless variant, a register "
 			"with no column or no recorder), and what produces silence for the person using it (a "
@@ -800,8 +800,8 @@ public:
 	{
 		ibMetaData* metaData = activeMetaData;
 
-		if (metaData == nullptr || !metaData->IsConfigOpen()) {
-			refusal = ibMcpText("No configuration is open.");
+		if (metaData == nullptr || !metaData->IsOpen()) {
+			refusal = ibMcpText("No application is open.");
 			return false;
 		}
 
@@ -809,7 +809,7 @@ public:
 
 		// The complaint, said about ONE object — the id and the name are what the caller acts on,
 		// and a fault with no address is a fault nobody can find (measured the same day: a refused
-		// save said "MainComposer: variant 1 has no name" of a configuration holding three
+		// save said "MainComposer: variant 1 has no name" of an application holding three
 		// composers called MainComposer).
 		// What the audit keeps beside the sentence (a module's diagnostics) goes into the entry as fields.
 		const ibMcpAudit::ibComplain complain(
@@ -849,7 +849,7 @@ public:
 	}
 };
 
-MCP_TOOL_REGISTER_DESIGNER(ibMcpToolConfigCheck);
+MCP_TOOL_REGISTER_DESIGNER(ibMcpToolAppCheck);
 
 // THE BACKEND'S OWN QUESTIONS — what a metaobject can be half-built into. Registered like any
 // other, so this file has no privilege over the ones that come from elsewhere.
@@ -858,7 +858,7 @@ public:
 
 	void Check(ibMetaData* metaData, const ibComplain& complain) const override
 	{
-		if (metaData == nullptr || !metaData->IsConfigOpen())
+		if (metaData == nullptr || !metaData->IsOpen())
 			return;
 
 		// ⭐⭐ AN OBJECT THE COMMAND INTERFACE COULD SHOW AND NO SECTION DOES. It saves, it applies,
@@ -880,7 +880,7 @@ public:
 			if (object == nullptr)
 				continue;
 
-			// ⚠ Only once a section EXISTS. In a configuration that has none, "in no section" is
+			// ⚠ Only once a section EXISTS. In an application that has none, "in no section" is
 			// true of everything and says nothing about any of it — that is a base at the start,
 			// not a base with a fault, and an audit that fires on all of it teaches people to skip
 			// the audit.
@@ -934,7 +934,7 @@ public:
 			}
 
 			// ⭐ A REGISTER THE SAVE WOULD REFUSE — no column at all, or written by a recorder and bound to
-			// none. The save itself is asked (ibMcpComplaints), because it refuses the WHOLE configuration over
+			// none. The save itself is asked (ibMcpComplaints), because it refuses the WHOLE application over
 			// one of them: every other change of the session waited behind a sequence that was still being
 			// built, and nothing said so until the save (#189).
 			const ibValueMetaObjectRegisterData* registerData = nullptr;
@@ -1000,19 +1000,19 @@ public:
 
 MCP_AUDIT_REGISTER(ibMcpAuditMetadata);
 
-// Compiling the common modules is one more question config_check asks, beside
+// Compiling the shared modules is one more question app_check asks, beside
 // the ones already registered. A module with no compile unit stays in the
 // answer: nothing was checked, which is not a pass - an empty diagnostics list
 // is a clean module only when the compile actually ran.
-class ibMcpAuditCommonModules : public ibMcpAudit {
+class ibMcpAuditSharedModules : public ibMcpAudit {
 public:
 	void Check(ibMetaData* metaData, const ibComplain& complain) const override
 	{
-		if (metaData == nullptr || !metaData->IsConfigOpen())
+		if (metaData == nullptr || !metaData->IsOpen())
 			return;
 
-		for (ibValueMetaObjectCommonModule* module :
-			metaData->GetAnyArrayObject<ibValueMetaObjectCommonModule>(true)) {
+		for (ibValueMetaObjectSharedModule* module :
+			metaData->GetAnyArrayObject<ibValueMetaObjectSharedModule>(true)) {
 
 			if (module == nullptr || module->IsDeleted())
 				continue;
@@ -1046,4 +1046,4 @@ public:
 	}
 };
 
-MCP_AUDIT_REGISTER(ibMcpAuditCommonModules);
+MCP_AUDIT_REGISTER(ibMcpAuditSharedModules);

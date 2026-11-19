@@ -29,7 +29,7 @@ protected:
 // ibTextDocument: ibDocument and its text married
 // ----------------------------------------------------------------------------
 
-// metaModuleObject.h is included for g_metaCommonModuleCLSID (icon lookup
+// metaModuleObject.h is included for g_metaSharedModuleCLSID (icon lookup
 // only — not for metadata binding; ibTextDocument is a plain file document).
 #include "backend/metaCollection/metaModuleObject.h"
 
@@ -38,7 +38,7 @@ class FRMSERVER_API ibTextDocument : public ibDocument
 public:
 
 	virtual ibPictureDescription GetIcon() const {
-		return ibPictureDescription(g_metaCommonModuleCLSID);
+		return ibPictureDescription(g_metaSharedModuleCLSID);
 	}
 
 	ibTextDocument() : ibDocument() {}

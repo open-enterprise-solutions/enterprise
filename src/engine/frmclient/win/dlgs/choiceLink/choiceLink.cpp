@@ -25,9 +25,9 @@ wxIcon FieldPicture(const wxIcon& own, const wxIcon& ordinary)
 }
 
 // A type row names its metaobject by metaID; the link keeps the class of that object's REFERENCE — the id the
-// configuration registered it under, its metaclass included.
+// application registered it under, its metaclass included.
 //
-// The configuration's answer (ibMetaData::GetIDObjectFromMetaID), which the client has no configuration to ask: the
+// The application's answer (ibMetaData::GetIDObjectFromMetaID), which the client has no application to ask: the
 // server writes it beside each type on the row (ibFieldReferenceClass).
 static ibClassID ReferenceClassOf(const ibBackendProperty* property, ibMetaID id)
 {

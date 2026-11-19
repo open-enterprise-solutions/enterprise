@@ -199,7 +199,7 @@ bool ibPropertyChoiceParameters::GetProtocolValue(ibDataNode& row, ibReader read
 		return false;
 	AppendTargets(row, m_owner, this);
 	const ibPropertyObject* const owner = m_owner;   // CONST: the non-const GetMetaData wxFAILs
-	const ibMetaData* const metaData = owner != nullptr ? owner->GetMetaData() : nullptr;   // the fields beside it are of its configuration
+	const ibMetaData* const metaData = owner != nullptr ? owner->GetMetaData() : nullptr;   // the fields beside it are of its application
 
 	auto sources = std::make_shared<ibDataNode>();
 	sources->SetValue(ibProtocol::ibSchema::ibProperties::Title, ibChoiceHolderName(m_owner));

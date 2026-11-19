@@ -24,7 +24,7 @@ enum func
 };
 
 // What a set of registrations answers to: the same verbs a register's set does — it is filled, read,
-// written and unloaded in the same words, and a configuration should not have to learn a second set
+// written and unloaded in the same words, and an application should not have to learn a second set
 // of them for this kind of row.
 void ibValueRecordSetObjectSequence::FillMembers(ibMemberTable& helper) const
 {

@@ -49,7 +49,7 @@ enum class ibQueryKeyword
 	//
 	// ⭐ A WORD HERE COSTS NOTHING, and that is why there is one. The link used to be recognised by
 	// POSITION alone (a top-level `JOIN A AND B ON …`, since a statement can only begin with SELECT
-	// or DROP) — to avoid taking a name away from every configuration that has an attribute called
+	// or DROP) — to avoid taking a name away from every application that has an attribute called
 	// `Link`. But at the START OF A STATEMENT no name can stand in the first place, so nothing is
 	// taken: the reasoning applied to words read where a FIELD may be, and this is not one of those
 	// positions (Max, 2026-08-27).
@@ -90,7 +90,7 @@ enum class ibQueryKeyword
 	// ⭐ `<expr> REFS <Kind>.<Name>` — the type TEST beside the type NARROWING (`CAST`). A word here
 	// costs nothing for the same reason LINK's does: it is read where an operator stands, never
 	// where a field may, and ParsePrimary's closing rule hands any keyword still standing in a value
-	// position back as a name — so a configuration may still have an attribute called `Refs`.
+	// position back as a name — so an application may still have an attribute called `Refs`.
 	Refs,
 
 	// literals
@@ -102,7 +102,7 @@ enum class ibQueryKeyword
 	// none. `IS NULL` cannot say the difference: it holds for both, so until this word there was no way
 	// to ask a query for one and not the other.
 	//
-	// ⚠ A word in a VALUE position, like TRUE / FALSE / NULL beside it, so it costs a configuration
+	// ⚠ A word in a VALUE position, like TRUE / FALSE / NULL beside it, so it costs an application
 	// nothing: ParsePrimary hands any keyword still standing where a field may stand back as a name, and
 	// a dotted path reads its first word as a name whatever the dictionary says.
 	Undefined,
@@ -149,10 +149,10 @@ struct ibQueryKeyWordEntry
 
 // ⭐⭐ THE SCALAR CALLS — A SECOND VOCABULARY, AND DELIBERATELY NOT KEYWORDS.
 //
-// `YEAR`, `MONTH`, `DAY`, `WEEK`, `HOUR`, `TYPE` are ordinary words. A configuration is entitled to
+// `YEAR`, `MONTH`, `DAY`, `WEEK`, `HOUR`, `TYPE` are ordinary words. An application is entitled to
 // an attribute called `Year`; a virtual table already spells its periodicity with the very same
 // words (`Turnovers(&From, &To, Month)`), read there as plain identifiers. Putting them in the
-// keyword table would take every one of those names away from every configuration at once — the
+// keyword table would take every one of those names away from every application at once — the
 // exact cost the `LINK` note weighed and refused to pay for a word read where a FIELD may stand.
 //
 // So they are recognised BY POSITION instead: an identifier immediately followed by `(`. A column

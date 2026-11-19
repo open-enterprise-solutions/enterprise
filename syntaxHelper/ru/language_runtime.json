@@ -274,7 +274,7 @@
       "syntax_block": "Q = Source.SkipWhile(Function(x) { return <condition>; });",
       "parameters": "predicate — fn(element), отвечающая Boolean.",
       "return_descr": "LinqQuery.",
-      "example": "AfterHeader = Lines.SkipWhile(Function(s) { return Left(s, 1) = \"#\"; }).ToArray();",
+      "example": "AfterHeader = Lines.SkipWhile(Function(s) { return Left(s, 1) == \"#\"; }).ToArray();",
       "availability": "Клиент, Сервер",
       "see_also": ["cls.LinqQuery.TakeWhile", "cls.LinqQuery.Skip"],
       "reviewed": false
@@ -530,7 +530,7 @@
       "syntax_block": "Value = Q.Aggregate(seed, Function(acc, x) { return <next acc>; });",
       "parameters": "seed — значение, с которого начать.\nreducer — fn(накопленное, элемент), отвечающая следующим накопленным значением.",
       "return_descr": "Последнее накопленное значение.",
-      "example": "List = Names.Aggregate(\"\", Function(acc, n) { return ?(acc = \"\", n, acc + \", \" + n); });",
+      "example": "List = Names.Aggregate(\"\", Function(acc, n) { return ?(acc == \"\", n, acc + \", \" + n); });",
       "availability": "Клиент, Сервер",
       "see_also": ["cls.LinqQuery.Sum"],
       "reviewed": false
@@ -546,7 +546,7 @@
       "syntax_block": "Q = Source.WhereIndexed(Function(x, i) { return <condition>; });",
       "parameters": "predicate — fn(element, index), отвечающая Boolean.",
       "return_descr": "LinqQuery.",
-      "example": "EveryOther = arr.WhereIndexed(Function(x, i) { return i % 2 = 0; }).ToArray();",
+      "example": "EveryOther = arr.WhereIndexed(Function(x, i) { return i % 2 == 0; }).ToArray();",
       "availability": "Клиент, Сервер",
       "see_also": ["cls.LinqQuery.Where", "cls.LinqQuery.SelectIndexed"],
       "reviewed": false
@@ -773,7 +773,7 @@
       "class_id": 500714230698570736,
       "category_keys": ["common_lang", "language_runtime"],
       "signature": "<Enumeration>.<Value>",
-      "description": "Откуда берутся системные перечисления. Каждое перечисление, которое регистрирует платформа, — TextEncoding, HTTPMethod, SortDirection, … — через него становится глобальным именем, а его значения читаются после точки: `TextEncoding.UTF8`. В скрипте он никогда не называется, своих членов у него нет; у каждого перечисления своя статья. Собственные перечисления конфигурации доступны через Enumerations.",
+      "description": "Откуда берутся системные перечисления. Каждое перечисление, которое регистрирует платформа, — TextEncoding, HTTPMethod, SortDirection, … — через него становится глобальным именем, а его значения читаются после точки: `TextEncoding.UTF8`. В скрипте он никогда не называется, своих членов у него нет; у каждого перечисления своя статья. Собственные перечисления приложения доступны через Enumerations.",
       "syntax_block": "Encoding = TextEncoding.UTF8;",
       "parameters": "",
       "return_descr": "",

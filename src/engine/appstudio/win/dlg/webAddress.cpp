@@ -84,7 +84,7 @@ void ibDialogWebAddress::Reload()
 
 void ibDialogWebAddress::OnAdd(wxCommandEvent&)
 {
-	// WHAT THE KINDS OFFER — each as the configuration declares it — and, last, a path of a kind the person names.
+	// WHAT THE KINDS OFFER — each as the application declares it — and, last, a path of a kind the person names.
 	const std::vector<ibProtocolNode> offers = m_shown.FindChild(ibWeb::Offers).Children();
 	const std::vector<ibProtocolNode> kinds = m_shown.FindChild(ibWeb::Kinds).Children();
 	if (offers.empty() && kinds.empty()) {

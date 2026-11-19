@@ -508,7 +508,7 @@
       "syntax_block_ves": "Narrowed = Source.Where(Function(x) Return <condition>; EndFunction);",
       "parameters": "predicate — a function of one row that answers a boolean.",
       "return_descr": "Queryable; when it ran in memory, a LINQ sequence (LinqQuery) — Foreach, Count and ToArray read it.",
-      "example": "Mine = Data.Documents.Sale.Where(Function(d) { return d.Counterparty = Client And d.Posted; });",
+      "example": "Mine = Data.Documents.Sale.Where(Function(d) { return d.Counterparty == Client && d.Posted; });",
       "availability": "Client, Server",
       "see_also": ["cls.Queryable", "guide.lambda", "kw.Where"],
       "reviewed": false
@@ -623,7 +623,7 @@
       "syntax_block": "Exists = Source.Any();",
       "parameters": "None.",
       "return_descr": "Boolean.",
-      "example": "if (Data.Documents.Sale.Where(Function(d) { return d.Counterparty = Client; }).Any()) {\n    Message(\"This client has sales\");\n}",
+      "example": "if (Data.Documents.Sale.Where(Function(d) { return d.Counterparty == Client; }).Any()) {\n    Message(\"This client has sales\");\n}",
       "availability": "Client, Server",
       "see_also": ["cls.Queryable.Count", "cls.Queryable.First"],
       "reviewed": false
@@ -655,7 +655,7 @@
       "syntax_block": "Row = Source.FirstOrDefault();",
       "parameters": "None.",
       "return_descr": "A row (a reference or a Structure), or Undefined.",
-      "example": "Found = Data.Catalogs.Goods.Where(Function(g) { return g.Code = Code; }).FirstOrDefault();",
+      "example": "Found = Data.Catalogs.Goods.Where(Function(g) { return g.Code == Code; }).FirstOrDefault();",
       "availability": "Client, Server",
       "see_also": ["cls.Queryable.First"],
       "reviewed": false
@@ -716,7 +716,7 @@
       "kind": "method",
       "category_keys": ["query"],
       "signature": "Count() : number",
-      "description": "How many sources of this kind the configuration has.",
+      "description": "How many sources of this kind the application has.",
       "syntax_block": "N = Data.Catalogs.Count();",
       "parameters": "None.",
       "return_descr": "Number.",
@@ -753,7 +753,7 @@
       "syntax_block_ves": "Source = Source.Where(Function(x) Return <condition>; EndFunction);",
       "parameters": "predicate — a function of one row of the source that answers a boolean.",
       "return_descr": "QueryDecorator — the same query, narrowed.",
-      "example": "if (Source = \"Document.Sale\") {\n    Source = Source.Where(Function(d) { return d.Company = SessionParameters.Company; });\n}",
+      "example": "if (Source == \"Document.Sale\") {\n    Source = Source.Where(Function(d) { return d.Company == SessionParameters.Company; });\n}",
       "availability": "Server",
       "see_also": ["cls.QueryDecorator", "cls.QueryDecorator.Join", "guide.rls"],
       "reviewed": false
@@ -766,11 +766,11 @@
       "category_keys": ["rls"],
       "signature": "Source.Join(inner, on : Function) | Source.Join(inner, leftKey : Function, rightKey : Function, op : string = \"=\") : QueryDecorator",
       "description": "Lets a row of the restricted query through only when a permitting row EXISTS in `inner` — a semi-join: it filters, it never multiplies rows. `inner` is a data source (`Data.InformationRegisters.Access`, with its own Where carried along) or a value table.\n\nTwo forms: one `on` comparison of a source key with an inner key, `Function(s, a) { return s.Warehouse = a.Warehouse; }`; or two key selectors and the comparison as a string — \"=\", \"<>\" (or \"!=\"), \"<\", \"<=\", \">\", \">=\"; any other string is read as \"=\". Each key must be ONE column — for a key reached through a reference, restrict with Where instead.\n\nA single-source inner runs as an EXISTS inside the one statement; a value table, or an inner that joins sources of its own, is put into a temporary table first. Where the database has no temporary tables, such an inner is joined as an ordinary join, which may repeat rows.",
-      "syntax_block": "Source = Source.Join(Inner, Function(s, a) { return s.<Key> = a.<Key>; });\nSource = Source.Join(Inner, Function(s) { return s.<Key>; }, Function(a) { return a.<Key>; }, \"=\");",
+      "syntax_block": "Source = Source.Join(Inner, Function(s, a) { return s.<Key> == a.<Key>; });\nSource = Source.Join(Inner, Function(s) { return s.<Key>; }, Function(a) { return a.<Key>; }, \"=\");",
       "syntax_block_ves": "Source = Source.Join(Inner, Function(s, a) Return s.<Key> = a.<Key>; EndFunction);\nSource = Source.Join(Inner, Function(s) Return s.<Key>; EndFunction, Function(a) Return a.<Key>; EndFunction, \"=\");",
       "parameters": "inner — a Queryable (Data.<Kind>.<Name>, optionally with its own Where) or a value Table.\non — a function of (sourceRow, innerRow) comparing one key of each.\nleftKey, rightKey — functions naming one key column on each side.\nop — the comparison, as a string; left out, \"=\".",
       "return_descr": "QueryDecorator — the same query, narrowed.",
-      "example": "Allowed = Data.InformationRegisters.WarehouseAccess.Where(Function(a) { return a.User = SessionParameters.User; });\nSource = Source.Join(Allowed, Function(s, a) { return s.Warehouse = a.Warehouse; });",
+      "example": "Allowed = Data.InformationRegisters.WarehouseAccess.Where(Function(a) { return a.User == SessionParameters.User; });\nSource = Source.Join(Allowed, Function(s, a) { return s.Warehouse == a.Warehouse; });",
       "availability": "Server",
       "see_also": ["cls.QueryDecorator", "cls.QueryDecorator.Where", "kw.Restrict"],
       "reviewed": false

@@ -2,12 +2,12 @@
 #define _DECLARED_PRESENTATION_H__
 
 ////////////////////////////////////////////////////////////////////////////
-// HOW A REFERENCE READS WHILE THE CONFIGURATION IS BEING WRITTEN
+// HOW A REFERENCE READS WHILE THE APPLICATION IS BEING WRITTEN
 ////////////////////////////////////////////////////////////////////////////
 //
 // At run time a reference presents the ROW behind it — a description, a document's number and date.
 // In the designer there is no row to present: a reference there stands for something the
-// configuration DECLARES, and what a person needs to read is what they wrote —
+// application DECLARES, and what a person needs to read is what they wrote —
 // `CatalogRef.Goods.EmptyRef`, `EnumRef.Kinds.Retail` (Max, 2026-08-28: "the designer sees
 // references through the full name").
 //

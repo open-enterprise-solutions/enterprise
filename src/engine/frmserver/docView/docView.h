@@ -120,7 +120,7 @@ public:
     // ⚠ THE GUID, NOT A NAME (Max's own correction, the same day). A name is unique enough to open
     // by and it MOVES: a rename between the open and the second open makes one document look like
     // two. The guid is what the object is, for as long as it exists. A path cannot serve either —
-    // a metaobject inside a configuration has no file, which is why FindDocumentByPath never
+    // a metaobject inside an application has no file, which is why FindDocumentByPath never
     // answers about one.
     //
     // ⚠ A STRING, ALWAYS (Max, 2026-09-01: *"an identifier is always a string"*). A guid is what a
@@ -177,7 +177,7 @@ public:
     virtual void Modify(bool mod);
 
     // Does what it shows take an edit — said to the client with its tab (ibTab::ReadOnly), where the windows opened
-    // from it ask it of their configuration. Nothing restricts a document by itself.
+    // from it ask it of their application. Nothing restricts a document by itself.
     virtual bool IsEditable() const { return true; }
 
     virtual bool AddView(ibView *view);
@@ -427,9 +427,13 @@ public:
     ibDocTemplate* FindTemplate(const std::type_index& documentType) const;
 
     ibDocument* FindDocumentByPath(const ibString& path) const;
+    // …and an external file's tree by the file its METADATA was read from (GetFileName) — what a failure in its module
+    // names, and what an assistant names it by. Not the document's path: a file the client handed over opens from
+    // temporary storage.
+    class ibMetaDataDocument* FindMetaDataDocument(const ibString& fileName) const;
 
     // ⭐ THE SAME QUESTION FOR THINGS THAT HAVE NO FILE. FindDocumentByPath answers for documents
-    // opened FROM DISK; everything inside a configuration — a form, a module, an object editor —
+    // opened FROM DISK; everything inside an application — a form, a module, an object editor —
     // has an identity and no path, and was therefore invisible to the only "is it already open"
     // check there was. See ibDocument::GetUniqueIdentifier.
     //
@@ -505,7 +509,7 @@ public:
     }
 
     // ⭐⭐ A METAOBJECT OPENS BY ITS CLSID, THROUGH THE TEMPLATE REGISTERED FOR IT — the same
-    // mechanism an external data processor opens by, and a module, and a form: AddDocTemplate above
+    // mechanism an external data tool opens by, and a module, and a form: AddDocTemplate above
     // says which document and view a clsid gets, and this makes one.
     //
     // 🛑 A SECOND NAME STOOD OVER IT — two static `OpenObjectForm` overloads that forwarded here and
@@ -589,7 +593,7 @@ protected:
     // At the owner: its editors, or mine where there is no owner (the desktop's).
     ibDocument* FindOpenDocument(const ibString& identifier, const ibDocument* docParent) const;
 
-    // WHICH DOCUMENT IS SHOWING THIS CONFIGURATION — null for the session's own, which the frame's tree holds with no
+    // WHICH DOCUMENT IS SHOWING THIS APPLICATION — null for the session's own, which the frame's tree holds with no
     // document at all (the desktop's). This is the owner an editor is opened under; getting it wrong puts the editor in
     // the manager's top level instead of under its tree, and every later "is it open?" then looks in the wrong place.
     class ibMetaDataDocument* FindMetaDataDocument(const class ibMetaData* metaData) const;
@@ -727,7 +731,7 @@ public:
 	virtual ibValueMetaObject* GetMetaObject() const { return m_metaObject; }
 
 	// 🛑 A DOCUMENT WITHOUT ITS METAOBJECT IS A STATE THAT HAPPENS — it is closed, the object was
-	// deleted, the configuration was reloaded under it — and every caller here already treats the
+	// deleted, the application was reloaded under it — and every caller here already treats the
 	// ANSWER as possibly null (`if (moduleObject != nullptr)`). This dereferenced before it could
 	// give them one, so the check they wrote was unreachable: the crash landed one frame earlier,
 	// inside a one-line helper (measured 2026-09-02 — designer_4404, opening a module from the
@@ -772,7 +776,7 @@ public:
 	virtual bool Save() override;
 	virtual bool SaveAs() override;
 
-	// ITS METAOBJECT'S answer — the configuration's word, an object deleted or switched off (ibValueMetaObject::
+	// ITS METAOBJECT'S answer — the application's word, an object deleted or switched off (ibValueMetaObject::
 	// IsEditable): what the module and composer views already say with their State. None held: nothing restricts it.
 	virtual bool IsEditable() const override { return m_metaObject == nullptr || m_metaObject->IsEditable(); }
 

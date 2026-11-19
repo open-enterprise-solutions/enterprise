@@ -264,7 +264,7 @@ public:
 			return true;
 		// ASK THE TYPE. This cell is not a form control and has no base to inherit the answer from —
 		// but it does not need one: the ctor answers for itself.
-		// (The desktop asked the active configuration's ctor; on the client a number and a date have one — the calculator,
+		// (The desktop asked the active application's ctor; on the client a number and a date have one — the calculator,
 		// the calendar — and a value that offers what it is picked among (a flag, an enumeration's member) has one too.)
 		const ibValueTypes vt = ibValue::GetVTByID(selValue.GetClassType());
 		if (vt == ibValueTypes::TYPE_NUMBER || vt == ibValueTypes::TYPE_DATE)

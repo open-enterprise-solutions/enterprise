@@ -29,7 +29,7 @@ void ibPropertyChartOfCharacteristicTypes::DoSetValue(const ibVariant& val)
 	ibProperty::DoSetValue(val);
 }
 
-// The charts of characteristic types in this configuration. The list used to sit in
+// The charts of characteristic types in this application. The list used to sit in
 // advpropChartOfCharacteristicTypes.cpp — where a chart of accounts could not reach it.
 ibPropertyChoiceMode ibPropertyChartOfCharacteristicTypes::GetValueList(ibPropertyChoiceList& list)
 {

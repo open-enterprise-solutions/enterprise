@@ -6,7 +6,7 @@
 //   ibValueSchedule          — WHEN a job is due, as a value. Both kinds carry one, and it is
 //                              also the TYPE of a parameterized job's Schedule requisite.
 //   ibValueJobRow            — one predefined job's live settings …
-//   ibValuePredefinedJobs    — … and every predefined job of this configuration, as a collection of them.
+//   ibValuePredefinedJobs    — … and every predefined job of this application, as a collection of them.
 //
 // The element stands beside its collection rather than inside it: a collection names its element in its
 // base (ibValueCollection<ElementT>), and a class cannot be named there from inside the one it is the base
@@ -105,7 +105,7 @@ public:
 	// happens IN PLACE, so whoever holds this value already has the new one when the call returns;
 	// there is nothing to re-assign and nothing to re-create.
 	//
-	// No frame means no interactive context (appserver, codeRunner, a background job) — and that is
+	// No frame means no interactive context (appserver, coderunner, a background job) — and that is
 	// said out loud rather than silently ignored: a script that opens an editor where none can be
 	// opened is a mistake, not a no-op.
 	virtual void ShowValue() override;
@@ -190,7 +190,7 @@ private:
 };
 
 //////////////////////////////////////////////////////////////////////
-//  ScheduledJobs.Predefined — every predefined job of this configuration, as one walkable
+//  ScheduledJobs.Predefined — every predefined job of this application, as one walkable
 //  collection, with the settings of ONE job as its element.
 //
 //  A COLLECTION with a parameter: counting, getting and walking are the collection's, and what it is

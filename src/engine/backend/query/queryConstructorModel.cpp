@@ -6,8 +6,8 @@
 
 #include "queryable.h"                   // ibBackendQueryable::GetProvider — who says what a reference to a table is
 #include "queryProvider.h"               // ibBackendQueryProvider::ResolveReferenceType — …and the provider says it
-#include "backend/appData.h"             // ibApplicationInstance::GetQueryableFactory (no config open)
-#include "queryableFactory.h"            // GetSourceFactory — the config the query runs on behalf of
+#include "backend/appData.h"             // ibApplicationInstance::GetQueryableFactory (no application open)
+#include "queryableFactory.h"            // GetSourceFactory — the application the query runs on behalf of
 
 #include <algorithm>
 
@@ -29,7 +29,7 @@ static ibQueryConstructorField FieldOfColumn(const ibQueryConstructorModel& mode
 	field.m_name           = column.GetName();
 	field.m_presentation   = column.GetName();
 	// ⭐ WHAT IT HOLDS (GetTypeValueDesc), the types the query walks it by (ResolveReferenceTargets): a field
-	// declared `AnyRef` unfolds into every reference of the configuration, a characteristic into its chart's.
+	// declared `AnyRef` unfolds into every reference of the application, a characteristic into its chart's.
 	// Read by the declaration, both were offered as a leaf, or as a [+] with nothing behind it.
 	// A reference field can be dot-walked further (Supplier.Region.Country) — the shell shows it with
 	// a [+] and asks again with the leaf's own source.
@@ -80,8 +80,8 @@ ibQueryConstructorModel::ibQueryConstructorModel(const ibMetaData* metaData)
 
 ibQueryableFactory* ibQueryConstructorModel::Factory() const
 {
-	// The config's OWN factory first (sources register per-config, and it descends to the global one
-	// on a miss); with no config open the global factory is the honest answer, not an error.
+	// The application's OWN factory first (sources register per-application, and it descends to the global one
+	// on a miss); with no application open the global factory is the honest answer, not an error.
 	ibQueryableFactory* factory = GetSourceFactory(m_metaData);
 	return factory != nullptr ? factory : ibApplicationInstance::GetQueryableFactory();
 }
@@ -92,11 +92,11 @@ std::vector<ibQueryConstructorSource> ibQueryConstructorModel::GetSources() cons
 
 	ibQueryableFactory* factory = Factory();
 	if (factory == nullptr)
-		return out;   // pre-appData / no config — an empty catalogue, not a crash
+		return out;   // pre-appData / no application — an empty catalogue, not a crash
 
 	// THE WALK. Whatever registered is what the constructor offers — a metatype added tomorrow
 	// appears here the day it vends a descriptor, with nothing edited in this file. In the factory's order: the
-	// application's as its configuration is read (ibMetaQueryableFactory::GetDescriptors), then the platform's.
+	// application's as its application is read (ibMetaQueryableFactory::GetDescriptors), then the platform's.
 	for (const ibQueryableSourceKind kind : { ibQueryableSourceKind::Application, ibQueryableSourceKind::Platform }) {
 		for (ibQueryableSourceDescriptor* descriptor : factory->GetDescriptors(kind)) {
 			if (descriptor == nullptr)
@@ -230,7 +230,7 @@ std::vector<ibQueryConstructorField> ibQueryConstructorModel::GetTableFields(ibM
 
 	ibQueryableSourceDescriptor* descriptor = factory->ResolveDescriptorById(table);
 	if (descriptor == nullptr)
-		return {};   // a type with no queryable (a report, a data processor) — not a table
+		return {};   // a type with no queryable (a report, a data tool) — not a table
 
 	return FieldsOfColumns(*this, descriptor->GetQueryColumns({}));
 }
@@ -240,7 +240,7 @@ std::vector<ibQueryConstructorField> ibQueryConstructorModel::GetTableFields(ibM
 //
 // ⚠ WHAT CAN BE WALKED THROUGH, and it is NOT "the field has a type". Every typed attribute carries a
 // clsid list — a string field's list holds the string's clsid — so "exactly one clsid" said yes to every
-// field in the configuration and put an unfoldable [+] on all of them, behind which there was nothing.
+// field in the application and put an unfoldable [+] on all of them, behind which there was nothing.
 // The question is whether a class is a REFERENCE, which the id answers by its kind alone (the high byte IS
 // the kind, no metadata lookup). A barrier (`AnyRef`, `CatalogRef`) names no table: a field declared with
 // one holds its members (FieldOfColumn), and one with none to hold is a leaf.
@@ -278,7 +278,7 @@ std::vector<ibQueryConstructorField> ibQueryFieldsOfText(const ibString& text,
 	if (text.IsEmpty())
 		return fields;
 
-	// The names resolve against the CONFIGURATION HANDED IN — never the active one, which in the
+	// The names resolve against the APPLICATION HANDED IN — never the active one, which in the
 	// designer is not necessarily this query's (two are open at once).
 	const ibSourceMetaDataScope scope(metaData);
 	try {
@@ -369,7 +369,7 @@ ibString ibQueryTextOfSource(const ibQueryableSourceDescriptor* source)
 {
 	// THE NAME THE LANGUAGE KNOWS IT BY — `Catalog.Products`, the descriptor's own namespace and name,
 	// which is exactly what the lowering resolves a FROM against. Not the physical table: a query written
-	// against one is a query the configuration cannot be restructured under.
+	// against one is a query the application cannot be restructured under.
 	if (source == nullptr || source->GetName().IsEmpty())
 		return ibEmptyString;
 

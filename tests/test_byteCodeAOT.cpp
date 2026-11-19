@@ -574,7 +574,7 @@ TEST(ByteCodeAOT, LargeButRealisticBytecode) {
 	src.m_version = MakeGuid(51);
 
 	// 5000 instructions, 200 vars, 50 functions — roughly the upper
-	// bound of a "big" common module.
+	// bound of a "big" shared module.
 	for (int i = 0; i < 5000; ++i)
 		src.m_listCode.push_back(MakeUnit((short)(i % 60), (unsigned)i + 1));
 	for (int i = 0; i < 200; ++i)
@@ -621,7 +621,7 @@ TEST(ByteCodeAOT, AChildSeesEverythingButPrivateLocals) {
 	EXPECT_FALSE(MakeVar(wxT("guarded"), ibVarKind::Protected, 2).IsLocal());
 
 	// System bindings — for children by construction, and the ones the compile
-	// side's list forgot: a common module reaching a document's object module is
+	// side's list forgot: a shared module reaching a document's object module is
 	// External, and Catalogs / Documents / Manager are Context / ContextProp.
 	EXPECT_FALSE(MakeVar(wxT("StockManagement"), ibVarKind::External,    3).IsLocal());
 	EXPECT_FALSE(MakeVar(wxT("Manager"),         ibVarKind::Context,     4).IsLocal());

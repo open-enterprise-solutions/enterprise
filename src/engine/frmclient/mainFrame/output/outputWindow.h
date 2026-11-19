@@ -1,6 +1,8 @@
 #ifndef _FRMCLIENT_OUTPUT_WINDOW_H__
 #define _FRMCLIENT_OUTPUT_WINDOW_H__
 
+#include <map>
+
 #include <wx/wx.h>
 #include "deskgui/univ/stc/stc.h"
 
@@ -23,12 +25,28 @@ public:
 
 	// A message at the end — the view follows it when it was at the end already.
 	void Output(const wxString& message, ibProtocol::ibFrame::ibMessage::ibLevel level);
+	// …and one with its place — a script's failure: `file` the external data tool's or report's (none: the application's),
+	// `module` by its address, `line` from 1. Its lines, double-clicked, open the module there (the desktop's).
+	void Output(const wxString& message, ibProtocol::ibFrame::ibMessage::ibLevel level,
+		const wxString& file, const wxString& module, int line);
 	void Clear();
 
 private:
 
+	// Where a message with a place was said — the lines it took up to `last`, and the module at the line.
+	struct Place {
+		wxString file;
+		wxString module;
+		int      line;
+		int      last;
+	};
+
+	void OnDoubleClick(wxMouseEvent& event);
 	void OnContextMenu(wxContextMenuEvent& event);
 	void OnClearOutput(wxCommandEvent& event);
+
+	// By the message's first line.
+	std::map<int, Place> m_places;
 
 	wxDECLARE_EVENT_TABLE();
 };

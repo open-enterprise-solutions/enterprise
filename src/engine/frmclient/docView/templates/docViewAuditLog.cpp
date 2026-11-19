@@ -428,7 +428,7 @@ void ibAuditLogView::OnCommandMenu(wxCommandEvent& event)
 		const ibLogRow* r = m_model->RowAt(sel);
 		if (r == nullptr || r->ref_guid.IsEmpty()) break;
 
-		// THE OBJECT IS OPENED BY THE SERVER, where the configuration is — a user's row and a metaobject's alike
+		// THE OBJECT IS OPENED BY THE SERVER, where the application is — a user's row and a metaobject's alike
 		// (ibAuditLogView::OnClientEvent there); what it opens comes as a tab of its own.
 		ibProtocolNode args, params;
 		args.SetValue(ibProtocol::ibView::ibAuditLog::Ref, r->ref_guid)

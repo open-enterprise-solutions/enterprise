@@ -1,13 +1,13 @@
 // =============================================================================
 // OES Enterprise — the order of an object among its siblings.
 //
-// The order of an object's children is data: the sections of a configuration come out in the
+// The order of an object's children is data: the sections of an application come out in the
 // navigation panel in the order the tree holds them. The door is the metaobject's own
-// ChangeChildPosition — it moves, marks the configuration modified and announces `Moved`. The MCP verb
+// ChangeChildPosition — it moves, marks the application modified and announces `Moved`. The MCP verb
 // metadata_move puts an object where another of its kind stands (the position of that one), which is
 // what the designer's up and down do with the neighbouring row.
 //
-// DB-FREE AND UI-FREE, like test_metadataPasteIdentity: a fresh ibMetaDataConfigurationFile (public
+// DB-FREE AND UI-FREE, like test_metadataPasteIdentity: a fresh ibMetaDataApplicationFile (public
 // ctor, never "run"), sections created with runObject=false.
 // =============================================================================
 
@@ -16,7 +16,7 @@
 
 #include <vector>
 
-#include "backend/metadataConfiguration.h"
+#include "backend/metadataApplication.h"
 #include "backend/metaCollection/metaObject.h"
 #include "backend/metaCollection/metaSectionObject.h"   // g_metaSectionCLSID
 
@@ -39,17 +39,17 @@ struct StageRecorder : ibMetaDataNotifier {
 	}
 };
 
-// Four sections A, B, C, D in one fresh configuration, in that order.
+// Four sections A, B, C, D in one fresh application, in that order.
 struct SectionsFix {
-	ibMetaDataConfigurationFile cfg;
-	ibValueMetaObjectConfiguration* root = nullptr;
+	ibMetaDataApplicationFile cfg;
+	ibValueMetaObjectApplication* root = nullptr;
 	ibValueMetaObject* A = nullptr;
 	ibValueMetaObject* B = nullptr;
 	ibValueMetaObject* C = nullptr;
 	ibValueMetaObject* D = nullptr;
 
 	SectionsFix() {
-		root = cfg.GetCommonMetaObject();
+		root = cfg.GetRootMetaObject();
 		if (root == nullptr)
 			return;
 		A = Make(wxT("A")); B = Make(wxT("B")); C = Make(wxT("C")); D = Make(wxT("D"));
@@ -162,7 +162,7 @@ TEST(MetaObjectOrder, AMove_IsAnnouncedOnceAsMovedOfTheObjectThatMoved)
 	f.cfg.RemoveNotifier(&recorder);
 }
 
-TEST(MetaObjectOrder, AMove_MarksTheConfigurationModified)
+TEST(MetaObjectOrder, AMove_MarksTheApplicationModified)
 {
 	SectionsFix f;
 	ASSERT_NE(nullptr, f.D);
@@ -183,7 +183,7 @@ TEST(MetaObjectOrder, APositionPastTheChildren_IsRefusedAndNothingMoves)
 	EXPECT_EQ(SectionsFix::Order(f.root), Names({ wxT("A"), wxT("B"), wxT("C"), wxT("D") }));
 }
 
-TEST(MetaObjectOrder, AReadOnlyConfiguration_RefusesTheMoveAndSaysNothing)
+TEST(MetaObjectOrder, AReadOnlyApplication_RefusesTheMoveAndSaysNothing)
 {
 	SectionsFix f;
 	ASSERT_NE(nullptr, f.D);

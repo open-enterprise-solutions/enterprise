@@ -579,7 +579,7 @@ bool ibValue::AdjustOutValue(const ibValue& varValue, ibValue& out) const
 	// ⚠ …AND OTHERWISE THE EMPTY VALUE OF THE LIMIT, not nothing: whoever asked gets a value of the
 	// right type either way, so the type of the answer is the answer to "what does this narrow to"
 	// without a second question being asked (Max, 2026-09-24). A class the registry cannot make — a
-	// configuration whose metaobjects were described but not registered, a headless tool before it
+	// application whose metaobjects were described but not registered, a headless tool before it
 	// opens a base — is the undefined value, as it is everywhere else this asks.
 	out = IsRegisterCtor(limit) ? CreateObject(limit) : ibValue();
 	return false;

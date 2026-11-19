@@ -1,6 +1,6 @@
 // =============================================================================
 // XMLString / XMLValue - a value through its node and the XML provider, and back: every kind a script holds
-// comes back as itself, against a configuration made in memory. The text's own forms (a number, a date, base64)
+// comes back as itself, against an application made in memory. The text's own forms (a number, a date, base64)
 // are the provider's and are pinned in test_xmlProvider.cpp.
 // =============================================================================
 
@@ -11,7 +11,7 @@
 #include "backend/appData.h"
 #include "backend/backend_exception.h"
 #include "backend/compiler/compileCode.h"
-#include "backend/metadataConfiguration.h"
+#include "backend/metadataApplication.h"
 #include "backend/metadataSerialization.h"
 #include "backend/metaCollection/partial/catalog.h"
 #include "backend/metaCollection/partial/enumeration.h"
@@ -60,7 +60,7 @@ TEST(XmlValueFunctions, EveryKindGoesToXmlAndComesBackAsItself)
 		GTEST_SKIP() << "wxBase init failed (no wxApp host)";
 	if (!ibApplicationInstance::CreateAppDataEnv(ibRunMode::eFILE_MODE))
 		GTEST_SKIP() << "appData env unavailable headless";
-	std::shared_ptr<ibMetaDataConfigurationFile> cfg = ibMetaData::MakeShared<ibMetaDataConfigurationFile>();
+	std::shared_ptr<ibMetaDataApplicationFile> cfg = ibMetaData::MakeShared<ibMetaDataApplicationFile>();
 	ActiveMetaDataAccess::Replace(cfg);
 	struct Release {
 		const short codeStyle = ibCompileCode::GetCodeStyle();
@@ -71,7 +71,7 @@ TEST(XmlValueFunctions, EveryKindGoesToXmlAndComesBackAsItself)
 		}
 	} release;
 
-	ibValueMetaObjectConfiguration* root = cfg->GetCommonMetaObject();
+	ibValueMetaObjectApplication* root = cfg->GetRootMetaObject();
 	ASSERT_NE(root, nullptr);
 	ibValueMetaObject* goods = cfg->CreateMetaObject(g_metaCatalogCLSID, root, false);
 	auto* rates = dynamic_cast<ibValueMetaObjectEnumeration*>(cfg->CreateMetaObject(g_metaEnumerationCLSID, root, false));
@@ -83,7 +83,7 @@ TEST(XmlValueFunctions, EveryKindGoesToXmlAndComesBackAsItself)
 	ASSERT_NE(vat20, nullptr);
 	vat20->SetName(wxT("Vat20"));
 	ASSERT_TRUE(cfg->RunDatabase());
-	ASSERT_TRUE(cfg->IsConfigOpen());
+	ASSERT_TRUE(cfg->IsOpen());
 
 	// The primitives: exact, to the millisecond, with what XML cannot hold as text.
 	const ibValue exact(ibNumber(ibString(ibT("123456789012345678901234567890.0000000001"))));
@@ -122,7 +122,7 @@ TEST(XmlValueFunctions, EveryKindGoesToXmlAndComesBackAsItself)
 	ibValuePtr<ibValueBinaryData> noBytes(new ibValueBinaryData(ibMemoryBuffer()));
 	EXPECT_TRUE(RoundTrip(noBytes).IsEmpty());
 
-	// A system enumeration's value, a reference, a configuration's enumeration value and the empty ones.
+	// A system enumeration's value, a reference, an application's enumeration value and the empty ones.
 	const ibValue text = ibValue::CreateEnumObject<ibValueEnumXmlNodeType>(ibXmlNodeType_CDATASection);
 	EXPECT_TRUE(RoundTrip(text).CompareValueEQ(text));
 
@@ -133,18 +133,18 @@ TEST(XmlValueFunctions, EveryKindGoesToXmlAndComesBackAsItself)
 	ibValuePtr<ibValueReferenceDataObject> rate(ibValueReferenceDataObject::Create(cfg.get(), rates->GetMetaID(), vat20->GetGuid()));
 	EXPECT_TRUE(RoundTrip(rate).CompareValueEQ(rate));
 
-	// …copied, as a parameter passed by value is: the copy is the configuration's to make too.
+	// …copied, as a parameter passed by value is: the copy is the application's to make too.
 	EXPECT_TRUE(ibValue(item).CloneValue().CompareValueEQ(item));
 	EXPECT_TRUE(ibValue(rate).CloneValue().CompareValueEQ(rate));
 
-	// …and through the door both ways: the configuration handed in, and none - the one this thread works in.
+	// …and through the door both ways: the application handed in, and none - the one this thread works in.
 	ibDataNode packedItem;
 	ibSerializeValue(ibValue(item), packedItem);
 	EXPECT_TRUE(ibDeserializeValue(packedItem, cfg.get()).CompareValueEQ(item));
 	EXPECT_TRUE(ibDeserializeValue(packedItem).CompareValueEQ(item));
 
-	// An array and a structure come back with what they hold - a reference and a configuration's enumeration value
-	// among it, made by the configuration as the one at the top is: through XML, through JSON, and as a Val copy.
+	// An array and a structure come back with what they hold - a reference and an application's enumeration value
+	// among it, made by the application as the one at the top is: through XML, through JSON, and as a Val copy.
 	ibValuePtr<ibValueArray> list(new ibValueArray());
 	list->Add(ibValue(1));
 	list->Add(item);
@@ -194,7 +194,7 @@ TEST(XmlValueFunctions, EveryKindGoesToXmlAndComesBackAsItself)
 	EXPECT_TRUE(listRead->Values()[1].CompareValueEQ(item));
 	EXPECT_TRUE(listRead->Values()[2].CompareValueEQ(rate));
 
-	// A reference inside that the configuration cannot read is refused, not read as the empty one.
+	// A reference inside that the application cannot read is refused, not read as the empty one.
 	ibString spoiled = ibValueSystemFunction::XMLString(list);
 	ASSERT_EQ(spoiled.Replace(key.str(), ibT("not-a-guid")), 1u);
 	EXPECT_NE(Refusal([&] { ibValueSystemFunction::XMLValue(spoiled); }).Find(ibT("'not-a-guid' is no guid")), wxNOT_FOUND);
@@ -207,7 +207,7 @@ TEST(XmlValueFunctions, WhatIsNotAValuesXmlIsRefused)
 		GTEST_SKIP() << "wxBase init failed (no wxApp host)";
 	if (!ibApplicationInstance::CreateAppDataEnv(ibRunMode::eFILE_MODE))
 		GTEST_SKIP() << "appData env unavailable headless";
-	std::shared_ptr<ibMetaDataConfigurationFile> cfg = ibMetaData::MakeShared<ibMetaDataConfigurationFile>();
+	std::shared_ptr<ibMetaDataApplicationFile> cfg = ibMetaData::MakeShared<ibMetaDataApplicationFile>();
 	ActiveMetaDataAccess::Replace(cfg);
 	struct Release {
 		~Release() { ibApplicationInstance::DestroyAppDataEnv(); }

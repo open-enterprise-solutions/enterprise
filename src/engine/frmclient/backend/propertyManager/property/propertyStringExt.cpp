@@ -4,7 +4,7 @@
 
 ////////////////////////////////////////////////////////////////////////
 
-// ⚠ HELD AS THE RAW FORM, unchanged — its node (ibPropertySerializable::ReadNodeValue). A configuration written before this
+// ⚠ HELD AS THE RAW FORM, unchanged — its node (ibPropertySerializable::ReadNodeValue). An application written before this
 // reads as it always did, and one written now is still read by everything that speaks the format.
 ibTranslateString ibPropertyTString::GetValueAsTranslate() const
 {

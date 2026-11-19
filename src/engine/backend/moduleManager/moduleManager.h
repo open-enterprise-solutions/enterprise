@@ -16,7 +16,7 @@ class ibSession;
 //*                                                                                                     *
 //*   Holds only what the Designer / code editor need to resolve names: the per-module unit type,       *
 //*   the metadata unit, the "Manager" singleton, the global-constant map and the named context. NO     *
-//*   runtime concerns (ProcUnit spin-up, common-module ProcUnit registry, Create/Start/Exit, session  *
+//*   runtime concerns (ProcUnit spin-up, shared-module ProcUnit registry, Create/Start/Exit, session  *
 //*   Attach). Those live in ibValueModuleRuntimeManager. Splitting them keeps the fragile runtime      *
 //*   unit lifetime out of the editor's read path (was the source of the UAF while typing).             *
 //*********************************************************************************************************
@@ -48,7 +48,7 @@ public:
 		ibValueModuleUnit(ibValueModuleManager* moduleManager, ibValueMetaObjectModuleBase* moduleObject, bool managerModule = false);
 		virtual ~ibValueModuleUnit();
 
-		//get common module
+		//get shared module
 		ibValueMetaObjectModuleBase* GetObjectModule() const {
 			return m_moduleObject;
 		}
@@ -81,7 +81,7 @@ public:
 		// from ibValueDynamicMembers). No FillMembers — exports are the whole surface.
 
 		// ⭐ IN THE DESIGNER THOSE EXPORTS COME FROM THE TEXT, not from bytecode — there is none
-		// (AddCommonModule below says why). Nothing extra is bound here for it: the tail already
+		// (AddSharedModule below says why). Nothing extra is bound here for it: the tail already
 		// asks ExportMethodsToHelper, and that is where the second road lives, so every descriptor
 		// gets it and not just this one — see moduleInfo.cpp.
 
@@ -133,7 +133,7 @@ public:
 		ibValueMetadataUnit(ibMetaData* metaData);
 		virtual ~ibValueMetadataUnit();
 
-		//get common module
+		//get shared module
 		const ibMetaData* GetMetaData() const { return m_metaData; }
 		ibMetaData* GetMetaData() { return m_metaData; }
 
@@ -259,16 +259,16 @@ public:
 	ibValueMetadataUnit* GetMetaManager() const { return m_metaManager; }
 	ibValueDataUnit* GetDataManager() const { return m_dataManager; }
 
-	// Resolve a registered common module's compiled unit. Pure virtual — the
+	// Resolve a registered shared module's compiled unit. Pure virtual — the
 	// runtime manager reads its per-session runtime registry, the designer holder
 	// reads its own compiled-unit registry. Callers (e.g. catalog/document manager
 	// objects via GetEditModuleManager) work through the base, designer-or-runtime
 	// agnostic.
-	virtual ibValueModuleUnit* FindCommonModule(const ibValueMetaObjectCommonModule* commonModule) const = 0;
+	virtual ibValueModuleUnit* FindSharedModule(const ibValueMetaObjectSharedModule* sharedModule) const = 0;
 
 	//associated map — globals are the extern binds (single source;
 	// m_listGlConstValue registry removed). Values are owned by
-	// m_metaManager / m_listCommonModuleManager, the map only references them.
+	// m_metaManager / m_listSharedModuleManager, the map only references them.
 	virtual std::map<ibString, ibValue*>& GetGlobalVariables() { return m_binds->m_listExternValue; }
 	virtual std::map<ibString, ibContextVar>& GetContextVariables() { return m_binds->m_listContextValue; }
 
@@ -278,7 +278,7 @@ public:
 	// Module lifecycle — same names across the hierarchy. ibValueModuleManagerDesigner
 	// overrides these to seed the "Manager" singleton + ctor-context (Catalogs /
 	// Documents / Enums) + global consts for the code editor (NO runtime, NO common-
-	// module registry); ibValueModuleManagerRuntimeConfiguration overrides them with
+	// module registry); ibValueModuleManagerRuntimeApplication overrides them with
 	// the full compile + runtime bring-up. Base default no-op.
 	virtual bool CreateMainModule() { return true; }
 	virtual bool DestroyMainModule() { return true; }
@@ -298,8 +298,8 @@ protected:
 	// held while it is up: the compile module's context binds only reference them
 	std::vector<ibValue> m_listContextManager;
 
-	friend class ibMetaDataConfiguration;
-	friend class ibMetaDataDataProcessor;
+	friend class ibMetaDataApplication;
+	friend class ibMetaDataDataTool;
 
 	friend class ibValueModuleUnit;
 };
@@ -307,9 +307,9 @@ protected:
 //*********************************************************************************************************
 //*   ibValueModuleRuntimeManager — HEAVY runtime part                                                  *
 //*                                                                                                     *
-//*   Adds the runtime common-module registry (ibValueRuntimeModuleUnit + ProcUnit spin-up), the        *
+//*   Adds the runtime shared-module registry (ibValueRuntimeModuleUnit + ProcUnit spin-up), the        *
 //*   per-session Attach/Detach, and the Create/Destroy/Start/Exit lifecycle. Per-session roots and     *
-//*   the external data-processor / report managers derive from this, NOT from the lightweight base.    *
+//*   the external data-tool / report managers derive from this, NOT from the lightweight base.         *
 //*********************************************************************************************************
 
 class BACKEND_API ibValueModuleRuntimeManager :
@@ -324,9 +324,9 @@ class BACKEND_API ibValueModuleRuntimeManager :
 	public:
 		ibValueRuntimeModuleUnit(ibValueModuleRuntimeManager* moduleManager, ibValueMetaObjectModuleBase* moduleObject, bool managerModule = false);
 
-		//initalize common module
-		bool CreateCommonModule();
-		bool DestroyCommonModule();
+		//initalize shared module
+		bool CreateSharedModule();
+		bool DestroySharedModule();
 
 	protected:
 		ibValueModuleRuntimeManager* m_moduleManager;
@@ -341,38 +341,38 @@ public:
 
 	virtual ~ibValueModuleRuntimeManager();
 
-	//Create common module — overridden with full compile + runtime bring-up
+	//Create shared module — overridden with full compile + runtime bring-up
 	virtual bool CreateMainModule() override = 0;
 
-	//destroy common module
+	//destroy shared module
 	virtual bool DestroyMainModule() override = 0;
 
-	//start common module
+	//start shared module
 	virtual bool StartMainModule(const ibRuntimeRequest& request = ibRuntimeRequest()) = 0;
 
-	//exit common module
+	//exit shared module
 	virtual bool ExitMainModule(const ibRuntimeRequest& request = ibRuntimeRequest()) = 0;
 
-	// common modules — runtime-side mutation API. Metadata's
-	// AddCommonModule/RenameCommonModule/RemoveCommonModule forwards
+	// shared modules — runtime-side mutation API. Metadata's
+	// AddSharedModule/RenameSharedModule/RemoveSharedModule forwards
 	// here on each active runtime; mm's CreateMainModule also invokes
-	// RuntimeRegisterCommonModule for every descriptor in metadata's
+	// RuntimeRegisterSharedModule for every descriptor in metadata's
 	// init-modules list. Not for direct caller use outside metadata
 	// or CreateMainModule.
-	bool RuntimeRegisterCommonModule(ibValueMetaObjectCommonModule* commonModule, bool compileNow = false);
-	bool RuntimeRenameCommonModule(ibValueMetaObjectCommonModule* commonModule, const ibString& newName);
-	bool RuntimeUnregisterCommonModule(ibValueMetaObjectCommonModule* commonModule);
+	bool RuntimeRegisterSharedModule(ibValueMetaObjectSharedModule* sharedModule, bool compileNow = false);
+	bool RuntimeRenameSharedModule(ibValueMetaObjectSharedModule* sharedModule, const ibString& newName);
+	bool RuntimeUnregisterSharedModule(ibValueMetaObjectSharedModule* sharedModule);
 
-	ibValueModuleUnit* FindCommonModule(const ibValueMetaObjectCommonModule* commonModule) const override;
+	ibValueModuleUnit* FindSharedModule(const ibValueMetaObjectSharedModule* sharedModule) const override;
 
-	virtual std::vector<ibValuePtr<ibValueRuntimeModuleUnit>>& GetCommonModules() { return m_listCommonModuleManager; }
+	virtual std::vector<ibValuePtr<ibValueRuntimeModuleUnit>>& GetSharedModules() { return m_listSharedModuleManager; }
 
-	// Per-session runtime — create ProcUnits for main + common modules
+	// Per-session runtime — create ProcUnits for main + shared modules
 	// under the given session's m_procUnitMap. Compile state untouched
 	// on `this`. Overridden by subclasses with additional modules
-	// (external data processor, report). Default impl handles the
-	// common-case main module + m_listCommonModuleManager fanout.
-	// Done, or THROWN: a configuration that does not start refuses the session (see the .cpp).
+	// (external data tool, report). Default impl handles the
+	// common-case main module + m_listSharedModuleManager fanout.
+	// Done, or THROWN: an application that does not start refuses the session (see the .cpp).
 	virtual void AttachRuntime(class ibSession* session);
 
 	// Symmetric teardown — drop this session's ProcUnit entries.
@@ -385,20 +385,20 @@ protected:
 	bool m_initialized;
 
 	// Serializes Init/DetachRuntime across sessions — the
-	// compile/common-module state is process-shared so two concurrent
+	// compile/shared-module state is process-shared so two concurrent
 	// Init (rapid F5) or Init-racing-Exit (pagehide beacon for old
-	// session while new one logs in) would corrupt m_listCommonModule*
+	// session while new one logs in) would corrupt m_listSharedModule*
 	// iteration or the ProcUnit Execute of BeforeStart running on
 	// bytecode whose parent PU ptrs are mid-reassignment.
 	std::mutex m_runtimeMutex;
 
-	//array of common modules
-	std::vector<ibValuePtr<ibValueRuntimeModuleUnit>> m_listCommonModuleManager;
+	//array of shared modules
+	std::vector<ibValuePtr<ibValueRuntimeModuleUnit>> m_listSharedModuleManager;
 
 	friend class ibValueRuntimeModuleUnit;
 };
 
-class BACKEND_API ibValueModuleManagerRuntimeConfiguration :
+class BACKEND_API ibValueModuleManagerRuntimeApplication :
 	public ibValueModuleRuntimeManager, public ibRuntimeRoot {
 	public:
 	//system events:
@@ -408,9 +408,9 @@ class BACKEND_API ibValueModuleManagerRuntimeConfiguration :
 	void OnExit();
 public:
 
-	ibValueModuleManagerRuntimeConfiguration(
+	ibValueModuleManagerRuntimeApplication(
 		ibMetaData* metaData,
-		ibValueMetaObjectConfiguration* metaObject);
+		ibValueMetaObjectApplication* metaObject);
 
 	// GetRoot override — we are the root, return ourselves as the
 	// ibRuntimeRoot interface pointer.
@@ -418,16 +418,16 @@ public:
 		return this;
 	}
 
-	//Create common module
+	//Create shared module
 	virtual bool CreateMainModule();
 
-	//destroy common module
+	//destroy shared module
 	virtual bool DestroyMainModule();
 
-	//start common module
+	//start shared module
 	virtual bool StartMainModule(const ibRuntimeRequest& request = ibRuntimeRequest());
 
-	//exit common module
+	//exit shared module
 	virtual bool ExitMainModule(const ibRuntimeRequest& request = ibRuntimeRequest());
 
 };
@@ -435,26 +435,26 @@ public:
 //*********************************************************************************************************
 //*   ibValueModuleManagerDesigner — LIGHTWEIGHT designer holder                                        *
 //*                                                                                                     *
-//*   Derives the lightweight base (NOT the runtime manager): no ProcUnit, no runtime common-module     *
+//*   Derives the lightweight base (NOT the runtime manager): no ProcUnit, no runtime shared-module     *
 //*   units, no Attach. Lives inside ibCompileValueCache so the code editor reads the "Manager"         *
 //*   singleton + ctor-context (Catalogs / Documents / Enums) + global consts from a holder that        *
-//*   tracks the current designer state, decoupled from per-session runtime managers. Common modules    *
+//*   tracks the current designer state, decoupled from per-session runtime managers. Shared modules    *
 //*   are surfaced by the editor from the metadata storage + live text parsing, NOT from here, so no    *
 //*   fragile runtime unit ever enters the editor's read path. Created in RunDatabase / released in      *
 //*   CloseDatabase (its object module is reset on reload — holding one in the ctor would dangle). Used   *
-//*   by the configuration AND by external data processors / reports (same editor context). See          *
+//*   by the application AND by external data tools / reports (same editor context). See          *
 //*   project_module_manager_split.                                                                      *
 //*********************************************************************************************************
 
 class BACKEND_API ibValueModuleManagerDesigner : public ibValueModuleManager {
 	public:
-	// Configuration variant — takes the config common object and forwards its
+	// Application variant — takes the application common object and forwards its
 	// object module to the base (out-of-line: GetObjectModule needs the complete
 	// metaobject type).
-	ibValueModuleManagerDesigner(ibMetaData* metaData, ibValueMetaObjectConfiguration* metaObject);
-	// External data-processor / report variant — its metadata has no
-	// configuration common object, only an object module. The ctor-context
-	// (Catalogs / Documents / Manager) still comes from the active config via
+	ibValueModuleManagerDesigner(ibMetaData* metaData, ibValueMetaObjectApplication* metaObject);
+	// External data-tool / report variant — its metadata has no
+	// application common object, only an object module. The ctor-context
+	// (Catalogs / Documents / Manager) still comes from the active application via
 	// metaData's GetListCtorsByType, so the editor sees the same names.
 	ibValueModuleManagerDesigner(ibMetaData* metaData, const ibValueMetaObjectModule* objectModule);
 
@@ -464,37 +464,37 @@ class BACKEND_API ibValueModuleManagerDesigner : public ibValueModuleManager {
 	bool CreateMainModule() override;
 	bool DestroyMainModule() override;
 
-	// Independent common-module registry — designer-only, NOT shared with the
-	// runtime managers. Each registered common module gets its OWN compiled
+	// Independent shared-module registry — designer-only, NOT shared with the
+	// runtime managers. Each registered shared module gets its OWN compiled
 	// lightweight unit (ibValueModuleUnit: a compile module, NO ProcUnit), so the
 	// editor reads exported names from a real compiled value with a predictable,
-	// designer-owned lifetime. Driven from ibValueMetaObjectCommonModule's
+	// designer-owned lifetime. Driven from ibValueMetaObjectSharedModule's
 	// OnBeforeRun / OnBeforeClose / OnRename hooks.
 	// runModule=true compiles the unit immediately (a module added live in the
 	// designer); false defers compilation to CreateMainModule (bulk load path).
-	bool AddCommonModule(ibValueMetaObjectCommonModule* commonModule, bool managerModule = false, bool runModule = false);
-	bool RemoveCommonModule(ibValueMetaObjectCommonModule* commonModule);
-	bool RenameCommonModule(ibValueMetaObjectCommonModule* commonModule, const ibString& newName);
-	ibValueModuleUnit* FindCommonModule(const ibValueMetaObjectCommonModule* commonModule) const override;
+	bool AddSharedModule(ibValueMetaObjectSharedModule* sharedModule, bool managerModule = false, bool runModule = false);
+	bool RemoveSharedModule(ibValueMetaObjectSharedModule* sharedModule);
+	bool RenameSharedModule(ibValueMetaObjectSharedModule* sharedModule, const ibString& newName);
+	ibValueModuleUnit* FindSharedModule(const ibValueMetaObjectSharedModule* sharedModule) const override;
 
-	std::vector<ibValuePtr<ibValueModuleUnit>>& GetCommonModules() { return m_listCommonModule; }
+	std::vector<ibValuePtr<ibValueModuleUnit>>& GetSharedModules() { return m_listSharedModule; }
 
-	// External DP/Report holder delegates its globals to the configuration root
-	// so the external module's editor sees the root's globals (Metadata + common
+	// External DataTool/Report holder delegates its globals to the application root
+	// so the external module's editor sees the root's globals (Metadata + shared
 	// modules surfaced as names), which never enter this holder's own map. The
-	// config-root holder (m_external == false) returns its own map. Mirrors the
+	// application-root holder (m_external == false) returns its own map. Mirrors the
 	// Ext runtime managers' GetContextVariables/GetGlobalVariables delegation.
 	std::map<ibString, ibValue*>& GetGlobalVariables() override;
 
 private:
 	bool m_populated = false;
 
-	// true when built from the external-DP/Report ctor (object-module variant) —
-	// drives GetGlobalVariables delegation to the configuration root.
+	// true when built from the external DataTool/Report ctor (object-module variant) —
+	// drives GetGlobalVariables delegation to the application root.
 	bool m_external = false;
 
-	// Compiled lightweight units, one per registered common module.
-	std::vector<ibValuePtr<ibValueModuleUnit>> m_listCommonModule;
+	// Compiled lightweight units, one per registered shared module.
+	std::vector<ibValuePtr<ibValueModuleUnit>> m_listSharedModule;
 };
 
 #endif

@@ -43,7 +43,7 @@
 #include "backend/metaCollection/genericData.h"   // ResolveQueryConstant — a named item as a value
 #include "backend/objCtor.h"                      // ibCtorMetaValueType — a type looked up by name
 #include "core/description/typeDescription.h"              // …and the description a parameter carries
-#include "backend/metadataConfiguration.h"
+#include "backend/metadataApplication.h"
 #include "backend/query/queryConstructorModel.h"   // ibQueryFieldsOfText — what the TEXT offers
 #include "backend/query/queryException.h"          // …and the judge that refuses one
 #include "backend/query/queryLowering.h"
@@ -176,9 +176,9 @@ const ibArg& ArgAt()
 const ibArg& ArgSynonym()
 {
 	static const ibArg s_a(ibT("synonym"), ibArg::Kind::Text,
-		ibMcpText("What the PERSON sees in the picker - in EVERY language the configuration declares, in "
+		ibMcpText("What the PERSON sees in the picker - in EVERY language the application declares, in "
 			  "one string: `en = 'Main'; ru = '...'; uk = '...';`. A plain text is refused where there "
-			  "are several languages: it would fill the configuration's own one and leave the rest blank. "
+			  "are several languages: it would fill the application's own one and leave the rest blank. "
 			  "Omit and the name is read out loud instead."));
 	return s_a;
 }
@@ -432,7 +432,7 @@ MCP_TOOL_REGISTER_DESIGNER(ibMcpToolReportGet);
 namespace {
 
 // ⭐ WHAT THIS COMPOSITION CAN TALK ABOUT — derived from the QUERY TEXT and the
-// configuration, and from nothing else.
+// application, and from nothing else.
 //
 // The same door the settings window uses. It used to be a method on a RUNNING
 // composition, so a window had to hold a live report — a source binding, a sheet,
@@ -500,7 +500,7 @@ bool PathIsOffered(const ibCompositionDescription& composition,
 // 🛑 THE TWO THAT ARE ALWAYS FORGOTTEN, and both were forgotten here on the first day of building
 // with these verbs (Max, 2026-09-02: *"you keep missing them - you do not name the variant, and
 // you do not say the selected fields"*):
-//   · a variant with NO NAME - nothing for a person to pick, and the configuration will refuse to
+//   · a variant with NO NAME - nothing for a person to pick, and the application will refuse to
 //     save (ibValueMetaObjectTemplate::OnSaveMetaObject);
 //   · NO SELECTED FIELDS - a report that groups and totals and shows no columns at all.
 // Neither is an error at the moment it happens, which is exactly why it survives to the end: the
@@ -508,7 +508,7 @@ bool PathIsOffered(const ibCompositionDescription& composition,
 //
 // So every report_* verb answers with this. Not a refusal - the state is legitimate WHILE
 // building, one call at a time - but never silent, and phrased as the next thing to do.
-// ⭐⭐ AND THE SAME QUESTION IS ASKED OF A WHOLE CONFIGURATION (config_check), which is why the
+// ⭐⭐ AND THE SAME QUESTION IS ASKED OF A WHOLE APPLICATION (app_check), which is why the
 // complaints are computed apart from the way they are said. One list of what a composition lacks:
 // the report verbs answer it after every change, the audit asks it of every composer there is, and
 // a rule added here is in both by construction rather than by remembering.
@@ -523,7 +523,7 @@ void ComposerComplaints(const ibCompositionDescription& composition,
 	for (size_t index = 0; index < composition.m_variants.size(); index++) {
 		if (composition.m_variants[index].m_name.IsEmpty()) {
 			say(ibString::Format(
-				ibMcpText("variant %i has no name - report_variant names it, and the configuration will "
+				ibMcpText("variant %i has no name - report_variant names it, and the application will "
 				  "not save while it is nameless"), (int)index + 1));
 			break;
 		}
@@ -642,7 +642,7 @@ ibString WordOfComparison(ibComparisonKind kind)
 //
 // ⚠ A PREDEFINED ITEM IS THE ORDINARY CASE - "only the main warehouse", "everything but the
 // scrap account" - and it is the one a caller can actually name in a call, because a predefined
-// item has a name in the configuration where an ordinary row has only a guid. So: a reference
+// item has a name in the application where an ordinary row has only a guid. So: a reference
 // field takes the predefined item of that name; anything else takes the scalar as it stands.
 bool ValueForPath(const ibCompositionDescription& composition, const ibString& path,
 	const ibDataNode& params, ibValue& value, ibString& refusal)
@@ -868,7 +868,7 @@ bool ConditionFromTree(const ibCompositionDescription& composition, const ibData
 }
 
 // …AND READ BACK IN THE SAME SHAPE — a group as a group, a switched-off entry as one, a root that is not an AND as
-// the one group it stands for. A value is read through the configuration the composition belongs to.
+// the one group it stands for. A value is read through the application the composition belongs to.
 std::vector<ibDataValue> TreeOfCondition(const std::vector<ibFilterNodeDescription>& nodes, const ibMetaData* metaData)
 {
 	std::vector<ibDataValue> entries;
@@ -916,8 +916,8 @@ ibDataValue TreeOfCondition(const ibFilterDescription& filter, const ibMetaData*
 
 } // namespace
 
-// THE SAME LIST, FOR WHOEVER IS NOT IN THIS FILE — the configuration-wide audit asks it of every
-// composition there is (config_check). Written here, beside the verbs that answer with it, so
+// THE SAME LIST, FOR WHOEVER IS NOT IN THIS FILE — the application-wide audit asks it of every
+// composition there is (app_check). Written here, beside the verbs that answer with it, so
 // "what a composer still lacks" has one definition and cannot come to differ from itself.
 void ibMcpComposerComplaints(const ibCompositionDescription& composition,
 	std::vector<ibString>& missing)
@@ -1868,7 +1868,7 @@ public:
 
 				if (clsid == 0) {
 					refusal = ibString::Format(
-						ibMcpText("'%s' is not a type this configuration knows. type_list shows the "
+						ibMcpText("'%s' is not a type this application knows. type_list shows the "
 						  "names."), typeName);
 					return false;
 				}
@@ -2320,7 +2320,7 @@ public:
 		const ibString name = ArgName().Text(params);
 		const ibString synonym = ArgSynonym().Text(params);
 
-		// A variant's synonym is a caption like any other — every language the configuration declares
+		// A variant's synonym is a caption like any other — every language the application declares
 		// (ibMcpCaptionInEveryLanguage).
 		if (params.Has(ArgSynonym().Name())
 		    && !ibMcpCaptionInEveryLanguage(composer->GetMetaData(), synonym,
@@ -2871,7 +2871,7 @@ public:
 	{
 		return ibMcpText("The query a composer composes OVER - what it reads before anything is grouped or "
 			"totalled. Refused, and nothing stored, when the text does not parse or names "
-			"something this configuration does not have: query_sources and query_fields say what "
+			"something this application does not have: query_sources and query_fields say what "
 			"it does have, and report_fields then lists what the stored query offers to group and "
 			"total by. A condition a virtual table's own parameters take goes inside its brackets, "
 			"so the table selects before it folds.");
@@ -2911,7 +2911,7 @@ public:
 				try { package = parser.ParsePackage(text); }
 				catch (const ibQueryRefusal& refusal) { ibBackendQuerySyntaxException::Raise(refusal); }
 
-				// Against THIS configuration, named explicitly: a tool is not standing inside one.
+				// Against THIS application, named explicitly: a tool is not standing inside one.
 				const ibSourceMetaDataScope resolveAgainst(activeMetaData);
 				ibQueryLowering::CheckNames(package, std::map<ibString, ibValue>());
 
@@ -2935,12 +2935,12 @@ public:
 				// THE RULE THIS LEAVES: a door may refuse what is WRONG. What is merely unsupported
 				// today is the engine's business to finish, not this tool's to forbid.
 			}
-			// THE TWO VARIETIES, CAUGHT BY TYPE — a text this configuration refuses (a name it does not
+			// THE TWO VARIETIES, CAUGHT BY TYPE — a text this application refuses (a name it does not
 			// have, or a rule the names break), and a text that does not parse. This used to read the
 			// POSITION to tell them apart (0:0 meant a name), which stopped being true the moment an
 			// unresolved source learnt to point at its own FROM.
 			catch (const ibBackendQueryNameException& e) {
-				refusal = ibString::Format(ibMcpText("This configuration refuses the query: %s. Nothing was "
+				refusal = ibString::Format(ibMcpText("This application refuses the query: %s. Nothing was "
 					"written."), e.GetErrorDescription());
 				return false;
 			}
@@ -3044,7 +3044,7 @@ public:
 		}
 
 		// ⭐ FILLED INTO A FRESH ONE, THEN PLACED. Reading straight into the live description would
-		// leave a half-read composition standing in the configuration if the read failed partway —
+		// leave a half-read composition standing in the application if the read failed partway —
 		// and a partly-read report is the kind of wrong that looks like an edit.
 		ibCompositionDescription composition;
 

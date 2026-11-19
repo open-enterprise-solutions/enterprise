@@ -10,7 +10,7 @@
 //
 // TWO FILES, ONE NUMBERING. This one is what a client of the application speaks — the thin client, the browser; the
 // designer speaks it too, and its own beside it: its debugger, its schemas and views, the questions asked while a
-// configuration is written (protocolDesigner.h). Every number stays here, the designer's with the rest — the wire has
+// application is written (protocolDesigner.h). Every number stays here, the designer's with the rest — the wire has
 // one numbering — and a mode refuses one it does not offer.
 //
 // THE WIRE'S NAMES — each written in the message that carries it: ibProtocol::ib<Part> — a method's call and answer, a
@@ -147,7 +147,7 @@ namespace ibProtocol {
 		inline constexpr const char* Code    = "code";
 		inline constexpr const char* Message = "message";
 		// A packet's names of the types its nodes are of — a field per clsid, its digits the name and the type's name the
-		// value (OES-RPC: a node carries its clsid, and only the answer knows the configuration's names).
+		// value (OES-RPC: a node carries its clsid, and only the answer knows the application's names).
 		inline constexpr const char* Types   = "types";
 
 		// What the server says unasked — a notification's method: a client's frame changed by itself (params: Client).
@@ -212,7 +212,7 @@ namespace ibProtocol {
 		// mode; the server has one door, and a client's frame is made for one mode.
 		enum class ibMode : int {
 			Runtime  = 1,   // the application, as the runtime runs it
-			Designer = 2,   // the configuration, as the designer edits it
+			Designer = 2,   // the application, as the designer edits it
 		};
 
 	}
@@ -238,7 +238,7 @@ namespace ibProtocol {
 		inline constexpr const char* Schemas    = "Schemas";    // the schemas the client's application offers
 		inline constexpr const char* Templates  = "Templates";  // what the client opens and makes documents of — ibFile each
 		inline constexpr const char* Request    = "Request";
-		inline constexpr const char* MetaData   = "MetaData";   // the designer's: its configuration's tree, the node itself its
+		inline constexpr const char* MetaData   = "MetaData";   // the designer's: its application's tree, the node itself its
 		                                                        // root row (ibSchema::ibMetaData)
 		// An event of the answer: the rows of each object a door acted on (an edit, a new object, the one the tree selects
 		// after a removal, a form editor's own), each as schema Properties writes them — the client shows them without
@@ -279,11 +279,15 @@ namespace ibProtocol {
 
 		}
 
-		// A message to the person.
+		// A message to the person — and its place, when it has one (a script's failure): File, the external data tool's
+		// or report's (none: the application's), Module by its address, Line from 1; its line double-clicked opens it there.
 		namespace ibMessage {
 
-			inline constexpr const char* Level = "Level";   // ibLevel
-			inline constexpr const char* Text  = "Text";
+			inline constexpr const char* Level  = "Level";   // ibLevel
+			inline constexpr const char* Text   = "Text";
+			inline constexpr const char* File   = "File";
+			inline constexpr const char* Module = "Module";
+			inline constexpr const char* Line   = "Line";
 
 			// How a message is meant.
 			enum class ibLevel : int {
@@ -339,7 +343,7 @@ namespace ibProtocol {
 
 	// ⭐ A PICTURE IS NAMED BY ITS ID, EVERYWHERE — an answer carries the id alone, and the picture is loaded by this,
 	// apart: picture {Pictures} → Pictures: the pictures of those ids, each {Id, Picture} (the PNG's bytes, a Binary) — a
-	// backend one by its number (a registered picture, a class's own: its class id), a configuration's by its guid and its
+	// backend one by its number (a registered picture, a class's own: its class id), an application's by its guid and its
 	// version, `<guid>#<version>` (a changed picture is another version); several at once,
 	// asked by a client that has not got them and kept by it. One there is none of comes back empty, not refused. A
 	// picture with no id of its own (a file's) is not asked for: the field that names it holds its PNG instead.
@@ -361,7 +365,7 @@ namespace ibProtocol {
 
 	}
 
-	// execute {Command[, Type]} — an object of the configuration, as the navigation executes it.
+	// execute {Command[, Type]} — an object of the application, as the navigation executes it.
 	namespace ibExecute {
 
 		inline constexpr const char* Command = "Command";
@@ -385,7 +389,7 @@ namespace ibProtocol {
 	// bound as the debugger's is: mcp {Command: Channel} on the client's connection → Channel, a key; mcp {Command: Listen,
 	// Channel} on a second connection of the same client binds that one — from then on mcp {Command: Message} is answered
 	// on it and it is sent what the server says unasked, `mcp {Client, Message}`. Refused NoRight to a person whose roles
-	// do not give the assistant (ibSchema::ibMcpServer). The client's session answers: their rights, their configuration.
+	// do not give the assistant (ibSchema::ibMcpServer). The client's session answers: their rights, their application.
 	// …OR AT A WEB ADDRESS — the browser's way, having no port of its own: mcp {Command: Register} makes the session an
 	// entry among the base's web addresses (ibServed, the kind MCP), answered on every web server that publishes the base
 	// while the session lives, to a request presenting the token. What is not given is drawn; both are answered, for the
@@ -752,7 +756,7 @@ namespace ibProtocol {
 
 		// The desktop's type picker over a field holding a type description (a characteristic's Type): Value — the
 		// description now, as ibTypeDescriptionMemory writes it; Classes — the types it may take, each once, as the
-		// configuration names and draws them (ibSchema::ibProperties: Type, Name, Picture) → Value — the description edited;
+		// application names and draws them (ibSchema::ibProperties: Type, Name, Picture) → Value — the description edited;
 		// none — cancelled.
 		namespace ibTypeSelector {
 
@@ -866,7 +870,7 @@ namespace ibProtocol {
 			                     // down where the person chooses; Clear — asked first. Each said to the person by the server
 			Assistant    = 17,   // the designer's assistant window (Administration) — shows nothing; command Open opens its
 			                     // tab (ibView::ibKind::Assistant). Allowed while the base's assistant access is running
-			ConfigCompare = 18,  // ibConfigCompare — the walk of two configurations; command Merge applies the ops chosen
+			ApplicationCompare = 18, // ibApplicationCompare — the walk of two applications; command Merge applies the ops chosen
 			Types        = 19,   // ibTypes
 			Style        = 20,   // ibStyle — both modes': how the person's interface is painted; command Save {Theme}
 			WebAddress   = 21,   // ibWebAddress (protocolDesigner.h) — the designer's: what the base answers on a web server
@@ -877,7 +881,7 @@ namespace ibProtocol {
 		// takes them and Save; Active users, the designer's, Kick, Reload and Release; the users Save and Remove; the
 		// designer's inspector (Properties) Save; its predefined values editor Create, Set and Remove; its texts
 		// (ObjectText) Save, and so the home page (HomePage); the base (Database) Load, Save and Clear; the assistant window
-		// (Assistant) Open; ConfigCompare Merge; the style (Style) Save; the web addresses (WebAddress) Create and Remove. The designer's tree has its own (ibMetaData::ibCommand), and so its debugger's store.
+		// (Assistant) Open; ApplicationCompare Merge; the style (Style) Save; the web addresses (WebAddress) Create and Remove. The designer's tree has its own (ibMetaData::ibCommand), and so its debugger's store.
 		enum class ibCommand : int {
 			Open    = 1,
 			Start   = 2,
@@ -891,7 +895,7 @@ namespace ibProtocol {
 			Set     = 10,
 			Load    = 11,
 			Clear   = 12,
-			Merge   = 13,  // ConfigCompare: apply selected Add/Delete/Replace ops
+			Merge   = 13,  // ApplicationCompare: apply selected Add/Delete/Replace ops
 		};
 
 		// The runtime's: Groups (Title, Icon) of items (Item, Title, Icon); command Open {Item, Type}.
@@ -913,7 +917,7 @@ namespace ibProtocol {
 			inline constexpr const char* Icon        = "Icon";
 			inline constexpr const char* Sessions    = "Sessions";
 			inline constexpr const char* User        = "User";
-			inline constexpr const char* Application = "Application";
+			inline constexpr const char* Program     = "Program";
 			inline constexpr const char* Type        = "Type";
 			inline constexpr const char* Picture     = "Picture";
 			inline constexpr const char* Started     = "Started";
@@ -966,13 +970,13 @@ namespace ibProtocol {
 
 		}
 
-		// Both modes': Build, Picture, Database, Application, User, Locale and Plugins (Name, Version).
+		// Both modes': Build, Picture, Database, Program, User, Locale and Plugins (Name, Version).
 		namespace ibAbout {
 
 			inline constexpr const char* Build       = "Build";
 			inline constexpr const char* Picture     = "Picture";
 			inline constexpr const char* Database    = "Database";
-			inline constexpr const char* Application = "Application";
+			inline constexpr const char* Program     = "Program";
 			inline constexpr const char* User        = "User";
 			inline constexpr const char* Locale      = "Locale";
 			inline constexpr const char* Plugins     = "Plugins";
@@ -1002,7 +1006,7 @@ namespace ibProtocol {
 
 		}
 
-		// Both modes': the configuration's Languages (Guid, Title, Code[, Default — true on the configuration's own
+		// Both modes': the application's Languages (Guid, Title, Code[, Default — true on the application's own
 		// language, its DefaultLanguage; absent elsewhere]) — what a translated text is written in (the translation
 		// window's boxes, a user's record's choice).
 		namespace ibLanguages {
@@ -1024,7 +1028,7 @@ namespace ibProtocol {
 	namespace ibView {
 
 		inline constexpr const char* State    = "State";
-		inline constexpr const char* MetaData = "MetaData";   // an external file's tree (DataProcessor, Report): its rows,
+		inline constexpr const char* MetaData = "MetaData";   // an external file's tree (DataTool, Report): its rows,
 		                                                      // as the frame's MetaData; its doors — schema MetaData with the Tab
 
 		enum class ibKind : int {
@@ -1032,19 +1036,19 @@ namespace ibProtocol {
 			Text             = 2,    // ibText
 			Spreadsheet      = 3,    // ibForm::ibSpreadsheet
 			AuditLog         = 4,    // ibAuditLog
-			DataProcessor    = 5,    // the designer's tree of an external file — of a data processor, of a report: MetaData
+			DataTool         = 5,    // the designer's tree of an external file — of a data tool, of a report: MetaData
 			Report           = 6,
 			Module           = 7,    // ibModule
 			FormDesigner     = 8,    // ibFormDesigner
 			Interface        = 9,    // ibCheckTree: a section's — the objects in it
-			CommonAttribute  = 10,   // ibCheckTree: a common attribute's — the objects that carry it
-			FunctionalOption = 11,   // ibCheckTree: a functional option's — the objects and their fields and tables it hides
+			SharedAttribute  = 10,   // ibCheckTree: a shared attribute's — the objects that carry it
+			FeatureOption    = 11,   // ibCheckTree: a feature option's — the objects and their fields and tables it hides
 			                         // while off
 			Role             = 12,   // ibCheckTree: a role's — every object that has rights, with its Roles
 			Assistant        = 13,   // ibAssistant
 			Composer         = 14,   // ibComposer
-			Configuration    = 15,   // a configuration file (or the database's copy) browsed read-only: MetaData
-			HomePage         = 16,   // ibHomePage: the start page — the forms the configuration places on it
+			Application      = 15,   // an application file (or the database's copy) browsed read-only: MetaData
+			HomePage         = 16,   // ibHomePage: the start page — the forms the application places on it
 			Profile          = 17,   // ibProfile: what a measurement measured — the tab its end opens
 		};
 
@@ -1108,7 +1112,7 @@ namespace ibProtocol {
 			inline constexpr const char* Targets     = "Targets";
 			inline constexpr const char* Expanded    = "Expanded";
 			// The classes a type cell may name — the fields', the parameters' and the primitive kinds — each once, as the
-			// inspector names its choices' (ibSchema::ibProperties: Type, Name, Picture): the client has no configuration
+			// inspector names its choices' (ibSchema::ibProperties: Type, Name, Picture): the client has no application
 			// to name a kind by.
 			inline constexpr const char* Classes     = "Classes";
 			// …and the types a parameter may be given (Kind Types: each a decimal class id, named in Classes) — the offer
@@ -1128,7 +1132,7 @@ namespace ibProtocol {
 				               // query (Text, optional) adds — Fields, References, Error — as the desktop's list settings
 				               // window reads them
 				Types  = 28,   // {} — what a parameter may be given: Types, named in Classes — what the desktop's type picker
-				               // asked its configuration for a reference-shaped field (GetTypesByFilter). Past the query
+				               // asked its application for a reference-shaped field (GetTypesByFilter). Past the query
 				               // constructor's, which a composer's tab answers too
 				Check  = 29,   // {Text} — a parameter's expression compiled, not run: Error — why it does not compile;
 				               // none — it does (the desktop panel's CheckExpression). Past the query constructor's

@@ -3,7 +3,7 @@
 #include "appstudio/docManager/templates/docViewModuleEditor.h"
 #include "appstudio/mainFrame/mainFrameDesigner.h"
 #include "appstudio/mainFrame/local/localWindow.h"
-#include "appstudio/mainFrame/metaTree/treeConfiguration.h"
+#include "appstudio/mainFrame/metaTree/treeApplication.h"
 #include "appstudio/mainFrame/stack/stackWindow.h"
 #include "appstudio/mainFrame/watch/watchWindow.h"
 #include "frmclient/mainFrame/output/outputWindow.h"
@@ -25,7 +25,7 @@
 // for twice already. The walk is over the open editors, once per step; it cannot be stale.
 //
 // (Every module is a tab of its own here — the server's — so the walk is the manager's list; the desktop's went
-// into a configuration's document for the editors its navigator opened.)
+// into an application's document for the editors its navigator opened.)
 static void ClearEveryRunLine()
 {
 	if (docManager == nullptr)
@@ -97,11 +97,11 @@ void ibDebuggerClientBridgeDesigner::OnEnterLoop(const ibDebugLineData& data)
 	if (m_runLine != nullptr)
 		m_runLine->Retake();
 
-	// Empty file name: the open configuration, whose tree is the main form's navigator.
-	// ⚠ A file name — an external data processor or report opened from disk — is not looked for yet: the desktop opened
-	// that file's document and asked its tree (thin-designer-editors.md §8).
+	// Empty file name: the open application, whose tree is the main form's navigator.
+	// ⚠ A file name — an external data tool or report — is not asked for here: the server finds only a file open in a
+	// tab (Open {File, Module}), and one that is not would be refused out loud at every step. A message's line opens it.
 	if (data.m_fileName.IsEmpty() && mainFrame != nullptr && mainFrame->GetMetaWindow() != nullptr)
-		mainFrame->GetMetaWindow()->EditModule(ibGuid(data.m_moduleName), data.m_line, true);
+		mainFrame->GetMetaWindow()->EditModule(wxString(), ibGuid(data.m_moduleName), data.m_line, true);
 
 	if (mainFrame != nullptr) mainFrame->Debugger_OnStateChanged();
 }
@@ -136,10 +136,12 @@ void ibDebuggerClientBridgeDesigner::OnMessageFromServer(const ibDebugLineData& 
 
 	// A REPORTED ERROR HAS A PLACE — shown without marking it as the RUN line (an external file's: see OnEnterLoop).
 	if (data.m_fileName.IsEmpty() && mainFrame != nullptr && mainFrame->GetMetaWindow() != nullptr)
-		mainFrame->GetMetaWindow()->EditModule(ibGuid(data.m_moduleName), data.m_line, false);
+		mainFrame->GetMetaWindow()->EditModule(wxString(), ibGuid(data.m_moduleName), data.m_line, false);
 
+	// …and the message keeps it: its lines, double-clicked, open the module there — an external file's too.
 	if (mainFrame != nullptr && mainFrame->GetOutputWindow() != nullptr)
-		mainFrame->GetOutputWindow()->Output(message, ibProtocol::ibFrame::ibMessage::ibLevel::Error);
+		mainFrame->GetOutputWindow()->Output(message, ibProtocol::ibFrame::ibMessage::ibLevel::Error,
+			data.m_fileName, data.m_moduleName, static_cast<int>(data.m_line));
 }
 
 void ibDebuggerClientBridgeDesigner::OnSetToolTip(const ibDebugExpressionData& data, const wxString& resultStr)

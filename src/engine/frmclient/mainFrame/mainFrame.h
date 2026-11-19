@@ -87,10 +87,14 @@ public:
 	virtual void ActivateView(ibFrontendView* view, bool activate) override;
 
 	// A METAOBJECT OPENS ON THE SERVER — the desktop's door (ibDocManager::OpenForm), by what the client holds of the
-	// object: its id and the configuration it is in (the tab); the server opens it as the tree's Edit does (schema
+	// object: its id and the application it is in (the tab); the server opens it as the tree's Edit does (schema
 	// MetaData, Open) and its document comes with the frame. False: not sent. Its message is the designer's protocol:
 	// the designer's window sends it (ibFrontendMainFrameDesigner), the base sends nothing.
 	virtual bool OpenForm(ibMetaID WXUNUSED(id), const class ibMetaData& WXUNUSED(metaData)) { return false; }
+	// …and A MODULE AT A LINE — where a script failed, its message's line double-clicked (the desktop's ibOutputWindow):
+	// `fileName` the external data tool's or report's it is in (none: the application's). The designer's window opens it
+	// in its tree (ibMetaTreeBase::EditModule), the base does nothing.
+	virtual void EditModule(const wxString& WXUNUSED(fileName), const ibGuid& WXUNUSED(moduleName), int WXUNUSED(line)) {}
 
 	// …and what it shows: the object selected in it (the desktop's property slot).
 	virtual ibPropertyObject* GetProperty() const override;
@@ -158,7 +162,7 @@ public:
 	// (a list's settings: Act Choose), the server opens the value's quick choice or its choice form (a dialog over this
 	// modal: CreateChildFrame), and the value chosen comes back with the window's question asked again (Chosen), to
 	// the cell's ChoiceProcessing. No window asks — the cell is on the active tab (a designer's composer panel): the same
-	// act goes to the tab (event Select), whose view chooses through its configuration and says the value with the view
+	// act goes to the tab (event Select), whose view chooses through its application and says the value with the view
 	// (State Chosen). `type` — the type the cell stands on (ibTypeControlFactory::ChooseValue). False — neither is there.
 	bool ChooseValue(class ibControlFrame* owner, const struct ibTypeDescription& type, const class ibValue& current);
 	// …and the value chosen, when the window's question or the tab's view state says one was (Chosen) — handed to the
@@ -216,7 +220,7 @@ protected:
 	virtual ibWelcomeWindow* OnCreateWelcome(wxWindow* parent);
 
 	// WHAT A MODE'S FRAME CARRIES BESIDE THE BASE'S — drawn by what the patch changed in it (not IsNode: the frame sent
-	// whole). Default: nothing; the designer draws its configuration's tree (MetaData).
+	// whole). Default: nothing; the designer draws its application's tree (MetaData).
 	virtual void DrawFrame(const ibProtocolNode& WXUNUSED(frame), const ibProtocolNode& WXUNUSED(patch)) {}
 
 	// What the window builds BY ITSELF once the start has run — the desktop's slot of the same name (its home page;
@@ -282,7 +286,7 @@ protected:
 	ibOutputWindow*     m_outputWindow = nullptr;
 	ibObjectInspector*  m_objectInspector = nullptr;
 
-	ibMenu*             m_menuConfiguration = nullptr;   // a mode's own (the designer's): after Edit, before the server's
+	ibMenu*             m_menuApplication = nullptr;   // a mode's own (the designer's): after Edit, before the server's
 	ibMenu*             m_menuDebug = nullptr;
 	ibMenu*             m_menuHelp = nullptr;   // a mode's own Help (the designer's): last on the bar, after the server's
 	ibKeyBinder         m_keyBinder;            // the keys of the bar's commands (UpdateHotKeys)

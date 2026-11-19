@@ -21,7 +21,7 @@ public:
 	ibCalcScheduleDescription& GetValueAsScheduleDesc() const;
 	void SetValue(const ibCalcScheduleDescription& val);
 
-	// The information registers of this configuration — the schedule is one of them.
+	// The information registers of this application — the schedule is one of them.
 	virtual ibPropertyChoiceMode GetValueList(ibPropertyChoiceList& list) override;
 
 	// Of the schedule register `scheduleDesc` names: the resources holding a number (the value), the dimensions

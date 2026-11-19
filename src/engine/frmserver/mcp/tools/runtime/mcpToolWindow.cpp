@@ -29,7 +29,7 @@ using ibArg = ibMcpTool::ibMcpArgument;
 const ibArg& ArgCode()
 {
 	static const ibArg s_a(ibT("code"), ibArg::Kind::Text,
-		ibMcpText("The statements, in this configuration's script dialect (`platform_state` says which). What they "
+		ibMcpText("The statements, in this application's script dialect (`platform_state` says which). What they "
 			"assign to `Result` comes back as text - `Result = someValue;` - or why they did not run. To read "
 			"the data, use compose_run."),
 		/*required*/ true);
@@ -79,7 +79,7 @@ public:
 			"change and get their yes first. Their roles decide: writing what they may not write is refused, and "
 			"the refusal comes back to you.\n"
 			"\n"
-			"The names are this configuration's and the language is its own: `metadata_tree`, `syntax_search` and "
+			"The names are this application's and the language is its own: `metadata_tree`, `syntax_search` and "
 			"`type_members` before guessing. ONLY IN THE APPLICATION.");
 	}
 
@@ -92,7 +92,7 @@ public:
 	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
 		ibSession* const session = ibSession::Current();
-		ibValueModuleManagerRuntimeConfiguration* const manager = session != nullptr ? session->GetManagerModule() : nullptr;
+		ibValueModuleManagerRuntimeApplication* const manager = session != nullptr ? session->GetManagerModule() : nullptr;
 		ibBackendDocFrame* const frame = ibSession::CurrentFrame();
 		if (!ibIsMcpInApplication() || manager == nullptr || frame == nullptr) {
 			refusal = ibMcpText("This runs in the application, in the window of the person using it.");

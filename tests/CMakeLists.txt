@@ -82,11 +82,10 @@ add_executable(oes_tests
     test_codeLengthApply.cpp
     test_numberPeriodicity.cpp
     test_pictureVersion.cpp
-    test_commonAttribute.cpp
+    test_sharedAttribute.cpp
     test_roleComposition.cpp
     test_rolePolicyFold.cpp
     test_dataNode.cpp
-    test_dataMover.cpp
     test_pointInTime.cpp
     test_fileProvider.cpp
     test_jsonProvider.cpp
@@ -223,15 +222,15 @@ add_executable(oes_tests
     test_stopSignals.cpp
     test_typeFamilyAdjust.cpp
     test_eventHandler.cpp
-    test_functionalOption.cpp
+    test_featureOption.cpp
     test_metadataMove.cpp
     test_sectionInterfaceItems.cpp
     test_debugServer.cpp
     test_debugClient.cpp
-    test_commonModuleCheck.cpp
-    test_configCheckRegisters.cpp
+    test_sharedModuleCheck.cpp
+    test_applicationCheckRegisters.cpp
     test_mcpPictureSet.cpp
-    test_mcpConfigApply.cpp
+    test_mcpAppApply.cpp
     test_mcpCodeRunDebug.cpp
     test_lockRace.cpp
     test_clientListener.cpp
@@ -568,7 +567,7 @@ oes_discover_tests(oes_job_tenancy_test)
 
 # ---------------------------------------------------------------------------
 # Scheduled and background jobs at run time — BackgroundJobs, ScheduledJobs' verbs (integration scope).
-# The same bring-up as the tenancy target, plus a configuration run in memory and sys_job.
+# The same bring-up as the tenancy target, plus an application run in memory and sys_job.
 #   cmake --build build --target oes_job_runtime_test --config Debug
 #   ./bin/oes_job_runtime_test
 # ---------------------------------------------------------------------------

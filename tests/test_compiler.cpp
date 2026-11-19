@@ -705,16 +705,16 @@ TEST(PluginHost, ScriptCheckPassesValidCode) {
 		<< (found.empty() ? ibString() : found.front().m_message).ToStdString();
 }
 
-TEST(PluginHost, MetadataAnswersEmptyWithNoConfiguration) {
+TEST(PluginHost, MetadataAnswersEmptyWithNoApplication) {
 	// A plugin may load long before — or entirely without — an open
-	// configuration. Answering empty is the contract; crashing or asserting
+	// application. Answering empty is the contract; crashing or asserting
 	// would make every headless host a special case.
 	const ibPluginHost* host = ibPluginHostInstance();
 	const auto* metadata = static_cast<const ibPluginMetadata*>(host->query(host, ibCapabilityMetadata, 2));
 	ASSERT_NE(nullptr, metadata);
 
-	if (metadata->IsConfigurationOpen())
-		GTEST_SKIP() << "a configuration is open in this run — nothing to assert here";
+	if (metadata->IsApplicationOpen())
+		GTEST_SKIP() << "an application is open in this run — nothing to assert here";
 
 	EXPECT_TRUE(metadata->List(wxT("Catalog")).empty());
 	EXPECT_TRUE(metadata->Describe(wxT("Catalog"), wxT("Anything")).IsEmpty());
@@ -869,11 +869,11 @@ TEST(BarrierTypes, WrongKindIsRefused) {
 	EXPECT_FALSE(anyControl->AllowValue(array->GetClassType()));
 }
 
-TEST(BarrierTypes, AMetatypeFamilyExistsWithoutAConfiguration) {
+TEST(BarrierTypes, AMetatypeFamilyExistsWithoutAnApplication) {
 	// `CatalogRef` is registered BESIDE THE METATYPE `Catalog` — on the metatype's
 	// own registration event, not by any catalog. So the name is declarable in a
-	// configuration that has no catalogs yet, and in a test binary that has no
-	// configuration at all.
+	// application that has no catalogs yet, and in a test binary that has no
+	// application at all.
 	const ibCtorAbstractType* catalogRef = ibValue::GetAvailableCtor(wxT("CatalogRef"));
 	ASSERT_NE(nullptr, catalogRef) << "the family did not arrive with its metatype";
 
@@ -883,7 +883,7 @@ TEST(BarrierTypes, AMetatypeFamilyExistsWithoutAConfiguration) {
 
 TEST(BarrierTypes, AMetatypeFamilyIsEmptyUntilItsReferencesRegister) {
 	// Membership is RECORDED, not derived: a catalog reference joins the family
-	// as it registers (objCtor.h). With no configuration open nothing has joined,
+	// as it registers (objCtor.h). With no application open nothing has joined,
 	// so only EMPTY passes — and anything that is not a reference never would.
 	const ibCtorAbstractType* catalogRef = ibValue::GetAvailableCtor(wxT("CatalogRef"));
 	const ibCtorAbstractType* number = ibValue::GetAvailableCtor(wxT("Number"));
@@ -1132,10 +1132,10 @@ TEST(ValueSerialize, UnknownTypeInANodeIsRefused) {
 // The metadata is the DOOR — bytes in, a live value out
 // ===========================================================================
 //
-// The real configuration needs a database, a metadata tree and a load pass.
+// The real application needs a database, a metadata tree and a load pass.
 // None of that is what this is testing: what is being tested is the CONTRACT of
 // the door — a blob in, a value out, an exception when there is no value. So
-// the configuration is STOOD IN FOR here, which is enough precisely because the
+// the application is STOOD IN FOR here, which is enough precisely because the
 // door is narrow: five pure virtuals nobody on this path calls, plus the ctor
 // registry, which the stand-in answers for itself.
 //
@@ -1148,7 +1148,7 @@ namespace {
 class StandInMetaData : public ibMetaData {
 public:
 	// The five the base leaves open. Nothing on the serialization path calls
-	// them — they are what makes a metadata a *configuration*, and this is not
+	// them — they are what makes a metadata a *application*, and this is not
 	// pretending to be one.
 	void SetVersion(const ibVersionID& version) override { m_version = version; }
 	ibVersionID GetVersion() const override { return m_version; }
@@ -1156,12 +1156,12 @@ public:
 	bool RunDatabase(const ibRuntimeRequest& request = ibRuntimeRequest()) override { return true; }
 	bool CloseDatabase(const ibRuntimeRequest& request = ibRuntimeRequest()) override { return true; }
 
-	// THE CONFIGURATION'S OWN REGISTRY, stood in for: a real one holds the
+	// THE APPLICATION'S OWN REGISTRY, stood in for: a real one holds the
 	// reference and enum types whose ids come from metaIDs. Claiming a class id
-	// here is the same shape of answer, without a configuration behind it.
+	// here is the same shape of answer, without an application behind it.
 	//
 	// ADDS to the base rather than replacing it — the base is where the fall
-	// through to ibValue's registry lives, and a configuration that answered
+	// through to ibValue's registry lives, and an application that answered
 	// only for its own types would break every built-in one.
 	bool IsRegisterCtor(const ibClassID& clsid) const override {
 		return (m_claimed != 0 && clsid == m_claimed) || ibMetaData::IsRegisterCtor(clsid);
@@ -1259,20 +1259,20 @@ TEST(MetaDataSerialize, WhatItDoesNotKnowGoesToTheValueFactory) {
 
 TEST(MetaDataSerialize, ItsOwnRegistryIsAskedFirst) {
 	// Claiming the id sends creation through the metadata's own registry —
-	// where, in a real configuration, a catalog reference lives. The value still
+	// where, in a real application, a catalog reference lives. The value still
 	// reads its own contents afterwards.
 	StandInMetaData metaData;
 	metaData.Claim(g_valueStringCLSID);
 
-	const ibValue original(ibT("through the configuration"));
+	const ibValue original(ibT("through the application"));
 	ibDataNode node(original.GetClassType(), 0);
 	metaData.Serialize(original, node);
 
-	EXPECT_EQ(wxT("through the configuration"), metaData.Deserialize(node).GetString());
+	EXPECT_EQ(wxT("through the application"), metaData.Deserialize(node).GetString());
 }
 
 TEST(MetaDataSerialize, ATypeNOBODYHasIsRefused) {
-	// Not "not mine" — not anywhere. The configuration asked its own registry,
+	// Not "not mine" — not anywhere. The application asked its own registry,
 	// the factory asked its own, and there is no such type: the caller wanted a
 	// value and there is none to give.
 	StandInMetaData metaData;
@@ -1294,17 +1294,17 @@ TEST(MetaDataSerialize, AValueWithNoPackedFormIsRefused) {
 }
 
 // ===========================================================================
-// A column's TYPED EMPTY value is made by the configuration that owns the type
+// A column's TYPED EMPTY value is made by the application that owns the type
 // ===========================================================================
 //
 // ibValueTypeDescription::AdjustValue answers "what does an empty cell of this
 // column look like". For a reference of a catalog that answer is the catalog's
 // empty reference, and the class that makes it is registered in the
-// CONFIGURATION'S image - never in the value registry, which knows the built-in
+// APPLICATION'S image - never in the value registry, which knows the built-in
 // types only.
 //
 // 🛑 The question "is this class registered?" was put to the value registry
-// (2026-09-24), so every reference type of a configuration came back as the
+// (2026-09-24), so every reference type of an application came back as the
 // untyped empty value. A ledger balance split one item into two rows: a currency
 // never written read as Undefined, one written empty read as the empty
 // reference, and the key a server read grouped by then (KeyFieldsAsRead) could no
@@ -1315,7 +1315,7 @@ TEST(MetaDataSerialize, AValueWithNoPackedFormIsRefused) {
 
 namespace {
 
-// Makes ONE class of its own, the way a configuration makes the empty reference of
+// Makes ONE class of its own, the way an application makes the empty reference of
 // its catalog: a class id the value registry has never heard of.
 class MakingStandIn : public StandInMetaData {
 public:
@@ -1336,7 +1336,7 @@ private:
 
 } // namespace
 
-TEST(TypedEmpty, AReferenceOfTheConfigurationIsMadeByTheConfiguration) {
+TEST(TypedEmpty, AReferenceOfTheApplicationIsMadeByTheApplication) {
 	const ibClassID catalogRef = reference_to_clsid(987654);
 	ASSERT_FALSE(ibValue::IsRegisterCtor(catalogRef)) << "the value registry must not know it - that is the case";
 
@@ -1347,7 +1347,7 @@ TEST(TypedEmpty, AReferenceOfTheConfigurationIsMadeByTheConfiguration) {
 }
 
 TEST(TypedEmpty, ATypeNobodyHasIsTheEmptyValueNotARefusal) {
-	// The other half, kept: a type described but registered NOWHERE (a configuration built without its
+	// The other half, kept: a type described but registered NOWHERE (an application built without its
 	// runtime objects) still answers with the untyped empty value rather than a raise.
 	const ibClassID catalogRef = reference_to_clsid(987655);
 	StandInMetaData metaData;
@@ -1360,11 +1360,11 @@ TEST(TypedEmpty, ATypeNobodyHasIsTheEmptyValueNotARefusal) {
 #include "backend/query/tempColumn.h"   // ibTempColumn — a column the engine makes
 #include "backend/query/queryable.h"    // ibAliasColumn — one standing for it
 
-// ⭐ A COLUMN MAKES ITS VALUE BY THE CONFIGURATION IT IS A COLUMN OF (ibBackendQueryColumn::GetMetaData) — one the engine
+// ⭐ A COLUMN MAKES ITS VALUE BY THE APPLICATION IT IS A COLUMN OF (ibBackendQueryColumn::GetMetaData) — one the engine
 // makes, by the one it was made with, never by whichever happens to be active: the stand-in is not, and asked of the
 // active one the reference came back as nothing. A column standing for it answers the same, and so does a raw reference
 // made with its target's.
-TEST(TypedEmpty, AColumnMakesItsValueByTheConfigurationItIsAColumnOf) {
+TEST(TypedEmpty, AColumnMakesItsValueByTheApplicationItIsAColumnOf) {
 	const ibClassID catalogRef = reference_to_clsid(987656);
 	MakingStandIn metaData(catalogRef);
 	const ibString made(wxT("the catalog's empty reference"));
@@ -1865,8 +1865,8 @@ TEST(CompilerTest, TwoAccessModifiersAreStillRefusedAlongsideCached) {
 // That second half is the design, not an implementation detail: `Cached` is
 // applied at the callee's entry, where every road into a body arrives, so the
 // caller emits what it always emitted. An opcode here would have covered only
-// the calls this emitter can see — and `CommonModule.Function(...)`, which is
-// how a non-global common module is normally called, is not one of them.
+// the calls this emitter can see — and `SharedModule.Function(...)`, which is
+// how a non-global shared module is normally called, is not one of them.
 TEST(CompilerTest, CachedReachesTheBytecodeAndLeavesTheCallSiteAlone) {
 	ibCompileCode cc(wxT("test"), wxT("memory"), false);
 	ASSERT_TRUE(TryCompile(cc,
@@ -1903,7 +1903,7 @@ TEST(CompilerTest, AFunctionWithoutCachedCarriesTheFlagCleared) {
 	EXPECT_FALSE(cc.m_cByteCode.m_listFunc[0].m_valueCached);
 }
 
-// CES is the DEFAULT dialect for new configurations, so a modifier that only
+// CES is the DEFAULT dialect for new applications, so a modifier that only
 // worked in VES would be broken for most users while every test here passed —
 // this binary forces VES process-wide. Style is swapped back before returning,
 // including on a failed assertion, so suite order stays unaffected.

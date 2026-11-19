@@ -129,7 +129,7 @@ public:
     // ⚠ THE GUID, NOT A NAME (Max's own correction, the same day). A name is unique enough to open
     // by and it MOVES: a rename between the open and the second open makes one document look like
     // two. The guid is what the object is, for as long as it exists. A path cannot serve either —
-    // a metaobject inside a configuration has no file, which is why FindDocumentByPath never
+    // a metaobject inside an application has no file, which is why FindDocumentByPath never
     // answers about one.
     //
     // ⚠ A STRING, ALWAYS (Max, 2026-09-01: *"an identifier is always a string"*). A guid is what a
@@ -277,7 +277,7 @@ public:
     virtual void SetDocParent(ibFrontendDocument* docParent);
 
     // ⭐ AN OWNER ANSWERS ABOUT ITS OWN. The editors a navigator opens are OWNED by the document
-    // holding that configuration and never join the manager's list, so "is it already open here?"
+    // holding that application and never join the manager's list, so "is it already open here?"
     // is a question for THIS document — the manager's own search answers about the manager's own
     // documents and cannot see these (Max, 2026-09-01: *"split the search by parent from the search
     // by name"* — they are two questions, and one function with an optional parent made them look
@@ -464,7 +464,7 @@ public:
     ibFrontendDocument* FindDocumentByPath(const wxString& path) const;
 
     // ⭐ THE SAME QUESTION FOR THINGS THAT HAVE NO FILE. FindDocumentByPath answers for documents
-    // opened FROM DISK; everything inside a configuration — a form, a module, an object editor —
+    // opened FROM DISK; everything inside an application — a form, a module, an object editor —
     // has an identity and no path, and was therefore invisible to the only "is it already open"
     // check there was. See ibFrontendDocument::GetUniqueIdentifier.
     //

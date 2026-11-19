@@ -22,7 +22,7 @@
 namespace {
 
 // THE TEXT A PARAMETER KEEPS, ticked or not — what its value cell edits. (Never a reference: an appearance
-// reads back without a configuration — see ibAppearanceValueDescription.)
+// reads back without an application — see ibAppearanceValueDescription.)
 ibString KeptText(const ibAppearanceDescription& appearance, ibAppearanceParameter parameter)
 {
 	const ibAppearanceValueDescription* value = appearance.Find(parameter);

@@ -10,14 +10,14 @@
 class FRMSERVER_API ibSchemaAuditLog : public ibClientSchema {
 public:
 
-	// The configuration's right to active users — what the desktop's menu item stood on.
+	// The application's right to active users — what the desktop's menu item stood on.
 	virtual bool AccessRight(const ibSession& session) const override;
 
 	// Nothing — the journal is a tab, opened by Open.
 	virtual void Build(const ibSession& /*session*/, const ibDataNode& /*args*/,
 		ibDataNode& /*result*/) const override {}
 
-	// Open — the journal's tab, as the desktop's menu item opened it, in the session's configuration.
+	// Open — the journal's tab, as the desktop's menu item opened it, in the session's application.
 	virtual std::function<void()> Command(const ibSession& session, std::int32_t command,
 		const ibDataNode& args, ibProtocol::ibRefusal& refusal, ibString& error) const override;
 };

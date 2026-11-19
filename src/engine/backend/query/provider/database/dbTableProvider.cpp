@@ -34,7 +34,7 @@
 #include "backend/metaCollection/partial/reference/reference.h"  // ibValueReferenceDataObject::ReadBatch — this base's references, read once the rows are in
 #include "backend/metaCollection/genericData.h"                  // ResolveQueryConstant + ibRefMember — a table's constants and its empty reference
 #include "backend/query/queryableFactory.h"                      // GetSourceFactory / ReferenceTargetsOf — declared for the query engine, answered here
-#include "backend/metaCollection/metaGroups.h"                   // ibMetaGroupOrder — a configuration's sources in the order it is read
+#include "backend/metaCollection/metaGroups.h"                   // ibMetaGroupOrder — an application's sources in the order it is read
 
 #include <deque>          // ibDbResultSource — the field names it has found, where they stay put
 #include <map>            // dot-walk join dedup
@@ -1227,7 +1227,7 @@ std::shared_ptr<const ibBackendQueryable> ColocatedOwner(const ColocatedLeaves& 
 	// reasoning is kept so the third attempt starts further along than the first two did.
 	//
 	// `ContainColumn` decides by MODEL-ID, on a premise written over it: *"the model-id (attribute
-	// metaID) is config-unique, so each column belongs to exactly one"*. True of attributes, and
+	// metaID) is application-unique, so each column belongs to exactly one"*. True of attributes, and
 	// FALSE of the sources that REPUBLISH them. A register's derived surfaces (Balance, Turnovers,
 	// the totals bundle) publish the register's attributes AS THEMSELVES, metaID included — and
 	// deliberately so, because that id is the contract a composed `Value(dimension)` read arrives by
@@ -1258,7 +1258,7 @@ std::shared_ptr<const ibBackendQueryable> ColocatedOwner(const ColocatedLeaves& 
 	// ⭐⭐ THE EXACT OBJECT FIRST, and only then the question that has to reason.
 	//
 	// `ContainColumn` decides by MODEL-ID, on a premise written over it: *"the model-id (attribute
-	// metaID) is config-unique, so each column belongs to exactly one"*. True of attributes, and
+	// metaID) is application-unique, so each column belongs to exactly one"*. True of attributes, and
 	// FALSE of the sources that REPUBLISH them — a register's derived surfaces (Balance, Turnovers,
 	// the totals bundle) publish the register's attributes AS THEMSELVES, metaID included, because
 	// that id is the contract a composed `Value(dimension)` read arrives by. Two surfaces in one
@@ -1330,7 +1330,7 @@ ibString ColocatedQual(const ColocatedLeaves& leaves, const std::shared_ptr<cons
 // 🛑 THE QUESTION WAS ASKED ON ONE ROAD OUT OF FOUR. The rollup path learnt it on 2026-08-22
 // ("built ibScan(name) unconditionally … the engine was right; the statement was ours"), and the
 // three beside it went on scanning the name. What that cost, measured live on 2026-09-02: reading
-// the stock balance of a warehouse configuration produced
+// the stock balance of a warehouse application produced
 // `SELECT * FROM …_Balance ORDER BY fld1043_D` — a scan of the balance surface, ordered by a period
 // column that surface deliberately does not have, and Firebird refused it; the neighbouring reading
 // asked for `…_BalanceAndTurnovers` and was told there is no such table. Turnovers worked, because
@@ -6218,7 +6218,7 @@ std::vector<std::shared_ptr<const ibBackendQueryable>> ReferenceTargetsOf(const 
 	for (const ibClassID& clsid : ibOpenBarriers(type, metaData).GetClsidList()) {
 		if (!IsReference(clsid))
 			continue;                                    // a non-reference alternative of the composite type
-		// A configuration's reference has its own table.
+		// An application's reference has its own table.
 		if (const ibCtorMetaValueType* ctor = metaData->GetTypeCtor(clsid))
 			if (const std::shared_ptr<const ibBackendQueryable> q = ctor->GetQueryable())
 				if (std::find(targets.begin(), targets.end(), q) == targets.end())
@@ -6228,16 +6228,16 @@ std::vector<std::shared_ptr<const ibBackendQueryable>> ReferenceTargetsOf(const 
 }
 
 // The factory a query written on behalf of `metaData` resolves its sources through (queryableFactory.h) — asked
-// here, where the configuration may be named, so the lowering and the constructor hold one and never its header.
+// here, where the application may be named, so the lowering and the constructor hold one and never its header.
 ibQueryableFactory* GetSourceFactory(const ibMetaData* metaData)
 {
 	return metaData != nullptr ? metaData->GetSourceFactory() : nullptr;
 }
 
-// AN APPLICATION'S SOURCES AS ITS CONFIGURATION IS READ (queryableFactory.h) — the kinds in its tree's order
+// AN APPLICATION'S SOURCES AS ITS APPLICATION IS READ (queryableFactory.h) — the kinds in its tree's order
 // (ibMetaGroupOrder: the charts before the registers), a kind's tables by name; a kind no metatype stands behind after
 // them all. A namespace IS its metatype's name (ibMetaQueryDescriptor::GetNamespace); asked without raising. The
-// platform's — made for this configuration, registered beside them — come apart, in the order they were made.
+// platform's — made for this application, registered beside them — come apart, in the order they were made.
 std::vector<ibQueryableSourceDescriptor*> ibMetaQueryableFactory::GetDescriptors(ibQueryableSourceKind kind) const
 {
 	const auto isPlatform = [this](const ibQueryableSourceDescriptor* descriptor) {

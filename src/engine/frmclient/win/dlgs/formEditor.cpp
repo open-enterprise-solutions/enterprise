@@ -133,7 +133,7 @@ void ibDialogFormEditor::AddChildren(ibValueFrame* obj, const wxTreeItemId& pare
 		}
 	}
 	else {
-		// An element the functional options of this base make unavailable is not offered to be re-arranged
+		// An element the feature options of this base make unavailable is not offered to be re-arranged
 		// or shown again: it is not the user's to bring back (control.h, IsAvailable).
 		if (!is_root && !obj->IsAvailable())
 			return;
@@ -340,7 +340,7 @@ void ibDialogFormEditor::OnButtonEvent(wxCommandEvent& e)
 			break;
 		case ibFormSettingsResult::NoAddress:
 			// Not a failure — a statement about this form. One built from its source rather than
-			// declared in the configuration has no metaobject, so there is nothing to key a setting
+			// declared in the application has no metaobject, so there is nothing to key a setting
 			// by, and trying again will never help.
 			ibMessageBox(_("This form is generated from its data and cannot keep a setting of its own."),
 				_("Change form"), wxOK | wxICON_INFORMATION, this);

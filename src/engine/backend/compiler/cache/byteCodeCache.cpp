@@ -32,11 +32,11 @@
 // The SAVE is the exception: it writes on a holder of its own, never inside the
 // caller's business transaction (see Save).
 
-// 🛑⭐⭐ THE KEY IS THE ENGINE AND THE CONFIGURATION, NOT THE CONFIGURATION ALONE.
+// 🛑⭐⭐ THE KEY IS THE ENGINE AND THE APPLICATION, NOT THE APPLICATION ALONE.
 //
-// Bytecode is compiled by an engine. A key of the configuration alone kept serving a blob after
+// Bytecode is compiled by an engine. A key of the application alone kept serving a blob after
 // the engine that compiled it was gone (2026-09-02): a global function added at noon was invisible
-// for an hour, and touching one module — which changed the configuration digest — made every row
+// for an hour, and touching one module — which changed the application digest — made every row
 // unreachable and the function appeared. The symptom is code that quietly stays as it was.
 //
 // The first engine half was GetBuildStamp(), the __DATE__/__TIME__ of core/build.cpp. core is its
@@ -55,7 +55,7 @@
 // Kept as one KEY VALUE rather than a second column: a row from another engine is then NOT FOUND,
 // instead of found and rejected by a check somebody has to remember to write.
 //
-// ⭐ HASHED DOWN TO 32, because that is what the COLUMN is (`config_md5`, ibTypeString(32)).
+// ⭐ HASHED DOWN TO 32, because that is what the COLUMN is (`application_md5`, ibTypeString(32)).
 // Returning the raw spelling made the key longer than 32 and every statement touching it died
 // with a string truncation; the misses looked like a cold cache (found 2026-09-04). A wider
 // column would be a schema change for a table whose contents are disposable.
@@ -78,10 +78,10 @@ void WriteRow(ibDatabaseQueryBuilder& q, const ibByteCode& bc, const ibMemoryBuf
 	const ibString descIdStr = bc.m_id;
 	const ibString bcVerStr  = bc.m_version;
 
-	// WEED THE PREVIOUS CONFIGURATIONS OUT, ONCE. Rows keyed on an older digest can never be found
+	// WEED THE PREVIOUS APPLICATIONS OUT, ONCE. Rows keyed on an older digest can never be found
 	// again — which is the whole point — but "never found" is not "gone". The table cannot GROW
 	// without bound (descriptor_id is its primary key, so one row per descriptor, and a recompile
-	// replaces it), yet a descriptor the new configuration never compiles — a module that was
+	// replaces it), yet a descriptor the new application never compiles — a module that was
 	// deleted, or simply one nobody has called yet — keeps a blob nothing can ever use. This is
 	// the first moment the new digest is known to be real: a compile just succeeded under it. The
 	// guard keeps it to one statement per digest per process, so the ordinary path stays a
@@ -107,7 +107,7 @@ void WriteRow(ibDatabaseQueryBuilder& q, const ibByteCode& bc, const ibMemoryBuf
 		if (bWeedNow) {
 			try {
 				q.Execute(ibDelete(bytecode_cache_table,
-					ibBinOp(ibQueryBinOp::Ne, ibCol(ibT("config_md5")), ibConst(ibValue(configMd5)))));
+					ibBinOp(ibQueryBinOp::Ne, ibCol(ibT("application_md5")), ibConst(ibValue(configMd5)))));
 			} catch (...) { /* hygiene, not correctness — a stale row is unreachable either way */ }
 		}
 		q.Execute(ibDelete(bytecode_cache_table,
@@ -115,7 +115,7 @@ void WriteRow(ibDatabaseQueryBuilder& q, const ibByteCode& bc, const ibMemoryBuf
 		q.Execute(ibInsert(bytecode_cache_table, {
 			{ ibT("descriptor_id"),    ibConst(ibValue(descIdStr)) },
 			{ ibT("bytecode_version"), ibConst(ibValue(bcVerStr)) },
-			{ ibT("config_md5"),       ibConst(ibValue(configMd5)) },
+			{ ibT("application_md5"),  ibConst(ibValue(configMd5)) },
 			{ ibT("bc_blob"),          ibConstBlob(blob.GetData(),
 			                                       static_cast<size_t>(blob.GetDataLen())) },
 		}));
@@ -159,7 +159,7 @@ private:
 	struct ibHeld {
 		ibSingleConnectionHolder m_holder;
 		ibDatabaseQueryBuilder   m_query{ &m_holder };
-		ibString                 m_configMd5;
+		ibString                 m_applicationMd5;
 	};
 	std::unique_ptr<ibHeld> m_held;
 };
@@ -172,7 +172,7 @@ void ibRowLock::Acquire(const ibGuid& descId, const ibString& configDigest)
 	const ibString key = descId;
 	try {
 		std::unique_ptr<ibHeld> held = std::make_unique<ibHeld>();
-		held->m_configMd5 = ibByteCodeCache::CacheKey(configDigest);
+		held->m_applicationMd5 = ibByteCodeCache::CacheKey(configDigest);
 		ibDatabaseQueryBuilder& q = held->m_query;
 		if (!q.IsOpen() || !q.TableExists(lock_key_table))
 			return;   // the same connection asks — see Load
@@ -225,7 +225,7 @@ bool ibRowLock::Save(const ibByteCode& bc)
 	ibWriterMemory writer;
 	if (!bc.SerializeAOT(writer)) return false;   // not cacheable: the next one compiles for itself
 	try {
-		WriteRow(held->m_query, bc, writer.buffer(), held->m_configMd5);
+		WriteRow(held->m_query, bc, writer.buffer(), held->m_applicationMd5);
 	}
 	catch (...) { return false; }
 	return true;
@@ -236,12 +236,12 @@ bool ibRowLock::Save(const ibByteCode& bc)
 ibMemoryBuffer ReadRow(const ibGuid& descId, const ibString& configMd5)
 {
 	try {
-		// SELECT bc_blob FROM <t> WHERE descriptor_id = <descId> AND config_md5 = <key>
+		// SELECT bc_blob FROM <t> WHERE descriptor_id = <descId> AND application_md5 = <key>
 		//
 		// THE FINGERPRINT IS PART OF THE KEY, not a field somebody compares afterwards. A row written
-		// against an earlier configuration is not "found and rejected" — it is not found. That removes
+		// against an earlier application is not "found and rejected" — it is not found. That removes
 		// the whole class of "somebody forgot the check" and makes a save self-invalidating: saving
-		// recomputes the configuration's digest, so every previously cached row falls out of reach in
+		// recomputes the application's digest, so every previously cached row falls out of reach in
 		// the same instant, without a single DELETE having to run first.
 		// ⭐⭐ THE LOOKUP RIDES THIS BUILDER, NOT `db_query` (a table check rode it then). Both ask the same question, but of
 		// DIFFERENT CONNECTIONS: the builder opens a scope and gets one of its own, while `db_query`
@@ -253,13 +253,13 @@ ibMemoryBuffer ReadRow(const ibGuid& descId, const ibString& configMd5)
 		// Measured twice on 2026-09-08, at the same instant in the journal both times — the sweeper
 		// deleting a dead session's `sys_lock` rows one millisecond before the failure:
 		//     [error] db.firebird  Error retrieving Next record
-		//     [warning] module     Common module init failed … invalid request handle
+		//     [warning] module     Shared module init failed … invalid request handle
 		// and earlier, the same collision arriving as `invalid transaction handle`. The startup is
 		// exactly when it happens: modules are being compiled while the sweeper cleans up after a
 		// runtime that was killed rather than closed.
 		//
-		// ⚠ AND THE TABLE IS NOT ASKED ABOUT FIRST. Every open of the base makes it (MigrateTableBytecodeCache), and
-		// a base where that failed answers this SELECT with a refusal, which the catch below takes for a miss — the
+		// ⚠ AND THE TABLE IS NOT ASKED ABOUT FIRST. A new base is made with it (CreateTableBytecodeCache), and
+		// a base without it answers this SELECT with a refusal, which the catch below takes for a miss — the
 		// answer the question gave. Asked, it was a statement prepared and run for every module of every session: an
 		// HTTP request is a session, and 16 % of a request that did nothing went on asking (2026-11-16,
 		// load-million-rows.md § 13).
@@ -271,7 +271,7 @@ ibMemoryBuffer ReadRow(const ibGuid& descId, const ibString& configMd5)
 					ibBinOp(ibQueryBinOp::And,
 					        ibBinOp(ibQueryBinOp::Eq, ibCol(ibT("descriptor_id")),
 					                ibConst(ibValue(ibString(descId)))),
-					        ibBinOp(ibQueryBinOp::Eq, ibCol(ibT("config_md5")),
+					        ibBinOp(ibQueryBinOp::Eq, ibCol(ibT("application_md5")),
 					                ibConst(ibValue(configMd5))))),
 				{ { ibCol(ibT("bc_blob")), ibEmptyString } }));
 
@@ -339,13 +339,13 @@ bool ibByteCodeCache::Load(ibByteCode& outBc, const ibGuid& descId, const ibStri
 
 	ibASSERT(descId.isValid());
 
-	// The same key the row was written under — the platform AND the configuration (see CacheKey).
+	// The same key the row was written under — the platform AND the application (see CacheKey).
 	const ibString configMd5 = CacheKey(configDigest);
 
 	ibMemoryBuffer blob = ReadRow(descId, configMd5);
 
 	// WHY A ROW IS TAKEN. The key is meant to make a stale row unfindable: a save recomputes the
-	// configuration's digest, and every row written under the previous one falls out of reach.
+	// application's digest, and every row written under the previous one falls out of reach.
 	// One got through anyway on 2026-09-01 — bytecode carrying a frame number this engine's
 	// chain never had, and emptying the table cured it — so the question worth being able to ask
 	// is not what the key GUARDS but why a lookup MATCHED.
@@ -397,21 +397,21 @@ std::map<ibGuid, ibMemoryBuffer> ibByteCodeCache::LoadAll(const ibString& config
 {
 	std::map<ibGuid, ibMemoryBuffer> rows;
 
-	// The same key the rows were written under — the platform AND the configuration (see CacheKey).
+	// The same key the rows were written under — the platform AND the application (see CacheKey).
 	const ibString configMd5 = CacheKey(configDigest);
 	try {
-		// Asked inside the try: this is called as a configuration opens, where the thread may have no base to ask.
+		// Asked inside the try: this is called as an application opens, where the thread may have no base to ask.
 		if (db_query == nullptr)
 			return rows;
 
-		// SELECT descriptor_id, bc_blob FROM <t> WHERE config_md5 = <key> — on the builder's own connection, and the
+		// SELECT descriptor_id, bc_blob FROM <t> WHERE application_md5 = <key> — on the builder's own connection, and the
 		// table not asked about first (see ReadRow).
 		ibDatabaseQueryBuilder q;
 		ibQueryIR ir(
 			ibProject(
 				ibFilter(
 					ibScan(bytecode_cache_table),
-					ibBinOp(ibQueryBinOp::Eq, ibCol(ibT("config_md5")), ibConst(ibValue(configMd5)))),
+					ibBinOp(ibQueryBinOp::Eq, ibCol(ibT("application_md5")), ibConst(ibValue(configMd5)))),
 				{ { ibCol(ibT("descriptor_id")), ibEmptyString },
 				  { ibCol(ibT("bc_blob")),       ibEmptyString } }));
 
