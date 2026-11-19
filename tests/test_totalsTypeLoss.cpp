@@ -379,6 +379,13 @@ TEST_P(TotalsTypeLossApply, ADimensionThatLosesATypeKeepsTotalsAtTheMovementSum)
 		ibBinOp(ibQueryBinOp::Eq, ibCol(totals->m_materialize.m_periodUnitColumn),
 			ibConst(ibValue(static_cast<int>(totals->m_materialize.m_periodUnits.front())))));
 
+	// The row that held a B holds the column's empty value, as a write spells it. The type left is CatalogRef.A alone,
+	// so that value is A's empty reference: the reference tag, A's class, no object — not a tag of 0, which is what the
+	// clear wrote while the application was not run and could not make an A.
+	const ibGuid none;
+	const ibString emptyOfA = ibString::Format(wxT("%d|%lld|%s"), static_cast<int>(ibFieldTypes_Reference),
+		static_cast<long long>(narrow.refA), HexOf(ibMemoryBuffer(none.bytes().data(), none.bytes().size())));
+
 	ASSERT_EQ(movement.size(), 2u);
 	ibNumber moved;
 	bool sawEmpty = false;
@@ -388,10 +395,11 @@ TEST_P(TotalsTypeLossApply, ADimensionThatLosesATypeKeepsTotalsAtTheMovementSum)
 		ASSERT_NE(found, total.end()) << "totals have no row for movement key " << one.first.ToStdString();
 		EXPECT_EQ(found->second.m_in, one.second.m_in);
 		EXPECT_EQ(found->second.m_out, ibNumber());
-		if (one.first.StartsWith(wxT("0|")))
+		if (one.first == emptyOfA)
 			sawEmpty = true;
 	}
-	EXPECT_TRUE(sawEmpty);
+	EXPECT_TRUE(sawEmpty) << "no movement row holds " << emptyOfA.ToStdString() << "; the keys are "
+		<< movement.begin()->first.ToStdString() << " and " << std::next(movement.begin())->first.ToStdString();
 	EXPECT_EQ(moved, ibNumber(24L));
 }
 
