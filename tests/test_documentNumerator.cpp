@@ -20,28 +20,29 @@
 #include "backend/databaseLayer/connectionPool.h"
 #include "backend/databaseLayer/databaseQueryBuilder.h"
 #include "backend/databaseLayer/sqllite/sqliteDatabaseLayer.h"
-#include "backend/metadataConfiguration.h"
+#include "backend/metadataApplication.h"
 #include "backend/metaCollection/metaObject.h"
 #include "backend/metaCollection/partial/document.h"
 #include "backend/metaCollection/partial/documentNumerator.h"
 #include "backend/metaCollection/partial/reference/reference.h"
 #include "backend/propertyManager/property/propertyMetaObjectChoice.h"
 #include "backend/query/columnLayout.h"
+#include "backend/query/provider/database/columnCodec.h"
 #include "backend/query/queryProvider.h"
 #include "core/serialize/dataBuilder.h"
 
 namespace {
 
-ibValueMetaObjectDocumentNumerator* MakeNumerator(ibMetaDataConfigurationFile& cfg)
+ibValueMetaObjectDocumentNumerator* MakeNumerator(ibMetaDataApplicationFile& cfg)
 {
 	return dynamic_cast<ibValueMetaObjectDocumentNumerator*>(
-		cfg.CreateMetaObject(g_metaDocumentNumeratorCLSID, cfg.GetCommonMetaObject(), /*runObject*/ false));
+		cfg.CreateMetaObject(g_metaDocumentNumeratorCLSID, cfg.GetRootMetaObject(), /*runObject*/ false));
 }
 
-ibValueMetaObjectDocument* MakeDocument(ibMetaDataConfigurationFile& cfg, const ibString& name)
+ibValueMetaObjectDocument* MakeDocument(ibMetaDataApplicationFile& cfg, const ibString& name)
 {
 	auto* doc = dynamic_cast<ibValueMetaObjectDocument*>(
-		cfg.CreateMetaObject(g_metaDocumentCLSID, cfg.GetCommonMetaObject(), /*runObject*/ false));
+		cfg.CreateMetaObject(g_metaDocumentCLSID, cfg.GetRootMetaObject(), /*runObject*/ false));
 	if (doc != nullptr)
 		doc->SetName(name);
 	return doc;
@@ -106,7 +107,7 @@ public:
 
 TEST(DocumentNumerator, ANewNumeratorIsOneSeriesThatChecksNumbers)
 {
-	ibMetaDataConfigurationFile cfg;
+	ibMetaDataApplicationFile cfg;
 	ibValueMetaObjectDocumentNumerator* numerator = MakeNumerator(cfg);
 	ASSERT_NE(numerator, nullptr);
 	EXPECT_EQ(ibNumberPeriodicity::ibNumberPeriodicity_Nonperiodical, numerator->GetNumberPeriodicity());
@@ -118,7 +119,7 @@ TEST(DocumentNumerator, ANewNumeratorIsOneSeriesThatChecksNumbers)
 
 TEST(DocumentNumerator, TheSettingsAndTheBindingRoundTrip)
 {
-	ibMetaDataConfigurationFile cfg;
+	ibMetaDataApplicationFile cfg;
 	ibValueMetaObjectDocumentNumerator* numerator = MakeNumerator(cfg);
 	ibValueMetaObjectDocument* doc = MakeDocument(cfg, wxT("Invoice"));
 	ASSERT_NE(numerator, nullptr);
@@ -149,21 +150,21 @@ TEST(DocumentNumerator, TheSettingsAndTheBindingRoundTrip)
 }
 
 // Through the whole configuration file, as the designer saves and opens it.
-TEST(DocumentNumerator, TheConfigurationFileKeepsTheNumeratorAndItsMembers)
+TEST(DocumentNumerator, TheApplicationFileKeepsTheNumeratorAndItsMembers)
 {
 	const ibString path = wxFileName::CreateTempFileName(wxT("oesnum"));
 	{
-		ibMetaDataConfigurationFile cfg;
+		ibMetaDataApplicationFile cfg;
 		ibValueMetaObjectDocumentNumerator* numerator = MakeNumerator(cfg);
 		ASSERT_NE(numerator, nullptr);
 		numerator->SetName(wxT("Sales"));
 		Bind(MakeDocument(cfg, wxT("Invoice")), numerator);
 		Bind(MakeDocument(cfg, wxT("Receipt")), numerator);
 		MakeDocument(cfg, wxT("Order"));
-		ASSERT_TRUE(cfg.SaveConfigToFile(path));
+		ASSERT_TRUE(cfg.SaveApplicationToFile(path));
 	}
-	ibMetaDataConfigurationFile cfg;
-	ASSERT_TRUE(cfg.LoadConfigFromFile(path));
+	ibMetaDataApplicationFile cfg;
+	ASSERT_TRUE(cfg.LoadApplicationFromFile(path));
 	wxRemoveFile(path);
 
 	std::vector<ibValueMetaObjectDocumentNumerator*> numerators =
@@ -188,7 +189,7 @@ struct NumeratorSeries : ::testing::Test {
 	const short m_codeStyle = ibCompileCode::GetCodeStyle();
 	std::shared_ptr<ibDatabaseLayerSQLite> db;
 	ibString dbPath;
-	std::unique_ptr<ibMetaDataConfigurationFile> cfg;
+	std::unique_ptr<ibMetaDataApplicationFile> cfg;
 	ibValueMetaObjectDocumentNumerator* numerator = nullptr;
 	ibValueMetaObjectDocument* invoice = nullptr;
 	ibValueMetaObjectDocument* receipt = nullptr;
@@ -213,7 +214,7 @@ struct NumeratorSeries : ::testing::Test {
 			GTEST_SKIP() << "SQLite open failed";
 		pool->Init(db, /*maxSize=*/4, /*minIdle=*/0);
 
-		cfg = std::make_unique<ibMetaDataConfigurationFile>();
+		cfg = std::make_unique<ibMetaDataApplicationFile>();
 		numerator = MakeNumerator(*cfg);
 		invoice = MakeDocument(*cfg, wxT("Invoice"));
 		receipt = MakeDocument(*cfg, wxT("Receipt"));
@@ -259,7 +260,7 @@ struct NumeratorSeries : ::testing::Test {
 		for (const ibValueMetaObjectAttributeBase* attribute : doc->GetGenericAttributeArrayObject()) {
 			if (attribute == nullptr || attribute->GetQueryColumn() == nullptr)
 				continue;
-			for (const ibString& field : ColumnFieldNames(attribute->GetQueryColumn())) {
+			for (const ibString& field : ColumnFieldNames(*attribute->GetQueryColumn())) {
 				if (!seen.insert(field).second)
 					continue;
 				list << (list.IsEmpty() ? wxT("") : wxT(", ")) << field << SqliteTypeOf(field);
@@ -270,11 +271,11 @@ struct NumeratorSeries : ::testing::Test {
 			+ wxT(" (") + list + wxT(")"));
 	}
 
-	void Assign(std::vector<ibDmlAssign>& out, const ibBackendQueryColumn* column, const ibValue& value) const {
-		const std::vector<ibString> fields = ColumnFieldNames(column);
+	void Assign(std::vector<ibDmlAssign>& out, const std::shared_ptr<const ibBackendQueryColumn>& column, const ibValue& value) const {
+		const std::vector<ibString> fields = ColumnFieldNames(*column);
 		ibQueryStatement capture(ibQueryStatement::Kind::Delete, ibString(), fields);
 		int position = 1;
-		ibColumnCodec::WriteValue(column, cfg.get(), value, &capture, position);
+		ibColumnCodec::WriteValue(*column, cfg.get(), value, &capture, position);
 		const std::vector<ibQueryExprPtr>& consts = capture.CapturedValues();
 		for (size_t i = 0; i < fields.size(); ++i)
 			out.push_back(ibDmlAssign{ fields[i], (i < consts.size() && consts[i]) ? consts[i] : ibConst(ibValue()) });

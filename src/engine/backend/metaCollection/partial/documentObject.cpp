@@ -329,8 +329,8 @@ void ibValueRecordDataObjectDocument::RefuseTakenNumber(bool generated)
 
 	const bool periodic = series.m_interval != ibNumberSeriesNonperiodical;
 	for (const ibValueMetaObjectDocument* member : numerator->GetMembers()) {
-		const ibBackendQueryColumn* numberCol = member->GetDocumentNumber()->GetQueryColumn();
-		const ibBackendQueryColumn* dateCol = member->GetDocumentDate()->GetQueryColumn();
+		const std::shared_ptr<const ibBackendQueryColumn> numberCol = member->GetDocumentNumber()->GetQueryColumn();
+		const std::shared_ptr<const ibBackendQueryColumn> dateCol = member->GetDocumentDate()->GetQueryColumn();
 
 		ibDataQueryBuilder b;
 		b.From(member->GetQueryable());

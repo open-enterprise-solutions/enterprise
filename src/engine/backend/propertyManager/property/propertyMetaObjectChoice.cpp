@@ -36,7 +36,7 @@ bool ibPropertyMetaObjectChoice::SetDataValue(const ibValue& varPropVal) { retur
 bool ibPropertyMetaObjectChoice::GetDataValue(ibValue& pvarPropVal) const
 {
 	const ibVariantOwner* owner = get_cell_variant<ibVariantOwner>();
-	wxASSERT(owner);
+	ibASSERT(owner);
 	pvarPropVal = owner->GetDataValue();
 	return true;
 }
