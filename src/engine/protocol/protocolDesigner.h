@@ -286,7 +286,8 @@ namespace ibProtocol {
 			// them, no other.
 			enum class ibCommand : int {
 				Open     = 1,    // {Id} — the object's editor; or {Module} — the module of that address (a stop, a failure),
-				                 // in that File's tree when it is given (an external data tool's or report's open in a tab)
+				                 // in that File's tree when it is given (an external data tool's or report's open in a tab);
+				                 // with none, the application's, else the open file's that holds it (one never saved)
 				Create   = 2,    // {Type, Parent} — a new one of that class under that object (0: the application's own), opened
 				Remove   = 3,    // {Id}
 				Move     = 4,    // {Id, Position} — put at that place among its parent's children

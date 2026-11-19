@@ -909,7 +909,7 @@ namespace ibProtocol {
 
 		}
 
-		// Both modes': Sessions (User, Application, Type, Started, Computer, Session, Activity, Picture) and Locks
+		// Both modes': Sessions (User, Program, Type, Started, Computer, Session, Activity, Picture) and Locks
 		// (Namespace, Key, Mode, User, Acquired, Lock); the designer's commands Kick {Session} — that session closed,
 		// Reload {Session} — its clients reloaded, Release {Lock} — that lock released by force.
 		namespace ibActiveUser {

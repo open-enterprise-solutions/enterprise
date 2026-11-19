@@ -431,6 +431,8 @@ public:
     // names, and what an assistant names it by. Not the document's path: a file the client handed over opens from
     // temporary storage.
     class ibMetaDataDocument* FindMetaDataDocument(const ibString& fileName) const;
+    // …and the open one that holds this module: a file never saved has no name for its failure to give.
+    class ibMetaDataDocument* FindMetaDataDocument(const ibGuid& module) const;
 
     // ⭐ THE SAME QUESTION FOR THINGS THAT HAVE NO FILE. FindDocumentByPath answers for documents
     // opened FROM DISK; everything inside an application — a form, a module, an object editor —

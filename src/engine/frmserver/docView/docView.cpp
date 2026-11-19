@@ -925,6 +925,19 @@ ibMetaDataDocument* ibDocManager::FindMetaDataDocument(const ibString& fileName)
     return nullptr;
 }
 
+ibMetaDataDocument* ibDocManager::FindMetaDataDocument(const ibGuid& module) const
+{
+    for ( ibDocument* doc : GetDocumentsVector() )
+    {
+        ibMetaDataDocument * const metaDoc = dynamic_cast<ibMetaDataDocument*>(doc);
+        const ibMetaData * const metaData = metaDoc != nullptr ? metaDoc->GetMetaData() : nullptr;
+
+        if ( metaData != nullptr && metaData->FindAnyObjectByFilter(module, true) != nullptr )
+            return metaDoc;
+    }
+    return nullptr;
+}
+
 ibDocument* ibDocManager::FindOpenDocument(const ibString& identifier,
                                            const ibDocument* docParent) const
 {

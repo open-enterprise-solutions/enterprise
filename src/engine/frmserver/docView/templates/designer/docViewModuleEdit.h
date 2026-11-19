@@ -42,7 +42,7 @@ public:
 	ibModuleTextDocument() : ibMetaDocument() {}
 
 	// The module's check, at the gate of a close — asked in the close's work, once (m_closeAllowed) — and before a save:
-	// its own, or its owner's of the file it lives in (a module of an external processing).
+	// its own, or its owner's of the file it lives in (a module of an external data tool).
 	virtual bool OnSaveModified() override;
 	virtual bool CanSave() const override;
 	virtual bool Save() override;

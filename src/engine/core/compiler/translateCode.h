@@ -593,7 +593,7 @@ protected:
 	//attributes:
 	ibString m_strModuleName;//name of the compiled module (to display information in case of errors)
 	ibString m_strDocPath; // unique path to the document
-	ibString m_strFileName; // path to the file (if external processing)
+	ibString m_strFileName; // path to the file (an external data tool's or report's)
 
 	// Reading position over m_strBuffer. Clear() — reached through Load() — resets
 	// all four, so every path that loads text before parsing it is covered; the

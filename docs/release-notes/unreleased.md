@@ -687,3 +687,8 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
   on a value that has no such property said "'Date' is a global function - it is not a member of this value",
   which read as `.Date` being taken for a call of `Date()`. That sentence is now kept for a method call such as
   `x.ValueIsFilled()`; a read or a write says the field is not found.
+- **A line in Messages opens its module again.** Double-clicked, an error from a module opens that module at its
+  line, an external data tool's or report's too, a new one not yet saved included. The thin designer did not; the
+  desktop's did not for a file never saved.
+- **A watch expression that fails says why.** Its row read `<error>` and nothing more: it now reads
+  `<error: …>` with the reason, and a breakpoint's condition that fails is reported with it.

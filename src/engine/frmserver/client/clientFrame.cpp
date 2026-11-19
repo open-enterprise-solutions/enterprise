@@ -667,7 +667,7 @@ ibDocument* ibClientFrame::GetSaveAsDocument(std::size_t i) const
 	if (const ibView* const view = control != nullptr ? control->GetControlView() : nullptr)
 		return view->GetDocument();
 	// A METAOBJECT'S HAS NO FILE OF ITS OWN (ibMetaDocument::OnSaveDocument) — it is saved in its owner's, the desktop's
-	// Save going to the parent first (ibMetaDocument::Save): a module of an external processing as the processing.
+	// Save going to the parent first (ibMetaDocument::Save): a module of an external data tool as the data tool.
 	ibDocument* const document = tab != nullptr ? tab->GetDocument() : nullptr;
 	const ibMetaDocument* const metaDocument = dynamic_cast<const ibMetaDocument*>(document);
 	if (metaDocument != nullptr && metaDocument->GetMetaObject() != nullptr && metaDocument->GetParent() != nullptr)

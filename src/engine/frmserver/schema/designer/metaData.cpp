@@ -137,10 +137,16 @@ std::function<void()> ibSchemaMetaData::Command(const ibSession& session, std::i
 				error = ibString::Format(ibT("the file %s is not open"), file);
 				return nullptr;
 			}
-			ibValueMetaObject* const object = owner->FindAnyObjectByFilter(ibGuid(module), true);
+			const ibGuid moduleGuid(module);
+			ibValueMetaObject* object = owner->FindAnyObjectByFilter(moduleGuid, true);
+			// …and with no File, a file never saved: its failure had no name to give, so the open one that holds the module.
+			if (object == nullptr && file.IsEmpty()) {
+				if (const ibMetaDataDocument* const unsaved = docManager->FindMetaDataDocument(moduleGuid))
+					object = unsaved->GetMetaData()->FindAnyObjectByFilter(moduleGuid, true);
+			}
 			if (object == nullptr || object->IsDeleted()) {
 				refusal = ibProtocol::ibRefusal::NotFound;
-				error = ibString::Format(ibT("nothing in the application is the module %s"), module);
+				error = ibString::Format(ibT("nothing open is the module %s"), module);
 				return nullptr;
 			}
 			return [object]() { docManager->OpenForm(object); };

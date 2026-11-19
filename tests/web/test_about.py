@@ -4,7 +4,7 @@ import unittest
 from harness import PageTest, tab
 
 ABOUT = 4
-ANSWER = {'Build': 1234, 'Database': 'file base', 'Application': 'Thin client', 'User': 'Admin', 'Locale': 'en_US'}
+ANSWER = {'Build': 1234, 'Database': 'file base', 'Program': 'Thin client', 'User': 'Admin', 'Locale': 'en_US'}
 MENU = {'NodeChildren': [{'Title': 'Help', 'NodeChildren': [{'Title': 'About', 'Schema': ABOUT}]}]}
 
 
@@ -22,7 +22,7 @@ class About(PageTest):
     def test_says_the_build_and_what_the_session_runs_on(self):
         page = self.show()
         self.assertIn('build 1234', page.locator('.about .platform').inner_text())
-        self.assertEqual(self.info(page), ['Database:', 'file base', 'Application:', 'Thin client', 'User:', 'Admin', 'Locale:', 'en_US'])
+        self.assertEqual(self.info(page), ['Database:', 'file base', 'Program:', 'Thin client', 'User:', 'Admin', 'Locale:', 'en_US'])
 
     def test_no_base_no_line_for_it(self):
         page = self.show({**ANSWER, 'Database': ''})

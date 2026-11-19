@@ -129,7 +129,7 @@ struct ibByteUnit {
 
 	ibString	 m_strModuleName;	 // module name (since it is possible to include connections from different modules)
 	ibString	 m_strDocPath; 	 	 // unique path to the document
-	ibString	 m_strFileName; 	 // path to the file (if external processing)
+	ibString	 m_strFileName; 	 // path to the file (an external data tool's or report's)
 };
 
 struct ibByteCode {
