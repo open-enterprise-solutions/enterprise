@@ -159,7 +159,19 @@ std::unique_ptr<ibTempTableManager> ibTempTableManager::Materialise(ibDatabaseCo
 {
 	if (table == nullptr)
 		return nullptr;
-	const std::vector<std::shared_ptr<const ibBackendQueryColumn>> columns = table->GetQueryColumns();
+	// ⭐ ONE FIELD, ONE COLUMN. A column laid over fields others already give — a document's point in time is its date and
+	// its reference — is read off them in the copy as in the table; written again, the copy held each of those fields
+	// twice, and a walk into it was refused as ambiguous ("Column 'fld1006_RTRef' is ambiguous", 2026-11-19).
+	std::vector<std::shared_ptr<const ibBackendQueryColumn>> columns;
+	std::vector<ibString> given;
+	for (const std::shared_ptr<const ibBackendQueryColumn>& col : table->GetQueryColumns()) {
+		const std::vector<ibString> fields = ColumnFieldNames(*col);
+		if (!fields.empty() && std::all_of(fields.begin(), fields.end(),
+				[&given](const ibString& f) { return std::find(given.begin(), given.end(), f) != given.end(); }))
+			continue;
+		given.insert(given.end(), fields.begin(), fields.end());
+		columns.push_back(col);
+	}
 	ibQueryRamTable rows;
 	for (const std::shared_ptr<const ibBackendQueryColumn>& col : columns)
 		rows.AddColumn(col->GetColumnId(), col->GetName(), col->GetTypeDesc());
@@ -179,7 +191,11 @@ std::unique_ptr<ibTempTableManager> ibTempTableManager::Materialise(ibDatabaseCo
 				rows.SetCell(row, col->GetColumnId(), found.GetValue(col));
 		}
 	}
-	return Materialise(holder, table->GetQueryTableName(), columns, table->GetPrimaryKeyColumns(), rows, table->GetMetaData());
+	std::vector<std::shared_ptr<const ibBackendQueryColumn>> keyColumns;
+	for (const std::shared_ptr<const ibBackendQueryColumn>& key : table->GetPrimaryKeyColumns())
+		if (std::find(columns.begin(), columns.end(), key) != columns.end())
+			keyColumns.push_back(key);
+	return Materialise(holder, table->GetQueryTableName(), columns, std::move(keyColumns), rows, table->GetMetaData());
 }
 
 std::unique_ptr<ibTempTableManager> ibTempTableManager::Materialise(ibDatabaseConnectionHolder* holder, const ibString& tableName,

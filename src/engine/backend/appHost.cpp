@@ -36,14 +36,20 @@
 #include <unistd.h>    // sysconf — the page /proc/self/statm counts in
 #endif
 
+// ⭐ THE QUERIES' MEMORY MANAGER'S LOCK OUTLIVES THE BASES — defined before them, so it goes after them. A base left to
+// the statics (a test's CreateAppDataEnv) releases its holders as it goes, and a holder asks HasPool, which takes this
+// lock. Defined after them it was gone by then: macOS refuses a lock on a destroyed mutex ("mutex lock failed: Invalid
+// argument" at the exit of every such test, 2026-11-19), Linux took it in silence.
+static std::mutex s_queryMemoryManagerMutex;
+
 std::unique_ptr<ibApplicationHost>                 ibApplicationHost::s_applicationHost;
 std::mutex                                          ibApplicationHost::s_mutex;
 std::vector<std::unique_ptr<ibApplicationInstance>> ibApplicationHost::s_instances;
 std::atomic<std::size_t>                            ibApplicationHost::s_instanceCount{ 0 };
 
 // The queries' memory manager (GetQueryMemoryManager) — the process's, made on the first ask and kept, as the instances
-// above are, until the statics go; HasPool asks it from a holder's destructor.
-static std::mutex                            s_queryMemoryManagerMutex;
+// above are, until the statics go; HasPool asks it from a holder's destructor. After the bases: it goes first, while
+// they stand.
 static std::unique_ptr<ibQueryMemoryManager> s_queryMemoryManager;
 
 // The base a thread with no session works for (ibApplicationInstanceScope, SetThreadInstance).

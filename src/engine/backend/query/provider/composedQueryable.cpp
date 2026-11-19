@@ -170,6 +170,13 @@ ibComposedQueryable::ibComposedQueryable(const std::shared_ptr<ibQueryNode>& roo
 			}
 		const ibString name = !alias.IsEmpty() ? ibSqlAliasOf(alias)
 			: ibString::Format(ibT("j%u_"), static_cast<unsigned>(leaf)) + origin->GetPhysicalName();
+		// ⭐ ONE NAME, ONE TWIN — a name is a field of the statement, and a field given twice is refused (Firebird: "column
+		// J0_FLD1202_TYPE was specified multiple times for derived table OES_COMPOSED"; the base in memory: "ambiguous").
+		// A leaf's key may be another object for a field its list already gave (a balance's Item beside the Item a query
+		// names, 2026-11-19): the field it names is the twin there is.
+		for (const std::shared_ptr<ibComposedQueryColumn>& t : m_twins)
+			if (t->GetPhysicalName().CmpNoCase(name) == 0)
+				return std::shared_ptr<const ibBackendQueryColumn>(t);
 		std::vector<std::shared_ptr<const ibBackendQueryColumn>> branches;
 		if (isUnion)
 			for (size_t b = 1; b < m_leaves.size(); ++b)

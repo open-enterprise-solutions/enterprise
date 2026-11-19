@@ -280,6 +280,12 @@ void CheckUnlimitedStringsAreCast(const ibQuerySelect& ast, const std::vector<ib
 		catch (const ibCoreException&) { return; }
 		if (cols.empty())
 			return;
+		// A column of NO TYPE is no string of unlimited length: it holds any value, laid out as the widest composite, whose
+		// string field has no limit because nothing declared one (DescribeColumnLayout). Its keys order and group (Max,
+		// 2026-11-18). No table of a configuration has one — a value table's, a computed source's, a copy's — and those are
+		// read where a text compares: a base in memory, a temporary table, never a Firebird blob.
+		if (cols.back()->GetTypeValueDesc().GetClsidCount() == 0)
+			return;
 		const std::vector<ibColumnSlot> layout = DescribeColumnLayout(*cols.back());
 		if (std::none_of(layout.begin(), layout.end(),
 				[](const ibColumnSlot& slot) { return slot.m_type.m_kind == ibCanonicalKind::Text; }))

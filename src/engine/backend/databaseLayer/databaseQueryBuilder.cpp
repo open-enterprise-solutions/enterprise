@@ -1429,17 +1429,21 @@ ibString ibQueryRenderer::RenderExpr(const ibQueryExprPtr& expr)
 	}
 
 	case ibQueryExprKind::Func: {
-		// COUNT with no argument is COUNT(*). COUNT() is not SQL.
+		// COUNT with no argument is COUNT(*). COUNT() is not SQL. (Its window is spelled after it as after any call:
+		// returned early, `COUNT(*) OVER ()` lost its OVER and folded the rows into one, 2026-11-19.)
+		ibString s;
 		if (expr->m_args.empty() && expr->m_name.IsSameAs(ibT("COUNT"), false) && !expr->m_distinct)
-			return ibT("COUNT(*)");
-		ibString s = expr->m_name + ibT("(");
-		if (expr->m_distinct)
-			s += ibT("DISTINCT ");   // COUNT(DISTINCT col) — one spelling, every dialect
-		for (size_t i = 0; i < expr->m_args.size(); ++i) {
-			if (i) s += ibT(", ");
-			s += RenderExpr(expr->m_args[i]);
+			s = ibT("COUNT(*)");
+		else {
+			s = expr->m_name + ibT("(");
+			if (expr->m_distinct)
+				s += ibT("DISTINCT ");   // COUNT(DISTINCT col) — one spelling, every dialect
+			for (size_t i = 0; i < expr->m_args.size(); ++i) {
+				if (i) s += ibT(", ");
+				s += RenderExpr(expr->m_args[i]);
+			}
+			s += ibT(")");
 		}
-		s += ibT(")");
 		// A window is a MODIFIER of the call, so it is spelled where the call ends. The operands
 		// render first (they append to the bind plan, and the plan is in SQL-text order).
 		if (expr->m_over)

@@ -296,8 +296,10 @@ TEST_F(ComputedServerFix, AQuestionPutToTheValueOfATableIsAnswered)
 	db->RunQuery(wxT("CREATE TABLE t (region TEXT, qty INTEGER)"));
 	db->RunQuery(wxT("INSERT INTO t (region, qty) VALUES ('North', 10), ('South', 5), ('North', 7), ('East', 3)"));
 
-	const std::shared_ptr<const ibBackendColumnRawDB> region = ibBackendColumnRawDB::String(wxT("region"));
-	const std::shared_ptr<const ibBackendColumnRawDB> qty    = ibBackendColumnRawDB::Number(wxT("qty"));
+	// Ids of their own, as a column a query publishes has: rows read into memory are kept by column id (GetColumnId, unique
+	// per column), and two columns of id 0 — a scaffold's — are one there.
+	const std::shared_ptr<const ibBackendColumnRawDB> region = ibBackendColumnRawDB::String(wxT("region"), 1);
+	const std::shared_ptr<const ibBackendColumnRawDB> qty    = ibBackendColumnRawDB::Number(wxT("qty"), 2);
 	const auto src = std::make_shared<PhysicalQ>(wxT("t"), 314);
 	src->AddCol(region);
 	src->AddCol(qty);

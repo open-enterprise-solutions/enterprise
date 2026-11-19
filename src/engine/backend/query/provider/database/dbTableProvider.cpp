@@ -570,7 +570,12 @@ ibQueryExprPtr DecomposeIn(const std::shared_ptr<const ibBackendQueryColumn>& co
 	// is the zero key whatever table it names — an IN of one table's ids would narrow it to that table — and
 	// UNDEFINED is the tag alone.
 	const bool anyEmpty = std::any_of(values.begin(), values.end(), [](const ibValue& v) { return v.IsEmpty(); });
-	if (!primitive && !anyEmpty && !IsComputedColumn(col) && fields.size() >= 2 && values.size() > 1) {
+	// 🛑 …AND ONLY REFERENCES, INTO THE FIELD THAT HOLDS A REFERENCE'S KEY. The last field of a column is its key only
+	// where the column ends with one, and only a reference has its key there: numbers of a column of no type put their
+	// `_V` — NULL for a number — into the IN, and `_V IN (NULL)` found no row (2026-11-19).
+	const bool references = !layout.empty() && layout.back().m_role == ibColumnRole::ReferenceId
+		&& std::all_of(values.begin(), values.end(), [](const ibValue& v) { return IsReference(v.GetClassType()); });
+	if (references && !anyEmpty && !IsComputedColumn(col) && fields.size() >= 2 && values.size() > 1) {
 		const auto isConst   = [](const ibQueryExprPtr& a) { return a && a->m_kind == ibQueryExprKind::Const; };
 		const auto sameConst = [&isConst](const ibQueryExprPtr& a, const ibQueryExprPtr& b) {
 			return isConst(a) && isConst(b)
@@ -1597,6 +1602,14 @@ std::vector<ibDataQueryResult::ibComputedSpread> ComputedReadsOf(const std::vect
 void ReadComputedOutputs(ibDataQueryResult& result, const ibDataQuerySpec& spec, bool spreadsProjected)
 {
 	std::vector<ibDataQueryResult::ibComputedSpread> reads = ComputedReadsOf(spec.m_selectExprs, spreadsProjected);
+	// …and a SELECTED COLUMN the statement calls by its output's name — a composite's output (composedQueryable.h). Of
+	// several fields (a string with its tag, an object, a union's output of several types, a column of no type) it is its
+	// fields under that name as a prefix; read by the name alone it was one field the statement never had, and came back
+	// empty (2026-11-19).
+	for (const std::pair<std::shared_ptr<const ibBackendQueryColumn>, ibString>& sc : spec.m_selectCols)
+		if (sc.first != nullptr && !sc.second.IsEmpty() && sc.first->GetPhysicalName() == ibSqlAliasOf(sc.second)
+		    && ColumnFieldNames(*sc.first).size() > 1)
+			reads.push_back({ sc.second, sc.second, sc.first });
 	// …and a computed GROUP KEY, which an aggregate query publishes under its alias the same way.
 	for (size_t i = 0; i < spec.m_groupExprs.size() && i < spec.m_groupAliases.size(); ++i) {
 		const ibString& alias = spec.m_groupAliases[i];
@@ -1833,8 +1846,22 @@ ibQueryExprPtr ibMetaIRBuilder::BuildConditionExpr(const std::shared_ptr<const i
 		// compare to the value, or to the other expression when the right side names a field too.
 		// Checked BEFORE the null-column branch: an expr condition carries m_col == null but is NOT
 		// a row-key lookup.
-		const ibQueryExprPtr lhs = BuildColumnExpr(queryable, c.m_expr, mainQual);
-		const ibQueryExprPtr rhs = c.m_valueExpr ? BuildColumnExpr(queryable, c.m_valueExpr, mainQual) : ibConst(c.m_value);
+		// ⭐ EACH SIDE IS READ IN THE KIND THE OTHER GIVES. A bare field of a composite keeps a field per kind and, asked
+		// for none, answers with the layout's first: `Qty > Price * 20` over columns of no type compared `Qty`'s `_B` with a
+		// number (2026-11-19). What a side evidently gives: a value or a constant its own kind, arithmetic a number (a
+		// concatenation a string); anything else asks no kind, as before.
+		const auto kindOf = [](const ibQueryColumnExprPtr& e, const ibValue& value) {
+			if (!e)
+				return value.GetType();
+			if (e->m_kind == ibQueryColumnExprKind::Const)
+				return e->m_const.GetType();
+			if (e->m_kind == ibQueryColumnExprKind::Arith)
+				return e->m_arith == ibQueryColumnArithOp::Concat ? ibValueTypes::TYPE_STRING : ibValueTypes::TYPE_NUMBER;
+			return ibValueTypes::TYPE_EMPTY;
+		};
+		const ibQueryExprPtr lhs = BuildColumnExpr(queryable, c.m_expr, mainQual, kindOf(c.m_valueExpr, c.m_value));
+		const ibQueryExprPtr rhs = c.m_valueExpr
+			? BuildColumnExpr(queryable, c.m_valueExpr, mainQual, kindOf(c.m_expr, ibValue())) : ibConst(c.m_value);
 		// ⚠ A VALUE ANSWERED OVER THE ROW HAS NO SQL — `PRESENTATION(x)`, `CAST(x AS Number(15, 2))` (ValueAsk): the
 		// server cannot be asked for it, and a comparison with nothing on one side is not a statement.
 		if (lhs == nullptr || rhs == nullptr)
@@ -2492,7 +2519,10 @@ ibQueryExprPtr ibMetaIRBuilder::BuildAnchorPredicate(const std::shared_ptr<const
 		std::shared_ptr<const ibBackendQueryColumn> col = cols[i].col;
 		const bool     asc = cols[i].asc;
 		const ibValue  v   = valueAt(i);
-		terms.push_back({ ibColQ(mainQual, FirstSqlFieldOfColumn(col)), operand(col, v), asc });
+		// …the field of the anchor's own kind: a column of several kinds keeps one per kind, and its first leads by the
+		// layout, not by the value — a page past `k = 2` over a column of no type compared its `_B` and found no row
+		// (2026-11-19).
+		terms.push_back({ ibColQ(mainQual, FirstSqlFieldOfColumn(col, v.GetType())), operand(col, v), asc });
 		if (IsReferenceValued(col)) {
 			ibValueReferenceDataObject* refObj = nullptr;
 			const ibClassID clsid = (v.ConvertToValue(refObj) && refObj != nullptr) ? refObj->GetClassType() : 0;

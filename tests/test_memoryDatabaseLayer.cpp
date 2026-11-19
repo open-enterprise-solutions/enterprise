@@ -332,7 +332,7 @@ TEST_F(MemoryBaseParity, Windows)
 		As(over(ibFunc(ibT("SUM"), { Col("_Price") }), { Col("_Flag") }, { Asc(Col("_Qty")) }, ibQueryFrame::RangeThroughPeers), "Peers"),
 		As(over(ibFunc(ibT("SUM"), { Col("_Price") }), {}, { Asc(Col("_Born")) }, ibQueryFrame::RowsThroughCurrent), "Running"),
 		As(over(ibFunc(ibT("SUM"), { Col("_Price") }), {}, { Asc(Col("_Born")) }, ibQueryFrame::RowsBeforeCurrent), "Before"),
-		As(over(ibFunc(ibT("COUNT")), {}, {}, ibQueryFrame::NoFrame), "All") }),
+		As(over(ibFunc(ibT("COUNT")), {}, {}, ibQueryFrame::NoFrame), "Counted") }),   // not "All": a word of SQL's
 		{ Asc(Col("_Code")) }));
 	const Rows rows = Same(ir, "SNNNNNNN");
 	ASSERT_EQ(rows.size(), 5u);

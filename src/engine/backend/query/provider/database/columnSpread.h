@@ -127,11 +127,19 @@ void DriveSpread(const ibBackendQueryColumn& col, int tag,
 		else if (IsEnum(clsid) && ibValue::IsRegisterCtor(clsid)) hasEnum = true;
 	}
 
+	// ⭐ A NULL HOLDS NOTHING IN ANY FIELD — every field after its tag is SQL NULL, not the placeholder an absent
+	// primitive binds. A placeholder says "this cell holds a value of another type"; a NULL's number field bound as 0 was
+	// summed as one, and IS NULL, which asks every field (BuildPredicateExpr), found the placeholders and said no — a
+	// computed source's NULL copied into a base in memory kept its group under `HAVING SUM(a) <> 40` (2026-11-19). A
+	// stored attribute meets no NULL: its write is adjusted to its type's empty (ibValueTypeDescription::AdjustValue), so
+	// the fields a table declares NOT NULL stay filled.
+	const bool null = tag == ibFieldTypes_Null;
 	auto primitive = [&](bool present, ibColumnRole role) {
 		if (!present)
 			return;
-		if (ibPersistedTypeTag(role) == tag) bindActive(role, pos);
-		else                                 BindAbsentPrimitive(st, role, pos);
+		if (null)                                 st->SetParamNull(pos++);
+		else if (ibPersistedTypeTag(role) == tag) bindActive(role, pos);
+		else                                      BindAbsentPrimitive(st, role, pos);
 	};
 	primitive(hasBoolean, ibColumnRole::Boolean);
 	primitive(hasNumber,  ibColumnRole::Number);
@@ -159,7 +167,11 @@ void DriveSpread(const ibBackendQueryColumn& col, int tag,
 		else                                     st->SetParamNull(pos++);
 	}
 
-	if (hasReference) {
+	if (hasReference && null) {
+		st->SetParamNull(pos++);
+		st->SetParamNull(pos++);
+	}
+	else if (hasReference) {
 		bindRef(ibColumnRole::ReferenceType, pos);
 		bindRef(ibColumnRole::ReferenceId,   pos);
 	}

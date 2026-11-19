@@ -32,7 +32,9 @@ class ibDatabaseLayerMemory;
 //   String a u32 count and the UTF-16 units · Blob a u32 length and the bytes.
 // ONE SPELLING A VALUE — a whole number that fits is an Integer — so two equal cells are equal bytes. Only primitives and
 // bytes: what a reference or a value of no declared type IS is not this layer's question (the column codec reads them).
-class ibMemoryCell
+// (Exported, as the row, the rows and the interpreter below are: a test drives the interpreter and reads what it holds —
+// Linux and macOS see every symbol, Windows only these.)
+class BACKEND_API ibMemoryCell
 {
 public:
 	enum class Kind : unsigned char { Null = 0, Bool, Integer, Number, Date, String, Blob };
@@ -81,7 +83,7 @@ ibMemoryCell CellOf(const ibValue& v);
 // then the cells, one after another. A copy is the same bytes, one more owner; a cell read out is a handle into them.
 // So a row a statement makes, a batch binds or a write puts is one block, not one a cell, and a copy into this base is
 // paid once, at the border: inside it a row and a cell travel by their count.
-class ibMemoryRow
+class BACKEND_API ibMemoryRow
 {
 public:
 	ibMemoryRow() noexcept = default;   // no fields
@@ -117,7 +119,7 @@ private:
 //
 // A holder is made only under the space's lock (a statement copies one; a result does not copy its own), and let go of
 // anywhere: a write that finds the count stale finds it too high, and copies once more than it had to — never less.
-class ibMemoryRows
+class BACKEND_API ibMemoryRows
 {
 public:
 	ibMemoryRows() noexcept = default;
@@ -152,7 +154,7 @@ struct ibMemoryTable
 	std::vector<ibMemoryCell> m_defaults;   // a base's table: per field, what a row written without it holds (its DEFAULT)
 };
 
-class ibQueryInterpreter
+class BACKEND_API ibQueryInterpreter
 {
 public:
 	explicit ibQueryInterpreter(ibDatabaseLayerMemory& base);
