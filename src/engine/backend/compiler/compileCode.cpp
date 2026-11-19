@@ -608,7 +608,7 @@ ibString ibCompileCode::ExpectIdentifier(bool strRealName, bool acceptKeyword)
 			m_numCurrentCompile--;
 
 		if (lex.m_lexType == KEYWORD)
-			Refuse(ibScriptError_KeywordAsName, lex.m_strData);
+			Refuse(ibScriptError_KeywordAsName, lex.m_valData.GetString());   // as written, not the lookup form
 		else
 			Refuse(ibScriptError_IdentifierDefine);
 		return ibEmptyString;
@@ -2338,7 +2338,7 @@ bool ibCompileCode::CompileBlock(ibCompileContext* context)
 					const ibLexem& after = m_translateCode.GetLexAt(m_numCurrentCompile + 2);
 					if (after.m_lexType == DELIMITER && after.m_numData == ibT('=')) {
 						GetLexem();   // onto the word, so the report points at it
-						Refuse(ibScriptError_KeywordAsName, lex.m_strData);
+						Refuse(ibScriptError_KeywordAsName, lex.m_valData.GetString());
 						return false;
 					}
 				}
@@ -3267,9 +3267,12 @@ bool ibCompileCode::CompileFor(ibCompileContext* context)
 		}
 	}
 
-	// `for (i = 0; i < n; i++)` - the loop of another language, met at its first ';'.
-	if (IsNextDelimiter(ibT(';'))) {
+	// `for (i = 0; i < n; i++)` - the loop of another language, met at its first ';'. The expression may have
+	// stepped over it already (PreviewGetLexem passes a ';' by), so the lexem just read is asked as well.
+	if (IsNextDelimiter(ibT(';')))
 		GetLexem();
+	const ibLexem& lastRead = m_translateCode.GetLexAt(m_numCurrentCompile);
+	if (lastRead.m_lexType == DELIMITER && lastRead.m_numData == ibT(';')) {
 		Refuse(ibScriptError_ForCountsWithTo);
 		return false;
 	}

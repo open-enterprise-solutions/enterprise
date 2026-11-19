@@ -32,10 +32,9 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
   the message names the spelling to use: *'=' is not a comparison here - comparison is written '=='*.
 - **A tabular section's line number is `LineNumber`**, as a register record's is, and both are shown as *No.* (a
   tabular section's was *N*, a register's *Line number*). It was `NumberLine`: rename it in modules and queries (`row.LineNumber`,
-  `ORDER BY G.LineNumber`). An application saved before is refused when it is opened, naming the attribute it lacks:
-  export its files with the engine it was saved by, rename `NumberLine` to `LineNumber` in them, and import them into a
-  new base. Before, it loaded with the attribute broken, and the next update refused every line a predefined item
-  declares.
+  `ORDER BY G.LineNumber`). An application saved before opens with the line number broken, and the next update refuses
+  every line a predefined item declares: export its files with the engine it was saved by, rename `NumberLine` to
+  `LineNumber` in them, and import them into a new base.
 
 - **In a date pattern `MM` is the month and `mm` the minutes**, as everywhere else they are written;
   the seconds are `ss`. It was the other way round. A stored format such as `DF=dd.mm.yyyy` now

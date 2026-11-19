@@ -1283,7 +1283,9 @@ TEST(RuntimeTest, AnUnknownFunction_NamesTheGlobalSpelledSimilarToIt) {
 	ibCompileCode cc(wxT("test"), wxT("memory"), false);
 	EXPECT_FALSE(TryCompileNamed(cc, wxT("x = StrFind(\"abc\", \"b\");\n"), why));
 	EXPECT_TRUE(why.Contains(wxT("StrFind"))) << why.ToStdString();
-	EXPECT_TRUE(why.Contains(wxT("a global function with a similar name: Find"))) << why.ToStdString();
+	// Every global spelled close to it is offered (String, Find) - Find among them.
+	EXPECT_TRUE(why.Contains(wxT("a global function with a similar name: "))) << why.ToStdString();
+	EXPECT_TRUE(why.Contains(wxT(": Find")) || why.Contains(wxT(", Find"))) << why.ToStdString();
 
 	// A name similar to nothing is refused as before, without a list.
 	ibCompileCode unknown(wxT("test"), wxT("memory"), false);

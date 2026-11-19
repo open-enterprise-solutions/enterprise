@@ -141,25 +141,7 @@ bool ibValueMetaObject::LoadNode(const ibDataNode& node)
 			return false;
 	}
 
-	if (!ReadData(node))
-		return false;
-
-	// ⭐⭐ A PREDEFINED CHILD THE SAVED NODE DOES NOT HOLD IS REFUSED, NAMING IT. Made by its owner's constructor and given
-	// its id by its own node (the owner's ReadData reads it, as a property under the child's name), one whose node is not
-	// there keeps the constructor's 0 - and loaded so it is quietly another thing: id 0 is also every scaffold column's, a
-	// row's owner among them (2026-11-19: a tabular section's line number, renamed LineNumber from NumberLine, read from an
-	// application saved before the rename; the apply then counted no declared line on any item and refused every one, "the
-	// base already holds one"). The format is not frozen, so the old name has no road in: the application is refused, and
-	// told what to do.
-	for (unsigned int idx = 0; idx < GetChildCount(); idx++) {
-		const ibValueMetaObject* child = GetChild(idx);
-		if (child->IsPinnedToParent() && child->GetMetaID() == 0)
-			ibBackendCoreException::Error(
-				_("'%s' holds no '%s' - the application was saved by an engine that named it otherwise or did not have it, "
-				  "and is not read. Export its files with that engine, rename in them what the release notes list as "
-				  "renamed, and import them into a new base."), GetName(), child->GetName());
-	}
-	return true;
+	return ReadData(node);
 }
 
 // WriteData / ReadData — the PER-TYPE data hook, the ONLY per-type serialization.

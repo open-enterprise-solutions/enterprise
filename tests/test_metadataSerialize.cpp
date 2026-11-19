@@ -130,42 +130,6 @@ TEST(MetadataSerialize, EveryBusinessObjectType_RoundTrip_BytesEqual) {
 	}
 }
 
-// ⭐ A PREDEFINED ATTRIBUTE THE SAVED NODE DOES NOT HOLD IS REFUSED, NAMING IT (2026-11-19). Loaded as it used to be, it kept
-// the constructor's id 0 - a line number renamed since the application was saved stood in for a row's owner, and the apply
-// that followed refused every declared line. A catalog saved, its Code taken out of the node, read into a fresh one.
-TEST(MetadataSerialize, APredefinedAttributeTheSavedNodeLacks_IsRefusedByName) {
-	ibMetaDataApplicationFile cfg;
-	ibValueMetaObjectApplication* root = cfg.GetRootMetaObject();
-	ASSERT_NE(root, nullptr);
-	ibValueMetaObject* catalog = cfg.CreateMetaObject(g_metaCatalogCLSID, root, /*runObject*/ false);
-	ASSERT_NE(catalog, nullptr);
-	cfg.RenameMetaObject(catalog, ibString(wxT("Goods")));
-
-	ibDataNode saved;
-	ASSERT_TRUE(catalog->SaveNode(saved));
-	ibDataNode older;
-	bool dropped = false;
-	for (const auto& field : saved.Fields()) {
-		if (field.first == wxT("Code"))
-			dropped = true;
-		else
-			older.AddField(field.first, field.second);
-	}
-	ASSERT_TRUE(dropped) << "the catalog's node holds no Code to take out";
-
-	ibValue* params[] = { root };   // made as the loader makes a child: by its class, under its parent
-	const ibValuePtr<ibValueMetaObject> fresh = ibValue::CreateObject(g_metaCatalogCLSID, params, 1);
-	ASSERT_TRUE(fresh != nullptr);
-	fresh->SetMetaData(&cfg);
-	try {
-		fresh->LoadNode(older);
-		FAIL() << "a node without Code was read";
-	}
-	catch (const ibBackendException& err) {
-		EXPECT_TRUE(err.GetErrorDescription().Contains(wxT("'Code'"))) << err.GetErrorDescription().ToStdString();
-	}
-}
-
 // ⭐ A SCHEDULED JOB SAVES (2026-11-15). Its default schedule and its row's own requisite were both written as
 // `Schedule` into one node, and since a node holds one field of a name the save refused — every apply after it too.
 // The default is stored as `DefaultSchedule` now; saved, read and saved again it is the same bytes.
