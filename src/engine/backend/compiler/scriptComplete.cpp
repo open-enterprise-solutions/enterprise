@@ -887,14 +887,17 @@ private:
 
 	// THE NAME AN UNWRITTEN SLOT WAS DECLARED UNDER, looked for where the runtime would look for
 	// the cell: the open function's own frame first, then the module's table, then each ancestor's.
-	// Only bind-required entries are considered — see the note at the call site.
+	// Only bound entries are considered — External / Context, and a Local the module has a bind for (a form's
+	// attribute, a constant's Value): a bound local is a Local to the compiler, and skipped, its slot number was
+	// answered by whoever holds it a module up (`Object.` in a form offered a shared module's exports).
 	ibString NameOfSlot(const ibParamRunUnit& slot) const
 	{
 		const long long index = slot.m_numIndex;
 
-		auto inTable = [index](const std::vector<ibByteCode::ibByteCodeVarInfo>& table) {
+		auto inTable = [index](const std::vector<ibByteCode::ibByteCodeVarInfo>& table, const ibBindTable* binds) {
 			for (const auto& var : table)
-				if (var.IsBindRequired() && (long long)var.m_slotIndex == index)
+				if ((long long)var.m_slotIndex == index && (var.IsBindRequired()
+					|| (binds != nullptr && var.IsLocal() && binds->m_listLocalValue.contains(var.m_strRealName))))
 					return var.m_strRealName;
 			return ibString();
 		};
@@ -909,7 +912,7 @@ private:
 		// So the name is found by SLOT across the ladder, nearest table first — the frame the caret
 		// stands in, then each module above it. It is a search, and it is honest about being one.
 		if (m_frame != nullptr) {
-			const ibString name = inTable(m_frame->m_listLocals);
+			const ibString name = inTable(m_frame->m_listLocals, nullptr);
 			if (!name.IsEmpty())
 				return name;
 
@@ -929,7 +932,7 @@ private:
 		}
 
 		for (const ibCompileCode* compile : m_chain) {
-			const ibString name = inTable(compile->m_cByteCode.m_listVar);
+			const ibString name = inTable(compile->m_cByteCode.m_listVar, &compile->m_binds);
 			if (!name.IsEmpty())
 				return name;
 		}
@@ -1238,6 +1241,10 @@ private:
 				if (bind.second != nullptr && bind.second->GetRef() == held)
 					return ibNameOrigin::Bound;
 
+			for (const auto& bind : compile->m_binds.m_listLocalValue)
+				if (bind.second != nullptr && bind.second->GetRef() == held)
+					return ibNameOrigin::Bound;
+
 			for (const auto& context : compile->m_binds.m_listContextValue)
 				if (context.second.m_value != nullptr && context.second.m_value->GetRef() == held)
 					return ibNameOrigin::Context;
@@ -1415,6 +1422,15 @@ private:
 				if (outOrigin != nullptr)
 					*outOrigin = ibNameOrigin::Bound;
 				ibJournalInfo(ibT("complete"), ibT("  bound `%s` from the extern map"), name);
+				return true;
+			}
+
+			const auto local = compile->m_binds.m_listLocalValue.find(name);
+			if (local != compile->m_binds.m_listLocalValue.end() && local->second != nullptr) {
+				out = *local->second;
+				if (outOrigin != nullptr)
+					*outOrigin = ibNameOrigin::Bound;
+				ibJournalInfo(ibT("complete"), ibT("  bound `%s` from the local map"), name);
 				return true;
 			}
 
@@ -1674,6 +1690,10 @@ const ibValue* BoundValueOf(const ibCompileChain& chain, const ibString& name)
 		const auto extern_ = compile->m_binds.m_listExternValue.find(name);
 		if (extern_ != compile->m_binds.m_listExternValue.end() && extern_->second != nullptr)
 			return extern_->second;
+
+		const auto local = compile->m_binds.m_listLocalValue.find(name);
+		if (local != compile->m_binds.m_listLocalValue.end() && local->second != nullptr)
+			return local->second;
 	}
 	return nullptr;
 }
