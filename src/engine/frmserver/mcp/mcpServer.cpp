@@ -1141,6 +1141,18 @@ void ibMcpDescribePlatform(const ibApplicationInstance* applicationInstance, ibD
 		  "A quote inside a string is doubled (\"\"). A literal in apostrophes is a DATE, not a "
 		  "string: '20260915'."));
 
+	// ⭐ A FUNCTION AS A VALUE, and WHEN. The guide says it whole (guide.lambda), and nothing a caller reads first
+	// pointed there: the only lambdas in these answers were "no lambda needed" (2026-11-20, Max: "is there any hint
+	// in the platform that you can use lambdas, and when?").
+	into.SetValue(ibT("functions"),
+		ibMcpText("A FUNCTION CAN BE A VALUE: `Function(x) { return x * 2; }` (word-fenced: `Function(x) ... "
+		  "EndFunction`) written where a value stands is stored, passed and called later, and reads the variables "
+		  "around it at the time of the call. Three jobs want one: a CALLBACK (`arr.Where(Function(x) { return x > k; "
+		  "})` - the collection decides when), an EVENT HANDLER, a RULE PASSED AS AN ARGUMENT (a comparison, a filter "
+		  "a routine takes). Not for filtering, sorting or grouping what is in hand - `queries` above writes those in "
+		  "keywords, shorter. One held in a field is called through a variable: `var g = s.f; g(1)`. "
+		  "`syntax_get guide.lambda` - the whole of it."));
+
 	std::vector<ibDataValue> languages;
 
 	for (const ibString& language : ibListMetaObjectNames(metaData, ibT("Language")))
