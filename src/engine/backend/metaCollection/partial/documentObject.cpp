@@ -126,7 +126,8 @@ enum Func {
 	enGetTemplate,
 	eGetMetadata,
 	eLock,
-	eUnlock
+	eUnlock,
+	eCheckFilling
 };
 
 void ibValueRecordDataObjectDocument::FillMethods(ibMemberTable& helper) const
@@ -148,6 +149,7 @@ void ibValueRecordDataObjectDocument::FillMethods(ibMemberTable& helper) const
 	helper.AppendFunc(ibT("GetMetadata"), ibT("GetMetadata()"));
 	helper.AppendProc(ibT("Lock"),   ibT("Lock()"));
 	helper.AppendProc(ibT("Unlock"), ibT("Unlock()"));
+	helper.AppendFunc(ibT("CheckFilling"), ibT("CheckFilling()"));   // appended: the order is load-bearing
 }
 
 bool ibValueRecordDataObjectDocument::SetPropVal(const long lPropNum, const ibValue& varPropVal)
@@ -210,6 +212,9 @@ bool ibValueRecordDataObjectDocument::CallAsFunc(const long lMethodNum, ibValue&
 {
 	switch (lMethodNum)
 	{
+	case Func::eCheckFilling:
+		pvarRetValue = CheckFilling();
+		return true;
 	case eIsNew:
 		pvarRetValue = m_newObject;
 		return true;

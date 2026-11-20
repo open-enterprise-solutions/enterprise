@@ -159,7 +159,7 @@ const ibSourceExplorer* ibValueRecordDataObjectChartOfAccounts::GetSourceExplore
 // WriteObject / DeleteObject inherited from
 // ibValueRecordDataObjectHierarchyRef — see commonObjectRefQuery.cpp.
 
-enum Func { enPointInTime, enIsNew, enCopy, enFill, enWrite, enDelete, enModified, enGetForm, enGetTemplate, enGetMetadata, enLock, enUnlock };
+enum Func { enPointInTime, enIsNew, enCopy, enFill, enWrite, enDelete, enModified, enGetForm, enGetTemplate, enGetMetadata, enLock, enUnlock, enCheckFilling };
 
 void ibValueRecordDataObjectChartOfAccounts::FillMethods(ibMemberTable& helper) const
 {
@@ -182,6 +182,7 @@ void ibValueRecordDataObjectChartOfAccounts::FillMethods(ibMemberTable& helper) 
 	helper.AppendFunc(ibT("GetMetadata"), ibT("GetMetadata()"));
 	helper.AppendProc(ibT("Lock"),   ibT("Lock()"));
 	helper.AppendProc(ibT("Unlock"), ibT("Unlock()"));
+	helper.AppendFunc(ibT("CheckFilling"), ibT("CheckFilling()"));   // appended: the order is load-bearing
 }
 
 bool ibValueRecordDataObjectChartOfAccounts::SetPropVal(const long lPropNum, const ibValue& varPropVal)
@@ -216,6 +217,9 @@ bool ibValueRecordDataObjectChartOfAccounts::CallAsProc(const long lMethodNum, i
 bool ibValueRecordDataObjectChartOfAccounts::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray)
 {
 	switch (lMethodNum) {
+	case Func::enCheckFilling:
+		pvarRetValue = CheckFilling();
+		return true;
 	case enIsNew: pvarRetValue = m_newObject; return true;
 	case enCopy: pvarRetValue = CopyObject(); return true;
 	case enFill: FillObject(*paParams[0]); return true;
