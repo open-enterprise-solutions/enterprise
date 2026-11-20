@@ -17807,7 +17807,7 @@ msgid "FullTextSearch.UpdateIndex: the full-text search of this base is switched
 msgstr ""
 
 #: src/engine/backend/fullTextSearch/fullTextIndex.cpp
-msgid "FullTextSearch.UpdateIndex: no configuration is open, so there is nothing to index"
+msgid "FullTextSearch.UpdateIndex: no application is open, so there is nothing to index"
 msgstr ""
 
 #: src/engine/backend/fullTextSearch/fullTextIndex.cpp
@@ -17815,7 +17815,7 @@ msgid "FullTextSearch: the full-text search of this base is switched off"
 msgstr ""
 
 #: src/engine/backend/fullTextSearch/fullTextIndex.cpp
-msgid "FullTextSearch: no configuration is open, so there is nothing to search in"
+msgid "FullTextSearch: no application is open, so there is nothing to search in"
 msgstr ""
 
 #: src/engine/backend/fullTextSearch/fullTextIndex.cpp

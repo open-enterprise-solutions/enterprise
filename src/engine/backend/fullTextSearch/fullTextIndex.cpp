@@ -10,7 +10,7 @@
 #include "backend/databaseLayer/connectionScope.h"
 #include "backend/databaseLayer/databaseQueryBuilder.h"
 #include "backend/metaData.h"
-#include "backend/metadataConfiguration.h"
+#include "backend/metadataApplication.h"
 #include "backend/metaCollection/partial/commonObject.h"
 #include "backend/metaCollection/partial/tabularSection/tabularSection.h"
 #include "backend/metaCollection/partial/reference/reference.h"
@@ -213,30 +213,30 @@ void ibFullTextIndex::CreateTables()
 	ibDatabaseQueryBuilder q;
 	if (!q.TableExists(search_word_table)) {
 		q.Execute(ibCreateTable(search_word_table, {
-			{ ibT("word"),       ibTypeString(static_cast<int>(ibFullTextTokenizer::kMaxWordLength)), true, true,  ibEmptyString },
-			{ ibT("wordLength"), ibTypeInteger(), true, false, ibEmptyString },   // the fuzzy match reads by it
+			{ ibT("word"),       ibTypeString(static_cast<int>(ibFullTextTokenizer::kMaxWordLength)), true, true,  nullptr },
+			{ ibT("wordLength"), ibTypeInteger(), true, false, nullptr },   // the fuzzy match reads by it
 		}));
 		q.Execute(ibCreateIndex(search_word_table, ibT("search_word_index_1"), { ibT("wordLength") }));
 	}
 	if (!q.TableExists(search_entry_table)) {
 		q.Execute(ibCreateTable(search_entry_table, {
-			{ ibT("word"),        ibTypeString(static_cast<int>(ibFullTextTokenizer::kMaxWordLength)), true, true, ibEmptyString },
-			{ ibT("metaId"),      ibTypeInteger(),    true, true,  ibEmptyString },
-			{ ibT("recordKey"),   ibTypeString(36),   true, true,  ibEmptyString },   // the record's guid
-			{ ibT("attributeId"), ibTypeInteger(),    true, true,  ibEmptyString },
-			{ ibT("hits"),        ibTypeInteger(),    true, false, ibEmptyString },   // how many times the word stands there
+			{ ibT("word"),        ibTypeString(static_cast<int>(ibFullTextTokenizer::kMaxWordLength)), true, true, nullptr },
+			{ ibT("metaId"),      ibTypeInteger(),    true, true,  nullptr },
+			{ ibT("recordKey"),   ibTypeString(36),   true, true,  nullptr },   // the record's guid
+			{ ibT("attributeId"), ibTypeInteger(),    true, true,  nullptr },
+			{ ibT("hits"),        ibTypeInteger(),    true, false, nullptr },   // how many times the word stands there
 		}));
 		// A write replaces one record's rows: found by the record, not by the word the key starts with.
 		q.Execute(ibCreateIndex(search_entry_table, ibT("search_entry_index_1"), { ibT("metaId"), ibT("recordKey") }));
 	}
 	if (!q.TableExists(search_state_table)) {
 		q.Execute(ibCreateTable(search_state_table, {
-			{ ibT("metaId"),     ibTypeInteger(),    true,  true,  ibEmptyString },
-			{ ibT("attributes"), ibTypeString(1024), true,  false, ibEmptyString },   // the attribute ids it was built with
-			{ ibT("complete"),   ibTypeInteger(),    true,  false, ibEmptyString },
-			{ ibT("cursorKey"),  ibTypeString(36),   true,  false, ibT("''") },       // the last record a build indexed
-			{ ibT("indexed"),    ibTypeInteger(),    true,  false, ibEmptyString },
-			{ ibT("changed"),    ibTypeDate(),       false, false, ibEmptyString },   // when the build completed
+			{ ibT("metaId"),     ibTypeInteger(),    true,  true,  nullptr },
+			{ ibT("attributes"), ibTypeString(1024), true,  false, nullptr },   // the attribute ids it was built with
+			{ ibT("complete"),   ibTypeInteger(),    true,  false, nullptr },
+			{ ibT("cursorKey"),  ibTypeString(36),   true,  false, ibConst(ibValue(ibEmptyString)) },       // the last record a build indexed
+			{ ibT("indexed"),    ibTypeInteger(),    true,  false, nullptr },
+			{ ibT("changed"),    ibTypeDate(),       false, false, nullptr },   // when the build completed
 		}));
 	}
 }
@@ -417,7 +417,7 @@ ibFullTextIndex::ibProgress ibFullTextIndex::Update(const ibMetaData* metaData, 
 	if (GetMode() != ibFullTextSearchMode_Enable)
 		ibBackendCoreException::Error(_("FullTextSearch.UpdateIndex: the full-text search of this base is switched off - there is no index to build"));
 	if (metaData == nullptr)
-		ibBackendCoreException::Error(_("FullTextSearch.UpdateIndex: no configuration is open, so there is nothing to index"));
+		ibBackendCoreException::Error(_("FullTextSearch.UpdateIndex: no application is open, so there is nothing to index"));
 
 	const auto metaObjects = IndexedMetaObjects(metaData);
 	auto states = ReadStates();
@@ -460,7 +460,7 @@ ibFullTextIndex::ibProgress ibFullTextIndex::Update(const ibMetaData* metaData, 
 			std::vector<ibGuid> keys;
 			{
 				ibDataQueryBuilder q;
-				q.WithAccessPolicy(nullptr).From(metaObject->GetQueryable()).OrderBy(static_cast<const ibBackendQueryColumn*>(nullptr), true);
+				q.WithAccessPolicy(nullptr).From(metaObject->GetQueryable()).OrderBy(std::shared_ptr<const ibBackendQueryColumn>(), true);
 				ibReadPageRequest page;
 				page.m_count = kPortionSize;
 				if (!state.m_cursorKey.IsEmpty()) {
@@ -468,7 +468,7 @@ ibFullTextIndex::ibProgress ibFullTextIndex::Update(const ibMetaData* metaData, 
 					page.m_anchorSortValues.push_back(ibValue(ibValueReferenceDataObject::Create(metaObject, ibGuid(state.m_cursorKey), ibReferenceLoad::OnDemand)));
 				}
 				ibDataQueryResult rs = q.Execute(page);
-				const ibBackendQueryColumn* const referenceColumn = metaObject->GetDataReference()->GetQueryColumn();
+				const std::shared_ptr<const ibBackendQueryColumn> referenceColumn = metaObject->GetDataReference()->GetQueryColumn();
 				while (rs.Next() && static_cast<int>(keys.size()) < kPortionSize) {
 					ibValueReferenceDataObject* reference = nullptr;
 					const ibValue value = rs.GetValue(referenceColumn);
@@ -589,7 +589,7 @@ std::vector<ibFullTextIndex::ibHit> ibFullTextIndex::Search(const ibMetaData* me
 	if (GetMode() != ibFullTextSearchMode_Enable)
 		ibBackendCoreException::Error(_("FullTextSearch: the full-text search of this base is switched off"));
 	if (metaData == nullptr)
-		ibBackendCoreException::Error(_("FullTextSearch: no configuration is open, so there is nothing to search in"));
+		ibBackendCoreException::Error(_("FullTextSearch: no application is open, so there is nothing to search in"));
 	if (fuzzyThreshold < 0 || fuzzyThreshold > 50)
 		ibBackendCoreException::Error(_("FullTextSearch: the fuzzy threshold is a share of a word's letters from 0 to 50 percent, not %d"), fuzzyThreshold);
 
@@ -684,7 +684,7 @@ std::vector<ibFullTextIndex::ibHit> ibFullTextIndex::Search(const ibMetaData* me
 	std::set<std::pair<ibMetaID, ibString>> readable;
 	for (const auto& [metaId, guids] : keys) {
 		const ibValueMetaObjectRecordDataMutableRef* const metaObject = area[metaId];
-		const ibBackendQueryColumn* const referenceColumn = metaObject->GetDataReference()->GetQueryColumn();
+		const std::shared_ptr<const ibBackendQueryColumn> referenceColumn = metaObject->GetDataReference()->GetQueryColumn();
 		for (std::size_t from = 0; from < guids.size(); from += kInChunk) {
 			const std::vector<ibGuid> chunk(guids.begin() + from, guids.begin() + std::min(guids.size(), from + kInChunk));
 			ibDataQueryBuilder q;

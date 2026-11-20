@@ -54,10 +54,10 @@ private:
 
 // FIND IN DATA - the records holding every word of a text, among those the person may read; a double click opens one
 // in its form. Not modal: the record opens beside it, and the person goes on to the next.
-class FRMCLIENT_API ibDialogSearch : public wxDialog {
+class FRMCLIENT_API ibDialogFindInData : public wxDialog {
 public:
 
-	ibDialogSearch(wxWindow* parent);
+	ibDialogFindInData(wxWindow* parent);
 
 private:
 

@@ -7,7 +7,7 @@
 #include "backend/appData.h"
 #include "backend/backend_exception.h"
 #include "backend/compiler/enumUnit.h"            // ConvertToEnumValue<> is declared in value.h and DEFINED here
-#include "backend/metadataConfiguration.h"        // activeMetaData - whose rights the verbs are asked under
+#include "backend/metadataApplication.h"        // activeMetaData - whose rights the verbs are asked under
 #include "backend/metaCollection/partial/commonObject.h"
 #include "backend/metaCollection/partial/reference/reference.h"
 #include "backend/system/systemManagerEnum.h"     // FullTextSearchMode, handed back by GetFullTextSearchMode
@@ -18,7 +18,7 @@ namespace {
 // has no roles to ask, which is open access.
 void RequireDataAdministration(const ibString& method)
 {
-	const ibMetaDataConfigurationBase* const metaData = activeMetaData;
+	const ibMetaDataApplicationBase* const metaData = activeMetaData;
 	if (metaData != nullptr && !metaData->AccessRight_DataAdministration())
 		ibBackendCoreException::Error(_("FullTextSearch.%s: the full-text index is the base's, and changing it needs the Data administration right"), method);
 }
@@ -143,9 +143,9 @@ bool ibValueFullTextSearchManager::CallAsFunc(const long lMethodNum, ibValue& pv
 
 void ibValueFullTextSearchItem_BindNames(ibValue::ibMemberTable& helper, const ibValue* /*ctx*/)
 {
-	helper.AppendProp(ibT("Value"), true, false, wxNOT_FOUND);
-	helper.AppendProp(ibT("Metadata"), true, false, wxNOT_FOUND);
-	helper.AppendProp(ibT("Presentation"), true, false, wxNOT_FOUND);
+	helper.AppendProp(ibT("Value"), true, false, ibNOT_FOUND);
+	helper.AppendProp(ibT("Metadata"), true, false, ibNOT_FOUND);
+	helper.AppendProp(ibT("Presentation"), true, false, ibNOT_FOUND);
 }
 
 ibValueFullTextSearchItem::ibValueFullTextSearchItem() : ibValueStaticMembers(ibValueTypes::TYPE_VALUE, true) {}
@@ -185,8 +185,8 @@ void ibValueFullTextSearchList_BindNames(ibValue::ibMemberTable& helper, const i
 	helper.AppendFunc(ibT("StartIndex"), 0, ibT("StartIndex() : number"));
 	helper.AppendFunc(ibT("Get"), 1, ibT("Get(index : number) : FullTextSearchItem"));
 
-	helper.AppendProp(ibT("SearchString"), true, false, wxNOT_FOUND);
-	helper.AppendProp(ibT("PortionSize"), true, false, wxNOT_FOUND);
+	helper.AppendProp(ibT("SearchString"), true, false, ibNOT_FOUND);
+	helper.AppendProp(ibT("PortionSize"), true, false, ibNOT_FOUND);
 }
 
 ibValueFullTextSearchList::ibValueFullTextSearchList() : ibValueStaticMembers(ibValueTypes::TYPE_VALUE, true) {}

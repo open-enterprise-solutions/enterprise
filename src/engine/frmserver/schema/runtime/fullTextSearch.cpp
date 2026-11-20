@@ -2,7 +2,7 @@
 
 #include "backend/backend_exception.h"
 #include "backend/fullTextSearch/fullTextIndex.h"
-#include "backend/metadataConfiguration.h"
+#include "backend/metadataApplication.h"
 #include "backend/metaCollection/partial/commonObject.h"
 #include "backend/metaCollection/partial/reference/reference.h"
 #include "backend/session/session.h"
@@ -26,13 +26,13 @@ ibProtocol::ibSchema::ibCommand CommandOf(std::int32_t command)
 
 bool ibSchemaFullTextSearch::AccessRight(const ibSession& session) const
 {
-	const ibMetaDataConfigurationBase* const metaData = session.GetMetaData();
+	const ibMetaDataApplicationBase* const metaData = session.GetMetaData();
 	return metaData != nullptr && metaData->AccessRight_DataAdministration();
 }
 
 void ibSchemaFullTextSearch::Build(const ibSession& session, const ibDataNode& /*args*/, ibDataNode& result) const
 {
-	const ibMetaDataConfigurationBase* const metaData = session.GetMetaData();
+	const ibMetaDataApplicationBase* const metaData = session.GetMetaData();
 	const bool enabled = ibFullTextIndex::GetMode() == ibFullTextSearchMode::ibFullTextSearchMode_Enable;
 	result.SetValue(ibProtocol::ibSchema::ibFullTextSearch::Enabled, enabled);
 	result.SetValue(ibProtocol::ibSchema::ibFullTextSearch::IndexTrue, ibFullTextIndex::IsIndexTrue(metaData));
@@ -48,7 +48,7 @@ void ibSchemaFullTextSearch::Build(const ibSession& session, const ibDataNode& /
 std::function<void()> ibSchemaFullTextSearch::Command(const ibSession& session, std::int32_t command,
 	const ibDataNode& args, ibProtocol::ibRefusal& refusal, ibString& error) const
 {
-	const ibMetaDataConfigurationBase* const metaData = session.GetMetaData();
+	const ibMetaDataApplicationBase* const metaData = session.GetMetaData();
 	switch (CommandOf(command)) {
 	case ibProtocol::ibSchema::ibCommand::Set: {
 		bool enabled = false;
@@ -119,7 +119,7 @@ std::function<void()> ibSchemaSearch::Command(const ibSession& session, std::int
 		return nullptr;
 	}
 
-	const ibMetaDataConfigurationBase* const metaData = session.GetMetaData();
+	const ibMetaDataApplicationBase* const metaData = session.GetMetaData();
 	std::int32_t metaId = 0;
 	ibString key;
 	args.GetValue(ibProtocol::ibSchema::ibFullTextSearch::MetaId, metaId);

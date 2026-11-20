@@ -186,7 +186,7 @@ void ibDialogFullTextSearch::OnClose(wxCloseEvent& event)
 //  Find
 //////////////////////////////////////////////////////////////////////
 
-ibDialogSearch::ibDialogSearch(wxWindow* parent)
+ibDialogFindInData::ibDialogFindInData(wxWindow* parent)
 	: wxDialog(parent, wxID_ANY, _("Find in data"), wxDefaultPosition, wxDefaultSize, wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER)
 {
 	wxBoxSizer* const mainSizer = new wxBoxSizer(wxVERTICAL);
@@ -212,14 +212,14 @@ ibDialogSearch::ibDialogSearch(wxWindow* parent)
 	SetSizerAndFit(mainSizer);
 	Centre(wxBOTH);
 
-	find->Bind(wxEVT_BUTTON, &ibDialogSearch::OnFind, this);
-	m_text->Bind(wxEVT_TEXT_ENTER, &ibDialogSearch::OnFind, this);
-	m_hits->Bind(wxEVT_LIST_ITEM_ACTIVATED, &ibDialogSearch::OnOpen, this);
-	Bind(wxEVT_CLOSE_WINDOW, &ibDialogSearch::OnClose, this);
+	find->Bind(wxEVT_BUTTON, &ibDialogFindInData::OnFind, this);
+	m_text->Bind(wxEVT_TEXT_ENTER, &ibDialogFindInData::OnFind, this);
+	m_hits->Bind(wxEVT_LIST_ITEM_ACTIVATED, &ibDialogFindInData::OnOpen, this);
+	Bind(wxEVT_CLOSE_WINDOW, &ibDialogFindInData::OnClose, this);
 	m_text->SetFocus();
 }
 
-void ibDialogSearch::OnFind(wxCommandEvent& WXUNUSED(event))
+void ibDialogFindInData::OnFind(wxCommandEvent& WXUNUSED(event))
 {
 	const ibString text = m_text->GetValue();
 	if (text.TrimAll().IsEmpty())
@@ -255,7 +255,7 @@ void ibDialogSearch::OnFind(wxCommandEvent& WXUNUSED(event))
 	Layout();
 }
 
-void ibDialogSearch::OnOpen(wxListEvent& event)
+void ibDialogFindInData::OnOpen(wxListEvent& event)
 {
 	const long row = event.GetIndex();
 	if (row < 0)
@@ -270,7 +270,7 @@ void ibDialogSearch::OnOpen(wxListEvent& event)
 	CallSchema(ibProtocol::ibSchema::ibKind::Search, params, answer);
 }
 
-void ibDialogSearch::OnClose(wxCloseEvent& WXUNUSED(event))
+void ibDialogFindInData::OnClose(wxCloseEvent& WXUNUSED(event))
 {
 	Destroy();
 }

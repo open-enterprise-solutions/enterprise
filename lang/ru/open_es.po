@@ -18249,16 +18249,16 @@ msgid "FullTextSearch.UpdateIndex: the full-text search of this base is switched
 msgstr "FullTextSearch.UpdateIndex: полнотекстовый поиск этой базы выключен — строить нечего"
 
 #: src/engine/backend/fullTextSearch/fullTextIndex.cpp
-msgid "FullTextSearch.UpdateIndex: no configuration is open, so there is nothing to index"
-msgstr "FullTextSearch.UpdateIndex: конфигурация не открыта, поэтому индексировать нечего"
+msgid "FullTextSearch.UpdateIndex: no application is open, so there is nothing to index"
+msgstr "FullTextSearch.UpdateIndex: приложение не открыто, поэтому индексировать нечего"
 
 #: src/engine/backend/fullTextSearch/fullTextIndex.cpp
 msgid "FullTextSearch: the full-text search of this base is switched off"
 msgstr "FullTextSearch: полнотекстовый поиск этой базы выключен"
 
 #: src/engine/backend/fullTextSearch/fullTextIndex.cpp
-msgid "FullTextSearch: no configuration is open, so there is nothing to search in"
-msgstr "FullTextSearch: конфигурация не открыта, поэтому искать негде"
+msgid "FullTextSearch: no application is open, so there is nothing to search in"
+msgstr "FullTextSearch: приложение не открыто, поэтому искать негде"
 
 #: src/engine/backend/fullTextSearch/fullTextIndex.cpp
 #, c-format

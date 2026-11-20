@@ -52,22 +52,22 @@ ibVariant WriteType(const ibVariant& value, const ibTypeDescription& typeDesc)
 }
 
 // Whether the full-text index holds a predefined attribute - a field of its node, beside the type.
-bool ReadFullTextSearch(const wxVariant& value)
+bool ReadFullTextSearch(const ibVariant& value)
 {
-	const std::optional<ibDataNode> held = ibVariantDataSerializable::GetNodeValue(value).AsChild();
+	const std::optional<ibDataNode> held = ibVariantSerializable::GetNodeValue(value).AsChild();
 	bool fullTextSearch = false;
 	if (held)
 		held->GetValue(ibProtocol::ibSchema::ibProperties::FullTextSearch, fullTextSearch);
 	return fullTextSearch;
 }
 
-wxVariant WriteFullTextSearch(const wxVariant& value, const ibTypeDescription& typeDesc, bool fullTextSearch)
+ibVariant WriteFullTextSearch(const ibVariant& value, const ibTypeDescription& typeDesc, bool fullTextSearch)
 {
-	const wxVariant written = WriteType(value, typeDesc);
-	const std::optional<ibDataNode> held = ibVariantDataSerializable::GetNodeValue(written).AsChild();
+	const ibVariant written = WriteType(value, typeDesc);
+	const std::optional<ibDataNode> held = ibVariantSerializable::GetNodeValue(written).AsChild();
 	auto node = std::make_shared<ibDataNode>(held ? *held : ibDataNode());
 	node->SetValue(ibProtocol::ibSchema::ibProperties::FullTextSearch, fullTextSearch);
-	return wxVariant(new ibVariantDataSerializable(written.GetType(), ibDataValue::Child(node), written.GetString()));
+	return ibVariant(new ibVariantSerializable(ibDataValue::Child(node), written.GetString()));
 }
 
 }
@@ -80,7 +80,7 @@ public:
 	{
 		// ibPropertyType — the type description as the server stores it (ibTypeDescriptionMemory); what it may hold is the
 		// row's offer (GetValueList: each type's class id, in the server's order; several at once unless a table's shape).
-		const auto editor = [](ibBackendProperty* property) -> ibPGProperty* {
+		const auto editor = [](ibBackendProperty* property, bool predefined) -> ibPGProperty* {
 			ibPropertyChoiceList offered;
 			const bool multiple = property->GetValueList(offered) == ibPropertyChoiceMode::Mult;
 			std::vector<ibClassID> listType;
@@ -89,19 +89,14 @@ public:
 				offered.GetValue(idx).GetNumber().ToInt(clsid);
 				listType.push_back(clsid);
 			}
-			return new ibPGTypeProperty(listType, multiple, property->GetLabel(), property->GetName(), property->GetValue());
+			return new ibPGTypeProperty(listType, multiple, property->GetLabel(), property->GetName(), property->GetValue(), predefined);
 		};
-		ibPropertyRegistry::Register(wxT("ibPropertyType"), editor);
+		ibPropertyRegistry::Register(wxT("ibPropertyType"),
+			[editor](ibBackendProperty* property) { return editor(property, false); });
 		// …and the holder of an attribute whose type is chosen - a code, a description, a number: the same editor, over
 		// the attribute's node (WriteType), with the full-text search flag the node carries.
-		ibPropertyRegistry::Register(wxT("ibPropertyPredefinedType"), [](ibBackendProperty* property) -> wxPGProperty* {
-			ibPropertyChoiceList offered;
-			const bool multiple = property->GetValueList(offered) == ibPropertyChoiceMode::Mult;
-			std::vector<ibClassID> listType;
-			for (unsigned int idx = 0; idx < offered.GetCount(); idx++)
-				listType.push_back(offered.GetValue(idx).GetULongLong().GetValue());
-			return new ibPGTypeProperty(listType, multiple, property->GetLabel(), property->GetName(), property->GetValue(), true);
-		});
+		ibPropertyRegistry::Register(wxT("ibPropertyPredefinedType"),
+			[editor](ibBackendProperty* property) { return editor(property, true); });
 	}
 }g_typeLoader;
 

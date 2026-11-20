@@ -977,7 +977,7 @@ void ibFrontendMainFrame::ShowSchema(ibProtocol::ibSchema::ibKind schema, const 
 				_("Find in data"), wxOK | wxICON_INFORMATION, this);
 			return;
 		}
-		(new ibDialogSearch(this))->Show();
+		(new ibDialogFindInData(this))->Show();
 	}
 	else if (schema == ibProtocol::ibSchema::ibKind::Debugging || schema == ibProtocol::ibSchema::ibKind::McpServer) {
 		ShowOptions(schema, shown);

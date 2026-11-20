@@ -23,12 +23,13 @@
 #include "backend/fullTextSearch/fullTextTokenizer.h"
 #include "backend/compiler/compileCode.h"
 #include "backend/databaseLayer/databaseQueryBuilder.h"
-#include "backend/metadataConfiguration.h"
+#include "backend/metadataApplication.h"
 #include "backend/metaCollection/attribute/metaAttributeObject.h"
 #include "backend/metaCollection/partial/catalog.h"
 #include "backend/metaCollection/partial/reference/reference.h"
 #include "backend/propertyManager/property/propertyBoolean.h"
 #include "backend/query/columnLayout.h"
+#include "backend/query/provider/database/columnCodec.h"
 #include "backend/query/queryProvider.h"
 #include "core/clsid.h"
 #include "core/diagnostics/journal.h"
@@ -114,7 +115,7 @@ TEST_F(FullTextSearch, TheModeIsKeptInTheBase)
 	// One row, the base's: no user in its address.
 	const std::vector<ibSettingsEntry> rows =
 		ibApplicationInstance::GetSettingsStorage()->List(ibSettingsCategory::Search,
-			ibGuid(ibT("66756c6c-7465-7874-0000-000000000001")), wxNullGuid);
+			ibGuid(ibT("66756c6c-7465-7874-0000-000000000001")), ibNullGuid);
 	EXPECT_EQ(rows.size(), 1u);
 
 	ibValueFullTextSearchManager::SetMode(ibFullTextSearchMode_Disable);
@@ -212,10 +213,10 @@ TEST(FullTextTokenizer, ASizeBetweenDigitsStaysOneWord)
 
 TEST(FullTextTokenizer, CyrillicIsFoldedWhateverTheLocale)
 {
-	const std::vector<ibString> words = ibFullTextTokenizer::Split(ibString::FromUTF8("\xD0\x81\xD0\x96 \xD0\xA8\xD0\x98\xD0\x9D\xD0\x90"));
+	const std::vector<ibString> words = ibFullTextTokenizer::Split(ibString::FromUTF8("ЁЖ ШИНА"));
 	ASSERT_EQ(words.size(), 2u);
-	EXPECT_EQ(words[0], ibString::FromUTF8("\xD0\xB5\xD0\xB6"));   // ё folded to е
-	EXPECT_EQ(words[1], ibString::FromUTF8("\xD1\x88\xD0\xB8\xD0\xBD\xD0\xB0"));
+	EXPECT_EQ(words[0], ibString::FromUTF8("еж"));   // ё folded to е
+	EXPECT_EQ(words[1], ibString::FromUTF8("шина"));
 }
 
 TEST(FullTextTokenizer, TheDistanceStopsPastItsLimit)
@@ -247,7 +248,7 @@ struct FullTextIndexBase : ::testing::Test {
 	const short m_codeStyle = ibCompileCode::GetCodeStyle();
 	std::shared_ptr<ibDatabaseLayerSQLite> m_db;
 	ibString m_dbPath;
-	std::shared_ptr<ibMetaDataConfigurationFile> m_cfg;
+	std::shared_ptr<ibMetaDataApplicationFile> m_cfg;
 	ibValueMetaObjectCatalog* m_goods = nullptr;
 	ibValueMetaObjectAttribute* m_note = nullptr;
 	ibValueMetaObjectAttribute* m_article = nullptr;
@@ -270,9 +271,9 @@ struct FullTextIndexBase : ::testing::Test {
 		SettingsSchemaAccess::Create();
 		ibFullTextIndex::CreateTables();
 
-		m_cfg = ibMetaData::MakeShared<ibMetaDataConfigurationFile>();
+		m_cfg = ibMetaData::MakeShared<ibMetaDataApplicationFile>();
 		ActiveMetaDataAccess::Replace(m_cfg);
-		ibValueMetaObjectConfiguration* const root = m_cfg->GetCommonMetaObject();
+		ibValueMetaObjectApplication* const root = m_cfg->GetRootMetaObject();
 		ASSERT_NE(root, nullptr);
 		m_goods = dynamic_cast<ibValueMetaObjectCatalog*>(m_cfg->CreateMetaObject(g_metaCatalogCLSID, root, false));
 		ASSERT_NE(m_goods, nullptr);
@@ -282,7 +283,7 @@ struct FullTextIndexBase : ::testing::Test {
 		m_article = AddString(wxT("Article"), false);
 		m_goods->GetDataDescription()->SetFullTextSearch(true);
 
-		ASSERT_TRUE(m_cfg->RunDatabase()) << "the configuration in memory did not run";
+		ASSERT_TRUE(m_cfg->RunDatabase()) << "the application in memory did not run";
 		CreateTable();
 		ibFullTextIndex::SetMode(ibFullTextSearchMode_Enable);
 	}
@@ -325,7 +326,7 @@ struct FullTextIndexBase : ::testing::Test {
 		for (const ibValueMetaObjectAttributeBase* attribute : m_goods->GetGenericAttributeArrayObject()) {
 			if (attribute == nullptr || attribute->GetQueryColumn() == nullptr)
 				continue;
-			for (const ibString& field : ColumnFieldNames(attribute->GetQueryColumn())) {
+			for (const ibString& field : ColumnFieldNames(*attribute->GetQueryColumn())) {
 				if (!seen.insert(field).second)
 					continue;
 				list << (list.IsEmpty() ? wxT("") : wxT(", ")) << field << SqliteTypeOf(field);
@@ -335,11 +336,11 @@ struct FullTextIndexBase : ::testing::Test {
 		m_db->RunQuery(wxT("%s"), wxT("CREATE TABLE ") + m_goods->GetQueryable()->GetQueryTableName() + wxT(" (") + list + wxT(")"));
 	}
 
-	void Assign(std::vector<ibDmlAssign>& out, const ibBackendQueryColumn* column, const ibValue& value) const {
-		const std::vector<ibString> fields = ColumnFieldNames(column);
+	void Assign(std::vector<ibDmlAssign>& out, const std::shared_ptr<const ibBackendQueryColumn>& column, const ibValue& value) const {
+		const std::vector<ibString> fields = ColumnFieldNames(*column);
 		ibQueryStatement capture(ibQueryStatement::Kind::Delete, ibString(), fields);
 		int position = 1;
-		ibColumnCodec::WriteValue(column, m_cfg.get(), value, &capture, position);
+		ibColumnCodec::WriteValue(*column, m_cfg.get(), value, &capture, position);
 		const std::vector<ibQueryExprPtr>& consts = capture.CapturedValues();
 		for (size_t i = 0; i < fields.size(); ++i)
 			out.push_back(ibDmlAssign{ fields[i], (i < consts.size() && consts[i]) ? consts[i] : ibConst(ibValue()) });
@@ -514,12 +515,12 @@ TEST_F(FullTextIndexBase, AListIsReadAPartAtATime)
 	EXPECT_NE(list.Get(0).GetString().Find(wxT("Wheel")), wxNOT_FOUND);
 }
 
-TEST_F(FullTextIndexBase, TheFlagsAreSavedWithTheConfiguration)
+TEST_F(FullTextIndexBase, TheFlagsAreSavedWithTheApplication)
 {
 	ibMemoryBuffer buffer;
-	ASSERT_TRUE(m_cfg->SaveConfigToBuffer(buffer));
-	ibMetaDataConfigurationFile loaded;
-	ASSERT_TRUE(loaded.LoadConfigFromBuffer(buffer));
+	ASSERT_TRUE(m_cfg->SaveApplicationToBuffer(buffer));
+	ibMetaDataApplicationFile loaded;
+	ASSERT_TRUE(loaded.LoadApplicationFromBuffer(buffer));
 
 	const ibValueMetaObjectCatalog* goods = nullptr;
 	for (const ibValueMetaObjectCatalog* catalog : loaded.GetAnyArrayObject<ibValueMetaObjectCatalog>(g_metaCatalogCLSID))
