@@ -230,7 +230,7 @@ class BACKEND_API ibValueRecordDataObjectDocument : public ibValueRecordDataObje
 	//****************************************************************************
 
 	// Document's own methods (bound in the ctor). Data members come from the base
-	// FillDataMembers. ThisObject.RegisterRecords is surfaced with the module's names
+	// FillDataAttributes / FillDataTables. ThisObject.RegisterRecords is surfaced with the module's names
 	// (ibValueModuleDataObject::FillMembers, moduleInfo.h), not by a contributor here.
 	void FillMethods(ibMemberTable& helper) const;
 

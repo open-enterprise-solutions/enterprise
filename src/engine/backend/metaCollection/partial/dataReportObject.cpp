@@ -13,12 +13,12 @@
 
 ibValueRecordDataObjectReport::ibValueRecordDataObjectReport(const ibValueMetaObjectReport* metaObject) : ibValueRecordDataObjectExt(metaObject)
 {
-	m_members.Bind(this, &ibValueRecordDataObjectReport::FillDataMembers);
+	m_members.Bind(this, &ibValueRecordDataObjectReport::FillDataComposers);
 }
 
 ibValueRecordDataObjectReport::ibValueRecordDataObjectReport(const ibValueRecordDataObjectReport& source) : ibValueRecordDataObjectExt(source)
 {
-	m_members.Bind(this, &ibValueRecordDataObjectReport::FillDataMembers);
+	m_members.Bind(this, &ibValueRecordDataObjectReport::FillDataComposers);
 }
 
 // ShowFormValue / GetFormValue inherited from ibValueRecordDataObject.
@@ -97,10 +97,10 @@ ibValueDataComposition* ibValueRecordDataObjectReport::GetDefaultComposition() c
 // The base publishes the attributes and the tabular sections; this ADDS the composers by name.
 // They are read-only as properties — a composition is configured, never assigned over.
 //
-// ⚠ IT DOES NOT CALL THE BASE. Binding accumulates: every class in the chain registers its own
-// filler and they all run, so calling the base here would publish each attribute and each tabular
+// ⚠ IT DOES NOT CALL THE BASE'S FILLERS. Binding accumulates: every class in the chain registers its own
+// filler and they all run, so calling the base's here would publish each attribute and each tabular
 // section TWICE.
-void ibValueRecordDataObjectReport::FillDataMembers(ibMemberTable& helper) const
+void ibValueRecordDataObjectReport::FillDataComposers(ibMemberTable& helper) const
 {
 	const auto* metaObject = dynamic_cast<const ibValueMetaObjectReport*>(GetMetaObject());
 	if (metaObject == nullptr)
@@ -112,8 +112,18 @@ void ibValueRecordDataObjectReport::FillDataMembers(ibMemberTable& helper) const
 			continue;
 		if (!metaComposer->GetObjectNameAsString(objectName))
 			continue;
-		helper.AppendProp(objectName, true, false, metaComposer->GetMetaID(), eProperty);
+		helper.AppendProp(objectName, true, false, metaComposer->GetMetaID());
 	}
+}
+
+// A composer's row is read as a field of the object, in the same store as every other one; a row this class did not
+// append goes to the base. No write: the row is not writable, and SetValueByMetaID refuses a composition anyway.
+bool ibValueRecordDataObjectReport::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
+{
+	const long id = m_members.GetPropData(lPropNum, this, &ibValueRecordDataObjectReport::FillDataComposers);
+	if (id == ibNOT_FOUND)
+		return ibValueRecordDataObjectExt::GetPropVal(lPropNum, pvarPropVal);
+	return GetValueByMetaID(id, pvarPropVal);
 }
 
 // ⭐ AND WHAT A FORM SEES. The base lists the object's attributes and tabular sections; a report

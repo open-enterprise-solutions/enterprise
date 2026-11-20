@@ -2090,11 +2090,6 @@ class BACKEND_API ibValueRecordDataObject : public ibValueModuleDataObject<ibVal
 	public ibSourceDataObject, public ibValueDataObject {
 	public:
 protected:
-	enum helperAlias {
-		eSystem,
-		eProperty,
-		eTable
-	};
 	enum helperProp {
 		eThisObject
 	};
@@ -2148,14 +2143,16 @@ public:
 	// is split so the common part lives once on the base and each leaf adds only its
 	// own methods (methods and props are separate helper vectors, so bind order
 	// across them never shifts a method's dispatch index):
-	//  - FillDataMembers — the metaobject's attributes (eProperty) + tabular sections
-	//    (eTable), after the module's names (ibValueModuleDataObject binds first). Bound by the
-	//    base ctor, shared by every leaf. Attribute writability follows IsDataReference.
+	//  - FillDataAttributes — the metaobject's attributes, after the module's names (ibValueModuleDataObject binds
+	//    first); FillDataTables — its tabular sections. A row's filler IS its kind: an attribute is written, a
+	//    tabular section is filled and never assigned over. Bound by the base ctor, shared by every leaf.
+	//    Attribute writability follows IsDataReference.
 	//  - FillBaseMethods — the three fixed methods (GetFormObject/GetTemplate/
 	//    GetMetadata) for leaves with no API of their own (DataTool, Report);
 	//    they bind this. Leaves with their own method set (Catalog, Document, …)
 	//    bind their own FillMethods instead.
-	void FillDataMembers(ibMemberTable& helper) const;
+	void FillDataAttributes(ibMemberTable& helper) const;
+	void FillDataTables(ibMemberTable& helper) const;
 	void FillBaseMethods(ibMemberTable& helper) const;
 
 	virtual bool SetPropVal(const long lPropNum, const ibValue& varPropVal) override;

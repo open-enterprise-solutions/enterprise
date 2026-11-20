@@ -256,7 +256,7 @@ public:
 	//*                              Support methods                             *
 	//****************************************************************************
 
-	// Catalog's own methods (the data members come from the base FillDataMembers).
+	// Catalog's own methods (the data members come from the base FillDataAttributes / FillDataTables).
 	// Bound in the ctor; run lazily by Build().
 	void FillMethods(ibMemberTable& helper) const;
 

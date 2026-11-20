@@ -24,8 +24,10 @@ ibValueForm::ibValueForm(const ibFormRequest& request, const ibValueMetaObjectFo
 {
 	// Frame surface (properties + Events) comes from ibValueFrame::FillMembers, bound
 	// by the base ctor, then the module's names (ibValueModuleDataObject). The form ADDS
-	// its own members after them (FillFormMembers).
+	// its own members after them (FillFormMembers), its controls and its attributes.
 	m_members.Bind(this, &ibValueForm::FillFormMembers);
+	m_members.Bind(this, &ibValueForm::FillFormControls);
+	m_members.Bind(this, &ibValueForm::FillFormAttributes);
 
 	// This control carries a command bar — the frame owns its STORE and points it
 	// back at itself; the visual host reads it to render the toolbar separately.
@@ -302,19 +304,19 @@ enum Func
 
 void ibValueForm::FillFormMembers(ibMemberTable& helper) const
 {
-	// Properties (eProperty) + Events come from ibValueFrame::FillMembers (base bind).
+	// Properties + Events come from ibValueFrame::FillMembers (base bind).
 	// Here the form adds only its OWN members.
 	// ThisForm / Controls / DataSource are BOUND in formObject (context / export).
 	// The bind is the single source; surfacing to editor + runtime is the
 	// infrastructure's job — no manual AppendProp here.
-	helper.AppendProp(ibT("Modified"), eModified, eSystem);
-	helper.AppendProp(ibT("FormOwner"), eFormOwner, eSystem);
-	helper.AppendProp(ibT("UniqueKey"), eUniqueKey, eSystem);
+	helper.AppendProp(ibT("Modified"), eModified);
+	helper.AppendProp(ibT("FormOwner"), eFormOwner);
+	helper.AppendProp(ibT("UniqueKey"), eUniqueKey);
 
-	helper.AppendProp(ibT("CloseOnChoice"), eCloseOnChoice, eSystem);
-	helper.AppendProp(ibT("CloseOnOwnerClose"), eCloseOnOwnerClose, eSystem);
-	helper.AppendProp(ibT("ReadOnly"), eReadOnly, eSystem);   // runtime read/write — open a form read-only (or read the mode)
-	helper.AppendProp(ibT("CurrentItem"), eCurrentItem, eSystem);   // the control in focus (read only)
+	helper.AppendProp(ibT("CloseOnChoice"), eCloseOnChoice);
+	helper.AppendProp(ibT("CloseOnOwnerClose"), eCloseOnOwnerClose);
+	helper.AppendProp(ibT("ReadOnly"), eReadOnly);   // runtime read/write — open a form read-only (or read the mode)
+	helper.AppendProp(ibT("CurrentItem"), eCurrentItem);   // the control in focus (read only)
 
 	helper.AppendProc(ibT("Show"), ibT("Show()"));
 	helper.AppendProc(ibT("Activate"), ibT("Activate()"));
@@ -330,142 +332,132 @@ void ibValueForm::FillFormMembers(ibMemberTable& helper) const
 
 	// The module's names AND the export binds (ThisForm.Controls / DataSource) come
 	// from ibValueModuleDataObject, bound first — NOT here.
+}
 
-	// A button, a caption, or an HTML box holds no value and is still what a
-	// module names. The compiler already accepts ThisForm.<name>; leaving the
-	// control off this list is the runtime "field not found". An empty name
-	// is not a member.
+// A button, a caption, or an HTML box holds no value and is still what a
+// module names. The compiler already accepts ThisForm.<name>; leaving the
+// control off this list is the runtime "field not found". An empty name
+// is not a member.
+void ibValueForm::FillFormControls(ibMemberTable& helper) const
+{
 	for (auto control : GetControlList()) {
 		if (control->GetControlName().IsEmpty())
 			continue;
-
-		helper.AppendProp(
-			control->GetControlName(),
-			control->GetControlID(),
-			eAttribute
-		);
-	}
-
-	// Form source attributes — ThisForm.<attrName>. Data = the attribute's STABLE id (not the
-	// store index): the index shifts on delete, which would make ThisForm.<attr> resolve to a
-	// different attribute (controls bind by GetControlID for the same reason).
-	for (const auto& av : m_attributes) {
-		helper.AppendProp(
-			av->GetName(),
-			av->GetId(),
-			eFormAttribute
-		);
+		helper.AppendProp(control->GetControlName(), control->GetControlID());
 	}
 }
 
+// Form source attributes — ThisForm.<attrName>. Data = the attribute's STABLE id (not the
+// store index): the index shifts on delete, which would make ThisForm.<attr> resolve to a
+// different attribute (controls bind by GetControlID for the same reason).
+void ibValueForm::FillFormAttributes(ibMemberTable& helper) const
+{
+	for (const auto& av : m_attributes)
+		helper.AppendProp(av->GetName(), av->GetId());
+}
+
+// The frame's rows (its properties, Events) are the frame's; a control's and an attribute's are the form's, found by
+// their filler, and so are its own properties; every other row is its module's — a Public variable or a binding
+// (Controls / DataSource).
 bool ibValueForm::SetPropVal(const long lPropNum, const ibValue& varPropVal)
 {
-	const long lPropAlias = m_members.GetPropAlias(lPropNum);
-	if (lPropAlias == eProperty || lPropAlias == eEvent) {
+	if (m_members.GetPropData(lPropNum, this, &ibValueFrame::FillMembers) != ibNOT_FOUND)
 		return ibValueFrame::SetPropVal(lPropNum, varPropVal);
-	}
-	else if (lPropAlias == eSystem) {
-		switch (m_members.GetPropData(lPropNum)) {
-		case eModified:
-			Modify(varPropVal.GetBoolean());
-			return true;
-		case eCloseOnChoice:
-			m_closeOnChoice = varPropVal.GetBoolean();
-			return true;
-		case eCloseOnOwnerClose:
-			m_closeOnOwnerClose = varPropVal.GetBoolean();
-			return true;
-		case eReadOnly:
-			SetViewOnly(varPropVal.GetBoolean());
-			RefreshForm();   // re-render live — controls re-Update (re-read writability) and command bars rebuild,
-			                 // so a runtime ThisForm.ReadOnly = True takes effect WITHOUT reopening the form
-			return true;
-		}
-	}
-	else if (lPropAlias == eAttribute) {
-		unsigned int id = m_members.GetPropData(lPropNum);
+
+	if (const long data = m_members.GetPropData(lPropNum, this, &ibValueForm::FillFormControls); data != ibNOT_FOUND) {
+		const unsigned int id = data;
 		const std::vector<ibValueControl*> list = GetControlList();
 		auto it = std::find_if(list.begin(), list.end(),
 			[id](const ibValueFrame* control) {
 				return id == control->GetControlID();
 			}
 		);
-		if (it != list.end())
-			return (*it)->SetControlValue(varPropVal);
-	}
-	else if (lPropAlias == eFormAttribute) {
-		if (ibFormAttributeValue* attr = FindAttributeById(m_members.GetPropData(lPropNum))) {
-			// INTO THE VALUE THE ATTRIBUTE HOLDS — the cell the module's bare <name> writes through its bind.
-			// SetValue is the variant's own, inherited by the holder: it copied the value over the HOLDER, so
-			// `ThisForm.<name> = …` turned the entry into the primitive and the attribute never saw it.
-			// Through the attribute's one write, as a field writes it: what is chosen within it is emptied (issue #259).
-			return attr->SetValueByPath({}, varPropVal);
-		}
+		return it != list.end() && (*it)->SetControlValue(varPropVal);
 	}
 
-	// A row the form does not answer itself is its module's — a Public variable or a binding.
+	if (const long id = m_members.GetPropData(lPropNum, this, &ibValueForm::FillFormAttributes); id != ibNOT_FOUND) {
+		// INTO THE VALUE THE ATTRIBUTE HOLDS — the cell the module's bare <name> writes through its bind.
+		// SetValue is the variant's own, inherited by the holder: it copied the value over the HOLDER, so
+		// `ThisForm.<name> = …` turned the entry into the primitive and the attribute never saw it.
+		// Through the attribute's one write, as a field writes it: what is chosen within it is emptied (issue #259).
+		ibFormAttributeValue* const attr = FindAttributeById(id);
+		return attr != nullptr && attr->SetValueByPath({}, varPropVal);
+	}
+
+	switch (m_members.GetPropData(lPropNum, this, &ibValueForm::FillFormMembers)) {
+	case eModified:
+		Modify(varPropVal.GetBoolean());
+		return true;
+	case eCloseOnChoice:
+		m_closeOnChoice = varPropVal.GetBoolean();
+		return true;
+	case eCloseOnOwnerClose:
+		m_closeOnOwnerClose = varPropVal.GetBoolean();
+		return true;
+	case eReadOnly:
+		SetViewOnly(varPropVal.GetBoolean());
+		RefreshForm();   // re-render live — controls re-Update (re-read writability) and command bars rebuild,
+		                 // so a runtime ThisForm.ReadOnly = True takes effect WITHOUT reopening the form
+		return true;
+	}
 	return ibValueModuleDataObject::SetPropVal(lPropNum, varPropVal);
 }
 
 bool ibValueForm::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 {
-	const long lPropAlias = m_members.GetPropAlias(lPropNum);
-	if (lPropAlias == eProperty || lPropAlias == eEvent) {
-		// Properties + the Events container come from ibValueFrame's surface.
+	if (m_members.GetPropData(lPropNum, this, &ibValueFrame::FillMembers) != ibNOT_FOUND)
 		return ibValueFrame::GetPropVal(lPropNum, pvarPropVal);
-	}
-	else if (lPropAlias == eSystem) {
-		switch (m_members.GetPropData(lPropNum))
-		{
-		case eModified:
-			pvarPropVal = IsModified();
-			return true;
-		case eFormOwner:
-			pvarPropVal = dynamic_cast<ibValue*>(m_controlOwner);
-			return true;
-		case eUniqueKey:
-			pvarPropVal = new ibValueGuid(m_formKey);
-			return true;
-		case eCloseOnChoice:
-			pvarPropVal = m_closeOnChoice;
-			return true;
-		case eCloseOnOwnerClose:
-			pvarPropVal = m_closeOnOwnerClose;
-			return true;
-		case eReadOnly:
-			pvarPropVal = IsViewOnly();   // reflects the explicit flag OR the rights-derived mode
-			return true;
-		case eCurrentItem:
-			pvarPropVal = static_cast<ibValue*>(GetActiveControl());
-			return true;
-		}
-	}
-	else if (lPropAlias == eAttribute) {
-		unsigned int id = m_members.GetPropData(lPropNum);
+
+	if (const long data = m_members.GetPropData(lPropNum, this, &ibValueForm::FillFormControls); data != ibNOT_FOUND) {
+		const unsigned int id = data;
 		const std::vector<ibValueControl*> list = GetControlList();
 		auto it = std::find_if(list.begin(), list.end(),
 			[id](const ibValueFrame* control) {
 				return id == control->GetControlID();
 			}
 		);
-		if (it != list.end()) {
-			// The value, when the control has one. Otherwise the control
-			// itself: ThisForm.HelpPane.SetPage reaches the HTML box.
-			if ((*it)->HasValueInControl())
-				return (*it)->GetControlValue(pvarPropVal);
-			pvarPropVal = *it;
-			return !pvarPropVal.IsEmpty();
-		}
-	}
-	else if (lPropAlias == eFormAttribute) {
-		if (ibFormAttributeValue* attr = FindAttributeById(m_members.GetPropData(lPropNum))) {
-			attr->GetValue(pvarPropVal);
-			return true;
-		}
+		if (it == list.end())
+			return false;
+		// The value, when the control has one. Otherwise the control
+		// itself: ThisForm.HelpPane.SetPage reaches the HTML box.
+		if ((*it)->HasValueInControl())
+			return (*it)->GetControlValue(pvarPropVal);
+		pvarPropVal = *it;
+		return !pvarPropVal.IsEmpty();
 	}
 
-	// A row the form does not answer itself is its module's — a Public variable or a binding
-	// (Controls / DataSource: `ThisForm.DataSource` arrives here).
+	if (const long id = m_members.GetPropData(lPropNum, this, &ibValueForm::FillFormAttributes); id != ibNOT_FOUND) {
+		ibFormAttributeValue* const attr = FindAttributeById(id);
+		if (attr == nullptr)
+			return false;
+		attr->GetValue(pvarPropVal);
+		return true;
+	}
+
+	// `ThisForm.DataSource` arrives at the module's row, through the default.
+	switch (m_members.GetPropData(lPropNum, this, &ibValueForm::FillFormMembers)) {
+	case eModified:
+		pvarPropVal = IsModified();
+		return true;
+	case eFormOwner:
+		pvarPropVal = dynamic_cast<ibValue*>(m_controlOwner);
+		return true;
+	case eUniqueKey:
+		pvarPropVal = new ibValueGuid(m_formKey);
+		return true;
+	case eCloseOnChoice:
+		pvarPropVal = m_closeOnChoice;
+		return true;
+	case eCloseOnOwnerClose:
+		pvarPropVal = m_closeOnOwnerClose;
+		return true;
+	case eReadOnly:
+		pvarPropVal = IsViewOnly();   // reflects the explicit flag OR the rights-derived mode
+		return true;
+	case eCurrentItem:
+		pvarPropVal = static_cast<ibValue*>(GetActiveControl());
+		return true;
+	}
 	return ibValueModuleDataObject::GetPropVal(lPropNum, pvarPropVal);
 }
 

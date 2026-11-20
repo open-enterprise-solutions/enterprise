@@ -131,7 +131,7 @@ enum Func {
 
 void ibValueRecordDataObjectDocument::FillMethods(ibMemberTable& helper) const
 {
-	// Document's own methods; the data members come from the base FillDataMembers.
+	// Document's own methods; the data members come from the base FillDataAttributes / FillDataTables.
 	// Order is load-bearing — CallAsFunc switches on the method index (eIsNew = 0 …).
 	// ⭐ THE SAME MOMENT THE REFERENCE VENDS. An object is asked when it is exactly as its reference
 	// is, and both answer with the pair already assembled -- one question, one answer, whichever

@@ -408,7 +408,7 @@ public:
 	// it. The form may refuse earlier for comfort; this is what makes it true.
 	virtual bool SaveData() override;
 
-	// Own methods (data members come from the base FillDataMembers); bound in the ctor.
+	// Own methods (data members come from the base FillDataAttributes / FillDataTables); bound in the ctor.
 	void FillMethods(ibMemberTable& helper) const;
 
 	virtual bool CallAsProc(const long lMethodNum, ibValue** paParams, const long lSizeArray) override;

@@ -95,8 +95,8 @@ enum Func {
 
 void ibValueRecordDataObjectCatalog::FillMethods(ibMemberTable& helper) const
 {
-	// Catalog's own methods. The data members (attributes / tabular sections) come from the base
-	// FillDataMembers, the module's names from ibValueModuleDataObject. Order is load-bearing — a row's data is
+	// Catalog's own methods. The data members come from the base FillDataAttributes / FillDataTables,
+	// the module's names from ibValueModuleDataObject. Order is load-bearing — a row's data is
 	// its place on this binder's level, and CallAsProc / CallAsFunc switch on it (enPointInTime = 0 …).
 	// ⭐ THE MOMENT, ON EVERY REFERENCE-BASED FAMILY. Being addressed by a reference is the whole
 	// qualification: an element of this kind has a place in the data's history, so it can be named

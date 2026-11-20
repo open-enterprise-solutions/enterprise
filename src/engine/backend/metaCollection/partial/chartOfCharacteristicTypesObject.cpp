@@ -96,7 +96,7 @@ enum Func {
 
 void ibValueRecordDataObjectChartOfCharacteristicTypes::FillMethods(ibMemberTable& helper) const
 {
-	// Own methods; the data members come from the base FillDataMembers. Order is
+	// Own methods; the data members come from the base FillDataAttributes / FillDataTables. Order is
 	// load-bearing — CallAsFunc switches on the method index (enIsNew = 0 …).
 	// ⭐ THE MOMENT, ON EVERY REFERENCE-BASED FAMILY. Being addressed by a reference is the whole
 	// qualification: an element of this kind has a place in the data's history, so it can be named

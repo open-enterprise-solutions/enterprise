@@ -1816,13 +1816,15 @@ ibValueRecordDataObject::ibValueRecordDataObject(const ibGuid& objGuid, bool new
 {
 	// Common data surface for every record leaf; leaves add their own methods. Module
 	// exports autobind in the ibRuntimeModuleDataObject ctor (as the helper's tail).
-	m_members.Bind(this, &ibValueRecordDataObject::FillDataMembers);
+	m_members.Bind(this, &ibValueRecordDataObject::FillDataAttributes);
+	m_members.Bind(this, &ibValueRecordDataObject::FillDataTables);
 }
 
 ibValueRecordDataObject::ibValueRecordDataObject(const ibValueRecordDataObject& source) :
 	ibValueModuleDataObject(nullptr, ibValueTypes::TYPE_VALUE), ibValueDataObject(ibNewUniqueGuid, true)
 {
-	m_members.Bind(this, &ibValueRecordDataObject::FillDataMembers);
+	m_members.Bind(this, &ibValueRecordDataObject::FillDataAttributes);
+	m_members.Bind(this, &ibValueRecordDataObject::FillDataTables);
 }
 
 ibValueRecordDataObject::~ibValueRecordDataObject()
@@ -2118,12 +2120,11 @@ void ibValueRecordDataObject::FillBaseMethods(ibMemberTable& helper) const
 	helper.AppendFunc(ibT("GetMetadata"), ibT("GetMetadata()"));
 }
 
-// Shared data surface bound by the base ctor: the metaobject's attributes
-// (eProperty) + tabular sections (eTable); the module's exports follow as the tail.
-// Attribute writability follows IsDataReference (a self-reference attribute is
-// read-only; default false for non-reference metaobjects). ThisObject is bound via
-// BindContextVariable in InitializeObject — no manual AppendProp.
-void ibValueRecordDataObject::FillDataMembers(ibMemberTable& helper) const
+// Shared data surface bound by the base ctor, after the module's names (ibValueModuleDataObject binds first): the
+// metaobject's attributes, a row's data its metaID. Attribute writability follows IsDataReference (a self-reference
+// attribute is read-only; default false for non-reference metaobjects). ThisObject is bound via BindContextVariable
+// in InitializeObject — no manual AppendProp.
+void ibValueRecordDataObject::FillDataAttributes(ibMemberTable& helper) const
 {
 	const ibValueMetaObjectRecordData* metaObject = GetMetaObject();
 	ibASSERT(metaObject);
@@ -2131,8 +2132,6 @@ void ibValueRecordDataObject::FillDataMembers(ibMemberTable& helper) const
 		return;
 
 	ibString objectName;
-
-	//fill custom attributes
 	for (const auto object : metaObject->GetGenericAttributeArrayObject()) {
 		if (object->IsDeleted())
 			continue;
@@ -2142,50 +2141,45 @@ void ibValueRecordDataObject::FillDataMembers(ibMemberTable& helper) const
 			objectName,
 			true,
 			!metaObject->IsReadOnlyAttribute(object->GetMetaID()),   // the reference is one of these
-			object->GetMetaID(),
-			eProperty
+			object->GetMetaID()
 		);
 	}
+}
 
-	//fill custom tables
+// …and its tabular sections, read-only as rows: a tabular section is filled, never assigned over.
+void ibValueRecordDataObject::FillDataTables(ibMemberTable& helper) const
+{
+	const ibValueMetaObjectRecordData* metaObject = GetMetaObject();
+	ibASSERT(metaObject);
+	if (metaObject == nullptr)
+		return;
+
+	ibString objectName;
 	for (const auto object : metaObject->GetGenericTableArrayObject()) {
 		if (object->IsDeleted())
 			continue;
 		if (!object->GetObjectNameAsString(objectName))
 			continue;
-		helper.AppendProp(
-			objectName,
-			true,
-			false,
-			object->GetMetaID(),
-			eTable
-		);
+		helper.AppendProp(objectName, true, false, object->GetMetaID());
 	}
-	// The module's names come from ibValueModuleDataObject, bound first — not here.
 }
 
-// A row the object does not answer itself (by its alias, by the verb its row carries) is its module's,
-// and goes up to the base.
+// An attribute's row is written, a tabular section's is not; every other row is its module's, and goes up to the base.
 bool ibValueRecordDataObject::SetPropVal(const long lPropNum, const ibValue& varPropVal)
 {
-	const long lPropAlias = m_members.GetPropAlias(lPropNum);
-	if (lPropAlias == eProperty) {
-		return SetValueByMetaID(
-			m_members.GetPropData(lPropNum),
-			varPropVal
-		);
-	}
+	if (const long id = m_members.GetPropData(lPropNum, this, &ibValueRecordDataObject::FillDataAttributes); id != ibNOT_FOUND)
+		return SetValueByMetaID(id, varPropVal);
+	if (m_members.GetPropData(lPropNum, this, &ibValueRecordDataObject::FillDataTables) != ibNOT_FOUND)
+		return false;
 	return ibValueModuleDataObject::SetPropVal(lPropNum, varPropVal);
 }
 
 bool ibValueRecordDataObject::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 {
-	const long lPropAlias = m_members.GetPropAlias(lPropNum);
-	if (lPropAlias == eProperty || lPropAlias == eTable) {
-		return GetValueByMetaID(
-			m_members.GetPropData(lPropNum), pvarPropVal
-		);
-	}
+	if (const long id = m_members.GetPropData(lPropNum, this, &ibValueRecordDataObject::FillDataAttributes); id != ibNOT_FOUND)
+		return GetValueByMetaID(id, pvarPropVal);
+	if (const long id = m_members.GetPropData(lPropNum, this, &ibValueRecordDataObject::FillDataTables); id != ibNOT_FOUND)
+		return GetValueByMetaID(id, pvarPropVal);
 	return ibValueModuleDataObject::GetPropVal(lPropNum, pvarPropVal);
 }
 
@@ -2219,7 +2213,7 @@ ibValueRecordDataObjectExt::ibValueRecordDataObjectExt(const ibValueMetaObjectRe
 	ibValueRecordDataObject(ibNewUniqueGuid, true), m_metaObject(metaObject)
 {
 	// External data objects (DataTool / Report) expose only the fixed methods;
-	// the data members come from the base FillDataMembers.
+	// the data members come from the base FillDataAttributes / FillDataTables.
 	m_members.Bind(this, &ibValueRecordDataObject::FillBaseMethods);
 }
 

@@ -266,7 +266,7 @@ public:
 	//*                              Support methods                             *
 	//****************************************************************************
 
-	// Own methods (data members come from the base FillDataMembers); bound in the ctor.
+	// Own methods (data members come from the base FillDataAttributes / FillDataTables); bound in the ctor.
 	void FillMethods(ibMemberTable& helper) const;
 
 	//****************************************************************************

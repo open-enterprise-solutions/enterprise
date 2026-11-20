@@ -249,7 +249,7 @@ public:
 
 	// WHAT THE OBJECT PUBLISHES — its attributes and tables (the base) plus its COMPOSITIONS by
 	// name, and `Composer` for the default one.
-	void FillDataMembers(class ibMemberTable& helper) const;
+	void FillDataComposers(class ibMemberTable& helper) const;
 
 	// …and what a FORM sees of it. The composers are nodes here too, which is what puts a gridbox
 	// on the generated form without anybody drawing one (Max, 2026-08-20: "the form is not made —
@@ -259,6 +259,9 @@ public:
 	// A report's MAIN node is its DEFAULT composer — the one a generated form is built from, and the
 	// one whose control speaks for the whole form.
 	virtual bool IsMainSourceNode(const ibMetaID& id) const override;
+
+	// The composers' rows — FillDataComposers appended them, so this class reads them; every other row is the base's.
+	virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal) override;
 
 	// (GetValueByMetaID is NOT overridden: a composition is a FIELD of the object, so the base finds
 	//  it where it finds every other one.)

@@ -52,16 +52,6 @@ class FRMSERVER_API ibValueForm :
 {
 public:
 
-private:
-
-	enum {
-		eSystem = eSizerItem + 1,
-		eAttribute,                  // controls-with-value: ThisForm.<controlName>
-		eFormAttribute               // form source attributes: ThisForm.<attrName>
-	};
-
-public:
-
 	const ibUniqueKey& GetFormKey() const { return m_formKey; }
 	bool CompareFormKey(const ibUniqueKey& formKey) const { return m_formKey == formKey; }
 
@@ -175,7 +165,11 @@ public:
 	// (descriptor autobind). Bound in the ctor (was PrepareNames). The member-pmf bind
 	// is lossless here because ibValueFrame is ibValueForm's FIRST base, so the ibValue
 	// sub-object is at offset 0 (no MI this-adjustment to lose in the pmf cast).
+	// A row's filler IS its kind: FillFormMembers — the form's own properties and verbs; FillFormControls —
+	// ThisForm.<control>, a row's data the control's id; FillFormAttributes — ThisForm.<attribute>, the attribute's id.
 	void FillFormMembers(ibMemberTable& helper) const;
+	void FillFormControls(ibMemberTable& helper) const;
+	void FillFormAttributes(ibMemberTable& helper) const;
 
 	virtual bool CallAsProc(const long lMethodNum, ibValue** paParams, const long lSizeArray);
 	virtual bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray);
