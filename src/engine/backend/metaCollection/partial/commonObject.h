@@ -3119,13 +3119,6 @@ public:
 	//get metaData from object
 	virtual const ibValueMetaObjectRegisterData* GetMetaObject() const { return m_metaObject; }
 
-	// The record-set compiles against the register's record-set (object) module.
-	virtual const class ibValueMetaObjectModuleBase* GetMetaForCompile() const override {
-		if (auto* m = GetMetaObject())
-			return m->GetObjectModule();
-		return nullptr;
-	}
-
 #pragma region _tabular_data_
 	//get metaData from object
 	virtual const ibValueMetaObjectCompositeData* GetSourceMetaObject() const { return GetMetaObject(); }
