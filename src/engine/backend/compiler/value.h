@@ -817,6 +817,14 @@ public:
 			return m_props[lPropNum].m_lData;
 		}
 
+		// The row's data when that contributor appended it, ibNOT_FOUND for any other row — as GetMethodData.
+		template<class C, class M>
+			requires std::derived_from<C, M> && std::derived_from<M, ibValue>
+		long GetPropData(const long lPropNum, const C* obj, void (M::*fn)(ibMemberTable&) const) const {
+			const long level = GetBinderLevel(obj, fn);
+			return level != ibNOT_FOUND && level == GetPropLevel(lPropNum) ? GetPropData(lPropNum) : ibNOT_FOUND;
+		}
+
 		virtual bool IsPropReadable(const long lPropNum) const {
 			if (lPropNum < 0 || lPropNum >= GetNProps())
 				return false;
