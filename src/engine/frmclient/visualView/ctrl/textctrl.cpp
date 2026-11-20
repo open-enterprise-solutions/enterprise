@@ -117,3 +117,5 @@ void ibValueTextCtrl::OnKillFocus(wxFocusEvent& event)
 }
 
 CONTROL_REGISTER(ibValueTextCtrl, ibProtocol::ibForm::ibType::Textctrl)
+// A field of the Input kind is a text field: the same properties, State and events.
+CONTROL_KIND_REGISTER(ibValueTextCtrl, ibProtocol::ibForm::ibType::Field, ibProtocol::ibForm::ibProperty::ibFieldKind::Input)

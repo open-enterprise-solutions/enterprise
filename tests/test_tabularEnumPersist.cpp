@@ -52,6 +52,11 @@
 #include "backend/query/columnLayout.h"
 #include "backend/query/provider/database/columnCodec.h"
 #include "core/clsid.h"
+#include "framedSession.h"                       // KeyFrame, FramedSession — a field on a form, typed by an enumeration
+#include "frmserver/visualView/ctrl/formAttribute.h"
+#include "backend/propertyManager/property/propertySource.h"
+#include "backend/srcDataObject.h"
+#include "protocol/protocol.h"                   // the State a client reads a field from
 
 using ibComposerNode = ibValueModel::ibComposerNode;
 
@@ -219,3 +224,81 @@ TEST_F(TabularEnumPersist, FindValue_OnAnEmptyTypedEnumCell_FindsTheMemberByName
 	EXPECT_EQ(candidates.front().GetString(), wxT("Vat10"));
 }
 
+
+
+// A FIELD OF RADIO BUTTONS OVER AN ENUMERATION OFFERS ITS MEMBERS — each called by its synonym, each the reference a field
+// of that type holds; a click writes the member in. The members come from the form's configuration, which a control
+// knows through the const GetMetaData.
+namespace {
+
+// What hands the form its configuration, as the object a form edits does.
+class ConfigurationSource : public ibSourceDataObject {
+	const ibMetaData* m_metaData;
+	ibSourceExplorer m_explorer;
+public:
+	explicit ConfigurationSource(const ibMetaData* metaData) : m_metaData(metaData) {}
+	const ibSourceExplorer* GetSourceExplorer() const override { return &m_explorer; }
+	void SourceIncrRef() override {}
+	void SourceDecrRef() override {}
+	bool IsEmpty() const override { return false; }
+	const ibUniqueKey& GetGuid() const override { static const ibUniqueKey none; return none; }
+	const ibValueMetaObjectGenericData* GetSourceMetaObject() const override { return nullptr; }
+	const ibMetaData* GetSourceMetaData() const override { return m_metaData; }
+	ibClassID GetSourceClassType() const override { return 0; }
+	ibString GetSourceCaption() const override { return ibString(); }
+};
+
+struct FormOverSource : ibValueForm {
+	ConfigurationSource* m_source = nullptr;
+	ibSourceDataObject* GetSourceObject() const override { return m_source; }
+};
+
+} // namespace
+
+TEST_F(TabularEnumPersist, RadioButtonsFieldOffersTheMembersOfItsEnumeration) {
+	ibValue vat20;
+	ASSERT_TRUE(vatRates->ResolveQueryConstant(wxT("Vat20"), vat20));
+	const ibClassID enumType = vat20.GetClassType();
+
+	auto session = std::make_shared<FramedSession>(wxT("field-enum"), ibSessionKind::Enterprise);
+	KeyFrame frame(ibApplicationInstance::GetSessionRegistry()->MintUnlisted(session));
+	session->Attach(&frame);
+	ibSessionScope scope(session.get());
+
+	ConfigurationSource source(cfg.get());
+	ibValuePtr<FormOverSource> form(new FormOverSource());
+	form->m_source = &source;
+	ibFormAttributeValue* const rate = form->AddAttribute(ibT("Rate"), enumType, ibValue());
+	ASSERT_NE(rate, nullptr);
+
+	ibValueFrame* const field = form->NewObject(ibT("Field"), form);
+	ASSERT_NE(field, nullptr);
+	ibDataNode saved;
+	ASSERT_TRUE(field->WriteData(saved));
+	saved.SetField(ibT("Kind"), ibDataValue::Int(static_cast<int>(ibProtocol::ibForm::ibProperty::ibFieldKind::RadioButtons)));
+	ASSERT_TRUE(field->ReadData(saved));
+	ibPropertySource* const bound = dynamic_cast<ibPropertySource*>(field->GetProperty(ibT("Source")));
+	ASSERT_NE(bound, nullptr);
+	bound->SetValue(ibSourceDescription(std::vector<ibSourceId>{ rate->GetId() }));
+
+	ibDataNode state;
+	field->OnUpdate(state, nullptr);
+	const auto choices = state.FindChild(ibProtocol::ibForm::ibField::Choices);
+	ASSERT_TRUE(choices.has_value());
+	std::vector<ibString> captions;
+	for (const ibDataNode& choice : choices->Children())
+		captions.push_back(choice.GetValue<ibString>(ibProtocol::ibForm::ibField::Caption));
+	ASSERT_EQ(captions.size(), 2u);
+
+	ibDataNode args;
+	args.SetValue(ibProtocol::ibEvent::Choice, static_cast<std::int32_t>(1));
+	EXPECT_TRUE(field->OnClientEvent(ibProtocol::ibEvent::ibKind::Change, args));
+	ibValue held;
+	ASSERT_TRUE(form->GetValueByAttributePath(ibSourceDescription(rate->GetId()), held));
+	EXPECT_EQ(held.GetClassType(), enumType);
+	EXPECT_EQ(held.GetString(), wxT("Vat20"));
+
+	ibDataNode after;
+	field->OnUpdate(after, nullptr);
+	EXPECT_EQ(after.GetValue<std::int32_t>(ibProtocol::ibForm::ibField::Selected), 1);
+}

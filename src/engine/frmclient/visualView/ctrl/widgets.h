@@ -117,6 +117,31 @@ private:
 	ibRadioButton* m_radioButton = nullptr;
 };
 
+// A FIELD OF THE RADIO BUTTONS KIND — its caption, and a button for each of its State's Choices, the Selected one
+// checked. Which one is checked is the server's: a click asks for that choice (Change {Choice}) and the next frame
+// says what stands; a read-only field puts the click back.
+class ibValueRadioButtons : public ibValueWindow {
+public:
+	ibValueRadioButtons(ibVisualHostClient& host, long long controlId) : ibValueWindow(host, controlId) {}
+
+	virtual void Create(wxWindow* parent, const ibProtocolNode& node) override;
+	virtual void Update(const ibProtocolNode& node) override;
+	virtual wxWindow* GetWindow() const override;
+
+private:
+	void OnButtonClicked(size_t index);
+	// The checks as the server says: the selected one on, the others off.
+	void ShowSelected();
+
+	ibPanel*                    m_panel = nullptr;
+	ibStaticText*               m_caption = nullptr;
+	wxBoxSizer*                 m_buttonSizer = nullptr;
+	std::vector<ibRadioButton*> m_buttons;
+	std::vector<wxString>       m_captions;        // the buttons' as built — others build them anew
+	int                         m_selected = -1;   // the server's
+	bool                        m_readOnly = false;
+};
+
 // A slider between its ends, its thumb where the form put it; moved, it stays on the client, as the desktop's did. Its
 // orientation is what it is built with — turned, it is built anew (ibVisualHostClient's shape).
 class ibValueSlider : public ibValueWindow {

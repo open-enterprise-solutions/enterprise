@@ -41,6 +41,29 @@ export function defineControl(type, control) {
 	customElements.define(tag, control);
 }
 
+/**
+ * A node of a type whose Kind picks what draws it — a field's: of that kind, it is drawn by the control registered as
+ * `drawnAs`. Another Kind is another element, so a kind changed builds the control anew.
+ * @param {string} type the node's NodeType
+ * @param {number} kind its Kind
+ * @param {string} drawnAs the type registered with defineControl that draws it
+ */
+export function defineKind(type, kind, drawnAs) {
+	const tag = tags.get(drawnAs);
+	if (tag === undefined)
+		throw new Error(`defineKind: ${drawnAs} is not defined`);
+	tags.set(`${type}#${kind}`, tag);
+}
+
+/**
+ * @param {ProtocolNode} node
+ * @returns {string} the element's tag that draws it
+ */
+function tagOf(node) {
+	const type = node.NodeType ?? '';
+	return tags.get(`${type}#${node.Kind ?? 0}`) ?? tags.get(type) ?? 'oes-unknown';
+}
+
 export class Control extends HTMLElement {
 	// THE BACKGROUND ITS KIND IS GIVEN WHEN ITS AUTHOR PICKS NONE, as the server saves it (frmserver's
 	// ibDefaultStyleBGColour; a kind of its own says its own), and the theme's for it — what a control naming it is painted.
@@ -189,7 +212,7 @@ export async function componentsDrawn(element) {
  * @returns {Control}
  */
 export function reconcile(parent, existing, node, context) {
-	const tag = tags.get(node.NodeType ?? '') ?? 'oes-unknown';
+	const tag = tagOf(node);
 	let element = existing;
 	if (element === null || element.localName !== tag || !element.update(node, element.node)) {
 		const made = /** @type {Control} */ (document.createElement(tag));

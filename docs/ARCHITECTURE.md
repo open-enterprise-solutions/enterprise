@@ -948,6 +948,7 @@ Choice, ComboBox, ListBox and ToolBar (with Tool / ToolSeparator) were the deskt
 | CheckBox | `checkbox.cpp` |
 | Form (root) | `form.cpp` |
 | Frame | `frame.cpp` |
+| Field | `field.cpp` (server), `radioButtons.cpp` (client, its Radio buttons kind) |
 | Gauge | `gauge.cpp` |
 | GridBox | `gridBox.cpp/.h` |
 | HtmlBox | `htmlBox.cpp/.h` |

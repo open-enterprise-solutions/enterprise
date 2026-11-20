@@ -47,6 +47,17 @@ bool IsOrientCreated(const wxString& type)
 		|| type == ibProtocol::ibForm::ibType::Gauge;
 }
 
+// What a control is BUILT with rather than set afterwards, besides its type: the way a line, a slider, a gauge runs; the
+// kind of a field, which picks the control that draws it (ibValueFrame::Make). Another of it builds the control anew.
+const char* BuiltWith(const wxString& type)
+{
+	if (IsOrientCreated(type))
+		return ibProtocol::ibForm::ibProperty::Orient;
+	if (type == ibProtocol::ibForm::ibType::Field)
+		return ibProtocol::ibForm::ibProperty::Kind;
+	return nullptr;
+}
+
 // A view as a list of what it is made of: each node's type and id, in order, nested as they are — and what a control
 // is BUILT with rather than set afterwards: how a sizer item lays its child out, which way a line, a slider, a gauge runs.
 void ShapeOf(const ibProtocolNode& node, std::string& shape)
@@ -60,8 +71,8 @@ void ShapeOf(const ibProtocolNode& node, std::string& shape)
 		shape += '(' + std::to_string(node.GetInt(ibProtocol::ibForm::ibProperty::Proportion)) + '|' + std::to_string(ibValueSizerItem::GetFlag(node))
 			+ '|' + std::to_string(node.GetInt(ibProtocol::ibForm::ibProperty::BorderSize)) + ')';
 	}
-	else if (IsOrientCreated(type)) {
-		shape += '(' + std::to_string(node.GetInt(ibProtocol::ibForm::ibProperty::Orient)) + ')';
+	else if (const char* const builtWith = BuiltWith(type)) {
+		shape += '(' + std::to_string(node.GetInt(builtWith)) + ')';
 	}
 
 	shape += '[';
@@ -79,7 +90,7 @@ bool IsShapeChanged(const ibProtocolNode& view, const ibProtocolNode& patch)
 	if (patch.Has(ibProtocol::ibNode::Order) || patch.Has(ibProtocol::ibNode::RemovedIds)
 		|| patch.Has(ibProtocol::ibNode::ChildrenWhole))
 		return true;
-	if (patch.Has(ibProtocol::ibForm::ibProperty::Orient) && IsOrientCreated(view.GetType()))
+	if (const char* const builtWith = BuiltWith(view.GetType()); builtWith != nullptr && patch.Has(builtWith))
 		return true;
 	for (const ibProtocolNode& changed : patch.Children()) {
 		for (const ibProtocolNode& child : view.Children()) {
@@ -441,7 +452,7 @@ void ibVisualHostClient::Generate(const ibProtocolNode& node, wxWindow* parent, 
 	// child sits in the sizer, and its child hangs on it, as the server's does.
 	ibValueFrame* const parentFrame = parentControl != nullptr ? parentControl : m_valueForm.get();
 	if (type == ibProtocol::ibForm::ibType::SizerItem) {
-		ibValueFrame* const holder = ibValueFrame::Make(type, *this, controlId);
+		ibValueFrame* const holder = ibValueFrame::Make(type, 0, *this, controlId);
 		ReadControl(holder, node);
 		m_controls[node.GetId()] = holder;
 		parentFrame->AddChild(holder);
@@ -451,7 +462,8 @@ void ibVisualHostClient::Generate(const ibProtocolNode& node, wxWindow* parent, 
 		return;
 	}
 
-	ibValueFrame* const control = ibValueFrame::Make(type, *this, controlId);
+	const char* const builtWith = BuiltWith(type);
+	ibValueFrame* const control = ibValueFrame::Make(type, builtWith != nullptr ? node.GetInt(builtWith) : 0, *this, controlId);
 	m_controls[node.GetId()] = control;
 	parentFrame->AddChild(control);
 	control->SetParent(parentFrame);
@@ -614,8 +626,9 @@ bool ibVisualHostClient::UpdateChildren(const ibProtocolNode& node, const ibProt
 		const auto found = m_controls.find(id);
 		if (found != m_controls.end() && found->second->GetParent() == control) {
 			const wxString type = child.GetType();
-			if (found->second->GetClassName() == type && !(IsOrientCreated(type)
-				&& m_drawn[id].GetInt(ibProtocol::ibForm::ibProperty::Orient) != child.GetInt(ibProtocol::ibForm::ibProperty::Orient)))
+			const char* const builtWith = BuiltWith(type);
+			if (found->second->GetClassName() == type && !(builtWith != nullptr
+				&& m_drawn[id].GetInt(builtWith) != child.GetInt(builtWith)))
 				stays[idx] = found->second;
 		}
 		if (stays[idx] == nullptr || !same || control->GetChild(idx) != stays[idx])

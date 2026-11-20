@@ -6,6 +6,12 @@ enum ibTitleLocation {
 	eRight
 };
 
+// How a field shows its value — the numbers a saved form holds and the client is sent (ibProtocol's ibFieldKind).
+enum ibFieldKind {
+	ibFieldKind_Input = 0,
+	ibFieldKind_RadioButtons = 1,
+};
+
 // Where a button's picture stands: Auto where the button puts it (on the left), on the left or the right of its caption,
 // or a tile - the picture large over the caption and the Note under them. The numbers are the ones a saved form holds
 // and the client reads (ibProtocol::ibForm::ibProperty::ibPictureLocation).
@@ -127,6 +133,17 @@ class FRMSERVER_API ibValueEnumTitleLocation :
 	virtual void CreateEnumeration() {
 		AddEnumeration(ibTitleLocation::eLeft, ibT("Left"), ibTRANSLATE("Left"));
 		AddEnumeration(ibTitleLocation::eRight, ibT("Right"), ibTRANSLATE("Right"));
+	}
+private:
+};
+
+class FRMSERVER_API ibValueEnumFieldKind :
+	public ibValueEnumeration<ibFieldKind> {
+	public:
+	ibValueEnumFieldKind() : ibValueEnumeration() {}
+	virtual void CreateEnumeration() {
+		AddEnumeration(ibFieldKind::ibFieldKind_Input, ibT("Input"), ibTRANSLATE_IN_CONTEXT("field kind", "Input field"), ibT("field kind"));
+		AddEnumeration(ibFieldKind::ibFieldKind_RadioButtons, ibT("RadioButtons"), ibTRANSLATE("Radio buttons"));
 	}
 private:
 };
