@@ -47,6 +47,9 @@ enum class ibSettingsCategory : int {
 	// ⭐ WHAT THE BASE ANSWERS ON A WEB SERVER — the administrator's web addresses (backend/served/servedAddressRegistry.h):
 	// one row, no user, under one well-known object key, as the locale's. Appended, as the rule above requires.
 	Web,
+	// The base's full-text search: whether it is on (FullTextSearch.SetFullTextSearchMode), one row with NO user —
+	// the mode is the base's, as the locale above is (backend/system/value/valueFullTextSearch.cpp).
+	Search,
 };
 
 // ONE SAVED SETTING as a shelf shows it — the identity, the caption, and when it

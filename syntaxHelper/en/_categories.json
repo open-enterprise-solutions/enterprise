@@ -37,6 +37,7 @@
     "metadata_enums": "Application object enumerations",
     "form_controls": "Form controls",
     "language_runtime": "Language runtime objects",
-    "application_runtime": "Application objects at run time"
+    "application_runtime": "Application objects at run time",
+    "full_text_search": "Full-text search"
   }
 }

@@ -1,0 +1,598 @@
+{
+  "format": "OES-HELP-1.0",
+  "schema_version": 1,
+  "locale": "en",
+  "entries": [
+    {
+      "id": "cls.FullTextSearch",
+      "name_local": "FullTextSearch",
+      "name_en": "FullTextSearch",
+      "kind": "collection",
+      "category_keys": [
+        "global_context",
+        "runtime",
+        "full_text_search"
+      ],
+      "signature": "FullTextSearch",
+      "description": "The base's full-text search: finding records by the words of their fields. A global of the server, reached by name.\n\nWHAT IS INDEXED is the metadata's answer: a string attribute whose Full-text search property is on - of a catalog, a document or a chart, of their tabular sections, and the Description and Code of a catalog or a chart. Nothing else keeps a list of them.\n\nTHE INDEX KEEPS ITSELF. A record's words are written with the record, in the same transaction, and dropped when it is deleted: there is no queue and nothing to run after a write. What is left to UpdateIndex is the BUILD - the records written before a field's flag was switched on, before the mode was, or since ClearIndex. IndexTrue says whether anything is left to build.\n\nTHE MODE IS THE BASE'S - one for every session, kept in the base, changed with the Data administration right. A base where nobody switched it on answers FullTextSearchMode.Disable; switching it off empties the index.\n\nWith the mouse: Administration - Full-text search index switches the mode and builds the index; Tools - Find in data searches.",
+      "syntax_block": "List = FullTextSearch.CreateList(\"front wheel\", 20);\nList.FirstPart();",
+      "parameters": "",
+      "return_descr": "",
+      "example": "List = FullTextSearch.CreateList(\"front wheel\", 20);\nList.FirstPart();\nfor (i = 0; i < List.Count(); i++) {\n    Message(List.Get(i).Presentation);\n}",
+      "availability": "Server",
+      "see_also": [
+        "cls.FullTextSearch.GetFullTextSearchMode",
+        "cls.FullTextSearch.SetFullTextSearchMode",
+        "cls.FullTextSearch.IndexTrue",
+        "cls.FullTextSearch.UpdateIndex",
+        "cls.FullTextSearch.ClearIndex",
+        "cls.FullTextSearch.UpdateDate",
+        "cls.FullTextSearch.CreateList",
+        "cls.FullTextSearchList",
+        "enum.FullTextSearchMode"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.FullTextSearch.GetFullTextSearchMode",
+      "name_local": "GetFullTextSearchMode",
+      "name_en": "GetFullTextSearchMode",
+      "kind": "method",
+      "category_keys": [
+        "global_context",
+        "runtime",
+        "full_text_search"
+      ],
+      "signature": "FullTextSearch.GetFullTextSearchMode() : FullTextSearchMode",
+      "description": "The base's full-text search mode, as it is kept in the base. Nothing saved yet reads as FullTextSearchMode.Disable. A mode this build does not know is refused with its number.",
+      "syntax_block": "Mode = FullTextSearch.GetFullTextSearchMode();",
+      "parameters": "",
+      "return_descr": "FullTextSearchMode.",
+      "example": "if (FullTextSearch.GetFullTextSearchMode() = FullTextSearchMode.Disable) {\n    Message(\"Full-text search is off\");\n}",
+      "availability": "Server",
+      "see_also": [
+        "cls.FullTextSearch",
+        "cls.FullTextSearch.SetFullTextSearchMode",
+        "enum.FullTextSearchMode"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.FullTextSearch.SetFullTextSearchMode",
+      "name_local": "SetFullTextSearchMode",
+      "name_en": "SetFullTextSearchMode",
+      "kind": "procedure",
+      "category_keys": [
+        "global_context",
+        "runtime",
+        "full_text_search"
+      ],
+      "signature": "FullTextSearch.SetFullTextSearchMode(mode : FullTextSearchMode)",
+      "description": "Switches the base's full-text search on or off, for every session. Needs the Data administration right. Switched on, the index starts empty and every write from then on keeps it - UpdateIndex builds what was written before. Switched off, the index is emptied and no write keeps it. A mode that is not a member of FullTextSearchMode is refused.",
+      "syntax_block": "FullTextSearch.SetFullTextSearchMode(FullTextSearchMode.Enable);",
+      "parameters": "mode - a member of FullTextSearchMode: Enable or Disable.",
+      "return_descr": "",
+      "example": "FullTextSearch.SetFullTextSearchMode(FullTextSearchMode.Enable);\nFullTextSearch.UpdateIndex();",
+      "availability": "Server",
+      "see_also": [
+        "cls.FullTextSearch",
+        "cls.FullTextSearch.GetFullTextSearchMode",
+        "cls.FullTextSearch.UpdateIndex",
+        "enum.FullTextSearchMode"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.FullTextSearch.IndexTrue",
+      "name_local": "IndexTrue",
+      "name_en": "IndexTrue",
+      "kind": "method",
+      "category_keys": [
+        "global_context",
+        "runtime",
+        "full_text_search"
+      ],
+      "signature": "FullTextSearch.IndexTrue() : boolean",
+      "description": "Whether nothing is left to build: every object with indexed fields is built with exactly those fields, and nothing is indexed for an object that has none any more. Writes never make it False - they keep the index themselves; a field's flag switched on or off, the mode switched on and ClearIndex do. False while the mode is off.",
+      "syntax_block": "Built = FullTextSearch.IndexTrue();",
+      "parameters": "",
+      "return_descr": "Boolean.",
+      "example": "while (!FullTextSearch.IndexTrue()) {\n    FullTextSearch.UpdateIndex(true);\n}",
+      "availability": "Server",
+      "see_also": [
+        "cls.FullTextSearch",
+        "cls.FullTextSearch.UpdateIndex",
+        "cls.FullTextSearch.UpdateDate"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.FullTextSearch.UpdateIndex",
+      "name_local": "UpdateIndex",
+      "name_en": "UpdateIndex",
+      "kind": "procedure",
+      "category_keys": [
+        "global_context",
+        "runtime",
+        "full_text_search"
+      ],
+      "signature": "FullTextSearch.UpdateIndex(portion : boolean = false)",
+      "description": "Builds the index for the records it does not hold yet: those written before a field's flag was switched on, before the mode was, or since ClearIndex. Records are read as they are stored - their modules are not run. Each portion of records is indexed in a transaction of its own, so a stop between portions keeps what was built. Refused while the mode is off. Needs the Data administration right.\n\nONE ARGUMENT. There is no merge argument: every write merges its record into the index. A call written with two arguments - UpdateIndex(merge, portion) - is refused and says so, because its first argument would be read as portion and its second lost. Write UpdateIndex(portion).",
+      "syntax_block": "FullTextSearch.UpdateIndex(portion);",
+      "parameters": "portion - True to index one portion of records (500) and return; IndexTrue then says whether to call again. Left out - False: everything left is built.",
+      "return_descr": "",
+      "example": "// a scheduled job: one portion each run, until the index is built\nif (!FullTextSearch.IndexTrue()) {\n    FullTextSearch.UpdateIndex(true);\n}",
+      "availability": "Server",
+      "see_also": [
+        "cls.FullTextSearch",
+        "cls.FullTextSearch.IndexTrue",
+        "cls.FullTextSearch.ClearIndex"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.FullTextSearch.ClearIndex",
+      "name_local": "ClearIndex",
+      "name_en": "ClearIndex",
+      "kind": "procedure",
+      "category_keys": [
+        "global_context",
+        "runtime",
+        "full_text_search"
+      ],
+      "signature": "FullTextSearch.ClearIndex()",
+      "description": "Empties the index: nothing is found until UpdateIndex builds it again. The mode is not changed, and writes go on indexing their records. Needs the Data administration right.",
+      "syntax_block": "FullTextSearch.ClearIndex();",
+      "parameters": "",
+      "return_descr": "",
+      "example": "FullTextSearch.ClearIndex();\nFullTextSearch.UpdateIndex();",
+      "availability": "Server",
+      "see_also": [
+        "cls.FullTextSearch",
+        "cls.FullTextSearch.UpdateIndex"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.FullTextSearch.UpdateDate",
+      "name_local": "UpdateDate",
+      "name_en": "UpdateDate",
+      "kind": "method",
+      "category_keys": [
+        "global_context",
+        "runtime",
+        "full_text_search"
+      ],
+      "signature": "FullTextSearch.UpdateDate() : date",
+      "description": "When the build last completed - the empty date while it never has, or while something is left to build now.",
+      "syntax_block": "Built = FullTextSearch.UpdateDate();",
+      "parameters": "",
+      "return_descr": "Date.",
+      "example": "Message(FullTextSearch.UpdateDate());",
+      "availability": "Server",
+      "see_also": [
+        "cls.FullTextSearch",
+        "cls.FullTextSearch.UpdateIndex",
+        "cls.FullTextSearch.IndexTrue"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.FullTextSearch.CreateList",
+      "name_local": "CreateList",
+      "name_en": "CreateList",
+      "kind": "method",
+      "category_keys": [
+        "global_context",
+        "runtime",
+        "full_text_search"
+      ],
+      "signature": "FullTextSearch.CreateList(searchString : string = \"\", portionSize : number = 20) : FullTextSearchList",
+      "description": "A search, not run yet: FirstPart runs it. The text is plain words, with no operators. A record is found when it holds every word - each as the beginning of an indexed word (whe finds wheel) or within one letter in five of one (wheal, wheell). A size or an article written with a dot, a slash or a comma between digits (205/55, 1.6) is one word. Case does not matter.",
+      "syntax_block": "List = FullTextSearch.CreateList(searchString, portionSize);",
+      "parameters": "searchString - the words to find.\nportionSize - how many records a part holds. Left out - 20.",
+      "return_descr": "FullTextSearchList.",
+      "example": "List = FullTextSearch.CreateList(\"wheel 205/55\", 20);\nList.FirstPart();\nMessage(List.TotalCount());",
+      "availability": "Server",
+      "see_also": [
+        "cls.FullTextSearch",
+        "cls.FullTextSearchList",
+        "cls.FullTextSearchList.FirstPart"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.FullTextSearchList",
+      "name_local": "FullTextSearchList",
+      "name_en": "FullTextSearchList",
+      "kind": "collection",
+      "category_keys": [
+        "global_context",
+        "runtime",
+        "full_text_search"
+      ],
+      "signature": "FullTextSearchList",
+      "description": "A search and its parts, made by FullTextSearch.CreateList. Nothing is searched until FirstPart; then the found records are read a part at a time, best ranked first - a record where the words stand more often comes higher, an exact or beginning match counting twice a misspelt one.\n\nWHAT THE PERSON MAY SEE: only objects they may read, and of their records only those the row-level access lets them read. TotalCount counts after that filter, so it is the person's own total.",
+      "syntax_block": "List = FullTextSearch.CreateList(\"wheel\");",
+      "parameters": "",
+      "return_descr": "",
+      "example": "List = FullTextSearch.CreateList(\"wheel\", 10);\nList.FirstPart();\nwhile (true) {\n    for (i = 0; i < List.Count(); i++) {\n        Message(List.Get(i).Presentation);\n    }\n    if (List.StartIndex() + List.Count() >= List.TotalCount()) {\n        break;\n    }\n    List.NextPart();\n}",
+      "availability": "Server",
+      "see_also": [
+        "cls.FullTextSearchList.FirstPart",
+        "cls.FullTextSearchList.NextPart",
+        "cls.FullTextSearchList.PreviousPart",
+        "cls.FullTextSearchList.Count",
+        "cls.FullTextSearchList.TotalCount",
+        "cls.FullTextSearchList.StartIndex",
+        "cls.FullTextSearchList.Get",
+        "cls.FullTextSearchList.SearchString",
+        "cls.FullTextSearchList.PortionSize",
+        "cls.FullTextSearchItem",
+        "cls.FullTextSearch.CreateList"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.FullTextSearchList.FirstPart",
+      "name_local": "FirstPart",
+      "name_en": "FirstPart",
+      "kind": "procedure",
+      "category_keys": [
+        "global_context",
+        "runtime",
+        "full_text_search"
+      ],
+      "signature": "FullTextSearchList.FirstPart()",
+      "description": "Runs the search and shows its first part. Refused while the mode is off, and for a text with no word in it.",
+      "syntax_block": "List.FirstPart();",
+      "parameters": "",
+      "return_descr": "",
+      "example": "List.FirstPart();\nMessage(List.Count());",
+      "availability": "Server",
+      "see_also": [
+        "cls.FullTextSearchList"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.FullTextSearchList.NextPart",
+      "name_local": "NextPart",
+      "name_en": "NextPart",
+      "kind": "procedure",
+      "category_keys": [
+        "global_context",
+        "runtime",
+        "full_text_search"
+      ],
+      "signature": "FullTextSearchList.NextPart()",
+      "description": "Shows the next part. Refused when the part shown is the last, or before FirstPart.",
+      "syntax_block": "List.NextPart();",
+      "parameters": "",
+      "return_descr": "",
+      "example": "List.NextPart();",
+      "availability": "Server",
+      "see_also": [
+        "cls.FullTextSearchList"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.FullTextSearchList.PreviousPart",
+      "name_local": "PreviousPart",
+      "name_en": "PreviousPart",
+      "kind": "procedure",
+      "category_keys": [
+        "global_context",
+        "runtime",
+        "full_text_search"
+      ],
+      "signature": "FullTextSearchList.PreviousPart()",
+      "description": "Shows the previous part. Refused when the part shown is the first, or before FirstPart.",
+      "syntax_block": "List.PreviousPart();",
+      "parameters": "",
+      "return_descr": "",
+      "example": "List.PreviousPart();",
+      "availability": "Server",
+      "see_also": [
+        "cls.FullTextSearchList"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.FullTextSearchList.Count",
+      "name_local": "Count",
+      "name_en": "Count",
+      "kind": "method",
+      "category_keys": [
+        "global_context",
+        "runtime",
+        "full_text_search"
+      ],
+      "signature": "FullTextSearchList.Count() : number",
+      "description": "How many records the part shown holds.",
+      "syntax_block": "N = List.Count();",
+      "parameters": "",
+      "return_descr": "Number.",
+      "example": "Message(List.Count());",
+      "availability": "Server",
+      "see_also": [
+        "cls.FullTextSearchList"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.FullTextSearchList.TotalCount",
+      "name_local": "TotalCount",
+      "name_en": "TotalCount",
+      "kind": "method",
+      "category_keys": [
+        "global_context",
+        "runtime",
+        "full_text_search"
+      ],
+      "signature": "FullTextSearchList.TotalCount() : number",
+      "description": "How many records were found that the person may read - counted after the rights filter.",
+      "syntax_block": "N = List.TotalCount();",
+      "parameters": "",
+      "return_descr": "Number.",
+      "example": "Message(List.TotalCount());",
+      "availability": "Server",
+      "see_also": [
+        "cls.FullTextSearchList"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.FullTextSearchList.StartIndex",
+      "name_local": "StartIndex",
+      "name_en": "StartIndex",
+      "kind": "method",
+      "category_keys": [
+        "global_context",
+        "runtime",
+        "full_text_search"
+      ],
+      "signature": "FullTextSearchList.StartIndex() : number",
+      "description": "The position, among all records found, of the first record of the part shown - from 0.",
+      "syntax_block": "N = List.StartIndex();",
+      "parameters": "",
+      "return_descr": "Number.",
+      "example": "Message(List.StartIndex());",
+      "availability": "Server",
+      "see_also": [
+        "cls.FullTextSearchList"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.FullTextSearchList.Get",
+      "name_local": "Get",
+      "name_en": "Get",
+      "kind": "method",
+      "category_keys": [
+        "global_context",
+        "runtime",
+        "full_text_search"
+      ],
+      "signature": "FullTextSearchList.Get(index : number) : FullTextSearchItem",
+      "description": "A record of the part shown. Refused for an index outside the part.",
+      "syntax_block": "Item = List.Get(index);",
+      "parameters": "index - from 0 to Count() - 1.",
+      "return_descr": "FullTextSearchItem.",
+      "example": "Item = List.Get(0);\nOpenValue(Item.Value);",
+      "availability": "Server",
+      "see_also": [
+        "cls.FullTextSearchList",
+        "cls.FullTextSearchItem"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.FullTextSearchList.SearchString",
+      "name_local": "SearchString",
+      "name_en": "SearchString",
+      "kind": "property",
+      "category_keys": [
+        "global_context",
+        "runtime",
+        "full_text_search"
+      ],
+      "signature": "FullTextSearchList.SearchString",
+      "description": "The text searched by - read-only.",
+      "syntax_block": "Text = List.SearchString;",
+      "parameters": "",
+      "return_descr": "String.",
+      "example": "Message(List.SearchString);",
+      "availability": "Server",
+      "see_also": [
+        "cls.FullTextSearchList"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.FullTextSearchList.PortionSize",
+      "name_local": "PortionSize",
+      "name_en": "PortionSize",
+      "kind": "property",
+      "category_keys": [
+        "global_context",
+        "runtime",
+        "full_text_search"
+      ],
+      "signature": "FullTextSearchList.PortionSize",
+      "description": "How many records a part holds - read-only.",
+      "syntax_block": "N = List.PortionSize;",
+      "parameters": "",
+      "return_descr": "Number.",
+      "example": "Message(List.PortionSize);",
+      "availability": "Server",
+      "see_also": [
+        "cls.FullTextSearchList"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.FullTextSearchItem",
+      "name_local": "FullTextSearchItem",
+      "name_en": "FullTextSearchItem",
+      "kind": "collection",
+      "category_keys": [
+        "global_context",
+        "runtime",
+        "full_text_search"
+      ],
+      "signature": "FullTextSearchItem",
+      "description": "One record a search found, as FullTextSearchList.Get hands it out.",
+      "syntax_block": "Item = List.Get(0);",
+      "parameters": "",
+      "return_descr": "",
+      "example": "Item = List.Get(0);\nMessage(Item.Presentation);",
+      "availability": "Server",
+      "see_also": [
+        "cls.FullTextSearchItem.Value",
+        "cls.FullTextSearchItem.Metadata",
+        "cls.FullTextSearchItem.Presentation",
+        "cls.FullTextSearchList.Get"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.FullTextSearchItem.Value",
+      "name_local": "Value",
+      "name_en": "Value",
+      "kind": "property",
+      "category_keys": [
+        "global_context",
+        "runtime",
+        "full_text_search"
+      ],
+      "signature": "FullTextSearchItem.Value",
+      "description": "The record's reference - read-only.",
+      "syntax_block": "Ref = Item.Value;",
+      "parameters": "",
+      "return_descr": "A reference.",
+      "example": "Ref = Item.Value;",
+      "availability": "Server",
+      "see_also": [
+        "cls.FullTextSearchItem"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.FullTextSearchItem.Metadata",
+      "name_local": "Metadata",
+      "name_en": "Metadata",
+      "kind": "property",
+      "category_keys": [
+        "global_context",
+        "runtime",
+        "full_text_search"
+      ],
+      "signature": "FullTextSearchItem.Metadata",
+      "description": "The metadata object the record belongs to - read-only.",
+      "syntax_block": "Object = Item.Metadata;",
+      "parameters": "",
+      "return_descr": "A metadata object.",
+      "example": "Object = Item.Metadata;",
+      "availability": "Server",
+      "see_also": [
+        "cls.FullTextSearchItem"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.FullTextSearchItem.Presentation",
+      "name_local": "Presentation",
+      "name_en": "Presentation",
+      "kind": "property",
+      "category_keys": [
+        "global_context",
+        "runtime",
+        "full_text_search"
+      ],
+      "signature": "FullTextSearchItem.Presentation",
+      "description": "How the record is shown: its object's name and its own presentation - read-only.",
+      "syntax_block": "Text = Item.Presentation;",
+      "parameters": "",
+      "return_descr": "String.",
+      "example": "Text = Item.Presentation;",
+      "availability": "Server",
+      "see_also": [
+        "cls.FullTextSearchItem"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.FullTextSearchMode",
+      "name_local": "FullTextSearchMode",
+      "name_en": "FullTextSearchMode",
+      "kind": "enum_type",
+      "class_id": 428523194804503701,
+      "category_keys": [
+        "global_context",
+        "runtime",
+        "full_text_search"
+      ],
+      "signature": "FullTextSearchMode.Enable, .Disable",
+      "description": "Whether the base keeps its full-text search: two members, written FullTextSearchMode.<Name>. What SetFullTextSearchMode is told and GetFullTextSearchMode answers.",
+      "syntax_block": "FullTextSearch.SetFullTextSearchMode(FullTextSearchMode.Enable);",
+      "parameters": "",
+      "return_descr": "",
+      "example": "Message(FullTextSearch.GetFullTextSearchMode() = FullTextSearchMode.Enable);",
+      "availability": "Server",
+      "see_also": [
+        "enum.FullTextSearchMode.Enable",
+        "enum.FullTextSearchMode.Disable",
+        "cls.FullTextSearch"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.FullTextSearchMode.Enable",
+      "name_local": "Enable",
+      "name_en": "Enable",
+      "kind": "system_enum",
+      "category_keys": [
+        "global_context",
+        "runtime",
+        "full_text_search"
+      ],
+      "signature": "FullTextSearchMode.Enable",
+      "description": "Full-text search is on.",
+      "syntax_block": "FullTextSearch.SetFullTextSearchMode(FullTextSearchMode.Enable);",
+      "parameters": "",
+      "return_descr": "FullTextSearchMode.",
+      "example": "FullTextSearch.SetFullTextSearchMode(FullTextSearchMode.Enable);",
+      "availability": "Server",
+      "see_also": [
+        "enum.FullTextSearchMode",
+        "cls.FullTextSearch.SetFullTextSearchMode"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.FullTextSearchMode.Disable",
+      "name_local": "Disable",
+      "name_en": "Disable",
+      "kind": "system_enum",
+      "category_keys": [
+        "global_context",
+        "runtime",
+        "full_text_search"
+      ],
+      "signature": "FullTextSearchMode.Disable",
+      "description": "Full-text search is off - also what a base where nobody switched it on answers.",
+      "syntax_block": "FullTextSearch.SetFullTextSearchMode(FullTextSearchMode.Disable);",
+      "parameters": "",
+      "return_descr": "FullTextSearchMode.",
+      "example": "FullTextSearch.SetFullTextSearchMode(FullTextSearchMode.Disable);",
+      "availability": "Server",
+      "see_also": [
+        "enum.FullTextSearchMode",
+        "cls.FullTextSearch.SetFullTextSearchMode"
+      ],
+      "reviewed": false
+    }
+  ]
+}
