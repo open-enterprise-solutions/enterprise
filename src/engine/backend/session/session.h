@@ -1213,7 +1213,7 @@ private:
 // (ibValueMetaObject::IsFullAccess). Opened by a role module — which dissolves
 // re-entrancy, the module may read the very source it restricts — by the session
 // parameters' handler, and by every call into a privileged shared module
-// (ibRuntimeModuleDataObject::ExecAsProc). Saves and restores the PRIOR value, so nested
+// (ibValueModuleDataObject::ExecAsProc). Saves and restores the PRIOR value, so nested
 // trusted scopes compose; the dtor runs on every exit INCLUDING a handler throw, so
 // enforcement is always restored. The bypass is CONSTRUCTIVE (only this scope sets
 // the flag) — never a failure default, so a genuinely absent policy stays fail-closed.

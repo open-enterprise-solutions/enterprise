@@ -93,7 +93,7 @@ static std::vector<ibValue> KeyFromStructure(const ibValueMetaObjectSequence* se
 
 bool ibValueManagerDataObjectSequence::CallAsProc(const long lMethodNum, ibValue** paParams, const long lSizeArray)
 {
-	switch (BuiltinMethodNum(lMethodNum))
+	switch (m_members.GetMethodData(lMethodNum, this, &ibValueManagerDataObjectSequence::FillManagerMethods))
 	{
 	case eRestore:
 		// Here, unlike the border's key, a dimension left out is NOT looked at: the run narrows by what is
@@ -108,7 +108,7 @@ bool ibValueManagerDataObjectSequence::CallAsProc(const long lMethodNum, ibValue
 
 bool ibValueManagerDataObjectSequence::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray)
 {
-	switch (BuiltinMethodNum(lMethodNum))
+	switch (m_members.GetMethodData(lMethodNum, this, &ibValueManagerDataObjectSequence::FillManagerMethods))
 	{
 	case eCreateRecordSet:
 		pvarRetValue = m_metaObject->CreateRecordSetObjectValue();

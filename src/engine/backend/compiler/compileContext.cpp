@@ -47,7 +47,7 @@ ibParamUnit ibCompileContext::AddVariable(const ibString& strVarName,
 	// is allowed even if a parent module exports an X.
 	auto existing = std::find_if(m_listVariable.begin(), m_listVariable.end(),
 		[&strVarName](const auto& v) { return v && stringUtils::IsSameAs(strVarName, v->m_strRealName); });
-	if (existing != m_listVariable.end()) {
+	if (existing != m_listVariable.end() && !(*existing)->IsContextProp()) {
 		m_compileModule->Refuse(ibScriptError_IdentifierDuplicate, strVarName);
 		return ibParamUnit();
 	}
@@ -68,7 +68,12 @@ ibParamUnit ibCompileContext::AddVariable(const ibString& strVarName,
 		return m_parentContext->AddVariable(strVarName, typeVar, exportVar, contextVar, tempVar);
 	}
 
-	unsigned int numVariable = m_listVariable.size();
+	// ⭐ AN ENTRY A CONTEXT BROUGHT (a member of ThisObject) IS TAKEN OVER by the declaration, in its place —
+	// PushVariable replaces it there. A slot is numbered by its position, and a context entry's own number is
+	// its member index, so its slot is held by nobody; appended instead, the entry would keep the name.
+	const unsigned int numVariable = existing != m_listVariable.end()
+		? static_cast<unsigned int>(std::distance(m_listVariable.begin(), existing))
+		: static_cast<unsigned int>(m_listVariable.size());
 	PushVariable(strVarName, ibT(""), numVariable,
 		typeVar, exportVar, contextVar, tempVar);
 

@@ -22,21 +22,11 @@ class ibSession;
 //*********************************************************************************************************
 
 class BACKEND_API ibValueModuleManager :
-	public ibValueDynamicMembers, public ibRuntimeModuleDataObject {
+	public ibValueModuleDataObject<ibValueDynamicMembers> {
 	public:
-protected:
-	enum helperAlias {
-		eProcUnit = g_aliasExport   // module exports go through the descriptor autobind
-	};
-public:
 
 	class BACKEND_API ibValueModuleUnit :
-		public ibValueDynamicMembers, public ibRuntimeModuleDataObject {
-	public:
-	protected:
-		enum helperAlias {
-			eProcUnit = g_aliasExport   // module exports go through the descriptor autobind
-		};
+		public ibValueModuleDataObject<ibValueDynamicMembers> {
 	public:
 
 		// No default ctor — the ibRuntimeModuleDataObject base requires the owning
@@ -76,19 +66,14 @@ public:
 
 		//WORK AS AN AGGREGATE OBJECT
 
-		// Name surface = the module's exports, autobound as the helper's tail by the
-		// ibRuntimeModuleDataObject ctor (DoGetPMethods + by-value m_members come
-		// from ibValueDynamicMembers). No FillMembers — exports are the whole surface.
+		// Name surface = the module's names, bound by ibValueModuleDataObject, which also answers their
+		// calls (DoGetPMethods + by-value m_members come from ibValueDynamicMembers). No FillMembers —
+		// the module is the whole surface.
 
-		// ⭐ IN THE DESIGNER THOSE EXPORTS COME FROM THE TEXT, not from bytecode — there is none
-		// (AddSharedModule below says why). Nothing extra is bound here for it: the tail already
+		// ⭐ IN THE DESIGNER THOSE NAMES COME FROM THE TEXT, not from bytecode — there is none
+		// (AddSharedModule below says why). Nothing extra is bound here for it: the template already
 		// asks ExportMethodsToHelper, and that is where the second road lives, so every descriptor
 		// gets it and not just this one — see moduleInfo.cpp.
-
-		//method call
-		virtual bool CallAsProc(const long lMethodNum, ibValue** paParams, const long lSizeArray) override;
-		virtual bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray) override;
-		virtual bool GetParamDefValue(const long lMethodNum, const long lParamNum, ibValue& pvarParamDefValue) const override;
 
 		virtual ibString GetString() const override {
 			return m_moduleObject->GetName();
@@ -238,18 +223,9 @@ public:
 
 	virtual ~ibValueModuleManager();
 
-	// Name surface = the module's exports, autobound as the helper's tail by the
-	// ibRuntimeModuleDataObject ctor (DoGetPMethods + by-value m_members come
-	// from ibValueDynamicMembers). No FillMembers — exports are the whole surface.
-
-	//method call
-	virtual bool CallAsProc(const long lMethodNum, ibValue** paParams, const long lSizeArray);
-	virtual bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray);
-	virtual bool GetParamDefValue(const long lMethodNum, const long lParamNum, ibValue& pvarParamDefValue) const override;
-
-	virtual bool SetPropVal(const long lPropNum, const ibValue& varPropVal);        //setting attribute
-	virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal);                   //attribute value
-	virtual long FindProp(const ibString& strName) const override;
+	// Name surface = the module's names, bound by ibValueModuleDataObject, which also answers their
+	// calls and their reads (DoGetPMethods + by-value m_members come from ibValueDynamicMembers). No
+	// FillMembers — the module is the whole surface.
 
 	//check is empty
 	virtual bool IsEmpty() const { return false; }

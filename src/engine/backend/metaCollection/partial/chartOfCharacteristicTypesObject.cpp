@@ -117,50 +117,9 @@ void ibValueRecordDataObjectChartOfCharacteristicTypes::FillMethods(ibMemberTabl
 	helper.AppendProc(ibT("Unlock"), ibT("Unlock()"));
 }
 
-bool ibValueRecordDataObjectChartOfCharacteristicTypes::SetPropVal(const long lPropNum, const ibValue& varPropVal)
-{
-	const long lPropAlias = m_members.GetPropAlias(lPropNum);
-	if (lPropAlias == eProcUnit) {
-		if (m_procUnit != nullptr) {
-			return m_procUnit->SetPropVal(
-				GetPropName(lPropNum), varPropVal
-			);
-		}
-	}
-	else if (lPropAlias == eProperty) {
-		return SetValueByMetaID(
-			m_members.GetPropData(lPropNum),
-			varPropVal
-		);
-	}
-
-	return false;
-}
-
-bool ibValueRecordDataObjectChartOfCharacteristicTypes::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
-{
-	const long lPropAlias = m_members.GetPropAlias(lPropNum);
-	if (lPropAlias == eProcUnit) {
-		if (m_procUnit != nullptr) {
-			return m_procUnit->GetPropVal(
-				GetPropName(lPropNum), pvarPropVal
-			);
-		}
-	}
-	else if (lPropAlias == eProperty || lPropAlias == eTable) {
-		const long lPropData = m_members.GetPropData(lPropNum);
-		if (m_metaObject->IsDataReference(lPropData)) {
-			pvarPropVal = GetReference();
-			return true;
-		}
-		return GetValueByMetaID(lPropData, pvarPropVal);
-	}
-	return false;
-}
-
 bool ibValueRecordDataObjectChartOfCharacteristicTypes::CallAsProc(const long lMethodNum, ibValue** paParams, const long lSizeArray)
 {
-	switch (lMethodNum)
+	switch (m_members.GetMethodData(lMethodNum, this, &ibValueRecordDataObjectChartOfCharacteristicTypes::FillMethods))
 	{
 	case Func::enLock:
 		TryAcquireFormLock();
@@ -175,7 +134,7 @@ bool ibValueRecordDataObjectChartOfCharacteristicTypes::CallAsProc(const long lM
 
 bool ibValueRecordDataObjectChartOfCharacteristicTypes::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray)
 {
-	switch (lMethodNum)
+	switch (m_members.GetMethodData(lMethodNum, this, &ibValueRecordDataObjectChartOfCharacteristicTypes::FillMethods))
 	{
 	case enIsNew:
 		pvarRetValue = m_newObject;
@@ -212,7 +171,5 @@ bool ibValueRecordDataObjectChartOfCharacteristicTypes::CallAsFunc(const long lM
 		return true;
 	}
 
-	return ibRuntimeModuleDataObject::ExecAsFunc(
-		GetMethodName(lMethodNum), pvarRetValue, paParams, lSizeArray
-	);
+	return ibValueModuleDataObject::CallAsFunc(lMethodNum, pvarRetValue, paParams, lSizeArray);
 }

@@ -1620,11 +1620,12 @@ ibValuePtr<ibValueRecordManagerObject> ibValueMetaObjectRegisterData::CopyRecord
 //*                        ibValueManagerDataObject						*
 //***********************************************************************
 
-// Manager-module methods. Surfaces the shared module's exported methods through its
-// runtime descriptor (ExportMethodsToHelper) rather than copying its whole helper
-// table — the former CopyMethod wart. The bytecode-function index it keys on is
-// exactly what CallAsProc/Func below feed back into pRefData, so dispatch lines up
-// with no duplicated table.
+// The manager module's methods — the base's own filling, bound first, so they come first. 🛑 A subclass
+// switches on the rows its own binder appended (GetMethodData with its filler), not on the row's number: read as
+// it stands, declaring one procedure shifted every verb onto its neighbour (2026-09-09, a document manager whose module declared one
+// procedure: CreateDocument() returned a DocumentSelection, EmptyRef() walked off the end into Undefined).
+// A row the subclass does not take is the module's, and goes to it by the name (CallAsProc / CallAsFunc
+// below).
 void ibValueManagerDataObject::FillMembers(ibMemberTable& helper) const
 {
 	const ibValueMetaObjectGenericData* valueMetaObject = GetMetaObject();
@@ -1639,7 +1640,7 @@ void ibValueManagerDataObject::FillMembers(ibMemberTable& helper) const
 	auto* pRefData = moduleManager ? moduleManager->FindSharedModule(GetManagerModule()) : nullptr;
 
 	if (pRefData != nullptr)
-		pRefData->ExportMethodsToHelper(&helper, g_aliasExport);
+		pRefData->ExportMethodsToHelper(&helper);
 }
 
 // ⭐⭐ THE MODULE IS ASKED BY THE NAME, AND ANSWERS WITH ITS OWN NUMBER. The entry's data is the
@@ -1670,9 +1671,6 @@ bool ibValueManagerDataObject::CallAsProc(const long lMethodNum, ibValue** paPar
 	const ibMetaData* metaData = valueMetaObject->GetMetaData();
 	ibASSERT(metaData);
 
-	if (m_members.GetMethodAlias(lMethodNum) != g_aliasExport)
-		return false;
-
 	auto* moduleManager = ibSession::EditModuleManagerFor(metaData);
 	auto* pRefData = moduleManager ? moduleManager->FindSharedModule(GetManagerModule()) : nullptr;
 
@@ -1689,9 +1687,6 @@ bool ibValueManagerDataObject::CallAsFunc(const long lMethodNum, ibValue& pvarRe
 
 	const ibMetaData* metaData = valueMetaObject->GetMetaData();
 	ibASSERT(metaData);
-
-	if (m_members.GetMethodAlias(lMethodNum) != g_aliasExport)
-		return false;
 
 	auto* moduleManager = ibSession::EditModuleManagerFor(metaData);
 	auto* pRefData = moduleManager ? moduleManager->FindSharedModule(GetManagerModule()) : nullptr;
@@ -1710,14 +1705,34 @@ bool ibValueManagerDataObject::GetParamDefValue(const long lMethodNum, const lon
 	const ibMetaData* metaData = valueMetaObject->GetMetaData();
 	ibASSERT(metaData);
 
-	if (m_members.GetMethodAlias(lMethodNum) != g_aliasExport)
-		return false;
+	auto* moduleManager = ibSession::EditModuleManagerFor(metaData);
+	auto* pRefData = moduleManager ? moduleManager->FindSharedModule(GetManagerModule()) : nullptr;
+
+	// NOT RAISED, unlike a call: every argument a call leaves out is asked for here, a verb of the
+	// manager's own as well, and the module has no default for a name it does not have.
+	if (pRefData != nullptr) {
+		const long found = pRefData->FindMethod(m_members.GetMethodName(lMethodNum));
+		return found != ibNOT_FOUND && pRefData->GetParamDefValue(found, lParamNum, pvarParamDefValue);
+	}
+
+	return false;
+}
+
+bool ibValueManagerDataObject::IsMethodScoped(const long lMethodNum) const
+{
+	const ibValueMetaObjectGenericData* valueMetaObject = GetMetaObject();
+	ibASSERT(valueMetaObject);
+
+	const ibMetaData* metaData = valueMetaObject->GetMetaData();
+	ibASSERT(metaData);
 
 	auto* moduleManager = ibSession::EditModuleManagerFor(metaData);
 	auto* pRefData = moduleManager ? moduleManager->FindSharedModule(GetManagerModule()) : nullptr;
 
-	if (pRefData != nullptr)
-		return pRefData->GetParamDefValue(ibModuleMethodNum(*pRefData, m_members.GetMethodName(lMethodNum)), lParamNum, pvarParamDefValue);
+	if (pRefData != nullptr) {
+		const long found = pRefData->FindMethod(m_members.GetMethodName(lMethodNum));
+		return found != ibNOT_FOUND && pRefData->IsMethodScoped(found);
+	}
 
 	return false;
 }
@@ -1753,24 +1768,6 @@ ibString ibValueManagerDataObject::GetString() const
 		valueMetaObject->GetTypeCtor(ibCtorObjectMetaType::ibCtorObjectMetaType_Manager);
 	ibASSERT(clsFactory);
 	return clsFactory->GetClassName();
-}
-
-// See the header for what this is for. The entry says who owns it; only the module's carry
-// g_aliasExport, because that is the alias FillMembers hands ExportMethodsToHelper.
-long ibValueManagerDataObject::BuiltinMethodNum(const long lMethodNum) const
-{
-	if (lMethodNum < 0 || lMethodNum >= m_members.GetNMethods())
-		return ibNOT_FOUND;
-
-	if (m_members.GetMethodAlias(lMethodNum) == g_aliasExport)
-		return ibNOT_FOUND;
-
-	long ordinal = 0;
-	for (long i = 0; i < lMethodNum; ++i) {
-		if (m_members.GetMethodAlias(i) != g_aliasExport)
-			++ordinal;
-	}
-	return ordinal;
 }
 
 //***********************************************************************
@@ -1815,8 +1812,7 @@ bool ibValueManagerDataObjectPredefined::GetPropVal(const long lPropNum, ibValue
 
 
 ibValueRecordDataObject::ibValueRecordDataObject(const ibGuid& objGuid, bool newObject) :
-	ibValueDynamicMembers(ibValueTypes::TYPE_VALUE), ibValueDataObject(objGuid, newObject),
-	ibRuntimeModuleDataObject(m_members, this)
+	ibValueModuleDataObject(nullptr, ibValueTypes::TYPE_VALUE), ibValueDataObject(objGuid, newObject)
 {
 	// Common data surface for every record leaf; leaves add their own methods. Module
 	// exports autobind in the ibRuntimeModuleDataObject ctor (as the helper's tail).
@@ -1824,8 +1820,7 @@ ibValueRecordDataObject::ibValueRecordDataObject(const ibGuid& objGuid, bool new
 }
 
 ibValueRecordDataObject::ibValueRecordDataObject(const ibValueRecordDataObject& source) :
-	ibValueDynamicMembers(ibValueTypes::TYPE_VALUE), ibValueDataObject(ibNewUniqueGuid, true),
-	ibRuntimeModuleDataObject(m_members, this)
+	ibValueModuleDataObject(nullptr, ibValueTypes::TYPE_VALUE), ibValueDataObject(ibNewUniqueGuid, true)
 {
 	m_members.Bind(this, &ibValueRecordDataObject::FillDataMembers);
 }
@@ -2124,7 +2119,7 @@ void ibValueRecordDataObject::FillBaseMethods(ibMemberTable& helper) const
 }
 
 // Shared data surface bound by the base ctor: the metaobject's attributes
-// (eProperty) + tabular sections (eTable) + data-object module exports (eProcUnit).
+// (eProperty) + tabular sections (eTable); the module's exports follow as the tail.
 // Attribute writability follows IsDataReference (a self-reference attribute is
 // read-only; default false for non-reference metaobjects). ThisObject is bound via
 // BindContextVariable in InitializeObject — no manual AppendProp.
@@ -2166,68 +2161,37 @@ void ibValueRecordDataObject::FillDataMembers(ibMemberTable& helper) const
 			eTable
 		);
 	}
-	// Module exports surface via the descriptor autobind (ExportThunk), not here.
+	// The module's names come from ibValueModuleDataObject, bound first — not here.
 }
 
+// A row the object does not answer itself (by its alias, by the verb its row carries) is its module's,
+// and goes up to the base.
 bool ibValueRecordDataObject::SetPropVal(const long lPropNum, const ibValue& varPropVal)
 {
 	const long lPropAlias = m_members.GetPropAlias(lPropNum);
-	if (lPropAlias == eProcUnit) {
-		if (m_procUnit != nullptr) {
-			return m_procUnit->SetPropVal(
-				GetPropName(lPropNum), varPropVal
-			);
-		}
-	}
-	else if (lPropAlias == eProperty) {
+	if (lPropAlias == eProperty) {
 		return SetValueByMetaID(
 			m_members.GetPropData(lPropNum),
 			varPropVal
 		);
 	}
-	return false;
+	return ibValueModuleDataObject::SetPropVal(lPropNum, varPropVal);
 }
 
 bool ibValueRecordDataObject::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 {
 	const long lPropAlias = m_members.GetPropAlias(lPropNum);
-	if (lPropAlias == eProcUnit) {
-		if (m_procUnit != nullptr) {
-			return m_procUnit->GetPropVal(
-				GetPropName(lPropNum), pvarPropVal
-			);
-		}
-	}
-	else if (lPropAlias == eProperty || lPropAlias == eTable) {
+	if (lPropAlias == eProperty || lPropAlias == eTable) {
 		return GetValueByMetaID(
 			m_members.GetPropData(lPropNum), pvarPropVal
 		);
 	}
-	return false;
-}
-
-bool ibValueRecordDataObject::CallAsProc(const long lMethodNum, ibValue** paParams, const long lSizeArray)
-{
-	const long lMethodAlias = m_members.GetMethodAlias(lMethodNum);
-	if (lMethodAlias == eProcUnit) {
-		return ibRuntimeModuleDataObject::ExecAsProc(
-			GetMethodName(lMethodNum), paParams, lSizeArray
-		);
-	}
-
-	return false;
+	return ibValueModuleDataObject::GetPropVal(lPropNum, pvarPropVal);
 }
 
 bool ibValueRecordDataObject::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray)
 {
-	const long lMethodAlias = m_members.GetMethodAlias(lMethodNum);
-	if (lMethodAlias == eProcUnit) {
-		return ibRuntimeModuleDataObject::ExecAsFunc(
-			GetMethodName(lMethodNum), pvarRetValue, paParams, lSizeArray
-		);
-	}
-
-	switch (lMethodNum)
+	switch (m_members.GetMethodData(lMethodNum, this, &ibValueRecordDataObject::FillBaseMethods))
 	{
 	case eGetFormObject:
 		pvarRetValue = GetFormValue(
@@ -2243,18 +2207,7 @@ bool ibValueRecordDataObject::CallAsFunc(const long lMethodNum, ibValue& pvarRet
 		return true;
 	}
 
-	return false;
-}
-
-bool ibValueRecordDataObject::GetParamDefValue(const long lMethodNum, const long lParamNum, ibValue& pvarParamDefValue) const
-{
-	if (m_members.GetMethodAlias(lMethodNum) == eProcUnit) {
-		return ibRuntimeModuleDataObject::GetParamDefValue(
-			GetMethodName(lMethodNum), lParamNum, pvarParamDefValue
-		);
-	}
-
-	return false;
+	return ibValueModuleDataObject::CallAsFunc(lMethodNum, pvarRetValue, paParams, lSizeArray);
 }
 
 //***********************************************************************
@@ -3801,25 +3754,6 @@ void ibValueRecordManagerObject::PrepareEmptyObject(const ibValueRecordManagerOb
 //						  ibValueRecordSetObject							//
 //////////////////////////////////////////////////////////////////////
 
-// The set declares no property of its own — see the declaration for why `Filter` is a bind.
-bool ibValueRecordSetObject::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
-{
-	// The set's exported names — `Filter` among them — resolve exactly as a document's do: through
-	// the ProcUnit where there is one, and through the BIND itself where there is not (the designer
-	// has no runtime, and the bind map is present in both). Nothing here knows the name `Filter`;
-	// it is bound in InitializeObject and reaches the member table through the descriptor autobind.
-	if (m_members.GetPropAlias(lPropNum) != eProcUnit)
-		return false;
-
-	if (m_procUnit != nullptr && m_procUnit->GetPropVal(GetPropName(lPropNum), pvarPropVal))
-		return true;
-
-	if (GetBoundValue(GetPropName(lPropNum), pvarPropVal))
-		return true;
-
-	return false;
-}
-
 void ibValueRecordSetObject::CreateEmptyKey()
 {
 	m_keyValues.clear();
@@ -3890,8 +3824,7 @@ ibValuePtr<ibValueRecordSetObject> ibValueRecordSetObject::CopyRegisterValue()
 
 ///////////////////////////////////////////////////////////////////////////////////
 
-ibValueRecordSetObject::ibValueRecordSetObject(const ibValueMetaObjectRegisterData* metaObject, const ibUniqueKeyPair& uniqueKey) : ibValueModelStorage(),
-ibRuntimeModuleDataObject(m_members, this),
+ibValueRecordSetObject::ibValueRecordSetObject(const ibValueMetaObjectRegisterData* metaObject, const ibUniqueKeyPair& uniqueKey) : ibValueModuleDataObject(nullptr),
 m_objModified(false), m_selected(ibSelection::NotSelected),
 // ⭐⭐ A SET MADE WITHOUT A KEY HAS NO FILTER AT ALL — not a filter of empty values.
 //
@@ -3912,8 +3845,7 @@ m_recordColumnCollection(new ibValueRecordSetObjectRegisterColumnCollection(this
 	GetModelComposer().SetMetaData(m_metaObject != nullptr ? m_metaObject->GetMetaData() : nullptr);
 }
 
-ibValueRecordSetObject::ibValueRecordSetObject(const ibValueRecordSetObject& source) : ibValueModelStorage(),
-ibRuntimeModuleDataObject(m_members, this),
+ibValueRecordSetObject::ibValueRecordSetObject(const ibValueRecordSetObject& source) : ibValueModuleDataObject(nullptr),
 m_objModified(true), m_selected(ibSelection::NotSelected),
 m_keyValues(source.m_keyValues), m_metaObject(source.m_metaObject),
 m_recordColumnCollection(new ibValueRecordSetObjectRegisterColumnCollection(this)), m_recordSetKeyValue(new ibValueRecordSetObjectRegisterKeyValue(this))

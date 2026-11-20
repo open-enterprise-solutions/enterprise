@@ -20,8 +20,7 @@
 //*********************************************************************************************************
 
 ibValueModuleManager::ibValueModuleManager(ibMetaData* metadata, const ibValueMetaObjectModule* obj) :
-	ibValueDynamicMembers(ibValueTypes::TYPE_VALUE),
-	ibRuntimeModuleDataObject(m_members, this, obj),
+	ibValueModuleDataObject(obj, ibValueTypes::TYPE_VALUE),
 	m_objectManager(new ibValueGlobalContextManager(metadata)),
 	m_metaManager(new ibValueMetadataUnit(metadata)),
 	m_dataManager(new ibValueDataUnit(metadata))
@@ -34,50 +33,6 @@ ibValueModuleManager::ibValueModuleManager(ibMetaData* metadata, const ibValueMe
 
 ibValueModuleManager::~ibValueModuleManager()
 {
-}
-
-bool ibValueModuleManager::CallAsProc(const long lMethodNum, ibValue** paParams, const long lSizeArray)
-{
-	return ibRuntimeModuleDataObject::ExecAsProc(
-		GetMethodName(lMethodNum), paParams, lSizeArray
-	);
-}
-
-bool ibValueModuleManager::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray)
-{
-	return ibRuntimeModuleDataObject::ExecAsFunc(
-		GetMethodName(lMethodNum), pvarRetValue, paParams, lSizeArray
-	);
-}
-
-bool ibValueModuleManager::GetParamDefValue(const long lMethodNum, const long lParamNum, ibValue& pvarParamDefValue) const
-{
-	return ibRuntimeModuleDataObject::GetParamDefValue(
-		GetMethodName(lMethodNum), lParamNum, pvarParamDefValue
-	);
-}
-
-bool ibValueModuleManager::SetPropVal(const long lPropNum, const ibValue& varPropVal)        //setting attribute
-{
-	if (m_procUnit != nullptr)
-		return m_procUnit->SetPropVal(lPropNum, varPropVal);
-	return false;
-}
-
-bool ibValueModuleManager::GetPropVal(const long lPropNum, ibValue& pvarPropVal)                   //attribute value
-{
-	if (m_procUnit != nullptr)
-		return m_procUnit->GetPropVal(lPropNum, pvarPropVal);
-	return false;
-}
-
-long ibValueModuleManager::FindProp(const ibString& strName) const
-{
-	if (m_procUnit != nullptr) {
-		return m_procUnit->FindProp(strName);
-	}
-
-	return ibValue::FindProp(strName);
 }
 
 //*********************************************************************************************************
@@ -610,8 +565,8 @@ bool ibValueModuleManagerDesigner::AddSharedModule(ibValueMetaObjectSharedModule
 		BindGlobalModule(sharedModule->GetName(), sharedModule);
 	}
 
-	// ⭐⭐ AND THE SURFACE IS TOLD, because a bind is not only a map entry: FillHelperFromBinds
-	// writes every extern binding into this manager's OWN member table, and that table is built
+	// ⭐⭐ AND THE SURFACE IS TOLD, because a bind is not only a map entry: FillMembers
+	// (ibValueModuleDataObject) writes every extern binding into this manager's OWN member table, and that table is built
 	// once and then cached. Changing the map under a built table changes nothing anybody can see —
 	// which is how a module registered here stayed invisible, and, the other way round, how a name
 	// UNBOUND in RemoveSharedModule went on being offered by every completion for the rest of the

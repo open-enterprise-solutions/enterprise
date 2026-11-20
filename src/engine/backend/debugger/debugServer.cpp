@@ -1791,9 +1791,14 @@ void ibDebuggerServer::ibDebuggerServerConnection::RecvCommand(void* pointer, un
 					commandChannel.w_stringZ(strAttributeName);
 				}
 
-				commandChannel.w_u32(vResult.GetNMethods());
-				//send functions 
+				long nMethodsVisible = 0;
 				for (long i = 0; i < vResult.GetNMethods(); i++) {
+					if (!vResult.IsMethodScoped(i)) ++nMethodsVisible;
+				}
+				commandChannel.w_u32((unsigned int)nMethodsVisible);
+				//send functions
+				for (long i = 0; i < vResult.GetNMethods(); i++) {
+					if (vResult.IsMethodScoped(i)) continue;
 					const ibString& strMethodName = vResult.GetMethodName(i);
 					const ibString& strMethodDescription = vResult.GetMethodHelper(i);
 					//send attribute body

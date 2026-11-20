@@ -6,9 +6,9 @@
 
 #include "backend/metaData.h"
 
-// 🛑 THIS ORDER IS THE CALL NUMBER, AND IT MUST MATCH FillMembers EXACTLY — a method is invoked by its
-// INDEX in the member table, so an enumerator out of step silently runs a different verb (the register's
-// set learned that in 2026-09-03: `Write` landed on `Load`).
+// 🛑 THIS ORDER IS FillMembers' ORDER — a row's data is its place on its binder's level, and CallAsFunc switches
+// on it, so an enumerator out of step runs a different verb (the register's set, 2026-09-03: `Write` landed on
+// `Load`).
 enum func
 {
 	eAdd = 0,
@@ -47,7 +47,7 @@ void ibValueRecordSetObjectSequence::FillMembers(ibMemberTable& helper) const
 // registration is filled, counted, cleared and unloaded in the same words as a movement.
 bool ibValueRecordSetObjectSequence::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray)
 {
-	switch (lMethodNum)
+	switch (m_members.GetMethodData(lMethodNum, this, &ibValueRecordSetObjectSequence::FillMembers))
 	{
 	case func::eAdd:
 		pvarRetValue = new ibValueRecordSetObjectRegisterReturnLine(this, GetItem(AppendRow()));
@@ -84,7 +84,7 @@ bool ibValueRecordSetObjectSequence::CallAsFunc(const long lMethodNum, ibValue& 
 		return true;
 	}
 
-	return false;
+	return ibValueRecordSetObject::CallAsFunc(lMethodNum, pvarRetValue, paParams, lSizeArray);
 }
 
 // The recorder this set is addressed by — empty for a set nobody keyed, which is the answer the

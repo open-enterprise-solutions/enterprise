@@ -626,7 +626,7 @@ See `docs/private/serialization-io.md` §4a.
 - Cross-table refs: `ContextProp / ContextMethod` carry `m_parentRef` indexing back into `m_listVar`.
 - `ibByteBinder` reads `m_listVar` directly and binds slots whose kind ∈ `{External, Context}` (`IsBindRequired()`).
 - Eval / watch expressions use `ibCompileEval` (in `procUnit.cpp`); `ibCompileCode::IsExpressionOnly()` and `GetEvalHostFunction()` are virtual hooks the eval class overrides.
-- Descriptors expose `ExportNamesToHelper(helper, alias)` on `ibRuntimeModuleDataObject` to populate a value's helper from the bc's export entries.
+- A value that carries a module is `ibValueModuleDataObject<TValue>` (`moduleInfo.h`; the descriptor `ibRuntimeModuleDataObject` is constructed only through it). It binds FIRST, so the module's names head the value's member table; a class below binds its own. Every row carries the level of the binder that appended it, and a method without data gets its place on that level, from 0 — so a class switches on `GetMethodData(n, this, &Self::Fill…)` (its own enum, `ibNOT_FOUND` for another binder's row) and hands every other row up — the template answers it by the name (`ExecAsProc` / `ExecAsFunc`, the trusted window). A manager does the same: its base puts the module's methods first, each subclass binds its own verbs (`FillManagerMethods`).
 
 See `docs/private/eval-scope-refactor.md` for the full architecture.
 

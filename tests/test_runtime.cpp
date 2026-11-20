@@ -4162,11 +4162,11 @@ TEST(RuntimeTest, AnArrayWalkedAndRewalkedIsLetGoOfOnce) {
 // A form's DataSource is the main attribute's cell. The cell holds a reference
 // to the object. A script that writes DataSource.B must change that object,
 // and a read-only slot must not answer as if the read had succeeded.
-// GetBoundValue is the form's own read; the test reaches it through a form.
-// A form is born against the session's frame (framedSession.h).
+// The read is the module's half of a value's GetPropVal (ibValueModuleDataObject); the test reaches it
+// through a form. A form is born against the session's frame (framedSession.h).
 struct ReadableForm : ibValueForm {
-	// A form with no module meta keeps a bind as any form does: in its maps.
-	bool ReadBound(const ibString& name, ibValue& out) { return GetBoundValue(name, out); }
+	// A form with no module meta keeps a bind as any form does: in its maps, and so a row of its table.
+	bool ReadBound(const ibString& name, ibValue& out) { return ibValueModuleDataObject::GetPropVal(FindProp(name), out); }
 };
 
 // The base goes down with the test. A session's teardown waits behind its queue in the base's worker pool

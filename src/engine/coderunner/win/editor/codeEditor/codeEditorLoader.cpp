@@ -20,6 +20,7 @@ void ibCodeEditor::AddKeywordFromObject(const ibValue& vObject)
 	if (vObject.GetType() != ibValueTypes::TYPE_EMPTY &&
 		vObject.GetType() != ibValueTypes::TYPE_OLE) {
 		for (long i = 0; i < vObject.GetNMethods(); i++) {
+			if (vObject.IsMethodScoped(i)) continue;
 			if (vObject.HasRetVal(i)) {
 				m_ac.Append(
 					ibContentType::eFunction,
@@ -46,8 +47,8 @@ void ibCodeEditor::AddKeywordFromObject(const ibValue& vObject)
 				wxEmptyString
 			);
 		}
-		// ⭐ THE VALUE'S OWN SURFACE IS THE WHOLE ANSWER. A module's exports are already the tail of its
-		// member table (ExportThunk, bound in the descriptor's ctor) and a manager adds its manager
+		// ⭐ THE VALUE'S OWN SURFACE IS THE WHOLE ANSWER. A module's exports are already rows of its
+		// member table (ibValueModuleDataObject::FillMembers, bound first) and a manager adds its manager
 		// module's in FillMembers — both read the TEXT in the designer (ibExportNamesFromText). Two
 		// blocks here parsed the same text again from the time the table said nothing in the designer,
 		// so every exported function after a manager's or a module's dot was offered TWICE, the second

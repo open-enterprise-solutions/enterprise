@@ -15,8 +15,6 @@
 // the pair belongs together and moving it is wider than this change.
 #include "backend/compiler/compileContext.h"
 
-// The single ctor is inline in moduleInfo.h (it must reference ExportThunk +
-// BindTail). Only the dtor lives out-of-line.
 ibRuntimeModuleDataObject::~ibRuntimeModuleDataObject()
 {
 	// Drop this descriptor's bytecode from the process-wide registry.
@@ -37,35 +35,10 @@ std::shared_ptr<ibProcUnit> ibRuntimeModuleDataObject::GetProcUnit() const
 #include "backend/session/session.h"                              // ibSession::EditModuleManagerFor — where they run
 #include "backend/moduleManager/moduleManager.h"                  // FindSharedModule — an event handler's module
 
-// A module value's method, a job, an owner's event, a manager's, an event handler: every call into a module
-// comes through here, so a privileged module's window is opened in one place and no road can miss it. For
-// the whole call, and for everything the call runs: nested windows compose, and Await pauses this one while
-// a question is open (ibSessionTrustPause). The flag is read off the module at the call, not copied anywhere.
-bool ibRuntimeModuleDataObject::ExecAsProc(const ibString& strMethodName,
-	ibValue** paParams, const long lSizeArray) const
-{
-	const std::shared_ptr<ibProcUnit> pu = GetProcUnit();
-	if (!pu)
-		return false;
-	const ibValueMetaObjectModuleBase* const module = GetMetaForCompile();
-	const ibAccessTrustScope trusted(module != nullptr && module->IsPrivilegedModule() ? ibSession::Current() : nullptr);
-	return pu->CallAsProc(strMethodName, paParams, lSizeArray);
-}
-
-bool ibRuntimeModuleDataObject::ExecAsFunc(const ibString& strMethodName,
-	ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray) const
-{
-	const std::shared_ptr<ibProcUnit> pu = GetProcUnit();
-	if (!pu)
-		return false;
-	const ibValueMetaObjectModuleBase* const module = GetMetaForCompile();
-	const ibAccessTrustScope trusted(module != nullptr && module->IsPrivilegedModule() ? ibSession::Current() : nullptr);
-	return pu->CallAsFunc(strMethodName, pvarRetValue, paParams, lSizeArray);
-}
-
-void ibRuntimeModuleDataObject::ExecEventHandlers(const ibMetaData* metaData, const ibValue* source,
+void ibRuntimeModuleDataObject::ExecEventHandlers(const ibValueMetaObjectModuleBase* module, const ibValue* source,
 	const ibString& strEventName, ibValue** paParams, const long lSizeArray)
 {
+	const ibMetaData* const metaData = module != nullptr ? module->GetMetaData() : nullptr;
 	if (metaData == nullptr || source == nullptr)
 		return;
 	const std::vector<ibValueMetaObjectEventHandler*> handlers =
@@ -100,20 +73,9 @@ void ibRuntimeModuleDataObject::ExecEventHandlers(const ibMetaData* metaData, co
 	params.insert(params.end(), paParams, paParams + lSizeArray);
 
 	for (const ibValueMetaObjectEventHandler* handler : taking) {
-		if (const ibRuntimeModuleDataObject* const unit = moduleManager->FindSharedModule(handler->GetHandlerModule()))
+		if (ibValueModuleManager::ibValueModuleUnit* const unit = moduleManager->FindSharedModule(handler->GetHandlerModule()))
 			unit->ExecAsProc(strEventName, params.data(), static_cast<long>(params.size()));
 	}
-}
-
-void ibRuntimeModuleDataObject::ExecAsEvent(const ibString& strEventName, ibValue** paParams, const long lSizeArray) const
-{
-	// The owner's own procedure first — what the event always did.
-	ExecAsProc(strEventName, paParams, lSizeArray);
-
-	// …then its event handlers, the runtime value this descriptor is a part of handed over as Source. The
-	// application is the owner's own, asked of the module it runs.
-	if (const ibValueMetaObjectModuleBase* const module = GetMetaForCompile())
-		ExecEventHandlers(module->GetMetaData(), GetRuntimeOwner(), strEventName, paParams, lSizeArray);
 }
 
 bool ibRuntimeModuleDataObject::ExecAsManagerEvent(const ibValueMetaObjectGenericData* metaObject, const ibString& strEventName,
@@ -129,14 +91,14 @@ bool ibRuntimeModuleDataObject::ExecAsManagerEvent(const ibValueMetaObjectGeneri
 	// root at all. Asked of the root, a job "ran" and did nothing.
 	const ibValueMetaObjectSharedModule* const module = metaObject->GetManagerModule();
 	const ibValueModuleManager* const moduleManager = module != nullptr ? ibSession::EditModuleManagerFor(metaData) : nullptr;
-	const ibRuntimeModuleDataObject* const unit = moduleManager != nullptr ? moduleManager->FindSharedModule(module) : nullptr;
+	ibValueModuleManager::ibValueModuleUnit* const unit = moduleManager != nullptr ? moduleManager->FindSharedModule(module) : nullptr;
 	if (unit == nullptr)
 		return false;
 	unit->ExecAsProc(strEventName, paParams, lSizeArray);
 
 	// …then its event handlers, the manager itself handed over as Source.
 	const ibValuePtr<ibValueManagerDataObject> manager = metaObject->CreateManagerDataObjectValue();
-	ExecEventHandlers(metaData, manager, strEventName, paParams, lSizeArray);
+	ExecEventHandlers(module, manager, strEventName, paParams, lSizeArray);
 	return true;
 }
 
@@ -172,10 +134,6 @@ std::unique_ptr<ibCompileModule> ibRuntimeModuleDataObject::CreateCompiler() con
 	return std::make_unique<ibCompileModule>(meta, *m_binds, m_parent != nullptr ? m_parent->CreateCompiler() : nullptr);
 }
 
-// See header. Append the EXPORT bindings as eProcUnit-aliased props so member
-// access (ThisForm.Controls / ThisObject.RegisterRecords) resolves them via the
-// descriptor's ProcUnit, exactly like ExportNamesToHelper does for module
-// exports. Context binds are the self-handles — skipped (no ThisForm.ThisForm).
 // THE NAMES A MODULE EXPORTS, AND THE TWO PLACES THEY COME FROM.
 //
 // ⭐⭐ THE DESIGNER HAS NO RUNTIME, so it cannot be asked for bytecode — and bytecode is the only
@@ -192,7 +150,7 @@ std::unique_ptr<ibCompileModule> ibRuntimeModuleDataObject::CreateCompiler() con
 // nothing, so there a name read off the text is a promise it can keep. Asked the same way by the
 // neighbour in this class: Compile() steps aside on appData->DesignerMode().
 static void ibExportNamesFromText(const ibValueMetaObjectModuleBase* moduleObject,
-	ibValue::ibMemberTable* helper, long alias, bool methods)
+	ibValue::ibMemberTable* helper, bool methods)
 {
 	if (moduleObject == nullptr)
 		return;
@@ -220,23 +178,23 @@ static void ibExportNamesFromText(const ibValueMetaObjectModuleBase* moduleObjec
 			const ibString signature = ibModuleCallForm(element);
 
 			if (element.m_eType == eExportFunction)
-				helper->AppendFunc(element.m_name, element.ParamCount(), signature, ibNOT_FOUND, alias);
+				helper->AppendFunc(element.m_name, element.ParamCount(), signature);
 			else if (element.m_eType == eExportProcedure)
-				helper->AppendProc(element.m_name, element.ParamCount(), signature, ibNOT_FOUND, alias);
+				helper->AppendProc(element.m_name, element.ParamCount(), signature);
 		}
 		else if (element.m_eType == eExportVariable) {
-			helper->AppendProp(element.m_name, ibNOT_FOUND, alias);
+			helper->AppendProp(element.m_name);
 		}
 	}
 }
 
-void ibRuntimeModuleDataObject::ExportMethodsToHelper(ibValue::ibMemberTable* helper, long alias) const
+void ibRuntimeModuleDataObject::ExportMethodsToHelper(ibValue::ibMemberTable* helper) const
 {
 	if (helper == nullptr)
 		return;
 
 	if (appData->DesignerMode()) {
-		ibExportNamesFromText(GetMetaObject(), helper, alias, /*methods*/ true);
+		ibExportNamesFromText(GetMetaObject(), helper, /*methods*/ true);
 		return;
 	}
 
@@ -245,7 +203,9 @@ void ibRuntimeModuleDataObject::ExportMethodsToHelper(ibValue::ibMemberTable* he
 	const ibByteCode* bc = pu->GetByteCode();
 	if (bc == nullptr) return;
 	for (const auto& fn : bc->m_listFunc) {
-		if (!fn.IsExport()) continue;
+		// The module's own, public or not (IsMethodScoped tells them apart); a lambda or a context's method
+		// is not the module's.
+		if (fn.IsLambda() || fn.IsContextMethod()) continue;
 
 		// ⭐ THE SAME CALL FORM THE TEXT ROAD WRITES, spelled from the bytecode's own parameter
 		// records — the names travel there too (ibByteParam::m_strName), and this passed an empty
@@ -277,17 +237,17 @@ void ibRuntimeModuleDataObject::ExportMethodsToHelper(ibValue::ibMemberTable* he
 			bc->GetNParams(fn),
 			bc->HasRetVal(fn),
 			(long)fn,
-			alias);
+			ibNOT_FOUND);
 	}
 }
 
-void ibRuntimeModuleDataObject::ExportPropsToHelper(ibValue::ibMemberTable* helper, long alias) const
+void ibRuntimeModuleDataObject::ExportPropsToHelper(ibValue::ibMemberTable* helper) const
 {
 	if (helper == nullptr)
 		return;
 
 	if (appData->DesignerMode()) {
-		ibExportNamesFromText(GetMetaObject(), helper, alias, /*methods*/ false);
+		ibExportNamesFromText(GetMetaObject(), helper, /*methods*/ false);
 		return;
 	}
 
@@ -296,37 +256,10 @@ void ibRuntimeModuleDataObject::ExportPropsToHelper(ibValue::ibMemberTable* help
 	const ibByteCode* bc = pu->GetByteCode();
 	if (bc == nullptr) return;
 	for (const auto& v : bc->m_listVar) {
-		if (!v.IsExport()) continue;
-		helper->AppendProp(v.m_strRealName, v, alias);
+		// The module's own, public or not (IsPropScoped tells them apart); a binding is not the module's.
+		if (!v.IsExport() && !v.IsLocal() && !v.IsProtected()) continue;
+		helper->AppendProp(v.m_strRealName, v);
 	}
-}
-
-void ibRuntimeModuleDataObject::FillHelperFromBinds(ibValue::ibMemberTable* helper, long alias) const
-{
-	if (helper == nullptr) return;
-	for (const auto& kv : m_binds->m_listExternValue)
-		helper->AppendProp(kv.first, ibNOT_FOUND, alias);
-}
-
-ibValue* ibRuntimeModuleDataObject::GetBoundValue(const ibString& name) const
-{
-	auto it = m_binds->m_listExternValue.find(name);
-	return (it != m_binds->m_listExternValue.end()) ? it->second : nullptr;
-}
-
-bool ibRuntimeModuleDataObject::GetBoundValue(const ibString& name, ibValue& out) const
-{
-	// A slot that cannot be written must not answer true and leave `out` stale.
-	if (out.m_bReadOnly)
-		return false;
-	ibValue* bound = GetBoundValue(name);
-	if (bound == nullptr)
-		return false;
-	// Copy what the cell holds. When the cell is a reference, that copy is the
-	// object it points at: the document stays writable, a const reference stays
-	// const, and the cell itself (an embedded member, refcount 0) is not counted.
-	out = *bound;
-	return true;
 }
 
 // Named context variable — name VISIBLE in the editor (ThisObject / ThisForm).

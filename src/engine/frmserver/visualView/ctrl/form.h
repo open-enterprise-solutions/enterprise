@@ -48,7 +48,7 @@ class FRMSERVER_API ibValueForm :
 	// The form is the command SOURCE / ENTRY hop of the walk — the ibBackendCommandSender contract comes through
 	// ibBackendValueForm (server-side, so a headless caller can walk commands); ibValueForm IMPLEMENTS GetCommandByHop.
 	// …and a SOURCE over its own attributes (ibSourceDataObject): a hop is an attribute's id.
-	public ibValueFrame, public ibBackendValueForm, public ibRuntimeModuleDataObject, public ibSourceDataObject
+	public ibValueModuleDataObject<ibValueFrame>, public ibBackendValueForm, public ibSourceDataObject
 {
 public:
 
@@ -56,7 +56,6 @@ private:
 
 	enum {
 		eSystem = eSizerItem + 1,
-		eProcUnit = g_aliasExport,   // module exports go through the descriptor autobind
 		eAttribute,                  // controls-with-value: ThisForm.<controlName>
 		eFormAttribute               // form source attributes: ThisForm.<attrName>
 	};
@@ -180,7 +179,6 @@ public:
 
 	virtual bool CallAsProc(const long lMethodNum, ibValue** paParams, const long lSizeArray);
 	virtual bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray);
-	virtual bool GetParamDefValue(const long lMethodNum, const long lParamNum, ibValue& pvarParamDefValue) const override;
 
 	//****************************************************************************
 	//*                              Support form context                        *

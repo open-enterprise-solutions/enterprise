@@ -184,29 +184,9 @@ void ibValueRecordDataObjectChartOfAccounts::FillMethods(ibMemberTable& helper) 
 	helper.AppendProc(ibT("Unlock"), ibT("Unlock()"));
 }
 
-bool ibValueRecordDataObjectChartOfAccounts::SetPropVal(const long lPropNum, const ibValue& varPropVal)
-{
-	const long lPropAlias = m_members.GetPropAlias(lPropNum);
-	if (lPropAlias == eProcUnit) { if (m_procUnit != nullptr) return m_procUnit->SetPropVal(GetPropName(lPropNum), varPropVal); }
-	else if (lPropAlias == eProperty) return SetValueByMetaID(m_members.GetPropData(lPropNum), varPropVal);
-	return false;
-}
-
-bool ibValueRecordDataObjectChartOfAccounts::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
-{
-	const long lPropAlias = m_members.GetPropAlias(lPropNum);
-	if (lPropAlias == eProcUnit) { if (m_procUnit != nullptr) return m_procUnit->GetPropVal(GetPropName(lPropNum), pvarPropVal); }
-	else if (lPropAlias == eProperty || lPropAlias == eTable) {
-		const long lPropData = m_members.GetPropData(lPropNum);
-		if (m_metaObject->IsDataReference(lPropData)) { pvarPropVal = GetReference(); return true; }
-		return GetValueByMetaID(lPropData, pvarPropVal);
-	}
-	return false;
-}
-
 bool ibValueRecordDataObjectChartOfAccounts::CallAsProc(const long lMethodNum, ibValue** paParams, const long lSizeArray)
 {
-	switch (lMethodNum) {
+	switch (m_members.GetMethodData(lMethodNum, this, &ibValueRecordDataObjectChartOfAccounts::FillMethods)) {
 	case Func::enLock:   TryAcquireFormLock(); return true;
 	case Func::enUnlock: ReleaseFormLock();    return true;
 	}
@@ -215,7 +195,7 @@ bool ibValueRecordDataObjectChartOfAccounts::CallAsProc(const long lMethodNum, i
 
 bool ibValueRecordDataObjectChartOfAccounts::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray)
 {
-	switch (lMethodNum) {
+	switch (m_members.GetMethodData(lMethodNum, this, &ibValueRecordDataObjectChartOfAccounts::FillMethods)) {
 	case enIsNew: pvarRetValue = m_newObject; return true;
 	case enCopy: pvarRetValue = CopyObject(); return true;
 	case enFill: FillObject(*paParams[0]); return true;
@@ -229,5 +209,5 @@ bool ibValueRecordDataObjectChartOfAccounts::CallAsFunc(const long lMethodNum, i
 	case Func::enGetTemplate: pvarRetValue = m_metaObject->GetTemplate(paParams[0]->GetString()); return true;
 	case Func::enGetMetadata: pvarRetValue = m_metaObject; return true;
 	}
-	return ibRuntimeModuleDataObject::ExecAsFunc(GetMethodName(lMethodNum), pvarRetValue, paParams, lSizeArray);
+	return ibValueModuleDataObject::CallAsFunc(lMethodNum, pvarRetValue, paParams, lSizeArray);
 }

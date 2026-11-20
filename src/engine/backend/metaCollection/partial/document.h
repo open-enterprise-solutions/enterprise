@@ -230,16 +230,13 @@ class BACKEND_API ibValueRecordDataObjectDocument : public ibValueRecordDataObje
 	//****************************************************************************
 
 	// Document's own methods (bound in the ctor). Data members come from the base
-	// FillDataMembers. ThisObject.RegisterRecords is surfaced by the descriptor's
-	// ExportThunk tail-bind (moduleInfo.h), not by a contributor here.
+	// FillDataMembers. ThisObject.RegisterRecords is surfaced with the module's names
+	// (ibValueModuleDataObject::FillMembers, moduleInfo.h), not by a contributor here.
 	void FillMethods(ibMemberTable& helper) const;
 
 	//****************************************************************************
 	//*                              Override attribute                          *
 	//****************************************************************************
-
-	virtual bool SetPropVal(const long lPropNum, const ibValue& varPropVal);
-	virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal);
 
 	virtual bool CallAsProc(const long lMethodNum, ibValue** paParams, const long lSizeArray) override;
 	virtual bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray);

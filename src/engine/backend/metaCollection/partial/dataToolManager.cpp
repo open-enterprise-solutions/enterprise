@@ -30,8 +30,7 @@ void ibValueManagerDataObjectDataTool::FillManagerMethods(ibMemberTable& helper)
 
 bool ibValueManagerDataObjectDataTool::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray)
 {
-	// Our own ordinal, not the table index — ibValueManagerDataObject::BuiltinMethodNum says why.
-	switch (BuiltinMethodNum(lMethodNum))
+	switch (m_members.GetMethodData(lMethodNum, this, &ibValueManagerDataObjectDataTool::FillManagerMethods))
 	{
 	case eCreate:
 		pvarRetValue = m_metaObject->CreateObjectValue();

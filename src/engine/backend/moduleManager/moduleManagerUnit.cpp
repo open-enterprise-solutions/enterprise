@@ -20,8 +20,7 @@
 // its units stood outside the chain, so the editor's syntax check resolved no global
 // name in any shared module while the runtime compiled the same text without a word.
 ibValueModuleManager::ibValueModuleUnit::ibValueModuleUnit(ibValueModuleManager *moduleManager, ibValueMetaObjectModuleBase *moduleObject, bool managerModule) :
-	ibValueDynamicMembers(ibValueTypes::TYPE_VALUE, true),
-	ibRuntimeModuleDataObject(m_members, this, moduleObject),
+	ibValueModuleDataObject(moduleObject, ibValueTypes::TYPE_VALUE, true),
 	m_moduleObject(moduleObject)
 {
 	SetParent(moduleManager);
@@ -74,25 +73,4 @@ bool ibValueModuleRuntimeManager::ibValueRuntimeModuleUnit::DestroySharedModule(
 
 	m_procUnit.reset();
 	return true;
-}
-
-bool ibValueModuleManager::ibValueModuleUnit::CallAsProc(const long lMethodNum, ibValue** paParams, const long lSizeArray)
-{
-	return ibRuntimeModuleDataObject::ExecAsProc(
-		GetMethodName(lMethodNum), paParams, lSizeArray
-	);
-}
-
-bool ibValueModuleManager::ibValueModuleUnit::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray)
-{
-	return ibRuntimeModuleDataObject::ExecAsFunc(
-		GetMethodName(lMethodNum), pvarRetValue, paParams, lSizeArray
-	);
-}
-
-bool ibValueModuleManager::ibValueModuleUnit::GetParamDefValue(const long lMethodNum, const long lParamNum, ibValue& pvarParamDefValue) const
-{
-	return ibRuntimeModuleDataObject::GetParamDefValue(
-		GetMethodName(lMethodNum), lParamNum, pvarParamDefValue
-	);
 }

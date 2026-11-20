@@ -26,11 +26,9 @@
 // Begin/Commit + LockByKeys helpers it calls live in commonObjectRecordSetQuery.cpp.
 
 
-// 🛑 THIS ORDER IS THE CALL NUMBER, AND IT MUST MATCH FillMembers EXACTLY. A method is invoked by
-// its INDEX in the member table, so an enumerator out of step silently runs a different verb:
-// `Write` landed on Load, `Load` on Unload and `Unload` on Write. Posting any document crashed
-// (Write handed its bool to Load, which casts it to a table) and an Unload would have WRITTEN the
-// set. Found 2026-09-03 by posting a goods receipt from the sandbox.
+// 🛑 THIS ORDER IS FillMembers' ORDER. A row's data is its place on its binder's level (counted from 0 for each
+// binder), and CallAsFunc switches on it — so an enumerator out of step runs a different verb: `Write` landed on
+// Load, `Load` on Unload and `Unload` on Write (2026-09-03, posting a goods receipt from the sandbox).
 enum func
 {
 	eAdd = 0,
@@ -950,7 +948,7 @@ bool ibValueRecordSetObjectAccountingRegister::WriteRecordSet(bool replace, bool
 
 bool ibValueRecordSetObjectAccountingRegister::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray)
 {
-	switch (lMethodNum)
+	switch (m_members.GetMethodData(lMethodNum, this, &ibValueRecordSetObjectAccountingRegister::FillMembers))
 	{
 	case func::eAdd:
 		pvarRetValue = AppendPostingLine(this, GetAccountingMetaObject(), /*sideGiven*/ false, false);
@@ -997,5 +995,5 @@ bool ibValueRecordSetObjectAccountingRegister::CallAsFunc(const long lMethodNum,
 		return true;
 	}
 
-	return false;
+	return ibValueRecordSetObject::CallAsFunc(lMethodNum, pvarRetValue, paParams, lSizeArray);
 }

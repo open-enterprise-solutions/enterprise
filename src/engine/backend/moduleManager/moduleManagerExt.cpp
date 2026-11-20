@@ -554,8 +554,8 @@ bool ibValueModuleRuntimeManagerExternalReport::ExitMainModule(const ibRuntimeRe
 
 void ibValueModuleRuntimeManagerExternalDataTool::FillMembers(ibMemberTable& helper) const
 {
-	// Copy the external object value's surface; the module exports are appended after
-	// these (the helper's tail, autobound by the ibRuntimeModuleDataObject ctor).
+	// Copy the external object value's surface, after the module's names (bound first by
+	// ibValueModuleDataObject) — so a row here has another number in the object: it is asked by the name.
 	if (m_objectValue != nullptr) {
 		ibMemberTable* methodHelper = m_objectValue->GetPMethods();
 		ibASSERT(methodHelper);
@@ -570,68 +570,34 @@ void ibValueModuleRuntimeManagerExternalDataTool::FillMembers(ibMemberTable& hel
 
 bool ibValueModuleRuntimeManagerExternalDataTool::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray)
 {
-	if (m_objectValue &&
-		m_objectValue->FindMethod(GetMethodName(lMethodNum)) != ibNOT_FOUND) {
-		return m_objectValue->CallAsFunc(lMethodNum, pvarRetValue, paParams, lSizeArray);
-	}
-
-	return ibRuntimeModuleDataObject::ExecAsFunc(
-		GetMethodName(lMethodNum), pvarRetValue, paParams, lSizeArray
-	);
+	const long lObjectNum = m_objectValue != nullptr ? m_objectValue->FindMethod(GetMethodName(lMethodNum)) : ibNOT_FOUND;
+	if (lObjectNum != ibNOT_FOUND)
+		return m_objectValue->CallAsFunc(lObjectNum, pvarRetValue, paParams, lSizeArray);
+	return ibValueModuleDataObject::CallAsFunc(lMethodNum, pvarRetValue, paParams, lSizeArray);
 }
 
 bool ibValueModuleRuntimeManagerExternalDataTool::GetParamDefValue(const long lMethodNum, const long lParamNum, ibValue& pvarParamDefValue) const
 {
-	if (m_objectValue &&
-		m_objectValue->FindMethod(GetMethodName(lMethodNum)) != ibNOT_FOUND) {
-		return m_objectValue->GetParamDefValue(lMethodNum, lParamNum, pvarParamDefValue);
-	}
-
-	return ibRuntimeModuleDataObject::GetParamDefValue(
-		GetMethodName(lMethodNum), lParamNum, pvarParamDefValue
-	);
+	const long lObjectNum = m_objectValue != nullptr ? m_objectValue->FindMethod(GetMethodName(lMethodNum)) : ibNOT_FOUND;
+	if (lObjectNum != ibNOT_FOUND)
+		return m_objectValue->GetParamDefValue(lObjectNum, lParamNum, pvarParamDefValue);
+	return ibValueModuleDataObject::GetParamDefValue(lMethodNum, lParamNum, pvarParamDefValue);
 }
 
 bool ibValueModuleRuntimeManagerExternalDataTool::SetPropVal(const long lPropNum, const ibValue& varPropVal)
 {
-	if (m_objectValue &&
-		m_objectValue->FindProp(GetPropName(lPropNum)) != ibNOT_FOUND) {
-		return m_objectValue->SetPropVal(lPropNum, varPropVal);
-	}
-
-	if (m_procUnit != nullptr) {
-		return m_procUnit->SetPropVal(lPropNum, varPropVal);
-	}
-
-	return false;
+	const long lObjectNum = m_objectValue != nullptr ? m_objectValue->FindProp(GetPropName(lPropNum)) : ibNOT_FOUND;
+	if (lObjectNum != ibNOT_FOUND)
+		return m_objectValue->SetPropVal(lObjectNum, varPropVal);
+	return ibValueModuleDataObject::SetPropVal(lPropNum, varPropVal);
 }
 
 bool ibValueModuleRuntimeManagerExternalDataTool::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 {
-	if (m_objectValue &&
-		m_objectValue->FindProp(GetPropName(lPropNum)) != ibNOT_FOUND) {
-		return m_objectValue->GetPropVal(lPropNum, pvarPropVal);
-	}
-
-	if (m_procUnit != nullptr) {
-		return m_procUnit->GetPropVal(lPropNum, pvarPropVal);
-	}
-
-	return false;
-}
-
-long ibValueModuleRuntimeManagerExternalDataTool::FindProp(const ibString& strName) const
-{
-	if (m_objectValue &&
-		m_objectValue->FindProp(strName) != ibNOT_FOUND) {
-		return m_objectValue->FindProp(strName);
-	}
-
-	if (m_procUnit != nullptr) {
-		return m_procUnit->FindProp(strName);
-	}
-
-	return ibValue::FindProp(strName);
+	const long lObjectNum = m_objectValue != nullptr ? m_objectValue->FindProp(GetPropName(lPropNum)) : ibNOT_FOUND;
+	if (lObjectNum != ibNOT_FOUND)
+		return m_objectValue->GetPropVal(lObjectNum, pvarPropVal);
+	return ibValueModuleDataObject::GetPropVal(lPropNum, pvarPropVal);
 }
 
 //****************************************************************************
@@ -640,8 +606,8 @@ long ibValueModuleRuntimeManagerExternalDataTool::FindProp(const ibString& strNa
 
 void ibValueModuleRuntimeManagerExternalReport::FillMembers(ibMemberTable& helper) const
 {
-	// Copy the external object value's surface; the module exports are appended after
-	// these (the helper's tail, autobound by the ibRuntimeModuleDataObject ctor).
+	// Copy the external object value's surface, after the module's names (bound first by
+	// ibValueModuleDataObject) — so a row here has another number in the object: it is asked by the name.
 	if (m_objectValue != nullptr) {
 		ibMemberTable* methodHelper = m_objectValue->GetPMethods();
 		ibASSERT(methodHelper);
@@ -656,68 +622,34 @@ void ibValueModuleRuntimeManagerExternalReport::FillMembers(ibMemberTable& helpe
 
 bool ibValueModuleRuntimeManagerExternalReport::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray)
 {
-	if (m_objectValue &&
-		m_objectValue->FindMethod(GetMethodName(lMethodNum)) != ibNOT_FOUND) {
-		return m_objectValue->CallAsFunc(lMethodNum, pvarRetValue, paParams, lSizeArray);
-	}
-
-	return ibRuntimeModuleDataObject::ExecAsFunc(
-		GetMethodName(lMethodNum), pvarRetValue, paParams, lSizeArray
-	);
+	const long lObjectNum = m_objectValue != nullptr ? m_objectValue->FindMethod(GetMethodName(lMethodNum)) : ibNOT_FOUND;
+	if (lObjectNum != ibNOT_FOUND)
+		return m_objectValue->CallAsFunc(lObjectNum, pvarRetValue, paParams, lSizeArray);
+	return ibValueModuleDataObject::CallAsFunc(lMethodNum, pvarRetValue, paParams, lSizeArray);
 }
 
 bool ibValueModuleRuntimeManagerExternalReport::GetParamDefValue(const long lMethodNum, const long lParamNum, ibValue& pvarParamDefValue) const
 {
-	if (m_objectValue &&
-		m_objectValue->FindMethod(GetMethodName(lMethodNum)) != ibNOT_FOUND) {
-		return m_objectValue->GetParamDefValue(lMethodNum, lParamNum, pvarParamDefValue);
-	}
-
-	return ibRuntimeModuleDataObject::GetParamDefValue(
-		GetMethodName(lMethodNum), lParamNum, pvarParamDefValue
-	);
+	const long lObjectNum = m_objectValue != nullptr ? m_objectValue->FindMethod(GetMethodName(lMethodNum)) : ibNOT_FOUND;
+	if (lObjectNum != ibNOT_FOUND)
+		return m_objectValue->GetParamDefValue(lObjectNum, lParamNum, pvarParamDefValue);
+	return ibValueModuleDataObject::GetParamDefValue(lMethodNum, lParamNum, pvarParamDefValue);
 }
 
 bool ibValueModuleRuntimeManagerExternalReport::SetPropVal(const long lPropNum, const ibValue& varPropVal)        //setting attribute
 {
-	if (m_objectValue &&
-		m_objectValue->FindProp(GetPropName(lPropNum)) != ibNOT_FOUND) {
-		return m_objectValue->SetPropVal(lPropNum, varPropVal);
-	}
-
-	if (m_procUnit != nullptr) {
-		return m_procUnit->SetPropVal(lPropNum, varPropVal);
-	}
-
-	return false;
+	const long lObjectNum = m_objectValue != nullptr ? m_objectValue->FindProp(GetPropName(lPropNum)) : ibNOT_FOUND;
+	if (lObjectNum != ibNOT_FOUND)
+		return m_objectValue->SetPropVal(lObjectNum, varPropVal);
+	return ibValueModuleDataObject::SetPropVal(lPropNum, varPropVal);
 }
 
 bool ibValueModuleRuntimeManagerExternalReport::GetPropVal(const long lPropNum, ibValue& pvarPropVal)                   //attribute value
 {
-	if (m_objectValue &&
-		m_objectValue->FindProp(GetPropName(lPropNum)) != ibNOT_FOUND) {
-		return m_objectValue->GetPropVal(lPropNum, pvarPropVal);
-	}
-
-	if (m_procUnit != nullptr) {
-		return m_procUnit->GetPropVal(lPropNum, pvarPropVal);
-	}
-
-	return false;
-}
-
-long ibValueModuleRuntimeManagerExternalReport::FindProp(const ibString& strName) const
-{
-	if (m_objectValue &&
-		m_objectValue->FindProp(strName) != ibNOT_FOUND) {
-		return m_objectValue->FindProp(strName);
-	}
-
-	if (m_procUnit != nullptr) {
-		return m_procUnit->FindProp(strName);
-	}
-
-	return ibValue::FindProp(strName);
+	const long lObjectNum = m_objectValue != nullptr ? m_objectValue->FindProp(GetPropName(lPropNum)) : ibNOT_FOUND;
+	if (lObjectNum != ibNOT_FOUND)
+		return m_objectValue->GetPropVal(lObjectNum, pvarPropVal);
+	return ibValueModuleDataObject::GetPropVal(lPropNum, pvarPropVal);
 }
 
 //**********************************************************************

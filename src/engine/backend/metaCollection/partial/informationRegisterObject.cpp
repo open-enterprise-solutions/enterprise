@@ -240,11 +240,9 @@ enum recordManager
 	enGetMetadataRecordManager
 };
 
-// 🛑 THIS ORDER IS THE CALL NUMBER, AND IT MUST MATCH FillMembers EXACTLY. A method is invoked by
-// its INDEX in the member table, so an enumerator out of step silently runs a different verb:
-// `Write` landed on Load, `Load` on Unload and `Unload` on Write. Posting any document crashed
-// (Write handed its bool to Load, which casts it to a table) and an Unload would have WRITTEN the
-// set. Found 2026-09-03 by posting a goods receipt from the sandbox.
+// 🛑 THIS ORDER IS FillMembers' ORDER. A row's data is its place on its binder's level (counted from 0 for each
+// binder), and CallAsFunc switches on it — so an enumerator out of step runs a different verb: `Write` landed on
+// Load, `Load` on Unload and `Unload` on Write (2026-09-03, posting a goods receipt from the sandbox).
 enum recordSet
 {
 	enAdd = 0,
@@ -345,7 +343,7 @@ bool ibValueRecordSetObjectInformationRegister::CallAsFunc(const long lMethodNum
 	const ibMetaData* metaData = m_metaObject->GetMetaData();
 	ibASSERT(metaData);
 
-	switch (lMethodNum)
+	switch (m_members.GetMethodData(lMethodNum, this, &ibValueRecordSetObjectInformationRegister::FillMembers))
 	{
 	case recordSet::enAdd:
 		pvarRetValue = new ibValueRecordSetObjectRegisterReturnLine(this, GetItem(AppendRow()));
@@ -386,7 +384,7 @@ bool ibValueRecordSetObjectInformationRegister::CallAsFunc(const long lMethodNum
 		return true;
 	}
 
-	return false;
+	return ibValueRecordSetObject::CallAsFunc(lMethodNum, pvarRetValue, paParams, lSizeArray);
 }
 
 bool ibValueRecordManagerObjectInformationRegister::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray)

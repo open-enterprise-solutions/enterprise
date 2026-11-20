@@ -225,9 +225,8 @@ public:
 			//
 			//   m_lData  — a METAID (SetValueByMetaID / IsDataReference read it).
 			//              Full width, stays.
-			//   m_lAlias — a small tag: eProcUnit / eProperty / eTable, the largest
-			//              being g_aliasExport = 1000. Sixteen bits with room to
-			//              spare.
+			//   m_lAlias — a small tag a class marks its own rows with (eProperty /
+			//              eTable / …). Sixteen bits with room to spare.
 			//
 			// One type serving both is why narrowing the flags alone bought nothing
 			// earlier: the saving vanished into the field beside it. Ordered wide to
@@ -237,6 +236,8 @@ public:
 			long     m_lData;
 			int16_t  m_lAlias;
 			uint8_t  m_flags = eProp_Readable | eProp_Writable;
+			// The level of the binder that appended it (GetBinderLevel); ibNOT_FOUND on a table filled by hand.
+			int8_t   m_level = ibNOT_FOUND;
 		};
 
 		// Bit-flags for method capabilities — counterpart to ibPropFlags.
@@ -278,6 +279,8 @@ public:
 			int16_t  m_lAlias = ibNOT_FOUND;
 			int8_t   m_paramCount = 0;
 			uint8_t  m_flags = 0;
+			// The level of the binder that appended it (GetBinderLevel); ibNOT_FOUND on a table filled by hand.
+			int8_t   m_level = ibNOT_FOUND;
 			// ⭐ THE NAME AS A NUMBER (NameHash) — what a call the compiler stamped with this method's number asks,
 			// so that an interpreted call compares two integers and not two names (OPER_CALL_METHOD).
 			uint32_t m_nameHash = 0;
@@ -320,15 +323,12 @@ public:
 			const ibValue* m_ctx = nullptr;     // free-fn ctx, or the member-fn target value
 			ibNameBinder   m_freeFn = nullptr;  // exactly one of m_freeFn / m_memberFn is set
 			ibNameFiller   m_memberFn = nullptr;
-			bool           m_tail = false;      // run AFTER all non-tail binders (module exports must
-			                                    // follow the class's fixed methods so index-based
-			                                    // CallAsFunc dispatch keeps IsNew=0…); set by BindTail.
+			int8_t         m_level = ibNOT_FOUND;   // its place in bind order (AddBinder) — not part of its identity
 			bool operator==(const ibBoundNames& o) const {
-				return m_ctx == o.m_ctx && m_freeFn == o.m_freeFn && m_memberFn == o.m_memberFn && m_tail == o.m_tail;
+				return m_ctx == o.m_ctx && m_freeFn == o.m_freeFn && m_memberFn == o.m_memberFn;
 			}
 		};
-		// Contributors, invoked by Build() in bind order — EXCEPT tail-flagged ones,
-		// which Build() runs last (a descriptor's module exports).
+		// Contributors, invoked by Build() in bind order — the base's first, as its ctor runs first.
 		//
 		// ONE SLOT INLINE, and the vector only past it. Measured shape of the list:
 		// every ctor binds exactly once, so a value has ONE contributor; a derived
@@ -347,9 +347,15 @@ public:
 		ibBoundNames m_binder0;
 		std::vector<ibBoundNames> m_binders;   // overflow only — entries 2..N
 		uint8_t m_binderCount = 0;
+		// The binder Build is running: its level goes on every row it appends, and the data a method appended
+		// without one carries is its place on that level, from 0 for each binder — so a class switches on its own
+		// enum whatever the binders before it added.
+		int8_t m_binderLevel = ibNOT_FOUND;
+		long m_lBinderMethods = 0;
 
 		// The ONE place that knows the storage is split. Everything else asks.
-		void AddBinder(const ibBoundNames& b) {
+		void AddBinder(ibBoundNames b) {
+			b.m_level = (int8_t)m_binderCount;
 			if (m_binderCount == 0) m_binder0 = b;
 			else                    m_binders.push_back(b);
 			++m_binderCount;
@@ -501,6 +507,7 @@ public:
 			m_ctors.reset();
 			m_props.clear();
 			m_methods.clear();
+			m_lBinderMethods = 0;
 			MarkPropDirty(); MarkMethodDirty();
 		}
 	public:
@@ -509,7 +516,9 @@ public:
 		// Free contributor (type-invariant / Shared). Idempotent BindOnce lets a
 		// base and a derived each register their own with no guard flag.
 		void Bind(ibNameBinder fn, const ibValue* ctx = nullptr) {
-			AddBinder(ibBoundNames{ ctx, fn, nullptr });
+			const ibBoundNames b{ ctx, fn, nullptr };
+			ibASSERT_MSG(!HasBinder(b), ibT("a contributor bound twice: its rows go in twice and GetBinderLevel answers one of the two levels - BindOnce is for a contributor a base and a derived both register"));
+			AddBinder(b);
 		}
 		void BindOnce(ibNameBinder fn, const ibValue* ctx = nullptr) {
 			const ibBoundNames b{ ctx, fn, nullptr };
@@ -544,7 +553,9 @@ public:
 		void Bind(const C* obj, void (M::*fn)(ibMemberTable&) const) {
 			ibASSERT_MSG(static_cast<const void*>(static_cast<const ibValue*>(obj)) == static_cast<const void*>(obj),
 				ibT("ibValue must be the FIRST base (offset 0) of a member-binding class - see PROJECT INVARIANT above; make the ibValue-holding base first"));
-			AddBinder(ibBoundNames{ static_cast<const ibValue*>(obj), nullptr, static_cast<ibNameFiller>(fn) });
+			const ibBoundNames b{ static_cast<const ibValue*>(obj), nullptr, static_cast<ibNameFiller>(fn) };
+			ibASSERT_MSG(!HasBinder(b), ibT("a filler bound twice: its rows go in twice and GetBinderLevel answers one of the two levels"));
+			AddBinder(b);
 		}
 		template<class C, class M>
 			requires std::derived_from<C, M> && std::derived_from<M, ibValue>
@@ -552,17 +563,18 @@ public:
 			const ibBoundNames b{ static_cast<const ibValue*>(obj), nullptr, static_cast<ibNameFiller>(fn) };
 			RemoveBinderIf([&b](const ibBoundNames& e) { return e == b; });
 		}
-		// Tail contributor — Build() runs it AFTER every non-tail binder, so its entries
-		// land at the END of the surface regardless of bind order. Used for a
-		// descriptor's module exports: they must follow the class's fixed methods
-		// (index-based CallAsFunc). Set by the ibRuntimeModuleDataObject ctor. Only one
-		// tail is expected; replace any existing one so a re-bind stays idempotent.
-		void BindTail(ibNameBinder fn, const ibValue* ctx = nullptr) {
-			RemoveBinderIf([](const ibBoundNames& b) { return b.m_tail; });
-			AddBinder(ibBoundNames{ ctx, fn, nullptr, /*tail=*/true });
-		}
 		bool HasBinders() const {
 			return m_binderCount > 0;
+		}
+		// The level of a member contributor — its place in bind order; ibNOT_FOUND when it is not bound. What a row's
+		// GetMethodLevel / GetPropLevel is compared with to know the row is that contributor's.
+		template<class C, class M>
+			requires std::derived_from<C, M> && std::derived_from<M, ibValue>
+		long GetBinderLevel(const C* obj, void (M::*fn)(ibMemberTable&) const) const {
+			const ibBoundNames b{ static_cast<const ibValue*>(obj), nullptr, static_cast<ibNameFiller>(fn) };
+			long level = ibNOT_FOUND;
+			ForEachBinder([&b, &level](const ibBoundNames& e) { if (e == b) level = e.m_level; });
+			return level;
 		}
 		// Rebuild the name surface from the bound contributors, in bind order.
 		// No-op when nothing is bound, so it is SAFE on a helper still populated
@@ -745,6 +757,7 @@ public:
 			//	return std::distance(m_props.begin(), iterator);
 
 			m_props.emplace_back(strPropName, flags, lPropAlias, lPropNum);
+			m_props.back().m_level = m_binderLevel;
 			MarkPropDirty();
 			return m_props.size();
 		}
@@ -752,6 +765,7 @@ public:
 		void CopyProp(const ibMemberTable* src, const long lPropNum) {
 			if (lPropNum < src->GetNProps()) {
 				m_props.push_back(src->m_props[lPropNum]);
+				m_props.back().m_level = m_binderLevel;
 				MarkPropDirty();
 			}
 		}
@@ -783,6 +797,12 @@ public:
 			if (lPropNum < 0 || lPropNum >= GetNProps())
 				return s_absent;
 			return m_props[lPropNum].m_fieldName;
+		}
+
+		long GetPropLevel(const long lPropNum) const {
+			if (lPropNum < 0 || lPropNum >= GetNProps())
+				return ibNOT_FOUND;
+			return m_props[lPropNum].m_level;
 		}
 
 		long GetPropAlias(const long lPropNum) const {
@@ -822,20 +842,20 @@ public:
 
 		///////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-		inline long AppendProc(const ibString& strMethodName) { return AppendMethod(strMethodName, ibEmptyString, 0, false, ibNOT_FOUND, ibNOT_FOUND); }
-		inline long AppendProc(const ibString& strMethodName, const ibString& strHelper) { return AppendMethod(strMethodName, strHelper, 0, false, ibNOT_FOUND, ibNOT_FOUND); }
+		inline long AppendProc(const ibString& strMethodName) { return AppendMethod(strMethodName, ibEmptyString, 0, false, m_lBinderMethods, ibNOT_FOUND); }
+		inline long AppendProc(const ibString& strMethodName, const ibString& strHelper) { return AppendMethod(strMethodName, strHelper, 0, false, m_lBinderMethods, ibNOT_FOUND); }
 		inline long AppendProc(const ibString& strMethodName, const ibString& strHelper, const long lMethodNum, const long lMethodAlias) { return AppendMethod(strMethodName, strHelper, 0, false, lMethodNum, lMethodAlias); }
 		inline long AppendProc(const ibString& strMethodName, const ibString& strHelper, const long paramCount, const long lMethodNum, const long lMethodAlias) { return AppendMethod(strMethodName, strHelper, paramCount, false, lMethodNum, lMethodAlias); }
-		inline long AppendProc(const ibString& strMethodName, const long paramCount, const ibString& strHelper) { return AppendMethod(strMethodName, strHelper, paramCount, false, ibNOT_FOUND, ibNOT_FOUND); }
+		inline long AppendProc(const ibString& strMethodName, const long paramCount, const ibString& strHelper) { return AppendMethod(strMethodName, strHelper, paramCount, false, m_lBinderMethods, ibNOT_FOUND); }
 		inline long AppendProc(const ibString& strMethodName, const long paramCount, const ibString& strHelper, const long lMethodNum) { return AppendMethod(strMethodName, strHelper, paramCount, false, lMethodNum, ibNOT_FOUND); }
 		inline long AppendProc(const ibString& strMethodName, const long paramCount, const ibString& strHelper, const long lMethodNum, const long lMethodAlias) { return AppendMethod(strMethodName, strHelper, paramCount, false, lMethodNum, lMethodAlias); }
 
-		inline long AppendFunc(const ibString& strMethodName) { return AppendMethod(strMethodName, ibEmptyString, 0, true, ibNOT_FOUND, ibNOT_FOUND); }
-		inline long AppendFunc(const ibString& strMethodName, const ibString& strHelper) { return AppendMethod(strMethodName, strHelper, 0, true, ibNOT_FOUND, ibNOT_FOUND); }
-		inline long AppendFunc(const ibString& strMethodName, const long paramCount, const ibString& strHelper) { return AppendMethod(strMethodName, strHelper, paramCount, true, ibNOT_FOUND, ibNOT_FOUND); }
+		inline long AppendFunc(const ibString& strMethodName) { return AppendMethod(strMethodName, ibEmptyString, 0, true, m_lBinderMethods, ibNOT_FOUND); }
+		inline long AppendFunc(const ibString& strMethodName, const ibString& strHelper) { return AppendMethod(strMethodName, strHelper, 0, true, m_lBinderMethods, ibNOT_FOUND); }
+		inline long AppendFunc(const ibString& strMethodName, const long paramCount, const ibString& strHelper) { return AppendMethod(strMethodName, strHelper, paramCount, true, m_lBinderMethods, ibNOT_FOUND); }
 		inline long AppendFunc(const ibString& strMethodName, const ibString& strHelper, const long lMethodNum, const long lMethodAlias) { return AppendMethod(strMethodName, strHelper, 0, true, lMethodNum, lMethodAlias); }
 		inline long AppendFunc(const ibString& strMethodName, const ibString& strHelper, const long paramCount, const long lMethodNum, const long lMethodAlias) { return AppendMethod(strMethodName, strHelper, paramCount, true, lMethodNum, lMethodAlias); }
-		inline long AppendFunc(const ibString& strMethodName, const long paramCount, const ibString& strHelper, const long lMethodAlias) { return AppendMethod(strMethodName, strHelper, paramCount, true, ibNOT_FOUND, lMethodAlias); }
+		inline long AppendFunc(const ibString& strMethodName, const long paramCount, const ibString& strHelper, const long lMethodAlias) { return AppendMethod(strMethodName, strHelper, paramCount, true, m_lBinderMethods, lMethodAlias); }
 		inline long AppendFunc(const ibString& strMethodName, const long paramCount, const ibString& strHelper, const long lMethodNum, const long lMethodAlias) { return AppendMethod(strMethodName, strHelper, paramCount, true, lMethodNum, lMethodAlias); }
 
 		inline long AppendMethod(const ibString& strMethodName, const long paramCount, bool hasRet, const long lMethodNum, const long lMethodAlias) { return AppendMethod(strMethodName, ibEmptyString, paramCount, hasRet, lMethodNum, lMethodAlias); }
@@ -848,6 +868,8 @@ public:
 			//	return std::distance(m_methods.begin(), iterator);
 
 			m_methods.emplace_back(strMethodName, strHelper, paramCount, hasRet, lMethodAlias, lMethodNum);
+			m_methods.back().m_level = m_binderLevel;
+			++m_lBinderMethods;
 			MarkMethodDirty();
 			return m_methods.size();
 		}
@@ -855,6 +877,7 @@ public:
 		void CopyMethod(const ibMemberTable* src, const long lMethodNum) {
 			if (lMethodNum < src->GetNMethods()) {
 				m_methods.push_back(src->m_methods[lMethodNum]);
+				m_methods.back().m_level = m_binderLevel;
 				MarkMethodDirty();
 			}
 		}
@@ -899,6 +922,12 @@ public:
 			return m_methods[lMethodNum].m_strHelper;
 		}
 
+		long GetMethodLevel(const long lMethodNum) const {
+			if (lMethodNum < 0 || lMethodNum >= GetNMethods())
+				return ibNOT_FOUND;
+			return m_methods[lMethodNum].m_level;
+		}
+
 		long GetMethodAlias(const long lMethodNum) const {
 			if (lMethodNum < 0 || lMethodNum >= GetNMethods())
 				return ibNOT_FOUND;
@@ -909,6 +938,15 @@ public:
 			if (lMethodNum < 0 || lMethodNum >= GetNMethods())
 				return ibNOT_FOUND;
 			return m_methods[lMethodNum].m_lData;
+		}
+
+		// The row's data when that contributor appended it, ibNOT_FOUND for any other row — what a class switches
+		// on to answer its own methods and hand the rest to its base.
+		template<class C, class M>
+			requires std::derived_from<C, M> && std::derived_from<M, ibValue>
+		long GetMethodData(const long lMethodNum, const C* obj, void (M::*fn)(ibMemberTable&) const) const {
+			const long level = GetBinderLevel(obj, fn);
+			return level != ibNOT_FOUND && level == GetMethodLevel(lMethodNum) ? GetMethodData(lMethodNum) : ibNOT_FOUND;
 		}
 
 		bool HasRetVal(const long lMethodNum) const {
@@ -1432,6 +1470,9 @@ public:
 	/// Is property scope-local (bc-local — invisible to children
 	/// through cross-bc resolution; ThisObject / ThisForm / etc.)?
 	BACKEND_API virtual bool IsPropScoped(const long lPropNum) const;
+
+	/// Is method scope-local — seen inside its module, not through the dot? Symmetric with IsPropScoped.
+	BACKEND_API virtual bool IsMethodScoped(const long lMethodNum) const;
 
 	/// Returns number of component methods
 	/**

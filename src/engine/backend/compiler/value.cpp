@@ -423,6 +423,16 @@ bool ibValue::IsPropScoped(const long lPropNum) const
 	return false;
 }
 
+bool ibValue::IsMethodScoped(const long lMethodNum) const
+{
+	if (m_pRef != nullptr && IsReference())
+		return GetRef()->IsMethodScoped(lMethodNum);
+	ibMemberTable* const methodHelper = GetPMethods();
+	if (methodHelper != nullptr)
+		return methodHelper->IsMethodScoped(lMethodNum);
+	return false;
+}
+
 long ibValue::ibMemberTable::AppendProp(const ibString& strPropName, bool readable, bool writable, bool scoped, const long lPropNum, const long lPropAlias)
 {
 	const unsigned int flags =
@@ -534,13 +544,15 @@ void ibValue::ibMemberTable::Build()
 		return;
 	ClearHelper();
 	const auto run = [this](const ibBoundNames& b) {
+		m_binderLevel = b.m_level;
+		m_lBinderMethods = 0;
 		if (b.m_freeFn != nullptr)
 			b.m_freeFn(*this, b.m_ctx);
 		else if (b.m_memberFn != nullptr)
 			(b.m_ctx->*b.m_memberFn)(*this);
 	};
-	ForEachBinder([&run](const auto& b) { if (!b.m_tail) run(b); });
-	ForEachBinder([&run](const auto& b) { if (b.m_tail)  run(b); });   // module exports last — keeps fixed-method indices stable
+	ForEachBinder(run);
+	m_binderLevel = ibNOT_FOUND;
 	// Release — pairs with the acquire load in EnsureBuilt(), so any thread that sees
 	// kBuilt (fast path or the wait loop) also sees every m_props/m_methods write above.
 	m_buildState.store(kBuilt, std::memory_order_release);

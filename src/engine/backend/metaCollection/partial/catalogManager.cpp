@@ -33,9 +33,9 @@ enum Func {
 
 void ibValueManagerDataObjectCatalog::FillManagerMethods(ibMemberTable& helper) const
 {
-	// Composes after FillMembers (shared-module methods) + FillPredefined (props),
-	// bound earlier in the ctor chain. Order is load-bearing — CallAsFunc switches
-	// on the method index (eCreateItem = 0 …, relative to these appends).
+	// Composes after FillMembers (shared-module methods) + FillPredefined (props), bound earlier in the
+	// ctor chain. Order is load-bearing — a row's data is its place on this binder's level, and CallAsFunc
+	// switches on it (eCreateItem = 0 …).
 	helper.AppendFunc(ibT("CreateItem"), ibT("CreateItem()"));
 	helper.AppendFunc(ibT("CreateFolder"), ibT("CreateFolder()"));
 	helper.AppendFunc(ibT("Select"), ibT("Select()"));
@@ -52,8 +52,7 @@ void ibValueManagerDataObjectCatalog::FillManagerMethods(ibMemberTable& helper) 
 
 bool ibValueManagerDataObjectCatalog::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray)
 {
-	// Our own ordinal, not the table index — ibValueManagerDataObject::BuiltinMethodNum says why.
-	switch (BuiltinMethodNum(lMethodNum))
+	switch (m_members.GetMethodData(lMethodNum, this, &ibValueManagerDataObjectCatalog::FillManagerMethods))
 	{
 	case eCreateItem:
 		pvarRetValue = m_metaObject->CreateObjectValue(ibObjectMode::OBJECT_ITEM);

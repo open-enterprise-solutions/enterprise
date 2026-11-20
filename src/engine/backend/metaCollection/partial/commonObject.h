@@ -2029,21 +2029,22 @@ class BACKEND_API ibValueManagerObject : public ibValueDynamicMembers {
 class BACKEND_API ibValueManagerDataObject : public ibValueManagerObject {
 	public:
 
-	// Helper + NVI DoGetPMethods come from ibValueDynamicMembers. The surface is
-	// composed from member fillers bound along the ctor chain: this base contributes
-	// the manager module's methods (FillMembers surfaces them via the module's
-	// descriptor, ExportMethodsToHelper); subclasses add their own.
+	// Helper + NVI DoGetPMethods come from ibValueDynamicMembers. The base fills its own — the
+	// manager module's methods (FillMembers) — and each subclass binds its own verbs. The order is the
+	// base's: it binds first, and a subclass switches on the rows its own binder appended (GetMethodData with its
+	// filler).
 	ibValueManagerDataObject() : ibValueManagerObject() { m_members.Bind(this, &ibValueManagerDataObject::FillMembers); }
 	virtual ~ibValueManagerDataObject() {}
 
 	virtual const ibValueMetaObjectSharedModule* GetManagerModule() const = 0;
 	virtual const ibValueMetaObjectGenericData*  GetMetaObject()    const = 0;
 
-	void FillMembers(ibMemberTable& helper) const;       // manager-module methods (was PrepareNames)
-
 	virtual bool CallAsProc(const long lMethodNum, ibValue** paParams, const long lSizeArray);//method call
 	virtual bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray);//method call
 	virtual bool GetParamDefValue(const long lMethodNum, const long lParamNum, ibValue& pvarParamDefValue) const override;
+
+	// Scoped — a non-public method of the manager module: asked of the module, as a call is.
+	virtual bool IsMethodScoped(const long lMethodNum) const override;
 
 	//Get ref class
 	virtual ibClassID GetClassType() const;
@@ -2051,25 +2052,7 @@ class BACKEND_API ibValueManagerDataObject : public ibValueManagerObject {
 	virtual ibString GetClassName() const;
 	virtual ibString GetString() const;
 
-protected:
-
-	// 🛑 A TABLE INDEX IS NOT A VERB'S OWN NUMBER. The manager's surface is composed of two
-	// blocks — the manager MODULE's exported methods (contributed here) and the manager's own
-	// BUILT-IN verbs (contributed by the subclass) — and they share one numbering space. So a
-	// subclass that switches on the raw index is right only while the module declares nothing:
-	// declare one method in it and every built-in answers as its neighbour. Measured
-	// 2026-09-09 on a document manager whose module declared a single procedure:
-	// CreateDocument() returned a DocumentSelection, GetTemplate() an empty DocumentRef, and
-	// EmptyRef() walked off the end into Undefined. Silent wrong values, not refusals.
-	//
-	// The table already carries what is needed and nothing read it: every entry records WHO
-	// contributed it (alias) and ITS OWN number (data). This translates a table index into the
-	// subclass's own ordinal, and answers ibNOT_FOUND when the entry belongs to the module.
-	// The same shape ibValueTabularSectionDataObjectBase::CallAsFunc has always used.
-	//
-	// Counted rather than subtracted deliberately: an offset would encode WHICH BLOCK COMES
-	// FIRST, which is a fact about ctor binding order that nothing else in this file depends on.
-	long BuiltinMethodNum(const long lMethodNum) const;
+	void FillMembers(ibMemberTable& helper) const;
 };
 
 class BACKEND_API ibValueManagerDataObjectPredefined : public ibValueManagerDataObject {
@@ -2103,15 +2086,14 @@ class BACKEND_API ibValueManagerDataObjectPredefined : public ibValueManagerData
 
 //object with metaobject 
 #pragma region objects 
-class BACKEND_API ibValueRecordDataObject : public ibValueDynamicMembers, public ibStandardCommandSource,
-	public ibSourceDataObject, public ibValueDataObject, public ibRuntimeModuleDataObject {
+class BACKEND_API ibValueRecordDataObject : public ibValueModuleDataObject<ibValueDynamicMembers>, public ibStandardCommandSource,
+	public ibSourceDataObject, public ibValueDataObject {
 	public:
 protected:
 	enum helperAlias {
 		eSystem,
 		eProperty,
-		eTable,
-		eProcUnit = g_aliasExport   // module exports go through the descriptor autobind
+		eTable
 	};
 	enum helperProp {
 		eThisObject
@@ -2167,8 +2149,8 @@ public:
 	// own methods (methods and props are separate helper vectors, so bind order
 	// across them never shifts a method's dispatch index):
 	//  - FillDataMembers — the metaobject's attributes (eProperty) + tabular sections
-	//    (eTable) + data-object module exports (eProcUnit). Bound by the base ctor,
-	//    shared by every leaf. Attribute writability follows IsDataReference.
+	//    (eTable), after the module's names (ibValueModuleDataObject binds first). Bound by the
+	//    base ctor, shared by every leaf. Attribute writability follows IsDataReference.
 	//  - FillBaseMethods — the three fixed methods (GetFormObject/GetTemplate/
 	//    GetMetadata) for leaves with no API of their own (DataTool, Report);
 	//    they bind this. Leaves with their own method set (Catalog, Document, …)
@@ -2179,9 +2161,7 @@ public:
 	virtual bool SetPropVal(const long lPropNum, const ibValue& varPropVal) override;
 	virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal) override;
 
-	virtual bool CallAsProc(const long lMethodNum, ibValue** paParams, const long lSizeArray) override;
 	virtual bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray) override;
-	virtual bool GetParamDefValue(const long lMethodNum, const long lParamNum, ibValue& pvarParamDefValue) const override;
 
 	//check is empty
 	virtual bool IsEmpty() const override { return ibValue::IsEmpty(); }
@@ -2913,7 +2893,7 @@ protected:
 	ibRowMetaValues m_keyValues;
 };
 
-class BACKEND_API ibValueRecordSetObject : public ibValueModelStorage, public ibRuntimeModuleDataObject {
+class BACKEND_API ibValueRecordSetObject : public ibValueModuleDataObject<ibValueModelStorage> {
 	public:
 
 	// NOT transferable across sessions. Not because it is a table — a value table
@@ -2951,10 +2931,8 @@ class BACKEND_API ibValueRecordSetObject : public ibValueModelStorage, public ib
 	// back then a bound name reached the list but not its VALUE (Max, 2026-09-08: *"this is probably
 	// left over from when IntelliSense did not work"*). That is a symptom hidden, not a road built:
 	// the same gap silently affected every other bound name on a set. The tag is gone and the set now
-	// answers bound names the way a document already did — one road, and the list stopped saying
-	// `Filter` twice as a side effect rather than as a fix.
-	enum { eProcUnit = g_aliasExport };   // module exports + binds, appended by the descriptor autobind
-	virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal) override;
+	// answers bound names the way a document already did — one road, ibValueModuleDataObject's GetPropVal,
+	// and the list stopped saying `Filter` twice as a side effect rather than as a fix.
 
 	class ibValueRecordSetObjectRegisterColumnCollection : public ibValueModel::ibValueModelColumnCollection {
 	public:

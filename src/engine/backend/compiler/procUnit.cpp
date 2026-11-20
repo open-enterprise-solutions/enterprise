@@ -1571,7 +1571,9 @@ start_label:
 				const long lPropNum = variable1.FindProp(strPropName);
 				if (lPropNum < 0) RaiseMemberNotFound(variable1, strPropName);
 				if (!variable1.IsPropWritable(lPropNum)) Raise(ibScriptError_PropNotWritable, strPropName);
-				variable1.SetPropVal(lPropNum, GetValue(cvariable3));
+				// A module's own non-public variable is not seen through the dot; asked only of a refused write.
+				if (!variable1.SetPropVal(lPropNum, GetValue(cvariable3)) && variable1.IsPropScoped(lPropNum))
+					RaiseMemberNotFound(variable1, strPropName);
 				if (array1 == DEF_VAR_TEMP_MOVE)
 					variable1.Reset();   // the link before is let go — see OPER_GET_A
 			} break;
@@ -1597,6 +1599,9 @@ start_label:
 					*pRetValue = vRet;
 				else if (result)
 					CopyValue(*pRetValue, vRet);
+				// A module's own non-public variable is not seen through the dot; asked only of a refused read.
+				else if (variable2.IsPropScoped(lPropNum))
+					RaiseMemberNotFound(variable2, strPropName);
 				// ⭐ A LINK LETS GO OF THE LINK BEFORE when that one is an expression's temporary
 				// (compileContext.h, DEF_VAR_TEMP_MOVE) — read once, it carried the value here and nothing
 				// reads it again. It held the object until the frame ended, so `Excel.Workbooks.Count` kept
@@ -1643,8 +1648,13 @@ start_label:
 				uint32_t hash = 0;	// 0 = no answer: not stamped, or no such method there
 				if (lMethodNum >= 0)
 					pVariable2->GetMethodName(lMethodNum, &hash);
-				if (hash == 0 || hash != static_cast<uint32_t>(array4))
+				if (hash == 0 || hash != static_cast<uint32_t>(array4)) {
 					lMethodNum = pVariable2->FindMethod(funcName);
+					// A module's own non-public procedure is not seen through the dot. Asked here only: a
+					// number the compiler stamped is a context's method, and a scoped one is never pushed.
+					if (lMethodNum >= 0 && pVariable2->IsMethodScoped(lMethodNum))
+						lMethodNum = ibNOT_FOUND;
+				}
 
 				if (lMethodNum < 0)
 					RaiseMethodNotFound(variable2, funcName);

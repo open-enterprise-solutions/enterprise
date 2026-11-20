@@ -10,7 +10,6 @@
 
 #include "system/systemManager.h"
 #include "backend/session/session.h"       // GetCompileState — the code style lives there
-//#include "backend/moduleInfo.h"          // g_aliasExport — for the commented filter in PrepareModuleData (TODO there)
 #include "core/fiber/fiber.h"              // StackLow — expression nesting is native recursion
 
 // The mark a filter writes on a comparison (procUnitLambda.h, LINQ_THREE_VALUED_NULL).
@@ -243,15 +242,17 @@ void ibCompileCode::PrepareModuleData()
 
 		// adding variables from context
 		for (unsigned int i = 0; i < contextValue->GetNProps(); i++) {
+			// ⭐ A SCOPED ROW IS NOT A CONTEXT'S: it is a module's own non-public name, which that module sees
+			// itself and nobody sees through the dot.
+			if (contextValue->IsPropScoped(i))
+				continue;
 			const ibString& propName = contextValue->GetPropName(i);
-			// Skip the self-named prop (ThisForm exposes a "ThisForm"
-			// prop pointing at itself; ThisObject does the same). The
-			// binding entry from Pass 2 already owns this name as
-			// kind=Context with a real frame slot — pushing the
-			// self-prop here would overwrite that via PushVariable's
-			// insert_or_assign (Pass-2 entry lost → binder skips the
-			// slot at pre-flight → runtime reads garbage).
-			if (stringUtils::IsSameAs(propName, pair.first))
+			// ⭐ WHAT THE MODULE REGISTERED ITSELF (Pass 1, 1b, 2) IS NOT HIDDEN BY A CONTEXT. ThisObject / ThisForm is
+			// the module's reference to itself, so its table carries the module's export bindings (RegisterRecords,
+			// Controls) and itself (ThisForm.ThisForm). PushVariable replaces a same-named entry, and the module's own
+			// lost its frame slot (the binder skipped it at pre-flight, the runtime read garbage).
+			std::shared_ptr<ibCompileContext::ibVariable> registered;
+			if (mainContext->FindVariable(propName, registered) && !registered->IsContextProp())
 				continue;
 			mainContext->PushVariable(propName, pair.first, i);
 
@@ -264,19 +265,9 @@ void ibCompileCode::PrepareModuleData()
 		}
 
 		// add methods from context
-		// TODO(2026-10-30, open): A MODULE MEETS ITS OWN EXPORTS IN ITS CONTEXT — in the designer only. ThisObject /
-		// ThisForm is the module's own descriptor, and the descriptor hangs its module's Public methods on its member
-		// table (ExportThunk) for outside callers. At run time the module compiles before it has bytecode to offer them
-		// from; in the designer they are read off the text (ibExportNamesFromText), so SyntaxControl reports every
-		// Public procedure of an object module as "already defined". Filtering here by the descriptor's alias makes the
-		// compiler know moduleInfo's convention — the rule belongs to the descriptor, and where exactly is not decided
-		// yet. Kept commented, with its include above, until it is:
-		//
-		// const ibValue::ibMemberTable* const members = contextValue->GetPMethods();
-		// ...
-		//     if (members != nullptr && members->GetMethodAlias(i) == g_aliasExport)
-		//         continue;
 		for (unsigned int i = 0; i < contextValue->GetNMethods(); i++) {
+			if (contextValue->IsMethodScoped(i))
+				continue;
 			// define the number and type of the function
 			mainContext->PushFunction(
 				contextValue->GetMethodName(i), pair.first, contextValue->GetMethodHelper(i), i, contextValue->HasRetVal(i), contextValue->GetNParams(i));
@@ -923,7 +914,6 @@ bool ibCompileCode::CompileDeclaration(ibCompileContext* context)
 		ibString strRealName = ExpectIdentifier(true);
 		ibString strName = stringUtils::MakeUpper(strRealName);
 
-
 		int numParent = 0;
 		ibCompileContext* pCurContext = context;
 		while (pCurContext) {
@@ -944,8 +934,10 @@ bool ibCompileCode::CompileDeclaration(ibCompileContext* context)
 				[&strName](const auto& v) { return v && stringUtils::IsSameAs(strName, v->m_strRealName); });
 			if (existing != pCurContext->m_listVariable.end()) {
 				const auto& currentVariable = *existing;
-				if (currentVariable->IsPublic() ||
-					pCurContext->m_compileModule == this) {
+				// ⭐ An entry a context brought (a member of ThisObject, of the system API) is hidden by the
+				// declaration — AddVariable takes its place; only a declared name collides.
+				if (!currentVariable->IsContextProp() &&
+					(currentVariable->IsPublic() || pCurContext->m_compileModule == this)) {
 					Refuse(ibScriptError_DefVariable, strRealName);
 					return false;
 				}
@@ -1492,10 +1484,13 @@ bool ibCompileCode::CompileFunction(ibCompileContext* context)
 	// different methods, and the object's own declaration shadows the
 	// manager's export. The call inside this module sees this declaration.
 	// The highlight stays on the name (errorPlace is the token after it).
+	//
+	// ⭐ A FUNCTION A CONTEXT BROUGHT (a method of ThisObject, of the system API) IS HIDDEN by the declaration,
+	// which takes its place (the upsert below); only a declared function collides.
 	{
 		std::shared_ptr<ibCompileContext::ibFunction> foundedFunc = nullptr;
 		if (context->FindFunction(strFuncName, foundedFunc)) {
-			if (foundedFunc != createdFunction && foundedFunc->IsCrossBcVisible()) {
+			if (foundedFunc != createdFunction && foundedFunc->IsCrossBcVisible() && !foundedFunc->IsContextMethod()) {
 				m_numCurrentCompile = errorPlace;
 				Refuse(ibScriptError_DefFunction, strFuncRealName);
 				return false;

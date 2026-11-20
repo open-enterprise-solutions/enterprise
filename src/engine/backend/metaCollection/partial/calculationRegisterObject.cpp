@@ -7,15 +7,10 @@
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-// 🛑⭐⭐ THE ORDER HERE IS THE ORDER OF FillMembers BELOW, and nothing checks it. A method is called by
-// its INDEX in the member table, so a case label that sits one row off answers the wrong method. The
-// import had Load and Unload ahead of Write here while FillMembers declares Write first — so a
-// script's `rs.Write()` ran Load (casting its argument to a table: "Variable type does not support this
-// operation"), `Load(t)` ran Unload, and `Unload()` WROTE THE SET. MEASURED 2026-09-10 with a
-// first-chance exception stack: ThrowErrorTypeOperation <- ConvertToType<ibValueModel> <- this CallAsFunc.
-//
-// The accumulation register had this exact misordering at the snapshot the import was taken from
-// (2026-08-16) and was corrected on 2026-09-04 (0ace1d0c); this copy predates the correction.
+// 🛑 THIS ORDER IS FillMembers' ORDER. A row's data is its place on its binder's level (counted from 0 for each
+// binder), and CallAsFunc switches on it — so a case label one row off answers the wrong method: the import had
+// Load and Unload ahead of Write here, so a script's `rs.Write()` ran Load, `Load(t)` ran Unload, and `Unload()`
+// WROTE THE SET (2026-09-10).
 enum recordSet
 {
 	enAdd = 0,
@@ -167,7 +162,7 @@ bool ibValueRecordSetObjectCalculationRegister::CallAsFunc(const long lMethodNum
 	const ibMetaData* metaData = m_metaObject->GetMetaData();
 	ibASSERT(metaData);
 
-	switch (lMethodNum)
+	switch (m_members.GetMethodData(lMethodNum, this, &ibValueRecordSetObjectCalculationRegister::FillMembers))
 	{
 	case recordSet::enAdd:
 		pvarRetValue = new ibValueCalculationLine(this, GetItem(AppendRow()));
@@ -210,5 +205,5 @@ bool ibValueRecordSetObjectCalculationRegister::CallAsFunc(const long lMethodNum
 		return true;
 	}
 
-	return false;
+	return ibValueRecordSetObject::CallAsFunc(lMethodNum, pvarRetValue, paParams, lSizeArray);
 }

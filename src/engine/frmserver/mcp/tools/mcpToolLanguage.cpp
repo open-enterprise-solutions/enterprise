@@ -428,11 +428,9 @@ public:
 		std::vector<ibDataValue> methods;
 		for (long i = 0; i < value.GetNMethods(); i++) {
 
-			// (No scope filter on METHODS, matching what the editor does after a
-			//  dot: it drops scope-local PROPERTIES and lists every method. The
-			//  member table knows IsMethodScoped, but the value does not forward
-			//  it — and inventing a way round that would make this answer differ
-			//  from the one a person sees, which is the whole thing to avoid.)
+			// The same scope filter the editor applies after a dot, to methods as to properties.
+			if (value.IsMethodScoped(i))
+				continue;
 			std::shared_ptr<ibDataNode> entry = std::make_shared<ibDataNode>();
 			entry->SetValue(ibT("name"), value.GetMethodName(i));
 

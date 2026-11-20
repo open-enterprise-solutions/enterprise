@@ -277,7 +277,7 @@ public:
 		return m_propertyGlobalModule->GetValueAsBoolean();
 	}
 
-	// A call into it runs in the session's trusted window, checking no access (ibRuntimeModuleDataObject::ExecAsProc).
+	// A call into it runs in the session's trusted window, checking no access (ibValueModuleDataObject::ExecAsProc).
 	// Never a global module: that one is compiled into the application's module and called by bare name, past the
 	// door that opens the window.
 	virtual bool IsPrivilegedModule() const {

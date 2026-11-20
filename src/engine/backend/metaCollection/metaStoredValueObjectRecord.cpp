@@ -104,7 +104,7 @@ bool ibValueRecordDataObjectConstant::InitializeObject(const ibValueRecordDataOb
 }
 
 ibValueRecordDataObjectConstant::ibValueRecordDataObjectConstant(const ibValueMetaObjectStoredValue* metaObject)
-	: ibValueDynamicMembers(ibValueTypes::TYPE_EMPTY), ibRuntimeModuleDataObject(m_members, this),
+	: ibValueModuleDataObject(nullptr, ibValueTypes::TYPE_EMPTY),
 	m_objModified(false), m_metaObject(metaObject)
 {
 	// (No InitializeObject here — the creator runs it once the object is held; see CreateRecordDataObjectValue.)
@@ -232,33 +232,6 @@ bool ibValueRecordDataObjectConstant::GetValueByMetaID(const ibMetaID& id, ibVal
 	return false;
 }
 
-/////////////////////////////////////////////////////////////////////////////////////////////////////
-
-bool ibValueRecordDataObjectConstant::SetPropVal(const long lPropNum, const ibValue& varPropVal)
-{
-	const long lPropAlias = m_members.GetPropAlias(lPropNum);
-	if (lPropAlias == eProcUnit) {
-		if (m_procUnit != nullptr) {
-			return m_procUnit->SetPropVal(
-				GetPropName(lPropNum), varPropVal
-			);
-		}
-	}
-	return false;
-}
-
-bool ibValueRecordDataObjectConstant::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
-{
-	const long lPropAlias = m_members.GetPropAlias(lPropNum);
-	if (lPropAlias == eProcUnit) {
-		if (m_procUnit != nullptr) {
-			return m_procUnit->GetPropVal(
-				GetPropName(lPropNum), pvarPropVal
-			);
-		}
-	}
-	return false;
-}
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////
 

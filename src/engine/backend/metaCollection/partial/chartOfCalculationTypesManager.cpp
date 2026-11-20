@@ -49,9 +49,7 @@ void ibValueManagerDataObjectChartOfCalculationTypes::FillManagerMethods(ibMembe
 
 bool ibValueManagerDataObjectChartOfCalculationTypes::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray)
 {
-	// Our own ordinal, not the table index — ibValueManagerDataObject::BuiltinMethodNum says why. Imported
-	// from before 16e8324c (2026-09-09), which moved the other eleven managers here.
-	switch (BuiltinMethodNum(lMethodNum))
+	switch (m_members.GetMethodData(lMethodNum, this, &ibValueManagerDataObjectChartOfCalculationTypes::FillManagerMethods))
 	{
 	case eCreateCalculationType:
 		pvarRetValue = m_metaObject->CreateObjectValue(ibObjectMode::OBJECT_ITEM);

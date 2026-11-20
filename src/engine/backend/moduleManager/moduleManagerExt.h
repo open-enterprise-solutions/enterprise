@@ -34,8 +34,8 @@ class BACKEND_API ibValueModuleRuntimeManagerExternalDataTool : public ibValueMo
 	//exit shared module
 	virtual bool ExitMainModule(const ibRuntimeRequest& request = ibRuntimeRequest());
 
-	// Copies the external object value's surface; module exports follow as the
-	// helper's tail (descriptor autobind). Bound in the ctor (was PrepareNames).
+	// Copies the external object value's surface after the module's names (ibValueModuleDataObject binds
+	// first). Bound in the ctor.
 	void FillMembers(ibMemberTable& helper) const;
 
 	//method call
@@ -44,8 +44,6 @@ class BACKEND_API ibValueModuleRuntimeManagerExternalDataTool : public ibValueMo
 
 	virtual bool SetPropVal(const long lPropNum, const ibValue& varPropVal);        //setting attribute
 	virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal);                   //attribute value
-
-	virtual long FindProp(const ibString& strName) const override;
 
 private:
 	ibValueRecordDataObjectDataTool* m_objectValue;
@@ -80,8 +78,8 @@ class BACKEND_API ibValueModuleRuntimeManagerExternalReport : public ibValueModu
 	//exit shared module
 	virtual bool ExitMainModule(const ibRuntimeRequest& request = ibRuntimeRequest());
 
-	// Copies the external object value's surface; module exports follow as the
-	// helper's tail (descriptor autobind). Bound in the ctor (was PrepareNames).
+	// Copies the external object value's surface after the module's names (ibValueModuleDataObject binds
+	// first). Bound in the ctor.
 	void FillMembers(ibMemberTable& helper) const;
 
 	//method call
@@ -90,7 +88,6 @@ class BACKEND_API ibValueModuleRuntimeManagerExternalReport : public ibValueModu
 
 	virtual bool SetPropVal(const long lPropNum, const ibValue& varPropVal);        //setting attribute
 	virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal);                   //attribute value
-	virtual long FindProp(const ibString& strName) const override;
 
 private:
 	ibValueRecordDataObjectReport* m_objectValue;

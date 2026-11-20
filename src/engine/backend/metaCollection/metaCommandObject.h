@@ -201,7 +201,7 @@ public:
 // (ibRuntimeModuleDataObject), compiles the command's module, and runs CommandProcessing on its
 // OWN ProcUnit — no module-manager registration, no name-resolvable exports. Built transiently by
 // ibValueMetaObjectCommand::Execute for a single invocation.
-class BACKEND_API ibValueCommandDataObject : public ibValueDynamicMembers, public ibRuntimeModuleDataObject {
+class BACKEND_API ibValueCommandDataObject : public ibValueModuleDataObject<ibValueDynamicMembers> {
 public:
 
 	ibValueCommandDataObject(const ibValueMetaObjectCommand* metaObject);

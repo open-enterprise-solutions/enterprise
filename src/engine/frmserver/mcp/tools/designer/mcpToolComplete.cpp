@@ -484,6 +484,8 @@ public:
 
 			std::vector<ibDataValue> methods;
 			for (long i = 0; i < value.GetNMethods(); i++) {
+				if (value.IsMethodScoped(i))
+					continue;
 
 				std::shared_ptr<ibDataNode> entry = std::make_shared<ibDataNode>();
 				entry->SetValue(ibT("name"), value.GetMethodName(i));

@@ -278,14 +278,13 @@ private:
 
 #include "backend/moduleInfo.h"
 
-class BACKEND_API ibValueRecordDataObjectConstant : public ibValueDynamicMembers, public ibStandardCommandSource,
-	public ibSourceDataObject, public ibRuntimeModuleDataObject {
+class BACKEND_API ibValueRecordDataObjectConstant : public ibValueModuleDataObject<ibValueDynamicMembers>, public ibStandardCommandSource,
+	public ibSourceDataObject {
 	public:
 	virtual bool InitializeObject(const ibValueRecordDataObjectConstant* source = nullptr);
 protected:
 	enum helperAlias {
-		eSystem,
-		eProcUnit = g_aliasExport   // module exports go through the descriptor autobind
+		eSystem
 	};
 	enum helperProp {
 		eValue
@@ -312,11 +311,8 @@ public:
 	ibValue GetConstValue() const;
 	bool SetConstValue(const ibValue& cValue);
 
-	// Name surface = only the constant module's exported names, surfaced by the
-	// descriptor autobind (ExportThunk bound in the ctor). No own filler needed.
-
-	virtual bool SetPropVal(const long lPropNum, const ibValue& varPropVal);
-	virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal);
+	// Name surface = only the constant module's names, bound and answered by
+	// ibValueModuleDataObject. No own filler needed.
 
 	//override default type object
 	virtual bool IsNewObject() const { return false; }

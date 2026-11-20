@@ -265,7 +265,7 @@ bool ibValueMetaObjectCommand::WriteData(ibDataNode& node) const
 //***********************************************************************
 
 ibValueCommandDataObject::ibValueCommandDataObject(const ibValueMetaObjectCommand* metaObject)
-	: ibValueDynamicMembers(ibValueTypes::TYPE_EMPTY), ibRuntimeModuleDataObject(m_members, this),
+	: ibValueModuleDataObject(nullptr, ibValueTypes::TYPE_EMPTY),
 	  m_metaObject(metaObject)
 {
 	// Wire the descriptor to the running module scope, compile the command's module, run its top-level

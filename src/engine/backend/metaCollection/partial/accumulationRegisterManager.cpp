@@ -33,10 +33,9 @@ void ibValueManagerDataObjectAccumulationRegister::FillManagerMethods(ibMemberTa
 	helper.AppendFunc(ibT("Turnovers"), 4, ibT("Turnovers(beginOfPeriod, endOfPeriod, filter, periodicity)"));
 	helper.AppendFunc(ibT("Select"), ibT("Select()"));
 	helper.AppendFunc(ibT("GetForm"), 3, ibT("GetForm(string, owner, guid)"));
-	// NOTE: no GetRecordForm here — accumulation register has no record form
-	// (the enum Func and CallAsFunc switch don't handle it). An extra AppendFunc
-	// shifted every later method's index off its enum case (GetListForm/GetTemplate
-	// misrouted). Method index == AppendFunc order, so this list must mirror enum Func.
+	// NOTE: no GetRecordForm here — accumulation register has no record form (the enum Func and CallAsFunc
+	// switch don't handle it). An extra AppendFunc shifts every later method's place off its enum case: a
+	// row's data is its place on this binder's level, so this list must mirror enum Func.
 	helper.AppendFunc(ibT("GetListForm"), 3, ibT("GetListForm(string, owner, guid)"));
 	helper.AppendFunc(ibT("GetTemplate"), 1, ibT("GetTemplate(string)"));
 }
@@ -45,8 +44,7 @@ void ibValueManagerDataObjectAccumulationRegister::FillManagerMethods(ibMemberTa
 
 bool ibValueManagerDataObjectAccumulationRegister::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray)
 {
-	// Our own ordinal, not the table index — ibValueManagerDataObject::BuiltinMethodNum says why.
-	switch (BuiltinMethodNum(lMethodNum))
+	switch (m_members.GetMethodData(lMethodNum, this, &ibValueManagerDataObjectAccumulationRegister::FillManagerMethods))
 	{
 	case eCreateRecordSet:
 		pvarRetValue = m_metaObject->CreateRecordSetObjectValue();

@@ -43,11 +43,7 @@ void ibValueManagerDataObjectCalculationRegister::FillManagerMethods(ibMemberTab
 
 bool ibValueManagerDataObjectCalculationRegister::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray)
 {
-	// Our own ordinal, not the table index — ibValueManagerDataObject::BuiltinMethodNum says why. The
-	// eleven managers that existed on 2026-09-09 moved here in 16e8324c; this one was imported from a
-	// snapshot of 2026-08-16 and still switched on the raw index, so the first procedure its manager
-	// module declared would have shifted every built-in verb onto its neighbour.
-	switch (BuiltinMethodNum(lMethodNum))
+	switch (m_members.GetMethodData(lMethodNum, this, &ibValueManagerDataObjectCalculationRegister::FillManagerMethods))
 	{
 	case eCreateRecordSet:
 		pvarRetValue = m_metaObject->CreateRecordSetObjectValue();

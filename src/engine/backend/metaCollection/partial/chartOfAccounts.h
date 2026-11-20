@@ -411,9 +411,6 @@ public:
 	// Own methods (data members come from the base FillDataMembers); bound in the ctor.
 	void FillMethods(ibMemberTable& helper) const;
 
-	virtual bool SetPropVal(const long lPropNum, const ibValue& varPropVal);
-	virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal);
-
 	virtual bool CallAsProc(const long lMethodNum, ibValue** paParams, const long lSizeArray) override;
 	virtual bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray);
 

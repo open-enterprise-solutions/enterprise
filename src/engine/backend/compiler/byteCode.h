@@ -407,14 +407,14 @@ struct ibByteCode {
 
 public:
 
-	long FindMethod(const ibString& strMethodName) const;
-	long FindExportMethod(const ibString& strMethodName) const;
+	BACKEND_API long FindMethod(const ibString& strMethodName) const;
+	BACKEND_API long FindExportMethod(const ibString& strMethodName) const;
 
-	long FindFunction(const ibString& funcName) const;
-	long FindExportFunction(const ibString& funcName) const;
+	BACKEND_API long FindFunction(const ibString& funcName) const;
+	BACKEND_API long FindExportFunction(const ibString& funcName) const;
 
-	long FindProcedure(const ibString& procName) const;
-	long FindExportProcedure(const ibString& procName) const;
+	BACKEND_API long FindProcedure(const ibString& procName) const;
+	BACKEND_API long FindExportProcedure(const ibString& procName) const;
 
 	// Bytecode-driven cross-module symbol resolution.
 	//
@@ -535,8 +535,9 @@ public:
 	}
 
 	// The declared default of a parameter, from this module's constant pool. False for a
-	// parameter declared without one — the caller has to supply it.
-	bool GetParamDefValue(const long lCodeLine, const long lParamNum, ibValue& pvarParamDefValue) const;
+	// parameter declared without one — the caller has to supply it. Exported, with FindMethod: a value that
+	// carries a module asks them where its template is made (ibValueModuleDataObject, moduleInfo.h).
+	BACKEND_API bool GetParamDefValue(const long lCodeLine, const long lParamNum, ibValue& pvarParamDefValue) const;
 
 	// Reverse lookup: find the function whose entry-line equals
 	// lCodeLine. Used by Execute on function entry to populate

@@ -50,10 +50,7 @@ void ibValueManagerDataObjectDocument::FillManagerMethods(ibMemberTable& helper)
 
 bool ibValueManagerDataObjectDocument::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray)
 {
-	// 🛑 OUR OWN ORDINAL, NOT THE TABLE INDEX — see ibValueManagerDataObject::BuiltinMethodNum.
-	// The manager module's exported methods share this table, so the raw index means a
-	// different verb for every application that declares one.
-	switch (BuiltinMethodNum(lMethodNum))
+	switch (m_members.GetMethodData(lMethodNum, this, &ibValueManagerDataObjectDocument::FillManagerMethods))
 	{
 	case eCreateDocument:
 		pvarRetValue = m_metaObject->CreateObjectValue();

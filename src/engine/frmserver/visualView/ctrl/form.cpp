@@ -14,8 +14,7 @@
 //****************************************************************************
 
 ibValueForm::ibValueForm(const ibFormRequest& request, const ibValueMetaObjectFormBase* creator, ibControlFrame* ownerControl,
-	ibSourceDataObject* srcObject) : ibValueFrame(),
-	ibRuntimeModuleDataObject(m_members, this),
+	ibSourceDataObject* srcObject) : ibValueModuleDataObject(nullptr),
 	m_formType(defaultFormType), m_formModified(false),
 	m_closeOnChoice(true), m_closeOnOwnerClose(true),
 	m_metaFormObject(nullptr), m_controlOwner(nullptr), m_request(request),
@@ -24,8 +23,8 @@ ibValueForm::ibValueForm(const ibFormRequest& request, const ibValueMetaObjectFo
 	m_formCollectionCommand(new ibValueFormCollectionCommand(this))
 {
 	// Frame surface (properties + Events) comes from ibValueFrame::FillMembers, bound
-	// by the base ctor. The form ADDS its own members on top (FillFormMembers); module
-	// exports autobind as the helper's tail (ibRuntimeModuleDataObject ctor).
+	// by the base ctor, then the module's names (ibValueModuleDataObject). The form ADDS
+	// its own members after them (FillFormMembers).
 	m_members.Bind(this, &ibValueForm::FillFormMembers);
 
 	// This control carries a command bar — the frame owns its STORE and points it
@@ -329,11 +328,8 @@ void ibValueForm::FillFormMembers(ibMemberTable& helper) const
 	// answer is the point: it reports what is missing and lets the caller decide to stop.
 	helper.AppendFunc(ibT("CheckFilling"), ibT("CheckFilling()"));
 
-	// Module exports AND the context binds (ThisForm.Controls / DataSource) are
-	// surfaced as the helper's tail by the descriptor's ExportThunk (autobind under
-	// eProcUnit == g_aliasExport) — NOT here. Doing it manually made an unguarded
-	// virtual call on a possibly half-alive `this` (crash on teardown /
-	// debugger-thread lazy build); the descriptor thunk is dynamic_cast-guarded.
+	// The module's names AND the export binds (ThisForm.Controls / DataSource) come
+	// from ibValueModuleDataObject, bound first — NOT here.
 
 	// A button, a caption, or an HTML box holds no value and is still what a
 	// module names. The compiler already accepts ThisForm.<name>; leaving the
@@ -365,12 +361,7 @@ void ibValueForm::FillFormMembers(ibMemberTable& helper) const
 bool ibValueForm::SetPropVal(const long lPropNum, const ibValue& varPropVal)
 {
 	const long lPropAlias = m_members.GetPropAlias(lPropNum);
-	if (lPropAlias == eProcUnit) {
-		if (m_procUnit != nullptr) {
-			return m_procUnit->SetPropVal(GetPropName(lPropNum), varPropVal);
-		}
-	}
-	else if (lPropAlias == eProperty || lPropAlias == eEvent) {
+	if (lPropAlias == eProperty || lPropAlias == eEvent) {
 		return ibValueFrame::SetPropVal(lPropNum, varPropVal);
 	}
 	else if (lPropAlias == eSystem) {
@@ -411,27 +402,15 @@ bool ibValueForm::SetPropVal(const long lPropNum, const ibValue& varPropVal)
 			return attr->SetValueByPath({}, varPropVal);
 		}
 	}
-	return false;
+
+	// A row the form does not answer itself is its module's — a Public variable or a binding.
+	return ibValueModuleDataObject::SetPropVal(lPropNum, varPropVal);
 }
 
 bool ibValueForm::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 {
 	const long lPropAlias = m_members.GetPropAlias(lPropNum);
-	if (lPropAlias == eProcUnit) {
-		if (m_procUnit != nullptr &&
-			m_procUnit->GetPropVal(GetPropName(lPropNum), pvarPropVal))
-			return true;
-		// Bound handle (Controls / DataSource) — resolve the live bind value directly. Works in the
-		// Designer (no ProcUnit) and as a runtime fallback.
-		//
-		// The form module compiles DataSource as a property of ThisForm, so
-		// `DataSource.B = ...` arrives here, and so does `ThisForm.DataSource`.
-		// The cell is an embedded member. Copy the reference it already holds;
-		// a read-only slot answers false instead of leaving the previous value.
-		if (GetBoundValue(GetPropName(lPropNum), pvarPropVal))
-			return true;
-	}
-	else if (lPropAlias == eProperty || lPropAlias == eEvent) {
+	if (lPropAlias == eProperty || lPropAlias == eEvent) {
 		// Properties + the Events container come from ibValueFrame's surface.
 		return ibValueFrame::GetPropVal(lPropNum, pvarPropVal);
 	}
@@ -485,12 +464,15 @@ bool ibValueForm::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 		}
 	}
 
-	return false;
+	// A row the form does not answer itself is its module's — a Public variable or a binding
+	// (Controls / DataSource: `ThisForm.DataSource` arrives here).
+	return ibValueModuleDataObject::GetPropVal(lPropNum, pvarPropVal);
 }
 
+// The form's own verbs — the rows FillFormMembers appended; the module's, bound first, go to the base.
 bool ibValueForm::CallAsProc(const long lMethodNum, ibValue** paParams, const long lSizeArray)
 {
-	switch (lMethodNum)
+	switch (m_members.GetMethodData(lMethodNum, this, &ibValueForm::FillFormMembers))
 	{
 	case enShow: ShowForm();
 		return true;
@@ -507,14 +489,12 @@ bool ibValueForm::CallAsProc(const long lMethodNum, ibValue** paParams, const lo
 		return true;
 	}
 
-	return ibRuntimeModuleDataObject::ExecAsProc(
-		GetMethodName(lMethodNum), paParams, lSizeArray
-	);
+	return ibValueModuleDataObject::CallAsProc(lMethodNum, paParams, lSizeArray);
 }
 
 bool ibValueForm::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray)
 {
-	switch (lMethodNum)
+	switch (m_members.GetMethodData(lMethodNum, this, &ibValueForm::FillFormMembers))
 	{
 	case enClose:
 		pvarRetValue = CloseForm();
@@ -527,16 +507,7 @@ bool ibValueForm::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibVal
 		return true;
 	}
 
-	return ibRuntimeModuleDataObject::ExecAsFunc(
-		GetMethodName(lMethodNum), pvarRetValue, paParams, lSizeArray
-	);
-}
-
-bool ibValueForm::GetParamDefValue(const long lMethodNum, const long lParamNum, ibValue& pvarParamDefValue) const
-{
-	return ibRuntimeModuleDataObject::GetParamDefValue(
-		GetMethodName(lMethodNum), lParamNum, pvarParamDefValue
-	);
+	return ibValueModuleDataObject::CallAsFunc(lMethodNum, pvarRetValue, paParams, lSizeArray);
 }
 
 //***********************************************************************
