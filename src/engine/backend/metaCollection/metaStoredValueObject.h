@@ -302,12 +302,6 @@ public:
 
 	virtual ~ibValueRecordDataObjectConstant();
 
-	// Constant's module object drives lazy compile creation via
-	// BindContextVariable.
-	virtual const class ibValueMetaObjectModuleBase* GetMetaForCompile() const override {
-		return m_metaObject ? m_metaObject->GetObjectModule() : nullptr;
-	}
-
 	ibValue GetConstValue() const;
 	bool SetConstValue(const ibValue& cValue);
 

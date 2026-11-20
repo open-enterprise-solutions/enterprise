@@ -211,11 +211,6 @@ public:
 
 	virtual bool IsEmpty() const override { return false; }
 
-protected:
-
-	// compile target — the command's own module
-	virtual const ibValueMetaObjectModuleBase* GetMetaForCompile() const override;
-
 private:
 
 	const ibValueMetaObjectCommand* m_metaObject;

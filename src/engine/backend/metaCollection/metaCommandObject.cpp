@@ -265,7 +265,7 @@ bool ibValueMetaObjectCommand::WriteData(ibDataNode& node) const
 //***********************************************************************
 
 ibValueCommandDataObject::ibValueCommandDataObject(const ibValueMetaObjectCommand* metaObject)
-	: ibValueModuleDataObject(nullptr, ibValueTypes::TYPE_EMPTY),
+	: ibValueModuleDataObject(metaObject != nullptr ? metaObject->GetCommandModule() : nullptr, ibValueTypes::TYPE_EMPTY),
 	  m_metaObject(metaObject)
 {
 	// Wire the descriptor to the running module scope, compile the command's module, run its top-level
@@ -283,11 +283,6 @@ ibValueCommandDataObject::ibValueCommandDataObject(const ibValueMetaObjectComman
 		return;
 	}
 	Run(true);
-}
-
-const ibValueMetaObjectModuleBase* ibValueCommandDataObject::GetMetaForCompile() const
-{
-	return m_metaObject ? m_metaObject->GetCommandModule() : nullptr;
 }
 
 bool ibValueCommandDataObject::RunHandler(ibValue& commandParameter, ibValue& executeParameters)

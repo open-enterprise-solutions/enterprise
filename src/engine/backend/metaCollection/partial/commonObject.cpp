@@ -3824,7 +3824,7 @@ ibValuePtr<ibValueRecordSetObject> ibValueRecordSetObject::CopyRegisterValue()
 
 ///////////////////////////////////////////////////////////////////////////////////
 
-ibValueRecordSetObject::ibValueRecordSetObject(const ibValueMetaObjectRegisterData* metaObject, const ibUniqueKeyPair& uniqueKey) : ibValueModuleDataObject(nullptr),
+ibValueRecordSetObject::ibValueRecordSetObject(const ibValueMetaObjectRegisterData* metaObject, const ibUniqueKeyPair& uniqueKey) : ibValueModuleDataObject(metaObject != nullptr ? metaObject->GetObjectModule() : nullptr),
 m_objModified(false), m_selected(ibSelection::NotSelected),
 // ⭐⭐ A SET MADE WITHOUT A KEY HAS NO FILTER AT ALL — not a filter of empty values.
 //
@@ -3845,7 +3845,7 @@ m_recordColumnCollection(new ibValueRecordSetObjectRegisterColumnCollection(this
 	GetModelComposer().SetMetaData(m_metaObject != nullptr ? m_metaObject->GetMetaData() : nullptr);
 }
 
-ibValueRecordSetObject::ibValueRecordSetObject(const ibValueRecordSetObject& source) : ibValueModuleDataObject(nullptr),
+ibValueRecordSetObject::ibValueRecordSetObject(const ibValueRecordSetObject& source) : ibValueModuleDataObject(source.GetMetaForCompile()),
 m_objModified(true), m_selected(ibSelection::NotSelected),
 m_keyValues(source.m_keyValues), m_metaObject(source.m_metaObject),
 m_recordColumnCollection(new ibValueRecordSetObjectRegisterColumnCollection(this)), m_recordSetKeyValue(new ibValueRecordSetObjectRegisterKeyValue(this))

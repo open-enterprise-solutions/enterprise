@@ -104,7 +104,7 @@ bool ibValueRecordDataObjectConstant::InitializeObject(const ibValueRecordDataOb
 }
 
 ibValueRecordDataObjectConstant::ibValueRecordDataObjectConstant(const ibValueMetaObjectStoredValue* metaObject)
-	: ibValueModuleDataObject(nullptr, ibValueTypes::TYPE_EMPTY),
+	: ibValueModuleDataObject(metaObject != nullptr ? metaObject->GetObjectModule() : nullptr, ibValueTypes::TYPE_EMPTY),
 	m_objModified(false), m_metaObject(metaObject)
 {
 	// (No InitializeObject here — the creator runs it once the object is held; see CreateRecordDataObjectValue.)
