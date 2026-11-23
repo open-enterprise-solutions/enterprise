@@ -302,7 +302,7 @@ A transport between browsers and bases: it holds no forms and runs no code of it
 
 - **Publications** — `web.conf` in the web folder (`--dir`, by default `web` beside the program), or one named on the command line (`--file` / `--server`). One group per publication: `Kind=firebird` + `Directory` — a file base opened in this process through `fileserver` and held as a server holds its bases (a connection per browser); `Kind=server` + `Address=oes://host:port/base` — a base of an application server, relayed (`oess://` over TLS, trusting the system's store or `Trusted=`'s PEM file, made once per publication).
 - **Routes:** `WS /<publication>/client` — a connection, each binary message one OES-RPC packet of the [client protocol](public/client-protocol.md), the base's notifications pushed; `POST /<publication>/client` — one request; the site's files from `Root` (`www`) at `/`, with ETag/304; `lang/` and
-  `/<publication>/lang/` — the program folder's catalogues (`lang/<code>/open_es.mo`), the page's own words in the
+  `/<publication>/lang/` — the program folder's catalogues (`lang/<code>/open_es.po`), the page's own words in the
   person's language from the dictionary the thin client reads.
 - **The site** is [the browser client](public/browser-client.md) (`webserver/www/`): native ES modules with no build, the form drawn from the frame as the thin client draws it; a release serves it from its pack `web/www.wpk`.
 - **Transport:** the core's (`core/net`) — Asio (standalone) + llhttp, TLS by Mbed TLS. HTTP serves loopback only; on any other interface plain HTTP only sends the browser on to HTTPS. Answers of 1 KB and more are deflated on `?compress=deflate`; a page of another site (`Origin` not in `Origins`) is refused.
@@ -1124,7 +1124,7 @@ ibClientInstance::OnExit (frmserver) — the client logs out, or its connection 
 Two parallel translation surfaces exist; do not confuse them:
 
 - **Application language** — the session's translate state (`ibTranslateState::m_resolvedLanguageCode`), selects metadata synonyms / form-label translations stored *inside* the application. See `ibBackendLocalization::GetUserLanguage` / `SetUserLanguage`.
-- **Engine UI language** — gettext catalogs under `lang/`, laid out as the programs read them: the template `lang/open_es.pot`, and per language `lang/<code>/open_es.po` with its compiled `open_es.mo` beside it. Strings wrapped in `_("...")` macros across `src/engine/**` end up in the `.mo` and are looked up by the engine's own `ibDictionary` (`core/localization/dictionary.h`), one per language, chosen per thread by the base it works for ([translations.md](public/translations.md)). A program finds `lang/` beside it, or walking up from its folder in a build tree; the packages carry `lang/`. The browser page reads the same `.mo`, served by the web server at `lang/` (`www/src/localization.js`: `_(text)`, `_(text, context)`, and `labelText` for a stock word the thin client takes with its mnemonic, `&OK`).
+- **Engine UI language** — gettext catalogs under `lang/`, laid out as the programs read them: the template `lang/open_es.pot`, and per language `lang/<code>/open_es.po`, read as written — nothing compiles it (2026-11-23; a `.mo` stood beside it until then). Strings wrapped in `_("...")` macros across `src/engine/**` end up in the `.po` and are looked up by the engine's own `ibDictionary` (`core/localization/dictionary.h`), one per language, chosen per thread by the base it works for ([translations.md](public/translations.md)). A program finds `lang/` beside it, or walking up from its folder in a build tree; the packages carry `lang/`. The browser page reads the same `.po` by the same rules, served by the web server at `lang/` (`www/src/localization.js`: `_(text)`, `_(text, context)`, and `labelText` for a stock word the thin client takes with its mnemonic, `&OK`).
 
 **Workflow** (when adding new `_()` strings):
 
@@ -1143,11 +1143,7 @@ xgettext --join-existing --from-code=UTF-8 --keyword=_:1 --keyword=_:1,2c --lang
 msgmerge --no-wrap --update --backup=none lang/ru/open_es.po lang/open_es.pot
 msgmerge --no-wrap --update --backup=none lang/uk/open_es.po lang/open_es.pot
 
-# Translate empty msgstr entries (manually or in Poedit).
-
-# Compile to .mo, in place: the programs read lang/<code>/open_es.mo.
-msgfmt --check-format --output-file=lang/ru/open_es.mo lang/ru/open_es.po
-msgfmt --check-format --output-file=lang/uk/open_es.mo lang/uk/open_es.po
+# Translate empty msgstr entries (manually or in Poedit). Nothing is compiled: the programs read the .po itself.
 ```
 
 wx's own words in the forked code (stock labels, cursor names) are in the same `open_es` - there is one catalog. Their

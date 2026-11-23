@@ -1,8 +1,8 @@
 ///////////////////////////////////////////////////////////////////////////
 // Name:        core/localization/dictionary.h
-// Purpose:     the engine's own message catalogs - gettext .mo files, one set per language, chosen per thread
-// Licence:     the .mo reader and the plural-forms calculator in dictionary.cpp are wxWidgets' (wxWindows
-//              licence, NOTICE.md); this interface and the choice per thread are the engine's own
+// Purpose:     the engine's own message catalogs - gettext .po files, one set per language, chosen per thread
+// Licence:     the plural-forms calculator in dictionary.cpp is wxWidgets' (wxWindows licence, NOTICE.md); the
+//              .po reader, this interface and the choice per thread are the engine's own
 ///////////////////////////////////////////////////////////////////////////
 
 #ifndef __CORE_DICTIONARY_H__
@@ -20,7 +20,7 @@
 // wxTranslations is one object for the whole process, and wx's _() asks it: a process that holds several
 // bases could speak one language only, the first base's (ibApplicationHost::InitLocale). The engine's words -
 // refusals, captions, the lines of its windows - now come through ibDictionary: ONE language is ONE set of
-// catalogs (ibMsgCatalog, a gettext .mo each), loaded once and kept for the process, and the language a call
+// catalogs (ibMsgCatalog, a gettext .po each), loaded once and kept for the process, and the language a call
 // speaks in is the thread's - the set the SOURCE installed by the backend answers (that of the base the
 // thread works for, ibApplicationInstance::GetDictionary), else the process's (SetProcessLanguage: InitLocale's word,
 // or a client's --locale). Core knows no base: the source is a callback, the way ibDateTime::Now() takes its
@@ -29,7 +29,7 @@
 // A set does not change once made: the domains are declared (AddDomain) before any language is asked for,
 // and what the readers hold - a pointer to a set, the strings in it - stays valid for the process.
 //
-// Where a catalog is looked for: <prefix>/<language>/LC_MESSAGES/<domain>.mo and <prefix>/<language>/<domain>.mo,
+// Where a catalog is looked for: <prefix>/<language>/LC_MESSAGES/<domain>.po and <prefix>/<language>/<domain>.po,
 // for the language as named ("uk_UA") and then its language alone ("uk"); the prefixes are what
 // AddCatalogLookupPathPrefix adds, first, then the working folder's `lang`, the program folder's `lang`, and
 // the first `lang` found walking up from the executable (a run from the build tree).
@@ -38,7 +38,7 @@
 // wx's own windows speak English.
 class ibMsgCatalog;
 
-// The engine's own gettext domain - lang/<language>/open_es.mo. Every language loads it, with no one declaring it.
+// The engine's own gettext domain - lang/<language>/open_es.po. Every language loads it, with no one declaring it.
 inline const ibChar* const kEngineDomain = ibT("open_es");
 
 class CORE_API ibDictionary {

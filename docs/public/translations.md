@@ -2,7 +2,7 @@
 
 **What.** The engine translates its own words (refusals, captions, the lines of its windows) itself:
 `core/localization/dictionary.h`. One language is one `ibDictionary`, the set of that language's
-gettext catalogs (`ibMsgCatalog`, one `.mo` each). It is loaded once and kept for the process. `_()`,
+gettext catalogs (`ibMsgCatalog`, one `.po` each, read as written). It is loaded once and kept for the process. `_()`,
 `ibPLURAL` and `ibGETTEXT_IN_CONTEXT` are the engine's macros over it. A string made at run time is
 translated with `ibGetTranslation`. The language is the THREAD's.
 
@@ -42,15 +42,21 @@ table of languages and no machine default. `ForLanguage` and `SetProcessLanguage
 
 ## The catalogs
 
-- The path is `<prefix>/<language>/<domain>.mo` or `<prefix>/<language>/LC_MESSAGES/<domain>.mo`.
+- The path is `<prefix>/<language>/<domain>.po` or `<prefix>/<language>/LC_MESSAGES/<domain>.po`.
   The language is tried as named, then as the language alone (`uk_UA` → `uk`).
 - Prefixes, in order: those from `AddCatalogLookupPathPrefix`, then the working folder's `lang`, the
   program folder's `lang`, and the first `lang` found walking up from the executable.
 - The engine's domain is `open_es` (`kEngineDomain`). Every dictionary has it, with no one declaring it.
   Another domain is declared (`AddDomain`) before any language is asked for: a dictionary does not
   change once made.
-- The `.mo` reader and the plural-forms calculator come from wxWidgets, under the wxWindows Library
-  Licence ([NOTICE.md](../../NOTICE.md)). A charset other than UTF-8 is journalled and read as UTF-8.
+- The `.po` is read as the translators write it; nothing compiles it (no `.mo`, no `msgfmt`). The reader takes
+  what `msgfmt --check-format` compiled:
+  - not a translation: an entry still `fuzzy`, an empty `msgstr`, an obsolete entry (`#~`), the header;
+  - not taken, and journalled: a `c-format` translation that names other conversions than its text;
+  - the whole catalog refused, journalled with the line: a line no `.po` has.
+- A charset other than UTF-8 is journalled and read as UTF-8.
+- The plural-forms calculator comes from wxWidgets, under the wxWindows Library Licence
+  ([NOTICE.md](../../NOTICE.md)); the reader is the engine's.
 
 ## Where wx stays
 
@@ -60,7 +66,7 @@ table of languages and no machine default. `ForLanguage` and `SetProcessLanguage
   cursor names, the Yes and No of a message box - are the engine's words: one catalog, `open_es`. A stock label
   comes from `ibGetStockLabel` (`deskgui/univ/stockItem.h`, wx's table) through `_()`. Their translations were
   taken from wx's `locale/<code>.po` into `open_es.po` (`msgmerge --compendium`), with the entries wx left fuzzy
-  settled, since a fuzzy entry is not compiled. One localization - wx's translations object is not made, and there
+  settled, since a fuzzy entry is not read. One localization - wx's translations object is not made, and there
   is no `wxstd` catalog. The code of the wxWidgets library itself speaks English.
 - `WXINTL_NO_GETTEXT_MACRO` is defined for every target that links core: wx's `_()` is off. `core/core.h`
   brings the engine's.
@@ -71,7 +77,8 @@ table of languages and no machine default. `ForLanguage` and `SetProcessLanguage
 
 - The page says its own words (menus of its own, windows, refusals) from the same catalog. The web server serves
   the program folder's `lang/` beside the page, at `lang/` and `<publication>/lang/`.
-- `www/src/localization.js` reads `<language>/open_es.mo`, the language as named and then alone, as the engine does.
+- `www/src/localization.js` reads `<language>/open_es.po`, the language as named and then alone, by the engine's
+  rules (`readCatalogue`, `unquote`, `conversions` mirror `dictionary.cpp`).
   `_(text)` and `_(text, context)` are the engine's `_()` and `ibGETTEXT_IN_CONTEXT`.
 - The language is the browser's before the login, then the login's `Locale`. No catalog for it: English.
 - What the server sends (its menus, forms, messages) comes translated already.

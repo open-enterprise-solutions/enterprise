@@ -1,21 +1,19 @@
 ////////////////////////////////////////////////////////////////////////////
-//	Description : the engine's own catalogs (core/localization/dictionary.h) - a .mo read without any
-//	wxLocale, the plural rule and the context the catalog carries, a region falling to its language, the
-//	process's language for a thread that names none, and the language chosen per thread: two threads of
-//	two languages at once. The catalogs are written by the test, the way gettext lays them out.
+//	Description : the engine's own catalogs (core/localization/dictionary.h) - a .po read without any
+//	wxLocale and without being compiled, the plural rule and the context the catalog carries, a region falling
+//	to its language, the process's language for a thread that names none, and the language chosen per thread:
+//	two threads of two languages at once. The catalogs are written by the test, the way gettext writes them;
+//	the shipped ones (lang/) are read whole - what msgfmt --check did while they were compiled.
 ////////////////////////////////////////////////////////////////////////////
 
 #include <gtest/gtest.h>
 
-#include <algorithm>
 #include <chrono>
-#include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <functional>
 #include <string>
 #include <thread>
-#include <utility>
 #include <vector>
 
 #include "core/fileSystem.h"   // ibPathOf
@@ -29,34 +27,123 @@ namespace {
 // (plural forms joined with '\0').
 struct Entry { std::string m_id; std::string m_text; };
 
-// A .mo as gettext writes it: little-endian, the header entry first (msgid ""), msgids sorted, no hash table.
-std::vector<unsigned char> MoFile(std::vector<Entry> entries)
+// A string as a .po writes it: quoted, with the C escapes gettext uses.
+std::string Quoted(const std::string& text)
 {
-	std::sort(entries.begin(), entries.end(), [](const Entry& a, const Entry& b) { return a.m_id < b.m_id; });
-	const uint32_t n = static_cast<uint32_t>(entries.size());
-	const uint32_t origTable = 28, transTable = origTable + 8 * n, strings = transTable + 8 * n;
-	std::vector<unsigned char> out;
-	const auto put32 = [&out](uint32_t v) {
-		for (int i = 0; i < 4; ++i)
-			out.push_back(static_cast<unsigned char>((v >> (8 * i)) & 0xff));
-	};
-	put32(0x950412de); put32(0); put32(n); put32(origTable); put32(transTable); put32(0); put32(0);
-	std::vector<unsigned char> pool;
-	std::vector<std::pair<uint32_t, uint32_t>> orig, trans;
-	for (const Entry& e : entries) {
-		orig.emplace_back(static_cast<uint32_t>(e.m_id.size()), strings + static_cast<uint32_t>(pool.size()));
-		pool.insert(pool.end(), e.m_id.begin(), e.m_id.end());
-		pool.push_back(0);
+	std::string out = "\"";
+	for (const char c : text) {
+		switch (c) {
+		case '"':  out += "\\\""; break;
+		case '\\': out += "\\\\"; break;
+		case '\n': out += "\\n"; break;
+		case '\t': out += "\\t"; break;
+		default:   out += c; break;
+		}
 	}
+	return out + "\"";
+}
+
+// A .po as a translator's tool writes it: the header entry first (msgid ""), a context as msgctxt, a plural as
+// msgid_plural and msgstr[n].
+std::string PoFile(const std::vector<Entry>& entries)
+{
+	std::string out;
 	for (const Entry& e : entries) {
-		trans.emplace_back(static_cast<uint32_t>(e.m_text.size()), strings + static_cast<uint32_t>(pool.size()));
-		pool.insert(pool.end(), e.m_text.begin(), e.m_text.end());
-		pool.push_back(0);
+		std::string id = e.m_id;
+		const size_t joint = id.find('\x04');
+		if (joint != std::string::npos) {
+			out += "msgctxt " + Quoted(id.substr(0, joint)) + "\n";
+			id = id.substr(joint + 1);
+		}
+		const size_t plural = id.find('\0');
+		if (plural == std::string::npos) {
+			out += "msgid " + Quoted(id) + "\nmsgstr " + Quoted(e.m_text) + "\n\n";
+			continue;
+		}
+		out += "msgid " + Quoted(id.substr(0, plural)) + "\nmsgid_plural " + Quoted(id.substr(plural + 1)) + "\n";
+		size_t from = 0;
+		for (int form = 0; from != std::string::npos; ++form) {
+			const size_t end = e.m_text.find('\0', from);
+			const std::string text = e.m_text.substr(from, end == std::string::npos ? std::string::npos : end - from);
+			out += "msgstr[" + std::to_string(form) + "] " + Quoted(text) + "\n";
+			from = end == std::string::npos ? end : end + 1;
+		}
+		out += "\n";
 	}
-	for (const auto& o : orig) { put32(o.first); put32(o.second); }
-	for (const auto& t : trans) { put32(t.first); put32(t.second); }
-	out.insert(out.end(), pool.begin(), pool.end());
 	return out;
+}
+
+// THE SHIPPED CATALOG AS ITS TEXT SAYS — every entry a translator finished (no `fuzzy`, a translation, one form),
+// read the plain way, line by line: what the reader under test must find, each one, word for word.
+struct ShippedEntry { std::string m_context; std::string m_id; std::string m_text; };
+
+std::string Unquoted(const std::string& line)
+{
+	const size_t open = line.find('"');
+	const size_t close = line.rfind('"');
+	std::string out;
+	for (size_t i = open + 1; open != std::string::npos && i < close; ++i) {
+		if (line[i] != '\\' || i + 1 >= close) {
+			out += line[i];
+			continue;
+		}
+		const char c = line[++i];
+		out += c == 'n' ? '\n' : c == 't' ? '\t' : c == 'r' ? '\r' : c;
+	}
+	return out;
+}
+
+std::vector<ShippedEntry> ShippedEntries(const std::filesystem::path& file)
+{
+	std::ifstream in(file, std::ios::binary);
+	std::vector<ShippedEntry> entries;
+	ShippedEntry entry;
+	std::string* field = nullptr;
+	bool fuzzy = false, plural = false, translated = false;
+	const auto finish = [&]() {
+		if (translated && !fuzzy && !plural && !entry.m_id.empty() && !entry.m_text.empty())
+			entries.push_back(entry);
+		entry = ShippedEntry();
+		field = nullptr;
+		fuzzy = plural = translated = false;
+	};
+	std::string line;
+	while (std::getline(in, line)) {
+		if (!line.empty() && line.back() == '\r')
+			line.pop_back();
+		if (line.rfind("msgctxt ", 0) == 0 || line.rfind("msgid ", 0) == 0 || line.rfind("#", 0) == 0 || line.empty()) {
+			if (translated)
+				finish();
+		}
+		if (line.rfind("#,", 0) == 0) {
+			fuzzy = fuzzy || line.find("fuzzy") != std::string::npos;
+		}
+		else if (line.rfind("#", 0) == 0 || line.empty()) {
+			field = nullptr;
+		}
+		else if (line.rfind("msgctxt ", 0) == 0) {
+			field = &entry.m_context;
+			*field = Unquoted(line);
+		}
+		else if (line.rfind("msgid_plural ", 0) == 0) {
+			plural = true;
+			field = nullptr;
+		}
+		else if (line.rfind("msgid ", 0) == 0) {
+			field = &entry.m_id;
+			*field = Unquoted(line);
+		}
+		else if (line.rfind("msgstr", 0) == 0) {
+			translated = true;
+			field = &entry.m_text;
+			*field = Unquoted(line);
+		}
+		else if (line.rfind("\"", 0) == 0 && field != nullptr) {
+			*field += Unquoted(line);
+		}
+	}
+	finish();
+	return entries;
 }
 
 const char* const kHeader =
@@ -111,14 +198,17 @@ protected:
 			std::filesystem::remove_all(m_root, error);
 	}
 
-	void Write(const char* language, std::vector<Entry> entries) {
+	void Write(const char* language, const std::vector<Entry>& entries) {
+		WriteText(language, PoFile(entries));
+	}
+	// …or the catalog's text as it is, for what PoFile does not write: comments, flags, a string over lines.
+	void WriteText(const char* language, const std::string& text) {
 		const std::filesystem::path folder = m_root / "lang" / language;
 		std::error_code error;
 		ASSERT_TRUE(std::filesystem::create_directories(folder, error));
-		const std::vector<unsigned char> bytes = MoFile(std::move(entries));
-		std::ofstream file(folder / ibPathOf(ibString(kDomain) + ibT(".mo")), std::ios::binary);
+		std::ofstream file(folder / ibPathOf(ibString(kDomain) + ibT(".po")), std::ios::binary);
 		ASSERT_TRUE(file.is_open());
-		file.write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+		file.write(text.data(), static_cast<std::streamsize>(text.size()));
 		ASSERT_TRUE(file.good());
 	}
 };
@@ -193,6 +283,93 @@ TEST_F(TranslationFix, ALargeCatalogIsReadWhole)
 	EXPECT_EQ(ibT("Dokument"), *document);
 }
 
+// A catalog's text as gettext writes it: a string carried over lines, the C escapes, comments of every kind, an
+// obsolete entry (#~), lines that end CRLF. A `fuzzy` entry is no translation yet and one with an empty msgstr none
+// at all: msgfmt left both out, and so does the reader.
+TEST_F(TranslationFix, ACatalogsTextIsReadAsGettextWritesIt)
+{
+	WriteText("qd",
+		"# the translator's comment\r\n"
+		"msgid \"\"\r\n"
+		"msgstr \"\"\r\n"
+		"\"Content-Type: text/plain; charset=UTF-8\\n\"\r\n"
+		"\"Plural-Forms: nplurals=2; plural=(n != 1);\\n\"\r\n"
+		"\r\n"
+		"#. the source's comment\r\n"
+		"#: src/engine/somewhere.cpp:1\r\n"
+		"msgid \"A line \"\r\n"
+		"\"carried over\"\r\n"
+		"msgstr \"Eine Zeile \"\r\n"
+		"\"fortgesetzt\"\r\n"
+		"\r\n"
+		"msgid \"Say \\\"no\\\"\\tthen\\\\stop\\n\"\r\n"
+		"msgstr \"Sag \\\"nein\\\"\\tdann\\\\halt\\n\"\r\n"
+		"\r\n"
+		"#, fuzzy\r\n"
+		"msgid \"Guessed\"\r\n"
+		"msgstr \"Geraten\"\r\n"
+		"\r\n"
+		"msgid \"Not yet\"\r\n"
+		"msgstr \"\"\r\n"
+		"\r\n"
+		"#~ msgid \"Gone\"\r\n"
+		"#~ msgstr \"Weg\"\r\n");
+	const ibDictionary* const qd = ibDictionary::ForLanguage(ibT("qd"));
+	ASSERT_NE(qd, nullptr);
+	ASSERT_TRUE(qd->IsLoaded(kDomain));
+	const ibString* const carried = qd->GetTranslatedString(ibT("A line carried over"));
+	ASSERT_NE(carried, nullptr);
+	EXPECT_EQ(ibT("Eine Zeile fortgesetzt"), *carried);
+	const ibString* const escaped = qd->GetTranslatedString(ibT("Say \"no\"\tthen\\stop\n"));
+	ASSERT_NE(escaped, nullptr);
+	EXPECT_EQ(ibT("Sag \"nein\"\tdann\\halt\n"), *escaped);
+	EXPECT_EQ(nullptr, qd->GetTranslatedString(ibT("Guessed"))) << "fuzzy is no translation yet";
+	EXPECT_EQ(nullptr, qd->GetTranslatedString(ibT("Not yet")));
+	EXPECT_EQ(nullptr, qd->GetTranslatedString(ibT("Gone"))) << "an obsolete entry is a comment";
+}
+
+// A format translated with other conversions than its own would hand Format arguments it does not take: such a form
+// is not taken - the text is said as written, and the journal names it - as msgfmt --check refused to compile it.
+// Only where the entry says it is c-format: a `%` in any other text is a character.
+TEST_F(TranslationFix, AFormatTranslatedWithOtherConversionsIsNotTaken)
+{
+	WriteText("qe",
+		"msgid \"\"\n"
+		"msgstr \"Content-Type: text/plain; charset=UTF-8\\n\"\n"
+		"\n"
+		"#, c-format\n"
+		"msgid \"%d rows of %s\"\n"
+		"msgstr \"%s: %d Zeilen\"\n"
+		"\n"
+		"#, c-format\n"
+		"msgid \"%d rows\"\n"
+		"msgstr \"%d Zeilen, 100%%\"\n"
+		"\n"
+		"msgid \"50% off\"\n"
+		"msgstr \"50% weniger %s\"\n");
+	const ibDictionary* const qe = ibDictionary::ForLanguage(ibT("qe"));
+	ASSERT_NE(qe, nullptr);
+	ASSERT_TRUE(qe->IsLoaded(kDomain));
+	EXPECT_EQ(nullptr, qe->GetTranslatedString(ibT("%d rows of %s"))) << "a string where the number was";
+	const ibString* const rows = qe->GetTranslatedString(ibT("%d rows"));
+	ASSERT_NE(rows, nullptr) << "%% is a character, not a conversion";
+	EXPECT_EQ(ibT("%d Zeilen, 100%%"), *rows);
+	EXPECT_NE(nullptr, qe->GetTranslatedString(ibT("50% off"))) << "no c-format, no check";
+}
+
+// A file that is not a catalog - a line no .po has - is not loaded: the text is said as written, and the journal names
+// the file and the line. A wrong line must not leave half a catalog.
+TEST_F(TranslationFix, ABrokenCatalogIsNotLoaded)
+{
+	WriteText("qf",
+		"msgid \"Document\"\n"
+		"msgstr Dokument\n");
+	const ibDictionary* const qf = ibDictionary::ForLanguage(ibT("qf"));
+	ASSERT_NE(qf, nullptr);
+	EXPECT_FALSE(qf->IsLoaded(kDomain));
+	EXPECT_EQ(nullptr, qf->GetTranslatedString(ibT("Document")));
+}
+
 TEST_F(TranslationFix, ARegionFallsToItsLanguage)
 {
 	const ibDictionary* const regional = ibDictionary::ForLanguage(ibT("qq_RR"));
@@ -248,6 +425,28 @@ TEST_F(TranslationFix, TwoThreadsSpeakTwoLanguagesAtOnce)
 	b.join();
 	EXPECT_EQ(0, qaWrong);
 	EXPECT_EQ(0, qbWrong);
+}
+
+// THE SHIPPED CATALOGS ARE READ WHOLE — lang/<language>/open_es.po, every entry a translator finished found word for
+// word. A line the reader does not take, a format translated with other conversions (refused, as above), an entry
+// lost between two others: red here, in CI, as msgfmt --check made it while the catalogs were compiled (2026-11-23).
+TEST(Translations, TheShippedCatalogsAreReadWhole)
+{
+	const std::filesystem::path lang = std::filesystem::path(__FILE__).parent_path().parent_path() / "lang";
+	ibDictionary::AddCatalogLookupPathPrefix(ibString::FromUTF8(reinterpret_cast<const char*>(lang.u8string().c_str())));
+	for (const char* language : { "ru", "uk" }) {
+		const ibDictionary* const dictionary = ibDictionary::ForLanguage(ibString::FromUTF8(language));
+		ASSERT_NE(dictionary, nullptr) << language;
+		ASSERT_TRUE(dictionary->IsLoaded(kEngineDomain)) << language;
+		const std::vector<ShippedEntry> entries = ShippedEntries(lang / language / "open_es.po");
+		EXPECT_GT(entries.size(), 1000u) << language;
+		for (const ShippedEntry& entry : entries) {
+			const ibString* const text = dictionary->GetTranslatedString(ibString::FromUTF8(entry.m_id),
+				ibString::FromUTF8(entry.m_context));
+			ASSERT_NE(text, nullptr) << language << ": " << entry.m_id;
+			EXPECT_EQ(ibString::FromUTF8(entry.m_text), *text) << language << ": " << entry.m_id;
+		}
+	}
 }
 
 // A language asked for by any of its spellings is one name - its language in lower case, its region in upper - and

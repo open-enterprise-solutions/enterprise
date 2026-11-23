@@ -35,7 +35,7 @@ rm -rf "$root"
 mkdir -p "$stage"
 cp -a "$release/." "$stage/"
 cp -a lang "$stage/lang"
-find "$stage/lang" \( -name '*.po' -o -name '*.pot' \) -delete   # the programs read the .mo only
+find "$stage/lang" -name '*.pot' -delete   # the programs read the .po; the template is the translators'
 cp src/engine/backend/backend.conf "$stage/backend.conf"
 # The Firebird 5 kit the workflow laid out (fbkit/): the framework's Resources, as Firebird's own tree.
 cp -a fbkit "$stage/_fb"
@@ -94,7 +94,7 @@ done
 required=(appworkspace.app appstudio.app launcher.app coderunner appserver
           appcluster appcluster-tray webserver web/www.wpk
           libcore.dylib libbackend.dylib libprotocol.dylib libdeskgui.dylib libfrmclient.dylib libfrmserver.dylib libfileserver.dylib
-          backend.conf help/en.hlk lang/ru/open_es.mo
+          backend.conf help/en.hlk lang/ru/open_es.po
           _fb/lib/libfbclient.dylib _fb/lib/libtommath.dylib _fb/plugins/libEngine13.dylib _fb/intl/libfbintl.dylib _fb/firebird.msg _fb/firebird.conf)
 for r in "${required[@]}"; do
   [ -e "$stage/$r" ] || { echo "::error::The package would not run - missing: $r"; exit 1; }

@@ -1,8 +1,8 @@
 ///////////////////////////////////////////////////////////////////////////
 // Name:        core/localization/dictionary.cpp
-// Purpose:     the engine's own message catalogs - gettext .mo files, one set per language, chosen per thread
-// Author:      the .mo reader and the plural-forms calculator are wxWidgets' (src/common/translation.cpp:
-//              Vadim Zeitlin, Vaclav Slavik, Michael N. Filippov), renamed; the sets and the choice are ours
+// Purpose:     the engine's own message catalogs - gettext .po files, one set per language, chosen per thread
+// Author:      the plural-forms calculator is wxWidgets' (src/common/translation.cpp: Vadim Zeitlin, Vaclav
+//              Slavik, Michael N. Filippov), renamed; the .po reader, the sets and the choice are ours
 // Copyright:   (c) 1998 Vadim Zeitlin <zeitlin@dptmaths.ens-cachan.fr> for the parts taken from wxWidgets
 // Licence:     wxWindows licence for those parts - NOTICE.md
 ///////////////////////////////////////////////////////////////////////////
@@ -12,6 +12,7 @@
 #include "core/diagnostics/journal.h"
 #include "core/fileSystem.h"   // ibProgramFolder, ibGetCwd, ibExecutablePath, ibPathOf — where the catalogs are
 
+#include <algorithm>
 #include <atomic>
 #include <cctype>
 #include <climits>
@@ -20,16 +21,24 @@
 #include <fstream>
 #include <memory>
 #include <mutex>
+#include <string>
+#include <string_view>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 namespace {
 
-typedef std::uint32_t size_t32;
-
-// magic number identifying the .mo format file
-const size_t32 MSGCATALOG_MAGIC    = 0x950412de;
-const size_t32 MSGCATALOG_MAGIC_SW = 0xde120495;
+// THE CATALOGS' WORDS — said once. gettext's: the layout under a language, the extension, the key of a word in a
+// context, the header's two fields read; the engine's: the folder the catalogs stand in, the journal's source.
+const ibChar* const        kCatalogFolder    = ibT("lang");          // <prefix>/<language>/<domain>.po
+const ibChar* const        kMessagesFolder   = ibT("LC_MESSAGES");   // gettext's <language>/LC_MESSAGES/<domain>.po
+const ibChar* const        kCatalogExtension = ibT(".po");
+const ibChar* const        kJournalSource    = ibT("i18n");
+constexpr char             kContextSeparator = '\x04';               // a key in a context: <context>\x04<text>
+constexpr unsigned char    kByteOrderMark[]  = { 0xEF, 0xBB, 0xBF };   // UTF-8's, as bytes (codePage.cpp)
+constexpr std::string_view kCharsetField     = "Content-Type: text/plain; charset=";
+constexpr std::string_view kPluralFormsField = "Plural-Forms:";
 
 typedef std::unordered_map<ibString, ibString> ibTranslationsHashMap;
 
@@ -665,269 +674,354 @@ ibPluralFormsCalculator* ibPluralFormsCalculator::make(const char* s)
     return calculator.release();
 }
 
-// The length of a string inside a catalog, never past `max` — a corrupt catalog's string may have no NUL in it.
-size_t Strnlen(const char* s, size_t max)
+// A .po string, its quotes and its escapes taken off, added to `text`: `"Say \"no\"\n"` is `Say "no"` and a line
+// break. False for what is no quoted string - a quote nobody escaped inside, an escape C has not. What stands between
+// two escapes goes in at once: a character at a time was most of the parse in a Debug build.
+bool Unquote(std::string_view line, std::string& text)
 {
-    const void* const nul = std::memchr(s, '\0', max);
-    return nul != nullptr ? static_cast<const char*>(nul) - s : max;
+	while (!line.empty() && (line.front() == ' ' || line.front() == '\t'))
+		line.remove_prefix(1);
+	while (!line.empty() && (line.back() == ' ' || line.back() == '\t'))
+		line.remove_suffix(1);
+	if (line.size() < 2 || line.front() != '"' || line.back() != '"')
+		return false;
+	const std::string_view inside = line.substr(1, line.size() - 2);
+	for (size_t i = 0; i < inside.size();) {
+		const size_t stop = std::min(inside.find_first_of("\\\"", i), inside.size());
+		text.append(inside.data() + i, stop - i);
+		if (stop == inside.size())
+			break;
+		if (inside[stop] == '"')
+			return false;
+		if (stop + 1 == inside.size())
+			return false;   // what it escapes is the closing quote
+		i = stop + 1;
+		const char escaped = inside[i++];
+		switch (escaped) {
+		case 'n': text += '\n'; break;
+		case 't': text += '\t'; break;
+		case 'r': text += '\r'; break;
+		case 'a': text += '\a'; break;
+		case 'b': text += '\b'; break;
+		case 'f': text += '\f'; break;
+		case 'v': text += '\v'; break;
+		case '"': case '\\': case '\'': case '?': text += escaped; break;
+		default: {
+			if (escaped < '0' || escaped > '7')
+				return false;
+			int value = escaped - '0';   // octal, up to three digits
+			for (int digit = 1; digit < 3 && i < inside.size() && inside[i] >= '0' && inside[i] <= '7'; ++digit)
+				value = value * 8 + (inside[i++] - '0');
+			text += static_cast<char>(value);
+			break;
+		}
+		}
+	}
+	return true;
+}
+
+// The conversions a c-format string names, each by its length and its kind, in its arguments' order - `%d`, `%s`,
+// `%.2f`, `%lld`; `%%` is a character, and `%2$s` stands at its position. A translation must name the same, or
+// Format would be handed arguments it does not take.
+std::string Conversions(const std::string& text)
+{
+	std::vector<std::pair<unsigned, std::string>> found;
+	unsigned next = 0;
+	for (size_t i = 0; i < text.size(); ++i) {
+		if (text[i] != '%')
+			continue;
+		if (++i < text.size() && text[i] == '%')
+			continue;
+		unsigned position = ++next;
+		size_t digits = i;
+		unsigned written = 0;
+		while (digits < text.size() && std::isdigit(static_cast<unsigned char>(text[digits])))
+			written = written * 10 + static_cast<unsigned>(text[digits++] - '0');
+		if (digits > i && digits < text.size() && text[digits] == '$') {
+			position = written;
+			i = digits + 1;
+		}
+		while (i < text.size() && std::string_view("-+ #0'").find(text[i]) != std::string_view::npos)
+			++i;   // the flags
+		while (i < text.size() && (std::isdigit(static_cast<unsigned char>(text[i])) || text[i] == '.' || text[i] == '*'))
+			++i;   // the width and the precision
+		std::string conversion;
+		while (i < text.size() && std::string_view("hlLqjzt").find(text[i]) != std::string_view::npos)
+			conversion += text[i++];
+		if (i < text.size())
+			conversion += text[i] == 'i' ? 'd' : text[i];
+		found.emplace_back(position, conversion);
+	}
+	std::stable_sort(found.begin(), found.end(), [](const auto& a, const auto& b) { return a.first < b.first; });
+	std::string signature;
+	for (const auto& one : found)
+		signature += one.second + ';';
+	return signature;
 }
 
 // ============================================================================
-// ibMsgCatalogFile - the .mo file itself: wxWidgets' reader (src/common/translation.cpp), renamed.
+// ibMsgCatalogFile - the catalog's file: gettext's .po as the translators write it (lang/<language>/<domain>.po),
+// read as it is - nothing compiles it (2026-11-23; until then wxWidgets' reader of the compiled .mo). Its header
+// entry (msgid "") says the charset and the plural rule, as a .mo's did. An entry still `fuzzy`, an empty msgstr and
+// an obsolete entry (#~) are no translation - msgfmt left them out; a form of a c-format entry naming other
+// conversions than its text is not taken - msgfmt --check refused it. A line no .po has refuses the whole file:
+// half a catalog would be read as a whole one.
 // ============================================================================
 class ibMsgCatalogFile
 {
 public:
-    typedef std::string DataBuffer;
-
-    // ctor & dtor
-    ibMsgCatalogFile();
-    ~ibMsgCatalogFile();
-
-    // load the catalog from disk
-    bool LoadFile(const ibString& filename,
-                  ibPluralFormsCalculatorPtr& rPluralFormsCalculator);
-    bool LoadData(const DataBuffer& data,
-                  ibPluralFormsCalculatorPtr& rPluralFormsCalculator);
-
-    // fills the hash with string-translation pairs
-    bool FillHash(ibTranslationsHashMap& hash) const;
-
-    // return the charset of the strings in this catalog or empty string if
-    // none/unknown
-    ibString GetCharset() const { return m_charset; }
+	// The file read whole and taken apart, each entry into the hash as it ends; false when it cannot be read or is no
+	// catalog (the journal says where) - what the hash took by then is the caller's to drop.
+	bool LoadFile(const ibString& filename, ibPluralFormsCalculatorPtr& rPluralFormsCalculator, ibTranslationsHashMap& hash);
 
 private:
-    // this implementation is binary compatible with GNU gettext() version 0.10
+	// One entry, its strings as written - UTF-8, the escapes undone. ONE serves the whole file, emptied between entries:
+	// its strings keep their room, so an entry costs no allocation once the first ones have grown them. A list of them
+	// was a second copy of the hash, and in a Debug build its allocations - five containers an entry, each with its
+	// proxy - were most of the parse (2026-11-23).
+	struct ibEntry
+	{
+		std::string              m_context;
+		bool                     m_hasContext = false;
+		std::string              m_id;
+		std::string              m_idPlural;
+		std::vector<std::string> m_texts;   // msgstr, or msgstr[0..n]; an empty one is no translation
+		bool                     m_fuzzy = false;
+		bool                     m_cFormat = false;
+	};
 
-    // an entry in the string table
-    struct ibMsgTableEntry
-    {
-        size_t32   nLen;           // length of the string
-        size_t32   ofsString;      // pointer to the string
-    };
+	// The text taken apart, each entry into the hash, and the header read; false at the first line no .po has,
+	// `badLine` naming it.
+	bool LoadData(const std::string& data, ibPluralFormsCalculatorPtr& rPluralFormsCalculator, ibTranslationsHashMap& hash,
+		size_t& badLine);
 
-    // header of a .mo file
-    struct ibMsgCatalogHeader
-    {
-        size_t32  magic,          // offset +00:  magic id
-                  revision,       //        +04:  revision
-                  numStrings;     //        +08:  number of strings in the file
-        size_t32  ofsOrigTable,   //        +0C:  start of original string table
-                  ofsTransTable;  //        +10:  start of translated string table
-        size_t32  nHashSize,      //        +14:  hash table size
-                  ofsHashTable;   //        +18:  offset of hash table start
-    };
+	// fills the hash with an entry's string-translation pairs
+	void FillHash(const ibEntry& entry, ibTranslationsHashMap& hash) const;
 
-    // all data is stored here
-    DataBuffer m_data;
-
-    // data description
-    size_t32          m_numStrings;   // number of strings in this domain
-    const
-    ibMsgTableEntry  *m_pOrigTable,   // pointer to original   strings
-                     *m_pTransTable;  //            translated
-
-    ibString m_charset;               // from the message catalog header
-
-
-    // swap the 2 halves of 32 bit integer if needed
-    size_t32 Swap(size_t32 ui) const
-    {
-        return m_bSwapped ? (ui << 24) | ((ui & 0xff00) << 8) |
-                            ((ui >> 8) & 0xff00) | (ui >> 24)
-                            : ui;
-    }
-
-    const char* StringAtOfs(const ibMsgTableEntry* pTable, size_t32 n) const
-    {
-        const ibMsgTableEntry * const ent = pTable + n;
-
-        // this check could fail for a corrupt message catalog
-        size_t32 ofsString = Swap(ent->ofsString);
-        if ( ofsString + Swap(ent->nLen) > m_data.length())
-        {
-            return nullptr;
-        }
-
-        return m_data.data() + ofsString;
-    }
-
-    bool m_bSwapped;   // wrong endianness?
-
-    ibMsgCatalogFile(const ibMsgCatalogFile&) = delete;
-    ibMsgCatalogFile& operator=(const ibMsgCatalogFile&) = delete;
+	ibString m_filename;   // what the journal names
 };
 
-// ----------------------------------------------------------------------------
-// ibMsgCatalogFile class
-// ----------------------------------------------------------------------------
-
-ibMsgCatalogFile::ibMsgCatalogFile()
+bool ibMsgCatalogFile::LoadFile(const ibString& filename, ibPluralFormsCalculatorPtr& rPluralFormsCalculator,
+	ibTranslationsHashMap& hash)
 {
-}
+	// Read whole at once: a catalog is a megabyte, and a character at a time is a call a byte, each one checked in a
+	// Debug build - the read alone took 115 ms of the Russian catalog's load (2026-11-23).
+	std::ifstream file(ibPathOf(filename), std::ios::binary | std::ios::ate);
+	if (!file.is_open())
+		return false;
+	const std::streamoff size = file.tellg();
+	if (size < 0)
+		return false;
+	std::string data(static_cast<size_t>(size), '\0');
+	file.seekg(0);
+	if (!file.read(data.data(), static_cast<std::streamsize>(size)))
+		return false;
 
-ibMsgCatalogFile::~ibMsgCatalogFile()
-{
-}
-
-// open disk file and read in its contents
-bool ibMsgCatalogFile::LoadFile(const ibString& filename,
-                                ibPluralFormsCalculatorPtr& rPluralFormsCalculator)
-{
-    // the whole file in memory
-    std::ifstream fileMsg(ibPathOf(filename), std::ios::binary);
-    if ( !fileMsg.is_open() )
-        return false;
-    DataBuffer filedata((std::istreambuf_iterator<char>(fileMsg)), std::istreambuf_iterator<char>());
-    if ( fileMsg.bad() )
-        return false;
-
-    bool ok = LoadData(filedata, rPluralFormsCalculator);
-    if ( !ok )
-    {
-        ibJournalWarning(ibT("i18n"), ibT("'%s' is not a valid message catalog"), filename);
-        return false;
-    }
-
-    return true;
+	m_filename = filename;
+	size_t badLine = 0;
+	if (!LoadData(data, rPluralFormsCalculator, hash, badLine)) {
+		ibJournalWarning(kJournalSource, ibT("'%s' is not a valid message catalog: line %u"), filename, static_cast<unsigned>(badLine));
+		return false;
+	}
+	return true;
 }
 
 
-bool ibMsgCatalogFile::LoadData(const DataBuffer& data,
-                                ibPluralFormsCalculatorPtr& rPluralFormsCalculator)
+bool ibMsgCatalogFile::LoadData(const std::string& data, ibPluralFormsCalculatorPtr& rPluralFormsCalculator,
+	ibTranslationsHashMap& hash, size_t& badLine)
 {
-    // examine header
-    bool bValid = data.length() > sizeof(ibMsgCatalogHeader);
+	ibEntry entry;
+	std::string header;             // the header entry's msgstr, read when the file is
+	std::string* field = nullptr;   // the string a line of "…" carries on
+	bool started = false;           // the entry has its msgid
+	bool translated = false;        // …and a msgstr: a keyword or a comment after it starts the next one
+	const auto finish = [&]() {
+		if (started) {
+			if (!entry.m_hasContext && entry.m_id.empty()) {
+				if (!entry.m_texts.empty())
+					header = entry.m_texts[0];
+			}
+			else
+				FillHash(entry, hash);
+		}
+		// Emptied, not made anew - its strings keep their room (ibEntry).
+		entry.m_context.clear();
+		entry.m_hasContext = false;
+		entry.m_id.clear();
+		entry.m_idPlural.clear();
+		for (std::string& text : entry.m_texts)
+			text.clear();
+		entry.m_fuzzy = entry.m_cFormat = false;
+		field = nullptr;
+		started = translated = false;
+	};
 
-    const ibMsgCatalogHeader* pHeader = reinterpret_cast<const ibMsgCatalogHeader*>(data.data());
-    if ( bValid ) {
-        // we'll have to swap all the integers if it's true
-        m_bSwapped = pHeader->magic == MSGCATALOG_MAGIC_SW;
+	size_t at = data.size() >= sizeof kByteOrderMark && std::memcmp(data.data(), kByteOrderMark, sizeof kByteOrderMark) == 0
+		? sizeof kByteOrderMark : 0;
+	for (size_t number = 1; at < data.size(); ++number) {
+		size_t end = data.find('\n', at);
+		if (end == std::string::npos)
+			end = data.size();
+		std::string_view line(data.data() + at, end - at);
+		at = end + 1;
+		if (!line.empty() && line.back() == '\r')
+			line.remove_suffix(1);
+		while (!line.empty() && (line.front() == ' ' || line.front() == '\t'))
+			line.remove_prefix(1);
 
-        // check the magic number
-        bValid = m_bSwapped || pHeader->magic == MSGCATALOG_MAGIC;
-    }
+		if (line.empty()) {
+			field = nullptr;
+			continue;
+		}
 
-    if ( !bValid ) {
-        // it's either too short or has incorrect magic number
-        ibJournalWarning(ibT("i18n"), ibT("a message catalog is not a valid one"));
-        return false;
-    }
+		// A comment of the next entry ends this one: `#,` says the flags, `#~` is an entry nobody uses any more, the
+		// rest - the source's place, a note - are for the translator.
+		if (line.front() == '#') {
+			if (translated)
+				finish();
+			field = nullptr;
+			if (line.size() > 1 && line[1] == ',') {
+				for (std::string_view flags = line.substr(2); !flags.empty();) {
+					const size_t comma = flags.find(',');
+					std::string_view flag = flags.substr(0, comma);
+					flags = comma == std::string_view::npos ? std::string_view() : flags.substr(comma + 1);
+					while (!flag.empty() && flag.front() == ' ')
+						flag.remove_prefix(1);
+					while (!flag.empty() && flag.back() == ' ')
+						flag.remove_suffix(1);
+					if (flag == "fuzzy")
+						entry.m_fuzzy = true;
+					else if (flag == "c-format")
+						entry.m_cFormat = true;
+				}
+			}
+			continue;
+		}
 
-    // The tables point into OUR copy: wx's buffer was shared, a std::string is copied, and the caller's goes
-    // with LoadFile's return - read through it, every catalog came out empty (2026-10-27).
-    m_data = data;
+		// A string carried over to the next line.
+		if (line.front() == '"') {
+			if (field == nullptr || !Unquote(line, *field)) {
+				badLine = number;
+				return false;
+			}
+			continue;
+		}
 
-    // initialize
-    m_numStrings  = Swap(pHeader->numStrings);
-    m_pOrigTable  = reinterpret_cast<const ibMsgTableEntry*>(m_data.data() +
-                    Swap(pHeader->ofsOrigTable));
-    m_pTransTable = reinterpret_cast<const ibMsgTableEntry*>(m_data.data() +
-                    Swap(pHeader->ofsTransTable));
+		// A keyword and its string: the field it names, then the string into it.
+		const size_t space = line.find_first_of(" \t");
+		const std::string_view keyword = line.substr(0, space);
+		if (space == std::string_view::npos) {
+			badLine = number;
+			return false;
+		}
+		if (keyword == "msgctxt" || keyword == "msgid") {
+			if (translated)
+				finish();
+			if (keyword == "msgctxt") {
+				entry.m_hasContext = true;
+				field = &entry.m_context;
+			}
+			else {
+				started = true;
+				field = &entry.m_id;
+			}
+		}
+		else if (keyword == "msgid_plural" && started) {
+			field = &entry.m_idPlural;
+		}
+		else if (keyword == "msgstr" && started) {
+			if (entry.m_texts.empty())
+				entry.m_texts.resize(1);
+			field = &entry.m_texts[0];
+			translated = true;
+		}
+		else if (keyword.starts_with("msgstr[") && keyword.ends_with(']') && started) {
+			// The form between the brackets.
+			const size_t open = keyword.find('[');
+			const std::string_view digits = keyword.substr(open + 1, keyword.size() - open - 2);
+			if (digits.empty()) {
+				badLine = number;
+				return false;
+			}
+			size_t form = 0;
+			for (const char digit : digits) {
+				if (digit < '0' || digit > '9' || form > 99) {
+					badLine = number;
+					return false;
+				}
+				form = form * 10 + static_cast<size_t>(digit - '0');
+			}
+			if (entry.m_texts.size() <= form)
+				entry.m_texts.resize(form + 1);
+			field = &entry.m_texts[form];
+			translated = true;
+		}
+		else {
+			badLine = number;
+			return false;
+		}
+		field->clear();
+		if (!Unquote(line.substr(space), *field)) {
+			badLine = number;
+			return false;
+		}
+	}
+	finish();
 
-    // now parse catalog's header and try to extract catalog charset and
-    // plural forms formula from it:
+	// THE HEADER — the entry with no msgid: the charset and the plural rule.
+	if (!header.empty()) {
+		const size_t charset = header.find(kCharsetField);
+		if (charset != std::string::npos) {
+			const size_t from = charset + kCharsetField.size();
+			const size_t end = header.find('\n', from);
+			if (end != std::string::npos) {
+				const ibString named = ibString::FromUTF8(header.substr(from, end - from));
+				// The engine's catalogs are UTF-8; one that names another charset is read as UTF-8 too, and the
+				// journal says so. "CHARSET" is the template's word, left by a translator: no charset named.
+				if (!named.IsEmpty() && !(named == ibT("CHARSET")) && named.CmpNoCase(ibT("UTF-8")) != 0)
+					ibJournalWarning(kJournalSource, ibT("a message catalog says it is in %s; it is read as UTF-8"), named);
+			}
+		}
 
-    const char* headerData = StringAtOfs(m_pOrigTable, 0);
-    if ( headerData && headerData[0] == '\0' )
-    {
-        // Extract the charset:
-        const char * const header = StringAtOfs(m_pTransTable, 0);
-        const char *
-            cset = strstr(header, "Content-Type: text/plain; charset=");
-        if ( cset )
-        {
-            cset += 34; // strlen("Content-Type: text/plain; charset=")
+		const size_t plurals = header.find(kPluralFormsField);
+		if (plurals != std::string::npos) {
+			const size_t from = plurals + kPluralFormsField.size();
+			const size_t end = header.find('\n', from);
+			if (end != std::string::npos) {
+				const std::string rule = header.substr(from, end - from);
+				if (ibPluralFormsCalculator* const calculator = ibPluralFormsCalculator::make(rule.c_str()))
+					rPluralFormsCalculator.reset(calculator);
+				else
+					ibJournalWarning(kJournalSource, ibT("Plural-Forms could not be parsed: '%s'"), ibString::FromUTF8(rule));
+			}
+		}
 
-            const char * const csetEnd = strchr(cset, '\n');
-            if ( csetEnd )
-            {
-                m_charset = ibString::FromUTF8(cset, csetEnd - cset);
-                if ( m_charset == ibT("CHARSET") )
-                {
-                    // "CHARSET" is not valid charset, but lazy translator
-                    m_charset.clear();
-                }
-            }
-        }
-        // else: incorrectly filled Content-Type header
-
-        // Extract plural forms:
-        const char * plurals = strstr(header, "Plural-Forms:");
-        if ( plurals )
-        {
-            plurals += 13; // strlen("Plural-Forms:")
-            const char * const pluralsEnd = strchr(plurals, '\n');
-            if ( pluralsEnd )
-            {
-                const size_t pluralsLen = pluralsEnd - plurals;
-                const std::string buf(plurals, pluralsLen);
-                ibPluralFormsCalculator * const
-                    pCalculator = ibPluralFormsCalculator::make(buf.c_str());
-                if ( pCalculator )
-                {
-                    rPluralFormsCalculator.reset(pCalculator);
-                }
-                else
-                {
-                    ibJournalWarning(ibT("i18n"), ibT("Plural-Forms could not be parsed: '%s'"), ibString::FromUTF8(buf));
-                }
-            }
-        }
-
-        if ( !rPluralFormsCalculator.get() )
-            rPluralFormsCalculator.reset(ibPluralFormsCalculator::make());
-    }
-
-    // everything is fine
-    return true;
+		if (!rPluralFormsCalculator)
+			rPluralFormsCalculator.reset(ibPluralFormsCalculator::make());
+	}
+	return true;
 }
 
-bool ibMsgCatalogFile::FillHash(ibTranslationsHashMap& hash) const
+void ibMsgCatalogFile::FillHash(const ibEntry& entry, ibTranslationsHashMap& hash) const
 {
-    // The engine's catalogs are UTF-8, and so is every one msgfmt writes from a .po that says so; a catalog that
-    // names another charset is read as UTF-8 too, and the journal says so once.
-    if ( !m_charset.empty() && m_charset.CmpNoCase(ibT("UTF-8")) != 0 )
-        ibJournalWarning(ibT("i18n"), ibT("a message catalog says it is in %s; it is read as UTF-8"), m_charset);
-
-    for (size_t32 i = 0; i < m_numStrings; i++)
-    {
-        const char *data = StringAtOfs(m_pOrigTable, i);
-        if (!data)
-            return false; // may happen for invalid MO files
-
-        const ibString msgid = ibString::FromUTF8(data);
-        data = StringAtOfs(m_pTransTable, i);
-        if (!data)
-            return false; // may happen for invalid MO files
-
-        size_t length = Swap(m_pTransTable[i].nLen);
-        size_t offset = 0;
-        size_t index = 0;
-        while (offset < length)
-        {
-            const char * const str = data + offset;
-
-            const size_t strLength = Strnlen(str, length - offset);
-            const ibString msgstr = ibString::FromUTF8(str, strLength);
-            if ( !msgstr.empty() )
-            {
-                hash[index == 0 ? msgid : msgid + ibChar(index)] = msgstr;
-            }
-
-            // skip this string
-            // IMPORTANT: accesses to the 'data' pointer are valid only for
-            //            the first 'length+1' bytes (GNU specs says that the
-            //            final NUL is not counted in length); using Strnlen()
-            //            we make sure we don't access memory beyond the valid range
-            //            (which otherwise may happen for invalid MO files):
-            offset += strLength + 1;
-            ++index;
-        }
-    }
-
-    return true;
+	if (entry.m_fuzzy)
+		return;   // a guess is no translation yet
+	// The keys are gettext's: a context before the text and kContextSeparator between them, a plural form after it by
+	// number.
+	const ibString msgid = entry.m_hasContext ? ibString::FromUTF8(entry.m_context + kContextSeparator + entry.m_id)
+		: ibString::FromUTF8(entry.m_id);
+	for (size_t index = 0; index < entry.m_texts.size(); ++index) {
+		const std::string& text = entry.m_texts[index];
+		if (text.empty())
+			continue;   // nobody translated it: the text is said as written
+		const std::string& source = index == 0 || entry.m_idPlural.empty() ? entry.m_id : entry.m_idPlural;
+		if (entry.m_cFormat && Conversions(text) != Conversions(source)) {
+			ibJournalWarning(kJournalSource, ibT("%s: the translation of '%s' names other conversions than the text; it is not taken"),
+				m_filename, ibString::FromUTF8(entry.m_id));
+			continue;
+		}
+		hash[index == 0 ? msgid : msgid + ibChar(index)] = ibString::FromUTF8(text);
+	}
 }
 
 } // namespace
@@ -942,12 +1036,8 @@ public:
 	{
 		std::unique_ptr<ibMsgCatalog> catalog(new ibMsgCatalog(domain));
 		ibMsgCatalogFile file;
-		if (!file.LoadFile(filename, catalog->m_pluralFormsCalculator))
+		if (!file.LoadFile(filename, catalog->m_pluralFormsCalculator, catalog->m_messages))
 			return nullptr;
-		if (!file.FillHash(catalog->m_messages)) {
-			ibJournalWarning(ibT("i18n"), ibT("'%s' is not a valid message catalog"), filename);
-			return nullptr;
-		}
 		return catalog;
 	}
 
@@ -966,13 +1056,13 @@ public:
 			if (context.IsEmpty())
 				found = m_messages.find(ibString(text) + ibChar(index));
 			else
-				found = m_messages.find(ibString(context) + ibString('\x04') + ibString(text) + ibChar(index));
+				found = m_messages.find(ibString(context) + ibString(kContextSeparator) + ibString(text) + ibChar(index));
 		}
 		else {
 			if (context.IsEmpty())
 				found = m_messages.find(text);
 			else
-				found = m_messages.find(ibString(context) + ibString('\x04') + ibString(text));
+				found = m_messages.find(ibString(context) + ibString(kContextSeparator) + ibString(text));
 		}
 		return found != m_messages.end() ? &found->second : nullptr;
 	}
@@ -997,7 +1087,7 @@ struct ibDictionaryRegistry {
 	std::mutex                                    m_mutex;
 	std::vector<std::unique_ptr<ibDictionary>>  m_languages;   // each made once, kept for the process
 	std::vector<ibString>                         m_domains{ kEngineDomain };   // loaded for every language on its first use
-	std::vector<ibString>                         m_prefixes;    // where <language>/<domain>.mo is looked for
+	std::vector<ibString>                         m_prefixes;    // where <language>/<domain>.po is looked for
 	bool                                          m_prefixesSettled = false;
 	ibString                                      m_processLanguage;
 	std::atomic<unsigned>                         m_processGeneration{ 0 };   // bumped by SetProcessLanguage: the threads' caches follow
@@ -1024,12 +1114,12 @@ void SettleDefaultPrefixes(ibDictionaryRegistry& registry)
 				return;
 		registry.m_prefixes.push_back(prefix);
 	};
-	add(ibGetCwd() + ibFILE_SEP_PATH + ibT("lang"));
-	add(ibProgramFolder() + ibFILE_SEP_PATH + ibT("lang"));
+	add(ibGetCwd() + ibFILE_SEP_PATH + kCatalogFolder);
+	add(ibProgramFolder() + ibFILE_SEP_PATH + kCatalogFolder);
 	std::filesystem::path walk = ibPathOf(ibExecutablePath()).parent_path();
 	for (int level = 0; level < 6 && !walk.empty(); ++level) {
 		std::error_code error;
-		const std::filesystem::path candidate = walk / "lang";
+		const std::filesystem::path candidate = walk / kCatalogFolder;
 		if (std::filesystem::is_directory(candidate, error)) {
 			add(ibString(candidate.wstring()));
 			break;
@@ -1040,16 +1130,16 @@ void SettleDefaultPrefixes(ibDictionaryRegistry& registry)
 	}
 }
 
-// <prefix>/<language>/LC_MESSAGES/<domain>.mo, then <prefix>/<language>/<domain>.mo, over every prefix;
+// <prefix>/<language>/LC_MESSAGES/<domain>.po, then <prefix>/<language>/<domain>.po, over every prefix;
 // empty when none of them is a file.
 ibString CatalogPath(const std::vector<ibString>& prefixes, const ibString& language, const ibString& domain)
 {
 	for (const ibString& prefix : prefixes) {
 		const ibString folder = prefix + ibFILE_SEP_PATH + language;
-		const ibString inMessages = folder + ibFILE_SEP_PATH + ibT("LC_MESSAGES") + ibFILE_SEP_PATH + domain + ibT(".mo");
+		const ibString inMessages = folder + ibFILE_SEP_PATH + kMessagesFolder + ibFILE_SEP_PATH + domain + kCatalogExtension;
 		if (ibFileExists(inMessages))
 			return inMessages;
-		const ibString beside = folder + ibFILE_SEP_PATH + domain + ibT(".mo");
+		const ibString beside = folder + ibFILE_SEP_PATH + domain + kCatalogExtension;
 		if (ibFileExists(beside))
 			return beside;
 	}
@@ -1090,7 +1180,7 @@ bool ibDictionary::LoadCatalogFrom(const std::vector<ibString>& prefixes, const 
 		std::unique_ptr<ibMsgCatalog> catalog = ibMsgCatalog::CreateFromFile(path, domain);
 		if (!catalog)
 			return false;   // found and not readable: said by the reader; another folder's copy is not tried
-		ibJournalInfo(ibT("i18n"), ibT("the catalog %s for %s is %s"), domain, m_language, path);
+		ibJournalInfo(kJournalSource, ibT("the catalog %s for %s is %s"), domain, m_language, path);
 		m_catalogs.push_back(std::move(catalog));
 		return true;
 	}
@@ -1142,7 +1232,7 @@ void ibDictionary::AddDomain(const ibString& domain)
 	registry.m_domains.push_back(domain);
 	// A set made before is not changed under its readers: said, for whoever declared the domain late.
 	for (const auto& language : registry.m_languages)
-		ibJournalWarning(ibT("i18n"), ibT("the domain %s is declared after the language %s was made; that set does not have it"),
+		ibJournalWarning(kJournalSource, ibT("the domain %s is declared after the language %s was made; that set does not have it"),
 			domain, language->GetLanguage());
 }
 

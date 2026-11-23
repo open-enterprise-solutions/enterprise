@@ -885,7 +885,7 @@ int ibWebServer::Run()
 			else
 				m_http.Mount(prefix, packed);
 		}
-		// THE PAGE'S OWN WORDS — the catalogues the thin client says its own by (lang/<language>/open_es.mo in the program
+		// THE PAGE'S OWN WORDS — the catalogues the thin client says its own by (lang/<language>/open_es.po in the program
 		// folder), read by the page in the language the login names (Locale): one dictionary for both clients, none in
 		// the site. The longer prefix is matched first, so lang/ is not looked for among the site's files.
 		const ibString catalogues = ibProgramFolder() + ibFILE_SEP_PATH + ibT("lang");

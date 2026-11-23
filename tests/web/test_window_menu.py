@@ -1,6 +1,5 @@
 """The client's own menus, as the thin client's: File's New and Quit, the tabbed frame's Window — in the person's language,
 read from the thin client's dictionary."""
-import struct
 import unittest
 
 from harness import PageTest, tab
@@ -10,18 +9,10 @@ EXIT, CLOSE_ALL = 6, 13
 
 
 def catalogue(words):
-    """A GNU catalogue (.mo) of the pairs, laid out as msgfmt lays it: the head, the two tables, the strings."""
-    keys = sorted(words)
-    originals = 28
-    translations = originals + len(keys) * 8
-    strings = translations + len(keys) * 8
-    tables, texts = [b'', b''], b''
-    for table, side in ((0, keys), (1, [words[key] for key in keys])):
-        for text in side:
-            encoded = text.encode()
-            tables[table] += struct.pack('<II', len(encoded), strings + len(texts))
-            texts += encoded + b'\0'
-    return struct.pack('<7I', 0x950412de, 0, len(keys), originals, translations, 0, strings) + tables[0] + tables[1] + texts
+    """A GNU catalogue (.po) of the pairs, as the translators write it: the header, then an entry a pair."""
+    entries = ['msgid ""\nmsgstr "Content-Type: text/plain; charset=UTF-8\\n"\n']
+    entries += [f'msgid "{key}"\nmsgstr "{words[key]}"\n' for key in sorted(words)]
+    return '\n'.join(entries).encode()
 
 
 class WindowMenu(PageTest):
@@ -103,7 +94,7 @@ class WindowMenu(PageTest):
     def test_the_menus_speak_the_language_the_login_names(self):
         words = catalogue({'&File': '&Файл', '&Window': '&Вікно', 'Close All': 'Закрити всі'})
         self.start({'tabs': [tab()], 'locale': 'uk_UA'},
-                   before=lambda page: page.route('**/lang/uk/open_es.mo', lambda route: route.fulfill(body=words)))
+                   before=lambda page: page.route('**/lang/uk/open_es.po', lambda route: route.fulfill(body=words)))
         self.assertEqual(self.tops(), ['Файл', 'Edit', 'Вікно'], 'a word the dictionary does not have stays as written')
         self.menu_item('Вікно', 'Закрити всі').wait_for()
 

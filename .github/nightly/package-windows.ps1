@@ -23,9 +23,9 @@ New-Item -ItemType Directory $stage | Out-Null
 Copy-Item -Recurse -Path (Join-Path $release '*') -Destination $stage
 Get-ChildItem -Recurse -File $stage -Include *.pdb, *.ilk, *.exp, *.lib | Remove-Item -Force
 
-# The translations — read from <exeDir>/lang/<code>/open_es.mo; the .po and the template beside them stay in the repository.
+# The translations — read from <exeDir>/lang/<code>/open_es.po; the template beside them stays in the repository.
 Copy-Item -Recurse -Path 'lang' -Destination (Join-Path $stage 'lang')
-Get-ChildItem -Recurse -File (Join-Path $stage 'lang') -Include *.po, *.pot | Remove-Item -Force
+Get-ChildItem -Recurse -File (Join-Path $stage 'lang') -Include *.pot | Remove-Item -Force
 
 # The MSVC runtime, from the toolset that built it (vcvars sets VCToolsRedistDir).
 $crt = Get-ChildItem -Directory (Join-Path $env:VCToolsRedistDir 'x64') -Filter 'Microsoft.VC*.CRT' | Select-Object -First 1
@@ -41,7 +41,7 @@ $required = @(
     'backend.conf',
     '_fb\fbclient.dll', '_fb\firebird.msg', '_fb\firebird.conf', '_fb\plugins\engine13.dll', '_fb\intl\fbintl.dll',
     'libpq.dll', 'libssl-3-x64.dll', 'libcrypto-3-x64.dll',
-    'help\en.hlk', 'lang\ru\open_es.mo', 'plugins\simple-plugin.dll',
+    'help\en.hlk', 'lang\ru\open_es.po', 'plugins\simple-plugin.dll',
     'msvcp140.dll', 'vcruntime140.dll'
 )
 $missing = $required | Where-Object { -not (Test-Path (Join-Path $stage $_)) }

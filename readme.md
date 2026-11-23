@@ -228,7 +228,7 @@ enterprise/
 ├── ConfigurationDefs.props   # Preprocessor definitions per configuration
 ├── LICENSE.md                # PolyForm Noncommercial 1.0.0 (source-available)
 ├── NOTICE.md                 # third-party licenses, the wx fork
-├── lang/                     # interface translations: the template, and per language (ru, uk) the .po and its .mo
+├── lang/                     # interface translations: the template, and per language (ru, uk) the .po the programs read
 ├── tests/                    # Google Test suites (built by CMake)
 ├── docs/                     # how we work, build, portability, architecture — start with docs/README.md
 │   └── private/              # PRIVATE submodule (design docs) — resolves for members of the

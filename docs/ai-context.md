@@ -63,7 +63,7 @@ business behaviour. The architect validates by running.
 | OES script modules inside metadata | `*.vcxproj`, `CMakeLists.txt`, `Common.props` |
 | Form layouts (visual designer) | Plugin DLLs (`simple-plugin.dll` pattern) |
 | Spreadsheet templates (`SpreadsheetDocument`) | `enterprise.sln` solution structure |
-| Test applications exercised by coderunner scripts | Build outputs, locale `.mo` / `.po` files |
+| Test applications exercised by coderunner scripts | Build outputs, locale `.po` files |
 | Tests against generated applications (coderunner scripts) | DB driver code under `databaseLayer/` |
 
 **Reason:** OES enforces invariants in C++ (RAII, prepared statements,

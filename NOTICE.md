@@ -69,9 +69,9 @@ They live in:
 | `src/engine/frmclient/docView`, `src/engine/frmserver/docView` | 2 + 2 |
 | `src/engine/deskgui/univ` (with `ctrl`, `theme`: wxUniversal's) | 72 |
 | `src/engine/frmclient/propertyManager/property/advprop` (advpropFont, advpropSize) | 2 |
-| `src/engine/core/localization` (dictionary.cpp: the `.mo` reader and the plural-forms calculator) | 1 |
+| `src/engine/core/localization` (dictionary.cpp: the plural-forms calculator) | 1 |
 | `src/engine/core` (fdatetimeParse.cpp: the free-form date and time reader) | 1 |
-| `lang/<code>` (open_es.po and its .mo: the entries of the strings the forked code keeps from wxWidgets are its translations, from its `locale/<code>.po`) | 2 + 2 |
+| `lang/<code>` (open_es.po: the entries of the strings the forked code keeps from wxWidgets are its translations, from its `locale/<code>.po`) | 2 |
 
 The per-file notices are authoritative; the table is a map, not a substitute. See
 `docs/private/wx-fork.md` (private) for what was changed and why.
