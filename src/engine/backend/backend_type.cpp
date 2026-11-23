@@ -418,6 +418,48 @@ const ibFormatString& ibBackendTypeApplicationFactory::GetFormatFromColumn(const
 	return s_kept.m_formatString;
 }
 
+unsigned int ibBackendTypeApplicationFactory::GetWidthFromColumn(const ibFormatString& format, const ibTypeDescription& type)
+{
+	// The bounds a type leaves open: a string's; a text whose length the type does not say — a string of no length, and
+	// the default of every type that is not a simple one (a reference, an enumeration: not measured, one width for
+	// all); a number nobody bounded.
+	constexpr unsigned int stringLeast = 3, stringMost = 40, unboundedText = 30, numberUnbounded = 12;
+
+	unsigned int widest = 0;
+	for (const ibClassID& clsid : type.GetClsidList()) {
+		unsigned int width = unboundedText;   // …the default, unless a simple type below measures itself
+		if (clsid == g_valueStringCLSID) {
+			const unsigned int length = type.GetLength();
+			width = length == 0 ? unboundedText : std::clamp(length, stringLeast, stringMost);
+		}
+		else if (clsid == g_valueNumberCLSID) {
+			// Its widest figure, all nines, the sign unless it holds none — printed, so the format's separators count.
+			const unsigned int precision = type.GetPrecision(), scale = type.GetScale();
+			if (precision == 0)
+				width = numberUnbounded;
+			else {
+				ibString nines = type.IsNonNegative() ? ibString() : ibString(ibT("-"));
+				nines.append(precision > scale ? precision - scale : 1, ibT('9'));
+				if (scale > 0)
+					nines.append(ibT(".")).append(scale, ibT('9'));
+				width = static_cast<unsigned int>(format.Apply(ibNumber(nines)).length());
+			}
+		}
+		else if (clsid == g_valueDateCLSID) {
+			// A Wednesday in September: the longest English names, should the pattern spell the day or the month.
+			width = static_cast<unsigned int>(format.Apply(ibDateTime(2000, 9, 27, 23, 59, 59)).length());
+		}
+		else if (clsid == g_valueBooleanCLSID) {
+			// Its texts, or a tick box.
+			const size_t texts = std::max(format.m_boolean.m_true.value_or(ibString()).length(),
+				format.m_boolean.m_false.value_or(ibString()).length());
+			width = texts > 0 ? static_cast<unsigned int>(texts) : stringLeast;
+		}
+		widest = std::max(widest, width);
+	}
+	return widest;
+}
+
 /////////////////////////////////////////////////////////////////////////////////////
 
 const ibBackendSourceColumn* ibBackendTypeSourceFactory::WalkSource(

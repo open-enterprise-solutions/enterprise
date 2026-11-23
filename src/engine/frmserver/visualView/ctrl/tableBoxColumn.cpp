@@ -7,6 +7,8 @@
 #include "core/formatString.h"         // ibFormatString — what a cell is shown through
 #include "backend/appData.h"
 
+#include <algorithm>   // std::clamp — a width by type, between its floor and its cap
+
 //****************************************************************************
 #include "backend/metaData.h"
 #include "backend/objCtor.h"
@@ -161,8 +163,27 @@ void ibValueModelTableBoxColumn::OnUpdate(ibDataNode& state, ibVisualHost* host)
 	if (rep == ibRepresentation::ibRepresentation_Auto)
 		rep = ibRepresentation::ibRepresentation_PictureAndText;
 
-	state.SetValue(ibProtocol::ibForm::ibState::Caption, GetControlTitle());
+	const ibString caption = GetControlTitle();
+	state.SetValue(ibProtocol::ibForm::ibState::Caption, caption);
 	state.SetValue(ibProtocol::ibForm::ibTable::FooterText, m_propertyFooterText->GetValueAsTranslateString());
+
+	// WITH NO WIDTH SET, THE CHARACTERS ITS TYPE NEEDS — answered here, as its caption and its format are: the type and
+	// the format it is printed through are the server's. At least the caption's longest line, so the header is not cut,
+	// and at most 50, so one wide field does not take the table. A client turns them into pixels with its own font.
+	if (GetWidthColumn() == 0) {
+		ibFormatString typeFormat;
+		const ibFormatString* format = GetCellFormat();
+		if (format == nullptr)
+			ibFormatString::FromTypeDesc(GetTypeDesc(), typeFormat);
+		unsigned int chars = ibBackendTypeApplicationFactory::GetWidthFromColumn(format != nullptr ? *format : typeFormat,
+			GetTypeDesc());
+		unsigned int line = 0;
+		for (const ibChar c : caption) {
+			line = c == ibT('\n') ? 0 : line + 1;
+			chars = std::max(chars, line);
+		}
+		state.SetValue(ibProtocol::ibForm::ibTable::Chars, static_cast<std::int32_t>(std::clamp(chars, 3u, 50u)));
+	}
 	state.SetValue(ibProtocol::ibForm::ibState::Representation, static_cast<std::int32_t>(rep));
 	if (rep != ibRepresentation::ibRepresentation_Text) {
 		const ibDataValue header = ibBackendPicture::SendPicture(m_propertyHeaderPicture->GetValueAsPictureDesc(), GetMetaData());

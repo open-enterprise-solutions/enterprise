@@ -1381,7 +1381,7 @@
       "kind": "property",
       "category_keys": ["value_types", "runtime", "forms", "form_controls"],
       "signature": "TableboxColumn.Width : number",
-      "description": "The column's starting width, in pixels. The user can change it when the column is Resizable.",
+      "description": "The column's starting width, in pixels, or 0 for the width its type needs: a column of codes, numbers or dates narrow, one of descriptions wide. The user can change it when the column is Resizable.",
       "syntax_block": "Controls.Column1.Width = 120;",
       "parameters": "",
       "return_descr": "Number.",

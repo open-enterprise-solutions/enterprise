@@ -1,7 +1,7 @@
 #ifndef __TABLE_BOX_H__
 #define __TABLE_BOX_H__
 
-#include "backend/tabularModel.h"   // ibValueModel, and through it ibDataViewItem and ibDVC_DEFAULT_WIDTH
+#include "backend/tabularModel.h"   // ibValueModel, and through it ibDataViewItem
 #include "backend/compiler/enumUnit.h"   // ibValueEnumeration template + AddEnumeration
 
 #include "frmserver/visualView/ctrl/window.h"
@@ -807,7 +807,8 @@ public:
 	// FooterText, Representation (Auto resolved: picture and text) with HeaderPicture / FooterPicture where
 	// pictures are shown, Visible (its own Visible, a binding, the feature options), ReadOnly, Sortable
 	// (the model sorts and the column has a field to sort by) and Sort (1 ascending / -1 descending, when
-	// the composer's active sort is on this column's field). Width and alignment are the schema's.
+	// the composer's active sort is on this column's field). Width and alignment are the schema's — and, with
+	// no width set, Chars: the characters its type needs (GetWidthFromColumn), which a client turns into pixels.
 	virtual void OnUpdate(ibDataNode& state, ibVisualHost* host) override;
 
 	virtual bool CanDeleteControl() const;
@@ -916,7 +917,7 @@ private:
 
 	ibPropertyCategory* m_categoryStyle = ibPropertyObject::CreatePropertyCategory(ibT("Style"), _("Style"));
 	ibPropertyUInteger* m_propertyWidth = ibPropertyObject::CreateProperty<ibPropertyUInteger>(m_categoryStyle, ibT("Width"), _("Width"),
-		_("The column's starting width, in pixels. The user can change it when the column is resizable."), ibDVC_DEFAULT_WIDTH);
+		_("The column's starting width, in pixels, or 0 for the width its type needs. The user can change it when the column is resizable."), 0);
 	ibPropertyEnum<ibValueEnumHorizontalAlignment>* m_propertyHeaderAlign = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumHorizontalAlignment>>(m_categoryStyle, ibT("HeaderAlign"), _("Header align"),
 		_("How the header text is aligned: left (the default), center or right."), ibAlignment_Left);
 	ibPropertyEnum<ibValueEnumHorizontalAlignment>* m_propertyFooterAlign = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumHorizontalAlignment>>(m_categoryStyle, ibT("FooterAlign"), _("Footer align"),

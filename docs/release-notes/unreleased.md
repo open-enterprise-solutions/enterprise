@@ -302,6 +302,12 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
 - **A scheduled job's last pass.** A row of `ScheduledJobs.Predefined` has `LastJob`, and a parameterized
   job's manager `LastJob(job)`: the `BackgroundJob` of its last pass here, `Undefined` if none ran. A
   predefined job the base has no settings for reads as declared; it read as switched on, hourly.
+- **A table column with no width set takes the width its type needs**, on the desktop and in the browser: a code, a
+  line number, a date or a flag narrow, a description wide, at least as wide as its caption and at most 50
+  characters; the table shares its width in proportion to them. A column's `Width` is 0 by default (it was 80) and
+  so is a value table's `Columns.Add` width; a width set in the designer, by a module or by dragging the column
+  still wins. A form saved with 80 keeps 80 until its width is set to 0. A width is the room for the value: the
+  first column also gets the room the expander and the row's picture take before it.
 
 ## The browser client
 

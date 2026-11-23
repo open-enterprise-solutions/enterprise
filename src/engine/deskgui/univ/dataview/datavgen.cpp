@@ -4236,9 +4236,13 @@ void ibDataViewCtrl::UpdateColumnSizes()
 	std::vector<ibWidthRange> ranges;
 	CollectWidthRanges(ranges);
 
-	int asking = 0;
-	for (const ibWidthRange& range : ranges)
+	// What the columns ask for, and the leads the control adds to it (ibWidthRange::lead) — kept apart, because only the
+	// asking is stretched: the expander's slot and the row's picture are as wide in a wide table as in a narrow one.
+	int asking = 0, leads = 0;
+	for (const ibWidthRange& range : ranges) {
 		asking += range.specified;
+		leads += range.lead;
+	}
 
 	if (ranges.empty() || asking <= 0 || room <= 0) {
 		// Nothing to share out — publish what the columns really take (the layout's total,
@@ -4251,11 +4255,11 @@ void ibDataViewCtrl::UpdateColumnSizes()
 	}
 
 	// DOES NOT FIT: leave every width alone and let the scrollbar do its job.
-	if (asking > room) {
+	if (asking + leads > room) {
 
 		bool moved = false;
 		for (const ibWidthRange& range : ranges) {
-			const int width = wxMax(range.specified, range.minimum);
+			const int width = wxMax(range.specified + range.lead, range.minimum);
 			for (ibDataViewColumn* column : range.columns) {
 				if (column->GetWidth() != width)
 					moved = true;
@@ -4281,7 +4285,8 @@ void ibDataViewCtrl::UpdateColumnSizes()
 		const bool lastOne = (idx + 1 == ranges.size());
 		const int width = lastOne
 			? room - given
-			: wxMax((int)((wxLongLong_t)room * ranges[idx].specified / asking), ranges[idx].minimum);
+			: wxMax((int)((wxLongLong_t)(room - leads) * ranges[idx].specified / asking) + ranges[idx].lead,
+				ranges[idx].minimum);
 
 		// Set QUIETLY, and not into the asked-for width: an automatic stretch is not a width
 		// the user requested, and everything that follows from the new widths is announced
@@ -5904,13 +5909,11 @@ public:
 	ibDataViewMaxWidthCalculator(const ibDataViewCtrl* dvc,
 		ibDataViewRenderer* renderer,
 		const ibDataViewModel* model,
-		size_t model_column,
-		int expanderSize)
+		size_t model_column)
 		: wxMaxWidthCalculatorBase(model_column),
 		m_dvc(dvc),
 		m_renderer(renderer),
-		m_model(model),
-		m_expanderSize(expanderSize)
+		m_model(model)
 	{
 		int index = dvc->GetModelColumnIndex(model_column);
 		ibDataViewColumn* column = index == wxNOT_FOUND ? NULL : dvc->GetColumn(index);
@@ -5929,15 +5932,10 @@ public:
 		{
 			ibDataViewTreeNode* node = m_dvc->GetTreeNodeByRow(row);
 			item = node->GetItem();
-			width = m_dvc->GetIndent() * node->GetIndentLevel() + m_expanderSize;
-			// …and the row's state picture, drawn after the expander (DrawTableContent).
-			if (m_model != NULL) {
-				const ibPictureID picture = m_model->GetRowPicture(item);
-				// A picture the client was not sent takes no room — it draws nothing either.
-				const wxBitmap bitmap = picture != 0 ? m_dvc->PictureById(picture) : wxBitmap();
-				if (bitmap.IsOk())
-					width += bitmap.GetLogicalWidth() + m_dvc->FromDIP(4);
-			}
+			// The indent only: the expander's slot and the row's picture are the control's LEAD, which the width law
+			// adds to whatever the column asks for (ibWidthRange::lead) — counted here too, a fit to the contents would
+			// come out wider by exactly that.
+			width = m_dvc->GetIndent() * node->GetIndentLevel();
 		}
 		else
 		{
@@ -5958,7 +5956,6 @@ private:
 	ibDataViewRenderer* m_renderer;
 	const ibDataViewModel* m_model;
 	bool m_isExpanderCol;
-	int m_expanderSize;
 };
 
 unsigned int ibDataViewCtrl::GetBestColumnWidth(ibDataViewColumn* column) const
@@ -5974,8 +5971,7 @@ unsigned int ibDataViewCtrl::GetBestColumnWidth(ibDataViewColumn* column) const
 		const_cast<ibDataViewRenderer*>(column->GetRenderer());
 
 	ibDataViewMaxWidthCalculator calculator(this, renderer,
-		GetModel(), column->GetModelColumn(),
-		GetRowHeight());
+		GetModel(), column->GetModelColumn());
 
 	calculator.UpdateWithWidth(column->GetMinWidth());
 

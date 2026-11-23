@@ -153,7 +153,7 @@ public:
 			// runtime / explorer read see the same value, nothing to mirror or drift. Only the identity
 			// (m_columnID) and the non-editable width are plain members. Members grouped last, per convention.
 			unsigned int m_columnID = 0;
-			int m_columnWidth = ibDVC_DEFAULT_WIDTH;
+			int m_columnWidth = 0;
 
 			ibPropertyCategory* m_categoryCommon = ibPropertyObject::CreatePropertyCategory(ibT("Common"), _("General"));
 			ibPropertyUString* m_propertyName = ibPropertyObject::CreateProperty<ibPropertyUString>(m_categoryCommon, ibT("Name"), _("Name"), _("Column name"), ibT(""));
@@ -176,7 +176,7 @@ public:
 		ibValueModelColumnInfo* AddColumn(const ibString& colName,
 			const ibTypeDescription& typeData,
 			const ibString& caption,
-			int width = ibDVC_DEFAULT_WIDTH) override {
+			int width = 0) override {
 
 			// Adding a column WRITES a cell into every existing row, so it needs the table. Without
 			// one there is nothing to add a column to, and saying so beats dereferencing.

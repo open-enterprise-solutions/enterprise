@@ -1385,6 +1385,8 @@ namespace ibProtocol {
 			inline constexpr const char* ContextMenu      = "ContextMenu";   // its standard commands (ibCommandBar's entries)
 			// …a column's node, and its State:
 			inline constexpr const char* Width            = "Width";
+			inline constexpr const char* Chars            = "Chars";          // with no Width set: the characters its type
+			                                                                  // needs — a client turns them into pixels
 			inline constexpr const char* HeaderAlign      = "HeaderAlign";
 			inline constexpr const char* FooterAlign      = "FooterAlign";
 			inline constexpr const char* Resizable        = "Resizable";

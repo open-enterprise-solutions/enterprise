@@ -940,7 +940,14 @@ void ibValueModelTableBoxColumn::Update(const ibProtocolNode& node)
 	m_column->SetFooterTitle(picture ? ibString() : state.GetString(ibProtocol::ibForm::ibTable::FooterText));
 	m_column->SetFooterBitmap(ibProtocolPicture(state, ibProtocol::ibForm::ibTable::FooterPicture));
 
-	m_column->SetWidth(static_cast<int>(node.GetInt(ibProtocol::ibForm::ibTable::Width, 80)));
+	// Its width set, in pixels; else the characters its type needs, in the table's font — a "0" each, and the cell's
+	// padding on either side (deskgui's PADDING_RIGHTLEFT, as its own best width adds it).
+	const int width = static_cast<int>(node.GetInt(ibProtocol::ibForm::ibTable::Width));
+	if (width > 0)
+		m_column->SetWidth(width);
+	else if (const ibDataViewCtrl* owner = m_column->GetOwner())
+		m_column->SetWidth(static_cast<int>(state.GetInt(ibProtocol::ibForm::ibTable::Chars)) * owner->GetTextExtent(wxT("0")).x
+			+ 2 * owner->FromDIP(3));
 	m_column->SetAlignment(static_cast<wxAlignment>(node.GetInt(ibProtocol::ibForm::ibTable::HeaderAlign, wxALIGN_LEFT)));
 	m_column->SetFooterAlignment(static_cast<wxAlignment>(node.GetInt(ibProtocol::ibForm::ibTable::FooterAlign, wxALIGN_LEFT)));
 

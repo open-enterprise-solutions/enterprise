@@ -152,7 +152,7 @@ let measure = null;
  * @param {string} text
  * @param {CSSStyleDeclaration} style
  */
-function textWidth(text, style) {
+export function textWidth(text, style) {
 	measure ??= /** @type {CanvasRenderingContext2D} */ (document.createElement('canvas').getContext('2d'));
 	measure.font = `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
 	return Math.ceil(measure.measureText(text).width);

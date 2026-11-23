@@ -301,7 +301,8 @@ public:
 			// attribute answers with the attribute's, the one written on it first.
 			virtual const ibFormatString& GetColumnFormat() const;
 
-			virtual int GetColumnWidth() const { return ibDVC_DEFAULT_WIDTH; }
+			// In pixels; 0 is "not set" — the column a table builds over it asks for the width its type needs.
+			virtual int GetColumnWidth() const { return 0; }
 
 			virtual void SetColumnWidth(int width) {};
 
@@ -329,7 +330,7 @@ public:
 		virtual ibValueModelColumnInfo* AddColumn(const ibString& colName,
 			const ibTypeDescription& typeData,
 			const ibString& caption,
-			int width = ibDVC_DEFAULT_WIDTH) {
+			int width = 0) {
 			return nullptr;
 		};
 

@@ -16710,7 +16710,7 @@ msgid "Whether the cell editor shows the Open button, which opens the referenced
 msgstr ""
 
 #: src/engine/frmserver/visualView/ctrl/tableBox.h:867
-msgid "The column's starting width, in pixels. The user can change it when the column is resizable."
+msgid "The column's starting width, in pixels, or 0 for the width its type needs. The user can change it when the column is resizable."
 msgstr ""
 
 #: src/engine/frmserver/visualView/ctrl/tableBox.h:869

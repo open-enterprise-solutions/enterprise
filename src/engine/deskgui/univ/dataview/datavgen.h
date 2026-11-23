@@ -1141,7 +1141,14 @@ public:     // utility functions not part of the API
 	struct ibWidthRange {
 		std::vector<ibDataViewColumn*> columns;
 		int specified = 0;   // the widest thing any of them asked for
-		// ONE FLOOR: a sliver, enough to keep the column on screen and its border grabbable.
+		// WHAT THE CONTROL DRAWS BEFORE THE VALUE — in the expander column's range only: the expander's slot (not in a
+		// list) and the row's state picture, the widest among the rows on screen (DrawTableContent). The control's own,
+		// so it is added to what the column asks for and never stored in it: a column's width is the room for its
+		// value, one set in pixels as much as one asked by its type, and the room follows the column when it is moved
+		// or hidden.
+		int lead = 0;
+		// ONE FLOOR: a sliver, enough to keep the column on screen and its border grabbable — of the VALUE, so the
+		// expander column's floor stands on its lead.
 		//
 		// There was a second, higher floor for a while — a column paying for its neighbour
 		// could not be squeezed past its own TITLE — because the AUTOMATIC fit used to squeeze

@@ -590,6 +590,39 @@ void ibDataViewCtrl::CollectWidthRanges(std::vector<ibWidthRange>& out)
 		if (!range.columns.empty())
 			out.push_back(range);
 	}
+
+	if (out.empty())
+		return;
+
+	// THE LEAD, ON THE RANGE THAT HOLDS THE EXPANDER COLUMN — the one set, or, with none set or it hidden, the first
+	// shown (GetExpanderColumnOrFirstOne), which is the first range by construction.
+	ibDataViewColumn* const expander = GetExpanderColumn();
+	std::vector<ibWidthRange>::iterator holder = out.begin();
+	if (expander != nullptr && !expander->IsHidden()) {
+		holder = std::find_if(out.begin(), out.end(), [expander](const ibWidthRange& range) {
+			return std::find(range.columns.begin(), range.columns.end(), expander) != range.columns.end();
+		});
+		if (holder == out.end())
+			holder = out.begin();
+	}
+
+	// What DrawTableContent puts before the value: the expander's slot outside a list, and the row's picture where the
+	// rows are the model's own (not a virtual list) — the widest among the rows on screen, a handful.
+	int lead = IsList() ? 0 : GetExpanderWidth();
+	const unsigned int rows = GetRowCount();
+	if (rows > 0 && !IsVirtualList() && GetModel() != nullptr) {
+		int picture = 0;
+		const unsigned int last = GetLastVisibleRow();
+		for (unsigned int row = GetFirstVisibleRow(); row <= last && row < rows; row++) {
+			const wxBitmap& bitmap = RowPictureBitmap(GetModel()->GetRowPicture(GetItemByRow(row)));
+			if (bitmap.IsOk())
+				picture = wxMax(picture, bitmap.GetLogicalWidth() + FromDIP(4));
+		}
+		lead += picture;
+	}
+
+	holder->lead = lead;
+	holder->minimum += lead;
 }
 
 // A DRAG BEGINS — remember the picture it starts from, so every mouse-move that follows is
@@ -781,9 +814,11 @@ void ibDataViewCtrl::WXApplyColumnWidth(ibDataViewColumn* column, int width)
 	// changes against the previous state and needed a spare-room budget, four rounds of
 	// collection and a total-restoring correction to stay honest — and still flip-flopped with
 	// the automatic fit, one handing out pixels and the other taking them back.
+	//
+	// Less the LEAD: the control's own room before the value is not what the column asks for (ibWidthRange::lead).
 	for (size_t idx = 0; idx < ranges.size(); idx++) {
 		for (ibDataViewColumn* member : ranges[idx].columns)
-			member->WXSetSpecifiedWidth(shown[idx]);
+			member->WXSetSpecifiedWidth(shown[idx] - ranges[idx].lead);
 	}
 
 	InvalidateColBestWidth(column);

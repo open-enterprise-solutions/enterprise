@@ -43,6 +43,7 @@
 import { Control, EventKind, defineControl } from '../controls/control.js';
 import { CommandBar } from '../controls/commandBar.js';
 import { TextEditor } from '../controls/textEditor.js';
+import { textWidth } from '../controls/textctrl.js';
 import { readPage } from './rows.js';
 
 /** @typedef {import('../protocol/patch.js').ProtocolNode} ProtocolNode */
@@ -132,8 +133,11 @@ class Tablebox extends Control {
 		this.built = null;
 		this.disposed = false;
 		this.drawnColumns = '';
-		/** @type {number[]} what stands directly under the table, as the server has it, the hidden columns too */
-		this.columnIds = [];
+		/** the rows read carry pictures: the first column's lead counts one (drawColumns) */
+		this.rowPictures = false;
+		/** @type {ProtocolNode[]} what stands directly under the table, as the server has it, the hidden columns too — the
+		 *  columns laid from it (drawColumns) */
+		this.columnNodes = [];
 		/** @type {number | undefined} the Version of the rows held */
 		this.version = undefined;
 		/** the reads of the rows held — a page asked under an older one is dropped */
@@ -257,23 +261,10 @@ class Tablebox extends Control {
 		const mode = state.ViewMode ?? hierarchicalView;
 		const switched = this.viewMode !== undefined && this.viewMode !== mode;
 		this.viewMode = mode;
-		this.columnIds = (node.NodeChildren ?? []).map((child) => child.ControlId);
-		const definitions = (node.NodeChildren ?? []).flatMap((child) => this.definitionsOf(child, node));
-		const first = firstShown(definitions);
-		if (first !== undefined)
-			first.formatterParams = { ...first.formatterParams, first: true };
-		// The columns frozen at the left (its FrezeeCol).
-		const frozen = node.FrezeeCol ?? 0;
-		if (frozen > 0)
-			definitions.slice(0, frozen).forEach((definition) => { definition.frozen = true; });
-		const drawn = JSON.stringify(definitions, (name, value) => typeof value === 'function' ? undefined : value);
-		this.grid(definitions, node).then((table) => {
+		this.columnNodes = node.NodeChildren ?? [];
+		this.drawColumns(node).then(() => {
 			if (this.disposed)
 				return;
-			if (drawn !== this.drawnColumns) {
-				this.drawnColumns = drawn;
-				table.setColumns(definitions);
-			}
 			if (state.CurrentColumn)
 				this.currentColumn = state.CurrentColumn;
 			if (switched) {
@@ -303,6 +294,43 @@ class Tablebox extends Control {
 				if (cell !== undefined)
 					this.editIn(cell, column);
 			}
+		});
+	}
+
+	/**
+	 * The columns, laid again only when they differ from the ones drawn — the first shown with what firstCell puts before
+	 * its value (form.css .first-cell): the expander's place, a button's touch-sized on a coarse pointer in a tree, and
+	 * the row's picture when the rows read carry one (rowPictures), each with the gap after it. The grid's own, added to
+	 * what the column asks for, as the desktop's lead is (ibWidthRange::lead).
+	 * @param {ProtocolNode} node the table's own — its footer and its frozen columns; the columns are columnNodes
+	 * @returns {Promise<TabulatorFull>}
+	 */
+	drawColumns(node) {
+		const definitions = this.columnNodes.flatMap((child) => this.definitionsOf(child, node));
+		const first = firstShown(definitions);
+		if (first !== undefined) {
+			const root = getComputedStyle(document.documentElement);
+			const rem = parseFloat(root.fontSize);
+			const touch = root.getPropertyValue('--oes-touch').trim();
+			const expander = this.viewMode === treeView && matchMedia('(pointer: coarse)').matches
+				? parseFloat(touch) * (touch.endsWith('rem') ? rem : 1)
+				: parseFloat(getComputedStyle(this.host).fontSize);
+			const lead = Math.ceil(expander + 0.2 * rem + (this.rowPictures ? 16 + 0.2 * rem : 0));
+			first.formatterParams = { ...first.formatterParams, first: true };
+			first.minWidth += lead;
+			first.widthGrow += lead;
+		}
+		// The columns frozen at the left (its FrezeeCol).
+		const frozen = node.FrezeeCol ?? 0;
+		if (frozen > 0)
+			definitions.slice(0, frozen).forEach((definition) => { definition.frozen = true; });
+		const drawn = JSON.stringify(definitions, (name, value) => typeof value === 'function' ? undefined : value);
+		return this.grid(definitions, node).then((table) => {
+			if (!this.disposed && drawn !== this.drawnColumns) {
+				this.drawnColumns = drawn;
+				table.setColumns(definitions);
+			}
+			return table;
 		});
 	}
 
@@ -420,7 +448,7 @@ class Tablebox extends Control {
 		const id = idOf(column.getField());
 		const order = columns.map((one) => idOf(one.getField()));
 		const next = order[order.indexOf(id) + 1];
-		const others = this.columnIds.filter((one) => one !== id);
+		const others = this.columnNodes.map((one) => one.ControlId).filter((one) => one !== id);
 		this.send(EventKind.Move, { Column: id, Holder: 0, Position: next === undefined ? others.length : others.indexOf(next) });
 	}
 
@@ -508,6 +536,12 @@ class Tablebox extends Control {
 	async setRows(records, inPlace = false) {
 		if (this.table === null)
 			return;
+		// Whether its rows carry pictures is known only once they are read: the first column's lead counts one.
+		const pictures = records.some((record) => Boolean(record.picture));
+		if (pictures !== this.rowPictures) {
+			this.rowPictures = pictures;
+			await this.drawColumns(this.node);
+		}
 		await (inPlace ? this.table.replaceData(records) : this.table.setData(records));
 		if (this.crumbs.length > 0) {
 			// A copy: the grid turns the rows it adds at the top round in place.
@@ -1111,14 +1145,20 @@ class Tablebox extends Control {
 			password: child.PasswordMode === true,
 			multiline: child.MultilineMode === true,
 		};
+		// The width it asks for: its own, in pixels, or the characters its type needs (Chars) in the grid's font — a "0"
+		// each — with the cell's two 0.3rem paddings and its rule (form.css).
+		const asked = child.Width > 0 ? child.Width
+			: (state.Chars ?? 0) * textWidth('0', getComputedStyle(this.host))
+				+ Math.ceil(0.6 * parseFloat(getComputedStyle(document.documentElement).fontSize)) + 1;
 		/** @type {any} */
 		const definition = {
 			title: part.title,
 			field: `c${id}`,
 			visible: state.Visible !== false && child.Visible !== false,
-			// The saved width is the column's floor, not its width: the columns share the table's width between them,
-			// as the desktop's do.
-			minWidth: child.Width > 0 ? child.Width : 40,
+			// The width asked for is the column's floor, not its width, and its share: the columns share the table's width
+			// in proportion to what they ask for, as the desktop's do.
+			minWidth: Math.max(asked, 40),
+			widthGrow: asked,
 			headerSort: false,
 			headerHozAlign: alignOf(child.HeaderAlign ?? 0),
 			// The header's picture and sort are in the definition, so one changed draws the header again.
@@ -1173,6 +1213,7 @@ class Tablebox extends Control {
 			title: parts.map((part) => part.title).join(grouping === oneUnderAnother ? '\n' : ' '),
 			field: `g${group.ControlId}`,
 			minWidth: Math.max(...columns.map((column) => column.minWidth ?? 40)),
+			widthGrow: Math.max(...columns.map((column) => column.widthGrow ?? 1)),
 			headerSort: false,
 			headerHozAlign: alignOf(group.HeaderAlign ?? 0),
 			titleFormatter: (cell) => {

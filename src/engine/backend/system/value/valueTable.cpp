@@ -393,7 +393,7 @@ bool ibValueModelTable::ReadProperty(const ibDataNode& node)
 	// rows exist yet, so AddColumn's per-row cell-fill is a no-op).
 	m_tableColumnCollection->m_listColumnInfo.clear();
 	for (const ibDataNode& colNode : node.Children()) {
-		if (m_tableColumnCollection->AddColumn(ibEmptyString, ibTypeDescription(), ibEmptyString, ibDVC_DEFAULT_WIDTH) != nullptr)
+		if (m_tableColumnCollection->AddColumn(ibEmptyString, ibTypeDescription(), ibEmptyString) != nullptr)
 			m_tableColumnCollection->m_listColumnInfo.back()->ReadProperty(colNode);
 	}
 	// The columns were emptied and each read its name and type AFTER it was added — so the rows' names and the
@@ -467,7 +467,7 @@ bool ibValueModelTable::ibValueModelTableColumnCollection::CallAsFunc(const long
 		}
 		const ibString name = paParams[0]->GetString();
 		const ibString caption = lSizeArray > 2 ? ibString(paParams[2]->GetString()) : name;
-		const int width = lSizeArray > 3 ? paParams[3]->GetInteger() : ibDVC_DEFAULT_WIDTH;
+		const int width = lSizeArray > 3 ? paParams[3]->GetInteger() : 0;   // not set: the column asks by its type
 		pvarRetValue = AddColumn(name, type, caption, width);
 		return true;
 	}

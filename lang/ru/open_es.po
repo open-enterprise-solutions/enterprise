@@ -16809,8 +16809,8 @@ msgid "Whether the cell editor shows the Open button, which opens the referenced
 msgstr "Показывает ли редактор ячейки кнопку открытия, которая открывает форму объекта по ссылке. По умолчанию выключено."
 
 #: src/engine/frmserver/visualView/ctrl/tableBox.h:867
-msgid "The column's starting width, in pixels. The user can change it when the column is resizable."
-msgstr "Начальная ширина колонки в пикселях. Пользователь может изменить её, если у колонки изменяемый размер."
+msgid "The column's starting width, in pixels, or 0 for the width its type needs. The user can change it when the column is resizable."
+msgstr "Начальная ширина колонки в пикселях или 0 — ширина по её типу. Пользователь может изменить её, если у колонки изменяемый размер."
 
 #: src/engine/frmserver/visualView/ctrl/tableBox.h:869
 msgid "How the header text is aligned: left (the default), center or right."

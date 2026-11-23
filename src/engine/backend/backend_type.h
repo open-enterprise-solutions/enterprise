@@ -135,6 +135,11 @@ public:
 	// column and an input field alike. A table is painted a column at a time, top to bottom, so the answer is
 	// kept per thread and read again only when the column asked is another one.
 	static const class ibFormatString& GetFormatFromColumn(const class ibTranslateString& format, const ibTypeDescription& type);
+	// …AND THE WIDTH IT IS SHOWN IN, in characters: a simple type's widest value, printed through `format` — a
+	// string's length, a number's widest figure, a date's pattern, a boolean's texts; a reference, and any other type
+	// that is not a simple one, one width for all; a composite type its widest member; no type, 0. A client turns it
+	// into pixels with its own font (docs/private/column-widths-by-type.md).
+	static unsigned int GetWidthFromColumn(const class ibFormatString& format, const ibTypeDescription& type);
 
 	// ⭐⭐ A CHARACTERISTIC STANDS FOR ITS CHART'S TYPES — answered here, for EVERY holder of such a
 	// declaration: an attribute, a control bound to one, a filter cell, a form's own attribute. Body in

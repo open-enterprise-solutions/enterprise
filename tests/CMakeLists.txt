@@ -40,6 +40,7 @@ add_executable(oes_tests
     test_driverDates.cpp
     test_timeZone.cpp
     test_formatString.cpp
+    test_columnWidthByType.cpp
     test_tstr.cpp
     test_blockSyntaxLINQ.cpp
     test_scriptFoldCode.cpp
