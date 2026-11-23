@@ -249,15 +249,18 @@ public:
 	// See SetCaret. -1 = nobody asked, and then NoteCaret does nothing at all.
 	long m_caretPos = -1;
 	long m_caretOwner = kCaretNowhere;
+	long m_caretDepth = 0;
 
-	// The caret fell inside [spanStart, here] — so `owner` is the declaration holding it. The
-	// INNERMOST one wins: a body finishes before the body enclosing it, so the first claim is the
+	// The caret fell inside [spanStart, here] — so `owner` is the declaration holding it, `depth` frames below its
+	// module. The INNERMOST one wins: a body finishes before the body enclosing it, so the first claim is the
 	// tightest, and an enclosing span must not take it back.
-	void NoteCaret(long spanStart, long owner) {
+	void NoteCaret(long spanStart, long owner, long depth = 0) {
 		if (m_caretPos < 0 || m_caretOwner != kCaretNowhere)
 			return;
-		if (m_caretPos >= spanStart && m_caretPos <= CaretCursor())
+		if (m_caretPos >= spanStart && m_caretPos <= CaretCursor()) {
 			m_caretOwner = owner;
+			m_caretDepth = depth;
+		}
 	}
 
 	// ⭐ THE STREAM IS EXHAUSTED — a different fact from "what you wrote is wrong", and the
@@ -296,11 +299,16 @@ public:
 	// on a closing instruction was never a boundary — it is what StampSource stamped, the token
 	// AFTER the body, which for the last declaration in a module is the end of the text. Every
 	// patch to make that field mean something else is a patch to a field somebody else owns.
-	void SetCaret(long position) { m_caretPos = position; m_caretOwner = kCaretNowhere; }
+	void SetCaret(long position) { m_caretPos = position; m_caretOwner = kCaretNowhere; m_caretDepth = 0; }
 
 	// The entry IP of the declaration the caret stands in; kCaretAtModule when it stands in the
 	// module body, kCaretNowhere when no caret was set or the text never reached it.
 	long GetCaretOwner() const { return m_caretOwner; }
+
+	// How many frames the caret's declaration stands below its module (its context's GetFrameDepth) — what an
+	// operand's depth counts from, so an operand `depth` deep names the module `depth − GetCaretDepth()` floors above
+	// the caret's own.
+	long GetCaretDepth() const { return m_caretDepth; }
 
 	static const long kCaretNowhere = -2;
 	static const long kCaretAtModule = -1;

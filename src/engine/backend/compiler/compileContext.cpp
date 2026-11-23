@@ -568,6 +568,15 @@ bool ibCompileContext::FindFunction(const ibString& strFuncName, std::shared_ptr
 	return false;
 }
 
+long ibCompileContext::GetFrameDepth() const
+{
+	long depth = 0;
+	for (const ibCompileContext* at = this; at != nullptr && at != m_compileModule->GetContext(); at = at->m_parentContext)
+		if (at->m_numReturn != RETURN_BLOCK)
+			depth++;
+	return depth;
+}
+
 /**
  * Linking GOTO statements to labels
  */

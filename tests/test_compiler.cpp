@@ -576,6 +576,67 @@ TEST(ClosureCapture, LambdaBodyEmitsDepthGreaterOrEqualOneForCapturedVar) {
 }
 
 // ===========================================================================
+// The caret's depth — how many frames its declaration stands below the module
+//
+// What an operand's depth counts from (GetCaretDepth): the completion reads a name `depth − GetCaretDepth()` floors
+// up the module chain. 0 in the module body, 1 in a procedure, one more for a lambda; a loop's block adds nothing,
+// as it adds nothing to an operand's depth. Read off the BRACE dialect, the one whose loop body is a block.
+// ===========================================================================
+
+namespace {
+
+struct ibCaretAnswer {
+	long m_owner;
+	long m_depth;
+};
+
+// The text `before` + `after`, compiled with the caret between them.
+ibCaretAnswer CaretBetween(const ibString& before, const ibString& after) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	cc.SetCaret((long)before.length());
+	TryCompile(cc, before + after);
+	return { cc.GetCaretOwner(), cc.GetCaretDepth() };
+}
+
+} // namespace
+
+TEST(CaretDepth, TheModuleBodyIsTheModulesOwnFrame_AProcedureOneBelow_ALambdaInItTwo) {
+	struct StyleGuard {
+		const short saved = ibCompileCode::GetCodeStyle();
+		~StyleGuard() { ibCompileCode::SetCodeStyle(saved); }
+	} guard;
+	ibCompileCode::SetCodeStyle(CODE_CES);
+
+	const ibString head =
+		wxT("var s;\n")
+		wxT("Procedure Fill() {\n")
+		wxT("  foreach (r in s) {\n")
+		wxT("    x = r;");
+	const ibString loopToLambda =
+		wxT("\n  }\n")
+		wxT("  f = Function(y) {\n")
+		wxT("    return y;");
+	const ibString lambdaToModule =
+		wxT("\n  };\n")
+		wxT("}\n")
+		wxT("t = 1;");
+	const ibString tail = wxT("\n");
+
+	const ibCaretAnswer inTheLoop = CaretBetween(head, loopToLambda + lambdaToModule + tail);
+	EXPECT_GE(inTheLoop.m_owner, 0) << "the procedure holds the caret";
+	EXPECT_EQ(inTheLoop.m_depth, 1) << "the loop's block is no frame";
+
+	const ibCaretAnswer inTheLambda = CaretBetween(head + loopToLambda, lambdaToModule + tail);
+	EXPECT_GE(inTheLambda.m_owner, 0) << "the lambda holds the caret";
+	EXPECT_NE(inTheLambda.m_owner, inTheLoop.m_owner) << "the innermost body claims it";
+	EXPECT_EQ(inTheLambda.m_depth, 2) << "the lambda's frame and the procedure's";
+
+	const ibCaretAnswer inTheModule = CaretBetween(head + loopToLambda + lambdaToModule, tail);
+	EXPECT_LT(inTheModule.m_owner, 0) << "no declaration holds it";
+	EXPECT_EQ(inTheModule.m_depth, 0);
+}
+
+// ===========================================================================
 // Diagnostics — a failure leaves the engine as DATA, not as a sentence
 //
 // The message a person reads is assembled FROM the record (compiler-pipeline.md

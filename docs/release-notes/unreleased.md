@@ -446,6 +446,9 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
 
 ## Fixes
 
+- **The completion after a shared module's name offers that module.** In a document's object module `Common.` listed
+  the record set's registers: a name was looked up by its cell number in every module up the chain, and the nearest
+  one holding that number answered. It is now looked up in the one module the compiler resolved it in.
 - **A value chosen into a table's cell stays.** In the thin client a flag picked *True* from the cell's list came back
   *False*: the cell's editor kept the text it opened with and sent it back when it closed. The value the server writes
   into the cell - a choice, a clear - now goes into its open editor. A flag typed as anything but *True* or *False* is

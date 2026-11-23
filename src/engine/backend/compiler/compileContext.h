@@ -442,6 +442,10 @@ struct ibCompileContext {
 	bool FindVariable(const ibString& strVarName, std::shared_ptr<ibVariable>& foundedVar, bool context = false);
 	bool FindFunction(const ibString& strFuncName, std::shared_ptr<ibFunction>& foundedFunc, bool context = false);
 
+	// How many frames this context stands below its module: 0 the module's own, 1 a procedure's body, one more for
+	// each lambda around it — every context up to the module's root but a block, as GetVariable counts an operand's.
+	long GetFrameDepth() const;
+
 	//Reset compile context
 	void Reset() {
 

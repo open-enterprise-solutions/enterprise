@@ -43,6 +43,26 @@ bool SameSlot(const ibParamRunUnit& a, const ibParamRunUnit& b)
 	return FrameOf(a) == FrameOf(b) && a.m_numIndex == b.m_numIndex;
 }
 
+// HOW MANY FRAMES AN INSTRUCTION STANDS BELOW ITS MODULE, read off the tape: the bodies still open at it — an opener
+// met going back with none of its own closed after it. 0 in the module body, 1 in a procedure, one more for each lambda
+// around it: what the compile counts for the caret (ibCompileContext::GetFrameDepth), for an instruction no caret is at.
+long FrameDepthAt(const ibByteCode& bc, long ip)
+{
+	long depth = 0;
+	for (long at = ip - 1, foreign = 0; at >= 0; --at) {
+		const short oper = bc.m_listCode[(size_t)at].m_numOper % TYPE_DELTA1;
+		if (oper == OPER_ENDFUNC || oper == OPER_ENDLFUNC)
+			foreign++;
+		else if (oper == OPER_FUNC || oper == OPER_LFUNC) {
+			if (foreign == 0)
+				depth++;
+			else
+				foreign--;
+		}
+	}
+	return depth;
+}
+
 // ⭐⭐ THE TYPES A FIELD IS DECLARED WITH — the one lookup behind both the walk's widening and the
 // type printed beside each name in a listing (see ibFieldTypesOf in the header for why it is asked
 // here rather than of the value).
@@ -112,12 +132,12 @@ enum class ibStep {
 // unwinds itself. Depth is the length of the dotted path, not of the module.
 class ibCaretWalk {
 public:
-	ibCaretWalk(const ibCompileChain& chain, const ibByteCode::ibByteFunction* frame,
+	ibCaretWalk(const ibCompileChain& chain, const ibByteCode::ibByteFunction* frame, long frameDepth,
 		long lastCode, const ibMetaData* metaData = nullptr, long firstCode = 0)
 		// In DECLARATION order — GCC and Clang warn on any other, and their warning log is an order
 		// of magnitude longer than MSVC's, so a reorder here is invisible locally and noisy in CI.
 		: m_chain(chain), m_byteCode(chain.front()->m_cByteCode),
-		  m_frame(frame), m_lastCode(lastCode), m_metaData(metaData), m_firstCode(firstCode) {}
+		  m_frame(frame), m_frameDepth(frameDepth), m_lastCode(lastCode), m_metaData(metaData), m_firstCode(firstCode) {}
 
 	// ⭐⭐ THE CARET AFTER A DOT IS AN INSTRUCTION THE COMPILER WROTE FOR IT — not "the last one", and
 	// not "the last one minus a few". A tolerant compile emits the attribute step with an EMPTY name
@@ -885,11 +905,10 @@ private:
 		return m_byteCode.m_listConst[(size_t)index].GetString();
 	}
 
-	// THE NAME AN UNWRITTEN SLOT WAS DECLARED UNDER, looked for where the runtime would look for
-	// the cell: the open function's own frame first, then the module's table, then each ancestor's.
-	// Only bound entries are considered — External / Context, and a Local the module has a bind for (a form's
-	// attribute, a constant's Value): a bound local is a Local to the compiler, and skipped, its slot number was
-	// answered by whoever holds it a module up (`Object.` in a form offered a shared module's exports).
+	// THE NAME AN UNWRITTEN SLOT WAS DECLARED UNDER, looked for where the runtime looks for the cell: an operand at
+	// or below zero in the frame the walk stands in, any other in the one module its depth names. Only bound entries
+	// are considered — External / Context, and a Local the module has a bind for (a form's attribute, a constant's
+	// Value).
 	ibString NameOfSlot(const ibParamRunUnit& slot) const
 	{
 		const long long index = slot.m_numIndex;
@@ -902,42 +921,34 @@ private:
 			return ibString();
 		};
 
-		// 🛑 THE OPERAND'S DEPTH IS NOT AN INDEX INTO THIS CHAIN, and it is worth writing down
-		// because it looks exactly like one. `m_numArray` counts CONTEXTS the way the runtime
-		// stacks them — and a block scope is a context too (`if`, `foreach`: RETURN_BLOCK in
-		// compileContext.cpp), so the number grows with nesting and has no fixed relation to how
-		// many MODULES up the name lives. Measured 2026-09-07 on this application's own modules:
-		// reading the depth as a chain index took the answer rate from 66% down to 57%.
+		// 🛑 THIS FRAME'S CELL IS NOT LOOKED FOR IN ANOTHER FRAME'S TABLE. An operand at or below zero says THIS
+		// frame (procUnit.cpp, ResolveRead), and inside a body that frame is the declaration the walk stands in.
+		// Reading on into the module's table answers with whoever holds the same cell NUMBER there — a different
+		// frame's variable, matched on nothing but its position.
 		//
-		// So the name is found by SLOT across the ladder, nearest table first — the frame the caret
-		// stands in, then each module above it. It is a search, and it is honest about being one.
-		if (m_frame != nullptr) {
-			const ibString name = inTable(m_frame->m_listLocals, nullptr);
-			if (!name.IsEmpty())
-				return name;
+		// Measured 2026-09-07, and it took an instrument to see: cell zero of a procedure — its first parameter, or
+		// an operand the compiler never filled because the expression refused at the caret — came back as `Data`,
+		// the global name that happens to sit at cell zero of the module. So `NoSuchName.` and `Cancel.` both
+		// offered that object's members, which is how a name the language does not know produced a confident list.
+		if (m_frame != nullptr && FrameOf(slot) == 0)
+			return inTable(m_frame->m_listLocals, nullptr);
 
-			// 🛑 …BUT THIS FRAME'S CELL IS NOT LOOKED FOR IN ANOTHER FRAME'S TABLE. An operand at or
-			// below zero says THIS frame (procUnit.cpp, ResolveRead), and inside a body that frame
-			// is the declaration the caret stands in. Reading on into the module's table answers
-			// with whoever holds the same cell NUMBER there — a different frame's variable, matched
-			// on nothing but its position.
-			//
-			// Measured 2026-09-07, and it took an instrument to see: cell zero of a procedure —
-			// its first parameter, or an operand the compiler never filled because the expression
-			// refused at the caret — came back as `Data`, the global name that happens to sit at
-			// cell zero of the module. So `NoSuchName.` and `Cancel.` both offered that object's
-			// members, which is how a name the language does not know produced a confident list.
-			if (FrameOf(slot) == 0)
-				return ibEmptyString;
-		}
+		// ⭐⭐ THE DEPTH NAMES THE MODULE. It counts the frames the walk stands below its module (m_frameDepth), then
+		// the modules above it, block scopes taken out (compileContext.cpp, GetVariable: numParent − numContext) — so
+		// `depth − m_frameDepth` is a floor of the chain: 0 the caret's own module, 1 its parent, on to the root. A
+		// depth short of the module is a frame around the walk's (a lambda's enclosing body), whose table is not here.
+		//
+		// 🛑 A SEARCH BY SLOT ACROSS THE LADDER, nearest table first, is what this replaced, and it answered with
+		// whoever held the same NUMBER first: 2026-11-23, `Common.` in a document's object module offered the
+		// record set's registers — the shared module sat at slot 0 of the root, `RegisterRecords` at slot 0 of the
+		// module. The note it replaced held that a block scope grows the depth (`if`, `foreach`); GetVariable takes
+		// every block out (numContext), so inside a loop a module is named at the same depth as outside it.
+		const long long floor = FrameOf(slot) - m_frameDepth;
+		if (floor < 0 || floor >= (long long)m_chain.size())
+			return ibEmptyString;
 
-		for (const ibCompileCode* compile : m_chain) {
-			const ibString name = inTable(compile->m_cByteCode.m_listVar, &compile->m_binds);
-			if (!name.IsEmpty())
-				return name;
-		}
-
-		return ibEmptyString;
+		const ibCompileCode* const compile = m_chain[(size_t)floor];
+		return inTable(compile->m_cByteCode.m_listVar, &compile->m_binds);
 	}
 
 	// `.name` ASKED OF THE PARENT VALUE — a property when it is one, and otherwise the receiver
@@ -1134,8 +1145,9 @@ private:
 			}
 
 			// The return's own slot, resolved WITHIN the callee — bounded at its entry so a name
-			// that means one thing in B is not answered from the caller's frame.
-			const ibCaretWalk inside(m_chain, callee, ip, m_metaData, entry);
+			// that means one thing in B is not answered from the caller's frame. A called body is a
+			// named one, a frame below the module.
+			const ibCaretWalk inside(m_chain, callee, /*frameDepth*/ 1, ip, m_metaData, entry);
 			return inside.ValueOfSlot(returned, out, depth + 1, outOrigin)
 				? ibStep::Value : ibStep::Failed;
 		}
@@ -1378,7 +1390,8 @@ private:
 			if (!takesTheLambda)
 				continue;
 
-			const ibCaretWalk outer(m_chain, nullptr, (long)ip, m_metaData, 0);
+			// The call stands in the body the lambda is made in, a frame nearer the module.
+			const ibCaretWalk outer(m_chain, nullptr, m_frameDepth - 1, (long)ip, m_metaData, 0);
 			ibValue source;
 			if (!outer.ValueOfSlot(call.m_param2, source, depth + 1))
 				return false;
@@ -1451,6 +1464,9 @@ private:
 	const ibCompileChain&              m_chain;
 	const ibByteCode&                  m_byteCode;
 	const ibByteCode::ibByteFunction*  m_frame;
+	// How many frames the walk stands below its module (the compile's GetCaretDepth at a caret, FrameDepthAt at any
+	// other instruction) — what an operand's depth counts from, so a name lives `depth − m_frameDepth` floors up.
+	const long                         m_frameDepth;
 	const long                         m_lastCode;
 
 	// The application this caret belongs to — where a DECLARATION is asked about, and where a
@@ -1579,6 +1595,9 @@ public:
 			return nullptr;
 		return m_compiler.m_cByteCode.FindFunctionByEntry(owner);
 	}
+
+	// …and how many frames that body stands below the module — answered by the same compile (GetCaretDepth).
+	long CaretDepth() const { return m_compiler.GetCaretDepth(); }
 
 	unsigned int Caret() const { return m_at; }
 
@@ -1744,7 +1763,7 @@ bool ibValueAtCaret(const ibString& text, unsigned int caret,
 	ibString walkTrace;
 	bool resolved = false;
 	if (compiled.ByteCode().FindCaret(point) && point.m_instruction >= 0) {
-		const ibCaretWalk walk(compiled.Chain(), compiled.CaretFrame(), point.m_instruction,
+		const ibCaretWalk walk(compiled.Chain(), compiled.CaretFrame(), compiled.CaretDepth(), point.m_instruction,
 			moduleObject != nullptr ? moduleObject->GetMetaData() : nullptr);
 		resolved = walk.ValueAt(point.m_instruction, outValues);
 		walkTrace = walk.Trace();
@@ -2415,6 +2434,7 @@ std::vector<ibQueryOutline> ibOutlineScriptQueries(const ibString& text, const i
 				&& (size_t)binding.foreachStartIp < compiler.m_cByteCode.m_listCode.size()) {
 
 				const ibCaretWalk walk(chain, /*frame*/ nullptr,
+					FrameDepthAt(compiler.m_cByteCode, (long)binding.foreachStartIp),
 					(long)binding.foreachStartIp, metaData, /*firstCode*/ 0);
 
 				ibValue sample;
@@ -2504,7 +2524,7 @@ std::vector<ibDiagnostic> ibCheckMethodCalls(const ibString& text, const ibValue
 
 		std::vector<ibCaretValue> receivers;
 		try {
-			const ibCaretWalk walk(compiled.Chain(), frame, ip, metaData);
+			const ibCaretWalk walk(compiled.Chain(), frame, FrameDepthAt(bc, ip), ip, metaData);
 			if (!walk.ValuesOfSlot(code.m_param2, receivers, 0, ip))
 				continue;
 		}

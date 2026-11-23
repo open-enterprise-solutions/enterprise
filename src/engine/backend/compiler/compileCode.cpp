@@ -1812,7 +1812,7 @@ bool ibCompileCode::EmitFunctionBody(ibCompileContext* /*context*/,
 	// ⭐⭐ THE DECLARATION THE CARET IS STANDING IN, SAID HERE. See NoteCaret: this is the moment
 	// both ends of this body's span are known, and the parser is standing on the token that closed
 	// it. Nothing about it is written into the tape.
-	NoteCaret(bodyStart, lAddress);
+	NoteCaret(bodyStart, lAddress, functionContext->GetFrameDepth());
 
 	// ⭐⭐ …AND A BODY NOBODY CLOSED REACHES THE END OF THE TEXT. NoteCaret measures a span by the
 	// token that closed it, which is right for every body that HAS one. A body being typed into has
@@ -1835,8 +1835,10 @@ bool ibCompileCode::EmitFunctionBody(ibCompileContext* /*context*/,
 			&& (last.m_numData == KEY_ENDFUNCTION || last.m_numData == KEY_ENDPROCEDURE);
 	};
 
-	if (m_caretOwner == kCaretNowhere && m_caretPos >= bodyStart && !bodyWasClosed())
+	if (m_caretOwner == kCaretNowhere && m_caretPos >= bodyStart && !bodyWasClosed()) {
 		m_caretOwner = lAddress;
+		m_caretDepth = functionContext->GetFrameDepth();
+	}
 
 	createdFunction->m_nFinish = m_cByteCode.m_listCode.size() - 1;
 	createdFunction->m_lVarCount = functionContext->m_listVariable.size();
