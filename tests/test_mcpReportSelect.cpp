@@ -188,7 +188,7 @@ TEST_F(McpReportSelect, AGroupIsAdded_ARowMovedIntoIt_RePlaced_TakenOut_TitledIn
 		auto shows = result.FindField(ibT("shows"));
 		ASSERT_TRUE(shows);
 		ASSERT_EQ(ibDataKind::Array, shows->Kind());
-		const std::vector<ibDataValue>& shown = shows->AsArray();
+		const ibDataRange<ibDataValue> shown = shows->AsArray();
 		ASSERT_EQ(2u, shown.size());
 		ASSERT_EQ(ibDataKind::String, shown[0].Kind());
 		EXPECT_EQ(wxT("Code"), shown[0].AsString());
