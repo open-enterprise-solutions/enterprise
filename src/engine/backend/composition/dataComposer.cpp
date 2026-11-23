@@ -798,8 +798,17 @@ std::vector<ibCompositionColumnNode> ibComposerColumnTreeOf(const ibCompositionO
 		}
 	// ⭐⭐ …AND THE RESOURCES STAND LAST, as a sheet has always put them (Max, 2026-08-28): a sheet reads "what this row
 	// is", then "what it adds up to". A figure a group holds stays in its group — that is where somebody put it.
-	std::stable_partition(tree.begin(), tree.end(), [&info](const ibCompositionColumnNode& node) {
-		return node.IsGroup() || info.m_schema[node.m_column].m_role != ibQueryLowering::ibColumnRole::Measure;
+	//
+	// A GROUP OF FIGURES IS A FIGURE: it stands among them, in the order it was put. Read as "what this row is", it went
+	// in front of them all — a trial balance's closing balances, grouped after the opening ones and the turnovers,
+	// printed first (2026-11-23). A group that holds a field as well says what the row is, and stands in front.
+	const std::function<bool(const ibCompositionColumnNode&)> figure = [&](const ibCompositionColumnNode& node) {
+		return node.IsGroup()
+			? std::all_of(node.m_children.begin(), node.m_children.end(), figure)
+			: info.m_schema[node.m_column].m_role == ibQueryLowering::ibColumnRole::Measure;
+	};
+	std::stable_partition(tree.begin(), tree.end(), [&figure](const ibCompositionColumnNode& node) {
+		return !figure(node);
 	});
 	return tree;
 }

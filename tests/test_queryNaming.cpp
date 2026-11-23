@@ -1697,3 +1697,49 @@ TEST(QueryComposerBranches, AGroupsTitleReachesTheDriverInTheReadersLanguage)
 	EXPECT_EQ(ibString(ibT("Sale")), kept.m_tree[0].m_title);
 	EXPECT_EQ(2u, kept.m_tree[0].m_children.size());
 }
+
+// A GROUP OF FIGURES STANDS AMONG THE FIGURES, WHERE IT WAS PUT (docs/private/selected-field-groups.md §5.4). The figures
+// stand last, and a group holding only figures used to count as "what the row is" and go in front of them all: a trial
+// balance with its closing balances grouped after the opening ones printed the group first (2026-11-23, both clients).
+TEST(QueryComposerBranches, AGroupOfFiguresStandsWhereItWasPutAmongTheFigures)
+{
+	RowsInMemory sales(ibT("Sale"),
+		{ { ibT("Partner"), ibValueTypes::TYPE_STRING }, { ibT("Opening"), ibValueTypes::TYPE_NUMBER }, { ibT("Closing"), ibValueTypes::TYPE_NUMBER } },
+		{ { ibValue(ibString(ibT("North"))), ibValue(100), ibValue(70) } });
+	OpenApplication cfg;
+	ASSERT_NE(nullptr, cfg.GetSourceFactory());
+	cfg.RegisterSource(&sales);
+	const ibSourceMetaDataScope scope(&cfg);
+
+	ibDataDBComposer composer;
+	composer.SetMetaData(&cfg);
+	composer.FromText(ibT("SELECT Sale.Partner AS Partner, Sale.Opening AS Opening, Sale.Closing AS Closing FROM Document.Sale AS Sale"));
+	composer.Resource(ibT("SUM"), ibT("Opening"));
+	composer.Resource(ibT("SUM"), ibT("Closing"));
+
+	// Grouped by the partner, so the two are the report's figures.
+	ibVariantDescription zeroth;
+	zeroth.m_name = ibT("Main");
+	ibOutputDescription output;
+	ibLevelDescription level;
+	level.m_kind = ibCompositionLevelKind::Grouping;
+	level.m_settings.m_group.Append(ibT("Partner"));
+	output.m_rowGroups.push_back(level);
+	zeroth.m_settings.m_structure.push_back(output);
+	composer.LoadVariants({ zeroth });
+	composer.ApplyAvailableStructure();
+	ASSERT_EQ(1u, composer.Outputs().size());
+
+	ibSelectedFieldDescription closing = ibSelectedFieldDescription::Group(ibT("Closing"), ibColumnGroupHorizontal);
+	closing.m_children = { ibSelectedFieldDescription::Field(ibT("Closing")) };
+	composer.Outputs().front().m_selected = { ibSelectedFieldDescription::Field(ibT("Opening")), closing };
+
+	KeptOutput kept;
+	composer.Outputs().front().m_driver = &kept;
+	ASSERT_NO_THROW(EXPECT_TRUE(composer.Run()));
+
+	ASSERT_EQ(2u, kept.m_tree.size());
+	ASSERT_FALSE(kept.m_tree[0].IsGroup()) << "the figure chosen first stands first";
+	EXPECT_EQ(ibQueryLowering::ibColumnRole::Measure, kept.m_schema[kept.m_tree[0].m_column].m_role);
+	EXPECT_TRUE(kept.m_tree[1].IsGroup()) << "the group of figures after it, where it was put";
+}
