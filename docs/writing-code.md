@@ -322,6 +322,9 @@ values only to walk a structure.
 **An untranslated engine word is a failed catalog lookup.** Fix the lookup; never add a second
 translator.
 
+**A caption is handed on as written, every language at once** (`en = '...'; ru = '...';`), and read
+in one language only where a person reads it. Handing on the reading drops the other languages.
+
 **Two builds, one method.** The build difference goes inside it (`#ifdef OES_USE_WEB`); no stub
 headers, no parallel class trees.
 

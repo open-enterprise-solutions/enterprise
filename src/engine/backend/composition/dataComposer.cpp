@@ -20,6 +20,7 @@
 #include "backend/query/queryConstructorModel.h"   // ibQueryFieldsOfText / WalkPath — the author's fields and a path's walk, as the pickers read them
 #include "backend/featureOption/featureOptionGate.h"   // AnyUnavailable, AsApplication — a run shows what the base uses
 #include "backend/system/value/valueType.h"   // ibValueTypeDescription::AdjustValue — the empty value of a type, for «filled»
+#include "backend/backend_localization.h"     // a group's title written in several languages, read in the reader's
 
 //////////////////////////////////////////////////////////////////////
 // sources
@@ -685,20 +686,44 @@ bool ibComposerColumnAnswersTo(const ibQueryLowering::ibQueryOutputColumn& oc, c
 //     inherit THAT, because it is the storey above them (Max, 2026-08-28: "the children further down
 //     will now take from THIS element"). Refusing to inherit does not break the chain; it makes this
 //     node its new beginning.
-void ibComposerResolveSelected(std::vector<ibString>& into,
-                     const std::vector<ibSelectedFieldDescription>& rows,
-                     const std::vector<ibString>& inherited)
+//
+// ⭐⭐ ON ROWS, AND A GROUP STAYS A GROUP (docs/private/selected-field-groups.md). The same three sentences, applied to a
+// tree: an `Auto` inside a group lands the inherited rows in that group; a field already placed — earlier in this
+// table, or in what `into` already holds — keeps its first place, as AppendFields keeps a path's; a group left with
+// nothing keeps no place, since a heading over no column is a heading over nothing.
+//
+// ⚠ "EMPTY INHERITS" IS THE TABLE'S RULE, NOT A GROUP'S. A group nobody filled holds nothing; only a table that says
+// nothing at all stands for the storey above.
+
+// Each row where it stands: `Auto` brings the inherited rows in (resolved already — no `Auto` in them), a group is
+// resolved inside itself, a field placed before keeps that place. `placed` runs across the groups.
+static void ibComposerResolveSelected(std::vector<ibSelectedFieldDescription>& into,
+                                      const std::vector<ibSelectedFieldDescription>& rows,
+                                      const std::vector<ibSelectedFieldDescription>& inherited,
+                                      std::vector<ibString>& placed)
 {
-	if (rows.empty()) {
-		ibDataComposer::AppendFields(into, inherited);
-		return;
-	}
 	for (const ibSelectedFieldDescription& row : rows) {
 		if (row.IsAuto())
-			ibDataComposer::AppendFields(into, inherited);
-		else if (!row.m_path.IsEmpty())
-			ibDataComposer::AppendFields(into, { row.m_path });
+			ibComposerResolveSelected(into, inherited, {}, placed);
+		else if (row.IsGroup()) {
+			ibSelectedFieldDescription group = ibSelectedFieldDescription::Group(row.m_title, row.m_placement);
+			ibComposerResolveSelected(group.m_children, row.m_children, inherited, placed);
+			if (!group.m_children.empty())
+				into.push_back(std::move(group));
+		}
+		else if (!row.m_path.IsEmpty() && std::find(placed.begin(), placed.end(), row.m_path) == placed.end()) {
+			placed.push_back(row.m_path);
+			into.push_back(row);
+		}
 	}
+}
+
+void ibComposerResolveSelected(std::vector<ibSelectedFieldDescription>& into,
+                               const std::vector<ibSelectedFieldDescription>& rows,
+                               const std::vector<ibSelectedFieldDescription>& inherited)
+{
+	std::vector<ibString> placed = ibSelectedPathsOf(into);
+	ibComposerResolveSelected(into, rows.empty() ? inherited : rows, inherited, placed);
 }
 
 // ⭐ WHAT A REPORT READS WHEN NOBODY HAS CHOSEN A FIELD — the fields it groups BY, and nothing else.
@@ -726,13 +751,66 @@ std::vector<ibString> ibComposerGroupingFieldsOf(const ibDataComposer::Output& o
 	return fields;
 }
 
+// Each row where it stands: a field takes the first column not placed yet that answers to it — as the schema was put in
+// order (dataComposerRun), so the leaves stand in the schema's order — and a group holds what its rows took; a group
+// that took nothing is not one.
+static void ibComposerColumnTreeOf(std::vector<ibCompositionColumnNode>& into, const ibCompositionOutputInfo& info,
+                                   const std::vector<ibSelectedFieldDescription>& rows, std::vector<bool>& placed)
+{
+	for (const ibSelectedFieldDescription& row : rows) {
+		if (row.IsGroup()) {
+			ibCompositionColumnNode group;
+			// …its title read in the reader's language, as a column's is (dataComposerRun) — written in one, it is itself.
+			group.m_title     = ibBackendLocalization::GetTranslateGetRawLocText(row.m_title);
+			group.m_placement = row.m_placement;
+			ibComposerColumnTreeOf(group.m_children, info, row.m_children, placed);
+			if (!group.m_children.empty())
+				into.push_back(std::move(group));
+			continue;
+		}
+		for (size_t i = 0; i < info.m_schema.size(); ++i)
+			if (!placed[i] && ibComposerColumnAnswersTo(info.m_schema[i], row.m_path)) {
+				placed[i] = true;
+				ibCompositionColumnNode leaf;
+				leaf.m_column = i;
+				into.push_back(std::move(leaf));
+				break;
+			}
+	}
+}
+
+std::vector<ibCompositionColumnNode> ibComposerColumnTreeOf(const ibCompositionOutputInfo& info,
+                                                            const std::vector<ibSelectedFieldDescription>& shown)
+{
+	// What the tree never holds counts as placed from the start: a heading's key — the dimension area prints it —
+	// and a column nobody shows.
+	std::vector<bool> placed(info.m_schema.size(), false);
+	for (size_t i = 0; i < info.m_schema.size(); ++i)
+		placed[i] = info.m_schema[i].m_role == ibQueryLowering::ibColumnRole::Dimension || !info.ShowsColumn(i);
+
+	std::vector<ibCompositionColumnNode> tree;
+	ibComposerColumnTreeOf(tree, info, shown, placed);
+	for (size_t i = 0; i < placed.size(); ++i)
+		if (!placed[i]) {
+			ibCompositionColumnNode leaf;
+			leaf.m_column = i;
+			tree.push_back(std::move(leaf));
+		}
+	// ⭐⭐ …AND THE RESOURCES STAND LAST, as a sheet has always put them (Max, 2026-08-28): a sheet reads "what this row
+	// is", then "what it adds up to". A figure a group holds stays in its group — that is where somebody put it.
+	std::stable_partition(tree.begin(), tree.end(), [&info](const ibCompositionColumnNode& node) {
+		return node.IsGroup() || info.m_schema[node.m_column].m_role != ibQueryLowering::ibColumnRole::Measure;
+	});
+	return tree;
+}
+
 // WHAT IS IN FORCE UNDER A NODE, given what was in force above it. The chain is CARRIED by whoever
 // walks the tree — it is not worked out by climbing back up, for the same reason a branch is a fact
 // about the node rather than a state of the walker: the walk already holds it.
-std::vector<ibString> ibComposerSelectedUnder(const std::vector<ibString>& above,
-                                    const ibDataComposer::GroupNode& level)
+std::vector<ibSelectedFieldDescription> ibComposerSelectedUnder(const std::vector<ibSelectedFieldDescription>& above,
+                                                                const ibDataComposer::GroupNode& level)
 {
-	std::vector<ibString> here;
+	std::vector<ibSelectedFieldDescription> here;
 	ibComposerResolveSelected(here, level.m_selected, above);
 	return here;
 }
@@ -743,11 +821,11 @@ std::vector<ibString> ibComposerSelectedUnder(const std::vector<ibString>& above
 // 🛑 THE CHILDREN WERE NOT WALKED AT ALL. Only the top level of each axis was read, so a field
 // selected on a nested grouping — or its filter's column, or its sort key — never reached the query.
 // The setting saved, travelled through variants and meant nothing.
-static void CollectProjection(std::vector<ibString>& into, const std::vector<ibString>& above,
+static void CollectProjection(std::vector<ibString>& into, const std::vector<ibSelectedFieldDescription>& above,
                        const ibDataComposer::GroupNode& level)
 {
-	const std::vector<ibString> here = ibComposerSelectedUnder(above, level);
-	ibDataComposer::AppendFields(into, here);
+	const std::vector<ibSelectedFieldDescription> here = ibComposerSelectedUnder(above, level);
+	ibDataComposer::AppendFields(into, ibSelectedPathsOf(here));
 	for (const ibFilterNodeDescription& node : level.m_settings.m_filter.m_nodes)
 		ibDataComposer::AppendFilterFields(into, node);
 	for (const ibSortLineDescription& line : level.m_settings.m_sort.m_lines)
@@ -902,10 +980,16 @@ ibGroupDescription ibDataComposer::GetAvailableGroupDesc() const
 	return group;
 }
 
-// A selected-fields table less its rows on a field this base does not use (`Auto` names no field and stays).
+// A selected-fields table less its rows on a field this base does not use (`Auto` names no field and stays), inside
+// its groups too — and a group that held only such rows goes with them: a heading over no column heads nothing.
 static void ibDropUnavailableRows(std::vector<ibSelectedFieldDescription>& rows, const ibDataComposer& composer)
 {
-	std::erase_if(rows, [&composer](const ibSelectedFieldDescription& row) {
+	std::erase_if(rows, [&composer](ibSelectedFieldDescription& row) {
+		if (row.IsGroup()) {
+			const bool held = !row.m_children.empty();
+			ibDropUnavailableRows(row.m_children, composer);
+			return held && row.m_children.empty();
+		}
 		return !row.IsAuto() && !composer.IsAvailable(row.m_path);
 	});
 }
@@ -954,7 +1038,7 @@ void ibDataComposer::ApplyAvailableStructure()
 	}
 }
 
-std::vector<ibString> ibDataComposer::SelectedFor(const Output& output) const
+std::vector<ibSelectedFieldDescription> ibDataComposer::SelectedFor(const Output& output) const
 {
 	// 🛑 THE BASE GOES THROUGH THE SAME SIEVE. Taking it as it stands let a duplicate that was
 	// already inside it reach the SELECT list, and a derived table refuses two columns of one name:
@@ -974,45 +1058,46 @@ std::vector<ibString> ibDataComposer::SelectedFor(const Output& output) const
 	// set anything it is what the report shows; once a reader HAS a setting, theirs answers — and an
 	// empty table of theirs means empty. Seeding the pile with the author's rows made "I removed the
 	// columns" unsayable: an empty reader storey inherits what it is piled on (Max, 2026-08-29).
-	std::vector<ibString> base;
+	std::vector<ibSelectedFieldDescription> base;
 	if (!ReaderHasSetting())
 		ibComposerResolveSelected(base, m_commonSelected, {});
 
 	// ⚠ ASKED OF THE PART, not of the whole setting: GetCurrentSettingsDesc assembles a COPY of every
 	// section, and this is called once per output and again for the projection.
-	std::vector<ibString> byReader;
+	std::vector<ibSelectedFieldDescription> byReader;
 	ibComposerResolveSelected(byReader, GetCurrentSelectedDesc(), base);
 
-	std::vector<ibString> selected;
+	std::vector<ibSelectedFieldDescription> selected;
 	ibComposerResolveSelected(selected, output.m_selected, byReader);
 	// …and what this base does not use is not shown, whichever storey named it (IsAvailable).
-	std::erase_if(selected,
-		[this](const ibString& path) { return !IsAvailable(path); });
+	ibDropUnavailableRows(selected, *this);
 	// WHAT A NODE NAMES IS **NOT** HERE — deliberately. This is what the report SHOWS down to the
 	// output, and a node's own fields are what IT shows.
 	return selected;
 }
 
-std::vector<ibString> ibDataComposer::SelectedFor(const Output& output, const GroupNode& level) const
+std::vector<ibSelectedFieldDescription> ibDataComposer::SelectedFor(const Output& output, const GroupNode& level) const
 {
 	return ibComposerSelectedUnder(SelectedFor(output), level);
 }
 
 // ⭐ WHAT IS SHOWN — the same walk as the projection below, minus what is only READ. A filter and a
-// sort name fields the query must fetch; a report does not print them for that.
-static void CollectShown(std::vector<ibString>& into, const std::vector<ibString>& above,
+// sort name fields the query must fetch; a report does not print them for that. A node's own rows hang after what
+// the output shows, groups and all, a field shown already keeping its first place.
+static void CollectShown(std::vector<ibSelectedFieldDescription>& into,
+                         const std::vector<ibSelectedFieldDescription>& above,
                          const ibDataComposer::GroupNode& level)
 {
-	const std::vector<ibString> here = ibComposerSelectedUnder(above, level);
-	ibDataComposer::AppendFields(into, here);
+	const std::vector<ibSelectedFieldDescription> here = ibComposerSelectedUnder(above, level);
+	ibComposerResolveSelected(into, here, {});   // resolved already — copied in, what is placed staying where it is
 	for (const ibDataComposer::GroupNode& child : level.m_children)
 		CollectShown(into, here, child);
 }
 
-std::vector<ibString> ibDataComposer::ShownFor(const Output& output) const
+std::vector<ibSelectedFieldDescription> ibDataComposer::ShownFor(const Output& output) const
 {
-	const std::vector<ibString> atOutput = SelectedFor(output);
-	std::vector<ibString> shown = atOutput;
+	const std::vector<ibSelectedFieldDescription> atOutput = SelectedFor(output);
+	std::vector<ibSelectedFieldDescription> shown = atOutput;
 	for (const std::vector<GroupNode>* axis : { &output.m_rowGroups, &output.m_columnGroups })
 		for (const GroupNode& level : *axis)
 			CollectShown(shown, atOutput, level);
@@ -1044,7 +1129,7 @@ bool ibDataComposer::WantsDetails(const Output& output) const
 	if (!HasGroupingFields(output) && DetailLevelOf(output) == nullptr)
 		return false;   // no heading to stand under, and no records node asking for them
 
-	const std::vector<ibString> shown = ShownFor(output);
+	const std::vector<ibString> shown = ibSelectedPathsOf(ShownFor(output));
 	if (shown.empty())
 		return ReadsEveryField() || !HasGroupingFields(output);
 
@@ -1069,8 +1154,8 @@ bool ibDataComposer::WantsDetails(const Output& output) const
 
 std::vector<ibString> ibDataComposer::ProjectionFor(const Output& output) const
 {
-	const std::vector<ibString> atOutput = SelectedFor(output);
-	std::vector<ibString> selected = atOutput;
+	const std::vector<ibSelectedFieldDescription> atOutput = SelectedFor(output);
+	std::vector<ibString> selected = ibSelectedPathsOf(atOutput);
 	for (const std::vector<GroupNode>* axis : { &output.m_rowGroups, &output.m_columnGroups })
 		for (const GroupNode& level : *axis)
 			CollectProjection(selected, atOutput, level);

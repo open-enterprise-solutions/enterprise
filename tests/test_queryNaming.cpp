@@ -1596,11 +1596,11 @@ TEST(QueryComposerTotals, AResourceWrittenAsAnExpressionFoldsOverAUnion)
 
 namespace {
 
-// What one output was handed: its columns, and the key of every heading it opened.
+// What one output was handed: its columns, how they hang, and the key of every heading it opened.
 class KeptOutput : public ibCompositionDriver
 {
 public:
-	void OnOutputBegin(const ibCompositionOutputInfo& info) override { m_schema = info.m_schema; }
+	void OnOutputBegin(const ibCompositionOutputInfo& info) override { m_schema = info.m_schema; m_tree = info.m_columnTree; }
 	void OnGroupBegin(const ibCompositionLine& /*line*/, const std::vector<ibValue>& values) override {
 		for (size_t at = 0; at < m_schema.size() && at < values.size(); ++at)
 			if (m_schema[at].m_role == ibQueryLowering::ibColumnRole::Dimension && !values[at].GetString().IsEmpty())
@@ -1615,6 +1615,7 @@ public:
 	}
 
 	std::vector<ibQueryLowering::ibQueryOutputColumn> m_schema;
+	std::vector<ibCompositionColumnNode>              m_tree;
 	std::set<std::string>                             m_keys;
 };
 
@@ -1664,4 +1665,35 @@ TEST(QueryComposerBranches, EachOutputKeepsItsOwnKeyWhenTheSelectionDoesNotCarry
 	EXPECT_EQ((std::set<std::string>{ "North", "South" }), byPartner.m_keys);
 	EXPECT_EQ(1u, byWarehouse.Keys()) << "the second table's — its own, not the first one's";
 	EXPECT_EQ((std::set<std::string>{ "Main", "Spare" }), byWarehouse.m_keys);
+}
+
+// A GROUP OF THE SELECTED FIELDS HEADS ITS COLUMNS IN THE READER'S LANGUAGE, as a column's title is read
+// (docs/private/selected-field-groups.md §5.6): the tree a driver is handed holds the text, never the form it is stored
+// in. Both languages say the same word here, so the answer is that word whatever language the machine reads in.
+TEST(QueryComposerBranches, AGroupsTitleReachesTheDriverInTheReadersLanguage)
+{
+	RowsInMemory sales(ibT("Sale"),
+		{ { ibT("Partner"), ibValueTypes::TYPE_STRING }, { ibT("Amount"), ibValueTypes::TYPE_NUMBER } },
+		{ { ibValue(ibString(ibT("North"))), ibValue(100) } });
+	OpenApplication cfg;
+	ASSERT_NE(nullptr, cfg.GetSourceFactory());
+	cfg.RegisterSource(&sales);
+	const ibSourceMetaDataScope scope(&cfg);
+
+	ibDataDBComposer composer;
+	composer.SetMetaData(&cfg);
+	composer.FromText(ibT("SELECT Sale.Partner AS Partner, Sale.Amount AS Amount FROM Document.Sale AS Sale"));
+	ibSelectedFieldDescription group =
+		ibSelectedFieldDescription::Group(ibT("en = 'Sale'; uk = 'Sale';"), ibColumnGroupHorizontal);
+	group.m_children = { ibSelectedFieldDescription::Field(ibT("Partner")), ibSelectedFieldDescription::Field(ibT("Amount")) };
+	composer.Outputs().front().m_selected = { group };
+
+	KeptOutput kept;
+	composer.Outputs().front().m_driver = &kept;
+	ASSERT_NO_THROW(EXPECT_TRUE(composer.Run()));
+
+	ASSERT_EQ(1u, kept.m_tree.size());
+	ASSERT_TRUE(kept.m_tree[0].IsGroup());
+	EXPECT_EQ(ibString(ibT("Sale")), kept.m_tree[0].m_title);
+	EXPECT_EQ(2u, kept.m_tree[0].m_children.size());
 }

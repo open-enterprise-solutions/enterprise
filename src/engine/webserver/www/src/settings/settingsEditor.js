@@ -295,6 +295,49 @@ export function smallButton(caption, label, press) {
 }
 
 /**
+ * A page's commands where the person pressed (the thin client's context menus on the settings pages): an entry's
+ * caption, greyed when it may not be pressed now, the press. Put in the page, not in the document — a window's page
+ * stands in a modal dialog, and what is outside it does not take the pointer.
+ * @param {MouseEvent} event
+ * @param {HTMLElement} page
+ * @param {{caption: string, enabled?: boolean, press: () => void}[]} entries
+ */
+export function popupMenu(event, page, entries) {
+	event.preventDefault();
+	const menu = /** @type {any} */ (document.createElement('div'));
+	menu.className = 'popup-menu';
+	menu.popover = 'auto';
+	menu.append(...entries.map((entry) => {
+		const item = document.createElement('button');
+		item.type = 'button';
+		item.textContent = entry.caption;
+		item.disabled = entry.enabled === false;
+		item.addEventListener('click', () => {
+			menu.hidePopover();
+			entry.press();
+		});
+		return item;
+	}));
+	menu.addEventListener('toggle', (/** @type {any} */ toggled) => {
+		if (toggled.newState === 'closed')
+			menu.remove();
+	});
+	const show = () => {
+		page.append(menu);
+		menu.showPopover();
+		const size = menu.getBoundingClientRect();
+		menu.style.left = `${Math.max(0, Math.min(event.clientX, innerWidth - size.width))}px`;
+		menu.style.top = `${Math.max(0, Math.min(event.clientY, innerHeight - size.height))}px`;
+	};
+	// Linux and macOS ask for the menu as the button goes down, Windows as it comes up: it opens once the button is up,
+	// the release being what closes a menu opened under it (the table's context menu).
+	if (event.buttons === 0)
+		show();
+	else
+		document.addEventListener('pointerup', () => setTimeout(show), { once: true, capture: true });
+}
+
+/**
  * The tools every editor of lines has — added, deleted, moved; the thin client's keys.
  * @param {() => void} add
  * @param {() => void} remove

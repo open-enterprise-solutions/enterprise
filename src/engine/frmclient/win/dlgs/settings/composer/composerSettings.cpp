@@ -93,11 +93,41 @@ enum {
 	// …AND THE `Auto` ROW, which is added rather than switched on: it is a row of this table like
 	// any other, and what it says is WHERE everything the storey above chose lands.
 	ID_SELECTED_AUTO,
+	// …AND A GROUP — a title, a placement and rows of its own, as a table's column group.
+	ID_SELECTED_GROUP,
 	ID_SELECTED_REMOVE,
 	ID_SELECTED_COPY,
 	ID_SELECTED_UP,
 	ID_SELECTED_DOWN,
 };
+
+// A ROW OF «SELECTED FIELDS» CARRIED BY THE MOUSE — its path, dotted. A field carried in from the
+// available-fields tree and a row moved inside the list land in the same drop, so the text says which:
+// the tree's carries no mark (its field is the tree's remembered drag item).
+const wxString kSelectedDragMark = wxT("selected-row:");
+
+wxString ibSelectedRowText(const std::vector<size_t>& row)
+{
+	wxString text;
+	for (const size_t index : row) {
+		if (!text.IsEmpty())
+			text += wxT('.');
+		text += wxString::Format(wxT("%zu"), index);
+	}
+	return text;
+}
+
+bool ibSelectedRowFromText(const wxString& text, std::vector<size_t>& row)
+{
+	row.clear();
+	for (const wxString& part : wxSplit(text, wxT('.'), wxT('\0'))) {
+		unsigned long index = 0;
+		if (!part.ToULong(&index))
+			return false;
+		row.push_back((size_t)index);
+	}
+	return !row.empty();
+}
 
 // WHICH AGGREGATES FIT THIS FIELD — asked of the ENGINE, never listed here.
 //
@@ -1155,97 +1185,256 @@ private:
 // A PLAIN LIST OF PATHS, as a model — what the available-fields page shows. One column, no
 // children, rows pooled by position; the list itself is asked for through a callback, so the page
 // follows the selection instead of holding whichever node was selected when it was built.
-// ⭐ THE SELECTED-FIELDS TABLE, and a row of it is not a string any more: it is a FIELD or the
-// `Auto` row that says where everything the storey above chose lands (2026-08-28). Named for what
-// it lists rather than for the C++ type it used to hold.
+// ⭐ THE SELECTED-FIELDS TABLE, and a row of it is not a string any more: it is a FIELD, the `Auto`
+// row that says where everything the storey above chose lands (2026-08-28), or a GROUP — a title, a
+// placement and rows of its own, as a table's column group (2026-11-23). Named for what it lists
+// rather than for the C++ type it used to hold.
+//
+// A ROW IS ITS PATH — its index in the table, then in each group down to it — as the structure tree's
+// row is its coordinate: the order is the meaning, so a row moved is a different row. Pooled by path
+// and never dropped, for the structure tree's reason: a row freed mid-paint is a crash that blames the
+// paint.
 class ibSelectedListModel : public ibDataViewModel {
 public:
-	enum { kColText = 1 };
+	// COLUMN 0 IS RESERVED by the fork. The tree hangs off the first column, and the grid refuses to
+	// start an edit there (the structure tree's lesson) — so the field is SHOWN there, and a group's
+	// title and placement, which are edited, are columns of their own.
+	enum { kColText = 1, kColTitle, kColPlacement };
 
 	// `fields` — the tree the page picks from, asked which lines are shown (never owned here).
 	explicit ibSelectedListModel(std::function<std::vector<ibSelectedFieldDescription>*()> list,
 		const ibSettingsFieldTree* fields = nullptr)
 		: m_list(std::move(list)), m_fields(fields) {}
 
-	std::vector<ibSelectedFieldDescription>* List() const { return m_list ? m_list() : nullptr; }
-	size_t Count() const { const std::vector<ibSelectedFieldDescription>* list = List(); return list != nullptr ? list->size() : 0u; }
-	void Rebuild() { Cleared(); }
-
-	int RowAt(const ibDataViewItem& item) const;
-	ibDataViewItem ItemForRow(size_t row) const;
-
 	void GetValue(ibVariant& variant, const ibDataViewItem& item, unsigned int col) const override;
-	bool SetValue(const ibVariant&, const ibDataViewItem&, unsigned int) override { return false; }
-	ibDataViewItem GetParent(const ibDataViewItem&) const override { return ibDataViewItem(); }
-	bool IsContainer(const ibDataViewItem& item) const override { return !item.IsOk(); }
+	bool SetValue(const ibVariant& variant, const ibDataViewItem& item, unsigned int col) override;
+	ibDataViewItem GetParent(const ibDataViewItem& item) const override;
+	// A GROUP'S TITLE AND PLACEMENT are a group's — no empty editable cell beside a field.
+	bool HasValue(const ibDataViewItem& item, unsigned col) const override;
+	bool IsEnabled(const ibDataViewItem& item, unsigned int col) const override { return HasValue(item, col); }
 	unsigned int GetFirstFetch(const ibDataViewItem& parent, const ibDataViewItem&,
 		int, ibDataViewItemArray& out) const override;
 
+	// The rows under `parent` — the table itself for an empty path; null where the path names no group.
+	std::vector<ibSelectedFieldDescription>* List(const std::vector<size_t>& parent = {}) const;
+	// The row a path names, or null.
+	ibSelectedFieldDescription* DescriptionAt(const std::vector<size_t>& row) const;
+	// RE-READ THE TABLE. Rows are pooled by path, so they survive a rebuild; what changes is how many
+	// the walk hands out and which group still has rows under it.
+	void Rebuild();
+
+	std::vector<size_t> RowAt(const ibDataViewItem& item) const;   // empty — no row
+	ibDataViewItem ItemForRow(const std::vector<size_t>& row) const;
+	// A title or a placement typed into a group's cell — the page marks the settings touched.
+	void SetOnChanged(std::function<void()> changed) { m_changed = std::move(changed); }
+
+	// THE PLACEMENT WORDS, in ibColumnGroupKind's order — the words a table's column group uses.
+	static wxArrayString PlacementWords();
+
 private:
 	class Row;
-	Row* RowFor(size_t row) const;
+	Row* RowFor(const std::vector<size_t>& row) const;
+	bool HasChildren(const std::vector<size_t>& row) const;
 
 	std::function<std::vector<ibSelectedFieldDescription>*()> m_list;
 	const ibSettingsFieldTree* m_fields = nullptr;   // which lines are shown — see GetFirstFetch
-	mutable std::vector<wxObjectDataPtr<class ibSelectedListModel::Row>> m_rows;
+	std::function<void()> m_changed;
+	mutable std::map<std::vector<size_t>, wxObjectDataPtr<class ibSelectedListModel::Row>> m_rows;
 };
 
 class ibSelectedListModel::Row : public ibDataViewObject {
 public:
-	explicit Row(size_t row) : m_row(row) {}
-	size_t GetRow() const { return m_row; }
-	virtual bool IsContainer() const override { return false; }
-	virtual ibDataViewItem GetParentItem() const override { return ibDataViewItem(); }
+	Row(const std::vector<size_t>& row, Row* parent) : m_row(row), m_parent(parent) {}
+
+	virtual bool IsContainer() const override { return m_hasChild; }
+	virtual ibDataViewItem GetParentItem() const override {
+		return m_parent != nullptr ? ibDataViewItem(m_parent) : ibDataViewItem();
+	}
+
+	const std::vector<size_t>& GetRow() const { return m_row; }
+	// A GROUP CONTAINS ITS ROWS. Whether it has any is re-stated on every rebuild — the front asks the
+	// ROW, not the model, so the row has to carry the answer.
+	void SetHasChild(bool hasChild) { m_hasChild = hasChild; }
+
 private:
-	size_t m_row;
+	std::vector<size_t> m_row;
+	Row*                m_parent;   // owned by the model, outlives this row
+	bool                m_hasChild = false;
 };
 
-ibSelectedListModel::Row* ibSelectedListModel::RowFor(size_t row) const
+std::vector<ibSelectedFieldDescription>* ibSelectedListModel::List(const std::vector<size_t>& parent) const
 {
-	while (m_rows.size() <= row)
-		m_rows.push_back(wxObjectDataPtr<Row>(new Row(m_rows.size())));
-	return m_rows[row].get();
+	if (parent.empty())
+		return m_list ? m_list() : nullptr;
+	ibSelectedFieldDescription* group = DescriptionAt(parent);
+	return group != nullptr && group->IsGroup() ? &group->m_children : nullptr;
 }
 
-int ibSelectedListModel::RowAt(const ibDataViewItem& item) const
+ibSelectedFieldDescription* ibSelectedListModel::DescriptionAt(const std::vector<size_t>& row) const
+{
+	std::vector<ibSelectedFieldDescription>* list = m_list ? m_list() : nullptr;
+	ibSelectedFieldDescription* at = nullptr;
+	for (const size_t index : row) {
+		if (list == nullptr || index >= list->size())
+			return nullptr;
+		at = &(*list)[index];
+		list = at->IsGroup() ? &at->m_children : nullptr;
+	}
+	return at;
+}
+
+void ibSelectedListModel::Rebuild()
+{
+	for (auto& entry : m_rows)
+		entry.second->SetHasChild(HasChildren(entry.first));
+	Cleared();
+}
+
+// A GROUP HAS ROWS when one of them is shown — a group whose fields the options of the base all take
+// away opens on nothing, so it does not offer to open.
+bool ibSelectedListModel::HasChildren(const std::vector<size_t>& row) const
+{
+	const ibSelectedFieldDescription* group = DescriptionAt(row);
+	if (group == nullptr || !group->IsGroup())
+		return false;
+	for (const ibSelectedFieldDescription& child : group->m_children)
+		if (m_fields == nullptr || m_fields->IsAvailable(child.m_path))
+			return true;
+	return false;
+}
+
+// The row for a path, created on the way down so every row has its parent — a row created on demand
+// with none could not be expanded to (the structure tree learnt that).
+ibSelectedListModel::Row* ibSelectedListModel::RowFor(const std::vector<size_t>& row) const
+{
+	const auto found = m_rows.find(row);
+	if (found != m_rows.end())
+		return found->second.get();
+	Row* parent = row.size() > 1 ? RowFor(std::vector<size_t>(row.begin(), row.end() - 1)) : nullptr;
+	wxObjectDataPtr<Row> made(new Row(row, parent));
+	made->SetHasChild(HasChildren(row));
+	m_rows[row] = made;
+	return made.get();
+}
+
+std::vector<size_t> ibSelectedListModel::RowAt(const ibDataViewItem& item) const
 {
 	const Row* row = static_cast<const Row*>(item.GetID());
-	return row != nullptr ? (int)row->GetRow() : wxNOT_FOUND;
+	return row != nullptr ? row->GetRow() : std::vector<size_t>();
 }
 
-ibDataViewItem ibSelectedListModel::ItemForRow(size_t row) const
+ibDataViewItem ibSelectedListModel::ItemForRow(const std::vector<size_t>& row) const
 {
-	return row < Count() ? ibDataViewItem(RowFor(row)) : ibDataViewItem();
+	return !row.empty() && DescriptionAt(row) != nullptr ? ibDataViewItem(RowFor(row)) : ibDataViewItem();
+}
+
+wxArrayString ibSelectedListModel::PlacementWords()
+{
+	wxArrayString words;
+	words.Add(_("Horizontal"));   // ibColumnGroupHorizontal
+	words.Add(_("Vertical"));     // ibColumnGroupVertical
+	words.Add(_("In cell"));      // ibColumnGroupInCell
+	return words;
 }
 
 void ibSelectedListModel::GetValue(ibVariant& variant, const ibDataViewItem& item, unsigned int col) const
 {
-	const std::vector<ibSelectedFieldDescription>* list = List();
-	const int row = RowAt(item);
-	if (list == nullptr || row == wxNOT_FOUND || (size_t)row >= list->size() || col != kColText)
+	const ibSelectedFieldDescription* at = DescriptionAt(RowAt(item));
+	if (at == nullptr)
+		return;   // BOUNDS FIRST — a queued paint can outlive the row it was queued for
+
+	if (col == kColTitle) {
+		if (at->IsGroup())
+			variant = ibTranslateString(at->m_title).GetString();   // in the language a person reads, as a field's title
+		return;
+	}
+	if (col == kColPlacement) {
+		const wxArrayString words = PlacementWords();
+		if (at->IsGroup() && (size_t)at->m_placement < words.size())
+			variant = words[(size_t)at->m_placement];
+		return;
+	}
+	if (col != kColText)
 		return;
 	// ⭐ THE `Auto` ROW READS AS WHAT IT IS. It names no field — it says "everything the storey above
 	// chose, here" — so it is drawn as the word rather than as a blank line, which is what an empty
-	// path would look like and is a different thing entirely.
-	if ((*list)[row].IsAuto())
-		variant = ibString(_("<Auto>"));
+	// path would look like and is a different thing entirely. A group says it is one; what it is
+	// called is its title, a column of its own.
+	if (at->IsGroup())
+		variant = _("Group");
+	else if (at->IsAuto())
+		variant = _("<Auto>");
 	else
-		variant = m_fields != nullptr ? m_fields->GetFieldText((*list)[row].m_path) : (*list)[row].m_path.ToWxString();
+		variant = m_fields != nullptr ? m_fields->GetFieldText(at->m_path) : at->m_path.ToWxString();
+}
+
+bool ibSelectedListModel::SetValue(const ibVariant& variant, const ibDataViewItem& item, unsigned int col)
+{
+	ibSelectedFieldDescription* at = DescriptionAt(RowAt(item));
+	if (at == nullptr || !at->IsGroup())
+		return false;
+	if (col == kColTitle) {
+		// THE LANGUAGE IN FORCE is the one the cell shows, so it is the one typing writes; the others stay as they were
+		// (the "..." edits them all), as a field's title (ibFieldModel). Emptied, that language is taken out — and a
+		// title with no language left is empty: a choice, the group then draws no heading band.
+		const ibString text = variant.GetString();
+		ibTranslateString title(at->m_title);
+		if (text == title.GetString())
+			return false;   // nothing changed — a click through the cell is not an edit of it
+		if (text.IsEmpty())
+			title.RemoveTranslate(ibBackendLocalization::GetUserLanguage());
+		else
+			title.SetTranslate(text);
+		at->m_title = title.GetRawText();
+	}
+	else if (col == kColPlacement) {
+		const int picked = PlacementWords().Index(variant.GetString().ToWxString());
+		if (picked == wxNOT_FOUND)
+			return false;   // a word that names no placement leaves the old one standing
+		at->m_placement = (ibColumnGroupKind)picked;
+	}
+	else {
+		return false;
+	}
+	if (m_changed)
+		m_changed();
+	return true;
+}
+
+ibDataViewItem ibSelectedListModel::GetParent(const ibDataViewItem& item) const
+{
+	const Row* row = static_cast<const Row*>(item.GetID());
+	return row != nullptr ? row->GetParentItem() : ibDataViewItem();
+}
+
+bool ibSelectedListModel::HasValue(const ibDataViewItem& item, unsigned col) const
+{
+	if (col != kColTitle && col != kColPlacement)
+		return true;
+	const ibSelectedFieldDescription* at = DescriptionAt(RowAt(item));
+	return at != nullptr && at->IsGroup();
 }
 
 unsigned int ibSelectedListModel::GetFirstFetch(const ibDataViewItem& parent, const ibDataViewItem&,
 	int, ibDataViewItemArray& out) const
 {
-	if (parent.IsOk())
+	// THE TABLE'S ROWS under the invisible root, a group's under the group.
+	const std::vector<size_t> under = RowAt(parent);
+	if (parent.IsOk() && under.empty())
 		return 0;
-	// ⭐ A ROW IS ITS POSITION IN THE LIST, so leaving one out needs no mapping: a field the options of
-	// the base take away is not listed, stays in the set and is applied — hidden, never removed.
-	const std::vector<ibSelectedFieldDescription>* list = List();
+	const std::vector<ibSelectedFieldDescription>* list = List(under);
+	if (list == nullptr)
+		return 0;
+	// ⭐ A ROW IS ITS PATH, so leaving one out needs no mapping: a field the options of the base take
+	// away is not listed, stays in the set and is applied — hidden, never removed.
 	unsigned int added = 0;
-	for (size_t i = 0; i < Count(); ++i) {
+	std::vector<size_t> row = under;
+	row.push_back(0);
+	for (size_t i = 0; i < list->size(); ++i) {
 		if (m_fields != nullptr && !m_fields->IsAvailable((*list)[i].m_path))
 			continue;
-		out.Add(ibDataViewItem(RowFor(i)));
+		row.back() = i;
+		out.Add(ibDataViewItem(RowFor(row)));
 		++added;
 	}
 	return added;
@@ -1840,7 +2029,8 @@ void ibComposerSettingsPanel::BuildPanel()
 	// VIEW ONLY, the cell half — every grid this window owns, in ONE place. Bound after all of them
 	// exist so none is missed, and listed here rather than beside each creation for the same reason:
 	// a fifth grid is added to this line, not remembered about.
-	for (ibDataViewCtrl* view : { m_variantView, m_structureView, m_fieldView, m_resourceView, m_parameterView }) {
+	for (ibDataViewCtrl* view : { m_variantView, m_structureView, m_fieldView, m_resourceView, m_parameterView,
+	                              m_selectedPage.m_view }) {
 		if (view != nullptr)
 			view->Bind(ibEVT_DATAVIEW_ITEM_START_EDITING, &ibComposerSettingsPanel::OnStartEditing, this);
 	}
@@ -1876,7 +2066,7 @@ void ibComposerSettingsPanel::SetReadOnly(bool readOnly)
 {
 	m_readOnly = readOnly;
 
-	ibAuiToolBar* const bars[] = { m_variantBar, m_structureBar, m_resourceBar, m_parameterBar };
+	ibAuiToolBar* const bars[] = { m_variantBar, m_structureBar, m_resourceBar, m_parameterBar, m_selectedPage.m_bar };
 	for (ibAuiToolBar* bar : bars) {
 		if (bar != nullptr)
 			bar->Enable(!readOnly);
@@ -2706,7 +2896,10 @@ wxWindow* ibComposerSettingsPanel::BuildFieldSetPage(wxWindow* parent)
 	const int idDown   = ID_SELECTED_DOWN;
 
 	ibAuiToolBar* bar = new ibAuiToolBar(right, wxID_ANY, wxDefaultPosition, wxDefaultSize, ibAUI_TB_HORIZONTAL);
+	page.m_bar = bar;
 	bar->AddTool(idAdd, _("Add field"), ibSettingsArt(wxASCII_STR(wxART_NEW), this), _("Add field"));
+	bar->AddTool(ID_SELECTED_GROUP, _("Add group"), ibSettingsArt(wxASCII_STR(wxART_NEW_DIR), this),
+		_("Columns under one title: side by side, one under another, or in one cell"));
 	bar->AddTool(ID_SELECTED_AUTO, _("Add \"Auto\""), ibSettingsArt(wxASCII_STR(wxART_GO_DIR_UP), this),
 		_("Everything the level above shows, in this place"));
 	bar->AddTool(idRemove, _("Delete"), ibSettingsArt(wxASCII_STR(wxART_DELETE), this), _("Delete"));
@@ -2724,39 +2917,30 @@ wxWindow* ibComposerSettingsPanel::BuildFieldSetPage(wxWindow* parent)
 	page.m_model = new ibSelectedListModel([this]() -> std::vector<ibSelectedFieldDescription>* {
 		return CurrentFieldSet();
 	}, m_fieldSource.get());
+	page.m_model->SetOnChanged([this] { MarkSettingsTouched(); });
 	page.m_view->AssociateModel(page.m_model);
-	// ⭐ A LINE OF THIS LIST IS A FIELD, so it is edited the way every other field is: the shared
-	// row-value cell, which opens the SAME picker the sort and the grouping open (Max, 2026-08-21:
-	// there was no way to open the picker here as one can in the sort). Drawn as text it could only
-	// be re-made — delete the line, add another — which is a different verb for "I picked the wrong
-	// one", and one this window offers nowhere else.
+
+	// ⭐ THE FIELD, AND THE TREE HANGS OFF IT. A field shows what it is called and a group says it is
+	// one; neither is edited in this column — the grid starts no edit in the expander's column (the
+	// structure tree's lesson), so the field picker the row-value cell used to open here (Max,
+	// 2026-08-21: "open the picker here as one can in the sort") opens on a double-click instead.
 	page.m_view->GetRootColumnGroup()->AppendColumn(new ibDataViewColumn(_("Field"),
-		new ibRowValueCellRenderer(this, ibComposerFieldChooser(this),
-			[this](const ibDataViewItem& row) -> ibValue {
-				const std::vector<ibSelectedFieldDescription>* list = CurrentFieldSet();
-				const int at = m_selectedPage.m_model != nullptr ? m_selectedPage.m_model->RowAt(row) : wxNOT_FOUND;
-				// ⚠ THE `Auto` ROW IS NOT A FIELD and opens no picker: it names nothing, so there is
-				// nothing to pick. It is added and removed as a row, which is the whole of editing it.
-				return (list != nullptr && at != wxNOT_FOUND && (size_t)at < list->size()
-				        && !(*list)[at].IsAuto())
-					? ibValue(new ibValueCompositionField((*list)[at].m_path)) : ibValue();
-			},
-			[this](const ibDataViewItem& row, const ibValue& value) {
-				std::vector<ibSelectedFieldDescription>* list = CurrentFieldSet();
-				const int at = m_selectedPage.m_model != nullptr ? m_selectedPage.m_model->RowAt(row) : wxNOT_FOUND;
-				if (list == nullptr || at == wxNOT_FOUND || (size_t)at >= list->size())
-					return;
-				// CLEARED MEANS REMOVED — an empty line in a set of fields is not a field, and the
-				// "×" beside the picker is the only place that says so.
-				ibValueCompositionField* field = nullptr;
-				if (value.ConvertToValue(field) && field != nullptr)
-					(*list)[at] = ibSelectedFieldDescription::Field(field->GetPath());
-				else
-					list->erase(list->begin() + at);
-				MarkSettingsTouched();
-				ReloadFieldSets();
-			}),
-		ibSelectedListModel::kColText, FromDIP(260), wxAlignment::wxALIGN_LEFT));
+		new ibDataViewTextRenderer(), ibSelectedListModel::kColText, FromDIP(240), wxAlignment::wxALIGN_LEFT));
+	// …a group's TITLE, typed where it stands for the language in force, the "..." opening every language — empty draws
+	// no heading band…
+	ibDataViewColumn* titleColumn = new ibDataViewColumn(_("Title"),
+		new ibTextWithDotsRenderer(this, [this](wxString& text) -> bool { return EditFieldSetTitle(text); }),
+		ibSelectedListModel::kColTitle, FromDIP(140), wxAlignment::wxALIGN_LEFT);
+	page.m_view->GetRootColumnGroup()->AppendColumn(titleColumn);
+	// …and its PLACEMENT, in the words a table's column group uses.
+	page.m_view->GetRootColumnGroup()->AppendColumn(new ibDataViewColumn(_("Placement"),
+		new ibDataViewChoiceRenderer(ibSelectedListModel::PlacementWords(), wxDATAVIEW_CELL_EDITABLE),
+		ibSelectedListModel::kColPlacement, FromDIP(110), wxAlignment::wxALIGN_LEFT));
+
+	// ⭐ A TREE, NOT A LIST — said out loud, because the control defaults to a list (the structure tree
+	// carries the same line for the same reason).
+	page.m_view->SetViewMode(ibDataViewTree);
+	page.m_view->SetExpanderColumn(page.m_view->GetColumn(0));
 	rightSizer->Add(page.m_view, 1, wxEXPAND | wxALL, FromDIP(4));
 	right->SetSizer(rightSizer);
 
@@ -2764,11 +2948,58 @@ wxWindow* ibComposerSettingsPanel::BuildFieldSetPage(wxWindow* parent)
 	splitter->SetMinimumPaneSize(FromDIP(120));
 
 	Bind(wxEVT_TOOL, [this](wxCommandEvent&) { OnFieldSetAdd(); }, idAdd);
+	Bind(wxEVT_TOOL, [this](wxCommandEvent&) { OnFieldSetGroup(); }, ID_SELECTED_GROUP);
 	Bind(wxEVT_TOOL, [this](wxCommandEvent&) { OnFieldSetAuto(); }, ID_SELECTED_AUTO);
 	Bind(wxEVT_TOOL, [this](wxCommandEvent&) { OnFieldSetRemove(); }, idRemove);
 	Bind(wxEVT_TOOL, [this](wxCommandEvent&) { OnFieldSetCopy(); }, idCopy);
 	Bind(wxEVT_TOOL, [this](wxCommandEvent&) { MoveFieldSetRow(-1); }, idUp);
 	Bind(wxEVT_TOOL, [this](wxCommandEvent&) { MoveFieldSetRow(+1); }, idDown);
+
+	// ⭐ A DOUBLE-CLICK EDITS THE ROW. A field opens the picker standing on it — re-picked, not deleted
+	// and added again; a group opens the cell that was clicked, its title when that was the field.
+	//
+	// ⚠ OPENED ON THE NEXT TURN of the event loop and the event OWNED, not skipped — the control is
+	// still inside its own click when it raises this, and what follows tears down whatever was opened
+	// underneath it (dataviewEditOnActivate.h, four attempts).
+	page.m_view->Bind(ibEVT_DATAVIEW_ITEM_ACTIVATED, [this, titleColumn](ibDataViewEvent& event) {
+		ibSelectedListModel* model = m_selectedPage.m_model;
+		const ibDataViewItem item = event.GetItem();
+		const std::vector<size_t> row = model != nullptr ? model->RowAt(item) : std::vector<size_t>();
+		const ibSelectedFieldDescription* at = model != nullptr ? model->DescriptionAt(row) : nullptr;
+		if (m_readOnly || at == nullptr || at->IsAuto()) {
+			event.Skip();   // `Auto` names nothing — there is nothing to pick
+			return;
+		}
+		if (at->IsGroup()) {
+			ibDataViewColumn* column = event.GetDataViewColumn();
+			if (column == nullptr || column->GetModelColumn() == ibSelectedListModel::kColText)
+				column = titleColumn;
+			m_selectedPage.m_view->Select(item);
+			CallAfter([this, item, column] {
+				if (m_selectedPage.m_view != nullptr)
+					m_selectedPage.m_view->EditItem(item, column);
+			});
+			return;
+		}
+		CallAfter([this, row] {
+			const ibSelectedFieldDescription* held = m_selectedPage.m_model != nullptr
+				? m_selectedPage.m_model->DescriptionAt(row) : nullptr;
+			if (held == nullptr || held->IsGroup() || held->IsAuto())
+				return;
+			ibValueCompositionField* chosen = ChooseStructureField(this, held->m_path.ToWxString());
+			// The row is asked for again: a modal ran in between, and a pointer held across one is a
+			// pointer into whatever the table was then.
+			ibSelectedFieldDescription* field = m_selectedPage.m_model != nullptr
+				? m_selectedPage.m_model->DescriptionAt(row) : nullptr;
+			if (chosen == nullptr || field == nullptr)
+				return;   // closed without picking
+			*field = ibSelectedFieldDescription::Field(chosen->GetPath());
+			MarkSettingsTouched();
+			ReloadFieldSets(row);
+		});
+	});
+	// RIGHT-CLICK RAISES THE SAME VERBS the toolbar does — on a row, or on the empty space below them.
+	page.m_view->Bind(ibEVT_DATAVIEW_ITEM_CONTEXT_MENU, &ibComposerSettingsPanel::OnFieldSetContextMenu, this);
 
 	// ⭐ FROM THE TREE INTO THE LIST, by hand. Double-clicking a field on the left puts it on the
 	// right — the shortest gesture, and the one people try first; the toolbar's Add opens the same
@@ -2777,11 +3008,31 @@ wxWindow* ibComposerSettingsPanel::BuildFieldSetPage(wxWindow* parent)
 		AddFieldFromTree(e.GetItem());
 		e.Skip();
 	});
-	// ...and by dragging onto the list, the same gesture the filter and the sort answer to.
-	right->SetDropTarget(new ibCallbackDropTarget([this] {
-		if (m_fieldSource)
-			AddFieldFromTree(m_fieldSource->GetDragItem());
-	}));
+
+	// ⭐⭐ …AND BY THE MOUSE, both ways into the list through ONE drop: a field carried from the tree is
+	// put where it lands, a row carried inside the list is moved there — into a group, out of it, within
+	// it. The list is a drag SOURCE, so the drop is the list's own: a target set on the pane around it
+	// stops being asked the moment the control takes drops over (the query constructor's totals learnt
+	// that, 2026-08-27).
+	page.m_view->EnableDragSource(wxDF_UNICODETEXT);
+	page.m_view->EnableDropTarget(wxDF_UNICODETEXT);
+	page.m_view->Bind(ibEVT_DATAVIEW_ITEM_BEGIN_DRAG, [this](ibDataViewEvent& event) {
+		const std::vector<size_t> row = m_selectedPage.m_model != nullptr
+			? m_selectedPage.m_model->RowAt(event.GetItem()) : std::vector<size_t>();
+		if (m_readOnly || row.empty()) {
+			event.Veto();
+			return;
+		}
+		event.SetDataObject(new wxTextDataObject(kSelectedDragMark + ibSelectedRowText(row)));
+		event.SetDragFlags(wxDrag_AllowMove);
+	});
+	// ⚠ THE EFFECT IS LEFT AS PROPOSED — the tree's drag is copy-only, and forcing a move refuses it
+	// (choiceParameters.cpp, 2026-09-23).
+	page.m_view->Bind(ibEVT_DATAVIEW_ITEM_DROP_POSSIBLE, [this](ibDataViewEvent& event) {
+		if (m_readOnly || event.GetDataFormat() != wxDF_UNICODETEXT)
+			event.Veto();
+	});
+	page.m_view->Bind(ibEVT_DATAVIEW_ITEM_DROP, &ibComposerSettingsPanel::OnFieldSetDrop, this);
 	return splitter;
 }
 
@@ -2814,8 +3065,7 @@ std::vector<ibSelectedFieldDescription>* ibComposerSettingsPanel::CurrentFieldSe
 
 void ibComposerSettingsPanel::OnFieldSetAdd()
 {
-	std::vector<ibSelectedFieldDescription>* fields = CurrentFieldSet();
-	if (fields == nullptr)
+	if (CurrentFieldSet() == nullptr)
 		return;
 	ibValueCompositionField* field = ChooseStructureField(this);
 	if (field == nullptr)
@@ -2823,78 +3073,192 @@ void ibComposerSettingsPanel::OnFieldSetAdd()
 
 	// ADDING IS ADDING — nothing is cleared first. A node contributes this field on top of what its
 	// output and the composition already show; it never takes over the list by naming one line.
-	fields->push_back(ibSelectedFieldDescription::Field(field->GetPath()));
-	MarkSettingsTouched();
-	ReloadFieldSets();
+	InsertFieldSetRow(ibSelectedFieldDescription::Field(field->GetPath()));
 }
 
-// ⭐⭐ THE `Auto` ROW — added like any other row, and there is at most ONE of it: two would say
-// "everything from above, twice", and the second one contributes nothing the first did not.
-//
-// It goes in at the CURSOR when there is one, because its position is its whole meaning: above the
-// node's own fields the inherited ones come first, below them they come last.
+// ⭐⭐ THE `Auto` ROW — added like any other row, and there is at most ONE of it, anywhere in the tree:
+// two would say "everything from above, twice", and the second one contributes nothing the first did
+// not. Its position is its whole meaning — before the node's own fields the inherited ones come
+// first, after them they come last, inside a group they hang there — so it goes where the cursor says.
 void ibComposerSettingsPanel::OnFieldSetAuto()
 {
 	std::vector<ibSelectedFieldDescription>* fields = CurrentFieldSet();
-	if (fields == nullptr)
-		return;
-	if (ibSelectedInherits(*fields))
+	if (fields == nullptr || ibSelectedInherits(*fields))
 		return;   // it is already there, and one is all it can mean
+	InsertFieldSetRow(ibSelectedFieldDescription::Auto());
+}
 
-	const int at = SelectedFieldSetRow();
-	const size_t where = (at == wxNOT_FOUND || (size_t)at > fields->size())
-		? fields->size() : (size_t)at;
-	fields->insert(fields->begin() + where, ibSelectedFieldDescription::Auto());
+// A NEW GROUP is titled, so it reads as one before anything is in it, and vertical — a table's new
+// column group is vertical too.
+void ibComposerSettingsPanel::OnFieldSetGroup()
+{
+	InsertFieldSetRow(ibSelectedFieldDescription::Group(_("Group"), ibColumnGroupVertical));
+}
+
+// THE "..." BEHIND A GROUP'S TITLE — every language of it at once, in the window every caption opens (EditFieldTitle).
+// What it writes goes straight into the group; the cell then commits the language in force, which the window has
+// already written.
+bool ibComposerSettingsPanel::EditFieldSetTitle(wxString& text)
+{
+	ibSelectedListModel* model = m_selectedPage.m_model;
+	const ibSelectedFieldDescription* said = model != nullptr ? model->DescriptionAt(SelectedFieldSetRow()) : nullptr;
+	if (said == nullptr || !said->IsGroup())
+		return false;
+
+	const ibTranslateString before(said->m_title);
+	ibDialogTranslateConstructor dialog(this, _("Title"), before, GetEditedMetaData(), m_readOnly);
+	if (dialog.ShowModal() != wxID_OK)
+		return false;
+	const ibTranslateString after = dialog.GetTranslate();
+	if (after == before)
+		return false;
+
+	// …the row asked for again — the window was modal, and what stood under it is not held across one.
+	ibSelectedFieldDescription* group = model->DescriptionAt(SelectedFieldSetRow());
+	if (group == nullptr || !group->IsGroup())
+		return false;
+	group->m_title = after.GetRawText();
+	text = after.GetString();
 	MarkSettingsTouched();
-	ReloadFieldSets();
+	return true;
 }
 
 void ibComposerSettingsPanel::OnFieldSetRemove()
 {
-	std::vector<ibSelectedFieldDescription>* fields = CurrentFieldSet();
-	const int at = SelectedFieldSetRow();
-	if (fields == nullptr || at == wxNOT_FOUND || (size_t)at >= fields->size())
+	const std::vector<size_t> row = SelectedFieldSetRow();
+	std::vector<size_t> parent = row;
+	if (!parent.empty())
+		parent.pop_back();
+	std::vector<ibSelectedFieldDescription>* list = m_selectedPage.m_model != nullptr
+		? m_selectedPage.m_model->List(parent) : nullptr;
+	if (m_readOnly || row.empty() || list == nullptr || row.back() >= list->size())
 		return;
-	fields->erase(fields->begin() + at);
+	list->erase(list->begin() + row.back());
 	MarkSettingsTouched();
-	ReloadFieldSets();
+	// THE CURSOR STAYS WHERE THE ROW WAS — on the one that took its place, the one before it when it was
+	// the last, its group when it was the only one.
+	std::vector<size_t> select = parent;
+	if (!list->empty())
+		select.push_back(std::min(row.back(), list->size() - 1));
+	ReloadFieldSets(select);
 }
 
 // COPY A LINE — the third verb of the toolbar (Max: add, delete, copy). A field listed twice is
 // not a mistake to refuse here: the same field can be wanted under two names, and what a duplicate
-// means is the engine's answer, not this list's.
+// means is the engine's answer, not this list's. A group is copied whole.
 void ibComposerSettingsPanel::OnFieldSetCopy()
 {
-	std::vector<ibSelectedFieldDescription>* fields = CurrentFieldSet();
-	const int at = SelectedFieldSetRow();
-	if (fields == nullptr || at == wxNOT_FOUND || (size_t)at >= fields->size())
+	const std::vector<size_t> row = SelectedFieldSetRow();
+	const ibSelectedFieldDescription* at = m_selectedPage.m_model != nullptr
+		? m_selectedPage.m_model->DescriptionAt(row) : nullptr;
+	if (at == nullptr)
 		return;
-	fields->insert(fields->begin() + at + 1, (*fields)[at]);
-	MarkSettingsTouched();
-	ReloadFieldSets();
+	const ibSelectedFieldDescription copy = *at;   // a copy first: the insert may move the original
+	InsertFieldSetRow(copy, std::vector<size_t>(row.begin(), row.end() - 1), row.back() + 1);
 }
 
-// MOVE A LINE — the set is read in order, so its order is a setting like any other.
+// MOVE A LINE — the set is read in order, so its order is a setting like any other. Within its own
+// group: out of one and into another is the mouse's.
 void ibComposerSettingsPanel::MoveFieldSetRow(int delta)
 {
-	std::vector<ibSelectedFieldDescription>* fields = CurrentFieldSet();
-	const int at = SelectedFieldSetRow();
-	if (fields == nullptr || at == wxNOT_FOUND || (size_t)at >= fields->size())
+	const std::vector<size_t> row = SelectedFieldSetRow();
+	std::vector<size_t> parent = row;
+	if (!parent.empty())
+		parent.pop_back();
+	std::vector<ibSelectedFieldDescription>* list = m_selectedPage.m_model != nullptr
+		? m_selectedPage.m_model->List(parent) : nullptr;
+	if (m_readOnly || row.empty() || list == nullptr || row.back() >= list->size())
 		return;
-	const int target = at + delta;
-	if (target < 0 || (size_t)target >= fields->size())
+	const long target = (long)row.back() + delta;
+	if (target < 0 || (size_t)target >= list->size())
 		return;
-	std::swap((*fields)[at], (*fields)[target]);
+	std::swap((*list)[row.back()], (*list)[(size_t)target]);
 	MarkSettingsTouched();
-	ReloadFieldSets();
 	// The cursor travels with the line — a move whose result you have to go and find again reads
 	// as a move that did nothing.
-	ibFieldSetPage& page = m_selectedPage;
-	if (page.m_view != nullptr && page.m_model != nullptr) {
-		const ibDataViewItem row = page.m_model->ItemForRow((size_t)target);
-		if (row.IsOk())
-			page.m_view->Select(row);
+	std::vector<size_t> moved = row;
+	moved.back() = (size_t)target;
+	ReloadFieldSets(moved);
+}
+
+// A ROW CARRIED TO `parent` AT `at` — the drop's move. Everything is checked before the row leaves its
+// place, so a refused move leaves the table as it was.
+void ibComposerSettingsPanel::MoveFieldSetRow(const std::vector<size_t>& from,
+	const std::vector<size_t>& parent, size_t at)
+{
+	ibSelectedListModel* model = m_selectedPage.m_model;
+	if (m_readOnly || model == nullptr || from.empty())
+		return;
+	// A GROUP IS NEVER DROPPED INTO ITSELF, nor into anything under it — it would hang off a row it
+	// took away with it.
+	if (parent.size() >= from.size() && std::equal(from.begin(), from.end(), parent.begin()))
+		return;
+	const std::vector<size_t> fromParent(from.begin(), from.end() - 1);
+	std::vector<ibSelectedFieldDescription>* source = model->List(fromParent);
+	const std::vector<ibSelectedFieldDescription>* landing = model->List(parent);
+	if (source == nullptr || from.back() >= source->size() || landing == nullptr)
+		return;
+	at = std::min(at, landing->size());
+	// Dropped where it already is — just above itself or just below — is no move at all.
+	if (parent == fromParent && (at == from.back() || at == from.back() + 1))
+		return;
+
+	ibSelectedFieldDescription moved = std::move((*source)[from.back()]);
+	source->erase(source->begin() + from.back());
+
+	// ⚠ THE PLACE IS RE-READ after the row has left: everything after it in its list moved up one, so
+	// a target in that list — or under a group that stood after it — is one place higher now, and a
+	// pointer taken before the erase points at whichever row moved into the old place.
+	std::vector<size_t> into = parent;
+	const size_t depth = fromParent.size();
+	if (into.size() > depth && std::equal(fromParent.begin(), fromParent.end(), into.begin())
+	    && into[depth] > from.back())
+		--into[depth];
+	if (into == fromParent && at > from.back())
+		--at;
+	std::vector<ibSelectedFieldDescription>* target = model->List(into);
+	target->insert(target->begin() + at, std::move(moved));
+	MarkSettingsTouched();
+	into.push_back(at);
+	ReloadFieldSets(into);
+}
+
+// ⭐ WHERE A NEW ROW GOES — one rule for every verb that adds (a field, a group, `Auto`, a field from
+// the tree): into the group the cursor is on, at its end; right after any other row the cursor is on,
+// in that row's group; at the end of the table when the cursor is on nothing.
+void ibComposerSettingsPanel::InsertFieldSetRow(const ibSelectedFieldDescription& row)
+{
+	std::vector<size_t> parent = SelectedFieldSetRow();
+	const ibSelectedFieldDescription* on = m_selectedPage.m_model != nullptr
+		? m_selectedPage.m_model->DescriptionAt(parent) : nullptr;
+	if (on != nullptr && on->IsGroup()) {
+		InsertFieldSetRow(row, parent, on->m_children.size());
+		return;
 	}
+	size_t at = (size_t)-1;   // the end
+	if (on != nullptr) {
+		at = parent.back() + 1;
+		parent.pop_back();
+	}
+	else {
+		parent.clear();
+	}
+	InsertFieldSetRow(row, parent, at);
+}
+
+void ibComposerSettingsPanel::InsertFieldSetRow(const ibSelectedFieldDescription& row,
+	const std::vector<size_t>& parent, size_t at)
+{
+	std::vector<ibSelectedFieldDescription>* list = m_selectedPage.m_model != nullptr
+		? m_selectedPage.m_model->List(parent) : nullptr;
+	if (m_readOnly || list == nullptr)
+		return;
+	at = std::min(at, list->size());
+	list->insert(list->begin() + at, row);
+	MarkSettingsTouched();
+	std::vector<size_t> inserted = parent;
+	inserted.push_back(at);
+	ReloadFieldSets(inserted);
 }
 
 // A FIELD PICKED IN THE TREE goes into the set — the same act as Add, from the other side.
@@ -2906,22 +3270,71 @@ void ibComposerSettingsPanel::AddFieldFromTree(const wxTreeItemId& item)
 	ibValueCompositionField* field = ibSettingsFieldTree::FieldAt(page.m_sourceTree, item);
 	if (field == nullptr)
 		return;   // a reference row is a road, not a field — double-clicking it unfolds instead
-
-	std::vector<ibSelectedFieldDescription>* fields = CurrentFieldSet();
-	if (fields == nullptr)
-		return;
-	fields->push_back(ibSelectedFieldDescription::Field(field->GetPath()));
-	MarkSettingsTouched();
-	ReloadFieldSets();
+	InsertFieldSetRow(ibSelectedFieldDescription::Field(field->GetPath()));
 }
 
-int ibComposerSettingsPanel::SelectedFieldSetRow()
+std::vector<size_t> ibComposerSettingsPanel::SelectedFieldSetRow()
 {
 	ibFieldSetPage& page = m_selectedPage;
 	if (page.m_view == nullptr || page.m_model == nullptr)
-		return wxNOT_FOUND;
+		return {};
 	const ibDataViewItem row = page.m_view->GetSelection();
-	return row.IsOk() ? page.m_model->RowAt(row) : wxNOT_FOUND;
+	return row.IsOk() ? page.m_model->RowAt(row) : std::vector<size_t>();
+}
+
+// ⭐⭐ WHERE A CARRIED ROW LANDS, in the control's own words (datavgen.cpp, GetDropItemInfo):
+//  * a PLACE in a container — between the rows of a group, or of the table when the item is not ok:
+//    the index counts the rows on screen, so it is read through them (a field the options of the base
+//    hide is still in the table);
+//  * ONTO a group — into it, at the end;
+//  * ONTO any other row — it takes that row's place, and the row moves down, as in the other lists of
+//    this family (choiceParameters.cpp);
+//  * NOTHING — the empty space below the rows: the end of the table.
+void ibComposerSettingsPanel::OnFieldSetDrop(ibDataViewEvent& event)
+{
+	ibFieldSetPage& page = m_selectedPage;
+	if (m_readOnly || page.m_model == nullptr || event.GetDataFormat() != wxDF_UNICODETEXT) {
+		event.Veto();
+		return;
+	}
+	wxTextDataObject carried;
+	carried.SetData(event.GetDataSize(), event.GetDataBuffer());
+	const wxString said = carried.GetText();
+
+	const ibDataViewItem onto = event.GetItem();
+	const std::vector<size_t> ontoRow = page.m_model->RowAt(onto);
+	std::vector<size_t> parent;
+	size_t at = (size_t)-1;   // the end
+	if (event.GetProposedDropIndex() >= 0) {
+		ibDataViewItemArray shown;
+		page.m_model->GetFirstFetch(onto, ibDataViewItem(), -1, shown);
+		const size_t index = (size_t)event.GetProposedDropIndex();
+		parent = ontoRow;
+		if (index < shown.size())
+			at = page.m_model->RowAt(shown[index]).back();
+	}
+	else if (const ibSelectedFieldDescription* on = page.m_model->DescriptionAt(ontoRow)) {
+		if (on->IsGroup()) {
+			parent = ontoRow;
+		}
+		else {
+			parent.assign(ontoRow.begin(), ontoRow.end() - 1);
+			at = ontoRow.back();
+		}
+	}
+
+	if (said.StartsWith(kSelectedDragMark)) {
+		std::vector<size_t> from;
+		if (ibSelectedRowFromText(said.Mid(kSelectedDragMark.length()), from))
+			MoveFieldSetRow(from, parent, at);
+		return;
+	}
+	// ANYTHING ELSE IS A FIELD FROM THE TREE — asked of the tree for the row it remembers dragging, as
+	// the double-click asks it for the row clicked (its text is a stub — settingsFieldTree.cpp).
+	ibValueCompositionField* field = m_fieldSource && page.m_sourceTree != nullptr
+		? ibSettingsFieldTree::FieldAt(page.m_sourceTree, m_fieldSource->GetDragItem()) : nullptr;
+	if (field != nullptr)
+		InsertFieldSetRow(ibSelectedFieldDescription::Field(field->GetPath()), parent, at);
 }
 
 // (⭐ NO "AUTO" HANDLER. The switch it served said "take the fields from above" — and under adding,
@@ -2929,10 +3342,77 @@ int ibComposerSettingsPanel::SelectedFieldSetRow()
 //  Its old body had to guess what "turning it off" should start from, which is a question that no
 //  longer exists.)
 
-void ibComposerSettingsPanel::ReloadFieldSets()
+void ibComposerSettingsPanel::ReloadFieldSets(const std::vector<size_t>& select)
 {
-	if (m_selectedPage.m_model != nullptr)
-		m_selectedPage.m_model->Rebuild();
+	if (m_selectedPage.m_model == nullptr || m_selectedPage.m_view == nullptr)
+		return;
+	// ⚠ DROP THE SELECTION FIRST — a rebuild clears the view's state, and a selection left pointing
+	// into what was there is the control's "invalid item in selection" assertion (ReloadStructure).
+	m_selectedPage.m_view->UnselectAll();
+	m_selectedPage.m_model->Rebuild();
+
+	// ⚠ EVERY GROUP IS OPENED, on the next turn of the event loop: a row the view has not fetched yet
+	// does not open, and a field added into a closed group reads as a field that was not added.
+	// Parent before child — a child does not exist for the view until its parent is open.
+	CallAfter([this, select] {
+		ibSelectedListModel* model = m_selectedPage.m_model;
+		ibDataViewCtrl* view = m_selectedPage.m_view;
+		if (model == nullptr || view == nullptr)
+			return;
+		std::function<void(const ibDataViewItem&)> openAll = [&](const ibDataViewItem& parent) {
+			ibDataViewItemArray children;
+			model->GetFirstFetch(parent, ibDataViewItem(), -1, children);
+			for (const ibDataViewItem& child : children) {
+				if (!child.IsContainer())
+					continue;
+				view->Expand(child);
+				openAll(child);
+			}
+		};
+		openAll(ibDataViewItem());
+
+		const ibDataViewItem row = model->ItemForRow(select);
+		if (row.IsOk()) {
+			view->Select(row);
+			view->EnsureVisible(row);
+		}
+	});
+}
+
+// RIGHT-CLICK — the toolbar's verbs, and the same handlers. On a row the verbs act on it; on the empty
+// space below the rows the cursor is let go, so whatever is added lands at the end of the table.
+void ibComposerSettingsPanel::OnFieldSetContextMenu(ibDataViewEvent& event)
+{
+	ibFieldSetPage& page = m_selectedPage;
+	if (m_readOnly || page.m_view == nullptr)   // view only — see OnParameterContextMenu
+		return;
+	if (event.GetItem().IsOk())
+		page.m_view->Select(event.GetItem());
+	else
+		page.m_view->UnselectAll();
+	const bool onRow = !SelectedFieldSetRow().empty();
+	const std::vector<ibSelectedFieldDescription>* fields = CurrentFieldSet();
+
+	ibMenu menu;
+	ibAppendCmd(menu, ID_SELECTED_ADD, _("Add field"), wxASCII_STR(wxART_NEW), this);
+	ibAppendCmd(menu, ID_SELECTED_GROUP, _("Add group"), wxASCII_STR(wxART_NEW_DIR), this);
+	// 🛑 One `Auto` is all it can mean — greyed while there is one, as the last variant's Delete is.
+	ibAppendCmd(menu, ID_SELECTED_AUTO, _("Add \"Auto\""), wxASCII_STR(wxART_GO_DIR_UP), this)
+		->Enable(fields != nullptr && !ibSelectedInherits(*fields));
+	ibAppendCmd(menu, ID_SELECTED_REMOVE, _("Delete"), wxASCII_STR(wxART_DELETE), this)->Enable(onRow);
+	ibAppendCmd(menu, ID_SELECTED_COPY, _("Copy"), wxASCII_STR(wxART_COPY), this)->Enable(onRow);
+	menu.AppendSeparator();
+	ibAppendCmd(menu, ID_SELECTED_UP, _("Move up"), wxASCII_STR(wxART_GO_UP), this)->Enable(onRow);
+	ibAppendCmd(menu, ID_SELECTED_DOWN, _("Move down"), wxASCII_STR(wxART_GO_DOWN), this)->Enable(onRow);
+
+	menu.Bind(wxEVT_MENU, [this](wxCommandEvent&) { OnFieldSetAdd(); }, ID_SELECTED_ADD);
+	menu.Bind(wxEVT_MENU, [this](wxCommandEvent&) { OnFieldSetGroup(); }, ID_SELECTED_GROUP);
+	menu.Bind(wxEVT_MENU, [this](wxCommandEvent&) { OnFieldSetAuto(); }, ID_SELECTED_AUTO);
+	menu.Bind(wxEVT_MENU, [this](wxCommandEvent&) { OnFieldSetRemove(); }, ID_SELECTED_REMOVE);
+	menu.Bind(wxEVT_MENU, [this](wxCommandEvent&) { OnFieldSetCopy(); }, ID_SELECTED_COPY);
+	menu.Bind(wxEVT_MENU, [this](wxCommandEvent&) { MoveFieldSetRow(-1); }, ID_SELECTED_UP);
+	menu.Bind(wxEVT_MENU, [this](wxCommandEvent&) { MoveFieldSetRow(+1); }, ID_SELECTED_DOWN);
+	page.m_view->PopupMenu(&menu);   // on the view: an ib menu shows over an ib window, the panel is native
 }
 
 void ibComposerSettingsPanel::OnGroupingFieldAdd(wxCommandEvent&)

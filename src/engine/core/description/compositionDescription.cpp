@@ -72,6 +72,10 @@ void ReadConditionalAppearance(const ibDataNode& node, ibConditionalAppearanceDe
 void WriteConditionalAppearance(ibDataNode& node, const ibConditionalAppearanceDescription& appearance);
 const ibString  kPathName       = ibT("Path");
 const ibString  kKindName       = ibT("Kind");
+// A GROUP OF SELECTED FIELDS — its heading and its placement, beside the kind; its rows go into a `Selected` node
+// inside its own row node, through the same writer.
+const ibString  kTitleName      = ibT("Title");
+const ibString  kPlacementName  = ibT("Placement");
 // A LEVEL'S OWN SORT AND FILTER — written inside the level, because that is where they belong.
 //
 // (⛔ A SECOND SPELLING OF THE SORT SECTION STOOD HERE — `g_sortNodeClsid`, `kSortNode = "Sort"`,
@@ -132,6 +136,12 @@ void WriteSelectedList(ibDataNode& node, const ibString& name,
 		// has no kind of its own, so the word is free here and means what it says.
 		if (list[i].m_kind != ibSelectedFieldKind_Field)
 			row.SetValue<std::int32_t>(kKindName, static_cast<std::int32_t>(list[i].m_kind));
+		// …a GROUP, its heading, its placement and its own rows — the same table, one storey into the row.
+		if (list[i].IsGroup()) {
+			row.SetValue<ibString>(kTitleName, list[i].m_title);
+			row.SetValue<std::int32_t>(kPlacementName, static_cast<std::int32_t>(list[i].m_placement));
+			WriteSelectedList(row, kSelectedNode, list[i].m_children);
+		}
 	}
 }
 
@@ -150,11 +160,34 @@ void ReadSelectedList(const ibDataNode& node, const ibString& name,
 		// them was. (ibDataNode answers a missing value with the type's default, and 0 IS Field.)
 		row.m_kind = static_cast<ibSelectedFieldKind>(child.GetValue<std::int32_t>(kKindName));
 		row.m_path = child.GetValue<ibString>(kPathName);
+		if (row.IsGroup()) {
+			row.m_title = child.GetValue<ibString>(kTitleName);
+			row.m_placement = static_cast<ibColumnGroupKind>(child.GetValue<std::int32_t>(kPlacementName));
+			ReadSelectedList(child, kSelectedNode, row.m_children);
+		}
 		list.push_back(std::move(row));
 	}
 }
 
 } // namespace
+
+// The tree flattened, depth first, paths only (`Auto` names nothing).
+static void ibAppendSelectedPaths(std::vector<ibString>& into, const std::vector<ibSelectedFieldDescription>& rows)
+{
+	for (const ibSelectedFieldDescription& row : rows) {
+		if (row.IsGroup())
+			ibAppendSelectedPaths(into, row.m_children);
+		else if (!row.IsAuto() && !row.m_path.IsEmpty())
+			into.push_back(row.m_path);
+	}
+}
+
+std::vector<ibString> ibSelectedPathsOf(const std::vector<ibSelectedFieldDescription>& rows)
+{
+	std::vector<ibString> paths;
+	ibAppendSelectedPaths(paths, rows);
+	return paths;
+}
 
 // (A LEVEL'S FIELD had a pair of its own here, writing {path, unfold} into a node. What a level
 //  groups by is its GROUPING — ibGroupDescriptionMemory already writes exactly that pair, so the

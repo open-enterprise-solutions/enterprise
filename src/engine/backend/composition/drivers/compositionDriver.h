@@ -55,6 +55,20 @@ enum class ibCompositionAxis
 	Columns,   // a heading across it
 };
 
+// A COLUMN OF THE SCHEMA, OR A GROUP OF THEM — the selected fields' groups carried to the driver
+// (docs/private/selected-field-groups.md §5.4). A leaf names its schema column; a group names none.
+struct ibCompositionColumnNode
+{
+	static constexpr size_t npos = static_cast<size_t>(-1);
+
+	size_t            m_column = npos;                       // a schema column; npos = a group
+	ibString          m_title;                               // a group's heading; empty = no band of its own
+	ibColumnGroupKind m_placement = ibColumnGroupVertical;   // how a group lays its members out
+	std::vector<ibCompositionColumnNode> m_children;
+
+	bool IsGroup() const { return m_column == npos; }
+};
+
 // What an output tells its driver before its first row: what shape is coming and what the values
 // mean. The schema is the output's OWN — two outputs of one composition show different fields.
 struct ibCompositionOutputInfo
@@ -132,6 +146,11 @@ struct ibCompositionOutputInfo
 	bool ShowsColumn(size_t column) const {
 		return column >= m_shown.size() || m_shown[column];
 	}
+
+	// ⭐ …AND HOW THE SHOWN COLUMNS HANG — every shown column that is not a heading's key, in the schema's order, in
+	// the groups the selected fields put it in (ibComposerColumnTreeOf). No group = every node a leaf: one band,
+	// a column each, the sheet as it always was.
+	std::vector<ibCompositionColumnNode>       m_columnTree;
 
 	// HOW MANY OF THE DIMENSIONS ARE THE ROWS'. Both axes fold in one `TOTALS BY`, rows first (see
 	// AppendSettingsClauses), so this is the seam between them and nothing else marks it.

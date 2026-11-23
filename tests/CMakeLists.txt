@@ -231,6 +231,7 @@ add_executable(oes_tests
     test_sharedModuleCheck.cpp
     test_applicationCheckRegisters.cpp
     test_mcpPictureSet.cpp
+    test_mcpReportSelect.cpp
     test_mcpAppApply.cpp
     test_mcpCodeRunDebug.cpp
     test_lockRace.cpp

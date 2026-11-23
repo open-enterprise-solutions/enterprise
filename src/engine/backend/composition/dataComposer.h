@@ -1133,11 +1133,13 @@ public:
 
 	// The four storeys resolved down to this output: composition (the AUTHOR) → the setting in force
 	// (the READER) → output. A node's own table is not here — that is what SelectedUnder answers.
-	std::vector<ibString> SelectedFor(const Output& output) const;
+	// Rows, groups kept (`Auto` spliced in, what this base does not use dropped): how the columns hang. A caller
+	// asking by name flattens them — ibSelectedPathsOf (docs/private/selected-field-groups.md).
+	std::vector<ibSelectedFieldDescription> SelectedFor(const Output& output) const;
 	// ⚠ ONE STOREY DOWN FROM THE OUTPUT — right for a node standing on an axis, and NOT a general
 	// answer for a node deeper in the tree: that one's chain runs through its parents, and the walk
 	// carries it (SelectedUnder). Kept for the callers that hold an output and a top-level node.
-	std::vector<ibString> SelectedFor(const Output& output, const GroupNode& level) const;
+	std::vector<ibSelectedFieldDescription> SelectedFor(const Output& output, const GroupNode& level) const;
 
 	// ⭐⭐ WHAT THE READ OWES — every name anything above it will ask for BY NAME, which is NOT the
 	// same list as what the report shows. A level hides on a field, orders on a field and selects
@@ -1181,8 +1183,9 @@ public:
 	std::vector<ibString> ProjectionFor(const Output& output) const;
 
 	// …and what is SHOWN out of it: the same walk without the fields a filter and a sort merely need.
-	// The read is the union, the print is what somebody chose — see the driver's `m_shown`.
-	std::vector<ibString> ShownFor(const Output& output) const;
+	// The read is the union, the print is what somebody chose — see the driver's `m_shown`. Rows, groups kept:
+	// the output's, then each node's own after them.
+	std::vector<ibSelectedFieldDescription> ShownFor(const Output& output) const;
 
 protected:
 	// Always non-empty (see Outputs) — the one output every composition starts with.

@@ -15027,6 +15027,19 @@ msgstr ""
 msgid "Everything the level above shows, in this place"
 msgstr ""
 
+#: src/engine/frmclient/win/dlgs/settings/composer/composerSettings.cpp:2892
+#: src/engine/frmclient/win/dlgs/settings/composer/composerSettings.cpp:3360
+msgid "Add group"
+msgstr ""
+
+#: src/engine/frmclient/win/dlgs/settings/composer/composerSettings.cpp:2893
+msgid "Columns under one title: side by side, one under another, or in one cell"
+msgstr ""
+
+#: src/engine/frmclient/win/dlgs/settings/composer/composerSettings.cpp:2926
+msgid "Placement"
+msgstr ""
+
 #: src/engine/frmclient/win/dlgs/settings/composer/composerSettings.cpp:2940
 msgid "Select a grouping in the structure above: these are the fields IT groups by."
 msgstr ""

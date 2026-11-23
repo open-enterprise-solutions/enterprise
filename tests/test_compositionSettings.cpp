@@ -21,7 +21,8 @@
 //   4. SELECTED FIELDS PILE UP — composition + output + node, deduped. Replacing was the old
 //      behaviour and it silently dropped what a storey above had asked for.
 //   5. A FIELD NAMED TWICE IS NAMED ONCE — the guard behind Firebird's -104, "column … was
-//      specified multiple times".
+//      specified multiple times". The fields may hang in GROUPS: an `Auto` inside one lands there, a
+//      group left empty is dropped, and a nested one reads back as it was written.
 //   6. A DESCRIPTION SURVIVES A ROUND TRIP with its variant and that variant's structure.
 //   7. EQUALITY NOTICES A CHANGED STRUCTURE — equality is how "modified" is decided, and a member
 //      left out of it is a form that never saves.
@@ -236,7 +237,7 @@ TEST(ComposerSettings, Selected_AutoTakesTheStoreyAboveAtItsOwnPosition)
 	output.m_selected = { ibSelectedFieldDescription::Auto(),
 	                      ibSelectedFieldDescription::Field(wxT("Date")) };
 
-	const std::vector<ibString> selected = composer.SelectedFor(output);
+	const std::vector<ibString> selected = ibSelectedPathsOf(composer.SelectedFor(output));
 
 	// ADDED, not replaced. Before 2026-08-24 an output naming one field made everything the report
 	// was told to show disappear under it.
@@ -258,7 +259,7 @@ TEST(ComposerSettings, Selected_WithoutAutoANodeStatesItsOwnComposition)
 	ibDataComposer::Output& output = composer.Outputs().front();
 	output.m_selected = Fields({ wxT("Date") });
 
-	const std::vector<ibString> selected = composer.SelectedFor(output);
+	const std::vector<ibString> selected = ibSelectedPathsOf(composer.SelectedFor(output));
 	ASSERT_EQ(1u, selected.size());
 	EXPECT_EQ(wxT("Date"), selected[0]);
 }
@@ -270,7 +271,7 @@ TEST(ComposerSettings, Selected_AnUntouchedTableInherits)
 	ibDataDBComposer composer;
 	composer.CommonSelected() = Fields({ wxT("Code"), wxT("Description") });
 
-	const std::vector<ibString> selected = composer.SelectedFor(composer.Outputs().front());
+	const std::vector<ibString> selected = ibSelectedPathsOf(composer.SelectedFor(composer.Outputs().front()));
 	ASSERT_EQ(2u, selected.size());
 	EXPECT_EQ(wxT("Code"), selected[0]);
 	EXPECT_EQ(wxT("Description"), selected[1]);
@@ -286,9 +287,57 @@ TEST(ComposerSettings, Selected_FieldNamedTwiceIsNamedOnce)
 	composer.CommonSelected() = Fields({ wxT("Code"), wxT("Code") });
 	composer.Outputs().front().m_selected = Fields({ wxT("Code") });
 
-	const std::vector<ibString> selected = composer.SelectedFor(composer.Outputs().front());
+	const std::vector<ibString> selected = ibSelectedPathsOf(composer.SelectedFor(composer.Outputs().front()));
 	ASSERT_EQ(1u, selected.size());
 	EXPECT_EQ(wxT("Code"), selected[0]);
+}
+
+// ⭐⭐ A GROUP CHANGES WHERE A COLUMN HANGS, NOT WHAT IS READ (docs/private/selected-field-groups.md). An `Auto` inside
+// a group puts what the storey above shows THERE, a field the group names again keeps its first place, and the rows
+// come back as rows — the group kept, its title and placement with it — flattened only where a name is asked.
+TEST(ComposerSettings, Selected_AutoInsideAGroupLandsInTheGroup)
+{
+	ibDataDBComposer composer;
+	composer.CommonSelected() = Fields({ wxT("Code"), wxT("Description") });
+
+	ibSelectedFieldDescription group = ibSelectedFieldDescription::Group(wxT("Amounts"), ibColumnGroupHorizontal);
+	group.m_children = { ibSelectedFieldDescription::Field(wxT("Date")),
+	                     ibSelectedFieldDescription::Auto(),
+	                     ibSelectedFieldDescription::Field(wxT("Code")) };   // named again — `Auto` placed it first
+	composer.Outputs().front().m_selected = { ibSelectedFieldDescription::Field(wxT("Number")), group };
+
+	const std::vector<ibSelectedFieldDescription> rows = composer.SelectedFor(composer.Outputs().front());
+	ASSERT_EQ(2u, rows.size());
+	EXPECT_EQ(wxT("Number"), rows[0].m_path);
+	ASSERT_TRUE(rows[1].IsGroup());
+	EXPECT_EQ(wxT("Amounts"), rows[1].m_title);
+	EXPECT_EQ(ibColumnGroupHorizontal, rows[1].m_placement);
+	ASSERT_EQ(3u, rows[1].m_children.size());
+	EXPECT_EQ(wxT("Date"), rows[1].m_children[0].m_path);
+	EXPECT_EQ(wxT("Code"), rows[1].m_children[1].m_path);
+	EXPECT_EQ(wxT("Description"), rows[1].m_children[2].m_path);
+
+	// …and what is READ is the tree flattened, in its order.
+	const std::vector<ibString> paths = ibSelectedPathsOf(rows);
+	ASSERT_EQ(4u, paths.size());
+	EXPECT_EQ(wxT("Number"), paths[0]);
+	EXPECT_EQ(wxT("Date"), paths[1]);
+	EXPECT_EQ(wxT("Code"), paths[2]);
+	EXPECT_EQ(wxT("Description"), paths[3]);
+}
+
+// A GROUP LEFT WITH NOTHING IN IT IS NOT THERE — a heading over no column is a blank band on the sheet.
+TEST(ComposerSettings, Selected_AGroupLeftEmptyIsDropped)
+{
+	ibDataDBComposer composer;
+	ibSelectedFieldDescription group = ibSelectedFieldDescription::Group(wxT("Twice"), ibColumnGroupVertical);
+	group.m_children = Fields({ wxT("Code") });   // already placed before it — the first place stands
+	composer.Outputs().front().m_selected = { ibSelectedFieldDescription::Field(wxT("Code")), group };
+
+	const std::vector<ibSelectedFieldDescription> rows = composer.SelectedFor(composer.Outputs().front());
+	ASSERT_EQ(1u, rows.size());
+	EXPECT_FALSE(rows[0].IsGroup());
+	EXPECT_EQ(wxT("Code"), rows[0].m_path);
 }
 
 // ⭐⭐ WHAT THE READ OWES IS NOT WHAT THE REPORT SHOWS. A level hides on a field, orders on a field
@@ -317,7 +366,7 @@ TEST(ComposerSettings, Projection_OwesWhatEveryLevelNamesByName)
 	output.m_rowGroups.push_back(level);
 
 	// What the report shows down to the output is unchanged — the level's fields are the LEVEL's.
-	const std::vector<ibString> shown = composer.SelectedFor(output);
+	const std::vector<ibString> shown = ibSelectedPathsOf(composer.SelectedFor(output));
 	ASSERT_EQ(2u, shown.size());
 	EXPECT_EQ(wxT("Code"), shown[0]);
 	EXPECT_EQ(wxT("Date"), shown[1]);
@@ -436,6 +485,36 @@ TEST(CompositionDescription, RoundTrip_KeepsVariantStructure)
 		read.m_variants[0].m_settings.m_structure[0].m_rowGroups[0].m_settings.m_group.m_lines[0].m_path);
 	EXPECT_EQ(written.m_query, read.m_query);
 	EXPECT_EQ(written.m_selected, read.m_selected);
+}
+
+// ⭐ A GROUP OF SELECTED FIELDS READS BACK AS IT WAS WRITTEN — its title (an empty one too), its placement and its own
+// rows, a group inside a group and `Auto` among them: the same table, one storey into the row.
+TEST(CompositionDescription, RoundTrip_KeepsSelectedGroupsNested)
+{
+	ibCompositionDescription written;
+	written.m_query = wxT("SELECT Code FROM Catalog.Products");
+
+	ibSelectedFieldDescription inner = ibSelectedFieldDescription::Group(wxT(""), ibColumnGroupInCell);
+	inner.m_children = Fields({ wxT("Debit"), wxT("Credit") });
+	ibSelectedFieldDescription outer = ibSelectedFieldDescription::Group(wxT("Amounts"), ibColumnGroupHorizontal);
+	outer.m_children = { ibSelectedFieldDescription::Field(wxT("Sum")), inner, ibSelectedFieldDescription::Auto() };
+	written.m_selected = { ibSelectedFieldDescription::Field(wxT("Code")), outer };
+
+	ibDataNode node;
+	ASSERT_TRUE(ibCompositionDescriptionMemory::WriteNode(node, written));
+	ibCompositionDescription read;
+	ASSERT_TRUE(ibCompositionDescriptionMemory::ReadNode(node, read));
+
+	EXPECT_EQ(written.m_selected, read.m_selected);
+	ASSERT_EQ(2u, read.m_selected.size());
+	ASSERT_EQ(3u, read.m_selected[1].m_children.size());
+	const ibSelectedFieldDescription& readInner = read.m_selected[1].m_children[1];
+	ASSERT_TRUE(readInner.IsGroup());
+	EXPECT_TRUE(readInner.m_title.IsEmpty());
+	EXPECT_EQ(ibColumnGroupInCell, readInner.m_placement);
+	ASSERT_EQ(2u, readInner.m_children.size());
+	EXPECT_EQ(wxT("Credit"), readInner.m_children[1].m_path);
+	EXPECT_TRUE(read.m_selected[1].m_children[2].IsAuto());
 }
 
 // ⭐ EVERY PART A COMPOSITION IS WRITTEN AS HAS A NAME THAT READS BACK INTO ITS ID (2026-11-15). A page reads a type it

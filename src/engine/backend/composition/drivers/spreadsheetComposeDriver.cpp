@@ -235,8 +235,9 @@ void ibSpreadsheetComposeDriver::OnOutputBegin(const ibCompositionOutputInfo& in
 			format.m_date.m_empty = ibString();
 	}
 	// …AND WHICH OF THEM ARE SHOWN, taken here for the same reason as the two above: the layout is
-	// decided later and the info does not outlive this call.
+	// decided later and the info does not outlive this call. And how they hang, for the same reason.
 	m_shown = info.m_shown;
+	m_columnTree = info.m_columnTree;
 	// AN OUTPUT STARTS ITS OWN DESCENT. Outputs share the sheet, not their trees: a cell of the
 	// second report standing under a heading of the first would be a link nobody can follow back.
 	m_chainAtLevel.clear();
@@ -455,6 +456,7 @@ void ibSpreadsheetComposeDriver::TakeSchema(const std::vector<ibQueryLowering::i
 	//   * DETAILS (a query with no TOTALS at all) are the ordinary case: a column each.
 	m_layout.assign(schema.size(), -1);
 	m_dimLevel.assign(schema.size(), -1);
+	m_band.assign(schema.size(), 0);
 
 	// ⭐ A LEVEL MAY BE MADE OF SEVERAL FIELDS, AND THEY ARE WELDED TOGETHER (Max): they belong to
 	// ONE heading, so they are written SIDE BY SIDE on its row — not one under another, which would
@@ -486,40 +488,52 @@ void ibSpreadsheetComposeDriver::TakeSchema(const std::vector<ibQueryLowering::i
 	// the first FIGURE with the word "Total".
 	m_dimWidth = anyDimension ? static_cast<int>(widestLevel) : 0;
 
-	// ⭐⭐ THE RESOURCES STAND LAST, ALWAYS (Max, 2026-08-28). They used to take their column in
-	// SCHEMA order alongside the fields, so `COUNT(Number)` landed second — between two fields —
-	// and the figures a reader scans were scattered through the text ones.
-	//
-	// Two passes, and the reason is that the order of a REPORT is not the order of a query: the
-	// schema is the order the columns were produced in, while a sheet reads left to right as
-	// "what this row is" and then "what it adds up to". Sorting the schema itself would be the
-	// same fact stated twice — the layout is the report's, and this is where it is decided.
-	for (size_t i = 0; i < schema.size(); ++i) {
-		switch (schema[i].m_role) {
-		case ibQueryLowering::ibColumnRole::Dimension: {
+	for (size_t i = 0; i < schema.size(); ++i)
+		if (schema[i].m_role == ibQueryLowering::ibColumnRole::Dimension) {
 			const int level = schema[i].m_level;
 			m_dimLevel[i] = level;
 			m_layout[i] = dimBase + filledInLevel[level]++;   // its place INSIDE its own level
-			break;
 		}
-		case ibQueryLowering::ibColumnRole::Measure:
-			break;                           // …placed in the second pass, to the right of everything
-		default:
-			// ⚠ …AND ONLY IF IT IS SHOWN. A projected field the read had to fetch for a filter or a
-			// sort takes no column at all — it is not blanked, it is absent, header and width with it
-			// (see ibCompositionOutputInfo::m_shown).
-			if (!m_shown.empty() && i < m_shown.size() && !m_shown[i])
-				break;
-			m_layout[i] = next++;            // a detail — one column each, in the order it was asked for
-			break;
+	int deepestLevel = 0;
+	for (const int level : m_dimLevel)
+		deepestLevel = std::max(deepestLevel, level + 1);
+
+	// ⭐⭐ …AND EVERY OTHER COLUMN WHERE THE OUTPUT HANGS IT (ibCompositionOutputInfo::m_columnTree), laid out by the
+	// table's own law in sheet cells (ibCompositionColumnLayout, docs/private/selected-field-groups.md §5.5). The tree
+	// already holds the report's order: the details as they were asked for, and THE RESOURCES LAST unless a group
+	// holds them (Max, 2026-08-28 — in schema order `COUNT(Number)` landed second, between two fields, and the
+	// figures a reader scans were scattered through the text ones). A projected field nobody shows is not in it at
+	// all — not blanked, absent, header and width with it (m_shown). With no group: a column each, on one line.
+	ibCompositionColumnLayout columns;
+	columns.Rebuild(m_columnTree, next, std::max(1, deepestLevel));
+	for (const ibCompositionColumnPlacement& place : columns.GetPlacements())
+		if (place.m_column < schema.size()) {
+			m_layout[place.m_column] = place.m_col;
+			m_band[place.m_column]   = place.m_band;
 		}
-	}
-	// …and the figures after them, in the order the resources were declared.
-	for (size_t i = 0; i < schema.size(); ++i)
-		if (schema[i].m_role == ibQueryLowering::ibColumnRole::Measure)
-			m_layout[i] = next++;
-	m_columnCount = next;
+	m_columnCount = next + columns.GetColumnCount();
+	m_lineBands   = columns.GetRowBandCount();
 	WidenTo(m_columnCount, firstSection);
+
+	// ONE PRINTED LINE, CELL BY CELL — the dimension area spans every band; every other cell is a placement's main
+	// cell, or covered by one.
+	m_lineSpans.assign(static_cast<size_t>(m_lineBands * std::max(m_columnCount, 0)), LineSpan());
+	const auto lineAt = [this](int band, int col) -> LineSpan& {
+		return m_lineSpans[static_cast<size_t>(band * m_columnCount + col)];
+	};
+	for (int col = 0; col < m_dimWidth; ++col) {
+		lineAt(0, col).m_rows = m_lineBands;
+		lineAt(0, col).m_cols = 1;
+	}
+	for (const ibCompositionColumnPlacement& place : columns.GetPlacements()) {
+		LineSpan& span = lineAt(place.m_band, place.m_col);
+		span.m_rows = place.m_bandSpan;
+		span.m_cols = place.m_colSpan;
+		span.m_ruleRight = !place.m_mergedRight;
+	}
+	for (const ibCompositionColumnPlacement& place : columns.GetPlacements())
+		if (place.m_mergedRight && place.m_col + place.m_colSpan < m_columnCount)
+			lineAt(place.m_band, place.m_col + place.m_colSpan).m_ruleLeft = false;
 
 	// HAS THIS OUTPUT ANY FIGURES? The grand-total row (depth 0) carries no dimension value — it
 	// stands for everything — so with no measures it has nothing at all to say, and printing it
@@ -535,14 +549,17 @@ void ibSpreadsheetComposeDriver::TakeSchema(const std::vector<ibQueryLowering::i
 	WriteOutputCaption();
 
 	// THE HEADER IS AS TALL AS THE DIMENSIONS ARE DEEP: one line per level, each naming its own
-	// level, stacked in the same column they will be read in. A measure names itself on the first
-	// line and its column stays clear underneath. Written as ONE area, put at level 0 — a heading
-	// is not inside any grouping.
-	int deepestLevel = 0;
-	for (const int level : m_dimLevel)
-		deepestLevel = std::max(deepestLevel, level + 1);
-	const int headerRows = std::max(1, deepestLevel);
+	// level, stacked in the same column they will be read in — or as the groups' titles need, where
+	// they need more (the layout was told the first, and answers the deeper of the two). A measure
+	// names itself on the first line and its column stays clear underneath. Written as ONE area, put
+	// at level 0 — a heading is not inside any grouping.
+	const int headerRows = columns.GetHeaderBandCount();
 	std::shared_ptr<ibSpreadsheetObject> header(std::make_shared<ibSpreadsheetObject>());
+	// …cell by cell, as a line is (m_lineSpans): every cell of it a main one or covered by one.
+	std::vector<LineSpan> headerSpans(static_cast<size_t>(headerRows * std::max(m_columnCount, 0)));
+	const auto headerAt = [&headerSpans, this](int row, int col) -> LineSpan& {
+		return headerSpans[static_cast<size_t>(row * m_columnCount + col)];
+	};
 	// ⭐⭐ A COLUMN THAT SAYS ONE THING SAYS IT OVER THE WHOLE HEIGHT (Max, 2026-08-28: *"make the
 	// cells merge when they are in the same space… and centre them"*, and then *"use the room
 	// sensibly — if a resource or an extra field lands with emptiness above it, let it use that
@@ -557,45 +574,73 @@ void ibSpreadsheetComposeDriver::TakeSchema(const std::vector<ibQueryLowering::i
 	// role would answer the resources only, and the emptiness is not theirs alone: a dimension that
 	// exists at the second level but not at the first has the SAME blank cell, just above instead of
 	// below. Counting the captions covers both, and covers whichever new case is next by construction.
-	std::vector<int> captions(static_cast<size_t>(std::max(0, m_columnCount)), 0);
+	//
+	// (The columns past the dimension area say one thing each by construction, and the layout gives each the height
+	// it has: the whole header for a plain column, its own band in a stack — ibCompositionColumnLayout.)
+	std::vector<int> captions(static_cast<size_t>(std::max(0, m_dimWidth)), 0);
 	for (size_t i = 0; i < schema.size(); ++i)
-		if (m_layout[i] >= 0)
+		if (m_dimLevel[i] >= 0 && m_layout[i] >= 0 && m_layout[i] < m_dimWidth)
 			++captions[static_cast<size_t>(m_layout[i])];
-
-	// Which columns took the whole height as one cell — their borders are drawn once, on the outside,
-	// or a row-by-row rule would be ruled straight through the middle of them.
-	std::vector<bool> merged(static_cast<size_t>(std::max(0, m_columnCount)), false);
+	for (int col = 0; col < m_dimWidth; ++col) {
+		if (captions[static_cast<size_t>(col)] == 1 && headerRows > 1) {
+			headerAt(0, col) = LineSpan{ headerRows, 1 };   // alone: one cell, the whole height
+			continue;
+		}
+		for (int row = 0; row < headerRows; ++row)
+			headerAt(row, col) = LineSpan{ 1, 1 };
+		// …and where the groups' titles make the header deeper than the levels, the deepest level's line takes
+		// the rest of the height rather than leaving blank cells under it.
+		if (deepestLevel >= 1 && headerRows > deepestLevel) {
+			headerAt(deepestLevel - 1, col).m_rows = headerRows - deepestLevel + 1;
+			for (int row = deepestLevel; row < headerRows; ++row)
+				headerAt(row, col) = LineSpan();
+		}
+	}
+	// WHAT A PERSON READS OVER THE COLUMN — the composition's title for it. The query's NAME is
+	// what a script looks the column up by and may have been qualified to stay unique; the
+	// header is not the place that difference should ever show (see m_titles).
 	for (size_t i = 0; i < schema.size(); ++i) {
 		const int col = m_layout[i];
-		if (col < 0)
+		if (m_dimLevel[i] < 0 || col < 0 || col >= m_dimWidth)
 			continue;
-		const bool alone = captions[static_cast<size_t>(col)] == 1 && headerRows > 1;
-		int row = 0;
-		if (!alone && schema[i].m_role == ibQueryLowering::ibColumnRole::Dimension)
-			row = std::max(0, m_dimLevel[i]);   // one header line per LEVEL, not per dimension column
-		// WHAT A PERSON READS OVER THE COLUMN — the composition's title for it. The query's NAME is
-		// what a script looks the column up by and may have been qualified to stay unique; the
-		// header is not the place that difference should ever show (see m_titles).
+		const bool alone = headerAt(0, col).m_rows == headerRows && headerRows > 1;
+		const int row = alone ? 0 : std::max(0, m_dimLevel[i]);   // one header line per LEVEL, not per dimension column
 		const ibString caption = ColumnTitle(i, schema);
 		header->SetCellValue(row, col, caption);
 		m_widest[static_cast<size_t>(col)] = std::max(m_widest[static_cast<size_t>(col)], caption.length());
-
-		if (alone) {
-			header->SetCellSize(row, col, headerRows, 1);
+		if (headerAt(row, col).m_rows > 1)   // taller than its line: beside the middle of its height
 			header->SetCellAlignment(row, col, ibAlignmentHorz_Left, ibAlignmentVert_Center);
-			merged[static_cast<size_t>(col)] = true;
-		}
 	}
+	// …and over every other column what the layout puts there: its title, or its group's — a group's over the
+	// middle of what it holds, a column's, where it is taller or wider than its place, beside the middle of it.
+	for (const ibCompositionHeaderCell& place : columns.GetHeaderCells()) {
+		headerAt(place.m_band, place.m_col) = LineSpan{ place.m_bandSpan, place.m_colSpan };
+		const bool ofGroup = place.m_column == ibCompositionColumnNode::npos;
+		const ibString caption = ofGroup ? place.m_title : ColumnTitle(place.m_column, schema);
+		header->SetCellValue(place.m_band, place.m_col, caption);
+		if (place.m_colSpan == 1)   // a title over several columns widens none of them
+			m_widest[static_cast<size_t>(place.m_col)] = std::max(m_widest[static_cast<size_t>(place.m_col)], caption.length());
+		if (ofGroup)
+			header->SetCellAlignment(place.m_band, place.m_col, ibAlignmentHorz_Center, ibAlignmentVert_Center);
+		else if (place.m_bandSpan > 1 || place.m_colSpan > 1)
+			header->SetCellAlignment(place.m_band, place.m_col, ibAlignmentHorz_Left, ibAlignmentVert_Center);
+	}
+	// …and a cell that takes more than its own place is merged over it.
+	for (int row = 0; row < headerRows; ++row)
+		for (int col = 0; col < m_columnCount; ++col) {
+			const LineSpan& span = headerAt(row, col);
+			if (span.m_rows > 1 || span.m_cols > 1)
+				header->SetCellSize(row, col, span.m_rows, span.m_cols);
+		}
 	// 🛑 THE TINT SKIPS WHAT A MERGE COVERS. Touching a cell CREATES it in the description, the grid
 	// then loads it and asks for its size, and a cell already inside somebody's span carries a negative
 	// one — `ibGrid::SetCellSize: setting cell size that is already part of another cell`, an int 3 at
 	// LOAD time, far from here (the cross layout hit this on 2026-08-25 and says so at its own tint).
 	// A merged cell paints its whole span from its main cell, so skipping them costs nothing on screen.
-	for (int col = 0; col < m_columnCount; ++col) {
-		const int rows = merged[static_cast<size_t>(col)] ? 1 : headerRows;
-		for (int row = 0; row < rows; ++row)
-			header->SetCellBackgroundColour(row, col, m_theme->m_headerFill);
-	}
+	for (int row = 0; row < headerRows; ++row)
+		for (int col = 0; col < m_columnCount; ++col)
+			if (!headerAt(row, col).IsCovered())
+				header->SetCellBackgroundColour(row, col, m_theme->m_headerFill);
 
 	// ⭐⭐ THE HEADER IS BOXED, and the rest of the table hangs off its lines. A report is read as a
 	// TABLE — the eye follows a column down and needs to know where that column ends sideways — and
@@ -613,16 +658,12 @@ void ibSpreadsheetComposeDriver::TakeSchema(const std::vector<ibQueryLowering::i
 	// data rows do not need this because each of them is an area of its own, where the edge is on
 	// the outside.
 	//
-	// ⚠ AND A MERGED COLUMN IS BOXED ONCE. Its cell IS the whole height, so the row-by-row rule would
-	// be asking for an edge in the middle of a single cell — the very line the merge exists to remove.
-	for (int col = 0; col < m_columnCount; ++col) {
-		if (merged[static_cast<size_t>(col)]) {
-			BoxCell(*header, 0, col, /*top*/ true, /*bottom*/ true, m_gridPen);
-			continue;
-		}
-		for (int row = 0; row < headerRows; ++row)
-			BoxCell(*header, row, col, /*top*/ true, /*bottom*/ true, m_gridPen);
-	}
+	// ⚠ AND A MERGED CELL IS BOXED ONCE. It IS the whole span, so a rule per row would be asking for an
+	// edge in the middle of a single cell — the very line the merge exists to remove.
+	for (int row = 0; row < headerRows; ++row)
+		for (int col = 0; col < m_columnCount; ++col)
+			if (!headerAt(row, col).IsCovered())
+				BoxCell(*header, row, col, /*top*/ true, /*bottom*/ true, m_gridPen);
 
 	m_document->PutArea(header, 0);
 
@@ -839,18 +880,21 @@ void ibSpreadsheetComposeDriver::PrintRow(const ibCompositionLine& line, const s
 	// WHAT EACH CELL OF THE LINE SAYS, gathered first and then written in one call per cell. Two fields may stand in
 	// one column — every level's dimensions start at the dimension area's first column, and a record of a list keeps
 	// them all — so a cell keeps the text of the last of them, and its link and its alignment from the last that had
-	// one: what the area's setters left it with.
+	// one: what the area's setters left it with. A line is `m_lineBands` sheet rows (a vertical group's members one
+	// under another), so a cell is found by its band as well as its column.
 	struct LineCell {
 		ibString m_text;
 		ibValue  m_bound;            // what the cell's link carries
 		bool     m_linked = false;
 		bool     m_right  = false;   // a number — read down its right edge
 	};
-	std::vector<LineCell> cells(static_cast<size_t>(std::max(m_columnCount, 0)));
+	const int bands = m_lineBands;
+	std::vector<LineCell> cells(static_cast<size_t>(bands * std::max(m_columnCount, 0)));
 
 	for (size_t i = 0; i < values.size() && i < m_layout.size(); ++i) {
 		const int col = m_layout[i];
-		if (col < 0 || static_cast<size_t>(col) >= cells.size())
+		const int band = BandOf(i);
+		if (col < 0 || col >= m_columnCount || band >= bands)
 			continue;
 
 		const bool isDimension = i < m_dimLevel.size() && m_dimLevel[i] >= 0;
@@ -880,10 +924,10 @@ void ibSpreadsheetComposeDriver::PrintRow(const ibCompositionLine& line, const s
 		if (isDimension && page > 0 && m_layout[i] == 0)
 			text.insert(0, page * kIndentPerLevel, ibT(' '));
 
-		if (static_cast<size_t>(col) < m_widest.size())
+		if (static_cast<size_t>(col) < m_widest.size() && SpanAt(band, col).m_cols == 1)   // a value over several columns widens none
 			m_widest[static_cast<size_t>(col)] = std::max(m_widest[static_cast<size_t>(col)], text.length());
 
-		LineCell& said = cells[static_cast<size_t>(col)];
+		LineCell& said = cells[static_cast<size_t>(band * m_columnCount + col)];
 		said.m_text = std::move(text);
 
 		// A CELL CARRIES ITS VALUE, and WHAT that means is the value's own business: the click ends in
@@ -933,36 +977,47 @@ void ibSpreadsheetComposeDriver::PrintRow(const ibCompositionLine& line, const s
 	for (ibSpreadsheetBorderDescription& edge : cell.m_borderAt)
 		edge = m_gridPen;
 	const ibCompositionLineAttr* const attr = line.m_attr;
-	for (int col = 0; col < m_columnCount; ++col) {
-		LineCell& said = cells[static_cast<size_t>(col)];
-		cell.m_value = std::move(said.m_text);
-		cell.m_alignHorz = said.m_right ? ibAlignmentHorz_Right : plainHorz;
-		cell.m_alignVert = said.m_right ? ibAlignmentVert_Center : plainVert;
-		cell.m_detailsParameter = said.m_linked ? LinkName(at, col) : ibString();
-		if (said.m_linked)
-			m_document->SetParameter(cell.m_detailsParameter, said.m_bound);
-		if (attr == nullptr) {
-			m_document->SetCell(at, col, cell);
-			continue;
+	for (int band = 0; band < bands; ++band)
+		for (int col = 0; col < m_columnCount; ++col) {
+			// A cell another's span covers is never written — the main one draws the whole span.
+			const LineSpan& span = SpanAt(band, col);
+			if (span.IsCovered())
+				continue;
+			LineCell& said = cells[static_cast<size_t>(band * m_columnCount + col)];
+			cell.m_value = std::move(said.m_text);
+			cell.m_alignHorz = said.m_right ? ibAlignmentHorz_Right : plainHorz;
+			cell.m_alignVert = said.m_right ? ibAlignmentVert_Center : plainVert;
+			// No rule between the columns of an in-cell group — they are one cell showing two values.
+			cell.m_borderAt[0] = span.m_ruleLeft ? m_gridPen : ibSpreadsheetBorderDescription();
+			cell.m_borderAt[1] = span.m_ruleRight ? m_gridPen : ibSpreadsheetBorderDescription();
+			cell.m_detailsParameter = said.m_linked ? LinkName(at + band, col) : ibString();
+			if (said.m_linked)
+				m_document->SetParameter(cell.m_detailsParameter, said.m_bound);
+			if (attr == nullptr)
+				m_document->SetCell(at + band, col, cell);
+			else {
+				// …its conditional appearance over it, on a copy — the description is the next cell's too: the line's,
+				// then the column's own where it has one (ApplyLineAttr's order).
+				ibSpreadsheetCellDescription dressed = cell;
+				ApplyAttr(dressed, attr->m_line);
+				for (const std::pair<size_t, ibCompositionAttr>& own : attr->m_cells)
+					if (own.first < m_layout.size() && m_layout[own.first] == col && BandOf(own.first) == band)
+						ApplyAttr(dressed, own.second);
+				m_document->SetCell(at + band, col, dressed);
+			}
+			if (span.m_rows > 1 || span.m_cols > 1)
+				m_document->SetCellSize(at + band, col, span.m_rows, span.m_cols);
 		}
-		// …its conditional appearance over it, on a copy — the description is the next cell's too: the line's, then
-		// the column's own where it has one (ApplyLineAttr's order).
-		ibSpreadsheetCellDescription dressed = cell;
-		ApplyAttr(dressed, attr->m_line);
-		for (const std::pair<size_t, ibCompositionAttr>& own : attr->m_cells)
-			if (own.first < m_layout.size() && m_layout[own.first] == col)
-				ApplyAttr(dressed, own.second);
-		m_document->SetCell(at, col, dressed);
-	}
 
 	// ⭐ AND THE ONLY POSITIONAL THING THIS DRIVER SAYS: how deep the row is DRAWN — the rung plus the
 	// hierarchy step — the group it folds into at that depth (what PutArea said about a line besides its
 	// cells, with the end of the printed rows). Where it lands, how far the group reaches, which line
 	// carries the fold marker — all of that follows from the order the rows arrived in, and belongs to
-	// the document and the grid.
-	m_document->SetRowBrake(at);
+	// the document and the grid. A line of several bands folds whole.
+	const int last = at + bands - 1;
+	m_document->SetRowBrake(last);
 	if (page > 0)
-		m_document->GetSpreadsheetDesc().AddRowGroup(static_cast<unsigned int>(at), static_cast<unsigned int>(at),
+		m_document->GetSpreadsheetDesc().AddRowGroup(static_cast<unsigned int>(at), static_cast<unsigned int>(last),
 			static_cast<unsigned int>(page));
 	++m_rowsWritten;
 }
@@ -971,11 +1026,13 @@ void ibSpreadsheetComposeDriver::ApplyLineAttr(ibSpreadsheetObject& area, const 
 {
 	if (attr == nullptr)
 		return;
-	for (int col = 0; col < m_columnCount; ++col)
-		ApplyAttr(area, 0, col, attr->m_line);
+	for (int band = 0; band < m_lineBands; ++band)
+		for (int col = 0; col < m_columnCount; ++col)
+			if (!SpanAt(band, col).IsCovered())
+				ApplyAttr(area, band, col, attr->m_line);
 	for (const std::pair<size_t, ibCompositionAttr>& cell : attr->m_cells)   // the columns with an own, over the line's
 		if (cell.first < m_layout.size() && m_layout[cell.first] >= 0)
-			ApplyAttr(area, 0, m_layout[cell.first], cell.second);
+			ApplyAttr(area, BandOf(cell.first), m_layout[cell.first], cell.second);
 }
 
 // The total line itself — the measures, plus a caption saying what they add up.
@@ -1009,36 +1066,50 @@ void ibSpreadsheetComposeDriver::WriteTotalLine(int level, const std::vector<ibV
 	// down the same edge as the numbers it sums.
 	for (size_t i = 0; i < values.size() && i < m_layout.size(); ++i) {
 		const int col = m_layout[i];
+		const int band = BandOf(i);
 		const bool isDimension = i < m_dimLevel.size() && m_dimLevel[i] >= 0;
-		if (col < m_dimWidth || isDimension)
+		if (col < m_dimWidth || isDimension || col >= m_columnCount || band >= m_lineBands)
 			continue;
 		const ibValue& value = values[i];
 		const ibString text = ColumnText(i, value, attr != nullptr ? &attr->AttrOf(i) : nullptr);
-		row->SetCellValue(0, col, text);
+		row->SetCellValue(band, col, text);
 		// ⭐ THE GRAND TOTAL STANDS UNDER NOTHING — it is the figure over everything, so its cells are
 		// packed with no links at all. A click on it still opens the value; there is simply no
-		// context to break down by, which is the truth about that line.
+		// context to break down by, which is the truth about that line. (Named by the cell's place in the line —
+		// its column, on a line of one band.)
 		if (!value.IsEmpty()) {
-			const ibString name = ibString::Format(ibT("Cell_%d"), col);
+			const ibString name = ibString::Format(ibT("Cell_%d"), band * m_columnCount + col);
 			row->SetParameter(name, PackDetails(i, value, ibValue()));
-			row->SetCellDetailsParameter(0, col, name);
+			row->SetCellDetailsParameter(band, col, name);
 		}
 		if (value.GetType() == ibValueTypes::TYPE_NUMBER)
-			row->SetCellAlignment(0, col, ibAlignmentHorz_Right, ibAlignmentVert_Center);
-		if (static_cast<size_t>(col) < m_widest.size())
+			row->SetCellAlignment(band, col, ibAlignmentHorz_Right, ibAlignmentVert_Center);
+		if (static_cast<size_t>(col) < m_widest.size() && SpanAt(band, col).m_cols == 1)
 			m_widest[static_cast<size_t>(col)] = std::max(m_widest[static_cast<size_t>(col)], text.length());
 	}
 
 	// TINTED AND BOLD LIKE THE HEADING IT BELONGS TO — a total is the group's other half, so it reads
 	// as part of it rather than as a stray row. The grand total is the output's own line, in its palette.
+	// Cell by cell as the line is laid out: a covered cell is never touched, a main one merged over its span, and
+	// no rule inside an in-cell group.
 	const ibColour fill = m_theme->GroupFill(level);
 	ibFont font = ibDefaultSpreadsheetFont();
 	font.m_weight = ibFONTWEIGHT_BOLD;
-	for (int col = 0; col < m_columnCount; ++col) {
-		row->SetCellBackgroundColour(0, col, fill);
-		row->SetCellFont(0, col, font);
-		BoxCell(*row, 0, col, /*top*/ true, /*bottom*/ true, m_gridPen);   // closed like every other row, both ends
-	}
+	for (int band = 0; band < m_lineBands; ++band)
+		for (int col = 0; col < m_columnCount; ++col) {
+			const LineSpan& span = SpanAt(band, col);
+			if (span.IsCovered())
+				continue;
+			if (span.m_rows > 1 || span.m_cols > 1)
+				row->SetCellSize(band, col, span.m_rows, span.m_cols);
+			row->SetCellBackgroundColour(band, col, fill);
+			row->SetCellFont(band, col, font);
+			BoxCell(*row, band, col, /*top*/ true, /*bottom*/ true, m_gridPen);   // closed like every other row, both ends
+			if (!span.m_ruleLeft)
+				row->SetCellBorderLeft(band, col, ibSpreadsheetBorderDescription());
+			if (!span.m_ruleRight)
+				row->SetCellBorderRight(band, col, ibSpreadsheetBorderDescription());
+		}
 	ApplyLineAttr(*row, attr);
 
 	m_document->PutArea(row, static_cast<unsigned int>(std::max(0, level)));

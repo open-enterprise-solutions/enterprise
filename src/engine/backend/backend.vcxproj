@@ -286,6 +286,7 @@
     <ClInclude Include="query\queryableFactory.h" />
     <ClInclude Include="composition\dataComposer.h" />
     <ClInclude Include="composition\drivers\compositionDriver.h" />
+    <ClInclude Include="composition\drivers\compositionColumnLayout.h" />
     <ClInclude Include="composition\dataComposerInternal.h" />
     <ClInclude Include="composition\drivers\spreadsheetComposeDriver.h" />
     <ClInclude Include="composition\drivers\listFetchDriver.h" />
@@ -769,6 +770,7 @@
     <ClCompile Include="query\queryableFactory.cpp" />
     <ClCompile Include="composition\dataComposer.cpp" />
     <ClCompile Include="composition\dataComposerRun.cpp" />
+    <ClCompile Include="composition\drivers\compositionColumnLayout.cpp" />
     <ClCompile Include="composition\drivers\spreadsheetComposeDriver.cpp" />
     <ClCompile Include="composition\ramComposer.cpp" />
     <ClCompile Include="composition\composeEvaluate.cpp" />

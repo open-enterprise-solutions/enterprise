@@ -1501,6 +1501,46 @@ wa-dialog.answered-only::part(close-button) {
 	font-style: italic;
 }
 
+/* A group of the selected fields says it is one; its title and placement are cells of their own. */
+.settings-group {
+	font-weight: 600;
+}
+
+/* A line of the selected fields' tree: stepped in by its depth, after the grip it is carried by. */
+.settings-tree-line {
+	display: flex;
+	align-items: center;
+	gap: 2px;
+	min-width: 0;
+}
+
+.settings-tree-line > select {
+	flex: 1;
+	min-width: 0;
+}
+
+.settings-grip {
+	flex: none;
+	width: 0.75rem;
+	color: var(--oes-muted);
+	text-align: center;
+	cursor: grab;
+	user-select: none;
+}
+
+/* Where a carried line would land: before a line, after it, into a group. */
+.settings-table tr.drop-before td {
+	box-shadow: inset 0 2px 0 var(--oes-accent);
+}
+
+.settings-table tr.drop-after td {
+	box-shadow: inset 0 -2px 0 var(--oes-accent);
+}
+
+.settings-table tr.drop-into td {
+	background: var(--oes-table-row-hover-bg);
+}
+
 .settings-fields,
 .settings-editor {
 	display: flex;
@@ -1679,6 +1719,16 @@ wa-dialog.answered-only::part(close-button) {
 .settings-part span {
 	min-width: 0;
 	padding-inline-start: 0.25rem;
+}
+
+/* …or typed where it stands, the «…» beside it (a selected-fields group's title in every language). */
+.settings-part input {
+	flex: 1;
+	min-width: 0;
+}
+
+.settings-part button {
+	flex: none;
 }
 
 :is(.settings-reference, .settings-part) button {

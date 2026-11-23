@@ -2,6 +2,7 @@
 #define _IB_DATAVIEW_COLUMN_LAYOUT_H_
 
 #include "deskgui/deskgui.h"
+#include "core/graphics/geometry.h"   // ibColumnGroupKind — the placement a group carries, the core's word
 
 #include <wx/object.h>
 #include <wx/gdicmn.h>
@@ -11,23 +12,6 @@
 
 class ibDataViewColumn;
 class ibDataViewColumnGroup;
-
-// THE ORIENTATION A GROUP CARRIES — the whole of what grouping means. Declared here,
-// in the light header, because the form layer needs the kind (a control property) with
-// no dataview type in sight.
-//
-// Plain enum, like the dataview's own ibDataViewSelectionMode / ibDataViewViewMode: the
-// property system stores an enumeration's value as a long, so a scoped enum would need
-// a cast at every one of those seams.
-enum ibColumnGroupKind {
-	ibColumnGroupHorizontal,   // columns side by side (the group's title spans them)
-	ibColumnGroupVertical,     // columns one under another (the row grows taller)
-	// IN CELL — the columns MERGE into one cell: they still sit side by side, but there
-	// is only ONE header cell over them (the group's own, full depth) and no title of
-	// their own. "Account / dimension" reads as one field, not as two columns that
-	// happen to be adjacent.
-	ibColumnGroupInCell,
-};
 
 // THE (x, band) GRID a table paints in — computed from the tree of column groups
 // (declared in dataview.h, beside the columns they hold).

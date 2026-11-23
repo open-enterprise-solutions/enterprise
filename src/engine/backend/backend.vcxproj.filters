@@ -2589,6 +2589,9 @@
     <ClCompile Include="composition\dataComposerRun.cpp">
       <Filter>composition</Filter>
     </ClCompile>
+    <ClCompile Include="composition\drivers\compositionColumnLayout.cpp">
+      <Filter>composition\drivers</Filter>
+    </ClCompile>
     <ClCompile Include="composition\drivers\spreadsheetComposeDriver.cpp">
       <Filter>composition\drivers</Filter>
     </ClCompile>
@@ -2821,6 +2824,9 @@
       <Filter>composition</Filter>
     </ClInclude>
     <ClInclude Include="composition\drivers\compositionDriver.h">
+      <Filter>composition\drivers</Filter>
+    </ClInclude>
+    <ClInclude Include="composition\drivers\compositionColumnLayout.h">
       <Filter>composition\drivers</Filter>
     </ClInclude>
     <ClInclude Include="composition\drivers\spreadsheetComposeDriver.h">

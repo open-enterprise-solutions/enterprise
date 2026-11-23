@@ -27,9 +27,9 @@ enum ibDataViewViewMode {
 	ibDataViewList,
 };
 
-// Column groups: the orientation (ibColumnGroupKind) — a property of the group control; the geometry it
+// Column groups: the placement (ibColumnGroupKind) — a property of the group control; the geometry it
 // decides is the client's.
-#include "frmserver/visualView/ctrl/columnLayout.h"
+#include "core/graphics/geometry.h"
 
 struct ibSettingsDescription;   // compositionDescription.h — the reader's setting a list is narrowed by
 struct ibFilterNodeDescription;   // …and one node of a filter — what a search narrows the table's read by
@@ -586,11 +586,14 @@ public:
 	void AddColumnGroup();
 
 	// Building a group from code takes exactly two things: what it is called and
-	// which way its columns run. (The title is READ through GetControlTitle, like
-	// every other control's — no second reader for it here.)
+	// which way its columns run. The caption goes in as written — every language at
+	// once — and comes out so (else its name); GetControlTitle reads it in one.
 	void SetCaption(const ibString& caption) { m_propertyTitle->SetValue(caption); }
+	ibString GetCaption() const;
 	void SetGrouping(ibColumnGroupKind kind) { m_propertyGrouping->SetValue(kind); }
 	ibColumnGroupKind GetGrouping() const { return m_propertyGrouping->GetValueAsEnum(); }
+	// Does the title take a band of the header (Show title) — the client's group asks the same of what it was sent.
+	bool IsTitleShown() const { return m_propertyShowTitle->GetValueAsBoolean(); }
 
 	// Shown — its own Visible and the feature options; what it holds goes with it.
 	bool IsGroupShown() const;

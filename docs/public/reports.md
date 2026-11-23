@@ -28,8 +28,12 @@ reproduced by pasting its text into `New Query`.
   reader's; running a report never writes into the application. A variant is a named setting: choosing
   one sets the reader's setting, and a hand edit after it simply is no longer that variant.
 - **A refusal is seen where Compose was pressed**, in the engine's words, not in a log nobody opened.
+- **Columns gather by meaning.** The selected fields hang in groups — one title over the columns that belong
+  together, side by side, one under another (a record over several lines of the sheet) or in one cell; groups
+  nest, the title is written per language. A group shapes what is shown, never what is read: the query is the
+  same with or without it.
 - **A list becomes a report for nothing.** Every list, tabular section and value table can print what is
-  on screen, in its order, filter and grouping, onto a spreadsheet document.
+  on screen, in its order, filter, grouping and column groups, onto a spreadsheet document.
 
 ## Where it stops
 

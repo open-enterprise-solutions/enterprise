@@ -38,16 +38,16 @@ std::vector<ibString> ibComposerRuleFieldsOf(const ibDataComposer::Output& outpu
                                              const ibConditionalAppearanceDescription& setting);
 
 // ONE TABLE, RESOLVED AGAINST WHAT IS IN FORCE ABOVE IT — the whole of the inheritance rule: an
-// empty table inherits, an `Auto` row is WHERE the inherited set lands, and a table without one
-// states this node's composition whole.
-void ibComposerResolveSelected(std::vector<ibString>& into,
+// empty table inherits, an `Auto` row is WHERE the inherited set lands (inside a group, there), and a table
+// without one states this node's composition whole. A field named twice keeps its first place.
+void ibComposerResolveSelected(std::vector<ibSelectedFieldDescription>& into,
                                const std::vector<ibSelectedFieldDescription>& rows,
-                               const std::vector<ibString>& inherited);
+                               const std::vector<ibSelectedFieldDescription>& inherited);
 
 // WHAT IS IN FORCE UNDER A NODE, given what was in force above it. The chain is CARRIED by whoever
 // walks the tree, never worked out by climbing back up.
-std::vector<ibString> ibComposerSelectedUnder(const std::vector<ibString>& above,
-                                              const ibDataComposer::GroupNode& level);
+std::vector<ibSelectedFieldDescription> ibComposerSelectedUnder(const std::vector<ibSelectedFieldDescription>& above,
+                                                                const ibDataComposer::GroupNode& level);
 
 // (IS THIS LEVEL THE RECORDS — asked of the LEVEL: `ibLevelDescription::IsDetailRecords()`. It was
 //  a function here for an hour, which made it the composer's opinion about a level rather than a
@@ -55,5 +55,11 @@ std::vector<ibString> ibComposerSelectedUnder(const std::vector<ibString>& above
 
 // WHAT A REPORT READS WHEN NOBODY HAS CHOSEN A FIELD — the fields it groups BY, and nothing else.
 std::vector<ibString> ibComposerGroupingFieldsOf(const ibDataComposer::Output& output);
+
+// HOW THE SHOWN COLUMNS HANG — the output's columns (a heading's key and a column nobody shows left out) in the groups
+// the shown rows put them in; what no row placed — a figure nobody chose, every column of a star — after them, as
+// leaves. Both roads hand it to their driver (ibCompositionOutputInfo::m_columnTree), the base's and the in-memory one.
+std::vector<ibCompositionColumnNode> ibComposerColumnTreeOf(const ibCompositionOutputInfo& info,
+                                                            const std::vector<ibSelectedFieldDescription>& shown);
 
 #endif

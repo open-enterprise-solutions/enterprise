@@ -439,7 +439,6 @@
     <ClInclude Include="visualView\layers\commandBar.h" />
     <ClInclude Include="visualView\layers\commandReceiver.h" />
     <ClInclude Include="visualView\ctrl\chartBox.h" />
-    <ClInclude Include="visualView\ctrl\columnLayout.h" />
     <ClInclude Include="visualView\ctrl\control.h" />
     <ClInclude Include="visualView\ctrl\form.h" />
     <ClInclude Include="visualView\ctrl\formAttribute.h" />

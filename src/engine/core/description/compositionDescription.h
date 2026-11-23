@@ -15,6 +15,7 @@
 // speaking the twin got an enumeration nobody had (an assert in CreateEnumObject).
 #include "core/query/queryUnfold.h"
 #include "core/query/queryBalanceRole.h"      // ibBalanceRole — what a field is in a balance (its entry's role)
+#include "core/graphics/geometry.h"           // ibColumnGroupKind — a group of selected fields is placed as a table's
 
 #include <vector>
 
@@ -108,12 +109,13 @@ enum ibFilterGroupKind {
 };
 
 // ⭐⭐ WHAT ONE ROW OF A SELECTED-FIELDS TABLE IS. A FIELD — or `Auto`, which stands for *everything
-// the storey above chose, HERE*.
+// the storey above chose, HERE* — or a GROUP of rows, laid out as a table's column group is.
 //
 // ⚠ APPENDED, NEVER INSERTED, like every other kind in this file: the row is serialised BY NUMBER.
 enum ibSelectedFieldKind {
 	ibSelectedFieldKind_Field = 0,
 	ibSelectedFieldKind_Auto,
+	ibSelectedFieldKind_Group,
 };
 
 // HOW A USER MEETS A CONDITION. A property of the SETTING, not of the data: the same condition is
@@ -840,11 +842,20 @@ CORE_API ibFieldDescription* ibFieldEntryForPath(std::vector<ibSelectDescription
 // ⭐ AND THIS IS WHAT OPTIMISES THE QUERY. The selected fields decide what takes part in the
 // selection, so a field nobody named is not read, not fetched and not rendered: the report gets
 // simpler for free (Max: "we get the report simplified for nothing").
+//
+// ⭐⭐ …AND A ROW MAY BE A GROUP — a title, a placement, and rows of its own, nested as a table's column groups
+// nest (docs/private/selected-field-groups.md). The tree IS the order: what is read is the tree flattened
+// (ibSelectedPathsOf), so a group changes nothing that is read, filtered, sorted or folded — only how the
+// columns hang on the sheet. A list's column groups become these one to one when it is output.
 struct ibSelectedFieldDescription {
 	ibSelectedFieldKind m_kind = ibSelectedFieldKind_Field;
-	ibString            m_path;   // the field; empty for Auto, which names nothing
+	ibString            m_path;    // the field; empty for Auto, which names nothing, and for a group
+	ibString            m_title;   // a group's heading; empty = the group draws no heading band
+	ibColumnGroupKind   m_placement = ibColumnGroupVertical;   // a group's — a table's new group is vertical too
+	std::vector<ibSelectedFieldDescription> m_children;        // a group's rows
 
 	bool IsAuto() const { return m_kind == ibSelectedFieldKind_Auto; }
+	bool IsGroup() const { return m_kind == ibSelectedFieldKind_Group; }
 
 	static ibSelectedFieldDescription Field(const ibString& path) {
 		ibSelectedFieldDescription row;
@@ -856,20 +867,34 @@ struct ibSelectedFieldDescription {
 		row.m_kind = ibSelectedFieldKind_Auto;
 		return row;
 	}
+	static ibSelectedFieldDescription Group(const ibString& title, ibColumnGroupKind placement) {
+		ibSelectedFieldDescription row;
+		row.m_kind = ibSelectedFieldKind_Group;
+		row.m_title = title;
+		row.m_placement = placement;
+		return row;
+	}
 
 	bool operator==(const ibSelectedFieldDescription& o) const {
-		return m_kind == o.m_kind && m_path == o.m_path;
+		return m_kind == o.m_kind && m_path == o.m_path && m_title == o.m_title
+			&& m_placement == o.m_placement && m_children == o.m_children;
 	}
 };
 
 // THE LIST AS A WHOLE — asked rather than walked, because "does this inherit" is one question and
-// every reader of it would otherwise spell the search itself.
+// every reader of it would otherwise spell the search itself. An `Auto` inside a group inherits as well:
+// the inherited rows land in that group.
 inline bool ibSelectedInherits(const std::vector<ibSelectedFieldDescription>& rows) {
 	for (const ibSelectedFieldDescription& row : rows)
-		if (row.IsAuto())
+		if (row.IsAuto() || (row.IsGroup() && ibSelectedInherits(row.m_children)))
 			return true;
 	return false;
 }
+
+// THE FIELDS A TABLE NAMES, in its order — the tree flattened depth first, the paths only. This is what is READ;
+// the groups are only how the columns hang. `Auto` names nothing and contributes nothing here: what it stands for
+// is resolved against the storey above, not read off the table.
+CORE_API std::vector<ibString> ibSelectedPathsOf(const std::vector<ibSelectedFieldDescription>& rows);
 
 // ⚠ AN EMPTY LIST INHERITS. Saying nothing is not the same as saying "nothing": a node that has
 // never been touched shows what the storey above shows, and that is the state every node starts in.

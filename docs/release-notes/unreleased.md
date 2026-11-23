@@ -111,6 +111,15 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
 
 ## Application
 
+- **A report's columns gather in groups by meaning.** A group puts one title over the columns that belong
+  together — *Opening balance*, *Turnover* and *Closing balance*, each over its Debit and Credit; a counterparty
+  over its details — so a wide report reads in blocks instead of as a row of twenty headers. A group lays its
+  columns side by side under its title, one under another (a record then takes several lines of the sheet), or in
+  one cell under one header; groups nest, and the title is written per language. In the report's settings the
+  selected fields are a tree: a group is added from the toolbar or the context menu, fields are dragged into it and
+  out of it with the mouse. A list's *Output list* prints its own column groups the same way. Over MCP
+  `report_select` adds, moves, retitles and re-places a group by a row's position (`2`, `2.1`). The browser does
+  the same.
 - **HTTP services: an application answers an HTTP request.** A new kind, `HTTPService`,
   with `URLTemplate`s (`/Transfer/{id}/reset`, `/*`) and their `HTTPServiceMethod`s (Get, Post, …
   or Any), shown in the tree's new Integration folder, right after Shared. Registered among the base's web addresses, a

@@ -432,8 +432,9 @@ bool ibDataDBComposer::RunOutputPass(const Output& output, ibCompositionDriver& 
 	// on it, and a report that shows nothing extra must not grow a headed, empty column for it (Max,
 	// 2026-08-29). Dimensions and measures are always shown — a heading prints its key, a fold prints
 	// its figure.
+	const std::vector<ibSelectedFieldDescription> shownRows = ShownFor(output);
 	{
-		const std::vector<ibString> shown = ShownFor(output);
+		const std::vector<ibString> shown = ibSelectedPathsOf(shownRows);
 		// …AND WHERE NOTHING IS CHOSEN AND THE READ IS THE STAR, WHAT IS READ IS WHAT IS SHOWN — asked as
 		// WhenNothingChosen asks it: a list, and a report that folds by nothing (a bare question through
 		// compose_run). Every field of it was read and none was shown. A report that folds answers "nothing chosen"
@@ -460,7 +461,7 @@ bool ibDataDBComposer::RunOutputPass(const Output& output, ibCompositionDriver& 
 	// last. Every reader asks a column by its NAME, so the schema is put in order here, once, together with
 	// what was worked out for each column above.
 	{
-		const std::vector<ibString> chosen = ShownFor(output);
+		const std::vector<ibString> chosen = ibSelectedPathsOf(shownRows);
 		std::vector<size_t> order;
 		std::vector<bool> placed(schema.size(), false);
 		for (size_t i = 0; i < schema.size(); ++i)
@@ -492,6 +493,8 @@ bool ibDataDBComposer::RunOutputPass(const Output& output, ibCompositionDriver& 
 		info.m_appearances = std::move(appearances);
 		info.m_shown = std::move(shown);
 	}
+	// …AND HOW THEY HANG — the selected fields' groups, over the columns in the order just given.
+	info.m_columnTree = ibComposerColumnTreeOf(info, shownRows);
 
 	info.m_detailsAxis = DetailAxisOf(output);
 	const ibGroupDescription readerGroup = GetAvailableGroupDesc();   // the render's answer — see there
@@ -636,7 +639,7 @@ bool ibDataDBComposer::RunOutputPass(const Output& output, ibCompositionDriver& 
 		// written. `hiddenAbove` existed to say that in a flat walk, and there is nothing left for it
 		// to say here.
 		// The set the walk starts from: the composition resolved, then this output's table over it.
-		const std::vector<ibString> shownAtOutput = SelectedFor(output);
+		const std::vector<ibSelectedFieldDescription> shownAtOutput = SelectedFor(output);
 		const bool everyField = ReadsEveryField();
 
 		// ⭐⭐ THE SET IN FORCE TRAVELS WITH THE WALK, exactly as the branch does. A node's selected
@@ -673,15 +676,16 @@ bool ibDataDBComposer::RunOutputPass(const Output& output, ibCompositionDriver& 
 				attrAt.emplace_back();
 			return attrAt[depth];
 		};
-		std::function<void(ibSelector&, const std::vector<ibString>&, size_t)> walk =
-			[&](ibSelector& level, const std::vector<ibString>& shownAbove, size_t depth) {
+		std::function<void(ibSelector&, const std::vector<ibSelectedFieldDescription>&, size_t)> walk =
+			[&](ibSelector& level, const std::vector<ibSelectedFieldDescription>& shownAbove, size_t depth) {
 			// What a node shows depends on nothing but the level it stands on and what stood above it,
 			// and every node of this loop stands under the same `shownAbove` — so it is worked out once per
 			// level met here, not once per node (a vector of names built and freed for each of 40 thousand
-			// employees and their cells, 2026-09-12).
+			// employees and their cells, 2026-09-12). The names are its rows flattened, once with them.
 			const GroupNode* shownFor   = nullptr;
 			bool             shownKnown = false;
-			std::vector<ibString> shownHere;
+			std::vector<ibSelectedFieldDescription> shownHere;
+			std::vector<ibString> namesHere;
 			const ibCompositionTheme* themeHere = nullptr;   // …and its palette, asked with it
 			while (level.Next()) {
 				hearCancel();
@@ -712,6 +716,7 @@ bool ibDataDBComposer::RunOutputPass(const Output& output, ibCompositionDriver& 
 				const GroupNode* here = LevelAt(output, level.Level(), level.Kind());
 				if (!shownKnown || here != shownFor) {
 					shownHere  = here != nullptr ? ibComposerSelectedUnder(shownAbove, *here) : shownAbove;
+					namesHere  = ibSelectedPathsOf(shownHere);
 					themeHere  = &ThemeFor(output, here);
 					shownFor   = here;
 					shownKnown = true;
@@ -779,7 +784,7 @@ bool ibDataDBComposer::RunOutputPass(const Output& output, ibCompositionDriver& 
 					// ⚠ ASKED, NOT COMPARED — a path and an output name are spelled differently for
 					// every dot-walk. See ibComposerColumnAnswersTo.
 					bool shows = false;
-					for (const ibString& name : shownHere)
+					for (const ibString& name : namesHere)
 						if (ibComposerColumnAnswersTo(oc, name)) { shows = true; break; }
 					if (!shows)
 						row[i] = ibValue();

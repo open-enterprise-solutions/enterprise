@@ -514,11 +514,37 @@ void ibValueModelTableBox::Command_OutputList()
 	for (const std::int32_t index : chosen)
 		printed.push_back(offered[static_cast<std::size_t>(index)]);
 
-	// The settings in force, with the chosen columns as the fields to print.
+	// The settings in force, with the chosen columns as the fields to print — HUNG AS THE BOX HANGS THEM: a column
+	// group of the box is a group of the selected fields, the two one to one (docs/private/selected-field-groups.md
+	// §5.7), so the sheet stands as the list does. Its title is its caption as written, every language at once — a
+	// translation, as a selected group's title is (GetCaption) — an in-cell group's always, being its one header cell;
+	// any other group's only while it shows a title. Its placement is its own.
+	// A hidden group goes with its columns, and a group with no column chosen has nothing to head.
 	ibSettingsDescription settings = m_tableModel->GetModelComposer().GetCurrentSettingsDesc();
 	settings.m_selected.clear();
-	for (const ibValueModelTableBoxColumn* column : printed)
-		settings.m_selected.push_back(ibSelectedFieldDescription::Field(column->GetSourceFieldName()));
+	const auto hang = [&printed](const auto& self, const ibValueFrame* parent,
+		std::vector<ibSelectedFieldDescription>& into) -> void {
+		for (unsigned int idx = 0; idx < parent->GetChildCount(); idx++) {
+			ibValueFrame* child = parent->GetChild(idx);
+			// A QUESTION asked of every child — ConvertToValue answers "no"; ConvertToType would raise on it.
+			ibValueModelTableBoxColumn* column = nullptr;
+			if (child->ConvertToValue(column)) {
+				if (std::find(printed.begin(), printed.end(), column) != printed.end())
+					into.push_back(ibSelectedFieldDescription::Field(column->GetSourceFieldName()));
+				continue;
+			}
+			const ibValueModelTableBoxColumnGroup* group = nullptr;
+			if (!child->ConvertToValue(group) || !group->IsGroupShown())
+				continue;
+			const bool titled = group->GetGrouping() == ibColumnGroupInCell || group->IsTitleShown();
+			ibSelectedFieldDescription row = ibSelectedFieldDescription::Group(
+				titled ? group->GetCaption() : ibString(), group->GetGrouping());
+			self(self, group, row.m_children);
+			if (!row.m_children.empty())
+				into.push_back(std::move(row));
+		}
+	};
+	hang(hang, this, settings.m_selected);
 
 
 	// ⭐⭐ A COPY OF THE LIST'S OWN COMPOSER, and that is more faithful than building one (Max, 2026-08-29:

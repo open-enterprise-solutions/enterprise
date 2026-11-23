@@ -42,6 +42,22 @@ std::vector<ibQueryLowering::ibQueryOutputColumn> Schema() {
 	return { Col(wxT("Partner")), Col(wxT("Amount")) };
 }
 
+// ⭐ HOW THE COLUMNS HANG, as the composer hangs a selection with no group in it (ibComposerColumnTreeOf): every
+// shown column that is not a heading's key, a leaf each, the details first and the figures last. The driver lays out
+// what it is told — a column the tree does not hold has no place on the sheet.
+void HangFlat(ibCompositionOutputInfo& info) {
+	for (const bool figures : { false, true })
+		for (size_t i = 0; i < info.m_schema.size(); ++i) {
+			const ibQueryLowering::ibColumnRole role = info.m_schema[i].m_role;
+			if (role == ibQueryLowering::ibColumnRole::Dimension || !info.ShowsColumn(i)
+				|| (role == ibQueryLowering::ibColumnRole::Measure) != figures)
+				continue;
+			ibCompositionColumnNode leaf;
+			leaf.m_column = i;
+			info.m_columnTree.push_back(leaf);
+		}
+}
+
 // ⭐ AN OUTPUT IS ANNOUNCED WITH ITS SCHEMA — there is no separate "here are the columns" event any
 // more, because which columns an output has is part of that output starting. The titles default to
 // the column names, which is what the composer fills in when nothing overrode them.
@@ -55,6 +71,7 @@ ibCompositionOutputInfo SchemaInfo(std::vector<ibQueryLowering::ibQueryOutputCol
 		// the driver is handed both.
 		info.m_paths.push_back(column.m_name);
 	}
+	HangFlat(info);
 	return info;
 }
 
@@ -747,6 +764,7 @@ TEST(SpreadsheetCross, WithNoColumnAxisTheStreamingLayoutIsUsed)
 	info.m_kind      = ibCompositionOutputKind::Grouping;
 	info.m_schema    = { Dim(wxT("Partner"), 0), Measure(wxT("Amount")) };
 	info.m_rowLevels = 1;
+	HangFlat(info);
 	driver.OnOutputBegin(info);
 
 	// The header is written straight away, which is exactly what a table cannot do.
@@ -838,6 +856,7 @@ TEST(SpreadsheetCompose, AnOutputPrintsItsOwnName)
 	info.m_rowLevels   = 1;
 	info.m_name        = wxT("By partner");
 	info.m_outputCount = 2;   // one of two blocks: the name tells them apart
+	HangFlat(info);
 	driver.OnOutputBegin(info);
 	driver.OnGroupBegin(HeadAt(1, ibSelectorNodeKind::Group, true, false), { ibValue(ibT("Alpha")), ibValue(100) });
 	driver.OnOutputEnd(true);
@@ -857,6 +876,7 @@ TEST(SpreadsheetCompose, ALoneOutputPrintsNoName)
 	info.m_schema    = { Dim(wxT("Partner"), 0), Measure(wxT("Amount")) };
 	info.m_rowLevels = 1;
 	info.m_name      = wxT("By partner");
+	HangFlat(info);
 	driver.OnOutputBegin(info);
 	driver.OnGroupBegin(HeadAt(1, ibSelectorNodeKind::Group, true, false), { ibValue(ibT("Alpha")), ibValue(100) });
 	driver.OnOutputEnd(true);
@@ -1055,4 +1075,156 @@ TEST(SpreadsheetCross, AColumnHeadingFedThroughOnColumn_LandsWhereOnGroupBeginPu
 		for (int col = 0; col <= viaGroup->GetNumberCols(); col++)
 			EXPECT_EQ(viaGroup->GetCellValue(row, col), viaColumn->GetCellValue(row, col))
 				<< "cell " << row << ',' << col << " differs between the two roads";
+}
+
+// ===========================================================================
+//  Column groups — the selected fields' groups hung on the sheet as a table hangs them on screen
+//  (docs/private/selected-field-groups.md §5.5): a leaf is one sheet column, a band one sheet row.
+// ===========================================================================
+
+namespace {
+
+ibCompositionColumnNode Leaf(size_t column) {
+	ibCompositionColumnNode leaf;
+	leaf.m_column = column;
+	return leaf;
+}
+
+ibCompositionColumnNode GroupOf(const ibString& title, ibColumnGroupKind placement,
+	std::vector<ibCompositionColumnNode> members) {
+	ibCompositionColumnNode group;
+	group.m_title = title;
+	group.m_placement = placement;
+	group.m_children = std::move(members);
+	return group;
+}
+
+} // namespace
+
+// WITH NO GROUP the layout is today's sheet: a column and one band each, every title over the whole header.
+TEST(CompositionColumnLayout, NoGroups_AColumnAndABandEach)
+{
+	ibCompositionColumnLayout layout;
+	layout.Rebuild({ Leaf(0), Leaf(1) }, 3, 2);
+
+	EXPECT_EQ(1, layout.GetRowBandCount());
+	EXPECT_EQ(2, layout.GetHeaderBandCount());
+	EXPECT_EQ(2, layout.GetColumnCount());
+	const std::vector<ibCompositionColumnPlacement>& body = layout.GetPlacements();
+	ASSERT_EQ(2u, body.size());
+	EXPECT_EQ(3, body[0].m_col);
+	EXPECT_EQ(4, body[1].m_col);
+	EXPECT_EQ(1, body[0].m_bandSpan);
+	const std::vector<ibCompositionHeaderCell>& header = layout.GetHeaderCells();
+	ASSERT_EQ(2u, header.size());
+	EXPECT_EQ(0, header[0].m_band);
+	EXPECT_EQ(2, header[0].m_bandSpan);
+}
+
+// ⭐ ONE UNDER ANOTHER — a record takes as many sheet rows as the stack is deep, a column beside the stack takes them
+// all, and the header has the group's title over a title per member.
+TEST(CompositionColumnLayout, Vertical_StacksTheMembersUnderTheTitle)
+{
+	ibCompositionColumnLayout layout;
+	layout.Rebuild({ Leaf(0), GroupOf(wxT("Amounts"), ibColumnGroupVertical, { Leaf(1), Leaf(2) }) }, 0, 1);
+
+	EXPECT_EQ(2, layout.GetRowBandCount());
+	EXPECT_EQ(3, layout.GetHeaderBandCount());
+	EXPECT_EQ(2, layout.GetColumnCount());
+
+	const std::vector<ibCompositionColumnPlacement>& body = layout.GetPlacements();
+	ASSERT_EQ(3u, body.size());
+	EXPECT_EQ(0u, body[0].m_column);
+	EXPECT_EQ(0, body[0].m_band);
+	EXPECT_EQ(2, body[0].m_bandSpan);
+	EXPECT_EQ(1u, body[1].m_column);
+	EXPECT_EQ(1, body[1].m_col);
+	EXPECT_EQ(0, body[1].m_band);
+	EXPECT_EQ(2u, body[2].m_column);
+	EXPECT_EQ(1, body[2].m_col);
+	EXPECT_EQ(1, body[2].m_band);
+
+	const std::vector<ibCompositionHeaderCell>& header = layout.GetHeaderCells();
+	ASSERT_EQ(4u, header.size());
+	EXPECT_EQ(0u, header[0].m_column);
+	EXPECT_EQ(3, header[0].m_bandSpan);
+	EXPECT_EQ(ibCompositionColumnNode::npos, header[1].m_column);
+	EXPECT_EQ(wxT("Amounts"), header[1].m_title);
+	EXPECT_EQ(1, header[1].m_col);
+	EXPECT_EQ(0, header[1].m_band);
+	EXPECT_EQ(1, header[2].m_band);
+	EXPECT_EQ(2, header[3].m_band);
+}
+
+// ⭐ IN ONE CELL — side by side with no rule between them, and ONE header cell over them all, none of their own.
+TEST(CompositionColumnLayout, InCell_OneHeaderCellAndNoRuleBetween)
+{
+	ibCompositionColumnLayout layout;
+	layout.Rebuild({ GroupOf(wxT(""), ibColumnGroupInCell, { Leaf(0), Leaf(1) }) }, 0, 1);
+
+	EXPECT_EQ(1, layout.GetRowBandCount());
+	EXPECT_EQ(1, layout.GetHeaderBandCount());
+	const std::vector<ibCompositionColumnPlacement>& body = layout.GetPlacements();
+	ASSERT_EQ(2u, body.size());
+	EXPECT_TRUE(body[0].m_mergedRight);
+	EXPECT_FALSE(body[1].m_mergedRight);
+	const std::vector<ibCompositionHeaderCell>& header = layout.GetHeaderCells();
+	ASSERT_EQ(1u, header.size());
+	EXPECT_EQ(ibCompositionColumnNode::npos, header[0].m_column);
+	EXPECT_EQ(0, header[0].m_col);
+	EXPECT_EQ(2, header[0].m_colSpan);
+}
+
+// SIDE BY SIDE under a title, a stack nested in it: the title spans the group's width, an untitled stack costs the
+// header nothing of its own, and the column beside the stack takes the line's whole height.
+TEST(CompositionColumnLayout, Horizontal_TitleOverANestedStack)
+{
+	ibCompositionColumnLayout layout;
+	layout.Rebuild({ GroupOf(wxT("Turnover"), ibColumnGroupHorizontal,
+		{ Leaf(0), GroupOf(wxT(""), ibColumnGroupVertical, { Leaf(1), Leaf(2) }) }) }, 0, 1);
+
+	EXPECT_EQ(2, layout.GetRowBandCount());
+	EXPECT_EQ(3, layout.GetHeaderBandCount());
+	EXPECT_EQ(2, layout.GetColumnCount());
+
+	const std::vector<ibCompositionColumnPlacement>& body = layout.GetPlacements();
+	ASSERT_EQ(3u, body.size());
+	EXPECT_EQ(2, body[0].m_bandSpan);
+	EXPECT_EQ(1, body[1].m_col);
+	EXPECT_EQ(0, body[1].m_band);
+	EXPECT_EQ(1, body[2].m_col);
+	EXPECT_EQ(1, body[2].m_band);
+
+	const std::vector<ibCompositionHeaderCell>& header = layout.GetHeaderCells();
+	ASSERT_EQ(4u, header.size());
+	EXPECT_EQ(wxT("Turnover"), header[0].m_title);
+	EXPECT_EQ(2, header[0].m_colSpan);
+	EXPECT_EQ(1, header[1].m_band);
+	EXPECT_EQ(2, header[1].m_bandSpan);
+	EXPECT_EQ(1, header[2].m_band);
+	EXPECT_EQ(2, header[3].m_band);
+}
+
+// ⭐⭐ ON THE SHEET: a vertical group prints a record over two rows — the plain column beside both, the figures one
+// under the other — under a header that names the group over its members.
+TEST(SpreadsheetCompose, AVerticalGroupPrintsARecordOverTwoRows)
+{
+	auto doc = MakeDocument();
+	ibSpreadsheetComposeDriver driver(doc.get());
+
+	ibCompositionOutputInfo info = SchemaInfo({ Detail(wxT("Code")), Detail(wxT("Debit")), Detail(wxT("Credit")) });
+	info.m_columnTree = { Leaf(0), GroupOf(wxT("Amounts"), ibColumnGroupVertical, { Leaf(1), Leaf(2) }) };
+	driver.OnOutputBegin(info);
+	driver.OnRow(RowAt(0), { ibValue(ibT("A1")), ibValue(10), ibValue(20) });
+	driver.OnOutputEnd(false);
+
+	EXPECT_EQ(wxT("Code"), doc->GetCellValue(0, 0));
+	EXPECT_EQ(wxT("Amounts"), doc->GetCellValue(0, 1));
+	EXPECT_EQ(wxT("Debit"), doc->GetCellValue(1, 1));
+	EXPECT_EQ(wxT("Credit"), doc->GetCellValue(2, 1));
+
+	EXPECT_EQ(wxT("A1"), doc->GetCellValue(3, 0));
+	EXPECT_EQ(wxT("10"), doc->GetCellValue(3, 1));
+	EXPECT_EQ(wxT("20"), doc->GetCellValue(4, 1));
+	EXPECT_EQ(1, driver.GetRowsWritten());
 }

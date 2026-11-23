@@ -15120,6 +15120,19 @@ msgstr "Добавить \"Авто\""
 msgid "Everything the level above shows, in this place"
 msgstr "Всё, что показывает уровень выше, в этом месте"
 
+#: src/engine/frmclient/win/dlgs/settings/composer/composerSettings.cpp:2892
+#: src/engine/frmclient/win/dlgs/settings/composer/composerSettings.cpp:3360
+msgid "Add group"
+msgstr "Добавить группу"
+
+#: src/engine/frmclient/win/dlgs/settings/composer/composerSettings.cpp:2893
+msgid "Columns under one title: side by side, one under another, or in one cell"
+msgstr "Колонки под одним заголовком: рядом, одна под другой или в одной ячейке"
+
+#: src/engine/frmclient/win/dlgs/settings/composer/composerSettings.cpp:2926
+msgid "Placement"
+msgstr "Расположение"
+
 #: src/engine/frmclient/win/dlgs/settings/composer/composerSettings.cpp:2940
 msgid "Select a grouping in the structure above: these are the fields IT groups by."
 msgstr "Выберите группировку в структуре выше: здесь поля, по которым группирует ИМЕННО ОНА."

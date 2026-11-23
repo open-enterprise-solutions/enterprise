@@ -11,6 +11,7 @@
 // / ResolveField). slice: filter + sort, flat order; dot-walk up to references.
 
 #include "backend/composition/ramComposer.h"   // ibDataRamComposer
+#include "backend/composition/dataComposerInternal.h"   // ibComposerColumnTreeOf — how the columns hang, as on the DB side
 #include "backend/tabularModel.h"           // ibRamValueStorage — RowCount / SplitField / ResolveField
 #include "backend/composition/drivers/compositionDriver.h"   // ibCompositionDriver — a composition is printed through
 #include "backend/query/queryConstructorModel.h"            // WalkFrom — the hops of a path, a reference by its type
@@ -197,8 +198,9 @@ bool ibDataRamComposer::Run(ibCompositionDriver& driver)
 
 	// The fields to print — asked of the composition through the same accessor the DB side uses, so a
 	// reader's selected-fields table means the same thing on both.
-	std::vector<ibString> fields = m_outputs.empty()
-		? std::vector<ibString>() : SelectedFor(m_outputs.front());
+	const std::vector<ibSelectedFieldDescription> selected = m_outputs.empty()
+		? std::vector<ibSelectedFieldDescription>() : SelectedFor(m_outputs.front());
+	std::vector<ibString> fields = ibSelectedPathsOf(selected);
 
 	if (fields.empty()) {
 		// Nothing chosen: every column the storage has, in its own order — but what this base does not use.
@@ -269,6 +271,8 @@ bool ibDataRamComposer::Run(ibCompositionDriver& driver)
 		// …and how it is shown — the field's appearance (its Format), as the DB side reads it (dataComposerRun).
 		info.m_appearances.push_back(AppearanceForPath(field));
 	}
+	// …and how the columns hang — the selected fields' groups, as the DB side hands them (dataComposerRun).
+	info.m_columnTree = ibComposerColumnTreeOf(info, selected);
 
 	driver.OnOutputBegin(info);
 

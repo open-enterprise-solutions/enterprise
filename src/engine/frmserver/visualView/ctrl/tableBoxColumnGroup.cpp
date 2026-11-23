@@ -56,6 +56,15 @@ ibString ibValueModelTableBoxColumnGroup::GetControlTitle() const
 	return m_propertyName->GetValueAsString();
 }
 
+// …AND AS WRITTEN — every language at once, the form SetCaption takes; no title, its name, as above.
+ibString ibValueModelTableBoxColumnGroup::GetCaption() const
+{
+	if (!m_propertyTitle->IsEmptyProperty())
+		return m_propertyTitle->GetValueAsRawString();
+
+	return m_propertyName->GetValueAsString();
+}
+
 bool ibValueModelTableBoxColumnGroup::IsGroupShown() const
 {
 	return m_propertyVisible->GetValueAsBoolean() && IsAvailable();

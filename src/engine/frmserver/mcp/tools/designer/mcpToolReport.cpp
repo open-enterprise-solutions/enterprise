@@ -1956,7 +1956,130 @@ MCP_TOOL_REGISTER_DESIGNER(ibMcpToolReportParameter);
 //
 // ⚠ AND IT MAKES THE QUERY SMALLER FOR FREE: a field nobody selected takes no part in the
 // selection - not read, not fetched, not rendered.
+//
+// ⭐⭐ AND THE FIELDS HANG IN GROUPS, as a table's columns do (docs/private/selected-field-groups.md §5.8): a group
+// heads its fields and lays them out side by side, one under another, or in one cell. A row is addressed by its
+// POSITION — `2` the second of the top level, `2.1` the first inside it — which is `at` extended into the groups.
 class ibMcpToolReportSelect : public ibMcpTool {
+
+	static const ibArg& ArgGroup() {
+		static const ibArg a(ibT("group"), ibArg::Kind::Text,
+			ibMcpText("Add a GROUP of fields with this title over them - empty for a group with no heading band. A caption: "
+				"every language the application declares in one string, `en = '...'; ru = '...';`. With `paths`, those "
+				"fields go into it. With `row`, retitles that group instead."));
+		return a;
+	}
+	static const ibArg& ArgPlacement() {
+		static const std::vector<ibString> s_words = [] {
+			std::vector<ibString> words;
+			for (const auto& word : PlacementWords())
+				words.push_back(word.first);
+			return words;
+		}();
+		static const ibArg a(ibT("placement"), ibArg::Kind::Text,
+			ibMcpText("How a group lays its fields out: horizontal (side by side under its title), vertical (one under "
+				"another - a record takes several lines of the sheet; the default) or incell (side by side, one header "
+				"cell over them, no rule between). With `row`, re-places that group."), false, s_words);
+		return a;
+	}
+	static const ibArg& ArgInto() {
+		static const ibArg a(ibT("into"), ibArg::Kind::Text,
+			ibMcpText("The group to put the fields, the new group or the moved row INTO, by its position - `2`, `2.1`. "
+				"Omit for the top level. `at` then counts inside it."));
+		return a;
+	}
+	static const ibArg& ArgRow() {
+		static const ibArg a(ibT("row"), ibArg::Kind::Text,
+			ibMcpText("An existing row by its position - `2` the second of the top level, `2.1` the first inside it. "
+				"With `group`/`placement` it changes that group; with `into`/`at` it MOVES the row there; with "
+				"remove:true it takes the row out, a group with everything in it."));
+		return a;
+	}
+
+	// THE PLACEMENT AS A WORD — the table's three (ibColumnGroupKind), one table for the schema, the reading and the
+	// answer, as GroupWords is for a condition's groups.
+	static const std::vector<std::pair<const ibChar*, ibColumnGroupKind>>& PlacementWords() {
+		static const std::vector<std::pair<const ibChar*, ibColumnGroupKind>> s_words = {
+			{ ibT("horizontal"), ibColumnGroupHorizontal },
+			{ ibT("vertical"),   ibColumnGroupVertical },
+			{ ibT("incell"),     ibColumnGroupInCell } };
+		return s_words;
+	}
+
+	// A POSITION AS INDEXES, 0-based — `2.1` is { 1, 0 }; false for anything that is not one.
+	static bool IndexesOf(const ibString& position, std::vector<size_t>& out) {
+		out.clear();
+		for (const ibString& part : ibStringTokenize(position, ibT("."))) {
+			unsigned long number = 0;
+			if (!part.ToULong(&number) || number == 0)
+				return false;
+			out.push_back(static_cast<size_t>(number - 1));
+		}
+		return !out.empty();
+	}
+
+	// THE LIST A ROW STANDS IN, walked down to its last index — null when a step is past the end or not a group.
+	static std::vector<ibSelectedFieldDescription>* ListOf(std::vector<ibSelectedFieldDescription>& top,
+		const std::vector<size_t>& indexes, size_t depth) {
+		std::vector<ibSelectedFieldDescription>* list = &top;
+		for (size_t step = 0; step < depth; ++step) {
+			if (indexes[step] >= list->size() || !(*list)[indexes[step]].IsGroup())
+				return nullptr;
+			list = &(*list)[indexes[step]].m_children;
+		}
+		return list;
+	}
+
+	// …the list a group named by `into` holds; the top level when it names none.
+	static std::vector<ibSelectedFieldDescription>* IntoList(std::vector<ibSelectedFieldDescription>& top,
+		const ibString& into, ibString& refusal) {
+		if (into.IsEmpty())
+			return &top;
+		std::vector<size_t> indexes;
+		std::vector<ibSelectedFieldDescription>* list = IndexesOf(into, indexes)
+			? ListOf(top, indexes, indexes.size()) : nullptr;
+		if (list == nullptr)
+			refusal = ibString::Format(ibMcpText("'%s' is no group of the selected fields - `into` names one by its "
+				"position, as `shows` lists them."), into);
+		return list;
+	}
+
+	// …and where a FIELD stands, wherever in the tree.
+	static bool FindPath(std::vector<ibSelectedFieldDescription>& list, const ibString& path,
+		std::vector<ibSelectedFieldDescription>*& in, size_t& index) {
+		for (size_t i = 0; i < list.size(); ++i) {
+			if (list[i].IsGroup()) {
+				if (FindPath(list[i].m_children, path, in, index))
+					return true;
+			}
+			else if (list[i].m_path.IsSameAs(path, false)) {
+				in = &list;
+				index = i;
+				return true;
+			}
+		}
+		return false;
+	}
+
+	// THE ANSWER IN THE SHAPE IT HAS — a field is its path, `Auto` `(auto)`, a group what it is and what it holds.
+	static std::vector<ibDataValue> ShownTree(const std::vector<ibSelectedFieldDescription>& rows) {
+		std::vector<ibDataValue> shown;
+		for (const ibSelectedFieldDescription& row : rows) {
+			if (!row.IsGroup()) {
+				shown.push_back(ibDataValue::String(row.IsAuto() ? ibString(ibT("(auto)")) : row.m_path));
+				continue;
+			}
+			std::shared_ptr<ibDataNode> entry = std::make_shared<ibDataNode>();
+			entry->SetValue(ibT("group"), row.m_title);
+			for (const auto& word : PlacementWords())
+				if (word.second == row.m_placement)
+					entry->SetValue(ibT("placement"), ibString(word.first));
+			entry->AddField(ibT("rows"), ibDataValue::Array(ShownTree(row.m_children)));
+			shown.push_back(ibDataValue::Child(entry));
+		}
+		return shown;
+	}
+
 public:
 
 	ibString GetName() const override { return ibT("report_select"); }
@@ -1973,13 +2096,18 @@ public:
 			"figures under them, so this belongs beside report_level and report_resource rather "
 			"than after them. The order of these is the order of the columns; `at` inserts at a "
 			"position instead of appending. Pass remove:true with the same path to take one out. "
+			"The fields may hang in GROUPS, as a table's columns do: `group` adds one (with `paths`, holding them), "
+			"`placement` says how it lays them out (horizontal / vertical / incell), `into` puts what is added inside "
+			"a group, and `row` names an existing row by its position (`2`, `2.1`) to retitle, re-place, move "
+			"(`into`/`at`) or remove it. `shows` answers the whole tree. "
 			"report_fields lists what the query offers.");
 	}
 
 	const std::vector<ibMcpArgument>& Arguments() const override
 	{
 		static const std::vector<ibMcpArgument> s_arguments =
-			{ ArgId(), ArgOnePath(), ArgPaths(), ArgAt(), ArgVariant(), ArgRemove() };
+			{ ArgId(), ArgOnePath(), ArgPaths(), ArgAt(), ArgVariant(), ArgRemove(),
+			  ArgGroup(), ArgPlacement(), ArgInto(), ArgRow() };
 		return s_arguments;
 	}
 
@@ -2009,35 +2137,135 @@ public:
 		if (const ibString path = ArgOnePath().Text(params); !path.IsEmpty())
 			wanted.push_back(path);
 
-		if (wanted.empty()) {
-			refusal = ibMcpText("Name the field to show - `path` for one, `paths` for several. "
-				  "report_fields lists what the query projects.");
+		std::vector<ibSelectedFieldDescription>& selected = variant->m_settings.m_selected;
+
+		// A GROUP'S TITLE is a caption like any other — every language the application declares (ibMcpCaptionInEveryLanguage).
+		const bool groupSaid = params.Has(ArgGroup().Name());
+		if (groupSaid && !ibMcpCaptionInEveryLanguage(composer->GetMetaData(), ArgGroup().Text(params),
+		                                              ibMcpText("A group's title"), refusal))
+			return false;
+
+		// THE PLACEMENT, where one is said — a word of the three, or a refusal naming them.
+		const ibString placementWord = ArgPlacement().Text(params);
+		ibColumnGroupKind placement = ibColumnGroupVertical;
+		if (!placementWord.IsEmpty()) {
+			const auto word = std::find_if(PlacementWords().begin(), PlacementWords().end(),
+				[&placementWord](const auto& known) { return placementWord.IsSameAs(known.first, false); });
+			if (word == PlacementWords().end()) {
+				refusal = ibString::Format(ibMcpText("'%s' is no placement - horizontal, vertical or incell."),
+					placementWord);
+				return false;
+			}
+			placement = word->second;
+		}
+		std::int32_t at = (std::int32_t)ArgAt().Whole(params);
+
+		// ⭐ A ROW BY ITS POSITION — changed, moved or taken out. One row per call: a position is read against the
+		// tree as it stands, and a second one in the same call would be read against a tree the first has changed.
+		if (const ibString position = ArgRow().Text(params); !position.IsEmpty()) {
+			std::vector<size_t> indexes;
+			std::vector<ibSelectedFieldDescription>* in = IndexesOf(position, indexes)
+				? ListOf(selected, indexes, indexes.size() - 1) : nullptr;
+			if (in == nullptr || indexes.back() >= in->size()) {
+				refusal = ibString::Format(ibMcpText("There is no row '%s' - `shows` lists them, a group's rows inside it."),
+					position);
+				return false;
+			}
+			const size_t index = indexes.back();
+			if (ArgRemove().Flag(params))
+				in->erase(in->begin() + index);
+			else {
+				if (groupSaid || !placementWord.IsEmpty()) {
+					ibSelectedFieldDescription& row = (*in)[index];
+					if (!row.IsGroup()) {
+						refusal = ibString::Format(ibMcpText("Row '%s' is a field, not a group - only a group has a title "
+							"and a placement."), position);
+						return false;
+					}
+					if (groupSaid)
+						row.m_title = ArgGroup().Text(params);
+					if (!placementWord.IsEmpty())
+						row.m_placement = placement;
+				}
+				// …MOVED, where it is told where to: out of its place and into the group `into` names (the top level
+				// when none), at `at`. Never into itself — a group cannot hold the group that holds it.
+				const ibString into = ArgInto().Text(params);
+				if (!into.IsEmpty() || at > 0) {
+					std::vector<size_t> target;
+					if (!into.IsEmpty() && !IndexesOf(into, target)) {
+						refusal = ibString::Format(ibMcpText("'%s' is no position."), into);
+						return false;
+					}
+					if (target.size() >= indexes.size() && std::equal(indexes.begin(), indexes.end(), target.begin())) {
+						refusal = ibMcpText("A group cannot be moved into itself or into a group it holds.");
+						return false;
+					}
+					const ibSelectedFieldDescription moved = (*in)[index];
+					in->erase(in->begin() + index);
+					// …the target read against the tree WITHOUT the row: a sibling after it moved up by one.
+					const size_t depth = indexes.size() - 1;
+					if (target.size() > depth && std::equal(indexes.begin(), indexes.begin() + depth, target.begin())
+						&& target[depth] > index)
+						--target[depth];
+					std::vector<ibSelectedFieldDescription>* to = target.empty()
+						? &selected : ListOf(selected, target, target.size());
+					if (to == nullptr) {
+						refusal = ibString::Format(ibMcpText("'%s' is no group of the selected fields."), into);
+						return false;
+					}
+					const size_t where = at > 0 && static_cast<size_t>(at) <= to->size()
+						? static_cast<size_t>(at - 1) : to->size();
+					to->insert(to->begin() + where, moved);
+				}
+			}
+			composer->SetTemplateDesc(composition);
+			activeMetaData->Modify(true);
+			result.AddField(ibT("shows"), ibDataValue::Array(ShownTree(selected)));
+			ibMcpSayComposerComplaints(composition, result);
+			return true;
+		}
+
+		if (wanted.empty() && !groupSaid) {
+			refusal = ibMcpText("Name the field to show - `path` for one, `paths` for several - or a `group` to add, "
+				  "or a `row` to change. report_fields lists what the query projects.");
 			return false;
 		}
 
-		std::vector<ibSelectedFieldDescription>& selected = variant->m_settings.m_selected;
+		// WHERE WHAT IS ADDED GOES — the group `into` names, else the top level; a new group first, the fields then
+		// inside it.
+		std::vector<ibSelectedFieldDescription>* target = IntoList(selected, ArgInto().Text(params), refusal);
+		if (target == nullptr)
+			return false;
+		if (groupSaid && !ArgRemove().Flag(params)) {
+			const size_t where = at > 0 && static_cast<size_t>(at) <= target->size()
+				? static_cast<size_t>(at - 1) : target->size();
+			target->insert(target->begin() + where,
+				ibSelectedFieldDescription::Group(ArgGroup().Text(params), placement));
+			target = &(*target)[where].m_children;
+			at = 0;   // …and the fields fill the new group from its start
+		}
 
 		// ⭐ ONE BAD NAME DOES NOT UNDO THE REST, and it is not swallowed either: each is reported
 		// on by name, and the answer below shows the order that actually resulted. A call that
 		// refused six good columns because the seventh was misspelled would teach a caller to go
 		// back to one field per call, which is what this is here to end.
 		std::vector<ibDataValue> refused;
-		std::int32_t at = (std::int32_t)ArgAt().Whole(params);
 
 		for (const ibString& path : wanted) {
 
-			const auto found = std::find_if(selected.begin(), selected.end(),
-				[&path](const ibSelectedFieldDescription& field) {
-					return field.m_path.IsSameAs(path, false); });
+			// Where it is shown already, wherever in the tree — a field is shown once.
+			std::vector<ibSelectedFieldDescription>* foundIn = nullptr;
+			size_t foundAt = 0;
+			const bool found = FindPath(selected, path, foundIn, foundAt);
 
 			ibString fault;
 
 			if (ArgRemove().Flag(params)) {
 
-				if (found == selected.end())
+				if (!found)
 					fault = ibString::Format(ibMcpText("'%s' is not shown here."), path);
 				else
-					selected.erase(found);
+					foundIn->erase(foundIn->begin() + foundAt);
 			}
 			// ⚠ A FIELD THE QUERY DOES NOT PROJECT stores happily and shows nothing - the same
 			// silent emptiness a level with a wrong path produces, which is why both are checked
@@ -2053,16 +2281,16 @@ public:
 			         && !PathIsOffered(composition, path, fault)) {
 				// fault already says what the query does offer
 			}
-			else if (found != selected.end()) {
+			else if (found) {
 				fault = ibString::Format(
 					ibMcpText("'%s' is already shown - remove it first to put it somewhere else."), path);
 			}
-			else if (at > 0 && (size_t)at <= selected.size()) {
-				selected.insert(selected.begin() + (at - 1), ibSelectedFieldDescription::Field(path));
+			else if (at > 0 && (size_t)at <= target->size()) {
+				target->insert(target->begin() + (at - 1), ibSelectedFieldDescription::Field(path));
 				at++;   // …and the next of the list goes after it, keeping the given order
 			}
 			else {
-				selected.push_back(ibSelectedFieldDescription::Field(path));
+				target->push_back(ibSelectedFieldDescription::Field(path));
 			}
 
 			if (!fault.IsEmpty())
@@ -2070,8 +2298,9 @@ public:
 		}
 
 		// EVERY ONE OF THEM WRONG IS A REFUSAL, not a result: nothing changed, and answering
-		// `shows` as though something had would be a lie the caller acts on.
-		if (refused.size() == wanted.size()) {
+		// `shows` as though something had would be a lie the caller acts on. (A group added with them stands:
+		// that was said on its own.)
+		if (!wanted.empty() && refused.size() == wanted.size() && !groupSaid) {
 			refusal = refused.front().AsString();
 			return false;
 		}
@@ -2083,12 +2312,8 @@ public:
 		activeMetaData->Modify(true);
 
 		// ANSWERED WITH THE WHOLE ORDER, because that is what was changed - a caller adding three
-		// columns sees the left-to-right result without asking again.
-		std::vector<ibDataValue> shown;
-		for (const ibSelectedFieldDescription& field : selected)
-			shown.push_back(ibDataValue::String(field.IsAuto() ? ibString(ibT("(auto)")) : field.m_path));
-
-		result.AddField(ibT("shows"), ibDataValue::Array(shown));
+		// columns sees the left-to-right result without asking again; the groups as the tree they are.
+		result.AddField(ibT("shows"), ibDataValue::Array(ShownTree(selected)));
 		ibMcpSayComposerComplaints(composition, result);
 		return true;
 	}

@@ -94,6 +94,22 @@ enum ibStretch : int {
 	ibStretch_Expand = 0x2000    // wxEXPAND
 };
 
+// THE PLACEMENT A GROUP OF COLUMNS CARRIES — the whole of what grouping means: a table's column group
+// (ibValueModelTableBoxColumnGroup's Grouping, the client's ibDataViewColumnGroup), and a composer's group of selected
+// fields, which a list's groups become one to one when it is output. One word for the three of them; the geometry it
+// decides is each side's own to lay out (the client's in pixels, a sheet's in cells).
+//
+// Plain enum, like ibAlignment above: the property system stores an enumeration's value as a long, and a form keeps
+// these numbers — they do not move.
+enum ibColumnGroupKind {
+	ibColumnGroupHorizontal,   // columns side by side (the group's title spans them)
+	ibColumnGroupVertical,     // columns one under another (the row grows taller)
+	// IN CELL — the columns MERGE into one cell: they still sit side by side, but there is only ONE header cell over
+	// them (the group's own, full depth) and no title of their own. "Account / dimension" reads as one field, not as
+	// two columns that happen to be adjacent.
+	ibColumnGroupInCell,
+};
+
 // The sides a margin is kept on, in wx's numbers (wxDirection) - flags that combine.
 enum ibDirection : int {
 	ibDirection_Left = 0x0010,    // wxLEFT

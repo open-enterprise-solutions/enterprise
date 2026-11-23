@@ -32,6 +32,7 @@
 // ---------------------------------------------------------------------------
 
 #include "backend/composition/drivers/compositionDriver.h"   // a DRIVER needs the contract, not the composer
+#include "backend/composition/drivers/compositionColumnLayout.h"   // the column groups, in sheet cells
 #include "core/spreadsheet/spreadsheetObject.h"
 #include "core/formatString.h"   // how a column writes its figures — see m_formats
 
@@ -133,6 +134,8 @@ private:
 	// Which schema columns are shown at all — a projected field fetched only for a filter or a sort
 	// takes no column. See ibCompositionOutputInfo::m_shown.
 	std::vector<bool>           m_shown;
+	// …and how the shown ones hang — the selected fields' groups (ibCompositionOutputInfo::m_columnTree).
+	std::vector<ibCompositionColumnNode> m_columnTree;
 	ibString ColumnPath(size_t column) const {
 		return column < m_paths.size() ? m_paths[column] : ibString();
 	}
@@ -190,6 +193,24 @@ private:
 	// fields, so this is what tells "the second field of level 1" from "the first field of level 2";
 	// counting dimension columns instead is how the last level used to disappear.
 	std::vector<int>            m_dimLevel;
+	// …and WHICH BAND of a printed line it is written on — 0 but under a vertical group (ibCompositionColumnLayout).
+	std::vector<int>            m_band;
+	int BandOf(size_t column) const { return column < m_band.size() ? m_band[column] : 0; }
+
+	// ⭐ ONE PRINTED LINE, CELL BY CELL — a record, a heading and a total are each `m_lineBands` sheet rows by
+	// `m_columnCount` columns, laid out once per output. An entry is the span of the cell it is the main cell of,
+	// {0, 0} where another's span covers it: such a cell is never written — touching one inside somebody's span is
+	// how a sheet comes to assert at load (see the header's tint). The dimension area spans every band.
+	struct LineSpan {
+		int  m_rows = 0, m_cols = 0;
+		bool m_ruleLeft = true, m_ruleRight = true;   // no rule inside an in-cell group
+		bool IsCovered() const { return m_rows == 0; }
+	};
+	int                         m_lineBands = 1;
+	std::vector<LineSpan>       m_lineSpans;
+	const LineSpan& SpanAt(int band, int col) const {
+		return m_lineSpans[static_cast<size_t>(band) * static_cast<size_t>(m_columnCount) + static_cast<size_t>(col)];
+	}
 
 	ibSpreadsheetObject*        m_document = nullptr;
 	// ⭐ THE PALETTE — the output's (ibCompositionOutputInfo::m_theme): its header, its foot, and every line whose

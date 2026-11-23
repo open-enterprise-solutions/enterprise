@@ -624,6 +624,7 @@ private:
 	// reader on the run path at all. Removing it removed the parameter with it.
 	struct ibFieldSetPage {
 		ibTreeCtrl*              m_sourceTree = nullptr;   // everything the source offers, to pick FROM
+		class ibAuiToolBar*      m_bar     = nullptr;      // shut with the others in view-only mode
 		class ibDataViewCtrl*    m_view    = nullptr;
 		class ibSelectedListModel* m_model = nullptr;
 	};
@@ -632,13 +633,27 @@ private:
 	void OnFieldSetAdd();
 	// The `Auto` row — where everything the storey above shows lands. At most one per table.
 	void OnFieldSetAuto();
+	// A group — a title, a placement and rows of its own, as a table's column group.
+	void OnFieldSetGroup();
+	// The "..." behind a group's title — every language of it at once, as a field's title (EditFieldTitle).
+	bool EditFieldSetTitle(wxString& text);
 	void OnFieldSetRemove();
 	void OnFieldSetCopy();
-	void ReloadFieldSets();          // the page follows the selection
+	void OnFieldSetContextMenu(class ibDataViewEvent&);
+	// A row carried by the mouse — moved within the list, or a field brought in from the tree.
+	void OnFieldSetDrop(class ibDataViewEvent&);
+	// The page follows the selection; `select` — the row (its path) the cursor lands on.
+	void ReloadFieldSets(const std::vector<size_t>& select = {});
 	// The selected node's OWN set — what IT adds. The report's is the bottom of the pile.
 	std::vector<ibSelectedFieldDescription>* CurrentFieldSet();
-	int  SelectedFieldSetRow();   // the line the cursor is on, or wxNOT_FOUND
+	std::vector<size_t> SelectedFieldSetRow();   // the row the cursor is on, as its path; empty — none
+	// A new row where the cursor says — into the group it is on, else after its row — or, given, under
+	// `parent` at `at` (past the end — the end).
+	void InsertFieldSetRow(const ibSelectedFieldDescription& row);
+	void InsertFieldSetRow(const ibSelectedFieldDescription& row, const std::vector<size_t>& parent, size_t at);
+	// Within the row's group by `delta` — or, given, to `parent` at `at`, as a drop moves it.
 	void MoveFieldSetRow(int delta);
+	void MoveFieldSetRow(const std::vector<size_t>& from, const std::vector<size_t>& parent, size_t at);
 	// Put the field a tree row stands for into the set — double-click on the left pane.
 	void AddFieldFromTree(const class wxTreeItemId& item);
 

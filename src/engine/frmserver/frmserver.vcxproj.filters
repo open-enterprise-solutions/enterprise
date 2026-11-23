@@ -967,9 +967,6 @@
     <ClInclude Include="visualView\ctrl\chartBox.h">
       <Filter>visualView\ctrl</Filter>
     </ClInclude>
-    <ClInclude Include="visualView\ctrl\columnLayout.h">
-      <Filter>visualView\ctrl</Filter>
-    </ClInclude>
     <ClInclude Include="visualView\ctrl\control.h">
       <Filter>visualView\ctrl</Filter>
     </ClInclude>
