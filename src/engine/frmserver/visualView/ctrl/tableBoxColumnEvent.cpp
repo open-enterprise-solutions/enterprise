@@ -6,14 +6,23 @@
 #include "backend/objCtor.h"
 #include "backend/backend_exception.h"       // ibBackendException — a value of a type the application lacks
 #include "core/serialize/dataBuilder.h"   // ibDataNode — the value as the client sent it
+#include "backend/system/systemManager.h"   // ibValueSystemFunction::Message — a value typed in part is said
+#include "core/inputMask.h"                 // ibInputMask — the typed text read back through the column's mask
 
 // The typed text becomes a value of the cell's type, or is refused. A refused text leaves the cell as it
 // was, and the next fetch of the row shows that value again in place of what was typed. A read-only
 // column (IsReadOnly) takes no text at all.
-bool ibValueModelTableBoxColumn::TextProcessing(const ibString& strData)
+bool ibValueModelTableBoxColumn::TextProcessing(const ibString& typed)
 {
 	if (IsReadOnly())
 		return false;
+
+	// Through the mask first, as a field reads it (ibValueTextCtrl::TextProcessing).
+	ibString strData, refusal;
+	if (!GetMask().Strip(typed, strData, &refusal)) {
+		ibValueSystemFunction::Message(refusal, ibStatusMessage::ibStatusMessage_Warning);
+		return false;
+	}
 
 	const ibMetaData* metaData = GetMetaData();
 	ibASSERT(metaData);
@@ -31,6 +40,10 @@ bool ibValueModelTableBoxColumn::TextProcessing(const ibString& strData)
 			SetControlValue(listValue.at(0));
 		}
 		else {
+			// …and a number or a date its type cannot read is said, as a field says it.
+			if (newValue.GetType() == ibValueTypes::TYPE_NUMBER || newValue.GetType() == ibValueTypes::TYPE_DATE)
+				ibValueSystemFunction::Message(ibString::Format(_("The value typed cannot be read: %s"), strData),
+					ibStatusMessage::ibStatusMessage_Warning);
 			return false;
 		}
 	}

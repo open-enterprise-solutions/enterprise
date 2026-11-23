@@ -112,13 +112,23 @@ public:
 		// create the window hidden to prevent flicker
 		textEditor->Show(false);
 
-		bool result = textEditor->Create(dv, wxID_ANY, value.GetString().ToWxString(),
+		// WHAT CAN BE TYPED — the mask the side's TYPE gives, as a form's field of that type has it (Max, 2026-11-23: an
+		// Amount's right value took `0.0155`). The text the cell shows is the type's own format (ibFilterValueText) —
+		// the text a field's editor starts from — laid into it; an empty date starts from the skeleton, not 01.01.0001.
+		ibInputMask mask;
+		ibInputMask::FromTypeDesc(GetTypeDesc(), mask);
+		ibValue held;
+		const bool emptyDate = !mask.IsEmpty() && GetControlValue(held)
+			&& held.GetType() == ibValueTypes::TYPE_DATE && held.IsEmpty();
+
+		bool result = textEditor->Create(dv, wxID_ANY, mask.Apply(emptyDate ? ibString() : value.GetString()).ToWxString(),
 			labelRect.GetPosition(),
 			labelRect.GetSize());
 
 		if (!result)
 			return nullptr;
 
+		textEditor->SetMask(mask);
 		textEditor->ShowSelectButton(true);
 		textEditor->ShowClearButton(true);
 		textEditor->ShowOpenButton(false);
@@ -161,6 +171,7 @@ public:
 		ibTextCtrl* textEditor = wxDynamicCast(ctrl, ibTextCtrl);
 		if (textEditor == nullptr)
 			return false;
+		const ibInputMask& mask = textEditor->GetMask();
 		const wxString text = textEditor->GetValue();
 
 		// 🛑⭐⭐ CLOSING AN EDITOR IS NOT AN EDIT. The grid takes the editor's TEXT whenever the editor goes
@@ -175,12 +186,19 @@ public:
 		// that road carries on below unchanged.
 		if (const ibFilterNodeDescription* item = GetSelectedItem()) {
 			const ibValue held = SideValue(item);
-			// …compared with the text the CELL shows, which is the text the editor opened on (ibFilterValueText).
+			// …compared with the text the CELL shows, which is the text the editor opened on (ibFilterValueText) — laid
+			// into the mask, when there is one.
 			const wxString shown = m_side == kFilterColRight ? ibFilterValueText(held, item->m_left)
 				: m_side == kFilterColLeft ? ibFilterValueText(held, item->m_right) : held.GetString().ToWxString();
-			if (!held.IsEmpty() && shown == text)
+			if (!held.IsEmpty() && mask.Apply(ibString(shown)).ToWxString() == text)
 				return false;   // the model has nothing to take — what is held stands
 		}
+
+		// A masked text is read back as the value's (`0.5` out of `.5`, no blanks, no literals the mask leaves out); one
+		// typed only in part is no value, and what is held stands.
+		ibString stripped;
+		if (!mask.Strip(ibString(text), stripped))
+			return false;
 
 		// ⭐⭐ A TYPED TEXT IS LOOKED FOR, as a form's field and a table's cell look for it (FindValue:
 		// by code or by description, the best answer first). Handed on raw, "66" reached the condition
@@ -191,7 +209,7 @@ public:
 		// as text, for the model to take as before.
 		// (A reference or an enumeration found by the text is the base's to look for — the server's, asked as the choice
 		// of a value is; a number or a date is read from the text by the model, AdjustValue.)
-		value = text;
+		value = stripped;
 		return true;
 	}
 

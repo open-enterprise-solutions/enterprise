@@ -15,6 +15,7 @@
 #define _DESKGUI_UNIV_TEXTCTRL_H_
 
 #include "deskgui/deskgui.h"
+#include "core/inputMask.h"   // ibInputMask - what a masked field lets the person type
 
 class wxCaret;
 class ibTextCtrlCommandProcessor;
@@ -298,6 +299,12 @@ public:
     // SEAM vs univ: the kind of field, changed in place (the canon fixed both at creation) - the text carried over
     void SetPassword(bool password);
     void SetMultiLine(bool multiLine);
+    // SEAM vs univ: THE INPUT MASK (core/inputMask.h) - what the person may type, position by position: a key its
+    // position does not take does not go in, the characters written in the mask stay; an empty one is none. A
+    // multi-line field has none (GetMask): a mask is positions on one line. The text set from outside is not laid
+    // into it - the caller's text stands
+    void SetMask(const ibInputMask& mask);
+    const ibInputMask& GetMask() const;
 
     // THE FIELD'S BUTTONS - inside its frame, after the text, as tall as it; none unless shown. Their presence does
     // not change the field's best size: they take their room from the text.
@@ -615,6 +622,9 @@ private:
 
     // max text line length
     unsigned long m_maxLength;
+
+    // the input mask the person types through (SetMask); none when empty
+    ibInputMask m_mask;
 
     // selection
     wxTextPos m_selAnchor,

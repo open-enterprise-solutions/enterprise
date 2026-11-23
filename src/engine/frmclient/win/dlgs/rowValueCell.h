@@ -26,6 +26,7 @@
 #include <functional>
 #include <utility>
 
+#include "core/formatString.h"                                   // ibFormatString::FromTypeDesc — the text a typed value starts from
 #include "core/tabular/tabularModelView.h"                       // ibDataViewItem
 #include "frmclient/backend/metaData.h"                               // ibMetaData — the application a type is read against
 #include "frmclient/backend/system/value/composition/valueComposerSettings.h"           // ibValueCompositionField — the one value with a picker
@@ -135,11 +136,26 @@ public:
 	virtual wxWindow* CreateEditorCtrl(wxWindow* dv, wxRect labelRect, const ibVariant& value) override {
 		m_row = m_item;   // the row this editor belongs to — never the grid's selection
 
+		// WHAT CAN BE TYPED — where the row declares a number or a date, the mask its type gives, as a form's field of
+		// that type has it (a parameter's Number(15,2) takes no third digit after the point). The editor starts from the
+		// value as its type writes it — an empty date from the skeleton, not 01.01.0001 — laid into the mask.
+		const ibTypeDescription& declared = GetTypeDesc();
+		ibInputMask mask;
+		ibValue held;
+		wxString text = value.GetString().ToWxString();
+		if (ibInputMask::FromTypeDesc(declared, mask) && GetControlValue(held)) {
+			ibFormatString format;
+			ibFormatString::FromTypeDesc(declared, format);
+			const bool emptyDate = held.GetType() == ibValueTypes::TYPE_DATE && held.IsEmpty();
+			text = mask.Apply(emptyDate ? ibString() : format.Apply(held)).ToWxString();
+		}
+
 		ibTextCtrl* editor = new ibTextCtrl;
 		editor->Show(false);
-		if (!editor->Create(dv, wxID_ANY, value.GetString().ToWxString(), labelRect.GetPosition(), labelRect.GetSize()))
+		if (!editor->Create(dv, wxID_ANY, text, labelRect.GetPosition(), labelRect.GetSize()))
 			return nullptr;
 
+		editor->SetMask(mask);
 		editor->ShowSelectButton(true);
 		editor->ShowClearButton(true);
 		editor->ShowOpenButton(false);
@@ -244,7 +260,13 @@ private:
 		const ibTypeDescription declared = m_typeOf(m_row);
 		if (declared.GetClsidCount() != 1 || !IsPrimitive(declared.GetByIdx(0)))
 			return;
-		m_set(m_row, ibValueTypeDescription::AdjustValue(declared, ibValue(ibString(event.GetString())), GetMetaData()));
+		// A masked text is read back as the value's first (`0.5` out of `.5`, a date with its time left out); one typed
+		// only in part is no value yet, and what is held stands until it is whole.
+		const ibTextCtrl* editor = wxDynamicCast(event.GetEventObject(), ibTextCtrl);
+		ibString typed;
+		if (editor == nullptr || !editor->GetMask().Strip(ibString(event.GetString()), typed))
+			return;
+		m_set(m_row, ibValueTypeDescription::AdjustValue(declared, ibValue(typed), GetMetaData()));
 	}
 
 	// A CELL IN A DIALOG HAS NO FORM TO REFRESH — the tablebox road (m_tableBoxColumn) is null here,

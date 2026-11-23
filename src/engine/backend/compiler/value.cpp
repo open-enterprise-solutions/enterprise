@@ -107,12 +107,15 @@ bool ibValue::FindValue(const ibString& input, const ibChoiceCondition& conditio
 			out.emplace_back(!flag);
 			return true;
 		}
-		else if (m_typeClass == ibValueTypes::TYPE_NUMBER) {
-			out.emplace_back().SetNumber(input);
-			return true;
-		}
-		else if (m_typeClass == ibValueTypes::TYPE_DATE) {
-			out.emplace_back().SetDate(input);
+		else if (m_typeClass == ibValueTypes::TYPE_NUMBER || m_typeClass == ibValueTypes::TYPE_DATE) {
+			// A text that is no number, no date is refused, as a flag's is: its failed read is an EMPTY value, which
+			// went into the field as found — a date typed `99.10.2026` emptied it.
+			ibValue& read = out.emplace_back();
+			const bool taken = m_typeClass == ibValueTypes::TYPE_NUMBER ? read.SetNumber(input) : read.SetDate(input);
+			if (!taken && !input.IsEmpty()) {
+				out.pop_back();
+				return false;
+			}
 			return true;
 		}
 		else if (m_typeClass == ibValueTypes::TYPE_STRING) {

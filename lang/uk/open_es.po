@@ -416,6 +416,23 @@ msgstr "Форматувати виділення"
 msgid "Format"
 msgstr "Формат"
 
+#: src/engine/backend/metaCollection/attribute/metaAttributeObject.h:327
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:893
+#: src/engine/frmserver/visualView/ctrl/widgets.h:367
+msgid "Mask"
+msgstr "Маска"
+
+#: src/engine/core/inputMask.cpp:315
+#, c-format
+msgid "The value is typed in only in part: %s"
+msgstr "Значення введено не повністю: %s"
+
+#: src/engine/frmserver/visualView/ctrl/tableBoxColumnEvent.cpp:45
+#: src/engine/frmserver/visualView/ctrl/textctrlEvent.cpp:44
+#, c-format
+msgid "The value typed cannot be read: %s"
+msgstr "Введене значення не розпізнано: %s"
+
 #: src/engine/appstudio/docManager/templates/docViewFormEditor.cpp:183
 #: src/engine/appstudio/docManager/templates/docViewModuleEditor.cpp:120
 #: src/engine/coderunner/coderunner.cpp:253
@@ -3429,6 +3446,10 @@ msgstr "Для поля, що посилається на ієрархічний
 #: src/engine/backend/metaCollection/attribute/metaAttributeObject.h:314
 msgid "How the field's value is shown, written per language: digits after the point, separators, a date pattern, the words for True and False. Every input field and table column bound to the field shows it this way unless it has a format of its own. Empty: a number is shown with as many digits after the point as its type keeps, a date as its type has it."
 msgstr "Як показується значення поля, окремо для кожної мови: цифри після крапки, роздільники, шаблон дати, слова для Істина і Хиба. Так його показують усі поля введення й колонки таблиць, прив'язані до поля, якщо вони не мають власного формату. Порожньо: число показується з такою кількістю цифр після крапки, яку зберігає його тип, а дата так, як задано її типом."
+
+#: src/engine/backend/metaCollection/attribute/metaAttributeObject.h:327
+msgid "What can be typed into the field, a position per character: 0 a digit, 9 a digit or nothing, # a digit or a sign, L a letter, l a letter or nothing, A a letter or a digit, a the same or nothing, C any character, c any or nothing; > upper case from here, < lower case, <> as typed; \\ the next character as written; ! first - a value's shape: !#9999.99 a number, typed as a number is, !dd.MM.yyyy HH:mm:ss a date, which takes no impossible day, month or hour. Any other character stays where it is written and is stepped over. After a ; - 1 (the default) keeps the written characters in the value, 0 leaves them out; after a second ; - the character an empty position shows (a space by default). Every input field and table column bound to the field takes it unless it has a mask of its own. Empty: a number takes as many digits before and after the point as its type keeps, a date its digits; anything else is typed freely."
+msgstr "Що можна ввести в поле, по позиції на символ: 0 - цифра, 9 - цифра або нічого, # - цифра або знак, L - літера, l - літера або нічого, A - літера або цифра, a - те саме або нічого, C - будь-який символ, c - будь-який або нічого; > - далі великі літери, < - малі, <> - як введено; \\ - наступний символ як написано; ! першим - вигляд значення: !#9999.99 - число, вводиться як число, !dd.MM.yyyy HH:mm:ss - дата, що не приймає неможливий день, місяць чи годину. Будь-який інший символ лишається там, де написаний, і переступається під час введення. Після ; - 1 (за замовчуванням) лишає написані символи у значенні, 0 прибирає їх; після другої ; - символ, яким показано порожню позицію (за замовчуванням пробіл). Маску беруть усі поля введення й колонки таблиць, прив'язані до поля, якщо в них немає власної. Якщо порожньо, число приймає стільки цифр до і після крапки, скільки зберігає його тип, дата - свої цифри; решта вводиться вільно."
 
 #: src/engine/backend/metaCollection/attribute/metaAttributeObject.h:315
 #: src/engine/backend/metaCollection/metaCommandObject.h:155
@@ -16730,6 +16751,10 @@ msgstr "Чи можна вводити значення в клітинку з �
 msgid "How the column shows its cells, written per language: digits after the point, separators, a date pattern. Empty: the bound attribute's format, and without one a number shows as many digits after the point as its type keeps."
 msgstr "Як колонка показує свої клітинки, задається для кожної мови: цифри після крапки, роздільники, шаблон дати. Якщо порожньо, використовується формат прив'язаного реквізиту, а без нього число показується з тією кількістю цифр після крапки, яку зберігає його тип."
 
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:894
+msgid "What can be typed into the column's cells, written as an attribute's Mask is: 0 9 # L l A a C c for the positions, > < <> for the case, \\ for a character as written, ! first for a value's shape (!#9999.99 a number, !dd.MM.yyyy a date); then ;1 or ;0 and the character an empty position shows. Empty: the bound attribute's mask, and without one a number takes as many digits as its type keeps and a date its digits. Not used in multi-line mode."
+msgstr "Що можна ввести в клітинки колонки, записується як Маска реквізиту: 0 9 # L l A a C c - позиції, > < <> - регістр, \\ - символ як написано, ! першим - вигляд значення (!#9999.99 - число, !dd.MM.yyyy - дата); далі ;1 або ;0 і символ, яким показано порожню позицію. Якщо порожньо, використовується маска прив'язаного реквізиту, а без неї число приймає стільки цифр, скільки зберігає його тип, а дата - свої цифри. Не використовується в багаторядковому режимі."
+
 #: src/engine/frmserver/visualView/ctrl/tableBox.h:833
 msgid "Footer text"
 msgstr "Текст підвалу"
@@ -17001,6 +17026,10 @@ msgstr "Чи можна вводити значення в поле з клав�
 #: src/engine/frmserver/visualView/ctrl/widgets.h:360
 msgid "How the field shows its value, written per language: digits after the point, separators, a date pattern. Empty: the bound attribute's format, and without one a number shows as many digits after the point as its type keeps."
 msgstr "Як поле показує своє значення, задається для кожної мови: цифри після крапки, роздільники, шаблон дати. Якщо порожньо, використовується формат прив'язаного реквізиту, а без нього число показується з тією кількістю цифр після крапки, яку зберігає його тип."
+
+#: src/engine/frmserver/visualView/ctrl/widgets.h:368
+msgid "What can be typed into the field, written as an attribute's Mask is: 0 9 # L l A a C c for the positions, > < <> for the case, \\ for a character as written, ! first for a value's shape (!#9999.99 a number, !dd.MM.yyyy a date); then ;1 or ;0 and the character an empty position shows. Empty: the bound attribute's mask, and without one a number takes as many digits as its type keeps and a date its digits. Not used in multi-line mode."
+msgstr "Що можна ввести в поле, записується як Маска реквізиту: 0 9 # L l A a C c - позиції, > < <> - регістр, \\ - символ як написано, ! першим - вигляд значення (!#9999.99 - число, !dd.MM.yyyy - дата); далі ;1 або ;0 і символ, яким показано порожню позицію. Якщо порожньо, використовується маска прив'язаного реквізиту, а без неї число приймає стільки цифр, скільки зберігає його тип, а дата - свої цифри. Не використовується в багаторядковому режимі."
 
 #: src/engine/frmserver/visualView/ctrl/widgets.h:364
 msgid "The value the field shows and edits: a form attribute, a field of the form's object, or a field reachable from them by a dotted path (read-only). The value's type decides how input is parsed and which choice form Select opens."

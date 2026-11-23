@@ -6,8 +6,12 @@
 // Typing wins over the server. What the field shows is written from the node while nobody is in it, or while it still
 // shows what the page last wrote there and no older commit of it is unanswered; otherwise the server's text waits and
 // lands when the field is left with nothing changed.
+//
+// Under a mask (State's Mask, the server's resolved) the field shows the server's text at rest — an empty one as the
+// mask's skeleton — and, entered, the text the mask is typed over (EditText where the shown one is another) laid into it.
 
 import { Control, EventKind, defineControl } from './control.js';
+import { InputMask } from './inputMask.js';
 import { TextEditor } from './textEditor.js';
 
 /** @typedef {import('../protocol/patch.js').ProtocolNode} ProtocolNode */
@@ -29,6 +33,10 @@ class Textctrl extends Control {
 
 		/** what the page last wrote into the field from a node — while it holds anything else, it is being typed in */
 		this.applied = '';
+		/** the server's Text — what the field shows at rest */
+		this.text = '';
+		/** …and its EditText: the text the mask is typed over, where Text is not */
+		this.editText = '';
 		/** @type {string | undefined} the server's text, waiting for the field to be left */
 		this.waiting = undefined;
 		/** commits sent and not yet answered */
@@ -53,13 +61,24 @@ class Textctrl extends Control {
 			});
 		}
 		// A text the server sent while the field was typed in lands when the field is left with no net change — the
-		// case no change event covers.
+		// case no change event covers. A masked field left untouched shows its text at rest again.
 		this.field.addEventListener('blur', () => {
-			if (this.waiting !== undefined && this.field.value === this.applied) {
-				this.field.value = this.waiting;
-				this.applied = this.waiting;
+			if (this.field.value === this.applied
+				&& (this.waiting !== undefined || (!this.editor.mask.isEmpty() && this.commits === 0))) {
+				const text = this.shownText(false);
+				this.field.value = text;
+				this.applied = text;
 			}
 			this.waiting = undefined;
+		});
+		// Coming into a masked field shows the mask: the text it is typed over, laid into it, all of it selected — the
+		// first key starts the value anew.
+		this.field.addEventListener('focus', () => {
+			if (this.editor.mask.isEmpty() || this.field.value !== this.applied)
+				return;
+			const text = this.shownText(true);
+			this.applied = text;
+			this.editor.changeValue(text, 0, text.length);
 		});
 
 		this.editor.onButton = async (kind) => {
@@ -121,9 +140,12 @@ class Textctrl extends Control {
 		this.caption.hidden = this.caption.textContent === '' && this.labelWidth <= 0;
 		this.field.toggleAttribute('readonly', state.ReadOnly === true || node.TexteditMode === false);
 		this.editor.showButtons(node);
+		this.editor.setMask(InputMask.parse(state.Mask ?? ''));
 
-		const text = state.Text ?? '';
+		this.text = state.Text ?? '';
+		this.editText = state.EditText ?? '';
 		const focused = this.contains(document.activeElement) || this.field.matches(':focus-within');
+		const text = this.shownText(focused);
 		if (!focused || (this.field.value === this.applied && this.commits <= 1)) {
 			if (this.field.value !== text) {
 				// The server's reformatted text lands under the caret, not after it.
@@ -140,6 +162,20 @@ class Textctrl extends Control {
 		else
 			this.waiting = text;
 		return true;
+	}
+
+	/**
+	 * The text the field shows while nobody types into it: the server's — and under a mask, where the person stands in
+	 * the field, the text the mask is typed over, laid into it; elsewhere an empty text is the mask's skeleton.
+	 * @param {boolean} focused
+	 */
+	shownText(focused) {
+		const mask = this.editor.mask;
+		if (mask.isEmpty())
+			return this.text;
+		if (focused)
+			return mask.apply(this.editText !== '' ? this.editText : this.text);
+		return this.text === '' ? mask.apply('') : this.text;
 	}
 }
 

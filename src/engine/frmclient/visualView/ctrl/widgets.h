@@ -49,13 +49,19 @@ public:
 
 private:
 	void Commit();
+	// The text the field shows while nobody types into it: the server's — and under a mask, where the person stands in
+	// the field, the text the mask is typed over, laid into it; elsewhere an empty text is the mask's skeleton.
+	void ShowText(bool focused);
 
 	void OnTextInput(wxCommandEvent& event);
 	void OnTextEnter(wxCommandEvent& event);
+	void OnSetFocus(wxFocusEvent& event);
 	void OnKillFocus(wxFocusEvent& event);
 
 	ibTextCtrl* m_textCtrl = nullptr;
 	bool        m_editing = false;   // typed into, not committed yet
+	wxString    m_text;              // the server's Text — what the field shows at rest
+	wxString    m_editText;          // …and its EditText: the text the mask is typed over, where Text is not
 };
 
 // A TEXT BOX — the desktop's text editor, many lines: the State's Text shown, ReadOnly or typed into. What is typed is the

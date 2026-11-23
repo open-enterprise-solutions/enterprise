@@ -199,6 +199,11 @@ const ibTranslateString& ibSourceDataObject::GetFormat(const ibMetaID& /*id*/) c
 	return s_none;
 }
 
+ibString ibSourceDataObject::GetMask(const ibMetaID& /*id*/) const
+{
+	return ibString();
+}
+
 ibSelectMode ibSourceDataObject::GetSelectMode(const ibMetaID& /*id*/) const
 {
 	return ibSelectMode::ibSelectMode_Items;

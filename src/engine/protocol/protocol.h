@@ -1273,6 +1273,10 @@ namespace ibProtocol {
 			inline constexpr const char* Note           = "Note";             // a tile's: the line under its caption
 			inline constexpr const char* Text           = "Text";
 			inline constexpr const char* Value          = "Value";            // a field's value with its type
+			inline constexpr const char* Mask           = "Mask";             // a field's input mask in effect, resolved
+			                                                                  // (docs/private/input-mask.md); absent: none
+			inline constexpr const char* EditText       = "EditText";         // …and the text its editor starts from, where
+			                                                                  // Text does not lay into the mask
 			inline constexpr const char* Checked        = "Checked";
 			inline constexpr const char* Selected       = "Selected";
 			inline constexpr const char* Link           = "Link";
@@ -1392,8 +1396,12 @@ namespace ibProtocol {
 			inline constexpr const char* Resizable        = "Resizable";
 			inline constexpr const char* Reorderable      = "Reorderable";
 			inline constexpr const char* TexteditMode     = "TexteditMode";   // may its cells be typed into
+			inline constexpr const char* Mask             = "Mask";           // the input mask its cells are typed through,
+			                                                                  // resolved; absent: none
 			inline constexpr const char* EditText         = "EditText";       // once: the text a value the server wrote into its
-			                                                                  // cell reads as — put into the cell's open editor
+			                                                                  // cell reads as — put into the cell's open editor;
+			                                                                  // …and a cell's in a masked column, where its Text
+			                                                                  // does not lay into the mask: what its editor starts from
 			inline constexpr const char* Sortable         = "Sortable";
 			inline constexpr const char* Sort             = "Sort";
 			inline constexpr const char* HeaderPicture    = "HeaderPicture";

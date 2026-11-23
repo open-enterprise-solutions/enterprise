@@ -14,6 +14,7 @@
 #include "core/query/queryRender.h"                     // ibQueryColumnFromPath — a field's path as the hops a source walks
 #include "core/query/queryConstructorField.h"           // ibQueryConstructorField — what the walk ends in
 #include "core/formatString.h"                       // ibFormatString — a column's format, found once per fetch
+#include "core/inputMask.h"                          // ibInputMask — …and its mask, the same way
 #include "formAttribute.h"                              // the attribute this box is bound to — its source IS the address
 #include "backend/srcDataObject.h"                      // …and the source answers with the guid of what it reads
 #include "backend/appData.h"
@@ -1126,12 +1127,15 @@ bool ibValueModelTableBox::Fetch(const ibDataNode& request, ibDataNode& response
 			columns.push_back(column);
 	}
 	std::vector<std::optional<ibFormatString>> formats;
+	std::vector<ibInputMask> masks;
 	std::vector<bool> columnEditable;
 	formats.reserve(columns.size());
+	masks.reserve(columns.size());
 	columnEditable.reserve(columns.size());
 	for (ibValueModelTableBoxColumn* column : columns) {
 		const ibFormatString* format = column->GetCellFormat();
 		formats.push_back(format != nullptr ? std::optional<ibFormatString>(*format) : std::nullopt);
+		masks.push_back(column->GetMask());
 		columnEditable.push_back(!column->IsReadOnly());
 	}
 
@@ -1262,7 +1266,7 @@ bool ibValueModelTableBox::Fetch(const ibDataNode& request, ibDataNode& response
 			if (col != 0 && !m_tableModel->HasValue(item, static_cast<unsigned int>(columns[col]->GetModelColumn())))
 				continue;
 			ibDataNode& cell = row.AddChild(0, columns[col]->GetControlID());
-			columns[col]->UpdateCell(item, cell, formats[col].has_value() ? &*formats[col] : nullptr, !columnEditable[col]);
+			columns[col]->UpdateCell(item, cell, formats[col].has_value() ? &*formats[col] : nullptr, masks[col], !columnEditable[col]);
 		}
 	}
 
@@ -1504,9 +1508,11 @@ void ibValueModelTableBox::OnFind(const ibDataNode& args)
 	CollectColumns(this, columns);
 	std::erase_if(columns, [](const ibValueModelTableBoxColumn* column) { return !column->IsColumnShown(); });
 	std::vector<std::optional<ibFormatString>> formats;
+	std::vector<ibInputMask> masks;
 	for (const ibValueModelTableBoxColumn* column : columns) {
 		const ibFormatString* format = column->GetCellFormat();
 		formats.push_back(format != nullptr ? std::optional<ibFormatString>(*format) : std::nullopt);
+		masks.push_back(column->GetMask());   // a string is found as it is shown, through its mask
 	}
 	// A cell's text holds it — anywhere, or as a word of its own: no letter, digit or _ either side.
 	const auto holdsText = [&](const ibString& written) {
@@ -1522,7 +1528,7 @@ void ibValueModelTableBox::OnFind(const ibDataNode& args)
 		if (col != 0 && !m_tableModel->HasValue(item, static_cast<unsigned int>(columns[col]->GetModelColumn())))
 			return false;
 		ibDataNode cell;
-		columns[col]->UpdateCell(item, cell, formats[col].has_value() ? &*formats[col] : nullptr, true);
+		columns[col]->UpdateCell(item, cell, formats[col].has_value() ? &*formats[col] : nullptr, masks[col], true);
 		return holdsText(cell.GetValue<ibString>(ibProtocol::ibForm::ibTable::Text));
 	};
 	// The first cell of a row holding it — from the place `from` on, down; from it back, up: its place, columns.size()

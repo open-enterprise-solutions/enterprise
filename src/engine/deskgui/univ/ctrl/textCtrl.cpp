@@ -138,6 +138,7 @@
     #include <wx/validate.h>
     #include <wx/dataobj.h>
     #include <wx/toplevel.h>
+    #include <wx/utils.h>
 #endif
 
 #include <ctype.h>
@@ -585,6 +586,50 @@ private:
 
     // the text which was deleted when this command was Do()ne
     wxString m_textDeleted;
+};
+
+// SEAM vs univ: a masked field's edit - the text as the mask made it, whole (ibInputMask::Replace): a key there
+// changes a character in place or moves a run along, which no insert or remove says. Named apart from "insert",
+// which the processor would merge it with.
+class ibTextCtrlMaskCommand : public ibTextCtrlCommand
+{
+public:
+    ibTextCtrlMaskCommand(const wxString& before, const wxString& after, wxTextPos caretBefore, wxTextPos caretAfter)
+        : ibTextCtrlCommand(wxT("mask")), m_before(before), m_after(after),
+          m_caretBefore(caretBefore), m_caretAfter(caretAfter)
+    {
+    }
+
+    virtual bool CanUndo() const { return true; }
+    virtual bool Do(ibTextCtrl *text) { return Put(text, m_after, m_caretAfter); }
+    virtual bool Do() { return ibTextCtrlCommand::Do(); }
+    virtual bool Undo() { return ibTextCtrlCommand::Undo(); }
+    virtual bool Undo(ibTextCtrl *text) { return Put(text, m_before, m_caretBefore); }
+
+    // The person's edit of a masked field: [from, to) replaced by `text` where the caret stands - null when the
+    // mask takes none of it (a key its position does not take).
+    static ibTextCtrlMaskCommand* Make(const ibInputMask& mask, const wxString& value,
+                                       wxTextPos from, wxTextPos to, wxTextPos caret, const wxString& text)
+    {
+        ibString masked(value);
+        size_t at = static_cast<size_t>(caret);
+        if ( !mask.Replace(masked, static_cast<size_t>(from), static_cast<size_t>(to), ibString(text), at) )
+            return nullptr;
+        return new ibTextCtrlMaskCommand(value, masked.ToWxString(), caret, static_cast<wxTextPos>(at));
+    }
+
+private:
+    static bool Put(ibTextCtrl *text, const wxString& value, wxTextPos caret)
+    {
+        text->Replace(0, text->GetLastPosition(), value);
+        text->SetInsertionPoint(caret);
+        return true;
+    }
+
+    wxString m_before,
+             m_after;
+    wxTextPos m_caretBefore,
+              m_caretAfter;
 };
 
 // a command processor for a ibTextCtrl
@@ -1793,6 +1838,17 @@ void ibTextCtrl::SetMultiLine(bool multiLine)
     Refresh();
 }
 
+void ibTextCtrl::SetMask(const ibInputMask& mask)
+{
+    m_mask = mask;
+}
+
+const ibInputMask& ibTextCtrl::GetMask() const
+{
+    static const ibInputMask s_none;
+    return IsSingleLine() ? m_mask : s_none;
+}
+
 // ----------------------------------------------------------------------------
 // the field's buttons
 // ----------------------------------------------------------------------------
@@ -2459,6 +2515,18 @@ bool ibTextCtrl::DoCut()
 
     Copy();
 
+    // SEAM vs univ: a masked field empties the positions cut, the characters written in the mask stay
+    if ( !GetMask().IsEmpty() )
+    {
+        if ( ibTextCtrlMaskCommand *command = ibTextCtrlMaskCommand::Make(GetMask(), GetValue(), m_selStart, m_selEnd,
+                                                                          m_curPos, wxString()) )
+        {
+            m_cmdProcessor->Submit(command);
+            m_isModified = true;
+        }
+        return true;
+    }
+
     RemoveSelection();
 
     return true;
@@ -2490,6 +2558,20 @@ bool ibTextCtrl::DoPaste()
                                               wxTextFileType_Unix);
         if ( !text.empty() )
         {
+            // SEAM vs univ: into a masked field the clipboard's text is laid as typing it would be - what fits
+            if ( !GetMask().IsEmpty() )
+            {
+                if ( ibTextCtrlMaskCommand *command = ibTextCtrlMaskCommand::Make(GetMask(), GetValue(),
+                        HasSelection() ? m_selStart : m_curPos, HasSelection() ? m_selEnd : m_curPos, m_curPos, text) )
+                {
+                    m_cmdProcessor->Submit(command);
+                    m_isModified = true;
+                }
+                else if ( !wxValidator::IsSilent() )
+                    wxBell();   // nothing of it the mask takes
+                return true;
+            }
+
             WriteText(text);
 
             return true;
@@ -4887,7 +4969,19 @@ bool ibTextCtrl::PerformAction(const ibControlAction& actionOrig,
     }
     else if ( action == ibACTION_TEXT_INSERT )
     {
-        if ( IsEditable() && !strArg.empty() )
+        // SEAM vs univ: a masked field takes the keys its positions take - into the selection's room or at the caret
+        if ( !GetMask().IsEmpty() )
+        {
+            if ( IsEditable() && !strArg.empty() )
+            {
+                command = ibTextCtrlMaskCommand::Make(GetMask(), GetValue(), HasSelection() ? m_selStart : m_curPos,
+                                                      HasSelection() ? m_selEnd : m_curPos, m_curPos, strArg);
+                // a key the mask does not take is refused out loud, as a validator refuses one (textValidator.cpp)
+                if ( command == nullptr && !wxValidator::IsSilent() )
+                    wxBell();
+            }
+        }
+        else if ( IsEditable() && !strArg.empty() )
         {
             bool isTextClipped = m_maxLength && (m_value.length() + strArg.length() > m_maxLength);
             const wxString& acceptedString = isTextClipped ? strArg.Left(m_maxLength - m_value.length())
@@ -4972,7 +5066,12 @@ bool ibTextCtrl::PerformAction(const ibControlAction& actionOrig,
     }
     else if ( action == ibACTION_TEXT_SEL_WORD )
     {
-        SetSelection(GetWordStart(), GetWordEnd());
+        // a masked text's word is the run the caret stands in: a day, a month, a number's whole part or its fraction
+        size_t first = 0, last = 0;
+        if ( m_curPos >= 0 && GetMask().GetRun(ibString(GetValue()), static_cast<size_t>(m_curPos), first, last) )
+            SetSelection(static_cast<wxTextPos>(first), static_cast<wxTextPos>(last + 1));
+        else
+            SetSelection(GetWordStart(), GetWordEnd());
     }
     else if ( action == ibACTION_TEXT_ANCHOR_SEL )
     {
@@ -5060,7 +5159,15 @@ bool ibTextCtrl::PerformAction(const ibControlAction& actionOrig,
 
             if ( from != INVALID_POS_VALUE )
             {
-                command = new ibTextCtrlRemoveCommand(from, to);
+                // SEAM vs univ: in a masked field the positions are emptied, the characters written in the mask stay -
+                // and where only those were struck, the position on the side the caret leaves goes
+                if ( !GetMask().IsEmpty() )
+                {
+                    OrderPositions(from, to);
+                    command = ibTextCtrlMaskCommand::Make(GetMask(), GetValue(), from, to, m_curPos, wxString());
+                }
+                else
+                    command = new ibTextCtrlRemoveCommand(from, to);
             }
         }
         else // cursor movement command

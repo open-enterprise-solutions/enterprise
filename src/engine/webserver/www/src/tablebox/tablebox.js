@@ -42,6 +42,7 @@
 
 import { Control, EventKind, defineControl } from '../controls/control.js';
 import { CommandBar } from '../controls/commandBar.js';
+import { InputMask } from '../controls/inputMask.js';
 import { TextEditor } from '../controls/textEditor.js';
 import { textWidth } from '../controls/textctrl.js';
 import { readPage } from './rows.js';
@@ -1144,6 +1145,7 @@ class Tablebox extends Control {
 			clear: child.ButtonClear !== false,
 			password: child.PasswordMode === true,
 			multiline: child.MultilineMode === true,
+			mask: InputMask.parse(state.Mask ?? ''),
 		};
 		// The width it asks for: its own, in pixels, or the characters its type needs (Chars) in the grid's font — a "0"
 		// each — with the cell's two 0.3rem paddings and its rule (form.css).
@@ -1634,9 +1636,9 @@ function headerOf(owner, caption, header) {
 
 /**
  * A table column as a column of the grid draws it: its id, its caption, whether its editor takes typing, and its
- * editor's buttons and kind as it was saved with them.
+ * editor's buttons and kind as it was saved with them, the mask its cells are typed through (the server's resolved).
  * @typedef {{id: number, title: string, typed: boolean, select: boolean, open: boolean, clear: boolean,
- *   password: boolean, multiline: boolean}} Part
+ *   password: boolean, multiline: boolean, mask: InputMask}} Part
  */
 
 /**
@@ -1725,9 +1727,14 @@ function cellEditor(owner) {
 			cancel();
 			return document.createElement('span');
 		}
-		const row = cell.getRow().getData().handle;
-		const text = cell.getRow().getData()[`c${part.id}`] ?? '';
+		const record = cell.getRow().getData();
+		const row = record.handle;
+		const text = record[`c${part.id}`] ?? '';
+		// Under a mask it starts from the text the mask is typed over (the cell's EditText where it shows another) laid
+		// into it — an empty date as its skeleton — and only a text changed from that is committed.
+		const begun = part.mask.isEmpty() ? text : part.mask.apply(record[`t${part.id}`] ?? text);
 		const editor = new TextEditor({ multiline: part.multiline, password: part.password });
+		editor.setMask(part.mask);
 		const field = editor.field;
 		field.readonly = !part.typed;
 		if (part.multiline)
@@ -1737,9 +1744,9 @@ function cellEditor(owner) {
 			if (done)
 				return;
 			done = true;
-			const typed = field.value ?? text;
+			const typed = field.value ?? begun;
 			cancel();
-			if (commit && typed !== text)
+			if (commit && typed !== begun)
 				owner.send(EventKind.Change, { Row: row, Column: part.id, Text: typed });
 			if (owner.awaitReload) {
 				owner.awaitReload = false;
@@ -1749,7 +1756,7 @@ function cellEditor(owner) {
 		owner.awaitEdit = false;
 		owner.send(EventKind.Input, { Row: row, Column: part.id });
 		field.classList.add('cell-editor');
-		field.value = text;
+		field.value = begun;
 		editor.showButtons({ ButtonSelect: part.select, ButtonOpen: part.open, ButtonClear: part.clear });
 		editor.onButton = (kind) => {
 			finish(false);

@@ -8,6 +8,7 @@
 #include "deskgui/univ/dataview/datavlayout.h"   // ibColumnGroupKind
 #include "frmclient/visualView/tableModel.h"
 #include "deskgui/univ/panel.h"
+#include "core/inputMask.h"   // ibInputMask — what a column's cells are typed through
 
 class ibViewCommandBar;
 class ibViewTableColumnObject;
@@ -118,6 +119,7 @@ public:
 	long long GetSort() const { return m_sort; }
 	bool GetPasswordMode() const { return m_passwordMode; }
 	bool GetMultilineMode() const { return m_multilineMode; }
+	const ibInputMask& GetMask() const { return m_mask; }
 	bool GetTextEditMode() const { return m_textEditMode && !m_readOnly; }
 	bool GetSelectButton() const { return m_selectButton; }
 	bool GetOpenButton() const { return m_openButton; }
@@ -133,6 +135,7 @@ private:
 	// How its cells are typed into — its node's, as drawn last (Update).
 	bool m_passwordMode = false;
 	bool m_multilineMode = false;
+	ibInputMask m_mask;            // the server's, resolved — none when empty
 	bool m_textEditMode = true;
 	bool m_selectButton = true;
 	bool m_openButton = false;

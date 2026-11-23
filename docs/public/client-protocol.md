@@ -210,8 +210,15 @@ A field's `State` carries `Text`, as shown, and `Value`, the value with its type
 "v": <text>}`, a reference `{"t", "m", "g"}`. An `event` that changes a field (`Change`) gives either: `Value` is
 taken as it is, `Text` is parsed by the field's type.
 
+A field that takes typing through an input mask carries `Mask` in its `State` — the mask in effect, the server's
+resolved, as written (`mask[;literals[;blank]]`; absent: none) — and `EditText` where the shown `Text` is not the
+text the mask is typed over (a long date, digit groups). The client lets in only what the mask takes and sends the
+masked text as it stands; the server reads the value back out of it. A table column carries its `Mask` the same way,
+and a cell `EditText` beside its `Text`.
+
 A table's `fetch` gives rows, each with `Container`, `Group` (a group's caption), `Picture`, and its cells as children
-by column id: `Text`, `Checked` for a flag, `Number`, `Value` when the cell takes an edit; its look, when the server's
+by column id: `Text`, `Checked` for a flag, `Number`, `Value` when the cell takes an edit, `EditText` in a masked
+column; its look, when the server's
 model set one — `TextColour`, `BackgroundColour` (a colour's text, `r,g,b`, as a form's colours), `Bold`, `Italic`,
 `Strikethrough`, `Underlined`, `Face`, `Size`, `Align` (`Left`, `Center`, `Right`). In the designer (`login` `Mode` 2)
 a table reads no rows — its `fetch` is refused, and a designer's client does not ask. A read that fails is refused

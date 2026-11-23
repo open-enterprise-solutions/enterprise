@@ -90,6 +90,13 @@ const ibTranslateString& ibChoiceHolder::GetFormat(const ibMetaID& id) const
 		[](const ibTranslateString& format) { return !format.IsEmpty(); }, s_none);
 }
 
+ibString ibChoiceHolder::GetMask(const ibMetaID& id) const
+{
+	return AskRowFirst<ibString>(*this,
+		[&id](const auto& level) { return level.GetMask(id); },
+		[](const ibString& mask) { return !mask.IsEmpty(); }, ibString());
+}
+
 ibSelectMode ibChoiceHolder::GetSelectMode(const ibMetaID& id) const
 {
 	return AskRowFirst<ibSelectMode>(*this,

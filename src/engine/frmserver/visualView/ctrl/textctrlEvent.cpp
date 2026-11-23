@@ -5,14 +5,24 @@
 #include "backend/metaData.h"
 #include "backend/metadataSerialization.h"
 #include "frmserver/visualView/ctrl/form.h"
+#include "backend/system/systemManager.h"   // ibValueSystemFunction::Message — a value typed in part is said
+#include "core/inputMask.h"                 // ibInputMask — the typed text read back through the field's mask
 
 // The typed text becomes a value of the field's type, or is refused. A refused text leaves the value
 // as it was, and the next Update shows that value again in place of what was typed. A read-only field
 // (IsReadOnly) takes no text at all.
-bool ibValueTextCtrl::TextProcessing(const ibString& strData)
+bool ibValueTextCtrl::TextProcessing(const ibString& typed)
 {
 	if (IsReadOnly())
 		return false;
+
+	// THROUGH THE MASK FIRST — what was typed into its positions, read back (docs/private/input-mask.md). A value
+	// typed in part is refused and the person is told why: the positions they left empty would be lost otherwise.
+	ibString strData, refusal;
+	if (!GetMask().Strip(typed, strData, &refusal)) {
+		ibValueSystemFunction::Message(refusal, ibStatusMessage::ibStatusMessage_Warning);
+		return false;
+	}
 
 	const ibMetaData* metaData = GetMetaData();
 	ibASSERT(metaData);
@@ -28,6 +38,11 @@ bool ibValueTextCtrl::TextProcessing(const ibString& strData)
 			SetControlValue(listValue.at(0));
 		}
 		else {
+			// A number or a date its type cannot read — a 30th of February — is said: the field shows the value it had
+			// again, and nothing else would tell why.
+			if (newValue.GetType() == ibValueTypes::TYPE_NUMBER || newValue.GetType() == ibValueTypes::TYPE_DATE)
+				ibValueSystemFunction::Message(ibString::Format(_("The value typed cannot be read: %s"), strData),
+					ibStatusMessage::ibStatusMessage_Warning);
 			return false;
 		}
 	}

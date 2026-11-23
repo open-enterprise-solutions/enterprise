@@ -51,6 +51,12 @@ const ibTranslateString& ibValueTabularSectionDataObjectBase::GetFormat(const ib
 	return attribute != nullptr ? attribute->GetFormat() : ibTabularDataObject::GetFormat(id);
 }
 
+ibString ibValueTabularSectionDataObjectBase::GetMask(const ibMetaID& id) const
+{
+	const ibValueMetaObjectAttributeBase* attribute = m_recordColumnCollection->GetAttributeByID(id);
+	return attribute != nullptr ? attribute->GetMask() : ibTabularDataObject::GetMask(id);
+}
+
 ibSelectMode ibValueTabularSectionDataObjectBase::GetSelectMode(const ibMetaID& id) const
 {
 	const ibValueMetaObjectAttributeBase* attribute = m_recordColumnCollection->GetAttributeByID(id);

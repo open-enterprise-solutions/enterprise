@@ -13,6 +13,7 @@
 // how it looks, the conditional appearance the server's model gave it.
 struct ibViewCell {
 	wxString            text;
+	wxString            editText;           // …the one its mask is typed over, where it is another (a long date) — none: text
 	std::optional<bool> checked;
 	bool                number = false;
 	bool                editable = false;   // the server wrote its value: a cell it lets be edited
@@ -70,6 +71,8 @@ public:
 	static long long HandleOf(const ibDataViewItem& item);
 	// May the cell be edited — the server wrote its value.
 	static bool IsCellEditable(const ibDataViewItem& item, long long column);
+	// The text the cell's editor starts from under a mask — its EditText where the server wrote one, else its text.
+	static wxString GetCellEditText(const ibDataViewItem& item, long long column);
 
 	// A cell — the model's column is the column's id (ibValueModelTableBoxColumn builds it so): a boolean as itself, anything else
 	// as the text the server wrote it in; a number stands right by its look. It has a value where the server wrote one: a

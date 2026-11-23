@@ -23,6 +23,7 @@ void ibValueTextCtrl::Create(wxWindow* parent, const ibProtocolNode& node)
 
 	m_textCtrl->Bind(wxEVT_TEXT_ENTER, &ibValueTextCtrl::OnTextEnter, this);
 	m_textCtrl->Bind(wxEVT_TEXT, &ibValueTextCtrl::OnTextInput, this);
+	m_textCtrl->Bind(wxEVT_SET_FOCUS, &ibValueTextCtrl::OnSetFocus, this);
 	m_textCtrl->Bind(wxEVT_KILL_FOCUS, &ibValueTextCtrl::OnKillFocus, this);
 }
 
@@ -32,13 +33,16 @@ void ibValueTextCtrl::Update(const ibProtocolNode& node)
 
 	m_textCtrl->SetTitle(state.GetString(ibProtocol::ibForm::ibState::Caption));
 
+	// What can be typed into it — the server resolved it (docs/private/input-mask.md); none when it says none.
+	m_textCtrl->SetMask(ibInputMask::Parse(state.GetString(ibProtocol::ibForm::ibState::Mask)));
+
 	// The value as text — none in the designer. Not over what is being typed: that is the person's until committed.
 	// Changed, not set: nobody typed it (no wxEVT_TEXT, no Input).
-	if (state.Has(ibProtocol::ibForm::ibState::Text) && !m_editing) {
-		const wxString text = state.GetString(ibProtocol::ibForm::ibState::Text);
-		if (m_textCtrl->GetValue() != text)
-			m_textCtrl->ChangeValue(text);
-	}
+	if (state.Has(ibProtocol::ibForm::ibState::Text))
+		m_text = state.GetString(ibProtocol::ibForm::ibState::Text);
+	m_editText = state.GetString(ibProtocol::ibForm::ibState::EditText);
+	if (!m_editing)
+		ShowText(m_textCtrl->HasFocus());
 
 	m_textCtrl->SetPassword(node.GetBool(ibProtocol::ibForm::ibProperty::PasswordMode));
 	m_textCtrl->SetMultiLine(node.GetBool(ibProtocol::ibForm::ibProperty::MultilineMode));
@@ -88,6 +92,20 @@ void ibValueTextCtrl::Commit()
 	Send(ibProtocol::ibEvent::ibKind::Change, args);
 }
 
+void ibValueTextCtrl::ShowText(bool focused)
+{
+	wxString text = m_text;
+	const ibInputMask& mask = m_textCtrl->GetMask();
+	if (!mask.IsEmpty()) {
+		if (focused)
+			text = mask.Apply(ibString(!m_editText.empty() ? m_editText : m_text)).ToWxString();
+		else if (text.empty())
+			text = mask.Apply(ibString()).ToWxString();
+	}
+	if (m_textCtrl->GetValue() != text)
+		m_textCtrl->ChangeValue(text);
+}
+
 //*******************************************************************
 //*                             Events                              *
 //*******************************************************************
@@ -108,11 +126,27 @@ void ibValueTextCtrl::OnTextEnter(wxCommandEvent& event)
 	event.Skip();
 }
 
+// Coming into a masked field shows the mask: the text it is typed over, laid into it, all of it selected — the first key
+// starts the value anew.
+void ibValueTextCtrl::OnSetFocus(wxFocusEvent& event)
+{
+	if (!m_editing && !m_textCtrl->GetMask().IsEmpty()) {
+		ShowText(true);
+		m_textCtrl->SelectAll();
+	}
+	event.Skip();
+}
+
 void ibValueTextCtrl::OnKillFocus(wxFocusEvent& event)
 {
-	// A field torn down loses its focus too — what was typed there goes with it.
-	if (m_editing && !m_textCtrl->IsBeingDeleted())
-		Commit();
+	// A field torn down loses its focus too — what was typed there goes with it. Left untouched, it shows its text at
+	// rest again.
+	if (!m_textCtrl->IsBeingDeleted()) {
+		if (m_editing)
+			Commit();
+		else
+			ShowText(false);
+	}
 	event.Skip();
 }
 

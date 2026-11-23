@@ -30,6 +30,11 @@ const ibTranslateString& ibTabularDataObject::GetFormat(const ibMetaID& /*id*/) 
 	return s_none;
 }
 
+ibString ibTabularDataObject::GetMask(const ibMetaID& /*id*/) const
+{
+	return ibString();
+}
+
 ibSelectMode ibTabularDataObject::GetSelectMode(const ibMetaID& /*id*/) const
 {
 	return ibSelectMode::ibSelectMode_Items;

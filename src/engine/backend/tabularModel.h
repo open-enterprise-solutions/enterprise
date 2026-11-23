@@ -324,6 +324,11 @@ public:
 			// WRAPS an attribute or a queryable column passes the question on; one that declares itself
 			// (a value table's) has no option over it. Last in the class, so no slot above it moves.
 			virtual bool IsColumnAvailable() const { return true; }
+
+			// WHAT CAN BE TYPED INTO A CELL OF IT, AS WRITTEN — a column that is an attribute answers with the
+			// attribute's mask; any other has none written (the control over it turns to the type,
+			// docs/private/input-mask.md). After IsColumnAvailable for the same reason: no slot above moves.
+			virtual ibString GetColumnMask() const { return ibString(); }
 		};
 	public:
 
@@ -355,6 +360,11 @@ public:
 		// …AND THE FORMAT A CELL OF IT IS SHOWN WITH, by the same id and for the same reason — what a table
 		// box's renderer shows a column with when the column has no format of its own.
 		const ibFormatString& GetColumnFormat(unsigned int col) const;
+		// …and the mask written on it, the same way: what a table box's column takes when it has none of its own.
+		ibString GetColumnMask(unsigned int col) const {
+			const ibValueModelColumnInfo* column = GetColumnByID(col);
+			return column != nullptr ? column->GetColumnMask() : ibString();
+		}
 
 		virtual ibValueModelColumnInfo* GetColumnInfo(unsigned int idx) const = 0;
 		virtual unsigned int GetColumnCount() const = 0;

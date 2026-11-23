@@ -749,16 +749,24 @@ public:
 	// THE FORMAT THE COLUMN SHOWS ITS CELLS WITH — its own where it has one, else the one its model column
 	// gives (the attribute's, else its type's). Null while the column stands in no table model.
 	const ibFormatString* GetCellFormat() const;
+	// …AND THE MASK ITS CELLS ARE TYPED THROUGH — its own, else the one written on its model column (the
+	// attribute's), else the one its type gives (docs/private/input-mask.md); none in multi-line mode.
+	class ibInputMask GetMask() const;
+	// …and the text its cell's editor starts from under it — the value through the format its type gives (a long date,
+	// digit groups are not typed over), a string as it is, an empty date none: its skeleton.
+	ibString GetEditText(const ibVariant& value) const;
 
 	// ⭐ ONE CELL OF THIS COLUMN, AS THE CLIENT SHOWS IT — the value of `item` in this column: resolved
 	// through the dot or the form (ibValueModelTableBox::ResolveCellValue) when the column reaches past
-	// the row, else the model's own. `Text` — through the column's format (GetCellFormat); `Checked` —
-	// a boolean, drawn as a tick; `Number` — a number, aligned right; `Value` — in a cell that may be edited.
-	// A fetch passes what it found once for the column — its format, whether it is read-only (`readOnly`:
-	// asked per cell, the form's view-only walked the application's objects for every one); the short form
-	// finds them itself.
+	// the row, else the model's own. `Text` — through the column's format (GetCellFormat), a string through
+	// the mask; `Checked` — a boolean, drawn as a tick; `Number` — a number, aligned right; `Value` — in a cell
+	// that may be edited, and `EditText` beside it where the text is not the one the mask is typed over.
+	// A fetch passes what it found once for the column — its format, its mask, whether it is read-only
+	// (`readOnly`: asked per cell, the form's view-only walked the application's objects for every one); the
+	// short form finds them itself.
 	void UpdateCell(const ibDataViewItem& item, ibDataNode& cell) const;
-	void UpdateCell(const ibDataViewItem& item, ibDataNode& cell, const ibFormatString* format, bool readOnly) const;
+	void UpdateCell(const ibDataViewItem& item, ibDataNode& cell, const ibFormatString* format, const class ibInputMask& mask,
+		bool readOnly) const;
 
 	// May this column's cell of `item` be edited — the column is not read-only (IsReadOnly) and the model
 	// lets the row's cell be (a group heading, a list row never are).
@@ -863,7 +871,7 @@ private:
 	void OnClearButtonPressed();
 
 	// text processing
-	bool TextProcessing(const ibString& strData);
+	bool TextProcessing(const ibString& typed);
 	// …and a value the client sent with its type (ibValue::Serialize): the same commit.
 	bool ValueProcessing(const class ibDataNode& node);
 
@@ -882,6 +890,8 @@ private:
 	ibPropertyBoolean* m_propertyTexteditMode = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryInfo, ibT("TexteditMode"), _("Textedit mode"), _("Whether the value can be typed into the cell. Off: it can only be picked with the Select button or cleared. On by default; a read-only column never takes typing."), true);
 	ibPropertyFormat* m_propertyFormat = ibPropertyObject::CreateProperty<ibPropertyFormat>(m_categoryInfo, ibT("Format"), _("Format"),
 		_("How the column shows its cells, written per language: digits after the point, separators, a date pattern. Empty: the bound attribute's format, and without one a number shows as many digits after the point as its type keeps."), ibT(""));
+	ibPropertyString* m_propertyMask = ibPropertyObject::CreateProperty<ibPropertyString>(m_categoryInfo, ibT("Mask"), _("Mask"),
+		_("What can be typed into the column's cells, written as an attribute's Mask is: 0 9 # L l A a C c for the positions, > < <> for the case, \\ for a character as written, ! first for a value's shape (!#9999.99 a number, !dd.MM.yyyy a date); then ;1 or ;0 and the character an empty position shows. Empty: the bound attribute's mask, and without one a number takes as many digits as its type keeps and a date its digits. Not used in multi-line mode."), ibT(""));
 
 	ibPropertyTString* m_propertyFooterText = ibPropertyObject::CreateProperty<ibPropertyTString>(m_categoryInfo, ibT("FooterText"), _("Footer text"),
 		_("The text in this column's footer cell, shown when the table's footer is on - a label or a total set from code. Can be written per language."), ibT(""));

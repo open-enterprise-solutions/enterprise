@@ -39,6 +39,7 @@ struct BACKEND_API ibChoiceHolder {
 	// not; ids are the application's own, so a row saying nothing is a row not having the field.
 	const ibChoiceParametersDescription& GetChoiceParameters(const ibMetaID& id) const;
 	const ibTranslateString& GetFormat(const ibMetaID& id) const;
+	ibString GetMask(const ibMetaID& id) const;
 	ibSelectMode GetSelectMode(const ibMetaID& id) const;
 
 	const class ibMetaData* GetMetaData() const;

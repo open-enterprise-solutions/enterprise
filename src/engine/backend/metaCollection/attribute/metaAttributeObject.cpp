@@ -62,6 +62,12 @@ const ibTranslateString& ibValueMetaObjectAttributeBase::GetFormat() const
 	return s_none;
 }
 
+// …and no mask: what can be typed into a predefined field is what its type gives.
+ibString ibValueMetaObjectAttributeBase::GetMask() const
+{
+	return ibString();
+}
+
 // The field itself, or the object it stands in, may belong to a part of the system this base does not use —
 // and so may every object its type can hold, which takes the field with them.
 bool ibValueMetaObjectAttributeBase::IsAvailable() const
@@ -207,6 +213,7 @@ bool ibValueMetaObjectAttribute::ReadData(const ibDataNode& node)
 	m_propertyItemMode->SetNodeValue(node.GetProperty(m_propertyItemMode->GetName()));
 	m_propertySelectMode->SetNodeValue(node.GetProperty(m_propertySelectMode->GetName()));
 	m_propertyFormat->SetNodeValue(node.GetProperty(m_propertyFormat->GetName()));
+	m_propertyMask->SetNodeValue(node.GetProperty(m_propertyMask->GetName()));
 	m_propertyTypeLink->SetNodeValue(node.GetProperty(m_propertyTypeLink->GetName()));
 	m_propertyChoiceParameters->SetNodeValue(node.GetProperty(m_propertyChoiceParameters->GetName()));
 	return true;
@@ -219,6 +226,7 @@ bool ibValueMetaObjectAttribute::WriteData(ibDataNode& node) const
 	node.SetProperty(m_propertyItemMode->GetName(),   m_propertyItemMode->GetNodeValue());
 	node.SetProperty(m_propertySelectMode->GetName(), m_propertySelectMode->GetNodeValue());
 	node.SetProperty(m_propertyFormat->GetName(),     m_propertyFormat->GetNodeValue());
+	node.SetProperty(m_propertyMask->GetName(),       m_propertyMask->GetNodeValue());
 	node.SetProperty(m_propertyTypeLink->GetName(),   m_propertyTypeLink->GetNodeValue());
 	node.SetProperty(m_propertyChoiceParameters->GetName(), m_propertyChoiceParameters->GetNodeValue());
 	return true;

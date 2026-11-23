@@ -227,6 +227,13 @@ const ibTranslateString& ibValueMetaObjectSharedAttributeColumn::GetFormat() con
 	return ibValueMetaObjectAttributeBase::GetFormat();
 }
 
+ibString ibValueMetaObjectSharedAttributeColumn::GetMask() const
+{
+	if (const ibValueMetaObjectSharedAttribute* const src = GetSource())
+		return src->GetMask();
+	return ibValueMetaObjectAttributeBase::GetMask();
+}
+
 bool ibValueMetaObjectSharedAttributeColumn::OnDeleteMetaObject()
 {
 	// THE REFUSAL BELONGS HERE, and putting it one event earlier was a real bug worth

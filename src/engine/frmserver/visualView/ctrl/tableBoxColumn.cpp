@@ -5,6 +5,7 @@
 #include "backend/backend_picture.h"           // ibBackendPicture::SendPicture — a header picture, by its id
 #include "backend/composition/dataComposer.h"   // the composer's active sort — the header's arrow
 #include "core/formatString.h"         // ibFormatString — what a cell is shown through
+#include "core/inputMask.h"            // ibInputMask — what can be typed into it
 #include "backend/appData.h"
 
 #include <algorithm>   // std::clamp — a width by type, between its floor and its cap
@@ -198,6 +199,10 @@ void ibValueModelTableBoxColumn::OnUpdate(ibDataNode& state, ibVisualHost* host)
 	const bool sourceMissing = m_propertySource->IsEmptyProperty() && m_model_id == ibNOT_FOUND;
 	state.SetValue(ibProtocol::ibForm::ibState::Visible, m_propertyVisible->GetValueAsBoolean() && !sourceMissing && IsAvailable());
 	state.SetValue(ibProtocol::ibForm::ibTable::ReadOnly, IsReadOnly());
+	// What can be typed into its cells — the mask in effect, resolved here, as the field's is.
+	const ibInputMask mask = GetMask();
+	if (!mask.IsEmpty())
+		state.SetValue(ibProtocol::ibForm::ibTable::Mask, mask.Render());
 	// …and the text a value just written into the cell reads as, said once (m_editText).
 	if (m_editText) {
 		state.SetValue(ibProtocol::ibForm::ibTable::EditText, *m_editText);
@@ -239,13 +244,45 @@ const ibFormatString* ibValueModelTableBoxColumn::GetCellFormat() const
 	return columns != nullptr ? &columns->GetColumnFormat(GetModelColumn()) : nullptr;
 }
 
+ibInputMask ibValueModelTableBoxColumn::GetMask() const
+{
+	ibInputMask mask;
+	if (m_propertyMultilineMode->GetValueAsBoolean())
+		return mask;
+	ibString text = m_propertyMask->GetValueAsString();
+	if (text.IsEmpty()) {
+		const ibValueModelTableBox* owner = GetOwner();
+		const ibValueModel* model = owner != nullptr ? owner->GetTableModel() : nullptr;
+		const ibValueModel::ibValueModelColumnCollection* columns = model != nullptr ? model->GetColumnCollection() : nullptr;
+		if (columns != nullptr)
+			text = columns->GetColumnMask(GetModelColumn());
+	}
+	if (!text.IsEmpty())
+		mask = ibInputMask::Parse(text);
+	else
+		ibInputMask::FromTypeDesc(GetTypeDesc(), mask);
+	return mask;
+}
+
+ibString ibValueModelTableBoxColumn::GetEditText(const ibVariant& value) const
+{
+	if (value.GetType() == ibValueTypes::TYPE_STRING)
+		return value.GetString();
+	if (value.GetType() == ibValueTypes::TYPE_DATE && value.IsEmpty())
+		return ibString();
+	static const ibTranslateString s_typeFormat;   // none written: the type's own, as the field takes it
+	ibString text;
+	ibBackendTypeApplicationFactory::GetFormatFromColumn(s_typeFormat, GetTypeDesc()).Apply(value, text);
+	return text;
+}
+
 void ibValueModelTableBoxColumn::UpdateCell(const ibDataViewItem& item, ibDataNode& cell) const
 {
-	UpdateCell(item, cell, GetCellFormat(), IsReadOnly());
+	UpdateCell(item, cell, GetCellFormat(), GetMask(), IsReadOnly());
 }
 
 void ibValueModelTableBoxColumn::UpdateCell(const ibDataViewItem& item, ibDataNode& cell, const ibFormatString* format,
-	bool readOnly) const
+	const ibInputMask& mask, bool readOnly) const
 {
 	const ibValueModelTableBox* owner = GetOwner();
 	ibValueModel* model = owner != nullptr ? owner->GetTableModel() : nullptr;
@@ -294,17 +331,31 @@ void ibValueModelTableBoxColumn::UpdateCell(const ibDataViewItem& item, ibDataNo
 		return;
 	}
 
-	// Everything below is asked of the value itself, through the format of the column.
+	// Everything below is asked of the value itself, through the format of the column — a string through its mask, as
+	// a field shows one; an empty date under a mask is a blank cell, not 01.01.0001.
 	ibString text;
-	if (format != nullptr)
+	if (!mask.IsEmpty() && value.GetType() == ibValueTypes::TYPE_STRING)
+		text = mask.Apply(value.GetString());
+	else if (!mask.IsEmpty() && value.GetType() == ibValueTypes::TYPE_DATE && value.IsEmpty())
+		text.clear();
+	else if (format != nullptr)
 		format->Apply(value, text);
 	else
 		text = value.GetString();
 	cell.SetValue(ibProtocol::ibForm::ibTable::Text, text);
 	// …and, in a cell the client may edit, the value with its type (ibValue::Serialize) — the field's way. A list's
 	// cells, never edited, carry their text alone and stay as light as they were.
-	if (!readOnly && model->EditableLine(item, modelColumn) && value.IsTransferable())
-		value.Serialize(cell.Child(ibProtocol::ibForm::ibTable::Value));
+	if (!readOnly && model->EditableLine(item, modelColumn)) {
+		if (value.IsTransferable())
+			value.Serialize(cell.Child(ibProtocol::ibForm::ibTable::Value));
+		// Under a mask, where the text is not the one the mask is typed over (a long date, digit groups): the text the
+		// cell's editor starts from.
+		if (!mask.IsEmpty() && !text.IsEmpty() && value.GetType() != ibValueTypes::TYPE_STRING) {
+			const ibString editText = GetEditText(value);
+			if (editText != text)
+				cell.SetValue(ibProtocol::ibForm::ibTable::EditText, editText);
+		}
+	}
 
 	// A boolean is drawn as a tick, and whether it has one is the value's, not its text's; a number stands
 	// to the right.
@@ -355,8 +406,9 @@ bool ibValueModelTableBoxColumn::SetControlValue(const ibValue& varControlVal)
 	if (currentLine != nullptr)
 		currentLine->SetValueByMetaID(GetModelColumn(), value);
 
-	// …and into the cell's open editor, as the desktop's column wrote it there: the text the edit's end sends back.
-	m_editText = value.GetString();
+	// …and into the cell's open editor, as the desktop's column wrote it there: the text the edit's end sends back — under
+	// a mask, the one the mask is typed over (a cleared date: its skeleton).
+	m_editText = GetMask().IsEmpty() ? value.GetString() : GetEditText(value);
 
 	// …and the controls chosen within this cell are emptied, on a change (#616) — the other cells of its row among them.
 	ibTypeControlFactory::ClearLinked(this, before);
@@ -440,6 +492,7 @@ bool ibValueModelTableBoxColumn::ReadData(const ibDataNode& node)
 	m_propertyMultilineMode->SetNodeValue(node.GetProperty(m_propertyMultilineMode->GetName()));
 	m_propertyTexteditMode->SetNodeValue(node.GetProperty(m_propertyTexteditMode->GetName()));
 	m_propertyFormat->SetNodeValue(node.GetProperty(m_propertyFormat->GetName()));
+	m_propertyMask->SetNodeValue(node.GetProperty(m_propertyMask->GetName()));
 	m_propertySelectButton->SetNodeValue(node.GetProperty(m_propertySelectButton->GetName()));
 	m_propertyOpenButton->SetNodeValue(node.GetProperty(m_propertyOpenButton->GetName()));
 	m_propertyClearButton->SetNodeValue(node.GetProperty(m_propertyClearButton->GetName()));
@@ -479,6 +532,7 @@ bool ibValueModelTableBoxColumn::WriteData(ibDataNode& node) const
 	node.SetProperty(m_propertyMultilineMode->GetName(), m_propertyMultilineMode->GetNodeValue());
 	node.SetProperty(m_propertyTexteditMode->GetName(), m_propertyTexteditMode->GetNodeValue());
 	node.SetProperty(m_propertyFormat->GetName(), m_propertyFormat->GetNodeValue());
+	node.SetProperty(m_propertyMask->GetName(), m_propertyMask->GetNodeValue());
 	node.SetProperty(m_propertySelectButton->GetName(), m_propertySelectButton->GetNodeValue());
 	node.SetProperty(m_propertyOpenButton->GetName(), m_propertyOpenButton->GetNodeValue());
 	node.SetProperty(m_propertyClearButton->GetName(), m_propertyClearButton->GetNodeValue());

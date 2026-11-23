@@ -2,6 +2,7 @@
 
 #include <wx/sizer.h>
 
+#include "core/formatString.h"                                              // ibFormatString::FromTypeDesc — the text a typed value starts from
 #include "protocol/protocol.h"
 #include "frmclient/win/picture.h"                                          // ibProtocolPicture — the window's picture
 #include "frmclient/backend/appData.h"                                      // activeMetaData — what a type is read by
@@ -193,13 +194,17 @@ bool ibDialogSearch::ByValue() const
 
 void ibDialogSearch::TakeField()
 {
-	const wxString typed = m_value->GetValue();
 	if (!m_byValue) {
-		m_text = typed;
+		m_text = m_value->GetValue();
 		return;
 	}
 	// The field shows the value held — nothing typed over it, nothing to read.
-	if (typed == m_held.GetString().ToWxString())
+	if (!m_value->IsModified())
+		return;
+	// A masked text is read back as the value's first (`0.5` out of `.5`, a date with its time left out); one typed only
+	// in part is no value yet, and what is held stands.
+	ibString typed;
+	if (!m_value->GetMask().Strip(ibString(m_value->GetValue()), typed))
 		return;
 	if (typed.IsEmpty()) {
 		m_held = ibValue();
@@ -216,7 +221,23 @@ void ibDialogSearch::ShowField()
 {
 	m_value->ShowSelectButton(m_byValue);
 	m_value->ShowClearButton(m_byValue);
-	m_value->ChangeValue(m_byValue ? m_held.GetString().ToWxString() : m_text);
+	// WHAT CAN BE TYPED — looked for by value, the mask the column's type gives, as a settings window's value cell has it
+	// (Max, 2026-11-23: a date took `yyyy` after its seconds); the value held laid into it as its type writes it, an
+	// empty date as the skeleton. Looked for as a text, what is typed is a text.
+	ibInputMask mask;
+	wxString text = m_text;
+	if (m_byValue) {
+		text = m_held.GetString().ToWxString();
+		if (ibInputMask::FromTypeDesc(GetTypeDesc(), mask)) {
+			ibFormatString format;
+			ibFormatString::FromTypeDesc(GetTypeDesc(), format);
+			const bool emptyDate = m_held.GetType() == ibValueTypes::TYPE_DATE && m_held.IsEmpty();
+			text = mask.Apply(emptyDate ? ibString() : format.Apply(m_held)).ToWxString();
+		}
+	}
+	m_value->SetMask(mask);
+	m_value->ChangeValue(text);
+	m_value->DiscardEdits();   // what it shows is what is held — nothing typed over it yet (TakeField)
 }
 
 void ibDialogSearch::Show(wxWindow* parent, const ibProtocolNode& request, ibProtocolNode& response)

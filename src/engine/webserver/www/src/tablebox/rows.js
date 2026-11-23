@@ -1,7 +1,8 @@
 // A TABLE'S ROWS as the protocol gives them (docs/public/client-protocol.md, The frame): a page — `End`, `Before`,
 // `CurrentRow`, the rows as its children — each row by its handle (NodeId) with `Container`, `Group`, `ReadOnly`,
 // `Picture`, its cells as children by the column's id: `Text`, `Checked` for a flag, `Number`, `Value` when the cell
-// takes an edit, its look. Turned here into the grid's records, one field per column and what a cell says of itself.
+// takes an edit, `EditText` the text its mask is typed over, its look. Turned here into the grid's records, one field per
+// column and what a cell says of itself.
 
 import { onFill } from '../controls/control.js';
 
@@ -9,7 +10,7 @@ import { onFill } from '../controls/control.js';
 
 /**
  * A record of the grid: the row's handle and its own fields, and per column `c<id>` its text, with `n<id>` a number,
- * `k<id>` a flag's mark, `e<id>` editable, `s<id>` its look.
+ * `k<id>` a flag's mark, `e<id>` editable, `t<id>` the text its mask is typed over where it is another, `s<id>` its look.
  * @typedef {{[field: string]: any, handle: number}} Record
  */
 
@@ -35,6 +36,8 @@ export function recordOf(row) {
 			record[`k${id}`] = cell.Checked === true;
 		if (cell.Value !== undefined)
 			record[`e${id}`] = true;
+		if (cell.EditText !== undefined)
+			record[`t${id}`] = cell.EditText;
 		const look = lookOf(cell);
 		if (look !== null)
 			record[`s${id}`] = look;

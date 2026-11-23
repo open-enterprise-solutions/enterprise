@@ -336,13 +336,19 @@ private:
 
 protected:
 
-	bool TextProcessing(const ibString& strData);
+	bool TextProcessing(const ibString& typed);
 	// …and a value the client sent with its type (ibValue::Serialize — a date from its calendar): the same commit.
 	bool ValueProcessing(const class ibDataNode& node);
 
 	// The format written on the attribute the field is bound to — what it shows its value with when it has
 	// none of its own. Empty when the source is no attribute.
 	const ibTranslateString& GetSourceFormat() const;
+	// …and the mask written on it, the same way.
+	ibString GetSourceMask() const;
+	
+	// THE MASK IN EFFECT — the field's own, else the bound attribute's, else the one its type gives
+	// (docs/private/input-mask.md); none in multi-line mode, which has no positions to keep.
+	class ibInputMask GetMask() const;
 
 private:
 
@@ -358,6 +364,8 @@ private:
 	ibPropertyBoolean* m_propertyTexteditMode = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryText, ibT("TexteditMode"), _("Textedit mode"), _("Whether the value can be typed into the field. Off: it can only be picked with the Select button or cleared. On by default; a field bound through a reference path is read-only whatever this says."), true);
 	ibPropertyFormat* m_propertyFormat = ibPropertyObject::CreateProperty<ibPropertyFormat>(m_categoryText, ibT("Format"), _("Format"),
 		_("How the field shows its value, written per language: digits after the point, separators, a date pattern. Empty: the bound attribute's format, and without one a number shows as many digits after the point as its type keeps."), ibT(""));
+	ibPropertyString* m_propertyMask = ibPropertyObject::CreateProperty<ibPropertyString>(m_categoryText, ibT("Mask"), _("Mask"),
+		_("What can be typed into the field, written as an attribute's Mask is: 0 9 # L l A a C c for the positions, > < <> for the case, \\ for a character as written, ! first for a value's shape (!#9999.99 a number, !dd.MM.yyyy a date); then ;1 or ;0 and the character an empty position shows. Empty: the bound attribute's mask, and without one a number takes as many digits as its type keeps and a date its digits. Not used in multi-line mode."), ibT(""));
 
 	ibPropertyCategory* m_categoryData = ibPropertyObject::CreatePropertyCategory(ibT("Data"), _("Data"));
 	ibPropertySource* m_propertySource = ibPropertyObject::CreateProperty<ibPropertySource>(m_categoryData, ibT("Source"), _("Source"),

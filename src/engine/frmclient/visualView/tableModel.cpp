@@ -57,6 +57,7 @@ void ibViewTableRow::Read(const ibProtocolNode& row)
 	for (const ibProtocolNode& node : row.Children()) {
 		ibViewCell& cell = m_cells[node.GetId()];
 		cell.text = node.GetString(ibProtocol::ibForm::ibTable::Text);
+		cell.editText = node.GetString(ibProtocol::ibForm::ibTable::EditText);
 		if (node.Has(ibProtocol::ibForm::ibTable::Checked))
 			cell.checked = node.GetBool(ibProtocol::ibForm::ibTable::Checked);
 		cell.number = node.GetBool(ibProtocol::ibForm::ibTable::Number);
@@ -107,6 +108,15 @@ bool ibViewTableModel::IsCellEditable(const ibDataViewItem& item, long long colu
 	const ibViewTableRow* const row = RowOf(item);
 	const ibViewCell* const cell = row != nullptr ? row->FindCell(column) : nullptr;
 	return cell != nullptr && cell->editable;
+}
+
+wxString ibViewTableModel::GetCellEditText(const ibDataViewItem& item, long long column)
+{
+	const ibViewTableRow* const row = RowOf(item);
+	const ibViewCell* const cell = row != nullptr ? row->FindCell(column) : nullptr;
+	if (cell == nullptr)
+		return wxString();
+	return !cell->editText.empty() ? cell->editText : cell->text;
 }
 
 void ibViewTableModel::GetValue(ibVariant& variant, const ibDataViewItem& item, unsigned int col) const

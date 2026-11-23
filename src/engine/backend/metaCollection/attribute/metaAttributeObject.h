@@ -186,6 +186,9 @@ class BACKEND_API ibValueMetaObjectAttributeBase :
 	// asked the same way: of every attribute, answered by the kind that carries the property. Empty for
 	// a predefined field — its values are shown as its type has them.
 	virtual const ibTranslateString& GetFormat() const;
+	// …and what can be typed into it — its input mask (docs/private/input-mask.md), asked the same way. Empty for a
+	// predefined field: its type gives the mask, as it gives the format.
+	virtual ibString GetMask() const;
 
 	// (IsEmptyTypeDesc lives on ibBackendTypeApplicationFactory's base — backend_type.h — because that is
 	//  where the type description itself is declared, and therefore the only place that can answer
@@ -307,6 +310,9 @@ public:
 	// HOW THE FIELD IS SHOWN — its own property, which every control bound to it follows unless it
 	// has a format of its own.
 	virtual const ibTranslateString& GetFormat() const override { return m_propertyFormat->GetValueAsFormatString(); }
+	// WHAT CAN BE TYPED INTO IT — its own property, which every control bound to it follows unless it has a mask of
+	// its own.
+	virtual ibString GetMask() const override { return m_propertyMask->GetValueAsString(); }
 
 private:
 
@@ -318,6 +324,7 @@ private:
 	ibPropertyCategory* m_categoryPresentation = ibPropertyObject::CreatePropertyCategory(ibT("Presentation"), _("Presentation"));
 	ibPropertyEnum<ibValueEnumSelectMode>* m_propertySelectMode = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumSelectMode>>(m_categoryPresentation, ibT("Select"), _("Select group and items"), _("For a field referring to a hierarchical catalog: what may be chosen into it - items only (the default), folders only, or both."), ibSelectMode::ibSelectMode_Items);
 	ibPropertyFormat* m_propertyFormat = ibPropertyObject::CreateProperty<ibPropertyFormat>(m_categoryPresentation, ibT("Format"), _("Format"), _("How the field's value is shown, written per language: digits after the point, separators, a date pattern, the words for True and False. Every input field and table column bound to the field shows it this way unless it has a format of its own. Empty: a number is shown with as many digits after the point as its type keeps, a date as its type has it."), ibT(""));
+	ibPropertyString* m_propertyMask = ibPropertyObject::CreateProperty<ibPropertyString>(m_categoryPresentation, ibT("Mask"), _("Mask"), _("What can be typed into the field, a position per character: 0 a digit, 9 a digit or nothing, # a digit or a sign, L a letter, l a letter or nothing, A a letter or a digit, a the same or nothing, C any character, c any or nothing; > upper case from here, < lower case, <> as typed; \\ the next character as written; ! first - a value's shape: !#9999.99 a number, typed as a number is, !dd.MM.yyyy HH:mm:ss a date, which takes no impossible day, month or hour. Any other character stays where it is written and is stepped over. After a ; - 1 (the default) keeps the written characters in the value, 0 leaves them out; after a second ; - the character an empty position shows (a space by default). Every input field and table column bound to the field takes it unless it has a mask of its own. Empty: a number takes as many digits before and after the point as its type keeps, a date its digits; anything else is typed freely."), ibT(""));
 	ibPropertyCategory* m_categoryGroup = ibPropertyObject::CreatePropertyCategory(ibT("Group"), _("Group"));
 	ibPropertyEnum<ibValueEnumItemMode>* m_propertyItemMode = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumItemMode>>(m_categoryGroup, ibT("ItemMode"), _("Item mode"), _("In a catalog with folders: which nodes carry the attribute - items (the default), folders, or both. A folder's form and its record show only the attributes that folders use; the column is shared, the value is just not asked of the other kind."), ibItemMode::ibItemMode_Item);
 

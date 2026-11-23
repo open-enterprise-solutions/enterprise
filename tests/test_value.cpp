@@ -124,6 +124,25 @@ TEST(ValueTest, ABooleanIsFoundByItsWordAndNothingElse) {
     EXPECT_TRUE(found.empty());
 }
 
+// A DATE, A NUMBER ARE READ OUT OF THE TEXT — and a text that is none is refused, as a flag's is. Its failed read was an
+// empty value, which went into the field as found: a document's date typed `99.10.2026` was emptied (Max, 2026-11-23).
+TEST(ValueTest, ADateOrANumberTheTextIsNotIsRefused) {
+    std::vector<ibValue> found;
+    const ibValue date(2026, 10, 31);
+    ASSERT_TRUE(date.FindValue(ibT("23.11.2026"), ibChoiceCondition(), found));
+    ASSERT_EQ(found.size(), 1u);
+    EXPECT_EQ(found[0].GetType(), ibValueTypes::TYPE_DATE);
+
+    found.clear();
+    EXPECT_FALSE(date.FindValue(ibT("99.10.2026 22:59:59"), ibChoiceCondition(), found));
+    EXPECT_TRUE(found.empty());
+
+    found.clear();
+    const ibValue number(ibNumber(1));
+    EXPECT_FALSE(number.FindValue(ibT("twelve"), ibChoiceCondition(), found));
+    EXPECT_TRUE(found.empty());
+}
+
 // ===========================================================================
 // TYPE_NUMBER
 // ===========================================================================

@@ -2046,6 +2046,12 @@ const ibTranslateString& ibValueRecordDataObject::GetFormat(const ibMetaID& id) 
 	return attribute != nullptr ? attribute->GetFormat() : ibSourceDataObject::GetFormat(id);
 }
 
+ibString ibValueRecordDataObject::GetMask(const ibMetaID& id) const
+{
+	const ibValueMetaObjectAttributeBase* attribute = GetMetaObject()->FindAnyAttributeObjectByFilter(id);
+	return attribute != nullptr ? attribute->GetMask() : ibSourceDataObject::GetMask(id);
+}
+
 ibSelectMode ibValueRecordDataObject::GetSelectMode(const ibMetaID& id) const
 {
 	const ibValueMetaObjectAttributeBase* attribute = GetMetaObject()->FindAnyAttributeObjectByFilter(id);
@@ -3670,6 +3676,12 @@ const ibTranslateString& ibValueRecordManagerObject::GetFormat(const ibMetaID& i
 	return attribute != nullptr ? attribute->GetFormat() : ibSourceDataObject::GetFormat(id);
 }
 
+ibString ibValueRecordManagerObject::GetMask(const ibMetaID& id) const
+{
+	const ibValueMetaObjectAttributeBase* attribute = GetMetaObject()->FindAnyAttributeObjectByFilter(id);
+	return attribute != nullptr ? attribute->GetMask() : ibSourceDataObject::GetMask(id);
+}
+
 ibSelectMode ibValueRecordManagerObject::GetSelectMode(const ibMetaID& id) const
 {
 	const ibValueMetaObjectAttributeBase* attribute = GetMetaObject()->FindAnyAttributeObjectByFilter(id);
@@ -4062,6 +4074,12 @@ const ibTranslateString& ibValueRecordSetObject::GetFormat(const ibMetaID& id) c
 {
 	const ibValueMetaObjectAttributeBase* attribute = m_recordColumnCollection->GetAttributeByID(id);
 	return attribute != nullptr ? attribute->GetFormat() : ibTabularDataObject::GetFormat(id);
+}
+
+ibString ibValueRecordSetObject::GetMask(const ibMetaID& id) const
+{
+	const ibValueMetaObjectAttributeBase* attribute = m_recordColumnCollection->GetAttributeByID(id);
+	return attribute != nullptr ? attribute->GetMask() : ibTabularDataObject::GetMask(id);
 }
 
 ibSelectMode ibValueRecordSetObject::GetSelectMode(const ibMetaID& id) const

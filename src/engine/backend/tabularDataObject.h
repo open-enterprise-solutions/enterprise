@@ -36,6 +36,7 @@ public:
 	virtual const ibChoiceTypeLinkDescription& GetTypeLink(const ibMetaID& id) const;
 	virtual const ibChoiceParametersDescription& GetChoiceParameters(const ibMetaID& id) const;
 	virtual const ibTranslateString& GetFormat(const ibMetaID& id) const;
+	virtual ibString GetMask(const ibMetaID& id) const;
 	virtual ibSelectMode GetSelectMode(const ibMetaID& id) const;
 	virtual ibValue AdjustValue(const ibMetaID& id, const ibValue& value) const;
 

@@ -90,6 +90,7 @@ public:
 			virtual const ibFormatString& GetColumnFormat() const {
 				return ibBackendTypeApplicationFactory::GetFormatFromColumn(m_metaAttribute->GetFormat(), m_metaAttribute->GetTypeDesc());
 			}
+			virtual ibString GetColumnMask() const override { return m_metaAttribute->GetMask(); }
 			virtual bool IsColumnAvailable() const override { return m_metaAttribute->IsAvailable(); }
 
 			ibValueTabularSectionColumnInfo();
@@ -179,6 +180,7 @@ public:
 	virtual const ibChoiceTypeLinkDescription& GetTypeLink(const ibMetaID& id) const override;
 	virtual const ibChoiceParametersDescription& GetChoiceParameters(const ibMetaID& id) const override;
 	virtual const ibTranslateString& GetFormat(const ibMetaID& id) const override;
+	virtual ibString GetMask(const ibMetaID& id) const override;
 	virtual ibSelectMode GetSelectMode(const ibMetaID& id) const override;
 	virtual ibValue AdjustValue(const ibMetaID& id, const ibValue& value) const override;
 	virtual std::vector<ibMetaID> GetLinked(const ibMetaID& edited) const override;   // one walk over its column map

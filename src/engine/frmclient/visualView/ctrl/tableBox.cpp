@@ -129,10 +129,16 @@ public:
 	// The desktop's CreateEditorCtrl: the field's editor in the cell, as its column says, the table's look on it.
 	virtual wxWindow* CreateEditorCtrl(wxWindow* parent, wxRect labelRect, const ibVariant& value) override
 	{
+		// Under a mask the editor starts from the text the mask is typed over — the server's EditText where the cell shows
+		// another (a long date, digit groups) — laid into it: an empty date opens as its skeleton.
+		const ibInputMask& mask = m_column.GetMask();
+		wxString text = value.GetType() == ibValueTypes::TYPE_EMPTY ? wxString() : value.GetString().ToWxString();
+		if (!mask.IsEmpty())
+			text = mask.Apply(ibString(ibViewTableModel::GetCellEditText(m_item, GetOwner()->GetModelColumn()))).ToWxString();
+
 		ibTextCtrl* const textEditor = new ibTextCtrl;
 		textEditor->Show(false);   // hidden while it is made: no flicker
-		if (!textEditor->Create(parent, wxID_ANY, value.GetType() == ibValueTypes::TYPE_EMPTY ? wxString() : value.GetString().ToWxString(),
-			labelRect.GetPosition(), labelRect.GetSize()))
+		if (!textEditor->Create(parent, wxID_ANY, text, labelRect.GetPosition(), labelRect.GetSize()))
 			return nullptr;
 
 		textEditor->ShowSelectButton(m_column.GetSelectButton());
@@ -146,10 +152,15 @@ public:
 
 		textEditor->SetPassword(m_column.GetPasswordMode());
 		textEditor->SetMultiLine(m_column.GetMultilineMode());
+		textEditor->SetMask(mask);
 		textEditor->SetEditable(m_column.GetTextEditMode());
 
 		textEditor->Show(true);
-		textEditor->SetInsertionPointEnd();
+		// …a masked one all selected, as a masked field is entered: the first key starts the value anew.
+		if (mask.IsEmpty())
+			textEditor->SetInsertionPointEnd();
+		else
+			textEditor->SelectAll();
 		m_textEditor = textEditor;
 		return textEditor;
 	}
@@ -959,6 +970,7 @@ void ibValueModelTableBoxColumn::Update(const ibProtocolNode& node)
 	// How its cells are typed into is its node's; the server says whether the column may be written.
 	m_passwordMode = node.GetBool(ibProtocol::ibForm::ibProperty::PasswordMode);
 	m_multilineMode = node.GetBool(ibProtocol::ibForm::ibProperty::MultilineMode);
+	m_mask = ibInputMask::Parse(state.GetString(ibProtocol::ibForm::ibTable::Mask));
 	m_textEditMode = node.GetBool(ibProtocol::ibForm::ibTable::TexteditMode, true);
 	m_selectButton = node.GetBool(ibProtocol::ibForm::ibProperty::ButtonSelect, true);
 	m_openButton = node.GetBool(ibProtocol::ibForm::ibProperty::ButtonOpen);
@@ -966,10 +978,12 @@ void ibValueModelTableBoxColumn::Update(const ibProtocolNode& node)
 	m_readOnly = state.GetBool(ibProtocol::ibForm::ibTable::ReadOnly);
 
 	// A value the server wrote into the cell — a choice, a clear — goes into its open editor, as the desktop's column wrote
-	// it there: the text the edit's end sends back is the new value's, not the one the editor opened with.
+	// it there: the text the edit's end sends back is the new value's, not the one the editor opened with — laid into the
+	// mask where there is one.
 	if (state.Has(ibProtocol::ibForm::ibTable::EditText)) {
 		if (ibTextCtrl* const editor = wxDynamicCast(m_column->GetRenderer()->GetEditorCtrl(), ibTextCtrl)) {
-			editor->ChangeValue(state.GetString(ibProtocol::ibForm::ibTable::EditText));
+			const ibString text = state.GetString(ibProtocol::ibForm::ibTable::EditText);
+			editor->ChangeValue((m_mask.IsEmpty() ? text : m_mask.Apply(text)).ToWxString());
 			editor->SetInsertionPointEnd();
 		}
 	}

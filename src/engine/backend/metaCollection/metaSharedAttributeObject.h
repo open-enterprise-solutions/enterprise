@@ -128,6 +128,7 @@ class BACKEND_API ibValueMetaObjectSharedAttributeColumn : public ibValueMetaObj
 	// …AND SO DOES THE FORMAT, for the same reason: it is the declaration's, and a copy of it would be
 	// a second truth. An unbound copy has none.
 	virtual const ibTranslateString& GetFormat() const override;
+	virtual ibString GetMask() const override;
 
 	// ALIVE ONLY WHILE ITS DECLARATION IS. A copy exists because a declaration put it
 	// there, so it cannot outlive it: mark the declaration deleted and every copy stops

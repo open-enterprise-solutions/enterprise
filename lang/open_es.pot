@@ -419,6 +419,23 @@ msgstr ""
 msgid "Format"
 msgstr ""
 
+#: src/engine/backend/metaCollection/attribute/metaAttributeObject.h:327
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:893
+#: src/engine/frmserver/visualView/ctrl/widgets.h:367
+msgid "Mask"
+msgstr ""
+
+#: src/engine/core/inputMask.cpp:315
+#, c-format
+msgid "The value is typed in only in part: %s"
+msgstr ""
+
+#: src/engine/frmserver/visualView/ctrl/tableBoxColumnEvent.cpp:45
+#: src/engine/frmserver/visualView/ctrl/textctrlEvent.cpp:44
+#, c-format
+msgid "The value typed cannot be read: %s"
+msgstr ""
+
 #: src/engine/appstudio/docManager/templates/docViewFormEditor.cpp:183
 #: src/engine/appstudio/docManager/templates/docViewModuleEditor.cpp:120
 #: src/engine/coderunner/coderunner.cpp:253
@@ -3387,6 +3404,10 @@ msgstr ""
 
 #: src/engine/backend/metaCollection/attribute/metaAttributeObject.h:314
 msgid "How the field's value is shown, written per language: digits after the point, separators, a date pattern, the words for True and False. Every input field and table column bound to the field shows it this way unless it has a format of its own. Empty: a number is shown with as many digits after the point as its type keeps, a date as its type has it."
+msgstr ""
+
+#: src/engine/backend/metaCollection/attribute/metaAttributeObject.h:327
+msgid "What can be typed into the field, a position per character: 0 a digit, 9 a digit or nothing, # a digit or a sign, L a letter, l a letter or nothing, A a letter or a digit, a the same or nothing, C any character, c any or nothing; > upper case from here, < lower case, <> as typed; \\ the next character as written; ! first - a value's shape: !#9999.99 a number, typed as a number is, !dd.MM.yyyy HH:mm:ss a date, which takes no impossible day, month or hour. Any other character stays where it is written and is stepped over. After a ; - 1 (the default) keeps the written characters in the value, 0 leaves them out; after a second ; - the character an empty position shows (a space by default). Every input field and table column bound to the field takes it unless it has a mask of its own. Empty: a number takes as many digits before and after the point as its type keeps, a date its digits; anything else is typed freely."
 msgstr ""
 
 #: src/engine/backend/metaCollection/attribute/metaAttributeObject.h:315
@@ -16634,6 +16655,10 @@ msgstr ""
 msgid "How the column shows its cells, written per language: digits after the point, separators, a date pattern. Empty: the bound attribute's format, and without one a number shows as many digits after the point as its type keeps."
 msgstr ""
 
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:894
+msgid "What can be typed into the column's cells, written as an attribute's Mask is: 0 9 # L l A a C c for the positions, > < <> for the case, \\ for a character as written, ! first for a value's shape (!#9999.99 a number, !dd.MM.yyyy a date); then ;1 or ;0 and the character an empty position shows. Empty: the bound attribute's mask, and without one a number takes as many digits as its type keeps and a date its digits. Not used in multi-line mode."
+msgstr ""
+
 #: src/engine/frmserver/visualView/ctrl/tableBox.h:833
 msgid "Footer text"
 msgstr ""
@@ -16904,6 +16929,10 @@ msgstr ""
 
 #: src/engine/frmserver/visualView/ctrl/widgets.h:360
 msgid "How the field shows its value, written per language: digits after the point, separators, a date pattern. Empty: the bound attribute's format, and without one a number shows as many digits after the point as its type keeps."
+msgstr ""
+
+#: src/engine/frmserver/visualView/ctrl/widgets.h:368
+msgid "What can be typed into the field, written as an attribute's Mask is: 0 9 # L l A a C c for the positions, > < <> for the case, \\ for a character as written, ! first for a value's shape (!#9999.99 a number, !dd.MM.yyyy a date); then ;1 or ;0 and the character an empty position shows. Empty: the bound attribute's mask, and without one a number takes as many digits as its type keeps and a date its digits. Not used in multi-line mode."
 msgstr ""
 
 #: src/engine/frmserver/visualView/ctrl/widgets.h:364

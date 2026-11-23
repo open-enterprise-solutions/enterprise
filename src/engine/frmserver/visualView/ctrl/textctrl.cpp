@@ -138,11 +138,32 @@ bool ibValueTextCtrl::IsReadOnly() const
 
 #include "backend/appData.h"
 #include "core/formatString.h"   // ibFormatString — what the field shows its value through
+#include "core/inputMask.h"      // ibInputMask — what can be typed into it
 
 // The format of the field this control is bound to — asked of the source that holds it, by the binding's leaf.
 const ibTranslateString& ibValueTextCtrl::GetSourceFormat() const
 {
 	return GetChoiceHolder().GetFormat(GetSourceDesc().GetLeaf());
+}
+
+ibString ibValueTextCtrl::GetSourceMask() const
+{
+	return GetChoiceHolder().GetMask(GetSourceDesc().GetLeaf());
+}
+
+ibInputMask ibValueTextCtrl::GetMask() const
+{
+	ibInputMask mask;
+	if (m_propertyMultilineMode->GetValueAsBoolean())
+		return mask;
+	ibString text = m_propertyMask->GetValueAsString();
+	if (text.IsEmpty())
+		text = GetSourceMask();
+	if (!text.IsEmpty())
+		mask = ibInputMask::Parse(text);
+	else
+		ibInputMask::FromTypeDesc(GetTypeDesc(), mask);
+	return mask;
 }
 
 void ibValueTextCtrl::OnCreated(ibVisualHost* host, bool firstCreated)
@@ -159,6 +180,12 @@ void ibValueTextCtrl::OnUpdate(ibDataNode& state, ibVisualHost* host)
 
 	state.SetValue(ibProtocol::ibForm::ibState::Caption, GetControlTitle());
 
+	// What can be typed into it — the mask in effect, resolved here: the client resolves nothing. In the designer as
+	// well, where the field shows no value and the mask's skeleton stands in for one.
+	const ibInputMask mask = GetMask();
+	if (!mask.IsEmpty())
+		state.SetValue(ibProtocol::ibForm::ibState::Mask, mask.Render());
+
 	// The value as text, through the field's own format or, without one, the bound attribute's. Not in
 	// the designer: there the field shows no value.
 	if (!appData->DesignerMode()) {
@@ -167,7 +194,21 @@ void ibValueTextCtrl::OnUpdate(ibDataNode& state, ibVisualHost* host)
 
 		ibString text;
 		const ibTranslateString& format = m_propertyFormat->GetValueAsFormatString();
-		GetFormatFromColumn(!format.IsEmpty() ? format : GetSourceFormat(), GetTypeDesc()).Apply(value, text);
+		if (mask.IsEmpty())
+			GetFormatFromColumn(!format.IsEmpty() ? format : GetSourceFormat(), GetTypeDesc()).Apply(value, text);
+		else if (value.GetType() == ibValueTypes::TYPE_STRING)
+			text = mask.Apply(value.GetString());   // a string shows through its mask: `5551234567` as `+1 (555) 123-45-67`
+		else if (value.GetType() != ibValueTypes::TYPE_DATE || !value.IsEmpty()) {
+			// (an empty date shows no text: the client draws the mask's skeleton in place of 01.01.0001)
+			GetFormatFromColumn(!format.IsEmpty() ? format : GetSourceFormat(), GetTypeDesc()).Apply(value, text);
+			// …and where that is not the text the mask is typed over (a long date, digit groups), the one the editor
+			// starts from: the value through the format its type gives.
+			static const ibTranslateString s_typeFormat;
+			ibString editText;
+			GetFormatFromColumn(s_typeFormat, GetTypeDesc()).Apply(value, editText);
+			if (editText != text)
+				state.SetValue(ibProtocol::ibForm::ibState::EditText, editText);
+		}
 		state.SetValue(ibProtocol::ibForm::ibState::Text, text);
 		// …and the value itself, with its type (ibValue::Serialize): a client edits by the type — a date as a date —
 		// and may answer a Change with the value instead of text. One that does not travel (an open object) is shown
@@ -288,6 +329,7 @@ bool ibValueTextCtrl::ReadData(const ibDataNode& node)
 	m_propertyMultilineMode->SetNodeValue(node.GetProperty(m_propertyMultilineMode->GetName()));
 	m_propertyTexteditMode->SetNodeValue(node.GetProperty(m_propertyTexteditMode->GetName()));
 	m_propertyFormat->SetNodeValue(node.GetProperty(m_propertyFormat->GetName()));
+	m_propertyMask->SetNodeValue(node.GetProperty(m_propertyMask->GetName()));
 	m_propertySelectButton->SetNodeValue(node.GetProperty(m_propertySelectButton->GetName()));
 	m_propertyOpenButton->SetNodeValue(node.GetProperty(m_propertyOpenButton->GetName()));
 	m_propertyClearButton->SetNodeValue(node.GetProperty(m_propertyClearButton->GetName()));
@@ -316,6 +358,7 @@ bool ibValueTextCtrl::WriteData(ibDataNode& node) const
 	node.SetProperty(m_propertyMultilineMode->GetName(), m_propertyMultilineMode->GetNodeValue());
 	node.SetProperty(m_propertyTexteditMode->GetName(), m_propertyTexteditMode->GetNodeValue());
 	node.SetProperty(m_propertyFormat->GetName(), m_propertyFormat->GetNodeValue());
+	node.SetProperty(m_propertyMask->GetName(), m_propertyMask->GetNodeValue());
 	node.SetProperty(m_propertySelectButton->GetName(), m_propertySelectButton->GetNodeValue());
 	node.SetProperty(m_propertyOpenButton->GetName(), m_propertyOpenButton->GetNodeValue());
 	node.SetProperty(m_propertyClearButton->GetName(), m_propertyClearButton->GetNodeValue());

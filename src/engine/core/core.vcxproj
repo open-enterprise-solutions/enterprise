@@ -194,6 +194,7 @@
     <ClCompile Include="fileSystem.cpp" />
     <ClCompile Include="fnumber.cpp" />
     <ClCompile Include="formatString.cpp" />
+    <ClCompile Include="inputMask.cpp" />
     <ClCompile Include="fstring.cpp" />
     <ClCompile Include="graphics\border.cpp" />
     <ClCompile Include="graphics\colour.cpp" />
@@ -318,6 +319,7 @@
     <ClInclude Include="fileSystem.h" />
     <ClInclude Include="fnumber.h" />
     <ClInclude Include="formatString.h" />
+    <ClInclude Include="inputMask.h" />
     <ClInclude Include="fstring.h" />
     <ClInclude Include="graphics\border.h" />
     <ClInclude Include="graphics\colour.h" />
