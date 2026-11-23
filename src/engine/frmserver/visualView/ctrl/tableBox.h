@@ -418,10 +418,9 @@ private:
 	void AttachModelView();
 	void DetachModelView();
 
-	// THE ROWS HANDED OUT — a handle per row, from a counter, never another row's: a row handed out before a read anew
-	// (`handedBefore`) and read again as the same object takes its own handle again.
-	std::int32_t HandRow(const ibDataViewItem& item, std::int32_t parentHandle, bool& added,
-		const std::map<const ibDataViewObject*, std::int32_t>* handedBefore = nullptr);
+	// THE ROWS HANDED OUT — a handle per row, from a counter, never another row's: a row handed out already keeps its
+	// handle, and hangs under `parentHandle` from here (`added` — it did not).
+	std::int32_t HandRow(const ibDataViewItem& item, std::int32_t parentHandle, bool& added);
 	ibDataViewItem FindRow(std::int32_t handle) const;
 	// The handle of a row the client was given — by its object, else by its identity (a row re-read as a
 	// new object, a restore stub). 0 when it was not handed out.

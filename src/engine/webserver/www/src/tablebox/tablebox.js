@@ -51,10 +51,11 @@ import { readPage } from './rows.js';
 /** The rows held past the window on each side (the thin client's kBufferSlack). */
 const slack = 5;
 
-// Which way a fetch reads from its Anchor (ibTable::ibDirection).
+// Which way a fetch reads from its Anchor (ibTable::ibDirection) — or the folders it lies in, from the top.
 const backward = -1;
 const reset = 0;
 const forward = 1;
+const ancestors = 2;
 
 // A header's alignment (wx's flags).
 const centred = 0x100;
@@ -1282,17 +1283,36 @@ class Tablebox extends Control {
 	}
 
 	/**
-	 * The rows around one the page did not hold, it among them and selected.
+	 * The rows around one the page did not hold, it among them and selected — in the folders it lies in, when it lies in
+	 * any (Ancestors; the thin client's model answers its data view so): entered in the Hierarchical view, frozen over its
+	 * level; opened in the tree, from the top. A choice form opened on a value in a folder stood on no row.
 	 * @param {number} handle
 	 */
 	async around(handle) {
 		const generation = ++this.generation;
-		const page = await this.fetch({ Direction: reset, Anchor: handle, Count: this.perPage() + slack, Before: slack });
+		const hierarchical = this.viewMode === hierarchicalView;
+		const answer = hierarchical || this.viewMode === treeView
+			? await this.fetch({ Direction: ancestors, Anchor: handle, Parent: 0 }) : null;
+		if (generation !== this.generation || this.table === null)
+			return;
+		const folders = answer !== null ? readPage(answer).records : [];
+		const crumbs = hierarchical ? folders.map((record) => ({ ...record, crumb: true })) : this.crumbs;
+		const tree = !hierarchical && folders.length > 0;
+		// …the tree's page is of the top, around the folder the way starts at.
+		const page = await this.fetch({ Direction: reset, Anchor: tree ? folders[0].handle : handle,
+			Parent: crumbs.at(-1)?.handle ?? 0, Count: this.perPage() + slack, Before: slack });
 		if (page === null || generation !== this.generation || this.table === null)
 			return;
+		this.crumbs = crumbs;
 		const read = readPage(page);
 		await this.setRows(read.records);
 		this.take(read);
+		for (const folder of tree ? folders : []) {
+			const row = this.rowOf(folder.handle);
+			if (row === null)
+				break;
+			await this.expand(row);
+		}
 		this.select(read.current || handle);
 		this.updatePager();
 	}

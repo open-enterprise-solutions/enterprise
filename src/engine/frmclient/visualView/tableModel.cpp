@@ -177,6 +177,36 @@ unsigned int ibViewTableModel::GetAroundFetch(const ibDataViewItem& parent, cons
 	return read - above;
 }
 
+void ibViewTableModel::BuildAncestorBreadcrumb(const ibDataViewItem& fromRow, ibDataViewItemArray& out) const
+{
+	// THE FOLDERS THE ROW LIES IN — what the data view asks to open a tree on a row it has not read, or to enter its
+	// folder (a choice form opened on a value in a folder). The server's model answers, the top first, each folder lying
+	// in the one before it; they are handed on the nearest first, as the desktop's model hands them.
+	const long long handle = HandleOf(fromRow);
+	if (handle == 0)
+		return;
+
+	ibProtocolNode request, answer;
+	request.SetValue(ibProtocol::ibForm::ibTable::Direction, static_cast<int>(ibProtocol::ibForm::ibTable::ibDirection::Ancestors))
+		.SetValue(ibProtocol::ibForm::ibTable::Anchor, handle);
+	if (!m_fetcher(request, answer))
+		return;
+
+	ibDataViewItemArray folders;
+	ibDataViewItem parent;
+	for (const ibProtocolNode& node : answer.Children()) {
+		ibViewTableRow* const row = new ibViewTableRow(node.GetId(), parent);
+		row->Read(node);
+		parent = ibDataViewItem(row);
+		row->DecRef();   // the item holds it — the row goes with the last of them
+		folders.Add(parent);
+	}
+	for (size_t idx = folders.GetCount(); idx-- > 0;)
+		out.Add(folders[idx]);
+
+	ibJournalInfo(wxT("table"), wxT("the folders of %lld: %u"), handle, static_cast<unsigned int>(folders.GetCount()));
+}
+
 ibPictureID ibViewTableModel::GetRowPicture(const ibDataViewItem& item) const
 {
 	const ibViewTableRow* const row = RowOf(item);
@@ -215,6 +245,7 @@ unsigned int ibViewTableModel::Fetch(ibProtocol::ibForm::ibTable::ibDirection di
 		ibViewTableRow* const row = new ibViewTableRow(node.GetId(), level);
 		row->Read(node);
 		out.Add(ibDataViewItem(row));
+		row->DecRef();   // the item holds it — the row goes with the last of them
 		++read;
 	}
 	above = std::min(static_cast<unsigned int>(answer.GetInt(ibProtocol::ibForm::ibTable::Before)), read);

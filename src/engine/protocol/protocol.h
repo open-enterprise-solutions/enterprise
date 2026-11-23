@@ -1439,9 +1439,12 @@ namespace ibProtocol {
 
 			// Which way a fetch reads from its Anchor.
 			enum class ibDirection : int {
-				Backward = -1,   // the rows before it
-				Reset    = 0,    // the page at it, read anew
-				Forward  = 1,    // the rows after it
+				Backward  = -1,   // the rows before it
+				Reset     = 0,    // the page at it, read anew
+				Forward   = 1,    // the rows after it
+				Ancestors = 2,    // the folders it lies in, from the top: the model's BuildAncestorBreadcrumb, which a
+				                  // client's data view asks to open a tree on it or enter its folder (a choice form opened
+				                  // on a value in a folder). No Parent, no Count: each folder lies in the one before it.
 			};
 
 			// Where a cell's text stands.

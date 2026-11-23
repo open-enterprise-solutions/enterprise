@@ -24,6 +24,7 @@
 #include <algorithm>
 #include <optional>
 #include <unordered_map>   // the rows handed out, filed by the number their identity hashes to — a re-read's carry-over
+#include <unordered_set>   // …and those of them read again
 
 #include "core/scopeGuard.h"   // ibON_BLOCK_EXIT_SET - a fetch's reads are its own, however it ends
 
@@ -839,26 +840,29 @@ void ibValueModelTableBox::OnUpdate(ibDataNode& state, ibVisualHost* host)
 //*                              The rows handed out                                *
 //***********************************************************************************
 
-std::int32_t ibValueModelTableBox::HandRow(const ibDataViewItem& item, std::int32_t parentHandle, bool& added,
-	const std::map<const ibDataViewObject*, std::int32_t>* handedBefore)
+std::int32_t ibValueModelTableBox::HandRow(const ibDataViewItem& item, std::int32_t parentHandle, bool& added)
 {
-	// A row already handed out keeps its handle — the client may hold it.
+	// A row already handed out keeps its handle — the client may hold it — and hangs where it is handed out now: one read
+	// at another level than before (the view switched to a list), the row a choice form opened on, handed out at the top
+	// before the folders it lies in were (Fetch, Ancestors).
 	const auto known = m_fetchedHandles.find(item.GetID());
 	if (known != m_fetchedHandles.end()) {
-		added = false;
-		return known->second;
+		const std::int32_t handle = known->second;
+		ibFetchedRow& row = m_fetchedRows.at(handle);
+		added = row.m_parent != parentHandle;
+		if (added) {
+			if (row.m_parent == 0)
+				std::erase(m_topRows, handle);
+			else if (const auto parent = m_fetchedRows.find(row.m_parent); parent != m_fetchedRows.end())
+				std::erase(parent->second.m_children, handle);
+			row.m_parent = parentHandle;
+			if (const auto parent = m_fetchedRows.find(parentHandle); parent != m_fetchedRows.end())
+				parent->second.m_children.push_back(handle);
+		}
+		return handle;
 	}
 
-	// …and one handed out before a read anew and read again - as the same object, or as a new one that is the same row
-	// (Fetch) - the handle it had, while no other row has taken it.
-	std::int32_t handle = 0;
-	if (handedBefore != nullptr) {
-		const auto before = handedBefore->find(item.GetID());
-		if (before != handedBefore->end() && !m_fetchedRows.contains(before->second))
-			handle = before->second;
-	}
-	if (handle == 0)
-		handle = m_nextRowHandle++;
+	const std::int32_t handle = m_nextRowHandle++;
 	ibFetchedRow& row = m_fetchedRows[handle];
 	row.m_item = item;
 	row.m_parent = parentHandle;
@@ -1012,16 +1016,19 @@ bool ibValueModelTableBox::Fetch(const ibDataNode& request, ibDataNode& response
 	const ibDataViewItem scope = parentItem.IsOk() ? parentItem
 		: (viewMode == ibDataViewList ? s_constIgnoreParent : ibDataViewItem());
 
-	// THE DIRECTION — a step needs a row to step from: an anchor the table does not know is a reset.
+	// THE DIRECTION — a step needs a row to step from: an anchor the table does not know is a reset. The folders the anchor
+	// lies in (Ancestors) are no level read, and no step.
 	const ibDataViewItem anchorItem = FindRow(anchorHandle);
+	const bool ancestors = direction == static_cast<std::int32_t>(ibProtocol::ibForm::ibTable::ibDirection::Ancestors);
 	ibFetchDirection dir = direction > 0 ? ibFetchDirection::Forward
 		: direction < 0 ? ibFetchDirection::Backward : ibFetchDirection::Reset;
 	if (dir != ibFetchDirection::Reset && !anchorItem.IsOk())
 		dir = ibFetchDirection::Reset;
+	const bool reset = !ancestors && dir == ibFetchDirection::Reset;
 
 	// A table read from nothing — no anchor, the top — is one the client built anew: it has no cursor, and is told the
 	// current row whatever it stood on before.
-	if (dir == ibFetchDirection::Reset && anchorHandle == 0 && parentHandle == 0)
+	if (reset && anchorHandle == 0 && parentHandle == 0)
 		m_clientRow = 0;
 
 	// (A read that fails throws, and the throw is the caller's to put in front of the person — the rows
@@ -1029,12 +1036,21 @@ bool ibValueModelTableBox::Fetch(const ibDataNode& request, ibDataNode& response
 	ibDataViewItemArray items;
 	unsigned int fetched = 0, ahead = 0;   // ahead — the rows read before the page (Before), first in `items`
 
-	// THE ROWS HANDED OUT BEFORE A READ ANEW — kept alive through it, so no object freed meanwhile comes back at the
-	// same address as another row: one read again as the SAME object (a table in memory hands out its own rows) keeps
-	// its handle, and the client's cursor stays on it through the re-read instead of going off and on with every change.
-	std::map<std::int32_t, ibFetchedRow> rowsBefore;
-	std::map<const ibDataViewObject*, std::int32_t> handlesBefore;
-	switch (dir) {
+	if (ancestors) {
+		// THE FOLDERS THE ROW LIES IN, from the top — the model's answer (BuildAncestorBreadcrumb), which the client's own
+		// model gives its data view to open a tree on the row or enter its folder (a choice form opened on a value in a
+		// folder). A folder handed out already goes as the object it was handed out as; below, each hangs under the one
+		// before it and the row under the last, so the reads of those folders that follow keep them and their handles.
+		ibDataViewItemArray chain;
+		if (anchorItem.IsOk())
+			m_tableModel->BuildAncestorBreadcrumb(anchorItem, chain);
+		for (size_t idx = chain.GetCount(); idx-- > 0;) {
+			const std::int32_t known = FindRowHandle(chain[idx]);
+			items.Add(known != 0 ? FindRow(known) : chain[idx]);
+		}
+		fetched = static_cast<unsigned int>(items.GetCount());
+	}
+	else switch (dir) {
 	case ibFetchDirection::Forward:
 		fetched = m_tableModel->GetNextFetch(scope, anchorItem, count, items);
 		break;
@@ -1059,16 +1075,9 @@ bool ibValueModelTableBox::Fetch(const ibDataNode& request, ibDataNode& response
 		// (Update worked around it, the web client too). Said here once, a reset with no anchor reads as any other does,
 		// and the page is the top only when it is.
 		const bool aroundCurrent = around.IsOk() && !anchorItem.IsOk();
-		// The level is read anew: the rows handed out at it are forgotten — every row, at the top.
-		if (parentHandle == 0) {
+		// The level is read anew — what was handed out at it is kept through the read and sorted out after it (below).
+		if (parentHandle == 0)
 			m_fetchFromTop = false;
-			rowsBefore.swap(m_fetchedRows);
-			handlesBefore.swap(m_fetchedHandles);
-			ForgetAllRows();
-		}
-		else {
-			ForgetChildRows(parentHandle);
-		}
 		// The Hierarchical view shows one level, and the level read last is the one the client stands in.
 		if (viewMode == ibDataViewHierarchical)
 			m_drillItem = parentItem;
@@ -1126,41 +1135,73 @@ bool ibValueModelTableBox::Fetch(const ibDataNode& request, ibDataNode& response
 		columnEditable.push_back(!column->IsReadOnly());
 	}
 
-	// …AND THE SAME ROW READ AGAIN AS A NEW OBJECT KEEPS ITS HANDLE TOO. A list read from a base hands out new objects at
-	// every read, while the client holds its rows by the handles it was given - its top row is the anchor of the read it
-	// asks next. A read anew it did not ask for (a later Version's Rows) forgot them: its read found no anchor and was read
-	// around the table's current row, and a list refreshed by its form came back with the current row at the top
-	// (2026-11-13). Found by identity, as FindRowHandle finds a row, walked in step with the page - a row read again mostly
-	// follows the one before it, as it was handed out - so a refresh costs a comparison a row. A table in memory hands out
-	// its own rows: the same objects, found by them.
-	if (!rowsBefore.empty() && m_tableModel->HasKeyedRows()) {
-		// …and one not found in step is found by the number its identity hashes to (GetIdentityHash), the rows handed
-		// out filed by it at the first such miss: a re-read in a new order misses at nearly every row, and each miss
-		// asked every row handed out before — a sort after a scroll of 2000 rows, +280 ms (2026-11-14). Of the rows
-		// that are the item, the first handed out, as the walk over them found it.
-		std::unordered_multimap<size_t, std::map<std::int32_t, ibFetchedRow>::iterator> byIdentity;
-		auto next = rowsBefore.begin();
+	// THE LEVEL READ ANEW: a row handed out at it before and read again keeps its handle — and the rows handed out under
+	// it: the client may hold them (a tree's folder open, the folders a choice form's row lies in, Ancestors — the reads
+	// that follow are of those very folders, the deepest first). The rest of the level goes, with what hangs under it, once
+	// the rows read are handed out — a row read at another level than before is moved, not forgotten (HandRow). Sorted out
+	// here, after the read: through it every row handed out is held, so no object freed meanwhile comes back at the same
+	// address as another row, and a read that fails leaves the rows as they were.
+	std::vector<std::int32_t> levelBefore;
+	std::unordered_set<std::int32_t> readAgain;
+	if (reset) {
+		if (parentHandle == 0) {
+			levelBefore.assign(m_topRows.begin(), m_topRows.end());
+			m_topRows.clear();   // …stood again in the order read
+		}
+		else {
+			levelBefore = m_fetchedRows.at(parentHandle).m_children;   // FindRow found it above
+		}
+		std::erase_if(levelBefore, [this](std::int32_t handle) { return !m_fetchedRows.contains(handle); });
+
+		// The same object (a table in memory hands out its own rows) is found by itself. A row read again as a new object
+		// — a list read from a base hands out new objects at every read, while the client holds its rows by the handles it
+		// was given, its top row the anchor of the read it asks next — is found by identity, as FindRowHandle finds a row,
+		// and stands for the object read now. A read anew it did not ask for (a later Version's Rows) forgot them: its read
+		// found no anchor and was read around the table's current row, and a list refreshed by its form came back with the
+		// current row at the top (2026-11-13). Walked in step with the page — a row read again mostly follows the one
+		// before it — and one not found in step is found by the number its identity hashes to (GetIdentityHash), the
+		// level's rows filed by it at the first such miss: a re-read in a new order misses at nearly every row, and each
+		// miss asked every row handed out — a sort after a scroll of 2000 rows, +280 ms (2026-11-14). Of the rows that are
+		// the item, the first at the level.
+		std::unordered_multimap<size_t, size_t> byIdentity;
+		size_t next = 0;
 		for (size_t idx = 0; idx < items.GetCount(); idx++) {
 			const ibDataViewItem& item = items[idx];
-			if (!item.IsOk() || handlesBefore.contains(item.GetID()))
+			if (!item.IsOk())
 				continue;
-			auto found = next;
-			if (found == rowsBefore.end() || !(found->second.m_item == item)) {
+			const auto same = m_fetchedHandles.find(item.GetID());
+			if (same != m_fetchedHandles.end()) {
+				readAgain.insert(same->second);
+				continue;
+			}
+			if (!m_tableModel->HasKeyedRows())
+				continue;
+			const auto isItem = [&](size_t at) {
+				return !readAgain.contains(levelBefore[at]) && m_fetchedRows.at(levelBefore[at]).m_item == item;
+			};
+			size_t found = levelBefore.size();
+			if (next < levelBefore.size() && isItem(next)) {
+				found = next;
+			}
+			else {
 				if (byIdentity.empty()) {
-					byIdentity.reserve(rowsBefore.size());
-					for (auto row = rowsBefore.begin(); row != rowsBefore.end(); ++row)
-						byIdentity.emplace(row->second.m_item.GetIdentityHash(), row);
+					byIdentity.reserve(levelBefore.size());
+					for (size_t at = 0; at < levelBefore.size(); at++)
+						byIdentity.emplace(m_fetchedRows.at(levelBefore[at]).m_item.GetIdentityHash(), at);
 				}
-				found = rowsBefore.end();
 				const auto [first, last] = byIdentity.equal_range(item.GetIdentityHash());
 				for (auto at = first; at != last; ++at)
-					if (at->second->second.m_item == item && (found == rowsBefore.end() || at->second->first < found->first))
+					if (at->second < found && isItem(at->second))
 						found = at->second;
 			}
-			if (found == rowsBefore.end())
+			if (found == levelBefore.size())
 				continue;
-			handlesBefore[item.GetID()] = found->first;
-			next = std::next(found);
+			ibFetchedRow& row = m_fetchedRows.at(levelBefore[found]);
+			m_fetchedHandles.erase(row.m_item.GetID());
+			row.m_item = item;
+			m_fetchedHandles[item.GetID()] = levelBefore[found];
+			readAgain.insert(levelBefore[found]);
+			next = found + 1;
 		}
 	}
 
@@ -1168,6 +1209,8 @@ bool ibValueModelTableBox::Fetch(const ibDataNode& request, ibDataNode& response
 		? m_tableCurrentLine->GetLineItem() : ibDataViewItem();
 	std::int32_t currentHandle = 0, firstHandle = 0;
 	std::vector<std::int32_t> newTopRows;
+	// The row a row read hangs under: the level's — a folder of the Ancestors under the one before it.
+	std::int32_t under = ancestors ? 0 : parentHandle;
 
 	for (size_t idx = 0; idx < items.GetCount(); idx++) {
 
@@ -1176,9 +1219,11 @@ bool ibValueModelTableBox::Fetch(const ibDataNode& request, ibDataNode& response
 			continue;
 
 		bool added = false;
-		const std::int32_t handle = HandRow(item, parentHandle, added, &handlesBefore);
-		if (added && parentHandle == 0)
+		const std::int32_t handle = HandRow(item, under, added);
+		if (under == 0 && (added || reset))
 			newTopRows.push_back(handle);
+		if (ancestors)
+			under = handle;
 		if (firstHandle == 0 && idx >= ahead)
 			firstHandle = handle;   // the page's first, not a row read ahead of it
 
@@ -1227,22 +1272,33 @@ bool ibValueModelTableBox::Fetch(const ibDataNode& request, ibDataNode& response
 	else
 		m_topRows.insert(m_topRows.end(), newTopRows.begin(), newTopRows.end());
 
+	// …the row the folders were asked for hangs under the last of them (see above), and what the level read anew had
+	// and did not read again goes.
+	if (ancestors && under != 0) {
+		bool added = false;
+		HandRow(anchorItem, under, added);
+	}
+	for (const std::int32_t handle : levelBefore) {
+		if (!readAgain.contains(handle))
+			ForgetRow(handle);
+	}
+
 	// NO CURRENT ROW YET — the first one read becomes it, so the table stands where the client shows its
 	// cursor (a choice "…" on that row would otherwise find no current line and skip the choice form).
-	if (dir == ibFetchDirection::Reset && m_tableCurrentLine == nullptr && firstHandle != 0) {
+	if (reset && m_tableCurrentLine == nullptr && firstHandle != 0) {
 		ApplyCurrentLine(m_tableModel->GetRowAt(FindRow(firstHandle)));
 		currentHandle = firstHandle;
 	}
 
 	// Over the limit, the rows furthest from where the client reads go — never the top-level row this
-	// portion was read under.
-	std::int32_t keep = parentHandle;
+	// portion was read under (the folders' first).
+	std::int32_t keep = under;
 	for (auto up = m_fetchedRows.find(keep); up != m_fetchedRows.end() && up->second.m_parent != 0;
 		up = m_fetchedRows.find(keep))
 		keep = up->second.m_parent;
 	TrimRows(dir == ibFetchDirection::Backward, keep);
 
-	if (fetched < static_cast<unsigned int>(count))
+	if (!ancestors && fetched < static_cast<unsigned int>(count))
 		response.SetValue(ibProtocol::ibForm::ibTable::End, true);
 	// …the same for a read: the row the server moved to, not the client's own.
 	if (currentHandle != 0 && currentHandle != m_clientRow && m_fetchedRows.contains(currentHandle)) {

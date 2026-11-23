@@ -455,6 +455,10 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
 
 ## Fixes
 
+- **A choice form opened on a value in a folder stands on it.** In the thin client and the browser the list opened
+  at its top with the folders closed and no row current: the row was looked for at the top. The tree now opens the
+  folders the value lies in, and the hierarchical view enters its folder, as the desktop client did.
+- **The thin client lets go of a table's rows.** Every row a table read stayed in memory until the client closed.
 - **The completion after a shared module's name offers that module.** In a document's object module `Common.` listed
   the record set's registers: a name was looked up by its cell number in every module up the chain, and the nearest
   one holding that number answered. It is now looked up in the one module the compiler resolved it in.

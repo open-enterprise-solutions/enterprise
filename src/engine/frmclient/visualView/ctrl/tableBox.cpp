@@ -522,7 +522,9 @@ void ibValueModelTableBox::SelectRow(long long handle)
 		m_dataView->EnsureVisible(row);
 	}
 	else {
-		m_dataView->SetPagedRestoreSelection(ibDataViewItem(new ibViewTableRow(handle, ibDataViewItem())));
+		ibViewTableRow* const stub = new ibViewTableRow(handle, ibDataViewItem());
+		m_dataView->SetPagedRestoreSelection(ibDataViewItem(stub));
+		stub->DecRef();   // the item holds it
 	}
 	m_selecting = false;
 }
