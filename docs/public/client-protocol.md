@@ -218,6 +218,10 @@ a table reads no rows — its `fetch` is refused, and a designer's client does n
 `Exception` in the base's own words, and the frame carries the same message for the person; a `Parent` the table no
 longer holds is refused `Exception` too.
 
+A column's `State` carries `EditText` once, in the frame after the server wrote a value into its cell (a choice, a
+clear): the text the cell's open editor is to hold, so that the `Change` its end sends is the new value's. With no
+editor open on the column it is passed over.
+
 From protocol 4 a fetch from the start (`Direction` 0) may name `Before`, the rows wanted ahead of the row it starts
 at; the answer gives those rows first and says in `Before` how many came. A server before protocol 4 gives none: the
 page comes alone. A fetch from the start that names no `Anchor` is read where the server's table stands: from the top

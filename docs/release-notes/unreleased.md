@@ -446,6 +446,10 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
 
 ## Fixes
 
+- **A value chosen into a table's cell stays.** In the thin client a flag picked *True* from the cell's list came back
+  *False*: the cell's editor kept the text it opened with and sent it back when it closed. The value the server writes
+  into the cell - a choice, a clear - now goes into its open editor. A flag typed as anything but *True* or *False* is
+  refused; it was read as *False*.
 - **A catalog folder is written on Firebird.** Every folder was refused: *Incorrect values within SQLDA structure -
   empty pointer to data*. A folder's deletion mark was left empty, and the driver sent an empty value without
   saying it may be empty.

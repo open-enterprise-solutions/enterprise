@@ -733,13 +733,8 @@ void ibValueModelTableBox::OnEditorButton(wxCommandEvent& event)
 	}
 	const wxEventType type = event.GetEventType();
 
-	// Cleared — into the open editor too, as the desktop's column wrote the empty value there (SetControlValue): the
-	// text left standing in it went back with the edit's end and found the value it had cleared again.
-	if (type == wxEVT_CONTROL_BUTTON_CLEAR) {
-		if (ibTextCtrl* const text = wxDynamicCast(event.GetEventObject(), ibTextCtrl))
-			text->ChangeValue(wxEmptyString);
-	}
-
+	// What the press writes into the cell comes back into its editor with the answer (the column's EditText) — a clear
+	// the script refused leaves the text as it was.
 	SendCell(type == wxEVT_CONTROL_BUTTON_SELECT ? ibProtocol::ibEvent::ibKind::Select
 		: type == wxEVT_CONTROL_BUTTON_OPEN ? ibProtocol::ibEvent::ibKind::Open : ibProtocol::ibEvent::ibKind::Clear, ibProtocolNode());
 }
@@ -960,6 +955,15 @@ void ibValueModelTableBoxColumn::Update(const ibProtocolNode& node)
 	m_openButton = node.GetBool(ibProtocol::ibForm::ibProperty::ButtonOpen);
 	m_clearButton = node.GetBool(ibProtocol::ibForm::ibProperty::ButtonClear, true);
 	m_readOnly = state.GetBool(ibProtocol::ibForm::ibTable::ReadOnly);
+
+	// A value the server wrote into the cell — a choice, a clear — goes into its open editor, as the desktop's column wrote
+	// it there: the text the edit's end sends back is the new value's, not the one the editor opened with.
+	if (state.Has(ibProtocol::ibForm::ibTable::EditText)) {
+		if (ibTextCtrl* const editor = wxDynamicCast(m_column->GetRenderer()->GetEditorCtrl(), ibTextCtrl)) {
+			editor->ChangeValue(state.GetString(ibProtocol::ibForm::ibTable::EditText));
+			editor->SetInsertionPointEnd();
+		}
+	}
 
 	// The sort the server keeps, shown by the arrow; a click asks it for another.
 	m_sort = state.GetInt(ibProtocol::ibForm::ibTable::Sort);

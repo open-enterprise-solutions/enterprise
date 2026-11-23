@@ -177,6 +177,11 @@ void ibValueModelTableBoxColumn::OnUpdate(ibDataNode& state, ibVisualHost* host)
 	const bool sourceMissing = m_propertySource->IsEmptyProperty() && m_model_id == ibNOT_FOUND;
 	state.SetValue(ibProtocol::ibForm::ibState::Visible, m_propertyVisible->GetValueAsBoolean() && !sourceMissing && IsAvailable());
 	state.SetValue(ibProtocol::ibForm::ibTable::ReadOnly, IsReadOnly());
+	// …and the text a value just written into the cell reads as, said once (m_editText).
+	if (m_editText) {
+		state.SetValue(ibProtocol::ibForm::ibTable::EditText, *m_editText);
+		m_editText.reset();
+	}
 
 	// Sortability is gated by the model's Sorting FEATURE (when the flag is turned off, sorting cannot be
 	// used), and by a field to sort by. The ACTIVE sort + direction come from L5 — the composer — matched
@@ -328,6 +333,9 @@ bool ibValueModelTableBoxColumn::SetControlValue(const ibValue& varControlVal)
 	ibValueModel::ibValueModelReturnLine* currentLine = GetCurrentLine();
 	if (currentLine != nullptr)
 		currentLine->SetValueByMetaID(GetModelColumn(), value);
+
+	// …and into the cell's open editor, as the desktop's column wrote it there: the text the edit's end sends back.
+	m_editText = value.GetString();
 
 	// …and the controls chosen within this cell are emptied, on a change (#616) — the other cells of its row among them.
 	ibTypeControlFactory::ClearLinked(this, before);

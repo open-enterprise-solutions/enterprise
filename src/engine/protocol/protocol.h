@@ -1390,6 +1390,8 @@ namespace ibProtocol {
 			inline constexpr const char* Resizable        = "Resizable";
 			inline constexpr const char* Reorderable      = "Reorderable";
 			inline constexpr const char* TexteditMode     = "TexteditMode";   // may its cells be typed into
+			inline constexpr const char* EditText         = "EditText";       // once: the text a value the server wrote into its
+			                                                                  // cell reads as — put into the cell's open editor
 			inline constexpr const char* Sortable         = "Sortable";
 			inline constexpr const char* Sort             = "Sort";
 			inline constexpr const char* HeaderPicture    = "HeaderPicture";

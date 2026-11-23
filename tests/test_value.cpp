@@ -103,6 +103,27 @@ TEST(ValueTest, BooleanToString) {
     EXPECT_FALSE(vFalse.GetString().IsEmpty());
 }
 
+// A FLAG IS FOUND BY ITS WORD — the one typed first, the other after it; nothing typed is the quick choice's question,
+// False first. A text that is neither word is refused: read as False, it wrote False without a word.
+TEST(ValueTest, ABooleanIsFoundByItsWordAndNothingElse) {
+    const ibValue flag(false);
+    std::vector<ibValue> found;
+    ASSERT_TRUE(flag.FindValue(ibT(" true "), ibChoiceCondition(), found));
+    ASSERT_EQ(found.size(), 2u);
+    EXPECT_TRUE(found[0].GetBoolean());
+    EXPECT_FALSE(found[1].GetBoolean());
+
+    found.clear();
+    ASSERT_TRUE(flag.FindValue(ibString(), ibChoiceCondition(), found));
+    ASSERT_EQ(found.size(), 2u);
+    EXPECT_FALSE(found[0].GetBoolean());
+    EXPECT_TRUE(found[1].GetBoolean());
+
+    found.clear();
+    EXPECT_FALSE(flag.FindValue(ibT("yes"), ibChoiceCondition(), found));
+    EXPECT_TRUE(found.empty());
+}
+
 // ===========================================================================
 // TYPE_NUMBER
 // ===========================================================================

@@ -98,11 +98,13 @@ bool ibValue::FindValue(const ibString& input, const ibChoiceCondition& conditio
 
 	try {
 		if (m_typeClass == ibValueTypes::TYPE_BOOLEAN) {
-			ibValue cFounded;
-			cFounded.SetBoolean(input);
-			out.emplace_back(cFounded);
-			if (cFounded.GetBoolean()) out.emplace_back(false);
-			else out.emplace_back(true);
+			// The word typed first, the other after it; nothing typed — the quick choice's question — False first. A text
+			// that is neither word is no flag and is refused: read as False, a True spelled otherwise wrote False silently.
+			ibBoolean flag;
+			if (!flag.FromString(input) && !input.IsEmpty())
+				return false;
+			out.emplace_back(static_cast<bool>(flag));
+			out.emplace_back(!flag);
 			return true;
 		}
 		else if (m_typeClass == ibValueTypes::TYPE_NUMBER) {

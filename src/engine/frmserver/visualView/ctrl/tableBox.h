@@ -10,6 +10,7 @@
 
 #include <deque>
 #include <map>
+#include <optional>
 #include <set>
 #include <vector>
 
@@ -864,6 +865,11 @@ private:
 	bool ValueProcessing(const class ibDataNode& node);
 
 	ibFormID m_model_id;
+	// ⭐ THE TEXT A VALUE WRITTEN INTO THE CELL READS AS — what the desktop's column put into its open editor itself
+	// (SetControlValue): a choice, a clear. Said ONCE, in the next State (EditText), and gone; the client puts it into
+	// the cell's editor when one is open. Left in the editor as it stood, the old text went back with the edit's end and
+	// wrote the old value again — a flag chosen True came back False.
+	std::optional<ibString> m_editText;
 
 	ibPropertyCategory* m_categoryInfo = ibPropertyObject::CreatePropertyCategory(ibT("Info"), _("Info"));
 	ibPropertyTString* m_propertyTitle = ibPropertyObject::CreateProperty<ibPropertyTString>(m_categoryInfo, ibT("Title"), _("Title"),
