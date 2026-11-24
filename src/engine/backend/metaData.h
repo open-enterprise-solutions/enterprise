@@ -811,6 +811,13 @@ public:
 	// ⭐ ONE STAGE, STATED TO EVERYONE WATCHING — see the note on the notifier. Every occasion a
 	// watcher used to be told about through a verb of its own comes through here.
 	void MetaObjectStage(ibMetaDataNotifier::ibMetaStage stage, class ibValueMetaObject* object) {
+		// ⭐ AN EDIT MOVES THE INVALIDATION COUNTER — as a creation, a rename and a removal do, and HERE, once the
+		// value stands and the object has reloaded on it: what describes a source at a version (its explorer, the
+		// types a list's columns were given) is described anew. A field's type or a journal's documents change what
+		// a source offers without registering anything. Moved in Modify, which OnPropertyChanging calls, a watcher
+		// told there read the explorer again before the value stood, and kept the old one (2026-11-24).
+		if (stage == ibMetaDataNotifier::ibMetaStage::Edited)
+			m_factoryCtorCountChanges++;
 		SayToNotifiers([stage, object](ibMetaDataNotifier* watching) {
 			watching->MetaObjectChanged(stage, object);
 		});

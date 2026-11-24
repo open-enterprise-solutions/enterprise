@@ -295,9 +295,9 @@ void ProjectDimensionByKind(ibDataQueryBuilder& b, const ibValueMetaObjectAccoun
 
 	// Every slot of a side is typed identically — that is the point of the design (they differ by the
 	// KIND standing in them, never by declaration) — so one slot's field layout describes them all.
-	const ibString sampleBase = sample->GetPhysicalName();
-	for (const ibString& field : ibRegFieldsOf(sample)) {
-		const ibString suffix = field.length() > sampleBase.length() ? field.Mid(sampleBase.length()) : ibString();
+	// Field by field, by ROLE — each slot's field of it, under that role's suffix after the alias.
+	for (const ibColumnSlot& field : DescribeColumnLayout(*sample->GetQueryColumn())) {
+		const ibString& suffix = ibFieldSuffix(field.m_role);
 
 		std::vector<std::pair<ibQueryPredicatePtr, ibQueryColumnExprPtr>> cases;
 		for (unsigned int idx = 0; idx < reg->GetAccountDimensionCount(); idx++) {
@@ -315,8 +315,11 @@ void ProjectDimensionByKind(ibDataQueryBuilder& b, const ibValueMetaObjectAccoun
 			leaf.m_op    = ibQueryFilterOp::Equal;
 			leaf.m_value = kind;
 
-			cases.push_back({ ibQueryPredicate::Leaf(leaf),
-			                  ibQueryColumnExpr::ColField(slot, slot->GetPhysicalName() + suffix) });
+			for (const ibColumnSlot& own : DescribeColumnLayout(*slot))
+				if (own.m_role == field.m_role) {
+					cases.push_back({ ibQueryPredicate::Leaf(leaf), ibQueryColumnExpr::ColField(slot, own.m_name) });
+					break;
+				}
 		}
 		if (cases.empty())
 			continue;
@@ -1879,16 +1882,16 @@ std::shared_ptr<const ibBackendQueryable> ibValueMetaObjectAccountingRegister::G
 	const bool withPeriod = (shape == ibAcctShape::Records) || fold.HasPeriod() || atMovementGrain;
 	// …and it is the MOMENT a balance's first and last are counted by.
 	if (withPeriod && GetRegisterPeriod() != nullptr)
-		columns.push_back(ibRegAttributeColumn(GetRegisterPeriod()).PlaysInBalance(ibBalanceRole::Moment, ibSourcePeriodRank(1)));
+		columns.push_back(ibRegAttributeColumn(GetRegisterPeriod()).PlaysInBalance(ibBalanceRole::Moment, g_registerPeriodRank));
 
 	// --- the movement's own identity — where a row IS a movement, or a document's worth of them ---
 	// …the recorder and the line are the junior PERIODS after it — what tells two documents of one second, and
 	// two lines of one document, apart in time.
 	if (shape == ibAcctShape::Records || atMovementGrain) {
 		if (GetRegisterRecorder() != nullptr)
-			columns.push_back(ibRegAttributeColumn(GetRegisterRecorder()).PlaysInBalance(ibBalanceRole::Moment, ibSourcePeriodRank(2)));
+			columns.push_back(ibRegAttributeColumn(GetRegisterRecorder()).PlaysInBalance(ibBalanceRole::Moment, g_registerRecorderRank));
 		if ((shape == ibAcctShape::Records || fold.HasLineNumber()) && GetRegisterLineNumber() != nullptr)
-			columns.push_back(ibRegAttributeColumn(GetRegisterLineNumber()).PlaysInBalance(ibBalanceRole::Moment, ibSourcePeriodRank(3)));
+			columns.push_back(ibRegAttributeColumn(GetRegisterLineNumber()).PlaysInBalance(ibBalanceRole::Moment, g_registerLineNumberRank));
 		// The side a LINE stands on. A total has none — it reports a debit figure and a credit figure
 		// side by side — so this belongs to the movements listing alone.
 		if (shape == ibAcctShape::Records && !correspondence && GetRegisterRecordType() != nullptr)
@@ -2999,8 +3002,8 @@ ibQueryRelPtr ibValueMetaObjectAccountingRegister::BuildDrCrTurnoverRelation(
 	ibDataQueryBuilder b;
 	b.From(movements);
 	// ⚠ NOT FILTERED BY THE CALLER'S RIGHTS — a total computed from the rows a particular user happens
-	// to see is a wrong total, and a wrong total does not look like an error. It is also what makes
-	// this composable at all: the door refuses to hand out a relation for a query carrying a policy.
+	// to see is a wrong total, and a wrong total does not look like an error. A relation under a policy
+	// would be exactly that: the door folds the reader's restriction into it (BuildRelation).
 	b.WithAccessPolicy(nullptr);
 
 	WherePeriodRange(b, GetRegisterPeriod()->GetQueryColumn(), RecorderColumnOf(this), begin, end);

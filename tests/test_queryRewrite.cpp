@@ -241,6 +241,33 @@ TEST(QueryRewrite, NoFlatten_InnerAllowed)
 	EXPECT_TRUE(sel->m_from.m_subquery->m_allowed);
 }
 
+// …while an ALLOWED the outer says as well is the outer's, handed down, and merging keeps it.
+TEST(QueryRewrite, FlattenWhenBothSayAllowed)
+{
+	auto sel = ParseAndRewrite(
+		wxT("SELECT ALLOWED Code FROM (SELECT Code FROM Catalog.Products) AS s"));
+	EXPECT_TRUE(sel->m_from.m_subquery == nullptr);
+	EXPECT_TRUE(sel->m_allowed);
+}
+
+// ⭐ ALLOWED IS SAID ONCE, FOR THE WHOLE STATEMENT: an IN (SELECT …) and a union's branch read under it (2026-11-24 — each
+// read its own word, and a closed table inside IN refused the whole query).
+TEST(QueryRewrite, AllowedReachesEveryNestedRead)
+{
+	auto sel = ParseAndRewrite(
+		wxT("SELECT ALLOWED Code FROM Catalog.Products WHERE Ref IN (SELECT Goods FROM Document.Sale) ")
+		wxT("UNION ALL SELECT Code FROM Catalog.Services"));
+	ASSERT_TRUE(sel->m_where != nullptr && sel->m_where->m_subquery != nullptr);
+	EXPECT_TRUE(sel->m_where->m_subquery->m_allowed);
+	ASSERT_EQ(sel->m_unions.size(), 1u);
+	EXPECT_TRUE(sel->m_unions.front()->m_allowed);
+
+	// …and a statement that does not say it hands nothing down.
+	auto plain = ParseAndRewrite(wxT("SELECT Code FROM Catalog.Products WHERE Ref IN (SELECT Goods FROM Document.Sale)"));
+	ASSERT_TRUE(plain->m_where != nullptr && plain->m_where->m_subquery != nullptr);
+	EXPECT_FALSE(plain->m_where->m_subquery->m_allowed);
+}
+
 TEST(QueryRewrite, FlattenStillHappensWithoutThoseWords)
 {
 	// The guard above must be about the clause, not about flattening.

@@ -48,7 +48,9 @@ const ibMetaGroupRow s_groups[] = {
 	{ g_metaConstantCLSID,                  ibTRANSLATE("Constants"),       ibMetaGroupBand::Metadata, ibTRANSLATE("Constant") },
 	{ g_metaCatalogCLSID,                    ibTRANSLATE("Catalogs"),        ibMetaGroupBand::Metadata, ibTRANSLATE("Catalog") },
 	{ g_metaDocumentCLSID,                   ibTRANSLATE("Documents"),       ibMetaGroupBand::Metadata, ibTRANSLATE("Document") },
-	{ g_metaEnumerationCLSID,                ibTRANSLATE("Enumerations"),    ibMetaGroupBand::Metadata, ibTRANSLATE("Enumeration") },
+	// A journal lists the documents above it, so it stands right under them.
+	{ g_metaDocumentJournalCLSID,            ibTRANSLATE("Document journals"), ibMetaGroupBand::Metadata, ibTRANSLATE("Document journal") },
+	{ g_metaEnumerationCLSID,               ibTRANSLATE("Enumerations"),    ibMetaGroupBand::Metadata, ibTRANSLATE("Enumeration") },
 	{ g_metaDataToolCLSID,                   ibTRANSLATE("Data tools"),      ibMetaGroupBand::Metadata, ibTRANSLATE("Data tool") },
 	{ g_metaReportCLSID,                     ibTRANSLATE("Reports"),         ibMetaGroupBand::Metadata, ibTRANSLATE("Report") },
 	// ⭐ THE CHARTS BEFORE THE REGISTERS, AND THE REGISTERS LAST — see the header.

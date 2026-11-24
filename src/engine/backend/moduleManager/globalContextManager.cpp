@@ -120,6 +120,7 @@ enum
 	enConstants = 0,
 	enCatalogs,
 	enDocuments,
+	enDocumentJournals,
 	enEnumerations,
 	enDataTools,
 	enExternalDataTools,
@@ -144,6 +145,8 @@ void ibValueGlobalContextManager::FillMembers(ibMemberTable& helper) const
 	helper.AppendProp(ibT("Constants"));
 	helper.AppendProp(ibT("Catalogs"));
 	helper.AppendProp(ibT("Documents"));
+	// The journals of documents: `DocumentJournals.<Name>`.
+	helper.AppendProp(ibT("DocumentJournals"));
 	helper.AppendProp(ibT("Enumerations"));
 	helper.AppendProp(ibT("DataTools"));
 	helper.AppendProp(ibT("ExternalDataTools"));
@@ -188,6 +191,9 @@ bool ibValueGlobalContextManager::GetPropVal(const long lPropNum, ibValue& pvarP
 		return true;
 	case enDocuments:
 		pvarPropVal = new ibValueManagerCollection(g_metaDocumentCLSID, m_metaData);
+		return true;
+	case enDocumentJournals:
+		pvarPropVal = new ibValueManagerCollection(g_metaDocumentJournalCLSID, m_metaData);
 		return true;
 	case enEnumerations:
 		pvarPropVal = new ibValueManagerCollection(g_metaEnumerationCLSID, m_metaData);

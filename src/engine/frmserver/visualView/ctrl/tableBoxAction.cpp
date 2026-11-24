@@ -13,7 +13,7 @@
 #include "backend/backend_composition.h"        // the description the quick filter writes into + ibStoreValue
 #include "backend/appData.h"
 #include "backend/settings/settingsComposer.h"  // the reader's shelf — ibSettingsCategory::List, restore / save
-#include "frmserver/visualView/choiceRequest.h" // ibRequestChoice — the columns printed
+#include "backend/choiceRequest.h"              // ibRequestChoice — the columns printed
 #include "frmserver/win/dlgs/settings/savedSettings.h"   // ibDialogSavedSettings — the reader's shelf
 #include "frmserver/win/dlgs/settings/list/listSettings.h"   // ibDialogListSettings — the reader's settings window
 #include "frmserver/win/dlgs/settings/settingsRequest.h"   // Advanced search asked as a settings window: its fields, a value chosen
@@ -243,7 +243,14 @@ void ibValueModelTableBox::Command_ShowListSettings()
 	// ⭐ A COPY OF THE ACTIVE SETTING GOES IN, AND ON OK IT IS SET BACK ON THE MODEL — that is the whole of it, and the
 	// window's own door does it (ibDialogListSettings::ShowUserSettings). …and the APPLICATION is handed in by the
 	// box: it knows which one it is showing.
-	ibDialogListSettings::ShowUserSettings(m_tableModel, GetMetaData());
+	//
+	// ⭐ ANOTHER SETTING IS ANOTHER SET OF ROWS — read from the top, the group drilled into left, as a search's are: a
+	// group is the old arrangement's, and read again under the new one it held that arrangement's crumb over rows that
+	// are not its (a grouping taken off, 2026-11-24). The client is told (Parent in the State).
+	if (ibDialogListSettings::ShowUserSettings(m_tableModel, GetMetaData())) {
+		m_fetchFromTop = true;
+		m_drillItem = ibDataViewItem();
+	}
 }
 
 // ⭐⭐ THE SAME SHELF A REPORT HAS, addressed the same way: by the LEAF OF THE BINDING, so the
@@ -263,7 +270,10 @@ void ibValueModelTableBox::Command_ShowSavedSettings(bool restore)
 				ibSettingsCategory::List, SettingsObjectKey(), GetMetaData())) {
 			// ⚠ A LIST IS NOT A REPORT: it re-reads AT ONCE. The report's sheet stays the one that was built until
 			// somebody says Compose; here the rows on screen are the answer to the setting that was just replaced,
-			// so leaving them would show the previous setting's rows.
+			// so leaving them would show the previous setting's rows. …and from the top, the group drilled into left, as
+			// Command_ShowListSettings says.
+			m_fetchFromTop = true;
+			m_drillItem = ibDataViewItem();
 			m_tableModel->RefetchAll();
 		}
 		return;
@@ -289,8 +299,11 @@ void ibValueModelTableBox::Command_Find()
 	if (!sel.IsOk() || field.IsEmpty())
 		return;
 
+	// The cell's value — through the column's own binding, as the grid resolves it: a column that walks a
+	// reference («Ref.Supplier») is not the model's, and asked of the model it is empty.
 	ibValue value;
-	m_tableModel->GetValueByMetaID(sel, static_cast<unsigned int>(column->GetModelColumn()), value);
+	if (!ResolveCellValue(sel, column, value))
+		m_tableModel->GetValueByMetaID(sel, static_cast<unsigned int>(column->GetModelColumn()), value);
 	ibFilterNodeDescription condition;
 	condition.m_left.m_path = field;
 	condition.m_comparison = ibComparisonKind_Equal;
@@ -332,7 +345,8 @@ void ibValueModelTableBox::Command_FindAdvanced()
 		if (!sel.IsOk())
 			continue;
 		ibValue value;
-		m_tableModel->GetValueByMetaID(sel, static_cast<unsigned int>(column->GetModelColumn()), value);
+		if (!ResolveCellValue(sel, column, value))
+			m_tableModel->GetValueByMetaID(sel, static_cast<unsigned int>(column->GetModelColumn()), value);
 		ibDataNode& held = written.Child(ibProtocol::ibRequest::ibSearch::Value);
 		value.Serialize(held);
 		held.SetValue(ibProtocol::ibRequest::ibListSettings::Presentation, ibString(value.GetString()));

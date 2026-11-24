@@ -142,6 +142,10 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
 
 ## Script language
 
+- **A union of plain reads is one statement on the server.** A branch of `UNION` / `UNION ALL` that reads the columns of
+  one table as they are goes into the server's statement as a derived table, under its reader's rights - its role's row
+  filter inside it, and with `SELECT ALLOWED` a table the user may not read is a branch of no row while the others are
+  read. Such branches were copied into a base in memory one by one.
 - **What follows `new Class(…)` is read on.** `new Array(3).Count()`, `New Query(text).Execute().Select()`
   and `New Structure("A", 1).A` compile, as a statement too. They were refused with "Keyword or
   identifier expected".
@@ -461,6 +465,17 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
   stops declaring stays, an ordinary line.
 - **An assistant arranges the start page.** Over MCP `home_page` reads it - the template, each column's forms and
   every form it can show - and sets a column or the template, as the designer's start-page dialog does.
+- **Document journals.** A `DocumentJournal` lists the documents named in its `RegisteredDocuments` in one list, a
+  row per written document: `Ref`, `Date`, `Number`, `DocumentType` (the row's document, a `Type`), `Posted`, `DeletionMark`.
+  The journal has a `Read` right of its own - who may open it is said on it, as on any list in the interface. Its rows
+  are read on the server, one `UNION ALL` over the documents, each document under its own rights: one the user may not
+  read is left out, the rest is shown, and a role's row filter on a document holds in the journal. A query
+  reads it as `DocumentJournal.<Name>`, and `DocumentJournals.<Name>.Select(From, To)` walks it over a period as a
+  document's selection does - `Next()`, the row's columns, `GetObject()` its document's object; the manager has
+  `GetForm`, `GetListForm` and `GetTemplate` too.
+  Its list is a document's list: the same commands, each run by the row's document, the same row pictures, and Add
+  asks which document to create when it lists several. A journal of no document is not saved. In the designer it
+  stands right under the documents.
 
 ## Forms
 
@@ -480,6 +495,20 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
 
 ## Fixes
 
+- **A nested query is read under its reader's rights.** A query declared inside another - `FROM (SELECT …) AS x`, and
+  the source of every report a data composer builds - was written into the statement without the user's access
+  policy: a role's row filter did not apply inside it, and a table the user may not read was read. It is folded in
+  where the query is declared now; with `SELECT ALLOWED` such a table reads as no rows.
+- **`SELECT ALLOWED` covers the queries nested in it.** Each nested query read its own word, so
+  `SELECT ALLOWED … WHERE x IN (SELECT … FROM T)`, with `T` closed to the user, was refused whole, and so was a
+  `FROM (SELECT …)` over it. Said once, the word now holds for every query inside.
+- **A list leaves the group it stood in when its settings change.** A grouping taken off in *List settings*, or
+  settings restored, left the list inside the group it had been entered: the flat rows under the old group's line,
+  and a step into a folder answered "The folder is no longer in the list". The list goes back to its top, on the
+  desktop and in the browser.
+- **A control's binding read over one it holds replaces it.** The path was appended to the one already there - a
+  field bound to `Text`, given `Text` again as a node (the property inspector, MCP), was bound to `Text.Text`, a path
+  nothing writes through.
 - **A shared attribute stays on its objects when the application is opened again.** After a load its copy in an
   object was read as deleted, so it was never bound to its declaration: the object had no such field, a query refused
   the name, and the next apply in the designer dropped the column with its data.

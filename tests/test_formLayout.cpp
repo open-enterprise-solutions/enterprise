@@ -151,7 +151,7 @@ TEST(FormLayout, AnUnknownViewLoadsAsBox)
 	ASSERT_TRUE(written.SetView(ibLayoutView_Group));
 	ibDataNode node;
 	ASSERT_TRUE(written.m_frame->WriteData(node));
-	node.SetProperty(ibString(ibT("View")), ibDataValue::Int(99));   // a later version's, or a damaged form's
+	node.SetField(ibString(ibT("View")), ibDataValue::Int(99));   // a later version's, or a damaged form's - in its place
 
 	LayoutUnderTest read;
 	ASSERT_TRUE(read.IsOk());

@@ -317,7 +317,7 @@ struct NoCaseLess
 	do { ibJournalInfo(ibT("query.rewrite"), ibT("nested FROM not flattened: ") fmt, ##__VA_ARGS__); \
 	     return false; } while (false)
 
-bool InnerIsFlattenable(const ibQuerySelect& inner)
+bool InnerIsFlattenable(const ibQuerySelect& inner, const ibQuerySelect& outer)
 {
 	if (!inner.m_joins.empty())    FlattenDecline(ibT("the inner query has a JOIN"));
 	if (!inner.m_unions.empty())   FlattenDecline(ibT("the inner query has a UNION"));
@@ -338,8 +338,9 @@ bool InnerIsFlattenable(const ibQuerySelect& inner)
 	if (inner.m_top > 0)           FlattenDecline(ibT("the inner query has TOP, whose limit merging would lose"));
 	// The statement words the inner may carry. Merging them away is the SILENT kind of wrong:
 	// ALLOWED would become a refusal the author asked not to have, FOR UPDATE would stop holding
-	// the rows, INTO would stop materialising anything — and the query would still run.
-	if (inner.m_allowed)           FlattenDecline(ibT("the inner query is SELECT ALLOWED"));
+	// the rows, INTO would stop materialising anything — and the query would still run. (An ALLOWED
+	// the outer says as well is the outer's, handed down — PassAllowedDown — and merging keeps it.)
+	if (inner.m_allowed && !outer.m_allowed) FlattenDecline(ibT("the inner query is SELECT ALLOWED"));
 	if (inner.m_forUpdate)         FlattenDecline(ibT("the inner query is FOR UPDATE"));
 	if (!inner.m_intoTemp.IsEmpty()) FlattenDecline(ibT("the inner query has INTO"));
 	if (inner.m_selectAll) return true;
@@ -364,7 +365,7 @@ void FlattenFrom(ibQuerySelect& s)
 	// destroys s.m_from.m_subquery, which owns it.
 	const std::shared_ptr<ibQuerySelect> innerKeep = s.m_from.m_subquery;
 	const ibQuerySelect& inner = *innerKeep;
-	if (!InnerIsFlattenable(inner)) return;
+	if (!InnerIsFlattenable(inner, s)) return;
 	// A nested query that says a ROLE of a field keeps its wrapper: the wrapper publishes the role with the
 	// field (StampDeclaredRoles), and merged into the outer select the word would have no output to stand on.
 	for (const ibQueryProjection& p : inner.m_projections)
@@ -1175,8 +1176,29 @@ void ReorderInnerJoins(ibQuerySelect& s)
 	s.m_joins.swap(out);
 }
 
+// ⭐ ALLOWED IS SAID ONCE, FOR THE WHOLE STATEMENT (2026-11-24): every read nested in it is read under it — a FROM's
+// or a JOIN's nested query, a union's branch, an IN (SELECT …) in the WHERE or the HAVING. Handed down HERE, on the
+// clone every lowering reads, so no road of them is told apart: each read its own word, and a refused table inside
+// `SELECT ALLOWED … WHERE x IN (SELECT … FROM it)` refused the whole query. A nested query that says it where the outer
+// does not keeps it as said.
+void PassAllowedDown(ibQuerySelect& s)
+{
+	const auto allowed = [](ibQuerySelect& nested) { nested.m_allowed = true; };
+	if (s.m_from.m_subquery) allowed(*s.m_from.m_subquery);
+	for (ibQueryAstJoin& j : s.m_joins)
+		if (j.m_source.m_subquery) allowed(*j.m_source.m_subquery);
+	for (const std::shared_ptr<ibQuerySelect>& u : s.m_unions)
+		allowed(*u);
+	WalkInSubqueries(s.m_where, allowed);
+	WalkInSubqueries(s.m_having, allowed);
+}
+
 void RewriteSelectInPlace(ibQuerySelect& s)
 {
+	// Its ALLOWED to its nested reads before they are rewritten — so theirs reach their own.
+	if (s.m_allowed)
+		PassAllowedDown(s);
+
 	// Children first: a flattenable child collapses before the parent looks at it.
 	if (s.m_from.m_subquery) RewriteSelectInPlace(*s.m_from.m_subquery);
 	for (ibQueryAstJoin& j : s.m_joins)

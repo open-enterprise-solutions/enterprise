@@ -20,7 +20,6 @@
 #include "backend/query/queryableFactory.h"                       // ibQueryableFactory — source-namespace resolution; ibQueryableSourceDescriptor — the source that consumes its own condition
 #include "backend/query/queryProvider.h"                          // ibBackendQueryProvider — what a source's provider is asked (CanDeclareNamedQuery, ResolveReferenceTarget…)
 #include "backend/appData.h"                                      // ibApplicationInstance::GetQueryableFactory
-#include "backend/session/session.h"                              // the session's access policy — an IN (SELECT …) said as EXISTS is guarded by it
 #include "backend/tabularModel.h"     // ibComparisonType
 #include "backend/backend_exception.h"                            // ibBackendCoreException
 #include "core/fiber/fiber.h"                                     // StackLow — a nested query is native recursion with no count
@@ -1871,26 +1870,20 @@ static ibQueryPredicatePtr InSubqueryAsSemiJoin(const std::vector<ibSourceBindin
 		}
 
 		ibDataQueryBuilder scope;   // the session's connection and policy, as the inner read would have had
-		scope.From(inner);
+		scope.From(inner).Allowed(sel.m_allowed);
 		if (sel.m_where)
 			scope.Where(BuildWherePredicate(innerSources, *sel.m_where, params, /*allowDotWalk*/ true));
-		const ibAccessPolicy* const policy =
-			ibSession::Current() != nullptr ? ibSession::Current()->GetAccessPolicy() : nullptr;
-		if (policy != nullptr) {
-			scope.WithAccessPolicy(nullptr);
-			if (!policy->CheckSelect(scope, ibAccessStage::Table))
-				return nullptr;
-			std::vector<std::shared_ptr<const ibBackendQueryable>> read;
-			scope.GetSources(read);
-			if (read.size() != 1)
-				return nullptr;
-		}
+		// …read under its reader's rights: refused — the set road says so (the catch below); read AS ALLOWED — the EXISTS
+		// of no row; a role's filter that joined a source of its own — no semi-join.
+		ibQueryPredicatePtr where;
+		if (!scope.BuildReadPredicate(where))
+			return nullptr;
 
 		ibSemiJoinExists semi;
 		semi.m_inner    = inner;
 		semi.m_outerKey = cols.front();
 		semi.m_innerKey = keys.front();
-		semi.m_where    = scope.GetWherePredicate();
+		semi.m_where    = where;
 		semi.m_negated  = negated;   // NOT IN is said by the leaf: the provider picks the anti-join's form for its server
 		for (size_t i = 1; i < cols.size(); ++i)
 			semi.m_alsoKeys.push_back({ cols[i], keys[i] });
@@ -4632,7 +4625,7 @@ std::shared_ptr<ibSubqueryQueryable> BuildUnionStack(const ibQuerySelect& ast, c
 		// matched nothing and arrived EMPTY - a tax branch of `-D.Result` summed to zero without a word
 		// (the payroll demo, 2026-09-10). Where the branch lists its columns one by one, each is given
 		// the first branch's name at its position; a `*` branch keeps the names its source gives.
-		ibQuerySelect branch = *u;
+		ibQuerySelect branch = *u;   // its ALLOWED the statement's where the statement says it (ibQueryRewrite: PassAllowedDown)
 		const bool listed = !branch.m_selectAll && branch.m_projections.size() == outSchema.size()
 			&& std::none_of(branch.m_projections.begin(), branch.m_projections.end(),
 				[](const ibQueryProjection& p) { return p.m_star; });
@@ -4767,6 +4760,9 @@ std::shared_ptr<ibSubqueryQueryable> WrapSelectAsQueryable(const ibQuerySelect& 
 	}
 
 	ibDataQueryBuilder inner;
+	// SELECT ALLOWED travels DOWN, as a declared query's does (DeclareNamedResultAsCte): this door reads the restricted
+	// source, and a branch the reader may not read is then a branch of no row rather than a refusal of the whole union.
+	inner.Allowed(sel.m_allowed);
 
 	std::vector<ibQueryOutputColumn> innerSchema;
 	// ⭐ THE WHOLE SOURCE TREE, BY THE ONE BUILDER THAT BUILDS ONE — FROM plus every JOIN, the
@@ -5286,8 +5282,11 @@ std::shared_ptr<const ibBackendQueryable> DeclareNamedResultAsCte(ibDataQueryBui
 	// and "which column is the row" is unanswerable from the outside. Only a single-source body can
 	// carry an identity across: a join publishes rows that are no one table's.
 	std::vector<std::shared_ptr<const ibBackendQueryColumn>> innerKeys;
-	if (innerSources.size() == 1 && innerSources[0].m_q != nullptr)
+	std::shared_ptr<const ibBackendQueryColumn> innerSort;   // …and what its rows are ordered by, for the same reason
+	if (innerSources.size() == 1 && innerSources[0].m_q != nullptr) {
 		innerKeys = innerSources[0].m_q->GetPrimaryKeyColumns();
+		innerSort = innerSources[0].m_q->GetSortColumn();
+	}
 	// Every physical field this declaration actually writes, so the synthetic columns below can be
 	// asked the only question that decides them: are the fields you are made of in here?
 	std::vector<ibString> writtenFields;
@@ -5383,6 +5382,7 @@ std::shared_ptr<const ibBackendQueryable> DeclareNamedResultAsCte(ibDataQueryBui
 		// under a second name, and only the first one published stands for it.
 		field.m_isKey = !repeated && oc.m_col != nullptr
 			&& std::find(innerKeys.begin(), innerKeys.end(), oc.m_col) != innerKeys.end();
+		field.m_isSort = !repeated && oc.m_col != nullptr && oc.m_col == innerSort;
 		// …and what it is in a balance, so totals read over the declaration still find their period and keys.
 		field.m_balanceRole = oc.GetBalanceRole();
 		field.m_periodRank  = oc.GetPeriodRank();

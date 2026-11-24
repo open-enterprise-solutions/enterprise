@@ -967,12 +967,14 @@ public:
 	// rows under new column identities, so "which column is the row" has to travel with them.
 	std::vector<std::shared_ptr<const ibBackendQueryColumn>> GetPrimaryKeyColumns() const override;   // out-of-line — needs the inner builder
 
-	ibBackendQueryProvider& GetProvider() const override;            // out-of-line — vends the computed provider
+	ibBackendQueryProvider& GetProvider() const override;            // out-of-line — its source's where it reads on the server, else the computed one
 	ibQueryRamTable ComputeRows(const std::vector<ibQueryCondition>& extra) const override;   // out-of-line — runs the inner query
+	// ⭐ …OR ITS READ AS A RELATION, a derived table in the statement around it — a union's branch among them, which is what
+	// makes `SELECT ALLOWED … UNION ALL …` one statement (ReadsOnServer). Null where it is computed in memory.
+	ibQueryRelPtr GetSourceRelation(const ibString& alias) const override;   // dbTableProvider.cpp, beside the composite's
 
-	// trivial L3 surface for a non-metaobject (derived) source — no metadata guid, no table name
-	// (matches the RAM temp-table queryable).
-	ibString GetQueryTableName() const override { return ibEmptyString; }
+	// no metadata guid; a table name only where it is read on the server — what its derived table goes under.
+	ibString GetQueryTableName() const override;
 	ibMetaID GetQueryTableId()    const override { return 0; }
 
 	// ⭐ BUT IT DOES KNOW WHICH APPLICATION IT READS — the inner query's own. Answering "no
@@ -989,6 +991,9 @@ public:
 	void SetComputedOverRow(std::vector<ibQueryColumnSelect> columns) { m_computedOverRow = std::move(columns); }
 
 private:
+	// Whether the server writes its rows as one read: one source of a base, every published column that source's own.
+	bool ReadsOnServer() const;
+
 	std::unique_ptr<ibDataQueryBuilder>      m_inner;     // the nested query (owned by value via the heap)
 	// exposed columns (select list / SELECT * / group keys + agg aliases) — the inner source's own and the ones this
 	// wrapper minted for its folds and walks alike

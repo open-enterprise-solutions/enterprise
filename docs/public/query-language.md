@@ -40,7 +40,8 @@ a script, a report, a list - is one place for rights, row restrictions, locks an
   `DROP` releases it, `ONTO` names a result, `LINK` relates named results by joins.
 - **`FOR UPDATE`** holds the rows a select returned until the transaction ends
   ([record-locks.md](record-locks.md)). **`SELECT ALLOWED`** reads rows the user may not see as none,
-  instead of a refusal ([access-rights.md](access-rights.md)).
+  instead of a refusal ([access-rights.md](access-rights.md)). It is said once, for the whole query: every
+  query nested in it - `FROM (SELECT …)`, a `UNION` branch, `IN (SELECT …)` - reads under it.
 
 ## What it guarantees
 
@@ -62,6 +63,8 @@ a script, a report, a list - is one place for rights, row restrictions, locks an
 - The keywords are English; the names in a query are the application's.
 - A named result is a server-side `WITH` where the DBMS reads one and the select has a server-side form; a
   named result with `TOTALS` or `UNION`, or one over a source computed in memory, is taken as rows.
+- A `UNION` branch that reads one table's columns as they are is a derived table of the same statement.
+  A branch that groups, limits or computes is computed in memory.
 - A dialect is sent only the forms it promised to take. The generic ODBC dialect promises neither window
   functions nor `WITH`; a query that needs them there is computed in memory or refused with a sentence.
 - A periodised calendar is built on the server up to 200 periods; past that, in memory.

@@ -157,8 +157,8 @@ TEST(SourceDescription, EmptySerializeRoundTrips) {
 }
 
 // ---------------------------------------------------------------------------
-// Node form (Binary blob in an ibDataValue) — the shape the property stores —
-// round-trips through the same v2 codec.
+// Node form (the hops as a list) — the shape the property stores — round-trips
+// ids and pinned types alike.
 // ---------------------------------------------------------------------------
 TEST(SourceDescription, NodeRoundTrip) {
     ibSourceDescription desc;
@@ -170,5 +170,20 @@ TEST(SourceDescription, NodeRoundTrip) {
 
     ibSourceDescription loaded;
     ASSERT_TRUE(ibSourceDescriptionMemory::ReadNode(node, loaded));
+    EXPECT_TRUE(desc.GetPath() == loaded.GetPath());
+}
+
+// …and a read REPLACES the path held, as LoadData's does (EmptySerializeRoundTrips): read into a bound one, the hops
+// went on after its own — Text read as Text.Text (2026-11-24, a switch read from its node).
+TEST(SourceDescription, NodeReadReplacesWhatWasThere) {
+    ibSourceDescription desc;
+    desc.AppendSource(7);
+
+    ibDataValue node;
+    ASSERT_TRUE(ibSourceDescriptionMemory::WriteNode(node, desc));
+
+    ibSourceDescription loaded(std::vector<ibSourceId>{ 7 });   // bound already, as a field made on a form is
+    ASSERT_TRUE(ibSourceDescriptionMemory::ReadNode(node, loaded));
+    EXPECT_EQ(loaded.GetHopCount(), 1u);
     EXPECT_TRUE(desc.GetPath() == loaded.GetPath());
 }

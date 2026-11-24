@@ -85,6 +85,11 @@ const ibChar* const kHopType   = ibT("type");
 
 bool ibSourceDescriptionMemory::ReadNode(const ibDataValue& value, ibSourceDescription& srcDesc)
 {
+	// A READ REPLACES WHAT WAS THERE, as LoadData's does. Read into a path held already, the hops went on after its own:
+	// a field bound to Text read a saved Text as Text.Text, a dot-walk nothing writes through (2026-11-24, a switch read
+	// from its node took the pick and wrote nothing) — and the property door reads a node into the path it holds.
+	srcDesc.ClearSource();
+
 	const auto node = value.AsChild();
 	if (!node)
 		return true;   // nothing bound — an ordinary state, not a failure

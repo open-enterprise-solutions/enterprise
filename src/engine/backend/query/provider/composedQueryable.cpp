@@ -1,6 +1,6 @@
 #include "composedQueryable.h"
 
-#include "backend/query/columnLayout.h"    // ibSqlAliasOf
+#include "backend/query/columnLayout.h"    // ibSqlAliasOf, ibFieldSuffix
 #include "backend/query/queryProvider.h"   // ibBackendQueryProvider::CanJoinOn
 #include "backend/query/provider/database/tempTableManager.h"   // the copies a composite over a base in memory holds
 
@@ -65,19 +65,18 @@ ibComposedQueryColumn::ibComposedQueryColumn(const std::shared_ptr<const ibBacke
 }
 
 // The origin's fields, under this name — the same slots in the same order, so a value spreads and reassembles as it
-// does on the leaf. A field after the origin's name takes the same suffix after this one; a field named otherwise (a
-// column made of the row's other fields — a moment, an order) goes under this name whole. A union's of several types is
-// laid out as a column of them all.
+// does on the leaf: each under its ROLE's suffix, which is what a read names after a base (the codec, and a column
+// that reads itself out of others' fields — a moment, a journal's document type). Spelled off the field's name — its
+// tail past the origin's, or the whole name after this one for a field of another column — the journal's document
+// type went out as `j0_DocumentType_Ref_RTRef` and was asked for as `j0_DocumentType_RTRef` (2026-11-24). A union's of
+// several types is laid out as a column of them all.
 std::vector<ibColumnSlot> ibComposedQueryColumn::DescribeLayout() const
 {
 	if (m_valueType != nullptr)
 		return ibBackendQueryColumn::DescribeLayout();
-	const ibString            base  = m_origin->GetPhysicalName();
 	std::vector<ibColumnSlot> slots = m_origin->DescribeLayout();
-	for (ibColumnSlot& slot : slots) {
-		ibString suffix;
-		slot.m_name = slot.m_name.StartsWith(base, &suffix) ? m_name + suffix : m_name + ibT("_") + slot.m_name;
-	}
+	for (ibColumnSlot& slot : slots)
+		slot.m_name = m_name + ibFieldSuffix(slot.m_role);
 	return slots;
 }
 

@@ -4,6 +4,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "document.h"
+#include "documentJournal.h"   // ibValueMetaObjectDocumentJournal — a journal listing this document reads it anew on its reload
 #include "core/serialize/dataBuilder.h"
 #include "backend/system/value/valueDynamicList.h"   // ibValueDynamicList — the document list migrates onto the universal dynamic list
 #include "backend/metaData.h"
@@ -224,6 +225,10 @@ bool ibValueMetaObjectDocument::OnDeleteMetaObject()
 
 bool ibValueMetaObjectDocument::OnReloadMetaObject()
 {
+	// A journal listing this document reads it and is typed by it: retyped or deleted, the journal reads anew.
+	for (ibValueMetaObjectDocumentJournal* journal : m_metaData->GetAnyArrayObject<ibValueMetaObjectDocumentJournal>())
+		if (journal->GetRegisteredDocuments().ContainMetaType(GetMetaID()))
+			journal->OnReloadMetaObject();
 
 	if (auto* cc = m_metaData->GetCompileCache()) {
 		ibValueRecordDataObjectDocument* pDataRef = nullptr;

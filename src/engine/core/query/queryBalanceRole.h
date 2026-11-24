@@ -31,6 +31,11 @@ enum class ibBalanceRole : uint8_t {
 // So roles may be given with no numbers at all, numbered in part, or ordered whole, and each means what it says.
 inline constexpr int ibSourcePeriodRank(int order) { return 1000 + order; }
 
+// …and a register's own three, in that order: its period, the document that wrote the row, the line within it.
+inline constexpr int g_registerPeriodRank     = ibSourcePeriodRank(1);
+inline constexpr int g_registerRecorderRank   = ibSourcePeriodRank(2);
+inline constexpr int g_registerLineNumberRank = ibSourcePeriodRank(3);
+
 // …AND THE WORD THE QUERY WRITES IT WITH — `<expr> ROLE PERIOD AS Period` (the parser reads these five back).
 inline const wchar_t* ibBalanceRoleWord(ibBalanceRole role)
 {

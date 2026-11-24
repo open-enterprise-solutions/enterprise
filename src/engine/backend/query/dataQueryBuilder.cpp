@@ -50,8 +50,48 @@ ibDataQueryBuilder& ibDataQueryBuilder::From(const std::shared_ptr<const ibBacke
 	return *this;
 }
 
+// A condition no row meets — the read AS ALLOWED of what may not be read (FoldPolicy): a column of the source is null
+// and is not, which no value is twice. Null for a source with no column to ask.
+static ibQueryPredicatePtr NoRowOf(const std::shared_ptr<const ibBackendQueryable>& source)
+{
+	if (source == nullptr)
+		return nullptr;
+	for (const std::shared_ptr<const ibBackendQueryColumn>& col : source->GetQueryColumns())
+		if (col != nullptr)
+			return ibQueryPredicate::Compose(ibQueryPredicateKind::And,
+				ibQueryPredicate::Null(col, /*negated*/ false), ibQueryPredicate::Null(col, /*negated*/ true));
+	return nullptr;
+}
+
+// ⭐ THE READER'S RIGHTS FOLDED INTO A READ THAT IS WRITTEN INTO ANOTHER STATEMENT — a relation (BuildRelation), a declared
+// query (With), a semi-join's EXISTS: the policy's table stage on it, as Execute asks it, its roles' row filter folded in,
+// and then it carries no policy, being restricted already. Refused, it is refused as a read is; read AS ALLOWED, it is the
+// read of no row — a union's branch the reader may not read is empty and the others are read (Max, 2026-11-24).
+void ibDataQueryBuilder::FoldPolicy()
+{
+	const ibAccessPolicy* const policy = m_policy;
+	m_policy = nullptr;
+	if (policy == nullptr || policy->CheckSelect(*this, ibAccessStage::Table))
+		return;
+	if (!m_allowed)
+		ibBackendAccessException::Error(_("reading"));
+	Where(NoRowOf(GetPrimarySource()));
+}
+
+// …A COPY THAT FOLDS AS IT IS MADE: the fold always came right after the copy, in every read that takes it (Max,
+// 2026-11-24) — so it is the copy's own step, and no caller can copy without it or fold twice.
+class ibGuardedDataQueryBuilder : public ibDataQueryBuilder {
+public:
+	explicit ibGuardedDataQueryBuilder(const ibDataQueryBuilder& read) : ibDataQueryBuilder(read) { FoldPolicy(); }
+};
+
 // A NAMED QUERY this statement declares. The inner door is copied whole — it is an ordinary door,
 // and what makes it a CTE is being declared here rather than executed on its own.
+//
+// ⭐ …UNDER ITS READER'S RIGHTS, folded here — the one door every declaration passes. Its body is written into the
+// statement from its spec (AttachNamedQueries), where no policy travels, and the read above it walks its own sources
+// only: a declared query is a name to it. So the body read what its reader may not — the source of every composed
+// report, `q_sub0`, among them (found 2026-11-24).
 ibDataQueryBuilder& ibDataQueryBuilder::With(const ibString& name, const ibDataQueryBuilder& inner)
 {
 	if (name.IsEmpty())
@@ -61,7 +101,7 @@ ibDataQueryBuilder& ibDataQueryBuilder::With(const ibString& name, const ibDataQ
 	for (const ibNamedQuery& declared : m_spec.m_with)
 		if (declared.m_name.IsSameAs(name, false))
 			return *this;
-	m_spec.m_with.push_back({ name, std::make_shared<ibDataQueryBuilder>(inner) });
+	m_spec.m_with.push_back({ name, std::make_shared<ibGuardedDataQueryBuilder>(inner) });
 	return *this;
 }
 
@@ -343,11 +383,16 @@ ibDataQueryBuilder& ibDataQueryBuilder::OrderBy(const std::shared_ptr<const ibBa
 		if (by != nullptr && by != col && (!grouped || aKey)) {
 			// THE SOURCE'S OWN REFERENCE is sorted by its own fields, where they lie — a document by its moment,
 			// the date and the reference in its own row. Walked like a foreign one, it joined the table to itself.
+			// ⚠ BY THE SOURCE'S OWN ORDER, not its kind's: a journal's reference is of the documents it lists, and
+			// their order lies in their tables — `fld1202_D` asked of the journal's row (2026-11-24). Of a document
+			// the two are the same column's; a source with no order of its own keeps its kind's.
 			const std::vector<std::shared_ptr<const ibBackendQueryColumn>> keys = m_spec.m_queryable->GetPrimaryKeyColumns();
 			if (keys.size() == 1 && keys.front() == col) {
+				const std::shared_ptr<const ibBackendQueryColumn> own = m_spec.m_queryable->GetSortColumn();
+				const std::shared_ptr<const ibBackendQueryColumn>& order = own != nullptr ? own : by;
 				if (grouped)
-					GroupBy(by);
-				m_spec.m_sorts.push_back(ibQuerySortItem{ by, ascending });
+					GroupBy(order);
+				m_spec.m_sorts.push_back(ibQuerySortItem{ order, ascending });
 			}
 			else {
 				const std::vector<std::shared_ptr<const ibBackendQueryColumn>> walk{ col, by };
@@ -879,10 +924,13 @@ ibDataQueryResult ibDataQueryBuilder::Execute(const ibReadPageRequest& req) cons
 
 ibQueryRelPtr ibDataQueryBuilder::BuildRelation() const
 {
-	// A RESTRICTED read is not a relation somebody else composes: the policy folds its restriction
-	// into the query it guards, and a relation handed out unrestricted could be joined past it. The
-	// caller reads rows instead — same numbers, same restriction, one materialisation.
-	if (m_policy != nullptr || m_spec.m_queryable == nullptr)
+	// ⭐ A RESTRICTED READ IS FOLDED BEFORE IT IS HANDED OUT — on a copy, as Execute does it, and the relation is the
+	// copy's: what goes into somebody else's FROM carries its reader's rights, so nothing is joined past them (FoldPolicy).
+	// It answered null under a policy, and every reader that wanted a relation turned the policy off and asked the rights
+	// by hand (the journal of documents did).
+	if (m_policy != nullptr)
+		return ibGuardedDataQueryBuilder(*this).BuildRelation();
+	if (m_spec.m_queryable == nullptr)
 		return nullptr;
 
 	// …AND NEITHER IS A QUERY THAT STANDS ON ITS OWN DECLARATIONS. A relation goes INSIDE somebody
@@ -902,6 +950,19 @@ ibQueryRelPtr ibDataQueryBuilder::BuildRelation() const
 	const bool folds = !m_spec.m_aggregates.empty() || !m_spec.m_groupBy.empty();
 	return folds ? m_spec.m_queryable->GetProvider().BuildAggregateRelation(m_spec)
 	             : m_spec.m_queryable->GetProvider().BuildReadRelation(m_spec);
+}
+
+// ⭐ A SEMI-JOIN'S READ, FOLDED AS A RELATION IS — on a copy, and the WHERE is the copy's. It folded by hand: the
+// session's policy fetched a second time beside the one the door holds, and the table stage asked of it (2026-11-24).
+bool ibDataQueryBuilder::BuildReadPredicate(ibQueryPredicatePtr& where) const
+{
+	const ibGuardedDataQueryBuilder guarded(*this);
+	std::vector<std::shared_ptr<const ibBackendQueryable>> read;
+	guarded.GetSources(read);
+	if (read.size() != 1)
+		return false;
+	where = guarded.GetWherePredicate();
+	return true;
 }
 
 ibDataQueryResult ibDataQueryBuilder::Execute(const ibReadPageRequest& req,

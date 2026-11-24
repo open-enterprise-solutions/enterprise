@@ -488,7 +488,7 @@ std::shared_ptr<const ibBackendQueryable> ibValueMetaObjectAccumulationRegister:
 		                               GetRegisterPeriod()->GetTypeDesc(), ibRegDerivedColumnId(GetRegisterPeriod()->GetMetaID(), 1),
 		                               GetMetaData(), GetRegisterPeriod()->GetSynonym(),
 		                               ibBackendQueryColumn::Kind::Computed).StandsFor(GetRegisterPeriod()->GetQueryColumn())
-		                  .PlaysInBalance(ibBalanceRole::Moment, ibSourcePeriodRank(1)));
+		                  .PlaysInBalance(ibBalanceRole::Moment, g_registerPeriodRank));
 
 		// The coarser projections the view exposes alongside the stored period. DERIVED from the
 		// stored granularity, not listed by hand: the renderer emits exactly the units above it, and
@@ -507,7 +507,7 @@ std::shared_ptr<const ibBackendQueryable> ibValueMetaObjectAccumulationRegister:
 				                               GetRegisterPeriod()->GetTypeDesc(),
 				                               ibRegDerivedColumnId(GetRegisterPeriod()->GetMetaID(), 2 + static_cast<unsigned int>(u.first)),
 				                               GetMetaData(), ibEmptyString, ibBackendQueryColumn::Kind::Computed).StandsFor(GetRegisterPeriod()->GetQueryColumn())
-				                  .PlaysInBalance(ibBalanceRole::Moment, ibSourcePeriodRank(1)));   // a grain of the same period
+				                  .PlaysInBalance(ibBalanceRole::Moment, g_registerPeriodRank));   // a grain of the same period
 	}
 
 	// Dimensions keep their METAID as the column id, so a composed read reaches them by
@@ -524,8 +524,8 @@ std::shared_ptr<const ibBackendQueryable> ibValueMetaObjectAccumulationRegister:
 	// …and they are the junior PERIODS a balance's first and last are counted by after the period itself: two
 	// documents of one second are told apart by the recorder, two lines of one document by the line number.
 	if (withPeriod && HasRecorder() && GetRegisterRecorder() != nullptr && GetRegisterLineNumber() != nullptr) {
-		columns.push_back(ibRegAttributeColumn(GetRegisterRecorder()).PlaysInBalance(ibBalanceRole::Moment, ibSourcePeriodRank(2)));
-		columns.push_back(ibRegAttributeColumn(GetRegisterLineNumber()).PlaysInBalance(ibBalanceRole::Moment, ibSourcePeriodRank(3)));
+		columns.push_back(ibRegAttributeColumn(GetRegisterRecorder()).PlaysInBalance(ibBalanceRole::Moment, g_registerRecorderRank));
+		columns.push_back(ibRegAttributeColumn(GetRegisterLineNumber()).PlaysInBalance(ibBalanceRole::Moment, g_registerLineNumberRank));
 	}
 
 	// Per-resource columns, by shape. A turnover-only register (no record type) has no expense side

@@ -249,7 +249,6 @@
     <ClCompile Include="schema\runtime\debugging.cpp" />
     <ClCompile Include="schema\runtime\sections.cpp" />
     <ClCompile Include="settings\formSettings.cpp" />
-    <ClCompile Include="visualView\choiceRequest.cpp" />
     <ClCompile Include="visualView\controlEnum.cpp" />
     <ClCompile Include="visualView\layerObject.cpp" />
     <ClCompile Include="visualView\visualHost.cpp" />
@@ -414,7 +413,6 @@
     <ClInclude Include="schema\runtime\debugging.h" />
     <ClInclude Include="schema\runtime\sections.h" />
     <ClInclude Include="settings\formSettings.h" />
-    <ClInclude Include="visualView\choiceRequest.h" />
     <ClInclude Include="visualView\controlCtor.h" />
     <ClInclude Include="visualView\controlEnum.h" />
     <ClInclude Include="visualView\formdefs.h" />

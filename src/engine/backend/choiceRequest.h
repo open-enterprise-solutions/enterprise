@@ -3,14 +3,15 @@
 
 // A CHOICE PUT TO THE PERSON — one of a list, through the current session's frame (ibBackendDocFrame::Request,
 // ibProtocol::ibRequest::ibKind::Choice: a caption, and one child per item with its Id, Caption, Picture and whether it is
-// Selected now; the response's Id names the item chosen). The one shape for every "pick one of these" a form on the
-// server makes: a quick choice, a type among several, the columns a list is printed with.
+// Selected now; the response's Id names the item chosen). The one shape for every "pick one of these" the server
+// makes: a quick choice, a type among several, the columns a list is printed with, the document a journal adds.
+// The engine's, beside the frame it asks through: a source's command asks it as well as a form does.
 
 #include <vector>
 
 #include "core/fstring.h"   // ibString
 
-#include "frmserver/frmserver.h"
+#include "backend/backend.h"
 #include "core/description/pictureDescription.h"   // ibPictureDescription — the item's picture, sent by its id
 #include <cstdint>   // std::int32_t
 
@@ -23,13 +24,13 @@ struct ibChoiceItem {
 
 // False: nothing chosen — cancelled, or nobody to ask. Only what was offered can come back: a response naming
 // an Id that is not among `items` is no choice at all.
-FRMSERVER_API bool ibRequestChoice(const ibString& caption, const std::vector<ibChoiceItem>& items, std::int32_t& chosen);
+BACKEND_API bool ibRequestChoice(const ibString& caption, const std::vector<ibChoiceItem>& items, std::int32_t& chosen);
 // …and SEVERAL of a list (Multiple → Ids), those `selected` ticked to begin with. False: none chosen — cancelled, none
 // ticked, or nobody to ask.
-FRMSERVER_API bool ibRequestChoice(const ibString& caption, const std::vector<ibChoiceItem>& items, std::vector<std::int32_t>& chosen);
+BACKEND_API bool ibRequestChoice(const ibString& caption, const std::vector<ibChoiceItem>& items, std::vector<std::int32_t>& chosen);
 // …and the QUICK CHOICE (Quick): no window and no caption, the items dropped under the field pressed, as the desktop's
 // list was. False: dismissed, or nobody to ask.
-FRMSERVER_API bool ibRequestQuickChoice(const std::vector<ibChoiceItem>& items, std::int32_t& chosen);
+BACKEND_API bool ibRequestQuickChoice(const std::vector<ibChoiceItem>& items, std::int32_t& chosen);
 
 // A POPUP MENU AT THE CURSOR — the desktop's wxMenu shown by GetPopupMenuSelectionFromUser, put to the person through
 // the session's frame (ibProtocol::ibRequest::ibKind::Menu): an item's id and caption, its tick, greyed out, and its own items — a
@@ -43,6 +44,6 @@ struct ibMenuItem {
 };
 
 // The id of the item picked. False: dismissed, or nobody to ask; only an id offered and enabled can come back.
-FRMSERVER_API bool ibRequestMenu(const std::vector<ibMenuItem>& items, std::int32_t& chosen);
+BACKEND_API bool ibRequestMenu(const std::vector<ibMenuItem>& items, std::int32_t& chosen);
 
 #endif

@@ -6636,6 +6636,10 @@ void ibDataViewCtrl::SetTopParent(const ibDataViewItem& item)
 				if (m_topParentChain[i] == item) { chainIdx = i; break; }
 			}
 		}
+		// …and NO ITEM IS THE TOP: every crumb up at once, as the topmost one clicked does — the level the server left
+		// (a list's setting replaced), one read and not one per crumb.
+		else if (model != NULL)
+			chainIdx = static_cast<int>(m_topParentChain.GetCount()) - 1;
 		if (model != NULL && chainIdx >= 0)
 		{
 			// Drill UP — pop chain[0..chainIdx] inclusive.  i=0 case

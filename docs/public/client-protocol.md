@@ -255,6 +255,10 @@ the same `Anchor` and asks no more, or — when the page is the whole level, `Be
 cut out as the server would read it. Any other read is a `fetch`, as before. The fields are those of a `fetch` answer,
 so a client that does not look at them takes the page only for a read that matches it. A hierarchical view whose last
 level read named a `Parent` is given no `Rows`: the page would be of the top, and the client reads its own level.
+When the server leaves that level itself — the list's settings replaced, its groups another arrangement's — the
+table's `State` carries `Parent` 0, once, in the frame whose `Rows` are the top's: the client leaves its crumbs and
+stands at the top. A client that does not look at it asks for its old level and is refused, as for any `Parent` the
+table no longer holds.
 A designer's module tab (its `View` `State`: `Syntax`, `Module`, `Modified`, `ReadOnly`) carries the module's `Text`
 in the frame that opens the tab, once; the client draws it without a `fetch`. A server that puts no `Text` there is
 asked with `fetch`, as before. A form's tab reads its module's text as it did.

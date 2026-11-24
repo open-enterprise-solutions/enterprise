@@ -23,6 +23,11 @@ show why.
   read, and the first refusal ends the query. A refusal is an error naming what was refused, never an
   empty result - unless the query says `SELECT ALLOWED`, which asks for exactly "what I may see": a
   refusal then reads as no rows.
+- **Nested queries and `UNION` branches read under the same rights.** A query inside another, the source
+  of every composed report, and each branch of a `UNION` is asked for its right and filtered by the roles.
+  With `ALLOWED`, a branch the user may not read is empty and the others are read; said once, `ALLOWED`
+  covers every query nested in the one that says it, `IN (SELECT …)` included. A journal of documents
+  reads its documents this way and has a `Read` right of its own.
 
 ## Row restrictions
 

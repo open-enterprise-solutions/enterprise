@@ -169,7 +169,7 @@ TEST(FormTableColumn, AnUnknownViewLoadsAsInput)
 	ASSERT_TRUE(written.SetView(ibColumnView_Label));
 	ibDataNode node;
 	ASSERT_TRUE(written.m_column->WriteData(node));
-	node.SetProperty(ibString(ibT("View")), ibDataValue::Int(99));   // a later version's, or a damaged form's
+	node.SetField(ibString(ibT("View")), ibDataValue::Int(99));   // a later version's, or a damaged form's - in its place
 
 	ColumnUnderTest read;
 	ASSERT_TRUE(read.IsOk());

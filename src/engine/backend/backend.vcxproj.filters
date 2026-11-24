@@ -389,6 +389,12 @@
     <ClInclude Include="metaCollection\partial\sequenceManager.h">
       <Filter>metaCollection\partial</Filter>
     </ClInclude>
+    <ClInclude Include="metaCollection\partial\documentJournal.h">
+      <Filter>metaCollection\partial</Filter>
+    </ClInclude>
+    <ClInclude Include="metaCollection\partial\documentJournalManager.h">
+      <Filter>metaCollection\partial</Filter>
+    </ClInclude>
     <ClInclude Include="metaCollection\partial\calculationRegisterManager.h">
       <Filter>metaCollection\partial</Filter>
     </ClInclude>
@@ -548,6 +554,7 @@
     <ClInclude Include="backend_type.h" />
     <ClInclude Include="backend_composition.h" />
     <ClInclude Include="choiceLinkResolver.h" />
+    <ClInclude Include="choiceRequest.h" />
     <ClInclude Include="propertyManager\property\eventAction.h">
       <Filter>propertyManager\property</Filter>
     </ClInclude>
@@ -1496,6 +1503,18 @@
     <ClCompile Include="metaCollection\partial\sequenceMetadata_res.cpp">
       <Filter>metaCollection\partial</Filter>
     </ClCompile>
+    <ClCompile Include="metaCollection\partial\documentJournalManager.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\documentJournalMetadata.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\documentJournalMetaQuery.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\documentJournalMetadata_res.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
     <ClCompile Include="metaCollection\partial\calculationRegisterMetadataMenu.cpp">
       <Filter>metaCollection\partial</Filter>
     </ClCompile>
@@ -1812,6 +1831,7 @@
       <Filter>compiler</Filter>
     </ClCompile>
     <ClCompile Include="choiceLinkResolver.cpp" />
+    <ClCompile Include="choiceRequest.cpp" />
     <ClCompile Include="system\systemManager.cpp">
       <Filter>system</Filter>
     </ClCompile>

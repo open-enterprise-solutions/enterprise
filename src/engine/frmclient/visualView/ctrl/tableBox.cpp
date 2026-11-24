@@ -357,6 +357,11 @@ void ibValueModelTableBox::UpdateState(const ibProtocolNode& state, const ibProt
 		}
 	}
 
+	// The level the server left — the top, said once (a list's setting replaced: its groups were the old arrangement's).
+	// Every crumb goes up at once, and the level is read from the top — from the page above, when it is that read.
+	if ((whole || changed->Has(ibProtocol::ibForm::ibTable::Parent)) && state.Has(ibProtocol::ibForm::ibTable::Parent))
+		m_dataView->SetTopParent(ibDataViewItem());
+
 	// The rows read anew when the server has — the first time, the data view reads them by itself (or from Rows above).
 	if (whole || changed->Has(ibProtocol::ibForm::ibTable::Version)) {
 		const long long version = state.GetInt(ibProtocol::ibForm::ibTable::Version);

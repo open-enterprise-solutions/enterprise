@@ -1,7 +1,7 @@
 #include "gridBox.h"
 #include "backend/system/value/valueDataComposition.h"   // …is there a schema behind this sheet at all
 #include "core/serialize/dataBuilder.h"                // ibDataNode — an event's arguments
-#include "frmserver/visualView/choiceRequest.h"           // ibRequestMenu — what a click offers, the desktop's popup menu
+#include "backend/choiceRequest.h"                        // ibRequestMenu — what a click offers, the desktop's popup menu
 #include "frmserver/docView/templates/docViewSpreadsheet.h"   // the document the box holds
 
 //***********************************************************************

@@ -268,7 +268,10 @@ class Table extends Control {
 				return;
 			if (state.CurrentColumn)
 				this.currentColumn = state.CurrentColumn;
-			if (switched) {
+			// …and the level the server left: the top, said once (Parent) — a list's setting replaced, its groups the old
+			// arrangement's. Unheard, the old group was read again and its crumb stood over the flat rows.
+			const left = state.Parent !== undefined && this.crumbs.length > 0;
+			if (switched || left) {
 				// Another way of showing them: read from nothing, no folder stood in. The State's page is of the mode just
 				// left unless its Version moved with the switch.
 				this.crumbs = [];

@@ -12,7 +12,7 @@
 #include "protocol/protocol.h"                            // ibStyle - its buttons and picture
 #include "backend/backend_composition.h"                  // ibVariantCaption — what the picker shows of a variant
 #include "backend/session/session.h"                      // ibSession — whose queue a compose is delivered on
-#include "frmserver/visualView/choiceRequest.h"           // ibRequestMenu — a variant, picked from the popup menu
+#include "backend/choiceRequest.h"                        // ibRequestMenu — a variant, picked from the popup menu
 #include "frmserver/win/dlgs/settings/savedSettings.h"    // ibDialogSavedSettings — the reader's shelf
 #include "frmserver/win/dlgs/settings/composer/composerSettings.h"   // ibDialogComposerSettings — the reader's settings window
 #include "frmserver/visualView/visualHost.h"              // ibFormVisualEditView — the host a delivered compose updates the box on

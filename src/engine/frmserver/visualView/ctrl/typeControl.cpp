@@ -8,7 +8,7 @@
 
 #include "frmserver/visualView/ctrl/frame.h"
 #include "frmserver/visualView/ctrl/form.h"                           // the form — the source a control's own links are read in
-#include "frmserver/visualView/choiceRequest.h"                      // ibRequestChoice, ibRequestQuickChoice — "pick one of these"
+#include "backend/choiceRequest.h"                                   // ibRequestChoice, ibRequestQuickChoice — "pick one of these"
 #include "backend/backend_mainFrame.h"                                    // the frame a request to the person goes through
 #include "core/serialize/dataBuilder.h"                                // the request and its answer
 #include "protocol/protocol.h"                                            // ibProtocol::ibRequest::ibKind::SimpleChoice

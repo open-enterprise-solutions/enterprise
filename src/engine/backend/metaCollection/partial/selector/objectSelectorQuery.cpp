@@ -18,6 +18,7 @@ bool ibValueSelectorDataObject::FetchNext()
 		// tail). Reused across every Next() — only the anchor (a bound param) changes.
 		m_query = std::make_unique<ibDataQueryBuilder>();
 		m_query->From(GetQueryable());
+		ApplyFilter(*m_query);
 		m_effective = ibDataQueryBuilder::EffectiveSort(GetQueryable(),
 			std::vector<ibQuerySortItem>());
 	}
@@ -157,4 +158,50 @@ void ibValueSelectorRegisterDataObject::MaterialiseRow(const ibDataQueryResult& 
 	m_current.clear();
 	for (const auto object : m_metaObject->GetGenericAttributeArrayObject())
 		m_current[object->GetMetaID()] = selection.GetValue(object->GetQueryColumn());
+}
+
+/////////////////////////////////////////////////////////////////////////
+// Journal selector — anchor = effective-sort values, as a register's.
+/////////////////////////////////////////////////////////////////////////
+
+void ibValueSelectorDocumentJournalDataObject::Reset()
+{
+	m_current.clear();
+	m_anchorSort.clear();
+}
+
+// The period, by the rows' date: both bounds inclusive, an empty one bounding nothing.
+void ibValueSelectorDocumentJournalDataObject::ApplyFilter(ibDataQueryBuilder& query) const
+{
+	const std::shared_ptr<const ibBackendQueryColumn> date = m_queryable->ResolveColumnByName(ibT("Date"));
+	if (!m_from.IsEmpty())
+		query.WhereCompare(date, ibQueryFilterOp::GreaterEqual, m_from);
+	if (!m_to.IsEmpty())
+		query.WhereCompare(date, ibQueryFilterOp::LessEqual, m_to);
+}
+
+bool ibValueSelectorDocumentJournalDataObject::ApplyAnchor(ibReadPageRequest& page) const
+{
+	if (m_anchorSort.empty())
+		return false;   // first row — no keyset clause
+	page.m_hasAnchor        = true;
+	page.m_anchorSortValues = m_anchorSort;
+	return true;
+}
+
+void ibValueSelectorDocumentJournalDataObject::CaptureAnchor(const ibDataQueryResult& selection)
+{
+	m_anchorSort.clear();
+	m_anchorSort.reserve(m_effective.size());
+	for (const auto& c : m_effective)
+		if (c.m_col != nullptr)
+			m_anchorSort.push_back(selection.GetValue(c.m_col));
+}
+
+void ibValueSelectorDocumentJournalDataObject::MaterialiseRow(const ibDataQueryResult& selection)
+{
+	// Every column of the reading, the document's type among them, by its id.
+	m_current.clear();
+	for (const std::shared_ptr<const ibBackendQueryColumn>& column : m_queryable->GetQueryColumns())
+		m_current[column->GetColumnId()] = selection.GetValue(column);
 }

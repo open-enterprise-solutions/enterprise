@@ -215,6 +215,8 @@
     <ClInclude Include="metaCollection\partial\calculationRegister.h" />
     <ClInclude Include="metaCollection\partial\sequence.h" />
     <ClInclude Include="metaCollection\partial\sequenceManager.h" />
+    <ClInclude Include="metaCollection\partial\documentJournal.h" />
+    <ClInclude Include="metaCollection\partial\documentJournalManager.h" />
     <ClInclude Include="metaCollection\partial\calculationRegisterManager.h" />
     <ClInclude Include="metaCollection\partial\chartOfCalculationTypes.h" />
     <ClInclude Include="metaCollection\partial\chartOfCalculationTypesEnum.h" />
@@ -419,6 +421,7 @@
     <ClInclude Include="system\value\valueType.h" />
     <ClInclude Include="tabularModel.h" />
     <ClInclude Include="choiceLinkResolver.h" />
+    <ClInclude Include="choiceRequest.h" />
     <ClInclude Include="uniqueKey.h" />
     <ClInclude Include="vcs\gitService.h" />
     <ClInclude Include="plugin\pluginApi.h" />
@@ -677,6 +680,10 @@
     <ClCompile Include="metaCollection\partial\sequenceMetadataMenu.cpp" />
     <ClCompile Include="metaCollection\partial\sequenceObject.cpp" />
     <ClCompile Include="metaCollection\partial\sequenceMetadata_res.cpp" />
+    <ClCompile Include="metaCollection\partial\documentJournalManager.cpp" />
+    <ClCompile Include="metaCollection\partial\documentJournalMetadata.cpp" />
+    <ClCompile Include="metaCollection\partial\documentJournalMetaQuery.cpp" />
+    <ClCompile Include="metaCollection\partial\documentJournalMetadata_res.cpp" />
     <ClCompile Include="metaCollection\partial\calculationRegisterObject.cpp" />
     <ClCompile Include="metaCollection\partial\chartOfCalculationTypesAction.cpp" />
     <ClCompile Include="metaCollection\partial\chartOfCalculationTypesEnum.cpp" />
@@ -945,6 +952,7 @@
     <ClCompile Include="tabularModelDb.cpp" />
     <ClCompile Include="tabularModelRam.cpp" />
     <ClCompile Include="choiceLinkResolver.cpp" />
+    <ClCompile Include="choiceRequest.cpp" />
     <ClCompile Include="uniqueKey.cpp" />
     <ClCompile Include="compiler\typeAny.cpp" />
     <ClCompile Include="vcs\gitService.cpp" />

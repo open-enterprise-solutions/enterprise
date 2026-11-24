@@ -100,9 +100,10 @@ class ibValueModelTableBox : public ibValueWindowCompositeSearch,
 	void SetChoiceMode(bool on = true) { m_propertyChoiceMode->SetValue(on); }
 
 	// Single point: resolve a dot-path column's value for ONE row (asked per shown cell by the column's
-	// UpdateCell). First hop via the DUMB model (GetValueByMetaID), deeper hops walk the reference.
-	// Returns false for a plain column (model resolves it).
-	bool ResolveCellValue(const ibDataViewItem& item, const class ibValueModelTableBoxColumn* column, ibVariant& out) const;
+	// UpdateCell, and by Find for the value it looks for). First hop via the DUMB model (GetValueByMetaID),
+	// deeper hops walk the reference; a header column through the form. Returns false for a plain column
+	// (model resolves it).
+	bool ResolveCellValue(const ibDataViewItem& item, const class ibValueModelTableBoxColumn* column, ibValue& out) const;
 
 	// A dot-path column — its binding reaches PAST the tablebox prefix + one row column. Such a
 	// column is resolved through the dot: read-only, so its cells take no editing (the column's ReadOnly).
@@ -512,6 +513,9 @@ private:
 	// The folder the client has drilled into in the Hierarchical view (the Parent of its last reset) —
 	// where a new element is created, and what Output list is delimited by. Empty at the top.
 	ibDataViewItem m_drillItem;
+	// …and the folder the client stands in as it read it (the Parent of that reset): the level the server left is said
+	// back (Parent in the State) only while the client still stands in one. 0 = the top.
+	std::int32_t m_clientParent = 0;
 	// The column the cursor stands on across (OnCurrentColumnChanged); 0 = none said.
 	ibFormID m_currentColumn;
 	// The row the client's cursor stands on — as it told (OnCurrentRowChanged) or was told (CurrentRow): what the

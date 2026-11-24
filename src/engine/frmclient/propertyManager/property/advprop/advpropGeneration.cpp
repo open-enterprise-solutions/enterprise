@@ -47,12 +47,15 @@ public:
 	{
 		// ibPropertyGeneration — the bases as the server stores them (ibMetaDescriptionMemory: the metaIds it names),
 		// what may fill it the row's choices.
-		ibPropertyRegistry::Register(wxT("ibPropertyGeneration"), [](ibBackendProperty* property) -> ibPGProperty* {
+		const ibPropertyRegistry::ibPropertyMaker maker = [](ibBackendProperty* property) -> ibPGProperty* {
 			ibPropertyChoiceList choices;
 			property->GetValueList(choices);
 			return new ibPGGenerationProperty(property->GetPropertyObject(), property->GetLabel(), property->GetName(),
 				property->GetValue(), choices);
-		});
+		};
+		ibPropertyRegistry::Register(wxT("ibPropertyGeneration"), maker);
+		// …and its heir, the documents a journal lists: the same binding with its own choices, named by its own class.
+		ibPropertyRegistry::Register(wxT("ibPropertyJournalDocuments"), maker);
 	}
 }g_generationLoader;
 

@@ -94,6 +94,34 @@ ibValuePtr<ibValueRecordManagerObject> ibValueSelectorRegisterDataObject::GetRec
 	);
 }
 
+//////////////////////////////////////////////////////////////////////////
+
+#include "backend/metaCollection/partial/documentJournal.h"   // ibValueMetaObjectDocumentJournal — the journal selected
+
+ibValueSelectorDocumentJournalDataObject::ibValueSelectorDocumentJournalDataObject(const ibValueMetaObjectDocumentJournal* metaObject,
+	const ibValue& from, const ibValue& to) :
+	ibValueSelectorDataObject(),
+	m_metaObject(metaObject), m_queryable(metaObject->GetQueryable()), m_from(from), m_to(to)
+{
+	m_members.Bind(this, &ibValueSelectorDocumentJournalDataObject::FillMembers);
+	Reset();
+}
+
+const ibValueMetaObjectGenericData* ibValueSelectorDocumentJournalDataObject::GetMetaObject() const
+{
+	return m_metaObject;
+}
+
+// The object of the document the row is — its reference says which kind.
+ibValuePtr<ibValueRecordDataObjectRef> ibValueSelectorDocumentJournalDataObject::GetObject() const
+{
+	const ibValue* ref = m_current.find_value(m_queryable->GetPrimaryKeyColumns().front()->GetColumnId());
+	ibValueReferenceDataObject* reference = nullptr;
+	if (ref == nullptr || !ref->ConvertToValue(reference) || reference == nullptr)
+		return nullptr;
+	return reference->GetObject();
+}
+
 enum Func {
 	enNext,
 	enReset,
@@ -238,6 +266,55 @@ bool ibValueSelectorRegisterDataObject::GetPropVal(const long lPropNum, ibValue&
 {
 	const ibMetaID& id = m_members.GetPropData(lPropNum);
 	if (m_keyValues.empty()) {
+		if (!appData->DesignerMode()) {
+			pvarPropVal = ibValue(ibValueTypes::TYPE_NULL);
+			return true;
+		}
+	}
+	pvarPropVal = m_current[id];
+	return true;
+}
+
+//////////////////////////////////////////////////////////////////////////
+
+// The journal's columns, as its reading publishes them — Ref, Date, Number, Posted, DeletionMark, DocumentType.
+void ibValueSelectorDocumentJournalDataObject::FillMembers(ibMemberTable& helper) const
+{
+	helper.AppendFunc(ibT("Next"), ibT("Next()"));
+	helper.AppendFunc(ibT("Reset"), ibT("Reset()"));
+	helper.AppendFunc(ibT("GetObject"), ibT("GetObject()"));
+
+	for (const std::shared_ptr<const ibBackendQueryColumn>& column : m_queryable->GetQueryColumns())
+		helper.AppendProp(column->GetName(), true, false, column->GetColumnId());
+}
+
+bool ibValueSelectorDocumentJournalDataObject::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray)
+{
+	switch (lMethodNum)
+	{
+	case enNext:
+		pvarRetValue = Next();
+		return true;
+	case enReset:
+		Reset();
+		return true;
+	case enGetObjectRecord:
+		pvarRetValue = GetObject();
+		return true;
+	}
+
+	return false;
+}
+
+bool ibValueSelectorDocumentJournalDataObject::SetPropVal(const long lPropNum, const ibValue& varPropVal)
+{
+	return false;
+}
+
+bool ibValueSelectorDocumentJournalDataObject::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
+{
+	const ibMetaID& id = m_members.GetPropData(lPropNum);
+	if (m_current.empty()) {
 		if (!appData->DesignerMode()) {
 			pvarPropVal = ibValue(ibValueTypes::TYPE_NULL);
 			return true;

@@ -3,6 +3,8 @@
 
 #include "backend/propertyManager/propertyObject.h"
 
+#include <type_traits>   // std::is_null_pointer_v — whether a filter was given
+
 //base property for "enum"
 class BACKEND_API ibPropertyEnumBase : public ibProperty {
 public:
@@ -118,7 +120,9 @@ protected:
 		ibPropertyChoiceList list;
 		for (unsigned int idx = 0; idx < m_enumCreator->GetEnumCount(); idx++) {
 			const long id = static_cast<long>(m_enumCreator->GetEnumValue(idx));
-			if constexpr (filter != nullptr) {
+			// Told by the TYPE, not by comparing the pointer: a member function's pointer compared under GCC's sanitizers
+			// is no constant expression (`IsViewAllowed != 0`, the ASan + UBSan job, 2026-11-24).
+			if constexpr (!std::is_null_pointer_v<decltype(filter)>) {
 				if (!IsTaken(filter, m_owner, m_enumCreator->GetEnumValue(idx)))
 					continue;
 			}

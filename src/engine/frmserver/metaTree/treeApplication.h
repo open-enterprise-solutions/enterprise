@@ -121,6 +121,7 @@ private:
 	void AddCatalogItem(ibValueMetaObject* obj, ibDataNode& item);
 	void AddChartOfAccountsItem(ibValueMetaObject* obj, ibDataNode& item);
 	void AddDocumentItem(ibValueMetaObject* obj, ibDataNode& item);
+	void AddDocumentJournalItem(ibValueMetaObject* obj, ibDataNode& item);
 	void AddEnumerationItem(ibValueMetaObject* obj, ibDataNode& item);
 	void AddDataToolItem(ibValueMetaObject* obj, ibDataNode& item);
 	void AddInformationRegisterItem(ibValueMetaObject* obj, ibDataNode& item);

@@ -536,10 +536,48 @@ ibSubqueryQueryable::ibSubqueryQueryable(const ibDataQueryBuilder& inner, long t
 
 ibSubqueryQueryable::~ibSubqueryQueryable() = default;   // unique_ptr<ibDataQueryBuilder> — complete here
 
-// Vends the computed (RAM) provider — the one every computed source uses.
+// ⭐ ITS SOURCE'S PROVIDER WHERE THE SERVER READS IT, and then it is a derived table of that base's statements; the computed
+// (RAM) one otherwise — the one every computed source uses.
 ibBackendQueryProvider& ibSubqueryQueryable::GetProvider() const
 {
+	if (ReadsOnServer())
+		return m_inner->GetPrimarySource()->GetProvider();
 	return ibComputedProviderInstance();
+}
+
+// ⭐ THE SERVER WRITES ITS ROWS WHEN THEY ARE ONE READ — of one source a metaobject stands behind, on a base this query's
+// connection joins, every published column that source's own and read as it is: none by an alias, none put back together
+// from a spread, no fold, no limit, nothing answered over the finished row. Its read is then the source's, with its
+// policy folded in (GetSourceRelation, BuildRelation) — and a union of such reads is one statement: the text's
+// `SELECT ALLOWED … UNION ALL …` and the journal of documents alike (2026-11-24), which were copied into a base in memory
+// branch by branch. Anything else is computed in memory, as it was.
+bool ibSubqueryQueryable::ReadsOnServer() const
+{
+	if (m_inner == nullptr || m_aggregate || m_top > 0 || !m_computedOverRow.empty()
+		|| !m_inner->GetDotWalks().empty() || !m_inner->GetSelectExprs().empty())
+		return false;
+	std::vector<std::shared_ptr<const ibBackendQueryable>> sources;
+	if (!m_inner->GetSources(sources) || sources.size() != 1 || sources.front() == nullptr
+		|| sources.front()->GetQueryTableId() == 0)
+		return false;
+	const ibBackendQueryProvider& provider = sources.front()->GetProvider();
+	if (provider.IsComputedInRam() || !provider.CanJoinOn(m_inner->GetHolder()))
+		return false;
+	for (size_t i = 0; i < m_columns.size(); ++i)
+		if (m_columns[i] == nullptr || i >= m_readFrom.size() || m_readFrom[i] == nullptr
+			|| (i < m_readAlias.size() && !m_readAlias[i].IsEmpty())
+			|| (i < m_readPrefix.size() && !m_readPrefix[i].IsEmpty()))
+			return false;
+	return true;
+}
+
+// …named after the source it reads, where the server reads it: what its derived table goes under and its fields are
+// qualified by (ColocatedQualOf). Computed in memory it is a table of no name, as the temp table is.
+ibString ibSubqueryQueryable::GetQueryTableName() const
+{
+	if (!ReadsOnServer())
+		return ibEmptyString;
+	return ibString(ibT("q_")) + m_inner->GetPrimarySource()->GetQueryTableName();
 }
 
 // Run the inner query (with the outer's pushed-down conditions) and materialise its rows
@@ -855,10 +893,15 @@ static ibQueryColumnExprPtr ExprOver(const ibQueryColumnExprPtr& e, const ibColu
 	ibQueryColumnExprPtr out = std::make_shared<ibQueryColumnExpr>(*e);
 	if (e->m_col != nullptr) {
 		out->m_col = over(e->m_col);
-		// ONE NAMED FIELD of the column moves with it: the same suffix after the name the column now has.
-		ibString suffix;
-		if (!e->m_field.IsEmpty() && out->m_col != e->m_col && e->m_field.StartsWith(e->m_col->GetPhysicalName(), &suffix))
-			out->m_field = out->m_col->GetPhysicalName() + suffix;
+		// ONE NAMED FIELD of the column moves with it: the field of the same ROLE on the column it now is. (By the tail
+		// past the old name, a field the column lies in that is another's — a journal's document type — never moved.)
+		if (!e->m_field.IsEmpty() && out->m_col != e->m_col)
+			for (const ibColumnSlot& from : DescribeColumnLayout(*e->m_col))
+				if (from.m_name == e->m_field) {
+					for (const ibColumnSlot& to : DescribeColumnLayout(*out->m_col))
+						if (to.m_role == from.m_role) { out->m_field = to.m_name; break; }
+					break;
+				}
 	}
 	out->m_lhs  = ExprOver(e->m_lhs, over);
 	out->m_rhs  = ExprOver(e->m_rhs, over);

@@ -1,0 +1,65 @@
+{
+  "format": "OES-HELP-1.0",
+  "schema_version": 1,
+  "locale": "ru",
+  "entries": [
+    {
+      "id": "cls.DocumentJournal",
+      "name_local": "DocumentJournals",
+      "name_en": "DocumentJournals",
+      "kind": "collection",
+      "category_keys": [
+        "value_types"
+      ],
+      "signature": "DocumentJournals.<Name>",
+      "description": "Один список по документам нескольких видов. Его строки - строки самих документов: по одной на каждый записанный документ каждого перечисленного вида, с колонками, которые есть у любого документа: Ref, Date, Number, Posted и DeletionMark, и DocumentType - тип документа строки, значение типа Type. У журнала своё право Read; внутри него каждый документ читается по своим правам, а тот, что пользователю читать нельзя, в список не попадает. Запрос читает их как DocumentJournal.<Name>, их же показывает форма списка журнала, а у менеджера есть Select, GetForm, GetListForm и GetTemplate.",
+      "parameters": "Нет.",
+      "return_descr": "Менеджер журнала.",
+      "example": "sel = DocumentJournals.Sales.Select();",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "mth.DocumentJournal.Select",
+        "mth.DocumentJournal.GetListForm"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "mth.DocumentJournal.Select",
+      "name_local": "Select",
+      "name_en": "Select",
+      "kind": "method",
+      "category_keys": [
+        "value_types"
+      ],
+      "signature": "Select(From : date, To : date)",
+      "description": "Выборка по строкам журнала за период, которую обходят как выборку документа: Next() переходит к следующей строке и отвечает, была ли она, Reset() начинает сначала. Колонки строки - её свойства: Ref, Date, Number, Posted, DeletionMark, DocumentType, а GetObject() - объект документа строки: счёт возвращается счётом.",
+      "parameters": "From - самая ранняя дата; To - самая поздняя; обе включаются. Любую можно опустить.",
+      "return_descr": "Выборка журнала.",
+      "example": "sel = DocumentJournals.Sales.Select(BegOfMonth(CurrentDate()));\nwhile (sel.Next()) {\n    Message(sel.DocumentType);\n}",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.DocumentJournal"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "mth.DocumentJournal.GetListForm",
+      "name_local": "GetListForm",
+      "name_en": "GetListForm",
+      "kind": "method",
+      "category_keys": [
+        "value_types"
+      ],
+      "signature": "GetListForm(Name : string, Owner, Key : guid)",
+      "description": "Форма списка журнала - основная форма списка, если она указана, иначе созданная по его колонкам. Открытие строки открывает её документ.",
+      "parameters": "Name - форма журнала или пусто для основной; Owner - форма-владелец; Key - ключ окна формы.",
+      "return_descr": "Форма.",
+      "example": "DocumentJournals.Sales.GetListForm().Open();",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.DocumentJournal"
+      ],
+      "reviewed": false
+    }
+  ]
+}

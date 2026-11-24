@@ -25,6 +25,7 @@
 #include "backend/metaCollection/partial/accumulationRegister.h"
 #include "backend/metaCollection/partial/accountingRegister.h"     // ibAcctArgs — the layout a call is read by
 #include "backend/metaCollection/partial/chartOfAccountsEnum.h"   // ibAccountType — the fold the balance applies
+#include "backend/query/tempColumn.h"                            // ibTempColumn — a view's column, as the view publishes it
 
 #include <algorithm>   // std::find — the condition surface's own columns
 #include <set>
@@ -43,11 +44,24 @@
 
 namespace {
 
-// The three names a register's own scaffold columns carry in these tests. Real registers read them
-// off their attributes; the RULE takes them as arguments precisely so it never has to know.
-const ibString kPeriod   = wxT("Period");
-const ibString kRecorder = wxT("Recorder");
-const ibString kLine     = wxT("LineNumber");
+// The period's name in these tests. A real register reads it off its attribute; the RULE takes it as an argument
+// precisely so it never has to know.
+const ibString kPeriod = wxT("Period");
+
+// A column of the register's view as the view publishes it (accumulationRegisterMetadataSchema.cpp): a name, and
+// what it is in a balance — the period and each grain of it the first moment, the recorder and the line number the
+// junior ones, the rest dimensions. The rule asks the second, never the first.
+std::shared_ptr<const ibBackendQueryColumn> Column(const ibString& name, ibBalanceRole role = ibBalanceRole::Dimension,
+                                                   int rank = 0)
+{
+	const std::shared_ptr<ibTempColumn> column = std::make_shared<ibTempColumn>(name, ibTypeDescription(), 0, nullptr);
+	column->PlaysInBalance(role, rank);
+	return column;
+}
+std::shared_ptr<const ibBackendQueryColumn> Period()   { return Column(kPeriod, ibBalanceRole::Moment, g_registerPeriodRank); }
+std::shared_ptr<const ibBackendQueryColumn> Grain(const ibString& unit) { return Column(kPeriod + unit, ibBalanceRole::Moment, g_registerPeriodRank); }
+std::shared_ptr<const ibBackendQueryColumn> Recorder() { return Column(wxT("Recorder"), ibBalanceRole::Moment, g_registerRecorderRank); }
+std::shared_ptr<const ibBackendQueryColumn> Line()     { return Column(wxT("LineNumber"), ibBalanceRole::Moment, g_registerLineNumberRank); }
 
 ibRegFold Fold(ibRegGranularity kind, ibTotalsPeriod unit = ibTotalsPeriod::Month)
 {
@@ -57,10 +71,10 @@ ibRegFold Fold(ibRegGranularity kind, ibTotalsPeriod unit = ibTotalsPeriod::Mont
 	return fold;
 }
 
-// The question as both sides ask it — with the register's scaffold names supplied.
-bool Fits(const ibString& column, const ibRegFold& fold)
+// The question as both sides ask it — with the register's period supplied.
+bool Fits(const std::shared_ptr<const ibBackendQueryColumn>& column, const ibRegFold& fold)
 {
-	return ibRegisterViewColumnFits(column, kPeriod, fold, kRecorder, kLine);
+	return ibRegisterViewColumnFits(*column, kPeriod, fold);
 }
 
 ibValue Word(const ibString& text)
@@ -146,9 +160,9 @@ TEST(RegisterFold, AnUnknownWordIsRefused)
 TEST(RegisterColumns, TheWholeIntervalHasNoPeriodColumnAtAll)
 {
     const ibRegFold whole = Fold(ibRegGranularity::Whole);
-    EXPECT_FALSE(Fits(kPeriod,   whole));
-    EXPECT_FALSE(Fits(kRecorder, whole));
-    EXPECT_FALSE(Fits(kLine,     whole));
+    EXPECT_FALSE(Fits(Period(),   whole));
+    EXPECT_FALSE(Fits(Recorder(), whole));
+    EXPECT_FALSE(Fits(Line(),     whole));
 }
 
 // UNDECIDED OFFERS EVERYTHING, and that is not the same table as the one above. An argument written
@@ -157,9 +171,9 @@ TEST(RegisterColumns, TheWholeIntervalHasNoPeriodColumnAtAll)
 TEST(RegisterColumns, UndecidedOffersEveryProjection)
 {
     const ibRegFold undecided = Fold(ibRegGranularity::Auto);
-    EXPECT_TRUE(Fits(kPeriod,   undecided));
-    EXPECT_TRUE(Fits(kRecorder, undecided));
-    EXPECT_TRUE(Fits(kLine,     undecided));
+    EXPECT_TRUE(Fits(Period(),   undecided));
+    EXPECT_TRUE(Fits(Recorder(), undecided));
+    EXPECT_TRUE(Fits(Line(),     undecided));
 }
 
 // THE RECORDER IS NOT A DIMENSION. It exists on a row only where a row IS a movement (or a
@@ -167,27 +181,27 @@ TEST(RegisterColumns, UndecidedOffersEveryProjection)
 // where the row is a month's worth of documents.
 TEST(RegisterColumns, TheRecorderExistsOnlyWhereARowIsAMovement)
 {
-    EXPECT_TRUE (Fits(kRecorder, Fold(ibRegGranularity::Recorder)));
-    EXPECT_TRUE (Fits(kRecorder, Fold(ibRegGranularity::Record)));
-    EXPECT_FALSE(Fits(kRecorder, Fold(ibRegGranularity::Period)));
-    EXPECT_FALSE(Fits(kRecorder, Fold(ibRegGranularity::Calendar, ibTotalsPeriod::Month)));
-    EXPECT_FALSE(Fits(kRecorder, Fold(ibRegGranularity::Whole)));
+    EXPECT_TRUE (Fits(Recorder(), Fold(ibRegGranularity::Recorder)));
+    EXPECT_TRUE (Fits(Recorder(), Fold(ibRegGranularity::Record)));
+    EXPECT_FALSE(Fits(Recorder(), Fold(ibRegGranularity::Period)));
+    EXPECT_FALSE(Fits(Recorder(), Fold(ibRegGranularity::Calendar, ibTotalsPeriod::Month)));
+    EXPECT_FALSE(Fits(Recorder(), Fold(ibRegGranularity::Whole)));
 }
 
 // The line number goes one step further: a DOCUMENT's worth of movements has no single line.
 TEST(RegisterColumns, TheLineNumberExistsOnlyAtTheMovementItself)
 {
-    EXPECT_TRUE (Fits(kLine, Fold(ibRegGranularity::Record)));
-    EXPECT_FALSE(Fits(kLine, Fold(ibRegGranularity::Recorder)));
-    EXPECT_FALSE(Fits(kLine, Fold(ibRegGranularity::Period)));
+    EXPECT_TRUE (Fits(Line(), Fold(ibRegGranularity::Record)));
+    EXPECT_FALSE(Fits(Line(), Fold(ibRegGranularity::Recorder)));
+    EXPECT_FALSE(Fits(Line(), Fold(ibRegGranularity::Period)));
 }
 
 TEST(RegisterColumns, AGranularityThatKeepsThePeriodOffersIt)
 {
-    EXPECT_TRUE(Fits(kPeriod, Fold(ibRegGranularity::Period)));
-    EXPECT_TRUE(Fits(kPeriod, Fold(ibRegGranularity::Calendar, ibTotalsPeriod::Month)));
-    EXPECT_TRUE(Fits(kPeriod, Fold(ibRegGranularity::Recorder)));
-    EXPECT_TRUE(Fits(kPeriod, Fold(ibRegGranularity::Record)));
+    EXPECT_TRUE(Fits(Period(), Fold(ibRegGranularity::Period)));
+    EXPECT_TRUE(Fits(Period(), Fold(ibRegGranularity::Calendar, ibTotalsPeriod::Month)));
+    EXPECT_TRUE(Fits(Period(), Fold(ibRegGranularity::Recorder)));
+    EXPECT_TRUE(Fits(Period(), Fold(ibRegGranularity::Record)));
 }
 
 // A DIMENSION OR A RESOURCE IS THERE WHATEVER THE GRANULARITY. The rule is about the period
@@ -198,32 +212,26 @@ TEST(RegisterColumns, ADimensionIsThereOnEveryGranularity)
     for (const ibRegGranularity kind : { ibRegGranularity::Whole, ibRegGranularity::Auto,
                                          ibRegGranularity::Period, ibRegGranularity::Calendar,
                                          ibRegGranularity::Recorder, ibRegGranularity::Record }) {
-        EXPECT_TRUE(Fits(wxT("Warehouse"),      Fold(kind))) << static_cast<int>(kind);
-        EXPECT_TRUE(Fits(wxT("QtyTurnover"),    Fold(kind))) << static_cast<int>(kind);
+        EXPECT_TRUE(Fits(Column(wxT("Warehouse")),   Fold(kind))) << static_cast<int>(kind);
+        EXPECT_TRUE(Fits(Column(wxT("QtyTurnover")), Fold(kind))) << static_cast<int>(kind);
     }
 }
 
-// …AND ONE NAMED AFTER THE PERIOD IS STILL ONE. A projection is the period or the period rolled to a unit;
-// the prefix alone took `PeriodKind` for a projection and dropped it from every reading but Auto.
+// …AND ONE NAMED AFTER THE PERIOD IS STILL ONE. A projection is what the view publishes as the period or the period
+// rolled to a unit, whatever a dimension is called: the prefix took `PeriodKind` for a projection, and the prefix with a
+// unit's word after it still took `PeriodMonth` — both dropped from every reading but Auto.
 TEST(RegisterColumns, ADimensionNamedAfterThePeriodIsStillADimension)
 {
     for (const ibRegGranularity kind : { ibRegGranularity::Whole, ibRegGranularity::Auto,
                                          ibRegGranularity::Period, ibRegGranularity::Calendar,
-                                         ibRegGranularity::Recorder, ibRegGranularity::Record })
-        EXPECT_TRUE(Fits(wxT("PeriodKind"), Fold(kind))) << static_cast<int>(kind);
+                                         ibRegGranularity::Recorder, ibRegGranularity::Record }) {
+        EXPECT_TRUE(Fits(Column(wxT("PeriodKind")),  Fold(kind))) << static_cast<int>(kind);
+        EXPECT_TRUE(Fits(Column(wxT("PeriodMonth")), Fold(kind))) << static_cast<int>(kind);
+    }
 
     // …while a unit's projection stays one: there on the undecided reading, not on the whole one.
-    EXPECT_TRUE (Fits(wxT("PeriodMonth"), Fold(ibRegGranularity::Auto)));
-    EXPECT_FALSE(Fits(wxT("PeriodMonth"), Fold(ibRegGranularity::Whole)));
-}
-
-// ⚠ A REGISTER WITH NO RECORDER AT ALL supplies no name for one, and the rule must not then match
-// the empty string against every column it is asked about.
-TEST(RegisterColumns, ARegisterWithoutARecorderIsAskedWithoutOne)
-{
-    const ibRegFold record = Fold(ibRegGranularity::Record);
-    EXPECT_TRUE(ibRegisterViewColumnFits(wxT("Warehouse"), kPeriod, record));
-    EXPECT_TRUE(ibRegisterViewColumnFits(kPeriod,          kPeriod, record));
+    EXPECT_TRUE (Fits(Grain(wxT("Month")), Fold(ibRegGranularity::Auto)));
+    EXPECT_FALSE(Fits(Grain(wxT("Month")), Fold(ibRegGranularity::Whole)));
 }
 
 // =============================================================================

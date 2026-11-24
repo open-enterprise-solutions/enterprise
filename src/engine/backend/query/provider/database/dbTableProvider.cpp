@@ -1308,6 +1308,9 @@ bool ScalarReadable(const std::shared_ptr<const ibBackendQueryColumn>& col, cons
 {
 	if (col == nullptr)     return false;
 	if (col->IsRawColumn()) return true;
+	// A column that lies in fields and has no value field among them — a journal's document type, in its reference's
+	// type field — is made by its own read out of them, as a reference is.
+	if (!DescribeColumnLayout(*col).empty() && ColumnValueSlots(*col).empty()) return false;
 	if (ibColumnCodec::HasReference(*col))                            return false;   // reference -> rehydration needed
 	if (col->GetTypeDesc().ContainType(ibValueTypes::TYPE_ENUM))     return false;   // enum -> variant reconstruction
 	return true;
@@ -1682,23 +1685,14 @@ ibQueryRelPtr ibComposedQueryable::GetSourceRelation(const ibString& alias) cons
 		for (const std::shared_ptr<ibComposedQueryColumn>& twin : Twins()) {
 			const std::shared_ptr<const ibBackendQueryColumn>& origin = twin->Origin();
 			const std::shared_ptr<const ibBackendQueryColumn>  own    = b == 0 ? origin : branch->ResolveColumnByName(origin->GetName());
-			const std::vector<ibString> ownFields = own != nullptr ? ColumnFieldNames(*own) : std::vector<ibString>();
-			const ibString                  base = origin->GetPhysicalName();
-			const std::vector<ibColumnSlot> from = origin->DescribeLayout();
-			const std::vector<ibColumnSlot> to   = twin->DescribeLayout();
 			const std::vector<ibColumnSlot> mine = own != nullptr ? own->DescribeLayout() : std::vector<ibColumnSlot>();
-			// The branch's field for each of the twin's: of a spread, the one of the same suffix; of a column whose fields
-			// are named otherwise (a moment, an order), the one at the same place.
-			const bool bySuffix = std::all_of(from.begin(), from.end(), [&base](const ibColumnSlot& s) { return s.m_name.StartsWith(base); });
-			for (size_t i = 0; i < to.size(); ++i) {
-				ibString field;
-				if (own != nullptr && bySuffix)
-					field = own->GetPhysicalName() + to[i].m_name.Mid(twin->GetPhysicalName().length());
-				else if (own != nullptr && i < mine.size() && mine.size() == to.size())
-					field = mine[i].m_name;
-				const ibQueryExprPtr value = !field.IsEmpty() && std::find(ownFields.begin(), ownFields.end(), field) != ownFields.end()
-					? ibCol(qual, field) : ibCast(ibConst(ibValue()), to[i].m_type);
-				projection.push_back(ibQueryProjItem{ value, to[i].m_name });
+			// The branch's field for each of the twin's: the one of the same ROLE — a twin keeps its origin's slots and their
+			// roles. Paired by the tail past each one's name, a column whose fields are another's (a moment, an order, a
+			// journal's document type) had no tail to pair and went by place.
+			for (const ibColumnSlot& slot : twin->DescribeLayout()) {
+				const auto field = std::find_if(mine.begin(), mine.end(), [&slot](const ibColumnSlot& m) { return m.m_role == slot.m_role; });
+				const ibQueryExprPtr value = field != mine.end() ? ibCol(qual, field->m_name) : ibCast(ibConst(ibValue()), slot.m_type);
+				projection.push_back(ibQueryProjItem{ value, slot.m_name });
 			}
 		}
 
@@ -1707,6 +1701,18 @@ ibQueryRelPtr ibComposedQueryable::GetSourceRelation(const ibString& alias) cons
 		stacked = stacked == nullptr ? rel : keepRepeats ? ibUnionAll(stacked, rel) : ibUnion(stacked, rel);
 	}
 	return ibSubquery(stacked, alias);
+}
+
+// ⭐ A NESTED QUERY THE SERVER READS IS THE READ IT IS — its own door's relation, under that door's policy (BuildRelation
+// folds it: a role's row filter stands inside it, a source the reader may not read is refused, or read as no row where the
+// query reads AS ALLOWED), as a derived table under the name it is qualified by. Its published columns are its source's
+// own (ReadsOnServer), so the read's fields are theirs, as the branch of a union takes them by role.
+ibQueryRelPtr ibSubqueryQueryable::GetSourceRelation(const ibString& alias) const
+{
+	if (!ReadsOnServer())
+		return nullptr;
+	const ibQueryRelPtr rows = m_inner->BuildRelation();
+	return rows != nullptr ? ibSubquery(rows, alias) : nullptr;
 }
 
 // A TYPE AS A VALUE — the doors declared in dbTableProvider.h. Implemented in this file because this
@@ -2713,8 +2719,17 @@ ibDataQueryResult ibDbTableProvider::ExecuteRead(const ibDataQuerySpec& spec, co
 //
 // ⚠ NOR IS THE SORT: the effective sort is still computed (a keyset read needs a total order to
 // build its predicate against), but nothing anchors it here — there is no cursor to continue.
-ibQueryRelPtr ibDbTableProvider::BuildReadRelation(const ibDataQuerySpec& spec)
+//
+// ⭐ A JOIN OR A UNION IS THE COMPOSITE IT IS — read as one source, as a declared query's body is (AttachNamedQueries),
+// when one statement of this base reads every source of it; otherwise there is no relation, and the caller reads rows.
+// Read through its first source alone, a union handed back its first branch without a word.
+ibQueryRelPtr ibDbTableProvider::BuildReadRelation(const ibDataQuerySpec& given)
 	{
+		if (given.m_root != nullptr && given.m_root->m_kind != ibQueryNode::Kind::Source
+			&& !ibCanJoinOn(given.m_root, given.m_holder))
+			return nullptr;
+		const ibDataQuerySpec spec = ibQueryComposer::OverComposite(given);
+
 		const std::vector<ibQuerySortItem> effective =
 			ibDataQueryBuilder::EffectiveSort(spec.m_queryable, spec.m_sorts);
 
@@ -2976,24 +2991,22 @@ public:
 		if (!sawComposite || occs.empty())
 			return {};
 
-		// Per-occurrence field spreads, cached; the first drives the suffix list.
-		std::vector<std::vector<ibString>> occFields;
-		occFields.reserve(occs.size());
+		// Per-occurrence layouts, cached; the first drives the list. Each kind's field of a ROLE meets the others' of it,
+		// under that role's suffix — what a read names after a prefix. (Paired by the tail past each one's name, a field
+		// a column lies in that is another's had none.)
+		std::vector<std::vector<ibColumnSlot>> occSlots;
+		occSlots.reserve(occs.size());
 		for (const LeafOccurrence& o : occs)
-			occFields.push_back(ColumnFieldNames(*o.m_col));
+			occSlots.push_back(DescribeColumnLayout(*o.m_col));
 
 		std::vector<SpreadField> merged;
-		const ibString repBase = occs.front().m_col->GetPhysicalName();
-		for (const ibString& repField : occFields.front()) {
-			const ibString suffix = repField.Mid(repBase.length());
+		for (const ibColumnSlot& rep : occSlots.front()) {
 			std::vector<ibQueryExprPtr> args;
-			for (size_t oi = 0; oi < occs.size(); ++oi) {
-				const ibString branchField = occs[oi].m_col->GetPhysicalName() + suffix;
-				for (const ibString& bf : occFields[oi])
-					if (bf == branchField) { args.push_back(ibCol(occs[oi].m_alias, branchField)); break; }
-			}
+			for (size_t oi = 0; oi < occs.size(); ++oi)
+				for (const ibColumnSlot& s : occSlots[oi])
+					if (s.m_role == rep.m_role) { args.push_back(ibCol(occs[oi].m_alias, s.m_name)); break; }
 			if (args.empty()) continue;
-			merged.push_back(SpreadField{ suffix, args.size() == 1 ? args.front() : ibFunc(ibT("COALESCE"), args) });
+			merged.push_back(SpreadField{ ibFieldSuffix(rep.m_role), args.size() == 1 ? args.front() : ibFunc(ibT("COALESCE"), args) });
 		}
 		return merged;
 	}
@@ -3375,15 +3388,15 @@ void ibDbTableProvider::BuildAggregateQuery(const ibDataQuerySpec& spec, ibDatab
 			}
 			if (!keyAlias.IsEmpty()) {
 				const ibString sqlAlias = ibSqlAliasOf(keyAlias);
-				const ibString base = gcol->GetPhysicalName();
 				// A SCALAR leaf is one field under the alias — the flat read's test (TypedScalarEmpty), so the
-				// lowering's by-alias read and this projection cannot disagree about what a scalar is.
+				// lowering's by-alias read and this projection cannot disagree about what a scalar is. Any other
+				// is its fields under the alias, each by its role's suffix — what the read names after it.
 				const bool scalar = TypedScalarEmpty(gcol) != nullptr && ibReadsBackAsItself(gcol->GetTypeDesc());
-				for (const ibString& field : ColumnFieldNames(*gcol)) {
-					const ibQueryExprPtr gexpr = qualCol(qual, field);
+				for (const ibColumnSlot& slot : DescribeColumnLayout(*gcol)) {
+					const ibQueryExprPtr gexpr = qualCol(qual, slot.m_name);
 					q.GroupBy(gexpr);
 					if (!scalar)
-						projection.push_back(ibQueryProjItem{ gexpr, sqlAlias + field.Mid(base.length()) });
+						projection.push_back(ibQueryProjItem{ gexpr, sqlAlias + ibFieldSuffix(slot.m_role) });
 				}
 				if (scalar)
 					projection.push_back(ibQueryProjItem{ qualCol(qual, FirstSqlFieldOfColumn(gcol)), sqlAlias });
@@ -4277,14 +4290,16 @@ static ibSelectorTree RunRollupTotals(const ibDataQuerySpec& spec, ibQueryRelPtr
 					for (const ibRefJoinChain::SpreadField& sf : ki.spread)
 						add(sf.m_expr, sf.m_suffix);
 				else {
-					const ibString base = g->GetPhysicalName();
-					for (const ibString& f : ColumnFieldNames(*g))
-						add(fieldCol(f), f.Mid(base.length()));
+					// Each field under its ROLE's suffix — what the column's read puts after the prefix. Cut off the
+					// field's name, it was the tail past the column's own name, and a field the column lies in that is
+					// another's (a journal's document type, in the reference's type field) has no such tail.
+					for (const ibColumnSlot& slot : DescribeColumnLayout(*g))
+						add(fieldCol(slot.m_name), ibFieldSuffix(slot.m_role));
 				}
 				ibString refAlias;
 				for (const ibColumnSlot& slot : DescribeColumnLayout(*g))
 					if (slot.m_role == ibColumnRole::ReferenceId)
-						refAlias = prefix + slot.m_name.Mid(g->GetPhysicalName().length());
+						refAlias = prefix + ibFieldSuffix(slot.m_role);
 				plan.fields.push_back({ g, false, prefix, ki.meta, refAlias });
 			}
 			++fi;
@@ -4870,9 +4885,11 @@ static ibSelectorTree FoldSingleSource(const ibDataQuerySpec& spec, bool rollup)
 				// A scalar walked through several kinds: its merged VALUE field, not the type tag its spread opens with.
 				const auto m = merged.find(c);
 				if (m != merged.end()) {
-					const ibString valueSuffix = FirstSqlFieldOfColumn(c, kind).Mid(c->GetPhysicalName().length());
-					for (const ibRefJoinChain::SpreadField& sf : m->second)
-						if (sf.m_suffix == valueSuffix) return sf.m_expr;
+					const ibString valueField = FirstSqlFieldOfColumn(c, kind);
+					for (const ibColumnSlot& slot : DescribeColumnLayout(*c))
+						if (slot.m_name == valueField)
+							for (const ibRefJoinChain::SpreadField& sf : m->second)
+								if (sf.m_suffix == ibFieldSuffix(slot.m_role)) return sf.m_expr;
 					return m->second.back().m_expr;
 				}
 				const ibString ql = qualOf(c);
@@ -5488,9 +5505,8 @@ ibQueryIR ibDbTableProvider::BuildPageIR(const ibDataQuerySpec& spec, const ibRe
 							projection.push_back(ibQueryProjItem{ ibCase({ { ibIsNull(colE), empty } }, colE), alias });
 						}
 						else {
-							const ibString    base = leaf->GetPhysicalName();
-							for (const ibString& f : ColumnFieldNames(*leaf))
-								projection.push_back(ibQueryProjItem{ ibCol(a, f), alias + f.Mid(base.length()) });
+							for (const ibColumnSlot& slot : DescribeColumnLayout(*leaf))   // …each by its role's suffix
+								projection.push_back(ibQueryProjItem{ ibCol(a, slot.m_name), alias + ibFieldSuffix(slot.m_role) });
 						}
 						continue;
 					}
@@ -5523,21 +5539,26 @@ ibQueryIR ibDbTableProvider::BuildPageIR(const ibDataQuerySpec& spec, const ibRe
 						continue;
 					}
 
-					const ibMetaData*           meta   = queryable != nullptr ? queryable->GetMetaData() : nullptr;
-					const ibString              base   = spread->GetPhysicalName();
-					const std::vector<ibString> fields = ColumnFieldNames(*spread);
+					const ibMetaData*               meta   = queryable != nullptr ? queryable->GetMetaData() : nullptr;
+					const std::vector<ibColumnSlot> slots  = DescribeColumnLayout(*spread);
+					const std::vector<ibString>     fields = ColumnFieldNames(*spread);
 
 					ibQueryStatement capture(ibQueryStatement::Kind::Delete, ibString(), fields);
 					int position = 1;
 					BindWriteValue(capture, *spread, meta, ibValue(), position);
 					const std::vector<ibQueryExprPtr>& absent = capture.CapturedValues();
 
-					for (size_t fi = 0; fi < fields.size(); ++fi) {
-						const ibString suffix = fields[fi].Mid(base.length());
+					// Field by field, by ROLE: an arm's field of it — none, the field's absent value — under that role's
+					// suffix after the alias. (Spelled as the arm's name and the tail past the spread's, an arm whose
+					// fields are another column's named one the row does not have.)
+					for (size_t fi = 0; fi < slots.size(); ++fi) {
+						const ibString& suffix = ibFieldSuffix(slots[fi].m_role);
 						const auto armOf = [&](const ibQueryColumnExprPtr& a) -> ibQueryExprPtr {
-							if (!a || a->m_kind != ibQueryColumnExprKind::Column || a->m_col == nullptr)
-								return (fi < absent.size() && absent[fi]) ? absent[fi] : ibConst(ibValue());
-							return ibColQ(mainQual, a->m_col->GetPhysicalName() + suffix);
+							if (a && a->m_kind == ibQueryColumnExprKind::Column && a->m_col != nullptr)
+								for (const ibColumnSlot& s : DescribeColumnLayout(*a->m_col))
+									if (s.m_role == slots[fi].m_role)
+										return ibColQ(mainQual, s.m_name);
+							return (fi < absent.size() && absent[fi]) ? absent[fi] : ibConst(ibValue());
 						};
 						std::vector<std::pair<ibQueryExprPtr, ibQueryExprPtr>> cases;
 						for (const std::pair<ibQueryPredicatePtr, ibQueryColumnExprPtr>& wt : sc.m_expr->m_cases)
@@ -5572,9 +5593,8 @@ ibQueryIR ibDbTableProvider::BuildPageIR(const ibDataQuerySpec& spec, const ibRe
 					// a prefix, reassembled on the read (Column(prefix, col)). Projecting only its first field
 					// gave the fold a key it could not read — every row landed in one empty group.
 					if (!leaf->IsRawColumn()) {
-						const ibString base = leaf->GetPhysicalName();
-						for (const ibString& f : ColumnFieldNames(*leaf))
-							projection.push_back(ibQueryProjItem{ ibCol(a, f), alias + f.Mid(base.length()) });
+						for (const ibColumnSlot& slot : DescribeColumnLayout(*leaf))   // …each by its role's suffix
+							projection.push_back(ibQueryProjItem{ ibCol(a, slot.m_name), alias + ibFieldSuffix(slot.m_role) });
 						continue;
 					}
 

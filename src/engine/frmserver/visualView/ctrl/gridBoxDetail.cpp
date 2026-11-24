@@ -7,7 +7,7 @@
 #include "backend/backend_localization.h"                  // a title read in the reader's language
 #include "core/query/queryPeriodUnits.h"                   // ibReadPeriodUnit — the word a period grouping says
 #include "backend/backend_composition.h"                   // ibStoreValue — a context value packed into its condition
-#include "frmserver/visualView/choiceRequest.h"            // ibMenuItem — the fields offered, as the click's submenu
+#include "backend/choiceRequest.h"                         // ibMenuItem — the fields offered, as the click's submenu
 
 #include <algorithm>
 

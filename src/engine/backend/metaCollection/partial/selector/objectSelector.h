@@ -48,6 +48,7 @@ protected:
 
 	// --- per-metatype hooks (the only parts that differ) ---------------------
 	virtual std::shared_ptr<const ibBackendQueryable> GetQueryable() const = 0;          // the source to page
+	virtual void ApplyFilter(ibDataQueryBuilder& query) const {}         // the selection's own conditions, once, after From
 	virtual bool ApplyAnchor(ibReadPageRequest& page) const = 0;         // anchor -> page; false = no anchor (first row)
 	virtual void CaptureAnchor(const ibDataQueryResult& selection) = 0;  // current row -> anchor
 	virtual void MaterialiseRow(const ibDataQueryResult& selection) = 0; // current row -> value surface
@@ -133,6 +134,52 @@ protected:
 
 	ibRowMetaValues      m_keyValues;    // current row identity (GetRecordManager / GetPropVal)
 	ibRowMetaValues      m_current;      // current row attributes — GetPropVal's SSOT
+	std::vector<ibValue> m_anchorSort;   // keyset anchor (effective-sort values; empty = start)
+};
+
+/////////////////////////////////////////////////////////////////////////////
+
+// A journal's selection — a row per document of every kind it lists, with the journal's columns; GetObject is the
+// object of the document the row is, of the kind its reference names. Over a period, both bounds the date's and
+// inclusive, an empty one bounding nothing. Over the reading it was made on: a journal whose documents change
+// reads anew, and whoever still reads the old one keeps it until done.
+class BACKEND_API ibValueSelectorDocumentJournalDataObject :
+	public ibValueSelectorDataObject {
+	public:
+	ibValueSelectorDocumentJournalDataObject(const class ibValueMetaObjectDocumentJournal* metaObject,
+		const ibValue& from = ibValue(), const ibValue& to = ibValue());
+
+	virtual ibValuePtr<ibValueRecordDataObjectRef> GetObject() const;
+
+	//get metaData from object
+	virtual const ibValueMetaObjectGenericData* GetMetaObject() const;
+
+	void FillMembers(ibMemberTable& helper) const;   // bound in ctor
+	virtual bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray);//method call
+
+	//attribute
+	virtual bool SetPropVal(const long lPropNum, const ibValue& varPropVal);        //setting attribute
+	virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal);                   //attribute value
+
+protected:
+
+	virtual void Reset();
+
+	// No single row-key either — the anchor is the row's value at every effective-sort column, as a register's.
+	virtual std::shared_ptr<const ibBackendQueryable> GetQueryable() const { return m_queryable; }
+	virtual void ApplyFilter(ibDataQueryBuilder& query) const;
+	virtual bool ApplyAnchor(ibReadPageRequest& page) const;
+	virtual void CaptureAnchor(const ibDataQueryResult& selection);
+	virtual void MaterialiseRow(const ibDataQueryResult& selection);
+
+protected:
+
+	const class ibValueMetaObjectDocumentJournal* m_metaObject;
+	std::shared_ptr<const ibBackendQueryable>     m_queryable;    // the reading this selection is made on
+	ibValue                                       m_from;         // the period — empty bounds nothing
+	ibValue                                       m_to;
+
+	ibRowMetaValues      m_current;      // current row, by the journal's column ids — GetPropVal's SSOT
 	std::vector<ibValue> m_anchorSort;   // keyset anchor (effective-sort values; empty = start)
 };
 

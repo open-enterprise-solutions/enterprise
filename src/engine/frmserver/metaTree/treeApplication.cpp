@@ -85,6 +85,7 @@ const ibMetaTreeGroupDef s_groups[] = {
 	{ g_metaConstantCLSID,                  0, ibMetaRow::Item },
 	{ g_metaCatalogCLSID,                    0, ibMetaRow::Item },
 	{ g_metaDocumentCLSID,                   0, ibMetaRow::Item },
+	{ g_metaDocumentJournalCLSID,            0, ibMetaRow::Item },
 	{ g_metaEnumerationCLSID,                0, ibMetaRow::Item },
 	{ g_metaDataToolCLSID,                   0, ibMetaRow::Item },
 	{ g_metaReportCLSID,                     0, ibMetaRow::Item },
@@ -622,6 +623,20 @@ void ibApplicationTree::AddDocumentItem(ibValueMetaObject* metaObject, ibDataNod
 	AddCatalogItem(metaObject, hParentID);
 }
 
+// A DOCUMENT JOURNAL — what a person opens it through. The documents it lists are a binding, shown
+// in its properties rather than as rows of its own.
+void ibApplicationTree::AddDocumentJournalItem(ibValueMetaObject* metaObject, ibDataNode& hParentID)
+{
+	ibValueMetaObjectGenericData* metaObjectValue = metaObject->ConvertToType<ibValueMetaObjectGenericData>();
+	ibASSERT(metaObjectValue);
+
+	AppendObjectGroup(hParentID, g_metaFormCLSID, objectFormsName,
+		metaObjectValue->GetFormArrayObject());
+	AppendCommandGroup(hParentID, objectCommandsName, metaObjectValue->GetCommandArrayObject());
+	AppendObjectGroup(hParentID, g_metaTemplateCLSID, objectTemplatesName,
+		metaObjectValue->GetTemplateArrayObject());
+}
+
 // AN ENUMERATION has values where the others have attributes and tabular sections.
 void ibApplicationTree::AddEnumerationItem(ibValueMetaObject* metaObject, ibDataNode& hParentID)
 {
@@ -726,6 +741,7 @@ void ibApplicationTree::ExpandMetaItem(ibValueMetaObject* metaItem, ibDataNode& 
 
 	if      (clsid == g_metaCatalogCLSID)                    AddCatalogItem(metaItem, item);
 	else if (clsid == g_metaDocumentCLSID)                   AddDocumentItem(metaItem, item);
+	else if (clsid == g_metaDocumentJournalCLSID)            AddDocumentJournalItem(metaItem, item);
 	else if (clsid == g_metaEnumerationCLSID)                AddEnumerationItem(metaItem, item);
 	else if (clsid == g_metaDataToolCLSID)                   AddDataToolItem(metaItem, item);
 	else if (clsid == g_metaReportCLSID)                     AddDataToolItem(metaItem, item);   // its composers are templates

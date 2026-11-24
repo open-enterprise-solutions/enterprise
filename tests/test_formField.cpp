@@ -185,7 +185,7 @@ TEST(FormField, AnUnknownViewLoadsAsInput)
 	written.SetView(ibFieldView_Label);
 	ibDataNode node;
 	ASSERT_TRUE(written.m_frame->WriteData(node));
-	node.SetProperty(ibString(ibT("View")), ibDataValue::Int(99));   // a later version's, or a damaged form's
+	node.SetField(ibString(ibT("View")), ibDataValue::Int(99));   // a later version's, or a damaged form's - in its place
 
 	FieldUnderTest read;
 	ASSERT_TRUE(read.IsOk());
@@ -414,7 +414,7 @@ TEST(FormField, ASwitchedViewKeepsASameNamedHandler_TheDesignersRoad)
 	ibDataNode node;
 	ASSERT_TRUE(input.m_frame->WriteData(node));
 
-	node.SetProperty(ibString(ibT("View")), ViewNode(ibFieldView_Label));
+	node.SetField(ibString(ibT("View")), ViewNode(ibFieldView_Label));
 	FieldUnderTest label;
 	ASSERT_TRUE(label.IsOk());
 	ASSERT_TRUE(label.m_frame->ReadData(node));
@@ -423,7 +423,7 @@ TEST(FormField, ASwitchedViewKeepsASameNamedHandler_TheDesignersRoad)
 
 	ibDataNode again;
 	ASSERT_TRUE(label.m_frame->WriteData(again));
-	again.SetProperty(ibString(ibT("View")), ViewNode(ibFieldView_Input));
+	again.SetField(ibString(ibT("View")), ViewNode(ibFieldView_Input));
 	FieldUnderTest back;
 	ASSERT_TRUE(back.IsOk());
 	ASSERT_TRUE(back.m_frame->ReadData(again));
@@ -731,7 +731,8 @@ TEST_F(FieldOnAForm, ASwitchOfNoItemsSaysSo)
 	ASSERT_EQ(choices->Children().size(), 1u);
 	EXPECT_FALSE(choices->Children()[0].GetValue<ibString>(ibProtocol::ibForm::ibState::Caption).IsEmpty());
 	EXPECT_TRUE(state.GetValue<bool>(ibProtocol::ibForm::ibState::ReadOnly));
-	EXPECT_FALSE(field.m_frame->OnClientEvent(ibProtocol::ibEvent::ibKind::Change, Picked(0)));
+	// The pick is the switch's, taken or not (a flag's toggle is the flag's): it says so, and nothing is written.
+	EXPECT_TRUE(field.m_frame->OnClientEvent(ibProtocol::ibEvent::ibKind::Change, Picked(0)));
 }
 
 TEST_F(FieldOnAForm, ASwitchChangeWritesTheItemsValue)
@@ -745,15 +746,16 @@ TEST_F(FieldOnAForm, ASwitchChangeWritesTheItemsValue)
 
 TEST_F(FieldOnAForm, ASwitchRefusesAPlaceItDoesNotHave)
 {
+	// The pick is the switch's even where it names nothing — what it refuses is the write.
 	FieldUnderTest empty = Field(ibFieldView_Switch, text);
 	ASSERT_TRUE(empty.IsOk());
-	EXPECT_FALSE(empty.m_frame->OnClientEvent(ibProtocol::ibEvent::ibKind::Change, Picked(0)));
+	EXPECT_TRUE(empty.m_frame->OnClientEvent(ibProtocol::ibEvent::ibKind::Change, Picked(0)));
 	EXPECT_TRUE(ValueOf(text).GetString() == ibString(ibT("Acme")));
 
 	FieldUnderTest abc = AbcSwitch();
 	ASSERT_TRUE(abc.IsOk());
-	EXPECT_FALSE(abc.m_frame->OnClientEvent(ibProtocol::ibEvent::ibKind::Change, Picked(3)));
-	EXPECT_FALSE(abc.m_frame->OnClientEvent(ibProtocol::ibEvent::ibKind::Change, Picked(-1)));
+	EXPECT_TRUE(abc.m_frame->OnClientEvent(ibProtocol::ibEvent::ibKind::Change, Picked(3)));
+	EXPECT_TRUE(abc.m_frame->OnClientEvent(ibProtocol::ibEvent::ibKind::Change, Picked(-1)));
 	EXPECT_TRUE(ValueOf(text).GetString() == ibString(ibT("Acme")));
 }
 
@@ -764,7 +766,7 @@ TEST_F(FieldOnAForm, AReadOnlySwitchIgnoresChange)
 	form->SetViewOnly(true);
 
 	EXPECT_TRUE(StateOf(field).GetValue<bool>(ibProtocol::ibForm::ibState::ReadOnly));
-	EXPECT_FALSE(field.m_frame->OnClientEvent(ibProtocol::ibEvent::ibKind::Change, Picked(0)));
+	EXPECT_TRUE(field.m_frame->OnClientEvent(ibProtocol::ibEvent::ibKind::Change, Picked(0)));   // taken, not written
 	EXPECT_TRUE(ValueOf(text).GetString() == ibString(ibT("Acme")));
 }
 
@@ -1052,7 +1054,7 @@ TEST_F(FieldOnAForm, ASavedViewTheTypeNoLongerAllowsLoadsAsAnInput)
 	ASSERT_TRUE(written.IsOk());
 	ibDataNode node;
 	ASSERT_TRUE(written.m_frame->WriteData(node));
-	node.SetProperty(ibString(ibT("View")), ViewNode(ibFieldView_Gauge));   // a Gauge over a String
+	node.SetField(ibString(ibT("View")), ViewNode(ibFieldView_Gauge));   // a Gauge over a String
 
 	FieldUnderTest read = Field(ibFieldView_Input);
 	ASSERT_TRUE(read.IsOk());

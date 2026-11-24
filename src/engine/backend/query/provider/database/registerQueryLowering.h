@@ -904,19 +904,6 @@ inline ibString ibRegQualifiedList(const ibValueMetaObjectAttributeBase* a, cons
 	return out;
 }
 
-// "q.f1 AS <alias><suffix>, …" — qualified + aliased (dr.fld_N AS AccountDr_N). The suffix is the
-// field's tail past the base name (_TYPE / _N / _RTRef …), so the alias mirrors the physical layout.
-inline ibString ibRegAliasedList(const ibValueMetaObjectAttributeBase* a, const ibString& q, const ibString& alias)
-{
-	const ibString base = a->GetPhysicalName();
-	ibString out;
-	for (const ibString& f : ibRegFieldsOf(a)) {
-		const ibString suffix = f.length() > base.length() ? f.Mid(base.length()) : ibString();
-		out += (out.empty() ? ibString() : ibString(", ")) + q + ibT(".") + f + ibT(" AS ") + alias + suffix;
-	}
-	return out;
-}
-
 // "lq.f1 = rq.f1 AND …" — an all-fields equality join between two qualifiers (the dr/cr recorder join).
 inline ibString ibRegJoinEq(const ibValueMetaObjectAttributeBase* a, const ibString& lq, const ibString& rq)
 {
@@ -1479,28 +1466,27 @@ inline void ibAppendRegisterPeriodicityParameter(std::vector<ibQuerySourceParame
 // only when the reading is AT a movement's own identity — Recorder, Record, or the undecided Auto.
 // Offering it beside a monthly turnover promises a document per row where the row is a month's
 // worth of them.
-inline bool ibRegisterViewColumnFits(const ibString& columnName, const ibString& periodName,
-	const ibRegFold& fold, const ibString& recorderName = ibEmptyString,
-	const ibString& lineName = ibEmptyString)
+//
+// ⭐ WHAT A COLUMN IS, THE COLUMN SAYS — the view publishes each with its part in a balance
+// (accumulationRegisterMetadataSchema.cpp): the period and each grain of it the first moment, the recorder and the
+// line number the junior ones, the rest dimensions and figures. Told by its NAME — the period's and a unit's after
+// it — a dimension called `PeriodMonth` was a projection and dropped out of every reading but Auto (2026-11-24).
+inline bool ibRegisterViewColumnFits(const ibBackendQueryColumn& column, const ibString& periodName, const ibRegFold& fold)
 {
+	// Not a moment (a dimension, a resource) — always there, whatever the granularity.
+	if (column.GetBalanceRole() != ibBalanceRole::Moment)
+		return true;
+
 	// The movement's own identity — present only where a row IS a movement (or a document's worth).
-	if (!recorderName.IsEmpty() && stringUtils::IsSameAs(columnName, recorderName))
+	if (column.GetPeriodRank() == g_registerRecorderRank)
 		return fold.m_kind == ibRegGranularity::Auto
 		    || fold.m_kind == ibRegGranularity::Recorder
 		    || fold.m_kind == ibRegGranularity::Record;
-	if (!lineName.IsEmpty() && stringUtils::IsSameAs(columnName, lineName))
+	if (column.GetPeriodRank() == g_registerLineNumberRank)
 		return fold.m_kind == ibRegGranularity::Auto
 		    || fold.m_kind == ibRegGranularity::Record;
 
-	// Not a period projection (a dimension, a resource) — always there, whatever the granularity. A projection
-	// is the period itself or the period rolled to a unit (`Period`, `PeriodMonth` — the names the view gives
-	// them, accumulationRegisterMetadataSchema.cpp), not every name that merely STARTS with the period's: a
-	// dimension called `PeriodKind` is a dimension, and the prefix alone dropped it from every reading but Auto.
-	ibString       unitWord;
-	ibTotalsPeriod unit;
-	if (!columnName.StartsWith(periodName, &unitWord)
-		|| (!unitWord.IsEmpty() && !ibReadPeriodUnit(unitWord, unit)))
-		return true;
+	// …the rest is the period itself or the period rolled to a unit (`Period`, `PeriodMonth`).
 
 	// ⚠ NOTHING ASKED FOR MEANS NO PERIOD AT ALL — not "the period, undecided". Left out, this table
 	// reads the interval WHOLE: one row per key, begin to end, with no date on it. That is what the
@@ -1517,23 +1503,19 @@ inline bool ibRegisterViewColumnFits(const ibString& columnName, const ibString&
 
 	// Anything else names ONE granularity, and the reading then has ONE period column — `Period`,
 	// rolled to it. The coarser projections are not part of that reading.
-	return stringUtils::IsSameAs(columnName, periodName);
+	return stringUtils::IsSameAs(column.GetName(), periodName);
 }
 
 // ⭐⭐ DOES THIS READING PRODUCE THAT COLUMN? The same rule the field tree offers by, asked with the
-// register's own names — so a reader and a writer of the query cannot disagree about which columns
+// register's period — so a reader and a writer of the query cannot disagree about which columns
 // a chosen granularity has.
 template <typename TReg>
 inline bool ibRegisterFoldOffersColumn(const TReg* reg,
-	const ibString& columnName, const ibRegFold& fold)
+	const ibBackendQueryColumn& column, const ibRegFold& fold)
 {
 	if (reg == nullptr || reg->GetRegisterPeriod() == nullptr)
 		return true;
-
-	const bool subordinate = reg->HasRecorder();
-	return ibRegisterViewColumnFits(columnName, reg->GetRegisterPeriod()->GetName(), fold,
-		subordinate && reg->GetRegisterRecorder()   != nullptr ? reg->GetRegisterRecorder()->GetName()   : ibString(),
-		subordinate && reg->GetRegisterLineNumber() != nullptr ? reg->GetRegisterLineNumber()->GetName() : ibString());
+	return ibRegisterViewColumnFits(column, reg->GetRegisterPeriod()->GetName(), fold);
 }
 
 

@@ -403,9 +403,6 @@
     <ClCompile Include="settings\formSettings.cpp">
       <Filter>settings</Filter>
     </ClCompile>
-    <ClCompile Include="visualView\choiceRequest.cpp">
-      <Filter>visualView</Filter>
-    </ClCompile>
     <ClCompile Include="visualView\controlEnum.cpp">
       <Filter>visualView</Filter>
     </ClCompile>
@@ -891,9 +888,6 @@
     </ClInclude>
     <ClInclude Include="settings\formSettings.h">
       <Filter>settings</Filter>
-    </ClInclude>
-    <ClInclude Include="visualView\choiceRequest.h">
-      <Filter>visualView</Filter>
     </ClInclude>
     <ClInclude Include="visualView\controlCtor.h">
       <Filter>visualView</Filter>

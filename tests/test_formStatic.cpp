@@ -122,7 +122,7 @@ TEST(FormStatic, AnUnknownViewLoadsAsText)
 	ASSERT_TRUE(written.Set(ibT("View"), ibStaticView_Line));
 	ibDataNode node;
 	ASSERT_TRUE(written.m_frame->WriteData(node));
-	node.SetProperty(ibString(ibT("View")), ibDataValue::Int(99));   // a later version's, or a damaged form's
+	node.SetField(ibString(ibT("View")), ibDataValue::Int(99));   // a later version's, or a damaged form's - in its place
 
 	StaticUnderTest read;
 	ASSERT_TRUE(read.IsOk());

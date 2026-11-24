@@ -290,6 +290,9 @@ public:
 		// across the declaration. A CTE has no storage to ask, so the only honest moment to know it is
 		// where the declaration is built and the inner source is still in hand.
 		bool                        m_isKey = false;
+		// …and whether the inner source's rows are ordered by it (GetSortColumn) — what a sort by the row's own
+		// reference sorts by, carried across the same way.
+		bool                        m_isSort = false;
 		// …and what it is in a balance, carried across the declaration as the type is: a register's period
 		// read one level down is still the moment its totals are taken at.
 		ibBalanceRole               m_balanceRole = ibBalanceRole::None;
@@ -318,6 +321,7 @@ public:
 				// the columns it is made of.
 				m_columns.push_back(field.m_borrowed);
 				if (field.m_isKey) m_keys.push_back(field.m_borrowed);
+				if (field.m_isSort) m_sort = field.m_borrowed;
 				continue;
 			}
 			if (field.m_name.IsEmpty())
@@ -330,6 +334,7 @@ public:
 			column->PlaysInBalance(field.m_balanceRole, field.m_periodRank);
 			m_columns.push_back(column);
 			if (field.m_isKey) m_keys.push_back(column);
+			if (field.m_isSort) m_sort = column;
 		}
 	}
 
@@ -352,6 +357,10 @@ public:
 	// shape `ibAliasQueryable` answers with, and for the same reason: a wrapper is the same rows under
 	// new column identities, so the answer has to be in the identities the outer query will see.
 	std::vector<std::shared_ptr<const ibBackendQueryColumn>> GetPrimaryKeyColumns() const override { return m_keys; }
+	// …AND WHAT THE ROWS ARE ORDERED BY, carried as the key is: a journal's own reference sorted by its kind's order
+	// asked the declaration for a document's fields it does not write (`-206 Column unknown FLD1202_D`, 2026-11-24).
+	// Null when the inner order is not among the outputs — a document's, which is read out of its parts.
+	std::shared_ptr<const ibBackendQueryColumn> GetSortColumn() const override { return m_sort; }
 
 	std::vector<std::shared_ptr<const ibBackendQueryColumn>> GetQueryColumns() const override { return m_columns; }
 	bool ContainColumn(const std::shared_ptr<const ibBackendQueryColumn>& col) const override
@@ -366,6 +375,7 @@ private:
 	ibUniqueKey                              m_guid;
 	std::vector<std::shared_ptr<const ibBackendQueryColumn>> m_columns;    // the columns this source publishes — minted here or the source's own
 	std::vector<std::shared_ptr<const ibBackendQueryColumn>> m_keys;       // …and the subset of them that IS the row (see GetPrimaryKeyColumns)
+	std::shared_ptr<const ibBackendQueryColumn>              m_sort;       // …and the one they are ordered by (see GetSortColumn)
 	const ibMetaData*                        m_metaData;
 };
 

@@ -1178,11 +1178,16 @@ public:
 	// `ibQueryRel` beside it would be a second lowering, free to disagree with the first about a
 	// join, a spread or a HAVING.
 	//
-	// Null when this door cannot be composed with — a non-DB source, or a query carrying an access
-	// POLICY. The policy is the interesting one: it must fold its restriction into the read it
-	// guards, and handing the relation out unrestricted would let a caller compose past it. Such a
-	// reading falls back to rows, which answer the same numbers under the same restriction.
+	// Null when this door cannot be composed with — a non-DB source, a join or a union one statement of
+	// its base does not read. A query carrying an access POLICY is folded first, on a copy, as Execute
+	// folds it: the relation carries its reader's rights, so nobody composes past them; refused, it
+	// raises — or, read AS ALLOWED, it is the relation of no row (2026-11-24).
 	[[nodiscard]] ibQueryRelPtr BuildRelation() const;
+	// …and for a read of ONE source written as another statement's EXISTS (an IN (SELECT …) said as a semi-join), the
+	// WHERE it is read under — its own, its reader's rights folded in as BuildRelation folds them. Refused, it raises;
+	// read AS ALLOWED, it is the WHERE of no row. False — a role's filter joined a source of its own: no longer one
+	// source's (2026-11-24).
+	[[nodiscard]] bool BuildReadPredicate(ibQueryPredicatePtr& where) const;
 
 	// Build-once overload: reuses `cache` when `signature` matches its last
 	// build, otherwise resolves identity + builds IR + renders and refills the
@@ -1302,6 +1307,12 @@ public:
 	// L3-native write kind — the public surface never names the L2 statement
 	// (ibQueryStatement::Kind is translated to this only inside the .cpp).
 	enum class WriteKind { Insert, Upsert, Update, Delete };
+
+protected:
+	// The policy it holds FOLDED INTO IT — the table stage asked, its roles' row filter in the WHERE — so it holds none
+	// after. The step a copy takes as it is made, and only then (ibGuardedDataQueryBuilder, the .cpp): every read written
+	// into another statement is one (With, BuildRelation, BuildReadPredicate).
+	void FoldPolicy();
 
 private:
 	// The ONE point that appends a left-deep JOIN node carrying `on`; the public Join / CrossJoin overloads

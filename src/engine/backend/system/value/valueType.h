@@ -34,6 +34,11 @@ class BACKEND_API ibValueType : public ibValue {
 
 	virtual ibString GetString() const;
 
+	// The packed form — the type as a description of it alone, packed as a TypeDescription is (a Find over a
+	// column of types keeps one in its condition).
+	virtual bool DoSerialize(class ibDataNode& node) const override;
+	virtual bool DoDeserialize(const class ibDataNode& node) override;
+
 private:
 	ibClassID m_clsid;
 };
@@ -98,6 +103,8 @@ void ibValueTypeDescription_BindNames(ibValue::ibMemberTable& helper, const ibVa
 // not have to spell the string (the same arrangement as g_valueScheduleCLSID in valueJob.h). A
 // second place that knows the spelling is a second place to get it wrong.
 constexpr ibClassID g_valueTypeDescriptionCLSID = value_to_clsid("VL_TYPED");
+// …and the Type's, for a column whose values are types (a document journal's DocumentType).
+constexpr ibClassID g_valueTypeCLSID = value_to_clsid("VL_TYPE");
 
 class BACKEND_API ibValueTypeDescription : public ibValueStaticMembers<&ibValueTypeDescription_BindNames> {
 public:

@@ -171,6 +171,7 @@ constexpr ibQueryableKind s_dataKinds[] = {
 	{ ibT("Constants"),                   g_metaConstantCLSID },
 	{ ibT("Catalogs"),                    g_metaCatalogCLSID },
 	{ ibT("Documents"),                   g_metaDocumentCLSID },
+	{ ibT("DocumentJournals"),            g_metaDocumentJournalCLSID },
 	{ ibT("Enumerations"),                g_metaEnumerationCLSID },
 	{ ibT("InformationRegisters"),        g_metaInformationRegisterCLSID },
 	{ ibT("AccumulationRegisters"),       g_metaAccumulationRegisterCLSID },

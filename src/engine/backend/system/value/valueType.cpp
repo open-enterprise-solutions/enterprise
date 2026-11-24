@@ -44,6 +44,32 @@ ibString ibValueType::GetString() const
 	return activeMetaData->GetNameObjectFromID(m_clsid);
 }
 
+// The empty type packs nothing, as the client's own empty one comes (Advanced search over a column of types).
+bool ibValueType::DoSerialize(ibDataNode& node) const
+{
+	if (m_clsid == 0)
+		return true;
+	ibDataValue described;
+	if (!ibTypeDescriptionMemory::WriteNode(described, GetOwnerTypeDescription()))
+		return false;
+	node.AddField(kValueFieldData, described);   // the payload, as every value's is
+	return true;
+}
+
+bool ibValueType::DoDeserialize(const ibDataNode& node)
+{
+	const auto described = node.FindField(kValueFieldData);
+	if (!described) {
+		m_clsid = 0;
+		return true;
+	}
+	ibTypeDescription read;
+	if (!ibTypeDescriptionMemory::ReadNode(*described, read) || read.GetClsidCount() != 1)
+		return false;
+	m_clsid = read.GetFirstClsid();
+	return true;
+}
+
 // The same naming door a single type uses, once per admitted type. Asked of the METADATA, so a
 // application-specific reference reads as "CatalogRef.Goods" rather than a number.
 ibString ibValueTypeDescription::GetString() const
@@ -533,7 +559,7 @@ bool ibValueQualifierString::Init(ibValue** paParams, const long lSizeArray)
 //*                       Runtime register                             *
 //**********************************************************************
 
-VALUE_TYPE_REGISTER(ibValueType, "Type", value_to_clsid("VL_TYPE"));
+VALUE_TYPE_REGISTER(ibValueType, "Type", g_valueTypeCLSID);
 VALUE_TYPE_REGISTER(ibValueTypeDescription, "TypeDescription", value_to_clsid("VL_TYPED"));
 
 VALUE_TYPE_REGISTER(ibValueQualifierNumber, "QualifierNumber", value_to_clsid("VL_QNUM"));

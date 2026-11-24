@@ -17743,3 +17743,36 @@ msgstr ""
 #, c-format
 msgid "HTTPServiceResponse: the value of the header '%s' holds a line break or a control character"
 msgstr ""
+
+#: src/engine/backend/metaCollection/metaGroups.cpp
+#: src/engine/frmserver/schema/runtime/allFunctions.cpp
+msgid "Document journals"
+msgstr ""
+
+#: src/engine/backend/metaCollection/metaGroups.cpp
+msgid "Document journal"
+msgstr ""
+
+#: src/engine/backend/metaCollection/partial/documentJournal.h
+msgid "Registered documents"
+msgstr ""
+
+#: src/engine/backend/metaCollection/partial/documentJournal.h
+msgid "The documents this journal lists. Its rows are theirs: one per written document of each kind listed, with the reference, date, number, posting flag and deletion mark every document has."
+msgstr ""
+
+#: src/engine/backend/metaCollection/partial/documentJournal.h
+msgid "The form the journal's list opens with. Empty: the list form is generated from the journal's columns."
+msgstr ""
+
+#: src/engine/backend/metaCollection/partial/documentJournalMetaQuery.cpp
+msgid "Document type"
+msgstr ""
+
+#: src/engine/backend/metaCollection/partial/documentJournalMetaQuery.cpp
+msgid "Select document type"
+msgstr ""
+
+#: src/engine/backend/metaCollection/partial/documentJournalMetadata.cpp
+msgid "%s: at least one document is required - a journal lists documents, and its rows are theirs"
+msgstr ""

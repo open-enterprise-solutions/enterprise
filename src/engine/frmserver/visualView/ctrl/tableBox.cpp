@@ -39,9 +39,9 @@ static const size_t s_maxFetchedRows = 2000;
 //***********************************************************************************
 
 // Single point: resolve a dot-path column's value for ONE row (asked per shown cell by the column's
-// UpdateCell). The model stays a plain id->value source: the FIRST hop is a real row column it
-// resolves; the deeper hops walk the reference by attribute name. A plain column (row-relative
-// tail <= 1) returns false — the cell falls through to the model.
+// UpdateCell, and by Find for the value it looks for). The model stays a plain id->value source: the FIRST
+// hop is a real row column it resolves; the deeper hops walk the reference by attribute name. A plain column
+// (row-relative tail <= 1) returns false — the cell falls through to the model.
 // A dot-path column reaches past the tablebox prefix + one row column (>= 2 row-relative hops).
 bool ibValueModelTableBox::IsPathColumn(const ibValueModelTableBoxColumn* column) const
 {
@@ -68,19 +68,14 @@ bool ibValueModelTableBox::IsForeignColumn(const ibValueModelTableBoxColumn* col
 }
 
 bool ibValueModelTableBox::ResolveCellValue(const ibDataViewItem& item,
-	const ibValueModelTableBoxColumn* column, ibVariant& out) const
+	const ibValueModelTableBoxColumn* column, ibValue& out) const
 {
 	// FOREIGN-root column (Mode 2): pulls from a form source ABOVE this tablebox (the header object),
 	// not from a row of the bound table. Resolve it ONCE through the form — the value is the same for
 	// every row of the tabular section (the header is constant across the lines). Read-only. The
 	// primitive is the same the designer read uses (GetControlValue's dotted-path branch).
-	if (IsForeignColumn(column)) {
-		ibValue current;
-		if (m_formOwner == nullptr || !m_formOwner->GetValueByAttributePath(column->GetSourceDesc(), current))
-			return false;
-		out = current;
-		return true;
-	}
+	if (IsForeignColumn(column))
+		return m_formOwner != nullptr && m_formOwner->GetValueByAttributePath(column->GetSourceDesc(), out);
 
 	// One hop past the prefix = a plain row column (the dumb model has it) — not ours.
 	if (m_tableModel == nullptr || !IsPathColumn(column))
@@ -91,12 +86,7 @@ bool ibValueModelTableBox::ResolveCellValue(const ibDataViewItem& item,
 
 	// The table STARTS the walk at the row (the first row-relative hop yields a source cell) and TRANSFERS the
 	// deeper hops to that source object — ONE entry, like a control resolving an attribute path off the form.
-	ibValue current;
-	if (!m_tableModel->GetValueByPath(item, colPath, prefix, current))
-		return false;
-
-	out = current;
-	return true;
+	return m_tableModel->GetValueByPath(item, colPath, prefix, out);
 }
 
 bool ibValueModelTableBox::GetControlValue(ibValue& pvarControlVal) const
@@ -765,6 +755,16 @@ void ibValueModelTableBox::OnUpdate(ibDataNode& state, ibVisualHost* host)
 	// handed out, the folder's too: the client's read of its folder was refused, the list showed it empty, and the drill
 	// went back to the top, so the next element was created there (an element added in a folder, 2026-10-29). The
 	// version is answered by the client's own read.
+	//
+	// ⭐ …AND THE FOLDER THE SERVER LEFT IS SAID FIRST, as the cursor it moved is (CurrentRow, below): the top, once the
+	// client still stands in a folder the server is out of — a new setting (its groups were another arrangement's), a
+	// model swapped. Unsaid, the client read its old group again: the flat rows under that group's crumb, or — the page
+	// below having forgotten the group — "The folder is no longer in the list" (a grouping taken off, 2026-11-24). Asked
+	// before that page: its read is the top's and says the client stands there.
+	if (m_clientParent != 0 && !m_drillItem.IsOk()) {
+		state.SetValue(ibProtocol::ibForm::ibTable::Parent, 0);
+		m_clientParent = 0;
+	}
 	if (m_rowsSentVersion != m_rowsVersion && m_drillItem.IsOk())
 		m_rowsSentVersion = m_rowsVersion;
 	if (m_rowsSentVersion != m_rowsVersion) {
@@ -1084,8 +1084,10 @@ bool ibValueModelTableBox::Fetch(const ibDataNode& request, ibDataNode& response
 		if (parentHandle == 0)
 			m_fetchFromTop = false;
 		// The Hierarchical view shows one level, and the level read last is the one the client stands in.
-		if (viewMode == ibDataViewHierarchical)
+		if (viewMode == ibDataViewHierarchical) {
 			m_drillItem = parentItem;
+			m_clientParent = parentHandle;
+		}
 		fetched = m_tableModel->GetFirstFetch(scope, around, count, items);
 		bool top = !around.IsOk();
 		// …AND ONE THAT FINDS NOTHING AROUND ITS ROW READS FROM THE TOP — the data view's own rule (its empty-fetch
@@ -1839,8 +1841,10 @@ void ibValueModelTableBox::OnViewModeChanged(ibDataViewViewMode viewMode)
 	// mode. Set past the door, the frame answering the switch drew nothing, and the client read its rows in the new mode
 	// only when something else was drawn (2026-10-29).
 	ibPropertyGate::SetValue(this, m_propertyViewMode, ibVariant(ibNumber(static_cast<long>(viewMode))));
-	// A drill is the Hierarchical view's own; the client reads the top again in whichever it now is.
+	// A drill is the Hierarchical view's own; the client reads the top again in whichever it now is — by itself, so it
+	// is not told.
 	m_drillItem = ibDataViewItem();
+	m_clientParent = 0;
 }
 
 ibDataViewViewMode ibValueModelTableBox::GetViewMode() const

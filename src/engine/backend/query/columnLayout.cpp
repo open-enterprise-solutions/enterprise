@@ -182,6 +182,8 @@ std::vector<ibString> ColumnValueFields(const ibBackendQueryColumn& col)
 std::vector<ibString> ColumnSortFields(const ibBackendQueryColumn& col)
 {
 	std::vector<ibString> out = ColumnValueFields(col);
+	if (out.empty())   // no value field of its own — a journal's document type: sorted on the fields it lies in
+		return ColumnFieldNames(col);
 	if (FirstValueSlot(col).m_role == ibColumnRole::ReferenceId)
 		out.push_back(col.GetPhysicalName() + ibFieldSuffix(ibColumnRole::ReferenceType));
 	return out;

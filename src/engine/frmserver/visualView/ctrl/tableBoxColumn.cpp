@@ -366,10 +366,13 @@ void ibValueModelTableBoxColumn::UpdateCell(const ibDataViewItem& item, ibDataNo
 	// The per-cell value resolves THROUGH this column's binding. A dot-path column ("Counterparty.Supplier")
 	// or a header column is resolved by the table — first hop via the dumb model, deeper hops walk the
 	// reference; a plain column is the model's own. Whether the cell has one at all (a container's non-first
-	// columns) the fetch has asked already.
-	ibVariant value;
-	if (!owner->ResolveCellValue(item, this, value))
-		model->GetValue(value, item, modelColumn);
+	// columns) the fetch has asked already. Each read stays what it was read as; the cell only looks at it.
+	ibValue resolved;
+	ibVariant read;
+	const bool walked = owner->ResolveCellValue(item, this, resolved);
+	if (!walked)
+		model->GetValue(read, item, modelColumn);
+	const ibVariant& value = walked ? resolved : read;
 
 	if (value.GetType() == ibValueTypes::TYPE_EMPTY) {
 		cell.SetValue(ibProtocol::ibForm::ibTable::Text, ibString());

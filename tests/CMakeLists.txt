@@ -90,6 +90,7 @@ add_executable(oes_tests
     test_numberPeriodicity.cpp
     test_pictureVersion.cpp
     test_sharedAttribute.cpp
+    test_documentJournal.cpp
     test_roleComposition.cpp
     test_rolePolicyFold.cpp
     test_dataNode.cpp

@@ -18343,3 +18343,36 @@ msgstr "Текстове поле"
 #: src/engine/frmserver/visualView/ctrl/frame.h
 msgid "Chart"
 msgstr "Діаграма"
+
+#: src/engine/backend/metaCollection/metaGroups.cpp
+#: src/engine/frmserver/schema/runtime/allFunctions.cpp
+msgid "Document journals"
+msgstr "Журнали документів"
+
+#: src/engine/backend/metaCollection/metaGroups.cpp
+msgid "Document journal"
+msgstr "Журнал документів"
+
+#: src/engine/backend/metaCollection/partial/documentJournal.h
+msgid "Registered documents"
+msgstr "Реєстровані документи"
+
+#: src/engine/backend/metaCollection/partial/documentJournal.h
+msgid "The documents this journal lists. Its rows are theirs: one per written document of each kind listed, with the reference, date, number, posting flag and deletion mark every document has."
+msgstr "Документи, які перелічує журнал. Його рядки - рядки цих документів: по одному на кожен записаний документ кожного виду, з посиланням, датою, номером, ознакою проведення та позначкою вилучення, які має будь-який документ."
+
+#: src/engine/backend/metaCollection/partial/documentJournal.h
+msgid "The form the journal's list opens with. Empty: the list form is generated from the journal's columns."
+msgstr "Форма, з якою відкривається список журналу. Порожньо: форма списку створюється за колонками журналу."
+
+#: src/engine/backend/metaCollection/partial/documentJournalMetaQuery.cpp
+msgid "Document type"
+msgstr "Вид документа"
+
+#: src/engine/backend/metaCollection/partial/documentJournalMetaQuery.cpp
+msgid "Select document type"
+msgstr "Виберіть вид документа"
+
+#: src/engine/backend/metaCollection/partial/documentJournalMetadata.cpp
+msgid "%s: at least one document is required - a journal lists documents, and its rows are theirs"
+msgstr "%s: потрібен хоча б один документ - журнал перелічує документи, і його рядки - їхні рядки"

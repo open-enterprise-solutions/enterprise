@@ -778,7 +778,7 @@ inline std::vector<std::shared_ptr<const ibBackendQueryColumn>> ibRegisterViewCo
 	// with the attribute, you get a set of virtual tables"). The id still matches the attribute's, so a read
 	// reaches the column exactly as on the movements table.
 	for (const std::shared_ptr<const ibBackendQueryColumn>& col : view->GetQueryColumns())
-		if (col != nullptr && ibRegisterFoldOffersColumn(reg, col->GetName(), fold))
+		if (col != nullptr && ibRegisterFoldOffersColumn(reg, *col, fold))
 			out.push_back(col);
 	return out;
 }
