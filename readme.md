@@ -13,6 +13,8 @@ a server process of its own, a thin client and a web server — and a built-in *
 AI assistant can read, build and check an application alongside the developer, through the same
 doors the developer uses.
 
+![The designer: a document's form laid out, its elements, attributes and commands, and the property inspector](docs/images/studio-form-designer.png)
+
 **Status: [2.0.0-preview.1](docs/release-notes/v2.0.0-preview.1.md)** — the first release after the alpha, on the
 road to beta: the database format may still change, and nothing migrates from 1.x.
 
@@ -43,6 +45,8 @@ tree, forms, the language, queries and reports, and the pitfalls.
 | Charts | Chart of accounts · Chart of calculation types (displacing, base and leading types) |
 | Processing and reports | Data tool · Report with its own composers · external data tools and reports |
 | Application-wide | Shared modules · shared forms, templates and commands · shared attributes · session parameters · feature options · roles · sections (the navigation panel) · languages · pictures · scheduled jobs |
+
+![A goods receipt's posting in the built-in language: stock and lot movements, an entry in each chart of accounts](docs/images/studio-posting-code.png)
 
 ---
 
@@ -110,6 +114,8 @@ tree, forms, the language, queries and reports, and the pitfalls.
   draws — lists, forms, tables, reports and their settings, questions, print — in the person's language,
   on a desktop and on a phone. The designer stays a desktop program.
 
+![A trial balance built by the report composer, grouped by company and account](docs/images/workspace-trial-balance.png)
+
 ### Measured
 
 On a copy of a 40 000-employee payroll base (Release, x86): a month's payroll reposted in about
@@ -119,7 +125,20 @@ On a copy of a 40 000-employee payroll base (Release, x86): a month's payroll re
 
 ## Screenshots
 
-![Designer overview](https://github.com/user-attachments/assets/8513361c-bbc3-44bb-b07c-776202940d8b)
+<table>
+<tr>
+<td><img src="docs/images/studio-module-code.png" alt="A form's module in the code editor"><br>A form's module in the code editor</td>
+<td><img src="docs/images/studio-report-query.png" alt="The query a report's composer reads"><br>The query a report's composer reads, over an accounting register's balance</td>
+</tr>
+<tr>
+<td><img src="docs/images/workspace-document-list.png" alt="A list of documents"><br>A list of documents in the application</td>
+<td><img src="docs/images/workspace-list-settings.png" alt="A list's settings"><br>A list's settings: filter, sort, groups, conditional appearance</td>
+</tr>
+<tr>
+<td><img src="docs/images/workspace-accounting-register.png" alt="An accounting register's records"><br>An accounting register's records, searched from the context menu</td>
+<td><img src="docs/images/coderunner-linq.png" alt="The code runner"><br>The code runner: LINQ over a collection</td>
+</tr>
+</table>
 
 ---
 
