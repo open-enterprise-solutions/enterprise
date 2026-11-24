@@ -13,19 +13,29 @@
 //   * the copy is in the object's attribute list — the runtime builds a form from
 //     exactly that list, and taking it out silently emptied the form;
 //   * a copy stops being allowed the moment its declaration does;
+//   * a reloaded copy is not deleted before its run — the run binds it and skips a
+//     deleted node, so one read as deleted was never bound, and an apply removed it
+//     with its column; the copy whose declaration is not there when the run looks is
+//     the orphan, and that one is;
 //   * a tabular section does NOT accept one — its ResolveChild says so, and the
 //     lists must agree with that.
 //
-// DB-free: a fresh file application, tree edits only (as test_metadataTree).
+// DB-free: a fresh file application, tree edits only (as test_metadataTree); the
+// reload cases run it too, in a file-mode base with no connection.
 // =============================================================================
 
 #include <gtest/gtest.h>
+#include <wx/init.h>
 #include <wx/string.h>   // wxT, wxString - the engine's headers include no wx
 
+#include "backend/appData.h"
+#include "backend/appHost.h"
+#include "backend/compiler/compileCode.h"
 #include "backend/metadataApplication.h"
 #include "backend/metaCollection/metaObject.h"
 #include "backend/metaCollection/metaSharedAttributeObject.h"
 #include "backend/metaCollection/partial/catalog.h"
+#include "backend/query/queryable.h"
 
 namespace {
 
@@ -58,6 +68,43 @@ struct SharedAttributeFixture {
 		return found;
 	}
 };
+
+// A base to run an application in. RunDatabase also sets this thread's code style to the
+// application's; the binary runs VES (test_compiler.cpp), so it is put back.
+class ApplicationRun {
+public:
+	ApplicationRun() {
+		if (m_wxInit.IsOk() && ibApplicationHost::IsEmpty()) {
+			ibApplicationInstance::CreateAppDataEnv(ibRunMode::eFILE_MODE);
+			m_owns = !ibApplicationHost::IsEmpty();
+		}
+	}
+	~ApplicationRun() {
+		ibCompileCode::SetCodeStyle(m_codeStyle);
+		if (m_owns)
+			ibApplicationInstance::DestroyAppDataEnv();
+	}
+	bool IsOpen() const { return m_owns; }
+private:
+	wxInitializer m_wxInit;
+	const short   m_codeStyle = ibCompileCode::GetCodeStyle();
+	bool          m_owns = false;
+};
+
+// The fixture's application saved and loaded into `loaded`; the copy in its catalog, read
+// off the tree (GetChild), which asks nobody whether the copy counts.
+ibValueMetaObjectSharedAttributeColumn* ReloadedCopy(SharedAttributeFixture& f, ibMetaDataApplicationFile& loaded) {
+	ibMemoryBuffer saved;
+	if (!f.cfg.SaveApplicationToBuffer(saved) || !loaded.LoadApplicationFromBuffer(saved))
+		return nullptr;
+	for (ibValueMetaObject* catalog : loaded.GetAnyArrayObject(g_metaCatalogCLSID)) {
+		for (unsigned int i = 0; i < catalog->GetChildCount(); ++i) {
+			if (auto* const copy = dynamic_cast<ibValueMetaObjectSharedAttributeColumn*>(catalog->GetChild(i)))
+				return copy;
+		}
+	}
+	return nullptr;
+}
 
 } // namespace
 
@@ -162,6 +209,74 @@ TEST(SharedAttribute, CopyStopsBeingAllowedWithItsDeclaration) {
 
 	f.declaration->MarkAsDeleted();
 	EXPECT_FALSE(copies.front()->IsAllowed());
+}
+
+// A save and a load keep the copy's link as the declaration's id; the run binds it. Until
+// then the copy is not bound, and that is not deleted — the run skips a deleted node, so
+// a copy read as deleted was never bound: no field on the object, an unknown name to a
+// query, and the next apply removed it with its column.
+TEST(SharedAttribute, ReloadedCopyIsBoundOnTheRun) {
+	const ApplicationRun run;
+	if (!run.IsOpen())
+		GTEST_SKIP() << "appData env unavailable headless";
+
+	SharedAttributeFixture f;
+	f.declaration->SetName(wxT("Organisation"));
+	ASSERT_TRUE(f.declaration->SetCompositionObject(f.catalog, true));
+
+	ibMetaDataApplicationFile loaded;
+	ibValueMetaObjectSharedAttributeColumn* const copy = ReloadedCopy(f, loaded);
+	ASSERT_NE(copy, nullptr);
+	EXPECT_EQ(copy->GetSource(), nullptr);
+	EXPECT_EQ(copy->GetSourceMetaID(), f.declaration->GetMetaID());
+	EXPECT_FALSE(copy->IsDeleted());
+
+	ASSERT_TRUE(loaded.RunDatabase()) << "the reloaded application did not run";
+
+	ASSERT_NE(copy->GetSource(), nullptr);
+	EXPECT_EQ(copy->GetSource()->GetMetaID(), f.declaration->GetMetaID());
+	EXPECT_TRUE(copy->IsAllowed());
+
+	auto* const catalog = dynamic_cast<ibValueMetaObjectCatalog*>(copy->GetParent());
+	ASSERT_NE(catalog, nullptr);
+	bool listed = false;
+	for (const ibValueMetaObjectAttributeBase* a : catalog->GetAttributeArrayObject())
+		if (a == copy)
+			listed = true;
+	EXPECT_TRUE(listed) << "the object's attribute list — what its fields are built from — omitted the copy";
+	ASSERT_NE(catalog->GetQueryable(), nullptr);
+	EXPECT_NE(catalog->GetQueryable()->ResolveColumnByName(wxT("Organisation")), nullptr)
+		<< "a query naming the shared attribute is refused";
+
+	loaded.CloseDatabase();
+}
+
+// The other side of the same line: a copy whose declaration is not there when the run looks
+// has its id cleared and stays deleted — read alive, it would hand the schema snapshot a
+// column with no type.
+TEST(SharedAttribute, CopyWithoutItsDeclarationOnTheRunIsDeleted) {
+	const ApplicationRun run;
+	if (!run.IsOpen())
+		GTEST_SKIP() << "appData env unavailable headless";
+
+	SharedAttributeFixture f;
+	ASSERT_TRUE(f.declaration->SetCompositionObject(f.catalog, true));
+
+	ibMetaDataApplicationFile loaded;
+	ibValueMetaObjectSharedAttributeColumn* const copy = ReloadedCopy(f, loaded);
+	ASSERT_NE(copy, nullptr);
+	ibValueMetaObject* const declaration =
+		loaded.FindAnyObjectByFilter<ibValueMetaObject>(copy->GetSourceMetaID());
+	ASSERT_NE(declaration, nullptr);
+	declaration->MarkAsDeleted();
+
+	ASSERT_TRUE(loaded.RunDatabase()) << "the reloaded application did not run";
+
+	EXPECT_EQ(copy->GetSource(), nullptr);
+	EXPECT_EQ(copy->GetSourceMetaID(), 0);
+	EXPECT_TRUE(copy->IsDeleted());
+
+	loaded.CloseDatabase();
 }
 
 // Who may carry one is asked of the object, never listed: the catalog/document

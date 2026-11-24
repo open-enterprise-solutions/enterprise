@@ -149,11 +149,18 @@ class BACKEND_API ibValueMetaObjectSharedAttributeColumn : public ibValueMetaObj
 
 	// Deleted WITH its declaration, and asked as such everywhere — the designer tree,
 	// application-compare and the schema snapshot all read this rather than IsAllowed.
-	// An unbound copy (declaration gone, or pasted in from another application) reads as
-	// deleted too, which is what makes its column disappear with no sweep to write.
+	//
+	// NOT BOUND YET IS NOT GONE. A loaded copy holds the declaration's id and no pointer
+	// until the run binds it (OnBeforeRunMetaObject), and the run skips a deleted node: read
+	// as deleted, a reloaded copy was never bound — no field on the object, an unknown name to
+	// a query — and the next apply removed it with its column. The orphan is the copy with
+	// no id (pasted in, or its declaration not there when the run looked), and it stays
+	// deleted, which is what makes its column disappear with no sweep to write.
 	virtual bool IsDeleted() const override {
+		if (ibValueMetaObjectAttribute::IsDeleted())
+			return true;
 		const ibValueMetaObjectSharedAttribute* const src = GetSource();
-		return ibValueMetaObjectAttribute::IsDeleted() || src == nullptr || src->IsDeleted();
+		return src != nullptr ? src->IsDeleted() : m_sourceMetaId == 0;
 	}
 
 	//support icons

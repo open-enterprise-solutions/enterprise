@@ -274,9 +274,14 @@ bool ibValueMetaObjectSharedAttributeColumn::OnBeforeRunMetaObject(int flags)
 	// declaration's — and the source explorer copies a node's type BY VALUE when it builds
 	// (ibSourceInfo::m_typeDesc). An unbound copy therefore yields a column with an empty
 	// type, and the form cannot build a control for it.
-	if (!m_source && m_sourceMetaId != 0 && m_metaData != nullptr)
+	if (!m_source && m_sourceMetaId != 0 && m_metaData != nullptr) {
 		m_source = m_metaData->FindAnyObjectByFilter<ibValueMetaObjectSharedAttribute>(
 			m_sourceMetaId, g_metaSharedAttributeCLSID);
+		// Not there: the id names nothing, and the copy is the orphan IsDeleted answers for.
+		// Kept, it would read alive and hand the schema snapshot a column with no type.
+		if (!m_source)
+			m_sourceMetaId = 0;
+	}
 
 	return ibValueMetaObjectAttribute::OnBeforeRunMetaObject(flags);
 }
