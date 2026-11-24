@@ -135,7 +135,7 @@ ibString ibSessionSnapshot::SingleUserHolderUser() const
 // The consequences are not cosmetic: an single-user-mode gate built on these would
 // block on a job the blocking window itself started, and a licence count would
 // double every seat that happens to be reading.
-static bool ibIsPersonSession(int kind)
+bool ibIsPersonSession(int kind)
 {
 	switch (kind) {
 	case static_cast<int>(ibSessionKind::BackgroundJob):

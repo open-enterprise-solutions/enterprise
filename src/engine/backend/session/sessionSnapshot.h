@@ -123,4 +123,8 @@ private:
 	std::vector<Entry> m_listSession;
 };
 
+// Is a person working in a session of this kind — not a job, which carries the user name of whoever started it
+// (the reason is at its definition). `kind` is the row's numeric ibSessionKind (GetSessionKind).
+BACKEND_API bool ibIsPersonSession(int kind);
+
 #endif

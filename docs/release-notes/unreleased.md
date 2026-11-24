@@ -506,6 +506,10 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
   account, kept as it was named; a second account of a name already held is refused - *A user named "Admin" already
   exists* - and so is a name of only spaces. A second `admin` beside `Admin` was another account, and a login by that
   name took whichever the base read first.
+- **A new password, or a deleted account, ends the account's sessions.** Set in the designer's user list, it ends
+  every session signed in under the account's name - on the desktop, in the browser, in every process of the base -
+  as *Active users* ends one; the administrator's own stays, and so does a job started under the name. A session
+  went on with the old password, or with no account, until its person left.
 - **A list leaves the group it stood in when its settings change.** A grouping taken off in *List settings*, or
   settings restored, left the list inside the group it had been entered: the flat rows under the old group's line,
   and a step into a folder answered "The folder is no longer in the list". The list goes back to its top, on the

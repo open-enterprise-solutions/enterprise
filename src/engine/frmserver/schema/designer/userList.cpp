@@ -2,15 +2,44 @@
 
 #include <algorithm>
 
+#include "backend/appData.h"   // GetSessionRegistry — the base's sessions
 #include "backend/metadataApplication.h"
 #include "backend/metaCollection/metaObjectMetadata.h"   // AccessRight_Administration of a role — the item's OK check
 #include "backend/metaCollection/metaLanguageObject.h"
 #include "backend/metaCollection/metaRoleObject.h"
 #include "backend/session/session.h"
+#include "backend/session/sessionRegistry.h"   // Kick — an account's sessions ended
+#include "backend/session/sessionSnapshot.h"   // the sessions signed in under its name
 #include "backend/userInfo.h"
 #include "backend/utils/passwordHash.hpp"
+#include "core/diagnostics/journal.h"          // ibJournalWarning — a kick that could not be queued
 #include "core/serialize/dataBuilder.h"
 #include "protocol/protocolDesigner.h"   // ibProtocol::ibSchema::ibUserList
+
+namespace {
+
+// ⭐ AN ACCOUNT WHOSE PASSWORD CHANGED, OR THAT IS GONE, KEEPS NO SESSION (#377): every person's session signed in under
+// its name is ended, in every process of the base, by the kick the active users' list sends — but the asking one, the
+// administrator at this list. A session went on with the old password, or with no account, until its person left. A
+// job started under the name runs on: it signed in with no password, and a night's work is not cut for a new one.
+void EndSessionsOf(const ibSession& session, const ibString& userName)
+{
+	ibSessionRegistry* const registry = ibApplicationInstance::GetSessionRegistry(session.GetApplicationInstance());
+	if (registry == nullptr || userName.IsEmpty())
+		return;
+
+	const ibSessionSnapshot snapshot = registry->GetClusterSnapshot();
+	for (unsigned int idx = 0; idx < snapshot.GetSessionCount(); idx++) {
+		const ibString guid = snapshot.GetSession(idx);
+		if (guid == session.GetId() || !ibIsPersonSession(snapshot.GetSessionKind(idx))
+			|| !snapshot.GetUserName(idx).IsSameAs(userName, /*caseSensitive*/false))
+			continue;
+		if (!registry->Kick(guid))
+			ibJournalWarning(ibT("ui"), _("Failed to queue kick for session %s"), guid);
+	}
+}
+
+} // namespace
 
 bool ibSchemaUserList::AccessRight(const ibSession& session) const
 {
@@ -102,7 +131,8 @@ std::function<void()> ibSchemaUserList::Command(const ibSession& session, std::i
 			// The hash the item kept untouched is the stored one — read here, where it stays. A copy is a new guid: it
 			// has none stored, and starts without a password, as the desktop's copy did.
 			const auto password = args.FindField(ibProtocol::ibSchema::ibUserList::Password);
-			userInfo.m_strUserPassword = ibPasswordHash::PasswordToStore(ibUserInfo::Read(userGuid).m_strUserPassword,
+			const ibUserInfo stored = ibUserInfo::Read(userGuid);
+			userInfo.m_strUserPassword = ibPasswordHash::PasswordToStore(stored.m_strUserPassword,
 				password.has_value(), password.has_value() ? password->AsString() : ibString());
 
 			const ibValueMetaObjectApplication* rootObject = metaData->GetRootMetaObject();
@@ -163,8 +193,12 @@ std::function<void()> ibSchemaUserList::Command(const ibSession& session, std::i
 				return nullptr;
 			}
 
-			if (ibUserInfo::Save(userInfo))
+			if (ibUserInfo::Save(userInfo)) {
+				// A password given anew ends the sessions the old one signed in — under the name they signed in by.
+				if (password.has_value() && stored.IsOk())
+					EndSessionsOf(session, stored.m_strUserName);
 				return done;
+			}
 			error = BackendErrorChain();
 		}
 		catch (const ibCoreException& e) {
@@ -174,8 +208,12 @@ std::function<void()> ibSchemaUserList::Command(const ibSession& session, std::i
 		return nullptr;
 	}
 	case ibProtocol::ibSchema::ibCommand::Remove: {
-		if (ibUserInfo::Delete(ibGuid(args.GetValue<ibString>(ibProtocol::ibSchema::ibUserList::Guid))))
+		const ibGuid userGuid(args.GetValue<ibString>(ibProtocol::ibSchema::ibUserList::Guid));
+		const ibUserInfo gone = ibUserInfo::Read(userGuid);   // the name its sessions signed in by, read while it is there
+		if (ibUserInfo::Delete(userGuid)) {
+			EndSessionsOf(session, gone.m_strUserName);
 			return done;
+		}
 		refusal = ibProtocol::ibRefusal::Failed;
 		error = BackendErrorChain();
 		return nullptr;
