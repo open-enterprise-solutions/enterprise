@@ -141,7 +141,6 @@ public:
 #define DEBUG_VALUE_DELETE()
 #endif
 
-//simple type date
 // THE VALUE ITSELF IS THE VARIANT'S (core/variant.h): the kind, the read-only flag, the count and the one word, with
 // their lifecycle. What this class adds is the runtime — the factory, the members, the calls.
 //
@@ -982,8 +981,6 @@ public:
 
 public:
 
-	//METHODS:
-	 //constructors:
 	// THE LIFECYCLE IS THE VARIANT'S (core/variant.h), in the header as it is: a runtime value adds its count of the
 	// living (DEBUG_VALUE_CREATE above) and nothing else — noexcept where the variant's is.
 	ibValue() noexcept : ibVariant() { DEBUG_VALUE_CREATE(); }
@@ -994,26 +991,26 @@ public:
 		: ibVariant(static_cast<ibVariant*>(pParam ? pParam->GetImplValueRef() : nullptr)) { DEBUG_VALUE_CREATE(); }
 	ibValue(ibValueTypes nType, bool readOnly = false) noexcept : ibVariant(nType, readOnly) { DEBUG_VALUE_CREATE(); }
 
-	//copy constructors:
-	ibValue(bool cParam) noexcept : ibVariant(cParam) { DEBUG_VALUE_CREATE(); } //boolean
-	ibValue(signed int cParam) noexcept : ibVariant(cParam) { DEBUG_VALUE_CREATE(); } //number
-	ibValue(unsigned int cParam) noexcept : ibVariant(cParam) { DEBUG_VALUE_CREATE(); } //number
-	ibValue(double cParam) : ibVariant(cParam) { DEBUG_VALUE_CREATE(); } //number
-	ibValue(const ibNumber& cParam) noexcept : ibVariant(cParam) { DEBUG_VALUE_CREATE(); } //number
-	ibValue(const ibDateTime& cParam) noexcept : ibVariant(cParam) { DEBUG_VALUE_CREATE(); } //date
+	// A flag, a number, a date — the variant's, each of its kind.
+	ibValue(bool cParam) noexcept : ibVariant(cParam) { DEBUG_VALUE_CREATE(); }
+	ibValue(signed int cParam) noexcept : ibVariant(cParam) { DEBUG_VALUE_CREATE(); }
+	ibValue(unsigned int cParam) noexcept : ibVariant(cParam) { DEBUG_VALUE_CREATE(); }
+	ibValue(double cParam) : ibVariant(cParam) { DEBUG_VALUE_CREATE(); }
+	ibValue(const ibNumber& cParam) noexcept : ibVariant(cParam) { DEBUG_VALUE_CREATE(); }
+	ibValue(const ibDateTime& cParam) noexcept : ibVariant(cParam) { DEBUG_VALUE_CREATE(); }
 	ibValue(int nYear, int nMonth, int nDay, unsigned short nHour = 0, unsigned short nMinute = 0, unsigned short nSecond = 0)
-		: ibVariant(nYear, nMonth, nDay, nHour, nMinute, nSecond) { DEBUG_VALUE_CREATE(); } //date
+		: ibVariant(nYear, nMonth, nDay, nHour, nMinute, nSecond) { DEBUG_VALUE_CREATE(); }
 
 	// CONST char pointers, and that const is load-bearing. Declared as `char*` these
 	// did not match a `const char*` argument at all, so `ibValue v = wxEmptyString`
 	// (wxEmptyString IS a `const wxChar*`) fell through to ibValue(bool) — pointer-to-bool
 	// is a STANDARD conversion and beats the user-defined one to wxString — and the value
 	// became Boolean TRUE. Same trap, same shape, as the const ibValue* overload below.
-	ibValue(const char* sParam) : ibVariant(sParam) { DEBUG_VALUE_CREATE(); } //string
-	ibValue(const ibChar* sParam) : ibVariant(sParam) { DEBUG_VALUE_CREATE(); } //string
-	ibValue(const std::wstring& sParam) : ibVariant(sParam) { DEBUG_VALUE_CREATE(); } //string
-	ibValue(const ibString& sParam) noexcept : ibVariant(sParam) { DEBUG_VALUE_CREATE(); } //string
-	ibValue(ibString&& sParam) noexcept : ibVariant(std::move(sParam)) { DEBUG_VALUE_CREATE(); } //string — native move (runtime string functions)
+	ibValue(const char* sParam) : ibVariant(sParam) { DEBUG_VALUE_CREATE(); }
+	ibValue(const ibChar* sParam) : ibVariant(sParam) { DEBUG_VALUE_CREATE(); }
+	ibValue(const std::wstring& sParam) : ibVariant(sParam) { DEBUG_VALUE_CREATE(); }
+	ibValue(const ibString& sParam) noexcept : ibVariant(sParam) { DEBUG_VALUE_CREATE(); }
+	ibValue(ibString&& sParam) noexcept : ibVariant(std::move(sParam)) { DEBUG_VALUE_CREATE(); }   // the text taken over, not counted (the runtime's string functions)
 
 	// A VARIANT AS IT IS — a constant as the translator read it (ibLexem::m_valData), the door through which the
 	// compiler puts one into the bytecode; a property's value; a cell or a sheet's parameter read back. Explicit: a
@@ -1130,7 +1127,8 @@ public:
 	// GetValueHash — declared with GetHashKey, near GetString: the two are the
 	// value's two IDENTITIES and belong together. See the note there.
 
-	//special converting
+	// The object held as a class of the runtime — null when it is not one (CastValue); a member of an enumeration as its
+	// enumerator.
 	template <typename valueType> inline valueType* ConvertToType() const {
 		return CastValue<valueType>(this);
 	}
@@ -1230,11 +1228,11 @@ public:
 
 	BACKEND_API static std::vector<ibCtorAbstractType*> GetListCtorsByType(ibCtorObjectType objectType = ibCtorObjectType::ibCtorObjectType_object_value);
 
-	//static event 
+	// A class told when its type is registered and unregistered (typeCtor.h, T::OnRegisterObject); nothing here.
 	static void OnRegisterObject(const ibString& className, ibCtorAbstractType* typeCtor) {}
 	static void OnUnRegisterObject(const ibString& className) {}
 
-	//factory version
+	// How many times the registry of types changed — what a list built from it is checked against.
 	BACKEND_API static unsigned int GetFactoryCountChanges();
 
 public:
@@ -1426,113 +1424,51 @@ private:
 
 public:
 
-	/// Returns number of component properties
-	/**
-	*  @return number of properties
-	*/
+	// ⭐ THE VALUE'S MEMBERS, AS A SCRIPT REACHES THEM THROUGH THE DOT — each property and method by its place in the
+	// value's member table (GetPMethods: the rows its binders appended, from 0). The compiler finds a member by its name
+	// once; the interpreter then asks by the place. A reference answers with the object it holds.
+
+	// How many properties it has; the place of one by its name, ibNOT_FOUND for none of that name; a place's name, empty
+	// for a place it has none at.
 	BACKEND_API virtual long GetNProps() const;
-
-	/// Finds property by name
-	/**
-	 *  @param wsPropName - property name
-	 *  @return property index or -1, if iterator is not found
-	 */
 	BACKEND_API virtual long FindProp(const ibString& strPropName) const;
-
-	/// Returns property name
-	/**
-	 *  @param lPropNum - property index (starting with 0)
-	 *  @return proeprty name or 0 if iterator is not found
-	 */
 	BACKEND_API virtual const ibString& GetPropName(const long lPropNum) const;
 
-	/// Returns property value
-	/**
-	 *  @param lPropNum - property index (starting with 0)
-	 *  @return the result of
-	 */
+	// A property read and written by its place — the class's own; here a reference hands it on, and a const one is not
+	// written through. False: the value did not answer for that place.
 	BACKEND_API virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal);
-
-	/// Sets the property value
-	/**
-	 *  @param lPropNum - property index (starting with 0)
-	 *  @param varPropVal - the pointer to a variable for property value
-	 *  @return the result of
-	 */
 	BACKEND_API virtual bool SetPropVal(const long lPropNum, const ibValue& varPropVal);
 
-	/// Is property readable?
-	/**
-	 *  @param lPropNum - property index (starting with 0)
-	 *  @return true if property is readable
-	 */
+	// Whether a property may be read, and written: a write to one that may not is refused before SetPropVal is asked
+	// (ibScriptError_PropNotWritable).
 	BACKEND_API virtual bool IsPropReadable(const long lPropNum) const;
-
-	/// Is property writable?
-	/**
-	 *  @param lPropNum - property index (starting with 0)
-	 *  @return true if property is writable
-	 */
 	BACKEND_API virtual bool IsPropWritable(const long lPropNum) const;
 
-	/// Is property scope-local (bc-local — invisible to children
-	/// through cross-bc resolution; ThisObject / ThisForm / etc.)?
+	// Whether a property is local to its module — ThisObject, ThisForm, a variable it does not export: seen inside it, not
+	// by a module below it nor through the dot; a refused read or write of one is said as a member not found.
 	BACKEND_API virtual bool IsPropScoped(const long lPropNum) const;
-
-	/// Is method scope-local — seen inside its module, not through the dot? Symmetric with IsPropScoped.
+	// …and a method, the same way.
 	BACKEND_API virtual bool IsMethodScoped(const long lMethodNum) const;
 
-	/// Returns number of component methods
-	/**
-	 *  @return number of component  methods
-	 */
+	// How many methods it has; the place of one by its name, ibNOT_FOUND for none of that name (a LINQ verb is not among
+	// them: FindLinqMethodByName).
 	BACKEND_API virtual long GetNMethods() const;
-
-	/// Finds a method by name
-	/**
-	 *  @param wsMethodName - method name
-	 *  @return - method index
-	 */
 	BACKEND_API virtual long FindMethod(const ibString& strMethodName) const;
-
-	/// Returns method name
-	/**
-	 *  @param lMethodNum - method index(starting with 0)
-	 *  @param hash - when asked, the name as a number (ibMemberTable::NameHash), 0 if method is not found
-	 *  @return method name or 0 if method is not found
-	 */
+	// A method's name by its place, empty for none — and, when asked, its hash (ibMemberTable::NameHash), 0 for none: a
+	// context method's call carries it, so the interpreter compares two numbers and asks by the name only when they differ.
 	BACKEND_API virtual const ibString& GetMethodName(const long lMethodNum, uint32_t* hash = nullptr) const;
-
-	/// Returns method helper
-	/**
-	*  @param lMethodNum - method index(starting with 0)
-	*  @return method name or 0 if method is not found
-	*/
+	// …and its description, the text it was appended with — shown by the code completion, the module editor and the
+	// debugger; empty for none.
 	BACKEND_API virtual const ibString& GetMethodHelper(const long lMethodNum) const;
 
-	/// Returns number of method parameters
-	/**
-	 *  @param lMethodNum - method index (starting with 0)
-	 *  @return number of parameters
-	 */
+	// How many parameters a method takes.
 	BACKEND_API virtual long GetNParams(const long lMethodNum) const;
-
-	/// Returns default value of method parameter
-	/**
-	 *  @param lMethodNum - method index(starting with 0)
-	 *  @param lParamNum - parameter index (starting with 0)
-	 *  @param pvarParamDefValue - the pointer to a variable for default value
-	 *  @return the result of
-	 */
+	// The value a parameter left out of a call takes — the class's own (a script's function answers from its
+	// declaration); false: none, the parameter stays Undefined. Not asked of an argument written as Undefined.
 	BACKEND_API virtual bool GetParamDefValue(const long lMethodNum,
 		const long lParamNum,
 		ibValue& pvarParamDefValue) const;
-
-	/// Does the method have a return value?
-	/**
-	 *  @param lMethodNum - method index (starting with 0)
-	 *  @return true if the method has a return value
-	 */
+	// Whether a method is a function — its call answers a value — rather than a procedure.
 	BACKEND_API virtual bool HasRetVal(const long lMethodNum) const;
 
 	// LINQ — universal pipeline ops (Where / Select / OrderBy / ...) on
@@ -1640,25 +1576,12 @@ public:
 	BACKEND_API virtual void DispatchLinqMethod(ibLinqMethod method, ibValue& ret,
 	                                            ibValue** args, long n);
 
-	/// Calls the method as a procedure
-	/**
-	 *  @param lMethodNum - method index (starting with 0)
-	 *  @param paParams - the pointer to array of method parameters
-	 *  @param lSizeArray - the size of array
-	 *  @return the result of
-	 */
+	// ⭐ A METHOD CALLED BY ITS PLACE — the class's own; here a reference hands it on. `paParams` are the arguments,
+	// `lSizeArray` of them, a left-out one already given its default (GetParamDefValue). False: the method did nothing —
+	// a procedure's call is refused for it (ibScriptError_ProcedureNotDone), a function's answers Undefined.
 	BACKEND_API virtual bool CallAsProc(const long lMethodNum,
 		ibValue** paParams,
 		const long lSizeArray);
-
-	/// Calls the method as a function
-	/**
-	 *  @param lMethodNum - method index (starting with 0)
-	 *  @param pvarRetValue - the pointer to returned value
-	 *  @param paParams - the pointer to array of method parameters
-	 *  @param lSizeArray - the size of array
-	 *  @return the result of
-	 */
 	BACKEND_API virtual bool CallAsFunc(const long lMethodNum,
 		ibValue& pvarRetValue,
 		ibValue** paParams,
@@ -1668,7 +1591,7 @@ public:
 
 	ibValue* GetThis() { return this; }
 
-	//support icons
+	// Its picture, and its class's.
 	BACKEND_API virtual ibPicture GetIcon() const;
 	BACKEND_API static ibPicture GetIconGroup();
 

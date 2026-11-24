@@ -754,7 +754,19 @@ public:
 	// a structural owner (a value-table sets it on its column-infos). Null when standalone. A change
 	// here bubbles up via OnChildChanged until a holder that can react is reached.
 	ibPropertyObject* GetAttachOwner() const { return m_attachOwner; }
-	
+
+	// …THE FIRST OF A KIND ON THAT EDGE — this object, or the first up the attach chain that is a T: a property a field's
+	// view holds answers for the field the view is attached to (its link's control, a switch's type). Null when none is.
+	// One walk, where three files each wrote their own (Max, 2026-11-24).
+	template <typename T>
+	const T* GetAttachOwner() const {
+		for (const ibPropertyObject* holder = this; holder != nullptr; holder = holder->GetAttachOwner()) {
+			if (const T* found = dynamic_cast<const T*>(holder))
+				return found;
+		}
+		return nullptr;
+	}
+
 	void SetAttachOwner(ibPropertyObject* owner) { m_attachOwner = owner; }
 	void RemoveAttachedObject(ibPropertyObject* other);
 

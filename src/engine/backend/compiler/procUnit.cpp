@@ -2990,13 +2990,13 @@ long ibProcUnit::FindProp(const ibString& strPropName) const
 	return ibNOT_FOUND;
 }
 
-bool ibProcUnit::SetPropVal(const long lPropNum, const ibValue& varPropVal)//setting attribute
+bool ibProcUnit::SetPropVal(const long lPropNum, const ibValue& varPropVal)
 {
 	*m_cCurContext.m_pRefLocVars[lPropNum] = varPropVal;
 	return true;
 }
 
-bool ibProcUnit::SetPropVal(const ibString& strPropName, const ibValue& varPropVal)//setting attribute
+bool ibProcUnit::SetPropVal(const ibString& strPropName, const ibValue& varPropVal)
 {
 	long lPropNum = FindProp(strPropName);
 	if (lPropNum != ibNOT_FOUND) {
@@ -3013,7 +3013,7 @@ bool ibProcUnit::SetPropVal(const ibString& strPropName, const ibValue& varPropV
 	return true;
 }
 
-bool ibProcUnit::GetPropVal(const long lPropNum, ibValue& pvarPropVal) //attribute value
+bool ibProcUnit::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 {
 	// Dereference: copy the VALUE of the local-var slot. Assigning the bare
 	// ibValue* (operator=(ibValue*)) would make pvarPropVal a TYPE_REFFER to
@@ -3025,7 +3025,7 @@ bool ibProcUnit::GetPropVal(const long lPropNum, ibValue& pvarPropVal) //attribu
 	return true;
 }
 
-bool ibProcUnit::GetPropVal(const ibString& strPropName, ibValue& pvarPropVal) //setting attribute
+bool ibProcUnit::GetPropVal(const ibString& strPropName, ibValue& pvarPropVal)
 {
 	const long lPropNum = FindProp(strPropName);
 	if (lPropNum != ibNOT_FOUND) {

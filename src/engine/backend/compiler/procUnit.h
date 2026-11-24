@@ -264,11 +264,13 @@ public:
 	// (job/jobRunByteCode.cpp does exactly this to carry a run's `Result` back.)
 	long FindProp(const ibString& strPropName) const;
 
+	// A module variable written and read — by its name, or by its place (FindProp, above). Written by a name it has none
+	// of, it is added; read so, false.
 	bool SetPropVal(const ibString& strPropName, const ibValue& varPropVal);
-	bool SetPropVal(const long lPropNum, const ibValue& varPropVal); //setting attribute
+	bool SetPropVal(const long lPropNum, const ibValue& varPropVal);
 
 	bool GetPropVal(const ibString& strPropName, ibValue& pvarPropVal);
-	bool GetPropVal(const long lPropNum, ibValue& pvarPropVal);//attribute value
+	bool GetPropVal(const long lPropNum, ibValue& pvarPropVal);
 
 	// Interpreter state (currentRunModule, runContext stack, errorPlace,
 	// recCount) lives on ibProcUnitState — accessed through

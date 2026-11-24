@@ -48,17 +48,6 @@ bool ibPropertyChoices::WriteNodeValue(ibDataValue& value) const
 
 namespace {
 
-// The field a switch stands in — the holder of the type, up the attach chain: the switch is the field's view, attached
-// to it (frmserver's ibFieldViewProvider), as a view's link stands on its control (variantChoiceLink.cpp, ControlOf).
-const ibBackendTypeFactory* TypeHolderOf(const ibPropertyObject* owner)
-{
-	for (const ibPropertyObject* holder = owner; holder != nullptr; holder = holder->GetAttachOwner()) {
-		if (const ibBackendTypeFactory* typed = dynamic_cast<const ibBackendTypeFactory*>(holder))
-			return typed;
-	}
-	return nullptr;
-}
-
 // A type whose values can be listed: a Boolean, an enumeration — of the application or of the engine. Not a reference
 // to a catalog: its values are the base's, and a switch is not a list form (a reference is a later phase).
 bool IsFinite(const ibClassID& clsid)
@@ -93,7 +82,8 @@ std::vector<ibValue> ValuesOf(const ibTypeDescription& typeDesc, const ibMetaDat
 // own, and the switch then marked none: 3.257 on a field of two digits wrote 3.26 (2026-11-24, a script's value list).
 ibChoicesDescription OfFieldType(const ibChoicesDescription& choices, const ibPropertyObject* owner)
 {
-	const ibBackendTypeFactory* const typed = TypeHolderOf(owner);
+	// The field the switch stands in holds the type: the switch is its view, attached to it (ibFieldViewProvider).
+	const ibBackendTypeFactory* const typed = owner != nullptr ? owner->GetAttachOwner<ibBackendTypeFactory>() : nullptr;
 	const ibMetaData* const metaData = owner != nullptr ? owner->GetMetaData() : nullptr;
 	if (typed == nullptr || metaData == nullptr || typed->GetTypeDesc().GetClsidList().empty())
 		return choices;
@@ -133,7 +123,7 @@ bool ibPropertyChoices::GetProtocolValue(ibDataNode& row, ibReader reader)
 
 	const ibPropertyObject* const owner = m_owner;   // CONST: the non-const GetMetaData wxFAILs
 	const ibMetaData* const metaData = owner != nullptr ? owner->GetMetaData() : nullptr;
-	const ibBackendTypeFactory* const typed = TypeHolderOf(owner);
+	const ibBackendTypeFactory* const typed = owner != nullptr ? owner->GetAttachOwner<ibBackendTypeFactory>() : nullptr;
 	if (typed == nullptr)
 		return true;
 

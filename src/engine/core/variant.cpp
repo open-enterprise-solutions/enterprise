@@ -73,7 +73,6 @@ void ibVariant::Reset()
 	m_dData = ibDateTime();   // the WHOLE word: the empty state of every member
 }
 
-//methods:
 void ibVariant::Copy(const ibVariant& cOld)
 {
 	if (this == &cOld)

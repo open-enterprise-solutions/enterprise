@@ -34,7 +34,7 @@ class ibDataNode;
 // they are otherwise hidden inside core.
 class CORE_API_VTABLE ibVariant {
 public:
-	//ATTRIBUTES:
+	// The kind, and whether the value may be written.
 	ibValueTypes m_typeClass;  // 1 byte (enum : unsigned char)
 	bool m_bReadOnly;          // 1 byte
 private:
@@ -91,31 +91,31 @@ public:
 	}
 	ibVariant(ibValueTypes nType, bool readOnly = false) noexcept   // the zeroed word is the empty value of every kind
 		: m_typeClass(nType), m_bReadOnly(readOnly), m_refCount(0), m_dData() {}
-	ibVariant(bool cParam) noexcept //boolean
+	ibVariant(bool cParam) noexcept
 		: m_typeClass(ibValueTypes::TYPE_BOOLEAN), m_bReadOnly(false), m_refCount(0), m_dData() { m_bData = cParam; }
-	ibVariant(signed int cParam) noexcept //number
+	ibVariant(signed int cParam) noexcept
 		: m_typeClass(ibValueTypes::TYPE_NUMBER), m_bReadOnly(false), m_refCount(0), m_dData() { m_fData = cParam; }
-	ibVariant(unsigned int cParam) noexcept //number
+	ibVariant(unsigned int cParam) noexcept
 		: m_typeClass(ibValueTypes::TYPE_NUMBER), m_bReadOnly(false), m_refCount(0), m_dData() { m_fData = cParam; }
-	CORE_API ibVariant(long cParam); //number
-	CORE_API ibVariant(double cParam); //number
-	ibVariant(const ibNumber& cParam) noexcept //number
+	CORE_API ibVariant(long cParam);
+	CORE_API ibVariant(double cParam);
+	ibVariant(const ibNumber& cParam) noexcept
 		: m_typeClass(ibValueTypes::TYPE_NUMBER), m_bReadOnly(false), m_refCount(0), m_dData() { m_fData = cParam; }
-	ibVariant(const ibDateTime& cParam) noexcept //date
+	ibVariant(const ibDateTime& cParam) noexcept
 		: m_typeClass(ibValueTypes::TYPE_DATE), m_bReadOnly(false), m_refCount(0), m_dData() { m_dData = cParam; }
-	CORE_API ibVariant(int nYear, int nMonth, int nDay, unsigned short nHour = 0, unsigned short nMinute = 0, unsigned short nSecond = 0); //date
-	CORE_API ibVariant(const char* sParam); //string
-	CORE_API ibVariant(const ibChar* sParam); //string
-	CORE_API ibVariant(const std::wstring& sParam); //string
-	ibVariant(const ibString& sParam) noexcept //string
+	CORE_API ibVariant(int nYear, int nMonth, int nDay, unsigned short nHour = 0, unsigned short nMinute = 0, unsigned short nSecond = 0);
+	CORE_API ibVariant(const char* sParam);
+	CORE_API ibVariant(const ibChar* sParam);
+	CORE_API ibVariant(const std::wstring& sParam);
+	ibVariant(const ibString& sParam) noexcept
 		: m_typeClass(ibValueTypes::TYPE_STRING), m_bReadOnly(false), m_refCount(0), m_dData() { m_sData = sParam; }
-	ibVariant(ibString&& sParam) noexcept //string — native move
+	ibVariant(ibString&& sParam) noexcept   // the text taken over, not counted
 		: m_typeClass(ibValueTypes::TYPE_STRING), m_bReadOnly(false), m_refCount(0), m_dData() { m_sData = std::move(sParam); }
 	// …and a wx text, the one a window hands in: without it `ibVariant(wxs)` is ambiguous on GCC and Clang — wxString
 	// reaches ibString, `const wchar_t*` and bool alike, each one user conversion away. A template, as ibString's
 	// boundary is (fstring.h): made only where a program includes wx.
 	template <std::same_as<wxString> S>
-	ibVariant(const S& sParam) : ibVariant(ibString(sParam)) {} //string
+	ibVariant(const S& sParam) : ibVariant(ibString(sParam)) {}
 
 	// ANY OTHER POINTER IS A MISTAKE, the runtime's rule: pointer-to-bool is a standard conversion, and an unrelated
 	// pointer would arrive as TRUE. Only an object (derived from this class) and a text are taken — "derived" asked as
@@ -208,7 +208,8 @@ public:
 		return m_typeClass == ibValueTypes::TYPE_CONST_REFFER;
 	}
 
-	//special copy & move function
+	// The kind and the payload taken from another — copied (a text and a number shared, an object referred to and
+	// counted) or moved; the read-only flag and the count stay this one's.
 	CORE_API void Copy(const ibVariant& cOld);
 	CORE_API void Move(ibVariant&& cOld);
 
@@ -282,7 +283,9 @@ public:
 	bool SetString(const char* sParam) { return SetString(ibString(sParam)); }
 	bool SetString(const ibChar* sParam) { return SetString(ibString(sParam)); }
 
-	CORE_API void SetData(const ibVariant& varValue); //setting the value without changing the type
+	// The other's value written in THIS one's kind, read from its text (a text "12" into a number) — where SetValue takes
+	// the other's kind; a reference hands it to its object, and a kind with no text of its own takes the other's.
+	CORE_API void SetData(const ibVariant& varValue);
 
 	CORE_API virtual bool GetBoolean() const;
 	CORE_API virtual ibNumber GetNumber() const;

@@ -1162,9 +1162,7 @@ bool ReadChoices(const ibPropertyChoices* property, const ibDataValue& given, ib
 
 	// The field the switch stands in holds the type — up the attach chain, the switch being its view. None, or no type
 	// yet: the values as said.
-	const ibBackendTypeFactory* typed = nullptr;
-	for (const ibPropertyObject* up = holder; up != nullptr && typed == nullptr; up = up->GetAttachOwner())
-		typed = dynamic_cast<const ibBackendTypeFactory*>(up);
+	const ibBackendTypeFactory* typed = holder != nullptr ? holder->GetAttachOwner<ibBackendTypeFactory>() : nullptr;
 	if (typed != nullptr && typed->GetClsidCount() == 0)
 		typed = nullptr;
 

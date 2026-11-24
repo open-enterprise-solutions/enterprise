@@ -31,11 +31,7 @@ const ibValueMetaObjectAttributeBase* AttributeOf(const ibPropertyObject* owner)
 // for the field.
 const ibBackendTypeSourceFactory* ControlOf(const ibPropertyObject* owner)
 {
-	for (const ibPropertyObject* holder = owner; holder != nullptr; holder = holder->GetAttachOwner()) {
-		if (const ibBackendTypeSourceFactory* control = dynamic_cast<const ibBackendTypeSourceFactory*>(holder))
-			return control;
-	}
-	return nullptr;
+	return owner != nullptr ? owner->GetAttachOwner<ibBackendTypeSourceFactory>() : nullptr;
 }
 
 // The form a control stands in — the top of its tree, the first SOURCE above it (a table and a group are none). Null
