@@ -480,6 +480,9 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
 
 ## Fixes
 
+- **A shared attribute stays on its objects when the application is opened again.** After a load its copy in an
+  object was read as deleted, so it was never bound to its declaration: the object had no such field, a query refused
+  the name, and the next apply in the designer dropped the column with its data.
 - **An external data tool's or report's reference attribute takes choice parameters.** Over a reference to the
   application's catalog or document its *Choice parameters* said "This field refers to nothing": the external looked
   the type up in itself only, and now asks its application as well.
