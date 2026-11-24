@@ -17,7 +17,7 @@ ibSelectorDataType ibValueMetaObjectAccountingKind::GetFilterDataType() const
 // — the branch it stands in already says which sort of field — so the attribute's icon is true rather
 // than a stand-in, and the engine's common set has no tick-box of its own to borrow instead. Art of
 // their own is worth having (a tick-box, and a tick-box over a breakdown) and is a picture to be drawn,
-// not a mechanism to be built: dropping two base64 PNGs in here is the whole of it.
+// not a mechanism to be built: two SVG strings in here are the whole of it.
 ibPicture ibValueMetaObjectAccountingKind::GetIcon() const
 {
 	return GetIconGroup();

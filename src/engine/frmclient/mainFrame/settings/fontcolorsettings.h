@@ -4,7 +4,9 @@
 /////////////////////////////////////////////////////////////////////////////
 // The font of code, and the colours of each kind of text in it: one font for
 // all, and per kind a fore and back colour with bold and italic over the
-// font. Kept in the options file under "fontcolor", each kind by its number.
+// font — a set per look, as a code editor's are per theme (Max, 2026-11-24:
+// "as Visual Studio"). Kept in the options file under "fontcolor", each kind
+// by its number, the dark look's under its "dark".
 /////////////////////////////////////////////////////////////////////////////
 
 #include <wx/wx.h>
@@ -57,8 +59,9 @@ public:
 	// The font with the kind's bold and italic over it.
 	wxFont GetFont(DisplayItem displayItem) const;
 
-	const Colors& GetColors(DisplayItem displayItem) const { return m_colors[displayItem]; }
-	void SetColors(DisplayItem displayItem, const Colors& colors) { m_colors[displayItem] = colors; }
+	// The kind's colours in the look in force.
+	const Colors& GetColors(DisplayItem displayItem) const;
+	void SetColors(DisplayItem displayItem, const Colors& colors);
 
 	// Paints a text control in these: each kind of text the C lexer tells apart in its font and colours, the
 	// selection, the line numbers, and a caret that shows on the paper.
@@ -72,7 +75,9 @@ public:
 private:
 
 	wxFont m_font;
-	Colors m_colors[DisplayItem_Last];
+	// [0] the light look's, [1] the dark one's — the look in force's is the one read, set and painted with; the look is
+	// set before any window, so it is one for the whole run.
+	Colors m_colors[2][DisplayItem_Last];
 };
 
 #endif

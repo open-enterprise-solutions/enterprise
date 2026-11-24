@@ -121,5 +121,13 @@ void ibPanelFontColorSettings::OnDisplayItemChanged(wxCommandEvent&)
 
 void ibPanelFontColorSettings::OnResetToDefaults(wxCommandEvent&)
 {
-	SetSettings(ibFontColorSettings());
+	// The font and the look in force's colours — the other look's set stays as it was chosen.
+	const ibFontColorSettings defaults;
+	ibFontColorSettings settings = m_settings;
+	settings.SetFont(defaults.GetFont());
+	for (unsigned int i = 0; i < ibFontColorSettings::DisplayItem_Last; ++i) {
+		const auto item = static_cast<ibFontColorSettings::DisplayItem>(i);
+		settings.SetColors(item, defaults.GetColors(item));
+	}
+	SetSettings(settings);
 }

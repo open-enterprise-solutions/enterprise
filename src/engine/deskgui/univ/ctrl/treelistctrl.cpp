@@ -606,6 +606,10 @@ public:
 	void OnIdle(wxIdleEvent& event);
 	void OnScroll(wxScrollWinEvent& event);
 	void OnCaptureLost(wxMouseCaptureLostEvent& WXUNUSED(event)) { ;; }
+	void OnSysColourChanged(wxSysColourChangedEvent& event);
+
+	// The theme's ground, ink and selection - as it is made (Create), and again when the look changes.
+	void ApplyThemeColours();
 
 	// implementation helpers
 	int GetColumnCount() const
@@ -1794,6 +1798,7 @@ EVT_KILL_FOCUS(ibTreeListMainWindow::OnKillFocus)
 EVT_IDLE(ibTreeListMainWindow::OnIdle)
 EVT_SCROLLWIN(ibTreeListMainWindow::OnScroll)
 EVT_MOUSE_CAPTURE_LOST(ibTreeListMainWindow::OnCaptureLost)
+EVT_SYS_COLOUR_CHANGED(ibTreeListMainWindow::OnSysColourChanged)
 wxEND_EVENT_TABLE()
 
 
@@ -1819,9 +1824,9 @@ void ibTreeListMainWindow::Init() {
 	m_indent = MININDENT; // min. indent
 	m_linespacing = 4;
 
-	// SEAM: the theme's selection, as ibTreeCtrl's - not the system's
-	m_hilightBrush = new wxBrush(wxTHEME_COLOUR(HIGHLIGHT), wxBRUSHSTYLE_SOLID);
-	m_hilightUnfocusedBrush = new wxBrush(wxTHEME_COLOUR(HIGHLIGHT).ChangeLightness(130), wxBRUSHSTYLE_SOLID);
+	// the selection's, their colours the theme's (ApplyThemeColours)
+	m_hilightBrush = new wxBrush();
+	m_hilightUnfocusedBrush = new wxBrush();
 
 	m_imageListNormal = (wxImageList*)nullptr;
 	m_imageListButtons = (wxImageList*)nullptr;
@@ -1885,10 +1890,7 @@ bool ibTreeListMainWindow::Create(ibTreeListCtrl* parent,
 	SetValidator(validator);
 #endif
 
-	// SEAM: the theme's content colour, as ibTreeCtrl's - not the system's list box
-	SetBackgroundColour(wxTHEME_COLOUR(WINDOW));
-	// ...and a table's text, as the list's (ibListMainWindow) - the control's black stood beside it (2026-11-12, Max)
-	SetOwnForegroundColour(wxTHEME_COLOUR(CONTROL_TEXT_ALTERNATE));
+	ApplyThemeColours();
 	// prevent any background repaint in order to reducing flicker
 	SetBackgroundStyle(wxBG_STYLE_CUSTOM);
 
@@ -3240,6 +3242,13 @@ int ibTreeListMainWindow::GetLineHeight(ibTreeListItem * item) const {
 	}
 }
 
+// THE LINES BETWEEN ROWS AND COLUMNS — a tint of the background, darker in the light and lighter in the dark, as
+// a table's striping (ibDataViewCtrl::DrawTableContent). The canon took the system's 3D light on white and a WHITE
+// pen on any other background: a dark tree was ruled in white (2026-11-24, Max's watch window).
+static wxPen GridLinePen(const wxColour& background) {
+	return wxPen(background.ChangeLightness(background.GetRGB() > 0x808080 ? 90 : 115), 1, wxPENSTYLE_SOLID);
+}
+
 void ibTreeListMainWindow::PaintItem(ibTreeListItem * item, wxDC & dc) {
 
 	wxColour colText = GetItemTextColour(item);
@@ -3358,21 +3367,21 @@ void ibTreeListMainWindow::PaintItem(ibTreeListItem * item, wxDC & dc) {
 				dc.SetBrush(wxBrush(colBg, wxBRUSHSTYLE_SOLID));
 				dc.DrawRectangle(x_colstart, item->GetY() + off_h, col_w, total_h - off_h);
 				// draw selection & optionally cursor
-				dc.SetPen(drawCursor ? *wxBLACK_PEN : *wxTRANSPARENT_PEN);
+				dc.SetPen(drawCursor ? wxPen(GetForegroundColour()) : *wxTRANSPARENT_PEN);
 				dc.SetBrush(!m_isDragging && m_hasFocus ? *m_hilightBrush : *m_hilightUnfocusedBrush);
 				dc.SetTextForeground(colTextHilight);
 				dc.DrawRectangle(text_x, item->GetY() + off_h, text_w, total_h - off_h);
 				// normal FG / BG from attributes
 			}
 			else {
-				// draw normal background & optionally cursor
-				dc.SetPen(drawCursor && i != GetMainColumn() ? *wxBLACK_PEN : *wxTRANSPARENT_PEN);
+				// draw normal background & optionally cursor - the cursor in the tree's ink, not black on any ground
+				dc.SetPen(drawCursor && i != GetMainColumn() ? wxPen(GetForegroundColour()) : *wxTRANSPARENT_PEN);
 				dc.SetBrush(wxBrush(colBg, wxBRUSHSTYLE_SOLID));
 				dc.SetTextForeground(colText);
 				dc.DrawRectangle(x_colstart, item->GetY() + off_h, col_w, total_h - off_h);
 				// on main col draw a separate cursor
 				if (drawCursor && i == GetMainColumn()) {
-					dc.SetPen(*wxBLACK_PEN);
+					dc.SetPen(GetForegroundColour());
 					dc.SetBackgroundMode(wxTRANSPARENT);
 					dc.DrawRectangle(text_x, item->GetY() + off_h, text_w, total_h - off_h);
 				}
@@ -3381,12 +3390,7 @@ void ibTreeListMainWindow::PaintItem(ibTreeListItem * item, wxDC & dc) {
 
 		// draw vertical column lines
 		if (HasFlag(wxTR_COLUMN_LINES)) { // vertical lines between columns
-#if !wxCHECK_VERSION(2, 5, 0)
-			wxPen pen(wxSystemSettings::GetSystemColour(wxSYS_COLOUR_3DLIGHT), 1, wxPENSTYLE_SOLID);
-#else
-			wxPen pen(wxSystemSettings::GetColour(wxSYS_COLOUR_3DLIGHT), 1, wxPENSTYLE_SOLID);
-#endif
-			dc.SetPen((GetBackgroundColour() == *wxWHITE) ? pen : *wxWHITE_PEN);
+			dc.SetPen(GridLinePen(GetBackgroundColour()));
 			dc.DrawLine(x_colstart + col_w - 1, item->GetY(), x_colstart + col_w - 1, item->GetY() + total_h);
 		}
 
@@ -3456,14 +3460,7 @@ void ibTreeListMainWindow::PaintLevel(ibTreeListItem * item, wxDC & dc,
 		if (HasFlag(wxTR_ROW_LINES)) { // horizontal lines between rows
 			//dc.DestroyClippingRegion();
 			int total_width = m_owner->GetHeaderWindow()->GetWidth();
-			// if the background colour is white, choose a
-			// contrasting color for the lines
-#if !wxCHECK_VERSION(2, 5, 0)
-			wxPen pen(wxSystemSettings::GetSystemColour(wxSYS_COLOUR_3DLIGHT), 1, wxSOLID);
-#else
-			wxPen pen(wxSystemSettings::GetColour(wxSYS_COLOUR_3DLIGHT), 1, wxPENSTYLE_SOLID);
-#endif
-			dc.SetPen((GetBackgroundColour() == *wxWHITE) ? pen : *wxWHITE_PEN);
+			dc.SetPen(GridLinePen(GetBackgroundColour()));
 			dc.DrawLine(0, y_top, total_width, y_top);
 			dc.DrawLine(0, y_top + h, total_width, y_top + h);
 		}
@@ -3472,7 +3469,7 @@ void ibTreeListMainWindow::PaintLevel(ibTreeListItem * item, wxDC & dc,
 		PaintItem(item, dc);
 
 		// restore DC objects
-		dc.SetBrush(*wxWHITE_BRUSH);
+		dc.SetBrush(GetBackgroundColour());
 		dc.SetPen(m_dottedPen);
 
 		// clip to the column width
@@ -3519,7 +3516,7 @@ void ibTreeListMainWindow::PaintLevel(ibTreeListItem * item, wxDC & dc,
 			else if (HasFlag(wxTR_TWIST_BUTTONS)) {
 
 				// draw the twisty button here
-				dc.SetPen(*wxBLACK_PEN);
+				dc.SetPen(GetForegroundColour());
 				dc.SetBrush(*m_hilightBrush);
 				wxPoint button[3];
 				if (item->IsExpanded()) {
@@ -3551,10 +3548,10 @@ void ibTreeListMainWindow::PaintLevel(ibTreeListItem * item, wxDC & dc,
 		}
 	}
 
-	// restore DC objects
-	dc.SetBrush(*wxWHITE_BRUSH);
+	// restore DC objects - the tree's own ground and ink, the canon's white and black
+	dc.SetBrush(GetBackgroundColour());
 	dc.SetPen(m_dottedPen);
-	dc.SetTextForeground(*wxBLACK);
+	dc.SetTextForeground(GetForegroundColour());
 
 	if (item->IsExpanded())
 	{
@@ -4361,6 +4358,23 @@ void ibTreeListMainWindow::OnScroll(wxScrollWinEvent & event) {
 
 	// Skipped, the event goes on to ibScrollHelper, which scrolls — its HandleOnScroll() is private since wx 3.3.4.
 	event.Skip();
+}
+
+void ibTreeListMainWindow::OnSysColourChanged(wxSysColourChangedEvent& event) {
+
+	ApplyThemeColours();
+	event.Skip();
+}
+
+void ibTreeListMainWindow::ApplyThemeColours() {
+
+	// SEAM: the theme's selection, as ibTreeCtrl's - not the system's
+	*m_hilightBrush = wxBrush(wxTHEME_COLOUR(HIGHLIGHT), wxBRUSHSTYLE_SOLID);
+	*m_hilightUnfocusedBrush = wxBrush(wxTHEME_COLOUR(HIGHLIGHT).ChangeLightness(130), wxBRUSHSTYLE_SOLID);
+	// SEAM: the theme's content colour, as ibTreeCtrl's - not the system's list box
+	SetBackgroundColour(wxTHEME_COLOUR(WINDOW));
+	// ...and a table's text, as the list's (ibListMainWindow) - the control's black stood beside it (2026-11-12, Max)
+	SetOwnForegroundColour(wxTHEME_COLOUR(CONTROL_TEXT_ALTERNATE));
 }
 
 void ibTreeListMainWindow::ScrollWindow(int dx, int dy, const wxRect* rect) {

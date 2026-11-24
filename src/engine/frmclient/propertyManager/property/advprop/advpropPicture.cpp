@@ -12,6 +12,8 @@
 #include "frmclient/win/picture.h"   // ibProtocolPicture — an application's picture, by its id
 
 #include "protocol/protocolDesigner.h"   // ibProtocol::ibSchema::ibProperties — the row's keys
+#include "deskgui/univ/theme.h"          // ibThemeEngine — the empty box's ground is the theme's
+#include "deskgui/univ/colourScheme.h"   // wxTHEME_COLOUR
 
 namespace {
 
@@ -367,8 +369,8 @@ void ibPGExternalImageProperty::OnCustomPaint(wxDC& dc,
 		dc.DrawBitmap(m_bitmap, rect.x, rect.y, false);
 	}
 	else {
-		// No file - just draw a white box
-		dc.SetBrush(*wxWHITE_BRUSH);
+		// No file - just draw an empty box, in the field's ground
+		dc.SetBrush(wxTHEME_COLOUR(WINDOW));
 		dc.DrawRectangle(rect);
 	}
 }

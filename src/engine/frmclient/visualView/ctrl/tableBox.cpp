@@ -9,6 +9,8 @@
 #include <wx/renderer.h>   // wxRendererNative::DrawCheckMark — a boolean cell
 
 #include "core/serialize/dataBuilder.h"              // ibDataValue — a column's width, as its property takes it
+#include "core/style/style.h"                        // ibStyle — a table's platform background
+#include "deskgui/typeconv.h"                        // typeConv::ColourToWxColour
 #include "frmclient/backend/appData.h"               // DesignerMode — no table's rows are read there
 #include "frmclient/visualView/commandBar.h"
 #include "frmclient/visualView/visualHostClient.h"   // a designer's host selects and moves by it
@@ -17,6 +19,8 @@
 #include "deskgui/univ/dataview/dataview.h"
 #include "deskgui/univ/dataview/headerctrlg.h"
 #include "deskgui/univ/menu.h"
+#include "deskgui/univ/theme.h"          // ibThemeEngine — the table's ground is the theme's
+#include "deskgui/univ/colourScheme.h"   // wxTHEME_COLOUR
 
 #include <wx/accel.h>      // wxAcceleratorEntry — a command's key, read as a menu writes it
 #include <wx/fdrepdlg.h>   // wxFindDialogEvent — Find, as the doc manager's dialog asks it
@@ -167,7 +171,7 @@ void ibValueModelTableBox::Create(wxWindow* parent, const ibProtocolNode& node)
 
 	m_dataView = new ibTableViewCtrl(m_panel,
 		wxDV_SINGLE | wxDV_HORIZ_RULES | wxDV_VERT_RULES | wxDV_ROW_LINES | wxDV_VARIABLE_LINE_HEIGHT | wxBORDER_NONE);
-	m_dataView->SetBackgroundColour(*wxWHITE);
+	m_dataView->SetBackgroundColour(wxTHEME_COLOUR(WINDOW));   // the content's, white in the light look (a fixed white held the dark look's light text)
 	sizer->Add(m_dataView, 1, wxEXPAND);
 	m_panel->SetSizer(sizer);
 	m_panel->SetMinSize(m_panel->FromDIP(wxSize(150, 75)));
@@ -304,15 +308,17 @@ void ibValueModelTableBox::Update(const ibProtocolNode& node)
 		m_dataView->SetSelectionMode(node.GetInt(ibProtocol::ibForm::ibTable::RowSelectionMode, ibDataViewSelectRow) == ibDataViewSelectCell
 			? ibDataViewSelectCell : ibDataViewSelectRow);
 
-		UpdateWindow(m_panel, node);
+		// Its own background, when the form leaves it empty, the content's in the look in force (as the web client's table).
+		const wxColour platform = GetPlatformBackground(), themed = wxTHEME_COLOUR(WINDOW);
+		UpdateWindow(m_panel, node, platform, themed);
 
 		// The table's look onto the data view itself and its header — the desktop's OnUpdated: the panel around it is
 		// the chrome, the font and the colours are the table's.
-		ApplyLook(m_dataView, node);
+		ApplyLook(m_dataView, node, platform, themed);
 		m_dataView->SetHeaderAttr(wxItemAttr(m_dataView->GetForegroundColour(), m_dataView->GetBackgroundColour(),
 			m_dataView->GetFont()));
 		// …and its command bar takes the table's look too (the desktop's ApplyLook(part)).
-		ApplyLook(m_commandBar->GetWindow(), node);
+		ApplyLook(m_commandBar->GetWindow(), node, platform, themed);
 	}
 
 	UpdateState(node.FindChild(ibProtocol::ibForm::ibState::State), nullptr);
@@ -407,6 +413,11 @@ wxWindow* ibValueModelTableBox::GetWindow() const
 ibDataViewColumnGroup* ibValueModelTableBox::GetColumnHolder() const
 {
 	return m_dataView->GetRootColumnGroup();
+}
+
+wxColour ibValueModelTableBox::GetPlatformBackground() const
+{
+	return typeConv::ColourToWxColour(std::get<ibColour>(ibStyle::Platform().Get(ibStyleItem::FieldBackground, false)));
 }
 
 void ibValueModelTableBox::SelectRow(long long handle)

@@ -4,6 +4,7 @@
 #include "frmclient/backend/backend_picture.h"   // a group's picture, as the client has it
 
 #include <wx/artprov.h>
+#include <wx/settings.h>   // wxSystemSettings::GetAppearance — a status tint's look (StatusTint)
 
 // --- ibDataViewDiffRowObject -----------------------------------------
 
@@ -396,6 +397,16 @@ unsigned int ibDataViewMetaDiffModel::GetFirstFetch(const ibDataViewItem& parent
 	return count;
 }
 
+// A status's tint, the inspector's palette and rule (ibObjectInspector::TintOf): in the dark look the same hue deep, under
+// the light text the theme gives it there - the light tints glared and their text went unread (2026-11-24). Asked as
+// a row is drawn, so it is the look in force.
+static ibColour StatusTint(unsigned char red, unsigned char green, unsigned char blue)
+{
+	const wxColour tint(red, green, blue);
+	const wxColour shown = wxSystemSettings::GetAppearance().IsDark() ? tint.ChangeLightness(25) : tint;
+	return ibColour(shown.Red(), shown.Green(), shown.Blue());
+}
+
 bool ibDataViewMetaDiffModel::GetAttr(const ibDataViewItem& item,
 	unsigned int /*col*/, ibDataViewItemAttr& attr) const
 {
@@ -407,16 +418,16 @@ bool ibDataViewMetaDiffModel::GetAttr(const ibDataViewItem& item,
 	case ibMetaDiffStatus::Same:
 		return false;
 	case ibMetaDiffStatus::Reordered:
-		attr.SetBackgroundColour(ibColour(0xE6, 0xEE, 0xF5));
+		attr.SetBackgroundColour(StatusTint(0xE6, 0xEE, 0xF5));
 		return true;
 	case ibMetaDiffStatus::Changed:
-		attr.SetBackgroundColour(ibColour(0xF8, 0xE3, 0xD5));
+		attr.SetBackgroundColour(StatusTint(0xF8, 0xE3, 0xD5));
 		return true;
 	case ibMetaDiffStatus::OnlyInLeft:
-		attr.SetBackgroundColour(ibColour(0xF5, 0xE8, 0xD5));
+		attr.SetBackgroundColour(StatusTint(0xF5, 0xE8, 0xD5));
 		return true;
 	case ibMetaDiffStatus::OnlyInRight:
-		attr.SetBackgroundColour(ibColour(0xD8, 0xE2, 0xEB));
+		attr.SetBackgroundColour(StatusTint(0xD8, 0xE2, 0xEB));
 		return true;
 	}
 	return false;

@@ -427,11 +427,6 @@ ibPopupMenuWindow::ibPopupMenuWindow(wxWindow *parent, ibMenu *menu)
     (void)Create(parent, wxBORDER_NONE | wxPU_CONTAINS_CONTROLS);
 
     SetCursor(wxCURSOR_ARROW);
-
-    // SEAM vs univ: the univ window erased itself with the scheme colour;
-    // the native base needs it set explicitly
-    SetBackgroundColour(wxSCHEME_COLOUR(ibThemeEngine::Get()->GetColourScheme(),
-                                        CONTROL));
 }
 
 ibPopupMenuWindow::~ibPopupMenuWindow()
@@ -548,6 +543,12 @@ void ibPopupMenuWindow::Popup(wxWindow *focus)
     wxASSERT_MSG( !m_nodeCurrent ||
                   m_nodeCurrent == m_menu->GetMenuItems().GetFirst(),
                   wxT("menu current item preselected incorrectly") );
+
+    // SEAM vs univ: the univ window erased itself with the scheme colour; the native base needs it set explicitly - as
+    // it is shown, the look in force then: the window is kept from one showing to the next (ibMenu::Popup), and one of
+    // its own is not told when the look changes (2026-11-24, Max: "the menu is not reset on a theme change")
+    SetBackgroundColour(wxSCHEME_COLOUR(ibThemeEngine::Get()->GetColourScheme(),
+                                        CONTROL));
 
     wxPopupTransientWindow::Popup(focus);
 

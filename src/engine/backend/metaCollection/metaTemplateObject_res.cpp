@@ -1,7 +1,6 @@
 #include "metaTemplateObject.h"
 
-/* PNG */
-static const ibString s_grid_16_png = ibT("iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAABL0lEQVR4nOzbMQrCMBgF4NfiNRydBEHQRRe9gMfo7FGc6y28gC66KAiCk6OHcNTFgv0hDb8RBd/7tiYG8dG0/WOag1wOcgoA5Fq2YTCa3PHHDrtN9nqsMwAfVpZl7bgoCnikjvfSGRD7wH67hsfxfPnpeGs4njb26zYIcgoA5BQAyCkAkFMAIKdaINRRVWX22TxmtryZlhPSpI1fPX9HqKrUFAA5XQNCHdWc8dfj9Tl7XfTgYa85/W4HHu15/ftjK0qaAiCnAEBOAYCcAgA5BQByqgVCHe+uB1j22dwvbXyp9YBmCgDkMttg9wil/r/vredTx1t2f4D2CBkKAOQUAMgpAJBTACCnAEBOAYCcAgC56PsCsf32ln3j49vjvbQiZBv01hiZDOR0GwQ5+gAeAAAA///5K8GdAAAABklEQVQDAFAVTcMgOKcVAAAAAElFTkSuQmCC");
+static const ibString s_grid_svg = ibT("<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'><rect x='1' y='1' width='14' height='14' rx='1.5' fill='#2f9e44'/><path d='M1 5.5 H15 M1 10 H15 M5.5 1 V15 M10 1 V15' fill='none' stroke='#ffffff' stroke-width='1' stroke-linecap='butt' stroke-linejoin='round'/><rect x='5.5' y='5.5' width='4.5' height='4.5' fill='#8ce99a'/></svg>");
 
 ibPicture ibValueMetaObjectTemplateBase::GetIcon() const
 {
@@ -10,7 +9,7 @@ ibPicture ibValueMetaObjectTemplateBase::GetIcon() const
 
 ibPicture ibValueMetaObjectTemplateBase::GetIconGroup()
 {
-	static const ibPicture picture = ibPicture::FromBase64(s_grid_16_png, ibSize(16, 16));
+	static const ibPicture picture = ibPicture::FromSvg(s_grid_svg);
 
 	return picture;
 }

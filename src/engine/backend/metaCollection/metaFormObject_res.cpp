@@ -1,7 +1,6 @@
 #include "metaFormObject.h"
 
-/* PNG */
-static const ibString s_form_16_png = ibT("iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAA40lEQVR4nOzaMQ4BURSF4X/EIiyEhoZWp7MLa7ELnU5LQ8NC7IJKImJMZkYi5vxfN/d1J3Pvey95PcL1CGcAhDMAwhkA4fqvheF4eqPDLqdD8fztH1C2cB2t6ZLBefW27hAknAEQzgAIZwCEMwDCeRcoW3icnc/HPf9sNJl9XLcFCGcAhHMX4MeqpnRddXctW4BwzgAami+WtLHbbt7W6/Zw2xliCxDOGUBDZT3c1rfPBVVsAcIZAOEMgHCeA2jIu0BHGADhvAsQzgAIV7wWfCscxgAIVxDOFiCcARDOAAgXH8AdAAD//z8i55kAAAAGSURBVAMAgDckXZ4t4q8AAAAASUVORK5CYII=");
+static const ibString s_form_svg = ibT("<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'><rect x='1' y='2' width='14' height='12' rx='1.5' fill='#1c6fd1'/><rect x='2' y='5' width='12' height='8' rx='0.5' fill='#a5d8ff'/><rect x='3.5' y='6.5' width='4' height='2' rx='0.5' fill='#ffffff'/><rect x='3.5' y='10' width='4' height='2' rx='0.5' fill='#ffffff'/><rect x='8.5' y='6.5' width='4' height='2' rx='0.5' fill='#1c6fd1'/><rect x='8.5' y='10' width='4' height='2' rx='0.5' fill='#1c6fd1'/></svg>");
 
 ibPicture ibValueMetaObjectForm::GetIcon() const
 {
@@ -10,7 +9,7 @@ ibPicture ibValueMetaObjectForm::GetIcon() const
 
 ibPicture ibValueMetaObjectForm::GetIconGroup()
 {
-	static const ibPicture picture = ibPicture::FromBase64(s_form_16_png, ibSize(16, 16));
+	static const ibPicture picture = ibPicture::FromSvg(s_form_svg);
 
 	return picture;
 }
@@ -22,7 +21,7 @@ ibPicture ibValueMetaObjectSharedForm::GetIcon() const
 
 ibPicture ibValueMetaObjectSharedForm::GetIconGroup()
 {
-	static const ibPicture picture = ibPicture::FromBase64(s_form_16_png, ibSize(16, 16));
+	static const ibPicture picture = ibPicture::FromSvg(s_form_svg);
 
 	return picture;
 }

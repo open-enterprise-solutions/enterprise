@@ -20,6 +20,10 @@ import { alignLabels } from './labels.js';
 const horizontal = 4;
 
 class ClientForm extends Control {
+	// Its own ground, the style's form background - what its controls with none of their own stand on.
+	/** @type {[string, string]} */
+	static platformBackground = ['rgb(238,242,246)', 'var(--oes-form-bg)'];
+
 	/** @param {ProtocolNode} node */
 	build(node) {
 		this.bar = new CommandBar(this);

@@ -1,7 +1,6 @@
 #include "catalog.h"
 
-/* PNG */
-static const ibString s_catalog_16_png = ibT("iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAB0klEQVR4nOybQUsCURDH/7MKURZdIqNv0NlDRZcwomNlBAoKHaSvEX2PDh2KCiLzmhUdvUjHPkHqSp1KQkintwfDRfBtELHbzO8iT2Z05rfvvd3DPgfCcSAcFQDhxH8S7GYThR5oi8BLIJpHmGCuM6jqEJeSZ+2ToGkUJKi1m5jrxXFqwtOIBFwxjRWMCNcWGWgJ9GJ0GZ3mPWid2btgdqwCmrmJopknK4gaRGuNbGLPFmbdA5hphwYWythCClPpTcRm/FuAe1j0jZMHR/hLui91vN2X0XmqfX9n6s6Yj+NRedYZQKDlwfHk6nDzYcCryavNByNly7PfBQjTvoTZ8DXfZ6i2AHcqfRCCcFQAhKMCIBwVAOGoAAhHBUA4KgDCUQEQjgqAcFQAhKMCIBwVAOGoAAhHBUA4KgDCUQEQjgqAcFQAhKMCIBwVAOGoAAhHBVgjmJuDw89WHWFluDZu2HKsAhh4HBy/P5TRfW0ibHivy3u1+WDUbHnWIzNudnybKXaFCEI93khetG9GxVhnQPL8o2SWwR2iBqNsa94j0CbodJE3v3iLyMAVdLAfJDLQqbE+bi6RZ6aM+YPFEB6be2aiqgO+/vVjc/8ZfQ6AcMQL+AIAAP//8a8BhwAAAAZJREFUAwD/kW7vX30GmAAAAABJRU5ErkJggg==");
+static const ibString s_catalog_svg = ibT("<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'><rect x='2' y='1' width='12' height='14' rx='1.5' fill='#f76707'/><path d='M3.5 1 H5 V15 H3.5 Q2 15 2 13.5 V2.5 Q2 1 3.5 1 Z' fill='#d9480f'/><path d='M7.5 5 H11.5 M7.5 7.5 H11.5' fill='none' stroke='#ffffff' stroke-width='1.3' stroke-linecap='round' stroke-linejoin='round'/></svg>");
 
 ibPicture ibValueMetaObjectCatalog::GetIcon() const
 {
@@ -10,7 +9,7 @@ ibPicture ibValueMetaObjectCatalog::GetIcon() const
 
 ibPicture ibValueMetaObjectCatalog::GetIconGroup()
 {
-	static const ibPicture picture = ibPicture::FromBase64(s_catalog_16_png, ibSize(16, 16));
+	static const ibPicture picture = ibPicture::FromSvg(s_catalog_svg);
 
 	return picture;
 }

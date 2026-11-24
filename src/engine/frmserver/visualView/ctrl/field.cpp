@@ -93,8 +93,6 @@ ibValueField::ibValueField() :
 	ibValueWindow(), ibTypeControlFactory()
 {
 	m_members.Bind(this, &ibValueField::FillControlMembers);
-	// a field's background the platform style's, as the text field's (the client leaves it to the theme)
-	m_propertyBG->SetValue(std::get<ibColour>(ibStyle::Platform().Get(ibStyleItem::FieldBackground, false)));
 	// born typed into
 	SetView(ibFieldView::ibFieldView_Input);
 }

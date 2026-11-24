@@ -15,14 +15,15 @@ import { logIn } from './window/login.js';
 import { hideSplash, showSplash } from './window/splash.js';
 import { ClientWindow } from './window/window.js';
 import { moveDialogs } from './window/dialogMove.js';
-import { Theme, applyTheme, readTheme } from './window/theme.js';
+import { applyKeptTheme } from './window/theme.js';
 
 const root = /** @type {HTMLElement} */ (document.getElementById('client'));
 const publication = location.pathname.split('/').filter(Boolean)[0] ?? '';
 
 async function start() {
-	// Before the login the person is not known: the page speaks the browser's language and is painted as the machine is
-	// set, the splash too — as the thin client speaks the machine's before it has a base.
+	// Before the login the person is not known: the page speaks the browser's language — as the thin client speaks the
+	// machine's before it has a base — and is painted in the theme chosen in this browser, the splash too, as the thin
+	// client builds its window in the one chosen on its machine.
 	await readDictionary(navigator.language);
 	if (publication === '') {
 		root.textContent = _('No publication in the address: open /<publication>/.');
@@ -30,7 +31,7 @@ async function start() {
 		return;
 	}
 	document.title = publication;
-	applyTheme(Theme.System);
+	applyKeptTheme();
 	moveDialogs();
 	showSplash(_('Connecting to the base'));
 	const connection = Connection.beside(location);
@@ -49,8 +50,7 @@ async function start() {
 	await logIn(root, session, publication);
 	addEventListener('pagehide', () => session.logout());
 	showSplash(_('Opening the window'));
-	// The person's theme and language, before anything of theirs is drawn.
-	await readTheme(session, session.frame);
+	// The person's language, before anything of theirs is drawn.
 	await readDictionary(session.locale);
 	await readLanguages(session, session.frame);
 	// The login's answer is the first frame: the session holds it, and the window draws it as it comes up.

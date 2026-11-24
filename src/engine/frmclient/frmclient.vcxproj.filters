@@ -373,9 +373,6 @@
     <ClInclude Include="win\editor\codeEditor\components\helpers\popupWnd.h">
       <Filter>win\editor\codeEditor\components\helpers</Filter>
     </ClInclude>
-    <ClInclude Include="win\editor\codeEditor\res\bitmaps_res.h">
-      <Filter>win\editor\codeEditor\res</Filter>
-    </ClInclude>
     <ClInclude Include="win\dlgs\lineInput\lineInput.h">
       <Filter>win\dlgs\lineInput</Filter>
     </ClInclude>
@@ -632,9 +629,6 @@
     </Filter>
     <Filter Include="win\editor\codeEditor\components\helpers">
       <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f5056}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="win\editor\codeEditor\res">
-      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f5057}</UniqueIdentifier>
     </Filter>
     <Filter Include="win\dlgs\lineInput">
       <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f5058}</UniqueIdentifier>

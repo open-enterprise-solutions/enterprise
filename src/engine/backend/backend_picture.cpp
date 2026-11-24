@@ -1,8 +1,6 @@
 #include "backend_picture.h"
 
 #include <fstream>
-#include <map>
-#include <mutex>
 
 #include "core/fileSystem.h"                // ibFileExists, ibPathOf - a picture's file
 #include "core/serialize/dataBuilder.h"     // ibDataValue — a picture as an answer names it
@@ -109,18 +107,12 @@ ibPicture ibBackendPicture::GetServerPicture(const ibPictureDescription& picture
 	if (pictureDesc.IsEmptyPicture())
 		return ibPicture();
 
-	// A backend picture is the process's: made at its first asking at the size it is shown (a registered one is a
-	// master), under the lock, and only read after that.
+	// A backend picture is the process's: the core's drawing, or a class's icon — each kept once where it is made, and
+	// handed out as it is.
 	if (pictureDesc.m_type == ibPictureType::eFromBackend) {
-		static std::mutex s_madeMutex;
-		static std::map<ibPictureID, ibPicture> s_made;
-		const std::lock_guard<std::mutex> lock(s_madeMutex);
-		const auto found = s_made.find(pictureDesc.m_class_identifier);
-		if (found != s_made.end())
-			return found->second;
 		const ibPicture picture = GetPicture(pictureDesc.m_class_identifier);
 		if (picture.IsOk() || metaData == nullptr)
-			return s_made.emplace(pictureDesc.m_class_identifier, picture).first->second;
+			return picture;
 		// …a type of the application's own (a catalog's reference) — its class's icon, as the application's
 		// constructor of it gives it: made anew, the application's only.
 		const ibCtorAbstractType* const ctor = metaData->GetAvailableCtor(pictureDesc.m_class_identifier);
@@ -180,7 +172,7 @@ ibPicture ibBackendPicture::GetPicture(const ibPictureID& id)
 {
 	const ibPicture registered = ibPictureRegistry::GetPicture(id);
 	if (registered.IsOk())
-		return registered.Scale(ibSize(16, 16));
+		return registered;
 
 	const ibCtorAbstractType* so = ibValue::GetAvailableCtor(id);
 	if (so != nullptr)
@@ -191,9 +183,7 @@ ibPicture ibBackendPicture::GetPicture(const ibPictureID& id)
 
 std::vector<ibPictureEntry> ibBackendPicture::GetArrayPicture()
 {
-	std::vector<ibPictureEntry> arrayPicture;
-	for (const ibPictureEntry& registered : ibPictureRegistry::GetArrayPicture())
-		arrayPicture.push_back({ registered.m_name, registered.m_id, registered.m_picture.Scale(ibSize(16, 16)) });
+	std::vector<ibPictureEntry> arrayPicture = ibPictureRegistry::GetArrayPicture();
 
 	for (auto so : ibValue::GetListCtorsByType(ibCtorObjectType::ibCtorObjectType_object_metadata)) {
 		const ibPicture icon = so->GetClassIcon();

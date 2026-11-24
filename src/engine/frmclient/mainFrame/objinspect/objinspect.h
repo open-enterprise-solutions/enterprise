@@ -6,6 +6,7 @@
 #include "deskgui/univ/aui/auibook.h"
 #include "deskgui/univ/propgrid/manager.h"
 #include <wx/config.h>
+#include <wx/settings.h>   // wxSystemSettings::GetAppearance — a tint's look (TintOf)
 
 #include "frmclient/frmclient.h"
 #include "deskgui/univ/panel.h"
@@ -101,6 +102,20 @@ protected:
 
 private:
 
+	// Per-class tint — interior palette: window props the warm focal hue (light terracotta), common neutral cream,
+	// sizerItem the cool tier (light powder); XP-era yellow/light-blue/cyan before. In the dark look the same hue deep,
+	// under the light text the theme gives it there. None for another class.
+	static wxColour TintOf(const wxString& name) {
+		wxColour tint;
+		if (stringUtils::IsSameAs(name, wxT("window")))
+			tint = wxColour(0xF8, 0xE3, 0xD5);
+		else if (stringUtils::IsSameAs(name, wxT("common")))
+			tint = wxColour(0xF5, 0xE8, 0xD5);
+		else if (stringUtils::IsSameAs(name, wxT("sizerItem")))
+			tint = wxColour(0xE6, 0xEE, 0xF5);
+		return tint.IsOk() && wxSystemSettings::GetAppearance().IsDark() ? tint.ChangeLightness(25) : tint;
+	}
+
 	int StringToBits(const wxString& strVal, ibPGChoices& constants) {
 		wxStringTokenizer strTok(strVal, wxT(" |"));
 		int val = 0;
@@ -187,16 +202,8 @@ private:
 				if (pg != nullptr) {
 					ibPGProperty* id = m_pg->Append(pg);
 					if (m_style != wxOES_OI_MULTIPAGE_STYLE) {
-						// Per-class tint — interior palette. Window props get
-						// the warm focal hue (light terracotta), common get
-						// neutral cream, sizerItem gets the cool tier (light
-						// powder). Replaces XP-era yellow/light-blue/cyan.
-						if (stringUtils::IsSameAs(name, wxT("window")))
-							m_pg->SetPropertyBackgroundColour(id, wxColour(0xF8, 0xE3, 0xD5)); // light terracotta
-						else if (stringUtils::IsSameAs(name, wxT("common")))
-							m_pg->SetPropertyBackgroundColour(id, wxColour(0xF5, 0xE8, 0xD5)); // light cream
-						else if (stringUtils::IsSameAs(name, wxT("sizerItem")))
-							m_pg->SetPropertyBackgroundColour(id, wxColour(0xE6, 0xEE, 0xF5)); // light powder
+						if (const wxColour tint = TintOf(name); tint.IsOk())
+							m_pg->SetPropertyBackgroundColour(id, tint);
 					}
 
 					std::map< wxString, bool >::iterator it = m_isExpanded.find(strPropName);
@@ -270,13 +277,8 @@ private:
 					ibPGProperty* id = m_pg->Append(eg);
 					m_pg->SetPropertyHelpString(id, ibGetTranslation(event->GetHelp()));
 					if (m_style != wxOES_OI_MULTIPAGE_STYLE) {
-						// Per-class tint — interior palette (see above).
-						if (stringUtils::IsSameAs(name, wxT("window")))
-							m_pg->SetPropertyBackgroundColour(id, wxColour(0xF8, 0xE3, 0xD5)); // light terracotta
-						else if (stringUtils::IsSameAs(name, wxT("common")))
-							m_pg->SetPropertyBackgroundColour(id, wxColour(0xF5, 0xE8, 0xD5)); // light cream
-						else if (stringUtils::IsSameAs(name, wxT("sizerItem")))
-							m_pg->SetPropertyBackgroundColour(id, wxColour(0xE6, 0xEE, 0xF5)); // light powder
+						if (const wxColour tint = TintOf(name); tint.IsOk())
+							m_pg->SetPropertyBackgroundColour(id, tint);
 					}
 
 					std::map< wxString, bool >::iterator it = m_isExpanded.find(eventName);

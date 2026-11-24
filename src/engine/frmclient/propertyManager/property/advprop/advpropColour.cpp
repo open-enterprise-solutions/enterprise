@@ -91,7 +91,7 @@ static const ibColour gs_cp_es_normcolour_colours[] = {
 	ibColour(255, 255, 255)
 };
 
-ibPG_IMPLEMENT_PROPERTY_CLASS(ibPGColourProperty, ibEnumProperty, TextCtrlAndButton)
+ibPG_IMPLEMENT_PROPERTY_CLASS(ibPGColourProperty, ibEnumProperty, TextCtrlAndButtons)
 
 // register frontend property
 class ibPropertyColourLoader
@@ -181,8 +181,11 @@ wxString ibPGColourProperty::ValueToString(ibVariant& value,
 {
 	const ibColour colour = GetVal(&value);
 
+	// None — the platform's, each kind its own in the look in force (ibValueFrame::ApplyLook): the default said, in the
+	// brackets the inspector says a state rather than a value in (an empty cell read as nothing at all — 2026-11-24,
+	// Max: "what value is this … the default value is used").
 	if (!colour.IsOk())
-		return wxEmptyString;
+		return _("<default>");
 
 	const int index = ColToInd(colour);
 
@@ -205,6 +208,13 @@ bool ibPGColourProperty::StringToValue(ibVariant& value, const wxString& text, i
 	wxString colStr(text);
 	colStr.Trim(true);
 	colStr.Trim(false);
+
+	// Cleared, or left as it reads — no colour: the platform's, painted in the look in force (ibValueFrame::ApplyLook).
+	if (colStr.empty() || colStr == _("<default>"))
+	{
+		value = WriteColour(ibColour());
+		return true;
+	}
 
 	if (colStr == custColName)
 	{

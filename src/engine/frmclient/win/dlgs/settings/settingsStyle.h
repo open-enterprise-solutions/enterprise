@@ -12,12 +12,13 @@
 
 #include <wx/artprov.h>
 #include "deskgui/univ/menu.h"
-#include <wx/settings.h>
 #include <wx/window.h>
 #include <wx/withimages.h>
 
 #include "deskgui/artProvider.h"   // the tabs' pictures (client wxART_FRONTEND)
 #include "deskgui/univ/dataview/dataview.h"
+#include "deskgui/univ/theme.h"          // a grid's colours: the theme's, in the look in force
+#include "deskgui/univ/colourScheme.h"   // wxTHEME_COLOUR
 
 // ONE PICTURE PER VERB. Art ids, not files: they follow the platform's theme, as
 // the rest of the shell does.
@@ -61,21 +62,16 @@ inline int ibSettingsTabArt(ibSettingsTab tab)
 
 // THE TABLES READ AS TABLES. They used to take the dialog's own grey background,
 // which made the grid and the panel one flat surface — the rows had no field of
-// their own to sit on. A list background (the system's own, so it follows the
-// theme) plus a faint alternating row makes the data area obvious without drawing
-// a single border.
+// their own to sit on. The theme's content colour (in the look in force) plus a
+// faint alternating row makes the data area obvious without drawing a single
+// border — the striping the table's own (ibDataViewMainWindow::OnPaint: a tint of
+// the background, darker in the light, lighter in the dark).
 inline void ibStyleSettingsGrid(ibDataViewCtrl* view)
 {
 	if (view == nullptr)
 		return;
-	view->SetBackgroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_LISTBOX));
-	view->SetForegroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_LISTBOXTEXT));
-
-	// A TINT OF THE BACKGROUND, not a fixed grey: on a dark theme the same rule
-	// lightens instead of darkening, so the banding stays subtle either way.
-	const wxColour base = wxSystemSettings::GetColour(wxSYS_COLOUR_LISTBOX);
-	const bool dark = (base.Red() + base.Green() + base.Blue()) < 3 * 128;
-	view->SetAlternateRowColour(dark ? base.ChangeLightness(115) : base.ChangeLightness(96));
+	view->SetBackgroundColour(wxTHEME_COLOUR(WINDOW));
+	view->SetForegroundColour(wxTHEME_COLOUR(CONTROL_TEXT));
 }
 
 // A virtual-list row id is 1-based — the cursor follows what was just added.

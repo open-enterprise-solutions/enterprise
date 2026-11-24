@@ -690,7 +690,7 @@ void ibPropertyGrid::OnComboItemPaint( const ibPGComboBox* pCb,
     wxCHECK_RET( pDc, wxS("Invalid DC") );
 
     wxDC& dc = *pDc;
-    dc.SetBrush(*wxWHITE_BRUSH);
+    dc.SetBrush(wxTHEME_COLOUR(WINDOW));   // the field's ground, white only in the light look
 
     //
     // DrawItem call
@@ -1248,6 +1248,68 @@ ibPGWindowList ibPGTextCtrlAndButtonEditor::CreateControls( ibPropertyGrid* prop
 ibPGTextCtrlAndButtonEditor::~ibPGTextCtrlAndButtonEditor()
 {
     ibPG_EDITOR(TextCtrlAndButton) = nullptr;
+}
+
+// -----------------------------------------------------------------------
+// ibPGTextCtrlAndButtonsEditor
+// -----------------------------------------------------------------------
+
+IB_PG_IMPLEMENT_INTERNAL_EDITOR_CLASS(TextCtrlAndButtons,
+                                      ibPGTextCtrlAndButtonsEditor,
+                                      ibPGTextCtrlEditor)
+
+
+ibPGWindowList ibPGTextCtrlAndButtonsEditor::CreateControls( ibPropertyGrid* propGrid,
+                                                             ibPGProperty* property,
+                                                             const wxPoint& pos,
+                                                             const wxSize& sz ) const
+{
+    // "…" first - the main button - then "×"; the text in the room they leave, as the sample of the canon's
+    // wxPGMultiButton lays them out
+    ibPGMultiButton* const buttons = new ibPGMultiButton(propGrid, sz);
+    // by their code points: the file is read in the system's code page, where the characters themselves came out as
+    // two and three letters of it
+    buttons->Add(wxString(wxUniChar(0x2026)));   // "Horizontal ellipsis", as GenerateEditorButton's
+    buttons->Add(wxString(wxUniChar(0x00D7)));   // "Multiplication sign", as a field's clear button
+    // ...each enabled as TextCtrlAndButton's one is (GenerateEditorButton); "×" sets the value - not on a read-only one
+    if ( property->HasFlag(ibPGFlags::ReadOnly) )
+    {
+        if ( !property->HasFlag(ibPGPropertyFlags_ActiveButton) )
+            buttons->GetButton(0)->Disable();
+        buttons->GetButton(1)->Disable();
+    }
+
+    ibPGWindowList windows = ibPGTextCtrlEditor::CreateControls(propGrid, property, pos, buttons->GetPrimarySize());
+    buttons->Finalize(propGrid, pos);
+    windows.SetSecondary(buttons);
+    return windows;
+}
+
+
+bool ibPGTextCtrlAndButtonsEditor::OnEvent( ibPropertyGrid* propGrid,
+                                            ibPGProperty* property,
+                                            wxWindow* primaryCtrl,
+                                            wxEvent& event ) const
+{
+    // "×" - the value the property reads an empty text as, given as a dialog gives one (ValueChangeInEvent): the
+    // property's default
+    const ibPGMultiButton* const buttons = dynamic_cast<const ibPGMultiButton*>(propGrid->GetEditorControlSecondary());
+    if ( event.GetEventType() == wxEVT_BUTTON && buttons != nullptr && buttons->GetCount() > 1 &&
+         event.GetId() == buttons->GetButtonId(1) )
+    {
+        ibVariant value;
+        if ( property->StringToValue(value, wxString(), ibPGPropValFormatFlags::EditableValue) )
+            propGrid->ValueChangeInEvent(value);
+        return false;
+    }
+
+    return ibPGTextCtrlEditor::OnEvent(propGrid, property, primaryCtrl, event);
+}
+
+
+ibPGTextCtrlAndButtonsEditor::~ibPGTextCtrlAndButtonsEditor()
+{
+    ibPG_EDITOR(TextCtrlAndButtons) = nullptr;
 }
 
 // -----------------------------------------------------------------------

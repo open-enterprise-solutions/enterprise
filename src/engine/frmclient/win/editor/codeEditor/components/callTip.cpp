@@ -7,7 +7,12 @@
 #include <stdexcept>
 #include <string>
 
+#include <variant>        // std::get — a style's value
 #include <wx/display.h>
+#include <wx/settings.h>   // wxSystemSettings::GetAppearance — the look in force
+
+#include "core/style/style.h"   // ibStyle::Platform — the tip's colours
+#include "deskgui/typeconv.h"
 
 inline int RoundXYPosition(float xyPos) {
 	return int(xyPos + 0.5);
@@ -15,21 +20,15 @@ inline int RoundXYPosition(float xyPos) {
 
 #define EXTENT_TEST wxT(" `~!@#$%^&*()-_=+\\|[]{};:\"\'<,>.?/1234567890abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
 
+// A colour of the platform style, in the look in force (deskgui/univ/theme/lunaTheme.cpp asks it the same way).
+static wxColour StyleColour(ibStyleItem item)
+{
+	return typeConv::ColourToWxColour(std::get<ibColour>(ibStyle::Platform().Get(item, wxSystemSettings::GetAppearance().IsDark())));
+}
+
 ibCallTip::ibCallTip(ibStyledTextCtrl* owner)
 	: m_owner(owner)
 {
-#ifdef __APPLE__
-	// proper apple colours for the default
-	m_colourBG    = wxColour(0xff, 0xff, 0xc6);
-	m_colourUnSel = wxColour(0, 0, 0);
-#else
-	m_colourBG    = wxColour(0xff, 0xff, 0xff);
-	m_colourUnSel = wxColour(0x80, 0x80, 0x80);
-#endif
-
-	m_colourSel    = wxColour(0, 0, 0x80);
-	m_colourShade  = wxColour(0, 0, 0);
-	m_colourLight  = wxColour(0xc0, 0xc0, 0xc0);
 }
 
 ibCallTip::~ibCallTip()
@@ -308,6 +307,14 @@ void ibCallTip::Show(int currentPos, const wxString& sTitleText)
 
 	m_clickPlace = 0;
 	m_val = sTitleText;
+
+	// The theme's tooltip, in the look in force as it shows — the parameter in hand its special text, the frame its
+	// border (a white box with grey and navy of its own stood out of the dark look, 2026-11-24).
+	m_colourBG     = StyleColour(ibStyleItem::TooltipBackground);
+	m_colourUnSel  = StyleColour(ibStyleItem::TooltipText);
+	m_colourSel    = StyleColour(ibStyleItem::SpecialText);
+	m_colourShade  = StyleColour(ibStyleItem::Border);
+	m_colourLight  = StyleColour(ibStyleItem::Border);
 
 	m_callTip = new ibSTCCallTip(m_owner, this);
 

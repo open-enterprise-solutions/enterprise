@@ -373,16 +373,10 @@ protected:
     static constexpr int FRAME_BUTTON_WIDTH = 24;
     static constexpr int FRAME_BUTTON_HEIGHT = 18;
 
-    // GDI objects we often use
-    wxPen m_penBlack,
-          m_penDarkGrey,
-          m_penLightGrey,
-          m_penHighlight;
-
     wxFont m_titlebarFont;
 
-    // the colours we use, they never change currently so we don't have to ever
-    // update m_penXXX objects above
+    // the colours we use, asked as each is drawn: a scheme's colour is the look in force (Luna's, light or dark), and a
+    // pen made of it when the theme was made kept the look the program started in
     const ibColourScheme * const m_scheme;
 
     wxDECLARE_NO_COPY_CLASS(ibThemeRenderer);

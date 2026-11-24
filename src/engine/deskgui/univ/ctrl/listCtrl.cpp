@@ -1600,14 +1600,8 @@ void ibListLineData::ApplyAttributes(wxDC *dc,
     wxColour colText;
     if ( highlighted )
     {
-#ifdef __WXMAC__
-        if ( hasFocus )
-            colText = *wxWHITE;
-        else
-            colText = *wxBLACK;
-#else
+        // the theme's on every port: the Mac branch's white or black was the native selection's, not the theme's
         colText = wxTHEME_COLOUR(HIGHLIGHT_TEXT); // SEAM: theme, not wxSYS
-#endif
     }
     else if ( attr && attr->HasTextColour() )
         colText = attr->GetTextColour();
@@ -7041,8 +7035,9 @@ void ibListCtrlBase::EnableAlternateRowColours(bool enable)
         const wxColour bgColour = GetBackgroundColour();
 
         // Depending on the background, alternate row colour should be a bit
-        // darker or brighter.
-        int alpha = bgColour.GetRGB() > 0x808080 ? 97 : 110;
+        // darker or brighter — the style's AlternateBackground over either
+        // look's content, one rule with ibDataViewMainWindow::OnPaint.
+        int alpha = bgColour.GetRGB() > 0x808080 ? 97 : 106;
         SetAlternateRowColour(bgColour.ChangeLightness(alpha));
     }
     else // Disable striping by setting invalid alternative colour.

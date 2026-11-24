@@ -448,7 +448,7 @@ export class ClientWindow {
 			else if (item.Schema === about)
 				await showAbout(this.session);
 			else if (item.Schema === styleSchema)
-				await showTheme(this.session);
+				await showTheme();
 			else if (item.Schema === assistantSchema || item.Schema === debugging)
 				await showAssistant(this.session);
 			else if (item.Schema === auditLog)

@@ -240,7 +240,23 @@ bool ibTopLevelWindow<W>::Create(wxWindow *parent,
     // docs/private/ui-palette.md). Its OWN colour, so the labels on it take it (ibLunaColourScheme::GetBackground)
     // and one set on the window afterwards wins
     if ( !this->UseBgCol() )
+    {
         this->SetOwnBackgroundColour(ibThemeEngine::Get()->GetColourScheme()->Get(ibColourScheme::FRAME));
+
+        // ...and taken again when the look changes, while it is the one taken here: the menu bar and the labels on it walk
+        // up to it (ibLunaColourScheme::GetBackground), and the menu bar stood in the look before (2026-11-24, Max: "the
+        // menu is not reset on a theme change")
+        this->Bind(wxEVT_SYS_COLOUR_CHANGED,
+            [this, taken = this->GetBackgroundColour()](wxSysColourChangedEvent& event) mutable {
+                if ( this->GetBackgroundColour() == taken )
+                {
+                    taken = ibThemeEngine::Get()->GetColourScheme()->Get(ibColourScheme::FRAME);
+                    this->SetOwnBackgroundColour(taken);
+                    this->Refresh();
+                }
+                event.Skip();
+            });
+    }
 
     // no larger than its display's work area, as Cocoa keeps a titled window the user may size (constrainFrameRect) -
     // ours is made without the system's title bar (the Mac's given back only after, unseen - above): one larger than

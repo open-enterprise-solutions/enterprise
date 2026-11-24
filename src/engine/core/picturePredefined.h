@@ -32,18 +32,13 @@ constexpr ibPictureID g_picSelectCLSID = picture_to_clsid("PC_SELVL");
 // "it looks unrelated"). Borrowing is what made repainting impossible: Select is pressed in a dozen
 // other places and means "take this one".
 //
-// Art: drawn in the debug toolbar's manner — flat solid shapes, no keyline, one colour each. Compose is
-// the green run-triangle and the rows it produces; settings is a gear; variants are three arrangements
-// with one taken; restore is the arrow OUT of the store, the mirror of Save's arrow into it, told apart
-// by direction exactly as the debugger's step-into and step-out are.
+// Compose is the green run-triangle and the rows it produces; settings is a gear; variants are three arrangements
+// with one taken; restore is the arrow OUT of the store, the mirror of Save's arrow into it.
 constexpr ibPictureID g_picComposeCLSID = picture_to_clsid("PC_CMPSE");
 constexpr ibPictureID g_picComposerSettingsCLSID = picture_to_clsid("PC_CMSET");
 constexpr ibPictureID g_picVariantsCLSID = picture_to_clsid("PC_VARNT");
 constexpr ibPictureID g_picRestoreSettingsCLSID = picture_to_clsid("PC_RSTOR");
-// …and its twin. Saving a SETTING is not saving the object — that one is g_picSaveCLSID and is pressed
-// on every form there is, so it could not be repainted into half of a pair without changing what Save
-// looks like everywhere. Here the two are one picture told apart by the arrow's direction, the way the
-// debugger tells step-into from step-out.
+// …and its twin, an id of its own: saving a setting is saving, and it is drawn as Save is (picturePredefined.cpp).
 constexpr ibPictureID g_picSaveSettingsCLSID = picture_to_clsid("PC_SVSET");
 
 constexpr ibPictureID g_picFilterCLSID = picture_to_clsid("PC_FLTER");
@@ -52,8 +47,6 @@ constexpr ibPictureID g_picFilterClearCLSID = picture_to_clsid("PC_FLTEC");
 
 // THE ROW-ORDER VERBS — move a row by hand, or order every row by one column. Only a table that OWNS
 // its rows has them (a RAM table); a cursor's order comes from the read, and there is nothing to move.
-// Art: the two arrows are the frontend's own 32px block arrows downscaled to 16; the two sort icons are
-// drawn in the same two colours the 32px sort art uses.
 constexpr ibPictureID g_picMoveUpCLSID = picture_to_clsid("PC_MVEUP");
 constexpr ibPictureID g_picMoveDownCLSID = picture_to_clsid("PC_MVEDN");
 constexpr ibPictureID g_picSortAscCLSID = picture_to_clsid("PC_SRTAS");
@@ -81,11 +74,9 @@ constexpr ibPictureID g_picUserListCLSID = picture_to_clsid("PC_USRLS");
 constexpr ibPictureID g_picAuthenticationCLSID = picture_to_clsid("PC_ATTON");
 
 // The start page — the tab, the designer's workspace editor and its menu item.
-// Art: icons8 ("switch host"), downscaled to 16px — see the note in picturePredefined.cpp.
 constexpr ibPictureID g_picHomePageCLSID = picture_to_clsid("PC_HOMEP");
 
 // The assistant — its tab and its menu item. One window, one icon.
-// Art: icons8 ("ai"), downscaled from 96px — see the note in picturePredefined.cpp.
 constexpr ibPictureID g_picAssistantCLSID = picture_to_clsid("PC_ASSIS");
 
 // THE ROW'S STATE — what a list's first column shows at its left (ibDataViewModel::GetRowPicture). Chosen by
@@ -114,12 +105,23 @@ constexpr ibPictureID g_picCommandGroupCreateCLSID = picture_to_clsid("PC_CMDGRP
 constexpr ibPictureID g_picCommandGroupReportsCLSID = picture_to_clsid("PC_CMDGRPREP");
 constexpr ibPictureID g_picCommandGroupServiceCLSID = picture_to_clsid("PC_CMDGRPSRV");
 
+// WHAT AN APPLICATION IS MADE OF, AS MORE THAN ONE PLACE SHOWS IT — one drawing, asked for by its id wherever it is
+// shown: the application (its root, and the launcher's designer), a report (the metaobject, and the Reports command
+// group), a table (a tabular section, and a value table), a translation (a language, and the code editor's translation
+// constructor), a value, a resource (the metaobject, and a settings window's field on the desktop).
+constexpr ibPictureID g_picApplicationCLSID = picture_to_clsid("PC_APP");
+constexpr ibPictureID g_picReportCLSID = picture_to_clsid("PC_REPORT");
+constexpr ibPictureID g_picTableCLSID = picture_to_clsid("PC_TABLE");
+constexpr ibPictureID g_picTranslationCLSID = picture_to_clsid("PC_TRANSL");
+constexpr ibPictureID g_picValueCLSID = picture_to_clsid("PC_VALUE");
+constexpr ibPictureID g_picResourceCLSID = picture_to_clsid("PC_RESOURCE");
+
 // THE STOCK PICTURES — wx's stock ids (wxART_NEW, wxART_UNDO, …) as the desktop draws them: its menus, its toolbar, its
 // lists and message boxes ask wx (deskgui's ibStockArtProvider answers from here), a server names them by these ids
 // (a document command's, ibDocCommandInfo), a browser draws them by the same. One copy for every client. Those drawn
-// as a picture above are that one — Delete, Edit, Error, Save, MoveUp, MoveDown; a stock id of another meaning has
-// its own, though drawn alike today (ClipboardCopy is not Clone, TickMark is not Select, HelpBook is not HelpForm):
-// a borrowed picture cannot be repainted without repainting the other.
+// as a picture above are that one — Delete, Edit, Error, Save, MoveUp, MoveDown; a stock id of another meaning keeps an
+// id of its own, though it is drawn alike (ClipboardCopy as Clone, TickMark as Select): one drawing, two ids, so either
+// can be drawn anew alone.
 constexpr ibPictureID g_picNewCLSID = picture_to_clsid("PC_NEW");
 constexpr ibPictureID g_picOpenCLSID = picture_to_clsid("PC_OPEN");
 constexpr ibPictureID g_picSaveAsCLSID = picture_to_clsid("PC_SAVEAS");

@@ -8,6 +8,8 @@
 
 #include "deskgui/univ/aui/auibar.h"
 #include "deskgui/univ/messageDialog.h"   // ibMessageBox, ibMessageDialog — the theme's, in the frame's look (the launcher's too)
+#include "deskgui/univ/theme.h"          // ibThemeEngine — the clear button's colours are the theme's
+#include "deskgui/univ/colourScheme.h"   // wxTHEME_COLOUR
 #include <wx/filedlg.h>
 #include <wx/wfstream.h>
 #include <wx/textfile.h>
@@ -124,6 +126,18 @@ void ibFrameCodeRunner::OnMenuEdit(wxCommandEvent& event)
 		case wxID_PASTE:     m_codeEditor->Paste();       break;
 		case wxID_SELECTALL: m_codeEditor->SelectAll();   break;
 	}
+}
+
+void ibFrameCodeRunner::OnSysColourChanged(wxSysColourChangedEvent& event)
+{
+	// The frame is told first and its windows after it: the editor's set (the one of the look in force, picked as it
+	// is made — ibFontColorSettings) goes over the theme's paper once each window has taken it anew.
+	event.Skip();
+	CallAfter([this]() {
+		m_codeEditor->SetFontColorSettings(ibFontColorSettings{});
+		m_buttonClearOutput->SetForegroundColour(wxTHEME_COLOUR(HIGHLIGHT));
+		m_buttonClearOutput->SetBackgroundColour(wxTHEME_COLOUR(WINDOW));
+	});
 }
 
 ///////////////////////////////////////////////////////////////////////////
@@ -265,6 +279,7 @@ ibFrameCodeRunner::ibFrameCodeRunner(wxWindow* parent, wxWindowID id, const wxSt
 	Connect(wxID_CR_DECREASE_INDENT, wxEVT_TOOL, wxCommandEventHandler(ibFrameCodeRunner::OnToolbarCommand));
 	Connect(wxID_CR_GOTO_LINE,       wxEVT_TOOL, wxCommandEventHandler(ibFrameCodeRunner::OnToolbarCommand));
 	Connect(wxID_CR_PROC_AND_FUNC,   wxEVT_TOOL, wxCommandEventHandler(ibFrameCodeRunner::OnToolbarCommand));
+	Bind(wxEVT_SYS_COLOUR_CHANGED, &ibFrameCodeRunner::OnSysColourChanged, this);
 
 	// The code editor, the old desktop front's copied whole (win/editor/codeEditor), with no
 	// document behind it: highlighter / fold / auto-indent / format & indent commands all live in
@@ -300,11 +315,13 @@ ibFrameCodeRunner::ibFrameCodeRunner(wxWindow* parent, wxWindowID id, const wxSt
 
 	m_buttonRunCode = new ibButton(this, wxID_ANY, _("Run code"));
 	m_buttonRunCode->SetBackgroundColour(wxColour(128, 255, 128));
+	m_buttonRunCode->SetForegroundColour(*wxBLACK);   // its light green's own ink: the dark look's light text vanished on it
 	bSizerButton->Add(m_buttonRunCode, 1, wxALL, 5);
 
+	// the highlight's text on the content's ground, the theme's in the look in force (OnSysColourChanged)
 	m_buttonClearOutput = new ibButton(this, wxID_ANY, _("Clear output"));
-	m_buttonClearOutput->SetForegroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_HIGHLIGHT));
-	m_buttonClearOutput->SetBackgroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOW));
+	m_buttonClearOutput->SetForegroundColour(wxTHEME_COLOUR(HIGHLIGHT));
+	m_buttonClearOutput->SetBackgroundColour(wxTHEME_COLOUR(WINDOW));
 	bSizerButton->Add(m_buttonClearOutput, 0, wxALL, 5);
 
 	bSizerMain->Add(bSizerButton, 0, wxEXPAND, 5);
@@ -323,9 +340,7 @@ ibFrameCodeRunner::ibFrameCodeRunner(wxWindow* parent, wxWindowID id, const wxSt
 	m_output->SetReadOnly(true);
 	m_output->SetMarginType(0, ibSTC_MARGIN_NUMBER);
 	m_output->SetMarginWidth(0, m_output->TextWidth(ibSTC_STYLE_LINENUMBER, wxT("_99999")));
-	m_output->SetSelBackground(true, wxSystemSettings::GetColour(wxSYS_COLOUR_HIGHLIGHT));
-	m_output->SetSelForeground(true, wxSystemSettings::GetColour(wxSYS_COLOUR_HIGHLIGHTTEXT));
-	m_output->SetCodePage(ibSTC_CP_UTF8);
+	m_output->SetCodePage(ibSTC_CP_UTF8);   // its selection the theme's, as the control takes it (ApplyThemeColours)
 
 	for (int margin = 0; margin < m_output->GetMarginCount(); margin++)
 		m_output->SetMarginCursor(margin, ibSTC_CURSORARROW);

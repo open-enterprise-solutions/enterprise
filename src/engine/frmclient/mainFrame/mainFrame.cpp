@@ -104,6 +104,12 @@ void RemoveWindowMenuOf(wxMenuBar* bar, wxMenu* windowMenu)
 constexpr const wxChar* kOptionsFile = wxT("options-thin.xml");
 constexpr const wxChar* kApplicationOptionsFile = wxT("options-thin-application.xml");
 
+// THE THEME, the client's own (ibProtocol::ibSchema::ibKind::Style — the server keeps nothing of it): wx's appearance by
+// its number — 0 as the machine is set, 1 light, 2 dark (wxApp::Appearance), in the order Tools → Theme... lists them.
+// None chosen: the machine's. The program's own (Max, 2026-11-24): wxConfig is the program's, so the application and
+// the designer each keep theirs; the window is built in it as it starts (the frame's constructor).
+constexpr const wxChar* kThemeEntry = wxT("Theme");
+
 wxFileName GetOptionsFile(ibProtocol::ibLogin::ibMode mode)
 {
 	wxFileName fileName(wxStandardPaths::Get().GetUserDir(wxStandardPaths::Dir::Dir_Cache),
@@ -301,6 +307,15 @@ ibFrontendMainFrame::ibFrontendMainFrame(std::unique_ptr<ibCommunicator> communi
 	: ibDocParentFrameAnyBase(this),
 	m_communicator(std::move(communicator)), m_mode(mode), m_user(user), m_password(password)
 {
+	// THE LOOK IT IS BUILT IN, before anything of it is made — its parts take their colours as they are made (the
+	// workspace its own as Create makes it, the panes in CreateGUI): the theme chosen on this machine (kThemeEntry), as
+	// the machine is set until one is (Max, 2026-11-24: "the client decides as it starts"). The desktop's theme paints in
+	// wx's appearance (deskgui/univ/theme/lunaTheme.cpp, IsDark); the program starts as the machine is set
+	// (ibWxApp::OnInit), so only a theme chosen is set over it.
+	const long theme = wxConfig::Get()->ReadLong(kThemeEntry, static_cast<long>(wxApp::Appearance::System));
+	if (theme == static_cast<long>(wxApp::Appearance::Light) || theme == static_cast<long>(wxApp::Appearance::Dark))
+		wxTheApp->SetAppearance(static_cast<wxApp::Appearance>(theme));
+
 	ibAuiMDIParentFrame::Create(nullptr, wxID_ANY, title, pos, size, style | wxNO_FULL_REPAINT_ON_RESIZE, name);
 
 	// Claim the process's main-window slot.
@@ -319,6 +334,7 @@ ibFrontendMainFrame::ibFrontendMainFrame(std::unique_ptr<ibCommunicator> communi
 	Bind(wxEVT_MENU, &ibFrontendMainFrame::OnMenu, this, kFirstMenuId, kLastMenuId);
 	for (const int edit : { wxID_CUT, wxID_COPY, wxID_PASTE, wxID_DELETE, wxID_SELECTALL })
 		Bind(wxEVT_MENU, &ibFrontendMainFrame::OnEditCommand, this, edit);
+	Bind(wxEVT_SYS_COLOUR_CHANGED, &ibFrontendMainFrame::OnSysColourChanged, this);
 
 	// A tab chosen is told the server, which draws it; a tab closed is its document's close (ibTabDocument::Close).
 	if (ibAuiMDIClientWindow* const client = GetClientWindow())
@@ -969,19 +985,26 @@ void ibFrontendMainFrame::ShowSchema(ibProtocol::ibSchema::ibKind schema, const 
 		ShowOptions(schema, shown);
 	}
 	else if (schema == ibProtocol::ibSchema::ibKind::Style) {
-		// The person's theme - the three, the one in force chosen; another chosen is kept by the server as theirs, and
-		// the browser paints with it. This window does not yet: the thin client's dark look is still to come.
+		// The theme - the three, the one chosen on this machine marked; another chosen is kept here (kThemeEntry) and is
+		// in force AT ONCE (Max, 2026-11-24: "I switch and nothing happens"): wx sets the look and tells the main window,
+		// whose windows each take their colours anew (wxEVT_SYS_COLOUR_CHANGED - OnSysColourChanged here and the
+		// windows' own); the next start builds the window in it (the frame's constructor).
 		const wxString choices[] = { _("As the system is set"), _("Light"), _("Dark") };
 		ibSingleChoiceDialog dialog(this, _("The theme the interface is painted in:"), _("Theme"), WXSIZEOF(choices), choices);
-		const long long theme = shown.GetInt(ibProtocol::ibSchema::ibStyle::Theme, 0);
-		dialog.SetSelection(theme >= 0 && theme < static_cast<long long>(WXSIZEOF(choices)) ? static_cast<int>(theme) : 0);
-		if (dialog.ShowModal() != wxID_OK || dialog.GetSelection() == theme)
-			return;
-		ibProtocolNode params, answer;
-		params.SetValue(ibProtocol::ibSchema::Schema, static_cast<long long>(schema));
-		params.SetValue(ibProtocol::ibSchema::Command, static_cast<long long>(ibProtocol::ibSchema::ibCommand::Save));
-		params.Child(ibProtocol::ibSchema::Args).SetValue(ibProtocol::ibSchema::ibStyle::Theme, static_cast<long long>(dialog.GetSelection()));
-		Call(ibProtocol::ibMethod::Schema, params, answer);
+		const long theme = wxConfig::Get()->ReadLong(kThemeEntry, static_cast<long>(wxApp::Appearance::System));
+		dialog.SetSelection(theme >= 0 && theme < static_cast<long>(WXSIZEOF(choices)) ? static_cast<int>(theme) : 0);
+		if (dialog.ShowModal() == wxID_OK && dialog.GetSelection() != theme) {
+			wxConfig::Get()->Write(kThemeEntry, static_cast<long>(dialog.GetSelection()));
+			wxTheApp->SetAppearance(static_cast<wxApp::Appearance>(dialog.GetSelection()));
+#ifdef __WXMSW__
+			// …and the program's other windows: wx on MSW tells its top window alone (MSWEnableDarkMode) - a pane floated
+			// off stayed in the look before. The system's own switch tells each, as GTK and Cocoa do.
+			for (wxWindow* const window : wxTopLevelWindows) {
+				if (window != wxTheApp->GetTopWindow())
+					window->SendSysColourChangedEvents();
+			}
+#endif
+		}
 	}
 }
 
@@ -1023,16 +1046,20 @@ void ibFrontendMainFrame::ShowOptions(ibProtocol::ibSchema::ibKind schema, const
 
 		m_fontColorSettings = dialog.GetFontColorSettingsPanel()->GetSettings();
 		m_editorSettings = dialog.GetEditorSettingsPanel()->GetSettings();
-
-		// …and in force at once, as the desktop's UpdateEditorOptions put them: every document's views told (a module's
-		// sets its editor anew, a form's its Module page), and the output window.
-		for (ibFrontendDocument* const doc : m_docManager->GetDocumentsVector())
-			doc->UpdateAllViews();
-		if (m_outputWindow != nullptr)
-			m_outputWindow->SetFontColorSettings(m_fontColorSettings);
+		UpdateEditorOptions();
 	}
 
 	SaveOptions();
+}
+
+void ibFrontendMainFrame::UpdateEditorOptions()
+{
+	// Every document's views told — a module's sets its editor anew, a form's its Module page, a text's and the
+	// assistant's their own (OnUpdate) — and the output window.
+	for (ibFrontendDocument* const doc : m_docManager->GetDocumentsVector())
+		doc->UpdateAllViews();
+	if (m_outputWindow != nullptr)
+		m_outputWindow->SetFontColorSettings(m_fontColorSettings);
 }
 
 bool ibFrontendMainFrame::AllowClose()
@@ -2189,6 +2216,12 @@ void ibFrontendMainFrame::OnMenu(wxCommandEvent& event)
 
 void ibFrontendMainFrame::OpenSchema(ibProtocol::ibSchema::ibKind schema)
 {
+	// The theme is the client's own, kept on this machine: the server is asked nothing of it.
+	if (schema == ibProtocol::ibSchema::ibKind::Style) {
+		ShowSchema(schema, ibProtocolNode());
+		return;
+	}
+
 	ibProtocolNode params, answer;
 	params.SetValue(ibProtocol::ibSchema::Schema, static_cast<long long>(schema));
 	// The journal shows nothing of its own: its command opens its tab, which the frame brings.
@@ -2220,6 +2253,22 @@ void ibFrontendMainFrame::OnTabChanged(ibAuiNotebookEvent& event)
 	ibProtocolNode params;
 	params.SetValue(ibProtocol::ibFrame::Tab, document->GetTabId());
 	Post(ibProtocol::ibMethod::Activate, params);
+}
+
+void ibFrontendMainFrame::OnSysColourChanged(wxSysColourChangedEvent& event)
+{
+	// The frame is told first and its windows after it (wxWindow::SendSysColourChangedEvents): the editors' options go
+	// in once each window has taken the theme's colours anew - an editor's own set over the theme's paper, not under it;
+	// and the shown tab's view drawn whole from the frame held, a form's host having forgotten its shape as the event
+	// reached it - built anew in the look in force (ibVisualHostClient). Whole is no patch at all: a node of no entries is
+	// a patch that changed nothing, and a home page's cells would be passed over.
+	event.Skip();
+	CallAfter([this]() {
+		UpdateEditorOptions();
+		const ibProtocolNode& frame = m_communicator->GetFrame();
+		DrawView(frame.GetInt(ibProtocol::ibFrame::ActiveTab), frame.FindChild(ibProtocol::ibFrame::View),
+			ibProtocolNode().FindChild(ibProtocol::ibFrame::Patch));
+	});
 }
 
 // ---------------------------------------------------------------------------

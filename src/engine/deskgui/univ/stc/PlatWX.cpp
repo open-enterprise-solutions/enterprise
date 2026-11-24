@@ -1606,6 +1606,9 @@ ibSTCListBox::ibSTCListBox(wxWindow* parent, ibSTCListBoxVisualData* v, int ht)
     m_textBoxToTextGap         = FromDIP(3);
     m_textExtraVerticalPadding = FromDIP(1);
 
+    // SEAM vs wx: the colours in force as it is made - the data is the editor's and outlives each list, and a look
+    // changed while none was shown was never told to it (a popup is told nothing of the window it is shown over)
+    m_visualData->ComputeColours();
     SetBackgroundColour(m_visualData->GetBgColour());
 
     Bind(wxEVT_LISTBOX, &ibSTCListBox::OnSelection, this);

@@ -11,7 +11,7 @@ bool ibAppLauncher::DoOnInit()
 	if (m_launcher)
 		return false;
 
-	// The command line first, then the base — see codeRunner/mainApp.cpp: OnExit follows only an
+	// The command line first, then the base — see coderunner/mainApp.cpp: OnExit follows only an
 	// OnInit that succeeded.
 	if (!wxApp::OnInit())
 		return false;
@@ -21,6 +21,7 @@ bool ibAppLauncher::DoOnInit()
 
 	// ibWxApp::OnInit already armed ibCrashGuard (deskgui/app.h, header-only).
 	ibApplicationInstance::CreateAppDataEnv(ibRunMode::eLAUNCHER_MODE);
+
 	m_launcher = new ibDialogLauncher(nullptr, wxID_ANY);
 
 	m_launcher->Show();

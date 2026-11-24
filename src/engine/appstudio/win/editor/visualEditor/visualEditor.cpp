@@ -13,6 +13,9 @@
 #include <wx/dataobj.h>   // wxDataObjectComposite — accept every registered drag kind on one target
 #include <wx/utils.h>     // wxFindWindowAtPoint (point -> widget hit-test)
 
+#include "deskgui/univ/theme.h"          // the canvas: the theme's panel ground, in the look in force
+#include "deskgui/univ/colourScheme.h"   // wxTHEME_COLOUR
+
 // Form-editor drop target: receives a node dragged from a form-editor tree and enacts it on the form. It registers
 // the draggable KINDS (ibFormDragItem — a source path → a bound control, a command → a command button); OnData
 // matches the received wire format to a kind, decodes it and hands it to the surface's applier. Shared by the form
@@ -81,8 +84,14 @@ ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost::ibVisualEditorHost(i
 	ibVisualHostClient(*ibFrontendMainFrame::GetFrame(), parent, tabId),
 	m_formHandler(handler)
 {
-	// The canvas the card sits on — the window the host scrolls in.
-	GetContentWindow()->SetOwnBackgroundColour(wxColour(0xE7, 0xEC, 0xF0));  // #E7ECF0 caption-inactive-top — light background so form card pops
+	// The canvas the card sits on — the window the host scrolls in: the panels' ground, so the form card stands off it;
+	// taken again when the look changes.
+	ibScrolled<ibPanel>* const canvas = GetContentWindow();
+	canvas->SetOwnBackgroundColour(wxTHEME_COLOUR(FRAME));
+	canvas->Bind(wxEVT_SYS_COLOUR_CHANGED, [canvas](wxSysColourChangedEvent& event) {
+		canvas->SetOwnBackgroundColour(wxTHEME_COLOUR(FRAME));
+		event.Skip();
+	});
 
 	m_back = new ibDesignerWindow(GetContentWindow(), wxID_ANY, wxPoint(10, 10));
 	m_back->GetEventHandler()->Connect(wxID_ANY, wxEVT_LEFT_DOWN, wxMouseEventHandler(ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost::OnClickBackPanel), nullptr, this);
@@ -333,9 +342,14 @@ ibDesignerWindow::ibDesignerWindow(wxWindow* parent, wxWindowID id, const wxPoin
 	: ibInnerFrame(parent, id, pos, wxDefaultSize, 0)
 {
 	ShowTitleBar(false);
-	SetBackgroundColour(wxColour(0xE7, 0xEC, 0xF0));  // #E7ECF0 caption-inactive-top — light background so form card pops
+	SetBackgroundColour(wxTHEME_COLOUR(FRAME));   // the panels' ground, so the form card stands off it
 
 	Bind(wxEVT_PAINT, &ibDesignerWindow::OnPaint, this);
+	// …taken again when the look changes
+	Bind(wxEVT_SYS_COLOUR_CHANGED, [this](wxSysColourChangedEvent& event) {
+		SetBackgroundColour(wxTHEME_COLOUR(FRAME));
+		event.Skip();
+	});
 }
 
 void ibDesignerWindow::SetSelection(ibValueFrame* object, wxWindow* window, wxSizer* sizer, wxWindow* panel)

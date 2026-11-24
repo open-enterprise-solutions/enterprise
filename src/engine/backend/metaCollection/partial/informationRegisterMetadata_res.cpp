@@ -1,7 +1,6 @@
 #include "informationRegister.h"
 
-/* PNG */
-static const ibString s_informationRegister_16_png = ibT("iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAEMUlEQVR4nOyb228bRRTGv7N26iQOtCqN65g4oXHSS2QEBVVpAnG4SIRKSEGqUAWPPPAAOAm58S9QEeI0lKJKCAme2gceUAUi5SII0JuqhqgtUVCTEveSBKOmbWKnbeydzrqq5F1f1g/uyNvdn7SSz5lv7J3Pu7Oe3WMJJkeCybEMgMmx5yvs6xzqAGgHgW0H0bM8tRHFxQJjOE3ExpmMU4Of9hzJpxPpCfre/3gTbPbDXLgDBoIxdswG6c29I93hXLqcp0B/59A7sNnOGm3wCkTUkgA73x8MvZ1LZ8vW0Ns19C5/k88JtAYGhQhr+DHe0dzUvnD85OjpjJpMyf7giA9S4oI2v2VbHeo2eeF53AWnsxzFRDQaw9Ur/2Hm4iVMTc6oGxliTI77B/f3X9T2yzgJMop/TSneOMvL8MquVni9VShWlC+kYfMTyW3rVh9+HP0DsdjKvUZCOUm2r/irgLZf2hzQ2zn8vHL+pOZ2vfZCUQ9eS22tB+2vtqqTRK0DwU92arVpBthIbkqN/f7N8HhcMBremipsa6xX5WRI+gYwoDk19jXUwKjU19eqYpJYi1aTyYC21NjtroRRqXStVycYNWs1aZMgn/w2pMYOR+Gvgn/P38E3E8s4c/lWMn6muhS7n6pAo7uwn1VRoblSEaq1mrx/CheKfWOLOHRmWZX7fjKa3PZsfwTdbesgEqGLoaNTsbTBp3J4fAm/Ta9AJEIN+PLETV3NwT+vQyTCDLgWTSB8fVVX9+9iHLdWZYhCmAFTkVW+QtPXKZoL/+sbVSiEGdBUWwqHXXf1ndQ0uh0QhTADJD72lxr0F1CKRtL3qWAInQS7AuvwaGn2j1TaHurL4NoyCQd2u+DbUJLWVveYHQfecOU06EEg/IeQr7IEX+xx4WT4NuZuxJO5qrV2NNU4UFoi/h6tcAMUlIG2+cpQDFjPBWByhJ4C356L4qOfruXUfPjyerz+pBOisE4BmBzLAJgcywCYHMsAmBzLAJgcywCYHMsAmBzLAJgcywCYHMsAmBzrrnBahrF5ELnvh0oFZqGqQjv8zuQmimW+7yqUsWnIdAT8lRpEIoswKpEF9S14RjSu1egacO7sPzAqExOTqpjA8jCAJJUBM9NhXArPwWhM8/0Oz15V5WQ5jyPAuVJ2hDGm+tqP/vB72psVM7OzV/DLz8e16UnZzr7TJjOXy3eHngZDmltKubyvzguPZyPKncXxdPc+S0tRzM9FMpfLcySJ+feGes5r81mLUfqCoW6SEMJDAAMLDu7r2Z+pLes/Ro6dGj3RsrP9MnfoRe6TuKqlAsIYboLYe3zwB7NpdMuRBoIj1UxKHOIvn4OBYMCvccJbw8Mf5JzB867HGuga3iIjEeBdAsQowHsWVR09n7hn+b6N8QGNJRLy2NBnvXldvwUWpBUn1mIIJsf0BtwFAAD//5jnA4EAAAAGSURBVAMA5Hsjb9R/MRgAAAAASUVORK5CYII=");
+static const ibString s_informationRegister_svg = ibT("<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'><rect x='1' y='1' width='14' height='14' rx='2.5' fill='#1c6fd1'/><circle cx='8' cy='4.6' r='1.4' fill='#ffffff'/><path d='M8 7.2 V12.4' fill='none' stroke='#ffffff' stroke-width='2.2' stroke-linecap='butt' stroke-linejoin='round'/></svg>");
 
 ibPicture ibValueMetaObjectInformationRegister::GetIcon() const
 {
@@ -10,7 +9,7 @@ ibPicture ibValueMetaObjectInformationRegister::GetIcon() const
 
 ibPicture ibValueMetaObjectInformationRegister::GetIconGroup()
 {
-	static const ibPicture picture = ibPicture::FromBase64(s_informationRegister_16_png, ibSize(16, 16));
+	static const ibPicture picture = ibPicture::FromSvg(s_informationRegister_svg);
 
 	return picture;
 }

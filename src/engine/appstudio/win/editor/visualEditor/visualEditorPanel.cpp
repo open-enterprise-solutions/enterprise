@@ -42,6 +42,19 @@ ibVisualEditorNotebook::ibVisualEditor::ibVisualEditor(ibModuleEditDocument* doc
 	}), true);
 	(void)picker;
 	OpenEditors().insert(this);
+
+	// THE LOOK CHANGED — the form drawn whole from the one held, once the event is done with: its host forgot its shape
+	// as it was told (ibVisualHostClient), so it is built anew in the look in force; the inspector, the selection and the
+	// trees as a command drawn whole leaves them (Max, 2026-11-24: a form repainted is a form updated whole).
+	Bind(wxEVT_SYS_COLOUR_CHANGED, [this](wxSysColourChangedEvent& event) {
+		event.Skip();
+		CallAfter([this]() {
+			// None held — the tab's answer brought no form (LoadForm): a node of no type, as a host draws none.
+			const ibProtocolNode form = m_formNode, trees = m_trees;
+			if (!form.GetType().IsEmpty())
+				Draw(form, trees, ibProtocolNode(), m_selected);
+		});
+	});
 }
 
 void ibVisualEditorNotebook::ibVisualEditor::CreateWideGui()

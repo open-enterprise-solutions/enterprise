@@ -9,6 +9,8 @@
 #include "deskgui/univ/ctrl/staticText.h"
 #include "deskgui/univ/stc/stc.h"
 #include "deskgui/univ/ctrl/textCtrl.h"
+#include "deskgui/univ/theme.h"          // ibThemeEngine — the transcript's inks are the theme's
+#include "deskgui/univ/colourScheme.h"   // wxTHEME_COLOUR
 #include <wx/weakref.h>
 
 namespace {
@@ -80,73 +82,16 @@ void ibAssistantView::BuildLayout(wxWindow* parent)
 	// there is to read rather than the box you type one line into.
 	splitter->SetSashGravity(1.0);
 
-	// THE PLATFORM'S FONT, not this window's idea of one — the same settings the
-	// code editor and the output window take, so the designer looks like one
-	// program. Resolved FIRST, because the transcript and the input box below
-	// must share it: two panes of one conversation in two typefaces reads as two
-	// programs.
-	//
-	// ⚠ AND ASKED WHETHER IT IS A FONT AT ALL. The settings come from the
-	// options file, and on a machine that has never saved one GetFont() answers
-	// a default-constructed wxFont — not a small font, NOT A FONT. Scintilla
-	// takes it apart without checking and the designer dies opening this tab
-	// (crash of 2026-08-30, StyleSetFont at the top of the stack). An absent
-	// setting is an ordinary state, not an error, so it gets an answer rather
-	// than a guard that hides the window.
-	wxFont font = mainFrame != nullptr
-		? mainFrame->GetFontColorSettings().GetFont() : wxFont();
-
-	if (!font.IsOk()) {
-		// The same kind of face a transcript wants anyway: fixed pitch, so a
-		// markdown table lines up.
-		font = wxFont(10, wxFONTFAMILY_TELETYPE, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL);
-	}
-
 	m_transcript = new ibStyledTextCtrl(splitter, wxID_ANY);
 
-	if (font.IsOk()) {
-		m_transcript->StyleSetFont(ibSTC_STYLE_DEFAULT, font);
-		m_transcript->StyleClearAll();
-	}
-
 	// The author chose the emphasis when they wrote the markdown; this only
-	// renders it.
+	// renders it - in the font and colours OnUpdate gives its styles.
 	//
 	// ⚠ BY NAME, not by number. Lexilla (src/3rdparty/lexilla) creates its
 	// lexers from a NAME; the number is the legacy door, and wx's coloured
 	// nothing — which is exactly how this arrived: styles set, lexer silent,
 	// text flat.
 	m_transcript->SetLexerLanguage(wxT("markdown"));
-
-	// And colours, because weight alone is nearly invisible on a heading. Kept
-	// to a handful of foreground colours over the inherited background, so the
-	// window still follows whatever theme the shared settings carry.
-	m_transcript->StyleSetForeground(ibSTC_MARKDOWN_HEADER1, wxColour(0, 64, 128));
-	m_transcript->StyleSetForeground(ibSTC_MARKDOWN_HEADER2, wxColour(0, 64, 128));
-	m_transcript->StyleSetForeground(ibSTC_MARKDOWN_HEADER3, wxColour(0, 64, 128));
-	m_transcript->StyleSetBold(ibSTC_MARKDOWN_HEADER1, true);
-	m_transcript->StyleSetBold(ibSTC_MARKDOWN_HEADER2, true);
-	m_transcript->StyleSetBold(ibSTC_MARKDOWN_HEADER3, true);
-	m_transcript->StyleSetBold(ibSTC_MARKDOWN_STRONG1, true);
-	m_transcript->StyleSetBold(ibSTC_MARKDOWN_STRONG2, true);
-	m_transcript->StyleSetItalic(ibSTC_MARKDOWN_EM1, true);
-	m_transcript->StyleSetItalic(ibSTC_MARKDOWN_EM2, true);
-	// A HEADING IS ALSO A SIZE. Colour alone at eight points is a difference a
-	// reader has to look for; the point of a heading is to be found without
-	// looking.
-	m_transcript->StyleSetSize(ibSTC_MARKDOWN_HEADER1, font.IsOk() ? font.GetPointSize() + 3 : 13);
-	m_transcript->StyleSetSize(ibSTC_MARKDOWN_HEADER2, font.IsOk() ? font.GetPointSize() + 2 : 12);
-
-	m_transcript->StyleSetForeground(ibSTC_MARKDOWN_CODE, wxColour(128, 0, 0));
-	m_transcript->StyleSetForeground(ibSTC_MARKDOWN_CODE2, wxColour(128, 0, 0));
-
-	// BACKGROUNDS, not just letters. A fenced block should read as a block — and
-	// a band of colour also answers the question "is the lexer alive at all"
-	// without anyone having to squint at a hue.
-	m_transcript->StyleSetBackground(ibSTC_MARKDOWN_CODEBK, wxColour(242, 242, 242));
-	m_transcript->StyleSetForeground(ibSTC_MARKDOWN_CODEBK, wxColour(64, 64, 64));
-	m_transcript->StyleSetBackground(ibSTC_MARKDOWN_BLOCKQUOTE, wxColour(240, 246, 240));
-	m_transcript->StyleSetForeground(ibSTC_MARKDOWN_BLOCKQUOTE, wxColour(0, 96, 0));
 
 	// A transcript is read, not edited. Margins off: there is no line to jump to
 	// here, and a number column would only take width from the text.
@@ -176,8 +121,6 @@ void ibAssistantView::BuildLayout(wxWindow* parent)
 	// against typing loses the thought instead of keeping it.
 	m_input = new ibTextCtrl(bottom, wxID_ANY, wxEmptyString,
 		wxDefaultPosition, wxDefaultSize, wxTE_MULTILINE);
-	if (font.IsOk())
-		m_input->SetFont(font);
 
 	// ⭐ ENTER SENDS — the same verb as the button, reached the way a person actually types. Shift
 	// holds it back for a second line, which is the convention every chat field shares, so the
@@ -232,8 +175,86 @@ void ibAssistantView::BuildLayout(wxWindow* parent)
 
 	mainSizer->Add(splitter, 1, wxEXPAND | wxALL, 4);
 
+	// The font and the colours, before the first layout measures them.
+	OnUpdate(nullptr);
+
 	parent->SetSizer(mainSizer);
 	parent->Layout();
+}
+
+void ibAssistantView::OnUpdate(ibFrontendView* WXUNUSED(sender), wxObject* WXUNUSED(hint))
+{
+	// A view closed has no transcript left to paint.
+	if (m_transcript == nullptr || m_input == nullptr)
+		return;
+
+	// THE PLATFORM'S FONT, not this window's idea of one — the same settings the
+	// code editor and the output window take, so the designer looks like one
+	// program. The transcript and the input box share it: two panes of one
+	// conversation in two typefaces reads as two programs.
+	//
+	// ⚠ AND ASKED WHETHER IT IS A FONT AT ALL. The settings come from the
+	// options file, and on a machine that has never saved one GetFont() answers
+	// a default-constructed wxFont — not a small font, NOT A FONT. Scintilla
+	// takes it apart without checking and the designer dies opening this tab
+	// (crash of 2026-08-30, StyleSetFont at the top of the stack). An absent
+	// setting is an ordinary state, not an error, so it gets an answer rather
+	// than a guard that hides the window.
+	wxFont font = mainFrame != nullptr
+		? mainFrame->GetFontColorSettings().GetFont() : wxFont();
+
+	if (!font.IsOk()) {
+		// The same kind of face a transcript wants anyway: fixed pitch, so a
+		// markdown table lines up.
+		font = wxFont(10, wxFONTFAMILY_TELETYPE, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL);
+	}
+
+	// Every style from the default one anew - its font, and the theme's paper and ink the control took last
+	// (ibStyledTextCtrl::ApplyThemeColours: as it was made, and again as the look changed) - and the markdown's own
+	// over them. Again on every call (ibFrontendMainFrame::UpdateEditorOptions: after Options, and when the look
+	// changes): a style kept from before would keep the paper of the look before.
+	if (font.IsOk())
+		m_transcript->StyleSetFont(ibSTC_STYLE_DEFAULT, font);
+	m_transcript->StyleClearAll();
+
+	// And colours, because weight alone is nearly invisible on a heading. Kept
+	// to a handful of the theme's colours over the inherited background, so the
+	// window follows the look in force, light or dark: a heading in the
+	// alternate text's dusty blue (a navy of its own sank into the dark ground).
+	const wxColour heading = wxTHEME_COLOUR(CONTROL_TEXT_ALTERNATE);
+	m_transcript->StyleSetForeground(ibSTC_MARKDOWN_HEADER1, heading);
+	m_transcript->StyleSetForeground(ibSTC_MARKDOWN_HEADER2, heading);
+	m_transcript->StyleSetForeground(ibSTC_MARKDOWN_HEADER3, heading);
+	m_transcript->StyleSetBold(ibSTC_MARKDOWN_HEADER1, true);
+	m_transcript->StyleSetBold(ibSTC_MARKDOWN_HEADER2, true);
+	m_transcript->StyleSetBold(ibSTC_MARKDOWN_HEADER3, true);
+	m_transcript->StyleSetBold(ibSTC_MARKDOWN_STRONG1, true);
+	m_transcript->StyleSetBold(ibSTC_MARKDOWN_STRONG2, true);
+	m_transcript->StyleSetItalic(ibSTC_MARKDOWN_EM1, true);
+	m_transcript->StyleSetItalic(ibSTC_MARKDOWN_EM2, true);
+	// A HEADING IS ALSO A SIZE. Colour alone at eight points is a difference a
+	// reader has to look for; the point of a heading is to be found without
+	// looking.
+	m_transcript->StyleSetSize(ibSTC_MARKDOWN_HEADER1, font.IsOk() ? font.GetPointSize() + 3 : 13);
+	m_transcript->StyleSetSize(ibSTC_MARKDOWN_HEADER2, font.IsOk() ? font.GetPointSize() + 2 : 12);
+
+	// Code in the accent's pressed shade, the action's (a maroon of its own sank into the dark ground too).
+	const wxColour code = wxTHEME_COLOUR(HYPERLINK);
+	m_transcript->StyleSetForeground(ibSTC_MARKDOWN_CODE, code);
+	m_transcript->StyleSetForeground(ibSTC_MARKDOWN_CODE2, code);
+
+	// BACKGROUNDS, not just letters. A fenced block should read as a block — and
+	// a band of colour also answers the question "is the lexer alive at all"
+	// without anyone having to squint at a hue. The control's tier under the
+	// text's ink: a light grey band glared in the dark look.
+	m_transcript->StyleSetBackground(ibSTC_MARKDOWN_CODEBK, wxTHEME_COLOUR(CONTROL));
+	m_transcript->StyleSetForeground(ibSTC_MARKDOWN_CODEBK, wxTHEME_COLOUR(CONTROL_TEXT));
+	// A quote in the muted ink on the paper, as quotes are set apart (the headings have the alternate ink): its pale
+	// green band with a dark green text glared in the dark look, and the text would have sunk into the dark ground.
+	m_transcript->StyleSetForeground(ibSTC_MARKDOWN_BLOCKQUOTE, wxTHEME_COLOUR(CONTROL_TEXT_DISABLED));
+
+	if (font.IsOk())
+		m_input->SetFont(font);
 }
 
 void ibAssistantView::OnDraw(wxDC* WXUNUSED(dc))

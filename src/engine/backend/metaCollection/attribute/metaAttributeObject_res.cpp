@@ -1,7 +1,6 @@
 #include "metaAttributeObject.h"
 
-/* PNG */
-static const ibString s_attribute_16_png = ibT("iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAACgklEQVR4nOyZz2sTURDHv7NRW6oVa6ktZNH2VCPa4K+KHlT0pH9F8SD0YCtIUW8RCmrx0l48CPGv0Jt6UFDB1iZIsacqGm0VjSDmh2T3+VYo7E8DsYfdzHwuYd7MPma+ee9l88YAcwwwRwQAc0QAMEcEAHNEADBHBABzRAAwRwQAczY1C0hfLh6HbY8RKKOAfUToRYxRCt8IWFKklnTO9z/OZl/+K54iPbk3W8yyNa2LvkIJXSlKKUuXOFPamcoht/93WExkYWa58Ux/TCW1eAciSukVe9383ngaFRNaXHqiMK0fP4p2gWjUnCzeCHX5B8xLi6MwyLNvMoPbcepgH/p7OtHVkUKcqdQtrJVreLLwBcvvf3p8lqIjn+dG5t1jgRWgDIy77b17ujF2bhBDA1tjX7yDk6OT64XzQxje3e3xGbAv+uNDtgANu60zh/qRVM4e9uZOvtocggIoHHCbA70dSCp9O7y5K0LGHxN4D9Cn5ja33bE5/ss+iq5Ob+76wNvlj5FXYTBHBABz5N8gWuTq3SL+h9vjI9jI+ZvNF4VsATBHzgC0SKt7Li7zryNbAMwRAcAcESAworDqNis1C0klkLuvNoegAITXbvPrjzqSij93BTXvjwkIYCsquO3HC2tIKo9e+XL3fbkOAQEaBu5pqWrr9lt9tZx/uIJ3qxVU6zbizq+q9TfX/IMVLH9wX4urasOivD8+tDVmTixe05eDN9FG2ApTn+ayd/zjkb3B9GThhXYeQxug+5vPS7PZE2G+yJ/BUk/qpO4uzuiH47/uI3Cao/pMu6VrOR0VQ80m4dseZ4K8CYI5IgCYIwKAOSIAmCMCgDkiAJgjAoA57AX4AwAA//+aWaB0AAAABklEQVQDAF2xrq5Kcze+AAAAAElFTkSuQmCC");
+static const ibString s_attribute_svg = ibT("<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'><rect x='1' y='4' width='14' height='8' rx='2' fill='#1c6fd1'/><path d='M3.5 8 H7.5' fill='none' stroke='#ffffff' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/><path d='M10 8 H12.5' fill='none' stroke='#ffffff' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/></svg>");
 
 // THE DEFAULT COLUMN PICTURE — declared on both column faces (srcColumn.h, queryColumn.h) and defined
 // here, beside the picture it names. Any column that is not a metaobject — a view's column, a temp
@@ -24,7 +23,7 @@ ibPicture ibValueMetaObjectAttribute::GetIcon() const
 
 ibPicture ibValueMetaObjectAttribute::GetIconGroup()
 {
-	static const ibPicture picture = ibPicture::FromBase64(s_attribute_16_png, ibSize(16, 16));
+	static const ibPicture picture = ibPicture::FromSvg(s_attribute_svg);
 
 	return picture;
 }

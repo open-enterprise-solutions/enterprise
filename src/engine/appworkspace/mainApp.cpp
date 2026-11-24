@@ -13,7 +13,7 @@
 #include "deskgui/univ/messageDialog.h"
 
 #include "frmclient/artProvider/splash/splashLogo.h"   // the splash's picture, the desktop's
-#include "frmclient/backend/backend_picture.h"         // ibBackendPicture::GetImageFromBase64 — the splash, a master in the source
+#include "frmclient/backend/backend_picture.h"         // ibBackendPicture::GetImageFromSvg — the splash, a picture in the source
 #include "protocol/connectionFile.h"
 #include "protocol/connectionServer.h"
 
@@ -79,7 +79,7 @@ bool ibAppEnterprise::OnCmdLineParsed(wxCmdLineParser& parser)
 
 bool ibAppEnterprise::DoOnInit()
 {
-	// The journal, the dumps and the light appearance are the base's (ibWxApp::OnInit, deskgui/app.h), set
+	// The journal, the dumps and the machine's appearance are the base's (ibWxApp::OnInit, deskgui/app.h), set
 	// before this runs — as every application of the platform has them.
 
 	// THE COMMAND LINE FIRST, then the connection: wx calls OnExit only after an OnInit that succeeded, so nothing is
@@ -92,7 +92,7 @@ bool ibAppEnterprise::DoOnInit()
 	// THE SPLASH — the desktop's (enterprise/mainApp.cpp): up while the base opens and the client logs in, gone with the
 	// main window shown — or before a refusal is said, which it would stand over.
 	const auto splashDestroy = [](wxSplashScreen* shown) { shown->Destroy(); };
-	std::unique_ptr<wxSplashScreen, decltype(splashDestroy)> splash(new ibProcessSplashScreen(wxBitmap(ibBackendPicture::GetImageFromBase64(s_splashLogo_png)),
+	std::unique_ptr<wxSplashScreen, decltype(splashDestroy)> splash(new ibProcessSplashScreen(wxBitmap(ibBackendPicture::GetImageFromSvg(s_splashLogo_svg, s_splashLogoSize)),
 		wxSPLASH_CENTRE_ON_SCREEN, -1, nullptr, -1, wxDefaultPosition, wxDefaultSize, wxBORDER_SIMPLE), splashDestroy);
 
 	std::unique_ptr<ibProtocolConnection> connection;

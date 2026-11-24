@@ -2827,7 +2827,7 @@ void ibTreeCtrl::PaintItem(ibTreeItem *item, wxDC& dc)
 
     if (item == m_dndEffectItem)
     {
-        dc.SetPen( *wxBLACK_PEN );
+        dc.SetPen( GetForegroundColour() );
         // DnD visual effects
         switch (m_dndEffect)
         {
@@ -2913,23 +2913,21 @@ ibTreeCtrl::PaintLevel(ibTreeItem *item,
 
     if (IsExposed(exposed_x, exposed_y, 10000, h))  // 10000 = very much
     {
+        // the focused selection framed in the tree's ink, and its text the theme's on every port - the canon's black
+        // frame sank into a dark ground, and its Mac branch wrote white or nothing
+        const wxPen cursor(GetForegroundColour());
         const wxPen *pen =
 #ifndef __WXMAC__
             // don't draw rect outline if we already have the
             // background color under Mac
-            (item->IsSelected() && m_hasFocus) ? wxBLACK_PEN :
+            (item->IsSelected() && m_hasFocus) ? &cursor :
 #endif // !__WXMAC__
             wxTRANSPARENT_PEN;
 
         wxColour colText;
         if ( item->IsSelected() )
         {
-#ifdef __WXMAC__
-            if (m_hasFocus)
-               colText = *wxWHITE;
-#else
             colText = wxSCHEME_COLOUR(ibThemeEngine::Get()->GetColourScheme(), HIGHLIGHT_TEXT); // SEAM: theme
-#endif
         }
         else
         {
@@ -2955,9 +2953,9 @@ ibTreeCtrl::PaintLevel(ibTreeItem *item,
         }
 
         // restore DC objects
-        dc.SetBrush(*wxWHITE_BRUSH);
+        dc.SetBrush(GetBackgroundColour());
         dc.SetPen(m_dottedPen);
-        dc.SetTextForeground(*wxBLACK);
+        dc.SetTextForeground(GetForegroundColour());
 
         if ( !HasFlag(wxTR_NO_LINES) )
         {

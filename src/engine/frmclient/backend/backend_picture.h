@@ -55,9 +55,9 @@ public:
 		return icon;
 	}
 
-	// A MASTER IN THE SOURCE — a PNG written as Base-64 text (the art provider's, the splash's), read at the size it is
-	// shown — none asked: as it is.
-	static wxImage GetImageFromBase64(const ibString& src, const wxSize& size = wxDefaultSize);
+	// A PICTURE IN THE SOURCE — its SVG (the splash's), drawn by the core at the size it is shown — none: the text draws
+	// nothing.
+	static wxImage GetImageFromSvg(const ibString& svg, const wxSize& size);
 };
 
 #endif

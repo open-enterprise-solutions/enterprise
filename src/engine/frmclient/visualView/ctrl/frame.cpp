@@ -7,11 +7,14 @@
 #include "frmclient/visualView/visualHostClient.h"
 
 #include <map>
+#include <variant>
+#include <wx/settings.h>   // wxSystemSettings::GetAppearance — the look in force (ApplyLook)
 #include <wx/sizer.h>   // wxSizer::GetItem — the place a control stands in (GetSizerItem)
 
 #include "widgets.h"   // ibViewPlaceholder — a type none is registered for
 
 #include "core/stringUtils.h"   // stringUtils::IsSameAs — a name found as the desktop's finds it
+#include "core/style/style.h"   // ibStyle::Platform — the platform's own colours, and the theme's for them (ApplyLook)
 #include "frmclient/backend/propertyManager/property/propertySerializable.h"   // its properties — a row's each
 #include "deskgui/typeconv.h"
 #include "protocol/protocolDesigner.h"   // ibProtocol::ibSchema::ibProperties
@@ -24,6 +27,12 @@ std::map<wxString, ibValueFrame* (*)(ibVisualHostClient&, long long)>& Types()
 {
 	static std::map<wxString, ibValueFrame* (*)(ibVisualHostClient&, long long)> types;
 	return types;
+}
+
+// A colour of the platform style, in a look (deskgui's theme asks it the same way, lunaTheme.cpp).
+wxColour StyleColour(ibStyleItem item, bool dark)
+{
+	return typeConv::ColourToWxColour(std::get<ibColour>(ibStyle::Platform().Get(item, dark)));
 }
 
 } // namespace
@@ -141,7 +150,8 @@ ibViewFetcher ibValueFrame::MakeFetcher() const
 	return m_host.MakeFetcher(m_controlId);
 }
 
-void ibValueFrame::UpdateWindow(wxWindow* window, const ibProtocolNode& node, const wxColour& platformBackground)
+void ibValueFrame::UpdateWindow(wxWindow* window, const ibProtocolNode& node, const wxColour& platformBackground,
+	const wxColour& themedBackground)
 {
 	if (window == nullptr)
 		return;
@@ -155,7 +165,7 @@ void ibValueFrame::UpdateWindow(wxWindow* window, const ibProtocolNode& node, co
 	if (maxSize != wxDefaultSize)
 		window->SetMaxSize(maxSize);
 
-	ApplyLook(window, node, platformBackground);
+	ApplyLook(window, node, platformBackground, themedBackground);
 
 	// The server has decided both: enabled with its form, shown where it is available and bound.
 	window->Enable(state.GetBool(ibProtocol::ibForm::ibState::Enabled, true));
@@ -166,7 +176,8 @@ void ibValueFrame::UpdateWindow(wxWindow* window, const ibProtocolNode& node, co
 		window->Layout();
 }
 
-void ibValueFrame::ApplyLook(wxWindow* window, const ibProtocolNode& node, const wxColour& platformBackground)
+void ibValueFrame::ApplyLook(wxWindow* window, const ibProtocolNode& node, const wxColour& platformBackground,
+	const wxColour& themedBackground)
 {
 	if (window == nullptr)
 		return;
@@ -176,16 +187,26 @@ void ibValueFrame::ApplyLook(wxWindow* window, const ibProtocolNode& node, const
 	const wxFont font = typeConv::StringToFont(node.GetString(ibProtocol::ibForm::ibProperty::Font));
 	if (font.IsOk())
 		window->SetFont(font);
+
+	// THE PLATFORM'S OWN LOOK — a colour the form leaves empty: its author picked none (Max, 2026-11-24: the property
+	// holds "the platform's", not the light look's colour). Both the platform's: the form's ink in the look in force, and
+	// the kind's own ground - the theme's for it (`themedBackground`: a form's its ground, a table's the content's), or,
+	// none given, no colour at all: the theme paints the control as its kind and state have it - a field its well while
+	// it can be typed into (ibTextCtrl::HasContentBackground, 2026-11-13), a button its face, a label and a group the
+	// surface under them (ibLunaColourScheme::GetBackground; Max: "an empty background - each with its own").
+	// One of them the author's: the author chose it against the light look's other side, so that side is what it gets -
+	// the light look's ink, or its ground for the kind (`platformBackground`) - and the pair reads as the author saw it.
+	// The web client's the same (control.js, themedPair; a kind's pair, its platformBackground).
 	const wxString foreground = node.GetString(ibProtocol::ibForm::ibProperty::ForegroundColour);
-	if (!foreground.IsEmpty())
-		window->SetForegroundColour(typeConv::StringToColour(foreground));
-	// The kind's own background (GetPlatformBackground) is no choice of its author's: none set, the theme's, as the
-	// control's state has it - a field that cannot be typed into has no well of its own (ibTextCtrl::HasContentBackground,
-	// 2026-11-13, Max: "the disabled field cannot be told from the one typed into"). The web client reads it so too
-	// (control.js, platformBackground).
 	const wxString background = node.GetString(ibProtocol::ibForm::ibProperty::BackgroundColour);
-	if (!background.IsEmpty()) {
-		const wxColour colour = typeConv::StringToColour(background);
-		window->SetBackgroundColour(colour == platformBackground ? wxNullColour : colour);
+	const wxColour text = !foreground.IsEmpty() ? typeConv::StringToColour(foreground) : wxNullColour;
+	const wxColour ground = !background.IsEmpty() ? typeConv::StringToColour(background) : wxNullColour;
+	if (!text.IsOk() && !ground.IsOk()) {
+		window->SetForegroundColour(StyleColour(ibStyleItem::FormText, wxSystemSettings::GetAppearance().IsDark()));
+		window->SetBackgroundColour(themedBackground);
+		return;
 	}
+	window->SetForegroundColour(text.IsOk() ? text : StyleColour(ibStyleItem::FormText, false));
+	window->SetBackgroundColour(ground.IsOk() ? ground
+		: platformBackground.IsOk() ? platformBackground : StyleColour(ibStyleItem::FormBackground, false));
 }

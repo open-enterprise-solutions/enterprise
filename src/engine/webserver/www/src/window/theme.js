@@ -1,19 +1,15 @@
-// THE THEME (schema 20, Style) — how the person's interface is painted: light, dark, or as their machine is set. Theirs,
-// kept in the base, so it goes with them from one machine to the next; read once, as the window comes up, and kept
-// anew when they choose another (Tools → Theme...). The page is painted by data-theme on <html> (styles/tokens.css) and
-// Web Awesome's own components by its class, wa-dark or wa-light.
+// THE THEME — how the interface is painted: light, dark, or as the machine is set. The client's own, kept in this
+// browser (Max, 2026-11-24: "nothing is kept on the backend, the client decides as it starts") - the server places it in
+// Tools (schema 20, Style) and answers nothing of it; the thin client keeps its own on its machine the same way. Applied
+// as the page starts, before anything is drawn, and anew when another is chosen (Tools → Theme...). The page is painted
+// by data-theme on <html> (styles/tokens.css) and Web Awesome's own components by its class, wa-dark or wa-light.
 
 import { _, labelText } from '../localization.js';
 
-/** @typedef {import('../protocol/session.js').Session} Session */
-/** @typedef {import('../protocol/patch.js').ProtocolNode} ProtocolNode */
-
-// The schema's number (ibSchema::ibKind::Style).
+// The menu item's schema number (ibSchema::ibKind::Style).
 export const styleSchema = 20;
-const schema = styleSchema;
-const save = 4;
 
-// ibStyle::ibTheme.
+// The three, numbered as the thin client keeps them (wx's Appearance).
 export const Theme = Object.freeze({ System: 0, Light: 1, Dark: 2 });
 
 // Said when drawn, in the person's language.
@@ -23,16 +19,18 @@ const choices = () => [
 	[Theme.Dark, _('Dark')],
 ];
 
+const keptKey = 'theme';
+
 const systemDark = matchMedia('(prefers-color-scheme: dark)');
 // Printing: paper is white whatever the theme - our tokens are the screen's alone (styles/tokens.css), and Web
 // Awesome's components are given its light class for as long as the page is printed.
 const printing = matchMedia('print');
 
-// The theme in force - the person's choice; the system's is followed as the machine changes it.
+// The theme in force - the one chosen; the system's is followed as the machine changes it.
 let chosen = Theme.System;
 
 /** The page painted as the theme says; the system's, as the machine is set now. @param {number} theme */
-export function applyTheme(theme) {
+function applyTheme(theme) {
 	chosen = theme === Theme.Light || theme === Theme.Dark ? theme : Theme.System;
 	const dark = chosen === Theme.Dark || (chosen === Theme.System && systemDark.matches);
 	const root = document.documentElement;
@@ -50,32 +48,27 @@ printing.addEventListener('change', () => applyTheme(chosen));
 addEventListener('beforeprint', () => applyTheme(chosen));
 addEventListener('afterprint', () => applyTheme(chosen));
 
-/**
- * The person's theme, read as the window comes up - when the server offers the schema (the frame's Schemas). A read
- * that fails leaves the page as the machine is set: a look is no reason to stop a login.
- * @param {Session} session
- * @param {ProtocolNode | null} frame
- */
-export async function readTheme(session, frame) {
-	if (!(frame?.Schemas ?? []).includes(schema))
-		return;
+/** The theme chosen in this browser - the system's when none is, or the storage cannot be read. @returns {number} */
+function readKept() {
 	try {
-		const answer = await session.call('schema', { Schema: schema });
-		applyTheme(Number(answer.Theme ?? Theme.System));
+		return Number(localStorage.getItem(keptKey) ?? Theme.System);
 	}
 	catch {
-		applyTheme(Theme.System);
+		return Theme.System;
 	}
 }
 
+/** The page painted in the theme chosen in this browser - as it starts, before anything is drawn. */
+export function applyKeptTheme() {
+	applyTheme(readKept());
+}
+
 /**
- * Tools → Theme...: the three, the one in force chosen. Another chosen is painted at once and kept by the server as the
- * person's.
- * @param {Session} session
+ * Tools → Theme...: the three, the one in force chosen. Another chosen is kept in this browser and painted at once; a
+ * storage that would not keep it paints it for this page alone.
  */
-export async function showTheme(session) {
-	const answer = await session.call('schema', { Schema: schema });
-	const current = Number(answer.Theme ?? Theme.System);
+export async function showTheme() {
+	const current = chosen;
 	const dialog = /** @type {any} */ (document.createElement('wa-dialog'));
 	dialog.label = _('Theme');
 	dialog.className = 'theme';
@@ -104,45 +97,27 @@ export async function showTheme(session) {
 	cancel.textContent = _('Cancel');
 	dialog.append(ok, cancel);
 
-	// OK keeps the choice first and closes after: a refusal is then the menu's to show, and a second press while the
-	// first is on its way is no second save.
-	/** @type {unknown} */
-	let refused = null;
 	/** @type {Promise<void>} */
-	const done = new Promise((resolve, reject) => {
-		ok.addEventListener('click', async () => {
-			if (ok.hasAttribute('loading'))
-				return;
+	const done = new Promise((resolve) => {
+		ok.addEventListener('click', () => {
 			const picked = Number(/** @type {HTMLInputElement | null} */ (list.querySelector('input:checked'))?.value ?? current);
 			if (picked !== current) {
-				ok.setAttribute('loading', '');
 				try {
-					await session.call('schema', { Schema: schema, Command: save, Args: { Theme: picked } });
+					localStorage.setItem(keptKey, String(picked));
 				}
-				catch (error) {
-					refused = error ?? new Error(_('The theme could not be kept'));
+				catch {
+					// Not kept: painted for this page, and the next one starts as the machine is set.
 				}
-				ok.removeAttribute('loading');
-			}
-			// What is kept is painted - and the one in force too, when the page shows another (a read that failed).
-			if (!refused)
 				applyTheme(picked);
+			}
 			dialog.open = false;
 		});
 		cancel.addEventListener('click', () => { dialog.open = false; });
-		// Escape, or a click beside it, while the save is on its way: it stays, so its answer is not lost.
-		dialog.addEventListener('wa-hide', (event) => {
-			if (event.target === dialog && ok.hasAttribute('loading'))
-				event.preventDefault();
-		});
 		dialog.addEventListener('wa-after-hide', (event) => {
 			if (event.target !== dialog)
 				return;
 			dialog.remove();
-			if (refused)
-				reject(refused);
-			else
-				resolve();
+			resolve();
 		});
 	});
 	document.body.append(dialog);

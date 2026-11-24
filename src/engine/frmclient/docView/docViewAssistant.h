@@ -44,6 +44,9 @@ public:
 
 	virtual bool OnCreate(ibFrontendDocument* doc, long flags) override;
 	virtual void OnDraw(wxDC* dc) override;
+	// The transcript's font and colours and the input's font - as it is built, and as the frame puts the options in
+	// force (ibFrontendMainFrame::UpdateEditorOptions: after Options, and when the look changes).
+	virtual void OnUpdate(ibFrontendView* sender, wxObject* hint = nullptr) override;
 	virtual bool OnClose(bool deleteWindow = true) override;
 
 	// THE SERVER'S VIEW OF THE WINDOW — the entries not shown yet appended, and the waiting as it says.

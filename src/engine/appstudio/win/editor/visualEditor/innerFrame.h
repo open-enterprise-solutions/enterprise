@@ -2,7 +2,6 @@
 #define __INNER_FRAME__
 
 #include "deskgui/univ/panel.h"
-#include <wx/bitmap.h>
 
 // The form's card in the visual editor: a caption over the panel the form is built in, resized by
 // dragging its right edge, its bottom edge or the corner between them.
@@ -46,9 +45,6 @@ private:
 
 	wxString m_title;
 	long m_titleStyle;
-	wxBitmap m_closeButton;
-	wxBitmap m_maximizeButton;
-	wxBitmap m_minimizeButton;
 
 	Edge m_sizing = Edge::None;
 	wxSize m_grabOffset;   // from the pointer to the card's bottom-right corner, as grabbed

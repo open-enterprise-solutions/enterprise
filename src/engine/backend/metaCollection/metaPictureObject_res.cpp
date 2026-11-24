@@ -1,7 +1,6 @@
 #include "metaPictureObject.h"
 
-/* PNG */
-static const ibString s_picture_64_png = ibT("iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAADd0lEQVR4nOyazU8TQRjGn+2HCR+KSOTgxYvxYBO4mGA8wd/gf2DiRY3GBEmMMRoST36hCYaTiZ5EAyT4CRHxoAQjIC1pgyggIKWg0C8shXa77jQxQKHd3ZmtTJ39JU26M++0O8888+47TW0QHBsExxIAgmMJAMGxBIDgODIbjh6vVfAfM9D3Ttp4bW0BCI6VA7QCLjzoRSFz52Rdzn5rC0BwLAEgOJpJUA+SkkR50ody2Q0oEpacVQjZj6hvTfn4vMJ8h/sTH3EsegbFKf+m9pjtAPp3N+OnswY8Q70FJCUBV+wG6sIntkyeQNpInyt2GxJk8Aq1ABXysDq5JnVyqawxpM8Vu4WKxCB4hUoAuxJDTfScOkHtcxOJqVk+nx7DI1QCkH1fKk/pjiexZAyPUCXBImUBRtmlhMEjVAKsSJUwyppUBh6hEiDkcMEoNGP+BVQ5IG6rRMBZqzuexJIxPEL9GPxcck19yO3SjCMxQ6WN4BVqASKOw/hSdEozzld8FlH7IfAK02HIU3IZb8s60mVvJqSN9HmL68EzzGcBUus/L+/HXtmHfQkPqZERtFcj6BDkMEQgEw06qtKvQqMgfw8YCnRiKuKGGRScANPhYfRMNKNv5hHMIK8CfPK3oWu8CSnFnONwKD6H9tGr6vEqhZmwxxQX5E2AscX36P3eAvf8C7R6G7Ca/A0WyPinvktYk9dPlWa4IC8CkNXpHLu+fh3x4KHnNIIrs6CBOIisfDA+u+V7WF1gugCLsWm0jV5Rbzq5qT0U96dFmA4bv+E3k82qiNuPY3WBqQJEV3+h1dewyaYbIe1kO4wsdEEv7vmXGA48y9rP6gLTBCB7lEx+eW0xZxxJYK++3UT3xD3VJamcsSTjd4/fhRYsLjBFADmVSNt+aWVG9xiyqq3ei1mT48aMrwWLC5gFUBQlnfB+REZglGzJcbuMrwWtC5gF6J1qwdelD6AlMzlmy/ha0LqASYDBuQ4M+NvBClnpx956eNTkmCvja0HjAurDECl0eibvw0xeq8mRhb8uOLinWvcYKgdkFjo8YdQFhgXIVujwgtFcYEgArUKHF4y4QLcAegsdHjDiAl0C0BQ6O41eF2g+BVgKnZ1Erws0BWAtdHYSPS7QFMDd+AROFCYBDGnGWP8Sg+AIL4AEwbG2AATHEgCCYwkAwRFegD8AAAD//6g729MAAAAGSURBVAMAHOS+Or4MobEAAAAASUVORK5CYII=");
+static const ibString s_picture_svg = ibT("<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'><rect x='1' y='2' width='14' height='12' rx='1.5' fill='#1c6fd1'/><circle cx='5' cy='6' r='1.8' fill='#fcc419'/><path d='M1 12 L5.5 8 L8.5 10.5 L11 8.5 L15 12 V12.5 Q15 14 13.5 14 H2.5 Q1 14 1 12.5 Z' fill='#8ce99a'/></svg>");
 
 ibPicture ibValueMetaObjectPicture::GetIcon() const
 {
@@ -16,7 +15,7 @@ ibPicture ibValueMetaObjectPicture::GetIcon() const
 
 ibPicture ibValueMetaObjectPicture::GetIconGroup()
 {
-	static const ibPicture picture = ibPicture::FromBase64(s_picture_64_png, ibSize(16, 16));
+	static const ibPicture picture = ibPicture::FromSvg(s_picture_svg);
 
 	return picture;
 }

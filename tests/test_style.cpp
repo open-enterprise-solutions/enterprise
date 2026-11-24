@@ -40,7 +40,9 @@ TEST(Style, EveryItemHasANumberAndANameOfItsOwn) {
 		{ "NegativeNumber", 13 }, { "Border", 14 }, { "TableHeaderBackground", 15 }, { "TableHeaderText", 16 },
 		{ "TableFooterBackground", 17 }, { "TableFooterText", 18 }, { "ReportHeader", 19 }, { "ReportGroup", 20 },
 		{ "ReportLine", 21 }, { "Activity", 22 }, { "Accent", 23 }, { "Navigation", 24 },
-		{ "SecondaryNavigation", 25 }, { "Important", 26 },
+		{ "SecondaryNavigation", 25 }, { "Important", 26 }, { "DesktopBackground", 27 }, { "PanelBackground", 28 },
+		{ "BarBackground", 29 }, { "ControlBackground", 30 }, { "DisabledText", 31 }, { "Caption", 32 },
+		{ "CaptionText", 33 }, { "AccentPressed", 34 }, { "AccentText", 35 }, { "Shelf", 36 },
 		{ "TextFont", 100 }, { "SmallFont", 101 }, { "RegularFont", 102 }, { "LargeFont", 103 }, { "VeryLargeFont", 104 },
 		{ "ControlBorder", 200 }, { "ButtonBorder", 201 },
 	};
@@ -51,6 +53,7 @@ TEST(Style, EveryItemHasANumberAndANameOfItsOwn) {
 		EXPECT_EQ(static_cast<int>(info->m_item), number) << name;
 	}
 	EXPECT_EQ(ibStyleItemInfo::Of(ibStyleItem::ReportGroup)->m_kind, ibStyleKind::ColourList);
+	EXPECT_EQ(ibStyleItemInfo::Of(ibStyleItem::Caption)->m_kind, ibStyleKind::ColourList);
 }
 
 // The platform's style has a value of the item's kind for every item, in both looks; its light look keeps the forms'
@@ -70,26 +73,43 @@ TEST(Style, ThePlatformsHasEveryItemInBothLooks) {
 		}
 	}
 	// What the light look keeps: the forms' ink on a ground a step below white, the fields white (frmserver's default
-	// style, taken from here; cream until 2026-11-13) and the Luna theme's colours (deskgui/univ/theme/lunaTheme.cpp),
-	// each where the platform painted it.
+	// style, taken from here; cream until 2026-11-13) and the desktop theme's colours, which it paints with from here
+	// (deskgui/univ/theme/lunaTheme.cpp) - each as the screen shows it, the browser's as well.
 	const std::vector<std::pair<ibStyleItem, ibColour>> kept = {
 		{ ibStyleItem::FormText, ibColour(0x3F, 0x5C, 0x77) },
 		{ ibStyleItem::FormBackground, ibColour(0xEE, 0xF2, 0xF6) },
 		{ ibStyleItem::FieldBackground, ibColour(0xFF, 0xFF, 0xFF) },
-		{ ibStyleItem::ButtonBackground, ibColour(0xC8, 0xD6, 0xDF) },
+		{ ibStyleItem::FieldText, ibColour(0, 0, 0) },
+		{ ibStyleItem::ButtonBackground, ibColour(0xFF, 0xFF, 0xFF) },
 		{ ibStyleItem::ButtonText, ibColour(0, 0, 0) },
 		{ ibStyleItem::Selection, ibColour(0xD9, 0x77, 0x57) },
 		{ ibStyleItem::SelectionText, ibColour(0xFF, 0xFF, 0xFF) },
+		{ ibStyleItem::TooltipBackground, ibColour(0xE6, 0xEE, 0xF5) },
+		{ ibStyleItem::TooltipText, ibColour(0, 0, 0) },
 		{ ibStyleItem::Border, ibColour(0xA8, 0xBA, 0xC8) },
+		{ ibStyleItem::TableHeaderBackground, ibColour(0xE6, 0xEE, 0xF5) },
+		{ ibStyleItem::TableHeaderText, ibColour(0x3F, 0x5C, 0x77) },
 		{ ibStyleItem::Accent, ibColour(0xD9, 0x77, 0x57) },
 		{ ibStyleItem::Activity, ibColour(0xD9, 0x77, 0x57) },
-		{ ibStyleItem::Navigation, ibColour(0xB8, 0xC9, 0xD4) },
-		{ ibStyleItem::SecondaryNavigation, ibColour(0xC8, 0xD6, 0xDF) },
+		{ ibStyleItem::Navigation, ibColour(0xDD, 0xE4, 0xE8) },
+		{ ibStyleItem::SecondaryNavigation, ibColour(0xF5, 0xF7, 0xF8) },
+		{ ibStyleItem::DesktopBackground, ibColour(0xD3, 0xDB, 0xE1) },
+		{ ibStyleItem::PanelBackground, ibColour(0xE7, 0xEC, 0xF0) },
+		{ ibStyleItem::BarBackground, ibColour(0xDD, 0xE4, 0xE8) },
+		{ ibStyleItem::ControlBackground, ibColour(0xE6, 0xEE, 0xF5) },
+		{ ibStyleItem::DisabledText, ibColour(0x94, 0xA6, 0xB4) },
+		{ ibStyleItem::CaptionText, ibColour(0xFF, 0xFF, 0xFF) },
+		{ ibStyleItem::AccentPressed, ibColour(0xB8, 0x5A, 0x38) },
+		{ ibStyleItem::AccentText, ibColour(0xFF, 0xFF, 0xFF) },
+		{ ibStyleItem::Shelf, ibColour(0xE0, 0xD8, 0xCC) },
 	};
 	for (const auto& [item, colour] : kept)
 		EXPECT_EQ(std::get<ibColour>(platform.Get(item, false)), colour) << ibStyleItemInfo::Of(item)->m_name;
 	EXPECT_NE(std::get<ibColour>(platform.Get(ibStyleItem::FormBackground, true)), ibColour(0xEE, 0xF2, 0xF6));
 	EXPECT_EQ(std::get<std::vector<ibColour>>(platform.Get(ibStyleItem::ReportGroup, false)).size(), 3u);
+	// …an active caption, lit from the top: its two, the light one first
+	EXPECT_EQ(std::get<std::vector<ibColour>>(platform.Get(ibStyleItem::Caption, false)),
+		(std::vector<ibColour>{ ibColour(0x5A, 0x7B, 0x95), ibColour(0x3F, 0x5C, 0x77) }));
 }
 
 // An application's style gives only what it changes: the rest is the platform's, look by look.

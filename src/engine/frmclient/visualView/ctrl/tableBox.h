@@ -38,6 +38,9 @@ public:
 	virtual wxWindow* GetWindow() const override;
 	virtual ibDataViewColumnGroup* GetColumnHolder() const override;
 	virtual ibViewCommandBar* GetCommandBar() const override { return m_commandBar.get(); }
+	// a table's: the platform style's field background — none chosen, the theme's content colour, its bar and its panel
+	// too (Update)
+	virtual wxColour GetPlatformBackground() const override;
 
 	// The desktop's says the source it shows; its source is the server's — here, its name.
 	virtual wxString GetControlTitle() const override { return _("Table") + wxT(": ") + GetControlName(); }

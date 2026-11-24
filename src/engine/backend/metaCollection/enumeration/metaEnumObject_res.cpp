@@ -1,7 +1,6 @@
 #include "metaEnumObject.h"
 
-/* PNG */
-static const ibString s_enumeration_16_png = ibT("iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAADh0lEQVR4nOyay08TQRzHv1PelD4ML0FiICoFIj4SqIEQX8REA148EG8SoyaejRFvmpBIiH+BoHg0HLwoekDUGN+IxBgpmgAmKgGx0EILWGjHmR7Mdre17WJ0l9lP0mxm5jvtzHdnf/Pb3ZogOCYIjmEABMcwAIJjGADBMQyA4BgGQHAMAyA4hgEQnNR4guvO+3UhGmwFQSWhqAIhudAylLopwQgBGTEF0XNyqOnVn+QkVkNvVW+6N8fczr7wHCFEpyuFBkFJp9Xvv9Qy0hKIpoi5Arxm81PmTi0749AvJIWd4ovz5uxGVtgTTRH1zHY777WzeddivUCIs7v27uWoTfKK7po7TphMEddNUWU+yveVwlqYg7SsuGHjv7KytIr5aR8+Pp7A1OiPiDa6SmtOv20ektYpVwAxnZUWN1bko+7ELuSW2jU/eQ4fIx9rfetuFDpk8ToFZ+T6KJcAdUhLjoNl0CsVjVtkNcQh1ygMYFtItbRsKzRDr1jysiMr2FYu1yjWNNs/cyIEGdpf9rFIz06LKLOAVyDX/JXZ0RCFZ3IBnq/z4V/ZsMkGW3EOCyfa30LXbIB7woPXt95jybscUZ9ly4TzeDVyy+zQMqozvFCQwtU/hifXBhWT5/A63uZ6MMbyMQqtotqAuS9euB6Os0w5toa3uQbGMcu0WkWVAas/g3jT+4HNMAEx03At76NFVMUA9+c5+GcXE9ZzLe9T6MhLuM/ttn4kw7GOQ1CDKgOWFwLJdgmnqFpElQGZlnQki1bTaFWjshVbkCxq+vwLVK6ADBSU5+L7J3dCeq7lfZJB7TWdLKq3wR1N5TClxO/ONTuPOqBVVBvAnw1sbdgcV+c4UAZLvnZvqNYUmbYf2YYi9rxAz6nwmkMzn+DhCw3wTvow980bTnzsJVbYWdAT4maIwydqL7GEP3pDGQMopqTFwOIK9Ipi7LK5caIFwWFpwTeTeMqrNRRjJ3RIrlE+EgPeScujjyagV1wDY5EVlAzLNQoDUijtYoffIX1qdAbPbw6zmxmPZvN5KQH/Snisz3qGMS1J1CjoEiWpN+T6qGG6q7avjb0YuYL1BKXnTw02X5VXx9ynup19LxHjdZLuoPQFm3x9tKaYmaDV59/LDp2U0hB0C3sYR9Fh9S/uj6WIm6kI+3pcFIy/yEBwDAMgOIYBEBzDAAiOYQAExzAAgmMYAMER3oBfAAAA//+NLCJPAAAABklEQVQDALsDFFbS8T84AAAAAElFTkSuQmCC");
+static const ibString s_enumeration_svg = ibT("<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'><rect x='1' y='4' width='14' height='8' rx='2' fill='#ae3ec9'/><circle cx='5' cy='8' r='1.8' fill='#ffffff'/><path d='M10 8 H12.5' fill='none' stroke='#ffffff' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/></svg>");
 
 ibPicture ibValueMetaObjectEnum::GetIcon() const
 {
@@ -10,7 +9,7 @@ ibPicture ibValueMetaObjectEnum::GetIcon() const
 
 ibPicture ibValueMetaObjectEnum::GetIconGroup()
 {
-	static const ibPicture picture = ibPicture::FromBase64(s_enumeration_16_png, ibSize(16, 16));
+	static const ibPicture picture = ibPicture::FromSvg(s_enumeration_svg);
 
 	return picture;
 }

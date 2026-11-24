@@ -55,14 +55,16 @@ public:
         : m_combo(combo)
     {
         (void)Create(combo, wxBORDER_NONE);
-
-        SetBackgroundColour(wxTHEME_COLOUR(WINDOW));
     }
 
     // show under the combo, the popup's control filling the window - its own border frames it, no extra chrome (an
     // own border strip left dark glitchy edges and dead space around the list)
     void Popup()
     {
+        // the look in force as it is shown: the window is kept from one showing to the next, and one of its own is not
+        // told when the look changes (as a menu's, ibPopupMenuWindow::Popup)
+        SetBackgroundColour(wxTHEME_COLOUR(WINDOW));
+
         ibComboPopup *popup = m_combo->GetPopupControl();
         const wxSize sizeCombo = m_combo->GetSize();
 

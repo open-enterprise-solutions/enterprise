@@ -410,7 +410,8 @@ ibVListBox::DoDrawSolidBackground(const wxColour& col,
         {
             dc.SetBrush(*wxTRANSPARENT_BRUSH);
         }
-        dc.SetPen(*(isCurrent ? wxBLACK_PEN : wxTRANSPARENT_PEN));
+        // the current item framed in the list's ink - black, the canon's, sank into a dark ground
+        dc.SetPen(isCurrent ? wxPen(GetForegroundColour()) : *wxTRANSPARENT_PEN);
         dc.DrawRectangle(rect);
     }
     //else: do nothing for the normal items

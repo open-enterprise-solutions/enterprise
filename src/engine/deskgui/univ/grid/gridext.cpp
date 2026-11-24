@@ -3339,6 +3339,28 @@ void ibGrid::Create()
 		pane->SetOwnBackgroundColour(m_labelBackgroundColour);
 	}
 
+	// ⭐ …AND TAKEN AGAIN WHEN THE LOOK CHANGES — the theme's colours taken here and in Init, each where it is still the
+	// one taken (one set since is its owner's): the header's face is the theme's as it is drawn, and its text kept from
+	// the look before was not seen on it (2026-11-24, Max: "no numbers on switching"). The sheet's paper and ink are the
+	// document's (ibGridEditor), not the theme's.
+	Bind(wxEVT_SYS_COLOUR_CHANGED, [this, labelText = m_labelTextColour, labelFace = m_labelBackgroundColour,
+		selection = m_selectionBackground, selectionText = m_selectionForeground](wxSysColourChangedEvent& event) mutable {
+		event.Skip();
+		if (m_labelTextColour == labelText) {
+			labelText = wxTHEME_COLOUR(CONTROL_TEXT);
+			SetLabelTextColour(labelText);
+		}
+		if (m_labelBackgroundColour == labelFace) {
+			labelFace = wxTHEME_COLOUR(CONTROL);
+			SetLabelBackgroundColour(labelFace);
+		}
+		if (m_selectionBackground == selection)
+			selection = m_selectionBackground = wxTHEME_COLOUR(HIGHLIGHT).ChangeLightness(172);
+		if (m_selectionForeground == selectionText)
+			selectionText = m_selectionForeground = wxTHEME_COLOUR(CONTROL_TEXT);
+		ForceRefresh();
+	});
+
 	InitPixelFields();
 }
 
@@ -3548,7 +3570,7 @@ void ibGrid::Init()
 
 	m_zoomScale = 1.0f;
 
-	m_gridLineColour = wxTHEME_COLOUR(CONTROL);   // the theme's, as every table's rules (ibDataViewCtrl::GetRuleColour)
+	m_gridLineColour = wxNullColour;   // none set: a tint of the paper (GetDefaultGridLinePen)
 	m_gridLinesEnabled = true;
 	m_gridLinesClipHorz =
 		m_gridLinesClipVert = true;
@@ -7463,7 +7485,13 @@ void ibGrid::DrawCellHighlight(wxDC& dc, int row, int col, const ibGridCellAttr*
 
 wxPen ibGrid::GetDefaultGridLinePen()
 {
-	return wxPen(GetGridLineColour());
+	// THE RULES ARE A TINT OF THE SHEET'S PAPER, as Excel's - darker on a light sheet, lighter on a dark one, taken as
+	// they are drawn; the theme's control tier ruled a white sheet in near black in the dark look (2026-11-24, Max:
+	// "Excel's are better"). A colour set by SetGridLineColour stands.
+	if (m_gridLineColour.IsOk())
+		return wxPen(m_gridLineColour);
+	const wxColour paper = GetDefaultCellBackgroundColour();
+	return wxPen(paper.ChangeLightness(paper.GetRGB() > 0x808080 ? 88 : 125));
 }
 
 wxPen ibGrid::GetRowGridLinePen(int WXUNUSED(row))

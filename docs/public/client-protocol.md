@@ -33,7 +33,7 @@ comes back with `login` `{Token}`.
 
 A packet is the node the server builds, as its bytes lie (`src/engine/core/serialize/dataBuilder.h`): `OES1`, the
 version (2; 1, from before a guid had a kind of its own, is still read), the length, then the root — `id`, `method` and `params`, or `id` and `result` or `error`, and `types`, the
-names of the types its nodes carry. Text is UTF-16LE; bytes (a picture's PNG, a file's part) are a `Binary`, never
+names of the types its nodes carry. Text is UTF-16LE; bytes (a picture, a file's part) are a `Binary`, never
 text; a guid is a `Guid`, its 16 bytes (the browser shows it as its text). A WebSocket opened with `?compress=deflate` gets every answer of 1 KB and more raw-deflated (RFC 1951 — a
 browser's `DecompressionStream("deflate-raw")`); a packet begins `OES1`, a deflated one never does.
 
@@ -58,7 +58,7 @@ browser's `DecompressionStream("deflate-raw")`); a packet begins `OES1`, a defla
 | `open` | `Client`, `File` or `Extension` | the frame — the file opened as a document; without a file, a new document of the template that opens `Extension` (File → New) |
 | `command` | `Client`, `Command` | the frame — the command done on the active tab's document |
 | `presentation` | `Client`, `Value`, `Format` | `Text` — the value as a person reads it, formatted by the server (`Format`: the codes `Format()` takes) |
-| `picture` | `Client`, `Pictures` — the ids: an engine picture's number, an application picture's `<guid>#<version>` (read by the guid) | `Pictures` — each `Id`, `Picture` (the PNG, a `Binary`; empty when there is none of that id) |
+| `picture` | `Client`, `Pictures` — the ids: an engine picture's number, an application picture's `<guid>#<version>` (read by the guid) | `Pictures` — each `Id`, `Picture` (a `Binary`: an engine picture's SVG, UTF-8 — the client draws it at its size; an application's, its PNG; the bytes tell which; empty when there is none of that id) |
 | `debug` | `Client`, `Command` and its fields (protocol 6) | at once, never the frame — [The debugger](#the-debugger) |
 | `mcp` | `Client`, `Command` and its fields (protocol 7) | never the frame — [The assistant](#the-assistant) |
 | `addresses` | — (no `Client`) | `Addresses` — the base's web addresses, each `Id`, `Path`; the connection is told each change — [Web addresses](#web-addresses) |
@@ -224,7 +224,8 @@ and a cell `EditText` beside its `Text`.
 A table's `fetch` gives rows, each with `Container`, `Group` (a group's caption), `Picture`, and its cells as children
 by column id: `Text`, `Checked` for a flag, `Number`, `Value` when the cell takes an edit, `EditText` in a masked
 column; its look, when the server's
-model set one — `TextColour`, `BackgroundColour` (a colour's text, `r,g,b`, as a form's colours), `Bold`, `Italic`,
+model set one — `TextColour`, `BackgroundColour` (a colour's text, `r,g,b`, as a form's colours; a form's colour sent empty is the
+platform's, painted in the client's look), `Bold`, `Italic`,
 `Strikethrough`, `Underlined`, `Face`, `Size`, `Align` (`Left`, `Center`, `Right`). In the designer (`login` `Mode` 2)
 a table reads no rows — its `fetch` is refused, and a designer's client does not ask. A read that fails is refused
 `Exception` in the base's own words, and the frame carries the same message for the person; a `Parent` the table no
@@ -358,7 +359,7 @@ A schema is a dialog of the desktop held as data: the client shows it however it
 | 8 Users | the designer | `Users` (`Guid`, `Name`, `FullName`), and what a record is chosen from: `Roles` (`Guid`, `Name`, `Title`, `Mode`), `Languages` (`Guid`, `Title`, `Code`, and `Default` on the application's own language); with `Args {Guid}` — that one's `User` (`Guid`, `Name`, `FullName`, `Password` — whether one is stored, `Language`, `Roles`) | 4 Save `{Guid, Name, FullName, Language, Roles[, Password]}` — the password hashed by the server, absent: kept; 8 Remove `{Guid}` | data administration |
 | 18 ApplicationCompare | the designer | with `Args {Mode, File, File2}` (`Mode` 1 the application and a file, 2 and the base's, 3 two files): `Records` — the walk of the two; a side that cannot be read is refused | 13 Merge `{Mode, File, File2, Pull, Ops}` — Add/Delete/Replace; what was applied and what was not, said to the person by the server | administration |
 | 19 Types | the designer | the language's types, for the syntax helper: with `Args {Query}` — `Types` (`Name`), whose names match; with `Args {Name}` — what that one offers: `Methods` (`Name`, `Signature`) and `Properties` (`Name`), or `Note`, why it cannot be asked | — | — |
-| 20 Style | both | how the person's interface is painted: `Theme` — 0 as their machine is set, 1 light, 2 dark; theirs, kept in the base (0 until they choose; a base with no users keeps one for everybody) | 4 Save `{Theme}` — kept as theirs; a value that is not one of the three numbers is refused | — |
+| 20 Style | both | no schema: the theme is the client's own, kept on its machine — the server places the item in Tools, enabled, and a call of it is refused | — | — |
 
 A schema the client's application does not have, or the person has no right to, is refused.
 

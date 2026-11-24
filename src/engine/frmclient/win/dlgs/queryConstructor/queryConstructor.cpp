@@ -230,11 +230,10 @@ ibAuiToolBar* ibDialogQueryConstructor::MakeToolBar(wxWindow* parent)
 void ibDialogQueryConstructor::AddTool(ibAuiToolBar* bar, const wxString& label, const wxString& artId,
                                        std::function<void(wxCommandEvent&)> handler)
 {
-	// ⚠ THE PRODUCT'S OWN IDS, NOT THE STOCK ONES. The frontend art provider serves exactly
-	// wxART_ADD / EDIT / DELETE / UP / DOWN / SORT (artProvider.cpp) — ask it for `wxART_NEW` or
-	// `wxART_LIST_VIEW` and it answers with nothing, MSW has no 16x16 stock bitmap for them either,
-	// and the tool draws as a blank square. That is why the "nested table" button was invisible:
-	// it was there, with no picture on it, and a toolbar of blanks is a toolbar you cannot read.
+	// ⚠ AN ID THE DESKTOP DRAWS: the product's own (the theme's, deskgui/artProvider.h) or wx's stock one, which is
+	// the core's picture (ibStockArtProvider). An id nobody answers draws a blank square — that is why the "nested
+	// table" button was invisible: it was there, with no picture on it, and a toolbar of blanks is a toolbar you
+	// cannot read.
 	//
 	// ⚠ AT NORMAL DPI. A bundle's size is its size at 100 %, and the display scales it; asked for
 	// FromDIP it came back twice as large at 200 %, which the context menu shows (it wears the same
@@ -649,8 +648,8 @@ wxWindow* ibDialogQueryConstructor::BuildPackagePage(wxWindow* parent)
 	AddTool(bar, _("Add query"), wxART_ADD_QUERY, [this](wxCommandEvent& e) { OnAddStatement(e); });
 	AddTool(bar, _("Delete"),    wxART_DELETE, [this](wxCommandEvent& e) { OnRemoveStatement(e); });
 	bar->AddSeparator();
-	AddTool(bar, _("Move up"),   wxART_UP,   [this](wxCommandEvent&) { OnMoveStatement(-1); });
-	AddTool(bar, _("Move down"), wxART_DOWN, [this](wxCommandEvent&) { OnMoveStatement(+1); });
+	AddTool(bar, _("Move up"),   wxART_GO_UP,   [this](wxCommandEvent&) { OnMoveStatement(-1); });
+	AddTool(bar, _("Move down"), wxART_GO_DOWN, [this](wxCommandEvent&) { OnMoveStatement(+1); });
 	bar->Realize();
 	sizer->Add(bar, 0, wxEXPAND);
 
@@ -818,8 +817,8 @@ wxWindow* ibDialogQueryConstructor::BuildTablesPage(wxWindow* parent)
 	// its own toolbar; this one was missing the one that takes something away.
 	AddTool(rightBar, _("Delete"),     wxART_DELETE, [this](wxCommandEvent& e) { OnRemoveField(e); });
 	rightBar->AddSeparator();
-	AddTool(rightBar, _("Move up"),   wxART_UP,   [this](wxCommandEvent&) { OnMoveField(-1); });
-	AddTool(rightBar, _("Move down"), wxART_DOWN, [this](wxCommandEvent&) { OnMoveField(+1); });
+	AddTool(rightBar, _("Move up"),   wxART_GO_UP,   [this](wxCommandEvent&) { OnMoveField(-1); });
+	AddTool(rightBar, _("Move down"), wxART_GO_DOWN, [this](wxCommandEvent&) { OnMoveField(+1); });
 	rightBar->Realize();
 	right->Add(rightBar, 0, wxEXPAND);
 	// THE PROJECTIONS, AS A GRID — the field, edited where it stands. Typing over it replaces the
@@ -1557,8 +1556,8 @@ wxWindow* ibDialogQueryConstructor::BuildOrderPage(wxWindow* parent)
 	ibAuiToolBar* bar = MakeToolBar(rightPane);
 	AddTool(bar, _("Direction"), wxART_DIRECTION, [this](wxCommandEvent& e) { OnToggleOrderDirection(e); });
 	bar->AddSeparator();
-	AddTool(bar, _("Move up"),   wxART_UP,   [this](wxCommandEvent&) { OnMoveOrder(-1); });
-	AddTool(bar, _("Move down"), wxART_DOWN, [this](wxCommandEvent&) { OnMoveOrder(+1); });
+	AddTool(bar, _("Move up"),   wxART_GO_UP,   [this](wxCommandEvent&) { OnMoveOrder(-1); });
+	AddTool(bar, _("Move down"), wxART_GO_DOWN, [this](wxCommandEvent&) { OnMoveOrder(+1); });
 	bar->Realize();
 	right->Add(bar, 0, wxEXPAND);
 
@@ -1675,8 +1674,8 @@ wxWindow* ibDialogQueryConstructor::BuildTotalsPage(wxWindow* parent)
 	AddTool(dimBar, _("Edit"),   wxART_EDIT, [this](wxCommandEvent& e) { OnEditTotalsDimension(e); });
 	AddTool(dimBar, _("Delete"), wxART_DELETE,    [this](wxCommandEvent& e) { OnRemoveTotalsLine(e); });
 	dimBar->AddSeparator();
-	AddTool(dimBar, _("Move up"),   wxART_UP,   [this](wxCommandEvent&) { OnMoveTotalsDimension(-1); });
-	AddTool(dimBar, _("Move down"), wxART_DOWN, [this](wxCommandEvent&) { OnMoveTotalsDimension(+1); });
+	AddTool(dimBar, _("Move up"),   wxART_GO_UP,   [this](wxCommandEvent&) { OnMoveTotalsDimension(-1); });
+	AddTool(dimBar, _("Move down"), wxART_GO_DOWN, [this](wxCommandEvent&) { OnMoveTotalsDimension(+1); });
 	dimBar->Realize();
 	dims->Add(dimBar, 0, wxEXPAND);
 
@@ -2393,8 +2392,8 @@ wxWindow* ibDialogQueryConstructor::BuildUnionsPage(wxWindow* parent)
 	bar->AddSeparator();
 	// BRANCH ORDER IS SEMANTICS, not presentation: the FIRST branch decides the shape of the whole
 	// union (its columns are the result's, and every other branch is lined up against them).
-	AddTool(bar, _("Move up"),   wxART_UP,   [this](wxCommandEvent&) { OnMoveUnionBranch(-1); });
-	AddTool(bar, _("Move down"), wxART_DOWN, [this](wxCommandEvent&) { OnMoveUnionBranch(+1); });
+	AddTool(bar, _("Move up"),   wxART_GO_UP,   [this](wxCommandEvent&) { OnMoveUnionBranch(-1); });
+	AddTool(bar, _("Move down"), wxART_GO_DOWN, [this](wxCommandEvent&) { OnMoveUnionBranch(+1); });
 	bar->Realize();
 	left->Add(bar, 0, wxEXPAND);
 
@@ -2431,8 +2430,8 @@ wxWindow* ibDialogQueryConstructor::BuildUnionsPage(wxWindow* parent)
 	ibAuiToolBar* fieldBar = MakeToolBar(rightPane);
 	AddTool(fieldBar, _("Delete"),    wxART_DELETE,  [this](wxCommandEvent& e) { OnRemoveUnionField(e); });
 	fieldBar->AddSeparator();
-	AddTool(fieldBar, _("Move up"),   wxART_UP,   [this](wxCommandEvent&) { OnMoveUnionField(-1); });
-	AddTool(fieldBar, _("Move down"), wxART_DOWN, [this](wxCommandEvent&) { OnMoveUnionField(+1); });
+	AddTool(fieldBar, _("Move up"),   wxART_GO_UP,   [this](wxCommandEvent&) { OnMoveUnionField(-1); });
+	AddTool(fieldBar, _("Move down"), wxART_GO_DOWN, [this](wxCommandEvent&) { OnMoveUnionField(+1); });
 	fieldBar->Realize();
 	right->Add(fieldBar, 0, wxEXPAND);
 

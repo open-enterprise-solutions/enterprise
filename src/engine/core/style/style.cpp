@@ -197,36 +197,47 @@ const ibStyle& ibStyle::Platform()
 	static const ibStyle* const s_platform = [] {
 		ibStyle* const made = new ibStyle();   // never torn down: a client may ask it while the process ends
 		ibStyle& style = *made;
-		// Each colour item: its light value and its dark one. The light look keeps what the platform painted with - the
-		// forms' ink on a ground a step below white, the fields white on it (frmserver's default style; cream until
-		// 2026-11-13, white for a day - the fields could not be told from it), the Luna theme's chrome, border, accent and button colours
-		// (deskgui/univ/theme/lunaTheme.cpp); the items it had no colour for, and the whole dark look, are new.
+		// Each colour item: its light value and its dark one. The light look is what the screen shows — the forms' ink on
+		// a ground a step below white, the fields white on it (frmserver's default style; cream until 2026-11-13), the
+		// desktop's chrome, border, accent and buttons, which the Luna theme paints with from here
+		// (deskgui/univ/theme/lunaTheme.cpp), and the browser the same (webserver/www/styles/tokens.css). The dark look is
+		// the same tiers in the same order, a surface over another lighter than it, the chrome dusty blue darkened, the
+		// accent the same terracotta lifted — the browser's dark tokens where it has them (docs/private/ui-palette.md).
 		const struct { ibStyleItem item; unsigned int light; unsigned int dark; } colours[] = {
 			{ ibStyleItem::FormBackground,        0xEEF2F6, 0x22262B },
 			{ ibStyleItem::FormText,              0x3F5C77, 0xC9D6E2 },
-			{ ibStyleItem::ButtonBackground,      0xC8D6DF, 0x2C3036 },
+			{ ibStyleItem::ButtonBackground,      0xFFFFFF, 0x2C3036 },
 			{ ibStyleItem::ButtonText,            0x000000, 0xE4E6EA },
 			{ ibStyleItem::FieldBackground,       0xFFFFFF, 0x1B1D21 },
 			{ ibStyleItem::FieldText,             0x000000, 0xE4E6EA },
 			{ ibStyleItem::Selection,             0xD97757, 0xB85A38 },
 			{ ibStyleItem::SelectionText,         0xFFFFFF, 0xFFFFFF },
 			{ ibStyleItem::AlternateBackground,   0xF7F8F9, 0x282B30 },
-			{ ibStyleItem::TooltipBackground,     0xFFFFE1, 0x30343A },
-			{ ibStyleItem::TooltipText,           0x222222, 0xE4E6EA },
+			{ ibStyleItem::TooltipBackground,     0xE6EEF5, 0x30343A },
+			{ ibStyleItem::TooltipText,           0x000000, 0xE4E6EA },
 			{ ibStyleItem::SpecialText,           0x3B50A0, 0x8197E8 },
 			{ ibStyleItem::NegativeNumber,        0xC0392B, 0xE5675A },
 			{ ibStyleItem::Border,                0xA8BAC8, 0x3A3F46 },
-			{ ibStyleItem::TableHeaderBackground, 0xF2F3F4, 0x2C3036 },
-			{ ibStyleItem::TableHeaderText,       0x222222, 0xE4E6EA },
-			{ ibStyleItem::TableFooterBackground, 0xF2F3F4, 0x2C3036 },
-			{ ibStyleItem::TableFooterText,       0x222222, 0xE4E6EA },
+			{ ibStyleItem::TableHeaderBackground, 0xE6EEF5, 0x2C3036 },
+			{ ibStyleItem::TableHeaderText,       0x3F5C77, 0xC9D6E2 },
+			{ ibStyleItem::TableFooterBackground, 0xE6EEF5, 0x2C3036 },
+			{ ibStyleItem::TableFooterText,       0x3F5C77, 0xC9D6E2 },
 			{ ibStyleItem::ReportHeader,          0xC5DCE8, 0x2A3D4B },
 			{ ibStyleItem::ReportLine,            0xD9D9D9, 0x3A3F46 },
 			{ ibStyleItem::Activity,              0xD97757, 0xE58A6C },
 			{ ibStyleItem::Accent,                0xD97757, 0xE58A6C },
-			{ ibStyleItem::Navigation,            0xB8C9D4, 0x1F2A33 },
-			{ ibStyleItem::SecondaryNavigation,   0xC8D6DF, 0x27333D },
+			{ ibStyleItem::Navigation,            0xDDE4E8, 0x1F2A33 },
+			{ ibStyleItem::SecondaryNavigation,   0xF5F7F8, 0x27333D },
 			{ ibStyleItem::Important,             0xC0392B, 0xE5675A },
+			{ ibStyleItem::DesktopBackground,     0xD3DBE1, 0x192229 },
+			{ ibStyleItem::PanelBackground,       0xE7ECF0, 0x24272C },
+			{ ibStyleItem::BarBackground,         0xDDE4E8, 0x1F2A33 },
+			{ ibStyleItem::ControlBackground,     0xE6EEF5, 0x30343A },
+			{ ibStyleItem::DisabledText,          0x94A6B4, 0x6B7480 },
+			{ ibStyleItem::CaptionText,           0xFFFFFF, 0xE4E6EA },
+			{ ibStyleItem::AccentPressed,         0xB85A38, 0xC96F52 },
+			{ ibStyleItem::AccentText,            0xFFFFFF, 0x16181B },
+			{ ibStyleItem::Shelf,                 0xE0D8CC, 0x3A352E },
 		};
 		for (const auto& colour : colours) {
 			style.m_light.Set(colour.item, Rgb(colour.light));
@@ -235,6 +246,9 @@ const ibStyle& ibStyle::Platform()
 		// Three grouping levels of a report, the outermost the strongest.
 		style.m_light.Set(ibStyleItem::ReportGroup, std::vector<ibColour>{ Rgb(0xE8EEF3), Rgb(0xF1F5F8), Rgb(0xF8FAFB) });
 		style.m_dark.Set(ibStyleItem::ReportGroup, std::vector<ibColour>{ Rgb(0x2F3A44), Rgb(0x2A333B), Rgb(0x262D33) });
+		// An active window's caption, lit from the top: its top, its bottom.
+		style.m_light.Set(ibStyleItem::Caption, std::vector<ibColour>{ Rgb(0x5A7B95), Rgb(0x3F5C77) });
+		style.m_dark.Set(ibStyleItem::Caption, std::vector<ibColour>{ Rgb(0x3E5568), Rgb(0x2C3F50) });
 		// The fonts are the same in both looks: the family's default face, by size.
 		const struct { ibStyleItem item; double points; } fonts[] = {
 			{ ibStyleItem::TextFont, 9 }, { ibStyleItem::SmallFont, 8 }, { ibStyleItem::RegularFont, 9 },

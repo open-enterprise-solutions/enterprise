@@ -89,6 +89,8 @@ add_executable(oes_tests
     test_predefinedLinesApply.cpp
     test_numberPeriodicity.cpp
     test_pictureVersion.cpp
+    test_pictureRegistry.cpp
+    test_picture.cpp
     test_sharedAttribute.cpp
     test_documentJournal.cpp
     test_roleComposition.cpp

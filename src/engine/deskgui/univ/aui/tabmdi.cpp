@@ -751,8 +751,12 @@ bool ibAuiMDIClientWindow::CreateClient(ibAuiMDIParentFrame* parent, long style)
     }
 
     // SEAM vs wx: the workspace's colour is the theme's (ibColourScheme::FRAME, the canon's wxSYS_COLOUR_APPWORKSPACE), not
-    // the system's - a client of the theme painted its own over it (2026-11-11)
+    // the system's - a client of the theme painted its own over it (2026-11-11); taken again when the look changes
     SetOwnBackgroundColour(wxTHEME_COLOUR(FRAME));
+    Bind(wxEVT_SYS_COLOUR_CHANGED, [this](wxSysColourChangedEvent& event) {
+        SetOwnBackgroundColour(wxTHEME_COLOUR(FRAME));
+        event.Skip();   // the notebook's own (ibAuiNotebook::OnSysColourChanged)
+    });
 
     return true;
 }

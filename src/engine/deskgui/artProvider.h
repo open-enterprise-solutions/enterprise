@@ -9,6 +9,8 @@
 
 #include "deskgui/deskgui.h"   // DESKGUI_API
 
+class ibPicture;   // core/graphics/picture.h — a picture as data, the drawing a bundle is made of
+
 // ----------------------------------------------------------------------------
 // Art clients
 // ----------------------------------------------------------------------------
@@ -78,11 +80,11 @@
 #define wxART_DATABASE_ROOLBACK		wxART_MAKE_ART_ID(wxART_DATABASE_ROOLBACK)
 #define wxART_DATABASE_APPLY		wxART_MAKE_ART_ID(wxART_DATABASE_APPLY)
 
+// A list's add (the core's g_picAddCLSID — ibStockArtProvider answers it); its edit, delete and moving a row are wx's
+// stock ids (wxART_EDIT, wxART_DELETE, wxART_GO_UP, wxART_GO_DOWN), the core's as well.
 #define wxART_ADD					wxART_MAKE_ART_ID(wxART_ADD)
 #define wxART_EDIT					wxART_MAKE_ART_ID(wxART_EDIT)
 #define wxART_DELETE				wxART_MAKE_ART_ID(wxART_DELETE)
-#define wxART_UP					wxART_MAKE_ART_ID(wxART_UP)
-#define wxART_DOWN					wxART_MAKE_ART_ID(wxART_DOWN)
 
 #define wxART_SORT					wxART_MAKE_ART_ID(wxART_SORT)
 // The query constructor — REGISTERED here rather than dropped into the code editor's marker
@@ -144,7 +146,7 @@
 #define wxART_SELECT_ALL				wxART_MAKE_ART_ID(wxART_SELECT_ALL)
 
 // The debugger's pictures (client wxART_DEBUG) — the Debug menu's and the debug toolbar's, one per command.
-// Drawn as SVG in artProvider/debugger/. Prefixed wxART_DEBUG_ because wxWidgets already owns wxART_STOP.
+// Prefixed wxART_DEBUG_ because wxWidgets already owns wxART_STOP.
 #define wxART_DEBUG_START						wxART_MAKE_ART_ID(wxART_DEBUG_START)
 #define wxART_DEBUG_START_WITHOUT_DEBUGGING		wxART_MAKE_ART_ID(wxART_DEBUG_START_WITHOUT_DEBUGGING)
 #define wxART_DEBUG_ATTACH						wxART_MAKE_ART_ID(wxART_DEBUG_ATTACH)
@@ -157,19 +159,27 @@
 #define wxART_DEBUG_STOP_PROGRAM				wxART_MAKE_ART_ID(wxART_DEBUG_STOP_PROGRAM)
 #define wxART_DEBUG_REMOVE_ALL_BREAKPOINTS		wxART_MAKE_ART_ID(wxART_DEBUG_REMOVE_ALL_BREAKPOINTS)
 
+// The code editor's margin (client wxART_DEBUG) — a breakpoint, the line the debugger stopped at, a line further up the
+// call stack, at the size the margin draws them (a breakpoint 13, an arrow 11): the designer's editor and coderunner's.
+#define wxART_BREAKPOINT						wxART_MAKE_ART_ID(wxART_BREAKPOINT)
+#define wxART_CURRENT_LINE						wxART_MAKE_ART_ID(wxART_CURRENT_LINE)
+#define wxART_BREAK_LINE						wxART_MAKE_ART_ID(wxART_BREAK_LINE)
+
 // ----------------------------------------------------------------------------
 // ibStockArtProvider
 // ----------------------------------------------------------------------------
 
 // WX'S STOCK IDS, DRAWN AS THE CORE DRAWS THEM (core/picturePredefined.h): wxART_NEW is g_picNewCLSID, wxART_FILE_SAVE
-// g_picSaveCLSID — one picture for a menu here, a server's command and a browser's. Pushed over wx's own as wx starts
+// g_picSaveCLSID — one picture for a menu here, a server's command and a browser's — and the product's own ids whose
+// picture is the core's (wxART_ADD, wxART_FILTER…: the theme draws no copy of it). Pushed over wx's own as wx starts
 // (ibThemeModule), for every client, so not one call site changes; an id it does not know is wx's (wxART_GOTO_FIRST,
-// wxART_HARDDISK…). The master is the registry's PNG, scaled down to the size asked.
+// wxART_HARDDISK…). The picture is the registry's drawing, drawn at the size asked.
 class DESKGUI_API ibStockArtProvider : public wxArtProvider {
 public:
-	// A master scaled down to the size asked, and to twice and four times it — a display scaled to 150 or 200 % is
-	// handed a picture drawn for it — never larger than the master. The theme's pictures are made so too.
-	static wxBitmapBundle BundleOf(const wxImage& master, const wxSize& size);
+	// A picture at the size asked, and at twice and four times it — a display scaled to 150 or 200 % is handed a picture
+	// drawn for it: a drawing drawn by the core at four times the size, the others scaled down from it. The theme's
+	// pictures and the launcher's are made so too.
+	static wxBitmapBundle BundleOf(const ibPicture& picture, const wxSize& size);
 
 protected:
 	virtual wxBitmapBundle CreateBitmapBundle(const wxArtID& id, const wxArtClient& client, const wxSize& size) override;

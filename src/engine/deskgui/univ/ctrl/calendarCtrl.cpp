@@ -1158,7 +1158,8 @@ void ibCalendarCtrl::OnPaint(wxPaintEvent& WXUNUSED(event))
         }
     }
 
-    // Greying out out-of-range background
+    // Greying out out-of-range background - hatched in the surrounding days' grey, the theme's (the canon's light
+    // grey glared on a dark calendar)
     bool showSurrounding = (GetWindowStyle() & wxCAL_SHOW_SURROUNDING_WEEKS) != 0;
 
     date = ( showSurrounding ) ? GetStartDate() : wxDateTime(1, m_date.GetMonth(), m_date.GetYear());
@@ -1166,8 +1167,7 @@ void ibCalendarCtrl::OnPaint(wxPaintEvent& WXUNUSED(event))
     {
         wxDateTime firstOOR = GetLowerDateLimit() - wxDateSpan::Day(); // first out-of-range
 
-        wxBrush oorbrush = *wxLIGHT_GREY_BRUSH;
-        oorbrush.SetStyle(wxBRUSHSTYLE_FDIAGONAL_HATCH);
+        wxBrush oorbrush(m_colSurrounding, wxBRUSHSTYLE_FDIAGONAL_HATCH);
 
         HighlightRange(&dc, date, firstOOR, wxTRANSPARENT_PEN, &oorbrush);
     }
@@ -1177,8 +1177,7 @@ void ibCalendarCtrl::OnPaint(wxPaintEvent& WXUNUSED(event))
     {
         wxDateTime firstOOR = GetUpperDateLimit() + wxDateSpan::Day(); // first out-of-range
 
-        wxBrush oorbrush = *wxLIGHT_GREY_BRUSH;
-        oorbrush.SetStyle(wxBRUSHSTYLE_FDIAGONAL_HATCH);
+        wxBrush oorbrush(m_colSurrounding, wxBRUSHSTYLE_FDIAGONAL_HATCH);
 
         HighlightRange(&dc, firstOOR, date, wxTRANSPARENT_PEN, &oorbrush);
     }

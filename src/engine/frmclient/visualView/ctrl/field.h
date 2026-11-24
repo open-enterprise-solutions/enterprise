@@ -63,8 +63,7 @@ public:
 	virtual void Create(wxWindow* parent, const ibProtocolNode& node) override;
 	virtual void Update(const ibProtocolNode& node) override;
 	virtual wxWindow* GetWindow() const override;
-	// a field's, whatever its view: the platform style's field background, as the server makes one (ibValueField's
-	// default) — left to the theme
+	// a field's, whatever its view: the platform style's field background — none chosen, left to the theme
 	virtual wxColour GetPlatformBackground() const override;
 
 	virtual bool SaveEdit(ibViewEdit& edit) const override;

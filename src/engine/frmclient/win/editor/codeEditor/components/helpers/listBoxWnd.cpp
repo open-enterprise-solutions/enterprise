@@ -17,6 +17,9 @@ ibCodeEditorListBox::ibCodeEditorListBox(wxWindow* parent, ibListBoxVisualData* 
 	m_textBoxToTextGap = FromDIP(3);
 	m_textExtraVerticalPadding = FromDIP(1);
 
+	// The colours in force as it is made: the data is the editor's, and outlives each list - a look changed while none
+	// was shown was never told to it (a popup is told nothing of the window it is shown over).
+	m_visualData->ComputeColours();
 	SetBackgroundColour(m_visualData->GetBgColour());
 
 	Bind(wxEVT_SYS_COLOUR_CHANGED, &ibCodeEditorListBox::OnSysColourChanged, this);

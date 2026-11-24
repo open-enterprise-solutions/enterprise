@@ -31,21 +31,6 @@ class FRMSERVER_API ibVisualHost;   // visualHost.h — who holds the form; ever
 #include "frmserver/visualView/layers/commandBar.h"   // ibValueCommandBar (command STORE the frame owns)
 #include "frmserver/visualView/ctrl/sizerItem.h"      // ibSizerItem (the place in the sizer above the frame owns)
 
-#include "core/style/style.h"   // ibStyle - the defaults below are the platform style's
-
-// Default foreground / background for designer-created form controls,
-// toolbars, dataviews, dialogs: THE PLATFORM STYLE'S form text and form
-// background, its light look (core/style/style.cpp) - colours of their own
-// here until 2026-11-13 (Max: "the form takes its default from the style"),
-// the background the cream the palette had dropped a day before. Was
-// Windows-blue accent (#0078D7) + light off-white grey (#EBEBF1) before
-// that. The core's colour: the server draws nothing.
-#define ibDefaultStyleFGColour std::get<ibColour>(ibStyle::Platform().Get(ibStyleItem::FormText, false))
-#define ibDefaultStyleBGColour std::get<ibColour>(ibStyle::Platform().Get(ibStyleItem::FormBackground, false))
-// ...and the cream the background was: kept in every form saved till then, as a background is written whatever it is -
-// nobody chose it, so it is read as the default it is now (ibValueForm, ibValueWindow ReadData)
-#define ibFormerStyleBGColour ibColour(0xFA, 0xF7, 0xF0)   // #FAF7F0 cream
-
 #include "core/memory/memoryStream.h"
 
 class FRMSERVER_API ibFormVisualDocument;

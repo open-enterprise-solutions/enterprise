@@ -60,6 +60,8 @@ protected:
 	void OnMenuExit(wxCommandEvent& event);
 	void OnMenuAbout(wxCommandEvent& event);
 	void OnMenuEdit(wxCommandEvent& event);
+	// The look changed (it follows the system's): the editor's set for the look in force, and the clear button's colours.
+	void OnSysColourChanged(wxSysColourChangedEvent& event);
 
 	wxString m_currentFile;
 

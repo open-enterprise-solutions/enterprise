@@ -1,7 +1,6 @@
 #include "document.h"
 
-/* PNG */
-static const ibString s_document_16_png = ibT("iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAD4ElEQVR4nOybW0gUURjH/+Ml20rL1Mq81ktpEpYZklYWaRBWGAZRSBJGPvQQ+GDlQyAoFHSFeukiFUZgIBR0oSKzBMk0M0hTsbyUYgre19vuNGdK2HVcz87uyZ1x5vc2Z75zOOc/5/vm+87uuEHjuEHj6AJA43jQDDZtSUzjeT6P47gIuBBhDnU8z+VXV5QWgSHuNIPA4LBiYfGRcDHCHAI4DgcCg8J/drT/qAYjqC6ghMVbwrnhZkxcYiYYocoY8E+ELDCAoxkIMYC3vK4sf4PZJDZ+h817vBnHqypKb8EJVP0WYOEOqn8NOiuC6gQ4m5MtaXNGBNUJkLovhakIqnQBliKoNgawEkHVQZCFCNRaQGnMlBdYQkTYGJdopNUOc7oaFGqHfJqN6naAHAQBwmg2+nkAFI7c2sPeGDGJfiQGjaPHADBiT+ohsORpyUPMBroLQOPoMQCMmC2fZY3uAtA4egwAI1jnATRYxRzdBaBx9BgARvyPPGDCDNT9MqK21Sherw81IGKlAR4MH5siD0Qqvw+h4HEHalqGRREsIYvfELYQufsDERO+AM6iKAEGR83iwu+X99i0IYIQgVKvNiEjwR+n967AgnmObwnFxICBETN2X2iYcfGW8MKP9oXvupF8vkHs6yiKESC3uB2tPWOQS4vQJ/dROxxFES7w/Es/Sqp6Je0rl3giY6s/Vi3zEq+bu0ZQWNaNzr4JK7uSj71IiV6C5CgfyEURAtx41SVpS4lejIuHQ6b4t48oyKmiNjz73CcZwxEBXO4CI+M8atuGrdpCls6bZvF/IW1XjoSIu8OSmtZhcSy5uFyAT8KrzjQlhqUn+M0Y2cm99Hg/qzYyBhFBLi53gQ/NQ5K2tYHzqf1IQjSVymnGouFyASZM0m1rMtO3somX2oxPqNAFooKlT3Iy9Z0JkiVKxgoxQC4uF2BdkHTSt8t+o89ostmH3Lv7vtuusWi4XIDgpZ7wMVhPo99oRvaDNgyPSTM80kbuERtLFhvcEeTrCbkoIg84uWs5Cp50WLW9EJKj7fn1OLYtAKuFRIh4t61ESBwjaRkcQRECZO0MwNv6AZQ3Dlq1k4VOFWY6Etd6i2M4giJqAY4Drh8NdWgLk4ToWnooHEUxxZDfIg+8zFmDtFhfu/sc3OyL12fWwHch9bMHmyjqSMx7vhsuC2nuncxwURBb+Ht74N6JVbgkpMuLvJxbgiJPhJKEoqYqL1Isj1t6RtHYOQp3YZ0kGIb7e4m1gjujRydbALn/wVE6+rE4zYDn+a9QKfbM3Z6Pps4JdUcT1Mc3MneaEfWbobmOHgOgcTQvwB8AAAD///N/rpUAAAAGSURBVAMAYTAyFZE+rgIAAAAASUVORK5CYII=");
+static const ibString s_document_svg = ibT("<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'><path d='M3.5 1 H10 L14 5 V13.5 Q14 15 12.5 15 H3.5 Q2 15 2 13.5 V2.5 Q2 1 3.5 1 Z' fill='#1c6fd1'/><path d='M10 1 V3.8 Q10 5 11.2 5 H14 Z' fill='#a5d8ff'/><path d='M4.5 7.5 H11' fill='none' stroke='#ffffff' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/><path d='M4.5 10 H8' fill='none' stroke='#ffffff' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/><circle cx='10.6' cy='11.6' r='1.7' fill='none' stroke='#ffffff' stroke-width='1.2'/></svg>");
 
 ibPicture ibValueMetaObjectDocument::GetIcon() const
 {
@@ -10,7 +9,7 @@ ibPicture ibValueMetaObjectDocument::GetIcon() const
 
 ibPicture ibValueMetaObjectDocument::GetIconGroup()
 {
-	static const ibPicture picture = ibPicture::FromBase64(s_document_16_png, ibSize(16, 16));
+	static const ibPicture picture = ibPicture::FromSvg(s_document_svg);
 
 	return picture;
 }

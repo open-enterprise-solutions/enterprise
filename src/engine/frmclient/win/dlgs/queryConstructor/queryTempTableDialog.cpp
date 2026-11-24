@@ -135,8 +135,8 @@ ibDialogQueryTempTable::ibDialogQueryTempTable(wxWindow* parent, const wxString&
 	tool(_("Add"),       wxART_ADD,    [this] { wxCommandEvent e; OnAdd(e); });
 	tool(_("Delete"),    wxART_DELETE, [this] { wxCommandEvent e; OnRemove(e); });
 	bar->AddSeparator();
-	tool(_("Move up"),   wxART_UP,     [this] { MoveField(-1); });
-	tool(_("Move down"), wxART_DOWN,   [this] { MoveField(+1); });
+	tool(_("Move up"),   wxART_GO_UP,   [this] { MoveField(-1); });
+	tool(_("Move down"), wxART_GO_DOWN, [this] { MoveField(+1); });
 	bar->Realize();
 	outer->Add(bar, 0, wxEXPAND | wxLEFT | wxRIGHT, FromDIP(6));
 

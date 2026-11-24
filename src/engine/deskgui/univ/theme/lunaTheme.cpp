@@ -5,7 +5,10 @@
 // content, terracotta accent). Registered as the default theme "luna".
 // ----------------------------------------------------------------------------
 
+#include <algorithm>   // std::min - one of a list's colours (StyleColour)
 #include <memory>   // std::unique_ptr - a frame button's smoothed DC (DrawFrameButton)
+#include <variant>
+#include <vector>
 
 #include <wx/dc.h>
 #include <wx/dcmemory.h>
@@ -17,12 +20,13 @@
 #include <wx/artprov.h>
 #include <wx/bmpbndl.h>
 #include <wx/image.h>
-#include <wx/mstream.h>
 #include <wx/toolbar.h>   // wxTOOL_STYLE_* - a tool bar's button or separator (DrawToolBarButton)
 
-#include "core/utils/base64.h"   // ibBase64 - a picture's PNG written as text
+#include "core/graphics/picture.h"   // ibPicture::FromSvg - a picture drawn from its SVG
+#include "core/style/style.h"        // ibStyle::Platform - every colour the theme paints with, light and dark
 
 #include "deskgui/artProvider.h"   // the pictures' ids, the product's own
+#include "deskgui/typeconv.h"      // typeConv::ColourToWxColour - a style's colour as wx paints it
 #include "deskgui/univ/theme.h"
 #include "deskgui/univ/renderer.h"
 #include "deskgui/univ/colourScheme.h"
@@ -30,36 +34,47 @@
 #include "deskgui/univ/window.h"
 #include "deskgui/univ/aui/framemanager.h"   // ibAUI_BUTTON_* - the AUI buttons (DrawStripButton, DrawPaneButton)
 #include "deskgui/univ/theme/themeRenderer.h"
-#include "deskgui/univ/theme/private/picturePredefined.h"   // the pictures, a PNG in Base64 each
+#include "deskgui/univ/theme/private/picturePredefined.h"   // the pictures, an SVG each
 
 namespace {
 
-// palette tiers (docs/private/ui-palette.md — reuse a tier, don't invent a shade). The chrome's tiers - chrome,
-// chrome-light, the inactive caption's two - were lifted a third of the way to white, their blue a quarter less (Max,
-// 2026-11-12: "the theme is greyish, it presses"; the variant he picked of three); the powder and the border stayed -
-// a table's header, rules and scroll bars are theirs, and the tables were liked as they were. The content is white, as a
-// table's rows: it was cream #FAF7F0 - "the cream gives a feeling of dirt" (Max, the same day)
-const wxColour kChrome(0xD3, 0xDB, 0xE1);        // chrome        #D3DBE1
-const wxColour kChromeLight(0xDD, 0xE4, 0xE8);   // chrome-light  #DDE4E8
-const wxColour kPowder(0xE6, 0xEE, 0xF5);        // powder        #E6EEF5
-const wxColour kContent(0xFF, 0xFF, 0xFF);       // content       #FFFFFF
-const wxColour kBorder(0xA8, 0xBA, 0xC8);        // border        #A8BAC8
-const wxColour kDisabledText(0x94, 0xA6, 0xB4);  // disabled-text #94A6B4
-const wxColour kCaptionTop(0x5A, 0x7B, 0x95);    // caption-active-top
-const wxColour kCaptionBottom(0x3F, 0x5C, 0x77); // caption-active-bottom
-const wxColour kCaptionInactiveTop(0xE7, 0xEC, 0xF0);    // caption-inactive-top    #E7ECF0
-const wxColour kCaptionInactiveBottom(0xDB, 0xE2, 0xE6); // caption-inactive-bottom #DBE2E6
-const wxColour kAccent(0xD9, 0x77, 0x57);        // accent        #D97757
-const wxColour kAccentDeep(0xB8, 0x5A, 0x38);    // accent-deep   #B85A38
+// THE COLOURS ARE THE PLATFORM STYLE'S (core/style/style.h), in the look in force: one table for the desktop, the forms
+// and the browser, a light and a dark value for each tier (docs/private/ui-palette.md — reuse a tier, don't invent a
+// shade); the theme keeps none of its own (Max, 2026-11-24: "two variants of one theme — the theme is asked for its dark
+// representation"). The light values as Max chose them: the chrome lifted a third of the way to white, its blue a
+// quarter less (2026-11-12, "the theme is greyish, it presses"), the powder and the border as they were - a table's
+// header, rules and scroll bars are theirs; the content white, as a table's rows (cream #FAF7F0 until "the cream gives
+// a feeling of dirt", the same day).
 
-// a title bar's buttons, the Mac's colours (DrawFrameButton): close, minimize, maximize or restore
+// THE LOOK IN FORCE — wx's appearance: the person's theme, set as the thin client starts, or the system's.
+bool IsDark()
+{
+	return wxSystemSettings::GetAppearance().IsDark();
+}
+
+// A colour of the style, in that look.
+wxColour StyleColour(ibStyleItem item)
+{
+	return typeConv::ColourToWxColour(std::get<ibColour>(ibStyle::Platform().Get(item, IsDark())));
+}
+
+// …one of a list's: an active caption's top (0) and its bottom (1).
+wxColour StyleColour(ibStyleItem item, size_t at)
+{
+	const std::vector<ibColour>& colours = std::get<std::vector<ibColour>>(ibStyle::Platform().Get(item, IsDark()));
+	return typeConv::ColourToWxColour(colours[std::min(at, colours.size() - 1)]);
+}
+
+// An inactive caption: the panel's tier, lit from the top as the active one is - its bottom a shade darker.
+wxColour InactiveCaptionBottom()
+{
+	return StyleColour(ibStyleItem::PanelBackground).ChangeLightness(95);
+}
+
+// a title bar's buttons, the Mac's colours in both looks (DrawFrameButton): close, minimize, maximize or restore
 const wxColour kFrameClose(0xFF, 0x5F, 0x57);    // #FF5F57
 const wxColour kFrameIconize(0xFE, 0xBC, 0x2E);  // #FEBC2E
 const wxColour kFrameMaximize(0x28, 0xC8, 0x40); // #28C840
-
-// the shelf under an AUI book's tabs (DrawTabStrip): a neutral warm taupe between the cool strip and the pages - a
-// sandstone #E8D8BE read as too yellow
-const wxColour kShelf(0xE0, 0xD8, 0xCC);
 
 // menu metrics (FORKED from the wxWin32Renderer menu block — the only canon
 // implementation of the univ menu geometry contract; margins widened from
@@ -155,33 +170,39 @@ public:
 // powder its margin is and a scroll bar's track a lighter one (2026-11-13), a dialog and a panel the light caption tier under them (a button is white
 // on it since 2026-11-12, powder under the mouse - GetBackground); the chrome-light tier stays a caption's. The text is
 // black, the alternate text the deep dusty blue the forms' tables had - a table's values and columns, the start page
-// (Max, 2026-11-10: "by default black, an alternate display beside it") - the desktop painted it in by hand
+// (Max, 2026-11-10: "by default black, an alternate display beside it") - the desktop painted it in by hand. Each the
+// style's tier in the look in force; where the light look lightens a tier for a shade, the dark one takes its own -
+// lightened there, it would glare (docs/private/ui-palette.md § The dark look)
 wxColour ibLunaColourScheme::Get(ibLunaColourScheme::StdColour col) const {
+	const bool dark = IsDark();
 	switch (col) {
-		case WINDOW:                      return kContent;
-		case CONTROL:                     return kPowder;
-		case CONTROL_PRESSED:             return kPowder.ChangeLightness(92);
-		case CONTROL_CURRENT:             return kPowder.ChangeLightness(106);
-		case CONTROL_TEXT:                return *wxBLACK;
-		case CONTROL_TEXT_DISABLED:       return kDisabledText;
-		case CONTROL_TEXT_DISABLED_SHADOW:return kChromeLight;
-		case CONTROL_TEXT_ALTERNATE:      return kCaptionBottom;
-		case SCROLLBAR:                   return kPowder.ChangeLightness(150);
-		case SCROLLBAR_PRESSED:           return kBorder;
-		case HIGHLIGHT:                   return kAccent;
-		case HIGHLIGHT_TEXT:              return *wxWHITE;
-		case HYPERLINK:                   return kAccentDeep;   // an action, as the default button; not the text's blue
-		case SHADOW_DARK:                return kCaptionBottom;
-		case SHADOW_HIGHLIGHT:            return *wxWHITE;
-		case SHADOW_IN:                   return kBorder;
-		case SHADOW_OUT:                  return kChromeLight.ChangeLightness(90);
-		case TITLEBAR:                    return kChromeLight;
-		case TITLEBAR_ACTIVE:             return kCaptionTop;
-		case TITLEBAR_TEXT:               return kCaptionBottom;
-		case TITLEBAR_ACTIVE_TEXT:        return *wxWHITE;
-		case GAUGE:                       return kAccent;
-		case DESKTOP:                     return kChrome;   // the docking's, round its panes (ibAuiManager)
-		case FRAME:                       return kCaptionInactiveTop;
+		case WINDOW:                      return StyleColour(ibStyleItem::FieldBackground);
+		case CONTROL:                     return StyleColour(ibStyleItem::ControlBackground);
+		case CONTROL_PRESSED:             return StyleColour(ibStyleItem::ControlBackground).ChangeLightness(dark ? 85 : 92);
+		case CONTROL_CURRENT:             return StyleColour(ibStyleItem::ControlBackground).ChangeLightness(dark ? 112 : 106);
+		case CONTROL_TEXT:                return StyleColour(ibStyleItem::FieldText);
+		case CONTROL_TEXT_DISABLED:       return StyleColour(ibStyleItem::DisabledText);
+		case CONTROL_TEXT_DISABLED_SHADOW:return StyleColour(ibStyleItem::BarBackground);
+		case CONTROL_TEXT_ALTERNATE:      return StyleColour(ibStyleItem::FormText);
+		case SCROLLBAR:                   return dark ? StyleColour(ibStyleItem::PanelBackground)
+		                                              : StyleColour(ibStyleItem::ControlBackground).ChangeLightness(150);
+		case SCROLLBAR_PRESSED:           return dark ? StyleColour(ibStyleItem::Border).ChangeLightness(130)
+		                                              : StyleColour(ibStyleItem::Border);
+		case HIGHLIGHT:                   return StyleColour(ibStyleItem::Selection);
+		case HIGHLIGHT_TEXT:              return StyleColour(ibStyleItem::SelectionText);
+		case HYPERLINK:                   return StyleColour(ibStyleItem::AccentPressed);   // an action, as the default button; not the text's blue
+		case SHADOW_DARK:                 return dark ? StyleColour(ibStyleItem::Border).ChangeLightness(140)
+		                                              : StyleColour(ibStyleItem::FormText);
+		case SHADOW_HIGHLIGHT:            return StyleColour(ibStyleItem::FieldBackground);
+		case SHADOW_IN:                   return StyleColour(ibStyleItem::Border);
+		case SHADOW_OUT:                  return StyleColour(ibStyleItem::BarBackground).ChangeLightness(dark ? 115 : 90);
+		case TITLEBAR:                    return StyleColour(ibStyleItem::BarBackground);
+		case TITLEBAR_ACTIVE:             return StyleColour(ibStyleItem::Caption, 0);
+		case TITLEBAR_TEXT:               return StyleColour(ibStyleItem::FormText);
+		case TITLEBAR_ACTIVE_TEXT:        return StyleColour(ibStyleItem::CaptionText);
+		case GAUGE:                       return StyleColour(ibStyleItem::Activity);
+		case DESKTOP:                     return StyleColour(ibStyleItem::DesktopBackground);   // the docking's, round its panes (ibAuiManager)
+		case FRAME:                       return StyleColour(ibStyleItem::PanelBackground);
 		case MAX:                         break;
 	}
 	wxFAIL_MSG(wxT("invalid standard colour"));
@@ -224,8 +245,8 @@ wxColour ibLunaColourScheme::GetBackground(ibWindow* win) const {
 	// box: the box) takes the surface. On GTK3/Cocoa the same - the buttons are the engine's there too
 	if (win->CanBeHighlighted() && !win->HasTransparentBackground()) {
 		const int flags = win->GetStateFlags();
-		if (flags & wxCONTROL_PRESSED)
-			return kAccent.ChangeLightness(172);
+		if (flags & wxCONTROL_PRESSED)   // the accent faded into the surface: toward white in the light look, black in the dark
+			return StyleColour(ibStyleItem::Accent).ChangeLightness(IsDark() ? 45 : 172);
 		if (flags & wxCONTROL_CURRENT)
 			return Get(CONTROL);
 		return Get(WINDOW);
@@ -285,11 +306,11 @@ public:
 	virtual void DrawButtonSurface(wxDC& dc, const wxColour& col,
 		const wxRect& rect, int flags) override {
 		if (flags & wxCONTROL_ISDEFAULT) {
-			wxColour face = kAccent;
+			wxColour face = StyleColour(ibStyleItem::Accent);
 			if (flags & wxCONTROL_PRESSED)
-				face = kAccentDeep;
+				face = StyleColour(ibStyleItem::AccentPressed);
 			else if (flags & wxCONTROL_CURRENT)
-				face = kAccent.ChangeLightness(106);
+				face = face.ChangeLightness(106);
 			dc.SetPen(*wxTRANSPARENT_PEN);
 			dc.SetBrush(wxBrush(face));
 			dc.DrawRectangle(rect);
@@ -302,7 +323,7 @@ public:
 		int flags = 0, wxRect* rectIn = nullptr) override {
 		wxColour border = m_scheme->Get(ibColourScheme::SHADOW_IN);
 		if (flags & (wxCONTROL_ISDEFAULT | wxCONTROL_FOCUSED))
-			border = kAccentDeep;
+			border = StyleColour(ibStyleItem::AccentPressed);
 		dc.SetPen(wxPen(border));
 		dc.SetBrush(*wxTRANSPARENT_BRUSH);
 		dc.DrawRectangle(rect);
@@ -321,7 +342,7 @@ public:
 		// for this label alone (a changer): set on the dc, the white stayed for whatever was drawn after it
 		wxDCTextColourChanger colChanger(dc);
 		if ((flags & wxCONTROL_ISDEFAULT) && !(flags & wxCONTROL_DISABLED))
-			colChanger.Set(*wxWHITE);
+			colChanger.Set(StyleColour(ibStyleItem::AccentText));
 
 		// the accent border already signals focus — the canon's dotted
 		// focus rect on top of it read as a second fat border
@@ -370,7 +391,7 @@ public:
 		if (border != wxBORDER_NONE &&
 				(accent || border == wxBORDER_SIMPLE)) {
 			wxRect rect = rectTotal;
-			DrawRect(dc, &rect, wxPen(accent ? kAccentDeep : kBorder));
+			DrawRect(dc, &rect, wxPen(StyleColour(accent ? ibStyleItem::AccentPressed : ibStyleItem::Border)));
 			if (rectIn != nullptr)
 				*rectIn = rect;
 			return;
@@ -381,13 +402,14 @@ public:
 	// a field's frame: the palette border, the accent's focused (DrawBorder); one that cannot be typed into - disabled, or
 	// read-only (ibTextCtrl::DrawBorder) - has no well, the surface under it shows (ibTextCtrl::HasContentBackground), and
 	// its frame is paler: the border most of the way to white (2026-11-13, Max: variant E3 - a field shut to typing could
-	// not be told from one open to it). On GTK3/Cocoa the same - the field is the engine's there too
+	// not be told from one open to it), in the dark look toward black. On GTK3/Cocoa the same - the field is the engine's
+	// there too
 	virtual void DrawTextBorder(wxDC& dc, wxBorder border, const wxRect& rectTotal,
 		int flags = 0, wxRect* rectIn = nullptr) override {
 		if (border != wxBORDER_NONE && border != wxBORDER_DEFAULT
 				&& (flags & wxCONTROL_DISABLED) && !(flags & wxCONTROL_FOCUSED)) {
 			wxRect rect = rectTotal;
-			DrawRect(dc, &rect, wxPen(kBorder.ChangeLightness(140)));
+			DrawRect(dc, &rect, wxPen(StyleColour(ibStyleItem::Border).ChangeLightness(IsDark() ? 75 : 140)));
 			if (rectIn != nullptr)
 				*rectIn = rect;
 			return;
@@ -420,7 +442,7 @@ public:
 
 	void DrawFlatBorder(wxDC& dc, wxRect* rect)
 	{
-		DrawRect(dc, rect, wxPen(kBorder));
+		DrawRect(dc, rect, wxPen(StyleColour(ibStyleItem::Border)));
 	}
 
 	// the methods ibThemeRenderer leaves to the concrete theme — flat Luna
@@ -495,7 +517,9 @@ public:
 	virtual void DrawScrollbarArrow(wxDC& dc, wxDirection dir, const wxRect& rect,
 		int flags = 0) override {
 		DrawSolidRect(dc, m_scheme->Get(ibColourScheme::SCROLLBAR), rect);
-		const wxColour col = (flags & wxCONTROL_DISABLED) ? kBorder : kBorder.ChangeLightness(75);
+		// the chevron away from the track - darker in the light look, lighter in the dark - and the border itself disabled
+		const wxColour border = StyleColour(ibStyleItem::Border);
+		const wxColour col = (flags & wxCONTROL_DISABLED) ? border : border.ChangeLightness(IsDark() ? 150 : 75);
 
 		// a chevron: 0.22 of the button each way across, half of that each way along, the stroke a tenth of it
 		const double size = wxMin(rect.width, rect.height);
@@ -541,15 +565,18 @@ public:
 		dc.DrawLines(3, pi);
 	}
 
-	// the thumb on the track: inset 3 of the bar's 16 across and 2 along, the ends round; darker under the mouse, the
-	// border's colour while dragged
+	// the thumb on the track: inset 3 of the bar's 16 across and 2 along, the ends round; further from the track under the
+	// mouse, the most while dragged - in the light look the border lightened, darkening to it; in the dark the border
+	// lifted, lifting further (the browser's dark thumb the same, tokens.css)
 	virtual void DrawScrollbarThumb(wxDC& dc, wxOrientation orient,
 		const wxRect& rect, int flags = 0) override {
-		wxColour face = kBorder.ChangeLightness(130);
+		const bool dark = IsDark();
+		const wxColour border = StyleColour(ibStyleItem::Border);
+		wxColour face = border.ChangeLightness(dark ? 110 : 130);
 		if (flags & wxCONTROL_PRESSED)
 			face = m_scheme->Get(ibColourScheme::SCROLLBAR_PRESSED);
 		else if (flags & wxCONTROL_CURRENT)
-			face = kBorder.ChangeLightness(115);
+			face = border.ChangeLightness(dark ? 120 : 115);
 		DrawSolidRect(dc, m_scheme->Get(ibColourScheme::SCROLLBAR), rect);
 
 		const wxCoord across = (orient == wxVERTICAL ? rect.width : rect.height) * 3 / 16, along = across * 2 / 3;
@@ -595,9 +622,12 @@ public:
 	// GTK3/Cocoa the same - the bars are the engine's there too
 	virtual void DrawToolBarBackground(wxDC& dc, const wxColour& WXUNUSED(col), const wxRect& rect,
 		int WXUNUSED(flags) = 0) override {
+		// …the dark look lit the same way, fainter (108 to 92, its own border under it): lightened as the light look is,
+		// a bar would glare
+		const bool dark = IsDark();
 		const wxColour chrome = m_scheme->Get(ibColourScheme::FRAME);
-		dc.GradientFillLinear(rect, chrome.ChangeLightness(125), chrome.ChangeLightness(95), wxSOUTH);
-		dc.SetPen(wxPen(kBorder.ChangeLightness(125)));
+		dc.GradientFillLinear(rect, chrome.ChangeLightness(dark ? 108 : 125), chrome.ChangeLightness(dark ? 92 : 95), wxSOUTH);
+		dc.SetPen(wxPen(StyleColour(ibStyleItem::Border).ChangeLightness(dark ? 100 : 125)));
 		dc.DrawLine(rect.GetLeft(), rect.GetBottom(), rect.GetRight() + 1, rect.GetBottom());
 	}
 
@@ -607,7 +637,7 @@ public:
 		// a separator is a line of the palette border across the bar, three quarters of it (the canon's dispatch on the
 		// style: the line along the longer side)
 		if (style == wxTOOL_STYLE_SEPARATOR) {
-			dc.SetPen(wxPen(kBorder));
+			dc.SetPen(wxPen(StyleColour(ibStyleItem::Border)));
 			if (rect.height > rect.width) {
 				const wxCoord length = rect.height * 3 / 4;
 				const wxCoord x = rect.x + rect.width / 2, y = rect.y + (rect.height - length) / 2;
@@ -632,14 +662,14 @@ public:
 		// chrome pad; both get the 1px palette border
 		else if (flags & (wxCONTROL_PRESSED | wxCONTROL_CURRENT | wxCONTROL_CHECKED)) {
 			wxColour pad;
-			if (flags & wxCONTROL_CHECKED)
-				pad = kAccent.ChangeLightness(170);
+			if (flags & wxCONTROL_CHECKED)   // the accent faded into the surface, as a pressed button's (GetBackground)
+				pad = StyleColour(ibStyleItem::Accent).ChangeLightness(IsDark() ? 45 : 170);
 			else if (flags & wxCONTROL_PRESSED)
 				pad = m_scheme->Get(ibColourScheme::CONTROL_PRESSED);
 			else
 				pad = m_scheme->Get(ibColourScheme::CONTROL_CURRENT);
 
-			dc.SetPen(wxPen((flags & wxCONTROL_CHECKED) ? kAccentDeep : kBorder));
+			dc.SetPen(wxPen(StyleColour((flags & wxCONTROL_CHECKED) ? ibStyleItem::AccentPressed : ibStyleItem::Border)));
 			dc.SetBrush(wxBrush(pad));
 			dc.DrawRectangle(rect);
 		}
@@ -652,7 +682,7 @@ public:
 	virtual void DrawGripper(wxDC& dc, const wxRect& rect, wxOrientation orient) override {
 		const wxCoord dot = dc.FromDIP(2), step = dc.FromDIP(4);
 		dc.SetPen(*wxTRANSPARENT_PEN);
-		dc.SetBrush(wxBrush(kBorder));
+		dc.SetBrush(wxBrush(StyleColour(ibStyleItem::Border)));
 		if (orient == wxHORIZONTAL) {
 			const wxCoord x = rect.x + (rect.width - dot) / 2;
 			for (wxCoord y = rect.y + step; y + dot + step <= rect.y + rect.height; y += step)
@@ -710,11 +740,11 @@ public:
 	virtual void DrawTabStrip(wxDC& dc, const wxRect& rect, wxDirection dir) override {
 		const bool bottom = dir == wxBOTTOM;
 		dc.SetPen(*wxTRANSPARENT_PEN);
-		dc.SetBrush(wxBrush(kChromeLight));
+		dc.SetBrush(wxBrush(StyleColour(ibStyleItem::BarBackground)));
 		dc.DrawRectangle(rect.x, rect.y, rect.width, bottom ? rect.height : rect.height - 3);
 
-		dc.SetPen(wxPen(kBorder));
-		dc.SetBrush(wxBrush(kShelf));
+		dc.SetPen(wxPen(StyleColour(ibStyleItem::Border)));
+		dc.SetBrush(wxBrush(StyleColour(ibStyleItem::Shelf)));
 		dc.DrawRectangle(rect.x - 1, bottom ? rect.y : rect.y + rect.height - 4, rect.width + 2, 4);
 	}
 
@@ -724,24 +754,27 @@ public:
 		if (!(flags & wxCONTROL_SELECTED))
 			return;
 
-		dc.SetPen(wxPen(kContent));
-		dc.SetBrush(wxBrush(kContent));
+		const wxColour content = StyleColour(ibStyleItem::FieldBackground), strip = StyleColour(ibStyleItem::BarBackground);
+		dc.SetPen(wxPen(content));
+		dc.SetBrush(wxBrush(content));
 		if (dir == wxBOTTOM) {
+			// its head a line between the page and the strip: the strip toward the page's light, or its dark
 			dc.DrawRectangle(rect.x - 2, rect.y - 1, rect.width + 3, rect.height + 4);
-			dc.SetPen(wxPen(kChromeLight.ChangeLightness(170)));
+			dc.SetPen(wxPen(strip.ChangeLightness(IsDark() ? 80 : 170)));
 			dc.DrawLine(rect.x + 1, rect.y, rect.x + rect.width, rect.y);
 			return;
 		}
 
 		dc.DrawRectangle(rect.x + 2, rect.y + 1, rect.width - 3, rect.height - 4);
-		dc.SetPen(wxPen(kChromeLight));
+		dc.SetPen(wxPen(strip));
 		dc.DrawPoint(rect.x + 2, rect.y + 1);
 		dc.DrawPoint(rect.x + rect.width - 2, rect.y + 1);
-		dc.SetPen(wxPen(kShelf));
+		dc.SetPen(wxPen(StyleColour(ibStyleItem::Shelf)));
 		dc.DrawLine(rect.x + 1, rect.y + rect.height - 4, rect.x + rect.width, rect.y + rect.height - 4);
 	}
 
-	// the glyph black, grey while it cannot be pressed - and a tab's (flat) until the mouse is over it
+	// the glyph the text's colour, the disabled text's while it cannot be pressed - and a tab's (flat) until the mouse is
+	// over it
 	virtual void DrawStripButton(wxDC& dc, const wxRect& rect, int button, int flags = 0) override {
 		const unsigned char* bits = nullptr;
 		switch (button) {
@@ -756,7 +789,7 @@ public:
 			|| ((flags & wxCONTROL_FLAT) && !(flags & (wxCONTROL_CURRENT | wxCONTROL_PRESSED)));
 		const wxRect glyph = wxRect(wxSize(AUI_GLYPH_SIZE, AUI_GLYPH_SIZE)).CentreIn(rect);
 		dc.DrawBitmap(ibAuiBitmapFromBits(bits, AUI_GLYPH_SIZE, AUI_GLYPH_SIZE,
-			faint ? wxColour(128, 128, 128) : *wxBLACK), glyph.GetPosition(), true);
+			m_scheme->Get(faint ? ibColourScheme::CONTROL_TEXT_DISABLED : ibColourScheme::CONTROL_TEXT)), glyph.GetPosition(), true);
 	}
 
 	// A PANE'S CAPTION IN THE DOCKING (ibAuiManager) is the palette's, as the frame's title bar is (the art's,
@@ -764,8 +797,9 @@ public:
 	virtual void DrawPaneCaption(wxDC& dc, const wxRect& rect, const wxString& title, const wxBitmap& icon,
 		int flags = 0) override {
 		const bool active = (flags & wxCONTROL_FOCUSED) != 0;
-		dc.GradientFillLinear(rect, active ? kCaptionBottom : kCaptionInactiveTop,
-			active ? kCaptionTop : kCaptionInactiveBottom, wxSOUTH);
+		dc.GradientFillLinear(rect,
+			active ? StyleColour(ibStyleItem::Caption, 1) : StyleColour(ibStyleItem::PanelBackground),
+			active ? StyleColour(ibStyleItem::Caption, 0) : InactiveCaptionBottom(), wxSOUTH);
 
 		wxCoord x = rect.x + 3;
 		if (icon.IsOk()) {
@@ -779,7 +813,7 @@ public:
 		if (title.empty() || room <= 0)
 			return;
 		dc.SetFont(m_paneCaptionFont);
-		dc.SetTextForeground(active ? *wxWHITE : kCaptionBottom);
+		dc.SetTextForeground(StyleColour(active ? ibStyleItem::CaptionText : ibStyleItem::FormText));
 		const wxCoord height = dc.GetTextExtent(wxT("ABCDEFHXfgkj")).y;
 		dc.DrawText(wxControl::Ellipsize(title, dc, wxELLIPSIZE_END, room, wxELLIPSIZE_FLAGS_NONE),
 			x, rect.y + rect.height / 2 - height / 2 - 1);
@@ -801,18 +835,18 @@ public:
 		if (flags & wxCONTROL_PRESSED)
 			glyph += wxPoint(1, 1);
 		if (flags & (wxCONTROL_CURRENT | wxCONTROL_PRESSED)) {
-			const wxColour caption = active ? kCaptionTop : kCaptionInactiveTop;
+			const wxColour caption = active ? StyleColour(ibStyleItem::Caption, 0) : StyleColour(ibStyleItem::PanelBackground);
 			dc.SetPen(wxPen(caption.ChangeLightness(70)));
 			dc.SetBrush(wxBrush(caption.ChangeLightness(120)));
 			dc.DrawRectangle(glyph.x, glyph.y, AUI_GLYPH_SIZE - 1, AUI_GLYPH_SIZE - 1);
 		}
-		dc.DrawBitmap(ibAuiBitmapFromBits(bits, AUI_GLYPH_SIZE, AUI_GLYPH_SIZE, active ? *wxWHITE : kCaptionBottom),
-			glyph, true);
+		dc.DrawBitmap(ibAuiBitmapFromBits(bits, AUI_GLYPH_SIZE, AUI_GLYPH_SIZE,
+			StyleColour(active ? ibStyleItem::CaptionText : ibStyleItem::FormText)), glyph, true);
 	}
 
 	// the line round a pane: the palette border, its corners rounded
 	virtual void DrawPaneBorder(wxDC& dc, const wxRect& rect) override {
-		dc.SetPen(wxPen(kBorder));
+		dc.SetPen(wxPen(StyleColour(ibStyleItem::Border)));
 		dc.SetBrush(*wxTRANSPARENT_BRUSH);
 		dc.DrawRoundedRectangle(rect, 3);
 	}
@@ -844,8 +878,8 @@ public:
 	// it (2026-11-13, Max: "the toolbar's free part, colour it on its own", "closer to the menu", variant M2, then "a bit
 	// darker"). On GTK3/Cocoa the same - the docking is the engine's there too
 	virtual void DrawToolBarDockBackground(wxDC& dc, const wxRect& rect) override {
-		dc.GradientFillLinear(rect, kCaptionInactiveTop.ChangeLightness(95), kCaptionInactiveBottom.ChangeLightness(95),
-			wxSOUTH);
+		dc.GradientFillLinear(rect, StyleColour(ibStyleItem::PanelBackground).ChangeLightness(95),
+			InactiveCaptionBottom().ChangeLightness(95), wxSOUTH);
 	}
 
 	// sliders: not revived yet — simple flat geometry
@@ -864,9 +898,9 @@ public:
 	virtual void DrawSliderThumb(wxDC& dc, const wxRect& rect,
 		wxOrientation WXUNUSED(orient), int flags = 0,
 		long WXUNUSED(style) = 0) override {
-		dc.SetPen(wxPen(kAccentDeep));
-		dc.SetBrush(wxBrush((flags & wxCONTROL_PRESSED)
-			? kAccentDeep : kAccent));
+		dc.SetPen(wxPen(StyleColour(ibStyleItem::AccentPressed)));
+		dc.SetBrush(wxBrush(StyleColour((flags & wxCONTROL_PRESSED)
+			? ibStyleItem::AccentPressed : ibStyleItem::Accent)));
 		dc.DrawRectangle(rect);
 	}
 
@@ -902,7 +936,7 @@ public:
 		rect.height--;
 
 		if (flags & wxCONTROL_SELECTED) {
-			dc.SetPen(wxPen(kBorder));
+			dc.SetPen(wxPen(StyleColour(ibStyleItem::Border)));
 			dc.SetBrush(wxBrush(m_scheme->Get(ibColourScheme::CONTROL_CURRENT)));
 			dc.DrawRoundedRectangle(wxRect(rect).Deflate(0, dc.FromDIP(2)), dc.FromDIP(3));
 		}
@@ -956,10 +990,11 @@ public:
 		rect.SetRight(geometryInfo.GetSize().x - MENU_SIDE_MARGIN);
 
 		// NB: no accel index here. Quieter than the label, as the welcome's keys are (ibWelcomeWindow): the alternate
-		// text lightened - it stood in the label's black; on the selection white, as the label
+		// text toward the menu's ground - lightened, in the dark look darkened; it stood in the label's black; on the
+		// selection white, as the label
 		wxDCTextColourChanger accelColour(dc);
 		if (!(flags & wxCONTROL_SELECTED))
-			accelColour.Set(m_scheme->Get(ibColourScheme::CONTROL_TEXT_ALTERNATE).ChangeLightness(115));
+			accelColour.Set(m_scheme->Get(ibColourScheme::CONTROL_TEXT_ALTERNATE).ChangeLightness(IsDark() ? 85 : 115));
 		DrawLabel(dc, accel, rect, flags, wxALIGN_CENTRE_VERTICAL);
 
 		// draw the submenu indicator
@@ -1091,22 +1126,24 @@ wxBitmap ibLunaRenderer::CreateIndicatorBitmap(int flags, bool radio) {
 	// does (DrawBorder, DrawButtonBorder) - the accent's ring round the indicator, in the margin it leaves
 	const bool focused = (flags & wxCONTROL_FOCUSED) != 0 && !disabled;
 
-	wxColour face = on ? kAccent : kContent;
-	wxColour border = on ? kAccentDeep : kBorder;
+	const wxColour content = StyleColour(ibStyleItem::FieldBackground), accent = StyleColour(ibStyleItem::Accent);
+	const wxColour accentPressed = StyleColour(ibStyleItem::AccentPressed), line = StyleColour(ibStyleItem::Border);
+	wxColour face = on ? accent : content;
+	wxColour border = on ? accentPressed : line;
 	if (disabled) {
-		face = kChromeLight;
-		border = kBorder;
+		face = StyleColour(ibStyleItem::BarBackground);
+		border = line;
 	}
 	else if (flags & wxCONTROL_PRESSED)
 		face = face.ChangeLightness(92);
 	else if (flags & wxCONTROL_CURRENT)
-		border = kCaptionBottom;
+		border = StyleColour(ibStyleItem::FormText);
 
 	// transparent corners — the indicator sits on any surface
 	dc.SetBackground(*wxTRANSPARENT_BRUSH);
 	dc.Clear();
 
-	const wxColour mark = disabled ? kBorder : *wxWHITE;
+	const wxColour mark = disabled ? line : StyleColour(ibStyleItem::AccentText);
 
 	if (radio) {
 		// float coordinates through the graphics context: the true centre of
@@ -1118,7 +1155,7 @@ wxBitmap ibLunaRenderer::CreateIndicatorBitmap(int flags, bool radio) {
 		const double radiusOuter = centre - 1.5;
 
 		gc->SetPen(wxPen(border));
-		gc->SetBrush(wxBrush(on && !disabled ? kContent : face));
+		gc->SetBrush(wxBrush(on && !disabled ? content : face));
 		gc->DrawEllipse(centre - radiusOuter, centre - radiusOuter,
 			2.0 * radiusOuter, 2.0 * radiusOuter);
 
@@ -1127,7 +1164,7 @@ wxBitmap ibLunaRenderer::CreateIndicatorBitmap(int flags, bool radio) {
 			// ellipse fills half a pixel off the pen-outlined outer circle
 			// and the dot visibly drifts off-centre
 			const double radiusDot = radiusOuter * 0.4;
-			const wxColour colDot = disabled ? kBorder : kAccent;
+			const wxColour colDot = disabled ? line : accent;
 			gc->SetPen(wxPen(colDot));
 			gc->SetBrush(wxBrush(colDot));
 			gc->DrawEllipse(centre - radiusDot, centre - radiusDot,
@@ -1136,7 +1173,7 @@ wxBitmap ibLunaRenderer::CreateIndicatorBitmap(int flags, bool radio) {
 
 		if (focused) {
 			const double radiusFocus = centre - 0.5;
-			gc->SetPen(wxPen(kAccentDeep));
+			gc->SetPen(wxPen(accentPressed));
 			gc->SetBrush(*wxTRANSPARENT_BRUSH);
 			gc->DrawEllipse(centre - radiusFocus, centre - radiusFocus,
 				2.0 * radiusFocus, 2.0 * radiusFocus);
@@ -1162,12 +1199,12 @@ wxBitmap ibLunaRenderer::CreateIndicatorBitmap(int flags, bool radio) {
 			wxRect rectMark = rect;
 			rectMark.Deflate(rect.width / 3);
 			dc.SetPen(*wxTRANSPARENT_PEN);
-			dc.SetBrush(wxBrush(disabled ? kBorder : kAccent));
+			dc.SetBrush(wxBrush(disabled ? line : accent));
 			dc.DrawRectangle(rectMark);
 		}
 
 		if (focused) {
-			dc.SetPen(wxPen(kAccentDeep));
+			dc.SetPen(wxPen(accentPressed));
 			dc.SetBrush(*wxTRANSPARENT_BRUSH);
 			dc.DrawRoundedRectangle(wxRect(0, 0, size, size), 3);
 		}
@@ -1211,7 +1248,7 @@ void ibLunaRenderer::DrawFrameBorder(wxDC& dc, const wxRect& rect, int flags) {
 	// the corner's mark: three strokes across it, as the native grip has
 	if ((flags & wxTOPLEVEL_RESIZEABLE) && !(flags & wxTOPLEVEL_MAXIMIZED)) {
 		const wxRect grip = GetFrameGripRect(GetFrameClientArea(rect, flags), GetScrollbarArrowSize());
-		dc.SetPen(wxPen(kCaptionBottom));
+		dc.SetPen(wxPen(StyleColour(ibStyleItem::FormText)));
 		for (int stroke = 1; stroke <= 3; ++stroke) {
 			const int d = 4 * stroke - 1;
 			dc.DrawLine(grip.GetRight() - d, grip.GetBottom(), grip.GetRight() + 1, grip.GetBottom() - d - 1);
@@ -1233,8 +1270,9 @@ void ibLunaRenderer::DrawFrameBackground(wxDC& dc, const wxRect& rect, int flags
 	// one light under its blue title. The system's caption colour lightening to the right was a pale blue the white
 	// title hardly showed on (Max, 2026-11-07), and the platform's, not the theme's
 	const bool active = (flags & wxTOPLEVEL_ACTIVE) != 0;
-	dc.GradientFillLinear(band, active ? kCaptionTop : kCaptionInactiveTop,
-		active ? kCaptionBottom : kCaptionInactiveBottom, wxSOUTH);
+	dc.GradientFillLinear(band,
+		active ? StyleColour(ibStyleItem::Caption, 0) : StyleColour(ibStyleItem::PanelBackground),
+		active ? StyleColour(ibStyleItem::Caption, 1) : InactiveCaptionBottom(), wxSOUTH);
 }
 
 void ibLunaRenderer::DrawFrameButton(wxDC& dc, wxCoord x, wxCoord y, int button, int flags) {
@@ -1245,7 +1283,7 @@ void ibLunaRenderer::DrawFrameButton(wxDC& dc, wxCoord x, wxCoord y, int button,
 	if (button == wxTOPLEVEL_BUTTON_HELP) {
 		if (flags & wxCONTROL_PRESSED) {
 			dc.SetPen(*wxTRANSPARENT_PEN);
-			dc.SetBrush(wxBrush(kBorder));
+			dc.SetBrush(wxBrush(StyleColour(ibStyleItem::Border)));
 			dc.DrawRectangle(face);
 		}
 		dc.DrawLabel(wxT("?"), face, wxALIGN_CENTRE);
@@ -1320,29 +1358,10 @@ int ibLunaRenderer::GetFrameBorderWidth(int flags) const {
 // ibLunaArtProvider
 // ----------------------------------------------------------------------------
 
-// EVERY PICTURE HERE IS A PNG IN BASE64, one string each in private/picturePredefined.h: a master four times the size of
-// its drawing, scaled down here to the size asked. Its source is an SVG in tools/pictures/render.js, which draws the PNG
-// and writes the string; the groups are the debugger, the code editor and its autocomplete, the form designer, the
-// metadata tree, the service panes and the output window, the spreadsheet, the list commands and the query constructor.
-// wx's own stock ids are the core's pictures (ibStockArtProvider).
-
-// A master's PNG read from its Base64 - none when the text is no PNG.
-static wxImage ImageOfBase64(const wxString& png)
-{
-	ibMemoryBuffer data;
-	if (!ibBase64::Read(png, data))
-		return wxImage();
-	if (wxImage::FindHandler(wxBITMAP_TYPE_PNG) == nullptr)
-		wxImage::AddHandler(new wxPNGHandler());
-	wxMemoryInputStream stream(data.GetData(), data.GetDataLen());
-	return wxImage(stream, wxBITMAP_TYPE_PNG);
-}
-
-// …at the size asked and at twice and four times it, as a stock picture is (ibStockArtProvider::BundleOf).
-static wxBitmapBundle BundleOf(const wxString& png, const wxSize& size)
-{
-	return ibStockArtProvider::BundleOf(ImageOfBase64(png), size);
-}
+// EVERY PICTURE HERE IS AN SVG, one string each in private/picturePredefined.h — the drawing itself, the source of the
+// picture; the groups are the debugger, the code editor and its autocomplete, the form designer, the metadata tree, the
+// service panes and the output window, the spreadsheet, the list commands and the query constructor. wx's own stock ids
+// are the core's pictures (ibStockArtProvider).
 
 // THE THEME'S PICTURES (the canon's wxWin32ArtProvider): the product's own by their client and id (deskgui/artProvider.h),
 // pushed over wx's own as the theme is set (ibThemeEngine::Set). wx's stock ids are the core's (ibStockArtProvider).
@@ -1354,118 +1373,112 @@ protected:
 		const wxArtClient& client,
 		const wxSize& size) override {
 
-		// The pictures: a PNG master in Base64, scaled down to the size asked for (16x16 when none is).
-		static const struct { wxArtClient client; wxArtID id; const wxString& png; } s_allPictures[] =
+		// The pictures: an SVG each, drawn at the size asked for (16x16 when none is).
+		static const struct { wxArtClient client; wxArtID id; const wxString& svg; } s_allPictures[] =
 		{
 			// ******* wxART_VISUALHOST *******
-			{ wxART_VISUALHOST, wxART_NO_PICTURE, s_null_png },
+			{ wxART_VISUALHOST, wxART_NO_PICTURE, s_null_svg },
 
-			// ******* wxART_FRONTEND ******* - moving a row is the stock arrow's act, so it is the stock arrow
-			// (wxART_EDIT and wxART_DELETE are stock ids themselves and are answered by ibStockArtProvider)
-			{ wxART_FRONTEND, wxART_ADD, s_add_png },
-			{ wxART_FRONTEND, wxART_UP, s_goUp_png },
-			{ wxART_FRONTEND, wxART_DOWN, s_goDown_png },
-			{ wxART_FRONTEND, wxART_SORT, s_sort_png },
-			{ wxART_FRONTEND, wxART_DATABASE, s_db_png },
-			{ wxART_FRONTEND, wxART_DATABASE_APPLY, s_dbApply_png },
-			{ wxART_FRONTEND, wxART_DATABASE_ROOLBACK, s_dbRollback_png },
-			{ wxART_FRONTEND, wxART_QUERY_CONSTRUCTOR, s_queryConstructor_png },
-			{ wxART_FRONTEND, wxART_TEMP_TABLE, s_tempTable_png },
-			{ wxART_FRONTEND, wxART_NESTED_QUERY, s_nestedQuery_png },
-			{ wxART_FRONTEND, wxART_ADD_QUERY, s_addQuery_png },
-			{ wxART_FRONTEND, wxART_ADD_NESTED, s_addNested_png },
-			{ wxART_FRONTEND, wxART_EDIT_NESTED, s_editNested_png },
-			{ wxART_FRONTEND, wxART_REPLACE_TABLE, s_replaceTable_png },
-			{ wxART_FRONTEND, wxART_ADD_EXPRESSION, s_addExpression_png },
-			{ wxART_FRONTEND, wxART_ADD_LINK, s_addLink_png },
-			{ wxART_FRONTEND, wxART_LINK_CONDITION, s_linkCondition_png },
-			{ wxART_FRONTEND, wxART_ADD_CONDITION, s_addCondition_png },
-			{ wxART_FRONTEND, wxART_DIRECTION, s_direction_png },
-			{ wxART_FRONTEND, wxART_ADD_SPLIT, s_addSplit_png },
-			{ wxART_FRONTEND, wxART_ADD_BRANCH, s_addBranch_png },
-			{ wxART_FRONTEND, wxART_ADD_JOIN, s_addJoin_png },
-			{ wxART_FRONTEND, wxART_COUNT_ROWS, s_countRows_png },
-			{ wxART_FRONTEND, wxART_TOTALS, s_totals_png },
-			{ wxART_FRONTEND, wxART_PARAMETERS, s_parameters_png },
-			{ wxART_FRONTEND, wxART_OUTPUT, s_output_png },
-			{ wxART_FRONTEND, wxART_SELECTED_FIELDS, s_selectedFields_png },
-			{ wxART_FRONTEND, wxART_FILTER, s_filter_png },
-			{ wxART_FRONTEND, wxART_GROUPING, s_grouping_png },
-			{ wxART_FRONTEND, wxART_TABLE, s_table_png },
-			{ wxART_FRONTEND, wxART_LINKS, s_links_png },
-			{ wxART_FRONTEND, wxART_SELECTION_LINKS, s_selectionLinks_png },
-			{ wxART_FRONTEND, wxART_ADVANCED, s_advanced_png },
-			{ wxART_FRONTEND, wxART_UNIONS, s_unions_png },
-			{ wxART_FRONTEND, wxART_INDEX, s_index_png },
-			{ wxART_FRONTEND, wxART_QUERY_BATCH, s_queryBatch_png },
-			{ wxART_FRONTEND, wxART_TRANSLATION_CONSTRUCTOR, s_translationConstructor_png },
-			{ wxART_FRONTEND, wxART_FORMAT_CONSTRUCTOR, s_formatConstructor_png },
-			{ wxART_FRONTEND, wxART_LINQ_CONSTRUCTOR, s_linqConstructor_png },
-			{ wxART_DEBUG, wxART_BREAKPOINT_CONDITION, s_breakpointCondition_png },
-			{ wxART_DOC_MODULE, wxART_SELECT_ALL, s_selectAll_png },
+			// ******* wxART_FRONTEND ******* - a list's add, edit, delete and arrows are the core's (ibStockArtProvider)
+			{ wxART_FRONTEND, wxART_SORT, s_sort_svg },
+			{ wxART_FRONTEND, wxART_DATABASE, s_db_svg },
+			{ wxART_FRONTEND, wxART_DATABASE_APPLY, s_dbApply_svg },
+			{ wxART_FRONTEND, wxART_DATABASE_ROOLBACK, s_dbRollback_svg },
+			{ wxART_FRONTEND, wxART_QUERY_CONSTRUCTOR, s_queryConstructor_svg },
+			{ wxART_FRONTEND, wxART_TEMP_TABLE, s_tempTable_svg },
+			{ wxART_FRONTEND, wxART_NESTED_QUERY, s_nestedQuery_svg },
+			{ wxART_FRONTEND, wxART_ADD_QUERY, s_addQuery_svg },
+			{ wxART_FRONTEND, wxART_ADD_NESTED, s_addNested_svg },
+			{ wxART_FRONTEND, wxART_EDIT_NESTED, s_editNested_svg },
+			{ wxART_FRONTEND, wxART_REPLACE_TABLE, s_replaceTable_svg },
+			{ wxART_FRONTEND, wxART_ADD_EXPRESSION, s_addExpression_svg },
+			{ wxART_FRONTEND, wxART_ADD_LINK, s_addLink_svg },
+			{ wxART_FRONTEND, wxART_LINK_CONDITION, s_linkCondition_svg },
+			{ wxART_FRONTEND, wxART_ADD_CONDITION, s_addCondition_svg },
+			{ wxART_FRONTEND, wxART_DIRECTION, s_direction_svg },
+			{ wxART_FRONTEND, wxART_ADD_SPLIT, s_addSplit_svg },
+			{ wxART_FRONTEND, wxART_ADD_BRANCH, s_addBranch_svg },
+			{ wxART_FRONTEND, wxART_ADD_JOIN, s_addJoin_svg },
+			{ wxART_FRONTEND, wxART_COUNT_ROWS, s_countRows_svg },
+			{ wxART_FRONTEND, wxART_TOTALS, s_totals_svg },
+			{ wxART_FRONTEND, wxART_PARAMETERS, s_parameters_svg },
+			{ wxART_FRONTEND, wxART_OUTPUT, s_output_svg },
+			{ wxART_FRONTEND, wxART_SELECTED_FIELDS, s_selectedFields_svg },
+			{ wxART_FRONTEND, wxART_TABLE, s_table_svg },
+			{ wxART_FRONTEND, wxART_LINKS, s_links_svg },
+			{ wxART_FRONTEND, wxART_SELECTION_LINKS, s_selectionLinks_svg },
+			{ wxART_FRONTEND, wxART_UNIONS, s_unions_svg },
+			{ wxART_FRONTEND, wxART_INDEX, s_index_svg },
+			{ wxART_FRONTEND, wxART_QUERY_BATCH, s_queryBatch_svg },
+			{ wxART_FRONTEND, wxART_FORMAT_CONSTRUCTOR, s_formatConstructor_svg },
+			{ wxART_FRONTEND, wxART_LINQ_CONSTRUCTOR, s_linqConstructor_svg },
+			{ wxART_DEBUG, wxART_BREAKPOINT_CONDITION, s_breakpointCondition_svg },
+			{ wxART_DOC_MODULE, wxART_SELECT_ALL, s_selectAll_svg },
 
 			// ******* wxART_DOC_FORM *******
-			{ wxART_DOC_FORM, wxART_DESIGNER_PAGE, s_designerPage_png },
-			{ wxART_DOC_FORM, wxART_CODE_PAGE, s_codePage_png },
+			{ wxART_DOC_FORM, wxART_DESIGNER_PAGE, s_designerPage_svg },
+			{ wxART_DOC_FORM, wxART_CODE_PAGE, s_codePage_svg },
 
 			// ******* wxART_DOC_TEMPLATE *******
-			{ wxART_DOC_TEMPLATE, wxART_MERGE_CELL, s_mergeCells_png },
-			{ wxART_DOC_TEMPLATE, wxART_ADD_SECTION, s_addSection_png },
-			{ wxART_DOC_TEMPLATE, wxART_REMOVE_SECTION, s_removeSection_png },
-			{ wxART_DOC_TEMPLATE, wxART_SHOW_CELL, s_showCells_png },
-			{ wxART_DOC_TEMPLATE, wxART_SHOW_HEADER, s_showHeaders_png },
-			{ wxART_DOC_TEMPLATE, wxART_SHOW_SECTION, s_showSections_png },
-			{ wxART_DOC_TEMPLATE, wxART_BORDER, s_borders_png },
+			{ wxART_DOC_TEMPLATE, wxART_MERGE_CELL, s_mergeCells_svg },
+			{ wxART_DOC_TEMPLATE, wxART_ADD_SECTION, s_addSection_svg },
+			{ wxART_DOC_TEMPLATE, wxART_REMOVE_SECTION, s_removeSection_svg },
+			{ wxART_DOC_TEMPLATE, wxART_SHOW_CELL, s_showCells_svg },
+			{ wxART_DOC_TEMPLATE, wxART_SHOW_HEADER, s_showHeaders_svg },
+			{ wxART_DOC_TEMPLATE, wxART_SHOW_SECTION, s_showSections_svg },
+			{ wxART_DOC_TEMPLATE, wxART_BORDER, s_borders_svg },
 
 			// ******* wxART_SERVICE *******
-			{ wxART_SERVICE, wxART_MESSAGE, s_message_png },
-			{ wxART_SERVICE, wxART_LOCAL_VARIABLE, s_variables_png },
-			{ wxART_SERVICE, wxART_STACK, s_stack_png },
-			{ wxART_SERVICE, wxART_WATCH, s_watch_png },
-			{ wxART_SERVICE, wxART_PROPERTY, s_property_png },
+			{ wxART_SERVICE, wxART_MESSAGE, s_message_svg },
+			{ wxART_SERVICE, wxART_LOCAL_VARIABLE, s_variables_svg },
+			{ wxART_SERVICE, wxART_STACK, s_stack_svg },
+			{ wxART_SERVICE, wxART_WATCH, s_watch_svg },
+			{ wxART_SERVICE, wxART_PROPERTY, s_property_svg },
 
-			// ******* wxART_METATREE *******
-			{ wxART_METATREE, wxART_COMMON_FOLDER, s_commonFolder_png },
-			{ wxART_METATREE, wxART_SAVE_METADATA, s_saveMetadata_png },
+			// ******* wxART_METATREE ******* - its Common folder is the core's (ibStockArtProvider)
+			{ wxART_METATREE, wxART_SAVE_METADATA, s_saveMetadata_svg },
 
 			// ******* wxART_DEBUG *******
-			{ wxART_DEBUG, wxART_DEBUG_START, s_start_png },
-			{ wxART_DEBUG, wxART_DEBUG_START_WITHOUT_DEBUGGING, s_startWithoutDebugging_png },
-			{ wxART_DEBUG, wxART_DEBUG_ATTACH, s_attach_png },
-			{ wxART_DEBUG, wxART_DEBUG_CONTINUE, s_continue_png },
-			{ wxART_DEBUG, wxART_DEBUG_PAUSE, s_pause_png },
-			{ wxART_DEBUG, wxART_DEBUG_STEP_INTO, s_stepInto_png },
-			{ wxART_DEBUG, wxART_DEBUG_STEP_OVER, s_stepOver_png },
-			{ wxART_DEBUG, wxART_DEBUG_STEP_OUT, s_stepOut_png },
-			{ wxART_DEBUG, wxART_DEBUG_STOP_DEBUGGING, s_stopDebugging_png },
-			{ wxART_DEBUG, wxART_DEBUG_STOP_PROGRAM, s_stopProgram_png },
-			{ wxART_DEBUG, wxART_DEBUG_REMOVE_ALL_BREAKPOINTS, s_removeAllBreakpoints_png },
+			{ wxART_DEBUG, wxART_DEBUG_START, s_start_svg },
+			{ wxART_DEBUG, wxART_DEBUG_START_WITHOUT_DEBUGGING, s_startWithoutDebugging_svg },
+			{ wxART_DEBUG, wxART_DEBUG_ATTACH, s_attach_svg },
+			{ wxART_DEBUG, wxART_DEBUG_CONTINUE, s_continue_svg },
+			{ wxART_DEBUG, wxART_DEBUG_PAUSE, s_pause_svg },
+			{ wxART_DEBUG, wxART_DEBUG_STEP_INTO, s_stepInto_svg },
+			{ wxART_DEBUG, wxART_DEBUG_STEP_OVER, s_stepOver_svg },
+			{ wxART_DEBUG, wxART_DEBUG_STEP_OUT, s_stepOut_svg },
+			{ wxART_DEBUG, wxART_DEBUG_STOP_DEBUGGING, s_stopDebugging_svg },
+			{ wxART_DEBUG, wxART_DEBUG_STOP_PROGRAM, s_stopProgram_svg },
+			{ wxART_DEBUG, wxART_DEBUG_REMOVE_ALL_BREAKPOINTS, s_removeAllBreakpoints_svg },
+			{ wxART_DEBUG, wxART_BREAKPOINT, s_breakpoint_svg },
+			{ wxART_DEBUG, wxART_CURRENT_LINE, s_currentLine_svg },
+			{ wxART_DEBUG, wxART_BREAK_LINE, s_breakLine_svg },
 
 			// ******* wxART_DOC_MODULE *******
-			{ wxART_DOC_MODULE, wxART_ADD_COMMENT, s_addComment_png },
-			{ wxART_DOC_MODULE, wxART_REMOVE_COMMENT, s_removeComment_png },
-			{ wxART_DOC_MODULE, wxART_SYNTAX_CONTROL, s_syntaxControl_png },
-			{ wxART_DOC_MODULE, wxART_GOTO_LINE, s_gotoLine_png },
-			{ wxART_DOC_MODULE, wxART_PROC_AND_FUNC, s_proceduresFunctions_png },
-			{ wxART_DOC_MODULE, wxART_FORMAT_CODE, s_formatCode_png },
-			{ wxART_DOC_MODULE, wxART_INCREASE_INDENT, s_increaseIndent_png },
-			{ wxART_DOC_MODULE, wxART_DECREASE_INDENT, s_decreaseIndent_png },
+			{ wxART_DOC_MODULE, wxART_ADD_COMMENT, s_addComment_svg },
+			{ wxART_DOC_MODULE, wxART_REMOVE_COMMENT, s_removeComment_svg },
+			{ wxART_DOC_MODULE, wxART_SYNTAX_CONTROL, s_syntaxControl_svg },
+			{ wxART_DOC_MODULE, wxART_GOTO_LINE, s_gotoLine_svg },
+			{ wxART_DOC_MODULE, wxART_PROC_AND_FUNC, s_proceduresFunctions_svg },
+			{ wxART_DOC_MODULE, wxART_FORMAT_CODE, s_formatCode_svg },
+			{ wxART_DOC_MODULE, wxART_INCREASE_INDENT, s_increaseIndent_svg },
+			{ wxART_DOC_MODULE, wxART_DECREASE_INDENT, s_decreaseIndent_svg },
 
 			// ******* wxART_AUTOCOMPLETE *******
-			{ wxART_AUTOCOMPLETE, wxART_FUNCTION, s_function_png },
-			{ wxART_AUTOCOMPLETE, wxART_PROCEDURE, s_procedure_png },
-			{ wxART_AUTOCOMPLETE, wxART_VARIABLE, s_variable_png },
-			{ wxART_AUTOCOMPLETE, wxART_VARIABLE_ALTERNATIVE, s_variableAlt_png },
+			{ wxART_AUTOCOMPLETE, wxART_FUNCTION, s_function_svg },
+			{ wxART_AUTOCOMPLETE, wxART_PROCEDURE, s_procedure_svg },
+			{ wxART_AUTOCOMPLETE, wxART_VARIABLE, s_variable_svg },
+			{ wxART_AUTOCOMPLETE, wxART_VARIABLE_ALTERNATIVE, s_variableAlt_svg },
 
 			// ******* wxART_SERVICE *******
-			{ wxART_SERVICE, wxART_OUTPUT_INFORMATION, s_outputInformation_png },
-			{ wxART_SERVICE, wxART_OUTPUT_WARNING, s_outputWarning_png },
-			{ wxART_SERVICE, wxART_OUTPUT_ERROR, s_outputError_png }
+			{ wxART_SERVICE, wxART_OUTPUT_INFORMATION, s_outputInformation_svg },
+			{ wxART_SERVICE, wxART_OUTPUT_WARNING, s_outputWarning_svg },
+			{ wxART_SERVICE, wxART_OUTPUT_ERROR, s_outputError_svg }
 		};
 
 		for (const auto& entry : s_allPictures) {
 			if (entry.client == client && entry.id == id)
-				return BundleOf(entry.png, size.IsFullySpecified() ? size : wxSize(16, 16));
+				return ibStockArtProvider::BundleOf(ibPicture::FromSvg(entry.svg), size.IsFullySpecified() ? size : wxSize(16, 16));
 		}
 
 		return wxNullBitmap;

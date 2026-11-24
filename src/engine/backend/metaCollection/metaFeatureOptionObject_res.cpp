@@ -2,11 +2,9 @@
 
 // THE CONSTANT'S PLATE, WITH A SWITCH FOR ITS SIGN. An option IS a constant, so it keeps the plate the
 // constant and the session parameter share and the stroke on the right that stands for the value; where
-// the constant shows π, the option shows what its value is — on or off. Drawn from its SVG by
-// tools/pictures/render.js (meta/featureOption).
+// the constant shows π, the option shows what its value is — on or off.
 
-/* PNG */
-static const ibString s_featureOption_16_png = ibT("iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAE5ElEQVR4nOyae0xbVRzHv6cdDDoe27CM1wrjMQQxcaGUARuw6F8zUWG4MaOJ/xgffxidkOjM1BiSLZORZXEYE3X+M7eQkGniMv1DgYQMyChYBwWB8WgoTB4TWjagpT2e1gl90nuJsy33fhKSe875XnrOt797zu/cUwkEjgQCRzQAAkc0AAJHNAACRzQAAkc0AAJHNAACRzQAAmeLL8G+wpICKcWrlCCLUJINghgEMhSzlFAt66uWUnJJ3d7UsZ6ceGvIzs4OlUXLayjwHiEkWCPFQik9uzg//YlWqzV5EniNADb4VhCS59Wh4EDKvrwP2FieZtf5HgWeKpWFpTVs8JXYLBCSGJ+ULJkcH2t2a3KtUBYcVIFInZ6bfFUeKsrLoFAoEBGxDYHMwsJ96HQ6NDQ24tYttVOb1UKUXR1NTpVuERCvSK1hrjz1b1mlVOLjUx9CLpcjNDQUgY6tj7a+lpYUY2BgEBOTk6tthFBMjI/96Kh3m9wIaKZj+djRCgQrx48ddakhma4aNwMoyJOO5eRkBYKVhMQEpzJbHrNcNW6rAAv/CMdyeHg4fDG3bIDOOA4rC7H1kEnDsCdKgRBJCP4PoiIjncoEJNZV4zMR8sbiyiLqey6h/W4n5k1GzvdJWEqRErkbL+09guKEAvibDSU4o0Yd3mipxs+6Jl6Dt2GlVgwbxlDTWYeLt7+B2WqGP+EdAbNL93Ci9SMsmO9z0keEbENl9vPI2JGKbSHhGDOM46fhZtye7sMPIzeYgfM4mfsu/AVvA2q76zkP/pCiECcL34Y8fG37cAAqHM96AZe113Cx61s062+iJKEIRfEq+ANej8DQ/CjU0xpO2rAtYahSvek0+NUPZfPAK08cwb5dOfbytZHr8Be8IuD3mV7O2pLd+5EYGbeuxmZCm74T/X8NYtliwlapc6L1zolqDA4NgSvnz9UiIyMNfOAVAZpZ7gY8HuO7I5k7/9GYLGb0zQ3CH/CKABOPGXvZwm92N1tM8Ae8IiA9KoWzVjOl9an5bWototJ4/O//El4RkBqVzFnbMdGFnpk/kPNYpsd2C8sHvtZcsV9v3xqNnWE73DTn6z7Do4ZXBBTEKZERncpJa0t4TrddsA/UE1f7vod2dsB+XZleBn/BKwJsS9upvCq81VLFcoEHPvW9MwMouVz+MBHaAxlLhPTGSVy/86s9EbJxKPEAytOehb/gnQjFyeS4cPAM6jT16Jnt96m3JU1fab5z/2AiRUX6c3h574vwJxvaDCVFxONc0ae4MfoLmvSt6L3XjxVq4XSv7XnfvysXZamH2c6Q+5zyqNjwbpBtLXE45Rn739LKEssSR7AC67r3bA+NZDvBwHq/4G4AxV02ttUUzmA0uu2rXbHNDTkxWQg0bH13wjY2FzysArTbsaTX6xGsuPadHe6oXTWeXok57XYaGhoRrFy52uBcYUW3q8btrXBiXNIIpJLX8fDx0E9M2DcksbFyyGSygH8zbDAYcWd4GJ9/8SXU6q61BkoXzVb62p/6sTlHvceDn9yC0vcJwWlsIihFtbqtuda13uvJFzOhnZmQj00Bbeu82VLoqcVrKrw4P1XMbjzLDhfXX9sCG3Y4ijMP5qZLvQl8nn0K9nhcKIg/kYHAEQ2AwBENgMARDYDAEQ2AwBENgMARDYDAEbwBfwMAAP//T8feSwAAAAZJREFUAwC494oZeyiwTwAAAABJRU5ErkJggg==");
+static const ibString s_featureOption_svg = ibT("<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'><rect x='1' y='4' width='14' height='8' rx='2' fill='#5a7b95'/><rect x='2.5' y='5.7' width='6.2' height='4.6' rx='2.3' fill='#ffffff'/><circle cx='6.4' cy='8' r='1.5' fill='#2f9e44'/><path d='M10 8 H12.5' fill='none' stroke='#ffffff' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/></svg>");
 
 ibPicture ibValueMetaObjectFeatureOption::GetIcon() const
 {
@@ -15,7 +13,7 @@ ibPicture ibValueMetaObjectFeatureOption::GetIcon() const
 
 ibPicture ibValueMetaObjectFeatureOption::GetIconGroup()
 {
-	static const ibPicture picture = ibPicture::FromBase64(s_featureOption_16_png, ibSize(16, 16));
+	static const ibPicture picture = ibPicture::FromSvg(s_featureOption_svg);
 
 	return picture;
 }

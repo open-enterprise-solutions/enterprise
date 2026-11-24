@@ -875,7 +875,9 @@ namespace ibProtocol {
 			                     // tab (ibView::ibKind::Assistant). Allowed while the base's assistant access is running
 			ApplicationCompare = 18, // ibApplicationCompare — the walk of two applications; command Merge applies the ops chosen
 			Types        = 19,   // ibTypes
-			Style        = 20,   // ibStyle — both modes': how the person's interface is painted; command Save {Theme}
+			Style        = 20,   // both modes': the theme the interface is painted in — the CLIENT'S, kept on its machine (Max,
+			                     // 2026-11-24: "nothing is kept on the backend, the client decides as it starts"). The
+			                     // server places it in Tools and answers nothing of it: a client shows its own window
 			WebAddress   = 21,   // ibWebAddress (protocolDesigner.h) — the designer's: what the base answers on a web server
 		};
 
@@ -884,7 +886,7 @@ namespace ibProtocol {
 		// takes them and Save; Active users, the designer's, Kick, Reload and Release; the users Save and Remove; the
 		// designer's inspector (Properties) Save; its predefined values editor Create, Set and Remove; its texts
 		// (ObjectText) Save, and so the home page (HomePage); the base (Database) Load, Save and Clear; the assistant window
-		// (Assistant) Open; ApplicationCompare Merge; the style (Style) Save; the web addresses (WebAddress) Create and Remove. The designer's tree has its own (ibMetaData::ibCommand), and so its debugger's store.
+		// (Assistant) Open; ApplicationCompare Merge; the web addresses (WebAddress) Create and Remove. The designer's tree has its own (ibMetaData::ibCommand), and so its debugger's store.
 		enum class ibCommand : int {
 			Open    = 1,
 			Start   = 2,
@@ -954,21 +956,6 @@ namespace ibProtocol {
 			enum class ibColumn : int {
 				Left  = 1,
 				Right = 2,
-			};
-
-		}
-
-		// Both modes': how the person's interface is painted — Theme, theirs, kept in the base (System when they chose none).
-		// Command Save {Theme} keeps another. A client paints itself with it: the system's follows the machine's own
-		// light or dark.
-		namespace ibStyle {
-
-			inline constexpr const char* Theme = "Theme";   // ibTheme
-
-			enum class ibTheme : int {
-				System = 0,   // as the machine the client runs on is set
-				Light  = 1,
-				Dark   = 2,
 			};
 
 		}

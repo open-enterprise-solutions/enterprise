@@ -5,18 +5,26 @@
 #include <wx/mstream.h>
 
 #include "core/picturePredefined.h"
-#include "core/pictureRegistry.h"   // ibPictureRegistry — the masters, by their ids
+#include "core/pictureRegistry.h"   // ibPictureRegistry — the drawings, by their ids
 
-wxBitmapBundle ibStockArtProvider::BundleOf(const wxImage& master, const wxSize& size)
+wxBitmapBundle ibStockArtProvider::BundleOf(const ibPicture& picture, const wxSize& size)
 {
+	// The largest drawn once, by the core — writing its PNG is most of the cost, so it is written once — and the
+	// smaller scaled down from it.
+	const ibPicture drawn = picture.Scale(ibSize(size.x * 4, size.y * 4));
+	const ibMemoryBuffer& png = drawn.GetData();
+	if (png.IsEmpty())
+		return wxBitmapBundle();
+	if (wxImage::FindHandler(wxBITMAP_TYPE_PNG) == nullptr)
+		wxImage::AddHandler(new wxPNGHandler());
+	wxMemoryInputStream stream(png.GetData(), png.GetDataLen());
+	const wxImage master(stream, wxBITMAP_TYPE_PNG);
 	if (!master.IsOk())
 		return wxBitmapBundle();
 
 	wxVector<wxBitmap> bitmaps;
 	for (const int times : { 1, 2, 4 }) {
 		const wxSize at(size.x * times, size.y * times);
-		if (times > 1 && (at.x > master.GetWidth() || at.y > master.GetHeight()))
-			break;
 		bitmaps.push_back(wxBitmap(at == master.GetSize() ? master : master.Scale(at.x, at.y, wxIMAGE_QUALITY_HIGH)));
 	}
 	return wxBitmapBundle::FromBitmaps(bitmaps);
@@ -63,20 +71,22 @@ wxBitmapBundle ibStockArtProvider::CreateBitmapBundle(const wxArtID& id, const w
 		{ wxART_ERROR, g_picErrorCLSID },
 		{ wxART_INFORMATION, g_picInformationCLSID },
 		{ wxART_QUESTION, g_picQuestionCLSID },
-		{ wxART_TIP, g_picTipCLSID }
+		{ wxART_TIP, g_picTipCLSID },
+
+		// …and the product's own whose picture is the core's: a list's add, a query's conditions and grouping (a list's
+		// filter and hierarchy), its advanced settings (a composer's settings), the metadata tree's Common (a folder row)
+		{ wxART_ADD, g_picAddCLSID },
+		{ wxART_FILTER, g_picFilterCLSID },
+		{ wxART_GROUPING, g_picHierarchyCLSID },
+		{ wxART_ADVANCED, g_picComposerSettingsCLSID },
+		{ wxART_COMMON_FOLDER, g_picRowFolderCLSID },
+		// …the code editor's translation constructor (a language's picture)
+		{ wxART_TRANSLATION_CONSTRUCTOR, g_picTranslationCLSID }
 	};
 
 	for (const auto& entry : s_stockPictures) {
-		if (entry.id != id)
-			continue;
-		const ibPicture picture = ibPictureRegistry::GetPicture(entry.picture);
-		const ibMemoryBuffer& png = picture.GetData();
-		if (png.GetDataLen() == 0)
-			return wxBitmapBundle();
-		if (wxImage::FindHandler(wxBITMAP_TYPE_PNG) == nullptr)
-			wxImage::AddHandler(new wxPNGHandler());
-		wxMemoryInputStream stream(png.GetData(), png.GetDataLen());
-		return BundleOf(wxImage(stream, wxBITMAP_TYPE_PNG), size.IsFullySpecified() ? size : wxSize(16, 16));
+		if (entry.id == id)
+			return BundleOf(ibPictureRegistry::GetPicture(entry.picture), size.IsFullySpecified() ? size : wxSize(16, 16));
 	}
 	return wxBitmapBundle();
 }

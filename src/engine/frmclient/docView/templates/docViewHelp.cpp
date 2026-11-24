@@ -19,9 +19,7 @@ wxEND_EVENT_TABLE()
 bool ibFrontendHelpEditView::OnCreate(ibFrontendDocument* doc, long flags)
 {
 	m_textEditor = new ibTextEditor(doc, m_viewFrame, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxBORDER_THEME);
-
-	mainFrame->GetEditorSettings().Apply(*m_textEditor);
-	mainFrame->GetFontColorSettings().Apply(*m_textEditor);
+	OnUpdate(nullptr);
 
 	m_textEditor->SetReadOnly(flags == ibDOC_READONLY);
 
@@ -31,6 +29,15 @@ bool ibFrontendHelpEditView::OnCreate(ibFrontendDocument* doc, long flags)
 void ibFrontendHelpEditView::OnDraw(wxDC* WXUNUSED(dc))
 {
 	// nothing to do here, wxTextCtrl draws itself
+}
+
+void ibFrontendHelpEditView::OnUpdate(ibFrontendView* WXUNUSED(sender), wxObject* WXUNUSED(hint))
+{
+	// A view closed has no editor left (OnClose).
+	if (m_textEditor == nullptr)
+		return;
+	mainFrame->GetEditorSettings().Apply(*m_textEditor);
+	mainFrame->GetFontColorSettings().Apply(*m_textEditor);
 }
 
 bool ibFrontendHelpEditView::OnClose(bool deleteWindow)

@@ -20,6 +20,13 @@ public:
 	ibPGFontProperty(const wxString& label = ibPG_LABEL, const wxString& name = ibPG_LABEL, const ibVariant& value = ibVariant());
 	virtual ~ibPGFontProperty() = default;
 
+	// None set — the default, the parent's: said so, not composed of the system font its parts start from, which read as
+	// one set; cleared, or left as it reads, none again.
+	virtual wxString ValueToString(ibVariant& value,
+		ibPGPropValFormatFlags flags = ibPGPropValFormatFlags::Null) const override;
+	virtual bool StringToValue(ibVariant& variant, const wxString& text,
+		ibPGPropValFormatFlags flags = ibPGPropValFormatFlags::Null) const override;
+
 	virtual ibVariant ChildChanged(ibVariant& thisValue, int childIndex,
 		ibVariant& childValue) const override;
 	virtual void RefreshChildren() override;

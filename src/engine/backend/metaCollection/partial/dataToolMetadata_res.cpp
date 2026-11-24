@@ -1,7 +1,6 @@
 #include "dataTool.h"
 
-/* PNG */
-static const ibString s_dataTool_64_png = ibT("iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAFYElEQVR4nOyaXUwcVRTH/3cWYwsRIpaPbjFVMFQpdNtGS1OlBbZ+RaPxQWwtTSxSFB8kxihNfCG+WDTR6INtqEVjsKIx8cFoqnwaaJMW05bFklA1pBEWQm1lUalZdud673QHZnf2Y+7AGtqZXzK7M2fuuZnznztnzr27EiyOBItjCwCLkyLS+K620vRUf1oVAXkSFIUUcIZOjROCX0DI13NpgS+Hq3r/RpLxNqKafR1g18EuAwedb+MzmIAYaVR8xJ0jSeQAIfQF5rIybmOKWfZxWCL+g2dr+i4hCbDg97OvlghznbMZRyBIQgFcre7HKUg7a5gGMWbYVjVY0/k9lpAYwasIixA3B7iOul9lGn1jInhOOtuOb2h1v4wlYqIR9YgdPKfF+zpehAAxR0DJUfceiZC2SPvtmU5sXFuMrPTbkJ2+SrFNzfzBtss4e3EI41cmdH3JBHuG9nUewyLgwbOH/UMjbVlQL61uxiGDbfW4PqlYT4MOD0ts8yPEQSS4i7fj/sL7IJHoA0emMk5cOI2un/sQZPvzUBqgkIs9z/eMwASxhn3GQ9XKt++Htmhuhh6HqJFQ2fGmNnjCDmor9qJsXWnM4JXO2LmydVtZ22rFBwsdsLeN1AQTxAs+1VWmbKoQEbSEfOOii4ZnfCbBU1pbZdEDyMvMhVHyMlej4p5t4UaCZ4o+ejgTAiQKXmUxIugEkFKwi73n52+f89YcbL97K0TZwQTIzcieP+Z9pjgCu4z6Gw1exawIOgGITJ7WHpcWbI477GN2zHy2FGwK75uG9x0L0eBVzIigqwQpwUZtZswKZXozrLolE+Q3GY4zMohPMZXfu62cJvJ7og9Ys3IWz64dRVnWtVoqY+fuuMGrKG3kIHydn0eeapl8DTO57+ALrVE/AiLe+dmLEIC/KjXBCzF+NRXHLt6p7Ct3flO5YV/eNtpIYK/jt2hTeMz6sa2Usgv4A36YhdKENzsh5KYVgJluaMg3rDN9T3oBCJ3SHk5MT8Es3ulJBDdLoBkQRn0E6Ny/8HW0Yfbcj4Z9eVvuw321sOjfIE2QtTZ9DqCEF0B3qMeTTIDC3HyYwfvnFGiBhECBFLoA+pWnpithIoyWBH0drJBkiTVRHpgd7LvWVk/dmma0Rxr1OYDIHdrjgdFzCMgBiOIPzuHM6GB435R2GfENVXB1kXZe8fEAY6EEL1gV6gRgz22YANP/+NB9/gRE6T7fj+nZmTDbHJU7jfqLimAmeI5OAF6vMxGOa239I6cwdtkLo/x+xYuTFwbCjRTfDtf2/goBjIpgNnhO1MlQSas7nxUtwywX3KzaHJID7vVlCSdD/SOn0T3cjyB7Fy9Ar9JgsNCzv3cMJkjmZCjmdNj1ceVeUOnTSLt2OpyTnsVurKxMheNNh6lMd3tqu9qxCJR5PjE2xWUXVc+WyA4baRp3Raikdecr7F6/i0XAMn8Dy/wfYAnQrgn0XcqaL5S0FaPIWgAnbpE/VNP5nkyCj7GcYGaRk2fAR5YqeE4oMCUn8OB5taitGPk5keA5CWc5Q/t6vpPJXBFT3vDaHm8bhL94qdcDOWpi5IGrhPaTsyiqpaT1wR0s1VUSii3MMV+7LM62UdbdKUpIz1BNh/GyzSSRk6qfTvYKxaIi9LtAKLCkB/d/Yv80BotjCwCLYwsAi2MLAItjCwCLY/9HCMuMvIZBY78CDDQY8ht73xV3kmQ/ArhOCazIjrovynUrwF/OR5XA+cb3zbLsckAkzfUbYpzh9ud01sZDHohg5wBYHFsAWBxbAFgcWwBYHFsAWBx7PQDLHNHaXhT7EYDFsbwApv5UcCNhPwKwOJYX4D8AAAD//+nlFXMAAAAGSURBVAMAC2EAt31za1cAAAAASUVORK5CYII=");
+static const ibString s_dataTool_svg = ibT("<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'><path d='M4 4 H11.5 M12 4 V11.5' fill='none' stroke='#5a7b95' stroke-width='1.3' stroke-linecap='round' stroke-linejoin='round'/><circle cx='4' cy='4' r='3' fill='#2f9e44'/><path d='M12 0.8 L15.2 4 L12 7.2 L8.8 4 Z' fill='#f08c00'/><rect x='9' y='9' width='6' height='6' rx='1' fill='#1c6fd1'/></svg>");
 
 ibPicture ibValueMetaObjectDataTool::GetIcon() const
 {
@@ -10,7 +9,7 @@ ibPicture ibValueMetaObjectDataTool::GetIcon() const
 
 ibPicture ibValueMetaObjectDataTool::GetIconGroup()
 {
-	static const ibPicture picture = ibPicture::FromBase64(s_dataTool_64_png, ibSize(16, 16));
+	static const ibPicture picture = ibPicture::FromSvg(s_dataTool_svg);
 
 	return picture;
 }

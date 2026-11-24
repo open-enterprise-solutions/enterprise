@@ -237,8 +237,16 @@ bool ibStyledTextCtrl::Create(wxWindow *parent,
     SetBufferedDraw(true);
 #endif
 
+    ApplyThemeColours();
+
+    return true;
+}
+
+void ibStyledTextCtrl::ApplyThemeColours()
+{
     // SEAM vs wx: the theme's colours, as an input surface takes them (the content colour, the control text, the
-    // highlight) - not the system's
+    // highlight) - not the system's; as it is made, and again when the look changes (OnSysColourChanged). A set of its
+    // owner's (an editor's font and colours) goes over them after.
     const wxColour colFg = wxTHEME_COLOUR(CONTROL_TEXT);
     StyleSetForeground(ibSTC_STYLE_DEFAULT, colFg);
     StyleSetBackground(ibSTC_STYLE_DEFAULT, wxTHEME_COLOUR(WINDOW));
@@ -259,8 +267,6 @@ bool ibStyledTextCtrl::Create(wxWindow *parent,
 
     SetSelForeground(true, wxTHEME_COLOUR(HIGHLIGHT_TEXT));
     SetSelBackground(true, wxTHEME_COLOUR(HIGHLIGHT));
-
-    return true;
 }
 
 
@@ -6349,6 +6355,7 @@ void ibStyledTextCtrl::OnDPIChanged(wxDPIChangedEvent& evt) {
 
 void ibStyledTextCtrl::OnSysColourChanged(wxSysColourChangedEvent& evt)
 {
+    ApplyThemeColours();
     m_swx->DoInvalidateStyleData();
     evt.Skip();
 }

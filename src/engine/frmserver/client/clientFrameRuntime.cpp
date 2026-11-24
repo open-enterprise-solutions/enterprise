@@ -52,7 +52,7 @@ void ibClientFrameRuntime::InitializeDefaultMenu()
 
 	ibClientMenu tools;
 	tools.Append(ibProtocol::ibSchema::ibKind::Debugging, _("Options..."));
-	tools.Append(ibProtocol::ibSchema::ibKind::Style, _("Theme..."));
+	tools.Append(ibProtocol::ibSchema::ibKind::Style, _("Theme..."));   // the client's own window: nothing asked here
 	m_menu.AppendSubMenu(tools, _("Tools"));
 
 	ibClientMenu help;

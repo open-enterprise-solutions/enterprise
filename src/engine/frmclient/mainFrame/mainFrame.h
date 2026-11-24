@@ -270,6 +270,10 @@ protected:
 	// Tools → Options, the one dialog of both modes: the schema its item asked (the designer's McpServer, the
 	// application's Debugging) says which pages it holds besides the common ones.
 	void ShowOptions(ibProtocol::ibSchema::ibKind schema, const ibProtocolNode& shown);
+	// …and in force at once, as the desktop's UpdateEditorOptions put them: every document's views told (each editor
+	// takes the font and colours anew, in the look in force), and the output window - after Options, and when the look
+	// changes (OnSysColourChanged).
+	void UpdateEditorOptions();
 
 	class ibFrameManager : public ibAuiManager {
 	public:
@@ -360,6 +364,9 @@ private:
 	// Cut, Copy, Paste, Delete, Select all — the field under the focus does them.
 	void OnEditCommand(wxCommandEvent& event);
 	void OnTabChanged(ibAuiNotebookEvent& event);
+	// The look changed - the theme chosen (Tools → Theme) or the system's: the editors' options put in force again,
+	// once the event has gone round the windows and each has taken the theme's own colours anew.
+	void OnSysColourChanged(wxSysColourChangedEvent& event);
 
 	static ibFrontendMainFrame* s_instance;
 

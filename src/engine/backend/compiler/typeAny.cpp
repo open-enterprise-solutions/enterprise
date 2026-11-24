@@ -4,7 +4,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "value.h"
-#include "core/graphics/picture.h"   // ibPicture::FromBase64 — the master read, scaled to 16 once
+#include "core/graphics/picture.h"   // ibPicture::FromSvg — the drawing, at 16
 
 ////////////////////////////////////////////////////////////////////////////
 // A BARRIER IS A TYPE, not a special case in the interpreter
@@ -49,7 +49,7 @@ public:
 	ibPicture GetClassIcon() const override {
 		if (m_picture == nullptr)
 			return ibPicture();
-		return ibPicture::FromBase64(m_picture, ibSize(16, 16));
+		return ibPicture::FromSvg(m_picture);
 	}
 
 	ibCtorObjectType GetObjectTypeCtor() const override { return ibCtorObjectType::ibCtorObjectType_object_system; }
@@ -64,7 +64,7 @@ public:
 
 private:
 	ibClassKind m_kind;   // the family: the high byte every member carries
-	const ibChar* m_picture;   // PNG, base64; null — no picture
+	const ibChar* m_picture;   // its SVG; null — no picture
 };
 
 // `Any` on its own — declared, restricting nothing. It exists so an author can
@@ -84,8 +84,8 @@ public:
 
 } // namespace
 
-/* PNG — two chain links: a reference, whichever it is. The flat style of the families beside it, in a hue of its own */
-static const ibChar s_anyRef_16_png[] = ibT("iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAADTElEQVR42u2av67TMBTG7yP0EfocmSoxI2VixU8QRUhMgJQBJiQ6IjGkApYLAxnuwILIcAEJCdEBBiQkOrAwIPIIRl/lIPf0OE1C7di+jWQpbRLHv2P7/Pnas7PTEdaRZOUsyco0ycoiycplkpV1kpUr9VkkWTmPFXyhQGWPtoYxYprxqic4bRsYLvRZb0bC660IEV6YgK7feyHvPL2Uj6rP8uX7H/Lx6y/ywflHeeP+qy4jrIKHv/nwYgv85uuvf9D47taTt9vzi08/t9fwOdiVYILHbH/4/qcLbsdIaNduP+fuWQQHj9nG7BqA2NauCOaZTfTwuhGwEphrIgb4jUp+EClyU6iEAZhtsw4dPu8bNuET4BiZPuahwoseucPOM+iLCZEiOnit74r6AjRvQqJNeNV/rj8LH4C+vUiMbMNz26DNDUifdZTw6j0F3QJIpEi/yykKG+vw6l0b+g7UDpP5AFXSNo7gc9oXwiAKKPJ96tIAlSP4vS0GB2jIBmeTLX3sRxfw6B8FFJzgZBGAylgYDAblAh5GZpyfu4pQ7f0+ubkVeCb2o1UuZz+lSo4hL88dwTfW977+AhqPEYqYgW0cwdtd+pp6K7TvltT5HSMnHwkvbHv6hlpZ/Wixs/8Zj6zfn4YIL0wJBo0AGCDjAHOSxKxCht9Z0lxOzmyBisnk0lDh5d1n75ameyBKYMBDnVMw8BjM5bfftXbfnMvLGT/QmIzA5fbewmvprR4K1z1zc6miSK6cakGrulDgJQmFgssGGV9wsIUCv6e20JlsQYYYIST4PdmZqwjxTPsTFuMT9kpaFFCGwsZLeHFIptLh4BjbFYHPMAjO8Q5cO2Ak/+FNiRENkS00gDHbqB0YJSdM+EMrYWBrbBc2tnX7BRfierbKaknrWL0VNE/o+oeHdSXHpXpL3jtXxigUaK1K6UKJKs4ETFfqrX//5ZtAva3V+cwXA0ym3qKAQhWpLfmFU+Oc1NurqN52JSdRq7eGQV4N9bZjoIPU26jgx6i3UcGPVW+jgY9avR2Yi8el3o4wQjzq7bHidZDq7X8aIWz11kZFGIx6ayskBqHe2k6MvFZvXa8Er9RbRz7BT/V2ghDpj3o7ccY4vXp7Oo53/AXLECU7NCFXOwAAAABJRU5ErkJggg==");
+// Two chain links: a reference, whichever it is — in the blue of the reference's own families.
+static const ibChar s_anyRef_svg[] = ibT("<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'><g transform='rotate(-45 8 8)'><rect x='0.6' y='5.6' width='8.6' height='4.8' rx='2.4' fill='none' stroke='#1c6fd1' stroke-width='1.7'/><rect x='6.8' y='5.6' width='8.6' height='4.8' rx='2.4' fill='none' stroke='#1c6fd1' stroke-width='1.7'/></g></svg>");
 
 //**********************************************************************
 //*                       Runtime register                             *
@@ -96,7 +96,7 @@ GENERATE_REGISTER(ibT("Any"), s_cs_reg_any_all, new ibCtorAnyUnrestricted());
 // (metaCtor.h): their kind, no metaclass, any metaID (clsid.h) — so `AnyRef` is stored as a reference, the
 // `_RTRef` / `_RRRef` pair, and a type test against it is the range of its kind. The others stay system ids —
 // none of them is a type a field is stored as.
-GENERATE_REGISTER(ibT("AnyRef"), s_cs_reg_any_ref, new ibCtorAnyKind(ibT("AnyRef"), ibClassKind_Reference, make_clsid_dynamic(kIbClsidAnyMetaID, ibClassKind_Reference), s_anyRef_16_png));
+GENERATE_REGISTER(ibT("AnyRef"), s_cs_reg_any_ref, new ibCtorAnyKind(ibT("AnyRef"), ibClassKind_Reference, make_clsid_dynamic(kIbClsidAnyMetaID, ibClassKind_Reference), s_anyRef_svg));
 GENERATE_REGISTER(ibT("AnyObject"), s_cs_reg_any_obj, new ibCtorAnyKind(ibT("AnyObject"), ibClassKind_Object, make_clsid_dynamic(kIbClsidAnyMetaID, ibClassKind_Object)));
 GENERATE_REGISTER(ibT("AnyManager"), s_cs_reg_any_mgr, new ibCtorAnyKind(ibT("AnyManager"), ibClassKind_Manager, make_clsid_dynamic(kIbClsidAnyMetaID, ibClassKind_Manager)));
 GENERATE_REGISTER(ibT("AnyControl"), s_cs_reg_any_ctl, new ibCtorAnyKind(ibT("AnyControl"), ibClassKind_Control, system_to_clsid("AnyControl")));

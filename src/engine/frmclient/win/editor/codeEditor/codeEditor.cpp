@@ -7,7 +7,7 @@
 #include "frmclient/mainFrame/mainFrame.h"
 #include "frmclient/docView/tabDocument.h"   // the module's tab — what the text is fetched from and handed back to
 #include "frmclient/mainFrame/objinspect/objinspect.h"   // the inspector — what it shows as it is made, and activated
-#include "res/bitmaps_res.h"
+#include "deskgui/artProvider.h"   // wxART_BREAKPOINT, wxART_CURRENT_LINE, wxART_BREAK_LINE — the margin's markers, the theme's
 #include "protocol/protocolDesigner.h"   // ibProtocol::ibView::ibModule
 
 #include <wx/artprov.h>
@@ -95,26 +95,26 @@ ibCodeEditor::ibCodeEditor(ibTabDocument* document, wxWindow* parent, wxWindowID
 	SetYCaretPolicy(ibSTC_CARET_EVEN | ibSTC_VISIBLE_STRICT | ibSTC_CARET_SLOP, 1);
 
 	// Set the marker bitmaps.
-	MarkerDefineBitmap(Breakpoint, wxMEMORY_BITMAP(Breakpoint_png));
-	MarkerDefineBitmap(CurrentLine, wxMEMORY_BITMAP(Currentline_png));
-	MarkerDefineBitmap(BreakLine, wxMEMORY_BITMAP(Breakline_png));
+	MarkerDefineBitmap(Breakpoint, wxArtProvider::GetBitmap(wxART_BREAKPOINT, wxART_DEBUG, wxSize(13, 13)));
+	MarkerDefineBitmap(CurrentLine, wxArtProvider::GetBitmap(wxART_CURRENT_LINE, wxART_DEBUG, wxSize(11, 11)));
+	MarkerDefineBitmap(BreakLine, wxArtProvider::GetBitmap(wxART_BREAK_LINE, wxART_DEBUG, wxSize(11, 11)));
 
 	// THE SAME DOT, ANOTHER COLOUR, for a breakpoint with a condition: the shape still reads as "a breakpoint",
 	// the colour says "not every time". Turned from the red one rather than drawn anew, so the two never drift.
 	// BLUE, not amber: amber read as a darker red beside the red dot, and the yellow run arrow drawn on top of
 	// it disappeared (Max, 2026-09-11).
-	wxImage conditionalBreakpoint = wxMEMORY_IMAGE(Breakpoint_png);
+	wxImage conditionalBreakpoint = wxArtProvider::GetBitmap(wxART_BREAKPOINT, wxART_DEBUG, wxSize(13, 13)).ConvertToImage();
 	conditionalBreakpoint.RotateHue(0.62);   // red -> blue
 	MarkerDefineBitmap(ConditionalBreakpoint, wxBitmap(conditionalBreakpoint));
 
-	//markers
-	MarkerDefine(ibSTC_MARKNUM_FOLDER, ibSTC_MARK_BOXPLUS, *wxWHITE, *wxBLACK);
-	MarkerDefine(ibSTC_MARKNUM_FOLDEROPEN, ibSTC_MARK_BOXMINUS, *wxWHITE, *wxBLACK);
-	MarkerDefine(ibSTC_MARKNUM_FOLDERSUB, ibSTC_MARK_VLINE, *wxWHITE, *wxBLACK);
-	MarkerDefine(ibSTC_MARKNUM_FOLDEREND, ibSTC_MARK_BOXPLUSCONNECTED, *wxWHITE, *wxBLACK);
-	MarkerDefine(ibSTC_MARKNUM_FOLDEROPENMID, ibSTC_MARK_BOXMINUSCONNECTED, *wxWHITE, *wxBLACK);
-	MarkerDefine(ibSTC_MARKNUM_FOLDERMIDTAIL, ibSTC_MARK_TCORNER, *wxWHITE, *wxBLACK);
-	MarkerDefine(ibSTC_MARKNUM_FOLDERTAIL, ibSTC_MARK_LCORNER, *wxWHITE, *wxBLACK);
+	// the fold markers' shapes; their colours are the font and colour set's (ibFontColorSettings::Apply)
+	MarkerDefine(ibSTC_MARKNUM_FOLDER, ibSTC_MARK_BOXPLUS);
+	MarkerDefine(ibSTC_MARKNUM_FOLDEROPEN, ibSTC_MARK_BOXMINUS);
+	MarkerDefine(ibSTC_MARKNUM_FOLDERSUB, ibSTC_MARK_VLINE);
+	MarkerDefine(ibSTC_MARKNUM_FOLDEREND, ibSTC_MARK_BOXPLUSCONNECTED);
+	MarkerDefine(ibSTC_MARKNUM_FOLDEROPENMID, ibSTC_MARK_BOXMINUSCONNECTED);
+	MarkerDefine(ibSTC_MARKNUM_FOLDERMIDTAIL, ibSTC_MARK_TCORNER);
+	MarkerDefine(ibSTC_MARKNUM_FOLDERTAIL, ibSTC_MARK_LCORNER);
 
 	// annotations
 	AnnotationSetVisible(ibSTC_ANNOTATION_BOXED);

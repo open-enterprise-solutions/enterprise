@@ -1,7 +1,6 @@
 #include "enumeration.h"
 
-/* PNG */
-static const ibString s_enum_64_png = ibT("iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAABcklEQVR4nOyYvUoDQRSFzx0SfAxfQSGCGAWrFKaxs7IQFisLH0c0ndrHYgutrEQkYF7Bd7ATHUcDqbJ7ZyAks3vPVyTL7mFZzv7c4XMwjoNxWACMwwJgHBYA47AAGKeTEh71ylMIjgG/O9sjr/AYF5PhLRqKxIRG2+UmurgOm4OKyBO+cF68Dz/QMOKegA7uw2+/JjFA19+F/4OqQG/v0GMNTF6ea2+y+g242SnPwnPSh4rs/2cbhv4RFH+CWFKymRDzCmwhnpRsFnAdEJGZIp6UbBaoBQjcFSJJyeaCWkDxdjT28I9aLsy4h78sGkbUOuDn2186J1MRbCw6Hgr6hLiLunNo83hdJF2U2aVwm+EYhHHoA1LC9AH0AZXQB9AHpGYzgT4AxqEP0AL0AfQB9AFz6ANaCMcgjEMfkBKmD6APqGRlPmDZ6wn6ADVBH0Af0GroA7QAfQB9AH3AHPqAFsIxCOOwABiHBcA4LADGMV/ALwAAAP//Kr2c3AAAAAZJREFUAwCgxLFRjB2ybAAAAABJRU5ErkJggg==");
+static const ibString s_enum_svg = ibT("<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'><circle cx='3' cy='4' r='1.7' fill='#ae3ec9'/><circle cx='3' cy='8' r='1.7' fill='#ae3ec9'/><circle cx='3' cy='12' r='1.7' fill='#ae3ec9'/><path d='M6.5 4 H14 M6.5 8 H14 M6.5 12 H11.5' fill='none' stroke='#5a7b95' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/></svg>");
 
 ibPicture ibValueMetaObjectEnumeration::GetIcon() const
 {
@@ -10,7 +9,7 @@ ibPicture ibValueMetaObjectEnumeration::GetIcon() const
 
 ibPicture ibValueMetaObjectEnumeration::GetIconGroup()
 {
-	static const ibPicture picture = ibPicture::FromBase64(s_enum_64_png, ibSize(16, 16));
+	static const ibPicture picture = ibPicture::FromSvg(s_enum_svg);
 
 	return picture;
 }

@@ -1,7 +1,6 @@
 #include "calculationRegister.h"
 
-/* PNG */
-static const ibString s_calculationRegister_16_png = ibT("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");
+static const ibString s_calculationRegister_svg = ibT("<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'><rect x='1' y='1' width='14' height='14' rx='2.5' fill='#7048e8'/><rect x='2.8' y='4.8' width='10.4' height='6.4' rx='0.8' fill='none' stroke='#ffffff' stroke-width='1.1'/><circle cx='8' cy='8' r='1.6' fill='#ffffff'/></svg>");
 
 ibPicture ibValueMetaObjectCalculationRegister::GetIcon() const
 {
@@ -10,7 +9,7 @@ ibPicture ibValueMetaObjectCalculationRegister::GetIcon() const
 
 ibPicture ibValueMetaObjectCalculationRegister::GetIconGroup()
 {
-	static const ibPicture picture = ibPicture::FromBase64(s_calculationRegister_16_png, ibSize(16, 16));
+	static const ibPicture picture = ibPicture::FromSvg(s_calculationRegister_svg);
 
 	return picture;
 }

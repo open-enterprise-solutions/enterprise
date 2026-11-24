@@ -82,16 +82,15 @@
 	/* A table's scrollbar over the window of rows it holds. */
 	--oes-pager: 12px;
 
-	/* A control's own look when its author picks none - the platform's (frmserver's default style, the platform style's
-	   form text and background): ink on a ground a step below white, cream until 2026-11-13. */
+	/* A control's own look when its author picks none - the platform's, a colour the form leaves empty (the platform
+	   style's form text and background): ink on a ground a step below white. */
 	--oes-form-text: #3f5c77;
 	--oes-form-bg: #eef2f6;
 
 	/* What stands on a coloured fill - a message's mark, the offline strip. */
 	--oes-on-colour: #ffffff;
-	/* A form's colour named on one side alone - its text or its fill - is paired with the light theme's other side,
-	   whatever the theme: the author chose it against that one (control.js, rows.js). */
-	--oes-paper: #ffffff;
+	/* A cell's fill named alone is read with the light theme's ink, whatever the theme: the author chose it against that
+	   one (control.js onFill, rows.js). A control's colour named alone gets its kind's light side (themedPair). */
 	--oes-paper-text: #222222;
 	/* The light a command bar is lit by, from the top down - the thin client's: half the light it was lit by, its
 	   flat form bar and its lit one met halfway (2026-11-13). */

@@ -58,7 +58,11 @@ public:
 
 		SetOwner(owner);
 
-		SetBackgroundColour(*wxWHITE);
+		// the table's ground, which the owner paints the rows on (DrawTableContent) and hands on when it is given one
+		// (ibDataViewCtrl::SetBackgroundColour); none given, the theme's as it stands, in the look in force - the
+		// canon's white stayed under a dark table (2026-11-24)
+		if (owner->UseBackgroundColour())
+			SetBackgroundColour(owner->GetBackgroundColour());
 
 		SetBackgroundStyle(wxBG_STYLE_PAINT);
 	}

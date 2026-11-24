@@ -19,10 +19,10 @@
 #include "deskgui/univ/ctrl/staticText.h"
 #include "deskgui/univ/dialog.h"
 
-// ⭐ THE LAUNCHER'S OWN PICTURES. It links the backend alone, so the frontend's art provider — which answers the
-// stock ids in the set's manner in the designer and the running application — never reaches it, and a stock id
-// asked for here drew wx's own (green arrows, a blue book, a clipboard for Edit). PNG in Base64 in
-// launcher_res.cpp, drawn from tools/pictures/render.js like every other picture.
+// ⭐ THE LAUNCHER'S PICTURES — the desktop's, as the designer and the running application draw them: a desktop program
+// like them, it is answered by the same art providers (the core's stock pictures, the theme's), so it names their ids
+// where it has their act, takes the core's application for the designer, and draws only the web client's globe, its own
+// (launcher_res.cpp).
 enum class ibLauncherPicture { Enterprise, Designer, Web, Add, Edit, Delete, Exit };
 wxBitmapBundle ibGetLauncherPicture(ibLauncherPicture which);
 

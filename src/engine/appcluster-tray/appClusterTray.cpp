@@ -130,6 +130,10 @@ bool ibAppClusterTray::OnInit()
 	if (!wxApp::OnInit())
 		return false;
 
+	// AS THE MACHINE IS SET: it has no theme to choose, so its menu and its message boxes are the system's look (Max,
+	// 2026-11-24) — the programs on ibWxApp take it there (deskgui/app.h), this one is on wx's own application.
+	SetAppearance(Appearance::System);
+
 	// No window of its own: a message box closed is not the last window gone.
 	SetExitOnFrameDelete(false);
 

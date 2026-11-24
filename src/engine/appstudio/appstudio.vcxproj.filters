@@ -55,9 +55,6 @@
     <Filter Include="win\editor\visualEditor">
       <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f7a15}</UniqueIdentifier>
     </Filter>
-    <Filter Include="win\editor\visualEditor\res">
-      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f7a16}</UniqueIdentifier>
-    </Filter>
     <Filter Include="win\editor\sharedAttributeEditor">
       <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f7a17}</UniqueIdentifier>
     </Filter>
@@ -316,9 +313,6 @@
     </ClInclude>
     <ClInclude Include="win\editor\visualEditor\innerFrame.h">
       <Filter>win\editor\visualEditor</Filter>
-    </ClInclude>
-    <ClInclude Include="win\editor\visualEditor\res\visualResource.h">
-      <Filter>win\editor\visualEditor\res</Filter>
     </ClInclude>
     <ClInclude Include="win\editor\visualEditor\titleFrame.h">
       <Filter>win\editor\visualEditor</Filter>

@@ -11266,6 +11266,7 @@ msgid "%s: the element '%s' is still open - WriteEndElement for every WriteStart
 msgstr ""
 
 #: src/engine/deskgui/docview/choiceTemplate.h:56
+#: src/engine/backend/metaCollection/partial/documentJournalMetaQuery.cpp
 msgid "Select document type"
 msgstr ""
 
@@ -13016,6 +13017,13 @@ msgstr ""
 #: src/engine/frmclient/propertyManager/property/advprop/advpropCalcSchedule.cpp:62
 #: src/engine/frmclient/propertyManager/property/advprop/advpropCalcSchedule.cpp:85
 msgid "<not set>"
+msgstr ""
+
+#: src/engine/frmclient/propertyManager/property/advprop/advpropColour.cpp:188
+#: src/engine/frmclient/propertyManager/property/advprop/advpropColour.cpp:213
+#: src/engine/frmclient/propertyManager/property/advprop/advpropFont.cpp:157
+#: src/engine/frmclient/propertyManager/property/advprop/advpropFont.cpp:164
+msgid "<default>"
 msgstr ""
 
 #: src/engine/frmclient/propertyManager/property/advprop/advpropCalcSchedule.cpp:101
@@ -16027,10 +16035,6 @@ msgstr ""
 msgid "After recording, there would not be a single role with admin rights. The action is impossible!"
 msgstr ""
 
-#: src/engine/frmserver/schema/style.cpp:88
-msgid "The theme could not be kept"
-msgstr ""
-
 #: src/engine/frmserver/visualView/controlEnum.h:81
 msgctxt "sizer flag"
 msgid "Shrink"
@@ -16091,7 +16095,7 @@ msgid "Foreground"
 msgstr ""
 
 #: src/engine/frmserver/visualView/ctrl/form.h:683
-msgid "The form's text colour, inherited by controls that have no colour of their own. Default: the system colour."
+msgid "The form's text colour. Default: the system colour, which follows the user's theme."
 msgstr ""
 
 #: src/engine/frmserver/visualView/ctrl/form.h:684
@@ -17767,10 +17771,6 @@ msgstr ""
 
 #: src/engine/backend/metaCollection/partial/documentJournalMetaQuery.cpp
 msgid "Document type"
-msgstr ""
-
-#: src/engine/backend/metaCollection/partial/documentJournalMetaQuery.cpp
-msgid "Select document type"
 msgstr ""
 
 #: src/engine/backend/metaCollection/partial/documentJournalMetadata.cpp

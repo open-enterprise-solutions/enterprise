@@ -1,7 +1,6 @@
 #include "metaDimensionObject.h"
 
-/* PNG */
-static const ibString s_dimension_16_png = ibT("iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAEYUlEQVR4nOyaT2wUVRzHv29mdrfLLmWTsuxuIcUDS4NSOSg1akQPGjWQcFHDkpCoMRoPxoMh0QNREhIN8eLBeJBIogaIJMY/hEi4NIBSDwUL2gPVRK22u6WFtvuvu8zO480UtrvzZrazXDrTN5/sbPL7vd+8fb/vzPs3sxIER4Lg+AJAcHwBIDi+ABAcXwAIji8ABMcXAILjCwDBUZYKyGXCj1Iqv0yBLSC4nwBdcDGsndPsa4QQjIDWjiZPlH9tFU9sK3oRwawSOcQC3mFh3rxTKK2x78OJWvEDchJVqxDbxLJy5AIB2e/Z5HUIkdnxXk6JnLcLsUwum4keIoRsx4qB9E9kogctS8yOib3hfkLlpn4T2rwNkcefgxLvBglH4GZouQj1+jiKF06jMnq1qUwm2sPxY6WhRh93B0ia9GajHUo/iFjmLQR60q5PXkdvo97W2N63EdzU11RW06TXzfGcAJSQ3kY78sROeJXojl1NNiXoNcfwYwBFk2xyYj28itKVaLIJ6BYuhjuLINpoSsEOLkSbnUZx8Czra/+zI8v6XQlyPGWMEaF0HzoecMf4SVZFzZ515pglF0JmykMDyJ85CXqr0uRXx/82jvnhXzB/ZRBrdr9i0QD30dYcP/fjl5g79TWXvJnKtWFMfXYAWn4WbsexANW/fkf50jmn4dAKecz+cBRux5EAtDSHmW+PWFcQ64KS2shGS76q6p9MtN9+hptxNAaU/xhiIhSaT0xsQOyFNyCvTRk2rVZQGPgOpYtn70RQ41MY+J5NwKpt3eGHnsRy4kiA2tQE51v97J568jokGMLqZ15CZeQSamyWWHASNmPcYOPGV7Z12wmQO/ga2iHx/hHcC466gGohQKC7hw9kCSupHngJRwIQ2eJGoXbBLaqktLW9DDgSQEnyV1XNjvGBLCE1NwYv4WgMCCQ3cL65n45bDoK1G5OLQUwQZV03VvU/bZjVf69h/uriRjPQs9n2N++1T7eLIwFC6W3GdKfNTNd9au4/TH16wPBL4SjUyTF9u9VwFjE++sAYTPfVXY0CKPEUlhtnC6FAELHdr1oW6aKoE/+Ykl+gY+v2xeRdiuOVYOC+3rbmbCnaic7nM3A7bW2GOnftQ4BNc/kz37TcD+hPkKw2Q8GNaXTu3Lf44/Eklpu2d4P6XRDatHVhOzw5bqwR6HyRJbPeGBBbbYfltd0Is8NN8AJQmmULmvql0ZfA5isprekyVoJux7x8N3IzwT8SAy432uo0d45nsGj7kNnBCcBWs8ONdvH8aXiVwrlTJg+5bI7hZwFS+5yyXn3XrIxewcyxT3BrbJR5S3A7tJg32nqTtVnfjtf9lJbZrvQLc7zlq7FsJvIuK/oQKwhC6f7EieLHnN/uhOyeyCDrD49gZXAxebzwmFWB7UKIvVDcQTR6mN08GryK8XKUfpRQC0/ZhZCl6hD29bgo+H+RgeD4AkBwfAEgOL4AEBxfAAiOLwAExxcAgiO8ALcBAAD//6Iu7ucAAAAGSURBVAMAQJZsiP7D2KgAAAAASUVORK5CYII=");
+static const ibString s_dimension_svg = ibT("<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'><rect x='1' y='4' width='14' height='8' rx='2' fill='#f76707'/><circle cx='4.4' cy='8' r='1.6' fill='none' stroke='#ffffff' stroke-width='1.3'/><path d='M6 8 H8.4' fill='none' stroke='#ffffff' stroke-width='1.3' stroke-linecap='butt' stroke-linejoin='round'/><path d='M7.7 8 V9.8' fill='none' stroke='#ffffff' stroke-width='1.2' stroke-linecap='butt' stroke-linejoin='round'/><path d='M10 8 H12.5' fill='none' stroke='#ffffff' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/></svg>");
 
 ibPicture ibValueMetaObjectDimension::GetIcon() const
 {
@@ -10,7 +9,7 @@ ibPicture ibValueMetaObjectDimension::GetIcon() const
 
 ibPicture ibValueMetaObjectDimension::GetIconGroup()
 {
-	static const ibPicture picture = ibPicture::FromBase64(s_dimension_16_png, ibSize(16, 16));
+	static const ibPicture picture = ibPicture::FromSvg(s_dimension_svg);
 
 	return picture;
 }

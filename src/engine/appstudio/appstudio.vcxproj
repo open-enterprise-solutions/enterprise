@@ -268,7 +268,6 @@
     <ClInclude Include="win\editor\roleEditor\roleEditor.h" />
     <ClInclude Include="win\editor\visualEditor\designerTreeCtrl.h" />
     <ClInclude Include="win\editor\visualEditor\innerFrame.h" />
-    <ClInclude Include="win\editor\visualEditor\res\visualResource.h" />
     <ClInclude Include="win\editor\visualEditor\titleFrame.h" />
     <ClInclude Include="win\editor\visualEditor\visualEditor.h" />
     <ClInclude Include="win\editor\visualEditor\visualEditorDragItem.h" />

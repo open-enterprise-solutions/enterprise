@@ -3,7 +3,7 @@
 #include "backend/backend_picture.h"
 
 // A field: its title's lines on the left, the slot its view stands in on the right — one picture whatever the view.
-static const ibString s_field_png = "iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAABFElEQVR42u2auw3CMBBA2SALMAYVVSoahvEiSEaiZBk2QKxBYyoqJOOTEJUR+fqTe0+6zol1z9/EXq0AAAAAAAASsDY3E+IawicKqcuUkHiTOPGYiCangJzJfyXk7Pa+kDBFtP75cveP58vPhbxb6iiiF8SST0VMQnYBc7Z8rCcUJyA1CEAAAroL2GxbG8KF8D1DnrFVC/gk70eGrVmAm0CAQwBDgElwkIDD8eTb3f5vXVJGyi5qGZSE+krvKqEKAV1aPtYTFiNg6JyDAIYAk2DyZfDncjf2Yyj7MthzI2SnFlDbVtghYIECdA+B3JMgv8QQgAAEqBCg/mhM4+Go+uNx3Rck1F+R4ZIU1+QAAAAAAKAw3hy81P+ALI/ZAAAAAElFTkSuQmCC";
+static const ibString s_field_svg = "<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'><rect x='0.8' y='5.6' width='4.4' height='1.6' rx='0.8' fill='#5a7b95'/><rect x='0.8' y='8.8' width='3' height='1.6' rx='0.8' fill='#5a7b95'/><rect x='6.2' y='3' width='9' height='10' rx='1.5' fill='#1c6fd1'/><rect x='7.2' y='4' width='7' height='8' rx='0.7' fill='#ffffff'/><rect x='8.5' y='7' width='3.5' height='2' rx='0.7' fill='#1c6fd1'/></svg>";
 
 ibPicture ibValueField::GetIcon() const
 {
@@ -12,6 +12,6 @@ ibPicture ibValueField::GetIcon() const
 
 ibPicture ibValueField::GetIconGroup()
 {
-	static const ibPicture picture = ibPicture::FromBase64(s_field_png, ibSize(16, 16));
+	static const ibPicture picture = ibPicture::FromSvg(s_field_svg);
 	return picture;
 }

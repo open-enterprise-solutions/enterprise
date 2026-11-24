@@ -67,11 +67,23 @@ while IFS= read -r file; do
   done < <(git show "$head:$file" | perl -ne 'print "$.\n" if /^(?:\xEF\xBB\xBF)?\s*#\s*pragma\s+once\b/')
 done < <(git -c core.quotePath=false diff --name-only -M --diff-filter=ACMR "$base...$head" -- '*.h' '*.hpp' "${exclude[@]}")
 
-# 3. A new picture is a PNG in Base64, never XPM (development.md section 2).
+# 3. A new picture is SVG text in the source, never XPM (development.md section 2).
 while IFS= read -r file; do
   [ -n "$file" ] || continue
-  report "$file" 1 "a new XPM picture - a picture is a PNG in Base64 in the file that reads it, drawn from an SVG in tools/pictures/render.js. See docs/development.md section 2."
+  report "$file" 1 "a new XPM picture - a picture is SVG text in the file that reads it (static const ibString s_<name>_svg). See docs/development.md section 2."
 done < <(git -c core.quotePath=false diff --name-only -M --diff-filter=AC "$base...$head" -- '*.xpm' "${exclude[@]}")
+
+# 3a. Nor a PNG in Base64 (iVBORw0KGgo is a PNG's signature, encoded). Asked of the ADDED lines only.
+while IFS=$'\t' read -r file n; do
+  [ -n "$file" ] || continue
+  report "$file" "$n" "a PNG in Base64 - a picture is SVG text in the file that reads it (static const ibString s_<name>_svg), drawn by the core at the size asked. See docs/development.md section 2."
+done < <(git -c core.quotePath=false diff -U0 -M --no-color "$base...$head" -- '*.cpp' '*.h' '*.hpp' '*.inl' "${exclude[@]}" | perl -ne '
+  if (/^\+\+\+ (?:b\/(.*)|\/dev\/null)$/) { $f = $1; next }
+  if (/^@@ -\S+ \+(\d+)/)                { $n = $1; next }
+  next unless defined $f && /^\+/;
+  print "$f\t$n\n" if /iVBORw0KGgo/;
+  $n++;
+')
 
 # 4. A _() message id is ASCII (portability.md section 1.9a). Asked of the ADDED lines only, and never of a
 # comment: typography in a comment is harmless, and there is plenty of it.

@@ -255,8 +255,8 @@ ibDialogLinqConstructor::ibDialogLinqConstructor(wxWindow* parent, const wxStrin
 			m_fields->SelectRow(m_fields->GetItemCount() - 1);
 		});
 		AddTool(fieldBar, _("Delete"), wxART_DELETE, [this, removeSelected] { removeSelected(m_fields); });
-		AddTool(fieldBar, _("Move up"), wxART_UP, [this, moveSelected] { moveSelected(m_fields, -1); });
-		AddTool(fieldBar, _("Move down"), wxART_DOWN, [this, moveSelected] { moveSelected(m_fields, +1); });
+		AddTool(fieldBar, _("Move up"), wxART_GO_UP, [this, moveSelected] { moveSelected(m_fields, -1); });
+		AddTool(fieldBar, _("Move down"), wxART_GO_DOWN, [this, moveSelected] { moveSelected(m_fields, +1); });
 		wxBoxSizer* fieldPane = pane(page, _("Fields"), fieldBar, m_fields);
 		// Said only while the query groups: then these are not the answer's only columns, and not rows.
 		m_fieldsNote = new ibStaticText(page, wxID_ANY, wxEmptyString);
@@ -325,8 +325,8 @@ ibDialogLinqConstructor::ibDialogLinqConstructor(wxWindow* parent, const wxStrin
 		m_groupKeys->AppendTextColumn(_("Grouped by"), wxDATAVIEW_CELL_EDITABLE, FromDIP(220));
 		ibAuiToolBar* keyBar = MakeBar(page);
 		AddTool(keyBar, _("Delete"), wxART_DELETE, [this, removeSelected] { removeSelected(m_groupKeys); });
-		AddTool(keyBar, _("Move up"), wxART_UP, [this, moveSelected] { moveSelected(m_groupKeys, -1); });
-		AddTool(keyBar, _("Move down"), wxART_DOWN, [this, moveSelected] { moveSelected(m_groupKeys, +1); });
+		AddTool(keyBar, _("Move up"), wxART_GO_UP, [this, moveSelected] { moveSelected(m_groupKeys, -1); });
+		AddTool(keyBar, _("Move down"), wxART_GO_DOWN, [this, moveSelected] { moveSelected(m_groupKeys, +1); });
 		keyRow->Add(pane(page, ibString::Format(_("Group by (%s ... %s)"), Word(KEY_GROUP), Word(KEY_BY)), keyBar, m_groupKeys),
 			wxSizerFlags(1).Expand().Border(wxALL, gap));
 		lists->Add(keyRow, wxSizerFlags(1).Expand());
@@ -415,8 +415,8 @@ ibDialogLinqConstructor::ibDialogLinqConstructor(wxWindow* parent, const wxStrin
 			m_order->SelectRow(m_order->GetItemCount() - 1);
 		});
 		AddTool(bar, _("Delete"), wxART_DELETE, [this, removeSelected] { removeSelected(m_order); });
-		AddTool(bar, _("Move up"), wxART_UP, [this, moveSelected] { moveSelected(m_order, -1); });
-		AddTool(bar, _("Move down"), wxART_DOWN, [this, moveSelected] { moveSelected(m_order, +1); });
+		AddTool(bar, _("Move up"), wxART_GO_UP, [this, moveSelected] { moveSelected(m_order, -1); });
+		AddTool(bar, _("Move down"), wxART_GO_DOWN, [this, moveSelected] { moveSelected(m_order, +1); });
 		row->Add(pane(page, _("Order"), bar, m_order), wxSizerFlags(5).Expand().Border(wxALL, gap));
 		m_order->SetDropTarget(new ibCallbackDropTarget([this] { AddSelectedToOrder(); }));
 

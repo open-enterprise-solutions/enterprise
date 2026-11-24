@@ -1,7 +1,7 @@
 #include "dataReport.h"
 
-/* PNG */
-static const ibString s_report_64_png = ibT("iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAABpklEQVR4nOybvUoDQRDH/3v6ChZBJbZaiPgBQZuzsBNB8QUEBUvBQrARhPT2ClZWPoKFaYSAGMRCESwEFR/BznEDCgcm2T1uyO1m5tfd3hR7P25md+4jgXASCEcFQDjDroD5xXSTiI6NMZMoETuHJyJTbzUbF2BkyBVQGate2oufQsnYOYwYg43K6MTH5/trC0w4UyCEi89iEpzO1dJtMBFlDfiVsAsGjCvA1gDKHt/eXKOfLCwtdz1H39i5azbOUICoVwGOdIh+GSwqIToBhwf7/8aKSIhOwPraKquEKFOAU0K0NYBLQtRFkEOCsxcIjV77gixtCbO19MvVOwx0N2h7h7orJro7IA9WQNUVo88DEDh5ew/fGvGH3gEIlJnzlY7j91tX4EQfikI4KgDC0VUAfWZ876Hj+NvJNMpAUwDCUQEQjgqAcHQfACZCW9990RSAcFQAhKMCIBwVAOGoAAhHewEw4bvn943jfgPUDU0BCEcFQDgqAMLRfQBykvcbnNDRFHAFENEjIsVn7j4/TR0R4QXx8dyeuyvI+c/QoKM1AMIRL+AHAAD//6GNUIwAAAAGSURBVAMAwBRdkVMdDg8AAAAASUVORK5CYII=");
+#include "backend/backend_picture.h"
+#include "core/picturePredefined.h"   // g_picReportCLSID — the core's drawing of a report, the Reports group's as well
 
 ibPicture ibValueMetaObjectReport::GetIcon() const
 {
@@ -10,7 +10,5 @@ ibPicture ibValueMetaObjectReport::GetIcon() const
 
 ibPicture ibValueMetaObjectReport::GetIconGroup()
 {
-	static const ibPicture picture = ibPicture::FromBase64(s_report_64_png, ibSize(16, 16));
-
-	return picture;
+	return ibBackendPicture::GetPicture(g_picReportCLSID);
 }

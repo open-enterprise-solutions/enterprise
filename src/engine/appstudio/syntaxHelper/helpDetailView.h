@@ -49,6 +49,8 @@ private:
 	// through the parent pane's ShowEntry so the history stack stays
 	// coherent.
 	void OnLinkClicked(wxHtmlLinkEvent& event);
+	// The look changed (the theme chosen, or the system's): the page shown, written again in its colours.
+	void OnSysColourChanged(wxSysColourChangedEvent& event);
 
 	// Right-click on the HTML pane — opens a Copy / Select All menu
 	// and copies the current selection into the system clipboard. Bound

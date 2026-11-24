@@ -52,7 +52,7 @@ public:
 
 // Base class for custom ibPropertyGrid editors.
 // - Names of builtin property editors are: TextCtrl, Choice,
-//   ComboBox, CheckBox, TextCtrlAndButton, and ChoiceAndButton. Additional
+//   ComboBox, CheckBox, TextCtrlAndButton, TextCtrlAndButtons and ChoiceAndButton. Additional
 //   editors include SpinCtrl and DatePickerCtrl, but using them requires
 //   calling ibPropertyGrid::RegisterAdditionalEditors() prior use.
 // - Pointer to builtin editor is available as ibPGEditor_EditorName
@@ -354,6 +354,30 @@ public:
                                           const wxSize& size) const override;
 
     wxDECLARE_DYNAMIC_CLASS(ibPGTextCtrlAndButtonEditor);
+};
+
+// ...and "×" after the "…": the value an empty text reads as, the property's default - a value set given back to it,
+// which a cleared text did and nobody would guess (2026-11-24, Max). A field of a form has its "…" and its "×" so. The
+// "…" stays the main button, the first of them (ibPropertyGrid::IsMainButtonEvent): a property's dialog is opened by it
+// as by TextCtrlAndButton's.
+class DESKGUI_API
+ibPGTextCtrlAndButtonsEditor : public ibPGTextCtrlEditor
+{
+public:
+    ibPGTextCtrlAndButtonsEditor() = default;
+    virtual ~ibPGTextCtrlAndButtonsEditor();
+    virtual wxString GetName() const override;
+
+    virtual ibPGWindowList CreateControls(ibPropertyGrid* propgrid,
+                                          ibPGProperty* property,
+                                          const wxPoint& pos,
+                                          const wxSize& size) const override;
+    virtual bool OnEvent(ibPropertyGrid* propgrid,
+                         ibPGProperty* property,
+                         wxWindow* primaryCtrl,
+                         wxEvent& event) const override;
+
+    wxDECLARE_DYNAMIC_CLASS(ibPGTextCtrlAndButtonsEditor);
 };
 
 

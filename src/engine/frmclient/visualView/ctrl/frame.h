@@ -76,6 +76,12 @@ public:
 	static ibValueFrame* Make(const wxString& type, ibVisualHostClient& host, long long controlId);
 	// …and how a control of a type is made, registered as its source is loaded (CONTROL_REGISTER).
 	static void Register(const wxString& type, ibValueFrame* (*make)(ibVisualHostClient& host, long long controlId));
+	// The desktop's ApplyLook: the font and the colours, where the form set them - a colour it leaves empty the platform's,
+	// the theme's in the look in force: a kind's own background (GetPlatformBackground) the theme's for it,
+	// `themedBackground` - none, left to the theme as the control's kind and state have it. A form's too, onto its window
+	// and its bar, with its ground (ibVisualHostClient::UpdateForm).
+	static void ApplyLook(wxWindow* window, const ibProtocolNode& node, const wxColour& platformBackground = wxNullColour,
+		const wxColour& themedBackground = wxNullColour);
 
 	virtual ~ibValueFrame() = default;
 
@@ -144,9 +150,10 @@ public:
 	virtual ibFrontendView* GetControlView() const { return nullptr; }
 	// The command bar it holds — a table's, a grid box's (the server's GetCommandBar); none — no bar of its own.
 	virtual ibViewCommandBar* GetCommandBar() const { return nullptr; }
-	// The background the platform gives its kind when its author picks none (the web client's platformBackground): a
-	// form sends it as any colour, and the desktop leaves it to the theme, as the control's state has it (ApplyLook).
-	// None — the colour sent is applied as it is: a form's ground is the style's colour itself.
+	// The background the platform gives its kind when its author picks none, in the light look (the web client's
+	// platformBackground): what an author's ink alone was chosen against (ApplyLook) - with none chosen, the desktop leaves
+	// it to the theme, as the control's state has it. None — the form's ground, and with none chosen the theme's for
+	// the control's kind: it stands on the surface under it.
 	virtual wxColour GetPlatformBackground() const { return wxNullColour; }
 
 	// An edit under way, carried over a rebuild into the control built anew for the same node: a frame that changes
@@ -175,10 +182,8 @@ protected:
 	ibViewFetcher MakeFetcher() const;
 
 	// The desktop's UpdateWindow: the sizes and the look the form saved; enabled, shown and the tooltip as State says.
-	static void UpdateWindow(wxWindow* window, const ibProtocolNode& node, const wxColour& platformBackground = wxNullColour);
-	// The desktop's ApplyLook: the font and the colours, where the form set them - a background that is the kind's own
-	// (GetPlatformBackground) left to the theme.
-	static void ApplyLook(wxWindow* window, const ibProtocolNode& node, const wxColour& platformBackground = wxNullColour);
+	static void UpdateWindow(wxWindow* window, const ibProtocolNode& node, const wxColour& platformBackground = wxNullColour,
+		const wxColour& themedBackground = wxNullColour);
 
 private:
 

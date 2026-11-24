@@ -361,7 +361,6 @@
     <ClInclude Include="win\editor\codeEditor\components\helpers\listBoxVisualData.h" />
     <ClInclude Include="win\editor\codeEditor\components\helpers\listBoxWnd.h" />
     <ClInclude Include="win\editor\codeEditor\components\helpers\popupWnd.h" />
-    <ClInclude Include="win\editor\codeEditor\res\bitmaps_res.h" />
     <ClInclude Include="win\dlgs\lineInput\lineInput.h" />
     <ClInclude Include="win\dlgs\functionSearcher\functionSearcher.h" />
     <ClInclude Include="win\editor\textEditor\textEditorPrintOut.h" />

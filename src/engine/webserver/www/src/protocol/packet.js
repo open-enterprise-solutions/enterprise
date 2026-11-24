@@ -12,7 +12,7 @@
 // THE NAMES OF THE TYPES ride beside the result: the root's `types` — a node whose fields are named by a clsid's digits,
 // each the name of that type — names the NodeType of every node in the packet.
 //
-// BYTES ARE BYTES: a Binary — a picture's PNG, a file's part — and a node's raw block are read as a Uint8Array of their
+// BYTES ARE BYTES: a Binary — a picture, a file's part — and a node's raw block are read as a Uint8Array of their
 // own (a view into the packet would keep all of it alive in the frame the page holds, and a copy of the frame would copy
 // it whole), and a Uint8Array or an ArrayBuffer is written as one; a string is always text.
 

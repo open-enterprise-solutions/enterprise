@@ -6,6 +6,8 @@
 #include "widgets.h"
 
 #include "deskgui/univ/ctrl/staticText.h"
+#include "deskgui/univ/theme.h"          // ibThemeEngine — the note's grey is the theme's
+#include "deskgui/univ/colourScheme.h"   // wxTHEME_COLOUR
 
 void ibViewPlaceholder::Create(wxWindow* parent, const ibProtocolNode& /*node*/)
 {
@@ -14,7 +16,7 @@ void ibViewPlaceholder::Create(wxWindow* parent, const ibProtocolNode& /*node*/)
 	ibStaticText* const text = new ibStaticText(m_panel, wxID_ANY,
 		ibString::Format(_("The control type \"%s\" is not registered in this client yet."), GetClassName()),
 		wxDefaultPosition, wxDefaultSize, wxALIGN_CENTRE_HORIZONTAL);
-	text->SetForegroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT));
+	text->SetForegroundColour(wxTHEME_COLOUR(CONTROL_TEXT_DISABLED));
 
 	// In the middle of the place the control would take.
 	wxBoxSizer* const sizer = new wxBoxSizer(wxVERTICAL);

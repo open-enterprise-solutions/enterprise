@@ -192,32 +192,24 @@ public:
 		}
 		ibTechJournal::SetEcho(&ibWxApp::EchoIntoWx);
 
-		// ⭐ THE APPLICATION IS LIGHT, AND NOW IT SAYS SO — because the half that answers to the
-		// system was contradicting the half that does not.
+		// ⭐ AS THE MACHINE IS SET — a program that cannot choose its theme takes the system's (Max, 2026-11-24): the
+		// launcher, coderunner. One that can (the thin client) takes the one chosen in it over this, before its window is
+		// built (frmclient/mainFrame/mainFrame.cpp, the frame's constructor).
 		//
-		// Every surface this platform draws is painted from a fixed LIGHT palette, in code:
-		// #FAF7F0 for the metadata tree, #D3DBE1 for the panels around it, and so on through
-		// docs/private/ui-palette.md. What is NOT set anywhere is the text colour — no SetForegroundColour
-		// accompanies those backgrounds — so glyphs come from the system.
-		//
-		// Under a dark system appearance the system duly hands back white. White on #FAF7F0 is
-		// invisible: the metadata tree renders as a column of blank rows (macOS 15, 2026-09-04).
-		// Nothing is broken, nothing is logged, and the window is simply unreadable.
-		//
-		// Declaring the appearance is the honest fix, not a workaround: an application whose
-		// palette cannot follow the system should not claim to. It costs one call and makes every
-		// system-derived colour — label text, disabled states, focus rings, native scrollbars —
-		// agree with the palette they are drawn against.
-		//
-		// A real dark theme is a different piece of work: it means a second palette and a
-		// theme-aware source for every hard-coded colour, not a switch. Until that exists, this is
-		// what keeps the window legible.
+		// It was declared LIGHT from 2026-09-04 to 2026-11-24, and rightly then: every surface was painted from a fixed
+		// light palette while the glyphs came from the system, and under a dark system the system handed back white —
+		// the metadata tree a column of blank rows (macOS 15). Since 2026-11-24 the theme has its dark look, the platform
+		// style's second palette (core/style/style.cpp), which deskgui/univ/theme/lunaTheme.cpp paints with in the look in
+		// force, so the system's look is one the theme can follow — label text, disabled states, focus rings and native
+		// scrollbars agreeing with the palette they are drawn against. What has colours of its own has a set per look —
+		// a code editor its paper and inks, Visual Studio's dark ones in the dark (fontcolorsettings, frmclient's and
+		// coderunner's).
 		//
 		// Called before DoOnInit() so it lands ahead of every window: wx wants it at the very start
 		// of OnInit, and MSW in particular can only apply it before controls exist. The result is
 		// deliberately ignored — CannotChange is the correct answer on a platform with no such
 		// concept, and it is not a startup failure anywhere.
-		SetAppearance(Appearance::Light);
+		SetAppearance(Appearance::System);
 
 		// ⭐ SIGTERM AND SIGINT ARE A REQUEST TO QUIT, and the application answers it. Unanswered, the only answer was
 		// the database client's: Firebird's own handler shuts every attachment down and the process lives on — the

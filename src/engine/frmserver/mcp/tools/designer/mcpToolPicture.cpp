@@ -89,7 +89,7 @@ const ibArg& ArgApplication()
 const ibArg& ArgData()
 {
 	static const ibArg s_a(ibT("data"), ibArg::Kind::Text,
-		ibMcpText("Base64 PNG bytes, for an image that is not in either list."));
+		ibMcpText("Base64 bytes of a PNG, or of an SVG's text, for an image that is not in either list."));
 	return s_a;
 }
 
@@ -206,8 +206,8 @@ const ibArg& ArgPicture()
 	return s_a;
 }
 
-// AN IMAGE FROM ITS OWN BYTES, at its own size — a PNG, the one form the platform keeps a picture in. None: the
-// bytes are no PNG.
+// AN IMAGE FROM ITS OWN BYTES, at its own size — a PNG or a drawing (an SVG's text), the forms the platform keeps a
+// picture in. None: the bytes are neither.
 ibPicture ImageFromBytes(const std::string& bytes)
 {
 	const ibPicture image(ibMemoryBuffer(bytes.data(), bytes.size()));
@@ -248,8 +248,8 @@ bool ImageGiven(const ibDataNode& params, ibExternalPictureDescription& external
 	// from the image itself, which also proves the bytes are an image at all.
 	const ibSize measured = ibPicture(bytes).GetSize();
 	if (measured == ibSize()) {
-		refusal = ibMcpText("Those bytes are not a PNG - the one form the platform keeps a picture in. "
-			"Nothing was set.");
+		refusal = ibMcpText("Those bytes are neither a PNG nor an SVG's text - the forms the platform keeps a "
+			"picture in. Nothing was set.");
 		return false;
 	}
 
@@ -654,8 +654,9 @@ public:
 			"form_control or picture_set give it, said as SVG - to read it, or to change it and draw it again "
 			"with picture_from_svg at the same width and height. An engine picture (Type 1) or a "
 			"application's (Type 2) is said too, so one of the set can be the start of a new one.\n"
-			"A PNG keeps no drawing, so the SVG is its pixels: every colour ONE path of rectangles - a "
-			"recolouring is one `fill` - and drawn back at the same size it gives the same image.");
+			"An engine picture is a drawing, and is said as it was drawn - its own SVG. A PNG keeps no drawing, "
+			"so the SVG is its pixels: every colour ONE path of rectangles - a recolouring is one `fill` - and "
+			"drawn back at the same size it gives the same image.");
 	}
 
 	const std::vector<ibMcpArgument>& Arguments() const override

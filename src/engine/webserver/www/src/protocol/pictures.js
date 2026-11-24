@@ -1,7 +1,9 @@
 // THE PICTURES — named by their id everywhere (a backend picture's number, an application picture's guid), never
 // carried in an answer. The page asks for every id an answer names in one `picture` call before it draws it, and keeps
-// them for the session: an id that has none is kept too, so it is not asked again (docs/public/client-protocol.md). A
-// picture with no id of its own (a file's) is its PNG itself, the bytes in the field that names it: drawn as it is.
+// them for the session: an id that has none is kept too, so it is not asked again (docs/public/client-protocol.md). An
+// engine's picture comes as its drawing, an SVG's text, which the browser draws at whatever size the page shows it; an
+// application's as its PNG. A picture with no id of its own (a file's) is its bytes themselves, in the field that names
+// it: drawn as they are.
 
 /** @typedef {import('./session.js').Session} Session */
 
@@ -22,7 +24,7 @@ export class Pictures {
 		this.session = session;
 		/** @type {Map<string, string>} id → the picture's URL, or '' when there is none of that id */
 		this.known = new Map();
-		/** @type {WeakMap<Uint8Array, string>} a field's PNG → its URL, made once */
+		/** @type {WeakMap<Uint8Array, string>} a field's picture → its URL, made once */
 		this.given = new WeakMap();
 	}
 
@@ -47,7 +49,7 @@ export class Pictures {
 	}
 
 	/**
-	 * The picture's URL to draw, '' when there is none or it has not come — a field's value: its id, or its PNG.
+	 * The picture's URL to draw, '' when there is none or it has not come — a field's value: its id, or its bytes.
 	 * @param {string | number | Uint8Array | undefined} picture
 	 */
 	url(picture) {
@@ -64,11 +66,18 @@ export class Pictures {
 }
 
 /**
- * A PNG's bytes as a URL to draw — '' when there are none.
- * @param {unknown} png
+ * A picture's bytes as a URL to draw — '' when there are none. The bytes say what they are, as the engine's ibPicture
+ * reads them: an SVG's text begins with `<` (spaces aside), anything else is a PNG.
+ * @param {unknown} bytes
  */
-function urlOf(png) {
-	return png instanceof Uint8Array && png.length !== 0 ? URL.createObjectURL(new Blob([png], { type: 'image/png' })) : '';
+function urlOf(bytes) {
+	if (!(bytes instanceof Uint8Array) || bytes.length === 0)
+		return '';
+	let at = 0;
+	while (at < bytes.length && (bytes[at] === 0x20 || bytes[at] === 0x09 || bytes[at] === 0x0d || bytes[at] === 0x0a))
+		++at;
+	const type = bytes[at] === 0x3c ? 'image/svg+xml' : 'image/png';
+	return URL.createObjectURL(new Blob([bytes], { type }));
 }
 
 /**

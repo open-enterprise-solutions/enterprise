@@ -2,18 +2,15 @@
 
 #include <functional>
 
+#include <variant>   // std::get — a style's value
 #include <wx/artprov.h>
 #include <wx/renderer.h>
 #include <wx/popupwin.h>
 #include <wx/dcbuffer.h>
+#include <wx/settings.h>   // wxSystemSettings::GetAppearance — the look in force
 
-// Interior-design palette (see deskgui/univ/theme/lunaTheme.cpp). Subsystem chrome
-// uses the same powder-blue + dusty-border tones as the rest of the
-// frontend so the home page sits in the same visual world as the
-// document panes.
-#define THEME_COLOUR_MAIN    wxColour(0xD3, 0xDB, 0xE1)  // #D3DBE1 chrome (lifted toward white, 2026-11-12)
-#define THEME_COLOUR_BORDER  wxColour(0xA8, 0xBA, 0xC8)  // #A8BAC8 light dusty
-
+#include "core/style/style.h"   // ibStyle::Platform — the panel's colours
+#include "deskgui/typeconv.h"
 #include "frmclient/win/picture.h"   // the pictures, as they travel
 #include "deskgui/univ/theme.h"          // the text of the panel's pages: the theme's alternate text
 #include "deskgui/univ/colourScheme.h"
@@ -27,6 +24,16 @@
 // same buttons, the same page in its popup, drawn line for line; what it shows is the server's schema Sections
 // (frmserver/schema/runtime/sections.cpp) instead of the application read here, and a link opens its item through
 // the schema's command — the window's call (ibFrontendMainFrameEnterprise::CreateSubSystem).
+
+// THE PANEL'S COLOURS ARE THE PLATFORM STYLE'S, in the look in force, as the theme's (deskgui/univ/theme/lunaTheme.cpp)
+// and the same tiers as the rest of the window: the panel the navigation ground, a section at rest the secondary one,
+// the open section and its page the content, the line between them the chrome (docs/private/ui-palette.md). Taken as
+// the panel is made, and again when the look changes (the panel's and its sections' OnSysColourChanged); a page that
+// pops up takes them as it is made.
+static wxColour StyleColour(ibStyleItem item)
+{
+	return typeConv::ColourToWxColour(std::get<ibColour>(ibStyle::Platform().Get(item, wxSystemSettings::GetAppearance().IsDark())));
+}
 
 // A link's picture as an icon — what a link draws.
 static wxIcon IconOf(const ibProtocolNode& item)
@@ -107,9 +114,6 @@ class ibSubSystemWindow : public ibWindow {
 			m_section(section), m_popupWindow(nullptr),
 			m_mainWindow(mainWindow), m_bitmap(ibProtocolPicture(section, ibProtocol::ibSchema::ibSections::Picture)), m_eventType(wxEVT_BUTTON) {
 
-			m_baseColour = wxSystemSettings::GetColour(wxSYS_COLOUR_3DFACE);
-			m_highlightColour = wxSystemSettings::GetColour(wxSYS_COLOUR_HIGHLIGHT);
-
 			SetLabel(section.GetString(ibProtocol::ibSchema::ibSections::Title));
 
 			m_normalFont = *wxNORMAL_FONT;
@@ -117,16 +121,7 @@ class ibSubSystemWindow : public ibWindow {
 			m_selectedFont.SetWeight(wxFONTWEIGHT_BOLD);
 			m_measuringFont = m_selectedFont;
 
-			// ⭐ NOT GREY (an accountant's review, 2026-09-22 — "too grey"; Max: "the selected one must be white, and a
-			// section is not grey by default either", "whiter"). A section at rest is all but white with dark text,
-			// lighter than the panel under it so it still reads as a button; the OPEN one is white and bold. It was
-			// the dusty border colour darkened to 75 %, with white text — a slab of mid-grey down the window's side.
-			m_activeColour = *wxWHITE;
-			m_baseColour = wxColour(0xF5, 0xF7, 0xF8);   // #F5F7F8 all but white, a breath of blue
-
-			m_borderPen = wxPen(THEME_COLOUR_MAIN);
-			m_baseColourPen = wxPen(m_activeColour);
-			m_baseColourBrush = wxBrush(THEME_COLOUR_MAIN);
+			ApplyThemeColours();
 
 			SetCursor(wxCURSOR_HAND);
 			SetBackgroundStyle(wxBG_STYLE_PAINT);
@@ -140,6 +135,26 @@ class ibSubSystemWindow : public ibWindow {
 		bool AcceptsFocus() const override { return false; }
 
 	protected:
+
+		// The section's tiers - as it is made, and again when the look changes (OnSysColourChanged).
+		void ApplyThemeColours() {
+			// ⭐ NOT GREY (an accountant's review, 2026-09-22 — "too grey"; Max: "the selected one must be white, and a
+			// section is not grey by default either", "whiter"). A section at rest is all but white with dark text,
+			// lighter than the panel under it so it still reads as a button; the OPEN one is white and bold. It was
+			// the dusty border colour darkened to 75 %, with white text — a slab of mid-grey down the window's side.
+			// In the dark look the same tiers, dark (StyleColour).
+			m_activeColour = wxTHEME_COLOUR(WINDOW);
+			m_baseColour = StyleColour(ibStyleItem::SecondaryNavigation);   // #F5F7F8 in the light, a breath of blue
+
+			m_borderPen = wxPen(StyleColour(ibStyleItem::DesktopBackground));
+			m_baseColourPen = wxPen(m_activeColour);
+		}
+
+		void OnSysColourChanged(wxSysColourChangedEvent& event) {
+			ApplyThemeColours();
+			Refresh();
+			event.Skip();
+		}
 
 		void OnLeftUp(wxMouseEvent& event) {
 			const bool endsClosingPress = m_closedByPressAt != 0 && (wxGetLocalTimeMillis() - m_closedByPressAt) < 1500;
@@ -370,13 +385,9 @@ class ibSubSystemWindow : public ibWindow {
 				caption,
 				tab_width - (text_offset - tab_x));
 
-			// draw tab text — dark on both: white text was for the dark slab the section used to be
-			if (!active) {
-				dc.SetTextForeground(wxColour(0x34, 0x3A, 0x40));   // #343a40
-			}
-			else {
-				dc.SetTextForeground(*wxBLACK);
-			}
+			// draw tab text — the content's on both, the open one told by its bold: white text was for the dark slab the
+			// section used to be
+			dc.SetTextForeground(wxTHEME_COLOUR(CONTROL_TEXT));
 
 			dc.DrawText(draw_text,
 				text_offset,
@@ -402,12 +413,10 @@ class ibSubSystemWindow : public ibWindow {
 		wxFont m_selectedFont;
 		wxFont m_measuringFont;
 		wxColour m_baseColour;
-		wxColour m_highlightColour;
 
 		wxPen m_baseColourPen;
 		wxPen m_borderPen;
 
-		wxBrush m_baseColourBrush;
 		wxColour m_activeColour;
 
 		ibSubSystemWindow* m_mainWindow;
@@ -642,7 +651,7 @@ class ibSubSystemWindow : public ibWindow {
 				SetSizer(sizerPage);
 				Layout();
 
-				SetBackgroundColour(*wxWHITE);
+				SetBackgroundColour(wxTHEME_COLOUR(WINDOW));
 				SetForegroundColour(wxTHEME_COLOUR(CONTROL_TEXT_ALTERNATE));
 			}
 
@@ -736,12 +745,12 @@ class ibSubSystemWindow : public ibWindow {
 
 			wxPopupTransientWindow::SetPosition(point);
 			wxPopupTransientWindow::SetSize(size);
-			wxPopupTransientWindow::SetBackgroundColour(THEME_COLOUR_MAIN);
+			wxPopupTransientWindow::SetBackgroundColour(StyleColour(ibStyleItem::DesktopBackground));
 
 			wxBoxSizer* bSizer1 = new wxBoxSizer(wxHORIZONTAL);
 
 			m_staticLine = new wxWindow(this, wxID_ANY, wxDefaultPosition, wxDefaultSize);
-			m_staticLine->SetBackgroundColour(THEME_COLOUR_MAIN);
+			m_staticLine->SetBackgroundColour(StyleColour(ibStyleItem::DesktopBackground));
 			m_staticLine->SetMinSize(wxSize(1, -1));
 			bSizer1->Add(m_staticLine, 0, wxEXPAND | wxALL, 0);
 
@@ -849,13 +858,18 @@ public:
 		for (const ibProtocolNode& section : shown.FindChild(ibProtocol::ibSchema::ibSections::Sections).Children())
 			CreateSubMenu(section);
 
-		// Interior palette — light dusty (one tier between powder chrome
-		// and the white popup interior). Was ibAUI_DEFAULT_COLOUR
-		// (dark navy) lightened — read as a muddy mid-grey.
-		ibWindow::SetBackgroundColour(wxColour(0xDD, 0xE4, 0xE8));  // #DDE4E8 light dusty (chrome-light)
+		// The navigation ground — one tier between the chrome and the page's content (#DDE4E8 in the light). Was
+		// ibAUI_DEFAULT_COLOUR (dark navy) lightened — read as a muddy mid-grey. Taken again when the look changes.
+		ibWindow::SetBackgroundColour(StyleColour(ibStyleItem::Navigation));
 	}
 
 protected:
+
+	void OnSysColourChanged(wxSysColourChangedEvent& event) {
+		ibWindow::SetBackgroundColour(StyleColour(ibStyleItem::Navigation));
+		Refresh();
+		event.Skip();
+	}
 
 	void OnEventSize(wxSizeEvent& event) {
 		unsigned int text_height_total = 0;
@@ -915,11 +929,13 @@ private:
 wxBEGIN_EVENT_TABLE(ibSubSystemWindow::ibSubSystemButton, ibControl)
 EVT_LEFT_UP(ibSubSystemWindow::ibSubSystemButton::OnLeftUp)
 EVT_PAINT(ibSubSystemWindow::ibSubSystemButton::OnPaint)
+EVT_SYS_COLOUR_CHANGED(ibSubSystemWindow::ibSubSystemButton::OnSysColourChanged)
 wxEND_EVENT_TABLE()
 
 wxBEGIN_EVENT_TABLE(ibSubSystemWindow, ibWindow)
 EVT_BUTTON(wxID_ANY, ibSubSystemWindow::OnEventButton)
 EVT_SIZE(ibSubSystemWindow::OnEventSize)
+EVT_SYS_COLOUR_CHANGED(ibSubSystemWindow::OnSysColourChanged)
 wxEND_EVENT_TABLE()
 
 //////////////////////////////////////////////////////////////////////////////

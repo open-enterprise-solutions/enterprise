@@ -163,9 +163,6 @@ Engine fixes, each on its own branch from `develop` and its own pull request:
 
 Still open:
 
-- Every control's `BackgroundColour` defaults to the cream form colour and has
-  no "unset" state, so captions draw cream boxes on the grey notebook page and
-  inside groups (written up as a proposal; it needs a decision on the property).
 - A vertical `Gauge` draws nothing on macOS, so the page shows horizontal ones only.
 - `Textbox` has no value/text property and `Chartbox` no data binding, so neither
   can show configured sample content; toolbar tools have no action binding.

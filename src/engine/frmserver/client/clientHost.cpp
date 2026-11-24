@@ -314,7 +314,8 @@ void DrawMenu(ibClientFrame* frame, const std::vector<ibClientMenu::Item>& items
 			if (item.schemaCommand != ibProtocol::ibSchema::ibCommand{})
 				child.SetValue(ibProtocol::ibFrame::ibMenu::Command, static_cast<std::int32_t>(item.schemaCommand));
 			child.SetValue(ibProtocol::ibFrame::ibMenu::Title, item.title);
-			enabled = frame->IsSchemaAllowed(item.schema);
+			// …the theme is the client's own window (ibKind::Style), no schema here: nothing of it for the roles to allow
+			enabled = item.schema == ibProtocol::ibSchema::ibKind::Style || frame->IsSchemaAllowed(item.schema);
 		}
 		else {
 			child.SetValue(ibProtocol::ibFrame::ibMenu::Title, item.title);

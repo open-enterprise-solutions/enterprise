@@ -9,8 +9,8 @@ item a value for the light look and one for the dark.
 
 | Kind | Items |
 |---|---|
-| Colour | form background and text, button background and text, field background and text, selection and its text, alternate background, tooltip background and text, special text, negative number, border, table header and footer background and text, report header, report line, activity, accent, navigation, secondary navigation, important |
-| Colour list | report grouping — one colour per level, the first outermost, at least one |
+| Colour | form background and text, button background and text, field background and text, selection and its text, alternate background, tooltip background and text, special text, negative number, border, table header and footer background and text, report header, report line, activity, accent, navigation, secondary navigation, important; the desktop's chrome — desktop background (behind the windows), panel background (a docked pane, an inactive caption), bar background (a menu and a tool bar), control background (a scroll bar, a tab strip, a pressed face), disabled text, caption text, accent pressed, accent text (on the accent), shelf (a held tab's ground) |
+| Colour list | report grouping — one colour per level, the first outermost, at least one; caption — an active window's caption, its top and its bottom |
 | Font | text, small, regular, large, very large |
 | Border | control, button — a border's kind and width (`core/graphics/border.h`); its colour is the Border item, so a theme recolours every border at once |
 
@@ -22,8 +22,14 @@ appended to its kind's run.
 `core/style/style.h`. A style is two sets of values over the items, `Light` and `Dark`.
 
 - **The platform's style is the default** (`ibStyle::Platform`): a value for every item in both looks. Its light look
-  keeps what the platform painted with — the forms' ink on cream, the Luna theme's chrome, field, border, accent and
-  button colours; the items it had no colour for, and the dark look, are new.
+  is what the screen shows — the forms' ink on a ground a step below white, the Luna theme's chrome, field, border,
+  accent and button colours, and the browser's the same; the items it had no colour for, and the dark look, are new.
+- **A form's colour left empty is the platform's**: the form text in the look in force, and the ground the kind's own
+  — the form its background, a field its well, a table the content, a button its face, a label and a group the surface
+  under them. The server keeps no colour for it; a colour the author chose stays theirs.
+- **The desktop theme paints from it.** Luna asks the platform's style for every colour it paints with, in the look
+  in force (wx's appearance — the theme chosen in the client, or the machine's): one table of colours, two looks of
+  one theme, not a dark theme beside a light one.
 - **An application's style lies over it**, giving only what it changes: an item it leaves out is the platform's
   (`ibStyle::Get`). So a style saved before an item existed reads whole.
 - **An item takes a value of its own kind**, and only one its text reads back as — an opaque colour, a font its
@@ -36,7 +42,8 @@ appended to its kind's run.
 
 ## Where it is going
 
-The person's theme says which set is in force; a report deeper than its grouping list takes the last
-level; a control's colour may name an item instead of holding a colour, and a
+The client's theme says which set is in force — chosen in the client and kept on its machine (the server keeps none):
+the desktop takes it when it starts, the browser at once; a report deeper than its grouping list takes the last level; a control's colour may name an item instead of holding a
+colour, and a
 client resolves it through the values in force; an application holds its own styles, and the designer edits one with
 a live preview. Those are built on this list.

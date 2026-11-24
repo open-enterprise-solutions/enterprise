@@ -1,8 +1,8 @@
 #include "metaEventHandlerObject.h"
-#include "core/graphics/picture.h"   // ibPicture::FromBase64 — the master read, scaled to 16 once
+#include "core/graphics/picture.h"   // ibPicture::FromSvg — the drawing, at 16 once
 
-/* PNG — a bell: the flat style of its neighbours, in a hue none of them uses */
-static const ibString s_eventHandler_16_png =ibT("iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAACgUlEQVR42u2bMU+DQBTH+xH6EfpRGFhNurgaJmc2145OEOPUxQ5uJtgY46AmZdA4GCNDB51k6OJggt8A8xpI4HmlUO69O+gN/6Rpgbv/j7v33h1l4NnBYJ81MAAMAAPAADAADAB2WZ4dzD07SDPNs+/2AoBTMI7l9B3A0LODpAJAkh3TWwBVd1/JKOAGMCmavT55WQsBmJgR0FMAI88O3BoA3OzY3gDAKa+uWFIj9R0PdzCOFVKOCMq5nkgwX0yPTlcA+JuMXBw9pPenUfp+Fadfzz/p6u13LfgM38FvcEwFCF93AELzl8eLtcHc8DbBsXAOBwTSFHd+cJMuzpa1jWPBuXANylQpM+Al2PzydrWz+VxwDQGERFZglAUgpDC/BUKoCwALD9E2w75qOgimgqUDgDkOeLLN5xIExrlqACN8V5pE+6aCawtGwUglAAfneSrzuQR1gqMSwKzYGShkqAFAGwjATCWAkGv4V0yDUCWAUmeK5S2VoA1BHNADALX5XLoAKGWA6eEdGwBoS1YmaAOgtLtzO3llAwBtCXaR2AGwB0CKQNhmf79U+3OZzyVYGww5ATh4e5sbgGA73eEEUCqAnqYf7ACgTRkF0a4AEu78X6MeSLgAWFyrvx1WhxYHAJ967d9ij8DnABAXG/18/FYGANpGAGJqAMqqP6qqsDPVH1VV2Kr601QhFYBhB8w3rgrrmh/j4Ke54qzPUgCMO2QcaywDQNxhALEMAGnHZUaAiQEmC+jxLzG3gQGXq1+cACK8iwRrepBgdyfqI4CND1FkP+wwAMwU0BPA3gfBf6NggyLOPql4YSLaYr7XL0wUp0OEjLsq+mLeGjMADID9BvAHRdhhvzjTY0gAAAAASUVORK5CYII=");
+/* A bell, violet: what answers an event */
+static const ibString s_eventHandler_svg =ibT("<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'><path d='M8 1.5 Q12.5 1.5 12.5 7 V10 L14.5 12.5 H1.5 L3.5 10 V7 Q3.5 1.5 8 1.5 Z' fill='#7048e8'/><circle cx='8' cy='14' r='1.8' fill='#7048e8'/></svg>");
 
 ibPicture ibValueMetaObjectEventHandler::GetIcon() const
 {
@@ -11,7 +11,7 @@ ibPicture ibValueMetaObjectEventHandler::GetIcon() const
 
 ibPicture ibValueMetaObjectEventHandler::GetIconGroup()
 {
-	static const ibPicture picture = ibPicture::FromBase64(s_eventHandler_16_png, ibSize(16, 16));
+	static const ibPicture picture = ibPicture::FromSvg(s_eventHandler_svg);
 
 	return picture;
 }

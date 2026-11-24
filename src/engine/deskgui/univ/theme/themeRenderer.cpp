@@ -88,11 +88,6 @@ static constexpr int FRAME_ICON = wxTOPLEVEL_ICON;
 ibThemeRenderer::ibThemeRenderer(const ibColourScheme *scheme)
              : m_scheme(scheme)
 {
-    m_penBlack = wxPen(wxSCHEME_COLOUR(scheme, SHADOW_DARK));
-    m_penDarkGrey = wxPen(wxSCHEME_COLOUR(scheme, SHADOW_OUT));
-    m_penLightGrey = wxPen(wxSCHEME_COLOUR(scheme, SHADOW_IN));
-    m_penHighlight = wxPen(wxSCHEME_COLOUR(scheme, SHADOW_HIGHLIGHT));
-
     m_titlebarFont = wxSystemSettings::GetFont(wxSYS_DEFAULT_GUI_FONT);
     m_titlebarFont.SetWeight(wxFONTWEIGHT_BOLD);
 }
@@ -242,7 +237,7 @@ ibThemeRenderer::DrawFocusRect(wxWindow* WXUNUSED(win), wxDC& dc, const wxRect& 
             x2 = rect.GetRight(),
             y2 = rect.GetBottom();
 
-    dc.SetPen(m_penBlack);
+    dc.SetPen(wxPen(m_scheme->Get(ibColourScheme::SHADOW_DARK)));
 
     // this seems to be closer than what Windows does than wxINVERT although
     // I'm still not sure if it's correct
@@ -700,36 +695,45 @@ void ibThemeRenderer::DrawButtonLabel(wxDC& dc,
 
 void ibThemeRenderer::DrawRaisedBorder(wxDC& dc, wxRect *rect)
 {
-    DrawShadedRect(dc, rect, m_penHighlight, m_penBlack);
-    DrawShadedRect(dc, rect, m_penLightGrey, m_penDarkGrey);
+    DrawShadedRect(dc, rect, wxPen(m_scheme->Get(ibColourScheme::SHADOW_HIGHLIGHT)),
+        wxPen(m_scheme->Get(ibColourScheme::SHADOW_DARK)));
+    DrawShadedRect(dc, rect, wxPen(m_scheme->Get(ibColourScheme::SHADOW_IN)),
+        wxPen(m_scheme->Get(ibColourScheme::SHADOW_OUT)));
 }
 
 void ibThemeRenderer::DrawSunkenBorder(wxDC& dc, wxRect *rect)
 {
-    DrawShadedRect(dc, rect, m_penDarkGrey, m_penHighlight);
-    DrawShadedRect(dc, rect, m_penBlack, m_penLightGrey);
+    DrawShadedRect(dc, rect, wxPen(m_scheme->Get(ibColourScheme::SHADOW_OUT)),
+        wxPen(m_scheme->Get(ibColourScheme::SHADOW_HIGHLIGHT)));
+    DrawShadedRect(dc, rect, wxPen(m_scheme->Get(ibColourScheme::SHADOW_DARK)),
+        wxPen(m_scheme->Get(ibColourScheme::SHADOW_IN)));
 }
 
 void ibThemeRenderer::DrawAntiSunkenBorder(wxDC& dc, wxRect *rect)
 {
-    DrawShadedRect(dc, rect, m_penLightGrey, m_penBlack);
-    DrawShadedRect(dc, rect, m_penHighlight, m_penDarkGrey);
+    DrawShadedRect(dc, rect, wxPen(m_scheme->Get(ibColourScheme::SHADOW_IN)),
+        wxPen(m_scheme->Get(ibColourScheme::SHADOW_DARK)));
+    DrawShadedRect(dc, rect, wxPen(m_scheme->Get(ibColourScheme::SHADOW_HIGHLIGHT)),
+        wxPen(m_scheme->Get(ibColourScheme::SHADOW_OUT)));
 }
 
 void ibThemeRenderer::DrawBoxBorder(wxDC& dc, wxRect *rect)
 {
-    DrawShadedRect(dc, rect, m_penDarkGrey, m_penHighlight);
-    DrawShadedRect(dc, rect, m_penHighlight, m_penDarkGrey);
+    DrawShadedRect(dc, rect, wxPen(m_scheme->Get(ibColourScheme::SHADOW_OUT)),
+        wxPen(m_scheme->Get(ibColourScheme::SHADOW_HIGHLIGHT)));
+    DrawShadedRect(dc, rect, wxPen(m_scheme->Get(ibColourScheme::SHADOW_HIGHLIGHT)),
+        wxPen(m_scheme->Get(ibColourScheme::SHADOW_OUT)));
 }
 
 void ibThemeRenderer::DrawStaticBorder(wxDC& dc, wxRect *rect)
 {
-    DrawShadedRect(dc, rect, m_penDarkGrey, m_penHighlight);
+    DrawShadedRect(dc, rect, wxPen(m_scheme->Get(ibColourScheme::SHADOW_OUT)),
+        wxPen(m_scheme->Get(ibColourScheme::SHADOW_HIGHLIGHT)));
 }
 
 void ibThemeRenderer::DrawExtraBorder(wxDC& dc, wxRect *rect)
 {
-    DrawRect(dc, rect, m_penLightGrey);
+    DrawRect(dc, rect, wxPen(m_scheme->Get(ibColourScheme::SHADOW_IN)));
 }
 
 void ibThemeRenderer::DrawBorder(wxDC& dc,
@@ -764,7 +768,7 @@ void ibThemeRenderer::DrawBorder(wxDC& dc,
             break;
 
         case wxBORDER_SIMPLE:
-            DrawRect(dc, &rect, m_penBlack);
+            DrawRect(dc, &rect, wxPen(m_scheme->Get(ibColourScheme::SHADOW_DARK)));
             break;
 
         default:
@@ -853,10 +857,10 @@ void ibThemeRenderer::DrawTextBorder(wxDC& dc,
 void
 ibThemeRenderer::DrawHorizontalLine(wxDC& dc, wxCoord y, wxCoord x1, wxCoord x2)
 {
-    dc.SetPen(m_penDarkGrey);
+    dc.SetPen(wxPen(m_scheme->Get(ibColourScheme::SHADOW_OUT)));
     dc.DrawLine(x1, y, x2 + 1, y);
 
-    dc.SetPen(m_penHighlight);
+    dc.SetPen(wxPen(m_scheme->Get(ibColourScheme::SHADOW_HIGHLIGHT)));
     y++;
     dc.DrawLine(x1, y, x2 + 1, y);
 }
@@ -864,10 +868,10 @@ ibThemeRenderer::DrawHorizontalLine(wxDC& dc, wxCoord y, wxCoord x1, wxCoord x2)
 void
 ibThemeRenderer::DrawVerticalLine(wxDC& dc, wxCoord x, wxCoord y1, wxCoord y2)
 {
-    dc.SetPen(m_penDarkGrey);
+    dc.SetPen(wxPen(m_scheme->Get(ibColourScheme::SHADOW_OUT)));
     dc.DrawLine(x, y1, x, y2 + 1);
 
-    dc.SetPen(m_penHighlight);
+    dc.SetPen(wxPen(m_scheme->Get(ibColourScheme::SHADOW_HIGHLIGHT)));
     x++;
     dc.DrawLine(x, y1, x, y2 + 1);
 }

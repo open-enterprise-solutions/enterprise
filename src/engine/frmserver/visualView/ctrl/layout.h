@@ -178,8 +178,8 @@ private:
 	ibPropertyTString* m_propertyTitle = ibPropertyObject::CreateProperty<ibPropertyTString>(m_categoryGroup, ibT("Title"), _("Title"),
 		_("The caption drawn on the group's frame. Empty: a frame with no caption. Can be written per language."), ibT(""));
 	ibPropertyFont* m_propertyFont = ibPropertyObject::CreateProperty<ibPropertyFont>(m_categoryGroup, ibT("Font"), _("Font"), _("The font of the frame's caption. Unset: the form's font."));
-	ibPropertyColour* m_propertyFG = ibPropertyObject::CreateProperty<ibPropertyColour>(m_categoryGroup, ibT("ForegroundColour"), _("Foreground"), _("The colour of the frame's caption. Default: the system colour."), ibDefaultStyleFGColour);
-	ibPropertyColour* m_propertyBG = ibPropertyObject::CreateProperty<ibPropertyColour>(m_categoryGroup, ibT("BackgroundColour"), _("Background"), _("The frame's background colour. Default: the system colour."), ibDefaultStyleBGColour);
+	ibPropertyColour* m_propertyFG = ibPropertyObject::CreateProperty<ibPropertyColour>(m_categoryGroup, ibT("ForegroundColour"), _("Foreground"), _("The colour of the frame's caption. Default: the system colour."));
+	ibPropertyColour* m_propertyBG = ibPropertyObject::CreateProperty<ibPropertyColour>(m_categoryGroup, ibT("BackgroundColour"), _("Background"), _("The frame's background colour. Default: the system colour."));
 	ibPropertyString* m_propertyTooltip = ibPropertyObject::CreateProperty<ibPropertyString>(m_categoryGroup, ibT("Tooltip"), _("Tooltip"), _("Text shown when the mouse pointer rests over the frame. Empty: no tooltip."), ibT(""));
 	ibPropertyBoolean* m_propertyEnabled = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryGroup, ibT("Enabled"), _("Enabled"), _("Whether the controls inside the frame take input. Off: the frame and everything in it are greyed out."), true);
 	ibPropertyBoolean* m_propertyVisible = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryGroup, ibT("Visible"), _("Visible"), _("Whether the frame is shown. Hiding it hides the frame itself; its controls keep their data."), true);

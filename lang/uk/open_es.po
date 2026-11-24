@@ -11311,6 +11311,7 @@ msgid "%s: the element '%s' is still open - WriteEndElement for every WriteStart
 msgstr "%s: елемент '%s' ще відкритий — на кожен WriteStartElement потрібен WriteEndElement"
 
 #: src/engine/deskgui/docview/choiceTemplate.h:56
+#: src/engine/backend/metaCollection/partial/documentJournalMetaQuery.cpp
 msgid "Select document type"
 msgstr "Виберіть тип документа"
 
@@ -13070,6 +13071,13 @@ msgstr "З чого почнемо?"
 #: src/engine/frmclient/propertyManager/property/advprop/advpropCalcSchedule.cpp:85
 msgid "<not set>"
 msgstr "<не задано>"
+
+#: src/engine/frmclient/propertyManager/property/advprop/advpropColour.cpp:188
+#: src/engine/frmclient/propertyManager/property/advprop/advpropColour.cpp:213
+#: src/engine/frmclient/propertyManager/property/advprop/advpropFont.cpp:157
+#: src/engine/frmclient/propertyManager/property/advprop/advpropFont.cpp:164
+msgid "<default>"
+msgstr "<за замовчуванням>"
 
 #: src/engine/frmclient/propertyManager/property/advprop/advpropCalcSchedule.cpp:101
 msgid "Schedule value"
@@ -16123,10 +16131,6 @@ msgstr "Не вдалося прочитати застосунок з файл�
 msgid "After recording, there would not be a single role with admin rights. The action is impossible!"
 msgstr "Після запису не залишиться жодної ролі з правами адміністратора. Дія неможлива!"
 
-#: src/engine/frmserver/schema/style.cpp:88
-msgid "The theme could not be kept"
-msgstr "Не вдалося зберегти тему"
-
 #: src/engine/frmserver/visualView/controlEnum.h:81
 msgctxt "sizer flag"
 msgid "Shrink"
@@ -16187,8 +16191,8 @@ msgid "Foreground"
 msgstr "Передній план"
 
 #: src/engine/frmserver/visualView/ctrl/form.h:683
-msgid "The form's text colour, inherited by controls that have no colour of their own. Default: the system colour."
-msgstr "Колір тексту форми; його успадковують елементи, які не мають власного кольору. За замовчуванням: системний колір."
+msgid "The form's text colour. Default: the system colour, which follows the user's theme."
+msgstr "Колір тексту форми. За замовчуванням: системний колір, що відповідає темі оформлення користувача."
 
 #: src/engine/frmserver/visualView/ctrl/form.h:684
 #: src/engine/frmserver/visualView/ctrl/sizer.h:189
@@ -18368,10 +18372,6 @@ msgstr "Форма, з якою відкривається список журн
 #: src/engine/backend/metaCollection/partial/documentJournalMetaQuery.cpp
 msgid "Document type"
 msgstr "Вид документа"
-
-#: src/engine/backend/metaCollection/partial/documentJournalMetaQuery.cpp
-msgid "Select document type"
-msgstr "Виберіть вид документа"
 
 #: src/engine/backend/metaCollection/partial/documentJournalMetadata.cpp
 msgid "%s: at least one document is required - a journal lists documents, and its rows are theirs"

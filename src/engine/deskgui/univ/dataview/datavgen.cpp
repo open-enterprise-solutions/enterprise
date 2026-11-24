@@ -5670,8 +5670,10 @@ wxBitmap ibDataViewCtrl::CreateItemBitmap(unsigned int row, int& indent)
 #endif
 	wxMemoryDC dc(bitmap);
 	dc.SetFont(GetFont());
-	dc.SetPen(*wxBLACK_PEN);
-	dc.SetBrush(*wxWHITE_BRUSH);
+	// the dragged row on the table's ground, framed in its ink - black on white, the canon's, hid a dark table's
+	// light text (2026-11-24)
+	dc.SetPen(GetForegroundColour());
+	dc.SetBrush(GetBackgroundColour());
 	dc.DrawRectangle(0, 0, width, height);
 
 	ibDataViewModel* model = GetModel();
@@ -7054,9 +7056,10 @@ void ibDataViewCtrl::DrawTableContent(wxDC& dc, ibDataViewMainWindow* tableWindo
 			// background colour.
 			const wxColour bgColour = GetBackgroundColour();
 
-			// Depending on the background, alternate row color
-			// will be 3% more dark or 50% brighter.
-			int alpha = bgColour.GetRGB() > 0x808080 ? 97 : 150;
+			// Depending on the background, alternate row color will be 3% darker or 6% brighter — the canon's 50% made
+			// a dark table a ladder of grey rungs (2026-11-24, Max: "the striping is garish"); 6% over the dark look's
+			// content is the style's AlternateBackground, as 3% under the light one's (one rule with ibListCtrlBase).
+			int alpha = bgColour.GetRGB() > 0x808080 ? 97 : 106;
 			altRowColour = bgColour.ChangeLightness(alpha);
 		}
 

@@ -18,6 +18,9 @@ public:
 
 	virtual bool OnCreate(ibFrontendDocument* doc, long flags) override;
 	virtual void OnDraw(wxDC* dc) override;
+	// The window's editor settings, font and colours, onto its editor - as it is made, and as the frame puts them in
+	// force (ibFrontendMainFrame::UpdateEditorOptions: after Options, and when the look changes).
+	virtual void OnUpdate(ibFrontendView* sender, wxObject* hint = nullptr) override;
 	virtual bool OnClose(bool deleteWindow = true) override;
 
 	virtual wxPrintout* OnCreatePrintout() override;

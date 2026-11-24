@@ -23,8 +23,6 @@
 #pragma warning(pop)
 #endif
 
-#include "core/utils/base64.h"   // ibBase64 — a master's text in the source, read into its bytes
-
 namespace {
 
 // A PICTURE'S PIXELS — RGBA, 8 bits a channel, rows top down, as LodePNG reads a PNG and writes one and NanoSVG draws.
@@ -36,9 +34,27 @@ struct ibPixels {
 
 }
 
+// THE BYTES ARE A DRAWING — an SVG's text: the first that is not a space is `<`. A PNG begins with its signature, which
+// is not; bytes that are neither are no picture.
+static bool IsDrawing(const ibMemoryBuffer& data)
+{
+	const char* const bytes = static_cast<const char*>(data.GetData());
+	for (size_t at = 0; at < data.GetDataLen(); ++at) {
+		if (bytes[at] != ' ' && bytes[at] != '\t' && bytes[at] != '\r' && bytes[at] != '\n')
+			return bytes[at] == '<';
+	}
+	return false;
+}
+
+// …and its text.
+static ibString DrawingOf(const ibMemoryBuffer& data)
+{
+	return ibString::FromUTF8(static_cast<const char*>(data.GetData()), data.GetDataLen());
+}
+
 static bool DecodePixels(const ibMemoryBuffer& png, ibPixels& pixels)
 {
-	return !png.IsEmpty() && lodepng::decode(pixels.m_rgba, pixels.m_width, pixels.m_height,
+	return !png.IsEmpty() && !IsDrawing(png) && lodepng::decode(pixels.m_rgba, pixels.m_width, pixels.m_height,
 		static_cast<const unsigned char*>(png.GetData()), png.GetDataLen()) == 0;
 }
 
@@ -90,12 +106,11 @@ static ibPixels ResampleArea(const ibPixels& source, unsigned width, unsigned he
 	return target;
 }
 
-ibPicture ibPicture::FromBase64(const ibString& text, const ibSize& size)
+ibPicture ibPicture::FromSvg(const ibString& svg)
 {
-	ibMemoryBuffer png;
-	if (!ibBase64::Read(text, png))
-		return ibPicture();
-	return size == ibDefaultSize ? ibPicture(png) : ibPicture(png).Scale(size);
+	const std::string text = svg.ToUtf8();
+	const ibMemoryBuffer data(text.data(), text.size());
+	return IsDrawing(data) ? ibPicture(data) : ibPicture();
 }
 
 ibPicture ibPicture::FromSvg(const ibString& svg, const ibSize& size)
@@ -131,6 +146,12 @@ ibPicture ibPicture::FromSvg(const ibString& svg, const ibSize& size)
 
 ibSize ibPicture::GetSize() const
 {
+	if (IsDrawing(m_data)) {
+		// The reader writes into the text it reads.
+		std::string text(static_cast<const char*>(m_data.GetData()), m_data.GetDataLen());
+		const std::unique_ptr<NSVGimage, decltype(&nsvgDelete)> image(nsvgParse(text.data(), "px", 96), &nsvgDelete);
+		return image != nullptr ? ibSize(int(std::lround(image->width)), int(std::lround(image->height))) : ibSize();
+	}
 	unsigned width = 0, height = 0;
 	lodepng::State state;
 	if (IsOk() && lodepng_inspect(&width, &height, &state, static_cast<const unsigned char*>(m_data.GetData()), m_data.GetDataLen()) == 0)
@@ -142,6 +163,8 @@ ibPicture ibPicture::Scale(const ibSize& size) const
 {
 	if (size.m_width <= 0 || size.m_height <= 0)
 		return ibPicture();
+	if (IsDrawing(m_data))
+		return FromSvg(DrawingOf(m_data), size);
 	if (GetSize() == size)
 		return *this;
 
@@ -153,6 +176,9 @@ ibPicture ibPicture::Scale(const ibSize& size) const
 
 ibString ibPicture::ToSvg(size_t mostRects) const
 {
+	if (IsDrawing(m_data))
+		return DrawingOf(m_data);
+
 	ibPixels pixels;
 	if (!DecodePixels(m_data, pixels))
 		return ibString();

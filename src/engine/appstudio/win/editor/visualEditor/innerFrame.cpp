@@ -13,15 +13,8 @@
 #include "deskgui/univ/renderer.h"
 #include "deskgui/univ/theme.h"
 #include "deskgui/univ/topLevel.h"   // wxTOPLEVEL_xxx - what the caption is drawn as
-#include "frmclient/backend/backend_picture.h"
-#include "res/visualResource.h"   // the caption's window buttons
 
 wxDEFINE_EVENT(wxEVT_INNER_FRAME_RESIZED, wxCommandEvent);
-
-static wxBitmap FrameButton(const wxString& png)
-{
-	return wxBitmap(ibBackendPicture::GetImageFromBase64(png, wxSize(16, 16)));
-}
 
 ibInnerFrame::ibInnerFrame(wxWindow* parent, wxWindowID id, const wxPoint& pos, const wxSize& size, long style)
 #ifdef __WXGTK__
@@ -29,13 +22,10 @@ ibInnerFrame::ibInnerFrame(wxWindow* parent, wxWindowID id, const wxPoint& pos, 
 #else
 	: ibPanel(parent, id, pos, size, wxBORDER_RAISED | wxFULL_REPAINT_ON_RESIZE),
 #endif
-	// the caption painted whole as it is sized: its shade runs across it, its buttons stand at its right end
+	// the caption painted whole as it is sized: its shade runs across it, its buttons stand where the theme puts them
 	m_titleBar(new ibPanel(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxTAB_TRAVERSAL | wxNO_BORDER | wxFULL_REPAINT_ON_RESIZE)),
 	m_content(new ibPanel(this, wxID_ANY)),
-	m_titleStyle(style),
-	m_closeButton(FrameButton(s_frameClose_png)),
-	m_maximizeButton(FrameButton(s_frameMaximize_png)),
-	m_minimizeButton(FrameButton(s_frameMinimize_png))
+	m_titleStyle(style)
 {
 	// a dialog's caption height - the theme's
 	m_titleBar->SetMinSize(wxSize(100,
@@ -133,37 +123,19 @@ void ibInnerFrame::EndSizing()
 void ibInnerFrame::OnPaintTitleBar(wxPaintEvent&)
 {
 	wxAutoBufferedPaintDC dc(m_titleBar);
-	const wxRect bar = m_titleBar->GetClientRect();
-	const int margin = FromDIP(2);
 
-	// The theme's caption, as a dialog's title bar is painted: the bar is a frame's caption with no border and
-	// nothing under it. The system's caption colour, lightening to the right, left the white title on a pale blue.
-	ibThemeEngine::Get()->GetRenderer()->DrawFrameBackground(dc, bar, wxTOPLEVEL_TITLEBAR | wxTOPLEVEL_ACTIVE);
-
-	// The window buttons the style asks for, from the right edge inwards.
-	int buttonsLeft = bar.GetRight() - margin;
-	const std::pair<long, const wxBitmap*> buttons[] = {
-		{ wxCLOSE_BOX, &m_closeButton },
-		{ wxMAXIMIZE_BOX, &m_maximizeButton },
-		{ wxMINIMIZE_BOX, &m_minimizeButton },
-	};
-	for (const auto& [box, bitmap] : buttons) {
-		if ((m_titleStyle & box) == 0)
-			continue;
-		buttonsLeft -= bitmap->GetWidth();
-		dc.DrawBitmap(*bitmap, buttonsLeft, bar.y + (bar.height - bitmap->GetHeight()) / 2, true);
-	}
-
-	// The title, white and bold, cut off where the buttons begin.
-	const int indent = FromDIP(19);
-	const wxRect text(bar.x + indent, bar.y, buttonsLeft - margin - indent, bar.height);
-	if (text.width <= 0)
-		return;
-
-	wxDCClipper clipper(dc, text);
-	dc.SetFont(m_titleBar->GetFont().Bold());
-	dc.SetTextForeground(*wxWHITE);
-	dc.DrawLabel(m_title, text, wxALIGN_LEFT | wxALIGN_CENTER_VERTICAL);
+	// The theme's title bar, as a window of the form's style is painted (ibTopLevelWindow::GetDecorationsStyle): the
+	// caption, the title and the buttons the style asks for, where the theme puts them — the card looks as the window it
+	// shows. A frame's caption with no border and nothing under it.
+	int decorations = wxTOPLEVEL_TITLEBAR | wxTOPLEVEL_ACTIVE;
+	if (m_titleStyle & wxCLOSE_BOX)
+		decorations |= wxTOPLEVEL_BUTTON_CLOSE;
+	if (m_titleStyle & wxMINIMIZE_BOX)
+		decorations |= wxTOPLEVEL_BUTTON_ICONIZE;
+	if (m_titleStyle & wxMAXIMIZE_BOX)
+		decorations |= wxTOPLEVEL_BUTTON_MAXIMIZE;
+	ibThemeEngine::Get()->GetRenderer()->DrawFrameTitleBar(dc, m_titleBar->GetClientRect(), m_title, wxNullIcon,
+		decorations);
 }
 
 void ibInnerFrame::OnTitleBarLeftDown(wxMouseEvent& event)

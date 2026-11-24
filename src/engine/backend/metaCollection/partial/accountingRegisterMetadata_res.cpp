@@ -1,7 +1,7 @@
 #include "accountingRegister.h"
 
-/* PNG - accounting register icon 16x16 (uses accumulation register icon) */
-static const ibString s_accountingRegister_16_png = ibT("iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAEK0lEQVR4nOybXWwUVRTH/2e2adldUGLsB9tdSrsLpbAajRJotSskhtqkCfGFRB99UKNsKf16Eh/ExKC1u9YSxTd9Ul/RhGpQUw0oIUHS4qaGtmkphXUTNcVuG9Od411M687sbHd2bcoMM79kkjnnnjuZ+5+5Z+bOvSPB4kiwOLYAsDglegO72/sPAbSHwI+C6DHhqoSxiDPjEhFfZhkX+97vPKOnEuUL6D7yTi0cJZ+JwD0wEcx83gHpuZMDHdOrxa3aBXra+1+EwzFitsanIaKmFPhqTzjywmpxjlwFXUf7XxEH+YBApTApRCgV9/ihxr0t8Qs/DV3SjNFy9oQH/JBS19T++oY61NX64KmugNvtgpGYn09i9sZvmJi8jrHYhLKQkWR5Kdg32DOprqeZBJmWPqEMbdwuJw62NsPn2wKjkr4g23dsu7Pt3OnH10M/IJlc+LeQ4CLJ8bHYC6nrZeWArvbok+n+k+lrbdtv6MarqanxoOWZZqWTqLk3/O4+dWyWAA6S92baweAOeDwVMBu+rVvQsCug8MmQ8gvAQGOm7d++FWYlEKhR2CRxkzpGS4CnMu2qqnKYlfKKB5QOpkZ1TFYSFMnvwUy7rMy0T0Fs3Kh6UhG86hjdr8LLHH/zdRiZE6+9UVB8wQKMxkZxL2EPh3EXYJ2+9cD+HoACCTYE8X+5NjmOxcUFhc+5wYlArR/rTcECFJplteg+3ovxCeVYq9pTvSbHLhQ7CcLi2ALA4tgCwOIU/BjMRdu3hxV2YJMf0cffgtGxuwAsTtFdYPTPGGaSsznL5/6ew9nZcyv27s318Lm80APPTAGFDLs9PtDuh1EMRQvwXXxY0UA18cUEBsdOr9hH6l/SLQB+GYH8YQR6oYNtRQtg5wBYHDsJokj2V4bg3/Tf+P3U2EeK8ooN5Ti87dkVO50EdbPrIUgvH9MfX1383EXRAgQ3N9zZllELcH/pfWj1PI1iIK+Y0PDWYD2wcwAszpqNBb448DnMiN0FYHFsAWBxbAFgcWwBYHHsN8EsD/MtEFUtm+kVmGu9KrTvxNtYD/4S564g3TYVWnfAz5lGIvEHzEoi/rvCZqLL6pi8AoyO/AqzcuVKTGETWIcAJCkEmBifxvXpmzAb4+K8p6eUX61lWccd4F5wnmFmxWX/6uz3WQczMlNTN/DNuQtqd0wu4S/VTu3l8h2RR8DIUiu9XN5f54PHUwmX2wkjcfv2PG7dTGgvlxdIEgdPRjqvqv05f5npDkc6SIL+j/MGhsHhvvc6B7XKcv4xcv7i0I9N+1pmhEIHhE5lMCHMmAPxq6Lxp3PF5P1pqjc84GUp9anYfQImgsXk1RLh+Wj02KoZPK8Ay/QejdbLSIVElRAxhURNQ62jF4lbTCjSsGjQcColD/ef6tL1/NYtwL2KPRiCxbG8AP8AAAD//2BX0GwAAAAGSURBVAMAEikcPLL2qM8AAAAASUVORK5CYII=");
+/* The register's square, teal, with an account's T: debit on the left, credit on the right */
+static const ibString s_accountingRegister_svg = ibT("<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'><rect x='1' y='1' width='14' height='14' rx='2.5' fill='#1098ad'/><path d='M3 4.2 H13 M8 4.2 V12.6' fill='none' stroke='#ffffff' stroke-width='1.5' stroke-linecap='butt' stroke-linejoin='round'/><path d='M3.8 8.6 H6.6 M5.2 7.2 V10' fill='none' stroke='#ffffff' stroke-width='1.2' stroke-linecap='butt' stroke-linejoin='round'/><path d='M9.4 8.6 H12.2' fill='none' stroke='#ffffff' stroke-width='1.2' stroke-linecap='butt' stroke-linejoin='round'/></svg>");
 
 ibPicture ibValueMetaObjectAccountingRegister::GetIcon() const
 {
@@ -10,6 +10,6 @@ ibPicture ibValueMetaObjectAccountingRegister::GetIcon() const
 
 ibPicture ibValueMetaObjectAccountingRegister::GetIconGroup()
 {
-	static const ibPicture picture = ibPicture::FromBase64(s_accountingRegister_16_png, ibSize(16, 16));
+	static const ibPicture picture = ibPicture::FromSvg(s_accountingRegister_svg);
 	return picture;
 }

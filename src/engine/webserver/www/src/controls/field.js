@@ -359,8 +359,8 @@ function makeProvider(view, control) {
 }
 
 class Field extends Control {
-	// A field's own, as the server makes one (ibValueField's default, whatever its view): white — the theme's, as a
-	// table's. A view with no well stands on the form instead (applyCommon).
+	// A field's own, whatever its view: white — the theme's, as a table's. A view with no well stands on the form
+	// instead (applyCommon).
 	/** @type {[string, string]} */
 	static platformBackground = ['rgb(255,255,255)', 'var(--oes-table-bg)'];
 
@@ -426,7 +426,7 @@ class Field extends Control {
 		super.applyCommon(node);
 		// A view with no well (a flag, a label, a switch, a gauge, a slider) stands on the form, as the thin client leaves
 		// its kind's background to the theme: the field's own background is no ground of it — an author's colour is.
-		if (!this.provider.well && colour(node.BackgroundColour) === Field.platformBackground[0])
+		if (!this.provider.well && colour(node.BackgroundColour) === '')
 			this.lookTarget.style.backgroundColor = '';
 	}
 }

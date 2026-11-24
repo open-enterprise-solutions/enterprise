@@ -677,8 +677,8 @@ private:
 	ibPropertyTString* m_propertyTitle = ibPropertyObject::CreateProperty<ibPropertyTString>(m_categoryFrame, ibT("Title"), _("Title"),
 		_("The form window's title. Empty: the synonym of the object the form shows (or of the form itself) is used. Can be written per language and changed from code while the form is open."),
 		ibT(""));
-	ibPropertyColour* m_propertyFG = ibPropertyObject::CreateProperty<ibPropertyColour>(m_categoryFrame, ibT("ForegroundColour"), _("Foreground"), _("The form's text colour, inherited by controls that have no colour of their own. Default: the system colour."), ibDefaultStyleFGColour);
-	ibPropertyColour* m_propertyBG = ibPropertyObject::CreateProperty<ibPropertyColour>(m_categoryFrame, ibT("BackgroundColour"), _("Background"), _("The form's background colour. Default: the system colour, which follows the user's theme."), ibDefaultStyleBGColour);
+	ibPropertyColour* m_propertyFG = ibPropertyObject::CreateProperty<ibPropertyColour>(m_categoryFrame, ibT("ForegroundColour"), _("Foreground"), _("The form's text colour. Default: the system colour, which follows the user's theme."));
+	ibPropertyColour* m_propertyBG = ibPropertyObject::CreateProperty<ibPropertyColour>(m_categoryFrame, ibT("BackgroundColour"), _("Background"), _("The form's background colour. Default: the system colour, which follows the user's theme."));
 	ibPropertyBoolean* m_propertyEnabled = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryFrame, ibT("Enabled"), _("Enabled"), _("Whether the user can interact with the form. Off: every control on it is greyed out and takes no input - a view-only form."), true);
 	ibPropertyCategory* m_categorySizer = ibPropertyObject::CreatePropertyCategory(ibT("Sizer"), _("Sizer"));
 	ibPropertyEnum<ibValueEnumOrient>* m_propertyOrient = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumOrient>>(m_categorySizer, ibT("Orient"), _("Orient"),

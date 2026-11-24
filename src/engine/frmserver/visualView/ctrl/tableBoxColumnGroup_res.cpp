@@ -2,7 +2,7 @@
 
 #include "backend/backend_picture.h"
 
-static const ibString s_tableBoxColumnGroup_png = "iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAABLUlEQVR4nOzaIWtCURjG8b+yMhbGBtvi0tKSsJWtbN9hsLR68SPJ/QQLwtqyySSYTCajGsQgRg0ieA/q5eUW5Xl+yfe89wYfeO89B60jro44B4A4B4A4B4C4i3Th5e1jtVu3l3NOydflNVX0up3abu0RQJyfAZyZu/uH0PXTyfho3yOAOAeAOAeAOO8DCHpstULX969uCnVjMSNi1GwW6v+/XyJe3z+P9j0CiHMAiHMAiPM+4FAjz/PNh5/vwnr6Xo+K3n+b3j8YErH9HlmW7e17BBDnZ8ChxnZm2sl6dC9f+SyQ1I3nJyJ8FijhABDnABDnABDnswDiHADifBZAnANAnANAnANAXPj/Aenv9WXSvfyIasre61EeAcTJB1BDnEcAcQ4AcQ4AcfIBrAEAAP//y1VA3gAAAAZJREFUAwCxOjyB0xzongAAAABJRU5ErkJggg==";
+static const ibString s_tableBoxColumnGroup_svg = "<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'><rect x='1' y='1.5' width='14' height='13' rx='1.2' fill='#5a7b95'/><rect x='2' y='5' width='12' height='8.5' rx='0.3' fill='#a8bac8'/><path d='M2 9.2 H14 M6.3 5 V13.5 M10.3 5 V13.5' fill='none' stroke='#ffffff' stroke-width='1' stroke-linecap='butt' stroke-linejoin='round'/><rect x='2' y='1.5' width='8.3' height='13' rx='0.6' fill='#e03131'/><path d='M2 9.2 H10.3 M6.15 5 V14.5' fill='none' stroke='#ffffff' stroke-width='1' stroke-linecap='butt' stroke-linejoin='round'/></svg>";
 
 ibPicture ibValueModelTableBoxColumnGroup::GetIcon() const
 {
@@ -11,6 +11,6 @@ ibPicture ibValueModelTableBoxColumnGroup::GetIcon() const
 
 ibPicture ibValueModelTableBoxColumnGroup::GetIconGroup()
 {
-	static const ibPicture picture = ibPicture::FromBase64(s_tableBoxColumnGroup_png, ibSize(16, 16));
+	static const ibPicture picture = ibPicture::FromSvg(s_tableBoxColumnGroup_svg);
 	return picture;
 }

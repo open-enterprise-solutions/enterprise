@@ -2,7 +2,7 @@
 
 #include "backend/backend_picture.h"
 
-static const ibString s_gridBox_png = "iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAA+klEQVR4nOzbMQ4BQQCF4Z+4Ak6gUkloaLjMHmpPoNNpaWhIVConwCGoJHYSJpvZjY33vm6QKf7M2p1Jto24NuIcAHGd8IPxdP7gjx3329b72CuAhsnzvDDOsow6eQXEftDt9SljvVqS4nS+FMaH3YYUk9ni6/e+DSLOARDnAIhzAMQ5AOK8F6Bi4bP8r+d77S4/7Sp9CSDO/wFUbDQckCK85lPn83lAhAMgzgEQ5wCIcwDEOQDifB6AOAdAnM8DEOcAiHMAxDkA4hwAcQ6AOAdAnAMgLnoecL9dKSO2/44J3xhJnS/GK4CGqfsdoZD8CmghzrdBxMkHeAIAAP//wef5egAAAAZJREFUAwC/CS7gV6/leQAAAABJRU5ErkJggg==";
+static const ibString s_gridBox_svg = "<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'><rect x='1' y='1.5' width='14' height='13' rx='1.2' fill='#5a7b95'/><rect x='2' y='5' width='12' height='8.5' rx='0.3' fill='#a8bac8'/><rect x='2' y='5' width='3' height='8.5' fill='#5a7b95'/><path d='M5 9.2 H14 M9.5 5 V13.5' fill='none' stroke='#ffffff' stroke-width='1' stroke-linecap='butt' stroke-linejoin='round'/></svg>";
 
 ibPicture ibValueGridBox::GetIcon() const
 {
@@ -11,6 +11,6 @@ ibPicture ibValueGridBox::GetIcon() const
 
 ibPicture ibValueGridBox::GetIconGroup()
 {
-	static const ibPicture picture = ibPicture::FromBase64(s_gridBox_png, ibSize(16, 16));
+	static const ibPicture picture = ibPicture::FromSvg(s_gridBox_svg);
 	return picture;
 }

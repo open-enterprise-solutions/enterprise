@@ -6648,6 +6648,10 @@ protected:
 #endif // __WXMSW__
 
 private:
+    // The theme's colours, as an input surface takes them - as it is made (Create), and again when the look changes
+    // (OnSysColourChanged); an owner's own set goes over them.
+    void ApplyThemeColours();
+
     wxDECLARE_EVENT_TABLE();
     wxDECLARE_DYNAMIC_CLASS(ibStyledTextCtrl);
 

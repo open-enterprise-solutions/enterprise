@@ -1,7 +1,7 @@
 #include "chartOfCalculationTypes.h"
 
-/* PNG - chart of calculation types icon 16x16 (attribute-style, blue) */
-static const ibString s_chartOfCalculationTypes_16_png = ibT("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");
+/* The chart's book, orange, with a dial: the kinds of calculation */
+static const ibString s_chartOfCalculationTypes_svg = ibT("<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'><rect x='2' y='1' width='12' height='14' rx='1.5' fill='#f76707'/><path d='M3.5 1 H5 V15 H3.5 Q2 15 2 13.5 V2.5 Q2 1 3.5 1 Z' fill='#d9480f'/><circle cx='9.5' cy='8' r='3' fill='none' stroke='#ffffff' stroke-width='1.3'/><path d='M9.5 6.4 V9.6' fill='none' stroke='#ffffff' stroke-width='1.2' stroke-linecap='butt' stroke-linejoin='round'/></svg>");
 
 ibPicture ibValueMetaObjectChartOfCalculationTypes::GetIcon() const
 {
@@ -10,7 +10,7 @@ ibPicture ibValueMetaObjectChartOfCalculationTypes::GetIcon() const
 
 ibPicture ibValueMetaObjectChartOfCalculationTypes::GetIconGroup()
 {
-	static const ibPicture picture = ibPicture::FromBase64(s_chartOfCalculationTypes_16_png, ibSize(16, 16));
+	static const ibPicture picture = ibPicture::FromSvg(s_chartOfCalculationTypes_svg);
 
 	return picture;
 }

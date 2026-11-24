@@ -23,6 +23,20 @@
 #include <wx/sizer.h>
 #include <wx/uri.h>
 
+#include "deskgui/univ/theme.h"          // ibThemeEngine — the page's inks are the theme's
+#include "deskgui/univ/colourScheme.h"   // wxTHEME_COLOUR
+
+namespace {
+
+// A colour of the theme in force, as the page's markup names it. wxHtmlWindow paints what the page says, so the page
+// is written in the look's colours - written in light ones, it stayed white in the dark look (2026-11-24, Max).
+wxString Ink(ibColourScheme::StdColour colour)
+{
+	return ibThemeEngine::Get()->GetColourScheme()->Get(colour).GetAsString(wxC2S_HTML_SYNTAX);
+}
+
+} // namespace
+
 ibHelpDetailView::ibHelpDetailView(wxWindow* parent, ibHelpPaneView* pane)
     : ibPanel(parent, wxID_ANY), m_pane(pane) {
 	m_html = new wxHtmlWindow(this, wxID_ANY);
@@ -35,6 +49,7 @@ ibHelpDetailView::ibHelpDetailView(wxWindow* parent, ibHelpPaneView* pane)
 
 	Bind(wxEVT_HTML_LINK_CLICKED,
 	     &ibHelpDetailView::OnLinkClicked, this);
+	Bind(wxEVT_SYS_COLOUR_CHANGED, &ibHelpDetailView::OnSysColourChanged, this);
 
 	// Right-click context menu on the HTML pane — wxHtmlWindow's
 	// built-in handling is "select with mouse drag, Ctrl+C copies"; this
@@ -88,9 +103,9 @@ void ibHelpDetailView::ShowEntry(const ibHelpEntry* entry) {
 	m_lastEntryId = entry ? entry->id : ibString();
 	if (entry == nullptr) {
 		m_html->SetPage(
-		    wxT("<html><body bgcolor=\"#FFFFFF\">"
+		    wxT("<html><body bgcolor=\"") + Ink(ibColourScheme::WINDOW) + wxT("\">"
 		         "<table border=\"0\" cellpadding=\"20\" width=\"100%\"><tr><td>"
-		         "<font color=\"#888888\" size=\"3\"><i>")
+		         "<font color=\"") + Ink(ibColourScheme::CONTROL_TEXT_DISABLED) + wxT("\" size=\"3\"><i>")
 		    + wxString(_("Select an entry in the tree on the left, or "
 		                  "press Ctrl+F1 on an identifier in the editor."))
 		    + wxT("</i></font>"
@@ -176,7 +191,7 @@ wxString ApplyInlineMarkdown(const wxString& escaped)
 	for (size_t i = 0; i < escaped.size(); ++i) {
 		// Skip the opening delimiter and emit the tag.
 		if (codeIt != codeSpans.end() && i == codeIt->begin - 1) {
-			out += wxT("<font face=\"Menlo\" color=\"#0f172a\"><tt>");
+			out += wxT("<font face=\"Menlo\" color=\"") + Ink(ibColourScheme::CONTROL_TEXT) + wxT("\"><tt>");
 			continue;
 		}
 		if (codeIt != codeSpans.end() && i == codeIt->end) {
@@ -226,9 +241,10 @@ wxString ibHelpDetailView::FormatCodeBlock(const wxString& code) {
 	// and newlines verbatim. The inner <font face="Menlo"> binds the
 	// monospace family to the block content (wxHtmlWindow respects
 	// face= on font inside pre even though it would ignore CSS).
+	// the control's tier under the text's ink, as the assistant's code block
 	return wxT("<table border=\"0\" cellspacing=\"0\" cellpadding=\"8\" "
-	             "bgcolor=\"#f3f4f6\" width=\"100%\"><tr><td>"
-	             "<font face=\"Menlo\" size=\"2\" color=\"#1a1a1a\"><pre>")
+	             "bgcolor=\"") + Ink(ibColourScheme::CONTROL) + wxT("\" width=\"100%\"><tr><td>"
+	             "<font face=\"Menlo\" size=\"2\" color=\"") + Ink(ibColourScheme::CONTROL_TEXT) + wxT("\"><pre>")
 	       + EscapeForPre(code)
 	       + wxT("</pre></font></td></tr></table>");
 }
@@ -237,31 +253,34 @@ wxString ibHelpDetailView::RenderHtml(const ibHelpEntry& entry) const {
 	wxString html;
 	html.reserve(4096);
 
+	// THE PAGE IN THE THEME'S INKS (Ink): the content tier under the text's ink, as the tree beside it; the headings,
+	// the rule and the links in the alternate ink, as the assistant's headings; what is said less, the muted one.
+	const wxString paper = Ink(ibColourScheme::WINDOW), text = Ink(ibColourScheme::CONTROL_TEXT),
+		muted = Ink(ibColourScheme::CONTROL_TEXT_DISABLED), heading = Ink(ibColourScheme::CONTROL_TEXT_ALTERNATE);
+
 	// Outer container with consistent left-margin via cellpadding.
-	// White bg — the content tier in the interior palette
-	// (docs/private/ui-palette.md), as the tree beside it.
-	html += wxT("<html><body bgcolor=\"#FFFFFF\">"
+	html += wxT("<html><body bgcolor=\"") + paper + wxT("\">"
 	             "<table border=\"0\" cellpadding=\"12\" cellspacing=\"0\" "
 	             "width=\"100%\"><tr><td>");
 
 	// === Title block ========================================================
-	html += wxT("<font size=\"5\" color=\"#1f2937\"><b>");
+	html += wxT("<font size=\"5\" color=\"") + text + wxT("\"><b>");
 	html += EscapeHtml(entry.nameLocal.IsEmpty() ? entry.nameEn
 	                                                : entry.nameLocal);
 	html += wxT("</b></font>");
 	if (!entry.nameEn.IsEmpty() && entry.nameEn != entry.nameLocal) {
-		html += wxT("<br><font size=\"3\" color=\"#6b7280\">");
+		html += wxT("<br><font size=\"3\" color=\"") + muted + wxT("\">");
 		html += EscapeHtml(entry.nameEn);
 		html += wxT("</font>");
 	}
 	// Coloured rule under the title.
 	html += wxT("<table border=\"0\" cellspacing=\"0\" cellpadding=\"0\" "
-	             "width=\"100%\" bgcolor=\"#2563eb\" height=\"2\">"
+	             "width=\"100%\" bgcolor=\"") + heading + wxT("\" height=\"2\">"
 	             "<tr><td></td></tr></table>");
 	html += wxT("<br>");
 
 	if (!entry.signature.IsEmpty()) {
-		html += wxT("<font face=\"Menlo\" size=\"3\" color=\"#0f172a\">");
+		html += wxT("<font face=\"Menlo\" size=\"3\" color=\"") + text + wxT("\">");
 		html += EscapeHtml(entry.signature);
 		html += wxT("</font><br><br>");
 	}
@@ -269,12 +288,12 @@ wxString ibHelpDetailView::RenderHtml(const ibHelpEntry& entry) const {
 	auto section = [&](const wxString& title, const wxString& body,
 	                    bool monospace) {
 		if (body.IsEmpty()) return;
-		html += wxT("<font size=\"3\" color=\"#2563eb\"><b>");
+		html += wxT("<font size=\"3\" color=\"") + heading + wxT("\"><b>");
 		html += EscapeHtml(title);
 		html += wxT("</b></font><br>");
 		if (monospace) html += FormatCodeBlock(body);
 		else {
-			html += wxT("<font color=\"#1f2937\">");
+			html += wxT("<font color=\"") + text + wxT("\">");
 			html += ApplyInlineMarkdown(EscapeHtml(body));
 			html += wxT("</font>");
 		}
@@ -313,7 +332,7 @@ wxString ibHelpDetailView::RenderHtml(const ibHelpEntry& entry) const {
 	if (!entry.seeAlso.empty()) {
 		auto corpus = m_pane ? m_pane->GetCorpus()
 		                       : std::shared_ptr<const ibHelpCorpus>();
-		html += wxT("<font size=\"3\" color=\"#2563eb\"><b>");
+		html += wxT("<font size=\"3\" color=\"") + heading + wxT("\"><b>");
 		html += EscapeHtml(_("See also"));
 		html += wxT("</b></font><br>");
 		bool first = true;
@@ -331,7 +350,7 @@ wxString ibHelpDetailView::RenderHtml(const ibHelpEntry& entry) const {
 			}
 			html += wxT("<a href=\"oeshelp://");
 			html += EscapeHtml(ref);
-			html += wxT("\"><font color=\"#2563eb\">");
+			html += wxT("\"><font color=\"") + heading + wxT("\">");
 			html += EscapeHtml(label);
 			html += wxT("</font></a>");
 		}
@@ -340,15 +359,22 @@ wxString ibHelpDetailView::RenderHtml(const ibHelpEntry& entry) const {
 
 	// === Draft badge ========================================================
 	if (!entry.reviewed) {
+		// the action's ink on the control's tier - an amber band glared in the dark look
 		html += wxT("<table border=\"0\" cellspacing=\"0\" cellpadding=\"6\" "
-		             "bgcolor=\"#fef3c7\" width=\"100%\"><tr><td>"
-		             "<font color=\"#92400e\" size=\"2\"><i>");
+		             "bgcolor=\"") + Ink(ibColourScheme::CONTROL) + wxT("\" width=\"100%\"><tr><td>"
+		             "<font color=\"") + Ink(ibColourScheme::HYPERLINK) + wxT("\" size=\"2\"><i>");
 		html += EscapeHtml(_("Draft - this entry awaits editorial review."));
 		html += wxT("</i></font></td></tr></table>");
 	}
 
 	html += wxT("</td></tr></table></body></html>");
 	return html;
+}
+
+void ibHelpDetailView::OnSysColourChanged(wxSysColourChangedEvent& event) {
+	// The page is written in the look's colours (Ink): the look changed, the entry shown is written again.
+	event.Skip();
+	ShowEntry(!m_lastEntryId.IsEmpty() && m_pane ? m_pane->Entry(m_lastEntryId) : nullptr);
 }
 
 void ibHelpDetailView::OnLinkClicked(wxHtmlLinkEvent& event) {

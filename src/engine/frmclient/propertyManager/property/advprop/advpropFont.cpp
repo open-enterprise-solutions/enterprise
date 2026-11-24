@@ -80,7 +80,7 @@ static long gs_fp_es_weight_values[] = {
 	ibFONTWEIGHT_EXTRAHEAVY
 };
 
-ibPG_IMPLEMENT_PROPERTY_CLASS(ibPGFontProperty, ibEditorDialogProperty, TextCtrlAndButton)
+ibPG_IMPLEMENT_PROPERTY_CLASS(ibPGFontProperty, ibEditorDialogProperty, TextCtrlAndButtons)
 
 // register frontend property — the cell holds the font as the server writes it, so it goes back as it is
 class ibPropertyFontLoader
@@ -147,6 +147,25 @@ ibPGFontProperty::ibPGFontProperty(const wxString& label, const wxString& name,
 	AddPrivateChild(new ibEnumProperty(_("Family"), wxS("Family"),
 		gs_fp_es_family_labels, gs_fp_es_family_values,
 		font.m_family));
+}
+
+wxString ibPGFontProperty::ValueToString(ibVariant& value, ibPGPropValFormatFlags flags) const
+{
+	// None set — the default, the parent's (2026-11-24, Max: "what font is this": the system's it starts from read as one
+	// set).
+	if (ibVariantSerializable::GetNodeValue(value).AsString().empty())
+		return _("<default>");
+	return ibEditorDialogProperty::ValueToString(value, flags);
+}
+
+bool ibPGFontProperty::StringToValue(ibVariant& variant, const wxString& text, ibPGPropValFormatFlags flags) const
+{
+	const wxString trimmed = wxString(text).Trim(true).Trim(false);
+	if (trimmed.empty() || trimmed == _("<default>")) {
+		variant = WriteFont(ibFont());
+		return true;
+	}
+	return ibEditorDialogProperty::StringToValue(variant, text, flags);
 }
 
 bool ibPGFontProperty::DisplayEditorDialog(ibPropertyGrid* pg, ibVariant& value)

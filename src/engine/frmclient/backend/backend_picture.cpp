@@ -4,8 +4,7 @@
 #include <wx/image.h>
 #include <wx/mstream.h>
 
-#include "core/pictureRegistry.h"   // the engine's pictures, as the core registered them
-#include "core/utils/base64.h"      // ibBase64 — a master's PNG, read from its text in the source
+#include "core/pictureRegistry.h"   // the engine's pictures, as the core registered them (and ibPicture::FromSvg)
 
 bool ibBackendPicture::LoadFromFile(const ibString& strFileName, ibExternalPictureDescription& pictureDesc)
 {
@@ -40,25 +39,18 @@ bool ibBackendPicture::LoadFromFile(const ibString& strFileName, ibExternalPictu
 
 wxBitmap ibBackendPicture::CreatePicture(const ibExternalPictureDescription& pictureDesc, const wxSize& size)
 {
-	if (!pictureDesc.m_img_buffer.empty()) {
-		wxMemoryInputStream inputStream(
-			pictureDesc.m_img_buffer.data(),
-			pictureDesc.m_img_buffer.size()
-		);
-		const wxImage image(inputStream);
-		if (size != image.GetSize())
-			return image.Scale(size.x, size.y, wxIMAGE_QUALITY_HIGH);
-		return image;
-	}
-
-	return wxNullBitmap;
+	// The bytes as they are kept — a PNG, or a drawing given over MCP — at the size asked, by the core.
+	if (pictureDesc.m_img_buffer.empty())
+		return wxNullBitmap;
+	const ibPicture picture(ibMemoryBuffer(pictureDesc.m_img_buffer.data(), pictureDesc.m_img_buffer.size()));
+	const wxImage image = ibProtocolImage(picture.Scale(ibSize(size.x, size.y)).GetData());
+	return image.IsOk() ? wxBitmap(image) : wxNullBitmap;
 }
 
-wxImage ibBackendPicture::GetImageFromBase64(const ibString& src, const wxSize& size)
+wxImage ibBackendPicture::GetImageFromSvg(const ibString& svg, const wxSize& size)
 {
-	ibMemoryBuffer png;
-	const wxImage image = ibBase64::Read(src, png) ? ibProtocolImage(png) : wxImage();
-	return size != wxDefaultSize && image.IsOk() && size != image.GetSize() ? image.Scale(size.x, size.y, wxIMAGE_QUALITY_HIGH) : image;
+	const ibPicture picture = ibPicture::FromSvg(svg, ibSize(size.x, size.y));
+	return picture.IsOk() ? ibProtocolImage(picture.GetData()) : wxImage();
 }
 
 std::vector<ibBackendPictureEntry> ibBackendPicture::GetArrayPicture()

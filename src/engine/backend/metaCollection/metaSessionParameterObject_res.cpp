@@ -2,15 +2,11 @@
 
 // THE ATTRIBUTE'S SHAPE, IN ANOTHER COLOUR. A session parameter IS an attribute —
 // same editor, same type page, same everything a declaration needs — so the icon
-// keeps the attribute's outline and swaps its blue for amber. A different picture
-// would claim a different kind of thing; the same picture would hide that this one
-// belongs to the session rather than to a table.
-//
-// Placeholder in the honest sense: the attribute icon with R and B swapped, good
-// enough to tell the branches apart until somebody draws one on purpose.
+// keeps the attribute's plate, in amber, with a person on it: the session it
+// belongs to. A different picture would claim a different kind of thing; the same
+// picture would hide that this one belongs to the session rather than to a table.
 
-/* PNG */
-static const ibString s_sessionParameter_16_png = ibT("iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAADuElEQVR4nOyZSUzUUBjH/28GKDOCLCqrSwANIrIcBIREJBE1hBtc9KSJicblpizeMCEBkbsxHkw4eDTGREU9kRgBRZEIuERFNGyyCAFmGJhOfS0Jtp0WMgxhOr7+km7f97V579/3+l6/ZwHjWMA4pgBgHFMAMI4pABjHFACMYwoAxjEFAOOYAoBxQtYKGLuGQt6Cs/Q0QyA4QIBtMDACMEkE9IOg32LBvYQGdK4WT3QfVIewYQfqCcFVBGtLEcDTfVOiHXWkDotaIbotYMSJl7TyeQhmCKx0f33EgWP0WKAVovlmh6tRTw/BXXk5BPlDNbih7VIxUo182tcV/YZLy0FE/gmEbk8CCbfDyAgLDixNDGPudStc3z4onQSHkhrxVm7yagEegovyay41G7EVlxC2c6/hKy8illEsa2zFFXApB5VOD86r472/AQLS5e0isrAMa8LzcA1+hHtqbPmhsfHg9mQAVisCSWRROVwDvXJTujrGSwD64cuSX1tps1+NpdEfmG5tgXt8SPngHcmIKT8nHQNFSEy82pShNmh9BCMUAWHh0ENYdOHPo7telRcRbVMPb0sxgYLYtqgMiFPH+DW+O963gZ+Z0PXz0+NSjJHxS4DFscENiQkka06FV2Np7NeGxAQSv1qAbV/uhsQEEr8EsGcfAQnldP2iz55TDCPjVxewxuzA1pJKzLy4r+mPKj0Fa/R2rIeRWxd8ik+suoP14JcAIvbco9KMa+7N85WpJ5eWjYi847BGGfrPWcJvAUTEikaVngbELcgwM0IwKOvt075iJkXBOOvvArwbC1974PzUhaXfP+m8fxJSSlKC5qKityE0bjdsmYcRnpJJv5TG7G2+l0rwYK7zmTTsidkXnSAqyIS0LXx5R5MUWxBRcFIaGkGM1eh8FmD6aQucfe0+3SMszGO27QHck6OILjsDI+H9OgSMKi6d8yvnru+9PldejrP3lfSMzUJe9mWDsm4i3gIQdMsv3VP/7nH0d8BfnJ+7sFnIyy5BlAlREa0u0EO3lUTgbEcrYisvS+fcrv1aaSafCNnE6fFs+2O1qVtt8EqLj9YilRfQRx0ruTAuLQuRBWUIEdPinA1GxuOcA0+Ts7MdTxTdTRDgtHqQmdCMAXm85tLYcA1q6aEB/xG0olWJN9GsYdeGrqR0EJ3lpGCDvv325CYUafl0B+UkG4rptKYJ4nJCsLK8ONqYZEeJXgjBGjC7PM4K5t8gGMcUAIxjCgDGMQUA45gCgHFMAcA4pgBgHOYF+AsAAP//s5UEJAAAAAZJREFUAwCTtw7vd7Af1gAAAABJRU5ErkJggg==");
+static const ibString s_sessionParameter_svg = ibT("<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'><rect x='1' y='4' width='14' height='8' rx='2' fill='#f08c00'/><circle cx='5' cy='6.6' r='1.3' fill='#ffffff'/><path d='M2.6 10.6 Q2.6 8.6 5 8.6 Q7.4 8.6 7.4 10.6 Z' fill='#ffffff'/><path d='M10 8 H12.5' fill='none' stroke='#ffffff' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/></svg>");
 
 ibPicture ibValueMetaObjectSessionParameter::GetIcon() const
 {
@@ -19,7 +15,7 @@ ibPicture ibValueMetaObjectSessionParameter::GetIcon() const
 
 ibPicture ibValueMetaObjectSessionParameter::GetIconGroup()
 {
-	static const ibPicture picture = ibPicture::FromBase64(s_sessionParameter_16_png, ibSize(16, 16));
+	static const ibPicture picture = ibPicture::FromSvg(s_sessionParameter_svg);
 
 	return picture;
 }

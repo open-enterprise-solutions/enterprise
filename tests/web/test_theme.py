@@ -1,18 +1,25 @@
-"""The theme - light, dark, or as the machine is set: the person's, read as the window comes up, and chosen anew from
-Tools → Theme..."""
+"""The theme - light, dark, or as the machine is set: the client's own, kept in this browser and applied as the page
+starts; chosen anew from Tools → Theme..., which asks the server nothing (it keeps nothing of it)."""
 import unittest
 
 from harness import PageTest, tab, table
 
 STYLE = 20
-SAVE = 4
 SYSTEM, LIGHT, DARK = 0, 1, 2
-MENU = {'NodeChildren': [{'Title': 'Tools', 'NodeChildren': [{'Title': 'Theme...', 'Schema': STYLE}]}]}
+MENU = {'NodeChildren': [{'Title': 'Tools', 'NodeChildren': [{'Title': 'Theme...', 'Schema': STYLE, 'Enabled': True}]}]}
 
 
-def scenario(theme, offered=True):
-    return {'tabs': [tab()], 'menu': MENU, 'schemas': {str(STYLE): {'Theme': theme}},
-            **({'schemaKinds': [STYLE]} if offered else {})}
+def kept(theme, scheme=None):
+    """The page's start with a theme kept in the browser before it - and the machine set to a scheme, if one is named."""
+    def before(page):
+        page.add_init_script(f"localStorage.setItem('theme', '{theme}');")
+        if scheme is not None:
+            page.emulate_media(color_scheme=scheme)
+    return before
+
+
+def scenario():
+    return {'tabs': [tab()], 'menu': MENU}
 
 
 class TheTheme(PageTest):
@@ -21,29 +28,44 @@ class TheTheme(PageTest):
             dark: document.documentElement.classList.contains('wa-dark'),
             window: getComputedStyle(document.documentElement).getPropertyValue('--oes-window-bg').trim() })""")
 
-    def test_is_the_persons_dark(self):
-        page = self.start(scenario(DARK))
+    def schema_calls(self, page):
+        return [call for call in page.evaluate('window.fake.calls') if call['method'] == 'schema']
+
+    def choose(self, page, caption, button='OK'):
+        page.locator('.menu wa-button', has_text='Tools').click()
+        page.locator('wa-dropdown-item', has_text='Theme').click()
+        page.wait_for_selector('wa-dialog.theme .themes')
+        page.locator('.themes label', has_text=caption).click()
+        page.locator('wa-dialog.theme wa-button', has_text=button).click()
+
+    def test_is_the_kept_dark(self):
+        page = self.start(scenario(), before=kept(DARK))
         self.assertEqual(self.painted(page), {'theme': 'dark', 'dark': True, 'window': '#1b1d21'})
 
-    def test_is_the_persons_light_on_a_dark_machine(self):
-        page = self.start(scenario(LIGHT), before=lambda page: page.emulate_media(color_scheme='dark'))
+    def test_is_the_kept_light_on_a_dark_machine(self):
+        page = self.start(scenario(), before=kept(LIGHT, 'dark'))
         self.assertEqual(self.painted(page)['theme'], 'light')
         self.assertFalse(self.painted(page)['dark'])
         self.assertEqual(self.painted(page)['window'], '#f4f5f7')
 
+    def test_none_kept_is_the_machines(self):
+        page = self.start(scenario(), before=lambda page: page.emulate_media(color_scheme='dark'))
+        self.assertEqual(self.painted(page)['theme'], 'dark')
+
     def test_the_systems_follows_the_machine_as_it_changes(self):
-        page = self.start(scenario(SYSTEM), before=lambda page: page.emulate_media(color_scheme='dark'))
+        page = self.start(scenario(), before=kept(SYSTEM, 'dark'))
         self.assertEqual(self.painted(page)['theme'], 'dark')
         page.emulate_media(color_scheme='light')
         page.wait_for_function("document.documentElement.dataset.theme === 'light'")
 
-    def test_a_server_that_offers_no_style_leaves_the_machines(self):
-        page = self.start(scenario(DARK, offered=False), before=lambda page: page.emulate_media(color_scheme='light'))
-        self.assertEqual(self.painted(page)['theme'], 'light')
-        self.assertEqual([call for call in page.evaluate('window.fake.calls') if call['method'] == 'schema'], [])
+    def test_the_server_is_asked_nothing_of_it(self):
+        page = self.start(scenario(), before=kept(DARK))
+        self.choose(page, 'Light')
+        page.wait_for_function("document.documentElement.dataset.theme === 'light'")
+        self.assertEqual(self.schema_calls(page), [])
 
     def test_is_chosen_from_tools_kept_and_painted_at_once(self):
-        page = self.start(scenario(LIGHT))
+        page = self.start(scenario(), before=kept(LIGHT))
         page.locator('.menu wa-button', has_text='Tools').click()
         page.locator('wa-dropdown-item', has_text='Theme').click()
         page.wait_for_selector('wa-dialog.theme .themes')
@@ -51,38 +73,17 @@ class TheTheme(PageTest):
         page.locator('.themes label', has_text='Dark').click()
         page.locator('wa-dialog.theme wa-button', has_text='OK').click()
         page.wait_for_function("document.documentElement.dataset.theme === 'dark'")
-        saved = [call['params'] for call in page.evaluate('window.fake.calls')
-                 if call['method'] == 'schema' and call['params'].get('Command') == SAVE]
-        self.assertEqual(len(saved), 1)
-        self.assertEqual(saved[0]['Schema'], STYLE)
-        self.assertEqual(saved[0]['Args'], {'Theme': DARK})
+        self.assertEqual(page.evaluate("localStorage.getItem('theme')"), str(DARK))
 
-    def test_a_refused_save_is_said_and_paints_nothing(self):
-        page = self.start({**scenario(LIGHT), 'schemaRefusal': 'The theme could not be kept'})
-        page.locator('.menu wa-button', has_text='Tools').click()
-        page.locator('wa-dropdown-item', has_text='Theme').click()
-        page.wait_for_selector('wa-dialog.theme .themes')
-        page.locator('.themes label', has_text='Dark').click()
-        page.locator('wa-dialog.theme wa-button', has_text='OK').click()
-        page.get_by_text('The theme could not be kept').wait_for()
+    def test_cancel_keeps_nothing(self):
+        page = self.start(scenario(), before=kept(LIGHT))
+        self.choose(page, 'Dark', 'Cancel')
+        page.wait_for_timeout(200)
         self.assertEqual(self.painted(page)['theme'], 'light')
-        self.assertEqual(page.locator('wa-dialog.theme').count(), 0)
-
-    def test_escape_while_the_save_is_on_its_way_waits_for_its_answer(self):
-        page = self.start({**scenario(LIGHT), 'schemaRefusal': 'The theme could not be kept', 'commandLatency': 1000})
-        page.locator('.menu wa-button', has_text='Tools').click()
-        page.locator('wa-dropdown-item', has_text='Theme').click()
-        page.wait_for_selector('wa-dialog.theme .themes')
-        page.locator('.themes label', has_text='Dark').click()
-        page.locator('wa-dialog.theme wa-button', has_text='OK').click()
-        page.keyboard.press('Escape')
-        page.wait_for_timeout(300)
-        self.assertTrue(page.evaluate("document.querySelector('wa-dialog.theme')?.open === true"))
-        page.get_by_text('The theme could not be kept').wait_for()
-        self.assertEqual(self.painted(page)['theme'], 'light')
+        self.assertEqual(page.evaluate("localStorage.getItem('theme')"), str(LIGHT))
 
     def test_a_printout_is_light(self):
-        page = self.start(scenario(DARK))
+        page = self.start(scenario(), before=kept(DARK))
         page.emulate_media(media='print')
         page.wait_for_function("!document.documentElement.classList.contains('wa-dark')")
         self.assertEqual(self.painted(page)['window'], '#f4f5f7')
@@ -92,7 +93,7 @@ class TheTheme(PageTest):
         self.assertEqual(self.painted(page)['window'], '#1b1d21')
 
     def test_a_tables_text_is_light_in_the_dark(self):
-        page = self.start(scenario(DARK))
+        page = self.start(scenario(), before=kept(DARK))
         page.wait_for_selector('oes-table .tabulator-cell')
         look = page.evaluate("""() => {
             const cell = document.querySelector('oes-table .tabulator-row .tabulator-cell');
@@ -100,78 +101,50 @@ class TheTheme(PageTest):
             return [getComputedStyle(cell).color, getComputedStyle(holder).backgroundColor]; }""")
         self.assertEqual(look, ['rgb(228, 230, 234)', 'rgb(36, 39, 44)'])
 
-    def test_the_splash_is_the_machines(self):
-        page = self.start(scenario(SYSTEM), before=lambda page: page.emulate_media(color_scheme='dark'))
-        self.assertEqual(self.painted(page)['theme'], 'dark')
-
-    def test_ok_on_the_kept_one_paints_it(self):
-        # The page shows another than the one kept - a read at the start that failed: OK on the kept one paints it.
-        page = self.start(scenario(LIGHT))
-        page.evaluate("async () => (await import('/pub/src/window/theme.js')).applyTheme(2)")
-        self.assertEqual(self.painted(page)['theme'], 'dark')
-        page.locator('.menu wa-button', has_text='Tools').click()
-        page.locator('wa-dropdown-item', has_text='Theme').click()
-        page.wait_for_selector('wa-dialog.theme .themes')
-        page.locator('wa-dialog.theme wa-button', has_text='OK').click()
-        page.wait_for_function("document.documentElement.dataset.theme === 'light'")
-        self.assertFalse(any(call['params'].get('Command') == SAVE for call in page.evaluate('window.fake.calls')
-                             if call['method'] == 'schema'))
-
-    def test_cancel_keeps_nothing(self):
-        page = self.start(scenario(LIGHT))
-        page.locator('.menu wa-button', has_text='Tools').click()
-        page.locator('wa-dropdown-item', has_text='Theme').click()
-        page.wait_for_selector('wa-dialog.theme .themes')
-        page.locator('.themes label', has_text='Dark').click()
-        page.locator('wa-dialog.theme wa-button', has_text='Cancel').click()
-        page.wait_for_timeout(200)
-        self.assertEqual(self.painted(page)['theme'], 'light')
-        self.assertFalse(any(call['params'].get('Command') == SAVE for call in page.evaluate('window.fake.calls')
-                             if call['method'] == 'schema'))
+    def test_the_splash_is_the_kept_one(self):
+        page = self.start(scenario(), wait=False, before=kept(DARK))
+        page.wait_for_function("document.documentElement.dataset.theme === 'dark'")
 
 
 class AControlsOwnLook(PageTest):
-    """The platform's own look of a control - what a form saves when its author picks no colour - is painted with the
-    theme's; a colour the author chose stays theirs."""
+    """The platform's own look of a control - a colour the form leaves empty, its author picked none - is painted with
+    the theme's; a colour the author chose stays theirs."""
 
     def look(self, theme):
-        # A field's own fill is white, as the server makes one (ibValueField); a label's, a group's - cream.
-        fields = [{'id': 21, 'caption': 'Platform', 'node': {'BackgroundColour': '255,255,255', 'ForegroundColour': '63,92,119'}},
-                  {'id': 22, 'caption': 'Chosen fill', 'node': {'BackgroundColour': '200,30,30', 'ForegroundColour': '63,92,119'}},
-                  {'id': 23, 'caption': 'Chosen ink', 'node': {'BackgroundColour': '250,247,240', 'ForegroundColour': '0,0,128'}},
-                  {'id': 24, 'caption': 'Fill alone', 'node': {'BackgroundColour': '255,255,0'}}]
-        page = self.start({'tabs': [{'title': 'List', 'fields': fields, 'table': table()}], 'schemas': {str(STYLE): {'Theme': theme}}, 'schemaKinds': [STYLE]})
+        # Empty - the platform's: a field's own fill is white in the light theme.
+        fields = [{'id': 21, 'caption': 'Platform', 'node': {'BackgroundColour': '', 'ForegroundColour': ''}},
+                  {'id': 22, 'caption': 'Chosen fill', 'node': {'BackgroundColour': '200,30,30', 'ForegroundColour': ''}},
+                  {'id': 23, 'caption': 'Chosen ink', 'node': {'BackgroundColour': '', 'ForegroundColour': '0,0,128'}}]
+        page = self.start({'tabs': [{'title': 'List', 'fields': fields, 'table': table()}]}, before=kept(theme))
         return page.evaluate("""() => [...document.querySelectorAll('oes-field')].map((field) => {
             const look = getComputedStyle(field.lookTarget ?? field); return [look.color, look.backgroundColor]; })""")
 
     def test_the_platforms_is_dark_in_the_dark(self):
-        platform, fill, ink, alone = self.look(DARK)
+        platform, fill, ink = self.look(DARK)
         self.assertEqual(platform, ['rgb(201, 214, 226)', 'rgb(36, 39, 44)'])
         # One side the author's: the other is the light theme's, so the pair reads as they chose it.
         self.assertEqual(fill, ['rgb(63, 92, 119)', 'rgb(200, 30, 30)'])
-        self.assertEqual(ink, ['rgb(0, 0, 128)', 'rgb(250, 247, 240)'])
-        self.assertEqual(alone, ['rgb(34, 34, 34)', 'rgb(255, 255, 0)'])
+        self.assertEqual(ink, ['rgb(0, 0, 128)', 'rgb(255, 255, 255)'])
 
     def test_the_field_itself_is_the_themes(self):
         # What a person types into is Web Awesome's own part, painted by its class - the form's colours stand on the
         # label and behind it, as they did before the theme.
         for theme, wanted in ((DARK, 'rgb(16, 18, 25)'), (LIGHT, 'rgb(255, 255, 255)')):
-            page = self.start({'tabs': [{'title': 'List', 'fields': [{'id': 21, 'caption': 'Platform'}], 'table': table()}],
-                               'schemas': {str(STYLE): {'Theme': theme}}, 'schemaKinds': [STYLE]})
+            page = self.start({'tabs': [{'title': 'List', 'fields': [{'id': 21, 'caption': 'Platform'}], 'table': table()}]},
+                              before=kept(theme))
             self.assertEqual(page.evaluate("""() => getComputedStyle(document.querySelector('oes-field').lookTarget
                 .shadowRoot.querySelector('[part~="base"]')).backgroundColor"""), wanted)
             page.close()
 
     def test_the_platforms_is_itself_in_the_light(self):
-        platform, fill, ink, alone = self.look(LIGHT)
+        platform, fill, ink = self.look(LIGHT)
         self.assertEqual(platform, ['rgb(63, 92, 119)', 'rgb(255, 255, 255)'])
         self.assertEqual(fill, ['rgb(63, 92, 119)', 'rgb(200, 30, 30)'])
-        self.assertEqual(ink, ['rgb(0, 0, 128)', 'rgb(250, 247, 240)'])
+        self.assertEqual(ink, ['rgb(0, 0, 128)', 'rgb(255, 255, 255)'])
 
     def table_fill(self, theme):
-        # A table's own fill is white, as the server makes one (ibValueModelTableBox): its command bar stands on it.
-        page = self.start({'tabs': [tab(node={'BackgroundColour': '255,255,255', 'ForegroundColour': '63,92,119'})],
-                           'schemas': {str(STYLE): {'Theme': theme}}, 'schemaKinds': [STYLE]})
+        # A table's own fill, left empty, is white in the light theme: its command bar stands on it.
+        page = self.start({'tabs': [tab(node={'BackgroundColour': '', 'ForegroundColour': ''})]}, before=kept(theme))
         return page.evaluate("() => getComputedStyle(document.querySelector('oes-table')).backgroundColor")
 
     def test_a_tables_own_is_the_themes_table_in_the_dark(self):
@@ -185,7 +158,7 @@ class ACellsOwnColour(PageTest):
     """A sheet's or a table's cell that names one colour gets the light theme's other side, in any theme."""
 
     def test_one_side_named_is_paired_with_the_paper(self):
-        page = self.start(scenario(DARK))
+        page = self.start(scenario(), before=kept(DARK))
         pairs = page.evaluate("""async () => {
             const { onFill } = await import('/pub/src/controls/control.js');
             const { recordOf } = await import('/pub/src/table/rows.js');

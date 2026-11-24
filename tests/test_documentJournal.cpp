@@ -21,6 +21,7 @@
 
 #include <wx/init.h>
 
+#include "activeMetaDataAccess.h"
 #include "backend/appData.h"
 #include "backend/backend_exception.h"
 #include "backend/compiler/compileCode.h"
@@ -77,7 +78,7 @@ struct DocumentJournalFix : ::testing::Test {
 	const short                            m_codeStyle = ibCompileCode::GetCodeStyle();
 	std::shared_ptr<ibDatabaseLayerSQLite> db;
 
-	std::unique_ptr<ibMetaDataApplicationFile> cfg;
+	std::shared_ptr<ibMetaDataApplicationFile> cfg;
 	ibValueMetaObjectDocument*        invoice = nullptr;
 	ibValueMetaObjectDocument*        refund  = nullptr;
 	ibValueMetaObjectDocumentJournal* journal = nullptr;
@@ -97,7 +98,9 @@ struct DocumentJournalFix : ::testing::Test {
 			GTEST_SKIP() << "in-memory SQLite open failed";
 		pool->Init(db, /*maxSize=*/1, /*minIdle=*/0);
 
-		cfg = std::make_unique<ibMetaDataApplicationFile>();
+		// The base's active application: a save writes its refusals into the active one's ledger (GetRestructureInfo).
+		cfg = ibMetaData::MakeShared<ibMetaDataApplicationFile>();
+		ActiveMetaDataAccess::Replace(cfg);
 		ibValueMetaObjectApplication* root = cfg->GetRootMetaObject();
 		ASSERT_NE(root, nullptr);
 		invoice = dynamic_cast<ibValueMetaObjectDocument*>(cfg->CreateMetaObject(g_metaDocumentCLSID, root, false));
@@ -146,16 +149,12 @@ struct DocumentJournalFix : ::testing::Test {
 		return std::dynamic_pointer_cast<const ibDocumentJournalQueryable>(of->GetQueryable());
 	}
 
-	static std::vector<std::shared_ptr<const ibBackendQueryColumn>> Columns(const ibValueMetaObjectDocument* doc) {
-		return { doc->GetDataReference()->GetQueryColumn(), doc->GetDocumentDate()->GetQueryColumn(),
-			doc->GetDocumentNumber()->GetQueryColumn(), doc->GetDocumentPosted()->GetQueryColumn(),
-			doc->GetDataDeletionMark()->GetQueryColumn() };
-	}
-	// Declared by what each field holds, as the platform's own DDL declares them.
+	// Every field a read of the document selects - so a row opens as its object too (ReadData) - declared by what it
+	// holds, as the platform's own DDL declares them.
 	static ibString FieldList(const ibValueMetaObjectDocument* doc) {
 		ibString list;
 		std::set<ibString> seen;
-		for (const std::shared_ptr<const ibBackendQueryColumn>& column : Columns(doc))
+		for (const std::shared_ptr<const ibBackendQueryColumn>& column : doc->GetQueryable()->GetQueryColumns())
 			for (const ibString& field : ColumnFieldNames(*column))
 				if (seen.insert(field).second)
 					list << (list.IsEmpty() ? wxT("") : wxT(", ")) << field << SqliteTypeOf(field);
@@ -336,12 +335,6 @@ TEST_F(DocumentJournalFix, SelectionWalksBothDocuments) {
 	for (const ibValue& written : { invoiced, another })
 		EXPECT_NE(std::find_if(bounded.begin(), bounded.end(), [&written](const ibValue& ref) { return Same(ref, written); }), bounded.end());
 
-	const ibValuePtr<ibValueSelectorDocumentJournalDataObject> selection(Selection(journal));
-	ASSERT_TRUE(selection->Next());
-	const ibValuePtr<ibValueRecordDataObjectRef> object = selection->GetObject();
-	ASSERT_TRUE(object);
-	EXPECT_TRUE(object->GetMetaObject() == invoice || object->GetMetaObject() == refund);
-
 	// …and the manager is what code reaches as `DocumentJournals.Sales`: its Select() is this selection, of the
 	// selection type the journal registers.
 	const ibCtorMetaValueType* managerType = journal->GetTypeCtor(ibCtorObjectMetaType::ibCtorObjectMetaType_Manager);
@@ -350,6 +343,21 @@ TEST_F(DocumentJournalFix, SelectionWalksBothDocuments) {
 	ASSERT_TRUE(manager.CallAsFunc(manager.FindMethod(wxT("Select")), selected, nullptr, 0));
 	EXPECT_EQ(Refs(selected).size(), 3u);
 	EXPECT_NE(journal->GetTypeCtor(ibCtorObjectMetaType::ibCtorObjectMetaType_Selection), nullptr);
+
+	// …and a row's object is its document's object, opened as code opens one: in a session, the document's module run
+	// over the row its own read finds.
+	ASSERT_TRUE(journal->SetRight(wxT("Read"), role->GetMetaID(), true));
+	ASSERT_TRUE(invoice->SetRight(wxT("Read"), role->GetMetaID(), true));
+	ASSERT_TRUE(refund->SetRight(wxT("Read"), role->GetMetaID(), true));
+	const std::shared_ptr<ibSession> session = SessionInRole(ibString());
+	ASSERT_NE(session, nullptr);
+	const RootCleared cleared{ session.get() };
+	ibSessionScope bound(session.get());
+	const ibValuePtr<ibValueSelectorDocumentJournalDataObject> selection(Selection(journal));
+	ASSERT_TRUE(selection->Next());
+	const ibValuePtr<ibValueRecordDataObjectRef> object = selection->GetObject();
+	ASSERT_TRUE(object);
+	EXPECT_TRUE(object->GetMetaObject() == invoice || object->GetMetaObject() == refund);
 }
 
 // A query names the journal as it names a document - `DocumentJournal.Sales`, its columns by the documents'
@@ -403,16 +411,17 @@ TEST_F(DocumentJournalFix, EveryRowSaysWhichDocumentItIs) {
 	EXPECT_TRUE(rows->GetDocumentTypeColumn()->GetTypeDesc().ContainType(g_valueTypeCLSID));
 	EXPECT_TRUE(rows->GetDocumentTypeColumn()->IsSyntheticColumn()) << "made of the reference's type field";
 
-	ibDataQueryBuilder read;
-	read.From(rows);
-	read.Select(rows->GetRefColumn(), wxT("Ref"));
-	read.Select(rows->GetDocumentTypeColumn(), wxT("DocumentType"));
-	read.OrderBy(rows->GetDateColumn(), true);
-	ibDataQueryResult result = read.Execute(ibReadPageRequest());
-
 	std::vector<std::pair<ibValue, ibValue>> said;
-	while (result.Next())
-		said.emplace_back(result.GetValue(rows->GetRefColumn()), result.GetValue(rows->GetDocumentTypeColumn()));
+	{
+		ibDataQueryBuilder read;
+		read.From(rows);
+		read.Select(rows->GetRefColumn(), wxT("Ref"));
+		read.Select(rows->GetDocumentTypeColumn(), wxT("DocumentType"));
+		read.OrderBy(rows->GetDateColumn(), true);
+		ibDataQueryResult result = read.Execute(ibReadPageRequest());
+		while (result.Next())
+			said.emplace_back(result.GetValue(rows->GetRefColumn()), result.GetValue(rows->GetDocumentTypeColumn()));
+	}   // a result holds its connection until it dies, and the pool has one: the read below waited for it
 	ASSERT_EQ(said.size(), 2u);
 	for (size_t at = 0; at < said.size(); ++at) {
 		const ibValueType* type = CastValue<ibValueType>(said[at].second);

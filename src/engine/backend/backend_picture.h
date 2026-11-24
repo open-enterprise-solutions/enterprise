@@ -11,13 +11,14 @@
 
 class ibDataValue;   // core/serialize/dataBuilder.h — a picture as an answer names it
 
-// ⭐ THE SERVER'S PICTURES ARE DATA — ibPicture, a PNG's bytes, read and scaled by the core; no wx image here. A window
-// makes its own from one (the thin client: frmclient/win/picture.h).
+// ⭐ THE SERVER'S PICTURES ARE DATA — ibPicture, an engine picture's drawing (its SVG) or an image's PNG, read and drawn
+// by the core; no wx image here. A window makes its own from one at the size it shows it (the thin client:
+// frmclient/win/picture.h).
 class BACKEND_API ibBackendPicture {
 	ibBackendPicture() = delete;
 public:
 
-	// A FILE'S PICTURE — its PNG, as it is: the server reads no other kind. Refused: no file, or no PNG in it.
+	// A FILE'S PICTURE — its PNG or its SVG, as it is: the server reads no other kind. Refused: no file, or neither in it.
 	static bool LoadFromFile(const ibString& strFileName, ibExternalPictureDescription& pictureDesc);
 	static bool LoadFromFile(const ibString& strFileName, ibPictureDescription& pictureDesc);
 
@@ -25,9 +26,10 @@ public:
 	static ibPicture CreatePicture(const ibPictureDescription& pictureDesc,
 		const class ibMetaData* metaData = nullptr, const ibSize& size = ibSize(16, 16));
 
-	// THE PICTURE A SERVER SENDS, by its description. A backend one (a registered picture, a class's icon) is made once
-	// and kept here; a type of the application's own (a catalog's reference), which no global class knows, is its
-	// constructor's icon in the application given; an application's picture and a file's are made from what they keep.
+	// THE PICTURE A SERVER SENDS, by its description. A backend one (a registered picture, a class's icon) is its drawing,
+	// kept once where it is made; a type of the application's own (a catalog's reference), which no global class knows,
+	// is its constructor's icon in the application given; an application's picture and a file's are made from what they
+	// keep.
 	static ibPicture GetServerPicture(const ibPictureDescription& pictureDesc, const class ibMetaData* metaData = nullptr);
 
 	// ⭐ A PICTURE BY ITS ID — all an answer names a picture by: a backend picture's number, an application picture's
@@ -41,7 +43,7 @@ public:
 
 #pragma region __picture_factory_h__
 	static bool IsRegisterPicture(const ibPictureID& id);
-	// A backend picture by its number, at 16: a registered one scaled from its master, else a class's icon.
+	// A backend picture by its number, its drawing: a registered one, else a class's icon.
 	static ibPicture GetPicture(const ibPictureID& id);
 	// …and every one of them: the registered ones, the metadata's classes' and the controls'.
 	static std::vector<ibPictureEntry> GetArrayPicture();

@@ -7,7 +7,8 @@
 #include "deskgui/univ/ctrl/timePickerCtrl.h"
 #include "deskgui/univ/popupWindow.h"   // ibPopupWindow — a choice's window, the theme's popup
 #include <wx/sizer.h>
-#include <wx/settings.h>
+#include "deskgui/univ/theme.h"          // ibThemeEngine — a choice window's ground and grey are the theme's
+#include "deskgui/univ/colourScheme.h"   // wxTHEME_COLOUR
 
 #include "core/clsid.h"                       // a family (`AnyRef`) — no type a cell stands on by itself
 #include "frmclient/mainFrame/mainFrame.h"   // ibFrontendMainFrame::ChooseValue — a value of the server's type
@@ -123,7 +124,9 @@ bool ibTypeControlFactory::SimpleChoice(ibControlFrame* ownerValue, const ibClas
 			wxPopupCalculatorWindow(ibControlFrame* ownerValue, wxWindow* parent, int style = wxBORDER_NONE | wxPU_CONTAINS_CONTROLS | wxWANTS_CHARS) :
 				wxPopupChoiceWindow(ownerValue, parent, style) {
 
-				SetBackgroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_FRAMEBK));
+				// the panel's ground in the look in force, as every choice window's here - the system's frame
+				// was another grey beside the palette's, and on the other ports not the look's at all
+				SetBackgroundColour(wxTHEME_COLOUR(FRAME));
 
 				wxBoxSizer* mainSizer = new wxBoxSizer(wxVERTICAL);
 				const int gap = FromDIP(3);
@@ -131,7 +134,7 @@ bool ibTypeControlFactory::SimpleChoice(ibControlFrame* ownerValue, const ibClas
 				// The open operation, small, above the figure it is waiting for.
 				m_operation = new ibStaticText(this, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize,
 					wxALIGN_RIGHT | wxST_NO_AUTORESIZE);
-				m_operation->SetForegroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT));
+				m_operation->SetForegroundColour(wxTHEME_COLOUR(CONTROL_TEXT_DISABLED));
 				mainSizer->Add(m_operation, wxSizerFlags().Expand().Border(wxLEFT | wxRIGHT | wxTOP, gap * 2));
 
 				m_display = new ibStaticText(this, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize,
@@ -401,7 +404,7 @@ bool ibTypeControlFactory::SimpleChoice(ibControlFrame* ownerValue, const ibClas
 			wxPopupDateTimeWindow(ibControlFrame* ownerValue, wxWindow* parent, int style = wxBORDER_NONE | wxPU_CONTAINS_CONTROLS | wxWANTS_CHARS) :
 				wxPopupChoiceWindow(ownerValue, parent, style) {
 
-				SetBackgroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_FRAMEBK));
+				SetBackgroundColour(wxTHEME_COLOUR(FRAME));
 
 				wxBoxSizer* mainSizer = new wxBoxSizer(wxVERTICAL);
 				wxBoxSizer* subSizer = new wxBoxSizer(wxHORIZONTAL);
@@ -533,7 +536,7 @@ bool ibTypeControlFactory::QuickChoice(ibControlFrame* ownerValue, const ibChoos
 		wxPopupQuickSelectWindow(ibControlFrame* ownerValue, wxWindow* parent, int style = wxBORDER_NONE | wxPU_CONTAINS_CONTROLS | wxWANTS_CHARS) :
 			wxPopupChoiceWindow(ownerValue, parent, style) {
 
-			SetBackgroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_FRAMEBK));
+			SetBackgroundColour(wxTHEME_COLOUR(FRAME));
 			wxBoxSizer* mainSizer = new wxBoxSizer(wxVERTICAL);
 
 			m_selListBox = new wxQuickListBox(this, wxID_ANY, wxDefaultPosition, wxDefaultSize);

@@ -22,6 +22,7 @@
 #include "backend/system/value/valueBinaryData.h"
 #include "backend/system/value/valueGuid.h"
 #include "backend/system/value/valueMap.h"
+#include "backend/system/value/valueType.h"   // QualifierNumber - a value with no packed form
 #include "core/clsid.h"
 #include "core/serialize/dataBuilder.h"
 
@@ -121,6 +122,11 @@ TEST(XmlValueFunctions, EveryKindGoesToXmlAndComesBackAsItself)
 	EXPECT_TRUE(binaryBack.CompareValueEQ(binary));
 	ibValuePtr<ibValueBinaryData> noBytes(new ibValueBinaryData(ibMemoryBuffer()));
 	EXPECT_TRUE(RoundTrip(noBytes).IsEmpty());
+	// A Type packs itself too - as the description of it alone (a document journal's column of types, e95b0ad3c).
+	const ibValue numberType = ibValueSystemFunction::TypeOf(ibValue(5));
+	const ibValue typeBack = RoundTrip(numberType);
+	EXPECT_EQ(typeBack.GetClassType(), numberType.GetClassType());
+	EXPECT_EQ(typeBack.GetString(), numberType.GetString());
 
 	// A system enumeration's value, a reference, an application's enumeration value and the empty ones.
 	const ibValue text = ibValue::CreateEnumObject<ibValueEnumXmlNodeType>(ibXmlNodeType_CDATASection);
@@ -214,7 +220,6 @@ TEST(XmlValueFunctions, WhatIsNotAValuesXmlIsRefused)
 	} release;
 	ASSERT_TRUE(cfg->RunDatabase());
 
-	const ibValue number = ibValue(5);
 	// Not XML at all, and XML that is not a value's node.
 	EXPECT_NE(Refusal([&] { ibValueSystemFunction::XMLValue(ibString(ibT("5"))); }), ibString());
 	EXPECT_NE(Refusal([&] { ibValueSystemFunction::XMLValue(ibString(ibT("<a/>"))); })
@@ -238,7 +243,8 @@ TEST(XmlValueFunctions, WhatIsNotAValuesXmlIsRefused)
 	guidAsText.SetValue(kValueFieldClsid, ibString::Format(ibT("%llu"), (unsigned long long)ibValue::GetIDObjectFromString(ibT("Guid"))));
 	guidAsText.SetValue(kValueFieldData, ibString(ibT("not-a-guid")));
 	EXPECT_NE(Refusal([&] { cfg->Deserialize(guidAsText); }).Find(ibT("'not-a-guid' is no guid")), wxNOT_FOUND);
-	// A value with no packed form - a type - is refused by the door, not written as nothing.
-	EXPECT_EQ(Refusal([&] { ibValueSystemFunction::XMLString(ibValueSystemFunction::TypeOf(number)); }),
-		ibString(ibT("The value 'Type' cannot be serialized")));
+	// A value with no packed form - a number's qualifiers - is refused by the door, not written as nothing.
+	ibValuePtr<ibValueQualifierNumber> qualifiers(new ibValueQualifierNumber(10, 2));
+	EXPECT_EQ(Refusal([&] { ibValueSystemFunction::XMLString(qualifiers); }),
+		ibString(ibT("The value 'QualifierNumber' cannot be serialized")));
 }

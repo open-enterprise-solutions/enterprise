@@ -50,12 +50,12 @@ export function defineControl(type, control) {
 }
 
 export class Control extends HTMLElement {
-	// THE BACKGROUND ITS KIND IS GIVEN WHEN ITS AUTHOR PICKS NONE, as the server saves it (frmserver's
-	// ibDefaultStyleBGColour; a kind of its own says its own), and the theme's for it — what a control naming it is painted.
+	// THE BACKGROUND ITS KIND IS GIVEN WHEN ITS AUTHOR PICKS NONE (a kind of its own says its own): the light theme's —
+	// what an author's ink alone was chosen against — and the theme's for it, what a control leaving it empty is painted.
+	// A control with none of its own stands on the surface under it (''), as the thin client's (Max, 2026-11-24: "an empty
+	// background - each with its own"); the light side the style's form background (core/style/style.cpp).
 	/** @type {[string, string]} */
-	// The style's form background (core/style/style.cpp), a step below white since 2026-11-13 - a form saved with the
-	// cream before is read as it by the server.
-	static platformBackground = ['rgb(238,242,246)', 'var(--oes-form-bg)'];
+	static platformBackground = ['rgb(238,242,246)', ''];
 
 	constructor() {
 		super();
@@ -153,7 +153,7 @@ export class Control extends HTMLElement {
 		else
 			this.removeAttribute('title');
 
-		const [text, background] = themedPair(colour(node.ForegroundColour), colour(node.BackgroundColour),
+		const [text, background] = themedPair(node.ForegroundColour, node.BackgroundColour,
 			/** @type {typeof Control} */ (this.constructor).platformBackground);
 		this.lookTarget.style.color = text;
 		this.lookTarget.style.backgroundColor = background;
@@ -300,26 +300,28 @@ function sameEntries(node, previous) {
 	return JSON.stringify(withoutChildren(node)) === JSON.stringify(previous);
 }
 
-// THE PLATFORM'S OWN LOOK OF A CONTROL - what a control is given when its author picks no colour (frmserver's
-// ibDefaultStyleFGColour; the background its kind's, Control.platformBackground). A form saves it as any colour, so it
-// comes as one: a control that names it is painted with the theme's (styles/tokens.css), which is it in the light theme
-// and a dark one in the dark.
+// THE PLATFORM'S OWN INK, in the light theme: what an author's fill alone was chosen against (the style's form text,
+// core/style/style.cpp).
 const defaultText = 'rgb(63,92,119)';
 
 /**
- * A control's two colours as they are painted. Both the platform's own look (or none): the theme's. One of them the
- * author's: the author chose it against the light theme's other side, so that side is what it gets - the platform's
- * colour as saved, or the light paper when the form names none - and the pair reads as the author saw it.
- * @param {string} text @param {string} background
- * @param {[string, string]} platform its kind's background as saved, and the theme's for it (Control.platformBackground)
+ * A control's two colours as they are painted, as the form writes them: empty — the platform's, its author picked none
+ * (Max, 2026-11-24); a kind with no colours (a sizer) names neither and is left to the stylesheet. Both the platform's:
+ * the theme's (styles/tokens.css). One of them the author's: the author chose it against the light theme's other side,
+ * so that side is what it gets - the light theme's ink, or its kind's ground - and the pair reads as the author saw it.
+ * @param {string | undefined} foreground @param {string | undefined} background
+ * @param {[string, string]} platform its kind's background in the light theme, and the theme's for it
+ * (Control.platformBackground)
  * @returns {[string, string]}
  */
-function themedPair(text, background, [platformBackground, themedBackground]) {
-	const ownText = text !== '' && text !== defaultText;
-	const ownBackground = background !== '' && background !== platformBackground;
-	if (!ownText && !ownBackground)
-		return [text === '' ? '' : 'var(--oes-form-text)', background === '' ? '' : themedBackground];
-	return [text || 'var(--oes-paper-text)', background || 'var(--oes-paper)'];
+function themedPair(foreground, background, [platformBackground, themedBackground]) {
+	if (foreground === undefined && background === undefined)
+		return ['', ''];
+	const text = colour(foreground);
+	const fill = colour(background);
+	if (text === '' && fill === '')
+		return ['var(--oes-form-text)', themedBackground];
+	return [text || defaultText, fill || platformBackground];
 }
 
 /**

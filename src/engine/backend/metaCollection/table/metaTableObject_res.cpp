@@ -1,7 +1,7 @@
 #include "metaTableObject.h"
 
-/* PNG */
-static const ibString s_table_16_png = ibT("iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAAqElEQVR4nOzZsQ3CMBQA0XPEGLACjAajwGiwAuwBLbKEkEjH3etiJS5O+kXsBbkFuQIgVwDkCoDcZl7YHq9P/tjjchjvz40AcgVArgDIFQC5AiBXAOT6G/z2wv285xe7023VPmu//7TPrBFArgDIFQC5AiBXAOQKgJw+wJgXuhuUKQBynQghVwDkCoBcAZArAHIFQK7zAOQKgNxArhFArgDIFQA5fYAXAAAA///Sc0ISAAAABklEQVQDADcbHoT1eZ8BAAAAAElFTkSuQmCC");
+#include "backend/backend_picture.h"
+#include "core/picturePredefined.h"   // g_picTableCLSID — the core's drawing of a table, a value table's as well
 
 ibPicture ibValueMetaObjectTableData::GetIcon() const
 {
@@ -10,7 +10,5 @@ ibPicture ibValueMetaObjectTableData::GetIcon() const
 
 ibPicture ibValueMetaObjectTableData::GetIconGroup()
 {
-	static const ibPicture picture = ibPicture::FromBase64(s_table_16_png, ibSize(16, 16));
-	
-	return picture;
+	return ibBackendPicture::GetPicture(g_picTableCLSID);
 }

@@ -43,6 +43,16 @@ enum class ibStyleItem : std::uint16_t {
 	Navigation = 24,               // the sections panel
 	SecondaryNavigation = 25,      // the functions panel of a section
 	Important = 26,                // a warning, an error, a required field
+	DesktopBackground = 27,        // the desktop's chrome: behind the windows, between the docked panes
+	PanelBackground = 28,          // a docked pane, a dialog, an inactive caption
+	BarBackground = 29,            // a tab strip, a status bar, a menu's band
+	ControlBackground = 30,        // a scroll bar, a table's lines, a button under the mouse
+	DisabledText = 31,
+	Caption = 32,                  // a list: an active window's caption, its top and its bottom
+	CaptionText = 33,
+	AccentPressed = 34,            // the accent held down
+	AccentText = 35,               // what is written on the accent
+	Shelf = 36,                    // the band a tab strip's chosen tab stands on
 	// fonts
 	TextFont = 100,                // a control's own text
 	SmallFont = 101,
@@ -57,7 +67,7 @@ enum class ibStyleItem : std::uint16_t {
 // What an item's value is.
 enum class ibStyleKind : std::uint8_t {
 	Colour,
-	ColourList,   // ReportGroup: as many colours as a style gives
+	ColourList,   // ReportGroup, Caption: as many colours as a style gives
 	Font,
 	Border,
 };

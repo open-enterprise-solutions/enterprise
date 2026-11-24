@@ -5938,6 +5938,7 @@ void ibPropertyGrid::RegisterDefaultEditors()
     ibPGRegisterDefaultEditorClass( Choice );
     ibPGRegisterDefaultEditorClass( ComboBox );
     ibPGRegisterDefaultEditorClass( TextCtrlAndButton );
+    ibPGRegisterDefaultEditorClass( TextCtrlAndButtons );
 #if ibPG_INCLUDE_CHECKBOX
     ibPGRegisterDefaultEditorClass( CheckBox );
 #endif

@@ -1,7 +1,6 @@
 #include "constant.h"
 
-/* PNG */
-static const ibString s_constant_16_png = ibT("iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAETklEQVR4nOyabWhTVxjH/6dZX5K2SctIba0mw7rFFgZ2TZum4oyr6DbZwOHs9mEggzHGkOGGsCGb+1A2cfu2ifhJEEQJVkUUVNRW0Poaqx+MYH1rMW1j8S21TX3r8dzYxpx7b/rqTW977g8K9znPc8o5/3vOfe55btIgOGkQHEMACI4hAATHEACCYwgAwTEEgOAYAkBwDAEgOG+NFFBes8hrolhNCUoJJWUgeBt6huIeJTTIxhqklGwLnGk8O1w4SeYoKyvLsNjs9RT4hRAyVVfKC0rppuij7j+DweBTtYCkK4BN/iQIqUyq0NTAxG7eb2wutezaoxqg1uiu8dWzyX+F6QIhxUWznGmdd9qaFC55g9u7sArExO0bT1UlVn6xAg6HAzk52dAzjx/3or29Hf6GBpw/H+B8Ay+I++LZRq5RsQKKHHPqmSrzh+wqtxsbfl8Pu92OjIwM6B1pjNJYfYs+xLVrrejo7Iz7CKHouNN2IDFe8XAjoK5Eu27VSkxVvq5bJWshLnmM4iFIQd5P3BdOp4PzHzp8BG8Kb3U1bDYrtGJm8UzOZumxVB6jEIBNPifRNpvNnP+/zVte/0NKX/UhbN3Qwf6yp4oUQwYbpZhEf8mcEk0FsObmcjYBKZDHTDC/k/jkyCjypRQzJJpeGPFNcDhG945AxtMpZUxoBVDI7iZRj+JNfSkw5hWw5scf4tfHG5twJXg1bs8osKPuSz5r+HfvQTgcjtuu997FsqVLYtcFLH6yGbMAHy9bGr9ubb3BCWCz2ji/xNFjjZwAUo6Wx0wmE3oGjAb5y9Pz589G1W/55yswFg7u34vxoLkA2dkWzu7t7YWe0FwAay6f5+8/eAA9obkAefk2zr53XzQB8vI5+0l/P8J3u2MZYzjGu6fHiuaVntmzixVtV4JB6AXNBSh1uRSZQHp/iEb7oQc0FyAzMxM13mquraXlEr5Z/S3+2vgP+vomNyukpNi5mBUn5ESjUZxqbsY5WdUm1aREgIqKD+DxVKn6urrCmEyUAlB0JZqRnp6knWcU8sfroqJC1TjpyLzu57VYUvuRwlfproBWKMYum5uEShqkLWzInwxZoVAI1nnzoMbCBQuwd99+RCIRZGZloXaxD8kwm7Ow9qc1+Gz5p7hx81Zs75eXz8c7Tie0Qhp7IuwgqthvaiWxy+zAGhfA72/Ahj/WQw3pju/Yvg23b7fH0l16ejpGYu7ckthfKti5y883DKBFHqOoChcXzroFU9r3GBQn1NGB1uvXY0dXi8WiSGnS8s7Pz4PJpPqJIeVEIj1shd3E/1u2IhC4+NpBafTZAP0uHGp7mBivWp2o8Pp+ZfP6G9MIVolbFzjd9K+8PWl5holwhongwbSAnr7QfKJGzZM0DUYf3WXJm25iRcwBTF3Yx1Fs7HvY7UsWMGKBTtjP46Jg/EQGgmMIAMExBIDgGAJAcAwBIDiGABAcQwAIjvACvAQAAP//G1TsVwAAAAZJREFUAwCHJTMTiL9FCQAAAABJRU5ErkJggg==");
+static const ibString s_constant_svg = ibT("<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'><rect x='1' y='4' width='14' height='8' rx='2' fill='#5a7b95'/><path d='M2.8 6.2 H7.8' fill='none' stroke='#ffffff' stroke-width='1.3' stroke-linecap='butt' stroke-linejoin='round'/><path d='M4.3 6.4 V10' fill='none' stroke='#ffffff' stroke-width='1.3' stroke-linecap='round' stroke-linejoin='round'/><path d='M6.5 6.4 C6.5 8.4 6.6 9.8 7.6 9.8' fill='none' stroke='#ffffff' stroke-width='1.3' stroke-linecap='round' stroke-linejoin='round'/><path d='M10 8 H12.5' fill='none' stroke='#ffffff' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/></svg>");
 
 ibPicture ibValueMetaObjectConstant::GetIcon() const
 {
@@ -10,7 +9,7 @@ ibPicture ibValueMetaObjectConstant::GetIcon() const
 
 ibPicture ibValueMetaObjectConstant::GetIconGroup()
 {
-	static const ibPicture picture = ibPicture::FromBase64(s_constant_16_png, ibSize(16, 16));
+	static const ibPicture picture = ibPicture::FromSvg(s_constant_svg);
 	
 	return picture;
 }

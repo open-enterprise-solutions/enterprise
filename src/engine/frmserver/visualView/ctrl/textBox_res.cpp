@@ -2,7 +2,7 @@
 
 #include "backend/backend_picture.h"
 
-static const ibString s_textBox_png = "iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAABhUlEQVR4nOybsU4CURBF72z8A8slsZYCS0v/wfgJmmgBlpZGEwpbLSy01P9xKTQmlvyDHc9FLUgIDJsdlh3mnoIEeMXbk527My/ZDMHJEBwKQHB2tAV5vzgpNd0KsI8NkoAPmchw/NB7hSHqHSCSbjZ98b/7mO4hSy+dQXEKQ/QSEOmiTQieLCX4zIBSQj54O4cBoi3oXBZp9vvdRQ9NcvU4Wvxnwtn4/uAZNfD9FDAoB/+PwZoS3Ak4Psrnf6whwZ2Aw+6uqQSXJWApwW0GWElwHYIWEtRZoG0s7QtmmUroj7612WGrp8Ekk6G2xt0dUAUR2dPW8DwALafq7LFyRvzDIzEEhxkAI6rWnkZT5w4sAQSHGQAjmj4rtIIlgOAwA2CEdR+gYZU5LAEEhxkAI9gHOIUCEBz2AQgOBSA47AMQHApAcFrXBzSdJSwBBIcZACPYBziFAhCcyhnQ9Ny/blgC6oqU3uGVFfauCkhJrsvPLzgjAZ9/e1+O+s7QtsMMQHDCC/gBAAD//0qcl2UAAAAGSURBVAMAIYde1O8QyCcAAAAASUVORK5CYII=";
+static const ibString s_textBox_svg = "<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'><rect x='1' y='1.5' width='14' height='13' rx='1.5' fill='#1c6fd1'/><rect x='2' y='2.5' width='12' height='11' rx='0.6' fill='#ffffff'/><path d='M4 5.5 H12 M4 8 H12 M4 10.5 H9.5' fill='none' stroke='#1c6fd1' stroke-width='1.1' stroke-linecap='butt' stroke-linejoin='round'/></svg>";
 
 ibPicture ibValueTextBox::GetIcon() const
 {
@@ -11,6 +11,6 @@ ibPicture ibValueTextBox::GetIcon() const
 
 ibPicture ibValueTextBox::GetIconGroup()
 {
-	static const ibPicture picture = ibPicture::FromBase64(s_textBox_png, ibSize(16, 16));
+	static const ibPicture picture = ibPicture::FromSvg(s_textBox_svg);
 	return picture;
 }

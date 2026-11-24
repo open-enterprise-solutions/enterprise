@@ -20,11 +20,12 @@ class ibProtocolNode;
 // application's guid and its version, `<guid>#<version>` (ibBackendPicture::SendPicture) — or, a picture with no id of
 // its own (a file's), its PNG itself, a Binary. Drawn from what this client keeps: the engine's own are the core's
 // (registered as it loads, core/picturePredefined.cpp), any other is asked of the server by its id the first time it is
-// named (ibProtocol::ibMethod::Picture) and kept with its version — one the server has none of as well, so it is not
-// asked again; one named by another version is asked anew and kept in its place. An empty bitmap when there is none.
+// named (ibProtocol::ibMethod::Picture) and kept as it came — a drawing, drawn here at the size it gives itself, or a
+// PNG — with its version: one the server has none of as well, so it is not asked again; one named by another version is
+// asked anew and kept in its place. An empty bitmap when there is none.
 FRMCLIENT_API wxBitmap ibProtocolPicture(const ibProtocolNode& node, const char* name);
-// …the same, fitted into a square of `pixels` physical pixels - a tile's picture, large: the engine's own drawn from its
-// master at that size, any other scaled into it with its proportions kept. Not scaled for the screen's DPI: a caller
+// …the same, fitted into a square of `pixels` physical pixels - a tile's picture, large: a drawing drawn at that size, a
+// PNG scaled into it, its proportions kept either way. Not scaled for the screen's DPI: a caller
 // hands wx two sizes as a bundle and wx picks (wxBitmapBundle::FromBitmaps).
 FRMCLIENT_API wxBitmap ibProtocolPicture(const ibProtocolNode& node, const char* name, int pixels);
 // …a field of an engine's node — a property's row (ibBackendProperty::GetProtocolValue).

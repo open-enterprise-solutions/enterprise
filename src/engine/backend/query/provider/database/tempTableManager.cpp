@@ -159,19 +159,7 @@ std::unique_ptr<ibTempTableManager> ibTempTableManager::Materialise(ibDatabaseCo
 {
 	if (table == nullptr)
 		return nullptr;
-	// ⭐ ONE FIELD, ONE COLUMN. A column laid over fields others already give — a document's point in time is its date and
-	// its reference — is read off them in the copy as in the table; written again, the copy held each of those fields
-	// twice, and a walk into it was refused as ambiguous ("Column 'fld1006_RTRef' is ambiguous", 2026-11-19).
-	std::vector<std::shared_ptr<const ibBackendQueryColumn>> columns;
-	std::vector<ibString> given;
-	for (const std::shared_ptr<const ibBackendQueryColumn>& col : table->GetQueryColumns()) {
-		const std::vector<ibString> fields = ColumnFieldNames(*col);
-		if (!fields.empty() && std::all_of(fields.begin(), fields.end(),
-				[&given](const ibString& f) { return std::find(given.begin(), given.end(), f) != given.end(); }))
-			continue;
-		given.insert(given.end(), fields.begin(), fields.end());
-		columns.push_back(col);
-	}
+	const std::vector<std::shared_ptr<const ibBackendQueryColumn>> columns = table->GetQueryColumns();
 	ibQueryRamTable rows;
 	for (const std::shared_ptr<const ibBackendQueryColumn>& col : columns)
 		rows.AddColumn(col->GetColumnId(), col->GetName(), col->GetTypeDesc());
@@ -203,6 +191,26 @@ std::unique_ptr<ibTempTableManager> ibTempTableManager::Materialise(ibDatabaseCo
                                                                     std::vector<std::shared_ptr<const ibBackendQueryColumn>> keys,
                                                                     const ibQueryRamTable& rows, const ibMetaData* metaData)
 {
+	// ⭐ ONE FIELD, ONE COLUMN — here, where every copy is laid out. A column laid over fields others already give — a
+	// document's point in time is its date and its reference, a journal's document type its reference's type — is read
+	// off them in the copy as in the table; written again, the copy held each of those fields twice, and a walk into it
+	// was refused as ambiguous ("Column 'fld1006_RTRef' is ambiguous", 2026-11-19). Said once, on the copy of a table
+	// only, the rows of a source computed in memory went past it ("Column 'Ref_RTRef' is ambiguous", a journal of no
+	// document, 2026-11-24).
+	std::vector<std::shared_ptr<const ibBackendQueryColumn>> laid;
+	std::vector<ibString> given;
+	for (const std::shared_ptr<const ibBackendQueryColumn>& col : columns) {
+		const std::vector<ibString> fields = ColumnFieldNames(*col);
+		if (!fields.empty() && std::all_of(fields.begin(), fields.end(),
+				[&given](const ibString& f) { return std::find(given.begin(), given.end(), f) != given.end(); }))
+			continue;
+		given.insert(given.end(), fields.begin(), fields.end());
+		laid.push_back(col);
+	}
+	columns = std::move(laid);
+	std::erase_if(keys, [&columns](const std::shared_ptr<const ibBackendQueryColumn>& key) {
+		return std::find(columns.begin(), columns.end(), key) == columns.end();
+	});
 	if (columns.empty())
 		return nullptr;
 

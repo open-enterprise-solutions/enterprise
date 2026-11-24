@@ -1259,7 +1259,7 @@ public:
         else if ( !prop->IsValueUnspecified() )
             dc.SetBrush( prop->GetVal().m_colour );
         else
-            dc.SetBrush( *wxWHITE );
+            dc.SetBrush( wxTHEME_COLOUR(WINDOW) );   // no colour: the field's ground
 
         wxRect imageRect = propertyGrid->GetImageRect(property, item);
         wxLogDebug(wxS("%i, %i"),imageRect.x,imageRect.y);
@@ -1904,8 +1904,8 @@ void ibImageFileProperty::OnCustomPaint( wxDC& dc,
     }
     else
     {
-        // No file - just draw a white box
-        dc.SetBrush( *wxWHITE_BRUSH );
+        // No file - just draw an empty box, in the field's ground
+        dc.SetBrush( wxTHEME_COLOUR(WINDOW) );
         dc.DrawRectangle ( rect );
     }
 }

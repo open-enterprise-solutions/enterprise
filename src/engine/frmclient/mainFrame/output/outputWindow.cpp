@@ -77,7 +77,6 @@ void ibOutputWindow::SetFontColorSettings(const ibFontColorSettings& settings)
 	// set margin as unused
 	SetMarginType(DEF_IMAGE_ID, ibSTC_MARGIN_SYMBOL);
 	SetMarginMask(DEF_IMAGE_ID, ~(1024 | 256 | 512 | 128 | 64 | ibSTC_MASK_FOLDERS));
-	StyleSetBackground(DEF_IMAGE_ID, *wxWHITE);
 
 	SetMarginWidth(DEF_IMAGE_ID, FromDIP(16));
 	SetMarginSensitive(DEF_IMAGE_ID, true);

@@ -461,7 +461,6 @@ m_modelView(nullptr), m_nextRowHandle(1), m_currentColumn(0), m_clientRow(0), m_
 
 	//set default params
 	m_propertyMinSize->SetValue(ibSize(150, 75));
-	m_propertyBG->SetValue(ibColour(255, 255, 255));
 	m_sizerItem->SetProportion(1);
 	m_sizerItem->SetFlagState(ibStretch_Expand);
 }

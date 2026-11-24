@@ -139,6 +139,28 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
   register; two companies keep their books in two ledgers at once - the continental one, where a posting is a pair,
   and the Anglo-Saxon general ledger, where an entry is lines - over a chart of accounts each. The start page shows a
   dashboard (a data tool's form), the sales being worked through and two reports.
+- **Every picture of the platform is drawn anew, in one manner.** The metadata tree, the menus and toolbars, a
+  form's command bar, the code editor's margin, the launcher and the splash: flat shapes in one palette, a family's
+  colour with white marks on it, a badge for adding, applying and refusing — drawn to read on a dark ground as well
+  as on the light one. A picture is SVG in the source, drawn sharp at whatever size a display asks for, and goes to a
+  client as it: the browser and the thin client draw it at the size they show it. A drawing the designer and the
+  application both showed in two copies is one. A check tree's boxes are the check boxes of a form, and a form's
+  title bar in the designer is the one its window shows.
+- **The desktop has a dark look.** The application and the designer each take the theme chosen in them (Tools →
+  Theme...: light, dark, or as the machine is set — the machine's until one is chosen); another chosen is in force at
+  once, and so is the machine's own switch. A program with no theme to choose — the launcher, the code runner, the
+  cluster's tray — follows the machine. The code editor is dark in the dark look, as Visual Studio's, and keeps
+  the colours chosen for each look apart; a dark table's alternate rows are a faint tint, and a sheet's grid lines a
+  light tint of its paper, as Excel's. It is the same
+  theme in its dark colours, not a second one: every colour it paints with is the platform style's, which holds a
+  light and a dark value for each — the forms', the windows' chrome and the browser's alike. A form's colours follow
+  it as the browser's do: the platform's own are the theme's, a colour the author chose keeps its pair.
+- **A form's colour its author picks none for is left empty** — the platform's, painted in the look in force — rather
+  than saved as the light look's colour. The property inspector says `<default>` for a colour or a font none was
+  picked for, and its × beside the … gives the platform's back. An empty
+  background is the control's own: a button its face, a field its well, a caption and a group the surface under them —
+  a caption inside a coloured group no longer draws a box of the form's colour. A form saved before holds the light
+  colours as its author's: set them empty again.
 
 ## Script language
 
@@ -339,10 +361,10 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
   item that does not stretch keeps its own width at the start of its cell, as there; given `Rows`,
   the grid keeps that many rows, and with no `Cols` counts its columns from them. A column is never
   narrower than what it holds: a form too narrow for them all widens that one and scrolls.
-- **A dark theme.** Tools → Theme... in both applications: light, dark, or as the machine is set — the person's,
-  kept in the base, so it goes with them from one machine to the next. The browser paints itself with it from the
-  login on, and follows the machine as it changes when the system's is chosen; the thin client keeps the choice now
-  and paints itself dark in a later build. A base with no users keeps one theme for everybody. A colour a form names
+- **A dark theme.** Tools → Theme... in both applications: light, dark, or as the machine is set — the client's own,
+  kept in the browser (the server keeps none). The browser paints itself with it from the first screen on, the
+  splash too, and follows the machine as it changes when the system's is chosen; the thin client switches at once as
+  well (Application, above). A colour a form names
   for itself is kept, and a control's pair with it is the light theme's - so yellow keeps its dark ink in the dark; a
   cell's fill named with no ink is read with dark ink. A printout is light.
 - **The start**: the thin client's splash, with arrows and the stage of the start under it, is up from the first paint;

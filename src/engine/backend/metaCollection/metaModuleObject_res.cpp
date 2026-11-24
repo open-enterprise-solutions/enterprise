@@ -1,7 +1,6 @@
 #include "metaModuleObject.h"
 
-/* PNG */
-static const ibString s_module_64_png = ibT("iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAABrElEQVR4nOybsUrEQBCG/z19BYtDJbZaWESFQ5vYi6D4CAqWgoVgIwjX22tr5UN4jXAgprBQBAtFxUewc8yBQkB0EzJ7ydzM1yWZYvOT/8/OJtuCclpQjgkA5Yz7ChaXky0iOnbOzaJGsjHcE7lu2u+dg5ExX0F7KrrIbn4ONZONYcI5bLYnZ97eX59SMOG1QBNuPo9r4XShk2yDCZEZ8C3CLhhwvoIsAyh/fH11iWGytLL65zX6xM5Nv3eGCoh+C3DYQfxrsKoI4gQ4PNj/da6KCOIE2FhfYxVBpAU4RRCbAVwiiA5BDhG8vUDT+G9ekGcgQtxJPny9w0h3g1nv0PXViHsCypAJEPlqbD0ADads71E0I36wJTEoxzIATDzHMTiIUrbVrkKYBaAcywAwMWzvcmEWgHIsAxCY6b1bhODlZB4cmAWgHMsABIbLq6EwC0A5lgEIDNc8IFSWmAWgHMsABMbmAQ3HBIByav8uUPdaolkAyrEMABP2XUAoJgCUUzoDyv6D03TMAr4CIrqDUIqMvcimqSMiPEIeD4Ox+4q8e4ZGHcsAKEe9AF8AAAD//38UW8gAAAAGSURBVAMA4FFiI/jPFoYAAAAASUVORK5CYII=");
+static const ibString s_module_svg = ibT("<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'><path d='M3.5 1 H10 L14 5 V13.5 Q14 15 12.5 15 H3.5 Q2 15 2 13.5 V2.5 Q2 1 3.5 1 Z' fill='#5a7b95'/><path d='M10 1 V3.8 Q10 5 11.2 5 H14 Z' fill='#a8bac8'/><path d='M4.5 7.5 H8' fill='none' stroke='#ffffff' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/><path d='M6.5 10 H11.5' fill='none' stroke='#ffffff' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/><path d='M4.5 12.5 H9' fill='none' stroke='#ffffff' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/></svg>");
 
 ibPicture ibValueMetaObjectModuleBase::GetIcon() const
 {
@@ -10,7 +9,7 @@ ibPicture ibValueMetaObjectModuleBase::GetIcon() const
 
 ibPicture ibValueMetaObjectModuleBase::GetIconGroup()
 {
-	static const ibPicture picture = ibPicture::FromBase64(s_module_64_png, ibSize(16, 16));
+	static const ibPicture picture = ibPicture::FromSvg(s_module_svg);
 
 	return picture;
 }
@@ -22,7 +21,7 @@ ibPicture ibValueMetaObjectSharedModule::GetIcon() const
 
 ibPicture ibValueMetaObjectSharedModule::GetIconGroup()
 {
-	static const ibPicture picture = ibPicture::FromBase64(s_module_64_png, ibSize(16, 16));
+	static const ibPicture picture = ibPicture::FromSvg(s_module_svg);
 
 	return picture;
 }
@@ -34,7 +33,7 @@ ibPicture ibValueMetaObjectManagerModule::GetIcon() const
 
 ibPicture ibValueMetaObjectManagerModule::GetIconGroup()
 {
-	static const ibPicture picture = ibPicture::FromBase64(s_module_64_png, ibSize(16, 16));
+	static const ibPicture picture = ibPicture::FromSvg(s_module_svg);
 
 	return picture;
 }

@@ -15,9 +15,11 @@
 
 namespace {
 
-// A picture kept, with the id it was given by — an application's carries its version (`<guid>#<version>`).
+// A picture kept, with the id it was given by — an application's carries its version (`<guid>#<version>`): the picture
+// as it came — the engine's drawing, an application's PNG — and its bitmap at its own size, as it is shown.
 struct ibKeptPicture {
 	wxString id;
+	ibPicture picture;
 	wxBitmap bitmap;
 };
 
@@ -31,16 +33,16 @@ std::map<wxString, ibKeptPicture>&      Pictures()
 }
 
 // THE PICTURE KEPT FOR THAT ID — of its version, not another's; null: not kept. Under the lock.
-const wxBitmap* FindKept(const wxString& id)
+const ibKeptPicture* FindKept(const wxString& id)
 {
 	const auto found = Pictures().find(id.BeforeFirst(wxT('#')));
-	return found != Pictures().end() && found->second.id == id ? &found->second.bitmap : nullptr;
+	return found != Pictures().end() && found->second.id == id ? &found->second : nullptr;
 }
 
 // …kept for that id, in the place of another version's. Under the lock.
-void Keep(const wxString& id, const wxBitmap& bitmap)
+void Keep(const ibKeptPicture& kept)
 {
-	Pictures()[id.BeforeFirst(wxT('#'))] = { id, bitmap };
+	Pictures()[kept.id.BeforeFirst(wxT('#'))] = kept;
 }
 
 // A backend picture's number as the server writes it — a decimal: a std::uint64_t is past what a JSON number keeps.
@@ -49,32 +51,47 @@ wxString IdOf(ibPictureID id)
 	return wxString::Format(wxT("%llu"), static_cast<unsigned long long>(id));
 }
 
-// A picture's PNG as a bitmap — none: no PNG.
-wxBitmap BitmapOf(const ibMemoryBuffer& png)
+// A picture as a bitmap at its own size — a drawing drawn at the size it gives itself, a PNG as it is; none for none.
+wxBitmap BitmapOf(const ibPicture& picture)
 {
-	const wxImage image = ibProtocolImage(png);
+	const wxImage image = ibProtocolImage(picture.Scale(picture.GetSize()).GetData());
 	return image.IsOk() ? wxBitmap(image) : wxBitmap();
 }
 
-// …an image, fitted into a square of `pixels`, its proportions kept; none for none.
-wxBitmap BitmapOf(const wxImage& image, int pixels)
+// …fitted into a square of `pixels`, its proportions kept — a drawing drawn at that size, a PNG scaled to it, by the
+// core; none for none.
+wxBitmap BitmapOf(const ibPicture& picture, int pixels)
 {
-	if (!image.IsOk() || pixels <= 0)
+	const ibSize size = picture.GetSize();
+	if (pixels <= 0 || size.m_width <= 0 || size.m_height <= 0)
 		return wxBitmap();
-	const int longest = wxMax(image.GetWidth(), image.GetHeight());
-	return wxBitmap(image.Scale(wxMax(1, image.GetWidth() * pixels / longest), wxMax(1, image.GetHeight() * pixels / longest),
-		wxIMAGE_QUALITY_HIGH));
+	const int longest = wxMax(size.m_width, size.m_height);
+	const ibPicture fitted = picture.Scale(ibSize(wxMax(1, size.m_width * pixels / longest), wxMax(1, size.m_height * pixels / longest)));
+	const wxImage image = ibProtocolImage(fitted.GetData());
+	return image.IsOk() ? wxBitmap(image) : wxBitmap();
 }
 
-// THE ENGINE'S OWN, by its number — the core's master, four times the size it is shown at (tools/pictures/render.js);
-// none: not the engine's.
-wxImage MasterOf(const wxString& id)
+// THE ENGINE'S OWN, by its number — the core's drawing; none: not the engine's.
+ibPicture EngineOf(const wxString& id)
 {
 	unsigned long long number = 0;
-	if (!id.ToULongLong(&number))
-		return wxImage();
-	const ibPicture registered = ibPictureRegistry::GetPicture(static_cast<ibPictureID>(number));
-	return registered.IsOk() ? ibProtocolImage(registered.GetData()) : wxImage();
+	return id.ToULongLong(&number) ? ibPictureRegistry::GetPicture(static_cast<ibPictureID>(number)) : ibPicture();
+}
+
+// THE PICTURE OF THAT ID, as it is kept — asked for the first time it is named; none: there is none of that id.
+ibKeptPicture KeptOf(const wxString& id)
+{
+	if (id.IsEmpty())
+		return ibKeptPicture();
+	{
+		std::lock_guard<std::mutex> lock(s_picturesLock);
+		if (const ibKeptPicture* const kept = FindKept(id))
+			return *kept;
+	}
+	ibProtocolPictureReceive({ id });
+	std::lock_guard<std::mutex> lock(s_picturesLock);
+	const ibKeptPicture* const kept = FindKept(id);
+	return kept != nullptr ? *kept : ibKeptPicture();
 }
 
 void PicturesOf(const ibDataNode& node, std::vector<wxString>& ids);
@@ -123,40 +140,28 @@ wxBitmap ibProtocolPicture(const ibDataNode& node, const char* name)
 
 wxBitmap ibProtocolPicture(const ibProtocolNode& node, const char* name, int pixels)
 {
-	// Scaled each time it is asked, nothing kept: it is asked when the server's state changes, not when the button is
-	// drawn, which draws the bitmap it was given. The engine's own from its master, which has the size to spare; any
-	// other — sent whole or kept by its id — as the door above gives it.
+	// Made each time it is asked, nothing kept: it is asked when the server's state changes, not when the button is
+	// drawn, which draws the bitmap it was given. Made from the picture as it came — sent whole or kept by its id — so a
+	// drawing is drawn at that size rather than a bitmap of 16 stretched.
 	const ibDataNode* const read = node.GetBody();
-	if (read == nullptr)
+	const auto value = read != nullptr ? read->FindField(name) : std::nullopt;
+	if (!value)
 		return wxBitmap();
-	const auto value = read->FindField(name);
-	const wxImage master = value && value->Kind() == ibDataKind::String ? MasterOf(wxString(value->AsString())) : wxImage();
-	if (master.IsOk())
-		return BitmapOf(master, pixels);
-	const wxBitmap shown = ibProtocolPicture(*read, name);
-	return shown.IsOk() ? BitmapOf(shown.ConvertToImage(), pixels) : wxBitmap();
+	if (value->Kind() == ibDataKind::Binary)
+		return BitmapOf(ibPicture(value->AsBinary()), pixels);
+	return value->Kind() == ibDataKind::String ? BitmapOf(KeptOf(wxString(value->AsString())).picture, pixels) : wxBitmap();
 }
 
 wxBitmap ibProtocolPicture(const ibDataValue& value)
 {
 	if (value.Kind() == ibDataKind::Binary)
-		return BitmapOf(value.AsBinary());
+		return BitmapOf(ibPicture(value.AsBinary()));
 	return value.Kind() == ibDataKind::String ? ibProtocolPicture(wxString(value.AsString())) : wxBitmap();
 }
 
 wxBitmap ibProtocolPicture(const wxString& id)
 {
-	if (id.IsEmpty())
-		return wxBitmap();
-	{
-		std::lock_guard<std::mutex> lock(s_picturesLock);
-		if (const wxBitmap* const kept = FindKept(id))
-			return *kept;
-	}
-	ibProtocolPictureReceive({ id });
-	std::lock_guard<std::mutex> lock(s_picturesLock);
-	const wxBitmap* const kept = FindKept(id);
-	return kept != nullptr ? *kept : wxBitmap();
+	return KeptOf(id).bitmap;
 }
 
 wxBitmap ibProtocolPictureById(ibPictureID id)
@@ -178,10 +183,11 @@ void ibProtocolPictureReceive(const std::vector<wxString>& ids)
 			if (FindKept(id) != nullptr)
 				continue;
 		}
-		const wxBitmap engine = BitmapOf(MasterOf(id), 16);   // shown at 16
+		const ibPicture engine = EngineOf(id);
 		if (engine.IsOk()) {
+			const ibKeptPicture kept = { id, engine, BitmapOf(engine) };   // drawn outside the lock
 			std::lock_guard<std::mutex> lock(s_picturesLock);
-			Keep(id, engine);
+			Keep(kept);
 			continue;
 		}
 		asked.insert(id);
@@ -196,9 +202,10 @@ void ibProtocolPictureReceive(const std::vector<wxString>& ids)
 	if (frame == nullptr || !frame->Fetch(ibProtocol::ibMethod::Picture, params, answer))
 		return;
 	for (const ibProtocolNode& picture : answer.FindChild(ibProtocol::ibPicture::Pictures).Children()) {
-		const wxBitmap bitmap = BitmapOf(picture.GetBinary(ibProtocol::ibPicture::Picture));
+		const ibPicture given(picture.GetBinary(ibProtocol::ibPicture::Picture));   // a drawing or a PNG, as it came
+		const ibKeptPicture kept = { picture.GetString(ibProtocol::ibPicture::Id), given, BitmapOf(given) };
 		std::lock_guard<std::mutex> lock(s_picturesLock);
-		Keep(picture.GetString(ibProtocol::ibPicture::Id), bitmap);
+		Keep(kept);
 	}
 }
 

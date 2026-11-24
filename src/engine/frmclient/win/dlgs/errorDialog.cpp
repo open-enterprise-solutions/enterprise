@@ -38,7 +38,6 @@ ibDialogError::ibDialogError(ibFrontendMainFrame* parent, wxWindowID id,
 	// set margin as unused
 	m_errorOutput->SetMarginType(DEF_IMAGE_ID, ibSTC_MARGIN_SYMBOL);
 	m_errorOutput->SetMarginMask(DEF_IMAGE_ID, ~(1024 | 256 | 512 | 128 | 64 | ibSTC_MASK_FOLDERS));
-	m_errorOutput->StyleSetBackground(DEF_IMAGE_ID, *wxWHITE);
 
 	m_errorOutput->SetMarginWidth(DEF_IMAGE_ID, FromDIP(16));
 	m_errorOutput->SetMarginSensitive(DEF_IMAGE_ID, true);

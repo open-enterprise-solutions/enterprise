@@ -109,7 +109,7 @@ function loadGrid() {
 }
 
 class Table extends Control {
-	// A table's own, as the server's makes it (ibValueModelTableBox): white — the theme's table.
+	// A table's own: white — the theme's table.
 	/** @type {[string, string]} */
 	static platformBackground = ['rgb(255,255,255)', 'var(--oes-table-bg)'];
 

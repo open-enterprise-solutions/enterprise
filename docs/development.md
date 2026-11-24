@@ -69,14 +69,15 @@ in its document. The words the engine's own design is spoken in are listed in
 **Header guards are `#ifndef __NAME_H__` / `#define __NAME_H__`.** Every header of ours uses
 them, and CI refuses a header that brings `#pragma once`.
 
-**A picture is a PNG in Base64, in the source file that reads it; never XPM.** It is a string
-(`static const wxString s_<name>_png = "..."`) beside the code that uses it — the art provider's in
-`frmclient/artProvider/private/picturePredefined.h` (coderunner keeps a copy of its own), the engine's own in `core/picturePredefined.cpp`, a control's in its `_res.cpp`, a metatype's in its
-`_res.cpp` — kept as a MASTER four times the size it is drawn at, and scaled down by whoever reads it to
-the size it shows it at. Its source is an SVG in `tools/pictures/render.js`, which draws the PNG and
-writes the string: to change a picture, change its SVG there and run the script; to add one, add the SVG,
-a line in its `TARGETS` and a placeholder string. One act has one drawing everywhere it appears, and the
-manner is the one that file describes. XPM renders poorly at any size but its own, and no new one goes in.
+**A picture is SVG text, in the source file that reads it; never PNG, never XPM.** It is a string
+(`static const ibString s_<name>_svg = ibT("<svg …>")`, `wxString` on the wx side) beside the code that
+uses it — the theme's in `deskgui/univ/theme/private/picturePredefined.h`, the engine's own in
+`core/picturePredefined.cpp`, a control's or a metatype's in its `_res.cpp`. The string IS the picture's
+source and what is kept and sent: an engine picture is `ibPicture::FromSvg(svg)` — the drawing, not pixels — and
+whoever shows it draws it at the size it shows it (NanoSVG; the browser itself). NanoSVG draws no `<text>`, no CSS and
+no filters — letters are paths. One act has one drawing everywhere it appears: a drawing two sides need is one engine
+picture asked for by its id, not two strings. The manner and the palette are in `docs/private/ui-palette.md`.
+`node tools/pictures/preview.js` lays every picture of the engine out on the light and the dark grounds.
 
 **The backend stays GUI-free and never shows a modal window.** core, protocol, backend, frmserver and fileserver
 include and link no wx, so a window, an image or a font there does not compile; a picture, a
