@@ -548,7 +548,7 @@ public:
 			"clause keywords that position admits), `code_run` (run it against the live base), and "
 			"`role_restrict` for composing a restriction into a role's handler.\n\n"
 			"FOUR THINGS THAT COST A RUN TO FIND OUT (measured 2026-09-08 against a live base):\n"
-			"  * A QUERY'S ANSWER IS A TABLE - `TypeOf` says `Table`, its rows are `TableRow`, "
+			"  * A QUERY'S ANSWER IS A TABLE - `TypeOf` says `ValueTable`, its rows are `ValueTableRow`, "
 			"and its columns are what `select` named. So `Count()`, `Columns`, `Sort`, `[i]` and "
 			"`foreach` all work on it; `First()` does not - a table has no such method.\n"
 			"  * PUT THE ANSWER IN A VARIABLE BEFORE ASKING IT ANYTHING. A parenthesised expression "

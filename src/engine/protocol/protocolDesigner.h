@@ -351,6 +351,9 @@ namespace ibProtocol {
 			                                                              // a source's: its window's tree
 			inline constexpr const char* Default      = "Default";
 			inline constexpr const char* Targets      = "Targets";
+			inline constexpr const char* Values       = "Values";         // a switch's Choices: the values its field's type
+			                                                              // is finite in (a Boolean, an enumeration), each
+			                                                              // its Value as a row stores it and Presentation
 			inline constexpr const char* Pictures     = "Pictures";       // a picture's: those it may be (Guid, Name; Id —
 			                                                              // the id it is drawn by)
 			inline constexpr const char* ClassPictures = "ClassPictures"; // a picture's: the engine's class icons it may be

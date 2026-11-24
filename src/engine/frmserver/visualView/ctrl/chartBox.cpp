@@ -7,6 +7,9 @@
 
 ibValueChartBox::ibValueChartBox() : ibValueWindow()
 {
+	//set default params
+	m_sizerItem->SetProportion(1);
+	m_sizerItem->SetFlagState(ibStretch_Expand);
 }
 
 //**********************************************************************************
@@ -27,4 +30,4 @@ bool ibValueChartBox::WriteData(ibDataNode& node) const
 //*                       Register in runtime                           *
 //***********************************************************************
 
-CONTROL_TYPE_REGISTER(ibValueChartBox, "Chartbox", "Container", control_to_clsid("CT_CHRB"));
+CONTROL_TYPE_REGISTER(ibValueChartBox, "Chart", "Container", control_to_clsid("CT_CHRB"));

@@ -46,7 +46,7 @@ enum ibDynamicListView {
 //     cleared+reapplied per fetch).
 // ---------------------------------------------------------------------------
 // The dynamic list is AT ONCE a runtime model (a tree), a form data source, AND a property
-// object (like ibValueSizerItem): its properties surface onto the form attribute. The attribute
+// object (like a control's ibSizerItem): its properties surface onto the form attribute. The attribute
 // merely casts its runtime value to ibPropertyObject and shows that object's properties — it
 // knows nothing about "a dynamic list" (anything property-bearing can sit there).
 // ⭐ ibCompositionHolder LAST — ibValue must stay the FIRST base (offset 0), which is what every
@@ -268,7 +268,7 @@ public:
 
 	// --- ibPropertyObject + serialization -----------------------------------
 	// The list IS a property object: its Source / Settings properties surface onto the form
-	// attribute (like ibValueSizerItem) — the attribute just casts the runtime value to
+	// attribute (like a control's ibSizerItem) — the attribute just casts the runtime value to
 	// ibPropertyObject, knowing nothing about "a dynamic list". OnPropertyChanged is the real
 	// hook (a virtual, not a backend function-pointer). Read/WriteProperty persist the properties,
 	// the composition description among them — there is nothing kept outside the property set.
@@ -335,7 +335,7 @@ private:
 	ibDynamicListView m_view = ibDynamicListView_Normal;
 
 	// --- property surface — the list's properties SURFACE onto the form attribute (like
-	// ibValueSizerItem). CreateProperty right in the declaration (this / protected base).
+	// a control's ibSizerItem). CreateProperty right in the declaration (this / protected base).
 	// ⭐ THE INSPECTOR SHOWS SOURCE, SETTINGS AND DYNAMIC READ — and nothing else (Max, 2026-08-19).
 	// The query is edited on the settings window's Query tab, where the styled editor, the
 	// constructor button and the engine's verdict already are.

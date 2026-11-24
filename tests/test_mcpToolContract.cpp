@@ -748,6 +748,23 @@ TEST(McpToolContract, EveryClosedSet_RefusesAWordOutsideIt)
 	}
 }
 
+// BYTES WHERE A TEXT IS TAKEN ARE NAMED AS BYTES: JSON's "base64:<...>" is read as bytes, and the refusal said "an empty
+// value came" over an external data tool's whole file (2026-11-24, driving forms over MCP).
+TEST(McpToolContract, BytesWhereATextIsTaken_AreNamedAsBytes)
+{
+	const ibMcpTool* tool = ibFindMcpTool(wxT("external_data_tool_open"));
+	ASSERT_NE(tool, nullptr);
+
+	const unsigned char raw[] = { 1, 2, 3 };
+	ibDataNode arguments;
+	arguments.AddField(ibT("file"), ibDataValue::String(ibString(ibT("Tool.otl"))));
+	arguments.AddField(ibT("data"), ibDataValue::Binary(ibMemoryBuffer(raw, sizeof(raw))));
+
+	const std::string fault = ibMcpArgumentFault(tool, arguments).ToStdString();
+	EXPECT_NE(std::string::npos, fault.find("bytes")) << fault;
+	EXPECT_EQ(std::string::npos, fault.find("empty")) << fault;
+}
+
 //---------------------------------------------------------------------------
 // how a query is matched — the one rule both finders share
 //---------------------------------------------------------------------------

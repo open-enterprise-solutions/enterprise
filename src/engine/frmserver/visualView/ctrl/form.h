@@ -117,15 +117,10 @@ public:
 	*/
 	void ResolveNameConflict(ibValueFrame* control);
 
-	/**
-	* Fabrica de objetos.
-	* A partir del nombre de la clase se crea una nueva instancia de un objeto.
-	*/
-	ibValueFrame* CreateObject(const ibString& className, ibValueFrame* parentControl = nullptr);
-
-	// …and one made from a COPY — the node as a form holds a control (SaveNode), the item it sits in with it: put in what
-	// it is pasted on, else in the first of its parents that makes one of its class, under this form's ids and with
-	// names unique on it. The designer's paste and form_paste both. Null: nothing there takes it, or it did not read.
+	// A control made from a COPY — the node as a form holds a control (SaveNode), its place in the sizer with it: put in
+	// what it is pasted on, else in the first of its parents that takes one of its class (FilterChild), under this form's
+	// ids and with names unique on it. The designer's paste and form_paste both. Null: nothing there takes it, or it did
+	// not read.
 	ibValueFrame* PasteObject(ibValueFrame* dstObject, const ibDataNode& copied);
 
 public:
@@ -160,8 +155,8 @@ public:
 	//*                              Support methods                             *
 	//****************************************************************************
 
-	// The form's OWN members, ADDED on top of ibValueFrame::FillMembers (properties +
-	// Events from the base bind); module exports follow as the helper's tail
+	// The form's OWN members, ADDED on top of ibValueFrame::FillFrameProperties / FillFrameEvents
+	// (the base binds); module exports follow as the helper's tail
 	// (descriptor autobind). Bound in the ctor (was PrepareNames). The member-pmf bind
 	// is lossless here because ibValueFrame is ibValueForm's FIRST base, so the ibValue
 	// sub-object is at offset 0 (no MI this-adjustment to lose in the pmf cast).
@@ -401,6 +396,9 @@ public:
 	*/
 	virtual bool CanDeleteControl() const { return false; }
 
+	// What its sizer lays out.
+	virtual bool FilterChild(const ibClassID& clsid) const override { return IsPlaceableControl(clsid); }
+
 	/**
 	* Is editable object?
 	*/
@@ -485,18 +483,21 @@ public:
 
 public:
 
+	// A control of `clsid` made in `control` (the form when none), when it takes one (FilterChild); null otherwise.
+	ibValueFrame* CreateControl(const ibClassID& clsid, ibValueFrame* control = nullptr);
+	// …by the class's name, as a script and MCP give it — turned into its id here, once; a name no class has is null.
 	ibValueFrame* CreateControl(const ibString& classControl, ibValueFrame* control = nullptr);
 
 	// …as the class it was asked by — the cast once here, as NewObject<retType> does it.
 	template <typename retType>
-	inline retType* CreateControl(const ibString& classControl, ibValueFrame* control = nullptr) {
-		return dynamic_cast<retType*>(CreateControl(classControl, control));
+	inline retType* CreateControl(const ibClassID& clsid, ibValueFrame* control = nullptr) {
+		return dynamic_cast<retType*>(CreateControl(clsid, control));
 	}
 
 	void RemoveControl(ibValueFrame* control);
 
 	// All controls owned by this form, derived by walking the control hierarchy
-	// (m_children), skipping sizer-items. Replaces the maintained m_listControl set
+	// (m_children). Replaces the maintained m_listControl set
 	// (whose SetOwnerForm erase-bookkeeping was a teardown hazard). Cold path -
 	// script Controls collection + design-time name-conflict; the form tree is small.
 	std::vector<ibValueControl*> GetControlList() const;

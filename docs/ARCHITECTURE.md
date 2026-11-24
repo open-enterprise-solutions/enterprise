@@ -935,35 +935,33 @@ metaId **PATH** whose head selects an attribute (the gate), resolved through one
 `Get/SetValueByAttributePath` pair. The source object passed on open lands in the MAIN
 attribute. See [form-attribute-binding.md](private/form-attribute-binding.md).
 
-### Visual controls — 18 registered + 5 system-kind children
+### Visual controls — 11 registered + 4 system-kind children
 
-Implemented in `src/engine/frmserver/visualView/ctrl/` (drawn by `frmclient/visualView/ctrl/`), verified 2026-10-27
-by grepping `CONTROL_TYPE_REGISTER`. The five system-kind children are registered via `S_CONTROL_TYPE_REGISTER`:
-ClientForm, SizerItem, NotebookPage, TableboxColumn, TableboxColumnGroup (added with column groups, 2026-08-17).
+Implemented in `src/engine/frmserver/visualView/ctrl/` (drawn by `frmclient/visualView/ctrl/`), verified 2026-11-23
+by grepping `CONTROL_TYPE_REGISTER`. The four system-kind children are registered via `S_CONTROL_TYPE_REGISTER`:
+ClientForm, Page, TableColumn, ColumnLayout (added with column groups, 2026-08-17; renamed from
+TableboxColumn and TableboxColumnGroup with the table, Tablebox → Table, 2026-11-24; Notebook and NotebookPage →
+Pages and Page, Gridbox → Spreadsheet, Textbox → TextArea, Htmlbox → Html, Chartbox → Chart the same day). A control's
+place in its sizer is no node of the tree: it is the control's own attached child (`ibSizerItem`, `sizerItem.h`),
+made by a window and a layout, its properties written on the control's node (2026-11-23). The four sizers (box, wrap,
+grid, framed box) are one Layout whose View is a child, as a field's is (2026-11-23); a table column's view (Input,
+Flag, Label) is a child too, and the caption and the line are one Static whose View is Text or Line (2026-11-24).
 Choice, ComboBox, ListBox and ToolBar (with Tool / ToolSeparator) were the desktop front's only and went with it.
 
 | Control | File |
 |---|---|
 | Button | `button.cpp` |
-| CheckBox | `checkbox.cpp` |
+| Field — its view a child: Input, Flag, Label, Switch, Gauge, Slider | `field.cpp/.h`, `fieldView<View>.cpp` |
 | Form (root) | `form.cpp` |
 | Frame | `frame.cpp` |
-| Gauge | `gauge.cpp` |
-| GridBox | `gridBox.cpp/.h` |
-| HtmlBox | `htmlBox.cpp/.h` |
-| Notebook | `notebook.cpp/.h` |
-| RadioButton | `radiobutton.cpp` |
-| Slider | `slider.cpp` |
-| StaticText | `statictext.cpp` |
-| StaticLine | `staticline.cpp` |
-| TableBox | `tableBox.cpp/.h` |
-| TextBox | `textBox.cpp/.h` |
-| TextCtrl | `textctrl.cpp` |
-| BoxSizer | `boxsizer.cpp` |
-| GridSizer | `gridsizer.cpp` |
-| StaticBoxSizer | `staticboxsizer.cpp` |
-| WrapSizer | `wrapsizer.cpp` |
-| ChartBox | `chartBox.cpp/.h` |
+| Spreadsheet | `gridBox.cpp/.h` |
+| Html | `htmlBox.cpp/.h` |
+| Layout — its view a child: Box, Wrap, Grid, Group | `layout.cpp/.h`, `layoutView<View>.cpp` |
+| Pages — its children Page | `notebook.cpp/.h`, `notebookPage.cpp` |
+| Static — a decoration, its view a child: Text, Line | `static.cpp/.h`, `staticView<View>.cpp` |
+| Table — a column's view a child: Input, Flag, Label | `tableBox.cpp/.h`, `tableBoxColumn*.cpp` |
+| TextArea | `textBox.cpp/.h` |
+| Chart | `chartBox.cpp/.h` |
 
 ### Form Rendering
 

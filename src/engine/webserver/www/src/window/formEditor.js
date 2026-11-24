@@ -18,7 +18,6 @@ import { PropertyGrid } from '../properties/propertyGrid.js';
 // What the window does (ibRequest::ibFormEditor::ibAct), and how a save or a reset went (ibFormSettingsResult).
 const Act = Object.freeze({ Apply: 1, Save: 2, Reset: 3 });
 const Result = Object.freeze({ Ok: 0, NoStorage: 1, NoAddress: 2, Refused: 3 });
-const sizerItem = 'SizerItem';
 // Closing, the act waited on done — OK pressed with something queued, or the window closed while an act was answered.
 const close = 'close';
 
@@ -212,14 +211,13 @@ export class FormEditor {
 	}
 
 	/**
-	 * The control taken, its rows and its sizer item's in the grid.
+	 * The control taken, its rows in the grid — its place in the sizer's among them.
 	 * @param {number} id
 	 */
 	show(id) {
 		this.taken = id;
 		const found = find(this.arranged, id);
-		const rows = found === null ? [] : [...(this.rows.get(id) ?? []),
-			...(found.parent?.type === sizerItem ? this.rows.get(found.parent.id) ?? [] : [])];
+		const rows = found === null ? [] : this.rows.get(id) ?? [];
 		/** @type {Map<ProtocolNode, ProtocolNode>} */
 		const changed = new Map();
 		for (const row of rows) {
@@ -232,7 +230,7 @@ export class FormEditor {
 	}
 
 	/**
-	 * The control taken moved among its siblings — its sizer item, when it stands in one.
+	 * The control taken moved among its siblings.
 	 * @param {number} step
 	 */
 	move(step) {
@@ -247,14 +245,12 @@ export class FormEditor {
 	}
 
 	/**
-	 * Where a control moves: what stands for it among its parent's children — itself, or the sizer items it is in.
+	 * Where a control moves: its place among its parent's children.
 	 * @param {number} id
 	 * @returns {{siblings: Arranged[], at: number} | null}
 	 */
 	placeOf(id) {
-		let found = find(this.arranged, id);
-		while (found !== null && found.parent?.type === sizerItem)
-			found = find(this.arranged, found.parent.id);
+		const found = find(this.arranged, id);
 		if (found === null || found.parent === null)
 			return null;
 		return { siblings: found.parent.children, at: found.parent.children.indexOf(found.item) };
@@ -262,8 +258,7 @@ export class FormEditor {
 
 	/** The tree drawn anew from the form as it stands, the control taken taken in it, the lines folded before kept so. */
 	drawTree() {
-		const root = this.item(this.arranged);
-		this.tree.replaceChildren(...(root !== null ? [root] : []));
+		this.tree.replaceChildren(this.item(this.arranged));
 		// Unfolded once they stand in the page: a line put in folds itself while the line it is in says it is folded, and
 		// one unfolded a moment before has not said so yet (Web Awesome 3.14, tree-item connectedCallback).
 		for (const item of /** @type {NodeListOf<any>} */ (this.tree.querySelectorAll('wa-tree-item')))
@@ -271,13 +266,11 @@ export class FormEditor {
 	}
 
 	/**
-	 * A control's line in the tree, and its controls under it; a sizer item is its control's.
+	 * A control's line in the tree, and its controls under it.
 	 * @param {Arranged} control
-	 * @returns {HTMLElement | null}
+	 * @returns {HTMLElement}
 	 */
 	item(control) {
-		if (control.type === sizerItem)
-			return control.children.length > 0 ? this.item(control.children[0]) : null;
 		const item = /** @type {any} */ (document.createElement('wa-tree-item'));
 		item.dataset.control = String(control.id);
 		const url = this.questions.pictures.url(this.pictures?.get(control.type));
@@ -288,11 +281,8 @@ export class FormEditor {
 			item.append(image);
 		}
 		item.append(control.title || '<empty caption>');
-		for (const child of control.children) {
-			const line = this.item(child);
-			if (line !== null)
-				item.append(line);
-		}
+		for (const child of control.children)
+			item.append(this.item(child));
 		item.selected = control.id === this.taken;
 		return item;
 	}
@@ -375,7 +365,7 @@ export class FormEditor {
 function arranged(node) {
 	const state = node.State ?? {};
 	const type = String(node.NodeType ?? '');
-	const title = type === 'Tablebox' ? `TableBox: ${node.Name ?? ''}` : state.Caption || state.Title || node.Caption || node.Title || type;
+	const title = type === 'Table' ? `Table: ${node.Name ?? ''}` : state.Caption || state.Title || node.Caption || node.Title || type;
 	return {
 		id: node.ControlId,
 		type,

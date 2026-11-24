@@ -168,7 +168,7 @@ public:
 	                                                                m_rows.erase(m_rows.begin() + static_cast<size_t>(row)); }
 
 	// ⭐ THE ROWS AS THE VALUE TABLE A SCRIPT HOLDS — where every read that hands a script its rows as a table
-	// ends: a register's slices and figures, a queryable's ToTable(), a query result's Unload(), a LINQ answer.
+	// ends: a register's slices and figures, a queryable's ToValueTable(), a query result's Unload(), a LINQ answer.
 	// Each fills this table, made for being filled, and this loads it: a column per column, by its name, type
 	// and caption, the rows in this order. There were nine copies of that loop; all but the LINQ one added their
 	// rows the slow way. A column with no type stays UNTYPED — it keeps whatever arrives, where a String one would

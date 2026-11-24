@@ -347,6 +347,7 @@
     <ClInclude Include="propertyManager\property\propertyFeatureOptions.h" />
     <ClInclude Include="propertyManager\property\propertyCalcSchedule.h" />
     <ClInclude Include="propertyManager\property\propertyChoiceLink.h" />
+    <ClInclude Include="propertyManager\property\propertyChoices.h" />
     <ClInclude Include="propertyManager\property\propertyPicture.h" />
     <ClInclude Include="propertyManager\property\propertyPoint.h" />
     <ClInclude Include="propertyManager\property\propertyRecord.h" />
@@ -367,6 +368,7 @@
     <ClInclude Include="propertyManager\property\variant\variantOwner.h" />
     <ClInclude Include="propertyManager\property\variant\variantCalcSchedule.h" />
     <ClInclude Include="propertyManager\property\variant\variantChoiceLink.h" />
+    <ClInclude Include="propertyManager\property\variant\variantChoices.h" />
     <ClInclude Include="propertyManager\property\variant\variantPicture.h" />
     <ClInclude Include="propertyManager\property\variant\variantPoint.h" />
     <ClInclude Include="propertyManager\property\variant\variantSize.h" />
@@ -870,6 +872,7 @@
     <ClCompile Include="propertyManager\property\propertyFeatureOptions.cpp" />
     <ClCompile Include="propertyManager\property\propertyCalcSchedule.cpp" />
     <ClCompile Include="propertyManager\property\propertyChoiceLink.cpp" />
+    <ClCompile Include="propertyManager\property\propertyChoices.cpp" />
     <ClCompile Include="propertyManager\property\propertyPicture.cpp" />
     <ClCompile Include="propertyManager\property\propertyPictureExt.cpp" />
     <ClCompile Include="propertyManager\property\propertyPoint.cpp" />

@@ -6,13 +6,13 @@
 
 // ⭐ AN OBJECT'S PROPERTIES AS A SCRIPT READS THEM — one member per property, under the property's name; `writable`
 // says whether a script may assign it, `alias` tells these members from the value's others, and each member's data is
-// the property's index, read back through GetPropertyByIndex. The one loop a control, a metaobject, a form attribute
+// the property's index, read back through GetProperty(idx). The one loop a control, a metaobject, a form attribute
 // and a form command list their properties with.
 inline void ibAppendPropertyMembers(ibValue::ibMemberTable& helper, const ibPropertyObject& object, bool writable,
 	const long alias = ibNOT_FOUND)
 {
 	for (unsigned int idx = 0; idx < object.GetPropertyCount(); idx++) {
-		if (const ibProperty* property = object.GetPropertyByIndex(idx))
+		if (const ibProperty* property = object.GetProperty(idx))
 			helper.AppendProp(property->GetName(), true, writable, idx, alias);
 	}
 }

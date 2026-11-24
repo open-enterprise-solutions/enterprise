@@ -29,4 +29,4 @@ wxWindow* ibValueHTMLBox::GetWindow() const
 	return m_htmlBox;
 }
 
-CONTROL_REGISTER(ibValueHTMLBox, ibProtocol::ibForm::ibType::Htmlbox)
+CONTROL_REGISTER(ibValueHTMLBox, ibProtocol::ibForm::ibType::Html)

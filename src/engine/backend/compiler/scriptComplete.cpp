@@ -803,7 +803,7 @@ private:
 			// answer is a TABLE carrying those names — the one exit every query has (docs/private/linq.md
 			// §0.2h-quater). A plain value does not, and then the answer is an Array, which is what
 			// `ToArray` over such rows means — and the Array HOLDS the sample row: a query that answers
-			// with the rows themselves (`select r`) hands this Array on to ToTable (compileCodeLINQ.cpp),
+			// with the rows themselves (`select r`) hands this Array on to ToValueTable (compileCodeLINQ.cpp),
 			// and that step, read through LinqStep, asks the very row for its columns.
 			//
 			// 🛑 IT IS THE EXPORTED RULE (`ibLinqNamedColumns`, procUnit.h) and not a second copy of

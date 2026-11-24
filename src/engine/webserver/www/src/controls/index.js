@@ -1,18 +1,13 @@
 // Every control the page draws, each registered as its <oes-…> element by the module that defines it.
 
 import './form.js';
-import './sizers.js';
-import './statictext.js';
-import './textctrl.js';
+import './layout.js';
+import './static.js';
+import './field.js';
 import './button.js';
-import './checkbox.js';
-import './radiobutton.js';
-import './staticline.js';
-import './notebook.js';
-import './slider.js';
-import './gauge.js';
-import './htmlbox.js';
-import './textbox.js';
-import './chartbox.js';
-import '../tablebox/tablebox.js';
-import '../gridbox/gridbox.js';
+import './pages.js';
+import './html.js';
+import './textarea.js';
+import './chart.js';
+import '../table/table.js';
+import '../spreadsheet/spreadsheet.js';

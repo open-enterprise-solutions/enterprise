@@ -539,10 +539,10 @@ export class ClientWindow {
 		if (control?.isConnected && element?.contains(control)) {
 			if (typeof control.find === 'function')
 				return control;
-			if (control.localName === 'oes-textbox')
+			if (control.localName === 'oes-textarea')
 				return control.querySelector('textarea');
 		}
-		return element?.querySelector('oes-textbox textarea') ?? null;
+		return element?.querySelector('oes-textarea textarea') ?? null;
 	}
 
 	/**
@@ -732,7 +732,7 @@ export class ClientWindow {
 	 */
 	focusTable(form) {
 		if (document.activeElement?.closest('wa-dialog') === null || document.activeElement === null)
-			/** @type {HTMLElement | null | undefined} */ (form?.querySelector('oes-tablebox'))?.focus({ preventScroll: true });
+			/** @type {HTMLElement | null | undefined} */ (form?.querySelector('oes-table'))?.focus({ preventScroll: true });
 	}
 
 	/**

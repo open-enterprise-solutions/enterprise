@@ -8,7 +8,7 @@
 
 #include "frmclient/mainFrame/mainFrame.h"
 #include "frmclient/visualView/commandBar.h"   // ibViewCommandBar — a drop on a command bar joins it, a tool pressed selects its command
-#include "frmclient/visualView/ctrl/sizer.h"   // ibValueSizerItem — the highlight is drawn out to its item's border
+#include <wx/sizer.h>   // wxSizerItem — the highlight is drawn out to the border of a control's place (GetSizerItem)
 
 #include <wx/dataobj.h>   // wxDataObjectComposite — accept every registered drag kind on one target
 #include <wx/utils.h>     // wxFindWindowAtPoint (point -> widget hit-test)
@@ -263,7 +263,7 @@ void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost::SetObjectSelect
 
 	if (wxWindow* const window = drawn->GetWindow()) {
 		// A notebook's page is boxed as its notebook (the desktop's: asked of the control's class).
-		ibValueFrame* const notebook = drawn->GetClassName() == ibProtocol::ibForm::ibType::NotebookPage ? drawn->GetParent() : nullptr;
+		ibValueFrame* const notebook = drawn->GetClassName() == ibProtocol::ibForm::ibType::Page ? drawn->GetParent() : nullptr;
 		wxWindow* const boxed = notebook != nullptr && notebook->GetWindow() != nullptr ? notebook->GetWindow() : window;
 		item = boxed;
 		selPanel = boxed->GetParent();
@@ -369,9 +369,9 @@ bool ibDesignerWindow::GetSelectionRect(wxRect& rect) const
 		return false;
 	}
 
-	// Out to the border the sizer item gives it (ibValueSizerItem::Update) on the sides it borders; elsewhere a pixel
+	// Out to the border its place in the sizer gives it (ibViewUpdateSizer) on the sides it borders; elsewhere a pixel
 	// round a window and nothing round a sizer.
-	const wxSizerItem* const item = m_selectedObject != nullptr ? ibValueSizerItem::GetItem(m_selectedObject) : nullptr;
+	const wxSizerItem* const item = m_selectedObject != nullptr ? m_selectedObject->GetSizerItem() : nullptr;
 	const int least = m_selectedObject != nullptr && m_selectedObject->GetComponentType() == COMPONENT_TYPE_SIZER ? 0 : 1;
 	const int border = item != nullptr && item->GetBorder() != 0 ? item->GetBorder() : least;
 	const auto side = [item, border, least](int direction) {

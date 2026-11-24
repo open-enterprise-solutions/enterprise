@@ -1877,7 +1877,7 @@ start_label:
 
 			case OPER_LINQ_RESULT:
 				// index3: 0 the rows · 1 the first row · 2 the GROUPS. (A table asked for by name is
-				// `ToTable`, an OPER_CALL_LINQ of its own — a query of the rows themselves ends in one.)
+				// `ToValueTable`, an OPER_CALL_LINQ of its own — a query of the rows themselves ends in one.)
 				if (index3 == 2) ibLinqGroups(variable1, variable2);
 				else             ibLinqResult(variable1, variable2, (int)array3, index3 == 1);
 				break;

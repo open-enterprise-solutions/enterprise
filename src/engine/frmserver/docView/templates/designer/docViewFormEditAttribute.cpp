@@ -16,7 +16,7 @@
 #include "frmserver/visualView/ctrl/formAttribute.h"
 #include "frmserver/visualView/ctrl/gridBox.h"                      // g_controlGridBoxCLSID
 #include "frmserver/visualView/ctrl/tableBox.h"                     // g_controlTableBoxCLSID
-#include "frmserver/visualView/ctrl/widgets.h"                      // g_controlCheckboxCLSID / g_controlTextCtrlCLSID
+#include "frmserver/visualView/ctrl/field.h"                        // g_controlFieldCLSID
 #include "protocol/protocol.h"
 #include "protocol/protocolDesigner.h"   // ibProtocol::ibView::ibFormDesigner
 
@@ -31,10 +31,10 @@ ibString ClsidText(const ibClassID& clsid)
 }
 
 // The control-class CLSID a node maps to (0 = not draggable). Mirrors BuildForm's type->control choice
-// for ONE node: table / section -> Tablebox, boolean -> Checkbox, scalar / reference -> Textctrl. A
-// composite OBJECT container (a non-table, non-reference metaobject: e.g. the main object attribute) has
-// no single control -> not draggable; drag its fields instead. Returns the CLSID (kind-typed), not a
-// class name: it is only the draggable gate now — the drop side re-resolves the class from the path.
+// for ONE node: table / section -> Table, a primitive or a reference -> Field. A composite OBJECT container (a
+// non-table, non-reference metaobject: e.g. the main object attribute) has no single control -> not draggable; drag
+// its fields instead. Returns the CLSID (kind-typed), not a class name: it is only the draggable gate now — the drop
+// side re-resolves the class from the path.
 ibClassID DropControlClass(bool isTable, const std::vector<ibMetaID>& refTypes, const ibTypeDescription& typeDesc)
 {
 	if (isTable)
@@ -44,16 +44,14 @@ ibClassID DropControlClass(bool isTable, const std::vector<ibMetaID>& refTypes, 
 	if (typeDesc.GetClsidCount() == 1 &&
 		(typeDesc.ContainType(g_valueDataCompositionCLSID) || typeDesc.ContainType(g_valueSpreadsheetCLSID)))
 		return g_controlGridBoxCLSID;
-	if (typeDesc.GetClsidCount() == 1) {
-		if (typeDesc.ContainType(ibValueTypes::TYPE_BOOLEAN))
-			return g_controlCheckboxCLSID;
-		if (typeDesc.ContainType(ibValueTypes::TYPE_STRING)
+	if (typeDesc.GetClsidCount() == 1 &&
+		(typeDesc.ContainType(ibValueTypes::TYPE_BOOLEAN)
+			|| typeDesc.ContainType(ibValueTypes::TYPE_STRING)
 			|| typeDesc.ContainType(ibValueTypes::TYPE_NUMBER)
-			|| typeDesc.ContainType(ibValueTypes::TYPE_DATE))
-			return g_controlTextCtrlCLSID;
-	}
-	if (!refTypes.empty())              // reference (incl. composite) -> a select-field textctrl
-		return g_controlTextCtrlCLSID;
+			|| typeDesc.ContainType(ibValueTypes::TYPE_DATE)))
+		return g_controlFieldCLSID;
+	if (!refTypes.empty())              // reference (incl. composite) -> a field with the Select button
+		return g_controlFieldCLSID;
 	return 0;                           // composite object container -> not a single control
 }
 

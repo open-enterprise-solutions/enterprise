@@ -10,6 +10,7 @@
 
 #include <deque>
 #include <map>
+#include <memory>
 #include <optional>
 #include <set>
 #include <vector>
@@ -225,10 +226,10 @@ public:
 		if (!m_propertySource->IsEmptyProperty()) {
 			ibValue pvarPropVal;
 			if (m_propertySource->GetDataValue(pvarPropVal))
-				return _("TableBox") + ibT(": ") + stringUtils::GenerateSynonym(pvarPropVal.GetString());
+				return _("Table") + ibT(": ") + stringUtils::GenerateSynonym(pvarPropVal.GetString());
 		}
 
-		return _("TableBox") + ibT(": ") + _("<empty source>");
+		return _("Table") + ibT(": ") + _("<empty source>");
 	}
 
 	// The window's state and the command bar's, then what the table decides at run time: the
@@ -262,6 +263,11 @@ public:
 
 	//get component type
 	virtual int GetComponentType() const { return COMPONENT_TYPE_WINDOW; }
+
+	// Its columns and their groups.
+	virtual bool FilterChild(const ibClassID& clsid) const override {
+		return clsid == g_controlTableBoxColumnCLSID || clsid == g_controlTableBoxColumnGroupCLSID;
+	}
 
 	// A table bound to the form's MAIN attribute doesn't carry its own command bar — the form's
 	// toolbar already serves those commands, so a table bar would just duplicate them (Add / Mark
@@ -615,6 +621,11 @@ public:
 	//get component type — a header, not a window
 	virtual int GetComponentType() const { return COMPONENT_TYPE_ABSTRACT; }
 
+	// What a table takes — columns, and groups of their own.
+	virtual bool FilterChild(const ibClassID& clsid) const override {
+		return clsid == g_controlTableBoxColumnCLSID || clsid == g_controlTableBoxColumnGroupCLSID;
+	}
+
 	//support icons
 	virtual ibPicture GetIcon() const;
 
@@ -646,13 +657,75 @@ private:
 		_("Whether the group and all its columns are shown. Hidden columns keep their data and can be shown again from code."), true);
 };
 
-class ibValueModelTableBoxColumn : public ibValueControl,
-	public ibTypeControlFactory {
-	public:
+class ibValueModelTableBoxColumn;
+
+// ⭐ WHAT A COLUMN'S VIEW DOES — the field's scheme in a row (field.h, ibFieldViewProvider; docs/private/
+// form-column-view.md): the column's View makes this child, attached — its properties and events show as the column's —
+// and it answers the cells' events; the cells are the column's, each client draws them as the view is, and the view adds
+// what it draws by. Made for a view by Create — the one place that knows the views.
+class ibColumnViewProvider : public ibPropertyObject {
+public:
+
+	virtual ~ibColumnViewProvider() = default;
+
+	// …answering as its column: outside, the column is the one object.
+	virtual ibString GetClassName() const override;
+	virtual ibString GetObjectTypeName() const override;
+	virtual bool IsEditable() const override;
+	virtual const ibMetaData* GetMetaData() const override;
+
+	// Its part of a cell (ibValueModelTableBoxColumn::UpdateCell): a boolean's truth, `Checked` — an Input's tick and
+	// check box, a Flag's box; a view that shows only text adds none.
+	virtual void UpdateCell(const ibVariant& value, ibDataNode& cell) const;
+	// What it does with an event of a cell of its column, on the table's current row.
+	virtual bool OnClientEvent(ibProtocol::ibEvent::ibKind event, const ibDataNode& args) { return false; }
+	// Read-only by the view's own word (a Label), over the binding's.
+	virtual bool IsReadOnly() const { return false; }
+
+	// How the cells are shown and typed — an Input's own format and mask over the ones its column has: a view with none of
+	// its own has no format (the model column's shows) and the mask written on its model column, else its type's.
+	virtual const ibTranslateString& GetFormat() const;
+	virtual class ibInputMask GetMask() const;
+
+	// THE CHOICE — an Input's; any other view answers with the column's own, its type's and its attribute's.
+	virtual bool HasQuickChoice() const;
+	virtual ibSelectMode GetSelectMode() const;
+	virtual const ibChoiceTypeLinkDescription& GetTypeLink() const;
+	virtual const ibChoiceParametersDescription& GetChoiceParameters() const;
+	virtual ibChoiceCondition GetChoiceCondition() const;
+	virtual void ChoiceProcessing(ibValue& selected) {}
+
+	// Its properties and events, read from and written into the column's own node.
+	virtual bool ReadData(const ibDataNode& node) = 0;
+	virtual bool WriteData(ibDataNode& node) const = 0;
+
+	ibValueModelTableBoxColumn* GetColumn() const { return m_column; }
+
+	// …and from the designer's copy blob, once the column is of the pasted view (ibValueModelTableBoxColumn::PasteData).
+	bool PasteData(const ibDataNode& node) { return PasteProperty(node); }
+
+	// The child of a view; null for a number no view has (a later version's, a damaged form's).
+	static std::unique_ptr<ibColumnViewProvider> Create(ibColumnView view, ibValueModelTableBoxColumn* column);
+
 protected:
 
-	bool GetChoiceForm(ibPropertyList* property);
+	explicit ibColumnViewProvider(ibValueModelTableBoxColumn* column) : m_column(column) {}
 
+	// The column's source changed — a view that holds something of its type checks it.
+	virtual void OnViewChanged() = 0;
+
+private:
+
+	ibValueModelTableBoxColumn* const m_column;
+
+	friend class ibValueModelTableBoxColumn;
+};
+
+// ⭐ A TABLE'S COLUMN — a field in a row: what its cells are for is its View (Input, Flag, Label — the field's words, an
+// enumeration of its own, ibColumnView), a child it makes (ibColumnViewProvider); the source, the title, the header and
+// the footer are its own.
+class ibValueModelTableBoxColumn : public ibValueControl,
+	public ibTypeControlFactory {
 public:
 
 	////////////////////////////////////////////////////////////////////////////////////////
@@ -665,11 +738,12 @@ public:
 
 	////////////////////////////////////////////////////////////////////////////////////////
 
-	void SetSource(const ibSourceId& id) { m_propertySource->SetValue(id); }
+	// A BUILDER BINDS A COLUMN — and the column takes the view its type gives (SetDefaultView).
+	void SetSource(const ibSourceId& id) { m_propertySource->SetValue(id); SetDefaultView(); }
 	// Full binding path [headAttrId, tableSection, column, ...] — the resolve walks the attribute.
-	void SetSource(const std::vector<ibSourceId>& path) { m_propertySource->SetValue(ibSourceDescription(path)); }
+	void SetSource(const std::vector<ibSourceId>& path) { m_propertySource->SetValue(ibSourceDescription(path)); SetDefaultView(); }
 	// Type-carrying entry: the hops (with any pinned composite types) go in as-is — no id-stripping.
-	void SetSource(const ibSourceDescription& desc) { m_propertySource->SetValue(desc); }
+	void SetSource(const ibSourceDescription& desc) { m_propertySource->SetValue(desc); SetDefaultView(); }
 	ibMetaID GetSource() const { return m_propertySource->GetValueAsSource(); }
 	// The column's FULL binding path (tablebox prefix + the column's own field id(s)); the
 	// tablebox strips its own prefix to get the row-relative tail it walks per row.
@@ -696,24 +770,6 @@ public:
 	void SetCaption(const ibString& caption) { return m_propertyTitle->SetValue(caption); }
 	ibString GetCaption() const { return m_propertyTitle->GetValueAsTranslateString(); }
 
-	void SetPasswordMode(bool caption) { return m_propertyPasswordMode->SetValue(caption); }
-	bool GetPasswordMode() const { return m_propertyPasswordMode->GetValueAsBoolean(); }
-
-	void SetMultilineMode(bool caption) { return m_propertyMultilineMode->SetValue(caption); }
-	bool GetMultilineMode() const { return m_propertyMultilineMode->GetValueAsBoolean(); }
-
-	void SetTexteditMode(bool caption) { return m_propertyTexteditMode->SetValue(caption); }
-	bool GetTextEditMode() const { return m_propertyTexteditMode->GetValueAsBoolean(); }
-
-	void SetSelectButton(bool caption) { return m_propertySelectButton->SetValue(caption); }
-	bool GetSelectButton() const { return m_propertySelectButton->GetValueAsBoolean(); }
-
-	void SetOpenButton(bool caption) { return m_propertyOpenButton->SetValue(caption); }
-	bool GetOpenButton() const { return m_propertyOpenButton->GetValueAsBoolean(); }
-
-	void SetClearButton(bool caption) { return m_propertyClearButton->SetValue(caption); }
-	bool GetClearButton() const { return m_propertyClearButton->GetValueAsBoolean(); }
-
 	void SetVisibleColumn(bool visible = true) const { m_propertyVisible->SetValue(visible); }
 	bool GetVisibleColumn() const { return m_propertyVisible->GetValueAsBoolean(); }
 
@@ -727,8 +783,8 @@ public:
 
 	///////////////////////////////////////////////////////////////////////
 
-	const ibTranslateString& GetFormat() const { return m_propertyFormat->GetValueAsFormatString(); }
-
+	// Its own format — its view's (an Input's Format); none where the view has none.
+	const ibTranslateString& GetFormat() const { return m_provider->GetFormat(); }
 
 	// The tablebox this column belongs to. NOT simply the parent any more: a column
 	// may sit inside a column GROUP (and groups nest), so the table is looked for UP
@@ -749,8 +805,8 @@ public:
 	// THE FORMAT THE COLUMN SHOWS ITS CELLS WITH — its own where it has one, else the one its model column
 	// gives (the attribute's, else its type's). Null while the column stands in no table model.
 	const ibFormatString* GetCellFormat() const;
-	// …AND THE MASK ITS CELLS ARE TYPED THROUGH — its own, else the one written on its model column (the
-	// attribute's), else the one its type gives (docs/private/input-mask.md); none in multi-line mode.
+	// …AND THE MASK ITS CELLS ARE TYPED THROUGH — its view's: an Input's own, else the one written on its model column
+	// (the attribute's), else the one its type gives (docs/private/input-mask.md); none in an Input's multi-line mode.
 	class ibInputMask GetMask() const;
 	// …and the text its cell's editor starts from under it — the value through the format its type gives (a long date,
 	// digit groups are not typed over), a string as it is, an empty date none: its skeleton.
@@ -759,8 +815,9 @@ public:
 	// ⭐ ONE CELL OF THIS COLUMN, AS THE CLIENT SHOWS IT — the value of `item` in this column: resolved
 	// through the dot or the form (ibValueModelTableBox::ResolveCellValue) when the column reaches past
 	// the row, else the model's own. `Text` — through the column's format (GetCellFormat), a string through
-	// the mask; `Checked` — a boolean, drawn as a tick; `Number` — a number, aligned right; `Value` — in a cell
-	// that may be edited, and `EditText` beside it where the text is not the one the mask is typed over.
+	// the mask; `Number` — a number, aligned right; `Value` — in a cell that may be edited (a Label's never), and
+	// `EditText` beside it where the text is not the one the mask is typed over; and the view's part
+	// (ibColumnViewProvider::UpdateCell): `Checked`, a boolean's truth, where the view draws it.
 	// A fetch passes what it found once for the column — its format, its mask, whether it is read-only
 	// (`readOnly`: asked per cell, the form's view-only walked the application's objects for every one); the
 	// short form finds them itself.
@@ -806,8 +863,8 @@ public:
 	// An empty binding is not a reason here: a column may stand on the model rather than a source (IsColumnShown).
 	virtual bool IsAvailable() const override { return m_propertySource->IsAvailable() && ibValueControl::IsAvailable(); }
 
-	// READ-ONLY — its cells take no editing: the form is view-only, the column reaches past the row (a
-	// dot-path or a foreign-root column — resolved, not stored), or the table's own binding cannot be
+	// READ-ONLY — its cells take no editing: its view says so (a Label), the form is view-only, the column reaches past
+	// the row (a dot-path or a foreign-root column — resolved, not stored), or the table's own binding cannot be
 	// written (an object this person may not change, a section read through a reference).
 	virtual bool IsReadOnly() const override;
 
@@ -816,8 +873,12 @@ public:
 	// pictures are shown, Visible (its own Visible, a binding, the feature options), ReadOnly, Sortable
 	// (the model sorts and the column has a field to sort by) and Sort (1 ascending / -1 descending, when
 	// the composer's active sort is on this column's field). Width and alignment are the schema's — and, with
-	// no width set, Chars: the characters its type needs (GetWidthFromColumn), which a client turns into pixels.
+	// no width set, Chars: the characters its type needs (GetWidthFromColumn), which a client turns into pixels. A view
+	// the column does not take gives way to Input first.
 	virtual void OnUpdate(ibDataNode& state, ibVisualHost* host) override;
+	// WHAT THE PERSON DID IN A CELL of this column — on the table's current row, which the client made current first.
+	// The table receives the events (a column gets none of its own) and hands a cell's here: its view's.
+	virtual bool OnClientEvent(ibProtocol::ibEvent::ibKind event, const ibDataNode& args) override;
 
 	virtual bool CanDeleteControl() const;
 
@@ -827,16 +888,14 @@ public:
 	//support icons
 	virtual ibPicture GetIcon() const;
 
-	/**
-	* Property events
-	*/
-	virtual void OnPropertyCreated(ibProperty* property);
-	virtual void OnPropertyRefresh() override;
-	virtual bool OnPropertyChanging(ibProperty* property, const ibVariant& newValue);
+	// A view the column does not take is refused (IsViewAllowed).
+	virtual bool OnPropertyChanging(ibProperty* property, const ibVariant& newValue) override;
+	// View changed — the child of the new view takes its place.
+	virtual void OnPropertyChanged(ibProperty* property, const ibVariant& oldValue, const ibVariant& newValue) override;
 
-	//load & save object in control
-	virtual bool ReadData(const ibDataNode& node);
-	virtual bool WriteData(ibDataNode& node) const;
+	// The view first — it makes the child whose properties the rest of the node holds.
+	virtual bool ReadData(const ibDataNode& node) override;
+	virtual bool WriteData(ibDataNode& node) const override;
 
 	//get control value
 	virtual bool SetControlValue(const ibValue& varControlVal = ibValue());
@@ -845,35 +904,34 @@ public:
 	// A column stands on the ROW being edited: its neighbours are the other cells of that row.
 	virtual ibChoiceHolder GetChoiceHolder() const override;
 
-	// The column's own word over its type's and its attribute's (issue #259) — as a form field says it.
+	// The choice — its view's (an Input's own word over its type's and its attribute's, #259, and its own links, #616).
 	virtual bool HasQuickChoice() const override;
 	virtual ibSelectMode GetSelectMode() const override;
-	// …and its own links (#616): TypeLink and ChoiceParameters, and the condition they add to its field's.
-	virtual const ibChoiceTypeLinkDescription& GetTypeLink() const override { return m_propertyTypeLink->GetValueAsLinkDesc(); }
-	virtual const ibChoiceParametersDescription& GetChoiceParameters() const override { return m_propertyChoiceParameters->GetValueAsParametersDesc(); }
+	virtual const ibChoiceTypeLinkDescription& GetTypeLink() const override;
+	virtual const ibChoiceParametersDescription& GetChoiceParameters() const override;
 	virtual ibChoiceCondition GetChoiceCondition() const override;
-
-	//choice processing
 	virtual void ChoiceProcessing(ibValue& vSelected);
+
+protected:
+
+	// The designer's paste makes the column of the pasted view first.
+	virtual bool PasteData(const ibDataNode& node) override;
 
 private:
 
-	// WHAT THE PERSON DID IN A CELL of this column — on the table's current row, which the client made
-	// current first. Reached through the table, which receives the events (a column gets none of its own).
-	// Typed text arrives as it stands and is parsed by the value's type; a read-only column takes none.
-	void OnTextEnter(const ibString& text);
 	// …the edit is over: the form refreshes and the rows are read again (a row edited out of the filter,
 	// or into another group, moves).
 	void OnEditingDone();
 
-	void OnSelectButtonPressed();
-	void OnOpenButtonPressed();
-	void OnClearButtonPressed();
+	ibColumnView GetView() const { return m_propertyView->GetValueAsEnum(); }
+	// The child of `view` takes the place of the one there: what the two have by the same name crosses over.
+	void SetView(ibColumnView view);
+	// The view the type gives — one Boolean a Flag, any other an Input — set through the door.
+	void SetDefaultView();
+	// Whether the column takes `view`: Input and Label of any type, a Flag of one Boolean.
+	bool IsViewAllowed(ibColumnView view) const;
 
-	// text processing
-	bool TextProcessing(const ibString& typed);
-	// …and a value the client sent with its type (ibValue::Serialize): the same commit.
-	bool ValueProcessing(const class ibDataNode& node);
+	std::unique_ptr<ibColumnViewProvider> m_provider;
 
 	ibFormID m_model_id;
 	// ⭐ THE TEXT A VALUE WRITTEN INTO THE CELL READS AS — what the desktop's column put into its open editor itself
@@ -883,16 +941,12 @@ private:
 	std::optional<ibString> m_editText;
 
 	ibPropertyCategory* m_categoryInfo = ibPropertyObject::CreatePropertyCategory(ibT("Info"), _("Info"));
+	// The views offered are those the column's type allows (IsViewAllowed, the property's filter).
+	ibPropertyEnum<ibValueEnumColumnView, &ibValueModelTableBoxColumn::IsViewAllowed>* m_propertyView = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumColumnView, &ibValueModelTableBoxColumn::IsViewAllowed>>(m_categoryInfo, ibT("View"), ibGETTEXT_IN_CONTEXT("field", "View"),
+		_("What the column's cells are for: Input - typed into; Flag - on or off, a check box; Label - shown, not edited. Allowed by the column's type: Input and Label for any, Flag for a Boolean; a column of another type turns into an Input. Each view has its own properties and events; the source, the title, the header and the footer are the column's in every view."),
+		ibColumnView::ibColumnView_Input);
 	ibPropertyTString* m_propertyTitle = ibPropertyObject::CreateProperty<ibPropertyTString>(m_categoryInfo, ibT("Title"), _("Title"),
 		_("The column's header text. Empty: the synonym of the bound field, or the column's name when nothing is bound. Can be written per language."), ibT(""));
-	ibPropertyBoolean* m_propertyPasswordMode = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryInfo, ibT("PasswordMode"), _("Password mode"), _("Whether the cell editor hides what is typed behind placeholder characters, for secrets such as passwords. Off by default."), false);
-	ibPropertyBoolean* m_propertyMultilineMode = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryInfo, ibT("MultilineMode"), _("Multiline mode"), _("Whether the cell editor accepts several lines of text (Enter starts a new line). Off by default: Enter finishes the edit."), false);
-	ibPropertyBoolean* m_propertyTexteditMode = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryInfo, ibT("TexteditMode"), _("Textedit mode"), _("Whether the value can be typed into the cell. Off: it can only be picked with the Select button or cleared. On by default; a read-only column never takes typing."), true);
-	ibPropertyFormat* m_propertyFormat = ibPropertyObject::CreateProperty<ibPropertyFormat>(m_categoryInfo, ibT("Format"), _("Format"),
-		_("How the column shows its cells, written per language: digits after the point, separators, a date pattern. Empty: the bound attribute's format, and without one a number shows as many digits after the point as its type keeps."), ibT(""));
-	ibPropertyString* m_propertyMask = ibPropertyObject::CreateProperty<ibPropertyString>(m_categoryInfo, ibT("Mask"), _("Mask"),
-		_("What can be typed into the column's cells, written as an attribute's Mask is: 0 9 # L l A a C c for the positions, > < <> for the case, \\ for a character as written, ! first for a value's shape (!#9999.99 a number, !dd.MM.yyyy a date); then ;1 or ;0 and the character an empty position shows. Empty: the bound attribute's mask, and without one a number takes as many digits as its type keeps and a date its digits. Not used in multi-line mode."), ibT(""));
-
 	ibPropertyTString* m_propertyFooterText = ibPropertyObject::CreateProperty<ibPropertyTString>(m_categoryInfo, ibT("FooterText"), _("Footer text"),
 		_("The text in this column's footer cell, shown when the table's footer is on - a label or a total set from code. Can be written per language."), ibT(""));
 
@@ -900,30 +954,6 @@ private:
 	ibPropertySource* m_propertySource = ibPropertyObject::CreateProperty<ibPropertySource>(m_categoryData, ibT("Source"), _("Source"),
 		_("The field of the table's source this column shows and edits. A path through a reference (such as Owner.Description) is shown read-only."),
 		ibValueTypes::TYPE_STRING);
-	ibPropertyList* m_propertyChoiceForm = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryData, ibT("ChoiceForm"), _("Choice form"),
-		_("Which form opens when the user presses Select in the cell: one of the forms of the value's type. Empty: the type's default choice form."),
-		&ibValueModelTableBoxColumn::GetChoiceForm);
-	ibPropertyEnum<ibValueEnumQuickChoiceMode>* m_propertyQuickChoice = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumQuickChoiceMode>>(m_categoryData, ibT("QuickChoice"), _("Quick choice"),
-		_("How a reference is picked into the cell when Select is pressed. Auto: as its type says (the catalog's or the document's own Quick choice). Use: a drop-down of the matching items. Don't use: the list form."),
-		ibQuickChoiceMode::ibQuickChoiceMode_Auto);
-	ibPropertyEnum<ibValueEnumChoiceFoldersAndItems>* m_propertyChoiceFoldersAndItems = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumChoiceFoldersAndItems>>(m_categoryData, ibT("ChoiceFoldersAndItems"), _("Choice folders and items"),
-		_("For a column referring to a hierarchical catalog: what may be picked into its cells - items, folders, or both. Auto: what the bound attribute's Select says."),
-		ibChoiceFoldersAndItems::ibChoiceFoldersAndItems_Auto);
-
-	// ⭐ THE COLUMN'S OWN LINKS (#616), as a form field's are (ibValueTextCtrl) — and a column also reads the cells of its row.
-	ibPropertyCategory* m_categoryChoice = ibPropertyObject::CreatePropertyCategory(ibT("Choice"), _("Choice"));
-	ibPropertyChoiceLink* m_propertyTypeLink = ibPropertyObject::CreateProperty<ibPropertyChoiceLink>(m_categoryChoice, ibT("TypeLink"), _("Link by type"),
-		_("The field whose value decides the TYPE of a value written into the column's cell: a characteristic gives the type it declares, a field holding a type description gives that, and any other field gives the type of the value standing in it. Offered: what the form reaches - its attributes and their fields. Empty: only the bound field's own link applies."));
-	ibPropertyChoiceParameters* m_propertyChoiceParameters = ibPropertyObject::CreateProperty<ibPropertyChoiceParameters>(m_categoryChoice, ibT("ChoiceParameters"), _("Choice parameters"),
-		_("What is shown in the list when a reference is chosen into the column's cell, on top of what the bound field itself declares: a row per parameter - which field of the chosen object it filters, which field the form reaches gives the value (an attribute or a field of one), and what becomes of a chosen value when that field changes."));
-
-	ibPropertyCategory* m_categoryButton = ibPropertyObject::CreatePropertyCategory(ibT("Button"), _("Button"));
-	ibPropertyBoolean* m_propertySelectButton = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryButton, ibT("ButtonSelect"), _("Select button"),
-		_("Whether the cell editor shows the Select button (...), which opens a choice form or list to pick the value from. On by default."), true);
-	ibPropertyBoolean* m_propertyClearButton = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryButton, ibT("ButtonClear"), _("Clear button"),
-		_("Whether the cell editor shows the Clear button (X), which empties the value. On by default."), true);
-	ibPropertyBoolean* m_propertyOpenButton = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryButton, ibT("ButtonOpen"), _("Open button"),
-		_("Whether the cell editor shows the Open button, which opens the referenced object's form. Off by default."), false);
 
 	ibPropertyCategory* m_categoryStyle = ibPropertyObject::CreatePropertyCategory(ibT("Style"), _("Style"));
 	ibPropertyUInteger* m_propertyWidth = ibPropertyObject::CreateProperty<ibPropertyUInteger>(m_categoryStyle, ibT("Width"), _("Width"),
@@ -948,16 +978,141 @@ private:
 	ibPropertyBoolean* m_propertyReorderable = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryStyle, ibT("Reorderable"), _("Reorderable"),
 		_("Whether the user can move the column to another place by dragging its header. On by default."), true);
 
-	ibPropertyCategory* m_propertyEvent = ibPropertyObject::CreatePropertyCategory(ibT("Event"), _("Event"));
-	ibEventControl* m_eventOnChange = ibPropertyObject::CreateEvent<ibEventControl>(m_propertyEvent, ibT("OnChange"), _("Change"), std::vector<ibString>{ ibT("Control") });
-	ibEventControl* m_eventStartChoice = ibPropertyObject::CreateEvent<ibEventControl>(m_propertyEvent, ibT("StartChoice"), _("Start choice"), std::vector<ibString>{ ibT("Control"), ibT("StandardProcessing") });
-	ibEventControl* m_eventStartListChoice = ibPropertyObject::CreateEvent<ibEventControl>(m_propertyEvent, ibT("StartListChoice"), _("Start list choice"), std::vector<ibString>{ ibT("Control"), ibT("StandardProcessing") });
-	ibEventControl* m_eventClearing = ibPropertyObject::CreateEvent<ibEventControl>(m_propertyEvent, ibT("Clearing"), _("Clearing"), std::vector<ibString>{ ibT("Control"), ibT("StandardProcessing") });
-	ibEventControl* m_eventOpening = ibPropertyObject::CreateEvent<ibEventControl>(m_propertyEvent, ibT("Opening"), _("Opening"), std::vector<ibString>{ ibT("Control"), ibT("StandardProcessing") });
-	ibEventControl* m_eventChoiceProcessing = ibPropertyObject::CreateEvent<ibEventControl>(m_propertyEvent, ibT("ChoiceProcessing"), _("Choice processing"), std::vector<ibString>{ ibT("Control"), ibT("ValueSelected"), ibT("StandardProcessing") });
-
-	// The table receives the events of its cells and hands each to the column it was in.
+	// The table receives the events of its cells and hands each to the column it was in, and makes its model's columns of
+	// the view their type gives.
 	friend class ibValueModelTableBox;
 };
 
-#endif 
+// ⭐ INPUT — typed into: the cell's editor, its properties, its events and its handling of the client, standing in the
+// column's slot (the field's ibFieldViewInput, in a row).
+class ibColumnViewInput : public ibColumnViewProvider {
+public:
+
+	explicit ibColumnViewInput(ibValueModelTableBoxColumn* column) : ibColumnViewProvider(column) {}
+
+	// Change — the text, or the value with its type, committed; Toggle — a boolean's check box committed; Select / Open /
+	// Clear — the editor's three buttons.
+	virtual bool OnClientEvent(ibProtocol::ibEvent::ibKind event, const ibDataNode& args) override;
+
+	// Its own format and mask; no mask in multi-line mode.
+	virtual const ibTranslateString& GetFormat() const override { return m_propertyFormat->GetValueAsFormatString(); }
+	virtual class ibInputMask GetMask() const override;
+
+	// The column's own word over its type's and its attribute's (issue #259), and its own links (#616).
+	virtual bool HasQuickChoice() const override;
+	virtual ibSelectMode GetSelectMode() const override;
+	virtual const ibChoiceTypeLinkDescription& GetTypeLink() const override { return m_propertyTypeLink->GetValueAsLinkDesc(); }
+	virtual const ibChoiceParametersDescription& GetChoiceParameters() const override { return m_propertyChoiceParameters->GetValueAsParametersDesc(); }
+	virtual ibChoiceCondition GetChoiceCondition() const override;
+	virtual void ChoiceProcessing(ibValue& selected) override;
+
+	virtual bool ReadData(const ibDataNode& node) override;
+	virtual bool WriteData(ibDataNode& node) const override;
+
+	// What is offered and hidden is asked of the column's type.
+	virtual void OnPropertyRefresh() override;
+
+protected:
+
+	// The choice form kept where it is one of the type's forms, cleared where it is not.
+	virtual void OnViewChanged() override;
+
+private:
+
+	// What the person did in a cell of the column, on the table's current row. Typed text arrives as it stands and is
+	// parsed by the value's type; a value with its type (ibValue::Serialize) is the same commit. A read-only column takes
+	// none of it.
+	bool TextProcessing(const ibString& typed);
+	bool ValueProcessing(const ibDataNode& node);
+	void OnSelectButtonPressed();
+	void OnOpenButtonPressed();
+	void OnClearButtonPressed();
+
+	bool GetChoiceForm(ibPropertyList* property);
+
+	ibPropertyCategory* m_categoryInput = ibPropertyObject::CreatePropertyCategory(ibT("Input"), ibGETTEXT_IN_CONTEXT("field view", "Input"));
+	ibPropertyBoolean* m_propertyPasswordMode = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryInput, ibT("PasswordMode"), _("Password mode"), _("Whether the cell editor hides what is typed behind placeholder characters, for secrets such as passwords. Off by default."), false);
+	ibPropertyBoolean* m_propertyMultilineMode = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryInput, ibT("MultilineMode"), _("Multiline mode"), _("Whether the cell editor accepts several lines of text (Enter starts a new line). Off by default: Enter finishes the edit."), false);
+	ibPropertyBoolean* m_propertyTexteditMode = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryInput, ibT("TexteditMode"), _("Textedit mode"), _("Whether the value can be typed into the cell. Off: it can only be picked with the Select button or cleared. On by default; a read-only column never takes typing."), true);
+	ibPropertyFormat* m_propertyFormat = ibPropertyObject::CreateProperty<ibPropertyFormat>(m_categoryInput, ibT("Format"), _("Format"),
+		_("How the column shows its cells, written per language: digits after the point, separators, a date pattern. Empty: the bound attribute's format, and without one a number shows as many digits after the point as its type keeps."), ibT(""));
+	ibPropertyString* m_propertyMask = ibPropertyObject::CreateProperty<ibPropertyString>(m_categoryInput, ibT("Mask"), _("Mask"),
+		_("What can be typed into the column's cells, written as an attribute's Mask is: 0 9 # L l A a C c for the positions, > < <> for the case, \\ for a character as written, ! first for a value's shape (!#9999.99 a number, !dd.MM.yyyy a date); then ;1 or ;0 and the character an empty position shows. Empty: the bound attribute's mask, and without one a number takes as many digits as its type keeps and a date its digits. Not used in multi-line mode."), ibT(""));
+
+	ibPropertyCategory* m_categoryChoice = ibPropertyObject::CreatePropertyCategory(ibT("Choice"), _("Choice"));
+	ibPropertyList* m_propertyChoiceForm = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryChoice, ibT("ChoiceForm"), _("Choice form"),
+		_("Which form opens when the user presses Select in the cell: one of the forms of the value's type. Empty: the type's default choice form."),
+		&ibColumnViewInput::GetChoiceForm, ibNOT_FOUND);
+	ibPropertyEnum<ibValueEnumQuickChoiceMode>* m_propertyQuickChoice = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumQuickChoiceMode>>(m_categoryChoice, ibT("QuickChoice"), _("Quick choice"),
+		_("How a reference is picked into the cell when Select is pressed. Auto: as its type says (the catalog's or the document's own Quick choice). Use: a drop-down of the matching items. Don't use: the list form."),
+		ibQuickChoiceMode::ibQuickChoiceMode_Auto);
+	ibPropertyEnum<ibValueEnumChoiceFoldersAndItems>* m_propertyChoiceFoldersAndItems = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumChoiceFoldersAndItems>>(m_categoryChoice, ibT("ChoiceFoldersAndItems"), _("Choice folders and items"),
+		_("For a column referring to a hierarchical catalog: what may be picked into its cells - items, folders, or both. Auto: what the bound attribute's Select says."),
+		ibChoiceFoldersAndItems::ibChoiceFoldersAndItems_Auto);
+	// ⭐ THE COLUMN'S OWN LINKS (#616), as a form field's are — and a column also reads the cells of its row.
+	ibPropertyChoiceLink* m_propertyTypeLink = ibPropertyObject::CreateProperty<ibPropertyChoiceLink>(m_categoryChoice, ibT("TypeLink"), _("Link by type"),
+		_("The field whose value decides the TYPE of a value written into the column's cell: a characteristic gives the type it declares, a field holding a type description gives that, and any other field gives the type of the value standing in it. Offered: what the form reaches - its attributes and their fields. Empty: only the bound field's own link applies."));
+	ibPropertyChoiceParameters* m_propertyChoiceParameters = ibPropertyObject::CreateProperty<ibPropertyChoiceParameters>(m_categoryChoice, ibT("ChoiceParameters"), _("Choice parameters"),
+		_("What is shown in the list when a reference is chosen into the column's cell, on top of what the bound field itself declares: a row per parameter - which field of the chosen object it filters, which field the form reaches gives the value (an attribute or a field of one), and what becomes of a chosen value when that field changes."));
+
+	ibPropertyCategory* m_categoryButton = ibPropertyObject::CreatePropertyCategory(ibT("Button"), _("Button"));
+	ibPropertyBoolean* m_propertySelectButton = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryButton, ibT("ButtonSelect"), _("Select button"),
+		_("Whether the cell editor shows the Select button (...), which opens a choice form or list to pick the value from. On by default."), true);
+	ibPropertyBoolean* m_propertyClearButton = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryButton, ibT("ButtonClear"), _("Clear button"),
+		_("Whether the cell editor shows the Clear button (X), which empties the value. On by default."), true);
+	ibPropertyBoolean* m_propertyOpenButton = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryButton, ibT("ButtonOpen"), _("Open button"),
+		_("Whether the cell editor shows the Open button, which opens the referenced object's form. Off by default."), false);
+
+	ibPropertyCategory* m_categoryEvent = ibPropertyObject::CreatePropertyCategory(ibT("Event"), _("Event"));
+	ibEventControl* m_eventOnChange = ibPropertyObject::CreateEvent<ibEventControl>(m_categoryEvent, ibT("OnChange"), _("Change"), std::vector<ibString>{ ibT("Control") });
+	ibEventControl* m_eventStartChoice = ibPropertyObject::CreateEvent<ibEventControl>(m_categoryEvent, ibT("StartChoice"), _("Start choice"), std::vector<ibString>{ ibT("Control"), ibT("StandardProcessing") });
+	ibEventControl* m_eventStartListChoice = ibPropertyObject::CreateEvent<ibEventControl>(m_categoryEvent, ibT("StartListChoice"), _("Start list choice"), std::vector<ibString>{ ibT("Control"), ibT("StandardProcessing") });
+	ibEventControl* m_eventClearing = ibPropertyObject::CreateEvent<ibEventControl>(m_categoryEvent, ibT("Clearing"), _("Clearing"), std::vector<ibString>{ ibT("Control"), ibT("StandardProcessing") });
+	ibEventControl* m_eventOpening = ibPropertyObject::CreateEvent<ibEventControl>(m_categoryEvent, ibT("Opening"), _("Opening"), std::vector<ibString>{ ibT("Control"), ibT("StandardProcessing") });
+	ibEventControl* m_eventChoiceProcessing = ibPropertyObject::CreateEvent<ibEventControl>(m_categoryEvent, ibT("ChoiceProcessing"), _("Choice processing"), std::vector<ibString>{ ibT("Control"), ibT("ValueSelected"), ibT("StandardProcessing") });
+};
+
+// ⭐ FLAG — on or off: the value's truth drawn as a check box, a Boolean written on a toggle.
+class ibColumnViewFlag : public ibColumnViewProvider {
+public:
+
+	explicit ibColumnViewFlag(ibValueModelTableBoxColumn* column) : ibColumnViewProvider(column) {}
+
+	// Toggle — the box clicked (Checked: the state the person toggled it to).
+	virtual bool OnClientEvent(ibProtocol::ibEvent::ibKind event, const ibDataNode& args) override;
+
+	virtual bool ReadData(const ibDataNode& node) override;
+	virtual bool WriteData(ibDataNode& node) const override;
+
+protected:
+
+	// Nothing it holds is of the source's type.
+	virtual void OnViewChanged() override {}
+
+private:
+
+	ibPropertyCategory* m_categoryEvent = ibPropertyObject::CreatePropertyCategory(ibT("Event"), _("Event"));
+	ibEventControl* m_eventOnChange = ibPropertyObject::CreateEvent<ibEventControl>(m_categoryEvent, ibT("OnChange"), _("Change"), std::vector<ibString>{ ibT("Control") });
+};
+
+// ⭐ LABEL — shown, not edited: the cell's text — a boolean's too — no editor and no events of its own (opening a row is
+// the table's, on a double click).
+class ibColumnViewLabel : public ibColumnViewProvider {
+public:
+
+	explicit ibColumnViewLabel(ibValueModelTableBoxColumn* column) : ibColumnViewProvider(column) {}
+
+	// The text alone: a boolean shows as its format writes it, not a tick.
+	virtual void UpdateCell(const ibVariant& value, ibDataNode& cell) const override {}
+	virtual bool IsReadOnly() const override { return true; }
+
+	virtual bool ReadData(const ibDataNode& node) override { return true; }
+	virtual bool WriteData(ibDataNode& node) const override { return true; }
+
+protected:
+
+	// Nothing it holds is of the source's type.
+	virtual void OnViewChanged() override {}
+};
+
+#endif

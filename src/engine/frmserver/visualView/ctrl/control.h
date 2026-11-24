@@ -67,18 +67,18 @@ class FRMSERVER_API ibValueControl : public ibValueFrame {
 	// element beside its own Visible, and ANDed in rather than written into it, so neither the code nor the
 	// user's "Change form" can bring such an element back. Here: the options the element names are not all
 	// off, and the element it stands inside is available (a plain sizer too — switched off, it takes what it
-	// lays out with it). A source control (textbox / checkbox / tablebox) overrides it and adds the field it is
+	// lays out with it). A source control (a field, a tablebox) overrides it and adds the field it is
 	// bound to: a field this base does not use (featureOptionGate.h) takes the control with it.
 	virtual bool IsAvailable() const override;
 
 protected:
 
-	// A just-added source control (checkbox / textbox) with no source provisions a form attribute NAMED after
+	// A just-added source control (a field) with no source provisions a form attribute NAMED after
 	// it, TYPED by its own value, and binds. The caller passes its OWN factory subobject (`this` — implicit
 	// upcast, NOT a cross-cast); the source-set lives there.
 	void AutoBindNewSource(ibTypeControlFactory* factory);
 
-	// A control that BINDS to a source (textbox / checkbox / tablebox — an ibTypeControlFactory) with NO
+	// A control that BINDS to a source (a field, a tablebox — an ibTypeControlFactory) with NO
 	// source picked is INCOMPLETE: it is never shown, so a dangling unbound control can neither reach the
 	// user nor later try to read a source it hasn't got. Default false — a control with no source
 	// requirement (label, sizer, button …) is always shown. Source controls OVERRIDE this to test their own

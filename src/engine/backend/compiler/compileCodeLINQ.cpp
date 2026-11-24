@@ -268,8 +268,8 @@ ibParamUnit ibCompileCode::CompileLinqExpression(ibCompileContext* context)
 		m_cByteCode.m_listCode.emplace_back(std::move(c));
 	}
 
-	// ⭐⭐ …AND WHEN THE ROWS ARE THE ROWS THEMSELVES, THE ANSWER IS WHAT ToTable MAKES OF THEM — by
-	// that very call, so `from r in t select r` and `t.ToTable()` cannot answer differently (Max,
+	// ⭐⭐ …AND WHEN THE ROWS ARE THE ROWS THEMSELVES, THE ANSWER IS WHAT ToValueTable MAKES OF THEM — by
+	// that very call, so `from r in t select r` and `t.ToValueTable()` cannot answer differently (Max,
 	// 2026-11-14, L3). The leaf said so with one column and no name; the columns are then the rows' own
 	// and not the compiler's to list, so its record of them is emptied once the call is on the tape.
 	ibParamUnit resultSlot = data.m_resultArray;   // captured before the scope ends
@@ -278,7 +278,7 @@ ibParamUnit ibCompileCode::CompileLinqExpression(ibCompileContext* context)
 		c.m_numOper = OPER_CALL_LINQ;
 		c.m_param1 = resultSlot = context->CreateVariable();
 		c.m_param2 = data.m_resultArray;
-		c.m_param3.m_numIndex = (long)ibValue::ibLinqMethod::ToTable;
+		c.m_param3.m_numIndex = (long)ibValue::ibLinqMethod::ToValueTable;
 		c.m_param3.m_numArray = 0;                     // no arguments
 		m_cByteCode.m_listCode.emplace_back(std::move(c));
 		data.m_columns.clear();
@@ -3042,7 +3042,7 @@ void ibCompileCode::CompileLinqBlock(ibCompileContext* linqCtx, const ibLinqBind
 		//   select o.Ref.Code                a WALK, glued — `RefCode`
 		//   select <anything else>           `Field1`, `Field2`, … — it has no natural name
 		//   select o  /  <omitted>           the ROW ITSELF — not projected: the answer is the table
-		//                                    ToTable makes of the rows (see below)
+		//                                    ToValueTable makes of the rows (see below)
 		//
 		// The rule is not invented here: it is the query engine's own (queryRewrite.h,
 		// ibQueryProposedName / ibQueryEnsureUniqueName), down to the leading source name never
@@ -3088,11 +3088,11 @@ void ibCompileCode::CompileLinqBlock(ibCompileContext* linqCtx, const ibLinqBind
 
 			// ⭐⭐ THE ROW ITSELF IS NOT A PROJECTION. `select o` — a range variable read as it is, nothing
 			// emitted for it — and a query with no `select` answer with the ROWS, so no one-column row is
-			// made around each: the answer is the table ToTable makes of them, by the same call (the end of
+			// made around each: the answer is the table ToValueTable makes of them, by the same call (the end of
 			// CompileLinqExpression) — a row with properties gives them as its columns, a plain value is one
 			// `Value` column. Max, 2026-11-14 (L3): `from r in t orderby r.Revenue select r` and then
 			// `e.Revenue` was "field not found" — a column named Field1 held the row — while
-			// `t.OrderBy(…).ToTable()` read it: two roads, two answers.
+			// `t.OrderBy(…).ToValueTable()` read it: two roads, two answers.
 			const auto isRangeVariable = [&data](const ibParamUnit& value) {
 				for (const ibLinqBinding& bound : data.m_bindings)
 					if ((bound.origin == ibLinqBinding::FromSource || bound.origin == ibLinqBinding::FromJoin

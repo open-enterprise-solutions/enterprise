@@ -8,11 +8,11 @@
 #include "valueQueryable.h"
 #include "valueArray.h"                          // ibValueArray — the RAM floor container
 #include "valueMap.h"                            // ibValueStructure — structure-shaped rows (no single row ref)
-#include "valueTable.h"                          // ibValueModelTable — the ToTable materialised result
+#include "valueTable.h"                          // ibValueModelTable — the ToValueTable materialised result
 
 #include "backend/query/queryable.h"                              // ibBackendQueryable / ibBackendQueryColumn
 #include "backend/query/queryProvider.h"                          // ibBackendQueryProvider::CanJoinOn — may the Join's inner take a temp beside it
-#include "backend/query/querySelector.h"                          // ibSelector::Snapshot — ToTable's rows as the fast table
+#include "backend/query/querySelector.h"                          // ibSelector::Snapshot — ToValueTable's rows as the fast table
 #include "backend/system/value/valueType.h"                       // ibValueTypeDescription::AdjustValue — an empty value of a declared type
 #include "backend/query/queryReadState.h"                         // ibQueryReadState — one state for a whole pipeline
 #include "backend/query/queryableFactory.h"                       // ibQueryableFactory — every source, and whose owner each is
@@ -678,7 +678,7 @@ void ibValueQueryable::DispatchLinqMethod(ibLinqMethod method, ibValue& ret, ibV
 		return;
 	}
 
-	case M::ToTable: {
+	case M::ToValueTable: {
 		// Materialise into the BUILT-IN value table (ibValueModelTable): every column of
 		// the source becomes a typed table column — the result is UI-bindable and
 		// round-trips straight back through Data.From.
@@ -688,7 +688,7 @@ void ibValueQueryable::DispatchLinqMethod(ibLinqMethod method, ibValue& ret, ibV
 		// outliving a temporary table. Its other face was the loop that stood here: a table fresh from `new` has
 		// refcount 0, the first GetRowAt takes it to 1, and `wxDELETE(line)` brings it back to 0 — which DELETES
 		// THE TABLE, so the second row is written into freed memory. MEASURED 2026-09-10:
-		// `Data.Catalogs.Goods.ToTable()` on a nine-row catalog took the whole application down; the same rows
+		// `Data.Catalogs.Goods.ToValueTable()` on a nine-row catalog took the whole application down; the same rows
 		// iterated by foreach came back fine.
 		ibDataQueryResult sel = ExecuteAccumulated();
 		sel.SetMaterialiseColumns(m_queryable->GetQueryColumns());

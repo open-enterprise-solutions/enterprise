@@ -33,7 +33,8 @@ ibValueFrame::ibValueFrame() : ibValueDynamicMembers(ibValueTypes::TYPE_VALUE),
 m_controlId(0), m_controlGuid(ibGuid::newGuid()),
 m_valEventContainer(new ibValueEventContainer(this))
 {
-	m_members.Bind(this, &ibValueFrame::FillMembers);
+	m_members.Bind(this, &ibValueFrame::FillFrameProperties);
+	m_members.Bind(this, &ibValueFrame::FillFrameEvents);
 }
 
 ibValueFrame::~ibValueFrame()
@@ -60,6 +61,12 @@ ibString ibValueFrame::GetObjectTypeName() const
 	if (typeCtor != nullptr)
 		return typeCtor->GetTypeControlName();
 	return _("Class not registered");
+}
+
+bool ibValueFrame::IsPlaceableControl(const ibClassID& clsid)
+{
+	const ibCtorControlTypeBase* const ctor = dynamic_cast<const ibCtorControlTypeBase*>(ibValue::GetAvailableCtor(clsid));
+	return ctor != nullptr && !ctor->IsControlSystem();
 }
 
 bool ibValueFrame::IsEditable() const
@@ -285,14 +292,6 @@ bool ibValueFrame::ChangeChildPosition(ibValueFrame* obj, unsigned int pos)
 	return ibPropertyObjectHelper::ChangeChildPosition(obj, pos);
 }
 
-ibValueFrame* ibValueFrame::SkipSizerItems()
-{
-	ibValueFrame* control = this;
-	while (control != nullptr && control->GetComponentType() == COMPONENT_TYPE_SIZERITEM)
-		control = control->GetChildCount() > 0 ? control->GetChild(0) : nullptr;
-	return control;
-}
-
 std::shared_ptr<ibProcUnit> ibValueFrame::GetFormProcUnit() const
 {
 	const ibValueForm* valueForm =
@@ -369,47 +368,36 @@ ibFormVisualDocument* ibValueFrame::GetVisualDocument() const
 
 #include "backend/propertyManager/propertyMembers.h"
 
-void ibValueFrame::FillMembers(ibMemberTable& helper) const
+void ibValueFrame::FillFrameProperties(ibMemberTable& helper) const
 {
-	ibAppendPropertyMembers(helper, *this, true, eProperty);
-	//if we have sizerItem then call him
-	ibValueFrame* sizeritem = GetParent();
-	if (sizeritem != nullptr && sizeritem->GetComponentType() == COMPONENT_TYPE_SIZERITEM)
-		ibAppendPropertyMembers(helper, *sizeritem, true, eSizerItem);
+	ibAppendPropertyMembers(helper, *this, true);
+}
 
-	helper.AppendProp(ibT("Events"), true, false, 0, eEvent);
+void ibValueFrame::FillFrameEvents(ibMemberTable& helper) const
+{
+	helper.AppendProp(ibT("Events"), true, false, 0);
 }
 
 bool ibValueFrame::SetPropVal(const long lPropNum, const ibValue& varPropVal)
 {
-	const long lPropAlias = m_members.GetPropAlias(lPropNum);
-	if (lPropAlias == eProperty) {
-		unsigned int idx = m_members.GetPropData(lPropNum);
-		ibProperty* property = GetPropertyByIndex(idx);
-		if (property != nullptr) {
-			// Through the property's change, as the inspector and MCP write it: the control hears it (OnPropertyChanged).
-			const ibVariant oldValue = property->GetValue();
-			property->SetDataValue(varPropVal);
-			OnPropertyChanged(property, oldValue, property->GetValue());
-		}
-	}
-	else if (lPropAlias == eSizerItem) {
-		//if we have sizerItem then call him savepropery
-		ibValueFrame* sizerItem = GetParent();
-		if (sizerItem != nullptr &&
-			sizerItem->GetComponentType() == COMPONENT_TYPE_SIZERITEM) {
-			// The member number is NOT the property index: FillMembers appends the
-			// sizerItem's properties AFTER our own, so the index it stored lives in
-			// the member's DATA. Reading it back is what GetPropVal does; writing
-			// must do the same or it lands on a different property.
-			unsigned int idx = m_members.GetPropData(lPropNum);
-			ibProperty* property = sizerItem->GetPropertyByIndex(idx);
-			if (property != nullptr) {
-				const ibVariant oldValue = property->GetValue();
-				property->SetDataValue(varPropVal);
-				sizerItem->OnPropertyChanged(property, oldValue, property->GetValue());
-			}
-		}
+	// The member's property — the control's own or an attached child's (its sizer item, a field's view), in the walk
+	// GetProperty(idx) takes. The member number is NOT the property index: the index it stored lives in the member's
+	// DATA. Reading it back is what GetPropVal does; writing must do the same or it lands on a different property.
+	const long idx = m_members.GetPropData(lPropNum, this, &ibValueFrame::FillFrameProperties);
+	ibProperty* const property = idx != ibNOT_FOUND ? GetProperty(idx) : nullptr;
+
+	// ⭐ THROUGH THE ONE DOOR (ibPropertyGate), as the inspector and MCP write it: the script's value read as the property
+	// holds one (SetDataValue), the one before it put back, and the value read handed to the door — its owner asked first
+	// (the control, or the object attached to it, and the control after it), set, told. What the owner refuses is refused
+	// to the script, said (2026-11-23: a script's write asked no veto, and a field took a view its type does not allow).
+	if (property != nullptr) {
+		const ibVariant oldValue = property->GetValue();
+		property->SetDataValue(varPropVal);
+		const ibVariant newValue = property->GetValue();
+		property->SetValue(oldValue);
+		ibString refusal;
+		if (!ibPropertyGate::SetValue(nullptr, property, newValue, &refusal))
+			ibBackendCoreException::Error(ibT("%s"), refusal);
 	}
 
 	// Nothing is poked: the next frame the form writes reads the property as it now is, and the client
@@ -419,30 +407,11 @@ bool ibValueFrame::SetPropVal(const long lPropNum, const ibValue& varPropVal)
 
 bool ibValueFrame::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 {
-	const long lPropAlias = m_members.GetPropAlias(lPropNum);
-	if (lPropAlias == eSizerItem) {
-		//if we have sizerItem then call him savepropery 
-		ibValueFrame* sizerItem = GetParent();
-		if (sizerItem != nullptr &&
-			sizerItem->GetComponentType() == COMPONENT_TYPE_SIZERITEM) {
-			unsigned int idx = m_members.GetPropData(lPropNum);
-			ibProperty* property = sizerItem->GetPropertyByIndex(idx);
-			if (property != nullptr)
-				return property->GetDataValue(pvarPropVal);
-			return false;
-		}
-	}
-	else if (lPropAlias == eEvent) {
+	if (m_members.GetPropData(lPropNum, this, &ibValueFrame::FillFrameEvents) != ibNOT_FOUND) {
 		pvarPropVal = m_valEventContainer;
 		return true;
 	}
-	else {
-		unsigned int idx = m_members.GetPropData(lPropNum);
-		ibProperty* property = GetPropertyByIndex(idx);
-		if (property != nullptr)
-			return property->GetDataValue(pvarPropVal);
-		return false;
-	}
-
-	return false;
+	const long idx = m_members.GetPropData(lPropNum, this, &ibValueFrame::FillFrameProperties);
+	ibProperty* const property = idx != ibNOT_FOUND ? GetProperty(idx) : nullptr;
+	return property != nullptr && property->GetDataValue(pvarPropVal);
 }

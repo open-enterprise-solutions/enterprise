@@ -458,7 +458,7 @@ public:
 	long AppendRow(unsigned int before = 0, const ibDataViewItem& contextRow = ibDataViewItem());
 	// …and a row whose values are given, by column id — made whole: each value adjusted to its column, as every cell
 	// of this table is, and the row appended once. What turns a reading into a table (a register's Get and GetBase,
-	// ToTable) used to add an empty row — every column's default made, a reference's through the registry — and then
+	// ToValueTable) used to add an empty row — every column's default made, a reference's through the registry — and then
 	// set each cell through a row object made and dropped for it (stack samples 2026-09-14, Debug).
 	long AppendRow(const std::vector<std::pair<ibMetaID, ibValue>>& values);
 	void CopyRow(const ibDataViewItem& row);

@@ -120,6 +120,9 @@
     <ClCompile Include="description\choiceLinkDescription.cpp">
       <Filter>description</Filter>
     </ClCompile>
+    <ClCompile Include="description\choicesDescription.cpp">
+      <Filter>description</Filter>
+    </ClCompile>
     <ClCompile Include="description\commandDescription.cpp">
       <Filter>description</Filter>
     </ClCompile>
@@ -385,6 +388,9 @@
       <Filter>description</Filter>
     </ClInclude>
     <ClInclude Include="description\choiceLinkDescription.h">
+      <Filter>description</Filter>
+    </ClInclude>
+    <ClInclude Include="description\choicesDescription.h">
       <Filter>description</Filter>
     </ClInclude>
     <ClInclude Include="description\commandDescription.h">

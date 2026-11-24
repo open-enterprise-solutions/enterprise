@@ -19,7 +19,7 @@ void ibVisualEditorNotebook::ibVisualEditor::NotifyEditorRefresh()
 {
 	m_objectTree->OnEditorRefresh();
 
-	WireTableboxDrops(GetValueForm());   // (re)attach per-table drop targets after the controls rebuild
+	WireTableDrops(GetValueForm());   // (re)attach per-table drop targets after the controls rebuild
 }
 
 void ibVisualEditorNotebook::ibVisualEditor::NotifyObjectSelected(ibValueFrame* obj, bool force)

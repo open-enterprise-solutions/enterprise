@@ -756,6 +756,9 @@
     <ClInclude Include="propertyManager\property\variant\variantChoiceLink.h">
       <Filter>propertyManager\property\variant</Filter>
     </ClInclude>
+    <ClInclude Include="propertyManager\property\variant\variantChoices.h">
+      <Filter>propertyManager\property\variant</Filter>
+    </ClInclude>
     <ClInclude Include="propertyManager\property\variant\variantPicture.h">
       <Filter>propertyManager\property\variant</Filter>
     </ClInclude>
@@ -830,6 +833,9 @@
       <Filter>propertyManager\property</Filter>
     </ClInclude>
     <ClInclude Include="propertyManager\property\propertyChoiceLink.h">
+      <Filter>propertyManager\property</Filter>
+    </ClInclude>
+    <ClInclude Include="propertyManager\property\propertyChoices.h">
       <Filter>propertyManager\property</Filter>
     </ClInclude>
     <ClInclude Include="characteristicCtor.h" />
@@ -2141,6 +2147,9 @@
       <Filter>propertyManager\property</Filter>
     </ClCompile>
     <ClCompile Include="propertyManager\property\propertyChoiceLink.cpp">
+      <Filter>propertyManager\property</Filter>
+    </ClCompile>
+    <ClCompile Include="propertyManager\property\propertyChoices.cpp">
       <Filter>propertyManager\property</Filter>
     </ClCompile>
     <ClCompile Include="characteristicCtor.cpp" />

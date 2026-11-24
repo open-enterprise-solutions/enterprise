@@ -153,6 +153,5 @@ over a server.
   window over the settings window); the presentation of a server-typed value already in a saved setting; the "any
   reference" families in the type picker.
 - A chart box is drawn empty: the desktop's chart library is not copied.
-- A radio button and a slider tell the server nothing when moved — as on the desktop.
 - A script's print always shows the print dialog, and fits the sheet to the page's width.
 - A thin runtime only reads the keys a person keeps; they are edited in the thin designer, under Tools → Options.

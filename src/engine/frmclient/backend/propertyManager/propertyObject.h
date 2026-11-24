@@ -899,28 +899,6 @@ public:
 	*/
 	unsigned int GetChildCount() const { return (unsigned int)m_children.size(); }
 
-	/**
-	* Checks whether the type is derived from the one passed as a parameter.
-	*/
-
-	bool IsSubclassOf(const ibString& className) const {
-		bool found = false;
-		if (stringUtils::IsSameAs(className, GetClassName())) {
-			found = true;
-		}
-		else {
-			propertyType* parent = GetParent();
-			while (parent != nullptr) {
-				found = parent->IsSubclassOf(className);
-				if (found)
-					break;
-				else
-					parent = parent->GetParent();
-			}
-		}
-		return found;
-	}
-
 	void DeleteRecursive() {
 		// Owning children: clearing releases each handle, and the destructor of a
 		// last-ref child recurses this teardown down the subtree. No wxDELETE /

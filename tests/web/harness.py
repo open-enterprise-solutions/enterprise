@@ -28,12 +28,12 @@ STOCK = 3
 def column(column_id, caption, **extra):
     state = {'Caption': caption, 'Visible': True, 'ReadOnly': extra.pop('read_only', False), 'Sortable': False}
     state.update(extra.pop('state', {}))
-    return {'NodeType': 'TableboxColumn', 'ControlId': column_id, 'Width': 80, 'Visible': True, 'ButtonSelect': True,
+    return {'NodeType': 'TableColumn', 'ControlId': column_id, 'Width': 80, 'Visible': True, 'ButtonSelect': True,
             'ButtonOpen': False, 'ButtonClear': True, 'State': state, **extra}
 
 
 def group(group_id, caption, columns, grouping, show_title=False):
-    return {'NodeType': 'TableboxColumnGroup', 'ControlId': group_id, 'Grouping': grouping, 'ShowTitle': show_title,
+    return {'NodeType': 'ColumnLayout', 'ControlId': group_id, 'Grouping': grouping, 'ShowTitle': show_title,
             'State': {'Caption': caption, 'Visible': True}, 'NodeChildren': columns}
 
 

@@ -26,19 +26,16 @@ ibValueForm::ibValueFormCollectionControl::~ibValueFormCollectionControl()
 {
 }
 
-// Walk the control hierarchy (m_children), collecting controls and skipping
-// sizer-items — the source of truth for the form's "Controls" collection.
-// Replaces the former maintained m_listControl set.
+// Walk the control hierarchy (m_children), collecting controls — the source of truth for the form's "Controls"
+// collection. Replaces the former maintained m_listControl set.
 static void CollectFormControls(const ibValueFrame* node, std::vector<ibValueControl*>& list)
 {
 	for (unsigned int idx = 0; idx < node->GetChildCount(); idx++) {
 		ibValueFrame* child = node->GetChild(idx);
 		if (child == nullptr)
 			continue;
-		if (child->GetComponentType() != COMPONENT_TYPE_SIZERITEM) {
-			if (ibValueControl* control = dynamic_cast<ibValueControl*>(child))
-				list.push_back(control);
-		}
+		if (ibValueControl* control = dynamic_cast<ibValueControl*>(child))
+			list.push_back(control);
 		CollectFormControls(child, list);
 	}
 }

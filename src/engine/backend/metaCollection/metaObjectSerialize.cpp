@@ -291,7 +291,7 @@ bool ibValueMetaObject::RunSubtree(int flags, ibRunPhase phase)
 	// ibVariantAttribute, ibVariantChoiceLink).
 	if (phase == ibRunPhase::After) {
 		for (unsigned int idx = 0; idx < GetPropertyCount(); idx++) {
-			ibProperty* const property = GetPropertyByIndex(idx);
+			ibProperty* const property = GetProperty(idx);
 			if (ibPropertyList* const list = dynamic_cast<ibPropertyList*>(property))
 				list->FillList();
 			else if (const ibPropertyType* const type = dynamic_cast<const ibPropertyType*>(property))

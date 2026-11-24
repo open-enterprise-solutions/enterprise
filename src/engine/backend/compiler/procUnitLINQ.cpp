@@ -1624,7 +1624,7 @@ SYSTEM_TYPE_REGISTER(ibValueQuery, "LinqQuery", g_valueQuery);
 namespace {
 
 // ⭐ ONE TABLE-BUILDER, TWO CALLERS — declared here and defined below, beside the query's own
-// answer. `ToTable` on a collection and the last instruction of a compiled query ask the same three
+// answer. `ToValueTable` on a collection and the last instruction of a compiled query ask the same three
 // questions of the same rows, and a second builder would be a second set of column names.
 struct ibRowColumns {
 	std::vector<ibString> m_names;
@@ -2094,7 +2094,7 @@ static void ibValueLinqDispatchImpl(ibValue* self, ibValue::ibLinqMethod method,
 			break;
 		}
 
-		case M::ToTable:
+		case M::ToValueTable:
 		{
 			// ⭐⭐ A TABLE OUT OF WHATEVER THE ROWS ARE. This used to REFUSE — *"ToTable is supported
 			// on data sources (Data.*) only"* — on the grounds that a RAM iterable has no column
@@ -2106,7 +2106,7 @@ static void ibValueLinqDispatchImpl(ibValue* self, ibValue::ibLinqMethod method,
 			//
 			// A data source never reaches this: `ibValueQueryable` overrides the dispatch and builds
 			// the table from the SCHEMA, typed and read server-side, which is the better answer and
-			// the reason the compiler leaves `ToTable` to this road rather than folding it into a
+			// the reason the compiler leaves `ToValueTable` to this road rather than folding it into a
 			// loop (compileCode.cpp, the terminals the door answers by itself).
 			ibValueLinqRows rows;
 			ibValue current;
@@ -2192,7 +2192,7 @@ const std::vector<ibValue::ibLinqMethodInfo>& ibValue::GetLinqMethodTable() {
 		{ M::Aggregate,           ibT("Aggregate"),           ibT("Fold via Aggregate(seed, fn(acc, elem) -> acc)") },
 		{ M::WhereIndexed,        ibT("WhereIndexed"),        ibT("Filter with index - fn(elem, index) -> bool") },
 		{ M::SelectIndexed,       ibT("SelectIndexed"),       ibT("Project with index - fn(elem, index) -> newElem") },
-		{ M::ToTable,             ibT("ToTable"),             ibT("Materialise a data source into a value table (Queryable)") },
+		{ M::ToValueTable,        ibT("ToValueTable"),        ibT("Materialise a data source into a value table (Queryable)") },
 		{ M::SelectMany,          ibT("SelectMany"),          ibT("Flatten - fn(elem) -> a source, whose elements are yielded in turn") },
 		{ M::Sum,                 ibT("Sum"),                 ibT("Total of the sequence; Sum(selector?) projects each element first") },
 		{ M::Min,                 ibT("Min"),                 ibT("Smallest element; Min(selector?) compares the projection") },
@@ -2396,7 +2396,7 @@ void ibLinqResult(ibValue& out, ibValue& scratch, int ordering, bool wantFirst)
 	//
 	// The Array below is for rows that are plain values with nothing to call a column — a chain
 	// asked to end in `ToArray`, which says in its own name what it wants back — and for the rows a
-	// query kept as they are (`select r`), which the compiler hands straight on to ToTable.
+	// query kept as they are (`select r`), which the compiler hands straight on to ToValueTable.
 	const std::vector<ibString> columns = ColumnsOf(kept);
 	if (!columns.empty()) {
 		out = TableOfRows(kept, columns);

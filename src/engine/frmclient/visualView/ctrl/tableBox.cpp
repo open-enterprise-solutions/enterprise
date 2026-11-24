@@ -79,110 +79,6 @@ bool FindShortcut(const std::vector<ibProtocolNode>& entries, const wxKeyEvent& 
 	return false;
 }
 
-// A CELL DRAWN — the desktop's ibDataViewValueRenderer: what it draws is asked of the value — a boolean a tick where
-// the text would start (a mark, not a box: a list cell is not ticked by a click), anything else its text; where it
-// stands is the cell's look (a number right). Edited, the field's editor stands in it, as its column says; what is typed
-// goes to the server when the edit is done, and its buttons' presses travel up to the table, which knows the cell.
-class ibViewCellRenderer : public ibDataViewCustomRenderer {
-public:
-
-	explicit ibViewCellRenderer(const ibValueModelTableBoxColumn& column)
-		: ibDataViewCustomRenderer(GetDefaultType(), wxDATAVIEW_CELL_EDITABLE), m_column(column) {}
-
-	virtual bool SetValue(const ibVariant& value) override
-	{
-		m_flag.reset();
-		m_text.clear();
-		if (value.GetType() == ibValueTypes::TYPE_BOOLEAN)
-			m_flag = value.GetBoolean();
-		else if (value.GetType() != ibValueTypes::TYPE_EMPTY)
-			m_text = value.GetString();
-		return true;
-	}
-
-	virtual bool GetValue(ibVariant& /*value*/) const override { return true; }
-
-	virtual bool Render(wxRect rect, wxDC* dc, int state) override
-	{
-		if (m_flag.has_value()) {
-			if (*m_flag) {
-				wxWindow* const view = GetView();
-				const wxSize mark = wxRendererNative::Get().GetCheckMarkSize(view);
-				const wxRect at(rect.x, rect.y + (rect.height - mark.y) / 2, mark.x, mark.y);
-				wxRendererNative::Get().DrawCheckMark(view, *dc, at);
-			}
-			return true;
-		}
-		RenderText(m_text, 0, rect, dc, state);
-		return true;
-	}
-
-	virtual wxSize GetSize() const override
-	{
-		if (m_flag.has_value())
-			return wxRendererNative::Get().GetCheckMarkSize(GetView());
-		return GetTextExtent(m_text);
-	}
-
-	virtual bool HasEditorCtrl() const override { return true; }
-
-	// The desktop's CreateEditorCtrl: the field's editor in the cell, as its column says, the table's look on it.
-	virtual wxWindow* CreateEditorCtrl(wxWindow* parent, wxRect labelRect, const ibVariant& value) override
-	{
-		// Under a mask the editor starts from the text the mask is typed over — the server's EditText where the cell shows
-		// another (a long date, digit groups) — laid into it: an empty date opens as its skeleton.
-		const ibInputMask& mask = m_column.GetMask();
-		wxString text = value.GetType() == ibValueTypes::TYPE_EMPTY ? wxString() : value.GetString().ToWxString();
-		if (!mask.IsEmpty())
-			text = mask.Apply(ibString(ibViewTableModel::GetCellEditText(m_item, GetOwner()->GetModelColumn()))).ToWxString();
-
-		ibTextCtrl* const textEditor = new ibTextCtrl;
-		textEditor->Show(false);   // hidden while it is made: no flicker
-		if (!textEditor->Create(parent, wxID_ANY, text, labelRect.GetPosition(), labelRect.GetSize()))
-			return nullptr;
-
-		textEditor->ShowSelectButton(m_column.GetSelectButton());
-		textEditor->ShowOpenButton(m_column.GetOpenButton());
-		textEditor->ShowClearButton(m_column.GetClearButton());
-
-		wxWindow* const view = GetView();
-		textEditor->SetBackgroundColour(view->GetBackgroundColour());
-		textEditor->SetForegroundColour(view->GetForegroundColour());
-		textEditor->SetFont(view->GetFont());
-
-		textEditor->SetPassword(m_column.GetPasswordMode());
-		textEditor->SetMultiLine(m_column.GetMultilineMode());
-		textEditor->SetMask(mask);
-		textEditor->SetEditable(m_column.GetTextEditMode());
-
-		textEditor->Show(true);
-		// …a masked one all selected, as a masked field is entered: the first key starts the value anew.
-		if (mask.IsEmpty())
-			textEditor->SetInsertionPointEnd();
-		else
-			textEditor->SelectAll();
-		m_textEditor = textEditor;
-		return textEditor;
-	}
-
-	// The text in the editor it made.
-	virtual bool GetValueFromEditorCtrl(wxWindow* editor, ibVariant& value) override
-	{
-		if (editor == nullptr || editor != m_textEditor)
-			return false;
-		value = m_textEditor->GetValue();
-		m_textEditor = nullptr;
-		return true;
-	}
-
-private:
-
-	const ibValueModelTableBoxColumn& m_column;
-	std::optional<bool>      m_flag;
-	wxString                 m_text;
-	ibTextCtrl*              m_textEditor = nullptr;   // the editor it made, while the cell is edited
-};
-
 // A table's own properties, as its node writes them — itself less its columns and its State — with what of the State
 // its window takes (UpdateWindow): what laying on again would only lay out and repaint.
 ibProtocolNode PropertiesOf(const ibProtocolNode& node)
@@ -227,8 +123,8 @@ public:
 class ibViewTableColumnObject : public ibDataViewColumn {
 public:
 
-	ibViewTableColumnObject(const ibValueModelTableBoxColumn& column, unsigned int modelColumn)
-		: ibDataViewColumn(wxEmptyString, new ibViewCellRenderer(column), modelColumn, ibDVC_DEFAULT_WIDTH,
+	ibViewTableColumnObject(const ibValueModelTableBoxColumn& column, ibDataViewRenderer* renderer, unsigned int modelColumn)
+		: ibDataViewColumn(wxEmptyString, renderer, modelColumn, ibDVC_DEFAULT_WIDTH,
 			wxALIGN_CENTER, wxDATAVIEW_COL_REORDERABLE), m_column(column) {}
 
 	virtual void SyncSortArrowFromModel() override
@@ -593,8 +489,14 @@ void ibValueModelTableBox::CallAsAction(ibProtocol::ibEvent::ibKind event, const
 
 void ibValueModelTableBox::SendCell(ibProtocol::ibEvent::ibKind event, const ibProtocolNode& args)
 {
+	SendCell(event, m_editRow, m_editColumn, args);
+}
+
+void ibValueModelTableBox::SendCell(ibProtocol::ibEvent::ibKind event, long long row, long long column,
+	const ibProtocolNode& args)
+{
 	ibProtocolNode cell = args.IsNode() ? args.Clone() : ibProtocolNode();
-	cell.SetValue(ibProtocol::ibForm::ibTable::Row, m_editRow).SetValue(ibProtocol::ibForm::ibTable::Column, m_editColumn);
+	cell.SetValue(ibProtocol::ibForm::ibTable::Row, row).SetValue(ibProtocol::ibForm::ibTable::Column, column);
 	Send(event, cell);
 }
 
@@ -728,11 +630,18 @@ void ibValueModelTableBox::OnItemEditingStarted(ibDataViewEvent& event)
 
 void ibValueModelTableBox::OnItemEditingDone(ibDataViewEvent& event)
 {
-	// What was typed, committed — or nothing, the edit cancelled.
+	// What was typed, committed — a boolean's box, as a flag's is toggled (Toggle {Checked}) — or nothing, the edit
+	// cancelled.
 	if (m_editRow != 0 && !event.IsEditCancelled()) {
 		ibProtocolNode args;
-		args.SetValue(ibProtocol::ibEvent::Text, event.GetValue().GetString());
-		SendCell(ibProtocol::ibEvent::ibKind::Change, args);
+		if (event.GetValue().GetType() == ibValueTypes::TYPE_BOOLEAN) {
+			args.SetValue(ibProtocol::ibEvent::Checked, event.GetValue().GetBoolean());
+			SendCell(ibProtocol::ibEvent::ibKind::Toggle, args);
+		}
+		else {
+			args.SetValue(ibProtocol::ibEvent::Text, event.GetValue().GetString());
+			SendCell(ibProtocol::ibEvent::ibKind::Change, args);
+		}
 	}
 	m_editRow = 0;
 	m_editColumn = 0;
@@ -931,12 +840,62 @@ void ibValueModelTableBox::OnFind(wxFindDialogEvent& event)
 //*                                    Column                                       *
 //***********************************************************************************
 
+bool ibViewCellRenderer::SetValue(const ibVariant& value)
+{
+	m_flag.reset();
+	m_text.clear();
+	if (value.GetType() == ibValueTypes::TYPE_BOOLEAN)
+		m_flag = value.GetBoolean();
+	else if (value.GetType() != ibValueTypes::TYPE_EMPTY)
+		m_text = value.GetString();
+	return true;
+}
+
+bool ibViewCellRenderer::Render(wxRect rect, wxDC* dc, int state)
+{
+	if (m_flag.has_value()) {
+		if (*m_flag) {
+			wxWindow* const view = GetView();
+			const wxSize mark = wxRendererNative::Get().GetCheckMarkSize(view);
+			const wxRect at(rect.x, rect.y + (rect.height - mark.y) / 2, mark.x, mark.y);
+			wxRendererNative::Get().DrawCheckMark(view, *dc, at);
+		}
+		return true;
+	}
+	RenderText(m_text, 0, rect, dc, state);
+	return true;
+}
+
+wxSize ibViewCellRenderer::GetSize() const
+{
+	if (m_flag.has_value())
+		return wxRendererNative::Get().GetCheckMarkSize(GetView());
+	return GetTextExtent(m_text);
+}
+
 void ibValueModelTableBoxColumn::Create(wxWindow* /*parent*/, const ibProtocolNode& node)
 {
-	// Built bare, as on the desktop, and hung on the group it is in; what it shows is its State's (Update).
-	m_column = new ibViewTableColumnObject(*this, static_cast<unsigned int>(node.GetInt(ibProtocol::ibForm::ControlId)));
+	// Built bare, as on the desktop, its cells drawn as its view is — a new view builds it anew (BuiltWith) — and hung on
+	// the group it is in; what it shows is its State's (Update).
+	ibDataViewRenderer* renderer = nullptr;
+	switch (static_cast<ibProtocol::ibForm::ibProperty::ibColumnView>(node.GetInt(ibProtocol::ibForm::ibProperty::View))) {
+	case ibProtocol::ibForm::ibProperty::ibColumnView::Flag:  renderer = new ibViewCellRendererFlag(*this); break;
+	case ibProtocol::ibForm::ibProperty::ibColumnView::Label: renderer = new ibViewCellRenderer(*this); break;
+	default:                                                 renderer = new ibViewCellRendererInput(*this); break;
+	}
+	m_column = new ibViewTableColumnObject(*this, renderer, static_cast<unsigned int>(node.GetInt(ibProtocol::ibForm::ControlId)));
 	if (ibDataViewColumnGroup* const holder = GetParent() != nullptr ? GetParent()->GetColumnHolder() : nullptr)
 		holder->AppendColumn(m_column);
+}
+
+// A column may stand in a group, and groups nest: the table is the first holder up the tree that is one.
+ibValueModelTableBox* ibValueModelTableBoxColumn::GetOwner() const
+{
+	for (ibValueFrame* holder = GetParent(); holder != nullptr; holder = holder->GetParent()) {
+		if (ibValueModelTableBox* const table = dynamic_cast<ibValueModelTableBox*>(holder))
+			return table;
+	}
+	return nullptr;
 }
 
 void ibValueModelTableBoxColumn::Update(const ibProtocolNode& node)
@@ -971,7 +930,7 @@ void ibValueModelTableBoxColumn::Update(const ibProtocolNode& node)
 	m_passwordMode = node.GetBool(ibProtocol::ibForm::ibProperty::PasswordMode);
 	m_multilineMode = node.GetBool(ibProtocol::ibForm::ibProperty::MultilineMode);
 	m_mask = ibInputMask::Parse(state.GetString(ibProtocol::ibForm::ibTable::Mask));
-	m_textEditMode = node.GetBool(ibProtocol::ibForm::ibTable::TexteditMode, true);
+	m_textEditMode = node.GetBool(ibProtocol::ibForm::ibProperty::TexteditMode, true);
 	m_selectButton = node.GetBool(ibProtocol::ibForm::ibProperty::ButtonSelect, true);
 	m_openButton = node.GetBool(ibProtocol::ibForm::ibProperty::ButtonOpen);
 	m_clearButton = node.GetBool(ibProtocol::ibForm::ibProperty::ButtonClear, true);
@@ -1024,6 +983,6 @@ void ibValueModelTableBoxColumnGroup::Update(const ibProtocolNode& node)
 		dataView->InvalidateColumnLayout();
 }
 
-CONTROL_REGISTER(ibValueModelTableBox, ibProtocol::ibForm::ibType::Tablebox)
-CONTROL_REGISTER(ibValueModelTableBoxColumn, ibProtocol::ibForm::ibType::TableboxColumn)
-CONTROL_REGISTER(ibValueModelTableBoxColumnGroup, ibProtocol::ibForm::ibType::TableboxColumnGroup)
+CONTROL_REGISTER(ibValueModelTableBox, ibProtocol::ibForm::ibType::Table)
+CONTROL_REGISTER(ibValueModelTableBoxColumn, ibProtocol::ibForm::ibType::TableColumn)
+CONTROL_REGISTER(ibValueModelTableBoxColumnGroup, ibProtocol::ibForm::ibType::ColumnLayout)

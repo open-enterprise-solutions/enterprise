@@ -278,6 +278,9 @@ bool ibBackendProperty::GetProtocolValue(ibDataNode& row, ibReader reader)
 	row.SetValue(ibProtocol::ibSchema::ibProperties::Title, GetLabel());
 	if (!GetHelp().IsEmpty())
 		row.SetValue(ibProtocol::ibSchema::ibProperties::Help, GetHelp());
+	// The class a client shows it by — a SUBCLASS goes by its own name, and a client shows only the classes it registers
+	// (ibPropertyRegistry, the browser's defineProperty): one it does not know is its bare value (2026-11-23: a field's
+	// View, an enumeration narrowed by a subclass, read "0").
 	row.SetValue(ibProtocol::ibSchema::ibProperties::Class, ibTypeInfoName(typeid(*this)));
 
 	// …as it is stored: a scalar a field, a composite (a type description) a node of its own.
@@ -394,14 +397,29 @@ ibProperty* ibPropertyObject::GetProperty(const ibString& nameParam) const
 	return nullptr;
 }
 
+unsigned int ibPropertyObject::GetPropertyCount() const
+{
+	unsigned int count = (unsigned int)m_properties.size();
+	for (ibPropertyObject* other : m_attachedObjects)
+		count += other->GetPropertyCount();
+	return count;
+}
+
 ibProperty* ibPropertyObject::GetProperty(unsigned int idx) const
 {
-	assert(idx < m_properties.size());
-
+	// Its own by their place, then each attached object's — the walk GetPropertyCount counts. Past the last: none.
 	if (idx < m_properties.size()) {
-		std::map<ibString, ibProperty*>::const_iterator iterator = m_properties.begin();
-		std::advance(iterator, idx);
-		return iterator->second;
+		std::map<ibString, ibProperty*>::const_iterator it = m_properties.begin();
+		std::advance(it, idx);
+		return it->second;
+	}
+
+	idx -= (unsigned int)m_properties.size();
+	for (ibPropertyObject* other : m_attachedObjects) {
+		const unsigned int count = other->GetPropertyCount();
+		if (idx < count)
+			return other->GetProperty(idx);
+		idx -= count;
 	}
 
 	return nullptr;
@@ -418,22 +436,40 @@ ibEvent* ibPropertyObject::GetEvent(const ibString& nameParam) const
 	if (it != m_events.end())
 		return it->second;
 
+	// Route to an attached object — its events appear as ours, as its properties do (GetProperty), but the event (its
+	// owner, its OnEventChanged) lives on IT.
+	for (ibPropertyObject* other : m_attachedObjects)
+		if (ibEvent* event = other->GetEvent(nameParam))
+			return event;
+
 	//LogDebug("[ibPropertyObject::GetEvent] ibEvent " + name + " not found!");
 	return nullptr;
 }
 
+unsigned int ibPropertyObject::GetEventCount() const
+{
+	unsigned int count = (unsigned int)m_events.size();
+	for (ibPropertyObject* other : m_attachedObjects)
+		count += other->GetEventCount();
+	return count;
+}
+
 ibEvent* ibPropertyObject::GetEvent(unsigned int idx) const
 {
-	assert(idx < m_events.size());
-
-	std::map<ibString, ibEvent*>::const_iterator it = m_events.begin();
-	unsigned int i = 0;
-	while (i < idx && it != m_events.end()) {
-		i++; it++;
+	// Its own by their place, then each attached object's — the walk GetEventCount counts. Past the last: none.
+	if (idx < m_events.size()) {
+		std::map<ibString, ibEvent*>::const_iterator it = m_events.begin();
+		std::advance(it, idx);
+		return it->second;
 	}
 
-	if (it != m_events.end())
-		return it->second;
+	idx -= (unsigned int)m_events.size();
+	for (ibPropertyObject* other : m_attachedObjects) {
+		const unsigned int count = other->GetEventCount();
+		if (idx < count)
+			return other->GetEvent(idx);
+		idx -= count;
+	}
 
 	return nullptr;
 }

@@ -12,7 +12,7 @@
 //   5. A key with a quote inside is reached by the subscript, the quote doubled in the literal.
 //   6. Get answers the value bound to a key, or Undefined when nothing is - without raising, which
 //      is what [key] does, and without a second argument, which is what Property needs.
-//   7. A key NAMES its entry: ToTable over containers builds the columns of its answer from those
+//   7. A key NAMES its entry: ToValueTable over containers builds the columns of its answer from those
 //      names.
 //   8. Undefined and Null are keys a script can WRITE - the lexer makes them values before
 //      anything else - and they are ONE key, the value ordering putting them in one place. A
@@ -106,7 +106,7 @@ var lines = New Array;
 var line = New Map;
 line.Insert("Amount", 5);
 lines.Add(line);
-var table = lines.ToTable();
+var table = lines.ToValueTable();
 var seen = 0;
 foreach (tableRow In table) {
 	if (tableRow.Amount != 5) { Raise("a column of a table made from containers: " + tableRow.Amount); }

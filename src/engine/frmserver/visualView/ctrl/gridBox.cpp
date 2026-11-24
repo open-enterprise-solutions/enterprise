@@ -58,6 +58,8 @@ m_gridView(new ibSheetGridBoxView())
 	m_members.Bind(this, &ibValueGridBox::FillControlMembers);
 	//set default params
 	m_propertyMinSize->SetValue(ibSize(150, 50));
+	m_sizerItem->SetProportion(1);
+	m_sizerItem->SetFlagState(ibStretch_Expand);
 	// ⭐ THE SOURCE TAKES EXACTLY TWO TYPES (Max, 2026-08-19): a **spreadsheet document** — the
 	// hand-filled sheet, a printable form — and a **composition** — the report, which builds its own
 	// document and brings the two verbs with it. Declared here so the picker offers those and
@@ -140,7 +142,7 @@ void ibValueGridBox::OnCreated(ibVisualHost* host, bool firstCreated)
 		AutoBindNewSource(this);
 
 	// THE BINDING IS HONOURED HERE TOO — the same moment every other source control takes its value
-	// (a checkbox, a textbox, a table all read the bound attribute as they are shown). The form has
+	// (a field, a table all read the bound attribute as they are shown). The form has
 	// already handed it over at InitializeControl; taking it again is idempotent.
 	RefreshModel();
 
@@ -297,28 +299,23 @@ enum prop {
 
 void ibValueGridBox::FillControlMembers(ibMemberTable& helper) const
 {
-	helper.AppendProp(ibT("Value"), eGridValue, eControl);
+	helper.AppendProp(ibT("Value"), eGridValue);
 }
 
 bool ibValueGridBox::SetPropVal(const long lPropNum, const ibValue& varPropVal)
 {
-	const long lPropAlias = m_members.GetPropAlias(lPropNum);
-	if (lPropAlias == eControl) {
-		const long lPropData = m_members.GetPropData(lPropNum);
-		if (lPropData == eGridValue)
-			return SetControlValue(varPropVal);   // ONE door: a script assigns what the form binds
+	switch (m_members.GetPropData(lPropNum, this, &ibValueGridBox::FillControlMembers)) {
+	case eGridValue:
+		return SetControlValue(varPropVal);   // ONE door: a script assigns what the form binds
 	}
-
 	return ibValueFrame::SetPropVal(lPropNum, varPropVal);
 }
 
 bool ibValueGridBox::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 {
-	const long lPropAlias = m_members.GetPropAlias(lPropNum);
-	if (lPropAlias == eControl) {
-		const long lPropData = m_members.GetPropData(lPropNum);
-		if (lPropData == eGridValue)
-			return GetControlValue(pvarPropVal);
+	switch (m_members.GetPropData(lPropNum, this, &ibValueGridBox::FillControlMembers)) {
+	case eGridValue:
+		return GetControlValue(pvarPropVal);
 	}
 	return ibValueFrame::GetPropVal(lPropNum, pvarPropVal);
 }
@@ -327,4 +324,4 @@ bool ibValueGridBox::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 //*                       Register in runtime                           *
 //***********************************************************************
 
-CONTROL_TYPE_REGISTER(ibValueGridBox, "Gridbox", "Container", g_controlGridBoxCLSID);
+CONTROL_TYPE_REGISTER(ibValueGridBox, "Spreadsheet", "Container", g_controlGridBoxCLSID);

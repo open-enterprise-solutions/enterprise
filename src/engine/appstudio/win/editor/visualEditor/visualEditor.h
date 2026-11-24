@@ -291,8 +291,7 @@ public:
 		// The tree drawn anew from the form: the selected command bar's row kept, the rows opened as the form has them.
 		void RebuildTree();
 		// A control's row under the parent's (none: the root), its command bar's rows and its children's — its node beside
-		// it, its children the control's in their order (the host lays each in at its place). A sizer item is no row: its
-		// control stands in its place.
+		// it, its children the control's in their order (the host lays each in at its place).
 		void AddControl(ibValueFrame* control, const ibProtocolNode& node, const wxTreeItemId& parent);
 		// The desktop's "Command interface" node under a control with a command bar (its node's state carries it) — its
 		// commands under it, as its node has them (Layers, CommandBar).
@@ -612,8 +611,8 @@ public:
 
 	// THE DESKTOP'S DOORS (designer/win/editor/visualEditor/visualEditorCmdProc.cpp) OVER THE FORM'S NODE: what its
 	// command processor did to the controls is done to the node — a command of the form before and after it — and the
-	// form drawn again. A new control is its class's from the tab's answer (Classes, Node), put where the desktop's form
-	// took it (ibValueForm::CreateObject) under ids and a name of the form's own; the clipboard is this computer's.
+	// form drawn again. A new control is its class's from the tab's answer (Classes, Node), put where a parent takes it
+	// (ibValueFrame::FilterChild, the server's) under ids and a name of the form's own; the clipboard is this computer's.
 	void CreateObject(const wxString& name);
 	// …and a control bound to a source dropped on one (an attribute tree's row), and a command dropped on one (a command
 	// tree's row): what is made of them is the server's to say (its metadata) — asked with the form as it stands, the
@@ -624,9 +623,9 @@ public:
 	// the command joins THAT bar as a new item instead of spawning a free button — the bar by the id of the control it
 	// is of. CreateCommandButton reads then clears it; 0 for any other drop.
 	void SetPendingDropBar(long long controlId) { m_pendingDropBar = controlId; }
-	// (Re)attach a drop target to every tablebox's own window — its grid swallows the OS drop before the form-canvas
+	// (Re)attach a drop target to every table's own window — its grid swallows the OS drop before the form-canvas
 	// target sees it, so drops over the rows need the table's own target. Called on editor refresh.
-	void WireTableboxDrops(ibValueFrame* obj);
+	void WireTableDrops(ibValueFrame* obj);
 	void RemoveObject(ibValueFrame* obj);
 	void CutObject(ibValueFrame* obj);
 	void CopyObject(ibValueFrame* obj);

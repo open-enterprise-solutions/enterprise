@@ -114,82 +114,55 @@ void ibDialogFormEditor::CreateTree()
 
 void ibDialogFormEditor::AddChildren(ibValueFrame* obj, const wxTreeItemId& parent, bool is_root)
 {
-	if (obj->GetComponentType() == COMPONENT_TYPE_SIZERITEM) {
-		if (obj->GetChildCount() > 0) {
-			AddChildren(obj->GetChild(0), parent);
-		}
-		else {
-			// If we reached here it is because the tree is malformed
-			// and how it was built needs to be reviewed.
-			wxString msg;
-			ibValueFrame* itemParent = obj->GetParent();
-			assert(parent);
+	// An element the feature options of this base make unavailable is not offered to be re-arranged
+	// or shown again: it is not the user's to bring back (control.h, IsAvailable).
+	if (!is_root && !obj->IsAvailable())
+		return;
 
-			msg = wxString::Format(wxT("Item without object as child of \'%s:%s\'"),
-				itemParent->GetControlName().c_str(),
-				itemParent->GetClassName().c_str());
-
-			ibJournalError(wxT("ui"), msg);
-		}
+	wxTreeItemId new_parent;
+	ibDialogFormEditorObjectTreeItemData* item_data = new ibDialogFormEditorObjectTreeItemData(obj);
+	if (is_root) {
+		new_parent = m_treeControl->AddRoot(wxT(""), wxNOT_FOUND, wxNOT_FOUND, item_data);
 	}
 	else {
-		// An element the feature options of this base make unavailable is not offered to be re-arranged
-		// or shown again: it is not the user's to bring back (control.h, IsAvailable).
-		if (!is_root && !obj->IsAvailable())
-			return;
+		unsigned int pos = 0;
 
-		wxTreeItemId new_parent;
-		ibDialogFormEditorObjectTreeItemData* item_data = new ibDialogFormEditorObjectTreeItemData(obj);
-		if (is_root) {
-			new_parent = m_treeControl->AddRoot(wxT(""), wxNOT_FOUND, wxNOT_FOUND, item_data);
+		// find a proper position where the added object should be displayed at
+		ibValueFrame* parent_obj = obj->GetParent();
+		if (parent_obj) {
+			pos = parent_obj->GetChildPosition(obj);
+		}
+
+		// insert tree item to proper position
+		if (pos > 0) {
+			new_parent = m_treeControl->InsertItem(parent, pos, wxEmptyString, wxNOT_FOUND, wxNOT_FOUND, item_data);
 		}
 		else {
-			unsigned int pos = 0;
-
-			ibValueFrame* parent_obj = obj->GetParent();
-
-			// find a proper position where the added object should be displayed at
-			if (parent_obj && parent_obj->GetComponentType() == COMPONENT_TYPE_SIZERITEM) {
-				parent_obj = parent_obj->GetParent();
-				if (parent_obj) {
-					pos = parent_obj->GetChildPosition(obj->GetParent());
-				}
-			}
-			else if (parent_obj) {
-				pos = parent_obj->GetChildPosition(obj);
-			}
-
-			// insert tree item to proper position
-			if (pos > 0) {
-				new_parent = m_treeControl->InsertItem(parent, pos, wxEmptyString, wxNOT_FOUND, wxNOT_FOUND, item_data);
-			}
-			else {
-				new_parent = m_treeControl->AppendItem(parent, wxEmptyString, wxNOT_FOUND, wxNOT_FOUND, item_data);
-			}
+			new_parent = m_treeControl->AppendItem(parent, wxEmptyString, wxNOT_FOUND, wxNOT_FOUND, item_data);
 		}
+	}
 
-		// Add the item to the map
-		m_listItem.insert(
-			std::map< ibValueFrame*, wxTreeItemId>::value_type(obj, new_parent)
-		);
+	// Add the item to the map
+	m_listItem.insert(
+		std::map< ibValueFrame*, wxTreeItemId>::value_type(obj, new_parent)
+	);
 
-		// Set the image
-		int image_idx = GetImageIndex(obj->GetClassName());
+	// Set the image
+	int image_idx = GetImageIndex(obj->GetClassName());
 
-		if (image_idx != wxNOT_FOUND) {
-			m_treeControl->SetItemImage(new_parent, image_idx);
-		}
+	if (image_idx != wxNOT_FOUND) {
+		m_treeControl->SetItemImage(new_parent, image_idx);
+	}
 
-		// Set the name
-		UpdateItem(new_parent, obj);
+	// Set the name
+	UpdateItem(new_parent, obj);
 
-		// Add the rest of the children
-		unsigned int count = obj->GetChildCount();
+	// Add the rest of the children
+	unsigned int count = obj->GetChildCount();
 
-		for (unsigned int i = 0; i < count; i++) {
-			ibValueFrame* child = obj->GetChild(i);
-			AddChildren(child, new_parent);
-		}
+	for (unsigned int i = 0; i < count; i++) {
+		ibValueFrame* child = obj->GetChild(i);
+		AddChildren(child, new_parent);
 	}
 }
 
@@ -417,26 +390,19 @@ void ibDialogFormEditor::OnSelChanged(wxTreeEvent& event)
 			static void FillPropertyByFrameValue(ibPropertyGridPage* propertyGridPage, ibValueFrame* obj, std::map<ibPGProperty*, ibProperty*>& pgArray) {
 				pgArray.clear(); propertyGridPage->Clear();
 
-				// The rows it holds, in the order the server sent them — and its sizer item's, which lays it out.
-				const auto append = [&](ibValueFrame* holder) {
-					const ibPropertyCategory* const category = holder->GetCategory();
-					for (unsigned int idx = 0; idx < category->GetPropertyCount(); idx++) {
-						ibProperty* const prop = holder->GetProperty(category->GetPropertyName(idx));
-						if (prop == nullptr)
-							continue;
+				// The rows it holds, in the order the server sent them — its sizer item's among them, which lay it out.
+				const ibPropertyCategory* const category = obj->GetCategory();
+				for (unsigned int idx = 0; idx < category->GetPropertyCount(); idx++) {
+					ibProperty* const prop = obj->GetProperty(category->GetPropertyName(idx));
+					if (prop == nullptr)
+						continue;
 
-						ibPGProperty* pg = ibPropertyRegistry::Create(prop);
-						propertyGridPage->Append(pg);
-						pg->RefreshChildren();
+					ibPGProperty* pg = ibPropertyRegistry::Create(prop);
+					propertyGridPage->Append(pg);
+					pg->RefreshChildren();
 
-						pgArray.emplace(pg, prop);
-					}
-				};
-
-				append(obj);
-				ibValueFrame* parent = obj->GetParent();
-				if (parent != nullptr && parent->GetComponentType() == COMPONENT_TYPE_SIZERITEM)
-					append(parent);
+					pgArray.emplace(pg, prop);
+				}
 
 				propertyGridPage->SetPropertyAttributeAll(ibPG_BOOL_USE_CHECKBOX, (long)1);
 			}
@@ -611,19 +577,8 @@ void ibDialogFormEditor::MovePosition(ibValueFrame* move_obj, bool right, unsign
 
 		ibValueFrame* parent = move_obj->GetParent();
 
-		if (parent != nullptr) {
-
-			// If the object is contained within an item, the item must be
-			// shifted
-			ibValueFrame* object = move_obj;
-
-			while (parent && parent->GetComponentType() == COMPONENT_TYPE_SIZERITEM) {
-				object = parent;
-				parent = object->GetParent();
-			}
-
-			ExecuteCommand(new ibShiftChildCmd(object, (right ? num : -1 * num)));
-		}
+		if (parent != nullptr)
+			ExecuteCommand(new ibShiftChildCmd(move_obj, (right ? num : -1 * num)));
 
 		m_listItem[move_obj] = inserted_item;
 		m_treeControl->SelectItem(inserted_item);

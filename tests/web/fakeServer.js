@@ -142,27 +142,22 @@
 			return {
 				NodeType: 'ClientForm', ControlId: tab.id * 100, Key: `form${tab.id}`,
 				State: {},
-				// Laid as a saved form lays them: each control in a sizer's item, the table taking what is left. A tab's
-				// `controls` are nodes as the server writes them, put first as they are.
-				NodeChildren: [...(tab.controls ?? []), ...(tab.fields ?? []).map((field, place) => ({
-					NodeType: 'SizerItem', ControlId: 500 + place, Proportion: 0, Stretch: expand,
-					NodeChildren: [{
-						NodeType: 'Textctrl', ControlId: field.id, ButtonSelect: field.select ?? true, ButtonClear: field.clear ?? true,
-						State: { Caption: field.caption, Text: field.text ?? '' },
-						// A field's own saved properties as the server writes them - its colours, say.
-						...(field.node ?? {}),
-					}],
+				// Laid as a saved form lays them: each control at its place in the sizer, on its own node, the table taking
+				// what is left. A tab's `controls` are nodes as the server writes them, put first as they are.
+				NodeChildren: [...(tab.controls ?? []), ...(tab.fields ?? []).map((field) => ({
+					NodeType: 'Field', ControlId: field.id, Proportion: 0, Stretch: expand,
+					ButtonSelect: field.select ?? true, ButtonClear: field.clear ?? true,
+					State: { Caption: field.caption, Text: field.text ?? '' },
+					// A field's own saved properties as the server writes them - its colours, say.
+					...(field.node ?? {}),
 				})), {
-					NodeType: 'SizerItem', ControlId: 600, Proportion: 1, Stretch: expand,
-					NodeChildren: [{
-						NodeType: 'Tablebox', ControlId: table.id ?? 1, Header: true, HeaderHeight: table.headerHeight ?? 1,
-						Footer: table.footer === true, FooterHeight: table.footerHeight ?? 1, FrezeeRow: 0, FrezeeCol: 0,
-						RowSelectionMode: table.selection ?? 1,
-						// The table's own saved properties as the server writes them - its colours, say.
-						...(table.node ?? {}),
-						State: state,
-						NodeChildren: table.columns,
-					}],
+					NodeType: 'Table', ControlId: table.id ?? 1, Proportion: 1, Stretch: expand, Header: true,
+					HeaderHeight: table.headerHeight ?? 1, Footer: table.footer === true, FooterHeight: table.footerHeight ?? 1,
+					FrezeeRow: 0, FrezeeCol: 0, RowSelectionMode: table.selection ?? 1,
+					// The table's own saved properties as the server writes them - its colours, say.
+					...(table.node ?? {}),
+					State: state,
+					NodeChildren: table.columns,
 				}],
 			};
 		}
@@ -203,9 +198,12 @@
 					Container: table.viewMode !== 2 && row.container === true,
 					ReadOnly: row.readOnly ?? true,
 					...(row.group ? { Group: row.group } : {}),
-					NodeChildren: Object.entries(row.cells).map(([column, text]) => ({
-						NodeId: Number(column), Text: text, ...(row.readOnly === false ? { Value: { t: 'string', v: text } } : {}),
-					})),
+					// A cell is its text, or its fields as the server writes them (a boolean's Checked beside its Text).
+					NodeChildren: Object.entries(row.cells).map(([column, cell]) => {
+						const fields = typeof cell === 'object' ? cell : { Text: cell };
+						return { NodeId: Number(column), ...fields,
+							...(row.readOnly === false ? { Value: { t: 'string', v: fields.Text } } : {}) };
+					}),
 				})),
 			};
 		}

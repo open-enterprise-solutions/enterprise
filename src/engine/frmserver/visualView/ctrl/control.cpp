@@ -81,7 +81,7 @@ ibFormID ibValueControl::GetTypeForm() const
 
 void ibValueControl::AutoBindNewSource(ibTypeControlFactory* factory)
 {
-	// Called by the source controls (checkbox / textbox / tablebox) from their CREATION event when the
+	// Called by the source controls (a field, a tablebox) from their CREATION event when the
 	// first-created flag is set. A just-added control with no source provisions a fresh attribute NAMED
 	// after this control and binds to it.
 	//

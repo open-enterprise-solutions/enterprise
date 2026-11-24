@@ -64,6 +64,10 @@ add_executable(oes_tests
     test_choiceLinkClear.cpp
     test_style.cpp
     test_formFieldChoice.cpp
+    test_formField.cpp
+    test_formLayout.cpp
+    test_formStatic.cpp
+    test_formTableColumn.cpp
     test_module_manager_split.cpp
     # test_pagingRamTable.cpp  # API-rotted (ibValueModelTableBase renamed) — excluded until updated
     test_blobCompression.cpp

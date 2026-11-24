@@ -209,5 +209,5 @@ ibValueNotebook* ibValueNotebookPage::GetNotebook() const
 	return dynamic_cast<ibValueNotebook*>(GetParent());
 }
 
-CONTROL_REGISTER(ibValueNotebook, ibProtocol::ibForm::ibType::Notebook)
-CONTROL_REGISTER(ibValueNotebookPage, ibProtocol::ibForm::ibType::NotebookPage)
+CONTROL_REGISTER(ibValueNotebook, ibProtocol::ibForm::ibType::Pages)
+CONTROL_REGISTER(ibValueNotebookPage, ibProtocol::ibForm::ibType::Page)

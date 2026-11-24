@@ -82,6 +82,11 @@ bool ibVisualHost::UpdateVisualHost(ibDataNode& frame)
 	bool whole = m_drawnFrame == nullptr || updatedControlArray.contains(form->GetControlID());
 	if (!whole) {
 		ibDataNode drawn = *m_drawnFrame;
+		// ⭐ A CONTROL MADE MAY HAVE GIVEN THE FORM SOMETHING OF ITS OWN — a field from the palette, a fresh attribute
+		// (AutoBindNewSource): the form's own entries are drawn again over what is drawn, wherever the control was made.
+		// Made in a control in the form, only that control was: the client kept the form's attributes without the new one
+		// and handed them back so — the field was left bound to none and hidden (2026-11-24: "a layout holds nothing").
+		bool formOwn = false;
 		for (const ibFormID id : updatedControlArray) {
 			// An updated one drawn anew, what is in it with it. ADDED SINCE (CreateControl) — not in the frame — the control
 			// it is in drawn again over its node as drawn: the new one made in it, the others in it as they were. The whole
@@ -89,7 +94,8 @@ bool ibVisualHost::UpdateVisualHost(ibDataNode& frame)
 			// 2026-10-26).
 			ibValueFrame* control = form->FindControlByID(id);
 			std::optional<ibDataNode> over;
-			if (control != nullptr && !FindDrawn(drawn, id)) {
+			const bool added = control != nullptr && !FindDrawn(drawn, id);
+			if (added) {
 				do
 					control = control->GetParent();
 				while (control != nullptr && control != form && !(over = FindDrawn(drawn, control->GetControlID())));
@@ -103,6 +109,12 @@ bool ibVisualHost::UpdateVisualHost(ibDataNode& frame)
 			ibDataNode node(control->GetClassType(), control->GetControlID());
 			RefreshControl(control, node, over ? *over : ibDataNode());
 			drawn = control == form ? std::move(node) : Redrawn(drawn, control->GetControlID(), node);
+			formOwn = control != form && (formOwn || added);
+		}
+		if (!whole && formOwn) {
+			ibDataNode node(form->GetClassType(), form->GetControlID());
+			RefreshControl(form, node, drawn);
+			drawn = std::move(node);
 		}
 		if (!whole)
 			frame = std::move(drawn);
@@ -187,14 +199,9 @@ void ibVisualHost::RefreshControl(ibValueFrame* control, ibDataNode& node, const
 	// back as drawn and loaded by LoadNode, which reads it.
 	if (IsDesignerHost())
 		node.SetValue(ibProtocol::ibForm::Expanded, control->GetExpanded());
-	// A reading, not a save: what a save refuses (an attribute not finished — a dynamic list with no source) is drawn
-	// all the same, its refusal is the save's (SaveNode). Stopping here sent the form without its controls (2026-10-15).
-	const long long writing = NowUs();
-	control->WriteData(node);
+	// The State FIRST: updating, a control may change what it is (a field whose type no longer allows its view takes
+	// the default one) — its properties are written as it now is.
 	const long long updating = NowUs();
-	s_drawTimes.propertiesUs += updating - writing;
-	++s_drawTimes.controls;
-
 	ibDataNode& state = node.Child(ibProtocol::ibForm::ibState::State);
 	control->OnUpdate(state, this);
 	// The state events the server is subscribed to on it — the client sends these at once, and holds the others.
@@ -206,10 +213,17 @@ void ibVisualHost::RefreshControl(ibValueFrame* control, ibDataNode& node, const
 	}
 	if (!subscribed.empty())
 		state.AddField(ibProtocol::ibForm::ibState::Subscribed, ibDataValue::Array(std::move(subscribed)));
-	const long long updated = NowUs() - updating;
+	const long long writing = NowUs();
+	const long long updated = writing - updating;
 	s_drawTimes.statesUs += updated;
 	if (updated > 2000)
 		ibJournalInfo(ibT("client"), ibT("        %s: its state %lld ms"), control->GetControlName(), updated / 1000);
+
+	// A reading, not a save: what a save refuses (an attribute not finished — a dynamic list with no source) is drawn
+	// all the same, its refusal is the save's (SaveNode). Stopping here sent the form without its controls (2026-10-15).
+	control->WriteData(node);
+	s_drawTimes.propertiesUs += NowUs() - writing;
+	++s_drawTimes.controls;
 
 	// What is in it, in its order now — one drawn there copied as it was, one not read whole.
 	for (unsigned int idx = 0; idx < control->GetChildCount(); idx++) {

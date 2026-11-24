@@ -185,6 +185,11 @@ value (`Id`, `Title`, `Picture`), each with as children (`Id`) the parameters it
 client that reads none opens the link's window without the question of which type it decides and does not open the
 parameters' window. A description's `path` is read whether it arrives as a field (as written) or as a property (an
 object read from JSON).
+A switch's `ibPropertyChoices` row carries its items as its `Value` (`rows`, each `value` — the item's value as a value
+is written — and `presentation`, its text in every language) and, as optional fields, the field's `Type` and `Values` —
+the values a finite type has (a Boolean, an enumeration), each `Value` as a row stores it and `Presentation`. The
+client's window offers those to pick and reads any other value as typed; the edited items go back through the row's
+`Set`.
 A control's `ibPropertySource` row (its Data source) carries what its source window may offer as optional fields:
 `SourceDataType` — an `ibSourceDataType`, the server's: `Table` 0, `TableColumn` 1 (of the table its table box is
 bound to), `Attribute` 2 — and `Sources`, the window's tree, already filtered by it. The tree's rows are the attribute
@@ -270,9 +275,25 @@ table. The client moves the column in its own copy of the form at once; the serv
 
 A notebook's tabs stand where `OrientPage` says; its `State` names the page selected, `ActivePage` (a page's control
 id). A page picked is event `Page {Page}`, a page's tab dragged `Move {Position}`. A page shown in the notebook carries
-its `Title` and `Picture`; a hidden one is out of it. A slider's ends are `MinValue` and `MaxValue`, a gauge's full
-mark `Range`; an HTML box's `State` has the `Page` it shows, a radio button's `Caption` and `Selected`. A chart box is
+its `Title` and `Picture`; a hidden one is out of it. A static text's `State` has its `Caption` alone; an HTML box's
+the `Page` it shows. A chart box is
 drawn empty.
+
+A field (`Field`) is one control; its `View` says what it is for, and the client draws it with a widget of its own:
+
+| `View` | `State` | Sends |
+|---|---|---|
+| 0 Input | `Text`, `EditText`, `Mask`, `ReadOnly` — a text field's | `Input`, `Change {Text}`, `Select`, `Open`, `Clear` |
+| 1 Flag | `Checked`, `ReadOnly` | `Toggle {Checked}` |
+| 2 Label | `Text`, `Link` when bound; unbound, its `Caption` is the text | `Open` (on the link) |
+| 3 Switch | `Choices` — an item each: `Caption`, `Selected` on the one the value stands on; `ReadOnly` | `Change {Member}` (the item's place, from 0) |
+| 4 Gauge | `Position` — the value, from 0 to the node's `Range` | — |
+| 5 Slider | `Position` — the value, between the node's `MinValue` and `MaxValue`; `ReadOnly` | `Change {Position}` (where it was let go) |
+
+`Caption` and `TitleLocation` (1 Left, 2 Right, 3 None — no caption: `Caption` empty, no label column) are the
+field's in every view; a view's own properties (`PasswordMode`, the buttons,
+`Orient` of a switch's items, a gauge's or a slider's) stand in the node beside them. A new `View` is a new control: the client draws the field
+anew, and what was typed into it is let go uncommitted. A client that does not know `Field` draws its placeholder.
 
 | Field | Holds |
 |---|---|

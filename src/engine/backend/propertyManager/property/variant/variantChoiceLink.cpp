@@ -16,27 +16,36 @@ namespace {
 // The property family hands its owner over as an ibPropertyObject, so somebody has to say what that
 // owner is; saying it in five places is five chances for the five to stop agreeing (Max, 2026-09-23,
 // reading this file: "you have thrown casts about here").
-const ibValueMetaObjectAttributeBase* SelfAttribute(const ibPropertyObject* owner)
+const ibValueMetaObjectAttributeBase* AttributeOf(const ibPropertyObject* owner)
 {
 	return dynamic_cast<const ibValueMetaObjectAttributeBase*>(owner);
 }
 
-// ⭐ …OR A CONTROL (#616) — a text field or a table's column, the only other place a link lives. Bound through the dot,
-// it may stand on a field that exists nowhere else to declare a link — a field of what a form's attribute holds — so it
-// says its own: its links name what the FORM reaches, the form being their source, and its paths are the form's, as its
-// binding is.
-const ibBackendTypeSourceFactory* SelfControl(const ibPropertyObject* owner)
+// ⭐ …OR A CONTROL (#616) — a text field, a field or a table's column, the only other place a link lives. Bound through
+// the dot, it may stand on a field that exists nowhere else to declare a link — a field of what a form's attribute holds —
+// so it says its own: its links name what the FORM reaches, the form being their source, and its paths are the form's,
+// as its binding is.
+//
+// ⭐ AND A PROPERTY A FIELD'S VIEW HOLDS SITS ON THE VIEW, attached to the field (frmserver's ibFieldViewProvider): the
+// control is the owner, or the first object up its attach chain that is one. Shown on the field, the property answers
+// for the field.
+const ibBackendTypeSourceFactory* ControlOf(const ibPropertyObject* owner)
 {
-	return dynamic_cast<const ibBackendTypeSourceFactory*>(owner);
+	for (const ibPropertyObject* holder = owner; holder != nullptr; holder = holder->GetAttachOwner()) {
+		if (const ibBackendTypeSourceFactory* control = dynamic_cast<const ibBackendTypeSourceFactory*>(holder))
+			return control;
+	}
+	return nullptr;
 }
 
 // The form a control stands in — the top of its tree, the first SOURCE above it (a table and a group are none). Null
-// for an attribute of the application.
-const ibSourceDataObject* SelfForm(const ibPropertyObject* owner)
+// for an attribute of the application. Its tree is the control's, which a view's property reaches through ControlOf.
+const ibSourceDataObject* FormOf(const ibPropertyObject* owner)
 {
-	if (SelfControl(owner) == nullptr)
+	const ibPropertyObject* control = dynamic_cast<const ibPropertyObject*>(ControlOf(owner));
+	if (control == nullptr)
 		return nullptr;
-	for (const ibPropertyObject* above = owner->GetOwner(); above != nullptr; above = above->GetOwner()) {
+	for (const ibPropertyObject* above = control->GetOwner(); above != nullptr; above = above->GetOwner()) {
 		if (const ibSourceDataObject* form = dynamic_cast<const ibSourceDataObject*>(above))
 			return form;
 	}
@@ -47,20 +56,20 @@ const ibSourceDataObject* SelfForm(const ibPropertyObject* owner)
 // attribute of the application IS one; a control stands on the column its binding reaches (the dot). One answer, so
 // this file does not ask two classes the same four questions (Max, 2026-11-09: "ibBackendFormAttributeValue and
 // ibValueMetaObjectAttributeBase already sit on ibBackendSourceColumn").
-const ibBackendSourceColumn* SelfColumn(const ibPropertyObject* owner)
+const ibBackendSourceColumn* ColumnOf(const ibPropertyObject* owner)
 {
 	if (const ibBackendSourceColumn* column = dynamic_cast<const ibBackendSourceColumn*>(owner))
 		return column;
-	const ibBackendTypeSourceFactory* control = SelfControl(owner);
+	const ibBackendTypeSourceFactory* control = ControlOf(owner);
 	return control != nullptr ? control->WalkSource(control->GetSourceDesc()) : nullptr;
 }
 
 // …AND WHERE IT STANDS — the path a row or a link naming it would store: an attribute by its id, a control by its binding.
-ibSourceDescription SelfPath(const ibPropertyObject* owner)
+ibSourceDescription PathOf(const ibPropertyObject* owner)
 {
-	if (const ibValueMetaObjectAttributeBase* self = SelfAttribute(owner))
+	if (const ibValueMetaObjectAttributeBase* self = AttributeOf(owner))
 		return ibSourceDescription(self->GetMetaID());
-	const ibBackendTypeSourceFactory* control = SelfControl(owner);
+	const ibBackendTypeSourceFactory* control = ControlOf(owner);
 	return control != nullptr ? control->GetSourceDesc() : ibSourceDescription();
 }
 
@@ -78,7 +87,7 @@ ibSourceDescription SelfPath(const ibPropertyObject* owner)
 // value from one. One rule, written once, so the two cannot offer different neighbourhoods.
 std::vector<ibValueMetaObjectAttributeBase*> HolderAttributes(const ibPropertyObject* owner)
 {
-	const ibValueMetaObjectAttributeBase* self = SelfAttribute(owner);
+	const ibValueMetaObjectAttributeBase* self = AttributeOf(owner);
 	const ibValueMetaObject* holder = self != nullptr ? self->GetParent() : nullptr;
 	const ibValueMetaObjectCompositeData* fields = dynamic_cast<const ibValueMetaObjectCompositeData*>(holder);
 	if (fields == nullptr)
@@ -120,7 +129,7 @@ std::vector<ibValueMetaObjectAttributeBase*> HolderAttributes(const ibPropertyOb
 // it through ibChoiceHolderFields, so the designer, the inspector's row and MCP cannot spell it apart.
 ibString NeighbourName(const ibPropertyObject* owner, const ibValueMetaObjectAttributeBase* field)
 {
-	const ibValueMetaObjectAttributeBase* self = SelfAttribute(owner);
+	const ibValueMetaObjectAttributeBase* self = AttributeOf(owner);
 	const ibValueMetaObject* holder = field->GetParent();
 	if (self == nullptr || holder == nullptr || holder == self->GetParent())
 		return field->GetName();
@@ -176,7 +185,7 @@ template <typename T>
 std::vector<const T*> ReferencedObjects(const ibPropertyObject* owner)
 {
 	std::vector<const T*> out;
-	const ibBackendSourceColumn* self = SelfColumn(owner);
+	const ibBackendSourceColumn* self = ColumnOf(owner);
 	if (self == nullptr)
 		return out;
 	for (const ibClassID& clsid : self->GetTypeDesc().GetClsidList()) {
@@ -209,7 +218,7 @@ std::vector<ibChoiceHolderField> ibChoiceHolderFields(const ibPropertyObject* ow
 		out.push_back(ibChoiceHolderField{ ibSourceDescription(field->GetMetaID()), field, NeighbourName(owner, field) });
 
 	// The form's attributes, as the form lists them, and one step further, into what each holds.
-	const ibSourceDataObject* form = SelfForm(owner);
+	const ibSourceDataObject* form = FormOf(owner);
 	const ibSourceDataObject::ibSourceExplorer* attributes = form != nullptr ? form->GetSourceExplorer() : nullptr;
 	for (unsigned int idx = 0; attributes != nullptr && idx < attributes->GetHelperCount(); ++idx) {
 		const ibSourceDataObject::ibSourceExplorer* node = attributes->GetHelper(idx);
@@ -222,7 +231,7 @@ std::vector<ibChoiceHolderField> ibChoiceHolderFields(const ibPropertyObject* ow
 	}
 
 	// ⭐ NOT ITSELF: a field cannot govern itself, and does not narrow itself — said here, so no list has to.
-	const ibSourceDescription self = SelfPath(owner);
+	const ibSourceDescription self = PathOf(owner);
 	std::erase_if(out, [&self](const ibChoiceHolderField& field) { return field.m_path == self; });
 	return out;
 }
@@ -274,13 +283,13 @@ void ibChoiceParametersForSource(const ibPropertyObject* owner, const ibChoiceHo
 
 ibString ibChoiceHolderName(const ibPropertyObject* owner)
 {
-	const ibValueMetaObjectAttributeBase* self = SelfAttribute(owner);
+	const ibValueMetaObjectAttributeBase* self = AttributeOf(owner);
 	const ibValueMetaObject* holder = self != nullptr ? self->GetParent() : nullptr;
 	if (holder != nullptr)
 		return holder->GetName();
 
 	// A control stands in its form — named as the form lists itself.
-	const ibSourceDataObject* form = SelfForm(owner);
+	const ibSourceDataObject* form = FormOf(owner);
 	const ibSourceDataObject::ibSourceExplorer* fields = form != nullptr ? form->GetSourceExplorer() : nullptr;
 	return fields != nullptr ? fields->GetSourceName() : ibString();
 }

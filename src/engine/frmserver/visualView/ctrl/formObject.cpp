@@ -7,10 +7,9 @@
 #include "formAttribute.h"
 #include "frmserver/settings/formSettings.h"   // the person's own arrangement, replayed on open
 #include "backend/appData.h"
-#include "backend/system/value/valueJob.h"   // g_valueScheduleCLSID — a schedule requisite builds as static text
 #include "backend/system/value/valueDataComposition.h"   // g_valueDataCompositionCLSID — a composition builds as a gridbox
 #include "gridBox.h"   // ibValueGridBox — a report's default view
-#include "widgets.h"   // the check box, caption and field a generated form is made of
+#include "field.h"     // the field a generated form is made of
 #include "backend/metaCollection/partial/dataReport.h"   // …bound to the report itself, when it has a default composer
 #include "backend/metaData.h"
 #include "frmserver/visualView/visualHost.h"
@@ -58,7 +57,7 @@ void ibValueForm::BuildForm(const ibFormID& formType)
 		if (isTableSource) {
 
 			mainTableBox =
-				ibValueForm::CreateControl<ibValueModelTableBox>(ibT("Tablebox"));
+				ibValueForm::CreateControl<ibValueModelTableBox>(g_controlTableBoxCLSID);
 
 			mainTableBox->SetControlName(sourceExplorer.GetSourceName());
 			
@@ -93,7 +92,7 @@ void ibValueForm::BuildForm(const ibFormID& formType)
 
 			if (defaultComposer != ibNOT_FOUND) {
 				ibValueGridBox* gridBox =
-					ibValueForm::CreateControl<ibValueGridBox>(ibT("Gridbox"));
+					ibValueForm::CreateControl<ibValueGridBox>(g_controlGridBoxCLSID);
 				if (gridBox != nullptr) {
 					gridBox->SetControlName(sourceExplorer.GetSourceName());
 					gridBox->SetSource({ mainAttrId, defaultComposer });
@@ -115,7 +114,7 @@ void ibValueForm::BuildForm(const ibFormID& formType)
 				ibValueFrame* holder = mainTableBox->GetColumnGroupHolder(nextSourceExplorer.GetSourceGroup());
 
 				ibValueModelTableBoxColumn* tableBoxColumn =
-					ibValueForm::CreateControl<ibValueModelTableBoxColumn>(ibT("TableboxColumn"), holder);
+					ibValueForm::CreateControl<ibValueModelTableBoxColumn>(g_controlTableBoxColumnCLSID, holder);
 				tableBoxColumn->SetControlName(mainTableBox->GetControlName() + nextSourceExplorer.GetSourceName());
 				tableBoxColumn->SetVisibleColumn(nextSourceExplorer.IsVisible() || sourceExplorer.GetHelperCount() == 1);
 				// Column = [mainAttr, field] → "List.Field". The row-type hop (the catalog/document)
@@ -127,7 +126,7 @@ void ibValueForm::BuildForm(const ibFormID& formType)
 				if (nextSourceExplorer.IsTableSection()) {
 
 					ibValueModelTableBox* tableBox =
-						ibValueForm::CreateControl<ibValueModelTableBox>(ibT("Tablebox"));
+						ibValueForm::CreateControl<ibValueModelTableBox>(g_controlTableBoxCLSID);
 
 					tableBox->SetControlName(nextSourceExplorer.GetSourceName());
 					tableBox->SetSource({ mainAttrId, nextSourceExplorer.GetSourceId() });
@@ -141,7 +140,7 @@ void ibValueForm::BuildForm(const ibFormID& formType)
 						ibValueFrame* holder = tableBox->GetColumnGroupHolder(colSourceExplorer.GetSourceGroup());
 
 						ibValueModelTableBoxColumn* tableBoxColumn =
-							ibValueForm::CreateControl<ibValueModelTableBoxColumn>(ibT("TableboxColumn"), holder);
+							ibValueForm::CreateControl<ibValueModelTableBoxColumn>(g_controlTableBoxColumnCLSID, holder);
 						tableBoxColumn->SetControlName(tableBox->GetControlName() + colSourceExplorer.GetSourceName());
 						//tableBoxColumn->SetCaption(colSourceExplorer.GetSourceSynonym());
 						tableBoxColumn->SetVisibleColumn(colSourceExplorer.IsVisible()
@@ -150,16 +149,6 @@ void ibValueForm::BuildForm(const ibFormID& formType)
 					}
 				}
 				else {
-					if (nextSourceExplorer.ContainType(ibValueTypes::TYPE_BOOLEAN)
-						&& nextSourceExplorer.GetClsidList().size() == 1) {
-						ibValueCheckbox* checkbox =
-							ibValueForm::CreateControl<ibValueCheckbox>(ibT("Checkbox"));
-						checkbox->SetControlName(nextSourceExplorer.GetSourceName());
-						//checkbox->SetCaption(nextSourceExplorer.GetSourceSynonym());
-						checkbox->EnableWindow(nextSourceExplorer.IsEnabled());
-						checkbox->VisibleWindow(nextSourceExplorer.IsVisible());
-						checkbox->SetSource({ mainAttrId, nextSourceExplorer.GetSourceId() });
-					}
 					// ⭐ A COMPOSITION IS SHOWN BY A GRIDBOX, and that is what makes a report need no
 					// form: the report declares a composer, the composer is a node here, and the
 					// generated form comes up with the sheet the report composes into — plus the
@@ -169,51 +158,19 @@ void ibValueForm::BuildForm(const ibFormID& formType)
 					// A COMPOSER IS NOT A FIELD — it is not laid out one by one here. The report
 					// itself is the grid's source (see above), and a second composer is reached by
 					// hand (`Object.Composer2`, a grid of its own).
-					else if (nextSourceExplorer.GetClsidList().size() == 1
+					if (nextSourceExplorer.GetClsidList().size() == 1
 						&& nextSourceExplorer.ContainType(g_valueDataCompositionCLSID)) {
 						continue;
 					}
-					// (g_valueScheduleCLSID — backend/system/value/valueJob.h, included at the top)
-					// A SCHEDULE is shown, not typed. There is nothing sensible to put in an edit
-					// box — the value is fourteen fields — so the auto-built control is the static
-					// text, which renders the schedule as its own sentence ("Every 10 minutes,
-					// 02:00-05:00, Mon") and opens the four-tab editor when clicked.
-					else if (nextSourceExplorer.GetClsidList().size() == 1
-						&& nextSourceExplorer.ContainType(g_valueScheduleCLSID)) {
-						ibValueStaticText* staticText =
-							ibValueForm::CreateControl<ibValueStaticText>(ibT("Statictext"));
-						staticText->SetControlName(nextSourceExplorer.GetSourceName());
-						// The caption comes from the METADATA — "Schedule", not the widget's own
-						// "Static text" placeholder. That placeholder exists for a decoration
-						// somebody dropped on a form; a bound control is named by what it shows,
-						// exactly as a text box is.
-						staticText->SetCaption(ibEmptyString);
-						staticText->EnableWindow(nextSourceExplorer.IsEnabled());
-						staticText->VisibleWindow(nextSourceExplorer.IsVisible());
-						staticText->SetSource({ mainAttrId, nextSourceExplorer.GetSourceId() });
-					}
-					else {
 
-						bool selButton = !nextSourceExplorer.ContainType(ibValueTypes::TYPE_BOOLEAN) &&
-							!nextSourceExplorer.ContainType(ibValueTypes::TYPE_NUMBER) &&
-							//!nextSourceExplorer.ContainType(ibValueTypes::TYPE_DATE) &&
-							!nextSourceExplorer.ContainType(ibValueTypes::TYPE_STRING);
-
-						if (nextSourceExplorer.GetClsidList().size() != 1)
-							selButton = true;
-
-						ibValueTextCtrl* textCtrl =
-							ibValueForm::CreateControl<ibValueTextCtrl>(ibT("Textctrl"));
-						textCtrl->SetControlName(nextSourceExplorer.GetSourceName());
-						//textCtrl->SetCaption(nextSourceExplorer.GetSourceSynonym());
-						textCtrl->EnableWindow(nextSourceExplorer.IsEnabled());
-						textCtrl->VisibleWindow(nextSourceExplorer.IsVisible());
-						textCtrl->SetSource({ mainAttrId, nextSourceExplorer.GetSourceId() });
-
-						textCtrl->SetSelectButton(selButton);
-						textCtrl->SetOpenButton(false);
-						textCtrl->SetClearButton(nextSourceExplorer.IsEnabled());
-					}
+					// ANY OTHER FIELD OF THE SOURCE IS A FIELD, of the view its type gives (ibValueField::SetSource): a
+					// Boolean a flag, a schedule a label — its own sentence ("Every 10 minutes, 02:00-05:00, Mon"), its
+					// four-tab editor on a click — any other an input. Captioned by the metadata (an empty Title).
+					ibValueField* field = ibValueForm::CreateControl<ibValueField>(g_controlFieldCLSID);
+					field->SetControlName(nextSourceExplorer.GetSourceName());
+					field->EnableWindow(nextSourceExplorer.IsEnabled());
+					field->VisibleWindow(nextSourceExplorer.IsVisible());
+					field->SetSource({ mainAttrId, nextSourceExplorer.GetSourceId() });
 				}
 			}
 		}
@@ -723,19 +680,15 @@ bool ibValueForm::GenerateForm(ibValueRecordDataObjectRef* obj) const
 //*                                   Other                                        *
 //**********************************************************************************
 
-ibValueFrame* ibValueForm::CreateControl(const ibString& clsControl, ibValueFrame* control)
+ibValueFrame* ibValueForm::CreateControl(const ibClassID& clsid, ibValueFrame* control)
 {
-	//get parent obj
-	ibValueFrame* parentControl = nullptr;
-
-	if (control != nullptr)
-		parentControl = control;
-	else
-		parentControl = this;
-
-	// furthermore, the object is inserted right after the selected object
-	ibValueFrame* newControl = ibValueForm::CreateObject(clsControl, parentControl);
-	ibASSERT(newControl);
+	// Made only in what takes it — the parent is asked.
+	ibValueFrame* const parentControl = control != nullptr ? control : this;
+	if (!parentControl->FilterChild(clsid))
+		return nullptr;
+	ibValueFrame* const newControl = NewObject(clsid, parentControl);
+	if (newControl == nullptr)
+		return nullptr;
 	// Live-tree insertion: on an open form the new control is created by the host that holds the others.
 	if (!ibBackendException::IsEvalMode()) {
 		ibFormVisualDocument* const ownerDocForm = GetVisualDocument();
@@ -752,7 +705,14 @@ ibValueFrame* ibValueForm::CreateControl(const ibString& clsControl, ibValueFram
 	m_formCollectionControl->InvalidateNames();
 
 	//return value
-	return newControl->SkipSizerItems();
+	return newControl;
+}
+
+ibValueFrame* ibValueForm::CreateControl(const ibString& classControl, ibValueFrame* control)
+{
+	// Asked, not raised: a name from outside that no class has is the same "not there" as a parent that takes none.
+	const ibCtorAbstractType* const ctor = ibValue::GetAvailableCtor(classControl);
+	return ctor != nullptr ? CreateControl(ctor->GetClassType(), control) : nullptr;
 }
 
 void ibValueForm::RemoveControl(ibValueFrame* control)
@@ -770,20 +730,9 @@ void ibValueForm::RemoveControl(ibValueFrame* control)
 		}
 	}
 
-	ibValueFrame* parentControl = currentControl->GetParent();
-
-	if (parentControl->GetComponentType() == COMPONENT_TYPE_SIZERITEM) {
-		// The sizer-item wraps currentControl; removing the wrapper from its owner
-		// releases the owning handle, cascading down to currentControl.
-		ibValueFrame* parentOwner = parentControl->GetParent();
-		if (parentOwner != nullptr)
-			parentOwner->RemoveChild(parentControl);
-	}
-	else {
-		ibValueFrame* parentOwner = currentControl->GetParent();
-		if (parentOwner != nullptr)
-			parentOwner->RemoveChild(currentControl); // owning handle releases → destroys
-	}
+	ibValueFrame* parentOwner = currentControl->GetParent();
+	if (parentOwner != nullptr)
+		parentOwner->RemoveChild(currentControl); // owning handle releases → destroys
 
 	// Control removed → form attribute surface + Controls collection surface stale.
 	InvalidateNames();

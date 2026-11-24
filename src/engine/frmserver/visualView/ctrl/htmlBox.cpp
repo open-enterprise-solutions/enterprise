@@ -14,6 +14,8 @@ ibValueHTMLBox::ibValueHTMLBox() : ibValueWindow()
 {
 	m_members.Bind(this, &ibValueHTMLBox::FillControlMembers);
 	m_propertyMinSize->SetValue(ibSize(250, 150));
+	m_sizerItem->SetProportion(1);
+	m_sizerItem->SetFlagState(ibStretch_Expand);
 }
 
 void ibValueHTMLBox::OnUpdate(ibDataNode& state, ibVisualHost* host)
@@ -64,4 +66,4 @@ bool ibValueHTMLBox::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ib
 //*                       Register in runtime                           *
 //***********************************************************************
 
-CONTROL_TYPE_REGISTER(ibValueHTMLBox, "Htmlbox", "Container", control_to_clsid("CT_HTML"));
+CONTROL_TYPE_REGISTER(ibValueHTMLBox, "Html", "Container", control_to_clsid("CT_HTML"));

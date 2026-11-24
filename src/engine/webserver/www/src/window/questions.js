@@ -5,7 +5,7 @@
 // list's and a report's settings (listSettings.js, composerSettings.js), a table's advanced search (searchWindow.js): each
 // act is one, and the window is asked again.
 
-import { drawSheet } from '../gridbox/sheet.js';
+import { drawSheet } from '../spreadsheet/sheet.js';
 import { _, format, labelText } from '../localization.js';
 import { ComposerSettings } from './composerSettings.js';
 import { editFocused } from './editFocused.js';

@@ -22,9 +22,16 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
     `FeatureOptions.<Name>`.
   - Exclusive mode is *single-user mode*: `ExclusiveMode()` → `SingleUserMode()`, `SetExclusive(on)` →
     `SetSingleUserMode(on)`, the right `ExclusiveMode` → `SingleUserMode`.
-  - A value table's parts: `TableValueRow` → `TableRow`, `TableValueColumn` → `TableColumns`,
-    `TableValueColumnInfo` → `TableColumn`.
+  - The value table is `ValueTable` (`New ValueTable()`), not `Table`; its parts: `TableValueRow` → `ValueTableRow`,
+    `TableValueColumn` → `ValueTableColumns`, `TableValueColumnInfo` → `ValueTableColumn`; the LINQ verb that makes
+    one is `ToValueTable()`, not `ToTable()`.
   - The Visual-Basic-style syntax is stored as `ves`, not `vbs` (`ProgramSyntax.ves`).
+  - A form's controls are fewer, each named for what it is, and what one shows is its `View`: `Textctrl`, `Checkbox`,
+    `Radiobutton`, `Gauge`, `Slider` → `Field`; `Boxsizer`, `Wrapsizer`, `Gridsizer`, `Staticboxsizer` → `Layout`;
+    `Statictext`, `Staticline` → `Static`; `Tablebox`, `TableboxColumn`, `TableboxColumnGroup` → `Table`,
+    `TableColumn`, `ColumnLayout`, with `TableboxViewMode`, `TableboxRowSelectionMode`, `TableboxColumnGrouping` →
+    `TableViewMode`, `TableRowSelectionMode`, `ColumnLayoutGrouping`; `Notebook`, `NotebookPage` → `Pages`, `Page`;
+    `Gridbox` → `Spreadsheet`, `Textbox` → `TextArea`, `Htmlbox` → `Html`, `Chartbox` → `Chart`.
 - **A base, an application file or an application folder written before this build is not read.** The stored names
   changed with the ones above, and nothing reads the old ones: make the base again and load the application into it.
 - **Each syntax compares and joins conditions in its own spelling.** CES compares with `==` / `!=` and joins with
@@ -308,6 +315,18 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
   so is a value table's `Columns.Add` width; a width set in the designer, by a module or by dragging the column
   still wins. A form saved with 80 keeps 80 until its width is set to 0. A width is the room for the value: the
   first column also gets the room the expander and the row's picture take before it.
+- **A field is one control, and what it is for is its `View`.** `FieldView.Input` (the default), `Flag` - a check box
+  for a Boolean, `Label` - the value shown, `Switch` - the value picked from its `Choices`, `Gauge` - a bar filled to
+  its `Range`, `Slider` - between `MinValue` and `MaxValue`. A view brings its own properties and events; one the
+  source's type does not allow is not taken, and a field whose source changes to such a type becomes an Input at
+  once. A switch's `Choices` are values of the field's type, each with its presentation, held to the field's
+  qualifiers; a list holding a value of another type is emptied. The field's `ReadOnly` shows the value - it can be
+  selected and copied, not changed - in every view. Over MCP `form_set {property: "Choices", value: [{"value": 7,
+  "presentation": "Week"}]}`, the shape `form_get` reads them in.
+- **A layout is one control, `Layout`, and how it lays its controls out is its `View`**: `LayoutView.Box` (the
+  default) - a row or a column, `Wrap` - a row that wraps, `Grid` - in `Cols` columns, `Group` - in a frame with a
+  title. A decoration is a `Static`: `StaticView.Text`, its title, or `StaticView.Line`. A table column's `View` is
+  `ColumnView.Input`, `Flag` - a check box for a Boolean, or `Label` - shown, not edited.
 
 ## The browser client
 
@@ -461,6 +480,11 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
 
 ## Fixes
 
+- **An external data tool's or report's reference attribute takes choice parameters.** Over a reference to the
+  application's catalog or document its *Choice parameters* said "This field refers to nothing": the external looked
+  the type up in itself only, and now asks its application as well.
+- **MCP: an argument that arrived as bytes is named so in a refusal.** A text written `"base64:<...>"` is read as
+  bytes, and a tool that takes a plain text refused it without saying what it got.
 - **A choice form opened on a value in a folder stands on it.** In the thin client and the browser the list opened
   at its top with the folders closed and no row current: the row was looked for at the top. The tree now opens the
   folders the value lies in, and the hierarchical view enters its folder, as the desktop client did.

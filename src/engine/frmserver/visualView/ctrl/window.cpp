@@ -15,6 +15,9 @@
 
 ibValueWindow::ibValueWindow() : ibValueControl()
 {
+	// The frame owns the window's place in the sizer above, attached: its properties are the window's.
+	m_sizerItem = std::make_unique<ibSizerItem>(this);
+	AttachPropertyObject(m_sizerItem.get());
 }
 
 //***********************************************************************************
@@ -55,6 +58,9 @@ bool ibValueWindow::ReadData(const ibDataNode& node)
 	m_propertyEnabled->SetNodeValue(node.GetProperty(m_propertyEnabled->GetName()));
 	m_propertyVisible->SetNodeValue(node.GetProperty(m_propertyVisible->GetName()));
 
+	if (!m_sizerItem->ReadData(node))
+		return false;
+
 	return ibValueControl::ReadData(node);
 }
 
@@ -68,6 +74,9 @@ bool ibValueWindow::WriteData(ibDataNode& node) const
 	node.SetProperty(m_propertyTooltip->GetName(), m_propertyTooltip->GetNodeValue());
 	node.SetProperty(m_propertyEnabled->GetName(), m_propertyEnabled->GetNodeValue());
 	node.SetProperty(m_propertyVisible->GetName(), m_propertyVisible->GetNodeValue());
+
+	if (!m_sizerItem->WriteData(node))
+		return false;
 
 	return ibValueControl::WriteData(node);
 }

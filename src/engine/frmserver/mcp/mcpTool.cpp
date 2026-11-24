@@ -16,6 +16,11 @@
 #include "backend/propertyManager/property/variant/variantMetaDesc.h"    // a set of objects, placed whole
 #include "backend/propertyManager/property/propertyCommandSource.h"      // a command binding reads in its own shape too
 #include "core/description/commandDescription.h"                        // ibCommandDescriptionMemory — that shape
+#include "backend/propertyManager/property/propertyChoices.h"            // a switch's items read in their own shape too
+#include "backend/propertyManager/property/variant/variantChoices.h"     // …and placed whole
+#include "backend/metadataSerialization.h"                               // an item's value, as a row stores it
+#include "backend/backend_type.h"                                        // the field a switch stands in — its type
+#include "backend/backend_exception.h"                                   // ibCoreException — an item of a type gone
 #include "backend/propertyManager/propertyObject.h"            // the whole property list, walked below
 
 #include "backend/backend_localization.h"                      // a caption is an array by language
@@ -672,6 +677,11 @@ ibString ibMcpArgumentFault(const ibMcpTool* tool, const ibDataNode& arguments)
 			case ibDataKind::Bool:   return ibT("a boolean");
 			case ibDataKind::Array:  return ibT("an array");
 			case ibDataKind::Child:  return ibT("an object");
+			// …and what JSON's text is read AS: a "base64:<...>" string is bytes, not text. Unnamed here, bytes sent to an
+			// external's `data` were refused as "an empty value came" (2026-11-24, MCP run).
+			case ibDataKind::Binary: return ibT("bytes (a text written \"base64:<...>\" is read as bytes)");
+			case ibDataKind::Date:   return ibT("a date");
+			case ibDataKind::Guid:   return ibT("a guid");
 			default: break;
 		}
 		return ibT("an empty value");
@@ -1109,6 +1119,131 @@ ibMetaID ChoiceNamed(const ibPropertyChoiceList& list, const ibString& asked, ib
 	return found;
 }
 
+// ⭐ A SWITCH'S ITEMS, IN THE WORDS A CALLER WRITES — each its value as JSON says one (a Boolean, a number; any other as it
+// reads: a date, an enumeration's member by its name, a text) and its presentation as stored, every language at once
+// (empty: the value's own). Read raw they were nodes only ibDeserializeValue reads, said as {} whatever they held.
+ibDataValue SayChoices(const ibPropertyChoices* property)
+{
+	const ibPropertyObject* const holder = property->GetPropertyObject();   // CONST: the non-const GetMetaData wxFAILs
+	const ibMetaData* const metaData = holder != nullptr ? holder->GetMetaData() : nullptr;
+
+	std::vector<ibDataValue> items;
+	for (const ibChoiceDescription& row : property->GetValueAsChoicesDesc().m_rows) {
+		auto item = std::make_shared<ibDataNode>();
+		try {
+			const ibValue value = ibDeserializeValue(row.m_value, metaData);
+			switch (value.GetType()) {
+			case ibValueTypes::TYPE_BOOLEAN: item->AddField(ibT("value"), ibDataValue::Bool(value.GetBoolean())); break;
+			case ibValueTypes::TYPE_NUMBER:  item->AddField(ibT("value"), ibDataValue::Number(value.GetNumber())); break;
+			default:                         item->SetValue(ibT("value"), value.GetString()); break;
+			}
+		}
+		catch (const ibCoreException&) {
+			item->SetValue(ibT("value"), ibString(ibMcpText("<gone>")));   // a type this application no longer has
+		}
+		item->SetValue(ibT("presentation"), row.m_presentation);
+		items.push_back(ibDataValue::Child(item));
+	}
+	return ibDataValue::Array(std::move(items));
+}
+
+// …AND TAKEN IN THE SAME WORDS, each value made of the type of the field the switch stands in, as typed text is: a text
+// looked for in it (an enumeration's member by its name, a date read from it), a value packed as a row stores it taken as
+// it is. One of another type is refused with the type it should be — never cleared behind the caller's back, as a list
+// left from another type is (ibPropertyChoices::SetValue, which holds the rest to the type's qualifiers). A presentation
+// is a caption: every language at once where the application declares several (ibMcpCaptionInEveryLanguage); one that is
+// the value's own text is kept as none, as a script's (ibPropertyChoices::SetDataValue). Sent raw, a number went in as an
+// empty node and every value was lost while the call answered ok (2026-11-24, driving a form over MCP).
+bool ReadChoices(const ibPropertyChoices* property, const ibDataValue& given, ibChoicesDescription& choicesDesc,
+	ibString& refusal)
+{
+	const ibPropertyObject* const holder = property->GetPropertyObject();   // CONST: the non-const GetMetaData wxFAILs
+	const ibMetaData* const metaData = holder != nullptr ? holder->GetMetaData() : nullptr;
+
+	// The field the switch stands in holds the type — up the attach chain, the switch being its view. None, or no type
+	// yet: the values as said.
+	const ibBackendTypeFactory* typed = nullptr;
+	for (const ibPropertyObject* up = holder; up != nullptr && typed == nullptr; up = up->GetAttachOwner())
+		typed = dynamic_cast<const ibBackendTypeFactory*>(up);
+	if (typed != nullptr && typed->GetClsidCount() == 0)
+		typed = nullptr;
+
+	choicesDesc.Clear();
+	if (given.Kind() == ibDataKind::Empty)
+		return true;   // none: the switch offers nothing
+	if (given.Kind() != ibDataKind::Array) {
+		refusal = ibMcpText("A switch's items are a list, in order: [{\"value\": <a value of the field's type>, "
+			"\"presentation\": \"<its text; empty for the value's own>\"}]. An empty list empties it.");
+		return false;
+	}
+
+	for (const ibDataValue& one : given.AsArray()) {
+		const auto item = one.AsChild();
+		if (!item) {
+			refusal = ibMcpText("Each item is an object, {value, presentation}.");
+			return false;
+		}
+
+		ibValue value;
+		try {
+			if (const auto packed = item->FindChild(ibT("value")))
+				value = ibDeserializeValue(*packed, metaData);
+			else if (const auto said = item->FindField(ibT("value"))) {
+				switch (said->Kind()) {
+				case ibDataKind::Bool:   value = ibValue(said->AsBool());   break;
+				case ibDataKind::Number: value = ibValue(said->AsNumber()); break;
+				case ibDataKind::String:
+					if (typed == nullptr || typed->GetTypeDesc().ContainType(g_valueStringCLSID))
+						value = ibValue(said->AsString());
+					else {
+						std::vector<ibValue> found;
+						if (typed->AdjustValue().FindValue(said->AsString(), ibChoiceCondition(), found) && !found.empty())
+							value = found.front();
+						else {
+							refusal = ibString::Format(ibMcpText("'%s' is not a %s - the switch's field holds that type."),
+								said->AsString(), typed->AdjustValue().GetClassName());
+							return false;
+						}
+					}
+					break;
+				default: break;
+				}
+			}
+		}
+		catch (const ibCoreException& err) {
+			refusal = err.GetErrorDescription();   // a packed value of a type the application lacks
+			return false;
+		}
+
+		// (Held to the type's qualifiers where every road ends, ibPropertyChoices::SetValue.)
+		if (typed != nullptr && !typed->GetTypeDesc().ContainType(value.GetClassType())) {
+			refusal = ibString::Format(ibMcpText("'%s' is a %s - the switch's field holds %s, and every item is of it."),
+				value.GetString(), value.GetClassName(), typed->AdjustValue().GetClassName());
+			return false;
+		}
+
+		ibString presentation;
+		if (const auto text = item->FindField(ibT("presentation")); text && text->Kind() != ibDataKind::Empty) {
+			if (text->Kind() != ibDataKind::String) {
+				refusal = ibMcpText("An item's presentation is a text.");
+				return false;
+			}
+			presentation = text->AsString();
+		}
+		if (presentation == value.GetString())
+			presentation.Clear();
+		if (!ibMcpCaptionInEveryLanguage(metaData, presentation,
+				ibString::Format(ibMcpText("The presentation of '%s'"), value.GetString()), refusal))
+			return false;
+
+		ibChoiceDescription row;
+		ibSerializeValue(value, row.m_value);
+		row.m_presentation = presentation;
+		choicesDesc.m_rows.push_back(std::move(row));
+	}
+	return true;
+}
+
 } // namespace
 
 bool ibMcpReadChoiceParameters(const ibPropertyObject* field, ibPropertyChoiceParameters* property,
@@ -1477,6 +1612,20 @@ void ibMcpSayProperties(const ibPropertyObject* object, ibDataNode& node,
 				"file's bytes in base64 written \"base64:<...>\" and Width and Height are its size in pixels. To work "
 				"in SVG: picture_to_svg says it as SVG, and picture_from_svg draws SVG - the `Image` of its answer is "
 				"what goes here."));
+		}
+		else if (const ibPropertyChoices* items = dynamic_cast<const ibPropertyChoices*>(property)) {
+
+			// 🛑 THE SAME TRAP ONCE MORE: a switch's items are a Child, read raw below — each value a node only
+			// ibDeserializeValue reads, said as {} whatever it held; and a number sent back went in as an empty node while
+			// the call answered ok (2026-11-24, driving a form over MCP). Said in the words form_set takes back.
+			entry->SetValue(ibT("kind"), ibString(ibT("choices")));
+			entry->AddField(ibT("value"), SayChoices(items));
+			entry->SetValue(ibT("shape"), ibMcpText(
+				"Set in this shape through form_set {control, property: Choices, value}: a list of {value, presentation}, "
+				"in order, which replaces the items; an empty list empties them. A value is of the field's type - a "
+				"Boolean or a number as JSON writes one, a text, a date or an enumeration's member as it reads; one of "
+				"another type is refused. A presentation is the item's text, every language at once (`en = '...'; "
+				"ru = '...';`) where the application declares several; empty, the value's own."));
 		}
 		else if (const ibPropertyChoiceParameters* rows = dynamic_cast<const ibPropertyChoiceParameters*>(property)) {
 
@@ -2005,6 +2154,26 @@ bool ibMcpSetProperty(ibProperty* property, const ibDataNode& params,
 
 		result.SetValue(ibT("property"), name);
 		ibMcpSayChoiceParameters(asParameters->GetPropertyObject(), asParameters->GetValueAsParametersDesc(), result.Child(ibT("value")));
+		return true;
+	}
+
+	// ⭐ A SWITCH'S ITEMS TAKE THE SHAPE THEY ARE READ IN — [{value, presentation}] (ReadChoices); an object sent instead
+	// is refused there with the shape, not read as no items.
+	if (ibPropertyChoices* asChoices = dynamic_cast<ibPropertyChoices*>(property)) {
+		ibDataValue given;
+		if (const auto said = params.FindField(ibMcpValueArgument().Name()))
+			given = *said;
+		else if (const auto object = params.FindChild(ibMcpValueArgument().Name()))
+			given = ibDataValue::Child(std::make_shared<ibDataNode>(*object));
+
+		ibChoicesDescription choicesDesc;
+		if (!ReadChoices(asChoices, given, choicesDesc, refusal))
+			return false;
+		if (!ibMcpApplyByHand(property, ibVariant(new ibVariantChoices(holder, choicesDesc)), refusal))
+			return false;
+
+		result.SetValue(ibT("property"), name);
+		result.AddField(ibT("value"), SayChoices(asChoices));
 		return true;
 	}
 

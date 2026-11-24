@@ -143,7 +143,7 @@ ibMetaID ibValueForm::AddAutoAttribute(const ibString& name, const ibTypeDescrip
 {
 	// Attribute name = the control's name, made UNIQUE among the form's attributes (a pre-existing
 	// same-named attribute gets a numeric suffix). Type = the control's default type desc (already
-	// produced by the source-type generator — checkbox Boolean, tablebox value table, else String).
+	// produced by the source-type generator — a flag Boolean, tablebox value table, else String).
 	ibString uniqueName = name;
 	for (unsigned int index = 0; GetAttribute(uniqueName) != nullptr; )
 		uniqueName = ibString::Format(ibT("%s%u"), name, ++index);
@@ -1028,7 +1028,7 @@ bool ibFormAttributeValue::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 	const std::vector<ibPropertyObject*>& attached = GetAttachedObjects();
 	const long idx = m_members.GetPropAlias(lPropNum);
 	const ibProperty* property = idx >= 0 && idx < static_cast<long>(attached.size())
-		? attached[idx]->GetPropertyByIndex(m_members.GetPropData(lPropNum)) : nullptr;
+		? attached[idx]->GetProperty(m_members.GetPropData(lPropNum)) : nullptr;
 	return property != nullptr && property->GetDataValue(pvarPropVal);
 }
 

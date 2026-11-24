@@ -93,10 +93,10 @@ class TheTheme(PageTest):
 
     def test_a_tables_text_is_light_in_the_dark(self):
         page = self.start(scenario(DARK))
-        page.wait_for_selector('oes-tablebox .tabulator-cell')
+        page.wait_for_selector('oes-table .tabulator-cell')
         look = page.evaluate("""() => {
-            const cell = document.querySelector('oes-tablebox .tabulator-row .tabulator-cell');
-            const holder = document.querySelector('oes-tablebox .tabulator-tableholder .tabulator-table');
+            const cell = document.querySelector('oes-table .tabulator-row .tabulator-cell');
+            const holder = document.querySelector('oes-table .tabulator-tableholder .tabulator-table');
             return [getComputedStyle(cell).color, getComputedStyle(holder).backgroundColor]; }""")
         self.assertEqual(look, ['rgb(228, 230, 234)', 'rgb(36, 39, 44)'])
 
@@ -135,13 +135,13 @@ class AControlsOwnLook(PageTest):
     theme's; a colour the author chose stays theirs."""
 
     def look(self, theme):
-        # A field's own fill is white, as the server makes one (ibValueTextCtrl); a label's, a group's - cream.
+        # A field's own fill is white, as the server makes one (ibValueField); a label's, a group's - cream.
         fields = [{'id': 21, 'caption': 'Platform', 'node': {'BackgroundColour': '255,255,255', 'ForegroundColour': '63,92,119'}},
                   {'id': 22, 'caption': 'Chosen fill', 'node': {'BackgroundColour': '200,30,30', 'ForegroundColour': '63,92,119'}},
                   {'id': 23, 'caption': 'Chosen ink', 'node': {'BackgroundColour': '250,247,240', 'ForegroundColour': '0,0,128'}},
                   {'id': 24, 'caption': 'Fill alone', 'node': {'BackgroundColour': '255,255,0'}}]
         page = self.start({'tabs': [{'title': 'List', 'fields': fields, 'table': table()}], 'schemas': {str(STYLE): {'Theme': theme}}, 'schemaKinds': [STYLE]})
-        return page.evaluate("""() => [...document.querySelectorAll('oes-textctrl')].map((field) => {
+        return page.evaluate("""() => [...document.querySelectorAll('oes-field')].map((field) => {
             const look = getComputedStyle(field.lookTarget ?? field); return [look.color, look.backgroundColor]; })""")
 
     def test_the_platforms_is_dark_in_the_dark(self):
@@ -158,7 +158,7 @@ class AControlsOwnLook(PageTest):
         for theme, wanted in ((DARK, 'rgb(16, 18, 25)'), (LIGHT, 'rgb(255, 255, 255)')):
             page = self.start({'tabs': [{'title': 'List', 'fields': [{'id': 21, 'caption': 'Platform'}], 'table': table()}],
                                'schemas': {str(STYLE): {'Theme': theme}}, 'schemaKinds': [STYLE]})
-            self.assertEqual(page.evaluate("""() => getComputedStyle(document.querySelector('oes-textctrl').lookTarget
+            self.assertEqual(page.evaluate("""() => getComputedStyle(document.querySelector('oes-field').lookTarget
                 .shadowRoot.querySelector('[part~="base"]')).backgroundColor"""), wanted)
             page.close()
 
@@ -172,7 +172,7 @@ class AControlsOwnLook(PageTest):
         # A table's own fill is white, as the server makes one (ibValueModelTableBox): its command bar stands on it.
         page = self.start({'tabs': [tab(node={'BackgroundColour': '255,255,255', 'ForegroundColour': '63,92,119'})],
                            'schemas': {str(STYLE): {'Theme': theme}}, 'schemaKinds': [STYLE]})
-        return page.evaluate("() => getComputedStyle(document.querySelector('oes-tablebox')).backgroundColor")
+        return page.evaluate("() => getComputedStyle(document.querySelector('oes-table')).backgroundColor")
 
     def test_a_tables_own_is_the_themes_table_in_the_dark(self):
         self.assertEqual(self.table_fill(DARK), 'rgb(36, 39, 44)')
@@ -188,7 +188,7 @@ class ACellsOwnColour(PageTest):
         page = self.start(scenario(DARK))
         pairs = page.evaluate("""async () => {
             const { onFill } = await import('/pub/src/controls/control.js');
-            const { recordOf } = await import('/pub/src/tablebox/rows.js');
+            const { recordOf } = await import('/pub/src/table/rows.js');
             const row = recordOf({ NodeId: 1, NodeChildren: [{ NodeId: 7, Text: 'x', BackgroundColour: '255,255,0' }] });
             const inked = recordOf({ NodeId: 1, NodeChildren: [{ NodeId: 7, Text: 'x', TextColour: '200,0,0' }] });
             return [onFill('', 'rgb(255,255,0)'), onFill('rgb(0,0,128)', ''), onFill('', ''),

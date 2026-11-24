@@ -7,49 +7,101 @@
 #include "core/formatString.h"         // ibFormatString — what a cell is shown through
 #include "core/inputMask.h"            // ibInputMask — what can be typed into it
 #include "backend/appData.h"
+#include "backend/metaData.h"
 
 #include <algorithm>   // std::clamp — a width by type, between its floor and its cap
 
 //****************************************************************************
-#include "backend/metaData.h"
-#include "backend/objCtor.h"
+//*                       the view's child, as the column                    *
+//****************************************************************************
 
-bool ibValueModelTableBoxColumn::GetChoiceForm(ibPropertyList* property)
+ibString ibColumnViewProvider::GetClassName() const
 {
-	const ibMetaData* metaData = GetMetaData();
-	if (metaData != nullptr) {
-		const ibValueMetaObjectRecordDataRef* metaObjectRefValue = nullptr;
-		if (!m_propertySource->IsEmptyProperty()) {
-			// Resolve the bound field through the source explorer (WalkSource), NOT the form's own metaobject:
-			// a dotted path's leaf — or a value-table / dynamic-list column with NO backing metaobject — is
-			// missed by a source-scoped FindAnyObjectByFilter (and asserts). Mirror ibValueTextCtrl::GetChoiceForm.
-			const ibBackendSourceColumn* column = WalkSource(GetSourceDesc());
-			if (column != nullptr) {
-				const ibCtorMetaValueType* so = metaData->GetTypeCtor(column->GetTypeDesc().GetFirstClsid());
-				if (so != nullptr)
-					metaObjectRefValue = dynamic_cast<const ibValueMetaObjectRecordDataRef*>(so->GetMetaObject());
-			}
-		}
-		else {
-			const ibCtorMetaValueType* so = metaData->GetTypeCtor(ibTypeControlFactory::GetFirstClsid());
-			if (so != nullptr) {
-				metaObjectRefValue = dynamic_cast<const ibValueMetaObjectRecordDataRef*>(so->GetMetaObject());
-			}
-		}
+	return m_column->GetClassName();
+}
 
-		if (metaObjectRefValue != nullptr) {
-			for (auto form : metaObjectRefValue->GetFormArrayObject()) {
-				property->AppendItem(
-					form->GetSynonym(),
-					form->GetMetaID(),
-					form->GetClassType(),
-					form
-				);
-			}
-		}
+ibString ibColumnViewProvider::GetObjectTypeName() const
+{
+	return m_column->GetObjectTypeName();
+}
+
+bool ibColumnViewProvider::IsEditable() const
+{
+	return m_column->IsEditable();
+}
+
+const ibMetaData* ibColumnViewProvider::GetMetaData() const
+{
+	return m_column->GetMetaData();
+}
+
+// A BOOLEAN'S TRUTH IS THE VALUE'S, not its text's: an Input draws it as a tick and edits it with a check box (Max,
+// 2026-11-24: "a boolean opens a boolean editor, not a text one"), a Flag as its box.
+void ibColumnViewProvider::UpdateCell(const ibVariant& value, ibDataNode& cell) const
+{
+	if (value.GetType() == ibValueTypes::TYPE_BOOLEAN)
+		cell.SetValue(ibProtocol::ibForm::ibTable::Checked, value.GetBoolean());
+}
+
+// A view with no format of its own: the cells show through the one its model column gives (GetCellFormat).
+const ibTranslateString& ibColumnViewProvider::GetFormat() const
+{
+	static const ibTranslateString s_none;
+	return s_none;
+}
+
+// …and the mask written on its model column (the attribute's), else the one its type gives: a string is shown through it
+// in any view.
+ibInputMask ibColumnViewProvider::GetMask() const
+{
+	const ibValueModelTableBox* owner = m_column->GetOwner();
+	const ibValueModel* model = owner != nullptr ? owner->GetTableModel() : nullptr;
+	const ibValueModel::ibValueModelColumnCollection* columns = model != nullptr ? model->GetColumnCollection() : nullptr;
+	const ibString text = columns != nullptr ? columns->GetColumnMask(m_column->GetModelColumn()) : ibString();
+
+	ibInputMask mask;
+	if (!text.IsEmpty())
+		mask = ibInputMask::Parse(text);
+	else
+		ibInputMask::FromTypeDesc(m_column->GetTypeDesc(), mask);
+	return mask;
+}
+
+// A view that is not typed into answers the choice with what the column's type and its attribute say — the base answers
+// the column's own doors would give, were the view not asked first.
+bool ibColumnViewProvider::HasQuickChoice() const
+{
+	return m_column->ibValueControl::HasQuickChoice();
+}
+
+ibSelectMode ibColumnViewProvider::GetSelectMode() const
+{
+	return m_column->ibTypeControlFactory::GetSelectMode();
+}
+
+const ibChoiceTypeLinkDescription& ibColumnViewProvider::GetTypeLink() const
+{
+	return m_column->ibControlFrame::GetTypeLink();
+}
+
+const ibChoiceParametersDescription& ibColumnViewProvider::GetChoiceParameters() const
+{
+	return m_column->ibControlFrame::GetChoiceParameters();
+}
+
+ibChoiceCondition ibColumnViewProvider::GetChoiceCondition() const
+{
+	return m_column->ibTypeControlFactory::GetChoiceCondition();
+}
+
+std::unique_ptr<ibColumnViewProvider> ibColumnViewProvider::Create(ibColumnView view, ibValueModelTableBoxColumn* column)
+{
+	switch (view) {
+	case ibColumnView::ibColumnView_Input: return std::make_unique<ibColumnViewInput>(column);
+	case ibColumnView::ibColumnView_Flag:  return std::make_unique<ibColumnViewFlag>(column);
+	case ibColumnView::ibColumnView_Label: return std::make_unique<ibColumnViewLabel>(column);
+	default:                               return nullptr;   // a number no view has
 	}
-
-	return true;
 }
 
 //***********************************************************************************
@@ -59,6 +111,8 @@ bool ibValueModelTableBoxColumn::GetChoiceForm(ibPropertyList* property)
 ibValueModelTableBoxColumn::ibValueModelTableBoxColumn() :
 	ibValueControl(), ibTypeControlFactory(), m_model_id(ibNOT_FOUND)
 {
+	// born typed into
+	SetView(ibColumnView::ibColumnView_Input);
 }
 
 // THE TABLE THIS COLUMN SERVES — asked of its PARENT, one step at a time. A table answers
@@ -136,8 +190,8 @@ bool ibValueModelTableBoxColumn::IsColumnShown() const
 
 bool ibValueModelTableBoxColumn::IsReadOnly() const
 {
-	// A view-only form: nothing on it is edited.
-	if (ibValueControl::IsReadOnly())
+	// A view that edits nothing (a Label), or a view-only form: nothing on it is edited.
+	if (m_provider->IsReadOnly() || ibValueControl::IsReadOnly())
 		return true;
 
 	const ibValueModelTableBox* owner = GetOwner();
@@ -157,6 +211,12 @@ bool ibValueModelTableBoxColumn::IsReadOnly() const
 
 void ibValueModelTableBoxColumn::OnUpdate(ibDataNode& state, ibVisualHost* host)
 {
+	// A VIEW THE COLUMN'S TYPE DOES NOT ALLOW — set so, left so by an attribute retyped in the metadata, read so — gives
+	// way to Input here, as the field's does (a source changed does it at once, OnPropertyChanged); through the door, so
+	// the view's change runs its own course.
+	if (!IsViewAllowed(GetView()))
+		ibPropertyGate::SetValue(this, m_propertyView, ibVariant(static_cast<int>(ibColumnView::ibColumnView_Input)));
+
 	// The representation the header and the footer are drawn in — Auto shows both, the title and the
 	// picture, whichever are set. The caption is always written: it names the column even when only the
 	// picture is shown, and the representation says which of the two are.
@@ -246,22 +306,7 @@ const ibFormatString* ibValueModelTableBoxColumn::GetCellFormat() const
 
 ibInputMask ibValueModelTableBoxColumn::GetMask() const
 {
-	ibInputMask mask;
-	if (m_propertyMultilineMode->GetValueAsBoolean())
-		return mask;
-	ibString text = m_propertyMask->GetValueAsString();
-	if (text.IsEmpty()) {
-		const ibValueModelTableBox* owner = GetOwner();
-		const ibValueModel* model = owner != nullptr ? owner->GetTableModel() : nullptr;
-		const ibValueModel::ibValueModelColumnCollection* columns = model != nullptr ? model->GetColumnCollection() : nullptr;
-		if (columns != nullptr)
-			text = columns->GetColumnMask(GetModelColumn());
-	}
-	if (!text.IsEmpty())
-		mask = ibInputMask::Parse(text);
-	else
-		ibInputMask::FromTypeDesc(GetTypeDesc(), mask);
-	return mask;
+	return m_provider->GetMask();
 }
 
 ibString ibValueModelTableBoxColumn::GetEditText(const ibVariant& value) const
@@ -357,12 +402,11 @@ void ibValueModelTableBoxColumn::UpdateCell(const ibDataViewItem& item, ibDataNo
 		}
 	}
 
-	// A boolean is drawn as a tick, and whether it has one is the value's, not its text's; a number stands
-	// to the right.
-	if (value.GetType() == ibValueTypes::TYPE_BOOLEAN)
-		cell.SetValue(ibProtocol::ibForm::ibTable::Checked, value.GetBoolean());
-	else if (value.GetType() == ibValueTypes::TYPE_NUMBER)
+	// A number stands to the right…
+	if (value.GetType() == ibValueTypes::TYPE_NUMBER)
 		cell.SetValue(ibProtocol::ibForm::ibTable::Number, true);
+	// …and the view adds what it draws by.
+	m_provider->UpdateCell(value, cell);
 }
 
 bool ibValueModelTableBoxColumn::IsCellEditable(const ibDataViewItem& item) const
@@ -393,7 +437,7 @@ bool ibValueModelTableBoxColumn::SetControlValue(const ibValue& varControlVal)
 		return false;
 
 	// Written into the CURRENT ROW's cell; the client reads it back with the next fetch of that row — narrowed first by
-	// the column's own link by type (#616), as a form field's is (ibValueTextCtrl::SetControlValue).
+	// the column's own link by type (#616), as a form field's is (ibValueField::SetControlValue).
 	ibValue value = varControlVal;
 	ibValue adjusted;
 	if (ibChoiceLinkResolver::Adjust(ibChoiceHolder(m_formOwner), GetTypeLink(), varControlVal, adjusted))
@@ -435,34 +479,30 @@ ibChoiceHolder ibValueModelTableBoxColumn::GetChoiceHolder() const
 	return holder;
 }
 
-// THE COLUMN'S OWN WORD over what its type says (issue #259), as a form field says it (ibValueTextCtrl).
+// …the rest of the choice is the view's.
 bool ibValueModelTableBoxColumn::HasQuickChoice() const
 {
-	switch (m_propertyQuickChoice->GetValueAsEnum()) {
-	case ibQuickChoiceMode::ibQuickChoiceMode_Use: return true;
-	case ibQuickChoiceMode::ibQuickChoiceMode_DontUse: return false;
-	case ibQuickChoiceMode::ibQuickChoiceMode_Auto: break;
-	}
-	return ibValueControl::HasQuickChoice();
+	return m_provider->HasQuickChoice();
 }
 
-// …and over what its attribute's Select says.
 ibSelectMode ibValueModelTableBoxColumn::GetSelectMode() const
 {
-	switch (m_propertyChoiceFoldersAndItems->GetValueAsEnum()) {
-	case ibChoiceFoldersAndItems::ibChoiceFoldersAndItems_Items: return ibSelectMode::ibSelectMode_Items;
-	case ibChoiceFoldersAndItems::ibChoiceFoldersAndItems_Folders: return ibSelectMode::ibSelectMode_Folders;
-	case ibChoiceFoldersAndItems::ibChoiceFoldersAndItems_FoldersAndItems: return ibSelectMode::ibSelectMode_FoldersAndItems;
-	case ibChoiceFoldersAndItems::ibChoiceFoldersAndItems_Auto: break;
-	}
-	return ibTypeControlFactory::GetSelectMode();
+	return m_provider->GetSelectMode();
 }
 
-// …and its own rows over its field's, read in the form (#616), as a form field's (ibValueTextCtrl::GetChoiceCondition).
+const ibChoiceTypeLinkDescription& ibValueModelTableBoxColumn::GetTypeLink() const
+{
+	return m_provider->GetTypeLink();
+}
+
+const ibChoiceParametersDescription& ibValueModelTableBoxColumn::GetChoiceParameters() const
+{
+	return m_provider->GetChoiceParameters();
+}
+
 ibChoiceCondition ibValueModelTableBoxColumn::GetChoiceCondition() const
 {
-	return ibChoiceLinkResolver::Resolve(GetChoiceHolder(), GetSourceDesc().GetLeaf(), GetChoiceParameters(),
-		ibChoiceHolder(m_formOwner));
+	return m_provider->GetChoiceCondition();
 }
 
 bool ibValueModelTableBoxColumn::GetControlValue(ibValue& pvarControlVal) const
@@ -477,6 +517,43 @@ bool ibValueModelTableBoxColumn::GetControlValue(ibValue& pvarControlVal) const
 	return false;
 }
 
+//*******************************************************************
+//*							 The view    	                        *
+//*******************************************************************
+
+void ibValueModelTableBoxColumn::SetView(ibColumnView view)
+{
+	std::unique_ptr<ibColumnViewProvider> made = ibColumnViewProvider::Create(view, this);
+	if (made == nullptr) {
+		// A number no view has, or a view half added: the column is kept, typed into.
+		m_propertyView->SetValue(ibColumnView::ibColumnView_Input);
+		made = ibColumnViewProvider::Create(ibColumnView::ibColumnView_Input, this);
+	}
+
+	if (m_provider != nullptr) {
+		// WHAT THE TWO VIEWS HAVE BY THE SAME NAME CROSSES OVER — a handler on OnChange stays on OnChange. The old view's
+		// node read by the new one carries the properties and the handlers' names…
+		ibDataNode carried;
+		m_provider->WriteData(carried);
+		made->ReadData(carried);
+		// …and a lambda a script hung on, which a node does not carry.
+		for (unsigned int idx = 0; idx < made->GetEventCount(); idx++) {
+			ibEvent* const event = made->GetEvent(idx);
+			const ibEvent* const was = event != nullptr ? m_provider->GetEvent(event->GetName()) : nullptr;
+			ibValue handler;
+			if (was != nullptr && was->GetDataValue(handler))
+				event->SetDataValue(handler);
+		}
+		RemoveAttachedObject(m_provider.get());
+	}
+
+	m_provider = std::move(made);
+	AttachPropertyObject(m_provider.get());
+
+	// The members a script names are the new view's.
+	InvalidateNames();
+}
+
 //***********************************************************************************
 //*                                  Data											*
 //***********************************************************************************
@@ -488,14 +565,6 @@ bool ibValueModelTableBoxColumn::ReadData(const ibDataNode& node)
 	m_propertyFooterText->SetNodeValue(node.GetProperty(m_propertyFooterText->GetName()));
 	m_propertyHeaderPicture->SetNodeValue(node.GetProperty(m_propertyHeaderPicture->GetName()));
 	m_propertyFooterPicture->SetNodeValue(node.GetProperty(m_propertyFooterPicture->GetName()));
-	m_propertyPasswordMode->SetNodeValue(node.GetProperty(m_propertyPasswordMode->GetName()));
-	m_propertyMultilineMode->SetNodeValue(node.GetProperty(m_propertyMultilineMode->GetName()));
-	m_propertyTexteditMode->SetNodeValue(node.GetProperty(m_propertyTexteditMode->GetName()));
-	m_propertyFormat->SetNodeValue(node.GetProperty(m_propertyFormat->GetName()));
-	m_propertyMask->SetNodeValue(node.GetProperty(m_propertyMask->GetName()));
-	m_propertySelectButton->SetNodeValue(node.GetProperty(m_propertySelectButton->GetName()));
-	m_propertyOpenButton->SetNodeValue(node.GetProperty(m_propertyOpenButton->GetName()));
-	m_propertyClearButton->SetNodeValue(node.GetProperty(m_propertyClearButton->GetName()));
 	m_propertyHeaderAlign->SetNodeValue(node.GetProperty(m_propertyHeaderAlign->GetName()));
 	m_propertyFooterAlign->SetNodeValue(node.GetProperty(m_propertyFooterAlign->GetName()));
 	m_propertyWidth->SetNodeValue(node.GetProperty(m_propertyWidth->GetName()));
@@ -503,39 +572,32 @@ bool ibValueModelTableBoxColumn::ReadData(const ibDataNode& node)
 	m_propertyResizable->SetNodeValue(node.GetProperty(m_propertyResizable->GetName()));
 	//m_propertySortable->SetNodeValue(node.GetProperty(m_propertySortable->GetName()));
 	m_propertyReorderable->SetNodeValue(node.GetProperty(m_propertyReorderable->GetName()));
-	m_propertyChoiceForm->SetNodeValue(node.GetProperty(m_propertyChoiceForm->GetName()));
 	m_propertySource->SetNodeValue(node.GetProperty(m_propertySource->GetName()));
-	m_propertyQuickChoice->SetNodeValue(node.GetProperty(m_propertyQuickChoice->GetName()));
-	m_propertyChoiceFoldersAndItems->SetNodeValue(node.GetProperty(m_propertyChoiceFoldersAndItems->GetName()));
-	m_propertyTypeLink->SetNodeValue(node.GetProperty(m_propertyTypeLink->GetName()));
-	m_propertyChoiceParameters->SetNodeValue(node.GetProperty(m_propertyChoiceParameters->GetName()));
 
-	//events
-	m_eventOnChange->SetNodeValue(node.GetProperty(m_eventOnChange->GetName()));
-	m_eventStartChoice->SetNodeValue(node.GetProperty(m_eventStartChoice->GetName()));
-	m_eventStartListChoice->SetNodeValue(node.GetProperty(m_eventStartListChoice->GetName()));
-	m_eventClearing->SetNodeValue(node.GetProperty(m_eventClearing->GetName()));
-	m_eventOpening->SetNodeValue(node.GetProperty(m_eventOpening->GetName()));
-	m_eventChoiceProcessing->SetNodeValue(node.GetProperty(m_eventChoiceProcessing->GetName()));
-	
+	// A view this version does not know (a later one, or a damaged form) is refused by the property, which keeps the one
+	// it holds: the column is kept, typed into, and the number is said.
+	const auto saved = node.FindProperty(m_propertyView->GetName());
+	if (saved && !m_propertyView->SetNodeValue(*saved)) {
+		ibJournalWarning(ibT("ui.form"), _("Column '%s' has a view this version does not know (%d); it is shown as Input."),
+			GetControlName(), (int)saved->AsInt());
+		m_propertyView->SetValue(ibColumnView::ibColumnView_Input);
+	}
+	SetView(GetView());
+
+	if (!m_provider->ReadData(node))
+		return false;
+
 	return ibValueControl::ReadData(node);
 }
 
 bool ibValueModelTableBoxColumn::WriteData(ibDataNode& node) const
 {
+	node.SetProperty(m_propertyView->GetName(), m_propertyView->GetNodeValue());
 	node.SetProperty(m_propertyTitle->GetName(), m_propertyTitle->GetNodeValue());
 	node.SetProperty(m_propertyRepresentation->GetName(), m_propertyRepresentation->GetNodeValue());
 	node.SetProperty(m_propertyFooterText->GetName(), m_propertyFooterText->GetNodeValue());
 	node.SetProperty(m_propertyHeaderPicture->GetName(), m_propertyHeaderPicture->GetNodeValue());
 	node.SetProperty(m_propertyFooterPicture->GetName(), m_propertyFooterPicture->GetNodeValue());
-	node.SetProperty(m_propertyPasswordMode->GetName(), m_propertyPasswordMode->GetNodeValue());
-	node.SetProperty(m_propertyMultilineMode->GetName(), m_propertyMultilineMode->GetNodeValue());
-	node.SetProperty(m_propertyTexteditMode->GetName(), m_propertyTexteditMode->GetNodeValue());
-	node.SetProperty(m_propertyFormat->GetName(), m_propertyFormat->GetNodeValue());
-	node.SetProperty(m_propertyMask->GetName(), m_propertyMask->GetNodeValue());
-	node.SetProperty(m_propertySelectButton->GetName(), m_propertySelectButton->GetNodeValue());
-	node.SetProperty(m_propertyOpenButton->GetName(), m_propertyOpenButton->GetNodeValue());
-	node.SetProperty(m_propertyClearButton->GetName(), m_propertyClearButton->GetNodeValue());
 	node.SetProperty(m_propertyHeaderAlign->GetName(), m_propertyHeaderAlign->GetNodeValue());
 	node.SetProperty(m_propertyFooterAlign->GetName(), m_propertyFooterAlign->GetNodeValue());
 	node.SetProperty(m_propertyWidth->GetName(), m_propertyWidth->GetNodeValue());
@@ -543,26 +605,24 @@ bool ibValueModelTableBoxColumn::WriteData(ibDataNode& node) const
 	node.SetProperty(m_propertyResizable->GetName(), m_propertyResizable->GetNodeValue());
 	//node.SetProperty(m_propertySortable->GetName(), m_propertySortable->GetNodeValue());
 	node.SetProperty(m_propertyReorderable->GetName(), m_propertyReorderable->GetNodeValue());
-	node.SetProperty(m_propertyChoiceForm->GetName(), m_propertyChoiceForm->GetNodeValue());
 	node.SetProperty(m_propertySource->GetName(), m_propertySource->GetNodeValue());
-	node.SetProperty(m_propertyQuickChoice->GetName(), m_propertyQuickChoice->GetNodeValue());
-	node.SetProperty(m_propertyChoiceFoldersAndItems->GetName(), m_propertyChoiceFoldersAndItems->GetNodeValue());
-	node.SetProperty(m_propertyTypeLink->GetName(), m_propertyTypeLink->GetNodeValue());
-	node.SetProperty(m_propertyChoiceParameters->GetName(), m_propertyChoiceParameters->GetNodeValue());
 
-	//events
-	node.SetProperty(m_eventOnChange->GetName(), m_eventOnChange->GetNodeValue());
-	node.SetProperty(m_eventStartChoice->GetName(), m_eventStartChoice->GetNodeValue());
-	node.SetProperty(m_eventStartListChoice->GetName(), m_eventStartListChoice->GetNodeValue());
-	node.SetProperty(m_eventClearing->GetName(), m_eventClearing->GetNodeValue());
-	node.SetProperty(m_eventOpening->GetName(), m_eventOpening->GetNodeValue());
-	node.SetProperty(m_eventChoiceProcessing->GetName(), m_eventChoiceProcessing->GetNodeValue());
-	
+	if (!m_provider->WriteData(node))
+		return false;
+
 	return ibValueControl::WriteData(node);
+}
+
+// The copy walk (ibValueFrame::CopyNode) carries every property and event, the view's among them; the paste makes the
+// column of the view pasted first, and its child takes what the copy carried.
+bool ibValueModelTableBoxColumn::PasteData(const ibDataNode& node)
+{
+	SetView(GetView());
+	return m_provider->PasteData(node);
 }
 
 //***********************************************************************
 //*                       Register in runtime                           *
 //***********************************************************************
 
-S_CONTROL_TYPE_REGISTER(ibValueModelTableBoxColumn, "TableboxColumn", "TableboxColumn", g_controlTableBoxColumnCLSID);
+S_CONTROL_TYPE_REGISTER(ibValueModelTableBoxColumn, "TableColumn", "TableColumn", g_controlTableBoxColumnCLSID);

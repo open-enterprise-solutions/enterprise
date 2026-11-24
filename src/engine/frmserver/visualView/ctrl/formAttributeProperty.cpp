@@ -5,7 +5,7 @@
 //*                            the attribute's PROPERTY aspect                                *
 //*                                                                                            *
 //* Split out of formAttribute.cpp the way every control in this folder has it (control,       *
-//* frame, checkbox, textctrl, tableBox, tableBoxColumn, gridBox, toolBar): what an object      *
+//* frame, field, tableBox, tableBoxColumn, gridBox, toolBar): what an object                   *
 //* DOES when its properties are edited is one aspect and lives in one file.                    *
 //*********************************************************************************************
 

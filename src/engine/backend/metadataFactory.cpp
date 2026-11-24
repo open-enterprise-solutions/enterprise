@@ -246,6 +246,14 @@ ibClassID ibMetaData::GetIDObjectFromMetaID(const ibMetaID& metaID, ibCtorObject
 		if (refType == typeCtor->GetMetaTypeCtor() && metaID == metaValue->GetMetaID())
 			result = typeCtor->GetClassType();
 	});
+
+	// ⭐ …AND NOT FOUND HERE, IN THE OWNER'S, as its type ctors are (an external data tool's or report's GetTypeCtor) and
+	// its objects (FindObjectByFilter): what an external's field refers to is its application's. Asked of its own image
+	// only, a reference attribute's choice parameters offered no field to narrow — "this field refers to nothing" over a
+	// DocumentRef (Max, 2026-11-24).
+	ibMetaData* owner = nullptr;
+	if (result == 0 && GetOwner(owner) && owner != nullptr && owner != this)
+		return owner->GetIDObjectFromMetaID(metaID, refType);
 	return result;
 }
 

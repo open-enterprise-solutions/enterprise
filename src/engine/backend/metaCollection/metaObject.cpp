@@ -345,14 +345,23 @@ void ibValueMetaObject::FillMembers(ibMemberTable& helper) const
 
 bool ibValueMetaObject::SetPropVal(const long lPropNum, const ibValue& varPropVal)
 {
-	ibProperty* property = GetPropertyByIndex(lPropNum);
-	if (property != nullptr) return property->SetDataValue(varPropVal);
-	return false;
+	// THROUGH THE ONE DOOR (ibPropertyGate), as the inspector and MCP write it: the script's value read as the property
+	// holds one (SetDataValue), the one before it put back, and the value read handed to the door — the metaobject asked
+	// first, set, told (2026-11-23: a script's write was set alone, unasked and untold).
+	ibProperty* property = GetProperty(lPropNum);
+	if (property == nullptr)
+		return false;
+	const ibVariant oldValue = property->GetValue();
+	if (!property->SetDataValue(varPropVal))
+		return false;
+	const ibVariant newValue = property->GetValue();
+	property->SetValue(oldValue);
+	return ibPropertyGate::SetValue(this, property, newValue);
 }
 
 bool ibValueMetaObject::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 {
-	const ibProperty* property = GetPropertyByIndex(lPropNum);
+	const ibProperty* property = GetProperty(lPropNum);
 	if (property != nullptr) return property->GetDataValue(pvarPropVal);
 	return false;
 }

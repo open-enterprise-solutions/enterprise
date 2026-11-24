@@ -16891,7 +16891,7 @@ msgid "Kept for older forms and saved with the form; it has no effect. For sever
 msgstr ""
 
 #: src/engine/frmserver/visualView/ctrl/widgets.h:184
-msgid "The caption text. Empty on a bound static text: the bound field's synonym. Can be written per language and changed from code while the form is open."
+msgid "The caption text. Can be written per language and changed from code while the form is open."
 msgstr ""
 
 #: src/engine/frmserver/visualView/ctrl/widgets.h:188

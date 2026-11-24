@@ -12,6 +12,8 @@ ibValueNotebook::ibValueNotebook() : ibValueWindow(), m_activePage(nullptr)
 	m_members.Bind(this, &ibValueNotebook::FillControlMembers);
 	//set default params
 	//m_minimum_size = wxSize(300, 100);
+	m_sizerItem->SetProportion(1);
+	m_sizerItem->SetFlagState(ibStretch_Expand);
 }
 
 //***********************************************************************************
@@ -128,4 +130,4 @@ bool ibValueNotebook::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, i
 //*                       Register in runtime                           *
 //***********************************************************************
 
-CONTROL_TYPE_REGISTER(ibValueNotebook, "Notebook", "Notebook", g_controlNotebookCLSID);
+CONTROL_TYPE_REGISTER(ibValueNotebook, "Pages", "Pages", g_controlNotebookCLSID);

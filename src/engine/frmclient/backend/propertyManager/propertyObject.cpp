@@ -376,14 +376,11 @@ ibEvent* ibPropertyObject::GetEvent(unsigned int idx) const
 {
 	assert(idx < m_events.size());
 
-	std::map<ibString, ibEvent*>::const_iterator it = m_events.begin();
-	unsigned int i = 0;
-	while (i < idx && it != m_events.end()) {
-		i++; it++;
+	if (idx < m_events.size()) {
+		std::map<ibString, ibEvent*>::const_iterator iterator = m_events.begin();
+		std::advance(iterator, idx);
+		return iterator->second;
 	}
-
-	if (it != m_events.end())
-		return it->second;
 
 	return nullptr;
 }

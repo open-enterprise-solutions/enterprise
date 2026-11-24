@@ -24,11 +24,6 @@ public:
 
 	ibValueNotebook();
 
-	//get title
-	virtual ibString GetControlTitle() const {
-		return _("Notebook");
-	}
-
 	// Just made by the designer with no page: its first page goes on with it (the desktop's).
 	virtual void OnCreated(ibVisualHost* host, bool firstCreated) override;
 	// The window's state, and the page selected now (ActivePage, by its control id; 0 while no page is shown).
@@ -36,6 +31,9 @@ public:
 
 	// Page — a page picked (Page: its control id); Move — the active page's tab dragged (Position).
 	virtual bool OnClientEvent(ibProtocol::ibEvent::ibKind event, const ibDataNode& args) override;
+
+	// Its pages.
+	virtual bool FilterChild(const ibClassID& clsid) const override { return clsid == g_controlNotebookPageCLSID; }
 
 	//methods
 	virtual bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray) override;       //method call
@@ -70,7 +68,7 @@ private:
 	ibValueNotebookPage* m_activePage;
 	std::vector< ibValueNotebookPage*> m_pageArray;
 
-	ibPropertyCategory* m_categoryNotebook = ibPropertyObject::CreatePropertyCategory(ibT("Notebook"), _("Notebook"));
+	ibPropertyCategory* m_categoryNotebook = ibPropertyObject::CreatePropertyCategory(ibT("Pages"), _("Pages"));
 	ibPropertyEnum<ibValueEnumOrientNotebookPage>* m_propertyOrient = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumOrientNotebookPage>>(m_categoryNotebook, ibT("OrientPage"), _("Orient page"),
 		_("Where the page tabs are drawn: above the pages (the default), below them, or nowhere - then the notebook is a panel: only the active page shows, and code switches it (ActivePage)."),
 		ibTabLocation_Top);
@@ -108,6 +106,8 @@ public:
 	virtual void OnSelected(ibVisualHost* host) override;
 
 	virtual bool CanDeleteControl() const;
+	// What its sizer lays out.
+	virtual bool FilterChild(const ibClassID& clsid) const override { return IsPlaceableControl(clsid); }
 
 	virtual int GetComponentType() const { return COMPONENT_TYPE_WINDOW; }
 

@@ -22,8 +22,8 @@ ibValueForm::ibValueForm(const ibFormRequest& request, const ibValueMetaObjectFo
 	m_formCollectionAttribute(new ibValueFormCollectionAttribute(this)),
 	m_formCollectionCommand(new ibValueFormCollectionCommand(this))
 {
-	// Frame surface (properties + Events) comes from ibValueFrame::FillMembers, bound
-	// by the base ctor, then the module's names (ibValueModuleDataObject). The form ADDS
+	// Frame surface (properties + Events) comes from ibValueFrame::FillFrameProperties / FillFrameEvents,
+	// bound by the base ctor, then the module's names (ibValueModuleDataObject). The form ADDS
 	// its own members after them (FillFormMembers), its controls and its attributes.
 	m_members.Bind(this, &ibValueForm::FillFormMembers);
 	m_members.Bind(this, &ibValueForm::FillFormControls);
@@ -304,7 +304,7 @@ enum Func
 
 void ibValueForm::FillFormMembers(ibMemberTable& helper) const
 {
-	// Properties + Events come from ibValueFrame::FillMembers (base bind).
+	// Properties + Events come from ibValueFrame::FillFrameProperties / FillFrameEvents (base binds).
 	// Here the form adds only its OWN members.
 	// ThisForm / Controls / DataSource are BOUND in formObject (context / export).
 	// The bind is the single source; surfacing to editor + runtime is the
@@ -361,7 +361,8 @@ void ibValueForm::FillFormAttributes(ibMemberTable& helper) const
 // (Controls / DataSource).
 bool ibValueForm::SetPropVal(const long lPropNum, const ibValue& varPropVal)
 {
-	if (m_members.GetPropData(lPropNum, this, &ibValueFrame::FillMembers) != ibNOT_FOUND)
+	if (m_members.GetPropData(lPropNum, this, &ibValueFrame::FillFrameProperties) != ibNOT_FOUND ||
+		m_members.GetPropData(lPropNum, this, &ibValueFrame::FillFrameEvents) != ibNOT_FOUND)
 		return ibValueFrame::SetPropVal(lPropNum, varPropVal);
 
 	if (const long data = m_members.GetPropData(lPropNum, this, &ibValueForm::FillFormControls); data != ibNOT_FOUND) {
@@ -405,7 +406,8 @@ bool ibValueForm::SetPropVal(const long lPropNum, const ibValue& varPropVal)
 
 bool ibValueForm::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 {
-	if (m_members.GetPropData(lPropNum, this, &ibValueFrame::FillMembers) != ibNOT_FOUND)
+	if (m_members.GetPropData(lPropNum, this, &ibValueFrame::FillFrameProperties) != ibNOT_FOUND ||
+		m_members.GetPropData(lPropNum, this, &ibValueFrame::FillFrameEvents) != ibNOT_FOUND)
 		return ibValueFrame::GetPropVal(lPropNum, pvarPropVal);
 
 	if (const long data = m_members.GetPropData(lPropNum, this, &ibValueForm::FillFormControls); data != ibNOT_FOUND) {

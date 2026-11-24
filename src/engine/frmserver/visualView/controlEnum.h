@@ -3,7 +3,8 @@
 
 enum ibTitleLocation {
 	eLeft = 1,
-	eRight
+	eRight,
+	eNoTitle    // None: no caption shown (Max, 2026-11-23); not eNone — backend_core.h's enumerator
 };
 
 // Where a button's picture stands: Auto where the button puts it (on the left), on the left or the right of its caption,
@@ -21,6 +22,43 @@ enum ibPictureLocation {
 enum ibButtonView {
 	ibButtonView_Button,
 	ibButtonView_Hyperlink
+};
+
+// What a field is for: typed into, on or off, shown, one of its items picked, how far a number has come, a number moved
+// between two ends. The numbers are the ones a saved form holds and the client reads (ibProtocol::ibForm::ibProperty::
+// ibFieldView).
+enum ibFieldView {
+	ibFieldView_Input,
+	ibFieldView_Flag,
+	ibFieldView_Label,
+	ibFieldView_Switch,
+	ibFieldView_Gauge,
+	ibFieldView_Slider
+};
+
+// What a table's column's cells are for: typed into, on or off, shown — a field's first three, by the same numbers
+// (ibProtocol::ibForm::ibProperty::ibColumnView).
+enum ibColumnView {
+	ibColumnView_Input,
+	ibColumnView_Flag,
+	ibColumnView_Label
+};
+
+// How a layout lays out what is in it: in a row or a column, in a row that wraps, in cells of one size, in a row or a
+// column inside a frame with a caption. The numbers are the ones a saved form holds and the client reads
+// (ibProtocol::ibForm::ibProperty::ibLayoutView).
+enum ibLayoutView {
+	ibLayoutView_Box,
+	ibLayoutView_Wrap,
+	ibLayoutView_Grid,
+	ibLayoutView_Group
+};
+
+// What a static shows: its text, a heading or a note; a line, across or down. The numbers are the ones a saved form holds
+// and the client reads (ibProtocol::ibForm::ibProperty::ibStaticView).
+enum ibStaticView {
+	ibStaticView_Text,
+	ibStaticView_Line
 };
 
 enum ibRepresentation {
@@ -127,6 +165,7 @@ class FRMSERVER_API ibValueEnumTitleLocation :
 	virtual void CreateEnumeration() {
 		AddEnumeration(ibTitleLocation::eLeft, ibT("Left"), ibTRANSLATE("Left"));
 		AddEnumeration(ibTitleLocation::eRight, ibT("Right"), ibTRANSLATE("Right"));
+		AddEnumeration(ibTitleLocation::eNoTitle, ibT("None"), ibTRANSLATE("None"));
 	}
 private:
 };
@@ -151,6 +190,57 @@ class FRMSERVER_API ibValueEnumButtonView :
 	virtual void CreateEnumeration() {
 		AddEnumeration(ibButtonView::ibButtonView_Button, ibT("Button"), ibTRANSLATE_IN_CONTEXT("button view", "Button"), ibT("button view"));
 		AddEnumeration(ibButtonView::ibButtonView_Hyperlink, ibT("Hyperlink"), ibTRANSLATE("Hyperlink"));
+	}
+private:
+};
+
+class FRMSERVER_API ibValueEnumFieldView :
+	public ibValueEnumeration<ibFieldView> {
+	public:
+	ibValueEnumFieldView() : ibValueEnumeration() {}
+	virtual void CreateEnumeration() {
+		AddEnumeration(ibFieldView::ibFieldView_Input, ibT("Input"), ibTRANSLATE_IN_CONTEXT("field view", "Input"), ibT("field view"));
+		AddEnumeration(ibFieldView::ibFieldView_Flag, ibT("Flag"), ibTRANSLATE_IN_CONTEXT("field view", "Flag"), ibT("field view"));
+		AddEnumeration(ibFieldView::ibFieldView_Label, ibT("Label"), ibTRANSLATE_IN_CONTEXT("field view", "Label"), ibT("field view"));
+		AddEnumeration(ibFieldView::ibFieldView_Switch, ibT("Switch"), ibTRANSLATE_IN_CONTEXT("field view", "Switch"), ibT("field view"));
+		AddEnumeration(ibFieldView::ibFieldView_Gauge, ibT("Gauge"), ibTRANSLATE_IN_CONTEXT("field view", "Gauge"), ibT("field view"));
+		AddEnumeration(ibFieldView::ibFieldView_Slider, ibT("Slider"), ibTRANSLATE_IN_CONTEXT("field view", "Slider"), ibT("field view"));
+	}
+private:
+};
+
+class FRMSERVER_API ibValueEnumColumnView :
+	public ibValueEnumeration<ibColumnView> {
+	public:
+	ibValueEnumColumnView() : ibValueEnumeration() {}
+	virtual void CreateEnumeration() {
+		AddEnumeration(ibColumnView::ibColumnView_Input, ibT("Input"), ibTRANSLATE_IN_CONTEXT("field view", "Input"), ibT("field view"));
+		AddEnumeration(ibColumnView::ibColumnView_Flag, ibT("Flag"), ibTRANSLATE_IN_CONTEXT("field view", "Flag"), ibT("field view"));
+		AddEnumeration(ibColumnView::ibColumnView_Label, ibT("Label"), ibTRANSLATE_IN_CONTEXT("field view", "Label"), ibT("field view"));
+	}
+private:
+};
+
+class FRMSERVER_API ibValueEnumLayoutView :
+	public ibValueEnumeration<ibLayoutView> {
+	public:
+	ibValueEnumLayoutView() : ibValueEnumeration() {}
+	virtual void CreateEnumeration() {
+		AddEnumeration(ibLayoutView::ibLayoutView_Box, ibT("Box"), ibTRANSLATE_IN_CONTEXT("layout view", "Box"), ibT("layout view"));
+		AddEnumeration(ibLayoutView::ibLayoutView_Wrap, ibT("Wrap"), ibTRANSLATE_IN_CONTEXT("layout view", "Wrap"), ibT("layout view"));
+		AddEnumeration(ibLayoutView::ibLayoutView_Grid, ibT("Grid"), ibTRANSLATE_IN_CONTEXT("layout view", "Grid"), ibT("layout view"));
+		AddEnumeration(ibLayoutView::ibLayoutView_Group, ibT("Group"), ibTRANSLATE_IN_CONTEXT("layout view", "Group"), ibT("layout view"));
+	}
+private:
+};
+
+class FRMSERVER_API ibValueEnumStaticView :
+	public ibValueEnumeration<ibStaticView> {
+	public:
+	ibValueEnumStaticView() : ibValueEnumeration() {}
+	virtual void CreateEnumeration() {
+		AddEnumeration(ibStaticView::ibStaticView_Text, ibT("Text"), ibTRANSLATE_IN_CONTEXT("static view", "Text"), ibT("static view"));
+		AddEnumeration(ibStaticView::ibStaticView_Line, ibT("Line"), ibTRANSLATE_IN_CONTEXT("static view", "Line"), ibT("static view"));
 	}
 private:
 };

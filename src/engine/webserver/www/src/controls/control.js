@@ -28,8 +28,16 @@ export const EventKind = Object.freeze({
 	Row: 12, Sort: 13, Cell: 14, Resize: 15, Action: 16, Search: 17, Find: 18,
 });
 
+// What a field is for (ibProtocol::ibForm::ibProperty::ibFieldView) — a meaning; the widget is this page's.
+export const FieldView = Object.freeze({ Input: 0, Flag: 1, Label: 2, Switch: 3, Gauge: 4, Slider: 5 });
+// What a table column's cells are for (ibProtocol::ibForm::ibProperty::ibColumnView) — a field's first three, by its numbers.
+export const ColumnView = Object.freeze({ Input: 0, Flag: 1, Label: 2 });
+
 /** @type {Map<string, string>} a node type → its element's tag */
 const tags = new Map();
+
+// A control's Stretch in the sizer it stands in (wxStretch): Expand fills it across, Shrink keeps the control's own size.
+const expand = 0x2000;
 
 /**
  * @param {string} type the node's NodeType, as the server names its control (ibForm::ibType)
@@ -127,8 +135,8 @@ export class Control extends HTMLElement {
 	}
 
 	/**
-	 * Applied to every control on every pass: shown and enabled, the tooltip, the colours, the font, the sizes.
-	 * Everything it sets it also clears, so what went away from the node goes away here too.
+	 * Applied to every control on every pass: shown and enabled, the tooltip, the colours, the font, the sizes, its place
+	 * in the sizer it stands in. Everything it sets it also clears, so what went away from the node goes away here too.
 	 * @param {ProtocolNode} node
 	 */
 	applyCommon(node) {
@@ -158,6 +166,28 @@ export class Control extends HTMLElement {
 		this.style.minHeight = minimum.height > 0 ? `max(${minimum.height}px, var(--oes-min-height, 0px))` : '';
 		this.style.maxWidth = maximum.width > 0 ? `${maximum.width}px` : '';
 		this.style.maxHeight = maximum.height > 0 ? `${maximum.height}px` : '';
+
+		// ITS PLACE IN THE SIZER IT STANDS IN, as its own node says (the server's ibSizerItem): its share of the free space,
+		// whether it stretches across — in a grid's cell the other axis too, Shrink keeping its own width at the cell's
+		// start, as the desktop's grid places it — the border round it. Said, not set: what lays it out reads it
+		// (styles/form.css), and a control standing alone, a document in a tab of its own, does not. A node with none (a
+		// page, a column) says none.
+		const placed = node.Proportion !== undefined;
+		const expanded = ((node.Stretch ?? 0) & expand) !== 0;
+		const border = node.BorderSize ?? 0;
+		const side = (/** @type {boolean | undefined} */ kept) => (kept && border > 0 ? `${border}px` : '0');
+		const place = {
+			'--oes-place-grow': String(node.Proportion ?? 0),
+			'--oes-place-align': expanded ? 'stretch' : 'flex-start',
+			'--oes-place-justify': expanded ? 'stretch' : 'start',
+			'--oes-place-margin': `${side(node.BorderTop)} ${side(node.BorderRight)} ${side(node.BorderBottom)} ${side(node.BorderLeft)}`,
+		};
+		for (const [name, value] of Object.entries(place)) {
+			if (placed)
+				this.style.setProperty(name, value);
+			else
+				this.style.removeProperty(name);
+		}
 	}
 }
 
@@ -355,4 +385,19 @@ export function readFont(text) {
 		size: Number(size),
 		underlined: Number(underlined) === 1,
 	};
+}
+
+/** @type {CanvasRenderingContext2D | null} */
+let measure = null;
+
+/**
+ * A text's width in a font, as the desktop's GetTextExtent gives it — read from the font, not from a layout, so a
+ * caption on a page not on show is measured too.
+ * @param {string} text
+ * @param {CSSStyleDeclaration} style
+ */
+export function textWidth(text, style) {
+	measure ??= /** @type {CanvasRenderingContext2D} */ (document.createElement('canvas').getContext('2d'));
+	measure.font = `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+	return Math.ceil(measure.measureText(text).width);
 }

@@ -1,6 +1,6 @@
 #include "docViewFormEdit.h"
 #include "docViewComposerEdit.h"   // ibFetchComposerRequest — what a composition's panel asks
-#include "backend/propertyManager/property/propertyDynamicSource.h"   // a list's Source, picked (SetProperty)
+#include "backend/propertyManager/propertyObject.h"   // ibPropertyGate — a value set through the one door (SetProperty)
 
 #include "backend/metaCollection/metaFormObject.h"
 #include "backend/metaData.h"   // GetCompileCache — the form the application compiled, when it has one
@@ -178,12 +178,8 @@ bool ibFormDesignView::FetchRows(const ibDataNode& request, ibDataNode& response
 	ibDataNode& drawn = response.Child(ibProtocol::ibView::ibFormDesigner::Node);
 	drawn = ibDataNode(control->GetClassType(), control->GetControlID());
 	RefreshControl(control, drawn);
-	// Its rows, and its sizer item's — the inspector shows them with it (the desktop's owner's category).
-	ibDataNode& controls = response.Child(ibProtocol::ibView::ibFormDesigner::Controls);
-	WriteRows(control, controls);
-	ibValueFrame* const holder = control->GetParent();
-	if (holder != nullptr && holder->GetComponentType() == COMPONENT_TYPE_SIZERITEM)
-		WriteRows(holder, controls);
+	// Its rows — its sizer item's among them, attached.
+	WriteRows(control, response.Child(ibProtocol::ibView::ibFormDesigner::Controls));
 	return true;
 }
 
@@ -206,36 +202,17 @@ bool ibFormDesignView::SetProperty(ibPropertyObject* object, const ibDataNode& r
 	if (object == nullptr || !value)
 		return false;
 
-	// An event — the handler a form command runs (Action): its owner asked and told by the event's pair.
-	if (ibEvent* const event = object->GetEvent(name)) {
-		ibPropertyObject* const owner = event->GetPropertyObject();
-		const ibVariant oldValue = event->GetValue();
-		if (value->Kind() == ibDataKind::String && !owner->OnEventChanging(event, ibVariant(value->AsString())))
-			return false;
-		if (!event->SetNodeValue(*value))
-			return false;
-		owner->OnEventChanged(event, oldValue, event->GetValue());
-		return true;
-	}
+	// ⭐ THROUGH THE ONE DOOR (ibPropertyGate), as MCP and the metadata's inspector set a value: the owner asked with the
+	// value as the property read it, whatever its kind — this door asked a string alone, and a field's View, a number,
+	// went past the field's veto (2026-11-23: a Gauge set on a String) — then set, the owner told, and the change carried
+	// up to the holder (OnChildChanged): a list's Source makes the list anew over it, its main table and its columns. An
+	// event — the handler a form command runs (Action) — through the event's pair.
+	if (ibEvent* const event = object->GetEvent(name))
+		return ibPropertyGate::SetEvent(event->GetPropertyObject(), event, *value);
 
-	// …any other property, its own owner's — the attribute's, or its value's (a dynamic list's Source): the change
-	// carries up to the holder, which makes its value anew for a new type.
+	// …any other property, its own owner's — the attribute's, or its value's (a dynamic list's Source).
 	ibProperty* const property = object->GetProperty(name);
-	if (property == nullptr)
-		return false;
-	ibPropertyObject* const owner = property->GetPropertyObject();
-	const ibVariant oldValue = property->GetValue();
-	if (value->Kind() == ibDataKind::String && !owner->OnPropertyChanging(property, ibVariant(value->AsString())))
-		return false;
-	if (!property->SetNodeValue(*value))
-		return false;
-	owner->OnPropertyChanged(property, oldValue, property->GetValue());
-	// A LIST'S SOURCE picked: the list is made anew over it — its main table, its columns (ibValueDynamicList::
-	// OnChildChanged, as the desktop's cell's SetSource rebuilds it); the main table lands in its description, which is
-	// what the form keeps.
-	if (dynamic_cast<const ibPropertyDynamicSource*>(property) != nullptr)
-		owner->OnChildChanged();
-	return true;
+	return property != nullptr && ibPropertyGate::SetValue(property->GetPropertyObject(), property, *value);
 }
 
 bool ibFormDesignView::LoadForm()
@@ -350,11 +327,11 @@ struct ibControlMenuItem {
 };
 
 const ibControlMenuItem s_controlMenu[] = {
-	{ ibProtocol::ibForm::ibType::Notebook,            ibProtocol::ibForm::ibType::NotebookPage,        ibTRANSLATE("Add page") },
-	{ ibProtocol::ibForm::ibType::Tablebox,            ibProtocol::ibForm::ibType::TableboxColumn,      ibTRANSLATE("Add column") },
-	{ ibProtocol::ibForm::ibType::Tablebox,            ibProtocol::ibForm::ibType::TableboxColumnGroup, ibTRANSLATE("Add column group") },
-	{ ibProtocol::ibForm::ibType::TableboxColumnGroup, ibProtocol::ibForm::ibType::TableboxColumn,      ibTRANSLATE("Add column") },
-	{ ibProtocol::ibForm::ibType::TableboxColumnGroup, ibProtocol::ibForm::ibType::TableboxColumnGroup, ibTRANSLATE("Add column group") },
+	{ ibProtocol::ibForm::ibType::Pages,        ibProtocol::ibForm::ibType::Page,         ibTRANSLATE("Add page") },
+	{ ibProtocol::ibForm::ibType::Table,        ibProtocol::ibForm::ibType::TableColumn,  ibTRANSLATE("Add column") },
+	{ ibProtocol::ibForm::ibType::Table,        ibProtocol::ibForm::ibType::ColumnLayout, ibTRANSLATE("Add column group") },
+	{ ibProtocol::ibForm::ibType::ColumnLayout, ibProtocol::ibForm::ibType::TableColumn,  ibTRANSLATE("Add column") },
+	{ ibProtocol::ibForm::ibType::ColumnLayout, ibProtocol::ibForm::ibType::ColumnLayout, ibTRANSLATE("Add column group") },
 };
 
 } // namespace
@@ -362,7 +339,7 @@ const ibControlMenuItem s_controlMenu[] = {
 void ibFormDesignView::WriteClasses(ibDataNode& response)
 {
 	// The classes a control may be made of, with their pictures — the editor's palette and its trees' icons; one the
-	// desktop did not offer to place (IsControlSystem — a sizer's item, a page) is not Visible. Each is made by the
+	// desktop did not offer to place (IsControlSystem — a page, a column) is not Visible. Each is made by the
 	// server (Control — its palette, its paste), so nothing of one is written but what is shown.
 	ibDataNode& classes = response.Child(ibProtocol::ibView::ibFormDesigner::Classes);
 	for (const ibCtorAbstractType* ctor : ibValue::GetListCtorsByType(ibCtorObjectType::ibCtorObjectType_object_control)) {

@@ -8,8 +8,8 @@ FORM = {'tabs': [{'title': 'Document', 'fields': [{'id': 50, 'caption': 'Number'
 
 def heights(page):
     return page.evaluate("""() => Object.fromEntries(Object.entries({
-        field: 'oes-textctrl wa-input', row: '.tabulator-tableholder .tabulator-row', header: '.tabulator-header',
-        tool: 'oes-tablebox .command-bar wa-button', bar: 'oes-tablebox .command-bar', tab: '.tab', top: '.client-window > header',
+        field: 'oes-field wa-input', row: '.tabulator-tableholder .tabulator-row', header: '.tabulator-header',
+        tool: 'oes-table .command-bar wa-button', bar: 'oes-table .command-bar', tab: '.tab', top: '.client-window > header',
       }).map(([name, selector]) => [name, Math.round(document.querySelector(selector).getBoundingClientRect().height)]))""")
 
 
@@ -24,9 +24,9 @@ class Desktop(PageTest):
 
     def test_a_field_is_not_cut(self):
         page = self.start(FORM)
-        page.wait_for_function("document.querySelector('oes-textctrl wa-input').value === '1'")
+        page.wait_for_function("document.querySelector('oes-field wa-input').value === '1'")
         fits = page.evaluate("""() => {
-            const input = document.querySelector('oes-textctrl wa-input').shadowRoot.querySelector('input');
+            const input = document.querySelector('oes-field wa-input').shadowRoot.querySelector('input');
             return input.scrollHeight <= input.clientHeight + 1 && input.clientHeight >= 14; }""")
         self.assertTrue(fits)
 

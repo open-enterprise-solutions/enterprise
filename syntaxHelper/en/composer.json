@@ -633,7 +633,7 @@
       "class_id": 161399673356296135,
       "category_keys": ["value_types", "runtime", "forms"],
       "signature": "List : DynamicList",
-      "description": "A list read from the base page by page — what a list form shows. It stands on a MAIN TABLE (a catalog, a document, a register), which says whose rows they are and what can be done with one: open it, create one, mark it for deletion. A query of its own, when it has one, changes what is read over that table, not whose rows they are. Its filter, sort and grouping are its settings, edited in its settings window and by the person in the list.\n\nA script meets one as a form attribute — a generated list form names its main attribute `List` — or as the Value of a table box. It asks two things of it: Refresh to read again, GetMetadata for what it lists. The current row of a table box showing it is a DynamicListRow.\n\n`New DynamicList()` makes an empty one, with no main table.",
+      "description": "A list read from the base page by page — what a list form shows. It stands on a MAIN TABLE (a catalog, a document, a register), which says whose rows they are and what can be done with one: open it, create one, mark it for deletion. A query of its own, when it has one, changes what is read over that table, not whose rows they are. Its filter, sort and grouping are its settings, edited in its settings window and by the person in the list.\n\nA script meets one as a form attribute — a generated list form names its main attribute `List` — or as the Value of a table. It asks two things of it: Refresh to read again, GetMetadata for what it lists. The current row of a table showing it is a DynamicListRow.\n\n`New DynamicList()` makes an empty one, with no main table.",
       "syntax_block": "List.Refresh();\nWhat = List.GetMetadata();",
       "parameters": "",
       "return_descr": "",
@@ -649,7 +649,7 @@
       "kind": "procedure",
       "category_keys": ["value_types", "runtime", "forms"],
       "signature": "Refresh()",
-      "description": "Reads the list again: its settings as they now stand are applied and every row is fetched anew, so rows written since appear and removed ones go. The table box showing it follows.",
+      "description": "Reads the list again: its settings as they now stand are applied and every row is fetched anew, so rows written since appear and removed ones go. The table showing it follows.",
       "syntax_block": "List.Refresh();",
       "parameters": "None.",
       "return_descr": "",
@@ -683,13 +683,13 @@
       "owner_id": "cls.DynamicList",
       "category_keys": ["value_types", "runtime", "forms"],
       "signature": "Row.<column>",
-      "description": "One row of a dynamic list as a script holds it — the current row of a table box that shows the list (`Controls.Table1.CurrentRow`). Its fields are the list's columns, read by name: the main table's fields and those its query adds. A row is read, not written: the list shows the base, and a change goes through the object the row stands for.\n\nA script never makes one. Writing a reference into the table box's CurrentRow puts it on that object's row.",
+      "description": "One row of a dynamic list as a script holds it — the current row of a table that shows the list (`Controls.Table1.CurrentRow`). Its fields are the list's columns, read by name: the main table's fields and those its query adds. A row is read, not written: the list shows the base, and a change goes through the object the row stands for.\n\nA script never makes one. Writing a reference into the table's CurrentRow puts it on that object's row.",
       "syntax_block": "Row = Controls.Table1.CurrentRow;\nName = Row.Description;",
       "parameters": "",
       "return_descr": "",
       "example": "Row = Controls.Table1.CurrentRow;\nMessage(Row.Description);",
       "availability": "Client, Server",
-      "see_also": ["cls.DynamicList", "cls.Table.Row"],
+      "see_also": ["cls.DynamicList", "cls.ValueTable.Row"],
       "reviewed": false
     }
   ]

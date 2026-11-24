@@ -22,10 +22,12 @@
 
 void ibValueForm::Modify(bool modify)
 {
-	if (IsShown()) {
+	// Shown, the form's document holds the mark and writes it on the form — a demonstration's takes none; not shown yet,
+	// the form holds it, and its document takes it when made (CreateDocForm).
+	if (IsShown())
 		GetVisualDocument()->Modify(modify);
-	}
-	m_formModified = modify;
+	else
+		m_formModified = modify;
 	// Its State says it, and the command bar what it lets through now.
 	ibFormVisualDocument* const document = GetVisualDocument();
 	if (ibFormVisualEditView* const host = document != nullptr ? document->GetFirstView() : nullptr)

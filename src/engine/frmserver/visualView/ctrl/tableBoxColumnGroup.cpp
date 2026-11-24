@@ -113,5 +113,5 @@ bool ibValueModelTableBoxColumnGroup::WriteData(ibDataNode& node) const
 //*                       Register in runtime                           *
 //***********************************************************************
 
-ENUM_TYPE_REGISTER(ibValueEnumTableBoxColumnGrouping, "TableboxColumnGrouping", enum_to_clsid("EN_TBXCG"));
-S_CONTROL_TYPE_REGISTER(ibValueModelTableBoxColumnGroup, "TableboxColumnGroup", "TableboxColumn", g_controlTableBoxColumnGroupCLSID);
+ENUM_TYPE_REGISTER(ibValueEnumTableBoxColumnGrouping, "ColumnLayoutGrouping", enum_to_clsid("EN_TBXCG"));
+S_CONTROL_TYPE_REGISTER(ibValueModelTableBoxColumnGroup, "ColumnLayout", "TableColumn", g_controlTableBoxColumnGroupCLSID);

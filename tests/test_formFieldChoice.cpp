@@ -3,19 +3,18 @@
 //
 // A form is a SOURCE over its own attributes (ibValueForm : ibSourceDataObject): its explorer is made of them, and a
 // hop is an attribute's id. A form's own attribute carries no link — one reached through the dot could not be given
-// any — so a link on a form lives on its CONTROL, a text field or a table column, and the form is the source its paths
-// are read in. These pin:
+// any — so a link on a form lives on its CONTROL, a field or a table column, and the form is the source its paths are
+// read in. These pin:
 //
 //   * a control's own rows are read off the form (ibChoiceLinkResolver::ResolveParameters, the form as the holder);
 //   * they are offered what the form reaches — never the field the control is bound to;
 //   * a value written through a control empties the controls whose own rows name its field, unless the row says
-//     Keep, on a change only (ibTypeControlFactory::ClearLinked);
-//   * a Textctrl's QuickChoice and ChoiceFoldersAndItems answer its doors HasQuickChoice and GetSelectMode, and
-//     survive the form's save and load;
-//   * a Textctrl's own TypeLink and ChoiceParameters (#616) survive the save and load, a path through the dot whole.
+//     Keep, on a change only (ibTypeControlFactory::ClearLinked).
+//
+// An Input field's own word and own links, saved and loaded: test_formField.cpp.
 //
 // DB-FREE AND UI-FREE: a fresh ibMetaDataApplicationFile that is never run, a form made in the test on a session with
-// a frame (framedSession.h), and a control made by its own ctor.
+// a frame (framedSession.h).
 // =============================================================================
 
 #include <gtest/gtest.h>
@@ -30,12 +29,11 @@
 #include "backend/propertyManager/property/propertyChoiceLink.h"
 #include "backend/propertyManager/property/variant/variantChoiceLink.h"   // ibChoiceHolderFields — what a row may read
 #include "backend/appData.h"                      // the environment a form is made in
-#include "backend/objCtor.h"                         // ibCtorAbstractType — a control made by its own ctor
 #include "core/serialize/dataBuilder.h"
 
-#include "frmserver/visualView/ctrl/frame.h"         // ibValueFrame — what a control saves and loads through
+#include "frmserver/visualView/ctrl/frame.h"         // ibControlFrame — what a value is written through
 #include "frmserver/visualView/ctrl/typeControl.h"
-#include "frmserver/visualView/ctrl/widgets.h"       // g_controlTextCtrlCLSID
+#include "frmserver/visualView/ctrl/field.h"         // g_controlFieldCLSID
 #include "frmserver/visualView/ctrl/form.h"
 #include "frmserver/visualView/ctrl/formAttribute.h"
 #include "framedSession.h"                           // KeyFrame, FramedSession — the frame a form is born against
@@ -158,31 +156,10 @@ TEST_F(FormAttributeChoice, TheFormIsTheSourceAControlsRowsAreReadIn)
 
 namespace {
 
-// A Textctrl made by its class's own ctor, the way the registry makes one, with no form around it. Asked through the
-// exported classes it derives — the frame saves, loads and answers the quick choice, the factory the select mode.
-ibValue MakeTextctrl()
+// A field on the form, bound to `attribute`, as the designer's add makes one.
+ibTypeControlFactory* BoundField(ibValueForm* form, const ibFormAttributeValue* attribute)
 {
-	ibCtorAbstractType* ctor = ibValue::GetAvailableCtor(g_controlTextCtrlCLSID);
-	return ctor != nullptr ? ctor->CreateObject() : ibValue();
-}
-
-struct TextctrlUnderTest {
-	ibValue m_value = MakeTextctrl();
-	ibValueFrame* m_frame = dynamic_cast<ibValueFrame*>(m_value.GetRef());
-	ibTypeControlFactory* m_factory = dynamic_cast<ibTypeControlFactory*>(m_value.GetRef());
-
-	bool IsOk() const { return m_frame != nullptr && m_factory != nullptr; }
-	ibPropertyEnumBase* Property(const wxString& name) const { return dynamic_cast<ibPropertyEnumBase*>(m_frame->GetProperty(name)); }
-};
-
-} // namespace
-
-namespace {
-
-// A Textctrl on the form, bound to `attribute`, as the designer's add makes one.
-ibTypeControlFactory* BoundTextctrl(ibValueForm* form, const ibFormAttributeValue* attribute)
-{
-	ibTypeControlFactory* control = dynamic_cast<ibTypeControlFactory*>(form->NewObject(g_controlTextCtrlCLSID, form));
+	ibTypeControlFactory* control = dynamic_cast<ibTypeControlFactory*>(form->NewObject(g_controlFieldCLSID, form));
 	if (control != nullptr)
 		control->SetDefaultSourceType(ibSourceDescription(attribute->GetId()));
 	return control;
@@ -199,7 +176,7 @@ ibPropertyChoiceParameters* OwnRows(ibTypeControlFactory* control)
 // A control's own rows are offered what the form reaches — never the field it is bound to.
 TEST_F(FormAttributeChoice, AControlIsOfferedWhatTheFormReaches)
 {
-	ibTypeControlFactory* control = BoundTextctrl(form, contract);
+	ibTypeControlFactory* control = BoundField(form, contract);
 	ASSERT_NE(control, nullptr);
 	ASSERT_NE(OwnRows(control), nullptr);
 
@@ -215,8 +192,8 @@ TEST_F(FormAttributeChoice, AControlIsOfferedWhatTheFormReaches)
 // empty nothing.
 TEST_F(FormAttributeChoice, AControlsOwnRowEmptiesItsFieldWhenTheFieldItNamesChanges)
 {
-	ibTypeControlFactory* contractField = BoundTextctrl(form, contract);
-	ibControlFrame* organisationField = dynamic_cast<ibControlFrame*>(BoundTextctrl(form, organisation));
+	ibTypeControlFactory* contractField = BoundField(form, contract);
+	ibControlFrame* organisationField = dynamic_cast<ibControlFrame*>(BoundField(form, organisation));
 	ASSERT_NE(contractField, nullptr);
 	ASSERT_NE(organisationField, nullptr);
 	ASSERT_NE(OwnRows(contractField), nullptr);
@@ -237,74 +214,4 @@ TEST_F(FormAttributeChoice, AControlsOwnRowEmptiesItsFieldWhenTheFieldItNamesCha
 	OwnRows(contractField)->SetValue(keep);
 	organisationField->SetControlValue(ibValue(ibString(wxT("Our firm"))));
 	EXPECT_TRUE(ValueOf(contract) == wxT("No. 9"));
-}
-
-// The field's word over its type's, through its own doors; Auto leaves the type's answer standing — and the two
-// properties go out with the form and come back with it.
-TEST(FormFieldChoice, TextctrlSaysItsWordInItsDoors)
-{
-	wxInitializer wxInit;
-	if (!wxInit.IsOk())
-		GTEST_SKIP() << "wxBase init failed (no wxApp host)";
-
-	TextctrlUnderTest written;
-	ASSERT_TRUE(written.IsOk());
-	ibPropertyEnumBase* quickChoice = written.Property(wxT("QuickChoice"));
-	ibPropertyEnumBase* foldersAndItems = written.Property(wxT("ChoiceFoldersAndItems"));
-	ASSERT_NE(quickChoice, nullptr);
-	ASSERT_NE(foldersAndItems, nullptr);
-
-	// Nothing said: the type's answer (no application here: none) and the holder's (items).
-	EXPECT_FALSE(written.m_frame->HasQuickChoice());
-	EXPECT_EQ(written.m_factory->GetSelectMode(), ibSelectMode::ibSelectMode_Items);
-
-	quickChoice->SetValue(static_cast<int>(ibQuickChoiceMode_Use));
-	EXPECT_TRUE(written.m_frame->HasQuickChoice());
-	quickChoice->SetValue(static_cast<int>(ibQuickChoiceMode_DontUse));
-	EXPECT_FALSE(written.m_frame->HasQuickChoice());
-	foldersAndItems->SetValue(static_cast<int>(ibChoiceFoldersAndItems_FoldersAndItems));
-	EXPECT_EQ(written.m_factory->GetSelectMode(), ibSelectMode::ibSelectMode_FoldersAndItems);
-
-	ibDataNode node;
-	ASSERT_TRUE(written.m_frame->WriteData(node));
-
-	TextctrlUnderTest read;
-	ASSERT_TRUE(read.IsOk());
-	ASSERT_TRUE(read.m_frame->ReadData(node));
-	EXPECT_FALSE(read.m_frame->HasQuickChoice());
-	EXPECT_EQ(read.m_factory->GetSelectMode(), ibSelectMode::ibSelectMode_FoldersAndItems);
-}
-
-// A field's OWN links (#616) go out with the form and come back with it — a path through the dot whole.
-TEST(FormFieldChoice, TextctrlKeepsItsOwnLinks)
-{
-	wxInitializer wxInit;
-	if (!wxInit.IsOk())
-		GTEST_SKIP() << "wxBase init failed (no wxApp host)";
-
-	TextctrlUnderTest written;
-	ASSERT_TRUE(written.IsOk());
-	ibPropertyChoiceLink* link = dynamic_cast<ibPropertyChoiceLink*>(written.m_frame->GetProperty(wxT("TypeLink")));
-	ibPropertyChoiceParameters* rows = dynamic_cast<ibPropertyChoiceParameters*>(written.m_frame->GetProperty(wxT("ChoiceParameters")));
-	ASSERT_NE(link, nullptr);
-	ASSERT_NE(rows, nullptr);
-
-	ibChoiceTypeLinkDescription linkDesc;
-	linkDesc.m_source.AppendSource(3);
-	linkDesc.m_source.AppendSource(17);   // Object.Kind — through the dot
-	link->SetValue(linkDesc);
-	ibChoiceParametersDescription paramsDesc;
-	paramsDesc.SetRow(Row(41, 3));
-	rows->SetValue(paramsDesc);
-	EXPECT_TRUE(written.m_frame->GetTypeLink() == linkDesc);
-	EXPECT_TRUE(written.m_frame->GetChoiceParameters() == paramsDesc);
-
-	ibDataNode node;
-	ASSERT_TRUE(written.m_frame->WriteData(node));
-
-	TextctrlUnderTest read;
-	ASSERT_TRUE(read.IsOk());
-	ASSERT_TRUE(read.m_frame->ReadData(node));
-	EXPECT_TRUE(read.m_frame->GetTypeLink() == linkDesc);
-	EXPECT_TRUE(read.m_frame->GetChoiceParameters() == paramsDesc);
 }

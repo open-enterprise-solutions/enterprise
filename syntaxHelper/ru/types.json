@@ -11,11 +11,11 @@
       "class_id": 206132776430546024,
       "category_keys": ["value_types", "type_description"],
       "signature": "Type(name : string) / TypeOf(value : any)",
-      "description": "Тип как значение — то, что TypeOf отвечает о значении, а Type(name) — по имени; с ним и сравнивают тип: `TypeOf(Value) = Type(\"Number\")`. Два типа равны, когда это один и тот же класс. String(тип) — его зарегистрированное имя: \"Number\", \"Table\", \"CatalogRef.Goods\".\n\nОписание типов (TypeDescription) строится из типов — одного или массива, — и его Types() отвечает ими.\n\nТип создают эти две функции, а не New: `New Type(...)`, что бы ему ни передали, создаёт тип, который не называет никакого класса, и первое же его использование вызывает ошибку. Собственных свойств и методов у типа нет.",
+      "description": "Тип как значение — то, что TypeOf отвечает о значении, а Type(name) — по имени; с ним и сравнивают тип: `TypeOf(Value) = Type(\"Number\")`. Два типа равны, когда это один и тот же класс. String(тип) — его зарегистрированное имя: \"Number\", \"ValueTable\", \"CatalogRef.Goods\".\n\nОписание типов (TypeDescription) строится из типов — одного или массива, — и его Types() отвечает ими.\n\nТип создают эти две функции, а не New: `New Type(...)`, что бы ему ни передали, создаёт тип, который не называет никакого класса, и первое же его использование вызывает ошибку. Собственных свойств и методов у типа нет.",
       "syntax_block": "T = Type(\"Number\");\nT = TypeOf(Value);\nIsNumber = TypeOf(Value) == Type(\"Number\");",
       "parameters": "name — имя зарегистрированного типа (Type).\nvalue — любое значение (TypeOf).",
       "return_descr": "Type.",
-      "example": "Value = 42;\nMessage(TypeOf(Value) == Type(\"Number\"));   // True\nMessage(String(TypeOf(New Table())));       // Table",
+      "example": "Value = 42;\nMessage(TypeOf(Value) == Type(\"Number\"));   // True\nMessage(String(TypeOf(New ValueTable())));  // ValueTable",
       "availability": "Клиент, Сервер",
       "see_also": ["fn.Type", "fn.TypeOf", "cls.TypeDescription", "cls.TypeDescription.Types"],
       "reviewed": false
@@ -32,9 +32,9 @@
       "syntax_block": "Desc = New TypeDescription(\"Number\", New QualifierNumber(15, 2));\nDesc = New TypeDescription(\"Number, String\");\nDesc = New TypeDescription(\"String\", , , New QualifierString(50));",
       "parameters": "types — текст из имён типов через запятую, массив Type или Type.\nnumber — QualifierNumber; если опущен, число не ограничено.\ndate — QualifierDate; если опущен, дата сохраняет время.\nstring — QualifierString; если опущен, строка любой длины.",
       "return_descr": "TypeDescription.",
-      "example": "Money = New TypeDescription(\"Number\", New QualifierNumber(15, 2));\nTable = New Table();\nTable.Columns.AddColumn(\"Amount\", Money);\nMessage(Money.AdjustValue(10.555));   // 10.56",
+      "example": "Money = New TypeDescription(\"Number\", New QualifierNumber(15, 2));\nTable = New ValueTable();\nTable.Columns.AddColumn(\"Amount\", Money);\nMessage(Money.AdjustValue(10.555));   // 10.56",
       "availability": "Клиент, Сервер",
-      "see_also": ["cls.TypeDescription.AdjustValue", "cls.TypeDescription.ContainType", "cls.TypeDescription.Types", "cls.QualifierNumber", "cls.QualifierDate", "cls.QualifierString", "cls.Type", "cls.Table.Columns.AddColumn"],
+      "see_also": ["cls.TypeDescription.AdjustValue", "cls.TypeDescription.ContainType", "cls.TypeDescription.Types", "cls.QualifierNumber", "cls.QualifierDate", "cls.QualifierString", "cls.Type", "cls.ValueTable.Columns.AddColumn"],
       "reviewed": false
     },
     {

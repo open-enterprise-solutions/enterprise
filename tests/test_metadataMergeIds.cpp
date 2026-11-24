@@ -209,7 +209,7 @@ TEST_F(MetadataMergeIds, ADataToolReadIntoTheApplication_ItsFormHoldsTheNewIds)
 		EXPECT_TRUE(CallTool(wxT("form_bind"), params, result, refusal)) << refusal.ToStdString();
 	};
 	const std::int64_t buttonId = add(wxT("Button"));
-	const std::int64_t fieldId = add(wxT("Textctrl"));
+	const std::int64_t fieldId = add(wxT("Field"));
 	ASSERT_GT(buttonId, 0);
 	ASSERT_GT(fieldId, 0);
 	bind(buttonId, wxT("Command"), wxT("Act"));
@@ -305,4 +305,50 @@ TEST_F(MetadataMergeIds, AnExternalFileThisBuildCannotRead_IsRefusedInWords)
 	// A data tool's file opened as a report is not a report's at all — its header says so.
 	const std::string notReport = RefusalOf<ibMetaDataReport>(ExternalFile(sign_dataTool, g_metaExternalDataToolCLSID), "DataTool.orp");
 	EXPECT_NE(std::string::npos, notReport.find("cannot read")) << notReport;
+}
+
+// WHAT AN EXTERNAL'S FIELD REFERS TO IS ITS APPLICATION'S: the reference's class, asked of the external by the object's
+// id, is the application's — as its type ctors are. Asked of its own image only, a DocumentRef attribute of an external
+// data tool offered no field to its choice parameters (Max, 2026-11-24: "this field refers to nothing").
+TEST_F(MetadataMergeIds, AnExternalAnswersTheApplicationsReferenceByItsId)
+{
+	ibSessionRegistry* const registry = ibApplicationInstance::GetSessionRegistry();
+	ASSERT_NE(registry, nullptr);
+	auto framed = std::make_shared<FramedSession>(wxT("metadata-external-reference"), ibSessionKind::Designer);
+	ibSession* const session = framed.get();
+	KeyFrame frame(registry->MintUnlisted(framed));
+	framed->Attach(&frame);
+	ibSessionScope scope(session);
+
+	registry->NotifyAuthenticated(session);
+	struct Leave {
+		ibSessionRegistry* m_registry;
+		ibSession* m_session;
+		~Leave() { m_registry->NotifyDisconnect(m_session); }
+	} leave{ registry, session };
+
+	ibMetaDataApplicationBase* cfg = session->GetMetaData();
+	ASSERT_NE(cfg, nullptr);
+	if (cfg->IsOpen()) {
+		ASSERT_TRUE(cfg->CloseDatabase(ibRuntimeRequest(forceCloseFlag)));
+	}
+	ASSERT_TRUE(cfg->RunDatabase());
+
+	const std::int64_t documentId = Create(wxT("Document"), wxT("Asset"), 0);
+	const std::int64_t toolId = Create(wxT("DataTool"), wxT("Mover"), 0);
+	ASSERT_GT(documentId, 0);
+	ASSERT_GT(toolId, 0);
+
+	ibValueMetaObjectDataTool* original = nullptr;
+	ibValueMetaObject* const root = cfg->GetRootMetaObject();
+	for (unsigned int idx = 0; idx < root->GetChildCount() && original == nullptr; idx++)
+		if (root->GetChild(idx)->GetMetaID() == (ibMetaID)toolId)
+			original = dynamic_cast<ibValueMetaObjectDataTool*>(root->GetChild(idx));
+	ASSERT_NE(original, nullptr);
+
+	const ibClassID reference = cfg->GetIDObjectFromMetaID((ibMetaID)documentId, ibCtorObjectMetaType::ibCtorObjectMetaType_Reference);
+	ASSERT_NE(reference, (ibClassID)0);
+
+	const auto external = std::make_shared<ibMetaDataDataTool>(cfg, original);
+	EXPECT_EQ(external->GetIDObjectFromMetaID((ibMetaID)documentId, ibCtorObjectMetaType::ibCtorObjectMetaType_Reference), reference);
 }

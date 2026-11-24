@@ -15,6 +15,11 @@
 #include <gtest/gtest.h>
 #include <wx/string.h>   // wxT, wxString - the engine's headers include no wx
 #include "backend/propertyManager/propertyManager.h"   // ibPropertyObject
+#include "backend/propertyManager/property/eventControl.h"   // ibEventControl — a control's event, as one is made
+#include "backend/propertyManager/property/propertyBoolean.h"   // ibPropertyBoolean — a property, as one is made
+
+#include <initializer_list>
+#include <vector>
 
 namespace {
 
@@ -34,6 +39,26 @@ public:
     }
 };
 
+// …with events of its own, made as a control makes them.
+class EventNode : public TestNode {
+public:
+    explicit EventNode(std::initializer_list<ibString> names) {
+        ibPropertyCategory* events = CreatePropertyCategory(ibT("Event"));
+        for (const ibString& name : names)
+            CreateEvent<ibEventControl>(events, name, std::vector<ibString>{});
+    }
+};
+
+// …and with properties of its own.
+class PropertyNode : public TestNode {
+public:
+    explicit PropertyNode(std::initializer_list<ibString> names) {
+        ibPropertyCategory* properties = CreatePropertyCategory(ibT("Property"));
+        for (const ibString& name : names)
+            CreateProperty<ibPropertyBoolean>(properties, name);
+    }
+};
+
 } // namespace
 
 // ---------------------------------------------------------------------------
@@ -50,6 +75,49 @@ TEST(PropertyObjectAttach, AttachSetsOwnerDetachClears) {
     parent.DetachAllPropertyObjects();
     EXPECT_EQ(child.GetAttachOwner(), nullptr);
     EXPECT_TRUE(parent.GetAttachedObjects().empty());
+}
+
+// ---------------------------------------------------------------------------
+// An attached object's EVENTS are ours, as its properties are — by name and by
+// place, our own first, then the attached in attach order; detached, gone
+// ---------------------------------------------------------------------------
+TEST(PropertyObjectAttach, AttachedEventsAreFoundByNameAndByPlace) {
+    EventNode parent({ ibT("Own") });
+    EventNode child({ ibT("First"), ibT("Second") });
+    parent.AttachPropertyObject(&child);
+
+    EXPECT_EQ(parent.GetEventCount(), 3u);
+    ASSERT_NE(parent.GetEvent(0u), nullptr);
+    EXPECT_EQ(parent.GetEvent(0u)->GetName(), ibString(ibT("Own")));
+    EXPECT_EQ(parent.GetEvent(2u), child.GetEvent(1u));   // "Second" — the child's by name order
+    EXPECT_EQ(parent.GetEvent(3u), nullptr);
+    EXPECT_NE(parent.GetEvent(ibString(ibT("First"))), nullptr);
+    EXPECT_EQ(parent.GetEvent(ibString(ibT("First"))), child.GetEvent(ibString(ibT("First"))));
+
+    parent.DetachAllPropertyObjects();
+    EXPECT_EQ(parent.GetEventCount(), 1u);
+    EXPECT_EQ(parent.GetEvent(ibString(ibT("First"))), nullptr);
+}
+
+// ---------------------------------------------------------------------------
+// …and its PROPERTIES the same way, by the same walk
+// ---------------------------------------------------------------------------
+TEST(PropertyObjectAttach, AttachedPropertiesAreFoundByNameAndByPlace) {
+    PropertyNode parent({ ibT("Own") });
+    PropertyNode child({ ibT("First"), ibT("Second") });
+    parent.AttachPropertyObject(&child);
+
+    EXPECT_EQ(parent.GetPropertyCount(), 3u);
+    ASSERT_NE(parent.GetProperty(0u), nullptr);
+    EXPECT_EQ(parent.GetProperty(0u)->GetName(), ibString(ibT("Own")));
+    EXPECT_EQ(parent.GetProperty(2u), child.GetProperty(1u));   // "Second" — the child's by name order
+    EXPECT_EQ(parent.GetProperty(3u), nullptr);
+    EXPECT_NE(parent.GetProperty(ibString(ibT("First"))), nullptr);
+    EXPECT_EQ(parent.GetProperty(ibString(ibT("First"))), child.GetProperty(ibString(ibT("First"))));
+
+    parent.DetachAllPropertyObjects();
+    EXPECT_EQ(parent.GetPropertyCount(), 1u);
+    EXPECT_EQ(parent.GetProperty(ibString(ibT("First"))), nullptr);
 }
 
 // ---------------------------------------------------------------------------

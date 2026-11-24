@@ -617,29 +617,23 @@ public:
 	*       is done through the reference.
 	*/
 	ibProperty* GetProperty(const ibString& nameParam) const;
+	// …and an event — its own, then an attached object's: what is attached shows its events as ours, as it shows its
+	// properties (a field's view, frmserver's ibFieldViewProvider), by name and by place alike.
 	ibEvent* GetEvent(const ibString& nameParam) const;
 
-	/**
-	* Gets the number of properties of the object.
-	*/
-	unsigned int GetPropertyCount() const { return (unsigned int)m_properties.size(); }
-	unsigned int GetEventCount() const { return m_events.size(); }
+	// Its own properties, then every attached object's, in the order they were attached — the walk GetProperty(idx)
+	// takes; its events the same way, GetEvent(idx).
+	unsigned int GetPropertyCount() const;
+	unsigned int GetEventCount() const;
 
-	ibProperty* GetProperty(unsigned int idx) const; // throws ...;
-	ibEvent* GetEvent(unsigned int idx) const; // throws ...;
+	// By place, in that walk; past the last — none.
+	ibProperty* GetProperty(unsigned int idx) const;
+	ibEvent* GetEvent(unsigned int idx) const;
 
 	/**
 	* Gets the number of children of the object.
 	*/
 	unsigned int GetPropertyIndex(const ibString& nameParam) const;
-
-	ibProperty* GetPropertyByIndex(unsigned int idx) const {
-		if (idx >= m_properties.size())
-			return nullptr;
-		auto properties_iterator = m_properties.begin();
-		std::advance(properties_iterator, idx);
-		return (*properties_iterator).second;
-	}
 
 	/**
 	* Returns the type of the object.
@@ -968,28 +962,6 @@ public:
 	* Gets the number of children of the object.
 	*/
 	unsigned int GetChildCount() const { return (unsigned int)m_children.size(); }
-
-	/**
-	* Checks whether the type is derived from the one passed as a parameter.
-	*/
-
-	bool IsSubclassOf(const ibString& className) const {
-		bool found = false;
-		if (stringUtils::IsSameAs(className, GetClassName())) {
-			found = true;
-		}
-		else {
-			propertyType* parent = GetParent();
-			while (parent != nullptr) {
-				found = parent->IsSubclassOf(className);
-				if (found)
-					break;
-				else
-					parent = parent->GetParent();
-			}
-		}
-		return found;
-	}
 
 	void DeleteRecursive() {
 		// Owning children: clearing releases each handle, and the destructor of a

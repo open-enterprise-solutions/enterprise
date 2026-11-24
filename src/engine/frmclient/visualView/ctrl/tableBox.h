@@ -2,6 +2,7 @@
 #define _FRMCLIENT_VIEW_TABLE_BOX_H__
 
 #include <memory>
+#include <optional>
 
 #include "frmclient/visualView/ctrl/window.h"
 #include "deskgui/univ/dataview/dataview.h"      // ibDataViewSelectionMode, ibDataViewViewMode
@@ -10,6 +11,8 @@
 #include "deskgui/univ/panel.h"
 #include "core/inputMask.h"   // ibInputMask — what a column's cells are typed through
 
+class ibCheckBox;
+class ibTextCtrl;
 class ibViewCommandBar;
 class ibViewTableColumnObject;
 class ibTableViewCtrl;
@@ -37,7 +40,10 @@ public:
 	virtual ibViewCommandBar* GetCommandBar() const override { return m_commandBar.get(); }
 
 	// The desktop's says the source it shows; its source is the server's — here, its name.
-	virtual wxString GetControlTitle() const override { return _("TableBox") + wxT(": ") + GetControlName(); }
+	virtual wxString GetControlTitle() const override { return _("Table") + wxT(": ") + GetControlName(); }
+
+	// …and a cell named outright, the row and the column, no editor open in it: a flag's box toggled.
+	void SendCell(ibProtocol::ibEvent::ibKind event, long long row, long long column, const ibProtocolNode& args);
 
 private:
 
@@ -111,8 +117,12 @@ public:
 
 	ibValueModelTableBoxColumn(ibVisualHostClient& host, long long controlId) : ibValueControl(host, controlId) {}
 
+	// Built with its view: its cells drawn and edited as the view is (an Input's editor, a Flag's box, a Label's text).
 	virtual void Create(wxWindow* parent, const ibProtocolNode& node) override;
 	virtual void Update(const ibProtocolNode& node) override;
+
+	// The table it serves — asked up the tree, as the server's column asks it: a column may stand in a group.
+	virtual ibValueModelTableBox* GetOwner() const override;
 
 	// What its data view column and its cells ask of it, as the desktop's column was asked: the sort the server keeps,
 	// how its cells are typed into — and whether they may be, which the server says (State's ReadOnly).
@@ -140,6 +150,79 @@ private:
 	bool m_selectButton = true;
 	bool m_openButton = false;
 	bool m_clearButton = true;
+};
+
+// THE VIEW A COLUMN'S CELLS ARE DRAWN WITH — the server's ibColumnViewProvider, this client's half: a renderer of the
+// data view's for each view (ibProtocol::ibForm::ibProperty::ibColumnView), made when the column is built (Create).
+
+// A CELL DRAWN — the desktop's ibDataViewValueRenderer: what it draws is asked of the value — a boolean a tick where
+// the text would start, anything else its text; where it stands is the cell's look (a number right). A Label's cell is
+// this alone: shown, never edited.
+class ibViewCellRenderer : public ibDataViewCustomRenderer {
+public:
+
+	explicit ibViewCellRenderer(const ibValueModelTableBoxColumn& column, ibDataViewCellMode mode = wxDATAVIEW_CELL_INERT)
+		: ibDataViewCustomRenderer(GetDefaultType(), mode), m_column(column) {}
+
+	virtual bool SetValue(const ibVariant& value) override;
+	virtual bool GetValue(ibVariant& /*value*/) const override { return true; }
+	virtual bool Render(wxRect rect, wxDC* dc, int state) override;
+	virtual wxSize GetSize() const override;
+
+protected:
+
+	const ibValueModelTableBoxColumn& m_column;
+
+private:
+
+	std::optional<bool> m_flag;
+	wxString            m_text;
+};
+
+// ⭐ INPUT — edited: the field's editor stands in the cell, as its column says — a check box for a boolean (Max,
+// 2026-11-24: "a boolean opens a boolean editor, not a text one"); what is typed or ticked goes to the server when the
+// edit is done, and the text editor's buttons' presses travel up to the table, which knows the cell.
+class ibViewCellRendererInput : public ibViewCellRenderer {
+public:
+
+	explicit ibViewCellRendererInput(const ibValueModelTableBoxColumn& column)
+		: ibViewCellRenderer(column, wxDATAVIEW_CELL_EDITABLE) {}
+
+	virtual bool HasEditorCtrl() const override { return true; }
+	// The desktop's CreateEditorCtrl: the field's editor in the cell, as its column says, the table's look on it.
+	virtual wxWindow* CreateEditorCtrl(wxWindow* parent, wxRect labelRect, const ibVariant& value) override;
+	// The text in the editor it made — or the truth, a boolean's.
+	virtual bool GetValueFromEditorCtrl(wxWindow* editor, ibVariant& value) override;
+
+private:
+
+	ibTextCtrl* m_textEditor = nullptr;    // the editor it made, while the cell is edited
+	ibCheckBox* m_checkEditor = nullptr;   // …a boolean's
+};
+
+// ⭐ FLAG — the value's truth as a check box where the text would start. A click on the box, or Space on the cell, is a
+// Toggle to the server with the state it was toggled to — only where the server lets the cell take an edit (it wrote its
+// Value); the box shows it when the rows are read again. A cell with no truth (a group's heading) shows none.
+class ibViewCellRendererFlag : public ibDataViewCustomRenderer {
+public:
+
+	explicit ibViewCellRendererFlag(const ibValueModelTableBoxColumn& column)
+		: ibDataViewCustomRenderer(GetDefaultType(), wxDATAVIEW_CELL_ACTIVATABLE), m_column(column) {}
+
+	virtual bool SetValue(const ibVariant& value) override;
+	virtual bool GetValue(ibVariant& /*value*/) const override { return true; }
+	virtual bool Render(wxRect rect, wxDC* dc, int state) override;
+	virtual wxSize GetSize() const override;
+	virtual bool ActivateCell(const wxRect& cell, ibDataViewModel* model, const ibDataViewItem& item, unsigned int col,
+		const wxMouseEvent* mouseEvent) override;
+
+private:
+
+	// Where the box stands in `rect`: at its start, in the middle of its height.
+	wxRect BoxIn(const wxRect& rect) const;
+
+	const ibValueModelTableBoxColumn& m_column;
+	std::optional<bool> m_flag;
 };
 
 // A group of a table's columns — the desktop's ibValueModelTableBoxColumnGroup: how its columns are laid out, its

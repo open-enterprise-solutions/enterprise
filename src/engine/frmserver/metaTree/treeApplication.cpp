@@ -292,16 +292,11 @@ bool ibMetaTreeBase::AskFormKind(ibValueMetaObject* object)
 		}
 	}
 
-	// Placed the way the object inspector places one: ask the owner, set, tell the owner. A generic form keeps the kind
-	// it was made with.
+	// Placed through the door the object inspector places one through (ibPropertyGate): the owner asked, the kind set,
+	// the owner told. A generic form keeps the kind it was made with.
 	ibProperty* const kind = form->GetProperty(ibProtocol::ibSchema::ibMetaData::FormType);
-	if (kind != nullptr && chosen != defaultFormType) {
-		const ibVariant before = kind->GetValue();
-		if (form->OnPropertyChanging(kind, ibVariant((long)chosen))) {
-			kind->SetValue(ibVariant((long)chosen));
-			form->OnPropertyChanged(kind, before, kind->GetValue());
-		}
-	}
+	if (kind != nullptr && chosen != defaultFormType)
+		ibPropertyGate::SetValue(form, kind, ibVariant((long)chosen));
 
 	// …AND THE LAYOUT, which the owner builds once the kind is known.
 	owner->OnCreateFormObject(form);
@@ -343,13 +338,9 @@ bool ibMetaTreeBase::AskTemplateKind(ibValueMetaObject* object)
 		}
 	}
 
-	// Placed the way the object inspector places one — an empty description of the kind; the template tells its
-	// report what it became (OnPropertyChanged).
-	const ibVariant before = templateData->GetValue();
-	if (object->OnPropertyChanging(templateData, kinds.GetValue(chosen))) {
-		templateData->SetValue(kinds.GetValue(chosen));
-		object->OnPropertyChanged(templateData, before, templateData->GetValue());
-	}
+	// Placed through the door the object inspector places one through (ibPropertyGate) — an empty description of the
+	// kind; the template tells its report what it became (OnPropertyChanged).
+	ibPropertyGate::SetValue(object, templateData, kinds.GetValue(chosen));
 	return true;
 }
 

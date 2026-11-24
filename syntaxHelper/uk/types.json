@@ -11,11 +11,11 @@
       "class_id": 206132776430546024,
       "category_keys": ["value_types", "type_description"],
       "signature": "Type(name : string) / TypeOf(value : any)",
-      "description": "Тип як значення — те, що TypeOf відповідає про значення, а Type(name) — за назвою; саме з ним порівнюють тип: `TypeOf(Value) = Type(\"Number\")`. Два типи рівні, коли це той самий клас. String(тип) — його зареєстрована назва: \"Number\", \"Table\", \"CatalogRef.Goods\".\n\nОпис типів (TypeDescription) будується з типів — одного або масиву, — і його Types() відповідає ними.\n\nТип створюють ці дві функції, а не New: `New Type(...)`, хай що йому передали, створює тип, який не називає жодного класу, і перше ж його використання спричиняє помилку. Власних властивостей і методів тип не має.",
+      "description": "Тип як значення — те, що TypeOf відповідає про значення, а Type(name) — за назвою; саме з ним порівнюють тип: `TypeOf(Value) = Type(\"Number\")`. Два типи рівні, коли це той самий клас. String(тип) — його зареєстрована назва: \"Number\", \"ValueTable\", \"CatalogRef.Goods\".\n\nОпис типів (TypeDescription) будується з типів — одного або масиву, — і його Types() відповідає ними.\n\nТип створюють ці дві функції, а не New: `New Type(...)`, хай що йому передали, створює тип, який не називає жодного класу, і перше ж його використання спричиняє помилку. Власних властивостей і методів тип не має.",
       "syntax_block": "T = Type(\"Number\");\nT = TypeOf(Value);\nIsNumber = TypeOf(Value) == Type(\"Number\");",
       "parameters": "name — назва зареєстрованого типу (Type).\nvalue — будь-яке значення (TypeOf).",
       "return_descr": "Type.",
-      "example": "Value = 42;\nMessage(TypeOf(Value) == Type(\"Number\"));   // True\nMessage(String(TypeOf(New Table())));       // Table",
+      "example": "Value = 42;\nMessage(TypeOf(Value) == Type(\"Number\"));   // True\nMessage(String(TypeOf(New ValueTable())));  // ValueTable",
       "availability": "Клієнт, Сервер",
       "see_also": ["fn.Type", "fn.TypeOf", "cls.TypeDescription", "cls.TypeDescription.Types"],
       "reviewed": false
@@ -32,9 +32,9 @@
       "syntax_block": "Desc = New TypeDescription(\"Number\", New QualifierNumber(15, 2));\nDesc = New TypeDescription(\"Number, String\");\nDesc = New TypeDescription(\"String\", , , New QualifierString(50));",
       "parameters": "types — текст із назв типів через кому, масив Type або Type.\nnumber — QualifierNumber; якщо пропущено, число не обмежене.\ndate — QualifierDate; якщо пропущено, дата зберігає час.\nstring — QualifierString; якщо пропущено, рядок будь-якої довжини.",
       "return_descr": "TypeDescription.",
-      "example": "Money = New TypeDescription(\"Number\", New QualifierNumber(15, 2));\nTable = New Table();\nTable.Columns.AddColumn(\"Amount\", Money);\nMessage(Money.AdjustValue(10.555));   // 10.56",
+      "example": "Money = New TypeDescription(\"Number\", New QualifierNumber(15, 2));\nTable = New ValueTable();\nTable.Columns.AddColumn(\"Amount\", Money);\nMessage(Money.AdjustValue(10.555));   // 10.56",
       "availability": "Клієнт, Сервер",
-      "see_also": ["cls.TypeDescription.AdjustValue", "cls.TypeDescription.ContainType", "cls.TypeDescription.Types", "cls.QualifierNumber", "cls.QualifierDate", "cls.QualifierString", "cls.Type", "cls.Table.Columns.AddColumn"],
+      "see_also": ["cls.TypeDescription.AdjustValue", "cls.TypeDescription.ContainType", "cls.TypeDescription.Types", "cls.QualifierNumber", "cls.QualifierDate", "cls.QualifierString", "cls.Type", "cls.ValueTable.Columns.AddColumn"],
       "reviewed": false
     },
     {

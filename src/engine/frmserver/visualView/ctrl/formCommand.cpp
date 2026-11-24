@@ -44,7 +44,7 @@ void ibFormCommandValue::FillMembers(ibMemberTable& helper) const
 
 bool ibFormCommandValue::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 {
-	const ibProperty* property = GetPropertyByIndex(m_members.GetPropData(lPropNum));
+	const ibProperty* property = GetProperty(m_members.GetPropData(lPropNum));
 	return property != nullptr && property->GetDataValue(pvarPropVal);
 }
 

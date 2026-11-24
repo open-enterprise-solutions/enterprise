@@ -379,7 +379,7 @@ html, body {
 }
 
 /* The registration journal (src/docView/auditLog.js), as the thin client's: the filter strip, the tools — a command
-   bar with the live refresh on it, at its right —, and the rows as the theme's table (a tablebox's: the powder header,
+   bar with the live refresh on it, at its right —, and the rows as the theme's table (a table control's: the powder header,
    every second row a step off white, the cursor in the highlight). */
 .audit-log {
 	display: flex;
@@ -883,7 +883,7 @@ wa-dialog.answered-only::part(close-button) {
 }
 
 /* A schedule edited (Questions.schedule, the thin client's ibDialogJobSchedule): its tabs at the window's size, their
-   lines of captions and fields, a group framed as a form's static box (oes-staticboxsizer), the checked lists boxed and
+   lines of captions and fields, a group framed as a form's Group layout (oes-layout[view="group"]), the checked lists boxed and
    scrolled (ibCheckListBox); the sentence under the tabs. */
 .job-schedule-dialog {
 	--width: 32rem;
@@ -2071,7 +2071,7 @@ wa-dialog.answered-only::part(close-button) {
 	}
 
 	.views,
-	oes-gridbox .sheet-host {
+	oes-spreadsheet .sheet-host {
 		overflow: visible;
 	}
 

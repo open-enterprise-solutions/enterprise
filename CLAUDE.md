@@ -527,7 +527,7 @@ its own, `MD_CMPS`). What a template of a kind DOES — its events, its
 menu, the value code is handed — is the kind's `ibTemplateProvider` (metaTemplateObject.h), not an `if` in the
 template. The kind is chosen in a dialog when the template is added, as a form's is, and once — under any
 owner, a document's or a data tool's too; `GetTemplate(name)` returns a fresh composition. The report names one
-of them `DefaultComposer`, and a report that declares one needs no form — the generated form is a gridbox
+of them `DefaultComposer`, and a report that declares one needs no form — the generated form is a spreadsheet
 bound to that composer. Embedded and external reports both have them, being the same metaobject. See
 [docs/private/report-engine.md](docs/private/report-engine.md) §4f.
 

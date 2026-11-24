@@ -16,7 +16,7 @@
     "value_types": "Типи значень",
     "collections": "Колекції",
     "containers": "Відповідність (Map) і структура",
-    "value_table": "Таблиця значень (Table)",
+    "value_table": "Таблиця значень (ValueTable)",
     "http": "HTTP — запити до іншої системи",
     "json": "JSON — читання і запис",
     "xml": "XML — читання і запис",

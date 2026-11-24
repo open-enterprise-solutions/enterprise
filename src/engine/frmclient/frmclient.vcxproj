@@ -200,6 +200,7 @@
     <ClCompile Include="win\dlgs\jobSchedule\jobScheduleSettings.cpp" />
     <ClCompile Include="win\dlgs\choiceLink\choiceLink.cpp" />
     <ClCompile Include="win\dlgs\choiceParameters\choiceParameters.cpp" />
+    <ClCompile Include="win\dlgs\choices\choices.cpp" />
     <ClCompile Include="win\dlgs\settings\savedSettings.cpp" />
     <ClCompile Include="win\dlgs\settings\list\listSettings.cpp" />
     <ClCompile Include="win\dlgs\settings\composer\composerSettings.cpp" />
@@ -255,6 +256,7 @@
     <ClCompile Include="propertyManager\property\advprop\advpropModule.cpp" />
     <ClCompile Include="propertyManager\property\advprop\advpropCalcSchedule.cpp" />
     <ClCompile Include="propertyManager\property\advprop\advpropChoiceLink.cpp" />
+    <ClCompile Include="propertyManager\property\advprop\advpropChoices.cpp" />
     <ClCompile Include="propertyManager\property\advprop\advpropCommandSource.cpp" />
     <ClCompile Include="propertyManager\property\advprop\advpropDate.cpp" />
     <ClCompile Include="propertyManager\property\advprop\advpropForm.cpp" />
@@ -312,20 +314,29 @@
     <ClCompile Include="visualView\visualHostClientDocView.cpp" />
     <ClCompile Include="visualView\ctrl\button.cpp" />
     <ClCompile Include="visualView\ctrl\chartBox.cpp" />
-    <ClCompile Include="visualView\ctrl\checkbox.cpp" />
-    <ClCompile Include="visualView\ctrl\gauge.cpp" />
+    <ClCompile Include="visualView\ctrl\field.cpp" />
+    <ClCompile Include="visualView\ctrl\fieldViewFlag.cpp" />
+    <ClCompile Include="visualView\ctrl\fieldViewGauge.cpp" />
+    <ClCompile Include="visualView\ctrl\fieldViewInput.cpp" />
+    <ClCompile Include="visualView\ctrl\fieldViewLabel.cpp" />
+    <ClCompile Include="visualView\ctrl\fieldViewSlider.cpp" />
+    <ClCompile Include="visualView\ctrl\fieldViewSwitch.cpp" />
     <ClCompile Include="visualView\ctrl\gridBox.cpp" />
     <ClCompile Include="visualView\ctrl\htmlBox.cpp" />
+    <ClCompile Include="visualView\ctrl\layout.cpp" />
+    <ClCompile Include="visualView\ctrl\layoutViewBox.cpp" />
+    <ClCompile Include="visualView\ctrl\layoutViewGrid.cpp" />
+    <ClCompile Include="visualView\ctrl\layoutViewGroup.cpp" />
+    <ClCompile Include="visualView\ctrl\layoutViewWrap.cpp" />
     <ClCompile Include="visualView\ctrl\notebook.cpp" />
     <ClCompile Include="visualView\ctrl\placeholder.cpp" />
-    <ClCompile Include="visualView\ctrl\radiobutton.cpp" />
-    <ClCompile Include="visualView\ctrl\sizer.cpp" />
-    <ClCompile Include="visualView\ctrl\slider.cpp" />
-    <ClCompile Include="visualView\ctrl\staticline.cpp" />
     <ClCompile Include="visualView\pageWindow.cpp" />
-    <ClCompile Include="visualView\ctrl\statictext.cpp" />
+    <ClCompile Include="visualView\ctrl\static.cpp" />
+    <ClCompile Include="visualView\ctrl\staticViewLine.cpp" />
+    <ClCompile Include="visualView\ctrl\staticViewText.cpp" />
     <ClCompile Include="visualView\ctrl\tableBox.cpp" />
-    <ClCompile Include="visualView\ctrl\textctrl.cpp" />
+    <ClCompile Include="visualView\ctrl\tableBoxColumnViewFlag.cpp" />
+    <ClCompile Include="visualView\ctrl\tableBoxColumnViewInput.cpp" />
     <ClCompile Include="visualView\ctrl\textBox.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -384,6 +395,7 @@
     <ClInclude Include="win\dlgs\jobSchedule\jobScheduleSettings.h" />
     <ClInclude Include="win\dlgs\choiceLink\choiceLink.h" />
     <ClInclude Include="win\dlgs\choiceParameters\choiceParameters.h" />
+    <ClInclude Include="win\dlgs\choices\choices.h" />
     <ClInclude Include="win\dlgs\settings\savedSettings.h" />
     <ClInclude Include="win\dlgs\settings\list\listSettings.h" />
     <ClInclude Include="win\dlgs\settings\composer\composerSettings.h" />
@@ -472,6 +484,7 @@
     <ClInclude Include="propertyManager\property\advprop\advpropDataComposition.h" />
     <ClInclude Include="propertyManager\property\advprop\advpropCalcSchedule.h" />
     <ClInclude Include="propertyManager\property\advprop\advpropChoiceLink.h" />
+    <ClInclude Include="propertyManager\property\advprop\advpropChoices.h" />
     <ClInclude Include="propertyManager\property\advprop\advpropCommandSource.h" />
     <ClInclude Include="propertyManager\property\advprop\advpropGeneration.h" />
     <ClInclude Include="propertyManager\property\advprop\advpropOwner.h" />
@@ -512,10 +525,12 @@
     <ClInclude Include="visualView\ctrl\form.h" />
     <ClInclude Include="visualView\formdefs.h" />
     <ClInclude Include="visualView\visualHostClient.h" />
+    <ClInclude Include="visualView\ctrl\field.h" />
     <ClInclude Include="visualView\ctrl\gridBox.h" />
+    <ClInclude Include="visualView\ctrl\layout.h" />
     <ClInclude Include="visualView\ctrl\notebook.h" />
+    <ClInclude Include="visualView\ctrl\static.h" />
     <ClInclude Include="visualView\pageWindow.h" />
-    <ClInclude Include="visualView\ctrl\sizer.h" />
     <ClInclude Include="visualView\ctrl\tableBox.h" />
     <ClInclude Include="visualView\ctrl\widgets.h" />
   </ItemGroup>

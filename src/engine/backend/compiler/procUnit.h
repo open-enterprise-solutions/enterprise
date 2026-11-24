@@ -46,7 +46,7 @@ BACKEND_API void ibLinqWindow(ibValue& scratch, const ibValue* skip, const ibVal
 //
 // What the rest becomes is READ OFF THE ROWS: a table when they carry named columns — which after a
 // projection they always do — and an Array when they do not, which is what `ToArray` over plain
-// values means. `ToTable` does not come through here at all: on a data source the queryable builds
+// values means. `ToValueTable` does not come through here at all: on a data source the queryable builds
 // the table from the SCHEMA, and on a collection the dispatcher builds it from the rows.
 BACKEND_API void ibLinqResult(ibValue& out, ibValue& scratch, int ordering, bool wantFirst);
 

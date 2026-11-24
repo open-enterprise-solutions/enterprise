@@ -203,6 +203,9 @@
     <ClCompile Include="win\dlgs\choiceParameters\choiceParameters.cpp">
       <Filter>win\dlgs\choiceParameters</Filter>
     </ClCompile>
+    <ClCompile Include="win\dlgs\choices\choices.cpp">
+      <Filter>win\dlgs\choices</Filter>
+    </ClCompile>
     <ClCompile Include="win\dlgs\settings\savedSettings.cpp">
       <Filter>win\dlgs\settings</Filter>
     </ClCompile>
@@ -239,10 +242,25 @@
     <ClCompile Include="visualView\ctrl\chartBox.cpp">
       <Filter>visualView\ctrl</Filter>
     </ClCompile>
-    <ClCompile Include="visualView\ctrl\checkbox.cpp">
+    <ClCompile Include="visualView\ctrl\field.cpp">
       <Filter>visualView\ctrl</Filter>
     </ClCompile>
-    <ClCompile Include="visualView\ctrl\gauge.cpp">
+    <ClCompile Include="visualView\ctrl\fieldViewFlag.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\fieldViewInput.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\fieldViewLabel.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\fieldViewGauge.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\fieldViewSlider.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\fieldViewSwitch.cpp">
       <Filter>visualView\ctrl</Filter>
     </ClCompile>
     <ClCompile Include="visualView\ctrl\gridBox.cpp">
@@ -251,34 +269,46 @@
     <ClCompile Include="visualView\ctrl\htmlBox.cpp">
       <Filter>visualView\ctrl</Filter>
     </ClCompile>
+    <ClCompile Include="visualView\ctrl\layout.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\layoutViewBox.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\layoutViewGrid.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\layoutViewGroup.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\layoutViewWrap.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
     <ClCompile Include="visualView\ctrl\notebook.cpp">
       <Filter>visualView\ctrl</Filter>
     </ClCompile>
     <ClCompile Include="visualView\ctrl\placeholder.cpp">
       <Filter>visualView\ctrl</Filter>
     </ClCompile>
-    <ClCompile Include="visualView\ctrl\radiobutton.cpp">
-      <Filter>visualView\ctrl</Filter>
-    </ClCompile>
-    <ClCompile Include="visualView\ctrl\sizer.cpp">
-      <Filter>visualView\ctrl</Filter>
-    </ClCompile>
-    <ClCompile Include="visualView\ctrl\slider.cpp">
-      <Filter>visualView\ctrl</Filter>
-    </ClCompile>
     <ClCompile Include="visualView\pageWindow.cpp">
       <Filter>visualView</Filter>
     </ClCompile>
-    <ClCompile Include="visualView\ctrl\staticline.cpp">
+    <ClCompile Include="visualView\ctrl\static.cpp">
       <Filter>visualView\ctrl</Filter>
     </ClCompile>
-    <ClCompile Include="visualView\ctrl\statictext.cpp">
+    <ClCompile Include="visualView\ctrl\staticViewLine.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\staticViewText.cpp">
       <Filter>visualView\ctrl</Filter>
     </ClCompile>
     <ClCompile Include="visualView\ctrl\tableBox.cpp">
       <Filter>visualView\ctrl</Filter>
     </ClCompile>
-    <ClCompile Include="visualView\ctrl\textctrl.cpp">
+    <ClCompile Include="visualView\ctrl\tableBoxColumnViewFlag.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\tableBoxColumnViewInput.cpp">
       <Filter>visualView\ctrl</Filter>
     </ClCompile>
     <ClCompile Include="visualView\ctrl\textBox.cpp">
@@ -445,6 +475,9 @@
     <ClInclude Include="win\dlgs\choiceParameters\choiceParameters.h">
       <Filter>win\dlgs\choiceParameters</Filter>
     </ClInclude>
+    <ClInclude Include="win\dlgs\choices\choices.h">
+      <Filter>win\dlgs\choices</Filter>
+    </ClInclude>
     <ClInclude Include="win\dlgs\settings\savedSettings.h">
       <Filter>win\dlgs\settings</Filter>
     </ClInclude>
@@ -475,19 +508,25 @@
     <ClInclude Include="visualView\ctrl\gridBox.h">
       <Filter>visualView\ctrl</Filter>
     </ClInclude>
+    <ClInclude Include="visualView\ctrl\layout.h">
+      <Filter>visualView\ctrl</Filter>
+    </ClInclude>
+    <ClInclude Include="visualView\ctrl\static.h">
+      <Filter>visualView\ctrl</Filter>
+    </ClInclude>
     <ClInclude Include="visualView\ctrl\notebook.h">
       <Filter>visualView\ctrl</Filter>
     </ClInclude>
     <ClInclude Include="visualView\pageWindow.h">
       <Filter>visualView</Filter>
     </ClInclude>
-    <ClInclude Include="visualView\ctrl\sizer.h">
-      <Filter>visualView\ctrl</Filter>
-    </ClInclude>
     <ClInclude Include="visualView\ctrl\tableBox.h">
       <Filter>visualView\ctrl</Filter>
     </ClInclude>
     <ClInclude Include="visualView\ctrl\widgets.h">
+      <Filter>visualView\ctrl</Filter>
+    </ClInclude>
+    <ClInclude Include="visualView\ctrl\field.h">
       <Filter>visualView\ctrl</Filter>
     </ClInclude>
   </ItemGroup>
@@ -617,6 +656,9 @@
     </Filter>
     <Filter Include="win\dlgs\choiceParameters">
       <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f505d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="win\dlgs\choices">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f5070}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
@@ -948,6 +990,12 @@
       <Filter>propertyManager\property\advprop</Filter>
     </ClCompile>
     <ClInclude Include="propertyManager\property\advprop\advpropChoiceLink.h">
+      <Filter>propertyManager\property\advprop</Filter>
+    </ClInclude>
+    <ClCompile Include="propertyManager\property\advprop\advpropChoices.cpp">
+      <Filter>propertyManager\property\advprop</Filter>
+    </ClCompile>
+    <ClInclude Include="propertyManager\property\advprop\advpropChoices.h">
       <Filter>propertyManager\property\advprop</Filter>
     </ClInclude>
     <ClCompile Include="propertyManager\property\advprop\advpropCommandSource.cpp">

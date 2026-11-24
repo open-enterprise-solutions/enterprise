@@ -195,6 +195,10 @@ public:
 	}
 
 	virtual bool IsVisualDemonstrationDoc() const { return true; }
+
+	// A demonstration shows a form, it does not run it: nothing of it is saved, so nothing marks it modified (Max,
+	// 2026-11-24 — a date typed into a tried-out form asked to save on close).
+	virtual void Modify(bool) override {}
 };
 
 #endif

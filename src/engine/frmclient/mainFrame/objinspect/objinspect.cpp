@@ -201,27 +201,13 @@ void ibObjectInspector::Create(ibPropertyObject* object, bool force)
 
 		if (object != nullptr) {
 
-			std::map<wxString, ibProperty*> propMap, dummyPropMap;
-			std::map<wxString, ibEvent*> eventMap, dummyEventMap;
+			std::map<wxString, ibProperty*> propMap;
+			std::map<wxString, ibEvent*> eventMap;
 
-			// We create the categories with the properties of the object organized by "classes"
+			// We create the categories with the properties of the object organized by "classes" — its sizer item's among
+			// them, as the server writes its rows
 			CreateCategory(object->GetClassName(), object, propMap, false);
-
-			ibPropertyObject* owner = object->GetOwner();
-
-			if (owner != nullptr) {
-				if (owner->GetComponentType() == COMPONENT_TYPE_SIZERITEM) {
-					CreateCategory(object->GetClassName(), owner, dummyPropMap, false);
-				}
-			}
-
 			CreateCategory(object->GetClassName(), object, eventMap, true);
-
-			if (owner != nullptr) {
-				if (owner->GetComponentType() == COMPONENT_TYPE_SIZERITEM) {
-					CreateCategory(object->GetClassName(), owner, dummyEventMap, true);
-				}
-			}
 
 			// Select previously object page, or first page
 			if (m_pg->GetPageCount() > 0)

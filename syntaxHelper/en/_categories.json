@@ -16,7 +16,7 @@
     "value_types": "Value types",
     "collections": "Collections",
     "containers": "Map and Structure",
-    "value_table": "Value table (Table)",
+    "value_table": "Value table (ValueTable)",
     "http": "HTTP — requests to another system",
     "json": "JSON — reading and writing",
     "xml": "XML — reading and writing",

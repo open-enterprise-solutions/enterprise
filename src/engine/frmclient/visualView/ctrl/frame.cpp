@@ -7,6 +7,7 @@
 #include "frmclient/visualView/visualHostClient.h"
 
 #include <map>
+#include <wx/sizer.h>   // wxSizer::GetItem — the place a control stands in (GetSizerItem)
 
 #include "widgets.h"   // ibViewPlaceholder — a type none is registered for
 
@@ -51,6 +52,22 @@ bool ibValueFrame::ChangeChildPosition(ibValueFrame* obj, unsigned int pos)
 bool ibValueFrame::Fetch()
 {
 	return m_host.Fetch(this);
+}
+
+wxSizerItem* ibValueFrame::GetSizerItem() const
+{
+	// It is in the sizer already (the host's Generate) — the item it stands in is found, not added again: a window knows
+	// its sizer, a sizer the window it is laid out in.
+	if (wxWindow* const window = GetWindow()) {
+		if (wxSizer* const holder = window->GetContainingSizer())
+			return holder->GetItem(window);
+	}
+	else if (wxSizer* const sizer = GetSizer()) {
+		wxWindow* const owner = sizer->GetContainingWindow();
+		if (owner != nullptr && owner->GetSizer() != nullptr)
+			return owner->GetSizer()->GetItem(sizer, true);
+	}
+	return nullptr;
 }
 
 void ibValueFrame::OnPropertyChanged(ibProperty* property, const ibVariant& oldValue, const ibVariant& newValue)

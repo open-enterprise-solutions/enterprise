@@ -103,8 +103,8 @@ private:
 		class ibValueCommandBar* dropBar = nullptr);
 	ibValueFrame* CreateControlOfClass(ibValueFrame* parentHint, const ibString& className,
 		const std::function<void(ibValueFrame*)>& bind);
-	// THE DESKTOP EDITOR'S PASTE over the node the client copied (a control as the form draws it, in its sizer item; a
-	// page, a column bare): put in the control pasted on, else in the first of its parents that can hold it, right after
+	// THE DESKTOP EDITOR'S PASTE over the node the client copied (a control as the form draws it, its place in the sizer
+	// on its own node): put in the control pasted on, else in the first of its parents that can hold it, right after
 	// it — its ids this form's (the one numbering: GenerateNewID), its names unique on it. The control put, else none.
 	ibValueFrame* PasteObject(ibValueFrame* dstObject, const ibDataNode& copied);
 	void InsertObject(ibValueFrame* object, ibValueFrame* parent, int pos = -1);

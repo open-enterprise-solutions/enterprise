@@ -82,7 +82,7 @@ const ibArg& ArgControl()
 const ibArg& ArgClass()
 {
 	static const ibArg s_a(ibT("class"), ibArg::Kind::Text,
-		ibMcpText("The control's class: Textctrl, Tablebox, Button, Staticline, Boxsizer..."), /*required*/ true);
+		ibMcpText("The control's class: Field, Table, Button, Static, Layout..."), /*required*/ true);
 	return s_a;
 }
 
@@ -98,8 +98,8 @@ const ibArg& ArgParent()
 const ibArg& ArgClassToAdd()
 {
 	static const ibArg s_a(ibT("class"), ibArg::Kind::Text,
-		ibMcpText("The control's class: Textctrl, Tablebox, TableboxColumn, TableboxColumnGroup, Notebook, "
-			  "NotebookPage, Gridbox, Button, Boxsizer... Not needed when `attribute` or `command` is given."));
+		ibMcpText("The control's class: Field, Table, TableColumn, ColumnLayout, Pages, "
+			  "Page, Spreadsheet, Button, Layout... Not needed when `attribute` or `command` is given."));
 	return s_a;
 }
 
@@ -187,10 +187,11 @@ const ibArg& ArgSlot()
 }
 
 // THE FORM AS A TREE, built the way the editor builds it — there is one road in
-// (ibValueForm + LoadFormData) and this is it. Returned as a ref-counted value
-// the caller owns for the length of one question: nothing here edits a form
-// somebody has open, and nothing here leaves one behind.
-ibValueForm* OpenForm(const ibDataNode& params, ibString& refusal,
+// (ibValueForm + LoadFormData) and this is it. Returned HELD (an ibValuePtr) for
+// the length of one question — the caller's holder gives the reference back on
+// any way out: nothing here edits a form somebody has open, and nothing here
+// leaves one behind.
+ibValuePtr<ibValueForm> OpenForm(const ibDataNode& params, ibString& refusal,
 	bool* generated = nullptr, ibValueMetaObjectFormBase** creatorOut = nullptr)
 {
 	ibMetaData* const metaData = ibMcpMetaDataNamed(params, refusal);
@@ -259,7 +260,6 @@ ibValueForm* OpenForm(const ibDataNode& params, ibString& refusal,
 		return nullptr;
 	}
 
-	form->IncrRef();   // the caller's reference — the holders above give theirs back on the way out
 	return form;
 }
 
@@ -269,7 +269,7 @@ ibValueForm* OpenForm(const ibDataNode& params, ibString& refusal,
 // its commands to stand on the bar, so the form worth reading is often one nobody created.
 //
 // Answers nullptr with NO refusal when the id is not such an object — OpenForm then answers for it.
-ibValueForm* OpenObjectForm(const ibDataNode& params, ibString& refusal, bool& generated)
+ibValuePtr<ibValueForm> OpenObjectForm(const ibDataNode& params, ibString& refusal, bool& generated)
 {
 	ibString unopened;   // OpenForm says it, when this hands the id on
 	ibMetaData* const metaData = ibMcpMetaDataNamed(params, unopened);
@@ -293,7 +293,6 @@ ibValueForm* OpenObjectForm(const ibDataNode& params, ibString& refusal, bool& g
 
 	const ibValueMetaObjectFormBase* creator = form->GetFormMetaObject();
 	generated = creator == nullptr || creator->GetFormData().IsEmpty();
-	form->IncrRef();
 	return form;
 }
 
@@ -318,7 +317,7 @@ void SayControl(ibValueFrame* control, ibDataNode& node)
 	if (!name.IsEmpty() && name != control->GetClassName())
 		node.SetValue(ibT("name"), name);
 
-	// The FAMILY, beside the class: a sizer, a control, a sizer-item. It decides
+	// The FAMILY, beside the class: a sizer, a control, a container. It decides
 	// what may go inside, and a caller reading only class names cannot tell a
 	// container from a leaf.
 	node.SetValue(ibT("kind"), control->GetObjectTypeName());
@@ -495,7 +494,7 @@ public:
 	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
 		bool generated = false;
-		ibValueForm* form = OpenObjectForm(params, refusal, generated);
+		ibValuePtr<ibValueForm> form = OpenObjectForm(params, refusal, generated);
 		if (form == nullptr && refusal.IsEmpty())
 			form = OpenForm(params, refusal, &generated);
 		if (form == nullptr)
@@ -615,7 +614,6 @@ public:
 		// following the object it was generated from.
 		result.AddField(ibT("generated"), ibDataValue::Bool(generated));
 
-		form->DecrRef();
 		return true;
 	}
 };
@@ -654,7 +652,7 @@ public:
 
 	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
-		ibValueForm* form = OpenForm(params, refusal);
+		const ibValuePtr<ibValueForm> form = OpenForm(params, refusal);
 		if (form == nullptr)
 			return false;
 
@@ -680,7 +678,6 @@ public:
 				SayEvents(part, result);
 			}
 
-			form->DecrRef();
 			return part != nullptr;
 		}
 
@@ -692,7 +689,6 @@ public:
 			if (control == nullptr) {
 				refusal = ibString::Format(
 					ibMcpText("This form has no control with id %i. form_get lists them."), (int)wanted);
-				form->DecrRef();
 				return false;
 			}
 		}
@@ -710,7 +706,6 @@ public:
 		ibMcpSayProperties(control, result);
 		SayEvents(control, result);
 
-		form->DecrRef();
 		return true;
 	}
 };
@@ -763,7 +758,7 @@ public:
 	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
 		ibValueMetaObjectFormBase* creator = nullptr;
-		ibValueForm* form = OpenForm(params, refusal, nullptr, &creator);
+		const ibValuePtr<ibValueForm> form = OpenForm(params, refusal, nullptr, &creator);
 		if (form == nullptr)
 			return false;
 
@@ -779,7 +774,6 @@ public:
 			if (added)
 				creator->GetMetaData()->Modify(true);
 
-			form->DecrRef();
 			return added;
 		}
 
@@ -787,7 +781,6 @@ public:
 		if (className.IsEmpty()) {
 			refusal = ibMcpText("Which class? type_list with kind=control names them - or name an `attribute` or a "
 				"`command` to add one of those.");
-			form->DecrRef();
 			return false;
 		}
 
@@ -798,7 +791,6 @@ public:
 			if (parent == nullptr) {
 				refusal = ibString::Format(
 					ibMcpText("This form has no control with id %i. form_get lists them."), (int)into);
-				form->DecrRef();
 				return false;
 			}
 		}
@@ -810,7 +802,6 @@ public:
 			refusal = ibString::Format(
 				ibMcpText("A %s cannot go there. type_list with kind=control names the classes; "
 				  "form_get shows what each control already holds."), className);
-			form->DecrRef();
 			return false;
 		}
 
@@ -824,17 +815,14 @@ public:
 		// ⚠ SAVED, OR IT NEVER HAPPENED. The value form is ours for the length of
 		// this call; the application keeps the LAYOUT, and nothing reaches it
 		// until the form is written back.
-		if (!StoreForm(creator, form, result, refusal, ibMcpText("The control was added"))) {
-			form->DecrRef();
+		if (!StoreForm(creator, form, result, refusal, ibMcpText("The control was added")))
 			return false;
-		}
 
 		creator->GetMetaData()->Modify(true);
 
 		result.AddField(ibT("added"), ibDataValue::Bool(true));
 		SayControl(created, result);
 
-		form->DecrRef();
 		return true;
 	}
 
@@ -941,7 +929,7 @@ public:
 	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
 		ibValueMetaObjectFormBase* creator = nullptr;
-		ibValueForm* form = OpenForm(params, refusal, nullptr, &creator);
+		const ibValuePtr<ibValueForm> form = OpenForm(params, refusal, nullptr, &creator);
 		if (form == nullptr)
 			return false;
 
@@ -967,10 +955,8 @@ public:
 			part = control;
 		}
 
-		if (part == nullptr) {
-			form->DecrRef();
+		if (part == nullptr)
 			return false;
-		}
 
 		const ibString name = ArgProperty().Text(params);
 
@@ -987,7 +973,6 @@ public:
 			if (!form->RenameAttribute(attribute, ArgValue().Text(params))) {
 				refusal = ibString::Format(ibMcpText("'%s' cannot be called '%s' - the name is empty or another "
 					"attribute has it."), attribute->GetName(), ArgValue().Text(params));
-				form->DecrRef();
 				return false;
 			}
 			result.SetValue(ibT("property"), name);
@@ -997,10 +982,8 @@ public:
 
 			// ONE RULE FOR BOTH TREES — see ibMcpSetProperty. An attribute's Type in words among them: the property
 			// takes a type by its name itself (ibPropertyType::ReadNodeValue).
-			if (!ibMcpSetProperty(property, params, result, refusal)) {
-				form->DecrRef();
+			if (!ibMcpSetProperty(property, params, result, refusal))
 				return false;
-			}
 		}
 		// ⭐ AN EVENT IS ADDRESSED THE SAME WAY A PROPERTY IS, so it is answered by
 		// the same verb rather than by a second one. ibEvent and ibProperty are
@@ -1040,17 +1023,13 @@ public:
 				ibMcpText("'%s' has no property or event called '%s'. form_control lists both."),
 				control != nullptr ? control->GetControlName()
 					: attribute != nullptr ? attribute->GetName() : command->GetName(), name);
-			form->DecrRef();
 			return false;
 		}
 
-		if (!StoreForm(creator, form, result, refusal, ibMcpText("The property was set"))) {
-			form->DecrRef();
+		if (!StoreForm(creator, form, result, refusal, ibMcpText("The property was set")))
 			return false;
-		}
 
 		creator->GetMetaData()->Modify(true);
-		form->DecrRef();
 		return true;
 	}
 
@@ -1089,7 +1068,7 @@ public:
 	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
 		ibValueMetaObjectFormBase* creator = nullptr;
-		ibValueForm* form = OpenForm(params, refusal, nullptr, &creator);
+		const ibValuePtr<ibValueForm> form = OpenForm(params, refusal, nullptr, &creator);
 		if (form == nullptr)
 			return false;
 
@@ -1103,10 +1082,8 @@ public:
 			ibFormCommandValue* command = ArgCommand().Given(params) && attribute == nullptr && refusal.IsEmpty()
 				? CommandNamed(form, ArgCommand().Text(params), refusal) : nullptr;
 
-			if (attribute == nullptr && command == nullptr) {
-				form->DecrRef();
+			if (attribute == nullptr && command == nullptr)
 				return false;
-			}
 
 			// The designer's removal on either tree: an attribute leaves the form with its module variable unbound,
 			// a command with the buttons that ran it resolving to nothing.
@@ -1122,7 +1099,6 @@ public:
 			if (control == nullptr) {
 				refusal = ibString::Format(
 					ibMcpText("This form has no control with id %i. form_get lists them."), (int)wanted);
-				form->DecrRef();
 				return false;
 			}
 
@@ -1130,17 +1106,14 @@ public:
 			form->RemoveControl(control);
 		}
 
-		if (!StoreForm(creator, form, result, refusal, ibMcpText("It was removed"))) {
-			form->DecrRef();
+		if (!StoreForm(creator, form, result, refusal, ibMcpText("It was removed")))
 			return false;
-		}
 
 		creator->GetMetaData()->Modify(true);
 
 		result.AddField(ibT("removed"), ibDataValue::Bool(true));
 		result.SetValue(ibT("name"), name);
 
-		form->DecrRef();
 		return true;
 	}
 };
@@ -1191,7 +1164,7 @@ public:
 	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
 		ibValueMetaObjectFormBase* creator = nullptr;
-		ibValueForm* form = OpenForm(params, refusal, nullptr, &creator);
+		const ibValuePtr<ibValueForm> form = OpenForm(params, refusal, nullptr, &creator);
 		if (form == nullptr)
 			return false;
 
@@ -1200,33 +1173,24 @@ public:
 		if (control == nullptr) {
 			refusal = ibString::Format(
 				ibMcpText("This form has no control with id %i. form_get lists them."), (int)wanted);
-			form->DecrRef();
 			return false;
 		}
 
-		// A control placed in a group sits in its own sizer item, and the item is what stands among the
-		// group's children — so a sizer item for a parent means one level up.
-		ibValueFrame* item = control;
-		if (item->GetParent() != nullptr && item->GetParent()->GetComponentType() == COMPONENT_TYPE_SIZERITEM)
-			item = item->GetParent();
-		ibValueFrame* const group = item->GetParent();
+		ibValueFrame* const group = control->GetParent();
 
 		const std::int32_t position = (std::int32_t)ArgPosition().Whole(params);
 		if (group == nullptr || position < 0 || position >= (std::int32_t)group->GetChildCount()) {
 			refusal = ibString::Format(
 				ibMcpText("Position %i is past the controls of this group. Nothing was moved."), (int)position);
-			form->DecrRef();
 			return false;
 		}
 
-		const bool moved = group->GetChildPosition(item) != (unsigned int)position;
-		group->ChangeChildPosition(item, (unsigned int)position);
+		const bool moved = group->GetChildPosition(control) != (unsigned int)position;
+		group->ChangeChildPosition(control, (unsigned int)position);
 
 		if (moved) {
-			if (!StoreForm(creator, form, result, refusal, ibMcpText("The control was moved"))) {
-				form->DecrRef();
+			if (!StoreForm(creator, form, result, refusal, ibMcpText("The control was moved")))
 				return false;
-			}
 			// The application the form BELONGS to — asked of its creator, not of whichever is active.
 			if (ibMetaData* const metaData = creator->GetMetaData())
 				metaData->Modify(true);
@@ -1235,7 +1199,6 @@ public:
 		result.SetValue(ibT("name"), control->GetControlName());
 		result.AddField(ibT("moved"), ibDataValue::Bool(moved));
 
-		form->DecrRef();
 		return true;
 	}
 };
@@ -1305,24 +1268,20 @@ public:
 	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
 		ibValueMetaObjectFormBase* creator = nullptr;
-		ibValueForm* form = OpenForm(params, refusal, nullptr, &creator);
+		const ibValuePtr<ibValueForm> form = OpenForm(params, refusal, nullptr, &creator);
 		if (form == nullptr)
 			return false;
 
 		ibFormAttributeValue* entry = AttributeNamed(form, ArgAttribute().Text(params), refusal);
-		if (entry == nullptr) {
-			form->DecrRef();
+		if (entry == nullptr)
 			return false;
-		}
 
 		// The panel's own verb: set it, or clear it when this one is already the main.
 		const bool wanted = !ArgMain().Given(params) || ArgMain().Flag(params);
 		form->SetMainAttribute(wanted ? entry : nullptr);
 
-		if (!StoreForm(creator, form, result, refusal, ibMcpText("The main attribute was set"))) {
-			form->DecrRef();
+		if (!StoreForm(creator, form, result, refusal, ibMcpText("The main attribute was set")))
 			return false;
-		}
 
 		creator->GetMetaData()->Modify(true);
 
@@ -1333,7 +1292,6 @@ public:
 		result.SetValue(ibT("form"), form->GetControlName());
 		result.SetValue(ibT("main"), now != nullptr ? now->GetName() : ibString());
 
-		form->DecrRef();
 		return true;
 	}
 };
@@ -1391,7 +1349,7 @@ public:
 
 	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
-		ibValueForm* form = OpenForm(params, refusal);
+		const ibValuePtr<ibValueForm> form = OpenForm(params, refusal);
 		if (form == nullptr)
 			return false;
 
@@ -1409,7 +1367,6 @@ public:
 				: ibString(ibMcpText("This form has no main attribute - start `path` with one of its attributes "
 					"(form_get lists them).")));
 			result.AddField(ibT("fields"), ibDataValue::Array(std::vector<ibDataValue>()));
-			form->DecrRef();
 			return true;
 		}
 
@@ -1429,12 +1386,10 @@ public:
 			explorer = source->WalkColumns(path, named ? head->GetName() : ibString(), hops, held);
 		}
 		catch (const ibBackendInterruptException&) {
-			form->DecrRef();
 			throw;
 		}
 		catch (const ibCoreException& thrown) {
 			refusal = thrown.GetErrorDescription();
-			form->DecrRef();
 			return false;
 		}
 
@@ -1454,7 +1409,6 @@ public:
 			result.SetValue(ibT("note"),
 				ibMcpText("Nothing unfolds from here - this is where a binding ends."));
 
-		form->DecrRef();
 		return true;
 	}
 
@@ -1567,8 +1521,8 @@ public:
 			"dynamic list's table needs no change to its query. A "
 			"binding is a chain of hops, so it cannot be set as plain text through form_set. A path opened "
 			"with another ATTRIBUTE's name starts there ('List.Price' - a column of a table showing a dynamic "
-			"list); that name alone binds the control to the attribute itself - a Tablebox to a dynamic list or "
-			"a value table, a Gridbox to a data composition.");
+			"list); that name alone binds the control to the attribute itself - a Table to a dynamic list or "
+			"a value table, a Spreadsheet to a data composition.");
 	}
 
 	const std::vector<ibMcpArgument>& Arguments() const override
@@ -1581,7 +1535,7 @@ public:
 	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
 		ibValueMetaObjectFormBase* creator = nullptr;
-		ibValueForm* form = OpenForm(params, refusal, nullptr, &creator);
+		const ibValuePtr<ibValueForm> form = OpenForm(params, refusal, nullptr, &creator);
 		if (form == nullptr)
 			return false;
 
@@ -1592,7 +1546,6 @@ public:
 
 		if (!ArgControl().Given(params)) {
 			refusal = ibMcpText("Which control? form_bind needs the control's id - form_get lists them.");
-			form->DecrRef();
 			return false;
 		}
 
@@ -1600,7 +1553,6 @@ public:
 		if (control == nullptr) {
 			refusal = ibString::Format(
 				ibMcpText("This form has no control with id %i. form_get lists them."), (int)wanted);
-			form->DecrRef();
 			return false;
 		}
 
@@ -1641,7 +1593,6 @@ public:
 				refusal = ibString::Format(
 					ibMcpText("There is no command called '%s' here. Available: %s."),
 					wanted, available.IsEmpty() ? ibString(ibT("none")) : available);
-				form->DecrRef();
 				return false;
 			}
 
@@ -1658,17 +1609,14 @@ public:
 					refusal = ibString::Format(
 						ibMcpText("'%s' cannot run '%s' - the path does not resolve from this control."),
 						control->GetControlName(), wanted);
-					form->DecrRef();
 					return false;
 				}
 			}
 
 			wiring->SetValue(command, leaf);
 
-			if (!StoreForm(creator, form, result, refusal, ibMcpText("The command was bound"))) {
-				form->DecrRef();
+			if (!StoreForm(creator, form, result, refusal, ibMcpText("The command was bound")))
 				return false;
-			}
 
 			creator->GetMetaData()->Modify(true);
 
@@ -1682,12 +1630,10 @@ public:
 			ibDataValue described;
 			if (!ibCommandDescriptionMemory::WriteNode(described, command)) {
 				refusal = ibMcpText("The command was wired, but could not be read back to confirm it.");
-				form->DecrRef();
 				return false;
 			}
 			result.AddField(ibT("wiring"), described);
 
-			form->DecrRef();
 			return true;
 		}
 
@@ -1697,7 +1643,6 @@ public:
 			refusal = ibString::Format(
 				ibMcpText("'%s' has no binding called '%s'. form_control lists its properties."),
 				control->GetControlName(), name);
-			form->DecrRef();
 			return false;
 		}
 
@@ -1710,23 +1655,28 @@ public:
 		//
 		// 🛑 IT WAS WALKED HERE, a road of its own beside the engine's, and a script had none at all: its Source write
 		// was dropped (ibPropertySource::SetDataValue answered false and did nothing).
+		//
+		// …and placed THROUGH THE ONE DOOR (ibPropertyGate), as a script's write is (ibValueFrame::SetPropVal): the value
+		// read, the one before it put back, the value read handed to the door — the control asked, set, told (2026-11-23:
+		// it was set alone, and a field never heard its source changed).
 		try {
+			const ibVariant oldValue = property->GetValue();
 			binding->SetDataValue(ibValue(ArgPath().Text(params)));
+			const ibVariant newValue = property->GetValue();
+			property->SetValue(oldValue);
+			if (!ibPropertyGate::SetValue(nullptr, property, newValue, &refusal))
+				return false;
 		}
 		catch (const ibBackendInterruptException&) {
-			form->DecrRef();
 			throw;
 		}
 		catch (const ibCoreException& thrown) {
 			refusal = thrown.GetErrorDescription();
-			form->DecrRef();
 			return false;
 		}
 
-		if (!StoreForm(creator, form, result, refusal, ibMcpText("The binding was set"))) {
-			form->DecrRef();
+		if (!StoreForm(creator, form, result, refusal, ibMcpText("The binding was set")))
 			return false;
-		}
 
 		creator->GetMetaData()->Modify(true);
 
@@ -1745,12 +1695,10 @@ public:
 		ibDataValue described;
 		if (!ibSourceDescriptionMemory::WriteNode(described, description)) {
 			refusal = ibMcpText("The binding was placed, but could not be read back to confirm it.");
-			form->DecrRef();
 			return false;
 		}
 		result.AddField(ibT("source"), described);
 
-		form->DecrRef();
 		return true;
 	}
 };
@@ -1802,7 +1750,7 @@ public:
 
 	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
-		ibValueForm* form = OpenForm(params, refusal);
+		const ibValuePtr<ibValueForm> form = OpenForm(params, refusal);
 		if (form == nullptr)
 			return false;
 
@@ -1812,7 +1760,6 @@ public:
 		if (control == nullptr) {
 			refusal = ibString::Format(
 				ibMcpText("This form has no control with id %i. form_get lists them."), (int)wanted);
-			form->DecrRef();
 			return false;
 		}
 
@@ -1821,20 +1768,15 @@ public:
 		if (control->GetComponentType() == COMPONENT_TYPE_FRAME) {
 			refusal = ibMcpText("The form itself is not a control. Copy the form metaobject with "
 				"metadata_copy instead.");
-			form->DecrRef();
 			return false;
 		}
 
-		// The item it is in goes with it — how it sits is part of it (the designer's copy, ibVisualEditor::CopyObject).
-		const ibValueFrame* copiedObject = control;
-		if (control->GetParent() != nullptr && control->GetParent()->GetComponentType() == COMPONENT_TYPE_SIZERITEM)
-			copiedObject = control->GetParent();
-		ibDataNode copied(copiedObject->GetClassType(), copiedObject->GetControlID());
+		// How it sits in its sizer goes with it — its own node holds it (ibValueFrame::GetSizerItem).
+		ibDataNode copied(control->GetClassType(), control->GetControlID());
 
-		if (!copiedObject->SaveNode(copied)) {
+		if (!control->SaveNode(copied)) {
 			refusal = ibString::Format(ibMcpText("'%s' could not be copied."),
 				control->GetControlName());
-			form->DecrRef();
 			return false;
 		}
 
@@ -1851,7 +1793,6 @@ public:
 		result.SetValue(ibT("name"), slot.m_name);
 		result.SetValue(ibT("class"), slot.m_what);
 
-		form->DecrRef();
 		return true;
 	}
 };
@@ -1899,7 +1840,7 @@ public:
 		}
 
 		ibValueMetaObjectFormBase* creator = nullptr;
-		ibValueForm* form = OpenForm(params, refusal, nullptr, &creator);
+		const ibValuePtr<ibValueForm> form = OpenForm(params, refusal, nullptr, &creator);
 		if (form == nullptr)
 			return false;
 
@@ -1910,7 +1851,6 @@ public:
 			if (parent == nullptr) {
 				refusal = ibString::Format(
 					ibMcpText("This form has no control with id %i. form_get lists them."), (int)into);
-				form->DecrRef();
 				return false;
 			}
 		}
@@ -1923,31 +1863,25 @@ public:
 			refusal = ibString::Format(
 				ibMcpText("A %s cannot go there. form_get shows what each control already holds."),
 				slot.m_what);
-			form->DecrRef();
 			return false;
 		}
-
-		ibValueFrame* const created = pasted->SkipSizerItems();
 
 		const ibString name = ArgName().Text(params);
 		if (!name.IsEmpty())
-			created->SetControlName(name);
+			pasted->SetControlName(name);
 
 		// ⚠ SAVED, OR IT NEVER HAPPENED — the application keeps the layout, and
 		// the value form is ours only for the length of this call.
-		if (!StoreForm(creator, form, result, refusal, ibMcpText("The control was pasted"))) {
-			form->DecrRef();
+		if (!StoreForm(creator, form, result, refusal, ibMcpText("The control was pasted")))
 			return false;
-		}
 
 		creator->GetMetaData()->Modify(true);
 
-		result.AddField(ibT("controlId"), ibDataValue::Int((std::int64_t)created->GetControlID()));
-		result.SetValue(ibT("class"), created->GetClassName());
-		result.SetValue(ibT("name"), created->GetControlName());
+		result.AddField(ibT("controlId"), ibDataValue::Int((std::int64_t)pasted->GetControlID()));
+		result.SetValue(ibT("class"), pasted->GetClassName());
+		result.SetValue(ibT("name"), pasted->GetControlName());
 		result.SetValue(ibT("copiedFrom"), slot.m_name);
 
-		form->DecrRef();
 		return true;
 	}
 };
@@ -1960,12 +1894,12 @@ MCP_TOOL_REGISTER_DESIGNER(ibMcpToolFormPaste);
 //
 // ⭐⭐ WHAT A CONTROL OF THIS CLASS WOULD HOLD — asked by building one where it would live, and
 // taking it straight back out. The twin of metadata_accepts, and it exists for the same reason: a
-// caller had to ADD a Textctrl before it could learn what a Textctrl has, so learning cost an edit.
+// caller had to ADD a Field before it could learn what a Field has, so learning cost an edit.
 //
 // ⭐ AND THE SAME TREE RULE, because a form has one too. Max, 2026-09-01: *"with controls it will be
 // the same trouble"* — a control is never born loose; `CreateControl(class, parent)` takes the
 // parent it goes under, and the form itself is the parent when none is named. So the question is
-// asked WHERE the control would stand: what a Boxsizer accepts inside a page is not what it accepts
+// asked WHERE the control would stand: what a Layout accepts inside a page is not what it accepts
 // at the top of a form, and a class the parent will not take is an answer, not a failure.
 //
 // Nothing is left behind: RemoveControl is the door form_remove uses, and the form is not saved.
@@ -1995,7 +1929,7 @@ public:
 
 	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
-		ibValueForm* form = OpenForm(params, refusal);
+		const ibValuePtr<ibValueForm> form = OpenForm(params, refusal);
 		if (form == nullptr)
 			return false;
 
@@ -2007,7 +1941,6 @@ public:
 			if (parent == nullptr) {
 				refusal = ibString::Format(
 					ibMcpText("This form has no control with id %i. form_get lists them."), (int)into);
-				form->DecrRef();
 				return false;
 			}
 		}
@@ -2023,7 +1956,6 @@ public:
 				ibMcpText("A '%s' cannot stand inside '%s'. A form is a tree - name a different `parent`, "
 				  "or form_control on an existing control shows what its container takes."),
 				className, parent == form ? ibMcpText("the form") : parent->GetControlName());
-			form->DecrRef();
 			return false;
 		}
 
@@ -2054,7 +1986,6 @@ public:
 		// TAKEN BACK OUT, the way form_remove takes one out. The form was never saved, so the
 		// application is as it was.
 		form->RemoveControl(sample);
-		form->DecrRef();
 		return true;
 	}
 };

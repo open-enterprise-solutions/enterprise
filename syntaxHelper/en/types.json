@@ -11,11 +11,11 @@
       "class_id": 206132776430546024,
       "category_keys": ["value_types", "type_description"],
       "signature": "Type(name : string) / TypeOf(value : any)",
-      "description": "A type as a value — what TypeOf answers about a value and Type(name) answers by name, and what a type comparison is made against: `TypeOf(Value) = Type(\"Number\")`. Two types are equal when they are the same class. String(type) is its registered name — \"Number\", \"Table\", \"CatalogRef.Goods\".\n\nA TypeDescription is built from types — one, or an Array of them — and its Types() answers with them.\n\nA Type is made by those two functions, not by New: `New Type(...)`, whatever it is given, makes a type that names no class, and the first use of it raises. A Type has no properties or methods of its own.",
+      "description": "A type as a value — what TypeOf answers about a value and Type(name) answers by name, and what a type comparison is made against: `TypeOf(Value) = Type(\"Number\")`. Two types are equal when they are the same class. String(type) is its registered name — \"Number\", \"ValueTable\", \"CatalogRef.Goods\".\n\nA TypeDescription is built from types — one, or an Array of them — and its Types() answers with them.\n\nA Type is made by those two functions, not by New: `New Type(...)`, whatever it is given, makes a type that names no class, and the first use of it raises. A Type has no properties or methods of its own.",
       "syntax_block": "T = Type(\"Number\");\nT = TypeOf(Value);\nIsNumber = TypeOf(Value) == Type(\"Number\");",
       "parameters": "name — a registered type's name (Type).\nvalue — any value (TypeOf).",
       "return_descr": "Type.",
-      "example": "Value = 42;\nMessage(TypeOf(Value) == Type(\"Number\"));   // True\nMessage(String(TypeOf(New Table())));       // Table",
+      "example": "Value = 42;\nMessage(TypeOf(Value) == Type(\"Number\"));   // True\nMessage(String(TypeOf(New ValueTable())));  // ValueTable",
       "availability": "Client, Server",
       "see_also": ["fn.Type", "fn.TypeOf", "cls.TypeDescription", "cls.TypeDescription.Types"],
       "reviewed": false
@@ -32,9 +32,9 @@
       "syntax_block": "Desc = New TypeDescription(\"Number\", New QualifierNumber(15, 2));\nDesc = New TypeDescription(\"Number, String\");\nDesc = New TypeDescription(\"String\", , , New QualifierString(50));",
       "parameters": "types — a text of type names separated by commas, an Array of Type, or a Type.\nnumber — a QualifierNumber; left out, a number is not limited.\ndate — a QualifierDate; left out, a date keeps its time.\nstring — a QualifierString; left out, a string has any length.",
       "return_descr": "TypeDescription.",
-      "example": "Money = New TypeDescription(\"Number\", New QualifierNumber(15, 2));\nTable = New Table();\nTable.Columns.AddColumn(\"Amount\", Money);\nMessage(Money.AdjustValue(10.555));   // 10.56",
+      "example": "Money = New TypeDescription(\"Number\", New QualifierNumber(15, 2));\nTable = New ValueTable();\nTable.Columns.AddColumn(\"Amount\", Money);\nMessage(Money.AdjustValue(10.555));   // 10.56",
       "availability": "Client, Server",
-      "see_also": ["cls.TypeDescription.AdjustValue", "cls.TypeDescription.ContainType", "cls.TypeDescription.Types", "cls.QualifierNumber", "cls.QualifierDate", "cls.QualifierString", "cls.Type", "cls.Table.Columns.AddColumn"],
+      "see_also": ["cls.TypeDescription.AdjustValue", "cls.TypeDescription.ContainType", "cls.TypeDescription.Types", "cls.QualifierNumber", "cls.QualifierDate", "cls.QualifierString", "cls.Type", "cls.ValueTable.Columns.AddColumn"],
       "reviewed": false
     },
     {

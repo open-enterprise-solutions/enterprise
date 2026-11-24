@@ -15,4 +15,4 @@ void ibValueChartBox::Update(const ibProtocolNode& node)
 	UpdateWindow(m_chartBox, node);
 }
 
-CONTROL_REGISTER(ibValueChartBox, ibProtocol::ibForm::ibType::Chartbox)
+CONTROL_REGISTER(ibValueChartBox, ibProtocol::ibForm::ibType::Chart)

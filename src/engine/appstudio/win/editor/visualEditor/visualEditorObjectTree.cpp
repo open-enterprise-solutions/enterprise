@@ -56,7 +56,7 @@ bool CanDeleteControl(const ibValueFrame* obj)
 {
 	if (obj == nullptr || obj->GetParent() == nullptr)
 		return false;
-	if (obj->GetClassName() == ibProtocol::ibForm::ibType::NotebookPage || obj->GetClassName() == ibProtocol::ibForm::ibType::TableboxColumn)
+	if (obj->GetClassName() == ibProtocol::ibForm::ibType::Page || obj->GetClassName() == ibProtocol::ibForm::ibType::TableColumn)
 		return obj->GetParent()->GetChildCount() > 1;
 	return true;
 }
@@ -129,19 +129,6 @@ void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::AddContro
 {
 	const std::vector<ibProtocolNode> children = node.Children();
 	const auto childNode = [&children](unsigned int idx) { return idx < children.size() ? children[idx] : ibProtocolNode(); };
-
-	if (control->GetComponentType() == COMPONENT_TYPE_SIZERITEM) {
-		if (control->GetChildCount() > 0) {
-			AddControl(control->GetChild(0), childNode(0), parent);
-			return;
-		}
-		// An item holds its control, always: an empty one is a form built wrong — said, and skipped.
-		ibValueFrame* const holder = control->GetParent();
-		ibJournalError(wxT("designer"), wxString::Format(wxT("A sizer item of '%s:%s' holds no control"),
-			holder != nullptr ? holder->GetControlName() : wxString(),
-			holder != nullptr ? holder->GetClassName() : ibString()));
-		return;
-	}
 
 	const int picture = GetPictureIndex(control->GetClassName());
 	ibVisualEditorObjectTreeItemData* const data = new ibVisualEditorObjectTreeItemData(control);

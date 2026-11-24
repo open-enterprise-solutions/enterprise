@@ -1,11 +1,13 @@
-"""A table's footer, its column groups, what the cursor stands on, and the cell's editor."""
+"""A table's footer, its column groups, what the cursor stands on, the cell's editor, and its columns' views."""
 import unittest
 
 from harness import NAME, STOCK, PageTest, column, group, row, tab
 
 SIDE_BY_SIDE, ONE_UNDER_ANOTHER, IN_CELL = 0, 1, 2
 RIGHT = 0x200
-ROW, CHANGE, SELECT, OPEN = 12, 5, 6, 7
+ROW, CHANGE, SELECT, OPEN, TOGGLE = 12, 5, 6, 7, 9
+# What a column's cells are for (ibProtocol::ibForm::ibProperty::ibFieldView): a box, shown.
+FLAG, LABEL = 1, 2
 
 FOOTERS = [column(NAME, 'Name', FooterAlign=0, state={'FooterText': 'Total'}),
            column(STOCK, 'Stock', FooterAlign=RIGHT, state={'FooterText': '150'})]
@@ -129,7 +131,7 @@ class RowSelection(PageTest):
     def test_the_table_takes_the_focus_as_its_form_opens(self):
         page = self.start({'tabs': [tab(selection=1, currentRow=2)]})
         self.row('Item 2').wait_for()
-        page.wait_for_function("document.querySelector('oes-tablebox .grid') === document.activeElement")
+        page.wait_for_function("document.querySelector('oes-table .grid') === document.activeElement")
         page.keyboard.press('ArrowDown')
         page.wait_for_function("document.querySelector('.current-row')?.textContent.includes('Item 3')")
 
@@ -138,12 +140,12 @@ class RowSelection(PageTest):
         self.row('Item 2').wait_for()
         page.evaluate("""() => { const button = document.createElement('button'); document.querySelector('.client-window header').append(button);
             button.focus(); window.fake.open(window.fakeSecond); }""".replace('window.fakeSecond', "{title: 'Second', table: window.fake.tab().table}"))
-        page.wait_for_function("document.activeElement === document.querySelector('oes-clientform:not([hidden]) oes-tablebox .grid')")
+        page.wait_for_function("document.activeElement === document.querySelector('oes-clientform:not([hidden]) oes-table .grid')")
 
     def test_the_ends_and_a_page(self):
         page = self.start({'tabs': [tab(selection=1, currentRow=2)]})
         self.row('Item 2').wait_for()
-        page.locator('oes-tablebox .grid').focus()
+        page.locator('oes-table .grid').focus()
         for key, name in (('End', 'Item 5'), ('Home', 'Item 1'), ('PageDown', 'Item 5'), ('PageUp', 'Item 1')):
             page.keyboard.press(key)
             page.wait_for_function("(name) => document.querySelector('.current-row')?.textContent.includes(name)", arg=name)
@@ -162,7 +164,7 @@ class RowSelection(PageTest):
     def test_the_keys_outlive_the_row_clicked_being_drawn_anew(self):
         page = self.start({'tabs': [tab(selection=1)]})
         self.row('Item 2').click()
-        page.evaluate("""() => { const box = document.querySelector('oes-tablebox');
+        page.evaluate("""() => { const box = document.querySelector('oes-table');
             box.table.getRows().forEach((one) => one.reformat()); }""")
         page.keyboard.press('ArrowDown')
         page.wait_for_function("document.querySelector('.current-row')?.textContent.includes('Item 3')")
@@ -228,7 +230,7 @@ class ContextMenu(PageTest):
 
     def test_in_an_empty_table_too(self):
         page = self.start({'tabs': [tab(contextMenu=self.MENU, rows=[])]})
-        frame = page.locator('oes-tablebox .grid-frame').bounding_box()
+        frame = page.locator('oes-table .grid-frame').bounding_box()
         page.mouse.click(frame['x'] + 100, frame['y'] + frame['height'] - 20, button='right')
         page.wait_for_selector('.popup-menu:popover-open')
 
@@ -336,7 +338,7 @@ class CellSelection(PageTest):
     def test_the_arrows_move_the_cell_and_the_row(self):
         page = self.start({'tabs': [tab(selection=0)]})
         self.row('Item 2').locator('.tabulator-cell', has_text='Item 2').click()
-        page.locator('oes-tablebox .grid').focus()
+        page.locator('oes-table .grid').focus()
         page.keyboard.press('ArrowRight')
         page.wait_for_function("document.querySelector('.current-cell')?.textContent.trim() === '20'")
         page.keyboard.press('ArrowDown')
@@ -372,7 +374,7 @@ class CellEditor(PageTest):
         look = """(field) => { const style = getComputedStyle(field); const base = field.shadowRoot.querySelector('[part~="base"]');
             const inner = getComputedStyle(base);
             return [field.getAttribute('size'), style.fontSize, inner.borderTopWidth, inner.borderTopStyle]; }"""
-        self.assertEqual(page.locator('.tabulator-cell wa-input').evaluate(look), page.locator('oes-textctrl wa-input').evaluate(look))
+        self.assertEqual(page.locator('.tabulator-cell wa-input').evaluate(look), page.locator('oes-field wa-input').evaluate(look))
 
     def test_stands_inside_its_row(self):
         page = self.open()
@@ -480,6 +482,49 @@ class CellEditor(PageTest):
         page.wait_for_function('window.fake.events(6).length === 1')
         self.assertEqual(self.sent(SELECT)[0]['Args'], {'Row': 1, 'Column': NAME})
         self.assertEqual(self.sent(CHANGE), [])
+
+
+class ColumnViews(PageTest):
+    """What a column's cells are for is its View (docs/private/form-column-view.md): typed into, a box, shown."""
+
+    def paid(self, checked, read_only=False, **extra):
+        """A table whose Stock column is a boolean 'Paid' of the given view."""
+        page = self.start({'tabs': [tab(selection=1, columns=[column(NAME, 'Name'), column(STOCK, 'Paid', **extra)],
+                                        rows=[row(1, 'Bolt', {'Text': 'Yes' if checked else 'No', 'Checked': checked},
+                                                  read_only=read_only)])]})
+        self.row('Bolt').wait_for()
+        return page
+
+    def test_a_flag_is_a_box_and_a_click_sends_toggle(self):
+        page = self.paid(True, View=FLAG)
+        box = self.row('Bolt').locator('input.cell-flag')
+        self.assertTrue(box.is_checked())
+        box.click()
+        page.wait_for_function('(kind) => window.fake.events(kind).length === 1', arg=TOGGLE)
+        self.assertEqual(self.sent(TOGGLE)[0]['Args'], {'Row': 1, 'Column': STOCK, 'Checked': False})
+        self.assertTrue(box.is_checked(), 'the box shows the server\'s answer, not the click')
+
+    def test_a_flag_whose_cell_takes_no_edit_sends_nothing(self):
+        page = self.paid(False, read_only=True, View=FLAG)
+        self.row('Bolt').locator('input.cell-flag').click()
+        page.wait_for_timeout(300)
+        self.assertEqual(self.sent(TOGGLE), [])
+
+    def test_a_boolean_in_an_input_opens_a_box(self):
+        page = self.paid(False)
+        self.row('Bolt').locator(f'.tabulator-cell[tabulator-field="c{STOCK}"]').dblclick()
+        page.wait_for_selector('.tabulator-cell input.cell-editor[type="checkbox"]')
+        page.keyboard.press('Space')
+        page.keyboard.press('Enter')
+        page.wait_for_function('(kind) => window.fake.events(kind).length === 1', arg=TOGGLE)
+        self.assertEqual(self.sent(TOGGLE)[0]['Args'], {'Row': 1, 'Column': STOCK, 'Checked': True})
+
+    def test_a_label_opens_no_editor(self):
+        page = self.start({'tabs': [tab(selection=1, columns=[column(NAME, 'Name', View=LABEL), column(STOCK, 'Stock', View=LABEL)],
+                                        rows=[row(1, 'Bolt', '5', read_only=False)])]})
+        self.row('Bolt').locator('.tabulator-cell', has_text='Bolt').dblclick()
+        page.wait_for_timeout(300)
+        self.assertEqual(page.locator('.cell-editor').count(), 0)
 
 
 if __name__ == '__main__':

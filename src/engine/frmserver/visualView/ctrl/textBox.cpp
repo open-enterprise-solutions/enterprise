@@ -9,6 +9,8 @@ ibValueTextBox::ibValueTextBox() : ibValueWindow()
 {
 	//set default params
 	m_propertyMinSize->SetValue(ibSize(150, 50));
+	m_sizerItem->SetProportion(1);
+	m_sizerItem->SetFlagState(ibStretch_Expand);
 }
 
 //**********************************************************************************
@@ -41,4 +43,4 @@ bool ibValueTextBox::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 //*                       Register in runtime                           *
 //***********************************************************************
 
-CONTROL_TYPE_REGISTER(ibValueTextBox, "Textbox", "Container", g_controlTextBoxCLSID);
+CONTROL_TYPE_REGISTER(ibValueTextBox, "TextArea", "Container", g_controlTextBoxCLSID);

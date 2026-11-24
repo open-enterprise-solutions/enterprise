@@ -410,7 +410,7 @@ bool ibValueReferenceDataObject::FindValue(const ibString& input, const ibChoice
 		const std::shared_ptr<const ibBackendQueryColumn> keyCol = m_metaObject->GetDataReference()->GetQueryColumn();
 
 		// ⭐ HOW WELL A ROW ANSWERS, so the best comes first - the caller that types takes the FIRST
-		// (ibValueTextCtrl::TextProcessing). By the searched attributes in their order (a code before a
+		// (ibFieldViewInput::TextProcessing). By the searched attributes in their order (a code before a
 		// description): the whole of it, then its beginning, then anywhere in it. "63" is account 63,
 		// before 631 and before a name that happens to hold the digits.
 		std::vector<std::pair<int, ibValue>> ranked;

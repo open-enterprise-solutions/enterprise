@@ -458,7 +458,8 @@ namespace ibProtocol {
 		inline constexpr const char* Args     = "Args";
 		// …the Args a control's event carries:
 		inline constexpr const char* Id       = "Id";         // Command, Action: the command's
-		inline constexpr const char* Member   = "Member";     // Command, Press: one command of a group, by its place in it
+		inline constexpr const char* Member   = "Member";     // Command, Press: one command of a group, by its place in it;
+		                                                      // Change: a switch's item, by its place among its Choices
 		inline constexpr const char* Text     = "Text";       // Change, Search, Find
 		inline constexpr const char* Down     = "Down";       // Find: looked for below the current row (false — above it)
 		inline constexpr const char* MatchCase = "MatchCase"; // Find: the case as written (false — aside)
@@ -466,7 +467,8 @@ namespace ibProtocol {
 		inline constexpr const char* Value    = "Value";      // Change: the value with its type, when the field holds one
 		inline constexpr const char* Checked  = "Checked";    // Toggle
 		inline constexpr const char* Page     = "Page";       // Page: the page picked, by its control id
-		inline constexpr const char* Position = "Position";   // Move: the place it is dragged to
+		inline constexpr const char* Position = "Position";   // Move: the place it is dragged to; Change: where a slider
+		                                                      // was let go
 		inline constexpr const char* Holder   = "Holder";     // Move: the group a column now stands in — 0, the table
 		inline constexpr const char* Row      = "Row";        // a table's row, by its handle; a spreadsheet's, from 1
 		inline constexpr const char* Column   = "Column";     // a table's column, by its control id
@@ -1173,28 +1175,19 @@ namespace ibProtocol {
 		namespace ibType {
 
 			inline constexpr const char* ClientForm          = "ClientForm";
-			inline constexpr const char* SizerItem           = "SizerItem";
-			inline constexpr const char* Boxsizer            = "Boxsizer";
-			inline constexpr const char* Wrapsizer           = "Wrapsizer";
-			inline constexpr const char* Gridsizer           = "Gridsizer";
-			inline constexpr const char* Staticboxsizer      = "Staticboxsizer";
-			inline constexpr const char* Statictext          = "Statictext";
-			inline constexpr const char* Textctrl            = "Textctrl";
+			inline constexpr const char* Layout              = "Layout";      // how it lays out is its View (ibLayoutView)
+			inline constexpr const char* Field               = "Field";       // what it is for is its View (ibFieldView)
+			inline constexpr const char* Static              = "Static";      // a decoration: what it shows is its View (ibStaticView)
 			inline constexpr const char* Button              = "Button";
-			inline constexpr const char* Checkbox            = "Checkbox";
-			inline constexpr const char* Staticline          = "Staticline";
-			inline constexpr const char* Tablebox            = "Tablebox";
-			inline constexpr const char* TableboxColumn      = "TableboxColumn";
-			inline constexpr const char* TableboxColumnGroup = "TableboxColumnGroup";
-			inline constexpr const char* Gridbox             = "Gridbox";
-			inline constexpr const char* Textbox             = "Textbox";
-			inline constexpr const char* Notebook            = "Notebook";
-			inline constexpr const char* NotebookPage        = "NotebookPage";
-			inline constexpr const char* Radiobutton         = "Radiobutton";
-			inline constexpr const char* Slider              = "Slider";
-			inline constexpr const char* Gauge               = "Gauge";
-			inline constexpr const char* Htmlbox             = "Htmlbox";
-			inline constexpr const char* Chartbox            = "Chartbox";
+			inline constexpr const char* Table               = "Table";
+			inline constexpr const char* TableColumn         = "TableColumn";
+			inline constexpr const char* ColumnLayout        = "ColumnLayout";   // how its columns go is its Grouping
+			inline constexpr const char* Spreadsheet         = "Spreadsheet";
+			inline constexpr const char* TextArea            = "TextArea";
+			inline constexpr const char* Pages               = "Pages";
+			inline constexpr const char* Page                = "Page";
+			inline constexpr const char* Html                = "Html";
+			inline constexpr const char* Chart               = "Chart";
 
 		}
 
@@ -1210,20 +1203,24 @@ namespace ibProtocol {
 			inline constexpr const char* Font             = "Font";
 			inline constexpr const char* ForegroundColour = "ForegroundColour";
 			inline constexpr const char* BackgroundColour = "BackgroundColour";
-			inline constexpr const char* Proportion       = "Proportion";
+			inline constexpr const char* Proportion       = "Proportion";      // the place in the sizer above — any control a sizer lays out
 			inline constexpr const char* BorderSize       = "BorderSize";
 			inline constexpr const char* BorderLeft       = "BorderLeft";
 			inline constexpr const char* BorderRight      = "BorderRight";
 			inline constexpr const char* BorderTop        = "BorderTop";
 			inline constexpr const char* BorderBottom     = "BorderBottom";
 			inline constexpr const char* Stretch          = "Stretch";
-			inline constexpr const char* Rows             = "Rows";            // a grid sizer's
+			inline constexpr const char* Rows             = "Rows";            // a layout's, its Grid
 			inline constexpr const char* Cols             = "Cols";
 			inline constexpr const char* TitleLocation    = "TitleLocation";   // ibTitleLocation
 			inline constexpr const char* PictureLocation  = "PictureLocation"; // ibPictureLocation: a button's
-			inline constexpr const char* View             = "View";            // ibButtonView: a button's
+			inline constexpr const char* View             = "View";            // ibButtonView: a button's; ibFieldView: a field's;
+			                                                                   // ibColumnView: a table column's; ibLayoutView: a
+			                                                                   // layout's; ibStaticView: a static's
 			inline constexpr const char* PasswordMode     = "PasswordMode";
 			inline constexpr const char* MultilineMode    = "MultilineMode";
+			inline constexpr const char* TexteditMode     = "TexteditMode";    // may it be typed into — off: its value is
+			                                                                   // picked and cleared only (a field's, a column's)
 			inline constexpr const char* ButtonSelect     = "ButtonSelect";
 			inline constexpr const char* ButtonOpen       = "ButtonOpen";
 			inline constexpr const char* ButtonClear      = "ButtonClear";
@@ -1232,10 +1229,11 @@ namespace ibProtocol {
 			inline constexpr const char* MaxValue         = "MaxValue";
 			inline constexpr const char* Value            = "Value";           // a gauge's, a slider's
 
-			// Where a field's title stands (the server's ibTitleLocation).
+			// Where a field's title stands (the server's ibTitleLocation); None — no title, its State's Caption empty.
 			enum class ibTitleLocation : int {
 				Left  = 1,
 				Right = 2,
+				None  = 3,
 			};
 
 			// Where a button's picture stands (the server's ibPictureLocation): Auto where the button puts it, on the left;
@@ -1252,6 +1250,43 @@ namespace ibProtocol {
 			enum class ibButtonView : int {
 				Button    = 0,
 				Hyperlink = 1,
+			};
+
+			// What a field is for (the server's ibFieldView) — a MEANING, never a widget: each client draws it with its own.
+			// Input: typed into; Flag: on or off; Label: shown, not edited; Switch: one of its Choices picked; Gauge: how
+			// far a number has come of its Range; Slider: a number moved between its MinValue and MaxValue.
+			enum class ibFieldView : int {
+				Input  = 0,
+				Flag   = 1,
+				Label  = 2,
+				Switch = 3,
+				Gauge  = 4,
+				Slider = 5,
+			};
+
+			// What a table's column's cells are for (the server's ibColumnView) — a field's first three, by its numbers: a
+			// cell typed into, its box toggled (Toggle), shown.
+			enum class ibColumnView : int {
+				Input = 0,
+				Flag  = 1,
+				Label = 2,
+			};
+
+			// How a layout lays out what is in it (the server's ibLayoutView) — a MEANING, never a widget: Box, a row or a
+			// column (Orient); Wrap, a row that wraps (Orient); Grid, cells of one size (Rows, Cols); Group, a row or a
+			// column inside a frame with a caption (Orient; its State's Title, Enabled, Visible).
+			enum class ibLayoutView : int {
+				Box   = 0,
+				Wrap  = 1,
+				Grid  = 2,
+				Group = 3,
+			};
+
+			// What a static shows (the server's ibStaticView) — a MEANING, never a widget: Text, its caption (State's
+			// Caption), a heading or a note; Line, across or down (Orient).
+			enum class ibStaticView : int {
+				Text = 0,
+				Line = 1,
 			};
 
 		}
@@ -1279,6 +1314,10 @@ namespace ibProtocol {
 			                                                                  // Text does not lay into the mask
 			inline constexpr const char* Checked        = "Checked";
 			inline constexpr const char* Selected       = "Selected";
+			inline constexpr const char* Choices        = "Choices";          // a switch's items as resolved: a child each,
+			                                                                  // its Caption, Selected on the chosen one
+			inline constexpr const char* Position       = "Position";         // a gauge's, a slider's: where the value
+			                                                                  // stands between its ends, a whole number
 			inline constexpr const char* Link           = "Link";
 			inline constexpr const char* Page           = "Page";             // an HTML box's: the page it shows
 			// …a form's:
@@ -1395,7 +1434,6 @@ namespace ibProtocol {
 			inline constexpr const char* FooterAlign      = "FooterAlign";
 			inline constexpr const char* Resizable        = "Resizable";
 			inline constexpr const char* Reorderable      = "Reorderable";
-			inline constexpr const char* TexteditMode     = "TexteditMode";   // may its cells be typed into
 			inline constexpr const char* Mask             = "Mask";           // the input mask its cells are typed through,
 			                                                                  // resolved; absent: none
 			inline constexpr const char* EditText         = "EditText";       // once: the text a value the server wrote into its

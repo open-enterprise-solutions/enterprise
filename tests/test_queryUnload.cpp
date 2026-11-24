@@ -5,7 +5,7 @@
 // search them, hand them on. `Table = Query.Execute().Unload()` gives the platform's value table.
 //
 // Every read that hands a script its rows as a table ends at ONE place - ibQueryRamTable::ToValueTable:
-// Unload(), a queryable's ToTable(), a register's slices and figures, a LINQ answer each fill the fast
+// Unload(), a queryable's ToValueTable(), a register's slices and figures, a LINQ answer each fill the fast
 // table and have it loaded. WHAT IS TESTED HERE is that loading, over a fast table filled by hand, so no
 // database, session or application is needed:
 //

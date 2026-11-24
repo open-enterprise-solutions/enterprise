@@ -131,6 +131,8 @@ public:
 	// What it is in the layout — a window or a sizer.
 	virtual wxWindow* GetWindow() const { return nullptr; }
 	virtual wxSizer*  GetSizer() const { return nullptr; }
+	// …and its place in the sizer above (the server's ibSizerItem — its node says it): none, laid out by none.
+	wxSizerItem* GetSizerItem() const;
 	// The window what is in it is built in: its own, a framed group's box; none — the one it was built in.
 	virtual wxWindow* GetChildParent() const { return GetWindow(); }
 	// A placeholder in the place of a control of a type this client does not draw yet (Make): what is in it is not built.

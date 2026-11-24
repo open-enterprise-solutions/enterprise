@@ -4,7 +4,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "visualEditor.h"
-#include "visualEditorDragItem.h"   // ibFormDragItem — a drop on a tablebox applied (WireTableboxDrops)
+#include "visualEditorDragItem.h"   // ibFormDragItem — a drop on a table applied (WireTableDrops)
 
 #include <set>
 
@@ -20,9 +20,8 @@
 
 // ⭐ THE DESKTOP'S COMMAND PROCESSOR OVER THE FORM'S NODE (designer visualEditorCmdProc.cpp): the desktop's commands
 // changed the controls and undid each change; here a command holds the form's node before it and after it — the node
-// never changed in place — and draws the one it leaves (ibVisualEditor::Draw). What the desktop's form decided as it
-// made a control (ibValueForm::CreateObject: what a parent takes, and whether in a sizer item) is decided on the
-// classes' types, as the tab's answer brought them.
+// never changed in place — and draws the one it leaves (ibVisualEditor::Draw). What a parent takes is the server's to
+// say (ibValueFrame::FilterChild): a new control, a paste are asked of it.
 
 namespace {
 
@@ -94,26 +93,13 @@ void SetChildren(ibProtocolNode node, const std::vector<ibProtocolNode>& childre
 	}
 }
 
-// The control a node holds — itself, or what its sizer items hold.
-ibProtocolNode Unwrap(const ibProtocolNode& node)
-{
-	ibProtocolNode inner = node;
-	while (inner.GetType() == ibProtocol::ibForm::ibType::SizerItem) {
-		const std::vector<ibProtocolNode> children = inner.Children();
-		if (children.empty())
-			break;
-		inner = children.front();
-	}
-	return inner;
-}
-
 // The desktop's DetermineObjectToSelect: the control now at the place one went from, else the last, else the parent.
 long long DetermineObjectToSelect(const ibProtocolNode& parent, unsigned int pos)
 {
 	const std::vector<ibProtocolNode> children = parent.Children();
 	if (children.empty())
 		return parent.GetInt(ibProtocol::ibForm::ControlId);
-	return Unwrap(children[std::min<size_t>(pos, children.size() - 1)]).GetInt(ibProtocol::ibForm::ControlId);
+	return children[std::min<size_t>(pos, children.size() - 1)].GetInt(ibProtocol::ibForm::ControlId);
 }
 
 // A property of a node given that value, as the server's WriteData writes it — in place of what it was: a value that is
@@ -198,7 +184,8 @@ class ibVisualEditorModifyPropertyCmd :
 	public ibVisualEditorCmd {
 public:
 
-	ibVisualEditorModifyPropertyCmd(ibVisualEditorNotebook::ibVisualEditor* visualEditor, ibProperty* prop, const ibVariant& oldValue, const ibVariant& newValue);
+	ibVisualEditorModifyPropertyCmd(ibVisualEditorNotebook::ibVisualEditor* visualEditor, long long controlId, const wxString& name,
+		const ibVariant& oldValue, const ibVariant& newValue);
 
 protected:
 
@@ -218,8 +205,9 @@ private:
 	ibVariant m_oldValue, m_newValue;
 };
 
-ibVisualEditorModifyPropertyCmd::ibVisualEditorModifyPropertyCmd(ibVisualEditorNotebook::ibVisualEditor* visualEditor, ibProperty* prop, const ibVariant& oldValue, const ibVariant& newValue) : m_visualEditor(visualEditor),
-m_controlId(dynamic_cast<ibValueFrame*>(prop->GetPropertyObject())->GetControlID()), m_name(prop->GetName()),
+ibVisualEditorModifyPropertyCmd::ibVisualEditorModifyPropertyCmd(ibVisualEditorNotebook::ibVisualEditor* visualEditor, long long controlId, const wxString& name,
+	const ibVariant& oldValue, const ibVariant& newValue) : m_visualEditor(visualEditor),
+m_controlId(controlId), m_name(name),
 m_oldValue(oldValue), m_newValue(newValue)
 {
 }
@@ -343,28 +331,28 @@ void ibVisualEditorNotebook::ibVisualEditor::CreateCommandButton(ibValueFrame* t
 	Execute(request, answer);
 }
 
-void ibVisualEditorNotebook::ibVisualEditor::WireTableboxDrops(ibValueFrame* obj)
+void ibVisualEditorNotebook::ibVisualEditor::WireTableDrops(ibValueFrame* obj)
 {
 	if (obj == nullptr)
 		return;
-	// Set ONE drop target on the tablebox's window. Re-wired on every editor refresh, since the controls are built anew
+	// Set ONE drop target on the table's window. Re-wired on every editor refresh, since the controls are built anew
 	// and take their drop targets with them.
-	if (obj->GetClassName() == ibProtocol::ibForm::ibType::Tablebox) {
+	if (obj->GetClassName() == ibProtocol::ibForm::ibType::Table) {
 		ibValueFrame* box = obj;
 		if (wxWindow* const window = obj->GetWindow())
-			// A drop ON the tablebox targets THIS table (fixed target = box, the point is irrelevant): a source path → a
+			// A drop ON the table targets THIS table (fixed target = box, the point is irrelevant): a source path → a
 			// bound column, a command → a command on this table. DEFERRED — this target lives ON the table, and the
 			// apply draws the form anew, freeing THIS very target mid-callback (use-after-free); the target clones the
 			// decoded item and runs the apply after the drag unwinds.
 			window->SetDropTarget(new ibSourceDragDropTarget(
-				// Drop on the tablebox targets THIS table; clear the per-drop command-bar channel (no form toolbar here) so
+				// Drop on the table targets THIS table; clear the per-drop command-bar channel (no form toolbar here) so
 				// a command drop climbs to the table's OWN bar instead of reading a stale bar from a prior drop.
 				[this, box](wxCoord, wxCoord) -> ibValueFrame* { m_pendingDropBar = 0; return box; },
 				[this](const ibFormDragItem& item, ibValueFrame* target) { item.ApplyDrop(this, target); },
 				/*deferred*/ true));
 	}
 	for (unsigned int i = 0; i < obj->GetChildCount(); i++)
-		WireTableboxDrops(obj->GetChild(i));
+		WireTableDrops(obj->GetChild(i));
 }
 
 void ibVisualEditorNotebook::ibVisualEditor::RemoveObject(ibValueFrame* obj)
@@ -388,11 +376,7 @@ void ibVisualEditorNotebook::ibVisualEditor::DoRemoveObject(ibValueFrame* obj, b
 	if (!FindPath(edited, obj->GetControlID(), path) || path.size() < 2)
 		return;
 
-	// When removing an object it is important that the "item" objects are not left behind — the top item goes.
-	size_t level = path.size() - 1;
-	while (level > 1 && path[level - 1].GetType() == ibProtocol::ibForm::ibType::SizerItem)
-		level--;
-
+	const size_t level = path.size() - 1;
 	ibProtocolNode parent = path[level - 1];
 	std::vector<ibProtocolNode> children = parent.Children();
 	const int pos = IndexOf(parent, path[level]);
@@ -410,15 +394,13 @@ void ibVisualEditorNotebook::ibVisualEditor::CopyObject(ibValueFrame* obj)
 	if (obj == nullptr || obj == GetValueForm())
 		return;
 
-	// The item it is in goes with it — how it sits is part of it.
+	// How it sits in its sizer goes with it — its own node holds it.
 	std::vector<ibProtocolNode> path;
 	if (!FindPath(m_formNode, obj->GetControlID(), path))
 		return;
-	const ibProtocolNode& copied = path.size() > 1 && path[path.size() - 2].GetType() == ibProtocol::ibForm::ibType::SizerItem ?
-		path[path.size() - 2] : path.back();
 
 	// THE COPY — the node as the form holds it: what the server's Paste reads (its controls' rows come with the answer).
-	CopyEntry(copied, oes_clipboard_frame, obj->GetControlName());
+	CopyEntry(path.back(), oes_clipboard_frame, obj->GetControlName());
 }
 
 bool ibVisualEditorNotebook::ibVisualEditor::PasteObject(ibValueFrame* dstObject)
@@ -452,11 +434,7 @@ void ibVisualEditorNotebook::ibVisualEditor::MovePosition(ibValueFrame* obj, boo
 	if (!FindPath(edited, obj->GetControlID(), path) || path.size() < 2)
 		return;
 
-	// If the object is contained within an item, the item must be shifted.
-	size_t level = path.size() - 1;
-	while (level > 1 && path[level - 1].GetType() == ibProtocol::ibForm::ibType::SizerItem)
-		level--;
-
+	const size_t level = path.size() - 1;
 	ibProtocolNode parent = path[level - 1];
 	std::vector<ibProtocolNode> children = parent.Children();
 	const int found = IndexOf(parent, path[level]);
@@ -489,11 +467,7 @@ void ibVisualEditorNotebook::ibVisualEditor::MovePosition(ibValueFrame* obj, ibV
 		if (!FindPath(edited, controlId, path) || path.size() < 2)
 			return;
 
-		// If the object is contained within an item, the item must be moved.
-		size_t level = path.size() - 1;
-		while (level > 1 && path[level - 1].GetType() == ibProtocol::ibForm::ibType::SizerItem)
-			level--;
-
+		const size_t level = path.size() - 1;
 		ibProtocolNode from = path[level - 1];
 		const int pos = IndexOf(from, path[level]);
 		if (pos == wxNOT_FOUND || (from.GetInt(ibProtocol::ibForm::ControlId) == parentId && static_cast<unsigned int>(pos) == toPos))
@@ -627,10 +601,15 @@ void ibVisualEditorNotebook::ibVisualEditor::ModifyProperty(ibProperty* prop, co
 	if (control == nullptr || oldValue == newValue)
 		return;
 
-	// The tree told first: the command makes the control's properties anew from the server's rows (UpdateControl).
-	CallAfter([this, prop, oldValue, newValue]() {
-		NotifyPropertyModified(prop);
-		Execute(new ibVisualEditorModifyPropertyCmd(this, prop, oldValue, newValue));
+	// The tree told first, while the property is the one edited; the command once the change is over — the property found
+	// again BY THE CONTROL'S ID AND ITS NAME, never the pointer: what runs before may make the control's properties anew
+	// from the server's rows — a column's header dragged selects its column (ibValueModelTableBox::OnHeaderEndResize) —
+	// and another made in the old one's place took the value (2026-11-24: a column's width written into its Title, the
+	// form refused by the server, "wrong value kind"; undone, into its Source).
+	NotifyPropertyModified(prop);
+	const long long controlId = control->GetControlID();
+	CallAfter([this, controlId, name, oldValue, newValue]() {
+		Execute(new ibVisualEditorModifyPropertyCmd(this, controlId, name, oldValue, newValue));
 	});
 }
 
@@ -678,7 +657,24 @@ void ibVisualEditorNotebook::ibVisualEditor::UpdateControl(ibValueFrame* control
 	request.SetValue(ibProtocol::ibView::ibFormDesigner::Form, edited);
 	ibProtocolNode answer;
 	if (m_document->Fetch(request, answer)) {
-		PatchState(answer.FindChild(ibProtocol::ibView::ibFormDesigner::Node), step);
+		// ⭐ THE CONTROL AS THE SERVER DREW IT — its properties as well as its state: what the server would not keep of the
+		// edit comes back, and the form held and handed again is the server's, not the edit (2026-11-23: a Gauge picked
+		// for a String field gave way to Input on the server, ibValueField::OnUpdate, stayed here and went back at every
+		// edit). Its node's properties in place of those held; its children's states below.
+		const ibProtocolNode drawn = answer.FindChild(ibProtocol::ibView::ibFormDesigner::Node);
+		const auto isProperty = [](const ibString& name) {
+			return name != ibProtocol::ibNode::Id && name != ibProtocol::ibNode::Type && name != ibProtocol::ibNode::Children
+				&& name != ibProtocol::ibForm::ibState::State;
+		};
+		for (const auto& [name, entry] : nodes.back().Entries()) {
+			if (isProperty(name))
+				step.AddItem(ibProtocol::ibNode::Removed, name);
+		}
+		for (const auto& [name, entry] : drawn.Entries()) {
+			if (isProperty(name))
+				step.SetValue(name, entry);
+		}
+		PatchState(drawn, step);
 		edited = m_formNode.Clone();
 		edited.Apply(patch);
 

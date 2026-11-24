@@ -18,7 +18,7 @@ ibValue LoadValueTable(const std::vector<ibQueryRamColumn>& ramColumns, Rows& ra
 	ibValueModelTable* const table = new ibValueModelTable();
 	// 🛑 Held while its rows are made: a table fresh from `new` has a count of zero, a row that takes the
 	// model and lets go drives it through zero, and that deletes the table under the loop (valueQueryable.cpp,
-	// M::ToTable, measured 2026-09-10).
+	// M::ToValueTable, measured 2026-09-10).
 	const ibValue keep(table);
 
 	ibValueModelTable::ibValueModelColumnCollection* const columns = table->GetColumnCollection();

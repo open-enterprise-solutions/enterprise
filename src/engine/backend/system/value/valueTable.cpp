@@ -882,8 +882,8 @@ void ibValueModelTable::Clear()
 //*                       Runtime register                             *
 //**********************************************************************
 
-VALUE_TYPE_REGISTER(ibValueModelTable, "Table", g_valueTableCLSID);
+VALUE_TYPE_REGISTER(ibValueModelTable, "ValueTable", g_valueTableCLSID);
 
-SYSTEM_TYPE_REGISTER(ibValueModelTable::ibValueModelTableColumnCollection, "TableColumns", system_to_clsid("VL_TCLM"));
-SYSTEM_TYPE_REGISTER(ibValueModelTable::ibValueModelTableColumnCollection::ibValueModelTableColumnInfo, "TableColumn", system_to_clsid("VL_TCLI"));
-SYSTEM_TYPE_REGISTER(ibValueModelTable::ibValueModelTableReturnLine, "TableRow", system_to_clsid("VL_TROW"));
+SYSTEM_TYPE_REGISTER(ibValueModelTable::ibValueModelTableColumnCollection, "ValueTableColumns", system_to_clsid("VL_TCLM"));
+SYSTEM_TYPE_REGISTER(ibValueModelTable::ibValueModelTableColumnCollection::ibValueModelTableColumnInfo, "ValueTableColumn", system_to_clsid("VL_TCLI"));
+SYSTEM_TYPE_REGISTER(ibValueModelTable::ibValueModelTableReturnLine, "ValueTableRow", system_to_clsid("VL_TROW"));

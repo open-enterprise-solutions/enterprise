@@ -29,6 +29,7 @@ class FRMSERVER_API ibVisualHost;   // visualHost.h — who holds the form; ever
 #include "backend/standardCommand.h"
 #include "backend/moduleInfo.h"
 #include "frmserver/visualView/layers/commandBar.h"   // ibValueCommandBar (command STORE the frame owns)
+#include "frmserver/visualView/ctrl/sizerItem.h"      // ibSizerItem (the place in the sizer above the frame owns)
 
 #include "core/style/style.h"   // ibStyle - the defaults below are the platform style's
 
@@ -42,7 +43,7 @@ class FRMSERVER_API ibVisualHost;   // visualHost.h — who holds the form; ever
 #define ibDefaultStyleFGColour std::get<ibColour>(ibStyle::Platform().Get(ibStyleItem::FormText, false))
 #define ibDefaultStyleBGColour std::get<ibColour>(ibStyle::Platform().Get(ibStyleItem::FormBackground, false))
 // ...and the cream the background was: kept in every form saved till then, as a background is written whatever it is -
-// nobody chose it, so it is read as the default it is now (ibValueForm, ibValueWindow, ibValueStaticBoxSizer ReadData)
+// nobody chose it, so it is read as the default it is now (ibValueForm, ibValueWindow ReadData)
 #define ibFormerStyleBGColour ibColour(0xFA, 0xF7, 0xF0)   // #FAF7F0 cream
 
 #include "core/memory/memoryStream.h"
@@ -96,16 +97,6 @@ class FRMSERVER_API ibValueFrame : public ibValueDynamicMembers,
 	public ibPropertyObjectHelper<ibValueFrame>,
 	public ibControlFrame,
 	public ibStandardCommandSource {
-	public:
-protected:
-
-	enum {
-		eProperty,
-		eControl,
-		eEvent,
-		eSizerItem,
-	};
-
 private:
 
 	ibValueFrame* DoFindControlByID(const ibFormID& id, ibValueFrame* control) const;
@@ -229,8 +220,14 @@ public:
 	*/
 	virtual bool CanDeleteControl() const = 0;
 
+	// ⭐ WHAT IT TAKES AS A CHILD — asked of the parent before a control of `clsid` is made in it (the designer's drop and
+	// palette, a paste, a script, MCP), as a metaobject is asked (ibValueMetaObject::FilterChild): a form, a page and a
+	// sizer take what a sizer lays out (IsPlaceableControl), a notebook its pages, a table its columns; anything else
+	// takes none.
+	virtual bool FilterChild(const ibClassID& clsid) const { return false; }
+
 	// Available by the feature options of this base — answered by an element of a form (control.h);
-	// anything else in the tree (a form, a sizer item) always is.
+	// anything else in the tree (a form) always is.
 	virtual bool IsAvailable() const { return true; }
 
 public:
@@ -341,6 +338,10 @@ public:
 	virtual bool HasCommandBar() const { return m_commandBar != nullptr; }
 	ibValueCommandBar* GetCommandBar() const { return m_commandBar; }
 
+	// THE PLACE IN THE SIZER ABOVE, owned by this frame (made and attached in the ctor of a window and of a sizer — what a
+	// sizer lays out); a form, a notebook's page, a table's column have none.
+	ibSizerItem* GetSizerItem() const { return m_sizerItem.get(); }
+
 	// THE SEARCH FIELD at the end of its command bar: whether it looks for text — a table; a form, when its command view
 	// does — what it holds, and the text typed into it, looked for.
 	virtual bool HasSearch() const { return false; }
@@ -397,8 +398,6 @@ public:
 	* Devuelve la posicion del hijo o GetChildCount() en caso de no encontrarlo
 	*/
 	bool ChangeChildPosition(ibValueFrame* obj, unsigned int pos);
-	// The control a sizer item holds — this, when it is not one: the item itself is never what is selected or pasted.
-	ibValueFrame* SkipSizerItems();
 
 public:
 
@@ -413,8 +412,10 @@ public:
 
 	//methods
 	// DoGetPMethods (protected) + by-value m_members come from ibValueDynamicMembers.
-	// Derived controls bind their OWN FillMembers in their ctor (binders accumulate).
-	void FillMembers(ibMemberTable& helper) const;   // bound in ctor (was PrepareNames)
+	// A KIND of row is the filler that appended it (GetPropData(n, this, &Self::Fill…)), never an alias: the frame's
+	// properties (its attached children's among them), then its Events; derived controls bind their own after them.
+	void FillFrameProperties(ibMemberTable& helper) const;
+	void FillFrameEvents(ibMemberTable& helper) const;
 
 	//attributes
 	virtual bool SetPropVal(const long lPropNum, const ibValue& varPropVal);
@@ -464,6 +465,10 @@ public:
 
 		return arr;
 	}
+
+	// A control a sizer lays out — one the palette offers to place; a system child (a page, a column) only its own
+	// parent takes (ibCtorControlTypeBase::IsControlSystem). What a form, a page and a sizer answer FilterChild with.
+	static bool IsPlaceableControl(const ibClassID& clsid);
 
 	// (de)serialize the whole control through the binary provider (form-blob entry)
 	bool LoadControl(const ibValueMetaObjectFormBase* metaForm, ibReaderMemory& dataReader);
@@ -517,6 +522,7 @@ protected:
 
 	ibValuePtr<ibValueEventContainer> m_valEventContainer;
 	ibValuePtr<ibValueCommandBar> m_commandBar;
+	std::unique_ptr<ibSizerItem> m_sizerItem;
 };
 
 #endif // !_BASE_H_

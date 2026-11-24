@@ -11,8 +11,10 @@ from harness import PageTest, table
 BOTH = 3
 AUTO, RIGHT, TILE = 0, 2, 3
 HYPERLINK = 1
-# An item's Stretch (wxStretch): it fills its box across.
+# A control's Stretch (wxStretch): it fills its box across.
 EXPAND = 0x2000
+# A layout's View (ibProtocol::ibForm::ibProperty::ibLayoutView): cells of one size.
+GRID = 2
 PRESS = 3
 
 
@@ -24,8 +26,9 @@ def png():
     return list(b'\x89PNG\r\n\x1a\n' + chunk(b'IHDR', header) + chunk(b'IDAT', zlib.compress(b'\x00\x80')) + chunk(b'IEND', b''))
 
 
-def item(item_id, control):
-    return {'NodeType': 'SizerItem', 'ControlId': item_id, 'Proportion': 0, 'Stretch': EXPAND, 'NodeChildren': [control]}
+def placed(control):
+    """A control at its place in the sizer above - its own node says it, as the server writes it."""
+    return {**control, 'Proportion': 0, 'Stretch': EXPAND}
 
 
 def button(button_id, caption, location, note=None, picture=None, members=None, view=None):
@@ -43,13 +46,13 @@ def button(button_id, caption, location, note=None, picture=None, members=None, 
 
 
 def scenario(**extra):
-    grid = {'NodeType': 'Gridsizer', 'ControlId': 701, 'Cols': 2, 'NodeChildren': [
-        item(702, button(710, 'Tea', TILE, note='12 pcs', picture='7')),
-        item(703, button(711, 'Coffee of a long name that wraps', TILE, picture='7')),
-        item(704, button(712, 'Plain', AUTO, picture='7')),
-        item(705, button(713, 'Note elsewhere', RIGHT, note='not shown', picture='7')),
+    grid = {'NodeType': 'Layout', 'View': GRID, 'ControlId': 701, 'Cols': 2, 'NodeChildren': [
+        placed(button(710, 'Tea', TILE, note='12 pcs', picture='7')),
+        placed(button(711, 'Coffee of a long name that wraps', TILE, picture='7')),
+        placed(button(712, 'Plain', AUTO, picture='7')),
+        placed(button(713, 'Note elsewhere', RIGHT, note='not shown', picture='7')),
     ]}
-    return {'tabs': [{'title': 'Panel', 'controls': [item(700, grid)], 'table': table()}], 'pictures': [{'id': 7, 'png': png()}],
+    return {'tabs': [{'title': 'Panel', 'controls': [placed(grid)], 'table': table()}], 'pictures': [{'id': 7, 'png': png()}],
             **extra}
 
 
@@ -104,16 +107,16 @@ class AGroupTile(PageTest):
     """A tile bound to a group of commands: it fills its cell as any tile, and opens the group's commands."""
 
     def scenario(self):
-        grid = {'NodeType': 'Gridsizer', 'ControlId': 701, 'Cols': 2, 'NodeChildren': [
-            item(702, button(710, 'Drinks', TILE, note='3 kinds', picture='7', members=['Tea', 'Coffee', 'Juice'])),
-            item(703, button(711, 'Tea', TILE, picture='7')),
+        grid = {'NodeType': 'Layout', 'View': GRID, 'ControlId': 701, 'Cols': 2, 'NodeChildren': [
+            placed(button(710, 'Drinks', TILE, note='3 kinds', picture='7', members=['Tea', 'Coffee', 'Juice'])),
+            placed(button(711, 'Tea', TILE, picture='7')),
         ]}
-        return {'tabs': [{'title': 'Panel', 'controls': [item(700, grid)], 'table': table()}], 'pictures': [{'id': 7, 'png': png()}]}
+        return {'tabs': [{'title': 'Panel', 'controls': [placed(grid)], 'table': table()}], 'pictures': [{'id': 7, 'png': png()}]}
 
     def test_fills_its_cell_as_a_plain_tile_does(self):
         page = self.start(self.scenario())
         page.wait_for_selector('oes-button.tile wa-dropdown')
-        cells = page.locator('oes-gridsizer > oes-sizeritem').evaluate_all('(cells) => cells.map((cell) => cell.getBoundingClientRect().height)')
+        cells = page.locator('oes-layout[view="grid"] > [data-control]').evaluate_all('(cells) => cells.map((cell) => cell.getBoundingClientRect().height)')
         faces = page.locator('oes-button.tile wa-button').evaluate_all(f'(buttons) => buttons.map({FACE_HEIGHT})')
         self.assertLess(abs(faces[0] - faces[1]), 1, faces)
         self.assertLess(abs(faces[0] - cells[0]), 2, (faces, cells))
@@ -134,10 +137,10 @@ class AHyperlink(PageTest):
     """The same button with no face and no frame, its caption underlined - pressed the same way."""
 
     def scenario(self):
-        grid = {'NodeType': 'Gridsizer', 'ControlId': 701, 'Cols': 1, 'NodeChildren': [
-            item(702, button(710, 'Stock', AUTO, picture='7', view=HYPERLINK)),
+        grid = {'NodeType': 'Layout', 'View': GRID, 'ControlId': 701, 'Cols': 1, 'NodeChildren': [
+            placed(button(710, 'Stock', AUTO, picture='7', view=HYPERLINK)),
         ]}
-        return {'tabs': [{'title': 'Panel', 'controls': [item(700, grid)], 'table': table()}], 'pictures': [{'id': 7, 'png': png()}]}
+        return {'tabs': [{'title': 'Panel', 'controls': [placed(grid)], 'table': table()}], 'pictures': [{'id': 7, 'png': png()}]}
 
     def test_is_drawn_plain_and_underlined_and_pressed_as_a_button_is(self):
         page = self.start(self.scenario())

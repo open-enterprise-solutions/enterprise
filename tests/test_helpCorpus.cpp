@@ -142,7 +142,7 @@ TEST(HelpCorpus, EveryLevelOfThePathIsNamed) {
 // A section holds its classes, and a class its members (2026-11-13, Max: "the forms, a button, and then what is inside
 // the button"): an article whose id, one segment shorter, is another article's stands under that one. Every member had
 // its class's categories, so the members of ComObject and ComSafeArray were one list under "com", an enum's values lay
-// beside its type, and Table's Columns' own members beside Table's. A class's node is the class's article as well.
+// beside its type, and ValueTable's Columns' own members beside ValueTable's. A class's node is the class's article as well.
 TEST(HelpCorpus, AMemberStandsUnderItsClassNotBesideIt) {
 	const std::vector<ibString> com = { wxT("value_types"), wxT("runtime"), wxT("com") };
 	std::vector<ibHelpEntry> entries;
@@ -150,9 +150,9 @@ TEST(HelpCorpus, AMemberStandsUnderItsClassNotBesideIt) {
 	entries.push_back(MakeEntry(wxT("cls.ComObject.AddEventHandler"), com));
 	entries.push_back(MakeEntry(wxT("cls.ComSafeArray"), com));
 	entries.push_back(MakeEntry(wxT("cls.ComSafeArray.GetLength"), com));
-	entries.push_back(MakeEntry(wxT("cls.Table"), com));
-	entries.push_back(MakeEntry(wxT("cls.Table.Columns"), com));
-	entries.push_back(MakeEntry(wxT("cls.Table.Columns.Add"), com));
+	entries.push_back(MakeEntry(wxT("cls.ValueTable"), com));
+	entries.push_back(MakeEntry(wxT("cls.ValueTable.Columns"), com));
+	entries.push_back(MakeEntry(wxT("cls.ValueTable.Columns.Add"), com));
 	entries.push_back(MakeEntry(wxT("enum.PictureLocation"), com));
 	entries.push_back(MakeEntry(wxT("enum.PictureLocation.Tile"), com));
 	entries.push_back(MakeEntry(wxT("fn.Message"), com));   // "fn" is no article: it stays in the section
@@ -177,13 +177,13 @@ TEST(HelpCorpus, AMemberStandsUnderItsClassNotBesideIt) {
 	ASSERT_EQ(safeArray->entries.size(), 1u) << "the two classes' members are one list again";
 	EXPECT_EQ(safeArray->entries.front()->id, wxT("cls.ComSafeArray.GetLength"));
 
-	const ibHelpCategory* table = ChildByKey(section, wxT("cls.Table"));
+	const ibHelpCategory* table = ChildByKey(section, wxT("cls.ValueTable"));
 	ASSERT_NE(table, nullptr);
 	EXPECT_TRUE(table->entries.empty());
-	const ibHelpCategory* columns = ChildByKey(table, wxT("cls.Table.Columns"));
+	const ibHelpCategory* columns = ChildByKey(table, wxT("cls.ValueTable.Columns"));
 	ASSERT_NE(columns, nullptr) << "a member that has members of its own is a node under its class";
 	ASSERT_EQ(columns->entries.size(), 1u);
-	EXPECT_EQ(columns->entries.front()->id, wxT("cls.Table.Columns.Add"));
+	EXPECT_EQ(columns->entries.front()->id, wxT("cls.ValueTable.Columns.Add"));
 
 	const ibHelpCategory* location = ChildByKey(section, wxT("enum.PictureLocation"));
 	ASSERT_NE(location, nullptr) << "an enum's values stand under its type";
@@ -318,11 +318,11 @@ TEST(HelpLoader, AClassIdIsCheckedAgainstTheRegistry)
 	const std::string tableId = std::to_string(value_to_clsid("VL_TABL"));
 	const ibString root = WriteHelpBucket(
 		R"({ "format": "OES-HELP-1.0", "schema_version": 1, "locale": "en", "entries": [)"
-		R"({ "id": "cls.Table",    "name_local": "Table",   "name_en": "Table",   "kind": "collection", "class_id": )" + tableId + R"( },)"
-		R"({ "id": "cls.Nothing",  "name_local": "Nothing", "name_en": "Nothing", "kind": "collection", "class_id": 12345 },)"
-		R"({ "id": "cls.Misnamed", "name_local": "Array",   "name_en": "Array",   "kind": "collection", "class_id": )" + tableId + R"( },)"
-		R"({ "id": "cls.Text",     "name_local": "Text",    "name_en": "Text",    "kind": "collection", "class_id": "VL_TABL" },)"
-		R"({ "id": "kw.Plain",     "name_local": "Plain",   "name_en": "Plain",   "kind": "keyword" })"
+		R"({ "id": "cls.ValueTable", "name_local": "ValueTable", "name_en": "ValueTable", "kind": "collection", "class_id": )" + tableId + R"( },)"
+		R"({ "id": "cls.Nothing",    "name_local": "Nothing",    "name_en": "Nothing",    "kind": "collection", "class_id": 12345 },)"
+		R"({ "id": "cls.Misnamed",   "name_local": "Array",      "name_en": "Array",      "kind": "collection", "class_id": )" + tableId + R"( },)"
+		R"({ "id": "cls.Text",       "name_local": "Text",       "name_en": "Text",       "kind": "collection", "class_id": "VL_TABL" },)"
+		R"({ "id": "kw.Plain",       "name_local": "Plain",      "name_en": "Plain",      "kind": "keyword" })"
 		R"(] })");
 
 	// The registry the backend's host hands in (ibApplicationHost::InitLocale) - the core keeps none.
@@ -336,10 +336,10 @@ TEST(HelpLoader, AClassIdIsCheckedAgainstTheRegistry)
 	// happened around the load (a locale fallen back, a construction that failed); helpLoader.cpp says why.
 	const std::vector<ibHelpLoadError>& said = loaded.corpus->LoadErrors();
 
-	const ibHelpEntry* table = loaded.corpus->FindById(wxT("cls.Table"));
+	const ibHelpEntry* table = loaded.corpus->FindById(wxT("cls.ValueTable"));
 	ASSERT_NE(table, nullptr);
 	EXPECT_EQ(table->classId, value_to_clsid("VL_TABL")) << "the tag resolves to the class the registry holds";
-	EXPECT_FALSE(SaysSomethingAbout(said, wxT("cls.Table")));
+	EXPECT_FALSE(SaysSomethingAbout(said, wxT("cls.ValueTable")));
 
 	const ibHelpEntry* nothing = loaded.corpus->FindById(wxT("cls.Nothing"));
 	ASSERT_NE(nothing, nullptr) << "a wrong join key does not cost the article its prose";
@@ -347,7 +347,7 @@ TEST(HelpLoader, AClassIdIsCheckedAgainstTheRegistry)
 	EXPECT_TRUE(SaysSomethingAbout(said, wxT("cls.Nothing"))) << "an id nothing is registered under is said";
 
 	EXPECT_TRUE(SaysSomethingAbout(said, wxT("cls.Misnamed")))
-		<< "an article about Array that points at the Table class is said";
+		<< "an article about Array that points at the ValueTable class is said";
 
 	const ibHelpEntry* text = loaded.corpus->FindById(wxT("cls.Text"));
 	ASSERT_NE(text, nullptr);
@@ -391,9 +391,9 @@ TEST(HelpLoader, EveryKindTheCorpusWritesArrivesAsItself)
 {
 	const ibString root = WriteHelpBucket(
 		R"({ "format": "OES-HELP-1.0", "schema_version": 1, "locale": "en", "entries": [)"
-		R"({ "id": "cls.Table.Columns",      "name_local": "Columns", "name_en": "Columns", "kind": "property" },)"
-		R"({ "id": "cls.Table.Find",         "name_local": "Find",    "name_en": "Find",    "kind": "method" },)"
-		R"({ "id": "cls.Table.Clear",        "name_local": "Clear",   "name_en": "Clear",   "kind": "procedure" },)"
+		R"({ "id": "cls.ValueTable.Columns", "name_local": "Columns", "name_en": "Columns", "kind": "property" },)"
+		R"({ "id": "cls.ValueTable.Find",    "name_local": "Find",    "name_en": "Find",    "kind": "method" },)"
+		R"({ "id": "cls.ValueTable.Clear",   "name_local": "Clear",   "name_en": "Clear",   "kind": "procedure" },)"
 		R"({ "id": "fn.Message",             "name_local": "Message", "name_en": "Message", "kind": "system_procedure" },)"
 		R"({ "id": "enum.TextEncoding",      "name_local": "TextEncoding", "name_en": "TextEncoding", "kind": "enum_type" },)"
 		R"({ "id": "enum.TextEncoding.Utf8", "name_local": "Utf8",    "name_en": "Utf8",    "kind": "system_enum" },)"
@@ -414,9 +414,9 @@ TEST(HelpLoader, EveryKindTheCorpusWritesArrivesAsItself)
 		return e != nullptr ? e->kind : ibHelpKind::kOperator;
 	};
 
-	EXPECT_EQ(kindOf(wxT("cls.Table.Columns")), ibHelpKind::kProperty);
-	EXPECT_EQ(kindOf(wxT("cls.Table.Find")), ibHelpKind::kMethod);
-	EXPECT_EQ(kindOf(wxT("cls.Table.Clear")), ibHelpKind::kProcedure);
+	EXPECT_EQ(kindOf(wxT("cls.ValueTable.Columns")), ibHelpKind::kProperty);
+	EXPECT_EQ(kindOf(wxT("cls.ValueTable.Find")), ibHelpKind::kMethod);
+	EXPECT_EQ(kindOf(wxT("cls.ValueTable.Clear")), ibHelpKind::kProcedure);
 	EXPECT_EQ(kindOf(wxT("fn.Message")), ibHelpKind::kSystemProcedure);
 	EXPECT_EQ(kindOf(wxT("enum.TextEncoding")), ibHelpKind::kEnumType)
 		<< "the head of an enum family is not a collection";

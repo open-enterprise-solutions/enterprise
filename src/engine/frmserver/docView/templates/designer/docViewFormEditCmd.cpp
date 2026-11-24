@@ -10,7 +10,6 @@
 #include "backend/srcColumn.h"                           // ibBackendSourceColumn::GetName — a dropped control named after its field
 #include "backend/srcDataObject.h"                      // ibSourceExplorer — a dropped path's leaf type → the control's class
 #include "backend/system/value/valueDataComposition.h"   // g_valueDataCompositionCLSID — drops as a gridbox
-#include "backend/system/value/valueJob.h"               // g_valueScheduleCLSID — a dropped schedule builds as static text
 #include "backend/system/value/valueSpreadsheet.h"       // g_valueSpreadsheetCLSID — so does a document
 #include "core/serialize/dataBuilder.h"
 #include "frmserver/visualView/ctrl/form.h"
@@ -34,7 +33,7 @@ void SetBoundSource(ibValueFrame* control, const ibSourceDescription& desc)
 	if (factory == nullptr)
 		return;
 
-	// Give the dropped control a NAME (identifier), like BuildForm, so it isn't a bare "Textctrl1".
+	// Give the dropped control a NAME (identifier), like BuildForm, so it isn't a bare "Field1".
 	// A NESTED binding (a NON-main head attribute + a deeper leaf, e.g. Catalog1.Section) CONCATENATES
 	// its segments — the dotted path becomes one joined identifier ("Catalog1Section"), never a literal
 	// dot. A direct field on the (implicit) MAIN attribute keeps just the field name; a BARE attribute is
@@ -73,8 +72,8 @@ void SetBoundSource(ibValueFrame* control, const ibSourceDescription& desc)
 
 // Resolve the control class for a dropped source path — the DROP side's type->control choice (the canon:
 // the drag carries the path, the drop picks the class from the type AT the leaf). Mirrors BuildForm's
-// per-field choice: a list / table-section leaf -> Tablebox, a single-clsid boolean -> Checkbox, everything
-// else (scalar / reference / multi-type) -> Textctrl. Empty = nothing to create (a bad path).
+// per-field choice: a list / table-section leaf -> Table, a composition or a document -> Spreadsheet, everything
+// else -> Field. Empty = nothing to create (a bad path).
 ibString ResolveDropControlClass(ibValueForm* form, const ibSourceDescription& desc)
 {
 	const std::vector<ibSourceHop>& path = desc.GetPath();
@@ -111,22 +110,15 @@ ibString ResolveDropControlClass(ibValueForm* form, const ibSourceDescription& d
 	}
 
 	if (isTable)
-		return ibProtocol::ibForm::ibType::Tablebox;
-	// ⭐ A COMPOSITION OR A SPREADSHEET DOCUMENT DROPS AS A GRIDBOX (Max, 2026-08-19). Both are shown
-	// by the same control and by no other: the document IS what a gridbox displays, and a composition
+		return ibProtocol::ibForm::ibType::Table;
+	// ⭐ A COMPOSITION OR A SPREADSHEET DOCUMENT DROPS AS A SPREADSHEET (Max, 2026-08-19). Both are shown
+	// by the same control and by no other: the document IS what a spreadsheet displays, and a composition
 	// composes one. Dropping either therefore builds the box that can show it, bound to the attribute
 	// that was dragged.
 	if (typeDesc.GetClsidCount() == 1 &&
 		(typeDesc.ContainType(g_valueDataCompositionCLSID) || typeDesc.ContainType(g_valueSpreadsheetCLSID)))
-		return ibProtocol::ibForm::ibType::Gridbox;
-	if (typeDesc.GetClsidCount() == 1 && typeDesc.ContainType(ibValueTypes::TYPE_BOOLEAN))
-		return ibProtocol::ibForm::ibType::Checkbox;
-	// A SCHEDULE is shown, not typed — the static text renders it as its own sentence and opens
-	// the four-tab editor on a click. Same choice the runtime auto-build makes (formObject.cpp),
-	// so dropping one and generating one give the same form.
-	if (typeDesc.GetClsidCount() == 1 && typeDesc.ContainType(g_valueScheduleCLSID))
-		return ibProtocol::ibForm::ibType::Statictext;
-	return ibProtocol::ibForm::ibType::Textctrl;
+		return ibProtocol::ibForm::ibType::Spreadsheet;
+	return ibProtocol::ibForm::ibType::Field;
 }
 
 } // namespace
@@ -227,12 +219,11 @@ ibValueFrame* ibFormDesignView::CreateBoundControl(ibValueFrame* parentHint, con
 			// Not a column of THIS table's source. Allow a SINGLE-value source (a scalar / reference
 			// attribute or object field) as a FOREIGN / object column (Mode 2 — one value per row); a column
 			// of a DIFFERENT table (ResolveDropControlClass declines it) has no per-row value here.
-			const ibString foreignClass = ResolveDropControlClass(m_valueForm, desc);
-			if (foreignClass != ibProtocol::ibForm::ibType::Textctrl && foreignClass != ibProtocol::ibForm::ibType::Checkbox)
+			if (ResolveDropControlClass(m_valueForm, desc) != ibProtocol::ibForm::ibType::Field)
 				break;
 		}
 
-		ibValueFrame* column = m_valueForm->CreateObject(ibProtocol::ibForm::ibType::TableboxColumn, box);
+		ibValueFrame* column = m_valueForm->NewObject(g_controlTableBoxColumnCLSID, box);
 		if (column == nullptr)
 			break;
 		SetBoundSource(column, desc);   // bind BEFORE build -> renders visible
@@ -243,8 +234,8 @@ ibValueFrame* ibFormDesignView::CreateBoundControl(ibValueFrame* parentHint, con
 	const ibString className = ResolveDropControlClass(m_valueForm, desc);
 	if (className.IsEmpty())
 		return nullptr;
-	// A scalar control shows its value / a tablebox refills its columns on first build because the source is
-	// bound BEFORE the widget is created — CreateControlOfClass runs the bind step ahead of the insert.
+	// A field shows its value / a tablebox refills its columns on first build because the source is bound BEFORE
+	// the widget is created — CreateControlOfClass runs the bind step ahead of the insert.
 	return CreateControlOfClass(parentHint, className, [&desc](ibValueFrame* control) {
 		SetBoundSource(control, desc);
 	});
@@ -302,29 +293,25 @@ ibValueFrame* ibFormDesignView::CreateCommandButton(ibValueFrame* target, const 
 ibValueFrame* ibFormDesignView::CreateControlOfClass(ibValueFrame* parentHint, const ibString& className,
 	const std::function<void(ibValueFrame*)>& bind)
 {
-	// Walk up until a parent that can hold the control (an item / leaf can't be a parent — climb to its container).
+	// Walk up until a parent that takes the control (a leaf takes none — climb to its container), and make it there. A
+	// name no class has is taken by none.
+	const ibCtorAbstractType* const ctor = ibValue::GetAvailableCtor(className);
+	const ibClassID clsid = ctor != nullptr ? ctor->GetClassType() : 0;
 	ibValueFrame* parent = parentHint != nullptr ? parentHint : GetValueForm();
-	ibValueFrame* obj = nullptr;
-	while (parent != nullptr && obj == nullptr) {
-		obj = m_valueForm->CreateObject(className, parent);
-		if (obj == nullptr) {
-			parent = parent->GetParent();
-			while (parent != nullptr && parent->GetComponentType() == COMPONENT_TYPE_SIZERITEM)
-				parent = parent->GetParent();
-		}
-	}
+	while (parent != nullptr && !parent->FilterChild(clsid))
+		parent = parent->GetParent();
+	ibValueFrame* const obj = parent != nullptr ? m_valueForm->NewObject(clsid, parent) : nullptr;
 	if (obj == nullptr)
 		return nullptr;
 
-	// Unwrap the sizer-item wrapper to the real control, then bind BEFORE the build: InsertObject runs the
-	// control's Create -> Update pipeline, and Update reads the binding — so it renders correct on first paint.
-	ibValueFrame* control = obj->SkipSizerItems();
-	if (control != nullptr && bind)
-		bind(control);
+	// Bind BEFORE the build: InsertObject runs the control's Create -> Update pipeline, and Update reads the binding — so
+	// it renders correct on first paint.
+	if (bind)
+		bind(obj);
 
 	// Builds the widget, already bound — a table with the columns its source gave it (SetBoundSource).
 	InsertObject(obj, parent, CalcPositionOfInsertion(parentHint, parent));
-	return control;
+	return obj;
 }
 
 ibValueFrame* ibFormDesignView::PasteObject(ibValueFrame* dstObject, const ibDataNode& copied)
@@ -337,7 +324,7 @@ ibValueFrame* ibFormDesignView::PasteObject(ibValueFrame* dstObject, const ibDat
 		return nullptr;
 	ibValueFrame* const parentObject = pasted->GetParent();
 	InsertObject(pasted, parentObject, CalcPositionOfInsertion(dstObject, parentObject));
-	return pasted->SkipSizerItems();
+	return pasted;
 }
 
 void ibFormDesignView::InsertObject(ibValueFrame* object, ibValueFrame* parent, int pos)

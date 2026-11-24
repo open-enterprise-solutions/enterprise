@@ -24,8 +24,7 @@ class ibViewCommandBar;
 // THE VIEW OF A TAB — the tab's form as the server writes it (the frame's View), drawn: the old desktop's ibVisualHost
 // over the wire's node instead of the form — a frame around the window the controls
 // scroll in, the command bar above that window, still while they scroll. The same walk builds it (GenerateControl): a
-// sizer item is no control, it carries how its one child sits in the sizer above; a window goes into the sizer it sits
-// in, and so does a sizer.
+// window goes into the sizer it sits in, and so does a sizer, at the place its own node says.
 //
 // A frame of the same form is drawn into the controls there — a control added, removed, moved or made otherwise laid in
 // among them where it changed (UpdateChildren); another form is built anew.
@@ -97,10 +96,9 @@ private:
 	void UpdateForm(const ibProtocolNode& form);
 
 	void Build(const ibProtocolNode& form);
-	// A node built — a control in the window and the sizer it sits in, as the sizer item above it says (an empty
-	// node: none) — and what is in it, under the control it is in (none: the form).
-	void Generate(const ibProtocolNode& node, wxWindow* parent, wxSizer* sizer, const ibProtocolNode& item,
-		ibValueFrame* parentControl);
+	// A node built — a control in the window and the sizer it sits in, at the place its node says — and what is in it,
+	// under the control it is in (none: the form).
+	void Generate(const ibProtocolNode& node, wxWindow* parent, wxSizer* sizer, ibValueFrame* parentControl);
 	// A node of the frame, into its control drawn — what is in it, UpdateChildren draws.
 	void UpdateNode(const ibProtocolNode& node);
 	// …and only what its patch changed, down the patch: a control — or the form itself — whose node in the patch has

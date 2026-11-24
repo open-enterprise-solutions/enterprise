@@ -1,106 +1,15 @@
 #include "tableBox.h"
 #include "form.h"
 
-#include "backend/metaData.h"
-#include "backend/metadataSerialization.h"
-#include "backend/objCtor.h"
-#include "backend/backend_exception.h"       // ibBackendException — a value of a type the application lacks
-#include "core/serialize/dataBuilder.h"   // ibDataNode — the value as the client sent it
-#include "backend/system/systemManager.h"   // ibValueSystemFunction::Message — a value typed in part is said
-#include "core/inputMask.h"                 // ibInputMask — the typed text read back through the column's mask
-
-// The typed text becomes a value of the cell's type, or is refused. A refused text leaves the cell as it
-// was, and the next fetch of the row shows that value again in place of what was typed. A read-only
-// column (IsReadOnly) takes no text at all.
-bool ibValueModelTableBoxColumn::TextProcessing(const ibString& typed)
+// The view's — what the person did in a cell of this column, handed by the table.
+bool ibValueModelTableBoxColumn::OnClientEvent(ibProtocol::ibEvent::ibKind event, const ibDataNode& args)
 {
-	if (IsReadOnly())
-		return false;
-
-	// Through the mask first, as a field reads it (ibValueTextCtrl::TextProcessing).
-	ibString strData, refusal;
-	if (!GetMask().Strip(typed, strData, &refusal)) {
-		ibValueSystemFunction::Message(refusal, ibStatusMessage::ibStatusMessage_Warning);
-		return false;
-	}
-
-	const ibMetaData* metaData = GetMetaData();
-	ibASSERT(metaData);
-	if (metaData == nullptr)
-		return false;
-	ibValue selValue; GetControlValue(selValue);
-	const ibValue& newValue = metaData->CreateObject(selValue.GetClassType());
-	if (newValue.GetType() == ibValueTypes::TYPE_EMPTY) {
-		//wxMessageBox(_("please select field type"));
-		return false;
-	}
-	if (strData.Length() > 0) {
-		std::vector<ibValue> listValue;
-		if (newValue.FindValue(strData, GetChoiceCondition(), listValue)) {
-			SetControlValue(listValue.at(0));
-		}
-		else {
-			// …and a number or a date its type cannot read is said, as a field says it.
-			if (newValue.GetType() == ibValueTypes::TYPE_NUMBER || newValue.GetType() == ibValueTypes::TYPE_DATE)
-				ibValueSystemFunction::Message(ibString::Format(_("The value typed cannot be read: %s"), strData),
-					ibStatusMessage::ibStatusMessage_Warning);
-			return false;
-		}
-	}
-	else {
-		SetControlValue(newValue);
-	}
-
-	ibValueControl::CallAsEvent(m_eventOnChange, GetValue());
-	return true;
+	return m_provider->OnClientEvent(event, args);
 }
-
-// The value the client sent with its type becomes the cell's — made by the application (a reference is its), and
-// only of a type the column admits; anything else is refused as a text that is no value is.
-bool ibValueModelTableBoxColumn::ValueProcessing(const ibDataNode& node)
-{
-	if (IsReadOnly())
-		return false;
-
-	const ibMetaData* metaData = GetMetaData();
-	if (metaData == nullptr)
-		return false;
-	ibValue newValue;
-	try {
-		newValue = ibDeserializeValue(node, metaData);
-	}
-	catch (const ibCoreException&) {
-		return false;   // a type this application does not have
-	}
-	if (!GetTypeValueDesc().ContainType(newValue.GetClassType()))
-		return false;
-
-	SetControlValue(newValue);
-	ibValueControl::CallAsEvent(m_eventOnChange, GetValue());
-	return true;
-}
-
-///////////////////////////////////////////////////////////////////////////////////////////////
 
 void ibValueModelTableBoxColumn::ChoiceProcessing(ibValue& vSelected)
 {
-	ibValue standartProcessing = true;
-	ibValueControl::CallAsEvent(m_eventChoiceProcessing, GetValue(), vSelected, standartProcessing);
-	// ⭐ THE SAME DOOR A TYPED VALUE GOES THROUGH, as on a form's field (ibValueTextCtrl::ChoiceProcessing).
-	// This wrote the row and the editor by itself — the same lines as SetControlValue, less the refresh —
-	// so a chosen value and a typed one reached the cell by two roads.
-	if (standartProcessing.GetBoolean()) {
-		SetControlValue(vSelected);
-		ibValueControl::CallAsEvent(m_eventOnChange, GetValue());
-	}
-}
-
-///////////////////////////////////////////////////////////////////////
-
-// Enter — the text as it stands is committed into the current row's cell.
-void ibValueModelTableBoxColumn::OnTextEnter(const ibString& text)
-{
-	TextProcessing(text);
+	m_provider->ChoiceProcessing(vSelected);
 }
 
 // THE EDIT IS OVER — what the cell editor's FinishEditing did once the editor was gone: the form refreshes,
@@ -123,46 +32,4 @@ void ibValueModelTableBoxColumn::OnEditingDone()
 		if (ibValueModel* model = owner->GetTableModel())
 			model->RefetchAll();
 	}
-}
-
-void ibValueModelTableBoxColumn::OnSelectButtonPressed()
-{
-	if (IsReadOnly())
-		return;
-
-	ibValue standartProcessing = true;
-	ibValueControl::CallAsEvent(m_eventStartChoice, GetValue(), standartProcessing);
-	if (!standartProcessing.GetBoolean())
-		return;
-
-	// THE ONE ROUTE (ibTypeControlFactory::ChooseValue) — the column already knew
-	// how to ask for its type; that knowledge stays here, as the answer to
-	// GetDataType, while the sequence itself is no longer a third copy of it.
-	const ibMetaID& formId = m_propertyChoiceForm->GetValueAsInteger();
-	const ibMetaData* metaData = GetMetaData();
-	const ibValueMetaObject* choiceForm = (formId != ibNOT_FOUND && metaData != nullptr)
-		? metaData->FindAnyObjectByFilter(formId) : nullptr;
-	ibTypeControlFactory::ChooseValue(this, choiceForm);
-}
-
-void ibValueModelTableBoxColumn::OnOpenButtonPressed()
-{
-	ibValue standartProcessing = true;
-	ibValueControl::CallAsEvent(m_eventOpening, GetValue(), standartProcessing);
-	if (standartProcessing.GetBoolean()) {
-		ibValue selValue;
-		if (GetControlValue(selValue) && !selValue.IsEmpty())
-			selValue.ShowValue();
-	}
-}
-
-void ibValueModelTableBoxColumn::OnClearButtonPressed()
-{
-	if (IsReadOnly())
-		return;
-
-	ibValue standartProcessing = true;
-	ibValueControl::CallAsEvent(m_eventClearing, GetValue(), standartProcessing);
-	if (standartProcessing.GetBoolean())
-		SetControlValue();
 }

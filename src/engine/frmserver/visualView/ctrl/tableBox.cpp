@@ -182,7 +182,7 @@ ibValueFrame* ibValueModelTableBox::GetColumnGroupHolder(const ibString& group, 
 
 	ibASSERT(m_formOwner);
 	ibValueModelTableBoxColumnGroup* newGroup =
-		m_formOwner->CreateControl<ibValueModelTableBoxColumnGroup>(ibT("TableboxColumnGroup"), this);
+		m_formOwner->CreateControl<ibValueModelTableBoxColumnGroup>(g_controlTableBoxColumnGroupCLSID, this);
 	if (newGroup == nullptr)
 		return this;
 
@@ -255,7 +255,7 @@ void ibValueModelTableBox::CreateColumnCollection()
 		for (const ColumnSnap& snap : snaps) {
 			// COLUMNS THAT NAME THE SAME FAMILY COME OUT IN ONE GROUP (GetColumnGroupHolder).
 			ibValueModelTableBoxColumn* column = m_formOwner->CreateControl<ibValueModelTableBoxColumn>(
-				ibT("TableboxColumn"), GetColumnGroupHolder(snap.group));
+				g_controlTableBoxColumnCLSID, GetColumnGroupHolder(snap.group));
 			if (column == nullptr)
 				continue;
 			column->SetControlName(GetControlName() + snap.name);
@@ -283,7 +283,7 @@ void ibValueModelTableBox::CreateColumnCollection()
 		if (columnInfo == nullptr)
 			continue;
 		ibValueModelTableBoxColumn* column =
-			m_formOwner->CreateControl<ibValueModelTableBoxColumn>(ibT("TableboxColumn"), this);
+			m_formOwner->CreateControl<ibValueModelTableBoxColumn>(g_controlTableBoxColumnCLSID, this);
 		if (column == nullptr)
 			continue;
 		const ibTypeDescription& columnType = columnInfo->GetColumnType();
@@ -294,6 +294,8 @@ void ibValueModelTableBox::CreateColumnCollection()
 		column->SetCaption(columnInfo->GetColumnCaption());
 		column->SetWidthColumn(columnInfo->GetColumnWidth());
 		column->SetModelColumn(columnInfo->GetColumnID());
+		// …of the view its type gives, as a column a builder binds (SetSource).
+		column->SetDefaultView();
 	}
 }
 
@@ -470,6 +472,8 @@ m_modelView(nullptr), m_nextRowHandle(1), m_currentColumn(0), m_clientRow(0), m_
 	//set default params
 	m_propertyMinSize->SetValue(ibSize(150, 75));
 	m_propertyBG->SetValue(ibColour(255, 255, 255));
+	m_sizerItem->SetProportion(1);
+	m_sizerItem->SetFlagState(ibStretch_Expand);
 }
 
 ibValueModelTableBox::~ibValueModelTableBox()
@@ -1624,6 +1628,7 @@ bool ibValueModelTableBox::OnClientEvent(ibProtocol::ibEvent::ibKind event, cons
 		return true;
 	case ibProtocol::ibEvent::ibKind::Input:
 	case ibProtocol::ibEvent::ibKind::Change:
+	case ibProtocol::ibEvent::ibKind::Toggle:
 	case ibProtocol::ibEvent::ibKind::Select:
 	case ibProtocol::ibEvent::ibKind::Clear:
 		return OnCellEvent(event, args);
@@ -1688,20 +1693,24 @@ bool ibValueModelTableBox::OnCellEvent(ibProtocol::ibEvent::ibKind event, const 
 		else if (m_editRow == rowHandle && m_editColumn == column->GetControlID())
 			m_editRow = 0;
 		return true;
+	case ibProtocol::ibEvent::ibKind::Toggle:
+		// A flag's box clicked — an edit begun and committed at once, so asked of the table as an editor is (a read-only
+		// column, a row the model does not let edit take none)…
+		if (!OnCellEditStarting(rowHandle, column->GetControlID()))
+			return true;
+		[[fallthrough]];
 	case ibProtocol::ibEvent::ibKind::Change:
-		// The value committed into the current line's cell — with its type when the client has one (Value), else the
-		// text it typed — and the edit is over.
+		// …and the value committed into the current line's cell by the column's view, and the edit is over.
 		m_editRow = 0;
-		if (const auto value = args.FindChild(ibProtocol::ibEvent::Value))
-			column->ValueProcessing(*value);
-		else
-			column->OnTextEnter(args.GetValue<ibString>(ibProtocol::ibEvent::Text));
+		column->OnClientEvent(event, args);
 		column->OnEditingDone();
 		return true;
-	case ibProtocol::ibEvent::ibKind::Select: column->OnSelectButtonPressed(); return true;
-	case ibProtocol::ibEvent::ibKind::Open:   column->OnOpenButtonPressed();   return true;
-	case ibProtocol::ibEvent::ibKind::Clear:  column->OnClearButtonPressed();  return true;
-	default:                    return false;
+	case ibProtocol::ibEvent::ibKind::Select:
+	case ibProtocol::ibEvent::ibKind::Open:
+	case ibProtocol::ibEvent::ibKind::Clear:
+		return column->OnClientEvent(event, args);
+	default:
+		return false;
 	}
 }
 
@@ -1999,39 +2008,38 @@ const ibMetaData* ibValueModelTableBox::GetMetaData() const
 
 void ibValueModelTableBox::FillControlMembers(ibMemberTable& helper) const
 {
-	helper.AppendProp(ibT("Value"), eTableValue, eControl);
-	helper.AppendProp(ibT("CurrentRow"), eCurrentRow, eControl);
+	helper.AppendProp(ibT("Value"), eTableValue);
+	helper.AppendProp(ibT("CurrentRow"), eCurrentRow);
 }
 
 bool ibValueModelTableBox::SetPropVal(const long lPropNum, const ibValue& varPropVal)
 {
-	const long lPropAlias = m_members.GetPropAlias(lPropNum); bool refreshColumn = false;
-	if (lPropAlias == eControl) {
-		const long lPropData = m_members.GetPropData(lPropNum);
-		if (lPropData == eTableValue) {
-			m_tableModel = varPropVal.ConvertToType<ibValueModel>();
-			m_tableCurrentLine.Reset();
-			refreshColumn = true;
+	bool refreshColumn = false;
+	switch (m_members.GetPropData(lPropNum, this, &ibValueModelTableBox::FillControlMembers)) {
+	case eTableValue:
+		m_tableModel = varPropVal.ConvertToType<ibValueModel>();
+		m_tableCurrentLine.Reset();
+		refreshColumn = true;
+		break;
+	case eCurrentRow: {
+		ibValueModel::ibValueModelReturnLine* tableReturnLine = nullptr;
+		if (varPropVal.ConvertToValue(tableReturnLine)
+			&& m_tableModel == tableReturnLine->GetOwnerModel()) {
+			ApplyCurrentLine(tableReturnLine);
 		}
-		else if (lPropData == eCurrentRow) {
-			ibValueModel::ibValueModelReturnLine* tableReturnLine = nullptr;
-			if (varPropVal.ConvertToValue(tableReturnLine)
-				&& m_tableModel == tableReturnLine->GetOwnerModel()) {
-				ApplyCurrentLine(tableReturnLine);
-			}
-			else {
-				// …or what stands for a row: a list's reference, a value of its rows. None of them: no row.
-				ApplyCurrentLine(m_tableModel != nullptr ? ResolveLineByValue(m_tableModel, varPropVal) : nullptr);
-			}
+		else {
+			// …or what stands for a row: a list's reference, a value of its rows. None of them: no row.
+			ApplyCurrentLine(m_tableModel != nullptr ? ResolveLineByValue(m_tableModel, varPropVal) : nullptr);
 		}
+		break;
 	}
-	else if (lPropAlias == eProperty) {
-		// …and a SOURCE written at run time (`Table.Source = "Prices"`) is a new table too: the change makes the model
-		// and its columns anew (OnPropertyChanged).
-		const unsigned int idx = m_members.GetPropData(lPropNum);
-		if (GetPropertyByIndex(idx) == m_propertySource)
-			m_tableCurrentLine.Reset();
 	}
+
+	// …and a SOURCE written at run time (`Table.Source = "Prices"`) is a new table too: the change makes the model
+	// and its columns anew (OnPropertyChanged).
+	if (const long idx = m_members.GetPropData(lPropNum, this, &ibValueFrame::FillFrameProperties);
+		idx != ibNOT_FOUND && GetProperty(idx) == m_propertySource)
+		m_tableCurrentLine.Reset();
 
 	bool result = ibValueFrame::SetPropVal(lPropNum, varPropVal);
 
@@ -2044,17 +2052,13 @@ bool ibValueModelTableBox::SetPropVal(const long lPropNum, const ibValue& varPro
 
 bool ibValueModelTableBox::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 {
-	const long lPropAlias = m_members.GetPropAlias(lPropNum);
-	if (lPropAlias == eControl) {
-		const long lPropData = m_members.GetPropData(lPropNum);
-		if (lPropData == eTableValue) {
-			pvarPropVal = m_tableModel;
-			return true;
-		}
-		else if (lPropData == eCurrentRow) {
-			pvarPropVal = m_tableCurrentLine;
-			return true;
-		}
+	switch (m_members.GetPropData(lPropNum, this, &ibValueModelTableBox::FillControlMembers)) {
+	case eTableValue:
+		pvarPropVal = m_tableModel;
+		return true;
+	case eCurrentRow:
+		pvarPropVal = m_tableCurrentLine;
+		return true;
 	}
 	return ibValueFrame::GetPropVal(lPropNum, pvarPropVal);
 }
@@ -2063,6 +2067,6 @@ bool ibValueModelTableBox::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 //*                       Register in runtime                           *
 //***********************************************************************
 
-ENUM_TYPE_REGISTER(ibValueEnumTableBoxSelectionMode, "TableboxRowSelectionMode", enum_to_clsid("EN_TBXSL"));
-ENUM_TYPE_REGISTER(ibValueEnumTableBoxViewMode, "TableboxViewMode", enum_to_clsid("EN_TBXVM"));
-CONTROL_TYPE_REGISTER(ibValueModelTableBox, "Tablebox", "Container", g_controlTableBoxCLSID);
+ENUM_TYPE_REGISTER(ibValueEnumTableBoxSelectionMode, "TableRowSelectionMode", enum_to_clsid("EN_TBXSL"));
+ENUM_TYPE_REGISTER(ibValueEnumTableBoxViewMode, "TableViewMode", enum_to_clsid("EN_TBXVM"));
+CONTROL_TYPE_REGISTER(ibValueModelTableBox, "Table", "Container", g_controlTableBoxCLSID);

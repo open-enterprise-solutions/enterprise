@@ -28,9 +28,9 @@ inline script, no inline style. What the page does is in `src/`, how it looks in
 | `src/settings/`, `src/properties/` | a list's and a report's settings — filter, sort, grouping, conditional appearance, output parameters, variants — and the property cells they and the form editor are edited in |
 | `src/localization.js` | the page's own words: the engine's catalogue for the person's language |
 | `src/docView/` | a tab's document, as the thin client's: each registered for its tab's Kind by the module that defines it (`defineDocument`, as a control is), made by that Kind (`createDocument`); it draws the tab's view and names it in its controls' calls — a form by its `Key`, a sheet by its tab; it takes the tab's commands — undo, redo, save as its `Commands` say — and puts its view on paper; the start page's is beside the page |
-| `src/controls/` | a form's controls, one file each, each its own element; the sizers; the label column |
-| `src/tablebox/` | the table: the grid fed with the server's pages |
-| `src/gridbox/` | the spreadsheet, drawn as a table |
+| `src/controls/` | a form's controls, one file each, each its own element; the layout; the label column |
+| `src/table/` | the table: the grid fed with the server's pages |
+| `src/spreadsheet/` | the spreadsheet, drawn as a table |
 | `styles/` | the palette, the splash, the window, the form — and the form folded for a narrow screen |
 | `tests/web/` (the repository's) | the page's tests: its own modules in a real browser, the server a fake in the page. Python and Playwright, no Node; `python -m unittest discover -s tests/web` |
 

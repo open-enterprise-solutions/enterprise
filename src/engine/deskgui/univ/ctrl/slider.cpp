@@ -496,8 +496,10 @@ void ibSlider::CalcGeometry()
     */
     long style = GetWindowStyle();
 
-    // initialize to the full client rect
-    wxRect rectTotal = GetClientRect();
+    // initialize to the full client rect - SEAM vs univ: from the client area's corner, (0, 0), as it is painted
+    // (ibThemePaintDC begins there): GetClientRect starts at GetClientAreaOrigin, which holds the field's title column
+    // (ibControl::GetBorderRect), so the shaft stood a column further right than the fields beside it (2026-11-23)
+    wxRect rectTotal(GetClientSize());
     wxSize bestClientSize = DoGetBestClientSize();
     if ( !IsVert() && rectTotal.height > bestClientSize.y )
     {
@@ -833,6 +835,10 @@ bool ibSlider::PerformAction(const ibControlAction& action,
     {
         return ibControl::PerformAction(action, numArg, strArg);
     }
+
+    // SEAM vs univ: a slider that is not editable moves nothing and says nothing (SetEditable)
+    if ( !m_isEditable )
+        return true;
 
     // update ibSlider current value
     if ( valueChanged )

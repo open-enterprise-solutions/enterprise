@@ -12,7 +12,7 @@ class Protocol(PageTest):
     def test_a_packet_reads_back_what_was_written(self):
         written = {'id': 7, 'result': {'Text': 'Привет', 'Whole': 42, 'Part': 1.5, 'Yes': True, 'No': False, 'None': None,
                                        'List': [1, 'two'], 'NodeId': 3,
-                                       'Child': {'NodeType': 'Tablebox', 'NodeChildren': [{'NodeId': 1, 'Text': 'row'}]}}}
+                                       'Child': {'NodeType': 'Table', 'NodeChildren': [{'NodeId': 1, 'Text': 'row'}]}}}
         read = self.run_in_page("""
             const { decode, encode, isPacket } = await import('/pub/src/protocol/packet.js');
             const bytes = encode(arg);
@@ -28,7 +28,7 @@ class Protocol(PageTest):
 
     def test_a_row_reads_as_its_cells_say(self):
         record = self.run_in_page("""
-            const { recordOf } = await import('/pub/src/tablebox/rows.js');
+            const { recordOf } = await import('/pub/src/table/rows.js');
             return recordOf({ NodeId: 5, Container: true, Picture: '9', ReadOnly: true, NodeChildren: [
                 { NodeId: 2, Text: 'Bolt', Bold: true }, { NodeId: 3, Text: '10', Number: true, Value: { t: 'n', v: 10 } },
                 { NodeId: 4, Text: '', Checked: true }] });""")
@@ -43,7 +43,7 @@ class Protocol(PageTest):
 
     def test_a_page_says_where_it_stands(self):
         read = self.run_in_page("""
-            const { readPage } = await import('/pub/src/tablebox/rows.js');
+            const { readPage } = await import('/pub/src/table/rows.js');
             return readPage({ Begin: true, CurrentRow: 2, NodeChildren: [{ NodeId: 2, NodeChildren: [{ NodeId: 1, Text: 'a' }] }] });""")
         self.assertTrue(read['begin'])
         self.assertFalse(read['end'])

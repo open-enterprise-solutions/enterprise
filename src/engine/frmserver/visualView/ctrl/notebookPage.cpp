@@ -72,4 +72,4 @@ bool ibValueNotebookPage::WriteData(ibDataNode& node) const
 //*                       Register in runtime                           *
 //***********************************************************************
 
-S_CONTROL_TYPE_REGISTER(ibValueNotebookPage, "NotebookPage", "NotebookPage", g_controlNotebookPageCLSID);
+S_CONTROL_TYPE_REGISTER(ibValueNotebookPage, "Page", "Page", g_controlNotebookPageCLSID);

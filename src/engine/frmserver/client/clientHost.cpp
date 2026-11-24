@@ -356,7 +356,7 @@ void DispatchEvent(ibClientFrame* frame, const ibDataNode& call)
 }
 
 // ⭐ WHAT A FIELD SHOWS ONCE IT IS COMMITTED — the text typed (Change {Text}), whatever the client's copy of the frame says
-// of it. Where the server shows another (a text refused leaves the value as it was, ibValueTextCtrl::TextProcessing), the
+// of it. Where the server shows another (a text refused leaves the value as it was, ibFieldViewInput::TextProcessing), the
 // base this answer is patched from takes the typed text in the field's place, and the patch carries the server's: with no
 // change to say, it left what was typed showing. Only then, and in this answer's base alone: a text the server shows as
 // typed is told as any change is, and the copy the client holds and the frame kept here stay one (the kept ones altered,

@@ -186,7 +186,7 @@ over mixed objects uses the non-throwing sibling; the asserting one looks fine u
 another process.
 
 **Identify a type by its class id, never by its registered name:** `GetClassType() == g_<x>CLSID`,
-not `GetClassName() == wxT("SizerItem")`. A global id is a `constexpr` in a header, not a map
+not `GetClassName() == wxT("Page")`. A global id is a `constexpr` in a header, not a map
 filled at static initialisation.
 
 **A cast branch that rescues one case means the shared road assumes something false.** The sixth
@@ -420,7 +420,11 @@ development.md §4, *one signal, one verb, at the owner*, is the base rule. In a
 
 **A change starts its own update.** A value rebuilds in its own `OnChildChanged` and then calls the
 base, so the change reaches the holder; a child whose property changed tells its owner up the
-attach chain (`m_attachOwner`). No `Ensure…` lazy build, no patch in the viewer.
+attach chain (`m_attachOwner`). No `Ensure…` lazy build, no patch in the viewer. A holder whose own
+property changed tells its attached child from the one place it hears it (`OnPropertyChanged`), by
+the child's event named for what changed (a field's view: `OnViewChanged`), and the child checks
+itself against the holder: no setter that sets nothing, no check of which way a call came, no second
+road to it.
 
 **An event is raised after the rights check, once its subject is ready and held, and it passes the
 subject.** A handler is foreign code: it must not see what the user may not see.

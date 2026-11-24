@@ -168,6 +168,7 @@
     <ClCompile Include="crypto\sha256.cpp" />
     <ClCompile Include="description\calcScheduleDescription.cpp" />
     <ClCompile Include="description\choiceLinkDescription.cpp" />
+    <ClCompile Include="description\choicesDescription.cpp" />
     <ClCompile Include="description\commandDescription.cpp" />
     <ClCompile Include="description\compositionDescription.cpp" />
     <ClCompile Include="description\homePageDescription.cpp" />
@@ -293,6 +294,7 @@
     <ClInclude Include="crypto\sha256.hpp" />
     <ClInclude Include="description\calcScheduleDescription.h" />
     <ClInclude Include="description\choiceLinkDescription.h" />
+    <ClInclude Include="description\choicesDescription.h" />
     <ClInclude Include="description\commandDescription.h" />
     <ClInclude Include="description\compositionDescription.h" />
     <ClInclude Include="description\homePageDescription.h" />

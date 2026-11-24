@@ -85,17 +85,25 @@ void AppendCategory(ibDataNode& parent, ibPropertyObject* object, const ibProper
 		ibPropertyInspector::AppendProperty(parent, event);
 	}
 
-	for (unsigned int index = 0; index < category->GetCategoryCount(); ++index) {
-		const ibPropertyCategory* const nextCategory = category->GetCategory(index);
-		if (nextCategory == nullptr)
-			continue;
-		// …put in only when it holds something.
-		ibDataNode row(0, static_cast<ibMetaID>(parent.Children().size() + 1));
-		row.SetValue(ibProtocol::ibSchema::ibProperties::Name, nextCategory->GetName());
-		row.SetValue(ibProtocol::ibSchema::ibProperties::Title, nextCategory->GetLabel());
-		AppendCategory(row, object, nextCategory, hidden, met);
-		if (!row.Children().empty())
-			parent.AddChild(row);
+	// ⭐ THE EVENTS LAST, whoever gives them (Max, 2026-11-24: "events at the bottom, as it should be") — a category of
+	// events alone after the others. Walked in order, a control's own Event came before the categories of what is attached
+	// to it (its place in the sizer) and stood in the middle; a field's was last only because its view is attached last.
+	const auto eventsOnly = [](const ibPropertyCategory* each) {
+		return each->GetPropertyCount() == 0 && each->GetEventCount() != 0;
+	};
+	for (const bool events : { false, true }) {
+		for (unsigned int index = 0; index < category->GetCategoryCount(); ++index) {
+			const ibPropertyCategory* const nextCategory = category->GetCategory(index);
+			if (nextCategory == nullptr || eventsOnly(nextCategory) != events)
+				continue;
+			// …put in only when it holds something.
+			ibDataNode row(0, static_cast<ibMetaID>(parent.Children().size() + 1));
+			row.SetValue(ibProtocol::ibSchema::ibProperties::Name, nextCategory->GetName());
+			row.SetValue(ibProtocol::ibSchema::ibProperties::Title, nextCategory->GetLabel());
+			AppendCategory(row, object, nextCategory, hidden, met);
+			if (!row.Children().empty())
+				parent.AddChild(row);
+		}
 	}
 }
 

@@ -109,7 +109,7 @@ ibValue::ibMemberTable* ibValueModel::ibValueModelReturnLine::DoGetPMethods() co
 // ⭐ A ROW IS AGGREGATED BY THE COLUMN NAMED. An aggregate with no selector hands each element the verb with what it was
 // given (ibValueLinqDispatchImpl, procUnitLINQ.cpp) - `q.Sum("Amount")` - and the row answers with that column's cell. A
 // query answers with a table, and `(from l in Goods select l.Amount).Sum()` added the rows themselves and answered
-// `TableRow` (2026-11-19, the demo base). Unnamed is refused, one column or several: the column is said, not guessed -
+// `ValueTableRow` (2026-11-19, the demo base). Unnamed is refused, one column or several: the column is said, not guessed -
 // and a column that is not added up (an item) is refused by Sum and Average, said why.
 void ibValueModel::ibValueModelReturnLine::DispatchLinqMethod(ibLinqMethod method, ibValue& ret, ibValue** args, long n)
 {

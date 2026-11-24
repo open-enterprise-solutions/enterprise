@@ -80,7 +80,7 @@ class Escape(PageTest):
         page.wait_for_timeout(300)
         page.keyboard.press('Escape')
         self.wait_for_tabs(1)
-        page.wait_for_function("document.activeElement?.closest('oes-tablebox') !== null")
+        page.wait_for_function("document.activeElement?.closest('oes-table') !== null")
 
     def test_a_dialog_goes_and_the_tab_stays(self):
         page = self.start({'tabs': [tab()]})
@@ -125,7 +125,7 @@ class Escape(PageTest):
     def test_text_typed_reaches_the_server_before_the_close(self):
         page = self.start({'tabs': [form()]})
         self.row('Item 1').wait_for()
-        page.locator('oes-textctrl wa-input input').fill('42')
+        page.locator('oes-field wa-input input').fill('42')
         page.keyboard.press('Escape')
         self.wait_for_tabs(0)
         methods = page.evaluate('window.fake.calls.map((call) => call.method)')
@@ -157,7 +157,7 @@ class Escape(PageTest):
         page.locator('wa-dialog wa-button', has_text='No').click()
         self.wait_for_tabs(1)
         page.wait_for_selector(DIALOG, state='detached')
-        page.wait_for_function("document.activeElement?.closest('oes-tablebox') !== null")
+        page.wait_for_function("document.activeElement?.closest('oes-table') !== null")
 
 
 if __name__ == '__main__':

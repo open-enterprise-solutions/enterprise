@@ -211,7 +211,7 @@ TEST(ClientFrameApply, NodeFilledAndRead)
 		.SetValue("ActiveTab", 3)
 		.SetValue("Locked", true);
 	node.Child("View").SetValue("Key", "form-1");
-	node.AddChild().SetValue("NodeId", 7).SetValue("NodeType", "Tablebox");
+	node.AddChild().SetValue("NodeId", 7).SetValue("NodeType", "Table");
 
 	ibProtocolNode read;
 	ASSERT_TRUE(ibProtocolNode::Read(node.Write(), read));
@@ -221,7 +221,7 @@ TEST(ClientFrameApply, NodeFilledAndRead)
 	EXPECT_EQ(read.FindChild("View").GetString("Key"), ibString(wxT("form-1")));
 	ASSERT_EQ(read.Children().size(), 1u);
 	EXPECT_EQ(read.Children()[0].GetId(), 7);
-	EXPECT_EQ(read.Children()[0].GetType(), ibString(wxT("Tablebox")));
+	EXPECT_EQ(read.Children()[0].GetType(), ibString(wxT("Table")));
 	EXPECT_TRUE(read.FindChild("Nothing").IsEmpty());
 	EXPECT_EQ(read.GetInt("Title", -1), -1);   // another kind — the default
 }
@@ -232,7 +232,7 @@ TEST(ClientFrameApply, NodeFilledGoesAsPacket)
 	ibProtocolNode node;
 	node.SetValue("Title", ibString(wxT("Goods"))).SetValue("ActiveTab", 3).SetValue("Locked", true);
 	node.Child("View").SetValue("Key", "form-1");
-	node.AddChild().SetValue("NodeId", 7).SetValue("NodeType", "Tablebox");
+	node.AddChild().SetValue("NodeId", 7).SetValue("NodeType", "Table");
 	node.AddItem("Features", ibString(wxT("resume")));
 
 	ibMemoryBuffer packet;
@@ -245,7 +245,7 @@ TEST(ClientFrameApply, NodeFilledGoesAsPacket)
 	EXPECT_EQ(read.FindChild("View").GetString("Key"), ibString(wxT("form-1")));
 	ASSERT_EQ(read.Children().size(), 1u);
 	EXPECT_EQ(read.Children()[0].GetId(), 7);
-	EXPECT_EQ(read.Children()[0].GetType(), ibString(wxT("Tablebox")));
+	EXPECT_EQ(read.Children()[0].GetType(), ibString(wxT("Table")));
 	ASSERT_EQ(read.GetList("Features").size(), 1u);
 	EXPECT_EQ(read.GetList("Features")[0].AsString(), ibString(wxT("resume")));
 }

@@ -88,7 +88,7 @@ class HomePage(PageTest):
     def test_a_form_on_it_is_not_folded_while_the_window_is_wide(self):
         page = self.start({'tabs': [page_tab([[cell('Goods', 'Bolt')], [cell('Receipts', 'First')]], gravity=0.2)]})
         self.row('Bolt').wait_for()
-        min_height = page.evaluate("getComputedStyle(document.querySelector('oes-homepage oes-tablebox')).minHeight")
+        min_height = page.evaluate("getComputedStyle(document.querySelector('oes-homepage oes-table')).minHeight")
         self.assertNotIn('dvh', min_height)
         self.assertLess(float(min_height.removesuffix('px')), page.viewport_size['height'] * 0.5)
         self.assertEqual(page.locator('.tabulator-responsive-collapse').count(), 0)

@@ -16970,38 +16970,15 @@ msgstr "Рядок під заголовком плитки - ціна, кіль
 msgid "The command a press runs: a form command, a standard command of the form or of one of its tables, or a command of the application. A button has no click event of its own - the code goes into the command's handler."
 msgstr "Команда, що виконується під час натискання: команда форми, стандартна команда форми або однієї з її таблиць чи команда застосунку. Кнопка не має власної події натискання - код пишеться в обробнику команди."
 
-#: src/engine/frmserver/visualView/ctrl/widgets.h:178
-msgid "Static text"
-msgstr "Статичний текст"
-
-#: src/engine/frmserver/visualView/ctrl/widgets.h:179
-msgid "Markup"
-msgstr "Розмітка"
-
-#: src/engine/frmserver/visualView/ctrl/widgets.h:180
-msgid "Kept for older forms and saved with the form; it has no effect - the caption is shown as plain text."
-msgstr "Залишено для старих форм і зберігається разом із формою; ні на що не впливає - напис показується як звичайний текст."
-
-#: src/engine/frmserver/visualView/ctrl/widgets.h:182
-msgid "Kept for older forms and saved with the form; it has no effect. For several lines, put line breaks into the title."
-msgstr "Залишено для старих форм і зберігається разом із формою; ні на що не впливає. Для кількох рядків вставте переноси рядків у заголовок."
-
-#: src/engine/frmserver/visualView/ctrl/widgets.h:184
-msgid "The caption text. Empty on a bound static text: the bound field's synonym. Can be written per language and changed from code while the form is open."
-msgstr "Текст напису. Якщо порожньо для прив'язаного статичного тексту, використовується синонім прив'язаного поля. Можна задати для кожної мови та змінювати з коду, поки форму відкрито."
+#: src/engine/frmserver/visualView/ctrl/static.h
+msgid "The caption text. Can be written per language and changed from code while the form is open."
+msgstr "Текст напису. Можна задати для кожної мови та змінювати з коду, поки форму відкрито."
 
 #: src/engine/frmserver/visualView/ctrl/widgets.h:188
 #: src/engine/frmserver/visualView/ctrl/widgets.h:505
 msgid "Title location"
 msgstr "Розташування заголовка"
 
-#: src/engine/frmserver/visualView/ctrl/widgets.h:189
-msgid "Which side of the value the caption sits on when the static text is bound: left (the default) or right."
-msgstr "З якого боку від значення розташовується напис, коли статичний текст прив'язано: ліворуч (за замовчуванням) або праворуч."
-
-#: src/engine/frmserver/visualView/ctrl/widgets.h:195
-msgid "Optional: a value to show beside the caption - a form attribute or any field reachable from it by a dotted path. A non-empty value is drawn as a link that opens its own form. Unbound, the static text is a plain caption."
-msgstr "Необов'язково: значення, яке показується поруч із написом, - реквізит форми або будь-яке поле, доступне від нього шляхом через крапку. Непорожнє значення виводиться як посилання, що відкриває його форму. Без прив'язки статичний текст - просто напис."
 
 #: src/engine/frmserver/visualView/ctrl/widgets.h:353
 msgid "Textbox"
@@ -17103,11 +17080,7 @@ msgstr "Вибрано"
 msgid "Whether the radio button is shown selected. A radio button has no data source of its own."
 msgstr "Чи показується перемикач вибраним. Перемикач не має власного джерела даних."
 
-#: src/engine/frmserver/visualView/ctrl/widgets.h:564
-msgid "Static line"
-msgstr "Статична лінія"
-
-#: src/engine/frmserver/visualView/ctrl/widgets.h:566
+#: src/engine/frmserver/visualView/ctrl/static.h
 msgid "The line's direction: horizontal (the default), separating stacked parts of a form, or vertical, separating side-by-side ones. Set Stretch to Expand for the line to run the full width or height."
 msgstr "Напрямок лінії: горизонтальна (за замовчуванням) розділяє частини форми, розташовані одна під одною, вертикальна - розташовані поруч. Задайте властивості Розтягнення значення Розгорнути, щоб лінія йшла на всю ширину або висоту."
 
@@ -18182,3 +18155,191 @@ msgstr "HTTPServiceResponse: значення заголовка '%s' - рядо
 #, c-format
 msgid "HTTPServiceResponse: the value of the header '%s' holds a line break or a control character"
 msgstr "HTTPServiceResponse: у значенні заголовка '%s' є переведення рядка або керівний символ"
+
+#: src/engine/frmserver/visualView/ctrl/field.h:161
+msgctxt "field"
+msgid "View"
+msgstr "Вигляд"
+
+#: src/engine/frmserver/visualView/controlEnum.h:172
+#: src/engine/frmserver/visualView/ctrl/field.h:228
+msgctxt "field view"
+msgid "Input"
+msgstr "Введення"
+
+#: src/engine/frmserver/visualView/controlEnum.h:173
+msgctxt "field view"
+msgid "Flag"
+msgstr "Прапорець"
+
+#: src/engine/frmserver/visualView/controlEnum.h:174
+msgctxt "field view"
+msgid "Label"
+msgstr "Напис"
+
+#: src/engine/frmserver/visualView/controlEnum.h:175
+#: src/engine/frmserver/visualView/ctrl/field.h:336
+msgctxt "field view"
+msgid "Switch"
+msgstr "Перемикач"
+
+#: src/engine/frmserver/visualView/controlEnum.h:179
+#: src/engine/frmserver/visualView/ctrl/field.h:386
+msgctxt "field view"
+msgid "Gauge"
+msgstr "Індикатор"
+
+#: src/engine/frmserver/visualView/controlEnum.h:180
+#: src/engine/frmserver/visualView/ctrl/field.h:410
+msgctxt "field view"
+msgid "Slider"
+msgstr "Повзунок"
+
+#: src/engine/frmserver/visualView/ctrl/field.h:179
+msgid "What the field is for: Input - typed into; Flag - on or off; Label - shown, not edited; Switch - one of the values set in its Choices picked; Gauge - how far a number has come of its range; Slider - a number moved between two ends. Allowed by the source's type: Input and Label for any, Flag for a Boolean, Gauge and Slider for a Number, Switch for one type of a number, a string, a date, a Boolean or an enumeration; a source of another type turns the field into an Input. Each view has its own properties and events; the source, the title and the value are the field's in every view."
+msgstr "Для чого поле: Введення - у нього вводять; Прапорець - увімкнено чи вимкнено; Напис - показується, не редагується; Перемикач - вибирається одне зі значень, заданих у його Варіантах; Індикатор - наскільки число дійшло до свого діапазону; Повзунок - число, що пересувається між двома краями. Допускається за типом джерела: Введення і Напис - для будь-якого, Прапорець - для Булевого, Індикатор і Повзунок - для Числа, Перемикач - для одного типу: числа, рядка, дати, Булевого чи перерахування; джерело іншого типу робить поле Введенням. Кожен вигляд має свої властивості й події; джерело, заголовок і значення - поля за будь-якого вигляду."
+
+#: src/engine/frmserver/visualView/ctrl/field.h:165
+msgid "The field's caption. Empty: the bound field's synonym. Can be written per language and changed from code while the form is open."
+msgstr "Заголовок поля. Порожньо: синонім прив'язаного поля. Пишеться кожною мовою і змінюється з коду, поки форма відкрита."
+
+#: src/engine/frmserver/visualView/ctrl/field.h:167
+msgid "Which side of the field the caption sits on: left (the default) - in the column the form lines its fields' titles up in - or right, beside it, as a flag's; none - no caption shown."
+msgstr "З якого боку поля стоїть заголовок: зліва (за замовчуванням) - у колонці, за якою форма вирівнює заголовки полів, - або справа, поруч, як у прапорця; немає - заголовок не показується."
+
+#: src/engine/frmserver/visualView/ctrl/field.h:172
+msgid "The value the field shows and edits: a form attribute, a field of the form's object, or a field reachable from them by a dotted path (read-only). Its type is the source's, whatever the view: a flag shows whether the value is true and writes a Boolean."
+msgstr "Значення, яке поле показує і редагує: реквізит форми, поле об'єкта форми або поле, досяжне від них шляхом через крапку (лише читання). Його тип - тип джерела за будь-якого вигляду: прапорець показує, чи значення істинне, і пише булеве."
+
+#: src/engine/frmserver/visualView/ctrl/field.h:175
+msgid "Whether the value is only shown: seen, selected and copied, not changed - in every view. Off by default; a field bound through a reference path, or on a form opened for viewing, is read-only whatever this says. Can be changed from code while the form is open."
+msgstr "Чи лише показується значення: його видно, можна виділити й скопіювати, але не змінити - за будь-якого вигляду. Типово вимкнено; поле, прив'язане шляхом через посилання, або на формі, відкритій для перегляду, лише для читання, хоч би що тут стояло. Можна змінювати з коду, поки форма відкрита."
+
+#: src/engine/frmserver/visualView/ctrl/field.h:337
+#: src/engine/frmclient/win/dlgs/choices/choices.cpp:54
+msgid "Choices"
+msgstr "Варіанти"
+
+#: src/engine/frmserver/visualView/ctrl/field.h:338
+msgid "The items the switch offers, in order: the value each writes into the field and the text it shows. A value is of the field's type - a string, a number, a date, a Boolean or an enumeration's member. Empty text: the value's own presentation."
+msgstr "Пункти, які пропонує перемикач, по порядку: значення, яке кожен пише в поле, і текст, який він показує. Значення - типу поля: рядок, число, дата, булеве або значення переліку. Порожній текст: власне представлення значення."
+
+#: src/engine/frmserver/visualView/ctrl/field.h:340
+msgid "How the items stand: side by side (the default) or one under another."
+msgstr "Як стоять пункти: поруч (за замовчуванням) або один під одним."
+
+#: src/engine/backend/propertyManager/property/propertyChoices.cpp
+msgid "<empty>"
+msgstr "<порожньо>"
+
+#: src/engine/frmserver/visualView/ctrl/field.cpp:350
+#, c-format
+msgid "Field '%s' has a view this version does not know (%d); it is shown as Input."
+msgstr "Поле '%s' має вигляд, невідомий цій версії (%d); його показано як Введення."
+
+#: src/engine/frmclient/win/dlgs/choices/choices.cpp:101
+msgid "Fill"
+msgstr "Заповнити"
+
+#: src/engine/frmclient/win/dlgs/choices/choices.cpp:102
+msgid "Add every value of the field's type the switch does not offer yet."
+msgstr "Додати всі значення типу поля, яких у перемикачі ще немає."
+
+#: src/engine/frmclient/win/dlgs/choices/choices.cpp:298
+#, c-format
+msgid "Item %d has no value. Give it one in the Value column, or remove it."
+msgstr "Пункт %d не має значення. Задайте його в колонці Значення або видаліть пункт."
+
+#: src/engine/frmserver/visualView/ctrl/layout.h
+msgid "Layout"
+msgstr "Компонування"
+
+#: src/engine/frmserver/visualView/ctrl/layout.h
+msgctxt "layout"
+msgid "View"
+msgstr "Вигляд"
+
+#: src/engine/frmserver/visualView/ctrl/layout.h
+msgid "How the layout lays out its controls: Box - in a row or a column; Wrap - in a row that wraps to a new one when there is no room; Grid - in cells of one size; Group - in a row or a column inside a frame with a caption. Each view has its own properties."
+msgstr "Як компонування розташовує свої елементи: Лінія - у рядок або в стовпець; Перенесення - у рядок, що переноситься на новий, коли місця немає; Сітка - у клітинки одного розміру; Група - у рядок або в стовпець усередині рамки із заголовком. Кожен вигляд має свої властивості."
+
+#: src/engine/frmserver/visualView/controlEnum.h
+#: src/engine/frmserver/visualView/ctrl/layout.h
+msgctxt "layout view"
+msgid "Box"
+msgstr "Лінія"
+
+#: src/engine/frmserver/visualView/controlEnum.h
+#: src/engine/frmserver/visualView/ctrl/layout.h
+msgctxt "layout view"
+msgid "Wrap"
+msgstr "Перенесення"
+
+#: src/engine/frmserver/visualView/controlEnum.h
+#: src/engine/frmserver/visualView/ctrl/layout.h
+msgctxt "layout view"
+msgid "Grid"
+msgstr "Сітка"
+
+#: src/engine/frmserver/visualView/controlEnum.h
+#: src/engine/frmserver/visualView/ctrl/layout.h
+msgctxt "layout view"
+msgid "Group"
+msgstr "Група"
+
+#: src/engine/frmserver/visualView/ctrl/layout.cpp
+#, c-format
+msgid "Layout '%s' has a view this version does not know (%d); it is laid out as a box."
+msgstr "Компонування '%s' має вигляд, невідомий цій версії (%d); його розташовано як Лінію."
+
+#: src/engine/frmserver/visualView/ctrl/tableBox.h
+msgid "What the column's cells are for: Input - typed into; Flag - on or off, a check box; Label - shown, not edited. Allowed by the column's type: Input and Label for any, Flag for a Boolean; a column of another type turns into an Input. Each view has its own properties and events; the source, the title, the header and the footer are the column's in every view."
+msgstr "Для чого клітинки колонки: Введення - у них вводять; Прапорець - увімкнено чи вимкнено, прапорець; Напис - показуються, не редагуються. Дозволені типом колонки: Введення і Напис - для будь-якого, Прапорець - для булевого; колонка іншого типу стає Введенням. Кожен вигляд має свої властивості й події; джерело, заголовок, шапка і підвал - колонки за будь-якого вигляду."
+
+#: src/engine/frmserver/visualView/ctrl/tableBoxColumn.cpp
+#, c-format
+msgid "Column '%s' has a view this version does not know (%d); it is shown as Input."
+msgstr "Колонка '%s' має вигляд, невідомий цій версії (%d); її показано як Введення."
+
+#: src/engine/frmserver/visualView/ctrl/static.h
+msgid "Static"
+msgstr "Оформлення"
+
+#: src/engine/frmserver/visualView/ctrl/static.h
+msgctxt "static"
+msgid "View"
+msgstr "Вигляд"
+
+#: src/engine/frmserver/visualView/ctrl/static.h
+msgid "What the static shows: Text - its title, a heading or a note; Line - a line across or down, separating parts of the form. Each view has its own properties."
+msgstr "Що показує оформлення: Текст - свій заголовок, підпис або примітку; Роздільник - лінію впоперек або вздовж, що відокремлює частини форми. Кожен вигляд має свої властивості."
+
+#: src/engine/frmserver/visualView/controlEnum.h
+#: src/engine/frmserver/visualView/ctrl/static.h
+msgctxt "static view"
+msgid "Text"
+msgstr "Текст"
+
+#: src/engine/frmserver/visualView/controlEnum.h
+#: src/engine/frmserver/visualView/ctrl/static.h
+msgctxt "static view"
+msgid "Line"
+msgstr "Роздільник"
+
+#: src/engine/frmserver/visualView/ctrl/static.cpp
+#, c-format
+msgid "Static '%s' has a view this version does not know (%d); it is shown as Text."
+msgstr "Оформлення '%s' має вигляд, невідомий цій версії (%d); його показано як Текст."
+
+#: src/engine/frmserver/visualView/ctrl/frame.h
+#: src/engine/frmserver/visualView/ctrl/notebook.h
+msgid "Pages"
+msgstr "Сторінки"
+
+#: src/engine/frmserver/visualView/ctrl/frame.h
+msgid "Text area"
+msgstr "Текстове поле"
+
+#: src/engine/frmserver/visualView/ctrl/frame.h
+msgid "Chart"
+msgstr "Діаграма"

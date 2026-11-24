@@ -28,15 +28,15 @@
 // Command bar — a CONTAINER layer object (the shared runtime/property/metadata base is
 // ibValueLayerObject). Holds its commands + the AutoFill flag; a client draws it from the frame.
 
-// Collect every tablebox under `frame` (recursive) — the form's tables, each vending its OWN commands.
-static void CollectTableboxes(ibValueFrame* frame, std::vector<ibValueFrame*>& out)
+// Collect every table under `frame` (recursive) — the form's tables, each vending its OWN commands.
+static void CollectTables(ibValueFrame* frame, std::vector<ibValueFrame*>& out)
 {
 	if (frame == nullptr)
 		return;
 	if (frame->GetClassType() == g_controlTableBoxCLSID)
 		out.push_back(frame);
 	for (unsigned int i = 0; i < frame->GetChildCount(); i++)
-		CollectTableboxes(frame->GetChild(i), out);
+		CollectTables(frame->GetChild(i), out);
 }
 
 // The three command sections of a form, in display order. GatherFormCommands labels its entries with
@@ -166,9 +166,9 @@ std::vector<ibCommandSourceEntry> GatherFormCommands(ibValueForm* form)
 			}
 		}
 	}
-	std::vector<ibValueFrame*> tableboxes;
-	CollectTableboxes(form, tableboxes);
-	for (ibValueFrame* table : tableboxes) {
+	std::vector<ibValueFrame*> tables;
+	CollectTables(form, tables);
+	for (ibValueFrame* table : tables) {
 		// A table bound to the form's MAIN source has its OWN command interface SUPPRESSED — the form toolbar
 		// already serves those commands. So its commands are reachable ONLY through the form (section 2 "Form"
 		// above), NOT as a separate table sub-group here; listing them would duplicate the suppressed interface.

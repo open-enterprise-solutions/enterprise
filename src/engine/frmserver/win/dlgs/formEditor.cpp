@@ -16,7 +16,7 @@
 namespace {
 
 // WHAT A PERSON MAY ARRANGE — cut here, by the desktop's list (ibValueFrame::GetAllowedUserProperty): each control
-// under its id, the rows of those it has (a sizer item's are its own), and the controls in it. The client's controls
+// under its id, the rows of those it has (its sizer item's among them, attached), and the controls in it. The client's controls
 // declare none: they show what this says.
 void AppendControl(ibDataNode& controls, ibValueFrame* control)
 {

@@ -33,6 +33,7 @@
 #include "backend/system/value/valueType.h"         // ibValueTypeDescription — an attribute's type, as the list reads it
 #include "core/serialize/dataBuilder.h"                // a control's saved node and its state
 #include "frmserver/visualView/controlEnum.h"         // a button's Representation, a tile among it
+#include "frmserver/visualView/visualHost.h"          // a form's document — a demonstration's takes no modification
 #include "protocol/protocol.h"                       // the state a client reads a tile from
 #include "protocol/protocolDesigner.h"   // ibProtocol::ibView::ibFormDesigner
 #include "backend/backend_mainFrame.h"               // a frame so the form can be born
@@ -1476,7 +1477,7 @@ TEST(RuntimeTest, LinqBlockSkip_NoJoin) {
 		wxT("  outer = New Array; outer.Add(1); outer.Add(2); outer.Add(3);\n")
 		wxT("  q = from a in outer skip 1 select a;\n")
 		wxT("  If q.Count() <> 2 Then Return -1; EndIf;\n")
-		// `select a` answers with the rows themselves, as ToTable makes them: a number is no row, so it
+		// `select a` answers with the rows themselves, as ToValueTable makes them: a number is no row, so it
 		// is the one column, `Value` (2026-11-14, L3 — it was a projected column named `Field1`). See
 		// KeptPayload above for why this is a table rather than the array it used to be.
 		wxT("  Return q[0].Value * 10 + q[1].Value;\n")
@@ -4003,7 +4004,7 @@ TEST(RuntimeTest, AColumnUnloadedIntoAnArraySumsAndAveragesItsNumbers) {
 	ibCompileCode cc(wxT("test"), wxT("memory"), false);
 	ASSERT_TRUE(TryCompile(cc,
 		wxT("var n public; var total public; var mean public; var projected public;\n")
-		wxT("var t; t = New Table;\n")
+		wxT("var t; t = New ValueTable;\n")
 		wxT("t.Columns.AddColumn(\"A\");\n")
 		wxT("var r; r = t.Add(); r.A = 1;\n")
 		wxT("r = t.Add(); r.A = 2;\n")
@@ -4031,7 +4032,7 @@ TEST(RuntimeTest, AColumnUnloadedIntoAnArraySumsAndAveragesItsNumbers) {
 }
 
 // A query answers with a table, so an aggregate walks ROWS: with nothing named they were added as they were, a row plus
-// a row is text, and `(from x in arr select x).Sum()` answered `TableRow` (2026-11-19, the demo base). The aggregate
+// a row is text, and `(from x in arr select x).Sum()` answered `ValueTableRow` (2026-11-19, the demo base). The aggregate
 // hands each row the verb with the column the call names (ibValueModelReturnLine::DispatchLinqMethod) - on the
 // dispatcher's road and on a chain the loop would have compiled; a Select still compiles and makes its own values. A
 // row is never added unnamed, of one column or several: the column is said, not guessed.
@@ -4045,7 +4046,7 @@ TEST(RuntimeTest, AnAggregateOverRowsTakesTheColumnItIsNamed) {
 		wxT("total = q.Sum(\"Value\"); low = q.Min(\"Value\"); high = q.Max(\"Value\"); mean = q.Average(\"Value\");\n")
 		wxT("filtered = q.Where(Function(r) Return r.Value > 1 EndFunction).Sum(\"Value\");\n")
 		wxT("projected = q.Select(Function(r) Return r.Value * 10 EndFunction).Sum();\n")
-		wxT("var t; t = New Table; t.Columns.AddColumn(\"A\"); t.Columns.AddColumn(\"B\");\n")
+		wxT("var t; t = New ValueTable; t.Columns.AddColumn(\"A\"); t.Columns.AddColumn(\"B\");\n")
 		wxT("var r; r = t.Add(); r.A = 1; r.B = 2;\n")
 		wxT("r = t.Add(); r.A = 10; r.B = 20;\n")
 		wxT("second = t.Sum(\"B\");\n")
@@ -4055,7 +4056,7 @@ TEST(RuntimeTest, AnAggregateOverRowsTakesTheColumnItIsNamed) {
 		wxT("Except\n")
 		wxT("  unnamed = True;\n")
 		wxT("EndTry;\n")
-		wxT("var words; words = New Table; words.Columns.AddColumn(\"Name\");\n")
+		wxT("var words; words = New ValueTable; words.Columns.AddColumn(\"Name\");\n")
 		wxT("r = words.Add(); r.Name = \"bolt\";\n")
 		wxT("notAdded = False;\n")
 		wxT("Try\n")
@@ -4097,7 +4098,7 @@ TEST(RuntimeTest, TableColumnsFindAColumnByNameOrAnswerUndefined) {
 	ibCompileCode cc(wxT("test"), wxT("memory"), false);
 	ASSERT_TRUE(TryCompile(cc,
 		wxT("var found public; var foundName public; var missing public; var before public; var after public;\n")
-		wxT("var t; t = New Table;\n")
+		wxT("var t; t = New ValueTable;\n")
 		wxT("t.Columns.AddColumn(\"Amount\");\n")
 		wxT("t.Columns.AddColumn(\"Note\");\n")
 		wxT("before = t.Columns.Count();\n")
@@ -4304,7 +4305,7 @@ TEST_F(FormRuntime, AFormScriptAddsAndRemovesAnAttribute) {
 		wxT("EndProcedure\n")
 		// What the attribute is FOR: a value of a complex type a control is bound to and shows.
 		wxT("Procedure BindTable(Table)\n")
-		wxT("  ThisForm.Attributes.Add(\"Prices\", New TypeDescription(\"Table\"));\n")
+		wxT("  ThisForm.Attributes.Add(\"Prices\", New TypeDescription(\"ValueTable\"));\n")
 		wxT("  ThisForm.Prices.Columns.AddColumn(\"Price\", New TypeDescription(\"Number\"));\n")
 		wxT("  Row = ThisForm.Prices.Add();\n")
 		wxT("  Row.Price = 42;\n")
@@ -4376,9 +4377,9 @@ TEST_F(FormRuntime, AFormScriptAddsAndRemovesAnAttribute) {
 	EXPECT_THROW(pu.CallAsProc(wxT("Remove"), added), ibBackendCoreException);
 
 	// The table is bound by the path the script wrote, and what it shows is the attribute's own table, row and all.
-	// The table is made as ThisForm.Controls.CreateControl makes it: `Type("Tablebox")` would ask an application,
+	// The table is made as ThisForm.Controls.CreateControl makes it: `Type("Table")` would ask an application,
 	// and this form has none.
-	ibValueModelTableBox* table = dynamic_cast<ibValueModelTableBox*>(form->CreateControl(ibT("Tablebox"), form));
+	ibValueModelTableBox* table = dynamic_cast<ibValueModelTableBox*>(form->CreateControl(ibT("Table"), form));
 	ASSERT_NE(table, nullptr);
 	ibValue shown(static_cast<ibValue*>(table));
 	ASSERT_TRUE(pu.CallAsProc(wxT("BindTable"), shown));
@@ -4568,6 +4569,26 @@ TEST_F(TileForm, TheStateCarriesTheNoteForATileAlone) {
 		ASSERT_NE(beside, nullptr);
 		EXPECT_FALSE(State(*beside).FindField(ibProtocol::ibForm::ibState::Note).has_value()) << "a note is a tile's";
 	}
+}
+
+// A FORM TRIED OUT IN THE DESIGNER IS NEVER MODIFIED (Max, 2026-11-24: "the demo form ignores any change of being
+// modified" — a date typed into one asked, on close, to save what nothing saves). The demonstration's document refuses
+// the mark, and the form, which holds it as its document says, holds none either; a running form's document takes it.
+// The form is TileForm's: born against the session's frame, with the metadata a form lives on.
+struct FormDocument : TileForm {};
+
+TEST_F(FormDocument, ADemonstrationTakesNoModification) {
+	ibFormVisualDocumentDemo demonstration(static_cast<ibValueForm*>(m_form));
+	demonstration.Modify(true);
+	EXPECT_FALSE(demonstration.IsModified());
+	EXPECT_FALSE(m_form->IsModified());
+}
+
+TEST_F(FormDocument, ARunningFormsDocumentTakesIt) {
+	ibFormVisualDocument document(static_cast<ibValueForm*>(m_form));
+	document.Modify(true);
+	EXPECT_TRUE(document.IsModified());
+	EXPECT_TRUE(m_form->IsModified());
 }
 
 // A list form's DataSource is a dynamic list. It already knows its source

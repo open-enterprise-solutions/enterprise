@@ -1583,7 +1583,7 @@ public:
 		Aggregate,
 		WhereIndexed,
 		SelectIndexed,
-		ToTable,        // materialise into the built-in value table (data sources / Queryable)
+		ToValueTable,   // materialise into the built-in value table (data sources / Queryable)
 		SelectMany,     // flatten: fn(elem) -> a source, and its elements are yielded in turn
 
 		// ⚠ APPENDED, AND NEW ONES GO AFTER THESE. The enum value is what

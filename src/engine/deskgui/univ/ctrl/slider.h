@@ -99,6 +99,12 @@ public:
     wxOrientation GetOrientation() const
         { return IsVert() ? wxVERTICAL : wxHORIZONTAL; }
 
+    // SEAM vs univ: NOT EDITABLE - the value is shown, and the slider takes the focus, the keys and the mouse, but moves
+    // nothing (a view-only form, a read-only binding). Not Enable(false): the slider is not greyed. Named as the box's
+    // (ibCheckBox::SetEditable).
+    void SetEditable(bool editable) { m_isEditable = editable; }
+    bool IsEditable() const { return m_isEditable; }
+
     // do we have labels?
     bool HasLabels() const
         { return ((GetWindowStyle() & wxSL_LABELS) != 0) &&
@@ -230,6 +236,9 @@ private:
 
     // the state of the thumb (wxCONTROL_XXX constants sum)
     int m_thumbFlags;
+
+    // does the person move the value? (SetEditable)
+    bool m_isEditable = true;
 
     wxDECLARE_EVENT_TABLE();
     wxDECLARE_DYNAMIC_CLASS(ibSlider);

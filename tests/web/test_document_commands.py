@@ -51,7 +51,7 @@ class DocumentCommands(PageTest):
     def test_text_typed_reaches_the_server_before_the_save(self):
         page = self.start({'tabs': [form(commands=[SAVE])]})
         self.row('Item 1').wait_for()
-        page.locator('oes-textctrl wa-input input').fill('42')
+        page.locator('oes-field wa-input input').fill('42')
         page.keyboard.press('Control+s')
         self.sent()
         methods = page.evaluate('window.fake.calls.map((call) => call.method)')
@@ -66,7 +66,7 @@ class DocumentCommands(PageTest):
     def test_undo_in_a_text_field_is_the_fields_own(self):
         page = self.start({'tabs': [form(commands=[UNDO])]})
         self.row('Item 1').wait_for()
-        page.locator('oes-textctrl wa-input input').fill('42')
+        page.locator('oes-field wa-input input').fill('42')
         page.keyboard.press('Control+z')
         self.stays()
 

@@ -165,4 +165,4 @@ void ibValueGridBox::OnCellLeftClick(ibGridEvent& event)
 	Send(ibProtocol::ibEvent::ibKind::Cell, args);
 }
 
-CONTROL_REGISTER(ibValueGridBox, ibProtocol::ibForm::ibType::Gridbox)
+CONTROL_REGISTER(ibValueGridBox, ibProtocol::ibForm::ibType::Spreadsheet)

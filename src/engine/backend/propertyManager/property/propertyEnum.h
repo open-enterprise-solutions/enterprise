@@ -57,7 +57,13 @@ public:
 
 #include "backend/compiler/enumUnit.h"
 
-template <typename valEnumProp>
+// ⭐ THE VALUES OFFERED ARE THE ENUMERATION'S — and, where a FILTER follows it, those its owner takes: a member function
+// of the property's owner, `bool (Owner::*)(valueEnumType) const`, asked of each value when the list is drawn (a field's
+// View: what its source's type allows — Max, 2026-11-24, "a number may be a switch, a Boolean a flag"). None given — the
+// enumeration whole. A value the filter refuses is not offered, and still read (HasEnumValue: a form's view is read
+// before its source); the owner's door refuses it (OnPropertyChanging). Still `ibPropertyEnum` to every client — a
+// template goes by its own name (ibTypeInfoName) — so a filter is registered nowhere.
+template <typename valEnumProp, auto filter = nullptr>
 class ibPropertyEnum : public ibPropertyEnumBase {
 	using valueEnumType = typename valEnumProp::valEnumType;
 public:
@@ -112,11 +118,22 @@ protected:
 		ibPropertyChoiceList list;
 		for (unsigned int idx = 0; idx < m_enumCreator->GetEnumCount(); idx++) {
 			const long id = static_cast<long>(m_enumCreator->GetEnumValue(idx));
+			if constexpr (filter != nullptr) {
+				if (!IsTaken(filter, m_owner, m_enumCreator->GetEnumValue(idx)))
+					continue;
+			}
 			list.Add(id, m_enumCreator->GetEnumName(idx), m_enumCreator->GetEnumDesc(idx), ibVariant(static_cast<int>(id)));
 		}
 		return list;
 	}
 private:
+	// The owner's answer for a value; an owner of another class, or none, takes every one.
+	template <typename Owner>
+	static bool IsTaken(bool (Owner::*question)(valueEnumType) const, const ibPropertyObject* owner, valueEnumType value) {
+		const Owner* const asked = dynamic_cast<const Owner*>(owner);
+		return asked == nullptr || (asked->*question)(value);
+	}
+
 	ibValuePtr<valEnumProp> m_enumCreator = ibValue::CreateObject<valEnumProp>();
 };
 

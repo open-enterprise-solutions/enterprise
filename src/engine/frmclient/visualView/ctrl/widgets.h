@@ -6,63 +6,11 @@
 #include "frmclient/visualView/ctrl/window.h"
 #include "deskgui/univ/panel.h"
 
-class ibStaticText;
-class ibTextCtrl;
 class ibButton;
-class ibCheckBox;
-class ibRadioButton;
-class ibSlider;
-class ibGauge;
-class ibStaticLine;
 class ibTextEditor;
 
 // THE WIDGETS OF A VIEW — the old desktop's, each on the control it drew with, now
 // drawing what the node says.
-
-// A caption — and, bound, the value beside it, a link where there is something to open.
-class ibValueStaticText : public ibValueWindow {
-public:
-	ibValueStaticText(ibVisualHostClient& host, long long controlId) : ibValueWindow(host, controlId) {}
-
-	virtual void Create(wxWindow* parent, const ibProtocolNode& node) override;
-	virtual void Update(const ibProtocolNode& node) override;
-	virtual wxWindow* GetWindow() const override;
-
-private:
-	ibStaticText* m_staticText = nullptr;
-};
-
-// A field. What is typed is the person's until it is committed — Enter, or the focus gone: the server is told the
-// typing started (Input) and given the text then (Change); a frame drawn in between does not overwrite it.
-class ibValueTextCtrl : public ibValueWindow {
-public:
-	ibValueTextCtrl(ibVisualHostClient& host, long long controlId) : ibValueWindow(host, controlId) {}
-
-	virtual void Create(wxWindow* parent, const ibProtocolNode& node) override;
-	virtual void Update(const ibProtocolNode& node) override;
-	virtual wxWindow* GetWindow() const override;
-	// a field's: the platform style's field background, as the server makes one (ibValueTextCtrl's default)
-	virtual wxColour GetPlatformBackground() const override;
-
-	virtual bool SaveEdit(ibViewEdit& edit) const override;
-	virtual void RestoreEdit(const ibViewEdit& edit) override;
-
-private:
-	void Commit();
-	// The text the field shows while nobody types into it: the server's — and under a mask, where the person stands in
-	// the field, the text the mask is typed over, laid into it; elsewhere an empty text is the mask's skeleton.
-	void ShowText(bool focused);
-
-	void OnTextInput(wxCommandEvent& event);
-	void OnTextEnter(wxCommandEvent& event);
-	void OnSetFocus(wxFocusEvent& event);
-	void OnKillFocus(wxFocusEvent& event);
-
-	ibTextCtrl* m_textCtrl = nullptr;
-	bool        m_editing = false;   // typed into, not committed yet
-	wxString    m_text;              // the server's Text — what the field shows at rest
-	wxString    m_editText;          // …and its EditText: the text the mask is typed over, where Text is not
-};
 
 // A TEXT BOX — the desktop's text editor, many lines: the State's Text shown, ReadOnly or typed into. What is typed is the
 // person's until the box loses its focus, then goes back whole (Change {Text}), as a field's does.
@@ -95,59 +43,6 @@ private:
 
 	ibButton*      m_button = nullptr;
 	ibProtocolNode m_members;   // a copy — the frame changes under a handle into it
-};
-
-class ibValueCheckbox : public ibValueWindow {
-public:
-	ibValueCheckbox(ibVisualHostClient& host, long long controlId) : ibValueWindow(host, controlId) {}
-
-	virtual void Create(wxWindow* parent, const ibProtocolNode& node) override;
-	virtual void Update(const ibProtocolNode& node) override;
-	virtual wxWindow* GetWindow() const override;
-
-private:
-	ibCheckBox* m_checkbox = nullptr;
-};
-
-// A radio button — shown selected as the State says; it has no data source, and its click stays on the client, as the
-// desktop's did.
-class ibValueRadioButton : public ibValueWindow {
-public:
-	ibValueRadioButton(ibVisualHostClient& host, long long controlId) : ibValueWindow(host, controlId) {}
-
-	virtual void Create(wxWindow* parent, const ibProtocolNode& node) override;
-	virtual void Update(const ibProtocolNode& node) override;
-	virtual wxWindow* GetWindow() const override;
-
-private:
-	ibRadioButton* m_radioButton = nullptr;
-};
-
-// A slider between its ends, its thumb where the form put it; moved, it stays on the client, as the desktop's did. Its
-// orientation is what it is built with — turned, it is built anew (ibVisualHostClient's shape).
-class ibValueSlider : public ibValueWindow {
-public:
-	ibValueSlider(ibVisualHostClient& host, long long controlId) : ibValueWindow(host, controlId) {}
-
-	virtual void Create(wxWindow* parent, const ibProtocolNode& node) override;
-	virtual void Update(const ibProtocolNode& node) override;
-	virtual wxWindow* GetWindow() const override;
-
-private:
-	ibSlider* m_slider = nullptr;
-};
-
-// A progress bar, filled to its value of its range. Its orientation is what it is built with, as a slider's is.
-class ibValueGauge : public ibValueWindow {
-public:
-	ibValueGauge(ibVisualHostClient& host, long long controlId) : ibValueWindow(host, controlId) {}
-
-	virtual void Create(wxWindow* parent, const ibProtocolNode& node) override;
-	virtual void Update(const ibProtocolNode& node) override;
-	virtual wxWindow* GetWindow() const override;
-
-private:
-	ibGauge* m_gauge = nullptr;
 };
 
 // An HTML box — the page its form's code set (the State's Page), the box's whole content.
@@ -190,19 +85,6 @@ public:
 
 private:
 	ibPanel* m_panel = nullptr;
-};
-
-// A line. Its orientation is what it is built with — a line turned is built anew (ibVisualHostClient's shape).
-class ibValueStaticLine : public ibValueWindow {
-public:
-	ibValueStaticLine(ibVisualHostClient& host, long long controlId) : ibValueWindow(host, controlId) {}
-
-	virtual void Create(wxWindow* parent, const ibProtocolNode& node) override;
-	virtual void Update(const ibProtocolNode& node) override;
-	virtual wxWindow* GetWindow() const override;
-
-private:
-	ibStaticLine* m_staticLine = nullptr;
 };
 
 #endif

@@ -107,5 +107,5 @@ function isRow(element) {
 
 /** A notebook's page: a window with a box of its own. @param {Element} element */
 function isPage(element) {
-	return element.localName === 'oes-notebookpage';
+	return element.localName === 'oes-page';
 }
