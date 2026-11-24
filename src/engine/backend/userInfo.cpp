@@ -3,6 +3,7 @@
 #include "appData.h"   // user_table macro
 #include "databaseLayer/databaseQueryBuilder.h"   // L2 door — the whole sys_user DAO rides this (no raw ibDatabaseLayer / result set)
 #include "databaseLayer/databaseErrorCodes.h"
+#include "backend_exception.h"   // ibBackendCoreException — a save refused for its name
 #include "core/memory/memoryStream.h"
 
 namespace {
@@ -116,6 +117,14 @@ void FillFromRow(ibQueryResult& row, ibUserInfo& info)
 	try { if (reader.r_chunk(eBlockLang, chunkLang)) ReadLanguageChunk(chunkLang, info); } catch (...) {}
 }
 
+// ⭐ A NAME IS ONE ACCOUNT, however it is spelled (#376): the name is kept as it was typed, and two are one when they
+// differ only in case or in the spaces around them. A second "admin" beside "Admin" was another row, and a login by
+// that name took whichever the base read first.
+bool IsSameName(const ibString& name, const ibString& other)
+{
+	return name.TrimAll().IsSameAs(other.TrimAll(), /*caseSensitive*/false);
+}
+
 } // namespace
 
 // Project exactly the columns FillFromRow consumes — guid / name / fullName / binaryData.
@@ -147,22 +156,23 @@ ibUserInfo ibUserInfo::Read(const ibGuid& userGuid)
 	return info;
 }
 
+// "ADMIN", " admin " find "Admin": every road that names a user (the login, a job's run-as, MCP) comes through here, so
+// none of them tells two spellings apart. Matched over the names (ListAll, no blob) in the engine's own fold — the same
+// on every driver (SQLite's LOWER folds no letter past ASCII).
 ibUserInfo ibUserInfo::Read(const ibString& userName)
 {
-	ibUserInfo info;
-	if (userName.IsEmpty())
-		return info;
+	if (userName.TrimAll().IsEmpty())
+		return ibUserInfo();
 
 	try {
-		ibDatabaseQueryBuilder q;
-		ibQueryResult result = q.ExecuteIR(SysUserRowQuery(
-			ibBinOp(ibQueryBinOp::Eq, ibCol(ibT("name")), ibConst(ibValue(userName)))));
-		if (result.Next())
-			FillFromRow(result, info);
+		for (const Brief& user : ListAll()) {
+			if (IsSameName(user.m_strUserName, userName))
+				return Read(ibGuid(user.m_strUserGuid));
+		}
 	}
 	catch (...) { /* no table / passive scope — empty info */ }
 
-	return info;
+	return ibUserInfo();
 }
 
 bool ibUserInfo::HasAny()
@@ -198,6 +208,14 @@ std::vector<ibUserInfo::Brief> ibUserInfo::ListAll()
 
 bool ibUserInfo::Save(const ibUserInfo& info)
 {
+	// ⭐ A NAME NOBODY ELSE HOLDS, OR NONE IS SAVED — refused with the reason, which the person can act on: no name,
+	// or one another account is known by. The account itself may keep its name or spell it anew ("admin" → "Admin").
+	if (info.m_strUserName.TrimAll().IsEmpty())
+		ibBackendCoreException::Error(_("A user must have a name."));
+	const ibUserInfo holder = Read(info.m_strUserName);
+	if (holder.IsOk() && ibGuid(holder.m_strUserGuid) != ibGuid(info.m_strUserGuid))
+		ibBackendCoreException::Error(_("A user named \"%s\" already exists."), holder.m_strUserName);
+
 	// The default-ctor builder resolves to CurrentHolder = the db_query channel's thread holder —
 	// the dedicated channel for infra-level writes that must stay out of any user session's TX
 	// (the pool never resolves a session holder here; session work passes its holder explicitly).

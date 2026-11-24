@@ -18376,3 +18376,11 @@ msgstr "Виберіть вид документа"
 #: src/engine/backend/metaCollection/partial/documentJournalMetadata.cpp
 msgid "%s: at least one document is required - a journal lists documents, and its rows are theirs"
 msgstr "%s: потрібен хоча б один документ - журнал перелічує документи, і його рядки - їхні рядки"
+
+#: src/engine/backend/userInfo.cpp
+msgid "A user must have a name."
+msgstr "Користувач повинен мати ім'я."
+
+#: src/engine/backend/userInfo.cpp
+msgid "A user named \"%s\" already exists."
+msgstr "Користувач з іменем \"%s\" вже існує."

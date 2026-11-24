@@ -502,6 +502,10 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
 - **`SELECT ALLOWED` covers the queries nested in it.** Each nested query read its own word, so
   `SELECT ALLOWED … WHERE x IN (SELECT … FROM T)`, with `T` closed to the user, was refused whole, and so was a
   `FROM (SELECT …)` over it. Said once, the word now holds for every query inside.
+- **A user name is one account, in whatever case it is typed.** `Admin`, `admin` and ` ADMIN ` sign in the same
+  account, kept as it was named; a second account of a name already held is refused - *A user named "Admin" already
+  exists* - and so is a name of only spaces. A second `admin` beside `Admin` was another account, and a login by that
+  name took whichever the base read first.
 - **A list leaves the group it stood in when its settings change.** A grouping taken off in *List settings*, or
   settings restored, left the list inside the group it had been entered: the flat rows under the old group's line,
   and a step into a folder answered "The folder is no longer in the list". The list goes back to its top, on the

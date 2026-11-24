@@ -17776,3 +17776,11 @@ msgstr ""
 #: src/engine/backend/metaCollection/partial/documentJournalMetadata.cpp
 msgid "%s: at least one document is required - a journal lists documents, and its rows are theirs"
 msgstr ""
+
+#: src/engine/backend/userInfo.cpp
+msgid "A user must have a name."
+msgstr ""
+
+#: src/engine/backend/userInfo.cpp
+msgid "A user named \"%s\" already exists."
+msgstr ""
