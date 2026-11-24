@@ -28,6 +28,7 @@
 
 
 #include <functional>
+#include <memory>
 #include <set>
 #include <vector>
 
@@ -77,7 +78,7 @@ public:
 	// THE COMPENSATION LEDGER — one inverse action per DDL the first commit ran on a pre-existing
 	// object, in execution order (the caller replays it in REVERSE). Built by Execute from the
 	// statements themselves; empty off a barrier dialect. See connectionHolder.h.
-	std::vector<std::function<void(ibDatabaseLayer*)>> UndoActions() const;
+	std::vector<std::function<void(const std::shared_ptr<ibDatabaseLayer>&)>> UndoActions() const;
 
 	// Does the target dialect accept a multi-clause ALTER TABLE (one statement, several ADD/DROP)? The
 	// structure builder folds a batch into one ALTER when true, and into one statement per clause when
@@ -87,8 +88,9 @@ public:
 	// The connection this save runs on, for a LEVEL that executes what it rendered — L2-2 applies
 	// its own trigger / view bundle, the same way ibDatabaseQueryBuilder runs the queries it builds.
 	// This door hands over the connection and never sees a SQL string: no floor above L2 handles
-	// one, which is the whole reason both halves of level 2 exist.
-	ibDatabaseLayer& Connection() const;
+	// one, which is the whole reason both halves of level 2 exist. The holder's pinned connection
+	// (holder->EnsureConnection()), or db_query when no holder was given.
+	std::shared_ptr<ibDatabaseLayer> Connection() const;
 
 	// Reset the per-save tracking (created-set + deferred queue) on this builder's barrier holder.
 	// Call at the start of a save. No longer static — the state lives on the holder, not a global.
@@ -96,7 +98,6 @@ public:
 
 private:
 	bool BarrierActive() const;   // the target dialect's m_ddlCommitBeforeData
-	ibDatabaseLayer* conn() const;   // holder->EnsureConnection() (the pinned conn), or db_query when no holder
 
 	// The holder that OWNS the per-save barrier state (created-set + deferred queue): this builder's
 	// explicit holder, or the current thread / session holder when none was given (the db_query channel).

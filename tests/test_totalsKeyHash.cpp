@@ -89,28 +89,28 @@ using Totals = std::map<ibString, std::pair<double, double>>;
 
 struct KeyHashFix : ::testing::Test
 {
-	ibDatabaseLayerSQLite db;
+	std::shared_ptr<ibDatabaseLayerSQLite> db = std::make_shared<ibDatabaseLayerSQLite>();
 	ibMaterializationDialect mat = DialectWithHash();
 	bool ready = false;
 
 	void SetUp() override
 	{
-		if (!db.Open(wxT(":memory:"))) {
+		if (!db->Open(wxT(":memory:"))) {
 			GTEST_SKIP() << "in-memory SQLite unavailable";
 			return;
 		}
-		db.RunQuery(wxT("CREATE TABLE Reg9 ("
+		db->RunQuery(wxT("CREATE TABLE Reg9 ("
 			"id INTEGER PRIMARY KEY, period_ TEXT, wh TEXT, owner_ TEXT, qty NUMERIC, rectype_ INTEGER)"));
 
 		// ⭐ THE TABLE HAS NO KEY OF ITS OWN — its ONLY unique index is over the hash
 		// column, which is precisely the shape the mechanism produces. If the digest
 		// were wrong, two logical keys would share a row (or one would split in two)
 		// and the parity below would say so.
-		db.RunQuery(wxT("CREATE TABLE Reg9_T ("
+		db->RunQuery(wxT("CREATE TABLE Reg9_T ("
 			"period_ TEXT NOT NULL, wh TEXT NOT NULL, owner_ TEXT NOT NULL, "
 			"keyhash_ TEXT, "
 			"qty_in NUMERIC NOT NULL DEFAULT 0, qty_out NUMERIC NOT NULL DEFAULT 0)"));
-		db.RunQuery(wxT("CREATE UNIQUE INDEX Reg9_T_PK ON Reg9_T (keyhash_)"));
+		db->RunQuery(wxT("CREATE UNIQUE INDEX Reg9_T_PK ON Reg9_T (keyhash_)"));
 
 		const ibMaterializeSql sql = RenderMaterialization(
 			MakeSpec(/*withKeyHash*/ true), &mat, ibDatabaseLayerSQLite::Dialect());
@@ -118,14 +118,14 @@ struct KeyHashFix : ::testing::Test
 		ready = true;
 	}
 
-	void TearDown() override { db.Close(); }
+	void TearDown() override { db->Close(); }
 
 	void Move(int id, const wxChar* period, const wxChar* wh, const wxChar* owner, double qty, int rectype)
 	{
-		db.RunQuery(wxT("INSERT INTO Reg9 (id, period_, wh, owner_, qty, rectype_) VALUES (%d, '%s', '%s', '%s', %s, %d)"),
+		db->RunQuery(wxT("INSERT INTO Reg9 (id, period_, wh, owner_, qty, rectype_) VALUES (%d, '%s', '%s', '%s', %s, %d)"),
 			id, period, wh, owner, wxString::FromCDouble(qty), rectype);
 	}
-	void Erase(int id) { db.RunQuery(wxT("DELETE FROM Reg9 WHERE id = %d"), id); }
+	void Erase(int id) { db->RunQuery(wxT("DELETE FROM Reg9 WHERE id = %d"), id); }
 
 	// ⚠ THE QUERY GOES IN AS A %s ARGUMENT. It carries '%' of its own (strftime masks), and the driver
 	// entry is a printf-style vararg — passing it directly makes the CRT read `%Y` as a specifier and
@@ -134,14 +134,14 @@ struct KeyHashFix : ::testing::Test
 	Totals Read(const ibString& sql)
 	{
 		Totals out;
-		ibDatabaseResultSet* rs = db.RunQueryWithResults(wxT("%s"), sql);
+		ibDatabaseResultSet* rs = db->RunQueryWithResults(wxT("%s"), sql);
 		if (rs == nullptr)
 			return out;
 		while (rs->Next()) {
 			const ibString key = rs->GetResultString(1) + wxT("|") + rs->GetResultString(2) + wxT("|") + rs->GetResultString(3);
 			out[key] = { rs->GetResultDouble(4), rs->GetResultDouble(5) };
 		}
-		db.CloseResultSet(rs);   // the LAYER owns the result set; closing it on the object alone leaves its registry dangling
+		db->CloseResultSet(rs);   // the LAYER owns the result set; closing it on the object alone leaves its registry dangling
 		return out;
 	}
 
@@ -165,10 +165,10 @@ struct KeyHashFix : ::testing::Test
 	long RowCount(const ibString& table)
 	{
 		long n = -1;
-		ibDatabaseResultSet* rs = db.RunQueryWithResults(wxT("%s"), wxT("SELECT COUNT(*) FROM ") + table);
+		ibDatabaseResultSet* rs = db->RunQueryWithResults(wxT("%s"), wxT("SELECT COUNT(*) FROM ") + table);
 		if (rs != nullptr) {
 			if (rs->Next()) n = rs->GetResultInt(1);
-			db.CloseResultSet(rs);
+			db->CloseResultSet(rs);
 		}
 		return n;
 	}
@@ -176,10 +176,10 @@ struct KeyHashFix : ::testing::Test
 	ibString OneString(const ibString& sql)
 	{
 		ibString value;
-		ibDatabaseResultSet* rs = db.RunQueryWithResults(wxT("%s"), sql);
+		ibDatabaseResultSet* rs = db->RunQueryWithResults(wxT("%s"), sql);
 		if (rs != nullptr) {
 			if (rs->Next()) value = rs->GetResultString(1);
-			db.CloseResultSet(rs);
+			db->CloseResultSet(rs);
 		}
 		return value;
 	}
@@ -195,14 +195,14 @@ struct KeyHashFix : ::testing::Test
 // and the unique index goes on covering the key itself.
 TEST(KeyHashDecision, NoCeilingDeclared_NeverHashes)
 {
-	ibDatabaseLayerSQLite db;
-	if (!db.Open(wxT(":memory:")))
+	auto db = std::make_shared<ibDatabaseLayerSQLite>();
+	if (!db->Open(wxT(":memory:")))
 		GTEST_SKIP() << "in-memory SQLite unavailable";
 
-	EXPECT_EQ(0u, db.GetDialect().m_maxIndexSegments);
+	EXPECT_EQ(0u, db->GetDialect().m_maxIndexSegments);
 	EXPECT_FALSE(ibKeyNeedsHash(db, 3));
 	EXPECT_FALSE(ibKeyNeedsHash(db, 64));   // no ceiling means no ceiling, at any width
-	db.Close();
+	db->Close();
 }
 
 // The rule itself, stated over the two facts it reads. Written against a locally
@@ -373,7 +373,7 @@ TEST_F(KeyHashFix, RebuiltRowsAreGivenTheIdentityTheTriggerWouldHave)
 	if (!ready) GTEST_SKIP();
 
 	// A rebuild's row: the key, the figures, no digest.
-	db.RunQuery(wxT("INSERT INTO Reg9_T (period_, wh, owner_, qty_in, qty_out) "
+	db->RunQuery(wxT("INSERT INTO Reg9_T (period_, wh, owner_, qty_in, qty_out) "
 	                "VALUES ('2026-03-01 00:00:00', 'W1', 'O1', 100, 0)"));
 	EXPECT_TRUE(OneString(wxT("SELECT COALESCE(keyhash_, '') FROM Reg9_T")).IsEmpty());
 

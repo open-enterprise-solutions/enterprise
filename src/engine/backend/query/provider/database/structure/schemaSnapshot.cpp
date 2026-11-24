@@ -152,7 +152,7 @@ void ibDeclareDerivedKey(ibSchemaTable& table, const ibString& tableName,
 
 	// The key must be UNIQUE: it is what the delta upserts against, and a duplicate would let two rows
 	// accumulate half the movements each — totals that are individually plausible and jointly wrong.
-	if (db_query == nullptr || !ibKeyNeedsHash(*db_query, fieldCount, keyBytes)) {
+	if (db_query == nullptr || !ibKeyNeedsHash(db_query, fieldCount, keyBytes)) {
 		table.Index(indexName, keyCols, /*unique*/ true);
 		return;
 	}
@@ -233,7 +233,7 @@ void ibDeclareLookupIndex(ibSchemaTable& table, const ibString& indexName,
 	// CREATE INDEX the engine refused (see ibKeyNeedsHash).
 	std::function<bool(size_t, size_t)> fits;
 	if (db_query != nullptr)
-		fits = [](size_t fields, size_t bytes) { return ibIndexKeyFits(*db_query, fields, bytes); };
+		fits = [](size_t fields, size_t bytes) { return ibIndexKeyFits(db_query, fields, bytes); };
 
 	const std::vector<std::shared_ptr<const ibBackendQueryColumn>> lookup = ibFitLookupColumns(cols, closing, fits);
 	if (!lookup.empty())
@@ -788,7 +788,8 @@ int AlterTable(ibStructureBatch& batch, const ibSchemaTable& old, const ibSchema
 // where the failure rolls the apply back and names nothing useful (a register's records key was declared
 // with no width check at all, ROADMAP §1o). Measured the way a derived key is (ibDeclareDerivedKey): fields
 // as the index counts them, bytes generously. Asked only of an index this apply CREATES — see the caller.
-bool IndexKeyFitsOrSay(const ibDatabaseLayer& conn, const ibSchemaTable& t, const ibSchemaIndex& i, ibRestructureInfo* report)
+bool IndexKeyFitsOrSay(const std::shared_ptr<ibDatabaseLayer>& conn, const ibSchemaTable& t, const ibSchemaIndex& i,
+                       ibRestructureInfo* report)
 {
 	size_t fieldCount = 0;
 	size_t keyBytes = 0;
@@ -805,7 +806,7 @@ bool IndexKeyFitsOrSay(const ibDatabaseLayer& conn, const ibSchemaTable& t, cons
 		report->AppendError(ibString::Format(
 			_("Index %s of %s is too wide for this base: %u fields and about %u bytes of key, where it holds %u and %u - shorten a field of it or take one out of the key (%s)"),
 			i.m_name, LedgerName(t), (unsigned)fieldCount, (unsigned)keyBytes,
-			ibIndexFieldCapacity(conn), conn.GetMaxIndexKeyBytes(), fields));
+			ibIndexFieldCapacity(conn), conn->GetMaxIndexKeyBytes(), fields));
 	return false;
 }
 
@@ -1035,7 +1036,7 @@ int DiffSnapshots(const ibSchemaSnapshot* baseline, const ibSchemaSnapshot& targ
 			// commit dropped (structureBuilder.cpp::UndoAppliedDdl). Comes out with the two-phase
 			// apply if that is ever reworked. Data tables stay unguarded: their absence is a defect
 			// and must refuse.
-			if (old.m_derived && !schema.Connection().TableExists(old.m_name))
+			if (old.m_derived && !schema.Connection()->TableExists(old.m_name))
 				continue;
 
 			ibStructureBatch batch(old.m_name);   // a drop needs no metadata
@@ -1115,9 +1116,9 @@ int DiffSnapshots(const ibSchemaSnapshot* baseline, const ibSchemaSnapshot& targ
 		// triggers, asked of the table they stand on. Rebuilt, it is regenerated from the movements, so
 		// the totals come back RIGHT rather than empty.
 		if (cur.m_derived && old != nullptr
-		    && (ibDerivedState::NeedsRegeneration(old, cur) || !schema.Connection().TableExists(old->m_name))) {
+		    && (ibDerivedState::NeedsRegeneration(old, cur) || !schema.Connection()->TableExists(old->m_name))) {
 			ibDropMaterialization(schema.Connection(), old->m_materialize.ToRenderSpec(old->m_name));
-			if (schema.Connection().TableExists(old->m_name)) {
+			if (schema.Connection()->TableExists(old->m_name)) {
 				ibStructureBatch drop(old->m_name);
 				drop.DropTable();   // no shape: a derived table is never re-created by the compensation
 				drop.Flush(schema);

@@ -547,19 +547,19 @@ const ibChar* ShardColumnName()      { return ibT("shard_"); }
 const ibChar* PeriodUnitColumnName() { return ibT("unit_"); }
 const ibChar* KeyHashColumnName()    { return ibT("keyhash_"); }
 
-unsigned int ibIndexFieldCapacity(const ibDatabaseLayer& conn)
+unsigned int ibIndexFieldCapacity(const std::shared_ptr<ibDatabaseLayer>& conn)
 {
-	return conn.GetDialect().m_maxIndexSegments;
+	return conn->GetDialect().m_maxIndexSegments;
 }
 
-bool ibIndexKeyFits(const ibDatabaseLayer& conn, size_t keyFieldCount, size_t keyByteWidth)
+bool ibIndexKeyFits(const std::shared_ptr<ibDatabaseLayer>& conn, size_t keyFieldCount, size_t keyByteWidth)
 {
 	const unsigned int segCeiling  = ibIndexFieldCapacity(conn);
-	const unsigned int byteCeiling = conn.GetMaxIndexKeyBytes();
+	const unsigned int byteCeiling = conn->GetMaxIndexKeyBytes();
 	return (segCeiling == 0 || keyFieldCount <= segCeiling) && (byteCeiling == 0 || keyByteWidth <= byteCeiling);
 }
 
-bool ibKeyNeedsHash(const ibDatabaseLayer& conn, size_t keyFieldCount, size_t keyByteWidth)
+bool ibKeyNeedsHash(const std::shared_ptr<ibDatabaseLayer>& conn, size_t keyFieldCount, size_t keyByteWidth)
 {
 	// ⭐⭐ TWO CEILINGS, AND EITHER ONE FORCES THE HASH. The field COUNT — a reference dimension is
 	// three physical fields, so a key of five columns is already fifteen segments — and the byte
@@ -581,19 +581,19 @@ bool ibKeyNeedsHash(const ibDatabaseLayer& conn, size_t keyFieldCount, size_t ke
 	// then declares the index it meant, and the engine refuses it at apply time in its own words. A
 	// hash column nothing fills would be worse — a UNIQUE index over a column of NULLs enforces
 	// nothing on any engine, and it LOOKS like it enforces the key.
-	const ibMaterializationDialect* mat = conn.GetMaterializationDialect();
+	const ibMaterializationDialect* mat = conn->GetMaterializationDialect();
 	return mat != nullptr && !mat->m_keyHashDigest.IsEmpty();
 }
 
-bool ibFillKeyHashes(ibDatabaseLayer& conn, const ibMaterializeSpec& spec,
+bool ibFillKeyHashes(const std::shared_ptr<ibDatabaseLayer>& conn, const ibMaterializeSpec& spec,
                      const ibMaterializationDialect* dialectOrNull)
 {
-	const ibMaterializationDialect* mat = dialectOrNull != nullptr ? dialectOrNull : conn.GetMaterializationDialect();
+	const ibMaterializationDialect* mat = dialectOrNull != nullptr ? dialectOrNull : conn->GetMaterializationDialect();
 	if (mat == nullptr || spec.m_table.IsEmpty() || spec.m_keyHashColumn.IsEmpty())
 		return true;   // nothing carries an identity here — not a failure
 
 	// Off the table, every part — the unit too — is read as stored, so the unit handed over truncates nothing.
-	const ibString digest = RenderKeyHash(spec, *mat, conn.GetDialect(), ibEmptyString, spec.m_periodUnits.front(),
+	const ibString digest = RenderKeyHash(spec, *mat, conn->GetDialect(), ibEmptyString, spec.m_periodUnits.front(),
 	                                      EffectiveShardCount(spec, mat));
 	if (digest.IsEmpty())
 		return true;
@@ -620,9 +620,10 @@ bool ibFillKeyHashes(ibDatabaseLayer& conn, const ibMaterializeSpec& spec,
 	return fill.Apply(conn);
 }
 
-bool ibFoldShards(ibDatabaseLayer& conn, const ibMaterializeSpec& spec, ibTotalsPeriod unit, const ibDateTime& period)
+bool ibFoldShards(const std::shared_ptr<ibDatabaseLayer>& conn, const ibMaterializeSpec& spec, ibTotalsPeriod unit,
+                  const ibDateTime& period)
 {
-	const ibMaterializationDialect* mat = conn.GetMaterializationDialect();
+	const ibMaterializationDialect* mat = conn->GetMaterializationDialect();
 	if (mat == nullptr || spec.m_table.IsEmpty() || spec.m_deltas.empty() || EffectiveShardCount(spec, mat) < 2)
 		return true;   // nothing split here: an engine that never splits (SQLite) keeps no shard column at all
 
@@ -632,9 +633,9 @@ bool ibFoldShards(ibDatabaseLayer& conn, const ibMaterializeSpec& spec, ibTotals
 	// The period is BOUND — a date spelled into the text is a dialect question this level has no dictionary entry
 	// for. The unit is a literal, as the trigger writes it.
 	ibString periodValue = ibT("?");
-	if (conn.GetDialect().m_paramStyle == ibParamStyle::DollarN)
+	if (conn->GetDialect().m_paramStyle == ibParamStyle::DollarN)
 		periodValue = ibT("$1");
-	else if (conn.GetDialect().m_paramStyle == ibParamStyle::Colon)
+	else if (conn->GetDialect().m_paramStyle == ibParamStyle::Colon)
 		periodValue = ibT(":p1");
 
 	// ONE PASS OVER THE SLICE: group it by key, keep the keys spread over several shards, and match each back to
@@ -684,7 +685,7 @@ bool ibFoldShards(ibDatabaseLayer& conn, const ibMaterializeSpec& spec, ibTotals
 
 	// Run here, at the level that wrote the text (ExistsByProbe, Apply) — no SQL string leaves L2-2. A statement is
 	// data, not a format.
-	ibPreparedStatement* stmt = conn.PrepareStatement(ibT("%s"), sql);
+	ibPreparedStatement* stmt = conn->PrepareStatement(ibT("%s"), sql);
 	if (stmt == nullptr)
 		ibBackendQueryException::Throw(ibBackendQueryException::Kind::TranslationFailure, sql);
 	try {
@@ -693,11 +694,11 @@ bool ibFoldShards(ibDatabaseLayer& conn, const ibMaterializeSpec& spec, ibTotals
 		stmt->RunQuery();
 	}
 	catch (const ibCoreException&) {
-		conn.CloseStatement(stmt);
-		conn.ResetErrorCodes();   // a conflict is the caller's to handle — it must not resurface later as a stale error
+		conn->CloseStatement(stmt);
+		conn->ResetErrorCodes();   // a conflict is the caller's to handle — it must not resurface later as a stale error
 		throw;
 	}
-	conn.CloseStatement(stmt);
+	conn->CloseStatement(stmt);
 	return true;
 }
 
@@ -1527,7 +1528,7 @@ ibQueryRelPtr RenderMaterializedRead(const ibMaterializeReadSpec& spec, const ib
 
 // Does the object a guarded drop targets actually exist? A read, never DDL — so it cannot fail the
 // way a speculative DROP does, and the transaction stays intact whatever the answer.
-static bool ExistsByProbe(ibDatabaseLayer& conn, const ibString& probe)
+static bool ExistsByProbe(const std::shared_ptr<ibDatabaseLayer>& conn, const ibString& probe)
 {
 	// "NOT THERE" AND "COULD NOT ASK" ARE OPPOSITE ANSWERS, and this used to return both as `false`.
 	// The probe reads a system table, so it does not fail on an absent object — it returns no rows.
@@ -1540,22 +1541,22 @@ static bool ExistsByProbe(ibDatabaseLayer& conn, const ibString& probe)
 	// stops the restructuring where the fault is instead of letting it walk on half-applied.
 	ibDatabaseResultSet* rs = nullptr;
 	try {
-		rs = conn.RunQueryWithResults(ibT("%s"), probe);   // a statement is data, not a format (ibRunRendered)
+		rs = conn->RunQueryWithResults(ibT("%s"), probe);   // a statement is data, not a format (ibRunRendered)
 	}
 	catch (const ibCoreException&) {
-		conn.ResetErrorCodes();
+		conn->ResetErrorCodes();
 		throw;
 	}
 	const bool found = (rs != nullptr && rs->Next());
 	if (rs != nullptr)
-		conn.CloseResultSet(rs);
-	conn.ResetErrorCodes();
+		conn->CloseResultSet(rs);
+	conn->ResetErrorCodes();
 	return found;
 }
 
 // Execution stays at the level that rendered the text — the same arrangement as
 // ibDatabaseQueryBuilder running what it built. No SQL string crosses out of L2-2.
-bool ibMaterializeSql::Apply(ibDatabaseLayer& conn) const
+bool ibMaterializeSql::Apply(const std::shared_ptr<ibDatabaseLayer>& conn) const
 {
 	// A drop must not be ATTEMPTED unless the object is there. Swallowing the failure is not
 	// enough: on Firebird a failed DDL rolls the transaction back, so dropping something that was
@@ -1576,10 +1577,10 @@ bool ibMaterializeSql::Apply(ibDatabaseLayer& conn) const
 		// "Never fatal" has to hold however the DRIVER reports the failure — and it is the
 		// EXCEPTION that reports it. See the note on the create loop below.
 		try {
-			conn.RunStatement(s.m_sql);
+			conn->RunStatement(s.m_sql);
 		}
 		catch (const ibCoreException&) {
-			conn.ResetErrorCodes();   // the object was not there — that is the normal first apply
+			conn->ResetErrorCodes();   // the object was not there — that is the normal first apply
 		}
 	}
 
@@ -1618,7 +1619,7 @@ bool ibMaterializeSql::Apply(ibDatabaseLayer& conn) const
 	// only DDL that does not pass through ibExecuteDdl, so no log holds a copy either.
 	for (const ibRenderedStatement& s : m_create) {
 		try {
-			conn.RunStatement(s.m_sql);
+			conn->RunStatement(s.m_sql);
 		}
 		catch (const ibCoreException& err) {
 			ibBackendQueryException::Throw(ibBackendQueryException::Kind::TranslationFailure,
@@ -1633,22 +1634,22 @@ bool ibMaterializeSql::Apply(ibDatabaseLayer& conn) const
 // comparing the text — the same test ibApplyMaterialization uses to decide it has nothing to do, so
 // there is one definition of "unchanged" rather than a second one written in terms of struct fields.
 // A caller above uses it to decide what to TELL the user; it never decides what to run.
-bool ibMaterializationEquivalent(ibDatabaseLayer& conn, const ibMaterializeSpec& a,
+bool ibMaterializationEquivalent(const std::shared_ptr<ibDatabaseLayer>& conn, const ibMaterializeSpec& a,
                                  const ibMaterializeSpec& b)
 {
-	const ibMaterializationDialect* mat = conn.GetMaterializationDialect();
+	const ibMaterializationDialect* mat = conn->GetMaterializationDialect();
 	if (mat == nullptr)
 		return true;   // nothing is maintained here, so nothing can differ
-	return RenderMaterialization(a, mat, conn.GetDialect()).CreateText()
-	    == RenderMaterialization(b, mat, conn.GetDialect()).CreateText();
+	return RenderMaterialization(a, mat, conn->GetDialect()).CreateText()
+	    == RenderMaterialization(b, mat, conn->GetDialect()).CreateText();
 }
 
-bool ibCanMaterialize(const ibDatabaseLayer& conn)
+bool ibCanMaterialize(const std::shared_ptr<ibDatabaseLayer>& conn)
 {
-	return conn.GetMaterializationDialect() != nullptr;
+	return conn != nullptr && conn->GetMaterializationDialect() != nullptr;
 }
 
-bool ibMaterializeSql::IsInstalled(ibDatabaseLayer& conn) const
+bool ibMaterializeSql::IsInstalled(const std::shared_ptr<ibDatabaseLayer>& conn) const
 {
 	if (m_create.empty())
 		return true;   // nothing is supposed to exist, so nothing can be missing
@@ -1658,14 +1659,14 @@ bool ibMaterializeSql::IsInstalled(ibDatabaseLayer& conn) const
 	return true;
 }
 
-ibMaterializeApply ibApplyMaterialization(ibDatabaseLayer& conn, const ibMaterializeSpec& spec,
+ibMaterializeApply ibApplyMaterialization(const std::shared_ptr<ibDatabaseLayer>& conn, const ibMaterializeSpec& spec,
                                           const ibMaterializeSpec* previous)
 {
 	// Both dictionaries come off the connection HERE. A caller that had to fetch them first would
 	// be a caller that knows what a dialect is — and the point of this level is that nothing above
 	// it does.
-	const ibMaterializationDialect* mat = conn.GetMaterializationDialect();
-	const ibMaterializeSql sql = RenderMaterialization(spec, mat, conn.GetDialect());
+	const ibMaterializationDialect* mat = conn->GetMaterializationDialect();
+	const ibMaterializeSql sql = RenderMaterialization(spec, mat, conn->GetDialect());
 	if (sql.IsEmpty())
 		return ibMaterializeApply::Unchanged;   // nothing to maintain on this driver
 
@@ -1673,7 +1674,7 @@ ibMaterializeApply ibApplyMaterialization(ibDatabaseLayer& conn, const ibMateria
 	// merely wasted DDL: on an engine that invalidates dependent plans it costs every register on
 	// every apply, and it makes the change log claim work that did not happen.
 	if (previous != nullptr) {
-		const ibMaterializeSql was = RenderMaterialization(*previous, mat, conn.GetDialect());
+		const ibMaterializeSql was = RenderMaterialization(*previous, mat, conn->GetDialect());
 		if (was.CreateText() == sql.CreateText() && sql.IsInstalled(conn))
 			return ibMaterializeApply::Unchanged;
 	}
@@ -1684,9 +1685,9 @@ ibMaterializeApply ibApplyMaterialization(ibDatabaseLayer& conn, const ibMateria
 	return ibMaterializeApply::Rebuilt;
 }
 
-bool ibDropMaterialization(ibDatabaseLayer& conn, const ibMaterializeSpec& spec)
+bool ibDropMaterialization(const std::shared_ptr<ibDatabaseLayer>& conn, const ibMaterializeSpec& spec)
 {
-	const ibMaterializationDialect* mat = conn.GetMaterializationDialect();
+	const ibMaterializationDialect* mat = conn->GetMaterializationDialect();
 	if (mat == nullptr || spec.m_table.IsEmpty() || spec.m_source.IsEmpty()) {
 		// ⚠ THREE DIFFERENT FACTS LEAVE BY THE SAME DOOR, AND THE ANSWER IS "nothing to drop" FOR ALL
 		// THREE. A driver with no materialization has genuinely nothing here; a spec with no table or

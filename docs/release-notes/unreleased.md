@@ -883,3 +883,7 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
   desktop's did not for a file never saved.
 - **A watch expression that fails says why.** Its row read `<error>` and nothing more: it now reads
   `<error: …>` with the reason, and a breakpoint's condition that fails is reported with it.
+- **A read no longer takes a second connection to ask what the base can do.** A `NOT IN` over a subquery, «in
+  hierarchy», a register's balances and its slice asked the driver through a connection of their own: under a session,
+  which holds one already, every such read took a second from the pool, and with a pool of one it waited thirty
+  seconds and was refused. They ask the connection the session holds.

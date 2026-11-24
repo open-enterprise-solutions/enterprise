@@ -1149,28 +1149,33 @@ private:
 // Each of these has exactly one thing to say and says it about a CONNECTION, because that is what
 // the answer depends on: not "does this product support X" but "can the driver I am holding do X".
 // A null layer answers NO / EMPTY rather than crashing — a passive pool is an ordinary state.
+// Where no read's connection is (a register's reading choosing its shape, a condition lowered with
+// no holder), the one asked is `db_query` — the connection the thread holds, or the base's first.
+// ⭐ NEVER ONE TAKEN FOR THE QUESTION: a scope of the thread's channel checks out a connection of
+// its own, and under a session, which holds its one, it waited — thirty seconds with a pool of one,
+// a second connection per read with more (DocumentJournalFix.AllowedReachesAnInSubquery, 2026-11-24).
 
 // GROUP BY ROLLUP — can the subtotal levels be folded by the SERVER, or must the result tier build
 // them? (FB5, PG yes; SQLite no.)
-BACKEND_API bool ibCanPushRollup(const ibDatabaseLayer* layer);
-BACKEND_API bool ibCanUseGrouping(const ibDatabaseLayer* layer);   // GROUPING(expr) — see ibSqlFeatures
+BACKEND_API bool ibCanPushRollup(const std::shared_ptr<ibDatabaseLayer>& layer);
+BACKEND_API bool ibCanUseGrouping(const std::shared_ptr<ibDatabaseLayer>& layer);   // GROUPING(expr) — see ibSqlFeatures
 
 // OVER (…) — can this driver rank and run totals ITSELF? A reading that folds periods, or picks the
 // row nearest a moment, is one pass with windows and a stack of self-joins without. (FB3+, PG,
 // SQLite 3.25+ yes; the ANSI baseline no.) Asked before choosing the SHAPE of the query — unlike
 // ibRenderOverClause, which refuses once a window has already been built.
-BACKEND_API bool ibCanPushWindow(const ibDatabaseLayer* layer);
+BACKEND_API bool ibCanPushWindow(const std::shared_ptr<ibDatabaseLayer>& layer);
 
 // WITH … AS (…) — can this driver read a query the statement NAMES? It is what lets a named result
 // of a package stay INSIDE the SQL: without it the named query has to come back as rows and be
 // joined here. (FB 2.1+, PG, SQLite 3.8.3+ yes; the ANSI baseline — ODBC — no.) Asked before
 // choosing the shape, unlike the renderer, which refuses once a WITH has already been built.
-BACKEND_API bool ibCanUseCte(const ibDatabaseLayer* layer);
+BACKEND_API bool ibCanUseCte(const std::shared_ptr<ibDatabaseLayer>& layer);
 
 // WITH RECURSIVE — can this driver walk a parent chain itself? It is what keeps «in hierarchy» inside the
 // SQL: without it the subtree has to be read here and sent back as a list. (FB 2.1+, PG, SQLite 3.8.3+
 // yes; ODBC no.)
-BACKEND_API bool ibCanWalkTree(const ibDatabaseLayer* layer);
+BACKEND_API bool ibCanWalkTree(const std::shared_ptr<ibDatabaseLayer>& layer);
 
 // (No `ibCanUseTempTables` here, and the reason is worth keeping: the per-driver temp facts'
 //  PRESENCE already IS that capability, and the one caller — the temp-table manager — needs the
@@ -1181,15 +1186,15 @@ BACKEND_API bool ibCanWalkTree(const ibDatabaseLayer* layer);
 // DDL THAT CHANGES A TABLE'S SHAPE, RUN. Render through this driver's dialect and execute — the two
 // halves were spelled at the callsite, which meant the caller built a renderer out of a dictionary
 // it had no other reason to hold. Returns the driver's own row count / status.
-BACKEND_API int ibExecuteDdl(ibDatabaseLayer* layer, const ibDdlStatement& ddl);
+BACKEND_API int ibExecuteDdl(const std::shared_ptr<ibDatabaseLayer>& layer, const ibDdlStatement& ddl);
 
 // DDL DURABILITY — does this engine keep DDL in the transaction, so a statement against a table
 // whose SHAPE this transaction just changed has to wait for the commit? (FB / PG yes, SQLite no.)
 // The barrier the schema builder runs on.
-BACKEND_API bool ibDdlCommitsBeforeData(const ibDatabaseLayer* layer);
+BACKEND_API bool ibDdlCommitsBeforeData(const std::shared_ptr<ibDatabaseLayer>& layer);
 
 // Can several column clauses ride ONE `ALTER TABLE`, or does each need a statement of its own?
-BACKEND_API bool ibAlterTableMultiClause(const ibDatabaseLayer* layer);
+BACKEND_API bool ibAlterTableMultiClause(const std::shared_ptr<ibDatabaseLayer>& layer);
 
 // ==========================================================================
 // ibQueryResult — RAII cursor. Move-only. Holds a shared_ptr to its

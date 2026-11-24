@@ -363,7 +363,7 @@ bool Collapse(const ibSchemaTable& derived, ibDatabaseConnectionHolder* holder)
 			ibConnectionScope scope(holder);
 			scope.SafeBeginTransaction(oneState);
 			try {
-				ibFoldShards(*scope.get(), rendered, unit, period);
+				ibFoldShards(scope.shared(), rendered, unit, period);
 			}
 			catch (const ibBackendDatabaseException& err) {
 				if (err.GetKind() != ibBackendDatabaseException::Kind::Deadlock &&

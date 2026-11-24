@@ -216,7 +216,7 @@ struct AcceptanceAccumulation : ::testing::Test {
 
 		const ibMaterializeSql sql = RenderMaterialization(render,
 			&ibDatabaseLayerSQLite::MaterializationDialect(), ibDatabaseLayerSQLite::Dialect());
-		ASSERT_TRUE(sql.Apply(*db)) << "the register's totals were not installed";
+		ASSERT_TRUE(sql.Apply(db)) << "the register's totals were not installed";
 
 		bool foundView = false;
 		for (const ibMaterializeView& view : readSpec.m_views) {

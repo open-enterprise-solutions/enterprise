@@ -45,7 +45,7 @@ public:
 
 	// ⚠ A SPACE OF ITS OWN, empty — a pool grows by cloning its first connection, and a read takes a space as a temp
 	// table takes its connection: what one read copies in, another does not see.
-	virtual ibDatabaseLayer* Clone() override;
+	virtual std::shared_ptr<ibDatabaseLayer> Clone() override;
 
 	virtual bool TableExists(const ibString& table) override;
 	virtual bool ViewExists(const ibString& view) override;

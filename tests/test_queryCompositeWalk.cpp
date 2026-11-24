@@ -207,7 +207,7 @@ struct QueryCompositeWalk : ::testing::Test {
 				continue;
 			const ibMaterializeSql sql = RenderMaterialization(table.m_materialize.ToRenderSpec(table.m_name),
 				&ibDatabaseLayerSQLite::MaterializationDialect(), ibDatabaseLayerSQLite::Dialect());
-			ASSERT_TRUE(sql.Apply(*db)) << "the register's totals were not installed";
+			ASSERT_TRUE(sql.Apply(db)) << "the register's totals were not installed";
 		}
 	}
 

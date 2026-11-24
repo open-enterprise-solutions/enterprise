@@ -54,7 +54,7 @@ public:
 	const ibRestructureInfo& GetChanges() const { return m_changes; }
 
 private:
-	ibDatabaseLayer* Conn() const;   // m_holder->EnsureConnection(), or db_query when no holder
+	std::shared_ptr<ibDatabaseLayer> Conn() const;   // m_holder->EnsureConnection(), or db_query when no holder
 	int FlushDeferred();             // barrier dialect (m_ddlCommitBeforeData): drain writes deferred past the DDL commit, own TX
 
 	// The compensation for that second phase failing: replay the barrier's undo ledger in reverse —

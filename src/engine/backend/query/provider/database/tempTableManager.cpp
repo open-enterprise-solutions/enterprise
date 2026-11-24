@@ -67,9 +67,10 @@ ibColumnType WidenForTemp(ibColumnRole role)
 std::mutex                       s_probeMutex;
 std::map<ibConnectionPool*, bool> s_probeCache;
 
-bool ProbeTempCapability(ibDatabaseConnectionHolder* holder, ibDatabaseLayer& connection, const ibTempTableDialect& dialect)
+bool ProbeTempCapability(ibDatabaseConnectionHolder* holder, const std::shared_ptr<ibDatabaseLayer>& connection,
+                         const ibTempTableDialect& dialect)
 {
-	if (connection.GetDialect().m_features.m_inMemory)
+	if (connection->GetDialect().m_features.m_inMemory)
 		return true;
 	ibConnectionPool* const base = holder != nullptr ? holder->GetPool() : nullptr;
 	{
@@ -114,7 +115,7 @@ bool ibTempTableManager::CanMaterialise(ibDatabaseConnectionHolder* holder)
 	if (!scope)
 		return false;
 	const ibTempTableDialect* dialect = scope->GetTempTableDialect();
-	return dialect != nullptr && ProbeTempCapability(holder, *scope.get(), *dialect);
+	return dialect != nullptr && ProbeTempCapability(holder, scope.shared(), *dialect);
 }
 
 std::unique_ptr<ibTempTableManager> ibTempTableManager::Materialise(ibDatabaseConnectionHolder* holder,
@@ -227,7 +228,7 @@ std::unique_ptr<ibTempTableManager> ibTempTableManager::Materialise(ibDatabaseCo
 	const ibTempTableDialect* dialect = scope->GetTempTableDialect();
 	if (dialect == nullptr)
 		return nullptr;
-	if (!ProbeTempCapability(holder, *scope.get(), *dialect))
+	if (!ProbeTempCapability(holder, scope.shared(), *dialect))
 		return nullptr;   // dialect present but this connection can't create temp tables (no DDL right / read-only) -> RAM
 	const bool interprets = scope->GetDialect().m_features.m_inMemory;
 

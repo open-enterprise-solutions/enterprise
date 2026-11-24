@@ -231,13 +231,13 @@ struct BACKEND_API ibMaterializeSql
 	// failed metadata update.
 	//
 	// Returns false if a CREATE failed (the caller aborts the apply); drop failures never fail.
-	bool Apply(ibDatabaseLayer& conn) const;
+	bool Apply(const std::shared_ptr<ibDatabaseLayer>& conn) const;
 
 	// Is everything this bundle would CREATE already in the database? Asked through the same
 	// existence probes the guarded drops use — a read, never DDL. Lets an apply leave an untouched
 	// register alone while still HEALING one whose objects went missing (a half-failed earlier
 	// apply, a hand-dropped view). A bundle that creates nothing is trivially installed.
-	bool IsInstalled(ibDatabaseLayer& conn) const;
+	bool IsInstalled(const std::shared_ptr<ibDatabaseLayer>& conn) const;
 
 	// INSPECTION for tests and diagnostics — reading the text, never a way to run it: Apply above
 	// takes the bundle, not a string, so text obtained here cannot be fed back in.
@@ -453,12 +453,13 @@ BACKEND_API ibQueryRelPtr RenderMovementRows(const ibMaterializeSpec& spec, cons
 
 // Can this driver maintain derived state at all? False for a driver with no materialization
 // dictionary (ODBC — it cannot know the engine underneath, so it cannot template a trigger).
-// Callers use it to decide whether a materialised read surface exists to query.
-BACKEND_API bool ibCanMaterialize(const ibDatabaseLayer& conn);
+// Callers use it to decide whether a materialised read surface exists to query. No connection
+// answers NO, as every ibCan* does (databaseQueryBuilder.h).
+BACKEND_API bool ibCanMaterialize(const std::shared_ptr<ibDatabaseLayer>& conn);
 
 // Whether two declarations render to the same bundle on this engine — the one definition of
 // "unchanged", shared with ibApplyMaterialization. Used to decide what to REPORT, never what to run.
-BACKEND_API bool ibMaterializationEquivalent(ibDatabaseLayer& conn, const ibMaterializeSpec& a,
+BACKEND_API bool ibMaterializationEquivalent(const std::shared_ptr<ibDatabaseLayer>& conn, const ibMaterializeSpec& a,
                                              const ibMaterializeSpec& b);
 
 // What an apply actually did — so the caller reports a rebuild only when one happened. An apply
@@ -479,7 +480,7 @@ enum class ibMaterializeApply { Unchanged, Rebuilt };
 // unchanged declaration is also PROBED, and a bundle whose objects went missing is rebuilt anyway.
 //
 // A driver that cannot materialise is Unchanged: its registers simply read from live aggregation.
-BACKEND_API ibMaterializeApply ibApplyMaterialization(ibDatabaseLayer& conn,
+BACKEND_API ibMaterializeApply ibApplyMaterialization(const std::shared_ptr<ibDatabaseLayer>& conn,
                                                       const ibMaterializeSpec& spec,
                                                       const ibMaterializeSpec* previous = nullptr);
 
@@ -492,7 +493,7 @@ BACKEND_API ibMaterializeApply ibApplyMaterialization(ibDatabaseLayer& conn,
 // movements become unwritable, and the failure surfaces far from the change that caused it.
 //
 // The spec passed here is the OLD one: it names the objects as they were created.
-BACKEND_API bool ibDropMaterialization(ibDatabaseLayer& conn, const ibMaterializeSpec& spec);
+BACKEND_API bool ibDropMaterialization(const std::shared_ptr<ibDatabaseLayer>& conn, const ibMaterializeSpec& spec);
 
 // Render the bundle. `mat` may be null (the driver cannot maintain derived state — ODBC), in
 // which case the result is EMPTY and the caller simply builds a plain table: the register keeps
@@ -542,12 +543,14 @@ BACKEND_API const ibChar* KeyHashColumnName();
 // enforces.
 // `keyByteWidth` 0 = not measured, and then only the field count decides (the behaviour before the
 // byte ceiling existed). See the body for why both are asked.
-BACKEND_API bool ibKeyNeedsHash(const ibDatabaseLayer& conn, size_t keyFieldCount, size_t keyByteWidth = 0);
+BACKEND_API bool ibKeyNeedsHash(const std::shared_ptr<ibDatabaseLayer>& conn, size_t keyFieldCount,
+                                size_t keyByteWidth = 0);
 
 // Does one index on this engine hold a key this wide — under BOTH ceilings, fields and bytes? The plain
 // question beneath the one above, for a declaration that wants a lookup index over as many leading
 // columns as will go (ibDeclareLookupIndex) and has no identity to move into a hash.
-BACKEND_API bool ibIndexKeyFits(const ibDatabaseLayer& conn, size_t keyFieldCount, size_t keyByteWidth);
+BACKEND_API bool ibIndexKeyFits(const std::shared_ptr<ibDatabaseLayer>& conn, size_t keyFieldCount,
+                                size_t keyByteWidth);
 
 // How many physical fields one index may cover here — 0 when the engine declares no limit.
 //
@@ -556,7 +559,7 @@ BACKEND_API bool ibIndexKeyFits(const ibDatabaseLayer& conn, size_t keyFieldCoun
 // stands on a digest and cannot serve a comparison of the fields it was made from. It is asked
 // THROUGH this level rather than read off a dictionary from up there — a dialect is L2's to read,
 // and the floor above has no business knowing one exists.
-BACKEND_API unsigned int ibIndexFieldCapacity(const ibDatabaseLayer& conn);
+BACKEND_API unsigned int ibIndexFieldCapacity(const std::shared_ptr<ibDatabaseLayer>& conn);
 
 // Give an identity to the rows that were written WITHOUT one — the rebuild's rows.
 //
@@ -572,7 +575,7 @@ BACKEND_API unsigned int ibIndexFieldCapacity(const ibDatabaseLayer& conn);
 // `mat` null = ask the connection, which is what production does. It is a parameter because a TEST
 // renders its bundle with a dialect of its own (RenderMaterialization takes one for the same reason),
 // and a fill that could only read the driver's would be untestable on the engine the suite runs on.
-BACKEND_API bool ibFillKeyHashes(ibDatabaseLayer& conn, const ibMaterializeSpec& spec,
+BACKEND_API bool ibFillKeyHashes(const std::shared_ptr<ibDatabaseLayer>& conn, const ibMaterializeSpec& spec,
                                  const ibMaterializationDialect* mat = nullptr);
 
 // ⭐⭐ FOLD ONE SLICE OF A SPLIT TABLE — the rows of one stored unit and one period — to one row per key.
@@ -595,7 +598,7 @@ BACKEND_API bool ibFillKeyHashes(ibDatabaseLayer& conn, const ibMaterializeSpec&
 // An engine that never splits (EffectiveShardCount 1 — SQLite) has nothing to fold: true at once, which also
 // spares it the MERGE it does not have. `unit` is ignored on a table that keeps one unit, `period` on a table
 // without a period. True when done or when nothing is split here; a refusal throws.
-BACKEND_API bool ibFoldShards(ibDatabaseLayer& conn, const ibMaterializeSpec& spec, ibTotalsPeriod unit,
-                              const ibDateTime& period);
+BACKEND_API bool ibFoldShards(const std::shared_ptr<ibDatabaseLayer>& conn, const ibMaterializeSpec& spec,
+                              ibTotalsPeriod unit, const ibDateTime& period);
 
 #endif // !__DATABASE_MATERIALIZE_BUILDER_H__

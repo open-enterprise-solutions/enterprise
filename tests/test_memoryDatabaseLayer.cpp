@@ -490,7 +490,7 @@ TEST(MemoryBase, ACloneIsASpaceOfItsOwn)
 	base.Run(ibCreateTable(ibT("T"), { Field("_A", ibTypeString(10)) }));
 	EXPECT_TRUE(db->TableExists(ibT("t")));
 	EXPECT_EQ(db->GetColumns(ibT("T")), (std::vector<ibString>{ ibT("_A") }));
-	std::unique_ptr<ibDatabaseLayer> clone(db->Clone());
+	const std::shared_ptr<ibDatabaseLayer> clone = db->Clone();
 	EXPECT_FALSE(clone->TableExists(ibT("T")));
 	EXPECT_TRUE(clone->GetTables().empty());
 }

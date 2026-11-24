@@ -136,7 +136,7 @@ void ibDatabaseLayer::Commit()
 	m_txAbortedBy.Clear();
 	// Release the holder's TX pin LAST: the layer stays alive through whatever other shared_ptr the
 	// caller holds (scope, pool entry after drop, etc.), and nothing below this line touches `this`.
-	ibConnectionPool::ClearActiveTxConnection(this);
+	ibConnectionPool::ClearActiveTxConnection(shared_from_this());
 }
 
 void ibDatabaseLayer::RollBack()
@@ -168,7 +168,7 @@ void ibDatabaseLayer::RollBack()
 	m_txDepth = 0;
 	m_txAborted = false;
 	m_txAbortedBy.Clear();
-	ibConnectionPool::ClearActiveTxConnection(this);
+	ibConnectionPool::ClearActiveTxConnection(shared_from_this());
 	MeasuredStep(this, ibT("ROLLBACK"), [this] { DoRollBack(); });
 }
 

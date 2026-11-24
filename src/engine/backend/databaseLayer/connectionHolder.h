@@ -112,7 +112,7 @@ public:
 	// INVERSE action (drop the added column, re-add the dropped one from its recorded shape, restore
 	// the altered type), appended in execution order and replayed in REVERSE when the second phase
 	// fails. Built from the statements this save itself issued — never from reading the database.
-	std::vector<std::function<void(ibDatabaseLayer*)>>& DdlUndoActions() { return m_ddlUndo; }
+	std::vector<std::function<void(const std::shared_ptr<ibDatabaseLayer>&)>>& DdlUndoActions() { return m_ddlUndo; }
 
 protected:
 	class ibConnectionPool* m_pool = nullptr;
@@ -121,7 +121,7 @@ private:
 	std::set<ibString>                 m_ddlCreated;
 	std::set<ibString>                 m_ddlShaped;
 	std::vector<std::function<bool()>> m_ddlDeferred;
-	std::vector<std::function<void(ibDatabaseLayer*)>> m_ddlUndo;
+	std::vector<std::function<void(const std::shared_ptr<ibDatabaseLayer>&)>> m_ddlUndo;
 };
 
 // ibSingleConnectionHolder — generic empty holder. The OES runtime

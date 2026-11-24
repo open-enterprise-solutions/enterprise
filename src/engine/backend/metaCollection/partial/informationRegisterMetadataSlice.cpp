@@ -203,7 +203,6 @@ ibQueryRamTable ibValueMetaObjectInformationRegister::ComputeSlice(
 			: (bound.m_excluding ? ibQueryBinOp::Gt : ibQueryBinOp::Ge);
 
 		ibQueryIR sliceIr;
-		ibConnectionScope scope;
 
 		// ⭐⭐ TWO SPELLINGS OF ONE SLICE, and which one is written depends on the engine.
 		//
@@ -217,7 +216,7 @@ ibQueryRamTable ibValueMetaObjectInformationRegister::ComputeSlice(
 		// baseline, i.e. ODBC and whatever derives from it). Same rule as a batched INSERT, which is
 		// VALUES on one engine and UNION ALL on another: a second SPELLING, not a second mechanism —
 		// and both must answer identically, which is what makes the pair testable.
-		if (ibCanPushWindow(scope.get())) {
+		if (ibCanPushWindow(db_query)) {
 			// PARTITION BY exactly what the aggregate road GROUPS BY — the period's type tag, the
 			// dimensions, the resources. Identical on purpose: partition the slice differently and the
 			// two roads stop answering the same question.

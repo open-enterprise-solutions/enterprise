@@ -554,7 +554,7 @@ bool ibValueMetaObjectAccountingRegister::HasMaterializedViews() const
 	// Presence of the driver's materialization dialect IS the capability: without it no view was ever
 	// created, so a reader must fall back to live aggregation over the movements rather than query a
 	// relation that does not exist.
-	return db_query != nullptr && ibCanMaterialize(*db_query);
+	return ibCanMaterialize(db_query);
 }
 
 std::shared_ptr<const ibBackendQueryable> ibValueMetaObjectAccountingRegister::GetTurnoverViewQueryable(bool creditSide) const

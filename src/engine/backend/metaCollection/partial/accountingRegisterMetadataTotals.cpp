@@ -5435,8 +5435,7 @@ bool ibAcctBalanceAndTurnoverQueryable::CanReadOnServer() const
 		// such a chart keeps the live path here.
 		if (AnyTurnoverOnlyKind(m_reg->GetChartOfAccounts()))
 			return false;
-		ibConnectionScope scope;
-		if (!ibCanPushWindow(scope.get()))
+		if (!ibCanPushWindow(db_query))
 			return false;   // no windows on this driver — the RAM road answers exactly as before
 	}
 
@@ -5466,8 +5465,7 @@ bool ibAcctBalanceAndTurnoverQueryable::CanReadOnServer() const
 			return false;
 		if (ibRegCalendarOf(m_begin.m_date, m_end.m_date, m_fold.m_unit).empty())
 			return false;
-		ibConnectionScope scope;
-		if (!ibCanPushWindow(scope.get()))
+		if (!ibCanPushWindow(db_query))
 			return false;   // no windows on this driver — the RAM road answers exactly as before
 	}
 

@@ -14,9 +14,9 @@
 
 // ⭐ THE BASE IN MEMORY'S EXECUTOR — where the dialect says the base computes in memory (ibSqlFeatures::m_inMemory), the
 // base IS ibDatabaseLayerMemory, and its interpreter is handed the IR as it is; none for a base that speaks SQL.
-static ibQueryInterpreter* ibInterpreterOf(ibDatabaseLayer& conn)
+static ibQueryInterpreter* ibInterpreterOf(const std::shared_ptr<ibDatabaseLayer>& conn)
 {
-	return conn.GetDialect().m_features.m_inMemory ? static_cast<ibDatabaseLayerMemory&>(conn).GetQueryInterpreter() : nullptr;
+	return conn->GetDialect().m_features.m_inMemory ? static_cast<ibDatabaseLayerMemory&>(*conn).GetQueryInterpreter() : nullptr;
 }
 
 // --------------------------------------------------------------------------
@@ -269,26 +269,27 @@ struct ibStatementClock {
 } // namespace
 
 // …a read: answered with the number its rows are told by — none while nothing measures, or when no rows came back.
-static std::uint64_t ibMeasuredRead(const ibStatementClock& clock, const ibDatabaseLayer* conn, const ibString& sql,
-                                    ibPreparedStatement* stmt, const ibDatabaseResultSet* rs,
+static std::uint64_t ibMeasuredRead(const ibStatementClock& clock, const std::shared_ptr<ibDatabaseLayer>& conn,
+                                    const ibString& sql, ibPreparedStatement* stmt, const ibDatabaseResultSet* rs,
                                     const ibDatabaseProfiler::ibValues& values)
 {
 	if (!clock.m_measured)
 		return 0;
 	const ibDatabaseProfiler::ibPlan plan = [stmt] { return stmt->GetPlan(); };
 	if (rs == nullptr) {
-		ibDatabaseProfiler::Sql(conn, sql, clock.Spent(), 0, plan, values);
+		ibDatabaseProfiler::Sql(conn.get(), sql, clock.Spent(), 0, plan, values);
 		return 0;
 	}
-	return ibDatabaseProfiler::SqlWithResults(conn, sql, clock.Spent(), plan, values);
+	return ibDatabaseProfiler::SqlWithResults(conn.get(), sql, clock.Spent(), plan, values);
 }
 
 // …a write: the rows it changed.
-static void ibMeasuredWrite(const ibStatementClock& clock, const ibDatabaseLayer* conn, const ibString& sql,
-                            ibPreparedStatement* stmt, int changed, const ibDatabaseProfiler::ibValues& values)
+static void ibMeasuredWrite(const ibStatementClock& clock, const std::shared_ptr<ibDatabaseLayer>& conn,
+                            const ibString& sql, ibPreparedStatement* stmt, int changed,
+                            const ibDatabaseProfiler::ibValues& values)
 {
 	if (clock.m_measured)
-		ibDatabaseProfiler::Sql(conn, sql, clock.Spent(), changed > 0 ? static_cast<std::uint64_t>(changed) : 0,
+		ibDatabaseProfiler::Sql(conn.get(), sql, clock.Spent(), changed > 0 ? static_cast<std::uint64_t>(changed) : 0,
 			[stmt] { return stmt->GetPlan(); }, values);
 }
 
@@ -296,19 +297,19 @@ static void ibMeasuredWrite(const ibStatementClock& clock, const ibDatabaseLayer
 // by the text `render` writes for it in the driver's dialect, called only while a measurement runs. The text names the
 // run as a prepared statement's names it; nothing is prepared from it, and there is no plan to ask.
 template <typename Render>
-static std::uint64_t ibMeasuredRead(const ibStatementClock& clock, const ibDatabaseLayer* conn, Render render,
-                                    const std::vector<ibValue>& external)
+static std::uint64_t ibMeasuredRead(const ibStatementClock& clock, const std::shared_ptr<ibDatabaseLayer>& conn,
+                                    Render render, const std::vector<ibValue>& external)
 {
 	if (!clock.m_measured)
 		return 0;
 	const ibDatabaseProfiler::ibClock::duration spent = clock.Spent();
 	const ibRenderedQuery rendered = render();
-	return ibDatabaseProfiler::SqlWithResults(conn, rendered.m_sql, spent, {}, ibValuesOfPlan(rendered.m_params, external));
+	return ibDatabaseProfiler::SqlWithResults(conn.get(), rendered.m_sql, spent, {}, ibValuesOfPlan(rendered.m_params, external));
 }
 
 template <typename Render>
-static void ibMeasuredWrite(const ibStatementClock& clock, const ibDatabaseLayer* conn, Render render, int changed,
-                            const std::vector<ibValue>& external)
+static void ibMeasuredWrite(const ibStatementClock& clock, const std::shared_ptr<ibDatabaseLayer>& conn, Render render,
+                            int changed, const std::vector<ibValue>& external)
 {
 	if (!clock.m_measured)
 		return;
@@ -316,7 +317,7 @@ static void ibMeasuredWrite(const ibStatementClock& clock, const ibDatabaseLayer
 	const ibRenderedQuery rendered = render();
 	if (rendered.m_sql.IsEmpty())
 		return;   // a statement the dialect has no text for (ANALYZE) runs as nothing, as on a driver that reads text
-	ibDatabaseProfiler::Sql(conn, rendered.m_sql, spent, changed > 0 ? static_cast<std::uint64_t>(changed) : 0, {},
+	ibDatabaseProfiler::Sql(conn.get(), rendered.m_sql, spent, changed > 0 ? static_cast<std::uint64_t>(changed) : 0, {},
 		ibValuesOfPlan(rendered.m_params, external));
 }
 
@@ -344,7 +345,7 @@ static ibQueryResult ibRunRendered(const std::shared_ptr<ibDatabaseLayer>& conn,
 
 		ibDatabaseResultSet* rs = stmt->RunQueryWithResults();
 		return ibQueryResult(conn, stmt, rs, std::move(runs), cancel,
-			ibMeasuredRead(clock, conn.get(), rendered.m_sql, stmt, rs, ibValuesOfPlan(rendered.m_params, externalParams)));
+			ibMeasuredRead(clock, conn, rendered.m_sql, stmt, rs, ibValuesOfPlan(rendered.m_params, externalParams)));
 	}
 	// ⭐⭐ THE STATEMENT RIDES WITH THE REFUSAL. A database's complaint is about a text the engine
 	// wrote and the caller has never seen: "Column unknown FLD1043_D. At line 1, column 57" — a
@@ -516,10 +517,10 @@ ibQueryResult ibDatabaseQueryBuilder::ExecuteIR(const ibQueryIR& ir, const std::
 			_("Query layer could not obtain a database connection from the holder."));
 
 	// ⭐ A BASE THAT EXECUTES THE IR ITSELF IS HANDED IT — no text is written for it (databaseQueryInterpreter.h).
-	if (ibQueryInterpreter* interpreter = ibInterpreterOf(*conn)) {
+	if (ibQueryInterpreter* interpreter = ibInterpreterOf(conn)) {
 		const ibStatementClock clock;
 		ibMemoryTable rows = interpreter->Execute(ir, externalParams);
-		const std::uint64_t statement = ibMeasuredRead(clock, conn.get(),
+		const std::uint64_t statement = ibMeasuredRead(clock, conn,
 			[&] { return ibQueryRenderer(conn->GetDialect()).Render(ir); }, externalParams);
 		return ibQueryResult(conn, std::move(rows), ibCancelOfReader(m_scope), statement);
 	}
@@ -552,7 +553,7 @@ ibQueryResult ibDatabaseQueryBuilder::ExecuteIR(const std::vector<ibQueryIR>& ru
 		return ibQueryResult(conn, nullptr, nullptr);   // nothing to run: a cursor with no rows
 
 	// …each run executed in turn and their rows read as one — every run is the same statement, so the same fields.
-	if (ibQueryInterpreter* interpreter = ibInterpreterOf(*conn)) {
+	if (ibQueryInterpreter* interpreter = ibInterpreterOf(conn)) {
 		const ibStatementClock clock;
 		ibMemoryTable all = interpreter->Execute(runs.front(), externalParams);
 		std::vector<ibMemoryRow>& rows = all.m_rows.GetWriteRows();   // a table's, perhaps: a copy then
@@ -561,7 +562,7 @@ ibQueryResult ibDatabaseQueryBuilder::ExecuteIR(const std::vector<ibQueryIR>& ru
 			for (ibMemoryRow& row : run.m_rows.TakeRows())
 				rows.push_back(std::move(row));
 		}
-		const std::uint64_t statement = ibMeasuredRead(clock, conn.get(),
+		const std::uint64_t statement = ibMeasuredRead(clock, conn,
 			[&] { return ibQueryRenderer(conn->GetDialect()).Render(runs.front()); }, externalParams);
 		return ibQueryResult(conn, std::move(all), ibCancelOfReader(m_scope), statement);
 	}
@@ -632,10 +633,10 @@ int ibDatabaseQueryBuilder::Execute(const ibDdlStatement& ddl)
 		ibBackendSessionException::Throw(ibBackendSessionException::Kind::NoConnection,
 			_("Query layer could not obtain a database connection from the holder."));
 
-	if (ibQueryInterpreter* interpreter = ibInterpreterOf(*conn)) {
+	if (ibQueryInterpreter* interpreter = ibInterpreterOf(conn)) {
 		const ibStatementClock clock;
 		const int changed = interpreter->Execute(ddl);
-		ibMeasuredWrite(clock, conn.get(), [&] {
+		ibMeasuredWrite(clock, conn, [&] {
 			ibRenderedQuery rendered;
 			rendered.m_sql = ibQueryRenderer(conn->GetDialect()).RenderDDL(ddl);
 			return rendered;
@@ -719,7 +720,7 @@ static int ibRunInsertPerRow(const std::shared_ptr<ibDatabaseLayer>& conn, const
 		}
 		ibBindPlan(guard.get(), plan, externalParams);
 		const int n = guard->RunQuery();
-		ibMeasuredWrite(clock, conn.get(), prepared, guard.get(), n, ibValuesOfPlan(plan, externalParams));
+		ibMeasuredWrite(clock, conn, prepared, guard.get(), n, ibValuesOfPlan(plan, externalParams));
 		if (n < 0)
 			return n;   // a refused row stops the batch — the caller's transaction decides the rest
 		total += n;
@@ -734,10 +735,10 @@ int ibDatabaseQueryBuilder::Execute(const ibDmlStatement& dml, const std::vector
 		ibBackendSessionException::Throw(ibBackendSessionException::Kind::NoConnection,
 			_("Query layer could not obtain a database connection from the holder."));
 
-	if (ibQueryInterpreter* interpreter = ibInterpreterOf(*conn)) {
+	if (ibQueryInterpreter* interpreter = ibInterpreterOf(conn)) {
 		const ibStatementClock clock;
 		const int changed = interpreter->Execute(dml, externalParams);
-		ibMeasuredWrite(clock, conn.get(), [&] { return ibQueryRenderer(conn->GetDialect()).RenderDML(dml); }, changed,
+		ibMeasuredWrite(clock, conn, [&] { return ibQueryRenderer(conn->GetDialect()).RenderDML(dml); }, changed,
 			externalParams);
 		return changed;
 	}
@@ -760,7 +761,7 @@ int ibDatabaseQueryBuilder::Execute(const ibDmlStatement& dml, const std::vector
 	ibStatementGuard guard(conn, stmt);   // RAII close — no result set to wrap
 	ibBindPlan(stmt, rendered.m_params, externalParams);
 	const int changed = stmt->RunQuery();
-	ibMeasuredWrite(clock, conn.get(), rendered.m_sql, stmt, changed, ibValuesOfPlan(rendered.m_params, externalParams));
+	ibMeasuredWrite(clock, conn, rendered.m_sql, stmt, changed, ibValuesOfPlan(rendered.m_params, externalParams));
 	return changed;
 }
 
@@ -776,10 +777,10 @@ ibQueryResult ibDatabaseQueryBuilder::ExecuteReturning(const ibDmlStatement& dml
 		ibBackendQueryException::Throw(ibBackendQueryException::Kind::TranslationFailure,
 			_("ExecuteReturning needs a RETURNING column list - use ibReturning(), or Execute() for a plain write."));
 
-	if (ibQueryInterpreter* interpreter = ibInterpreterOf(*conn)) {
+	if (ibQueryInterpreter* interpreter = ibInterpreterOf(conn)) {
 		const ibStatementClock clock;
 		ibMemoryTable rows = interpreter->ExecuteReturning(dml, externalParams);
-		const std::uint64_t statement = ibMeasuredRead(clock, conn.get(),
+		const std::uint64_t statement = ibMeasuredRead(clock, conn,
 			[&] { return ibQueryRenderer(conn->GetDialect()).RenderDML(dml); }, externalParams);
 		return ibQueryResult(conn, std::move(rows), ibCancelOfReader(m_scope), statement);
 	}
@@ -965,7 +966,7 @@ bool ibQueryResult::Next()
 		}
 		ibBindPlan(m_stmt, run.m_params, m_runs->m_external);
 		m_rs = m_stmt->RunQueryWithResults();
-		m_statement = ibMeasuredRead(clock, m_conn.get(), run.m_sql, m_stmt, m_rs, ibValuesOfPlan(run.m_params, m_runs->m_external));
+		m_statement = ibMeasuredRead(clock, m_conn, run.m_sql, m_stmt, m_rs, ibValuesOfPlan(run.m_params, m_runs->m_external));
 	}
 	return false;
 }
@@ -2436,7 +2437,7 @@ int ibBatchInsert::RunQuery()
 		const ibStatementClock clock;
 		const int changed = (*m_prepared)->RunQuery();
 		// Its values were bound one by one, past any plan: the run is told without them.
-		ibMeasuredWrite(clock, clock.m_measured ? m_scope.shared().get() : nullptr, m_preparedSql, m_prepared->get(), changed, {});
+		ibMeasuredWrite(clock, m_scope.shared(), m_preparedSql, m_prepared->get(), changed, {});
 		return changed;
 	}
 
@@ -2478,8 +2479,8 @@ int ibBatchInsert::Flush()
 
 		const std::shared_ptr<ibDatabaseLayer>& conn = m_scope.shared();
 		const ibStatementClock clock;
-		const int n = ibInterpreterOf(*conn)->Insert(m_table, std::move(rows));
-		ibMeasuredWrite(clock, conn.get(), [this] { return ibRenderedQuery{ m_preparedSql, {} }; }, n, {});
+		const int n = ibInterpreterOf(conn)->Insert(m_table, std::move(rows));
+		ibMeasuredWrite(clock, conn, [this] { return ibRenderedQuery{ m_preparedSql, {} }; }, n, {});
 		return n;
 	}
 
@@ -2501,7 +2502,7 @@ int ibBatchInsert::Flush()
 // two, a template that grows an argument — and the compiler then finds the DEFINITION and not the
 // readers. Asked as questions, there is one place to change and the callers keep their own words.
 
-bool ibCanPushRollup(const ibDatabaseLayer* layer)
+bool ibCanPushRollup(const std::shared_ptr<ibDatabaseLayer>& layer)
 {
 	return layer != nullptr && layer->GetDialect().m_features.m_rollup;
 }
@@ -2514,27 +2515,27 @@ bool ibCanPushRollup(const ibDatabaseLayer* layer)
 // the Firebird driver sets BOTH flags false (PR #9029 adds ROLLUP / CUBE / GROUPING SETS / GROUPING
 // together and is still open), and a comment claiming a capability is exactly how a road gets
 // declared working without ever executing. Ask the dialect; do not remember what an engine "has".
-bool ibCanUseGrouping(const ibDatabaseLayer* layer)
+bool ibCanUseGrouping(const std::shared_ptr<ibDatabaseLayer>& layer)
 {
 	return layer != nullptr && layer->GetDialect().m_features.m_grouping;
 }
 
-bool ibCanPushWindow(const ibDatabaseLayer* layer)
+bool ibCanPushWindow(const std::shared_ptr<ibDatabaseLayer>& layer)
 {
 	return layer != nullptr && layer->GetDialect().m_features.m_window;
 }
 
-bool ibCanUseCte(const ibDatabaseLayer* layer)
+bool ibCanUseCte(const std::shared_ptr<ibDatabaseLayer>& layer)
 {
 	return layer != nullptr && layer->GetDialect().m_features.m_cte;
 }
 
-bool ibCanWalkTree(const ibDatabaseLayer* layer)
+bool ibCanWalkTree(const std::shared_ptr<ibDatabaseLayer>& layer)
 {
 	return layer != nullptr && layer->GetDialect().m_features.m_recursiveCte;
 }
 
-int ibExecuteDdl(ibDatabaseLayer* layer, const ibDdlStatement& ddl)
+int ibExecuteDdl(const std::shared_ptr<ibDatabaseLayer>& layer, const ibDdlStatement& ddl)
 {
 	// A null connection is a CALLER error, not a road: every caller resolves a channel first. Nothing
 	// ran, and 0 says so — this is a guard against a dereference, not a quiet "it worked".
@@ -2566,12 +2567,12 @@ int ibExecuteDdl(ibDatabaseLayer* layer, const ibDdlStatement& ddl)
 	return layer->RunStatement(sql);
 }
 
-bool ibDdlCommitsBeforeData(const ibDatabaseLayer* layer)
+bool ibDdlCommitsBeforeData(const std::shared_ptr<ibDatabaseLayer>& layer)
 {
 	return layer != nullptr && layer->GetDialect().m_ddlCommitBeforeData;
 }
 
-bool ibAlterTableMultiClause(const ibDatabaseLayer* layer)
+bool ibAlterTableMultiClause(const std::shared_ptr<ibDatabaseLayer>& layer)
 {
 	return layer != nullptr && layer->GetDialect().m_alterTableMultiClause;
 }

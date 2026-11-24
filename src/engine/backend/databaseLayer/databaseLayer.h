@@ -790,8 +790,8 @@ public:
 	// the runtime's cancel alone does the rest.
 	virtual void Cancel() = 0;
 
-	/// clone database  
-	virtual ibDatabaseLayer *Clone() = 0;
+	// A new connection to the same base, born shared: shared_from_this() answers through that first owner.
+	virtual std::shared_ptr<ibDatabaseLayer> Clone() = 0;
 
 	// transaction support
 

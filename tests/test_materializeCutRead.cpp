@@ -305,7 +305,7 @@ struct CutReadFix : ::testing::Test {
 
 		// The maintenance — the triggers that keep Reg9_T, and the dressed view the old road reads.
 		const ibMaterializeSql sql = RenderMaterialization(Declared(), &ibDatabaseLayerSQLite::MaterializationDialect(), SqliteQ());
-		ASSERT_TRUE(sql.Apply(*db));
+		ASSERT_TRUE(sql.Apply(db));
 	}
 
 	// The totals as this fixture keeps them: the declaration, and the table it maintains.

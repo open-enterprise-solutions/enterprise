@@ -131,18 +131,18 @@ ibMaterializeSpec OneSided()
 
 struct AcctFix : ::testing::Test
 {
-	ibDatabaseLayerSQLite db;
+	std::shared_ptr<ibDatabaseLayerSQLite> db = std::make_shared<ibDatabaseLayerSQLite>();
 	bool ready = false;
 
 	void SetUp() override
 	{
-		if (!db.Open(wxT(":memory:"))) {
+		if (!db->Open(wxT(":memory:"))) {
 			GTEST_SKIP() << "in-memory SQLite unavailable";
 			return;
 		}
-		db.RunQuery(kCreateMovements);
-		db.RunQuery(CreateTotals(wxT("Acc5_TtDr"), wxT("accdr")));
-		db.RunQuery(CreateTotals(wxT("Acc5_TtCr"), wxT("acccr")));
+		db->RunQuery(kCreateMovements);
+		db->RunQuery(CreateTotals(wxT("Acc5_TtDr"), wxT("accdr")));
+		db->RunQuery(CreateTotals(wxT("Acc5_TtCr"), wxT("acccr")));
 
 		for (const bool creditSide : { false, true }) {
 			const ibMaterializeSql sql = RenderMaterialization(
@@ -154,28 +154,28 @@ struct AcctFix : ::testing::Test
 		ready = true;
 	}
 
-	void TearDown() override { db.Close(); }
+	void TearDown() override { db->Close(); }
 
 	// A posting. An account is (type, key); type 0 means the side names NO account —
 	// which is what an off-balance line legitimately looks like.
 	void Post(int id, const wxChar* period, int drType, const wxChar* drKey,
 	          int crType, const wxChar* crKey, double amount, int active = 1)
 	{
-		db.RunQuery(wxT("INSERT INTO Acc5 (id, period_, active_, accdr_RTRef, accdr_RRRef,"
+		db->RunQuery(wxT("INSERT INTO Acc5 (id, period_, active_, accdr_RTRef, accdr_RRRef,"
 		                " acccr_RTRef, acccr_RRRef, amount) VALUES (%d, '%s', %d, %d, '%s', %d, '%s', %s)"),
 			id, period, active, drType, drKey, crType, crKey, wxString::FromCDouble(amount));
 	}
 
-	void Activate(int id, int active) { db.RunQuery(wxT("UPDATE Acc5 SET active_ = %d WHERE id = %d"), active, id); }
+	void Activate(int id, int active) { db->RunQuery(wxT("UPDATE Acc5 SET active_ = %d WHERE id = %d"), active, id); }
 
 	// The other two ways a movement changes after it was stored. Both fire the delta
 	// TWICE — out under the old row, in under the new — so they are the arms an
 	// accumulate has to get right, not extra flavours of INSERT.
-	void Remove(int id) { db.RunQuery(wxT("DELETE FROM Acc5 WHERE id = %d"), id); }
+	void Remove(int id) { db->RunQuery(wxT("DELETE FROM Acc5 WHERE id = %d"), id); }
 
 	void SetAmount(int id, double amount)
 	{
-		db.RunQuery(wxT("UPDATE Acc5 SET amount = %s WHERE id = %d"), wxString::FromCDouble(amount), id);
+		db->RunQuery(wxT("UPDATE Acc5 SET amount = %s WHERE id = %d"), wxString::FromCDouble(amount), id);
 	}
 
 	// ⚠ The query rides in as a %s ARGUMENT — the driver entry is a printf-style vararg, so a query
@@ -184,11 +184,11 @@ struct AcctFix : ::testing::Test
 	double Figure(const ibString& table, const ibString& column)
 	{
 		double sum = 0.0;
-		ibDatabaseResultSet* rs = db.RunQueryWithResults(wxT("%s"),
+		ibDatabaseResultSet* rs = db->RunQueryWithResults(wxT("%s"),
 			wxT("SELECT COALESCE(SUM(") + column + wxT("), 0) FROM ") + table);
 		if (rs != nullptr) {
 			if (rs->Next()) sum = rs->GetResultDouble(1);
-			db.CloseResultSet(rs);
+			db->CloseResultSet(rs);
 		}
 		return sum;
 	}
@@ -196,10 +196,10 @@ struct AcctFix : ::testing::Test
 	long Rows(const ibString& table)
 	{
 		long n = -1;
-		ibDatabaseResultSet* rs = db.RunQueryWithResults(wxT("%s"), wxT("SELECT COUNT(*) FROM ") + table);
+		ibDatabaseResultSet* rs = db->RunQueryWithResults(wxT("%s"), wxT("SELECT COUNT(*) FROM ") + table);
 		if (rs != nullptr) {
 			if (rs->Next()) n = rs->GetResultInt(1);
-			db.CloseResultSet(rs);
+			db->CloseResultSet(rs);
 		}
 		return n;
 	}
@@ -393,13 +393,13 @@ TEST_F(AcctFix, KopecksSurviveTheAccumulation)
 
 TEST(AcctOneSided, DebitIsTheEnumsFirstMember)
 {
-	ibDatabaseLayerSQLite db;
-	if (!db.Open(wxT(":memory:")))
+	auto db = std::make_shared<ibDatabaseLayerSQLite>();
+	if (!db->Open(wxT(":memory:")))
 		GTEST_SKIP() << "in-memory SQLite unavailable";
 
-	db.RunQuery(wxT("CREATE TABLE Acc6 (id INTEGER PRIMARY KEY, period_ TEXT, active_ INTEGER,"
+	db->RunQuery(wxT("CREATE TABLE Acc6 (id INTEGER PRIMARY KEY, period_ TEXT, active_ INTEGER,"
 	                " acc_RTRef INTEGER, acc_RRRef TEXT, rectype_ INTEGER, amount NUMERIC)"));
-	db.RunQuery(wxT("CREATE TABLE Acc6_Tt (period_ TEXT NOT NULL, acc_RTRef INTEGER NOT NULL,"
+	db->RunQuery(wxT("CREATE TABLE Acc6_Tt (period_ TEXT NOT NULL, acc_RTRef INTEGER NOT NULL,"
 	                " acc_RRRef TEXT NOT NULL, amount_Dr NUMERIC NOT NULL DEFAULT 0,"
 	                " amount_Cr NUMERIC NOT NULL DEFAULT 0,"
 	                " PRIMARY KEY (period_, acc_RTRef, acc_RRRef))"));
@@ -408,21 +408,21 @@ TEST(AcctOneSided, DebitIsTheEnumsFirstMember)
 		OneSided(), &ibDatabaseLayerSQLite::MaterializationDialect(), ibDatabaseLayerSQLite::Dialect());
 	ASSERT_TRUE(sql.Apply(db));
 
-	db.RunQuery(wxT("INSERT INTO Acc6 VALUES (1, '2026-03-04 10:00:00', 1, 7, 'cash', 0, 40)"));   // debit
-	db.RunQuery(wxT("INSERT INTO Acc6 VALUES (2, '2026-03-04 11:00:00', 1, 7, 'cash', 1, 25)"));   // credit
-	db.RunQuery(wxT("INSERT INTO Acc6 VALUES (3, '2026-03-04 12:00:00', 0, 7, 'cash', 0, 99)"));   // not in force
+	db->RunQuery(wxT("INSERT INTO Acc6 VALUES (1, '2026-03-04 10:00:00', 1, 7, 'cash', 0, 40)"));   // debit
+	db->RunQuery(wxT("INSERT INTO Acc6 VALUES (2, '2026-03-04 11:00:00', 1, 7, 'cash', 1, 25)"));   // credit
+	db->RunQuery(wxT("INSERT INTO Acc6 VALUES (3, '2026-03-04 12:00:00', 0, 7, 'cash', 0, 99)"));   // not in force
 
 	double dr = 0.0, cr = 0.0;
-	ibDatabaseResultSet* rs = db.RunQueryWithResults(wxT("%s"), wxT("SELECT amount_Dr, amount_Cr FROM Acc6_Tt"));
+	ibDatabaseResultSet* rs = db->RunQueryWithResults(wxT("%s"), wxT("SELECT amount_Dr, amount_Cr FROM Acc6_Tt"));
 	ASSERT_NE(nullptr, rs);
 	ASSERT_TRUE(rs->Next());
 	dr = rs->GetResultDouble(1);
 	cr = rs->GetResultDouble(2);
-	db.CloseResultSet(rs);
+	db->CloseResultSet(rs);
 
 	EXPECT_DOUBLE_EQ(40.0, dr) << "record type 0 is DEBIT — the enum declares it first";
 	EXPECT_DOUBLE_EQ(25.0, cr);
-	db.Close();
+	db->Close();
 }
 
 // =============================================================================

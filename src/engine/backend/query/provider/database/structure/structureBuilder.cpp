@@ -15,7 +15,7 @@
 ibStructureBuilder::ibStructureBuilder() = default;
 ibStructureBuilder::~ibStructureBuilder() = default;
 
-ibDatabaseLayer* ibStructureBuilder::Conn() const
+std::shared_ptr<ibDatabaseLayer> ibStructureBuilder::Conn() const
 {
 	// ⭐⭐ ONE HOLDER FOR THE WHOLE RESTRUCTURING, and the SESSION's is that holder.
 	//
@@ -31,10 +31,10 @@ ibDatabaseLayer* ibStructureBuilder::Conn() const
 	//
 	// db_query stays the fallback for callers that have no session at all (coderunner, tests).
 	if (m_holder != nullptr)
-		return m_holder->EnsureConnection().get();
+		return m_holder->EnsureConnection();
 	if (ibSession* session = ibSession::Current())
-		return session->EnsureConnection().get();
-	return db_query.get();
+		return session->EnsureConnection();
+	return db_query;
 }
 
 bool ibStructureBuilder::OnBeforeSave()
@@ -209,7 +209,7 @@ void ibStructureBuilder::UndoAppliedDdl()
 {
 #if _USE_SAVE_METADATA_IN_TRANSACTION == 1
 	ibSchemaBuilder schema(m_holder);
-	const std::vector<std::function<void(ibDatabaseLayer*)>> undo = schema.UndoActions();
+	const std::vector<std::function<void(const std::shared_ptr<ibDatabaseLayer>&)>> undo = schema.UndoActions();
 	if (undo.empty())
 		return;
 

@@ -511,7 +511,7 @@ TEST(RegisterArmCut, TheBalanceBeforeMidnightLeavesOutTheDayThatStartsThere)
     db->RunQuery(wxT("CREATE TABLE Reg9_T (period_ TEXT NOT NULL, wh TEXT NOT NULL, ")
         wxT("qty_in NUMERIC NOT NULL DEFAULT 0, qty_out NUMERIC NOT NULL DEFAULT 0, PRIMARY KEY (period_, wh))"));
     const ibMaterializeSql sql = RenderMaterialization(spec, &ibDatabaseLayerSQLite::MaterializationDialect(), ibDatabaseLayerSQLite::Dialect());
-    ASSERT_TRUE(sql.Apply(*db));
+    ASSERT_TRUE(sql.Apply(db));
 
     db->RunQuery(wxT("INSERT INTO Reg9 VALUES ('r1', 1, '2026-03-03 09:00:00', 1, 'kitchen', 1, 100)"));
     db->RunQuery(wxT("INSERT INTO Reg9 VALUES ('w1', 1, '2026-03-04 23:00:00', 1, 'kitchen', 0, 12)"));

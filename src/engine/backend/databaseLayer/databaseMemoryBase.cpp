@@ -71,9 +71,9 @@ void ibDatabaseLayerMemory::Cancel()
 	m_cancelled = true;
 }
 
-ibDatabaseLayer* ibDatabaseLayerMemory::Clone()
+std::shared_ptr<ibDatabaseLayer> ibDatabaseLayerMemory::Clone()
 {
-	return new ibDatabaseLayerMemory();
+	return std::make_shared<ibDatabaseLayerMemory>();
 }
 
 bool ibDatabaseLayerMemory::TableExists(const ibString& table)

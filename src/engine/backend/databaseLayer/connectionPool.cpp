@@ -120,18 +120,18 @@ void ibConnectionPool::SetActiveTxConnection(std::shared_ptr<ibDatabaseLayer> co
 	ibDatabaseConnectionHolder* holder = CurrentHolder();
 	if (holder != nullptr) {
 		const std::shared_ptr<ibDatabaseLayer> taken = pool->GetReservedTx(holder);
-		if (taken && taken.get() != conn.get())
+		if (taken && taken != conn)
 			holder = nullptr;   // somebody else's transaction owns this channel — do not evict it
 	}
 	if (holder == nullptr) {
 		if (auto* own = conn->GetHolder()) holder = own;
-		else                               holder = pool->FindBoundHolder(conn.get());
+		else                               holder = pool->FindBoundHolder(conn);
 	}
 	if (holder == nullptr) return;
 	pool->ReserveTx(holder, std::move(conn));
 }
 
-void ibConnectionPool::ClearActiveTxConnection(ibDatabaseLayer* conn)
+void ibConnectionPool::ClearActiveTxConnection(const std::shared_ptr<ibDatabaseLayer>& conn)
 {
 	if (conn == nullptr) return;
 	auto* pool = conn->GetPool();   // the one it was pinned in
@@ -143,12 +143,12 @@ void ibConnectionPool::ClearActiveTxConnection(ibDatabaseLayer* conn)
 		pool->ReleaseTx(h);
 }
 
-ibDatabaseConnectionHolder* ibConnectionPool::FindBoundHolder(ibDatabaseLayer* conn) const
+ibDatabaseConnectionHolder* ibConnectionPool::FindBoundHolder(const std::shared_ptr<ibDatabaseLayer>& conn) const
 {
 	if (conn == nullptr) return nullptr;
 	std::lock_guard<std::mutex> lock(m_mutex);
 	for (const auto& e : m_entries) {
-		if (e.conn.get() == conn) {
+		if (e.conn == conn) {
 			if (e.txHolder)    return e.txHolder;
 			if (e.scopeHolder) return e.scopeHolder;
 			return nullptr;
@@ -165,7 +165,7 @@ void ibConnectionPool::ReserveTx(ibDatabaseConnectionHolder* holder,
 	const auto now = std::chrono::steady_clock::now();
 
 	for (auto& e : m_entries) {
-		if (e.conn.get() == conn.get()) {
+		if (e.conn == conn) {
 			// Defensive: re-pin if the entry was already reserved by
 			// another holder (paired Begin without Commit). Drop the
 			// stale back-pointer first.
@@ -361,7 +361,7 @@ void ibConnectionPool::BindScopeHolder(ibDatabaseConnectionHolder* holder,
 	if (holder == nullptr || !conn) return;
 	std::lock_guard<std::mutex> lock(m_mutex);
 	for (auto& e : m_entries) {
-		if (e.conn.get() == conn.get()) {
+		if (e.conn == conn) {
 			// First-bind wins — nested ibConnectionScope ctors observe
 			// scopeHolder!=nullptr and inherit instead of attempting to
 			// rebind. The outermost scope's dtor calls Unbind.
@@ -466,11 +466,11 @@ void ibConnectionPool::Init(std::shared_ptr<ibDatabaseLayer> primary, std::size_
 	// use minIdle=2 (registry write conn + script thread), so the loop
 	// below clones exactly one extra connection at Init.
 	while (m_entries.size() < m_minIdle && m_entries.size() < m_maxSize) {
-		ibDatabaseLayer* raw = primary ? primary->Clone() : nullptr;
-		if (raw == nullptr) break;
-		raw->m_pool = this;
+		std::shared_ptr<ibDatabaseLayer> conn = primary ? primary->Clone() : nullptr;
+		if (conn == nullptr) break;
+		conn->m_pool = this;
 		ibConnectionEntry e;
-		e.conn     = std::shared_ptr<ibDatabaseLayer>(raw);
+		e.conn     = std::move(conn);
 		e.lastUsed = now;
 		m_entries.push_back(std::move(e));
 	}
@@ -552,18 +552,14 @@ std::shared_ptr<ibDatabaseLayer> ibConnectionPool::Checkout(std::chrono::millise
 
 		if (m_entries.size() < m_maxSize) {
 			const auto connecting = measured.m_measured ? ibDatabaseProfiler::ibClock::now() : ibDatabaseProfiler::ibClock::time_point();
-			ibDatabaseLayer* raw = m_source->Clone();
+			std::shared_ptr<ibDatabaseLayer> sp = m_source->Clone();
 			if (measured.m_measured) {
 				measured.m_db       = m_source;
 				measured.m_connect += ibDatabaseProfiler::ibClock::now() - connecting;
 			}
-			if (raw == nullptr)
+			if (sp == nullptr)
 				return nullptr;
-			raw->m_pool = this;
-			// FIRST shared_ptr wrapping `raw` — initialises the weak_ptr
-			// inside std::enable_shared_from_this so future
-			// shared_from_this() calls route through this control block.
-			auto sp = std::shared_ptr<ibDatabaseLayer>(raw);
+			sp->m_pool = this;
 			ibConnectionEntry e;
 			e.conn     = sp;
 			e.inUse    = true;
@@ -642,7 +638,7 @@ std::shared_ptr<ibDatabaseLayer> ibConnectionPool::WrapHandout(
 			std::lock_guard<std::mutex> lock(m_mutex);
 			if (m_shutdown) return;   // sp drops with the lambda
 			for (auto& e : m_entries) {
-				if (e.conn.get() == sp.get()) {
+				if (e.conn == sp) {
 					e.inUse    = false;
 					e.lastUsed = std::chrono::steady_clock::now();
 					// Wake one Checkout waiter only if the entry is now

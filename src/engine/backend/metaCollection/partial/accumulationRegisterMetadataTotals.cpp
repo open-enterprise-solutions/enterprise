@@ -253,8 +253,7 @@ bool ibBalanceAndTurnoverQueryable::CanReadOnServer() const
 
 	// Periodised. The running balance is a window, so this road exists only where the engine has
 	// them — and where it does not, the live path answers exactly as it did before.
-	ibConnectionScope scope;
-	return ibCanPushWindow(scope.get());
+	return ibCanPushWindow(db_query);
 }
 // ⭐⭐ THE READING IS A READING. Nothing is recomputed here.
 //

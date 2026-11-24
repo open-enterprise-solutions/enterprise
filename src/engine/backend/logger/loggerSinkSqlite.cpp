@@ -121,7 +121,7 @@ void ibLoggerSinkSqlite::WriteBatch(const std::vector<ibLogEntry>& batch)
             m_db->RunQuery(ibT("ROLLBACK"));
             return;
         }
-        ibStatementGuard stmt(m_db.get(), raw);
+        ibStatementGuard stmt(m_db, raw);
         for (const ibLogEntry& e : batch) {
             // SQLite has no SetParamInt64 here; ms-resolution timestamps
             // fit a double's 53-bit mantissa until year 285k.

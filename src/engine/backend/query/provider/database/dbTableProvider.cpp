@@ -22,7 +22,8 @@
 #include "backend/query/provider/database/tempTableManager.h" // ibTempTableManager — the copies a composite holds, complete where the exported composite is compiled
 #include "backend/query/queryException.h"   // ibBackendQueryException — L3-L5 varieties (it used to arrive through the DB header)
 #include "backend/query/queryHierarchy.h"   // ibQueryHierarchyScope — «in hierarchy» read here where the server cannot walk it
-#include "backend/databaseLayer/connectionScope.h"   // ibConnectionScope — which driver is asked (ibCanWalkTree)
+#include "backend/databaseLayer/connectionScope.h"   // ibConnectionScope — a read's holder asked what its driver can do
+#include "backend/appData.h"                         // db_query — the driver in hand, where no read's holder is
 
 #include "backend/databaseLayer/databaseLayer.h"
 #include "backend/valueInfo.h"                                    // ibReference (physical reference blob, GetQueryTableId source)
@@ -692,13 +693,10 @@ ibQueryExprPtr BuildSubtreeIn(const std::shared_ptr<const ibBackendQueryable>& q
 	if (queryable == nullptr || c.m_col == nullptr || c.m_col->IsRawColumn() || c.m_expr || c.m_values.empty()
 	    || queryable->GetMetaData() == nullptr)
 		return nullptr;
-	bool dropsRepeats = false;   // UNION where the dialect allows it in the recursive part: a looped chain ends
-	{
-		ibConnectionScope scope;
-		if (!scope || !ibCanWalkTree(scope.get()))
-			return nullptr;
-		dropsRepeats = scope.get()->GetDialect().m_features.m_recursiveCteUnion;
-	}
+	if (!ibCanWalkTree(db_query))
+		return nullptr;
+	// UNION where the dialect allows it in the recursive part: a looped chain ends
+	const bool dropsRepeats = db_query->GetDialect().m_features.m_recursiveCteUnion;
 	const std::vector<ibString> fields = ColumnFieldNames(*c.m_col);
 	if (fields.size() < 2)
 		return nullptr;
@@ -2224,11 +2222,9 @@ ibQueryExprPtr ibMetaIRBuilder::BuildSemiJoinExists(const std::shared_ptr<const 
 	if (sj.m_negated && sj.m_op == ibQueryFilterOp::Equal && queryable != nullptr
 	    && queryable->GetProvider().CanJoinOn(nullptr /* the base's statement, being written */)
 	    && queryable->GetSourceRelation(ibString()) == nullptr && !queryable->GetQueryTableName().IsEmpty()) {
-		bool antiJoin = true;   // no connection to ask: the form that is right everywhere
-		{
-			ibConnectionScope scope;
-			antiJoin = !scope || scope.get()->GetDialect().m_features.m_antiJoin;
-		}
+		// No driver to ask: the form that is right everywhere
+		const std::shared_ptr<ibDatabaseLayer> driver = db_query;
+		const bool antiJoin = driver == nullptr || driver->GetDialect().m_features.m_antiJoin;
 		const ibString outerAlias = sjAlias + ibT("_o"), unionAlias = sjAlias + ibT("_u"), keysAlias = sjAlias + ibT("_k");
 		std::vector<ibQueryExprPtr> outerSide, innerSide, rowSide;   // per pair: the key among the outer's, the select's, the row's
 		bool sayable = !antiJoin;
@@ -4137,7 +4133,7 @@ bool ibDbTableProvider::CanPushRollupTotals(const ibDataQuerySpec& spec)
 		// a question, and this tier has no business knowing which field carries the answer.
 		ibConnectionScope scope(spec.m_holder);
 		if (!scope)                        RollupDecline(ibT("no connection to ask whether it folds"));
-		if (!ibCanPushRollup(scope.get())) RollupDecline(ibT("this engine has no GROUP BY ROLLUP"));
+		if (!ibCanPushRollup(scope.shared())) RollupDecline(ibT("this engine has no GROUP BY ROLLUP"));
 		return true;
 	}
 
@@ -4207,7 +4203,7 @@ static ibSelectorTree RunRollupTotals(const ibDataQuerySpec& spec, ibQueryRelPtr
 	bool hasGrouping = false;
 	if (rollup) {
 		ibConnectionScope scope(spec.m_holder);
-		hasGrouping = scope && ibCanUseGrouping(scope.get());
+		hasGrouping = ibCanUseGrouping(scope.shared());
 	}
 
 	// `refAlias` — a reference field's id under the name the statement wrote it (one level looks its target up by it).
@@ -5820,7 +5816,7 @@ ibQueryIR ibDbTableProvider::BuildPageIR(const ibDataQuerySpec& spec, const ibRe
 bool ibDbTableProvider::CanDeclareNamedQuery(ibDatabaseConnectionHolder* holder) const
 {
 	ibConnectionScope scope(holder);
-	return scope && ibCanUseCte(scope.get());
+	return ibCanUseCte(scope.shared());
 }
 
 // ⭐⭐ WOULD THIS DECLARATION RENDER — the question AttachNamedQueries below meets, asked one step earlier. The
@@ -6316,8 +6312,8 @@ bool ibDbTableProvider::ResolveQueryConstant(const std::shared_ptr<const ibBacke
 
 size_t ibDbTableProvider::ParametersOneStatementTakes() const
 {
-	ibConnectionScope scope;
-	return scope ? scope.get()->GetDialect().m_maxParameters : 0;
+	const std::shared_ptr<ibDatabaseLayer> driver = db_query;
+	return driver != nullptr ? driver->GetDialect().m_maxParameters : 0;
 }
 
 // ⭐⭐ THE FLAT LIST IS IN HAND, AND ITS REFERENCES ARE TOLD WHAT THEY SAY. A reference leaves a row RAW —

@@ -185,7 +185,7 @@ private:
 	// releases that holder's pin. Internal — exposed only to the
 	// layer through static-method visibility.
 	static void SetActiveTxConnection(std::shared_ptr<ibDatabaseLayer> conn);
-	static void ClearActiveTxConnection(ibDatabaseLayer* conn);
+	static void ClearActiveTxConnection(const std::shared_ptr<ibDatabaseLayer>& conn);
 
 	// Holder-keyed reservation primitives. Used by SetActive*/Clear*
 	// above and by ibConnectionScope (via friend) to bind / unbind /
@@ -206,7 +206,7 @@ private:
 	// (txHolder if pinned, otherwise scopeHolder). Used by
 	// SetActiveTxConnection to resolve the right holder when the
 	// calling thread has no Current() session.
-	ibDatabaseConnectionHolder* FindBoundHolder(ibDatabaseLayer* conn) const;
+	ibDatabaseConnectionHolder* FindBoundHolder(const std::shared_ptr<ibDatabaseLayer>& conn) const;
 
 	// Convenience: release every pool registration keyed on `holder`
 	// (TX pin + scope binding) and close any leftover stmt/rs on

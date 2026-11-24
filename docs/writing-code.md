@@ -218,9 +218,12 @@ holder that takes it and lets it go deletes stack memory.
 (`ibValue::FromNode(node).ConvertToValue(p)`): the temporary dies at the end of the expression.
 Hold the value in a variable first.
 
-**No `.get()` at a call site.** Inside the class, call its accessor; where the callee always gets
-an object, take a reference and pass `*holder`; keep a returned `shared_ptr` as it is. `.get()`
-lives only inside the one getter.
+**No `.get()` and no `*holder` at a call site.** A door takes what its callers hold: callers that
+hold a `std::shared_ptr<T>` are served by a `const std::shared_ptr<T>&` parameter
+(`ibCanPushWindow(db_query)`, `ibApplyMaterialization(schema.Connection(), …)`). Inside the class,
+call its accessor; keep a returned `shared_ptr` as it is. A raw pointer stays where an object
+speaks of itself (`this`, a back-pointer to its owner); handing itself to a door that takes the
+holder, it passes `shared_from_this()`.
 
 **Owned plain C++ objects are `std::shared_ptr<T>`,** in collections too, and `unique_ptr` only
 where single ownership is a real invariant. Take a `shared_ptr` parameter by `const&`, a sink too —

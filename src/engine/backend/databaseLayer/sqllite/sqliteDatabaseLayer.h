@@ -33,7 +33,7 @@ public:
 	virtual void Cancel();
 
 	/// clone database
-	virtual ibDatabaseLayer* Clone() { return new ibDatabaseLayerSQLite(*this); }
+	virtual std::shared_ptr<ibDatabaseLayer> Clone() { return std::make_shared<ibDatabaseLayerSQLite>(*this); }
 
 	// IsActiveTransaction inherits the base-class default
 	// (m_txDepth > 0). Driver transaction primitives

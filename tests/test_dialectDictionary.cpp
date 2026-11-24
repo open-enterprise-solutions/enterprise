@@ -91,14 +91,14 @@ TEST(DbCapabilities, NoConnectionIsAnAnswerNotACrash) {
 }
 
 TEST(DbCapabilities, SqliteAnswersItsOwnDeclarations) {
-    ibDatabaseLayerSQLite db;
+    auto db = std::make_shared<ibDatabaseLayerSQLite>();
     // No GROUP BY ROLLUP — so the totals tree folds in RAM here, and the provider must not push it.
-    EXPECT_FALSE(ibCanPushRollup(&db));
+    EXPECT_FALSE(ibCanPushRollup(db));
     // No DDL barrier: a statement is durable the moment it returns, which is exactly why the whole
     // deferral class is invisible to this suite (see the accounting arc).
-    EXPECT_FALSE(ibDdlCommitsBeforeData(&db));
+    EXPECT_FALSE(ibDdlCommitsBeforeData(db));
     // One ADD/DROP per ALTER — the structure builder splits its batches for this.
-    EXPECT_FALSE(ibAlterTableMultiClause(&db));
+    EXPECT_FALSE(ibAlterTableMultiClause(db));
 }
 
 TEST(DbCapabilities, TheBarrierAnswerDiffersByDriver) {
@@ -121,8 +121,8 @@ TEST(DbCapabilities, NothingIsMissingOnSqlite) {
 // -----------------------------------------------------------------------------
 
 TEST(DbCapabilities, ExecuteDdlRunsTheStatementAsGiven) {
-    ibDatabaseLayerSQLite db;
-    if (!db.Open(wxT(":memory:")))
+    auto db = std::make_shared<ibDatabaseLayerSQLite>();
+    if (!db->Open(wxT(":memory:")))
         GTEST_SKIP() << "in-memory SQLite unavailable";
 
     // ⭐ THE '%' IS THE POINT OF THIS TEST. ibExecuteDdl runs through RunStatement, not RunQuery —
@@ -138,9 +138,9 @@ TEST(DbCapabilities, ExecuteDdlRunsTheStatementAsGiven) {
     id.m_name = wxT("id");
     id.m_type = ibTypeInteger();
 
-    ibExecuteDdl(&db, ibCreateTable(wxT("pct"), { id, tag }));
-    EXPECT_TRUE(db.TableExists(wxT("pct"))) << "the CREATE did not reach the driver intact";
+    ibExecuteDdl(db, ibCreateTable(wxT("pct"), { id, tag }));
+    EXPECT_TRUE(db->TableExists(wxT("pct"))) << "the CREATE did not reach the driver intact";
 
-    db.Close();
+    db->Close();
 }
 

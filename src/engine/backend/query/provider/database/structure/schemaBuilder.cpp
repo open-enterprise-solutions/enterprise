@@ -12,13 +12,6 @@ ibSchemaBuilder::ibSchemaBuilder(ibDatabaseConnectionHolder* holder)
 {
 }
 
-ibDatabaseLayer* ibSchemaBuilder::conn() const
-{
-	// The holder's pinned/scoped conn (same one its open TX lives on); db_query when no holder given.
-	// Both db_query and EnsureConnection vend shared_ptr<ibDatabaseLayer> — take the raw layer off each.
-	return m_holder != nullptr ? m_holder->EnsureConnection().get() : db_query.get();
-}
-
 ibDatabaseConnectionHolder* ibSchemaBuilder::BarrierHolder() const
 {
 	// The barrier state's owner: the explicit holder, or the db_query channel's per-thread holder
@@ -27,18 +20,18 @@ ibDatabaseConnectionHolder* ibSchemaBuilder::BarrierHolder() const
 }
 
 // ⭐ THE FOUR QUESTIONS BELOW ARE L2'S, AND L2 ANSWERS THEM. Each of these used to read a FIELD of
-// the dialect dictionary (`conn()->GetDialect().m_…`) — this tier spelling another tier's vocabulary,
+// the dialect dictionary (`Connection()->GetDialect().m_…`) — this tier spelling another tier's vocabulary,
 // which is how a dictionary that changes shape leaves its readers compiling and wrong. They stay as
 // methods because "on MY connection" is what the schema builder means every time, and that is the one
 // thing these add: the connection. (databaseQueryBuilder.h — the capability accessors.)
 bool ibSchemaBuilder::BarrierActive() const
 {
-	return ibDdlCommitsBeforeData(conn());
+	return ibDdlCommitsBeforeData(Connection());
 }
 
 bool ibSchemaBuilder::AlterTableMultiClause() const
 {
-	return ibAlterTableMultiClause(conn());
+	return ibAlterTableMultiClause(Connection());
 }
 
 
@@ -73,7 +66,7 @@ int ibSchemaBuilder::Execute(const ibDdlStatement& ddl)
 	// RENDER AND RUN ARE ONE STEP, AND IT IS L2'S. Spelling them here meant building a renderer out of
 	// a dictionary this tier has no other reason to hold — and picking, at this tier, which of the
 	// driver's two run doors a final statement goes through.
-	const int ret = ibExecuteDdl(conn(), ddl);
+	const int ret = ibExecuteDdl(Connection(), ddl);
 
 	// Bookkeeping AFTER the statement ran: a refused DDL threw above, changed nothing, and must not
 	// be deferred around or compensated for.
@@ -123,20 +116,20 @@ int ibSchemaBuilder::Execute(const ibDdlStatement& ddl)
 			// statement. None is needed: the ledger records only what actually RAN, so at replay
 			// time the table exists by construction.
 			const ibDdlStatement undo = ibDropTable(ddl.m_table);
-			h->DdlUndoActions().push_back([undo](ibDatabaseLayer* c) { ibExecuteDdl(c, undo); });
+			h->DdlUndoActions().push_back([undo](const std::shared_ptr<ibDatabaseLayer>& c) { ibExecuteDdl(c, undo); });
 		}
 		break;
 	case ibDdlKind::AddColumn:
 		if (!onCreatedTable && !ddl.m_columns.empty()) {
 			const ibDdlStatement undo = ibDropColumn(ddl.m_table, ddl.m_columns.front().m_name);
-			h->DdlUndoActions().push_back([undo](ibDatabaseLayer* c) { ibExecuteDdl(c, undo); });
+			h->DdlUndoActions().push_back([undo](const std::shared_ptr<ibDatabaseLayer>& c) { ibExecuteDdl(c, undo); });
 		}
 		break;
 	case ibDdlKind::DropColumn:
 		if (!onCreatedTable && !ddl.m_columns.empty()) {
 			const ibDdlStatement undo = ibAddColumn(ddl.m_table, ddl.m_columns.front());
 			const ibString table = ddl.m_table, column = ddl.m_columns.front().m_name;
-			h->DdlUndoActions().push_back([undo, table, column](ibDatabaseLayer* c) {
+			h->DdlUndoActions().push_back([undo, table, column](const std::shared_ptr<ibDatabaseLayer>& c) {
 				ibExecuteDdl(c, undo);
 				ibLog->Warn(ibT("restructure"), ibT("compensation"), ibString::Format(
 					ibT("column %s.%s re-added EMPTY - its data died with the first commit"), table, column));
@@ -146,13 +139,13 @@ int ibSchemaBuilder::Execute(const ibDdlStatement& ddl)
 	case ibDdlKind::AlterColumn:
 		if (!onCreatedTable && ddl.m_columns.size() > 1) {
 			const ibDdlStatement undo = ibAlterColumn(ddl.m_table, ddl.m_columns[1]);
-			h->DdlUndoActions().push_back([undo](ibDatabaseLayer* c) { ibExecuteDdl(c, undo); });
+			h->DdlUndoActions().push_back([undo](const std::shared_ptr<ibDatabaseLayer>& c) { ibExecuteDdl(c, undo); });
 		}
 		break;
 	case ibDdlKind::RenameColumn:
 		if (!onCreatedTable && ddl.m_columns.size() > 1) {
 			const ibDdlStatement undo = ibRenameColumn(ddl.m_table, ddl.m_columns[1].m_name, ddl.m_columns[0].m_name);
-			h->DdlUndoActions().push_back([undo](ibDatabaseLayer* c) { ibExecuteDdl(c, undo); });
+			h->DdlUndoActions().push_back([undo](const std::shared_ptr<ibDatabaseLayer>& c) { ibExecuteDdl(c, undo); });
 		}
 		break;
 	case ibDdlKind::AlterTable:
@@ -160,14 +153,14 @@ int ibSchemaBuilder::Execute(const ibDdlStatement& ddl)
 			ibDdlStatement undo = ibAlterTable(ddl.m_table, {});
 			for (auto it = ddl.m_alterClauses.rbegin(); it != ddl.m_alterClauses.rend(); ++it)
 				undo.m_alterClauses.push_back(InverseOfClause(*it));
-			h->DdlUndoActions().push_back([undo](ibDatabaseLayer* c) { ibExecuteDdl(c, undo); });
+			h->DdlUndoActions().push_back([undo](const std::shared_ptr<ibDatabaseLayer>& c) { ibExecuteDdl(c, undo); });
 		}
 		break;
 	case ibDdlKind::CreateIndex:
 		if (!onCreatedTable) {
 			const ibDdlStatement undo = ibDropIndex(ddl.m_indexName, ddl.m_table, ddl.m_indexColumns, ddl.m_unique,
 				ddl.m_descending);   // a twin this engine never made is never dropped either
-			h->DdlUndoActions().push_back([undo](ibDatabaseLayer* c) { ibExecuteDdl(c, undo); });
+			h->DdlUndoActions().push_back([undo](const std::shared_ptr<ibDatabaseLayer>& c) { ibExecuteDdl(c, undo); });
 		}
 		break;
 	case ibDdlKind::DropTable:
@@ -185,7 +178,7 @@ int ibSchemaBuilder::Execute(const ibDdlStatement& ddl)
 			// (schemaSnapshot.cpp), because an empty totals table under live maintenance is wrong numbers.
 			const ibDdlStatement undo = ibCreateTable(ddl.m_table, ddl.m_columns);
 			const ibString table = ddl.m_table;
-			h->DdlUndoActions().push_back([undo, table](ibDatabaseLayer* c) {
+			h->DdlUndoActions().push_back([undo, table](const std::shared_ptr<ibDatabaseLayer>& c) {
 				ibExecuteDdl(c, undo);
 				ibLog->Warn(ibT("restructure"), ibT("compensation"), ibString::Format(
 					ibT("table %s re-created EMPTY - its rows died with the first commit"), table));
@@ -194,7 +187,7 @@ int ibSchemaBuilder::Execute(const ibDdlStatement& ddl)
 		else if (!onCreatedTable) {
 			// A drop that did not say what it dropped — nothing to rebuild it from. Said, never swallowed.
 			const ibString table = ddl.m_table;
-			h->DdlUndoActions().push_back([table](ibDatabaseLayer*) {
+			h->DdlUndoActions().push_back([table](const std::shared_ptr<ibDatabaseLayer>&) {
 				ibLog->Warn(ibT("restructure"), ibT("compensation"), ibString::Format(
 					ibT("cannot restore dropped table %s - the next apply may refuse against the old baseline"), table));
 			});
@@ -206,11 +199,11 @@ int ibSchemaBuilder::Execute(const ibDdlStatement& ddl)
 			// failed second phase left the baseline's index missing and the next apply's DROP INDEX refused.
 			const ibDdlStatement undo = ibCreateIndex(ddl.m_table, ddl.m_indexName, ddl.m_indexColumns, ddl.m_unique,
 				ddl.m_descending);
-			h->DdlUndoActions().push_back([undo](ibDatabaseLayer* c) { ibExecuteDdl(c, undo); });
+			h->DdlUndoActions().push_back([undo](const std::shared_ptr<ibDatabaseLayer>& c) { ibExecuteDdl(c, undo); });
 		}
 		else if (!onCreatedTable) {
 			const ibString index = ddl.m_indexName;
-			h->DdlUndoActions().push_back([index](ibDatabaseLayer*) {
+			h->DdlUndoActions().push_back([index](const std::shared_ptr<ibDatabaseLayer>&) {
 				ibLog->Warn(ibT("restructure"), ibT("compensation"), ibString::Format(
 					ibT("cannot restore dropped index %s - the next apply may refuse against the old baseline"), index));
 			});
@@ -222,9 +215,10 @@ int ibSchemaBuilder::Execute(const ibDdlStatement& ddl)
 	return ret;
 }
 
-ibDatabaseLayer& ibSchemaBuilder::Connection() const
+std::shared_ptr<ibDatabaseLayer> ibSchemaBuilder::Connection() const
 {
-	return *conn();
+	// The holder's pinned/scoped conn (same one its open TX lives on); db_query when no holder given.
+	return m_holder != nullptr ? m_holder->EnsureConnection() : db_query;
 }
 
 bool ibSchemaBuilder::RunOrDefer(const ibString& table, std::function<bool()> work)
@@ -256,10 +250,10 @@ std::set<ibString> ibSchemaBuilder::CreatedTables() const
 	return h != nullptr ? h->DdlCreatedTables() : std::set<ibString>();
 }
 
-std::vector<std::function<void(ibDatabaseLayer*)>> ibSchemaBuilder::UndoActions() const
+std::vector<std::function<void(const std::shared_ptr<ibDatabaseLayer>&)>> ibSchemaBuilder::UndoActions() const
 {
 	ibDatabaseConnectionHolder* h = BarrierHolder();
-	return h != nullptr ? h->DdlUndoActions() : std::vector<std::function<void(ibDatabaseLayer*)>>();
+	return h != nullptr ? h->DdlUndoActions() : std::vector<std::function<void(const std::shared_ptr<ibDatabaseLayer>&)>>();
 }
 
 bool ibSchemaBuilder::Flush()

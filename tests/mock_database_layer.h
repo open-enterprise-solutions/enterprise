@@ -20,7 +20,7 @@ public:
     bool Close() override                { m_open = false; return true; }
     bool IsOpen() override               { return m_open; }
     void Cancel() override               {}   // no DBMS to tell
-    ibDatabaseLayer* Clone() override    { auto* c = new MockDatabaseLayer(); c->m_open = true; return c; }
+    std::shared_ptr<ibDatabaseLayer> Clone() override { auto c = std::make_shared<MockDatabaseLayer>(); c->m_open = true; return c; }
 
     bool TableExists(const ibString&) override { return false; }
     bool ViewExists (const ibString&) override { return false; }

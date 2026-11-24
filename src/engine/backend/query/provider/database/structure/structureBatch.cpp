@@ -129,7 +129,7 @@ void ibStructureBatch::AlterField(const std::shared_ptr<const ibBackendQueryColu
 		const ibQueryExprPtr value = type.m_kind == ibCanonicalKind::Text ? ibCol(held)
 			: ibCast(ibSubstring(ibCol(held), ibConst(ibValue(1)), ibConst(ibValue(type.m_length))), ibTypeString(type.m_length));
 		ibDatabaseQueryBuilder().Execute(ibUpdate(table, { { field, value } }));
-		ibExecuteDdl(&ibSchemaBuilder().Connection(), ibDropColumn(table, held));
+		ibExecuteDdl(ibSchemaBuilder().Connection(), ibDropColumn(table, held));
 		return true;   // a real failure THREW
 	});
 }

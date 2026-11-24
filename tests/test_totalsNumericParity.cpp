@@ -62,18 +62,18 @@ ibMaterializeSpec MakeSpec()
 // the triggers would insert duplicate rows instead of accumulating into one.
 struct TotalsFix : ::testing::Test
 {
-	ibDatabaseLayerSQLite db;
+	std::shared_ptr<ibDatabaseLayerSQLite> db = std::make_shared<ibDatabaseLayerSQLite>();
 	bool ready = false;
 
 	void SetUp() override
 	{
-		if (!db.Open(wxT(":memory:"))) {
+		if (!db->Open(wxT(":memory:"))) {
 			GTEST_SKIP() << "in-memory SQLite unavailable";
 			return;
 		}
-		db.RunQuery(wxT("CREATE TABLE Reg7 ("
+		db->RunQuery(wxT("CREATE TABLE Reg7 ("
 			"id INTEGER PRIMARY KEY, period_ TEXT, wh TEXT, qty NUMERIC, rectype_ INTEGER)"));
-		db.RunQuery(wxT("CREATE TABLE Reg7_T ("
+		db->RunQuery(wxT("CREATE TABLE Reg7_T ("
 			"period_ TEXT NOT NULL, wh TEXT NOT NULL, "
 			"qty_in NUMERIC NOT NULL DEFAULT 0, qty_out NUMERIC NOT NULL DEFAULT 0, "
 			"PRIMARY KEY (period_, wh))"));
@@ -86,21 +86,21 @@ struct TotalsFix : ::testing::Test
 		ready = true;
 	}
 
-	void TearDown() override { db.Close(); }
+	void TearDown() override { db->Close(); }
 
 	// --- movements ---------------------------------------------------------
 	void Move(int id, const wxChar* period, const wxChar* wh, double qty, int rectype)
 	{
-		db.RunQuery(wxT("INSERT INTO Reg7 (id, period_, wh, qty, rectype_) VALUES (%d, '%s', '%s', %s, %d)"),
+		db->RunQuery(wxT("INSERT INTO Reg7 (id, period_, wh, qty, rectype_) VALUES (%d, '%s', '%s', %s, %d)"),
 			id, period, wh, wxString::FromCDouble(qty), rectype);
 	}
-	void Retype(int id, int rectype) { db.RunQuery(wxT("UPDATE Reg7 SET rectype_ = %d WHERE id = %d"), rectype, id); }
+	void Retype(int id, int rectype) { db->RunQuery(wxT("UPDATE Reg7 SET rectype_ = %d WHERE id = %d"), rectype, id); }
 	void Requantity(int id, double qty) {
-		db.RunQuery(wxT("UPDATE Reg7 SET qty = %s WHERE id = %d"), wxString::FromCDouble(qty), id);
+		db->RunQuery(wxT("UPDATE Reg7 SET qty = %s WHERE id = %d"), wxString::FromCDouble(qty), id);
 	}
-	void Rewarehouse(int id, const wxChar* wh) { db.RunQuery(wxT("UPDATE Reg7 SET wh = '%s' WHERE id = %d"), wh, id); }
-	void Reperiod(int id, const wxChar* period) { db.RunQuery(wxT("UPDATE Reg7 SET period_ = '%s' WHERE id = %d"), period, id); }
-	void Erase(int id) { db.RunQuery(wxT("DELETE FROM Reg7 WHERE id = %d"), id); }
+	void Rewarehouse(int id, const wxChar* wh) { db->RunQuery(wxT("UPDATE Reg7 SET wh = '%s' WHERE id = %d"), wh, id); }
+	void Reperiod(int id, const wxChar* period) { db->RunQuery(wxT("UPDATE Reg7 SET period_ = '%s' WHERE id = %d"), period, id); }
+	void Erase(int id) { db->RunQuery(wxT("DELETE FROM Reg7 WHERE id = %d"), id); }
 
 	// --- the two sides -----------------------------------------------------
 
@@ -139,25 +139,25 @@ struct TotalsFix : ::testing::Test
 		Totals out;
 		// The query text goes in as a %s ARGUMENT: it contains '%' (strftime masks), which
 		// would otherwise be read as printf specifiers.
-		ibDatabaseResultSet* rs = db.RunQueryWithResults(wxT("%s"), query);
+		ibDatabaseResultSet* rs = db->RunQueryWithResults(wxT("%s"), query);
 		if (rs == nullptr)
 			return out;
 		while (rs->Next()) {
 			out[{ rs->GetResultString(wxT("p")), rs->GetResultString(wxT("w")) }] =
 				{ rs->GetResultDouble(wxT("a")), rs->GetResultDouble(wxT("b")) };
 		}
-		db.CloseResultSet(rs);
+		db->CloseResultSet(rs);
 		return out;
 	}
 
 	double Cell(const wxChar* period, const wxChar* wh, const wxChar* column)
 	{
-		ibDatabaseResultSet* rs = db.RunQueryWithResults(
+		ibDatabaseResultSet* rs = db->RunQueryWithResults(
 			wxT("SELECT %s AS v FROM Reg7_T WHERE period_ = '%s' AND wh = '%s'"), column, period, wh);
 		if (rs == nullptr)
 			return -1.0;
 		const double v = rs->Next() ? rs->GetResultDouble(wxT("v")) : -1.0;
-		db.CloseResultSet(rs);
+		db->CloseResultSet(rs);
 		return v;
 	}
 
