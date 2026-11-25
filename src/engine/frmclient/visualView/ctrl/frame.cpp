@@ -17,7 +17,7 @@
 #include "core/style/style.h"   // ibStyle::Platform — the platform's own colours, and the theme's for them (ApplyLook)
 #include "frmclient/backend/propertyManager/property/propertySerializable.h"   // its properties — a row's each
 #include "deskgui/typeconv.h"
-#include "protocol/protocolDesigner.h"   // ibProtocol::ibSchema::ibProperties
+#include "protocol/protocolStudio.h"   // ibProtocol::ibSchema::ibProperties
 
 namespace {
 

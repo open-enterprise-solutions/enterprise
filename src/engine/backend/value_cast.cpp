@@ -6,7 +6,7 @@
 #if defined(_USE_CONTROL_VALUECAST)
 void ThrowErrorTypeOperation(const ibVariant* fromValue, const std::type_info& typeInfo)
 {
-	if (!appData->DesignerMode()) {
+	if (!appData->StudioMode()) {
 		// The type it was — a runtime value's or a property's, named by the class it answers with.
 		const ibString fromType = fromValue != nullptr ? ibValue::GetNameObjectFromID(fromValue->GetClassType()) : ibString();
 		ibString className = ibEmptyString;

@@ -47,7 +47,7 @@ protected:
 	void OnKickSelected(wxCommandEvent& event);
 	void OnReloadSelected(wxCommandEvent& event);
 
-	// Locks tab: right-click → force-release. Designer-only admin path,
+	// Locks tab: right-click → force-release. Studio-only admin path,
 	// drops the named sys_lock row regardless of owner. Use when a
 	// zombie session left a lock behind.
 	void OnLocksContextMenu(wxListEvent& event);

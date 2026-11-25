@@ -395,7 +395,7 @@ public:
     //
     // ⭐ THE BASE SET — what every application's manager has, registered here: the shared templates (Text /
     // Spreadsheet / Help, meta-bound via CLSID, + the registration journal and the home page) and the shared
-    // schemas. An application's own manager adds its own in its ctor (ibDocManagerRuntime, ibDocManagerDesigner).
+    // schemas. An application's own manager adds its own in its ctor (ibDocManagerWorkspace, ibDocManagerStudio).
     ibDocManager(long flags = 0, bool initialize = true);
     virtual ~ibDocManager();
 

@@ -154,7 +154,7 @@ bool ibValueMetaObjectInformationRegister::OnDeleteMetaObject()
 bool ibValueMetaObjectInformationRegister::OnReloadMetaObject()
 {
 	// The periodicity may have just been switched — which decides whether this register has slices
-	// at all. Asked again here, where a designer edit lands.
+	// at all. Asked again here, where a studio edit lands.
 	SyncSliceSources();
 
 	if (auto* cc = m_metaData->GetCompileCache()) {
@@ -228,7 +228,7 @@ bool ibValueMetaObjectInformationRegister::OnAfterRunMetaObject(int flags)
 
 // ⭐ WHETHER THIS REGISTER HAS SLICES AT ALL, ASKED AGAIN RATHER THAN REMEMBERED.
 //
-// The answer is its PERIODICITY, and periodicity is a property the designer can switch. Decided once
+// The answer is its PERIODICITY, and periodicity is a property the studio can switch. Decided once
 // when the metaobject ran, a register turned periodic afterwards would offer no slices until the
 // process restarted, and one turned non-periodic would go on offering slices it cannot compute.
 //

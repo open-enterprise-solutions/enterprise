@@ -55,10 +55,10 @@ void ibValueRecordDataObjectReport::PrepareEmptyObject()
 		if (metaComposer == nullptr || metaComposer->IsDeleted())
 			continue;
 
-		// ⭐⭐ RUNNING TAKES A COPY OF THE ACTIVE PART; THE DESIGNER EDITS THE CURRENT ONE (Max,
+		// ⭐⭐ RUNNING TAKES A COPY OF THE ACTIVE PART; THE STUDIO EDITS THE CURRENT ONE (Max,
 		// 2026-08-23). Opening a report hands its object a COPY of what the metaobject declares —
 		// the user turns knobs on their own copy, saves it as theirs (storage side), and the
-		// author's variants are untouched by any of it. The designer works on the very description
+		// author's variants are untouched by any of it. The studio works on the very description
 		// the application holds, because there the point IS to change what ships.
 		//
 		// The copy is an assignment and nothing else. It used to travel through a node — write the

@@ -5,7 +5,7 @@
 //	Description : ibCheckScript — compile a module text, report, never run
 ////////////////////////////////////////////////////////////////////////////
 //
-// COMPILE ONLY. The text goes through the same compiler the designer uses and
+// COMPILE ONLY. The text goes through the same compiler the studio uses and
 // is thrown away: nothing is registered, no module is replaced, the open
 // application never learns it happened. An empty answer means it compiles.
 //
@@ -27,7 +27,7 @@
 #include <vector>
 
 // TEXT ON ITS OWN. `moduleName` is what the messages are written against — pass
-// the name of the module being edited so a report reads the way the designer's
+// the name of the module being edited so a report reads the way the studio's
 // would.
 //
 // ⭐⭐ GIVE IT AN APPLICATION AND IT IS JUDGED IN ONE. Without `metaData` the text
@@ -56,11 +56,11 @@ BACKEND_API std::vector<ibDiagnostic> ibCheckScript(const ibString& text,
 BACKEND_API std::vector<ibDiagnostic> ibCheckExpression(const ibString& expression,
 	const class ibMetaData* metaData);
 
-// WHY A SECOND DOOR. The designer's *Syntax control* button does NOT compile a
+// WHY A SECOND DOOR. The studio's *Syntax control* button does NOT compile a
 // bare text: it resolves the module through the application's compile cache
 // and compiles it against the metaobject that owns it, so the object's own
 // attributes, its parent's context and every cross-module export resolve. A
-// check that skips that reports failures the designer would not — and misses
+// check that skips that reports failures the studio would not — and misses
 // the ones it would. For a caller writing code into an application (an
 // assistant, a build step) the weaker answer is the harmful one: plausible and
 // wrong. This door is the button's own road.
@@ -75,7 +75,7 @@ struct ibScriptCheckAnswer {
 
 	// Clean means CHECKED and clean. "Nothing was checked" is not a pass, and
 	// saying so is the whole reason the outcome is carried separately: the
-	// designer's own button returns true when it finds no compile module, which
+	// studio's own button returns true when it finds no compile module, which
 	// is fine for a person watching and wrong for anything acting on the answer.
 	bool IsClean() const {
 		return m_outcome == ibScriptCheckOutcome::Checked && m_diagnostics.empty();

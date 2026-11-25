@@ -966,7 +966,7 @@ int ibWebServer::Run()
 			ibWebServerSay(ibJournalMark::Error, ibT("the manifest %s was not written"), m_config.m_manifest);
 	}
 
-	// A DESIGNER'S DEBUG RUN GOES WITH THE DESIGNER, closed or fallen: nobody else knows this one is there, and it holds
+	// A STUDIO'S DEBUG RUN GOES WITH THE STUDIO, closed or fallen: nobody else knows this one is there, and it holds
 	// the base and the executable's libraries from whoever comes next.
 	for (unsigned tick = 1; !ibCrashGuard::IsStopRequested(); ++tick) {
 		std::this_thread::sleep_for(std::chrono::milliseconds(250));

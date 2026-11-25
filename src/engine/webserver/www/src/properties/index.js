@@ -2,7 +2,7 @@
 // thin client's ibPropertyRegistry maps it; docs/private/web/browser-parity.md, D1). A maker is given the row and a
 // door: it reads the row's Value and hands a new one through the door, in the same shape — the node is the value, so a
 // cell needs no variant and no pair of conversions — and, where it knows, how the new one reads (its Presentation).
-// The cells are registered by mode: runtime.js those the application is sent; a designer's page would register its
+// The cells are registered by mode: runtime.js those the application is sent; a studio's page would register its
 // own beside them, as appstudio does on the thin side. A class nobody registered is shown, never guessed: its
 // Presentation, read-only.
 

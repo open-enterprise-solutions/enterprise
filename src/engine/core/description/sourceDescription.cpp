@@ -69,7 +69,7 @@ bool ibSourceDescriptionMemory::SaveData(ibWriterMemory& writer, const ibSourceD
 // be supported, in sources least of all"*). A fallback branch would keep the old
 // shape alive in every file that still had it and in every reader that had to
 // know about it — and a format with two shapes is a format that will drift.
-// Applications written before this are re-saved from the designer.
+// Applications written before this are re-saved from the studio.
 //
 // The byte reader / writer below is NOT this: LoadData / SaveData still serve the
 // clipboard's own transient form, which rides guids rather than raw ids and never

@@ -607,7 +607,7 @@ public:
 	void ShowOnlyUserSettable(bool only) { m_onlyUser = only; ResetFromList(); }
 
 	// …and WHOSE value the Value column shows. Unset = the author's own line, which is what the
-	// designer's page reads; set = the window answers ("the reader's where they set one").
+	// studio's page reads; set = the window answers ("the reader's where they set one").
 	void SetValueSource(std::function<ibValue(const wxString&)> valueOf) { m_valueOf = std::move(valueOf); }
 
 	// VIEW ROW → PARAMETER. Not the same number once the list is filtered, and this is the ONE place
@@ -1837,11 +1837,11 @@ private:
 };
 
 // ⭐ THE SETTINGS ARE A PANEL, AND THE DIALOG IS ONE OF ITS HOSTS. A composer declared in the
-// metadata is edited on a TAB of its own (the designer opens it like a form or a template — see
+// metadata is edited on a TAB of its own (the studio opens it like a form or a template — see
 // docViewComposer), while a composition held by a form is edited modally from the gridbox. The
 // same shape the list settings already took: content in a panel, the modal window a thin wrapper
 // around it, so the two hosts cannot drift about what a setting is.
-// THE DESIGNER'S — it edits the description's own variants, starting on the zeroth.
+// THE STUDIO'S — it edits the description's own variants, starting on the zeroth.
 ibComposerSettingsPanel::ibComposerSettingsPanel(wxWindow* parent, ibCompositionDescription& edited,
 	const ibMetaData* metaData)
 	: ibPanel(parent, wxID_ANY),
@@ -1853,7 +1853,7 @@ ibComposerSettingsPanel::ibComposerSettingsPanel(wxWindow* parent, ibComposition
 	BuildPanel();
 }
 
-// 🛑⭐⭐ THE DESIGNER'S, HOLDING WHAT IT EDITS. Same window as above; what differs is the GRIP: a window
+// 🛑⭐⭐ THE STUDIO'S, HOLDING WHAT IT EDITS. Same window as above; what differs is the GRIP: a window
 // stays open far longer than the call that opened it, and what it was handed may go first (see the
 // header's m_heldComposition — on the desktop, the 2026-09-02 crash under an MCP write).
 ibComposerSettingsPanel::ibComposerSettingsPanel(wxWindow* parent, const ibCompositionDescription& composition,
@@ -1899,7 +1899,7 @@ void ibComposerSettingsPanel::BuildPanel()
 	//  before it parents the expression to it — ibCheckExpression. The desktop compiled it here, as the window opened.)
 
 	// (NOTHING IS COPIED HERE ANY MORE. The description this window edits was handed to it BY
-	//  REFERENCE and is edited in place — the shape the designer's other editors have, where the grid
+	//  REFERENCE and is edited in place — the shape the studio's other editors have, where the grid
 	//  editor is given the metaobject and writes its description directly. A host that wants a
 	//  transaction holds the copy itself and hands a reference to it, which is where Cancel belongs:
 	//  it is the one who knows whether there is a Cancel at all.)
@@ -1935,7 +1935,7 @@ void ibComposerSettingsPanel::BuildPanel()
 
 	ibNotebook* notebook = new ibNotebook(this, wxID_ANY);
 	ibStyleSettingsTabs(notebook);
-	if (appData->DesignerMode()) {
+	if (appData->StudioMode()) {
 		notebook->AddPage(BuildQueryPage(notebook), _("Query"), true, ibSettingsTabArt(ibSettingsTab::Query));
 		// WHAT EACH FIELD THE QUERY READS IS — right after the query and before anything folds or lays
 		// them out, because the resources and the output both take their fields from here.
@@ -1968,7 +1968,7 @@ void ibComposerSettingsPanel::BuildPanel()
 	// the output tree now — they are about the result the tree describes, so that is where they
 	// belong, and a button at the far end of the dialog said they were something else.)
 	//
-	// OK / Cancel belong to the HOST, not here: a modal window has them, a designer tab has Save
+	// OK / Cancel belong to the HOST, not here: a modal window has them, a studio tab has Save
 	// and Close instead. What they DO is Commit() / RestoreOnOpenState() below — one pair of rules
 	// for both hosts.
 	SetSizer(mainSizer);
@@ -2006,7 +2006,7 @@ void ibComposerSettingsPanel::BuildPanel()
 	// native drag beside ours, and MSW then refuses the second BeginDrag with an assert. Same shape
 	// the query constructor uses.
 	// ⚠ GUARDED, because a page that is not built leaves its controls null — the Query page is
-	// Designer-only, and a rearrangement of the pages once left this binding pointing at a tree
+	// Studio-only, and a rearrangement of the pages once left this binding pointing at a tree
 	// nobody had created any more. It crashed in the constructor, before the window ever appeared
 	// (designer_25192, 2026-08-18), and the stack said `Bind` rather than anything about layout.
 	if (m_resourceFieldTree != nullptr) {
@@ -2176,7 +2176,7 @@ bool ibComposerSettingsPanel::Commit()
 			return false;   // stay open, on the settings that are still being written
 	}
 
-	// 🛑 ONLY IF THE BUFFER WAS ACTUALLY EDITED. Closing a designer tab IS accepting it, so this runs
+	// 🛑 ONLY IF THE BUFFER WAS ACTUALLY EDITED. Closing a studio tab IS accepting it, so this runs
 	// every time a composer is merely LOOKED at — and announcing unconditionally meant an untouched
 	// tab came back as "the application changed", asterisk and all (found by the final audit,
 	// 2026-08-20).
@@ -2199,12 +2199,12 @@ bool ibComposerSettingsPanel::Commit()
 // own and lets it fill its live objects from it; Cancel simply drops the copy. There is nothing to
 // restore, because nothing was changed until the assignment — which is why this is a transaction
 // and the old snapshot-and-put-back was only an imitation of one.
-// (CommitDescription REMOVED — CommitSettings does exactly this on the designer's road, and a second
+// (CommitDescription REMOVED — CommitSettings does exactly this on the studio's road, and a second
 //  method saying the same thing is a second place to keep in step.)
 
 // (RestoreOpenState DELETED — CANCEL is the copy being dropped, and that is all of it. What this
 //  window edits is a description somebody else holds, and whoever holds it decided what Cancel
-//  means: the modal host keeps a COPY and lets it die with the window, the designer's tab hands
+//  means: the modal host keeps a COPY and lets it die with the window, the studio's tab hands
 //  over the metaobject's own and has no Cancel at all. So the body was empty, and an empty method
 //  wired to a button is a promise that something happens there.)
 
@@ -2262,7 +2262,7 @@ const ibMetaData* ibComposerEditor::GetEditedMetaData() const
 {
 	// An absent application is a legitimate answer, not a broken one — see the base's constructor:
 	// with nothing to ask, the primitive types are what a field can be. What it must never do is
-	// reach for the ACTIVE application, which in the designer is somebody else's.
+	// reach for the ACTIVE application, which in the studio is somebody else's.
 	return MetaDataOf(m_document);
 }
 
@@ -2472,8 +2472,8 @@ void ibDialogComposerSettings::BuildAround()
 // "which fields does this composition have".
 wxWindow* ibComposerSettingsPanel::BuildOutputPage(wxWindow* parent)
 {
-	// ⭐⭐ VARIANTS ARE THE DESIGNER'S, AND A READER MUST NOT SEE THEM (Max, 2026-08-24: "variants
-	// are shown in the designer only; a run always takes the zeroth").
+	// ⭐⭐ VARIANTS ARE THE STUDIO'S, AND A READER MUST NOT SEE THEM (Max, 2026-08-24: "variants
+	// are shown in the studio only; a run always takes the zeroth").
 	//
 	// 🛑 THE COLUMN WAS BUILT UNCONDITIONALLY, so Enterprise showed a reader the list of variants
 	// with Add / Copy / Delete over the author's templates. Seen live on an external report.
@@ -4018,7 +4018,7 @@ wxWindow* ibComposerSettingsPanel::BuildParameterPage(wxWindow* parent, bool for
 	// parameter, materialised for the reader and left as the declaration for the author.
 	m_parameterModel->SetValueSource([this](const wxString& name) -> ibValue {
 		const ibValue held = ibStoredValue(StoredParameterValue(name), GetEditedMetaData());
-		return appData->DesignerMode() ? held : ibMaterializeCompositionValue(held, GetEditedMetaData());
+		return appData->StudioMode() ? held : ibMaterializeCompositionValue(held, GetEditedMetaData());
 		});
 	m_parameterView->AssociateModel(m_parameterModel);
 
@@ -4028,7 +4028,7 @@ wxWindow* ibComposerSettingsPanel::BuildParameterPage(wxWindow* parent, bool for
 	// reference — and a text column can only take letters: there was no way to put a reference in at
 	// all (Max, 2026-08-28: "and how am I supposed to change it?"). This is the same cell the filter
 	// and the sort lines are edited through, told where the row's declared type comes from, so the
-	// "…" walks the one route: settle the type, then choose a value of it — which in the designer is
+	// "…" walks the one route: settle the type, then choose a value of it — which in the studio is
 	// the predefined-value form.
 	ibRowValueCellRenderer* valueCell = new ibRowValueCellRenderer(this,
 		ibComposerFieldChooser(this),
@@ -4046,13 +4046,13 @@ wxWindow* ibComposerSettingsPanel::BuildParameterPage(wxWindow* parent, bool for
 			const ibValue held = ibStoredValue(
 				StoredParameterValue(m_edited.m_parameters[at].m_name), GetEditedMetaData());
 
-			// ⭐⭐ THE READER SEES A VALUE, THE AUTHOR SEES A DECLARATION. What the designer wrote is
+			// ⭐⭐ THE READER SEES A VALUE, THE AUTHOR SEES A DECLARATION. What the studio wrote is
 			// `CatalogRef.Goods.Chair` — a declaration, and that is exactly what the author should read
 			// back. At RUN TIME the same parameter is a DEFAULT somebody may replace, so it is shown as
 			// the thing itself, in its ordinary presentation, and changed through the ordinary choice
-			// (Max, 2026-08-29: "the runtime digests what the designer set — it sees a predefined value
+			// (Max, 2026-08-29: "the runtime digests what the studio set — it sees a predefined value
 			// as the default, in a normal presentation, and can change it with its own interface").
-			return appData->DesignerMode()
+			return appData->StudioMode()
 				? held : ibMaterializeCompositionValue(held, GetEditedMetaData());
 		},
 		[this](const ibDataViewItem& row, const ibValue& value) {
@@ -4763,7 +4763,7 @@ void ibComposerSettingsPanel::PopulateFieldTree(ibTreeCtrl* tree)
 		root = tree->AddRoot(wxEmptyString);
 
 	// THE SAME ATTRIBUTE ICON the list settings put on every field. A field list without them reads
-	// as text; with them it reads as the same thing a person sees everywhere else in the designer.
+	// as text; with them it reads as the same thing a person sees everywhere else in the studio.
 	//
 	// ⭐ …AND A RESOURCE WEARS THE RESOURCE METATYPE'S OWN PICTURE (Max, 2026-08-22: highlight them
 	// in the available fields too). Index 0 is the attribute, index 1 the resource — the same two
@@ -4975,8 +4975,8 @@ void ibComposerSettingsPanel::ActivateVariant(size_t idx)
 	//
 	// ⭐ AND NOTHING IS MARKED MODIFIED. Looking at another row is NAVIGATION, not an edit.
 	//
-	// 🛑 THIS IS THE DESIGNER'S ROAD ONLY. A reader has no variant list at all (Max, 2026-08-24:
-	// *"there are no selected variants on the runtime side; they exist only in the designer"*), and
+	// 🛑 THIS IS THE STUDIO'S ROAD ONLY. A reader has no variant list at all (Max, 2026-08-24:
+	// *"there are no selected variants on the runtime side; they exist only in the studio"*), and
 	// the guard above already returned for them — the pointer they were handed is their own setting
 	// and nothing here may move it.
 	m_settings = &m_edited.m_variants[idx].m_settings;

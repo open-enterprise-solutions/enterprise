@@ -202,7 +202,7 @@ void ibDebuggerClient::PatchModule(const ibString& strModuleName, unsigned int l
 		ShiftLineMap(*offsets, line, line_offset, atLineStart, /*collapseCollisions*/ false);
 
 	// …and nothing to the runtime: it counts the committed lines (CommandId_ToggleBreakpoint), and the edits since are
-	// the editor's to count (Max, 2026-10-21: *"the designer keeps the patches, so as not to clutter the runtime"*).
+	// the editor's to count (Max, 2026-10-21: *"the studio keeps the patches, so as not to clutter the runtime"*).
 }
 
 bool ibDebuggerClient::SaveModule(const ibString& strModuleName, unsigned int line_count)
@@ -277,7 +277,7 @@ std::map<unsigned int, int>::iterator ibDebuggerClient::ResolveOriginalLine(
 // A breakpoint on a line the running application does not have is a refusal with a real cause —
 // the module was edited and not applied, so the runtime's copy has different lines. That cause was
 // shown as `wxMessageBox` from inside the engine, which is wrong three times over: backend.dll is
-// GUI-free by rule; a modal blocks the designer until a person clicks it; and a caller that is not
+// GUI-free by rule; a modal blocks the studio until a person clicks it; and a caller that is not
 // a person — an assistant over MCP — got back a bare `false` and had to guess, while the sentence
 // explaining it stood on somebody else's screen (measured 2026-09-02: the box appeared in front of
 // Max, the tool answered "the debugger did not accept it", and the two never met).
@@ -539,9 +539,9 @@ void ibDebuggerClient::RequestScreenshot(const ibString& reason, const ibString&
 // not. A sandbox needs the stop because it borrows the parked session's frame and connection; a fill
 // asks for a background job in a session of its own, which a running application can start whenever.
 //
-// ⭐ AND IT TRAVELS THIS WAY BECAUSE THE RUNTIME IS OVER THERE. The MCP server is in the designer,
-// and a designer builds no runtime for any session (ibSession::EnsureRoot returns early on
-// DesignerMode) — so the work cannot be done on this side at all, only asked for.
+// ⭐ AND IT TRAVELS THIS WAY BECAUSE THE RUNTIME IS OVER THERE. The MCP server is in the studio,
+// and a studio builds no runtime for any session (ibSession::EnsureRoot returns early on
+// StudioMode) — so the work cannot be done on this side at all, only asked for.
 void ibDebuggerClient::StartJob(const ibJobRunRequest& request)
 {
 	ibWriterMemory commandChannel;
@@ -567,7 +567,7 @@ void ibDebuggerClient::CancelJob(const ibString& token)
 }
 
 // ⭐⭐ AND READING A REPORT GOES THE SAME WAY, for a reason of rights rather than of plumbing: the
-// designer does not work with data. What is sent is a SCHEMA — which is why the caller may send one
+// studio does not work with data. What is sent is a SCHEMA — which is why the caller may send one
 // that exists nowhere — and no breakpoint is needed, because what happens over there is a rented
 // read on a connection of its own.
 void ibDebuggerClient::RequestCompose(const ibMemoryBuffer& request)
@@ -750,7 +750,7 @@ void ibDebuggerClient::ibDebuggerClientConnection::EntryClient()
 		///////////////////////////////////////////////////////////////////////
 
 		// CONNECTED IS ANSWERED, not dialled: the runtime answers the verification on a socket it took, and a port
-		// with no runtime behind it, or with one another designer is on (debugServer.cpp, AcceptConnection), lets
+		// with no runtime behind it, or with one another studio is on (debugServer.cpp, AcceptConnection), lets
 		// the socket go having said nothing.
 		bool connected = false;
 		bool sessionEnded = false;   // said to the UI at the bottom of this pass, see there
@@ -795,7 +795,7 @@ void ibDebuggerClient::ibDebuggerClientConnection::EntryClient()
 
 				// 🔎 WHY THE SESSION ENDED — the word this loop leaves by, printed once below.
 				//
-				// Every exit here is a detach the person at the designer sees as "the debugger fell off",
+				// Every exit here is a detach the person at the studio sees as "the debugger fell off",
 				// and from outside they all looked the same: the loop ended, the socket was closed, the
 				// Debug menu went dark, and nothing said which of the six doors it left by. That is the
 				// one question a log could answer and did not (Max, 2026-09-25: *"the connection is not
@@ -811,7 +811,7 @@ void ibDebuggerClient::ibDebuggerClientConnection::EntryClient()
 							// 🛑 A FRAME THIS END CANNOT READ ENDS THE CONNECTION, NOT THE PROCESS. The reader
 							// refuses a chunk whose declared size is larger than what arrived (core/memory/memoryStream.cpp),
 							// and that refusal travels up here - on a worker thread, where an escaping exception
-							// takes the whole designer down with it. It did, on 2026-09-23, while the designer
+							// takes the whole studio down with it. It did, on 2026-09-23, while the studio
 							// was debugging: two asserts in the journal and an access violation inside memcpy a
 							// second later, from a thread whose entire record was those two lines.
 							//

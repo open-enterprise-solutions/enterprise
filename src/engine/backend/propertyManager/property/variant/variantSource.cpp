@@ -35,7 +35,7 @@ void ibVariantAttributeSource::DoRefreshTypeDesc()
 
 		// Validate tabular-section types against the binding's GATE metaobject: the START attribute's
 		// type (from the control's own source path) walked to the table — NOT a single runtime source
-		// object (null at designer, blind to custom object attributes). On copy / section deletion the
+		// object (null at studio, blind to custom object attributes). On copy / section deletion the
 		// gate no longer owns the stale section → it is cleared. Gate unknown → keep (can't validate).
 		const ibValueMetaObject* gateMeta = ResolveGateMeta(m_ownerSrcProperty, m_ownerSrcProperty->GetSourceDesc());
 
@@ -83,7 +83,7 @@ static const ibValueMetaObject* ResolveMetaWide(const ibBackendTypeSourceFactory
 
 // The binding's GATE metaobject = the START attribute's TYPE metaobject (the object whose tabular
 // sections a section-binding references). Used to validate section types per BINDING attribute
-// (main OR custom object) rather than a single runtime source object — and it resolves at designer
+// (main OR custom object) rather than a single runtime source object — and it resolves at studio
 // (no runtime source) since it comes from the attribute's Type, not a live object.
 static const ibValueMetaObject* ResolveGateMeta(const ibBackendTypeSourceFactory* owner,
 	const ibSourceDescription& srcDesc)

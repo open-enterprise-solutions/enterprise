@@ -34,7 +34,7 @@ static const wxCmdLineEntryDesc s_cmdLineDesc[] = {
 	{ wxCMD_LINE_OPTION, "lc", "locale",     "The platform's locale for the file base (default: as the base says)", wxCMD_LINE_VAL_STRING, 0 },
 	{ wxCMD_LINE_SWITCH, "g",  "debug",      "The engine's debug server for the file base, as enterprise's --debug", wxCMD_LINE_VAL_NONE, 0 },
 	{ wxCMD_LINE_OPTION, "m",  "manifest",   "Write the publication's page address to this file once the port is open (url=...)", wxCMD_LINE_VAL_STRING, 0 },
-	{ wxCMD_LINE_OPTION, "o",  "owner",      "Stop when the process of this id ends: what a designer's debug run is started with", wxCMD_LINE_VAL_NUMBER, 0 },
+	{ wxCMD_LINE_OPTION, "o",  "owner",      "Stop when the process of this id ends: what a studio's debug run is started with", wxCMD_LINE_VAL_NUMBER, 0 },
 	{ wxCMD_LINE_SWITCH, "h",  "help",       "Show this help message.", wxCMD_LINE_VAL_NONE, wxCMD_LINE_OPTION_HELP },
 	{ wxCMD_LINE_NONE,   nullptr, nullptr,   nullptr,                   wxCMD_LINE_VAL_NONE, 0 }
 };

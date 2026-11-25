@@ -1,7 +1,7 @@
 #include "docViewRole.h"
 
 #include "appstudio/win/editor/roleEditor/roleEditor.h"
-#include "protocol/protocolDesigner.h"   // ibProtocol::ibView::ibCheckTree
+#include "protocol/protocolStudio.h"   // ibProtocol::ibView::ibCheckTree
 
 // ----------------------------------------------------------------------------
 // ibRoleEditView implementation

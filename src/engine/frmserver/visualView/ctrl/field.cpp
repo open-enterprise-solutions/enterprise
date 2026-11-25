@@ -158,7 +158,7 @@ bool ibValueField::IsReadOnly() const
 
 void ibValueField::OnCreated(ibVisualHost* host, bool firstCreated)
 {
-	// firstCreated is set ONLY by the designer's add, never on a form open. AN ATTRIBUTE DROPPED ON THE FORM makes an Input
+	// firstCreated is set ONLY by the studio's add, never on a form open. AN ATTRIBUTE DROPPED ON THE FORM makes an Input
 	// bound to it, and the field takes the default view (Max, 2026-11-23: a Boolean dropped — a Flag); a view a paste
 	// brought is kept. A field dropped with no source auto-binds to a fresh attribute (control-side helper) so it
 	// renders bound, not hidden — where its view binds one.

@@ -1,11 +1,11 @@
 #ifndef __HOME_PAGE_EDITOR__
 #define __HOME_PAGE_EDITOR__
 
-// Home-page workspace editor — the designer surface of ibHomePageDescription.
+// Home-page workspace editor — the studio surface of ibHomePageDescription.
 //
 // Reached from the application root's context menu ("Open home page workspace"), through the same
 // seam the predefined-values editor uses: the metaobject asks (ibMetaDataNotifier::
-// EditHomePage), the designer owns the dialog.
+// EditHomePage), the studio owns the dialog.
 //
 // What it edits is deliberately small: which forms the start page shows, in which column, in
 // which order, with what height share, and the column template. It edits a WORKING COPY and

@@ -66,7 +66,7 @@ bool FoldTotals(ibSession* session)
 	// anywhere saying so. That is not hypothetical — a rebuild that filed every movement as
 	// an expense was found by hand on 2026-09-15, and this check is what would have reported
 	// it on the next pass. A disagreement is written to the registration journal, where the
-	// person responsible reads; the Designer's recompute rebuilds the table.
+	// person responsible reads; the Studio's recompute rebuilds the table.
 	const ibDerivedState::ibTotalsMaintenance done = ibDerivedState::MaintainTotals(snapshot, session->Holder());
 	if (done.m_failed) {
 		ibJournalInfo(ibT("job"),ibT("totals fold failed"));
@@ -75,7 +75,7 @@ bool FoldTotals(ibSession* session)
 	if (done.m_mismatched > 0)
 		ibLog->Warn(ibT("totals"), ibT("verify"), ibString::Format(
 			ibT("%d key(s) of the last period in the register totals disagree with the movements - ")
-			ibT("recompute the totals in the Designer to rebuild them"), done.m_mismatched));
+			ibT("recompute the totals in the Studio to rebuild them"), done.m_mismatched));
 
 	// MaintainTotals walks every table in one pass, so there is never a remainder to
 	// report. If it ever grows a chunked form, THIS is the line that turns into

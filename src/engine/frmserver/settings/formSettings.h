@@ -34,7 +34,7 @@ class ibValueForm;
 // or a value — has the last word.
 //
 // ⭐⭐ SOFT DEGRADATION LIVES HERE (Max: *"with soft degradation, because it can change in the
-// Designer"*): a control id that is gone, a property renamed, a property taken off the list a user
+// Studio"*): a control id that is gone, a property renamed, a property taken off the list a user
 // may touch, a value the property no longer accepts — each is one entry skipped, and the rest still
 // goes on. 🛑 And nothing raises: `get_cell_variant` throws when a stored value is not of the kind
 // the property expects, and a raise inside the form's initialisation is a form that does not open.

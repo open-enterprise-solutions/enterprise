@@ -49,7 +49,7 @@
 #include "backend/system/value/valueSpreadsheet.h" // …and an alignment, an enumeration's member
 #include "backend/query/queryHierarchy.h"         // …and the subtree an «in hierarchy» one is handed
 #include "backend/backend_composition.h"         // the description + its Memory (read/write) pair, its values packed
-#include "backend/system/value/composition/valueComposerField.h"   // …a value the designer declared among them
+#include "backend/system/value/composition/valueComposerField.h"   // …a value the studio declared among them
 #include "core/serialize/dataBuilder.h"        // ibDataNode — what a description is written into
 
 namespace {
@@ -603,7 +603,7 @@ TEST(CompositionDescription, Equality_NoticesAChangedStructure)
 TEST(CompositionDescription, AuthorSettingsAreVariantZero)
 {
 	ibCompositionDescription desc;
-	desc.m_variants.emplace_back();          // a second one the designer authored
+	desc.m_variants.emplace_back();          // a second one the studio authored
 	desc.m_variants[0].m_name = wxT("Main");
 	desc.m_variants[1].m_name = wxT("With profitability");
 
@@ -1150,7 +1150,7 @@ TEST(CompositionOtherSettings, ANodeSaysItsOwnElseTheOutputElseTheSetting)
 	EXPECT_EQ(ibCompositionThemes().front(), &ibCompositionThemeById(wxT("NoSuchTheme")));
 }
 
-// ⭐ A VALUE THE DESIGNER DECLARED READS BACK AS IT WAS WRITTEN — its text was written under `t`, the name the header
+// ⭐ A VALUE THE STUDIO DECLARED READS BACK AS IT WAS WRITTEN — its text was written under `t`, the name the header
 // gives the type, and a read finds the first field of a name: it came back reading as its type's id (2026-10-29).
 TEST(CompositionParameters, ADeclaredValueIsKeptThroughTheStore)
 {

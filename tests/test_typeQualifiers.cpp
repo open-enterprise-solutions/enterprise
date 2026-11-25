@@ -4,14 +4,14 @@
 // Two defects, both measured 2026-09-21 on a running copy:
 //
 //   * A description a script built with no qualifier took ibTypeData's own defaults - ten digits and no
-//     fraction, ten characters, a date without its time - which are the designer's defaults for a NEW
+//     fraction, ten characters, a date without its time - which are the studio's defaults for a NEW
 //     ATTRIBUTE. `New TypeDescription("String")` cut a text to ten characters, "Number" rounded to a
 //     whole number, and a value table's column added without a type kept ten characters of anything.
 //   * The qualifiers had no Init of their own, so `New QualifierNumber(15, 2)` ignored its arguments and
 //     no fraction could be declared from a script at all.
 //
 // What these pin: no qualifier limits nothing (ibValueTypeDescription::Unqualified); a qualifier takes
-// what it is given and refuses what it cannot hold; and the designer's defaults still mean what they did
+// what it is given and refuses what it cannot hold; and the studio's defaults still mean what they did
 // for the attributes that carry them.
 // =============================================================================
 
@@ -56,7 +56,7 @@ TEST(TypeQualifiers, ABooleanReadsTheValueAsOne)
 	EXPECT_FALSE(AdjustedTo(boolean, ibValue()).GetBoolean());
 }
 
-TEST(TypeQualifiers, TheDesignersDefaultsStillMeanWhatTheyDid)
+TEST(TypeQualifiers, TheStudiosDefaultsStillMeanWhatTheyDid)
 {
 	// A new attribute's defaults are a column width in the database; they are not what a script meant by
 	// "a number", but they are what an attribute declared with them has always been adjusted to.

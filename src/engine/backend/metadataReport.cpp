@@ -13,7 +13,7 @@ m_moduleManager(nullptr),
 m_rootObject(nullptr),
 m_version(version_oes_last)
 {
-	// Compile cache (designer mode only) is built by the image ctor via
+	// Compile cache (studio mode only) is built by the image ctor via
 	// CreateCompileCache() below — see ibMetaDataDataTool.
 
 	//create main metaObject
@@ -115,15 +115,15 @@ ibString ibMetaDataReport::GetLangCode() const
 
 ////////////////////////////////////////////////////////////////////
 
-std::unique_ptr<ibCompileValueCache> ibMetaDataReport::CreateDesignerCache()
+std::unique_ptr<ibCompileValueCache> ibMetaDataReport::CreateStudioCache()
 {
-	// Designer mode only; an external report additionally owns a module-manager (bound
+	// Studio mode only; an external report additionally owns a module-manager (bound
 	// to its object module). Called by the image ctor.
-	if (!appData->DesignerMode())
+	if (!appData->StudioMode())
 		return nullptr;
 	auto cache = std::make_unique<ibCompileValueCache>();
 	if (m_rootObject->IsExternalCreate())
-		cache->SetModuleManager(new ibValueModuleManagerDesigner(this, m_rootObject->GetObjectModule()));
+		cache->SetModuleManager(new ibValueModuleManagerStudio(this, m_rootObject->GetObjectModule()));
 	return cache;
 }
 
@@ -148,8 +148,8 @@ bool ibMetaDataReport::RunDatabase(const ibRuntimeRequest& request)
 			m_moduleManager->InvalidateNames();
 		}
 
-		// The designer module-manager (for the report's compile cache) was already
-		// built by the image ctor via CreateDesignerModuleManager() — shared modules
+		// The studio module-manager (for the report's compile cache) was already
+		// built by the image ctor via CreateStudioModuleManager() — shared modules
 		// register into it during RunSubtree(true) below.
 		if (!m_rootObject->RunSubtree(request.m_flags, ibValueMetaObject::ibRunPhase::Before))
 			return false;
@@ -195,7 +195,7 @@ bool ibMetaDataReport::CloseDatabase(const ibRuntimeRequest& request)
 	// and the rollback ends HERE, on a container that never opened.
 	//
 	// ⭐ THE ASSERT STAYS, THE EXIT HAPPENS ANYWAY (Max: "let it warn me there is an error, and let
-	// it still come out — in the designer while debugging I want to know; in the runtime it does not
+	// it still come out — in the studio while debugging I want to know; in the runtime it does not
 	// matter"). Debug tells the developer, Release closes silently, and neither traps the user:
 	// nothing to close IS a successful close — the rule the destructors in this tree already follow.
 	ibASSERT(IsOpen());
@@ -216,7 +216,7 @@ bool ibMetaDataReport::CloseDatabase(const ibRuntimeRequest& request)
 	if (!m_rootObject->CloseSubtree(ibValueMetaObject::ibRunPhase::Before))   // un-resolve
 		return false;
 
-	// Symmetric to RunDatabase — tear down + release the designer manager.
+	// Symmetric to RunDatabase — tear down + release the studio manager.
 	if (auto* cc = GetCompileCache()) {
 		if (auto* mgr = cc->GetModuleManager())
 			mgr->DestroyMainModule();
@@ -305,7 +305,7 @@ bool ibMetaDataReport::LoadFromBuffer(const ibMemoryBuffer& buffer, const ibStri
 	m_fullPath = fullPath;
 
 	// (A file read INTO an application is read here on its own, with its own ids, and then pasted into it — the paste
-	// gives its objects their ids and re-homes what holds them: ReadExternal, schema/designer/metaData.cpp, #578.)
+	// gives its objects their ids and re-homes what holds them: ReadExternal, schema/studio/metaData.cpp, #578.)
 
 	// External (start from file): standalone report — detached-root swap. Build a
 	// fresh root and load into it; on failure the live report is untouched.
@@ -413,7 +413,7 @@ bool ibMetaDataReport::LoadRootTree(ibValueMetaObjectReport* root, const ibClass
 	//
 	// 🛑 BYTES THIS BUILD CANNOT READ ARE REFUSED IN WORDS, as an application's are (ibMetaDataApplicationFile::
 	// LoadRootTree). A quiet false here was a file opened in the application with no tab and nothing said, and the
-	// designer's File → Open the same — a report saved before the kind-typed ids keeps its tree under an id this build
+	// studio's File → Open the same — a report saved before the kind-typed ids keeps its tree under an id this build
 	// does not look for (2026-11-15, ExternalReport1.orp of 2026-08-24).
 	const auto unreadable = [this]() {
 		ibBackendCoreException::Error(_("'%s' is stored in a format this build cannot read: it was written by an older or "

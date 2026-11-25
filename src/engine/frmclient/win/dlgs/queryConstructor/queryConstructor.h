@@ -121,9 +121,9 @@ public:
 	                         int exclude = ibQueryExclude_None);
 
 	// Does this application allow its structure to be changed? The answer lives on the metadata's
-	// own application (ibMetaData::IsEditable) — the same question the designer asks before it
+	// own application (ibMetaData::IsEditable) — the same question the studio asks before it
 	// lets anything be edited, so the constructor inherits the answer instead of inventing one.
-	// No tree at all = a runtime host with no designer surface, which does not make a query
+	// No tree at all = a runtime host with no studio surface, which does not make a query
 	// unreadable — so: editable.
 	static bool IsMetaDataReadOnly(const ibMetaData* metaData);
 

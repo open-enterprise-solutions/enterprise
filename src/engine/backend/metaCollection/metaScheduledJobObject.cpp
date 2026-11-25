@@ -5,7 +5,7 @@
 #include "metaScheduledJobObject.h"
 
 #include "backend/metaData.h"
-#include "backend/appData.h"                       // appData->DesignerMode(), GetJobManager
+#include "backend/appData.h"                       // appData->StudioMode(), GetJobManager
 #include "backend/userInfo.h"                      // ibUserInfo — the identity a job inherits
 #include "backend/job/jobManager.h"                // ibJobManager / ibJobDescription
 #include "backend/moduleManager/moduleManager.h"   // ibValueModuleManagerRuntimeApplication
@@ -82,8 +82,8 @@ bool RunScheduledJobBody(ibSession* session, const ibValueMetaObjectScheduledJob
 
 bool ibValueMetaObjectScheduledJob::RegisterJob()
 {
-	// The Designer never runs an application's jobs. It edits them.
-	if (appData == nullptr || appData->DesignerMode())
+	// The Studio never runs an application's jobs. It edits them.
+	if (appData == nullptr || appData->StudioMode())
 		return true;
 
 	ibJobManager* const manager = ibApplicationInstance::GetJobManager();
@@ -149,7 +149,7 @@ bool ibValueMetaObjectScheduledJob::RegisterJob()
 
 bool ibValueMetaObjectScheduledJob::UnregisterJob()
 {
-	if (appData == nullptr || appData->DesignerMode())
+	if (appData == nullptr || appData->StudioMode())
 		return true;
 
 	if (ibJobManager* const manager = ibApplicationInstance::GetJobManager())
@@ -185,7 +185,7 @@ bool ibValueMetaObjectScheduledJob::OnSaveMetaObject(int flags)
 
 bool ibValueMetaObjectScheduledJob::OnDeleteMetaObject()
 {
-	// NOTHING IS FORGOTTEN HERE. This event is the Designer's "delete" — a mark on a metaobject
+	// NOTHING IS FORGOTTEN HERE. This event is the Studio's "delete" — a mark on a metaobject
 	// that the user may still walk away from by not saving. Dropping the job's record on it would
 	// throw away the settings and the clock of a job that is, so far, still there.
 	//

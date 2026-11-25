@@ -125,7 +125,7 @@ struct DocumentJournalFix : ::testing::Test {
 		// journal's Number a column of two kinds, read back by the tag beside it.
 		refund->GetDocumentNumber()->GetTypeDesc().SetDefaultMetaType(ibValueTypes::TYPE_NUMBER);
 
-		// What binding the documents in the designer or over MCP does, said directly.
+		// What binding the documents in the studio or over MCP does, said directly.
 		journal->GetRegisteredDocuments().AppendMetaType(invoice->GetMetaID());
 		journal->GetRegisteredDocuments().AppendMetaType(refund->GetMetaID());
 
@@ -216,7 +216,7 @@ struct DocumentJournalFix : ::testing::Test {
 	std::shared_ptr<ibSession> SessionInRole(const ibString& roleModule) {
 		const_cast<ibValueMetaObjectManagerModule*>(role->GetRoleModule())->SetModuleText(roleModule);
 
-		auto session = std::make_shared<ibSession>(wxT("journal-clerk"), ibSessionKind::Enterprise);
+		auto session = std::make_shared<ibSession>(wxT("journal-clerk"), ibSessionKind::Workspace);
 		ibUserInfo user;
 		user.m_strUserGuid = wxT("22222222-2222-2222-2222-222222222222");
 		user.m_strUserName = wxT("clerk");
@@ -705,8 +705,8 @@ TEST_F(DocumentJournalFix, ARowFilterOnADocumentHoldsInTheJournal) {
 }
 
 // ⭐ OVER MCP, AS AN ASSISTANT BUILDS ONE: `metadata_create` makes the journal and the documents, `metadata_bind`
-// lists them in RegisteredDocuments, and the journal reads them - the same binding the designer's property grid
-// sets. The application is the one a designer session edits (test_applicationCheckRegisters.cpp says why each
+// lists them in RegisteredDocuments, and the journal reads them - the same binding the studio's property grid
+// sets. The application is the one a studio session edits (test_applicationCheckRegisters.cpp says why each
 // step is there).
 TEST(DocumentJournalOverMcp, IsCreatedAndBoundByTheTools) {
 	wxInitializer wx;
@@ -734,7 +734,7 @@ TEST(DocumentJournalOverMcp, IsCreatedAndBoundByTheTools) {
 	ibSessionRegistry* const registry = ibApplicationInstance::GetSessionRegistry();
 	ASSERT_NE(registry, nullptr);
 	ibSessionHolder holder = registry->MintUnlisted(
-		std::make_shared<ibSession>(wxT("journal-over-mcp"), ibSessionKind::Designer));
+		std::make_shared<ibSession>(wxT("journal-over-mcp"), ibSessionKind::Studio));
 	ibSession* const session = holder.Get();
 	ASSERT_NE(session, nullptr);
 	ibSessionScope scope(session);

@@ -240,7 +240,7 @@ bool ibFrontendCommandReceiver::ResolveCommand(const ibCommandDescription& desc,
 		return true;
 	}
 	// (2) The RELIABLE gather — a TABLEBOX command's walk resolves the hop but vends an empty caption / no icon
-	// (fragile in the designer preview); the gather (the SAME set the picker offered) fills the readable name + icon
+	// (fragile in the studio preview); the gather (the SAME set the picker offered) fills the readable name + icon
 	// and PROVES the command still exists. Only a truly gone command misses BOTH.
 	if (ibValueForm* form = GetCommandGateForm())
 		for (const ibCommandSourceEntry& e : GatherFormCommands(form))

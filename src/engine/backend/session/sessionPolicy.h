@@ -10,9 +10,9 @@
 // runs.
 //
 // Typical concrete policies (subclasses):
-//   - `ibDesignerExclusivePolicy` — migrates the existing
-//     `VerifySessionUpdater` designer-conflict check: at most one
-//     designer session across the cluster at a time.
+//   - `ibStudioExclusivePolicy` — migrates the existing
+//     `VerifySessionUpdater` studio-conflict check: at most one
+//     studio session across the cluster at a time.
 //   - `ibLicenseLimitPolicy` (future) — at most N user sessions,
 //     cluster-wide, as a licensing constraint.
 //   - `ibPerUserQuotaPolicy` (future) — at most M sessions per user.

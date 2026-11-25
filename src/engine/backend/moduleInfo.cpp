@@ -5,7 +5,7 @@
 
 #include "moduleInfo.h"
 
-#include "appData.h"                 // DesignerMode() guard in Compile()
+#include "appData.h"                 // StudioMode() guard in Compile()
 #include "backend/metaCollection/metaModuleObject.h"  // ibValueMetaObjectModuleBase full type for GetGuid/GetClassType
 #include "backend/metaData.h"                         // ibByteCodeStorage — where a module's bytecode comes from
 #include "core/compiler/scriptParseCode.h"          // ibParseCode — the export names a TEXT declares
@@ -87,7 +87,7 @@ bool ibRuntimeModuleDataObject::ExecAsManagerEvent(const ibValueMetaObjectGeneri
 
 	// The manager module's own procedure first — found where the manager value finds it (EditModuleManagerFor),
 	// NOT in the session's runtime root. The root holds the application's shared modules; a manager module is
-	// registered where its metaobject's metadata lives, which in the Designer is a compile-cache manager with no
+	// registered where its metaobject's metadata lives, which in the Studio is a compile-cache manager with no
 	// root at all. Asked of the root, a job "ran" and did nothing.
 	const ibValueMetaObjectSharedModule* const module = metaObject->GetManagerModule();
 	const ibValueModuleManager* const moduleManager = module != nullptr ? ibSession::EditModuleManagerFor(metaData) : nullptr;
@@ -112,9 +112,9 @@ const ibRuntimeRoot* ibRuntimeModuleDataObject::GetRoot() const
 void ibRuntimeModuleDataObject::InitializeRuntime()
 {
 	// ProcUnit is the runtime slot — allocated lazily per descriptor.
-	// Designer never executes so no slot is needed; duplicate calls
+	// Studio never executes so no slot is needed; duplicate calls
 	// (already-set slot) short-circuit to keep the same instance.
-	if (m_procUnit != nullptr || appData->DesignerMode())
+	if (m_procUnit != nullptr || appData->StudioMode())
 		return;
 	m_procUnit = std::make_shared<ibProcUnit>();
 	// Propagate parent's ProcUnit as scope chain if parent is already
@@ -136,19 +136,19 @@ std::unique_ptr<ibCompileModule> ibRuntimeModuleDataObject::CreateCompiler() con
 
 // THE NAMES A MODULE EXPORTS, AND THE TWO PLACES THEY COME FROM.
 //
-// ⭐⭐ THE DESIGNER HAS NO RUNTIME, so it cannot be asked for bytecode — and bytecode is the only
-// thing this used to read. Everything built on it therefore said NOTHING in the designer: a shared
+// ⭐⭐ THE STUDIO HAS NO RUNTIME, so it cannot be asked for bytecode — and bytecode is the only
+// thing this used to read. Everything built on it therefore said NOTHING in the studio: a shared
 // module offered no exports after its dot, a manager host (Catalogs.Goods., commonObject.cpp)
 // missed its manager module's exports, an object module's own exported procedures were invisible
-// on ThisObject — while the designer's "Procedures and functions" window listed all of them,
+// on ThisObject — while the studio's "Procedures and functions" window listed all of them,
 // because IT read the TEXT (ibParseCode). One question, two answers, and one of them empty.
 //
 // ⚠ AND THE TEST IS "DESIGNER", NOT "NO BYTECODE" — which is the tempting one and is wrong. At
 // RUNTIME a descriptor can also be without bytecode: a module that failed to compile is exactly
 // that. Naming its exports there would advertise something nobody can call, and the failure moves
-// from an honest "method not found" to a call into an absent ProcUnit. The designer executes
+// from an honest "method not found" to a call into an absent ProcUnit. The studio executes
 // nothing, so there a name read off the text is a promise it can keep. Asked the same way by the
-// neighbour in this class: Compile() steps aside on appData->DesignerMode().
+// neighbour in this class: Compile() steps aside on appData->StudioMode().
 static void ibExportNamesFromText(const ibValueMetaObjectModuleBase* moduleObject,
 	ibValue::ibMemberTable* helper, bool methods)
 {
@@ -193,7 +193,7 @@ void ibRuntimeModuleDataObject::ExportMethodsToHelper(ibValue::ibMemberTable* he
 	if (helper == nullptr)
 		return;
 
-	if (appData->DesignerMode()) {
+	if (appData->StudioMode()) {
 		ibExportNamesFromText(GetMetaObject(), helper, /*methods*/ true);
 		return;
 	}
@@ -246,7 +246,7 @@ void ibRuntimeModuleDataObject::ExportPropsToHelper(ibValue::ibMemberTable* help
 	if (helper == nullptr)
 		return;
 
-	if (appData->DesignerMode()) {
+	if (appData->StudioMode()) {
 		ibExportNamesFromText(GetMetaObject(), helper, /*methods*/ false);
 		return;
 	}
@@ -313,10 +313,10 @@ void ibRuntimeModuleDataObject::UnbindVariable(const ibString& name)
 
 void ibRuntimeModuleDataObject::Run(bool delta)
 {
-	// Designer never executes script — the editor only cares about
+	// Studio never executes script — the editor only cares about
 	// AST / symbol table. Runtime / codeRunner / appserver all go through
 	// here.
-	if (appData->DesignerMode())
+	if (appData->StudioMode())
 		return;
 	Execute(delta);
 }
@@ -326,9 +326,9 @@ bool ibRuntimeModuleDataObject::Compile()
 	const ibValueMetaObjectModuleBase* const meta = GetMetaForCompile();
 	if (meta == nullptr)
 		return false;
-	// Designer never runs bytecode. What it asks about a text it asks
+	// Studio never runs bytecode. What it asks about a text it asks
 	// a compile chain (CreateCompiler).
-	if (appData->DesignerMode())
+	if (appData->StudioMode())
 		return true;
 
 	if (m_byteCode == nullptr)
@@ -370,7 +370,7 @@ bool ibRuntimeModuleDataObject::Compile()
 		outBc = std::move(static_cast<ibByteCode&>(compiler.m_cByteCode));
 		// Stamp the freshly-compiled bytecode with the descriptor
 		// identity. m_id is the descriptor's GUID — stable across
-		// renames in Designer; cache rows in sys_bytecode_cache key
+		// renames in Studio; cache rows in sys_bytecode_cache key
 		// off it. m_descriptorClsid records the kind (SharedModule /
 		// FormModule / etc.) for sanity checks at AOT-load time and
 		// for diag tooling.
@@ -386,7 +386,7 @@ bool ibRuntimeModuleDataObject::Compile()
 
 	// What the storage holds is taken; a miss compiles once, whoever else misses meanwhile, and the storage saves and
 	// holds what was compiled (ibByteCodeStorage::Load with `compile`). Best-effort: a save that fails leaves the live
-	// bc. No storage — a designer's own copy, an application not open — and it compiles for itself.
+	// bc. No storage — a studio's own copy, an application not open — and it compiles for itself.
 	//
 	// ⭐ NOT WHAT WAS COMPILED UNDER AN EVAL. A watch or a sandbox opens a compile inside its
 	// OWN host frame, and that frame is a rung: every operand this compile stamps carries a

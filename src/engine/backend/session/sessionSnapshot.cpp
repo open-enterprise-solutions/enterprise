@@ -34,7 +34,7 @@ ibString ibSessionSnapshot::GetProgram(unsigned int idx) const {
 		return ibEmptyString;
 	const auto& row = m_listSession[idx];
 	// THE KIND SAYS WHAT A SESSION WORKS IN; the run mode only says whether its process is a server or a file
-	// base, and either hosts designers, clients and jobs alike. A row whose kind says nothing (Unknown) falls back
+	// base, and either hosts the studio, the workspace and jobs alike. A row whose kind says nothing (Unknown) falls back
 	// to the run-mode description.
 	// A JOB IS NOT AN APPLICATION. Its run mode says which executable happens to
 	// host it, which is exactly the wrong answer for the question this column
@@ -45,13 +45,9 @@ ibString ibSessionSnapshot::GetProgram(unsigned int idx) const {
 	case static_cast<int>(ibSessionKind::BackgroundJob): return _("Background job");
 	case static_cast<int>(ibSessionKind::ScheduledJob):  return _("Scheduled job");
 	case static_cast<int>(ibSessionKind::SystemJob):     return _("System job");
-	case static_cast<int>(ibSessionKind::ThinClient):    return _("Application Workspace");
-	case static_cast<int>(ibSessionKind::Designer):
-	case static_cast<int>(ibSessionKind::ThinDesigner):  return _("Application Studio");
-	case static_cast<int>(ibSessionKind::Enterprise):    return _("Thick client (GUI)");
+	case static_cast<int>(ibSessionKind::Workspace):     return _("Application Workspace");
+	case static_cast<int>(ibSessionKind::Studio):        return _("Application Studio");
 	case static_cast<int>(ibSessionKind::Service):       return _("Application server");
-	case static_cast<int>(ibSessionKind::WebServer):     return _("Web server");
-	case static_cast<int>(ibSessionKind::WebClient):     return _("Web client");
 	case static_cast<int>(ibSessionKind::HttpService):   return _("HTTP service");
 	default: break;
 	}
@@ -78,7 +74,7 @@ ibString ibSessionSnapshot::GetSessionKindDescr(unsigned int idx) const
 		return ibEmptyString;
 	const auto& row = m_listSession[idx];
 	// The kind carries the server/client split; everything else is user-facing, reported as "Client" for
-	// consistency in the Active Users dialog — a legacy row without a kind (m_kind = 0) included.
+	// consistency in the Active Users dialog — a row without a kind (m_kind = 0) included.
 	// Jobs are neither: nobody is sitting at them. Saying "Client" here would
 	// claim a person is connected, which is the one thing an administrator reads
 	// this column to find out.
@@ -90,7 +86,6 @@ ibString ibSessionSnapshot::GetSessionKindDescr(unsigned int idx) const
 	case static_cast<int>(ibSessionKind::SystemJob):
 		return _("Job");
 	case static_cast<int>(ibSessionKind::Service):
-	case static_cast<int>(ibSessionKind::WebServer):
 		return _("Server");
 	// …and a request to an HTTP service is a system's call, not a person's.
 	case static_cast<int>(ibSessionKind::HttpService):

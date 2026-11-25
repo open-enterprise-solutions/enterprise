@@ -66,7 +66,7 @@ ibValueMetaObject* ibFindMetaObject(ibMetaData* metaData, const ibString& kind, 
 
 	// ⭐ THE TREE FINDS ITS OWN. This used to pull every object of the kind and compare names in a
 	// loop — a second copy of ibMetaData::FindAnyObjectByFilter, which takes the name and the clsid
-	// together and is the one road the designer and the compiler already take.
+	// together and is the one road the studio and the compiler already take.
 	//
 	// ⚠ AND THE CLSID IS NOT ONLY A FILTER. Given one, the walk settles the cast with a static_cast,
 	// because an exact class id IS an exact type; without one it has to dynamic_cast every candidate.
@@ -89,7 +89,7 @@ ibValueMetaObject* ibFindMetaObjectById(ibMetaData* metaData, const ibMetaID& id
 	// 🛑 THE ROOT IS PART OF THE TREE AND IS NOT ONE OF ITS CHILDREN. The walk below starts AT the
 	// common object and descends, so the one object it can never return is the object it starts
 	// from — and the application root is a metaobject like any other: it has a metaID, it is
-	// selectable in the designer's tree, it carries help and notes, and the notes on it are where
+	// selectable in the studio's tree, it carries help and notes, and the notes on it are where
 	// the direction of the whole application belongs.
 	//
 	// Which meant every tool that addresses by id — read it, describe it, write a note on it —

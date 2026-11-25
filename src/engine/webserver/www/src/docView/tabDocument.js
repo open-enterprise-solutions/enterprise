@@ -93,7 +93,7 @@ export class TabDocument {
 			fetch: (control, request) => session.call('fetch', { Control: control, Request: request, ...of }),
 			picture: (picture) => pictures.url(picture),
 			fetchPictures: (node) => pictures.fetchFor(node).catch(() => {}),
-			designerMode: () => session.designerMode(),
+			studioMode: () => session.studioMode(),
 		};
 	}
 

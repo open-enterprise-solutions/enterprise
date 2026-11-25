@@ -8,7 +8,7 @@
 
 bool ibSchemaMcpServer::AccessRight(const ibSession& session) const
 {
-	if (IsDesignerSessionKind(session.GetKind()))
+	if (session.GetKind() == ibSessionKind::Studio)
 		return true;
 
 	const ibMetaDataApplicationBase* const metaData = session.GetMetaData();

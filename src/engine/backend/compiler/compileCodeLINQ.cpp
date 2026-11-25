@@ -3118,7 +3118,7 @@ void ibCompileCode::CompileLinqBlock(ibCompileContext* linqCtx, const ibLinqBind
 						// ends the read — and a caret inside a projection IS a text that stops there,
 						// because ibCaretCompile truncates at the caret. So `select { C = o.` never met
 						// its `}`: the loop turned forever, appending a column each time, and the
-						// designer stopped answering. Found from a live break, 2026-09-08: the time was
+						// studio stopped answering. Found from a live break, 2026-09-08: the time was
 						// burning inside UniqueColumnName, scanning a column list that grew without
 						// bound — the symptom was two frames away from the cause.
 						//

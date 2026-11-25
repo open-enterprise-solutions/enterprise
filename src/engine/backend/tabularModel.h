@@ -440,7 +440,7 @@ public:
 		// model: measured 2026-09-08 from a crash dump. `t = New Table(); foreach (row in t) { row.`
 		// made the completion walk build a sample row over a TEMPORARY table; the table died with
 		// the step, and the first question to the row walked a freed column vector. It crashed the
-		// designer from the editor as readily as from the tool.
+		// studio from the editor as readily as from the tool.
 		//
 		// The line's own refcount does NOT cover this: `IsLineAttached` says the row left the model,
 		// which is an ordinary state (Clear/Remove) and is guarded. A model that no longer EXISTS is
@@ -713,7 +713,7 @@ public:
 	// caller sees. It is used up, brings the data back and ends.
 	//
 	// WHERE the caller lives does not enter into it. A list is a list in the
-	// Designer, in the thick client and in a browser tab; the run is the same in
+	// Studio, in the thick client and in a browser tab; the run is the same in
 	// all three.
 	//
 	// Everything that cannot be rented lands INLINE — a saturated pool, a registry

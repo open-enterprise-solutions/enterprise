@@ -9,7 +9,7 @@
 #include "deskgui/univ/panel.h"
 
 // THE APPLICATION'S DEBUGGING PAGE OF THE OPTIONS: its box read from the server's schema
-// (frmserver/schema/runtime/debugging.cpp) and switched by the schema's Start and Stop, at once, not on OK.
+// (frmserver/schema/workspace/debugging.cpp) and switched by the schema's Start and Stop, at once, not on OK.
 class FRMCLIENT_API ibPanelDebugSettings : public ibPanel
 {
 public:

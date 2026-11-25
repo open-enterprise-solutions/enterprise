@@ -156,7 +156,7 @@ public:
 
 	// Canonical sort rank for a group CLSID. Lower rank = appears first
 	// in the standard metadata tree (see treeApplication_impl.cpp).
-	// Used by the walker to emit groups in the same order the designer
+	// Used by the walker to emit groups in the same order the studio
 	// shows them. Unknown CLSIDs sort after the known ones.
 	static int GroupOrderRank(ibClassID clsid);
 

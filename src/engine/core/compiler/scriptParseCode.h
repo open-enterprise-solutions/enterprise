@@ -1,13 +1,13 @@
 #ifndef __IB_SCRIPT_PARSE_CODE_H__
 #define __IB_SCRIPT_PARSE_CODE_H__
 
-// WHAT A MODULE TEXT DECLARES, read WITHOUT compiling it — the walk that fills the designer's
+// WHAT A MODULE TEXT DECLARES, read WITHOUT compiling it — the walk that fills the studio's
 // "Procedures and functions" window, the editor's autocomplete, and module_outline.
 //
 // ⭐ IT LIVES BELOW EVERY READER BECAUSE THE ANSWER IS NEEDED ON EVERY SIDE. It began in the code
 // editor, and by location it looked like an editor concern; it is not. A module's exports are ALSO
 // its own value's member surface (ibRuntimeModuleDataObject::ExportMethodsToHelper), and that
-// surface reads BYTECODE — which the designer does not have, because it compiles nothing. So the
+// surface reads BYTECODE — which the studio does not have, because it compiles nothing. So the
 // same question — "what does this text export" — was answered by this parser on one side and by
 // nothing at all on the other: `StockManagement.` offered nothing while module_outline listed its
 // exports from the very same text.

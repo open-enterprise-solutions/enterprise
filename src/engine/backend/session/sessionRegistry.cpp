@@ -2,7 +2,7 @@
 #include "sessionException.h"
 #include "sessionPolicy.h"
 #include "sessionThrottle.h"
-#include "designerExclusivePolicy.h"
+#include "studioExclusivePolicy.h"
 #include "serviceExclusivePolicy.h"
 
 #include "backend/appData.h"
@@ -71,7 +71,7 @@ void LogSession(const std::string& msg)
 // asked of a few rows by somebody about to be refused (SettleSilentPeers). The question had three beats of
 // its own while the sweep kept ten, so a live peer whose heart stalls for a few seconds — stopped in a native
 // debugger, its beat waiting on a database lock — lost its row to the question, and with it the guard that one
-// designer is open (audit 2026-09-12). A live peer still costs the question one beat: it stops watching a row
+// studio is open (audit 2026-09-12). A live peer still costs the question one beat: it stops watching a row
 // the moment it moves.
 constexpr auto kHeartbeatInterval = std::chrono::seconds(1);
 constexpr int  kSilentBeats       = 10;
@@ -147,7 +147,7 @@ ibSessionWatch ibSessionRegistry::Find(const ibString& id)
 {
 	// Lookup by session id in m_own — the live map keyed by GetId(),
 	// populated through the normal Connect / worker-pool flow. The
-	// designer echoes GetId() back as the debug sid, so this resolves
+	// studio echoes GetId() back as the debug sid, so this resolves
 	// Continue / Step / Pause targets.
 	std::shared_lock<std::shared_mutex> lock(m_ownMutex);
 	auto it = m_own.find(id);
@@ -183,25 +183,6 @@ ibSessionWatch ibSessionRegistry::FindSessionByFrame(ibBackendDocFrame* frame) c
 	return ibSessionWatch();
 }
 
-bool ibSessionRegistry::HasClients() const
-{
-	std::shared_ptr<ibSession> server;
-	{
-		std::shared_lock<std::shared_mutex> lk(m_serverMutex);
-		server = m_currentServer.lock();
-	}
-	if (!server) return false;
-	std::shared_lock<std::shared_mutex> lock(m_ownMutex);
-	for (const auto& kv : m_own) {
-		auto s = kv.second.Share();
-		if (!s || s == server) continue;
-		auto srv = s->Server();
-		if (srv && srv.get() == server.get())
-			return true;
-	}
-	return false;
-}
-
 // --- Session factory facade ----------------------------------------------
 
 ibSessionHolder ibSessionRegistry::CreateSessionOfKind(ibRunMode runMode,
@@ -210,10 +191,10 @@ ibSessionHolder ibSessionRegistry::CreateSessionOfKind(ibRunMode runMode,
                                                        ibConnectRequest::SessionFactory factory)
 {
 	// Anonymous-phase Connect — registry INSERTs a row with userName=''
-	// immediately so peers (Active Users UI, designer-exclusive policy)
+	// immediately so peers (Active Users UI, studio-exclusive policy)
 	// see "someone is logging in", and a job is visible from the moment it
 	// exists — before it has an identity, and whether or not it ever gets
-	// one. The kind is the caller's: the server's own login, the designer's
+	// one. The kind is the caller's: the server's own login, the studio's
 	// window, wes's technical WebServer row, a job.
 	ibConnectRequest req;
 	req.m_computer       = computer;
@@ -223,7 +204,7 @@ ibSessionHolder ibSessionRegistry::CreateSessionOfKind(ibRunMode runMode,
 
 	auto result = Connect(req);
 	if (result.m_code != ibConnectResult::Ok) {
-		// Surface the actual rejection reason (e.g. designer-exclusive
+		// Surface the actual rejection reason (e.g. studio-exclusive
 		// policy veto, single-user-mode block, registry-down) so the caller's
 		// catch shows something better than the generic "Failed to create
 		// session" wrapper in FinishCreateSession.
@@ -291,10 +272,10 @@ void ibSessionRegistry::Start()
 	// UPDATE path.
 	EnableSysSessionOwnership(true);
 
-	// Designer-exclusive policy — one designer per IB at a time, in EVERY process: a designer is a session's kind,
-	// and a file base's designer and a thin designer in a server are the same question. It lets everyone else
+	// Studio-exclusive policy — one studio per IB at a time, in EVERY process: a studio is a session's kind,
+	// and a file base's studio and a studio in a server are the same question. It lets everyone else
 	// through. Added BEFORE the thread so the chain is immutable once the consumer thread is running.
-	AddPolicy(std::make_unique<ibDesignerExclusivePolicy>(this));
+	AddPolicy(std::make_unique<ibStudioExclusivePolicy>(this));
 
 	// …and a base served by an application server is that server's — in EVERY process, because the refusal has to happen
 	// in the one trying to come in (docs/private/multi-base-process.md § 5.2).
@@ -390,7 +371,7 @@ void ibSessionRegistry::Stop()
 	// SELECT already waiting in the database reads nothing until it returns, and it need not return: rows held by
 	// a peer process that was KILLED stay locked until the server notices the owner is gone. The wait below then
 	// detached the thread, the connections were torn down under it, and it woke into freed memory — a close that
-	// crashed (appworkspace 2104, 2026-10-28: the designer beside it killed for a rebuild a second before;
+	// crashed (appworkspace 2104, 2026-10-28: the studio beside it killed for a rebuild a second before;
 	// "Error retrieving Next record: invalid statement handle", then an access violation on 0xdddddddd).
 	// Cancelled, the statement throws, the throw leaves the loop as a deliberate stop (Die returns quietly once
 	// `m_stop` is set), and the join below is an ordinary one. Nothing running — nothing is cancelled.
@@ -399,7 +380,7 @@ void ibSessionRegistry::Stop()
 	// ⭐⭐ AN ORDINARY JOIN — NO DEADLINE, NO DETACH. It waits as long as the database takes to deliver the cancel:
 	// a lock held by a peer that was KILLED is let go only when the server notices, ~10 s on 2026-11-13. A timed
 	// wait of two seconds then DETACHED the thread, the close went on freeing the registry, its connection and the
-	// Firebird client, and the thread woke into them — the designer closed right after app_stop, an access
+	// Firebird client, and the thread woke into them — the studio closed right after app_stop, an access
 	// violation on 0xdddddddd. A detached thread outlives everything it uses: the process is not gone yet. (The
 	// backstop was for a fatal exception unwinding main while it held a lock the thread waits on; wx ends such a
 	// process with ExitProcess, which ends every other thread before any destructor runs — no join waits there.)
@@ -744,7 +725,7 @@ void ibSessionRegistry::NotifyAuthenticated(ibSession* s)
 			if (cb) cb(s);
 	}
 	// Between phases — the session acquires its own reference to the base's
-	// active application NOW (a designer's session: one of its own): the one
+	// active application NOW (a studio's session: one of its own): the one
 	// it works in for its whole life, whatever replaces the active one later.
 	// OnAuthenticated's listeners (CompileRoot) need session->mm to exist.
 	// Session creates its root here so ownership stays in ibSession (see EnsureRoot).
@@ -1012,24 +993,6 @@ void ibSessionRegistry::ProcessAdd(ibRegistryRequest& req)
 	if (!req.session) return;
 	ibSession& s = *req.session;
 
-	// Server (parent) auto-tracking — kind == WebServer registers as
-	// the process's server; subsequent non-server sessions get Server()
-	// pinned to it so keep-alive / topology queries see the tree without
-	// the caller threading the pointer through. Single-session apps
-	// (desktop GUI, appserver, coderunner) never add a WebServer-kind
-	// session, so m_currentServer stays nullptr and Server() does too.
-	if (s.GetKind() == ibSessionKind::WebServer) {
-		std::unique_lock<std::shared_mutex> lk(m_serverMutex);
-		m_currentServer = s.weak_from_this();
-	} else {
-		std::shared_ptr<ibSession> srv;
-		{
-			std::shared_lock<std::shared_mutex> lk(m_serverMutex);
-			srv = m_currentServer.lock();
-		}
-		if (srv) s.SetServer(srv.get());
-	}
-
 	// Single-user (monopoly) gate — if another session holds the IB in
 	// single-user mode, park the request. The session stays in Created
 	// state; the producer's WaitForState in Connect blocks until either
@@ -1050,7 +1013,7 @@ void ibSessionRegistry::ProcessAdd(ibRegistryRequest& req)
 	}
 
 	// ⭐ REFRESH BEFORE REFUSING. This gate used to read the CACHED snapshot while the refresh below sat
-	// after it, so a row that had already gone — the previous designer run's own single-user row, released
+	// after it, so a row that had already gone — the previous studio run's own single-user row, released
 	// on exit — kept rejecting the next start until something else rebuilt the cache. Restarting the
 	// application "fixed" it, which is the signature of a stale read rather than a busy database.
 	//
@@ -1058,7 +1021,7 @@ void ibSessionRegistry::ProcessAdd(ibRegistryRequest& req)
 	// a decision that cannot be revisited may not be taken on a cached picture. The same coalescing as
 	// below keeps this cheap: a snapshot taken moments ago is not re-read.
 	// ⭐ AND SWEEP THE DEAD FIRST. Refreshing only re-reads the table — it does not ask whether the rows
-	// in it belong to anything still running. A process that ended without unregistering (a designer
+	// in it belong to anything still running. A process that ended without unregistering (a studio
 	// closed while it held monopoly, a crash) leaves its row behind, and a refusal built on that row is
 	// a refusal on behalf of nobody: the message names an EMPTY user, and the block clears itself only
 	// when the periodic sweep happens to fire — which is exactly what made it come and go.
@@ -1111,9 +1074,9 @@ void ibSessionRegistry::ProcessAdd(ibRegistryRequest& req)
 	}
 
 	// Refresh the cluster snapshot before consulting policies — closes the
-	// race where a second designer starts up faster than the first refresh
+	// race where a second studio starts up faster than the first refresh
 	// tick (~3s) and the cached snapshot doesn't yet show the first
-	// designer's INSERTed row, so the exclusion policy permits the second
+	// studio's INSERTed row, so the exclusion policy permits the second
 	// instance. Refresh is on this thread (consumer), so it can't deadlock
 	// with itself.
 	//
@@ -1335,15 +1298,6 @@ void ibSessionRegistry::ProcessRemove(ibRegistryRequest& req)
 	if (wasSingleUserHolder) {
 		s.m_singleUser.store(false, std::memory_order_release);
 		DrainPendingSingleUser();
-	}
-
-	// If the leaving session was the registered server, drop the
-	// auto-tracking pointer. Subsequent CreateSession calls will leave
-	// Server() null until another WebServer-kind session is added.
-	{
-		std::unique_lock<std::shared_mutex> lk(m_serverMutex);
-		if (auto cur = m_currentServer.lock(); cur && cur.get() == &s)
-			m_currentServer.reset();
 	}
 
 	// Fire Disconnect listeners while session is still alive (between
@@ -1929,7 +1883,7 @@ size_t ibSessionRegistry::SettleSilentPeers(const std::vector<ibString>& peers)
 
 // Shared UPDATE path for admin directives. Uses the global `db_query`
 // (not the registry's pool-checkout'ed connections) because the admin
-// endpoints may be reached from callers — designer's Active Users
+// endpoints may be reached from callers — studio's Active Users
 // dialog — that haven't checked out a pool connection themselves.
 static bool WriteSessionSignal(const ibString& sessionGuid,
                                 const ibString& signalValue)
@@ -2228,7 +2182,7 @@ void ibSessionRegistry::ThreadBody() noexcept
 			// will exit anyway" — it joins now, 2026-11-13), and the detached thread went on working
 			// while the registry deleted sessions underneath it and the pool shut down.
 			//
-			// Measured 2026-09-08, on an ORDINARY close of the designer — the last two lines of the
+			// Measured 2026-09-08, on an ORDINARY close of the studio — the last two lines of the
 			// journal, 14 ms apart:
 			//     t24868  DELETE FROM sys_session WHERE (session = ?)   ← the registry, tearing down
 			//     t2948   DELETE FROM sys_lock    WHERE (sessionGuid = ?)  ← this thread, still going
@@ -2369,7 +2323,7 @@ void ibSessionRegistry::Die(const ibString& why)
 	// attachment down at once (its own handler, beside the program's), so the statement fails before the program has
 	// come round to Stop() and set m_stop — the same ordinary exit, a moment earlier (appworkspace, 2026-10-29:
 	// SIGTERM, this FATAL, then SIGABRT). Firebird is told to leave a signal to the program since 2026-11-12
-	// (RefuseSignalShutdown, firebirdInterface.cpp) — the designer's logout ran on a base already gone.
+	// (RefuseSignalShutdown, firebirdInterface.cpp) — the studio's logout ran on a base already gone.
 	if (m_stop.load(std::memory_order_acquire) || ibCrashGuard::IsStopRequested()) {
 		m_submitCv.notify_all();
 		return;

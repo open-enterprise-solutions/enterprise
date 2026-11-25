@@ -209,7 +209,7 @@ TEST(FiberTrust, ARoleHandlerThatAsksIsRefusedByName)
 {
 	ibBaseForTest base;
 	ASSERT_TRUE(base.IsOpen());
-	auto session = std::make_shared<ibRoleSession>(wxT("role-name"), ibSessionKind::Enterprise);
+	auto session = std::make_shared<ibRoleSession>(wxT("role-name"), ibSessionKind::Workspace);
 	ibSessionScope bound(session.get());
 	ibBaseFrame frame(session);
 
@@ -266,7 +266,7 @@ TEST(FiberTrust, ARoleHandlerThatAsksThroughTheGateDoesNotHang)
 	ASSERT_TRUE(root->SetRight(wxT("Administration"), role->GetMetaID(), false));
 	ASSERT_TRUE(cfg.RunDatabase()) << "the application in memory did not run";
 
-	auto session = std::make_shared<ibRoleSession>(wxT("role-gate"), ibSessionKind::Enterprise);
+	auto session = std::make_shared<ibRoleSession>(wxT("role-gate"), ibSessionKind::Workspace);
 	ibUserInfo user;
 	user.m_strUserGuid = wxT("11111111-1111-1111-1111-111111111111");
 	user.m_strUserName = wxT("clerk");
@@ -359,7 +359,7 @@ TEST(FiberTrust, SetSessionParametersPausesTrustWhileItAsks)
 	ASSERT_TRUE(SetModuleText(root->GetSessionModule(), kSessionAsks));
 	ASSERT_TRUE(cfg.RunDatabase()) << "the application in memory did not run";
 
-	auto session = std::make_shared<ibRoleSession>(wxT("session-params"), ibSessionKind::Enterprise);
+	auto session = std::make_shared<ibRoleSession>(wxT("session-params"), ibSessionKind::Workspace);
 	{
 		ibSessionScope bound(session.get());
 		ibString error;

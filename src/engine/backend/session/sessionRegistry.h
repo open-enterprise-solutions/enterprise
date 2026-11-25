@@ -97,7 +97,7 @@ struct BACKEND_API ibRegistryRequest {
 
 // -------------------------------------------------------------------
 // ibConnectRequest — unified entry-point parameters for Connect().
-// Desktop, designer, web-server technical, web per-cookie all fill one
+// Desktop, studio, web-server technical, web per-cookie all fill one
 // of these. When user+password are empty the session stays anonymous
 // after Connect (INSERT row with empty userName, expectsAnonPhase =
 // true). When creds are supplied Connect attempts Attach inline and
@@ -196,13 +196,6 @@ public:
 	// pointer but no direct field on it (e.g. cross-DLL hooks).
 	ibSessionWatch FindSessionByFrame(class ibBackendDocFrame* frame) const;
 
-	// Does the registered server session (m_currentServer) currently have
-	// any client attached? Server-shutdown logic uses this to decline
-	// process exit while real clients are still alive — replaces the
-	// pre-2026-04-26 `Count() > 2` heuristic. Returns false in single-
-	// session apps where no WebServer-kind session ever registered.
-	bool                     HasClients() const;
-
 	// How long a producer waits for the registry thread to settle a Connect.
 	// Generous on purpose: the consumer may be mid-sweep or mid-snapshot when the
 	// request arrives, and a session that fails to open is a user who cannot work.
@@ -222,7 +215,7 @@ public:
 	// Caller passes runMode + computer so the registry stays decoupled
 	// from appData's runtime state (the ibConnectRequest fields m_appMode /
 	// m_computer), and the KIND — what the session is never follows from how
-	// the process was started: a server's own login, the designer's window, a
+	// the process was started: a server's own login, the studio's window, a
 	// job any host holds next to its own session.
 	// Returns OWNERSHIP of the registered session. Empty holder on
 	// registry-Connect failure (policy veto, duplicate id, registry down).
@@ -346,7 +339,7 @@ public:
 
 	// ---- Is a peer alive? Asked ----
 	// ⭐ A ROW OUTLIVES A KILLED PROCESS until the stale sweep's cutoff passes (JobSweepStale), and a
-	// question answered from the table in that window — "is another designer here?", "am I alone?" — is
+	// question answered from the table in that window — "is another studio here?", "am I alone?" — is
 	// answered about somebody who is not there. A live owner moves its row's lastActive every heartbeat, so
 	// the question is ASKED instead of waited out: the named rows are watched, a row that moves has an owner,
 	// and one that stands still until its last beat is as old as the sweep's own cutoff has none — it is
@@ -402,7 +395,7 @@ public:
 	// Fires from ibSession::RequestForceExit on any session kind.
 	// Per-class OnClose only does something for sessions that have
 	// something to close — a window, a tab, a job queue
-	// (desktop pair, web tab). Designer's CommandId_Destroy lands on
+	// (desktop pair, web tab). Studio's CommandId_Destroy lands on
 	// Current(), which for wes falls back to the WebServer technical
 	// session — windowless, so nothing happens there. This listener picks
 	// up THAT case.
@@ -457,7 +450,7 @@ public:
 	// the public ibSession surface.
 
 	// Install authenticated user identity on a session. Writes the user
-	// info struct + caches the plain-text password for Designer "Start
+	// info struct + caches the plain-text password for Studio "Start
 	// debugging" child spawn. Caller must already be under a
 	// ibSessionScope bound to the target session (registry's
 	// ProcessAttach, or the GUI login dialog on the main thread).
@@ -683,21 +676,6 @@ private:
 	std::vector<SessionCallback>        m_listReload;
 	std::size_t                         m_authenticatedCount = 0;
 	bool                                m_firstConnectFired  = false;
-
-	// --- server (parent) auto-tracking ---
-	// Most recent session added with kind == WebServer. ProcessAdd uses
-	// it to auto-populate Server() on subsequent (non-server) sessions
-	// so wes per-tab clients link to the wes system session without the
-	// caller threading a parameter through. Empty weak in single-session
-	// apps (desktop GUI, appserver, codeRunner) — no WebServer kind ever
-	// registers, no auto-attach happens.
-	//
-	// weak_ptr (not raw) — single writer (registry thread in ProcessAdd /
-	// ProcessRemove), multi reader (HasClients from any thread). m_serverMutex
-	// guards both. lock().get() returns nullptr if the server session was
-	// destroyed before ProcessRemove cleared the slot (crash path).
-	mutable std::shared_mutex                                    m_serverMutex;
-	std::weak_ptr<ibSession>                                     m_currentServer;
 
 	// --- single-user (monopoly) mode ---
 	// Current holder. Writes happen on the registry thread (ProcessAdd /

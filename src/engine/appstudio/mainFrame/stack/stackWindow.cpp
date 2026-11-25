@@ -136,7 +136,7 @@ void ibStackWindow::ClearAndCreate()
 	FitColumns();
 }
 
-#include "mainFrame/mainFrameDesigner.h"
+#include "mainFrame/mainFrameStudio.h"
 
 ibStackWindow* ibStackWindow::GetStackWindow()
 {

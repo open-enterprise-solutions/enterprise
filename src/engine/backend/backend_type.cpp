@@ -28,7 +28,7 @@ bool ibBackendMetaDescriptionMemory::WriteNode(ibDataValue& value, const ibMetaD
 		// binding this door had served named something that stands at the top — a register, a
 		// chart, a catalog — so a shallow search answered them all and nobody noticed it was
 		// shallow. An ACCOUNTING KIND lives inside its chart of accounts: not found, its id was
-		// dropped here, and the binding was written as an EMPTY list. Set in the designer, read
+		// dropped here, and the binding was written as an EMPTY list. Set in the studio, read
 		// back, saved, reopened — and gone, with no error anywhere (found with probes over MCP,
 		// 2026-09-16). The rule this filter states — "an id that names no object is not written" —
 		// is about existence, and existence does not depend on depth. The READING side asks the
@@ -276,7 +276,7 @@ static void AppendMetaAnyKinds(ibCtorObjectMetaType kind, std::vector<ibClassID>
 //
 // 🛑 THE BODY CAME FROM THE OLD DESKTOP'S TYPE PICKER, where it was a static
 // function only that dialog could reach — which is why the MCP door, in this very library, could set a
-// type the designer does not offer. The type property now asks this (propertyType.cpp).
+// type the studio does not offer. The type property now asks this (propertyType.cpp).
 void ibBackendTypeApplicationFactory::GetTypesByFilter(ibSelectorDataType filterDataType,
 	const ibMetaData* metaData, std::vector<ibClassID>& out)
 {
@@ -390,7 +390,7 @@ void ibBackendTypeApplicationFactory::GetTypesByFilter(ibSelectorDataType filter
 
 const ibFormatString& ibBackendTypeApplicationFactory::GetFormatFromColumn(const ibTranslateString& format, const ibTypeDescription& type)
 {
-	// Compared by what they say, not by whose they are: an attribute edited in the designer keeps its
+	// Compared by what they say, not by whose they are: an attribute edited in the studio keeps its
 	// address, and a column's type in a value table is changed in place.
 	//
 	// ONE KEPT: a table is painted a column at a time, top to bottom, so the cells of a column ask one question

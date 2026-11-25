@@ -17,7 +17,7 @@
 // the server sent (ibProtocol::ibRequest::ibKind::ObjectKind) — the window's Caption, the object's Name, Synonym and
 // Comment, and a kind per child: its Id, Caption and the Name the object takes with it; the desktop's read them of the
 // application. The server puts the answer on the object, as the desktop's OK put it there. Here, as the desktop keeps
-// it; asked by the designer's frame (ibFrontendMainFrameDesigner::ShowRequest).
+// it; asked by the studio's frame (ibFrontendMainFrameStudio::ShowRequest).
 class FRMCLIENT_API ibDialogSelectKind : public ibDialog {
 
 	ibStaticText* m_staticTextName;

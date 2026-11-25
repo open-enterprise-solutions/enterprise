@@ -16,7 +16,7 @@ judgement belongs in `.github/lint.sh`, not here.
 ## 1. Before the first line
 
 **Read what you change and the road it sits on, not the whole tree.** Who sets the value, who
-reads it, where it is serialised, which designer and runtime paths pass through it. A change that
+reads it, where it is serialised, which studio and runtime paths pass through it. A change that
 compiles but does not reach the other end of that road is not done.
 
 **Find the nearest neighbour and repeat it literally.** Open it whole and copy its shape and its
@@ -355,7 +355,7 @@ not with a hook, a flag or a guard where the symptom shows. To forbid something 
 the one door everybody gets the object through (`CurrentFrame()` gives no form during a forced
 exit) instead of checking at each caller.
 
-**Gate designer against runtime at the creator that pairs a widget with its data:** it hands the
+**Gate studio against runtime at the creator that pairs a widget with its data:** it hands the
 widget a null model. The widget gets no mode flag, and the models get no per-class checks.
 
 **Formatting is applied by the edge that shows the value.** Data answers "what value" and "what
@@ -489,7 +489,7 @@ narrow it or reword it; find who asks the wrong object the wrong question.
 
 **Key a guard on the question the rule asks.** An evaluation guard asks the evaluation
 (`ibBackendException::IsEvalComplete()`), not the process mode; "not here" is asked of the holder
-(`IsDesignerHost()`), not of the whole process. A refusal by process in a shared door starves every
+(`IsStudioHost()`), not of the whole process. A refusal by process in a shared door starves every
 other road through it, so when a shared door refuses, check that each caller still wants it.
 
 **No optional "pass it if you have it" parameter.** A default is a branch hidden from the callers:

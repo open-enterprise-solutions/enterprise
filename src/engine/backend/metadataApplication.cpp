@@ -5,14 +5,14 @@
 
 #include "backend/backend_mainFrame.h"
 #include "backend/appData.h"
-#include "backend/session/session.h"   // IsDesignerSessionKind — whom an application was made for
+#include "backend/session/session.h"   // ibSessionKind — whom an application was made for
 #include "backend/session/sessionRegistry.h"   // an apply that moves the structure lets the session's single-user mode go
 #include "backend/job/jobManager.h"   // the job records are swept once the surviving jobs are known
 
 // ms_instance / Get / Initialize / Destroy retired — ownership moved
 // to ibApplicationInstance::m_activeMetaData, shared with every session let
 // in while it was active (ibSession::GetMetaData). The fabric
-// lives on ibApplicationInstance::CreateActiveMetaData (a designer's session's own: ibSession::AcquireMetaData),
+// lives on ibApplicationInstance::CreateActiveMetaData (a studio's session's own: ibSession::AcquireMetaData),
 // its tear-down in the base's Close;
 // callers reach the active metadata through `appEnv::ActiveMetaData()`
 // (which the legacy `activeMetaData` macro now redirects to).
@@ -239,7 +239,7 @@ ibMetaDataApplicationFile::~ibMetaDataApplicationFile()
 
 	// m_rootObject (ibValuePtr) releases the root automatically on destruction
 	// (DecrRef → cascade). For an unshared root that destroys it; a still-shared
-	// root (e.g. designer UI holding a ref) survives until the last holder drops.
+	// root (e.g. studio UI holding a ref) survives until the last holder drops.
 }
 
 ////////////////////////////////////////////////////////////////////
@@ -286,8 +286,8 @@ bool ibMetaDataApplicationFile::RunDatabase(const ibRuntimeRequest& request)
 		ibCompileCode::SetCodeStyle(m_rootObject->GetCompileSyntax());
 
 	// Transactional open as RAII (image presence == open): LoadGuard CREATES the
-	// runtime image — and, for a designer-edit application, its compile cache + designer
-	// module-manager (bound to the root metaobject, via CreateDesignerModuleManager),
+	// runtime image — and, for a studio-edit application, its compile cache + studio
+	// module-manager (bound to the root metaobject, via CreateStudioModuleManager),
 	// so shared modules can register into the manager during RunSubtree(true). The
 	// guard's dtor ROLLS BACK on ANY exit that isn't Commit() — a failed RunSubtree
 	// return OR a raised ibBackendException unwinding the stack — by dropping the image,
@@ -329,10 +329,10 @@ bool ibMetaDataApplicationFile::RunDatabase(const ibRuntimeRequest& request)
 	// SWEEP THE JOB RECORDS — here, and nowhere earlier.
 	//
 	// sys_job holds a row per job: its schedule, its switch, when it last ran. A job that was
-	// deleted in the Designer leaves one behind, and the moment to notice is exactly this one —
+	// deleted in the Studio leaves one behind, and the moment to notice is exactly this one —
 	// the resolve pass has just finished, so every job that still exists has announced itself,
 	// and whatever is left in the table belongs to something that did not survive the
-	// restructuring. Doing it at the Designer's delete instead would throw the record away while
+	// restructuring. Doing it at the Studio's delete instead would throw the record away while
 	// the user could still walk away without saving.
 	if (ibJobManager* const jobs = ibApplicationInstance::GetJobManager())
 		jobs->PurgeSharedState();
@@ -370,7 +370,7 @@ bool ibMetaDataApplicationFile::CloseDatabase(const ibRuntimeRequest& request)
 	if (!m_rootObject->CloseSubtree(ibValueMetaObject::ibRunPhase::Before))   // un-resolve
 		return false;
 
-	// Tear down the designer manager AND release it BEFORE the un-register phase. The
+	// Tear down the studio manager AND release it BEFORE the un-register phase. The
 	// metaobject it binds to is about to be reset; dropping the manager now prevents a
 	// dangling reference (the next RunDatabase makes a fresh one). Mirrors CreateMainModule.
 	if (auto* cc = GetCompileCache()) {
@@ -452,7 +452,7 @@ bool ibMetaDataApplicationFile::LoadRootTree(const ibClassID& clsid, ibReaderMem
 	//
 	// 🛑 BYTES THIS BUILD CANNOT READ ARE REFUSED IN WORDS — never a quiet false. Every caller hands in
 	// a blob it has already checked is not empty, so a missing header, a foreign sign or a missing
-	// application block means one thing: another format. Returned as false, the designer's start
+	// application block means one thing: another format. Returned as false, the studio's start
 	// swallowed it and opened the DEFAULT application over an old base — an empty tree that one
 	// "Update database" would have written over the real one (2026-09-28, a base of
 	// 2026-09-27). Raised, it reaches the start's message box and every menu's error window.
@@ -553,14 +553,9 @@ bool ibMetaDataApplication::OnInitialize(const int flags)
 	ibBackendLocalization::SetUserLanguage(GetLangCode());
 
 	if ((flags & _app_start_create_debug_server_flag) != 0) {
-		// wait=true blocks bootstrap until the designer's debugClient
+		// wait=true blocks bootstrap until the studio's debugClient
 		// connects (OnStart must not run before breakpoints arrive).
-		// For wes that's a deadlock — wes needs to bind HTTP and start
-		// serving immediately; the designer attaches later through the
-		// per-process search. Per-tab WebClient sessions stop at their
-		// own OnStart only after the listener exists.
-		const bool waitForClient = !appData->WebEnterpriseMode();
-		debugServer->CreateServer(defaultHost, ibPort::Debugger.m_first, waitForClient);
+		debugServer->CreateServer(defaultHost, ibPort::Debugger.m_first, true);
 	}
 
 	return true;
@@ -599,7 +594,7 @@ bool ibMetaDataApplicationStorage::OnInitialize(const int flags)
 
 	// (Its tables are the base's, made as it opens — ibApplicationInstance::Open.)
 
-	// Designer-side debugger client. Same 1:1-with-metadata footing as
+	// Studio-side debugger client. Same 1:1-with-metadata footing as
 	// m_debugServer above — promoted to ibApplicationInstance if multi-metadata
 	// hosting becomes a thing.
 	m_debugClient.reset(new ibDebuggerClient(this));
@@ -622,7 +617,7 @@ bool ibMetaDataApplicationStorage::OnInitialize(const int flags)
 #pragma endregion
 
 	// Localization: pin the process-wide default to the application's
-	// main language code — designer always works with the editorial
+	// main language code — studio always works with the editorial
 	// baseline of the application regardless of OS locale.
 	ibBackendLocalization::SetUserLanguage(GetLangCode());
 
@@ -640,20 +635,20 @@ bool ibMetaDataApplicationStorage::OnDestroy()
 ibMetaDataApplicationStorage::ibMetaDataApplicationStorage(ib::AppDataCtorToken owner) :
 	ibMetaDataApplication(owner),
 	m_applicationMetadata(MakeShared<ibMetaDataApplication>(owner)) {
-	// Designer-edit application carries a compile-value cache + its module-manager —
-	// built with the runtime image (CreateDesignerCache below); callsites gate on
-	// `if (auto* cc = metaData->GetCompileCache())` rather than appData->DesignerMode().
+	// Studio-edit application carries a compile-value cache + its module-manager —
+	// built with the runtime image (CreateStudioCache below); callsites gate on
+	// `if (auto* cc = metaData->GetCompileCache())` rather than appData->StudioMode().
 }
 
-// Designer-edit application: compile cache + its module-manager (bound to the common
+// Studio-edit application: compile cache + its module-manager (bound to the common
 // metaobject, rebuilt fresh with the image each run). Built by the image ctor; dropping
 // the image releases the manager (RAII → DestroyMainModule).
-std::unique_ptr<ibCompileValueCache> ibMetaDataApplication::CreateDesignerCache()
+std::unique_ptr<ibCompileValueCache> ibMetaDataApplication::CreateStudioCache()
 {
-	if (!IsDesignerSessionKind(m_owner.GetSessionKind()))
+	if (m_owner.GetSessionKind() != ibSessionKind::Studio)
 		return nullptr;
 	auto cache = std::make_unique<ibCompileValueCache>();
-	cache->SetModuleManager(new ibValueModuleManagerDesigner(this, GetRootMetaObject()));
+	cache->SetModuleManager(new ibValueModuleManagerStudio(this, GetRootMetaObject()));
 	return cache;
 }
 
@@ -957,7 +952,7 @@ bool ibMetaDataApplicationBase::ApplyApplication(ibString& refusal,
 		const bool saved = OnSaveDatabase(saveApplicationFlag);
 
 		// 4 — ⭐ THE ONE MOMENT "NO" IS FREE, and it belongs to WHOEVER CALLED. The ledger is
-		// complete and the transaction is still open, which is why the designer can show it and be
+		// complete and the transaction is still open, which is why the studio can show it and be
 		// answered — and why an assistant answers from an argument instead. A caller that declines gets
 		// everything rolled back and keeps the ledger it declined: a real pass, not a rehearsal
 		// (schemaSnapshot.h explains why the differ has no rehearsal mode).

@@ -119,10 +119,10 @@ std::vector<ibValueMetaObjectAttributeBase*> HolderAttributes(const ibPropertyOb
 // `<Object>.<Field>` when it is the header's field seen from a column. A section and its object keep
 // their names apart, so each may hold a field under the same name (a Warehouse in the header and a
 // Warehouse in every row is the ordinary case), and spelled bare the two were two identical lines:
-// the designer drew them alike and a caller naming one got whichever came last.
+// the studio drew them alike and a caller naming one got whichever came last.
 //
 // The path is what is stored; this is only how it is said — and every list and every summary here says
-// it through ibChoiceHolderFields, so the designer, the inspector's row and MCP cannot spell it apart.
+// it through ibChoiceHolderFields, so the studio, the inspector's row and MCP cannot spell it apart.
 ibString NeighbourName(const ibPropertyObject* owner, const ibValueMetaObjectAttributeBase* field)
 {
 	const ibValueMetaObjectAttributeBase* self = AttributeOf(owner);
@@ -403,7 +403,7 @@ ibPropertyChoiceMode ibVariantChoiceLink::GetValueList(ibPropertyChoiceList& lis
 	long row = 0;
 	for (const ibChoiceHolderField& field : ibChoiceHolderFields(owner)) {
 		// ⭐ THE SAME ANSWER THE RESOLVER READS BY. Which fields can give a type is said ONCE, beside the
-		// reading itself (ibChoiceLinkResolver::CanGovern) — a second rule here is a designer that offers
+		// reading itself (ibChoiceLinkResolver::CanGovern) — a second rule here is a studio that offers
 		// a field the runtime cannot read, and the drift would be silent.
 		if (!ibChoiceLinkResolver::CanGovern(field.m_column->GetTypeDesc()))
 			continue;

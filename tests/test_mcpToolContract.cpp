@@ -584,15 +584,15 @@ TEST(McpToolContract, EveryNameSaidInADescription_IsANameThatExists)
 	}
 }
 
-// Who may be offered a tool: what changes the application is the designer's alone, what acts in a person's window the
+// Who may be offered a tool: what changes the application is the studio's alone, what acts in a person's window the
 // application's alone, and the rest is anybody's the assistant is given to.
 TEST(McpToolContract, ToolMode_IsWhatItWasRegisteredAs)
 {
-	EXPECT_EQ(ibGetMcpToolMode(ibFindMcpTool(wxT("metadata_create"))), ibMcpToolMode::Designer);
-	EXPECT_EQ(ibGetMcpToolMode(ibFindMcpTool(wxT("client_call"))), ibMcpToolMode::Designer);
-	EXPECT_EQ(ibGetMcpToolMode(ibFindMcpTool(wxT("form_get"))), ibMcpToolMode::Designer);
-	EXPECT_EQ(ibGetMcpToolMode(ibFindMcpTool(wxT("window_run"))), ibMcpToolMode::Runtime);
-	EXPECT_EQ(ibGetMcpToolMode(ibFindMcpTool(wxT("report_show"))), ibMcpToolMode::Runtime);
+	EXPECT_EQ(ibGetMcpToolMode(ibFindMcpTool(wxT("metadata_create"))), ibMcpToolMode::Studio);
+	EXPECT_EQ(ibGetMcpToolMode(ibFindMcpTool(wxT("client_call"))), ibMcpToolMode::Studio);
+	EXPECT_EQ(ibGetMcpToolMode(ibFindMcpTool(wxT("form_get"))), ibMcpToolMode::Studio);
+	EXPECT_EQ(ibGetMcpToolMode(ibFindMcpTool(wxT("window_run"))), ibMcpToolMode::Workspace);
+	EXPECT_EQ(ibGetMcpToolMode(ibFindMcpTool(wxT("report_show"))), ibMcpToolMode::Workspace);
 	EXPECT_EQ(ibGetMcpToolMode(ibFindMcpTool(wxT("compose_run"))), ibMcpToolMode::Common);
 	EXPECT_EQ(ibGetMcpToolMode(ibFindMcpTool(wxT("compose_settings"))), ibMcpToolMode::Common);
 	EXPECT_EQ(ibGetMcpToolMode(ibFindMcpTool(wxT("metadata_get"))), ibMcpToolMode::Common);
@@ -611,7 +611,7 @@ TEST(McpToolContract, IsDataAssistant_IsSaidByWhatTouchesTheRecords)
 
 TEST(McpToolContract, EveryTool_SaysWhatItIsDoingInAPersonsWords)
 {
-	// The activity line is what the designer's window and the registration
+	// The activity line is what the studio's window and the registration
 	// journal both show. Asked with EMPTY arguments on purpose: it is called
 	// before a tool has run, and a tool that only phrases itself when its
 	// arguments are complete would leave the record blank for a refused call —
@@ -656,7 +656,7 @@ TEST(McpToolContract, EveryToolName_IsSpelledTheWayTheProtocolSpellsThem)
 //---------------------------------------------------------------------------
 //
 // 🛑⭐⭐ A SWEEP IS A SESSION; THIS IS A SUITE. Driving all ninety-odd tools by hand on 2026-09-01
-// found real defects — a required argument nobody checked, a tool that crashed the designer with
+// found real defects — a required argument nobody checked, a tool that crashed the studio with
 // empty hands — and left nothing behind that would find the NEXT one. The registry enumerates
 // itself, so the questions can be asked of every tool that exists and every tool added later,
 // which is the only thing that keeps ninety-six honest when they become a hundred and fifty.
@@ -665,7 +665,7 @@ TEST(McpToolContract, EveryRequiredArgument_IsRefusedWhenItDoesNotCome)
 {
 	// The gate that answers this is ibMcpMissingArgument (mcpTool.cpp), and it is CALLED here:
 	// a tool that declares something required must not be reachable without it. `form_accepts` reached the control factory with an empty name, tripped an assert
-	// and took the designer down (2026-09-01) — the class, not that one tool.
+	// and took the studio down (2026-09-01) — the class, not that one tool.
 	for (const ibMcpTool* tool : ibMcpTools()) {
 
 		const std::vector<ibString> required = RequiredArguments(SchemaOf(tool));

@@ -176,8 +176,8 @@ bool ibValueFrame::OnClientEvent(ibProtocol::ibEvent::ibKind event, const ibData
 {
 	if ((event != ibProtocol::ibEvent::ibKind::Command && event != ibProtocol::ibEvent::ibKind::Search) || !HasCommandBar())
 		return false;
-	// The designer's test form previews the form, it does not run it — a command pressed there is not executed (the
-	// desktop's ibValueToolbar::OnTool, and its command bar's tool in the designer).
+	// The studio's test form previews the form, it does not run it — a command pressed there is not executed (the
+	// desktop's ibValueToolbar::OnTool, and its command bar's tool in the studio).
 	const ibFormVisualDocument* const visualDoc = GetVisualDocument();
 	if (visualDoc != nullptr && visualDoc->IsVisualDemonstrationDoc())
 		return true;

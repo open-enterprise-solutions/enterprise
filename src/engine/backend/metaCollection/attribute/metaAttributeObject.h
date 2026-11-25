@@ -235,11 +235,11 @@ class BACKEND_API ibValueMetaObjectAttributeBase :
 	virtual bool OnCreateMetaObject(ibMetaData* metaData, int flags);
 	virtual bool OnDeleteMetaObject();
 
-	//for designer 
+	//for studio 
 	virtual bool OnReloadMetaObject();
 
 	//module manager is started or exit 
-	// //after and before for designer 
+	// //after and before for studio 
 	virtual bool OnBeforeRunMetaObject(int flags);
 	virtual bool OnAfterRunMetaObject(int flags);
 
@@ -332,7 +332,7 @@ private:
 	// (docs/private/choice-links.md): this one answers WHICH LIST OPENS, they answer what is shown in it.
 	ibPropertyCategory* m_categoryChoice = ibPropertyObject::CreatePropertyCategory(ibT("Choice"), _("Choice"));
 	ibPropertyChoiceLink* m_propertyTypeLink = ibPropertyObject::CreateProperty<ibPropertyChoiceLink>(m_categoryChoice, ibT("TypeLink"), _("Link by type"), _("The field whose value decides the TYPE of this one: a characteristic gives the type it declares, a field holding a type description gives that, and any other field gives the type of the value standing in it. Every field beside this one that holds anything is offered - what is pulled is that field's own answer. Empty: the field opens the list its own type declares."));
-	ibPropertyChoiceParameters* m_propertyChoiceParameters = ibPropertyObject::CreateProperty<ibPropertyChoiceParameters>(m_categoryChoice, ibT("ChoiceParameters"), _("Choice parameters"), _("What is shown in the list: a row per parameter - which field of the chosen object it filters, where its value comes from, and what becomes of an already chosen value when that source changes (cleared by default, because the old value belonged to the old source). A catalog with an owner gets its row written here by the designer."));
+	ibPropertyChoiceParameters* m_propertyChoiceParameters = ibPropertyObject::CreateProperty<ibPropertyChoiceParameters>(m_categoryChoice, ibT("ChoiceParameters"), _("Choice parameters"), _("What is shown in the list: a row per parameter - which field of the chosen object it filters, where its value comes from, and what becomes of an already chosen value when that source changes (cleared by default, because the old value belonged to the old source). A catalog with an owner gets its row written here by the studio."));
 };
 
 class BACKEND_API ibValueMetaObjectAttributePredefined : public ibValueMetaObjectAttributeBase {

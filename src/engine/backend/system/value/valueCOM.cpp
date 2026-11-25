@@ -786,7 +786,7 @@ bool ibValueCOM::Create(const ibString& strOleName)
 {
 	// THE CARET'S WALK FOR COMPLETION STARTS NO COM SERVER: it builds `New COMObject("…")` to list its members,
 	// and that must not launch the application named. Asked of the evaluation, not of the process — the
-	// designer runs no other script, and the client's editors complete with the same walk (census, 2026-10-01).
+	// studio runs no other script, and the client's editors complete with the same walk (census, 2026-10-01).
 	if (ibBackendException::IsEvalComplete())
 		return true;
 

@@ -62,7 +62,7 @@ void ibValueForm::BuildForm(const ibFormID& formType)
 			mainTableBox->SetControlName(sourceExplorer.GetSourceName());
 			
 			// A picker source stamps its main table node with choice mode — carry it onto the table so it shows
-			// Select first (the runtime open-as-choice path; the designer property is the alternative source).
+			// Select first (the runtime open-as-choice path; the studio property is the alternative source).
 			mainTableBox->SetChoiceMode(sourceExplorer.IsChoiceMode());
 
 			// The MAIN attribute IS the list (its Type is CatalogList.<X>) — its source is
@@ -212,8 +212,8 @@ void ibValueForm::InitializeForm(const ibValueMetaObjectFormBase* creator,
 
 	if (descParent == nullptr && creator != nullptr) {
 		// No bound data object → parent under the metadata's module manager.
-		// Through the seam so the Designer (which has no runtime root mm) parents
-		// under its lightweight designer manager, same as every other edit-path
+		// Through the seam so the Studio (which has no runtime root mm) parents
+		// under its lightweight studio manager, same as every other edit-path
 		// object. Null-folds for sessionless / no-cache hosts.
 		descParent = ibSession::EditModuleManagerFor(creator->GetMetaData());
 	}
@@ -226,7 +226,7 @@ void ibValueForm::InitializeForm(const ibValueMetaObjectFormBase* creator,
 	// name by kind, the source Type, the seated value); WITHOUT one it is a bare default
 	// (Object / empty Type) that a later load refills from the "MainAttribute" section.
 	if (srcObject != nullptr) {
-		// Auto-generated form (no designer form): declare the MAIN attribute the
+		// Auto-generated form (no studio form): declare the MAIN attribute the
 		// source lands in. With no source the form stays generic (no list/tree
 		// view) — that's why this lives under the source gate. Empty Type accepts
 		// the incoming source; controls / source explorer work off this attribute.
@@ -276,7 +276,7 @@ bool ibValueForm::InitializeFormModule()
 	// has names to offer with no module to compile.
 	// Parent is already wired in InitializeForm(). InitializeRuntime
 	// lazily creates the ProcUnit and picks up the parent's scope chain
-	// on creation. Run is Designer-guarded; Compile internally too. Session
+	// on creation. Run is Studio-guarded; Compile internally too. Session
 	// linkage flows through the parent chain (descriptor → root → session).
 	BindContextVariable(thisForm, this);                                          // contextual
 	BindExportVariable(ibT("Controls"), m_formCollectionControl);                 // exported
@@ -284,7 +284,7 @@ bool ibValueForm::InitializeFormModule()
 	BindExportVariable(ibT("Commands"), m_formCollectionCommand);                 // …and the commands'
 	// Bind each source attribute as a form-module variable: its value cell as a LOCAL named
 	// <attrName>, and — for the MAIN — the exported DataSource. Same self-managed path that
-	// designer add / become-main reuse (BindAttributeVariable), so the wiring is one place.
+	// studio add / become-main reuse (BindAttributeVariable), so the wiring is one place.
 	for (const auto& av : m_attributes)
 		BindAttributeVariable(av);
 
@@ -297,7 +297,7 @@ bool ibValueForm::InitializeFormModule()
 			Run(true);
 		}
 		catch (const ibCoreException&) {
-			if (!appData->DesignerMode())
+			if (!appData->StudioMode())
 				throw;
 			return false;
 		}
@@ -387,7 +387,7 @@ void ibValueForm::NotifyChoice(ibValue& vSelected)
 
 ibValue ibValueForm::CreateControl(const ibValueType* clsControl, const ibValue& vControl)
 {
-	if (appData->DesignerMode())
+	if (appData->StudioMode())
 		return ibValue();
 
 	if (!ibValue::IsRegisterCtor(clsControl->GetString(), ibCtorObjectType::ibCtorObjectType_object_control)) {
@@ -418,7 +418,7 @@ ibValue ibValueForm::FindControl(const ibValue& vControl)
 
 void ibValueForm::RemoveControl(const ibValue& vControl)
 {
-	if (appData->DesignerMode())
+	if (appData->StudioMode())
 		return;
 
 	//get parent obj
@@ -450,7 +450,7 @@ bool ibValueForm::ShowForm(ibDocument* docParent, bool createContext)
 		docParent = m_controlOwner->GetVisualDocument();
 	}
 
-	if (!createContext || !appData->DesignerMode()) {
+	if (!createContext || !appData->StudioMode()) {
 		// Soft-lock UX (docs/private/record-locks.md Phase B.3): try to acquire
 		// the long-held sys_lock on the form's source, but DO NOT
 		// block form open on conflict. Users can view / edit
@@ -483,7 +483,7 @@ bool ibValueForm::ShowForm(ibDocument* docParent, bool createContext)
 		return CreateDocForm(docParent, createContext);
 	}
 
-	// Designer preview path — the form is not opened here.
+	// Studio preview path — the form is not opened here.
 	return false;
 }
 
@@ -537,7 +537,7 @@ bool ibValueForm::CloseForm(bool force)
 	if (ibBackendException::IsEvalMode())
 		return false;
 
-	if (!appData->DesignerMode()) {
+	if (!appData->StudioMode()) {
 		if (!force && !CloseDocForm()) {
 			return false;
 		}
@@ -583,7 +583,7 @@ bool ibValueForm::CloseForm(bool force)
 void ibValueForm::HelpForm()
 {
 	// ⭐ THE TEXT IS THE OBJECT'S OWN. Every metaobject carries help
-	// (ibValueMetaObject::GetHelpContent), written in the designer's tree; this is the reading
+	// (ibValueMetaObject::GetHelpContent), written in the studio's tree; this is the reading
 	// end of it. Asked of the object the form is FOR — "what is this document" is a question
 	// about the document, not about the form showing it.
 	const ibValueMetaObjectGenericData* metaObject = GetMetaObject();
@@ -631,7 +631,7 @@ void ibValueForm::HelpForm()
 	documents->AddDocument(doc);
 
 	// READ-ONLY: this is the user's copy of what a developer wrote, and the view already honours
-	// the flag (docViewHelp.cpp). Editing happens in the designer, on the object.
+	// the flag (docViewHelp.cpp). Editing happens in the studio, on the object.
 	if (!doc->OnCreate(ibEmptyString, ibDOC_READONLY)) {
 		doc->DeleteAllViews();
 		return;
@@ -772,7 +772,7 @@ void ibValueForm::RunIdleHandlers()
 
 void ibValueForm::AttachIdleHandler(const ibString& procedureName, int interval, bool single)
 {
-	if (appData->DesignerMode())
+	if (appData->StudioMode())
 		return;
 
 	for (unsigned int i = 0; i < procedureName.length(); i++) {
@@ -798,7 +798,7 @@ void ibValueForm::AttachIdleHandler(const ibString& procedureName, int interval,
 
 void ibValueForm::DetachIdleHandler(const ibString& procedureName)
 {
-	if (appData->DesignerMode())
+	if (appData->StudioMode())
 		return;
 
 	for (unsigned int i = 0; i < procedureName.length(); i++) {

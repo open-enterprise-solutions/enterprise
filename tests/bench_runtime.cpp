@@ -380,7 +380,7 @@ struct SessionBench : ::testing::Test {
         }
         if (ibApplicationInstance::GetSessionRegistry() == nullptr)
             GTEST_SKIP() << "no session registry after CreateAppDataEnv";
-        m_session = std::make_shared<ibSession>(ibString(wxT("bench")), ibSessionKind::Enterprise);
+        m_session = std::make_shared<ibSession>(ibString(wxT("bench")), ibSessionKind::Workspace);
         m_bound   = std::make_unique<ibSessionScope>(m_session.get());
         // A bound session compiles in ITS syntax, which starts as CES (compileState.h) — the suite's VES is the
         // sessionless thread's. The modules here are VES; the style goes with the session, nothing to put back.
@@ -419,7 +419,7 @@ TEST_F(SessionBench, DISABLED_CallCost) {
         std::vector<std::thread> pool;
         for (int t = 0; t < threads; ++t) {
             pool.emplace_back([&, t] {
-                const auto session = std::make_shared<ibSession>(ibString::Format(wxT("bench-%d"), t), ibSessionKind::Enterprise);
+                const auto session = std::make_shared<ibSession>(ibString::Format(wxT("bench-%d"), t), ibSessionKind::Workspace);
                 const ibSessionScope bound(session.get());
                 ++ready;
                 while (!go) std::this_thread::yield();

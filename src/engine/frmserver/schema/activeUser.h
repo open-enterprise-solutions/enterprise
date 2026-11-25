@@ -2,8 +2,8 @@
 #define __ACTIVE_USER_H__
 
 // ACTIVE USERS — the dialog of that name (frmclient/win/dlgs/activeUser.h), as the server holds it: the base's sessions,
-// as the cluster sees them, and the locks they hold. Shared by every mode — the designer's dialog and the runtime's
-// showed the same two tables. What the designer's dialog alone did there — a session kicked or its clients reloaded, a
+// as the cluster sees them, and the locks they hold. Shared by every mode — the studio's dialog and the runtime's
+// showed the same two tables. What the studio's dialog alone did there — a session kicked or its clients reloaded, a
 // lock released by force — are its commands, refused to any other session.
 
 #include "clientSchema.h"
@@ -18,7 +18,7 @@ public:
 	// Acquired, Lock} — the dialog's two tables, column for column.
 	virtual void Build(const ibSession& session, const ibDataNode& args, ibDataNode& result) const override;
 
-	// The dialog's context menus, the designer's (OnKickSelected, OnReloadSelected, OnForceReleaseSelected there):
+	// The dialog's context menus, the studio's (OnKickSelected, OnReloadSelected, OnForceReleaseSelected there):
 	// Kick {Session}, Reload {Session} — not the asking session's own; Release {Lock}. Done in the asking.
 	virtual std::function<void()> Command(const ibSession& session, std::int32_t command,
 		const ibDataNode& args, ibProtocol::ibRefusal& refusal, ibString& error) const override;

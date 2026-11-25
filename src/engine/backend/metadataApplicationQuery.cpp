@@ -140,7 +140,7 @@ bool ibMetaDataApplicationStorage::OnSaveDatabase(int flags)
 	// transaction + the auto-acquired single-user mode — the next apply then bails
 	// silently at the "transaction already active" guard ("metadata returned
 	// false", no text). Roll back + release here and rethrow so any caller
-	// (designer / coderunner / appserver) still reports the error and the DB stays clean.
+	// (studio / coderunner / appserver) still reports the error and the DB stays clean.
 	try {
 
 	//remove old tables (if need)
@@ -321,7 +321,7 @@ bool ibMetaDataApplicationStorage::OnAfterSaveDatabase(bool roolback, int flags)
 	// nothing else. The account of the change — every CREATE / ALTER / DROP, every column added or
 	// removed, every warning raised on the way — is sitting right here in the restructure ledger,
 	// and until now it was read by the apply dialog and by `app_apply`'s result and then thrown
-	// away. So an apply made from the designer's own button left NO trace of its content anywhere:
+	// away. So an apply made from the studio's own button left NO trace of its content anywhere:
 	// the technology journal showed the fact and not the substance (Max, 2026-08-31: "I updated the
 	// database, it shows nothing").
 	//
@@ -338,12 +338,12 @@ bool ibMetaDataApplicationStorage::OnAfterSaveDatabase(bool roolback, int flags)
 			ledger.HasErrors()   ? ibT(", with errors")   : ibT(""));
 
 		// 🛑 AN ERROR HERE IS NOT LOGGED WITH A DIALOG — IT IS RAISED. ibJournalError echoes through
-		// wxLogError, and in a GUI process that is a MODAL: the person in front of the designer was
+		// wxLogError, and in a GUI process that is a MODAL: the person in front of the studio was
 		// shown "! Doesn't have any recorder" for work they never started (a `app_save` over MCP,
 		// 2026-09-03), while the caller sat waiting on a window it could not see.
 		//
 		// ⭐ WHO SHOWS IT IS DECIDED BY WHO ASKED, and the way to let them decide is an exception:
-		// the designer catches it at its button and shows a window; a tool catches it and puts the
+		// the studio catches it at its button and shows a window; a tool catches it and puts the
 		// words in its answer. Restructuring itself has no business knowing which of the two is
 		// there — it only has to say what went wrong, once, and let go.
 		// ⚠ AND THE LEVEL IS A FACT ABOUT THE RESTRUCTURING, NOT ABOUT THE PROCESS. "Doesn't have any
@@ -477,8 +477,8 @@ bool ibMetaDataApplicationStorage::OnAfterSaveDatabase(bool roolback, int flags)
 		m_applicationNew = false;
 
 		// …and the sessions to come get what the database publishes now: the base reads it as its own. This copy is the
-		// designer's, made with its token — handed to the base, it took the designer's compile cache to the runtime
-		// (Max, 2026-10-28: "the designer's metadata is held only by its session; the rest hold the main one"). Raised
+		// studio's, made with its token — handed to the base, it took the studio's compile cache to the runtime
+		// (Max, 2026-10-28: "the studio's metadata is held only by its session; the rest hold the main one"). Raised
 		// last, with the apply's own state written: the apply is done, the base still works in the one before.
 		if (read && published->IsOpen() && m_applicationInstance != nullptr
 			&& !m_applicationInstance->ReplaceActiveMetaData())
@@ -596,7 +596,7 @@ void ibMetaDataApplicationStorage::CreateApplicationTable() {
 
 void ibMetaDataApplicationStorage::CreateApplicationSaveTable() {
 
-	//db for designer
+	//db for studio
 	if (!db_query->TableExists(application_save_table)) {
 		// Same schema as application_table — GUID + blob columns resolve per driver via the dialect TYPE-MAP.
 		ibDatabaseQueryBuilder q;

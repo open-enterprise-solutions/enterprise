@@ -1,7 +1,7 @@
 #include "docViewFeatureOption.h"
 
 #include "appstudio/win/editor/featureOptionEditor/featureOptionEditor.h"
-#include "protocol/protocolDesigner.h"   // ibProtocol::ibView::ibCheckTree
+#include "protocol/protocolStudio.h"   // ibProtocol::ibView::ibCheckTree
 
 // ----------------------------------------------------------------------------
 // ibFeatureOptionEditView implementation

@@ -523,7 +523,7 @@ public:
 	// modules are exactly that set.
 	//
 	// This is only the convenience form, asked from the child's side. Before it, the
-	// designer tree spelled `GetClassType() == g_metaPredefinedAttributeCLSID` out TEN
+	// studio tree spelled `GetClassType() == g_metaPredefinedAttributeCLSID` out TEN
 	// times, once per metatype branch, and application-compare kept a second list of
 	// clsids whose own comment admitted it was mirroring the first.
 	// DELETED IS PART OF THE SAME ANSWER. Every caller paired this with an `IsDeleted()` line of its
@@ -608,7 +608,7 @@ public:
 	virtual bool OnDeleteMetaObject();
 	virtual bool OnRenameMetaObject(const ibString& sNewName) { return true; }
 
-	//for designer 
+	//for studio 
 	virtual bool OnReloadMetaObject() { return true; }
 
 	//module manager lifecycle — TWO run phases (see ibRunPhase), driven by RunSubtree:

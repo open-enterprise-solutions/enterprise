@@ -12,8 +12,8 @@ class ibMetaData;
 // answer is the server's (a window is handed what it needs, or asks).
 class FRMCLIENT_API ibApplicationData {
 public:
-	// The designer — the frame logged in as one (ibProtocol::ibLogin::ibMode::Designer): the thin designer is.
-	bool DesignerMode() const;
+	// The studio — the frame logged in as one (ibProtocol::ibLogin::ibMode::Studio): the studio is.
+	bool StudioMode() const;
 
 	// A client of the same base started beside this one, on this computer — `strAppName` the binary next to this one,
 	// given the base this one opened (the fields below; `--debug` when `searchDebug`). Its pid; 0 — not started.
@@ -29,7 +29,7 @@ private:
 
 	// THE BASE THIS CLIENT OPENED — the engine's appData's fields: what the application read from its command line or
 	// had the person pick (appstudio/mainApp.cpp, the one that fills them).
-	friend class ibAppDesigner;
+	friend class ibAppStudio;
 
 	// APPLICATION SERVER ENTRY — oes://server[:port]/<base>, or oess:// over TLS; the authorities it trusts, a PEM file
 	// (empty — the platform's store)

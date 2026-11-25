@@ -8,8 +8,8 @@
 
 void ibFieldViewFlag::OnUpdate(ibDataNode& state, ibVisualHost* host)
 {
-	// The value's truth, read through the binding. Not in the designer: there the box shows no value.
-	if (appData->DesignerMode())
+	// The value's truth, read through the binding. Not in the studio: there the box shows no value.
+	if (appData->StudioMode())
 		return;
 
 	ibValue value;

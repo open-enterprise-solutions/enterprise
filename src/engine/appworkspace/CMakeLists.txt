@@ -1,16 +1,16 @@
 cmake_minimum_required(VERSION 3.16)
 
-# The thin runtime — appworkspace.exe, the runtime as a thin client (mainApp.h says what it is). It links the thin client's core
+# The workspace — appworkspace.exe, the workspace as a thin client (mainApp.h says what it is). It links the thin client's core
 # alone; a file base's server half (fileserver) is loaded by it when one is opened.
-set(ENTERPRISE_THIN_SOURCES
+set(APPWORKSPACE_SOURCES
     mainApp.cpp
     mainAppEvent.cpp
-    mainFrame/mainFrameEnterprise.cpp
-    mainFrame/mainFrameEnterpriseInterface.cpp
+    mainFrame/mainFrameWorkspace.cpp
+    mainFrame/mainFrameWorkspaceInterface.cpp
     win/dlg/functionAll.cpp
 )
 
-add_executable(appworkspace ${ENTERPRISE_THIN_SOURCES})
+add_executable(appworkspace ${APPWORKSPACE_SOURCES})
 
 set_target_properties(appworkspace PROPERTIES
     CXX_STANDARD 20

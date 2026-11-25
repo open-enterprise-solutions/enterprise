@@ -205,7 +205,7 @@ public:
 	*/
 	virtual bool CanDeleteControl() const = 0;
 
-	// ⭐ WHAT IT TAKES AS A CHILD — asked of the parent before a control of `clsid` is made in it (the designer's drop and
+	// ⭐ WHAT IT TAKES AS A CHILD — asked of the parent before a control of `clsid` is made in it (the studio's drop and
 	// palette, a paste, a script, MCP), as a metaobject is asked (ibValueMetaObject::FilterChild): a form, a page and a
 	// sizer take what a sizer lays out (IsPlaceableControl), a notebook its pages, a table its columns; anything else
 	// takes none.
@@ -227,9 +227,9 @@ public:
 	//   OnUpdate → the children → OnUpdated   the frame drawn
 	//   the children → OnCleanup              the form closed, or the control taken off an open one
 	// …and OnSelected: the control picked out (the client's Focus). What holds the form is asked of the host
-	// (IsDesignerHost), as the window's events asked it.
+	// (IsStudioHost), as the window's events asked it.
 	virtual void OnCreate(ibVisualHost* host) {}
-	// firstCreated — the designer has just made it (the desktop's), never on a form opened: a source control with no
+	// firstCreated — the studio has just made it (the desktop's), never on a form opened: a source control with no
 	// source binds to a fresh attribute (ibValueControl::AutoBindNewSource).
 	virtual void OnCreated(ibVisualHost* host, bool firstCreated) {}
 	virtual void OnSelected(ibVisualHost* host) {}
@@ -238,7 +238,7 @@ public:
 public:
 
 	// ⭐ WHAT THIS CONTROL SHOWS NOW. There is no window here: a client draws the form from the frame, and
-	// the frame is the form's own schema — the node SaveNode writes, properties as the designer saved them —
+	// the frame is the form's own schema — the node SaveNode writes, properties as the studio saved them —
 	// with a `State` child beside them, which is what this writes: the value, the caption as resolved,
 	// whether the control is enabled and shown. Everything a renderer would otherwise have to work out
 	// itself is worked out here, once, on the server. A child of its own and not more fields, because the
@@ -419,7 +419,7 @@ public:
 
 	virtual bool IsEditable() const;
 
-	// Is this control READ-ONLY at runtime (its form in view-only mode)? Distinct from IsEditable (designer:
+	// Is this control READ-ONLY at runtime (its form in view-only mode)? Distinct from IsEditable (studio:
 	// can the STRUCTURE be changed). The form is the root frame, so a control resolves this off its owner
 	// form's IsViewOnly(); a control reads it at build time and renders classic read-only — value visible,
 	// selectable, copyable, openable, but NOT editable. NOT Enable(false): that is availability (a dead,

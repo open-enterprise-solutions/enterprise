@@ -4,7 +4,7 @@
 // ibMetaData's tree-edit API (metaData.h): CreateMetaObject attaches a typed
 // child under a parent, RenameMetaObject sets its name, RemoveMetaObject detaches
 // it, and GetAnyArrayObject<T>(clsid) enumerates a type. These are the operations
-// the Designer drives on every metaobject add/rename/delete. DB-free
+// the Studio drives on every metaobject add/rename/delete. DB-free
 // (runObject=false on a fresh file application — see test_metadataSerialize).
 // =============================================================================
 
@@ -60,7 +60,7 @@ TEST(MetadataTree, SeveralTypesCoexist) {
 }
 
 // =============================================================================
-// EVERY KIND THE ROOT HOSTS, CREATED — the door the Designer's "add" button goes
+// EVERY KIND THE ROOT HOSTS, CREATED — the door the Studio's "add" button goes
 // through, walked across the whole taxonomy instead of the two types that
 // happened to be spot-checked above.
 //
@@ -74,7 +74,7 @@ TEST(MetadataTree, SeveralTypesCoexist) {
 //
 // ⚠ WHAT THIS DOES NOT COVER, said plainly: the crash that prompted it. That one
 // lives in ibApplicationTree::ibMetaTreeCtrl::OnSetFocus — a focus handler in
-// `designer`, which is an add_executable, so no gtest target can link it. This
+// `studio`, which is an add_executable, so no gtest target can link it. This
 // pins the half that is reachable: creating each kind must succeed rather than
 // return nullptr or raise.
 namespace {
@@ -180,7 +180,7 @@ TEST(MetadataTree, CreatingEveryHostedKindTwiceKeepsBothAndNamesThemApart) {
 
 namespace {
 
-// The selector's constructor asks whether this is the designer, which reads
+// The selector's constructor asks whether this is the studio, which reads
 // appData. A host always has it; a bare test has to bring it up.
 bool EnsureAppData()
 {

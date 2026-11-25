@@ -16,7 +16,7 @@
 // once (2026-10-06). So an application fills its lists when it loads (ibValueMetaObject::RunSubtree, the resolve
 // phase — sequential, every object present), anything else on its first read; afterwards a read takes the shared
 // lock and reads. The list is refilled where what is offered may have changed: when the value is SET (the next
-// read fills afresh) and when the choices are SHOWN (GetValueList — the designer has just been editing).
+// read fills afresh) and when the choices are SHOWN (GetValueList — the studio has just been editing).
 class BACKEND_API ibPropertyList : public ibProperty {
 public:
 
@@ -34,7 +34,7 @@ public:
 			return ibPropertyChoiceMode::None;
 		// The NAME and the LABEL each where the list keeps it, as an enumeration gives them (ibPropertyEnum::GetEnumList):
 		// given as the label alone, the translated label took the name's place — a form's kind was "Форма об'єкта" to
-		// the assistant in a Ukrainian designer, and the word it writes was nowhere (2026-11-14).
+		// the assistant in a Ukrainian studio, and the word it writes was nowhere (2026-11-14).
 		for (unsigned int idx = 0; idx < m_listPropValue.GetItemCount(); idx++) {
 			const long id = m_listPropValue.GetItemId(idx);
 			list.Add(id, m_listPropValue.GetItemName(idx), m_listPropValue.GetItemLabel(idx),
@@ -271,7 +271,7 @@ public:
 
 protected:
 
-	// A value set — what is offered may have changed with it (the designer has been editing the owner): the next
+	// A value set — what is offered may have changed with it (the studio has been editing the owner): the next
 	// read fills the list afresh.
 	virtual void DoSetValue(const ibVariant& val) {
 		ibProperty::DoSetValue(val);

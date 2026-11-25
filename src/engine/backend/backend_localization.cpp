@@ -9,7 +9,7 @@ static const ibString ms_strUserLanguage = ibT("en");
 
 void ibBackendLocalization::SetUserLanguage(const ibString& strUserLanguage)
 {
-	// ⭐ THE LANGUAGE OF WHOEVER TRANSLATES HERE — the current session's translate state (the designer's at its
+	// ⭐ THE LANGUAGE OF WHOEVER TRANSLATES HERE — the current session's translate state (the studio's at its
 	// load, a base's first session at its bring-up), else this thread's (codeRunner). It used to be one string for
 	// the process: in a process of several bases a user with no language of their own read the language of
 	// whichever base had opened LAST, and a reader raced the writer.

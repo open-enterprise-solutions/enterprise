@@ -1,7 +1,7 @@
 #include "about.h"
 
 #include "backend/appData.h"
-#include "backend/backend_core.h"   // GetBuildId
+#include "backend/backend_core.h"   // GetBuildId, OES_VERSION_* (core/build.h)
 #include "backend/metaCollection/metaObject.h"   // g_metaApplicationMetadataCLSID — the application's picture
 #include "backend/plugin/pluginManager.h"
 #include "core/serialize/dataBuilder.h"
@@ -13,6 +13,9 @@ void ibSchemaAbout::Build(const ibSession& session, const ibDataNode& /*args*/, 
 	const ibApplicationInstance* const applicationInstance = session.GetApplicationInstance();
 
 	result.SetValue(ibProtocol::ibSchema::ibAbout::Build, static_cast<std::int32_t>(GetBuildId()));
+	// The platform's version, on the root's Version as a plugin's row says its own (core/build.h).
+	result.SetValue(ibProtocol::ibSchema::ibAbout::Version,
+		ibString::Format(ibT("%d.%d.%d"), OES_VERSION_MAJOR, OES_VERSION_MINOR, OES_VERSION_RELEASE));
 	result.SetValue(ibProtocol::ibSchema::ibAbout::Picture, ibBackendPicture::SendPicture(g_metaApplicationMetadataCLSID));
 	result.SetValue(ibProtocol::ibSchema::ibAbout::User, session.GetUserInfo().m_strUserName);
 	if (applicationInstance == nullptr)

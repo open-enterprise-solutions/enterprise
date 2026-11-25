@@ -9,7 +9,7 @@
 // database_diff gave just before it - and the ledger is kept beside them as
 // `structureChanges`.
 //
-// The application is the one a designer session opens, as in
+// The application is the one a studio session opens, as in
 // test_mcpPictureSet.cpp.
 
 #include <gtest/gtest.h>
@@ -101,7 +101,7 @@ TEST_F(McpAppApply, AnApplyOfObjectsWithNoTableCountsThem_AndKeepsTheLedgerApart
 	ibSessionRegistry* const registry = ibApplicationInstance::GetSessionRegistry();
 	ASSERT_NE(registry, nullptr);
 	ibSessionHolder holder = registry->MintUnlisted(
-		std::make_shared<ibSession>(wxT("application-apply"), ibSessionKind::Designer));
+		std::make_shared<ibSession>(wxT("application-apply"), ibSessionKind::Studio));
 	ibSession* const session = holder.Get();
 	ASSERT_NE(session, nullptr);
 	ibSessionScope scope(session);
@@ -118,7 +118,7 @@ TEST_F(McpAppApply, AnApplyOfObjectsWithNoTableCountsThem_AndKeepsTheLedgerApart
 	if (cfg->IsOpen()) {
 		ASSERT_TRUE(cfg->CloseDatabase(ibRuntimeRequest(forceCloseFlag)));
 	}
-	ASSERT_NE(cfg->GetApplication(), nullptr) << "the designer's application has the base's copy beside it";
+	ASSERT_NE(cfg->GetApplication(), nullptr) << "the studio's application has the base's copy beside it";
 
 	ASSERT_TRUE(cfg->RunDatabase());
 

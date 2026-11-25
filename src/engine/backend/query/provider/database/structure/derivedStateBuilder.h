@@ -157,12 +157,12 @@ struct ibTotalsMaintenance
 //
 // NO REBUILD HERE, deliberately. Regenerating a register is a full scan of its history — minutes to
 // hours — and nothing that long should start by itself while people work. It belongs to the
-// Designer's "recompute totals" command, where an administrator chooses the moment and watches it
+// Studio's "recompute totals" command, where an administrator chooses the moment and watches it
 // finish (RegenerateAll is that command's body).
 //
 // So this pass never fixes a disagreement; it REPORTS one, in m_mismatched. That separation is the
 // design, not a limitation: the quiet half runs unattended precisely because the loud half is not
-// hiding inside it, and a non-zero count is exactly the signal that sends someone to the Designer.
+// hiding inside it, and a non-zero count is exactly the signal that sends someone to the Studio.
 BACKEND_API ibTotalsMaintenance MaintainTotals(const ibSchemaSnapshot& target,
                                                ibDatabaseConnectionHolder* holder);
 

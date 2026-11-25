@@ -36,7 +36,7 @@ void ibValueNotebook::OnPageChanged(const ibFormID& pageId)
 
 void ibValueNotebook::OnEndDrag(unsigned int position)
 {
-	// A form open in the designer keeps the page order it was designed with.
-	if (!appData->DesignerMode())
+	// A form open in the studio keeps the page order it was designed with.
+	if (!appData->StudioMode())
 		ChangeChildPosition(m_activePage, position);
 }

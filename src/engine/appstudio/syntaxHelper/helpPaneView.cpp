@@ -11,13 +11,13 @@
 #include "appstudio/syntaxHelper/helpSearchView.h"
 #include "appstudio/syntaxHelper/helpTreeView.h"
 
-#include "appstudio/mainFrame/mainFrameDesigner.h"   // wxID_FRONTEND_SYNTAX_HELPER_LOOKUP
+#include "appstudio/mainFrame/mainFrameStudio.h"   // wxID_FRONTEND_SYNTAX_HELPER_LOOKUP
 #include "core/compiler/codeDef.h"                       // CODE_CES
 #include "core/syntaxHelper/helpCorpus.h"
 #include "core/syntaxHelper/helpEntry.h"
 #include "core/syntaxHelper/helpResolver.h"
 #include "core/syntaxHelper/helpService.h"
-#include "protocol/protocolDesigner.h"   // ibProtocol::ibSchema::ibTypes
+#include "protocol/protocolStudio.h"   // ibProtocol::ibSchema::ibTypes
 
 #include <algorithm>
 
@@ -46,7 +46,7 @@ const wxChar* const kTypeId = wxT("type.");
 // Asked of the server, the refusal said to nobody: fewer names in a list is not a thing to stop a person for.
 bool ReadTypes(const ibProtocolNode& args, ibProtocolNode& answer)
 {
-	ibFrontendMainFrameDesigner* const frame = mainFrame;
+	ibFrontendMainFrameStudio* const frame = mainFrame;
 	if (frame == nullptr)
 		return false;
 	ibProtocolNode params;
@@ -273,7 +273,7 @@ void ibHelpPaneView::ReloadCorpus() {
 void ibHelpPaneView::SyncFromEditorCaret() {
 	// Delegate to the same routing path the editor's right-click menu
 	// uses — wxID_FRONTEND_SYNTAX_HELPER_LOOKUP propagates up to the
-	// designer frame, which calls OpenHelpForCursor(). Keeps the
+	// studio frame, which calls OpenHelpForCursor(). Keeps the
 	// codepath single-sourced.
 	wxCommandEvent up(wxEVT_MENU, wxID_FRONTEND_SYNTAX_HELPER_LOOKUP);
 	up.SetEventObject(this);

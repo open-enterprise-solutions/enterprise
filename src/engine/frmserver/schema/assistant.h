@@ -1,7 +1,7 @@
 #ifndef __SCHEMA_ASSISTANT_H__
 #define __SCHEMA_ASSISTANT_H__
 
-// THE ASSISTANT WINDOW — the person's, in the designer's Administration and the application's Assistant menu (as their
+// THE ASSISTANT WINDOW — the person's, in the studio's Administration and the application's Assistant menu (as their
 // roles say), as the server holds it: a tab its command opens (ibAssistantTranscriptDocument), the exchange drawn by the
 // tab's own view.
 

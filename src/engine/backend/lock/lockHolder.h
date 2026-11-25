@@ -8,7 +8,7 @@
 // abstraction:
 //
 //   - Long-running background job not tied to a user session
-//     (Designer apply that needs to hold locks across worker hops,
+//     (Studio apply that needs to hold locks across worker hops,
 //      scheduled maintenance that locks several namespaces).
 //   - System-level coordinator (cluster-wide singleton that pre-acquires
 //     locks before a deploy / migration).
@@ -45,7 +45,7 @@ public:
 	// Human-readable owner name surfaced in conflict messages
 	// ("locked by user X") and admin UI rows. For session holders =
 	// the user name; for custom holders = whatever the caller picks
-	// (e.g. "Designer apply", "Maintenance job 42").
+	// (e.g. "Studio apply", "Maintenance job 42").
 	virtual ibString DisplayName() const = 0;
 
 	// Machine hint surfaced in admin UI alongside DisplayName. For

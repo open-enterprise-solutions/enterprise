@@ -29,7 +29,7 @@ protected:
 	// written, so "someone forgot to attach the session" is not a bug
 	// that can exist. That single rule is this base class's whole job;
 	// what opening and closing MEAN is each implementation's business
-	// (desktop asks BeforeStart / BeforeExit, the designer asks nothing,
+	// (desktop asks BeforeStart / BeforeExit, the studio asks nothing,
 	// the web will grow states desktop never has).
 	explicit ibBackendDocFrame(ibSessionHolder&& holder) noexcept
 		: m_sessionHolder(std::move(holder)) {

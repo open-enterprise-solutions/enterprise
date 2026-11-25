@@ -61,7 +61,7 @@ public:
 
 	// ⭐⭐ WHOSE WINDOW THIS IS, and it decides one thing: whether a line marked **Inaccessible** is
 	// shown. That display mode means "applied, never shown", so it can only mean anything where
-	// there is somebody to hide it FROM — a reader. The designer authors those lines and has to see
+	// there is somebody to hide it FROM — a reader. The studio authors those lines and has to see
 	// them, which is why this is a question and not a rule.
 	//
 	// 🛑 IT MEANT NOTHING AT ALL until 2026-08-24: the mode serialised, was edited in the window and
@@ -72,7 +72,7 @@ public:
 
 	// ⭐ SOMETHING IN HERE WAS CHANGED — told to whoever hosts this editor, the moment it happens
 	// (Max, 2026-08-20: "we changed the value, we do not have to press OK — it counts as changed
-	// already"). The host decides what that means: in the designer it ends as the application
+	// already"). The host decides what that means: in the studio it ends as the application
 	// being marked modified. Announced HERE rather than at the host's commit, because a commit that
 	// announces unconditionally also announces a window that was only opened and closed.
 	void SetOnChanged(std::function<void()> onChanged) { m_onChanged = std::move(onChanged); }
@@ -148,7 +148,7 @@ private:
 	ibFilterDescription* m_filter = nullptr;
 	ibSettingsFieldTree* m_fieldSource = nullptr;
 
-	// THE DESIGNER'S WINDOW BY DEFAULT — see SetAuthoring. An "inaccessible" line has to be visible
+	// THE STUDIO'S WINDOW BY DEFAULT — see SetAuthoring. An "inaccessible" line has to be visible
 	// somewhere, and this is the only place it can be authored.
 	bool m_authoring = true;
 

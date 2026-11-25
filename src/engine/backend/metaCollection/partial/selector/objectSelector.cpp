@@ -12,9 +12,9 @@ ibValueSelectorDataObject::~ibValueSelectorDataObject()
 
 bool ibValueSelectorDataObject::Next()
 {
-	// Universal cursor drive: designer mode never iterates; otherwise advance one row
+	// Universal cursor drive: studio mode never iterates; otherwise advance one row
 	// past the anchor through the shared keyset step.
-	if (appData->DesignerMode())
+	if (appData->StudioMode())
 		return false;
 	return FetchNext();
 }
@@ -58,7 +58,7 @@ ibValueSelectorRecordDataObject::ibValueSelectorRecordDataObject(const ibValueMe
 
 ibValuePtr<ibValueRecordDataObjectRef> ibValueSelectorRecordDataObject::GetObject(const ibGuid& guid) const
 {
-	if (appData->DesignerMode()) {
+	if (appData->StudioMode()) {
 		return m_metaObject->CreateObjectValue();
 	}
 
@@ -81,7 +81,7 @@ ibValueSelectorRegisterDataObject::ibValueSelectorRegisterDataObject(const ibVal
 
 ibValuePtr<ibValueRecordManagerObject> ibValueSelectorRegisterDataObject::GetRecordManager(const ibRowMetaValues& keyValues) const
 {
-	if (appData->DesignerMode()) {
+	if (appData->StudioMode()) {
 		return m_metaObject->CreateRecordManagerObjectValue();
 	}
 
@@ -200,7 +200,7 @@ bool ibValueSelectorRecordDataObject::GetPropVal(const long lPropNum, ibValue& p
 {
 	const ibMetaID& id = m_members.GetPropData(lPropNum);
 	if (!m_objGuid.isValid()) {
-		if (!appData->DesignerMode()) {
+		if (!appData->StudioMode()) {
 			pvarPropVal = ibValue(ibValueTypes::TYPE_NULL);
 			return true;
 		}
@@ -266,7 +266,7 @@ bool ibValueSelectorRegisterDataObject::GetPropVal(const long lPropNum, ibValue&
 {
 	const ibMetaID& id = m_members.GetPropData(lPropNum);
 	if (m_keyValues.empty()) {
-		if (!appData->DesignerMode()) {
+		if (!appData->StudioMode()) {
 			pvarPropVal = ibValue(ibValueTypes::TYPE_NULL);
 			return true;
 		}
@@ -315,7 +315,7 @@ bool ibValueSelectorDocumentJournalDataObject::GetPropVal(const long lPropNum, i
 {
 	const ibMetaID& id = m_members.GetPropData(lPropNum);
 	if (m_current.empty()) {
-		if (!appData->DesignerMode()) {
+		if (!appData->StudioMode()) {
 			pvarPropVal = ibValue(ibValueTypes::TYPE_NULL);
 			return true;
 		}

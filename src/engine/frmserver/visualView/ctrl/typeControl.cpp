@@ -16,10 +16,10 @@
 #include "backend/system/value/valueType.h"          // ibValueTypeDescription / g_valueTypeDescriptionCLSID
 #include "backend/choiceLinkResolver.h"               // what narrows this choice — type and conditions
 #include "backend/metaCollection/metaObject.h"                      // the metaobject a choice opens
-#include "frmserver/win/dlgs/selectPredefined.h"   // ibShowPredefinedSelector — the designer's declared values
+#include "frmserver/win/dlgs/selectPredefined.h"   // ibShowPredefinedSelector — the studio's declared values
 #include "frmserver/win/dlgs/typeSelector.h"       // ibShowTypeSelector — a type description edited
 #include "backend/metaCollection/partial/chartOfCharacteristicTypes.h"   // the chart a characteristic's types are its
-#include "backend/appData.h"                        // DesignerMode — the two roads part here
+#include "backend/appData.h"                        // StudioMode — the two roads part here
 
 bool ibTypeControlFactory::ChooseValue(ibControlFrame* ownerValue, const ibValueMetaObject* choiceForm)
 {
@@ -35,10 +35,10 @@ bool ibTypeControlFactory::ChooseValue(ibControlFrame* ownerValue, const ibValue
 	// may be), asking the person only when the cell admits more than one type. Settled, the cell stands on it, and the
 	// value of that type is chosen right after, in the same press.
 	if (current.GetType() == ibValueTypes::TYPE_EMPTY) {
-		// THE DESIGNER'S OWN WINDOW asks both — the type and a declared value of it — so an empty cell reaches a value
+		// THE STUDIO'S OWN WINDOW asks both — the type and a declared value of it — so an empty cell reaches a value
 		// in one click, as the desktop's. Whether anything referenceable is admitted is the window's question: it
 		// answers `false` for a declaration with none, and the road below carries on unchanged.
-		if (appData->DesignerMode() && ibShowPredefinedSelector(ownerValue, factory->GetTypeDesc(), metaData))
+		if (appData->StudioMode() && ibShowPredefinedSelector(ownerValue, factory->GetTypeDesc(), metaData))
 			return true;
 
 		const ibClassID settled = ShowSelectType(metaData, factory->GetTypeValueDesc());
@@ -52,7 +52,7 @@ bool ibTypeControlFactory::ChooseValue(ibControlFrame* ownerValue, const ibValue
 	// an enumeration, a reference), then the metaobject's own selection form.
 	const ibClassID clsid = current.GetClassType();
 
-	// A TYPE DESCRIPTION is edited by the type picker — the client's window, the one the designer opens over an attribute's
+	// A TYPE DESCRIPTION is edited by the type picker — the client's window, the one the studio opens over an attribute's
 	// Type. What may be picked is the chart's whose object holds the field: a characteristic is only ever one of the types
 	// its chart declares (TypesOfCharacteristics). A field no chart holds — a filter cell, a form's own attribute — is
 	// offered the whole reference shape, as the desktop's.
@@ -72,9 +72,9 @@ bool ibTypeControlFactory::ChooseValue(ibControlFrame* ownerValue, const ibValue
 		return ibShowTypeSelector(ownerValue, offered, metaData);
 	}
 
-	// IN THE DESIGNER EVERY REFERENCE ASKS ITS DECLARED VALUES — a catalog, a document and an enumeration, one window,
+	// IN THE STUDIO EVERY REFERENCE ASKS ITS DECLARED VALUES — a catalog, a document and an enumeration, one window,
 	// one habit (Max, 2026-08-28). A cell that declares nothing is standing on the type it already holds.
-	if (appData->DesignerMode()) {
+	if (appData->StudioMode()) {
 		const ibTypeDescription& declared = factory->GetTypeDesc();
 		if (ibShowPredefinedSelector(ownerValue,
 				declared.GetClsidList().empty() ? ibTypeDescription(clsid) : declared, metaData))

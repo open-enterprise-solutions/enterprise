@@ -5,7 +5,7 @@
 
 #include <algorithm>                                  // std::none_of — is this value one the field admits?
 
-// THE TWO DOORS — see the header. (A declared value — `CompositionPredefinedValue` — is the designer's; here it is
+// THE TWO DOORS — see the header. (A declared value — `CompositionPredefinedValue` — is the studio's; here it is
 // one more the server wrote.)
 ibValue ibStoredValue(const ibDataNode& stored, const ibMetaData* WXUNUSED(metaData))
 {

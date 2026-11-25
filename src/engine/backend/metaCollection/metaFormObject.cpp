@@ -70,7 +70,7 @@ bool ibValueMetaObjectFormBase::SaveFormData(ibBackendValueForm* valueForm) {
 	ibMemoryBuffer memoryBuffer;
 	if (valueForm->SaveForm(memoryBuffer)) {
 		SetFormData(memoryBuffer);
-		// Designer's form-edit commit — invalidate this form's compile-cache
+		// Studio's form-edit commit — invalidate this form's compile-cache
 		// entry so the next FindCompileModule rebuilds the form value via the
 		// stored ibDeferredForm rebuilder. Caller is always the visual form
 		// editor; runtime never reaches here.
@@ -95,7 +95,7 @@ ibFormPtr<ibBackendValueForm> ibValueMetaObjectFormBase::CreateAndBuildForm(cons
 ibFormPtr<ibBackendValueForm> ibValueMetaObjectFormBase::CreateAndBuildForm(const ibFormRequest& request, const ibValueMetaObjectFormBase* creator, const ibFormID& form_id,
 	ibBackendControlFrame* ownerControl, ibSourceDataObject* srcObject)
 {
-	// HELD FROM THE START — the designer cache's form, or a new one born owned. A form that fails below goes with
+	// HELD FROM THE START — the studio cache's form, or a new one born owned. A form that fails below goes with
 	// this holder (a cached one only loses this reference; the cache keeps its own).
 	ibFormPtr<ibBackendValueForm> result;
 
@@ -297,7 +297,7 @@ bool ibValueMetaObjectForm::OnCreateMetaObject(ibMetaData* metaData, int flags)
 		// could not make a form at all, and a create could be undone by somebody closing a window.
 		//
 		// The form is made, and its KIND is set afterwards by whoever knows it: a tool passes it in
-		// `properties`, and the designer's tree hears the creation notice, asks the person, and
+		// `properties`, and the studio's tree hears the creation notice, asks the person, and
 		// writes the answer in through the ordinary property door. One road, two ways of arriving
 		// at the value.
 		//

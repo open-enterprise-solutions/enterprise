@@ -10,7 +10,7 @@
 // fields, and between two cells of one row, the same link worked.
 //
 // Built the way a person builds it: an application in memory, the parameter row written through the
-// attribute's own `ChoiceParameters` property (what the designer writes), and the values set through
+// attribute's own `ChoiceParameters` property (what the studio writes), and the values set through
 // the object's and the section's own write — the road a form and a module both take.
 // =============================================================================
 
@@ -116,7 +116,7 @@ struct ChoiceLinkClear : ::testing::Test {
 		ASSERT_NE(contract, nullptr);
 		contract->GetTypeDesc().SetDefaultMetaType(ReferenceTo(contracts));
 
-		// The parameter row, written as the designer writes it — through the attribute's own property.
+		// The parameter row, written as the studio writes it — through the attribute's own property.
 		ibChoiceParametersDescription params;
 		ibChoiceParameterRowDescription row;
 		row.m_parameter = contractOwner->GetMetaID();

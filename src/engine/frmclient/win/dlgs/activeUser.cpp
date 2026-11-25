@@ -3,7 +3,7 @@
 #include "frmclient/mainFrame/mainFrame.h"
 #include "protocol/protocol.h"
 #include "frmclient/win/picture.h"
-#include "frmclient/backend/appData.h"        // DesignerMode — whose the context menus are
+#include "frmclient/backend/appData.h"        // StudioMode — whose the context menus are
 
 #include "deskgui/univ/menu.h"
 #include "deskgui/univ/messageDialog.h"
@@ -206,10 +206,10 @@ void ibDialogActiveUser::OnContextMenu(wxListEvent& event)
 	const wxString guid = m_activeTable->GetItemText(row, 5);
 	if (guid.IsEmpty()) return;
 
-	// Kick / Reload are designer-only admin actions. Runtime
+	// Kick / Reload are studio-only admin actions. Runtime
 	// users see the dialog read-only — runtime operators don't get to
 	// boot peers off. (The server refuses them to any other session too.)
-	if (!appData->DesignerMode()) return;
+	if (!appData->StudioMode()) return;
 
 	ibMenu menu;
 	menu.Append(ID_ActiveUser_Kick,   _("Kick session"));
@@ -262,7 +262,7 @@ void ibDialogActiveUser::OnLocksContextMenu(wxListEvent& event)
 	if (row < 0) return;
 
 	// Same admin-only gate as kick/reload — runtime users get read-only view.
-	if (!appData->DesignerMode()) return;
+	if (!appData->StudioMode()) return;
 
 	const wxString lockGuid = m_locksTable->GetItemText(row, 5);
 	if (lockGuid.IsEmpty()) return;

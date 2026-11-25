@@ -11,7 +11,7 @@
 class ibMetaData;
 
 // A TEMPLATE OF THE APPLICATION — the engine's ibValueMetaObjectTemplateBase and ibValueMetaObjectTemplate
-// (backend/metaCollection/metaTemplateObject.h): the designer's, where an area of the editor is written into a
+// (backend/metaCollection/metaTemplateObject.h): the studio's, where an area of the editor is written into a
 // spreadsheet template, and whose composer tab edits the composition a composer template stores (ibComposerEditor).
 // The client's documents have no metaobject — ConvertMetaObjectToType answers none — so nothing here is reached at
 // runtime.

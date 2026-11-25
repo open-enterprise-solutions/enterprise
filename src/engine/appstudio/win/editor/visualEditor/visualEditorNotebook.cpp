@@ -62,7 +62,7 @@ bool ibVisualEditorNotebook::CanRedo() const
 	return false;
 }
 
-// THE DESKTOP'S (designer visualEditorNotebook.cpp) over the module this tab holds: the syntax and the template are the
+// THE DESKTOP'S (studio visualEditorNotebook.cpp) over the module this tab holds: the syntax and the template are the
 // code editor's (the desktop's were the process's). The event's value itself is the server's — a row set (ModifyProperty).
 void ibVisualEditorNotebook::ModifyEvent(ibProperty* event, const ibVariant& oldValue, const ibVariant& newValue)
 {

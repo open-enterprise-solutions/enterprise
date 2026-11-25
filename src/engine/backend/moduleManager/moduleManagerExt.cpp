@@ -12,7 +12,7 @@
 //////////////////////////////////////////////////////////////////////////////////
 
 // These delegate to the APPLICATION's module manager (an external data tool inherits
-// the active application's context) — designer manager in the Designer, session root
+// the active application's context) — studio manager in the Studio, session root
 // mm at runtime. Resolved against the active application metadata, not the data tool's own.
 const ibByteCode* ibValueModuleRuntimeManagerExternalDataTool::GetByteCode() const
 {
@@ -67,9 +67,9 @@ ibValueModuleRuntimeManagerExternalDataTool::ibValueModuleRuntimeManagerExternal
 	: ibValueModuleRuntimeManager(appEnv::ActiveMetaData(), metaObject ? metaObject->GetObjectModule() : nullptr)
 {
 	// metadata is the container the object works in — LoadFromFile creates this manager and passes
-	// itself, and at runtime the object holds it. In designer the document holds it, never the object.
+	// itself, and at runtime the object holds it. In studio the document holds it, never the object.
 	m_objectValue = new ibValueRecordDataObjectExternalDataTool(
-		metaObject, appData->DesignerMode() ? nullptr : std::move(metadata));
+		metaObject, appData->StudioMode() ? nullptr : std::move(metadata));
 	// One module, so one set of binds and one bytecode: the object is the script-side wrapper around the same source.
 	m_byteCode = std::make_shared<ibByteCode>();
 	m_objectValue->m_binds = m_binds;
@@ -77,7 +77,7 @@ ibValueModuleRuntimeManagerExternalDataTool::ibValueModuleRuntimeManagerExternal
 	//set proc unit
 	m_objectValue->m_procUnit = m_procUnit;
 
-	if (appData->DesignerMode()) {
+	if (appData->StudioMode()) {
 		//incrRef
 		m_objectValue->IncrRef();
 	}
@@ -96,7 +96,7 @@ ibValueModuleRuntimeManagerExternalDataTool::~ibValueModuleRuntimeManagerExterna
 	if (m_objectValue) {
 		m_objectValue->m_procUnit = nullptr;
 	}
-	if (appData->DesignerMode()) {
+	if (appData->StudioMode()) {
 		//decrRef
 		m_objectValue->DecrRef();
 	}
@@ -131,7 +131,7 @@ bool ibValueModuleRuntimeManagerExternalDataTool::CreateMainModule()
 
 	m_objectValue->InitializeObject();
 
-	if (!appData->DesignerMode()) {
+	if (!appData->StudioMode()) {
 		InitializeRuntime();
 		// Share procUnit with m_objectValue — both descriptors reach
 		// the same runtime; shared_ptr co-ownership keeps the unit
@@ -212,7 +212,7 @@ bool ibValueModuleRuntimeManagerExternalDataTool::StartMainModule(const ibRuntim
 
 	// ⭐ WHETHER A FORM TOOK THE OBJECT. At runtime nothing else holds it, so when none did the run's reference is
 	// the last one and the object goes with it — and the pointer to it is cleared, not left dangling (Max,
-	// 2026-11-03): ExternalDataTools.Create then hands back nothing instead of a freed object. In the designer
+	// 2026-11-03): ExternalDataTools.Create then hands back nothing instead of a freed object. In the studio
 	// the manager holds it (ctor), so it never goes here.
 	bool taken = false;
 
@@ -239,7 +239,7 @@ bool ibValueModuleRuntimeManagerExternalDataTool::StartMainModule(const ibRuntim
 				result->ShowForm();
 				taken = true;
 			}
-			else if (!appData->DesignerMode()) {
+			else if (!appData->StudioMode()) {
 				//decrRef - for control delete
 				m_objectValue->DecrRef();
 				m_objectValue = nullptr;
@@ -256,7 +256,7 @@ bool ibValueModuleRuntimeManagerExternalDataTool::StartMainModule(const ibRuntim
 	//	}
 	//	catch (...) {
 	//		wxDELETE(valueForm);
-	//		if (appData->EnterpriseMode() ||
+	//		if (appData->WorkspaceMode() ||
 	//			appData->ServiceMode()) {
 	//			//decrRef - for control delete 
 	//			m_objectValue->DecrRef();
@@ -268,7 +268,7 @@ bool ibValueModuleRuntimeManagerExternalDataTool::StartMainModule(const ibRuntim
 	//decrRef - for control delete
 	m_objectValue->DecrRef();
 	
-	if (!taken && !appData->DesignerMode())
+	if (!taken && !appData->StudioMode())
 		m_objectValue = nullptr;
 
 	return true;
@@ -342,9 +342,9 @@ ibValueModuleRuntimeManagerExternalReport::ibValueModuleRuntimeManagerExternalRe
 	: ibValueModuleRuntimeManager(appEnv::ActiveMetaData(), metaObject ? metaObject->GetObjectModule() : nullptr)
 {
 	// See the data-tool manager above: metadata is the container (passed by LoadFromFile),
-	// held by the object at runtime, never in designer.
+	// held by the object at runtime, never in studio.
 	m_objectValue = new ibValueRecordDataObjectExternalReport(
-		metaObject, appData->DesignerMode() ? nullptr : std::move(metadata));
+		metaObject, appData->StudioMode() ? nullptr : std::move(metadata));
 	// One module, so one set of binds and one bytecode: the object is the script-side wrapper around the same source.
 	m_byteCode = std::make_shared<ibByteCode>();
 	m_objectValue->m_binds = m_binds;
@@ -352,7 +352,7 @@ ibValueModuleRuntimeManagerExternalReport::ibValueModuleRuntimeManagerExternalRe
 	//set proc unit
 	m_objectValue->m_procUnit = m_procUnit;
 
-	if (appData->DesignerMode()) {
+	if (appData->StudioMode()) {
 		//incrRef
 		m_objectValue->IncrRef();
 	}
@@ -371,7 +371,7 @@ ibValueModuleRuntimeManagerExternalReport::~ibValueModuleRuntimeManagerExternalR
 	if (m_objectValue) {
 		m_objectValue->m_procUnit = nullptr;
 	}
-	if (appData->DesignerMode()) {
+	if (appData->StudioMode()) {
 		//decrRef
 		m_objectValue->DecrRef();
 	}
@@ -397,7 +397,7 @@ bool ibValueModuleRuntimeManagerExternalReport::CreateMainModule()
 	m_objectValue->ibRuntimeModuleDataObject::SetParent(moduleManager);
 	m_objectValue->InitializeObject();
 
-	if (!appData->DesignerMode()) {
+	if (!appData->StudioMode()) {
 		InitializeRuntime();
 		m_objectValue->m_procUnit = m_procUnit;
 
@@ -492,7 +492,7 @@ bool ibValueModuleRuntimeManagerExternalReport::StartMainModule(const ibRuntimeR
 				result->ShowForm();
 				taken = true;
 			}
-			else if (!appData->DesignerMode()) {
+			else if (!appData->StudioMode()) {
 				//decrRef - for control delete
 				m_objectValue->DecrRef();
 				m_objectValue = nullptr;
@@ -518,7 +518,7 @@ bool ibValueModuleRuntimeManagerExternalReport::StartMainModule(const ibRuntimeR
 		}
 		catch (...) {
 			// A form that failed to show goes with its holder — nobody else took it.
-			if (appData->EnterpriseMode() || appData->ServiceMode()) {
+			if (appData->WorkspaceMode() || appData->ServiceMode()) {
 				//decrRef - for control delete
 				m_objectValue->DecrRef();
 				m_objectValue = nullptr;
@@ -530,7 +530,7 @@ bool ibValueModuleRuntimeManagerExternalReport::StartMainModule(const ibRuntimeR
 	//decrRef - for control delete
 	m_objectValue->DecrRef();
 	
-	if (!taken && !appData->DesignerMode())
+	if (!taken && !appData->StudioMode())
 		m_objectValue = nullptr;
 
 	return true;

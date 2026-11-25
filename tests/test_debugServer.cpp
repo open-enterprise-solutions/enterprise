@@ -1,5 +1,5 @@
 // =============================================================================
-// The debugger's port — the core's WebSocket (core/net) at /debugger: one designer at a time, each command one
+// The debugger's port — the core's WebSocket (core/net) at /debugger: one studio at a time, each command one
 // binary message, handed to the debug thread through the socket's queue (ibDebugCommandQueue, debugDefs.h).
 //
 // It took the place of ibSocketLock (#155): two threads closing one wxSocketBase is a hazard the debugger no longer
@@ -29,7 +29,7 @@ public:
 		return std::unique_ptr<ibDebuggerServer>(new ibDebuggerServer(nullptr));
 	}
 
-	// A designer is on its port.
+	// A studio is on its port.
 	static bool IsConnected(const ibDebuggerServer& server) {
 		return server.m_socketConnectionThread != nullptr && server.m_socketConnectionThread->IsConnected();
 	}
@@ -66,13 +66,13 @@ bool Within(std::chrono::milliseconds limit, Done done) {
 	return true;
 }
 
-// A designer's socket to the port, and whether it has gone — held by its handler too, which may be told after the
+// A studio's socket to the port, and whether it has gone — held by its handler too, which may be told after the
 // socket was let go.
-struct DesignerSocket {
+struct StudioSocket {
 	std::shared_ptr<std::atomic<bool>> m_closed = std::make_shared<std::atomic<bool>>(false);
 	std::unique_ptr<ibWebSocketClient> m_socketClient;
 
-	DesignerSocket(ibIoThreads& threads, std::uint16_t port) {
+	StudioSocket(ibIoThreads& threads, std::uint16_t port) {
 		const std::shared_ptr<std::atomic<bool>> closed = m_closed;
 		m_socketClient = std::make_unique<ibWebSocketClient>(threads.GetContext(), nullptr, nullptr, nullptr,
 			[closed](const std::string&) { closed->store(true); });
@@ -102,13 +102,13 @@ TEST_F(DebugServerFix, ServerShutdown_WhileWaitingForClient_IsBounded)
 	}
 }
 
-// ONE DESIGNER AT A TIME: a second one is refused while the first is on, the first going takes the next, and the
-// port going lets its designer go.
-TEST_F(DebugServerFix, AcceptConnection_SecondDesigner_IsRefusedAndTheFirstStays)
+// ONE STUDIO AT A TIME: a second one is refused while the first is on, the first going takes the next, and the
+// port going lets its studio go.
+TEST_F(DebugServerFix, AcceptConnection_SecondStudio_IsRefusedAndTheFirstStays)
 {
-	// A PORT THE SYSTEM CHOOSES, and the designer knocks where the server listens: a port named here may be held by a
+	// A PORT THE SYSTEM CHOOSES, and the studio knocks where the server listens: a port named here may be held by a
 	// socket of the tests before it — on Windows the ports from 49152 are the ones handed to outgoing connections — and
-	// the server takes the next one while the designer knocks on the first (CI, 2026-10-21).
+	// the server takes the next one while the studio knocks on the first (CI, 2026-10-21).
 	auto server = ibStandaloneDebuggerServer::Make();
 	ASSERT_TRUE(server->CreateServer(wxT("127.0.0.1"), 0, false));
 	ASSERT_TRUE(Within(5s, [&]() { return ibStandaloneDebuggerServer::GetHttpPort(*server) != 0; }));
@@ -116,24 +116,24 @@ TEST_F(DebugServerFix, AcceptConnection_SecondDesigner_IsRefusedAndTheFirstStays
 
 	ibIoThreads threads;
 
-	DesignerSocket first(threads, port);
+	StudioSocket first(threads, port);
 	ASSERT_TRUE(Within(5s, [&]() { return ibStandaloneDebuggerServer::IsConnected(*server); }));
 
-	DesignerSocket second(threads, port);
-	EXPECT_TRUE(Within(5s, [&]() { return second.m_closed->load(); })) << "a second designer is refused";
+	StudioSocket second(threads, port);
+	EXPECT_TRUE(Within(5s, [&]() { return second.m_closed->load(); })) << "a second studio is refused";
 	EXPECT_FALSE(first.m_closed->load());
 	EXPECT_TRUE(ibStandaloneDebuggerServer::IsConnected(*server));
 
 	first.m_socketClient->Close();
 	EXPECT_TRUE(Within(5s, [&]() { return !ibStandaloneDebuggerServer::IsConnected(*server); }))
-		<< "the first designer going empties the slot";
+		<< "the first studio going empties the slot";
 
-	DesignerSocket third(threads, port);
+	StudioSocket third(threads, port);
 	EXPECT_TRUE(Within(5s, [&]() { return ibStandaloneDebuggerServer::IsConnected(*server); }))
-		<< "the next designer is taken";
+		<< "the next studio is taken";
 
 	server->ShutdownServer();
-	EXPECT_TRUE(Within(5s, [&]() { return third.m_closed->load(); })) << "the port going lets its designer go";
+	EXPECT_TRUE(Within(5s, [&]() { return third.m_closed->load(); })) << "the port going lets its studio go";
 }
 
 TEST(DebugCommandQueue, Pop_Commands_ComeInTheOrderTheyCame)

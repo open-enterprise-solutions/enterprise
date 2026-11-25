@@ -3,7 +3,7 @@
 
 // ibSessionSnapshot — point-in-time copy of every sys_session row in
 // the cluster, refreshed by ibSessionRegistry's JobRefreshSnapshot.
-// Read by the designer's Active Users dialog and by the registry
+// Read by the studio's Active Users dialog and by the registry
 // itself (cross-process single-user-mode gate, sole-live check).
 //
 // Was named ibApplicationDataSessionArray while it lived in appData.h;
@@ -84,11 +84,11 @@ public:
 	ibRunMode GetSessionApplication(unsigned int idx) const;
 	int       GetSessionKind       (unsigned int idx) const;
 	// Short label derived from the kind:
-	//   Service / WebServer → "Server"
-	//   ThinClient / ThinDesigner → "Thin client"
+	//   Service → "Server"
 	//   a job → "Job"
-	//   anything else → "Client"
-	// Used by designer's Active Users dialog.
+	//   an HTTP service's request → "HTTP request"
+	//   anything else (Workspace, Studio) → "Client"
+	// Used by the studio's Active Users dialog.
 	ibString  GetSessionKindDescr  (unsigned int idx) const;
 	unsigned int GetSessionCount() const { return static_cast<unsigned int>(m_listSession.size()); }
 
@@ -112,8 +112,8 @@ public:
 	//   Case-sensitive match — usernames in sys_user are stored
 	//   verbatim.
 	// CountByKind    — how many rows carry the given session kind
-	//   (Designer / WebClient / Enterprise / ...). Useful for admin
-	//   gauges and for predicates like "any designer attached?".
+	//   (Studio / WebClient / Enterprise / ...). Useful for admin
+	//   gauges and for predicates like "any studio attached?".
 	bool         HasActiveUsers() const;
 	bool         IsUserActive(const ibString& userName) const;
 	unsigned int CountByKind(ibSessionKind kind) const;

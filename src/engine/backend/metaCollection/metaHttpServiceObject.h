@@ -88,7 +88,7 @@ public:
 	virtual ibPicture GetIcon() const;
 	static ibPicture GetIconGroup();
 
-	// designer context menu — "Open service module", as a job's module is opened.
+	// studio context menu — "Open service module", as a job's module is opened.
 	virtual bool CollectContextMenu(std::vector<ibMetaMenuItem>& items) override;
 
 	// A root that is not one segment, or that another service already has, is refused.

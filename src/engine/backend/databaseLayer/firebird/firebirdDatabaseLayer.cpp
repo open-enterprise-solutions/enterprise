@@ -684,7 +684,7 @@ bool ibDatabaseLayerFirebird::Open()
 		//   - Backup / Restore — RunBackupRestoreCycle in the off-
 		//     hours maintenance window.
 		//   - CREATE INDEX / ALTER INDEX ACTIVE / index rebuild —
-		//     designer deploys, data-import flows.
+		//     studio deploys, data-import flows.
 		//
 		// What it does NOT parallelise in FB 5: regular SELECT (no
 		// parallel scan yet — planned for FB 6), DML, OLTP in

@@ -15,7 +15,7 @@
 // ⭐ THE MEMBERSHIP LIVES ON THE MEMBER, the way a section's does (featureOptionHelper.h): every object
 // keeps the options it belongs to, so "am I available" is asked of the object and a copied object takes its
 // options along. Opening an option shows them as a tree to tick, the way a section and a shared attribute
-// show theirs (the designer's featureOptionEditor); `option_include` does the same over MCP.
+// show theirs (the studio's featureOptionEditor); `option_include` does the same over MCP.
 //
 // The module is the stored value's: BeforeWrite refuses a switch the data does not allow ("there are
 // balances in a foreign currency"), OnWrite carries its consequences. Code reads it the way it reads a constant:

@@ -6,7 +6,7 @@
 ////////////////////////////////////////////////////////////////////////////
 //
 // WHY THIS EXISTS. Extensions used to be string literals at the point of use:
-// "*.mcf" in the designer's template list, "*.edp" again in the enterprise
+// "*.mcf" in the studio's template list, "*.edp" again in the enterprise
 // one, "Data tool files (*.edp)|*.edp" spelled a third time in the
 // metadata tree. Six kinds across eight files, and every one of them a place to
 // forget when a name changes — which is exactly what a rename has to touch.

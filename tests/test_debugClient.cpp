@@ -1,7 +1,7 @@
 // =============================================================================
-// THE BREAKPOINTS' ONE MAP: the debugger client of the designer's session (backend/debugger/debugClient.cpp). A
+// THE BREAKPOINTS' ONE MAP: the debugger client of the studio's session (backend/debugger/debugClient.cpp). A
 // breakpoint is set at an editor line. The edits that come with the module's text move it (PatchModule). The save
-// writes the map into the base's sys_dbg and reads it back from there (SaveModule). The next designer draws what the
+// writes the map into the base's sys_dbg and reads it back from there (SaveModule). The next studio draws what the
 // base keeps.
 //
 // 2026-11-04: the save moved its rows one by one, in ascending order. 5→7 wrote over the row at 7, and 7→9 then
@@ -63,7 +63,7 @@ struct DebugClientFix : ::testing::Test {
 			ibApplicationInstance::DestroyAppDataEnv();
 	}
 
-	// The module opened, as a designer opens it (OnBeforeRunMetaObject): its lines, and its breakpoints read from the
+	// The module opened, as a studio opens it (OnBeforeRunMetaObject): its lines, and its breakpoints read from the
 	// base.
 	static std::unique_ptr<ibDebuggerClient> Open()
 	{
@@ -114,8 +114,8 @@ TEST_F(DebugClientFix, SaveKeepsEveryBreakpointADeletionMoved)
 	EXPECT_EQ(client->GetDebugList(s_module), moved);
 }
 
-// What the save wrote is what the next designer opening the module draws.
-TEST_F(DebugClientFix, TheNextDesignerDrawsWhatTheSaveWrote)
+// What the save wrote is what the next studio opening the module draws.
+TEST_F(DebugClientFix, TheNextStudioDrawsWhatTheSaveWrote)
 {
 	{
 		std::unique_ptr<ibDebuggerClient> client = Open();

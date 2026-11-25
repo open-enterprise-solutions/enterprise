@@ -10,7 +10,7 @@
 #include "frmclient/mainFrame/mainFrame.h"
 #include "frmclient/win/picture.h"
 #include "protocol/protocol.h"
-#include "protocol/protocolDesigner.h"   // ibProtocol::ibSchema::ibProperties
+#include "protocol/protocolStudio.h"   // ibProtocol::ibSchema::ibProperties
 
 bool ibValueSerializable::CompareValueEQ(const ibVariant& value) const
 {
@@ -43,7 +43,7 @@ ibValue ibValue::FromNode(const ibDataNode& node)
 		return ibValue(ibVariant::FromNode(node));
 
 	// A FIELD OF A COMPOSITION — the client's own object (a condition's other side may be one): made and read, as the
-	// engine's registry makes it. …a value the designer declared (a parameter's, a condition's), as the engine's store
+	// engine's registry makes it. …a value the studio declared (a parameter's, a condition's), as the engine's store
 	// makes it; and an appearance's colour and font, the same way.
 	if (clsid == g_compositionFieldCLSID)
 		return ReadObject<ibValueCompositionField>(node);

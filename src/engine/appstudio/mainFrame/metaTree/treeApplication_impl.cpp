@@ -24,7 +24,7 @@
 #include "frmclient/mainFrame/objinspect/objinspect.h"   // the inspector the row's object is shown in
 #include "frmclient/win/picture.h"
 #include "deskgui/univ/menu.h"   // ibMenu — the row's context menu
-#include "protocol/protocolDesigner.h"   // ibProtocol::ibSchema::ibMetaData, ibProtocol::ibSchema::ibProperties
+#include "protocol/protocolStudio.h"   // ibProtocol::ibSchema::ibMetaData, ibProtocol::ibSchema::ibProperties
 
 namespace {
 

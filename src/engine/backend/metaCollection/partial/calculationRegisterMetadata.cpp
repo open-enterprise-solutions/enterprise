@@ -56,7 +56,7 @@ const ibValueMetaObjectChartOfCalculationTypes* ibValueMetaObjectCalculationRegi
 // so the schema can be taken between two statements of it. The run is the moment everything that
 // reads the type comes up, so declaring it there answers every reader once.
 //
-// The property-change road stays, and only that one: a designer who picks a chart must see the type
+// The property-change road stays, and only that one: a studio who picks a chart must see the type
 // follow immediately rather than after a restart.
 void ibValueMetaObjectCalculationRegister::ApplyChartBinding()
 {

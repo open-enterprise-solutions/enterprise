@@ -50,7 +50,7 @@ allows and which owes us nothing.
 What we offer in return is not money, and we would rather say so than imply otherwise.
 
 **The platform itself, free, for anything noncommercial.** Not a trial, not a cut-down
-edition, not a license that expires — the whole thing: the designer, the language, the query
+edition, not a license that expires — the whole thing: the studio, the language, the query
 engine, the reports, every driver. Build your own systems on it, run them, keep them. And for
 evaluation: a business weighing whether to build on it may try it the same way
 ([LICENSE.md](LICENSE.md)). That offer stands whether you ever contribute a line or not;

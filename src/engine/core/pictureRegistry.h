@@ -31,7 +31,7 @@ class CORE_API ibPictureRegistry {
 public:
 
 	// A picture under its number, as its SVG. One already there stays, and false says so: the sides of one process
-	// register the same ones (the thin designer opening a file base loads the backend beside the client).
+	// register the same ones (the studio opening a file base loads the backend beside the client).
 	static bool RegisterPicture(const ibString& name, ibPictureID id, const ibString& svg);
 	static bool IsRegisterPicture(ibPictureID id);
 

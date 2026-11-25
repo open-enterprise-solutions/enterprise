@@ -38,13 +38,13 @@ public:
 private:
 
 	void OnButtonCloseProgramClick(wxCommandEvent& event);
-	void OnButtonGotoDesignerClick(wxCommandEvent& event);
+	void OnButtonGotoStudioClick(wxCommandEvent& event);
 	void OnButtonCloseWindowClick(wxCommandEvent& event);
 
 	ibStyledTextCtrl* m_errorOutput;
 
 	ibButton* m_buttonCloseProgram;
-	ibButton* m_buttonGotoDesigner;
+	ibButton* m_buttonGotoStudio;
 	ibButton* m_buttonCloseWindow;
 };
 

@@ -6,7 +6,7 @@
 
 #include <vector>
 
-// ⭐ WHAT A SWITCH OFFERS — the values set in advance in the designer, each with its presentation, as many as are
+// ⭐ WHAT A SWITCH OFFERS — the values set in advance in the studio, each with its presentation, as many as are
 // listed (Max, 2026-11-23: "a property where you set the values and the presentations"). The type of the field's source
 // does not make them: the author does, in a window of its own (docs/private/form-field.md § 4.6).
 //

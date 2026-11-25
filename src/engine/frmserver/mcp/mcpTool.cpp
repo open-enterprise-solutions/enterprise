@@ -43,7 +43,7 @@
 
 #include "backend/restructureInfo.h"              // the ledger an object complains into
 #include "backend/session/session.h"              // who is asking — which tools are there for them
-#include "frmserver/docView/docView.h"            // ibMetaDataDocument — an external open in the designer, in its tab
+#include "frmserver/docView/docView.h"            // ibMetaDataDocument — an external open in the studio, in its tab
 
 namespace {
 
@@ -242,7 +242,7 @@ const ibMcpTool::ibMcpArgument& ibMcpMetaDataArgument()
 {
 	static const ibMcpTool::ibMcpArgument s_metaData(ibT("metadata"), ibMcpTool::ibMcpArgument::Kind::Text,
 		ibMcpText("Which metadata to work on: the file name of an external data tool or report open in the "
-		  "designer - the `file` external_data_tool_open / external_report_open answered with. Its NodeIds are its "
+		  "studio - the `file` external_data_tool_open / external_report_open answered with. Its NodeIds are its "
 		  "own - take them from metadata_tree with the same `metadata`. Omitted, the application."));
 	return s_metaData;
 }
@@ -289,13 +289,13 @@ bool ibIsMcpToolOffered(const ibMcpTool* tool)
 
 	if (ibSession::Current() == nullptr)
 		return false;
-	return ibIsMcpInApplication() == (mode == ibMcpToolMode::Runtime);
+	return ibIsMcpInApplication() == (mode == ibMcpToolMode::Workspace);
 }
 
 bool ibIsMcpInApplication()
 {
 	const ibSession* const session = ibSession::Current();
-	return session != nullptr && !IsDesignerSessionKind(session->GetKind());
+	return session != nullptr && session->GetKind() != ibSessionKind::Studio;
 }
 
 ibFailureToCaller::ibFailureToCaller(ibSession* session) : m_session(session)
@@ -614,7 +614,7 @@ ibValueMetaObjectModuleBase* ibMcpModuleOf(ibValueMetaObject* object, ibString& 
 
 	// ⭐ THE PLATFORM'S OWN CONVERSION, not a bare cast. `ConvertToValue` is the value's answer to
 	// "are you one of these" — it unwraps a REFERENCE first, which a cast cannot, and it answers
-	// true/false rather than raising the way ConvertToType does outside the designer. Same door
+	// true/false rather than raising the way ConvertToType does outside the studio. Same door
 	// every other value question in the engine goes through.
 	ibValueMetaObjectModuleBase* module = nullptr;
 
@@ -1079,7 +1079,7 @@ void ibMcpSayCaption(const ibPropertyTString* caption, ibDataNode& into)
 }
 
 // ⭐ NAMED BY THE INSPECTOR'S OWN WORDS — ibChoiceHolderFieldName for a neighbour, ibChoiceTargetFieldName
-// for a field of what is chosen, `<gone>` where the inspector says `<gone>` — so MCP and the designer's line
+// for a field of what is chosen, `<gone>` where the inspector says `<gone>` — so MCP and the studio's line
 // cannot spell one field two ways. A field deleted from the application does not reach here: the choice has
 // dropped it already (variantChoiceLink.cpp).
 void ibMcpSayChoiceLink(const ibPropertyObject* field, const ibChoiceTypeLinkDescription& linkDesc, ibDataNode& into)
@@ -1515,7 +1515,7 @@ void ibMcpSayProperties(const ibPropertyObject* object, ibDataNode& node,
 			//
 			// ⭐ THE TWO HALVES ARE ASKED OF THE TWO THINGS THAT HOLD THEM: what it IS, of the
 			// VALUE — the variant renders the whole relationship itself, which is the same string
-			// the designer's property sheet shows; what it ACCEPTS, of the LIST, which is already
+			// the studio's property sheet shows; what it ACCEPTS, of the LIST, which is already
 			// beside it. Nothing here takes the value apart, and nothing resolves an id against the
 			// application: the value can say itself and the list is already the vocabulary.
 			entry->SetValue(ibT("value"),
@@ -1645,7 +1645,7 @@ void ibMcpSayProperties(const ibPropertyObject* object, ibDataNode& node,
 			// Child too — a hop path, not a Name/Id pair — so it fell into "a structure is named" and
 			// read back as {"name": ""} whether nothing was bound, a command was bound and working, or
 			// a bound command's hops no longer resolved to anything (a merged-in button whose command
-			// kept its old, now-foreign id: the designer's own property cell shows "<not found>" for
+			// kept its old, now-foreign id: the studio's own property cell shows "<not found>" for
 			// exactly this, form_control showed nothing at all - right up to the moment a caller would
 			// have trusted the blank and never looked again).
 			//
@@ -1798,11 +1798,11 @@ ibMetaData* ibMcpMetaDataNamed(const ibDataNode& params, ibString& refusal)
 		return activeMetaData;
 	}
 
-	// ⭐ ONLY WHAT IS OPEN IN THE DESIGNER, where the person sees it — a file is never read behind its tab. Closed, it is
+	// ⭐ ONLY WHAT IS OPEN IN THE STUDIO, where the person sees it — a file is never read behind its tab. Closed, it is
 	// gone with what was not saved, and that is said rather than the file read again as it was.
 	ibMetaDataDocument* const document = ibMcpExternalNamed(external);
 	if (document == nullptr || document->GetMetaData() == nullptr) {
-		refusal = ibString::Format(ibMcpText("'%s' is not open in the designer - external_data_tool_open or "
+		refusal = ibString::Format(ibMcpText("'%s' is not open in the studio - external_data_tool_open or "
 			"external_report_open opens it. A tab closed takes with it what was not saved."), external);
 		return nullptr;
 	}
@@ -1967,7 +1967,7 @@ std::vector<ibString> ibMcpComplaints(ibValueMetaObject* object)
 		return found;
 
 	// ⚠ The ledger is process-wide, so it is emptied before the question and
-	// after it. In a designer session nothing else is writing to it at that
+	// after it. In a studio session nothing else is writing to it at that
 	// moment; a batch apply would want its own, which is a reason not to ask this
 	// during one.
 	ibRestructureInfo& ledger = ibMetaDataApplicationBase::GetRestructureInfo();
@@ -1976,13 +1976,13 @@ std::vector<ibString> ibMcpComplaints(ibValueMetaObject* object)
 	// ⭐ AND THE OTHER HALF IS NOT HERE. Some metatypes complain into this ledger;
 	// others say it through the message pane (a chart of accounts with no chart of
 	// characteristic types does), and that road ends in the frame of the session
-	// this runs in — the person's designer window. Nothing on this side keeps it:
+	// this runs in — the person's studio window. Nothing on this side keeps it:
 	// messages_read, which read the desktop window's record, went with the desktop
 	// front (2026-10-27), and a second collector in the backend would say the same
 	// thing twice.
 	//
 	// The probe below therefore FILLS BOTH: the ledger is read here, and whatever
-	// it says through the pane is shown to the person at the designer.
+	// it says through the pane is shown to the person at the studio.
 	try {
 		object->OnSaveMetaObject(0);
 	}
@@ -2017,7 +2017,7 @@ void ibMcpReportComplaints(ibDataNode& result, ibValueMetaObject* object)
 	result.SetValue(ibT("incompleteNote"),
 		ibMcpText("The change was made. The object still reports this, and the application cannot "
 		  "be saved to the database until it stops. Some objects complain through the "
-		  "message pane instead - those reach the designer's window, not this answer."));
+		  "message pane instead - those reach the studio's window, not this answer."));
 }
 
 // ⭐⭐ THE SAME DOOR A MOUSE CLICK USES — and it is the platform's, not this server's.
@@ -2396,7 +2396,7 @@ bool ibMcpSetProperty(ibProperty* property, const ibDataNode& params,
 		for (unsigned int index = 0; index < choices.GetCount(); ++index) {
 
 			// BY ID WHEN A NUMBER CAME, otherwise by name or by label — the name is what a script
-			// writes, the label is what the designer shows, and a caller should not have to know
+			// writes, the label is what the studio shows, and a caller should not have to know
 			// which vocabulary this property speaks.
 			const bool matches = byNumber
 				? choices.GetId(index) == askedId
@@ -2476,7 +2476,7 @@ bool ibMcpSetProperty(ibProperty* property, const ibDataNode& params,
 
 	// ⭐ THE PROPERTY JUDGES, AND THE REFUSAL CARRIES THE SHAPE. Nothing here decides whether a
 	// value is legal — the gate hands the node to the property, the only place that knows, and puts
-	// what it read before its owner (ibPropertyGate::SetValue, the node's door — the designer's
+	// what it read before its owner (ibPropertyGate::SetValue, the node's door — the studio's
 	// inspector comes by it too). But "would not take that value" on its own leaves a caller guessing
 	// at the difference, and the answer was in reach the whole time: the property can be asked what
 	// it holds NOW, and its kind is the shape a value has to arrive in.

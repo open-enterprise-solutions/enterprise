@@ -225,7 +225,7 @@ TEST_F(OneBaseFix, AFreshThreadIsRefusedEvenWithOneBase)
 }
 
 // An empty sys_user that was actually read is open access, including the
-// application server's own login and the web server's own session. A table
+// application server's own login and a workspace's session in a file base. A table
 // that cannot be read is not empty, and the login is refused.
 TEST_F(OneBaseFix, AnEmptyUserListOpensAndAnUnreadableOneRefuses)
 {
@@ -266,10 +266,10 @@ TEST_F(OneBaseFix, AnEmptyUserListOpensAndAnUnreadableOneRefuses)
 	// refuses. A file and a wider pool let that read see the empty list.
 	const ibString path = wxFileName::CreateTempFileName(wxT("oes-users"));
 	ASSERT_FALSE(path.IsEmpty());
-	ibApplicationInstance* const webBase = OpenBase(ibRunMode::eFILE_MODE, /*poolSize=*/4, path);
-	ASSERT_NE(webBase, nullptr);
+	ibApplicationInstance* const fileBase = OpenBase(ibRunMode::eFILE_MODE, /*poolSize=*/4, path);
+	ASSERT_NE(fileBase, nullptr);
 	{
-		ibApplicationInstanceScope working(webBase);
+		ibApplicationInstanceScope working(fileBase);
 		ASSERT_NE(db_query->RunQuery(emptyUserList), -1);
 		// The registry writes and re-reads this row on its own connection.
 		ASSERT_NE(db_query->RunQuery(wxT(
@@ -278,18 +278,17 @@ TEST_F(OneBaseFix, AnEmptyUserListOpensAndAnUnreadableOneRefuses)
 			"started TEXT, lastActive TEXT, computer TEXT)")), -1);
 		// …the base being put together by hand, its registry is started the way Open starts it.
 		ibApplicationInstance::GetSessionRegistry()->Start();
-		ibSessionHolder web = webBase->CreateSession(ibSessionKind::WebServer);
-		ASSERT_NE(web.Get(), nullptr);
-		ibSessionScope scope(web.Get());
-		EXPECT_TRUE(webBase->WebEnterpriseMode());
+		ibSessionHolder workspace = fileBase->CreateSession(ibSessionKind::Workspace);
+		ASSERT_NE(workspace.Get(), nullptr);
+		ibSessionScope scope(workspace.Get());
 		ibUserInfo info;
-		EXPECT_TRUE(webBase->AuthenticateUser(wxEmptyString, wxEmptyString, info));
+		EXPECT_TRUE(fileBase->AuthenticateUser(wxEmptyString, wxEmptyString, info));
 		EXPECT_TRUE(ibUserInfo::ListAll().empty());
 	}
 	wxRemoveFile(path);
 }
 
-// #649 — a thin designer in an application server asks for single-user mode beside the server's own login
+// #649 — a studio in an application server asks for single-user mode beside the server's own login
 // (ibSessionKind::Service, appServer.cpp). The login is the HOST'S: it passes both of the acquire's checks — this
 // process's sessions, and the snapshot's rows, where the registry wrote its row. A job running at that moment refuses
 // as one to wait for (JobRunning: it ends by itself), a second client refuses outright (NotSole) and outweighs a job.
@@ -323,16 +322,16 @@ TEST(SingleUserBesideTheHost, TheHostsOwnLoginPassesAJobAndASecondClientDoNot)
 	registry->Start();
 
 	ibSessionHolder host = base->CreateSession(ibSessionKind::Service);
-	ibSessionHolder designer = base->CreateSession(ibSessionKind::ThinDesigner);
+	ibSessionHolder studio = base->CreateSession(ibSessionKind::Studio);
 	ASSERT_NE(host.Get(), nullptr);
-	ASSERT_NE(designer.Get(), nullptr);
+	ASSERT_NE(studio.Get(), nullptr);
 
 	// The registry's verdict, asked as an apply asks it (ibRestructureInfo::RequireSingleUserForDDL); a grant is let go.
 	using R = ibSession::ibSingleUserResult;
 	const auto acquire = [&]() {
-		const R verdict = registry->SetSingleUser(designer.Get(), true);
+		const R verdict = registry->SetSingleUser(studio.Get(), true);
 		if (verdict == R::Granted)
-			registry->SetSingleUser(designer.Get(), false);
+			registry->SetSingleUser(studio.Get(), false);
 		return verdict;
 	};
 
@@ -344,10 +343,10 @@ TEST(SingleUserBesideTheHost, TheHostsOwnLoginPassesAJobAndASecondClientDoNot)
 		ibSessionHolder job = base->CreateSession(ibSessionKind::SystemJob);
 		ASSERT_NE(job.Get(), nullptr);
 		EXPECT_EQ(acquire(), R::JobRunning) << "a running job refuses, as one to wait for";
-		EXPECT_THROW(designer.Get()->SetSingleUser(true), ibBackendSessionException)
+		EXPECT_THROW(studio.Get()->SetSingleUser(true), ibBackendSessionException)
 			<< "and the session's door refuses with it";
 
-		ibSessionHolder client = base->CreateSession(ibSessionKind::ThinClient);
+		ibSessionHolder client = base->CreateSession(ibSessionKind::Workspace);
 		ASSERT_NE(client.Get(), nullptr);
 		EXPECT_EQ(acquire(), R::NotSole) << "a client beside the job outweighs it";
 	}
@@ -386,18 +385,18 @@ TEST(SingleUserBesideTheHost, TheSessionsSingleUserOutlivesASavesGate)
 		"singleUser INTEGER NOT NULL DEFAULT 0, tokenHash TEXT)")), -1);
 	ibApplicationInstance::GetSessionRegistry()->Start();
 
-	ibSessionHolder designer = base->CreateSession(ibSessionKind::ThinDesigner);
-	ASSERT_NE(designer.Get(), nullptr);
-	ibSessionScope bound(designer.Get());
+	ibSessionHolder studio = base->CreateSession(ibSessionKind::Studio);
+	ASSERT_NE(studio.Get(), nullptr);
+	ibSessionScope bound(studio.Get());
 
-	designer.Get()->SetSingleUser(true);
-	EXPECT_TRUE(appData->SingleUserMode()) << "the designer alone: held from the start";
+	studio.Get()->SetSingleUser(true);
+	EXPECT_TRUE(appData->SingleUserMode()) << "the studio alone: held from the start";
 
 	// A save inside the apply: its first DDL asks the gate, its OnAfterSave lets the gate's own go.
 	ibRestructureInfo::RequireSingleUserForDDL();
 	ibRestructureInfo::ReleaseAutoSingleUser();
 	EXPECT_TRUE(appData->SingleUserMode()) << "the save found it held and left it — the apply still holds it";
 
-	designer.Get()->SetSingleUser(false);
+	studio.Get()->SetSingleUser(false);
 	EXPECT_FALSE(appData->SingleUserMode()) << "the apply over, it is let go";
 }

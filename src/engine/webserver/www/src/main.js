@@ -3,7 +3,7 @@
 
 import './controls/index.js';
 import './docView/index.js';
-// The application's property cells — a designer's page would import the designer's beside them (properties/index.js).
+// The application's property cells — a studio's page would import the studio's beside them (properties/index.js).
 import './properties/runtime.js';
 import { _, readDictionary } from './localization.js';
 import { startAssistant } from './window/assistantAccess.js';
@@ -44,7 +44,7 @@ async function start() {
 		return;
 	}
 	// The application's client — appworkspace's in the browser: its documents are those docView/index.js registers.
-	const session = new Session(connection, Mode.Runtime);
+	const session = new Session(connection, Mode.Workspace);
 	const pictures = new Pictures(session);
 	showSplash(_('Logging in'));
 	await logIn(root, session, publication);

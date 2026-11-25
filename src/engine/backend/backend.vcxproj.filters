@@ -879,7 +879,7 @@
     <ClInclude Include="session\sessionSnapshot.h">
       <Filter>session</Filter>
     </ClInclude>
-    <ClInclude Include="session\designerExclusivePolicy.h">
+    <ClInclude Include="session\studioExclusivePolicy.h">
       <Filter>session</Filter>
     </ClInclude>
     <ClInclude Include="session\serviceExclusivePolicy.h">
@@ -2203,7 +2203,7 @@
     <ClCompile Include="session\sessionSnapshot.cpp">
       <Filter>session</Filter>
     </ClCompile>
-    <ClCompile Include="session\designerExclusivePolicy.cpp">
+    <ClCompile Include="session\studioExclusivePolicy.cpp">
       <Filter>session</Filter>
     </ClCompile>
     <ClCompile Include="session\serviceExclusivePolicy.cpp">

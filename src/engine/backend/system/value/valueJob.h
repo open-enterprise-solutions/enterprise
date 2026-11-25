@@ -28,7 +28,7 @@ void ibValuePredefinedJobs_BindNames(ibValue::ibMemberTable& helper, const ibVal
 //
 //  It exists because a parameterized scheduled job carries its schedule in a ROW, not in the
 //  metadata: the row is the value, and a row's requisite has to be a type the language can hold,
-//  read and assign. The metadata half (a designer property + its four-tab dialog) was already
+//  read and assign. The metadata half (a studio property + its four-tab dialog) was already
 //  there; this is the same description reaching the other three surfaces — script, the column
 //  codec and the form.
 //
@@ -92,7 +92,7 @@ public:
 	virtual bool Init() { return true; }
 	virtual bool Init(ibValue** paParams, const long lSizeArray);
 
-	// The sentence — the same one the manager's journal and the designer's property row show.
+	// The sentence — the same one the manager's journal and the studio's property row show.
 	virtual ibString GetString() const { return ibJobScheduleRules::Describe(m_schedule); }
 
 	// A schedule is never "empty": it always answers when its job is due. Saying otherwise would
@@ -135,7 +135,7 @@ constexpr ibClassID g_valueScheduleCLSID = value_to_clsid("VL_SCHED");
 //  Why LIVE settings rather than the metaobject: the declaration answers what the developer wrote,
 //  and the question here is what the base is doing — is this job on, when did it last run, when is
 //  it due. Those live in the base (docs/private/scheduled-jobs.md § 8), because switching a misbehaving
-//  job off must not mean opening the Designer against production.
+//  job off must not mean opening the Studio against production.
 //////////////////////////////////////////////////////////////////////
 
 class BACKEND_API ibValueJobRow : public ibValueStaticMembers<&ibValueJobRow_BindNames> {

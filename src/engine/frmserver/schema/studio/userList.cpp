@@ -1,0 +1,228 @@
+#include "userList.h"
+
+#include <algorithm>
+
+#include "backend/appData.h"   // GetSessionRegistry — the base's sessions
+#include "backend/metadataApplication.h"
+#include "backend/metaCollection/metaObjectMetadata.h"   // AccessRight_Administration of a role — the item's OK check
+#include "backend/metaCollection/metaLanguageObject.h"
+#include "backend/metaCollection/metaRoleObject.h"
+#include "backend/session/session.h"
+#include "backend/session/sessionRegistry.h"   // Kick — an account's sessions ended
+#include "backend/session/sessionSnapshot.h"   // the sessions signed in under its name
+#include "backend/userInfo.h"
+#include "backend/utils/passwordHash.hpp"
+#include "core/diagnostics/journal.h"          // ibJournalWarning — a kick that could not be queued
+#include "core/serialize/dataBuilder.h"
+#include "protocol/protocolStudio.h"   // ibProtocol::ibSchema::ibUserList
+
+namespace {
+
+// ⭐ AN ACCOUNT WHOSE PASSWORD CHANGED, OR THAT IS GONE, KEEPS NO SESSION (#377): every person's session signed in under
+// its name is ended, in every process of the base, by the kick the active users' list sends — but the asking one, the
+// administrator at this list. A session went on with the old password, or with no account, until its person left. A
+// job started under the name runs on: it signed in with no password, and a night's work is not cut for a new one.
+void EndSessionsOf(const ibSession& session, const ibString& userName)
+{
+	ibSessionRegistry* const registry = ibApplicationInstance::GetSessionRegistry(session.GetApplicationInstance());
+	if (registry == nullptr || userName.IsEmpty())
+		return;
+
+	const ibSessionSnapshot snapshot = registry->GetClusterSnapshot();
+	for (unsigned int idx = 0; idx < snapshot.GetSessionCount(); idx++) {
+		const ibString guid = snapshot.GetSession(idx);
+		if (guid == session.GetId() || !ibIsPersonSession(snapshot.GetSessionKind(idx))
+			|| !snapshot.GetUserName(idx).IsSameAs(userName, /*caseSensitive*/false))
+			continue;
+		if (!registry->Kick(guid))
+			ibJournalWarning(ibT("ui"), _("Failed to queue kick for session %s"), guid);
+	}
+}
+
+} // namespace
+
+bool ibSchemaUserList::AccessRight(const ibSession& session) const
+{
+	const ibMetaDataApplicationBase* const metaData = session.GetMetaData();
+	return metaData != nullptr && metaData->AccessRight_DataAdministration();
+}
+
+void ibSchemaUserList::Build(const ibSession& session, const ibDataNode& args, ibDataNode& result) const
+{
+	const ibString guid = args.GetValue<ibString>(ibProtocol::ibSchema::ibUserList::Guid);
+
+	// The list — the rows ibUserListModel::PrepareData read, a Brief each — and what a user's record is chosen from:
+	// the roles ibDialogUserItem listed off the application, which the client does not hold (its languages are
+	// every translation's — ibSchemaLanguages).
+	if (guid.IsEmpty()) {
+		ibDataNode& users = result.Child(ibProtocol::ibSchema::ibUserList::Users);
+		const std::vector<ibUserInfo::Brief> list = ibUserInfo::ListAll();
+		for (std::size_t idx = 0; idx < list.size(); idx++) {
+			ibDataNode& row = users.AddChild(0, static_cast<ibMetaID>(idx));
+			row.SetValue(ibProtocol::ibSchema::ibUserList::Guid, list[idx].m_strUserGuid);
+			row.SetValue(ibProtocol::ibSchema::ibUserList::Name, list[idx].m_strUserName);
+			row.SetValue(ibProtocol::ibSchema::ibUserList::FullName, list[idx].m_strUserFullName);
+		}
+
+		const ibMetaDataApplicationBase* const metaData = session.GetMetaData();
+		if (metaData == nullptr)
+			return;
+
+		ibDataNode& roles = result.Child(ibProtocol::ibSchema::ibUserList::Roles);
+		ibMetaID idx = 0;
+		for (const auto object : metaData->GetAnyArrayObject<ibValueMetaObjectRole>(g_metaRoleCLSID)) {
+			ibDataNode& row = roles.AddChild(0, idx++);
+			row.SetValue(ibProtocol::ibSchema::ibUserList::Guid, object->GetDocPath());
+			row.SetValue(ibProtocol::ibSchema::ibUserList::Name, object->GetName());
+			row.SetValue(ibProtocol::ibSchema::ibUserList::Title, object->GetSynonym());
+			row.SetValue(ibProtocol::ibSchema::ibUserList::Mode, static_cast<std::int32_t>(object->GetRoleCompositionMode()));
+		}
+		return;
+	}
+
+	// One user — what ibDialogUserItem::ReadUserData read; none of it when there is no such user. The stored password is
+	// said, not given.
+	const ibUserInfo userInfo = ibUserInfo::Read(ibGuid(guid));
+	if (!userInfo.IsOk())
+		return;
+
+	ibDataNode& user = result.Child(ibProtocol::ibSchema::ibUserList::User);
+	user.SetValue(ibProtocol::ibSchema::ibUserList::Guid, userInfo.m_strUserGuid);
+	user.SetValue(ibProtocol::ibSchema::ibUserList::Name, userInfo.m_strUserName);
+	user.SetValue(ibProtocol::ibSchema::ibUserList::FullName, userInfo.m_strUserFullName);
+	user.SetValue(ibProtocol::ibSchema::ibUserList::Password, userInfo.IsSetPassword());
+	if (userInfo.IsSetLanguage())
+		user.SetValue(ibProtocol::ibSchema::ibUserList::Language, userInfo.m_strLanguageGuid);
+	std::vector<ibDataValue> roles;
+	for (const ibUserInfo::ibUserRole& role : userInfo.m_roleArray)
+		roles.push_back(ibDataValue::String(role.m_strRoleGuid));
+	user.AddField(ibProtocol::ibSchema::ibUserList::Roles, ibDataValue::Array(std::move(roles)));
+}
+
+std::function<void()> ibSchemaUserList::Command(const ibSession& session, std::int32_t command,
+	const ibDataNode& args, ibProtocol::ibRefusal& refusal, ibString& error) const
+{
+	const ibMetaDataApplicationBase* const metaData = session.GetMetaData();
+	if (metaData == nullptr) {
+		refusal = ibProtocol::ibRefusal::NoSession;
+		error = ibT("the session has no application");
+		return nullptr;
+	}
+
+	// Done in the asking — the work is nothing more: the frame the client is answered with.
+	const auto done = []() {};
+
+	switch (static_cast<ibProtocol::ibSchema::ibCommand>(command)) {
+	case ibProtocol::ibSchema::ibCommand::Save: {
+		const ibGuid userGuid(args.GetValue<ibString>(ibProtocol::ibSchema::ibUserList::Guid));
+		if (!userGuid.isValid()) {
+			refusal = ibProtocol::ibRefusal::NotFound;
+			error = ibT("no user guid");
+			return nullptr;
+		}
+
+		try {
+			ibUserInfo userInfo;
+
+			userInfo.m_strUserGuid = userGuid.str();
+			userInfo.m_strUserName = args.GetValue<ibString>(ibProtocol::ibSchema::ibUserList::Name);
+			userInfo.m_strUserFullName = args.GetValue<ibString>(ibProtocol::ibSchema::ibUserList::FullName);
+
+			// The hash the item kept untouched is the stored one — read here, where it stays. A copy is a new guid: it
+			// has none stored, and starts without a password, as the desktop's copy did.
+			const auto password = args.FindField(ibProtocol::ibSchema::ibUserList::Password);
+			const ibUserInfo stored = ibUserInfo::Read(userGuid);
+			userInfo.m_strUserPassword = ibPasswordHash::PasswordToStore(stored.m_strUserPassword,
+				password.has_value(), password.has_value() ? password->AsString() : ibString());
+
+			const ibValueMetaObjectApplication* rootObject = metaData->GetRootMetaObject();
+			ibASSERT(rootObject);
+
+			// The language and the roles the item offered — the application's, found by the guids it sent.
+			const ibString languageGuid = args.GetValue<ibString>(ibProtocol::ibSchema::ibUserList::Language);
+			for (const auto object : metaData->GetAnyArrayObject<ibValueMetaObjectLanguage>(g_metaLanguageCLSID)) {
+				if (object->GetDocPath() != languageGuid)
+					continue;
+				userInfo.m_strLanguageGuid = object->GetDocPath();
+				userInfo.m_strLanguageCode = object->GetLangCode();
+				break;
+			}
+
+			std::vector<ibString> checked;
+			if (const auto roles = args.FindField(ibProtocol::ibSchema::ibUserList::Roles)) {
+				for (const ibDataValue& role : roles->AsArray())
+					checked.push_back(role.AsString());
+			}
+
+			bool access_right = false;
+
+			for (const auto object : metaData->GetAnyArrayObject<ibValueMetaObjectRole>(g_metaRoleCLSID)) {
+				if (std::find(checked.begin(), checked.end(), object->GetDocPath()) == checked.end())
+					continue;
+				auto& entry = userInfo.m_roleArray.emplace_back();
+				entry.m_strRoleGuid = object->GetDocPath();
+				entry.m_strRoleName = object->GetName();
+				entry.m_miRoleId = object->GetMetaID();
+				entry.m_mode = object->GetRoleCompositionMode();
+				// Parenthesised as it always behaved: a role grants the right only if it carries
+				// BOTH administration flags, and any one such role is enough for the user.
+				access_right = access_right || (rootObject->AccessRight_Administration(entry.m_miRoleId) &&
+					rootObject->AccessRight_DataAdministration(entry.m_miRoleId));
+			}
+
+			// …or another user keeps one. The desktop's loop went on past a user who did, and the last user's roles
+			// decided; any one is enough.
+			if (!access_right) {
+				for (const auto& brief : ibUserInfo::ListAll()) {
+					const ibGuid otherGuid(brief.m_strUserGuid);
+					if (otherGuid == userGuid)
+						continue;
+					const ibUserInfo userEntry = ibUserInfo::Read(otherGuid);
+					for (const auto& role : userEntry.m_roleArray) {   // by reference — a role is a struct, not a handle
+						access_right = rootObject->AccessRight_Administration(role.m_miRoleId) &&
+							rootObject->AccessRight_DataAdministration(role.m_miRoleId);
+						if (access_right) break;
+					}
+					if (access_right) break;
+				}
+			}
+
+			if (!access_right) {
+				refusal = ibProtocol::ibRefusal::Failed;
+				error = _("After recording, there would not be a single role with admin rights. The action is impossible!");
+				return nullptr;
+			}
+
+			if (ibUserInfo::Save(userInfo)) {
+				// A password given anew ends the sessions the old one signed in — under the name they signed in by.
+				if (password.has_value() && stored.IsOk())
+					EndSessionsOf(session, stored.m_strUserName);
+				return done;
+			}
+			error = BackendErrorChain();
+		}
+		catch (const ibCoreException& e) {
+			error = BackendErrorChain(e.GetErrorDescription());
+		}
+		refusal = ibProtocol::ibRefusal::Failed;
+		return nullptr;
+	}
+	case ibProtocol::ibSchema::ibCommand::Remove: {
+		const ibGuid userGuid(args.GetValue<ibString>(ibProtocol::ibSchema::ibUserList::Guid));
+		const ibUserInfo gone = ibUserInfo::Read(userGuid);   // the name its sessions signed in by, read while it is there
+		if (ibUserInfo::Delete(userGuid)) {
+			EndSessionsOf(session, gone.m_strUserName);
+			return done;
+		}
+		refusal = ibProtocol::ibRefusal::Failed;
+		error = BackendErrorChain();
+		return nullptr;
+	}
+	default:
+		break;
+	}
+
+	refusal = ibProtocol::ibRefusal::NotFound;
+	error = ibString::Format(ibT("the users take no command %d"), command);
+	return nullptr;
+}

@@ -1,5 +1,5 @@
 ////////////////////////////////////////////////////////////////////////////
-//	Description : the designer's choice of a DECLARED value — see selectPredefined.h
+//	Description : the studio's choice of a DECLARED value — see selectPredefined.h
 ////////////////////////////////////////////////////////////////////////////
 
 #include "selectPredefined.h"
@@ -19,32 +19,32 @@
 #include "frmserver/visualView/ctrl/frame.h"                             // ibControlFrame::ChoiceProcessing
 #include "frmserver/visualView/ctrl/typeControl.h"                       // ShowSelectType — the type list already in the product
 #include "protocol/protocol.h"
-#include "protocol/protocolDesigner.h"   // ibProtocol::ibRequest::ibPredefinedSelector
+#include "protocol/protocolStudio.h"   // ibProtocol::ibRequest::ibPredefinedSelector
 
 // The window's own parts — nothing outside this file has business with a branch or a value's number.
 namespace {
 
 // THE ANSWER IS A NUMBER: which type, and which value of it, kept here under the number the client's tree names it by.
 // A null guid IS the empty reference of that type, so every answer is the same kind and the window has one road out.
-struct ibDesignerRefItem {
+struct ibStudioRefItem {
 	const ibValueMetaObjectRecordDataRef* m_ref;
 	ibGuid m_guid;
 	ibString m_name;
 };
 
 // One value under `at`, numbered; what it holds goes under it.
-ibDataNode& ibAppendValue(ibDataNode& at, std::vector<ibDesignerRefItem>& values,
+ibDataNode& ibAppendValue(ibDataNode& at, std::vector<ibStudioRefItem>& values,
 	const ibValueMetaObjectRecordDataRef* recordRef, const ibGuid& guid, const ibString& name)
 {
 	ibDataNode& value = at.AddChild(0, 0);
 	value.SetValue(ibProtocol::ibRequest::ibPredefinedSelector::Name, name);
 	value.SetValue(ibProtocol::ibRequest::ibPredefinedSelector::Id, static_cast<std::int32_t>(values.size()));
-	values.push_back(ibDesignerRefItem{ recordRef, guid, name });
+	values.push_back(ibStudioRefItem{ recordRef, guid, name });
 	return value;
 }
 
 // WHAT ONE TYPE OFFERS: its empty reference, then everything it declares, nested as it is declared.
-void ibFillOneTypeBranch(ibDataNode& branch, std::vector<ibDesignerRefItem>& values,
+void ibFillOneTypeBranch(ibDataNode& branch, std::vector<ibStudioRefItem>& values,
 	const ibValueMetaObjectRecordDataRef* recordRef)
 {
 	if (recordRef == nullptr)
@@ -90,7 +90,7 @@ void ibFillOneTypeBranch(ibDataNode& branch, std::vector<ibDesignerRefItem>& val
 // EVERY ADMITTED REFERENCE TYPE IS A BRANCH — the composite case is not a second window but one more
 // branch, which is what makes "choose a declared value" a single question however many types the
 // parameter admits.
-void ibFillDesignerRefTree(ibDataNode& request, std::vector<ibDesignerRefItem>& values,
+void ibFillStudioRefTree(ibDataNode& request, std::vector<ibStudioRefItem>& values,
 	const std::vector<const ibValueMetaObjectRecordDataRef*>& types)
 {
 	ibDataNode& branches = request.Child(ibProtocol::ibRequest::ibPredefinedSelector::Types);
@@ -103,7 +103,7 @@ void ibFillDesignerRefTree(ibDataNode& request, std::vector<ibDesignerRefItem>& 
 
 } // namespace
 
-// ⭐⭐ THE DESIGNER'S OWN ROAD TO A REFERENCE VALUE — one window, no data behind it. The whole of it
+// ⭐⭐ THE STUDIO'S OWN ROAD TO A REFERENCE VALUE — one window, no data behind it. The whole of it
 // is described in the header; what follows is how the two questions are asked.
 bool ibShowPredefinedSelector(ibControlFrame* ownerValue, const ibTypeDescription& declared,
 	const ibMetaData* metaData)
@@ -161,10 +161,10 @@ bool ibShowPredefinedSelector(ibControlFrame* ownerValue, const ibTypeDescriptio
 	if (frame == nullptr)
 		return false;
 
-	std::vector<ibDesignerRefItem> values;
+	std::vector<ibStudioRefItem> values;
 	ibDataNode request;
 	request.SetValue(ibProtocol::ibRequest::Kind, static_cast<std::int32_t>(ibProtocol::ibRequest::ibKind::PredefinedSelector));
-	ibFillDesignerRefTree(request, values, types);
+	ibFillStudioRefTree(request, values, types);
 
 	ibDataNode response;
 	if (!frame->Request(request, response) || !response.FindField(ibProtocol::ibRequest::ibPredefinedSelector::Id))
@@ -172,7 +172,7 @@ bool ibShowPredefinedSelector(ibControlFrame* ownerValue, const ibTypeDescriptio
 	const std::int32_t id = response.GetValue<std::int32_t>(ibProtocol::ibRequest::ibPredefinedSelector::Id);
 	if (id < 0 || static_cast<size_t>(id) >= values.size())
 		return false;
-	const ibDesignerRefItem& chosen = values[static_cast<size_t>(id)];
+	const ibStudioRefItem& chosen = values[static_cast<size_t>(id)];
 
 	// ⭐⭐ WHAT IS WRITTEN IS THE DECLARATION, NOT A LIVE REFERENCE. A reference object is runtime — a
 	// session, a register, a row to read — and this value is going into a DESCRIPTION that is saved

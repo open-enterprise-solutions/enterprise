@@ -7,7 +7,7 @@
 //
 // ONE STRUCTURE FOR BOTH SIDES (Max, 2026-11-14: *"it lives in the core"*). The engine's query measurement
 // (backend/query/queryProfiler.h) answers with it, the debugger carries it under a profiler's line (ibProfileData), and
-// the designer and an assistant read it as it came — nobody keeps a copy of its shape.
+// the studio and an assistant read it as it came — nobody keeps a copy of its shape.
 //
 // The queries of the query language that ran and, under each, the statements it sent the database; and the
 // statements sent past the language — an object written or deleted, the platform's own reads. Times are microseconds.

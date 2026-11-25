@@ -8,7 +8,7 @@
 // answer BEFORE the fact: signatures, parameters, return values, worked
 // examples, and which runtimes an entry is even valid in.
 //
-// ⭐ IT IS THE SYNTAX HELPER AND NOTHING ELSE — the same corpus the designer shows beside the
+// ⭐ IT IS THE SYNTAX HELPER AND NOTHING ELSE — the same corpus the studio shows beside the
 // editor. What an APPLICATION holds is metadata_tree / metadata_get / query_fields; how something
 // is USUALLY BUILT here is pattern_read. Those three questions look alike and are not, and a verb
 // that answers all of them teaches a caller to ask the wrong one.
@@ -310,7 +310,7 @@ public:
 		if (!types.empty())
 			result.AddField(ibT("types"), ibDataValue::Array(types));
 
-		// ⭐ THIS IS THE SYNTAX HELPER, AND ONLY THAT — the same corpus the designer shows beside the
+		// ⭐ THIS IS THE SYNTAX HELPER, AND ONLY THAT — the same corpus the studio shows beside the
 		// editor: how the LANGUAGE is written. It briefly also answered names out of the open
 		// application, and that was a mixing of two different questions: what an application
 		// HOLDS is metadata_tree / metadata_get / query_fields, and how things are USUALLY BUILT is
@@ -474,7 +474,7 @@ public:
 			result.SetValue(ibT("syntaxNote"),
 				ibMcpText("This entry is written down only in the other syntax form."));
 
-		// WHERE IT IS VALID AT ALL. "Works in appserver, not in the designer" is
+		// WHERE IT IS VALID AT ALL. "Works in appserver, not in the studio" is
 		// the class of mistake that costs a run to discover.
 		if (!entry->availability.IsEmpty())
 			result.SetValue(ibT("availability"), entry->availability);

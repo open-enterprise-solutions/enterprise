@@ -4,7 +4,7 @@
 #include "backend/settings/settingsComposer.h"            // the setting marked "restore on open" goes on here
 #include "backend/metaCollection/partial/dataReport.h"   // ibReportParameter::ComposeOnOpen — read off the form's request
 #include "backend/system/systemManager.h"                 // ibValueSystemFunction::Message — the platform's own way to speak
-#include "frmserver/visualView/visualHost.h"              // IsDesignerHost — a form being drawn neither restores nor composes
+#include "frmserver/visualView/visualHost.h"              // IsStudioHost — a form being drawn neither restores nor composes
 #include "frmserver/docView/templates/docViewSpreadsheet.h"   // the document it holds, and its view
 
 #include "protocol/protocol.h"   // ibProtocol::ibForm::ibSpreadsheet::ibComposeState — what the sheet is to its report
@@ -146,10 +146,10 @@ void ibValueGridBox::OnCreated(ibVisualHost* host, bool firstCreated)
 	// already handed it over at InitializeControl; taking it again is idempotent.
 	RefreshModel();
 
-	// ⚠ NOT FOR THE DESIGNER'S PICTURE OF THE FORM: there the box is a picture of itself — running the report
+	// ⚠ NOT FOR THE STUDIO'S PICTURE OF THE FORM: there the box is a picture of itself — running the report
 	// while somebody is drawing the form would read live data into an editor, and slowly; and a person drawing
 	// a form is not a reader whose settings these are.
-	if (host->IsDesignerHost())
+	if (host->IsStudioHost())
 		return;
 
 	// ⭐⭐ THE SETTING MARKED "restore on open" IS PUT ON — HERE, BEFORE THE COMPOSE, because the compose
@@ -266,7 +266,7 @@ bool ibValueGridBox::ReadData(const ibDataNode& node)
 	// like it had lost its composition.
 	m_propertySource->SetNodeValue(node.GetProperty(m_propertySource->GetName()));
 
-	// The sheet a designer typed into travels with the control — read into the sheet the MODEL holds,
+	// The sheet a studio typed into travels with the control — read into the sheet the MODEL holds,
 	// which with no source bound is the box's own document.
 	if (m_spreadsheetModel) {
 		ibSpreadsheetDescriptionMemory::ReadNode(node.GetProperty(ibT("Spreadsheet")),
@@ -278,7 +278,7 @@ bool ibValueGridBox::WriteData(ibDataNode& node) const
 {
 	node.SetProperty(m_propertySource->GetName(), m_propertySource->GetNodeValue());
 
-	// ⭐ THE SHEET IS THE CONTROL'S ONLY WHEN NOTHING IS BOUND — the one a designer typed in (HasValueInControl). A bound
+	// ⭐ THE SHEET IS THE CONTROL'S ONLY WHEN NOTHING IS BOUND — the one a studio typed in (HasValueInControl). A bound
 	// box shows what its source holds — a report's output, an attribute's document — taken again when the form opens
 	// (RefreshModel), so writing it would keep a copy nobody reads back: into a saved form, and into every frame a
 	// client is sent (100 KB re-written on each click in a report, for a patch that came out empty — the client takes

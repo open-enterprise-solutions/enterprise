@@ -34,7 +34,7 @@ bool ibPropertyChoices::WriteNodeValue(ibDataValue& value) const
 
 ////////////////////////////////////////////////////////////////////////
 
-#include "protocol/protocolDesigner.h"         // ibProtocol::ibSchema::ibProperties — the row's keys
+#include "protocol/protocolStudio.h"         // ibProtocol::ibSchema::ibProperties — the row's keys
 #include "core/serialize/dataBuilder.h"
 #include "backend/backend_type.h"              // ibBackendTypeFactory — the field the switch stands in; its type's words
 #include "backend/metaData.h"                  // CreateObject — a value of the type, asked for its values

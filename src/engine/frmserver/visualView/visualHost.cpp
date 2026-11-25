@@ -195,9 +195,9 @@ void ibVisualHost::RefreshControl(ibValueFrame* control, ibDataNode& node, const
 	// The id is what an event comes back naming, so a control that never had one gets one now.
 	node.SetValue(ibProtocol::ibForm::ControlId, control->EnsureControlID());
 	node.SetValue(ibProtocol::ibForm::Name, control->GetControlName());
-	// …and, for the designer, whether it is open in its tree — the header's last field: the form it edits is handed
+	// …and, for the studio, whether it is open in its tree — the header's last field: the form it edits is handed
 	// back as drawn and loaded by LoadNode, which reads it.
-	if (IsDesignerHost())
+	if (IsStudioHost())
 		node.SetValue(ibProtocol::ibForm::Expanded, control->GetExpanded());
 	// The State FIRST: updating, a control may change what it is (a field whose type no longer allows its view takes
 	// the default one) — its properties are written as it now is.

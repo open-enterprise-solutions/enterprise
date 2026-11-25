@@ -169,7 +169,7 @@ bool ibComposerEditDocument::Close()
 {
 	// The panel accepted before the tab is asked closed — while the server has the tab (ibTabDocument::Close). A tab the
 	// server closed takes nothing: the panel sent there drew the tabs again under this close, and the document went in it
-	// (the designer closed with a composer open, the dump of 2026-11-07).
+	// (the studio closed with a composer open, the dump of 2026-11-07).
 	ibFrontendMainFrame* const frame = ibFrontendMainFrame::GetFrame();
 	if (frame != nullptr && frame->FindTab(GetTabId()).GetId() == GetTabId()) {
 		ibComposerEditView* const view = dynamic_cast<ibComposerEditView*>(GetFirstView());

@@ -1,10 +1,10 @@
 ////////////////////////////////////////////////////////////////////////////
 //	Description : Git service — a thin, GUI-free wrapper over the `git` CLI for
 //	              version-controlling an application working copy from the
-//	              Designer. Lives in the backend (wxBase only) so the Designer,
+//	              Studio. Lives in the backend (wxBase only) so the Studio,
 //	              the daemon, and the future web client can all reuse it.
 //
-//	Workflow it serves: the Designer exports the application to a working dir
+//	Workflow it serves: the Studio exports the application to a working dir
 //	as OES-XML / OES-JSON (already supported), git tracks those text files, and
 //	this service drives status / diff / commit / branch / push-pull from the IDE.
 ////////////////////////////////////////////////////////////////////////////
@@ -15,8 +15,8 @@
 #include <wx/arrstr.h>
 #include <vector>
 
-// THE ENGINE'S GIT SERVICE (backend/vcs/gitService.h) WHOLE, LIVING IN THE THIN DESIGNER — the `git` of the machine the
-// designer runs on, over a working copy there, as the desktop's panel drove it; nothing of it is the server's.
+// THE ENGINE'S GIT SERVICE (backend/vcs/gitService.h) WHOLE, LIVING IN THE STUDIO — the `git` of the machine the
+// studio runs on, over a working copy there, as the desktop's panel drove it; nothing of it is the server's.
 
 // Outcome of a single git invocation. Never throws — git failures are normal
 // control flow (not a repo, nothing to commit, push rejected), so the caller

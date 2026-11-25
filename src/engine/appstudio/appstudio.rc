@@ -8,4 +8,4 @@
 #include "../core/version.rc2"
 
 // The first icon is the program's.
-OES ICON "designer.ico"
+OES ICON "studio.ico"

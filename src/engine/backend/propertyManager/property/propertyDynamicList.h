@@ -5,7 +5,7 @@
 #include "core/description/compositionDescription.h"   // what it stores — the SAME composer a report stores
 
 // ---------------------------------------------------------------------------
-// ibPropertyDynamicList — backend half of the "dynamic list settings" designer
+// ibPropertyDynamicList — backend half of the "dynamic list settings" studio
 // property. Pure action property (no stored scalar of its own): it surfaces a
 // single "Settings…" action on whatever owner created it (a form attribute
 // whose Type is a dynamic list). It mirrors ibPropertyForm: GetPGProperty hands

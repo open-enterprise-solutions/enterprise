@@ -205,7 +205,7 @@ public:
 		std::vector<ibQueryConstructorField> fields = model.GetFields(source, empty, 0);
 
 		// ⭐⭐ AND IF THAT IS NOT A SOURCE, THE TAIL IS A WALK. A path names a source, then possibly
-		// fields to step THROUGH — which is the same [+] the designer's field tree makes, and the
+		// fields to step THROUGH — which is the same [+] the studio's field tree makes, and the
 		// only way to ask what is behind a reference. Asked here by shortening the source until it
 		// resolves, because a source is itself two or three segments (a register and its virtual
 		// table), so where the source ends cannot be assumed — it has to be found.

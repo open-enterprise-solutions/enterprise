@@ -20,7 +20,7 @@
 #include "core/clsid.h"
 #include "backend/metaCollection/metaFormObject.h"            // ibValueMetaObjectFormBase::SaveFormData — the live form back into its blob
 #include "backend/backend_exception.h"                       // ibBackendCoreException — a module asked for an attribute it cannot have
-#include "protocol/protocolDesigner.h"   // ibProtocol::ibView::ibFormDesigner
+#include "protocol/protocolStudio.h"   // ibProtocol::ibView::ibFormDesigner
 
 
 //*********************************************************************************************
@@ -79,7 +79,7 @@ bool ibValueForm::WriteAttributes(ibDataNode& node) const
 		// WriteProperty returns false when the attribute is INCOMPLETE (a dynamic list with no
 		// source picked) — FAIL the whole write so a broken definition is never persisted (the
 		// form's save is refused, not silently partial). The node is still written whole: the thin
-		// designer carries the form under edit as this node, and one unfinished list wiped every
+		// studio carries the form under edit as this node, and one unfinished list wiped every
 		// control of it (2026-10-15).
 		if (!av->WriteProperty(attrNode))
 			complete = false;
@@ -445,7 +445,7 @@ ibFormAttributeValue* ibValueForm::GetAttribute(unsigned int idx) const
 // A METAOBJECT attribute is checked at the moment its object is WRITTEN
 // (ibValueRecordDataObjectRef::SaveData). A form attribute has no such moment: it is form-local, it
 // is never saved, and nothing in the frame ever asked. So the property serialised, offered "Don't
-// check" / "Show error" in the designer, and did nothing at all (audit, 2026-08-24).
+// check" / "Show error" in the studio, and did nothing at all (audit, 2026-08-24).
 //
 // ⭐ IT REPORTS AND RETURNS, it does not raise — and that is the difference from the object's road.
 // A save that cannot happen must fail; a form is somebody standing in front of a window, and the
@@ -683,7 +683,7 @@ bool ibValueForm::ibValueFormCollectionAttribute::CallAsProc(const long lMethodN
 	switch (lMethodNum)
 	{
 	case enAttributeRemove:
-		// The cast raises on anything but an attribute — except in the designer's session, where it answers null.
+		// The cast raises on anything but an attribute — except in the studio's session, where it answers null.
 		if (ibFormAttributeValue* const entry = paParams[0]->ConvertToType<ibFormAttributeValue>())
 			m_formOwner->RemoveAttribute(entry);
 		return true;
@@ -819,7 +819,7 @@ const ibMetaData* ibFormAttributeValue::ibFormAttribute::GetMetaData() const
 }
 
 // Editable only when the owner form is — a form opened over a read-only metadata (a DB / file application, not the
-// designer's own storage) is view-only, so its attributes must present as read-only in the inspector.
+// studio's own storage) is view-only, so its attributes must present as read-only in the inspector.
 bool ibFormAttributeValue::ibFormAttribute::IsEditable() const
 {
 	return m_ownerForm != nullptr ? m_ownerForm->IsEditable() : true;

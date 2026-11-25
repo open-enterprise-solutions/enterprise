@@ -5,7 +5,7 @@
 // navigation panel in the order the tree holds them. The door is the metaobject's own
 // ChangeChildPosition — it moves, marks the application modified and announces `Moved`. The MCP verb
 // metadata_move puts an object where another of its kind stands (the position of that one), which is
-// what the designer's up and down do with the neighbouring row.
+// what the studio's up and down do with the neighbouring row.
 //
 // DB-FREE AND UI-FREE, like test_metadataPasteIdentity: a fresh ibMetaDataApplicationFile (public
 // ctor, never "run"), sections created with runObject=false.
@@ -74,7 +74,7 @@ struct SectionsFix {
 	}
 };
 
-// Where `other` stands, `object` goes — what metadata_move and the designer's up / down ask the door.
+// Where `other` stands, `object` goes — what metadata_move and the studio's up / down ask the door.
 bool PutAt(ibValueMetaObject* object, ibValueMetaObject* other) {
 	ibValueMetaObject* const parent = object->GetParent();
 	return parent->ChangeChildPosition(object, parent->GetChildPosition(other));

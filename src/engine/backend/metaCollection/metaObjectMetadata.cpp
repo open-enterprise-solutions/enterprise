@@ -153,13 +153,13 @@ bool ibValueMetaObjectApplication::OnBeforeRunMetaObject(int flags)
 	if (!(*m_propertyModuleApplication)->OnBeforeRunMetaObject(flags))
 		return false;
 
-	// Designer's compile-cache holds its OWN module manager (the mm the Designer lost
+	// Studio's compile-cache holds its OWN module manager (the mm the Studio lost
 	// when runtime moved into per-session managers). Register THAT under the application
 	// module — not the per-session runtime mm — so the editor reads shared-module
-	// units + named context from a manager that tracks the current designer state,
+	// units + named context from a manager that tracks the current studio state,
 	// decoupled from session timing. Runtime applications have null cache → skip.
 	if (auto* cc = m_metaData->GetCompileCache()) {
-		// Register the designer holder under the application module so the editor reads
+		// Register the studio holder under the application module so the editor reads
 		// the "Manager" singleton + named context from it. The holder is STARTED
 		// (CreateMainModule) by ibMetaDataApplicationFile::RunDatabase, as the
 		// shared module did historically — not here.

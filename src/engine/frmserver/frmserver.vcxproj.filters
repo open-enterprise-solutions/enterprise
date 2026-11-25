@@ -10,7 +10,7 @@
     <Filter Include="docView\templates">
       <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f4008}</UniqueIdentifier>
     </Filter>
-    <Filter Include="docView\templates\designer">
+    <Filter Include="docView\templates\studio">
       <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f4020}</UniqueIdentifier>
     </Filter>
     <Filter Include="mcp">
@@ -19,10 +19,10 @@
     <Filter Include="mcp\tools">
       <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f400b}</UniqueIdentifier>
     </Filter>
-    <Filter Include="mcp\tools\designer">
+    <Filter Include="mcp\tools\studio">
       <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f4040}</UniqueIdentifier>
     </Filter>
-    <Filter Include="mcp\tools\runtime">
+    <Filter Include="mcp\tools\workspace">
       <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f4041}</UniqueIdentifier>
     </Filter>
     <Filter Include="metaTree">
@@ -31,10 +31,10 @@
     <Filter Include="schema">
       <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f4009}</UniqueIdentifier>
     </Filter>
-    <Filter Include="schema\runtime">
+    <Filter Include="schema\workspace">
       <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f400a}</UniqueIdentifier>
     </Filter>
-    <Filter Include="schema\designer">
+    <Filter Include="schema\studio">
       <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f4011}</UniqueIdentifier>
     </Filter>
     <Filter Include="settings">
@@ -76,13 +76,13 @@
     <ClCompile Include="client\clientFrame.cpp">
       <Filter>client</Filter>
     </ClCompile>
-    <ClCompile Include="client\clientFrameDesigner.cpp">
+    <ClCompile Include="client\clientFrameStudio.cpp">
       <Filter>client</Filter>
     </ClCompile>
     <ClCompile Include="client\propertyInspector.cpp">
       <Filter>client</Filter>
     </ClCompile>
-    <ClCompile Include="client\clientFrameRuntime.cpp">
+    <ClCompile Include="client\clientFrameWorkspace.cpp">
       <Filter>client</Filter>
     </ClCompile>
     <ClCompile Include="client\clientHost.cpp">
@@ -109,10 +109,10 @@
     <ClCompile Include="docView\docManager.cpp">
       <Filter>docView</Filter>
     </ClCompile>
-    <ClCompile Include="docView\docManagerDesigner.cpp">
+    <ClCompile Include="docView\docManagerStudio.cpp">
       <Filter>docView</Filter>
     </ClCompile>
-    <ClCompile Include="docView\docManagerRuntime.cpp">
+    <ClCompile Include="docView\docManagerWorkspace.cpp">
       <Filter>docView</Filter>
     </ClCompile>
     <ClCompile Include="docView\docView.cpp">
@@ -127,56 +127,56 @@
     <ClCompile Include="docView\templates\docViewDataReportFile.cpp">
       <Filter>docView\templates</Filter>
     </ClCompile>
-    <ClCompile Include="docView\templates\designer\docViewDataToolEdit.cpp">
-      <Filter>docView\templates\designer</Filter>
+    <ClCompile Include="docView\templates\studio\docViewDataToolEdit.cpp">
+      <Filter>docView\templates\studio</Filter>
     </ClCompile>
-    <ClCompile Include="docView\templates\designer\docViewMetaFile.cpp">
-      <Filter>docView\templates\designer</Filter>
+    <ClCompile Include="docView\templates\studio\docViewMetaFile.cpp">
+      <Filter>docView\templates\studio</Filter>
     </ClCompile>
-    <ClCompile Include="docView\templates\designer\docViewDataReportEdit.cpp">
-      <Filter>docView\templates\designer</Filter>
+    <ClCompile Include="docView\templates\studio\docViewDataReportEdit.cpp">
+      <Filter>docView\templates\studio</Filter>
     </ClCompile>
-    <ClCompile Include="docView\templates\designer\docViewFormEdit.cpp">
-      <Filter>docView\templates\designer</Filter>
+    <ClCompile Include="docView\templates\studio\docViewFormEdit.cpp">
+      <Filter>docView\templates\studio</Filter>
     </ClCompile>
-    <ClCompile Include="docView\templates\designer\docViewFormEditAttribute.cpp">
-      <Filter>docView\templates\designer</Filter>
+    <ClCompile Include="docView\templates\studio\docViewFormEditAttribute.cpp">
+      <Filter>docView\templates\studio</Filter>
     </ClCompile>
-    <ClCompile Include="docView\templates\designer\docViewFormEditCmd.cpp">
-      <Filter>docView\templates\designer</Filter>
+    <ClCompile Include="docView\templates\studio\docViewFormEditCmd.cpp">
+      <Filter>docView\templates\studio</Filter>
     </ClCompile>
-    <ClCompile Include="docView\templates\designer\docViewFormEditCommand.cpp">
-      <Filter>docView\templates\designer</Filter>
+    <ClCompile Include="docView\templates\studio\docViewFormEditCommand.cpp">
+      <Filter>docView\templates\studio</Filter>
     </ClCompile>
-    <ClCompile Include="docView\templates\designer\docViewModuleEdit.cpp">
-      <Filter>docView\templates\designer</Filter>
+    <ClCompile Include="docView\templates\studio\docViewModuleEdit.cpp">
+      <Filter>docView\templates\studio</Filter>
     </ClCompile>
-    <ClCompile Include="docView\templates\designer\docViewSpreadsheetEdit.cpp">
-      <Filter>docView\templates\designer</Filter>
+    <ClCompile Include="docView\templates\studio\docViewSpreadsheetEdit.cpp">
+      <Filter>docView\templates\studio</Filter>
     </ClCompile>
     <ClCompile Include="docView\templates\docViewAssistant.cpp">
       <Filter>docView\templates</Filter>
     </ClCompile>
-    <ClCompile Include="docView\templates\designer\docViewSharedAttributeEdit.cpp">
-      <Filter>docView\templates\designer</Filter>
+    <ClCompile Include="docView\templates\studio\docViewSharedAttributeEdit.cpp">
+      <Filter>docView\templates\studio</Filter>
     </ClCompile>
-    <ClCompile Include="docView\templates\designer\docViewFeatureOptionEdit.cpp">
-      <Filter>docView\templates\designer</Filter>
+    <ClCompile Include="docView\templates\studio\docViewFeatureOptionEdit.cpp">
+      <Filter>docView\templates\studio</Filter>
     </ClCompile>
-    <ClCompile Include="docView\templates\designer\docViewComposerEdit.cpp">
-      <Filter>docView\templates\designer</Filter>
+    <ClCompile Include="docView\templates\studio\docViewComposerEdit.cpp">
+      <Filter>docView\templates\studio</Filter>
     </ClCompile>
-    <ClCompile Include="docView\templates\designer\queryConstructorRequest.cpp">
-      <Filter>docView\templates\designer</Filter>
+    <ClCompile Include="docView\templates\studio\queryConstructorRequest.cpp">
+      <Filter>docView\templates\studio</Filter>
     </ClCompile>
-    <ClCompile Include="docView\templates\designer\docViewInterfaceEdit.cpp">
-      <Filter>docView\templates\designer</Filter>
+    <ClCompile Include="docView\templates\studio\docViewInterfaceEdit.cpp">
+      <Filter>docView\templates\studio</Filter>
     </ClCompile>
-    <ClCompile Include="docView\templates\designer\docViewProfile.cpp">
-      <Filter>docView\templates\designer</Filter>
+    <ClCompile Include="docView\templates\studio\docViewProfile.cpp">
+      <Filter>docView\templates\studio</Filter>
     </ClCompile>
-    <ClCompile Include="docView\templates\designer\docViewRoleEdit.cpp">
-      <Filter>docView\templates\designer</Filter>
+    <ClCompile Include="docView\templates\studio\docViewRoleEdit.cpp">
+      <Filter>docView\templates\studio</Filter>
     </ClCompile>
     <ClCompile Include="docView\templates\docViewHelp.cpp">
       <Filter>docView\templates</Filter>
@@ -226,8 +226,8 @@
     <ClCompile Include="mcp\tools\mcpToolPlatform.cpp">
       <Filter>mcp\tools</Filter>
     </ClCompile>
-    <ClCompile Include="mcp\tools\designer\mcpToolProtocol.cpp">
-      <Filter>mcp\tools\designer</Filter>
+    <ClCompile Include="mcp\tools\studio\mcpToolProtocol.cpp">
+      <Filter>mcp\tools\studio</Filter>
     </ClCompile>
     <ClCompile Include="mcp\tools\mcpToolQuery.cpp">
       <Filter>mcp\tools</Filter>
@@ -235,95 +235,95 @@
     <ClCompile Include="mcp\tools\mcpToolValue.cpp">
       <Filter>mcp\tools</Filter>
     </ClCompile>
-    <ClCompile Include="mcp\tools\designer\mcpToolAddress.cpp">
-      <Filter>mcp\tools\designer</Filter>
+    <ClCompile Include="mcp\tools\studio\mcpToolAddress.cpp">
+      <Filter>mcp\tools\studio</Filter>
     </ClCompile>
-    <ClCompile Include="mcp\tools\designer\mcpToolApp.cpp">
-      <Filter>mcp\tools\designer</Filter>
+    <ClCompile Include="mcp\tools\studio\mcpToolApp.cpp">
+      <Filter>mcp\tools\studio</Filter>
     </ClCompile>
-    <ClCompile Include="mcp\tools\designer\mcpToolBind.cpp">
-      <Filter>mcp\tools\designer</Filter>
+    <ClCompile Include="mcp\tools\studio\mcpToolBind.cpp">
+      <Filter>mcp\tools\studio</Filter>
     </ClCompile>
-    <ClCompile Include="mcp\tools\designer\mcpToolClipboard.cpp">
-      <Filter>mcp\tools\designer</Filter>
+    <ClCompile Include="mcp\tools\studio\mcpToolClipboard.cpp">
+      <Filter>mcp\tools\studio</Filter>
     </ClCompile>
-    <ClCompile Include="mcp\tools\designer\mcpToolComplete.cpp">
-      <Filter>mcp\tools\designer</Filter>
+    <ClCompile Include="mcp\tools\studio\mcpToolComplete.cpp">
+      <Filter>mcp\tools\studio</Filter>
     </ClCompile>
-    <ClCompile Include="mcp\tools\designer\mcpToolComposition.cpp">
-      <Filter>mcp\tools\designer</Filter>
+    <ClCompile Include="mcp\tools\studio\mcpToolComposition.cpp">
+      <Filter>mcp\tools\studio</Filter>
     </ClCompile>
-    <ClCompile Include="mcp\tools\designer\mcpToolDatabase.cpp">
-      <Filter>mcp\tools\designer</Filter>
+    <ClCompile Include="mcp\tools\studio\mcpToolDatabase.cpp">
+      <Filter>mcp\tools\studio</Filter>
     </ClCompile>
-    <ClCompile Include="mcp\tools\designer\mcpToolDebug.cpp">
-      <Filter>mcp\tools\designer</Filter>
+    <ClCompile Include="mcp\tools\studio\mcpToolDebug.cpp">
+      <Filter>mcp\tools\studio</Filter>
     </ClCompile>
-    <ClCompile Include="mcp\tools\designer\mcpToolExternal.cpp">
-      <Filter>mcp\tools\designer</Filter>
+    <ClCompile Include="mcp\tools\studio\mcpToolExternal.cpp">
+      <Filter>mcp\tools\studio</Filter>
     </ClCompile>
-    <ClCompile Include="mcp\tools\designer\mcpToolForms.cpp">
-      <Filter>mcp\tools\designer</Filter>
+    <ClCompile Include="mcp\tools\studio\mcpToolForms.cpp">
+      <Filter>mcp\tools\studio</Filter>
     </ClCompile>
-    <ClCompile Include="mcp\tools\designer\mcpToolFeatureOption.cpp">
-      <Filter>mcp\tools\designer</Filter>
+    <ClCompile Include="mcp\tools\studio\mcpToolFeatureOption.cpp">
+      <Filter>mcp\tools\studio</Filter>
     </ClCompile>
-    <ClCompile Include="mcp\tools\designer\mcpToolHomePage.cpp">
-      <Filter>mcp\tools\designer</Filter>
+    <ClCompile Include="mcp\tools\studio\mcpToolHomePage.cpp">
+      <Filter>mcp\tools\studio</Filter>
     </ClCompile>
-    <ClCompile Include="mcp\tools\designer\mcpToolJournal.cpp">
-      <Filter>mcp\tools\designer</Filter>
+    <ClCompile Include="mcp\tools\studio\mcpToolJournal.cpp">
+      <Filter>mcp\tools\studio</Filter>
     </ClCompile>
-    <ClCompile Include="mcp\tools\designer\mcpToolLocks.cpp">
-      <Filter>mcp\tools\designer</Filter>
+    <ClCompile Include="mcp\tools\studio\mcpToolLocks.cpp">
+      <Filter>mcp\tools\studio</Filter>
     </ClCompile>
-    <ClCompile Include="mcp\tools\designer\mcpToolMetadataWrite.cpp">
-      <Filter>mcp\tools\designer</Filter>
+    <ClCompile Include="mcp\tools\studio\mcpToolMetadataWrite.cpp">
+      <Filter>mcp\tools\studio</Filter>
     </ClCompile>
-    <ClCompile Include="mcp\tools\designer\mcpToolModule.cpp">
-      <Filter>mcp\tools\designer</Filter>
+    <ClCompile Include="mcp\tools\studio\mcpToolModule.cpp">
+      <Filter>mcp\tools\studio</Filter>
     </ClCompile>
-    <ClCompile Include="mcp\tools\designer\mcpToolNotes.cpp">
-      <Filter>mcp\tools\designer</Filter>
+    <ClCompile Include="mcp\tools\studio\mcpToolNotes.cpp">
+      <Filter>mcp\tools\studio</Filter>
     </ClCompile>
-    <ClCompile Include="mcp\tools\designer\mcpToolPicture.cpp">
-      <Filter>mcp\tools\designer</Filter>
+    <ClCompile Include="mcp\tools\studio\mcpToolPicture.cpp">
+      <Filter>mcp\tools\studio</Filter>
     </ClCompile>
-    <ClCompile Include="mcp\tools\designer\mcpToolPredefined.cpp">
-      <Filter>mcp\tools\designer</Filter>
+    <ClCompile Include="mcp\tools\studio\mcpToolPredefined.cpp">
+      <Filter>mcp\tools\studio</Filter>
     </ClCompile>
-    <ClCompile Include="mcp\tools\designer\mcpToolReport.cpp">
-      <Filter>mcp\tools\designer</Filter>
+    <ClCompile Include="mcp\tools\studio\mcpToolReport.cpp">
+      <Filter>mcp\tools\studio</Filter>
     </ClCompile>
-    <ClCompile Include="mcp\tools\designer\mcpToolRoles.cpp">
-      <Filter>mcp\tools\designer</Filter>
+    <ClCompile Include="mcp\tools\studio\mcpToolRoles.cpp">
+      <Filter>mcp\tools\studio</Filter>
     </ClCompile>
-    <ClCompile Include="mcp\tools\designer\mcpToolRunCode.cpp">
-      <Filter>mcp\tools\designer</Filter>
+    <ClCompile Include="mcp\tools\studio\mcpToolRunCode.cpp">
+      <Filter>mcp\tools\studio</Filter>
     </ClCompile>
-    <ClCompile Include="mcp\tools\designer\mcpToolSchema.cpp">
-      <Filter>mcp\tools\designer</Filter>
+    <ClCompile Include="mcp\tools\studio\mcpToolSchema.cpp">
+      <Filter>mcp\tools\studio</Filter>
     </ClCompile>
-    <ClCompile Include="mcp\tools\designer\mcpToolScreen.cpp">
-      <Filter>mcp\tools\designer</Filter>
+    <ClCompile Include="mcp\tools\studio\mcpToolScreen.cpp">
+      <Filter>mcp\tools\studio</Filter>
     </ClCompile>
-    <ClCompile Include="mcp\tools\designer\mcpToolScript.cpp">
-      <Filter>mcp\tools\designer</Filter>
+    <ClCompile Include="mcp\tools\studio\mcpToolScript.cpp">
+      <Filter>mcp\tools\studio</Filter>
     </ClCompile>
-    <ClCompile Include="mcp\tools\designer\mcpToolSection.cpp">
-      <Filter>mcp\tools\designer</Filter>
+    <ClCompile Include="mcp\tools\studio\mcpToolSection.cpp">
+      <Filter>mcp\tools\studio</Filter>
     </ClCompile>
-    <ClCompile Include="mcp\tools\designer\mcpToolSession.cpp">
-      <Filter>mcp\tools\designer</Filter>
+    <ClCompile Include="mcp\tools\studio\mcpToolSession.cpp">
+      <Filter>mcp\tools\studio</Filter>
     </ClCompile>
-    <ClCompile Include="mcp\tools\designer\mcpToolSheet.cpp">
-      <Filter>mcp\tools\designer</Filter>
+    <ClCompile Include="mcp\tools\studio\mcpToolSheet.cpp">
+      <Filter>mcp\tools\studio</Filter>
     </ClCompile>
-    <ClCompile Include="mcp\tools\runtime\mcpToolCompose.cpp">
-      <Filter>mcp\tools\runtime</Filter>
+    <ClCompile Include="mcp\tools\workspace\mcpToolCompose.cpp">
+      <Filter>mcp\tools\workspace</Filter>
     </ClCompile>
-    <ClCompile Include="mcp\tools\runtime\mcpToolWindow.cpp">
-      <Filter>mcp\tools\runtime</Filter>
+    <ClCompile Include="mcp\tools\workspace\mcpToolWindow.cpp">
+      <Filter>mcp\tools\workspace</Filter>
     </ClCompile>
     <ClCompile Include="metaTree\treeApplication.cpp">
       <Filter>metaTree</Filter>
@@ -355,47 +355,47 @@
     <ClCompile Include="schema\assistant.cpp">
       <Filter>schema</Filter>
     </ClCompile>
-    <ClCompile Include="schema\designer\metaData.cpp">
-      <Filter>schema\designer</Filter>
+    <ClCompile Include="schema\studio\metaData.cpp">
+      <Filter>schema\studio</Filter>
     </ClCompile>
-    <ClCompile Include="schema\designer\homePage.cpp">
-      <Filter>schema\designer</Filter>
+    <ClCompile Include="schema\studio\homePage.cpp">
+      <Filter>schema\studio</Filter>
     </ClCompile>
-    <ClCompile Include="schema\designer\objectText.cpp">
-      <Filter>schema\designer</Filter>
+    <ClCompile Include="schema\studio\objectText.cpp">
+      <Filter>schema\studio</Filter>
     </ClCompile>
-    <ClCompile Include="schema\designer\applicationCompare.cpp">
-      <Filter>schema\designer</Filter>
+    <ClCompile Include="schema\studio\applicationCompare.cpp">
+      <Filter>schema\studio</Filter>
     </ClCompile>
-    <ClCompile Include="schema\designer\database.cpp">
-      <Filter>schema\designer</Filter>
+    <ClCompile Include="schema\studio\database.cpp">
+      <Filter>schema\studio</Filter>
     </ClCompile>
-    <ClCompile Include="schema\designer\debugger.cpp">
-      <Filter>schema\designer</Filter>
+    <ClCompile Include="schema\studio\debugger.cpp">
+      <Filter>schema\studio</Filter>
     </ClCompile>
-    <ClCompile Include="schema\designer\predefined.cpp">
-      <Filter>schema\designer</Filter>
+    <ClCompile Include="schema\studio\predefined.cpp">
+      <Filter>schema\studio</Filter>
     </ClCompile>
-    <ClCompile Include="schema\designer\properties.cpp">
-      <Filter>schema\designer</Filter>
+    <ClCompile Include="schema\studio\properties.cpp">
+      <Filter>schema\studio</Filter>
     </ClCompile>
-    <ClCompile Include="schema\designer\types.cpp">
-      <Filter>schema\designer</Filter>
+    <ClCompile Include="schema\studio\types.cpp">
+      <Filter>schema\studio</Filter>
     </ClCompile>
-    <ClCompile Include="schema\designer\userList.cpp">
-      <Filter>schema\designer</Filter>
+    <ClCompile Include="schema\studio\userList.cpp">
+      <Filter>schema\studio</Filter>
     </ClCompile>
-    <ClCompile Include="schema\designer\webAddress.cpp">
-      <Filter>schema\designer</Filter>
+    <ClCompile Include="schema\studio\webAddress.cpp">
+      <Filter>schema\studio</Filter>
     </ClCompile>
-    <ClCompile Include="schema\runtime\allFunctions.cpp">
-      <Filter>schema\runtime</Filter>
+    <ClCompile Include="schema\workspace\allFunctions.cpp">
+      <Filter>schema\workspace</Filter>
     </ClCompile>
-    <ClCompile Include="schema\runtime\debugging.cpp">
-      <Filter>schema\runtime</Filter>
+    <ClCompile Include="schema\workspace\debugging.cpp">
+      <Filter>schema\workspace</Filter>
     </ClCompile>
-    <ClCompile Include="schema\runtime\sections.cpp">
-      <Filter>schema\runtime</Filter>
+    <ClCompile Include="schema\workspace\sections.cpp">
+      <Filter>schema\workspace</Filter>
     </ClCompile>
     <ClCompile Include="settings\formSettings.cpp">
       <Filter>settings</Filter>
@@ -682,13 +682,13 @@
     <ClInclude Include="client\clientFrame.h">
       <Filter>client</Filter>
     </ClInclude>
-    <ClInclude Include="client\clientFrameDesigner.h">
+    <ClInclude Include="client\clientFrameStudio.h">
       <Filter>client</Filter>
     </ClInclude>
     <ClInclude Include="client\propertyInspector.h">
       <Filter>client</Filter>
     </ClInclude>
-    <ClInclude Include="client\clientFrameRuntime.h">
+    <ClInclude Include="client\clientFrameWorkspace.h">
       <Filter>client</Filter>
     </ClInclude>
     <ClInclude Include="client\clientHost.h">
@@ -721,10 +721,10 @@
     <ClInclude Include="docView\docManager.h">
       <Filter>docView</Filter>
     </ClInclude>
-    <ClInclude Include="docView\docManagerDesigner.h">
+    <ClInclude Include="docView\docManagerStudio.h">
       <Filter>docView</Filter>
     </ClInclude>
-    <ClInclude Include="docView\docManagerRuntime.h">
+    <ClInclude Include="docView\docManagerWorkspace.h">
       <Filter>docView</Filter>
     </ClInclude>
     <ClInclude Include="docView\docView.h">
@@ -739,47 +739,47 @@
     <ClInclude Include="docView\templates\docViewDataReportFile.h">
       <Filter>docView\templates</Filter>
     </ClInclude>
-    <ClInclude Include="docView\templates\designer\docViewDataToolEdit.h">
-      <Filter>docView\templates\designer</Filter>
+    <ClInclude Include="docView\templates\studio\docViewDataToolEdit.h">
+      <Filter>docView\templates\studio</Filter>
     </ClInclude>
-    <ClInclude Include="docView\templates\designer\docViewMetaFile.h">
-      <Filter>docView\templates\designer</Filter>
+    <ClInclude Include="docView\templates\studio\docViewMetaFile.h">
+      <Filter>docView\templates\studio</Filter>
     </ClInclude>
-    <ClInclude Include="docView\templates\designer\docViewDataReportEdit.h">
-      <Filter>docView\templates\designer</Filter>
+    <ClInclude Include="docView\templates\studio\docViewDataReportEdit.h">
+      <Filter>docView\templates\studio</Filter>
     </ClInclude>
-    <ClInclude Include="docView\templates\designer\docViewFormEdit.h">
-      <Filter>docView\templates\designer</Filter>
+    <ClInclude Include="docView\templates\studio\docViewFormEdit.h">
+      <Filter>docView\templates\studio</Filter>
     </ClInclude>
-    <ClInclude Include="docView\templates\designer\docViewModuleEdit.h">
-      <Filter>docView\templates\designer</Filter>
+    <ClInclude Include="docView\templates\studio\docViewModuleEdit.h">
+      <Filter>docView\templates\studio</Filter>
     </ClInclude>
-    <ClInclude Include="docView\templates\designer\docViewSpreadsheetEdit.h">
-      <Filter>docView\templates\designer</Filter>
+    <ClInclude Include="docView\templates\studio\docViewSpreadsheetEdit.h">
+      <Filter>docView\templates\studio</Filter>
     </ClInclude>
     <ClInclude Include="docView\templates\docViewAssistant.h">
       <Filter>docView\templates</Filter>
     </ClInclude>
-    <ClInclude Include="docView\templates\designer\docViewSharedAttributeEdit.h">
-      <Filter>docView\templates\designer</Filter>
+    <ClInclude Include="docView\templates\studio\docViewSharedAttributeEdit.h">
+      <Filter>docView\templates\studio</Filter>
     </ClInclude>
-    <ClInclude Include="docView\templates\designer\docViewFeatureOptionEdit.h">
-      <Filter>docView\templates\designer</Filter>
+    <ClInclude Include="docView\templates\studio\docViewFeatureOptionEdit.h">
+      <Filter>docView\templates\studio</Filter>
     </ClInclude>
-    <ClInclude Include="docView\templates\designer\docViewComposerEdit.h">
-      <Filter>docView\templates\designer</Filter>
+    <ClInclude Include="docView\templates\studio\docViewComposerEdit.h">
+      <Filter>docView\templates\studio</Filter>
     </ClInclude>
-    <ClInclude Include="docView\templates\designer\queryConstructorRequest.h">
-      <Filter>docView\templates\designer</Filter>
+    <ClInclude Include="docView\templates\studio\queryConstructorRequest.h">
+      <Filter>docView\templates\studio</Filter>
     </ClInclude>
-    <ClInclude Include="docView\templates\designer\docViewInterfaceEdit.h">
-      <Filter>docView\templates\designer</Filter>
+    <ClInclude Include="docView\templates\studio\docViewInterfaceEdit.h">
+      <Filter>docView\templates\studio</Filter>
     </ClInclude>
-    <ClInclude Include="docView\templates\designer\docViewProfile.h">
-      <Filter>docView\templates\designer</Filter>
+    <ClInclude Include="docView\templates\studio\docViewProfile.h">
+      <Filter>docView\templates\studio</Filter>
     </ClInclude>
-    <ClInclude Include="docView\templates\designer\docViewRoleEdit.h">
-      <Filter>docView\templates\designer</Filter>
+    <ClInclude Include="docView\templates\studio\docViewRoleEdit.h">
+      <Filter>docView\templates\studio</Filter>
     </ClInclude>
     <ClInclude Include="docView\templates\docViewHelp.h">
       <Filter>docView\templates</Filter>
@@ -838,47 +838,47 @@
     <ClInclude Include="schema\assistant.h">
       <Filter>schema</Filter>
     </ClInclude>
-    <ClInclude Include="schema\designer\metaData.h">
-      <Filter>schema\designer</Filter>
+    <ClInclude Include="schema\studio\metaData.h">
+      <Filter>schema\studio</Filter>
     </ClInclude>
-    <ClInclude Include="schema\designer\homePage.h">
-      <Filter>schema\designer</Filter>
+    <ClInclude Include="schema\studio\homePage.h">
+      <Filter>schema\studio</Filter>
     </ClInclude>
-    <ClInclude Include="schema\designer\objectText.h">
-      <Filter>schema\designer</Filter>
+    <ClInclude Include="schema\studio\objectText.h">
+      <Filter>schema\studio</Filter>
     </ClInclude>
-    <ClInclude Include="schema\designer\applicationCompare.h">
-      <Filter>schema\designer</Filter>
+    <ClInclude Include="schema\studio\applicationCompare.h">
+      <Filter>schema\studio</Filter>
     </ClInclude>
-    <ClInclude Include="schema\designer\database.h">
-      <Filter>schema\designer</Filter>
+    <ClInclude Include="schema\studio\database.h">
+      <Filter>schema\studio</Filter>
     </ClInclude>
-    <ClInclude Include="schema\designer\debugger.h">
-      <Filter>schema\designer</Filter>
+    <ClInclude Include="schema\studio\debugger.h">
+      <Filter>schema\studio</Filter>
     </ClInclude>
-    <ClInclude Include="schema\designer\predefined.h">
-      <Filter>schema\designer</Filter>
+    <ClInclude Include="schema\studio\predefined.h">
+      <Filter>schema\studio</Filter>
     </ClInclude>
-    <ClInclude Include="schema\designer\properties.h">
-      <Filter>schema\designer</Filter>
+    <ClInclude Include="schema\studio\properties.h">
+      <Filter>schema\studio</Filter>
     </ClInclude>
-    <ClInclude Include="schema\designer\types.h">
-      <Filter>schema\designer</Filter>
+    <ClInclude Include="schema\studio\types.h">
+      <Filter>schema\studio</Filter>
     </ClInclude>
-    <ClInclude Include="schema\designer\userList.h">
-      <Filter>schema\designer</Filter>
+    <ClInclude Include="schema\studio\userList.h">
+      <Filter>schema\studio</Filter>
     </ClInclude>
-    <ClInclude Include="schema\designer\webAddress.h">
-      <Filter>schema\designer</Filter>
+    <ClInclude Include="schema\studio\webAddress.h">
+      <Filter>schema\studio</Filter>
     </ClInclude>
-    <ClInclude Include="schema\runtime\allFunctions.h">
-      <Filter>schema\runtime</Filter>
+    <ClInclude Include="schema\workspace\allFunctions.h">
+      <Filter>schema\workspace</Filter>
     </ClInclude>
-    <ClInclude Include="schema\runtime\debugging.h">
-      <Filter>schema\runtime</Filter>
+    <ClInclude Include="schema\workspace\debugging.h">
+      <Filter>schema\workspace</Filter>
     </ClInclude>
-    <ClInclude Include="schema\runtime\sections.h">
-      <Filter>schema\runtime</Filter>
+    <ClInclude Include="schema\workspace\sections.h">
+      <Filter>schema\workspace</Filter>
     </ClInclude>
     <ClInclude Include="settings\formSettings.h">
       <Filter>settings</Filter>

@@ -21,7 +21,7 @@
 // The `holder` is the seam (same as L2-1 ibDatabaseQueryBuilder / L3 ibTempTableManager): it is the
 // connection lifetime anchor; the door runs DDL on holder->EnsureConnection() (the holder's pinned /
 // scoped conn — the SAME conn its open transaction lives on). nullptr = the local DDL channel (db_query,
-// the designer's single save channel); an explicit holder = another database / a dedicated restructuring
+// the studio's single save channel); an explicit holder = another database / a dedicated restructuring
 // connection — manage / migrate a remote schema from one base.
 
 #include "backend/backend.h"

@@ -9,7 +9,7 @@
 // from what the protocol answers; nothing here is a window.
 //
 // ⭐ AND IT IS THE PROTOCOL THE CLIENT SPEAKS. The old desktop front had a main window per program (its
-// designer and its runtime), each with the doc manager of its application — what it may open — and a start of its own. A
+// studio and its runtime), each with the doc manager of its application — what it may open — and a start of its own. A
 // client's frame is made for one mode in the same way: the mode's frame puts in its application's doc manager
 // (its templates, its schemas) and starts it its own way.
 
@@ -37,8 +37,8 @@ class ibClientDebugger;
 class ibClientInstance;
 class ibClientSession;
 
-// What every mode's frame shares; each mode's frame is a class of its own (ibClientFrameRuntime,
-// ibClientFrameDesigner).
+// What every mode's frame shares; each mode's frame is a class of its own (ibClientFrameWorkspace,
+// ibClientFrameStudio).
 class FRMSERVER_API ibClientFrame : public ibBackendDocFrame, public ibDocParentFrameAnyBase {
 public:
 
@@ -53,22 +53,22 @@ public:
 	//***************************************************************************************
 
 	// THE FRAME'S OWN PARTS, once the login has brought the person's rights and the application — the menus, the
-	// designer's debugger. The frame itself is made before the login (ibClientInstance::CreateSession): the session's
+	// studio's debugger. The frame itself is made before the login (ibClientInstance::CreateSession): the session's
 	// way to the person from its first step, which a failed compile already speaks through. Nothing by default.
 	virtual void OnCreate() {}
 
-	// THE MODE'S VETO POINT — the runtime runs the application's start, the designer asks for the right to
+	// THE MODE'S VETO POINT — the runtime runs the application's start, the studio asks for the right to
 	// edit it. False: the client is refused, and the frame goes with its session.
 	virtual bool AllowRun() = 0;
 
 	// The mode's own tabs, after the start — the runtime's start page.
 	virtual void CreateStartupPage() {}
 
-	// THE MODE'S OWN PART OF THE FRAME, beside its tabs — the designer's application tree: written into the frame's
+	// THE MODE'S OWN PART OF THE FRAME, beside its tabs — the studio's application tree: written into the frame's
 	// state with every answer (ibClientHost::DrawFrame), as a view writes its own (ibView::OnDraw). Nothing by default.
 	virtual void OnDraw(ibDataNode& /*state*/) {}
 
-	// …and THE MODE'S DEBUGGER — the designer's, a listener of the engine's (ibClientDebugger): what the client's debug
+	// …and THE MODE'S DEBUGGER — the studio's, a listener of the engine's (ibClientDebugger): what the client's debug
 	// calls go to (ibClientHost::Debug). None by default.
 	virtual ibClientDebugger* GetDebugger() const { return nullptr; }
 
@@ -87,7 +87,7 @@ public:
 		const ibString& strDocPath, const long line,
 		const ibString& strErrorMessage) override;
 	// THE METADATA OF A FILE — an external data tool's or report's open in a tab, by the file it was read from: what a
-	// failure in its module is quoted from (ibBackendException::ProcessError) and opened at (the designer's Open).
+	// failure in its module is quoted from (ibBackendException::ProcessError) and opened at (the studio's Open).
 	virtual class ibMetaData* FindMetadataByPath(const ibString& strFileName) const override;
 
 	// A REPAINT the backend asks for, the frame having changed by itself (a report delivered, a debugger stopped): the
@@ -174,7 +174,7 @@ public:
 		ibString        docPath;
 		long            line = 0;
 	};
-	// A message with its place — a script's failure (the designer's BackendError): its line, double-clicked, opens the
+	// A message with its place — a script's failure (the studio's BackendError): its line, double-clicked, opens the
 	// module there (the desktop's ibOutputWindow).
 	void Message(const ibString& strMessage, ibStatusMessage status,
 		const ibString& strFileName, const ibString& strDocPath, long line);
@@ -192,7 +192,7 @@ public:
 	// answer, or in the answer of the call it is in, and goes as from its own Exit: its logout takes the session.
 	bool                        ExitClient(bool force);
 	// ⭐ THE CLIENT TOLD TO CLOSE AS THE PERSON CLOSES IT — the session closed without force (a script's EndJob(False), an
-	// assistant's app_close: OnClose). Nothing closed here: the client hears Close and takes its own [X] — the designer's
+	// assistant's app_close: OnClose). Nothing closed here: the client hears Close and takes its own [X] — the studio's
 	// Save?, then its Exit, each tab asked — and a refusal there keeps everything. A client at rest is called for it.
 	void                        CloseClient();
 	// THE INSPECTOR'S ROWS OF AN OBJECT A DOOR ACTED ON — an edit's, a new object's, the one the tree goes to after a

@@ -89,7 +89,7 @@ public:
 		return array;
 	}
 	// True if any live child is a command — a direct scan, no array allocation (this runs per node while the
-	// designer tree / a dropdown is built).
+	// studio tree / a dropdown is built).
 	bool HasSubCommands() const {
 		for (unsigned int i = 0; i < GetChildCount(); i++)
 			if (const ibValueMetaObject* child = GetChild(i))
@@ -114,7 +114,7 @@ public:
 	virtual ibPicture GetIcon() const;
 	static ibPicture GetIconGroup();
 
-	// designer context menu — "Open command module" opens the handler module's code editor (metaCommandObjectMenu.cpp),
+	// studio context menu — "Open command module" opens the handler module's code editor (metaCommandObjectMenu.cpp),
 	// exactly as a shared module / object opens its module.
 	virtual bool CollectContextMenu(std::vector<ibMetaMenuItem>& items) override;
 
@@ -128,7 +128,7 @@ public:
 	virtual bool OnDeleteMetaObject();
 	virtual bool OnBeforeRunMetaObject(int flags);
 	// ⭐ WHERE THE COMMAND'S MODULE BECOMES CHECKABLE — see the .cpp. Every other
-	// metatype registers its module with the designer's compile cache here; a
+	// metatype registers its module with the studio's compile cache here; a
 	// command did not, so nothing could compile it.
 	virtual bool OnAfterRunMetaObject(int flags);
 	virtual bool OnBeforeCloseMetaObject();

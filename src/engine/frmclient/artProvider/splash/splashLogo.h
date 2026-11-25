@@ -1,7 +1,7 @@
 #ifndef __SPLASH_LOGO_H__
 #define __SPLASH_LOGO_H__
 
-// The splash screen, the designer's and the application's alike: an SVG, drawn at the size it is made at. The letters
+// The splash screen, the studio's and the application's alike: an SVG, drawn at the size it is made at. The letters
 // are shapes, not text — a font differs from machine to machine, a shape does not — on one line, 104 to 130, the round
 // O and S over it by 0.4 at each side, each
 // stroke 6; the S two arcs, as the O is a ring (2026-11-24, Max: "the OES text is uneven" - its S, a stroked curve,

@@ -79,8 +79,8 @@ TEST(WorkerPoolFiber, StopJoinsTheWorkerBeforeTheCallerTearsDown)
 		std::vector<std::thread::id> seen;
 
 		ibWorkerPoolHeadless pool(2);
-		auto sessionA = std::make_shared<ibSession>(wxT("wake-a"), ibSessionKind::Designer);
-		auto sessionB = std::make_shared<ibSession>(wxT("wake-b"), ibSessionKind::Designer);
+		auto sessionA = std::make_shared<ibSession>(wxT("wake-a"), ibSessionKind::Studio);
+		auto sessionB = std::make_shared<ibSession>(wxT("wake-b"), ibSessionKind::Studio);
 
 		auto noteThread = [&]() {
 			const auto id = std::this_thread::get_id();

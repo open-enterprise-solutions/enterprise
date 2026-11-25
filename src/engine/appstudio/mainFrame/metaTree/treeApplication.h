@@ -12,14 +12,14 @@
 
 #include "frmclient/backend/metaCollection/metaObject.h"   // the object the inspector shows
 #include "protocol/protocol.h"
-#include "protocol/protocolDesigner.h"   // ibProtocol::ibSchema::ibMetaData
+#include "protocol/protocolStudio.h"   // ibProtocol::ibSchema::ibMetaData
 #include "protocol/protocolNode.h"
 #include "deskgui/univ/panel.h"
 
 class ibMenu;
 class ibMetaView;
 
-// THE DESIGNER'S TREES — the desktop's ibMetaTreeBase and its heirs (designer/mainFrame/metaTree): the panel, its
+// THE STUDIO'S TREES — the desktop's ibMetaTreeBase and its heirs (designer/mainFrame/metaTree): the panel, its
 // toolbar, its search, its menus and keys. The ROWS are the server's: its ibApplicationTree (frmserver/metaTree)
 // writes them into the frame's MetaData, an external file's tree into its tab's View; a row is NodeId — its object's
 // id, or below 0 a group row's place among its siblings — Title, Picture, Group (what New makes under it), Type,
@@ -198,7 +198,7 @@ private:
 	bool m_drawing = false;             // what the drawing does to the control is not the person's
 };
 
-// THE APPLICATION'S TREE — the designer's pane on the left (the desktop's ibApplicationTree): its rows the frame's
+// THE APPLICATION'S TREE — the studio's pane on the left (the desktop's ibApplicationTree): its rows the frame's
 // MetaData, the search above them.
 class ibApplicationTree : public ibMetaTreeBase {
 public:

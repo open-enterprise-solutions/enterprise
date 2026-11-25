@@ -71,7 +71,7 @@ private:
 // Sessions are held by shared_ptr because ibSessionScope — which the worker
 // takes around every task — binds through weak_from_this.
 std::shared_ptr<ibSession> MakeSession(const ibString& id) {
-	return std::make_shared<ibSession>(id, ibSessionKind::Designer);
+	return std::make_shared<ibSession>(id, ibSessionKind::Studio);
 }
 
 } // namespace

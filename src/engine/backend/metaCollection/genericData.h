@@ -234,7 +234,7 @@ public:
 	// EMPTY — the runtime meaning — so a plain CreateObjectForm(metaForm) does the safe thing: the key falls back to the SOURCE
 	// object's guid, which is how everything finds a live form afterwards
 	// (ibValueRecordDataObject::GetForm / Modify / the write notify all call
-	// FindFormByUniqueKey(m_objGuid)). Only the DESIGNER's compile cache passes a guid — the
+	// FindFormByUniqueKey(m_objGuid)). Only the STUDIO's compile cache passes a guid — the
 	// METAFORM's — because its value IS one per metaform and is keyed that way. Keyed by the
 	// metaform, a runtime form would be invisible to the lookups above and Save / Refresh
 	// would have nothing to act on. (Out of line: it holds the source, which is only declared here.)
@@ -272,7 +272,7 @@ protected:
 
 // THE MEMBER A REFERENCE ITSELF DECLARES. The managers DECLARE `EmptyRef` as a method, each in its
 // own AppendFunc — that is a declaration and reads fine as a literal. What does NOT is the code that
-// RECOGNISES the word: the constant resolver above compares a member name against it, the designer's
+// RECOGNISES the word: the constant resolver above compares a member name against it, the studio's
 // presentation builds `CatalogRef.Goods.EmptyRef` out of it, and the DB provider asks for the empty
 // reference by it to learn what a type IS (`x REFS Catalog.Goods`). Those three have to agree letter
 // for letter, so the word is asked for rather than typed out again — the same reason ibRegFigure

@@ -76,7 +76,7 @@ struct InformationRegisterGet : ::testing::Test {
 			GTEST_SKIP() << "SQLite open failed";
 		pool->Init(db, /*maxSize=*/2, /*minIdle=*/0);
 		// The manager reads through the session's connection (ses_query).
-		session = std::make_shared<ibSession>(wxT("register-get"), ibSessionKind::Enterprise);
+		session = std::make_shared<ibSession>(wxT("register-get"), ibSessionKind::Workspace);
 		scope = std::make_unique<ibSessionScope>(session.get());
 	}
 

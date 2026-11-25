@@ -85,7 +85,7 @@ struct JobRuntimeFix : ::testing::Test {
 			GTEST_SKIP() << "in-memory SQLite open failed";
 		pool->Init(db, 2, /*minIdle=*/0);
 
-		parent = std::make_shared<ibSession>(ibString(wxT("job-runtime-parent")), ibSessionKind::Enterprise);
+		parent = std::make_shared<ibSession>(ibString(wxT("job-runtime-parent")), ibSessionKind::Workspace);
 		bound  = std::make_unique<ibSessionScope>(parent.get());
 		ready  = true;
 	}

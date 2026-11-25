@@ -24,7 +24,7 @@ public:
 
 	ibValueNotebook();
 
-	// Just made by the designer with no page: its first page goes on with it (the desktop's).
+	// Just made by the studio with no page: its first page goes on with it (the desktop's).
 	virtual void OnCreated(ibVisualHost* host, bool firstCreated) override;
 	// The window's state, and the page selected now (ActivePage, by its control id; 0 while no page is shown).
 	virtual void OnUpdate(ibDataNode& state, ibVisualHost* host) override;
@@ -51,7 +51,7 @@ public:
 	// with two rules, a script read null for a page the person was plainly looking at.
 	ibValueNotebookPage* GetActivePage() const;
 
-	// A new page at the end of the notebook, built on the host as a control the designer has just made.
+	// A new page at the end of the notebook, built on the host as a control the studio has just made.
 	void AddNotebookPage(ibVisualHost* host);
 
 	void FillControlMembers(ibMemberTable& helper) const;   // bound in ctor (was PrepareNames)

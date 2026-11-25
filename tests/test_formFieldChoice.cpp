@@ -101,7 +101,7 @@ struct FormAttributeChoice : ::testing::Test {
 		contractOrganisation = Attribute(contracts, wxT("Organisation"));
 		ASSERT_TRUE(contractCounterparty && contractOrganisation);
 
-		session = std::make_shared<FramedSession>(wxT("form-attribute-choice"), ibSessionKind::Enterprise);
+		session = std::make_shared<FramedSession>(wxT("form-attribute-choice"), ibSessionKind::Workspace);
 		frame = std::make_unique<KeyFrame>(ibApplicationInstance::GetSessionRegistry()->MintUnlisted(session));
 		session->Attach(frame.get());
 		scope = std::make_unique<ibSessionScope>(session.get());
@@ -156,7 +156,7 @@ TEST_F(FormAttributeChoice, TheFormIsTheSourceAControlsRowsAreReadIn)
 
 namespace {
 
-// A field on the form, bound to `attribute`, as the designer's add makes one.
+// A field on the form, bound to `attribute`, as the studio's add makes one.
 ibTypeControlFactory* BoundField(ibValueForm* form, const ibFormAttributeValue* attribute)
 {
 	ibTypeControlFactory* control = dynamic_cast<ibTypeControlFactory*>(form->NewObject(g_controlFieldCLSID, form));

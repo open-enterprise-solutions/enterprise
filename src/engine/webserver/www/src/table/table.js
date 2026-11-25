@@ -1525,9 +1525,9 @@ class Table extends Control {
 	 * @param {object} request
 	 */
 	async fetch(request) {
-		// None in the designer: its tables have no rows to show, the server reads none there (the thin client's
-		// tableBox, DesignerMode — a form tried out in it was refused, each of its tables).
-		if (this.context.designerMode())
+		// None in the studio: its tables have no rows to show, the server reads none there (the thin client's
+		// tableBox, StudioMode — a form tried out in it was refused, each of its tables).
+		if (this.context.studioMode())
 			return null;
 		try {
 			const page = await this.context.fetch(this.node.ControlId, { Parent: this.crumbs.at(-1)?.handle ?? 0, ...request });

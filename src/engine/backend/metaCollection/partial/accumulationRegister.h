@@ -271,7 +271,7 @@ public:
 	ibTotalsPeriod GetTotalsPeriodUnit() const { return ibTotalsPeriod::Day; }
 
 	// Is this register's totals row split across shards? A schema question, answered by the
-	// designer's switch — turning it on or off changes the totals KEY, so it takes effect through
+	// studio's switch — turning it on or off changes the totals KEY, so it takes effect through
 	// an Apply, and the regenerator rebuilds the table because the key shape changed.
 	bool IsTotalsSplitEnabled() const { return m_propertySplitTotals->GetValueAsBoolean(); }
 
@@ -322,7 +322,7 @@ public:
 	virtual bool OnSaveMetaObject(int flags);
 	virtual bool OnDeleteMetaObject();
 
-	//for designer 
+	//for studio 
 	virtual bool OnReloadMetaObject();
 
 	//module manager is started or exit 

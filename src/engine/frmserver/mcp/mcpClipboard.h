@@ -5,20 +5,20 @@
 //	Description : the caller's OWN buffer — what a copy put there, waiting
 ////////////////////////////////////////////////////////////////////////////
 //
-// ⭐ NOT THE SYSTEM CLIPBOARD, deliberately. The designer's copy goes to the OS
+// ⭐ NOT THE SYSTEM CLIPBOARD, deliberately. The studio's copy goes to the OS
 // one (see treeApplicationEvent.cpp), which is a single shared slot behind an
 // exclusive lock: a tool writing there would overwrite whatever the developer
 // standing at the keyboard had just copied, and would block on the lock while a
 // window holds it. Two callers, one board, no way to tell whose turn it is.
 //
 // So the machine caller gets a board of its own. Same PAYLOAD — what the
-// designer's own copy makes, unchanged — carried in a different pocket. Nothing
+// studio's own copy makes, unchanged — carried in a different pocket. Nothing
 // about copy or paste is re-implemented here; this file is the pocket and
 // nothing else.
 //
 // ⭐ ONE PAIR OF VERBS, SEVERAL FAMILIES. A metaobject is copied and pasted by
 // its metadata (CopyMetaObject / PasteMetaObject), a form control by its form
-// (SaveNode / ibValueForm::PasteObject) — the doors the designer takes. The
+// (SaveNode / ibValueForm::PasteObject) — the doors the studio takes. The
 // KIND below is what keeps a control from being pasted into a metadata tree — a
 // refusal that reads, rather than a payload that lands somewhere it cannot work.
 //

@@ -1,5 +1,5 @@
-#ifndef _DESIGNER_ASSISTANT_H__
-#define _DESIGNER_ASSISTANT_H__
+#ifndef _STUDIO_ASSISTANT_H__
+#define _STUDIO_ASSISTANT_H__
 
 // THE ASSISTANT WINDOW AS THE SERVER HOLDS IT — the desktop designer's ibAssistantDocument and ibAssistantView
 // (designer/docManager/templates/docViewAssistant.h): the exchange with the base's assistant access (its MCP server), as

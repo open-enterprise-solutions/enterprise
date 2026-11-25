@@ -15,7 +15,7 @@
 #include "frmserver/client/clientFrame.h"
 #include "frmserver/docView/docView.h"
 #include "frmserver/win/dlgs/kindSelector.h"   // ibDialogSelectKind — the form's kind and the template's, asked
-#include "protocol/protocolDesigner.h"                  // ibProtocol::ibSchema::ibMetaData::FormType, TemplateData — the kinds, their properties
+#include "protocol/protocolStudio.h"                  // ibProtocol::ibSchema::ibMetaData::FormType, TemplateData — the kinds, their properties
 
 #include <algorithm>    // std::stable_sort — the groups in the declared order
 #include <functional>   // std::function — a group fills its nested groups first
@@ -820,7 +820,7 @@ void ibApplicationTree::FillData(ibDataNode& root)
 	root.SetValue(ibProtocol::ibSchema::ibMetaData::Type, ClsidText(rootObject->GetClassType()));
 	// …the dialect its modules are written in — what the desktop's process held (ibCompileCode::GetCodeStyle).
 	root.SetValue(ibProtocol::ibSchema::ibMetaData::Syntax, static_cast<std::int32_t>(m_metaData->GetRootMetaObject()->GetCompileSyntax()));
-	// …and its state — what the desktop's caption asked of it (ibFrontendMainFrameDesigner::Modify).
+	// …and its state — what the desktop's caption asked of it (ibFrontendMainFrameStudio::Modify).
 	root.SetValue(ibProtocol::ibSchema::ibMetaData::Modified, m_metaData->IsModified());
 	root.SetValue(ibProtocol::ibSchema::ibMetaData::Edited, m_metaData->IsEdited());
 	root.SetValue(ibProtocol::ibSchema::ibMetaData::ApplicationSave, m_metaData->IsApplicationSave());

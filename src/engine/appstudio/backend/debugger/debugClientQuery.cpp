@@ -5,11 +5,11 @@
 
 #include "debugClient.h"
 
-#include "appstudio/mainFrame/mainFrameDesigner.h"
-#include "protocol/protocolDesigner.h"   // ibProtocol::ibSchema::ibDebugger
+#include "appstudio/mainFrame/mainFrameStudio.h"
+#include "protocol/protocolStudio.h"   // ibProtocol::ibSchema::ibDebugger
 
 // THE STORE IS THE SERVER'S — the engine's sys_dbg, of the base the application is in (ibSchemaDebugger,
-// frmserver/schema/designer/debugger.cpp): what the engine's client asked its builder here is asked of the schema, by the
+// frmserver/schema/studio/debugger.cpp): what the engine's client asked its builder here is asked of the schema, by the
 // same verbs. And so are the lines: the server's client keeps the breakpoints at the editor's lines, moved by the edits
 // the editor's text carries (ibModuleTextView, Change) — one map, as the desktop's one process had it; none here.
 
@@ -19,7 +19,7 @@ namespace {
 	// reason (`said`): no debugger, a line the running application does not have.
 	bool AskStore(ibProtocolNode args, ibProtocolNode& answer, int command, wxString& said)
 	{
-		ibFrontendMainFrameDesigner* const frame = mainFrame;
+		ibFrontendMainFrameStudio* const frame = mainFrame;
 		if (frame == nullptr)
 			return false;
 		ibProtocolNode params;
@@ -58,7 +58,7 @@ ibDebuggerClient::ibDebuggerClient() :
 	Listen();
 }
 
-// …or as the login read it (the designer's GetStartSchemas).
+// …or as the login read it (the studio's GetStartSchemas).
 ibDebuggerClient::ibDebuggerClient(const ibProtocolNode& store) :
 	m_adapter(new ibDebuggerClientAdapter)
 {

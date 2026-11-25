@@ -44,7 +44,7 @@
 
 class ibSession;
 
-// WATCHING THE CONVERSATION. The designer shows a window with the exchange in
+// WATCHING THE CONVERSATION. The studio shows a window with the exchange in
 // it — what was asked, what the platform answered — so a person can see what is
 // being done in their name rather than infer it from the tree changing under
 // them. Publishing is best-effort and cheap when nobody listens, like the
@@ -101,7 +101,7 @@ public:
 	bool IsRunning() const { return m_running.load(); }
 
 	// --- the debugger -----------------------------------------------------
-	// The bridge a designer's assistant listens to it by (mcpDebugBridge.h). Set by the bridge: the debug client
+	// The bridge a studio's assistant listens to it by (mcpDebugBridge.h). Set by the bridge: the debug client
 	// owns it and may end it first. Null — there is none.
 	class ibMcpDebugBridge* GetDebugBridge() const { return m_debugBridge.load(); }
 	void                    SetDebugBridge(class ibMcpDebugBridge* bridge) { m_debugBridge.store(bridge); }
@@ -267,7 +267,7 @@ private:
 	std::mutex                   m_toldMutex;
 
 	// ⭐⭐ THE ASSISTANT'S OWN SUBSCRIPTION TO THE METADATA — the twin of ibMcpDebugBridge, and the
-	// same idea: it watches ALONGSIDE the designer's navigator instead of asking the navigator
+	// same idea: it watches ALONGSIDE the studio's navigator instead of asking the navigator
 	// anything, so a person building an application by hand and an assistant watching it see the
 	// same events at the same moment.
 	//
@@ -299,7 +299,7 @@ private:
 	// The base this server belongs to — its owner, asked instead of "the current one".
 	ibApplicationInstance* const     m_applicationInstance;
 
-	// ⚠ ADDED AND REMOVED ON ONE THREAD, CALLED ON ANOTHER — a window's (the thin designer's: whichever thread serves
+	// ⚠ ADDED AND REMOVED ON ONE THREAD, CALLED ON ANOTHER — a window's (the studio's: whichever thread serves
 	// its client) against the server's and Say's. Held for the whole of Publish, so once RemoveNotifier returns no call
 	// to that notifier is in flight and it may go.
 	std::vector<ibMcpNotifier*>  m_notifiers;

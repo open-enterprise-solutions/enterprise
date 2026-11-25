@@ -42,7 +42,7 @@
 #include "frmserver/client/clientHost.h"
 
 #include "protocol/protocolNode.h"
-#include "protocol/protocolDesigner.h"   // ibProtocol::ibSchema::ibTypes
+#include "protocol/protocolStudio.h"   // ibProtocol::ibSchema::ibTypes
 
 namespace {
 
@@ -613,11 +613,11 @@ TEST_F(SessionFailover, LiveSessionIsNotTakenByToken)
 	EXPECT_EQ(intruderFrame.code, 401);
 }
 
-TEST_F(SessionFailover, DesignerGetsNoToken)
+TEST_F(SessionFailover, StudioGetsNoToken)
 {
 	int connection = 0;
 	ibProtocolNode params = PasswordLogin();
-	params.SetValue(ibProtocol::ibLogin::Mode, static_cast<int>(ibProtocol::ibLogin::ibMode::Designer));
+	params.SetValue(ibProtocol::ibLogin::Mode, static_cast<int>(ibProtocol::ibLogin::ibMode::Studio));
 	const Rpc login = g_base->Call(Request(55, "login", params), &connection);
 	ASSERT_TRUE(login.ok) << login.message;
 	EXPECT_TRUE(login.result.GetString(ibProtocol::ibLogin::Token).IsEmpty());
@@ -627,12 +627,12 @@ TEST_F(SessionFailover, DesignerGetsNoToken)
 	EXPECT_FALSE(SessionRowExists(client));
 }
 
-// The designer's syntax helper asks the server for the names its articles do not write up, and what one offers.
+// The studio's syntax helper asks the server for the names its articles do not write up, and what one offers.
 TEST_F(SessionFailover, TheSyntaxHelperAsksForATypeAndWhatItOffers)
 {
 	int connection = 0;
 	ibProtocolNode login = PasswordLogin();
-	login.SetValue(ibProtocol::ibLogin::Mode, static_cast<int>(ibProtocol::ibLogin::ibMode::Designer));
+	login.SetValue(ibProtocol::ibLogin::Mode, static_cast<int>(ibProtocol::ibLogin::ibMode::Studio));
 	const Rpc opened = g_base->Call(Request(60, "login", login), &connection);
 	ASSERT_TRUE(opened.ok) << opened.message;
 	const ibString client = opened.result.GetString(ibProtocol::ibLogin::Client);
@@ -868,7 +868,7 @@ TEST_F(SessionFailover, ByteCodeStorageHoldsWhatItCompiledAndDetachedSavesNothin
 	ASSERT_NE(meta->GetByteCodeStorage(), nullptr) << "an application that runs holds its bytecode";
 
 	// ⚠ A STORAGE HOLDS ONLY UNDER A DIGEST, and this base's application has none: it was made here and never saved,
-	// and the digest is computed from the saved blob (metadataApplicationQuery.cpp). The designer saves a new
+	// and the digest is computed from the saved blob (metadataApplicationQuery.cpp). The studio saves a new
 	// application on its first load, so one that runs in a person's base has it. The storages below are made over a
 	// application that answers one — the only thing ibByteCodeStorage's constructor asks of it.
 	struct Saved : ibMetaDataApplicationFile {

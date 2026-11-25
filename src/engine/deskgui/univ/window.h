@@ -224,7 +224,7 @@ protected:
 
     // SEAM vs univ: A DISABLED WINDOW KEEPS ITS HANDLE LIVE. Enable keeps the logical state - IsEnabled(), the theme's
     // wxCONTROL_DISABLED - and the native host is not disabled, so the mouse still reaches a disabled control (the
-    // designer selects it by a click) and ibInputConsumer refuses its input itself (inputConsumer.cpp).
+    // studio selects it by a click) and ibInputConsumer refuses its input itself (inputConsumer.cpp).
     virtual void DoEnable(bool WXUNUSED(enable)) override {}
 
     // SEAM vs univ: the rectangle, in window coordinates, the border is drawn round - the client area and the

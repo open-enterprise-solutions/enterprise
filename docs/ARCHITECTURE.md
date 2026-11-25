@@ -65,15 +65,15 @@ engine into their process; the cluster and its tray link `core` alone:
 | Executable | Run Mode (`ibRunMode`) | Own session (`ibSessionKind`) | Purpose |
 |---|---|---|---|
 | `launcher.exe` | `eLAUNCHER_MODE` | — | Connection chooser: a file base, a base of the server cluster (`server[:port]` and its name), a web server's publication by its link; starts the two clients on it |
-| `appstudio.exe` | its host's | `ThinDesigner` (on the server) | The designer as a thin client: an application server's base by its address (`oes://host:port/base`, `oess://` over TLS) or a web server's publication by its link (`https://host/base/`), or a file base opened in its own process |
-| `appworkspace.exe` | its host's | `ThinClient` (on the server) | The runtime as a thin client, by the same two roads; holds no base of its own and runs no code |
-| `appserver.exe` | `eSERVER_MODE` | `Service` | The application server: serves one base of its server folder for the cluster, headless; protocol clients are `ThinClient` / `ThinDesigner` |
+| `appstudio.exe` | its host's | `Studio` (on the server) | The studio as a thin client: an application server's base by its address (`oes://host:port/base`, `oess://` over TLS) or a web server's publication by its link (`https://host/base/`), or a file base opened in its own process |
+| `appworkspace.exe` | its host's | `Workspace` (on the server) | The workspace as a thin client, by the same two roads; holds no base of its own and runs no code |
+| `appserver.exe` | `eSERVER_MODE` | `Service` | The application server: serves one base of its server folder for the cluster, headless; protocol clients are `Workspace` / `Studio` |
 | `appcluster.exe` | — | — | The application cluster: a console program — or a service of the system — on `core.dll` alone; `appserver --worker=<base> --route=<n>` for each base of its folder, as many as its `Processes`, started again when one falls; holds the clients' port and carries each socket on to the server its session lives in |
 | `appcluster-tray.exe` | — | — | The cluster's tray, on `core.dll` alone: shows the cluster's servers and steers them over its control socket; starts the cluster — its service, or the program — when none runs |
 | `webserver.exe` | `eFILE_MODE` (the file bases it opens) | — | The web gateway: browsers over HTTP(S) and WebSocket to file bases it opens and to application servers' bases |
 | `coderunner.exe` | `eSANDBOX_MODE` | — | Executes a single script module |
 
-> The run mode says only how the process holds the base — serving it (`eSERVER_MODE`) or as a file base for the one who started it (`eFILE_MODE`). What a session works in is its kind: either mode hosts designers, runtimes and jobs alike, and `DesignerMode()` / `EnterpriseMode()` are answered by the current session's kind. The base loads and runs its application as it opens, before any session is let in; every session takes a reference to it, and a designer's session works in an editable application of its own.
+> The run mode says only how the process holds the base — serving it (`eSERVER_MODE`) or as a file base for the one who started it (`eFILE_MODE`). What a session works in is its kind: either mode hosts studios, workspaces and jobs alike, and `StudioMode()` / `WorkspaceMode()` are answered by the current session's kind. The base loads and runs its application as it opens, before any session is let in; every session takes a reference to it, and a studio's session works in an editable application of its own.
 
 ### Core Layer (`core.dll`)
 
@@ -137,7 +137,7 @@ The backend is the core engine. It is self-contained — no GUI dependencies. Ke
 - **`ibApplicationInstance`** (`src/engine/backend/appData.h`) — ONE BASE: its connection pool, lock manager, session registry, job manager, settings storage, temporary files, logger and metadata. A process holds one (a thin client's file base, the application server, the tests) or several (the web server, a file base per publication). Reached through the `appData` macro, which answers the base of the session the thread works for — there is no global current base. Per-session state (user info, ProcUnits, frame) lives on `ibSession`; sys_user on `ibUserInfo`; the sys_session snapshot on `ibSessionSnapshot` produced by `ibSessionRegistry`.
 - **`ibMetaDataApplication`** (`src/engine/backend/metadataApplication.h`) — loads, saves, and manages the metadata tree (all business objects). Accessed via `activeMetaData` — the calling session's own application. Stores compile cache (compiled bytecode) per module descriptor; runtime instances live in sessions.
 - **`ibSession` / `ibSessionRegistry`** (`src/engine/backend/session/`) — per-session state and the base's session manager (one registry per base). The session is reachable via `ibSession::Current()`: the calling thread's own binding, else the base's fallback — the process's own session in that base (never a job's or a web tab's). `ibSessionScope` and `ibSessionThreadBinding` are the RAII helpers that bind a session to the calling thread. See [Sessions and Runtime Ownership](#sessions-and-runtime-ownership).
-- **`ibDebuggerServer`** (`src/engine/backend/debugger/debugServer.h`) — TCP server that accepts designer connections and relays debugger events.
+- **`ibDebuggerServer`** (`src/engine/backend/debugger/debugServer.h`) — TCP server that accepts studio connections and relays debugger events.
 
 ### Thin client layer (`protocol.dll`, `frmserver.dll`, `deskgui.dll`, `frmclient.dll`, `fileserver.dll`)
 
@@ -161,14 +161,14 @@ shelf) are core's, one copy for both sides; `frmclient/backend/` keeps reduced c
 what the client's windows use (the type factories, a value fitted to its type, a composition's values restored) —
 meeting the wire at `frmclient/backend/serialize/dataProtocol.h`; its `backend_core.h` / `backend.h` /
 `backend_exception.h` just include core. Chain: core → backend → frmserver ⇄ protocol ⇄ frmclient → appworkspace,
-appstudio. The thin designer keeps beside it what only a designer's windows need (`appstudio/backend/`: its
+appstudio. The studio keeps beside it what only a studio's windows need (`appstudio/backend/`: its
 debugger client among them). See [thin-client.md](public/thin-client.md).
 
 Form objects:
 - **`ibValueForm`** — an open form, on each side of the wire: the server's (`frmserver/visualView/ctrl/form.h`) holds the control tree and answers user events; the client's (`frmclient/visualView/ctrl/form.h`) draws it.
 - **`ibVisualHost` / `ibVisualHostClient`** — who holds a form and takes its controls through their life (`frmserver/visualView/visualHost.h`, no window: the frame it draws), and the client's view of a tab drawn from that frame (`frmclient/visualView/visualHostClient.h`).
 - **Doc-view frames** — backend-facing interface `ibBackendDocFrame` (`backend/backend_mainFrame.h`); the server's implementation is `ibClientFrame` (`frmserver/client/clientFrame.h`: the frame of one client, held on the server — a script's `OpenForm`, `Message`, `Question` land there). The client's window is `ibFrontendMainFrame` (`frmclient/mainFrame/mainFrame.h`); coderunner has `ibFrameCodeRunner`. The frame is owned by the `ibSession` that created it (no process-level singleton on the backend side); backend code reaches it through `ibSession::Current()->GetFrame()` or `ibSession::CurrentFrame()`.
-- **`ibCodeEditor`** (`frmclient/win/editor/codeEditor/`) — the Scintilla-based script editor of the thin designer. Highlighter, fold parser (core's `ibFoldCode`), auto-indent on Enter, format / increase / decrease indent, comment add/remove, Ctrl-Space autocomplete, GotoLine + ProceduresAndFunctions dialogs all live here. Debugger integration is a designer-only concern, kept out of the base via virtual hooks (`IsDebuggerEnterLoop`, `OnEditDebugPoint`, `OnPatchModule`, `OnEvaluateToolTip`, `RefreshBreakpointMarkers`, …); `ibCodeEditorDesigner` (`appstudio/win/editor/codeEditor/codeEditorDesigner.h`) overrides them. `coderunner` carries its own copy of the old desktop editor (`coderunner/win/editor/codeEditor/`, with its dialogs in `coderunner/win/dlgs/`), with no document behind it.
+- **`ibCodeEditor`** (`frmclient/win/editor/codeEditor/`) — the Scintilla-based script editor of the studio. Highlighter, fold parser (core's `ibFoldCode`), auto-indent on Enter, format / increase / decrease indent, comment add/remove, Ctrl-Space autocomplete, GotoLine + ProceduresAndFunctions dialogs all live here. Debugger integration is a studio-only concern, kept out of the base via virtual hooks (`IsDebuggerEnterLoop`, `OnEditDebugPoint`, `OnPatchModule`, `OnEvaluateToolTip`, `RefreshBreakpointMarkers`, …); `ibCodeEditorStudio` (`appstudio/win/editor/codeEditor/codeEditorStudio.h`) overrides them. `coderunner` carries its own copy of the old desktop editor (`coderunner/win/editor/codeEditor/`, with its dialogs in `coderunner/win/dlgs/`), with no document behind it.
 
 ---
 
@@ -228,7 +228,7 @@ The init list is **the** ordering contract:
 
 The MCP server is not the base's: the engine's is one per client (`frmserver/mcp`, `ibClientHost::GetMcpServer`), and the port is the client's, on the person's machine.
 
-`m_logger` is created by `Open` (`CreateLogger`) after the tables exist. `m_activeMetaData` — the application's `ibMetaDataApplication` — is made, loaded and run by `Open` (`CreateActiveMetaData(applicationInstance, flags)`, the flags from the request: the debug server), before any session is let in; an application that does not come up refuses the base. Launcher and coderunner have none. It is held for the sessions to come: a session takes its own reference when it is let in and lets it go when it leaves. A designer's session (`Designer`, `ThinDesigner`) takes none: it makes the application it edits, an `ibMetaDataApplicationStorage`, and holds it alone (`ibSession::AcquireMetaData`). Its apply replaces the active one with the application it published (`ReplaceActiveMetaData`); sessions already working finish on the old one, which closes with its last holder. The job manager starts with the base, at the end of `Open` — jobs need no user. Every metadata — an application, an external report or data tool, an application file — is made by `ibMetaData::MakeShared` and held by `shared_ptr` by whoever works in it. The plugins and the syntax-helper corpus (constructed in `InitLocale()` once the locale is settled — see `docs/private/syntax-helper-design.md`) are the process's.
+`m_logger` is created by `Open` (`CreateLogger`) after the tables exist. `m_activeMetaData` — the application's `ibMetaDataApplication` — is made, loaded and run by `Open` (`CreateActiveMetaData(applicationInstance, flags)`, the flags from the request: the debug server), before any session is let in; an application that does not come up refuses the base. Launcher and coderunner have none. It is held for the sessions to come: a session takes its own reference when it is let in and lets it go when it leaves. A studio's session (`Studio`) takes none: it makes the application it edits, an `ibMetaDataApplicationStorage`, and holds it alone (`ibSession::AcquireMetaData`). Its apply replaces the active one with the application it published (`ReplaceActiveMetaData`); sessions already working finish on the old one, which closes with its last holder. The job manager starts with the base, at the end of `Open` — jobs need no user. Every metadata — an application, an external report or data tool, an application file — is made by `ibMetaData::MakeShared` and held by `shared_ptr` by whoever works in it. The plugins and the syntax-helper corpus (constructed in `InitLocale()` once the locale is settled — see `docs/private/syntax-helper-design.md`) are the process's.
 
 ### Closing a base (`ibApplicationHost::Close` → `ibApplicationInstance::Close`)
 
@@ -250,7 +250,7 @@ ibApplicationInstance::Close() {
 
 ### Token pattern for subsystem construction
 
-Every owned subsystem's ctor takes `ib::AppDataCtorToken` (`backend/appDataCtorToken.h`). Its ctor is private and only `ibApplicationInstance`, `ibApplicationHost` and `ibSession` are friends, so external code that tries `new ibSessionRegistry(…)` gets a compile error. The token also says **whose**: a base mints `AppDataCtorToken{ this }` and the subsystem reads its owner off it (`GetApplicationInstance()`); the host mints a null one for the process's share (the plugins, the corpus); a designer's session mints one with its base for the application it edits.
+Every owned subsystem's ctor takes `ib::AppDataCtorToken` (`backend/appDataCtorToken.h`). Its ctor is private and only `ibApplicationInstance`, `ibApplicationHost` and `ibSession` are friends, so external code that tries `new ibSessionRegistry(…)` gets a compile error. The token also says **whose**: a base mints `AppDataCtorToken{ this }` and the subsystem reads its owner off it (`GetApplicationInstance()`); the host mints a null one for the process's share (the plugins, the corpus); a studio's session mints one with its base for the application it edits.
 
 Why a token instead of a friend declaration on each subsystem header? Friends scattered across seven headers mean refactoring the owner ripples into every owned class. One token type keeps the "who can build subsystems" decision in one place; subsystem headers declare their ctors public.
 
@@ -280,7 +280,7 @@ A headless process that serves **one base** of its **server folder** for the app
 - **Each person's assistant** (MCP): a server per client (`ibClientHost::GetMcpServer`), answering what that client's port carries over a connection of its own (`ibProtocol::ibMcp`). The server opens no port for it.
 - **Its sessions' tokens end in its route** — `<hex>.<route>` (`ibSessionToken::WithRoute`), the login's Token and the debugger's Channel key alike: only the hex is the bearer and only it is hashed; the route is how the cluster carries a client that comes back to this server.
 - **Stop:** `stop` on stdin, stdin closing (the cluster gone), Ctrl+C, SIGTERM or the console closing raises a flag; the main thread ends the server's session, then closes the base. Started again after a fall it is given `--again`: its first error takes no dump — the first start took one, and a dump at every start would fill the disk while a DBMS stays down.
-- **Not yet:** creating a new base (only the designer creates the system tables). It is not a service of the system itself — the cluster is, and runs it.
+- **Not yet:** creating a new base (only the studio creates the system tables). It is not a service of the system itself — the cluster is, and runs it.
 
 ### The application cluster (`appcluster.exe`, `src/engine/appcluster/`)
 
@@ -294,7 +294,7 @@ A console program over the same server folder that links `core.dll` alone (of wx
 
 **The tray** (`appcluster-tray.exe`, `src/engine/appcluster-tray/`) is a program of its own and no part of the cluster: it shows the servers of each base ("trade #2" when there are several) — state, process, falls, and why it fell (the last error it said) — with Start / Stop / Restart and Stop the cluster, over the control socket; a fallen server's two read "Start now" and "Do not start again". Not running, the cluster is started from it: its service if one is installed, the program beside the tray otherwise; a cluster that ends with an error is said in a message box. A tray closed leaves the cluster serving.
 
-- **Not yet:** the designer's own process, the settings in the tray, the client's address past the relay (servers see `127.0.0.1`), the control socket when `Host` names an address off this machine (the tray reaches `127.0.0.1` only).
+- **Not yet:** the studio's own process, the settings in the tray, the client's address past the relay (servers see `127.0.0.1`), the control socket when `Host` names an address off this machine (the tray reaches `127.0.0.1` only).
 
 ### The web server (`webserver.exe`, `src/engine/webserver/`)
 
@@ -487,7 +487,7 @@ aspects carry the `Metadata` infix; the runtime value, its manager and its comma
 | `chartOfAccountsMetadata.cpp` | the metaobject — ctor, lifecycle events, `ReadData` / `WriteData` |
 | `chartOfAccountsMetadataSchema.cpp` | **the database schema** — `ContributeTables` plus the restructuring guards those tables carry |
 | `chartOfAccountsMetadataProperty.cpp` | the property hooks (`OnPropertyChanged`, …) |
-| `chartOfAccountsMetadataMenu.cpp` | the designer context menu |
+| `chartOfAccountsMetadataMenu.cpp` | the studio context menu |
 | `chartOfAccountsMetadata_res.cpp` | the embedded icons |
 | `chartOfAccountsObject.cpp`, `…Manager.cpp`, `…Manager_impl.cpp`, `…Action.cpp`, `…Enum.{h,cpp}` | the runtime value, its manager, its commands, the enum value types the family registers — none of these is the metaobject, hence no infix |
 
@@ -519,10 +519,10 @@ declaring the rule that guards it are the same statement, so they cannot drift a
 
 | File | Class | Role |
 |---|---|---|
-| `debugServer.h/cpp` | `ibDebuggerServer` | The debuggee's port — a WebSocket at `/debugger` on the core's HTTP, one designer at a time; owned by the running application |
-| `debugClient.h/cpp`, `debugClientAsync.cpp`, `debugClientQuery.cpp` | `ibDebuggerClient` | The designer's end (a thin designer's session on the server): the connection, the events told every bridge, the breakpoints kept in the base |
+| `debugServer.h/cpp` | `ibDebuggerServer` | The debuggee's port — a WebSocket at `/debugger` on the core's HTTP, one studio at a time; owned by the running application |
+| `debugClient.h/cpp`, `debugClientAsync.cpp`, `debugClientQuery.cpp` | `ibDebuggerClient` | The studio's end (a studio's session on the server): the connection, the events told every bridge, the breakpoints kept in the base |
 | `debugClientBridge.h/cpp` | `ibDebuggerClientBridge` | Bridge between client socket and UI |
-| `runtimeProfiler.h/cpp` | `ibRuntimeProfiler` | A measurement: which lines of which modules the runs spent their time on — of every session (the designer's Debug menu, `profile_start` / `profile_stop`) or of one run (`code_run {profile}`) |
+| `runtimeProfiler.h/cpp` | `ibRuntimeProfiler` | A measurement: which lines of which modules the runs spent their time on — of every session (the studio's Debug menu, `profile_start` / `profile_stop`) or of one run (`code_run {profile}`) |
 | `debugDefs.h` | enums | `CommandId`, `EventId`, `ConnectionType` |
 
 ### `src/engine/backend/system/`
@@ -626,7 +626,7 @@ Mode is the session's (`ibCompileCode::SetCodeStyle()` writes its `ibCompileStat
 
 ### ibValueMetaObject
 
-`ibValueMetaObject` (defined in `src/engine/backend/metaCollection/metaObject.h`) is the abstract base for all application objects. It extends `ibValueDynamicMembers` (which extends `ibValue`, so it can be assigned to script variables) and `ibPropertyObjectHelper<ibValueMetaObject>` (so properties appear in the designer's object inspector), plus `ibAccessObject` / `ibInterfaceObject`.
+`ibValueMetaObject` (defined in `src/engine/backend/metaCollection/metaObject.h`) is the abstract base for all application objects. It extends `ibValueDynamicMembers` (which extends `ibValue`, so it can be assigned to script variables) and `ibPropertyObjectHelper<ibValueMetaObject>` (so properties appear in the studio's object inspector), plus `ibAccessObject` / `ibInterfaceObject`.
 
 Key attributes:
 - `ibMetaID m_metaId` — numeric identifier within the application
@@ -714,10 +714,10 @@ there is nothing to build a moment from and nothing offered in its field tree.
 
 A metadata's **open state is the presence of its image**, not a separate boolean. `ibMetaData` (`src/engine/backend/metaData.h`) holds `std::shared_ptr<ibMetaImage> m_image`: nullptr = closed, live = open. `IsOpen()` returns `m_image != nullptr`.
 
-- **`ibMetaImage`** aggregates everything a run fills and a close discards: the type-ctor factory (`ibCtorRegistry<ibCtorMetaValueType>`), the shared-module skeleton (`ibModuleStorage`), and the designer-only compile-value cache (`ibCompileValueCache`). The registry **owns its ctors via `shared_ptr`**, so dropping the image frees them — no manual cleanup. The image is non-copyable / non-movable; lifetime is managed only through the shared_ptr.
+- **`ibMetaImage`** aggregates everything a run fills and a close discards: the type-ctor factory (`ibCtorRegistry<ibCtorMetaValueType>`), the shared-module skeleton (`ibModuleStorage`), and the studio-only compile-value cache (`ibCompileValueCache`). The registry **owns its ctors via `shared_ptr`**, so dropping the image frees them — no manual cleanup. The image is non-copyable / non-movable; lifetime is managed only through the shared_ptr.
 - **`LoadGuard`** (nested in `ibMetaData`) is the RAII transaction. Its ctor creates the image (asserting the metadata was closed); the dtor drops it — *unless* `Commit()` ran. A raised `ibBackendException` (or any early return) unwinds through the dtor, the image is dropped, and the state is exactly the closed state it started from ("the load never happened").
 - `m_factoryCtorCountChanges` (the monotonic compiler-cache invalidation counter) deliberately lives on `ibMetaData`, *outside* the image, so dropping the image never resets it.
-- Each metadata kind builds its own designer infrastructure via `CreateDesignerCache()` (cache + module-manager for designer kinds; `nullptr` for runtime / external data tool / report). The compile cache is `nullptr` on runtime applications — callers gate with `if (auto* cc = metaData->GetCompileCache())`, not `appData->DesignerMode()`.
+- Each metadata kind builds its own studio infrastructure via `CreateStudioCache()` (cache + module-manager for studio kinds; `nullptr` for runtime / external data tool / report). The compile cache is `nullptr` on runtime applications — callers gate with `if (auto* cc = metaData->GetCompileCache())`, not `appData->StudioMode()`.
 
 `RunDatabase()` / `CloseDatabase()` (overridden per subclass) drive the run/close cascade under `LoadGuard`. `LoadDatabase()` / `SaveDatabase()` are the buffer-level entry points on `ibMetaDataApplicationBase`; they reach `LoadApplicationFromBuffer` / `SaveApplicationToBuffer`.
 
@@ -754,7 +754,7 @@ an **account dimension** whose KIND is a characteristic. Only the opaque CLSID b
 | ChartOfAccounts | `MD_CHOA` | Chart of accounts with AccountType (Active/Passive/AP), OffBalance, the accounting kinds it declares (two branches of its own: `MD_ACKD` — a boolean field of every account; `MD_ADKD` — a tick-box column of the account's kinds table), the maximum dimension count, and the predefined `AccountDimensionKinds` tabular section |
 | AccountingRegister | `MD_AREG` | Double-entry register. One-sided: RecordType (Debit/Credit) + Account + N *(kind, value)* AccountDimension slots; correspondence: AccountDr / AccountCr + N slots per side, and a dimension or resource with `Balance` cleared kept per side as hidden `<Field>Dr` / `<Field>Cr` attributes. Totals per side at two grains (per account and breakdown, per account). Balance / Turnovers / DrCrTurnovers / BalanceAndTurnovers / RecordsWithAccountDimensions |
 
-Bindings: AccountingRegister → ChartOfAccounts (via `ibPropertyChartOfAccounts`), ChartOfAccounts → ChartOfCharacteristicTypes (via `ibPropertyChartOfCharacteristicTypes`). Each binding has its own property class. Since 2026-09-10 (committed 2026-09-11) every chart binding is edited by ONE designer editor, `ibPGChartBindingProperty` (`frmclient/propertyManager/property/advprop/advpropChartBinding.cpp`), which replaced a copy per chart: the candidates and whether one chart or a set may be ticked are the property's own answer (`GetValueList` → `ibPropertyChoiceMode`), and only an accepted dialog changes the value.
+Bindings: AccountingRegister → ChartOfAccounts (via `ibPropertyChartOfAccounts`), ChartOfAccounts → ChartOfCharacteristicTypes (via `ibPropertyChartOfCharacteristicTypes`). Each binding has its own property class. Since 2026-09-10 (committed 2026-09-11) every chart binding is edited by ONE studio editor, `ibPGChartBindingProperty` (`frmclient/propertyManager/property/advprop/advpropChartBinding.cpp`), which replaced a copy per chart: the candidates and whether one chart or a set may be ticked are the property's own answer (`GetValueList` → `ibPropertyChoiceMode`), and only an accepted dialog changes the value.
 
 ### Calculation Objects
 
@@ -785,13 +785,13 @@ OES distinguishes between **metadata** (compile-time, process-wide, shared) and 
 `ibSession` (`src/engine/backend/session/session.h`) is the unit of runtime state:
 
 - **Identity** (`ibSessionIdentity`) — guid, userName, userGuid, computer, address (host:port for web), appMode, started timestamp, pid
-- **Kind** (`ibSessionKind`) — Launcher / Designer / Enterprise / Service (a server's own login) / WebServer (the old web server's technical row) / WebClient (per-tab) / BackgroundJob / ScheduledJob / SystemJob / ThinClient / ThinDesigner (a client of the protocol, in the application or in the application). The kind, not the run mode, says what a session is: a job or a thin client lives in whatever process hosts it, and its run mode is its host's.
+- **Kind** (`ibSessionKind`) — Service (a server's own login) / BackgroundJob / ScheduledJob / SystemJob / Workspace / Studio (a client of the protocol: working in the application, or on it) / HttpService (one request to an HTTP service). The kind, not the run mode, says what a session is: a job or a client lives in whatever process hosts it, and its run mode is its host's.
 - **State machine** — `ibSessionState` (Created / Added / Rejected / Stopping / Gone), `ibAuthState` (Anonymous / Authenticated / AuthFailed)
-- **User info** — `ibUserInfo` (formerly `ibApplicationDataUserInfo`) — OES-user (from `sys_user` table), distinct from the DB-level admin user used to open the database connection. Plus `m_sessionRawPassword` — plain-text cached only for Designer "Start debugging" so spawned children can re-authenticate without prompting. `ibUserInfo` itself owns sys_user CRUD as static factories — `appData` no longer mediates.
+- **User info** — `ibUserInfo` (formerly `ibApplicationDataUserInfo`) — OES-user (from `sys_user` table), distinct from the DB-level admin user used to open the database connection. Plus `m_sessionRawPassword` — plain-text cached only for Studio "Start debugging" so spawned children can re-authenticate without prompting. `ibUserInfo` itself owns sys_user CRUD as static factories — `appData` no longer mediates.
 - **Working date** — `m_workDate` per-session (replaces the legacy static `ibValueSystemFunction::ms_workDate` so two web sessions don't step on each other).
 - **Translate state** — `ibTranslateState`: explicit override, the user's language, the application's own, and the resolved code (`override || user || application`). Selects which metadata synonym / form-label translation is shown. Per-session, so concurrent web tabs each render their own user's language and two bases in one process each keep their own. Distinct from the engine's UI gettext (`ibDictionary`, the base's locale per thread). Read through `ibBackendLocalization::GetUserLanguage()`.
 - **Compile state** — `ibCompileState`: the code style (CES / VES) the session's modules compile in, taken from its base's application. Like the interpreter's `ibProcUnitState`, a thread with no session (coderunner, tests) has its own `thread_local` one.
-- **Root module manager** — `m_root : ibValuePtr<ibValueModuleManagerRuntimeApplication>`. Created via `EnsureRoot()` in `ibSessionRegistry::NotifyAuthenticated`, right after `AcquireMetaData` and before the `OnAuthenticated` listeners. Stays nullptr for sessions that never run scripts — **the Designer never creates a root** (`EnsureRoot` is gated on `DesignerMode()`; it uses the lightweight `ibValueModuleManagerDesigner` in the compile cache instead), and likewise WebServer technical / Launcher. Objects/records/modules reach the right manager through the `ibSession::GetEditModuleManager(metaData)` seam (Designer → compile-cache designer manager; runtime → `m_root`). See [module-manager-split.md](private/module-manager-split.md).
+- **Root module manager** — `m_root : ibValuePtr<ibValueModuleManagerRuntimeApplication>`. Created via `EnsureRoot()` in `ibSessionRegistry::NotifyAuthenticated`, right after `AcquireMetaData` and before the `OnAuthenticated` listeners. Stays nullptr for sessions that never run scripts — **the Studio never creates a root** (`EnsureRoot` is gated on `StudioMode()`; it uses the lightweight `ibValueModuleManagerStudio` in the compile cache instead), and likewise WebServer technical / Launcher. Objects/records/modules reach the right manager through the `ibSession::GetEditModuleManager(metaData)` seam (Studio → compile-cache studio manager; runtime → `m_root`). See [module-manager-split.md](private/module-manager-split.md).
 - **Frame** — `virtual ibBackendDocFrame* GetFrame() const { return nullptr; }` on base `ibSession`. Frame storage lives on derived sessions that have one (`ibClientSession::SetFrame(ibClientFrame*)`, `frmserver/client/clientSession.h` — a protocol client's). Base has no `m_frame` field — null means "no frame on this session" (coderunner, a server's technical session). The frame belongs to the session that created it, not to a process-wide singleton.
 - **Per-session debug** — optional `ibDebugSession` (CV/mutex + per-session watch expressions + run context) so concurrent web sessions can each enter their own debug loop without blocking.
 - **Exclusive (monopoly) mode** — `m_exclusive`. At most one session in the registry holds it; while held, every other Connect parks until release.
@@ -800,7 +800,7 @@ OES distinguishes between **metadata** (compile-time, process-wide, shared) and 
 `ibSession::Current()` is the canonical "session this code is currently working on". One rule in every host:
 
 - **The thread's binding** — a thread that bound a session (`ibSessionScope`, `ibSessionThreadBinding`, a job's run) works for it.
-- **Else the base's fallback** — the process's own session there (`IsProcessSessionKind`: the designer's or the client's window, the application server's login). A job or a web tab never becomes it.
+- **Else the base's fallback** — the process's own session there (the application server's login; the studio's in a file base). A job or a workspace never becomes it.
 
 `ibSessionScope` (legacy) and `ibSessionThreadBinding` (preferred for app entry points) are the RAII helpers that bind a session to the calling thread. The interpreter no longer reads global `thread_local` state directly: `ibProcUnitState` lives under `ibSession` (`session.h`), and the only `thread_local` slot in `session.cpp` is a fallback for sessionless callers (coderunner sandbox / system bootstrap). The worker pool (`workerPool.h` + `workerPoolHeadless.cpp`) leases a session into a thread via `tl_currentLease` and runs the request on it.
 
@@ -848,9 +848,9 @@ ibSession::m_root  →  ibValueModuleManagerRuntimeApplication  (per-session roo
 
 **Bytecode self-contained.** `ibByteCode` holds its own moduleName, rootContext, parent-bytecode ref, and dependency manifest. It has no pointer back to a compiler: the compiler is gone by the time the bytecode runs, and running code holds its bytecode through a shared_ptr.
 
-### Designer — compile only
+### Studio — compile only
 
-A designer session (`Designer`, `ThinDesigner`) has no runtime — `AttachRuntime` returns early for a designer kind. It holds neither a compiler nor bytecode: each question about a text (autocomplete, syntax check) gets a compile chain made for it (`CreateCompiler`, up the descriptors' `m_parent`, each with its binds), which goes with the answer. Global modules are bound here as in the runtime, so a text sees their names and a broken one is reported. Scripts are not executed. Autocomplete reads bound names off that chain (`ibValueAtCaret` / `ibNamesAtCaret`, `backend/compiler/scriptComplete.h`); the editor keeps only its lexer. See [Name binding § Designer](private/name-binding.md#designer--surfacing-the-same-binds). Debug sessions attach to the process that runs the application over its debug port — see [Debugger Architecture](#debugger-architecture).
+A studio session (`Studio`) has no runtime — `AttachRuntime` returns early for a studio kind. It holds neither a compiler nor bytecode: each question about a text (autocomplete, syntax check) gets a compile chain made for it (`CreateCompiler`, up the descriptors' `m_parent`, each with its binds), which goes with the answer. Global modules are bound here as in the runtime, so a text sees their names and a broken one is reported. Scripts are not executed. Autocomplete reads bound names off that chain (`ibValueAtCaret` / `ibNamesAtCaret`, `backend/compiler/scriptComplete.h`); the editor keeps only its lexer. See [Name binding § Studio](private/name-binding.md#studio--surfacing-the-same-binds). Debug sessions attach to the process that runs the application over its debug port — see [Debugger Architecture](#debugger-architecture).
 
 ---
 
@@ -978,7 +978,7 @@ named in the answer's patch, so the field shows the server's text at once.
 ### Client-Server Model
 
 ```
-the debuggee — whatever runs the application       the designer
+the debuggee — whatever runs the application       the studio
 (appserver, webserver,                               appstudio.exe — the client in its session
  a thin client's file base)                          on the server, reached over the client protocol
       │                                                     │
@@ -988,7 +988,7 @@ ibDebuggerServer ◄──── WebSocket /debugger ────────►
 Ports: 7700–7709, the first free one  (ibPort::Debugger, core/net/ports.h)
 ```
 
-The thin designer's debugger is the server's: the engine's `ibDebuggerClient` lives in the designer's session where
+The studio's debugger is the server's: the engine's `ibDebuggerClient` lives in the studio's session where
 the base is, and `appstudio/backend/debugger/` is its facade — a command goes as `debug {Command}` on a second
 connection of the same client, bound to the first (`ibProtocol::ibDebug`, protocol 6), and what the engine says comes
 back as news on it. The breakpoints at the editor's lines stay with the editor; the store they are kept in is the
@@ -998,16 +998,16 @@ server's.
 
 | Value | Purpose |
 |---|---|
-| `ConnectionType_Scanner` | Designer scanning for debuggable processes |
+| `ConnectionType_Scanner` | Studio scanning for debuggable processes |
 | `ConnectionType_Waiter` | Enterprise waiting for a connection |
 | `ConnectionType_Debugger` | Active debug session |
 
 ### Command Flow
 
-The designer sends `CommandId` packets; enterprise responds with `EventId` packets:
+The studio sends `CommandId` packets; the debuggee responds with `EventId` packets:
 
 ```
-Designer                           Enterprise
+Studio                           Debuggee
    │  CommandId_VerifyConnection      │
    │ ────────────────────────────────►│
    │  CommandId_SetConnectionType     │
@@ -1028,7 +1028,7 @@ Designer                           Enterprise
    │ ◄────────────────────────────────│
 ```
 
-The port's I/O threads only move bytes: each command is one binary WebSocket message (`SendCommand` / `RecvCommand`), handed in order to the debug thread — a `std::thread` of `ibDebuggerServer::ibDebuggerServerConnection`, the one the session registry knows as the debugger's. A packet that cannot be read — shorter than what it claims to hold, or a string with no terminator — ends that connection, with a line in the technology journal; the debuggee goes on running. The designer's end does the same with a packet it cannot read.
+The port's I/O threads only move bytes: each command is one binary WebSocket message (`SendCommand` / `RecvCommand`), handed in order to the debug thread — a `std::thread` of `ibDebuggerServer::ibDebuggerServerConnection`, the one the session registry knows as the debugger's. A packet that cannot be read — shorter than what it claims to hold, or a string with no terminator — ends that connection, with a line in the technology journal; the debuggee goes on running. The studio's end does the same with a packet it cannot read.
 
 ---
 
@@ -1041,7 +1041,7 @@ appworkspace.exe / appstudio.exe --file=… (a file base: fileserver, in the cli
   └─ ibApplicationInstance::CreateAppDataEnv(ibFileInstanceRequest{ server, port, user, pwd, db, locale })
        └─ ibDatabaseLayer::Open(server, port, db, ibUser, ibPwd)   # DB-level admin connection
             └─ ibClientInstance::CreateSession (frmserver) — on the client's login over the protocol
-                 └─ appData->CreateSession<ibClientSession>(ThinClient | ThinDesigner, …)
+                 └─ appData->CreateSession<ibClientSession>(Workspace | Studio, …)
                  # registry runs Connect(req) under the session factory:
                  #   - Submit(Add, Normal), waits state Added
                  #   - Add handler INSERTs the sys_session row
@@ -1056,7 +1056,7 @@ appworkspace.exe / appstudio.exe --file=… (a file base: fileserver, in the cli
                                         ran as the base opened):
                                           1. OnFirstConnect — on the first auth
                                           2. session->AcquireMetaData() — its own reference
-                                             (a designer's: an application of its own, loaded and run)
+                                             (a studio's: an application of its own, loaded and run)
                                              session->EnsureRoot() — CreateRoot(GetMetaData())
                                           3. OnAuthenticated — session->CompileRoot()
                                                              + mm->AttachRuntime(s)

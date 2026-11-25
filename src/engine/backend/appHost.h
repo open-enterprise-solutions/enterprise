@@ -3,7 +3,7 @@
 
 // ibApplicationHost — THE PROCESS, and the bases it serves.
 //
-// A process holds one base — every host of today: the desktop client, the designer, coderunner, the web
+// A process holds one base — every host of today: the desktop client, the studio, coderunner, the web
 // host, the tests — or several: the application server. Each base is an ibApplicationInstance. What belongs to the process
 // rather than to any base lives here, once: the plugins (DLLs loaded into the process, each initialised
 // once), the platform locale (the C library's is process state) and the syntax-helper corpus that follows it.

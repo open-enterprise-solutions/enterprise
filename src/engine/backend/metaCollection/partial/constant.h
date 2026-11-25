@@ -33,7 +33,7 @@ protected:
 private:
 
 	// The VALUE properties — moved here from the attribute base the constant used to inherit. They
-	// are what the user edits, so they belong on the object the designer shows, and the inner column
+	// are what the user edits, so they belong on the object the studio shows, and the inner column
 	// reads them back rather than holding a second copy.
 	ibPropertyCategory* m_categoryValue = ibPropertyObject::CreatePropertyCategory(ibT("Value"), _("Value"));
 	ibPropertyType* m_propertyType = ibPropertyObject::CreateProperty<ibPropertyType>(m_categoryValue, ibT("Type"), _("Type"), _("The type of the constant's value - a primitive (string, number, date, boolean) or a reference. The one stored value is kept in the system table of constants and converted to this type when read."), ibValueTypes::TYPE_STRING);

@@ -14,7 +14,7 @@ bool ibValueMetaObjectChartOfCalculationTypes::OnPropertyChanging(ibProperty* pr
 
 void ibValueMetaObjectChartOfCalculationTypes::OnPropertyChanged(ibProperty* property, const ibVariant& oldValue, const ibVariant& newValue)
 {
-	// The list edited in the designer types the sections now, not at the next run — see TypeBaseAndLeading.
+	// The list edited in the studio types the sections now, not at the next run — see TypeBaseAndLeading.
 	if (property == m_propertyBaseCharts)
 		TypeBaseAndLeading();
 

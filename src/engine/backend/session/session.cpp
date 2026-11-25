@@ -207,7 +207,7 @@ private:
 		// that never had movements would report "not enough access rights" to a full-access user —
 		// which is exactly the confusion this whole second stage exists to end.
 		if (m_roleProcs.empty())
-			return true;                                  // no restricting role (or Designer)
+			return true;                                  // no restricting role (or Studio)
 		if (m_metaData != nullptr && m_metaData->IsFullAccess())
 			return true;                                  // Tier 0 — full access
 
@@ -233,7 +233,7 @@ private:
 		if (!TablesAllowed(query, right))
 			return false;                                 // refused on a table — the filter never runs
 
-		// Whether anything restricts at all is a property of the RUN, not of a table (Designer / no
+		// Whether anything restricts at all is a property of the RUN, not of a table (Studio / no
 		// restricting role / full access), so it is settled once, outside the walk.
 		if (m_roleProcs.empty())
 			return true;
@@ -641,10 +641,10 @@ ibValueModuleManagerRuntimeApplication* ibSession::GetManagerModule() const
 ibValueModuleManager* ibSession::GetEditModuleManager(const ibMetaData* metaData) const
 {
 	// Two roads off one seam, keyed on THIS session's kind (not the process-global
-	// appData->DesignerMode()): a Designer session has no per-session runtime root —
-	// it reads the lightweight designer manager from the metadata's compile cache.
+	// appData->StudioMode()): a Studio session has no per-session runtime root —
+	// it reads the lightweight studio manager from the metadata's compile cache.
 	// Every other kind (Enterprise / WebClient / Service / …) uses its root mm.
-	if (IsDesignerSessionKind(m_kind)) {
+	if (m_kind == ibSessionKind::Studio) {
 		if (auto* cc = metaData ? metaData->GetCompileCache() : nullptr)
 			return cc->GetModuleManager();
 		return nullptr;
@@ -772,7 +772,7 @@ void ibSession::Teardown()
 
 	// TAKE OUR RUNTIME DOWN OURSELVES, on this thread — the mirror of Open, which brought it up here. The
 	// listeners detach the runtime and destroy the root, and the last one out closes the application.
-	// Left to the Remove, the registry thread did it, and the designer's cached forms died off the main
+	// Left to the Remove, the registry thread did it, and the studio's cached forms died off the main
 	// thread at exit (dump of 2026-10-04). Before IsFatal: a dead registry thread does not excuse us.
 	reg.NotifyDisconnect(this);
 
@@ -958,8 +958,8 @@ bool ibSession::CompileRoot()
 	// attach as shared modules DURING AttachRuntime, so their procUnits (FindSharedModule -> GetProcUnit)
 	// are only live NOW — the policy ctor resolves + caches them once. Still before the session serves
 	// any user query (CompileRoot finishes first), so it is in place before anything it must guard.
-	// Designer never enforces (it runs off the edit-time manager, not this runtime root).
-	if (!m_accessPolicy && !appData->DesignerMode()) {
+	// Studio never enforces (it runs off the edit-time manager, not this runtime root).
+	if (!m_accessPolicy && !appData->StudioMode()) {
 		// The registry's session already holds the application it was let in on. A session
 		// built over an application it has not acquired yet (a test, a root created first)
 		// still enforces the roles of the application its root was compiled against.
@@ -1039,11 +1039,11 @@ void ibSession::AcquireMetaData()
 {
 	if (m_metaData)
 		return;
-	// ⭐ A DESIGNER'S SESSION WORKS IN A WORLD OF ITS OWN (Max, 2026-10-20: *"the designer's metadata is held only
-	// by the designer's session; the rest live with the active one, by reference count"*) — the application it
+	// ⭐ A STUDIO'S SESSION WORKS IN A WORLD OF ITS OWN (Max, 2026-10-20: *"the studio's metadata is held only
+	// by the studio's session; the rest live with the active one, by reference count"*) — the application it
 	// edits, made for it and held by it alone. The base's active one it leaves to the rest, and only an apply
 	// replaces it.
-	if (IsDesignerSessionKind(GetKind())) {
+	if (GetKind() == ibSessionKind::Studio) {
 
 		// Held BEFORE it loads — a session's own application is the first answer `activeMetaData` gives on its
 		// thread (ibApplicationInstance::GetActiveMetaData), and its loading asks for it. The session is bound to the
@@ -1073,11 +1073,11 @@ void ibSession::EnsureRoot()
 	// (Launcher, technical) without metadata don't fault.
 	if (m_root) return;
 	if (GetMetaData() == nullptr) return;
-	// Designer never executes script — it has its own lightweight designer
-	// module manager in the compile cache (ibValueModuleManagerDesigner). No
-	// per-session runtime root mm is created; designer-path consumers read the
+	// Studio never executes script — it has its own lightweight studio
+	// module manager in the compile cache (ibValueModuleManagerStudio). No
+	// per-session runtime root mm is created; studio-path consumers read the
 	// manager module from the compile cache instead of session->GetManagerModule().
-	if (appData->DesignerMode()) return;
+	if (appData->StudioMode()) return;
 
 	// RLS — the access policy is NOT built here: it is built in CompileRoot, between module compile and
 	// run, so its ctor can resolve the user's role-module procUnits (see there). The L3 door pulls it via
@@ -1231,7 +1231,7 @@ ibSession* ibSession::Current()
 		// go away for the duration of the handler.
 		if (auto s = reg.GetActiveDebugTarget().Share()) return s.get();
 		// No session parked → fall through to the regular path below
-		// so a debug worker can still observe its own Designer-side
+		// so a debug worker can still observe its own Studio-side
 		// connection on a thread that was bound separately.
 	}
 
@@ -1421,7 +1421,7 @@ void ibSession::WakeDebugLoop()
 	// Step 2 — flip the debug-park flag and notify the per-session CV
 	// so a script worker parked in ibDebuggerServer::DoDebugLoop
 	// returns immediately. Mirrors the per-session wake performed by
-	// ibDebuggerServer::WakeDebugSession on designer disconnect — same
+	// ibDebuggerServer::WakeDebugSession on studio disconnect — same
 	// graceful LeaveLoop is sent on the wire when the loop unwinds.
 	m_debug.m_debugLoop = false;
 	std::lock_guard<std::mutex> lk(m_debug.m_mutex);
@@ -1596,7 +1596,7 @@ ibSession::OpenResult ibSession::Open(const ibString& user, const ibString& pass
 		//   1. OnFirstConnect listeners, on the first auth (the base's
 		//      application ran as it opened, before anybody came in).
 		//   2. session->AcquireMetaData + EnsureRoot — the session's own reference
-		//      to it (a designer's: one of its own), and the per-session root mm
+		//      to it (a studio's: one of its own), and the per-session root mm
 		//      allocated over it NOW so step 3's listeners can rely on
 		//      GetManagerModule() != null.
 		//   3. OnAuthenticated listeners — per-session bring-up

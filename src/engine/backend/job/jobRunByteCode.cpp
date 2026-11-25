@@ -41,7 +41,7 @@ namespace {
 // would break; the name stays as long as the run is held.
 //
 // ⚠ THE RUNS ARE THE MANAGER'S, not kept here and not at the tool: ibJobManager holds every run it started,
-// the active ones and the last ones that ended (ibJobManager::GetBackgroundJobs). A designer that reconnects, or a second
+// the active ones and the last ones that ended (ibJobManager::GetBackgroundJobs). A studio that reconnects, or a second
 // assistant on the same application, can still ask after a run somebody else started; one that dropped out
 // of the manager's list answers as unknown, as one that never existed does.
 //
@@ -163,11 +163,11 @@ bool ibJobRunByteCode::Start(const ibJobRunRequest& request, ibJobRunByteCodeSta
 	}
 
 	// ⚠ THE SAME WALL THE TOOL CHECKS FOR, CHECKED AGAIN WHERE IT IS TRUE. The tool refuses in a
-	// designer because it knows it is one; this end refuses because a request may arrive over the
+	// studio because it knows it is one; this end refuses because a request may arrive over the
 	// wire from anywhere, and a guard that only exists at the caller is a guard the next caller
 	// misses.
-	if (appData != nullptr && appData->DesignerMode()) {
-		state.m_refusal = _("Running code: a designer builds no runtime, so there is nothing here to "
+	if (appData != nullptr && appData->StudioMode()) {
+		state.m_refusal = _("Running code: a studio builds no runtime, so there is nothing here to "
 			"run application code in");
 		return false;
 	}
@@ -207,7 +207,7 @@ bool ibJobRunByteCode::Start(const ibJobRunRequest& request, ibJobRunByteCodeSta
 		// what makes the code able to do anything: `Catalogs`, `Documents`, the metatype collections,
 		// every shared module and the platform's own global functions are names on the root, and a
 		// compile without it produces a program that resolves nothing. Same recipe as the syntax
-		// check uses in the designer (`ibCheckScript`, compiler/scriptCheck.cpp).
+		// check uses in the studio (`ibCheckScript`, compiler/scriptCheck.cpp).
 		//
 		// 🛑 AND THE CODE ARRIVES AS TEXT, not as bytecode, which is the whole reason this compile is
 		// here. Sending compiled bytecode WORKS — it was built that way first and measured running,

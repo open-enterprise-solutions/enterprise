@@ -3,7 +3,7 @@
 
 // THE REGISTRATION JOURNAL — the menu item of that name (the desktop's OnAuditLog), as the server holds it: not a
 // dialog but a tab, which its command opens (ibAuditLogDocument); its rows are read by the tab's own view. Shared by
-// every mode — the designer's Administration and the runtime's opened the same tab.
+// every mode — the studio's Administration and the runtime's opened the same tab.
 
 #include "clientSchema.h"
 

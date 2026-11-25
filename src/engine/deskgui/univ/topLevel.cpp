@@ -462,7 +462,7 @@ void ibTopLevelWindow<W>::DoSetClientSize(int width, int height)
     // area again and added its bars to it (2026-11-11). Nor the native window's: GTK's and Cocoa's (wxWindowGTK,
     // wxWindowMac) measure what to add by the virtual GetClientSize - this one's, the decorations and the bars taken
     // off already - and added them a second time, the main frame some 80 pixels taller than asked and the clamp above
-    // undone (CI look-macos 2026-11-13: the designer 760 high on the 768 screen, its title bar and menu under the
+    // undone (CI look-macos 2026-11-13: the studio 760 high on the 768 screen, its title bar and menu under the
     // system's menu bar); wxMSW's measured the native client area itself, the same as here
     this->SetSize(size + (this->GetSize() - GetFrameRect().GetSize()));
 }

@@ -110,7 +110,7 @@ bool ibPropertyChoiceParameters::WriteNodeValue(ibDataValue& value) const
 
 ////////////////////////////////////////////////////////////////////////
 
-#include "protocol/protocolDesigner.h"         // ibProtocol::ibSchema::ibProperties — the row's keys
+#include "protocol/protocolStudio.h"         // ibProtocol::ibSchema::ibProperties — the row's keys
 #include "backend/backend_picture.h"   // ibBackendPicture::SendPicture — a type's, a field's picture, by its id
 #include "backend/metaData.h"          // GetIDObjectFromMetaID — the class a target's reference is registered under
 #include "backend/choiceLinkResolver.h" // CanGovern — which fields beside it may govern a link

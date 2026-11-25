@@ -253,7 +253,7 @@ ibFrameCodeRunner::ibFrameCodeRunner(wxWindow* parent, wxWindowID id, const wxSt
 	Connect(wxID_PASTE,     wxEVT_MENU, wxCommandEventHandler(ibFrameCodeRunner::OnMenuEdit));
 	Connect(wxID_SELECTALL, wxEVT_MENU, wxCommandEventHandler(ibFrameCodeRunner::OnMenuEdit));
 
-	// Top toolbar — same command set as designer's module-editor
+	// Top toolbar — same command set as studio's module-editor
 	// docview minus document-only items (Goto line / Procedures &
 	// functions don't apply without a backing module). The desktop's toolbar, as frmclient's are: ibAuiToolBar in the
 	// Luna art, at the top of the window's sizer.

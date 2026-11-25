@@ -10,8 +10,8 @@
 
 void ibFieldViewSlider::OnUpdate(ibDataNode& state, ibVisualHost* host)
 {
-	// The value, read through the binding. Not in the designer: there the thumb stands at the start.
-	if (appData->DesignerMode())
+	// The value, read through the binding. Not in the studio: there the thumb stands at the start.
+	if (appData->StudioMode())
 		return;
 
 	ibValue value;

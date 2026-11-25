@@ -47,7 +47,7 @@
 #include "frmclient/win/dlgs/search.h"
 #include "frmclient/win/dlgs/selectData.h"   // ibDialogSelectDataType — the server's choice of one, with pictures
 #include "frmclient/win/dlgs/typeSelector.h"
-#include "protocol/protocolDesigner.h"   // ibProtocol::ibSchema::ibProperties — how the types offered are named (Classes)
+#include "protocol/protocolStudio.h"   // ibProtocol::ibSchema::ibProperties — how the types offered are named (Classes)
 #include "frmclient/win/dlgs/jobSchedule/jobScheduleSettings.h"
 #include "frmclient/win/editor/gridEditor/gridPrintout.h"   // a script's sheet printed — and the preview's page (ApplyFitToPageWidth)
 #include "frmclient/win/dlgs/settings/savedSettings.h"
@@ -81,7 +81,7 @@ constexpr int kSchemaCommandMenuIds     = 32;   // the ids a schema's commands t
 constexpr int kLastMenuId               = wxID_HIGHEST + 6999;
 
 // The Window menu's Close All — ibAuiMDIParentFrame's own id, which tabmdi.cpp keeps to itself (the desktop designer's
-// mainFrameDesignerMenu.cpp names it as well).
+// mainFrameStudioMenu.cpp names it as well).
 constexpr int kWindowCloseAllId = 4002;
 
 // The Window menu out of a bar BY THE MENU — wx's RemoveWindowMenu looks for it by `_("&Window")` as said at that moment.
@@ -100,20 +100,20 @@ void RemoveWindowMenuOf(wxMenuBar* bar, wxMenu* windowMenu)
 }
 
 // The person's options files, beside the desktop designer's options.xml: the thin client's commands go by other ids.
-// One for each mode: a font or a key set in the application does not move the designer's.
+// One for each mode: a font or a key set in the application does not move the studio's.
 constexpr const wxChar* kOptionsFile = wxT("options-thin.xml");
 constexpr const wxChar* kApplicationOptionsFile = wxT("options-thin-application.xml");
 
 // THE THEME, the client's own (ibProtocol::ibSchema::ibKind::Style — the server keeps nothing of it): wx's appearance by
 // its number — 0 as the machine is set, 1 light, 2 dark (wxApp::Appearance), in the order Tools → Theme... lists them.
 // None chosen: the machine's. The program's own (Max, 2026-11-24): wxConfig is the program's, so the application and
-// the designer each keep theirs; the window is built in it as it starts (the frame's constructor).
+// the studio each keep theirs; the window is built in it as it starts (the frame's constructor).
 constexpr const wxChar* kThemeEntry = wxT("Theme");
 
 wxFileName GetOptionsFile(ibProtocol::ibLogin::ibMode mode)
 {
 	wxFileName fileName(wxStandardPaths::Get().GetUserDir(wxStandardPaths::Dir::Dir_Cache),
-		mode == ibProtocol::ibLogin::ibMode::Designer ? kOptionsFile : kApplicationOptionsFile);
+		mode == ibProtocol::ibLogin::ibMode::Studio ? kOptionsFile : kApplicationOptionsFile);
 	fileName.AppendDir(wxT("OES"));
 	return fileName;
 }
@@ -324,7 +324,7 @@ ibFrontendMainFrame::ibFrontendMainFrame(std::unique_ptr<ibCommunicator> communi
 		wxTheApp->SetTopWindow(this);
 	}
 
-	// Its templates are the server's — a mode's own among them, the designer's metaobjects', the runtime's external data
+	// Its templates are the server's — a mode's own among them, the studio's metaobjects', the runtime's external data
 	// tool and report (DrawTemplates).
 	SetDocumentManager(new ibFrontendDocManager);
 
@@ -358,7 +358,7 @@ ibFrontendMainFrame::~ibFrontendMainFrame()
 		s_instance = nullptr;
 
 	// ⚠ THE SLOT GOES BEFORE THE CHILDREN: they die after this body (~wxWindow), the inspector among them and in any
-	// order — a metaobject the designer's tree holds asks the slot as it dies (~ibPropertyObject → GetProperty), and met
+	// order — a metaobject the studio's tree holds asks the slot as it dies (~ibPropertyObject → GetProperty), and met
 	// an inspector already freed (an exit, 2026-10-14). Unhooked, the two settle it between them (the notifier).
 	m_objectInspector = nullptr;
 
@@ -840,7 +840,7 @@ bool ibFrontendMainFrame::Show(bool show)
 	}
 	SetFocus();
 	Raise();
-	// …and the messages its start said, opened below — the desktop's (ibFrontendMainFrameEnterprise::Show): drawn before
+	// …and the messages its start said, opened below — the desktop's (ibFrontendMainFrameWorkspace::Show): drawn before
 	// the window was shown, they took no focus (ibOutputWindow::Output).
 	if (m_outputWindow != nullptr && !m_outputWindow->IsEmpty())
 		m_outputWindow->SetFocus();
@@ -1016,7 +1016,7 @@ void ibFrontendMainFrame::ShowOptions(ibProtocol::ibSchema::ibKind schema, const
 	dialog.GetFontColorSettingsPanel()->SetSettings(m_fontColorSettings);
 	dialog.GetEditorSettingsPanel()->SetSettings(m_editorSettings);
 
-	// ASSISTANT ACCESS, for whom it is given: the designer's item is its schema, shown already; the application's item is
+	// ASSISTANT ACCESS, for whom it is given: the studio's item is its schema, shown already; the application's item is
 	// Debugging, so it is asked there. Its settings lie on this machine.
 	ibMcpServer* const mcpServer = schema == ibProtocol::ibSchema::ibKind::McpServer
 		? ibApplicationInstance::GetMcpServer(shown) : ibApplicationInstance::GetMcpServer();
@@ -1407,7 +1407,7 @@ void ibFrontendMainFrame::Settle(const ibProtocolNode& answer)
 {
 	// The client's part of a call, beside its exchange (the communicator's line): the window drawn from the answer.
 	const wxLongLong began = wxGetUTCTimeMillis();
-	// The pictures it names asked for at once, before a part of the window asks for its own: the designer's start was two
+	// The pictures it names asked for at once, before a part of the window asks for its own: the studio's start was two
 	// picture exchanges, the templates' and the tree's.
 	ibProtocolPictureReceive(answer);
 	Draw(answer);
@@ -1462,7 +1462,7 @@ void ibFrontendMainFrame::TakeChosen(const ibProtocolNode& asked)
 
 bool ibFrontendMainFrame::ChooseValue(ibControlFrame* owner, const ibTypeDescription& type, const ibValue& current)
 {
-	// ⭐ NO WINDOW ASKS — the cell is on the active tab (a designer's composer panel; 2026-10-29: a parameter's "..." and a
+	// ⭐ NO WINDOW ASKS — the cell is on the active tab (a studio's composer panel; 2026-10-29: a parameter's "..." and a
 	// condition's opened nothing): the same act goes to the tab, whose view chooses through the application there.
 	const bool asking = !m_asking.empty() && IsSettingsRequest(GetRequest());
 	const long long tab = asking ? 0 : GetActiveTab();
@@ -1570,7 +1570,7 @@ void ibFrontendMainFrame::ShowRequest(const ibProtocolNode& request, ibProtocolN
 		ibDialogError dialog(this);
 		dialog.SetErrorMessage(request.GetString(ibProtocol::ibRequest::ibError::Text));
 		const int act = dialog.ShowModal();
-		if (act == static_cast<int>(ibProtocol::ibRequest::ibError::ibAct::CloseWindow) || act == static_cast<int>(ibProtocol::ibRequest::ibError::ibAct::GotoDesigner)
+		if (act == static_cast<int>(ibProtocol::ibRequest::ibError::ibAct::CloseWindow) || act == static_cast<int>(ibProtocol::ibRequest::ibError::ibAct::GotoStudio)
 			|| act == static_cast<int>(ibProtocol::ibRequest::ibError::ibAct::CloseProgram))
 			response.SetValue(ibProtocol::ibRequest::ibError::Act, act);
 		break;
@@ -2156,7 +2156,7 @@ void ibFrontendMainFrame::OnCloseWindow(wxCloseEvent& event)
 		return;
 	}
 
-	// Marked WHO is asking, for the whole of AllowClose — a mode's own questions before the base's too (the designer's
+	// Marked WHO is asking, for the whole of AllowClose — a mode's own questions before the base's too (the studio's
 	// Save?): a refusal said while the window is closing does not close it a second time.
 	if (!force) {
 		m_closingWindow = true;

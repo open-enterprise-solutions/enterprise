@@ -78,7 +78,7 @@ void ibAssistantView::BuildLayout(wxWindow* parent)
 	splitter->SetMinimumPaneSize(80);
 
 	// GROWTH GOES TO THE CONVERSATION. Gravity 1.0 means the TOP pane takes the
-	// space when the window is resized, so enlarging the designer enlarges what
+	// space when the window is resized, so enlarging the studio enlarges what
 	// there is to read rather than the box you type one line into.
 	splitter->SetSashGravity(1.0);
 
@@ -189,14 +189,14 @@ void ibAssistantView::OnUpdate(ibFrontendView* WXUNUSED(sender), wxObject* WXUNU
 		return;
 
 	// THE PLATFORM'S FONT, not this window's idea of one — the same settings the
-	// code editor and the output window take, so the designer looks like one
+	// code editor and the output window take, so the studio looks like one
 	// program. The transcript and the input box share it: two panes of one
 	// conversation in two typefaces reads as two programs.
 	//
 	// ⚠ AND ASKED WHETHER IT IS A FONT AT ALL. The settings come from the
 	// options file, and on a machine that has never saved one GetFont() answers
 	// a default-constructed wxFont — not a small font, NOT A FONT. Scintilla
-	// takes it apart without checking and the designer dies opening this tab
+	// takes it apart without checking and the studio dies opening this tab
 	// (crash of 2026-08-30, StyleSetFont at the top of the stack). An absent
 	// setting is an ordinary state, not an error, so it gets an answer rather
 	// than a guard that hides the window.

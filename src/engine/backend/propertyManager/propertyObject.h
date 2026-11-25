@@ -352,7 +352,7 @@ protected:
 	//
 	// `accept` narrows the classes when belonging to one is not enough — a document posts only to
 	// registers that HAVE A RECORDER, a rule that lived inside one of those front-side fill loops and
-	// would have been lost bringing the classes down, leaving a list wider than the designer's own.
+	// would have been lost bringing the classes down, leaving a list wider than the studio's own.
 	//
 	// ⚠ A PLAIN FUNCTION POINTER, so a captureless lambda goes straight in with no std::function
 	// between them — and nothing is added to the base for the properties that have no such rule.

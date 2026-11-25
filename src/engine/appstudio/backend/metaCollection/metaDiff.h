@@ -5,7 +5,7 @@
 
 #include <vector>
 
-// THE ENGINE'S COMPARISON (backend/metaCollection/metaDiff.h) AS THE THIN DESIGNER'S COMPARE TAB NAMES IT
+// THE ENGINE'S COMPARISON (backend/metaCollection/metaDiff.h) AS THE STUDIO'S COMPARE TAB NAMES IT
 // (appstudio/mainFrame/applicationCompare): the record and its status whole. Records arrive from schema ApplicationCompare
 // Build (the server's Walk); m_left/m_right stay null — Name, Picture, LeftId, RightId and the side strings name each row.
 //
@@ -150,7 +150,7 @@ public:
 	// synthetic group rows under every paired object, partitioning its
 	// children by CLSID, so the result mirrors the standard metadata-
 	// tree shape (Catalogs / Documents / Attributes / ...).
-	// The walk is the server's (schema ApplicationCompare Build). The thin designer never walks local trees — the client's
+	// The walk is the server's (schema ApplicationCompare Build). The studio never walks local trees — the client's
 	// metaobjects hold no children. Kept so the header matches the engine's; callers use wire Records instead.
 	static std::vector<ibMetaDiffRecord> Walk(
 		ibValueMetaObject* WXUNUSED(leftRoot),
@@ -176,7 +176,7 @@ public:
 
 	// Canonical sort rank for a group CLSID. Lower rank = appears first
 	// in the standard metadata tree (see treeApplication_impl.cpp).
-	// Used by the walker to emit groups in the same order the designer
+	// Used by the walker to emit groups in the same order the studio
 	// shows them. Unknown CLSIDs sort after the known ones.
 	// The two rows the comparison adds itself ahead; a metatype's declared place (the engine's ibMetaGroupOrder) is the
 	// server's walk's.

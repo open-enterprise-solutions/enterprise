@@ -365,8 +365,8 @@ const ibLexem& ibParseCode::GetLexem()
 /**
  * PreviewGetLexem
  *   Peek the next non-trivial lexem without advancing the cursor.
- *   Skips both ';' and '\n' delimiters — same designer-side behaviour
- *   as the designer-side precompiler did, before it was removed.
+ *   Skips both ';' and '\n' delimiters — same studio-side behaviour
+ *   as the studio-side precompiler did, before it was removed.
  */
 const ibLexem& ibParseCode::PreviewGetLexem()
 {

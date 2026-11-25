@@ -150,7 +150,7 @@ void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost::OnResizeBackPan
 
 bool ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost::OnLeftClickFromApp(wxWindow* currentWindow)
 {
-	// A TOOL OF A COMMAND BAR — the bar's command it runs is selected, as the desktop's bar did in the designer
+	// A TOOL OF A COMMAND BAR — the bar's command it runs is selected, as the desktop's bar did in the studio
 	// (BuildCommandBarToolBar: SelectPropertyObject of FindItemByCommandId); a standard command is no item of the bar —
 	// the bar's owner then, as a click on the bar elsewhere.
 	if (ibValueFrame* const barOwner = GetCommandBarOwner(currentWindow)) {

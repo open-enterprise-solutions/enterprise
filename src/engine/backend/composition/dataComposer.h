@@ -735,7 +735,7 @@ public:
 	// which has one output and says so at the call instead of setting it beforehand.
 	bool Run() {
 		// ONE VIEW OF THE FEATURE OPTIONS FOR THE WHOLE RUN — what every output asks (IsAvailable) is
-		// answered as the application answers it, and in the designer from one reading of the base.
+		// answered as the application answers it, and in the studio from one reading of the base.
 		const ibFeatureOptionGate::AsApplication asTheApplication;
 
 		bool read = false;
@@ -798,7 +798,7 @@ public:
 	//  ⭐⭐ ONE LEVEL OF A GROUPING **IS** ITS DESCRIPTION (Max, 2026-08-23: "finish it"). It carried
 	//  every field the stored level carries — its kind, what it folds by, selected/available with
 	//  their auto flags, its own filter and sort — under a second set of names, so a level had two
-	//  shapes and the designer's edits landed in the one the file never saw. What sat here beside
+	//  shapes and the studio's edits landed in the one the file never saw. What sat here beside
 	//  them was DERIVED: a flat FilterItem list nothing ever filled (Filter() writes the
 	//  composition-wide one), and the AST built from the filter with a version counter to say it was
 	//  fresh. An expression built from a description is not a second state to keep.
@@ -814,7 +814,7 @@ public:
 	//
 	// Everything else it used to declare — the name, the row and column groupings, selected and
 	// available with their auto flags, its own filter and sort, the source it may read — is exactly
-	// what ibOutputDescription holds, and holding it twice is how a structure edited in the designer
+	// what ibOutputDescription holds, and holding it twice is how a structure edited in the studio
 	// never reached the file (Max, 2026-08-23). Stored by INHERITING the description: assigning the
 	// base part in is loading, slicing it out is saving, and neither is a copy loop that can drift.
 	//
@@ -1278,7 +1278,7 @@ protected:
 	//
 	// ⭐ THE ARRAY IS SERIALISED AND THE READER'S SETTING IS NOT. Not by this class — the composer is
 	// never written anywhere: the array's content IS the description's, loaded when the source is
-	// built and saved back through the description when an AUTHOR edits it in the designer. What a
+	// built and saved back through the description when an AUTHOR edits it in the studio. What a
 	// reader saves has no file and no description: it stands while the report is open and is gone
 	// with it.
 
@@ -1316,7 +1316,7 @@ public:
 	// temp table's for the select that made it), the RAM one the columns of its storage. A grouping or a
 	// selected field on an unavailable one is not printed; a filter or a sort on one still applies — it shows
 	// nothing. Answered as the application answers it, wherever the composer runs: a run shows what the base
-	// uses, and "the designer sees everything" is for what an author edits.
+	// uses, and "the studio sees everything" is for what an author edits.
 	//
 	// The door takes the path as the settings keep it, a dotted line, and lays it out as HOPS once
 	// (ibQueryColumnFromPath); a composer answers for the hops, from the source's own field on. Last in the

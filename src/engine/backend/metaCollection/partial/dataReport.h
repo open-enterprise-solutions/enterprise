@@ -95,7 +95,7 @@ public:
 	virtual bool OnSaveMetaObject(int flags);
 	virtual bool OnDeleteMetaObject();
 
-	//for designer
+	//for studio
 	virtual bool OnReloadMetaObject();
 
 	//module manager is started or exit

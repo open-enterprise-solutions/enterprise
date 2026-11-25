@@ -18,7 +18,7 @@
 namespace {
 
 wxString BuildLaunchCommand(const wxString& exeName, const ibListInfo& info, ibLaunchSecrets& secrets) {
-	// The program beside this one — a flat build's designer beside launcher, a bundle's designer.app beside launcher.app
+	// The program beside this one — a flat build's studio beside launcher, a bundle's studio.app beside launcher.app
 	// (ibExecutablePath).
 	wxString cmd = wxT("\"") + wxString(ibExecutablePath(exeName)) + wxT("\"");
 	secrets = ibLaunchSecrets();
@@ -202,11 +202,11 @@ ibDialogLauncher::ibDialogLauncher(wxWindow* parent, wxWindowID id, const wxStri
 	wxBoxSizer* sizerRight = new wxBoxSizer(wxVERTICAL);
 
 	// The workspace twice - its window and the browser - then, apart, the studio.
-	m_buttonEnterprise = new ibButton(this, wxID_ANY, _("Workspace (GUI)"), wxDefaultPosition, wxDefaultSize, 0);
-	m_buttonEnterprise->SetBitmap(ibGetLauncherPicture(ibLauncherPicture::Enterprise));
-	m_buttonEnterprise->Bind(wxEVT_BUTTON, &ibDialogLauncher::OnButtonEnterprise, this);
+	m_buttonWorkspace = new ibButton(this, wxID_ANY, _("Workspace (GUI)"), wxDefaultPosition, wxDefaultSize, 0);
+	m_buttonWorkspace->SetBitmap(ibGetLauncherPicture(ibLauncherPicture::Workspace));
+	m_buttonWorkspace->Bind(wxEVT_BUTTON, &ibDialogLauncher::OnButtonWorkspace, this);
 
-	sizerRight->Add(m_buttonEnterprise, 0, wxALL | wxEXPAND, FromDIP(5));
+	sizerRight->Add(m_buttonWorkspace, 0, wxALL | wxEXPAND, FromDIP(5));
 
 	m_buttonWeb = new ibButton(this, wxID_ANY, _("Workspace (Web)"), wxDefaultPosition, wxDefaultSize, 0);
 	m_buttonWeb->SetBitmap(ibGetLauncherPicture(ibLauncherPicture::Web));
@@ -215,11 +215,11 @@ ibDialogLauncher::ibDialogLauncher(wxWindow* parent, wxWindowID id, const wxStri
 	sizerRight->Add(m_buttonWeb, 0, wxALL | wxEXPAND, FromDIP(5));
 	sizerRight->AddSpacer(FromDIP(10));
 
-	m_buttonDesigner = new ibButton(this, wxID_ANY, _("Studio (GUI)"), wxDefaultPosition, wxDefaultSize, 0);
-	m_buttonDesigner->SetBitmap(ibGetLauncherPicture(ibLauncherPicture::Designer));
-	m_buttonDesigner->Bind(wxEVT_BUTTON, &ibDialogLauncher::OnButtonDesigner, this);
+	m_buttonStudio = new ibButton(this, wxID_ANY, _("Studio (GUI)"), wxDefaultPosition, wxDefaultSize, 0);
+	m_buttonStudio->SetBitmap(ibGetLauncherPicture(ibLauncherPicture::Studio));
+	m_buttonStudio->Bind(wxEVT_BUTTON, &ibDialogLauncher::OnButtonStudio, this);
 
-	sizerRight->Add(m_buttonDesigner, 0, wxALL | wxEXPAND, FromDIP(5));
+	sizerRight->Add(m_buttonStudio, 0, wxALL | wxEXPAND, FromDIP(5));
 	sizerRight->Add(0, 0, 1, wxEXPAND, FromDIP(5));
 
 	m_buttonAdd = new ibButton(this, wxID_ANY, _("Add"), wxDefaultPosition, wxDefaultSize, 0);
@@ -280,7 +280,7 @@ void ibDialogLauncher::OnSelectedList(wxCommandEvent& event) {
 	m_staticDBName->SetLabel(FormatInfoLabel(itSelection->second));
 }
 
-// ONE ROAD TO START AN APPLICATION — the double click, Enterprise and Designer were three copies of it.
+// ONE ROAD TO START AN APPLICATION — the double click, Enterprise and Studio were three copies of it.
 void ibDialogLauncher::StartApplication(const wxString& appName) {
 	int selection = m_listIBwnd->GetSelection();
 	if (selection == wxNOT_FOUND) return;
@@ -290,7 +290,7 @@ void ibDialogLauncher::StartApplication(const wxString& appName) {
 
 	// ⭐ A START THAT FAILED IS SAID, AND THE LAUNCHER STAYS. The spawn answers 0 when nothing was started; the
 	// launcher used to close regardless, so a missing executable looked exactly like a click that did nothing —
-	// which is how the designer "would not start" on a Mac with nothing on screen to say why.
+	// which is how the studio "would not start" on a Mac with nothing on screen to say why.
 	if (ibStartProcess(executeCmd, secrets) == 0) {
 		ibMessageBox(ibString::Format(_("Could not start %s.\n\n%s"), appName, executeCmd),
 			_("Launch OES"), wxOK | wxICON_ERROR, this);
@@ -303,11 +303,11 @@ void ibDialogLauncher::OnSelectedDClickList(wxCommandEvent& event) {
 	StartApplication(wxT("appworkspace"));
 }
 
-void ibDialogLauncher::OnButtonEnterprise(wxCommandEvent& event) {
+void ibDialogLauncher::OnButtonWorkspace(wxCommandEvent& event) {
 	StartApplication(wxT("appworkspace"));
 }
 
-void ibDialogLauncher::OnButtonDesigner(wxCommandEvent& event) {
+void ibDialogLauncher::OnButtonStudio(wxCommandEvent& event) {
 	StartApplication(wxT("appstudio"));
 }
 

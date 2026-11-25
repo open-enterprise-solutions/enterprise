@@ -180,7 +180,7 @@ void ibCompileCode::Reset()
 	m_listHashConst.clear();
 	m_listCallFunc.clear();
 
-	// 🛑 AND THE COMPILE-TIME SCRATCH, because this object is REUSED — Recompile, the designer
+	// 🛑 AND THE COMPILE-TIME SCRATCH, because this object is REUSED — Recompile, the studio
 	// rebuilding a module. A parked chain position that survived a refusal would be consumed by the
 	// next module's first `foreach`, whose verbs it does not describe. The arming itself cannot leak
 	// (ibLinqSourceScope disarms on every exit); this is the other half, and it costs one store.
@@ -1995,8 +1995,8 @@ ibParamUnit ibCompileCode::CompileLambdaExpression(ibCompileContext* context)
 			ibBuildLambdaQueryAstFromCode(m_cByteCode, funcIndex, &refused, nameOfOuter);
 
 		// 🛑 AT INFO, NOT WARNING. A warning in this engine reaches wxLogGui and comes back as a
-		// MODAL dialog — measured: one line on a half-typed lambda put a 'Designer Warning' box on
-		// screen and every request after it was refused because the designer was waiting on it.
+		// MODAL dialog — measured: one line on a half-typed lambda put a 'Studio Warning' box on
+		// screen and every request after it was refused because the studio was waiting on it.
 		// ⚠ ASCII only in this line: a non-ASCII dash in a wxT() literal reaches the journal as
 		// mojibake, and a diagnostic nobody can read is worse than a plainer one.
 		ibJournalInfo(ibT("linq"), ibT("lambda `%s` at %d: %s"),

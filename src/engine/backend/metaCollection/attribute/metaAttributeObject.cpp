@@ -202,7 +202,7 @@ bool ibValueMetaObjectAttributeBase::OnAfterRunMetaObject(int flags)
 // start. Nothing refuses, nothing warns; a read-back in the same session shows it set.
 //
 // MEASURED 2026-09-23: the link by type and the choice parameters were set, saved, applied, and read
-// back EMPTY after the designer was restarted — so every battery over them narrowed nothing and
+// back EMPTY after the studio was restarted — so every battery over them narrowed nothing and
 // cleared nothing, and it looked like the mechanism being broken rather than the value being absent.
 // Whenever a property is added above, it is added HERE in the same change.
 bool ibValueMetaObjectAttribute::ReadData(const ibDataNode& node)

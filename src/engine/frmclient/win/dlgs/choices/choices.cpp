@@ -7,7 +7,7 @@
 #include "frmclient/win/dlgs/rowValueCell.h"                      // the Value cell of a typed value: a report parameter's
 #include "deskgui/univ/dataview/dataviewEditOnActivate.h"         // …and the one way a cell opens on a double-click
 #include "deskgui/univ/dataview/dvrenderers.h"                    // the Value cell of a finite type: picked
-#include "protocol/protocolDesigner.h"                            // ibProtocol::ibSchema::ibProperties — the row's keys
+#include "protocol/protocolStudio.h"                            // ibProtocol::ibSchema::ibProperties — the row's keys
 
 #include <algorithm>
 #include <wx/sizer.h>

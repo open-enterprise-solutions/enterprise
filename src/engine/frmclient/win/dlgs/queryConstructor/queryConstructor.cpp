@@ -341,7 +341,7 @@ bool ibDialogQueryConstructor::IsMetaDataReadOnly(const ibMetaData* metaData)
 	if (metaData == nullptr)
 		return false;   // no application in play (a runtime list's own query) — nothing forbids editing it
 
-	// The DESIGNER question, asked where it is already answered — OF THE APPLICATION. Read-only is
+	// The STUDIO question, asked where it is already answered — OF THE APPLICATION. Read-only is
 	// a fact about the application, not about who happens to be showing it, so it is kept there
 	// and nobody is asked back (metaData.h, SetReadOnly).
 	return !metaData->IsEditable();

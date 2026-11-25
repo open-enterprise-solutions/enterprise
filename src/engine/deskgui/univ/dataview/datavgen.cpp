@@ -5049,11 +5049,11 @@ void ibDataViewCtrl::CalcWindowSizes()
 		// Set ONLY the x-rate; preserve the current y-rate.  Forcing a y-rate
 		// here would enable the vertical scrollbar for controls that never had
 		// one (y-rate stays 0 until RecalculateDisplay sets it), making it pop
-		// up spuriously — e.g. the small designer tablebox preview where any
+		// up spuriously — e.g. the small studio tablebox preview where any
 		// content overflows the tiny rows area.  Vertical stays owned by
 		// RecalculateDisplay (non-paged) / the lying paged scrollbar (paged).
 		// Apply synchronously, NOT deferred to idle.  Deferring the scrollbar
-		// geometry to OnInternalIdle crashed / glitched designer column-add and
+		// geometry to OnInternalIdle crashed / glitched studio column-add and
 		// resize: the deferred AdjustScrollbars ran a tick later, after the
 		// column array / control state had already moved on.  Set ONLY the
 		// x-rate; preserve the current y-rate (see rationale above).
@@ -5761,14 +5761,14 @@ void ibDataViewCtrl::OnColumnResized()
 //
 // Only the x-rate is touched, deliberately: forcing a y-rate would raise a vertical
 // scrollbar on controls that never had one (it stays 0 until RecalculateDisplay sets it) —
-// the small tablebox preview in the designer, for one.
+// the small tablebox preview in the studio, for one.
 // THE BAR ON THE NEXT FRAME, AND ONCE PER FRAME. Whoever changes the widths says so and goes
 // on; idle serves the request, so twenty mouse-moves between two repaints cost one cascade.
 //
 // It also makes the two hosts behave alike. The bar used to appear during a drag in the thick
-// client and only on release in the Designer — same control, same table: the client's form was
+// client and only on release in the Studio — same control, same table: the client's form was
 // getting a size cascade from its own layout that re-derived the bar as a side effect, and the
-// Designer's dialog was not. Asking the control itself for the frame depends on nobody's layout.
+// Studio's dialog was not. Asking the control itself for the frame depends on nobody's layout.
 void ibDataViewCtrl::RequestScrollbarSync()
 {
 	m_scrollSyncPending = true;

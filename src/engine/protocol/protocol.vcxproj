@@ -150,7 +150,7 @@
     <ClInclude Include="connectionServer.h" />
     <ClInclude Include="protocol.h" />
     <ClInclude Include="protocolApi.h" />
-    <ClInclude Include="protocolDesigner.h" />
+    <ClInclude Include="protocolStudio.h" />
     <ClInclude Include="protocolNode.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

@@ -100,10 +100,10 @@ ibDataDBComposer& ibDataDBComposer::FromText(const ibString& text)
 // available, what it is called, and what it is in a balance.
 void ibDataDBComposer::RefreshSourceFields()
 {
-	// ⭐ A RUN SHOWS WHAT THE BASE USES, WHOEVER RUNS IT — the application, or the designer answering for what a
-	// person sees (compose_run). The designer's own rule ("it sees everything") is for what an author EDITS, not
+	// ⭐ A RUN SHOWS WHAT THE BASE USES, WHOEVER RUNS IT — the application, or the studio answering for what a
+	// person sees (compose_run). The studio's own rule ("it sees everything") is for what an author EDITS, not
 	// for what a composition produces, so the composer works this out as the application does, by itself — no
-	// caller asks for it (2026-09-28: warehouses printed through the designer).
+	// caller asks for it (2026-09-28: warehouses printed through the studio).
 	const ibFeatureOptionGate::AsApplication asTheApplication;
 
 	m_sourceFields.reset();
@@ -519,7 +519,7 @@ ibDataComposer& ibDataComposer::ClearUserSettings()
 // variants are not changed through the settings — you hand them out as a constant, they are only
 // copied; the user setting is the one you take and set"*). That is why there is no mutable door to
 // an element of this array anywhere on this class: a settings window COPIES what composes, edits the
-// copy, and hands it back as the READER's setting. The author's array changes in the designer, on
+// copy, and hands it back as the READER's setting. The author's array changes in the studio, on
 // the description, and reaches a composer only through here.
 //
 // A record can say anything; the invariant that `[0]` exists is ours.

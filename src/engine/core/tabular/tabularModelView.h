@@ -485,7 +485,7 @@ public:
 	// flat record + parent lookup uses an external index).
 	//
 	// (A single GetDataViewInfo(item) -> {container, hasChildren, …} door would be better than one
-	//  virtual per question — but this one has eight overriders across the designer, the dataview
+	//  virtual per question — but this one has eight overriders across the studio, the dataview
 	//  controls and the filter tree, so collapsing it is its own piece of work, not a side effect.)
 	//
 	// The empty (invisible) root is always treated as a container so
@@ -596,7 +596,7 @@ public:
 	// model class. `flags` is a bitset; defaults mean "feature absent". Wiring (today, all READ):
 	// * Filters / Sorting / Grouping — the list-settings dialog shows/hides its tabs by these; Sorting also lets
 	//   the column header click-sort.
-	// * CustomQuery — capability marker; the query is edited in the DESIGNER, not the runtime dialog.
+	// * CustomQuery — capability marker; the query is edited in the STUDIO, not the runtime dialog.
 	// What this struct deliberately does NOT carry — all DERIVED now (Max: "a single fetch through RunComposerPage;
 	// tree-ness is determined by grouping"):
 	// * Tree — tree-ness is whether the composer GROUPS (GetModelComposer().GroupCount() > 0).
@@ -609,7 +609,7 @@ public:
 			Filters   = 1u << 4,   // user filter is meaningful — show the Filter tab
 			Sorting   = 1u << 5,   // user column-sort is meaningful — header click reorders + show the Sort tab
 			Grouping  = 1u << 6,   // user grouping is meaningful — show the Group tab
-			CustomQuery = 1u << 7, // runs a verbatim author query ("custom query"); edited in the DESIGNER
+			CustomQuery = 1u << 7, // runs a verbatim author query ("custom query"); edited in the STUDIO
 			// (bits 0-3 intentionally free — retired Tree / Folders / RamFetch / DbFetch; keep positions stable)
 		};
 		uint32_t flags = 0;

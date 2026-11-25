@@ -36,7 +36,7 @@ public:
 	// The edited items — read after ShowModal() returns wxID_OK.
 	const ibChoicesDescription& GetChoices() const { return m_choices; }
 
-	// The designer's entry: the window over a Choices property, and whether its items changed. Mirrors
+	// The studio's entry: the window over a Choices property, and whether its items changed. Mirrors
 	// ibDialogChoiceParameters::ShowChoiceParametersDialog.
 	static bool ShowChoicesDialog(ibBackendProperty* property, ibChoicesDescription& choices);
 

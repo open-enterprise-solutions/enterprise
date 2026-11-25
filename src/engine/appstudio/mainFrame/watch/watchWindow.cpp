@@ -3,7 +3,7 @@
 #include <wx/dnd.h>
 
 #include "appstudio/backend/debugger/debugClient.h"
-#include "mainFrame/mainFrameDesigner.h"
+#include "mainFrame/mainFrameStudio.h"
 
 enum
 {
@@ -44,7 +44,7 @@ private:
 
 ibWatchWindow::ibWatchWindow(wxWindow* parent, wxWindowID id)
 	: ibTreeListCtrl(parent, id, wxDefaultPosition, wxDefaultSize,
-		// no lines between the nodes, as every other tree of the designer (treeApplication): a row of grey dots stood
+		// no lines between the nodes, as every other tree of the studio (treeApplication): a row of grey dots stood
 		// before the empty slot (2026-11-13, Max) - on Cocoa the control drops them itself
 		wxTR_HIDE_ROOT | wxTR_FULL_ROW_HIGHLIGHT | wxTR_ROW_LINES | wxTR_HAS_BUTTONS | wxTR_NO_LINES)
 {
@@ -78,7 +78,7 @@ ibWatchWindow::~ibWatchWindow()
 
 ibWatchWindow* ibWatchWindow::GetWatchWindow()
 {
-	return ibFrontendMainFrameDesigner::GetFrame() != nullptr ? mainFrame->GetWatchWindow() : nullptr;
+	return ibFrontendMainFrameStudio::GetFrame() != nullptr ? mainFrame->GetWatchWindow() : nullptr;
 }
 
 void ibWatchWindow::SetVariable(const ibWatchWindowData& watchData)
@@ -87,7 +87,7 @@ void ibWatchWindow::SetVariable(const ibWatchWindowData& watchData)
 	Freeze();
 	for (unsigned int i = 0; i < watchData.GetWatchCount(); ++i) {
 		// The id is a row of THIS tree: the bridge lets through only the answers to its own
-		// questions (ibDebuggerClientBridgeDesigner::OnSetVariable).
+		// questions (ibDebuggerClientBridgeStudio::OnSetVariable).
 		const wxTreeItemId item = GetWatchItem(watchData.GetItem(i));
 		if (!item.IsOk())
 			continue;

@@ -41,12 +41,12 @@ bool ibValueDatabaseLayer::CallAsFunc(const long lMethodNum, ibValue& pvarRetVal
 	// engine — the access policy, the row-level restrictions, the register rules; this one hands a
 	// script the session's raw connection, so what it runs is answered by nobody. That is a tool for
 	// the person who administers the data, and only for them: DataAdministration, the same right the
-	// designer's administration menu asks. (Nothing runs for the caret's walk anyway — it answers stubs.)
+	// studio's administration menu asks. (Nothing runs for the caret's walk anyway — it answers stubs.)
 	//
-	// ⭐ THE CARET'S WALK FOR COMPLETION RUNS NO SQL — in any editor, not only the designer's. It reaches
+	// ⭐ THE CARET'S WALK FOR COMPLETION RUNS NO SQL — in any editor, not only the studio's. It reaches
 	// these methods by CALLING them (and replays earlier calls on the same value), so a literal statement
 	// typed above the caret would be executed on Ctrl+Space; the stubs below are what it gets instead. Asked
-	// of the evaluation, not of the process: the designer runs no other script, and the frontend's editors
+	// of the evaluation, not of the process: the studio runs no other script, and the frontend's editors
 	// complete with the same walk in the client too — the composer's expression editor (census, 2026-10-01).
 	const bool completing = ibBackendException::IsEvalComplete();
 	if (!completing && activeMetaData != nullptr && !activeMetaData->AccessRight_DataAdministration())

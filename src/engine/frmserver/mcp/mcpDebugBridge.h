@@ -77,7 +77,7 @@ public:
 
 	// ⭐ THE RUN'S OUTPUT BUFFER — everything the application said since this was last emptied.
 	// It is the assistant's copy: the person already has these lines in the application's own
-	// window and does not want them in the designer, so nothing is announced as it arrives and the
+	// window and does not want them in the studio, so nothing is announced as it arrives and the
 	// buffer is read when there is a reason to.
 	std::vector<Printed> TakeOutput(bool clear);
 
@@ -140,7 +140,7 @@ public:
 	bool Compose(const ibDataNode& request, ibDataNode& result, bool& answered, ibString& refusal,
 		int timeoutMs = 120000);
 
-	// ⭐ THE PERSON'S MEASUREMENT of every session over there (ibRuntimeProfiler) — the one the designer's Debug menu
+	// ⭐ THE PERSON'S MEASUREMENT of every session over there (ibRuntimeProfiler) — the one the studio's Debug menu
 	// starts, so either side may begin it and either may end it. Starting answers false only when no runtime is
 	// attached. Stopping waits for what it measured — `measured` false when none was running. A false RETURN is nothing
 	// arrived in time.
@@ -209,7 +209,7 @@ private:
 	// m_mutex and never by an answer. The pending slot below holds ONE question, and nothing kept a second
 	// asker out of it: two MCP calls at once (two code_status polls, 2026-10-01) both set it, the first answer
 	// woke both, and one of them went away with the other's run. ONE IN THE PROCESS, not one a bridge: the debug
-	// client is the process's, an answer carries no asker and reaches every bridge, so two designers' assistants
+	// client is the process's, an answer carries no asker and reaches every bridge, so two studios' assistants
 	// asking at once would each take the other's.
 	static std::mutex       s_oneQuestion;
 
@@ -254,7 +254,7 @@ private:
 	unsigned long long      m_nextWatchId = 1;
 };
 
-// The bridge of the session this is asked in — each designer's assistant has its own. Null when no
+// The bridge of the session this is asked in — each studio's assistant has its own. Null when no
 // transport is listening, and for an application's person, who debugs nothing.
 FRMSERVER_API ibMcpDebugBridge* ibMcpDebug();
 

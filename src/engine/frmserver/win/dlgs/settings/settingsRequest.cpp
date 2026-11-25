@@ -17,7 +17,7 @@
 #include "frmserver/visualView/ctrl/typeControl.h" // ibTypeControlFactory::ChooseValue — the one road a Select button walks
 
 #include "protocol/protocol.h"   // ibProtocol::ibRequest::ibListSettings::ibAct
-#include "protocol/protocolDesigner.h"   // ibProtocol::ibSchema::ibProperties
+#include "protocol/protocolStudio.h"   // ibProtocol::ibSchema::ibProperties
 
 #include <map>
 #include <memory>
@@ -58,7 +58,7 @@ void ibWriteSettingsReferences(ibDataNode& references, const std::vector<ibTypeD
 			for (const ibMetaID& target : targets)
 				ids.push_back(ibDataValue::Int(target));
 			reference.AddField(ibProtocol::ibRequest::ibListSettings::Targets, ibDataValue::Array(ids));
-			// …and its empty value, written as a value chosen is (WriteChosen): read as it reads here — in the designer
+			// …and its empty value, written as a value chosen is (WriteChosen): read as it reads here — in the studio
 			// `CatalogRef.Goods.EmptyRef`, at run time nothing. The client has no name of its own for a reference. A family
 			// (AnyRef) has no value of its own to write.
 			if (metaData != nullptr && metaData->IsRegisterCtor(clsid)) {

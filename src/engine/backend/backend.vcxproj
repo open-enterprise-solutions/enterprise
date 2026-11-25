@@ -36,7 +36,7 @@
     <ClInclude Include="logger\loggerWriter.h" />
     <ClInclude Include="backend_exception.h" />
     <ClInclude Include="backend_diagnostic.h" />
-    <ClInclude Include="session\designerExclusivePolicy.h" />
+    <ClInclude Include="session\studioExclusivePolicy.h" />
     <ClInclude Include="session\serviceExclusivePolicy.h" />
     <ClInclude Include="session\sessionThrottle.h" />
     <ClInclude Include="session\sessionException.h" />
@@ -450,7 +450,7 @@
     <ClCompile Include="backend.cpp" />
     <ClCompile Include="backend_exception.cpp" />
     <ClCompile Include="backend_diagnostic.cpp" />
-    <ClCompile Include="session\designerExclusivePolicy.cpp" />
+    <ClCompile Include="session\studioExclusivePolicy.cpp" />
     <ClCompile Include="session\serviceExclusivePolicy.cpp" />
     <ClCompile Include="session\session.cpp" />
     <ClCompile Include="session\sessionThrottle.cpp" />

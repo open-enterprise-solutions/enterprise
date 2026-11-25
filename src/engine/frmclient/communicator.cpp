@@ -10,7 +10,7 @@
 #include <wx/scopeguard.h>   // wxMakeGuard — a call's line, however it returns
 
 #include "core/diagnostics/journal.h"
-#include "protocol/protocolDesigner.h"   // ibProtocol::ibDebug
+#include "protocol/protocolStudio.h"   // ibProtocol::ibDebug
 
 namespace {
 
@@ -73,7 +73,7 @@ bool IsSameState(const ibProtocolNode& one, const ibProtocolNode& other)
 }
 
 // A NETWORK BETWEEN, put on by hand — OES_PROTOCOL_DELAY, in milliseconds, slept once per exchange as the way there and
-// back: what a client far from its server waits, seen with the base beside it (a designer's, a thin client's — how many
+// back: what a client far from its server waits, seen with the base beside it (a studio's, a thin client's — how many
 // exchanges an action costs). Unset — none; a debug build's only, said once in its journal.
 int ExchangeDelay()
 {

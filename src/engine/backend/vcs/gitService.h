@@ -1,10 +1,10 @@
 ////////////////////////////////////////////////////////////////////////////
 //	Description : Git service — a thin, GUI-free wrapper over the `git` CLI for
 //	              version-controlling an application working copy from the
-//	              Designer. Lives in the backend (wxBase only) so the Designer,
+//	              Studio. Lives in the backend (wxBase only) so the Studio,
 //	              the daemon, and the future web client can all reuse it.
 //
-//	Workflow it serves: the Designer exports the application to a working dir
+//	Workflow it serves: the Studio exports the application to a working dir
 //	as OES-XML / OES-JSON (already supported), git tracks those text files, and
 //	this service drives status / diff / commit / branch / push-pull from the IDE.
 ////////////////////////////////////////////////////////////////////////////
@@ -13,7 +13,7 @@
 
 #include <vector>
 
-#include "backend/backend_core.h"          // BACKEND_API — the Designer links this across the DLL
+#include "backend/backend_core.h"          // BACKEND_API — the Studio links this across the DLL
 
 // Outcome of a single git invocation. Never throws — git failures are normal
 // control flow (not a repo, nothing to commit, push rejected), so the caller

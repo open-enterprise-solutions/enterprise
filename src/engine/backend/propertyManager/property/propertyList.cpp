@@ -49,7 +49,7 @@ bool ibPropertyList::ReadNodeValue(const ibDataValue& value)
 
 bool ibPropertyList::WriteNodeValue(ibDataValue& value) const
 {
-	// What is written is checked against the owner as it is NOW — a list filled before the designer changed what it
+	// What is written is checked against the owner as it is NOW — a list filled before the studio changed what it
 	// offers (a form's type, say) would keep a choice that is no longer one.
 	const_cast<ibPropertyList*>(this)->FillList();
 	value = ibDataValue::Int(ibPropertyList::GetValueAsInteger());

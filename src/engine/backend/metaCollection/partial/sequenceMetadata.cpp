@@ -78,7 +78,7 @@ bool ibValueMetaObjectSequence::OnDeleteMetaObject()
 
 // ⭐⭐ …AND THROUGH THE OTHER FOUR, THE RUN AND THE CLOSE, which is where a module is REGISTERED. The rule
 // above was kept for creating, loading, saving and deleting and stopped there: both modules were made and
-// written and handed to nobody. The manager module never reached the designer's module manager or a
+// written and handed to nobody. The manager module never reached the studio's module manager or a
 // session's, and the record set module was never put in the compile cache, so neither had anything to be
 // edited or compiled against (reported 2026-09-21). Driven here as the accumulation register drives its
 // own - the two modules, the moment, and the selection the manager's Select() hands out.

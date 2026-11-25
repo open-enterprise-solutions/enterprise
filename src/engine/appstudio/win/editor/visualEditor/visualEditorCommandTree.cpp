@@ -3,7 +3,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 // The parallel of the attribute tree, one door over — its own file, as the desktop's. The commands available to the form
-// are the server's gather (GatherFormCommands, its rows the View's CommandTree), and the tree is the surface a designer
+// are the server's gather (GatherFormCommands, its rows the View's CommandTree), and the tree is the surface a studio
 // DRAGS from: a drag serializes the projection (kind + id) through the engine's memory writer and emits
 // "oes_command_drag", which the shared drop target decodes and says to the server (CreateCommandButton). Its first
 // section, the form's own commands, is managed here too — add / copy / cut / paste / delete, through the server's editor.
@@ -19,7 +19,7 @@
 #include "frmclient/mainFrame/mainFrame.h"
 #include "frmclient/mainFrame/objinspect/objinspect.h"
 #include "frmclient/win/picture.h"                                     // ibProtocolPicture — a row's picture
-#include "protocol/protocolDesigner.h"   // ibProtocol::ibView::ibFormDesigner
+#include "protocol/protocolStudio.h"   // ibProtocol::ibView::ibFormDesigner
 
 #include <wx/accel.h>     // wxAcceleratorTable — Ctrl+C / X / V / Delete on the tree
 #include <wx/artprov.h>   // wxArtProvider — menu-item icons (SAME set the attribute tree uses)

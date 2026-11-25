@@ -48,7 +48,7 @@ public:
 	// WHICH EDITORS this panel carries. A host asks for what it does not already
 	// provide itself.
 	enum Pages {
-		Page_Query  = 1 << 0,   // the arbitrary-query source (dynamic list only, Designer only)
+		Page_Query  = 1 << 0,   // the arbitrary-query source (dynamic list only, Studio only)
 		Page_Filter = 1 << 2,   // the SHARED filter editor
 		Page_Sort   = 1 << 3,   // the SHARED sort editor
 		Page_Group  = 1 << 4,   // the list's OWN fold

@@ -8,7 +8,7 @@ bool ibValueModelTableBoxColumn::OnPropertyChanging(ibProperty* property, const 
 	return ibValueControl::OnPropertyChanging(property, newValue);
 }
 
-// View changed — in the inspector, over MCP or from a script (the live road; the designer's other road reads a column
+// View changed — in the inspector, over MCP or from a script (the live road; the studio's other road reads a column
 // anew from its node, ReadData). The child of the new view takes the old one's place, keeping what the two share by name.
 void ibValueModelTableBoxColumn::OnPropertyChanged(ibProperty* property, const ibVariant& oldValue, const ibVariant& newValue)
 {

@@ -12,10 +12,10 @@
 #include "deskgui/univ/aui/auibar.h"      // the bar of the levels' checks
 #include "deskgui/univ/ctrl/checkBox.h"
 
-#include "appstudio/mainFrame/mainFrameDesigner.h"
+#include "appstudio/mainFrame/mainFrameStudio.h"
 #include "appstudio/mainFrame/metaTree/treeApplication.h"   // EditModule — a row opens its line
 #include "core/localization/dictionary.h"                    // _() — the columns' words
-#include "protocol/protocolDesigner.h"                       // ibProtocol::ibView::ibProfile
+#include "protocol/protocolStudio.h"                       // ibProtocol::ibView::ibProfile
 
 namespace {
 

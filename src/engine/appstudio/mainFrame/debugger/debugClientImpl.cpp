@@ -1,7 +1,7 @@
 #include "debugClientImpl.h"
 
 #include "appstudio/docManager/templates/docViewModuleEditor.h"
-#include "appstudio/mainFrame/mainFrameDesigner.h"
+#include "appstudio/mainFrame/mainFrameStudio.h"
 #include "appstudio/mainFrame/local/localWindow.h"
 #include "appstudio/mainFrame/metaTree/treeApplication.h"
 #include "appstudio/mainFrame/stack/stackWindow.h"
@@ -62,17 +62,17 @@ public:
 
 // Defined here, where ibDebugRunLine is complete — that is the whole reason they are not defaulted
 // in the header.
-ibDebuggerClientBridgeDesigner::ibDebuggerClientBridgeDesigner() = default;
-ibDebuggerClientBridgeDesigner::~ibDebuggerClientBridgeDesigner() = default;
+ibDebuggerClientBridgeStudio::ibDebuggerClientBridgeStudio() = default;
+ibDebuggerClientBridgeStudio::~ibDebuggerClientBridgeStudio() = default;
 
-void ibDebuggerClientBridgeDesigner::OnSessionStart()
+void ibDebuggerClientBridgeStudio::OnSessionStart()
 {
 	m_runLine = std::make_unique<ibDebugRunLine>();
 
 	if (mainFrame != nullptr) mainFrame->Debugger_OnStateChanged();
 }
 
-void ibDebuggerClientBridgeDesigner::OnSessionEnd()
+void ibDebuggerClientBridgeStudio::OnSessionEnd()
 {
 	// The arrow goes with it — the holder's destructor is the clear.
 	m_runLine.reset();
@@ -83,7 +83,7 @@ void ibDebuggerClientBridgeDesigner::OnSessionEnd()
 	if (mainFrame != nullptr) mainFrame->Debugger_OnStateChanged();
 }
 
-void ibDebuggerClientBridgeDesigner::OnEnterLoop(const ibDebugLineData& data)
+void ibDebuggerClientBridgeStudio::OnEnterLoop(const ibDebugLineData& data)
 {
 	if (mainFrame != nullptr) mainFrame->RaiseFrame();
 
@@ -106,7 +106,7 @@ void ibDebuggerClientBridgeDesigner::OnEnterLoop(const ibDebugLineData& data)
 	if (mainFrame != nullptr) mainFrame->Debugger_OnStateChanged();
 }
 
-void ibDebuggerClientBridgeDesigner::OnLeaveLoop(const ibDebugLineData& data)
+void ibDebuggerClientBridgeStudio::OnLeaveLoop(const ibDebugLineData& data)
 {
 	// ⭐⭐ THE RUNTIME IS RUNNING AGAIN, SO THERE IS NO RUN LINE — ANYWHERE. That is the whole
 	// statement, and it needs neither the module's name nor a tree to find it in.
@@ -121,16 +121,16 @@ void ibDebuggerClientBridgeDesigner::OnLeaveLoop(const ibDebugLineData& data)
 	if (mainFrame != nullptr) mainFrame->Debugger_OnStateChanged();
 }
 
-void ibDebuggerClientBridgeDesigner::OnAutoComplete(const ibDebugAutoCompleteData& WXUNUSED(data))
+void ibDebuggerClientBridgeStudio::OnAutoComplete(const ibDebugAutoCompleteData& WXUNUSED(data))
 {
 	// ⚠ Not asked from here yet: the editor completes from the server's module (ibModuleTextView::Fetch), and has no
 	// door for the runtime's answer (the desktop's ShowAutoComplete) — thin-designer-editors.md §8.
 }
 
-void ibDebuggerClientBridgeDesigner::OnMessageFromServer(const ibDebugLineData& data, const wxString& message)
+void ibDebuggerClientBridgeStudio::OnMessageFromServer(const ibDebugLineData& data, const wxString& message)
 {
 	// ⭐ WHAT ARRIVES HERE IS A FAILURE, and that is why it takes the screen: a person chose to send
-	// it over ("Go to designer"), and the module and line below are theirs to fix. What a run merely
+	// it over ("Go to Application Studio"), and the module and line below are theirs to fix. What a run merely
 	// SAYS never comes down this road — it goes to whoever asked for the run, by the eval channel.
 	if (mainFrame != nullptr) mainFrame->RaiseFrame();
 
@@ -144,7 +144,7 @@ void ibDebuggerClientBridgeDesigner::OnMessageFromServer(const ibDebugLineData& 
 			data.m_fileName, data.m_moduleName, static_cast<int>(data.m_line));
 }
 
-void ibDebuggerClientBridgeDesigner::OnSetToolTip(const ibDebugExpressionData& data, const wxString& resultStr)
+void ibDebuggerClientBridgeStudio::OnSetToolTip(const ibDebugExpressionData& data, const wxString& resultStr)
 {
 	// THE ADDRESS THE RUNTIME ANSWERS TO, taken once and as the type it IS — its module's tab, by the address its State
 	// says. A module not open has nobody to show it to.
@@ -162,12 +162,12 @@ void ibDebuggerClientBridgeDesigner::OnSetToolTip(const ibDebugExpressionData& d
 	}
 }
 
-void ibDebuggerClientBridgeDesigner::OnSetStack(const ibStackData& stackData)
+void ibDebuggerClientBridgeStudio::OnSetStack(const ibStackData& stackData)
 {
 	stackWindow->SetStack(stackData);
 }
 
-void ibDebuggerClientBridgeDesigner::OnSetLocalVariable(const ibLocalWindowData& data)
+void ibDebuggerClientBridgeStudio::OnSetLocalVariable(const ibLocalWindowData& data)
 {
 	localWindow->SetLocalVariable(data);
 }
@@ -183,7 +183,7 @@ void ibDebuggerClientBridgeDesigner::OnSetLocalVariable(const ibLocalWindowData&
 //
 // Now the question carried who asked (ibDebuggerClientBridge::GetBridgeId) and the answer brings it
 // back, so the test is identity rather than resemblance — and the walk is gone.
-void ibDebuggerClientBridgeDesigner::OnSetVariable(const ibWatchWindowData& watchData)
+void ibDebuggerClientBridgeStudio::OnSetVariable(const ibWatchWindowData& watchData)
 {
 	if (!(watchData.GetBridgeId() == GetBridgeId()))
 		return;
@@ -191,7 +191,7 @@ void ibDebuggerClientBridgeDesigner::OnSetVariable(const ibWatchWindowData& watc
 	watchWindow->SetVariable(watchData);
 }
 
-void ibDebuggerClientBridgeDesigner::OnSetExpanded(const ibWatchWindowData& watchData)
+void ibDebuggerClientBridgeStudio::OnSetExpanded(const ibWatchWindowData& watchData)
 {
 	if (!(watchData.GetBridgeId() == GetBridgeId()))
 		return;

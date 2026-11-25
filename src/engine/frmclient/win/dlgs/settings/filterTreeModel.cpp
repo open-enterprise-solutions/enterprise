@@ -193,7 +193,7 @@ bool ibFilterTreeModel::HasValue(const ibDataViewItem& item, unsigned col) const
 // ⭐⭐ A FIELD READS AS ITS WHOLE PATH, dots included. `Recorder.Ref` is a value reached THROUGH a
 // reference, and a cell that says only `Ref` hides exactly the thing worth seeing — which of the two
 // it is (Max, 2026-09-25: "it must show the full path, so we see plainly that the value is obtained
-// through the dot"). The rule, with the designer's names beside the enterprise's synonyms, is
+// through the dot"). The rule, with the studio's names beside the enterprise's synonyms, is
 // ibSettingsFieldText's — every settings surface reads a field by it.
 static wxString ibFieldText(const ibFilterOperandDescription& side)
 {
@@ -333,13 +333,13 @@ bool ibFilterTreeModel::SetValue(const ibVariant& variant, const ibDataViewItem&
 bool ibFilterTreeModel::IsListed(const ibFilterNodeDescription& node) const
 {
 	// ⭐ APPLIED, NEVER SHOWN — the whole meaning of `Inaccessible`, and the one place it is asked. The
-	// line stays in the filter and runs; a READER simply does not see it. The designer does, because that
+	// line stays in the filter and runs; a READER simply does not see it. The studio does, because that
 	// window is where it was written (2026-08-24: before this the mode was authored, serialised and
 	// consulted by nothing at all).
 	if (!m_authoring && node.m_display == ibFilterDisplayMode_Inaccessible)
 		return false;
 	// …AND A CONDITION ON A FIELD THE OPTIONS OF THE BASE TAKE AWAY — the same answer for another reason,
-	// asked of the field tree the pickers come from. No authoring exemption: in the designer the options
+	// asked of the field tree the pickers come from. No authoring exemption: in the studio the options
 	// take nothing away.
 	return m_fields == nullptr || node.m_kind != ibFilterNodeKind_Condition
 		|| (m_fields->IsAvailable(node.m_left.m_path) && m_fields->IsAvailable(node.m_right.m_path));

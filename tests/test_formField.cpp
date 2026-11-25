@@ -6,9 +6,9 @@
 // and never names the child. These pin:
 //
 //   * a field is born an Input, and its view, its view's properties and its handlers go out with the form, come back
-//     with it and ride the designer's copy;
+//     with it and ride the studio's copy;
 //   * a view's events and properties are the field's: counted, found by name, and members a script reads and writes;
-//   * what two views share by name crosses over a change of view — on the designer's road (the form read anew from
+//   * what two views share by name crosses over a change of view — on the studio's road (the form read anew from
 //     its node) and on the live one (the property changed), a lambda a script hung on included;
 //   * a view that binds is not shown unbound; a Label is;
 //   * a Flag writes a Boolean, a Switch the value of the item picked, a Slider a Number within its ends — and none writes
@@ -81,7 +81,7 @@ struct FieldUnderTest {
 		return view != nullptr ? (int)view->GetValueAsInteger() : -1;
 	}
 
-	// PAST THE DOOR — the property set, then the control told, no veto asked: as a form the designer's client hands back
+	// PAST THE DOOR — the property set, then the control told, no veto asked: as a form the studio's client hands back
 	// is read (ReadData).
 	void SetView(ibFieldView view) {
 		ibProperty* property = m_frame->GetProperty(ibString(ibT("View")));
@@ -401,8 +401,8 @@ TEST(FormField, AnInputsSelectButtonIsItsSourcesType)
 	EXPECT_TRUE(button->GetValue().GetBoolean());
 }
 
-// THE DESIGNER'S ROAD — the form is read anew from its node: what the new view has by the old one's name is read off it.
-TEST(FormField, ASwitchedViewKeepsASameNamedHandler_TheDesignersRoad)
+// THE STUDIO'S ROAD — the form is read anew from its node: what the new view has by the old one's name is read off it.
+TEST(FormField, ASwitchedViewKeepsASameNamedHandler_TheStudiosRoad)
 {
 	wxInitializer wxInit;
 	if (!wxInit.IsOk())
@@ -505,7 +505,7 @@ struct FieldOnAForm : ::testing::Test {
 		if (ibApplicationInstance::Get() == nullptr && !ibApplicationInstance::CreateAppDataEnv(ibRunMode::eFILE_MODE))
 			GTEST_SKIP() << "appData env unavailable headless";
 
-		session = std::make_shared<FramedSession>(ibT("form-field"), ibSessionKind::Enterprise);
+		session = std::make_shared<FramedSession>(ibT("form-field"), ibSessionKind::Workspace);
 		frame = std::make_unique<KeyFrame>(ibApplicationInstance::GetSessionRegistry()->MintUnlisted(session));
 		session->Attach(frame.get());
 		scope = std::make_unique<ibSessionScope>(session.get());
@@ -994,7 +994,7 @@ TEST_F(FieldOnAForm, AScriptsViewTheSourcesTypeDoesNotAllowIsRefused)
 	EXPECT_EQ(field.View(), (int)ibFieldView_Input);
 }
 
-// AN ATTRIBUTE DROPPED ON THE FORM — an Input bound to it, made by the designer — takes the default view (Max,
+// AN ATTRIBUTE DROPPED ON THE FORM — an Input bound to it, made by the studio — takes the default view (Max,
 // 2026-11-23): a Boolean a Flag. A view a paste brought is kept.
 TEST_F(FieldOnAForm, ADroppedBooleanIsAFlagAPastedViewStays)
 {
@@ -1034,7 +1034,7 @@ TEST_F(FieldOnAForm, ASourceOfAnotherTypeMakesTheFieldAnInput)
 	EXPECT_EQ(label.View(), (int)ibFieldView_Label);
 }
 
-// …as one set past the door does: a form the designer's client hands back is read with no veto (ReadData), nor does
+// …as one set past the door does: a form the studio's client hands back is read with no veto (ReadData), nor does
 // this helper ask one.
 TEST_F(FieldOnAForm, AViewSetPastTheDoorGivesWayToAnInput)
 {

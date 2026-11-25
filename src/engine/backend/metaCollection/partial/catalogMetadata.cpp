@@ -69,7 +69,7 @@ ibValuePtr<ibValueManagerDataObject> ibValueMetaObjectCatalog::CreateManagerData
 }
 
 #include "backend/appData.h"
-#include "backend/metaCollection/partial/declaredPresentation.h"   // how a reference reads in the designer
+#include "backend/metaCollection/partial/declaredPresentation.h"   // how a reference reads in the studio
 
 ibValuePtr<ibValueRecordDataObjectHierarchyRef> ibValueMetaObjectCatalog::CreateObjectRefValue(ibObjectMode mode, const ibGuid& guid) const
 {

@@ -5,7 +5,7 @@
 #include "core/exception.h"   // ibCoreException — a tab that shows no application, the person's refusal
 #include "core/serialize/dataBuilder.h"
 
-#include "frmserver/schema/designer/metaData.h"   // the tab's application — as the tree's doors find it
+#include "frmserver/schema/studio/metaData.h"   // the tab's application — as the tree's doors find it
 
 void ibSchemaLanguages::Build(const ibSession& session, const ibDataNode& args, ibDataNode& result) const
 {

@@ -223,7 +223,7 @@ msgstr "Згорнути всі вузли дерева"
 #: src/engine/appstudio/docManager/templates/docViewApplicationCompare.cpp:117
 #: src/engine/appstudio/docManager/templates/docViewApplicationCompare.cpp:348
 #: src/engine/appstudio/docManager/templates/docViewApplicationCompare.cpp:438
-#: src/engine/frmserver/schema/designer/applicationCompare.cpp:363
+#: src/engine/frmserver/schema/studio/applicationCompare.cpp:363
 msgid "Merge"
 msgstr "Об'єднання"
 
@@ -286,7 +286,7 @@ msgid "The other-side file has been saved."
 msgstr "Файл іншої сторони збережено."
 
 #: src/engine/appstudio/docManager/templates/docViewApplicationCompare.cpp:427
-#: src/engine/frmserver/schema/designer/applicationCompare.cpp:358
+#: src/engine/frmserver/schema/studio/applicationCompare.cpp:358
 msgid "Warning: failed to save the other-side file."
 msgstr "Попередження: не вдалося зберегти файл іншої сторони."
 
@@ -487,7 +487,7 @@ msgstr ""
 "  --server=<host> --db=<name> [--dbport=...] [--user=...] [--password=...]"
 
 #: src/engine/appstudio/mainApp.cpp:153
-#: src/engine/appstudio/mainFrame/mainFrameDesigner.h:106
+#: src/engine/appstudio/mainFrame/mainFrameStudio.h:106
 msgid "OES Application Studio"
 msgstr "OES Application Studio"
 
@@ -574,14 +574,14 @@ msgstr "Значення"
 msgid "Type"
 msgstr "Тип"
 
-#: src/engine/appstudio/mainFrame/mainFrameDesigner.cpp:51
-#: src/engine/appstudio/mainFrame/mainFrameDesignerMenu.cpp:85
+#: src/engine/appstudio/mainFrame/mainFrameStudio.cpp:51
+#: src/engine/appstudio/mainFrame/mainFrameStudioMenu.cpp:85
 #: src/engine/backend/metaCollection/metaObjectMetadata.h:210
 msgid "Update database"
 msgstr "Оновити базу даних"
 
-#: src/engine/appstudio/mainFrame/mainFrameDesigner.cpp:120
-#: src/engine/appstudio/mainFrame/mainFrameDesignerParts.cpp:22
+#: src/engine/appstudio/mainFrame/mainFrameStudio.cpp:120
+#: src/engine/appstudio/mainFrame/mainFrameStudioParts.cpp:22
 #: src/engine/appstudio/win/editor/sharedAttributeEditor/sharedAttributeEditor.cpp:89
 #: src/engine/appstudio/win/editor/featureOptionEditor/featureOptionEditor.cpp:102
 #: src/engine/appstudio/win/editor/interfaceEditor/interfaceEditor.cpp:86
@@ -590,256 +590,250 @@ msgstr "Оновити базу даних"
 #: src/engine/frmclient/mainFrame/mainFrame.cpp:689
 #: src/engine/frmclient/mainFrame/mainFrame.cpp:1217
 #: src/engine/frmclient/propertyManager/property/advprop/advpropPicture.cpp:174
-#: src/engine/frmserver/docView/docManagerDesigner.cpp:37
-#: src/engine/frmserver/docView/templates/designer/docViewSharedAttributeEdit.cpp:92
-#: src/engine/frmserver/docView/templates/designer/docViewFeatureOptionEdit.cpp:100
+#: src/engine/frmserver/docView/docManagerStudio.cpp:37
+#: src/engine/frmserver/docView/templates/studio/docViewSharedAttributeEdit.cpp:92
+#: src/engine/frmserver/docView/templates/studio/docViewFeatureOptionEdit.cpp:100
 msgid "Application"
 msgstr "Застосунок"
 
-#: src/engine/appstudio/mainFrame/mainFrameDesigner.cpp:178
+#: src/engine/appstudio/mainFrame/mainFrameStudio.cpp:178
 #, c-format
 msgid "Application '%s' has been changed. Save?"
 msgstr "Застосунок '%s' було змінено. Зберегти?"
 
-#: src/engine/appstudio/mainFrame/mainFrameDesignerEvent.cpp:37
-#: src/engine/appstudio/mainFrame/mainFrameDesignerEvent.cpp:254
-#: src/engine/appstudio/mainFrame/mainFrameDesignerEvent.cpp:283
+#: src/engine/appstudio/mainFrame/mainFrameStudioEvent.cpp:37
+#: src/engine/appstudio/mainFrame/mainFrameStudioEvent.cpp:254
+#: src/engine/appstudio/mainFrame/mainFrameStudioEvent.cpp:283
 #, c-format
 msgid ""
 "Application '%s' has been changed.\n"
 "Do you want to save?"
 msgstr "Застосунок '%s' було змінено.\nЗберегти?"
 
-#: src/engine/appstudio/mainFrame/mainFrameDesignerEvent.cpp:52
-#: src/engine/appstudio/mainFrame/mainFrameDesignerEvent.cpp:91
+#: src/engine/appstudio/mainFrame/mainFrameStudioEvent.cpp:52
+#: src/engine/appstudio/mainFrame/mainFrameStudioEvent.cpp:91
 msgid "Debugger is already running!"
 msgstr "Налагоджувач вже запущено!"
 
-#: src/engine/appstudio/mainFrame/mainFrameDesignerEvent.cpp:80
+#: src/engine/appstudio/mainFrame/mainFrameStudioEvent.cpp:80
 msgid "Failed to start webserver"
 msgstr "Не вдалося запустити webserver"
 
-#: src/engine/appstudio/mainFrame/mainFrameDesignerEvent.cpp:150
+#: src/engine/appstudio/mainFrame/mainFrameStudioEvent.cpp:150
 msgid ""
 "To update the database you need to stop debugging.\n"
 "Do you want to continue?"
 msgstr "Щоб оновити базу даних, зупиніть налагодження.\nПродовжити?"
 
-#: src/engine/appstudio/mainFrame/mainFrameDesignerEvent.cpp:243
+#: src/engine/appstudio/mainFrame/mainFrameStudioEvent.cpp:243
 msgid "Open application file"
 msgstr "Відкрити файл застосунку"
 
-#: src/engine/appstudio/mainFrame/mainFrameDesignerEvent.cpp:263
+#: src/engine/appstudio/mainFrame/mainFrameStudioEvent.cpp:263
 msgid "Save application file"
 msgstr "Зберегти файл застосунку"
 
-#: src/engine/appstudio/mainFrame/mainFrameDesignerEvent.cpp:269
-#: src/engine/appstudio/mainFrame/mainFrameDesignerEvent.cpp:301
+#: src/engine/appstudio/mainFrame/mainFrameStudioEvent.cpp:269
+#: src/engine/appstudio/mainFrame/mainFrameStudioEvent.cpp:301
 msgid "Successfully unloaded to: "
 msgstr "Успішно вивантажено до: "
 
-#: src/engine/appstudio/mainFrame/mainFrameDesignerEvent.cpp:276
+#: src/engine/appstudio/mainFrame/mainFrameStudioEvent.cpp:276
 msgid "Choose the directory the application was saved to"
 msgstr "Виберіть теку, у яку застосунок було збережено"
 
-#: src/engine/appstudio/mainFrame/mainFrameDesignerEvent.cpp:295
+#: src/engine/appstudio/mainFrame/mainFrameStudioEvent.cpp:295
 msgid "Choose a directory of its own for the application's files"
 msgstr "Виберіть окрему теку для файлів застосунку"
 
-#: src/engine/appstudio/mainFrame/mainFrameDesignerEvent.cpp:309
+#: src/engine/appstudio/mainFrame/mainFrameStudioEvent.cpp:309
 msgid "Choose application file to compare with"
 msgstr "Виберіть файл застосунку для порівняння"
 
-#: src/engine/appstudio/mainFrame/mainFrameDesignerEvent.cpp:319
+#: src/engine/appstudio/mainFrame/mainFrameStudioEvent.cpp:319
 msgid "Failed to upload application file."
 msgstr "Не вдалося вивантажити файл застосунку."
 
-#: src/engine/appstudio/mainFrame/mainFrameDesignerEvent.cpp:325
+#: src/engine/appstudio/mainFrame/mainFrameStudioEvent.cpp:325
 msgid "Failed to compare with the application file."
 msgstr "Не вдалося порівняти з файлом застосунку."
 
-#: src/engine/appstudio/mainFrame/mainFrameDesignerEvent.cpp:329
-#: src/engine/appstudio/mainFrame/mainFrameDesignerEvent.cpp:344
+#: src/engine/appstudio/mainFrame/mainFrameStudioEvent.cpp:329
+#: src/engine/appstudio/mainFrame/mainFrameStudioEvent.cpp:344
 msgid "Current"
 msgstr "Поточна"
 
-#: src/engine/appstudio/mainFrame/mainFrameDesignerEvent.cpp:339
+#: src/engine/appstudio/mainFrame/mainFrameStudioEvent.cpp:339
 msgid "The database's application is not available."
 msgstr "Застосунок бази даних недоступний."
 
-#: src/engine/appstudio/mainFrame/mainFrameDesignerEvent.cpp:344
-#: src/engine/frmclient/win/dlgs/about.cpp:81
+#: src/engine/appstudio/mainFrame/mainFrameStudioEvent.cpp:344
+#: src/engine/frmclient/win/dlgs/about.cpp:94
 msgid "Database"
 msgstr "База даних"
 
-#: src/engine/appstudio/mainFrame/mainFrameDesignerEvent.cpp:350
+#: src/engine/appstudio/mainFrame/mainFrameStudioEvent.cpp:350
 msgid "Choose left application file"
 msgstr "Виберіть лівий файл застосунку"
 
-#: src/engine/appstudio/mainFrame/mainFrameDesignerEvent.cpp:355
+#: src/engine/appstudio/mainFrame/mainFrameStudioEvent.cpp:355
 msgid "Choose right application file"
 msgstr "Виберіть правий файл застосунку"
 
-#: src/engine/appstudio/mainFrame/mainFrameDesignerEvent.cpp:366
+#: src/engine/appstudio/mainFrame/mainFrameStudioEvent.cpp:366
 msgid "Failed to upload one of the application files."
 msgstr "Не вдалося вивантажити один із файлів застосунку."
 
-#: src/engine/appstudio/mainFrame/mainFrameDesignerEvent.cpp:373
+#: src/engine/appstudio/mainFrame/mainFrameStudioEvent.cpp:373
 msgid "Failed to load one of the application files."
 msgstr "Не вдалося завантажити один із файлів застосунку."
 
-#: src/engine/appstudio/mainFrame/mainFrameDesignerMenu.cpp:48
-#: src/engine/appstudio/mainFrame/mainFrameDesignerMenu.cpp:54
+#: src/engine/appstudio/mainFrame/mainFrameStudioMenu.cpp:48
+#: src/engine/appstudio/mainFrame/mainFrameStudioMenu.cpp:54
 #: src/engine/backend/session/sessionSnapshot.cpp:95
 msgid "Thin client"
 msgstr "Тонкий клієнт"
 
-#: src/engine/appstudio/mainFrame/mainFrameDesignerMenu.cpp:49
-#: src/engine/appstudio/mainFrame/mainFrameDesignerMenu.cpp:55
-#: src/engine/backend/session/sessionSnapshot.cpp:54
-msgid "Web client"
-msgstr "Веб-клієнт"
-
-#: src/engine/appstudio/mainFrame/mainFrameDesignerMenu.cpp:50
-#: src/engine/appstudio/mainFrame/mainFrameDesignerParts.cpp:122
-#: src/engine/appstudio/mainFrame/welcome/welcomeWindowDesigner.cpp:19
+#: src/engine/appstudio/mainFrame/mainFrameStudioMenu.cpp:50
+#: src/engine/appstudio/mainFrame/mainFrameStudioParts.cpp:122
+#: src/engine/appstudio/mainFrame/welcome/welcomeWindowStudio.cpp:19
 msgid "Start debugging"
 msgstr "Почати налагодження"
 
-#: src/engine/appstudio/mainFrame/mainFrameDesignerMenu.cpp:56
-#: src/engine/appstudio/mainFrame/mainFrameDesignerParts.cpp:123
-#: src/engine/appstudio/mainFrame/welcome/welcomeWindowDesigner.cpp:20
+#: src/engine/appstudio/mainFrame/mainFrameStudioMenu.cpp:56
+#: src/engine/appstudio/mainFrame/mainFrameStudioParts.cpp:123
+#: src/engine/appstudio/mainFrame/welcome/welcomeWindowStudio.cpp:20
 msgid "Start without debugging"
 msgstr "Запустити без налагодження"
 
-#: src/engine/appstudio/mainFrame/mainFrameDesignerMenu.cpp:58
-#: src/engine/appstudio/mainFrame/mainFrameDesignerParts.cpp:124
+#: src/engine/appstudio/mainFrame/mainFrameStudioMenu.cpp:58
+#: src/engine/appstudio/mainFrame/mainFrameStudioParts.cpp:124
 msgid "Attach for debugging..."
 msgstr "Приєднати для налагодження..."
 
-#: src/engine/appstudio/mainFrame/mainFrameDesignerMenu.cpp:61
-#: src/engine/appstudio/mainFrame/mainFrameDesignerParts.cpp:126
+#: src/engine/appstudio/mainFrame/mainFrameStudioMenu.cpp:61
+#: src/engine/appstudio/mainFrame/mainFrameStudioParts.cpp:126
 msgid "Continue"
 msgstr "Продовжити"
 
-#: src/engine/appstudio/mainFrame/mainFrameDesignerMenu.cpp:62
-#: src/engine/appstudio/mainFrame/mainFrameDesignerParts.cpp:127
+#: src/engine/appstudio/mainFrame/mainFrameStudioMenu.cpp:62
+#: src/engine/appstudio/mainFrame/mainFrameStudioParts.cpp:127
 msgid "Pause"
 msgstr "Пауза"
 
-#: src/engine/appstudio/mainFrame/mainFrameDesignerMenu.cpp:63
-#: src/engine/appstudio/mainFrame/mainFrameDesignerParts.cpp:128
+#: src/engine/appstudio/mainFrame/mainFrameStudioMenu.cpp:63
+#: src/engine/appstudio/mainFrame/mainFrameStudioParts.cpp:128
 msgid "Step into"
 msgstr "Крок із заходом"
 
-#: src/engine/appstudio/mainFrame/mainFrameDesignerMenu.cpp:64
-#: src/engine/appstudio/mainFrame/mainFrameDesignerParts.cpp:129
+#: src/engine/appstudio/mainFrame/mainFrameStudioMenu.cpp:64
+#: src/engine/appstudio/mainFrame/mainFrameStudioParts.cpp:129
 msgid "Step over"
 msgstr "Крок з обходом"
 
-#: src/engine/appstudio/mainFrame/mainFrameDesignerMenu.cpp:65
-#: src/engine/appstudio/mainFrame/mainFrameDesignerParts.cpp:130
+#: src/engine/appstudio/mainFrame/mainFrameStudioMenu.cpp:65
+#: src/engine/appstudio/mainFrame/mainFrameStudioParts.cpp:130
 msgid "Step out"
 msgstr "Крок з виходом"
 
-#: src/engine/appstudio/mainFrame/mainFrameDesignerMenu.cpp:66
-#: src/engine/appstudio/mainFrame/mainFrameDesignerParts.cpp:131
+#: src/engine/appstudio/mainFrame/mainFrameStudioMenu.cpp:66
+#: src/engine/appstudio/mainFrame/mainFrameStudioParts.cpp:131
 msgid "Stop debugging"
 msgstr "Зупинити налагодження"
 
-#: src/engine/appstudio/mainFrame/mainFrameDesignerMenu.cpp:67
-#: src/engine/appstudio/mainFrame/mainFrameDesignerParts.cpp:132
+#: src/engine/appstudio/mainFrame/mainFrameStudioMenu.cpp:67
+#: src/engine/appstudio/mainFrame/mainFrameStudioParts.cpp:132
 msgid "Stop debugging program"
 msgstr "Зупинити налагодження програми"
 
-#: src/engine/appstudio/mainFrame/mainFrameDesignerMenu.cpp:67
+#: src/engine/appstudio/mainFrame/mainFrameStudioMenu.cpp:67
 msgid "Stop program"
 msgstr "Зупинити програму"
 
-#: src/engine/appstudio/mainFrame/mainFrameDesignerMenu.cpp:70
-#: src/engine/appstudio/mainFrame/mainFrameDesignerParts.cpp:134
+#: src/engine/appstudio/mainFrame/mainFrameStudioMenu.cpp:70
+#: src/engine/appstudio/mainFrame/mainFrameStudioParts.cpp:134
 msgid "Remove all breakpoints"
 msgstr "Видалити всі точки зупинки"
 
-#: src/engine/appstudio/mainFrame/mainFrameDesignerMenu.cpp:80
+#: src/engine/appstudio/mainFrame/mainFrameStudioMenu.cpp:80
 msgid "Open the database's application"
 msgstr "Відкрити застосунок бази даних"
 
-#: src/engine/appstudio/mainFrame/mainFrameDesignerMenu.cpp:82
+#: src/engine/appstudio/mainFrame/mainFrameStudioMenu.cpp:82
 msgid "Revert to the database's application"
 msgstr "Повернути застосунок бази даних"
 
-#: src/engine/appstudio/mainFrame/mainFrameDesignerMenu.cpp:90
+#: src/engine/appstudio/mainFrame/mainFrameStudioMenu.cpp:90
 msgid "Load application"
 msgstr "Завантажити застосунок"
 
-#: src/engine/appstudio/mainFrame/mainFrameDesignerMenu.cpp:91
+#: src/engine/appstudio/mainFrame/mainFrameStudioMenu.cpp:91
 msgid "Save application"
 msgstr "Зберегти застосунок"
 
-#: src/engine/appstudio/mainFrame/mainFrameDesignerMenu.cpp:96
+#: src/engine/appstudio/mainFrame/mainFrameStudioMenu.cpp:96
 msgid "Load application from files..."
 msgstr "Завантажити застосунок з файлів..."
 
-#: src/engine/appstudio/mainFrame/mainFrameDesignerMenu.cpp:97
+#: src/engine/appstudio/mainFrame/mainFrameStudioMenu.cpp:97
 msgid "Save application to files..."
 msgstr "Зберегти застосунок у файли..."
 
-#: src/engine/appstudio/mainFrame/mainFrameDesignerMenu.cpp:106
+#: src/engine/appstudio/mainFrame/mainFrameStudioMenu.cpp:106
 msgid "With file..."
 msgstr "З файлом..."
 
-#: src/engine/appstudio/mainFrame/mainFrameDesignerMenu.cpp:107
+#: src/engine/appstudio/mainFrame/mainFrameStudioMenu.cpp:107
 msgid "With the database's application"
 msgstr "Із застосунком бази даних"
 
-#: src/engine/appstudio/mainFrame/mainFrameDesignerMenu.cpp:108
+#: src/engine/appstudio/mainFrame/mainFrameStudioMenu.cpp:108
 msgid "Two files..."
 msgstr "Два файли..."
 
-#: src/engine/appstudio/mainFrame/mainFrameDesignerMenu.cpp:110
+#: src/engine/appstudio/mainFrame/mainFrameStudioMenu.cpp:110
 msgid "Compare applications"
 msgstr "Порівняти застосунки"
 
-#: src/engine/appstudio/mainFrame/mainFrameDesignerMenu.cpp:116
+#: src/engine/appstudio/mainFrame/mainFrameStudioMenu.cpp:116
 msgid "Syntax Helper\tRawCtrl+Alt+F1"
 msgstr "Синтакс-помічник\tRawCtrl+Alt+F1"
 
-#: src/engine/appstudio/mainFrame/mainFrameDesignerMenu.cpp:118
+#: src/engine/appstudio/mainFrame/mainFrameStudioMenu.cpp:118
 #: src/engine/deskgui/univ/stockItem.cpp:51
-#: src/engine/frmserver/client/clientFrameRuntime.cpp:59
+#: src/engine/frmserver/client/clientFrameWorkspace.cpp:59
 msgid "About"
 msgstr "Про програму"
 
-#: src/engine/appstudio/mainFrame/mainFrameDesignerParts.cpp:51
+#: src/engine/appstudio/mainFrame/mainFrameStudioParts.cpp:51
 msgid "Version control"
 msgstr "Контроль версій"
 
-#: src/engine/appstudio/mainFrame/mainFrameDesignerParts.cpp:91
+#: src/engine/appstudio/mainFrame/mainFrameStudioParts.cpp:91
 #: src/engine/frmclient/mainFrame/mainFrame.cpp:465
 msgid "Messages"
 msgstr "Повідомлення"
 
-#: src/engine/appstudio/mainFrame/mainFrameDesignerParts.cpp:92
+#: src/engine/appstudio/mainFrame/mainFrameStudioParts.cpp:92
 msgid "Local variable"
 msgstr "Локальні змінні"
 
-#: src/engine/appstudio/mainFrame/mainFrameDesignerParts.cpp:93
+#: src/engine/appstudio/mainFrame/mainFrameStudioParts.cpp:93
 msgid "Call stack"
 msgstr "Стек викликів"
 
-#: src/engine/appstudio/mainFrame/mainFrameDesignerParts.cpp:94
+#: src/engine/appstudio/mainFrame/mainFrameStudioParts.cpp:94
 msgid "Watch"
 msgstr "Спостереження"
 
-#: src/engine/appstudio/mainFrame/mainFrameDesignerParts.cpp:139
+#: src/engine/appstudio/mainFrame/mainFrameStudioParts.cpp:139
 #: src/engine/frmclient/mainFrame/mainFrame.cpp:691
 #: src/engine/frmclient/mainFrame/mainFrame.cpp:1219
 msgid "Debug"
 msgstr "Налагодження"
 
-#: src/engine/appstudio/mainFrame/mainFrameDesignerParts.cpp:169
-#: src/engine/appstudio/mainFrame/welcome/welcomeWindowDesigner.cpp:22
+#: src/engine/appstudio/mainFrame/mainFrameStudioParts.cpp:169
+#: src/engine/appstudio/mainFrame/welcome/welcomeWindowStudio.cpp:22
 msgid "Syntax Helper"
 msgstr "Синтакс-помічник"
 
@@ -1192,7 +1186,7 @@ msgstr "Відмінності: %s"
 msgid "(no diff - untracked, binary, or staged)"
 msgstr "(немає відмінностей - файл не відстежується, двійковий або проіндексований)"
 
-#: src/engine/appstudio/mainFrame/welcome/welcomeWindowDesigner.cpp:21
+#: src/engine/appstudio/mainFrame/welcome/welcomeWindowStudio.cpp:21
 #: src/engine/deskgui/docview/docManager.cpp:210
 #: src/engine/frmclient/mainFrame/mainFrame.cpp:529
 msgid "Find"
@@ -1227,7 +1221,7 @@ msgstr "Скасувати"
 
 #: src/engine/appstudio/syntaxHelper/helpChooserDialog.cpp:61
 #: src/engine/deskgui/univ/stockItem.cpp:75
-#: src/engine/frmserver/client/clientFrameRuntime.cpp:60
+#: src/engine/frmserver/client/clientFrameWorkspace.cpp:60
 #: src/engine/frmserver/visualView/ctrl/formAction.cpp:70
 #: src/engine/frmserver/visualView/ctrl/formObject.cpp:672
 msgid "Help"
@@ -1279,6 +1273,7 @@ msgstr "Чернетка - стаття очікує редакторської 
 #: src/engine/coderunner/win/editor/codeEditor/codeEditor.cpp:836
 #: src/engine/deskgui/univ/stockItem.cpp:62
 #: src/engine/frmclient/mainFrame/output/outputWindow.cpp:144
+#: src/engine/frmclient/win/dlgs/about.cpp:135
 #: src/engine/frmclient/win/dlgs/settings/composer/composerSettings.cpp:2347
 #: src/engine/frmclient/win/dlgs/settings/composer/composerSettings.cpp:2709
 #: src/engine/frmclient/win/dlgs/settings/settingsFilterEditor.cpp:614
@@ -1374,7 +1369,7 @@ msgstr "Знайдено: %zu"
 #: src/engine/appstudio/win/dlg/debugItem/debugItem.cpp:11
 #: src/engine/appstudio/win/dlg/debugItem/debugItem.cpp:16
 #: src/engine/frmclient/docView/templates/docViewAuditLog.cpp:337
-#: src/engine/frmclient/win/dlgs/about.cpp:84
+#: src/engine/frmclient/win/dlgs/about.cpp:96
 #: src/engine/frmclient/win/dlgs/activeUser.cpp:46
 #: src/engine/frmclient/win/dlgs/activeUser.cpp:105
 #: src/engine/frmclient/win/dlgs/userItem.cpp:112
@@ -1623,20 +1618,20 @@ msgstr "Поле \"Ім'я\" не унікальне!"
 msgid "Predefined values editor"
 msgstr "Редактор визначених значень"
 
-#: src/engine/appstudio/win/editor/codeEditor/codeEditorDesigner.cpp:64
+#: src/engine/appstudio/win/editor/codeEditor/codeEditorStudio.cpp:64
 #, c-format
 msgid "Breakpoint condition: %s"
 msgstr "Умова точки зупинки: %s"
 
-#: src/engine/appstudio/win/editor/codeEditor/codeEditorDesigner.cpp:75
+#: src/engine/appstudio/win/editor/codeEditor/codeEditorStudio.cpp:75
 msgid "Breakpoint condition..."
 msgstr "Умова точки зупинки..."
 
-#: src/engine/appstudio/win/editor/codeEditor/codeEditorDesigner.cpp:84
+#: src/engine/appstudio/win/editor/codeEditor/codeEditorStudio.cpp:84
 msgid "Stop on this line only when the condition is true, for example: i > 500. Leave it empty to stop every time."
 msgstr "Зупинятися на цьому рядку, лише якщо умова істинна, наприклад: i > 500. Залиште порожнім, щоб зупинятися завжди."
 
-#: src/engine/appstudio/win/editor/codeEditor/codeEditorDesigner.cpp:85
+#: src/engine/appstudio/win/editor/codeEditor/codeEditorStudio.cpp:85
 msgid "Breakpoint condition"
 msgstr "Умова точки зупинки"
 
@@ -1772,7 +1767,7 @@ msgstr ""
 "  --server=<host> --db=<name> [--dbport=...] [--user=...]"
 
 #: src/engine/appworkspace/mainApp.cpp:144
-#: src/engine/appworkspace/mainFrame/mainFrameEnterprise.h:16
+#: src/engine/appworkspace/mainFrame/mainFrameWorkspace.h:16
 msgid "OES Application Workspace"
 msgstr "OES Application Workspace"
 
@@ -3284,7 +3279,7 @@ msgid "Running code: nothing to run - no code came with the request"
 msgstr "Виконання коду: нічого виконувати - у запиті немає коду"
 
 #: src/engine/backend/job/jobRunByteCode.cpp:150
-msgid "Running code: a designer builds no runtime, so there is nothing here to run application code in"
+msgid "Running code: a studio builds no runtime, so there is nothing here to run application code in"
 msgstr "Виконання коду: Application Studio не створює середовища виконання, тому тут ніде виконати код застосунку"
 
 #: src/engine/backend/job/jobRunByteCode.cpp:157
@@ -3491,7 +3486,7 @@ msgid "Choice parameters"
 msgstr "Параметри вибору"
 
 #: src/engine/backend/metaCollection/attribute/metaAttributeObject.h:322
-msgid "What is shown in the list: a row per parameter - which field of the chosen object it filters, where its value comes from, and what becomes of an already chosen value when that source changes (cleared by default, because the old value belonged to the old source). A catalog with an owner gets its row written here by the designer."
+msgid "What is shown in the list: a row per parameter - which field of the chosen object it filters, where its value comes from, and what becomes of an already chosen value when that source changes (cleared by default, because the old value belonged to the old source). A catalog with an owner gets its row written here by the studio."
 msgstr "Що показується в списку: по рядку на параметр - яке поле вибраного об'єкта він фільтрує, звідки береться його значення і що відбувається з уже вибраним значенням, коли це джерело змінюється (за замовчуванням воно очищується, бо старе значення належало старому джерелу). Для довідника з власником Application Studio сам записує сюди рядок."
 
 #: src/engine/backend/metaCollection/attribute/metaAttributeObjectEnum.h:34
@@ -3619,7 +3614,7 @@ msgstr "Створити"
 
 #: src/engine/backend/metaCollection/metaCommandObject.h:21
 #: src/engine/backend/metaCollection/metaGroups.cpp:46
-#: src/engine/frmserver/schema/runtime/allFunctions.cpp:31
+#: src/engine/frmserver/schema/workspace/allFunctions.cpp:31
 msgid "Reports"
 msgstr "Звіти"
 
@@ -3802,7 +3797,7 @@ msgid "Shared templates"
 msgstr "Загальні шаблони"
 
 #: src/engine/backend/metaCollection/metaGroups.cpp:29
-#: src/engine/frmserver/schema/runtime/allFunctions.cpp:40
+#: src/engine/frmserver/schema/workspace/allFunctions.cpp:40
 msgid "Scheduled jobs"
 msgstr "Регламентні завдання"
 
@@ -3819,7 +3814,7 @@ msgid "Session parameters"
 msgstr "Параметри сеансу"
 
 #: src/engine/backend/metaCollection/metaGroups.cpp:33
-#: src/engine/frmserver/schema/runtime/allFunctions.cpp:26
+#: src/engine/frmserver/schema/workspace/allFunctions.cpp:26
 #: src/engine/frmserver/visualView/ctrl/control.h:107
 #: src/engine/frmserver/visualView/layers/commandBar.h:171
 msgid "Feature options"
@@ -3847,12 +3842,12 @@ msgid "Languages"
 msgstr "Мови"
 
 #: src/engine/backend/metaCollection/metaGroups.cpp:41
-#: src/engine/frmserver/schema/runtime/allFunctions.cpp:27
+#: src/engine/frmserver/schema/workspace/allFunctions.cpp:27
 msgid "Constants"
 msgstr "Константи"
 
 #: src/engine/backend/metaCollection/metaGroups.cpp:42
-#: src/engine/frmserver/schema/runtime/allFunctions.cpp:28
+#: src/engine/frmserver/schema/workspace/allFunctions.cpp:28
 msgid "Catalogs"
 msgstr "Довідники"
 
@@ -3901,7 +3896,7 @@ msgid "Sequence"
 msgstr "Послідовність"
 
 #: src/engine/backend/metaCollection/metaGroups.cpp:43
-#: src/engine/frmserver/schema/runtime/allFunctions.cpp:29
+#: src/engine/frmserver/schema/workspace/allFunctions.cpp:29
 msgid "Documents"
 msgstr "Документи"
 
@@ -3910,47 +3905,47 @@ msgid "Enumerations"
 msgstr "Перерахування"
 
 #: src/engine/backend/metaCollection/metaGroups.cpp:45
-#: src/engine/frmserver/schema/runtime/allFunctions.cpp:30
+#: src/engine/frmserver/schema/workspace/allFunctions.cpp:30
 msgid "Data tools"
 msgstr "Обробки"
 
 #: src/engine/backend/metaCollection/metaGroups.cpp:48
-#: src/engine/frmserver/schema/runtime/allFunctions.cpp:32
+#: src/engine/frmserver/schema/workspace/allFunctions.cpp:32
 msgid "Charts of characteristic types"
 msgstr "Плани видів характеристик"
 
 #: src/engine/backend/metaCollection/metaGroups.cpp:49
-#: src/engine/frmserver/schema/runtime/allFunctions.cpp:33
+#: src/engine/frmserver/schema/workspace/allFunctions.cpp:33
 msgid "Charts of accounts"
 msgstr "Плани рахунків"
 
 #: src/engine/backend/metaCollection/metaGroups.cpp:50
-#: src/engine/frmserver/schema/runtime/allFunctions.cpp:34
+#: src/engine/frmserver/schema/workspace/allFunctions.cpp:34
 msgid "Charts of calculation types"
 msgstr "Плани видів розрахунку"
 
 #: src/engine/backend/metaCollection/metaGroups.cpp:51
-#: src/engine/frmserver/schema/runtime/allFunctions.cpp:35
+#: src/engine/frmserver/schema/workspace/allFunctions.cpp:35
 msgid "Information registers"
 msgstr "Регістри відомостей"
 
 #: src/engine/backend/metaCollection/metaGroups.cpp:52
-#: src/engine/frmserver/schema/runtime/allFunctions.cpp:36
+#: src/engine/frmserver/schema/workspace/allFunctions.cpp:36
 msgid "Accumulation registers"
 msgstr "Регістри накопичення"
 
 #: src/engine/backend/metaCollection/metaGroups.cpp:53
-#: src/engine/frmserver/schema/runtime/allFunctions.cpp:37
+#: src/engine/frmserver/schema/workspace/allFunctions.cpp:37
 msgid "Accounting registers"
 msgstr "Регістри бухгалтерії"
 
 #: src/engine/backend/metaCollection/metaGroups.cpp:54
-#: src/engine/frmserver/schema/runtime/allFunctions.cpp:38
+#: src/engine/frmserver/schema/workspace/allFunctions.cpp:38
 msgid "Calculation registers"
 msgstr "Регістри розрахунку"
 
 #: src/engine/backend/metaCollection/metaGroups.cpp:57
-#: src/engine/frmserver/schema/runtime/allFunctions.cpp:39
+#: src/engine/frmserver/schema/workspace/allFunctions.cpp:39
 msgid "Sequences"
 msgstr "Послідовності"
 
@@ -4159,8 +4154,8 @@ msgid "The dialect the application's modules are written in. CES (the default fo
 msgstr "Діалект, яким написано модулі застосунку. CES (за замовчуванням для нових застосунків): фігурні дужки та крапки з комою. VES: застарілий діалект на ключових словах, збережений для перенесених застосунків."
 
 #: src/engine/backend/metaCollection/metaObjectMetadata.h:208
-#: src/engine/frmserver/client/clientFrameDesigner.cpp:78
-#: src/engine/frmserver/client/clientFrameRuntime.cpp:50
+#: src/engine/frmserver/client/clientFrameStudio.cpp:78
+#: src/engine/frmserver/client/clientFrameWorkspace.cpp:50
 msgid "Administration"
 msgstr "Адміністрування"
 
@@ -4170,8 +4165,8 @@ msgstr "Адміністрування даних"
 
 #: src/engine/backend/metaCollection/metaObjectMetadata.h:211
 #: src/engine/frmclient/win/dlgs/activeUser.h:37
-#: src/engine/frmserver/client/clientFrameDesigner.cpp:66
-#: src/engine/frmserver/client/clientFrameRuntime.cpp:39
+#: src/engine/frmserver/client/clientFrameStudio.cpp:66
+#: src/engine/frmserver/client/clientFrameWorkspace.cpp:39
 msgid "Active users"
 msgstr "Активні користувачі"
 
@@ -7809,13 +7804,13 @@ msgstr "Не вдалося перебудувати підсумки для %s 
 msgid "Failed to write the data of %s - the restructuring was rolled back"
 msgstr "Не вдалося записати дані %s - реструктуризацію скасовано"
 
-#: src/engine/backend/session/designerExclusivePolicy.cpp:81
+#: src/engine/backend/session/studioExclusivePolicy.cpp:81
 #, c-format
 msgid ""
-"Another designer process is already running:\n"
+"Another studio process is already running:\n"
 "%s, %s, %s"
 msgstr ""
-"Інший процес конфігуратора вже запущено:\n"
+"Інший процес Application Studio вже запущено:\n"
 "%s, %s, %s"
 
 #: src/engine/backend/session/serviceExclusivePolicy.cpp:19
@@ -7952,18 +7947,15 @@ msgid "System job"
 msgstr "Системне завдання"
 
 #: src/engine/backend/session/sessionSnapshot.cpp:48
+#: src/engine/frmclient/win/dlgs/about.cpp:48
 msgid "Application Workspace"
 msgstr "Application Workspace"
 
 #: src/engine/backend/session/sessionSnapshot.cpp:50
+#: src/engine/frmclient/win/dlgs/about.cpp:48
 msgid "Application Studio"
 msgstr "Application Studio"
 
-#: src/engine/backend/session/sessionSnapshot.cpp:51
-msgid "Thick client (GUI)"
-msgstr "Товстий клієнт (GUI)"
-
-#: src/engine/backend/session/sessionSnapshot.cpp:53
 #: src/engine/launcher/connectionDB.cpp:78
 msgid "Web server"
 msgstr "Веб-сервер"
@@ -8020,10 +8012,10 @@ msgstr "Попередження"
 #: src/engine/coderunner/mainFrame/settings/fontcolorsettings.cpp:41
 #: src/engine/frmclient/mainFrame/settings/fontcolorsettings.cpp:45
 #: src/engine/frmclient/visualView/ctrl/typeControl.cpp:323
-#: src/engine/frmserver/schema/designer/database.cpp:97
-#: src/engine/frmserver/schema/designer/database.cpp:126
-#: src/engine/frmserver/schema/designer/database.cpp:144
-#: src/engine/frmserver/schema/designer/metaData.cpp:311
+#: src/engine/frmserver/schema/studio/database.cpp:97
+#: src/engine/frmserver/schema/studio/database.cpp:126
+#: src/engine/frmserver/schema/studio/database.cpp:144
+#: src/engine/frmserver/schema/studio/metaData.cpp:311
 msgid "Error"
 msgstr "Помилка"
 
@@ -9665,6 +9657,7 @@ msgid "OES Code Runner"
 msgstr "OES Code Runner"
 
 #: src/engine/coderunner/coderunner.cpp:105
+#: src/engine/frmclient/win/dlgs/about.cpp:49
 #, c-format
 msgid "About %s"
 msgstr "Про %s"
@@ -9674,7 +9667,7 @@ msgid "Standalone OES script runner - write and execute scripts without metadata
 msgstr "Автономний виконавець скриптів OES - пишіть і запускайте скрипти без метаданих."
 
 #: src/engine/coderunner/coderunner.cpp:135
-#: src/engine/frmserver/docView/templates/designer/docViewModuleEdit.cpp:711
+#: src/engine/frmserver/docView/templates/studio/docViewModuleEdit.cpp:711
 msgid "No syntax errors detected!"
 msgstr "Синтаксичних помилок не виявлено!"
 
@@ -10437,7 +10430,7 @@ msgid "Log files"
 msgstr "Файли журналу"
 
 #: src/engine/core/fileKind.cpp:24
-#: src/engine/frmserver/schema/designer/database.cpp:31
+#: src/engine/frmserver/schema/studio/database.cpp:31
 msgid "Data files"
 msgstr "Файли даних"
 
@@ -12243,7 +12236,6 @@ msgid "&Info"
 msgstr "&Інформація"
 
 #: src/engine/deskgui/univ/stockItem.cpp:79
-#: src/engine/frmclient/win/dlgs/about.cpp:74
 #: src/engine/frmserver/visualView/ctrl/tableBox.h:419
 #: src/engine/frmserver/visualView/ctrl/tableBox.h:580
 #: src/engine/frmserver/visualView/ctrl/tableBox.h:824
@@ -13202,6 +13194,7 @@ msgid "Select a source picture"
 msgstr "Вибрати джерело картинки"
 
 #: src/engine/frmclient/propertyManager/property/advprop/advpropPicture.cpp:168
+#: src/engine/frmclient/win/dlgs/about.cpp:98
 msgid "System"
 msgstr "Система"
 
@@ -13311,26 +13304,38 @@ msgstr "Дерево"
 msgid "List"
 msgstr "Список"
 
-#: src/engine/frmclient/win/dlgs/about.cpp:33
-msgid "About..."
-msgstr "Про програму..."
-
-#: src/engine/frmclient/win/dlgs/about.cpp:83
 #: src/engine/frmclient/win/dlgs/activeUser.cpp:47
 msgid "Program"
 msgstr "Програма"
 
-#: src/engine/frmclient/win/dlgs/about.cpp:85
-msgid "Locale"
-msgstr "Локаль"
+#: src/engine/frmclient/win/dlgs/about.cpp:52
+#, c-format
+msgid "Version %s, build %d"
+msgstr "Версія %s, збірка %d"
 
-#: src/engine/frmclient/win/dlgs/about.cpp:96
+#: src/engine/frmclient/win/dlgs/about.cpp:79
+msgid "Business applications from metadata and a language of their own"
+msgstr "Бізнес-застосунки з метаданих і власної мови"
+
+#: src/engine/frmclient/win/dlgs/about.cpp:95
+msgid "Connection"
+msgstr "Підключення"
+
+#: src/engine/frmclient/win/dlgs/about.cpp:97
+msgid "Language"
+msgstr "Мова"
+
+#: src/engine/frmclient/win/dlgs/about.cpp:108
 msgid "Plugins"
 msgstr "Плагіни"
 
-#: src/engine/frmclient/win/dlgs/about.cpp:119
-msgid "Thanks"
-msgstr "Подяки"
+#: src/engine/frmclient/win/dlgs/about.cpp:117
+msgid "Built on"
+msgstr "Побудовано на"
+
+#: src/engine/frmclient/win/dlgs/about.cpp:122
+msgid "Grown from wxFormBuilder (the form editor) and the ideas of 2C (the interpreter)"
+msgstr "Виросло з wxFormBuilder (редактор форм) та ідей 2C (інтерпретатор)"
 
 #: src/engine/frmclient/win/dlgs/activeUser.cpp:49
 msgid "Started"
@@ -13361,7 +13366,7 @@ msgid "LockGuid"
 msgstr "LockGuid"
 
 #: src/engine/frmclient/win/dlgs/activeUser.cpp:138
-#: src/engine/frmserver/client/clientFrameDesigner.cpp:65
+#: src/engine/frmserver/client/clientFrameStudio.cpp:65
 msgid "Users"
 msgstr "Користувачі"
 
@@ -13969,7 +13974,7 @@ msgstr "Додати з'єднанням"
 #: src/engine/frmclient/win/dlgs/linqConstructor/linqConstructor.cpp:247
 #: src/engine/frmclient/win/dlgs/linqConstructor/linqConstructor.cpp:324
 #: src/engine/frmclient/win/dlgs/linqConstructor/linqConstructor.cpp:339
-#: src/engine/frmserver/docView/templates/designer/docViewFormEditAttribute.cpp:323
+#: src/engine/frmserver/docView/templates/studio/docViewFormEditAttribute.cpp:323
 msgid "Column"
 msgstr "Колонка"
 
@@ -15652,50 +15657,50 @@ msgstr "Готово"
 msgid "Nothing here opens '%s'."
 msgstr "Тут ніщо не відкриває '%s'."
 
-#: src/engine/frmserver/client/clientFrameDesigner.cpp:68
-#: src/engine/frmserver/client/clientFrameRuntime.cpp:41
+#: src/engine/frmserver/client/clientFrameStudio.cpp:68
+#: src/engine/frmserver/client/clientFrameWorkspace.cpp:41
 #: src/engine/frmserver/docView/docManager.cpp:299
 #: src/engine/frmserver/schema/auditLog.cpp:33
 msgid "Registration journal"
 msgstr "Журнал реєстрації"
 
-#: src/engine/frmserver/client/clientFrameDesigner.cpp:70
+#: src/engine/frmserver/client/clientFrameStudio.cpp:70
 msgid "Restore database"
 msgstr "Відновити базу даних"
 
-#: src/engine/frmserver/client/clientFrameDesigner.cpp:71
+#: src/engine/frmserver/client/clientFrameStudio.cpp:71
 msgid "Dump database"
 msgstr "Вивантажити базу даних"
 
-#: src/engine/frmserver/client/clientFrameDesigner.cpp:73
+#: src/engine/frmserver/client/clientFrameStudio.cpp:73
 msgid "Clear database"
 msgstr "Очистити базу даних"
 
-#: src/engine/frmserver/client/clientFrameDesigner.cpp:76
-#: src/engine/frmserver/client/clientFrameRuntime.cpp:47
+#: src/engine/frmserver/client/clientFrameStudio.cpp:76
+#: src/engine/frmserver/client/clientFrameWorkspace.cpp:47
 msgid "Assistant window"
 msgstr "Вікно асистента"
 
-#: src/engine/frmserver/client/clientFrameDesigner.cpp:81
-#: src/engine/frmserver/client/clientFrameRuntime.cpp:54
+#: src/engine/frmserver/client/clientFrameStudio.cpp:81
+#: src/engine/frmserver/client/clientFrameWorkspace.cpp:54
 msgid "Options..."
 msgstr "Параметри..."
 
-#: src/engine/frmserver/client/clientFrameDesigner.cpp:82
-#: src/engine/frmserver/client/clientFrameRuntime.cpp:55
+#: src/engine/frmserver/client/clientFrameStudio.cpp:82
+#: src/engine/frmserver/client/clientFrameWorkspace.cpp:55
 msgid "Theme..."
 msgstr "Тема..."
 
-#: src/engine/frmserver/client/clientFrameDesigner.cpp:83
-#: src/engine/frmserver/client/clientFrameRuntime.cpp:56
+#: src/engine/frmserver/client/clientFrameStudio.cpp:83
+#: src/engine/frmserver/client/clientFrameWorkspace.cpp:56
 msgid "Tools"
 msgstr "Інструменти"
 
-#: src/engine/frmserver/client/clientFrameRuntime.cpp:28
+#: src/engine/frmserver/client/clientFrameWorkspace.cpp:28
 msgid "All operations..."
 msgstr "Усі функції..."
 
-#: src/engine/frmserver/client/clientFrameRuntime.cpp:29
+#: src/engine/frmserver/client/clientFrameWorkspace.cpp:29
 msgid "Operations"
 msgstr "Операції"
 
@@ -15788,75 +15793,75 @@ msgstr "Подання асистента"
 msgid "Save as..."
 msgstr "Зберегти як..."
 
-#: src/engine/frmserver/docView/docManagerDesigner.cpp:35
-#: src/engine/frmserver/docView/docManagerRuntime.cpp:17
+#: src/engine/frmserver/docView/docManagerStudio.cpp:35
+#: src/engine/frmserver/docView/docManagerWorkspace.cpp:17
 msgid "External data tool"
 msgstr "Зовнішня обробка"
 
-#: src/engine/frmserver/docView/docManagerDesigner.cpp:35
-#: src/engine/frmserver/docView/docManagerRuntime.cpp:17
+#: src/engine/frmserver/docView/docManagerStudio.cpp:35
+#: src/engine/frmserver/docView/docManagerWorkspace.cpp:17
 msgid "Data tool Doc"
 msgstr "Документ обробки"
 
-#: src/engine/frmserver/docView/docManagerDesigner.cpp:35
-#: src/engine/frmserver/docView/docManagerRuntime.cpp:17
+#: src/engine/frmserver/docView/docManagerStudio.cpp:35
+#: src/engine/frmserver/docView/docManagerWorkspace.cpp:17
 msgid "Data tool View"
 msgstr "Перегляд обробки"
 
-#: src/engine/frmserver/docView/docManagerDesigner.cpp:36
-#: src/engine/frmserver/docView/docManagerRuntime.cpp:18
+#: src/engine/frmserver/docView/docManagerStudio.cpp:36
+#: src/engine/frmserver/docView/docManagerWorkspace.cpp:18
 msgid "External report"
 msgstr "Зовнішній звіт"
 
-#: src/engine/frmserver/docView/docManagerDesigner.cpp:36
-#: src/engine/frmserver/docView/docManagerRuntime.cpp:18
+#: src/engine/frmserver/docView/docManagerStudio.cpp:36
+#: src/engine/frmserver/docView/docManagerWorkspace.cpp:18
 msgid "Report Doc"
 msgstr "Документ звіту"
 
-#: src/engine/frmserver/docView/docManagerDesigner.cpp:36
-#: src/engine/frmserver/docView/docManagerRuntime.cpp:18
+#: src/engine/frmserver/docView/docManagerStudio.cpp:36
+#: src/engine/frmserver/docView/docManagerWorkspace.cpp:18
 msgid "Report View"
 msgstr "Перегляд звіту"
 
-#: src/engine/frmserver/docView/docManagerDesigner.cpp:37
+#: src/engine/frmserver/docView/docManagerStudio.cpp:37
 msgid "Application Doc"
 msgstr "Документ застосунку"
 
-#: src/engine/frmserver/docView/docManagerDesigner.cpp:37
+#: src/engine/frmserver/docView/docManagerStudio.cpp:37
 msgid "Application View"
 msgstr "Перегляд застосунку"
 
-#: src/engine/frmserver/docView/templates/designer/docViewFormEdit.cpp:267
+#: src/engine/frmserver/docView/templates/studio/docViewFormEdit.cpp:267
 #, c-format
 msgid "Form editor: the form \"%s\" could not be loaded (its stored data is unreadable)."
 msgstr "Редактор форм: не вдалося завантажити форму \"%s\" (її збережені дані не читаються)."
 
-#: src/engine/frmserver/docView/templates/designer/docViewFormEdit.cpp:274
+#: src/engine/frmserver/docView/templates/studio/docViewFormEdit.cpp:274
 #, c-format
 msgid "Form editor: the form \"%s\" could not be opened."
 msgstr "Редактор форм: не вдалося відкрити форму \"%s\"."
 
-#: src/engine/frmserver/docView/templates/designer/docViewFormEdit.cpp:302
+#: src/engine/frmserver/docView/templates/studio/docViewFormEdit.cpp:302
 #, c-format
 msgid "Form editor: the form \"%s\" handed back could not be read whole."
 msgstr "Редактор форми: повернуту форму \"%s\" не вдалося прочитати повністю."
 
-#: src/engine/frmserver/docView/templates/designer/docViewFormEdit.cpp:353
+#: src/engine/frmserver/docView/templates/studio/docViewFormEdit.cpp:353
 msgid "Add page"
 msgstr "Додати сторінку"
 
-#: src/engine/frmserver/docView/templates/designer/docViewFormEdit.cpp:354
-#: src/engine/frmserver/docView/templates/designer/docViewFormEdit.cpp:356
-#: src/engine/frmserver/docView/templates/designer/docViewFormEditAttribute.cpp:175
+#: src/engine/frmserver/docView/templates/studio/docViewFormEdit.cpp:354
+#: src/engine/frmserver/docView/templates/studio/docViewFormEdit.cpp:356
+#: src/engine/frmserver/docView/templates/studio/docViewFormEditAttribute.cpp:175
 msgid "Add column"
 msgstr "Додати колонку"
 
-#: src/engine/frmserver/docView/templates/designer/docViewFormEdit.cpp:355
-#: src/engine/frmserver/docView/templates/designer/docViewFormEdit.cpp:357
+#: src/engine/frmserver/docView/templates/studio/docViewFormEdit.cpp:355
+#: src/engine/frmserver/docView/templates/studio/docViewFormEdit.cpp:357
 msgid "Add column group"
 msgstr "Додати групу колонок"
 
-#: src/engine/frmserver/docView/templates/designer/docViewModuleEdit.cpp:730
+#: src/engine/frmserver/docView/templates/studio/docViewModuleEdit.cpp:730
 msgid "Errors were found while checking module. Do you want to continue ?"
 msgstr "При перевірці модуля знайдено помилки. Продовжити?"
 
@@ -16014,7 +16019,7 @@ msgstr "'%s' завершився помилкою, яку не описує."
 msgid "refused"
 msgstr "відмовлено"
 
-#: src/engine/frmserver/mcp/tools/designer/mcpToolSession.cpp:114
+#: src/engine/frmserver/mcp/tools/studio/mcpToolSession.cpp:114
 #, c-format
 msgid "The user list could not be read: %s"
 msgstr "Не вдалося прочитати список користувачів: %s"
@@ -16099,76 +16104,76 @@ msgstr "Не вдалося зняти блокування %s: %s"
 msgid "Failed to release lock %s"
 msgstr "Не вдалося зняти блокування %s"
 
-#: src/engine/frmserver/schema/designer/applicationCompare.cpp:354
+#: src/engine/frmserver/schema/studio/applicationCompare.cpp:354
 #, c-format
 msgid "Merge applied to %d item(s)."
 msgstr "Об'єднання застосовано до елементів: %d."
 
-#: src/engine/frmserver/schema/designer/applicationCompare.cpp:356
+#: src/engine/frmserver/schema/studio/applicationCompare.cpp:356
 msgid "Not applied:"
 msgstr "Не застосовано:"
 
-#: src/engine/frmserver/schema/designer/applicationCompare.cpp:360
+#: src/engine/frmserver/schema/studio/applicationCompare.cpp:360
 msgid "Use Application > Save application to persist the changes."
 msgstr "Щоб зберегти зміни, скористайтеся Застосунок > Зберегти застосунок."
 
-#: src/engine/frmserver/schema/designer/database.cpp:73
+#: src/engine/frmserver/schema/studio/database.cpp:73
 msgid "Open database file"
 msgstr "Відкрити файл бази даних"
 
-#: src/engine/frmserver/schema/designer/database.cpp:82
+#: src/engine/frmserver/schema/studio/database.cpp:82
 msgid "Loading of tasks completed successful. Restart the program!"
 msgstr "Завантаження завдань завершено. Перезапустіть програму!"
 
-#: src/engine/frmserver/schema/designer/database.cpp:88
+#: src/engine/frmserver/schema/studio/database.cpp:88
 msgid "Error when trying to load database from a file!"
 msgstr "Помилка при спробі завантажити базу даних з файлу!"
 
-#: src/engine/frmserver/schema/designer/database.cpp:91
+#: src/engine/frmserver/schema/studio/database.cpp:91
 msgid "Loading the database failed."
 msgstr "Не вдалося завантажити базу даних."
 
-#: src/engine/frmserver/schema/designer/database.cpp:94
+#: src/engine/frmserver/schema/studio/database.cpp:94
 msgid "Loading the database failed with an internal error."
 msgstr "Завантаження бази даних завершилося внутрішньою помилкою."
 
-#: src/engine/frmserver/schema/designer/database.cpp:120
+#: src/engine/frmserver/schema/studio/database.cpp:120
 msgid "Save database file"
 msgstr "Зберегти файл бази даних"
 
-#: src/engine/frmserver/schema/designer/database.cpp:121
+#: src/engine/frmserver/schema/studio/database.cpp:121
 msgid "Data upload completed successfully!"
 msgstr "Вивантаження даних успішно завершено!"
 
-#: src/engine/frmserver/schema/designer/database.cpp:125
+#: src/engine/frmserver/schema/studio/database.cpp:125
 msgid "Error when trying to upload data to a file!"
 msgstr "Помилка при спробі вивантажити дані у файл!"
 
-#: src/engine/frmserver/schema/designer/database.cpp:132
+#: src/engine/frmserver/schema/studio/database.cpp:132
 msgid "Are you sure you want to clear the database?"
 msgstr "Ви впевнені, що хочете очистити базу даних?"
 
-#: src/engine/frmserver/schema/designer/database.cpp:141
+#: src/engine/frmserver/schema/studio/database.cpp:141
 msgid "Database cleared successfully!"
 msgstr "Базу даних успішно очищено!"
 
-#: src/engine/frmserver/schema/designer/database.cpp:143
+#: src/engine/frmserver/schema/studio/database.cpp:143
 msgid "Error when trying to clear database!"
 msgstr "Помилка при спробі очистити базу даних!"
 
-#: src/engine/frmserver/schema/designer/metaData.cpp:294
+#: src/engine/frmserver/schema/studio/metaData.cpp:294
 msgid "Successfully reverted to the database's application!"
 msgstr "Застосунок бази даних успішно повернуто!"
 
-#: src/engine/frmserver/schema/designer/metaData.cpp:350
+#: src/engine/frmserver/schema/studio/metaData.cpp:350
 msgid "The data tool or report could not be read from the file."
 msgstr "Не вдалося прочитати обробку або звіт із файлу."
 
-#: src/engine/frmserver/schema/designer/metaData.cpp:388
+#: src/engine/frmserver/schema/studio/metaData.cpp:388
 msgid "The application could not be read from the file."
 msgstr "Не вдалося прочитати застосунок з файлу."
 
-#: src/engine/frmserver/schema/designer/userList.cpp:162
+#: src/engine/frmserver/schema/studio/userList.cpp:162
 msgid "After recording, there would not be a single role with admin rights. The action is impossible!"
 msgstr "Після запису не залишиться жодної ролі з правами адміністратора. Дія неможлива!"
 
@@ -17226,7 +17231,7 @@ msgid "Global commands"
 msgstr "Глобальні команди"
 
 #: src/engine/frmserver/visualView/layers/commandBar.h:145
-msgid "The item's name, unique among the command bar's items. It identifies the item in the designer; the user never sees it."
+msgid "The item's name, unique among the command bar's items. It identifies the item in the studio; the user never sees it."
 msgstr "Ім'я елемента, унікальне серед елементів командної панелі. Воно ідентифікує елемент в Application Studio; користувач його ніколи не бачить."
 
 #: src/engine/frmserver/visualView/layers/commandBar.h:149
@@ -17740,20 +17745,20 @@ msgstr "Усі файли зображень"
 #~ msgstr "Веб-сервер публікує файлову базу, а ця база — на сервері СУБД."
 #~ msgid "No settings have been saved here yet."
 #~ msgstr "Тут ще не збережено жодного налаштування."
-#: src/engine/appstudio/mainFrame/mainFrameDesignerMenu.cpp:71
+#: src/engine/appstudio/mainFrame/mainFrameStudioMenu.cpp:71
 msgid "Performance measurement"
 msgstr "Замір продуктивності"
 
-#: src/engine/frmserver/docView/templates/designer/docViewProfile.cpp:23
+#: src/engine/frmserver/docView/templates/studio/docViewProfile.cpp:23
 #, c-format
 msgid "Performance measurement: %s s, script %s s"
 msgstr "Замір продуктивності: %s с, код %s с"
 
-#: src/engine/frmserver/docView/docManagerDesigner.cpp:62
+#: src/engine/frmserver/docView/docManagerStudio.cpp:62
 msgid "Profile Doc"
 msgstr "Документ заміру"
 
-#: src/engine/frmserver/docView/docManagerDesigner.cpp:62
+#: src/engine/frmserver/docView/docManagerStudio.cpp:62
 msgid "Profile View"
 msgstr "Перегляд заміру"
 
@@ -17983,7 +17988,7 @@ msgstr "Зняти веб-адресу '%s'?"
 msgid "The path under every publication of the base, without a slash at either end (es/desk):"
 msgstr "Шлях під кожною публікацією бази, без скісної риски на початку й у кінці (es/desk):"
 
-#: src/engine/frmserver/client/clientFrameDesigner.cpp
+#: src/engine/frmserver/client/clientFrameStudio.cpp
 msgid "Web addresses"
 msgstr "Веб-адреси"
 
@@ -18390,7 +18395,7 @@ msgid "Chart"
 msgstr "Діаграма"
 
 #: src/engine/backend/metaCollection/metaGroups.cpp
-#: src/engine/frmserver/schema/runtime/allFunctions.cpp
+#: src/engine/frmserver/schema/workspace/allFunctions.cpp
 msgid "Document journals"
 msgstr "Журнали документів"
 

@@ -2,7 +2,7 @@
 #define __FRMSERVER_SELECT_PREDEFINED_H__
 
 ////////////////////////////////////////////////////////////////////////////
-// THE DESIGNER'S CHOICE OF A DECLARED VALUE
+// THE STUDIO'S CHOICE OF A DECLARED VALUE
 ////////////////////////////////////////////////////////////////////////////
 //
 // The old desktop's dialog, asked of the thin client (frmclient/win/dlgs/selectPredefined.h). At run time a reference is chosen

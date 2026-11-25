@@ -4,7 +4,7 @@
 // ibUserInfo — profile of an authenticated user inside the OES
 // information base: name, GUID, password hash, role memberships,
 // language. Process-local — every session that authenticates a user
-// carries one (ibSession::m_userInfo); other GUIs (designer's Active
+// carries one (ibSession::m_userInfo); other GUIs (studio's Active
 // Users, admin tools) display copies built from sys_session /
 // sys_user reads. Was named ibApplicationDataUserInfo while the
 // singleton ibApplicationInstance owned the only copy; the registry

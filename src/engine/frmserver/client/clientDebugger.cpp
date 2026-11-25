@@ -9,8 +9,8 @@
 
 #include "clientHost.h"       // NotifyDebug — the client told what the engine said
 #include "clientInstance.h"   // ShareSession — whose worker the tab is opened on
-#include "frmserver/docView/templates/designer/docViewProfile.h"   // ShowProfile — what it measured, as a tab
-#include "protocol/protocolDesigner.h"   // ibProtocol::ibDebug
+#include "frmserver/docView/templates/studio/docViewProfile.h"   // ShowProfile — what it measured, as a tab
+#include "protocol/protocolStudio.h"   // ibProtocol::ibDebug
 
 namespace {
 

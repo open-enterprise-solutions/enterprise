@@ -141,7 +141,7 @@ bool ibValueMetaObjectStoredValue::OnBeforeCloseMetaObject()
 		// "there was an entry" — a MISS means the registration never happened at OPEN time, which
 		// is a bug worth knowing about but says nothing about whether this object can close. Read
 		// as a refusal it stopped CloseSubtree, which stopped CloseDatabase, which failed the whole
-		// rollback and left the designer half-open — one unregistered module taking the
+		// rollback and left the studio half-open — one unregistered module taking the
 		// application down with it. The miss is traced instead (metaData.cpp), so it is still
 		// visible without being fatal.
 		if (ibValueMetaObjectGenericData::OnBeforeCloseMetaObject()) {

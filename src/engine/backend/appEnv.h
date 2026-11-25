@@ -25,7 +25,7 @@
 // MUST null-check — the signatures document the precondition explicitly.
 // Subsystems that are mode-gated (logger, metadata, debugger) also return
 // nullptr when the active runMode does not allocate them (e.g. launcher
-// has no metadata; designer has no debug server; coderunner has no
+// has no metadata; studio has no debug server; coderunner has no
 // metadata + no debug server).
 
 #include "backend/backend.h"
@@ -56,7 +56,7 @@ BACKEND_API ibPluginManager*   PluginManager();
 // actually use them. Caller's null-check matters more here.
 
 // Audit + trace logger. Created for every mode that opens a DB
-// (enterprise / designer / appserver / wes); nullptr in launcher.
+// (enterprise / studio / appserver / wes); nullptr in launcher.
 BACKEND_API ibLogger* Logger();
 
 // Active application metadata — the one the engine has loaded into
@@ -74,7 +74,7 @@ BACKEND_API ibLogger* Logger();
 BACKEND_API ibMetaDataApplicationBase* ActiveMetaData();
 
 // Debugger endpoints — exclusive of each other. enterprise / wes own
-// the DebugServer (when started with --debug); designer owns the
+// the DebugServer (when started with --debug); studio owns the
 // DebugClient (always).
 //
 // Ownership chain: appData -> ActiveMetaData -> m_debugServer /
@@ -86,7 +86,7 @@ BACKEND_API ibMetaDataApplicationBase* ActiveMetaData();
 //
 // Practical effect for callers: nullptr when ActiveMetaData() is
 // nullptr (launcher / coderunner / pre-init) AND nullptr when the
-// active mode doesn't host this endpoint (designer has no server,
+// active mode doesn't host this endpoint (studio has no server,
 // runtime without --debug has no server, runtime has no client).
 BACKEND_API ibDebuggerServer* DebugServer();
 BACKEND_API ibDebuggerClient* DebugClient();

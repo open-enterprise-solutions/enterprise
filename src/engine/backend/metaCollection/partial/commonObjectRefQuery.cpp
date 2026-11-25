@@ -194,7 +194,7 @@ void ibValueRecordDataObjectRef::CaptureLoadedDataVersion()
 
 bool ibValueRecordDataObjectRef::BeginWriteScope(ibConnectionScope& scope)
 {
-	if (appData->DesignerMode())          return false;   // designer skip
+	if (appData->StudioMode())          return false;   // studio skip
 	if (!scope || !scope->IsOpen())
 		ibBackendCoreException::Error(_("Database is not open!"));
 
@@ -220,7 +220,7 @@ bool ibValueRecordDataObjectRef::BeginWriteScope(ibConnectionScope& scope)
 
 bool ibValueRecordDataObjectRef::BeginDeleteScope(ibConnectionScope& scope)
 {
-	if (appData->DesignerMode())          return false;
+	if (appData->StudioMode())          return false;
 	if (!scope || !scope->IsOpen())
 		ibBackendCoreException::Error(_("Database is not open!"));
 

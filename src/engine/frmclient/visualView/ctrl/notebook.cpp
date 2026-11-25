@@ -6,7 +6,7 @@
 #include "notebook.h"
 
 #include "frmclient/visualView/pageWindow.h"
-#include "frmclient/visualView/visualHostClient.h"   // a designer's host selects and moves by it
+#include "frmclient/visualView/visualHostClient.h"   // a studio's host selects and moves by it
 #include "frmclient/win/picture.h"
 #include "deskgui/univ/aui/auibook.h"
 
@@ -21,13 +21,13 @@ ibProtocol::ibForm::ibNotebook::ibTabLocation TabLocationOf(const ibProtocolNode
 
 // The desktop's style of a notebook: its tabs where the form put them, moved and scrolled; split at runtime only, as
 // the desktop's (ibValueNotebook::Create) - with a split, ibAuiNotebook ends a drag inside its own tabs before it says
-// DRAG_DONE, so the designer would never hear that a page was moved.
+// DRAG_DONE, so the studio would never hear that a page was moved.
 long NotebookStyleOf(const ibProtocolNode& node, const ibVisualHostClient& host)
 {
 	long style = (TabLocationOf(node) == ibProtocol::ibForm::ibNotebook::ibTabLocation::Bottom ? ibAUI_NB_BOTTOM : ibAUI_NB_TOP) |
 		ibAUI_NB_TAB_MOVE |
 		ibAUI_NB_SCROLL_BUTTONS;
-	if (!host.IsDesignerHost())
+	if (!host.IsStudioHost())
 		style |= ibAUI_NB_TAB_SPLIT;
 	return style;
 }
@@ -52,8 +52,8 @@ void ibValueNotebook::Update(const ibProtocolNode& node)
 
 	m_notebook->SetWindowStyle(NotebookStyleOf(node, GetVisualHost()));
 	// …and its tabs nowhere when OrientPage is None: a panel, the active page alone, switched by the server
-	// (ActivePage). The designer keeps them, as the desktop's (ibValueNotebook::OnUpdated).
-	const bool tabs = GetVisualHost().IsDesignerHost() ||
+	// (ActivePage). The studio keeps them, as the desktop's (ibValueNotebook::OnUpdated).
+	const bool tabs = GetVisualHost().IsStudioHost() ||
 		TabLocationOf(node) != ibProtocol::ibForm::ibNotebook::ibTabLocation::None;
 	m_notebook->SetTabCtrlHeight(tabs ? -1 : 0);
 
@@ -92,9 +92,9 @@ void ibValueNotebook::OnPageChanged(ibAuiNotebookEvent& event)
 			continue;
 		m_activePage = child->GetControlID();
 
-		// The designer's: the page clicked is selected in its editor (the desktop's SelectControl) - nothing goes to
+		// The studio's: the page clicked is selected in its editor (the desktop's SelectControl) - nothing goes to
 		// the server.
-		if (GetVisualHost().IsDesignerHost()) {
+		if (GetVisualHost().IsStudioHost()) {
 			GetVisualHost().SelectControl(child);
 			return;
 		}
@@ -110,9 +110,9 @@ void ibValueNotebook::OnEndDrag(ibAuiNotebookEvent& event)
 {
 	event.Skip();
 
-	// The designer's: the page dragged moves among the notebook's pages in the form, its editor's command (the
+	// The studio's: the page dragged moves among the notebook's pages in the form, its editor's command (the
 	// desktop's ChangeChildPosition and RefreshEditor) - the runtime's is the server's.
-	if (GetVisualHost().IsDesignerHost()) {
+	if (GetVisualHost().IsStudioHost()) {
 		wxWindow* const page = m_notebook->GetPage(event.GetSelection());
 		const int pos = m_notebook->GetPagePosition(event.GetSelection()).tabIdx;
 		for (unsigned int i = 0; i < GetChildCount(); i++) {
@@ -185,8 +185,8 @@ void ibValueNotebookPage::Update(const ibProtocolNode& node)
 
 void ibValueNotebookPage::OnSelected()
 {
-	// The desktop's: selected in the designer, or a control on it is — its notebook shows it, through the one door that
-	// brings a page up (SelectActivePage), as a tab clicked in the designer makes it the active one (OnPageChanged).
+	// The desktop's: selected in the studio, or a control on it is — its notebook shows it, through the one door that
+	// brings a page up (SelectActivePage), as a tab clicked in the studio makes it the active one (OnPageChanged).
 	ibValueNotebook* const owner = GetNotebook();
 	if (owner == nullptr)
 		return;

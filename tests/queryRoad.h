@@ -8,7 +8,7 @@
 // a release build compiles it out (ibJournalInfo under NDEBUG); this is what a test holds, in any build.
 //
 // Measured by the query measurement the profiler is made of (backend/query/queryProfiler.h) — the instrument a person
-// reads in the designer, not a second one.
+// reads in the studio, not a second one.
 
 #include <cstdint>
 #include <ostream>

@@ -552,7 +552,7 @@ void ibValueSystemFunction::Message(const ibString& strMessage, ibStatusMessage 
 	// and I blamed a dead channel that turned out to be innocent).
 	//
 	// ⭐ SO THEY LEAVE BY A CHANNEL OF THEIR OWN — the results of a sandbox, read by whoever asked
-	// for it and dropped by the designer. The person is debugging their own work and has no reason
+	// for it and dropped by the studio. The person is debugging their own work and has no reason
 	// to read somebody else's probe; the assistant cannot see into that run any other way.
 	if (ibBackendException::IsEvalMode()) {
 
@@ -565,7 +565,7 @@ void ibValueSystemFunction::Message(const ibString& strMessage, ibStatusMessage 
 	// ⭐ NOTHING IS INTERCEPTED HERE, deliberately. A message needs to be readable
 	// by more than the person looking at the pane — but the place to keep it is
 	// the FRAME it is already handed to, which records it as data on the way to
-	// the window (ibFrontendMainFrameDesigner::Message). A collector here would be
+	// the window (ibFrontendMainFrameStudio::Message). A collector here would be
 	// a second road to the same fact, and second roads diverge: this one would
 	// have missed everything the debugger reports, which never passes through
 	// here at all.
@@ -585,7 +585,7 @@ void ibValueSystemFunction::Message(const ibString& strMessage, ibStatusMessage 
 		run->Say(strMessage, status);
 
 	// ⭐⭐ AND UP THE DEBUG CHANNEL, WHEN SOMEBODY IS ATTACHED. The road has been there all along —
-	// `CommandId_MessageFromServer`, which the designer parses and hands to every bridge on it —
+	// `CommandId_MessageFromServer`, which the studio parses and hands to every bridge on it —
 	// and nothing ever sent one: SendErrorToClient had no callers at all (measured 2026-09-02,
 	// looking for why a sandbox's printed lines never arrived). What a running application says is
 	// exactly what somebody debugging it needs to read, and they are not sitting in front of its

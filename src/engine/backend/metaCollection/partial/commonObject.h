@@ -238,7 +238,7 @@ public:
 		// The copies belong here: an object's attributes ARE its own plus the common ones it
 		// carries, and this is the list the RUNTIME reads to build a form
 		// (ibValueRecordDataObjectCatalog::GetSourceExplorer walks it). Hiding them from the
-		// DESIGNER TREE is a display decision and belongs where the tree is drawn — taking
+		// STUDIO TREE is a display decision and belongs where the tree is drawn — taking
 		// them out of this list took them out of the form as well.
 		FillArrayObjectByFilter<ibValueMetaObjectAttributeBase>(array, { g_metaAttributeCLSID, g_metaSharedAttributeColumnCLSID });
 		return array;
@@ -636,7 +636,7 @@ public:
 	virtual bool OnDeleteMetaObject();
 
 	//module manager is started or exit
-	//after and before for designer
+	//after and before for studio
 	virtual bool OnBeforeRunMetaObject(int flags);
 	virtual bool OnAfterRunMetaObject(int flags);
 
@@ -823,7 +823,7 @@ public:
 	//descriptions...
 	//
 	// ⭐⭐ AN ENUMERATION MEMBER IS DECLARED, NOT STORED — it reads as the application writes it in the
-	// designer and as the synonym a person put on it at run time.
+	// studio and as the synonym a person put on it at run time.
 	virtual bool GenerateDataDesc(const ibValueDataObject* objValue, ibString& out) const override;
 	// …so it reads NO field to say it: the member is found by its guid in the metadata.
 	virtual bool GenerateDataDesc(ibDataDescParameter& /*out*/) const override { return false; }
@@ -1461,7 +1461,7 @@ class BACKEND_API ibValueMetaObjectRecordDataHierarchyMutableRef :
 	//
 	// ⭐⭐ HOW A ROW OF ANY OF THEM READS — ONE implementation, here, because it was one sentence copied
 	// three times. A catalog, a chart of accounts and a chart of characteristic types all say the same
-	// thing: in the designer the DECLARED form (the empty reference, or a predefined value written as
+	// thing: in the studio the DECLARED form (the empty reference, or a predefined value written as
 	// `CatalogRef.Goods.Chair`), and at run time the row's own `Description` — the very attribute this
 	// class owns. Three copies meant three places to fix and three chances to drift; the families that
 	// genuinely read differently (a document by number and date, an enumeration by its member) say so on
@@ -1507,7 +1507,7 @@ class BACKEND_API ibValueMetaObjectRecordDataHierarchyMutableRef :
 	// against the columns its kind offers (GetPredefinedDesc) and against where its hierarchy lets it stand BEFORE anything
 	// changes: refused, it raises naming the item, and every item is as it was. Append makes one more item and says which:
 	// its guid; it declares its kind's default where it must declare and was given nothing, and with no code it takes the
-	// one after the greatest declared. Set changes the item of that guid whole, or makes one more of it (the designer's Copy).
+	// one after the greatest declared. Set changes the item of that guid whole, or makes one more of it (the studio's Copy).
 	ibGuid AppendPredefinedValue(const ibPredefinedItemDescription& item);
 	void SetPredefinedValue(const ibPredefinedItemDescription& item);
 	void DeletePredefinedValue(const ibGuid& predefinedGuid);
@@ -1522,7 +1522,7 @@ class BACKEND_API ibValueMetaObjectRecordDataHierarchyMutableRef :
 	// ⭐⭐ THE ONE SCHEMA OF THE PREDEFINED ITEMS, AS ASKED NOW — the description kept (m_predefinedDesc), its form written
 	// into it first, read off the tables this object declares at this moment: a parent where the items stand under one
 	// another, folders where they are told apart, the next code, every attribute of its row and every section, and the
-	// types a type is chosen among. Asked by everything that declares or shows an item: the door, the designer's window,
+	// types a type is chosen among. Asked by everything that declares or shows an item: the door, the studio's window,
 	// MCP. What it answered may be behind by the next question; the apply's check judges the facts (ContributeTables).
 	const ibPredefinedDescription& GetPredefinedDesc();
 
@@ -1773,7 +1773,7 @@ public:
 	//attribute
 	std::vector<ibValueMetaObjectAttributeBase*> GetAttributeArrayObject(
 		std::vector<ibValueMetaObjectAttributeBase*> array = std::vector<ibValueMetaObjectAttributeBase*>()) const {
-		// The copies come along: the designer tree lists what an object HAS, and a shared
+		// The copies come along: the studio tree lists what an object HAS, and a shared
 		// attribute it carries is one of those — visible where it lives, and edited only
 		// where it was declared.
 		FillArrayObjectByFilter<ibValueMetaObjectAttributeBase>(array, { g_metaAttributeCLSID });
@@ -2493,7 +2493,7 @@ protected:
 	//
 	//   bool ibValueRecordDataObjectCatalog::WriteObject() {
 	//     ibConnectionScope scope = ibSession::Current()->OpenConnectionScope();
-	//     if (!BeginWriteScope(scope)) return true;          // designer / eval
+	//     if (!BeginWriteScope(scope)) return true;          // studio / eval
 	//     ibWriteScope objectScope(*this);                   // put back if never durable
 	//
 	//     ibBackendValueForm* const valueForm = GetForm();
@@ -2506,7 +2506,7 @@ protected:
 	//   }
 	//
 	// Begin*Scope returns true to proceed, false to skip silently
-	// (designer / eval mode). Throws ibBackendAccessException on
+	// (studio / eval mode). Throws ibBackendAccessException on
 	// access denial; ibBackendLockException on lock conflict /
 	// version mismatch; ibBackendCoreException on DB-not-open.
 	//
@@ -2764,7 +2764,7 @@ public:
 	// subclass override paths.
 	// ⭐ BOTH HOLDERS, one act: this is what makes `RegisterRecords.<Name>` — and `Sequences.<Name>`
 	// beside it — resolve in the module after the document's lists are edited. Driving only the
-	// first left the second answering "not found" in the designer's syntax check until the whole
+	// first left the second answering "not found" in the studio's syntax check until the whole
 	// application was reloaded.
 	void ClearRecordSet()  { ibASSERT(m_registerRecords && m_sequenceRecords); m_registerRecords->ClearRecordSet(); m_sequenceRecords->ClearRecordSet(); }
 	void UpdateRecordSet() { ClearRecordSet(); m_registerRecords->CreateRecordSet(); m_sequenceRecords->CreateRecordSet(); }

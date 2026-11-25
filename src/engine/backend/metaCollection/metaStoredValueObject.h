@@ -151,7 +151,7 @@ class BACKEND_API ibValueMetaObjectStoredValue :
 
 	// Hosts no children of its own. A constant carries a module (a predefined child, not a tree
 	// node) and nothing else — no forms, no templates, no commands. Left at GenericData's default
-	// it would start admitting them, which changes the designer tree rather than fixing a cast.
+	// it would start admitting them, which changes the studio tree rather than fixing a cast.
 	virtual ibClassID ResolveChild(const ibClassID&) const override { return 0; }
 
 	// The form is built on the fly from the source (see GetObjectForm) — a constant has no form

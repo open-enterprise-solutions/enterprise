@@ -9,7 +9,7 @@
 #include "frmclient/mainFrame/mainFrameChild.h"
 #include "frmclient/visualView/visualHostClient.h"
 
-void ibAppDesigner::OnMouseEvent(wxMouseEvent& event)
+void ibAppStudio::OnMouseEvent(wxMouseEvent& event)
 {
 	// A CLICK IN A FORM'S EDITOR SELECTS WHAT IT IS ON — the desktop designer's: a control's window takes the click
 	// itself, so the host it is drawn in is told from here (the runtime's host does nothing with it).
@@ -35,7 +35,7 @@ void ibAppDesigner::OnMouseEvent(wxMouseEvent& event)
 	event.Skip();
 }
 
-void ibAppDesigner::OnSetFocus(wxFocusEvent& event)
+void ibAppStudio::OnSetFocus(wxFocusEvent& event)
 {
 	// THE FOCUS GONE INTO A TAB BRINGS IT UP — the desktop designer's: a click into a tab's window that is not the
 	// selected one (the notebook split in two) selects it, and the selection is told to the server as a tab picked is.
@@ -54,7 +54,7 @@ void ibAppDesigner::OnSetFocus(wxFocusEvent& event)
 	event.Skip();
 }
 
-int ibAppDesigner::FilterEvent(wxEvent& event)
+int ibAppStudio::FilterEvent(wxEvent& event)
 {
 	if (event.GetEventType() == wxEVT_LEFT_DOWN || event.GetEventType() == wxEVT_RIGHT_DOWN) {
 		OnMouseEvent(

@@ -6,7 +6,7 @@
 #include "frmclient/propertyManager/property/private/prop.h"             // ibPGPropertyFlags_*
 #include "frmclient/propertyManager/property/private/propertyRegistry.h"
 #include "frmclient/propertyManager/propertyEditor.h"
-#include "protocol/protocolDesigner.h"   // ibProtocol::ibSchema::ibProperties
+#include "protocol/protocolStudio.h"   // ibProtocol::ibSchema::ibProperties
 #include "deskgui/univ/messageDialog.h"
 
 ibPG_IMPLEMENT_PROPERTY_CLASS(ibPGDataSourceProperty, ibPGProperty, TextCtrlAndButton)

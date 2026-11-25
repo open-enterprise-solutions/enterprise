@@ -26,7 +26,7 @@
 // nothing else.
 //
 // WHAT is shown comes from the application (ibHomePageDescription on ibValueMetaObjectApplication), edited in
-// the designer through the workspace editor. See docs/private/home-page.md.
+// the studio through the workspace editor. See docs/private/home-page.md.
 
 #include "frmserver/docView/docView.h"
 #include "frmserver/visualView/ctrl/form.h"   // ibValuePtr<ibValueForm> — a cell holds its form
@@ -65,7 +65,7 @@ public:
 
 	// The workspace as it was when this tab opened. A snapshot on purpose: the tab is a running layout of live
 	// forms, and re-reading the description under it mid-session would silently invalidate the cells. Reopening
-	// the tab picks up designer changes.
+	// the tab picks up studio changes.
 	const ibHomePageDescription& GetDescription() const { return m_description; }
 
 	// The metadata the page's forms belong to — its metaobject's.

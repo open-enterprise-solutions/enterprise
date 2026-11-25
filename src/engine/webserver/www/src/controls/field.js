@@ -331,7 +331,7 @@ class FieldViewSlider extends FieldViewProvider {
 		const state = this.control.state(node);
 		this.slider.min = node.MinValue ?? 0;
 		this.slider.max = node.MaxValue ?? 100;
-		// The value — none in the designer.
+		// The value — none in the studio.
 		if (state.Position !== undefined)
 			this.slider.value = state.Position;
 		const vertical = node.Orient === OrientVertical;

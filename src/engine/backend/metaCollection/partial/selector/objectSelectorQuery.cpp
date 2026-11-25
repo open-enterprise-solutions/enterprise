@@ -47,9 +47,9 @@ void ibValueSelectorRecordDataObject::Reset()
 	m_objGuid.reset(); m_newObject = false;
 	m_anchorSort.clear();
 	m_listObjectValue.clear();
-	// Designer mode never iterates (Next() returns false); GetPropVal reads these
-	// designer values directly, so populate them up front.
-	if (appData->DesignerMode()) {
+	// Studio mode never iterates (Next() returns false); GetPropVal reads these
+	// studio values directly, so populate them up front.
+	if (appData->StudioMode()) {
 		for (const auto object : m_metaObject->GetGenericAttributeArrayObject()) {
 			if (m_metaObject->IsDataReference(object->GetMetaID()))
 				continue;

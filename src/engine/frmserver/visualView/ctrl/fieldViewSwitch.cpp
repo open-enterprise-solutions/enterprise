@@ -25,8 +25,8 @@ bool ibFieldViewSwitch::GetChoiceValue(size_t place, ibValue& value) const
 
 void ibFieldViewSwitch::OnUpdate(ibDataNode& state, ibVisualHost* host)
 {
-	// The items, each its text, and the one the value stands on — none in the designer, where the field shows no value.
-	const bool showValue = !appData->DesignerMode();
+	// The items, each its text, and the one the value stands on — none in the studio, where the field shows no value.
+	const bool showValue = !appData->StudioMode();
 	ibValue current;
 	if (showValue)
 		GetField()->GetControlValue(current);

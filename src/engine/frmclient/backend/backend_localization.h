@@ -20,14 +20,14 @@ public:
 	// ru/en/uk that localization arrays are keyed on) for whoever translates
 	// here — the current session's translate state, else this thread's
 	// (ibSession::GetTranslateState). Pinned when the application loads and
-	// when the designer changes it; a session takes its base's in CompileRoot.
+	// when the studio changes it; a session takes its base's in CompileRoot.
 	static void SetUserLanguage(const ibString& strUserLanguage);
 
 	// Active application-language for the calling thread — the translate
 	// state's answer: the script's override, else the user's, else the
 	// application's; each session its own, a thread without one its own.
 	// Every internal lookup
-	// (synonym translate, raw-loc encode/decode) and the designer's
+	// (synonym translate, raw-loc encode/decode) and the studio's
 	// advprop string editor route through here.
 	//
 	// HOT PATH. A single report line / form synonym lookup hits this

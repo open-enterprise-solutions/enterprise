@@ -318,7 +318,7 @@ public:
 
 		// ⭐ A FIELD KEPT PER SIDE IS OFFERED AS ITS TWO SIDES (listed with the predefined ones), not as
 		// itself. The author's field is not a predefined attribute — it is listed by the dimension or
-		// resource walk, and switching it off would take it out of the designer's own tree — so it is
+		// resource walk, and switching it off would take it out of the studio's own tree — so it is
 		// left out here; its column stays, because the schema reads the dimensions itself.
 		// …and only once its sides exist: a copy that mirrors a database written before them still reads
 		// the field itself.
@@ -804,7 +804,7 @@ public:
 	// been rebuilt.
 	std::shared_ptr<const ibBackendQueryable> GetTurnoverViewQueryable(bool creditSide) const;
 
-	// Is this register's totals row split across shards? A schema question, answered by the designer's
+	// Is this register's totals row split across shards? A schema question, answered by the studio's
 	// switch — turning it on or off changes the totals KEY, so it takes effect through an Apply and the
 	// regenerator rebuilds the table because a re-keyed row cannot be migrated in place.
 	bool IsTotalsSplitEnabled() const { return m_propertySplitTotals->GetValueAsBoolean(); }
@@ -828,7 +828,7 @@ public:
 	virtual bool OnSaveMetaObject(int flags);
 	virtual bool OnDeleteMetaObject();
 
-	//for designer
+	//for studio
 	virtual bool OnReloadMetaObject();
 
 	//module manager is started or exit
@@ -878,7 +878,7 @@ protected:
 	//
 	//     Period · Recorder · LineNumber · Active · Account · <all the KINDS> · <all the VALUES>
 	//
-	// The order is not decoration — this list is what the designer shows, what a generated form lays
+	// The order is not decoration — this list is what the studio shows, what a generated form lays
 	// out and what a `SELECT *` returns. WHEN a movement happened, WHAT wrote it, whether it is in
 	// force, WHAT it is against, and only then the analytical breakdown: kinds together, values
 	// together, so a reader sees the vocabulary of the breakdown before its contents.

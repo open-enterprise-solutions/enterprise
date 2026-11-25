@@ -58,33 +58,33 @@ public:
 	// The control a window drawn is — none: no control's (the desktop's GetObjectBase).
 	ibValueFrame* GetObjectBase(const wxObject* ibobject) const;
 
-	// THE DESIGNER'S HOST — the desktop's: the form drawn for its editor, what the person does with a control the
+	// THE STUDIO'S HOST — the desktop's: the form drawn for its editor, what the person does with a control the
 	// editor's — nothing of it goes to the server (Send, Hold).
-	virtual bool IsDesignerHost() const { return false; }
-	// The window the controls are built in — the one they scroll in; a designer's host, its card's.
+	virtual bool IsStudioHost() const { return false; }
+	// The window the controls are built in — the one they scroll in; a studio's host, its card's.
 	virtual wxWindow* GetBackgroundWindow() const { return m_contentWindow; }
-	// A click into it, as the application saw it before the window clicked did — a designer's host selects by it.
+	// A click into it, as the application saw it before the window clicked did — a studio's host selects by it.
 	virtual void OnClickFromApp(wxWindow* WXUNUSED(currentWindow), wxMouseEvent& WXUNUSED(event)) {}
 	// …and a part of a control clicked that is a control of its own — a table's column by its header, the table by its
-	// rows (the desktop's g_visualHostContext->SelectControl): a designer's host selects it in its editor.
+	// rows (the desktop's g_visualHostContext->SelectControl): a studio's host selects it in its editor.
 	virtual void SelectControl(ibValueFrame* WXUNUSED(control)) {}
-	// A control's properties fetched as the inspector shows it (ibValueFrame::Fetch) — a designer's host asks its editor,
+	// A control's properties fetched as the inspector shows it (ibValueFrame::Fetch) — a studio's host asks its editor,
 	// which holds them or asks the server; a running form's control shows none. False: no answer.
 	virtual bool Fetch(ibValueFrame* WXUNUSED(control)) { return true; }
-	// A property of a control edited (ibValueFrame::OnPropertyChanged) — a designer's host gives it to its editor, which
+	// A property of a control edited (ibValueFrame::OnPropertyChanged) — a studio's host gives it to its editor, which
 	// draws it; nothing of it is the runtime's.
 	virtual void ModifyProperty(ibProperty* WXUNUSED(property), const ibVariant& WXUNUSED(oldValue),
 		const ibVariant& WXUNUSED(newValue)) {}
-	// …and a control moved under `parent`, at `pos` among its children — a table's column by its header: a designer's
+	// …and a control moved under `parent`, at `pos` among its children — a table's column by its header: a studio's
 	// host gives it to its editor, whose command it is; the runtime's table tells the server itself (Send).
 	virtual void MovePosition(ibValueFrame* WXUNUSED(control), ibValueFrame* WXUNUSED(parent), unsigned int WXUNUSED(pos)) {}
 
 protected:
 
 	// ⭐ A NODE READ BY ITS CONTROL — the one place a control reads what its node says: as it is built (Generate), and
-	// drawn again where its node changed (UpdateNode). A designer's host reads its properties there too.
+	// drawn again where its node changed (UpdateNode). A studio's host reads its properties there too.
 	virtual void ReadControl(ibValueFrame* control, const ibProtocolNode& node);
-	// The scrolling fitted to what is drawn — a designer's host fits its card first.
+	// The scrolling fitted to what is drawn — a studio's host fits its card first.
 	virtual void UpdateVirtualSize();
 
 private:

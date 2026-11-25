@@ -35,7 +35,7 @@ static const ibMetaData* ibQuerySessionApplication()
 {
 	const ibSession* session = ibSession::Current();
 	if (session == nullptr)
-		return nullptr;   // designer eval / no session — the caller degrades, it does not guess
+		return nullptr;   // studio eval / no session — the caller degrades, it does not guess
 
 	const ibValueModuleManagerRuntimeApplication* mm = session->GetManagerModule();
 	if (mm == nullptr)
@@ -188,7 +188,7 @@ bool ibValueQueryExec::RunPackage(std::vector<ibValue>& out, std::vector<ibStrin
 	catch (...) {
 		if (!ibBackendException::IsEvalComplete())
 			throw;   // runtime: the package fails at the statement that failed, with THAT statement's message
-		// completion: the caret's walk may have no live session to read from (the designer's has no runtime),
+		// completion: the caret's walk may have no live session to read from (the studio's has no runtime),
 		// and a session-less read can throw beyond ibBackendException — degrade instead of failing, so the
 		// .Execute().Select()… chain stays introspectable. (The walk would otherwise swallow the throw and
 		// leave the chain object undefined → no Select in the dropdown.)
@@ -226,7 +226,7 @@ bool ibValueQueryExec::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue,
 		}
 	}
 
-	// Statement-less (empty query), designer-degraded, or a first statement that is a DROP (which
+	// Statement-less (empty query), studio-degraded, or a first statement that is a DROP (which
 	// has no result) — an empty QueryResult keeps the method chain alive.
 	pvarRetValue = new ibValueQueryResult();
 	return true;

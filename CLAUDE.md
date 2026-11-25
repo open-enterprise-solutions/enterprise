@@ -88,7 +88,7 @@ enterprise/
 │       ├── view-only.md          # read-only forms — rights matryoshka, control read-only, command greying
 │       ├── user-form-editor.md   # "Change form" — the USER re-arranges an open form (whitelisted props, queued commands)
 │       ├── property-system.md    # ibPropertyObject + object inspector — the skeleton (5 surfaces)
-│       ├── metadata-tree.md      # Designer navigator + external reports/data tools
+│       ├── metadata-tree.md      # Studio navigator + external reports/data tools
 │       ├── compatibility-version.md # the version an application declares — the USER's step up, gating code AND schema
 │       ├── metadata-lifecycle.md # load/run/save/close — the metaobject events in order + external DataTool/Report
 │       ├── metadata-containers.md # the ibMetaData family — mechanism + varieties (application vs external DataTool/Report)
@@ -118,7 +118,7 @@ enterprise/
 │       ├── serialization-io.md   # ibWriterMemory/ibReaderMemory, chunks, compression (⚠ licensing)
 │       ├── ROADMAP.md            # state of the platform — landed / in flight / not built
 │       ├── naming-plan.md        # PLAN — file/folder renames (nothing applied)
-│       ├── metaobject-naming.md  # PLAN — user-visible taxonomy: designer labels, script names, tree order
+│       ├── metaobject-naming.md  # PLAN — user-visible taxonomy: studio labels, script names, tree order
 │       ├── restructure-plan.md   # PLAN — grouping, declaration order, naming (nothing applied)
 │       └── application-compare.md  # Compare/Merge feature — walker, model, Apply paths
 └── src/
@@ -128,7 +128,7 @@ enterprise/
         │                    #   ibDateTime/ibGuid, fileSystem, serialize (dataBuilder, JSON), ibCoreException,
         │                    #   ibLocalization, build stamp; no wx
         ├── backend/         # backend.dll  — engine, compiler, DB, metadata, debugger; links core
-        ├── protocol/        # protocol.dll — the client protocol: protocol.h (names/numbers, no deps; the designer's messages in protocolDesigner.h) + the talking side
+        ├── protocol/        # protocol.dll — the client protocol: protocol.h (names/numbers, no deps; the studio's messages in protocolStudio.h) + the talking side
         ├── frmserver/       # frmserver.dll — server-side forms, the client host; includes protocol.h only
         ├── deskgui/         # deskgui.dll — the desktop's user interface: the root is the API (deskgui.h, app — the desktop program's base `ibWxApp`, console — the servers' boot, header-only, typeconv, dateconv, strvararg — an ibString in wx's varargs); docview/
         │                    #   the doc/view; univ/ the custom-drawn engine and all that inherits it (ctrl, dataview, grid, theme); links core
@@ -136,7 +136,7 @@ enterprise/
         ├── fileserver/      # fileserver.dll — a file base loaded into the thin client's process
         ├── appworkspace/    # appworkspace.exe (thin client)
         ├── webserver/       # webserver.exe (the bases' transport for browsers: the site + the client protocol)
-        ├── appstudio/       # appstudio.exe (thin designer)
+        ├── appstudio/       # appstudio.exe (studio)
         ├── launcher/        # launcher.exe  (connection chooser)
         ├── appserver/       # appserver.exe (the application server)
         ├── appcluster/      # appcluster.exe (servers per base, the port and routing, restarts; console or a service)
@@ -255,7 +255,7 @@ CLSIDs appear in serialised application files and the DB; the kind-typing change
 
 ### 7. Metadata open/close — `ibMetaImage`
 
-`ibMetaData` (`src/engine/backend/metaData.h`) holds an open application as a single runtime image: `std::shared_ptr<ibMetaImage> m_image`. **Its presence is the open state** — `IsOpen()` is just `m_image != nullptr`. A `LoadGuard` RAII transaction creates the image at the start of a run and drops it (rolling the load back) if the run does not complete. The image owns the type-ctor registry (`ibCtorRegistry<ibCtorMetaValueType> m_factoryCtors`, which owns ctors via `shared_ptr`), the module storage, and the compile-value cache built by `CreateDesignerCache()` (designer kinds only; `nullptr` otherwise). Subclass accessors (`GetModuleStorage`, `GetCompileCache`, …) all guard `m_image`.
+`ibMetaData` (`src/engine/backend/metaData.h`) holds an open application as a single runtime image: `std::shared_ptr<ibMetaImage> m_image`. **Its presence is the open state** — `IsOpen()` is just `m_image != nullptr`. A `LoadGuard` RAII transaction creates the image at the start of a run and drops it (rolling the load back) if the run does not complete. The image owns the type-ctor registry (`ibCtorRegistry<ibCtorMetaValueType> m_factoryCtors`, which owns ctors via `shared_ptr`), the module storage, and the compile-value cache built by `CreateStudioCache()` (studio kinds only; `nullptr` otherwise). Subclass accessors (`GetModuleStorage`, `GetCompileCache`, …) all guard `m_image`.
 
 ---
 
@@ -379,7 +379,7 @@ bin\Win32\Debug\appworkspace.exe --file=F:\projects\oes-bin\examples\fb_test301
 ```
 
 `--file=` is the **folder**, not a `.fdb`. Started with no `--file`, no `--srv` and no `--address`, the
-designer asks for the folder with a picker. Server bases take `--srv` / `--db` / `--usr` / `--pwd`
+studio asks for the folder with a picker. Server bases take `--srv` / `--db` / `--usr` / `--pwd`
 instead, a base an application server serves `--address=oes://server[:port]/<base>`, a web server's publication
 `--address=` its link as the browser shows it (`https://server/<base>/`); the full list is
 `OnInitCmdLine` in each `mainApp.cpp` (`address`, `trusted`, `file`, `srv`, `dbport`, `db`, `user`,
@@ -388,10 +388,10 @@ instead, a base an application server serves `--address=oes://server[:port]/<bas
 ### The MCP server — how an assistant reaches the platform
 
 **The port is the client's; the tools are the engine's.** The thin client opens the port on the person's
-own machine (`frmclient/backend/mcp/mcpServer.h`) — the designer on `http://127.0.0.1:7374/`, the
+own machine (`frmclient/backend/mcp/mcpServer.h`) — the studio on `http://127.0.0.1:7374/`, the
 application on 7375 (`ibPort::Assistant`, `core/net/ports.h`) — and carries every message, as it is,
 over a connection of its own (`ibProtocol::ibMcp`) to the engine's MCP server (`frmserver/mcp`, one per
-client, `ibClientHost::GetMcpServer`): in the designer's own process for a file base (fileserver), in the
+client, `ibClientHost::GetMcpServer`): in the studio's own process for a file base (fileserver), in the
 application server for a base it serves. What a message means, the tools and their rights are all the
 engine's. Nothing answers until that client is running with an application open — a refused
 connection means the process is not up, not that the feature is missing. The port is off until a person
@@ -400,7 +400,7 @@ for that person. The token is made the first time the settings are read and neve
 anyone's back.
 
 **The first call must be `chat_say`.** Every other verb is refused until an assistant has said who
-it is, what it sees and what it means to do — because the person at that designer is watching a
+it is, what it sees and what it means to do — because the person at that studio is watching a
 window that would otherwise stay silent while their application is read and changed. The refusal
 text says exactly this, so the rule teaches itself.
 
@@ -411,7 +411,7 @@ inside a stopped runtime, always rolled back; answers with `microseconds`), and 
 `journal_read` for what the INSTALLATION did (logins, writes, postings: the accountant's record)
 and `trace_read` for what the ENGINE did (the SQL as sent, query roads, driver traffic, and the
 crash dump matched to the run that ended). `trace_read` reads files, so it answers for the process
-under the debugger as well as for the designer itself.
+under the debugger as well as for the studio itself.
 
 ---
 
@@ -513,8 +513,8 @@ Synthetic columns carry it (AND over what they are made of, `ibIsWalkAvailable` 
 view's column `StandsFor` its attribute, an alias forwards, a nested query's and a computed output's take
 it when made. A user's setting on an unavailable field STAYS: a grouping or a selected field on it is not
 printed (`ApplyAvailableStructure`, `GetAvailableGroupDesc`, `SelectedFor`), a filter or a sort still applies. The
-designer sees everything it EDITS; a composer answers as the application wherever it runs (it opens
-`ibFeatureOptionGate::AsApplication` itself — in the designer the outermost scope reads the values afresh). An option may `Require` another (off above = off here); `InitialValue` answers while nothing
+studio sees everything it EDITS; a composer answers as the application wherever it runs (it opens
+`ibFeatureOptionGate::AsApplication` itself — in the studio the outermost scope reads the values afresh). An option may `Require` another (off above = off here); `InitialValue` answers while nothing
 was ever written (the value column is created holding it: a field's DEFAULT is the column's write of the value a
 fresh row holds — `ibBackendQueryColumn::CreateValue`, the type factory's pair repeated on the column: an attribute's
 column makes it as its attribute does, any other of its type over its application, `GetMetaData`; structureBatch.cpp). Reached as `FeatureOptions.<Name>.Get()` ([docs/public/feature-options.md](docs/public/feature-options.md)).
@@ -577,7 +577,7 @@ that tree to bytes (and reads it back).
   of files: `Catalog/Goods/node.json` (the node in `ibJsonProvider`'s form), module texts and
   binaries beside it, from any depth of a value (`ObjectModule.Module.txt`). Laid out in memory (`files`, one field a file); `Publish` / `Collect`
   touch the disk. Entry points: `SaveApplicationToFiles` / `LoadApplicationFromFiles` (a directory, or
-  the set of files), the Designer's *Application* menu, MCP `app_export_files` /
+  the set of files), the Studio's *Application* menu, MCP `app_export_files` /
   `app_import_files`. Records and user accounts are excluded.
   See [application-files.md](docs/public/application-files.md). Tests: `tests/test_fileProvider.cpp`.
 - The old XML/JSON application layer is **gone**: `metadataApplicationXML.cpp` /
@@ -614,7 +614,7 @@ See `docs/private/serialization-io.md` §4a.
 - **Built-in globals:** 106 functions + 8 procedures = 114 as of 2026-11-05, registered in `ibValueSystemFunction` (`src/engine/backend/system/systemManager.cpp`); count drifts as features land — grep `AppendFunc\|AppendProc` for the live total
 - **Syntax modes:** VES (`If…Then…EndIf`, Visual-Basic-style, a legacy business-scripting dialect) and CES (`if (…) { … }`, C-flavoured); both compile to the same bytecode. The mode is the session's (`ibCompileState`, `compiler/compileState.h` — its application's, taken when its runtime is built; a thread with no session has its own): a process may hold bases written in different syntaxes. **CES is the default** for new applications (2026-05-10); existing serialised applications preserve their stored Syntax. The stored token is `ves` / `ces` (`ProgramSyntax.ves` / `.ces`; `vbs` was renamed on 2026-11-19 and is not read).
 - **Anonymous functions:** `Function(args) ... EndFunction` and `Procedure(args) ... EndProcedure` (or CES `Function(args) { … }`) work as expressions — assignable to slots, callable through variables. Backed by `ibValueFunction` (`compiler/procUnitLambda.h`, CLSID `VL_FUNC`). Lambda's compile-context return kind is `RETURN_LAMBDA_FUNCTION` / `RETURN_LAMBDA_PROCEDURE` (`compileCode.h`). Eval-in-lambda resolves outer frames via splice in `CompileExpression` (lambda-shim's `m_pppArrayList[1..]` → eval's `[2..]`). **Closure capture: a lambda takes the variables it references, not the frames** (2026-11-03; it took whole frames from 2026-05-11). The compiler lists them in `ibByteFunction::m_listCaptured` as (depth, slot) — depth 0 on the function they live in, which makes them cells (heap `ibValue`s) on entry (`ibRunContext::Capture`), depth ≥ 1 on each lambda that takes them; at runtime the lambda holds, per outer frame, an `ibRunCaptureContext` with just those cells, and outer-function locals resolve at depth ≥ 1 as before. See `docs/private/lambda.md`, `docs/private/closure-capture.md`.
-- **Debugger ports:** 7700–7709 (`ibPort::Debugger`, `src/engine/core/net/ports.h`) — every process that can be debugged listens on the first free one, the designer looks in all of them
+- **Debugger ports:** 7700–7709 (`ibPort::Debugger`, `src/engine/core/net/ports.h`) — every process that can be debugged listens on the first free one, the studio looks in all of them
 
 ### Bytecode resolver (kind-driven, AOT-ready)
 
@@ -633,8 +633,8 @@ See `docs/private/eval-scope-refactor.md` for the full architecture.
 ### Runtime infrastructure (landed)
 
 - **Worker pool** — `ibWorkerPool` (`src/engine/backend/session/workerPool.h`) + headless implementation (`workerPoolHeadless.{h,cpp}`). Each session has a queue + an atomic "leased" flag (`workerPoolHeadless.h`); sessionless callers fall back to a `thread_local ibProcUnitState ts_fallbackPUState` in `session.cpp` (`ibSession::GetPUState`).
-- **AOT bytecode cache** — `byteCodeAOT.cpp` serialises a compiled `ibByteCode` to a memory stream; deserialisation reverses the compile step without re-running the parser. Persisted in `sys_bytecode_cache`, looked up by **`(descriptor_id, application_md5)`**, where `application_md5` holds `ibByteCodeCache::CacheKey` — an MD5 of three things: `kAOTFormatVersion` (`compiler/byteCodeFormat.h`), `kEngineFingerprint` (a SHA-256 of every file under `backend/compiler/`, `backend/system/` and `core/compiler/` — the compiler, the interpreter, the built-in registry, the translator — written at build time into a generated `engineFingerprintBuild.h` — by `compiler/engineFingerprint.cmake` under CMake, by the `EngineFingerprint` task of `backend.vcxproj` under MSBuild, one rule and one hash), and the application's own digest (`ibMetaData::GetApplicationMD5()`). So an application save, a compiler change or a new built-in each make every older row unreachable, and `Invalidate()` is hygiene rather than correctness. The build stamp is no longer part of the key (2026-10-10): `core` is not rebuilt when the compiler changes, so a stale blob kept its key. Written by the RUNTIME lazily on first call to a descriptor; the Designer never writes it. See [docs/private/compiler-pipeline.md](docs/private/compiler-pipeline.md) §4a.
-- **Per-session runtime image** — each `ibSession` owns `m_root : ibValuePtr<ibValueModuleManagerRuntimeApplication>` (built in `CreateRoot`; `GetManagerModule()`) and `m_lambdaRuntime : std::unique_ptr<ibProcUnit>` (wired to `m_root`'s procUnit on first `GetLambdaRuntime()`). Designer / coderunner edit-time managers come from `GetEditModuleManager(metaData)` / `EditModuleManagerFor(metaData)`, kept separate from the per-session runtime root.
+- **AOT bytecode cache** — `byteCodeAOT.cpp` serialises a compiled `ibByteCode` to a memory stream; deserialisation reverses the compile step without re-running the parser. Persisted in `sys_bytecode_cache`, looked up by **`(descriptor_id, application_md5)`**, where `application_md5` holds `ibByteCodeCache::CacheKey` — an MD5 of three things: `kAOTFormatVersion` (`compiler/byteCodeFormat.h`), `kEngineFingerprint` (a SHA-256 of every file under `backend/compiler/`, `backend/system/` and `core/compiler/` — the compiler, the interpreter, the built-in registry, the translator — written at build time into a generated `engineFingerprintBuild.h` — by `compiler/engineFingerprint.cmake` under CMake, by the `EngineFingerprint` task of `backend.vcxproj` under MSBuild, one rule and one hash), and the application's own digest (`ibMetaData::GetApplicationMD5()`). So an application save, a compiler change or a new built-in each make every older row unreachable, and `Invalidate()` is hygiene rather than correctness. The build stamp is no longer part of the key (2026-10-10): `core` is not rebuilt when the compiler changes, so a stale blob kept its key. Written by the RUNTIME lazily on first call to a descriptor; the Studio never writes it. See [docs/private/compiler-pipeline.md](docs/private/compiler-pipeline.md) §4a.
+- **Per-session runtime image** — each `ibSession` owns `m_root : ibValuePtr<ibValueModuleManagerRuntimeApplication>` (built in `CreateRoot`; `GetManagerModule()`) and `m_lambdaRuntime : std::unique_ptr<ibProcUnit>` (wired to `m_root`'s procUnit on first `GetLambdaRuntime()`). Studio / coderunner edit-time managers come from `GetEditModuleManager(metaData)` / `EditModuleManagerFor(metaData)`, kept separate from the per-session runtime root.
 
 ---
 
@@ -646,7 +646,7 @@ See `docs/private/eval-scope-refactor.md` for the full architecture.
 - Do not give `core.dll` any wx (its zlib on Windows is wx's bundled build, nothing else), no base, no script, no
   metadata — it sits under frmclient as well as backend
 - **Do not raise a MODAL from the engine.** `backend.dll` has no modal boxes of its own (verified
-  2026-09-02; the last two were leftovers from when the designer and the engine were one binary —
+  2026-09-02; the last two were leftovers from when the studio and the engine were one binary —
   a `wxMessageBox` about a breakpoint, and a `ShowModalMessage` that showed a person a C++ function
   signature). A modal blocks the window until somebody clicks it, so a caller that is not a person —
   an assistant over MCP, a background job, the web server — is simply frozen, while the sentence

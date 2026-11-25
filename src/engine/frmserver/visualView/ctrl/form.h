@@ -119,7 +119,7 @@ public:
 
 	// A control made from a COPY — the node as a form holds a control (SaveNode), its place in the sizer with it: put in
 	// what it is pasted on, else in the first of its parents that takes one of its class (FilterChild), under this form's
-	// ids and with names unique on it. The designer's paste and form_paste both. Null: nothing there takes it, or it did
+	// ids and with names unique on it. The studio's paste and form_paste both. Null: nothing there takes it, or it did
 	// not read.
 	ibValueFrame* PasteObject(ibValueFrame* dstObject, const ibDataNode& copied);
 
@@ -217,7 +217,7 @@ public:
 	//****************************************************************************
 	//*           Attribute store — the form's typed source registry            *
 	//****************************************************************************
-	// Externally managed (designer CRUD / build-time defaulting). Each entry is
+	// Externally managed (studio CRUD / build-time defaulting). Each entry is
 	// a typed form-local source; the MAIN one receives the source object passed
 	// on open. Serialized as a separate "Attributes" child node of the form,
 	// read back on load. Each attribute is also a local variable of the form
@@ -407,7 +407,7 @@ public:
 	// Is the form in VIEW-ONLY mode? Runtime state (NOT a persisted property): the form was opened over a
 	// source whose WRITE right is denied (a read-only role), or opened explicitly view-only. Controls read it
 	// through ibValueFrame::IsReadOnly() and build themselves read-only; data-modifying commands grey out.
-	// Distinct from IsEditable() (designer: can the STRUCTURE be changed). SetViewOnly forces it on open.
+	// Distinct from IsEditable() (studio: can the STRUCTURE be changed). SetViewOnly forces it on open.
 	bool IsViewOnly() const;
 	void SetViewOnly(bool viewOnly) { m_viewOnly = viewOnly; }
 
@@ -582,7 +582,7 @@ public:
 	virtual void SetSearchText(const ibString& text) override;
 
 	// The form's COMMAND provider, resolved LIVE on every query (never cached — a stored pointer would go stale
-	// the moment the designer re-points the MAIN attribute without re-running any view's bind). A list form:
+	// the moment the studio re-points the MAIN attribute without re-running any view's bind). A list form:
 	// the control whose WHOLE binding is the main attribute (ibValueModelTableBox::IsMainSourceBound) adapts its dumb
 	// command model into a full action interface. An object form: the self-commanding source object (both
 	// ibSourceDataObject and ibStandardCommandSource). null when neither exists.

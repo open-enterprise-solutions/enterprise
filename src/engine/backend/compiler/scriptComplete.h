@@ -25,9 +25,9 @@
 // evaluating an argument would mean running arbitrary code for a question the editor asked
 // speculatively.
 //
-// 🛑 A PLATFORM FUNCTION IS NOT RUN IN THE DESIGNER, and that is a wall somebody built on purpose,
-// not a gap here: `ibValueSystemFunction::CallAsFunc` opens with `if (!appData->DesignerMode())`,
-// because the designer has no runtime. So a chain that passes through `CurrentDate()`,
+// 🛑 A PLATFORM FUNCTION IS NOT RUN IN THE STUDIO, and that is a wall somebody built on purpose,
+// not a gap here: `ibValueSystemFunction::CallAsFunc` opens with `if (!appData->StudioMode())`,
+// because the studio has no runtime. So a chain that passes through `CurrentDate()`,
 // `String(x)` or `GetSharedTemplate(…)` ends there while designing, and the same walk answers it
 // where a runtime exists. Measured 2026-09-07: this accounts for most of what still refuses in real
 // modules — and the walk reaches the call correctly, resolves the receiver (SystemManager), finds

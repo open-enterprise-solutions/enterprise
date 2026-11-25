@@ -12,13 +12,13 @@
 #include "frmclient/backend/serialize/dataProtocol.h"   // ibReadProtocolValue, ibWriteProtocolNode — a control's values
 #include "frmclient/backend/propertyManager/property/propertySerializable.h"   // a layer's properties — a row's each
 #include "frmclient/mainFrame/objinspect/objinspect.h"
-#include "protocol/protocolDesigner.h"   // ibProtocol::ibView::ibFormDesigner, ibProtocol::ibView::ibModule
+#include "protocol/protocolStudio.h"   // ibProtocol::ibView::ibFormDesigner, ibProtocol::ibView::ibModule
 
 #include <wx/artprov.h>
 #include <wx/clipbrd.h>
 #include <wx/menu.h>
 
-// ⭐ THE DESKTOP'S COMMAND PROCESSOR OVER THE FORM'S NODE (designer visualEditorCmdProc.cpp): the desktop's commands
+// ⭐ THE DESKTOP'S COMMAND PROCESSOR OVER THE FORM'S NODE (studio visualEditorCmdProc.cpp): the desktop's commands
 // changed the controls and undid each change; here a command holds the form's node before it and after it — the node
 // never changed in place — and draws the one it leaves (ibVisualEditor::Draw). What a parent takes is the server's to
 // say (ibValueFrame::FilterChild): a new control, a paste are asked of it.
@@ -1025,7 +1025,7 @@ bool ibVisualEditorNotebook::ibVisualEditor::CanPasteFormCommand() const
 
 namespace {
 
-// The designer's layer-menu ids (the desktop's): a node is either the bar or one command, so the two sets never meet.
+// The studio's layer-menu ids (the desktop's): a node is either the bar or one command, so the two sets never meet.
 enum {
 	kMenuAddCommand = wxID_HIGHEST + 3200,
 	kMenuCut, kMenuCopy, kMenuPaste, kMenuDelete, kMenuMoveUp, kMenuMoveDown, kMenuProps,

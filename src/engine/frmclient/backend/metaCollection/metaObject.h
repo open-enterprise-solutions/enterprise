@@ -15,7 +15,7 @@ constexpr ibClassID g_metaRoleCLSID = metadata_to_clsid("MD_ROLE");
 // may be set to — is the server's to say (Max, 2026-10-14): it holds only its id and the link to the application it
 // was opened from (ibMetaData: the tab — two bases open, an edit goes to the one it came from), and fills its
 // properties from the server's rows (ibPropertySerializable), one per row, kept — an edit running through one outlives the
-// answer that brings the rows back. The designer's tree makes one for the row it selects, and drops it for the next
+// answer that brings the rows back. The studio's tree makes one for the row it selects, and drops it for the next
 // (ibMetaTreeBase::SelectItem); a ported window that only names the class meets none.
 class FRMCLIENT_API ibValueMetaObject : public ibPropertyObject {
 public:
@@ -30,7 +30,7 @@ public:
 	ibString GetSynonym() const;
 	wxBitmap GetIcon() const { return wxNullBitmap; }
 
-	// ITS TWO TEXTS, the engine's — help, what its user is told, and the note, what its designers are: the server's (schema
+	// ITS TWO TEXTS, the engine's — help, what its user is told, and the note, what its studios are: the server's (schema
 	// ObjectText), read when asked and given back at once.
 	ibString GetHelpContent() const;
 	void SetHelpContent(const ibString& strHelpContent);

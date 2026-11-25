@@ -8,7 +8,7 @@
 #include "deskgui/univ/textEntryDialog.h"
 #include "frmclient/mainFrame/mainFrame.h"
 #include "protocol/protocol.h"
-#include "protocol/protocolDesigner.h"   // ibProtocol::ibSchema::ibWebAddress
+#include "protocol/protocolStudio.h"   // ibProtocol::ibSchema::ibWebAddress
 
 namespace {
 

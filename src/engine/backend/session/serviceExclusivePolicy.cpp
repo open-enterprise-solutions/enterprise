@@ -66,7 +66,7 @@ bool ibServiceExclusivePolicy::CanAdd(const ibSession& session, ibString& reason
 	std::vector<unsigned int> rows = inTheWay(snap);
 
 	// …UNLESS IT DOES NOT BREATHE — a server killed a moment ago must not keep its base until the sweep's
-	// cutoff passes. Same settling as the designer rule.
+	// cutoff passes. Same settling as the studio rule.
 	if (!rows.empty()) {
 		std::vector<ibString> guids;
 		for (const unsigned int i : rows)
@@ -113,7 +113,7 @@ bool ibServiceExclusivePolicy::CanOpen(ibRunMode runMode, ibString& reason)
 		// snapshot. A row whose beat is already as old as the registry's one silence has no owner; a fresher one is
 		// WATCHED: one that moves has an owner and refuses, one that stands still until it is that old, or goes,
 		// has none. Read off one snapshot, a process killed a moment ago kept the base for the rest of the silence
-		// (measured 2026-10-06: a designer killed, the server refused 40 ms later).
+		// (measured 2026-10-06: a studio killed, the server refused 40 ms later).
 		const long long silence = ibSessionRegistry::GetSilentSeconds() * 1000ll;
 		std::map<ibString, ibRowInTheWay> watched, seen;
 		readRows(watched);

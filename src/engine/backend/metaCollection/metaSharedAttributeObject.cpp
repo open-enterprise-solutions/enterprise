@@ -69,7 +69,7 @@ bool ibValueMetaObjectSharedAttribute::SetCompositionObject(ibValueMetaObject* m
 		if (auto* const ref = dynamic_cast<ibValueMetaObjectSharedAttributeColumn*>(created)) {
 			ref->BindSource(this);
 			// THE NAME IS SET, not answered on demand. ibValueMetaObject::GetName is not
-			// virtual — the designer tree, the property grid and the metadata walkers read
+			// virtual — the studio tree, the property grid and the metadata walkers read
 			// it directly — so an override would be seen by almost nobody and the copy
 			// would show up under its generated name. It is kept in step by OnRename below.
 			ref->SetName(GetName());
@@ -133,7 +133,7 @@ void ibValueMetaObjectSharedAttribute::OnPropertyChanged(
 	// A TYPE CHANGE REACHES EVERY CARRIER. The copies never held a type of their own —
 	// they ask this declaration — so the value is already right the moment this returns.
 	// What is NOT right until somebody says so is everything built ON the old answer: an
-	// open form's attribute list, the editor's completion, a designer tree row that still
+	// open form's attribute list, the editor's completion, a studio tree row that still
 	// shows String where a reference now stands.
 	//
 	// The carriers are told the way an ordinary attribute tells its owner

@@ -10,16 +10,16 @@
 #include "core/guid.h"
 #include "core/stringUtils.h"
 
-// THE DESIGNER'S DEBUGGER IS THE SERVER'S (protocol 6) — the engine's client of the designer's session
+// THE STUDIO'S DEBUGGER IS THE SERVER'S (protocol 6) — the engine's client of the studio's session
 // (backend/debugger/debugClient.h) is the one connected to the runtimes, and this is its facade, in its words, so the
 // windows ask what they always asked: a command goes as debug {Command} on the debugger's own connection
 // (ibCommunicator::Debug), and what the engine says comes back as news (ibCommunicator::ListenDebug), told the
-// listeners here on the window's loop. A web designer listens the same way. The breakpoints are that client's too, at
+// listeners here on the window's loop. A web studio listens the same way. The breakpoints are that client's too, at
 // the editor's lines: one map, as the desktop's one process had it, moved by the edits the editor's text carries
 // (ibModuleTextView, Change), and asked of the store, schema Debugger (debugClientQuery.cpp) — none kept here.
 //
-// Lifecycle: owned by the designer's main frame as a unique_ptr field (private ctor + friend), made once it is logged
-// in. Designer / codeEditor hot paths read the static slot directly through the macro.
+// Lifecycle: owned by the studio's main frame as a unique_ptr field (private ctor + friend), made once it is logged
+// in. Studio / codeEditor hot paths read the static slot directly through the macro.
 #define debugClient           (ibDebuggerClient::Get())
 
 #include "debugClientBridge.h"
@@ -28,7 +28,7 @@ class ibProtocolNode;
 
 class ibDebuggerClient {
 
-	// The listeners — the designer's windows. What the server's debugger says is told them here, already on the window's
+	// The listeners — the studio's windows. What the server's debugger says is told them here, already on the window's
 	// loop (Listen): nothing here changes threads.
 	class ibDebuggerClientAdapter {
 	public:
@@ -87,9 +87,9 @@ class ibDebuggerClient {
 	// THE APPLICATION IS THE SERVER'S: its guid, asked of schema Debugger; and the debugger's news listened to from then
 	// on (Listen).
 	ibDebuggerClient();
-	// …or of its store as the login read it (the designer's GetStartSchemas): nothing asked.
+	// …or of its store as the login read it (the studio's GetStartSchemas): nothing asked.
 	explicit ibDebuggerClient(const class ibProtocolNode& store);
-	friend class ibFrontendMainFrameDesigner;
+	friend class ibFrontendMainFrameStudio;
 
 public:
 
@@ -169,7 +169,7 @@ public:
 
 	// ⭐⭐ A WATCH QUESTION CARRIES WHO ASKED IT, IN THE PACKET.
 	//
-	// The `id` is a handle in the asker's own world (a row of the designer's tree), so an answer
+	// The `id` is a handle in the asker's own world (a row of the studio's tree), so an answer
 	// says WHICH ROW and, on its own, nothing about WHOSE — and every listener used to receive
 	// every answer and guess. The asker's identity therefore travels with the question and comes
 	// back with the answer; nothing is remembered on either side, so there is no map to keep in
@@ -241,7 +241,7 @@ protected:
 private:
 
 	// THE SERVER'S DEBUGGER LISTENED TO — its own connection opened and bound (ibCommunicator::ListenDebug), each piece of
-	// news handed to the window's loop and received there; a refusal said in the messages, the designer working on
+	// news handed to the window's loop and received there; a refusal said in the messages, the studio working on
 	// without a debugger.
 	void Listen();
 	// …and one piece of news received: the state it says kept, and the listeners told it, in their words.

@@ -10,7 +10,7 @@
 #include "backend/objCtor.h"   // ibCtorMetaValueType::GetMetaTypeCtor / ibCtorObjectMetaType_Reference — ConvertToMetaIds
 #include "backend/metaCollection/partial/commonObject.h"
 #include "backend/metaCollection/partial/tabularSection/tabularSection.h"
-#include "backend/appData.h"   // DesignerMode — a reference being WRITTEN is type + guid, not a row
+#include "backend/appData.h"   // StudioMode — a reference being WRITTEN is type + guid, not a row
 
 #include <vector>
 #include <algorithm>
@@ -762,7 +762,7 @@ bool ibValueReferenceDataObject::CoerceHopType(const ibSourceHop& hop, ibValue& 
 	if (!::IsReference(hop.m_type))
 		return false;   // no pinned reference branch — keep whatever the id primitive gave
 	// STALE-pin guard: if the field carries a type filter, the pin must be among its clsids. A value-table
-	// column RETYPED in the designer leaves an OLD pin on a bound path — do NOT fabricate the old twin (else the
+	// column RETYPED in the studio leaves an OLD pin on a bound path — do NOT fabricate the old twin (else the
 	// dead path keeps resolving as a phantom reference). An EMPTY filter (metadata-fixed field) skips the check.
 	if (filter.GetClsidCount() > 0 && !filter.ContainType(hop.m_type))
 		return false;
@@ -881,12 +881,12 @@ const ibSourceExplorer* ibValueReferenceDataObject::GetSourceExplorer() const
 
 ibString ibValueReferenceDataObject::GetString() const
 {
-	// ⭐⭐ IN THE DESIGNER A REFERENCE IS A TYPE AND A GUID, AND NOTHING ELSE — "what matters to the
-	// designer is that the reference has a guid, and that's it" (Max, 2026-08-28). There is no row to
+	// ⭐⭐ IN THE STUDIO A REFERENCE IS A TYPE AND A GUID, AND NOTHING ELSE — "what matters to the
+	// studio is that the reference has a guid, and that's it" (Max, 2026-08-28). There is no row to
 	// read and none is wanted, so the metaobject is asked straight away: it turns the guid into the
 	// form the application declares it in. PrepareRef and the found / not-found answers below are
 	// statements about DATA, which is not what a reference stands for while one is being WRITTEN.
-	if (appData->DesignerMode()) {
+	if (appData->StudioMode()) {
 		ibString declared;
 		return m_metaObject->GenerateDataDesc(this, declared) ? std::move(declared) : ibString();
 	}

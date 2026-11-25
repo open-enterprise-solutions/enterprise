@@ -83,7 +83,7 @@ bool ibValueRecordDataObjectConstant::InitializeObject(const ibValueRecordDataOb
 		m_constValue = GetConstValue();
 	}
 	catch (const ibCoreException&) {
-		if (!appData->DesignerMode())
+		if (!appData->StudioMode())
 			throw;
 		return false;
 	}
@@ -93,7 +93,7 @@ bool ibValueRecordDataObjectConstant::InitializeObject(const ibValueRecordDataOb
 		Compile();
 	}
 	catch (const ibCoreException&) {
-		if (!appData->DesignerMode())
+		if (!appData->StudioMode())
 			throw;
 		return false;
 	};
@@ -242,7 +242,7 @@ ibValue ibValueRecordDataObjectConstant::GetConstValue() const
 {
 	ibValue ret;
 
-	if (!appData->DesignerMode()) {
+	if (!appData->StudioMode()) {
 
 		ibDatabaseQueryBuilder dbq;   // L2 door for the open gate (no raw ibDatabaseLayer)
 		if (!dbq.IsOpen())
@@ -311,7 +311,7 @@ bool ibValueRecordDataObjectConstant::TryAcquireFormLock(ibLockMode mode)
 
 bool ibValueRecordDataObjectConstant::SetConstValue(const ibValue& cValue)
 {
-	if (appData->DesignerMode())
+	if (appData->StudioMode())
 		return true;
 
 	if (!m_metaObject->AccessRight_Write()) {

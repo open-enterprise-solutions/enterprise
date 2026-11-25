@@ -6,7 +6,7 @@
 // It is an ATTRIBUTE, and that is the whole design: an attribute is already
 // "a declared name with a type, its qualifiers and an editor", which is exactly
 // what is being declared here. Deriving it means the type description, the
-// designer's property page, the serialisation and AdjustValue arrive finished —
+// studio's property page, the serialisation and AdjustValue arrive finished —
 // a metatype of its own would have to be taught all four again.
 //
 // WHAT MAKES IT DIFFERENT from an attribute of a catalog is its OWNER, not its
@@ -98,7 +98,7 @@ class BACKEND_API ibValueSessionParameter : public ibValue {
 //     SessionParameters.Organisation = org;   // write — only in the session module
 //
 // The members are whatever the application declared, so the name list is read
-// from the metadata every time it is asked: a parameter added in the designer
+// from the metadata every time it is asked: a parameter added in the studio
 // appears without a restart, and the editor completes exactly what the runtime
 // accepts.
 //

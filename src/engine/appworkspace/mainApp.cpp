@@ -1,6 +1,6 @@
 ////////////////////////////////////////////////////////////////////////////
 //	Author		: Maxim Kornienko
-//	Description : the thin runtime's application
+//	Description : the workspace's application
 ////////////////////////////////////////////////////////////////////////////
 
 #include "mainApp.h"
@@ -17,13 +17,13 @@
 #include "protocol/connectionFile.h"
 #include "protocol/connectionServer.h"
 
-#include "mainFrame/mainFrameEnterprise.h"
+#include "mainFrame/mainFrameWorkspace.h"
 
-wxIMPLEMENT_APP(ibAppEnterprise);
+wxIMPLEMENT_APP(ibAppWorkspace);
 
 #if wxUSE_CMDLINE_PARSER
 
-void ibAppEnterprise::OnInitCmdLine(wxCmdLineParser& parser)
+void ibAppWorkspace::OnInitCmdLine(wxCmdLineParser& parser)
 {
 	parser.AddOption(wxT("address"), wxT("address"), "Application server: oes://server[:port]/<base>, oess:// over TLS; or a web server's publication: http(s)://server[:port]/<base>/", wxCMD_LINE_VAL_STRING, wxCMD_LINE_PARAM_OPTIONAL);
 	parser.AddOption(wxT("trusted"), wxT("trusted"), "oess://: the authorities trusted, a PEM file (default: the system's store)", wxCMD_LINE_VAL_STRING, wxCMD_LINE_PARAM_OPTIONAL);
@@ -41,7 +41,7 @@ void ibAppEnterprise::OnInitCmdLine(wxCmdLineParser& parser)
 	wxApp::OnInitCmdLine(parser);
 }
 
-bool ibAppEnterprise::OnCmdLineParsed(wxCmdLineParser& parser)
+bool ibAppWorkspace::OnCmdLineParsed(wxCmdLineParser& parser)
 {
 	parser.Found(wxT("address"), &m_strAddress);
 	parser.Found(wxT("trusted"), &m_strTrusted);
@@ -77,7 +77,7 @@ bool ibAppEnterprise::OnCmdLineParsed(wxCmdLineParser& parser)
 
 #endif
 
-bool ibAppEnterprise::DoOnInit()
+bool ibAppWorkspace::DoOnInit()
 {
 	// The journal, the dumps and the machine's appearance are the base's (ibWxApp::OnInit, deskgui/app.h), set
 	// before this runs — as every application of the platform has them.
@@ -149,7 +149,7 @@ bool ibAppEnterprise::DoOnInit()
 
 	// The window holds the client from here: it logs in as it is shown, and a refused start takes it down again —
 	// the communicator with it, and a file base's connection closes the base.
-	auto* frame = new ibFrontendMainFrameEnterprise(
+	auto* frame = new ibFrontendMainFrameWorkspace(
 		std::make_unique<ibCommunicator>(std::move(connection)), m_strIBUser, m_strIBPassword);
 	if (!frame->Show()) {
 		frame->Destroy();

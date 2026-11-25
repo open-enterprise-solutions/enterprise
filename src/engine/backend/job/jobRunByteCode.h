@@ -11,8 +11,8 @@
 // is reposting a period's documents. The verb is: run this code, in the application, in the
 // background.
 //
-// 🛑 THIS IS THE HALF THAT RUNS IN THE APPLICATION. The MCP server lives in the DESIGNER, where no
-// session ever gets a runtime (`ibSession::EnsureRoot` returns early on DesignerMode). So the tool
+// 🛑 THIS IS THE HALF THAT RUNS IN THE APPLICATION. The MCP server lives in the STUDIO, where no
+// session ever gets a runtime (`ibSession::EnsureRoot` returns early on StudioMode). So the tool
 // sends a debugger command and this is what the far end runs.
 //
 // ⭐ A BACKGROUND JOB, NOT A SANDBOX, and the difference is a stop. `debug_sandbox` borrows the
@@ -120,7 +120,7 @@ public:
 
 	// ⭐ WHOSE RUNS ARE ASKED — the manager of the base the asking thread works for. Over MCP that is the
 	// debugger's connection thread, which works for the base its server debugs (ibApplicationInstanceScope in
-	// ibDebuggerServerConnection::EntryClient): the APPLICATION the designer started, never the designer's own
+	// ibDebuggerServerConnection::EntryClient): the APPLICATION the studio started, never the studio's own
 	// base. A run is answered while it runs and among the last ibJobManager::kKeptBackgroundJobs that ended;
 	// one that dropped out answers as unknown.
 	static bool Status(const ibString& token, ibJobRunByteCodeState& state);

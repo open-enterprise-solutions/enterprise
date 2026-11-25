@@ -12,7 +12,7 @@
 #include "protocol/connection.h"
 #include "protocol/protocolNode.h"
 
-// THE COMMUNICATOR — the client's side of the protocol, one for the thin runtime and the thin designer, for a file
+// THE COMMUNICATOR — the client's side of the protocol, one for the workspace and the studio, for a file
 // base and a server alike (the connection says which; both carry the same packets). It writes each call's envelope
 // (OES-RPC) with the client and the frame it holds named in it, reads the answer back, and keeps the frame it was
 // answered: a frame sent whole is kept as it is, a patch is applied to the one kept, and (protocol 2) each tab's view
@@ -119,7 +119,7 @@ private:
 	ibString       m_client;
 	ibString       m_token;    // the bearer, kept here. The server stores only its hash.
 	bool           m_resume = false;   // the server listed `resume` — a dropped socket is asked for again
-	ibProtocol::ibLogin::ibMode m_mode = ibProtocol::ibLogin::ibMode::Runtime;
+	ibProtocol::ibLogin::ibMode m_mode = ibProtocol::ibLogin::ibMode::Workspace;
 	std::atomic<int> m_protocol{ 1 };   // read by Hold on the window's thread while a fetch may be in a call
 	long long      m_number = 0;
 	ibProtocolNode m_frame;

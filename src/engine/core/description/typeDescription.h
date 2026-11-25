@@ -19,7 +19,7 @@ enum ibAllowedLength {
 struct ibQualifierNumber {
 	// The most digits a script's QualifierNumber takes; 0 is no limit. The description itself holds what m_precision
 	// holds, and a file is read back as written (ibTypeDescriptionMemory::ReadNode). A field's column takes fewer:
-	// MAX_PRECISION_NUMBER (core/core.h), the designer's.
+	// MAX_PRECISION_NUMBER (core/core.h), the studio's.
 	static constexpr int kMaxPrecision = 38;
 	bool m_nonNegative;
 	unsigned char m_precision;
@@ -35,7 +35,7 @@ struct ibQualifierNumber {
 	CORE_API ibNumber Adjust(const ibNumber& value) const;
 
 	// THE SCALE NEVER PASSES THE PRECISION — a number keeps no more decimals than it has digits; with no limit on the
-	// digits (0) none on the decimals either. The one rule every road takes: the designer's editors, a script's
+	// digits (0) none on the decimals either. The one rule every road takes: the studio's editors, a script's
 	// QualifierNumber, the assistant (Max, 2026-11-10: "the scale must not exceed the length")
 	static unsigned char ScaleWithin(unsigned char precision, unsigned char scale) {
 		return precision > 0 && scale > precision ? precision : scale;
@@ -53,7 +53,7 @@ struct ibQualifierDate {
 
 struct ibQualifierString {
 	// The longest string a type description holds — the most m_length holds; 0 is no limit. A field's column takes
-	// fewer: MAX_LENGTH_STRING (core/core.h), the designer's.
+	// fewer: MAX_LENGTH_STRING (core/core.h), the studio's.
 	static constexpr int kMaxLength = 65535;
 	unsigned short m_length;
 	ibAllowedLength m_allowedLength;

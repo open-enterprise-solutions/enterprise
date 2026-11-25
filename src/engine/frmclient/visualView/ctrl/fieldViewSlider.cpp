@@ -36,7 +36,7 @@ void ibFieldViewSlider::Update(const ibProtocolNode& node)
 	m_slider->SetRange(static_cast<int>(node.GetInt(ibProtocol::ibForm::ibProperty::MinValue, 0)),
 		static_cast<int>(node.GetInt(ibProtocol::ibForm::ibProperty::MaxValue, 100)));
 	m_slider->SetEditable(!state.GetBool(ibProtocol::ibForm::ibState::ReadOnly));
-	// The value — none in the designer.
+	// The value — none in the studio.
 	if (state.Has(ibProtocol::ibForm::ibState::Position))
 		m_slider->SetValue(static_cast<int>(state.GetInt(ibProtocol::ibForm::ibState::Position)));
 }

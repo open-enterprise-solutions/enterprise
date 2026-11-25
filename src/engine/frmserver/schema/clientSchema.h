@@ -9,7 +9,7 @@
 // Which of them a client has is its application's: its frame's doc manager registers them — the shared ones the
 // base ibDocManager's ctor, each mode's own its manager's ctor. They lie the same way: the shared
 // ones here, each mode's in a folder of its own (runtime/, designer/) — All functions is the runtime's, since a
-// designer loads no runtime.
+// studio loads no runtime.
 
 #include <functional>
 

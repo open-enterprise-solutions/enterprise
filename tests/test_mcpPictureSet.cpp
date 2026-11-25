@@ -5,7 +5,7 @@
 // assembles by hand. It now takes `data` (base64 PNG) or `svg`, and what it
 // stored is what the application saves.
 //
-// The application is the one a designer session opens, as in
+// The application is the one a studio session opens, as in
 // test_sharedModuleCheck.cpp.
 
 #include <gtest/gtest.h>
@@ -94,7 +94,7 @@ TEST_F(McpPictureSet, FillsAnApplicationPictureFromDataOrSvg_AndTheApplicationKe
 	ibSessionRegistry* const registry = ibApplicationInstance::GetSessionRegistry();
 	ASSERT_NE(registry, nullptr);
 	ibSessionHolder holder = registry->MintUnlisted(
-		std::make_shared<ibSession>(wxT("picture-set"), ibSessionKind::Designer));
+		std::make_shared<ibSession>(wxT("picture-set"), ibSessionKind::Studio));
 	ibSession* const session = holder.Get();
 	ASSERT_NE(session, nullptr);
 	ibSessionScope scope(session);

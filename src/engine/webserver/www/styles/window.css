@@ -1933,7 +1933,6 @@ wa-dialog.answered-only::part(close-button) {
 	margin: 0.125rem 0 0;
 }
 
-/* About: the platform and its build centred over the blocks, as the thin client's window. */
 /* Tools → Theme...: the three, one under the other. */
 .themes {
 	display: flex;
@@ -1941,54 +1940,65 @@ wa-dialog.answered-only::part(close-button) {
 	gap: 0.5rem;
 }
 
+/* About: the program beside the logo, the facts under a line, what the platform is built on under another — the thin
+   client's window. */
 .about {
-	--width: 30rem;
+	--width: 32rem;
+}
+
+.about .head {
+	display: flex;
+	align-items: center;
+	gap: 0.75rem;
+	padding-bottom: 0.75rem;
+	border-bottom: 1px solid var(--oes-border);
 }
 
 .about .logo {
-	display: block;
-	width: 40px;
-	height: 40px;
-	margin: 0 auto 0.25rem;
+	flex: none;
+	width: 48px;
+	height: 48px;
 }
 
-.about .platform {
+.about p {
 	margin: 0;
-	font-size: 1.15rem;
+}
+
+.about .program {
+	font-size: 1.3rem;
 	font-weight: 600;
-	text-align: center;
 }
 
-.about .community {
-	display: block;
-	margin-bottom: 0.5rem;
-	font-style: italic;
-	text-align: center;
-}
-
-.about fieldset {
-	margin: 0.25rem 0 0;
-	padding: 0.25rem 0.5rem 0.5rem;
-	border: 1px solid var(--oes-border);
-	border-radius: 4px;
-}
-
-.about legend {
-	padding: 0 0.25rem;
-	color: var(--oes-muted);
+.about .purpose {
+	margin-top: 0.25rem;
 }
 
 .about dl {
 	display: grid;
 	grid-template-columns: auto 1fr;
-	gap: 2px 0.5rem;
+	gap: 2px 1rem;
 	margin: 0;
+	padding: 0.75rem 0;
+	border-bottom: 1px solid var(--oes-border);
 }
 
 .about dd {
 	margin: 0;
 	min-width: 0;
 	overflow-wrap: anywhere;
+}
+
+.about .credits {
+	padding-top: 0.75rem;
+}
+
+.about .caption {
+	font-weight: 600;
+}
+
+.about .origins,
+.about .licence {
+	margin-top: 0.5rem;
 }
 
 /* Tools → Options... — the assistant access, as the thin client's page: the setting, Start now beside what is true, then

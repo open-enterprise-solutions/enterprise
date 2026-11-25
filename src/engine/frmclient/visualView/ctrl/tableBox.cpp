@@ -11,9 +11,9 @@
 #include "core/serialize/dataBuilder.h"              // ibDataValue — a column's width, as its property takes it
 #include "core/style/style.h"                        // ibStyle — a table's platform background
 #include "deskgui/typeconv.h"                        // typeConv::ColourToWxColour
-#include "frmclient/backend/appData.h"               // DesignerMode — no table's rows are read there
+#include "frmclient/backend/appData.h"               // StudioMode — no table's rows are read there
 #include "frmclient/visualView/commandBar.h"
-#include "frmclient/visualView/visualHostClient.h"   // a designer's host selects and moves by it
+#include "frmclient/visualView/visualHostClient.h"   // a studio's host selects and moves by it
 #include "frmclient/win/picture.h"
 #include "deskgui/univ/ctrl/textCtrl.h"
 #include "deskgui/univ/dataview/dataview.h"
@@ -181,10 +181,10 @@ void ibValueModelTableBox::Create(wxWindow* parent, const ibProtocolNode& node)
 	// is served here once when the reset asks from the top — no wire call.
 	std::weak_ptr<bool> alive = m_alive;
 	ibViewFetcher wire = MakeFetcher();
-	// …none in the designer: its tables have no rows to show, the server reads none there (ibValueModelTableBox::Fetch) —
+	// …none in the studio: its tables have no rows to show, the server reads none there (ibValueModelTableBox::Fetch) —
 	// a form tried out in it was refused (404), each of its tables (2026-10-15).
-	const bool designer = appData->DesignerMode();
-	ibViewFetcher fetcher = [this, wire, designer](const ibProtocolNode& request, ibProtocolNode& answer) -> bool {
+	const bool studio = appData->StudioMode();
+	ibViewFetcher fetcher = [this, wire, studio](const ibProtocolNode& request, ibProtocolNode& answer) -> bool {
 		// The page State's Rows was read as: from the top, or around the row the server stands on — Anchor, when this side
 		// had been given it — with its Count and as many rows ahead (Before), the top saying so (Begin). Taken for a read it
 		// holds all of: that Anchor, no larger a Count, no more rows ahead than it has — or the top reached.
@@ -242,7 +242,7 @@ void ibValueModelTableBox::Create(wxWindow* parent, const ibProtocolNode& node)
 				return true;
 			}
 		}
-		return !designer && wire(request, answer);
+		return !studio && wire(request, answer);
 	};
 	ibViewTableModel* const model = new ibViewTableModel(std::move(fetcher), [this, alive](const ibViewTableModel::ibAnswer& answer) {
 		wxTheApp->CallAfter([this, alive, answer]() {
@@ -254,7 +254,7 @@ void ibValueModelTableBox::Create(wxWindow* parent, const ibProtocolNode& node)
 	// seen: on a notebook page that is not selected (a hidden ancestor) focusing it makes the notebook switch to that page,
 	// and the form opens on the table's page instead of its first. What it stands in is drawn already, before what is in
 	// it; its own Visible is the State's, which Update lays on.
-	if (!designer) {
+	if (!studio) {
 		bool visible = node.FindChild(ibProtocol::ibForm::ibState::State).GetBool(ibProtocol::ibForm::ibState::Visible, true);
 		for (wxWindow* w = parent; visible && w != nullptr && !w->IsTopLevel(); w = w->GetParent())
 			visible = w->IsShown();
@@ -685,8 +685,8 @@ void ibValueModelTableBox::OnColumnClick(ibDataViewEvent& event)
 	if (column == nullptr)
 		return;
 
-	// The designer's: the column selected in its editor (the desktop's) — there are no rows to sort.
-	if (GetVisualHost().IsDesignerHost()) {
+	// The studio's: the column selected in its editor (the desktop's) — there are no rows to sort.
+	if (GetVisualHost().IsStudioHost()) {
 		GetVisualHost().SelectControl(GetVisualHost().GetValueForm()->FindControlByID(column->GetModelColumn()));
 		return;
 	}
@@ -742,9 +742,9 @@ void ibValueModelTableBox::OnColumnReordered(ibDataViewEvent& event)
 	columnObject->SetParent(holder);
 	holder->AddChild(pos, columnObject);
 
-	// …and in the form: the designer's, its editor's command (the desktop's RefreshEditor over its tree so moved); the
+	// …and in the form: the studio's, its editor's command (the desktop's RefreshEditor over its tree so moved); the
 	// runtime's is the server's — the same move there (OnColumnMoved).
-	if (GetVisualHost().IsDesignerHost()) {
+	if (GetVisualHost().IsStudioHost()) {
 		GetVisualHost().MovePosition(columnObject, holder, pos);
 		return;
 	}
@@ -814,9 +814,9 @@ void ibValueModelTableBox::OnHeaderEndResize(ibHeaderGenericCtrlEvent& event)
 	if (column == nullptr)
 		return;
 	m_dataView->CallAfter([this, column]() {
-		// The designer's: the width the column's property in the form, and the column selected (the desktop's
+		// The studio's: the width the column's property in the form, and the column selected (the desktop's
 		// SetWidthColumn and SelectControl).
-		if (GetVisualHost().IsDesignerHost()) {
+		if (GetVisualHost().IsStudioHost()) {
 			ibValueFrame* const control = GetVisualHost().GetValueForm()->FindControlByID(column->GetModelColumn());
 			if (control == nullptr)
 				return;
@@ -834,9 +834,9 @@ void ibValueModelTableBox::OnHeaderEndResize(ibHeaderGenericCtrlEvent& event)
 
 void ibValueModelTableBox::OnMainWindowClick(wxMouseEvent& event)
 {
-	// The designer's: a click on the rows selects the table, its column selected or not (the desktop's) — the
+	// The studio's: a click on the rows selects the table, its column selected or not (the desktop's) — the
 	// application's click leaves the selection on a column, a table's part.
-	if (GetVisualHost().IsDesignerHost())
+	if (GetVisualHost().IsStudioHost())
 		GetVisualHost().SelectControl(this);
 	event.Skip();
 }

@@ -134,12 +134,12 @@ class ibValueModelTableBox : public ibValueWindowCompositeSearch,
 	// twice, they would drift; and finding the group BY NAME rather than by remembering a run also
 	// means the source may hand its columns out in any order.
 	//
-	// `created` (optional) says a group control was just made, which the designer needs in
+	// `created` (optional) says a group control was just made, which the studio needs in
 	// order to tell its editor about it.
 	ibValueFrame* GetColumnGroupHolder(const ibString& group, bool* created = nullptr);
 
 	// ⭐ THE DEFAULT COLUMNS, built anew whenever the table is given a source (OnPropertyChanged — the inspector, a
-	// script, a drop in the designer) and when code hands it a value whose model names its own (AutoCreateColumn).
+	// script, a drop in the studio) and when code hands it a value whose model names its own (AutoCreateColumn).
 	// Bound by a path — a column per field of what the path reaches, bound through the path; bound by none — a column
 	// per column of the model, reading it. The columns it had go first.
 	void CreateColumnCollection();
@@ -216,7 +216,7 @@ public:
 
 	// ⭐ CREATED — the form has opened: the model taken again, the reader's own setting marked "restore on open"
 	// put on it, and a choice form's list standing on the value it was opened for. The window's OnCreated.
-	// Just made by the designer (firstCreated), with no source — bound to a fresh attribute first (the desktop's).
+	// Just made by the studio (firstCreated), with no source — bound to a fresh attribute first (the desktop's).
 	virtual void OnCreated(ibVisualHost* host, bool firstCreated) override;
 	// …and the form closed: the table lets go of its model's view (the window's Cleanup).
 	virtual void OnCleanup(ibVisualHost* host) override;
@@ -705,7 +705,7 @@ public:
 
 	ibValueModelTableBoxColumn* GetColumn() const { return m_column; }
 
-	// …and from the designer's copy blob, once the column is of the pasted view (ibValueModelTableBoxColumn::PasteData).
+	// …and from the studio's copy blob, once the column is of the pasted view (ibValueModelTableBoxColumn::PasteData).
 	bool PasteData(const ibDataNode& node) { return PasteProperty(node); }
 
 	// The child of a view; null for a number no view has (a later version's, a damaged form's).
@@ -918,7 +918,7 @@ public:
 
 protected:
 
-	// The designer's paste makes the column of the pasted view first.
+	// The studio's paste makes the column of the pasted view first.
 	virtual bool PasteData(const ibDataNode& node) override;
 
 private:

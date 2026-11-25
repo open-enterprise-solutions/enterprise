@@ -77,7 +77,7 @@ enum class ibSettingsCategory : int;
 // this is where they arrive — the layout already asks the question.
 // ---------------------------------------------------------------------------
 // ⭐ THE CONTENT IS A PANEL, THE MODAL WINDOW IS ONE OF ITS HOSTS (2026-08-20). A composer declared
-// in the metadata is edited on a TAB of its own — the designer opens it like a form or a template
+// in the metadata is edited on a TAB of its own — the studio opens it like a form or a template
 // (docViewComposer) — while a composition held by a form is edited modally from the gridbox. Same
 // split the list settings already took: one panel, two hosts, so nothing about what a setting IS
 // can differ between them.
@@ -125,7 +125,7 @@ class FRMCLIENT_API ibComposerSettingsPanel : public ibPanel {
 public:
 
 	// ⭐⭐ `edited` — THE DESCRIPTION THIS PANEL EDITS, BY REFERENCE, edited in place. The shape the
-	// designer's other editors have (Max, 2026-08-24: "there is your reference — ibSpreadsheetEditView"):
+	// studio's other editors have (Max, 2026-08-24: "there is your reference — ibSpreadsheetEditView"):
 	// the grid editor is handed the metaobject and writes its description directly; there is no live
 	// object in between and nothing to copy back.
 	//
@@ -156,14 +156,14 @@ public:
 	// and which setting that is belongs to the HOST (Max, 2026-08-24). The panel that picks its own
 	// subject is the panel that can pick wrong.
 	//
-	//   DESIGNER — edits the description's variants. Starts on the zeroth; clicking a variant in the
+	//   STUDIO — edits the description's variants. Starts on the zeroth; clicking a variant in the
 	//              list unwraps ITS setting and drives it into the pages (ActivateVariant).
 	//   READER   — edits the setting it is handed, a COPY of `GetCurrentSettingsDesc()`. No variant
 	//              list at all: there is no such thing as a chosen variant at runtime.
 	ibComposerSettingsPanel(wxWindow* parent, ibCompositionDescription& edited,
 		const class ibMetaData* metaData);
 	// …AND THE SAME ROAD, HANDED A DESCRIPTION TO HOLD instead of one to edit in place — the form the
-	// designer's tab takes, because a window that stays open has to hold what it edits (see m_heldComposition).
+	// studio's tab takes, because a window that stays open has to hold what it edits (see m_heldComposition).
 	ibComposerSettingsPanel(wxWindow* parent, const ibCompositionDescription& composition,
 		const class ibMetaData* metaData);
 	ibComposerSettingsPanel(wxWindow* parent, ibCompositionDescription& edited,
@@ -181,7 +181,7 @@ public:
 
 	// ⭐ VIEW ONLY — the tabs open, everything reads, nothing can be changed (Max, 2026-08-20: "in
 	// view mode you can only look: no copying, no adding, nothing"). The house call, the one every
-	// other designer editor takes (`SetReadOnly(flags == ibDOC_READONLY)` — role, interface, module,
+	// other studio editor takes (`SetReadOnly(flags == ibDOC_READONLY)` — role, interface, module,
 	// visual, help); the panel used to be Enable(false)d whole instead, which greys the text you came
 	// to READ and is why this exists at all.
 	//
@@ -421,25 +421,25 @@ private:
 	ibString m_queryFault;
 	// ⭐⭐ WHOSE ROAD THIS IS — decided by the host at construction and never again: a window cannot
 	// become somebody else's halfway through. It records ONE fact — was a setting handed in — and it
-	// is asked for the things that differ between a reader and a designer: the variants pane, the
+	// is asked for the things that differ between a reader and a studio: the variants pane, the
 	// inaccessible filter lines, what accepting means.
 	//
 	// 🛑 THAT FACT USED TO BE READ OFF `m_settings == nullptr`, which is why the pointer could not
 	// also be used to say WHICH setting is being edited. One member answering two questions is how
-	// the designer ended up unable to edit any variant but the zeroth.
+	// the studio ended up unable to edit any variant but the zeroth.
 	const bool m_readerRoad;
 
 	// 🛑⭐⭐ THE GRIP ON WHAT THIS WINDOW EDITS — empty unless the host handed over a description to HOLD.
 	//
 	// A window outlives the call that opened it, so binding `m_edited` into something the host may let
-	// go of means freed memory the moment it does — which is how the designer died on 2026-09-02, an MCP
+	// go of means freed memory the moment it does — which is how the studio died on 2026-09-02, an MCP
 	// verb writing while this window stood open (the desktop holds the property's cell for that). The
 	// client's property holds a node, not a description: what is held here is the description itself.
 	// Declared ABOVE the two members that point into it: they are initialised in declaration order, and
 	// both read it.
 	ibCompositionDescription m_heldComposition;
 
-	// …AND WHAT IS BEING EDITED, always valid. A reader's own setting, or — in the designer — the
+	// …AND WHAT IS BEING EDITED, always valid. A reader's own setting, or — in the studio — the
 	// variant the list has selected, re-pointed as it moves (ActivateVariant).
 	ibSettingsDescription* m_settings = nullptr;
 
@@ -495,7 +495,7 @@ private:
 	// ⭐⭐ THE DESCRIPTION THIS WINDOW EDITS — BY REFERENCE, in place. Everything typed here lands in
 	// it: the query, the settings, the variants, the structure, the resources, the parameters.
 	//
-	// WHOSE description it is, is the HOST's decision and this panel never learns it. The designer's
+	// WHOSE description it is, is the HOST's decision and this panel never learns it. The studio's
 	// tab hands over the metaobject's own (the shape ibSpreadsheetEditView has, where the grid editor
 	// writes the metaobject's description directly); a modal window that offers Cancel hands over a
 	// copy IT holds and assigns that copy on OK. A transaction is a copy plus an assignment, and it
@@ -537,11 +537,11 @@ private:
 	// ⚠ DESCRIPTIONS, not the composer's outputs. The driver an output carries is a live object and
 	// has no business in a window.
 	// ⭐⭐ THE OUTPUTS OF THE SETTING BEING EDITED — asked through `EditedSettings()`, which is the
-	// handed-in setting on a READER's road and the cursor's VARIANT on the designer's.
+	// handed-in setting on a READER's road and the cursor's VARIANT on the studio's.
 	//
 	// 🛑 IT WENT STRAIGHT TO A VARIANT REGARDLESS, and that is a reader editing a variant — which
-	// they may not do at all (Max, 2026-08-24: *"you can only edit a variant in the designer. You go
-	// into the composer in the designer, you go into each variant and set its settings, and they
+	// they may not do at all (Max, 2026-08-24: *"you can only edit a variant in the studio. You go
+	// into the composer in the studio, you go into each variant and set its settings, and they
 	// accumulate in that list. You cannot change those variants' settings from the runtime"*). A
 	// reader edits THEIR setting; the outputs are part of it, so they come along by themselves.
 	std::vector<ibOutputDescription>& Structure() { return EditedSettings().m_structure; }
@@ -701,7 +701,7 @@ private:
 // opening a composer: when you have a document, and when you have the metadata").
 //
 // It is the same content: what a composer declares is one thing, and a setting cannot mean one
-// thing on a designer tab and another on a form. What the document adds is WHO IS ASKED — the
+// thing on a studio tab and another on a form. What the document adds is WHO IS ASKED — the
 // metaobject and its application come out of the document rather than out of a live composition,
 // and "something changed" goes to the document, which is the thing that has a dirty bit and a Save
 // behind it.
@@ -720,7 +720,7 @@ public:
 	// ⭐ THE DOCUMENT IS THE ONLY INPUT. It answers both of the others — which description is being
 	// edited and which application that description means — so the view that opens this tab hands
 	// over the document and nothing else, exactly as ibSpreadsheetEditView hands ibGridEditor one.
-	// THE DESIGNER'S TAB — always the author's road: it edits the composer metaobject's own
+	// THE STUDIO'S TAB — always the author's road: it edits the composer metaobject's own
 	// description, so there is no setting to hand in and no reader to hand one.
 	ibComposerEditor(wxWindow* parent, class ibMetaDocument* document);
 
@@ -729,7 +729,7 @@ public:
 protected:
 
 	// THE APPLICATION IS THE DOCUMENT'S — reached through its metaobject, which is what the tab was
-	// opened on. NEVER the active one: two applications are open at once in the designer and the
+	// opened on. NEVER the active one: two applications are open at once in the studio and the
 	// document knows which of them is its own (the same reason docViewComposer builds its composition
 	// over `metaComposer->GetMetaData()`).
 	virtual const class ibMetaData* GetEditedMetaData() const override;
@@ -860,7 +860,7 @@ public:
 	ibDialogComposerSettings(wxWindow* parent, ibCompositionDescription& desc,
 		const class ibMetaData* metaData, ibSettingsDescription& settings);
 	// …and the AUTHOR's, over a description edited in place — what `ShowComposerSettings` opens when
-	// a composer is configured from the designer rather than read from.
+	// a composer is configured from the studio rather than read from.
 	ibDialogComposerSettings(wxWindow* parent, ibCompositionDescription& desc,
 		const class ibMetaData* metaData);
 

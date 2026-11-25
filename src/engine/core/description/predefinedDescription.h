@@ -23,7 +23,7 @@
 // MutableRef::m_predefinedDesc), read and written with the application whole (ibPredefinedDescriptionMemory): its
 // items, and what its kind alone knows, set by the kind when its property changes — how many rows a section takes, the
 // types a type is chosen among; the rest of the columns is read off the tables the object declares whenever it is asked
-// (GetPredefinedDesc). The seed is built of it, the designer's schema sends it whole, the thin designer draws it, edits
+// (GetPredefinedDesc). The seed is built of it, the studio's schema sends it whole, the studio draws it, edits
 // an item and sends that item back in its own form (ibPredefinedItemDescriptionMemory), and MCP reads its words against
 // it — one schema for both sides, so it lives here, as a virtual table's parameters do (core/query/querySourceParameter.h).
 

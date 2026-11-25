@@ -57,7 +57,7 @@ bool IsStructuralProperty(const ibProperty* prop) {
 // (The list that used to live here — predefined attributes, object modules, manager
 // modules — is gone. Whether a child belongs under its owner is the owner's OWN answer
 // (ibValueMetaObject::IsAcceptedByParent -> FilterChild), so the diff tree and the
-// designer tree can no longer drift apart, and a new kind of child needs no line here.)
+// studio tree can no longer drift apart, and a new kind of child needs no line here.)
 }
 
 // g_diffSharedUmbrellaClsid / g_diffPropertiesGroupClsid are now header-defined
@@ -376,7 +376,7 @@ bool ibMetaDiffWalker::SubtreeHasDifference(
 // THE ORDER AN AUTHOR SETS: each kind's children among themselves - the attributes, the dimensions, the forms - which
 // is what moving one up or down in the tree changes. Not the whole list: that interleaves the kinds, and holds the
 // attributes the engine makes itself (PredefinedAttribute) in the order things happened to be made. An accounting
-// register built in the designer lists its analytics slots before the dimensions added after them, and the same
+// register built in the studio lists its analytics slots before the dimensions added after them, and the same
 // register read back from the base lists them after: database_diff answered "reordered" for every new register, and
 // the apply, rightly, had nothing to write (2026-11-19).
 static std::vector<std::pair<ibClassID, ibGuid>> AuthoredChildOrder(const ibValueMetaObject* parent)

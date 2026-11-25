@@ -481,7 +481,7 @@ bool ibMcpDebugBridge::Unfold(const ibString& expression, std::vector<Local>& me
 	// the row in the requester's own window. It travels to the runtime and comes back, and every
 	// listener used to render every answer by dereferencing it. Sound while exactly one thing can
 	// ask; a crash the moment two can, because a number chosen here arrives at the IDE's watch
-	// window as an address it never handed out. It took the designer down — 0x41, from an id of 1 —
+	// window as an address it never handed out. It took the studio down — 0x41, from an id of 1 —
 	// and this asked nothing at all for a day rather than risk it again.
 	//
 	// What changed is that the QUESTION NOW CARRIES WHO ASKED (ibDebuggerClientBridge::GetBridgeId,
@@ -597,7 +597,7 @@ void ibMcpDebugBridge::OnMessageFromServer(const ibDebugLineData& data, const ib
 		//  design. Collecting here would gather whatever the application happened to say at the
 		//  same moment and call it the run's result.)
 	}
-	// READ BY BOTH OF US. This road ends in the designer's output pane, where the person is; the
+	// READ BY BOTH OF US. This road ends in the studio's output pane, where the person is; the
 	// assistant is told as well because it is usually the one that asked for the run.
 	Announce(ibT("the run reported a failure: ") + message);
 }

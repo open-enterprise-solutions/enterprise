@@ -24,10 +24,10 @@ const protocol = 6;
 
 /**
  * THE MODE a client works in — the login's Mode (ibLogin::ibMode): which application's frame it gets, and what the
- * client draws differently for it — the places the thin client asks DesignerMode(). This page is the application's;
- * a designer in the browser would log in as one and bring its own documents, questions and property cells.
+ * client draws differently for it — the places the thin client asks StudioMode(). This page is the workspace;
+ * a studio in the browser would log in as one and bring its own documents, questions and property cells.
  */
-export const Mode = Object.freeze({ Runtime: 1, Designer: 2 });
+export const Mode = Object.freeze({ Workspace: 1, Studio: 2 });
 
 // What comes beside a frame and is not the frame: the events, and the login's own answer.
 const besideFrame = ['Messages', 'Clear', 'Exit', 'Properties', 'Client', 'Protocol', 'Features', 'Token', 'Read', 'Locale',
@@ -78,9 +78,9 @@ export class Session extends EventTarget {
 		connection.onClose = (reason) => this.dropped(reason);
 	}
 
-	/** The session is the designer's — logged in as one (the thin client's DesignerMode). */
-	designerMode() {
-		return this.mode === Mode.Designer;
+	/** The session is the studio's — logged in as one (the thin client's StudioMode). */
+	studioMode() {
+		return this.mode === Mode.Studio;
 	}
 
 	/** The names the login window offers — asked before the login, with no Client. */

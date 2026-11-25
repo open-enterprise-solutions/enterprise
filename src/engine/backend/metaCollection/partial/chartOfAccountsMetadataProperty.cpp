@@ -45,7 +45,7 @@ void ibValueMetaObjectChartOfAccounts::OnPropertyChanged(ibProperty* property, c
 
 	// The number of analytical slots, and which values they may hold, are both declared HERE and
 	// both build columns THERE. Waiting for the next application run would leave a register
-	// describing the previous shape while the designer already shows the new one.
+	// describing the previous shape while the studio already shows the new one.
 	if (property == m_propertyMaxAccountDimensionCount ||
 		property == m_propertyChartOfCharacteristicTypes) {
 		// The ceiling also decides how many UNFOLDED columns the list has — the same number, the same
@@ -54,7 +54,7 @@ void ibValueMetaObjectChartOfAccounts::OnPropertyChanged(ibProperty* property, c
 		if (property == m_propertyMaxAccountDimensionCount)
 			SyncAccountDimensionKindColumns();
 		// The kinds column takes its type from the binding the user has just changed — apply it here for
-		// the same reason the registers resync here: the designer already shows the new shape.
+		// the same reason the registers resync here: the studio already shows the new shape.
 		if (property == m_propertyChartOfCharacteristicTypes)
 			ApplyAccountDimensionKindType();
 		if (m_metaData != nullptr)

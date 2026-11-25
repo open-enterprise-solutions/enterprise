@@ -55,12 +55,12 @@ ibValueDataComposition::ibValueDataComposition(const std::shared_ptr<const ibBac
 	: ibValueSpreadsheetModel(), ibSourceDataObject()
 {
 	// ⚠ THE SOURCE'S OWN APPLICATION FIRST, the ACTIVE one only if there is no source to ask. A
-	// queryable lives in the application it was created in — the edited one in the designer, the
+	// queryable lives in the application it was created in — the edited one in the studio, the
 	// copy's own on a copy — and resolving against the active application there would answer with
 	// somebody else's tables.
 	//
 	// ⚠⚠ A COMPOSITION BELONGING TO AN APPLICATION MUST NEVER FALL BACK TO THE ACTIVE ONE — it would
-	// see THE WRONG TABLES. Two applications are open in the designer at once (the edited one and
+	// see THE WRONG TABLES. Two applications are open in the studio at once (the edited one and
 	// the one being compared or copied from), and the active one is not necessarily this object's; a
 	// name resolved there answers with somebody else's metadata and everything downstream is quietly
 	// about the wrong report.
@@ -98,7 +98,7 @@ ibValueDataComposition::ibValueDataComposition(const std::shared_ptr<const ibBac
 // and the application to resolve names in.
 //
 // ⚠ NULL MEANS THE ACTIVE APPLICATION, decided here. A caller that has one passes it (a property
-// passes its owner's — the edited application in the designer, the copy's own on a copy); a caller
+// passes its owner's — the edited application in the studio, the copy's own on a copy); a caller
 // that has none passes null and says so. Leaving each of them to reach for the active one itself is
 // the same decision written in as many places as there are callers.
 ibValueDataComposition::ibValueDataComposition(ibCompositionDescription& desc, const ibMetaData* metaData)
@@ -193,7 +193,7 @@ void ibValueDataComposition::RebuildSource()
 	m_sourceBuiltFor = GetQueryText();
 
 	// STORE the source application into the metadata VARIABLE, taken from the VALUE — the picked queryable's
-	// metaobject knows its application (the edited one in the designer, the copy's on a copy). Held so
+	// metaobject knows its application (the edited one in the studio, the copy's on a copy). Held so
 	// GetSourceMetaData stays TERMINAL: it never re-resolves the queryable through the attach owner,
 	// which walks the form and would come back here.
 	const std::shared_ptr<const ibBackendQueryable> queryable = GetSourceQueryable();
@@ -380,7 +380,7 @@ void ibValueDataComposition::EnsureVariant()
 	// ⭐⭐ AND IT LIVES IN THE DESCRIPTION, WHOLE. A live vector stood beside desc.m_variants holding
 	// the structure and the parameter values while the description held the name and the settings —
 	// one variant, split across two stores, and only one of them ever reached the file. That is why
-	// a structure edited in the designer came back the way it was (Max, 2026-08-23).
+	// a structure edited in the studio came back the way it was (Max, 2026-08-23).
 	ibCompositionDescription& desc = GetCompositionDesc();
 	if (desc.m_variants.empty()) {
 		ibVariantDescription first;
@@ -515,7 +515,7 @@ void ibValueDataComposition::SyncParametersWithQuery()
 //
 // ⭐ AND IT LIVES IN composeEvaluate.{h,cpp} NOW. It stood here as a static and again, file-local, in
 // composeRunSchema.cpp — each with a comment pointing at the other and an obligation to agree. They
-// had already stopped agreeing: this one knew about the designer's edit manager and that one did
+// had already stopped agreeing: this one knew about the studio's edit manager and that one did
 // not, so an expression evaluated when a report was generated from script and refused when the same
 // report was read over the wire. Everything the note above says is still true of it; what changed is
 // that there is one of it.
@@ -1165,6 +1165,6 @@ bool ibValueDataComposition::WriteProperty(ibDataNode& node) const
 	return ibCompositionDescriptionMemory::WriteNode(node, GetCompositionDesc());
 }
 
-// Register the type — runtime / designer know "DataComposition".
+// Register the type — runtime / studio know "DataComposition".
 VALUE_TYPE_REGISTER(ibValueDataComposition, "DataComposition", g_valueDataCompositionCLSID);
 // (The row type is gone with the dataview surface: there is no return LINE where there are no rows.)

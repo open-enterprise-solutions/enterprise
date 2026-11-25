@@ -154,9 +154,9 @@ bool ibValueMetaObjectHttpService::OnSaveMetaObject(int flags)
 
 	// ⭐ A METHOD NOBODY ANSWERS IS REFUSED HERE, not at the first request: a handler the module has no function
 	// of — Function <Handler>(Request) — would be a 500 a stranger's system meets, with its reason in a journal it
-	// cannot read. Read off the module's TEXT, as the designer reads a module's exports (ibExportNamesFromText): a
+	// cannot read. Read off the module's TEXT, as the studio reads a module's exports (ibExportNamesFromText): a
 	// text that does not parse yet says nothing here, its compile says it. Into the ledger, every one of them, so
-	// app_check (ibMcpComplaints) and the designer's save read the same sentences.
+	// app_check (ibMcpComplaints) and the studio's save read the same sentences.
 	bool answered = true;
 	const ibValueMetaObjectManagerModule* const module = GetServiceModule();
 	ibParseCode parser(ibCompileCode::GetCodeStyle());

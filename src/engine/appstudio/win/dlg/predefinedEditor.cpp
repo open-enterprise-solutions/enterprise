@@ -14,7 +14,7 @@
 #include "frmclient/win/dlgs/typeSelector.h"            // ibShowTypeSelector — a type picked
 #include "deskgui/univ/menu.h"
 #include "deskgui/univ/aui/auibar.h"
-#include "protocol/protocolDesigner.h"                          // ibProtocol::ibRequest::ibPredefinedSelector — what that window is given
+#include "protocol/protocolStudio.h"                          // ibProtocol::ibRequest::ibPredefinedSelector — what that window is given
 #include "deskgui/univ/ctrl/staticText.h"
 #include "deskgui/univ/ctrl/staticBox.h"
 #include "deskgui/univ/panel.h"
@@ -170,7 +170,7 @@ wxString DescribeTypes(const ibTypeDescription& type)
 	return described;
 }
 
-// ONE OF THE CLOSED SET, PICKED in the designer's own window for a declared value (ibShowPredefinedSelector): one branch,
+// ONE OF THE CLOSED SET, PICKED in the studio's own window for a declared value (ibShowPredefinedSelector): one branch,
 // the attribute's caption — what is being chosen, named where a type is not (a platform enumeration has no class this
 // side names) — and the values declared for it under it. `title` — how the value reads: what the field shows, and what
 // TakeText finds the value by.
@@ -343,7 +343,7 @@ ibDialogPredefinedEditor::ibDialogPredefinedItem::ibDialogPredefinedItem(ibDialo
 }
 
 // ONE ATTRIBUTE, ITS EDITOR CHOSEN BY WHAT IT HOLDS: a flag — a tick; a type or a closed set — our text editor, not typed
-// into, its "..." the type picker or the designer's window for a declared value, its "×" clearing it; anything else typed.
+// into, its "..." the type picker or the studio's window for a declared value, its "×" clearing it; anything else typed.
 // A value the set no longer has stays what it was, shown as it reads: the server refuses it when the item is written,
 // saying why.
 void ibDialogPredefinedEditor::ibDialogPredefinedItem::AppendAttribute(wxWindow* parent, wxSizer* sizer,

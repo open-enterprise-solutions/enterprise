@@ -18,7 +18,7 @@ ibFontColorSettings::ibFontColorSettings()
 	m_font = wxFont(10, wxFONTFAMILY_MODERN, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL);
 #endif
 
-	// THE DARK LOOK'S — Visual Studio's dark editor, its paper and its inks, as the designer's (frmclient's
+	// THE DARK LOOK'S — Visual Studio's dark editor, its paper and its inks, as the studio's (frmclient's
 	// fontcolorsettings; Max, 2026-11-24: "the background for programming from Visual Studio, the same principle").
 	if (wxSystemSettings::GetAppearance().IsDark()) {
 		const wxColour night(0x1E, 0x1E, 0x1E);

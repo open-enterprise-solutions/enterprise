@@ -14,9 +14,9 @@
 #include "protocol/protocolNode.h"
 
 #include "appstudio/docManager/templates/docViewModuleEditor.h"
-#include "appstudio/mainFrame/mainFrameDesigner.h"
+#include "appstudio/mainFrame/mainFrameStudio.h"
 #include "frmclient/mainFrame/output/outputWindow.h"
-#include "protocol/protocolDesigner.h"   // ibProtocol::ibDebug
+#include "protocol/protocolStudio.h"   // ibProtocol::ibDebug
 
 ///////////////////////////////////////////////////////////////////////
 ibDebuggerClient* ibDebuggerClient::ms_debugClient = nullptr;
@@ -24,7 +24,7 @@ ibDebuggerClient* ibDebuggerClient::ms_debugClient = nullptr;
 
 namespace {
 
-// THE STANDARD DOOR, the engine's ibValueSystemFunction::Message at Error: the designer's messages.
+// THE STANDARD DOOR, the engine's ibValueSystemFunction::Message at Error: the studio's messages.
 static void Message(const wxString& said)
 {
 	if (mainFrame != nullptr && mainFrame->GetOutputWindow() != nullptr)
@@ -36,7 +36,7 @@ static void Message(const wxString& said)
 static bool Send(ibProtocol::ibDebug::ibCommand command, ibProtocolNode params = ibProtocolNode(),
 	ibProtocolNode* answer = nullptr)
 {
-	ibFrontendMainFrameDesigner* const frame = mainFrame;
+	ibFrontendMainFrameStudio* const frame = mainFrame;
 	if (frame == nullptr)
 		return false;
 	params.SetValue(ibProtocol::ibDebug::Command, static_cast<int>(command));
@@ -85,7 +85,7 @@ ibDebuggerClient::~ibDebuggerClient()
 
 void ibDebuggerClient::Listen()
 {
-	ibFrontendMainFrameDesigner* const frame = mainFrame;
+	ibFrontendMainFrameStudio* const frame = mainFrame;
 	if (frame == nullptr)
 		return;
 
@@ -191,7 +191,7 @@ void ibDebuggerClient::Receive(const ibProtocolNode& news)
 		m_adapter->OnSetExpanded(WatchOf(news));
 		break;
 	default:
-		ibJournalWarning(wxT("debugger"), wxT("the debugger said something this designer does not know: %lld"),
+		ibJournalWarning(wxT("debugger"), wxT("the debugger said something this studio does not know: %lld"),
 			news.GetInt(ibProtocol::ibDebug::Event));
 		break;
 	}
@@ -286,7 +286,7 @@ void ibDebuggerClient::Stop(bool kill)
 // A breakpoint on a line the running application does not have is a refusal with a real cause —
 // the module was edited and not applied, so the runtime's copy has different lines. That cause was
 // shown as `wxMessageBox` from inside the engine, which is wrong three times over: backend.dll is
-// GUI-free by rule; a modal blocks the designer until a person clicks it; and a caller that is not
+// GUI-free by rule; a modal blocks the studio until a person clicks it; and a caller that is not
 // a person — an assistant over MCP — got back a bare `false` and had to guess, while the sentence
 // explaining it stood on somebody else's screen (measured 2026-09-02: the box appeared in front of
 // Max, the tool answered "the debugger did not accept it", and the two never met).

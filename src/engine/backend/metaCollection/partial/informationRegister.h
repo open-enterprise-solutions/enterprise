@@ -102,7 +102,7 @@ public:
 	virtual bool OnSaveMetaObject(int flags);
 	virtual bool OnDeleteMetaObject();
 
-	//for designer 
+	//for studio 
 	// Register / unregister `.SliceLast` and `.SliceFirst` from the periodicity as it is NOW. A slice
 	// is defined by the period, so a non-periodic register has none — and periodicity is a property
 	// that can be switched after the register has run.

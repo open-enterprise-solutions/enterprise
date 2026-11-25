@@ -263,7 +263,7 @@ TEST(ClientFrameApply, BrokenPacketRefused)
 	EXPECT_FALSE(ibProtocolNode::Read(cut, read));
 }
 
-// A handle read out of a tree made here writes into it — the designer's edit of its form's copy: a parent found by
+// A handle read out of a tree made here writes into it — the studio's edit of its form's copy: a parent found by
 // reading, its children given anew, read anew through the same handle.
 TEST(ClientFrameApply, HandleReadFromCloneWritesIntoIt)
 {
@@ -293,9 +293,9 @@ TEST(ClientFrameApply, HandleReadFromCloneWritesIntoIt)
 	EXPECT_EQ(form.Children()[0].Children().size(), 2u);   // the one copied is as it was
 }
 
-// ⭐ A CLONE OF A PART OF A PACKET IS WALKED WHOLE — the designer's tree, a part of the frame's answer, cloned and walked
+// ⭐ A CLONE OF A PART OF A PACKET IS WALKED WHOLE — the studio's tree, a part of the frame's answer, cloned and walked
 // for its pictures: the first part's handle moved the copy into a packet of its own, and every part after it was looked
-// for in the bytes it had left (2026-10-26, a crash at the designer's start).
+// for in the bytes it had left (2026-10-26, a crash at the studio's start).
 TEST(ClientFrameApply, CloneOfAPartIsWalkedWhole)
 {
 	ibDataNode frame;

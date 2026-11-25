@@ -6,13 +6,13 @@
 
 #include "frmclient/backend/metaData.h"   // ibFormAttributeValue — its form's tab
 #include "innerFrame.h"
-#include "appstudio/win/editor/codeEditor/codeEditorDesigner.h"
+#include "appstudio/win/editor/codeEditor/codeEditorStudio.h"
 
 #include "frmclient/visualView/visualHostClient.h"
 
 #include "core/description/commandDescription.h"  // ibCommandDescription — a command row's path
 #include "core/description/sourceDescription.h"   // ibSourceHop — an attribute row's path
-#include "protocol/protocolDesigner.h"                     // ibProtocol::ibSchema::ibProperties::ibSourceDataType
+#include "protocol/protocolStudio.h"                     // ibProtocol::ibSchema::ibProperties::ibSourceDataType
 
 #include "deskgui/univ/aui/auibook.h"
 #include "deskgui/univ/splitterWindow.h"
@@ -48,7 +48,7 @@ class ibValueCommandBarItem;
 #define wxNOTEBOOK_PAGE_DESIGNER 0
 #define wxNOTEBOOK_PAGE_CODE_EDITOR 1
 
-// wxDropTarget for a node dragged from a form-editor tree — the desktop's (designer visualEditor.h). Shared by the form
+// wxDropTarget for a node dragged from a form-editor tree — the desktop's (studio visualEditor.h). Shared by the form
 // CANVAS and the OBJECT TREE. It holds the registered draggable KINDS (ibFormDragItem — a source path, a command
 // path); OnData matches the RECEIVED format to a kind, decodes it and enacts the drop. NO per-format branch — adding a
 // draggable is a new ibFormDragItem subclass registered in the ctor, nothing here changes. Each surface supplies only a RESOLVER (drop
@@ -199,8 +199,8 @@ public:
 
 		ibVisualEditorHost(ibVisualEditor* handler, wxWindow* parent, long long tabId);
 
-		//override designer host
-		virtual bool IsDesignerHost() const override { return true; }
+		//override studio host
+		virtual bool IsStudioHost() const override { return true; }
 		virtual wxWindow* GetBackgroundWindow() const override;
 		virtual void OnClickFromApp(wxWindow* currentWindow, wxMouseEvent& event) override;
 		virtual void SelectControl(ibValueFrame* control) override { m_formHandler->SelectObject(control); }
@@ -356,7 +356,7 @@ public:
 	};
 
 	//////////////////////////////////////////////////////////////////////////////////////////
-	// ibVisualEditorAttributeTree — THE DESKTOP'S (designer visualEditorAttributeTree.cpp) OVER THE SERVER'S WALK: the
+	// ibVisualEditorAttributeTree — THE DESKTOP'S (studio visualEditorAttributeTree.cpp) OVER THE SERVER'S WALK: the
 	// form's attributes and their composition are the server's (its holders, their source explorers, the metadata), so
 	// its rows are — the answer's AttributeTree, a row's composition asked when it is expanded (Composition). The holder a
 	// root row carries is the client's (ibFormAttributeValue): its properties the server's inspector's rows. Every action
@@ -493,7 +493,7 @@ public:
 	};
 
 	//////////////////////////////////////////////////////////////////////////////////////////
-	// ibVisualEditorCommandTree — THE DESKTOP'S (designer visualEditorCommandTree.cpp) OVER THE SERVER'S GATHER: the
+	// ibVisualEditorCommandTree — THE DESKTOP'S (studio visualEditorCommandTree.cpp) OVER THE SERVER'S GATHER: the
 	// commands the form can bind are the server's (GatherFormCommands), so its rows are — the answer's CommandTree, the
 	// three sections and what is in them. A form command's row carries its id, and the holder by it is the client's
 	// (ibFormCommandValue): its properties the server's inspector's rows. Every action is the server's editor's door
@@ -733,7 +733,7 @@ private:
 	// The node of the attribute (`owner` Attributes) or command (FormCommands) with that id put on the clipboard in that
 	// format — what Paste hands to the server's editor.
 	void CopyEntry(const char* owner, long long id, const wxString& format, const wxString& name);
-	// …that node itself — the system's clipboard, so another window, another designer, pastes it; `name` its text.
+	// …that node itself — the system's clipboard, so another window, another studio, pastes it; `name` its text.
 	void CopyEntry(const ibProtocolNode& entry, const wxString& format, const wxString& name);
 	// …and the one on it, in that format — none: an empty node.
 	ibProtocolNode PasteEntry(const wxString& format) const;
@@ -798,7 +798,7 @@ private:
 	// The notebook it is the Designer page of — an event's procedure is its Code page's (ModifyEvent).
 	ibVisualEditorNotebook* m_visualNotebook;
 
-	//Splitter for designer
+	//Splitter for studio
 	ibSplitterWindow* m_splitter = nullptr;
 	//Splitter between the control tree and the attribute tree
 	ibSplitterWindow* m_treeSplitter = nullptr;
@@ -828,7 +828,7 @@ public:
 
 	ibVisualEditorNotebook(ibModuleEditDocument* document, wxWindow* parent, wxWindowID id, long flags) :
 		ibAuiNotebook(parent, id, wxDefaultPosition, wxDefaultSize, ibAUI_NB_BOTTOM | ibAUI_NB_TAB_FIXED_WIDTH),
-		m_visualEditor(new ibVisualEditor(document, this)), m_codeEditor(new ibCodeEditorDesigner(document, this)) {
+		m_visualEditor(new ibVisualEditor(document, this)), m_codeEditor(new ibCodeEditorStudio(document, this)) {
 		CreateVisualEditor(document, parent, id, flags);
 	}
 
@@ -957,7 +957,7 @@ private:
 	void OnPageChanged(ibAuiNotebookEvent& event);
 
 	ibVisualEditor* m_visualEditor;
-	ibCodeEditorDesigner* m_codeEditor;
+	ibCodeEditorStudio* m_codeEditor;
 };
 
 ///////////////////////////////////////////////////////////////////////////////

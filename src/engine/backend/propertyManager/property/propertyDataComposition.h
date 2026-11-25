@@ -6,7 +6,7 @@
 
 // ---------------------------------------------------------------------------
 // ibPropertyDataComposition — backend half of the "data composer settings"
-// designer property. Pure action property (no stored scalar of its own): it
+// studio property. Pure action property (no stored scalar of its own): it
 // surfaces a single "Settings…" action on the composition that created it.
 //
 // ⭐ ITS OWN TYPE, not the dynamic list's (Max, 2026-08-20). A list and a

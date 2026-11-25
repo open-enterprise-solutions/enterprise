@@ -10,7 +10,7 @@
 #include "frmclient/mainFrame/mainFrame.h"
 #include "frmclient/mainFrame/mainFrameChild.h"
 
-void ibAppEnterprise::OnKeyEvent(wxKeyEvent& event)
+void ibAppWorkspace::OnKeyEvent(wxKeyEvent& event)
 {
 	if (mainFrame != nullptr && event.GetEventType() == wxEVT_KEY_DOWN && event.GetKeyCode() == WXK_ESCAPE) {
 		// ⭐⭐ ESCAPE CLOSES THE FORM IT WAS PRESSED IN, AND NOTHING ELSE — the desktop's rule (enterprise/mainAppEvent):
@@ -33,7 +33,7 @@ void ibAppEnterprise::OnKeyEvent(wxKeyEvent& event)
 	event.Skip();
 }
 
-void ibAppEnterprise::OnSetFocus(wxFocusEvent& event)
+void ibAppWorkspace::OnSetFocus(wxFocusEvent& event)
 {
 	// THE FOCUS GONE INTO A FORM BRINGS ITS TAB UP — the desktop's: a click into a tab's window that is not the selected
 	// one (the notebook split in two) selects it, and the selection is told to the server as a tab picked is.
@@ -50,7 +50,7 @@ void ibAppEnterprise::OnSetFocus(wxFocusEvent& event)
 	}
 }
 
-int ibAppEnterprise::FilterEvent(wxEvent& event)
+int ibAppWorkspace::FilterEvent(wxEvent& event)
 {
 	if (event.GetEventType() == wxEVT_KEY_DOWN) {
 		OnKeyEvent(

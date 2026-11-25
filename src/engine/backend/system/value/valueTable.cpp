@@ -272,8 +272,8 @@ bool ibValueModelTable::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue,
 bool ibValueModelTable::GetAt(const ibValue& varKeyValue, ibValue& pvarValue)
 {
 	const long index = varKeyValue.GetUInteger();
-	// No designer exemption, here or for the columns below: only the running indexer reaches these, and the
-	// designer runs none — its caret walk reads a table through a sample row (census, 2026-10-01).
+	// No studio exemption, here or for the columns below: only the running indexer reaches these, and the
+	// studio runs none — its caret walk reads a table through a sample row (census, 2026-10-01).
 	if (index >= GetRowCount()) {
 		ibBackendCoreException::Error(_("Array index out of bounds"));
 		return false;
@@ -362,7 +362,7 @@ bool ibValueModelTable::WriteProperty(ibDataNode& node) const
 	// sitting under last run's guid (Max, 2026-08-29: *"you write this guid there, and when it is read it
 	// is restored from there, and it stands stable"*).
 	//
-	// It rides with the COLUMNS because it is a fact about the same thing they are — what the designer
+	// It rides with the COLUMNS because it is a fact about the same thing they are — what the studio
 	// declared. A table created in a SCRIPT is never written, keeps the minted one, and is unaddressable
 	// by design: nobody declared it, so nobody can have kept anything for it.
 	node.SetValue(ibT("Guid"), m_guid.GetGuid());
@@ -580,7 +580,7 @@ bool ibValueModelTable::ibValueModelTableReturnLine::SetPropVal(const long lProp
 
 bool ibValueModelTable::ibValueModelTableReturnLine::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 {
-	// ⚠ NOT ASKED WHETHER THIS IS THE DESIGNER. That question guarded nothing: the designer's caret walk reads
+	// ⚠ NOT ASKED WHETHER THIS IS THE STUDIO. That question guarded nothing: the studio's caret walk reads
 	// a column off a SAMPLE row, one with no item, and the table answers false for a row without an item by
 	// itself (GetViewData). It also asked the current base, which a thread working for none cannot answer —
 	// and before that, in a host with no application at all, it dereferenced null (2026-09-09, oes_tests).

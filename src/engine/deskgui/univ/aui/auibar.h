@@ -370,7 +370,7 @@ public:
 
     // SEAM vs wx: a bar that collapses its tools into the overflow (ibAUI_TB_OVERFLOW) asks for no more than that
     // button's width - wx 3.3 asks for every tool's, and a form pushed a horizontal scroll bar onto itself; edited in
-    // the designer, it shows its real width.
+    // the studio's form editor, it shows its real width.
     void SetDesignerMode(bool designer);
 
     bool GetGripperVisible() const;

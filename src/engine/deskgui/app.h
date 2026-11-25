@@ -108,14 +108,14 @@ protected:
 class ibWxApp : public wxApp {
 public:
 
-	// "enterprise" / "designer" / "coderunner" / "launcher" — used as
+	// "appworkspace" / "appstudio" / "coderunner" / "launcher" — used as
 	// dump-file prefix and dialog caption. Override on the concrete app.
 	virtual wxString GetExeName() const = 0;
 
 	// Subclass entry points. The default is `wxApp::OnInit()` (the wx
 	// side of init: cmd-line parse, image handler registration). Override
 	// only if the exe needs extra steps (coderunner / launcher construct
-	// a frame here; enterprise / designer keep the default).
+	// a frame here; appworkspace / appstudio keep the default).
 	virtual bool DoOnInit() { return wxApp::OnInit(); }
 
 	virtual int DoOnRun() { return wxApp::OnRun(); }

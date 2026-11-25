@@ -125,7 +125,7 @@ TEST(SessionFailoverClient, IdsStayMonotonicAcrossReconnect)
 	ibProtocol::ibRefusal refusal = ibProtocol::ibRefusal::None;
 	ibString error;
 
-	ASSERT_TRUE(communicator.Login(wxT("user"), wxT("secret"), ibProtocol::ibLogin::ibMode::Runtime, result, refusal, error)) << error;
+	ASSERT_TRUE(communicator.Login(wxT("user"), wxT("secret"), ibProtocol::ibLogin::ibMode::Workspace, result, refusal, error)) << error;
 
 	ibProtocolNode params;
 	ASSERT_TRUE(communicator.Call(ibProtocol::ibMethod::Frame, params, result, refusal, error)) << error;
@@ -228,7 +228,7 @@ TEST(SessionFailoverClient, AssistantChannelOpensAgainAndALostCallIsNotSentAgain
 	ibProtocolNode result;
 	ibProtocol::ibRefusal refusal = ibProtocol::ibRefusal::None;
 	ibString error;
-	ASSERT_TRUE(communicator.Login(wxT("user"), wxT("secret"), ibProtocol::ibLogin::ibMode::Runtime, result, refusal, error)) << error;
+	ASSERT_TRUE(communicator.Login(wxT("user"), wxT("secret"), ibProtocol::ibLogin::ibMode::Workspace, result, refusal, error)) << error;
 	ASSERT_TRUE(communicator.ListenMcp([](const ibProtocolNode&) {}, refusal, error)) << error;
 
 	ibProtocolNode params;
@@ -302,7 +302,7 @@ TEST(SubscribedEventsClient, HeldEventsGoWithTheNextCall)
 	ibProtocolNode result;
 	ibProtocol::ibRefusal refusal = ibProtocol::ibRefusal::None;
 	ibString error;
-	ASSERT_TRUE(communicator.Login(wxT("user"), wxT("secret"), ibProtocol::ibLogin::ibMode::Runtime, result, refusal, error)) << error;
+	ASSERT_TRUE(communicator.Login(wxT("user"), wxT("secret"), ibProtocol::ibLogin::ibMode::Workspace, result, refusal, error)) << error;
 
 	for (int row = 1; row <= 100; ++row)
 		EXPECT_TRUE(communicator.Hold(StateEvent(7, ibProtocol::ibEvent::ibKind::Row, ibProtocol::ibEvent::Row, row)));
@@ -345,7 +345,7 @@ TEST(SubscribedEventsClient, NothingHeldBelowProtocol3)
 	ibProtocol::ibRefusal refusal = ibProtocol::ibRefusal::None;
 	ibString error;
 	EXPECT_FALSE(communicator.Hold(StateEvent(7, ibProtocol::ibEvent::ibKind::Row, ibProtocol::ibEvent::Row, 1)));
-	ASSERT_TRUE(communicator.Login(wxT("user"), wxT("secret"), ibProtocol::ibLogin::ibMode::Runtime, result, refusal, error)) << error;
+	ASSERT_TRUE(communicator.Login(wxT("user"), wxT("secret"), ibProtocol::ibLogin::ibMode::Workspace, result, refusal, error)) << error;
 	EXPECT_FALSE(communicator.Hold(StateEvent(7, ibProtocol::ibEvent::ibKind::Row, ibProtocol::ibEvent::Row, 1)));
 
 	ibProtocolNode params;

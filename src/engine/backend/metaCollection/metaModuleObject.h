@@ -4,7 +4,7 @@
 #include "metaObject.h"
 #include "core/compiler/translateCode.h"  // ibCompilableSourceCode — what a compile is given to read
 #include "core/serialize/dataBuilder.h"   // ibDataNode — holder serializes its metaobject's node
-#include "protocol/protocolDesigner.h"            // ibProtocol::ibSchema::ibProperties::Object — what the holder's link opens
+#include "protocol/protocolStudio.h"            // ibProtocol::ibSchema::ibProperties::Object — what the holder's link opens
 
 enum ibContentHelper {
 	eProcedureHelper = 1,
@@ -87,7 +87,7 @@ public:
 	// shadowed: ibFindMetaObjectById returned the original for both. It is not cosmetic, because
 	// the physical column is named `fld<id>` (see ibMetaData::GenerateNewID, which never re-issues
 	// one for exactly that reason). Found 2026-08-31 by copying a document through metadata_copy
-	// and reading the ids back — the designer's own Ctrl+C / Ctrl+V walks this same road.
+	// and reading the ids back — the studio's own Ctrl+C / Ctrl+V walks this same road.
 	//
 	// Both are safe to reset for the same reason: an ordinary metaobject re-homes its bindings BY
 	// guid so it must adopt the source's, while a module has no re-homed hops and nothing addresses

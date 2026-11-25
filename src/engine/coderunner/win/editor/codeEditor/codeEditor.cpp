@@ -159,7 +159,7 @@ ibCodeEditor::~ibCodeEditor()
 
 void ibCodeEditor::EditDebugPoint(int line_to_edit)
 {
-	// Forward to the (designer-side) debugger override; sessionless
+	// Forward to the (studio-side) debugger override; sessionless
 	// hosts (coderunner) get the default no-op.
 	OnEditDebugPoint(line_to_edit);
 }

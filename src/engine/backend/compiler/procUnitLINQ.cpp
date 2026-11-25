@@ -2527,7 +2527,7 @@ bool ibLinqNamedColumns(const ibValue& row, std::vector<ibString>& outNames)
 // point it never left the RUNTIME — it lived inside a grouped answer and nothing ever asked it what
 // it was. The moment a READER was handed one (`ibLinqGroupedSample`, so the caret can say what a
 // grouping will look like without running it) `ClassNameOf` asked, `GetTypeIDByRef` found no ctor,
-// and the designer stopped on an assert.
+// and the studio stopped on an assert.
 //
 // ⭐ THE RULE, and it is wider than this file: a value that never leaves the runtime can skip
 // registration and nobody notices — the bill arrives when somebody READS it. So a type is either

@@ -74,7 +74,7 @@ void ibFrame::OnSize(wxSizeEvent& event)
 #if wxUSE_STATUSBAR
     // ...and the status bar, as the canon's: the native frame places it only as a SHOWN frame is sized
     // (wxFrame::HandleSize), and the main window is sized hidden - shown at that size, its bar stood where the frame's
-    // first size put it: mid-window in the client, under the panes in the designer until the window was first sized
+    // first size put it: mid-window in the client, under the panes in the studio until the window was first sized
     // (2026-11-11, Max). The port's own bar got by on a size posted at its creation (wxStatusBar::Create, MSW)
     PositionStatusBar();
 #endif // wxUSE_STATUSBAR

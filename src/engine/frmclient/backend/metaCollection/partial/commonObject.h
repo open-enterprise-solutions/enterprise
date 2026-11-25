@@ -29,7 +29,7 @@ public:
 	public:
 
 		// Folder/leaf flag is stored on the predefined value itself
-		// — the designer's predefined-list dialog renders these as
+		// — the studio's predefined-list dialog renders these as
 		// a tree, so the data-view item asks the row "are you a
 		// container?" directly.  Keeps the dialog free of model-side
 		// IsContainer overrides.

@@ -19,7 +19,7 @@
 // LIFECYCLE. The module registers itself on run and unregisters on close — this object only
 // forwards. What it adds is its own registration with ibJobManager: declared on the AFTER-run phase
 // (the resolve half, once the module is registered) and withdrawn on BEFORE-close, inversely. In
-// the Designer nothing is registered at all: a designer that ran the application's jobs on a
+// the Studio nothing is registered at all: a studio that ran the application's jobs on a
 // schedule would execute application code while it is being edited.
 
 #include "metaModuleObject.h"   // ibPropertyInnerModule + ibValueMetaObjectManagerModule
@@ -38,10 +38,10 @@ public:
 	const ibValueMetaObjectManagerModule* GetJobModule() const { return m_propertyJobModule->GetMetaObject(); }
 
 	// WHEN it is due. The description is the core's (core/description/jobScheduleDescription.h), so the
-	// designer edits exactly the structure the manager evaluates.
+	// studio edits exactly the structure the manager evaluates.
 	ibJobScheduleDescription& GetSchedule() const { return m_propertySchedule->GetValueAsSchedule(); }
 
-	// Declared but switched off — still visible, never registered. The Designer's value is the
+	// Declared but switched off — still visible, never registered. The Studio's value is the
 	// STARTING POINT for a base that has not seen this job yet; the live value belongs in the
 	// database (docs/private/scheduled-jobs.md § 8), which is a later step.
 	bool IsUsed() const { return m_propertyUse->GetValueAsBoolean(); }
@@ -59,14 +59,14 @@ public:
 	ibString GetJobName() const { return GetName(); }
 
 	// Hosts no children — a predefined job is code plus a schedule, and admitting forms or commands
-	// here would change the designer tree rather than add a feature.
+	// here would change the studio tree rather than add a feature.
 	virtual ibClassID ResolveChild(const ibClassID&) const override { return 0; }
 
 	//support icons
 	virtual ibPicture GetIcon() const;
 	static ibPicture GetIconGroup();
 
-	// designer context menu — "Open job module" opens the handler's code editor, exactly as a
+	// studio context menu — "Open job module" opens the handler's code editor, exactly as a
 	// shared module or a command does.
 	virtual bool CollectContextMenu(std::vector<ibMetaMenuItem>& items) override;
 
@@ -87,7 +87,7 @@ protected:
 	virtual bool ReadData(const ibDataNode& node) override;
 	virtual bool WriteData(ibDataNode& node) const override;
 
-	// Declare / withdraw with ibJobManager. Both are no-ops in the Designer and when there is no
+	// Declare / withdraw with ibJobManager. Both are no-ops in the Studio and when there is no
 	// manager (launcher, pre-bootstrap).
 	bool RegisterJob();
 	bool UnregisterJob();

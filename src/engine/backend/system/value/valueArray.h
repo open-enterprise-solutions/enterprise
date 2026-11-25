@@ -86,7 +86,7 @@ public:
 	}
 
 	// Insert BEFORE `index`; index == size appends. Out of range refuses outside
-	// the designer and does nothing inside it — never an out-of-bounds insert.
+	// the studio and does nothing inside it — never an out-of-bounds insert.
 	// Defined in the .cpp so the bounds guard can use appData / the exception.
 	void Insert(unsigned int index, const ibValue& varValue);
 
@@ -148,7 +148,7 @@ public:
 		m_listValue = std::move(sorted);
 	}
 
-	// Erase the element AT `index`. Out of range refuses outside the designer and
+	// Erase the element AT `index`. Out of range refuses outside the studio and
 	// does nothing inside it (never an out-of-bounds erase). Defined in the .cpp.
 	void Remove(unsigned int index);
 

@@ -16,7 +16,7 @@ class BACKEND_API ibValueSelectorDataObject : public ibValueDynamicMembers {
 	ibValueSelectorDataObject();
 	virtual ~ibValueSelectorDataObject();
 
-	// Advance to the next row after the anchor (false = exhausted / designer mode).
+	// Advance to the next row after the anchor (false = exhausted / studio mode).
 	bool Next();
 
 	//is empty
@@ -37,7 +37,7 @@ class BACKEND_API ibValueSelectorDataObject : public ibValueDynamicMembers {
 protected:
 
 	// Rewind the cursor to the start (anchor cleared). Per-subclass: clears its anchor
-	// + current row (and, in designer mode, populates designer values).
+	// + current row (and, in studio mode, populates studio values).
 	virtual void Reset() = 0;
 
 	// The shared keyset-cursor step: build the statement once (From + page cache +

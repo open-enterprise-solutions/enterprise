@@ -83,7 +83,7 @@ inline ibFont ibDefaultSpreadsheetFont() {
 // ⭐ THE SHEET'S ORDINARY COLOURS — the platform's, not the system's. A cell nobody coloured is drawn in these, and the
 // editor writes what it draws into the cell it touches: taken from the system (wxSYS_COLOUR_WINDOW / WINDOWTEXT), a
 // template edited under a dark macOS appearance was saved with (23,23,23) on White, and the system's theme became
-// part of the application (thin designer, 2026-10-27). The same two colours on every client and every theme.
+// part of the application (studio, 2026-10-27). The same two colours on every client and every theme.
 inline ibColour ibDefaultSpreadsheetBackgroundColour() {
 	return ibColour(255, 255, 255);
 }
@@ -1218,7 +1218,7 @@ private:
 	// It is not a mistake one caller made. SetCellSize (below) is built that way BY NECESSITY: it
 	// takes the owner cell, then creates every cell the merge covers, then writes the span back
 	// through the pointer it took first. `sheet_cell` with a colSpan on an empty template did
-	// exactly that — one cell became six, the container moved, and the designer died on the next
+	// exactly that — one cell became six, the container moved, and the studio died on the next
 	// line (dump designer_24140, 2026-09-02; the frame is ibMcpToolSheetCell::Call).
 	//
 	// ⭐ SO THE FIX IS THE CONTAINER, NOT THE TWO CALLERS. A container that never moves the elements

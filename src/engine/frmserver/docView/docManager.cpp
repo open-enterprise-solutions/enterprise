@@ -265,7 +265,7 @@ ibMetaDocument* ibDocManager::GetCurrentMetaDocument() const
 }
 
 // THE BASE SET: what every application's manager has — the shared templates and the shared schemas. An
-// application's own manager adds its own in its ctor (ibDocManagerRuntime, ibDocManagerDesigner).
+// application's own manager adds its own in its ctor (ibDocManagerWorkspace, ibDocManagerStudio).
 ibDocManager::ibDocManager(long /*flags*/, bool initialize)
 {
 	m_defaultDocumentNameCounter = 1;
@@ -317,7 +317,7 @@ ibDocManager::ibDocManager(long /*flags*/, bool initialize)
 	RegisterSchema(ibProtocol::ibSchema::ibKind::McpServer, std::make_unique<ibSchemaMcpServer>());
 	// …and the window onto it.
 	RegisterSchema(ibProtocol::ibSchema::ibKind::Assistant, std::make_unique<ibSchemaAssistant>());
-	// Active users — the sessions and the locks; the designer's dialog and the runtime's showed the same tables.
+	// Active users — the sessions and the locks; the studio's dialog and the runtime's showed the same tables.
 	RegisterSchema(ibProtocol::ibSchema::ibKind::ActiveUser, std::make_unique<ibSchemaActiveUser>());
 	// The registration journal — a tab its command opens; both applications' Administration had it.
 	RegisterSchema(ibProtocol::ibSchema::ibKind::AuditLog, std::make_unique<ibSchemaAuditLog>());

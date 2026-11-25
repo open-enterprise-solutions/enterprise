@@ -119,7 +119,7 @@ class BACKEND_API ibValueMetaObjectSharedAttributeColumn : public ibValueMetaObj
 	// contributing no column.
 	//
 	// THE NAME does not work that way, and the difference is not a preference:
-	// ibValueMetaObject::GetName is NOT virtual, so the designer tree and the property
+	// ibValueMetaObject::GetName is NOT virtual, so the studio tree and the property
 	// grid read the stored one directly. The copy therefore STORES its name, set when it
 	// is created and rewritten by the declaration's OnRenameMetaObject.
 	virtual ibTypeDescription& GetTypeDesc() const override;
@@ -135,7 +135,7 @@ class BACKEND_API ibValueMetaObjectSharedAttributeColumn : public ibValueMetaObj
 	// being allowed in the same instant — no pass over the application, no list to keep.
 	//
 	// This is what makes the column disappear too. Every walk that builds anything —
-	// the schema snapshot, the designer tree, the query columns — filters on IsAllowed
+	// the schema snapshot, the studio tree, the query columns — filters on IsAllowed
 	// (FillArrayObjectByFilter does it first), so a copy whose declaration is gone stops
 	// contributing a column, and the next restructuring drops it exactly as it drops a
 	// deleted attribute.
@@ -147,7 +147,7 @@ class BACKEND_API ibValueMetaObjectSharedAttributeColumn : public ibValueMetaObj
 		return ibValueMetaObjectAttribute::IsAllowed() && src != nullptr && src->IsAllowed();
 	}
 
-	// Deleted WITH its declaration, and asked as such everywhere — the designer tree,
+	// Deleted WITH its declaration, and asked as such everywhere — the studio tree,
 	// application-compare and the schema snapshot all read this rather than IsAllowed.
 	//
 	// NOT BOUND YET IS NOT GONE. A loaded copy holds the declaration's id and no pointer
@@ -178,7 +178,7 @@ class BACKEND_API ibValueMetaObjectSharedAttributeColumn : public ibValueMetaObj
 	// Called by the declaration immediately before it removes this copy.
 	void AllowRemoval() { m_removalAllowed = true; }
 
-	// The designer offers no New / Remove on a copy — only a jump to where it is edited.
+	// The studio offers no New / Remove on a copy — only a jump to where it is edited.
 	virtual bool CollectContextMenu(std::vector<ibMetaMenuItem>& items) override;
 
 	virtual bool OnLoadMetaObject(class ibMetaData* metaData) override;

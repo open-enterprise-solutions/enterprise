@@ -19,7 +19,7 @@ class BACKEND_API ibValueMetaObjectLanguage : public ibValueMetaObject {
 	virtual bool OnDeleteMetaObject();
 
 	//module manager is started or exit 
-	//after and before for designer 
+	//after and before for studio 
 	virtual bool OnBeforeRunMetaObject(int flags);
 	virtual bool OnAfterRunMetaObject(int flags);
 

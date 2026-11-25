@@ -1,6 +1,6 @@
 ﻿////////////////////////////////////////////////////////////////////////////
 //	Description : RUN A COMPOSITION SCHEMA - see composeRunSchema.h for why
-//	              this runs on the application side and not in the designer,
+//	              this runs on the application side and not in the studio,
 //	              and for what crosses the wire to get here.
 ////////////////////////////////////////////////////////////////////////////
 
@@ -90,7 +90,7 @@ ibValue ValueFrom(const ibDataValue& given)
 // is anything that has to be WORKED OUT where the data is — today's date as this session reckons it,
 // a rate looked up in a register, a catalogue item found by its code. Those are not values a sender
 // has; they are values a runtime produces. So the third road exists for exactly them, and in a
-// designer it would have nothing to evaluate against.
+// studio it would have nothing to evaluate against.
 //
 // NO FRAME OF OUR OWN — the root module's is borrowed. A run context is a frame descriptor: it
 // carries the ProcUnit whose bytecode the expression is compiled against, which is what "attached to
@@ -98,7 +98,7 @@ ibValue ValueFrom(const ibDataValue& given)
 //
 // ⭐ THE HELPER MOVED OUT — composeEvaluate.{h,cpp}, beside this file. It stood here file-local and
 // again as a static in valueDataComposition.cpp, each with a note pointing at the other, and the
-// two had already drifted: that one knew the designer's edit manager and this one did not. One
+// two had already drifted: that one knew the studio's edit manager and this one did not. One
 // home, one answer.
 
 // --- what a driver accumulated, as a node --------------------------------------------------------
@@ -186,7 +186,7 @@ bool ibComposeRunSchema::Run(const ibDataNode& request, ibDataNode& result, ibSt
 		return false;
 	}
 
-	// ⭐ THE SCHEMA ARRIVED; NOTHING IS LOOKED UP. What the designer resolved - which composer, which
+	// ⭐ THE SCHEMA ARRIVED; NOTHING IS LOOKED UP. What the studio resolved - which composer, which
 	// variant, whose saved setting - was resolved where the application and the settings live. This
 	// end is handed the answer, which is why there is no metaobject and no settings table in sight.
 	//
@@ -237,7 +237,7 @@ bool ibComposeRunSchema::Run(const ibDataNode& request, ibDataNode& result, ibSt
 	composer.CommonSelected() = description.m_selected;
 	composer.LoadVariants(description.m_variants);
 
-	// ⭐ THE SETTINGS SECTION AS IT WAS CHOSEN. The designer folded the author's variant and whoever's
+	// ⭐ THE SETTINGS SECTION AS IT WAS CHOSEN. The studio folded the author's variant and whoever's
 	// saved setting into one section before sending it, so there is one thing to apply and no order
 	// to get wrong on this side.
 	if (auto settingsNode = request.FindChild(kComposeSettings)) {
@@ -252,7 +252,7 @@ bool ibComposeRunSchema::Run(const ibDataNode& request, ibDataNode& result, ibSt
 	// ⭐⭐ THE PARAMETERS ARE SETTLED HERE, AND THAT IS WHY THIS RUNS WHERE IT DOES. A parameter is one
 	// of three things and only the last one needs anything: a value the caller stated, a value the
 	// schema stored, or an EXPRESSION — and an expression needs a runtime to evaluate against. In a
-	// designer there is none, which is exactly the case that used to answer "true, produced nothing"
+	// studio there is none, which is exactly the case that used to answer "true, produced nothing"
 	// and look like a parameter that legitimately evaluated to empty.
 	//
 	// ⭐ AND A CALLER MAY SEND AN EXPRESSION OF ITS OWN (Max, 2026-09-06: *"it should still be able to
@@ -470,7 +470,7 @@ bool ibComposeRunSchema::Run(const ibDataNode& request, ibDataNode& result, ibSt
 	// ⭐⭐ WHAT IS RENTED IS A CONNECTION PLUS A POLICY, not a place in anybody's session. The session
 	// a tenant is minted on is UNLISTED: it takes no row in the registry, answers no lookup and
 	// installs no identity of its own. That is what lets it read ALONGSIDE them rather than queueing
-	// behind them - and here, unlike in a designer, the policy it borrows is the policy of the very
+	// behind them - and here, unlike in a studio, the policy it borrows is the policy of the very
 	// person whose report this is, so the rows are the rows they would see.
 	//
 	// ⚠ AND A REFUSAL TO RENT MEANS "READ IT HERE", never "no data". The wait for a free worker is

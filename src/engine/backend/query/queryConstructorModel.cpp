@@ -279,7 +279,7 @@ std::vector<ibQueryConstructorField> ibQueryFieldsOfText(const ibString& text,
 		return fields;
 
 	// The names resolve against the APPLICATION HANDED IN — never the active one, which in the
-	// designer is not necessarily this query's (two are open at once).
+	// studio is not necessarily this query's (two are open at once).
 	const ibSourceMetaDataScope scope(metaData);
 	try {
 		ibQueryParser parser;

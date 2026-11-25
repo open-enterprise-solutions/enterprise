@@ -5,7 +5,7 @@
 // The MCP page of the settings dialog — where a person says whether their own
 // assistant may reach this session, and where.
 //
-// THE SETTINGS ARE THEIRS, on their own machine, and the designer's apart from the
+// THE SETTINGS ARE THEIRS, on their own machine, and the studio's apart from the
 // application's. This panel only edits the value; who saves it and when is the
 // dialog's caller, and where it is kept is the transport's (ibMcpServer::SaveSettings).
 //

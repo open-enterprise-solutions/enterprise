@@ -446,7 +446,7 @@ void RenumberDockRows(ibAuiDockInfoPtrArray& docks)
 // SEAM vs wx: the window a top-level window's panes are laid out in (ibAuiManager::SetManagedWindow) - an ib window,
 // placed at the client area's origin as one is (ibWindow::Create, DoSetSize). wxGTK places a child from the native
 // window's corner, and the port's window stood there: its toolbars over the title bar, the menubar over its top, its
-// bottom short of the frame (the designer on GTK3, CI's look, 2026-11-12). On MSW and Cocoa wx places the port's
+// bottom short of the frame (the studio on GTK3, CI's look, 2026-11-12). On MSW and Cocoa wx places the port's
 // window there itself (AdjustForParentClientOrigin) - the same place; its paint and erase are AUI's (Bind) before ibWindow's
 class ibAuiManagedWindow : public ibWindow
 {
@@ -1148,7 +1148,7 @@ bool ibAuiManager::AddPane(wxWindow* window, const ibAuiPaneInfo& paneInfo)
     // SEAM vs wx: the pane is a child of the window managed - made a child of the top-level window, it is moved into
     // the window laid out inside it (SetManagedWindow). A window with no parent is not made - a book's tab frame, which
     // only places its row of tabs - and stays as wx leaves it: wxOSX's Reparent embeds the window's view, and there is
-    // none (the designer fell making its bottom pane, CI's look step, 2026-11-13); on MSW and GTK3 there was no native
+    // none (the studio fell making its bottom pane, CI's look step, 2026-11-13); on MSW and GTK3 there was no native
     // window to move either
     if (window->GetParent() != nullptr && window->GetParent() != m_frame)
         window->Reparent(m_frame);

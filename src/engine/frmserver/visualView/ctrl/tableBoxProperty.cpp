@@ -16,7 +16,7 @@ bool ibValueModelTableBox::OnPropertyChanging(ibProperty* property, const ibVari
 void ibValueModelTableBox::OnPropertyChanged(ibProperty* property, const ibVariant& oldValue, const ibVariant& newValue)
 {
 	// A NEW SOURCE, A NEW MODEL AND ITS COLUMNS — set in the inspector, by a script (ibValueFrame::SetPropVal) or by a
-	// drop in the designer (SetBoundSource).
+	// drop in the studio (SetBoundSource).
 	if (m_propertySource == property) {
 		ibValueModelTableBox::RefreshModel(true);
 		ibValueModelTableBox::CreateColumnCollection();

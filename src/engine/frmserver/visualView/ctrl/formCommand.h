@@ -12,7 +12,7 @@
 // control (and the non-control layer object) do.
 //
 // It IS an ibValueLayerObject: the same non-control property object that hangs off an owner FRAME and borrows its
-// metadata + designer routing (GetMetaData / OnPropertyChanged / OnEventChanged, all shared through GetOwnerFrame()).
+// metadata + studio routing (GetMetaData / OnPropertyChanged / OnEventChanged, all shared through GetOwnerFrame()).
 // The form command reuses that machinery wholesale instead of re-deriving it — it only adds its own properties (Name
 // / Caption / Picture), its Action event, and its form-unique id.
 //
@@ -42,7 +42,7 @@ public:
 	ibFormCommandValue& operator=(const ibFormCommandValue&) = delete;
 
 	// --- ibValueLayerObject ---
-	virtual ibValueFrame* GetOwnerFrame() const override;   // → the owner form (metadata + designer routing)
+	virtual ibValueFrame* GetOwnerFrame() const override;   // → the owner form (metadata + studio routing)
 	virtual bool IsLayerContainer() const override { return false; }   // a leaf — no children
 
 	// --- value identity ---

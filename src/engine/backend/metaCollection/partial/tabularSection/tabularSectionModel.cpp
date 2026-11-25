@@ -142,7 +142,7 @@ void ibValueTabularSectionDataObjectBase::CopyValue(const ibDataViewItem& row)
 		return;
 	ibComposerNode* rowData = new ibComposerNode();
 	// THE GENERIC LIST — the section's own columns AND the predefined ones. GetAttributeArrayObject
-	// answers "what did a person add to this section", which is the right question for the designer
+	// answers "what did a person add to this section", which is the right question for the studio
 	// tree and the wrong one for copying a ROW: every other walk over a row (create, read, write —
 	// tabularSection.cpp, tabularSectionQuery.cpp) takes the generic list, and this one did not. A
 	// section whose columns are ALL predefined — a chart of accounts' analytics kinds — therefore

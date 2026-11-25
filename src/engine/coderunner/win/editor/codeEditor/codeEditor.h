@@ -61,7 +61,7 @@ static_assert(ibFoldCode::FoldLevelElse == ibSTC_FOLDLEVELELSE_FLAG, "the core's
 class ibCodeEditor : public ibStyledTextCtrl {
 
 protected:
-	// Marker IDs — protected so designer's ibCodeEditorDesigner subclass
+	// Marker IDs — protected so studio's ibCodeEditorStudio subclass
 	// (which manages breakpoint markers via debugClient) can reach them.
 	//
 	// ⚠ THE NUMBER IS THE DRAWING ORDER: Scintilla draws a higher-numbered marker over a lower one. The dots come
@@ -232,7 +232,7 @@ protected:
 
 	// ---- Debugger integration hooks ----
 	// Frontend's ibCodeEditor doesn't know about backend's debugClient;
-	// designer's ibCodeDesigner subclass overrides these to forward to
+	// studio's ibCodeEditorStudio subclass overrides these to forward to
 	// debugClient. coderunner / other sessionless hosts get the default
 	// no-op behaviour so the editor still works without any debug
 	// infrastructure attached.
@@ -325,13 +325,13 @@ private:
 	wxString m_askedValue;
 
 protected:
-	// The context menu's debugger part, for the line it was opened on - the designer adds the
+	// The context menu's debugger part, for the line it was opened on - the studio adds the
 	// breakpoint condition there; a host with no debugger adds nothing. Last in the class: a virtual
 	// added between others moves every one after it in the table, and an object built before reads
 	// the wrong slot.
 	virtual void AppendDebugMenu(ibMenu& /*menu*/, int /*line*/) {}
 
-	// What the breakpoint margin says about the line under the mouse - the designer answers with the
+	// What the breakpoint margin says about the line under the mouse - the studio answers with the
 	// breakpoint's condition. False: nothing to say, `hint` untouched.
 	virtual bool GetDebugPointHint(int /*line*/, wxString& /*hint*/) { return false; }
 };

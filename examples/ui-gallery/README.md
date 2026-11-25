@@ -2,7 +2,7 @@
 
 A Storybook-style catalog of OES's form controls — one `NotebookPage` per control
 type, built as a `Form` on the `UIComponentGallery` `DataTool`, inside this
-folder's base. It was built live through the Designer's MCP server (an assistant
+folder's base. It was built live through the Studio's MCP server (an assistant
 driving `metadata_create`/`form_add`/`form_bind`, not hand-authored), and is kept
 here as a worked example of what that looks like, plus a record of what it found.
 
@@ -14,7 +14,7 @@ OES has two layers that could be called "the UI kit":
   renderer (the "Luna" theme) and the controls on it, shared by the thin client
   and the launcher. Unfinished, and the web client never calls into it at all.
 - `src/engine/frmserver/visualView/ctrl/` — the form-control types a developer
-  actually places from the Designer's palette (drawn by the thin client's
+  actually places from the Studio's palette (drawn by the thin client's
   `src/engine/frmclient/visualView/ctrl/`). This is the layer a form's
   metadata is built from, and the only one with any chance of reaching the web
   client — see the gap below for how much of a chance that actually is.
@@ -95,7 +95,7 @@ macOS when a control's Font is empty"); without it this gallery opens on an
 arbitrary page and shows only the active tab.
 
 Opening this gallery in the old desktop front (branch `oes/thick_client`), or its
-Designer's form editor, used to show only one `NotebookPage` at a time, picking a
+Studio's form editor, used to show only one `NotebookPage` at a time, picking a
 different, seemingly arbitrary page on every fresh run — with the visible tab's
 own label sometimes not even matching what was drawn under it. Two distinct bugs
 were involved, both in that front's notebook control:

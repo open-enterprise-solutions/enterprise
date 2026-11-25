@@ -3,19 +3,19 @@
 #include "core/diagnostics/debugTrace.h"   // ibDebugTraceEnabled — class-registration tracing is opt-in
 #include "backend/query/queryableFactory.h"   // ibMetaQueryableFactory — the per-application source factory (complete here)
 
-// The image's designer infrastructure (compile cache + its module-manager) is built by the owner metadata's
-// CreateDesignerCache() — each kind decides (designer-only, nullptr otherwise). Dropping the image later releases
+// The image's studio infrastructure (compile cache + its module-manager) is built by the owner metadata's
+// CreateStudioCache() — each kind decides (studio-only, nullptr otherwise). Dropping the image later releases
 // the manager (RAII → DestroyMainModule), so there's no separate teardown to mirror.
 ibMetaImage::ibMetaImage(ibMetaData* owner)
 {
 	if (owner != nullptr)
-		m_compileCache = owner->CreateDesignerCache();   // nullptr ⇒ no designer infra for this kind
+		m_compileCache = owner->CreateStudioCache();   // nullptr ⇒ no studio infra for this kind
 	// Every open snapshot gets its OWN source factory — metadata-backed queryables register into it, the platform's
 	// sources are made for this application in it, and resolve descends to the global factory on a miss. Dropping
 	// the image frees it (RAII), same lifecycle as the compile cache.
 	m_sourceFactory = std::make_unique<ibMetaQueryableFactory>(owner);
 	// The bytecode of an application that RUNS is read here — once, as it opens — and held for every session's
-	// modules (ibByteCodeStorage). A designer's own copy has the compile cache above and runs none.
+	// modules (ibByteCodeStorage). A studio's own copy has the compile cache above and runs none.
 	if (owner != nullptr && m_compileCache == nullptr)
 		m_byteCodeStorage = std::make_unique<ibByteCodeStorage>(owner);
 }

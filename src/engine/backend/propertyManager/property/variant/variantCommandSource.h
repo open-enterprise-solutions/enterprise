@@ -42,7 +42,7 @@ public:
 	// The string the cell shows — SERVER-SIDE and live, exactly like ibVariantSource::GetString asks its source
 	// factory. The owner (a button / a bar item) is cast to ibBackendCommandReceiver; WalkCommand WALKS the bound hops
 	// and returns valid / invalid. Can't walk to the end (a hop gone) -> "<not found>", the guarantee the path broke;
-	// this runs at RUNTIME too, so a deleted command reads "<not found>" everywhere, not just in the designer cell.
+	// this runs at RUNTIME too, so a deleted command reads "<not found>" everywhere, not just in the studio cell.
 	// Only with no owner wired (a detached temp) does it fall back to the picker-set display.
 	virtual ibString GetString() const override {
 		if (!m_commandDesc.IsOk())

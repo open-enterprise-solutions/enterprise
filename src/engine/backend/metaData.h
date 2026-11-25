@@ -40,7 +40,7 @@ class BACKEND_API ibMetaData;
 // which has no tree at all — has an empty list and loses nothing by it.
 //
 // ⚠ AND IT STAYS GUI-FREE. Nothing below names a window, a dialog or a wx control: a DECISION
-// arrives as a std::function and an OUTCOME leaves as words. A designer answers with a dialog, an
+// arrives as a std::function and an OUTCOME leaves as words. A studio answers with a dialog, an
 // MCP tool answers from an argument, and neither fact is visible from in here.
 class BACKEND_API ibMetaDataNotifier {
 public:
@@ -53,7 +53,7 @@ public:
 	// first"*).
 	//
 	// A create can arrive UNFINISHED — a form that does not yet know which kind it is — and the
-	// designer's answer to that is to ASK: a modal wizard, right for a click, impossible for a tool.
+	// studio's answer to that is to ASK: a modal wizard, right for a click, impossible for a tool.
 	// Whoever FILLS the gap must be told before whoever would ASK about it. So the assistant answers
 	// from its arguments, and by the time the tree hears the same stage the form already knows what
 	// it is and there is nothing left to ask.
@@ -87,7 +87,7 @@ public:
 	//
 	// 🛑 THREE SIGNALS WERE TRIED FIRST and removed the same day: created / renamed / removed, each
 	// carrying the object. That made the ENGINE describe an edit to something whose whole job is to
-	// re-read, and it tied "something changed" to "a designer exists". A watcher knows how to refresh
+	// re-read, and it tied "something changed" to "a studio exists". A watcher knows how to refresh
 	// itself; the only thing it cannot know is WHEN, and that is all this says.
 	//
 	// ⚠ BOTH DIRECTIONS COME THROUGH IT. A save resets the modified flag without changing a row,
@@ -108,7 +108,7 @@ public:
 	// So the stage is an ARGUMENT. Everything a watcher used to be told through a verb of its own
 	// arrives here, and adding a stage to the platform adds nothing to this class.
 	//
-	// ⭐ THE ENGINE STATES A FACT AND 🛑S. What a watcher does with it is its own: the designer's
+	// ⭐ THE ENGINE STATES A FACT AND 🛑S. What a watcher does with it is its own: the studio's
 	// tree asks a person which kind a new form is and writes the answer in, closes the editors of an
 	// object that is going away, re-reads itself when the shape changed. None of that can refuse the
 	// stage — by the time this arrives the thing has already happened.
@@ -150,7 +150,7 @@ public:
 		// know you started it, but you do need to know when someone started it besides you."*
 		//
 		// So the ledger goes to the CALLER, through `decide` (metadataApplication.h), and these two
-		// go to everyone: a designer learns the assistant applied, the assistant learns the person
+		// go to everyone: a studio learns the assistant applied, the assistant learns the person
 		// at the keyboard did. The initiator hears its own and ignores them, which costs nothing.
 		Applying,    // the database is being restructured — do not read it until one of the next two
 		Applied,     // …and it now runs this application
@@ -189,7 +189,7 @@ public:
 ///////////////////////////////////////////////////////////////////////////////
 
 // Module-storage skeleton — list of shared-module descriptors that
-// belong to the metadata. Designer-mutation API (Add/Rename/Remove) +
+// belong to the metadata. Studio-mutation API (Add/Rename/Remove) +
 // read-only iteration for runtime mm. One instance per metadata; held
 // by value on ibMetaData so the accessor never returns nullptr (empty
 // storage is the default for metadata kinds without init modules).
@@ -271,11 +271,11 @@ private:
 
 ///////////////////////////////////////////////////////////////////////////////
 
-// Compile-value cache — stores compiled ibValue pointers for designer's
+// Compile-value cache — stores compiled ibValue pointers for studio's
 // intellisense / metadata-property previews. Created only on metadata
-// applications that support designer editing (ibMetaDataApplicationStorage);
+// applications that support studio editing (ibMetaDataApplicationStorage);
 // runtime applications leave m_compileCache nullptr → callsites use
-// `if (auto* cc = metaData->GetCompileCache())` instead of DesignerMode().
+// `if (auto* cc = metaData->GetCompileCache())` instead of StudioMode().
 //
 // Two AddCompileModule overloads share storage:
 //   - (meta, ibValue*)        — caller already has the compiled value
@@ -294,25 +294,25 @@ private:
 // changing the API contract for callers.
 class BACKEND_API ibCompileValueCache {
 public:
-	// Designer-own module manager (the pre-session-split application-level mm the
-	// Designer lost when runtime moved into per-session ibSession::m_root). Held
+	// Studio-own module manager (the pre-session-split application-level mm the
+	// Studio lost when runtime moved into per-session ibSession::m_root). Held
 	// here so the editor reads shared-module units + named context from a manager
-	// that tracks the CURRENT designer state, decoupled from the runtime session's
+	// that tracks the CURRENT studio state, decoupled from the runtime session's
 	// CreateMainModule timing. Owned by this cache. See project_common_module_designer_cache.
-	explicit ibCompileValueCache(ibValueModuleManagerDesigner* moduleManager = nullptr);
+	explicit ibCompileValueCache(ibValueModuleManagerStudio* moduleManager = nullptr);
 
-	// Out-of-line (metadata.cpp): the ibValuePtr<ibValueModuleManagerDesigner>
-	// assign/convert needs the COMPLETE designer type for its ref-count static_cast.
-	ibValueModuleManagerDesigner* GetModuleManager() const;
-	// Rebind the designer manager — driven by RunDatabase (fresh metaobject) /
+	// Out-of-line (metadata.cpp): the ibValuePtr<ibValueModuleManagerStudio>
+	// assign/convert needs the COMPLETE studio type for its ref-count static_cast.
+	ibValueModuleManagerStudio* GetModuleManager() const;
+	// Rebind the studio manager — driven by RunDatabase (fresh metaobject) /
 	// CloseDatabase (nullptr). The manager binds to the current root metaobject;
 	// holding one across an application reload would dangle (the old metaobject is freed).
-	void SetModuleManager(ibValueModuleManagerDesigner* moduleManager);
+	void SetModuleManager(ibValueModuleManagerStudio* moduleManager);
 
 	bool AddCompileModule(const ibValueMetaObject* moduleObject, ibValue* object);
 	// Generalized deferred: the builder is Constructed lazily on first lookup.
 	// Forms wrap ibDeferredForm (needs the session root mm compiled). Shared
-	// modules no longer use this path — they register into the designer-mgr
+	// modules no longer use this path — they register into the studio-mgr
 	// directly via RuntimeRegisterSharedModule (see project_common_module_designer_cache).
 	// insert_or_assign semantics (a re-run replaces the prior builder + drops
 	// the built value). The builder answers with the OWNER of what it built — a data object's
@@ -320,7 +320,7 @@ public:
 	bool AddCompileModule(const ibValueMetaObject* moduleObject, std::function<ibValue()> builder);
 	bool RemoveCompileModule(const ibValueMetaObject* moduleObject);
 
-	// Mark a deferred entry as dirty — Designer calls this on form-edit
+	// Mark a deferred entry as dirty — Studio calls this on form-edit
 	// commits so the next Find rebuilds the form value via the stored
 	// rebuilder. No-op for entries that were registered as immediate
 	// values (no rebuilder), and no-op for unknown descriptors.
@@ -342,18 +342,18 @@ private:
 	};
 	mutable std::map<const ibValueMetaObject*, ibCompileEntry> m_cache;
 
-	// Designer-own module manager — owning handle (ibValuePtr: IncrRef on bind,
+	// Studio-own module manager — owning handle (ibValuePtr: IncrRef on bind,
 	// DecrRef on cache destruction). Null until ibMetaDataApplicationStorage
-	// wires one in. Designer-only type: holds its OWN shared-module registry with
+	// wires one in. Studio-only type: holds its OWN shared-module registry with
 	// compiled lightweight units, independent of the runtime managers.
-	ibValuePtr<ibValueModuleManagerDesigner> m_moduleManager;
+	ibValuePtr<ibValueModuleManagerStudio> m_moduleManager;
 };
 
 ///////////////////////////////////////////////////////////////////////////////
 
 // Runtime-image — aggregates everything that "opening" a metadata fills and
 // "closing" discards: the metadata-defined type-ctor factory, the shared-module
-// skeleton, and the (designer-only) compile cache. Held by shared_ptr on ibMetaData
+// skeleton, and the (studio-only) compile cache. Held by shared_ptr on ibMetaData
 // (m_image): its PRESENCE is the open state — a run builds it (LoadGuard) and keeps
 // it on success or drops it on failure ("the load never happened"); close tears the
 // registered objects down per-node, then drops it. The registry OWNS its ctors via
@@ -367,11 +367,11 @@ class ibMetaQueryableFactory;     // the concrete per-application factory (own r
 
 class BACKEND_API ibMetaImage {
 public:
-	// The image builds its OWN designer infrastructure on construction (out of line —
-	// see metadataFactory.cpp): it asks the owner metadata for its designer cache via
-	// CreateDesignerCache() (the compile-value cache WITH its module-manager attached;
-	// nullptr for runtime / non-designer kinds). So each metadata kind decides its own
-	// designer setup; the caller (LoadGuard) never pokes the image's internals.
+	// The image builds its OWN studio infrastructure on construction (out of line —
+	// see metadataFactory.cpp): it asks the owner metadata for its studio cache via
+	// CreateStudioCache() (the compile-value cache WITH its module-manager attached;
+	// nullptr for runtime / non-studio kinds). So each metadata kind decides its own
+	// studio setup; the caller (LoadGuard) never pokes the image's internals.
 	// owner==nullptr ⇒ a bare image (the ctor-factory + module skeleton fill during the
 	// run cascade, not here).
 	explicit ibMetaImage(ibMetaData* owner = nullptr);
@@ -417,7 +417,7 @@ public:
 	// Module-storage + compile-cache accessors. ibMetaData exposes these as a facade
 	// (GetModuleStorage / GetCompileCache), null-checking the image for the closed
 	// state; on a live image module storage is always valid, the compile cache nullptr
-	// unless the metadata's CreateCompileCache() made one (designer kinds).
+	// unless the metadata's CreateCompileCache() made one (studio kinds).
 	ibModuleStorage*       ModuleStorage()       { return &m_moduleStorage; }
 	const ibModuleStorage* ModuleStorage() const { return &m_moduleStorage; }
 	ibCompileValueCache*   CompileCache()  const { return m_compileCache.get(); }
@@ -428,7 +428,7 @@ public:
 	ibQueryableFactory*    SourceFactory() const { return m_sourceFactory.get(); }
 
 	// This application's bytecode, read as it opens — where every module of every session takes its compiled code
-	// from. Null on a designer's own copy (it runs none) and on a bare image. See ibMetaData::GetByteCodeStorage facade.
+	// from. Null on a studio's own copy (it runs none) and on a bare image. See ibMetaData::GetByteCodeStorage facade.
 	ibByteCodeStorage*     ByteCodeStorage() const { return m_byteCodeStorage.get(); }
 
 private:
@@ -440,14 +440,14 @@ private:
 	// Shared-module skeleton — populated by descriptor's OnBeforeRunMetaObject
 	// during RunDatabase. Empty for metadata kinds without init modules.
 	ibModuleStorage                      m_moduleStorage;
-	// Compile-value cache — designer-only. Allocated by ibMetaDataApplicationStorage's
+	// Compile-value cache — studio-only. Allocated by ibMetaDataApplicationStorage's
 	// ctor (and the external data tool / report ctors); nullptr on runtime applications.
 	std::unique_ptr<ibCompileValueCache> m_compileCache;
 	// Per-application source factory (ibMetaQueryableFactory) — this snapshot's OWN metadata-backed queryable descriptors;
 	// resolve descends to the global factory on a miss. Allocated in the image ctor (out of line).
 	std::unique_ptr<ibQueryableFactory> m_sourceFactory;
 	// The application's bytecode held in memory — the rows of sys_bytecode_cache read in one statement as the
-	// application opens. Allocated in the image ctor, for an application that runs; nullptr on a designer's copy.
+	// application opens. Allocated in the image ctor, for an application that runs; nullptr on a studio's copy.
 	std::unique_ptr<ibByteCodeStorage>  m_byteCodeStorage;
 };
 
@@ -518,16 +518,16 @@ public:
 	ibModuleStorage* GetModuleStorage() { return m_image ? m_image->ModuleStorage() : nullptr; }
 	const ibModuleStorage* GetModuleStorage() const { return m_image ? m_image->ModuleStorage() : nullptr; }
 
-	// Compile-value cache — designer-only storage of compiled ibValue
+	// Compile-value cache — studio-only storage of compiled ibValue
 	// pointers used by intellisense / metadata-property previews. Created
-	// only on metadata applications that support designer editing
+	// only on metadata applications that support studio editing
 	// (ibMetaDataApplicationStorage's ctor allocates it). Runtime-only
 	// applications leave it nullptr — callers gate by null-check
 	// (`if (auto* cc = metaData->GetCompileCache())`) instead of querying
-	// appData->DesignerMode().
+	// appData->StudioMode().
 	ibCompileValueCache* GetCompileCache() const { return m_image ? m_image->CompileCache() : nullptr; }
 
-	// This application's bytecode storage (on the image; null when closed, and on a designer's own copy) — where a
+	// This application's bytecode storage (on the image; null when closed, and on a studio's own copy) — where a
 	// module takes its compiled code from (ibRuntimeModuleDataObject::Compile). It goes with the image: sessions that
 	// keep a replaced application keep its storage with it.
 	ibByteCodeStorage* GetByteCodeStorage() const { return m_image ? m_image->ByteCodeStorage() : nullptr; }
@@ -558,13 +558,13 @@ public:
 	void RegisterSource(class ibQueryableSourceDescriptor* descriptor) const;
 	void UnregisterSource(class ibQueryableSourceDescriptor* descriptor) const;
 
-	// Factory for this metadata kind's designer infrastructure — called by the image
+	// Factory for this metadata kind's studio infrastructure — called by the image
 	// ctor, which takes ownership (no bool flag on the metadata). Base returns none
-	// (runtime / non-designer kinds); the designer kinds override to build the
+	// (runtime / non-studio kinds); the studio kinds override to build the
 	// compile-value cache WITH its module-manager already attached (Storage always;
-	// external data tool / report in designer mode — manager bound to the root metaobject /
-	// object module). One method ⇒ each kind's whole designer setup lives in one place.
-	virtual std::unique_ptr<ibCompileValueCache> CreateDesignerCache() { return nullptr; }
+	// external data tool / report in studio mode — manager bound to the root metaobject /
+	// object module). One method ⇒ each kind's whole studio setup lives in one place.
+	virtual std::unique_ptr<ibCompileValueCache> CreateStudioCache() { return nullptr; }
 
 	// Open state — single source of truth, lives in the open-image (see ibMetaImage).
 	// One flag for File / DataTool / Report, each of which once kept its own; a
@@ -588,7 +588,7 @@ public:
 
 		m_metaModify = modify;
 
-		// ⭐⭐ THE SAME MECHANISM THAT WAS IN THE DESIGNER'S CAPTION, MOVED TO WHERE THE STATE IS.
+		// ⭐⭐ THE SAME MECHANISM THAT WAS IN THE STUDIO'S CAPTION, MOVED TO WHERE THE STATE IS.
 		// It worked; what was wrong was WHERE IT LIVED — a file-static in one window, so the answer
 		// belonged to a process rather than to an application, one copy shared by every frame and
 		// every application opened in turn, and nothing else could ask for it.
@@ -714,7 +714,7 @@ public:
 
 	// ⭐⭐ THE WATCHERS ARE A LIST, AND THERE IS NO WAY TO ASK FOR ONE OF THEM.
 	//
-	// One application is watched by more than one thing — the designer's own navigator and
+	// One application is watched by more than one thing — the studio's own navigator and
 	// whatever the assistant has open — and until 2026-09-01 installing a second put out the first,
 	// exactly as the debugger's single bridge once did (debugger-architecture.md § 8.1).
 	//
@@ -796,7 +796,7 @@ public:
 	// you last read"; making it for a value that is already the current one says that of a metadata
 	// nothing happened to. Loading an application ends in `SetReadOnly(m_bReadOnly)` with the same
 	// value it already held (ibApplicationTree::Load) — a flip that flips nothing — and the false
-	// signal that came out of it was doing visible damage: the designer's caption paints its
+	// signal that came out of it was doing visible damage: the studio's caption paints its
 	// modified mark on the SECOND report it hears, so this one arrived to draw a mark the first,
 	// truthful report had been suppressed for (Max, 2026-09-05: *"SetReadOnly — the mode did not
 	// actually change"*).
@@ -897,7 +897,7 @@ public:
 	// Overload pair (Effective C++ Item 3): const this → const result, so the
 	// runtime (which reaches ibMetaData through a const handle) gets const
 	// meta-objects — they protect metadata from mutation exactly like the const
-	// ibMetaData handle does. non-const this → mutable, for designer /
+	// ibMetaData handle does. non-const this → mutable, for studio /
 	// meta-internal edits. The protected FindObjectByFilter helper stays const
 	// and is shared by both; the const path just narrows its result.
 	template <std::derived_from<ibValueMetaObject> _T1 = ibValueMetaObject, typename _T2>
@@ -1104,7 +1104,7 @@ protected:
 	// one; the dtor DROPS it, rolling the load back, UNLESS Commit() ran.
 	// "exception == rollback": a raised ibBackendException (or any early return)
 	// unwinds through the dtor, the image is dropped, and the state is exactly the
-	// closed state it started from. Dropping the image also releases the designer
+	// closed state it started from. Dropping the image also releases the studio
 	// module-manager (it lives in the cache, freed by RAII → DestroyMainModule), so
 	// no separate manager teardown is needed.
 	class LoadGuard {
@@ -1117,8 +1117,8 @@ protected:
 			// so it must forget the previous application's high-water mark — otherwise a base
 			// opened after a larger one would start issuing ids from the OTHER one's ceiling.
 			m_meta->m_nextMetaId = 0;
-			// The image ctor builds its own designer infrastructure via the owner's
-			// CreateDesignerCache() (cache + manager; nullptr for non-designer kinds).
+			// The image ctor builds its own studio infrastructure via the owner's
+			// CreateStudioCache() (cache + manager; nullptr for non-studio kinds).
 			m_meta->m_image = std::make_shared<ibMetaImage>(m_meta);
 		}
 		~LoadGuard() {
@@ -1153,7 +1153,7 @@ protected:
 
 protected:
 
-	// 🛑 THIS WAS A FILE-STATIC IN THE DESIGNER'S FRAME (`s_setModify`), which made the answer belong
+	// 🛑 THIS WAS A FILE-STATIC IN THE STUDIO'S FRAME (`s_setModify`), which made the answer belong
 	// to the PROCESS instead of to an application: one copy shared by every frame and every
 	// application opened in turn, and unreachable by anything but the caption. Its twin
 	// (`s_modified`) is gone entirely — it held what IsModified() already says.

@@ -214,7 +214,7 @@ ibVisualHostClient::ibVisualHostClient(ibFrontendMainFrame& frame, wxWindow* par
 	// ⭐ A FORM REPAINTED IS A FORM UPDATED WHOLE (Max, 2026-11-24) — the look changed: its windows took the colours in
 	// force as they were made, and what is held of each control is its node without the State (m_drawn), drawn again from
 	// which a command bar comes out empty and a table reads its rows anew. Its shape forgotten, the next draw builds it
-	// anew from the view (Draw): the shown tab's at once (ibFrontendMainFrame::OnSysColourChanged), the designer's form
+	// anew from the view (Draw): the shown tab's at once (ibFrontendMainFrame::OnSysColourChanged), the studio's form
 	// at once (its editor's), another tab's when it comes up.
 	Bind(wxEVT_SYS_COLOUR_CHANGED, [this](wxSysColourChangedEvent& event) {
 		m_shape.clear();
@@ -317,9 +317,9 @@ void ibVisualHostClient::Draw(const ibProtocolNode& view, const ibProtocolNode& 
 
 void ibVisualHostClient::Send(long long controlId, ibProtocol::ibEvent::ibKind event, const ibProtocolNode& args)
 {
-	// Raised while the view is torn down — a focus going with a closing tab — it is no one's; in a designer's — the
+	// Raised while the view is torn down — a focus going with a closing tab — it is no one's; in a studio's — the
 	// editor's.
-	if (IsBeingDeleted() || IsDesignerHost())
+	if (IsBeingDeleted() || IsStudioHost())
 		return;
 
 	// What it says, as it says it — a sheet handed over whole by its size: written out, it was the sheet again in the
@@ -335,8 +335,8 @@ void ibVisualHostClient::Send(long long controlId, ibProtocol::ibEvent::ibKind e
 
 bool ibVisualHostClient::Hold(long long controlId, ibProtocol::ibEvent::ibKind event, const ibProtocolNode& args)
 {
-	// Raised while the view is torn down — no one's, as for Send; the editor's in a designer's.
-	if (IsBeingDeleted() || IsDesignerHost())
+	// Raised while the view is torn down — no one's, as for Send; the editor's in a studio's.
+	if (IsBeingDeleted() || IsStudioHost())
 		return true;
 	if (!m_mainFrame.Hold(EventOf(controlId, event, args)))
 		return false;
@@ -363,12 +363,12 @@ ibViewFetcher ibVisualHostClient::MakeFetcher(long long controlId) const
 	ibFrontendMainFrame* const frame = &m_mainFrame;
 	const wxString form = m_formKey;
 	const long long tab = m_tabId;
-	// …none in a designer's: the editor's tab answers the ask as its own, with the whole form and its classes — some 280 KB,
-	// a second on every drawing of a form with a table (2026-10-15). A document's tab in the designer is asked: its sheet
-	// comes by Fetch alone (2026-10-20: the designer's whole process refused it, a sheet opened there came empty).
-	const bool designer = IsDesignerHost();
-	return [frame, controlId, form, tab, designer](const ibProtocolNode& request, ibProtocolNode& answer) {
-		if (designer)
+	// …none in a studio's: the editor's tab answers the ask as its own, with the whole form and its classes — some 280 KB,
+	// a second on every drawing of a form with a table (2026-10-15). A document's tab in the studio is asked: its sheet
+	// comes by Fetch alone (2026-10-20: the studio's whole process refused it, a sheet opened there came empty).
+	const bool studio = IsStudioHost();
+	return [frame, controlId, form, tab, studio](const ibProtocolNode& request, ibProtocolNode& answer) {
+		if (studio)
 			return false;
 		ibProtocolNode params;
 		params.SetValue(ibProtocol::ibFetch::Control, controlId)
@@ -411,7 +411,7 @@ void ibVisualHostClient::UpdateForm(const ibProtocolNode& form)
 void ibVisualHostClient::Build(const ibProtocolNode& form)
 {
 	// The desktop's chrome: the command bar at the top, above the controls (CreateFormLayers) — on this window, above the
-	// one they scroll in, so it stays where it is (InitMainSizer); a host that builds them deeper (the designer's card)
+	// one they scroll in, so it stays where it is (InitMainSizer); a host that builds them deeper (the studio's card)
 	// has it there with them, the whole card scrolling.
 	wxWindow* const window = GetBackgroundWindow();
 	wxWindow* const barParent = window == m_contentWindow ? this : window;

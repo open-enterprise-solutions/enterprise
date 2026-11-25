@@ -80,7 +80,7 @@ DESKGUI_API bool ibMSWShowShadowed(wxWindow *window, const std::function<bool()>
 // ibTopLevelWindow
 //-----------------------------------------------------------------------------
 
-// SEAM vs univ: THE WINDOW IS wx's OWN, ITS DECORATIONS OURS - as the designer's form card has them (ibInnerFrame): the
+// SEAM vs univ: THE WINDOW IS wx's OWN, ITS DECORATIONS OURS - as the studio's form card has them (ibInnerFrame): the
 // native window is made without its caption and frame, the wx style keeps both for what is painted in their place
 // (GetDecorationsStyle) - the theme's title bar, its buttons and the border (ibRenderer::DrawFrameTitleBar) round the
 // client area (GetClientAreaOrigin, DoGetClientSize). On MSW the system moves and sizes it, held by the title bar and
@@ -110,7 +110,7 @@ public:
     // W's - the window deleted when the application is idle (wxTopLevelWindowBase::Destroy) - and the application woken
     // for it: a person's close comes with the events that wake it, a close from the code may come with none - a signal's
     // (ibWxApp::OnStopSignal), a timer's. On GTK3 the idle is gone while nothing happens and is put back by a widget's
-    // event: the window waited to be deleted and the process lived on (codeRunner after its SIGTERM under Xvfb, CI's look
+    // event: the window waited to be deleted and the process lived on (coderunner after its SIGTERM under Xvfb, CI's look
     // step for half an hour, 2026-11-12). On MSW and Cocoa the wake costs nothing
     virtual bool Destroy() override;
     // W's, and the window painted at once after it, every window in it (Update is the one window's): a queue gives the

@@ -382,7 +382,7 @@ std::shared_ptr<ibBackgroundRun> ibJobManager::Launch(ibBackgroundBody body, con
 
 		// ANY HOST WILL DO. A tenant is not a property of how the process was
 		// started — it is a connection plus a policy, borrowed for the length of one
-		// read. A list is a list whether it is opened in the Designer, in the thick
+		// read. A list is a list whether it is opened in the Studio, in the thick
 		// client or in a browser tab; the run is used up, brings the data back and
 		// ends, and nothing about it needs to know which of those it was.
 		launch->m_parent = current->shared_from_this();

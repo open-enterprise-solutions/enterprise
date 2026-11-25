@@ -688,7 +688,7 @@ public:
 			// description — an attribute, a dimension, a resource, a command's parameter, a shared
 			// attribute — so one cast covers the lot and a metatype added later is covered too.
 			// ⚠ ConvertToValue, NOT ConvertToType — this is a QUESTION asked of every object in the
-			// tree, and the latter is an assertion that raises on a miss outside the designer
+			// tree, and the latter is an assertion that raises on a miss outside the studio
 			// (value_cast.h, _USE_CONTROL_VALUECAST). Both unwrap a reference-held value; only this
 			// one answers "no".
 			const ibValueMetaObjectAttributeBase* column = nullptr;

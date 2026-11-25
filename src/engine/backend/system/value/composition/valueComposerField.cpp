@@ -147,7 +147,7 @@ ibValue ibMaterializeCompositionValue(const ibValue& stored, const ibMetaData* m
 
 VALUE_TYPE_REGISTER(ibValueCompositionField, "CompositionField", g_compositionFieldCLSID);
 
-// ⭐ REGISTERED TO BE NAMED, not to be created — the designer's type list renders whatever the
+// ⭐ REGISTERED TO BE NAMED, not to be created — the studio's type list renders whatever the
 // registry can name, and this entry is how "one of the declared values" gets a line there beside
 // Date and Number. Nobody writes `New` of it: it is vended by the tier that owns it.
 SYSTEM_TYPE_REGISTER(ibValueCompositionPredefined, "CompositionPredefinedValue", g_compositionPredefinedCLSID);

@@ -150,7 +150,7 @@ ibValueModelTableBox::ibStandardCommandSet ibValueModelTableBox::GetStandardComm
 
 void ibValueModelTableBox::CallAsAction(const ibActionID& lNumAction, ibBackendValueForm* srcForm)
 {
-	if (m_tableModel == nullptr || appData->DesignerMode())
+	if (m_tableModel == nullptr || appData->StudioMode())
 		return;
 
 	// The TABLE owns the rows a command runs against — read them once here. m_selection = the current row
@@ -710,7 +710,7 @@ void ibValueModelTableBox::Command_OutputList()
 	own->BuildPrintLevels(!flatView, m_tableModel->GetSourceQueryable());
 
 	// The sheet is titled by the FORM it was output from — that is what a person will call this page a
-	// week later; the control's own name means nothing outside the designer.
+	// week later; the control's own name means nothing outside the studio.
 	const ibString title = m_formOwner != nullptr && !m_formOwner->GetCaption().IsEmpty()
 		? m_formOwner->GetCaption() : ibString(_("List"));
 

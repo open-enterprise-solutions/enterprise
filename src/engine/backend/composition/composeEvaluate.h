@@ -9,7 +9,7 @@
 // file-local in `composeRunSchema.cpp` (a composition read over the wire) and static in
 // `valueDataComposition.cpp` (a composition run from script), each with a comment pointing at the
 // other. Two copies of "where does an expression evaluate" is two places for the answer to drift,
-// and it drifted: one had learnt the designer's edit manager and the other had not.
+// and it drifted: one had learnt the studio's edit manager and the other had not.
 //
 // ⚠ NOT IN `backend_composition.{h,cpp}`, though ibStoredValue lives there and looks like a
 // neighbour. A DESCRIPTION IS DATA — it is read while an application is still loading — and this
@@ -32,7 +32,7 @@ class ibMetaData;
 // legitimately came out empty are the same emptiness afterwards, and a report composed on an
 // unfilled parameter looks exactly like a report with no data.
 //
-// `metaData` is the application to fall back on when there is no runtime root — the designer's
+// `metaData` is the application to fall back on when there is no runtime root — the studio's
 // edit manager compiles against it (ibSession::EditModuleManagerFor). It may be null.
 BACKEND_API bool ibEvaluateInRoot(const ibString& expression, ibValue& produced,
 	const ibMetaData* metaData);

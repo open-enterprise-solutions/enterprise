@@ -17,7 +17,7 @@
 class ibWatchWindow : public ibTreeListCtrl
 {
 	// Made by the frame, once.
-	friend class ibFrontendMainFrameDesigner;
+	friend class ibFrontendMainFrameStudio;
 	ibWatchWindow(wxWindow* parent, wxWindowID id);
 
 public:

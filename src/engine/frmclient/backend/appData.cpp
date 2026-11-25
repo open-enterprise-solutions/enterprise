@@ -11,10 +11,10 @@
 #include "frmclient/backend/mcp/mcpServer.h"
 #include "frmclient/mainFrame/mainFrame.h"
 
-bool ibApplicationData::DesignerMode() const
+bool ibApplicationData::StudioMode() const
 {
 	const ibFrontendMainFrame* const frame = ibFrontendMainFrame::GetFrame();
-	return frame != nullptr && frame->GetMode() == ibProtocol::ibLogin::ibMode::Designer;
+	return frame != nullptr && frame->GetMode() == ibProtocol::ibLogin::ibMode::Studio;
 }
 
 long ibApplicationData::RunApplication(const ibString& strAppName, bool searchDebug, bool useManifest) const

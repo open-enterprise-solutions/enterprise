@@ -279,7 +279,7 @@ IB_FORCEINLINE const ibValue& ResolveRead(int slot, int idx,
 // Reaching the running module as `m_ppArrayCode[0]->m_pByteCode` bypasses it and
 // reads whatever the lambda runtime last swapped in — the exact hazard the
 // snapshot exists to prevent, and it broke `Message("…")` in coderunner and the
-// designer while every test stayed green, because the corpus harness substitutes
+// studio while every test stayed green, because the corpus harness substitutes
 // its own Message and never exercises the real one.
 #define LOAD_ARG_CONST(slot)                                                    \
 	do {                                                                        \
@@ -3098,7 +3098,7 @@ bool ibProcUnit::Evaluate(const ibString& strExpression, ibRunContext* pRunConte
 
 	// Helper — render an exception into the watch result slot so the
 	// debugger panel can show *what* went wrong instead of an empty
-	// row + silent `false` return. Watch handler in the designer prints
+	// row + silent `false` return. Watch handler in the studio prints
 	// the result via ibValue::ToString; a string-typed ibValue with
 	// "<error: msg>" reads naturally.
 	//

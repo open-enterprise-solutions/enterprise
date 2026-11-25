@@ -8154,7 +8154,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"A catalogue, a document or a report that belongs to no section works perfectly and is\n"
 		"INVISIBLE: there is no menu it appears in and no way to open it. Checking objects into\n"
 		"sections is the last step of building anything, and the one that gets forgotten because\n"
-		"everything the builder does goes through the designer, where the tree shows it regardless.\n"
+		"everything the builder does goes through the studio, where the tree shows it regardless.\n"
 		"\n"
 		"* A SECTION IS A JOB, NOT A KIND OF OBJECT. Purchases, Sales, Stock, Finance, Production,\n"
 		"Payroll, Administration - these are what people DO, and each maps to a person or a part of\n"

@@ -11,7 +11,7 @@
 #include "frmclient/backend/metaData.h"                            // …the tab its application handle carries
 #include "deskgui/univ/stc/stc.h"                                  // the arbitrary query is shown in the styled editor
 
-#include "frmclient/backend/appData.h"                        // appData->DesignerMode() — the Query tab is a developer tool
+#include "frmclient/backend/appData.h"                        // appData->StudioMode() — the Query tab is a developer tool
 #include "frmclient/backend/serialize/dataProtocol.h"         // the setting and its fields, as the server's question carries them
 #include "frmclient/backend/metaCollection/partial/reference/reference.h"   // which of the fields' types are references
 
@@ -122,7 +122,7 @@ void ibListSettingsPanel::BuildPages()
 	//
 	// THE QUERY TAB IS A DEVELOPER TOOL — writing the source query is configuring the form, not
 	// using it; an end user opening "Filter" has no business being offered it.
-	if ((m_pages & Page_Query) != 0 && m_desc != nullptr && appData->DesignerMode()) {
+	if ((m_pages & Page_Query) != 0 && m_desc != nullptr && appData->StudioMode()) {
 		if (wxWindow* const query = BuildQueryPage(notebook))
 			notebook->AddPage(query, _("Query"), true, ibSettingsTabArt(ibSettingsTab::Query));
 	}
@@ -139,7 +139,7 @@ void ibListSettingsPanel::BuildPages()
 		m_filterEditor = new ibFilterEditor(notebook, &EditedSettings().m_filter, m_fieldSource.get());
 		m_filterEditor->SetOnChanged([this] { MarkModified(); });
 		// ⭐ WHOSE WINDOW THIS IS. A handed-in setting means a READER opened it, and a line the
-		// author marked inaccessible is hidden from them — applied, never shown. The designer's
+		// author marked inaccessible is hidden from them — applied, never shown. The studio's
 		// road (no setting handed in, the description edited directly) sees everything.
 		m_filterEditor->SetAuthoring(m_settings == nullptr);
 		notebook->AddPage(m_filterEditor, _("Filter"), notebook->GetPageCount() == 0, ibSettingsTabArt(ibSettingsTab::Filter));
@@ -201,7 +201,7 @@ void ibListSettingsPanel::BindFieldSource()
 	const ibMetaData* metaData = SourceMetaData();
 
 	// ⭐⭐ THE MAIN TABLE'S FIELDS, AND WHAT THE QUERY ADDS ON TOP — the desktop's answer, read where the application is:
-	// a list edited on a designer tab (a form attribute's) asks the tab (ibListSourceFields, Kind Source).
+	// a list edited on a studio tab (a form attribute's) asks the tab (ibListSourceFields, Kind Source).
 	if (m_schema != nullptr && (m_schema->HasMainTable() || m_schema->HasQuery())
 		&& metaData != nullptr && metaData->GetTabId() != 0) {
 		m_fieldSource->SetPlainFields(ibListSourceFields(m_schema->m_mainTable, m_schema->m_query, metaData, &m_queryFault),
@@ -403,7 +403,7 @@ wxWindow* ibListSettingsPanel::BuildGroupPage(wxWindow* parent)
 				const size_t idx = GroupIndexAt(row);
 				// THE KIND ALONE CHANGES. A grouping line IS a path plus a kind, and writing the kind
 				// where it stands is the whole edit — rebuilding the line from an object that only
-				// existed half the time is what used to crash the designer here ("added a field,
+				// existed half the time is what used to crash the studio here ("added a field,
 				// switched it to HierarchyOnly, crash").
 				if (g != nullptr && idx < g->m_lines.size())
 					g->m_lines[idx].m_kind = value.ConvertToEnumValue<ibQueryDimUnfold>();
@@ -676,7 +676,7 @@ bool ibListSettingsPanel::Commit()
 	// through the grid's cycle to the form attribute, which is where modified-ness is decided
 	// (Max, 2026-08-24: "we work with snapshots, and the snapshot is the composer description").
 	// ⭐⭐ HANDED BACK, AND THAT IS ALL. The caller gave the setting; the caller decides what accepting
-	// it means — a designer road writes it into the schema it came from, a reader's road puts it into
+	// it means — a studio road writes it into the schema it came from, a reader's road puts it into
 	// the composer's user section. This window knows neither, and it is not its business to (Max,
 	// 2026-08-24: "I pass the setting, it changes it and gives it back with an OK; then I set it on
 	// the composer myself").

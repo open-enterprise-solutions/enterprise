@@ -42,7 +42,7 @@ public:
 
 	ibValueStatic* GetStatic() const { return m_static; }
 
-	// …and from the designer's copy blob, once the static is of the pasted view (ibValueStatic::PasteData).
+	// …and from the studio's copy blob, once the static is of the pasted view (ibValueStatic::PasteData).
 	bool PasteData(const ibDataNode& node) { return PasteProperty(node); }
 
 	// The child of a view; null for a view this build does not know.
@@ -79,7 +79,7 @@ public:
 
 protected:
 
-	// The designer's paste makes the static of the pasted view first.
+	// The studio's paste makes the static of the pasted view first.
 	virtual bool PasteData(const ibDataNode& node) override;
 
 private:

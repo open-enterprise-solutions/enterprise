@@ -9,7 +9,7 @@ bool ibValueField::OnPropertyChanging(ibProperty* property, const ibVariant& new
 	return ibValueWindow::OnPropertyChanging(property, newValue);
 }
 
-// View changed — in the inspector, over MCP or from a script (the live road; the designer's other road reads a field
+// View changed — in the inspector, over MCP or from a script (the live road; the studio's other road reads a field
 // anew from its node, ReadData). The child of the new view takes the old one's place, keeping what the two share by
 // name; a view's own property changed comes here too, from the child, and the field is drawn anew either way.
 void ibValueField::OnPropertyChanged(ibProperty* property, const ibVariant& oldValue, const ibVariant& newValue)

@@ -20,7 +20,7 @@ public:
 
 	// The metaobjects these types point at — none for a type that is no reference (the engine's).
 	static std::vector<ibMetaID> ConvertToMetaIds(const std::vector<ibClassID>& clsids, const ibMetaData* metaData);
-	// …and the empty reference of one, as the server wrote it and reads it — `CatalogRef.Goods.EmptyRef` in the designer;
+	// …and the empty reference of one, as the server wrote it and reads it — `CatalogRef.Goods.EmptyRef` in the studio;
 	// Undefined for a type it said nothing of (the engine's managers' EmptyRef).
 	static ibValue EmptyRef(const ibClassID& clsid);
 

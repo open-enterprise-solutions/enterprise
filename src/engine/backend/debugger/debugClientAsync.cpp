@@ -80,7 +80,7 @@ ibDebuggerClient::ibDebuggerClientAdapter::ibDebuggerClientAdapter()
 // ⚠ THE FUTURE IS DROPPED ON PURPOSE. This is a notification, not a call anybody waits on; holding
 // the future would park the socket thread on the main loop, which is the opposite of deferring.
 //
-// ⭐⭐ AND TODAY THIS CHANGES NOTHING, WHICH IS WHY THE REASON HAS TO BE WRITTEN DOWN. The designer's
+// ⭐⭐ AND TODAY THIS CHANGES NOTHING, WHICH IS WHY THE REASON HAS TO BE WRITTEN DOWN. The studio's
 // session answers with ibWorkerPoolGUI, so a reply still lands on the wx main loop — exactly where
 // the wx event put it. What moved is WHO DECIDES: the pool, not the transport.
 //

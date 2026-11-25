@@ -72,12 +72,12 @@ public:
 	virtual ~ibPluginScript() = default;
 
 	// COMPILE ONLY, NEVER RUN. The text is put through the same compiler the
-	// designer uses and thrown away; nothing is stored, no module is replaced,
+	// studio uses and thrown away; nothing is stored, no module is replaced,
 	// no application is touched. Returns the diagnostics produced — empty
 	// means the text compiles.
 	//
 	// `moduleName` is what appears in the messages; pass the name of the module
-	// being edited so a report reads the way the designer's would.
+	// being edited so a report reads the way the studio's would.
 	//
 	// This is the call that closes the loop for a code-generating assistant: it
 	// can find its own mistakes in a language that exists nowhere but here.

@@ -2,7 +2,7 @@
 #define _FRMCLIENT_BACKEND_USER_INFO_H__
 
 // ibUserInfo — a user of the base, as the engine's (backend/userInfo.h) holds one: the same record, the same calls, the
-// designer's users dialogs (ibDialogUserList, ibDialogUserItem) copied onto them. Behind them is the server's schema
+// studio's users dialogs (ibDialogUserList, ibDialogUserItem) copied onto them. Behind them is the server's schema
 // (ibProtocol::ibSchema::ibKind::UserList), where sys_user is. One thing is not the desktop's: the stored password stays there —
 // a record read says whether there is one (IsSetPassword), and one saved carries a new one only when it was typed.
 

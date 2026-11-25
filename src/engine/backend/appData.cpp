@@ -164,17 +164,12 @@ namespace {
 // consumer is the listener wiring below.
 ibString DescribeSessionKind(ibSessionKind k) {
 	switch (k) {
-	case ibSessionKind::Launcher:   return ibT("Launcher");
-	case ibSessionKind::Designer:   return ibT("Designer");
-	case ibSessionKind::Enterprise: return ibT("Enterprise");
-	case ibSessionKind::Service:    return ibT("Service");
-	case ibSessionKind::WebServer:  return ibT("WebServer");
-	case ibSessionKind::WebClient:  return ibT("WebClient");
+	case ibSessionKind::Service:       return ibT("Service");
 	case ibSessionKind::BackgroundJob: return ibT("BackgroundJob");
 	case ibSessionKind::ScheduledJob:  return ibT("ScheduledJob");
 	case ibSessionKind::SystemJob:     return ibT("SystemJob");
-	case ibSessionKind::ThinClient:    return ibT("ThinClient");
-	case ibSessionKind::ThinDesigner:  return ibT("ThinDesigner");
+	case ibSessionKind::Workspace:     return ibT("Workspace");
+	case ibSessionKind::Studio:        return ibT("Studio");
 	case ibSessionKind::HttpService:   return ibT("HttpService");
 	case ibSessionKind::Unknown:       return ibT("Unknown");
 	}
@@ -289,38 +284,32 @@ static std::size_t ReadInfobaseConnections(const ibString& folder, std::size_t b
 }
 
 // ⭐ ASKED OF THE SESSION DOING THE WORK. A person's session says what it works in, whatever process hosts it — a
-// thin designer and a thin runtime live in one application server side by side, and a file base has its designer
-// and its runtime as a server does. A session nobody sits at (a job) goes by the process's own session in the base
-// — the designer's window, the client's, the server's login (the registry's fallback): a job in the designer's base
+// studio and a workspace live in one application server side by side, and a file base has its studio and its
+// workspace as a server does. A session nobody sits at (a job) goes by the process's own session in the base
+// — the studio's in a file base, the server's login (the registry's fallback): a job in the studio's base
 // builds no runtime.
-bool ibApplicationInstance::DesignerMode() const
+bool ibApplicationInstance::StudioMode() const
 {
 	if (const ibSession* const session = ibSession::Current()) {
-		if (IsDesignerSessionKind(session->GetKind()))
+		if (session->GetKind() == ibSessionKind::Studio)
 			return true;
-		if (IsRuntimeSessionKind(session->GetKind()))
+		if (session->GetKind() == ibSessionKind::Workspace)
 			return false;
 	}
 	const ibSession* const own = m_sessionRegistry != nullptr ? m_sessionRegistry->GetFallback() : nullptr;
-	return own != nullptr && IsDesignerSessionKind(own->GetKind());
+	return own != nullptr && own->GetKind() == ibSessionKind::Studio;
 }
 
-bool ibApplicationInstance::EnterpriseMode() const
+bool ibApplicationInstance::WorkspaceMode() const
 {
 	if (const ibSession* const session = ibSession::Current()) {
-		if (IsRuntimeSessionKind(session->GetKind()))
+		if (session->GetKind() == ibSessionKind::Workspace)
 			return true;
-		if (IsDesignerSessionKind(session->GetKind()))
+		if (session->GetKind() == ibSessionKind::Studio)
 			return false;
 	}
 	const ibSession* const own = m_sessionRegistry != nullptr ? m_sessionRegistry->GetFallback() : nullptr;
-	return (own == nullptr || !IsDesignerSessionKind(own->GetKind())) && GetActiveMetaData(this) != nullptr;
-}
-
-bool ibApplicationInstance::WebEnterpriseMode() const
-{
-	const ibSession* const session = ibSession::Current();
-	return session != nullptr && (session->GetKind() == ibSessionKind::WebServer || session->GetKind() == ibSessionKind::WebClient);
+	return (own == nullptr || own->GetKind() != ibSessionKind::Studio) && GetActiveMetaData(this) != nullptr;
 }
 
 bool ibApplicationInstance::ServiceMode() const
@@ -406,8 +395,8 @@ ibMetaDataApplicationBase* ibApplicationInstance::GetActiveMetaData(const ibAppl
 
 bool ibApplicationInstance::ReplaceActiveMetaData()
 {
-	// ⭐ THE BASE READS ITS OWN, made with its own token — for no session, whatever thread asks: the designer's apply
-	// asks on its own, and what the designer reads there is the designer's (its compile cache with it). Read as the
+	// ⭐ THE BASE READS ITS OWN, made with its own token — for no session, whatever thread asks: the studio's apply
+	// asks on its own, and what the studio reads there is the studio's (its compile cache with it). Read as the
 	// apply's copy is read, the mirror of the database (loadApplicationFlag).
 	const std::shared_ptr<ibMetaDataApplication> metaData =
 		ibMetaData::MakeShared<ibMetaDataApplication>(ib::AppDataCtorToken{ this });
@@ -460,19 +449,18 @@ void ibApplicationInstance::WireSessionEvents()
 			}
 		} catch (...) {}
 		ibSession::BindSessionToThread(s, std::this_thread::get_id());
-		// ⭐ THE PROCESS'S OWN SESSION IN THIS BASE — of a process kind (IsProcessSessionKind): the designer's window,
-		// the client's window, the application server's login, the web server's technical row. Not a job's
-		// and not a visitor's tab, which are let in through this same door and used to take what follows by
-		// being FIRST: the job manager starts with the base, before anybody logs in, so a scheduled job due at
-		// start made its run-as user what every unbound thread answered with, and a job under a user with
-		// settings of their own re-pointed the running MCP server at that user's token (census, 2026-10-01).
-		// …and a thin designer's in a FILE base: a base has one designer, and it has its person's MCP settings.
-		// ⭐ A THIN CLIENT'S NEVER: A FILE BASE IS A SERVER WITH ONE BASE, and its connections a cluster with one server
+		// ⭐ THE PROCESS'S OWN SESSION IN THIS BASE — the application server's login. Not a job's and not a
+		// visitor's, which are let in through this same door and used to take what follows by being FIRST: the
+		// job manager starts with the base, before anybody logs in, so a scheduled job due at start made its run-as
+		// user what every unbound thread answered with, and a job under a user with settings of their own re-pointed
+		// the running MCP server at that user's token (census, 2026-10-01).
+		// …and the studio's in a FILE base: a base has one studio, and it has its person's MCP settings.
+		// ⭐ A WORKSPACE'S NEVER: A FILE BASE IS A SERVER WITH ONE BASE, and its connections a cluster with one server
 		// (2026-10-31). It was taken here for the process's own, true of the one client a desktop process holds —
 		// and under a web server every visitor was: ten at once wrote the one MCP server's settings below, the strings
 		// were freed twice, and the process fell somewhere else entirely.
-		const bool ownSession = IsProcessSessionKind(s->GetKind())
-			|| (m_runMode == ibRunMode::eFILE_MODE && s->GetKind() == ibSessionKind::ThinDesigner);
+		const bool ownSession = s->GetKind() == ibSessionKind::Service
+			|| (m_runMode == ibRunMode::eFILE_MODE && s->GetKind() == ibSessionKind::Studio);
 		auto* registry = m_sessionRegistry.get();
 		if (ownSession && registry && registry->GetFallback() == nullptr) {
 			// What an UNBOUND thread resolves to (ibSession::Current — one rule everywhere). On the desktop
@@ -481,12 +469,12 @@ void ibApplicationInstance::WireSessionEvents()
 		}
 		if (s->GetMetaData() != nullptr) {
 			// Root mm is allocated by ibSession::EnsureRoot (called by the registry before this listener) for
-			// runtime sessions; the Designer has no root mm (it uses the lightweight designer manager in the
+			// runtime sessions; the Studio has no root mm (it uses the lightweight studio manager in the
 			// compile cache). The session's application comes to it run: the active one ran as the base opened,
-			// a replacement arrives run (ReplaceActiveMetaData), a designer's own ran as it was made
+			// a replacement arrives run (ReplaceActiveMetaData), a studio's own ran as it was made
 			// (ibSession::AcquireMetaData).
 			// CompileRoot folds compile + AttachRuntime + lambda runtime wire-up.
-			// No-op when there's no root mm (Designer). AttachRuntime self-gates by
+			// No-op when there's no root mm (Studio). AttachRuntime self-gates by
 			// session kind, so no explicit runMode check needed here.
 			s->CompileRoot();
 		}
@@ -710,7 +698,7 @@ bool ibApplicationInstance::CreateAppDataEnv(ibRunMode runMode)
 #define sys_db ibT("sys.fdb")
 
 // THE REQUEST'S TYPE IS THE RUN MODE — a file base holds its base itself, a server holds it for its clients. Only a
-// file base makes a base not made yet (the designer's opening); a server never does — that is the launcher's.
+// file base makes a base not made yet (the studio's opening); a server never does — that is the launcher's.
 ibApplicationInstance* ibApplicationInstance::CreateAppDataEnv(const ibFileInstanceRequest& request)
 {
 	return Open(ibRunMode::eFILE_MODE, request, request, request.m_create);
@@ -915,7 +903,7 @@ ibApplicationInstance* ibApplicationInstance::Open(std::unique_ptr<ibApplication
 			CreateTableSettings();         // sys_settings — what people saved on their forms and their lists
 			CreateTableFile();             // sys_file — the sessions' temporary files
 			CreateTableBytecodeCache();    // sys_bytecode_cache — the compiled modules
-			// The application's own — what the database publishes, what a designer saves, its sequence: read at the
+			// The application's own — what the database publishes, what a studio saves, its sequence: read at the
 			// end of this opening.
 			ibMetaDataApplicationStorage::CreateApplicationTable();
 			ibMetaDataApplicationStorage::CreateApplicationSaveTable();
@@ -947,7 +935,7 @@ ibApplicationInstance* ibApplicationInstance::Open(std::unique_ptr<ibApplication
 		// metadata; a job builds those on its first run.
 		//
 		// But declaring is NOT read-free: Register() asks sys_job for a stored schedule so a
-		// setting made in the Designer survives, and seeds a row when there is none. This call
+		// setting made in the Studio survives, and seeds a row when there is none. This call
 		// used to stand ~25 lines ABOVE, before CreateTableJob — while the comment there claimed
 		// the table was "created before the platform's jobs are declared below". The comment
 		// described the INTENDED order and the code did the other one.
@@ -960,7 +948,7 @@ ibApplicationInstance* ibApplicationInstance::Open(std::unique_ptr<ibApplication
 		// ⭐ THE APPLICATION, UP BEFORE ANYBODY COMES IN (Max, 2026-10-20: *"first the metadata is loaded, then the
 		// users connect — not the first user, as before"*). The base's first session used to make it and the first
 		// to be let in ran it, so two first logins at once ran it twice (`!IsOpen()` in RunDatabase, under
-		// the web server's load test). Now every session takes it ready, by its own reference; a designer's session
+		// the web server's load test). Now every session takes it ready, by its own reference; a studio's session
 		// works in one of its own (ibSession::AcquireMetaData). An application that does not come up refuses the base.
 		applicationInstance->m_loadMetadataFlags = request.m_loadMetadataFlags;
 		if (!CreateActiveMetaData(applicationInstance, request.m_loadMetadataFlags))
@@ -1127,7 +1115,7 @@ long ibApplicationInstance::RunApplication(const ibString& strAppName, const ibS
 		// Web debug attach: the server is up with --debug, its in-process
 		// ibDebuggerServer is listening on one of ibPort::Debugger
 		// in non-blocking (wait=false) mode. SearchServer scans + verifies
-		// each port, but verified+Scanner stays Scanner — designer never
+		// each port, but verified+Scanner stays Scanner — studio never
 		// auto-promotes to Debugger on a non-waiting server. We retry
 		// SearchServer in rounds because a single sweep can race with the
 		// server's metadataCreate (debug server still coming up) — first sweep's

@@ -43,7 +43,7 @@ public:
 	virtual bool IsSubscribed(ibProtocol::ibEvent::ibKind event) const { return false; }
 	// Read-only by the view's own word (an Input with its text editing off; a Label always), over the binding's.
 	virtual bool IsReadOnly() const { return false; }
-	// Whether the view edits the source: a field of one that does, with no source, is not shown, and a designer's drop
+	// Whether the view edits the source: a field of one that does, with no source, is not shown, and a studio's drop
 	// binds it to a fresh attribute. A Label does not — unbound, it is a decoration.
 	virtual bool IsBindingView() const { return true; }
 	
@@ -61,7 +61,7 @@ public:
 
 	ibValueField* GetField() const { return m_field; }
 
-	// …and from the designer's copy blob, once the field is of the pasted view (ibValueField::PasteData).
+	// …and from the studio's copy blob, once the field is of the pasted view (ibValueField::PasteData).
 	bool PasteData(const ibDataNode& node) { return PasteProperty(node); }
 
 	// The child of a view; null for a view this build does not know.
@@ -107,7 +107,7 @@ public:
 	// The Title when it is filled, otherwise the bound field's synonym.
 	virtual ibString GetControlTitle() const;
 
-	// Just made by the designer: dropped bound — of the default view; with no source — bound to a fresh attribute where
+	// Just made by the studio: dropped bound — of the default view; with no source — bound to a fresh attribute where
 	// its view binds one.
 	virtual void OnCreated(ibVisualHost* host, bool firstCreated) override;
 	// A view the source's type does not allow gives way to Input first; then the caption as resolved and whether it is
@@ -151,7 +151,7 @@ public:
 
 protected:
 
-	// The designer's paste makes the field of the pasted view first.
+	// The studio's paste makes the field of the pasted view first.
 	virtual bool PasteData(const ibDataNode& node) override;
 
 private:
@@ -294,7 +294,7 @@ public:
 
 	explicit ibFieldViewFlag(ibValueField* field) : ibFieldViewProvider(field) {}
 
-	// Checked — the value's truth. None in the designer.
+	// Checked — the value's truth. None in the studio.
 	virtual void OnUpdate(ibDataNode& state, ibVisualHost* host) override;
 	// Toggle — the box clicked (Checked: the state the person toggled it to).
 	virtual bool OnClientEvent(ibProtocol::ibEvent::ibKind event, const ibDataNode& args) override;
@@ -388,7 +388,7 @@ public:
 
 	explicit ibFieldViewGauge(ibValueField* field) : ibFieldViewProvider(field) {}
 
-	// Position — the value, from 0 to the range. None in the designer.
+	// Position — the value, from 0 to the range. None in the studio.
 	virtual void OnUpdate(ibDataNode& state, ibVisualHost* host) override;
 	virtual bool IsReadOnly() const override { return true; }
 
@@ -415,7 +415,7 @@ public:
 
 	explicit ibFieldViewSlider(ibValueField* field) : ibFieldViewProvider(field) {}
 
-	// Position — the value, between the ends. None in the designer.
+	// Position — the value, between the ends. None in the studio.
 	virtual void OnUpdate(ibDataNode& state, ibVisualHost* host) override;
 	// Change — the thumb let go (Position: where), held between the ends; a read-only field writes nothing.
 	virtual bool OnClientEvent(ibProtocol::ibEvent::ibKind event, const ibDataNode& args) override;

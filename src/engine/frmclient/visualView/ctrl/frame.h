@@ -96,7 +96,7 @@ public:
 	// Its properties fetched as the inspector shows it, through its host (ibVisualHostClient::Fetch).
 	virtual bool Fetch() override;
 	// One of them edited — the desktop's, told to the editor the form is drawn for (g_visualHostContext there; its host
-	// here, which a designer's host passes on).
+	// here, which a studio's host passes on).
 	virtual void OnPropertyChanged(ibProperty* property, const ibVariant& oldValue, const ibVariant& newValue) override;
 
 	// Its name, as the frame says it (the node's Name).
@@ -130,7 +130,7 @@ public:
 	// …and only what the frame's patch changed in it (`patch` — its node there): drawn whole, unless the control knows
 	// which of its parts a patch names.
 	virtual void Update(const ibProtocolNode& node, const ibProtocolNode& /*patch*/) { Update(node); }
-	// Selected in the designer — it, or a control inside it (the desktop's OnSelected, said by the editor's host to the
+	// Selected in the studio — it, or a control inside it (the desktop's OnSelected, said by the editor's host to the
 	// control and its parents): a page shows itself in its notebook. Nothing goes to the server.
 	virtual void OnSelected() {}
 

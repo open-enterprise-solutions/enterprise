@@ -14,7 +14,7 @@
 // query rather than computed per row:
 //
 //   Active   — this row's own on/off. A parallel to the deletion mark: switching a misbehaving
-//              exchange off must not require the Designer, and must not delete anything.
+//              exchange off must not require the Studio, and must not delete anything.
 //   Schedule — a JobSchedule value (system/value/valueJob.h), stored whole in its own blob.
 //   LastRun  — when it last finished. The schedule is a pure function of (last run, now), so the
 //              row needs its own. This one IS stored: it is a fact about the past.
@@ -39,7 +39,7 @@
 #include "reference/reference.h"
 
 #include "core/job/jobSchedule.h"
-#include "backend/propertyManager/property/propertySchedule.h"   // the designer-side default schedule
+#include "backend/propertyManager/property/propertySchedule.h"   // the studio-side default schedule
 #include "backend/system/value/valueJob.h"                        // g_valueScheduleCLSID — the Schedule requisite's type
 
 //********************************************************************************************
@@ -145,7 +145,7 @@ public:
 	virtual bool OnSaveMetaObject(int flags);
 	virtual bool OnDeleteMetaObject();
 
-	//for designer
+	//for studio
 	virtual bool OnReloadMetaObject();
 
 	//module manager is started or exit
@@ -220,7 +220,7 @@ protected:
 	virtual bool ReadData(const ibDataNode& node) override;
 	virtual bool WriteData(ibDataNode& node) const override;
 
-	// Declare / withdraw with ibJobManager — no-ops in the Designer (which edits jobs, never runs
+	// Declare / withdraw with ibJobManager — no-ops in the Studio (which edits jobs, never runs
 	// them) and when there is no manager (launcher, pre-bootstrap).
 	//
 	// ONE ENTRY PER ACTIVE ROW. A row IS the job: it carries the schedule, the last run and the
@@ -285,7 +285,7 @@ private:
 	ibPropertyCategory* m_categoryJob = ibPropertyObject::CreatePropertyCategory(ibT("Job"), _("Job"));
 	ibPropertyBoolean* m_propertyUse = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryJob, ibT("Use"), _("Use"), _("The developer's switch for the whole job kind: off, none of its rows run, whatever their own Active and schedules say. A row's Active is the administrator's switch for that row alone."), true);
 
-	// The DEFAULT a new row starts from. The designer declares, the base holds (§ 8) — so a
+	// The DEFAULT a new row starts from. The studio declares, the base holds (§ 8) — so a
 	// schedule edited here does not reach rows that already exist, which is correct for a default
 	// and is why the card can always be opened to change one row's own.
 	// Named DefaultSchedule, not Schedule: the row's own requisite below is Schedule, both are written into one node,

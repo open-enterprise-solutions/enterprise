@@ -1,7 +1,7 @@
 #include "docViewSharedAttribute.h"
 
 #include "appstudio/win/editor/sharedAttributeEditor/sharedAttributeEditor.h"
-#include "protocol/protocolDesigner.h"   // ibProtocol::ibView::ibCheckTree
+#include "protocol/protocolStudio.h"   // ibProtocol::ibView::ibCheckTree
 
 // ----------------------------------------------------------------------------
 // ibSharedAttributeEditView implementation

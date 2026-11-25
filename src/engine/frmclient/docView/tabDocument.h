@@ -11,7 +11,7 @@
 // saved by the server, modified and taking commands as the tab says. ⚠ NO TEMPLATE, as the desktop's had none: made for
 // each tab the frame brings (ibFrontendMainFrame::DrawTabs) by the tab's Kind (Make), each kind with a document of its
 // own registered at the bottom of its source (TAB_DOCUMENT_REGISTER) — a form (ibFormVisualDocument), the registration
-// journal (ibAuditLogDocument), the designer's own in the designer.
+// journal (ibAuditLogDocument), the studio's own in the studio.
 // ----------------------------------------------------------------------------
 
 class FRMCLIENT_API ibTabDocument : public ibFrontendDocument {

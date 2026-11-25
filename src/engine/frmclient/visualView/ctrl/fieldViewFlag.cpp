@@ -24,7 +24,7 @@ void ibFieldViewFlag::Update(const ibProtocolNode& node)
 	const ibProtocolNode state = node.FindChild(ibProtocol::ibForm::ibState::State);
 
 	m_checkbox->SetEditable(!state.GetBool(ibProtocol::ibForm::ibState::ReadOnly));
-	// The value — none in the designer.
+	// The value — none in the studio.
 	if (state.Has(ibProtocol::ibForm::ibState::Checked))
 		m_checkbox->SetValue(state.GetBool(ibProtocol::ibForm::ibState::Checked));
 }

@@ -2,22 +2,18 @@
 #define __about__
 
 #include <wx/wx.h>
-#include <wx/panel.h>
-#include "deskgui/univ/ctrl/button.h"
-#include "deskgui/univ/ctrl/staticLine.h"
-#include <wx/hyperlink.h>
 
 #include "frmclient/frmclient.h"
 #include "protocol/protocolNode.h"
-#include "deskgui/univ/ctrl/staticText.h"
-#include "deskgui/univ/ctrl/textCtrl.h"
 #include "deskgui/univ/dialog.h"
 
 /**
  * Class ibDialogAbout
  *
- * ABOUT — what the client works in, as the server's schema shows it (frmserver/schema/about.cpp): the old desktop's
- * dialog, drawn from what it is answered instead of reading the process itself.
+ * ABOUT — what the client is and what it works in, as the server's schema shows it (frmserver/schema/about.cpp): the
+ * program and the platform's version beside the logo, the base, the connection, the person and the language, what the
+ * platform is built on and whose ideas it grew from, the licence. Copy puts the facts on the clipboard as text — a
+ * report names the build it came from.
  */
 class FRMCLIENT_API ibDialogAbout :
 	public ibDialog {
@@ -27,23 +23,8 @@ public:
 
 private:
 
-	ibStaticText* m_staticTextHeader;
-	ibStaticText* m_staticTextFramework;
-	ibStaticText* m_staticTextCommunity;
-	ibStaticText* m_staticTextThanks;
-	ibStaticLine* m_staticlineHeader;
-	ibTextCtrl* m_textCtrlContributors;
-
-	ibStaticText* m_staticDataBaseInfo;
-	ibTextCtrl* m_textCtrl1;
-	ibStaticText* m_staticAppInfo;
-	ibTextCtrl* m_textCtrl2;
-	ibStaticText* m_staticUserInfo;
-	ibTextCtrl* m_textCtrl3;
-	ibStaticText* m_staticLocaleInfo;
-	ibTextCtrl* m_textCtrl4;
-	ibButton* m_buttonOK;
+	// The facts, a line each — the program, its version, the rows — as Copy hands them on.
+	wxString m_facts;
 };
 
 #endif //__about__
-

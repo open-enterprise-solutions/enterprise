@@ -67,7 +67,7 @@ ibValueMetaObjectModule* ObjectModuleOf(ibValueMetaObject* owner) {
 }
 
 // Two catalogs in one fresh application — a source to copy from and a target
-// to paste onto, which is what Ctrl+C / Ctrl+V in the designer amounts to.
+// to paste onto, which is what Ctrl+C / Ctrl+V in the studio amounts to.
 struct PasteFixture {
 	ibMetaDataApplicationFile cfg;
 	ibValueMetaObject* source = nullptr;

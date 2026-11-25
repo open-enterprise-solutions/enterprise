@@ -2,8 +2,8 @@
 #define _DEBUGGER_DEFS_H__
 
 // ⭐ THE DEBUGGER'S WORDS, ONE FOR BOTH ENDS (Max, 2026-11-14: *"the whole of debugDefs lives in the core"*) — the
-// commands, the structures a runtime answers with and the designer shows, the wire's constants. The engine's debugger
-// and the thin designer read the same file; text is the core's ibString, a watch row is a number — what a side does
+// commands, the structures a runtime answers with and the studio shows, the wire's constants. The engine's debugger
+// and the studio read the same file; text is the core's ibString, a watch row is a number — what a side does
 // with them (a wxString, a tree item) is that side's.
 
 #include <string>
@@ -50,7 +50,7 @@ enum EventId
 	EventId_ShowAutocomplete = 7,      // When activate autocomplete 
 	EventId_SetData = 8,      // When set data 
 
-	EventId_MessageFromEnterprise = 9,      // Message from enterprise
+	EventId_MessageFromWorkspace = 9,      // Message from the workspace
 };
 
 enum CommandId
@@ -66,7 +66,7 @@ enum CommandId
 	CommandId_RemoveBreakpoint = 8,    // Remove a breakpoint on a line on and off.
 	CommandId_Pause = 9,    // Instructs the debugger to break on the next line of script code.
 	CommandId_Detach = 10,    // Soft stop: disconnect debug client + reset debug state, listener stays so the debugger can reattach.
-	CommandId_Destroy = 11,    // Hard stop: same as Detach plus a forced close of the stopped session (a thin client is told to go). The process's other sessions stay, unless the process lives for the debugger (ibStopProcess: a web server a designer started; so does Detach there).
+	CommandId_Destroy = 11,    // Hard stop: same as Detach plus a forced close of the stopped session (a thin client is told to go). The process's other sessions stay, unless the process lives for the debugger (ibStopProcess: a web server a studio started; so does Detach there).
 
 	// 12–14 — the editor's patches (insert, delete, complete), which no runtime read: the edits are the editor's to count.
 
@@ -79,11 +79,11 @@ enum CommandId
 	CommandId_ExpandExpression = 19, // Expand variable from enterprise 
 	CommandId_RemoveExpression = 20, // Remove variable from enterprise 
 
-	CommandId_GetArrayBreakpoint = 22, // Wait breakpoits from designer
+	CommandId_GetArrayBreakpoint = 22, // Wait breakpoits from studio
 	CommandId_SetArrayBreakpoint = 23, // Set breakpoits to enterprise
 
-	CommandId_SetStack = 24, // Set up stack in designer 
-	CommandId_SetLocalVariables = 25, // Set up local variables to designer 
+	CommandId_SetStack = 24, // Set up stack in studio 
+	CommandId_SetLocalVariables = 25, // Set up local variables to studio 
 	CommandId_SetExpressions = 26, //Set up all expressions
 
 	CommandId_EvalToolTip = 27,
@@ -112,12 +112,12 @@ enum CommandId
 	//
 	// Sending those lines up the ORDINARY message road instead would work and would also mean
 	// every message of a running application storms the debugger (Max, 2026-09-02, weighing it).
-	// So they travel apart: the assistant that asked for the run reads them, the designer drops
+	// So they travel apart: the assistant that asked for the run reads them, the studio drops
 	// them, and the person is shown whatever the assistant decides is worth showing.
 	CommandId_EvalMessage = 31,
 
 	// ⭐⭐ "SEND ME A PICTURE OF WHAT YOU ARE SEEING" — asked of the running application through the
-	// designer, answered with the window as PNG bytes. The hardest reports to act on are the ones a
+	// studio, answered with the window as PNG bytes. The hardest reports to act on are the ones a
 	// person cannot phrase: "the list displays wrongly", "the numbers do not add up". Which form,
 	// which period, which column — all of it is in one image and none of it is in the sentence.
 	//
@@ -135,8 +135,8 @@ enum CommandId
 	// about one run; they share a REPLY shape, since all three answer with the state of that run.
 	//
 	// ⭐⭐ WHY IT COMES OVER THIS WIRE AT ALL, and it is not a preference. The MCP server lives in
-	// the DESIGNER, and a designer builds no runtime for anybody: `ibSession::EnsureRoot` returns
-	// early on `appData->DesignerMode()` — "Designer never executes script". So a background job
+	// the STUDIO, and a studio builds no runtime for anybody: `ibSession::EnsureRoot` returns
+	// early on `appData->StudioMode()` — "Studio never executes script". So a background job
 	// started there gets a session with no root module and nothing to call, every time. The runtime
 	// is in the application, on the other side of this socket, and that is the only reason a fill
 	// travels as a debugger command.
@@ -155,7 +155,7 @@ enum CommandId
 	// ⭐⭐ AND WHAT TRAVELS ON FillStart IS COMPILED BYTECODE, not a name and not source — the only
 	// command on this wire that carries a program. Having no frame here to compile against was first
 	// read as "so the caller must name a procedure the application already has", which made trying
-	// a fill require editing somebody's application. The designer has the compiler; it compiles,
+	// a fill require editing somebody's application. The studio has the compiler; it compiles,
 	// and the far end runs what arrives (Max, 2026-09-06: *"you can pass the bytecode you compiled
 	// and send it there so it executes there — what's the problem?"*). Calls inside it bind at THIS
 	// end by module-descriptor guid, versions checked, so a program built against an application
@@ -165,10 +165,10 @@ enum CommandId
 	CommandId_JobCancel = 35,
 
 	// ⭐⭐ READING A REPORT, and it is here for a reason of RIGHTS rather than of plumbing (Max,
-	// 2026-09-06: *"we do not work with data in the designer, we get it through the wire — and the
-	// wire is what the user sees, that they really gave access"*). A designer holds an APPLICATION;
+	// 2026-09-06: *"we do not work with data in the studio, we get it through the wire — and the
+	// wire is what the user sees, that they really gave access"*). A studio holds an APPLICATION;
 	// the rows belong to the application somebody started, and starting it with the debugger
-	// attached is the visible act that grants access. Reading them over the designer's own
+	// attached is the visible act that grants access. Reading them over the studio's own
 	// connection would take them by deciding to — which is what the screenshot command already
 	// refuses to do with a window.
 	//
@@ -516,13 +516,13 @@ struct ibWatchedExpression {
 
 /////////////////////////////////////////////////////////////////////////////////////////////
 
-// The ports — ibPort::Debugger: a debug server listens on the first free one, the designer looks in all of them.
+// The ports — ibPort::Debugger: a debug server listens on the first free one, the studio looks in all of them.
 #include "core/net/ports.h"
 #define defaultHost ibT("localhost")
 
 /////////////////////////////////////////////////////////////////////////////////////////////
 #define numberOfConnectionAttempts 1
-// A launched child (SearchServer(true)) — it waits 30 s for its designer (ibDebuggerServer::CreateServer), and an attempt
+// A launched child (SearchServer(true)) — it waits 30 s for its studio (ibDebuggerServer::CreateServer), and an attempt
 // on a port nobody listens on yet takes ~2 s on Windows.
 #define numberOfLaunchConnectionAttempts 15
 /////////////////////////////////////////////////////////////////////////////////////////////

@@ -124,7 +124,7 @@ class FRMSERVER_API ibFormAttributeValue :
 		// the widget instead of the setting.
 		//
 		// 🛑 IT WAS ANSWERED BY NOBODY until 2026-08-24: the property serialised both ways and was
-		// edited in the designer, and no code anywhere asked. The seam it needed was a form-wide
+		// edited in the studio, and no code anywhere asked. The seam it needed was a form-wide
 		// pass — ibValueForm::CheckFilling, which is where it is asked now.
 		ibFormAttributeFillCheck GetFillCheck() const {
 			return static_cast<ibFormAttributeFillCheck>(m_propertyFillCheck->GetValueAsInteger());
@@ -176,7 +176,7 @@ public:
 	// Metadata flows THROUGH the form. The holder is the attach-owner a held dynamic list reaches from its
 	// GetSourceMetaData(); forward to the attribute, which reads m_ownerForm->GetMetaData() (active-application
 	// fallback). Without this the base returns null, so the held list's Source picker resolves the WRONG
-	// (empty global) factory and lists nothing — even in the designer on the original application.
+	// (empty global) factory and lists nothing — even in the studio on the original application.
 	virtual const ibMetaData* GetMetaData() const override { return m_attribute->GetMetaData(); }
 	// Single interception point (the holder is what the inspector selects): forward the change
 	// to the property's REAL owner (attribute / value — each reacts to its own), and on the

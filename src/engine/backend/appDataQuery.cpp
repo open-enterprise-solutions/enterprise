@@ -173,7 +173,7 @@ void ibApplicationInstance::CreateTableJob()
 			{ ibT("lastRun"),  ibTypeDate(),      false, false, nullptr },   // wall clock, shared across processes
 			{ ibT("computer"), ibTypeString(128), false, false, nullptr },   // who ran it last, for diagnostics
 			// The two SETTINGS a base holds — what the enterprise may change without opening the
-			// Designer. They are here and not in the metadata because switching a misbehaving job
+			// Studio. They are here and not in the metadata because switching a misbehaving job
 			// off at 3 a.m. must not mean editing the application on a production base; and for
 			// the engine's OWN jobs there is no application to edit at all.
 			{ ibT("active"),   ibTypeBoolean(),   false, false, nullptr },   // stated by every write of the settings

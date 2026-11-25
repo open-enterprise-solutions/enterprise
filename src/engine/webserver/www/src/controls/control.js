@@ -18,7 +18,7 @@
  *   file's PNG as its field holds it — '' when there is none
  * @property {(node: any) => Promise<void>} fetchPictures the pictures a node names, asked for before it is drawn — a
  *   table's page fetched after the frame
- * @property {() => boolean} designerMode the session is the designer's (Session.designerMode) — what a control draws
+ * @property {() => boolean} studioMode the session is the studio's (Session.studioMode) — what a control draws
  *   differently there
  */
 

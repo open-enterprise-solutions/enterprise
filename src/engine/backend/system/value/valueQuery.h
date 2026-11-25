@@ -130,7 +130,7 @@ private:
 	//   a plain select      -> a QueryResult
 	//   a select INTO temp  -> the ROW COUNT (the table went into the temp; there is none to hand back)
 	//   a drop              -> Undefined
-	// Returns false when nothing could run (empty text, or the designer's degraded path).
+	// Returns false when nothing could run (empty text, or the studio's degraded path).
 	// Run the package. `names` — when asked for, the ONTO name of each statement, in step with the
 	// results (empty where a statement gave none).
 	bool RunPackage(std::vector<ibValue>& out, std::vector<ibString>* names = nullptr);

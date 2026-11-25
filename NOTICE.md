@@ -82,7 +82,7 @@ The per-file notices are authoritative; the table is a map, not a substitute. Se
 
 ## Icons
 
-Two icons in the designer come from **[icons8](https://icons8.com)** and are used under its
+Two icons in the studio come from **[icons8](https://icons8.com)** and are used under its
 free tier, which requires attribution:
 
 | Icon | Where it is used | Source |

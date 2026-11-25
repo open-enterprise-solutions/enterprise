@@ -35,7 +35,7 @@
 #include "frmserver/visualView/controlEnum.h"         // a button's Representation, a tile among it
 #include "frmserver/visualView/visualHost.h"          // a form's document — a demonstration's takes no modification
 #include "protocol/protocol.h"                       // the state a client reads a tile from
-#include "protocol/protocolDesigner.h"   // ibProtocol::ibView::ibFormDesigner
+#include "protocol/protocolStudio.h"   // ibProtocol::ibView::ibFormDesigner
 #include "backend/backend_mainFrame.h"               // a frame so the form can be born
 #include "framedSession.h"                            // KeyFrame, FramedSession — the frame a form is born against
 #include "backend/metaCollection/metaModuleObject.h" // a form module, so the bind has somewhere to live
@@ -54,7 +54,7 @@ namespace {
 // ===========================================================================
 // CALLING A BUILT-IN NEEDS APPLICATION DATA
 //
-// `ibValueSystemFunction::CallAsFunc` opens with `if (!appData->DesignerMode())`
+// `ibValueSystemFunction::CallAsFunc` opens with `if (!appData->StudioMode())`
 // — before any dispatch, on a global that a bare backend test binary leaves
 // NULL. So every built-in call access-violates here, and that is why nothing in
 // this tree had ever executed one: not a policy, a wall.
@@ -1022,7 +1022,7 @@ TEST(RuntimeTest, AnOmittedArgumentTakesTheDeclaredDefault) {
 // to that module. A hole in the middle is filled there too, and a required
 // argument that was left out is refused.
 TEST_F(BuiltInRuntime, ASharedModuleUnitFillsAHoleInTheMiddle) {
-	ibSession session(wxT("mod-default"), ibSessionKind::Enterprise);
+	ibSession session(wxT("mod-default"), ibSessionKind::Workspace);
 	ibSessionScope scope(&session);
 
 	// The module is written with Procedure/EndFunction. The process default
@@ -1057,7 +1057,7 @@ TEST_F(BuiltInRuntime, ASharedModuleUnitFillsAHoleInTheMiddle) {
 		wxT("  Return b;\n")
 		wxT("EndFunction\n"));
 
-	ibValueModuleManagerDesigner manager(&cfg, root);
+	ibValueModuleManagerStudio manager(&cfg, root);
 	// The shared module is compiled against the application module, so that
 	// module has to be compiled and running before the shared module's own
 	// frame will accept it.
@@ -4184,7 +4184,7 @@ TEST_F(FormRuntime, AFormScriptWritesThroughDataSource) {
 	// UNLISTED, as a harness's session is: a listed one gives itself back to its base's registry as
 	// it goes, and this base's registry was never started — the request kept the session alive into the static
 	// teardown, past the map of current sessions (ASan: heap-use-after-free; macOS: mutex lock failed).
-	auto session = std::make_shared<FramedSession>(wxT("form-write"), ibSessionKind::Enterprise);
+	auto session = std::make_shared<FramedSession>(wxT("form-write"), ibSessionKind::Workspace);
 	ibSessionHolder holder = ibApplicationInstance::GetSessionRegistry()->MintUnlisted(session);
 	KeyFrame frame(std::move(holder));
 	session->Attach(&frame);
@@ -4240,7 +4240,7 @@ TEST_F(FormRuntime, AFormScriptWritesThroughDataSource) {
 // only a name and a type. The list walks the attributes as Controls walks the controls — what each one IS, not what
 // it holds — and the module can take away what it added and nothing else.
 TEST_F(FormRuntime, AFormScriptAddsAndRemovesAnAttribute) {
-	auto session = std::make_shared<FramedSession>(wxT("form-add-attribute"), ibSessionKind::Enterprise);
+	auto session = std::make_shared<FramedSession>(wxT("form-add-attribute"), ibSessionKind::Workspace);
 	ibSessionHolder holder = ibApplicationInstance::GetSessionRegistry()->MintUnlisted(session);
 	KeyFrame frame(std::move(holder));
 	session->Attach(&frame);
@@ -4426,7 +4426,7 @@ TEST_F(FormRuntime, AFormScriptAddsAndRemovesAnAttribute) {
 // them. What the server says of it: the member of the button's own Representation, the note saved with the button,
 // and the state a client draws from - the note going with a tile alone. The buttons are made by a form born against
 // the session's frame, with the metadata a form lives on - a shared form of an application is its creator - through
-// the factory the designer's comes to (NewObject), and read through what every control answers; they stand on the
+// the factory the studio's comes to (NewObject), and read through what every control answers; they stand on the
 // form itself, with no sizer between - their state does not ask for one.
 struct TileForm : FormRuntime {
 	std::shared_ptr<FramedSession> m_session;
@@ -4439,7 +4439,7 @@ struct TileForm : FormRuntime {
 		FormRuntime::SetUp();
 		if (IsSkipped() || HasFatalFailure())
 			return;
-		m_session = std::make_shared<FramedSession>(wxT("tile"), ibSessionKind::Enterprise);
+		m_session = std::make_shared<FramedSession>(wxT("tile"), ibSessionKind::Workspace);
 		m_frame = std::make_unique<KeyFrame>(ibApplicationInstance::GetSessionRegistry()->MintUnlisted(m_session));
 		m_session->Attach(m_frame.get());
 		m_scope = std::make_unique<ibSessionScope>(m_session.get());
@@ -4571,7 +4571,7 @@ TEST_F(TileForm, TheStateCarriesTheNoteForATileAlone) {
 	}
 }
 
-// A FORM TRIED OUT IN THE DESIGNER IS NEVER MODIFIED (Max, 2026-11-24: "the demo form ignores any change of being
+// A FORM TRIED OUT IN THE STUDIO IS NEVER MODIFIED (Max, 2026-11-24: "the demo form ignores any change of being
 // modified" — a date typed into one asked, on close, to save what nothing saves). The demonstration's document refuses
 // the mark, and the form, which holds it as its document says, holds none either; a running form's document takes it.
 // The form is TileForm's: born against the session's frame, with the metadata a form lives on.

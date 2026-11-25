@@ -160,7 +160,7 @@ class ibPicture;   // core/graphics/picture.h — a picture as data, the drawing
 #define wxART_DEBUG_REMOVE_ALL_BREAKPOINTS		wxART_MAKE_ART_ID(wxART_DEBUG_REMOVE_ALL_BREAKPOINTS)
 
 // The code editor's margin (client wxART_DEBUG) — a breakpoint, the line the debugger stopped at, a line further up the
-// call stack, at the size the margin draws them (a breakpoint 13, an arrow 11): the designer's editor and coderunner's.
+// call stack, at the size the margin draws them (a breakpoint 13, an arrow 11): the studio's editor and coderunner's.
 #define wxART_BREAKPOINT						wxART_MAKE_ART_ID(wxART_BREAKPOINT)
 #define wxART_CURRENT_LINE						wxART_MAKE_ART_ID(wxART_CURRENT_LINE)
 #define wxART_BREAK_LINE						wxART_MAKE_ART_ID(wxART_BREAK_LINE)

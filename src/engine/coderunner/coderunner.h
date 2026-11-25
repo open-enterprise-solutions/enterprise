@@ -27,7 +27,7 @@
 // SyntaxCheck / Clear buttons live here; everything editor-related is
 // inherited.
 //
-// The frame is the desktop's own (ibFrame), as the designer's and the application's: the theme's title bar and menubar
+// The frame is the desktop's own (ibFrame), as the studio's and the application's: the theme's title bar and menubar
 // round the window - a wxFrame stood with the system's caption and menu (2026-11-11, Max: "coderunner - onto our frame").
 class ibFrameCodeRunner : public ibBackendDocFrame, public ibFrame {
 protected:

@@ -41,7 +41,7 @@ protected:
 
 private:
 
-	// A metatype's group row, as the server wrote it — the same caption the designer tree reads.
+	// A metatype's group row, as the server wrote it — the same caption the studio tree reads.
 	wxTreeItemId GroupFor(const ibProtocolNode& row);
 
 	wxTreeItemId AppendItem(const wxTreeItemId& parent, const ibProtocolNode& row);

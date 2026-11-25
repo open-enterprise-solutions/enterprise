@@ -23,8 +23,8 @@
 //       return new ibPGBooleanProperty(property->GetLabel(), property->GetName(), property->GetValue());
 //   });
 //
-// The widgets are the advprop classes, one copy: the common ones here in frmclient (the designer's and the runtime's),
-// the designer's own registered by appstudio. ⚠ A TYPE NOBODY REGISTERED IS A STRING — read-only, as it reads
+// The widgets are the advprop classes, one copy: the common ones here in frmclient (the studio's and the runtime's),
+// the studio's own registered by appstudio. ⚠ A TYPE NOBODY REGISTERED IS A STRING — read-only, as it reads
 // (Max, 2026-10-14): never guessed from the value's shape, so what the client has not been taught shows as not done.
 class FRMCLIENT_API ibPropertyRegistry {
 public:

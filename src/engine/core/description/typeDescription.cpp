@@ -121,7 +121,7 @@ bool ibTypeDescriptionMemory::ReadNode(const ibDataValue& value, ibTypeDescripti
 	// anything is touched, so a refused shape leaves the description as it was. The bound is the field's own and
 	// no more: an application loads through here, and its file reads as it was written — 44 digits saved before
 	// stay 44, for the apply's DDL to refuse; refused here, the attribute would keep its default type without a
-	// word. What a qualifier may say is its door's (QualifierNumber, the designer, metadata_set_type).
+	// word. What a qualifier may say is its door's (QualifierNumber, the studio, metadata_set_type).
 	const std::int32_t precision = root->GetValue<std::int32_t>(ibT("Precision"));
 	const std::int32_t scale = root->GetValue<std::int32_t>(ibT("Scale"));
 	const std::int32_t length = root->GetValue<std::int32_t>(ibT("Length"));

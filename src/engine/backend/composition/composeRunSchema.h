@@ -7,13 +7,13 @@
 //	              schema rather than the name of one.
 ////////////////////////////////////////////////////////////////////////////
 //
-// 🛑 THE DESIGNER DOES NOT WORK WITH DATA — a rule about RIGHTS, not about where a runtime lives. A
-// designer holds an APPLICATION; a person's rows belong to the running application they started, and
+// 🛑 THE STUDIO DOES NOT WORK WITH DATA — a rule about RIGHTS, not about where a runtime lives. A
+// studio holds an APPLICATION; a person's rows belong to the running application they started, and
 // starting it with the debugger attached is the visible act of consent.
 //
 // So the split falls where the rights do:
 //
-//   the designer  — resolves the composer, picks the variant, restores a saved setting. Metadata.
+//   the studio  — resolves the composer, picks the variant, restores a saved setting. Metadata.
 //   the wire      — carries a description, a settings section and the parameters. Nothing to look up.
 //   the runtime   — builds a composer out of what arrived and RUNS it, on a Tenant rental: the rows
 //                   are the ones that person sees, and their window is not blocked while it reads.

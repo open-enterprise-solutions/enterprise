@@ -1,12 +1,12 @@
 ////////////////////////////////////////////////////////////////////////////
-//	Description : Git panel for the Designer — a dockable AUI pane that drives
+//	Description : Git panel for the Studio — a dockable AUI pane that drives
 //	              ibGitService against the application working copy (the dir
 //	              where the application is exported to OES-XML / OES-JSON). First
 //	              increment: status list + Refresh / Commit / Push / Pull.
 //	              Diff view, log, and branch switching land as later steps.
 ////////////////////////////////////////////////////////////////////////////
-#ifndef _OES_DESIGNER_GIT_PANEL_H_
-#define _OES_DESIGNER_GIT_PANEL_H_
+#ifndef _OES_STUDIO_GIT_PANEL_H_
+#define _OES_STUDIO_GIT_PANEL_H_
 
 #include "deskgui/univ/panel.h"
 #include "deskgui/univ/ctrl/listCtrl.h"
@@ -15,9 +15,9 @@
 #include "deskgui/univ/ctrl/choice.h"
 #include <memory>
 
-#include "appstudio/backend/vcs/gitService.h"   // the engine's, living in the thin designer
+#include "appstudio/backend/vcs/gitService.h"   // the engine's, living in the studio
 
-// THE DESKTOP'S (designer/mainFrame/vcs/gitPanel.h) WHOLE — over the working copy beside the file base the designer was
+// THE DESKTOP'S (designer/mainFrame/vcs/gitPanel.h) WHOLE — over the working copy beside the file base the studio was
 // started on (CreateGitPane), on this machine.
 
 class ibGitPanel : public ibPanel {
@@ -58,4 +58,4 @@ private:
 	ibStaticText* m_info         = nullptr;   // last-action result line
 };
 
-#endif // _OES_DESIGNER_GIT_PANEL_H_
+#endif // _OES_STUDIO_GIT_PANEL_H_

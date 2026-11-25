@@ -190,7 +190,7 @@ public:
 	virtual bool EditableLine(const ibDataViewItem& item, unsigned int col) const override { return false; }
 
 	// DynamicRead OFF → the base ibValueModelCursor serves the WHOLE list from its RAM snapshot instead of the live
-	// keyset cursor (EnsureSnapshot / RunStoragePage). Read straight off the designer property (default = live).
+	// keyset cursor (EnsureSnapshot / RunStoragePage). Read straight off the studio property (default = live).
 	bool IsDynamicRead() const override { return m_propertyDynamicRead->GetValueAsBoolean(); }
 	// Add/Copy/Edit/Delete: NOT overridden — the base no-ops. List mutation goes through the
 	// choice/keyset path (separate design). AutoCreateColumn also keeps the base default (false).

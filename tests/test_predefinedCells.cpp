@@ -125,7 +125,7 @@ TEST(PredefinedCells, ACharacteristicsTypeIsDeclaredSavedAndWritten) {
 		cfg->CreateMetaObject(g_metaChartOfCharacteristicTypesCLSID, cfg->GetRootMetaObject(), false));
 	ASSERT_NE(chart, nullptr);
 	chart->SetName(wxT("UserSettings"));
-	// The contour the Type is picked within, set through the property's door as the designer sets it: a string, a number.
+	// The contour the Type is picked within, set through the property's door as the studio sets it: a string, a number.
 	ibDataValue contour;
 	ASSERT_TRUE(ibBackendTypeDescriptionMemory::WriteNode(contour,
 		ibTypeDescription(std::vector<ibClassID>{ g_valueStringCLSID, g_valueNumberCLSID }), cfg));
@@ -759,7 +759,7 @@ TEST(PredefinedCells, AnAccountsAnalyticsAreLinesItOwns) {
 		cfg->CreateMetaObject(g_metaChartOfAccountsCLSID, cfg->GetRootMetaObject(), false));
 	ASSERT_NE(chart, nullptr);
 	chart->SetName(wxT("Balance"));
-	// Bound through the property's door, as the designer binds it: the kinds column takes the chart's type there.
+	// Bound through the property's door, as the studio binds it: the kinds column takes the chart's type there.
 	ibDataValue bound;
 	ASSERT_TRUE(ibBackendMetaDescriptionMemory::WriteNode(bound, ibMetaDescription(analytics->GetMetaID()), cfg));
 	ibString why;

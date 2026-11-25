@@ -1,7 +1,7 @@
 #include "metaFeatureOptionObject.h"
 
 // What an option offers first is its COMPOSITION — the members it takes away when it is off, as a tree to tick
-// (the option's own document, the designer's featureOptionEditor) — the way a role offers itself; the stored
+// (the option's own document, the studio's featureOptionEditor) — the way a role offers itself; the stored
 // value's module follows.
 bool ibValueMetaObjectFeatureOption::CollectContextMenu(std::vector<ibMetaMenuItem>& items)
 {

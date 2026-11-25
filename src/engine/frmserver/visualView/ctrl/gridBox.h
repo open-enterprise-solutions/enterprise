@@ -77,7 +77,7 @@ class ibValueGridBox : public ibValueWindowComposite, public ibTypeControlFactor
 	// ⭐⭐ CREATED — the form has opened (its onOpen ran, the parameters an opener set are in place). The
 	// binding is taken again, the setting marked "restore on open" is put on, and a report marked so
 	// composes itself.
-	// Just made by the designer (firstCreated), with no source — bound to a fresh attribute first (the desktop's).
+	// Just made by the studio (firstCreated), with no source — bound to a fresh attribute first (the desktop's).
 	virtual void OnCreated(ibVisualHost* host, bool firstCreated) override;
 	// …and the form closed: the read in flight is told to stop — nobody waits for it any more.
 	virtual void OnCleanup(ibVisualHost* host) override;
@@ -133,7 +133,7 @@ class ibValueGridBox : public ibValueWindowComposite, public ibTypeControlFactor
 
 public:
 
-	// The SOURCE, set by the designer (and by whatever generates a report form).
+	// The SOURCE, set by the studio (and by whatever generates a report form).
 	//
 	// ⚠ THE SETTER REFRESHES ITSELF, exactly as the tablebox's does: SetValue writes the property
 	// without firing OnPropertyChanged, so a binding set from code would otherwise leave the box

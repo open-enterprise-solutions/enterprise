@@ -1,7 +1,7 @@
 #include "featureOptionEditor.h"
 
 #include "frmclient/win/picture.h"   // a row's picture, by its id
-#include "protocol/protocolDesigner.h"   // ibProtocol::ibView::ibCheckTree
+#include "protocol/protocolStudio.h"   // ibProtocol::ibView::ibCheckTree
 
 #include <functional>
 

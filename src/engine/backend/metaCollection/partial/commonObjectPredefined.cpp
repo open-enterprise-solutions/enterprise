@@ -105,7 +105,7 @@ ibPredefinedChoiceDescription DescribeChoice(const ibValue& value, const ibStrin
 }
 
 // A DECLARED VALUE OF A REFERENCE, as an application holds one (ibValueCompositionPredefined): the metaobject, which of its
-// declared values, and how it reads — written as the designer's selector writes it (selectPredefined.cpp).
+// declared values, and how it reads — written as the studio's selector writes it (selectPredefined.cpp).
 ibValue DeclaredValue(const ibValueMetaObjectRecordDataRef* recordRef, const ibGuid& guid, const ibString& name)
 {
 	return ibValue(new ibValueCompositionPredefined(recordRef->GetMetaID(), guid,

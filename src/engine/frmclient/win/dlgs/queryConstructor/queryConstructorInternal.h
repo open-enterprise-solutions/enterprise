@@ -376,7 +376,7 @@ inline ibDataViewColumn* ChoiceColumn(const wxString& title, unsigned int col, i
 }
 
 // EVERY LIST IN THIS WINDOW IS THE SAME CONTROL, made the same way. Six listboxes and two listctrls
-// standing beside three dataview grids is what "the designer catches the eye" meant — different row
+// standing beside three dataview grids is what "the studio catches the eye" meant — different row
 // heights, different grid lines, and no cell you could edit where it stood.
 // ⚠ A DOUBLE-CLICK MUST OPEN THE CELL — and how is the CONTROL's business now, not this window's:
 // ibDataViewEditOnActivate (dataviewEditOnActivate.h) is this window's answer, moved beside the grid

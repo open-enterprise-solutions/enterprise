@@ -729,7 +729,7 @@ ibMaterializeSql RenderMaterialization(const ibMaterializeSpec& spec,
 	// columns the same apply just dropped.
 	RenderDrops(out, spec, *mat);
 
-	// NOTHING TO ACCUMULATE — a register with no resources yet (freshly created in the designer,
+	// NOTHING TO ACCUMULATE — a register with no resources yet (freshly created in the studio,
 	// or one that only ever had dimensions). There is no delta to apply, so there is no
 	// maintenance to install: an empty accumulate list would render `UPDATE SET` with no
 	// assignments, which is not a statement any engine accepts. Dropping and creating nothing is

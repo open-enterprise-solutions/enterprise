@@ -21,12 +21,12 @@ struct ibRunContext;
 // ⭐ A MEASUREMENT — which lines of which modules the runs spent their time on, from its making to its end (Max,
 // 2026-11-14: *"the measurement must say which module, so a report can be built from it"*). It runs while it lives:
 // made, it is told every frame and every line of the runs it watches; gone, it is told nothing. Of every session — the
-// person's, started and taken by the debugger's commands (the designer's Debug menu, profile_start / profile_stop) and
+// person's, started and taken by the debugger's commands (the studio's Debug menu, profile_start / profile_stop) and
 // held by the debug server between them — or of one: a run of code_run {profile}, made around its code.
 //
 // THE INTERPRETER TELLS IT THREE THINGS, on the thread of the session they are of: a frame entered and left
 // (ibProcStackGuard) and a line begun (EnterDebugger, where a new line is already noticed) — so lines are told while a
-// designer is attached, which every road to a measurement is.
+// studio is attached, which every road to a measurement is.
 //
 // What a line is given: SELF, its time without the calls it made; TOTAL, with them — a recursive line at its outermost
 // occurrence only, the inner ones being inside it; COUNT, how often it began. A frame's first line takes the frame's

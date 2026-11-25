@@ -193,7 +193,7 @@ struct BACKEND_API ibJobDescription {
 	// ignores the calendar). Only the tick reads it.
 	//
 	// Why the manager holds it rather than the metadata: switching a misbehaving job off at 3 a.m.
-	// must not mean opening the Designer against a production base. The value therefore lives in
+	// must not mean opening the Studio against a production base. The value therefore lives in
 	// the database (sys_job), seeded from the declaration the first time the job is seen, and the
 	// base wins from then on.
 	bool m_active = true;
@@ -709,7 +709,7 @@ public:
 	// noted live, nor in `alsoLive`, and report how many went.
 	//
 	// This is the ONLY place records are cleaned up in bulk, and it is deliberately not the
-	// Designer's delete: that event is a MARK on a metaobject, and the user may still close
+	// Studio's delete: that event is a MARK on a metaobject, and the user may still close
 	// without saving. A job ceases to exist at the RESTRUCTURING, which drops its table in its own
 	// transaction — and the honest way to notice is afterwards, at start-up, when what survived is
 	// exactly what registered.

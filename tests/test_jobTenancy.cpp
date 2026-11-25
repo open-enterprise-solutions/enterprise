@@ -80,7 +80,7 @@ struct JobTenancyFix : ::testing::Test {
 		// shared_from_this on whatever is Current(), and bound for the same reason
 		// a form's session is bound when it asks for a portion.
 		parent = std::make_shared<ibSession>(ibString(wxT("tenancy-parent")),
-		                                     ibSessionKind::Enterprise);
+		                                     ibSessionKind::Workspace);
 		bound  = std::make_unique<ibSessionScope>(parent.get());
 		ready  = true;
 	}

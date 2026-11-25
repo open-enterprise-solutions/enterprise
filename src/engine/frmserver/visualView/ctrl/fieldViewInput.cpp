@@ -79,15 +79,15 @@ void ibFieldViewInput::OnUpdate(ibDataNode& state, ibVisualHost* host)
 {
 	ibValueField* const field = GetField();
 
-	// What can be typed into it — the mask in effect, resolved here: the client resolves nothing. In the designer as
+	// What can be typed into it — the mask in effect, resolved here: the client resolves nothing. In the studio as
 	// well, where the field shows no value and the mask's skeleton stands in for one.
 	const ibInputMask mask = GetMask();
 	if (!mask.IsEmpty())
 		state.SetValue(ibProtocol::ibForm::ibState::Mask, mask.Render());
 
-	// The value as text, through the field's own format or, without one, the bound attribute's. Not in the designer:
+	// The value as text, through the field's own format or, without one, the bound attribute's. Not in the studio:
 	// there the field shows no value.
-	if (appData->DesignerMode())
+	if (appData->StudioMode())
 		return;
 
 	ibValue value;

@@ -594,7 +594,7 @@ bool ibJobManager::Register(ibJobDescription desc)
 	// Done here, OUTSIDE the lock — it is a database round trip, and the tick shares this mutex
 	// with it (a mutex a hot path shares with a slow one is the bug, not the symptom).
 	//
-	// ⚠ A schedule changed in the Designer therefore does NOT reach a base that already has the
+	// ⚠ A schedule changed in the Studio therefore does NOT reach a base that already has the
 	// row. Correct for a default, surprising in practice — the job list needs a "reset to the
 	// application's value" action, or the first support call is about exactly this.
 	//

@@ -9,7 +9,7 @@
 // sheet. RefreshModel is where that is done, once, for all three moments a binding can change.
 //
 // (No "refill the columns?" question here: a gridbox has no columns to refill. What a sheet contains
-//  is the designer's own and no source dictates it.)
+//  is the studio's own and no source dictates it.)
 void ibValueGridBox::OnPropertyChanged(ibProperty* property, const ibVariant& oldValue, const ibVariant& newValue)
 {
 	if (property == m_propertySource)

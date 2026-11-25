@@ -9,7 +9,7 @@
 #include "protocol/protocolNode.h"
 
 // ALL FUNCTIONS — the objects this person may open, grouped by kind: the desktop's dialog (enterprise/win/dlg), drawn
-// from the server's schema (frmserver/schema/runtime/allFunctions.cpp) instead of reading the application itself.
+// from the server's schema (frmserver/schema/workspace/allFunctions.cpp) instead of reading the application itself.
 // An item opened is the schema's command, made by the window (`open`); the dialog goes when it is done.
 class ibDialogFunctionAll : public ibDialog {
 public:

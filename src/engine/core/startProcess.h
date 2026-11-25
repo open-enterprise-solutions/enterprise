@@ -15,7 +15,7 @@
 // argument.
 //
 // ⚠ CALLABLE FROM ANY THREAD, which is why it is not wxExecute. wxExecute asserts off the main thread on Windows and
-// waits for its child through the main loop on Unix, and the application server has no main loop at all: a designer's
+// waits for its child through the main loop on Unix, and the application server has no main loop at all: a studio's
 // tool there runs on a session's fiber, and app_run asserted from one (2026-10-21). The child is not watched; on POSIX
 // a thread waits for it, so it does not stay a zombie that wxProcess::Exists reports as running.
 //
@@ -43,7 +43,7 @@ CORE_API bool ibKillProcess(long pid);
 CORE_API bool ibProcessExists(long pid);
 
 // THIS PROCESS, ASKED TO GO — by the debugger letting go of it, which ends a session and knows nothing of what holds the
-// process. A host that lives only for the debugger says how it stops (a web server a designer started, its serving
+// process. A host that lives only for the debugger says how it stops (a web server a studio started, its serving
 // loop: `stop` is called on any thread and has to return at once); false when none did - a thin client goes with its
 // window, a server started by itself serves on - and the process stays.
 CORE_API void ibOnStopProcess(void (*stop)());

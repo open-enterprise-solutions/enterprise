@@ -4,7 +4,7 @@
 
 #include "parameterizedJob.h"
 
-#include "backend/appData.h"                       // appData->DesignerMode(), GetJobManager
+#include "backend/appData.h"                       // appData->StudioMode(), GetJobManager
 #include "backend/metaData.h"
 #include "backend/moduleManager/moduleManager.h"
 #include "core/serialize/dataBuilder.h"
@@ -186,7 +186,7 @@ bool ibValueMetaObjectParameterizedJob::OnSaveMetaObject(int flags)
 
 bool ibValueMetaObjectParameterizedJob::OnDeleteMetaObject()
 {
-	// NOTHING IS FORGOTTEN HERE — see the predefined kind for why. This is the Designer's mark,
+	// NOTHING IS FORGOTTEN HERE — see the predefined kind for why. This is the Studio's mark,
 	// not the end of the job: the table is still there, its rows are still there, and the user may
 	// yet close without saving. What actually ends a job is the RESTRUCTURING, which drops the
 	// table in its own transaction; the orphaned records are swept at start-up, when the surviving
@@ -267,7 +267,7 @@ bool ibValueMetaObjectParameterizedJob::OnAfterRunMetaObject(int flags)
 		if (!ibValueMetaObjectRecordDataHierarchyMutableRef::OnAfterRunMetaObject(flags))
 			return false;
 
-		// The designer builds the compile value and stops — it must not declare a job.
+		// The studio builds the compile value and stops — it must not declare a job.
 		return cc->AddCompileModule(m_propertyObjectModule->GetMetaObject(),
 			[this]() -> ibValue { return CreateObjectValue(ibObjectMode::OBJECT_ITEM); });
 	}

@@ -11,7 +11,7 @@
 // added afterwards.
 //
 // Which is why a tool is NOT a re-implementation of what a command does. It
-// calls the SAME door the button calls. Where a designer command does bookkeeping
+// calls the SAME door the button calls. Where a studio command does bookkeeping
 // of its own around that door (the metadata tree inserting its item after
 // ibMetaData::CreateMetaObject, say), the answer is to move the notification
 // DOWN to where both roads pass — never to copy the bookkeeping in here, which
@@ -47,9 +47,9 @@ class ibApplicationInstance;   // the base a description is about (ibMcpDescribe
 // character outside ASCII: on Windows a mark came back as `?`, on Linux the WHOLE STRING came back
 // EMPTY — three tools shipped with no description at all, and only the CI contract test noticed
 // (2026-09-02, `syntax_search has no description`). Nothing in this layer is read by the person at
-// the designer: descriptions, argument texts and refusals are read by an assistant, in English, so
+// the studio: descriptions, argument texts and refusals are read by an assistant, in English, so
 // there was never anything to translate. What IS read by a person — the lines the server publishes
-// into the designer's window — stays `_()` in mcpServer.cpp, and stays ASCII.
+// into the studio's window — stays `_()` in mcpServer.cpp, and stays ASCII.
 #define ibMcpText(text) ibString(ibT(text))
 
 class FRMSERVER_API ibMcpTool {
@@ -161,7 +161,7 @@ public:
 
 	// ⭐ THE TOOL WORKS WITH THE DATA, not with the schema. In an application's session the call then needs the person's
 	// roles to give the assistant the records (AccessRight_DataAssistant), and without that RunTool throws, before this
-	// tool has run. A designer's session is not asked.
+	// tool has run. A studio's session is not asked.
 	virtual bool IsDataAssistant() const { return false; }
 
 	// One sentence, written for the CALLER — it is what a machine reads to
@@ -202,7 +202,7 @@ public:
 
 	// WHAT TO SAY IN THE WINDOW A PERSON IS WATCHING. Not the protocol name —
 	// `metadata_create` is what a machine calls this, and it tells the developer
-	// sitting in the designer nothing about what is happening to their
+	// sitting in the studio nothing about what is happening to their
 	// application. A sentence, in their language, naming the thing being acted
 	// on: "creating catalog Goods", "reading the journal".
 	//
@@ -345,7 +345,7 @@ FRMSERVER_API void ibMcpComposerComplaints(const struct ibCompositionDescription
 //
 // 🛑 `IsRequired()` WAS DECLARED, PUBLISHED AND READ BY NOBODY, so a call arriving without one
 // reached the tool with an empty string where a name should be: `report_output` added a nameless
-// output and answered success, `form_accepts` took the designer down (2026-09-01).
+// output and answered success, `form_accepts` took the studio down (2026-09-01).
 //
 // ⚠ IT LIVED IN THE SERVER until 2026-09-02 — where it was first needed, not where it belongs. Two
 // costs, and the second is why it moved: the transport owned a rule about arguments, and a test
@@ -429,7 +429,7 @@ FRMSERVER_API const ibMcpTool::ibMcpArgument& ibMcpIdArgument();
 FRMSERVER_API const ibMcpTool::ibMcpArgument& ibMcpValueArgument();
 FRMSERVER_API const ibMcpTool::ibMcpArgument& ibMcpLanguageArgument();
 // `metadata` — which metadata a call works on: the name of an external data tool or report's file, open in the
-// designer (external_data_tool_open / external_report_open, or the person's File → Open); omitted, the application.
+// studio (external_data_tool_open / external_report_open, or the person's File → Open); omitted, the application.
 // A tool that edits an external takes it; its doors read it (ibMcpMetaDataNamed, below).
 FRMSERVER_API const ibMcpTool::ibMcpArgument& ibMcpMetaDataArgument();
 
@@ -554,11 +554,11 @@ FRMSERVER_API class ibValueMetaObjectTemplate* ibMcpComposerNamed(const ibDataNo
 	ibString& refusal, const ibString& field = ibT("id"));
 
 // …and the metadata the call works on, which the two above look in: the external data tool or report its
-// `metadata` names, open in this designer — or the application, when it names none. nullptr, said in `refusal`,
+// `metadata` names, open in this studio — or the application, when it names none. nullptr, said in `refusal`,
 // when what it names is not open.
 FRMSERVER_API class ibMetaData* ibMcpMetaDataNamed(const ibDataNode& params, ibString& refusal);
 
-// The external data tool or report open in this designer under the file's name `file` — its document, as the
+// The external data tool or report open in this studio under the file's name `file` — its document, as the
 // person's File → Open made it (a tab, its tree); nullptr when none is. The server knows no folder of the client's,
 // only the name the file was handed over under. Closing the tab closes it, and what was not saved goes with it.
 FRMSERVER_API class ibMetaDataDocument* ibMcpExternalNamed(const ibString& file);
@@ -653,13 +653,13 @@ FRMSERVER_API const std::vector<const ibMcpAudit*>& ibMcpAudits();
 // waits for its answer, and a wait that expires used to be reported one way whatever caused it — "it did
 // not answer in time, it may still be running" — about an application that had CRASHED a second after
 // the request went out (2026-09-10, three times in one evening; the process list and the Windows event
-// log were what told them apart). The process THIS designer started (app_run) is remembered by id, so
+// log were what told them apart). The process THIS studio started (app_run) is remembered by id, so
 // an expired wait asks whether it is still there before it counsels patience.
 FRMSERVER_API void ibMcpRememberStartedApplication(long pid);
 FRMSERVER_API long ibMcpStartedApplication();   // 0 when app_run has started nothing
 
 // The refusal for a wait that expired: `usual` while the application's process is there (or unknown —
-// started by somebody else), and "it is gone" when the process this designer started has exited.
+// started by somebody else), and "it is gone" when the process this studio started has exited.
 FRMSERVER_API ibString ibMcpNoAnswer(const ibString& usual);
 
 // ⭐⭐ A CAPTION GOES IN EVERY LANGUAGE THE APPLICATION DECLARES. True when `text` already carries
@@ -670,7 +670,7 @@ FRMSERVER_API bool ibMcpCaptionInEveryLanguage(const class ibMetaData* owner, co
 	const ibString& what, ibString& refusal);
 
 // ⭐⭐ WHAT MAY RUN BEFORE A CLIENT HAS SAID WHO IT IS — and the answer is: exactly what saying so
-// requires. There is a person in front of this designer, and a connection is invisible to them until
+// requires. There is a person in front of this studio, and a connection is invisible to them until
 // something speaks; a client reading their whole application in silence is indistinguishable from
 // one that never arrived. Asking for a greeting did not work in any of its gentler shapes, so it is
 // a DOOR: everything else is refused, with the four verbs named, until `chat_say` has happened.
@@ -685,17 +685,17 @@ FRMSERVER_API const std::vector<ibString>& ibMcpGreetingVerbs();
 // is a function-local static inside the .cpp — a namespace-scope container
 // would not be built yet when the first registrar runs.
 // Who may be offered a tool, said by how it is registered: anybody the assistant is given to (MCP_TOOL_REGISTER); the
-// designer alone (MCP_TOOL_REGISTER_DESIGNER); the application alone, for what acts in a person's window
-// (MCP_TOOL_REGISTER_RUNTIME). Whether the data may be touched is the tool's own word: ibMcpTool::IsDataAssistant.
-enum class ibMcpToolMode { Common, Designer, Runtime };
+// studio alone (MCP_TOOL_REGISTER_STUDIO); the application alone, for what acts in a person's window
+// (MCP_TOOL_REGISTER_WORKSPACE). Whether the data may be touched is the tool's own word: ibMcpTool::IsDataAssistant.
+enum class ibMcpToolMode { Common, Studio, Workspace };
 
 FRMSERVER_API void ibRegisterMcpTool(const ibMcpTool* tool, ibMcpToolMode mode);
 FRMSERVER_API ibMcpToolMode ibGetMcpToolMode(const ibMcpTool* tool);
-// ⭐ IS IT THERE FOR THE ONE ASKING — the current session's: a designer's is offered the common tools and its own, a person's
+// ⭐ IS IT THERE FOR THE ONE ASKING — the current session's: a studio's is offered the common tools and its own, a person's
 // in the application the common ones and the runtime's. Unoffered is as good as absent: it is not listed, not found by a
 // search and not called.
 FRMSERVER_API bool ibIsMcpToolOffered(const ibMcpTool* tool);
-// In an application's session — its person's roles answer, and what is the designer's alone is refused.
+// In an application's session — its person's roles answer, and what is the studio's alone is refused.
 FRMSERVER_API bool ibIsMcpInApplication();
 
 // While it is held, a failure of the session's code comes back to the call: without it each one is a Critical failure
@@ -730,8 +730,8 @@ FRMSERVER_API void ibMcpLanguageTypes(const ibString& query, std::vector<ibDataV
 	static tool_class##Registrar s_##tool_class##Registrar;                  \
 	}
 #define MCP_TOOL_REGISTER(tool_class)          MCP_TOOL_REGISTER_AS(tool_class, ibMcpToolMode::Common)
-#define MCP_TOOL_REGISTER_DESIGNER(tool_class) MCP_TOOL_REGISTER_AS(tool_class, ibMcpToolMode::Designer)
-#define MCP_TOOL_REGISTER_RUNTIME(tool_class)  MCP_TOOL_REGISTER_AS(tool_class, ibMcpToolMode::Runtime)
+#define MCP_TOOL_REGISTER_STUDIO(tool_class) MCP_TOOL_REGISTER_AS(tool_class, ibMcpToolMode::Studio)
+#define MCP_TOOL_REGISTER_WORKSPACE(tool_class)  MCP_TOOL_REGISTER_AS(tool_class, ibMcpToolMode::Workspace)
 
 //     MCP_AUDIT_REGISTER(ibMcpAuditForms);   — the same idiom, for a check rather than a verb
 #define MCP_AUDIT_REGISTER(audit_class)                                      \

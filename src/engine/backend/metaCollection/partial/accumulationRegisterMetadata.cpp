@@ -197,7 +197,7 @@ bool ibValueMetaObjectAccumulationRegister::OnReloadMetaObject()
 	// registered: the catalogue goes on offering a balance the register no longer has, and the
 	// property panel and the query constructor say different things about the same object.
 	//
-	// So the answer is re-taken on reload, which is what a designer edit ends in. Unregistering is
+	// So the answer is re-taken on reload, which is what a studio edit ends in. Unregistering is
 	// unconditional (removing what is not there is a no-op) and registering follows the type as it
 	// is NOW — same rule, asked again rather than remembered. A DELETED register offers nothing: the
 	// delete reloads it too, and the two tables outlived it (see the accounting register's reload).

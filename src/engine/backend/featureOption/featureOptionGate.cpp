@@ -69,7 +69,7 @@ std::map<const ibMetaData*, ibFeatureOptionValues> s_values;
 // Open AsApplication scopes on this thread — see the header.
 thread_local int s_asApplication = 0;
 
-// A composition parked mid-question must not leave the designer's
+// A composition parked mid-question must not leave the studio's
 // "as application" view on for the next session on this thread.
 struct ibRegisterAsApplicationLocal {
 	ibRegisterAsApplicationLocal()
@@ -80,12 +80,12 @@ struct ibRegisterAsApplicationLocal {
 	}
 } s_registerAsApplicationLocal;
 
-// Only the running application makes anything unavailable: the designer shows what it edits — but for a
+// Only the running application makes anything unavailable: the studio shows what it edits — but for a
 // composition's run, which prints what a person sees (AsApplication) — and a process with no application (a
 // test) has nothing to withhold.
 bool IsRuntime()
 {
-	return appData != nullptr && (!appData->DesignerMode() || s_asApplication > 0);
+	return appData != nullptr && (!appData->StudioMode() || s_asApplication > 0);
 }
 
 // The values of this application's options — read once and kept. Called under s_valuesLock.
@@ -195,14 +195,14 @@ void ibFeatureOptionGate::Forget(const ibMetaData* metaData)
 	s_values.erase(metaData);
 }
 
-// ⭐ THE DESIGNER KEEPS NO APPLICATION'S MEMORY. A running application reads the values once and keeps them
-// (its forms were built by them); the designer has nothing built by them, so the application's view it is
+// ⭐ THE STUDIO KEEPS NO APPLICATION'S MEMORY. A running application reads the values once and keeps them
+// (its forms were built by them); the studio has nothing built by them, so the application's view it is
 // asked for is the base as it stands NOW — read afresh when a run opens its outermost scope, and kept for that
 // run's own questions. Without it a switch made in the application since was seen here only after the
-// designer restarted, and compose_run said so in its description (2026-09-28).
+// studio restarted, and compose_run said so in its description (2026-09-28).
 ibFeatureOptionGate::AsApplication::AsApplication()
 {
-	if (s_asApplication++ == 0 && appData != nullptr && appData->DesignerMode()) {
+	if (s_asApplication++ == 0 && appData != nullptr && appData->StudioMode()) {
 		std::lock_guard<std::mutex> lock(s_valuesLock);
 		s_values.clear();
 	}

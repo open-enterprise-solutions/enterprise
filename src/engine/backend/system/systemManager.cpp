@@ -291,7 +291,7 @@ void ibValueSystemFunction_BindNames(ibValue::ibMemberTable& helper, const ibVal
 
 bool ibValueSystemFunction::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray)
 {
-	if (!appData->DesignerMode()) {
+	if (!appData->StudioMode()) {
 		switch (lMethodNum)
 		{
 			//--- Basic:
@@ -514,7 +514,7 @@ bool ibValueSystemFunction::CallAsFunc(const long lMethodNum, ibValue& pvarRetVa
 
 bool ibValueSystemFunction::CallAsProc(const long lMethodNum, ibValue** paParams, const long lSizeArray)
 {
-	if (!appData->DesignerMode()) {
+	if (!appData->StudioMode()) {
 		switch (lMethodNum)
 		{
 			//--- Special:
@@ -566,7 +566,7 @@ bool ibValueSystemFunction::CallAsProc(const long lMethodNum, ibValue** paParams
 				lSizeArray > 1 ? paParams[1]->ConvertToType<ibBackendControlFrame>() : nullptr,
 				lSizeArray > 2 ? paParams[2]->ConvertToType<ibValueGuid>() : nullptr);
 			return true;
-			// In the designer these are deliberately nothing — no running application's messages, journal or
+			// In the studio these are deliberately nothing — no running application's messages, journal or
 			// transaction — and a call to one is done, not refused.
 		case enMessage:
 		case enWriteJournalEvent:

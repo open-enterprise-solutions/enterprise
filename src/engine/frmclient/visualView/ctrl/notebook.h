@@ -19,7 +19,7 @@ public:
 
 private:
 
-	// The active page brought up once it is on the notebook — the server's, or the one the designer selected (a page
+	// The active page brought up once it is on the notebook — the server's, or the one the studio selected (a page
 	// selected in the editor, ibValueNotebookPage::OnSelected); asked by the notebook as it is drawn, and by each page put
 	// on it after: the pages are drawn after the notebook.
 	void SelectActivePage();

@@ -6,9 +6,9 @@
 ////////////////////////////////////////////////////////////////////////////
 //
 // At run time a reference presents the ROW behind it — a description, a document's number and date.
-// In the designer there is no row to present: a reference there stands for something the
+// In the studio there is no row to present: a reference there stands for something the
 // application DECLARES, and what a person needs to read is what they wrote —
-// `CatalogRef.Goods.EmptyRef`, `EnumRef.Kinds.Retail` (Max, 2026-08-28: "the designer sees
+// `CatalogRef.Goods.EmptyRef`, `EnumRef.Kinds.Retail` (Max, 2026-08-28: "the studio sees
 // references through the full name").
 //
 // ⭐ THE PRESENTATION IS THE METAOBJECT'S OWN BUSINESS, so this is a pair of helpers rather than a

@@ -77,22 +77,17 @@ enum class ibAuthState : int {
 };
 
 // ------------------------------------------------------------------
-// ibSessionKind — WHAT A SESSION IS: the designer, the application, a job,
+// ibSessionKind — WHAT A SESSION IS: the studio, the workspace, a job,
 // a server's own login. The process says only how it holds the base
-// (ibRunMode); a file base has its designer, its runtime and its jobs as a
+// (ibRunMode); a file base has its studio, its workspace and its jobs as a
 // server does. A file base is started as something — its first session is that
-// (the designer's window, the client's window); a server is started as the
+// (the studio's window, the workspace's window); a server is started as the
 // server — its first session is its own, and the clients of every kind come
 // later. A number on disk (sys_session.kind): never renumbered.
 // ------------------------------------------------------------------
 enum class ibSessionKind : int {
 	Unknown    = 0,                    // nobody said
-	Launcher   = 1,
-	Designer   = 2,
-	Enterprise = 3,
 	Service    = 4,                    // a server's own login
-	WebServer  = 5,                    // the web server's own technical row
-	WebClient  = 100,                  // per-tab / API caller
 	// A job's own session. A job is not a way of running the process: any host
 	// can hold one alongside its normal sessions, so "what kind of session is
 	// this" is not answerable from how the process was started.
@@ -110,13 +105,12 @@ enum class ibSessionKind : int {
 	ScheduledJob  = 102,   // declared by the application, runs on its interval
 	SystemJob     = 103,   // the platform's own (totals fold, maintenance)
 
-	// A CLIENT OF THE PROTOCOL working in the application — the thin runtime, the web, the assistant (frmserver):
+	// A CLIENT OF THE PROTOCOL working in the application — the workspace, the web, the assistant (frmserver):
 	// a person at it, whatever process hosts it. Its run mode is its host's — a server's or a file base's — so the
 	// kind is what says what it is.
-	ThinClient    = 104,
-	// …working in the application — the thin designer. A designer as the desktop's is (IsDesignerSessionKind):
-	// no runtime, the one designer of the base.
-	ThinDesigner  = 105,
+	Workspace     = 104,
+	// …working on the application — the studio: no runtime, the one studio of the base.
+	Studio        = 105,
 	// ONE REQUEST TO AN HTTP SERVICE of the application (backend/httpService/httpServiceCall.h): made for the
 	// request, under the identity it came with, and ended once it is answered. Nobody sits at it.
 	HttpService   = 106,
@@ -126,39 +120,12 @@ enum class ibSessionKind : int {
 // IS THIS SESSION A JOB — one of the three above, whatever host it lives in.
 //
 // Worth one question because a job lives in whatever process started it — the
-// designer's, the application's, a server — and is none of them. The KIND is what
+// studio's, the workspace's, a server — and is none of them. The KIND is what
 // answers, and this is the shorthand for asking.
 inline bool IsJobSessionKind(ibSessionKind k) {
 	return k == ibSessionKind::BackgroundJob
 	    || k == ibSessionKind::ScheduledJob
 	    || k == ibSessionKind::SystemJob;
-}
-
-// IS THIS SESSION A DESIGNER'S — the desktop's or the thin one, whatever process hosts it. Asked of the session's
-// kind, not of the process's run mode: a server and a file base host designers alike.
-inline bool IsDesignerSessionKind(ibSessionKind k) {
-	return k == ibSessionKind::Designer
-	    || k == ibSessionKind::ThinDesigner;
-}
-
-// IS THIS SESSION A PERSON'S IN THE APPLICATION — the desktop's runtime, a web tab, a thin client — whatever process
-// hosts it.
-inline bool IsRuntimeSessionKind(ibSessionKind k) {
-	return k == ibSessionKind::Enterprise
-	    || k == ibSessionKind::WebClient
-	    || k == ibSessionKind::ThinClient;
-}
-
-// IS THIS THE PROCESS'S OWN LOGIN — what a program logs in as (the designer's window, the client's window, a
-// server's own, the web server's technical row): what a base gives only that session — the thread without a session
-// falls back to it, its person's MCP settings are read. Not a job's and not a visitor's (a web tab, a client of the
-// protocol), which come in through the same door.
-inline bool IsProcessSessionKind(ibSessionKind k) {
-	return k == ibSessionKind::Launcher
-	    || k == ibSessionKind::Designer
-	    || k == ibSessionKind::Enterprise
-	    || k == ibSessionKind::Service
-	    || k == ibSessionKind::WebServer;
 }
 
 // ------------------------------------------------------------------
@@ -312,13 +279,13 @@ public:
 
 	// Root runtime of this session. Populated by CreateRoot() driven from
 	// the registry's NotifyAuthenticated phase right after Open() succeeds;
-	// stays nullptr for sessions that never run scripts (Designer,
+	// stays nullptr for sessions that never run scripts (Studio,
 	// WebServer technical session, Launcher).
 	ibValueModuleManagerRuntimeApplication* GetManagerModule() const;
 
 	// The RLS access policy for this session. The L3 door (ibDataQueryBuilder)
 	// pulls it opaquely in its ctor and applies it to every read/write. Null on
-	// Designer / technical sessions (no enforcement). Created at authentication
+	// Studio / technical sessions (no enforcement). Created at authentication
 	// (EnsureRoot) for runtime sessions; the concrete impl lives in session.cpp.
 	// Returns null inside an ibAccessTrustScope (a role module, a privileged module
 	// runs privileged). Await pauses that window, so a task it runs while a question
@@ -337,11 +304,11 @@ public:
 
 	// The module manager whose context (Manager / Catalogs / Documents / globals)
 	// an object/record/module compiled against `metaData` should parent to. One
-	// seam, two roads: Designer returns the lightweight designer manager held in
-	// `metaData`'s compile cache (no runtime root exists in the Designer); runtime
+	// seam, two roads: Studio returns the lightweight studio manager held in
+	// `metaData`'s compile cache (no runtime root exists in the Studio); runtime
 	// returns this session's root mm. Callers that previously wrote
-	// `session->GetManagerModule()` + a DesignerMode branch use this instead.
-	// Out-of-line (session.cpp) — needs the complete designer type.
+	// `session->GetManagerModule()` + a StudioMode branch use this instead.
+	// Out-of-line (session.cpp) — needs the complete studio type.
 	class ibValueModuleManager* GetEditModuleManager(const class ibMetaData* metaData) const;
 
 	// Convenience: resolve against ibSession::Current() (the common call shape at
@@ -474,7 +441,7 @@ public:
 	// shared_ptr<const ...> with atomic_load/store.
 	const ibUserInfo& GetUserInfo() const { return m_userInfo; }
 
-	// Plain-text password cached for the Designer "Start debugging" path —
+	// Plain-text password cached for the Studio "Start debugging" path —
 	// the spawned child re-authenticates without prompting. Public read
 	// because the writer (SetSessionRawPassword in registry-driven
 	// InstallUser) is single-threaded; readers observe Auth() ==
@@ -482,7 +449,7 @@ public:
 	const ibString& GetSessionRawPassword() const { return m_sessionRawPassword; }
 
 	// The child has the password in its ticket. Drop the copy this session
-	// was keeping for the next Designer launch, overwriting it first.
+	// was keeping for the next Studio launch, overwriting it first.
 	void ClearSessionRawPassword() {
 		for (size_t i = 0; i < m_sessionRawPassword.length(); ++i)
 			m_sessionRawPassword[i] = ibT('x');
@@ -869,7 +836,7 @@ private:
 	ibSessionState WaitForState(ibSessionState from, std::chrono::milliseconds timeout);
 	ibAuthState    WaitForAuth (ibAuthState    from, std::chrono::milliseconds timeout);
 
-	// Its +1 — the base's active application as it stands when the session is let in (GetMetaData); a designer's
+	// Its +1 — the base's active application as it stands when the session is let in (GetMetaData); a studio's
 	// session makes one of its own instead, the application it edits (ibMetaDataApplicationStorage), held by it
 	// alone.
 	// Acquired once, by the registry (NotifyAuthenticated), before the root is built over it; a rented read takes
@@ -891,7 +858,7 @@ private:
 	// (InstallUser) — registry is the single
 	// mutator of session state, callers from appData / login dialogs
 	// route through it. SetSessionRawPassword writes the plain-text
-	// cache used by the Designer "Start debugging" child spawn; the
+	// cache used by the Studio "Start debugging" child spawn; the
 	// matching read accessor stays public (the logging-in thread writes
 	// it — ibSessionRegistry::Attach — before the registry announces the
 	// login, so reads from any thread are race-free against atomic-flag
@@ -906,7 +873,7 @@ private:
 	void SetSessionRawPassword(const ibString& pwd) { m_sessionRawPassword = pwd; }
 
 public:
-	// Per-session debug state — where a stop of this session parks. MADE WITH THE SESSION: a designer
+	// Per-session debug state — where a stop of this session parks. MADE WITH THE SESSION: a studio
 	// attaches at any moment, and a stop must find it then. It was made only for a session that logged in
 	// under --debug, so attaching to a running application took the breakpoints and the Pause and every
 	// stop was dropped in DoDebugLoop without a word (Max, 2026-10-21, desktop and thin alike). Whether
@@ -915,7 +882,7 @@ public:
 	// the others.
 	struct ibDebugSession {
 		// True while ibProcUnit::Execute is parked in DoDebugLoop's CV
-		// wait. Designer's Continue/Step/Detach commands clear this and
+		// wait. Studio's Continue/Step/Detach commands clear this and
 		// notify the CV for the matching session.
 		std::atomic<bool>       m_debugLoop{false};
 
@@ -925,7 +892,7 @@ public:
 		ibRunContext*           m_runContext{nullptr};
 
 		// CV + mutex pair: producer (script thread inside DoDebugLoop)
-		// waits on m_cv; consumer (designer command handler in the
+		// waits on m_cv; consumer (studio command handler in the
 		// debug-server worker) flips m_debugLoop and notifies.
 		std::condition_variable m_cv;
 		std::mutex              m_mutex;
@@ -1103,7 +1070,7 @@ private:
 	// under a ibSessionScope on the main thread). m_identity holds the row
 	// fields written to sys_session; m_userInfo carries the full user record
 	// (roles, language) used by script-side AppUser() readers and access
-	// checks. m_sessionRawPassword caches the plain-text for Designer
+	// checks. m_sessionRawPassword caches the plain-text for Studio
 	// "Start debugging" — handed to spawned child processes so they can
 	// re-authenticate without prompting.
 	ibString                  m_sessionRawPassword;

@@ -129,7 +129,7 @@ bool ibHomePageDocument::OnSaveModified()
 
 namespace {
 
-// An item's share of its column. 0 (the designer's "same height") counts as one share, so a column of unset items
+// An item's share of its column. 0 (the studio's "same height") counts as one share, so a column of unset items
 // splits evenly — which is what "same" means.
 inline unsigned int ItemWeight(const ibHomePageItem& item)
 {

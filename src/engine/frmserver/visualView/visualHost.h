@@ -2,7 +2,7 @@
 #define __VISUAL_HOST_H__
 
 // THE FORM'S HOST — who holds a form and takes its controls through their life, as the window's visual host did
-// for the designer, the desktop and the web alike. With no window here, what it holds is the frame it draws; each
+// for the studio, the desktop and the web alike. With no window here, what it holds is the frame it draws; each
 // control's node in it stands where the control's window stood.
 //
 //   CreateVisualHost   the title → OnCreate → the children → OnCreated    the form opened
@@ -13,7 +13,7 @@
 //                                                                         of it) — drawn anew with the next frame
 //   SelectControl      OnSelected                                         a control picked out (the client's Focus)
 //
-// A control asks the host what it is held by (IsDesignerHost), never the process: a designer and a client may be
+// A control asks the host what it is held by (IsStudioHost), never the process: a studio and a client may be
 // one process.
 
 #include "frmserver/frmserver.h"
@@ -29,10 +29,10 @@ public:
 
 	// The form held.
 	virtual class ibValueForm* GetValueForm() const = 0;
-	// Held for the designer's picture of the form, not for a person working in it.
-	virtual bool IsDesignerHost() const { return false; }
+	// Held for the studio's picture of the form, not for a person working in it.
+	virtual bool IsStudioHost() const { return false; }
 	// The title bar — the form's caption, as the host shows it: the client's view, as its document's title; the
-	// designer's editor, on the card it draws.
+	// studio's editor, on the card it draws.
 	virtual void SetCaption(const ibString& strCaption) = 0;
 
 	void CreateVisualHost();
@@ -46,7 +46,7 @@ public:
 
 protected:
 
-	// A control's life as a host takes it — the designer's editor writes a new one's node with them (WriteClasses).
+	// A control's life as a host takes it — the studio's editor writes a new one's node with them (WriteClasses).
 	void GenerateControl(class ibValueFrame* control, bool firstCreated = false);
 	void RefreshControl(class ibValueFrame* control, class ibDataNode& node);
 	// …and drawn again over the node it was drawn as: its own part read anew, each in it drawn there copied as it was,
@@ -78,8 +78,8 @@ private:
 // its document closes.
 //
 // The CLIENT's host, the desktop's and the web's (ibVisualHostClient) — a demonstration document's included:
-// through it the designer shows a form as a person would see it. The designer's picture of a form being edited
-// is the other host, its editor's (ibVisualEditorHost): its own class, with its own title and IsDesignerHost.
+// through it the studio shows a form as a person would see it. The studio's picture of a form being edited
+// is the other host, its editor's (ibVisualEditorHost): its own class, with its own title and IsStudioHost.
 class FRMSERVER_API ibFormVisualEditView : public ibView, public ibVisualHost {
 public:
 
@@ -91,7 +91,7 @@ public:
 	virtual bool OnClose(bool deleteWindow = true) override;
 	virtual void OnClosingDocument() override;
 
-	// ⭐ THE FORM AS IT STANDS NOW — its controls as the designer saved them, each with what it shows at this
+	// ⭐ THE FORM AS IT STANDS NOW — its controls as the studio saved them, each with what it shows at this
 	// moment (ibVisualHost::UpdateVisualHost). Drawn anew only where it changed (UpdateControl) — the rest as drawn
 	// last; what reaches a client is the difference.
 	virtual void OnDraw(ibDataNode& frame) override;

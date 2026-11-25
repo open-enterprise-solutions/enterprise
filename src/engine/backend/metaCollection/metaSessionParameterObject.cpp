@@ -75,8 +75,8 @@ ibValueMetaObjectSessionParameter* ibValueSessionParameters::ParameterAt(long in
 void ibValueSessionParameters::FillMembers(ibMemberTable& helper) const
 {
 	// FROM THE METADATA, every time it is asked. A cached list would go stale the
-	// moment a parameter is added in the designer, and the editor would complete a
-	// name the runtime refuses — or refuse one the designer shows.
+	// moment a parameter is added in the studio, and the editor would complete a
+	// name the runtime refuses — or refuse one the studio shows.
 	ibMetaData* const metaData = m_metaData != nullptr ? m_metaData : activeMetaData;
 	if (metaData == nullptr)
 		return;

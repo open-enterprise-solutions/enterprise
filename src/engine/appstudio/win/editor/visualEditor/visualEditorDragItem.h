@@ -5,7 +5,7 @@
 //	Description : form-editor DRAG ITEMS — one polymorphic KIND per draggable
 ////////////////////////////////////////////////////////////////////////////
 
-// A form-editor DRAG ITEM — the desktop's (designer visualEditorDragItem.h): one draggable KIND (a source path -> a
+// A form-editor DRAG ITEM — the desktop's (studio visualEditorDragItem.h): one draggable KIND (a source path -> a
 // bound control). Polymorphic: each kind owns its wire FORMAT, its (de)serialization, and what it DOES when dropped on
 // the form — said to the server's editor (ApplyDrop → the editor's door). The drop target (ibSourceDragDropTarget)
 // holds the registered kinds, matches the RECEIVED format and dispatches — so adding a draggable (the command tree's

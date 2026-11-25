@@ -94,7 +94,7 @@ TEST(ValueStructure, FieldNamesFoldCase) {
 // process locale says how, and a gtest binary runs in "C", where it does not.
 //
 // ⚠ WORTH KNOWING, because it is not a property of this code: the same script
-// sees case-SENSITIVE Cyrillic field names in a headless run (appserver, codeRunner,
+// sees case-SENSITIVE Cyrillic field names in a headless run (appserver, coderunner,
 // this suite) and case-INSENSITIVE ones under a UI locale. Deciding that is a
 // language question, not a folding one, so this test states the rule and skips
 // where the platform will not honour it rather than asserting either answer.
@@ -204,7 +204,7 @@ TEST(ValueStructure, FieldsAreFoundTheSameWalkedAndIndexed) {
     EXPECT_EQ(s.Count(), 2u);
 }
 
-// Insert refuses a repeated key in every process, with no question about the designer; an owner for whom a
+// Insert refuses a repeated key in every process, with no question about the studio; an owner for whom a
 // repeat is no error puts it with SetAt — one entry, the later value (the metadata namespaces do).
 TEST(ValueStructure, InsertRefusesARepeatAndSetAtPutsIt) {
     ibValueStructure s;

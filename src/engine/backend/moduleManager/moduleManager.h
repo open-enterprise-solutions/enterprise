@@ -14,7 +14,7 @@ class ibSession;
 //*********************************************************************************************************
 //*   ibValueModuleManager — LIGHTWEIGHT base                                                           *
 //*                                                                                                     *
-//*   Holds only what the Designer / code editor need to resolve names: the per-module unit type,       *
+//*   Holds only what the Studio / code editor need to resolve names: the per-module unit type,       *
 //*   the metadata unit, the "Manager" singleton, the global-constant map and the named context. NO     *
 //*   runtime concerns (ProcUnit spin-up, shared-module ProcUnit registry, Create/Start/Exit, session  *
 //*   Attach). Those live in ibValueModuleRuntimeManager. Splitting them keeps the fragile runtime      *
@@ -34,7 +34,7 @@ class BACKEND_API ibValueModuleManager :
 		//
 		// The manager is not optional. A unit compiles against its parent's scope, so
 		// one built without a manager can only fail to resolve every name outside
-		// itself — which is what a managerless variant used to hand the designer.
+		// itself — which is what a managerless variant used to hand the studio.
 		ibValueModuleUnit(ibValueModuleManager* moduleManager, ibValueMetaObjectModuleBase* moduleObject, bool managerModule = false);
 		virtual ~ibValueModuleUnit();
 
@@ -70,7 +70,7 @@ class BACKEND_API ibValueModuleManager :
 		// calls (DoGetPMethods + by-value m_members come from ibValueDynamicMembers). No FillMembers —
 		// the module is the whole surface.
 
-		// ⭐ IN THE DESIGNER THOSE NAMES COME FROM THE TEXT, not from bytecode — there is none
+		// ⭐ IN THE STUDIO THOSE NAMES COME FROM THE TEXT, not from bytecode — there is none
 		// (AddSharedModule below says why). Nothing extra is bound here for it: the template already
 		// asks ExportMethodsToHelper, and that is where the second road lives, so every descriptor
 		// gets it and not just this one — see moduleInfo.cpp.
@@ -236,9 +236,9 @@ public:
 	ibValueDataUnit* GetDataManager() const { return m_dataManager; }
 
 	// Resolve a registered shared module's compiled unit. Pure virtual — the
-	// runtime manager reads its per-session runtime registry, the designer holder
+	// runtime manager reads its per-session runtime registry, the studio holder
 	// reads its own compiled-unit registry. Callers (e.g. catalog/document manager
-	// objects via GetEditModuleManager) work through the base, designer-or-runtime
+	// objects via GetEditModuleManager) work through the base, studio-or-runtime
 	// agnostic.
 	virtual ibValueModuleUnit* FindSharedModule(const ibValueMetaObjectSharedModule* sharedModule) const = 0;
 
@@ -251,7 +251,7 @@ public:
 	//return external module
 	virtual ibValue* GetObjectValue() const { return nullptr; }
 
-	// Module lifecycle — same names across the hierarchy. ibValueModuleManagerDesigner
+	// Module lifecycle — same names across the hierarchy. ibValueModuleManagerStudio
 	// overrides these to seed the "Manager" singleton + ctor-context (Catalogs /
 	// Documents / Enums) + global consts for the code editor (NO runtime, NO common-
 	// module registry); ibValueModuleManagerRuntimeApplication overrides them with
@@ -293,7 +293,7 @@ class BACKEND_API ibValueModuleRuntimeManager :
 	public:
 
 	// Runtime variant — adds the owning module manager + per-runtime create/destroy.
-	// The lightweight base unit above is what the designer reads for autocomplete (no
+	// The lightweight base unit above is what the studio reads for autocomplete (no
 	// manager); this is what the runtime manager spawns for actual execution.
 	class BACKEND_API ibValueRuntimeModuleUnit :
 		public ibValueModuleManager::ibValueModuleUnit {
@@ -409,12 +409,12 @@ public:
 };
 
 //*********************************************************************************************************
-//*   ibValueModuleManagerDesigner — LIGHTWEIGHT designer holder                                        *
+//*   ibValueModuleManagerStudio — LIGHTWEIGHT studio holder                                        *
 //*                                                                                                     *
 //*   Derives the lightweight base (NOT the runtime manager): no ProcUnit, no runtime shared-module     *
 //*   units, no Attach. Lives inside ibCompileValueCache so the code editor reads the "Manager"         *
 //*   singleton + ctor-context (Catalogs / Documents / Enums) + global consts from a holder that        *
-//*   tracks the current designer state, decoupled from per-session runtime managers. Shared modules    *
+//*   tracks the current studio state, decoupled from per-session runtime managers. Shared modules    *
 //*   are surfaced by the editor from the metadata storage + live text parsing, NOT from here, so no    *
 //*   fragile runtime unit ever enters the editor's read path. Created in RunDatabase / released in      *
 //*   CloseDatabase (its object module is reset on reload — holding one in the ctor would dangle). Used   *
@@ -422,17 +422,17 @@ public:
 //*   project_module_manager_split.                                                                      *
 //*********************************************************************************************************
 
-class BACKEND_API ibValueModuleManagerDesigner : public ibValueModuleManager {
+class BACKEND_API ibValueModuleManagerStudio : public ibValueModuleManager {
 	public:
 	// Application variant — takes the application common object and forwards its
 	// object module to the base (out-of-line: GetObjectModule needs the complete
 	// metaobject type).
-	ibValueModuleManagerDesigner(ibMetaData* metaData, ibValueMetaObjectApplication* metaObject);
+	ibValueModuleManagerStudio(ibMetaData* metaData, ibValueMetaObjectApplication* metaObject);
 	// External data-tool / report variant — its metadata has no
 	// application common object, only an object module. The ctor-context
 	// (Catalogs / Documents / Manager) still comes from the active application via
 	// metaData's GetListCtorsByType, so the editor sees the same names.
-	ibValueModuleManagerDesigner(ibMetaData* metaData, const ibValueMetaObjectModule* objectModule);
+	ibValueModuleManagerStudio(ibMetaData* metaData, const ibValueMetaObjectModule* objectModule);
 
 	// Compile-side context only (Manager + Catalogs/Documents/Enums + globals).
 	// Lightweight bodies, no runtime. Exports helper names at the end of
@@ -440,14 +440,14 @@ class BACKEND_API ibValueModuleManagerDesigner : public ibValueModuleManager {
 	bool CreateMainModule() override;
 	bool DestroyMainModule() override;
 
-	// Independent shared-module registry — designer-only, NOT shared with the
+	// Independent shared-module registry — studio-only, NOT shared with the
 	// runtime managers. Each registered shared module gets its OWN compiled
 	// lightweight unit (ibValueModuleUnit: a compile module, NO ProcUnit), so the
 	// editor reads exported names from a real compiled value with a predictable,
-	// designer-owned lifetime. Driven from ibValueMetaObjectSharedModule's
+	// studio-owned lifetime. Driven from ibValueMetaObjectSharedModule's
 	// OnBeforeRun / OnBeforeClose / OnRename hooks.
 	// runModule=true compiles the unit immediately (a module added live in the
-	// designer); false defers compilation to CreateMainModule (bulk load path).
+	// studio); false defers compilation to CreateMainModule (bulk load path).
 	bool AddSharedModule(ibValueMetaObjectSharedModule* sharedModule, bool managerModule = false, bool runModule = false);
 	bool RemoveSharedModule(ibValueMetaObjectSharedModule* sharedModule);
 	bool RenameSharedModule(ibValueMetaObjectSharedModule* sharedModule, const ibString& newName);

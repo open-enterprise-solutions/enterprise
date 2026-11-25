@@ -1,13 +1,13 @@
-// A data tool read from its file INTO an application (the designer's "read from file", ReadExternal) cannot keep
+// A data tool read from its file INTO an application (the studio's "read from file", ReadExternal) cannot keep
 // the file's ids: they would collide with the application's own. #578: the objects were renumbered, but what HOLDS
 // their ids inside a form was not — a button still named the file's command id, a field the file's attribute id, the
 // form's main attribute the file's root. In the same application the file was saved from, those are the ids of the
 // ORIGINAL data tool, so the copy's form quietly bound the original's command.
 //
-// ReadExternal reads the file on its own and pastes it in, as a copy made in the designer is pasted; the steps are
+// ReadExternal reads the file on its own and pastes it in, as a copy made in the studio is pasted; the steps are
 // taken here as it takes them. The data tool is built through the MCP tools, saved to a file and read back into
-// the same application, and the copy's form — taken as the designer's editor takes it, from the compile cache — is
-// asked what it holds. The application is the one a designer session opens, as in test_commandDescription.cpp.
+// the same application, and the copy's form — taken as the studio's editor takes it, from the compile cache — is
+// asked what it holds. The application is the one a studio session opens, as in test_commandDescription.cpp.
 
 #include <gtest/gtest.h>
 #include <wx/string.h>   // wxT, wxString - the engine's headers include no wx
@@ -18,7 +18,7 @@
 
 #include <wx/init.h>
 
-#include "framedSession.h"   // KeyFrame / FramedSession — a designer's session has a frame, and a form is born against it
+#include "framedSession.h"   // KeyFrame / FramedSession — a studio's session has a frame, and a form is born against it
 
 #include "backend/appData.h"
 #include "backend/databaseLayer/connectionPool.h"
@@ -161,7 +161,7 @@ TEST_F(MetadataMergeIds, ADataToolReadIntoTheApplication_ItsFormHoldsTheNewIds)
 {
 	ibSessionRegistry* const registry = ibApplicationInstance::GetSessionRegistry();
 	ASSERT_NE(registry, nullptr);
-	auto framed = std::make_shared<FramedSession>(wxT("metadata-merge-ids"), ibSessionKind::Designer);
+	auto framed = std::make_shared<FramedSession>(wxT("metadata-merge-ids"), ibSessionKind::Studio);
 	ibSession* const session = framed.get();
 	KeyFrame frame(registry->MintUnlisted(framed));
 	framed->Attach(&frame);
@@ -222,7 +222,7 @@ TEST_F(MetadataMergeIds, ADataToolReadIntoTheApplication_ItsFormHoldsTheNewIds)
 			original = dynamic_cast<ibValueMetaObjectDataTool*>(root->GetChild(idx));
 	ASSERT_NE(original, nullptr);
 
-	// Written to its file, as the designer's "save to file" does…
+	// Written to its file, as the studio's "save to file" does…
 	ASSERT_TRUE(std::make_shared<ibMetaDataDataTool>(cfg, original)->SaveToFile(ibString(m_file.wstring())));
 
 	// …and read back into the same application, as "read from file" does (ReadExternal): read on its own, copied, and
@@ -254,7 +254,7 @@ TEST_F(MetadataMergeIds, ADataToolReadIntoTheApplication_ItsFormHoldsTheNewIds)
 				<< "the copy's '" << child->GetName().ToStdString() << "' kept an id of the original";
 	}
 
-	// And its form holds them — taken as the designer's editor takes it (ibFormDesignView::LoadForm): from the compile
+	// And its form holds them — taken as the studio's editor takes it (ibFormDesignView::LoadForm): from the compile
 	// cache, built over its object.
 	ibCompileValueCache* const cache = cfg->GetCompileCache();
 	ASSERT_NE(cache, nullptr);
@@ -288,7 +288,7 @@ TEST_F(MetadataMergeIds, ADataToolReadIntoTheApplication_ItsFormHoldsTheNewIds)
 }
 
 // A file this build cannot read is refused in words that name it. A quiet false was a report opened in the application
-// with no tab and nothing said, and the designer's File → Open the same (2026-11-15): one saved before the kind-typed ids
+// with no tab and nothing said, and the studio's File → Open the same (2026-11-15): one saved before the kind-typed ids
 // keeps its tree under an id this build does not look for.
 TEST_F(MetadataMergeIds, AnExternalFileThisBuildCannotRead_IsRefusedInWords)
 {
@@ -314,7 +314,7 @@ TEST_F(MetadataMergeIds, AnExternalAnswersTheApplicationsReferenceByItsId)
 {
 	ibSessionRegistry* const registry = ibApplicationInstance::GetSessionRegistry();
 	ASSERT_NE(registry, nullptr);
-	auto framed = std::make_shared<FramedSession>(wxT("metadata-external-reference"), ibSessionKind::Designer);
+	auto framed = std::make_shared<FramedSession>(wxT("metadata-external-reference"), ibSessionKind::Studio);
 	ibSession* const session = framed.get();
 	KeyFrame frame(registry->MintUnlisted(framed));
 	framed->Attach(&frame);

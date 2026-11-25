@@ -2,7 +2,7 @@
 //	Description : ibChoiceLinkDescriptionMemory — a field's link by type and its choice parameters, read back;
 //	              ibChoicesDescriptionMemory — a switch's items, the same way.
 //
-// The thin designer edits them on the client and sends them back to the server as JSON. The JSON reader
+// The studio edits them on the client and sends them back to the server as JSON. The JSON reader
 // puts a member that is an object into the node's properties, where WriteNode put the path as a field;
 // these pin that a description survives that crossing.
 ////////////////////////////////////////////////////////////////////////////

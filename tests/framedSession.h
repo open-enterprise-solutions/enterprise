@@ -6,7 +6,7 @@
 // test's registry was never started — the request kept the session alive into the static teardown (ASan:
 // heap-use-after-free; macOS: mutex lock failed).
 //
-//   auto session = std::make_shared<FramedSession>(wxT("name"), ibSessionKind::Designer);
+//   auto session = std::make_shared<FramedSession>(wxT("name"), ibSessionKind::Studio);
 //   KeyFrame frame(ibApplicationInstance::GetSessionRegistry()->MintUnlisted(session));
 //   session->Attach(&frame);
 //   ibSessionScope scope(session.get());

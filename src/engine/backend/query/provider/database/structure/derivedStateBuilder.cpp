@@ -558,7 +558,7 @@ ibTotalsMaintenance MaintainTotals(const ibSchemaSnapshot& target, ibDatabaseCon
 		if (mismatched > 0)
 			out.m_mismatched += mismatched;
 
-		// FOLD regardless of the verdict. A disagreement is a question for the Designer's recompute
+		// FOLD regardless of the verdict. A disagreement is a question for the Studio's recompute
 		// command, not a reason to leave the table spread — the shards are wrong either way, and
 		// folding them changes nothing about that while still shrinking the read.
 		if (IsCollapsible(t)) {

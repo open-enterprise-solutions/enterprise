@@ -44,7 +44,7 @@ bool ibAccessObject::AccessRight(const ibRole* role, const ibRoleUserInfo& roleI
 	// DECLARES its own default where it is created (CreateRole(name, label, defValue) — allowed
 	// unless the declaration says otherwise). That default is what a user with no roles gets, and
 	// what a role that never had this particular right flipped in the editor contributes. Reading
-	// it off the role is also what makes the designer's checkbox and this gate agree: the editor
+	// it off the role is also what makes the studio's checkbox and this gate agree: the editor
 	// paints an unset right by calling right here.
 	const bool defValue = role->GetDefValue();
 	bool access = defValue;

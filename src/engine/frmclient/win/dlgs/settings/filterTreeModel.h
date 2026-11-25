@@ -120,7 +120,7 @@ public:
 	ibFilterDescription* GetFilter() const { return m_filter; }
 
 	// ⭐ SHOW THE LINES MARKED **Inaccessible**, or leave them out — see ibFilterEditor::SetAuthoring.
-	// True is the designer, where those lines are written; false is a reader, whom they are hidden
+	// True is the studio, where those lines are written; false is a reader, whom they are hidden
 	// from while still being applied. The enumeration below is the only place it is asked.
 	void SetAuthoring(bool authoring) { m_authoring = authoring; }
 
@@ -189,7 +189,7 @@ private:
 
 	ibFilterDescription* m_filter = nullptr;
 	const ibSettingsFieldTree* m_fields = nullptr;   // which fields are available — see GetFirstFetch
-	bool m_authoring = true;   // see SetAuthoring — the designer sees the inaccessible lines
+	bool m_authoring = true;   // see SetAuthoring — the studio sees the inaccessible lines
 	// Keyed by the PATH, not by an address: a node lives in a vector, and adding a
 	// sibling moves every one of them. The path is what a row IS.
 	mutable std::map<wxString, wxObjectDataPtr<ibFilterTreeNode>> m_nodes;

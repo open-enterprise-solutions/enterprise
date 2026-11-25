@@ -42,7 +42,7 @@ public:
 
 	ibValueLayout* GetLayout() const { return m_layout; }
 
-	// …and from the designer's copy blob, once the layout is of the pasted view (ibValueLayout::PasteData).
+	// …and from the studio's copy blob, once the layout is of the pasted view (ibValueLayout::PasteData).
 	bool PasteData(const ibDataNode& node) { return PasteProperty(node); }
 
 	// The child of a view; null for a view this build does not know.
@@ -84,7 +84,7 @@ public:
 
 protected:
 
-	// The designer's paste makes the layout of the pasted view first.
+	// The studio's paste makes the layout of the pasted view first.
 	virtual bool PasteData(const ibDataNode& node) override;
 
 private:

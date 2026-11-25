@@ -58,7 +58,7 @@ ibDebuggerServer* DebugServer()
 
 ibDebuggerClient* DebugClient()
 {
-	// Same chain as DebugServer — designer's debug client also lives
+	// Same chain as DebugServer — studio's debug client also lives
 	// on metadata. TODO: chain through ActiveMetaData()->GetDebugClient().
 	return nullptr;
 }

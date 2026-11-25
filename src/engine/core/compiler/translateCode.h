@@ -354,7 +354,7 @@ public:
 
 	// THE SYNTAX THE TEXT IS WRITTEN IN — the owner's to say: the session's compile state holds it
 	// (ibCompileState), and whoever reads a text of that session gives it to the constructor. An owner that
-	// lives across texts (the compiler, the editor) says it again here before lexing — the designer may
+	// lives across texts (the compiler, the editor) says it again here before lexing — the studio may
 	// have switched it since. It decides which words are keywords (IsAllowedKey).
 	void SetCodeStyle(short codeStyle) { m_codeStyle = codeStyle; }
 	short GetCodeStyle() const { return m_codeStyle; }

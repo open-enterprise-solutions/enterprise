@@ -3,7 +3,7 @@
 
 // The variant payload of a schedule property — an ibJobScheduleDescription living INSIDE the
 // variant, never beside it (docs/private/property-system.md § 3). That is what enrols a schedule in all
-// five property surfaces at once: the designer editor, script, serialization, clipboard and the
+// five property surfaces at once: the studio editor, script, serialization, clipboard and the
 // application diff.
 //
 // Eq() is what makes the diff work, and it is one line because the description already has value

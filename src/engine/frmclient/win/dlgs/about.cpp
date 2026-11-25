@@ -1,162 +1,159 @@
 #include "about.h"
 
-#include "protocol/protocol.h"
-#include "frmclient/win/picture.h"
-#include "deskgui/univ/ctrl/staticBox.h"
+#include <wx/clipbrd.h>
 
-static const wxString s_strContributors =
-	wxT("wxWidgets and wxFormBuilder, Unknown Worlds Entertaiment team\n")
-	wxT("2C team, whose ideas were taken as the basis for building the interpreter\n")
-	wxT("Tomasz Sowa which developed ttmath\n")
-	wxT("And also everyone who was not mentioned here");
+#include "protocol/protocol.h"
+#include "frmclient/backend/appData.h"   // StudioMode — which of the two programs this is
+#include "frmclient/win/picture.h"
+#include "deskgui/univ/ctrl/button.h"
+#include "deskgui/univ/ctrl/staticBitmap.h"
+#include "deskgui/univ/ctrl/staticLine.h"
+#include "deskgui/univ/ctrl/staticText.h"
+#include "deskgui/univ/ctrl/textCtrl.h"
 
 namespace {
 
-// Compact read-only value field: no border - a label the user can copy text
-// out of, on the dialog's colour (ibTextCtrl::HasContentBackground); fills
-// the 2nd column of the info grid.
-ibTextCtrl* AddInfoRow(wxWindow* parent, wxFlexGridSizer* grid, const wxString& label, const wxString& value)
-{
-	ibStaticText* lbl = new ibStaticText(parent, wxID_ANY, label + wxT(":"));
-	grid->Add(lbl, 0, wxALIGN_CENTER_VERTICAL);
+// WHAT THE PLATFORM IS BUILT ON — NOTICE.md's components the desktop carries, its drawing and its code editor first.
+// Names, as their projects say them; the dot between them is UTF-8, said in bytes so the source stays ASCII.
+const char* const s_builtOn =
+	"wxWidgets \xC2\xB7 Scintilla \xC2\xB7 Mbed TLS \xC2\xB7 Asio \xC2\xB7 llhttp \xC2\xB7 Expat\n"
+	"LodePNG \xC2\xB7 lunasvg \xC2\xB7 SQLite \xC2\xB7 Firebird \xC2\xB7 PostgreSQL";
 
-	ibTextCtrl* field = new ibTextCtrl(parent, wxID_ANY, value,
-		wxDefaultPosition, wxDefaultSize, wxTE_READONLY | wxBORDER_NONE);
+const char* const s_licence = "\xC2\xA9 2026 Open Enterprise Solutions \xC2\xB7 PolyForm Noncommercial 1.0.0";
+
+const char* const s_project = "https://github.com/open-enterprise-solutions/enterprise";
+
+// A FACT'S ROW: its name, and the value as a borderless read-only field the text can be copied out of
+// (ibTextCtrl::HasContentBackground — on the dialog's colour), as wide as its text; an empty value is a dash. The line
+// goes to the facts Copy hands on.
+void AddFact(wxWindow* parent, wxFlexGridSizer* grid, wxString& facts, const wxString& label, const wxString& value)
+{
+	const wxString shown = !value.IsEmpty() ? value : wxString::FromUTF8("\xE2\x80\x94");
+	grid->Add(new ibStaticText(parent, wxID_ANY, label), 0, wxALIGN_CENTER_VERTICAL);
+
+	ibTextCtrl* field = new ibTextCtrl(parent, wxID_ANY, shown, wxDefaultPosition, wxDefaultSize,
+		wxTE_READONLY | wxBORDER_NONE);
+	field->SetMinSize(wxSize(field->GetTextExtent(shown).x + parent->FromDIP(8), -1));
 	grid->Add(field, 1, wxEXPAND);
 
-	return field;
+	facts << label << wxT(": ") << shown << wxT("\n");
 }
 
 } // namespace
 
 ibDialogAbout::ibDialogAbout(wxWindow* parent, const ibProtocolNode& shown, int id)
-	: ibDialog(parent, id, _("About..."), wxDefaultPosition, wxDefaultSize,
-		wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER)
+	: ibDialog(parent, id, wxEmptyString, wxDefaultPosition, wxDefaultSize, wxDEFAULT_DIALOG_STYLE)
 {
-	// System font so the dialog looks native on each platform/theme.
-	const wxFont sysFont = wxSystemSettings::GetFont(wxSYS_DEFAULT_GUI_FONT);
-	wxFont headerFont = sysFont; headerFont.SetPointSize(sysFont.GetPointSize() + 2); headerFont.MakeBold();
-	wxFont linkFont = sysFont; linkFont.MakeItalic();
+	// WHICH PROGRAM — the studio or the workspace, as the frame logged in; the brand is not translated.
+	const wxString program = wxT("OES ") + (appData->StudioMode() ? _("Application Studio") : _("Application Workspace"));
+	SetTitle(wxString::Format(_("About %s"), program));
 
-	const int kPad = FromDIP(4);
-	const int kRowGap = FromDIP(2);
+	// The platform's version and its build — the server's, the engine a report names.
+	const wxString version = wxString::Format(_("Version %s, build %d"),
+		shown.GetString(ibProtocol::ibSchema::ibAbout::Version),
+		static_cast<int>(shown.GetInt(ibProtocol::ibSchema::ibAbout::Build)));
+
+	const wxFont font = wxSystemSettings::GetFont(wxSYS_DEFAULT_GUI_FONT);
+	wxFont programFont = font;
+	programFont.SetPointSize(font.GetPointSize() + 5);
+	programFont.MakeBold();
+
+	const int pad = FromDIP(6);
+	const int gap = FromDIP(2);
 
 	wxBoxSizer* root = new wxBoxSizer(wxVERTICAL);
 
-	// --- Header block (title, subtitle, copyright link) ---
-	m_staticTextHeader = new ibStaticText(this, wxID_ANY,
-		wxString::Format(wxT("Open Enterprise Solutions, build %lld"), shown.GetInt(ibProtocol::ibSchema::ibAbout::Build)),
-		wxDefaultPosition, wxDefaultSize, wxALIGN_CENTER_HORIZONTAL);
-	m_staticTextHeader->SetFont(headerFont);
-	root->Add(m_staticTextHeader, 0, wxEXPAND | wxTOP | wxLEFT | wxRIGHT, kPad * 2);
+	// --- The program beside the logo ---
+	wxBoxSizer* head = new wxBoxSizer(wxHORIZONTAL);
+	const wxBitmap logo = ibProtocolPicture(shown, ibProtocol::ibSchema::ibAbout::Picture, 48);
+	if (logo.IsOk()) {
+		const wxBitmapBundle logos = wxBitmapBundle::FromBitmaps(logo,
+			ibProtocolPicture(shown, ibProtocol::ibSchema::ibAbout::Picture, 96));
+		head->Add(new ibStaticBitmap(this, wxID_ANY, logos), 0, wxALIGN_TOP | wxRIGHT, pad * 2);
+	}
+	wxBoxSizer* title = new wxBoxSizer(wxVERTICAL);
+	ibStaticText* programText = new ibStaticText(this, wxID_ANY, program);
+	programText->SetFont(programFont);
+	title->Add(programText);
+	title->Add(new ibStaticText(this, wxID_ANY, version), 0, wxTOP, gap);
+	title->Add(new ibStaticText(this, wxID_ANY, _("Business applications from metadata and a language of their own")),
+		0, wxTOP, pad);
+	head->Add(title, 1, wxALIGN_CENTER_VERTICAL);
+	root->Add(head, 0, wxEXPAND | wxALL, pad * 2);
 
-	m_staticTextFramework = new ibStaticText(this, wxID_ANY,
-		wxT("a RAD tool powered by wxWidgets framework"),
-		wxDefaultPosition, wxDefaultSize, wxALIGN_CENTER_HORIZONTAL);
-	root->Add(m_staticTextFramework, 0, wxEXPAND | wxLEFT | wxRIGHT | wxTOP, kPad);
+	root->Add(new ibStaticLine(this, wxID_ANY), 0, wxEXPAND | wxLEFT | wxRIGHT, pad * 2);
 
-	m_staticTextCommunity = new ibStaticText(this, wxID_ANY,
-		wxT("(c) 2026 OES community"),
-		wxDefaultPosition, wxDefaultSize, wxALIGN_CENTER_HORIZONTAL);
-	m_staticTextCommunity->SetFont(linkFont);
-	m_staticTextCommunity->SetHyperlink();
-	m_staticTextCommunity->Bind(wxEVT_BUTTON,
-		[](wxCommandEvent&) {
-			wxLaunchDefaultBrowser(wxT("https://github.com/open-enterprise-solutions/enterprise"));
-		});
-	root->Add(m_staticTextCommunity, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, kPad);
-
-	m_staticlineHeader = new ibStaticLine(this, wxID_ANY);
-	root->Add(m_staticlineHeader, 0, wxEXPAND | wxLEFT | wxRIGHT, kPad);
-
-	// --- Info block: 2-col flex grid (label | value) ---
-	ibStaticBoxSizer* infoSizer = new ibStaticBoxSizer(
-		new ibStaticBox(this, wxID_ANY, _("Info")), wxVERTICAL);
-	wxWindow* infoHost = infoSizer->GetStaticBox();
-
-	wxFlexGridSizer* grid = new wxFlexGridSizer(/*rows*/0, /*cols*/2, kRowGap, kPad * 2);
+	// --- The facts: the base (none, no row), the connection, the person, the language, this computer, the plugins
+	// loaded (a row only when there are any) ---
+	m_facts << program << wxT("\n") << version << wxT("\n");
+	wxFlexGridSizer* grid = new wxFlexGridSizer(0, 2, gap, pad * 2);
 	grid->AddGrowableCol(1, 1);
 
-	const wxString database = shown.GetString(ibProtocol::ibSchema::ibAbout::Database);   // empty — no base
-	m_textCtrl1 = !database.IsEmpty() ? AddInfoRow(infoHost, grid, _("Database"), database) : nullptr;
+	const wxString database = shown.GetString(ibProtocol::ibSchema::ibAbout::Database);
+	if (!database.IsEmpty())
+		AddFact(this, grid, m_facts, _("Database"), database);
+	AddFact(this, grid, m_facts, _("Connection"), shown.GetString(ibProtocol::ibSchema::ibAbout::Program));
+	AddFact(this, grid, m_facts, _("User"), shown.GetString(ibProtocol::ibSchema::ibAbout::User));
+	AddFact(this, grid, m_facts, _("Language"), shown.GetString(ibProtocol::ibSchema::ibAbout::Locale));
+	AddFact(this, grid, m_facts, _("System"), wxGetOsDescription());
 
-	m_textCtrl2 = AddInfoRow(infoHost, grid, _("Program"), shown.GetString(ibProtocol::ibSchema::ibAbout::Program));
-	m_textCtrl3 = AddInfoRow(infoHost, grid, _("User"),        shown.GetString(ibProtocol::ibSchema::ibAbout::User));
-	m_textCtrl4 = AddInfoRow(infoHost, grid, _("Locale"),      shown.GetString(ibProtocol::ibSchema::ibAbout::Locale));
-
-	infoSizer->Add(grid, 0, wxEXPAND | wxALL, kPad);
-	root->Add(infoSizer, 0, wxEXPAND | wxLEFT | wxRIGHT | wxTOP, kPad);
-
-	// --- Plugins block: only if any are loaded; otherwise skip entirely ---
-	{
-		const std::vector<ibProtocolNode> plugins = shown.FindChild(ibProtocol::ibSchema::ibAbout::Plugins).Children();
-		if (!plugins.empty()) {
-
-			ibStaticBoxSizer* pluginsSizer = new ibStaticBoxSizer(
-				new ibStaticBox(this, wxID_ANY, _("Plugins")), wxVERTICAL);
-
-			wxString text;
-			for (const ibProtocolNode& p : plugins) {
-				text << p.GetString(ibProtocol::ibSchema::ibAbout::Name)
-					<< wxT("  ")
-					<< p.GetString(ibProtocol::ibSchema::ibAbout::Version)
-					<< wxT("\n");
-			}
-			if (!text.empty() && text.Last() == wxT('\n'))
-				text.RemoveLast();
-
-			ibTextCtrl* list = new ibTextCtrl(pluginsSizer->GetStaticBox(), wxID_ANY,
-				text, wxDefaultPosition, FromDIP(wxSize(-1, 48)),
-				wxTE_MULTILINE | wxTE_READONLY | wxBORDER_NONE);
-			pluginsSizer->Add(list, 1, wxEXPAND | wxALL, kPad);
-
-			root->Add(pluginsSizer, 0, wxEXPAND | wxLEFT | wxRIGHT | wxTOP, kPad);
-		}
+	wxString plugins;
+	for (const ibProtocolNode& plugin : shown.FindChild(ibProtocol::ibSchema::ibAbout::Plugins).Children()) {
+		if (!plugins.IsEmpty())
+			plugins << wxT(", ");
+		plugins << plugin.GetString(ibProtocol::ibSchema::ibAbout::Name) << wxT(" ")
+			<< plugin.GetString(ibProtocol::ibSchema::ibAbout::Version);
 	}
+	if (!plugins.IsEmpty())
+		AddFact(this, grid, m_facts, _("Plugins"), plugins);
+	m_facts.Trim();
 
-	// --- Thanks block ---
-	ibStaticBoxSizer* thanksSizer = new ibStaticBoxSizer(
-		new ibStaticBox(this, wxID_ANY, _("Thanks")), wxVERTICAL);
-	m_staticTextThanks = nullptr;
+	root->Add(grid, 0, wxEXPAND | wxALL, pad * 2);
 
-	m_textCtrlContributors = new ibTextCtrl(thanksSizer->GetStaticBox(), wxID_ANY,
-		s_strContributors, wxDefaultPosition, FromDIP(wxSize(-1, 64)),
-		wxTE_MULTILINE | wxTE_READONLY | wxBORDER_NONE);
-	thanksSizer->Add(m_textCtrlContributors, 1, wxEXPAND | wxALL, kPad);
+	root->Add(new ibStaticLine(this, wxID_ANY), 0, wxEXPAND | wxLEFT | wxRIGHT, pad * 2);
 
-	root->Add(thanksSizer, 1, wxEXPAND | wxLEFT | wxRIGHT | wxTOP, kPad);
+	// --- What it is built on, whose ideas it grew from, the licence and where the project lives ---
+	wxBoxSizer* credits = new wxBoxSizer(wxVERTICAL);
+	ibStaticText* builtOnCaption = new ibStaticText(this, wxID_ANY, _("Built on"));
+	builtOnCaption->SetFont(font.Bold());
+	credits->Add(builtOnCaption);
+	credits->Add(new ibStaticText(this, wxID_ANY, wxString::FromUTF8(s_builtOn)), 0, wxTOP, gap);
+	credits->Add(new ibStaticText(this, wxID_ANY,
+		_("Grown from wxFormBuilder (the form editor) and the ideas of 2C (the interpreter)")), 0, wxTOP, pad);
+	credits->Add(new ibStaticText(this, wxID_ANY, wxString::FromUTF8(s_licence)), 0, wxTOP, pad);
 
-	// --- OK button, right-aligned ---
-	ibStdDialogButtonSizer* btns = new ibStdDialogButtonSizer();
-	m_buttonOK = new ibButton(this, wxID_OK);
-	btns->AddButton(m_buttonOK);
-	btns->Realize();
-	root->Add(btns, 0, wxALIGN_RIGHT | wxALL, kPad * 2);
+	ibStaticText* link = new ibStaticText(this, wxID_ANY, wxT("github.com/open-enterprise-solutions/enterprise"));
+	link->SetHyperlink();
+	link->Bind(wxEVT_BUTTON, [](wxCommandEvent&) { wxLaunchDefaultBrowser(s_project); });
+	credits->Add(link, 0, wxTOP, gap);
 
-	SetSizer(root);
+	root->Add(credits, 0, wxEXPAND | wxALL, pad * 2);
 
-	// Fit to content first, then enforce a sensible minimum width so the
-	// header and copyright lines don't wrap on a short translation.
-	root->SetSizeHints(this);
-	const wxSize minSize = FromDIP(wxSize(440, -1));
-	if (GetSize().x < minSize.x)
-		SetSize(minSize.x, GetSize().y);
+	// --- Copy, OK ---
+	wxBoxSizer* buttons = new wxBoxSizer(wxHORIZONTAL);
+	buttons->AddStretchSpacer();
+	ibButton* copy = new ibButton(this, wxID_ANY, _("Copy"));
+	copy->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
+		if (wxTheClipboard->Open()) {
+			wxTheClipboard->SetData(new wxTextDataObject(m_facts));
+			wxTheClipboard->Close();
+		}
+	});
+	buttons->Add(copy, 0, wxRIGHT, pad);
+	ibButton* ok = new ibButton(this, wxID_OK);
+	ok->SetDefault();
+	buttons->Add(ok);
+	root->Add(buttons, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, pad * 2);
 
+	SetSizerAndFit(root);
 	Centre(wxBOTH);
 
-	const wxBitmap picture = ibProtocolPicture(shown, ibProtocol::ibSchema::ibAbout::Picture);
-	if (picture.IsOk()) {
-		wxIcon dlg_icon;
-		dlg_icon.CopyFromBitmap(picture);
-		SetIcon(dlg_icon);
+	// The title bar's icon — the same picture.
+	const wxBitmap icon = ibProtocolPicture(shown, ibProtocol::ibSchema::ibAbout::Picture);
+	if (icon.IsOk()) {
+		wxIcon dialogIcon;
+		dialogIcon.CopyFromBitmap(icon);
+		SetIcon(dialogIcon);
 	}
-	SetFocus();
-
-	// Suppress the unused-member warning — m_staticDataBaseInfo/m_staticAppInfo/
-	// m_staticUserInfo/m_staticLocaleInfo are declared in the header but the
-	// labels are now local (added via AddInfoRow) to keep the layout compact.
-	m_staticDataBaseInfo = nullptr;
-	m_staticAppInfo = nullptr;
-	m_staticUserInfo = nullptr;
-	m_staticLocaleInfo = nullptr;
+	ok->SetFocus();
 }

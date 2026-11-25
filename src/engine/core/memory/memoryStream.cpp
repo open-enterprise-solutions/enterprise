@@ -122,7 +122,7 @@ void	ibReaderMemory::r(void* p, int cnt) const
 {
 	// 🛑 REFUSES INSTEAD OF SAYING SO AND READING ANYWAY. This was a ibASSERT followed by the copy:
 	// the assert is a line in the journal and nothing else, so an over-read was ANNOUNCED and then
-	// performed, leaving m_pos past m_size for whoever read next. That is how the designer died on
+	// performed, leaving m_pos past m_size for whoever read next. That is how the studio died on
 	// 2026-09-23 while it was debugging - two asserts from one worker thread at 01:36:38 (this line
 	// and advance's), and a second later the same thread walked off the end of the page inside
 	// memcpy: access violation, 348 MB of dump, and a stack that named nothing because the binary
@@ -188,7 +188,7 @@ std::uint64_t ibReaderMemory::find_chunk(std::uint64_t ID, bool* bCompressed) co
 				// ⚠ A SIZE THAT DOES NOT FIT IS NOT A CHUNK TO STEP OVER. A block of another format (a base
 				// written before the application's layout changed) reads as a header with any number in
 				// it; stepped over, the reader landed past its own end and stayed there (advance only
-				// ASSERTS), and the next read walked off the page — the designer died opening an old base
+				// ASSERTS), and the next read walked off the page — the studio died opening an old base
 				// (2026-09-27). Not the chunk sought, and nothing after it can be trusted: not found.
 				if (dwSize > (std::uint64_t)elapsed())
 					break;
@@ -272,7 +272,7 @@ ibReaderMemory* ibReaderMemory::open_chunk_iterator(std::uint64_t& ID, ibReaderM
 	// there; the ITERATOR never did, and an iterator is what walks a frame that arrived over a wire.
 	// Refusing here is what keeps the difference between "declared" and "present" visible: by the
 	// time the over-read happens it reads as a crash inside memcpy, subsystems away from the frame
-	// that lied (2026-09-23, the designer, while it was debugging).
+	// that lied (2026-09-23, the studio, while it was debugging).
 	if (_size > (std::uint64_t)elapsed())
 		ibCoreException::Error(
 			_("Chunk %llu declares %llu bytes, and %i are left in the block"),

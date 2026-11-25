@@ -56,7 +56,7 @@ struct ibSettingsPlainField {
 std::vector<ibSettingsPlainField> ibReadSettingsFields(const class ibProtocolNode& fields);
 
 // ⭐⭐ WHAT A FIELD READS AS — one rule for every settings surface (the tree, its picker, the lists beside it, a filter's
-// side): THE DESIGNER WORKS WITH NAMES, THE ENTERPRISE SHOWS A PERSON THE SYNONYM (Max, 2026-11-14). `path` is what the
+// side): THE STUDIO WORKS WITH NAMES, THE ENTERPRISE SHOWS A PERSON THE SYNONYM (Max, 2026-11-14). `path` is what the
 // field stores, `presentation` its readable spelling — shown where it names every hop the path does: one that lost a
 // prefix on the way would hide that the value is reached through the dot (Max, 2026-09-25), so the path answers.
 // What is SHOWN only — a presentation a pick stores (a filter's side) stays what it is.

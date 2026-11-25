@@ -19,11 +19,11 @@
 #include "deskgui/univ/ctrl/staticText.h"
 #include "deskgui/univ/dialog.h"
 
-// ⭐ THE LAUNCHER'S PICTURES — the desktop's, as the designer and the running application draw them: a desktop program
+// ⭐ THE LAUNCHER'S PICTURES — the desktop's, as the studio and the workspace draw them: a desktop program
 // like them, it is answered by the same art providers (the core's stock pictures, the theme's), so it names their ids
-// where it has their act, takes the core's application for the designer, and draws only the web client's globe, its own
+// where it has their act, takes the core's application for the studio, and draws only the web client's globe, its own
 // (launcher_res.cpp).
-enum class ibLauncherPicture { Enterprise, Designer, Web, Add, Edit, Delete, Exit };
+enum class ibLauncherPicture { Workspace, Studio, Web, Add, Edit, Delete, Exit };
 wxBitmapBundle ibGetLauncherPicture(ibLauncherPicture which);
 
 // HOW A BASE IS REACHED — the three a client knows: a file base, opened in its own process; a base of the server
@@ -49,8 +49,8 @@ class ibDialogLauncher : public ibDialog {
 
 	ibListBox* m_listIBwnd;
 	ibStaticText* m_staticDBName;
-	ibButton* m_buttonEnterprise;
-	ibButton* m_buttonDesigner;
+	ibButton* m_buttonWorkspace;
+	ibButton* m_buttonStudio;
 	ibButton* m_buttonWeb;
 	ibButton* m_buttonAdd;
 	ibButton* m_buttonEdit;
@@ -73,8 +73,8 @@ protected:
 	void OnSelectedList(wxCommandEvent& event);
 	void OnSelectedDClickList(wxCommandEvent& event);
 
-	void OnButtonEnterprise(wxCommandEvent& event);
-	void OnButtonDesigner(wxCommandEvent& event);
+	void OnButtonWorkspace(wxCommandEvent& event);
+	void OnButtonStudio(wxCommandEvent& event);
 	void OnButtonWeb(wxCommandEvent& event);
 
 	void OnButtonAdd(wxCommandEvent& event);
@@ -86,7 +86,7 @@ protected:
 
 private:
 
-	// Start the application `appName` (enterprise, designer) on the selected base and close — or, when it could
+	// Start the application `appName` (appworkspace, appstudio) on the selected base and close — or, when it could
 	// not be started, say so and STAY: the launcher closing either way made a failed start look exactly like a
 	// click that did nothing.
 	void StartApplication(const wxString& appName);

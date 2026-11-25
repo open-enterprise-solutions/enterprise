@@ -40,7 +40,7 @@ public:
 	// and at once the frame of the client's mode — the session's way to the person, there before anything of the login
 	// runs, so what the login's compile says reaches the frame's error window (BackendError) as a failure of the start
 	// does (Max, 2026-11-13: "it must be made at once, ready to pass messages to the other side"). False: no session,
-	// or no frame of that mode. Throws (ibCoreException) what refuses a session before any login — another designer at
+	// or no frame of that mode. Throws (ibCoreException) what refuses a session before any login — another studio at
 	// work — so the person is told why, not asked to log in again.
 	bool CreateSession();
 

@@ -71,7 +71,7 @@ public:
 		};
 	public:
 
-		// A column is an EDITABLE property object (Name + Caption + Type surface in the designer inspector
+		// A column is an EDITABLE property object (Name + Caption + Type surface in the studio inspector
 		// when a column tree-node is selected) AND a source-column descriptor (ibBackendSourceColumn — the
 		// ABSTRACT source column, NOT a QueryColumn: a value-table pulls from RAM, it is not a DB query like
 		// the dynamic list) so the bound tablebox reads its header / type through the SAME explorer ->

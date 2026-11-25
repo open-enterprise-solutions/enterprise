@@ -9,7 +9,7 @@
 class FRMSERVER_API ibSchemaMcpServer : public ibClientSchema {
 public:
 
-	// ⭐ WHO THE ASSISTANT IS THERE FOR: whoever is in the designer; in the application, whose roles give it
+	// ⭐ WHO THE ASSISTANT IS THERE FOR: whoever is in the studio; in the application, whose roles give it
 	// (AccessRight_Assistant). The right a menu item asks and the right a channel to it asks (ibClientHost::Mcp).
 	virtual bool AccessRight(const ibSession& session) const override;
 

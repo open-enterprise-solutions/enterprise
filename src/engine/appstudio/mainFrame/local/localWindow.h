@@ -14,7 +14,7 @@ class ibLocalWindow : public ibPanel {
 	ibListCtrl* m_treeCtrl;
 private:
 	ibLocalWindow(wxWindow* parent, int id = wxID_ANY);
-	friend class ibFrontendMainFrameDesigner;
+	friend class ibFrontendMainFrameStudio;
 public:
 
 	virtual ~ibLocalWindow();

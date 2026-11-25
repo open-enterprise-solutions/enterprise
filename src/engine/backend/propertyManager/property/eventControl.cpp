@@ -13,13 +13,13 @@ ibEventDispatcher* ibEventControl::GetDispatcher() const
 	if (ibValueFunction* fn = AsFunction(&m_dispatcherValue))
 		return fn;   // a lambda -> its own dispatcher (implicit upcast ibValueFunction* -> ibEventDispatcher*)
 
-	// Nothing assigned in the designer -> the event is UNDEFINED -> no dispatcher. nullptr IS the "not set"
+	// Nothing assigned in the studio -> the event is UNDEFINED -> no dispatcher. nullptr IS the "not set"
 	// signal the fire site reads (CallAsEvent: null -> no-op, the event just proceeds). We must NOT fabricate
 	// an empty named event here — that's what made GetDispatcher never return null (leaning on a later IsEmpty).
 	if (IsEmptyProperty())
 		return nullptr;
 
-	// A named event set in the designer: materialise it ONCE from the stored name, cached in m_dispatcherValue.
+	// A named event set in the studio: materialise it ONCE from the stored name, cached in m_dispatcherValue.
 	// A non-throwing probe (dynamic_cast on the resolved ref), NOT ConvertToType — the controlled cast THROWS
 	// ibScriptError_TypeOperation on the empty first-fire value; "not built yet" must read as nullptr, not an exception.
 	ibValueEvent* ev = dynamic_cast<ibValueEvent*>(m_dispatcherValue.GetRef());

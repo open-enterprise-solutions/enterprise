@@ -2,7 +2,7 @@
 // Loader error records.
 //
 // LoadHelpCorpus() is non-throwing — bad JSON in production must never
-// crash Designer startup or unwind a cpp-httplib handler. Errors are
+// crash Studio startup or unwind a cpp-httplib handler. Errors are
 // returned as a collection alongside the (possibly partial) corpus.
 //
 // Severity model:

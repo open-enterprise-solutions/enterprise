@@ -1,8 +1,8 @@
 ﻿////////////////////////////////////////////////////////////////////////////
-//	Description : the conversation tools — talking to the person at the designer
+//	Description : the conversation tools — talking to the person at the studio
 ////////////////////////////////////////////////////////////////////////////
 //
-// The designer has a window where a person writes. The platform cannot call a
+// The studio has a window where a person writes. The platform cannot call a
 // model — no outbound TLS, no key, and neither belongs in an ERP engine — but
 // whoever is CONNECTED can. So the exchange is turned around: what was typed
 // waits in the server, the connected assistant collects it with one tool and
@@ -66,7 +66,7 @@ public:
 
 	ibString GetDescription() const override
 	{
-		return ibMcpText("Collect what the person at the designer has written in the assistant window, and "
+		return ibMcpText("Collect what the person at the studio has written in the assistant window, and "
 			"what has HAPPENED in their application while you were not looking. Answers empty "
 			"lists when there is nothing new. Taking REMOVES both from the queue, so ask once and "
 			"answer what you got - chat_history reads the whole conversation back without "
@@ -119,7 +119,7 @@ public:
 
 	ibString GetDescription() const override
 	{
-		return ibMcpText("Say something to the person at the designer - it appears in their assistant "
+		return ibMcpText("Say something to the person at the studio - it appears in their assistant "
 			"window. Write for a person: what you did and what you propose, not the shape of "
 			"the calls you made. Markdown is rendered.");
 	}
@@ -163,7 +163,7 @@ MCP_TOOL_REGISTER(ibMcpToolChatSay);
 // So the exchange is kept beside the queue, and this is the reading end of it. Ask it when you
 // join a conversation already in progress, or after anything that lost your place.
 //
-// ⚠ THIS SESSION ONLY. It lives with the server and goes when the designer does. Persisting it
+// ⚠ THIS SESSION ONLY. It lives with the server and goes when the studio does. Persisting it
 // needs somewhere to put it and a decision about how long it is kept — saying "history" and
 // quietly meaning "since this morning" would be worse than saying so.
 //
@@ -181,11 +181,11 @@ public:
 
 	ibString GetDescription() const override
 	{
-		return ibMcpText("The whole conversation with the person at the designer, oldest first, WITHOUT "
+		return ibMcpText("The whole conversation with the person at the studio, oldest first, WITHOUT "
 			"collecting anything - chat_take empties its queue, this does not. Read it when you "
 			"connect, or whenever you need the context of what was already discussed: what they "
 			"asked for earlier is usually why the application looks the way it does. Covers "
-			"this run of the designer only.");
+			"this run of the studio only.");
 	}
 
 	const std::vector<ibMcpArgument>& Arguments() const override
@@ -230,7 +230,7 @@ public:
 
 		if (conversation.empty())
 			result.SetValue(ibT("note"),
-				ibMcpText("Nothing has been said yet in this run of the designer."));
+				ibMcpText("Nothing has been said yet in this run of the studio."));
 
 		return true;
 	}

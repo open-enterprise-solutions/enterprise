@@ -1,5 +1,5 @@
 ﻿/////////////////////////////////////////////////////////////////////////////
-// Syntax-helper sidebar panel for Designer.
+// Syntax-helper sidebar panel for Studio.
 //
 // One panel widget containing:
 //   - top: wxNotebook with three tabs (Contents / Index / Search) that

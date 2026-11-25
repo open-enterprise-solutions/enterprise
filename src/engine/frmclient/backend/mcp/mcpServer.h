@@ -41,7 +41,7 @@ struct ibMcpSettings {
 // port (the key) and from where (the Origin) are asked here, before anything is sent.
 //
 // THE SETTINGS LIE ON THIS MACHINE, as the rest of a window's (wxConfig), each person's their own — the port is here, and
-// so is whoever connects to it. The designer and the application keep them apart: open together, they take two ports.
+// so is whoever connects to it. The studio and the application keep them apart: open together, they take two ports.
 class FRMCLIENT_API ibMcpServer {
 public:
 
@@ -53,7 +53,7 @@ public:
 	void Receive();
 	void Receive(const ibProtocolNode& shown) { m_shown = shown; }
 
-	// The designer's, or their roles give it. Not — the schema refused.
+	// The studio's, or their roles give it. Not — the schema refused.
 	bool IsAllowed() const;
 
 	// The settings of this mode on this machine. Saved — what the next Start takes; a running port is not moved by it.

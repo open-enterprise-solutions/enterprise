@@ -13,7 +13,7 @@
 #include "backend/choiceLinkResolver.h"      // what narrows a choice, put on the list before it is shown
 
 #include "backend/metaCollection/partial/reference/reference.h"
-#include "backend/metaCollection/partial/declaredPresentation.h"   // how a reference reads in the designer
+#include "backend/metaCollection/partial/declaredPresentation.h"   // how a reference reads in the studio
 #include "backend/system/value/composition/valueComposerField.h"   // ibMaterializeCompositionValue - a declared line's cell, made live
 #include "backend/metadataSerialization.h"                         // ibDeserializeValue - that cell, read with its application
 
@@ -460,7 +460,7 @@ ibValue ibValueMetaObjectRecordDataRef::GenerateIdentifier(const ibNumber& count
 
 	if (attribute->ContainType(ibValueTypes::TYPE_STRING)) {
 		// "<prefix><zero-padded number>" — width derived from the attribute's length.
-		// Defensive else: if length was shrunk in the designer below
+		// Defensive else: if length was shrunk in the studio below
 		// what the prefix already takes, drop the prefix and pad the
 		// number to prefix-width so the output keeps a stable size.
 		// Uses ibNumber::Format directly — no int64 cap, big counters OK.
@@ -574,7 +574,7 @@ bool ibValueMetaObjectRecordDataEnumRef::OnAfterCloseMetaObject()
 	return ibValueMetaObjectRecordDataRef::OnAfterCloseMetaObject();
 }
 
-// ⭐ AN ENUMERATION MEMBER IS DECLARED, NOT STORED — in the designer it reads as it is written,
+// ⭐ AN ENUMERATION MEMBER IS DECLARED, NOT STORED — in the studio it reads as it is written,
 // `EnumRef.Kinds.Retail`, and at run time as the synonym a person put on it. A guid that names no
 // member is `false`: there is nothing to read, which is not the same as reading as nothing.
 bool ibValueMetaObjectRecordDataEnumRef::GenerateDataDesc(const ibValueDataObject* objValue,
@@ -583,8 +583,8 @@ bool ibValueMetaObjectRecordDataEnumRef::GenerateDataDesc(const ibValueDataObjec
 	if (objValue == nullptr)
 		return false;
 
-	const bool designer = appData->DesignerMode();
-	if (designer) {
+	const bool studio = appData->StudioMode();
+	if (studio) {
 		const ibString empty = ibDeclaredEmptyRef(this, objValue->GetGuid());
 		if (!empty.IsEmpty()) {
 			out = empty;
@@ -594,7 +594,7 @@ bool ibValueMetaObjectRecordDataEnumRef::GenerateDataDesc(const ibValueDataObjec
 
 	for (auto obj : GetEnumObjectArray()) {
 		if (obj != nullptr && objValue->GetGuid() == obj->GetGuid()) {
-			out = designer
+			out = studio
 				? ibDeclaredTypeName(this) + ibT(".") + obj->GetName()
 				: obj->GetSynonym();
 			return true;
@@ -972,7 +972,7 @@ bool ibValueMetaObjectRecordDataRecorderRef::GenerateDataDesc(const ibValueDataO
 	if (objValue == nullptr)
 		return false;
 
-	if (appData->DesignerMode()) {
+	if (appData->StudioMode()) {
 		const ibString empty = ibDeclaredEmptyRef(this, objValue->GetGuid());
 		if (!empty.IsEmpty()) {
 			out = empty;
@@ -1057,10 +1057,10 @@ bool ibValueMetaObjectRecordDataHierarchyMutableRef::GenerateDataDesc(const ibVa
 	if (objValue == nullptr)
 		return false;
 
-	// ⭐⭐ IN THE DESIGNER A REFERENCE IS A DECLARATION — there is no row to describe, and what it says is
+	// ⭐⭐ IN THE STUDIO A REFERENCE IS A DECLARATION — there is no row to describe, and what it says is
 	// what the application declares: the empty reference, or one of the predefined values, written as
 	// `CatalogRef.Goods.Chair`.
-	if (appData->DesignerMode()) {
+	if (appData->StudioMode()) {
 		const ibString empty = ibDeclaredEmptyRef(this, objValue->GetGuid());
 		if (!empty.IsEmpty()) {
 			out = empty;
@@ -1634,7 +1634,7 @@ void ibValueManagerDataObject::FillMembers(ibMemberTable& helper) const
 	const ibMetaData* metaData = valueMetaObject->GetMetaData();
 	ibASSERT(metaData);
 
-	// Manager module's compiled unit — designer mm in the Designer, session root
+	// Manager module's compiled unit — studio mm in the Studio, session root
 	// mm at runtime. FindSharedModule returns the typed descriptor (ibValueModuleUnit).
 	auto* moduleManager = ibSession::EditModuleManagerFor(metaData);
 	auto* pRefData = moduleManager ? moduleManager->FindSharedModule(GetManagerModule()) : nullptr;
@@ -2255,7 +2255,7 @@ bool ibValueRecordDataObjectExt::InitializeObject()
 			Compile();
 		}
 		catch (const ibCoreException&) {
-			if (!appData->DesignerMode())
+			if (!appData->StudioMode())
 				throw;
 			return false;
 		};
@@ -2270,7 +2270,7 @@ bool ibValueRecordDataObjectExt::InitializeObject()
 	// ⭐ …AND ITS FIELDS DESCRIBED ANEW. The metaobject's reload is what re-initialises this object (OnReloadMetaObject),
 	// and a field's TYPE changed is one of what it reloads for: the description is stamped by the metadata version,
 	// which a type did not move, so the form's attribute picker kept the type it was first asked with — on both
-	// designers, since the stamp (2026-10-19); an edit moves it now (ibMetaData::MetaObjectStage). Cleared, it is built again
+	// studios, since the stamp (2026-10-19); an edit moves it now (ibMetaData::MetaObjectStage). Cleared, it is built again
 	// when next read.
 	m_sourceExplorer.Clear();
 
@@ -2292,7 +2292,7 @@ bool ibValueRecordDataObjectExt::InitializeObject(ibValueRecordDataObjectExt* so
 			Compile();
 		}
 		catch (const ibCoreException&) {
-			if (!appData->DesignerMode())
+			if (!appData->StudioMode())
 				throw;
 			return false;
 		};
@@ -2354,7 +2354,7 @@ bool ibValueRecordDataObjectRef::InitializeObject(const ibGuid& copyGuid)
 	}
 
 	// Parent the object's module to the module manager whose context it
-	// should see — designer manager in the Designer, session root mm at runtime.
+	// should see — studio manager in the Studio, session root mm at runtime.
 	ibValueModuleManager* moduleManager = ibSession::EditModuleManagerFor(m_metaObject->GetMetaData());
 	ibASSERT(moduleManager);
 
@@ -2364,13 +2364,13 @@ bool ibValueRecordDataObjectRef::InitializeObject(const ibGuid& copyGuid)
 		Compile();
 	}
 	catch (const ibCoreException&) {
-		if (!appData->DesignerMode())
+		if (!appData->StudioMode())
 			throw;
 		return false;
 	};
 
 	bool succes = true;
-	if (!appData->DesignerMode()) {
+	if (!appData->StudioMode()) {
 		if (m_newObject && !copyGuid.isValid()) {
 			PrepareEmptyObject();
 		}
@@ -2391,7 +2391,7 @@ bool ibValueRecordDataObjectRef::InitializeObject(const ibGuid& copyGuid)
 	else {
 		PrepareEmptyObject();
 	}
-	if (!appData->DesignerMode()) {
+	if (!appData->StudioMode()) {
 		ibASSERT(m_procUnit == nullptr);
 		InitializeRuntime();
 		m_procUnit->SetParent(moduleManager->GetProcUnit().get());
@@ -2420,7 +2420,7 @@ bool ibValueRecordDataObjectRef::InitializeObject(ibValueRecordDataObjectRef* so
 		Compile();
 	}
 	catch (const ibCoreException&) {
-		if (!appData->DesignerMode())
+		if (!appData->StudioMode())
 			throw;
 		return false;
 	};
@@ -2431,7 +2431,7 @@ bool ibValueRecordDataObjectRef::InitializeObject(ibValueRecordDataObjectRef* so
 		PrepareEmptyObject();
 
 	bool succes = true;
-	if (!appData->DesignerMode()) {
+	if (!appData->StudioMode()) {
 		ibASSERT(m_procUnit == nullptr);
 		InitializeRuntime();
 		// Re-apply descriptor SetParent so cascade picks up the now-
@@ -2440,7 +2440,7 @@ bool ibValueRecordDataObjectRef::InitializeObject(ibValueRecordDataObjectRef* so
 		Execute();
 		// OnCopy / Filling run user script with side effects. Skip them under a
 		// debugger watch/eval, the same way BeginWriteScope/BeginDeleteScope skip
-		// eval — evaluating a watch must not fire user handlers. (DesignerMode is
+		// eval — evaluating a watch must not fire user handlers. (StudioMode is
 		// already excluded by the enclosing guard.)
 		// …and the sandbox is the evaluation that MAY fire them: a document filled by nothing is not
 		// the document the person would have got, so a measurement taken on it measures the wrong
@@ -2894,8 +2894,8 @@ bool ibValueRecordDataObjectHierarchyRef::WriteObject()
 			GenerateUniqueIdentifier(prefix.GetString());
 	}
 
-	// After the handlers, which may have touched the lines too; the designer writes no data (DeleteObject).
-	if (!appData->DesignerMode())
+	// After the handlers, which may have touched the lines too; the studio writes no data (DeleteObject).
+	if (!appData->StudioMode())
 		CheckPredefinedTables(*this);
 
 	if (!SaveData())
@@ -2915,9 +2915,9 @@ bool ibValueRecordDataObjectHierarchyRef::WriteObject()
 bool ibValueRecordDataObjectHierarchyRef::DeleteObject()
 {
 	// Predefined-guard fires before the scope — pure policy check that
-	// doesn't need a TX. DesignerMode is checked first so the predefined
+	// doesn't need a TX. StudioMode is checked first so the predefined
 	// lookup itself doesn't run during metadata editing.
-	if (!appData->DesignerMode()) {
+	if (!appData->StudioMode()) {
 		const ibValueMetaObjectRecordDataHierarchyMutableRef* valueMetaObject = GetMetaObject();
 		ibASSERT(valueMetaObject);
 		const ibGuid& objGuid = GetGuid();
@@ -3184,7 +3184,7 @@ void ibValueRecordDataObjectRecorderRef::InitRegisterRecords()
 
 // RegisterRecords — EXPORTED context variable, bound BEFORE the base compiles so
 // the module resolves it. The base re-SetParents (idempotent), binds ThisObject and
-// compiles. The bind is the single source for both designer (a compile chain) and
+// compiles. The bind is the single source for both studio (a compile chain) and
 // runtime (binder). Shared by all recorder/document-like objects.
 bool ibValueRecordDataObjectRecorderRef::InitializeObject(const ibGuid& copyGuid)
 {
@@ -3210,7 +3210,7 @@ bool ibValueRecordDataObjectRecorderRef::InitializeObject(ibValueRecordDataObjec
 bool ibValueRecordDataObjectRecorderRef::WriteObject(ibDocumentWriteMode writeMode, ibDocumentPostingMode postingMode)
 {
 	// Posting pre-guard: a recorder marked for deletion is not posted.
-	if (!appData->DesignerMode()
+	if (!appData->StudioMode()
 	    && writeMode == ibDocumentWriteMode::ibDocumentWriteMode_Posting
 	    && GetValueByMetaID(*GetMetaObject()->GetDataDeletionMark()).GetBoolean())
 	{
@@ -3537,7 +3537,7 @@ bool ibValueRecordManagerObject::InitializeObject(const ibValueRecordManagerObje
 	if (!m_recordSet->InitializeObject(source ? source->GetRecordSet() : nullptr, newRecord))
 		return false;
 
-	if (!appData->DesignerMode()) {
+	if (!appData->StudioMode()) {
 		if (!newRecord && !ReadData(m_objGuid)) {
 			PrepareEmptyObject(source);
 		}
@@ -3561,7 +3561,7 @@ bool ibValueRecordManagerObject::InitializeObject(const ibUniqueKeyPair& key)
 	if (!m_recordSet->InitializeObject(nullptr, true))
 		return false;
 
-	if (!appData->DesignerMode()) {
+	if (!appData->StudioMode()) {
 		if (ReadData(key)) {
 			m_recordSet->m_selected = ibValueRecordSetObject::ibSelection::NotSelected; // is new
 			m_recordSet->Modify(true); // and modify
@@ -3791,7 +3791,7 @@ bool ibValueRecordSetObject::InitializeObject(const ibValueRecordSetObject* sour
 		Compile();
 	}
 	catch (const ibCoreException&) {
-		if (!appData->DesignerMode())
+		if (!appData->StudioMode())
 			throw;
 		return false;
 	};
@@ -3804,11 +3804,11 @@ bool ibValueRecordSetObject::InitializeObject(const ibValueRecordSetObject* sour
 		}
 	}
 
-	if (!appData->DesignerMode()) {
+	if (!appData->StudioMode()) {
 		if (!newRecord) ReadData();
 	}
 
-	if (!appData->DesignerMode()) {
+	if (!appData->StudioMode()) {
 		ibASSERT(m_procUnit == nullptr);
 		InitializeRuntime();
 		// Descriptor parent cascades both compile and procUnit parents.
@@ -3963,7 +3963,7 @@ bool ibValueRecordSetObject::DeleteRecordSet()
 bool ibValueRecordSetObject::GetAt(const ibValue& varKeyValue, ibValue& pvarValue)
 {
 	long index = varKeyValue.GetUInteger();
-	if (index >= GetRowCount() && !appData->DesignerMode()) {
+	if (index >= GetRowCount() && !appData->StudioMode()) {
 		ibBackendCoreException::Error(_("Array index out of bounds"));
 		return false;
 	}
@@ -4114,7 +4114,7 @@ std::vector<ibMetaID> ibValueRecordSetObject::GetLinked(const ibMetaID& edited) 
 
 bool ibValueRecordSetObject::SetValueByMetaID(const ibDataViewItem& item, const ibMetaID& id, const ibValue& varMetaVal)
 {
-	if (!appData->DesignerMode()) {
+	if (!appData->StudioMode()) {
 		ibComposerNode* node = GetViewData<ibComposerNode>(item);
 		if (node != nullptr) {
 			// The set's own column map, not a walk of the metaobject's children: a value set in a line is the
@@ -4162,7 +4162,7 @@ bool ibValueRecordSetObject::SetValueByMetaID(const ibDataViewItem& item, const 
 
 bool ibValueRecordSetObject::GetValueByMetaID(const ibDataViewItem& item, const ibMetaID& id, ibValue& pvarMetaVal) const
 {
-	if (appData->DesignerMode()) {
+	if (appData->StudioMode()) {
 		const ibValueMetaObjectAttributeBase* attribute = m_metaObject->FindAnyAttributeObjectByFilter(id);
 		if (attribute != nullptr) {
 			pvarMetaVal = attribute->CreateValue();
@@ -4214,9 +4214,9 @@ bool ibValueRecordSetObject::ibValueRecordSetObjectRegisterColumnCollection::Get
 {
 	unsigned int index = varKeyValue.GetUInteger();
 	// `index` is unsigned, so `index < 0` was dead code, and && binds tighter than ||
-	// — the condition already meant "out of range AND not in the designer". Spelled out;
-	// the designer-mode exemption is preserved, not introduced (see docs/portability.md).
-	if (index >= m_listColumnInfo.size() && !appData->DesignerMode()) {
+	// — the condition already meant "out of range AND not in the studio". Spelled out;
+	// the studio-mode exemption is preserved, not introduced (see docs/portability.md).
+	if (index >= m_listColumnInfo.size() && !appData->StudioMode()) {
 		ibBackendCoreException::Error(_("Index goes beyond array"));
 		return false;
 	}
@@ -4484,7 +4484,7 @@ void ibValueRecordKeyObject::FillMembers(ibMemberTable& helper) const
 void ibValueRecordSetObject::ibValueRecordSetObjectRegisterKeyValue::FillMembers(ibMemberTable& helper) const
 {
 	// A key built with no record set — the registry's empty form, which type_members reads its members off — has
-	// no register to offer dimensions of (2026-11-14: read through the null, it took the designer down).
+	// no register to offer dimensions of (2026-11-14: read through the null, it took the studio down).
 	const ibValueMetaObjectRegisterData* metaObject = m_recordSet != nullptr ? m_recordSet->GetMetaObject() : nullptr;
 	if (metaObject != nullptr) {
 		ibString objectName;

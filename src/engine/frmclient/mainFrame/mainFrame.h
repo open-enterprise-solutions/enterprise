@@ -46,8 +46,8 @@ class ibWelcomeWindow;
 // toolbars and what may be pressed, as the desktop's did, and asks the server nothing for that; what is done to a
 // document is a call (ibTabDocument, frmclient/docView/tabDocument.h).
 //
-// Each mode's window is a class of its own on top of it — the runtime's (appworkspace) and the designer's (appstudio),
-// as on the desktop and as the server's ibClientFrameRuntime / ibClientFrameDesigner.
+// Each mode's window is a class of its own on top of it — the runtime's (appworkspace) and the studio's (appstudio),
+// as on the desktop and as the server's ibClientFrameWorkspace / ibClientFrameStudio.
 class FRMCLIENT_API ibFrontendMainFrame : public ibBackendDocFrame, public ibAuiMDIParentFrame, public ibDocParentFrameAnyBase {
 public:
 
@@ -88,11 +88,11 @@ public:
 
 	// A METAOBJECT OPENS ON THE SERVER — the desktop's door (ibDocManager::OpenForm), by what the client holds of the
 	// object: its id and the application it is in (the tab); the server opens it as the tree's Edit does (schema
-	// MetaData, Open) and its document comes with the frame. False: not sent. Its message is the designer's protocol:
-	// the designer's window sends it (ibFrontendMainFrameDesigner), the base sends nothing.
+	// MetaData, Open) and its document comes with the frame. False: not sent. Its message is the studio's protocol:
+	// the studio's window sends it (ibFrontendMainFrameStudio), the base sends nothing.
 	virtual bool OpenForm(ibMetaID WXUNUSED(id), const class ibMetaData& WXUNUSED(metaData)) { return false; }
 	// …and A MODULE AT A LINE — where a script failed, its message's line double-clicked (the desktop's ibOutputWindow):
-	// `fileName` the external data tool's or report's it is in (none: the application's). The designer's window opens it
+	// `fileName` the external data tool's or report's it is in (none: the application's). The studio's window opens it
 	// in its tree (ibMetaTreeBase::EditModule), the base does nothing.
 	virtual void EditModule(const wxString& WXUNUSED(fileName), const ibGuid& WXUNUSED(moduleName), int WXUNUSED(line)) {}
 
@@ -127,7 +127,7 @@ public:
 
 	// The window's own menu of that id — File, Edit: a document's undo names its commands in Edit (the desktop's).
 	wxMenu* GetDefaultMenu(int idMenu) const;
-	// …and its toolbar: the doc manager's commands — a mode's window puts its own after them (the designer's Update
+	// …and its toolbar: the doc manager's commands — a mode's window puts its own after them (the studio's Update
 	// database).
 	ibAuiToolBar* GetMainFrameToolbar() const { return m_mainFrameToolbar; }
 
@@ -161,7 +161,7 @@ public:
 	// A VALUE OF THE SERVER'S TYPE CHOSEN FOR A CELL OF THE WINDOW ASKING — the window answers its question with the act
 	// (a list's settings: Act Choose), the server opens the value's quick choice or its choice form (a dialog over this
 	// modal: CreateChildFrame), and the value chosen comes back with the window's question asked again (Chosen), to
-	// the cell's ChoiceProcessing. No window asks — the cell is on the active tab (a designer's composer panel): the same
+	// the cell's ChoiceProcessing. No window asks — the cell is on the active tab (a studio's composer panel): the same
 	// act goes to the tab (event Select), whose view chooses through its application and says the value with the view
 	// (State Chosen). `type` — the type the cell stands on (ibTypeControlFactory::ChooseValue). False — neither is there.
 	bool ChooseValue(class ibControlFrame* owner, const struct ibTypeDescription& type, const class ibValue& current);
@@ -212,15 +212,15 @@ protected:
 	virtual void CreateGUI();
 	// …the properties pane among them, on the right (the desktop's).
 	virtual void CreatePropertyPane();
-	// …and the notebook along the bottom, the messages' (the desktop's CreateBottomPane); the designer's adds the
+	// …and the notebook along the bottom, the messages' (the desktop's CreateBottomPane); the studio's adds the
 	// debugger's panes beside them.
 	virtual void CreateBottomPane();
 	// …and the workspace while no tab is open, in the client window `parent` (wx's OnCreateClient for the client): made
-	// once the login has said who the person is (m_fullName). Default: the greeting alone; the designer's adds its keys.
+	// once the login has said who the person is (m_fullName). Default: the greeting alone; the studio's adds its keys.
 	virtual ibWelcomeWindow* OnCreateWelcome(wxWindow* parent);
 
 	// WHAT A MODE'S FRAME CARRIES BESIDE THE BASE'S — drawn by what the patch changed in it (not IsNode: the frame sent
-	// whole). Default: nothing; the designer draws its application's tree (MetaData).
+	// whole). Default: nothing; the studio draws its application's tree (MetaData).
 	virtual void DrawFrame(const ibProtocolNode& WXUNUSED(frame), const ibProtocolNode& WXUNUSED(patch)) {}
 
 	// What the window builds BY ITSELF once the start has run — the desktop's slot of the same name (its home page;
@@ -237,15 +237,15 @@ protected:
 	// (ShowSchema) once the window is up, as a call of its own would have been. Default: none.
 	virtual std::vector<ibProtocol::ibSchema::ibKind> GetStartSchemas() const { return {}; }
 	// A schema of the menu, asked for and answered, shown — or one of the start's (GetStartSchemas). The base shows what
-	// both modes have (Active users, About); a mode's window shows its own (the runtime's All functions, the designer's
+	// both modes have (Active users, About); a mode's window shows its own (the runtime's All functions, the studio's
 	// debugger store) and leaves the rest to the base.
 	virtual void ShowSchema(ibProtocol::ibSchema::ibKind schema, const ibProtocolNode& shown);
 	// A question, put to the person; what they answered in `response` (nothing — cancelled). The base asks what both
-	// modes are asked; a mode's window asks its own (the designer's restructure ledger) and leaves the rest to the base.
+	// modes are asked; a mode's window asks its own (the studio's restructure ledger) and leaves the rest to the base.
 	virtual void ShowRequest(const ibProtocolNode& request, ibProtocolNode& response);
 
 	// The File and Edit menus — the desktop's, the doc manager's commands — and the bar they start it. A mode's window
-	// makes its own menu (the designer's Help) and calls this.
+	// makes its own menu (the studio's Help) and calls this.
 	virtual void InitializeDefaultMenu();
 	// The keys of the window's own commands, File's and Edit's — the desktop's defaults; a mode's window adds its own
 	// commands' and calls this.
@@ -261,13 +261,13 @@ protected:
 	ibCommunicator& GetCommunicator() const { return *m_communicator; }
 
 	// A schema of the menu opened — asked for and shown (ShowSchema); the journal's tab opened by its command. What an
-	// item of the server's menu does, and of the window's own (the designer's About).
+	// item of the server's menu does, and of the window's own (the studio's About).
 	void OpenSchema(ibProtocol::ibSchema::ibKind schema);
 
-	// THE PERSON'S OPTIONS WRITTEN BACK — the designer's Options: the font and colours, how editors edit, the keys as
+	// THE PERSON'S OPTIONS WRITTEN BACK — the studio's Options: the font and colours, how editors edit, the keys as
 	// they stand, into the file LoadOptions reads; and kept as read, so a menu built again keeps the keys.
 	void SaveOptions();
-	// Tools → Options, the one dialog of both modes: the schema its item asked (the designer's McpServer, the
+	// Tools → Options, the one dialog of both modes: the schema its item asked (the studio's McpServer, the
 	// application's Debugging) says which pages it holds besides the common ones.
 	void ShowOptions(ibProtocol::ibSchema::ibKind schema, const ibProtocolNode& shown);
 	// …and in force at once, as the desktop's UpdateEditorOptions put them: every document's views told (each editor
@@ -290,9 +290,9 @@ protected:
 	ibOutputWindow*     m_outputWindow = nullptr;
 	ibObjectInspector*  m_objectInspector = nullptr;
 
-	ibMenu*             m_menuApplication = nullptr;   // a mode's own (the designer's): after Edit, before the server's
+	ibMenu*             m_menuApplication = nullptr;   // a mode's own (the studio's): after Edit, before the server's
 	ibMenu*             m_menuDebug = nullptr;
-	ibMenu*             m_menuHelp = nullptr;   // a mode's own Help (the designer's): last on the bar, after the server's
+	ibMenu*             m_menuHelp = nullptr;   // a mode's own Help (the studio's): last on the bar, after the server's
 	ibKeyBinder         m_keyBinder;            // the keys of the bar's commands (UpdateHotKeys)
 	ibFontColorSettings m_fontColorSettings;    // the person's options (LoadOptions, SaveOptions)
 	ibEditorSettings    m_editorSettings;

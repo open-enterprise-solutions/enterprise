@@ -32,7 +32,7 @@ void ibFieldViewInput::Update(const ibProtocolNode& node)
 	// What can be typed into it — the server resolved it (docs/private/input-mask.md); none when it says none.
 	m_textCtrl->SetMask(ibInputMask::Parse(state.GetString(ibProtocol::ibForm::ibState::Mask)));
 
-	// The value as text — none in the designer. Not over what is being typed: that is the person's until committed.
+	// The value as text — none in the studio. Not over what is being typed: that is the person's until committed.
 	// Changed, not set: nobody typed it (no wxEVT_TEXT, no Input).
 	if (state.Has(ibProtocol::ibForm::ibState::Text))
 		m_text = state.GetString(ibProtocol::ibForm::ibState::Text);

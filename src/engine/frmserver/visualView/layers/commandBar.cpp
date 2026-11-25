@@ -23,7 +23,7 @@
 #include <set>                                  // std::set — the form's reference-type set
 #include <map>
 #include "protocol/protocol.h"                  // ibProtocol::ibForm::ibCommandBar — the command tree's rows
-#include "protocol/protocolDesigner.h"   // ibProtocol::ibSchema::ibProperties
+#include "protocol/protocolStudio.h"   // ibProtocol::ibSchema::ibProperties
 
 // Command bar — a CONTAINER layer object (the shared runtime/property/metadata base is
 // ibValueLayerObject). Holds its commands + the AutoFill flag; a client draws it from the frame.
@@ -64,7 +64,7 @@ static void CollectExplorerRefTypes(const ibSourceDataObject::ibSourceExplorer* 
 static std::set<ibClassID> CollectFormDataTypes(ibValueForm* form)
 {
 	std::set<ibClassID> types;
-	// The form's PRIMARY object type from metadata — always available, incl. the designer (where the runtime
+	// The form's PRIMARY object type from metadata — always available, incl. the studio (where the runtime
 	// source object below may not be populated yet).
 	if (const ibValueMetaObjectGenericData* obj = form->GetMetaObject())
 		types.insert(reference_to_clsid(obj->GetMetaID(), clsid_metaclass(obj->GetClassType())));
@@ -209,7 +209,7 @@ std::vector<ibCommandSourceEntry> GatherFormCommands(ibValueForm* form)
 			if (cmd != nullptr && !cmd->IsDeleted() && !CommandExcludedByType(cmd, formTypes))
 				out.push_back({ sGlobal, cmd->GetName(), ibCommandDescription(cmd->GetMetaID()), commandPicture(cmd), ibEmptyString, cmd->GetFullName() });
 
-	// 4 — SECTION COMMANDS: the form sees sections EXACTLY as the runtime menu builder does (mainFrameEnterpriseInterface)
+	// 4 — SECTION COMMANDS: the form sees sections EXACTLY as the runtime menu builder does (mainFrameWorkspaceInterface)
 	// — each section's items laid out by AREA through the SAME method, GetInterfaceItemArrayObject (membership by
 	// IsSetInterface, area by the item's GetCommandSection — property-driven for a command), subsections walked
 	// recursively via GetInterfaceArrayObject. Only COMMAND items are pickable here; a command included in a section
@@ -303,7 +303,7 @@ ibString ibQuickFilterCaption(const ibFilterNodeDescription& node, const ibMetaD
 void ibValueCommandBar::BuildQuickFilters()
 {
 	// These stand for VALUES a reader picks at runtime — and this library serves the runtime only, so they
-	// always build. (In the designer they are not built: the author edits the LINE, in the settings window.)
+	// always build. (In the studio they are not built: the author edits the LINE, in the settings window.)
 	const ibValueModel* model = QuickFilterModel();
 	if (model == nullptr)
 		return;
@@ -378,7 +378,7 @@ const std::vector<ibCommandEntry>& ibValueCommandBar::BuildCommands()
 	// is by CONSTRUCTION — GetCommandArrayObject returns only THIS object's commands.
 	// Gate on the FORM'S OWN bar (m_owner is the ibValueForm): a sub-control's bar (a tablebox / list) must
 	// NOT auto-surface object commands — those land there only when one is deliberately dropped on it
-	// (placement is the designer's choice, not forced).
+	// (placement is the studio's choice, not forced).
 	if (ibValueForm* ownerForm = (IsAutoFill() ? dynamic_cast<ibValueForm*>(m_owner) : nullptr)) {
 		const ibValueMetaObjectGenericData* obj = ownerForm->GetMetaObject();
 		if (obj != nullptr) {
@@ -758,7 +758,7 @@ void ibValueCommandBar::Update(ibDataNode& state)
 		entry.SetValue(ibProtocol::ibForm::ibCommandBar::Default, c.isDefault);
 		entry.SetValue(ibProtocol::ibForm::ibCommandBar::Kind, static_cast<std::int32_t>(c.kind));
 
-		// An item of the bar's own — its place among them, as its node is written (WriteData): what the designer selects
+		// An item of the bar's own — its place among them, as its node is written (WriteData): what the studio selects
 		// it by when its tool is pressed (the desktop's FindItemByCommandId).
 		if (c.item != nullptr) {
 			std::int32_t position = 0;

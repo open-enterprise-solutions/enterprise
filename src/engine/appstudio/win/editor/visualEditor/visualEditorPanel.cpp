@@ -11,7 +11,7 @@
 #include "frmclient/backend/serialize/dataProtocol.h"   // ibReadProtocolValue — a control's values, as its node has them
 #include "frmclient/mainFrame/objinspect/objinspect.h"
 #include "frmclient/propertyManager/property/advprop/advpropSource.h"   // ibSetSourcePicker — a control's Source cell
-#include "protocol/protocolDesigner.h"   // ibProtocol::ibSchema::ibProperties, ibProtocol::ibView::ibFormDesigner
+#include "protocol/protocolStudio.h"   // ibProtocol::ibSchema::ibProperties, ibProtocol::ibView::ibFormDesigner
 
 #include <set>
 
@@ -85,7 +85,7 @@ void ibVisualEditorNotebook::ibVisualEditor::CreateWideGui()
 	m_objectTree = new ibVisualEditorObjectTree(this, m_treeSplitter);
 
 	// The right pane splits again: [Attributes | Commands] — the source-attribute tree and the command
-	// navigator (the command door beside the data door). The command navigator is where a designer drags
+	// navigator (the command door beside the data door). The command navigator is where a studio drags
 	// a command onto the form to create a bound button. Equal halves of the remaining two thirds.
 	m_rightSplitter = new ibSplitterWindow(m_treeSplitter, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxSP_THIN_SASH);
 	m_rightSplitter->SetSashGravity(0.5);
@@ -150,7 +150,7 @@ bool ibVisualEditorNotebook::ibVisualEditor::LoadForm(const ibProtocolNode& answ
 {
 	const ibProtocolNode form = answer.FindChild(ibProtocol::ibView::ibFormDesigner::Form);
 	if (form.GetType() != ibProtocol::ibForm::ibType::ClientForm) {
-		ibJournalWarning(wxT("designer"), wxT("form editor: the tab's answer brought no form"));
+		ibJournalWarning(wxT("studio"), wxT("form editor: the tab's answer brought no form"));
 		return false;
 	}
 
@@ -209,7 +209,7 @@ void ibVisualEditorNotebook::ibVisualEditor::Draw(const ibProtocolNode& form, co
 
 	if (GetValueForm() == nullptr) {
 		m_visualEditor->Thaw();
-		ibJournalWarning(wxT("designer"), wxT("form editor: the form was not drawn"));
+		ibJournalWarning(wxT("studio"), wxT("form editor: the form was not drawn"));
 		return;
 	}
 	// …a control whose rows alone the answer changed, after; the rows left are of no control drawn.
@@ -262,7 +262,7 @@ bool ibVisualEditorNotebook::ibVisualEditor::FetchRows(long long controlId)
 
 void ibVisualEditorNotebook::ibVisualEditor::Receive(const ibProtocolNode& answer, ibProtocolNode& trees)
 {
-	// ⭐ WHAT EACH CONTROL HAS IS THE SERVER'S TO SAY — its rows, as the designer's inspector writes them; the client's
+	// ⭐ WHAT EACH CONTROL HAS IS THE SERVER'S TO SAY — its rows, as the studio's inspector writes them; the client's
 	// controls declare none (ibValueFrame). Kept by the control's id: a control made reads them as it is built, one whose
 	// rows the answer changed as it is drawn.
 	for (const ibProtocolNode& described : answer.FindChild(ibProtocol::ibView::ibFormDesigner::Controls).Children()) {

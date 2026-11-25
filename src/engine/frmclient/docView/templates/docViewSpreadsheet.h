@@ -172,9 +172,9 @@ public:
 	// SAVE AS OF ITS OWN. Made from no template and kept in no manager's list, it asks no manager: the
 	// formats are its own answer (GetSaveFilter — the sheet format registry), and the file joins no
 	// history. It used to borrow the manager's template for this, and the box outlives the manager: a
-	// form compiled into the designer's cache is let go with the application after the main window has
+	// form compiled into the studio's cache is let go with the application after the main window has
 	// deleted the manager and its templates, and the view's destructor followed the borrowed template
-	// into freed memory — the designer's crash on exit, 2026-10-04.
+	// into freed memory — the studio's crash on exit, 2026-10-04.
 	virtual bool SaveAs() override;
 
 	// The box holds this document, not its views — none of them going takes it along.

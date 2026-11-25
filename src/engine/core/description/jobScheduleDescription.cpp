@@ -79,7 +79,7 @@ bool ibJobScheduleDescriptionMemory::ReadNode(const ibDataValue& value, ibJobSch
 	readInt(ibT("EveryNMonths"),       s.m_everyNMonths);
 
 	// A DATE READS AS EITHER KIND: a node kept by the engine holds a Date, a node that crossed the wire as JSON holds
-	// its ISO text (jsonProvider.h — a Date reads back as a String, "" the empty one). The thin designer's schedule
+	// its ISO text (jsonProvider.h — a Date reads back as a String, "" the empty one). The studio's schedule
 	// cell reads the second and writes it back the same way, so both readers meet it.
 	const auto readDate = [&root](const ibString& name, ibDateTime& target) {
 		const auto v = root->FindField(name);

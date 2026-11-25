@@ -12,7 +12,7 @@
 // The field's own class id, named once — the engine's.
 constexpr ibClassID g_compositionFieldCLSID = value_to_clsid("VL_CFLD");
 
-// A DECLARED value — the designer's (CompositionPredefinedValue): which metaobject, which of its declared values, how it
+// A DECLARED value — the studio's (CompositionPredefinedValue): which metaobject, which of its declared values, how it
 // reads. On the client it is one more value the server wrote; its class id is the engine's.
 constexpr ibClassID g_compositionPredefinedCLSID = system_to_clsid("VL_CPRV");
 

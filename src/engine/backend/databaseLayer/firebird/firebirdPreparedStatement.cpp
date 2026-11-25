@@ -276,7 +276,7 @@ int ibPreparedStatementFirebird::RunQuery()
 	// ⚠ COMMIT RETAINING KEEPS THE TRANSACTION OPEN, and that is what this statement needs: the
 	// statement handle was prepared inside it and goes on being used. Closing it here and reopening
 	// lazily was tried on 2026-08-14 (with the cursor adopting the transaction on the read path) and
-	// crashed the designer. It also did not fix what it was aimed at — the restructuring refusals
+	// crashed the studio. It also did not fix what it was aimed at — the restructuring refusals
 	// survived unchanged, measured — so the retaining form stays.
 	if (m_bManageTransaction)
 	{
@@ -312,7 +312,7 @@ ibDatabaseResultSet* ibPreparedStatementFirebird::RunQueryWithResults()
 		// ⚠ THE STATEMENT KEEPS AN OPEN TRANSACTION BETWEEN CALLS, and that is deliberate rather than
 		// merely tolerated: a prepared statement is PREPARED inside a transaction, and the cursor it
 		// vends reads through the same one. Handing the transaction to the cursor and clearing it here
-		// was tried on 2026-08-14 and crashed the designer — the statement handle outlives the call
+		// was tried on 2026-08-14 and crashed the studio — the statement handle outlives the call
 		// and cannot be left pointing at a transaction it no longer has.
 		//
 		// It is not free: an open transaction holds metadata, which is a real cost for concurrent DDL.

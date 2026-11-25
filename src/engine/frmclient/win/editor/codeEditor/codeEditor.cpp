@@ -8,7 +8,7 @@
 #include "frmclient/docView/tabDocument.h"   // the module's tab — what the text is fetched from and handed back to
 #include "frmclient/mainFrame/objinspect/objinspect.h"   // the inspector — what it shows as it is made, and activated
 #include "deskgui/artProvider.h"   // wxART_BREAKPOINT, wxART_CURRENT_LINE, wxART_BREAK_LINE — the margin's markers, the theme's
-#include "protocol/protocolDesigner.h"   // ibProtocol::ibView::ibModule
+#include "protocol/protocolStudio.h"   // ibProtocol::ibView::ibModule
 
 #include <wx/artprov.h>
 #include "deskgui/univ/messageDialog.h"
@@ -133,8 +133,8 @@ ibCodeEditor::ibCodeEditor(ibTabDocument* document, wxWindow* parent, wxWindowID
 	// that adds the Syntax Helper Look-Up item alongside the standard
 	// edit actions. The Look-Up item posts wxID_FRONTEND_SYNTAX_HELPER_LOOKUP
 	// upward through the parent chain so the host frame
-	// (mainFrameDesigner's OpenHelpForCursor binding) handles it without
-	// the editor depending on the downstream designer header. See
+	// (mainFrameStudio's OpenHelpForCursor binding) handles it without
+	// the editor depending on the downstream studio header. See
 	// subphase 1.3 — codeEditor knows nothing about the help corpus.
 	UsePopUp(ibSTC_POPUP_NEVER);
 	Bind(wxEVT_CONTEXT_MENU, &ibCodeEditor::OnContextMenu, this);
@@ -221,7 +221,7 @@ bool ibCodeEditor::TryBefore(wxEvent& event)
 
 void ibCodeEditor::EditDebugPoint(int line_to_edit)
 {
-	// Forward to the (designer-side) debugger override; sessionless
+	// Forward to the (studio-side) debugger override; sessionless
 	// hosts (coderunner) get the default no-op.
 	OnEditDebugPoint(line_to_edit);
 }

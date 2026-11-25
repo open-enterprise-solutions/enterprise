@@ -24,7 +24,7 @@ class ibDataNode;
 //////////////////////////////////////////////////////////////////////////////////////////////////////
 // Lifecycle — ibApplicationInstance::CreateActiveMetaData makes the application's (ibMetaDataApplication) as the
 // base opens; teardown happens in the base's Close (ibApplicationInstance::Close), which closes it, calls OnDestroy
-// and then lets the base's reference go — the polymorphic dtor chain runs with the last holder. A designer's
+// and then lets the base's reference go — the polymorphic dtor chain runs with the last holder. A studio's
 // session's own (ibMetaDataApplicationStorage) is made by the session itself (ibSession::AcquireMetaData) and goes
 // with it.
 //////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -180,7 +180,7 @@ public:
 	bool SaveApplicationToFile(const ibString& strFileName);
 
 	// …into a directory of files, one a part (ibFileProvider) — and as the set of those files itself, for a directory on
-	// another machine: a thin designer's, the set travelling as one node.
+	// another machine: a studio's, the set travelling as one node.
 	bool LoadApplicationFromFiles(const ibString& directory);
 	bool LoadApplicationFromFiles(const ibDataNode& files);
 	bool SaveApplicationToFiles(const ibString& directory);
@@ -226,7 +226,7 @@ public:
 	// owned active metadata (those are the leaf subclasses
 	// `ibMetaDataApplication` and `ibMetaDataApplicationStorage`,
 	// which have private ctor + friend ibApplicationInstance). The File
-	// base is instantiated directly by designer document views that
+	// base is instantiated directly by studio document views that
 	// load a stand-alone .oap / XML / JSON for inspection — that is
 	// per-document scratch state, not a coordinator singleton.
 	ibMetaDataApplicationFile();
@@ -329,11 +329,11 @@ public:
 	//get application type
 	virtual ibApplicationType GetApplicationType() const { return ibApplicationType::ibApplicationType_Load; };
 
-	// ⭐ THE COMPILE CACHE IS A DESIGNER'S — on an application made for a designer's session: the one it edits and its
+	// ⭐ THE COMPILE CACHE IS A STUDIO'S — on an application made for a studio's session: the one it edits and its
 	// copy of the database's. Asked of the token it was made with, not of the thread that builds it: an apply builds
-	// on the designer's thread, and the base's own application, the one the runtime works in, carries none — given
-	// one, it handed the runtime the designer's one instance of a form ("duplicate identifier Controls", 2026-10-28).
-	virtual std::unique_ptr<ibCompileValueCache> CreateDesignerCache() override;
+	// on the studio's thread, and the base's own application, the one the runtime works in, carries none — given
+	// one, it handed the runtime the studio's one instance of a form ("duplicate identifier Controls", 2026-10-28).
+	virtual std::unique_ptr<ibCompileValueCache> CreateStudioCache() override;
 
 protected:
 
@@ -344,7 +344,7 @@ public:
 	// Construction restricted to ibApplicationInstance::CreateActiveMetaData
 	// (and to ibMetaDataApplicationStorage, which composes an inner
 	// ibMetaDataApplication as the "saved" reference baseline against
-	// which designer edits are compared). Both gate on the
+	// which studio edits are compared). Both gate on the
 	// ib::AppDataCtorToken — appData mints once, Storage forwards the
 	// token it received when constructing its inner baseline. The token names
 	// the base it is made for (GetApplicationInstance) and the session it is made for (GetSessionKind).
@@ -378,7 +378,7 @@ public:
 
 	virtual ~ibMetaDataApplicationStorage();
 
-	// Construction restricted to a designer's session (ibSession::AcquireMetaData)
+	// Construction restricted to a studio's session (ibSession::AcquireMetaData)
 	// via the ib::AppDataCtorToken gate. The inner baseline reference
 	// (m_applicationMetadata) is constructed by forwarding the same token — and with it the same base.
 	explicit ibMetaDataApplicationStorage(ib::AppDataCtorToken owner);
@@ -458,7 +458,7 @@ public:
 	// the apply will write DDL, and DDL means single-user mode.
 	//
 	// Answered by comparing the two schema snapshots OnSaveDatabase would diff (the saved baseline + the
-	// edited application) — see SameStructure. Asked BEFORE the apply starts, so the designer can offer the
+	// edited application) — see SameStructure. Asked BEFORE the apply starts, so the studio can offer the
 	// choice instead of refusing; the apply keeps its own gate either way (ibStructureBatch::Flush).
 	virtual bool IsDynamicUpdateAvailable() const override;
 
@@ -479,9 +479,9 @@ private:
 	bool LoadSequenceFromBuffer(const ibReaderMemory& reader);
 	bool SaveSequenceToBuffer(ibWriterMemory& writer);
 
-	// THE DATABASE'S COPY — what IsApplicationSave compares against and what an apply diffs from. The designer's, made with
+	// THE DATABASE'S COPY — what IsApplicationSave compares against and what an apply diffs from. The studio's, made with
 	// its token: an apply reads the published application into a NEW one, and the base reads its own
-	// (ibApplicationInstance::ReplaceActiveMetaData) — the designer's copy is never handed to the runtime.
+	// (ibApplicationInstance::ReplaceActiveMetaData) — the studio's copy is never handed to the runtime.
 	std::shared_ptr<ibMetaDataApplication> m_applicationMetadata;
 
 	// The application-save STRUCTURE + SEED engine — METADATA-AGNOSTIC: it works only on snapshots this Storage
@@ -489,7 +489,7 @@ private:
 	// builds both snapshots and drives the builder's before/during/after events. (query/provider/database/structure/structureBuilder.h)
 	ibStructureBuilder m_structureBuilder;
 
-	// Designer-side debugger client. Same ownership pattern as
+	// Studio-side debugger client. Same ownership pattern as
 	// m_debugServer on the base; cached pointer through
 	// `ibDebuggerClient::ms_debugClient`.
 	std::unique_ptr<ibDebuggerClient> m_debugClient;

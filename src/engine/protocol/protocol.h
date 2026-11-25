@@ -9,8 +9,8 @@
 // below is never renumbered; a new one takes the next. The wire itself is described in docs/public/client-protocol.md.
 //
 // TWO FILES, ONE NUMBERING. This one is what a client of the application speaks — the thin client, the browser; the
-// designer speaks it too, and its own beside it: its debugger, its schemas and views, the questions asked while a
-// application is written (protocolDesigner.h). Every number stays here, the designer's with the rest — the wire has
+// studio speaks it too, and its own beside it: its debugger, its schemas and views, the questions asked while a
+// application is written (protocolStudio.h). Every number stays here, the studio's with the rest — the wire has
 // one numbering — and a mode refuses one it does not offer.
 //
 // THE WIRE'S NAMES — each written in the message that carries it: ibProtocol::ib<Part> — a method's call and answer, a
@@ -36,7 +36,7 @@ namespace ibProtocol {
 	//   5  …and a table's State may carry Rows with the Version: the first page, as fetch would give it (rows as children,
 	//      End, Before, Pictures), so the frame that opens the tab need not be followed by a fetch. A server below 5, or
 	//      one that omits Rows, is answered with fetch, as before.
-	//   6  …and the designer's debugger rides the protocol (ibDebug): a second connection of the same client, bound to it by
+	//   6  …and the studio's debugger rides the protocol (ibDebug): a second connection of the same client, bound to it by
 	//      the key the first asks for, carries the debugger's commands, answered at once, and the server's `debug`
 	//      notifications — a stop, the stack, the locals — sent as they happen, not as a frame.
 	//   7  …and the assistant's MCP rides it the same way (ibMcp): a connection of its own, bound by a key of its own.
@@ -177,7 +177,7 @@ namespace ibProtocol {
 	}
 
 	// THE LOGIN, and what every call names. login {User, Password[, Mode][, Protocol][, Features][, Read]} → Client,
-	// Protocol, Features, and the frame. A thin runtime whose window is on also gets Token, once. Features on the request
+	// Protocol, Features, and the frame. A workspace whose window is on also gets Token, once. Features on the request
 	// names what the client accepts; FeatureResume there opts into the idempotency slot. {Token[, Protocol]} and no User,
 	// only while that client is detached, → the previous Client, Protocol, Features, and no frame (the next frame {Since}
 	// is the patch). A token login does not return Token again. Mode: ibMode, Runtime when absent; Protocol: the newest
@@ -211,8 +211,8 @@ namespace ibProtocol {
 		// THE MODE a client works in — login's Mode: which application's frame it gets. The desktop had a program per
 		// mode; the server has one door, and a client's frame is made for one mode.
 		enum class ibMode : int {
-			Runtime  = 1,   // the application, as the runtime runs it
-			Designer = 2,   // the application, as the designer edits it
+			Workspace = 1,  // the application, as the workspace runs it
+			Studio    = 2,  // the application, as the studio edits it
 		};
 
 	}
@@ -239,7 +239,7 @@ namespace ibProtocol {
 		inline constexpr const char* Schemas    = "Schemas";    // the schemas the client's application offers
 		inline constexpr const char* Templates  = "Templates";  // what the client opens and makes documents of — ibFile each
 		inline constexpr const char* Request    = "Request";
-		inline constexpr const char* MetaData   = "MetaData";   // the designer's: its application's tree, the node itself its
+		inline constexpr const char* MetaData   = "MetaData";   // the studio's: its application's tree, the node itself its
 		                                                        // root row (ibSchema::ibMetaData)
 		// An event of the answer: the rows of each object a door acted on (an edit, a new object, the one the tree selects
 		// after a removal, a form editor's own), each as schema Properties writes them — the client shows them without
@@ -710,7 +710,7 @@ namespace ibProtocol {
 		// ibSettingsDescriptionMemory writes it — Fields, its columns (children Name, Presentation, Id, Type — as
 		// ibTypeDescriptionMemory writes it — Available, Picture), and References: which types are references and to what
 		// (children Type — its class id as text — Targets, the metaobjects, and Value, its empty value as a value is written:
-		// read as the server reads it, `CatalogRef.Goods.EmptyRef` in the designer; none for a family) → Settings — the
+		// read as the server reads it, `CatalogRef.Goods.EmptyRef` in the studio; none for a family) → Settings — the
 		// setting edited, which the server puts on and asks no more; Error beside the setting when it refused one; none —
 		// cancelled. On the way: an Act (ibAct), asked again with what it brought.
 		namespace ibListSettings {
@@ -742,7 +742,7 @@ namespace ibProtocol {
 				Choose = 2,   // a value of a type of the server's chosen (Type — its class id as text, or, a cell that stands on
 				              // no type yet — several, a family — its type whole as a field's, the type then asked here; Value —
 				              // the one held, Choice — the number the client asks it under): its quick choice, or its choice form — a tab
-				              // like any other, in the designer its declared values (ibPredefinedSelector); what is chosen
+				              // like any other, in the studio its declared values (ibPredefinedSelector); what is chosen
 				              // comes back in the window's question as Chosen (Choice, and Value with its Presentation
 				              // beside {t, v}), whenever it is
 			};
@@ -790,7 +790,7 @@ namespace ibProtocol {
 			// it does, and more.
 			enum class ibAct : int {
 				CloseWindow  = 1,   // the error kept in the messages
-				GotoDesigner = 2,   // …and sent to the designer debugging this base
+				GotoStudio = 2,   // …and sent to the studio debugging this base
 				CloseProgram = 3,   // …and the client goes
 			};
 
@@ -867,26 +867,26 @@ namespace ibProtocol {
 			ObjectText   = 13,   // ibObjectText
 			HomePage     = 14,   // ibHomePage
 			Debugger     = 15,   // ibDebugger
-			Database     = 16,   // the designer's base as a whole (Administration → Restore, Dump, Clear database) — shows
+			Database     = 16,   // the studio's base as a whole (Administration → Restore, Dump, Clear database) — shows
 			                     // nothing; commands Load — restored from a file the person is asked for
 			                     // (ibRequest::ibFile), every session of the base closed after; Save — dumped, and taken
 			                     // down where the person chooses; Clear — asked first. Each said to the person by the server
-			Assistant    = 17,   // the designer's assistant window (Administration) — shows nothing; command Open opens its
+			Assistant    = 17,   // the studio's assistant window (Administration) — shows nothing; command Open opens its
 			                     // tab (ibView::ibKind::Assistant). Allowed while the base's assistant access is running
 			ApplicationCompare = 18, // ibApplicationCompare — the walk of two applications; command Merge applies the ops chosen
 			Types        = 19,   // ibTypes
 			Style        = 20,   // both modes': the theme the interface is painted in — the CLIENT'S, kept on its machine (Max,
 			                     // 2026-11-24: "nothing is kept on the backend, the client decides as it starts"). The
 			                     // server places it in Tools and answers nothing of it: a client shows its own window
-			WebAddress   = 21,   // ibWebAddress (protocolDesigner.h) — the designer's: what the base answers on a web server
+			WebAddress   = 21,   // ibWebAddress (protocolStudio.h) — the studio's: what the base answers on a web server
 		};
 
 		// A schema's own commands — `schema {Schema, Command, Args}`. All functions and Sections take the one: Open
 		// {Item, Type} — an item they show, opened as the navigation opens it. Debugging takes Start and Stop; McpServer
-		// takes them and Save; Active users, the designer's, Kick, Reload and Release; the users Save and Remove; the
-		// designer's inspector (Properties) Save; its predefined values editor Create, Set and Remove; its texts
+		// takes them and Save; Active users, the studio's, Kick, Reload and Release; the users Save and Remove; the
+		// studio's inspector (Properties) Save; its predefined values editor Create, Set and Remove; its texts
 		// (ObjectText) Save, and so the home page (HomePage); the base (Database) Load, Save and Clear; the assistant window
-		// (Assistant) Open; ApplicationCompare Merge; the web addresses (WebAddress) Create and Remove. The designer's tree has its own (ibMetaData::ibCommand), and so its debugger's store.
+		// (Assistant) Open; ApplicationCompare Merge; the web addresses (WebAddress) Create and Remove. The studio's tree has its own (ibMetaData::ibCommand), and so its debugger's store.
 		enum class ibCommand : int {
 			Open    = 1,
 			Start   = 2,
@@ -915,7 +915,7 @@ namespace ibProtocol {
 		}
 
 		// Both modes': Sessions (User, Program, Type, Started, Computer, Session, Activity, Picture) and Locks
-		// (Namespace, Key, Mode, User, Acquired, Lock); the designer's commands Kick {Session} — that session closed,
+		// (Namespace, Key, Mode, User, Acquired, Lock); the studio's commands Kick {Session} — that session closed,
 		// Reload {Session} — its clients reloaded, Release {Lock} — that lock released by force.
 		namespace ibActiveUser {
 
@@ -979,9 +979,9 @@ namespace ibProtocol {
 		// commands Start and Stop.
 		namespace ibDebugging {
 
-			inline constexpr const char* Debugging = "Debugging";   // the session's process listens for the designer
+			inline constexpr const char* Debugging = "Debugging";   // the session's process listens for the studio
 			inline constexpr const char* Allowed   = "Allowed";     // …and may be switched now: not on the application server,
-			                                                        // not while a start waits for the designer
+			                                                        // not while a start waits for the studio
 
 		}
 
@@ -1026,7 +1026,7 @@ namespace ibProtocol {
 			Text             = 2,    // ibText
 			Spreadsheet      = 3,    // ibForm::ibSpreadsheet
 			AuditLog         = 4,    // ibAuditLog
-			DataTool         = 5,    // the designer's tree of an external file — of a data tool, of a report: MetaData
+			DataTool         = 5,    // the studio's tree of an external file — of a data tool, of a report: MetaData
 			Report           = 6,
 			Module           = 7,    // ibModule
 			FormDesigner     = 8,    // ibFormDesigner
@@ -1073,7 +1073,7 @@ namespace ibProtocol {
 
 		}
 
-		// The designer's assistant window — the exchange with the assistant access: State {Waiting, Pending}, Rows — the
+		// The studio's assistant window — the exchange with the assistant access: State {Waiting, Pending}, Rows — the
 		// transcript, an entry a row (Text); what the person writes — event {Tab, Event: Change, Args: {Text}}.
 		namespace ibAssistant {
 
@@ -1084,7 +1084,7 @@ namespace ibProtocol {
 
 		}
 
-		// The designer's editor of a report's composer — the composition panel: State {ReadOnly}, Composition — the
+		// The studio's editor of a report's composer — the composition panel: State {ReadOnly}, Composition — the
 		// composer's description in its node form, Fields and References — what its query offers, as the settings
 		// questions have them (Error — why it offers none); the fields of a text being edited, or of a reference's targets
 		// — fetch {Tab, Request: {Kind (ibRequest), …}}; an edit — event {Tab, Event: Input}, what the panel holds — event
@@ -1528,9 +1528,9 @@ namespace ibProtocol {
 		inline constexpr const char* Database  = "Database";
 		inline constexpr const char* User      = "User";
 		inline constexpr const char* Password  = "Password";
-		inline constexpr const char* Create    = "Create";   // made there when there is none yet (the designer's)
+		inline constexpr const char* Create    = "Create";   // made there when there is none yet (the studio's)
 		inline constexpr const char* Debug     = "Debug";    // the engine in the client's process brings its debug server up
-		                                                     // (the designer's Start debugging)
+		                                                     // (the studio's Start debugging)
 
 	}
 

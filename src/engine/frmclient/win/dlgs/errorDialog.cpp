@@ -46,8 +46,8 @@ ibDialogError::ibDialogError(ibFrontendMainFrame* parent, wxWindowID id,
 	m_buttonCloseWindow = new ibButton(this, wxID_ANY, _("Close window"), wxDefaultPosition, wxDefaultSize, 0);
 	m_bSizerButtons->Add(m_buttonCloseWindow, 0, wxALL | wxEXPAND, FromDIP(5));
 
-	m_buttonGotoDesigner = new ibButton(this, wxID_ANY, _("Go to Application Studio"), wxDefaultPosition, wxDefaultSize, 0);
-	m_bSizerButtons->Add(m_buttonGotoDesigner, 0, wxALL | wxEXPAND, FromDIP(5));
+	m_buttonGotoStudio = new ibButton(this, wxID_ANY, _("Go to Application Studio"), wxDefaultPosition, wxDefaultSize, 0);
+	m_bSizerButtons->Add(m_buttonGotoStudio, 0, wxALL | wxEXPAND, FromDIP(5));
 
 	m_buttonCloseProgram = new ibButton(this, wxID_ANY, _("Close program"), wxDefaultPosition, wxDefaultSize, 0);
 	m_bSizerButtons->Add(m_buttonCloseProgram, 0, wxALL | wxEXPAND, FromDIP(5));
@@ -62,7 +62,7 @@ ibDialogError::ibDialogError(ibFrontendMainFrame* parent, wxWindowID id,
 
 	// Connect Events
 	m_buttonCloseProgram->Connect(wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler(ibDialogError::OnButtonCloseProgramClick), nullptr, this);
-	m_buttonGotoDesigner->Connect(wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler(ibDialogError::OnButtonGotoDesignerClick), nullptr, this);
+	m_buttonGotoStudio->Connect(wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler(ibDialogError::OnButtonGotoStudioClick), nullptr, this);
 	m_buttonCloseWindow->Connect(wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler(ibDialogError::OnButtonCloseWindowClick), nullptr, this);
 
 	// The report in the code's font and colours, without line numbers.
@@ -104,9 +104,9 @@ void ibDialogError::OnButtonCloseProgramClick(wxCommandEvent& event)
 	EndModal(static_cast<int>(ibProtocol::ibRequest::ibError::ibAct::CloseProgram)); event.Skip();
 }
 
-void ibDialogError::OnButtonGotoDesignerClick(wxCommandEvent& event)
+void ibDialogError::OnButtonGotoStudioClick(wxCommandEvent& event)
 {
-	EndModal(static_cast<int>(ibProtocol::ibRequest::ibError::ibAct::GotoDesigner)); event.Skip();
+	EndModal(static_cast<int>(ibProtocol::ibRequest::ibError::ibAct::GotoStudio)); event.Skip();
 }
 
 void ibDialogError::OnButtonCloseWindowClick(wxCommandEvent& event)

@@ -287,15 +287,15 @@ bool ibValueMetaObjectChartOfCalculationTypes::OnBeforeRunMetaObject(int flags)
 
 	// Stamped BEFORE they run: a section's value ctor is registered under its id, and an id of 0 would
 	// register all three under one. Stamped only by the copy that saves itself — the copy that mirrors
-	// the database (the designer's baseline, the running application) has to go on NOT having a section
+	// the database (the studio's baseline, the running application) has to go on NOT having a section
 	// the database has no table for, or the diff never creates one (see StampIfNeverSaved). A section it
 	// leaves at 0 does not run either — the section refuses that itself, since the tree's own walk
 	// (RunSubtree) reaches it without passing through here.
 	//
-	// WHICH COPY THIS IS, THE RUN ALREADY SAYS: the designer's baseline is run with loadApplicationFlag, and
-	// the running application is not the designer — the pair a module's debugger set-up asks by
+	// WHICH COPY THIS IS, THE RUN ALREADY SAYS: the studio's baseline is run with loadApplicationFlag, and
+	// the running application is not the studio — the pair a module's debugger set-up asks by
 	// (metaModuleObject.cpp). It was a cast of the metadata to an application, to read its type.
-	const bool savesItself = (flags & loadApplicationFlag) == 0 && appData->DesignerMode();
+	const bool savesItself = (flags & loadApplicationFlag) == 0 && appData->StudioMode();
 	for (auto* relation : GetRelationTables()) {
 		if (savesItself && !relation->StampIfNeverSaved(m_metaData))
 			return false;

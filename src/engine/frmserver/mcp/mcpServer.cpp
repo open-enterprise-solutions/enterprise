@@ -110,7 +110,7 @@ ibMcpServer::ibMcpServer(ib::ClientHostCtorToken owner, ibSession* session) :
 // ============================================================================
 //
 // ⭐⭐ IT WATCHES ALONGSIDE, exactly as ibMcpDebugBridge watches a debugging session somebody else
-// is driving. The designer's navigator draws these same stages; this one forwards them, so an
+// is driving. The studio's navigator draws these same stages; this one forwards them, so an
 // assistant learns that a catalog was created the moment the tree does, instead of asking again
 // and diffing what came back.
 //
@@ -378,7 +378,7 @@ void ibMcpServer::Listen(std::function<void(const ibString& message)> told)
 
 		// Detach DESTROYS the bridge — the debug client's list owns it. ⚠ The debug client is the application's,
 		// so the bridge dies with it — and `Watch(nullptr)` can be what lets the application go. A pointer kept
-		// past that was read after it (crash dump 2026-10-20 16:45, thin designer's exit); the bridge's destructor
+		// past that was read after it (crash dump 2026-10-20 16:45, studio's exit); the bridge's destructor
 		// clears this one.
 		if (ibMcpDebugBridge* const bridge = m_debugBridge.load())
 			bridge->Detach();
@@ -413,11 +413,11 @@ void ibMcpServer::Listen(std::function<void(const ibString& message)> told)
 	// kept by the code rather than by the comment.
 	Publish(ibT("did"), Greeting(), ibEmptyString);
 
-	// LISTEN TO THE DEBUGGER TOO, from here on — a designer's: the application's person debugs nothing. The
+	// LISTEN TO THE DEBUGGER TOO, from here on — a studio's: the application's person debugs nothing. The
 	// bridge is a list, so this takes nothing away from the IDE's own windows — the developer debugs as they
 	// always did and the same stop is visible on this side. The debug client owns what it is given, which is
 	// why this is a bare `new` and why letting go is a call to it rather than a delete of our own.
-	if (IsDesignerSessionKind(m_session->GetKind()) && debugClient != nullptr && m_debugBridge.load() == nullptr) {
+	if (m_session->GetKind() == ibSessionKind::Studio && debugClient != nullptr && m_debugBridge.load() == nullptr) {
 		ibMcpDebugBridge* bridge = new ibMcpDebugBridge(this);
 		if (!bridge->Attach())
 			delete bridge;
@@ -429,7 +429,7 @@ void ibMcpServer::Stop()
 	// 🛑 OFF THE METADATA FIRST. The bridge HOLDS the application it watches, so the application goes
 	// after the server, never before it. While it held a bare pointer it was outlived twice: by the base's
 	// own release order (crash dump 2026-09-08 09:43, `_Adopt_unlocked` inside `ibMetaData::RemoveNotifier`),
-	// and by the session that opened it — the thin designer's logout let go of its application before the
+	// and by the session that opened it — the studio's logout let go of its application before the
 	// base closed, and this line called `RemoveNotifier` on a freed list (2026-10-16).
 	//
 	// Let go HERE because this is what the host calls before the client's session goes (ibClientHost::
@@ -515,7 +515,7 @@ void ibMcpServer::Say(const ibString& text)
 	// ⚠ AND ONLY AS LOUDLY AS THEY ASKED. A client that sent `logging/setLevel` above info is
 	// saying it does not want this frame; declaring the capability and then ignoring the switch
 	// would be advertising something we do not honour. The WINDOW is unaffected — a person
-	// watching their own designer is not the audience a client's log level is about.
+	// watching their own studio is not the audience a client's log level is about.
 	if (IsRunning() && kChatNoteLevel >= m_logLevel.load()) {
 		ibDataNode note;
 		note.SetValue(ibT("jsonrpc"), ibString(ibT("2.0")));
@@ -585,7 +585,7 @@ std::vector<ibString> ibMcpServer::TakeSaid()
 	}
 
 	// ⭐ AND THE WINDOWS ARE TOLD IT WAS — "waiting for an assistant to collect it" ends the moment one has. A window
-	// that is drawn only when its client asks (the thin designer's) has no timer to ask PendingCount by, and hears it
+	// that is drawn only when its client asks (the studio's) has no timer to ask PendingCount by, and hears it
 	// here. Nothing to show: not a line of the transcript.
 	if (!taken.empty())
 		Publish(ibT("taken"), ibEmptyString, ibEmptyString);
@@ -646,7 +646,7 @@ std::vector<ibMcpServer::Turn> ibMcpServer::GetConversation() const
 // ⭐ THE LONG ROAD, AND WHY IT IS WORTH THE PLUMBING. Say() drops a message in a queue and rings a
 // bell; whoever is connected still has to come and take it with a tool. If nobody is looking, the
 // message waits — which is exactly the complaint this exists to answer: text typed into the
-// designer sat there until the person went and prodded the assistant from somewhere else.
+// studio sat there until the person went and prodded the assistant from somewhere else.
 //
 // `sampling/createMessage` inverts it. The server asks; the client runs the completion and posts
 // the answer back to the same endpoint, where Answer() recognises it as a RESPONSE (it names no
@@ -727,8 +727,8 @@ bool ibMcpServer::AskModel(const ibString& question, ibString& refusal)
 // ⭐⭐ A TOOL RUNS WHERE A MOUSE CLICK RUNS.
 //
 // 🛑 Until this, every tool executed ON THE SOCKET THREAD — httplib's — and reached straight into
-// the designer's tree and its widgets. wx allows exactly one thread near a widget, so what came
-// back was not a refusal but a crash: `app_run` took the whole designer down on the spot, creating
+// the studio's tree and its widgets. wx allows exactly one thread near a widget, so what came
+// back was not a refusal but a crash: `app_run` took the whole studio down on the spot, creating
 // a form opened a modal and died on "only the main thread may do this", and a value edited from
 // here raced the UI over a refcount ("DecRef: invalid ref data count"). None of it was diagnosable
 // from the answer, because there was no answer — the process was gone.
@@ -804,7 +804,7 @@ bool ibMcpServer::RunTool(const class ibMcpTool* tool, const ibDataNode& argumen
 	// work, finite so a forgotten dialog is answered instead of hung on.
 	if (done.wait_for(std::chrono::minutes(5)) != std::future_status::ready) {
 		// ⚠ A WARNING — the journal's word for "nobody has to be stopped for this". Written as an error it
-		// put a modal "Designer Error" box (and a dump) on top of the very dialog the call was waiting
+		// put a modal "Studio Error" box (and a dump) on top of the very dialog the call was waiting
 		// behind, in front of a person who had pressed nothing (2026-09-28).
 		ibJournalWarning(ibT("mcp"), ibT("%s: not finished within five minutes - most likely waiting behind "
 			"a dialog; the call still runs when it is answered"), toolName);
@@ -1020,11 +1020,11 @@ void ibMcpDescribePlatform(const ibApplicationInstance* applicationInstance, ibD
 	into.AddField(ibT("build"), ibDataValue::Int((std::int64_t)GetBuildId()));
 
 	// ⭐⭐ AND WHICH BASE THIS IS. Every tool here answers for the process that happens to hold the port,
-	// and two designers can stand open on two different bases — so an answer naming the application but
+	// and two studios can stand open on two different bases — so an answer naming the application but
 	// not the base lets a caller work in the wrong one and never learn it from anything but the journal
 	// (2026-09-22: a print form, a command and an applied application, all built in the base somebody
 	// else had open). Where the base lives is said beside it: a Firebird folder, or a PostgreSQL server's database.
-	// A designer's to know: an application's person is given the base by their client, not where it lies.
+	// A studio's to know: an application's person is given the base by their client, not where it lies.
 	if (!ibIsMcpInApplication()) {
 		into.SetValue(ibT("connection"), applicationInstance->GetDatabaseDescription());
 		if (!applicationInstance->GetFile().IsEmpty())
@@ -1196,7 +1196,7 @@ void ibMcpDescribePlatform(const ibApplicationInstance* applicationInstance, ibD
 	// ⭐⭐ TWO QUESTIONS THAT ONE WORD WOULD HIDE. "Saved" sounds like one state and is two, with
 	// different consequences and different cures:
 	//
-	//   unsavedEdits  - changed since it was last STORED. Close the designer now and this is
+	//   unsavedEdits  - changed since it was last STORED. Close the studio now and this is
 	//                   gone. `app_save` is the cure, and it is cheap.
 	//   inDatabase    - the same as the copy the DATABASE holds. False means the running
 	//                   application is still on the old one however much was saved.
@@ -1231,14 +1231,14 @@ void ibMcpDescribePlatform(const ibApplicationInstance* applicationInstance, ibD
 	// always true and then reported `inDatabase` only when it happened to hold.
 	//
 	// ⚠ AND NOT `GetApplication() != nullptr` EITHER, which was the other thing tried here: that
-	// answers "is there a designer-side BASELINE", and it is null in the RUNTIME — precisely where
+	// answers "is there a studio-side BASELINE", and it is null in the RUNTIME — precisely where
 	// this field matters most. IsApplicationSave is virtual on the base and is the question itself.
 	const bool applied = metaData->IsApplicationSave();
 
 	into.AddField(ibT("inDatabase"), ibDataValue::Bool(applied));
 
 	// ⭐⭐ THE THIRD FACT, AND IT USED TO BE A CONFESSION INSTEAD OF AN ANSWER. "Would closing the
-	// designer lose this?" is the question a session actually needs, and it is independent of both
+	// studio lose this?" is the question a session actually needs, and it is independent of both
 	// fields above: a plain save writes the store and leaves the database exactly as behind as it
 	// was, so `differsFromDatabase: true` with nothing at risk is the ordinary state. The metadata
 	// now keeps it (ibMetaData::IsStored) from the only two occasions that can move it.
@@ -1259,15 +1259,15 @@ void ibMcpDescribePlatform(const ibApplicationInstance* applicationInstance, ibD
 		into.SetValue(ibT("state"), ibString(ibT("storedNotApplied")));
 
 		// 🛑 THE FIRST HALF OF THIS SENTENCE USED TO BE ASSERTED WITHOUT KNOWING IT. The word says
-		// "stored", and the text said "it survives closing the designer" — while four lines below,
+		// "stored", and the text said "it survives closing the studio" — while four lines below,
 		// the same answer admitted that nothing tracked whether it had been stored at all. Now it
 		// is known, so the state says which of the two it is instead of asserting the good one.
 		into.SetValue(ibT("meaning"), unsaved
-			? ibMcpText("NOT stored: closing the designer loses this work. And the DATABASE holds an "
+			? ibMcpText("NOT stored: closing the studio loses this work. And the DATABASE holds an "
 			    "older application besides, so the running application does not have any of it. "
 			    "`app_save` writes the store; `app_apply` does that AND publishes to the "
 			    "database. `database_diff` says what differs.")
-			: ibMcpText("Stored - it survives closing the designer - but the DATABASE still holds an "
+			: ibMcpText("Stored - it survives closing the studio - but the DATABASE still holds an "
 			    "older application, so the running application does not have any of it. "
 			    "`database_diff` says what differs; `app_apply` writes it."));
 	}
@@ -1297,7 +1297,7 @@ void ibMcpDescribePlatform(const ibApplicationInstance* applicationInstance, ibD
 	// session and appears only when it is true.
 	if (unsaved)
 		into.SetValue(ibT("atRisk"),
-			ibMcpText("There are edits that exist only in this process. Closing the designer - including "
+			ibMcpText("There are edits that exist only in this process. Closing the studio - including "
 			  "a close for a rebuild - loses them, and nothing else in this answer says so: "
 			  "`differsFromDatabase` is about the DATABASE and stays true after a perfectly good "
 			  "save. `app_save` is the cure and is cheap."));
@@ -1371,7 +1371,7 @@ void AppendPersonLanguage(ibString& out, const ibUserInfo& who)
 			<< ibT(" - answer them in it, whatever language this text is in.\n");
 }
 
-// ⭐⭐ WHAT THE APPLICATION'S ASSISTANT IS TOLD — its own text, not the designer's with lines struck out: that one
+// ⭐⭐ WHAT THE APPLICATION'S ASSISTANT IS TOLD — its own text, not the studio's with lines struck out: that one
 // sells building, and every verb it leads to is not on offer here (Max, 2026-10-31: it says at once which mode this
 // is and that nothing can be changed from it).
 ibString BuildApplicationOrientation(const ibApplicationInstance* applicationInstance)
@@ -1382,10 +1382,10 @@ ibString BuildApplicationOrientation(const ibApplicationInstance* applicationIns
 		<< (unsigned)GetBuildId()
 		<< ibT("), working inside the session of the person at it, with exactly their rights.\n\n");
 
-	out << ibT("THIS IS NOT THE DESIGNER, AND YOU CANNOT CHANGE THE APPLICATION FROM HERE. Objects, ")
-		<< ibT("forms, modules and reports are changed in the designer, and the tools that do it are ")
+	out << ibT("THIS IS NOT THE STUDIO, AND YOU CANNOT CHANGE THE APPLICATION FROM HERE. Objects, ")
+		<< ibT("forms, modules and reports are changed in the studio, and the tools that do it are ")
 		<< ibT("not offered here: `mcp_search` will not find them, and that is not a fault. When the ")
-		<< ibT("person asks for such a change, say plainly that it is the designer's work.\n\n");
+		<< ibT("person asks for such a change, say plainly that it is the studio's work.\n\n");
 
 	AppendTextEncoding(out);
 
@@ -1469,7 +1469,7 @@ ibString BuildOrientation(const ibApplicationInstance* applicationInstance)
 
 	ibString out;
 
-	out << ibT("You are connected to a running OES Enterprise DESIGNER (build ")
+	out << ibT("You are connected to a running OES Enterprise STUDIO (build ")
 		<< (unsigned)GetBuildId()
 		<< ibT("), working inside the session of the person at it, with exactly their rights. ")
 		<< ibT("What you change is their live application.\n\n");
@@ -1595,7 +1595,7 @@ ibString BuildOrientation(const ibApplicationInstance* applicationInstance)
 	ibMetaDataApplicationBase* metaData = ibApplicationInstance::GetActiveMetaData();
 
 	if (metaData == nullptr || !metaData->IsOpen()) {
-		out << ibT("NO APPLICATION IS OPEN in this designer yet.\n");
+		out << ibT("NO APPLICATION IS OPEN in this studio yet.\n");
 		return out;
 	}
 
@@ -1671,7 +1671,7 @@ ibString BuildOrientation(const ibApplicationInstance* applicationInstance)
 		<< ibT(" BEFORE WRITING CODE - the dialect can be switched while you are connected, and ")
 		<< ibT("the other one is rejected by the compiler while reading perfectly.\n")
 		<< ibT(" BEFORE SAYING SOMETHING IS DONE - `unsavedEdits` means it dies when the ")
-		<< ibT("designer closes, `inDatabase: false` means the running application never got it. ")
+		<< ibT("studio closes, `inDatabase: false` means the running application never got it. ")
 		<< ibT("Both are silent, and \"done\" is false in each of them for a different reason ")
 		<< ibT("with a different cure.\n");
 
@@ -1848,7 +1848,7 @@ ibString BuildOrientation(const ibApplicationInstance* applicationInstance)
 	// it by a person, which is what happens today.
 	out << ibT("THE PLATFORM IS NOT ONE YOU KNOW. Its script language, query language and type ")
 		<< ibT("system are its own - do not carry over the shape of anything familiar. It ")
-		<< ibT("documents itself, and every one of these reads the same reference the designer's ")
+		<< ibT("documents itself, and every one of these reads the same reference the studio's ")
 		<< ibT("syntax helper shows:\n")
 		<< ibT(" `syntax_search` / `syntax_get` - the language reference, function by function\n")
 		<< ibT(" `type_list` / `type_members` - what a value IS and what it can do\n")
@@ -1920,7 +1920,7 @@ ibString BuildOrientation(const ibApplicationInstance* applicationInstance)
 		<< ibT("When a run answers something you did not expect, `trace_read` has the engine's own ")
 		<< ibT("commentary on it - the SQL exactly as sent, the road the query took, the keys a ")
 		<< ibT("join was stitched on - for the application under the debugger as well as for this ")
-		<< ibT("designer. (`journal_read` is the other journal: what the INSTALLATION did - logins, ")
+		<< ibT("studio. (`journal_read` is the other journal: what the INSTALLATION did - logins, ")
 		<< ibT("writes, postings - the record an auditor reads.)\n\n");
 
 	out << ibT("THREE VERBS NOTHING LEADS YOU TO, and each is a step you will otherwise miss:\n")
@@ -1935,7 +1935,7 @@ ibString BuildOrientation(const ibApplicationInstance* applicationInstance)
 		<< ibT("`DefaultFormObject` / ..., which are ordinary lists. A form's MAIN ATTRIBUTE has its ")
 		<< ibT("own verb, `form_attribute`.\n")
 		<< ibT(" `app_check` -> `app_save` -> `app_apply` - half-built / outlives the ")
-		<< ibT("designer / reaches the running application. Three different questions; none ")
+		<< ibT("studio / reaches the running application. Three different questions; none ")
 		<< ibT("implies the others.\n\n");
 
 	// ⭐ AND A STEP NOTHING LEADS YOU TO EITHER, the one taken instead being a query (Max, 2026-10-28: "sometimes
@@ -1948,7 +1948,7 @@ ibString BuildOrientation(const ibApplicationInstance* applicationInstance)
 		<< ibT("appearance or grouping. A list's query is not edited for it - a query is for what a dot ")
 		<< ibT("cannot say: a total, a balance, a table joined by something other than a reference.\n\n");
 
-	out << ibT("THE CONVERSATION. A person may be typing to you in the designer's assistant ")
+	out << ibT("THE CONVERSATION. A person may be typing to you in the studio's assistant ")
 		<< ibT("window: `chat_take` collects new messages (and EMPTIES the queue), ")
 		<< ibT("`chat_history` reads the whole exchange back without collecting, `chat_say` ")
 		<< ibT("answers into their window.\n\n");
@@ -1983,7 +1983,7 @@ ibString BuildOrientation(const ibApplicationInstance* applicationInstance)
 		<< ibT("request. Until `chat_say` has happened, every other verb is refused; what runs ")
 		<< ibT("before it is exactly what the greeting is made of: `chat_history`, ")
 		<< ibT("`platform_state`, `metadata_tree`, `mcp_search`, `chat_say`. A person is sitting ")
-		<< ibT("in front of this designer and cannot see that anything connected.\n")
+		<< ibT("in front of this studio and cannot see that anything connected.\n")
 		<< ibT("So: read `chat_history` - you may be joining something ")
 		<< ibT("already in progress - and then `chat_say` a greeting with four things in it:\n")
 		<< ibT(" WHO YOU ARE. Name yourself - which assistant and which model. The handshake ")
@@ -2548,7 +2548,7 @@ ibString ibMcpServer::Answer(const ibString& request, const ibMcpWireHeaders& he
 				// arrives the way every other "I did not do that, and here is why" arrives — in
 				// the same field the caller already reads.
 				//
-				// ⭐⭐ NOT A REMINDER — A DOOR. There is a person sitting in front of this designer, and
+				// ⭐⭐ NOT A REMINDER — A DOOR. There is a person sitting in front of this studio, and
 				// from their side a connection is INVISIBLE until something says so: an assistant that
 				// reads their whole application in silence looks exactly like one that never came.
 				//

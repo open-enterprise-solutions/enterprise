@@ -22,13 +22,13 @@
 // the same for every user; what a user may see is the roles' question, and a refusal. An option never
 // refuses anything — it only does not offer it.
 //
-// ⭐ THE DESIGNER SEES EVERYTHING. The gate answers "available" there, and wherever there is no application
+// ⭐ THE STUDIO SEES EVERYTHING. The gate answers "available" there, and wherever there is no application
 // at all (a test), so nothing an author edits can disappear from under them. A composition's run is the one
 // exception: what it prints is what a person sees, so it asks as the application (AsApplication, below).
 //
 // The values are read once per open application and kept; the write door of an option drops them
 // (OnAfterValueWrite), so the next form built in this process follows the new value. Another client reads
-// it at its next start — no timer, so the moment a change arrives is one anybody can name. The designer
+// it at its next start — no timer, so the moment a change arrives is one anybody can name. The studio
 // reads them at the start of each run it composes as the application (AsApplication, below).
 
 #include "backend/backend_core.h"   // ibMetaID
@@ -71,17 +71,17 @@ public:
 	static bool IsAvailable(const class ibMetaData* metaData, const std::set<ibMetaID>& options);
 
 	// Whether anything at all is unavailable in this application — the cheap question a control asks
-	// before it walks its source for the column to ask the real one. False in the designer, but for a run.
+	// before it walks its source for the column to ask the real one. False in the studio, but for a run.
 	static bool AnyUnavailable(const class ibMetaData* metaData);
 
 	// What was answered about this application is dropped; the next question reads the values again.
 	static void Forget(const class ibMetaData* metaData);
 
-	// ⭐ THE APPLICATION'S VIEW, INSIDE THE DESIGNER — for what PRODUCES what a person sees: a composition's run,
+	// ⭐ THE APPLICATION'S VIEW, INSIDE THE STUDIO — for what PRODUCES what a person sees: a composition's run,
 	// which opens it itself (ibDataDBComposer::RefreshSourceFields), whoever called the run. While one is
-	// open on this thread the gate answers as the running application does, not with "the designer sees
-	// everything" — which stays the rule for what an author edits. In the designer the outermost scope reads
-	// the values afresh: the base as it stands now, not as it stood when the designer first asked. A scope, so
+	// open on this thread the gate answers as the running application does, not with "the studio sees
+	// everything" — which stays the rule for what an author edits. In the studio the outermost scope reads
+	// the values afresh: the base as it stands now, not as it stood when the studio first asked. A scope, so
 	// it cannot outlive its use.
 	class BACKEND_API AsApplication {
 	public:

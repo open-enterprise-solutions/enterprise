@@ -194,7 +194,7 @@
     <ClCompile Include="backend\debugger\debugClientQuery.cpp" />
     <ClCompile Include="backend\vcs\gitService.cpp" />
     <ClCompile Include="mainFrame\debugger\debugClientImpl.cpp" />
-    <ClCompile Include="win\editor\codeEditor\codeEditorDesigner.cpp" />
+    <ClCompile Include="win\editor\codeEditor\codeEditorStudio.cpp" />
     <ClCompile Include="win\editor\sharedAttributeEditor\sharedAttributeEditor.cpp" />
     <ClCompile Include="win\editor\featureOptionEditor\featureOptionEditor.cpp" />
     <ClCompile Include="win\editor\interfaceEditor\interfaceEditor.cpp" />
@@ -224,10 +224,10 @@
     <ClCompile Include="docManager\templates\docViewMetaFile.cpp" />
     <ClCompile Include="mainFrame\applicationCompare\applicationCompareModel.cpp" />
     <ClCompile Include="mainFrame\local\localWindow.cpp" />
-    <ClCompile Include="mainFrame\mainFrameDesigner.cpp" />
-    <ClCompile Include="mainFrame\mainFrameDesignerEvent.cpp" />
-    <ClCompile Include="mainFrame\mainFrameDesignerMenu.cpp" />
-    <ClCompile Include="mainFrame\mainFrameDesignerParts.cpp" />
+    <ClCompile Include="mainFrame\mainFrameStudio.cpp" />
+    <ClCompile Include="mainFrame\mainFrameStudioEvent.cpp" />
+    <ClCompile Include="mainFrame\mainFrameStudioMenu.cpp" />
+    <ClCompile Include="mainFrame\mainFrameStudioParts.cpp" />
     <ClCompile Include="mainFrame\metaTree\treeApplication.cpp" />
     <ClCompile Include="mainFrame\metaTree\treeApplicationEvent.cpp" />
     <ClCompile Include="mainFrame\metaTree\treeApplication_impl.cpp" />
@@ -240,7 +240,7 @@
     <ClCompile Include="mainFrame\stack\stackWindow.cpp" />
     <ClCompile Include="mainFrame\vcs\gitPanel.cpp" />
     <ClCompile Include="mainFrame\watch\watchWindow.cpp" />
-    <ClCompile Include="mainFrame\welcome\welcomeWindowDesigner.cpp" />
+    <ClCompile Include="mainFrame\welcome\welcomeWindowStudio.cpp" />
     <ClCompile Include="syntaxHelper\helpChooserDialog.cpp" />
     <ClCompile Include="syntaxHelper\helpDetailView.cpp" />
     <ClCompile Include="syntaxHelper\helpDragSource.cpp" />
@@ -261,7 +261,7 @@
     <ClInclude Include="backend\metaCollection\metaDiff.h" />
     <ClInclude Include="backend\vcs\gitService.h" />
     <ClInclude Include="mainFrame\debugger\debugClientImpl.h" />
-    <ClInclude Include="win\editor\codeEditor\codeEditorDesigner.h" />
+    <ClInclude Include="win\editor\codeEditor\codeEditorStudio.h" />
     <ClInclude Include="win\editor\sharedAttributeEditor\sharedAttributeEditor.h" />
     <ClInclude Include="win\editor\featureOptionEditor\featureOptionEditor.h" />
     <ClInclude Include="win\editor\interfaceEditor\interfaceEditor.h" />
@@ -286,7 +286,7 @@
     <ClInclude Include="docManager\templates\docViewMetaFile.h" />
     <ClInclude Include="mainFrame\applicationCompare\applicationCompareModel.h" />
     <ClInclude Include="mainFrame\local\localWindow.h" />
-    <ClInclude Include="mainFrame\mainFrameDesigner.h" />
+    <ClInclude Include="mainFrame\mainFrameStudio.h" />
     <ClInclude Include="mainFrame\metaTree\clipboardLock.h" />
     <ClInclude Include="mainFrame\metaTree\treeApplication.h" />
     <ClInclude Include="mainFrame\metaTree\treeDataTool.h" />
@@ -294,7 +294,7 @@
     <ClInclude Include="mainFrame\stack\stackWindow.h" />
     <ClInclude Include="mainFrame\vcs\gitPanel.h" />
     <ClInclude Include="mainFrame\watch\watchWindow.h" />
-    <ClInclude Include="mainFrame\welcome\welcomeWindowDesigner.h" />
+    <ClInclude Include="mainFrame\welcome\welcomeWindowStudio.h" />
     <ClInclude Include="syntaxHelper\helpChooserDialog.h" />
     <ClInclude Include="syntaxHelper\helpDetailView.h" />
     <ClInclude Include="syntaxHelper\helpDragSource.h" />
@@ -309,7 +309,7 @@
     <ClInclude Include="win\dlg\webAddress.h" />
   </ItemGroup>
   <ItemGroup>
-    <Image Include="designer.ico" />
+    <Image Include="studio.ico" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="appstudio.rc" />

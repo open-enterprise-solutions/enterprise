@@ -308,7 +308,7 @@ void ibCallTip::Show(int currentPos, const wxString& sTitleText)
 	m_clickPlace = 0;
 	m_val = sTitleText;
 
-	// The theme's tooltip, in the look in force as it shows — as the designer's (frmclient's callTip.cpp).
+	// The theme's tooltip, in the look in force as it shows — as the studio's (frmclient's callTip.cpp).
 	m_colourBG     = StyleColour(ibStyleItem::TooltipBackground);
 	m_colourUnSel  = StyleColour(ibStyleItem::TooltipText);
 	m_colourSel    = StyleColour(ibStyleItem::SpecialText);

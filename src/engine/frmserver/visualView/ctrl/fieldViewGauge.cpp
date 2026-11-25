@@ -10,8 +10,8 @@
 
 void ibFieldViewGauge::OnUpdate(ibDataNode& state, ibVisualHost* host)
 {
-	// The value, read through the binding. Not in the designer: there the gauge shows no value.
-	if (appData->DesignerMode())
+	// The value, read through the binding. Not in the studio: there the gauge shows no value.
+	if (appData->StudioMode())
 		return;
 
 	ibValue value;

@@ -72,7 +72,7 @@ enum class ibStyleKind : std::uint8_t {
 	Border,
 };
 
-// An item, its kind and its name - what the designer and a script call it, and a saved style keys it by.
+// An item, its kind and its name - what the studio and a script call it, and a saved style keys it by.
 struct CORE_API ibStyleItemInfo {
 	ibStyleItem m_item;
 	ibStyleKind m_kind;

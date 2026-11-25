@@ -101,7 +101,7 @@ const ibValueMetaObjectGenericData* ibValueForm::GetMetaObject() const
 	if (const ibSourceDataObject* src = mainAttr->GetSourceValue())
 		if (const ibValueMetaObjectGenericData* obj = src->GetSourceMetaObject())
 			return obj;
-	// (b) DESIGNER — no live value; resolve the main's TYPE (an object reference) to the object metaobject through
+	// (b) STUDIO — no live value; resolve the main's TYPE (an object reference) to the object metaobject through
 	// the form's own application. Same resolve the attribute tree uses (ConvertToMetaIds) — metadata, not a live value.
 	const ibMetaData* metaData = GetMetaData();
 	if (metaData != nullptr) {
@@ -283,7 +283,7 @@ void ibValueForm::ChoiceDocForm(ibValue& vSelected)
 
 void ibValueForm::RefreshDocForm()
 {
-	if (!appData->DesignerMode()) {
+	if (!appData->StudioMode()) {
 		CallAsEvent(ibT("refreshDisplay"));
 	}
 }
@@ -295,7 +295,7 @@ bool ibValueForm::CloseDocForm()
 	if (visualDoc == nullptr)
 		return false;
 
-	if (!appData->DesignerMode() && !visualDoc->IsVisualDemonstrationDoc()) {
+	if (!appData->StudioMode() && !visualDoc->IsVisualDemonstrationDoc()) {
 
 		ibValue bCancel = false;
 		CallAsEvent(ibT("beforeClose"), bCancel);

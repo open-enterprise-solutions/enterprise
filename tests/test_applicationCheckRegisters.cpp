@@ -57,7 +57,7 @@ TEST(ApplicationCheckRegisters, NamesWhatTheSaveWouldRefuseAndOnlyThat) {
 		}
 	} release;
 
-	// The base is an in-memory SQLite, and the application is the one its designer session edits - run, as
+	// The base is an in-memory SQLite, and the application is the one its studio session edits - run, as
 	// app_check finds it (test_sharedModuleCheck.cpp says why each step is there).
 	ibConnectionPool* pool = ibApplicationInstance::GetConnectionPool();
 	ASSERT_NE(pool, nullptr);
@@ -71,7 +71,7 @@ TEST(ApplicationCheckRegisters, NamesWhatTheSaveWouldRefuseAndOnlyThat) {
 	ibSessionRegistry* const registry = ibApplicationInstance::GetSessionRegistry();
 	ASSERT_NE(registry, nullptr);
 	ibSessionHolder holder = registry->MintUnlisted(
-		std::make_shared<ibSession>(wxT("register-check"), ibSessionKind::Designer));
+		std::make_shared<ibSession>(wxT("register-check"), ibSessionKind::Studio));
 	ibSession* const session = holder.Get();
 	ASSERT_NE(session, nullptr);
 	ibSessionScope scope(session);

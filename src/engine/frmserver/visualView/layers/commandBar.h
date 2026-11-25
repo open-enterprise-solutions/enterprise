@@ -24,7 +24,7 @@ class ibDataNode;   // serialize/dataBuilder.h — universal node (layer -> node
 // One command the bar consists of. id == wxNOT_FOUND marks a separator. representation
 // is the resolved display mode (picture / text / both) for THIS command; enabled greys the
 // tool out (an item's Enabled flag) without dropping it from the bar. item is
-// the source child (nullptr for an AutoFill command) — lets a designer click resolve back.
+// the source child (nullptr for an AutoFill command) — lets a studio click resolve back.
 // ⭐⭐ WHAT A BAR ENTRY IS — and there are three answers, which is why this is a KIND and not a flag.
 // A COMMAND stands for something to DO; a QUICK FILTER stands for a filter LINE the author marked
 // «quick access», and clicking it edits that line's value rather than running anything; a GROUP stands
@@ -116,7 +116,7 @@ public:
 	}
 	void SetCommandMetaId(const ibMetaID& id) { m_propertyCommand->SetValue(ibCommandDescription(id)); }
 
-	// The bar this item belongs to — set on add; routes the designer refresh + name uniqueness,
+	// The bar this item belongs to — set on add; routes the studio refresh + name uniqueness,
 	// and is the Action picker's source (the owner frame's action collection).
 	void SetBar(class ibValueCommandBar* bar) { m_bar = bar; }
 	class ibValueCommandBar* GetBar() const { return m_bar; }
@@ -143,9 +143,9 @@ private:
 
 	ibPropertyCategory* m_category = ibPropertyObject::CreatePropertyCategory(ibT("Command"), _("Command"));
 	ibPropertyUString* m_propertyName = ibPropertyObject::CreateProperty<ibPropertyUString>(m_category, ibT("Name"), _("Name"),
-		_("The item's name, unique among the command bar's items. It identifies the item in the designer; the user never sees it."), _("Command"));
+		_("The item's name, unique among the command bar's items. It identifies the item in the studio; the user never sees it."), _("Command"));
 	// Empty by default ON PURPOSE: an unset caption lets the bound command provide the DEFAULT (BuildCommands
-	// fills it via the command door). A designer who types one overrides that — own caption on top.
+	// fills it via the command door). A studio who types one overrides that — own caption on top.
 	ibPropertyTString* m_propertyCaption = ibPropertyObject::CreateProperty<ibPropertyTString>(m_category, ibT("Caption"), _("Caption"),
 		_("The item's caption on the bar. Empty: the bound command's own caption. Can be written per language."), ibT(""));
 	ibPropertyEnum<ibValueEnumRepresentation>* m_propertyRepresentation = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumRepresentation>>(m_category, ibT("Representation"), _("Representation"),
@@ -190,8 +190,8 @@ public:
 	// ibFrontendCommandReceiver gate — the bar IS-A command door; the walk starts at the owner frame's form.
 	virtual ibValueForm* GetCommandGateForm() const override;
 
-	// Child COMMANDS (runtime items). Added via the designer; the manual set (AutoFill off).
-	// Inline so the designer (separate module) links without exporting the symbol.
+	// Child COMMANDS (runtime items). Added via the studio; the manual set (AutoFill off).
+	// Inline so the studio (separate module) links without exporting the symbol.
 	ibValueCommandBarItem* AddCommandItem() {
 		ibValueCommandBarItem* item = new ibValueCommandBarItem();
 		item->SetBar(this);
@@ -265,7 +265,7 @@ public:
 	void Update(ibDataNode& state);
 
 	// Reverse-lookup the child that produced the command with this id (built by BuildCommands).
-	// nullptr for an AutoFill command (no child). Used by the designer to select on tool click.
+	// nullptr for an AutoFill command (no child). Used by the studio to select on tool click.
 	ibValueCommandBarItem* FindItemByCommandId(const ibActionID& id) const {
 		for (const ibCommandEntry& c : m_commands)
 			if (c.id == id) return c.item;
@@ -306,7 +306,7 @@ private:
 	std::vector<ibCommandEntry> m_commands;
 	std::vector<ibValuePtr<ibValueCommandBarItem>> m_items;   // child COMMANDS (runtime)
 	std::vector<ibValuePtr<ibValueCommandBarItem>> m_autoItems; // TRANSIENT AutoFill items for the owner object's own commands — rebuilt each BuildCommands, never serialized
-	bool                        m_treeExpanded = true;        // designer tree node open-state
+	bool                        m_treeExpanded = true;        // studio tree node open-state
 
 	ibPropertyCategory* m_category = ibPropertyObject::CreatePropertyCategory(ibT("CommandBar"), _("Command bar"));
 	ibPropertyBoolean* m_propertyAutoFill = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_category, ibT("AutoFill"), _("Auto fill"),

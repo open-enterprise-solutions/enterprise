@@ -3,7 +3,7 @@
 
 // THE CLIENT'S MENU — wx's menu (wxMenuBar, wxMenu, wxMenuItem) made data: what the desktop's main frame put in its
 // menu bar, which a client draws as it likes. Built by the frame of the client's mode, as the desktop's
-// InitializeDefaultMenu built it (ibClientFrameRuntime, ibClientFrameDesigner). An item does one of the things the
+// InitializeDefaultMenu built it (ibClientFrameWorkspace, ibClientFrameStudio). An item does one of the things the
 // protocol already does — a command of the documents (`command`), a schema the client shows (`schema`) or that
 // schema's command (`schema` with Command) — or opens a menu of its own; its name and key are the command's own, as the doc manager registered it. Whether an
 // item is enabled is not kept here: it is asked as the frame is drawn — of the document a command is done on, of

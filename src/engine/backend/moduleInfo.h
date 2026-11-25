@@ -34,9 +34,9 @@ public:
 		ibValue** paParams, const long lSizeArray);
 
 	// Allocate the runtime slot (ProcUnit) for this descriptor on
-	// demand. No-op in Designer mode (no script execution ever) and
+	// demand. No-op in Studio mode (no script execution ever) and
 	// when the slot is already populated. Callers that previously
-	// inlined the make_shared + DesignerMode check use this single
+	// inlined the make_shared + StudioMode check use this single
 	// entry instead.
 	void InitializeRuntime();
 
@@ -79,7 +79,7 @@ public:
 
 	// Bring up this descriptor's bytecode: from the cache, and only when it
 	// has none there a compiler is made for it, and it goes when the
-	// bytecode is made. Skips in Designer mode (the designer
+	// bytecode is made. Skips in Studio mode (the studio
 	// never runs a module; it asks a compile chain, CreateCompiler).
 	// Returns false when there is no module to compile. Backend compile errors
 	// propagate as ibBackendException — callers with swallow semantics wrap in
@@ -88,7 +88,7 @@ public:
 
 	// Run the compiled top-level of this descriptor on its ProcUnit —
 	// initialization entry run at object/form creation, fires handlers
-	// registered at module scope. Skips in Designer mode (no execution
+	// registered at module scope. Skips in Studio mode (no execution
 	// ever) and when either side of the pair is absent. delta matches
 	// ibProcUnit::Execute's semantics: delta=true EXECUTES the module
 	// top-level body (the default — almost every descriptor wants its
@@ -98,7 +98,7 @@ public:
 	// top-level is just declarations.
 	void Run(bool delta = true);
 
-	// Low-level execute — unconditional (no Designer guard). Prefer
+	// Low-level execute — unconditional (no Studio guard). Prefer
 	// Run() in subclass code; Execute() remains for compatibility and
 	// for paths that re-Execute on already-compiled state. Nothing compiled,
 	// nothing runs. The binder is made for the call, from the binds as they
@@ -128,12 +128,12 @@ public:
 	virtual const ibValueMetaObjectModuleBase* GetMetaForCompile() const { return m_metaForCompile; }
 
 	// What a child of this descriptor compiles against and its ProcUnit runs under.
-	// Null until Compile has brought it up, and always in the designer.
+	// Null until Compile has brought it up, and always in the studio.
 	virtual const ibByteCode* GetByteCode() const { return m_byteCode.get(); }
 
 	// A compiler of this descriptor's module with what is bound here and a compiler for every
 	// descriptor above it, held by the one below; nothing else keeps them. Null when there is no
-	// module. It is what a question about the text asks where nothing is compiled: the designer's
+	// module. It is what a question about the text asks where nothing is compiled: the studio's
 	// check and its hints. The first Compile on it compiles the whole chain, the root first.
 	virtual std::unique_ptr<ibCompileModule> CreateCompiler() const;
 
@@ -176,10 +176,10 @@ public:
 	// Public on purpose: the caller is a sibling value, not a subclass.
 	//
 	// ⭐⭐ AND WHERE THERE IS NO BYTECODE, THE TEXT IS ASKED INSTEAD — same question, same
-	// answer, second road. The designer never emits bytecode for a module, so everything
+	// answer, second road. The studio never emits bytecode for a module, so everything
 	// built on this said nothing there: `Module.` offered no exports in the code editor or
 	// in script_complete, and a manager host (Catalogs.Goods., commonObject.cpp) missed its
-	// manager module's exports the same way — while the designer's own "Procedures and
+	// manager module's exports the same way — while the studio's own "Procedures and
 	// functions" window listed them perfectly, because IT read the text (ibParseCode).
 	//
 	// Out-of-line since: reading the text needs the parser and the module object, and this
@@ -264,7 +264,7 @@ public:
 		return lVarNum != ibNOT_FOUND && pu->SetPropVal(lVarNum, varPropVal);
 	}
 
-	// The read asks the running module, then the binding itself, which the designer has as well (no ProcUnit there).
+	// The read asks the running module, then the binding itself, which the studio has as well (no ProcUnit there).
 	virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal) override {
 		const ibString& strPropName = this->GetPropName(lPropNum);
 		const std::shared_ptr<ibProcUnit> pu = GetProcUnit();

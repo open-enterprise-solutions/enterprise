@@ -98,7 +98,7 @@ int PickFreePort() {
 }
 
 // PID file location — per-OES-process so multiple OES instances
-// (designer + enterprise on the same host, or two enterprises on
+// (studio + enterprise on the same host, or two enterprises on
 // the same install) don't stomp each other's recovery record.
 // Filename embeds our own PID so each instance owns its own file.
 ibString PidFilePath() {

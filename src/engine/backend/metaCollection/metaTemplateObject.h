@@ -9,7 +9,7 @@
 // ONE description (core/description/templateDescription.h): the kind and the schema of that kind. A SPREADSHEET
 // holds the cells, named areas and parameters a print form is assembled from; a COMPOSER holds a composition —
 // what a report reads and how it is laid out. The owner's GetTemplate(name) hands code a fresh value of either,
-// and the designer opens the kind's editor.
+// and the studio opens the kind's editor.
 //
 // ⭐ IN A REPORT A COMPOSER IS DECLARED, NOT ADDED AS AN ATTRIBUTE. It sits inside the report the way a form does
 // (Max, 2026-08-20: "an attribute you add by hand; this type lives in the object"). Declaring one is what makes

@@ -134,7 +134,7 @@ ibFormPtr<ibBackendValueForm> ibValueRecordManagerObjectInformationRegister::Get
 
 bool ibValueRecordManagerObjectInformationRegister::WriteRegister(bool replace)
 {
-	if (!appData->DesignerMode())
+	if (!appData->StudioMode())
 	{
 		ibConnectionScope scope = ibSession::Current()->OpenConnectionScope();
 
@@ -192,7 +192,7 @@ bool ibValueRecordManagerObjectInformationRegister::WriteRegister(bool replace)
 
 bool ibValueRecordManagerObjectInformationRegister::DeleteRegister()
 {
-	if (!appData->DesignerMode())
+	if (!appData->StudioMode())
 	{
 		ibConnectionScope scope = ibSession::Current()->OpenConnectionScope();
 

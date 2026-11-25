@@ -77,7 +77,7 @@ bool ibValueMetaObjectTemplate::OnReloadMetaObject()
 		&& ibValueMetaObjectTemplateBase::OnReloadMetaObject();
 }
 
-// ⭐ THE KIND CHOSEN after the template is made (the designer asks): the provider of the kind it was lets it go as
+// ⭐ THE KIND CHOSEN after the template is made (the studio asks): the provider of the kind it was lets it go as
 // if it were deleted, the provider of the kind it is takes it as if it were made with it, and each re-prepares what
 // it has a stake in — a composer's report, whose object carries a composition as a field.
 void ibValueMetaObjectTemplate::OnPropertyChanged(ibProperty* property, const ibVariant& oldValue, const ibVariant& newValue)
@@ -99,7 +99,7 @@ void ibValueMetaObjectTemplate::OnPropertyChanged(ibProperty* property, const ib
 
 // ⭐ THE ANSWER TO THE COMPOSITION'S CHANGE SIGNAL: the APPLICATION is modified. Which is where
 // modified-ness lives (Max, 2026-08-20: "modified-ness is set on the metadata") — a metaobject does not
-// carry a dirty flag of its own, the container does, and the designer's Save reads it there.
+// carry a dirty flag of its own, the container does, and the studio's Save reads it there.
 //
 // No payload is needed and none is offered: "something below me changed" is the whole fact. The base
 // keeps bubbling, so a template nested under something that also cares stays heard.
@@ -151,7 +151,7 @@ class ibComposerTemplateProvider : public ibTemplateProvider {
 public:
 
 	// One made with its kind (a report over a schema, ibOpenReportOver) is told here; one whose kind is chosen after it
-	// is made — the designer asks — when the kind is set (ibValueMetaObjectTemplate::OnPropertyChanged).
+	// is made — the studio asks — when the kind is set (ibValueMetaObjectTemplate::OnPropertyChanged).
 	virtual bool OnCreateMetaObject(ibValueMetaObjectTemplate* metaTemplate, int flags) const override {
 		ibValueMetaObjectReport* report = dynamic_cast<ibValueMetaObjectReport*>(metaTemplate->GetParent());
 		if ((flags & newObjectFlag) != 0 && report != nullptr)
@@ -194,7 +194,7 @@ public:
 
 			// ⭐⭐ INTO THE LEDGER, NOT INTO THE PANE — one road for a refusal, and this is it. The object
 			// writes down what is wrong and answers false; whoever ASKED then reads the ledger: the
-			// designer puts it in front of the person, a tool puts it in its answer, and the apply dialog
+			// studio puts it in front of the person, a tool puts it in its answer, and the apply dialog
 			// greys its button out of it.
 			//
 			// 🛑 PRINTING IT HERE MADE THE OBJECT SPEAK TO A WINDOW IT KNOWS NOTHING ABOUT, and the cost

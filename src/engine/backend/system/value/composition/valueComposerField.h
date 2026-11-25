@@ -50,7 +50,7 @@
 constexpr ibClassID g_compositionFieldCLSID = value_to_clsid("VL_CFLD");
 
 ////////////////////////////////////////////////////////////////////////////
-// CompositionPredefinedValue — the DESIGNER'S way of saying "one of the declared values"
+// CompositionPredefinedValue — the STUDIO'S way of saying "one of the declared values"
 ////////////////////////////////////////////////////////////////////////////
 //
 // ⭐⭐ A TECHNICAL TYPE, AND ITS WHOLE JOB IS TO STAND IN A TYPE LIST. A parameter that admits
@@ -67,7 +67,7 @@ constexpr ibClassID g_compositionFieldCLSID = value_to_clsid("VL_CFLD");
 // serialises and resolves at run time like any other. This type exists so the QUESTION can be asked,
 // and it is registered for the same reason a word is: so it has a name to show.
 // ⚠ SYSTEM — nobody writes `New CompositionPredefinedValue`. It is VENDED by the tier that owns it:
-// the designer's window makes one when a declared value is chosen, and the composition store builds
+// the studio's window makes one when a declared value is chosen, and the composition store builds
 // it back when it reads its own blob (ibStoredValue). The value factory is not that road.
 constexpr ibClassID g_compositionPredefinedCLSID = system_to_clsid("VL_CPRV");
 
@@ -79,7 +79,7 @@ constexpr ibClassID g_compositionPredefinedCLSID = system_to_clsid("VL_CPRV");
 // value that was saved perfectly well (Max, 2026-08-28: "the runtime must not leak in; the runtime
 // is made at execution").
 //
-// So what the designer writes is what it is: the metaobject this names and which of its declared
+// So what the studio writes is what it is: the metaobject this names and which of its declared
 // values — two plain fields, read and written like any other data. The RUNTIME reference is built
 // from them at execution, by whoever is running the composition, against the application it runs
 // in (ibMaterializeCompositionValue below).
@@ -93,7 +93,7 @@ public:
 	virtual ibClassID GetClassType() const override { return g_compositionPredefinedCLSID; }
 
 	// WHAT A PERSON READS IN THE CELL — `CatalogRef.Goods.Chair`, as it was written. Held rather than
-	// recomputed: the name is what the designer chose, and it must read the same before there is any
+	// recomputed: the name is what the studio chose, and it must read the same before there is any
 	// application to ask.
 	virtual ibString GetString() const override { return m_written; }
 

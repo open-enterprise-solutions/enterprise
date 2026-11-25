@@ -36,7 +36,7 @@ public:
 	const std::vector<ibSourceHop>& GetValueAsPath() const;   // the {id, expected type} hop path — id + type per hop
 
 	// The binding rendered as its dotted NAME (e.g. "Product.SKU") — the value's own GetString, the
-	// same string the designer shows and the composer's ORDER BY / Filter dot-walks. "<not selected>" when unbound.
+	// same string the studio shows and the composer's ORDER BY / Filter dot-walks. "<not selected>" when unbound.
 	ibString GetValueAsString() const;
 
 	void SetValue(const ibMetaID& val);

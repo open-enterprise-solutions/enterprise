@@ -20,7 +20,7 @@ ibValue ibStoredValue(const ibDataNode& stored, const ibMetaData* metaData)
 
 	// ⭐⭐ ITS OWN VALUE, BUILT BY ITS OWNER. `CompositionPredefinedValue` is a SYSTEM type — the value
 	// factory does not create those, and nothing writes `New` of it. It belongs to this tier: the
-	// designer's window makes one when a declared value is chosen, and here is where the store makes
+	// studio's window makes one when a declared value is chosen, and here is where the store makes
 	// it back out of what it kept. Everything else goes through the application's own door.
 	if (ibReadNodeType(stored) == g_compositionPredefinedCLSID) {
 		ibValueCompositionPredefined* declared = new ibValueCompositionPredefined();

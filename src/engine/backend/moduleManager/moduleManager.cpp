@@ -1,6 +1,6 @@
 ////////////////////////////////////////////////////////////////////////////
 //	Author		: Maxim Kornienko
-//	Description : module manager for shared modules and compile value (in designer mode)
+//	Description : module manager for shared modules and compile value (in studio mode)
 ////////////////////////////////////////////////////////////////////////////
 
 #include "moduleManager.h"
@@ -170,14 +170,11 @@ void ibValueModuleRuntimeManager::AttachRuntime(ibSession* session)
 	std::lock_guard<std::mutex> lock(m_runtimeMutex);
 	// WHICH SESSIONS DO NOT GET A RUNTIME — the short list, and the question is
 	// asked that way round on purpose:
-	//   Launcher   — no metadata to compile.
-	//   Designer   — compile-only; it runs off the edit-time module manager in the
+	//   Studio     — compile-only; it runs off the edit-time module manager in the
 	//                metadata's compile cache, never a per-session runtime root.
-	//   WebServer  — the wes process's own technical row; it serves tabs, it does
-	//                not execute an application.
 	// Everything else executes script and therefore needs one. Naming the
 	// EXCEPTIONS rather than the members is what makes a new session kind default
-	// to working: the list used to be positive (Enterprise / WebClient / Service),
+	// to working: the list used to be positive (the desktop's runtime, a web tab, Service),
 	// and every kind added after it — a background run, a scheduled job — silently
 	// got no root module at all, so a job declared as `Module.Method` could not
 	// run and said nothing about why. userInfo-empty is NOT a valid discriminator
@@ -186,8 +183,7 @@ void ibValueModuleRuntimeManager::AttachRuntime(ibSession* session)
 	//
 	// A RENTED run never arrives here — it is not authenticated and asks for no
 	// runtime (see ibJobTenancy) — so this gate is not what keeps it cheap.
-	const ibSessionKind kind = session->GetKind();
-	if (kind == ibSessionKind::Launcher || kind == ibSessionKind::WebServer || IsDesignerSessionKind(kind))
+	if (session->GetKind() == ibSessionKind::Studio)
 		return;
 	// Imperative pipeline — each descriptor owns its m_procUnit.
 	// CreateMainModule already brought up m_byteCode.
@@ -207,7 +203,7 @@ void ibValueModuleRuntimeManager::AttachRuntime(ibSession* session)
 	//
 	// Phase 1a — root: allocate the ProcUnit and register its functions WITHOUT
 	// running the body (Run(false)).
-	if (!appData->DesignerMode() && GetMetaForCompile() != nullptr) {
+	if (!appData->StudioMode() && GetMetaForCompile() != nullptr) {
 		InitializeRuntime();     // ensure root's ProcUnit exists
 		Run(false);              // register functions; do NOT run the top-level yet
 	}
@@ -249,7 +245,7 @@ void ibValueModuleRuntimeManager::AttachRuntime(ibSession* session)
 	// Phase 2 — every module's ProcUnit now exists and surfaces are invalidated;
 	// run the main body. The top-level can now reach any manager / shared module
 	// export and resolve it against the live runtime.
-	if (!appData->DesignerMode() && GetMetaForCompile() != nullptr)
+	if (!appData->StudioMode() && GetMetaForCompile() != nullptr)
 		Run(true);               // execute main module top-level
 }
 
@@ -284,7 +280,7 @@ ibValueModuleManagerRuntimeApplication::ibValueModuleManagerRuntimeApplication(
 	// owns the value); "Data" is its queryable-source mirror (L4-2): same kind-namespace shape, leaves
 	// vend ibValueQueryable (lazy, inert — reading the value reads no data). An external data tool's
 	// or report's manager does NOT bind them: its module is the object's, and it reads globals from the
-	// application root (GetGlobalVariables). The designer's application manager binds the same two.
+	// application root (GetGlobalVariables). The studio's application manager binds the same two.
 	BindExportVariable(objectMetadataManager, m_metaManager);
 	BindExportVariable(objectDataManager, m_dataManager);
 }
@@ -297,7 +293,7 @@ bool ibValueModuleManagerRuntimeApplication::CreateMainModule()
 
 	// Read the init-modules list from metadata's storage and create per-
 	// runtime ibValueModuleUnit instances for each. Metadata's storage is
-	// the registry (designer-side mutation through ibModuleStorage's
+	// the registry (studio-side mutation through ibModuleStorage's
 	// Add/Rename/Remove); every runtime mm reads it here to spawn its
 	// own runtime objects.
 	if (auto* metaData = m_metaManager ? m_metaManager->GetMetaData() : nullptr) {
@@ -337,7 +333,7 @@ bool ibValueModuleManagerRuntimeApplication::CreateMainModule()
 	//
 	// A module that does not compile is thrown to whoever opens the session, like a failure in
 	// AttachRuntime: a warning here and a session served without its application was the old way.
-	const bool rootCompiled = !appData->DesignerMode();
+	const bool rootCompiled = !appData->StudioMode();
 	if (rootCompiled)
 		Compile();
 
@@ -396,7 +392,7 @@ bool ibValueModuleManagerRuntimeApplication::DestroyMainModule()
 	//Setup shared modules
 	for (auto& moduleValue : m_listSharedModuleManager) {
 		if (!moduleValue->DestroySharedModule()) {
-			if (!appData->DesignerMode())
+			if (!appData->StudioMode())
 				return false;
 		}
 	}
@@ -447,10 +443,10 @@ bool ibValueModuleManagerRuntimeApplication::ExitMainModule(const ibRuntimeReque
 }
 
 //*********************************************************************************************************
-//*                          ibValueModuleManagerDesigner — lightweight designer holder                 *
+//*                          ibValueModuleManagerStudio — lightweight studio holder                 *
 //*********************************************************************************************************
 
-ibValueModuleManagerDesigner::ibValueModuleManagerDesigner(
+ibValueModuleManagerStudio::ibValueModuleManagerStudio(
 	ibMetaData* metaData,
 	ibValueMetaObjectApplication* metaObject)
 	: ibValueModuleManager(metaData, metaObject ? metaObject->GetObjectModule() : nullptr)
@@ -460,7 +456,7 @@ ibValueModuleManagerDesigner::ibValueModuleManagerDesigner(
 	BindExportVariable(objectDataManager, m_dataManager);
 }
 
-ibValueModuleManagerDesigner::ibValueModuleManagerDesigner(
+ibValueModuleManagerStudio::ibValueModuleManagerStudio(
 	ibMetaData* metaData,
 	const ibValueMetaObjectModule* objectModule)
 	: ibValueModuleManager(metaData, objectModule)
@@ -470,7 +466,7 @@ ibValueModuleManagerDesigner::ibValueModuleManagerDesigner(
 	m_external = true;
 }
 
-std::map<ibString, ibValue*>& ibValueModuleManagerDesigner::GetGlobalVariables()
+std::map<ibString, ibValue*>& ibValueModuleManagerStudio::GetGlobalVariables()
 {
 	// Application-root holder: own globals (the extern map). External
 	// DataTool/Report holder: delegate to the application root so its editor sees the
@@ -491,7 +487,7 @@ std::map<ibString, ibValue*>& ibValueModuleManagerDesigner::GetGlobalVariables()
 // ctor-context (Catalogs / Documents / Enums) + global consts. Used by BOTH the
 // application (ctor-from-ibValueMetaObjectApplication) and external data
 // tools / reports (ctor-from-object-module) — same editor context everywhere.
-bool ibValueModuleManagerDesigner::CreateMainModule()
+bool ibValueModuleManagerStudio::CreateMainModule()
 {
 	if (m_populated)
 		return true;
@@ -511,7 +507,7 @@ bool ibValueModuleManagerDesigner::CreateMainModule()
 	}
 
 	// No unit compilation here — see AddSharedModule. The editor parses shared
-	// modules' text for exports; the designer never executes script.
+	// modules' text for exports; the studio never executes script.
 
 	// Invalidate the manager's name surface now that the context is seeded, so the
 	// very first autocomplete after load rebuilds it (descriptor export tail). The
@@ -522,7 +518,7 @@ bool ibValueModuleManagerDesigner::CreateMainModule()
 	return true;
 }
 
-bool ibValueModuleManagerDesigner::DestroyMainModule()
+bool ibValueModuleManagerStudio::DestroyMainModule()
 {
 	if (!m_populated)
 		return true;
@@ -543,8 +539,8 @@ bool ibValueModuleManagerDesigner::DestroyMainModule()
 // Independent shared-module registry — see header. Builds a compiled lightweight
 // unit (NO ProcUnit) per shared module and indexes it in the compile cache so the
 // editor resolves the module to a real compiled value. Mirrors the historical
-// IValueModuleManager::AddSharedModule, but designer-only and ProcUnit-free.
-bool ibValueModuleManagerDesigner::AddSharedModule(ibValueMetaObjectSharedModule* sharedModule, bool managerModule, bool runModule)
+// IValueModuleManager::AddSharedModule, but studio-only and ProcUnit-free.
+bool ibValueModuleManagerStudio::AddSharedModule(ibValueMetaObjectSharedModule* sharedModule, bool managerModule, bool runModule)
 {
 	ibValuePtr<ibValueModuleUnit> moduleValue(
 		new ibValueModuleUnit(this, sharedModule, managerModule));
@@ -574,19 +570,19 @@ bool ibValueModuleManagerDesigner::AddSharedModule(ibValueMetaObjectSharedModule
 	// of it and the map no longer held it, but the built table still did).
 	InvalidateNames();
 
-	// NB: the designer does NOT compile/execute the unit. A shared module's exports are read from
+	// NB: the studio does NOT compile/execute the unit. A shared module's exports are read from
 	// its live TEXT there (ibParseCode, reached through ExportMethodsToHelper /
-	// ExportPropsToHelper, which take that road on DesignerMode). Driving ibCompileModule::Compile()
+	// ExportPropsToHelper, which take that road on StudioMode). Driving ibCompileModule::Compile()
 	// here would enter the
-	// Designer-mode parent-recompile walk and deref a stale meta-object (AV in
+	// Studio-mode parent-recompile walk and deref a stale meta-object (AV in
 	// GetFullName). The unit just needs to exist in the cache so FindCompileModule
-	// resolves the module being edited. runModule is unused for the designer.
+	// resolves the module being edited. runModule is unused for the studio.
 	(void)runModule;
 
 	return true;
 }
 
-ibValueModuleManager::ibValueModuleUnit* ibValueModuleManagerDesigner::FindSharedModule(const ibValueMetaObjectSharedModule* sharedModule) const
+ibValueModuleManager::ibValueModuleUnit* ibValueModuleManagerStudio::FindSharedModule(const ibValueMetaObjectSharedModule* sharedModule) const
 {
 	auto it = std::find_if(m_listSharedModule.begin(), m_listSharedModule.end(),
 		[sharedModule](ibValueModuleUnit* valueModule) {
@@ -600,13 +596,13 @@ ibValueModuleManager::ibValueModuleUnit* ibValueModuleManagerDesigner::FindShare
 	return nullptr;
 }
 
-bool ibValueModuleManagerDesigner::RenameSharedModule(ibValueMetaObjectSharedModule* sharedModule, const ibString& newName)
+bool ibValueModuleManagerStudio::RenameSharedModule(ibValueMetaObjectSharedModule* sharedModule, const ibString& newName)
 {
 	ibValue* moduleValue = FindSharedModule(sharedModule);
 
 	// 🛑 A MODULE THIS MANAGER NEVER TOOK IN IS NOT A PROGRAMMING ERROR. A metaobject is created
 	// first and RUN afterwards, and only the run hands its module here — so anything that renames
-	// one between those two moments (the designer's own Add, which names what it just created, and
+	// one between those two moments (the studio's own Add, which names what it just created, and
 	// every server-side create that passes a name) arrives with nothing bound yet. The assert made
 	// that ordinary sequence a debug break, and the rename it was asked about had already happened.
 	//
@@ -624,7 +620,7 @@ bool ibValueModuleManagerDesigner::RenameSharedModule(ibValueMetaObjectSharedMod
 	return true;
 }
 
-bool ibValueModuleManagerDesigner::RemoveSharedModule(ibValueMetaObjectSharedModule* sharedModule)
+bool ibValueModuleManagerStudio::RemoveSharedModule(ibValueMetaObjectSharedModule* sharedModule)
 {
 	ibValuePtr<ibValueModuleUnit> moduleValue(FindSharedModule(sharedModule));
 
@@ -671,8 +667,8 @@ bool ibValueModuleManagerDesigner::RemoveSharedModule(ibValueMetaObjectSharedMod
 
 SYSTEM_TYPE_REGISTER(ibValueModuleManagerRuntimeApplication, "ApplicationModuleManager", system_to_clsid("SO_COMM"));
 
-// The lightweight base unit (designer's compiled shared-module value) needs its
-// OWN factory registration: the designer puts it into the compile module's
+// The lightweight base unit (studio's compiled shared-module value) needs its
+// OWN factory registration: the studio puts it into the compile module's
 // context, and PrepareModuleData calls GetClassType() on it → GetTypeIDByRef
 // asserts on an unregistered wxClassInfo. The runtime unit (SO_MODL) derives from
 // it but is a distinct type.

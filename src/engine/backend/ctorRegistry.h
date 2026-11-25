@@ -129,7 +129,7 @@ public:
 	// (Thread-safety is the same as it has always been for this object: Register / Unregister
 	// mutate these maps unguarded on every metaobject run and close, so the registry was never
 	// safe against a concurrent metadata mutation. The rebuild adds no new kind of hazard — a
-	// rename is a Designer-thread edit, exactly like the register/unregister around it.)
+	// rename is a Studio-thread edit, exactly like the register/unregister around it.)
 	void InvalidateNames() const { m_namesStale = true; }
 
 private:

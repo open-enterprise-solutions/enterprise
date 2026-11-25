@@ -6,7 +6,7 @@
 #include "backend/session/session.h"                // ibSession::EditModuleManagerFor
 #include "backend/moduleManager/moduleManager.h"    // ibValueModuleManager (descriptor scope parent)
 #include "backend/backend_form.h"                   // ibBackendValueForm + formWrapper::cast_value
-#include "backend/appData.h"                         // appData->DesignerMode()
+#include "backend/appData.h"                         // appData->StudioMode()
 
 //***********************************************************************
 //*                            Command object                          *
@@ -55,7 +55,7 @@ bool ibValueMetaObjectCommand::OnDeleteMetaObject()
 
 bool ibValueMetaObjectCommand::OnBeforeRunMetaObject(int flags)
 {
-	// forwards to the inner module so the designer code editor sees it; a PLAIN module does NOT
+	// forwards to the inner module so the studio code editor sees it; a PLAIN module does NOT
 	// register with the module manager (that is only SharedModule / ManagerModule).
 	if (!(*m_propertyCommandModule)->OnBeforeRunMetaObject(flags))
 		return false;
@@ -64,16 +64,16 @@ bool ibValueMetaObjectCommand::OnBeforeRunMetaObject(int flags)
 
 // ⭐ THE COMMAND'S MODULE, MADE CHECKABLE.
 //
-// Eleven metatypes register a compile module with the designer's cache here — object modules,
+// Eleven metatypes register a compile module with the studio's cache here — object modules,
 // manager modules, record modules, forms, shared modules. A command did not, and the consequence
-// was quiet: ibCheckModule found no compile module and answered Unreachable, so the designer's
+// was quiet: ibCheckModule found no compile module and answered Unreachable, so the studio's
 // Syntax button and every tool over it reported "nothing wrong" about a module that had never been
 // compiled. An empty diagnostics list from an unchecked module is not a pass — which is exactly why
 // ibScriptCheckAnswer carries the outcome separately (scriptCheck.h).
 //
 // The thing to compile against already existed: ibValueCommandDataObject is the command's own
 // runtime descriptor, and GetMetaForCompile already names the command module as its target. It was
-// only ever built transiently by Execute, so the designer never had one. Nothing new is written
+// only ever built transiently by Execute, so the studio never had one. Nothing new is written
 // here — the missing half was the registration.
 //
 // Found 2026-08-31 writing a print command through the tools: module_write answered
@@ -83,7 +83,7 @@ bool ibValueMetaObjectCommand::OnAfterRunMetaObject(int flags)
 	if (!(*m_propertyCommandModule)->OnAfterRunMetaObject(flags))
 		return false;
 
-	// Designer kinds only — a runtime application has no compile cache, and asking for one is how
+	// Studio kinds only — a runtime application has no compile cache, and asking for one is how
 	// the callsites in this tree decide, rather than by testing the mode.
 	if (auto* cc = m_metaData->GetCompileCache()) {
 
@@ -278,7 +278,7 @@ ibValueCommandDataObject::ibValueCommandDataObject(const ibValueMetaObjectComman
 		Compile();
 	}
 	catch (const ibCoreException&) {
-		if (!appData->DesignerMode())
+		if (!appData->StudioMode())
 			throw;
 		return;
 	}

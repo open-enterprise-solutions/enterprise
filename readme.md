@@ -378,7 +378,7 @@ for all three platforms whenever it changed.
 
 | Where | What it holds |
 |---|---|
-| [The wiki](https://github.com/open-enterprise-solutions/enterprise/wiki) | The user's guide: installing, first steps, the designer, metadata, forms, the language, queries and reports, the application server, pitfalls |
+| [The wiki](https://github.com/open-enterprise-solutions/enterprise/wiki) | The user's guide: installing, first steps, the studio, metadata, forms, the language, queries and reports, the application server, pitfalls |
 | [docs/public/](docs/public/README.md) | Design documents: how a subsystem works, what it guarantees and where it stops — the query language, registers, access rights, reports, jobs, record locks, numbers and dates, the client protocol, the cluster |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | The system, directory by directory |
 | [docs/BUILD.md](docs/BUILD.md) | Building on every platform, the drivers, the third-party components and their versions |

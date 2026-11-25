@@ -10,7 +10,7 @@
 namespace {
 
 // The empty value of one class — a primitive's own, a reference's as the server wrote it and reads it (References: in the
-// designer `CatalogRef.Goods.EmptyRef`), any other type of the server's as the engine writes an empty one ({t}).
+// studio `CatalogRef.Goods.EmptyRef`), any other type of the server's as the engine writes an empty one ({t}).
 ibValue EmptyOf(const ibClassID& clsid)
 {
 	switch (ibValue::GetVTByID(clsid)) {
@@ -58,7 +58,7 @@ ibValue ibValueTypeDescription::AdjustValue(const ibTypeDescription& typeDescrip
 		}
 	}
 
-	// ⭐ A DECLARED VALUE IS THE REFERENCE IT NAMES — the designer's choice in its window of declared values
+	// ⭐ A DECLARED VALUE IS THE REFERENCE IT NAMES — the studio's choice in its window of declared values
 	// (`CatalogRef.Goods.EmptyRef`, a predefined element), for the type that points at its metaobject and at nothing else
 	// (the server's answer, References). Its metaobject and guid are the pair a reference packs itself with: the same node
 	// under the type's header, read as it was written. Made the type's empty value below, the element chosen was lost and

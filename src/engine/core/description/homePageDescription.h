@@ -34,7 +34,7 @@ enum ibHomePageColumn {
 
 // One attached form: WHICH form, how much vertical room it asks for, and whether it renders.
 // m_height is a PROPORTION (a weight), not pixels — 0 means "share the column equally with
-// the other zero-weight items", which is what the designer's "same height" checkbox writes.
+// the other zero-weight items", which is what the studio's "same height" checkbox writes.
 struct ibHomePageItem {
 	ibMetaID m_formId = ibNOT_FOUND;
 	unsigned int m_height = 0;
@@ -83,7 +83,7 @@ public:
 	const std::vector<ibHomePageItem>& GetColumn(ibHomePageColumn column) const { return m_columns[column]; }
 
 	// The forms a column actually renders — visible items with a resolvable id. This is the
-	// list the composite lays out; everything else in the description is designer state.
+	// list the composite lays out; everything else in the description is studio state.
 	std::vector<ibHomePageItem> GetShownItems(ibHomePageColumn column) const;
 
 	void AppendItem(ibHomePageColumn column, const ibHomePageItem& item) { m_columns[column].push_back(item); }

@@ -102,7 +102,7 @@ public:
 
 	// Base ibCompileCode has no compile-side parent — only the
 	// ibCompileModule subclass holds a typed `m_parentModule` for
-	// compile-orchestration cascade (parent-recompile in Designer
+	// compile-orchestration cascade (parent-recompile in Studio
 	// mode, parent bytecode wire-up on Reset). Subclass call sites
 	// reach `m_parentModule` directly; no virtual on base needed.
 	//
@@ -583,7 +583,7 @@ private:
 	// ⭐ ARMED FOR EXACTLY ONE SOURCE READ, AND DISARMED ON EVERY EXIT — a raise out of the source
 	// expression included. It used to be two bare assignments around the read, and a refusal between
 	// them left the compiler armed: `Reset()` does not clear compile-time scratch, so a REUSED
-	// compiler (Recompile, the designer rebuilding a module) would claim the first chain it met
+	// compiler (Recompile, the studio rebuilding a module) would claim the first chain it met
 	// anywhere in the next module — consuming its verbs from the token stream and emitting none of
 	// them, which is a `Where` that silently disappears.
 	//

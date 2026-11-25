@@ -73,7 +73,7 @@ constexpr ibPictureID g_picUserListCLSID = picture_to_clsid("PC_USRLS");
 
 constexpr ibPictureID g_picAuthenticationCLSID = picture_to_clsid("PC_ATTON");
 
-// The start page — the tab, the designer's workspace editor and its menu item.
+// The start page — the tab, the studio's workspace editor and its menu item.
 constexpr ibPictureID g_picHomePageCLSID = picture_to_clsid("PC_HOMEP");
 
 // The assistant — its tab and its menu item. One window, one icon.
@@ -106,7 +106,7 @@ constexpr ibPictureID g_picCommandGroupReportsCLSID = picture_to_clsid("PC_CMDGR
 constexpr ibPictureID g_picCommandGroupServiceCLSID = picture_to_clsid("PC_CMDGRPSRV");
 
 // WHAT AN APPLICATION IS MADE OF, AS MORE THAN ONE PLACE SHOWS IT — one drawing, asked for by its id wherever it is
-// shown: the application (its root, and the launcher's designer), a report (the metaobject, and the Reports command
+// shown: the application (its root, and the launcher's studio), a report (the metaobject, and the Reports command
 // group), a table (a tabular section, and a value table), a translation (a language, and the code editor's translation
 // constructor), a value, a resource (the metaobject, and a settings window's field on the desktop).
 constexpr ibPictureID g_picApplicationCLSID = picture_to_clsid("PC_APP");

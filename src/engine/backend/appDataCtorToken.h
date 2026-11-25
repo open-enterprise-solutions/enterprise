@@ -12,7 +12,7 @@
 // How it works:
 //   - The token's constructor is private.
 //   - Only `ibApplicationInstance`, `ibApplicationHost` and `ibSession` are friends, so only they can mint a
-//     token (a designer's session makes the application it edits — ibSession::AcquireMetaData).
+//     token (a studio's session makes the application it edits — ibSession::AcquireMetaData).
 //   - Subsystem ctors take an `ibAppDataCtorToken` argument.
 //
 // Net effect: subsystems can declare their ctors public (no friend
@@ -40,8 +40,8 @@
 // (docs/private/multi-base-process.md § 3). Null when the host mints it for the process's share (the
 // plugins, the syntax-helper corpus) or a test mints it with no base.
 //
-// ⭐ …AND FOR WHOM, WHEN A SESSION MINTS IT — its kind: what is made for a designer's session is built as the
-// designer's (an application's compile cache), whatever thread builds it. Minted by the base, it is for no session
+// ⭐ …AND FOR WHOM, WHEN A SESSION MINTS IT — its kind: what is made for a studio's session is built as the
+// studio's (an application's compile cache), whatever thread builds it. Minted by the base, it is for no session
 // (Unknown): the base's own, the one the rest work in (Max, 2026-10-28).
 
 // Forward declaration is REQUIRED. `friend class ::ibApplicationInstance;`
@@ -69,7 +69,7 @@ class AppDataCtorToken {
 public:
 #else
 	// Mintable only from inside ibApplicationInstance's TU — and the host's, which owns the process's share:
-	// the plugins and the syntax-helper corpus (appHost.h); and a designer's session's, for the application
+	// the plugins and the syntax-helper corpus (appHost.h); and a studio's session's, for the application
 	// it edits, made for it and held by it alone (ibSession::AcquireMetaData).
 	friend class ::ibApplicationInstance;
 	friend class ::ibApplicationHost;

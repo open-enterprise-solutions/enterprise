@@ -4,7 +4,7 @@
 // THE OLD DESKTOP'S SCRIPT EDITOR, copied whole: the lexer, the colouring,
 // the folds, the indent, the braces, the literals and their constructors are the client's. What the desktop asked the
 // application — the module's text, the names at the caret, a call's form, the syntax — is asked of the server's tab
-// (the designer's module tab, frmserver ibModuleTextView): its document is that tab's.
+// (the studio's module tab, frmserver ibModuleTextView): its document is that tab's.
 
 #include "frmclient/frmclient.h"
 
@@ -22,7 +22,7 @@
 #include "core/compiler/scriptFoldCode.h"  // ibFoldCode — where the text folds, the core's one copy
 #include "core/compiler/codeDef.h"   // CODE_VES / CODE_CES — the syntax the stream reads in, for fold-mode dispatch
 
-#include "protocol/protocolDesigner.h"   // ibProtocol::ibView::ibModule::ibRequest — what the module's tab is asked
+#include "protocol/protocolStudio.h"   // ibProtocol::ibView::ibModule::ibRequest — what the module's tab is asked
 #include "protocol/protocolNode.h"
 
 #include "frmclient/mainFrame/settings/editorsettings.h"
@@ -70,7 +70,7 @@ class FRMCLIENT_API ibCodeEditor : public ibStyledTextCtrl {
 	wxDECLARE_CLASS(ibCodeEditor);   // wxDynamicCast(focus, ibCodeEditor) — else any text control passes as one
 
 protected:
-	// Marker IDs — protected so designer's ibCodeEditorDesigner subclass
+	// Marker IDs — protected so studio's ibCodeEditorStudio subclass
 	// (which manages breakpoint markers via debugClient) can reach them.
 	//
 	// ⚠ THE NUMBER IS THE DRAWING ORDER: Scintilla draws a higher-numbered marker over a lower one. The dots come
@@ -153,7 +153,7 @@ public:
 
 	// hook the document manager into event handling chain here
 	// ⚠ Out of line, unlike the desktop's: frmclient hides every symbol it does not export, and an editor derived outside
-	// it (appstudio's ibCodeEditorDesigner) emitted this body and could not reach ibAutoComplete / ibCallTip (CI's
+	// it (appstudio's ibCodeEditorStudio) emitted this body and could not reach ibAutoComplete / ibCallTip (CI's
 	// macOS link, 2026-10-15).
 	virtual bool TryBefore(wxEvent& event) override;
 
@@ -247,7 +247,7 @@ protected:
 
 	// ---- Debugger integration hooks ----
 	// Frontend's ibCodeEditor doesn't know about backend's debugClient;
-	// designer's ibCodeDesigner subclass overrides these to forward to
+	// studio's ibCodeEditorStudio subclass overrides these to forward to
 	// debugClient. coderunner / other sessionless hosts get the default
 	// no-op behaviour so the editor still works without any debug
 	// infrastructure attached.
@@ -264,7 +264,7 @@ protected:
 	// Multi-line edit (paste / cut) just shifted code by linesAdded
 	// at `line`. `atLineStart` = the edit happened at column 0 of `line`
 	// (the whole line moved), which decides whether a breakpoint sitting
-	// ON `line` shifts too. The designer's sends it with the text (SaveModule).
+	// ON `line` shifts too. The studio's sends it with the text (SaveModule).
 	virtual void OnPatchModule(int line, int linesAdded, bool atLineStart) {}
 
 	// The tooltip handler wants the debugger to evaluate an expression against the running session — the module is
@@ -298,7 +298,7 @@ private:
 	void EditDebugPoint(int line);
 
 protected:
-	// Subclasses (designer's ibCodeEditorDesigner) reach the document
+	// Subclasses (studio's ibCodeEditorStudio) reach the document
 	// + breakpoint marker enum to wire debug-client interactions.
 	ibTabDocument*    m_document         = nullptr;
 
@@ -339,13 +339,13 @@ private:
 	wxString m_askedValue;
 
 protected:
-	// The context menu's debugger part, for the line it was opened on - the designer adds the
+	// The context menu's debugger part, for the line it was opened on - the studio adds the
 	// breakpoint condition there; a host with no debugger adds nothing. Last in the class: a virtual
 	// added between others moves every one after it in the table, and an object built before reads
 	// the wrong slot.
 	virtual void AppendDebugMenu(ibMenu& /*menu*/, int /*line*/) {}
 
-	// What the breakpoint margin says about the line under the mouse - the designer answers with the
+	// What the breakpoint margin says about the line under the mouse - the studio answers with the
 	// breakpoint's condition. False: nothing to say, `hint` untouched.
 	virtual bool GetDebugPointHint(int /*line*/, wxString& /*hint*/) { return false; }
 };

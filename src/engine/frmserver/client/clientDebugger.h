@@ -1,12 +1,12 @@
 #ifndef __CLIENT_DEBUGGER_H__
 #define __CLIENT_DEBUGGER_H__
 
-// THE DESIGNER'S DEBUGGER, ON THE SERVER (protocol 6) — a listener of the session's engine client (backend/debugger), as
+// THE STUDIO'S DEBUGGER, ON THE SERVER (protocol 6) — a listener of the session's engine client (backend/debugger), as
 // the assistant's is (ibMcpDebugBridge): the engine is the one connected to the runtimes, and a client's windows hear it
 // over the wire. What the engine says is sent as it is, `debug {Event, …}`, to the connection the client's debugger
 // listens on (ibClientHost::NotifyDebug); what the client asks — a step, a value, the runtimes — is done at once, on the
-// caller's thread, as the assistant's tools do it (Command). Made with the designer's frame and gone with it
-// (ibClientFrameDesigner) — the engine's adapter owns it meanwhile.
+// caller's thread, as the assistant's tools do it (Command). Made with the studio's frame and gone with it
+// (ibClientFrameStudio) — the engine's adapter owns it meanwhile.
 
 #include <atomic>
 
@@ -14,7 +14,7 @@
 
 #include "frmserver/frmserver.h"
 
-#include "protocol/protocolDesigner.h"   // ibProtocol::ibDebug — the commands and the news
+#include "protocol/protocolStudio.h"   // ibProtocol::ibDebug — the commands and the news
 
 class ibApplicationInstance;
 class ibClientInstance;
@@ -39,7 +39,7 @@ public:
 	virtual void OnEnterLoop(const ibDebugLineData& data) override;
 	virtual void OnLeaveLoop(const ibDebugLineData& data) override;
 
-	// ⚠ Not sent: the thin designer's editor completes from the server's module (ibModuleTextView::Fetch), and has no door
+	// ⚠ Not sent: the studio's editor completes from the server's module (ibModuleTextView::Fetch), and has no door
 	// for the runtime's answer.
 	virtual void OnAutoComplete(const ibDebugAutoCompleteData& data) override;
 	virtual void OnMessageFromServer(const ibDebugLineData& data, const ibString& message) override;

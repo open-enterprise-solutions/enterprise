@@ -17,7 +17,7 @@ nightly by itself.
 The programs and the bases come from one release, hence one commit: a base is never opened by a build that does not
 know it. The bases start afresh with every nightly — what visitors typed is gone the next day.
 
-Not reachable from outside: the cluster's port (7373), MCP (7374, 7600–7699), the designer.
+Not reachable from outside: the cluster's port (7373), MCP (7374, 7600–7699), the studio.
 
 ⚠ A visitor's rights are what the base gives: a base without users lets anyone in with all of them, and a client can
 hand the server a file to open. The web server runs as `oes`, on the loopback alone, writing only in the releases

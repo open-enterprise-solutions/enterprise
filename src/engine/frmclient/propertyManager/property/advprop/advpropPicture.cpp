@@ -11,7 +11,7 @@
 
 #include "frmclient/win/picture.h"   // ibProtocolPicture — an application's picture, by its id
 
-#include "protocol/protocolDesigner.h"   // ibProtocol::ibSchema::ibProperties — the row's keys
+#include "protocol/protocolStudio.h"   // ibProtocol::ibSchema::ibProperties — the row's keys
 #include "deskgui/univ/theme.h"          // ibThemeEngine — the empty box's ground is the theme's
 #include "deskgui/univ/colourScheme.h"   // wxTHEME_COLOUR
 

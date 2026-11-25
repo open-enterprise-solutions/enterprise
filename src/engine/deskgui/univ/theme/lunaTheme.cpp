@@ -292,7 +292,7 @@ public:
 	virtual wxBitmap GetCheckBitmap(int flags) override;
 	virtual wxBitmap GetFrameButtonBitmap(FrameButtonType type) override;
 
-	// a top-level window's decorations (ibTopLevelWindow) as the designer's form card has them (ibInnerFrame): the
+	// a top-level window's decorations (ibTopLevelWindow) as the studio's form card has them (ibInnerFrame): the
 	// border every raised window has, the system's caption colour lightening to the right, the buttons flat glyphs; a
 	// resizable window's corner marked, and held there it is sized
 	virtual int HitTestFrame(const wxRect& rect, const wxPoint& pt, int flags = 0) const override;

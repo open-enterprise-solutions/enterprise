@@ -20,7 +20,7 @@
 // correctness.
 //
 // This replaced a validity rule of "the row exists", propped up by
-// Designer-side Invalidate hooks. The header of byteCodeAOT.cpp had long
+// Studio-side Invalidate hooks. The header of byteCodeAOT.cpp had long
 // DESCRIBED a fingerprint of source_hash + metadata_version +
 // compiler_version + kind_bindings_hash and the code checked none of them,
 // so anything that changed the meaning of the bytecode without touching
@@ -97,7 +97,7 @@ public:
 	// does not read its modules' rows one by one. Empty when there are none, or when the base could not be asked.
 	static std::map<ibGuid, ibMemoryBuffer> LoadAll(const ibString& configMd5);
 
-	// DELETE the cache row for one descriptor. Used by Designer's
+	// DELETE the cache row for one descriptor. Used by Studio's
 	// OnSaveMetaObject / OnDeleteMetaObject hooks to keep the cache
 	// consistent when the source side moves under the bytecode.
 	// Best-effort — silent on failure.

@@ -41,7 +41,7 @@ void ibValueMetaObject::OnPropertyChanged(ibProperty* property, const ibVariant&
 	ibASSERT(m_metaData);
 
 	// ⭐ THE EDIT IS STATED, NOT DRAWN. This used to ask the metadata for its tree — purely to learn
-	// "am I in a designer?" — and then reach through a session for the main window and repaint it.
+	// "am I in a studio?" — and then reach through a session for the main window and repaint it.
 	// Three things the engine has no business knowing, to say one thing it does: this metaobject was
 	// edited. Whoever is watching repaints whatever it is that shows it; a host with nobody watching
 	// draws nothing, which is what the null tree used to stand for.

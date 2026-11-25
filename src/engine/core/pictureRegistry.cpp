@@ -6,7 +6,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 // Registered as the DLLs load and read from every thread after — the lock is for a DLL loaded later (a file base's
-// server in the thin designer) writing while a window reads.
+// server in the studio) writing while a window reads.
 static std::mutex s_registryLock;
 
 static std::vector<ibPictureEntry>& Registry()

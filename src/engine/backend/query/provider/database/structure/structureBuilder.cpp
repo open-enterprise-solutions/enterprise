@@ -21,7 +21,7 @@ std::shared_ptr<ibDatabaseLayer> ibStructureBuilder::Conn() const
 	//
 	// A holder owns a connection and pins it: while its transaction is open nobody else can take that
 	// connection, and everyone who asks later sees the committed result. The session already has one —
-	// the designer's session IS the DDL session — so there is nothing to invent here; what was missing
+	// the studio's session IS the DDL session — so there is nothing to invent here; what was missing
 	// is that this builder never asked for it. `SetHolder` exists and was called from nowhere, so the
 	// apply ran over `db_query` while the batches, the barrier and the deferred drain took the holder
 	// they were handed. Two owners of one process, which is exactly what the trace showed: the

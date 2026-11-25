@@ -23,7 +23,7 @@
 #include "core/diagnostics/debugTrace.h"
 
 // Atomic counter — Create/Delete can race across the HTTP and worker
-// threads on the web build, and even on desktop if the designer's debug
+// threads on the web build, and even on desktop if the studio's debug
 // thread manipulates values. A plain unsigned int would UB.
 static std::atomic<unsigned int> s_nCreateCount{0};
 

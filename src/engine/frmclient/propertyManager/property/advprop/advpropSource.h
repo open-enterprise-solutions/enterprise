@@ -6,13 +6,13 @@
 #include "frmclient/backend/backend_core.h"
 #include "frmclient/propertyManager/property/advprop/advpropType.h"   // the Type row beneath — the desktop's
 #include "core/description/sourceDescription.h"
-#include "protocol/protocolDesigner.h"   // ibProtocol::ibSchema::ibProperties — SourceDataType, ibSourceDataType
+#include "protocol/protocolStudio.h"   // ibProtocol::ibSchema::ibProperties — SourceDataType, ibSourceDataType
 
 #include <functional>
 
 class FRMCLIENT_API ibPropertyObject;
 
-// THE SOURCE WINDOW, OPENED BY WHOEVER HOLDS THE FORM — the thin designer's form editor (it asks the server for the tree
+// THE SOURCE WINDOW, OPENED BY WHOEVER HOLDS THE FORM — the studio's form editor (it asks the server for the tree
 // as the window opens, and for what lies under a reference). It sets the picker once; the cell calls it with the control
 // the binding is of, the property's name (what the server's editor of it is asked by), what it may be bound to (the row's
 // SourceDataType), and the binding — changed in place on OK. False: cancelled, or no form holds the control.

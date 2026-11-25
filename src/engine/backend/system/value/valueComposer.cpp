@@ -22,7 +22,7 @@ bool ibValueDataComposer::Init(ibValue** paParams, const long lSizeArray)
 {
 	const ibString source = (lSizeArray >= 1) ? paParams[0]->GetString() : ibString();
 
-	// A source-less composer is a valid, empty object (designer introspection keeps the
+	// A source-less composer is a valid, empty object (studio introspection keeps the
 	// method chain reachable); Execute() on it yields an empty QueryResult.
 	if (source.IsEmpty())
 		return true;

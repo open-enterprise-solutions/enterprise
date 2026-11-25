@@ -144,7 +144,7 @@ bool ibModuleStorage::RemoveSharedModule(ibValueMetaObjectSharedModule* sharedMo
 // it was tried on 2026-09-04 and taken back out: it patches the symptom at the reader's end,
 // while the cause is a WRITER that changes metadata without going through the save the rest of
 // the product goes through (Max: you change a form, you change objects, and you go PAST the
-// standard save). In the Designer, editing a module and closing the document saves the metadata —
+// standard save). In the Studio, editing a module and closing the document saves the metadata —
 // the digest moves, the cache row retires by itself. A door that skips that has to be fixed at
 // the door.
 //
@@ -242,21 +242,21 @@ void ibByteCodeStorage::Detach()
 //*                                    ibCompileValueCache                                         *
 //**************************************************************************************************
 
-// Out-of-line — the complete ibValueModuleManagerDesigner type is available here
-// (moduleManager.h fully included), so the ibValuePtr<ibValueModuleManagerDesigner>
+// Out-of-line — the complete ibValueModuleManagerStudio type is available here
+// (moduleManager.h fully included), so the ibValuePtr<ibValueModuleManagerStudio>
 // assign/convert (a ref-counting static_cast through ibValue*) compiles. In
 // metaData.h the type is only forward-visible under the moduleManager.h cycle.
-ibCompileValueCache::ibCompileValueCache(ibValueModuleManagerDesigner* moduleManager)
+ibCompileValueCache::ibCompileValueCache(ibValueModuleManagerStudio* moduleManager)
 	: m_moduleManager(moduleManager)
 {
 }
 
-ibValueModuleManagerDesigner* ibCompileValueCache::GetModuleManager() const
+ibValueModuleManagerStudio* ibCompileValueCache::GetModuleManager() const
 {
 	return m_moduleManager;
 }
 
-void ibCompileValueCache::SetModuleManager(ibValueModuleManagerDesigner* moduleManager)
+void ibCompileValueCache::SetModuleManager(ibValueModuleManagerStudio* moduleManager)
 {
 	m_moduleManager = moduleManager;
 }
@@ -280,7 +280,7 @@ bool ibCompileValueCache::AddCompileModule(const ibValueMetaObject* moduleObject
 	if (moduleObject == nullptr)
 		return false;
 	// Insert/replace — second registration for the same descriptor (e.g.
-	// after a designer rename + re-run) overrides the prior rebuilder
+	// after a studio rename + re-run) overrides the prior rebuilder
 	// and drops any built value so the next Find rebuilds from scratch.
 	ibCompileEntry entry;
 	entry.m_deferred = std::move(builder);
@@ -309,7 +309,7 @@ bool ibCompileValueCache::InvalidateCompileModule(const ibValueMetaObject* modul
 	// fresh AddCompileModule(meta, value) replaces it.
 	//
 	// ⭐ BUT ITS NAMES CAN GO STALE ON THEIR OWN, and for such an entry that is the whole of what
-	// "this module changed" means. In the designer a module's exports are read from its TEXT
+	// "this module changed" means. In the studio a module's exports are read from its TEXT
 	// (ibRuntimeModuleDataObject::ExportMethodsToHelper — there is no bytecode there), and that
 	// surface is built once and cached. Returning false here left the caller with nothing done and
 	// nothing said, so `Module.` went on offering the exports of an older edit.
@@ -412,7 +412,7 @@ ibValueMetaObject* ibMetaData::CreateMetaObject(const ibClassID& clsidIn, ibValu
 	// ⭐ AN APPLICATION THAT MAY NOT BE EDITED IS NOT EDITED — asked at the DOOR, not at the
 	// command that happens to have a person behind it (Max, 2026-09-01: *"if the metadata is in
 	// read mode, it should raise if something tries to change it — or at least return false"*).
-	// The designer's trees each carried their own check; a tool over MCP carried none.
+	// The studio's trees each carried their own check; a tool over MCP carried none.
 	if (!IsEditable())
 		return nullptr;
 
@@ -489,7 +489,7 @@ ibValueMetaObject* ibMetaData::CreateMetaObject(const ibClassID& clsidIn, ibValu
 
 		// ⭐ AND EVERYONE WATCHING IS TOLD — last, after every phase that could still undo the
 		// creation, because an object that did not survive its own initialisation was never
-		// created. A watcher may act on this (the designer's tree asks which kind of form it is
+		// created. A watcher may act on this (the studio's tree asks which kind of form it is
 		// and writes the answer in); none of them can refuse it.
 		//
 		// 🛑 …BUT ONLY WHEN THE OBJECT IS FINISHED, AND `runObject` IS WHAT SAYS SO (Max, 2026-09-01:
@@ -931,7 +931,7 @@ bool ibMetaData::RemoveMetaObject(ibValueMetaObject* object, ibValueMetaObject* 
 
 		// ⭐⭐ SAID LAST, WHEN IT IS TRUE (Max, 2026-09-01: *"you send the delete command, it marks
 		// and deletes the object, the cycle runs — and THEN the notifier broadcasts that the
-		// designer must reflect the change"*). The same order the create now follows.
+		// studio must reflect the change"*). The same order the create now follows.
 		//
 		// 🛑 IT WAS SAID FIRST, AND SO IT WAS SAID OF THINGS THAT DID NOT HAPPEN. Every early
 		// return above — a close phase that refuses, a delete hook that says no — leaves the object

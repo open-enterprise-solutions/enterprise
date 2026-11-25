@@ -48,7 +48,7 @@ public:
 	//
 	// Given this, the cell answers the type question itself and the "…" walks the ONE route
 	// (ibTypeControlFactory::ChooseValue): settle the type from what is declared, then choose a value
-	// of it — which is also what puts the designer's predefined-value form under the same button.
+	// of it — which is also what puts the studio's predefined-value form under the same button.
 	using TypeOf = std::function<ibTypeDescription(const ibDataViewItem&)>;
 	// …AND THE APPLICATION THAT TYPE IS READ AGAINST. It travels WITH the type because it is the
 	// same question: whoever declares "this row may hold Catalog.Goods" is the one who knows which
@@ -203,7 +203,7 @@ private:
 		// 2026-08-28: "there should be no picker here — an empty reference plus the predefined
 		// elements"). Asked FIRST, because emptiness is exactly the state both branches claim.
 		if (m_typeOf) {
-			// ⭐⭐ THE EDITOR CLOSES ONLY IF THE VALUE IS ALREADY THERE. A MODAL — the designer's
+			// ⭐⭐ THE EDITOR CLOSES ONLY IF THE VALUE IS ALREADY THERE. A MODAL — the studio's
 			// declared-value window — has answered by the time the call returns, and the cell must be
 			// redrawn or it keeps showing the text it was opened with ("the value is not set straight
 			// away"). A TRANSIENT POPUP — the calendar behind a date — has not: it is still open, it is

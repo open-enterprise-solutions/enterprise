@@ -16,7 +16,7 @@
 // edited — the editor inside").
 //
 // ⭐ NOTHING IS TYPED HERE. Both halves of a row are chosen from lists the BACKEND property answers
-// (ibPropertyChoiceParameters), because the designer knows the target's fields and this field's
+// (ibPropertyChoiceParameters), because the studio knows the target's fields and this field's
 // neighbours at that moment, and a name typed by hand that matches nothing applies nothing while
 // saying nothing about it (docs/private/choice-links.md § 2a).
 //
@@ -52,7 +52,7 @@ public:
 	// The edited value — read after ShowModal() returns wxID_OK.
 	const ibChoiceParametersDescription& GetParameters() const { return m_params; }
 
-	// The designer entry: open the editor against a parameters property and hand back whether the rows
+	// The studio entry: open the editor against a parameters property and hand back whether the rows
 	// changed. Mirrors ibDialogJobSchedule::ShowScheduleDialog.
 	static bool ShowChoiceParametersDialog(ibBackendProperty* property,
 		ibChoiceParametersDescription& params);

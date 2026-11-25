@@ -102,7 +102,7 @@ ibDataViewItem ibValueTabularSectionDataObjectBase::FindRowValue(const ibValue& 
 bool ibValueTabularSectionDataObjectBase::GetAt(const ibValue& varKeyValue, ibValue& pvarValue)
 {
 	long index = varKeyValue.GetUInteger();
-	if (index >= GetRowCount() && !appData->DesignerMode()) {
+	if (index >= GetRowCount() && !appData->StudioMode()) {
 		ibBackendCoreException::Error(_("Array index out of bounds"));
 		return false;
 	}
@@ -155,7 +155,7 @@ bool ibValueTabularSectionDataObjectBase::SetValueByMetaID(const ibDataViewItem&
 	if (m_readOnly || m_metaTable->IsLineNumber(id))
 		return false;
 
-	if (!appData->DesignerMode()) {
+	if (!appData->StudioMode()) {
 		ibComposerNode* node = GetViewData<ibComposerNode>(item);
 		
 		if (node != nullptr) {
@@ -202,7 +202,7 @@ bool ibValueTabularSectionDataObjectBase::GetValueByMetaID(const ibDataViewItem&
 		return true;
 	}
 
-	if (appData->DesignerMode()) {
+	if (appData->StudioMode()) {
 		const ibValueMetaObjectAttributeBase* attribute = ibSectionColumnById(m_metaTable, id);
 		if (attribute == nullptr)
 			return false;   // not found, or switched off — as SetValueByMetaID above answers it
@@ -527,9 +527,9 @@ bool ibValueTabularSectionDataObjectBase::ibValueTabularSectionDataObjectColumnC
 {
 	unsigned int index = varKeyValue.GetUInteger();
 	// `index` is unsigned, so `index < 0` was dead code, and && binds tighter than ||
-	// — the condition already meant "out of range AND not in the designer". Spelled out;
-	// the designer-mode exemption is preserved, not introduced (see docs/portability.md).
-	if (index >= m_listColumnInfo.size() && !appData->DesignerMode()) {
+	// — the condition already meant "out of range AND not in the studio". Spelled out;
+	// the studio-mode exemption is preserved, not introduced (see docs/portability.md).
+	if (index >= m_listColumnInfo.size() && !appData->StudioMode()) {
 		ibBackendCoreException::Error(_("Index goes beyond array"));
 		return false;
 	}

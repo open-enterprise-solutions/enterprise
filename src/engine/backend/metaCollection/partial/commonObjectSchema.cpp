@@ -82,7 +82,7 @@ void ibValueMetaObjectRecordDataMutableRef::ContributeTables(ibSchemaSnapshot& o
 	// THE GENERIC LIST, not predefined + own: it is the one that also carries the shared
 	// attributes this object was checked into. They are columns like any other — but they
 	// are NOT in GetAttributeArrayObject, because that list answers "what did a person add
-	// to this object", and the designer tree shows it. A shared attribute is not shown
+	// to this object", and the studio tree shows it. A shared attribute is not shown
 	// there, for the same reason Code and Description are not: it belongs to the
 	// declaration, not to this object.
 	for (const auto object : GetGenericAttributeArrayObject())

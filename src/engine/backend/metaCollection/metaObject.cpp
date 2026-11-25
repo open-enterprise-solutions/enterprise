@@ -136,7 +136,7 @@ void ibValueMetaObject::DoSetRight(const ibRole* role, const bool& val)
 
 bool ibValueMetaObject::IsFullAccess() const
 {
-	if (appData->DesignerMode())
+	if (appData->StudioMode())
 		return true;
 
 	// The trusted window — a privileged module's call, a role handler, the session parameters' handler —
@@ -268,13 +268,13 @@ void ibValueMetaObject::SetName(const ibString& strName)
 		m_metaData->InvalidateCtorNames();
 }
 
-// ⭐⭐ THE DOOR FOR THE ORDER OF A METAOBJECT'S CHILDREN — the designer's up/down and sort, the MCP
+// ⭐⭐ THE DOOR FOR THE ORDER OF A METAOBJECT'S CHILDREN — the studio's up/down and sort, the MCP
 // verb metadata_move, anything that reorders. The order is data: the sections in the navigation panel,
 // the forms under an object, what a person reads down the tree. `pos` is where the child ENDS UP.
 //
 // 🛑 IT MARKED THE APPLICATION MODIFIED BEFORE ASKING, and said nothing: a refused move and a move to
 // where the child already stood both left "modified" behind, while a move nobody announced left every
-// watcher's picture of the order stale — the designer's tree shuffled its own rows by hand, and a move
+// watcher's picture of the order stale — the studio's tree shuffled its own rows by hand, and a move
 // from anywhere else was not drawn at all. Now a move that happened is marked and announced (`Moved`),
 // once, here, and the rows follow the announcement.
 bool ibValueMetaObject::ChangeChildPosition(ibValueMetaObject* object, unsigned int pos)
@@ -380,7 +380,7 @@ void ibRestructureInfo::RequireSingleUserForDDL()
 {
 	// Already single-user? Caller (or previous gate) holds it. Don't touch — the flag included. Every batch of an
 	// apply asks (ibStructureBatch::Flush), and the second asking used to clear what the first had set, so the
-	// apply's end released nothing: the base stayed single-user until the designer closed, and every later login
+	// apply's end released nothing: the base stayed single-user until the studio closed, and every later login
 	// parked behind it (2026-10-30, "registry did not answer to Add").
 	if (appData->SingleUserMode()) return;
 	ts_acquiredByGate = false;

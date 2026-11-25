@@ -20,7 +20,7 @@
 #include "backend/appData.h"
 #include "backend/backend_exception.h"                  // ibBackendException — a folder the table no longer holds, said
 #include "backend/backend_picture.h"                    // ibBackendPicture::SendPicture — a row's picture, by its id
-#include "frmserver/visualView/visualHost.h"            // IsDesignerHost — what the form is held by
+#include "frmserver/visualView/visualHost.h"            // IsStudioHost — what the form is held by
 
 #include <algorithm>
 #include <optional>
@@ -73,7 +73,7 @@ bool ibValueModelTableBox::ResolveCellValue(const ibDataViewItem& item,
 	// FOREIGN-root column (Mode 2): pulls from a form source ABOVE this tablebox (the header object),
 	// not from a row of the bound table. Resolve it ONCE through the form — the value is the same for
 	// every row of the tabular section (the header is constant across the lines). Read-only. The
-	// primitive is the same the designer read uses (GetControlValue's dotted-path branch).
+	// primitive is the same the studio read uses (GetControlValue's dotted-path branch).
 	if (IsForeignColumn(column))
 		return m_formOwner != nullptr && m_formOwner->GetValueByAttributePath(column->GetSourceDesc(), out);
 
@@ -92,7 +92,7 @@ bool ibValueModelTableBox::ResolveCellValue(const ibDataViewItem& item,
 bool ibValueModelTableBox::GetControlValue(ibValue& pvarControlVal) const
 {
 	if (m_tableModel == nullptr) {
-		if (appData->DesignerMode()) {
+		if (appData->StudioMode()) {
 			if (!m_propertySource->IsEmptyProperty()) {
 				if (!m_propertySource->IsEmptyProperty() && m_formOwner != nullptr &&
 					m_formOwner->GetValueByAttributePath(m_propertySource->GetValueAsSourceDesc(), pvarControlVal)) {
@@ -211,7 +211,7 @@ void ibValueModelTableBox::CreateColumnCollection()
 	if (m_formOwner == nullptr)
 		return;
 
-	// Through the form, which tells the host that draws them — in the designer and on an open form alike.
+	// Through the form, which tells the host that draws them — in the studio and on an open form alike.
 	while (GetChildCount() != 0)
 		m_formOwner->RemoveControl(GetChild(0));
 
@@ -490,9 +490,9 @@ void ibValueModelTableBox::OnCreated(ibVisualHost* host, bool firstCreated)
 
 	ibValueModelTableBox::CreateModel();
 
-	// ⚠ NOT FOR THE DESIGNER'S PICTURE OF THE FORM: there the box is a picture of itself, and the person
+	// ⚠ NOT FOR THE STUDIO'S PICTURE OF THE FORM: there the box is a picture of itself, and the person
 	// drawing the form is not the reader whose settings these are.
-	if (host->IsDesignerHost())
+	if (host->IsStudioHost())
 		return;
 
 	// ⭐⭐ THE SETTING MARKED "restore on open" GOES ON — right after the model is in place, which is the
@@ -699,10 +699,10 @@ void ibValueModelTableBox::OnUpdate(ibDataNode& state, ibVisualHost* host)
 	state.SetValue(ibProtocol::ibForm::ibTable::ChoiceMode, IsChoiceMode());
 	state.SetValue(ibProtocol::ibForm::ibTable::ViewMode, static_cast<std::int32_t>(GetViewMode()));
 
-	// The designer's picture of the form must not attach the runtime data model (a read would issue SQL
-	// against a metadata table that doesn't exist yet, or that the designer session has no runtime to query
+	// The studio's picture of the form must not attach the runtime data model (a read would issue SQL
+	// against a metadata table that doesn't exist yet, or that the studio session has no runtime to query
 	// against).
-	if (host->IsDesignerHost() || m_tableModel == nullptr) {
+	if (host->IsStudioHost() || m_tableModel == nullptr) {
 		state.SetValue(ibProtocol::ibForm::ibTable::Version, m_rowsVersion);
 		return;
 	}
@@ -986,8 +986,8 @@ struct ibSearchScope {
 
 bool ibValueModelTableBox::Fetch(const ibDataNode& request, ibDataNode& response)
 {
-	// Nothing is read in the designer (see Update).
-	if (m_tableModel == nullptr || appData->DesignerMode())
+	// Nothing is read in the studio (see Update).
+	if (m_tableModel == nullptr || appData->StudioMode())
 		return false;
 
 	AttachModelView();
@@ -1495,7 +1495,7 @@ void ibValueModelTableBox::OnFind(const ibDataNode& args)
 		matchCase = args.GetValue<bool>(ibProtocol::ibEvent::MatchCase),
 		wholeWord = args.GetValue<bool>(ibProtocol::ibEvent::WholeWord);
 	const ibString looked = matchCase ? text : ibString(text).Lower();
-	if (m_tableModel == nullptr || looked.IsEmpty() || appData->DesignerMode())
+	if (m_tableModel == nullptr || looked.IsEmpty() || appData->StudioMode())
 		return;
 
 	AttachModelView();
@@ -1757,7 +1757,7 @@ bool ibValueModelTableBox::OnColumnClick(const ibFormID& columnId)
 	// composer + a re-read); the column already knows its OWN bound field (GetSourceFieldName), and the
 	// composer dot-walks it exactly as the cell resolves its value.
 	ibValueModelTableBoxColumn* column = FindColumn(columnId);
-	if (m_tableModel == nullptr || column == nullptr || appData->DesignerMode()
+	if (m_tableModel == nullptr || column == nullptr || appData->StudioMode()
 		|| !m_tableModel->GetFeatures().Has(ibValueModel::Features::Sorting))
 		return false;
 
@@ -1832,8 +1832,8 @@ void ibValueModelTableBox::OnColumnResized(const ibFormID& columnId, int width)
 void ibValueModelTableBox::OnViewModeChanged(ibDataViewViewMode viewMode)
 {
 	// Written back onto the PROPERTY — the one the next fetch reads (a List view walks the whole table
-	// flat) and the one the form is saved with. Not in the designer: there it is the author's choice.
-	if (appData->DesignerMode())
+	// flat) and the one the form is saved with. Not in the studio: there it is the author's choice.
+	if (appData->StudioMode())
 		return;
 
 	// …THROUGH THE PROPERTY'S DOOR, as the inspector writes it: the table hears it, and the next frame draws it with its
@@ -1951,7 +1951,7 @@ bool ibValueModelTableBox::ReadData(const ibDataNode& node)
 	m_propertyRowSelectionMode->SetNodeValue(node.GetProperty(m_propertyRowSelectionMode->GetName()));
 	m_propertyChoiceMode->SetNodeValue(node.GetProperty(m_propertyChoiceMode->GetName()));
 	// 🛑 THE VIEW MODE WAS MISSING FROM BOTH LISTS. It is read at build time and written back when the
-	// user switches list/tree at runtime — and then had no road to the file, so a designer's choice
+	// user switches list/tree at runtime — and then had no road to the file, so a studio's choice
 	// came back as the default on the next open (audit, 2026-08-24). Both halves are explicit lists
 	// here, so a property added to the class and not to them is silently not saved.
 	m_propertyViewMode->SetNodeValue(node.GetProperty(m_propertyViewMode->GetName()));

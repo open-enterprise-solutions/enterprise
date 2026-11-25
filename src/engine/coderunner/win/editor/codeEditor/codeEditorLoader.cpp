@@ -49,8 +49,8 @@ void ibCodeEditor::AddKeywordFromObject(const ibValue& vObject)
 		}
 		// ⭐ THE VALUE'S OWN SURFACE IS THE WHOLE ANSWER. A module's exports are already rows of its
 		// member table (ibValueModuleDataObject::FillMembers, bound first) and a manager adds its manager
-		// module's in FillMembers — both read the TEXT in the designer (ibExportNamesFromText). Two
-		// blocks here parsed the same text again from the time the table said nothing in the designer,
+		// module's in FillMembers — both read the TEXT in the studio (ibExportNamesFromText). Two
+		// blocks here parsed the same text again from the time the table said nothing in the studio,
 		// so every exported function after a manager's or a module's dot was offered TWICE, the second
 		// time without its call form (`Documents.GoodsSale.` → InvoiceSheet ×2, 2026-09-15).
 	}

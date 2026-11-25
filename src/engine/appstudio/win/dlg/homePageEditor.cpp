@@ -1,6 +1,6 @@
 ////////////////////////////////////////////////////////////////////////////
 //	Author		: Maxim Kornienko
-//	Description : home page workspace editor (designer)
+//	Description : home page workspace editor (studio)
 ////////////////////////////////////////////////////////////////////////////
 
 #include "homePageEditor.h"
@@ -16,7 +16,7 @@
 #include "frmclient/backend/backend_picture.h"                 // ibBackendPicture::GetPicture — the toolbar art
 #include "core/picturePredefined.h"
 #include "deskgui/univ/aui/auibar.h"
-#include "protocol/protocolDesigner.h"                                 // ibProtocol::ibSchema::ibHomePage — the forms' rows
+#include "protocol/protocolStudio.h"                                 // ibProtocol::ibSchema::ibHomePage — the forms' rows
 
 #include <map>
 #include "deskgui/univ/panel.h"
@@ -252,7 +252,7 @@ void ibDialogHomePageEditor::OnCommandMenu(wxCommandEvent& event)
 		ibDialogHomePageFormSelect dlg(this, m_metaObject);
 		if (dlg.ShowModal() == wxID_OK && dlg.GetSelectedForm() != wxNOT_FOUND) {
 			// The same form MAY be attached twice: the runtime builds a form value per open
-			// (no compile cache outside the designer), so two cells are two independent forms
+			// (no compile cache outside the studio), so two cells are two independent forms
 			// — the same thing two tabs of one list would be.
 			m_description.AppendItem(column, ibHomePageItem(dlg.GetSelectedForm()));
 			FillColumn(column, (long)m_description.GetColumn(column).size() - 1);

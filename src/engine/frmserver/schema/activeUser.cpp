@@ -67,8 +67,8 @@ void ibSchemaActiveUser::Build(const ibSession& session, const ibDataNode& /*arg
 std::function<void()> ibSchemaActiveUser::Command(const ibSession& session, std::int32_t command,
 	const ibDataNode& args, ibProtocol::ibRefusal& refusal, ibString& error) const
 {
-	// The designer's actions — the desktop's dialog offered them in the designer alone (DesignerMode there).
-	if (!IsDesignerSessionKind(session.GetKind())) {
+	// The studio's actions — the desktop's dialog offered them in the studio alone (StudioMode there).
+	if (session.GetKind() != ibSessionKind::Studio) {
 		refusal = ibProtocol::ibRefusal::NotFound;
 		error = ibString::Format(ibT("active users take no command %d here"), command);
 		return nullptr;
@@ -83,7 +83,7 @@ std::function<void()> ibSchemaActiveUser::Command(const ibSession& session, std:
 	case ibProtocol::ibSchema::ibCommand::Kick: {
 		const ibString guid = args.GetValue<ibString>(ibProtocol::ibSchema::ibActiveUser::Session);
 
-		// Self-kick guard: kicking the asking session only closes the designer that asked, not a peer.
+		// Self-kick guard: kicking the asking session only closes the studio that asked, not a peer.
 		if (guid == session.GetId()) {
 			refusal = ibProtocol::ibRefusal::Failed;
 			error = _("Cannot kick the current session. Close the application instead.");
@@ -98,7 +98,7 @@ std::function<void()> ibSchemaActiveUser::Command(const ibSession& session, std:
 	case ibProtocol::ibSchema::ibCommand::Reload: {
 		const ibString guid = args.GetValue<ibString>(ibProtocol::ibSchema::ibActiveUser::Session);
 
-		// Same self-guard as kick: reloading the asking session would just close the designer that asked.
+		// Same self-guard as kick: reloading the asking session would just close the studio that asked.
 		if (guid == session.GetId()) {
 			refusal = ibProtocol::ibRefusal::Failed;
 			error = _("Cannot reload the current session.");

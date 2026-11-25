@@ -54,8 +54,8 @@ void ibSession::SetSessionParameter(const ibString& name, const ibValue& value)
 // all is a far worse outcome than one that shows no rows.
 void ibSession::SetSessionParameters()
 {
-	if (appData->DesignerMode())
-		return;   // the designer runs no application code
+	if (appData->StudioMode())
+		return;   // the studio runs no application code
 
 	// THE APPLICATION THIS SESSION COMPILED, not only the one it was let in on.
 	// CompileRoot builds the root against that application when the session has

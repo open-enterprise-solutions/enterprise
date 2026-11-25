@@ -87,7 +87,7 @@ public:
 	ibMetaID GetLanguage() const { return m_propertyDefLanguage->GetValueAsInteger(); }
 
 	// The start-page workspace — the forms every session opens FIRST, and how they are split.
-	// Read by the runtime composite (frontend ibHomePageDocument), written by the designer's
+	// Read by the runtime composite (frontend ibHomePageDocument), written by the studio's
 	// workspace editor. It is plain state on the root, not a property: the inspector has no
 	// cell shape for "two ordered lists of forms", the dedicated editor has.
 	const ibHomePageDescription& GetHomePage() const { return m_homePage; }

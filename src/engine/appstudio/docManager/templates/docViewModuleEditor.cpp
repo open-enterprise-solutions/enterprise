@@ -1,7 +1,7 @@
 #include "docViewModuleEditor.h"
 #include "frmclient/mainFrame/mainFrame.h"
-#include "appstudio/win/editor/codeEditor/codeEditorDesigner.h"
-#include "protocol/protocolDesigner.h"   // ibProtocol::ibView::ibModule
+#include "appstudio/win/editor/codeEditor/codeEditorStudio.h"
+#include "protocol/protocolStudio.h"   // ibProtocol::ibView::ibModule
 
 enum {
 	wxID_ADD_COMMENTS = wxID_HIGHEST + 10000,
@@ -41,8 +41,8 @@ bool ibModuleEditView::OnCreate(ibFrontendDocument* docBase, long flags)
 	ibModuleEditDocument* const doc = dynamic_cast<ibModuleEditDocument*>(docBase);
 	wxASSERT(doc);
 
-	// The desktop's designer editor — the debugger's margin, its patches, its values (ibCodeEditorDesigner).
-	m_codeEditor = new ibCodeEditorDesigner(doc, m_viewFrame, wxID_ANY,
+	// The desktop's designer editor — the debugger's margin, its patches, its values (ibCodeEditorStudio).
+	m_codeEditor = new ibCodeEditorStudio(doc, m_viewFrame, wxID_ANY,
 		wxDefaultPosition, wxDefaultSize, wxBORDER_THEME);
 
 	m_codeEditor->SetReadOnly(flags == ibDOC_READONLY);

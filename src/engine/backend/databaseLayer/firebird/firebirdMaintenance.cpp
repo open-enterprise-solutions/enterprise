@@ -110,7 +110,7 @@ bool WaitForServiceCompletion(ibInterfaceFirebird* iface,
 	// ⭐ AND EACH QUERY WAITS ONE SECOND AT MOST (`isc_info_svc_timeout`, a 4-byte value behind a 2-byte
 	// length). Asked for a LINE, the service holds the call until one comes — and a backup without verbose
 	// output writes none — so the cancel, checked between queries, was never reached while the service sat
-	// still, and a process's exit waited on it (2026-09-28: a designer held open by the night's backup).
+	// still, and a process's exit waited on it (2026-09-28: a studio held open by the night's backup).
 	// With the timeout the answer comes back every second, empty when there is nothing to read.
 	const char sendItems[] = {
 		(char)isc_info_svc_timeout, 4, 0,

@@ -189,17 +189,17 @@
   <ItemGroup>
     <ClCompile Include="mainApp.cpp" />
     <ClCompile Include="mainAppEvent.cpp" />
-    <ClCompile Include="mainFrame\mainFrameEnterprise.cpp" />
-    <ClCompile Include="mainFrame\mainFrameEnterpriseInterface.cpp" />
+    <ClCompile Include="mainFrame\mainFrameWorkspace.cpp" />
+    <ClCompile Include="mainFrame\mainFrameWorkspaceInterface.cpp" />
     <ClCompile Include="win\dlg\functionAll.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="mainApp.h" />
-    <ClInclude Include="mainFrame\mainFrameEnterprise.h" />
+    <ClInclude Include="mainFrame\mainFrameWorkspace.h" />
     <ClInclude Include="win\dlg\functionAll.h" />
   </ItemGroup>
   <ItemGroup>
-    <Image Include="enterprise.ico" />
+    <Image Include="workspace.ico" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="appworkspace.rc" />

@@ -1238,7 +1238,7 @@ struct ibCompositionDescription {
 	//
 	// ⭐⭐ AND IT IS THE ZEROTH ONE, ALWAYS (Max, 2026-08-24: the author's setting IS variant zero).
 	// Not a default a picker will later override here — the reader's choice never lands in this
-	// vector at all. Variants are shown in the DESIGNER; a run always takes the first.
+	// vector at all. Variants are shown in the STUDIO; a run always takes the first.
 	//
 	// ⏭ WHAT A PICKER DOES, when it lands: taking variant N means putting `m_variants[N].m_settings`
 	// into the composer's USER section — the same door "save my settings" goes through, because it

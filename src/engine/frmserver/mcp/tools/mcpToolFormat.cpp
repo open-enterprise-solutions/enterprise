@@ -6,7 +6,7 @@
 // ⭐ WHY IT EXISTS. A format string is written by hand in a module (`Format(x, "NFD=2; NGS= ")`), and
 // every way of getting one wrong is silent: a code the function does not read changes nothing, `mm` is
 // the month where the minutes were meant, a separator trimmed to nothing leaves a number ungrouped.
-// The designer has a constructor for it; a caller writing code over MCP had nothing but the help text
+// The studio has a constructor for it; a caller writing code over MCP had nothing but the help text
 // and a guess (Max, 2026-09-15: "connect the format tool for yourself").
 //
 // ⭐ AND IT IS THE SAME CODE, not a description of it. The string is read, edited and written by

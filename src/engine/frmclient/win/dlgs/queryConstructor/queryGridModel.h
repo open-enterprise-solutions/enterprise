@@ -58,7 +58,7 @@ public:
 
 	// A COLUMN THAT CARRIES A PICTURE. The field grids show paths into the data, and a row without
 	// the field picture reads as a different kind of thing from the same field in the tree beside
-	// it — which is the whole of "the designer catches the eye". The icon is the model's because the
+	// it — which is the whole of "the studio catches the eye". The icon is the model's because the
 	// renderer asks the model for the cell's VALUE, picture included (ibDataViewIconText).
 	void SetIconColumn(unsigned int column, const wxIcon& icon)
 	{

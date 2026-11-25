@@ -49,7 +49,7 @@ ibValue ibTabularDataObject::AdjustValue(const ibMetaID& /*id*/, const ibValue& 
 // wanted: what the walk needs is something OF THE COLUMN'S TYPE, so it can go on reading the referenced
 // source's own columns. The table says what the column accepts (GetColumnTypeById); the REFERENCE builds
 // the twin, because fabricating reference logic anywhere else is how a second, subtly different copy of it
-// appears. The column's CURRENT type is handed over as the filter, so a column retyped in the designer
+// appears. The column's CURRENT type is handed over as the filter, so a column retyped in the studio
 // leaves a stale pin unresolved instead of resolving to the dead old branch.
 //
 // Written ONCE, here. Before this it existed twice — on the value table and on the dynamic list — each added

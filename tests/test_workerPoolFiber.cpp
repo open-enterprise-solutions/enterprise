@@ -57,7 +57,7 @@ private:
 
 std::shared_ptr<ibSession> MakeSession(const ibString& id)
 {
-	return std::make_shared<ibSession>(id, ibSessionKind::Designer);
+	return std::make_shared<ibSession>(id, ibSessionKind::Studio);
 }
 
 // ibSession::Current() answers "no session" while the process holds no base — the gate for bootstrap and
@@ -86,7 +86,7 @@ private:
 void MarkRunning(ibSession& session)
 {
 	// Cancel on a host session only sticks when a run is in progress.
-	// Designer sessions start Idle; the test is the run.
+	// Studio sessions start Idle; the test is the run.
 	const_cast<std::atomic<ibRunState>*>(session.RunState())->store(ibRunState::Running);
 }
 

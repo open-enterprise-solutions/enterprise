@@ -84,7 +84,7 @@ public:
 	virtual ibPicture GetIcon() const;
 	static ibPicture GetIconGroup();
 
-	// designer context menu — "Open handler module", as a job's module is opened.
+	// studio context menu — "Open handler module", as a job's module is opened.
 	virtual bool CollectContextMenu(std::vector<ibMetaMenuItem>& items) override;
 
 	// A new source or a new event prepares the module for the procedure that now applies.

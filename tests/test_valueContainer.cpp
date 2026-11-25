@@ -33,7 +33,7 @@ TEST(ValueContainer, InsertAndGetAt) {
 }
 
 // Property is the NON-throwing lookup: a miss returns false. (GetAt, by
-// contrast, raises "Key not found" outside designer mode — script-error
+// contrast, raises "Key not found" outside studio mode — script-error
 // semantics — so it is not used for miss-testing here.)
 TEST(ValueContainer, PropertyMissReturnsFalse) {
     ibValueMap c;
@@ -105,7 +105,7 @@ TEST(ValueContainer, ConstructFromMap) {
 // inferred from whichever helper the lookup happens to call.
 //
 // Property is used throughout: it is the no-throw lookup (see above), and Insert
-// on a duplicate raises outside designer mode, which is exactly what a collision
+// on a duplicate raises outside studio mode, which is exactly what a collision
 // between two of these keys would look like.
 // =============================================================================
 namespace {

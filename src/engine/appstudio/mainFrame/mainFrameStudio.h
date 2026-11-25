@@ -1,0 +1,221 @@
+#ifndef _MAINFRAME_STUDIO_H__
+#define _MAINFRAME_STUDIO_H__
+
+#include <functional>
+
+#include "frmclient/mainFrame/mainFrame.h"
+
+#if defined(mainFrame)
+#undef mainFrame
+#endif
+
+class ibApplicationTree;
+class ibDebuggerClient;
+class ibStackWindow;
+class ibWatchWindow;
+class ibLocalWindow;
+
+// The syntax helper's pane — the studio's alone; its commands —
+// the base's (the code editor posts them).
+#define ibAUI_PANE_HELP     wxT("syntaxHelperWindow")
+// …and the application's tree's.
+#define ibAUI_PANE_METADATA wxT("metadataWindow")
+
+// The desktop's (designer/mainFrame/mainFrameStudio.h), by the same numbers: a person's keys are kept by them.
+enum {
+
+	wxID_STUDIO_DEBUG_START = 10000,
+	wxID_STUDIO_DEBUG_START_WITHOUT_DEBUGGING,
+	wxID_STUDIO_DEBUG_START_WEB,
+	wxID_STUDIO_DEBUG_START_WITHOUT_DEBUGGING_WEB,
+	wxID_STUDIO_DEBUG_ATTACH_FOR_DEBUGGING,
+	wxID_STUDIO_DEBUG_EDIT_POINT,
+	wxID_STUDIO_DEBUG_STEP_OVER,
+	wxID_STUDIO_DEBUG_STEP_INTO,
+	wxID_STUDIO_DEBUG_STEP_OUT,
+	wxID_STUDIO_DEBUG_PAUSE,
+	wxID_STUDIO_DEBUG_STOP_DEBUGGING,
+	wxID_STUDIO_DEBUG_STOP_PROGRAM,
+	wxID_STUDIO_DEBUG_NEXT_POINT,
+	wxID_STUDIO_DEBUG_REMOVE_ALL_DEBUGPOINTS,
+
+	wxID_STUDIO_APPLICATION_OPEN_DATABASE,
+	wxID_STUDIO_APPLICATION_UPDATE_DATABASE,
+	wxID_STUDIO_APPLICATION_ROLLBACK_DATABASE,
+
+	wxID_STUDIO_APPLICATION_LOAD_FROM_FILE,
+	wxID_STUDIO_APPLICATION_SAVE_TO_FILE,
+	wxID_STUDIO_APPLICATION_EXPORT_JSON,   // EXPERIMENTAL — builder -> JSON dump
+	wxID_STUDIO_APPLICATION_COMPARE_FILE,
+	wxID_STUDIO_APPLICATION_COMPARE_DB,
+	wxID_STUDIO_APPLICATION_COMPARE_TWO_FILES,
+
+	wxID_STUDIO_DATABASE_LOAD_FROM_FILE,
+	wxID_STUDIO_DATABASE_SAVE_TO_FILE,
+
+	wxID_STUDIO_DATABASE_CLEAR,
+
+	wxID_STUDIO_ABOUT,
+
+	// …and the application as a directory of files, one a part (ibFileProvider) — last, as every new one goes.
+	wxID_STUDIO_APPLICATION_LOAD_FROM_FILES,
+	wxID_STUDIO_APPLICATION_SAVE_TO_FILES,
+
+	// …and the measurement of the attached runtime, begun and ended by one checked item (ibDebuggerClient::StartProfile).
+	wxID_STUDIO_DEBUG_PROFILE,
+
+	wxID_STUDIO_END
+};
+
+// ⚠ A PERSON'S KEYS ARE KEPT BY THESE NUMBERS (ibKeyBinder::Save, the profile's "shortcuts"), so a command
+// inserted in the middle moves every changed key after it onto another command — Step Out did (2026-09-12),
+// and that profile was dropped for it. A new command goes LAST, before the end marker; these checks break the
+// build on an insertion or a removal instead of moving somebody's keys. The numbers are the day the
+// "shortcuts" profile began.
+static_assert(wxID_STUDIO_ABOUT == 10026, "append new studio commands before wxID_STUDIO_END - the key profile keeps keys by number");
+
+// …and the desktop's application commands, by the same numbers. Here only Connection is bound, where the desktop binds
+// it (no menu item sends it, there either); the rest are the server's menu — Users, Options and the assistant.
+enum {
+	wxID_APPLICATION_DEBUG = wxID_HIGHEST + 1,
+	wxID_APPLICATION_SETTING,
+	wxID_APPLICATION_USERS,
+	wxID_APPLICATION_ACTIVE_USERS,
+	wxID_APPLICATION_AUDIT_LOG,
+	wxID_APPLICATION_CONNECTION,
+	// Assistant access — one command, because starting and stopping are the same
+	// switch seen from its two sides; the label follows the state through
+	// EVT_UPDATE_UI rather than through two entries a person has to choose between.
+	wxID_APPLICATION_MCP_SERVER,
+	wxID_APPLICATION_MCP_ASSISTANT,
+};
+// …and the same for these (see above): a new one goes last.
+static_assert(wxID_APPLICATION_MCP_ASSISTANT == wxID_HIGHEST + 8, "append new application commands last - the key profile keeps keys by number");
+
+#define mainFrame	(ibFrontendMainFrameStudio::GetFrame())
+
+// THE STUDIO'S MAIN WINDOW — the desktop's ibFrontendMainFrameStudio (designer/mainFrame) on the thin client.
+// The base draws what both modes share — the menu, the tabs, the messages; this one logs in to the studio, whose
+// application the server's session holds (ibClientFrameStudio there).
+class ibFrontendMainFrameStudio : public ibFrontendMainFrame {
+public:
+
+	static ibFrontendMainFrameStudio* GetFrame();
+
+	// The window is built around a communicator, and owns it from that moment on; it logs in to the studio as it is
+	// shown.
+	ibFrontendMainFrameStudio(std::unique_ptr<ibCommunicator> communicator,
+		const wxString& user, const wxString& password,
+		const wxString& title = _("OES Application Studio"),
+		const wxPoint& pos = wxDefaultPosition,
+		const wxSize& size = wxDefaultSize);
+	virtual ~ibFrontendMainFrameStudio();
+
+	// Shown — logged in — its debugger made over the application logged in to, and the person's assistant access
+	// started with it when they switched it on (the desktop's).
+	virtual bool Show(bool show = true) override;
+
+	// A metaobject opened on the server - the studio's schema MetaData, Open (ibFrontendMainFrame::OpenForm).
+	virtual bool OpenForm(ibMetaID id, const ibMetaData& metaData) override;
+	// …and a module at a failure's line - the tree's (ibMetaTreeBase::EditModule), not marked as the run line.
+	virtual void EditModule(const wxString& fileName, const ibGuid& moduleName, int line) override;
+
+	// The application's tree and the messages — the desktop's, where the debugger shows a stop and what was said.
+	ibApplicationTree* GetMetaWindow() const { return m_metaWindow; }
+	ibOutputWindow* GetOutputWindow() const { return m_outputWindow; }
+
+	// The debugger's panes along the bottom — the desktop's, beside the messages.
+	ibStackWindow* GetStackWindow() const { return m_stackWindow; }
+	ibWatchWindow* GetWatchWindow() const { return m_watchWindow; }
+	ibLocalWindow* GetLocalWindow() const { return m_localWindow; }
+
+	// The debugger's state changed (attached, detached, stopped, running): the Debug menu asks again
+	// (OnUpdateDebugCommand) - it does not carry a state of its own.
+	void Debugger_OnStateChanged();
+
+	// …and the debugger's own connection, the window's doors to it (ibCommunicator::ListenDebug, Debug): the server's
+	// debugger heard — `told` on that connection's thread — and asked, answered at once beside the window's call.
+	bool ListenDebug(std::function<void(const ibProtocolNode& news)> told, ibProtocol::ibRefusal& refusal, ibString& error);
+	bool Debug(const ibProtocolNode& params, ibProtocolNode& result, ibProtocol::ibRefusal& refusal, ibString& error);
+
+protected:
+
+	// The base's parts, and the desktop designer's around them (its CreateWideGui): the Update database button on the
+	// main toolbar, the debug toolbar beside it, the application's tree on the left, version control's pane hidden.
+	virtual void CreateGUI() override;
+	// …and the notebook along the bottom — the messages, then the debugger's three (the desktop's).
+	virtual void CreateBottomPane() override;
+	// …and the workspace while no tab is open: the greeting, and the keys of the commands an application is worked on with.
+	virtual ibWelcomeWindow* OnCreateWelcome(wxWindow* parent) override;
+
+	// THE APPLICATION'S TREE — the frame's MetaData, drawn when the patch changed it; its state on the pane's caption.
+	virtual void DrawFrame(const ibProtocolNode& frame, const ibProtocolNode& patch) override;
+
+	// May the window go down? An edited application is asked about first — the desktop's Save? — then the base's.
+	virtual bool AllowClose() override;
+
+	// The debugger's store, read in the login — not a call of its own at the start.
+	virtual std::vector<ibProtocol::ibSchema::ibKind> GetStartSchemas() const override;
+	// The studio's Users and Options — the desktop's dialogs (Administration → Users, Tools → Options) — and the
+	// debugger made over its store as the login read it, over the base's schemas.
+	virtual void ShowSchema(ibProtocol::ibSchema::ibKind schema, const ibProtocolNode& shown) override;
+	// …and the questions only the studio is asked — the restructure's ledger (the desktop's ibDialogApplyChange), the
+	// kind of a form or a template just made (ibDialogSelectKind); the rest — the base's.
+	virtual void ShowRequest(const ibProtocolNode& request, ibProtocolNode& response) override;
+
+	// The studio's Application, Debug and Help — the desktop's — over the base's File and Edit.
+	virtual void InitializeDefaultMenu() override;
+	// …and their keys over the base's.
+	virtual void SetDefaultHotKeys() override;
+
+private:
+
+	// The application's tree's pane — the desktop's.
+	void CreateMetadataPane();
+	// …and version control's, the desktop's: hidden, floating on the right, over the working copy beside the file base.
+	void CreateGitPane();
+	// The debug commands as buttons, beside the main toolbar. They are the Debug menu's own commands
+	// (same ids, same handlers, same OnUpdateDebugCommand for enabling) - a button is a second way to
+	// press a menu item, not a second implementation of it.
+	void CreateDebugToolbar();
+
+	// THE SYNTAX HELPER — the desktop's pane on the right, made the first time it is asked for.
+	void EnsureHelpPane();
+	void ToggleHelpPane();
+
+	//events
+	void OnStartDebug(wxCommandEvent& event);
+	void OnStartDebugWithoutDebug(wxCommandEvent& event);
+	void OnStartDebugWeb(wxCommandEvent& event);
+	void OnStartDebugWithoutDebugWeb(wxCommandEvent& event);
+	void OnAttachForDebugging(wxCommandEvent& event);
+
+	// The database's application, browsed in a tab of its own — the desktop's; ⚠ not in the thin yet, said so.
+	void OnOpenApplication(wxCommandEvent& event);
+	void OnRollbackApplication(wxCommandEvent& event);
+	void OnUpdateApplication(wxCommandEvent& event);
+	void OnApplication(wxCommandEvent& event);
+	// Rollback and Update — lit while the application differs from the base's (the desktop's ibDocManagerStudio's).
+	void OnUpdateSaveMetadata(wxUpdateUIEvent& event);
+
+	void OnRunDebugCommand(wxCommandEvent& event);
+	void OnUpdateDebugCommand(wxUpdateUIEvent& event);
+	// The connection's dialog — the desktop's (ibDialogConnection).
+	void OnConnection(wxCommandEvent& event);
+
+	ibApplicationTree* m_metaWindow = nullptr;
+	class ibGitPanel* m_gitPanel = nullptr;
+	class ibHelpPaneView* m_helpPane = nullptr;
+
+	// THE DEBUGGER — the engine's client, the studio's own (appstudio/backend/debugger): its sockets go straight to
+	// the runtimes; its breakpoints are kept by the server. Made when the frame logged in, gone with the frame.
+	std::unique_ptr<ibDebuggerClient> m_debugClient;
+
+	ibAuiToolBar* m_debugToolbar = nullptr;
+
+	ibStackWindow* m_stackWindow = nullptr;
+	ibWatchWindow* m_watchWindow = nullptr;
+	ibLocalWindow* m_localWindow = nullptr;
+};
+
+#endif

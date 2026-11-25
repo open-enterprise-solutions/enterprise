@@ -1,7 +1,7 @@
 ////////////////////////////////////////////////////////////////////////////
 //  Isolation test — do the L4 runtime value objects expose their method
 //  surface via the generic ibValue introspection (GetNMethods / FindMethod)
-//  the designer autocomplete reads? Constructs the EMPTY (AST-less) variants
+//  the studio autocomplete reads? Constructs the EMPTY (AST-less) variants
 //  — no DB, no session — so this is a pure member-table check.
 ////////////////////////////////////////////////////////////////////////////
 

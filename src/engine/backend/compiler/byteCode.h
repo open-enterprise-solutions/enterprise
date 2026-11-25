@@ -669,7 +669,7 @@ public:
 	// those triggers cache miss → recompile → write a new row
 	// under the same key.
 	//
-	// Why GUID, not name: user renames in Designer (e.g. "Utilities"
+	// Why GUID, not name: user renames in Studio (e.g. "Utilities"
 	// → "Tools") don't touch the descriptor's GUID, so dependent
 	// bytecodes' references stay valid. Same way `metadataReader`
 	// already references metadata objects through their own
@@ -740,7 +740,7 @@ public:
 	//
 	// Persistence note: when bytecode is saved (sys_bytecode_cache /
 	// AOT deploy), the dependency edge is stored by the dependency's
-	// `m_id`, NOT by name. So a Designer rename of a dependency
+	// `m_id`, NOT by name. So a Studio rename of a dependency
 	// module is invisible to callers — their cache rows stay valid,
 	// resolution at load time finds the renamed dependency by ID.
 	// Live in-memory layout below holds resolved pointers for fast

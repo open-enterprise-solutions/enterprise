@@ -4,7 +4,7 @@
 // moved and changed, never added by path, so no query has to offer a field: the composer's table is set first, as a
 // settings window would have left it.
 //
-// The application is the one a designer session opens, as in test_mcpPictureSet.cpp.
+// The application is the one a studio session opens, as in test_mcpPictureSet.cpp.
 
 #include <gtest/gtest.h>
 #include <wx/string.h>   // wxT, wxString - the engine's headers include no wx
@@ -75,7 +75,7 @@ TEST_F(McpReportSelect, AGroupIsAdded_ARowMovedIntoIt_RePlaced_TakenOut_TitledIn
 	ibSessionRegistry* const registry = ibApplicationInstance::GetSessionRegistry();
 	ASSERT_NE(registry, nullptr);
 	ibSessionHolder holder = registry->MintUnlisted(
-		std::make_shared<ibSession>(wxT("report-select"), ibSessionKind::Designer));
+		std::make_shared<ibSession>(wxT("report-select"), ibSessionKind::Studio));
 	ibSession* const session = holder.Get();
 	ASSERT_NE(session, nullptr);
 	ibSessionScope scope(session);

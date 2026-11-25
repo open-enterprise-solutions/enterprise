@@ -58,7 +58,7 @@ enum class ibRpcError {
 	//
 	// ⚠ AND THEIR MESSAGES ARE ENGLISH, not translated. What goes on the wire is read
 	// by a CLIENT — another program, or a model — and never by the person at the
-	// designer, who is shown platform errors through a different door entirely. A
+	// studio, who is shown platform errors through a different door entirely. A
 	// refusal that changes wording with the machine's locale is one a client cannot
 	// match on and a report nobody can compare; `_()` belongs where a human reads.
 	//

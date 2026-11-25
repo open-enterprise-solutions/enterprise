@@ -7,7 +7,7 @@
 #include "backend/appData.h"   // ibApplicationInstance::GetTempStorage — a document saved as a file of the client's naming
 #include "backend/backend_form.h"
 #include "backend/backend_picture.h"
-#include "backend/debugger/debugServer.h"   // a script's failure sent to the designer (BackendError)
+#include "backend/debugger/debugServer.h"   // a script's failure sent to the studio (BackendError)
 #include "core/picturePredefined.h"
 #include "backend/session/session.h"
 #include "backend/session/workerPool.h"   // Await / Wake — a question waits in the session's pool
@@ -19,8 +19,8 @@
 #include "frmserver/visualView/ctrl/gridBox.h"   // ibFetchSpreadsheet — a sheet printed goes as a sheet fetched
 
 #include "clientChildFrame.h"
-#include "clientFrameDesigner.h"
-#include "clientFrameRuntime.h"
+#include "clientFrameStudio.h"
+#include "clientFrameWorkspace.h"
 #include "clientHost.h"      // NotifyChanged — the client told its frame changed by itself
 #include "propertyInspector.h"   // ShowProperties — an object's rows, as the inspector writes them
 #include "protocol/protocol.h"
@@ -60,10 +60,10 @@ std::unique_ptr<ibClientFrame> ibClientFrame::Create(ibProtocol::ibLogin::ibMode
 	ibClientInstance* clientInstance)
 {
 	switch (mode) {
-	case ibProtocol::ibLogin::ibMode::Runtime:
-		return std::unique_ptr<ibClientFrame>(new ibClientFrameRuntime(std::move(holder), clientInstance));
-	case ibProtocol::ibLogin::ibMode::Designer:
-		return std::unique_ptr<ibClientFrame>(new ibClientFrameDesigner(std::move(holder), clientInstance));
+	case ibProtocol::ibLogin::ibMode::Workspace:
+		return std::unique_ptr<ibClientFrame>(new ibClientFrameWorkspace(std::move(holder), clientInstance));
+	case ibProtocol::ibLogin::ibMode::Studio:
+		return std::unique_ptr<ibClientFrame>(new ibClientFrameStudio(std::move(holder), clientInstance));
 	}
 	return nullptr;
 }
@@ -160,7 +160,7 @@ void ibClientFrame::BackendError(const ibString& strFileName,
 	const ibString& strDocPath, const long line,
 	const ibString& strErrorMessage)
 {
-	// THE DESKTOP'S ERROR WINDOW (ibFrontendMainFrameEnterprise::BackendError), asked of the client: the person chooses
+	// THE DESKTOP'S ERROR WINDOW (ibFrontendMainFrameWorkspace::BackendError), asked of the client: the person chooses
 	// what becomes of the failure. Closed without a choice — as Close window.
 	ibDataNode request;
 	request.SetValue(ibProtocol::ibRequest::Kind, static_cast<std::int32_t>(ibProtocol::ibRequest::ibKind::Error));
@@ -170,14 +170,14 @@ void ibClientFrame::BackendError(const ibString& strFileName,
 	ibDataNode response;
 	const std::int32_t act = DoRequest(request, response) ? response.GetValue<std::int32_t>(ibProtocol::ibRequest::ibError::Act) : 0;   // 0 — closed: Close window
 
-	// ⭐ THE ANSWERS ARE CUMULATIVE, as the desktop's: the error stays in the messages whatever was chosen; Go to designer
-	// also sends it to the designer debugging this base; Close program does both, and the client goes.
+	// ⭐ THE ANSWERS ARE CUMULATIVE, as the desktop's: the error stays in the messages whatever was chosen; Go to studio
+	// also sends it to the studio debugging this base; Close program does both, and the client goes.
 	{
 		std::lock_guard<std::mutex> lock(m_msgMutex);
 		m_pendingMessages.push_back({ ibStatusMessage_Error, strErrorMessage });
 	}
 
-	if (act == static_cast<std::int32_t>(ibProtocol::ibRequest::ibError::ibAct::GotoDesigner) || act == static_cast<std::int32_t>(ibProtocol::ibRequest::ibError::ibAct::CloseProgram)) {
+	if (act == static_cast<std::int32_t>(ibProtocol::ibRequest::ibError::ibAct::GotoStudio) || act == static_cast<std::int32_t>(ibProtocol::ibRequest::ibError::ibAct::CloseProgram)) {
 		if (ibDebuggerServer* const server = debugServer)
 			server->SendErrorToClient(strFileName, strDocPath, line, strErrorMessage);
 	}

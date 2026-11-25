@@ -14,7 +14,7 @@
 #include "core/server/listener.h"      // the options: plain on this machine's own addresses only
 #include "core/crypto/sessionToken.h"  // TextEqual - the token compared in constant time; Generate - the token made
 #include "core/net/ports.h"            // the port each mode starts on
-#include "frmclient/backend/appData.h" // DesignerMode — whose settings
+#include "frmclient/backend/appData.h" // StudioMode — whose settings
 #include "frmclient/mainFrame/mainFrame.h"
 
 namespace {
@@ -28,10 +28,10 @@ const std::size_t kMaxRequestBytes = 8u * 1024u * 1024u;
 // through is answered first. A call still waiting for the server by then is not: the window is going.
 constexpr std::chrono::seconds kAnswersWithin(2);
 
-// The designer's and the application's apart: both can be open on one machine, each on its own port.
+// The studio's and the application's apart: both can be open on one machine, each on its own port.
 wxString SettingsGroup()
 {
-	return appData->DesignerMode() ? wxT("/Assistant/Designer/") : wxT("/Assistant/Application/");
+	return appData->StudioMode() ? wxT("/Assistant/Designer/") : wxT("/Assistant/Application/");
 }
 
 // The bottom bar's lamp. The endpoint, not just the word: when an assistant cannot connect, the first question is always
@@ -102,7 +102,7 @@ public:
 		// ⭐ THE CONSEQUENCE FIRST, THEN THE CAUSE — and the likely holder named. "The port is already
 		// taken" alone leaves the reader to work out that the assistant is therefore NOT LISTENING, and
 		// the symptom on the other side is a client that cannot connect, which looks exactly like the
-		// access being switched off (2026-09-23: two designers open, the second one silently without a
+		// access being switched off (2026-09-23: two studios open, the second one silently without a
 		// server). Another window already open is the ordinary reason, not a fault.
 		//
 		// 🛑 One listener per port is said to the operating system by the server (SO_EXCLUSIVEADDRUSE on
@@ -436,7 +436,7 @@ ibMcpSettings ibMcpServer::GetSettings() const
 	settings.m_enabled = config->ReadBool(group + wxT("Enabled"), settings.m_enabled);
 	settings.m_address = config->Read(group + wxT("Address"), wxString(settings.m_address));
 	settings.m_port = static_cast<unsigned short>(config->ReadLong(group + wxT("Port"),
-		appData->DesignerMode() ? ibPort::Assistant.m_first : ibPort::Assistant.Last()));
+		appData->StudioMode() ? ibPort::Assistant.m_first : ibPort::Assistant.Last()));
 	settings.m_token = config->Read(group + wxT("Token"), wxString());
 
 	// Kept as it is made: a token made again next time would refuse every client told this one.

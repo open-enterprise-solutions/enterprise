@@ -1,5 +1,5 @@
-// WHAT THE QUERY CONSTRUCTOR ASKS A DESIGNER TAB — ibProtocol::ibView::ibQueryConstructor, the server's half
-// (frmserver/docView/templates/designer/queryConstructorRequest.h). Asked with no application open, the answers are
+// WHAT THE QUERY CONSTRUCTOR ASKS A STUDIO TAB — ibProtocol::ibView::ibQueryConstructor, the server's half
+// (frmserver/docView/templates/studio/queryConstructorRequest.h). Asked with no application open, the answers are
 // the desktop model's own for that case: an empty catalogue, no fields, no parameters — never a failure.
 
 #include <gtest/gtest.h>
@@ -8,9 +8,9 @@
 #include "core/serialize/dataBuilder.h"
 #include "core/query/queryParser.h"
 #include "core/query/queryRender.h"
-#include "frmserver/docView/templates/designer/queryConstructorRequest.h"
+#include "frmserver/docView/templates/studio/queryConstructorRequest.h"
 #include "protocol/protocol.h"
-#include "protocol/protocolDesigner.h"   // ibProtocol::ibView::ibQueryConstructor
+#include "protocol/protocolStudio.h"   // ibProtocol::ibView::ibQueryConstructor
 #include "backend/query/queryableFactory.h"        // ibQueryableSourceDescriptor — a table the application offers
 #include "backend/query/tempTableQueryable.h"      // ibTempTableQueryable — its columns, from a table in memory
 #include "backend/metadataApplication.h"           // ibMetaDataApplicationFile — the open application it registers in

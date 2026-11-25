@@ -12,7 +12,7 @@ m_moduleManager(nullptr),
 m_rootObject(nullptr),
 m_version(version_oes_last)
 {
-	// Compile cache (designer mode only) is built by the image ctor via
+	// Compile cache (studio mode only) is built by the image ctor via
 	// CreateCompileCache() below — backs code-editor / form-preview lookups via
 	// GetCompileCache(). At runtime it stays absent, so StartMainModule's "show default
 	// form" branch (gated by !cc) runs.
@@ -116,16 +116,16 @@ ibString ibMetaDataDataTool::GetLangCode() const
 
 ////////////////////////////////////////////////////////////////////
 
-std::unique_ptr<ibCompileValueCache> ibMetaDataDataTool::CreateDesignerCache()
+std::unique_ptr<ibCompileValueCache> ibMetaDataDataTool::CreateStudioCache()
 {
-	// Designer mode only — the cache backs the code editor / form preview. Only an
+	// Studio mode only — the cache backs the code editor / form preview. Only an
 	// external (.otl) data tool additionally owns a module-manager (bound to its object
 	// module); an embedded data tool runs against the application's. Called by the image ctor.
-	if (!appData->DesignerMode())
+	if (!appData->StudioMode())
 		return nullptr;
 	auto cache = std::make_unique<ibCompileValueCache>();
 	if (m_rootObject->IsExternalCreate())
-		cache->SetModuleManager(new ibValueModuleManagerDesigner(this, m_rootObject->GetObjectModule()));
+		cache->SetModuleManager(new ibValueModuleManagerStudio(this, m_rootObject->GetObjectModule()));
 	return cache;
 }
 
@@ -150,8 +150,8 @@ bool ibMetaDataDataTool::RunDatabase(const ibRuntimeRequest& request)
 			m_moduleManager->InvalidateNames();
 		}
 
-		// The designer module-manager (for the data tool's own compile cache) was already
-		// built by the image ctor via CreateDesignerModuleManager() — shared modules
+		// The studio module-manager (for the data tool's own compile cache) was already
+		// built by the image ctor via CreateStudioModuleManager() — shared modules
 		// register into it during RunSubtree(true) below.
 		if (!m_rootObject->RunSubtree(request.m_flags, ibValueMetaObject::ibRunPhase::Before))
 			return false;
@@ -211,7 +211,7 @@ bool ibMetaDataDataTool::CloseDatabase(const ibRuntimeRequest& request)
 	if (!m_rootObject->CloseSubtree(ibValueMetaObject::ibRunPhase::Before))   // un-resolve
 		return false;
 
-	// Symmetric to RunDatabase — tear down + release the designer manager (its
+	// Symmetric to RunDatabase — tear down + release the studio manager (its
 	// object module is about to be reset/freed; dropping it avoids a dangle).
 	if (auto* cc = GetCompileCache()) {
 		if (auto* mgr = cc->GetModuleManager())
@@ -299,7 +299,7 @@ bool ibMetaDataDataTool::LoadFromBuffer(const ibMemoryBuffer& buffer, const ibSt
 	m_fullPath = fullPath;
 
 	// (A file read INTO an application is read here on its own, with its own ids, and then pasted into it — the paste
-	// gives its objects their ids and re-homes what holds them: ReadExternal, schema/designer/metaData.cpp, #578.)
+	// gives its objects their ids and re-homes what holds them: ReadExternal, schema/studio/metaData.cpp, #578.)
 
 	// External (start from file): standalone data tool — detached-root swap.
 	// Build a fresh root and load into it; on failure the live data tool is

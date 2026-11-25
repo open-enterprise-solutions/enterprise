@@ -1,7 +1,7 @@
 ﻿#include "docViewFormEditor.h"
 #include "frmclient/mainFrame/mainFrame.h"
 #include "frmclient/win/picture.h"   // ibProtocolPicture — a class's picture, as the answer brought it
-#include "protocol/protocolDesigner.h"   // ibProtocol::ibView::ibFormDesigner, ibProtocol::ibView::ibModule
+#include "protocol/protocolStudio.h"   // ibProtocol::ibView::ibFormDesigner, ibProtocol::ibView::ibModule
 
 enum {
 	wxID_ADD_COMMENTS = wxID_HIGHEST + 10000,
@@ -266,7 +266,7 @@ void ibFormEditView::OnKillFocus(wxFocusEvent& event)
 
 void ibFormEditDocument::DrawView(const ibProtocolNode& view, const ibProtocolNode& patch)
 {
-	// The designer's first — the module's drawing asks the menu and the toolbar anew when the read-only changed, and they
+	// The studio's first — the module's drawing asks the menu and the toolbar anew when the read-only changed, and they
 	// are built of both editors.
 	ibVisualEditorNotebook* const visualNotebook = GetVisualNotebook();
 	if (visualNotebook != nullptr && (!patch.IsNode() || patch.Has(ibProtocol::ibView::State))) {

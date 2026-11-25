@@ -30,7 +30,7 @@ public:
 // `accept` narrows the classes further when belonging to one is not enough. A document posts only to
 // registers that HAVE A RECORDER, and that rule lived in the front editor's fill loop — carrying the
 // clsids down without it would have offered registers a document cannot post to at all: a wider list
-// than the designer's own, which is the quiet kind of wrong.
+// than the studio's own, which is the quiet kind of wrong.
 inline ibPropertyChoiceMode CreateValueList(ibPropertyObject* owner, ibPropertyChoiceList& list,
                                             ibPropertyChoiceMode mode,
                                             const std::initializer_list<ibClassID> classes,

@@ -58,7 +58,7 @@ public:
 //  RECEIVER — everything that RECEIVES a command: a button, a toolbar / command bar (and its items).
 //  The command-side twin of ibBackendTypeSourceFactory. This is the BACKEND slice, declared here so the
 //  variant (ibVariantCommandSource, backend) can CAST its owner to it and validate the binding in
-//  MakeString — which runs at RUNTIME too, not only in the designer cell: a bound command that was
+//  MakeString — which runs at RUNTIME too, not only in the studio cell: a bound command that was
 //  deleted must read "<not found>" everywhere, so the check cannot live in a frontend-only adapter.
 //
 //  A stored path is just HOPS; returning them blind can't tell a live binding from a broken one.

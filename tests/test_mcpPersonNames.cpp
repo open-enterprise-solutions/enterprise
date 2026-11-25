@@ -59,7 +59,7 @@ struct McpPersonNames : ::testing::Test {
 				GTEST_SKIP() << "appData env unavailable headless";
 			m_ownsApp = true;
 		}
-		// The application a designer opens lives in the base. An in-memory SQLite is that base here.
+		// The application a studio opens lives in the base. An in-memory SQLite is that base here.
 		ibConnectionPool* pool = ibApplicationInstance::GetConnectionPool();
 		if (pool == nullptr)
 			GTEST_SKIP() << "no connection pool after CreateAppDataEnv";
@@ -116,13 +116,13 @@ struct McpPersonNames : ::testing::Test {
 		ActiveMetaDataAccess::Replace(cfg);
 		ASSERT_NO_FATAL_FAILURE(Fill(cfg.get()));
 		ASSERT_TRUE(cfg->RunDatabase());
-		ASSERT_NO_FATAL_FAILURE(LetIn(ibSessionKind::Enterprise));
+		ASSERT_NO_FATAL_FAILURE(LetIn(ibSessionKind::Workspace));
 		ASSERT_EQ(m_holder->GetMetaData(), cfg.get());
 	}
 
-	// A designer's session makes its own as it is let in.
-	void EnterDesigner() {
-		ASSERT_NO_FATAL_FAILURE(LetIn(ibSessionKind::Designer));
+	// A studio's session makes its own as it is let in.
+	void EnterStudio() {
+		ASSERT_NO_FATAL_FAILURE(LetIn(ibSessionKind::Studio));
 		ibMetaDataApplicationBase* const cfg = m_holder->GetMetaData();
 		ASSERT_NE(cfg, nullptr);
 		if (cfg->IsOpen()) {
@@ -242,9 +242,9 @@ TEST_F(McpPersonNames, TheApplicationsGreeting_SaysThem)
 	EXPECT_TRUE(greeting.Contains(wxT("The person is working in Ukrainian"))) << greeting.ToStdString();
 }
 
-TEST_F(McpPersonNames, TheDesignersGreeting_SaysThem)
+TEST_F(McpPersonNames, TheStudiosGreeting_SaysThem)
 {
-	ASSERT_NO_FATAL_FAILURE(EnterDesigner());
+	ASSERT_NO_FATAL_FAILURE(EnterStudio());
 	LogIn(Account());
 
 	const ibString greeting = Greeting();

@@ -3,7 +3,7 @@
 
 // LANGUAGES — the application's, as the desktop's translation window listed them (ibDialogTranslateConstructor, a
 // box each) and its user's record offered them (ibDialogUserItem): the client holds no application, so it asks.
-// Shared by every mode — a caption is translated in the designer's inspector and in the runtime's settings alike.
+// Shared by every mode — a caption is translated in the studio's inspector and in the runtime's settings alike.
 
 #include "clientSchema.h"
 

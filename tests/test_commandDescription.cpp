@@ -5,7 +5,7 @@
 // Two halves. The reader reads the shape it writes, whole, or refuses and leaves the binding as it was. And form_set,
 // the general property door, refuses a name and says which verb binds a command by it: form_bind.
 //
-// The application is the one a designer session opens, as in test_mcpPictureSet.cpp.
+// The application is the one a studio session opens, as in test_mcpPictureSet.cpp.
 
 #include <gtest/gtest.h>
 #include <wx/string.h>   // wxT, wxString - the engine's headers include no wx
@@ -26,7 +26,7 @@
 #include "core/serialize/dataBuilder.h"
 #include "frmserver/mcp/mcpTool.h"
 #include "frmserver/visualView/ctrl/form.h"   // ibValueForm — what the frame makes
-#include "framedSession.h"                     // KeyFrame, FramedSession — a designer's session has a frame
+#include "framedSession.h"                     // KeyFrame, FramedSession — a studio's session has a frame
 
 namespace {
 
@@ -139,7 +139,7 @@ TEST_F(McpFormSetCommand, ANameForAButtonsCommand_IsRefusedWithTheVerbThatBindsI
 {
 	ibSessionRegistry* const registry = ibApplicationInstance::GetSessionRegistry();
 	ASSERT_NE(registry, nullptr);
-	auto framed = std::make_shared<FramedSession>(wxT("form-set-command"), ibSessionKind::Designer);
+	auto framed = std::make_shared<FramedSession>(wxT("form-set-command"), ibSessionKind::Studio);
 	ibSession* const session = framed.get();
 	KeyFrame frame(registry->MintUnlisted(framed));
 	framed->Attach(&frame);
@@ -167,7 +167,7 @@ TEST_F(McpFormSetCommand, ANameForAButtonsCommand_IsRefusedWithTheVerbThatBindsI
 
 	const std::int64_t formId = (std::int64_t)creator->GetMetaID();
 
-	// A form command and a button, bound to it the way the designer binds one.
+	// A form command and a button, bound to it the way the studio binds one.
 	{
 		ibDataNode params, result;
 		params.AddField(ibT("form"), ibDataValue::Int(formId));

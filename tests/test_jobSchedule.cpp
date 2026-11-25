@@ -302,7 +302,7 @@ TEST(JobSchedule, Serialization_AbsentFieldsKeepTheirDefaults)
 TEST(JobSchedule, Serialization_ReadsDatesThatCrossedTheWireAsText)
 {
 	// A NODE THAT CROSSED THE WIRE: JSON writes a Date as its ISO text and reads it back as a String
-	// (jsonProvider.h), the empty date as "". The thin designer's schedule cell reads such a node and
+	// (jsonProvider.h), the empty date as "". The studio's schedule cell reads such a node and
 	// writes one back, so the reader takes either kind; a text that names no date leaves the default.
 	auto root = std::make_shared<ibDataNode>();
 	root->SetValue(ibT("IntervalSeconds"), (std::int32_t)7200);

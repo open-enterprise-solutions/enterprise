@@ -354,7 +354,7 @@ TEST_F(ValueTableVerbs, Clone_CopiesColumnsAndRows_AndSharesNothing)
 }
 
 // A column added with no type keeps a string of ANY length. It used to be a string column, and before
-// that the designer's ten-character default, so a cell kept the first ten of whatever was written
+// that the studio's ten-character default, so a cell kept the first ten of whatever was written
 // (2026-09-21). Text written into an untyped column is still that text.
 TEST_F(ValueTableVerbs, AColumnAddedWithoutAType_KeepsTextOfAnyLength)
 {

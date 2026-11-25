@@ -3,7 +3,7 @@
 
 // THE ENGINE'S CONNECTIONS OUT — a WebSocket to a server, and a POST. The web server's to an application server, over
 // its port: a WebSocket for each browser's, a POST for each browser's POST. A thin client's to its application server
-// (protocol/connectionServer.h). The designer's debugger to a runtime's debug port (backend/debugger/debugClient.h).
+// (protocol/connectionServer.h). The studio's debugger to a runtime's debug port (backend/debugger/debugClient.h).
 // Over TLS when the caller hands them a client's TLS (ibTlsClientContext) — an application server's address that says
 // oess:// — in the clear otherwise. Asynchronous, on whichever I/O threads the user runs — the HTTP server's, or its
 // own (ioThreads.h): a thousand sockets here are no thread each.

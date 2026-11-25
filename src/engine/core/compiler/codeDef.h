@@ -139,7 +139,7 @@ enum { //instruction types
 	// Bound-variable access by bind-kind — 1:1 with Bind{Context,Scope,Export}Variable.
 	// Resolve the bound value LAZILY at access (vs the eager binder pre-flight that
 	// pre-fills frame slots and rejects null — the "Required binding not provided"
-	// trap), and carry the kind explicitly so interpreter and designer dispatch on it.
+	// trap), and carry the kind explicitly so interpreter and studio dispatch on it.
 	//   EXTERN / CONTEXT — named handle (RegisterRecords / Filter / ThisObject / ...)
 	//   SCOPE            — bare member resolved through the scope-provider chain
 	// Operand layout mirrors OPER_GET_A / OPER_SET_A (see procUnit dispatch).

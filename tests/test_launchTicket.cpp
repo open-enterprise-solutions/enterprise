@@ -117,7 +117,7 @@ TEST(LaunchSecrets, ASecondLaunchKeepsTheSessionPassword)
 	if (mine && !ibApplicationInstance::CreateAppDataEnv(ibRunMode::eFILE_MODE))
 		GTEST_SKIP() << "appData env unavailable";
 
-	ibSession session(wxT("launch-keep"), ibSessionKind::Designer);
+	ibSession session(wxT("launch-keep"), ibSessionKind::Studio);
 	ibSessionScope scope(&session);
 	ibUserInfo info;
 	info.m_strUserName = wxT("Ada");

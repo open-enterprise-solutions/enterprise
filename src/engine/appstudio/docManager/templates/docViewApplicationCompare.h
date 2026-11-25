@@ -4,9 +4,9 @@
 // THE DESKTOP'S (designer/docManager/templates/docViewApplicationCompare.h) WHOLE — a document of the client's, in a tab of
 // its own (no Kind the server raises it with). Records come from schema ApplicationCompare Build (the server's Walk); Merge
 // is schema ApplicationCompare command Merge (CopyMetaObject / Remove / Paste on the server). The menu opens it
-// (ibFrontendMainFrameDesigner::OnApplication).
+// (ibFrontendMainFrameStudio::OnApplication).
 //
-// Application Compare/Merge — doc/view tab inside the designer shell.
+// Application Compare/Merge — doc/view tab inside the studio shell.
 // Document holds the walker output (wire records) + compare Mode/Files for
 // Apply + optional applied callback. View builds the toolbar + tree dataview +
 // filter / direction / Apply bottom strip.
@@ -16,7 +16,7 @@
 #include "core/clsid.h"
 #include "appstudio/mainFrame/applicationCompare/applicationCompareModel.h"
 #include "protocol/protocol.h"
-#include "protocol/protocolDesigner.h"   // ibProtocol::ibSchema::ibApplicationCompare
+#include "protocol/protocolStudio.h"   // ibProtocol::ibSchema::ibApplicationCompare
 
 #include <wx/object.h>
 

@@ -7,14 +7,14 @@
 
 // THE DESKTOP DESIGNER'S BRIDGE (designer/mainFrame/debugger/debugClientImpl.h) — the windows it paints are this
 // client's: the module a stop or a failure is in, the run line, the stack, the locals, the watch, the Debug menu.
-class ibDebuggerClientBridgeDesigner : public ibDebuggerClientBridge {
+class ibDebuggerClientBridgeStudio : public ibDebuggerClientBridge {
 public:
 
 	// ⚠ DECLARED, NOT DEFAULTED HERE. m_runLine holds an incomplete type on purpose — the holder is
 	// an implementation detail of the .cpp — and a destructor generated in this header would need it
 	// complete. Defined beside the class it destroys.
-	ibDebuggerClientBridgeDesigner();
-	virtual ~ibDebuggerClientBridgeDesigner();
+	ibDebuggerClientBridgeStudio();
+	virtual ~ibDebuggerClientBridgeStudio();
 
 	//commands
 	virtual void OnSessionStart() override;

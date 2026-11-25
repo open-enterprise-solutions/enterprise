@@ -8,7 +8,7 @@
 #include "core/stringUtils.h"
 #include "frmclient/mainFrame/mainFrame.h"
 #include "protocol/protocol.h"
-#include "protocol/protocolDesigner.h"   // ibProtocol::ibRequest::ibObjectKind
+#include "protocol/protocolStudio.h"   // ibProtocol::ibRequest::ibObjectKind
 #include "deskgui/univ/ctrl/radioButton.h"
 #include "deskgui/univ/ctrl/staticBox.h"
 

@@ -35,8 +35,8 @@
 #define ibLog     (ibApplicationInstance::GetLogger())
 
 // HOW THE PROCESS HOLDS ITS BASES — and nothing else. Whether a session designs the application or runs the
-// application is the session's (ibSessionKind): a file base has its designer, its runtime, its jobs exactly as a
-// server does. A number on disk (sys_session's appMode): never renumbered; 2, 3 and 5 were the designer, the
+// application is the session's (ibSessionKind): a file base has its studio, its runtime, its jobs exactly as a
+// server does. A number on disk (sys_session's appMode): never renumbered; 2, 3 and 5 were the studio, the
 // runtime and the web runtime, and are not taken again.
 enum ibRunMode {
 	eUNKNOWN_MODE  = 0,   // nobody said — the default; a base is not opened with it (ibApplicationHost::Ensure throws)
@@ -59,7 +59,7 @@ enum class ibSessionKind : int;   // defined in backend/session/session.h
 
 // ibSessionSnapshot — cluster-wide sys_session snapshot — moved to
 // backend/session/sessionSnapshot.h. Producer is ibSessionRegistry's
-// JobRefreshSnapshot; consumers (designer Active Users dialog) read
+// JobRefreshSnapshot; consumers (studio Active Users dialog) read
 // it through ibApplicationInstance::GetSessionRegistry()->GetClusterSnapshot().
 
 #pragma region user
@@ -101,7 +101,7 @@ struct BACKEND_API ibInstanceStorage {
 
 // A FILE BASE — the process holds it itself, and its opener says where it lives.
 struct BACKEND_API ibFileInstanceRequest : ibInstanceRequest, ibInstanceStorage {
-	// A base not made yet is made — its tables, its settings file: the designer's opening. Otherwise a base with
+	// A base not made yet is made — its tables, its settings file: the studio's opening. Otherwise a base with
 	// nothing in it is refused. A server makes none — that is the launcher's.
 	bool      m_create = false;
 };
@@ -170,7 +170,7 @@ public:
 	// Phased startup — split of Connect(). Apps compose:
 	//
 	//   CreateSession()     → holder in hand, row visible in sys_session,
-	//                         registry policies fire (DesignerExclusive).
+	//                         registry policies fire (StudioExclusive).
 	//   holder->Open(u, p)  → Attach with creds (+ dialog fallback).
 	//   new Frame(std::move(holder))  → the window takes ownership.
 	//   frame->Show()       → runtime start + the window's own AllowRun.
@@ -182,14 +182,14 @@ public:
 
 	// Phase 1: registry session — anonymous Connect (no creds yet).
 	// Row inserted in sys_session immediately so admin / policies see
-	// "someone is logging in". DesignerExclusivePolicy (etc.) fire
+	// "someone is logging in". StudioExclusivePolicy (etc.) fire
 	// here before any auth.
 	//
 	// Returns OWNERSHIP, not a pointer. Nothing in this codebase hands out
 	// a bare live session: whoever calls this holds the session's life in
 	// its hands until it moves the holder into a real owner (a frame), and
 	// an empty holder is the failure case (policy veto, duplicate id).
-	// `kind` — what the session is (the server's own login, the designer's window…); Unknown unless said.
+	// `kind` — what the session is (the server's own login, the studio's window…); Unknown unless said.
 	ibSessionHolder CreateSession(ibSessionKind kind = ibSessionKind{});
 
 	// Typed overload of CreateSession. The caller (enterprise/mainApp.cpp,
@@ -207,7 +207,7 @@ public:
 	template<std::derived_from<ibSession> SessionT>
 	ibSessionHolder CreateSession(ibSessionKind kind = ibSessionKind{});
 
-	// A visitor's session — a wes tab (WebClient), a client of the protocol (ThinClient, ThinDesigner). Caller
+	// A visitor's session — a wes tab (WebClient), a client of the protocol (Workspace, Studio). Caller
 	// supplies the kind, independent of process run mode, the guid it already knows the visitor by (used as
 	// sys_session.session PK + the registry's session id — one identifier across cookie / SessionManager /
 	// sys_session row) and the listener address ("host:port", surfaced in admin UI).
@@ -265,7 +265,7 @@ public:
 	}
 
 #pragma region execute
-	// RunApplication overloads spawn any OES bin (enterprise / designer /
+	// RunApplication overloads spawn any OES bin (enterprise / studio /
 	// appserver / codeRunner / webserver). Connection flags are
 	// emitted in unified `--flag=value` form which every bin's parser
 	// accepts.
@@ -288,13 +288,12 @@ public:
 	ibRunMode GetAppMode() const { return m_runMode; }
 
 	bool LauncherMode() const { return m_runMode == ibRunMode::eLAUNCHER_MODE; }
-	// THE DESIGNER'S WORK, OR THE APPLICATION'S — asked of the session doing it, not of the process: a thin designer
-	// and a thin runtime live in one application server side by side. A session nobody sits at and a thread
+	// THE STUDIO'S WORK, OR THE WORKSPACE'S — asked of the session doing it, not of the process: a studio and a
+	// workspace live in one application server side by side. A session nobody sits at and a thread
 	// without a session go by the process's own session (appData.cpp).
-	bool DesignerMode() const;
-	bool EnterpriseMode() const;
-	// What the process itself is — by the session it logs in as: the old web server, the application server.
-	bool WebEnterpriseMode() const;
+	bool StudioMode() const;
+	bool WorkspaceMode() const;
+	// What the process itself is: the application server.
 	bool ServiceMode() const;
 
 	inline ibString GetRunModeDescr(const ibRunMode& mode) const {
@@ -341,7 +340,7 @@ public:
 	                      ibUserInfo& outInfo);
 
 	// Commit side of Login. Writes the resolved user onto the current
-	// ibSessionScope's ibSession. `rawPassword` is cached for Designer
+	// ibSessionScope's ibSession. `rawPassword` is cached for Studio
 	// "Start debugging" re-attach — pass the plain-text the caller received;
 	// pass empty to skip the raw-password cache (e.g. token-based flows).
 	// No-op when no session is scoped — the caller is in a pre-auth path
@@ -560,7 +559,7 @@ private:
 	// in the application it came in with; the old one goes with the last of them. A shared_ptr, swapped under the
 	// process's lock (ReplaceActiveMetaData).
 	// The application's — `ibMetaDataApplication`, loaded and run as the base opens (CreateActiveMetaData),
-	// before anybody comes in. A designer's session works in an application of its own, held by it alone
+	// before anybody comes in. A studio's session works in an application of its own, held by it alone
 	// (ibSession::AcquireMetaData). nullptr in launcher / codeRunner (no DB-backed metadata). Declared last so
 	// reverse-order destruction lets it go first — OnDestroy ran already in the dtor above.
 	std::shared_ptr<class ibMetaDataApplicationBase> m_activeMetaData;
@@ -601,8 +600,8 @@ public:
 	static class ibMetaDataApplicationBase* GetActiveMetaData() { return GetActiveMetaData(Get()); }
 	static class ibMetaDataApplicationBase* GetActiveMetaData(const ibApplicationInstance* applicationInstance);
 
-	// The active application replaced — the base reads what the database now publishes, as its own (the designer's
-	// apply asks it to; the designer's copy is the designer's). The sessions working in the old one keep it; it goes
+	// The active application replaced — the base reads what the database now publishes, as its own (the studio's
+	// apply asks it to; the studio's copy is the studio's). The sessions working in the old one keep it; it goes
 	// with the last of them. False when the database's copy could not be read: the old one stays.
 	bool ReplaceActiveMetaData();
 

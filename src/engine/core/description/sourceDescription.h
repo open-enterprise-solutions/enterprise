@@ -65,7 +65,7 @@ public:
 	const std::vector<ibSourceHop>& GetPath() const { return m_listSource; }
 
 	// THE SAME FIELD — hop by hop, by id. A binding may pin a hop's type (a composite reference) and a path made in the
-	// designer does not, so the pin is not what tells two fields apart; a hop's own == compares it, for the walk's gate.
+	// studio does not, so the pin is not what tells two fields apart; a hop's own == compares it, for the walk's gate.
 	//
 	// ⚠ THE LENGTH FIRST, THEN BY POSITION — no iterators. Asked of every column of a line for every cell a posting
 	// writes (ibChoiceLinkResolver::IsLinked: is this column chosen within the one just written?), and nearly always

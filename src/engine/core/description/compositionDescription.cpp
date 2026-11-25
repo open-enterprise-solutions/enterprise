@@ -894,7 +894,7 @@ bool ibParameterDescriptionMemory::WriteNode(ibDataNode& node,
 		ibDataNode& sub = node.AddChild(g_parameterNodeClsid, static_cast<ibMetaID>(i));
 		sub.SetValue<ibString>(kParamName, parameter.m_name);
 		sub.SetValue<ibString>(kParamExpression, parameter.m_expression);
-		// …AND GOES BACK AS IT IS. It was packed by whoever put it there — the designer choosing a
+		// …AND GOES BACK AS IT IS. It was packed by whoever put it there — the studio choosing a
 		// declared value, the runtime writing one back — so writing is copying, byte for byte.
 		sub.Child(kParamValue) = parameter.m_value;
 		if (!full)

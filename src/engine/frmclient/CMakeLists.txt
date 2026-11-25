@@ -1,6 +1,6 @@
 # =============================================================================
 # OES Enterprise — frmclient shared library
-# The thin client's core, shared by the thin runtime and the thin designer: the communicator that keeps the frame, the
+# The thin client's core, shared by the workspace and the studio: the communicator that keeps the frame, the
 # main window and what is drawn in it, over the protocol's library (protocol/: the connections to a base's clients).
 # =============================================================================
 
@@ -36,7 +36,7 @@ endif()
 
 # Nothing of the server — not even the backend: the client talks through the protocol's library (protocol/), which
 # carries the wire's tree and the connections; it speaks the core's meanings (core/), as the engine does; and its
-# windows are drawn with the desktop's user interface library (deskgui/) - public, as the thin designer draws with it too.
+# windows are drawn with the desktop's user interface library (deskgui/) - public, as the studio draws with it too.
 target_link_libraries(frmclient
     PUBLIC
         protocol

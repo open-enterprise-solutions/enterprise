@@ -162,8 +162,8 @@ enum ibCtorObjectTypeEvent {
 inline const ibChar* const kValueFieldClsid = ibT("t");   // the type — written and read FIRST
 inline const ibChar* const kValueFieldData  = ibT("v");   // the payload
 
-// THE CLIPBOARD'S FORMATS — what a copied object is put on the system's clipboard under. Here, not with a designer,
-// because both designers and the client copy and paste by them: one window pastes what another copied, so the
+// THE CLIPBOARD'S FORMATS — what a copied object is put on the system's clipboard under. Here, not with a studio,
+// because both studios and the client copy and paste by them: one window pastes what another copied, so the
 // name a copy goes under cannot part from the one a paste asks for.
 #define oes_clipboard_metadata	L"oes_clipboard_metadata"
 #define oes_clipboard_frame		L"oes_clipboard_frame"

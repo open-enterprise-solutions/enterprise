@@ -310,7 +310,7 @@ TEST(SpreadsheetCellDescription, Equality_LooksAtEveryFieldTheCellCarries)
 // moment pointed at freed memory — writing through one corrupted the heap. It is not a mistake a
 // caller can avoid: SetCellSize is built on exactly this order, taking the owner cell, creating
 // the cells the merge covers, then writing the span back through the first pointer. `sheet_cell`
-// with a colSpan on an empty template killed the designer that way (2026-09-02).
+// with a colSpan on an empty template killed the studio that way (2026-09-02).
 //
 // So the invariant is pinned here rather than the two callers being made careful: the address of a
 // cell does not change, and what was written through it is still there afterwards.

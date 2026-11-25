@@ -119,7 +119,7 @@ public:
 	// What a field may hold is a fact about the FIELD, so it is answered here, beside the registry that
 	// knows which metatypes exist, and not by whichever window happens to be asking.
 	//
-	// 🛑 IT LIVED IN THE TYPE PICKER, a static function inside a frontend dialog, and so the designer
+	// 🛑 IT LIVED IN THE TYPE PICKER, a static function inside a frontend dialog, and so the studio
 	// was the only door that knew it. The MCP server, which is in this library and cannot see that
 	// function, therefore accepted types the picker would never have offered — `TypeDescription` set on
 	// an ordinary attribute, a state the editor cannot produce and the platform does not mean to have
@@ -166,7 +166,7 @@ public:
 	// controls take their metadata from a const source (GetSourceMetaObject() is
 	// const) and therefore CANNOT produce a mutable pointer without a const_cast,
 	// so they must not be forced to implement a non-const overload here.
-	// Designer holds the metaobject non-const and resolves to its mutable overload
+	// Studio holds the metaobject non-const and resolves to its mutable overload
 	// automatically.
 	virtual const class ibMetaData* GetMetaData() const = 0;
 };

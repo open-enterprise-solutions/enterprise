@@ -1,5 +1,5 @@
 ////////////////////////////////////////////////////////////////////////////
-//	Description : the designer's choice of a DECLARED value — see selectPredefined.h
+//	Description : the studio's choice of a DECLARED value — see selectPredefined.h
 ////////////////////////////////////////////////////////////////////////////
 
 #include "selectPredefined.h"
@@ -9,15 +9,15 @@
 #include <wx/sizer.h>
 
 #include "protocol/protocol.h"
-#include "protocol/protocolDesigner.h"   // ibProtocol::ibRequest::ibPredefinedSelector
+#include "protocol/protocolStudio.h"   // ibProtocol::ibRequest::ibPredefinedSelector
 
 // The window's own parts — nothing outside this file has business with a tree node or a branch.
 namespace {
 
 // THE ANSWER RIDES THE NODE: the number the server knows the value by. A type's node carries none — it is
 // not a value.
-struct ibDesignerRefItem : public wxTreeItemData {
-	explicit ibDesignerRefItem(int id) : m_id(id) {
+struct ibStudioRefItem : public wxTreeItemData {
+	explicit ibStudioRefItem(int id) : m_id(id) {
 	}
 	int m_id;
 };
@@ -28,7 +28,7 @@ void ibFillOneTypeBranch(ibTreeCtrl* tree, const wxTreeItemId& root, const ibPro
 {
 	for (const ibProtocolNode& value : branch.Children()) {
 		const wxTreeItemId item = tree->AppendItem(root, value.GetString(ibProtocol::ibRequest::ibPredefinedSelector::Name),
-			-1, -1, new ibDesignerRefItem(static_cast<int>(value.GetInt(ibProtocol::ibRequest::ibPredefinedSelector::Id))));
+			-1, -1, new ibStudioRefItem(static_cast<int>(value.GetInt(ibProtocol::ibRequest::ibPredefinedSelector::Id))));
 		ibFillOneTypeBranch(tree, item, value);
 	}
 }
@@ -36,7 +36,7 @@ void ibFillOneTypeBranch(ibTreeCtrl* tree, const wxTreeItemId& root, const ibPro
 // EVERY ADMITTED REFERENCE TYPE IS A BRANCH — the composite case is not a second window but one more
 // branch, which is what makes "choose a declared value" a single question however many types the
 // parameter admits.
-void ibFillDesignerRefTree(ibTreeCtrl* tree, const ibProtocolNode& types)
+void ibFillStudioRefTree(ibTreeCtrl* tree, const ibProtocolNode& types)
 {
 	tree->DeleteAllItems();
 	const wxTreeItemId hidden = tree->AddRoot(wxT("*"));   // hidden — the branches are the roots seen
@@ -70,7 +70,7 @@ bool ibShowPredefinedSelector(wxWindow* parent, const ibProtocolNode& request, i
 
 	ibTreeCtrl* valueTree = new ibTreeCtrl(&dlg, wxID_ANY, wxDefaultPosition, wxDefaultSize,
 		wxTR_HAS_BUTTONS | wxTR_LINES_AT_ROOT | wxTR_SINGLE | wxTR_HIDE_ROOT);
-	ibFillDesignerRefTree(valueTree, request.FindChild(ibProtocol::ibRequest::ibPredefinedSelector::Types));
+	ibFillStudioRefTree(valueTree, request.FindChild(ibProtocol::ibRequest::ibPredefinedSelector::Types));
 	valueTree->Bind(wxEVT_TREE_ITEM_ACTIVATED, [&](wxTreeEvent& event) {
 		if (valueTree->GetItemData(event.GetItem()) != nullptr)
 			dlg.EndModal(wxID_OK);
@@ -86,7 +86,7 @@ bool ibShowPredefinedSelector(wxWindow* parent, const ibProtocolNode& request, i
 
 	const wxTreeItemId atValue = valueTree->GetSelection();
 	const auto* chosen = atValue.IsOk()
-		? dynamic_cast<ibDesignerRefItem*>(valueTree->GetItemData(atValue)) : nullptr;
+		? dynamic_cast<ibStudioRefItem*>(valueTree->GetItemData(atValue)) : nullptr;
 	if (chosen == nullptr)
 		return false;   // the type node itself is not a value
 

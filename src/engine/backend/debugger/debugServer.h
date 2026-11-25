@@ -30,13 +30,13 @@ class ibWebSocket;
 class BACKEND_API ibDebuggerServer {
 
 	// ⭐ THE DEBUG THREAD, AND THE PORT BESIDE IT. The port is the core's (core/net): a WebSocket at /debugger, one
-	// designer at a time, each command one binary message. Its threads only move bytes — what arrives is handed to
+	// studio at a time, each command one binary message. Its threads only move bytes — what arrives is handed to
 	// THIS thread, in order, and dispatched here, because this is the thread the session registry knows as the
 	// debugger's (RegisterDebugThread) and the one COM is initialised on for an OLE value.
 	class BACKEND_API ibDebuggerServerConnection {
 	public:
 
-		// A designer is on the port.
+		// A studio is on the port.
 		bool IsConnected() const;
 
 		void WaitConnection();
@@ -58,7 +58,7 @@ class BACKEND_API ibDebuggerServer {
 
 	private:
 
-		// From the port's thread: a designer came — its socket in the slot, and the queue what it says goes to; null
+		// From the port's thread: a studio came — its socket in the slot, and the queue what it says goes to; null
 		// when another one is on.
 		std::shared_ptr<ibDebugCommandQueue> AcceptConnection(const std::shared_ptr<ibWebSocket>& socket);
 
@@ -81,13 +81,13 @@ class BACKEND_API ibDebuggerServer {
 		// in CreateServer's wait loop. Plain bool was being kept in a
 		// register on the main thread → wait loop never observed the
 		// flip and the server hung until something else flushed cache
-		// (e.g. designer closing rewrote enough memory).
+		// (e.g. studio closing rewrote enough memory).
 		std::atomic<bool> m_acceptConnection;
 
 		// Worker thread sets true once StartServer has answered — the port up,
 		// or none free in the diapason. Used by
 		// CreateServer(wait=false) to make the manifest-write path
-		// deterministic — without it, the designer's SearchServer can
+		// deterministic — without it, the studio's SearchServer can
 		// race with wes's bind-loop and the connect refused that
 		// follows leaves the loop reaching round-budget exhaustion.
 		std::atomic<bool> m_bindReady{false};
@@ -96,7 +96,7 @@ class BACKEND_API ibDebuggerServer {
 
 		// ⭐ A MESSAGE IS WHOLE, so the socket needs no lock of its own: the two writes of a frame that interleaved
 		// between senders, and the blocking flags a read and a write restored over each other (2026-09-25), were
-		// wxSocketBase's. This lock only guards the slot — which socket is the designer's, and its queue.
+		// wxSocketBase's. This lock only guards the slot — which socket is the studio's, and its queue.
 		mutable std::mutex                   m_socketMutex;
 		std::shared_ptr<ibWebSocket>         m_socket;
 		std::shared_ptr<ibDebugCommandQueue> m_commandQueue;
@@ -148,10 +148,10 @@ public:
 	// a new line by it (ibRuntimeProfiler).
 	void EnterDebugger(const struct ibProcUnitState* state, ibRunContext* runContext, const struct ibByteUnit& byteCode,
 		long& numPrevLine);
-	// ⭐⭐ THE PERSON'S ROAD, AND IT CARRIES FAILURES. It lands in the DESIGNER'S OUTPUT PANE, where
+	// ⭐⭐ THE PERSON'S ROAD, AND IT CARRIES FAILURES. It lands in the STUDIO'S OUTPUT PANE, where
 	// somebody is working: a fault in a module belongs there, with its file, its module and its line,
 	// because it is theirs to fix. What a run merely SAYS does not — it goes to whoever asked for the
-	// run, by the channel below (Max, 2026-09-04: *"this is an error that reaches me in the designer,
+	// run, by the channel below (Max, 2026-09-04: *"this is an error that reaches me in the studio,
 	// and I can see it really is an error; and there are messages that should reach you, not me — I
 	// do not need them"*).
 	void SendErrorToClient(const ibString& strFileName, const ibString& strDocPath, unsigned int numLine, const ibString& strErrorMessage);
@@ -159,16 +159,16 @@ public:
 	// ⭐ WHAT EVALUATED CODE PRINTED — up the eval channel, to whoever asked for the evaluation.
 	//
 	// Separate from the error road above on purpose, and not only to keep the volume down: the
-	// person at the designer is debugging their own work and has no reason to read what somebody
+	// person at the studio is debugging their own work and has no reason to read what somebody
 	// else's sandbox is printing, while the assistant that ran it has no other way to see it — it
 	// is not their window (Max, 2026-09-02: *"I do not need to see those messages; you do, because
 	// you write them in the sandbox and I have no access to the sandbox"*).
 	//
 	// Never opens a connection: unlike an error, an evaluation is not worth a listening socket.
 	// ⭐⭐ THE ASSISTANT'S OWN CHANNEL, and what a run SAYS travels on it too. Two roads exist and
-	// they answer to different readers: `SendErrorToClient` lands in the DESIGNER'S OUTPUT PANE —
+	// they answer to different readers: `SendErrorToClient` lands in the STUDIO'S OUTPUT PANE —
 	// the person's window, where a failure belongs — while this one is read by whoever ASKED for
-	// the run and is dropped by the designer. Ordinary output down the error road would paint a
+	// the run and is dropped by the studio. Ordinary output down the error road would paint a
 	// person's pane with somebody else's narration (Max, 2026-09-04).
 	//
 	// The level rides along, so a reader can tell "the document did not post" from "posted 12".

@@ -3,7 +3,7 @@
 // compiler's, and a module that was never compiled is still a problem:
 // checked false, with an empty diagnostics list, is not a clean module.
 //
-// The application is the one a designer session opens. The compile cache
+// The application is the one a studio session opens. The compile cache
 // is the one that session builds. Nothing here substitutes its own.
 
 #include <gtest/gtest.h>
@@ -40,7 +40,7 @@ struct SharedModuleCheck : ::testing::Test {
 				GTEST_SKIP() << "appData env unavailable headless";
 			m_ownsApp = true;
 		}
-		// The application the designer opens lives in the base. An
+		// The application the studio opens lives in the base. An
 		// in-memory SQLite is that base for this test.
 		ibConnectionPool* pool = ibApplicationInstance::GetConnectionPool();
 		if (pool == nullptr)
@@ -75,15 +75,15 @@ TEST_F(SharedModuleCheck, ApplicationCheckReportsABrokenModuleAndOneThatWasNever
 	ibSessionRegistry* const registry = ibApplicationInstance::GetSessionRegistry();
 	ASSERT_NE(registry, nullptr);
 	// The base's session, unlisted: this base has no system tables to list it in. A session of no base makes a
-	// application of none. A session on the stack is not current: the scope keeps a weak pointer, and a designer
+	// application of none. A session on the stack is not current: the scope keeps a weak pointer, and a studio
 	// that is not current builds no compile cache.
 	ibSessionHolder holder = registry->MintUnlisted(
-		std::make_shared<ibSession>(wxT("module-check"), ibSessionKind::Designer));
+		std::make_shared<ibSession>(wxT("module-check"), ibSessionKind::Studio));
 	ibSession* const session = holder.Get();
 	ASSERT_NE(session, nullptr);
 	ibSessionScope scope(session);
 
-	// The application a designer edits is its session's own, made as the
+	// The application a studio edits is its session's own, made as the
 	// session is let in (NotifyAuthenticated → ibSession::AcquireMetaData) and
 	// let go as it leaves. The base's active one is not it.
 	registry->NotifyAuthenticated(session);
@@ -170,7 +170,7 @@ TEST_F(SharedModuleCheck, ApplicationCheckReportsABrokenModuleAndOneThatWasNever
 	EXPECT_TRUE(empty->Kind() == ibDataKind::Array && empty->AsArray().empty());
 }
 
-// A global module is a bind of the module manager, in the designer as in a running application: a text sees its names,
+// A global module is a bind of the module manager, in the studio as in a running application: a text sees its names,
 // a broken line of it is reported under its own name, and removing it takes the names away.
 TEST_F(SharedModuleCheck, AGlobalModuleIsReadWithTheTextThatBindsIt)
 {
@@ -178,7 +178,7 @@ TEST_F(SharedModuleCheck, AGlobalModuleIsReadWithTheTextThatBindsIt)
 	ibSessionRegistry* const registry = ibApplicationInstance::GetSessionRegistry();
 	ASSERT_NE(registry, nullptr);
 	ibSessionHolder holder = registry->MintUnlisted(
-		std::make_shared<ibSession>(wxT("global-module-check"), ibSessionKind::Designer));
+		std::make_shared<ibSession>(wxT("global-module-check"), ibSessionKind::Studio));
 	ibSession* const session = holder.Get();
 	ASSERT_NE(session, nullptr);
 	ibSessionScope scope(session);
@@ -226,7 +226,7 @@ TEST_F(SharedModuleCheck, AGlobalModuleIsReadWithTheTextThatBindsIt)
 	EXPECT_TRUE(broken.m_diagnostics.front().m_moduleName.Contains(global->GetName()));
 	global->SetModuleText(wxT("Function GlobalDouble(x) Public {\n\treturn x * 2;\n}\n"));
 
-	auto* const manager = dynamic_cast<ibValueModuleManagerDesigner*>(ibSession::EditModuleManagerFor(cfg));
+	auto* const manager = dynamic_cast<ibValueModuleManagerStudio*>(ibSession::EditModuleManagerFor(cfg));
 	ASSERT_NE(manager, nullptr);
 	ASSERT_TRUE(manager->RemoveSharedModule(global));
 
@@ -243,7 +243,7 @@ TEST_F(SharedModuleCheck, AMethodTheManagerDoesNotHaveIsReported)
 	ibSessionRegistry* const registry = ibApplicationInstance::GetSessionRegistry();
 	ASSERT_NE(registry, nullptr);
 	ibSessionHolder holder = registry->MintUnlisted(
-		std::make_shared<ibSession>(wxT("method-call-check"), ibSessionKind::Designer));
+		std::make_shared<ibSession>(wxT("method-call-check"), ibSessionKind::Studio));
 	ibSession* const session = holder.Get();
 	ASSERT_NE(session, nullptr);
 	ibSessionScope scope(session);

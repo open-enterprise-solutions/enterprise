@@ -86,7 +86,7 @@ struct QueryCompositeWalk : ::testing::Test {
 			GTEST_SKIP() << "SQLite open failed";
 		pool->Init(db, /*maxSize=*/2, /*minIdle=*/0);
 		// The manager reads through the session's connection (ses_query).
-		session = std::make_shared<ibSession>(wxT("query-composite-walk"), ibSessionKind::Enterprise);
+		session = std::make_shared<ibSession>(wxT("query-composite-walk"), ibSessionKind::Workspace);
 		scope = std::make_unique<ibSessionScope>(session.get());
 	}
 

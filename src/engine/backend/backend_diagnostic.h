@@ -19,7 +19,7 @@
 // name, so that the SAME failure can be:
 //
 //   * shown to a person      — the text is built FROM this, not instead of it;
-//   * jumped to in the designer — module + line is an address, not a phrase;
+//   * jumped to in the studio — module + line is an address, not a phrase;
 //   * returned to a headless caller — a build step, a test, or an AI assistant
 //     asking "compile this and tell me what is wrong", which is the one
 //     consumer that cannot exist while the answer is prose.
@@ -65,7 +65,7 @@ struct ibDiagnostic {
 
 	// WHERE. Three fields because three different things answer "where":
 	//   m_docPath   — the module's guid: the only one that is stable and the
-	//                 only one the designer can navigate by;
+	//                 only one the studio can navigate by;
 	//   m_moduleName— what a person reads;
 	//   m_fileName  — the external file (external report / data tool),
 	//                 empty for a module inside the open application.
@@ -118,7 +118,7 @@ public:
 };
 
 // THE REGISTRY. Static and process-wide on purpose: an error is reported from
-// wherever it happens — a job session, a compile in the designer, a background
+// wherever it happens — a job session, a compile in the studio, a background
 // run — and a subscriber that had to be threaded through all of those would be
 // threaded through none of them.
 //

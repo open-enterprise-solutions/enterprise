@@ -179,7 +179,7 @@ ibSourceDataObject* ibValueForm::GetSourceObject() const
 	// Prefer the source held by the MAIN attribute (the owner). The source
 	// object passed on open was assigned into it (InitializeForm); controls and
 	// their dot-walk read it from here. Fall back to the legacy field when no
-	// main attribute holds a source (sourceless / designer / not yet assigned).
+	// main attribute holds a source (sourceless / studio / not yet assigned).
 	if (ibFormAttributeValue* mainAttr = GetMainAttribute()) {
 		return mainAttr->GetSourceValue();
 	}

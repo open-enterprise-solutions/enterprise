@@ -160,7 +160,7 @@ struct ibHttpServerOptions {
 	std::optional<std::uint16_t> m_httpsPort;
 
 	// ⚠ HTTP SERVED IN THE CLEAR BEYOND THIS MACHINE TOO — the debug server's alone, until its port speaks TLS: the
-	// designer reaches a runtime's debugger over ws:// only (backend/debugger/debugClient.cpp).
+	// studio reaches a runtime's debugger over ws:// only (backend/debugger/debugClient.cpp).
 	bool          m_clearBeyondMachine = false;
 
 	// PEM text — the certificate (its chain after it) and its key: what HTTPS is spoken over, and only it.

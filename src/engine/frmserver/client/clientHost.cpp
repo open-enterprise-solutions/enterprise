@@ -41,7 +41,7 @@
 #include "clientInstance.h"
 #include "backend/metadataSerialization.h"
 #include "protocol/protocol.h"
-#include "protocol/protocolDesigner.h"   // ibProtocol::ibDebug
+#include "protocol/protocolStudio.h"   // ibProtocol::ibDebug
 #include "clientPatch.h"
 #include "protocolProfiler.h"   // a client's call told to a measurement
 
@@ -110,10 +110,10 @@ std::int64_t ResumeWindowMs()
 bool IsThinClient(const ibClientInstance& instance)
 {
 	const std::shared_ptr<ibSession> session = instance.ShareSession();
-	return session != nullptr && session->GetKind() == ibSessionKind::ThinClient;
+	return session != nullptr && session->GetKind() == ibSessionKind::Workspace;
 }
 
-// A socket to come back to, and a window that is on. An HTTP login has no connection, a designer is not kept,
+// A socket to come back to, and a window that is on. An HTTP login has no connection, a studio is not kept,
 // and Resume 0 drops the session at once — none of those is handed a token.
 bool WindowFor(const void* connection, const ibClientInstance& instance)
 {
@@ -1069,13 +1069,13 @@ bool ibClientHost::Call(ibProtocol::ibMethod method, const ibDataNode& params, i
 		params.GetValue(ibProtocol::ibLogin::Protocol, protocol);
 		auto client = std::make_shared<Client>();
 		const ibString id = ibGuid(ibGuid::newGuid()).str();
-		std::int32_t mode = static_cast<std::int32_t>(ibProtocol::ibLogin::ibMode::Runtime);
+		std::int32_t mode = static_cast<std::int32_t>(ibProtocol::ibLogin::ibMode::Workspace);
 		params.GetValue(ibProtocol::ibLogin::Mode, mode);
 		client->instance = std::make_shared<ibClientInstance>(m_applicationInstance, id, address, static_cast<ibProtocol::ibLogin::ibMode>(mode));
 		client->connectionless = connection == nullptr;
 		client->connection.store(connection, std::memory_order_relaxed);
 		client->protocol = std::min(protocol, ibProtocol::Version);
-		// THE SESSION AND ITS FRAME — false: none was made; thrown: refused before any login (another designer at work),
+		// THE SESSION AND ITS FRAME — false: none was made; thrown: refused before any login (another studio at work),
 		// said as it is. Read as a wrong password, it opened the client's login window on a question nobody asked
 		// (2026-10-20).
 		const auto createSession = [&]() {
@@ -1165,7 +1165,7 @@ bool ibClientHost::Call(ibProtocol::ibMethod method, const ibDataNode& params, i
 				OfferResume(result, id, client->protocol, result.GetValue<ibString>(ibProtocol::ibLogin::Token));
 			}
 			// WHAT THE CLIENT READS RIGHT AFTER ITS START, read in it (Read) — each schema it names, built as `schema`
-			// would build it, beside the frame: the designer's debugger store was a call of its own at every start, for
+			// would build it, beside the frame: the studio's debugger store was a call of its own at every start, for
 			// an empty answer where the application has no debugger. Only once the start is done, not waiting.
 			if (done && !client->unsettled.valid())
 				BuildSchema(*client->instance, params, result);
@@ -1650,7 +1650,7 @@ bool ibClientHost::Debug(Client& client, const ibDataNode& params, ibDataNode& r
 	const auto refuse = [&refusal, &error](ibProtocol::ibRefusal why, const ibString& text) { refusal = why; error = text; };
 	const ibProtocol::ibDebug::ibCommand command = static_cast<ibProtocol::ibDebug::ibCommand>(params.GetValue<std::int32_t>(ibProtocol::ibDebug::Command));
 
-	// The frame's debugger, the designer's — a client of another mode has none, and nothing of this is its.
+	// The frame's debugger, the studio's — a client of another mode has none, and nothing of this is its.
 	ibClientFrame* const frame = client.instance->GetFrame();
 	ibClientDebugger* const debugger = frame != nullptr ? frame->GetDebugger() : nullptr;
 	if (debugger == nullptr) {
@@ -2378,7 +2378,7 @@ void ibClientHost::DrawFrame(ibClientFrame* frame, ibDataNode& state, ibDataNode
 	DrawMenu(frame, frame->GetMenu().GetItems(), state.Child(ibProtocol::ibFrame::Menu));
 	const std::int64_t menus = NowMs();
 
-	// …and the mode's own part of it, beside the tabs — the designer's application tree.
+	// …and the mode's own part of it, beside the tabs — the studio's application tree.
 	frame->OnDraw(state);
 	const std::int64_t frameDrawn = NowMs();
 

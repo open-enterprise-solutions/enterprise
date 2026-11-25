@@ -977,7 +977,7 @@ private:
 	// "arbitrary code to run" — it is a value the compiler already wrote into the pool, so handing
 	// it over executes nothing, and it is exactly what the answer turns on: `GetSharedTemplate("")`
 	// is nothing, `GetSharedTemplate("DeliveryNote")` is a template with an area to complete
-	// against. The designer's own dispatcher branch takes four such functions by name — Type,
+	// against. The studio's own dispatcher branch takes four such functions by name — Type,
 	// TypeOf, GetSharedForm, GetSharedTemplate — and every one of them reads its first argument.
 	//
 	// The tape is read the way the runtime reads it (procUnit.cpp, LOAD_ARG_CONST): the `count`
@@ -1225,7 +1225,7 @@ private:
 
 	// The handles the chain was given, by name and nearest first — which is the rule the compiler
 	// bound the name by, not a search widened until something matches. Both maps are filled in the
-	// designer as well as at runtime (Bind* on the descriptor), which is what lets this answer in a
+	// studio as well as at runtime (Bind* on the descriptor), which is what lets this answer in a
 	// process that executes nothing.
 	// ⭐⭐ WHOSE A MEMBER IS, ANSWERED BY IDENTITY RATHER THAN BY NAME. `ThisObject` is reached as a
 	// member of the scope object exactly as `Chars` is reached as a member of a string, so the step
@@ -2344,7 +2344,7 @@ std::vector<ibQueryOutline> ibOutlineScriptQueries(const ibString& text, const i
 
 	// The walk below reaches into the platform to ask a source for a sample of what it yields, the
 	// same way the caret's own question does — so it answers under the same mode, and a refusal
-	// down there goes to whoever asked rather than to the designer's message pane.
+	// down there goes to whoever asked rather than to the studio's message pane.
 	const ibBackendException::ibEvalModeScope answering{ eval_complete };
 
 	// ⚠ COMPILED AND DISCARDED — and the answer is taken BEFORE the compiler dies, because the tree

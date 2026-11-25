@@ -2,16 +2,16 @@
 // OES Enterprise — module-manager split structural + seam smoke tests
 //
 // Guards the 2026-06-01 refactor that split ibValueModuleManager into a
-// lightweight base + a heavy runtime branch + a designer holder, and routed
+// lightweight base + a heavy runtime branch + a studio holder, and routed
 // every object/record/module through the ibSession::GetEditModuleManager seam
-// (Designer → lightweight designer manager from the compile cache; runtime →
+// (Studio → lightweight studio manager from the compile cache; runtime →
 // per-session root mm). See docs/private/module-manager-split.md.
 //
 // These are pure structural/null-safety smoke tests — they need no database,
 // no appData wiring, no live session pool. The behavioural half (which manager
 // a real Catalog/Document object actually parents to, shared-module
 // registration through OnBeforeRunMetaObject, reload lifetime) is integration
-// scope and exercised by the designer at runtime, not here.
+// scope and exercised by the studio at runtime, not here.
 // =============================================================================
 
 #include <gtest/gtest.h>
@@ -24,7 +24,7 @@
 #include <type_traits>
 
 // ---------------------------------------------------------------------------
-// Hierarchy: lightweight base, heavy runtime branch, designer holder
+// Hierarchy: lightweight base, heavy runtime branch, studio holder
 // ---------------------------------------------------------------------------
 
 TEST(ModuleManagerSplit, RuntimeManagerDerivesLightweightBase) {
@@ -40,13 +40,13 @@ TEST(ModuleManagerSplit, RuntimeApplicationDerivesRuntimeManager) {
     EXPECT_TRUE((std::is_base_of_v<ibValueModuleManager, ibValueModuleManagerRuntimeApplication>));
 }
 
-TEST(ModuleManagerSplit, DesignerHolderDerivesLightweightBaseNotRuntime) {
-    // The designer holder is-a lightweight base, but must NOT be-a runtime
+TEST(ModuleManagerSplit, StudioHolderDerivesLightweightBaseNotRuntime) {
+    // The studio holder is-a lightweight base, but must NOT be-a runtime
     // manager — it owns no ProcUnit / runtime shared-module registry. This is
     // the whole point of the split: the editor's read path never touches a
     // fragile runtime unit.
-    EXPECT_TRUE((std::is_base_of_v<ibValueModuleManager, ibValueModuleManagerDesigner>));
-    EXPECT_FALSE((std::is_base_of_v<ibValueModuleRuntimeManager, ibValueModuleManagerDesigner>));
+    EXPECT_TRUE((std::is_base_of_v<ibValueModuleManager, ibValueModuleManagerStudio>));
+    EXPECT_FALSE((std::is_base_of_v<ibValueModuleRuntimeManager, ibValueModuleManagerStudio>));
 }
 
 TEST(ModuleManagerSplit, ExternalManagersDeriveRuntimeManager) {
@@ -57,7 +57,7 @@ TEST(ModuleManagerSplit, ExternalManagersDeriveRuntimeManager) {
 }
 
 TEST(ModuleManagerSplit, BaseIsAbstract_FindSharedModulePureVirtual) {
-    // FindSharedModule was lifted onto the base as a pure virtual (designer and
+    // FindSharedModule was lifted onto the base as a pure virtual (studio and
     // runtime resolve it from their own registries). The base must therefore be
     // abstract — never instantiated directly.
     EXPECT_TRUE(std::is_abstract_v<ibValueModuleManager>);
@@ -74,23 +74,23 @@ TEST(ModuleManagerSeam, StaticHelperNullWhenNoCurrentSession) {
     EXPECT_EQ(ibSession::EditModuleManagerFor(nullptr), nullptr);
 }
 
-TEST(ModuleManagerSeam, DesignerSessionWithoutCacheYieldsNull) {
-    // A Designer-kind session has no runtime root; with null metadata (hence no
+TEST(ModuleManagerSeam, StudioSessionWithoutCacheYieldsNull) {
+    // A Studio-kind session has no runtime root; with null metadata (hence no
     // compile cache) the seam returns null rather than dereferencing.
-    ibSession sess(wxT("seam-designer"), ibSessionKind::Designer);
+    ibSession sess(wxT("seam-studio"), ibSessionKind::Studio);
     EXPECT_EQ(sess.GetEditModuleManager(nullptr), nullptr);
 }
 
 TEST(ModuleManagerSeam, RuntimeSessionWithoutRootYieldsNull) {
     // A fresh runtime-kind session has not had CreateRoot run, so m_root is
     // null. The seam returns it as-is (null) without asserting/crashing.
-    ibSession sess(wxT("seam-runtime"), ibSessionKind::Enterprise);
+    ibSession sess(wxT("seam-runtime"), ibSessionKind::Workspace);
     EXPECT_EQ(sess.GetEditModuleManager(nullptr), nullptr);
     EXPECT_EQ(sess.GetManagerModule(), nullptr);
 }
 
-TEST(ModuleManagerSeam, NonDesignerKindIgnoresCachePath) {
-    // For non-Designer kinds the seam takes the root road regardless of
+TEST(ModuleManagerSeam, NonStudioKindIgnoresCachePath) {
+    // For non-Studio kinds the seam takes the root road regardless of
     // metadata — a null-metadata runtime session still returns m_root (null
     // here), never touching GetCompileCache.
     ibSession svc(wxT("seam-service"), ibSessionKind::Service);

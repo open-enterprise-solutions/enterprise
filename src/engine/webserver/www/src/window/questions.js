@@ -22,9 +22,9 @@ import { typeEditor } from './typeSelector.js';
 /** @typedef {import('../protocol/pictures.js').Pictures} Pictures */
 /** @typedef {import('../protocol/patch.js').ProtocolNode} ProtocolNode */
 
-// The kinds of question (ibRequest::ibKind) the application asks. A designer's frame asks three more of its own —
-// ApplyChange 17, ObjectKind 18, PredefinedSelector 19, answered by the thin designer's frame over the client's
-// (appstudio, ibFrontendMainFrameDesigner::ShowRequest): a designer's page would answer them in its own Questions over
+// The kinds of question (ibRequest::ibKind) the application asks. A studio's frame asks three more of its own —
+// ApplyChange 17, ObjectKind 18, PredefinedSelector 19, answered by the studio's frame over the client's
+// (appstudio, ibFrontendMainFrameStudio::ShowRequest): a studio's page would answer them in its own Questions over
 // these, and the application is never asked them.
 const Kind = Object.freeze({
 	Message: 1, Choice: 2, Edit: 4, File: 5, Generation: 6, ViewMode: 7, SavedSettings: 8, Menu: 9, FormEditor: 10,

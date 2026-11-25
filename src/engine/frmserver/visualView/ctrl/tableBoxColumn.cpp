@@ -277,7 +277,7 @@ void ibValueModelTableBoxColumn::OnUpdate(ibDataNode& state, ibVisualHost* host)
 	const ibValueModelTableBox* owner = GetOwner();
 	ibValueModel* model = owner != nullptr ? owner->GetTableModel() : nullptr;
 	const ibString field = GetSourceFieldName();
-	const bool sortable = model != nullptr && !appData->DesignerMode() && !field.IsEmpty()
+	const bool sortable = model != nullptr && !appData->StudioMode() && !field.IsEmpty()
 		&& model->GetFeatures().Has(ibValueModel::Features::Sorting);
 	state.SetValue(ibProtocol::ibForm::ibTable::Sortable, sortable);
 	if (sortable) {

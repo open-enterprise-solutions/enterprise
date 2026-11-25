@@ -37,7 +37,7 @@ public:
 
 	const ibChoiceTypeLinkDescription& GetLink() const { return m_link; }
 
-	// The designer entry — hands back whether the link changed. Mirrors its companion's.
+	// The studio entry — hands back whether the link changed. Mirrors its companion's.
 	static bool ShowChoiceLinkDialog(ibBackendProperty* property, ibChoiceTypeLinkDescription& link);
 
 private:

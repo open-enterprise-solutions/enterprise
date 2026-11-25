@@ -15,7 +15,7 @@ ibSchemaBuilder::ibSchemaBuilder(ibDatabaseConnectionHolder* holder)
 ibDatabaseConnectionHolder* ibSchemaBuilder::BarrierHolder() const
 {
 	// The barrier state's owner: the explicit holder, or the db_query channel's per-thread holder
-	// (designer save) when none was given. Every ibSchemaBuilder of one save resolves to the same holder.
+	// (studio save) when none was given. Every ibSchemaBuilder of one save resolves to the same holder.
 	return m_holder != nullptr ? m_holder : ibConnectionPool::ThreadHolder();
 }
 

@@ -30,7 +30,7 @@ public:
 
 	// THE one command resolve — EVERY projection (button / bar / the inspector cell) calls this, so "does it exist +
 	// what's its look" is decided in ONE place, never guessed per-surface. Walk the path (ResolveValueByPath); where
-	// the walk is fragile (a tablebox command resolves the hop but vends an EMPTY caption / no icon in the designer)
+	// the walk is fragile (a tablebox command resolves the hop but vends an EMPTY caption / no icon in the studio)
 	// fall back to the RELIABLE gather — the SAME set the picker offered. Returns whether the command EXISTS (walk
 	// resolved OR gather has it); fills the readable caption (button/bar text), picture, the modifies-data flag, and the
 	// full PATH name (the inspector cell text). WalkCommand is a thin wrapper over this.

@@ -25,7 +25,7 @@ namespace {
 const ibChar* const s_fieldControl  = ibT("Control");
 const ibChar* const s_fieldPosition = ibT("Position");
 
-// ⭐⭐ A GENERATED FORM IS ADDRESSED BY WHAT IT SHOWS. Not every form is declared in the Designer —
+// ⭐⭐ A GENERATED FORM IS ADDRESSED BY WHAT IT SHOWS. Not every form is declared in the Studio —
 // a catalog with no list form of its own still opens as a list, built on the spot by `BuildForm`,
 // and those are exactly the ones people most want to arrange (Max, 2026-08-30: *"for a default form
 // you have to take the id of the main object it refers to — the object, the report and so on"*).

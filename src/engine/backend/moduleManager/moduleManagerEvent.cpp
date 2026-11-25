@@ -24,7 +24,7 @@
 // was in the same function. Serializing startup is cheap (login is rare).
 bool ibValueModuleManagerRuntimeApplication::BeforeStart()
 {
-	if (appData->DesignerMode())
+	if (appData->StudioMode())
 		return true;
 
 	try {
@@ -56,7 +56,7 @@ bool ibValueModuleManagerRuntimeApplication::BeforeStart()
 
 void ibValueModuleManagerRuntimeApplication::OnStart()
 {
-	if (appData->DesignerMode())
+	if (appData->StudioMode())
 		return;
 
 	try {
@@ -81,7 +81,7 @@ void ibValueModuleManagerRuntimeApplication::OnStart()
 
 bool ibValueModuleManagerRuntimeApplication::BeforeExit()
 {
-	if (appData->DesignerMode())
+	if (appData->StudioMode())
 		return true;
 
 	try {
@@ -112,7 +112,7 @@ bool ibValueModuleManagerRuntimeApplication::BeforeExit()
 
 void ibValueModuleManagerRuntimeApplication::OnExit()
 {
-	if (appData->DesignerMode())
+	if (appData->StudioMode())
 		return;
 
 	try {

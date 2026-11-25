@@ -13,7 +13,7 @@
 #include "deskgui/univ/aui/auibar.h"
 #include "deskgui/univ/menu.h"
 #include "deskgui/univ/ctrl/searchCtrl.h"   // ibSearchCtrl — the bar's search field
-#include "frmclient/visualView/visualHostClient.h"   // ibVisualHostClient::IsDesignerHost — the bar's real width in the editor
+#include "frmclient/visualView/visualHostClient.h"   // ibVisualHostClient::IsStudioHost — the bar's real width in the editor
 
 namespace {
 
@@ -65,7 +65,7 @@ ibViewCommandBar::ibViewCommandBar(wxWindow* parent, const ibVisualHostClient& h
 {
 	m_bar = new ibAuiToolBar(parent, wxID_ANY, wxDefaultPosition, wxDefaultSize,
 		ibAUI_TB_NO_AUTORESIZE | ibAUI_TB_HORZ_TEXT | ibAUI_TB_OVERFLOW);
-	m_bar->SetDesignerMode(host.IsDesignerHost());   // show real width in the editor (no overflow collapse)
+	m_bar->SetDesignerMode(host.IsStudioHost());   // show real width in the editor (no overflow collapse)
 
 	// Hidden until it has a command: an empty strip takes no room.
 	m_bar->Hide();
@@ -167,7 +167,7 @@ void ibViewCommandBar::UpdateSearch(const wxString& text)
 		m_search = new ibSearchCtrl(m_bar, wxID_ANY, wxEmptyString, wxDefaultPosition, m_bar->FromDIP(wxSize(220, -1)));
 		m_search->ShowCancelButton(true);
 		m_search->SetDescriptiveText(_("Search"));
-		// as the designer's tree looks for what is typed (ibMetaTreeBase::OnStartSearch): at every change, the "×" too
+		// as the studio's tree looks for what is typed (ibMetaTreeBase::OnStartSearch): at every change, the "×" too
 		m_search->Bind(wxEVT_TEXT, &ibViewCommandBar::OnSearch, this);
 	}
 	// the bar's font, as its tools are written in — the owner gives it to the bar (ApplyLook), and a window's font is not

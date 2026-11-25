@@ -73,7 +73,7 @@ void ibInputConsumer::CreateInputHandler(const wxString& inphandler)
 }
 
 // SEAM vs univ: a disabled window is not disabled natively (ibWindow::DoEnable) - its input stops here, at the one
-// door all of it comes through, and goes on to whoever else handles it (the designer's own filter has seen it first).
+// door all of it comes through, and goes on to whoever else handles it (the studio's own filter has seen it first).
 void ibInputConsumer::OnKeyDown(wxKeyEvent& event)
 {
     if ( !GetInputWindow()->IsEnabled() || !m_inputHandler || !m_inputHandler->HandleKey(this, event, true) )

@@ -1,8 +1,8 @@
 cmake_minimum_required(VERSION 3.16)
 
-# The thin designer — appstudio.exe, the designer as a thin client (mainApp.h says what it is). It links the thin client's core
+# The studio — appstudio.exe, the studio as a thin client (mainApp.h says what it is). It links the thin client's core
 # alone; a file base's server half (fileserver) is loaded by it when one is opened.
-set(DESIGNER_THIN_SOURCES
+set(APPSTUDIO_SOURCES
     mainApp.cpp
     mainAppEvent.cpp
     backend/debugger/debugClient.cpp
@@ -11,7 +11,7 @@ set(DESIGNER_THIN_SOURCES
     backend/debugger/debugClientQuery.cpp
     backend/vcs/gitService.cpp
     mainFrame/debugger/debugClientImpl.cpp
-    win/editor/codeEditor/codeEditorDesigner.cpp
+    win/editor/codeEditor/codeEditorStudio.cpp
     win/editor/sharedAttributeEditor/sharedAttributeEditor.cpp
     win/editor/featureOptionEditor/featureOptionEditor.cpp
     win/editor/interfaceEditor/interfaceEditor.cpp
@@ -40,10 +40,10 @@ set(DESIGNER_THIN_SOURCES
     docManager/templates/docViewMetaFile.cpp
     mainFrame/applicationCompare/applicationCompareModel.cpp
     mainFrame/local/localWindow.cpp
-    mainFrame/mainFrameDesigner.cpp
-    mainFrame/mainFrameDesignerEvent.cpp
-    mainFrame/mainFrameDesignerMenu.cpp
-    mainFrame/mainFrameDesignerParts.cpp
+    mainFrame/mainFrameStudio.cpp
+    mainFrame/mainFrameStudioEvent.cpp
+    mainFrame/mainFrameStudioMenu.cpp
+    mainFrame/mainFrameStudioParts.cpp
     mainFrame/metaTree/treeApplication.cpp
     mainFrame/metaTree/treeApplicationEvent.cpp
     mainFrame/metaTree/treeApplication_impl.cpp
@@ -56,7 +56,7 @@ set(DESIGNER_THIN_SOURCES
     mainFrame/stack/stackWindow.cpp
     mainFrame/vcs/gitPanel.cpp
     mainFrame/watch/watchWindow.cpp
-    mainFrame/welcome/welcomeWindowDesigner.cpp
+    mainFrame/welcome/welcomeWindowStudio.cpp
     syntaxHelper/helpChooserDialog.cpp
     syntaxHelper/helpDetailView.cpp
     syntaxHelper/helpDragSource.cpp
@@ -71,7 +71,7 @@ set(DESIGNER_THIN_SOURCES
     win/dlg/webAddress.cpp
 )
 
-add_executable(appstudio ${DESIGNER_THIN_SOURCES})
+add_executable(appstudio ${APPSTUDIO_SOURCES})
 
 set_target_properties(appstudio PROPERTIES
     CXX_STANDARD 20

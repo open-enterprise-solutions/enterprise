@@ -243,13 +243,13 @@ ibValue ibValueTypeDescription::AdjustValue(const ibTypeDescription& typeDescrip
 //////////////////////////////////////////////////////////////////////
 
 // ⭐⭐ A TYPE NAMED AT RUN TIME WITHOUT A QUALIFIER LIMITS NOTHING. `ibTypeData`'s own defaults — ten digits
-// and no fraction, ten characters, a date without its time — are what the designer gives a NEW ATTRIBUTE,
+// and no fraction, ten characters, a date without its time — are what the studio gives a NEW ATTRIBUTE,
 // and they reached every description a script built: `New TypeDescription("String")` cut a text to ten
 // characters, "Number" rounded to a whole number, "Date" dropped the time, and a value table's column added
 // without a type kept the first ten characters of whatever was written into it (measured 2026-09-21).
 //
 // No qualifier means no limit: precision 0 (AdjustValue does not round), a date with its time, length 0
-// (already "unlimited" to AdjustValue). The designer's defaults stay where they belong — on a new attribute,
+// (already "unlimited" to AdjustValue). The studio's defaults stay where they belong — on a new attribute,
 // whose type becomes a column in the database and has to say how wide it is.
 ibTypeDescription::ibTypeData ibValueTypeDescription::Unqualified()
 {

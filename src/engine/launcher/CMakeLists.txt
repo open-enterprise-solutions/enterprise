@@ -20,14 +20,14 @@ if(WIN32)
     target_sources(launcher PRIVATE launcher.rc ${CMAKE_SOURCE_DIR}/src/engine/core/program.manifest)
 endif()
 
-# A BUNDLE OF ITS OWN, like the designer's and the enterprise's: CMake's default Info.plist leaves the bundle
+# A BUNDLE OF ITS OWN, like the studio's and the enterprise's: CMake's default Info.plist leaves the bundle
 # identifier EMPTY, and the launcher was the only one of the three apps built that way.
 if(APPLE)
     set_target_properties(launcher PROPERTIES
         MACOSX_BUNDLE TRUE
         MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/resources/Info.plist"
     )
-    # The platform's one icon, the file the designer's bundle carries.
+    # The platform's one icon, the file the studio's bundle carries.
     set(OES_ICON "${CMAKE_SOURCE_DIR}/src/engine/appstudio/resources/oes.icns")
     set_source_files_properties(${OES_ICON} PROPERTIES MACOSX_PACKAGE_LOCATION "Resources")
     target_sources(launcher PRIVATE ${OES_ICON})

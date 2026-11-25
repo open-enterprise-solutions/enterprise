@@ -1,13 +1,13 @@
-#ifndef _MAIN_ENTERPRISE_APP_H__
-#define _MAIN_ENTERPRISE_APP_H__
+#ifndef _MAIN_WORKSPACE_APP_H__
+#define _MAIN_WORKSPACE_APP_H__
 
 #include "deskgui/app.h"               // ibWxApp — the journal and the dumps, the machine's appearance, the refusals said
 
-// THE THIN RUNTIME — the runtime as a thin client: it opens a connection — to an
+// THE WORKSPACE — the workspace as a thin client: it opens a connection — to an
 // application server by its address, or to a file base it opens in its own process (fileserver, loaded for it) — and
 // puts up the runtime's main window around it, which logs in and draws what it is answered. It holds no base of its
 // own and runs no code: that is the server's, wherever it runs.
-class ibAppEnterprise : public ibWxApp {
+class ibAppWorkspace : public ibWxApp {
 
 	// APPLICATION SERVER ENTRY — oes://server[:port]/<base>, or oess:// over TLS; the authorities it trusts, a PEM file
 	// (empty — the platform's store)
@@ -31,7 +31,7 @@ class ibAppEnterprise : public ibWxApp {
 	//LOCALE
 	wxString m_strLocale;
 
-	// DEBUG — a file base's engine brings its debug server up (the designer's Start debugging)
+	// DEBUG — a file base's engine brings its debug server up (the studio's Start debugging)
 	bool m_debugEnable = false;
 
 public:
@@ -55,6 +55,6 @@ protected:
 	void OnSetFocus(wxFocusEvent& event);
 };
 
-wxDECLARE_APP(ibAppEnterprise);
+wxDECLARE_APP(ibAppWorkspace);
 
 #endif

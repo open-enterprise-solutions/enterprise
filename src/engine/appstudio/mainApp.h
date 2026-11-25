@@ -1,15 +1,15 @@
-#ifndef _MAIN_DESIGNER_APP_H__
-#define _MAIN_DESIGNER_APP_H__
+#ifndef _MAIN_STUDIO_APP_H__
+#define _MAIN_STUDIO_APP_H__
 
 #include "deskgui/app.h"               // ibWxApp — the journal and the dumps, the machine's appearance, the refusals said
 
-// THE THIN DESIGNER — the designer as a thin client: it opens a connection — to an
+// THE STUDIO — the studio as a thin client: it opens a connection — to an
 // application server by its address, or to a file base it opens in its own process (fileserver, loaded for it) — and
-// puts up the designer's main window around it, which logs in as the designer and draws what it is answered. The
+// puts up the studio's main window around it, which logs in as the studio and draws what it is answered. The
 // application it edits is the server's, held by its session there; this process holds none.
 // The base it opens is held by appData (frmclient/backend/appData.h), as the desktop's engine held it: the application
 // fills it, a child started beside it is given it (RunApplication).
-class ibAppDesigner : public ibWxApp {
+class ibAppStudio : public ibWxApp {
 public:
 
 	virtual wxString GetExeName() const override { return wxT("appstudio"); }
@@ -31,6 +31,6 @@ protected:
 	void OnSetFocus(wxFocusEvent& event);
 };
 
-wxDECLARE_APP(ibAppDesigner);
+wxDECLARE_APP(ibAppStudio);
 
 #endif

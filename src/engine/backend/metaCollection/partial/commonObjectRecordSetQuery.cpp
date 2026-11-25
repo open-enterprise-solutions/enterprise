@@ -85,7 +85,7 @@ bool ibValueRecordSetObject::LockByKeys()
 
 bool ibValueRecordSetObject::BeginRecordSetWriteScope(ibConnectionScope& scope)
 {
-	if (appData->DesignerMode())          return false;
+	if (appData->StudioMode())          return false;
 	if (!scope || !scope->IsOpen())
 		ibBackendCoreException::Error(_("Database is not open!"));
 
@@ -113,7 +113,7 @@ bool ibValueRecordSetObject::BeginRecordSetWriteScope(ibConnectionScope& scope)
 
 bool ibValueRecordSetObject::BeginRecordSetDeleteScope(ibConnectionScope& scope)
 {
-	if (appData->DesignerMode())          return false;
+	if (appData->StudioMode())          return false;
 	if (!scope || !scope->IsOpen())
 		ibBackendCoreException::Error(_("Database is not open!"));
 

@@ -242,7 +242,7 @@ public:
 			"has one - its identifier. That last is what a REFERENCE actually is, and the reason a "
 			"reference cannot be written as a scalar anywhere.\n"
 			  "\n"
-			"A designer holds the APPLICATION, not the data: a PREDEFINED item can be named "
+			"A studio holds the APPLICATION, not the data: a PREDEFINED item can be named "
 			"here, an ordinary one is a row in somebody's application and this can only say what "
 			"the packed value claims about it.");
 	}

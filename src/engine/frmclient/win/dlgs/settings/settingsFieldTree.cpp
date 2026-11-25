@@ -12,7 +12,7 @@
 #include "frmclient/backend/metaCollection/partial/reference/reference.h"   // ibValueReferenceDataObject — what a reference points at
 #include "frmclient/backend/metaCollection/resource/metaResourceObject.h"   // the RESOURCE metatype — its own class icon
 #include "frmclient/backend/metaData.h"                                      // a tab's application — its tab
-#include "frmclient/backend/appData.h"                                       // DesignerMode — names, or a person's synonyms
+#include "frmclient/backend/appData.h"                                       // StudioMode — names, or a person's synonyms
 #include "frmclient/mainFrame/mainFrame.h"                                  // ibFrontendMainFrame::Respond — a target's fields asked
 #include "frmclient/win/picture.h"                                          // ibProtocolPicture — a field's picture, as it names it
 #include "protocol/protocol.h"
@@ -312,7 +312,7 @@ wxString ibSettingsFieldTree::GetFieldText(const wxString& path) const
 
 wxString ibSettingsFieldText(const wxString& path, const wxString& presentation)
 {
-	if (presentation.IsEmpty() || appData->DesignerMode())
+	if (presentation.IsEmpty() || appData->StudioMode())
 		return path;
 	const size_t inPath = std::count(path.begin(), path.end(), wxT('.'));
 	const size_t inText = std::count(presentation.begin(), presentation.end(), wxT('.'));

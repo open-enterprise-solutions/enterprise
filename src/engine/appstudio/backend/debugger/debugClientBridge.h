@@ -7,7 +7,7 @@
 
 #include "core/debugger/debugDefs.h"
 
-// THE ENGINE'S (backend/debugger/debugClientBridge.h) whole — a listener of the thin designer's debugger (debugClient.h).
+// THE ENGINE'S (backend/debugger/debugClientBridge.h) whole — a listener of the studio's debugger (debugClient.h).
 class ibDebuggerClientBridge {
 public:
 
@@ -72,7 +72,7 @@ public:
 	// date), so code cannot time itself, and timing it from this end would measure the socket.
 	virtual void OnSandboxResult(bool ran, const wxString& answer, const wxString& json, wxLongLong_t microseconds) {}
 
-	// A line printed by evaluated code. Not shown to the person: the designer drops these, and
+	// A line printed by evaluated code. Not shown to the person: the studio drops these, and
 	// whoever asked for the evaluation reads them.
 	virtual void OnEvalMessage(const wxString& message, MessageType type) {}
 
@@ -85,7 +85,7 @@ public:
 	// answer to its own request from an answer to somebody else's; `accepted` false means the far end
 	// refused, and `refusal` says why.
 	//
-	// ⚠ EMPTY BODY, LIKE ITS NEIGHBOURS ABOVE, and appended rather than inserted: the designer's own
+	// ⚠ EMPTY BODY, LIKE ITS NEIGHBOURS ABOVE, and appended rather than inserted: the studio's own
 	// bridge wants none of this, and moving a vtable slot under a partially rebuilt DLL is a fault
 	// with no message.
 	virtual void OnJobState(unsigned int which, const struct ibJobRunByteCodeState& state) {}

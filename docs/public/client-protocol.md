@@ -1,6 +1,6 @@
 # The client protocol
 
-**What.** How a client works with a base: the thin runtime, the thin designer, a web server, a webview client, an
+**What.** How a client works with a base: the workspace, the studio, a web server, a webview client, an
 assistant. The server holds the session, its forms, its documents and all the code; the client draws what it is
 answered and sends what the person did.
 
@@ -10,8 +10,8 @@ the browser one [the browser client](browser-client.md).
 
 **Where it is written.** Every name and number below is written once, in `src/engine/protocol/protocol.h` — a header
 that depends on nothing, included by the server (`frmserver`), the thin client and the web server alike. A number there
-is never renumbered. What only the designer speaks — its debugger, its schemas and views, the questions asked while a
-application is written — is written beside it, in `protocol/protocolDesigner.h`; its numbers stay in `protocol.h`,
+is never renumbered. What only the studio speaks — its debugger, its schemas and views, the questions asked while a
+application is written — is written beside it, in `protocol/protocolStudio.h`; its numbers stay in `protocol.h`,
 one numbering for the wire.
 
 ## Transports
@@ -26,8 +26,8 @@ The address is `oes://server[:port]/<base>`, or `oess://` when the server speaks
 certificate, which the client checks ([listeners.md](listeners.md)); the port is the cluster's, 7373 unless its
 `server.conf` says otherwise. A web server's publication is reached by the link a browser shows for it,
 `http(s)://server[:port]/<base>/`: the same WebSocket at `/<base>/client`, the same packets; the port left out is the
-browser's (80, 443). A file base needs no server: the client opens it itself and makes the same calls in process. A thin designer's
-WebSocket, and a thin runtime's when `backend.conf` `Resume` is 0, ends its session when it closes. A thin runtime
+browser's (80, 443). A file base needs no server: the client opens it itself and makes the same calls in process. A studio's
+WebSocket, and a workspace's when `backend.conf` `Resume` is 0, ends its session when it closes. A workspace
 with the window on (left out, 120 seconds; 0 is off; never more than 30 minutes) keeps the session that long, and
 comes back with `login` `{Token}`.
 
@@ -41,7 +41,7 @@ browser's `DecompressionStream("deflate-raw")`); a packet begins `OES1`, a defla
 
 | Method | Parameters | Answer |
 |---|---|---|
-| `login` | `User`, `Password`, `Mode` (1 runtime — the default, 2 designer), `Protocol` (the newest version the client speaks, 1 if absent), `Features` (what this client accepts; `resume` opts into the slot below), `Read` (the schemas the client reads right after its start, each `{Schema}`) | `Client`, `Protocol` (the version both speak), `Features` (what the server offers; `resume` when a dropped thin runtime is kept), `Token` (that runtime only, once), `Locale` (the base's language: the client's own words are said in it, [translations.md](translations.md)), `FullName` (the person the session is, as the client greets them: the user's full name, else their name; empty in a base with no users), `Read` (each schema of the login's `Read` the server built, as `schema` answers it, with its `Schema`), and the frame |
+| `login` | `User`, `Password`, `Mode` (1 workspace — the default, 2 studio), `Protocol` (the newest version the client speaks, 1 if absent), `Features` (what this client accepts; `resume` opts into the slot below), `Read` (the schemas the client reads right after its start, each `{Schema}`) | `Client`, `Protocol` (the version both speak), `Features` (what the server offers; `resume` when a dropped workspace is kept), `Token` (that workspace only, once), `Locale` (the base's language: the client's own words are said in it, [translations.md](translations.md)), `FullName` (the person the session is, as the client greets them: the user's full name, else their name; empty in a base with no users), `Read` (each schema of the login's `Read` the server built, as `schema` answers it, with its `Schema`), and the frame |
 | `login` | `Token` and no `User`, only while that client is detached | the same `Client`, `Protocol`, `Features`, and no frame and no new `Token`. The next `frame` `{Since}` is the patch |
 | `users` | — (before the login, no `Client`) | `Users` — the names the login window offers |
 | `logout` | `Client` | — |
@@ -64,7 +64,7 @@ browser's `DecompressionStream("deflate-raw")`); a packet begins `OES1`, a defla
 | `addresses` | — (no `Client`) | `Addresses` — the base's web addresses, each `Id`, `Path`; the connection is told each change — [Web addresses](#web-addresses) |
 | `serve` | `Address` (an entry's `Id`), `Prefix`, `Method`, `Path`, `Query`, `Headers`, `Body` (no `Client`) | `Status`, `Headers`, `Body` — never the frame — [Web addresses](#web-addresses) |
 
-`login`'s `Read` saves the start's own reads: the designer names the debugger's store (`Schema` 15), which was a
+`login`'s `Read` saves the start's own reads: the studio names the debugger's store (`Schema` 15), which was a
 call of its own at every start. A schema the server does not know, the person has no right to, or that could not be
 built is left out of the answer, and so is everything while the start waits on a question; an older server answers no
 `Read` at all. Either way the client reads what is missing with `schema`, as before — no protocol version is needed.
@@ -117,7 +117,7 @@ composed again when the person says so (Compose). When a composed sheet's `Versi
 also carry `Sheet` (and `ReadOnly`) — the same as `fetch` would give — so the client need not fetch; a server that
 does not put `Sheet` in the state is answered with `fetch`, as before.
 
-In the designer an application file opened with File → Open (`.oap`) is a tab of `Kind` 15. Its `View` holds
+In the studio an application file opened with File → Open (`.oap`) is a tab of `Kind` 15. Its `View` holds
 `MetaData` — the application's tree, as an external data tool's does (Kind 5) — browsed read-only. Schema
 `MetaData` commands for that tab carry its `Tab`.
 
@@ -127,7 +127,7 @@ uploaded file, `Load {Id, File}` replaces that object by the one read, `Unload {
 (uploaded empty). A property row whose cell is a link (a module, a form, a template) carries `Object` — the metaobject
 the link opens, by its id.
 
-In the designer a report's composer is a tab of `Kind` 14. Its `View` holds `State` (`ReadOnly`), `Composition` —
+In the studio a report's composer is a tab of `Kind` 14. Its `View` holds `State` (`ReadOnly`), `Composition` —
 the composer's description in its node form — and `Fields`, `References`, `Error` — what its query offers, as the
 ComposerSettings question has them — and `Classes`, rows `{Type, Name, Picture}`: the classes its type cells name.
 The client edits the description itself and sends it back whole: event
@@ -207,7 +207,7 @@ carries the picture itself:
 - the platform's own pictures are compiled into the client — it never asks for them;
 - any other it asks for with `picture`, the ids of a whole list in one call, and keeps for the session — an id there
   is none of too, so it is not asked again. Before it draws an answer, the client asks for every picture the answer
-  names at once (its `Picture`, `Icon` and `…Picture` fields): the designer's start is one `picture` call, not one for
+  names at once (its `Picture`, `Icon` and `…Picture` fields): the studio's start is one `picture` call, not one for
   the templates and another for the tree;
 - only a picture with no id (one held as a file's bytes) comes as itself: the field holds its PNG, a `Binary`.
 
@@ -226,8 +226,8 @@ by column id: `Text`, `Checked` for a flag, `Number`, `Value` when the cell take
 column; its look, when the server's
 model set one — `TextColour`, `BackgroundColour` (a colour's text, `r,g,b`, as a form's colours; a form's colour sent empty is the
 platform's, painted in the client's look), `Bold`, `Italic`,
-`Strikethrough`, `Underlined`, `Face`, `Size`, `Align` (`Left`, `Center`, `Right`). In the designer (`login` `Mode` 2)
-a table reads no rows — its `fetch` is refused, and a designer's client does not ask. A read that fails is refused
+`Strikethrough`, `Underlined`, `Face`, `Size`, `Align` (`Left`, `Center`, `Right`). In the studio (`login` `Mode` 2)
+a table reads no rows — its `fetch` is refused, and a studio's client does not ask. A read that fails is refused
 `Exception` in the base's own words, and the frame carries the same message for the person; a `Parent` the table no
 longer holds is refused `Exception` too.
 
@@ -260,7 +260,7 @@ When the server leaves that level itself — the list's settings replaced, its g
 table's `State` carries `Parent` 0, once, in the frame whose `Rows` are the top's: the client leaves its crumbs and
 stands at the top. A client that does not look at it asks for its old level and is refused, as for any `Parent` the
 table no longer holds.
-A designer's module tab (its `View` `State`: `Syntax`, `Module`, `Modified`, `ReadOnly`) carries the module's `Text`
+A studio's module tab (its `View` `State`: `Syntax`, `Module`, `Modified`, `ReadOnly`) carries the module's `Text`
 in the frame that opens the tab, once; the client draws it without a `fetch`. A server that puts no `Text` there is
 asked with `fetch`, as before. A form's tab reads its module's text as it did.
 A module tab's `fetch` with `Request {Kind: 4 Linq, Text, Position}` is what the LINQ constructor asks the compiler,
@@ -311,9 +311,9 @@ anew, and what was typed into it is let go uncommitted. A client that does not k
 | `Exit` | the client is to go: Exit done, every tab closed — an event, never in a patch |
 | `Properties` | the inspector's rows (as `Schema` 10 shows them) of each object a door acted on since the last answer, each by its `NodeId` and `Tab` (the tab whose tree holds it; absent: the application's) — an event, never in a patch |
 | `Request` | a question to the person, while one is pending |
-| `View` | the active tab drawn: a form — its `Key` and its controls as the designer saved them, each with a `State` of what it shows now; or the start page |
+| `View` | the active tab drawn: a form — its `Key` and its controls as the studio saved them, each with a `State` of what it shows now; or the start page |
 
-A designer's form editor tab is opened by the frame that opens it: its view's `State` carries `Opening` once —
+A studio's form editor tab is opened by the frame that opens it: its view's `State` carries `Opening` once —
 what the tab's `fetch` with `Request {Kind: Text}` answers (the form, the classes, the module's text). The client
 makes the editor from it without a `fetch`; a frame without `Opening` (an older server, a tab opened before) is read
 with `fetch`, as before.
@@ -349,16 +349,16 @@ A schema is a dialog of the desktop held as data: the client shows it however it
 
 | Schema | In | Shows | Commands | Right |
 |---|---|---|---|---|
-| 1 All functions | the runtime | the objects the person may open, grouped by kind, each by its `Item` | 1 Open `{Item, Type}` | the mode of all functions |
-| 2 Active users | both | `Sessions` and `Locks` | the designer's: 5 Kick `{Session}`, 6 Reload `{Session}`, 7 Release `{Lock}` | active users |
-| 3 Sections | the runtime | the section panel: `Sections` with their `Blocks` of items | 1 Open `{Item, Type}` | — |
-| 4 About | both | `Build`, `Picture`, `Database`, `Application`, `User`, `Locale`, `Plugins` (`Name`, `Version`) | — | — |
+| 1 All functions | the workspace | the objects the person may open, grouped by kind, each by its `Item` | 1 Open `{Item, Type}` | the mode of all functions |
+| 2 Active users | both | `Sessions` and `Locks` | the studio's: 5 Kick `{Session}`, 6 Reload `{Session}`, 7 Release `{Lock}` | active users |
+| 3 Sections | the workspace | the section panel: `Sections` with their `Blocks` of items | 1 Open `{Item, Type}` | — |
+| 4 About | both | `Version` (the platform's), `Build`, `Picture`, `Database`, `Program`, `User`, `Locale`, `Plugins` (`Name`, `Version`) | — | — |
 | 5 Registration journal | both | nothing | 1 Open — opens its tab (`Kind` 4) | active users |
-| 6 Debugging | the runtime | `Debugging` — the session's process listens for the designer; `Allowed` — it may be switched now (not on an application server, not while a start waits for the designer) | 2 Start, 3 Stop | — |
+| 6 Debugging | the workspace | `Debugging` — the session's process listens for the studio; `Allowed` — it may be switched now (not on an application server, not while a start waits for the studio) | 2 Start, 3 Stop | — |
 | 7 Assistant access | both, in the application as the roles say | `Allowed`; the settings lie on the person's machine | — | — |
-| 8 Users | the designer | `Users` (`Guid`, `Name`, `FullName`), and what a record is chosen from: `Roles` (`Guid`, `Name`, `Title`, `Mode`), `Languages` (`Guid`, `Title`, `Code`, and `Default` on the application's own language); with `Args {Guid}` — that one's `User` (`Guid`, `Name`, `FullName`, `Password` — whether one is stored, `Language`, `Roles`) | 4 Save `{Guid, Name, FullName, Language, Roles[, Password]}` — the password hashed by the server, absent: kept; 8 Remove `{Guid}` | data administration |
-| 18 ApplicationCompare | the designer | with `Args {Mode, File, File2}` (`Mode` 1 the application and a file, 2 and the base's, 3 two files): `Records` — the walk of the two; a side that cannot be read is refused | 13 Merge `{Mode, File, File2, Pull, Ops}` — Add/Delete/Replace; what was applied and what was not, said to the person by the server | administration |
-| 19 Types | the designer | the language's types, for the syntax helper: with `Args {Query}` — `Types` (`Name`), whose names match; with `Args {Name}` — what that one offers: `Methods` (`Name`, `Signature`) and `Properties` (`Name`), or `Note`, why it cannot be asked | — | — |
+| 8 Users | the studio | `Users` (`Guid`, `Name`, `FullName`), and what a record is chosen from: `Roles` (`Guid`, `Name`, `Title`, `Mode`), `Languages` (`Guid`, `Title`, `Code`, and `Default` on the application's own language); with `Args {Guid}` — that one's `User` (`Guid`, `Name`, `FullName`, `Password` — whether one is stored, `Language`, `Roles`) | 4 Save `{Guid, Name, FullName, Language, Roles[, Password]}` — the password hashed by the server, absent: kept; 8 Remove `{Guid}` | data administration |
+| 18 ApplicationCompare | the studio | with `Args {Mode, File, File2}` (`Mode` 1 the application and a file, 2 and the base's, 3 two files): `Records` — the walk of the two; a side that cannot be read is refused | 13 Merge `{Mode, File, File2, Pull, Ops}` — Add/Delete/Replace; what was applied and what was not, said to the person by the server | administration |
+| 19 Types | the studio | the language's types, for the syntax helper: with `Args {Query}` — `Types` (`Name`), whose names match; with `Args {Name}` — what that one offers: `Methods` (`Name`, `Signature`) and `Properties` (`Name`), or `Note`, why it cannot be asked | — | — |
 | 20 Style | both | no schema: the theme is the client's own, kept on its machine — the server places the item in Tools, enabled, and a call of it is refused | — | — |
 
 A schema the client's application does not have, or the person has no right to, is refused.
@@ -396,15 +396,15 @@ while the number stays: clicking an object again, or walking back to it, before 
 | 9 Menu | items: `Id`, `Caption`, `Checked`, `Enabled` (false — greyed) and their own items — a submenu; a popup menu where the mouse is | `Id` — the item picked; none — dismissed |
 | 8 SavedSettings | `Mode` (0 save, 1 restore), `Key`, `Default` and items: `Id`, `Caption` — the person's saved settings | `Act` (1 save, 2 restore, 3 default, 4 rename, 5 remove), `Id`, `Name`; none — closed |
 | 10 FormEditor | the active tab's form, as the frame has it: `Picture`, `HasSetting`, `Result` (the act before's: 0 done, 1 no storage, 2 no address, 3 refused), `Classes` (`Name`, `Picture`) | `Act` (1 apply — with `Controls`: each `Control`, its `Position`, the properties a person may arrange; 2 save; 3 reset); none — closed |
-| 11 ListSettings | a table's settings: `Settings` (the setting in force, in the node form the settings schema writes), `Fields` (`Name`, `Presentation`, `Id`, `Type`, `Available`, `Picture` — the column's, by its id, where the source describes itself; none — the attribute picture), `References` (`Type` — a class id as text, `Targets` — the metaobjects it points at, `Value` — its empty value as a value is written, read as the server reads it: `CatalogRef.Goods.EmptyRef` in the designer; none for a family), `Error` | `Settings` — the setting edited; none — cancelled |
+| 11 ListSettings | a table's settings: `Settings` (the setting in force, in the node form the settings schema writes), `Fields` (`Name`, `Presentation`, `Id`, `Type`, `Available`, `Picture` — the column's, by its id, where the source describes itself; none — the attribute picture), `References` (`Type` — a class id as text, `Targets` — the metaobjects it points at, `Value` — its empty value as a value is written, read as the server reads it: `CatalogRef.Goods.EmptyRef` in the studio; none for a family), `Error` | `Settings` — the setting edited; none — cancelled |
 | 12 SimpleChoice | `Value` — a field's number or date, with its type | `Value` — the one chosen; none — dismissed |
 | 13 ComposerSettings | a report's settings: `Settings` (the setting in force), `Composition` (what the report arranges, in its node form), `Fields` and `References` as ListSettings has them — the fields its query offers, no `Id`; `Error` | `Settings` — the setting edited; none — cancelled |
-| 14 Error | a script's failure: `Picture`, `Text` — the error with its call stack | `Act`: 1 close the window, 2 and send it to the designer debugging the base, 3 and close the client — each does the one before it too; none — 1 |
+| 14 Error | a script's failure: `Picture`, `Text` — the error with its call stack | `Act`: 1 close the window, 2 and send it to the studio debugging the base, 3 and close the client — each does the one before it too; none — 1 |
 | 15 Print | a script's sheet: `Sheet`, as a gridbox's `fetch` gives it | `Done` — printed; false — the print dialog cancelled, or the printer failed |
 | 16 Schedule | a form's schedule: `Schedule`, in its stored form | `Schedule` — the one edited, and the form is modified; none — cancelled |
 | 17 ApplyChange | the restructure's ledger: `Picture` and items `Level`, `Text` | `Done` — applied; none — cancelled, rolled back |
 | 18 ObjectKind | a form or a template just made: `Caption` (the window's), `Name`, `Synonym`, `Comment` and items `Id`, `Caption`, `Name` — the kinds it is offered | `Id`, `Name`, `Synonym`, `Comment` — the kind chosen; none — cancelled, the object taken away |
-| 19 PredefinedSelector | the designer's declared values of a reference, its type asked before it as a Choice: `Types` — a branch per admitted reference (`Title`), its values as children (`Name`, `Id`), each with what is declared under it | `Id` — the value chosen; none — closed |
+| 19 PredefinedSelector | the studio's declared values of a reference, its type asked before it as a Choice: `Types` — a branch per admitted reference (`Title`), its values as children (`Name`, `Id`), each with what is declared under it | `Id` — the value chosen; none — closed |
 | 20 Search | a table's advanced search, a settings window over one condition: `Picture`, `Fields` and `References` as ListSettings has them — the columns it may look in (`Id` — the column), `Column` — the cursor's, `Value` — its cell's value with its `Presentation`, `How` | `Column`, `How`: 1 from the start, 2 anywhere, 3 the whole field, 4 by value; `Value` — the text looked for, or by value the value (none — nothing); none — closed. A value of the server's choosing is chosen on the way as a ListSettings window's (`Act` 2 Choose) |
 | 21 TypeSelector | a field holding a type description (a characteristic's Type): `Value` — the description in its stored form (`Types` — `TypeId` each, a class id as text; `Precision`, `Scale`, `NonNegative`, `DateFraction`, `Length`, `AllowedLength`), `Classes` — the types it may take (`Type` — a class id as text, `Name`, `Picture`) | `Value` — the description edited; none — cancelled |
 
@@ -418,7 +418,7 @@ with `Expanded`, the fields of those targets (one per name, its type the union o
 checked: one refused is asked again as it was given, with `Error`; one taken becomes the table's user setting, and its
 rows are read again. `Act` 2 Choose — a condition's value of a type of the server's (`Type`, `Value` held, `Choice` —
 the client's number for it): the server opens its quick choice, or its choice form — a tab like any other; in the
-designer, its declared values (PredefinedSelector). The value chosen comes back in the window's question, asked again
+studio, its declared values (PredefinedSelector). The value chosen comes back in the window's question, asked again
 or said anew, as `Chosen` (`Choice`, `Value` with its `Presentation`).
 
 A ComposerSettings window acts the same way. The setting taken becomes the report's user setting; the report is not
@@ -478,7 +478,7 @@ the kind's that answers it.
 
 ## The debugger
 
-From protocol 6 a designer debugs through the server's debugger — the one connected to the runtimes. The client's
+From protocol 6 a studio debugs through the server's debugger — the one connected to the runtimes. The client's
 windows listen to it, as the assistant does. It goes on a second connection of the same client, so a step is not
 queued behind a call waiting on the stop it would let go:
 
@@ -597,7 +597,7 @@ for its `Commands` — the person's right for a schema.
 
 ## Sessions
 
-A client's session is a thin client in the runtime and a designer in the designer, whatever process hosts it.
+A client's session is the workspace's or the studio's, whatever process hosts it.
 Active users shows both columns: the application (Application Workspace, Application Studio, Application server, …) and
 the kind (Client, Server, Job). A thin client whose socket has dropped stays in the list for the resume window, and its
 activity says `detached until HH:MM:SS` — the moment the window ends — so an administrator can end it.
@@ -605,7 +605,7 @@ activity says `detached until HH:MM:SS` — the moment the window ends — so an
 ## A dropped connection
 
 `backend.conf` key `Resume`, seconds. Absent is 120. 0 is off: the drop ends the session, its locks and its seat at
-once. A value above 30 minutes is 30 minutes. The window is a thin runtime that logged in on a WebSocket. A designer,
+once. A value above 30 minutes is 30 minutes. The window is a workspace that logged in on a WebSocket. A studio,
 an HTTP client, and `Resume` 0 get no `Token` and no `resume` feature.
 
 While the window is armed, a call that names `Client` is 401. An HTTP client is the login that arrived with no
@@ -672,7 +672,7 @@ session included.
 ## Where it stops
 
 - A call is answered once. A client that did not name `resume` in `login`'s `Features`, and a session with no
-  window, runs a repeated call again. A dropped socket with the window off, or a designer's, ends its session.
+  window, runs a repeated call again. A dropped socket with the window off, or a studio's, ends its session.
 - HTTP `POST` is not bound to a connection. The `Client` id remains its bearer. The window and the token are not
   offered there.
 - Over HTTP `POST` — JSON — bytes travel as `"base64:<...>"`.

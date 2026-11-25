@@ -25,7 +25,7 @@ enum
 // binding IS the main attribute). Asks the BASE virtual ibValueFrame::IsMainSourceBound (false by default; a view
 // bound single-hop to the main attribute overrides it) — no per-type cast. "Search by source": move the main
 // attribute from table-1 to table-2 and the very next walk finds table-2, because IsMainSourceBound re-reads the
-// holder's Main flag live. Never cached — nothing to go stale in the designer. null on an object form. Among the controls
+// holder's Main flag live. Never cached — nothing to go stale in the studio. null on an object form. Among the controls
 // under `top`, not `top` itself — a form is never its own command view — so a const form finds it too.
 static ibValueFrame* FindMainCommandView(const ibValueFrame* top)
 {
@@ -80,7 +80,7 @@ ibValueForm::ibStandardCommandSet ibValueForm::GetStandardCommands(const ibFormI
 
 void ibValueForm::CallAsAction(const ibActionID& lNumAction, ibBackendValueForm* srcForm)
 {
-	if (appData->DesignerMode()) {
+	if (appData->StudioMode()) {
 		return;
 	}
 

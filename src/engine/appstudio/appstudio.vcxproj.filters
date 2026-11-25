@@ -101,7 +101,7 @@
     <ClCompile Include="mainFrame\debugger\debugClientImpl.cpp">
       <Filter>mainFrame\debugger</Filter>
     </ClCompile>
-    <ClCompile Include="win\editor\codeEditor\codeEditorDesigner.cpp">
+    <ClCompile Include="win\editor\codeEditor\codeEditorStudio.cpp">
       <Filter>win\editor\codeEditor</Filter>
     </ClCompile>
     <ClCompile Include="win\editor\sharedAttributeEditor\sharedAttributeEditor.cpp">
@@ -146,16 +146,16 @@
     <ClCompile Include="win\editor\visualEditor\visualEditorPanel.cpp">
       <Filter>win\editor\visualEditor</Filter>
     </ClCompile>
-    <ClCompile Include="mainFrame\mainFrameDesigner.cpp">
+    <ClCompile Include="mainFrame\mainFrameStudio.cpp">
       <Filter>mainFrame</Filter>
     </ClCompile>
-    <ClCompile Include="mainFrame\mainFrameDesignerEvent.cpp">
+    <ClCompile Include="mainFrame\mainFrameStudioEvent.cpp">
       <Filter>mainFrame</Filter>
     </ClCompile>
-    <ClCompile Include="mainFrame\mainFrameDesignerMenu.cpp">
+    <ClCompile Include="mainFrame\mainFrameStudioMenu.cpp">
       <Filter>mainFrame</Filter>
     </ClCompile>
-    <ClCompile Include="mainFrame\mainFrameDesignerParts.cpp">
+    <ClCompile Include="mainFrame\mainFrameStudioParts.cpp">
       <Filter>mainFrame</Filter>
     </ClCompile>
     <ClCompile Include="mainFrame\metaTree\treeApplication.cpp">
@@ -200,7 +200,7 @@
     <ClCompile Include="mainFrame\watch\watchWindow.cpp">
       <Filter>mainFrame\watch</Filter>
     </ClCompile>
-    <ClCompile Include="mainFrame\welcome\welcomeWindowDesigner.cpp">
+    <ClCompile Include="mainFrame\welcome\welcomeWindowStudio.cpp">
       <Filter>mainFrame\welcome</Filter>
     </ClCompile>
     <ClCompile Include="docManager\templates\docViewDataToolFile.cpp">
@@ -293,7 +293,7 @@
     <ClInclude Include="mainFrame\debugger\debugClientImpl.h">
       <Filter>mainFrame\debugger</Filter>
     </ClInclude>
-    <ClInclude Include="win\editor\codeEditor\codeEditorDesigner.h">
+    <ClInclude Include="win\editor\codeEditor\codeEditorStudio.h">
       <Filter>win\editor\codeEditor</Filter>
     </ClInclude>
     <ClInclude Include="win\editor\sharedAttributeEditor\sharedAttributeEditor.h">
@@ -326,7 +326,7 @@
     <ClInclude Include="win\editor\visualEditor\printout\formPrintOut.h">
       <Filter>win\editor\visualEditor</Filter>
     </ClInclude>
-    <ClInclude Include="mainFrame\mainFrameDesigner.h">
+    <ClInclude Include="mainFrame\mainFrameStudio.h">
       <Filter>mainFrame</Filter>
     </ClInclude>
     <ClInclude Include="mainFrame\metaTree\clipboardLock.h">
@@ -356,7 +356,7 @@
     <ClInclude Include="mainFrame\watch\watchWindow.h">
       <Filter>mainFrame\watch</Filter>
     </ClInclude>
-    <ClInclude Include="mainFrame\welcome\welcomeWindowDesigner.h">
+    <ClInclude Include="mainFrame\welcome\welcomeWindowStudio.h">
       <Filter>mainFrame\welcome</Filter>
     </ClInclude>
     <ClInclude Include="docManager\templates\docViewDataToolFile.h">
@@ -433,7 +433,7 @@
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <Image Include="designer.ico" />
+    <Image Include="studio.ico" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="appstudio.rc" />

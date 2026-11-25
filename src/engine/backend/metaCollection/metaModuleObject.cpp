@@ -6,7 +6,7 @@
 #include "metaModuleObject.h"
 #include "core/serialize/dataBuilder.h"
 #include "backend/appData.h"
-#include "backend/metaData.h" // ibCompileValueCache::GetModuleManager (designer compile-cache)
+#include "backend/metaData.h" // ibCompileValueCache::GetModuleManager (studio compile-cache)
 #include "backend/compiler/cache/byteCodeCache.h"
 
 //***********************************************************************
@@ -34,17 +34,17 @@ bool ibValueMetaObjectModuleBase::OnLoadMetaObject(ibMetaData* metaData)
 bool ibValueMetaObjectModuleBase::OnSaveMetaObject(int flags)
 {
 	// ⚠ ON THE DATABASE APPLY, AND DELIBERATELY NOT ON A PLAIN SAVE. A working variant is stored
-	// for the designer's own sake; the running application never reads it, so the cached blob has
+	// for the studio's own sake; the running application never reads it, so the cached blob has
 	// not diverged from anything and dropping it would discard a row that is still true. The
 	// application the runtime reads changes at the APPLY — restructuring and all — and that is
 	// the moment the two can disagree.
 	//
 	//save debugger client offset
-	if ((flags & saveApplicationFlag) != 0 && appData->DesignerMode()) {
+	if ((flags & saveApplicationFlag) != 0 && appData->StudioMode()) {
 		const ibString& strBuffer = GetModuleText();
 		debugClient->SaveModule(GetDocPath(),
 			1 + std::count(strBuffer.begin(), strBuffer.end(), ibT('\n')));
-		// AOT cache row for this descriptor is now stale — Designer
+		// AOT cache row for this descriptor is now stale — Studio
 		// just persisted new source text. Drop the row so the next
 		// runtime session that compiles this module refreshes the
 		// blob via the cache-miss path in
@@ -57,7 +57,7 @@ bool ibValueMetaObjectModuleBase::OnSaveMetaObject(int flags)
 
 bool ibValueMetaObjectModuleBase::OnDeleteMetaObject()
 {
-	if (appData->DesignerMode()) {
+	if (appData->StudioMode()) {
 		// Hygiene — orphan rows survive harmlessly (no descriptor
 		// queries them again) but bloating sys_bytecode_cache serves
 		// no purpose.
@@ -69,7 +69,7 @@ bool ibValueMetaObjectModuleBase::OnDeleteMetaObject()
 bool ibValueMetaObjectModuleBase::OnBeforeRunMetaObject(int flags)
 {
 	//initialize debugger client
-	if ((flags & loadApplicationFlag) == 0 && (flags & newObjectFlag) == 0 && appData->DesignerMode()) {
+	if ((flags & loadApplicationFlag) == 0 && (flags & newObjectFlag) == 0 && appData->StudioMode()) {
 		const ibString& strBuffer = GetModuleText();
 		debugClient->InitializeModule(GetDocPath(),
 			1 + std::count(strBuffer.begin(), strBuffer.end(), ibT('\n')));
@@ -81,15 +81,15 @@ bool ibValueMetaObjectModuleBase::OnBeforeRunMetaObject(int flags)
 bool ibValueMetaObjectModuleBase::OnAfterCloseMetaObject()
 {
 	//remove debugger client module unit
-	//if (appData->DesignerMode())
+	//if (appData->StudioMode())
 	//	debugClient->RemoveModule(GetDocPath());
 
 	return ibValueMetaObject::OnAfterCloseMetaObject();
 }
 
-// ⭐ WHAT WAS BUILT FROM THIS TEXT IS NOW STALE, and in the designer that is not a detail: a
+// ⭐ WHAT WAS BUILT FROM THIS TEXT IS NOW STALE, and in the studio that is not a detail: a
 // module's exports are READ FROM THE TEXT there (ibRuntimeModuleDataObject::ExportMethodsToHelper
-// — nothing compiles a module in the designer, so there is no bytecode to read them from), and a
+// — nothing compiles a module in the studio, so there is no bytecode to read them from), and a
 // name surface is built once and then cached. Nobody would notice the missing word until an export
 // added five minutes ago failed to appear after the dot for the rest of the session.
 //
@@ -191,7 +191,7 @@ bool ibValueMetaObjectSharedModule::OnRenameMetaObject(const ibString& newName)
 			return false;
 	}
 
-	// Designer registry — the editor's own compiled-unit holder.
+	// Studio registry — the editor's own compiled-unit holder.
 	if (auto* cc = m_metaData->GetCompileCache()) {
 		if (auto* mgr = cc->GetModuleManager())
 			mgr->RenameSharedModule(this, newName);
@@ -207,8 +207,8 @@ bool ibValueMetaObjectSharedModule::OnBeforeRunMetaObject(int flags)
 			return false;
 	}
 
-	// Designer registry: register a compiled lightweight unit. newObjectFlag = a
-	// module just created in the designer → compile now; bulk load defers to
+	// Studio registry: register a compiled lightweight unit. newObjectFlag = a
+	// module just created in the studio → compile now; bulk load defers to
 	// the manager's CreateMainModule.
 	if (auto* cc = m_metaData->GetCompileCache()) {
 		if (auto* mgr = cc->GetModuleManager())
@@ -258,7 +258,7 @@ bool ibValueMetaObjectManagerModule::OnBeforeRunMetaObject(int flags)
 			return false;
 	}
 
-	// Designer registry — a manager module registers as managerModule=true.
+	// Studio registry — a manager module registers as managerModule=true.
 	if (auto* cc = m_metaData->GetCompileCache()) {
 		if (auto* mgr = cc->GetModuleManager())
 			if (!mgr->AddSharedModule(this, /*managerModule=*/true, (flags & newObjectFlag) != 0))

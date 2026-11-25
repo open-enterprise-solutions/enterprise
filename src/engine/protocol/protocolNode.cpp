@@ -89,7 +89,7 @@ ibMemoryBuffer BinaryOf(const std::optional<ibDataValue>& value)
 // A node as a packet of its own — a root is one already, the same bytes; one read out of another's is copied out of
 // them. What a tree being made holds at its root, from the start: a walk over its parts (Children, Entries) reads them
 // all, then asks a handle for each (ibDataNode::Handle) — copied out as the first handle was given, the root moved
-// under the parts read with it, and the next handles fell into the bytes it had left (2026-10-26, the designer's tree).
+// under the parts read with it, and the next handles fell into the bytes it had left (2026-10-26, the studio's tree).
 ibDataNode PacketOf(const ibDataNode& node)
 {
 	ibMemoryBuffer packet;

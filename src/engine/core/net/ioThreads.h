@@ -1,7 +1,7 @@
 #ifndef __CORE_NET_IO_THREADS_H__
 #define __CORE_NET_IO_THREADS_H__
 
-// THE I/O THREADS OF A PROCESS THAT LISTENS ON NOTHING — the designer's debugger, a thin client's connection: the
+// THE I/O THREADS OF A PROCESS THAT LISTENS ON NOTHING — the studio's debugger, a thin client's connection: the
 // context core/net's clients run on (httpClient.h), and the threads that carry it. A server has its own
 // (ibHttpServer::GetContext). A socket waiting for its peer costs a buffer here, not a thread.
 //

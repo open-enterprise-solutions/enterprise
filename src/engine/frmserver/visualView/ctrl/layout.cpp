@@ -64,7 +64,7 @@ void ibValueLayout::OnUpdate(ibDataNode& state, ibVisualHost* host)
 	m_provider->OnUpdate(state, host);
 }
 
-// View changed — in the inspector, over MCP or from a script (the live road; the designer's other road reads a layout
+// View changed — in the inspector, over MCP or from a script (the live road; the studio's other road reads a layout
 // anew from its node, ReadData). The child of the new view takes the old one's place, keeping what the two share by name.
 void ibValueLayout::OnPropertyChanged(ibProperty* property, const ibVariant& oldValue, const ibVariant& newValue)
 {

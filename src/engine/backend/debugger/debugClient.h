@@ -13,7 +13,7 @@
 
 // Lifecycle: owned by ibMetaDataApplicationStorage as a unique_ptr
 // field (private ctor + friend). Same cache-pointer pattern as
-// ibDebuggerServer — designer / codeEditor hot paths read the static
+// ibDebuggerServer — studio / codeEditor hot paths read the static
 // slot directly through the macro.
 #define debugClient           (ibDebuggerClient::Get())
 
@@ -131,7 +131,7 @@ class BACKEND_API ibDebuggerClient {
 	private:
 		std::vector<std::unique_ptr<ibDebuggerClientBridge> > m_debugBridges;
 		// 🛑 THE LIST UNDER A LOCK — a listener is put in and taken out on its own thread (the assistant's, a thin
-		// designer's frame going with its client), while the fan-out walks the list on the worker: a listener taken out
+		// studio's frame going with its client), while the fan-out walks the list on the worker: a listener taken out
 		// mid-walk was destroyed under the walk. Recursive: a listener told something may ask who is bridged (BridgeId),
 		// and SetBridge puts one in under it.
 		mutable std::recursive_mutex m_bridgesMutex;
@@ -142,7 +142,7 @@ class BACKEND_API ibDebuggerClient {
 		//
 		// 🛑 WATCHED, NOT POINTED AT. It was a raw pointer taken at birth, and the session is gone
 		// before the client stops its socket thread: a reply arriving in that window submitted to freed
-		// memory, and the designer died on its way out. A watch answers "gone" instead (sessionHolder.h).
+		// memory, and the studio died on its way out. A watch answers "gone" instead (sessionHolder.h).
 		ibSessionWatch m_session;
 		bool           m_bound = false;   // there was a session to watch at all — see Defer
 	};
@@ -214,7 +214,7 @@ class BACKEND_API ibDebuggerClient {
 
 		// A socket to the port, in the slot, and the queue what it says goes to — this thread's, for one try.
 		std::shared_ptr<ibDebugCommandQueue> OpenConnection();
-		// The socket out of the slot, and closed. Any thread: the designer's main thread ends a session
+		// The socket out of the slot, and closed. Any thread: the studio's main thread ends a session
 		// (DetachConnection) while this connection's own thread lets the socket go on its way out.
 		void CloseConnection();
 
@@ -325,7 +325,7 @@ public:
 	// Auto-attach every verified Scanner connection. Used by the web
 	// debug path (RunApplication, useManifest): the web server's debug server runs
 	// with wait=false so its connection-type is Scanner, which means
-	// designer's RecvCommand does NOT auto-promote to Debugger on verify.
+	// studio's RecvCommand does NOT auto-promote to Debugger on verify.
 	// Manual UI attach works (ibDialogDebugItem → OnAvailableItemSelected
 	// → AttachConnection), this hook does the same for the
 	// programmatic spawn-then-attach flow.
@@ -357,7 +357,7 @@ public:
 
 	// ⭐⭐ A WATCH QUESTION CARRIES WHO ASKED IT, IN THE PACKET.
 	//
-	// The `id` is a handle in the asker's own world (a row of the designer's tree), so an answer
+	// The `id` is a handle in the asker's own world (a row of the studio's tree), so an answer
 	// says WHICH ROW and, on its own, nothing about WHOSE — and every listener used to receive
 	// every answer and guess. The asker's identity therefore travels with the question and comes
 	// back with the answer; nothing is remembered on either side, so there is no map to keep in
@@ -511,7 +511,7 @@ public:
 	// was right: the shape was never the problem, the transport knowing about a GUI was.
 	//
 	// 🛑 THE CLOSURE WATCHES THE ADAPTER, IT DOES NOT POINT AT IT. A connection's thread ends with OnSessionEnd, queued as
-	// the client goes; it ran after the destructor had deleted the adapter and waited on its freed lock — the designer
+	// the client goes; it ran after the destructor had deleted the adapter and waited on its freed lock — the studio
 	// hung on exit (2026-10-26). An adapter gone tells nobody.
 	template <std::derived_from<ibDebuggerClientAdapter> T, typename... TArgs, typename... PArgs>
 	void CallAfter(void (T::* method)(TArgs...), PArgs... args) {
@@ -608,7 +608,7 @@ private:
 	ibIoThreads m_ioThreads;
 
 	// 🛑 THE CONNECTIONS AND THE STOP, UNDER ONE LOCK — the list, the connection a runtime is parked on and its session:
-	// each connection's thread puts itself in, takes itself out and parks the stop, while the designer, the assistant
+	// each connection's thread puts itself in, takes itself out and parks the stop, while the studio, the assistant
 	// and the server's listeners walk the list. Taken on every touch of the three, the walk included. Recursive, as the
 	// bridges' lock is: a call made under it may tell a listener at once (Defer with no session), who asks
 	// HasConnections. Taken after m_breakpointsMutex, never before it.
@@ -622,7 +622,7 @@ private:
 	// command to the right ibSession in a multi-tab wes process.
 	ibString                                 m_currentSessionGuid;
 
-	// 🛑 THE BREAKPOINTS, THE LINES THE EDITS MOVED, WHAT IS WATCHED — set on the designer's thread, read on a
+	// 🛑 THE BREAKPOINTS, THE LINES THE EDITS MOVED, WHAT IS WATCHED — set on the studio's thread, read on a
 	// connection's (a stop's line, everything told again on a reconnect). Recursive: a module saved is initialised under it.
 	mutable std::recursive_mutex m_breakpointsMutex;
 	std::map <ibString, std::map<unsigned int, ibBreakpoint>> m_listBreakpoint; //list of points: committed line -> offset + condition

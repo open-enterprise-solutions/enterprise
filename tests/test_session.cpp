@@ -39,7 +39,7 @@ TEST(SessionHolder, IsNotADatabaseConnectionHolder) {
 }
 
 TEST(SessionHolder, HolderAccessorReturnsNonNull) {
-    ibSession sess(wxT("test-id"), ibSessionKind::Designer);
+    ibSession sess(wxT("test-id"), ibSessionKind::Studio);
     EXPECT_NE(sess.Holder(), nullptr);
 }
 
@@ -47,12 +47,12 @@ TEST(SessionHolder, HolderAccessorIsStable) {
     // Holder() must return the same pointer across calls — it's the
     // pool's identity key for reservations. A different pointer per call
     // would scatter TX/scope bindings across phantom holders.
-    ibSession sess(wxT("test-id"), ibSessionKind::Designer);
+    ibSession sess(wxT("test-id"), ibSessionKind::Studio);
     EXPECT_EQ(sess.Holder(), sess.Holder());
 }
 
 TEST(SessionHolder, ConstHolderAccessorMatchesNonConst) {
-    ibSession sess(wxT("test-id"), ibSessionKind::Designer);
+    ibSession sess(wxT("test-id"), ibSessionKind::Studio);
     const ibSession& csess = sess;
     EXPECT_EQ(sess.Holder(), csess.Holder());
 }
@@ -60,8 +60,8 @@ TEST(SessionHolder, ConstHolderAccessorMatchesNonConst) {
 TEST(SessionHolder, DistinctSessionsHaveDistinctHolders) {
     // Each session must have its own holder — pool keys reservations by
     // address, two sessions sharing one holder would conflict on TX pin.
-    ibSession a(wxT("session-a"), ibSessionKind::Designer);
-    ibSession b(wxT("session-b"), ibSessionKind::Designer);
+    ibSession a(wxT("session-a"), ibSessionKind::Studio);
+    ibSession b(wxT("session-b"), ibSessionKind::Studio);
     EXPECT_NE(a.Holder(), b.Holder());
 }
 
@@ -103,7 +103,7 @@ struct SessionParameterRead : ::testing::Test {
 		// Current() answers nothing until a base exists. The read under test asks it.
 		if (!ibApplicationInstance::CreateAppDataEnv(ibRunMode::eFILE_MODE))
 			GTEST_SKIP() << "appData env unavailable";
-		session = std::make_shared<ibSession>(wxT("session-params"), ibSessionKind::Designer);
+		session = std::make_shared<ibSession>(wxT("session-params"), ibSessionKind::Studio);
 		scope = std::make_unique<ibSessionScope>(session.get());
 		cfg = std::make_unique<ibMetaDataApplicationFile>();
 		ibValueMetaObjectApplication* root = cfg->GetRootMetaObject();

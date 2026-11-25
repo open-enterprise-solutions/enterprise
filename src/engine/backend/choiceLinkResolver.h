@@ -61,7 +61,7 @@ public:
 	// ⭐⭐ WHICH FIELDS CAN GOVERN, SAID ONCE — by the type the field declares. Any field that has a type
 	// can: whatever stands in it knows what it brings a value to — a type description by what it
 	// describes, a chosen kind by its own `Type`, anything else by its own class (ibValue::AdjustValue).
-	// Only a field declared with no type at all has nothing to give. The designer offers exactly the
+	// Only a field declared with no type at all has nothing to give. The studio offers exactly the
 	// fields that answer true.
 	static bool CanGovern(const ibTypeDescription& type);
 

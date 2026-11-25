@@ -136,11 +136,11 @@ void ibLocalWindow::ClearAndCreate()
 	FitColumns();
 }
 
-#include "mainFrame/mainFrameDesigner.h"
+#include "mainFrame/mainFrameStudio.h"
 
 ibLocalWindow* ibLocalWindow::GetLocalWindow()
 {
-	if (ibFrontendMainFrameDesigner::GetFrame())
+	if (ibFrontendMainFrameStudio::GetFrame())
 		return mainFrame->GetLocalWindow();
 	return nullptr; 
 }

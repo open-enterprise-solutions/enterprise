@@ -88,7 +88,7 @@ public:
 	// ⭐⭐ THE RUNNING COMPOSITION OVER A DESCRIPTION SOMEBODY ELSE HOLDS — and whoever wants one makes
 	// it, here, with the two things it needs: the data, and the application to resolve names in.
 	// A metaobject does not keep one for you (it DECLARES; what it has is the description), and a
-	// property hands none out (it STORES). The designer builds one over the current description; a
+	// property hands none out (it STORES). The studio builds one over the current description; a
 	// report builds one over its own copy of it.
 	//
 	// ⚠ A NULL APPLICATION MEANS THE ACTIVE ONE, and the substitution happens HERE, in the
@@ -497,7 +497,7 @@ private:
 	// (THE VARIANTS ARE NOT HERE. A live vector of them stood beside desc.m_variants, holding the
 	//  structure and the parameter values while the description held the name and the settings — one
 	//  variant split across two stores, and only one of them ever reached the file, which is why a
-	//  structure edited in the designer came back the way it was. A VARIANT IS PART OF THE REPORT:
+	//  structure edited in the studio came back the way it was. A VARIANT IS PART OF THE REPORT:
 	//  it lives in the description, whole. See ibVariantDescription.)
 
 	// The first variant, made on construction so the invariant "there is always one" holds from the
@@ -546,7 +546,7 @@ private:
 		_("Opens the composition's settings window: query, resources, parameters, structure (groupings, table, charts) and settings variants."));
 
 	// WHICH COMPOSER'S SETTINGS THE BASE HOLDS FOR THIS ONE. Empty on a composition
-	// built in code or in the designer — those save nothing, which is right: there
+	// built in code or in the studio — those save nothing, which is right: there
 	// is no reader whose settings they would be.
 	//
 	// NOT SERIALISED, deliberately. It is an identity, not a setting: it is stated

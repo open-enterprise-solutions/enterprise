@@ -3,7 +3,7 @@
 #include "appstudio/backend/metaCollection/metaDiff.h"
 #include "frmclient/mainFrame/mainFrame.h"
 #include "deskgui/univ/dataview/dataview.h"
-#include "protocol/protocolDesigner.h"   // ibProtocol::ibSchema::ibApplicationCompare
+#include "protocol/protocolStudio.h"   // ibProtocol::ibSchema::ibApplicationCompare
 
 #include "deskgui/univ/aui/auibar.h"
 #include <wx/button.h>
@@ -224,7 +224,7 @@ void ibApplicationCompareView::RefreshDirectionChoice()
 	m_directionChoice->Clear();
 
 	// Pull always exists — left-side mutation needs no extra save
-	// wiring (designer handles activeMetaData; the applied callback
+	// wiring (studio handles activeMetaData; the applied callback
 	// rebuilds the tree).
 	m_directionChoice->Append(ibString::Format(_("%s -> %s"),
 		m_compareDoc->GetRightLabel(), m_compareDoc->GetLeftLabel()));

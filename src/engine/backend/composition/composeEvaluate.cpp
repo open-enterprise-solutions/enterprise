@@ -43,7 +43,7 @@ bool ibEvaluateInRoot(const ibString& expression, ibValue& produced, const ibMet
 	if (session != nullptr && session->GetManagerModule() != nullptr)
 		return session->EvaluateInRoot(expression, produced);
 
-	// ⭐⭐ AND IN THE DESIGNER THE ROOT IS THE EDIT MANAGER. There is no runtime root there — and no
+	// ⭐⭐ AND IN THE STUDIO THE ROOT IS THE EDIT MANAGER. There is no runtime root there — and no
 	// lambda runtime either, since that is built by CompileRoot — and this used to answer "true,
 	// produced nothing": success with an empty value, which the caller cannot tell from an expression
 	// that legitimately evaluated to nothing. So a composer's parameter expression was silently

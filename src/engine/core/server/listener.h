@@ -10,7 +10,7 @@
 
 // ⭐ THE LISTENER OF A SERVER OF THIS PLATFORM - TLS when backend.conf names a certificate, plain otherwise.
 //
-// Servers listen on a network here - the application server's clients, the cluster's, the designer's assistant
+// Servers listen on a network here - the application server's clients, the cluster's, the studio's assistant
 // access (MCP) - and spoke plain HTTP whatever the address. The transport is one thing for the process, said once, in
 // backend.conf (the file beside the program, as the locale is): Certificate and PrivateKey, PEM files, relative to the
 // file's folder. Named, a listener started here speaks TLS over them; not named, it speaks plain HTTP on this

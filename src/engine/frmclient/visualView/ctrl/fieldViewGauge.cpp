@@ -26,7 +26,7 @@ void ibFieldViewGauge::Update(const ibProtocolNode& node)
 	}
 
 	m_gauge->SetRange(static_cast<int>(node.GetInt(ibProtocol::ibForm::ibProperty::Range, 100)));
-	// The value — none in the designer.
+	// The value — none in the studio.
 	if (state.Has(ibProtocol::ibForm::ibState::Position))
 		m_gauge->SetValue(static_cast<int>(state.GetInt(ibProtocol::ibForm::ibState::Position)));
 }

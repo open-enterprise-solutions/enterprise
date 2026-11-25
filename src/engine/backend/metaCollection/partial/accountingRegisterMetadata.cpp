@@ -228,7 +228,7 @@ bool ibValueMetaObjectAccountingRegister::ReadData(const ibDataNode& node)
 	// "restructuring does not apply" arc.
 	//
 	// Correspondence and SplitTotals were declared, edited and USED to build the schema — and never
-	// written or read. So they lived for as long as the designer held the object in memory and were
+	// written or read. So they lived for as long as the studio held the object in memory and were
 	// reborn at their DEFAULTS the moment the saved application was re-read. The re-read produces
 	// the BASELINE the next apply diffs against, which means:
 	//   * turning a switch OFF applied correctly, then the baseline came back saying ON;
@@ -447,7 +447,7 @@ const ibValueMetaObjectChartOfAccounts* ibValueMetaObjectAccountingRegister::Get
 
 bool ibValueMetaObjectAccountingRegister::OnReloadMetaObject()
 {
-	// A designer edit of a dimension or a resource ends here (its property change reloads the owner): the
+	// A studio edit of a dimension or a resource ends here (its property change reloads the owner): the
 	// tick, the name and the type its sides follow may all have changed.
 	SyncFieldSides();
 
@@ -458,14 +458,14 @@ bool ibValueMetaObjectAccountingRegister::OnReloadMetaObject()
 	// offering a matrix the register can no longer answer, and the property panel and the query
 	// constructor say different things about the same object.
 	//
-	// So the answer is re-taken on reload, which is what a designer edit ends in. Unregistering is
+	// So the answer is re-taken on reload, which is what a studio edit ends in. Unregistering is
 	// unconditional (removing what is not there is a no-op) and registering follows the mode as it is
 	// NOW — the same rule, asked again rather than remembered.
 	//
 	// 🛑 …AND A DELETED REGISTER OFFERS NOTHING. Removing an object reloads it after the delete
 	// (ibMetaData::RemoveMetaObject), and this put `.DrCrTurnovers` back into the catalogue of a register
 	// that was gone: the apply destroyed it, the descriptor stayed, and the next list of sources called
-	// into freed memory — the designer fell over on `query_sources` (2026-11-11).
+	// into freed memory — the studio fell over on `query_sources` (2026-11-11).
 	if (m_metaData != nullptr) {
 		m_metaData->UnregisterSource(&m_drCrTurnover);
 		if (IsCorrespondence() && !IsDeleted())
@@ -895,7 +895,7 @@ bool ibValueMetaObjectAccountingRegister::OnAfterRunMetaObject(int flags)
 	// of the two would be empty and their columns never created (measured 2026-09-16: the apply failed on
 	// the totals trigger, "Column unknown NEW.FLD1434_TYPE"). The same rule, for the same reason, as the
 	// sections of a chart of calculation types (StampIfNeverSaved).
-	SyncFieldSides(/*leaving*/ nullptr, /*createMissing*/ (flags & loadApplicationFlag) == 0 && appData->DesignerMode());
+	SyncFieldSides(/*leaving*/ nullptr, /*createMissing*/ (flags & loadApplicationFlag) == 0 && appData->StudioMode());
 
 	// Set Account field type from Chart of Accounts binding
 	const ibMetaDescription& metaDesc = m_propertyChartOfAccounts->GetValueAsMetaDesc();

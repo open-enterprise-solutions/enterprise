@@ -133,7 +133,7 @@ public:
 	// from `metaData`. Returns true iff a twin was substituted. A source's own GetValueBySourceHop calls this
 	// with its GetSourceMetaData() — so ibSourceDataObject itself stays free of metadata / reference creation.
 	// `filter`: the field's CURRENT declared type. If non-empty, the pin must be among its clsids (ContainType) —
-	// a value-table column RETYPED in the designer leaves a stale pin, and CoerceHopType must NOT fabricate the
+	// a value-table column RETYPED in the studio leaves a stale pin, and CoerceHopType must NOT fabricate the
 	// old twin over a now-dead path. A METADATA-fixed field (record / reference gate — its type cannot be
 	// retyped at runtime) passes an EMPTY filter and skips the check.
 	static bool CoerceHopType(const ibSourceHop& hop, ibValue& out, const ibTypeDescription& filter, const ibMetaData* metaData);

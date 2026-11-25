@@ -20,7 +20,7 @@ ibValueMetaObjectReport::ibValueMetaObjectReport() : ibValueMetaObjectRecordData
 	// NO HANDLER IN THE OBJECT MODULE. A report used to offer `Composing(StandartProcessing)`, back
 	// when the object itself composed; it does not — it points at the composer it declares, and the
 	// box showing that composer runs it. Declaring a handler nothing raises is worse than none: the
-	// designer would list it, an author would write into it, and it would never be called.
+	// studio would list it, an author would write into it, and it would never be called.
 
 	(*m_propertyManagerModule)->SetDefaultProcedure(ibT("FormGetProcessing"), ibContentHelper::eProcedureHelper, { ibT("Form"), ibT("Cancel") });
 }

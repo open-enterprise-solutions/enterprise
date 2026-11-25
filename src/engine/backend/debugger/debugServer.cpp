@@ -9,7 +9,7 @@
 #include <future>                             // packaged_task — the debugger's work, run by the stopped thread
 #include <system_error>                       // std::system_error — a thread the system would not start
 
-#include "core/net/httpServer.h"              // the port the designer reaches this process by
+#include "core/net/httpServer.h"              // the port the studio reaches this process by
 #include "core/net/webSocketFrame.h"          // ibWebSocketClose — what a socket is told as it is let go
 
 #include "backend/logger/logger.h"            // the screenshot is written down before it is handed over
@@ -41,8 +41,8 @@ ibDebuggerServer::ibProfileMaker ibDebuggerServer::ms_profileMaker = nullptr;
 ///////////////////////////////////////////////////////////////////////
 
 namespace {
-// ⭐⭐ THE SESSION AN EVALUATION IS ABOUT — NAMED, not guessed. The designer knows which stop it is
-// showing (every loop-entry packet carries the session's id, and the designer keeps it), and it says the
+// ⭐⭐ THE SESSION AN EVALUATION IS ABOUT — NAMED, not guessed. The studio knows which stop it is
+// showing (every loop-entry packet carries the session's id, and the studio keeps it), and it says the
 // name back on every step. An evaluation is a question about THE SAME stop, so it says it too.
 //
 // 🛑 IT USED TO ASK `ibSession::Current()`, which on the debug thread answers with the FRONT OF THE DEBUG
@@ -54,7 +54,7 @@ namespace {
 // two halves of one window disagreed about what they were looking at.
 //
 // An empty name still means "whoever is at the front" — the fallback WakeDebugSession has always had, for
-// a command from a designer that has not learnt to say which.
+// a command from a studio that has not learnt to say which.
 std::shared_ptr<ibSession> ParkedSession(const ibString& sessionGuid)
 {
 	// The registry of the base whose application owns this debugger — asked down the chain, because this
@@ -171,9 +171,9 @@ bool ibDebuggerServer::CreateServer(const ibString& hostName, unsigned short sta
 	if (wait) {
 		// Hold the bootstrap until the debug client is on the socket, so breakpoints
 		// exist before OnStart runs. Bounded, because a process started with --debug
-		// and no designer would otherwise never finish starting; when the bound
+		// and no studio would otherwise never finish starting; when the bound
 		// expires it goes on without a debugger. An assertion used to stand here and
-		// it fired on a race nobody at the window could act on - the designer scans
+		// it fired on a race nobody at the window could act on - the studio scans
 		// the ports while this process is still connecting to its database, so the
 		// two miss each other on a slow start.
 		const int kWaitForClientMs = 30000;
@@ -196,11 +196,11 @@ bool ibDebuggerServer::CreateServer(const ibString& hostName, unsigned short sta
 		}
 	}
 	else {
-		// Non-blocking server (wes / designer auto-debug): wait for the
+		// Non-blocking server (wes / studio auto-debug): wait for the
 		// worker thread to finish binding a port before returning.
 		// Caller (e.g. wes's manifest write + listen_after_bind) can now
 		// rely on the debug listener already being live, removing the
-		// race that left designer's SearchServer scanning empty ports.
+		// race that left studio's SearchServer scanning empty ports.
 		// 500 ms cap is enough for a successful bind in practice — if
 		// every port in the diapason is taken the loop exits with the
 		// flag still set (worker stores it after the loop terminates,
@@ -273,7 +273,7 @@ namespace {
 
 void ibDebuggerServer::WakeDebugSession(const ibString& sessionGuid)
 {
-	// Empty guid -> wake everyone (legacy / pre-multi-session designer
+	// Empty guid -> wake everyone (legacy / pre-multi-session studio
 	// command). Otherwise route only to the matching session so siblings
 	// stay parked at their own breakpoints.
 	if (sessionGuid.IsEmpty()) { WakeAllDebugSessions(); return; }
@@ -281,7 +281,7 @@ void ibDebuggerServer::WakeDebugSession(const ibString& sessionGuid)
 	auto* reg = ibApplicationInstance::GetSessionRegistry(GetApplicationInstance());
 	if (reg == nullptr) return;
 
-	// Resolve by sid (GetId(), echoed back by the designer from EnterLoop).
+	// Resolve by sid (GetId(), echoed back by the studio from EnterLoop).
 	// Find() now searches the live m_own map; it used to hit the dead legacy
 	// m_sessions map and return null, so this wake was a no-op masked by the
 	// old server-global m_bDebugLoop flag.
@@ -308,7 +308,7 @@ void ibDebuggerServer::WakeAllDebugSessions()
 	// Iterate live sessions, flip their per-session m_debugLoop off and
 	// kick the CV so the script-thread parked in DoDebugLoop returns.
 	// Used on connection loss / server shutdown so sibling tabs in a
-	// wes process don't stay frozen after the designer disconnects.
+	// wes process don't stay frozen after the studio disconnects.
 	for (auto& [tid, s] : ibSession::SnapshotByThread()) {
 		(void)tid;
 		if (s == nullptr) continue;
@@ -372,7 +372,7 @@ void ibDebuggerServer::DoDebugLoop(const ibString& strDocPath, const ibString& s
 
 		commandChannelEnterLoop.w_u16(CommandId_EnterLoop);
 		// Session guid travels with every loop-entry packet so the
-		// designer side can route Continue/Step/Eval back to the right
+		// studio side can route Continue/Step/Eval back to the right
 		// session in a multi-tab wes process.
 		commandChannelEnterLoop.w_stringZ(sess->GetId());
 		commandChannelEnterLoop.w_stringZ(docPath);
@@ -388,7 +388,7 @@ void ibDebuggerServer::DoDebugLoop(const ibString& strDocPath, const ibString& s
 	//send local variable
 	SendLocalVariables(runContext);
 
-	//send stack data to designer
+	//send stack data to studio
 	SendStack();
 
 	//start debug loop
@@ -409,11 +409,11 @@ void ibDebuggerServer::DoDebugLoop(const ibString& strDocPath, const ibString& s
 	// step doesn't unpark this script thread by accident.
 	// 250ms wake-up is a safety tick only.
 	//
-	// ⭐ …AND A STOP LASTS ONLY WHILE A DEBUGGER HOLDS IT. Every road that loses the designer — the connection
+	// ⭐ …AND A STOP LASTS ONLY WHILE A DEBUGGER HOLDS IT. Every road that loses the studio — the connection
 	// dropped, Detach, Destroy, the server shut down — clears m_bUseDebug, and the stop ends with it. Their
 	// wake (WakeAllDebugSessions) reaches the sessions bound to a thread, and a desktop's stopped in its start
-	// (BeforeStart, inside its window's Show) is not one: a designer closed while it stood there left it parked
-	// for good, its window never shown and no designer able to attach (2026-10-21).
+	// (BeforeStart, inside its window's Show) is not one: a studio closed while it stood there left it parked
+	// for good, its window never shown and no studio able to attach (2026-10-21).
 	//
 	// ⭐ THE DEBUGGER'S WORK IS DONE HERE, on this thread, between two waits (RunInParkedSession): taken under
 	// the lock, run outside it — what it runs may come back to this session's debug state.
@@ -908,7 +908,7 @@ void ibDebuggerServer::SendCommand(void* pointer, unsigned int length)
 
 namespace {
 
-// THE DESIGNER'S SOCKET — what it says goes to its queue, for the debug thread, and so does its going.
+// THE STUDIO'S SOCKET — what it says goes to its queue, for the debug thread, and so does its going.
 class ibCommandRelay : public ibWebSocketHandler {
 public:
 
@@ -947,7 +947,7 @@ bool ibDebuggerServer::ibDebuggerServerConnection::IsConnected() const
 
 std::shared_ptr<ibDebugCommandQueue> ibDebuggerServer::ibDebuggerServerConnection::AcceptConnection(const std::shared_ptr<ibWebSocket>& socket)
 {
-	// ONE DESIGNER AT A TIME — a second one is refused while the first is on, as the listener used to leave it in
+	// ONE STUDIO AT A TIME — a second one is refused while the first is on, as the listener used to leave it in
 	// the backlog until the first had gone.
 	std::lock_guard<std::mutex> lock(m_socketMutex);
 	if (m_socket != nullptr)
@@ -970,10 +970,10 @@ bool ibDebuggerServer::ibDebuggerServerConnection::StartServer()
 
 	ibHttpServerOptions options;
 	options.m_host = std::string(m_strHostName.utf8_str());
-	// The debuggee need not be on the designer's machine (debugger-architecture.md § 1), and the designer speaks
+	// The debuggee need not be on the studio's machine (debugger-architecture.md § 1), and the studio speaks
 	// ws:// only to it — the one exception left (the option says so).
 	options.m_clearBeyondMachine = true;
-	// The threads only move bytes and hand them over: one of each is plenty for a designer at a time and the
+	// The threads only move bytes and hand them over: one of each is plenty for a studio at a time and the
 	// scanners knocking.
 	options.m_threads = 1;
 	options.m_workers = 1;
@@ -1001,7 +1001,7 @@ void ibDebuggerServer::ibDebuggerServerConnection::WaitConnection()
 void ibDebuggerServer::ibDebuggerServerConnection::Disconnect()
 {
 	// 🔎 THE DELIBERATE DETACH, from whichever of its three callers asked: the Detach command, the
-	// Destroy command, or a connection type the designer no longer recognises. The wire line printed
+	// Destroy command, or a connection type the studio no longer recognises. The wire line printed
 	// a moment earlier says which — this one says the socket went with it, which is what separates
 	// this road from a connection that was lost.
 	std::shared_ptr<ibWebSocket> socket;
@@ -1086,13 +1086,13 @@ void ibDebuggerServer::ibDebuggerServerConnection::EntryClient()
 	const bool listening = StartServer();
 	m_bindReady.store(true, std::memory_order_release);
 
-	// The designer this thread is serving: the queue in the slot, as this thread last saw it. The slot is the port's
-	// to fill (AcceptConnection) and either side's to empty — the designer closing, or Disconnect.
+	// The studio this thread is serving: the queue in the slot, as this thread last saw it. The slot is the port's
+	// to fill (AcceptConnection) and either side's to empty — the studio closing, or Disconnect.
 	std::shared_ptr<ibDebugCommandQueue> held;
 
-	// 🔎 WHY THIS END STOPPED READING — the same word the designer's loop keeps for itself (debugClient.cpp), so the
+	// 🔎 WHY THIS END STOPPED READING — the same word the studio's loop keeps for itself (debugClient.cpp), so the
 	// two journals can be read side by side: the end that printed its reason first is the end that ended the session.
-	const ibChar* leftBy = ibT("the slot emptied - Disconnect let the designer go");
+	const ibChar* leftBy = ibT("the slot emptied - Disconnect let the studio go");
 
 	while (listening && !m_stop) {
 
@@ -1116,7 +1116,7 @@ void ibDebuggerServer::ibDebuggerServerConnection::EntryClient()
 
 			m_waitConnection = false;
 			m_connectionType = ConnectionType::ConnectionType_Unknown;
-			leftBy = ibT("the slot emptied - Disconnect let the designer go");
+			leftBy = ibT("the slot emptied - Disconnect let the studio go");
 		}
 		held = current;
 
@@ -1129,12 +1129,12 @@ void ibDebuggerServer::ibDebuggerServerConnection::EntryClient()
 		std::string command;
 		if (!current->Pop(command, waitDebuggerTimeout)) {
 			if (current->IsStopped()) {
-				// The designer's socket went: out of the slot, if Disconnect has not taken it already.
+				// The studio's socket went: out of the slot, if Disconnect has not taken it already.
 				std::lock_guard<std::mutex> lock(m_socketMutex);
 				if (m_commandQueue == current) {
 					m_socket.reset();
 					m_commandQueue.reset();
-					leftBy = ibT("the designer's socket closing");
+					leftBy = ibT("the studio's socket closing");
 				}
 			}
 			continue;
@@ -1265,7 +1265,7 @@ void ibDebuggerServer::ibDebuggerServerConnection::RecvCommand(void* pointer, un
 		// Sets the line's breakpoint, or gives the one there a new condition - one per line, the last sent.
 		ibString strModuleName; commandReader.r_stringZ(strModuleName);
 		unsigned int line = commandReader.r_u32();
-		commandReader.r_s32();   // the offset the designer's edits have moved it by - the runtime counts committed lines
+		commandReader.r_s32();   // the offset the studio's edits have moved it by - the runtime counts committed lines
 		ibString condition; commandReader.r_stringZ(condition);
 		std::unique_lock<std::shared_mutex> lock(ms_debugServer->m_breakpointsMutex);
 		SetBreakpoint(ms_debugServer->m_listBreakpoint, strModuleName, line, condition);
@@ -1493,7 +1493,7 @@ void ibDebuggerServer::ibDebuggerServerConnection::RecvCommand(void* pointer, un
 			//
 			// 🛑 THE SEND USED TO SIT INSIDE `if (EvalInParkedSession(...))`, so an expression the
 			// runtime could not evaluate produced NOTHING on the wire. For a person hovering in the
-			// designer that is a tooltip that never appears — indistinguishable from hovering over
+			// studio that is a tooltip that never appears — indistinguishable from hovering over
 			// something that has no value. For a caller that WAITS for the reply it is a timeout,
 			// and "could not be evaluated" arrives as "the runtime did not answer in time", which
 			// points at the connection instead of at the expression (2026-09-01, stopped inside
@@ -1639,7 +1639,7 @@ void ibDebuggerServer::ibDebuggerServerConnection::RecvCommand(void* pointer, un
 					// (measured 2026-09-02, first live run: `2 + 2;` came back blank).
 					// The compiler's own words are in it too: Evaluate writes them there and takes them off the
 					// error chain (procUnit.cpp), so there is no second place to read them from (measured
-					// 2026-09-02: `JSONString(42)` compiled in the designer and failed here, with nothing to say why).
+					// 2026-09-02: `JSONString(42)` compiled in the studio and failed here, with nothing to say why).
 					if (!ran)
 						answer = vResult.GetString();
 
@@ -1950,8 +1950,8 @@ void ibDebuggerServer::ibDebuggerServerConnection::RecvCommand(void* pointer, un
 	// application can start one at any moment. It does not borrow the parked frame, so it does not
 	// need one to exist.
 	//
-	// ⭐ WHY IT ARRIVES OVER THIS SOCKET AT ALL: the MCP server lives in the designer, and a designer
-	// builds no runtime for any session (ibSession::EnsureRoot returns early on DesignerMode). The
+	// ⭐ WHY IT ARRIVES OVER THIS SOCKET AT ALL: the MCP server lives in the studio, and a studio
+	// builds no runtime for any session (ibSession::EnsureRoot returns early on StudioMode). The
 	// runtime is here. Everything the work itself needs is in ibJobRunByteCode; this marshals.
 	//
 	// ⚠ ONE REPLY SHAPE FOR ALL THREE, because all three answer with the state of one run — a caller
@@ -1965,7 +1965,7 @@ void ibDebuggerServer::ibDebuggerServerConnection::RecvCommand(void* pointer, un
 
 		if (commandFromClient == CommandId_JobStart) {
 			// ⭐⭐ THE CODE ARRIVES AS TEXT and is compiled HERE, against this application's own
-			// application. It was built the other way first — compiled in the designer and sent
+			// application. It was built the other way first — compiled in the studio and sent
 			// as bytecode, which worked — but that made four standing promises that two processes
 			// agree (format version, dependency guids, parent, slot numbering), and the day the
 			// compiler numbers something differently, sent bytecode points at the wrong thing
@@ -1992,7 +1992,7 @@ void ibDebuggerServer::ibDebuggerServerConnection::RecvCommand(void* pointer, un
 		SendCommand(commandChannel.pointer(), commandChannel.size());
 	}
 	// ⭐⭐ READING A REPORT HERE, because this is where data may be touched. What arrives is a SCHEMA
-	// — resolved in the designer, or assembled by the caller out of nothing — plus the settings
+	// — resolved in the studio, or assembled by the caller out of nothing — plus the settings
 	// section and the parameters. Nothing is looked up on this side; ibComposeRunSchema builds a composer
 	// out of what came and runs it, on a rented connection so nobody's window waits for it.
 	else if (commandFromClient == CommandId_Compose) {
@@ -2117,7 +2117,7 @@ void ibDebuggerServer::ibDebuggerServerConnection::RecvCommand(void* pointer, un
 			s->Close(true);
 
 		// ⭐ DESTROY IS THE SESSION'S — and a process that lives for the debugger goes with it (Max, 2026-10-30: "a web
-		// server held from the designer goes; one started by itself, naturally, does not"). A designer's web server closed
+		// server held from the studio goes; one started by itself, naturally, does not"). A studio's web server closed
 		// the one session above and went on serving: `app_run restart` said it had ended it, and the process stood there
 		// holding the base and the libraries, re-attached by the next debugger.
 		ibStopProcess();

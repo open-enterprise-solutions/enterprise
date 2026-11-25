@@ -8,7 +8,7 @@
 #include "frmclient/propertyManager/propertyEditor.h"
 #include "frmclient/win/picture.h"                                             // ibProtocolPicture — a command's picture
 
-#include "protocol/protocolDesigner.h"   // ibProtocol::ibSchema::ibProperties — the tree's keys
+#include "protocol/protocolStudio.h"   // ibProtocol::ibSchema::ibProperties — the tree's keys
 
 #include "deskgui/univ/ctrl/treeCtrl.h"
 #include <functional>

@@ -162,7 +162,7 @@ public:
     // which disables the menu tracking: the last open submenu holds the capture and hands the moves up to its parent
     // and the menu bar (ProcessMouseMove), and with a submenu open the menu the cursor was NOT in took the capture - the
     // submenu got no moves nor clicks, and moved back over the parent, the submenu was not hidden (2026-11-13, the
-    // designer on the Mac; the program hung at a menu). So it does nothing, on every port; GTK3 has no such handler
+    // studio on the Mac; the program hung at a menu). So it does nothing, on every port; GTK3 has no such handler
     void OnIdle(wxIdleEvent& WXUNUSED(event)) { }
 
     // get the currently selected item (may be null)
@@ -2888,7 +2888,7 @@ bool ibWindow::DoPopupMenu(wxWindow *window, wxMenu *popup, int x, int y)
     // SEAM vs univ: its frame closed while the menu is shown (Alt+F4, the task bar) shuts the menu first, as a native
     // one is, and the frame goes after the loop. Closed inside it, the frame was destroyed there - the menu's window
     // with the capture and its handlers on it (wx asserts), and the loop with nothing left to end it: no window, and
-    // the process stayed (2026-11-11, a designer closed with a menu open)
+    // the process stayed (2026-11-11, a studio closed with a menu open)
     const wxWeakRef<wxWindow> frame(wxGetTopLevelParent(window));
     const auto onFrameClose = [menu](wxCloseEvent& event)
     {

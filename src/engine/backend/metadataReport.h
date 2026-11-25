@@ -64,9 +64,9 @@ public:
 	virtual bool RunDatabase(const ibRuntimeRequest& request = ibRuntimeRequest());
 	virtual bool CloseDatabase(const ibRuntimeRequest& request = ibRuntimeRequest());
 
-	// Designer infrastructure (cache + manager) — built by the image ctor; cache in
-	// designer mode, manager only for an external report.
-	virtual std::unique_ptr<ibCompileValueCache> CreateDesignerCache() override;
+	// Studio infrastructure (cache + manager) — built by the image ctor; cache in
+	// studio mode, manager only for an external report.
+	virtual std::unique_ptr<ibCompileValueCache> CreateStudioCache() override;
 
 	//load/save form file
 	bool LoadFromFile(const ibString& strFileName);

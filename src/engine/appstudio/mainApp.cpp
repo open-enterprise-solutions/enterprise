@@ -1,6 +1,6 @@
 ////////////////////////////////////////////////////////////////////////////
 //	Author		: Maxim Kornienko
-//	Description : the thin designer's application
+//	Description : the studio's application
 ////////////////////////////////////////////////////////////////////////////
 
 #include "mainApp.h"
@@ -19,14 +19,14 @@
 #include "protocol/connectionFile.h"
 #include "protocol/connectionServer.h"
 
-#include "mainFrame/mainFrameDesigner.h"
+#include "mainFrame/mainFrameStudio.h"
 #include "mainFrame/debugger/debugClientImpl.h"
 
-wxIMPLEMENT_APP(ibAppDesigner);
+wxIMPLEMENT_APP(ibAppStudio);
 
 #if wxUSE_CMDLINE_PARSER
 
-void ibAppDesigner::OnInitCmdLine(wxCmdLineParser& parser)
+void ibAppStudio::OnInitCmdLine(wxCmdLineParser& parser)
 {
 	parser.AddOption(wxT("address"), wxT("address"), "Application server: oes://server[:port]/<base>, oess:// over TLS; or a web server's publication: http(s)://server[:port]/<base>/", wxCMD_LINE_VAL_STRING, wxCMD_LINE_PARAM_OPTIONAL);
 	parser.AddOption(wxT("trusted"), wxT("trusted"), "oess://: the authorities trusted, a PEM file (default: the system's store)", wxCMD_LINE_VAL_STRING, wxCMD_LINE_PARAM_OPTIONAL);
@@ -43,7 +43,7 @@ void ibAppDesigner::OnInitCmdLine(wxCmdLineParser& parser)
 	wxApp::OnInitCmdLine(parser);
 }
 
-bool ibAppDesigner::OnCmdLineParsed(wxCmdLineParser& parser)
+bool ibAppStudio::OnCmdLineParsed(wxCmdLineParser& parser)
 {
 	// wxCmdLineParser's own: it writes what it found into a wx string, handed on to the application's data.
 	const auto found = [&parser](const wxString& name, ibString& value) {
@@ -73,7 +73,7 @@ bool ibAppDesigner::OnCmdLineParsed(wxCmdLineParser& parser)
 
 #endif
 
-bool ibAppDesigner::DoOnInit()
+bool ibAppStudio::DoOnInit()
 {
 	// The journal, the dumps and the machine's appearance are the base's (ibWxApp::OnInit, deskgui/app.h), set
 	// before this runs — as every application of the platform has them.
@@ -116,7 +116,7 @@ bool ibAppDesigner::DoOnInit()
 		connection = std::move(server);
 	}
 	else if (!appData->m_strFile.IsEmpty() || (!appData->m_strServer.IsEmpty() && !appData->m_strDatabase.IsEmpty())) {
-		// A file base — opened in this process, by the library that brings the server in; the designer's is made
+		// A file base — opened in this process, by the library that brings the server in; the studio's is made
 		// where there is none yet, as the desktop designer made it.
 		ibProtocolNode request;
 		request.SetValue(ibProtocol::ibFileBase::Locale, appData->m_strLocale)
@@ -158,16 +158,16 @@ bool ibAppDesigner::DoOnInit()
 
 	// The window holds the client from here: it logs in as it is shown, and a refused start takes it down again —
 	// the communicator with it, and a file base's connection closes the base.
-	auto* frame = new ibFrontendMainFrameDesigner(
+	auto* frame = new ibFrontendMainFrameStudio(
 		std::make_unique<ibCommunicator>(std::move(connection)), appData->m_strIBUser, appData->m_strIBPassword);
 	if (!frame->Show()) {
 		frame->Destroy();
 		return false;
 	}
 
-	// The designer's bridge onto its debugger, as the desktop's wired it after its login — the frame made the debugger
+	// The studio's bridge onto its debugger, as the desktop's wired it after its login — the frame made the debugger
 	// as it logged in (Show).
 	ibDebuggerClientBridge::SetDebuggerClientBridge(
-		new ibDebuggerClientBridgeDesigner);
+		new ibDebuggerClientBridgeStudio);
 	return true;
 }

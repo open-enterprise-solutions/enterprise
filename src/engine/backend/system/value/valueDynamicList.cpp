@@ -169,12 +169,12 @@ ibValueDynamicList::ibValueDynamicList(const std::shared_ptr<const ibBackendQuer
 	  m_columns(nullptr), m_view(view)
 {
 	// ⚠ THE SOURCE'S OWN APPLICATION FIRST, the ACTIVE one only if there is no source to ask. A
-	// queryable lives in the application it was created in — the edited one in the designer, the
+	// queryable lives in the application it was created in — the edited one in the studio, the
 	// copy's own on a copy — and resolving against the active application there would answer with
 	// somebody else's tables.
 	//
 	// ⚠⚠ A LIST BELONGING TO AN APPLICATION MUST NEVER FALL BACK TO THE ACTIVE ONE — it would see THE
-	// WRONG TABLES. Two applications are open in the designer at once, and the active one is not
+	// WRONG TABLES. Two applications are open in the studio at once, and the active one is not
 	// necessarily this object's; a name resolved there answers with somebody else's metadata.
 	//
 	// The line below is INSURANCE, not the road: it catches the list CREATED IN CODE
@@ -232,7 +232,7 @@ void ibValueDynamicList::SetSourceQueryable(const std::shared_ptr<const ibBacken
 void ibValueDynamicList::RebuildSource()
 {
 	// STORE the source application into the metadata VARIABLE, taken from the VALUE — the picked queryable's metaobject
-	// knows its application (the edited application in the designer, the copy's application on a copy). The list HOLDS it so
+	// knows its application (the edited application in the studio, the copy's application on a copy). The list HOLDS it so
 	// GetSourceMetaData is terminal (it never re-resolves the queryable through m_owner->GetMetaData, which walks the
 	// form → recurses). A metaobject-less source (arbitrary query / register virtual table / not yet picked) leaves
 	// the variable as-is; GetSourceMetaData then falls back to the ACTIVE application.
@@ -900,7 +900,7 @@ bool ibValueDynamicList::WriteProperty(ibDataNode& node) const
 	return true;
 }
 
-// Register the type — runtime / designer know "DynamicList".
+// Register the type — runtime / studio know "DynamicList".
 VALUE_TYPE_REGISTER(ibValueDynamicList, "DynamicList", g_valueDynamicListCLSID);
 // The row / return-line type. When a choice has NO source-command handler (holder == null →
 // GetItemSelectValue empty), the base ibValueModelReturnLine::GetSelectValue falls back to the row's

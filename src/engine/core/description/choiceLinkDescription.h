@@ -86,7 +86,7 @@ struct ibChoiceParameterRowDescription {
 // a warehouse and by whatever else the form knows.
 //
 // ⭐ THE OWNER IS ONE OF THESE ROWS, and that is the whole of "link by owner": a catalog that declares
-// `ListOwner` has its row written by the designer (parameter = the owner field, source = the field of
+// `ListOwner` has its row written by the studio (parameter = the owner field, source = the field of
 // the owner's type, on change = Clear), so the author sees it rather than having to know it was needed.
 // A third mechanism for the owner would say the same thing in a second place.
 struct ibChoiceParametersDescription {

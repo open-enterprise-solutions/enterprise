@@ -16,7 +16,7 @@
 
 // Stored by number — a file written with these must read back the same.
 enum class ibTemplateType {
-	None        = 0,   // not chosen yet — a template the designer has just made asks for it
+	None        = 0,   // not chosen yet — a template the studio has just made asks for it
 	Spreadsheet = 1,   // cells, named areas and parameters
 	Composer    = 2,   // a composition
 };

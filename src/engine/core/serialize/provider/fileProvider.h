@@ -10,7 +10,7 @@
 // from inside a value — the names on the way, `ObjectModule.Module.txt`). The root is `application.json`.
 //
 // ⭐ LAID OUT IN MEMORY FIRST — `files`, a node holding one field a file: its path and its bytes. The files are written
-// where the directory is and the tree is read where the application is, and in a thin designer those are two
+// where the directory is and the tree is read where the application is, and in a studio those are two
 // machines: the set travels between them as one node (its binary form), and only Publish and Collect touch a disk.
 class CORE_API ibFileProvider {
 public:

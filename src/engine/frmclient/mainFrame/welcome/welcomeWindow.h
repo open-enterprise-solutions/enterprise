@@ -11,7 +11,7 @@
 
 // THE WORKSPACE WHILE NO TAB IS OPEN — a sheet in its frame where the tabs stand (ibFrontendMainFrame: in the client
 // window, shown while it holds no tab), greeting the person the session is by the time of day and asking where to start;
-// a mode's window adds what it has to offer under the question (the designer's keys). Where an application has a start
+// a mode's window adds what it has to offer under the question (the studio's keys). Where an application has a start
 // page, that page is the workspace and the welcome is never seen (Max, 2026-11-13: "the greeting is for when there is no
 // desktop; a desktop replaces it").
 //

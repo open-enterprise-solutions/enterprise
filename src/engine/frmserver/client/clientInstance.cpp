@@ -49,10 +49,10 @@ bool ibClientInstance::CreateSession()
 	// The session is made in the base as soon as it is asked for — its row in sys_session shows "logging in"
 	// until the login settles — under the instance's own id, one identifier for the client, the registry's
 	// session and the row. A wrong password lets the frame go, and the holder with it, which removes the row.
-	// ITS KIND IS THE CLIENT'S MODE: the runtime's a thin client; the designer's a thin designer — a designer as the
-	// desktop's is (no runtime, the one designer of the base), whatever process hosts it.
-	const ibSessionKind kind = m_mode == ibProtocol::ibLogin::ibMode::Designer ? ibSessionKind::ThinDesigner : ibSessionKind::ThinClient;
-	// …REFUSED BEFORE ANY LOGIN — another designer at work (ibDesignerExclusivePolicy): thrown on, its reason the person's
+	// ITS KIND IS THE CLIENT'S MODE: the runtime's a thin client; the studio's a studio — a studio as the
+	// desktop's is (no runtime, the one studio of the base), whatever process hosts it.
+	const ibSessionKind kind = m_mode == ibProtocol::ibLogin::ibMode::Studio ? ibSessionKind::Studio : ibSessionKind::Workspace;
+	// …REFUSED BEFORE ANY LOGIN — another studio at work (ibStudioExclusivePolicy): thrown on, its reason the person's
 	// to read. Turned into false here, it reached the client as a wrong password, and the login window asked for a name
 	// that was never the question (2026-10-20).
 	ibSessionHolder holder = m_applicationInstance->CreateSession<ibClientSession>(kind, m_id, m_address);
@@ -61,7 +61,7 @@ bool ibClientInstance::CreateSession()
 
 	// THE FRAME AT ONCE, of the client's mode, and published before the login runs anything: the login's compile may
 	// say a failure in the frame's error window, a start may open forms or ask the person something — the client
-	// reaches all of it through the frame. Its menus and the designer's debugger come with the start (OnCreate): they
+	// reaches all of it through the frame. Its menus and the studio's debugger come with the start (OnCreate): they
 	// read the rights and the application the login brings.
 	m_session = ibSessionWatch(holder);
 	m_frame = ibClientFrame::Create(m_mode, std::move(holder), this);

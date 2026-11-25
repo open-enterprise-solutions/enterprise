@@ -127,7 +127,7 @@ bool ibValueGridBox::HasCommandBar() const
 //
 //   * the form is built      (InitializeControl, the "before run" hook every control gets);
 //   * the form is opened     (OnCreated — where the box's window used to be created);
-//   * the Source is set      (the designer's property edit, or SetSource from code: SetValue fires
+//   * the Source is set      (the studio's property edit, or SetSource from code: SetValue fires
 //                             no event, which is why the setter calls this itself).
 //
 // One function, not the sibling's two: there is no table to re-create here, so the second name would
@@ -150,7 +150,7 @@ void ibValueGridBox::RefreshModel()
 	// back to a sheet OF ITS OWN, which is what keeps a bare box a usable scratch sheet, and is the
 	// twin of the table re-creating its own value-table when the source no longer matches.
 	//
-	// 🛑 A DOCUMENT ALREADY HELD IS KEPT. Its content is the DESIGNER's — typed into the box and
+	// 🛑 A DOCUMENT ALREADY HELD IS KEPT. Its content is the STUDIO's — typed into the box and
 	// serialised with it (ReadData reads into the model's sheet), so replacing it on every refresh
 	// would quietly wipe a template every time a property was touched. Only a COMPOSER left over
 	// from a previous binding is dropped, and its sheet was never anybody's input.

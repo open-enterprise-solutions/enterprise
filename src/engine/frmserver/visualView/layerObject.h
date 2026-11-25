@@ -31,7 +31,7 @@ public:
 	// the right context menu / icon without a dynamic_cast.
 	virtual bool IsLayerContainer() const = 0;
 
-	// Designer tree open-state for a container node (a leaf ignores it). Kept on the object so
+	// Studio tree open-state for a container node (a leaf ignores it). Kept on the object so
 	// RebuildTree restores it, mirroring a control's ibValueFrame::GetExpanded.
 	virtual bool IsTreeExpanded() const { return true; }
 	virtual void SetTreeExpanded(bool value) {}

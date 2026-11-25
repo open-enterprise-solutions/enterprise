@@ -114,18 +114,18 @@ public:
 	virtual bool OnSaveMetaObject(int flags);
 	virtual bool OnDeleteMetaObject();
 
-	//for designer
+	//for studio
 	virtual bool OnReloadMetaObject();
 
 	//module manager is started or exit
-	//after and before for designer
+	//after and before for studio
 	//ABSTRACT: a tabular section MUST be either RAM (Ram) or DB-backed (Ref). Each leaf overrides
 	//this to register its own value-ctor, then chains to this base body (number line + framework).
 	//Pure-virtual-with-body: the base supplies the common body but cannot be instantiated itself.
 	virtual bool OnBeforeRunMetaObject(int flags) = 0;
 	virtual bool OnAfterRunMetaObject(int flags);
 
-	//after and before for designer
+	//after and before for studio
 	virtual bool OnBeforeCloseMetaObject();
 	virtual bool OnAfterCloseMetaObject();
 

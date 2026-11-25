@@ -26,7 +26,7 @@
 //
 // WHAT THIS DELIBERATELY IS NOT: a cron expression. A schedule that has to be
 // parsed cannot be shown in an editor without also being unparsed, and every
-// field here is a control a designer can render. If a case ever genuinely needs
+// field here is a control a studio can render. If a case ever genuinely needs
 // cron, it is a second kind of schedule, not a rewrite of this one.
 //
 // ⭐ THE SCHEMA STORES; IT DECIDES NOTHING (Max, 2026-10-12: every schema lives in the core, and a schema keeps

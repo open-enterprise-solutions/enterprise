@@ -33,7 +33,7 @@ template <typename Compile>
 std::vector<ibDiagnostic> CollectFrom(Compile compile)
 {
 	// ⭐⭐ THE ANSWER GOES TO WHOEVER ASKED, AND NOWHERE ELSE. A compile failure normally travels to
-	// the designer's message pane as well (ibBackendException::ProcessError → ibFrontendMainFrame::
+	// the studio's message pane as well (ibBackendException::ProcessError → ibFrontendMainFrame::
 	// BackendError), which is right for code somebody is EDITING and wrong for a text somebody
 	// ASKED ABOUT: checking a snippet filled the person's own window with the assistant's failed
 	// attempts — *"{module(3)}: Procedure or function not detected (NoSuchFunction)"* about a text
@@ -112,7 +112,7 @@ std::vector<ibDiagnostic> ibCheckScript(const ibString& text, const ibString& mo
 		// application never learns this happened.
 		ibCompileCode compiler(moduleName, ibT("check"), false);
 
-		// ⚠ AND IT COMPILES THE ORDINARY WAY — the first refusal ends it, exactly as the designer's
+		// ⚠ AND IT COMPILES THE ORDINARY WAY — the first refusal ends it, exactly as the studio's
 		// own Syntax button behaves. The tolerant mode is NOT for this: it exists so a reader
 		// working out what is at a caret can go on reading, and it says nothing to anybody
 		// (compileCode.cpp, DoRefuse). A check that used it would come back silent.
@@ -183,7 +183,7 @@ ibScriptCheckAnswer ibCheckModule(const ibValueMetaObject* metaObject)
 	if (metaData == nullptr)
 		return answer;
 
-	// The cache exists only where the application supports designer editing,
+	// The cache exists only where the application supports studio editing,
 	// which is the same test the rest of the tree spells as
 	// `if (auto* cc = metaData->GetCompileCache())` rather than by asking what
 	// mode we are in.
@@ -199,7 +199,7 @@ ibScriptCheckAnswer ibCheckModule(const ibValueMetaObject* metaObject)
 	if (compileModule == nullptr)
 		return answer;
 
-	// THE BUTTON'S OWN ROAD — the designer's Syntax control asks exactly this,
+	// THE BUTTON'S OWN ROAD — the studio's Syntax control asks exactly this,
 	// so the module is checked against the metaobject that owns it and every
 	// name it can legitimately see resolves.
 	answer.m_diagnostics = CollectFrom([&] { compileModule->Compile(); });

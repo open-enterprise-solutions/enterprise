@@ -6,7 +6,7 @@
 // to ibJobManager, runs through the manager module, and stamps its run in the shared register.
 #include "parameterizedJob.h"
 
-#include "backend/appData.h"                       // appData->DesignerMode(), GetJobManager
+#include "backend/appData.h"                       // appData->StudioMode(), GetJobManager
 #include "backend/metaData.h"
 #include "backend/moduleManager/moduleManager.h"
 #include "backend/userInfo.h"                        // ibUserInfo — the identity the job inherits
@@ -162,8 +162,8 @@ ibString ibValueMetaObjectParameterizedJob::GetRowJobName(const ibGuid& objGuid)
 bool ibValueMetaObjectParameterizedJob::RegisterRow(const ibGuid& objGuid, bool active,
 	const ibJobScheduleDescription& schedule, const ibString& presentation) const
 {
-	// The Designer never runs an application's jobs. It edits them.
-	if (appData == nullptr || appData->DesignerMode())
+	// The Studio never runs an application's jobs. It edits them.
+	if (appData == nullptr || appData->StudioMode())
 		return true;
 
 	ibJobManager* const manager = ibApplicationInstance::GetJobManager();
@@ -281,7 +281,7 @@ bool ibValueMetaObjectParameterizedJob::RegisterRow(const ibGuid& objGuid, bool 
 
 bool ibValueMetaObjectParameterizedJob::UnregisterRow(const ibGuid& objGuid, bool forgetState) const
 {
-	if (appData == nullptr || appData->DesignerMode())
+	if (appData == nullptr || appData->StudioMode())
 		return true;
 
 	if (ibJobManager* const manager = ibApplicationInstance::GetJobManager())
@@ -299,8 +299,8 @@ bool ibValueMetaObjectParameterizedJob::UnregisterRow(const ibGuid& objGuid, boo
 
 bool ibValueMetaObjectParameterizedJob::RegisterJobs()
 {
-	// The Designer never runs an application's jobs. It edits them.
-	if (appData == nullptr || appData->DesignerMode())
+	// The Studio never runs an application's jobs. It edits them.
+	if (appData == nullptr || appData->StudioMode())
 		return true;
 	if (ibApplicationInstance::GetJobManager() == nullptr)
 		return true;
@@ -360,7 +360,7 @@ bool ibValueMetaObjectParameterizedJob::RegisterJobs()
 
 bool ibValueMetaObjectParameterizedJob::UnregisterJobs()
 {
-	if (appData == nullptr || appData->DesignerMode())
+	if (appData == nullptr || appData->StudioMode())
 		return true;
 
 	ibJobManager* const manager = ibApplicationInstance::GetJobManager();

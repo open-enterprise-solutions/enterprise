@@ -1,7 +1,7 @@
-// THE SECTION PANEL (schema 3) — the thin client's (appworkspace/mainFrame/mainFrameEnterpriseInterface.cpp) in
+// THE SECTION PANEL (schema 3) — the thin client's (appworkspace/mainFrame/mainFrameWorkspaceInterface.cpp) in
 // the browser: a column of section buttons down the window's left side, and a section's page opened beside them, over
 // the rest of the window. The page lays the section's blocks in two columns, as the server orders them
-// (frmserver/schema/runtime/sections.cpp, PageOf): on the left the section's own items under no heading, the navigation
+// (frmserver/schema/workspace/sections.cpp, PageOf): on the left the section's own items under no heading, the navigation
 // groups and the subsections; on the right the actions — Create, Reports, Service, then the declared groups. A link
 // opens its item through the schema's command, Open {Item, Type}, and the page closes once it has. A press outside the
 // page, Esc, or the open section's button again puts it away; another section's button opens that one instead. A
@@ -34,7 +34,7 @@ export class Sections {
 
 	/**
 	 * The panel read and drawn when the frame's application offers it — a server that does not is not asked, and the
-	 * window goes without the panel (ibFrontendMainFrameEnterprise::CreateSubSystem). Only the sections the person
+	 * window goes without the panel (ibFrontendMainFrameWorkspace::CreateSubSystem). Only the sections the person
 	 * may use come.
 	 * @param {ProtocolNode} frame
 	 */
