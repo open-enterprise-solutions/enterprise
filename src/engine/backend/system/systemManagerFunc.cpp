@@ -468,7 +468,7 @@ ibString ibValueSystemFunction::GetTempDir()
 	std::filesystem::path folder = std::filesystem::temp_directory_path(error);
 	if (!folder.has_filename() && folder.has_relative_path())
 		folder = folder.parent_path();
-	return ibString(folder.wstring());
+	return ibTextOf(folder);
 }
 
 ibString ibValueSystemFunction::GetTempFileName()
@@ -484,7 +484,7 @@ ibString ibValueSystemFunction::GetTempFileName()
 		if (std::filesystem::exists(name, error) || error)
 			continue;
 		if (std::ofstream(name, std::ios::binary).is_open())
-			return ibString(name.wstring());
+			return ibTextOf(name);
 	}
 	return ibString();
 }

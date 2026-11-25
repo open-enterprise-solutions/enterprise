@@ -323,7 +323,7 @@ bool ibValueInternetMailAttachments::CallAsFunc(const long lMethodNum, ibValue& 
 		const ibString path = paParams[0]->GetString();
 		ibValueBinaryData::ReadWholeFile(path, ibT("InternetMailAttachments"), bytes);
 		if (name.IsEmpty())
-			name = ibString(ibPathOf(path).filename().wstring());
+			name = ibTextOf(ibPathOf(path).filename());
 	}
 	else
 		ibBackendCoreException::Error(_("InternetMailAttachments: an attachment is BinaryData or a file's name"));

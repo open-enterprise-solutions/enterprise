@@ -129,7 +129,7 @@ ibString TraceDirectory()
 {
 	const ibString own = ibTechJournal::Path();
 	if (!own.IsEmpty())
-		return ibString(ibPathOf(own).parent_path().wstring());
+		return ibTextOf(ibPathOf(own).parent_path());
 
 	// The journal's own rule (journal.cpp): beside the dumps, in the diagnostic folder - which, for a
 	// program inside a macOS bundle, is ~/Library/Logs/OES and not the folder that holds the .app.
@@ -145,7 +145,7 @@ ibString TraceAppOfFile(const ibString& fileName) { return fileName.BeforeFirst(
 ibDateTime TraceStartOfFile(const ibString& file)
 {
 	// `yyyymmddThhmmss`: the fourteen digits without the T are one of the date's own forms.
-	const ibString middle = ibString(ibPathOf(file).stem().wstring()).AfterFirst(ibT('_')).BeforeLast(ibT('_'));
+	const ibString middle = ibTextOf(ibPathOf(file).stem()).AfterFirst(ibT('_')).BeforeLast(ibT('_'));
 
 	ibDateTime stamp;
 	if (middle.length() == 15 && middle[8] == ibT('T') && stamp.FromString(middle.Left(8) + middle.Mid(9)))
@@ -195,13 +195,13 @@ std::map<ibString, ibString> TraceNewestPerApp(const ibString& directory)
 // crash guard writes its dump BESIDE the journal (`crashdumps/` next to `journal/`, one decision,
 // see crashGuard.cpp), and both file names carry the pid. So the two halves of one incident are
 // joined by the thing they already agree on, and nothing new has to be recorded to say "it died".
-ibString TracePidOfLog(const ibString& file) { return ibString(ibPathOf(file).stem().wstring()).AfterLast(ibT('_')); }
+ibString TracePidOfLog(const ibString& file) { return ibTextOf(ibPathOf(file).stem()).AfterLast(ibT('_')); }
 
 // `<exe>_[<kind>]<pid>_t<tid>_<stamp>_<seq>.dmp` — the pid is the digits ending the token before
 // the thread's, which is where an optional kind suffix ("_error") leaves it.
 ibString TracePidOfDump(const ibString& fileName)
 {
-	std::vector<ibString> parts = ibStringTokenize(ibString(ibPathOf(fileName).stem().wstring()), ibT("_"));
+	std::vector<ibString> parts = ibStringTokenize(ibTextOf(ibPathOf(fileName).stem()), ibT("_"));
 
 	for (size_t i = 1; i < parts.size(); ++i) {
 
@@ -223,7 +223,7 @@ std::map<ibString, ibString> TraceDumpsByPid(const ibString& journalDirectory)
 {
 	std::map<ibString, ibString> dumps;
 
-	const ibString directory = ibString(ibPathOf(journalDirectory).parent_path().wstring())
+	const ibString directory = ibTextOf(ibPathOf(journalDirectory).parent_path())
 		+ ibFILE_SEP_PATH + ibT("crashdumps");
 
 	ibDir dir(directory);
@@ -658,7 +658,7 @@ public:
 
 			std::shared_ptr<ibDataNode> node = std::make_shared<ibDataNode>();
 			node->SetValue(ibT("app"), entry.first);
-			node->SetValue(ibT("file"), ibString(ibPathOf(entry.second).filename().wstring()));
+			node->SetValue(ibT("file"), ibTextOf(ibPathOf(entry.second).filename()));
 			node->AddField(ibT("lines"), ibDataValue::Int((std::int64_t)(rows.size() - before)));
 
 			// Which of these is the process answering right now. Everything else is another run,

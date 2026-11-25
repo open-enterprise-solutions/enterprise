@@ -24,7 +24,7 @@
 #include "backend/system/value/valueBinaryData.h"
 #include "backend/system/value/valueZip.h"
 
-#include "core/fileSystem.h"   // ibPathOf
+#include "core/fileSystem.h"   // ibPathOf, ibTextOf
 #include "core/zip/zip.h"
 
 namespace {
@@ -52,7 +52,7 @@ struct TempFolder {
 		bytes << file.rdbuf();
 		return bytes.str();
 	}
-	ibString Text(const fs::path& name = fs::path()) const { return ibString((name.empty() ? path : path / name).wstring()); }
+	ibString Text(const fs::path& name = fs::path()) const { return ibTextOf(name.empty() ? path : path / name); }
 };
 
 // What a refusal says, or "" when the call went through.
@@ -229,7 +229,7 @@ TEST(ZipFile, WhatIsWrittenIsWhatIsReadBack)
 {
 	TempFolder folder;
 	const std::string binary = { '\0', '\1', static_cast<char>(0xFF), static_cast<char>(0x80), 'z', 'i', 'p' };
-	const ibString soup(wxT("борщ.txt"));
+	const ibString soup(wxT("\u0431\u043E\u0440\u0449.txt"));
 	folder.Put("in/b.bin", binary);
 	folder.Put("in/a.txt", "alpha");
 	folder.Put(ibPathOf(ibString(wxT("in/")) + soup), "soup");
@@ -279,7 +279,7 @@ TEST(ZipFile, TheStorePathModeNamesTheEntries)
 		EXPECT_EQ(name.find(':'), std::string::npos) << "nor carries a drive: " << name;
 		EXPECT_EQ(name.find('\\'), std::string::npos) << "folders are parted by '/': " << name;
 	}
-	const std::string tail = Utf8(ibString(fs::path(folder.path / "in" / "sub" / "c.txt").relative_path().generic_wstring()));
+	const std::string tail = Utf8(ibTextOf(fs::path(folder.path / "in" / "sub" / "c.txt").relative_path().generic_u16string()));
 	EXPECT_EQ(Names(fullReader).back(), tail);
 }
 

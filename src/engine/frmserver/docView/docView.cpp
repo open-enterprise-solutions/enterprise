@@ -413,7 +413,7 @@ ibString ibDocument::DoGetUserReadableName() const
     if ( !m_documentFile.empty() )
     {
         const ibString name = ibTempFile(m_documentFile).GetName();
-        return !name.empty() ? name : ibString(ibPathOf(m_documentFile).filename().wstring());
+        return !name.empty() ? name : ibTextOf(ibPathOf(m_documentFile).filename());
     }
 
     return _("unnamed");

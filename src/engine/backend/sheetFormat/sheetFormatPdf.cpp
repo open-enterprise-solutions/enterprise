@@ -144,7 +144,7 @@ void ReadFace(std::ifstream& file, const std::filesystem::path& path, uint32_t a
 		return;
 
 	FontFace face;
-	face.path = ibString(path.wstring());
+	face.path = ibTextOf(path);
 	face.index = index;
 	const std::string table = ReadAt(file, names->second.first, std::min<uint32_t>(names->second.second, 1u << 20));
 	face.family = NameOf(table, 1);
@@ -216,7 +216,7 @@ const std::vector<FontFace>& Faces()
 				std::error_code kind;
 				if (!it->is_regular_file(kind))
 					continue;
-				const ibString extension = ibString(it->path().extension().wstring()).Lower();
+				const ibString extension = ibTextOf(it->path().extension()).Lower();
 				if (extension == ibT(".ttf") || extension == ibT(".otf") || extension == ibT(".ttc"))
 					ReadFaces(it->path(), found);
 			}

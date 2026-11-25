@@ -100,5 +100,8 @@ private:
 // THE ONE DOOR FROM TEXT TO A FILE SYSTEM PATH — every std::filesystem call takes its path from here, so a name is
 // read the same way everywhere: the wide characters as they are on Windows, UTF-8 elsewhere.
 CORE_API std::filesystem::path ibPathOf(const ibString& text);
+// …and back: a path's text, through UTF-16. ⚠ Never `ibString(path.wstring())`: libstdc++ makes a wstring with the "C"
+// locale's facet, and a name that is not ASCII throws "Cannot convert character sequence" on Linux.
+CORE_API ibString ibTextOf(const std::filesystem::path& path);
 
 #endif // __FILE_SYSTEM_H__

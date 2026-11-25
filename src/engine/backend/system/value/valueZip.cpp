@@ -63,22 +63,22 @@ void WriteEntry(const ibString& folder, const ibString& name, const ibMemoryBuff
 	if (name.EndsWith(ibT("/"))) {
 		std::filesystem::create_directories(target, error);
 		if (error)
-			ibBackendCoreException::Error(_("ZipFileReader: cannot make the folder '%s'"), ibString(target.wstring()));
+			ibBackendCoreException::Error(_("ZipFileReader: cannot make the folder '%s'"), ibTextOf(target));
 		return;
 	}
 	std::filesystem::create_directories(target.parent_path(), error);
 	if (error)
-		ibBackendCoreException::Error(_("ZipFileReader: cannot make the folder '%s'"), ibString(target.parent_path().wstring()));
+		ibBackendCoreException::Error(_("ZipFileReader: cannot make the folder '%s'"), ibTextOf(target.parent_path()));
 
 	std::ofstream file(target, std::ios::binary | std::ios::trunc);
 	if (!file)
-		ibBackendCoreException::Error(_("ZipFileReader: cannot open the file '%s' for writing"), ibString(target.wstring()));
+		ibBackendCoreException::Error(_("ZipFileReader: cannot open the file '%s' for writing"), ibTextOf(target));
 	const std::size_t length = bytes.GetDataLen();
 	if (length > 0)
 		file.write(static_cast<const char*>(bytes.GetData()), static_cast<std::streamsize>(length));
 	file.close();
 	if (file.fail())
-		ibBackendCoreException::Error(_("ZipFileReader: writing to the file '%s' failed"), ibString(target.wstring()));
+		ibBackendCoreException::Error(_("ZipFileReader: writing to the file '%s' failed"), ibTextOf(target));
 }
 
 } // namespace
@@ -138,7 +138,7 @@ bool ibValueZipFileWriter::CallAsProc(const long lMethodNum, ibValue** paParams,
 void ibValueZipFileWriter::Add(const ibString& path, ibZIPStorePathMode storePath, ibZIPSubDirProcessingMode subDirs)
 {
 	const std::filesystem::path given = ibPathOf(path);
-	const ibString last(given.filename().wstring());
+	const ibString last = ibTextOf(given.filename());
 	const int flags = ibDIR_FILES | (subDirs == ibZIPSubDirProcessingMode_ProcessRecursively ? ibDIR_DIRS : 0);
 
 	std::error_code error;
@@ -146,7 +146,7 @@ void ibValueZipFileWriter::Add(const ibString& path, ibZIPStorePathMode storePat
 	std::vector<ibString> files;
 	if (last.Contains(ibT("*")) || last.Contains(ibT("?"))) {
 		folder = given.parent_path();
-		ibDir::GetAllFiles(ibString(folder.wstring()), &files, last, flags);
+		ibDir::GetAllFiles(ibTextOf(folder), &files, last, flags);
 	}
 	else if (std::filesystem::is_directory(given, error)) {
 		folder = given;
@@ -171,7 +171,7 @@ void ibValueZipFileWriter::Add(const ibString& path, ibZIPStorePathMode storePat
 			inside = one.relative_path();   // the root and the drive aside: a name inside is never absolute
 		if (inside.empty() || *inside.begin() == std::filesystem::path(".."))
 			inside = one.filename();
-		m_entries.push_back({ file, ibString(inside.generic_wstring()) });
+		m_entries.push_back({ file, ibTextOf(inside.generic_u16string()) });   // parted by '/' on every system
 	}
 }
 

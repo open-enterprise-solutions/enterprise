@@ -34,6 +34,7 @@
 #include "core/description/commandDescription.h"
 #include "core/description/sourceDescription.h"
 #include "core/description/typeDescription.h"
+#include "core/fileSystem.h"   // ibTextOf
 #include "core/memory/memoryStream.h"   // ibWriterMemory / ibReaderMemory — the copy's payload
 #include "core/serialize/dataBuilder.h"
 #include "frmserver/mcp/mcpTool.h"
@@ -145,7 +146,7 @@ std::string RefusalOf(const ibMemoryBuffer& bytes, const char* name)
 	}
 	std::string refusal;
 	try {
-		ibMetaData::MakeShared<T>()->LoadFromFile(ibString(file.wstring()));
+		ibMetaData::MakeShared<T>()->LoadFromFile(ibTextOf(file));
 	}
 	catch (const ibBackendException& err) {
 		refusal = err.GetErrorDescription().ToStdString();
@@ -223,14 +224,14 @@ TEST_F(MetadataMergeIds, ADataToolReadIntoTheApplication_ItsFormHoldsTheNewIds)
 	ASSERT_NE(original, nullptr);
 
 	// Written to its file, as the studio's "save to file" does…
-	ASSERT_TRUE(std::make_shared<ibMetaDataDataTool>(cfg, original)->SaveToFile(ibString(m_file.wstring())));
+	ASSERT_TRUE(std::make_shared<ibMetaDataDataTool>(cfg, original)->SaveToFile(ibTextOf(m_file)));
 
 	// …and read back into the same application, as "read from file" does (ReadExternal): read on its own, copied, and
 	// pasted under the application's root.
 	ibWriterMemory copied;
 	{
 		const std::shared_ptr<ibMetaDataDataTool> reader = ibMetaData::MakeShared<ibMetaDataDataTool>();
-		ASSERT_TRUE(reader->LoadFromFile(ibString(m_file.wstring())));
+		ASSERT_TRUE(reader->LoadFromFile(ibTextOf(m_file)));
 		ASSERT_TRUE(reader->CopyMetaObject(reader->GetDataTool(), copied));
 	}
 	ibReaderMemory pasted(copied.pointer(), copied.size());

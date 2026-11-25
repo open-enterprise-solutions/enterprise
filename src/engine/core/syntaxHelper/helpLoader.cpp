@@ -86,7 +86,7 @@ std::vector<ibString> SafeStrArray(const json& obj, const char* key) {
 
 // The path of `name` inside `folder` — what wxFileName(folder, name).GetFullPath() gave.
 ibString PathIn(const ibString& folder, const ibString& name) {
-	return ibString((ibPathOf(folder) / ibPathOf(name)).wstring());
+	return ibTextOf(ibPathOf(folder) / ibPathOf(name));
 }
 
 // Read an entire file into a string. Returns empty + sets *ok = false on
@@ -423,7 +423,7 @@ public:
 		std::error_code error;
 		for (std::filesystem::directory_iterator it(ibPathOf(m_dir), error), end; !error && it != end; it.increment(error)) {
 			if (!it->is_regular_file(error) || it->path().extension() != ".json") continue;
-			const ibString name(it->path().filename().wstring());
+			const ibString name = ibTextOf(it->path().filename());
 			if (!name.StartsWith(ibT("_"))) out.push_back(name);
 		}
 		return out;

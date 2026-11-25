@@ -49,7 +49,7 @@ bool ibBackendPicture::LoadFromFile(const ibString& strFileName, ibExternalPictu
 	if (size.m_width <= 0 || size.m_height <= 0)
 		return false;
 
-	pictureDesc.m_img_name = ibString(path.make_preferred().wstring()).ToUtf8();   // the separators this system writes, as wxFileName did
+	pictureDesc.m_img_name = ibTextOf(path.make_preferred()).ToUtf8();   // the separators this system writes, as wxFileName did
 	pictureDesc.m_img_buffer = std::move(bytes);
 	pictureDesc.m_width = size.m_width;
 	pictureDesc.m_height = size.m_height;

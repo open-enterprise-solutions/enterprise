@@ -426,7 +426,7 @@ void ibApplicationHost::ReadBackendConf()
 	const bool resumePresent = fc.Read(ibT("Resume"), &resume);
 	m_configResume = ResumeSeconds(resumePresent, resume);
 	// The certificate the listeners speak TLS over, named relative to this file's folder (core/server/listener.h).
-	m_configTls = ibTlsFiles::FromConf(fc, ibString(ibPathOf(strConfigFile).parent_path().wstring()));
+	m_configTls = ibTlsFiles::FromConf(fc, ibTextOf(ibPathOf(strConfigFile).parent_path()));
 
 	// (THE ASSISTANT ACCESS'S SETTINGS ARE NOT HERE: the port is on the person's own machine, and so
 	//  are they. See ibMcpServer::GetSettings in frmclient/backend/mcp/mcpServer.h.)

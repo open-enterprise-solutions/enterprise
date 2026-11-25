@@ -247,7 +247,7 @@ ibMailMessage AMessage()
 	message.m_to = { "buyer@example.net" };
 	message.m_cc = { "Accounts <accounts@example.net>" };
 	message.m_bcc = { "archive@example.com" };
-	message.m_subject = Utf8(ibString(wxT("Счёт 42")));
+	message.m_subject = Utf8(ibString(wxT("\u0421\u0447\u0451\u0442 42")));
 	message.m_plain = "The invoice is attached.\r\n.a line that begins with a dot\r\nThanks";
 	message.m_attachments.push_back({ "invoice-42.pdf", std::string("%PDF-1.4\0\x01\x02", 11) });
 	return message;
@@ -314,7 +314,7 @@ TEST(SmtpClient, TheMessageIsMimeTheServerCanRead)
 	const std::size_t subject = message.find("Subject: =?UTF-8?B?");
 	ASSERT_NE(subject, std::string::npos);
 	const std::size_t open = subject + 19;
-	EXPECT_EQ(Base64Decoded(message.substr(open, message.find("?=", open) - open)), Utf8(ibString(wxT("Счёт 42"))));
+	EXPECT_EQ(Base64Decoded(message.substr(open, message.find("?=", open) - open)), Utf8(ibString(wxT("\u0421\u0447\u0451\u0442 42"))));
 
 	EXPECT_EQ(Base64Decoded(PartBody(message, "Content-Type: text/plain; charset=utf-8")), AMessage().m_plain);
 	EXPECT_NE(message.find("Content-Type: application/pdf; name=\"invoice-42.pdf\""), std::string::npos);
@@ -472,10 +472,10 @@ TEST(MailMessage, AddressesAndHeadersAreChecked)
 TEST(MailMessage, ANameThatIsNotAsciiIsEncoded)
 {
 	ibMailMessage message = AMessage();
-	message.m_from = Utf8(ibString(wxT("Магазин <shop@example.com>")));
+	message.m_from = Utf8(ibString(wxT("\u041C\u0430\u0433\u0430\u0437\u0438\u043D <shop@example.com>")));
 	ibString longName;
 	for (int n = 0; n < 60; ++n)
-		longName += wxT("рахунок");
+		longName += wxT("\u0440\u0430\u0445\u0443\u043D\u043E\u043A");
 	message.m_attachments = { { Utf8(longName) + ".pdf", "bytes" } };
 	std::string text, error;
 	ASSERT_TRUE(message.Compose(text, error)) << error;

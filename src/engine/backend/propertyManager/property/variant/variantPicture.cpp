@@ -7,7 +7,7 @@ ibString ibVariantExternalPicture::GetString() const
 	if (IsEmptyPicture())
 		return ibEmptyString;
 
-	return ibString(ibPathOf(GetPictureFileName()).filename().wstring());
+	return ibTextOf(ibPathOf(GetPictureFileName()).filename());
 }
 
 ibString ibVariantExternalPicture::GetPictureFileName() const

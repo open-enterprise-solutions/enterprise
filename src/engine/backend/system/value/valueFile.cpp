@@ -99,22 +99,22 @@ bool ibValueFile::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 	switch (lPropNum)
 	{
 	case enBaseName:
-		pvarPropVal = ibString(path.stem().wstring());
+		pvarPropVal = ibTextOf(path.stem());
 		return true;
 	case enExtension: {
 		// without its dot, as wxFileName::GetExt gave it
-		const std::wstring extension = path.extension().wstring();
-		pvarPropVal = ibString(extension.empty() ? extension : extension.substr(1));
+		const ibString extension = ibTextOf(path.extension());
+		pvarPropVal = extension.IsEmpty() ? extension : extension.Mid(1);
 		return true;
 	}
 	case enFullName:
-		pvarPropVal = ibString(path.make_preferred().wstring());   // the separators this system writes, as wxFileName did
+		pvarPropVal = ibTextOf(path.make_preferred());   // the separators this system writes, as wxFileName did
 		return true;
 	case enName:
-		pvarPropVal = ibString(path.filename().wstring());
+		pvarPropVal = ibTextOf(path.filename());
 		return true;
 	case enPath:
-		pvarPropVal = ibString(path.parent_path().wstring());
+		pvarPropVal = ibTextOf(path.parent_path());
 		return true;
 	}
 

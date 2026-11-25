@@ -45,7 +45,7 @@ namespace
 // doesn't leak through docManager.h.
 ibString FindExtension(const ibString& path)
 {
-	ibString ext(ibPathOf(path).extension().wstring());
+	ibString ext = ibTextOf(ibPathOf(path).extension());
 	if (!ext.IsEmpty())
 		ext.Remove(0, 1);   // the dot
 

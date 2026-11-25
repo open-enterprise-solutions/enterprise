@@ -25,18 +25,16 @@ bool LastDirsAreBundle(const std::filesystem::path& folder)
 	return macOS == "MacOS" && contents == "Contents" && bundle.extension() == ".app";
 }
 
-ibString TextOf(const std::filesystem::path& path)
+// wx's wildcards: `*` any run of characters, `?` any one, the case folded; no spec at all is every name. A `*` that the
+// rest fails to follow is let take one more character, and the rest is tried again.
+bool MatchesSpec(const ibString& name, const ibString& spec)
 {
-	return ibString(path.wstring());
-}
+	if (spec.IsEmpty())
+		return true;
 
-// wx's wildcards: `*` any run of characters, `?` any one, the case folded. A `*` that the rest fails to follow is
-// let take one more character, and the rest is tried again.
-bool MatchesSpec(const std::wstring& name, const ibString& spec)
-{
 	const size_t specLength = spec.Len();
-	size_t n = 0, s = 0, star = std::wstring::npos, resume = 0;
-	while (n < name.size()) {
+	size_t n = 0, s = 0, star = ibString::npos, resume = 0;
+	while (n < name.Len()) {
 		if (s < specLength && spec[s] == ibT('*')) {
 			star = s++;
 			resume = n;
@@ -45,7 +43,7 @@ bool MatchesSpec(const std::wstring& name, const ibString& spec)
 			++n;
 			++s;
 		}
-		else if (star != std::wstring::npos) {
+		else if (star != ibString::npos) {
 			s = star + 1;
 			n = ++resume;
 		}
@@ -74,7 +72,7 @@ ibString ibProgramFolder(const ibString& executablePath)
 	std::filesystem::path folder = ibPathOf(executablePath).parent_path();
 	if (LastDirsAreBundle(folder))
 		folder = folder.parent_path().parent_path().parent_path();   // MacOS, Contents, X.app
-	return TextOf(folder);
+	return ibTextOf(folder);
 }
 
 ibString ibProgramFolder()
@@ -87,14 +85,14 @@ ibString ibProgramSubfolder(const ibString& name)
 	std::error_code error;
 	const std::filesystem::path beside = ibPathOf(ibProgramFolder()) / ibPathOf(name);
 	if (std::filesystem::is_directory(beside, error))
-		return ibString(beside.wstring());
+		return ibTextOf(beside);
 
 	// Bounded: bin/Win32/Debug is three levels below the tree, a macOS bundle's binary a few more.
 	std::filesystem::path walk = ibPathOf(ibExecutablePath()).parent_path();
 	for (int level = 0; level < 6 && !walk.empty(); ++level) {
 		const std::filesystem::path candidate = walk / ibPathOf(name);
 		if (std::filesystem::is_directory(candidate, error))
-			return ibString(candidate.wstring());
+			return ibTextOf(candidate);
 		if (walk == walk.parent_path())
 			break;
 		walk = walk.parent_path();
@@ -112,7 +110,7 @@ ibString ibDiagnosticFolder()
 	// keeps the program folder, which is the directory of the executable.
 	const char* const home = std::getenv("HOME");
 	if (home != nullptr && LastDirsAreBundle(ibPathOf(ibExecutablePath()).parent_path()))
-		return TextOf(std::filesystem::path(home) / "Library" / "Logs" / "OES");
+		return ibTextOf(std::filesystem::path(home) / "Library" / "Logs" / "OES");
 #endif
 	return ibProgramFolder();
 }
@@ -137,10 +135,10 @@ ibString ibExecutablePath()
 		return ibString();
 	std::error_code error;
 	const std::filesystem::path real = std::filesystem::canonical(path.data(), error);
-	return TextOf(error ? std::filesystem::path(path.data()) : real);
+	return ibTextOf(error ? std::filesystem::path(path.data()) : real);
 #else
 	std::error_code error;
-	return TextOf(std::filesystem::read_symlink("/proc/self/exe", error));
+	return ibTextOf(std::filesystem::read_symlink("/proc/self/exe", error));
 #endif
 }
 
@@ -155,13 +153,13 @@ ibString ibExecutablePath(const ibString& name)
 		flat += L".exe";
 #endif
 	if (std::filesystem::is_regular_file(flat, error))
-		return TextOf(flat);
+		return ibTextOf(flat);
 
 #if defined(__IBOSX__)
 	// A bundle keeps its binary inside: name.app beside this one's .app, or beside this binary off a bundle.
 	const std::filesystem::path bundled = folder / ibPathOf(name + ibT(".app")) / "Contents" / "MacOS" / ibPathOf(name);
 	if (std::filesystem::is_regular_file(bundled, error))
-		return TextOf(bundled);
+		return ibTextOf(bundled);
 #endif
 
 	return name;
@@ -170,7 +168,7 @@ ibString ibExecutablePath(const ibString& name)
 ibString ibGetCwd()
 {
 	std::error_code error;
-	return ibString(std::filesystem::current_path(error).wstring());
+	return ibTextOf(std::filesystem::current_path(error));
 }
 
 ibString ibBackendConfPath()
@@ -267,10 +265,10 @@ bool ibDir::GetNext(ibString* filename)
 		m_walk.increment(error);
 		if (error)   // the folder stopped answering: what was read is the last of it
 			m_walk = std::filesystem::directory_iterator();
-		const std::wstring name = entry.path().filename().wstring();
+		const ibString name = ibTextOf(entry.path().filename());
 		if (ListsKind(entry, m_flags) && MatchesSpec(name, m_filespec)) {
 			if (filename != nullptr)
-				*filename = ibString(name);
+				*filename = name;
 			return true;
 		}
 	}
@@ -286,10 +284,10 @@ size_t ibDir::GetAllFiles(const ibString& dirname, std::vector<ibString>* files,
 		std::error_code kind;
 		if (it->is_directory(kind)) {
 			if ((flags & ibDIR_DIRS) != 0)
-				added += GetAllFiles(TextOf(it->path()), files, filespec, flags);
+				added += GetAllFiles(ibTextOf(it->path()), files, filespec, flags);
 		}
-		else if ((flags & ibDIR_FILES) != 0 && it->is_regular_file(kind) && MatchesSpec(it->path().filename().wstring(), filespec)) {
-			files->push_back(TextOf(it->path()));
+		else if ((flags & ibDIR_FILES) != 0 && it->is_regular_file(kind) && MatchesSpec(ibTextOf(it->path().filename()), filespec)) {
+			files->push_back(ibTextOf(it->path()));
 			++added;
 		}
 	}
@@ -299,4 +297,12 @@ size_t ibDir::GetAllFiles(const ibString& dirname, std::vector<ibString>* files,
 std::filesystem::path ibPathOf(const ibString& text)
 {
 	return std::filesystem::path(text.c_str(), text.c_str() + text.Len());
+}
+
+// THROUGH UTF-16, which is what the text holds: UTF-8 to UTF-16 asks no locale on any system (CI, 2026-11-25: a file
+// named in Cyrillic, zipped, threw on Linux through wstring()).
+ibString ibTextOf(const std::filesystem::path& path)
+{
+	const std::u16string text = path.u16string();
+	return ibString(text.c_str(), text.size());
 }

@@ -36,7 +36,7 @@ ibFileBase* ibFileBaseOpen(const ibString& request, ibString& error)
 {
 	// THE PROCESS'S JOURNAL, AND ITS CRASH GUARD — the engine runs in this process now, and every application of the
 	// tree installs both as its first act; a client that loads a file base is one too. Named by the process, as theirs.
-	ibCrashGuard::Install(ibString(ibPathOf(ibExecutablePath()).stem().wstring()));
+	ibCrashGuard::Install(ibTextOf(ibPathOf(ibExecutablePath()).stem()));
 
 	// Read as the port's requests are read — the text where it lies.
 	ibDataNode where;

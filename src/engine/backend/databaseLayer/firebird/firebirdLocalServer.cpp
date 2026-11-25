@@ -103,8 +103,8 @@ int PickFreePort() {
 // Filename embeds our own PID so each instance owns its own file.
 ibString PidFilePath() {
 	std::error_code error;
-	return ibString((std::filesystem::temp_directory_path(error) / ibPathOf(ibString::Format(
-		ibT("oes-fb-localserver-%u.pid"), ibCrashGuard::CurrentPidPortable()))).wstring());
+	return ibTextOf(std::filesystem::temp_directory_path(error) / ibPathOf(ibString::Format(
+		ibT("oes-fb-localserver-%u.pid"), ibCrashGuard::CurrentPidPortable())));
 }
 
 // Record the PID + port so a recovery tool can find / kill the

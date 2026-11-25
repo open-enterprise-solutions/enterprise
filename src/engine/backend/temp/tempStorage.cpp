@@ -48,7 +48,7 @@ ibString ibTempStorage::Create(const ibGuid& session, const ibString& name)
 {
 	std::lock_guard<std::recursive_mutex> serialised(m_mtx);
 
-	const ibString fileName(ibPathOf(name).filename().wstring());
+	const ibString fileName = ibTextOf(ibPathOf(name).filename());
 	if (fileName.IsEmpty() || !session.isValid())
 		return ibString();
 

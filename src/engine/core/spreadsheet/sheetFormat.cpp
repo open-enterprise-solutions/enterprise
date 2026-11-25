@@ -39,7 +39,7 @@ const ibSheetFormat* ibSheetFormatFor(const ibString& fileName)
 {
 	// BY EXTENSION, and case-blind: a file arrives as .XLSX from one mail client and
 	// .xlsx from the next, and they are the same file.
-	const ibString extension = ibString(ibPathOf(fileName).extension().wstring()).Mid(1);
+	const ibString extension = ibTextOf(ibPathOf(fileName).extension()).Mid(1);
 	if (extension.IsEmpty())
 		return nullptr;
 

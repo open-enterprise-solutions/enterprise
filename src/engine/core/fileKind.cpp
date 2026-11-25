@@ -62,7 +62,7 @@ bool ibFileKindOf(const ibString& path, ibFileKind& kind)
 {
 	// The EXTENSION, not the tail of the name: "report.orp.bak" is a backup of a
 	// report, not a report.
-	const ibString ext = ibString(ibPathOf(path).extension().wstring()).Mid(1).Lower();
+	const ibString ext = ibTextOf(ibPathOf(path).extension()).Mid(1).Lower();
 	if (ext.IsEmpty())
 		return false;
 

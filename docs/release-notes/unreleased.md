@@ -789,6 +789,10 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
   (`pattern_read` with a query, `mcp_search`) lists the entries most about the words first: it kept the corpus's
   order and cut at two dozen, so a search for contracts lost `settlements`.
 
+- **Linux: a file whose name is not in Latin letters no longer stops the work.** Reading such a name - a
+  file's properties, a folder walked, an archive packed, a font, a journal - raised "Cannot convert character
+  sequence" on Linux.
+
 - **A value read from JSON no longer gains a `type` field.** The type's name the JSON view writes
   beside a value's type came back as a field, one more on each round.
 

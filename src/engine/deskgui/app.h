@@ -31,6 +31,7 @@
 #include "core/diagnostics/crashGuard.h"
 #include "core/diagnostics/journal.h"   // ibJournalError — what the loop says of a refusal
 #include "core/exception.h"             // ibCoreException — the refusal it says and goes on
+#include "core/fileSystem.h"            // ibTextOf — the file a wx line came from, by its name alone
 #include "deskgui/univ/messageDialog.h"   // ibLogGui — wx's log window in the theme's box
 
 #include <wx/app.h>
@@ -99,7 +100,7 @@ protected:
 		// produced it, and this is the one place that has them.
 		if (info.filename != nullptr && info.line > 0)
 			ibTechJournal::Write(mark, kind, ibString::Format(ibT("%s   [%s:%d]"),
-				msg, ibString(std::filesystem::path(info.filename).filename().wstring()), info.line));
+				msg, ibTextOf(std::filesystem::path(info.filename).filename()), info.line));
 		else
 			ibTechJournal::Write(mark, kind, msg);
 	}

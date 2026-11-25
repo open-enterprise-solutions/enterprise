@@ -37,7 +37,7 @@ ibString ResolvePlatformDir(const ibString& locale)
 	if (!hasLocale(platformDir)) {
 		// Inside the bundle (Contents/Resources), which is not the program folder.
 		const std::filesystem::path exeDir = ibPathOf(ibExecutablePath()).parent_path();
-		const ibString c = ibString((exeDir.parent_path() / "Resources" / "help").wstring());
+		const ibString c = ibTextOf(exeDir.parent_path() / "Resources" / "help");
 		if (hasLocale(c)) platformDir = c;
 	}
 #endif

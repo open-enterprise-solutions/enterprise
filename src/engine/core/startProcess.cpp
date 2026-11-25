@@ -458,8 +458,8 @@ long ibStartWebServer(const ibString& command, ibString& url, const std::functio
 	// and this call's in the temporary folder; the server makes the file.
 	static std::atomic<unsigned> s_started{ 0 };
 	std::error_code error;
-	const ibString manifest = ibString((std::filesystem::temp_directory_path(error) / ibPathOf(ibString::Format(
-		ibT("oes-web-%u-%u.txt"), ibCrashGuard::CurrentPidPortable(), s_started.fetch_add(1)))).wstring());
+	const ibString manifest = ibTextOf(std::filesystem::temp_directory_path(error) / ibPathOf(ibString::Format(
+		ibT("oes-web-%u-%u.txt"), ibCrashGuard::CurrentPidPortable(), s_started.fetch_add(1))));
 	const long pid = ibStartProcess(command + ibString::Format(ibT(" --port=0 --manifest=\"%s\""), manifest));
 	if (pid == 0) {
 		ibRemoveFile(manifest);

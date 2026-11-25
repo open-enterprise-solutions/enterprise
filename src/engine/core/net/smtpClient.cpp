@@ -194,8 +194,10 @@ std::string FileNameParameter(const std::string& name)
 		const std::size_t take = WholeCharacters(name, at, 16);
 		std::string encoded;
 		for (std::size_t i = at; i < at + take; ++i) {
+			// ASCII's letters and digits, asked by range: `isalnum` answers by the locale, and macOS's "C" counts a byte
+			// of UTF-8 (0xD1) a Latin-1 letter - it went out unencoded.
 			const unsigned char c = static_cast<unsigned char>(name[i]);
-			if (std::isalnum(c) || c == '.' || c == '-' || c == '_')
+			if ((c >= '0' && c <= '9') || (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '.' || c == '-' || c == '_')
 				encoded += static_cast<char>(c);
 			else {
 				encoded += '%';
@@ -308,8 +310,12 @@ bool ibMailMessage::ParseAddress(const std::string& text, std::string& name, std
 			return false;
 		address = Trim(whole.substr(open + 1, whole.size() - open - 2));
 		name = Trim(whole.substr(0, open));
-		if (name.size() >= 2 && name.front() == '"' && name.back() == '"')
+		// ONE ADDRESS: what stands before it is a name and never another address - `<a@b.c>, <d@e.f>` is two.
+		const bool quoted = name.size() >= 2 && name.front() == '"' && name.back() == '"';
+		if (quoted)
 			name = name.substr(1, name.size() - 2);
+		if (name.find_first_of(quoted ? "\"" : "\"<>@,;") != std::string::npos)
+			return false;
 	}
 	else {
 		address = whole;

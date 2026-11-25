@@ -409,7 +409,7 @@ bool ibMetaDataDataTool::LoadRootTree(ibValueMetaObjectDataTool* root, const ibC
 	// 🛑 BYTES THIS BUILD CANNOT READ ARE REFUSED IN WORDS — the external report's reader says why (metadataReport.cpp).
 	const auto unreadable = [this]() {
 		ibBackendCoreException::Error(_("'%s' is stored in a format this build cannot read: it was written by an older or "
-			"a different build. Nothing was loaded."), ibString(ibPathOf(m_fullPath).filename().wstring()));
+			"a different build. Nothing was loaded."), ibTextOf(ibPathOf(m_fullPath).filename()));
 	};
 	{
 		std::shared_ptr<ibReaderMemory> headerReader(readerData.open_chunk(eHeaderBlock));

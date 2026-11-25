@@ -56,7 +56,7 @@ bool WriteAll(const ibString& path, const std::string& bytes)
 } // namespace
 
 ibServerConfig::ibServerConfig(const ibString& folder) :
-	m_folder(ibString((ibPathOf(folder) / "").parent_path().wstring())),   // one spelling, no trailing separator
+	m_folder(ibTextOf((ibPathOf(folder) / "").parent_path())),   // one spelling, no trailing separator
 	m_confPath(m_folder + ibFILE_SEP_PATH + ibT("server.conf"))
 {
 }

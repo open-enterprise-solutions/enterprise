@@ -73,7 +73,7 @@ std::shared_ptr<ibDatabaseLayer> ibApplicationInstance::GetDatabaseLayer()
 // name without its extension, as wxApp named itself. Empty when the system has no such folder to say.
 static ibString UserLocalDataFolder()
 {
-	const ibString program(ibPathOf(ibExecutablePath()).stem().wstring());
+	const ibString program = ibTextOf(ibPathOf(ibExecutablePath()).stem());
 #ifdef __IBMSW__
 	const wchar_t* const root = _wgetenv(L"LOCALAPPDATA");
 	return root != nullptr ? ibString(root) + ibFILE_SEP_PATH + program : ibString();
@@ -780,7 +780,7 @@ ibApplicationInstance* ibApplicationInstance::Open(ibRunMode runMode, const ibIn
 		std::unique_ptr<ibApplicationInstance> opening(new ibApplicationInstance(host, runMode));
 		opening->m_strFile = storage.m_directory;
 		const std::filesystem::path folder = ibPathOf(storage.m_directory).lexically_normal();   // "base/" and "base" alike
-		const ibString last(folder.has_filename() ? folder.filename().wstring() : folder.parent_path().filename().wstring());
+		const ibString last = ibTextOf(folder.has_filename() ? folder.filename() : folder.parent_path().filename());
 		opening->m_strInstance = !request.m_name.IsEmpty() ? request.m_name
 			: last.IsEmpty() ? storage.m_directory : last;
 

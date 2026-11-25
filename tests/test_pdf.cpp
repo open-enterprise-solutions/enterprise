@@ -222,7 +222,7 @@ TEST(PdfDocument, TwoPagesAreReadBackWithTheirText)
 		pdf.DrawLine(30, 50, 230, 50);
 		pdf.DrawText(ibT("Invoice"), 32, 32);
 		pdf.StartPage(595.28, 841.89);
-		pdf.DrawText(ibString(ibT("Сумма: 1 200,00")), 32, 32);
+		pdf.DrawText(ibString(ibT("\u0421\u0443\u043C\u043C\u0430: 1 200,00")), 32, 32);
 		pdf.DrawRotatedText(ibT("Up"), 100, 200, 90);
 		ASSERT_TRUE(pdf.Close());
 	}
@@ -232,7 +232,7 @@ TEST(PdfDocument, TwoPagesAreReadBackWithTheirText)
 	const std::vector<int> pages = reader.Pages();
 	ASSERT_EQ(pages.size(), 2u);
 	EXPECT_EQ(reader.Text(pages[0]), ibString(ibT("Invoice")));
-	EXPECT_EQ(reader.Text(pages[1]), ibString(ibT("Сумма: 1 200,00\nUp")));
+	EXPECT_EQ(reader.Text(pages[1]), ibString(ibT("\u0421\u0443\u043C\u043C\u0430: 1 200,00\nUp")));
 }
 
 TEST(PdfDocument, TheFontGoesInWithOnlyTheGlyphsDrawn)
@@ -324,7 +324,7 @@ TEST(SheetFormatPdf, TheCellsAreWrittenRowByRow)
 {
 	ibSpreadsheetDescription sheet;
 	sheet.SetCellValue(0, 0, ibT("Name"));
-	sheet.SetCellValue(0, 1, ibString(ibT("Сумма")));
+	sheet.SetCellValue(0, 1, ibString(ibT("\u0421\u0443\u043C\u043C\u0430")));
 	sheet.SetCellValue(1, 0, ibT("Tea"));
 	sheet.SetCellValue(1, 1, ibT("12.50"));
 
@@ -332,7 +332,7 @@ TEST(SheetFormatPdf, TheCellsAreWrittenRowByRow)
 	ASSERT_TRUE(reader.Read());
 	const std::vector<int> pages = reader.Pages();
 	ASSERT_EQ(pages.size(), 1u);
-	EXPECT_EQ(reader.Text(pages[0]), ibString(ibT("Name\nСумма\nTea\n12.50")));
+	EXPECT_EQ(reader.Text(pages[0]), ibString(ibT("Name\n\u0421\u0443\u043C\u043C\u0430\nTea\n12.50")));
 }
 
 TEST(SheetFormatPdf, AnEmptySheetIsOneBlankPage)

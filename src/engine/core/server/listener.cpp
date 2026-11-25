@@ -28,7 +28,7 @@ ibString Resolved(const ibString& value, const ibString& folder)
 	// An absolute one is normalised too: "F:/certs/server.key" comes back as the system writes it.
 	const std::filesystem::path name = ibPathOf(path);
 	const std::filesystem::path full = name.is_relative() && !folder.IsEmpty() ? ibPathOf(folder) / name : name;
-	return ibString(full.lexically_normal().wstring());
+	return ibTextOf(full.lexically_normal());
 }
 
 // The file's bytes into `bytes`, or a refusal naming it. Read HERE, by the name in whatever script, and handed
@@ -65,7 +65,7 @@ ibTlsFiles ibTlsFiles::FromConf(const ibString& path)
 	if (path.IsEmpty() || !ibFileExists(path))
 		return ibTlsFiles();
 	// Read as the host reads it (ibApplicationHost::ReadBackendConf).
-	return FromConf(ibFileConfig(path), ibString(ibPathOf(path).parent_path().wstring()));
+	return FromConf(ibFileConfig(path), ibTextOf(ibPathOf(path).parent_path()));
 }
 
 ibHttpServerOptions ibListenerOptions(const ibString& address, std::uint16_t port, const ibTlsFiles& tls)

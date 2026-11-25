@@ -417,7 +417,7 @@ bool ibMetaDataReport::LoadRootTree(ibValueMetaObjectReport* root, const ibClass
 	// does not look for (2026-11-15, ExternalReport1.orp of 2026-08-24).
 	const auto unreadable = [this]() {
 		ibBackendCoreException::Error(_("'%s' is stored in a format this build cannot read: it was written by an older or "
-			"a different build. Nothing was loaded."), ibString(ibPathOf(m_fullPath).filename().wstring()));
+			"a different build. Nothing was loaded."), ibTextOf(ibPathOf(m_fullPath).filename()));
 	};
 	{
 		std::shared_ptr<ibReaderMemory> headerReader(readerData.open_chunk(eHeaderBlock));
