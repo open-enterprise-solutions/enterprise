@@ -10,14 +10,13 @@
 #include "core/localization/dictionary.h"
 
 #include "core/diagnostics/journal.h"
-#include "core/fileSystem.h"   // ibProgramFolder, ibGetCwd, ibExecutablePath, ibPathOf — where the catalogs are
+#include "core/fileSystem.h"   // ibProgramFolder, ibProgramSubfolder, ibGetCwd, ibPathOf — where the catalogs are
 
 #include <algorithm>
 #include <atomic>
 #include <cctype>
 #include <climits>
 #include <cstring>
-#include <filesystem>
 #include <fstream>
 #include <memory>
 #include <mutex>
@@ -1116,18 +1115,9 @@ void SettleDefaultPrefixes(ibDictionaryRegistry& registry)
 	};
 	add(ibGetCwd() + ibFILE_SEP_PATH + kCatalogFolder);
 	add(ibProgramFolder() + ibFILE_SEP_PATH + kCatalogFolder);
-	std::filesystem::path walk = ibPathOf(ibExecutablePath()).parent_path();
-	for (int level = 0; level < 6 && !walk.empty(); ++level) {
-		std::error_code error;
-		const std::filesystem::path candidate = walk / kCatalogFolder;
-		if (std::filesystem::is_directory(candidate, error)) {
-			add(ibString(candidate.wstring()));
-			break;
-		}
-		if (walk == walk.parent_path())
-			break;
-		walk = walk.parent_path();
-	}
+	const ibString shipped = ibProgramSubfolder(kCatalogFolder);
+	if (!shipped.IsEmpty())
+		add(shipped);
 }
 
 // <prefix>/<language>/LC_MESSAGES/<domain>.po, then <prefix>/<language>/<domain>.po, over every prefix;

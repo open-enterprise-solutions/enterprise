@@ -611,6 +611,32 @@ oes_silence_directory_targets("${OES_3RDPARTY_DIR}/wxWidgets")
 # After add_subdirectory, wxWidgets targets (wx::core, wx::base, wx::html, etc.)
 # are available as imported targets.
 
+# THE CORE'S PDF (ibPdfDocument, core/pdf/pdfDocument.cpp) — libharu: a PDF file, its pages, the TrueType fonts
+# embedded in it. Taken as it is released, through its OWN CMake, as lunasvg is (Max, 2026-11-25: whoever keeps the
+# format up, we pull their releases); core/pdf/libharu/libharu.vcxproj builds the same. Here, after wx, because its
+# zlib is the one the core links: wx's copy where wx builds one, else the system's. No libpng - the core puts no PNG
+# into a PDF, and a server's package must not ask a bare system for one. Static, hidden, position-independent, as it
+# goes into the shared core; its CMake asks for 3.10, so its option(BUILD_SHARED_LIBS ... ON) keeps the OFF set here
+# only under the new rule for option().
+oes_require_submodule(libharu include/hpdf.h)
+set(OES_SHARED_WAS ${BUILD_SHARED_LIBS})
+set(BUILD_SHARED_LIBS OFF)
+set(CMAKE_POLICY_DEFAULT_CMP0077 NEW)
+set(CMAKE_DISABLE_FIND_PACKAGE_PNG TRUE)
+if(TARGET wxzlib)
+    set(ZLIB_INCLUDE_DIR "${OES_3RDPARTY_DIR}/wxWidgets/src/zlib" CACHE PATH "zlib: wx's copy, the core's" FORCE)
+    set(ZLIB_LIBRARY wxzlib CACHE STRING "zlib: wx's copy, the core's" FORCE)
+endif()
+add_subdirectory(src/3rdparty/libharu EXCLUDE_FROM_ALL)
+unset(CMAKE_DISABLE_FIND_PACKAGE_PNG)
+unset(CMAKE_POLICY_DEFAULT_CMP0077)
+set(BUILD_SHARED_LIBS ${OES_SHARED_WAS})
+set_target_properties(hpdf PROPERTIES POSITION_INDEPENDENT_CODE ON C_VISIBILITY_PRESET hidden)
+# Its headers and the one its CMake writes (hpdf_config.h), for whoever links it: its CMake names them for itself only.
+target_include_directories(hpdf INTERFACE
+    "${OES_3RDPARTY_DIR}/libharu/include" "${CMAKE_BINARY_DIR}/src/3rdparty/libharu/include")
+oes_silence_directory_targets("${OES_3RDPARTY_DIR}/libharu")
+
 # ---------------------------------------------------------------------------
 # Optional database drivers — find system libraries
 # ---------------------------------------------------------------------------

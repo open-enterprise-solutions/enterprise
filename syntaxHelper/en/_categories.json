@@ -21,6 +21,8 @@
     "json": "JSON — reading and writing",
     "xml": "XML — reading and writing",
     "text_files": "Text files and bytes — reading and writing",
+    "zip": "ZIP archives — packing and unpacking",
+    "mail": "Mail — sending messages",
     "hashing": "Hashing, base64 and hex",
     "forms": "Forms — what a form shows",
     "com": "COM objects and add-ins",

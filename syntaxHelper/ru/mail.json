@@ -1,0 +1,742 @@
+{
+  "format": "OES-HELP-1.0",
+  "schema_version": 1,
+  "locale": "ru",
+  "entries": [
+    {
+      "id": "cls.InternetMailProfile",
+      "name_local": "InternetMailProfile",
+      "name_en": "InternetMailProfile",
+      "kind": "collection",
+      "class_id": 166093668095330944,
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "mail"
+      ],
+      "signature": "New InternetMailProfile()",
+      "description": "Какой почтовый сервер и кто на него входит: адрес, порт, пользователь и пароль, время на каждый ответ и защита. InternetMail.Logon читает профиль в момент входа и только тогда — профиль, изменённый после, ничего не меняет до следующего Logon.\n\nЗАЩИТА — ЭТО SecureConnection, тот же, что принимает HTTPConnection: с ним разговор идёт по TLS — с первого байта на порту 465, через STARTTLS на любом другом (587, 25); сервер, который не предлагает STARTTLS, отклоняется, а не получает пароль открытым текстом. Без него соединение открытое.\n\nПОРТ, ЕСЛИ НЕ ЗАДАН, ОПРЕДЕЛЯЕТСЯ ЗАЩИТОЙ: 465 с SecureConnection, 25 без него.",
+      "syntax_block": "Profile = New InternetMailProfile();\nProfile.SMTPServerAddress = server;\nProfile.SecureConnection = New SecureConnection();",
+      "parameters": "",
+      "return_descr": "InternetMailProfile.",
+      "example": "Profile = New InternetMailProfile();\nProfile.SMTPServerAddress = \"smtp.example.com\";\nProfile.SMTPUser = \"shop@example.com\";\nProfile.SMTPPassword = Password;\nProfile.SecureConnection = New SecureConnection();   // TLS on 465\n\nMessage = New InternetMailMessage();\nMessage.From = \"Shop <shop@example.com>\";\nMessage.To.Add(\"buyer@example.net\");\nMessage.Subject = \"Invoice 42\";\nMessage.Texts.Add(\"The invoice is attached.\");\nMessage.Attachments.Add(\"C:\\out\\invoice-42.pdf\");\n\nMail = New InternetMail();\nMail.Logon(Profile);\nMail.Send(Message);\nMail.Logoff();",
+      "availability": "Клиент, Сервер",
+      "see_also": [
+        "cls.InternetMail",
+        "cls.InternetMailMessage",
+        "cls.SecureConnection"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.InternetMailProfile.SMTPServerAddress",
+      "name_local": "SMTPServerAddress",
+      "name_en": "SMTPServerAddress",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "mail"
+      ],
+      "signature": "Profile.SMTPServerAddress : string",
+      "description": "Имя почтового сервера — `smtp.example.com`, без схемы и порта. Пустое отклоняется при Logon.",
+      "syntax_block": "Profile.SMTPServerAddress = Value;",
+      "parameters": "",
+      "return_descr": "Строка.",
+      "example": "Profile = New InternetMailProfile();\nProfile.SMTPServerAddress = \"smtp.example.com\";\nProfile.SMTPUser = \"shop@example.com\";\nProfile.SMTPPassword = Password;\nProfile.SecureConnection = New SecureConnection();   // TLS on 465\n\nMessage = New InternetMailMessage();\nMessage.From = \"Shop <shop@example.com>\";\nMessage.To.Add(\"buyer@example.net\");\nMessage.Subject = \"Invoice 42\";\nMessage.Texts.Add(\"The invoice is attached.\");\nMessage.Attachments.Add(\"C:\\out\\invoice-42.pdf\");\n\nMail = New InternetMail();\nMail.Logon(Profile);\nMail.Send(Message);\nMail.Logoff();",
+      "availability": "Клиент, Сервер",
+      "see_also": [
+        "cls.InternetMailProfile",
+        "cls.InternetMail.Logon"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.InternetMailProfile.SMTPPort",
+      "name_local": "SMTPPort",
+      "name_en": "SMTPPort",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "mail"
+      ],
+      "signature": "Profile.SMTPPort : number",
+      "description": "Порт. Не заданный, читается как порт по защите: 465 с SecureConnection, 25 без. 0 — не задан; число вне 1–65535 отклоняется.",
+      "syntax_block": "Profile.SMTPPort = Value;",
+      "parameters": "",
+      "return_descr": "Число.",
+      "example": "Profile.SMTPPort = 587;",
+      "availability": "Клиент, Сервер",
+      "see_also": [
+        "cls.InternetMailProfile",
+        "cls.InternetMail.Logon"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.InternetMailProfile.SMTPUser",
+      "name_local": "SMTPUser",
+      "name_en": "SMTPUser",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "mail"
+      ],
+      "signature": "Profile.SMTPUser : string",
+      "description": "Кто входит. Пусто — вход на сервер не выполняется (ретранслятор внутри сети).",
+      "syntax_block": "Profile.SMTPUser = Value;",
+      "parameters": "",
+      "return_descr": "Строка.",
+      "example": "Profile.SMTPUser = \"shop@example.com\";",
+      "availability": "Клиент, Сервер",
+      "see_also": [
+        "cls.InternetMailProfile",
+        "cls.InternetMail.Logon"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.InternetMailProfile.SMTPPassword",
+      "name_local": "SMTPPassword",
+      "name_en": "SMTPPassword",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "mail"
+      ],
+      "signature": "Profile.SMTPPassword : string",
+      "description": "Пароль пользователя. Записывается и обратно не читается. Передаётся как AUTH PLAIN или AUTH LOGIN, если PLAIN не предложен, и никогда не появляется в тексте отказа.",
+      "syntax_block": "Profile.SMTPPassword = Value;",
+      "parameters": "",
+      "return_descr": "",
+      "example": "Profile.SMTPPassword = Password;",
+      "availability": "Клиент, Сервер",
+      "see_also": [
+        "cls.InternetMailProfile",
+        "cls.InternetMail.Logon"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.InternetMailProfile.Timeout",
+      "name_local": "Timeout",
+      "name_en": "Timeout",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "mail"
+      ],
+      "signature": "Profile.Timeout : number",
+      "description": "Секунды на каждый ответ сервера — 30, если не сказано, не меньше 1 и не больше суток. Письмо уходит частями, каждая в пределах этого времени, поэтому большое вложение на медленной линии — не тайм-аут.",
+      "syntax_block": "Profile.Timeout = Value;",
+      "parameters": "",
+      "return_descr": "Число.",
+      "example": "Profile.Timeout = 60;",
+      "availability": "Клиент, Сервер",
+      "see_also": [
+        "cls.InternetMailProfile",
+        "cls.InternetMail.Logon"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.InternetMailProfile.SecureConnection",
+      "name_local": "SecureConnection",
+      "name_en": "SecureConnection",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "mail"
+      ],
+      "signature": "Profile.SecureConnection : SecureConnection",
+      "description": "TLS, заданный так же, как у HTTPConnection: SecureConnection — кому доверять, какой сертификат показать, проверять ли — или Undefined для открытого соединения. Иное отклоняется.",
+      "syntax_block": "Profile.SecureConnection = Value;",
+      "parameters": "",
+      "return_descr": "SecureConnection или Undefined.",
+      "example": "Profile.SecureConnection = New SecureConnection();",
+      "availability": "Клиент, Сервер",
+      "see_also": [
+        "cls.InternetMailProfile",
+        "cls.InternetMail.Logon"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.InternetMailMessage",
+      "name_local": "InternetMailMessage",
+      "name_en": "InternetMailMessage",
+      "kind": "collection",
+      "class_id": 194000372725466810,
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "mail"
+      ],
+      "signature": "New InternetMailMessage()",
+      "description": "Письмо: кто отправляет, кому, тема, тексты и вложения. Адрес — строка `buyer@example.net` или `Buyer <buyer@example.net>`; имя не в ASCII уходит так, как требует формат, как и тема. Bcc доходит до своих получателей и не виден никому из них.\n\nПисьмо уходит как MIME: тексты и вложения в base64, поэтому его передаст любой сервер. Перевод строки в теме или в адресе отклоняется при отправке — он добавил бы свой заголовок.",
+      "syntax_block": "Message = New InternetMailMessage();\nMessage.From = sender;\nMessage.To.Add(recipient);\nMessage.Texts.Add(text);",
+      "parameters": "",
+      "return_descr": "InternetMailMessage.",
+      "example": "Profile = New InternetMailProfile();\nProfile.SMTPServerAddress = \"smtp.example.com\";\nProfile.SMTPUser = \"shop@example.com\";\nProfile.SMTPPassword = Password;\nProfile.SecureConnection = New SecureConnection();   // TLS on 465\n\nMessage = New InternetMailMessage();\nMessage.From = \"Shop <shop@example.com>\";\nMessage.To.Add(\"buyer@example.net\");\nMessage.Subject = \"Invoice 42\";\nMessage.Texts.Add(\"The invoice is attached.\");\nMessage.Attachments.Add(\"C:\\out\\invoice-42.pdf\");\n\nMail = New InternetMail();\nMail.Logon(Profile);\nMail.Send(Message);\nMail.Logoff();",
+      "availability": "Клиент, Сервер",
+      "see_also": [
+        "cls.InternetMail.Send",
+        "cls.InternetMailTexts",
+        "cls.InternetMailAttachments"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.InternetMailMessage.From",
+      "name_local": "From",
+      "name_en": "From",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "mail"
+      ],
+      "signature": "Message.From : string",
+      "description": "Отправитель: `адрес` или `Имя <адрес>`. Адрес же — отправитель в конверте.",
+      "syntax_block": "Value = Message.From;",
+      "parameters": "",
+      "return_descr": "Строка.",
+      "example": "Message.From = \"Shop <shop@example.com>\";",
+      "availability": "Клиент, Сервер",
+      "see_also": [
+        "cls.InternetMailMessage"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.InternetMailMessage.To",
+      "name_local": "To",
+      "name_en": "To",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "mail"
+      ],
+      "signature": "Message.To : Array",
+      "description": "Получатели — массив адресов, пополняемый через Add. Один и тот же адрес в To, Cc и Bcc получает письмо один раз.",
+      "syntax_block": "Value = Message.To;",
+      "parameters": "",
+      "return_descr": "Массив.",
+      "example": "Message.To.Add(\"buyer@example.net\");",
+      "availability": "Клиент, Сервер",
+      "see_also": [
+        "cls.InternetMailMessage"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.InternetMailMessage.Cc",
+      "name_local": "Cc",
+      "name_en": "Cc",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "mail"
+      ],
+      "signature": "Message.Cc : Array",
+      "description": "Копии — массив адресов, видимый всем получателям.",
+      "syntax_block": "Value = Message.Cc;",
+      "parameters": "",
+      "return_descr": "Массив.",
+      "example": "Message.Cc.Add(\"Accounts <accounts@example.net>\");",
+      "availability": "Клиент, Сервер",
+      "see_also": [
+        "cls.InternetMailMessage"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.InternetMailMessage.Bcc",
+      "name_local": "Bcc",
+      "name_en": "Bcc",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "mail"
+      ],
+      "signature": "Message.Bcc : Array",
+      "description": "Скрытые копии — массив адресов, только в конверте и никогда в заголовках: их не видит ни один получатель.",
+      "syntax_block": "Value = Message.Bcc;",
+      "parameters": "",
+      "return_descr": "Массив.",
+      "example": "Message.Bcc.Add(\"archive@example.com\");",
+      "availability": "Клиент, Сервер",
+      "see_also": [
+        "cls.InternetMailMessage"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.InternetMailMessage.Subject",
+      "name_local": "Subject",
+      "name_en": "Subject",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "mail"
+      ],
+      "signature": "Message.Subject : string",
+      "description": "Тема. Любой текст; перевод строки в нём отклоняется при отправке.",
+      "syntax_block": "Value = Message.Subject;",
+      "parameters": "",
+      "return_descr": "Строка.",
+      "example": "Message.Subject = \"Invoice 42\";",
+      "availability": "Клиент, Сервер",
+      "see_also": [
+        "cls.InternetMailMessage"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.InternetMailMessage.Texts",
+      "name_local": "Texts",
+      "name_en": "Texts",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "mail"
+      ],
+      "signature": "Message.Texts : InternetMailTexts",
+      "description": "Тексты — простые и HTML, добавляются через Add.",
+      "syntax_block": "Value = Message.Texts;",
+      "parameters": "",
+      "return_descr": "InternetMailTexts.",
+      "example": "Message.Texts.Add(\"The invoice is attached.\");",
+      "availability": "Клиент, Сервер",
+      "see_also": [
+        "cls.InternetMailMessage"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.InternetMailMessage.Attachments",
+      "name_local": "Attachments",
+      "name_en": "Attachments",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "mail"
+      ],
+      "signature": "Message.Attachments : InternetMailAttachments",
+      "description": "Вложенные файлы, добавляются через Add.",
+      "syntax_block": "Value = Message.Attachments;",
+      "parameters": "",
+      "return_descr": "InternetMailAttachments.",
+      "example": "Message.Attachments.Add(\"C:\\out\\invoice-42.pdf\");",
+      "availability": "Клиент, Сервер",
+      "see_also": [
+        "cls.InternetMailMessage"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.InternetMail",
+      "name_local": "InternetMail",
+      "name_en": "InternetMail",
+      "kind": "collection",
+      "class_id": 182498381585022239,
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "mail"
+      ],
+      "signature": "New InternetMail()",
+      "description": "Соединение с одним почтовым сервером. Logon(profile) открывает его и выполняет вход, Send(message) отправляет — столько писем, сколько нужно, — Logoff() прощается. Отпущенное без Logoff, соединение прощается само.\n\nТОЛЬКО ОТПРАВКА (SMTP): ни POP3, ни IMAP.\n\nОТКАЗ — ИСКЛЮЧЕНИЕ с именем сервера и причиной: имя не разрешается, порт никто не слушает, сервер молчит дольше отведённого, сертификат не доверен, вход отклонён — и собственные слова сервера с его кодом, когда он отклоняет команду.",
+      "syntax_block": "Mail = New InternetMail();\nMail.Logon(Profile);\nMail.Send(Message);\nMail.Logoff();",
+      "syntax_block_ves": "Mail = New InternetMail();\nMail.Logon(Profile);\nMail.Send(Message);\nMail.Logoff();",
+      "parameters": "",
+      "return_descr": "InternetMail.",
+      "example": "Profile = New InternetMailProfile();\nProfile.SMTPServerAddress = \"smtp.example.com\";\nProfile.SMTPUser = \"shop@example.com\";\nProfile.SMTPPassword = Password;\nProfile.SecureConnection = New SecureConnection();   // TLS on 465\n\nMessage = New InternetMailMessage();\nMessage.From = \"Shop <shop@example.com>\";\nMessage.To.Add(\"buyer@example.net\");\nMessage.Subject = \"Invoice 42\";\nMessage.Texts.Add(\"The invoice is attached.\");\nMessage.Attachments.Add(\"C:\\out\\invoice-42.pdf\");\n\nMail = New InternetMail();\nMail.Logon(Profile);\nMail.Send(Message);\nMail.Logoff();",
+      "availability": "Клиент, Сервер",
+      "see_also": [
+        "cls.InternetMail.Logon",
+        "cls.InternetMail.Send",
+        "cls.InternetMailProfile",
+        "cls.InternetMailMessage"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.InternetMail.Logon",
+      "name_local": "Logon",
+      "name_en": "Logon",
+      "kind": "procedure",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "mail"
+      ],
+      "signature": "Mail.Logon(profile : InternetMailProfile)",
+      "description": "Подключается к серверу профиля, здоровается, переводит соединение в TLS, если так сказано в профиле, и выполняет вход, если указан пользователь (AUTH PLAIN или LOGIN, если PLAIN не предложен). Уже открытое соединение сначала закрывается. Отказ называет сервер и причину: \"InternetMail: logging on to <server>:<port> failed: ...\".",
+      "syntax_block": "Mail.Logon(Profile);",
+      "parameters": "profile — сервер и кто входит.",
+      "return_descr": "",
+      "example": "Mail = New InternetMail();\nMail.Logon(Profile);",
+      "availability": "Клиент, Сервер",
+      "see_also": [
+        "cls.InternetMail",
+        "cls.InternetMailProfile"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.InternetMail.Send",
+      "name_local": "Send",
+      "name_en": "Send",
+      "kind": "procedure",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "mail"
+      ],
+      "signature": "Mail.Send(message : InternetMailMessage)",
+      "description": "Отправляет одно письмо — ВСЕМ ПОЛУЧАТЕЛЯМ ИЛИ НИКОМУ: получатель, которого сервер отклонил, прекращает отправку до того, как письмо ушло, и отказ называет этого получателя с кодом сервера. До Logon или после потери соединения вызов отклоняется: \"InternetMail: not logged on - Logon(profile) first\". Письмо больше, чем сервер принимает, отклоняется до отправки.",
+      "syntax_block": "Mail.Send(Message);",
+      "parameters": "message — что отправляется и кому.",
+      "return_descr": "",
+      "example": "Mail.Send(Message);",
+      "availability": "Клиент, Сервер",
+      "see_also": [
+        "cls.InternetMail",
+        "cls.InternetMailMessage"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.InternetMail.Logoff",
+      "name_local": "Logoff",
+      "name_en": "Logoff",
+      "kind": "procedure",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "mail"
+      ],
+      "signature": "Mail.Logoff()",
+      "description": "Прощается (QUIT) и закрывает соединение. Неотвечающего сервера не ждут дольше отведённого времени.",
+      "syntax_block": "Mail.Logoff();",
+      "parameters": "Нет.",
+      "return_descr": "",
+      "example": "Mail.Send(Message);\nMail.Logoff();",
+      "availability": "Клиент, Сервер",
+      "see_also": [
+        "cls.InternetMail"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.InternetMailTexts",
+      "name_local": "InternetMailTexts",
+      "name_en": "InternetMailTexts",
+      "kind": "collection",
+      "class_id": 314163799497104883,
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "mail"
+      ],
+      "signature": "Message.Texts : InternetMailTexts",
+      "description": "Тексты письма — считаются, читаются и обходятся как коллекция, Add добавляет ещё один. Простые тексты уходят одним, соединённые в порядке добавления, как и HTML; если есть оба вида, программа читателя показывает тот, который умеет. Скрипт его не создаёт: он есть у письма.",
+      "syntax_block": "Text = Message.Texts.Add(text, InternetMailTextType.HTML);",
+      "parameters": "",
+      "return_descr": "",
+      "example": "Message.Texts.Add(\"The invoice is attached.\");\nMessage.Texts.Add(\"<p>The invoice is attached.</p>\", InternetMailTextType.HTML);",
+      "availability": "Клиент, Сервер",
+      "see_also": [
+        "cls.InternetMailMessage.Texts",
+        "cls.InternetMailTexts.Add",
+        "enum.InternetMailTextType"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.InternetMailTexts.Add",
+      "name_local": "Add",
+      "name_en": "Add",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "mail"
+      ],
+      "signature": "Texts.Add(text : string [, textType : InternetMailTextType = PlainText]) : InternetMailText",
+      "description": "Добавляет текст, простой, если не сказано иное, и возвращает его.",
+      "syntax_block": "Text = Message.Texts.Add(text);",
+      "parameters": "text — текст.\ntextType — PlainText или HTML; без него — PlainText.",
+      "return_descr": "InternetMailText.",
+      "example": "Message.Texts.Add(\"<p>Hello</p>\", InternetMailTextType.HTML);",
+      "availability": "Клиент, Сервер",
+      "see_also": [
+        "cls.InternetMailTexts",
+        "enum.InternetMailTextType"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.InternetMailText",
+      "name_local": "InternetMailText",
+      "name_en": "InternetMailText",
+      "kind": "collection",
+      "class_id": 314173695101758782,
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "mail"
+      ],
+      "signature": "Message.Texts.Add(text) : InternetMailText",
+      "description": "Один текст письма, как его создал Texts.Add: Text и TextType, только для чтения.",
+      "syntax_block": "Text.Text   Text.TextType",
+      "parameters": "",
+      "return_descr": "",
+      "example": "foreach (Text in Message.Texts) {\n    Message(Text.TextType);\n}",
+      "availability": "Клиент, Сервер",
+      "see_also": [
+        "cls.InternetMailTexts"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.InternetMailText.Text",
+      "name_local": "Text",
+      "name_en": "Text",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "mail"
+      ],
+      "signature": "Text.Text : string",
+      "description": "Текст, как он был добавлен.",
+      "syntax_block": "Value = Text.Text;",
+      "parameters": "",
+      "return_descr": "Строка.",
+      "example": "Message(Text.Text);",
+      "availability": "Клиент, Сервер",
+      "see_also": [
+        "cls.InternetMailText"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.InternetMailText.TextType",
+      "name_local": "TextType",
+      "name_en": "TextType",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "mail"
+      ],
+      "signature": "Text.TextType : InternetMailTextType",
+      "description": "PlainText или HTML.",
+      "syntax_block": "Value = Text.TextType;",
+      "parameters": "",
+      "return_descr": "InternetMailTextType.",
+      "example": "if (Text.TextType == InternetMailTextType.HTML) { Message(\"HTML\"); }",
+      "availability": "Клиент, Сервер",
+      "see_also": [
+        "cls.InternetMailText",
+        "enum.InternetMailTextType"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.InternetMailAttachments",
+      "name_local": "InternetMailAttachments",
+      "name_en": "InternetMailAttachments",
+      "kind": "collection",
+      "class_id": 326636659405070542,
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "mail"
+      ],
+      "signature": "Message.Attachments : InternetMailAttachments",
+      "description": "Вложенные файлы письма — считаются, читаются и обходятся как коллекция, Add добавляет ещё один. Скрипт его не создаёт: он есть у письма.",
+      "syntax_block": "Attachment = Message.Attachments.Add(source, name);",
+      "parameters": "",
+      "return_descr": "",
+      "example": "Message.Attachments.Add(\"C:\\out\\invoice-42.pdf\");\nBytes = New BinaryData(\"Paid in full.\", TextEncoding.UTF8);\nMessage.Attachments.Add(Bytes, \"receipt.txt\");",
+      "availability": "Клиент, Сервер",
+      "see_also": [
+        "cls.InternetMailMessage.Attachments",
+        "cls.InternetMailAttachments.Add"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.InternetMailAttachments.Add",
+      "name_local": "Add",
+      "name_en": "Add",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "mail"
+      ],
+      "signature": "Attachments.Add(source : BinaryData | string [, name : string]) : InternetMailAttachment",
+      "description": "Вкладывает байты или файл. ФАЙЛ ЧИТАЕТСЯ СРАЗУ, целиком: письмо несёт то, что было в нём при добавлении; нечитаемый файл отклоняется с его именем. Без имени файл идёт под своим, байты — как \"attachment\". Тип, о котором узнаёт получатель, — по расширению имени (pdf, xlsx, docx, zip, xml, png...), иначе — байты.",
+      "syntax_block": "Attachment = Message.Attachments.Add(source);",
+      "parameters": "source — BinaryData или имя файла.\nname — имя, которое видит получатель.",
+      "return_descr": "InternetMailAttachment.",
+      "example": "Message.Attachments.Add(\"C:\\out\\invoice-42.pdf\");",
+      "availability": "Клиент, Сервер",
+      "see_also": [
+        "cls.InternetMailAttachments",
+        "cls.BinaryData"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.InternetMailAttachment",
+      "name_local": "InternetMailAttachment",
+      "name_en": "InternetMailAttachment",
+      "kind": "collection",
+      "class_id": 326639957939955175,
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "mail"
+      ],
+      "signature": "Message.Attachments.Add(source) : InternetMailAttachment",
+      "description": "Один вложенный файл: Name (его можно изменить) и Data.",
+      "syntax_block": "Attachment.Name   Attachment.Data",
+      "parameters": "",
+      "return_descr": "",
+      "example": "Attachment = Message.Attachments.Add(path);\nAttachment.Name = \"invoice.pdf\";",
+      "availability": "Клиент, Сервер",
+      "see_also": [
+        "cls.InternetMailAttachments"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.InternetMailAttachment.Name",
+      "name_local": "Name",
+      "name_en": "Name",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "mail"
+      ],
+      "signature": "Attachment.Name : string",
+      "description": "Имя, которое видит получатель; расширение задаёт тип.",
+      "syntax_block": "Attachment.Name = name;",
+      "parameters": "",
+      "return_descr": "Строка.",
+      "example": "Attachment.Name = \"invoice.pdf\";",
+      "availability": "Клиент, Сервер",
+      "see_also": [
+        "cls.InternetMailAttachment"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.InternetMailAttachment.Data",
+      "name_local": "Data",
+      "name_en": "Data",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "mail"
+      ],
+      "signature": "Attachment.Data : BinaryData",
+      "description": "Байты, какими они были при добавлении. Только для чтения.",
+      "syntax_block": "Bytes = Attachment.Data;",
+      "parameters": "",
+      "return_descr": "BinaryData.",
+      "example": "Message(Attachment.Data.Size());",
+      "availability": "Клиент, Сервер",
+      "see_also": [
+        "cls.InternetMailAttachment",
+        "cls.BinaryData"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.InternetMailTextType",
+      "name_local": "InternetMailTextType",
+      "name_en": "InternetMailTextType",
+      "kind": "enum_type",
+      "class_id": 379713556117057949,
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "mail"
+      ],
+      "signature": "InternetMailTextType.PlainText, .HTML",
+      "description": "Чем является текст письма: PlainText или HTML, который программа читателя показывает как страницу.",
+      "syntax_block": "Message.Texts.Add(text, InternetMailTextType.HTML);",
+      "parameters": "",
+      "return_descr": "",
+      "example": "Message.Texts.Add(\"<p>Hello</p>\", InternetMailTextType.HTML);",
+      "availability": "Клиент, Сервер",
+      "see_also": [
+        "cls.InternetMailTexts.Add"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.InternetMailTextType.PlainText",
+      "name_local": "PlainText",
+      "name_en": "PlainText",
+      "kind": "system_enum",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "mail"
+      ],
+      "signature": "InternetMailTextType.PlainText",
+      "description": "Простой текст. По умолчанию.",
+      "syntax_block": "Message.Texts.Add(text, InternetMailTextType.PlainText);",
+      "parameters": "",
+      "return_descr": "InternetMailTextType.",
+      "example": "Message.Texts.Add(text, InternetMailTextType.PlainText);",
+      "availability": "Клиент, Сервер",
+      "see_also": [
+        "enum.InternetMailTextType"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.InternetMailTextType.HTML",
+      "name_local": "HTML",
+      "name_en": "HTML",
+      "kind": "system_enum",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "mail"
+      ],
+      "signature": "InternetMailTextType.HTML",
+      "description": "HTML, показывается как страница.",
+      "syntax_block": "Message.Texts.Add(text, InternetMailTextType.HTML);",
+      "parameters": "",
+      "return_descr": "InternetMailTextType.",
+      "example": "Message.Texts.Add(text, InternetMailTextType.HTML);",
+      "availability": "Клиент, Сервер",
+      "see_also": [
+        "enum.InternetMailTextType"
+      ],
+      "reviewed": false
+    }
+  ]
+}

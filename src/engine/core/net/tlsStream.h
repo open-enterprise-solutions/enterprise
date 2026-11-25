@@ -70,6 +70,9 @@ public:
 	// After a handshake that failed: why the server's certificate was not taken (MBEDTLS_X509_BADCERT_*), 0 — it was,
 	// or the failure was not about it.
 	std::uint32_t GetVerification() const;
+	// …and the failure told apart, for a client of `host`: ::Verification (a chain nobody vouches for), ::Hostname
+	// (another host's certificate), ::Handshake (no TLS, or not this TLS); why, in a sentence, into `why`.
+	ibHttpClientError GetRefusal(const std::string& host, const std::error_code& error, std::string& why) const;
 
 	virtual void Handshake(std::function<void(const std::error_code& error)> done) override;
 	virtual void ReadSome(char* buffer, std::size_t size, ibDone done) override;

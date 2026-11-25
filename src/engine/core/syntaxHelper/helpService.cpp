@@ -20,7 +20,6 @@ namespace {
 // and the service publishes an empty corpus snapshot.
 ibString ResolvePlatformDir(const ibString& locale)
 {
-	const std::filesystem::path exeDir = ibPathOf(ibExecutablePath()).parent_path();
 	const ibString programDir = ibProgramFolder();
 
 	auto hasLocale = [&](const ibString& root) -> bool {
@@ -37,25 +36,17 @@ ibString ResolvePlatformDir(const ibString& locale)
 #if defined(__IBOSX__)
 	if (!hasLocale(platformDir)) {
 		// Inside the bundle (Contents/Resources), which is not the program folder.
+		const std::filesystem::path exeDir = ibPathOf(ibExecutablePath()).parent_path();
 		const ibString c = ibString((exeDir.parent_path() / "Resources" / "help").wstring());
 		if (hasLocale(c)) platformDir = c;
 	}
 #endif
 
-	// Dev fallback: walk up from <exe> looking for syntaxHelper.
-	// Typical layouts:
-	//   bin/Win32/Debug/                 3 walk-ups to repo root
-	//   build/bin/                       2 walk-ups
-	//   build/src/engine/X/X.app/...     varies (macOS)
-	// Cap at 6 levels — bounded, no infinite loop on weird paths.
+	// Dev fallback: the source tree's syntaxHelper, found walking up from the executable as lang and fonts are.
 	if (!hasLocale(platformDir)) {
-		std::filesystem::path walk = exeDir;
-		for (int i = 0; i < 6; ++i) {
-			const ibString candidate = ibString((walk / "syntaxHelper").wstring());
-			if (hasLocale(candidate)) { platformDir = candidate; break; }
-			if (!walk.has_relative_path()) break;   // the root: no folder left to leave
-			walk = walk.parent_path();
-		}
+		const ibString sources = ibProgramSubfolder(ibT("syntaxHelper"));
+		if (!sources.IsEmpty() && hasLocale(sources))
+			platformDir = sources;
 	}
 
 	// Last resort: <cwd>/syntaxHelper — running from repo root.

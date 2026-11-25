@@ -179,6 +179,13 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
 - **A form's sheet has nothing at its sides.** A spreadsheet on a form — a report's result — is drawn without the
   rows' numbers and the columns' letters round it, in the browser as on the desktop, where *Show headers* in its menu
   brings them back. A document's sheet and a template being edited keep them.
+- **A sheet is saved as PDF.** *Save as* offers *PDF document*, and the MCP sheet tools write one by its name: the
+  pages printing lays out — A4, the same margins, bands of rows and of columns, a page break where the sheet asks for
+  one and never through a merged cell — with the fills, the text as each cell places it (wrapped, cut with an
+  ellipsis, run out over empty neighbours, turned on its side) and the rules. It is written on the server, in the
+  server's fonts: the face a cell names, else the one its metrics were copied for — the program ships Liberation
+  Sans, Serif and Mono, Arial's, Times New Roman's and Courier New's twins — so lines break where they break on screen.
+  The text stays text: a reader finds and copies it.
 
 ## Script language
 
@@ -261,6 +268,16 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
   write them as hex and read them, `Base64String(data)` and `Base64Value(text)` as base64. `String(data)`
   and `New BinaryData(text)` stay base64, and now skip line breaks. Text that is not base64 or hex is
   refused, not read as no bytes.
+- **ZIP archives: `ZipFileWriter`, `ZipFileReader`, `ZipFileEntry`.** `New ZipFileWriter(file)`, then `Add` a file, a
+  folder or a mask (`C:\out\*.pdf`) — keeping the name alone, the path below the folder or the whole path
+  (`ZIPStorePathMode`), a folder's folders too when asked (`ZIPSubDirProcessingMode`) — and `Write`. `New
+  ZipFileReader(file or BinaryData)` lists `Items` (name, extension, path, size) and writes them out with `Extract` and
+  `ExtractAll`. An entry whose name leads out of the folder it is extracted to is refused, not followed. No passwords.
+- **Mail: `InternetMailProfile`, `InternetMailMessage`, `InternetMail`.** A profile names the server, the user and the
+  password, and a `SecureConnection` for TLS — from the first byte on port 465, STARTTLS on any other, refused when the
+  server does not offer it. A message has `From`, `To`, `Cc`, `Bcc` (arrays of addresses), `Subject`,
+  `Texts.Add(text, InternetMailTextType)` and `Attachments.Add(BinaryData or a file, name)`. `Logon`, `Send`, `Logoff`
+  send it over SMTP as MIME in UTF-8: to every recipient or, when the server refuses one, to none. Sending only.
 - **`COMObject` compiles everywhere and is complete on Windows.** `New COMObject(progId)` compiles on
   macOS and Linux too, and is refused there when it runs ("COM objects are available on Windows only").
   On Windows it works on the application server's threads as well as in the client; arrays (an `Array` with

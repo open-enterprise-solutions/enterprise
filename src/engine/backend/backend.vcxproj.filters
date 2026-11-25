@@ -606,6 +606,9 @@
     <ClInclude Include="system\value\valueSecureConnection.h">
       <Filter>system\value</Filter>
     </ClInclude>
+    <ClInclude Include="system\value\valueMail.h">
+      <Filter>system\value</Filter>
+    </ClInclude>
     <ClInclude Include="system\value\valueGuid.h">
       <Filter>system\value</Filter>
     </ClInclude>
@@ -613,6 +616,9 @@
       <Filter>system\value</Filter>
     </ClInclude>
     <ClInclude Include="system\value\valueXml.h">
+      <Filter>system\value</Filter>
+    </ClInclude>
+    <ClInclude Include="system\value\valueZip.h">
       <Filter>system\value</Filter>
     </ClInclude>
     <ClInclude Include="system\value\valueJob.h">
@@ -943,6 +949,9 @@
       <Filter>sheetFormat</Filter>
     </ClInclude>
     <ClInclude Include="sheetFormat\sheetFormatDocx.h">
+      <Filter>sheetFormat</Filter>
+    </ClInclude>
+    <ClInclude Include="sheetFormat\sheetFormatPdf.h">
       <Filter>sheetFormat</Filter>
     </ClInclude>
     <ClInclude Include="utils\passwordHash.hpp">
@@ -1865,6 +1874,9 @@
     <ClCompile Include="system\value\valueSecureConnection.cpp">
       <Filter>system\value</Filter>
     </ClCompile>
+    <ClCompile Include="system\value\valueMail.cpp">
+      <Filter>system\value</Filter>
+    </ClCompile>
     <ClCompile Include="system\value\valueGuid.cpp">
       <Filter>system\value</Filter>
     </ClCompile>
@@ -1872,6 +1884,9 @@
       <Filter>system\value</Filter>
     </ClCompile>
     <ClCompile Include="system\value\valueXml.cpp">
+      <Filter>system\value</Filter>
+    </ClCompile>
+    <ClCompile Include="system\value\valueZip.cpp">
       <Filter>system\value</Filter>
     </ClCompile>
     <ClCompile Include="system\value\valueJob.cpp">
@@ -2261,6 +2276,9 @@
       <Filter>sheetFormat</Filter>
     </ClCompile>
     <ClCompile Include="sheetFormat\sheetFormatDocx.cpp">
+      <Filter>sheetFormat</Filter>
+    </ClCompile>
+    <ClCompile Include="sheetFormat\sheetFormatPdf.cpp">
       <Filter>sheetFormat</Filter>
     </ClCompile>
     <ClCompile Include="sheetFormat\sheetFormatXlsxRead.cpp">

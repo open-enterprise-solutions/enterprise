@@ -1,0 +1,541 @@
+{
+  "format": "OES-HELP-1.0",
+  "schema_version": 1,
+  "locale": "ru",
+  "entries": [
+    {
+      "id": "cls.ZipFileWriter",
+      "name_local": "ZipFileWriter",
+      "name_en": "ZipFileWriter",
+      "kind": "collection",
+      "class_id": 155302561365560639,
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "zip"
+      ],
+      "signature": "New ZipFileWriter(fileName : string)",
+      "description": "Файлы, складываемые в ZIP-архив. Писатель создаётся с файлом архива, Add называет, что в него кладётся, Write упаковывает — пакет обмена, комплект печатных форм для отправки, папка выгрузки.\n\nДО Write НИЧЕГО НЕ ЧИТАЕТСЯ И НЕ ПИШЕТСЯ: создание писателя не трогает файлов, а Add лишь заносит пути в список. Write читает каждый файл таким, каким застаёт его в этот момент, и заменяет файл архива целиком.\n\nАрхив — тот же, в который упакованы книга и резервная копия: записи сжаты deflate, имена в UTF-8, ZIP64 после четырёх гигабайт — его читают Windows, любой распаковщик и ZipFileReader. Пароля и шифрования нет.\n\nБез имени файла создание отклоняется: \"ZipFileWriter: the archive needs a file name\".",
+      "syntax_block": "Zip = New ZipFileWriter(fileName);\nZip.Add(path);\nZip.Write();",
+      "parameters": "fileName — архив, который нужно записать. Его создаёт Write, а если он есть — заменяет.",
+      "return_descr": "ZipFileWriter.",
+      "example": "Zip = New ZipFileWriter(\"C:\\out\\invoices.zip\");\nZip.Add(\"C:\\out\\*.pdf\");\nZip.Add(\"C:\\out\\register.xlsx\");\nZip.Write();",
+      "availability": "Клиент, Сервер",
+      "see_also": [
+        "cls.ZipFileWriter.Add",
+        "cls.ZipFileWriter.Write",
+        "cls.ZipFileReader",
+        "enum.ZIPStorePathMode"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.ZipFileWriter.Add",
+      "name_local": "Add",
+      "name_en": "Add",
+      "kind": "procedure",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "zip"
+      ],
+      "signature": "Zip.Add(path : string [, storePathMode : ZIPStorePathMode = DontStorePath [, subDirProcessingMode : ZIPSubDirProcessingMode = DontProcess]])",
+      "description": "Заносит файлы в список, который упакует Write. Путь называет ФАЙЛ; ПАПКУ — берутся её файлы (с ZIPSubDirProcessingMode.ProcessRecursively — и файлы её папок); или МАСКУ в последней части — `C:\\out\\*.pdf` — файлы этой папки, подходящие под неё. Файлы, взятые одним Add, идут в порядке имён, поэтому одна и та же папка даёт один и тот же архив.\n\nstorePathMode говорит, что из пути архив хранит как имя внутри: только имя (DontStorePath, по умолчанию), путь ниже добавленной папки (StoreRelativePath — раскладка папки сохраняется) или весь путь без диска и корня (StoreFullPath). Папки внутри разделяются `/` в любой системе.\n\nПУТЬ, ЗА КОТОРЫМ НИЧЕГО НЕТ, ОТКЛОНЯЕТСЯ — \"ZipFileWriter: there is no file or folder '<path>'\", — потому что архив без файла о нём молчит. Маска, под которую ничего не подошло, — не отказ, а ответ.\n\nЗдесь ничего не читается: файл, изменённый между Add и Write, попадает таким, каким его застанет Write.",
+      "syntax_block": "Zip.Add(path, ZIPStorePathMode.StoreRelativePath, ZIPSubDirProcessingMode.ProcessRecursively);",
+      "parameters": "path — файл, папка или папка с маской (`*` и `?`) в последней части.\nstorePathMode — что из пути хранится как имя внутри; без него — DontStorePath.\nsubDirProcessingMode — добавляются ли с папкой её папки; без него — DontProcess.",
+      "return_descr": "",
+      "example": "Zip = New ZipFileWriter(\"C:\\out\\upload.zip\");\nZip.Add(\"C:\\upload\", ZIPStorePathMode.StoreRelativePath, ZIPSubDirProcessingMode.ProcessRecursively);\nZip.Write();   // upload\\docs\\a.pdf goes in as docs/a.pdf",
+      "availability": "Клиент, Сервер",
+      "see_also": [
+        "cls.ZipFileWriter",
+        "cls.ZipFileWriter.Write",
+        "enum.ZIPStorePathMode",
+        "enum.ZIPSubDirProcessingMode"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.ZipFileWriter.Write",
+      "name_local": "Write",
+      "name_en": "Write",
+      "kind": "procedure",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "zip"
+      ],
+      "signature": "Zip.Write()",
+      "description": "Упаковывает файлы, перечисленные Add, в порядке добавления в файл писателя — архив целиком или никак. Каждый файл читается таким, каким его застаёт Write. Архив, записываемый в папку, которую он же упаковывает, пропускается: второй запуск не упакует архив первого сам в себя.\n\nПеречисленный файл, которого уже нет, отклоняется с его именем; так же — архив, который не удаётся записать: \"ZipFileWriter: cannot open the file '<path>' for writing\", \"ZipFileWriter: writing to the file '<path>' failed\". Файл закрывается, и его ответ читается до возврата из Write — полный диск сообщается здесь, а не теряется.",
+      "syntax_block": "Zip.Write();",
+      "parameters": "Нет.",
+      "return_descr": "",
+      "example": "Zip = New ZipFileWriter(GetTempFileName());\nZip.Add(\"C:\\out\\act.pdf\");\nZip.Write();",
+      "availability": "Клиент, Сервер",
+      "see_also": [
+        "cls.ZipFileWriter",
+        "cls.ZipFileWriter.Add",
+        "cls.ZipFileReader"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.ZipFileReader",
+      "name_local": "ZipFileReader",
+      "name_en": "ZipFileReader",
+      "kind": "collection",
+      "class_id": 150543875039609556,
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "zip"
+      ],
+      "signature": "New ZipFileReader(source : string | BinaryData)",
+      "description": "Архив, открытый для чтения, — файл или его байты в BinaryData (вложение, тело HTTP-ответа). Открытие прочитывает его один раз, чтобы перечислить записи в Items; Extract и ExtractAll читают его снова и пишут файлы.\n\nМежду вызовами хранится список, а не содержимое, и файл не держится открытым: архив любого размера открывается в памяти его самой большой записи.\n\nАРХИВ, КОТОРЫЙ НЕ ЧИТАЕТСЯ, ОТКЛОНЯЕТСЯ ПРИ ОТКРЫТИИ, там, где его называет скрипт: \"ZipFileReader: '<path>' is not a ZIP archive\"; запись повреждённая, зашифрованная или сжатая не методом stored/deflated отклоняется с её именем. Архив без записей открывается пустым.\n\n⚠ ЗАПИСЬ ПИШЕТСЯ ВНУТРИ ПАПКИ, В КОТОРУЮ ИЗВЛЕКАЕТСЯ, ИЛИ НИКАК: имя вроде `../../run.bat` или `/etc/passwd` отклоняется — \"ZipFileReader: the entry '<name>' names a place outside the folder it is extracted to\" — по такому имени не пишут и молча его не укорачивают.",
+      "syntax_block": "Reader = New ZipFileReader(source);\nforeach (Item in Reader.Items) {\n    Message(Item.FullName);\n}\nReader.ExtractAll(folder);",
+      "syntax_block_ves": "Reader = New ZipFileReader(source);\nFor Each Item In Reader.Items Do\n    Message(Item.FullName);\nEndDo;\nReader.ExtractAll(folder);",
+      "parameters": "source — файл архива или его байты в BinaryData.",
+      "return_descr": "ZipFileReader.",
+      "example": "Reader = New ZipFileReader(Response.GetBodyAsBinaryData());\nforeach (Item in Reader.Items) {\n    if (Item.Extension == \"xml\") {\n        Reader.Extract(Item, \"C:\\in\");\n    }\n}\nReader.Close();",
+      "availability": "Клиент, Сервер",
+      "see_also": [
+        "cls.ZipFileReader.Items",
+        "cls.ZipFileReader.Extract",
+        "cls.ZipFileReader.ExtractAll",
+        "cls.ZipFileEntry",
+        "cls.ZipFileWriter",
+        "cls.BinaryData"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.ZipFileReader.Items",
+      "name_local": "Items",
+      "name_en": "Items",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "zip"
+      ],
+      "signature": "Reader.Items : Array",
+      "description": "Записи архива — массив ZipFileEntry в том порядке, в каком их хранит архив, составленный один раз при открытии. Собственная запись папки тоже в списке (её FullName оканчивается на `/`). Только для чтения; остаётся доступным после Close.",
+      "syntax_block": "Array = Reader.Items;",
+      "parameters": "",
+      "return_descr": "Массив.",
+      "example": "Message(\"entries: \" + Reader.Items.Count());",
+      "availability": "Клиент, Сервер",
+      "see_also": [
+        "cls.ZipFileReader",
+        "cls.ZipFileEntry"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.ZipFileReader.Extract",
+      "name_local": "Extract",
+      "name_en": "Extract",
+      "kind": "procedure",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "zip"
+      ],
+      "signature": "Reader.Extract(item : ZipFileEntry | string, folder : string)",
+      "description": "Пишет одну запись в папку, по её пути внутри: `docs/a.pdf` ложится в `<folder>\\docs\\a.pdf`, папки создаются по необходимости, существующий файл заменяется. Запись — элемент Items или её FullName.\n\nЗапись, которой в архиве нет, отклоняется: \"ZipFileReader: there is no entry '<name>' in the archive\"; так же — имя, указывающее за пределы папки, и закрытый читатель.",
+      "syntax_block": "Reader.Extract(Item, folder);",
+      "parameters": "item — запись из Items или её FullName.\nfolder — куда её записать.",
+      "return_descr": "",
+      "example": "Reader.Extract(\"invoice.xml\", TempFolder);",
+      "availability": "Клиент, Сервер",
+      "see_also": [
+        "cls.ZipFileReader",
+        "cls.ZipFileReader.ExtractAll",
+        "cls.ZipFileReader.Items"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.ZipFileReader.ExtractAll",
+      "name_local": "ExtractAll",
+      "name_en": "ExtractAll",
+      "kind": "procedure",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "zip"
+      ],
+      "signature": "Reader.ExtractAll(folder : string)",
+      "description": "Пишет все записи в папку в порядке архива, каждую по её пути внутри. Запись, имя которой указывает за пределы папки, останавливает извлечение отказом; записи до неё уже записаны.",
+      "syntax_block": "Reader.ExtractAll(folder);",
+      "parameters": "folder — куда их записать; создаётся, если её нет.",
+      "return_descr": "",
+      "example": "Reader = New ZipFileReader(\"C:\\in\\package.zip\");\nReader.ExtractAll(\"C:\\in\\package\");",
+      "availability": "Клиент, Сервер",
+      "see_also": [
+        "cls.ZipFileReader",
+        "cls.ZipFileReader.Extract"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.ZipFileReader.Close",
+      "name_local": "Close",
+      "name_en": "Close",
+      "kind": "procedure",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "zip"
+      ],
+      "signature": "Reader.Close()",
+      "description": "Отпускает байты, которые держит архив, открытый из BinaryData. Items остаётся доступным; Extract и ExtractAll после Close отклоняются: \"ZipFileReader: the archive is closed\". Файл между вызовами открытым не держится, поэтому читателю из файла Close ради файла не нужен.",
+      "syntax_block": "Reader.Close();",
+      "parameters": "Нет.",
+      "return_descr": "",
+      "example": "Reader.ExtractAll(folder);\nReader.Close();",
+      "availability": "Клиент, Сервер",
+      "see_also": [
+        "cls.ZipFileReader"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.ZipFileEntry",
+      "name_local": "ZipFileEntry",
+      "name_en": "ZipFileEntry",
+      "kind": "collection",
+      "class_id": 316644897628820409,
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "zip"
+      ],
+      "signature": "Reader.Items : Array of ZipFileEntry",
+      "description": "Один файл архива, как его перечисляет ZipFileReader.Items: имя внутри (`docs/report.pdf`), разобранное на части, и размер после распаковки. СКРИПТ ЕГО НЕ СОЗДАЁТ — его выдаёт читатель. Все свойства только для чтения.",
+      "syntax_block": "Item = Reader.Items[0];\nItem.Name   Item.Path   Item.UncompressedSize",
+      "parameters": "",
+      "return_descr": "",
+      "example": "foreach (Item in Reader.Items) {\n    Message(Item.Path + \" | \" + Item.Name + \" | \" + Item.UncompressedSize);\n}",
+      "availability": "Клиент, Сервер",
+      "see_also": [
+        "cls.ZipFileReader",
+        "cls.ZipFileReader.Items",
+        "cls.ZipFileEntry.FullName"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.ZipFileEntry.Name",
+      "name_local": "Name",
+      "name_en": "Name",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "zip"
+      ],
+      "signature": "Item.Name : string",
+      "description": "Имя с расширением — то, что после последнего `/`: `report.final.pdf` у `docs/report.final.pdf`. Запись папки называется именем папки.",
+      "syntax_block": "Value = Item.Name;",
+      "parameters": "",
+      "return_descr": "Строка.",
+      "example": "Message(Item.Name);   // report.final.pdf",
+      "availability": "Клиент, Сервер",
+      "see_also": [
+        "cls.ZipFileEntry",
+        "cls.ZipFileEntry.BaseName",
+        "cls.ZipFileEntry.Extension",
+        "cls.ZipFileEntry.FullName"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.ZipFileEntry.BaseName",
+      "name_local": "BaseName",
+      "name_en": "BaseName",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "zip"
+      ],
+      "signature": "Item.BaseName : string",
+      "description": "Имя без расширения: `report.final`. У имени, начинающегося с точки (`.profile`), расширения нет.",
+      "syntax_block": "Value = Item.BaseName;",
+      "parameters": "",
+      "return_descr": "Строка.",
+      "example": "Message(Item.BaseName);   // report.final",
+      "availability": "Клиент, Сервер",
+      "see_also": [
+        "cls.ZipFileEntry",
+        "cls.ZipFileEntry.Name",
+        "cls.ZipFileEntry.Extension",
+        "cls.ZipFileEntry.FullName"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.ZipFileEntry.Extension",
+      "name_local": "Extension",
+      "name_en": "Extension",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "zip"
+      ],
+      "signature": "Item.Extension : string",
+      "description": "То, что после последней точки имени, без точки: `pdf`. Пусто, если её нет.",
+      "syntax_block": "Value = Item.Extension;",
+      "parameters": "",
+      "return_descr": "Строка.",
+      "example": "if (Item.Extension == \"xml\") { Reader.Extract(Item, folder); }",
+      "availability": "Клиент, Сервер",
+      "see_also": [
+        "cls.ZipFileEntry",
+        "cls.ZipFileEntry.Name",
+        "cls.ZipFileEntry.BaseName",
+        "cls.ZipFileEntry.FullName"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.ZipFileEntry.FullName",
+      "name_local": "FullName",
+      "name_en": "FullName",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "zip"
+      ],
+      "signature": "Item.FullName : string",
+      "description": "Имя, как его хранит архив, папки разделены `/`: `docs/report.final.pdf`. Это имя принимает Extract.",
+      "syntax_block": "Value = Item.FullName;",
+      "parameters": "",
+      "return_descr": "Строка.",
+      "example": "Reader.Extract(Item.FullName, folder);",
+      "availability": "Клиент, Сервер",
+      "see_also": [
+        "cls.ZipFileEntry",
+        "cls.ZipFileEntry.Name",
+        "cls.ZipFileEntry.BaseName",
+        "cls.ZipFileEntry.Extension"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.ZipFileEntry.Path",
+      "name_local": "Path",
+      "name_en": "Path",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "zip"
+      ],
+      "signature": "Item.Path : string",
+      "description": "Папки перед именем, с `/` в конце: `docs/`. Пусто у записи в корне архива.",
+      "syntax_block": "Value = Item.Path;",
+      "parameters": "",
+      "return_descr": "Строка.",
+      "example": "Message(Item.Path);   // docs/",
+      "availability": "Клиент, Сервер",
+      "see_also": [
+        "cls.ZipFileEntry",
+        "cls.ZipFileEntry.Name",
+        "cls.ZipFileEntry.BaseName",
+        "cls.ZipFileEntry.Extension"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.ZipFileEntry.UncompressedSize",
+      "name_local": "UncompressedSize",
+      "name_en": "UncompressedSize",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "zip"
+      ],
+      "signature": "Item.UncompressedSize : number",
+      "description": "Сколько байт даёт запись после распаковки.",
+      "syntax_block": "Value = Item.UncompressedSize;",
+      "parameters": "",
+      "return_descr": "Число.",
+      "example": "Message(Item.UncompressedSize);",
+      "availability": "Клиент, Сервер",
+      "see_also": [
+        "cls.ZipFileEntry",
+        "cls.ZipFileEntry.Name",
+        "cls.ZipFileEntry.BaseName",
+        "cls.ZipFileEntry.Extension"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.ZIPStorePathMode",
+      "name_local": "ZIPStorePathMode",
+      "name_en": "ZIPStorePathMode",
+      "kind": "enum_type",
+      "class_id": 424166248778404563,
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "zip"
+      ],
+      "signature": "ZIPStorePathMode.DontStorePath, .StoreRelativePath, .StoreFullPath",
+      "description": "Какую часть пути файла ZipFileWriter.Add хранит как его имя внутри архива. DontStorePath, по умолчанию, хранит только имя — файлы из разных папок лежат рядом. StoreRelativePath хранит путь ниже добавленной папки — её раскладку. StoreFullPath хранит весь путь без диска и корня — откуда пришёл каждый файл.",
+      "syntax_block": "Zip.Add(path, ZIPStorePathMode.StoreRelativePath);",
+      "parameters": "",
+      "return_descr": "",
+      "example": "Zip.Add(\"C:\\upload\", ZIPStorePathMode.StoreRelativePath, ZIPSubDirProcessingMode.ProcessRecursively);",
+      "availability": "Клиент, Сервер",
+      "see_also": [
+        "cls.ZipFileWriter.Add",
+        "enum.ZIPSubDirProcessingMode"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.ZIPStorePathMode.DontStorePath",
+      "name_local": "DontStorePath",
+      "name_en": "DontStorePath",
+      "kind": "system_enum",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "zip"
+      ],
+      "signature": "ZIPStorePathMode.DontStorePath",
+      "description": "Только имя: `C:\\out\\docs\\a.pdf` попадает как `a.pdf`. По умолчанию.",
+      "syntax_block": "Zip.Add(path, ZIPStorePathMode.DontStorePath);",
+      "parameters": "",
+      "return_descr": "ZIPStorePathMode.",
+      "example": "Zip.Add(path, ZIPStorePathMode.DontStorePath);",
+      "availability": "Клиент, Сервер",
+      "see_also": [
+        "enum.ZIPStorePathMode",
+        "cls.ZipFileWriter.Add"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.ZIPStorePathMode.StoreRelativePath",
+      "name_local": "StoreRelativePath",
+      "name_en": "StoreRelativePath",
+      "kind": "system_enum",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "zip"
+      ],
+      "signature": "ZIPStorePathMode.StoreRelativePath",
+      "description": "Путь ниже добавленной папки: при добавленной `C:\\out` файл `C:\\out\\docs\\a.pdf` попадает как `docs/a.pdf`.",
+      "syntax_block": "Zip.Add(\"C:\\out\", ZIPStorePathMode.StoreRelativePath, ZIPSubDirProcessingMode.ProcessRecursively);",
+      "parameters": "",
+      "return_descr": "ZIPStorePathMode.",
+      "example": "Zip.Add(\"C:\\out\", ZIPStorePathMode.StoreRelativePath, ZIPSubDirProcessingMode.ProcessRecursively);",
+      "availability": "Клиент, Сервер",
+      "see_also": [
+        "enum.ZIPStorePathMode",
+        "cls.ZipFileWriter.Add"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.ZIPStorePathMode.StoreFullPath",
+      "name_local": "StoreFullPath",
+      "name_en": "StoreFullPath",
+      "kind": "system_enum",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "zip"
+      ],
+      "signature": "ZIPStorePathMode.StoreFullPath",
+      "description": "Весь путь без диска и корня: `C:\\out\\docs\\a.pdf` попадает как `out/docs/a.pdf`.",
+      "syntax_block": "Zip.Add(path, ZIPStorePathMode.StoreFullPath);",
+      "parameters": "",
+      "return_descr": "ZIPStorePathMode.",
+      "example": "Zip.Add(path, ZIPStorePathMode.StoreFullPath);",
+      "availability": "Клиент, Сервер",
+      "see_also": [
+        "enum.ZIPStorePathMode",
+        "cls.ZipFileWriter.Add"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.ZIPSubDirProcessingMode",
+      "name_local": "ZIPSubDirProcessingMode",
+      "name_en": "ZIPSubDirProcessingMode",
+      "kind": "enum_type",
+      "class_id": 363613944415805831,
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "zip"
+      ],
+      "signature": "ZIPSubDirProcessingMode.DontProcess, .ProcessRecursively",
+      "description": "Берёт ли ZipFileWriter.Add вместе с папкой её папки. DontProcess, по умолчанию: добавленная папка — это её файлы. ProcessRecursively: и файлы её папок на любой глубине.",
+      "syntax_block": "Zip.Add(folder, ZIPStorePathMode.StoreRelativePath, ZIPSubDirProcessingMode.ProcessRecursively);",
+      "parameters": "",
+      "return_descr": "",
+      "example": "Zip.Add(\"C:\\upload\", ZIPStorePathMode.StoreRelativePath, ZIPSubDirProcessingMode.ProcessRecursively);",
+      "availability": "Клиент, Сервер",
+      "see_also": [
+        "cls.ZipFileWriter.Add",
+        "enum.ZIPStorePathMode"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.ZIPSubDirProcessingMode.DontProcess",
+      "name_local": "DontProcess",
+      "name_en": "DontProcess",
+      "kind": "system_enum",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "zip"
+      ],
+      "signature": "ZIPSubDirProcessingMode.DontProcess",
+      "description": "Добавленная папка — это её файлы; в её папки не заходят. По умолчанию.",
+      "syntax_block": "Zip.Add(folder, ZIPStorePathMode.DontStorePath, ZIPSubDirProcessingMode.DontProcess);",
+      "parameters": "",
+      "return_descr": "ZIPSubDirProcessingMode.",
+      "example": "Zip.Add(folder, ZIPStorePathMode.DontStorePath, ZIPSubDirProcessingMode.DontProcess);",
+      "availability": "Клиент, Сервер",
+      "see_also": [
+        "enum.ZIPSubDirProcessingMode",
+        "cls.ZipFileWriter.Add"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.ZIPSubDirProcessingMode.ProcessRecursively",
+      "name_local": "ProcessRecursively",
+      "name_en": "ProcessRecursively",
+      "kind": "system_enum",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "zip"
+      ],
+      "signature": "ZIPSubDirProcessingMode.ProcessRecursively",
+      "description": "Добавленная папка — это её файлы и файлы её папок на любой глубине.",
+      "syntax_block": "Zip.Add(folder, ZIPStorePathMode.StoreRelativePath, ZIPSubDirProcessingMode.ProcessRecursively);",
+      "parameters": "",
+      "return_descr": "ZIPSubDirProcessingMode.",
+      "example": "Zip.Add(folder, ZIPStorePathMode.StoreRelativePath, ZIPSubDirProcessingMode.ProcessRecursively);",
+      "availability": "Клиент, Сервер",
+      "see_also": [
+        "enum.ZIPSubDirProcessingMode",
+        "cls.ZipFileWriter.Add"
+      ],
+      "reviewed": false
+    }
+  ]
+}

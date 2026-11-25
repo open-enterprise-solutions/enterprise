@@ -4,7 +4,7 @@
 # Usage: package-linux.sh <build>/bin <out.tar.gz>
 #
 # What goes in: everything the build put beside the executables (programs, libbackend / libfrmclient, the
-# wxWidgets libraries with their version symlinks, help/, plugins/), plus the translations (lang/),
+# wxWidgets libraries with their version symlinks, help/, plugins/), plus the translations (lang/), the fonts (fonts/),
 # backend.conf, and the Firebird 5 kit the workflow laid out in fbkit/ — as _fb/, where the engine loads it.
 #
 # ⚠ THE LIBRARIES ARE FOUND BESIDE THE PROGRAM, NOT WHERE THEY WERE BUILT. A build-tree binary carries the
@@ -27,6 +27,7 @@ mkdir -p "$stage"
 cp -a "$release/." "$stage/"
 cp -a lang "$stage/lang"
 find "$stage/lang" -name '*.pot' -delete   # the programs read the .po; the template is the translators'
+cp -a fonts "$stage/fonts"                  # the fonts a PDF is written in, embedded into every PDF the engine writes
 cp src/engine/backend/backend.conf "$stage/backend.conf"
 # The Firebird 5 kit the workflow laid out (fbkit/), as Firebird's own tree — see nightly.yml.
 cp -a fbkit "$stage/_fb"
@@ -47,7 +48,7 @@ done < <(find "$stage" -type f -print0)
 required=(appworkspace appstudio launcher coderunner appserver
           appcluster appcluster-tray webserver web/www.wpk
           libcore.so libbackend.so libprotocol.so libdeskgui.so libfrmclient.so libfrmserver.so libfileserver.so
-          backend.conf help/en.hlk lang/ru/open_es.po
+          backend.conf help/en.hlk lang/ru/open_es.po fonts/LiberationSans-Regular.ttf
           _fb/lib/libfbclient.so.2 _fb/lib/libtommath.so.1 _fb/plugins/libEngine13.so _fb/intl/fbintl _fb/firebird.msg _fb/firebird.conf)
 for r in "${required[@]}"; do
   [ -e "$stage/$r" ] || { echo "::error::The package would not run - missing: $r"; exit 1; }

@@ -53,7 +53,7 @@ endif()
 target_include_directories(core PRIVATE ${OES_3RDPARTY_DIR}/asio/include)
 # MBED TLS IS THE CORE'S (core/tls declares it): a random byte, a cipher, TLS — whatever else needs one asks the core
 # (crypto/, net/). PRIVATE and hidden (the root CMakeLists.txt), so nothing reaches it past the core.
-target_link_libraries(core PRIVATE llhttp lodepng lunasvg expat mbedtls mbedx509 mbedcrypto)
+target_link_libraries(core PRIVATE llhttp lodepng lunasvg hpdf expat mbedtls mbedx509 mbedcrypto)
 if(NOT MSVC)
     target_link_libraries(core PRIVATE date-tz)   # the IANA rules where the toolchain has none (core/timeZone.cpp)
 endif()

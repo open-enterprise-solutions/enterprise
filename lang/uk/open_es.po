@@ -18430,3 +18430,204 @@ msgstr "Користувач повинен мати ім'я."
 #: src/engine/backend/userInfo.cpp
 msgid "A user named \"%s\" already exists."
 msgstr "Користувач з іменем \"%s\" вже існує."
+
+#: src/engine/backend/system/value/valueZip.cpp
+#, c-format
+msgid "ZipFileReader: the entry '%s' names a place outside the folder it is extracted to"
+msgstr "ZipFileReader: запис '%s' вказує за межі теки, до якої видобувається"
+
+#: src/engine/backend/system/value/valueZip.cpp
+#, c-format
+msgid "ZipFileReader: cannot make the folder '%s'"
+msgstr "ZipFileReader: не вдається створити теку '%s'"
+
+#: src/engine/backend/system/value/valueZip.cpp
+#, c-format
+msgid "ZipFileReader: cannot open the file '%s' for writing"
+msgstr "ZipFileReader: не вдається відкрити файл '%s' для запису"
+
+#: src/engine/backend/system/value/valueZip.cpp
+#, c-format
+msgid "ZipFileReader: writing to the file '%s' failed"
+msgstr "ZipFileReader: не вдалося записати у файл '%s'"
+
+#: src/engine/backend/system/value/valueZip.cpp
+msgid "ZipFileWriter: the archive needs a file name"
+msgstr "ZipFileWriter: архіву потрібне ім'я файлу"
+
+#: src/engine/backend/system/value/valueZip.cpp
+#, c-format
+msgid "ZipFileWriter: there is no file or folder '%s'"
+msgstr "ZipFileWriter: немає файлу або теки '%s'"
+
+#: src/engine/backend/system/value/valueZip.cpp
+#, c-format
+msgid "ZipFileWriter: cannot open the file '%s' for writing"
+msgstr "ZipFileWriter: не вдається відкрити файл '%s' для запису"
+
+#: src/engine/backend/system/value/valueZip.cpp
+#, c-format
+msgid "ZipFileWriter: writing to the file '%s' failed"
+msgstr "ZipFileWriter: не вдалося записати у файл '%s'"
+
+#: src/engine/backend/system/value/valueZip.cpp
+msgid "ZipFileReader: the archive is closed"
+msgstr "ZipFileReader: архів закрито"
+
+#: src/engine/backend/system/value/valueZip.cpp
+#, c-format
+msgid "ZipFileReader: cannot open the file '%s' for reading"
+msgstr "ZipFileReader: не вдається відкрити файл '%s' для читання"
+
+#: src/engine/backend/system/value/valueZip.cpp
+#, c-format
+msgid "ZipFileReader: the entry '%s' cannot be read - the archive is damaged, encrypted, or packed by a method other than stored and deflated"
+msgstr "ZipFileReader: запис '%s' не читається - архів пошкоджений, зашифрований або стиснутий методом, відмінним від stored і deflated"
+
+#: src/engine/backend/system/value/valueZip.cpp
+msgid "ZipFileReader: the archive needs a file name or its bytes"
+msgstr "ZipFileReader: архіву потрібне ім'я файлу або його байти"
+
+#: src/engine/backend/system/value/valueZip.cpp
+#, c-format
+msgid "ZipFileReader: '%s' is not a ZIP archive"
+msgstr "ZipFileReader: '%s' - не ZIP-архів"
+
+#: src/engine/backend/system/value/valueZip.cpp
+#, c-format
+msgid "ZipFileReader: there is no entry '%s' in the archive"
+msgstr "ZipFileReader: в архіві немає запису '%s'"
+
+#: src/engine/backend/system/value/valueZip.h
+msgid "Don't store path"
+msgstr "Не зберігати шлях"
+
+#: src/engine/backend/system/value/valueZip.h
+msgid "Store relative path"
+msgstr "Зберігати відносний шлях"
+
+#: src/engine/backend/system/value/valueZip.h
+msgid "Store full path"
+msgstr "Зберігати повний шлях"
+
+#: src/engine/backend/system/value/valueZip.h
+msgid "Don't process"
+msgstr "Не обробляти"
+
+#: src/engine/backend/system/value/valueZip.h
+msgid "Process recursively"
+msgstr "Обробляти рекурсивно"
+
+#: src/engine/backend/system/value/valueMail.cpp
+#, c-format
+msgid "InternetMailMessage: an address is a string - 'address' or 'Name <address>': '%s' is not one"
+msgstr "InternetMailMessage: адреса - це рядок 'адреса' або 'Ім'я <адреса>': '%s' - не адреса"
+
+#: src/engine/backend/system/value/valueMail.cpp
+msgid "the server does not offer STARTTLS, so the connection cannot be made secure on this port - TLS from the first byte is port 465"
+msgstr "сервер не пропонує STARTTLS, тому з'єднання на цьому порту не захистити - TLS з першого байта йде на порту 465"
+
+#: src/engine/backend/system/value/valueMail.cpp
+#, c-format
+msgid "the server offers no login this client speaks (PLAIN or LOGIN) - %s"
+msgstr "сервер не пропонує входу, який знає клієнт (PLAIN або LOGIN) - %s"
+
+#: src/engine/backend/system/value/valueMail.cpp
+#, c-format
+msgid "the server refused - %s"
+msgstr "сервер відмовив - %s"
+
+#: src/engine/backend/system/value/valueMail.cpp
+#, c-format
+msgid "the message cannot be sent - %s"
+msgstr "лист не може бути надіслано - %s"
+
+#: src/engine/backend/system/value/valueMail.cpp
+#, c-format
+msgid "the connection was lost - %s"
+msgstr "з'єднання втрачено - %s"
+
+#: src/engine/backend/system/value/valueMail.cpp
+#, c-format
+msgid "what came back is not SMTP - %s"
+msgstr "прийшла не відповідь SMTP - %s"
+
+#: src/engine/backend/system/value/valueMail.cpp
+#, c-format
+msgid "InternetMailProfile: a port is a number from 1 to 65535, or 0 for the one the security says: %d was given"
+msgstr "InternetMailProfile: порт - число від 1 до 65535 або 0 для порту за захистом: передано %d"
+
+#: src/engine/backend/system/value/valueMail.cpp
+#, c-format
+msgid "InternetMailProfile: the time allowed is a number of seconds, 1 or more - never 'forever': %d was given"
+msgstr "InternetMailProfile: відведений час - число секунд, 1 або більше, а не 'безкінечно': передано %d"
+
+#: src/engine/backend/system/value/valueMail.cpp
+#, c-format
+msgid "InternetMailProfile: the time allowed is at most %d s, a day: %d was given"
+msgstr "InternetMailProfile: відведений час - не більше %d с (доба): передано %d"
+
+#: src/engine/backend/system/value/valueMail.cpp
+msgid "InternetMailProfile: SecureConnection is a SecureConnection value, or Undefined for a connection in the clear"
+msgstr "InternetMailProfile: SecureConnection - значення SecureConnection або Undefined для відкритого з'єднання"
+
+#: src/engine/backend/system/value/valueMail.cpp
+msgid "InternetMailAttachments: an attachment is BinaryData or a file's name"
+msgstr "InternetMailAttachments: вкладення - це BinaryData або ім'я файлу"
+
+#: src/engine/backend/system/value/valueMail.cpp
+msgid "InternetMail: Logon takes an InternetMailProfile"
+msgstr "InternetMail: Logon приймає InternetMailProfile"
+
+#: src/engine/backend/system/value/valueMail.cpp
+msgid "InternetMail: Send takes an InternetMailMessage"
+msgstr "InternetMail: Send приймає InternetMailMessage"
+
+#: src/engine/backend/system/value/valueMail.cpp
+msgid "InternetMail: the profile names no server - SMTPServerAddress is empty"
+msgstr "InternetMail: у профілі не вказано сервер - SMTPServerAddress порожній"
+
+#: src/engine/backend/system/value/valueMail.cpp
+#, c-format
+msgid "InternetMail: the certificate file '%s' could not be read - not a PEM, or the key's password is wrong"
+msgstr "InternetMail: файл сертифіката '%s' не прочитано - це не PEM або пароль ключа невірний"
+
+#: src/engine/backend/system/value/valueMail.cpp
+#, c-format
+msgid "InternetMail: the trusted certificates could not be read from the certificate file '%s' - not a PEM"
+msgstr "InternetMail: довірені сертифікати не прочитано з файлу '%s' - це не PEM"
+
+#: src/engine/backend/system/value/valueMail.cpp
+#, c-format
+msgid "InternetMail: the platform's trusted certificates could not be read - %s; name the authority's file in TrustedCertificates"
+msgstr "InternetMail: довірені сертифікати системи не прочитано - %s; вкажіть файл центру сертифікації в TrustedCertificates"
+
+#: src/engine/backend/system/value/valueMail.cpp
+#, c-format
+msgid "InternetMail: logging on to %s failed: %s"
+msgstr "InternetMail: вхід на %s не виконано: %s"
+
+#: src/engine/backend/system/value/valueMail.cpp
+msgid "InternetMail: not logged on - Logon(profile) first"
+msgstr "InternetMail: вхід не виконано - спершу Logon(profile)"
+
+#: src/engine/backend/system/value/valueMail.cpp
+#, c-format
+msgid "InternetMail: the message was not sent through %s: %s"
+msgstr "InternetMail: лист не надіслано через %s: %s"
+
+#: src/engine/backend/system/value/valueMail.h
+msgid "Plain text"
+msgstr "Простий текст"
+
+#: src/engine/backend/system/value/valueMail.h
+msgid "HTML"
+msgstr "HTML"
+
+#: src/engine/backend/sheetFormat/sheetFormatPdf.h
+msgid "PDF document"
+msgstr "Документ PDF"
+
+#: src/engine/backend/sheetFormat/sheetFormatPdf.cpp
+msgid "A PDF file cannot be written: no TrueType font was found, neither in the program's \"fonts\" folder nor among the system's fonts."
+msgstr "Файл PDF не записано: не знайдено жодного шрифту TrueType — ні в теці програми \"fonts\", ні серед шрифтів системи."

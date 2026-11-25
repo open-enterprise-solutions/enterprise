@@ -186,6 +186,9 @@ add_executable(oes_tests
     test_valueStructure.cpp
     test_valueGeometry.cpp
     test_valueTextFile.cpp
+    test_valueZip.cpp
+    test_mail.cpp
+    test_pdf.cpp
     test_valueHttp.cpp
     test_valueHttpSecure.cpp
     test_httpService.cpp
@@ -277,7 +280,7 @@ target_compile_definitions(oes_tests PRIVATE OES_CMAKE_COMMAND="${CMAKE_COMMAND}
 target_compile_definitions(oes_tests PRIVATE CPPHTTPLIB_MBEDTLS_SUPPORT)
 target_link_libraries(oes_tests PRIVATE mbedtls mbedx509 mbedcrypto)
 if(WIN32)
-    target_link_libraries(oes_tests PRIVATE crypt32)
+    target_link_libraries(oes_tests PRIVATE crypt32 ws2_32)   # ws2_32 - test_mail's own mail server, a plain socket
 endif()
 if(APPLE)
     target_link_libraries(oes_tests PRIVATE "-framework Security" "-framework CoreFoundation")

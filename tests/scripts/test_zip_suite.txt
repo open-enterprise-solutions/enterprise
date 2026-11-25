@@ -1,0 +1,88 @@
+// ============================================================================
+// ZIP archives from a script - 2026-11-25
+//
+// ZipFileWriter / ZipFileReader / ZipFileEntry, and the ZIPStorePathMode and ZIPSubDirProcessingMode enumerations.
+// The suite CHECKS ITSELF: a mismatch raises, and a corpus script that raises fails its run. What a script cannot
+// reach (folders walked, the names each mode gives, an entry named outside the folder) is tests/test_valueZip.cpp.
+//
+//   1. Files put into an archive come out of it with the bytes they went in with.
+//   2. Items lists each file once: its name taken apart, the size it unpacks to; For Each walks it.
+//   3. An archive is read from its bytes as from its file, and one entry is taken by its name.
+//   4. A file that is no archive is refused when opened; a path that names nothing is refused when added.
+// ============================================================================
+
+var first = GetTempFileName();
+var writer = New TextWriter(first, TextEncoding.UTF8);
+writer.Write("Борщ український");
+writer.Close();
+
+var second = GetTempFileName();
+writer = New TextWriter(second, TextEncoding.UTF8);
+writer.Write("12345");
+writer.Close();
+
+var archive = GetTempFileName();
+
+// 1
+var zip = New ZipFileWriter(archive);
+zip.Add(first);
+zip.Add(second, ZIPStorePathMode.DontStorePath, ZIPSubDirProcessingMode.DontProcess);
+zip.Write();
+
+var reader = New ZipFileReader(archive);
+FileDelete(first);
+FileDelete(second);
+reader.ExtractAll(GetTempDir());
+
+var back = New TextReader(first, TextEncoding.UTF8);
+var text = back.Read();
+back.Close();
+if (text != "Борщ український") { Raise("the first file came back as [" + text + "]"); }
+back = New TextReader(second, TextEncoding.UTF8);
+text = back.Read();
+back.Close();
+if (text != "12345") { Raise("the second file came back as [" + text + "]"); }
+Message("extracted: 2 files");
+
+// 2
+if (reader.Items.Count() != 2) { Raise("expected 2 items, got " + reader.Items.Count()); }
+var listed = 0;
+foreach (item in reader.Items) {
+	if (item.Extension != "tmp") { Raise("the extension of " + item.FullName + " is [" + item.Extension + "]"); }
+	if (item.Name != item.BaseName + ".tmp") { Raise("the name of " + item.FullName + " is [" + item.Name + "]"); }
+	if (item.Path != "") { Raise("a file added without its path has none in the archive: [" + item.Path + "]"); }
+	if (Right(first, StrLen(item.Name)) != item.Name && Right(second, StrLen(item.Name)) != item.Name) {
+		Raise("the entry " + item.Name + " names neither file");
+	}
+	listed = listed + 1;
+}
+if (listed != 2) { Raise("For Each walked " + listed + " items"); }
+if (reader.Items.Get(1).UncompressedSize != 5) { Raise("the second file unpacks to 5 bytes, got " + reader.Items.Get(1).UncompressedSize); }
+reader.Close();
+Message("listed: " + listed);
+
+// 3
+var bytes = New BinaryData();
+bytes.Read(archive);
+var fromBytes = New ZipFileReader(bytes);
+if (fromBytes.Items.Count() != 2) { Raise("from its bytes the archive lists " + fromBytes.Items.Count()); }
+FileDelete(second);
+fromBytes.Extract(fromBytes.Items.Get(1).Name, GetTempDir());
+back = New TextReader(second, TextEncoding.UTF8);
+text = back.Read();
+back.Close();
+if (text != "12345") { Raise("the entry taken by its name came back as [" + text + "]"); }
+Message("from bytes: " + fromBytes.Items.Count());
+
+// 4
+var refused = False;
+try { var notOne = New ZipFileReader(first); } except { refused = True; }
+if (!refused) { Raise("a text file must not open as an archive"); }
+refused = False;
+try { var missing = New ZipFileWriter(archive); missing.Add(archive + ".none"); } except { refused = True; }
+if (!refused) { Raise("adding a path that names nothing must be refused"); }
+
+FileDelete(first);
+FileDelete(second);
+FileDelete(archive);
+Message("refusals: 2");

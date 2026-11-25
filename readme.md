@@ -394,7 +394,7 @@ for all three platforms whenever it changed.
 
 ```
 enterprise/
-├── enterprise.sln            # MSBuild solution (23 projects, Mbed TLS, llhttp, LodePNG, lunasvg, expat, Scintilla and Lexilla among them)
+├── enterprise.sln            # MSBuild solution (24 projects, Mbed TLS, llhttp, LodePNG, lunasvg, libharu, expat, Scintilla and Lexilla among them)
 ├── CMakeLists.txt            # the cross-platform build, tests included
 ├── CMakePresets.json         # the build presets, Debug and Release, per platform
 ├── Common.props              # Shared MSBuild properties (paths, platforms)
@@ -414,7 +414,7 @@ enterprise/
 │                             # organisation only and is empty for everyone else. The build never
 │                             # needs it, so links to docs/private/… will not open for you.
 └── src/
-    ├── 3rdparty/             # Git submodules: wxWidgets 3.3.4, Mbed TLS, Asio, llhttp, expat, LodePNG, lunasvg, Lexilla, date, cpp-httplib, nlohmann/json; Scintilla in the tree
+    ├── 3rdparty/             # Git submodules: wxWidgets 3.3.4, Mbed TLS, Asio, llhttp, expat, LodePNG, lunasvg, libharu, Lexilla, date, cpp-httplib, nlohmann/json; Scintilla in the tree
     └── engine/
         ├── core/             # What the engine and its clients share: values, strings, dates, nodes, the query text, the journal
         ├── backend/          # Core engine DLL
@@ -464,6 +464,7 @@ enterprise/
 | Network | Asio (standalone) + llhttp — the core's HTTP and WebSocket, server and client |
 | TLS and ciphers | Mbed TLS |
 | Pictures | LodePNG and lunasvg — the core reads, scales and writes PNG and draws SVG; the server has no wx image |
+| PDF | libharu — a sheet written as the pages printing lays out, in the server's fonts (Liberation shipped) |
 | XML | expat — under the core's reader and writer, the application's files and the spreadsheet formats |
 | Code editor | Scintilla and Lexilla |
 | AI access | Model Context Protocol (Streamable HTTP) |

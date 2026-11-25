@@ -1,0 +1,742 @@
+{
+  "format": "OES-HELP-1.0",
+  "schema_version": 1,
+  "locale": "en",
+  "entries": [
+    {
+      "id": "cls.InternetMailProfile",
+      "name_local": "InternetMailProfile",
+      "name_en": "InternetMailProfile",
+      "kind": "collection",
+      "class_id": 166093668095330944,
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "mail"
+      ],
+      "signature": "New InternetMailProfile()",
+      "description": "Which mail server, and who logs on to it: the address, the port, the user and the password, the time allowed for each answer, and the security. InternetMail.Logon reads it then, and only then - a profile changed afterwards changes nothing until the next Logon.\n\nTHE SECURITY IS A SecureConnection, the one HTTPConnection takes: with it the conversation is TLS - from the first byte on port 465, by STARTTLS on any other port (587, 25), and a server that does not offer STARTTLS is refused rather than told the password in the clear. Without it the connection is in the clear.\n\nTHE PORT, WHEN NONE IS GIVEN, IS THE SECURITY'S: 465 with a SecureConnection, 25 without.",
+      "syntax_block": "Profile = New InternetMailProfile();\nProfile.SMTPServerAddress = server;\nProfile.SecureConnection = New SecureConnection();",
+      "parameters": "",
+      "return_descr": "InternetMailProfile.",
+      "example": "Profile = New InternetMailProfile();\nProfile.SMTPServerAddress = \"smtp.example.com\";\nProfile.SMTPUser = \"shop@example.com\";\nProfile.SMTPPassword = Password;\nProfile.SecureConnection = New SecureConnection();   // TLS on 465\n\nMessage = New InternetMailMessage();\nMessage.From = \"Shop <shop@example.com>\";\nMessage.To.Add(\"buyer@example.net\");\nMessage.Subject = \"Invoice 42\";\nMessage.Texts.Add(\"The invoice is attached.\");\nMessage.Attachments.Add(\"C:\\out\\invoice-42.pdf\");\n\nMail = New InternetMail();\nMail.Logon(Profile);\nMail.Send(Message);\nMail.Logoff();",
+      "availability": "Client, Server",
+      "see_also": [
+        "cls.InternetMail",
+        "cls.InternetMailMessage",
+        "cls.SecureConnection"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.InternetMailProfile.SMTPServerAddress",
+      "name_local": "SMTPServerAddress",
+      "name_en": "SMTPServerAddress",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "mail"
+      ],
+      "signature": "Profile.SMTPServerAddress : string",
+      "description": "The mail server's name - `smtp.example.com`, no scheme and no port. Empty is refused at Logon.",
+      "syntax_block": "Profile.SMTPServerAddress = Value;",
+      "parameters": "",
+      "return_descr": "String.",
+      "example": "Profile = New InternetMailProfile();\nProfile.SMTPServerAddress = \"smtp.example.com\";\nProfile.SMTPUser = \"shop@example.com\";\nProfile.SMTPPassword = Password;\nProfile.SecureConnection = New SecureConnection();   // TLS on 465\n\nMessage = New InternetMailMessage();\nMessage.From = \"Shop <shop@example.com>\";\nMessage.To.Add(\"buyer@example.net\");\nMessage.Subject = \"Invoice 42\";\nMessage.Texts.Add(\"The invoice is attached.\");\nMessage.Attachments.Add(\"C:\\out\\invoice-42.pdf\");\n\nMail = New InternetMail();\nMail.Logon(Profile);\nMail.Send(Message);\nMail.Logoff();",
+      "availability": "Client, Server",
+      "see_also": [
+        "cls.InternetMailProfile",
+        "cls.InternetMail.Logon"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.InternetMailProfile.SMTPPort",
+      "name_local": "SMTPPort",
+      "name_en": "SMTPPort",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "mail"
+      ],
+      "signature": "Profile.SMTPPort : number",
+      "description": "The port. Read back unset, it is the one the security says: 465 with a SecureConnection, 25 without. 0 means unset; a number outside 1-65535 is refused.",
+      "syntax_block": "Profile.SMTPPort = Value;",
+      "parameters": "",
+      "return_descr": "Number.",
+      "example": "Profile.SMTPPort = 587;",
+      "availability": "Client, Server",
+      "see_also": [
+        "cls.InternetMailProfile",
+        "cls.InternetMail.Logon"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.InternetMailProfile.SMTPUser",
+      "name_local": "SMTPUser",
+      "name_en": "SMTPUser",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "mail"
+      ],
+      "signature": "Profile.SMTPUser : string",
+      "description": "Who logs on. Empty - the server is not logged on to (a relay inside the network).",
+      "syntax_block": "Profile.SMTPUser = Value;",
+      "parameters": "",
+      "return_descr": "String.",
+      "example": "Profile.SMTPUser = \"shop@example.com\";",
+      "availability": "Client, Server",
+      "see_also": [
+        "cls.InternetMailProfile",
+        "cls.InternetMail.Logon"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.InternetMailProfile.SMTPPassword",
+      "name_local": "SMTPPassword",
+      "name_en": "SMTPPassword",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "mail"
+      ],
+      "signature": "Profile.SMTPPassword : string",
+      "description": "The user's password. Written and never read back. It goes as AUTH PLAIN, or AUTH LOGIN where PLAIN is not offered, and never appears in a refusal.",
+      "syntax_block": "Profile.SMTPPassword = Value;",
+      "parameters": "",
+      "return_descr": "",
+      "example": "Profile.SMTPPassword = Password;",
+      "availability": "Client, Server",
+      "see_also": [
+        "cls.InternetMailProfile",
+        "cls.InternetMail.Logon"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.InternetMailProfile.Timeout",
+      "name_local": "Timeout",
+      "name_en": "Timeout",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "mail"
+      ],
+      "signature": "Profile.Timeout : number",
+      "description": "Seconds allowed for each answer of the server - 30 unless said, at least 1, at most a day. A message goes out in pieces, each within it, so a large attachment on a slow line is not a timeout.",
+      "syntax_block": "Profile.Timeout = Value;",
+      "parameters": "",
+      "return_descr": "Number.",
+      "example": "Profile.Timeout = 60;",
+      "availability": "Client, Server",
+      "see_also": [
+        "cls.InternetMailProfile",
+        "cls.InternetMail.Logon"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.InternetMailProfile.SecureConnection",
+      "name_local": "SecureConnection",
+      "name_en": "SecureConnection",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "mail"
+      ],
+      "signature": "Profile.SecureConnection : SecureConnection",
+      "description": "TLS, said as HTTPConnection says it: a SecureConnection - whom to trust, the certificate to show, whether to check - or Undefined for a connection in the clear. Anything else is refused.",
+      "syntax_block": "Profile.SecureConnection = Value;",
+      "parameters": "",
+      "return_descr": "SecureConnection or Undefined.",
+      "example": "Profile.SecureConnection = New SecureConnection();",
+      "availability": "Client, Server",
+      "see_also": [
+        "cls.InternetMailProfile",
+        "cls.InternetMail.Logon"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.InternetMailMessage",
+      "name_local": "InternetMailMessage",
+      "name_en": "InternetMailMessage",
+      "kind": "collection",
+      "class_id": 194000372725466810,
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "mail"
+      ],
+      "signature": "New InternetMailMessage()",
+      "description": "A message: who sends it, to whom, its subject, its texts and its attachments. An address is a string - `buyer@example.net` or `Buyer <buyer@example.net>`; a name that is not ASCII goes as the format says, and so does a subject. Bcc reaches its recipients and is seen by none of them.\n\nIt goes as MIME: the texts and the attachments in base64, so any server carries it. A line break in the subject or in an address is refused when it is sent - it would add a header of its own.",
+      "syntax_block": "Message = New InternetMailMessage();\nMessage.From = sender;\nMessage.To.Add(recipient);\nMessage.Texts.Add(text);",
+      "parameters": "",
+      "return_descr": "InternetMailMessage.",
+      "example": "Profile = New InternetMailProfile();\nProfile.SMTPServerAddress = \"smtp.example.com\";\nProfile.SMTPUser = \"shop@example.com\";\nProfile.SMTPPassword = Password;\nProfile.SecureConnection = New SecureConnection();   // TLS on 465\n\nMessage = New InternetMailMessage();\nMessage.From = \"Shop <shop@example.com>\";\nMessage.To.Add(\"buyer@example.net\");\nMessage.Subject = \"Invoice 42\";\nMessage.Texts.Add(\"The invoice is attached.\");\nMessage.Attachments.Add(\"C:\\out\\invoice-42.pdf\");\n\nMail = New InternetMail();\nMail.Logon(Profile);\nMail.Send(Message);\nMail.Logoff();",
+      "availability": "Client, Server",
+      "see_also": [
+        "cls.InternetMail.Send",
+        "cls.InternetMailTexts",
+        "cls.InternetMailAttachments"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.InternetMailMessage.From",
+      "name_local": "From",
+      "name_en": "From",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "mail"
+      ],
+      "signature": "Message.From : string",
+      "description": "The sender: `address` or `Name <address>`. The address is also the envelope's sender.",
+      "syntax_block": "Value = Message.From;",
+      "parameters": "",
+      "return_descr": "String.",
+      "example": "Message.From = \"Shop <shop@example.com>\";",
+      "availability": "Client, Server",
+      "see_also": [
+        "cls.InternetMailMessage"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.InternetMailMessage.To",
+      "name_local": "To",
+      "name_en": "To",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "mail"
+      ],
+      "signature": "Message.To : Array",
+      "description": "The recipients - an Array of addresses, added to with Add. The same address in To, Cc and Bcc is sent to once.",
+      "syntax_block": "Value = Message.To;",
+      "parameters": "",
+      "return_descr": "Array.",
+      "example": "Message.To.Add(\"buyer@example.net\");",
+      "availability": "Client, Server",
+      "see_also": [
+        "cls.InternetMailMessage"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.InternetMailMessage.Cc",
+      "name_local": "Cc",
+      "name_en": "Cc",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "mail"
+      ],
+      "signature": "Message.Cc : Array",
+      "description": "The copies - an Array of addresses, seen by every recipient.",
+      "syntax_block": "Value = Message.Cc;",
+      "parameters": "",
+      "return_descr": "Array.",
+      "example": "Message.Cc.Add(\"Accounts <accounts@example.net>\");",
+      "availability": "Client, Server",
+      "see_also": [
+        "cls.InternetMailMessage"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.InternetMailMessage.Bcc",
+      "name_local": "Bcc",
+      "name_en": "Bcc",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "mail"
+      ],
+      "signature": "Message.Bcc : Array",
+      "description": "The blind copies - an Array of addresses, in the envelope and never in the headers: no recipient sees them.",
+      "syntax_block": "Value = Message.Bcc;",
+      "parameters": "",
+      "return_descr": "Array.",
+      "example": "Message.Bcc.Add(\"archive@example.com\");",
+      "availability": "Client, Server",
+      "see_also": [
+        "cls.InternetMailMessage"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.InternetMailMessage.Subject",
+      "name_local": "Subject",
+      "name_en": "Subject",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "mail"
+      ],
+      "signature": "Message.Subject : string",
+      "description": "The subject. Any text; a line break in it is refused when the message is sent.",
+      "syntax_block": "Value = Message.Subject;",
+      "parameters": "",
+      "return_descr": "String.",
+      "example": "Message.Subject = \"Invoice 42\";",
+      "availability": "Client, Server",
+      "see_also": [
+        "cls.InternetMailMessage"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.InternetMailMessage.Texts",
+      "name_local": "Texts",
+      "name_en": "Texts",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "mail"
+      ],
+      "signature": "Message.Texts : InternetMailTexts",
+      "description": "The texts - plain and HTML, added with Add.",
+      "syntax_block": "Value = Message.Texts;",
+      "parameters": "",
+      "return_descr": "InternetMailTexts.",
+      "example": "Message.Texts.Add(\"The invoice is attached.\");",
+      "availability": "Client, Server",
+      "see_also": [
+        "cls.InternetMailMessage"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.InternetMailMessage.Attachments",
+      "name_local": "Attachments",
+      "name_en": "Attachments",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "mail"
+      ],
+      "signature": "Message.Attachments : InternetMailAttachments",
+      "description": "The attached files, added with Add.",
+      "syntax_block": "Value = Message.Attachments;",
+      "parameters": "",
+      "return_descr": "InternetMailAttachments.",
+      "example": "Message.Attachments.Add(\"C:\\out\\invoice-42.pdf\");",
+      "availability": "Client, Server",
+      "see_also": [
+        "cls.InternetMailMessage"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.InternetMail",
+      "name_local": "InternetMail",
+      "name_en": "InternetMail",
+      "kind": "collection",
+      "class_id": 182498381585022239,
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "mail"
+      ],
+      "signature": "New InternetMail()",
+      "description": "One mail server's connection. Logon(profile) opens it and logs on, Send(message) sends - as many messages as there are - and Logoff() says goodbye. Let go while logged on, it says goodbye by itself.\n\nSENDING ONLY (SMTP): no POP3, no IMAP.\n\nA FAILURE RAISES, naming the server and why: a name that does not resolve, a port nobody listens on, a server silent past the time allowed, a certificate not trusted, a login refused - and the server's own words, with its code, when it refuses a command.",
+      "syntax_block": "Mail = New InternetMail();\nMail.Logon(Profile);\nMail.Send(Message);\nMail.Logoff();",
+      "syntax_block_ves": "Mail = New InternetMail();\nMail.Logon(Profile);\nMail.Send(Message);\nMail.Logoff();",
+      "parameters": "",
+      "return_descr": "InternetMail.",
+      "example": "Profile = New InternetMailProfile();\nProfile.SMTPServerAddress = \"smtp.example.com\";\nProfile.SMTPUser = \"shop@example.com\";\nProfile.SMTPPassword = Password;\nProfile.SecureConnection = New SecureConnection();   // TLS on 465\n\nMessage = New InternetMailMessage();\nMessage.From = \"Shop <shop@example.com>\";\nMessage.To.Add(\"buyer@example.net\");\nMessage.Subject = \"Invoice 42\";\nMessage.Texts.Add(\"The invoice is attached.\");\nMessage.Attachments.Add(\"C:\\out\\invoice-42.pdf\");\n\nMail = New InternetMail();\nMail.Logon(Profile);\nMail.Send(Message);\nMail.Logoff();",
+      "availability": "Client, Server",
+      "see_also": [
+        "cls.InternetMail.Logon",
+        "cls.InternetMail.Send",
+        "cls.InternetMailProfile",
+        "cls.InternetMailMessage"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.InternetMail.Logon",
+      "name_local": "Logon",
+      "name_en": "Logon",
+      "kind": "procedure",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "mail"
+      ],
+      "signature": "Mail.Logon(profile : InternetMailProfile)",
+      "description": "Connects to the profile's server, greets it, turns the connection to TLS when the profile says so, and logs on when it names a user (AUTH PLAIN, or LOGIN where PLAIN is not offered). A connection already open is closed first. A refusal says the server and why: \"InternetMail: logging on to <server>:<port> failed: ...\".",
+      "syntax_block": "Mail.Logon(Profile);",
+      "parameters": "profile - the server and who logs on.",
+      "return_descr": "",
+      "example": "Mail = New InternetMail();\nMail.Logon(Profile);",
+      "availability": "Client, Server",
+      "see_also": [
+        "cls.InternetMail",
+        "cls.InternetMailProfile"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.InternetMail.Send",
+      "name_local": "Send",
+      "name_en": "Send",
+      "kind": "procedure",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "mail"
+      ],
+      "signature": "Mail.Send(message : InternetMailMessage)",
+      "description": "Sends one message - TO EVERY RECIPIENT OR TO NONE: a recipient the server refuses ends it before the message goes, and the refusal names that recipient with the server's code. Sent before Logon, or after a connection was lost, it is refused: \"InternetMail: not logged on - Logon(profile) first\". A message larger than the server says it takes is refused before anything is sent.",
+      "syntax_block": "Mail.Send(Message);",
+      "parameters": "message - what goes and to whom.",
+      "return_descr": "",
+      "example": "Mail.Send(Message);",
+      "availability": "Client, Server",
+      "see_also": [
+        "cls.InternetMail",
+        "cls.InternetMailMessage"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.InternetMail.Logoff",
+      "name_local": "Logoff",
+      "name_en": "Logoff",
+      "kind": "procedure",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "mail"
+      ],
+      "signature": "Mail.Logoff()",
+      "description": "Says goodbye (QUIT) and closes the connection. A server that does not answer is not waited for past the time allowed.",
+      "syntax_block": "Mail.Logoff();",
+      "parameters": "None.",
+      "return_descr": "",
+      "example": "Mail.Send(Message);\nMail.Logoff();",
+      "availability": "Client, Server",
+      "see_also": [
+        "cls.InternetMail"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.InternetMailTexts",
+      "name_local": "InternetMailTexts",
+      "name_en": "InternetMailTexts",
+      "kind": "collection",
+      "class_id": 314163799497104883,
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "mail"
+      ],
+      "signature": "Message.Texts : InternetMailTexts",
+      "description": "A message's texts - counted, got and walked as a collection, Add puts one more. The plain texts go as one, joined in the order added, and so do the HTML ones; with both, the reader's program shows the one it can. A script never makes one: a message has it.",
+      "syntax_block": "Text = Message.Texts.Add(text, InternetMailTextType.HTML);",
+      "parameters": "",
+      "return_descr": "",
+      "example": "Message.Texts.Add(\"The invoice is attached.\");\nMessage.Texts.Add(\"<p>The invoice is attached.</p>\", InternetMailTextType.HTML);",
+      "availability": "Client, Server",
+      "see_also": [
+        "cls.InternetMailMessage.Texts",
+        "cls.InternetMailTexts.Add",
+        "enum.InternetMailTextType"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.InternetMailTexts.Add",
+      "name_local": "Add",
+      "name_en": "Add",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "mail"
+      ],
+      "signature": "Texts.Add(text : string [, textType : InternetMailTextType = PlainText]) : InternetMailText",
+      "description": "Adds a text, plain unless said, and returns it.",
+      "syntax_block": "Text = Message.Texts.Add(text);",
+      "parameters": "text - the text.\ntextType - PlainText or HTML; PlainText when left out.",
+      "return_descr": "InternetMailText.",
+      "example": "Message.Texts.Add(\"<p>Hello</p>\", InternetMailTextType.HTML);",
+      "availability": "Client, Server",
+      "see_also": [
+        "cls.InternetMailTexts",
+        "enum.InternetMailTextType"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.InternetMailText",
+      "name_local": "InternetMailText",
+      "name_en": "InternetMailText",
+      "kind": "collection",
+      "class_id": 314173695101758782,
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "mail"
+      ],
+      "signature": "Message.Texts.Add(text) : InternetMailText",
+      "description": "One text of a message, as Texts.Add made it: Text and TextType, read-only.",
+      "syntax_block": "Text.Text   Text.TextType",
+      "parameters": "",
+      "return_descr": "",
+      "example": "foreach (Text in Message.Texts) {\n    Message(Text.TextType);\n}",
+      "availability": "Client, Server",
+      "see_also": [
+        "cls.InternetMailTexts"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.InternetMailText.Text",
+      "name_local": "Text",
+      "name_en": "Text",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "mail"
+      ],
+      "signature": "Text.Text : string",
+      "description": "The text as it was added.",
+      "syntax_block": "Value = Text.Text;",
+      "parameters": "",
+      "return_descr": "String.",
+      "example": "Message(Text.Text);",
+      "availability": "Client, Server",
+      "see_also": [
+        "cls.InternetMailText"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.InternetMailText.TextType",
+      "name_local": "TextType",
+      "name_en": "TextType",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "mail"
+      ],
+      "signature": "Text.TextType : InternetMailTextType",
+      "description": "PlainText or HTML.",
+      "syntax_block": "Value = Text.TextType;",
+      "parameters": "",
+      "return_descr": "InternetMailTextType.",
+      "example": "if (Text.TextType == InternetMailTextType.HTML) { Message(\"HTML\"); }",
+      "availability": "Client, Server",
+      "see_also": [
+        "cls.InternetMailText",
+        "enum.InternetMailTextType"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.InternetMailAttachments",
+      "name_local": "InternetMailAttachments",
+      "name_en": "InternetMailAttachments",
+      "kind": "collection",
+      "class_id": 326636659405070542,
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "mail"
+      ],
+      "signature": "Message.Attachments : InternetMailAttachments",
+      "description": "A message's attached files - counted, got and walked as a collection, Add puts one more. A script never makes one: a message has it.",
+      "syntax_block": "Attachment = Message.Attachments.Add(source, name);",
+      "parameters": "",
+      "return_descr": "",
+      "example": "Message.Attachments.Add(\"C:\\out\\invoice-42.pdf\");\nBytes = New BinaryData(\"Paid in full.\", TextEncoding.UTF8);\nMessage.Attachments.Add(Bytes, \"receipt.txt\");",
+      "availability": "Client, Server",
+      "see_also": [
+        "cls.InternetMailMessage.Attachments",
+        "cls.InternetMailAttachments.Add"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.InternetMailAttachments.Add",
+      "name_local": "Add",
+      "name_en": "Add",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "mail"
+      ],
+      "signature": "Attachments.Add(source : BinaryData | string [, name : string]) : InternetMailAttachment",
+      "description": "Attaches bytes or a file. A FILE IS READ NOW, whole: what the message carries is what was there when it was added; one that cannot be read is refused, named. Without a name a file goes by its own, bytes as \"attachment\". The type the recipient is told is the name's extension's (pdf, xlsx, docx, zip, xml, png...), bytes otherwise.",
+      "syntax_block": "Attachment = Message.Attachments.Add(source);",
+      "parameters": "source - BinaryData, or a file's name.\nname - the name the recipient sees.",
+      "return_descr": "InternetMailAttachment.",
+      "example": "Message.Attachments.Add(\"C:\\out\\invoice-42.pdf\");",
+      "availability": "Client, Server",
+      "see_also": [
+        "cls.InternetMailAttachments",
+        "cls.BinaryData"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.InternetMailAttachment",
+      "name_local": "InternetMailAttachment",
+      "name_en": "InternetMailAttachment",
+      "kind": "collection",
+      "class_id": 326639957939955175,
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "mail"
+      ],
+      "signature": "Message.Attachments.Add(source) : InternetMailAttachment",
+      "description": "One attached file: its Name (which may be changed) and its Data.",
+      "syntax_block": "Attachment.Name   Attachment.Data",
+      "parameters": "",
+      "return_descr": "",
+      "example": "Attachment = Message.Attachments.Add(path);\nAttachment.Name = \"invoice.pdf\";",
+      "availability": "Client, Server",
+      "see_also": [
+        "cls.InternetMailAttachments"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.InternetMailAttachment.Name",
+      "name_local": "Name",
+      "name_en": "Name",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "mail"
+      ],
+      "signature": "Attachment.Name : string",
+      "description": "The name the recipient sees; its extension says the type.",
+      "syntax_block": "Attachment.Name = name;",
+      "parameters": "",
+      "return_descr": "String.",
+      "example": "Attachment.Name = \"invoice.pdf\";",
+      "availability": "Client, Server",
+      "see_also": [
+        "cls.InternetMailAttachment"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.InternetMailAttachment.Data",
+      "name_local": "Data",
+      "name_en": "Data",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "mail"
+      ],
+      "signature": "Attachment.Data : BinaryData",
+      "description": "The bytes, as they were when added. Read-only.",
+      "syntax_block": "Bytes = Attachment.Data;",
+      "parameters": "",
+      "return_descr": "BinaryData.",
+      "example": "Message(Attachment.Data.Size());",
+      "availability": "Client, Server",
+      "see_also": [
+        "cls.InternetMailAttachment",
+        "cls.BinaryData"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.InternetMailTextType",
+      "name_local": "InternetMailTextType",
+      "name_en": "InternetMailTextType",
+      "kind": "enum_type",
+      "class_id": 379713556117057949,
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "mail"
+      ],
+      "signature": "InternetMailTextType.PlainText, .HTML",
+      "description": "What a text of a message is: PlainText, or HTML the reader's program shows as a page.",
+      "syntax_block": "Message.Texts.Add(text, InternetMailTextType.HTML);",
+      "parameters": "",
+      "return_descr": "",
+      "example": "Message.Texts.Add(\"<p>Hello</p>\", InternetMailTextType.HTML);",
+      "availability": "Client, Server",
+      "see_also": [
+        "cls.InternetMailTexts.Add"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.InternetMailTextType.PlainText",
+      "name_local": "PlainText",
+      "name_en": "PlainText",
+      "kind": "system_enum",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "mail"
+      ],
+      "signature": "InternetMailTextType.PlainText",
+      "description": "Plain text. The default.",
+      "syntax_block": "Message.Texts.Add(text, InternetMailTextType.PlainText);",
+      "parameters": "",
+      "return_descr": "InternetMailTextType.",
+      "example": "Message.Texts.Add(text, InternetMailTextType.PlainText);",
+      "availability": "Client, Server",
+      "see_also": [
+        "enum.InternetMailTextType"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.InternetMailTextType.HTML",
+      "name_local": "HTML",
+      "name_en": "HTML",
+      "kind": "system_enum",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "mail"
+      ],
+      "signature": "InternetMailTextType.HTML",
+      "description": "HTML, shown as a page.",
+      "syntax_block": "Message.Texts.Add(text, InternetMailTextType.HTML);",
+      "parameters": "",
+      "return_descr": "InternetMailTextType.",
+      "example": "Message.Texts.Add(text, InternetMailTextType.HTML);",
+      "availability": "Client, Server",
+      "see_also": [
+        "enum.InternetMailTextType"
+      ],
+      "reviewed": false
+    }
+  ]
+}

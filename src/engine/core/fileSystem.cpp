@@ -82,6 +82,26 @@ ibString ibProgramFolder()
 	return ibProgramFolder(ibExecutablePath());
 }
 
+ibString ibProgramSubfolder(const ibString& name)
+{
+	std::error_code error;
+	const std::filesystem::path beside = ibPathOf(ibProgramFolder()) / ibPathOf(name);
+	if (std::filesystem::is_directory(beside, error))
+		return ibString(beside.wstring());
+
+	// Bounded: bin/Win32/Debug is three levels below the tree, a macOS bundle's binary a few more.
+	std::filesystem::path walk = ibPathOf(ibExecutablePath()).parent_path();
+	for (int level = 0; level < 6 && !walk.empty(); ++level) {
+		const std::filesystem::path candidate = walk / ibPathOf(name);
+		if (std::filesystem::is_directory(candidate, error))
+			return ibString(candidate.wstring());
+		if (walk == walk.parent_path())
+			break;
+		walk = walk.parent_path();
+	}
+	return ibString();
+}
+
 ibString ibDiagnosticFolder()
 {
 #if defined(__IBOSX__)

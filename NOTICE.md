@@ -43,10 +43,12 @@ These keep their own licenses. Nothing in LICENSE.md changes or overrides them.
 | LodePNG | `src/3rdparty/lodepng` (submodule) | zlib |
 | lunasvg | `src/3rdparty/lunasvg` (submodule) | MIT |
 | plutovg | `src/3rdparty/lunasvg/plutovg` (inside lunasvg) | MIT; its rasterizer and stroker derive from FreeType (FreeType License, `plutovg/source/FTL.TXT` — credit below), its font and image readers are stb's (public domain / MIT) |
+| libharu 2.4.6 | `src/3rdparty/libharu` (submodule) | zlib/libpng (`src/3rdparty/libharu/LICENSE`) |
 | Expat | `src/3rdparty/expat` (submodule) | MIT |
 | date (Howard Hinnant) | `src/3rdparty/date` (submodule; built on Linux and macOS only) | MIT |
 | SQLite | `src/engine/backend/databaseLayer/sqllite/engine` | public domain |
 | Firebird client headers | `src/engine/backend/databaseLayer/firebird/engine` | InterBase Public License 1.0 / IDPL, per file header |
+| Liberation fonts 2.1.5 | `fonts/` (the release's TTF files, as released; embedded into a PDF the engine writes) | SIL Open Font License 1.1 (`fonts/LICENSE`) |
 
 The FreeType License asks for this credit in the documentation of a program that uses its code (plutovg's):
 Portions of this software are copyright © 2014 The FreeType Project (www.freetype.org). All rights reserved.

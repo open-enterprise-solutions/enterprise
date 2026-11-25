@@ -17830,3 +17830,204 @@ msgstr ""
 #: src/engine/backend/userInfo.cpp
 msgid "A user named \"%s\" already exists."
 msgstr ""
+
+#: src/engine/backend/system/value/valueZip.cpp
+#, c-format
+msgid "ZipFileReader: the entry '%s' names a place outside the folder it is extracted to"
+msgstr ""
+
+#: src/engine/backend/system/value/valueZip.cpp
+#, c-format
+msgid "ZipFileReader: cannot make the folder '%s'"
+msgstr ""
+
+#: src/engine/backend/system/value/valueZip.cpp
+#, c-format
+msgid "ZipFileReader: cannot open the file '%s' for writing"
+msgstr ""
+
+#: src/engine/backend/system/value/valueZip.cpp
+#, c-format
+msgid "ZipFileReader: writing to the file '%s' failed"
+msgstr ""
+
+#: src/engine/backend/system/value/valueZip.cpp
+msgid "ZipFileWriter: the archive needs a file name"
+msgstr ""
+
+#: src/engine/backend/system/value/valueZip.cpp
+#, c-format
+msgid "ZipFileWriter: there is no file or folder '%s'"
+msgstr ""
+
+#: src/engine/backend/system/value/valueZip.cpp
+#, c-format
+msgid "ZipFileWriter: cannot open the file '%s' for writing"
+msgstr ""
+
+#: src/engine/backend/system/value/valueZip.cpp
+#, c-format
+msgid "ZipFileWriter: writing to the file '%s' failed"
+msgstr ""
+
+#: src/engine/backend/system/value/valueZip.cpp
+msgid "ZipFileReader: the archive is closed"
+msgstr ""
+
+#: src/engine/backend/system/value/valueZip.cpp
+#, c-format
+msgid "ZipFileReader: cannot open the file '%s' for reading"
+msgstr ""
+
+#: src/engine/backend/system/value/valueZip.cpp
+#, c-format
+msgid "ZipFileReader: the entry '%s' cannot be read - the archive is damaged, encrypted, or packed by a method other than stored and deflated"
+msgstr ""
+
+#: src/engine/backend/system/value/valueZip.cpp
+msgid "ZipFileReader: the archive needs a file name or its bytes"
+msgstr ""
+
+#: src/engine/backend/system/value/valueZip.cpp
+#, c-format
+msgid "ZipFileReader: '%s' is not a ZIP archive"
+msgstr ""
+
+#: src/engine/backend/system/value/valueZip.cpp
+#, c-format
+msgid "ZipFileReader: there is no entry '%s' in the archive"
+msgstr ""
+
+#: src/engine/backend/system/value/valueZip.h
+msgid "Don't store path"
+msgstr ""
+
+#: src/engine/backend/system/value/valueZip.h
+msgid "Store relative path"
+msgstr ""
+
+#: src/engine/backend/system/value/valueZip.h
+msgid "Store full path"
+msgstr ""
+
+#: src/engine/backend/system/value/valueZip.h
+msgid "Don't process"
+msgstr ""
+
+#: src/engine/backend/system/value/valueZip.h
+msgid "Process recursively"
+msgstr ""
+
+#: src/engine/backend/system/value/valueMail.cpp
+#, c-format
+msgid "InternetMailMessage: an address is a string - 'address' or 'Name <address>': '%s' is not one"
+msgstr ""
+
+#: src/engine/backend/system/value/valueMail.cpp
+msgid "the server does not offer STARTTLS, so the connection cannot be made secure on this port - TLS from the first byte is port 465"
+msgstr ""
+
+#: src/engine/backend/system/value/valueMail.cpp
+#, c-format
+msgid "the server offers no login this client speaks (PLAIN or LOGIN) - %s"
+msgstr ""
+
+#: src/engine/backend/system/value/valueMail.cpp
+#, c-format
+msgid "the server refused - %s"
+msgstr ""
+
+#: src/engine/backend/system/value/valueMail.cpp
+#, c-format
+msgid "the message cannot be sent - %s"
+msgstr ""
+
+#: src/engine/backend/system/value/valueMail.cpp
+#, c-format
+msgid "the connection was lost - %s"
+msgstr ""
+
+#: src/engine/backend/system/value/valueMail.cpp
+#, c-format
+msgid "what came back is not SMTP - %s"
+msgstr ""
+
+#: src/engine/backend/system/value/valueMail.cpp
+#, c-format
+msgid "InternetMailProfile: a port is a number from 1 to 65535, or 0 for the one the security says: %d was given"
+msgstr ""
+
+#: src/engine/backend/system/value/valueMail.cpp
+#, c-format
+msgid "InternetMailProfile: the time allowed is a number of seconds, 1 or more - never 'forever': %d was given"
+msgstr ""
+
+#: src/engine/backend/system/value/valueMail.cpp
+#, c-format
+msgid "InternetMailProfile: the time allowed is at most %d s, a day: %d was given"
+msgstr ""
+
+#: src/engine/backend/system/value/valueMail.cpp
+msgid "InternetMailProfile: SecureConnection is a SecureConnection value, or Undefined for a connection in the clear"
+msgstr ""
+
+#: src/engine/backend/system/value/valueMail.cpp
+msgid "InternetMailAttachments: an attachment is BinaryData or a file's name"
+msgstr ""
+
+#: src/engine/backend/system/value/valueMail.cpp
+msgid "InternetMail: Logon takes an InternetMailProfile"
+msgstr ""
+
+#: src/engine/backend/system/value/valueMail.cpp
+msgid "InternetMail: Send takes an InternetMailMessage"
+msgstr ""
+
+#: src/engine/backend/system/value/valueMail.cpp
+msgid "InternetMail: the profile names no server - SMTPServerAddress is empty"
+msgstr ""
+
+#: src/engine/backend/system/value/valueMail.cpp
+#, c-format
+msgid "InternetMail: the certificate file '%s' could not be read - not a PEM, or the key's password is wrong"
+msgstr ""
+
+#: src/engine/backend/system/value/valueMail.cpp
+#, c-format
+msgid "InternetMail: the trusted certificates could not be read from the certificate file '%s' - not a PEM"
+msgstr ""
+
+#: src/engine/backend/system/value/valueMail.cpp
+#, c-format
+msgid "InternetMail: the platform's trusted certificates could not be read - %s; name the authority's file in TrustedCertificates"
+msgstr ""
+
+#: src/engine/backend/system/value/valueMail.cpp
+#, c-format
+msgid "InternetMail: logging on to %s failed: %s"
+msgstr ""
+
+#: src/engine/backend/system/value/valueMail.cpp
+msgid "InternetMail: not logged on - Logon(profile) first"
+msgstr ""
+
+#: src/engine/backend/system/value/valueMail.cpp
+#, c-format
+msgid "InternetMail: the message was not sent through %s: %s"
+msgstr ""
+
+#: src/engine/backend/system/value/valueMail.h
+msgid "Plain text"
+msgstr ""
+
+#: src/engine/backend/system/value/valueMail.h
+msgid "HTML"
+msgstr ""
+
+#: src/engine/backend/sheetFormat/sheetFormatPdf.h
+msgid "PDF document"
+msgstr ""
+
+#: src/engine/backend/sheetFormat/sheetFormatPdf.cpp
+msgid "A PDF file cannot be written: no TrueType font was found, neither in the program's \"fonts\" folder nor among the system's fonts."
+msgstr ""

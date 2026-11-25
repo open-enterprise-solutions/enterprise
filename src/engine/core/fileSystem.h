@@ -34,6 +34,10 @@ constexpr ibChar ibFILE_SEP_PATH = static_cast<ibChar>(std::filesystem::path::pr
 // this process.
 CORE_API ibString ibProgramFolder(const ibString& executablePath);
 CORE_API ibString ibProgramFolder();
+// A FOLDER THE PROGRAM SHIPS — lang, fonts, the help's sources: `<program folder>/<name>`, else, for a run from the
+// build tree where nothing copies it beside the binaries, the first `<name>` met walking up from the executable (a
+// bin/Win32/Debug reaches the source tree's). Empty when there is none. One walk for whoever looks.
+CORE_API ibString ibProgramSubfolder(const ibString& name);
 CORE_API ibString ibDiagnosticFolder();
 
 // This process's binary, its full path — the one the no-argument ibProgramFolder walks from.

@@ -56,32 +56,6 @@ std::string Authority(const std::string& host, std::uint16_t port)
 	return Bracketed(host) + ":" + std::to_string(port);
 }
 
-// THE HANDSHAKE FAILED — told apart by what the certificate's check said: a chain nobody vouches for first, the name
-// after it; neither — the server does not speak TLS, or not this TLS. Why, into `why`.
-ibHttpClientError HandshakeRefusal(const ibTlsStream& stream, const std::string& host, const std::error_code& error,
-	std::string& why)
-{
-	const std::uint32_t flags = stream.GetVerification();
-	if ((flags & ~static_cast<std::uint32_t>(MBEDTLS_X509_BADCERT_CN_MISMATCH)) != 0) {
-		char said[512] = {};
-		mbedtls_x509_crt_verify_info(said, sizeof(said), "", flags);
-
-		// A line per failed check, each ended with '\n' — one sentence for the refusal.
-		why = said;
-		while (!why.empty() && why.back() == '\n')
-			why.pop_back();
-		for (std::size_t at = why.find('\n'); at != std::string::npos; at = why.find('\n', at))
-			why.replace(at, 1, "; ");
-		return ibHttpClientError::Verification;
-	}
-	if (flags != 0) {
-		why = "the certificate is not for '" + host + "'";
-		return ibHttpClientError::Hostname;
-	}
-	why = "the TLS handshake failed: " + ibErrorText(error);
-	return ibHttpClientError::Handshake;
-}
-
 } // namespace
 
 ibHttpClientError ibTlsClientContext(const std::string& trusted, const std::string& certificate,
@@ -217,7 +191,7 @@ void ibWebSocketClientState::Connected(asio::ip::tcp::socket socket)
 			return;
 		if (shaken) {
 			std::string why;
-			HandshakeRefusal(static_cast<const ibTlsStream&>(*self->m_stream), self->m_host, shaken, why);
+			static_cast<const ibTlsStream&>(*self->m_stream).GetRefusal(self->m_host, shaken, why);
 			self->Drop(why);
 			return;
 		}
@@ -586,7 +560,7 @@ public:
 									return;
 								if (shaken) {
 									std::string why;
-									HandshakeRefusal(static_cast<const ibTlsStream&>(*self->m_stream), host, shaken, why);
+									static_cast<const ibTlsStream&>(*self->m_stream).GetRefusal(host, shaken, why);
 									self->Finish(0, why);
 									return;
 								}
@@ -838,7 +812,7 @@ struct ibHttpClientState {
 	void Refused(const std::error_code& error)
 	{
 		std::string why;
-		const ibHttpClientError refused = HandshakeRefusal(static_cast<const ibTlsStream&>(*m_stream), m_host, error, why);
+		const ibHttpClientError refused = static_cast<const ibTlsStream&>(*m_stream).GetRefusal(m_host, error, why);
 		Finish(refused, std::move(why));
 	}
 

@@ -2,7 +2,8 @@
 #
 # What goes in: everything the build put beside the executables (the programs, backend / frmclient, the
 # wxWidgets DLLs, help/, plugins/, and the database clients the backend's post-build step copies: _fb/ and
-# libpq with OpenSSL), plus what no build step places — the interface translations (lang/) and the MSVC
+# libpq with OpenSSL), plus what no build step places — the interface translations (lang/), the fonts a PDF is
+# written in (fonts/) and the MSVC
 # runtime, which Common.props copies for a Visual Studio Release build and nothing does for CMake. The
 # UCRT is part of Windows 10/11 and is not shipped, as there.
 #
@@ -26,6 +27,8 @@ Get-ChildItem -Recurse -File $stage -Include *.pdb, *.ilk, *.exp, *.lib | Remove
 # The translations — read from <exeDir>/lang/<code>/open_es.po; the template beside them stays in the repository.
 Copy-Item -Recurse -Path 'lang' -Destination (Join-Path $stage 'lang')
 Get-ChildItem -Recurse -File (Join-Path $stage 'lang') -Include *.pot | Remove-Item -Force
+# The fonts a PDF is written in — read from <exeDir>/fonts, embedded into every PDF the engine writes.
+Copy-Item -Recurse -Path 'fonts' -Destination (Join-Path $stage 'fonts')
 
 # The MSVC runtime, from the toolset that built it (vcvars sets VCToolsRedistDir).
 $crt = Get-ChildItem -Directory (Join-Path $env:VCToolsRedistDir 'x64') -Filter 'Microsoft.VC*.CRT' | Select-Object -First 1
@@ -41,7 +44,7 @@ $required = @(
     'backend.conf',
     '_fb\fbclient.dll', '_fb\firebird.msg', '_fb\firebird.conf', '_fb\plugins\engine13.dll', '_fb\intl\fbintl.dll',
     'libpq.dll', 'libssl-3-x64.dll', 'libcrypto-3-x64.dll',
-    'help\en.hlk', 'lang\ru\open_es.po', 'plugins\simple-plugin.dll',
+    'help\en.hlk', 'lang\ru\open_es.po', 'fonts\LiberationSans-Regular.ttf', 'plugins\simple-plugin.dll',
     'msvcp140.dll', 'vcruntime140.dll'
 )
 $missing = $required | Where-Object { -not (Test-Path (Join-Path $stage $_)) }

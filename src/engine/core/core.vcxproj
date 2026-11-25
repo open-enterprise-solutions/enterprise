@@ -102,7 +102,7 @@
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>$(oesLibDir);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>ws2_32.lib;crypt32.lib;bcrypt.lib;mbedtls.lib;llhttp.lib;lodepng.lib;lunasvg.lib;expat.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>ws2_32.lib;crypt32.lib;bcrypt.lib;mbedtls.lib;llhttp.lib;lodepng.lib;lunasvg.lib;libharu.lib;expat.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
@@ -235,11 +235,18 @@
     <ClCompile Include="net\servedAddress.cpp">
       <PreprocessorDefinitions>WIN32_LEAN_AND_MEAN;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
+    <ClCompile Include="net\smtpClient.cpp">
+      <PreprocessorDefinitions>WIN32_LEAN_AND_MEAN;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
     <ClCompile Include="net\tlsStream.cpp">
       <PreprocessorDefinitions>WIN32_LEAN_AND_MEAN;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
     <ClCompile Include="net\webSocketFrame.cpp">
       <PreprocessorDefinitions>WIN32_LEAN_AND_MEAN;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <!-- The one file that writes PDF: libharu's header, and its configuration (pdf\libharu\libharu.vcxproj). -->
+    <ClCompile Include="pdf\pdfDocument.cpp">
+      <AdditionalIncludeDirectories>$(oesEngine)core\pdf\libharu;$(oes3rdParty)libharu\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <ClCompile Include="pictureRegistry.cpp" />
     <ClCompile Include="launchTicket.cpp" />
@@ -351,8 +358,10 @@
     <ClInclude Include="net\ioThreads.h" />
     <ClInclude Include="net\ports.h" />
     <ClInclude Include="net\servedAddress.h" />
+    <ClInclude Include="net\smtpClient.h" />
     <ClInclude Include="net\tlsStream.h" />
     <ClInclude Include="net\webSocketFrame.h" />
+    <ClInclude Include="pdf\pdfDocument.h" />
     <ClInclude Include="net\webSocketRelay.h" />
     <ClInclude Include="pictureRegistry.h" />
     <ClInclude Include="launchTicket.h" />

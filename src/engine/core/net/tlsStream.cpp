@@ -284,6 +284,31 @@ std::uint32_t ibTlsStream::GetVerification() const
 	return flags;
 }
 
+// THE HANDSHAKE FAILED — told apart by what the certificate's check said: a chain nobody vouches for first, the name
+// after it; neither — the server does not speak TLS, or not this TLS.
+ibHttpClientError ibTlsStream::GetRefusal(const std::string& host, const std::error_code& error, std::string& why) const
+{
+	const std::uint32_t flags = GetVerification();
+	if ((flags & ~static_cast<std::uint32_t>(MBEDTLS_X509_BADCERT_CN_MISMATCH)) != 0) {
+		char said[512] = {};
+		mbedtls_x509_crt_verify_info(said, sizeof(said), "", flags);
+
+		// A line per failed check, each ended with '\n' — one sentence for the refusal.
+		why = said;
+		while (!why.empty() && why.back() == '\n')
+			why.pop_back();
+		for (std::size_t at = why.find('\n'); at != std::string::npos; at = why.find('\n', at))
+			why.replace(at, 1, "; ");
+		return ibHttpClientError::Verification;
+	}
+	if (flags != 0) {
+		why = "the certificate is not for '" + host + "'";
+		return ibHttpClientError::Hostname;
+	}
+	why = "the TLS handshake failed: " + ibErrorText(error);
+	return ibHttpClientError::Handshake;
+}
+
 int ibTlsStream::Send(void* stream, const unsigned char* data, std::size_t size)
 {
 	static_cast<ibTlsStream*>(stream)->m_cipherOut.append(reinterpret_cast<const char*>(data), size);

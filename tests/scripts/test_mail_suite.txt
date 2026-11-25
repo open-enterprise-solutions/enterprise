@@ -1,0 +1,65 @@
+// ============================================================================
+// Mail from a script - the values - 2026-11-25
+//
+// InternetMailProfile / InternetMailMessage / InternetMail, the texts, the attachments and InternetMailTextType.
+// The suite CHECKS ITSELF: a mismatch raises, and a corpus script that raises fails its run. It speaks to no server:
+// the conversation is tests/test_mail.cpp's, against a server of its own.
+//
+//   1. A message is built as a script builds it: addresses added to To and Cc, texts of both kinds, attachments.
+//   2. A profile's port is the security's unless given; the time allowed is 30 s unless said.
+//   3. Sending before logging on, a profile with no server and a time of 0 are refused.
+// ============================================================================
+
+// 1
+var message = New InternetMailMessage();
+message.From = "Shop <shop@example.com>";
+message.To.Add("buyer@example.net");
+message.Cc.Add("Accounts <accounts@example.net>");
+message.Subject = "Рахунок 42";
+if (message.To.Count() != 1 || message.Cc.Count() != 1 || message.Bcc.Count() != 0) { Raise("the address lists are not as added"); }
+if (message.Subject != "Рахунок 42") { Raise("the subject read back as [" + message.Subject + "]"); }
+
+var plain = message.Texts.Add("The invoice is attached.");
+if (plain.TextType != InternetMailTextType.PlainText) { Raise("a text is plain unless said"); }
+var html = message.Texts.Add("<p>The invoice is attached.</p>", InternetMailTextType.HTML);
+if (html.TextType != InternetMailTextType.HTML) { Raise("a text said to be HTML is not"); }
+if (message.Texts.Count() != 2) { Raise("expected 2 texts, got " + message.Texts.Count()); }
+
+var bytes = message.Attachments.Add(New BinaryData("abc", TextEncoding.UTF8), "a.txt");
+if (bytes.Name != "a.txt" || bytes.Data.Size() != 3) { Raise("the attachment from bytes: " + bytes.Name + ", " + bytes.Data.Size()); }
+
+var path = GetTempFileName();
+var writer = New TextWriter(path, TextEncoding.UTF8);
+writer.Write("12345");
+writer.Close();
+var fromFile = message.Attachments.Add(path);
+FileDelete(path);
+if (Right(path, StrLen(fromFile.Name)) != fromFile.Name) { Raise("a file attached without a name goes by its own, not [" + fromFile.Name + "]"); }
+if (fromFile.Data.Size() != 5) { Raise("the file was not read when it was added"); }
+
+var walked = 0;
+foreach (one in message.Attachments) { walked = walked + 1; }
+if (walked != 2) { Raise("For Each walked " + walked + " attachments"); }
+Message("message: " + message.Texts.Count() + " texts, " + walked + " attachments");
+
+// 2
+var profile = New InternetMailProfile();
+if (profile.SMTPPort != 25) { Raise("in the clear the port is 25 unless given, got " + profile.SMTPPort); }
+profile.SecureConnection = New SecureConnection();
+if (profile.SMTPPort != 465) { Raise("with TLS the port is 465 unless given, got " + profile.SMTPPort); }
+profile.SMTPPort = 587;
+if (profile.SMTPPort != 587) { Raise("a port given is the port"); }
+if (profile.Timeout != 30) { Raise("the time allowed is 30 s unless said, got " + profile.Timeout); }
+Message("profile: " + profile.SMTPPort);
+
+// 3
+var refused = False;
+try { New InternetMail().Send(message); } except { refused = True; }
+if (!refused) { Raise("sending before logging on must be refused"); }
+refused = False;
+try { New InternetMail().Logon(New InternetMailProfile()); } except { refused = True; }
+if (!refused) { Raise("a profile that names no server must be refused"); }
+refused = False;
+try { profile.Timeout = 0; } except { refused = True; }
+if (!refused) { Raise("a time allowed of 0 must be refused"); }
+Message("refusals: 3");

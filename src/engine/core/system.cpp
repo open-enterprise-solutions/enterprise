@@ -6,6 +6,7 @@
 #include <windows.h>
 #include <shellapi.h>   // CommandLineToArgvW
 #else
+#include <cstdlib>         // getenv - the user's font folders
 #include <cstring>         // strchr - the host name's domain cut off
 #include <fstream>         // /proc/self/cmdline
 #include <iterator>
@@ -60,6 +61,21 @@ ibString ibOsDescription()
 	return ibString::Format(ibT("%s (build %lu)%s"), name, info.dwBuildNumber, wide ? ibT(", 64-bit edition") : ibT(""));
 }
 
+std::vector<ibString> ibSystemFontFolders()
+{
+	std::vector<ibString> folders;
+	wchar_t windows[MAX_PATH] = {};
+	const UINT length = ::GetWindowsDirectoryW(windows, MAX_PATH);
+	if (length > 0 && length < MAX_PATH)
+		folders.push_back(ibString(windows) + ibT("\\Fonts"));
+	// …and the user's, where Windows puts a font a person installs for themselves alone (Windows 10 1809 on).
+	wchar_t local[MAX_PATH] = {};
+	const DWORD localLength = ::GetEnvironmentVariableW(L"LOCALAPPDATA", local, MAX_PATH);
+	if (localLength > 0 && localLength < MAX_PATH)
+		folders.push_back(ibString(local) + ibT("\\Microsoft\\Windows\\Fonts"));
+	return folders;
+}
+
 bool ibSetEnv(const ibString& name, const ibString& value)
 {
 	// Both the system's block and the C runtime's copy: a library may read either (GetEnvironmentVariable, getenv).
@@ -106,6 +122,26 @@ ibString ibOsDescription()
 	if (::uname(&name) != 0)
 		return ibString();
 	return ibString::FromUTF8(std::string(name.sysname) + " " + name.release + " " + name.machine);
+}
+
+std::vector<ibString> ibSystemFontFolders()
+{
+	const char* const home = std::getenv("HOME");
+#ifdef __IBOSX__
+	std::vector<ibString> folders{ ibT("/System/Library/Fonts"), ibT("/Library/Fonts") };
+	if (home != nullptr)
+		folders.push_back(ibString::FromUTF8(std::string(home) + "/Library/Fonts"));
+#else
+	// Where fontconfig looks unless told otherwise: the system's two, and the user's — XDG's, then the old one.
+	std::vector<ibString> folders{ ibT("/usr/share/fonts"), ibT("/usr/local/share/fonts") };
+	if (const char* const data = std::getenv("XDG_DATA_HOME"); data != nullptr && *data != '\0')
+		folders.push_back(ibString::FromUTF8(std::string(data) + "/fonts"));
+	else if (home != nullptr)
+		folders.push_back(ibString::FromUTF8(std::string(home) + "/.local/share/fonts"));
+	if (home != nullptr)
+		folders.push_back(ibString::FromUTF8(std::string(home) + "/.fonts"));
+#endif
+	return folders;
 }
 
 bool ibSetEnv(const ibString& name, const ibString& value)

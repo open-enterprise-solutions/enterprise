@@ -66,6 +66,7 @@
     <ClInclude Include="sheetFormat\sheetFormatXlsx.h" />
     <ClInclude Include="sheetFormat\sheetFormatNative.h" />
     <ClInclude Include="sheetFormat\sheetFormatDocx.h" />
+    <ClInclude Include="sheetFormat\sheetFormatPdf.h" />
     <ClInclude Include="system\value\valueBackgroundJob.h" />
     <ClInclude Include="backend_core.h" />
     <ClInclude Include="backend_mainFrame.h" />
@@ -400,11 +401,13 @@
     <ClInclude Include="system\value\valueTextFile.h" />
     <ClInclude Include="system\value\valueHttp.h" />
     <ClInclude Include="system\value\valueSecureConnection.h" />
+    <ClInclude Include="system\value\valueMail.h" />
     <ClInclude Include="system\value\valueFile.h" />
     <ClInclude Include="system\value\valueFont.h" />
     <ClInclude Include="system\value\valueGuid.h" />
     <ClInclude Include="system\value\valueJson.h" />
     <ClInclude Include="system\value\valueXml.h" />
+    <ClInclude Include="system\value\valueZip.h" />
     <ClInclude Include="system\value\valueJob.h" />
     <ClInclude Include="system\value\valueMap.h" />
     <ClInclude Include="system\value\valueCOM.h" />
@@ -479,6 +482,7 @@
     <ClCompile Include="sheetFormat\sheetFormat.cpp" />
     <ClCompile Include="sheetFormat\sheetFormatNative.cpp" />
     <ClCompile Include="sheetFormat\sheetFormatDocx.cpp" />
+    <ClCompile Include="sheetFormat\sheetFormatPdf.cpp" />
     <ClCompile Include="sheetFormat\sheetFormatXlsxRead.cpp" />
     <ClCompile Include="sheetFormat\sheetFormatXlsxWrite.cpp" />
     <ClCompile Include="system\value\valueBackgroundJob.cpp" />
@@ -926,11 +930,13 @@
     <ClCompile Include="system\value\valueTextFile.cpp" />
     <ClCompile Include="system\value\valueHttp.cpp" />
     <ClCompile Include="system\value\valueSecureConnection.cpp" />
+    <ClCompile Include="system\value\valueMail.cpp" />
     <ClCompile Include="system\value\valueFile.cpp" />
     <ClCompile Include="system\value\valueFont.cpp" />
     <ClCompile Include="system\value\valueGuid.cpp" />
     <ClCompile Include="system\value\valueJson.cpp" />
     <ClCompile Include="system\value\valueXml.cpp" />
+    <ClCompile Include="system\value\valueZip.cpp" />
     <ClCompile Include="system\value\valueJob.cpp" />
     <ClCompile Include="system\value\valueMap.cpp" />
     <ClCompile Include="system\value\valueCOM.cpp" />

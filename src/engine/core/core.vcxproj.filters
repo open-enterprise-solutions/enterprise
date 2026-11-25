@@ -82,6 +82,9 @@
     <Filter Include="zip">
       <UniqueIdentifier>{7c3e9a51-2d84-4f6b-9e07-a1b5c8d2f364}</UniqueIdentifier>
     </Filter>
+    <Filter Include="pdf">
+      <UniqueIdentifier>{a154d774-7fd5-4c8a-818f-43be5af6a6cf}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="build.cpp" />
@@ -244,11 +247,17 @@
     <ClCompile Include="net\servedAddress.cpp">
       <Filter>net</Filter>
     </ClCompile>
+    <ClCompile Include="net\smtpClient.cpp">
+      <Filter>net</Filter>
+    </ClCompile>
     <ClCompile Include="net\tlsStream.cpp">
       <Filter>net</Filter>
     </ClCompile>
     <ClCompile Include="net\webSocketFrame.cpp">
       <Filter>net</Filter>
+    </ClCompile>
+    <ClCompile Include="pdf\pdfDocument.cpp">
+      <Filter>pdf</Filter>
     </ClCompile>
     <ClCompile Include="picturePredefined.cpp" />
     <ClCompile Include="pictureRegistry.cpp" />
@@ -522,11 +531,17 @@
     <ClInclude Include="net\servedAddress.h">
       <Filter>net</Filter>
     </ClInclude>
+    <ClInclude Include="net\smtpClient.h">
+      <Filter>net</Filter>
+    </ClInclude>
     <ClInclude Include="net\tlsStream.h">
       <Filter>net</Filter>
     </ClInclude>
     <ClInclude Include="net\webSocketFrame.h">
       <Filter>net</Filter>
+    </ClInclude>
+    <ClInclude Include="pdf\pdfDocument.h">
+      <Filter>pdf</Filter>
     </ClInclude>
     <ClInclude Include="net\webSocketRelay.h">
       <Filter>net</Filter>

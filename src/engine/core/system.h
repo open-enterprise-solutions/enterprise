@@ -17,6 +17,10 @@ CORE_API ibString ibUserName();
 // The system in words ("Windows 11 (build 26200), 64-bit edition", "Linux 6.8.0 x86_64"), what wxGetOsDescription gave
 // the journal's opening lines.
 CORE_API ibString ibOsDescription();
+// The folders the system keeps its fonts in — the machine's, then this user's: Windows' Fonts and the user's own,
+// /usr/share/fonts and its neighbours, /System/Library/Fonts and /Library/Fonts. A folder named may not exist; a font
+// is looked for in them, and below them, by whoever writes one into a file (a PDF).
+CORE_API std::vector<ibString> ibSystemFontFolders();
 
 // This process's environment, as a library it loads reads it (fbclient finds its folder by FIREBIRD).
 CORE_API bool ibSetEnv(const ibString& name, const ibString& value);

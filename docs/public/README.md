@@ -59,9 +59,11 @@ Add a row to the group it belongs to when you add a document, so this folder can
 | [http-client.md](http-client.md) | HTTP and HTTPS from a script: the values, what they guarantee, where they stop |
 | [http-services.md](http-services.md) | HTTP services: an application answering a request — the three kinds, the match, the handler, the session, where it stops |
 | [json.md](json.md) | JSON from a script: what reading gives, what the writer guarantees, where it stops |
+| [mail.md](mail.md) | Mail from a script: the profile, the message, sending over SMTP with TLS, what reaches whom |
 | [number-model.md](number-model.md) | The number: an exact decimal in `ibNumber`, the one bounded step (division), the rounding rules, its doors |
 | [query-language.md](query-language.md) | The query language: sources, references, expressions, totals, the package; the one door under every front-end |
 | [xml.md](xml.md) | XML from a script: the reader node by node, the writer, the encodings, what nothing outside the document can reach |
+| [zip.md](zip.md) | ZIP archives from a script: the writer, the reader from a file or bytes, what an entry's name may not reach |
 
 ### Running a base
 

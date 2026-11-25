@@ -91,7 +91,7 @@ git submodule update --init --recursive
 
 The `--recursive` flag is required because wxWidgets itself contains submodules.
 
-**A CMake configure fetches what is missing.** wxWidgets, cpp-httplib, Mbed TLS, nlohmann/json, Asio, llhttp, LodePNG, lunasvg, Expat and date are
+**A CMake configure fetches what is missing.** wxWidgets, cpp-httplib, Mbed TLS, nlohmann/json, Asio, llhttp, LodePNG, lunasvg, libharu, Expat and date are
 each checked before use, and one that is not there is fetched with `git submodule update --init --recursive` for
 that path (three attempts); only a tree with no git, or no network, stops with the command to run. A
 checkout that fetched less than the tree needs - an older workflow, a partial clone - still builds.
@@ -110,7 +110,10 @@ target, `core/graphics/lodepng/lodepng.vcxproj` in the solution, linked into cor
 lunasvg (`<lunasvg.h>`, with plutovg inside it, release `v3.5.0`, taken as released — nothing in it is changed, a
 newer release is a new gitlink; built by its own CMake as the static `lunasvg` and `plutovg` targets, and under MSBuild
 by `core/graphics/lunasvg/lunasvg.vcxproj`, which compiles every source file it has; read in
-`core/graphics/picture.cpp` alone — `ibPicture::FromSvg`).
+`core/graphics/picture.cpp` alone — `ibPicture::FromSvg`). PDF is the core's the same way: libharu (`<hpdf.h>`,
+release `v2.4.6`, taken as released; built by its own CMake as the static `hpdf` target — after wx, its zlib the
+core's, no libpng — and under MSBuild by `core/pdf/libharu/libharu.vcxproj`, every `.c` it has plus the configuration
+header its CMake would write; read in `core/pdf/pdfDocument.cpp` alone — `ibPdfDocument`).
 Time zones are the system's on Linux and macOS: the core reads the zoneinfo files through the date library
 (`src/3rdparty/date`, built there alone), so a server needs the `tzdata` package; nothing is shipped. Windows has
 them in the C++ runtime.
