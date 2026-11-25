@@ -354,8 +354,13 @@ bool ibPGColourProperty::OnEvent(ibPropertyGrid* propgrid,
 	return false;
 }
 
-wxSize ibPGColourProperty::OnMeasureImage(int) const
+wxSize ibPGColourProperty::OnMeasureImage(int item) const
 {
+	// The value with no colour (<default>) has no swatch — width 0, and its text stands where the font's does. The
+	// height stays the default: the grid counts the property among those with an image when it is added, and the
+	// swatch is there again once a colour is chosen. An item of the list is a colour, every one the swatch's width.
+	if (item < 0 && !GetVal().IsOk())
+		return wxSize(0, wxDefaultCoord);
 	return ibPG_DEFAULT_IMAGE_SIZE;
 }
 

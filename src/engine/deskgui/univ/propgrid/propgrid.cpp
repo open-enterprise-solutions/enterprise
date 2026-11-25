@@ -3247,6 +3247,11 @@ bool ibPropertyGrid::DoPropertyChanged( ibPGProperty* p, ibPGSelectPropertyFlags
     {
         RefreshEditor();
     }
+    // Typed, the text stays as typed; the control's place still follows the value's image, as RefreshEditor moves it.
+    else if ( editor && (m_iFlags & ibPG_FL_CUR_USES_CUSTOM_IMAGE) )
+    {
+        CorrectEditorWidgetSizeX();
+    }
 
     // Sanity check
     wxASSERT( !changedProperty->GetParent()->HasFlag(ibPGFlags::Aggregate) );
@@ -3588,7 +3593,8 @@ wxRect ibPropertyGrid::GetEditorWidgetRect( ibPGProperty* p, int column ) const
             //m_iFlags |= ibPG_FL_CUR_USES_CUSTOM_IMAGE;
             int iw = p->OnMeasureImage().x;
             wxASSERT( iw == wxDefaultCoord || iw >= 0 );
-            if ( iw == wxDefaultCoord || iw == 0 )
+            // 0 — no image for this value (a colour's none): no offset, as the cell draws it (ibPGDefaultRenderer).
+            if ( iw == wxDefaultCoord )
                 iw = ibPG_CUSTOM_IMAGE_WIDTH;
             imageOffset = p->GetImageOffset(iw);
         }
@@ -4035,12 +4041,9 @@ bool ibPropertyGrid::DoSelectProperty( ibPGProperty* p, ibPGSelectPropertyFlags 
                         m_iFlags |= ibPG_FL_ABNORMAL_EDITOR;
 
                     // If it has modified status, use bold font
-                    // (must be done before capturing m_ctrlXAdjust)
                     if ( p->HasFlag(ibPGFlags::Modified) &&
                          (m_windowStyle & ibPG_BOLD_MODIFIED) )
                         SetCurControlBoldFont();
-                    // Store x relative to splitter (we'll need it).
-                    m_ctrlXAdjust = m_wndEditor->GetPosition().x - splitterX;
 
                     // Check if background clear is not necessary
                     wxPoint pos = m_wndEditor->GetPosition();
@@ -4236,6 +4239,10 @@ void ibPropertyGrid::RefreshEditor()
     const ibPGEditor* editorClass = p->GetEditorClass();
 
     editorClass->UpdateControl(p, wnd);
+
+    // The value's image may be of another width now (a colour's swatch: none for no colour) — the control follows it.
+    if ( m_iFlags & ibPG_FL_CUR_USES_CUSTOM_IMAGE )
+        CorrectEditorWidgetSizeX();
 
     if ( p->IsValueUnspecified() )
         SetEditorAppearance(m_unspecifiedAppearance, true);

@@ -1671,6 +1671,11 @@ void ibPropertyGrid::CorrectEditorWidgetSizeX()
     CalcScrolledPosition(m_pState->DoGetSplitterPosition(0), 0, &newSplitterx, nullptr);
     int newWidth = newSplitterx + m_pState->GetColumnWidth(1);
 
+    // Where the cell's value starts now — past the value's image, whose width follows the value (a colour's swatch is
+    // none for no colour): the primary control keeps its place from there, as CorrectEditorWidgetPosY puts it.
+    ibPGProperty* selected = GetSelection();
+    const int cellX = selected != nullptr ? GetEditorWidgetRect(selected, 1).x : newSplitterx;
+
     if ( m_wndEditor2 )
     {
         // if width change occurred, move secondary wnd by that amount
@@ -1679,6 +1684,8 @@ void ibPropertyGrid::CorrectEditorWidgetSizeX()
         r.x = newWidth - secWid;
 
         m_wndEditor2->SetSize( r );
+        // At the column's end wherever the value starts — what CorrectEditorWidgetPosY moves it by.
+        m_wndEditor2PosRel.x = r.x - cellX;
 
         // if primary is textctrl, then we have to add some extra space
         if ( wxDynamicCast(m_wndEditor, ibTextCtrl) )
@@ -1689,7 +1696,7 @@ void ibPropertyGrid::CorrectEditorWidgetSizeX()
     {
         wxRect r = m_wndEditor->GetRect();
 
-        r.x = newSplitterx+m_ctrlXAdjust;
+        r.x = cellX + m_wndEditorPosRel.x;
 
         if ( !(m_iFlags & ibPG_FL_FIXED_WIDTH_EDITOR) )
             r.width = newWidth - r.x - secWid;

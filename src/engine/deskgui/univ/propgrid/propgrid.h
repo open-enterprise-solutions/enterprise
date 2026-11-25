@@ -1514,8 +1514,6 @@ protected:
 
     // Which column's editor is selected (usually 1)?
     unsigned int        m_selColumn;
-    // x relative to splitter (needed for resize).
-    int                 m_ctrlXAdjust;
     // lines between cells
     wxColour            m_colLine;
     // property labels and values are written in this colour

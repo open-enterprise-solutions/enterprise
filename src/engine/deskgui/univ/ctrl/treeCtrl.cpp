@@ -2455,11 +2455,22 @@ void ibTreeCtrl::ScrollTo(const wxTreeItemId &item)
         return;
 
     // update the control before scrolling it: the pending paint, then the positions the scroll is counted from
-    // (SEAM vs wx: wxOSX's, on every port - wx's MSW scrolled over the positions of before the change)
+    // (SEAM vs wx: wxOSX's, on every port - wx's MSW scrolled over the positions of before the change). A tree held
+    // still (Freeze) paints nothing, but its positions and its range are counted all the same, the paint left for when
+    // it is let go: scrolled by those of before, a row made while it was held stood at 0 and the tree went to its top
+    // (the studio's control tree, rebuilt with every control added - 2026-11-25).
     if (m_dirty)
     {
         Update();
-        DoDirtyProcessing();
+        if (IsFrozen())
+        {
+            CalculatePositions();
+            AdjustMyScrollbars();
+        }
+        else
+        {
+            DoDirtyProcessing();
+        }
     }
 
     ibTreeItem *gitem = GetItemPtr(item);

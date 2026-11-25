@@ -1,10 +1,11 @@
-"""The window About: what the server answers, in the thin client's blocks."""
+"""The window About: the program beside the logo, the session's facts the server answers, what it is built on."""
 import unittest
 
 from harness import PageTest, tab
 
 ABOUT = 4
-ANSWER = {'Build': 1234, 'Database': 'file base', 'Program': 'Thin client', 'User': 'Admin', 'Locale': 'en_US'}
+ANSWER = {'Version': '2.0.0', 'Build': 1234, 'Database': 'file base', 'Program': 'File base', 'User': 'Admin',
+          'Locale': 'en_US'}
 MENU = {'NodeChildren': [{'Title': 'Help', 'NodeChildren': [{'Title': 'About', 'Schema': ABOUT}]}]}
 
 
@@ -13,29 +14,43 @@ class About(PageTest):
         page = self.start({'tabs': [tab()], 'menu': MENU, 'schemas': {str(ABOUT): answer if answer is not None else ANSWER}})
         page.locator('.menu wa-button', has_text='Help').click()
         page.locator('wa-dropdown-item', has_text='About').click()
-        page.wait_for_selector('wa-dialog.about .platform')
+        page.wait_for_selector('wa-dialog.about .program')
         return page
 
-    def info(self, page):
+    def facts(self, page):
+        """The facts as label, value, label, value… - the system's value is the browser's, so only its label."""
         return page.locator('.about dl').evaluate('(one) => [...one.children].map((part) => part.textContent)')
 
-    def test_says_the_build_and_what_the_session_runs_on(self):
+    def test_says_the_program_its_version_and_build(self):
         page = self.show()
-        self.assertIn('build 1234', page.locator('.about .platform').inner_text())
-        self.assertEqual(self.info(page), ['Database:', 'file base', 'Program:', 'Thin client', 'User:', 'Admin', 'Locale:', 'en_US'])
+        self.assertEqual(page.locator('.about .program').inner_text(), 'OES Application Workspace')
+        self.assertEqual(page.locator('.about .version').inner_text(), 'Version 2.0.0, build 1234')
+
+    def test_says_what_the_session_runs_on(self):
+        facts = self.facts(self.show())
+        self.assertEqual(facts[:8], ['Database', 'file base', 'Connection', 'File base', 'User', 'Admin',
+                                     'Language', 'en_US'])
+        self.assertEqual(facts[8], 'System')
 
     def test_no_base_no_line_for_it(self):
-        page = self.show({**ANSWER, 'Database': ''})
-        self.assertNotIn('Database:', self.info(page))
+        self.assertNotIn('Database', self.facts(self.show({**ANSWER, 'Database': ''})))
+
+    def test_an_empty_fact_is_a_dash(self):
+        facts = self.facts(self.show({**ANSWER, 'User': ''}))
+        self.assertEqual(facts[facts.index('User') + 1], '—')
 
     def test_the_plugins_only_if_any(self):
         page = self.show()
-        self.assertEqual(page.locator('.about legend').all_inner_texts(), ['Info', 'Thanks'])
+        self.assertNotIn('Plugins', self.facts(page))
         page.context.close()
         self.context = None
-        page = self.show({**ANSWER, 'Plugins': {'NodeChildren': [{'Name': 'Sample', 'Version': '1.2'}]}})
-        self.assertEqual(page.locator('.about legend').all_inner_texts(), ['Info', 'Plugins', 'Thanks'])
-        self.assertIn('Sample  1.2', page.locator('.about fieldset', has_text='Plugins').evaluate('(one) => one.textContent'))
+        facts = self.facts(self.show({**ANSWER, 'Plugins': {'NodeChildren': [{'Name': 'Sample', 'Version': '1.2'}]}}))
+        self.assertEqual(facts[-2:], ['Plugins', 'Sample 1.2'])
+
+    def test_says_what_it_is_built_on(self):
+        credits = self.show().locator('.about .credits').inner_text()
+        self.assertIn('Built on', credits)
+        self.assertIn('PolyForm Noncommercial 1.0.0', credits)
 
     def test_ok_closes_it(self):
         page = self.show()

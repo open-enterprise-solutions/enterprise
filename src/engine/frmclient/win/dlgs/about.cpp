@@ -14,21 +14,21 @@
 namespace {
 
 // WHAT THE PLATFORM IS BUILT ON — NOTICE.md's components the desktop carries, its drawing and its code editor first.
-// Names, as their projects say them; the dot between them is UTF-8, said in bytes so the source stays ASCII.
-const char* const s_builtOn =
-	"wxWidgets \xC2\xB7 Scintilla \xC2\xB7 Mbed TLS \xC2\xB7 Asio \xC2\xB7 llhttp \xC2\xB7 Expat\n"
-	"LodePNG \xC2\xB7 lunasvg \xC2\xB7 SQLite \xC2\xB7 Firebird \xC2\xB7 PostgreSQL";
+// Names, as their projects say them; the dot between them by its code point, as the calculator's keys are said.
+const wxChar* const s_builtOn =
+	wxT("wxWidgets \u00B7 Scintilla \u00B7 Mbed TLS \u00B7 Asio \u00B7 llhttp \u00B7 Expat\n")
+	wxT("LodePNG \u00B7 lunasvg \u00B7 SQLite \u00B7 Firebird \u00B7 PostgreSQL");
 
-const char* const s_licence = "\xC2\xA9 2026 Open Enterprise Solutions \xC2\xB7 PolyForm Noncommercial 1.0.0";
+const wxChar* const s_licence = wxT("\u00A9 2026 Open Enterprise Solutions \u00B7 PolyForm Noncommercial 1.0.0");
 
-const char* const s_project = "https://github.com/open-enterprise-solutions/enterprise";
+const wxChar* const s_project = wxT("https://github.com/open-enterprise-solutions/enterprise");
 
 // A FACT'S ROW: its name, and the value as a borderless read-only field the text can be copied out of
 // (ibTextCtrl::HasContentBackground — on the dialog's colour), as wide as its text; an empty value is a dash. The line
 // goes to the facts Copy hands on.
 void AddFact(wxWindow* parent, wxFlexGridSizer* grid, wxString& facts, const wxString& label, const wxString& value)
 {
-	const wxString shown = !value.IsEmpty() ? value : wxString::FromUTF8("\xE2\x80\x94");
+	const wxString shown = !value.IsEmpty() ? value : wxString(wxT("\u2014"));
 	grid->Add(new ibStaticText(parent, wxID_ANY, label), 0, wxALIGN_CENTER_VERTICAL);
 
 	ibTextCtrl* field = new ibTextCtrl(parent, wxID_ANY, shown, wxDefaultPosition, wxDefaultSize,
@@ -117,10 +117,10 @@ ibDialogAbout::ibDialogAbout(wxWindow* parent, const ibProtocolNode& shown, int 
 	ibStaticText* builtOnCaption = new ibStaticText(this, wxID_ANY, _("Built on"));
 	builtOnCaption->SetFont(font.Bold());
 	credits->Add(builtOnCaption);
-	credits->Add(new ibStaticText(this, wxID_ANY, wxString::FromUTF8(s_builtOn)), 0, wxTOP, gap);
+	credits->Add(new ibStaticText(this, wxID_ANY, s_builtOn), 0, wxTOP, gap);
 	credits->Add(new ibStaticText(this, wxID_ANY,
 		_("Grown from wxFormBuilder (the form editor) and the ideas of 2C (the interpreter)")), 0, wxTOP, pad);
-	credits->Add(new ibStaticText(this, wxID_ANY, wxString::FromUTF8(s_licence)), 0, wxTOP, pad);
+	credits->Add(new ibStaticText(this, wxID_ANY, s_licence), 0, wxTOP, pad);
 
 	ibStaticText* link = new ibStaticText(this, wxID_ANY, wxT("github.com/open-enterprise-solutions/enterprise"));
 	link->SetHyperlink();
