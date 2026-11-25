@@ -46,9 +46,6 @@ ibCodeEditor::ibCodeEditor(ibTabDocument* document, wxWindow* parent, wxWindowID
 	: ibStyledTextCtrl(parent, id, pos, size, style, name),
 	  m_document(document), m_ac(this), m_ct(this), m_tc(CODE_CES)
 {
-	// initialize styles
-	StyleClearAll();
-
 	//set Lexer to LEX_CONTAINER: This will trigger the styleneeded event so you can do your own highlighting
 	SetLexer(ibSTC_LEX_CONTAINER);
 
@@ -631,7 +628,10 @@ void ibCodeEditor::OnStyleNeeded(ibStyledTextEvent& event)
 	/*this is called every time the styler detects a line that needs style, so we style that range.
 	This will save a lot of performance since we only style text when needed instead of parsing the whole file every time.*/
 	int line_start = ibCodeEditor::LineFromPosition(ibCodeEditor::GetEndStyled());
-	int line_end = ibCodeEditor::GetFirstVisibleLine() + ibCodeEditor::LinesOnScreen();
+	// The screen, or further where the document asks further: printing styles the pages below the screen through
+	// here (Document::EnsureStyledTo) - styled to the screen alone, they were printed without their colours.
+	int line_end = std::max(ibCodeEditor::GetFirstVisibleLine() + ibCodeEditor::LinesOnScreen(),
+		ibCodeEditor::LineFromPosition(event.GetPosition()));
 
 	if (line_end > ibCodeEditor::GetLineCount()) {
 		line_end = ibCodeEditor::GetLineCount() - 1;

@@ -22,9 +22,6 @@ ibDialogError::ibDialogError(ibFrontendMainFrame* parent, wxWindowID id,
 
 	m_errorOutput = new ibStyledTextCtrl(this, wxID_ANY, wxDefaultPosition, wxSize(550, 250), 0, wxEmptyString);
 
-	// initialize styles
-	m_errorOutput->StyleClearAll();
-
 	//set Lexer to LEX_CONTAINER: This will trigger the styleneeded event so you can do your own highlighting
 	m_errorOutput->SetLexer(ibSTC_LEX_CONTAINER);
 

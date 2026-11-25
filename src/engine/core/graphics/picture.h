@@ -12,7 +12,7 @@
 // int (wxRefCounter::m_count, and wx stays as it is upstream): four sessions copying the same class icon freed it
 // under each other (2026-10-06). A window makes its wx image from this one anew — the side's converter does (the
 // desktop: deskgui/artProvider.h; the thin client: frmclient/win/picture.h). Read, scaled and written here by LodePNG,
-// drawn from SVG and said as SVG here (NanoSVG), so the server has no wx image at all.
+// drawn from SVG by lunasvg and said as SVG here, so the server has no wx image at all.
 //
 ////////////////////////////////////////////////////////////////////////////
 
@@ -29,8 +29,8 @@ public:
 	// The drawing itself, kept as its text — every picture written in the source is one, an `s_<name>_svg` beside the
 	// code that shows it. None: the text is no SVG (it does not begin with `<`).
 	static ibPicture FromSvg(const ibString& svg);
-	// …drawn at the size asked: a PNG, the drawing fitted into it from the top left corner (NanoSVG: shapes, paths, fills
-	// and strokes are read; text and filters are not). None: the text is no SVG, or it draws nothing — every pixel
+	// …drawn at the size asked: a PNG, the drawing fitted into it from the top left corner (lunasvg, as it is released:
+	// nearly all of static SVG; not filters, not animation). None: the text is no SVG, or it draws nothing — every pixel
 	// transparent.
 	static ibPicture FromSvg(const ibString& svg, const ibSize& size);
 

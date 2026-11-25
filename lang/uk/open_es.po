@@ -11453,11 +11453,52 @@ msgstr "Вигляди"
 msgid "Printout"
 msgstr "Роздруківка"
 
-#: src/engine/deskgui/docview/print/printPreview.cpp:46
+#: src/engine/deskgui/docview/print/printPreview.cpp:408
+msgid "Could not start document preview."
+msgstr "Не вдалося почати попередній перегляд документа."
+
+#: src/engine/deskgui/docview/print/printPreview.cpp:408
+#: src/engine/deskgui/docview/print/printPreview.cpp:470
+#: src/engine/deskgui/docview/print/printPreview.cpp:477
+msgid "Print Preview Failure"
+msgstr "Помилка попереднього перегляду"
+
+#: src/engine/deskgui/docview/print/printPreview.cpp:470
+#: src/engine/deskgui/docview/print/printPreview.cpp:477
+msgid "Sorry, not enough memory to create a preview."
+msgstr "Недостатньо пам'яті для попереднього перегляду."
+
+#: src/engine/deskgui/docview/print/printPreview.cpp:484
+#, c-format
+msgid "Page %d of %d"
+msgstr "Сторінка %d з %d"
+
+#: src/engine/deskgui/docview/print/printPreview.cpp:485
+#, c-format
+msgid "Page %d"
+msgstr "Сторінка %d"
+
+#: src/engine/deskgui/docview/print/printPreview.cpp:733
+msgid "First page"
+msgstr "Перша сторінка"
+
+#: src/engine/deskgui/docview/print/printPreview.cpp:734
+msgid "Previous page"
+msgstr "Попередня сторінка"
+
+#: src/engine/deskgui/docview/print/printPreview.cpp:746
+msgid "Next page"
+msgstr "Наступна сторінка"
+
+#: src/engine/deskgui/docview/print/printPreview.cpp:747
+msgid "Last page"
+msgstr "Остання сторінка"
+
+#: src/engine/deskgui/docview/print/printPreview.cpp:772
 msgid "Fit to page width"
 msgstr "За шириною сторінки"
 
-#: src/engine/deskgui/docview/print/printPreview.cpp:48
+#: src/engine/deskgui/docview/print/printPreview.cpp:774
 msgid "Shrink a table wider than the page so that it is printed on one page across"
 msgstr "Зменшити таблицю, ширшу за аркуш, щоб завширшки вона вмістилася на одну сторінку"
 

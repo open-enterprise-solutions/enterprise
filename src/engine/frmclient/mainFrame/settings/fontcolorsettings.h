@@ -64,8 +64,10 @@ public:
 	void SetColors(DisplayItem displayItem, const Colors& colors);
 
 	// Paints a text control in these: each kind of text the C lexer tells apart in its font and colours, the
-	// selection, the line numbers, and a caret that shows on the paper.
-	void Apply(ibStyledTextCtrl& text) const;
+	// selection, the line numbers, and a caret that shows on the paper. In the set of the look given - the look in
+	// force's by default (System, as the client's theme says it); what is printed takes the light one's, paper being
+	// white in either look (2026-11-25: printed in the dark look, a module came out light grey on black).
+	void Apply(ibStyledTextCtrl& text, wxApp::Appearance look = wxApp::Appearance::System) const;
 
 	// The settings written as an element named by the tag; Load reads one back,
 	// keeping the default for a kind the node does not name.

@@ -91,7 +91,7 @@ git submodule update --init --recursive
 
 The `--recursive` flag is required because wxWidgets itself contains submodules.
 
-**A CMake configure fetches what is missing.** wxWidgets, cpp-httplib, Mbed TLS, nlohmann/json, Asio, llhttp, LodePNG, NanoSVG, Expat and date are
+**A CMake configure fetches what is missing.** wxWidgets, cpp-httplib, Mbed TLS, nlohmann/json, Asio, llhttp, LodePNG, lunasvg, Expat and date are
 each checked before use, and one that is not there is fetched with `git submodule update --init --recursive` for
 that path (three attempts); only a tree with no git, or no network, stops with the command to run. A
 checkout that fetched less than the tree needs - an older workflow, a partial clone - still builds.
@@ -101,17 +101,21 @@ checkout that fetched less than the tree needs - an older workflow, a partial cl
 `<mbedtls/…>` and wx's `<wx/…>` from their own include folders. Mbed TLS is the core's: linked into core only
 (`core/tls` declares it), and into the test binary for its reference TLS servers (cpp-httplib's); every other
 module asks the core for a cipher, a random byte, TLS. The core's network (`core/net`) has two more — Asio
-(`<asio.hpp>`, standalone, release `asio-1-36-0`, compiled once in `core/net/asio.cpp`; private to core — no header of
-`core/net` includes it) and llhttp (`<llhttp.h>`, branch `release/v9.3.0`, which
+(`<asio.hpp>`, standalone, release `asio-1-39-0` — its headers in the submodule's own `include/` since 1.38, not
+`asio/include/` — compiled once in `core/net/asio.cpp`; private to core — no header of
+`core/net` includes it) and llhttp (`<llhttp.h>`, branch `release/v9.4.4`, which
 carries the generated C sources; built as the static `llhttp` target, linked into core only). The core's pictures
 (`core/graphics/picture.h`) have LodePNG (`<lodepng.h>`, one source, `LODEPNG_NO_COMPILE_DISK`; the static `lodepng`
 target, `core/graphics/lodepng/lodepng.vcxproj` in the solution, linked into core only). SVG is the core's too:
-NanoSVG (`<nanosvg/src/nanosvg.h>`, header only, compiled in `core/graphics/picture.cpp` — `ibPicture::FromSvg`).
+lunasvg (`<lunasvg.h>`, with plutovg inside it, release `v3.5.0`, taken as released — nothing in it is changed, a
+newer release is a new gitlink; built by its own CMake as the static `lunasvg` and `plutovg` targets, and under MSBuild
+by `core/graphics/lunasvg/lunasvg.vcxproj`, which compiles every source file it has; read in
+`core/graphics/picture.cpp` alone — `ibPicture::FromSvg`).
 Time zones are the system's on Linux and macOS: the core reads the zoneinfo files through the date library
 (`src/3rdparty/date`, built there alone), so a server needs the `tzdata` package; nothing is shipped. Windows has
 them in the C++ runtime.
 
-XML is the core's as well: Expat (`<expat.h>`, tag `R_2_9_0`; the static `expat` target, its configuration
+XML is the core's as well: Expat (`<expat.h>`, tag `R_2_11_0`; the static `expat` target, its configuration
 `core/xml/expat/expat_config.h`, `core/xml/expat/expat.vcxproj` in the solution, linked into core only), read and
 written through `core/xml/xmlText.h`.
 
@@ -344,8 +348,8 @@ The root `CMakeLists.txt` adds fifteen engine subdirectories, each with its own
 | appcluster | executable (console, or a service) — one or more servers per base of the folder; links `core` alone |
 | appcluster-tray | executable (GUI) — the cluster's tray; links `core` alone |
 | webserver | executable (console) — the web server |
-| appworkspace | executable (GUI) — the thin client |
-| appstudio | executable (GUI) — the thin designer |
+| appworkspace | executable (GUI) — the workspace |
+| appstudio | executable (GUI) — the studio |
 | launcher | executable (GUI) |
 | coderunner | executable (GUI) — links `backend` and wx, as `launcher` does |
 | simple-plugin | shared lib (plugin example) |
@@ -537,7 +541,7 @@ Five notes on why it is shaped this way — each one paid for by a wasted round:
   locally, and 0.09–0.37 s for the backend-linking suite — so `tests/CMakeLists.txt` registers
   every suite through one `oes_discover_tests()` wrapper carrying `DISCOVERY_TIMEOUT 120`. Add a
   new suite through that wrapper, not through `gtest_discover_tests` directly.
-- **The solution compiles no tests.** `enterprise.sln` carries the 18 shipping projects and nothing
+- **The solution compiles no tests.** `enterprise.sln` carries the shipping projects and nothing
   from `tests/` — the test tree is reached through CMake only. So a rename or a header move that a
   local `Debug|x86` build accepts can still leave test sources naming a file that no longer exists,
   and CI is what says so. Three did, on 2026-08-20

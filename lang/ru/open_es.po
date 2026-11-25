@@ -11456,11 +11456,52 @@ msgstr "Виды"
 msgid "Printout"
 msgstr "Распечатка"
 
-#: src/engine/deskgui/docview/print/printPreview.cpp:46
+#: src/engine/deskgui/docview/print/printPreview.cpp:408
+msgid "Could not start document preview."
+msgstr "Не удалось начать предварительный просмотр документа."
+
+#: src/engine/deskgui/docview/print/printPreview.cpp:408
+#: src/engine/deskgui/docview/print/printPreview.cpp:470
+#: src/engine/deskgui/docview/print/printPreview.cpp:477
+msgid "Print Preview Failure"
+msgstr "Ошибка предварительного просмотра"
+
+#: src/engine/deskgui/docview/print/printPreview.cpp:470
+#: src/engine/deskgui/docview/print/printPreview.cpp:477
+msgid "Sorry, not enough memory to create a preview."
+msgstr "Недостаточно памяти для предварительного просмотра."
+
+#: src/engine/deskgui/docview/print/printPreview.cpp:484
+#, c-format
+msgid "Page %d of %d"
+msgstr "Страница %d из %d"
+
+#: src/engine/deskgui/docview/print/printPreview.cpp:485
+#, c-format
+msgid "Page %d"
+msgstr "Страница %d"
+
+#: src/engine/deskgui/docview/print/printPreview.cpp:733
+msgid "First page"
+msgstr "Первая страница"
+
+#: src/engine/deskgui/docview/print/printPreview.cpp:734
+msgid "Previous page"
+msgstr "Предыдущая страница"
+
+#: src/engine/deskgui/docview/print/printPreview.cpp:746
+msgid "Next page"
+msgstr "Следующая страница"
+
+#: src/engine/deskgui/docview/print/printPreview.cpp:747
+msgid "Last page"
+msgstr "Последняя страница"
+
+#: src/engine/deskgui/docview/print/printPreview.cpp:772
 msgid "Fit to page width"
 msgstr "По ширине страницы"
 
-#: src/engine/deskgui/docview/print/printPreview.cpp:48
+#: src/engine/deskgui/docview/print/printPreview.cpp:774
 msgid "Shrink a table wider than the page so that it is printed on one page across"
 msgstr "Уменьшить таблицу шире листа, чтобы по ширине она поместилась на одну страницу"
 

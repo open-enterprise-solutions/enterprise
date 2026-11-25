@@ -297,7 +297,7 @@ set(CMAKE_C_VISIBILITY_PRESET ${OES_C_VISIBILITY_WAS})
 # core/net/llhttp/llhttp.vcxproj builds them: its own CMake writes into the submodule's tree and asks for CMake 3.25.
 # Asio is header-only, compiled once inside the core (core/net/asio.cpp).
 oes_require_submodule(llhttp include/llhttp.h)
-oes_require_submodule(asio asio/include/asio.hpp)
+oes_require_submodule(asio include/asio.hpp)
 add_library(llhttp STATIC
     "${OES_3RDPARTY_DIR}/llhttp/src/llhttp.c"
     "${OES_3RDPARTY_DIR}/llhttp/src/http.c"
@@ -360,9 +360,25 @@ else()
     target_compile_options(expat PRIVATE -w)
 endif()
 
-# THE CORE'S SVG (ibPicture::FromSvg) — NanoSVG, two headers, compiled in core/graphics/picture.cpp: an SVG read and
-# drawn into pixels the core writes as a PNG. Nothing to build here.
-oes_require_submodule(nanosvg src/nanosvg.h)
+# THE CORE'S SVG (ibPicture::FromSvg, core/graphics/picture.cpp) — lunasvg, and plutovg under it that draws: an SVG
+# read and drawn into pixels the core writes as a PNG. Taken as it is released, through its OWN CMake - its sources and
+# its definitions are its own, so a new release is a new gitlink and nothing here changes (Max, 2026-11-25: "whoever
+# keeps the SVG format up, we pull their updates"); core/graphics/lunasvg/lunasvg.vcxproj builds the same. Static,
+# its examples off; hidden as it is already, and position-independent, as it goes into the shared core.
+oes_require_submodule(lunasvg include/lunasvg.h)
+set(OES_SHARED_WAS ${BUILD_SHARED_LIBS})
+set(BUILD_SHARED_LIBS OFF)
+set(LUNASVG_BUILD_EXAMPLES OFF CACHE BOOL "lunasvg: its examples" FORCE)
+add_subdirectory(src/3rdparty/lunasvg EXCLUDE_FROM_ALL)
+set(BUILD_SHARED_LIBS ${OES_SHARED_WAS})
+set_target_properties(lunasvg plutovg PROPERTIES POSITION_INDEPENDENT_CODE ON)
+if(MSVC)
+    target_compile_options(lunasvg PRIVATE /W0)
+    target_compile_options(plutovg PRIVATE /W0)
+else()
+    target_compile_options(lunasvg PRIVATE -w)
+    target_compile_options(plutovg PRIVATE -w)
+endif()
 
 # THE CORE'S TIME ZONES (core/timeZone.cpp) — the IANA rules. MSVC has them (std::chrono::tzdb, from Windows' own
 # ICU); GCC before 14 and Apple's libc++ do not, so there the core takes Howard Hinnant's date library, the one

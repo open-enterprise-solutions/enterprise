@@ -2,7 +2,7 @@
 
 **What.** A server of this platform listens through one door, `core/server/listener.h`: TLS when
 `backend.conf` names a certificate, plain HTTP on this machine's own addresses when it names none, and a
-refusal on any other address. Through it listen the assistant access (MCP) inside the designer and in a
+refusal on any other address. Through it listen the assistant access (MCP) inside the studio and in a
 server's base, the application cluster's port for the clients, and the servers it hands them to. The
 server itself is the core's (`core/net/httpServer.h`), and so is its TLS: Mbed TLS is linked into the core
 and nowhere else.
@@ -40,9 +40,9 @@ Without a certificate a listener speaks plain HTTP on this machine's own address
 number, `::1`, `localhost` - and is refused on any other, with `backend.conf` named in the reason: the
 clear does not cross a network.
 
-- **The assistant access** - in the designer, and the one the application server starts for a base - edits
+- **The assistant access** - in the studio, and the one the application server starts for a base - edits
   an application and runs code as the developer whose session it lives in, and a token sent in the clear
-  across a network is a token given away. Widen the address, and the designer says that `backend.conf`
+  across a network is a token given away. Widen the address, and the studio says that `backend.conf`
   must name a certificate first; the application server says it in its journal and serves the base
   without. With one named, the address it shows and the `claude mcp add` line it writes carry
   `https://`, and the client has to trust the certificate: a self-signed one is given to Claude Code's
@@ -75,9 +75,9 @@ as written; taken by another process, it is refused, never moved off.
 | Port | Whose | Kept in |
 |---|---|---|
 | 7373 | the cluster: every client, and its tray | `server.conf` `Port` |
-| 7374, 7375 | the assistant access (MCP), on the person's own machine: their client listens, the designer on the first, the application on the second | their settings on that machine, one set for each |
+| 7374, 7375 | the assistant access (MCP), on the person's own machine: their client listens, the studio on the first, the workspace on the second | their settings on that machine, one set for each |
 | 7500-7599 | the cluster's servers, as many a base as its `Processes`, on `127.0.0.1`: the first free one | - |
-| 7700-7709 | the debugger: the first free one, the designer looks in all | - |
+| 7700-7709 | the debugger: the first free one, the studio looks in all | - |
 | 8080 / 443 | the web server: HTTP / HTTPS, when `web.conf` names a certificate | `web.conf` `HttpPort`, `HttpsPort` |
 
 ## Where it stops
@@ -86,11 +86,11 @@ as written; taken by another process, it is refused, never moved off.
 - The launcher's list of bases has no field for a trusted file: a base on a server with a self-signed
   certificate is opened from the command line (`--trusted`), or its authority is put into the system's store.
 - A base whose assistant access was set to an address off this machine's own, with no certificate named,
-  does not start it any more: the designer's settings page says why, the application server's journal
+  does not start it any more: the studio's settings page says why, the application server's journal
   does. Name a certificate, or set the address back.
 - The assistant's timeouts: a connection that sends no request within 30 seconds is let go, one kept
   alive between calls after ten minutes of silence; a call is not cut while it runs (a tool waits its turn
-  on the designer's main thread, five minutes at most).
+  on the studio's main thread, five minutes at most).
 - The certificate is the process's, not a base's: one file for every server the process runs.
 - Nothing here checks the certificate's name against the address: that is the client's side, as with any
   TLS server.

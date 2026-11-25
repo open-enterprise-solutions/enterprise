@@ -47,7 +47,7 @@ The help corpus (`syntaxHelper/*/http.json`) has an article for every member.
 ## What it guarantees
 
 - **What is published is a choice.** A declared service answers nothing until it is registered:
-  Administration → Web addresses in the designer, or the MCP `address_register`. The entry names the
+  Administration → Web addresses in the studio, or the MCP `address_register`. The entry names the
   service by its object, so a renamed `RootURL` keeps the address it was registered at.
 - **A method nobody answers is not saved.** The application's save refuses a method whose `Handler`
   the service module has no `Function <Handler>(Request)` for, naming `Service.Template.Method`;

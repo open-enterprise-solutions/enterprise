@@ -54,6 +54,8 @@ wxBitmapBundle ibStockArtProvider::CreateBitmapBundle(const wxArtID& id, const w
 		{ wxART_GO_DOWN, g_picMoveDownCLSID },
 		{ wxART_GO_BACK, g_picGoBackCLSID },
 		{ wxART_GO_FORWARD, g_picGoForwardCLSID },
+		{ wxART_GOTO_FIRST, g_picGotoFirstCLSID },
+		{ wxART_GOTO_LAST, g_picGotoLastCLSID },
 		{ wxART_GO_DIR_UP, g_picGoDirUpCLSID },
 		{ wxART_PLUS, g_picPlusCLSID },
 		{ wxART_MINUS, g_picMinusCLSID },

@@ -70,6 +70,7 @@ class DESKGUI_API ibFrontendDocManager;
 class ibDocChildFrameAnyBase;
 class ibDocParentFrameAnyBase;
 class ibAuiToolBar;
+class ibPrintPreviewFrame;
 
 // ============================================================================
 //                          PART 1 — FORKED DOC/VIEW
@@ -563,9 +564,9 @@ protected:
     virtual void OnMRUFileNotExist(unsigned n, const wxString& filename);
     void DoOpenMRUFile(unsigned n);
 #if wxUSE_PRINTING_ARCHITECTURE
-    virtual wxPreviewFrame* CreatePreviewFrame(wxPrintPreviewBase* preview,
-                                               wxWindow *parent,
-                                               const wxString& title);
+    virtual ibPrintPreviewFrame* CreatePreviewFrame(wxPrintPreviewBase* preview,
+                                                    wxWindow *parent,
+                                                    const wxString& title);
 #endif
 
     virtual bool TryBefore(wxEvent& event) override;

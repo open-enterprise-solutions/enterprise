@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <cstring>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -10,22 +11,15 @@
 
 #include "lodepng.h"
 
-// NanoSVG (src/3rdparty/nanosvg, header only) — compiled here, the one place SVG is read.
-#ifdef _MSC_VER
-#pragma warning(push, 0)
-#endif
-#define NANOSVG_IMPLEMENTATION
-#define NANOSVGRAST_IMPLEMENTATION
-#define NANOSVG_ALL_COLOR_KEYWORDS
-#include <nanosvg/src/nanosvg.h>
-#include <nanosvg/src/nanosvgrast.h>
-#ifdef _MSC_VER
-#pragma warning(pop)
-#endif
+// lunasvg (src/3rdparty/lunasvg, a submodule taken as it is released; its plutovg draws) — the one place SVG is read
+// and drawn. What a release of it learns to read, the core draws with nothing changed here (Max, 2026-11-25: "whoever
+// keeps the SVG format up, we pull their updates").
+#include <lunasvg.h>
 
 namespace {
 
-// A PICTURE'S PIXELS — RGBA, 8 bits a channel, rows top down, as LodePNG reads a PNG and writes one and NanoSVG draws.
+// A PICTURE'S PIXELS — RGBA, 8 bits a channel, rows top down, as LodePNG reads a PNG and writes one and a drawing is
+// drawn into.
 struct ibPixels {
 	std::vector<unsigned char> m_rgba;
 	unsigned m_width = 0;
@@ -118,26 +112,30 @@ ibPicture ibPicture::FromSvg(const ibString& svg, const ibSize& size)
 	if (size.m_width <= 0 || size.m_height <= 0)
 		return ibPicture();
 
-	// The reader writes into the text it reads.
-	std::string text = svg.ToUtf8();
-	const std::unique_ptr<NSVGimage, decltype(&nsvgDelete)> image(nsvgParse(text.data(), "px", 96), &nsvgDelete);
+	const std::unique_ptr<lunasvg::Document> document = lunasvg::Document::loadFromData(svg.ToUtf8());
 
-	// A text that is not SVG reads as an image of no size or no shapes, not as nothing.
-	if (image == nullptr || image->width == 0 || image->height == 0 || image->shapes == nullptr)
+	// A text that is not SVG reads as nothing, or as an image of no size.
+	if (document == nullptr || document->width() <= 0 || document->height() <= 0)
 		return ibPicture();
+
+	// Fitted whole from the top left corner, one scale both ways: the size asked holds the drawing, never stretches it.
+	lunasvg::Bitmap bitmap(size.m_width, size.m_height);
+	if (bitmap.isNull())
+		return ibPicture();
+	const float scale = std::min(size.m_width / document->width(), size.m_height / document->height());
+	document->render(bitmap, lunasvg::Matrix(scale, 0, 0, scale, 0, 0));
+	bitmap.convertToRGBA();   // its premultiplied ARGB words, as RGBA bytes
 
 	ibPixels pixels;
 	pixels.m_width = unsigned(size.m_width);
 	pixels.m_height = unsigned(size.m_height);
 	pixels.m_rgba.resize(size_t(pixels.m_width) * pixels.m_height * 4);
-	const std::unique_ptr<NSVGrasterizer, decltype(&nsvgDeleteRasterizer)> rasterizer(nsvgCreateRasterizer(),
-		&nsvgDeleteRasterizer);
-	nsvgRasterize(rasterizer.get(), image.get(), 0.0f, 0.0f,
-		std::min(size.m_width / image->width, size.m_height / image->height),
-		pixels.m_rgba.data(), size.m_width, size.m_height, size.m_width * 4);
+	for (unsigned row = 0; row < pixels.m_height; ++row)
+		std::memcpy(&pixels.m_rgba[size_t(row) * pixels.m_width * 4], bitmap.data() + size_t(row) * bitmap.stride(),
+			size_t(pixels.m_width) * 4);
 
-	// 🛑 NOTHING DRAWN IS NO PICTURE, not a transparent square: the reader passes over what it does not know — text,
-	// filters — without a word, and a picture that shows nothing would be taken as set.
+	// 🛑 NOTHING DRAWN IS NO PICTURE, not a transparent square: the reader passes over what it does not know — filters,
+	// animation — without a word, and a picture that shows nothing would be taken as set.
 	bool visible = false;
 	for (size_t at = 3; at < pixels.m_rgba.size() && !visible; at += 4)
 		visible = pixels.m_rgba[at] != 0;
@@ -147,10 +145,10 @@ ibPicture ibPicture::FromSvg(const ibString& svg, const ibSize& size)
 ibSize ibPicture::GetSize() const
 {
 	if (IsDrawing(m_data)) {
-		// The reader writes into the text it reads.
-		std::string text(static_cast<const char*>(m_data.GetData()), m_data.GetDataLen());
-		const std::unique_ptr<NSVGimage, decltype(&nsvgDelete)> image(nsvgParse(text.data(), "px", 96), &nsvgDelete);
-		return image != nullptr ? ibSize(int(std::lround(image->width)), int(std::lround(image->height))) : ibSize();
+		const std::unique_ptr<lunasvg::Document> document = lunasvg::Document::loadFromData(
+			static_cast<const char*>(m_data.GetData()), m_data.GetDataLen());
+		return document != nullptr ? ibSize(int(std::lround(document->width())), int(std::lround(document->height())))
+			: ibSize();
 	}
 	unsigned width = 0, height = 0;
 	lodepng::State state;

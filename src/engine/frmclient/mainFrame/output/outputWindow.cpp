@@ -32,9 +32,6 @@ wxEND_EVENT_TABLE()
 ibOutputWindow::ibOutputWindow(ibFrontendMainFrame* parent, wxWindowID winid)
 	: ibStyledTextCtrl(parent, winid, wxDefaultPosition, wxDefaultSize)
 {
-	// initialize styles
-	StyleClearAll();
-
 	//set Lexer to LEX_CONTAINER: This will trigger the styleneeded event so you can do your own highlighting
 	SetLexer(ibSTC_LEX_CONTAINER);
 

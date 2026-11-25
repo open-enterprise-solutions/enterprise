@@ -41,11 +41,15 @@ These keep their own licenses. Nothing in LICENSE.md changes or overrides them.
 | Asio (standalone) | `src/3rdparty/asio` (submodule) | Boost Software License 1.0 |
 | llhttp | `src/3rdparty/llhttp` (submodule) | MIT |
 | LodePNG | `src/3rdparty/lodepng` (submodule) | zlib |
-| NanoSVG | `src/3rdparty/nanosvg` (submodule) | zlib |
+| lunasvg | `src/3rdparty/lunasvg` (submodule) | MIT |
+| plutovg | `src/3rdparty/lunasvg/plutovg` (inside lunasvg) | MIT; its rasterizer and stroker derive from FreeType (FreeType License, `plutovg/source/FTL.TXT` — credit below), its font and image readers are stb's (public domain / MIT) |
 | Expat | `src/3rdparty/expat` (submodule) | MIT |
 | date (Howard Hinnant) | `src/3rdparty/date` (submodule; built on Linux and macOS only) | MIT |
 | SQLite | `src/engine/backend/databaseLayer/sqllite/engine` | public domain |
 | Firebird client headers | `src/engine/backend/databaseLayer/firebird/engine` | InterBase Public License 1.0 / IDPL, per file header |
+
+The FreeType License asks for this credit in the documentation of a program that uses its code (plutovg's):
+Portions of this software are copyright © 2014 The FreeType Project (www.freetype.org). All rights reserved.
 
 ## wxWidgets-derived sources inside the engine
 

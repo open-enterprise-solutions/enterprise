@@ -65,9 +65,9 @@ Firebird and PostgreSQL bases stand side by side in one folder.
 
 ## Where it stops
 
-- A server opens existing bases; the designer creates a base and its tables.
+- A server opens existing bases; the studio creates a base and its tables.
 - The cluster starts its servers on its own machine: one cluster, one machine.
 - A server behind the cluster sees every client as `127.0.0.1`: the client's own address is not carried
   past the relay.
 - The tray reaches a cluster on `127.0.0.1` only, and its settings are not edited from it.
-- The designer has no process of its own in the cluster: a thin designer works in the base's server.
+- The studio has no process of its own in the cluster: it works in the base's server.

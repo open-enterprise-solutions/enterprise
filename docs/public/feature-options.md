@@ -60,7 +60,7 @@ If (FeatureOptions.MultipleWarehouses.Get()) {
   the field is.
 - **Not a right.** Nothing is refused: a form of a hidden object still opens from a reference to it. Who
   may see what is the roles' question.
-- **The designer shows everything it edits.** A report it composes shows what the base uses, as the
+- **The studio shows everything it edits.** A report it composes shows what the base uses, as the
   application would.
 - **For every user of the base, read without asking the user's rights.** Switching needs `Write`.
 

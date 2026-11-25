@@ -70,16 +70,6 @@ int ibGridEditorPrintout::GetStyle() const
 	return m_style;
 }
 
-// A twin over the same document, set the way this one is. Nothing measured is copied - a printout lays its
-// pages out against the DC it is handed, so the twin works that out for itself.
-wxPrintout* ibGridEditorPrintout::Clone() const
-{
-	ibGridEditorPrintout* twin = new ibGridEditorPrintout(m_doc, m_style, GetTitle());
-	twin->m_userScale = m_userScale;
-	twin->m_fitToPageWidth = m_fitToPageWidth;
-	return twin;
-}
-
 // ⭐⭐ PRINT ASKS THE DOCUMENT THE SAME QUESTION THE SCREEN ASKS (Max, 2026-08-28: *"print must
 // simply get the same thing the render gets"*). The document holds the translation too, and it
 // knows how to hand out the string — `ComputeStringValueFromParameters` is that door, and the

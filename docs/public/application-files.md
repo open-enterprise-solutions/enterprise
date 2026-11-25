@@ -6,8 +6,8 @@ itself outside version control.
 
 ## Saving and loading
 
-- **Designer:** *Application → Save application to files…* / *Load application from files…*. The directory
-  is on the Designer's own computer; the files travel to the server and back as one packet.
+- **Studio:** *Application → Save application to files…* / *Load application from files…*. The directory
+  is on the studio's own computer; the files travel to the server and back as one packet.
 - **MCP:** `app_export_files` / `app_import_files` — the directory is on the server's host.
 
 ```json

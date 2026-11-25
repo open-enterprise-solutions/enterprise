@@ -444,6 +444,17 @@ void ibTlsStream::Write(const char* data, std::size_t size, ibDone done)
 void ibTlsStream::Close()
 {
 	std::error_code ignored;
+	// THE CLOSING ALERT GOES FIRST (close_notify): without it the peer cannot tell the end of the conversation from its
+	// cutting - a TLS reader may refuse such an end, and cpp-httplib's does since 0.67 (2026-11-25: Close only shut the
+	// socket). Sent once - a socket closed before is not written to - after a finished handshake, and only while
+	// nothing is on the socket: a write in flight is cut by the close, as before. Not waited for: written without
+	// blocking, as IsAlive asks the socket (httpClient.cpp), so a peer that reads nothing more does not hold the close.
+	if (m_socket.is_open() && m_setup == 0 && mbedtls_ssl_is_handshake_over(&m_ssl) && m_flushed.expired()
+		&& mbedtls_ssl_close_notify(&m_ssl) == 0 && !m_cipherOut.empty()) {
+		m_socket.non_blocking(true, ignored);
+		m_socket.write_some(asio::buffer(m_cipherOut), ignored);
+		m_cipherOut.clear();
+	}
 	m_socket.shutdown(asio::ip::tcp::socket::shutdown_both, ignored);
 	m_socket.close(ignored);
 }

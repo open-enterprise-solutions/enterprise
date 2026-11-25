@@ -172,8 +172,8 @@ class ibPicture;   // core/graphics/picture.h — a picture as data, the drawing
 // WX'S STOCK IDS, DRAWN AS THE CORE DRAWS THEM (core/picturePredefined.h): wxART_NEW is g_picNewCLSID, wxART_FILE_SAVE
 // g_picSaveCLSID — one picture for a menu here, a server's command and a browser's — and the product's own ids whose
 // picture is the core's (wxART_ADD, wxART_FILTER…: the theme draws no copy of it). Pushed over wx's own as wx starts
-// (ibThemeModule), for every client, so not one call site changes; an id it does not know is wx's (wxART_GOTO_FIRST,
-// wxART_HARDDISK…). The picture is the registry's drawing, drawn at the size asked.
+// (ibThemeModule), for every client, so not one call site changes; an id it does not know is wx's (wxART_HARDDISK,
+// wxART_CDROM…). The picture is the registry's drawing, drawn at the size asked.
 class DESKGUI_API ibStockArtProvider : public wxArtProvider {
 public:
 	// A picture at the size asked, and at twice and four times it — a display scaled to 150 or 200 % is handed a picture

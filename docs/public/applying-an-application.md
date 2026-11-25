@@ -1,6 +1,6 @@
 # Applying an application
 
-**What.** The designer edits an application of its own. **Update database** (MCP:
+**What.** The studio edits an application of its own. **Update database** (MCP:
 `app_apply`) makes it the one the base holds: the database's tables, columns and indexes are brought
 to what the edited application declares, and the running application is given it.
 

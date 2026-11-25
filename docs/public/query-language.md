@@ -2,7 +2,7 @@
 
 **What.** A query is text in the application's words - `SELECT … FROM Document.Sales.Goods WHERE
 Product.Manufacturer = &Maker TOTALS SUM(Amount) BY Product` - with parameters written `&Name`. The text is
-read, written and rewritten in the core (`core/query`), so the designer's query constructor and the server
+read, written and rewritten in the core (`core/query`), so the studio's query constructor and the server
 hold the same tree. On the server it is lowered into the one door every read goes through, and from
 there into the SQL of the base's DBMS.
 

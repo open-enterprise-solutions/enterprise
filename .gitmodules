@@ -25,9 +25,6 @@
 [submodule "src/3rdparty/lodepng"]
 	path = src/3rdparty/lodepng
 	url = https://github.com/lvandeve/lodepng.git
-[submodule "src/3rdparty/nanosvg"]
-	path = src/3rdparty/nanosvg
-	url = https://github.com/memononen/nanosvg.git
 [submodule "src/3rdparty/expat"]
 	path = src/3rdparty/expat
 	url = https://github.com/libexpat/libexpat.git
@@ -37,3 +34,6 @@
 [submodule "src/3rdparty/lexilla"]
 	path = src/3rdparty/lexilla
 	url = https://github.com/ScintillaOrg/lexilla.git
+[submodule "src/3rdparty/lunasvg"]
+	path = src/3rdparty/lunasvg
+	url = https://github.com/sammycage/lunasvg.git

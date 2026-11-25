@@ -4,6 +4,10 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
 
 ## Breaking changes
 
+- **The programs take new names.** The designer `designer-thin` is `appstudio` (OES Application Studio), the
+  application `enterprise-thin` is `appworkspace` (OES Application Workspace), `codeRunner` is `coderunner` and the
+  example plugin is `simple-plugin`. The launcher's buttons say *Workspace (GUI)*, *Workspace (Web)* and *Studio (GUI)*.
+  A shortcut or a script that starts a program by its old name: rename it.
 - **Kinds, functions, rights and tools take plain English names, one word for each family.** A module, a query or
   an assistant's call that names an old one no longer compiles or is refused: rename it.
   - The configuration is the *application*: `CommonMetadata` → `ApplicationMetadata`, its module

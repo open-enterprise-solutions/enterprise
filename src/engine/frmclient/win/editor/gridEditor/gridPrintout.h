@@ -32,7 +32,6 @@ public:
 	// a narrower one is left at its size. Rows follow the same scale, so more of them fit on a page.
 	virtual void SetFitToPageWidth(bool fit) override { m_fitToPageWidth = fit; }
 	virtual bool IsFitToPageWidth() const override { return m_fitToPageWidth; }
-	virtual wxPrintout* Clone() const override;
 
 	bool HasColValue(int col) const {
 		for (int row = 0; row < m_doc->GetNumberRows(); row++) {

@@ -125,6 +125,8 @@ static const ibString s_find_svg = "<svg xmlns='http://www.w3.org/2000/svg' widt
 static const ibString s_findCancel_svg = "<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'><circle cx='6.2' cy='6.2' r='4.3' fill='none' stroke='#5a7b95' stroke-width='2'/><path d='M9.4 9.4 L11 11' fill='none' stroke='#5a7b95' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/><circle cx='12' cy='12' r='4.4' fill='#ffffff'/><circle cx='12' cy='12' r='3.6' fill='#e03131'/><path d='M10.4 10.4 L13.6 13.6 M13.6 10.4 L10.4 13.6' fill='none' stroke='#ffffff' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/></svg>";
 static const ibString s_goBack_svg = "<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'><path d='M14 6 H8 V3 L2.5 8 L8 13 V10 H14 Z' fill='#1c6fd1'/></svg>";
 static const ibString s_goForward_svg = "<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'><path d='M2 6 H8 V3 L13.5 8 L8 13 V10 H2 Z' fill='#1c6fd1'/></svg>";
+static const ibString s_gotoFirst_svg = "<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'><rect x='1' y='3' width='2' height='10' rx='0.5' fill='#1c6fd1'/><path d='M14 6 H10 V3 L4.5 8 L10 13 V10 H14 Z' fill='#1c6fd1'/></svg>";
+static const ibString s_gotoLast_svg = "<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'><rect x='13' y='3' width='2' height='10' rx='0.5' fill='#1c6fd1'/><path d='M2 6 H6 V3 L11.5 8 L6 13 V10 H2 Z' fill='#1c6fd1'/></svg>";
 static const ibString s_goDirUp_svg = "<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'><path d='M1 3.5 Q1 2 2.5 2 H5.8 L7.5 3.7 H13.5 Q15 3.7 15 5.2 V12.5 Q15 14 13.5 14 H2.5 Q1 14 1 12.5 Z' fill='#1c6fd1'/><path d='M1 6.5 H15 V12.5 Q15 14 13.5 14 H2.5 Q1 14 1 12.5 Z' fill='#74c0fc'/><circle cx='12' cy='12' r='4.7' fill='#ffffff'/><circle cx='12' cy='12' r='3.9' fill='#2f9e44'/><path d='M12 9.6 L14.3 12 H12.9 V14.3 H11.1 V12 H9.7 Z' fill='#ffffff'/></svg>";
 static const ibString s_plus_svg = "<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'><path d='M8 2.5 V13.5' stroke='#1c6fd1' stroke-width='2' stroke-linecap='butt' stroke-linejoin='miter' fill='none'/><path d='M2.5 8 H13.5' stroke='#1c6fd1' stroke-width='2' stroke-linecap='butt' stroke-linejoin='miter' fill='none'/></svg>";
 static const ibString s_minus_svg = "<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'><path d='M2.5 8 H13.5' stroke='#1c6fd1' stroke-width='2' stroke-linecap='butt' stroke-linejoin='miter' fill='none'/></svg>";
@@ -237,6 +239,8 @@ void RegisterAllPicture()
 	::RegisterPicture(ibT("FindCancel"), g_picFindCancelCLSID, s_findCancel_svg);
 	::RegisterPicture(ibT("GoBack"), g_picGoBackCLSID, s_goBack_svg);
 	::RegisterPicture(ibT("GoForward"), g_picGoForwardCLSID, s_goForward_svg);
+	::RegisterPicture(ibT("GotoFirst"), g_picGotoFirstCLSID, s_gotoFirst_svg);
+	::RegisterPicture(ibT("GotoLast"), g_picGotoLastCLSID, s_gotoLast_svg);
 	::RegisterPicture(ibT("GoDirUp"), g_picGoDirUpCLSID, s_goDirUp_svg);
 	::RegisterPicture(ibT("Plus"), g_picPlusCLSID, s_plus_svg);
 	::RegisterPicture(ibT("Minus"), g_picMinusCLSID, s_minus_svg);

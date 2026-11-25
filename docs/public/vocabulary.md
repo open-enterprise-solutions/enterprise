@@ -30,7 +30,7 @@ is made, a word translated and a schema interpreted on the side that knows it. T
 *Holds at* `ibVariant::FromNode` (`core/variant.h`): makes a primitive, and leaves an object to the side
 that knows its class. Rules: writing-code.md §7.
 
-**Entrance.** A way in for a different caller: the designer's mouse, a thin client, a browser, an
+**Entrance.** A way in for a different caller: the studio's mouse, the workspace, a browser, an
 assistant over MCP. Every entrance reaches the same session, the same rights and the same doors. A new
 entrance is not a new door.
 *Holds at* `frmserver/mcp/mcpTool.h`: a tool calls the same door the button calls. Rules: writing-code.md

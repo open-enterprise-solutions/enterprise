@@ -4,6 +4,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "textEditorPrintOut.h"
+#include "frmclient/mainFrame/mainFrame.h"
 
 #if wxUSE_PRINTING_ARCHITECTURE
 
@@ -13,21 +14,50 @@
 
 ibTextEditorPrintout::ibTextEditorPrintout(ibStyledTextCtrl*edit, const wxString& title)
 	: wxPrintout(title)
-	, m_edit(edit)
 {
+	// Hidden before it is made, so it is made hidden: shown, it would stand in the editor's corner.
+	ibStyledTextCtrl* const paper = new ibStyledTextCtrl();
+	paper->Hide();
+	paper->Create(edit, wxID_ANY);
+
+	// The same document - its text, its tab width and the styles its lexer gave it; a style still missing is asked of
+	// every view of it (Document::EnsureStyledTo), the editor's lexer answers. The paper itself reports no change of
+	// it: its events would go up to the editor it stands in, which hears the editor's own already.
+	paper->SetModEventMask(0);
+	paper->SetDocPointer(edit->GetDocPointer());
+
+	// The margins as the editor has them: of them Scintilla prints the line numbers' alone (EditView::FormatRange).
+	paper->SetMarginCount(edit->GetMarginCount());
+	for (int margin = 0; margin < edit->GetMarginCount(); ++margin) {
+		paper->SetMarginType(margin, edit->GetMarginType(margin));
+		paper->SetMarginWidth(margin, edit->GetMarginWidth(margin));
+	}
+
+	// The light look's inks, on white whatever the paper colour of the set.
+	mainFrame->GetFontColorSettings().Apply(*paper, wxApp::Appearance::Light);
+	paper->SetPrintColourMode(ibSTC_PRINT_COLOURONWHITE);
+
+	m_paper = paper;
+}
+
+ibTextEditorPrintout::~ibTextEditorPrintout()
+{
+	// …unless it went with the editor it stands in.
+	if (m_paper)
+		m_paper->Destroy();
 }
 
 bool ibTextEditorPrintout::OnPrintPage(int page) {
 
 	wxDC *dc = GetDC();
-	if (!dc) 
+	if (!dc || !m_paper)
 		return false;
 
 	// scale DC
 	PrintScaling(dc);
 
 	// print page
-	m_edit->FormatRange(true, page == 1 ? 0 : m_pageEnds[page - 2], m_pageEnds[page - 1],
+	m_paper->FormatRange(true, page == 1 ? 0 : m_pageEnds[page - 2], m_pageEnds[page - 1],
 		dc, dc, m_printRect, m_pageRect);
 	return true;
 }
@@ -53,7 +83,7 @@ void ibTextEditorPrintout::GetPageInfo(int *minPage, int *maxPage, int *selPageF
 
 	// scale DC if possible
 	wxDC *dc = GetDC();
-	if (!dc) return;
+	if (!dc || !m_paper) return;
 	PrintScaling(dc);
 
 	wxPageSetupDialogData *m_pageSetupData = &ibFrontendDocManager::GetDocumentManager()->GetPageSetupDialogData();
@@ -96,8 +126,8 @@ void ibTextEditorPrintout::GetPageInfo(int *minPage, int *maxPage, int *selPageF
 	// count pages
 	m_pageEnds.Clear();
 	int printed = 0;
-	while (printed < m_edit->GetLength()) {
-		printed = m_edit->FormatRange(false, printed, m_edit->GetLength(),
+	while (printed < m_paper->GetLength()) {
+		printed = m_paper->FormatRange(false, printed, m_paper->GetLength(),
 			dc, dc, m_printRect, m_pageRect);
 		m_pageEnds.Add(printed);
 		*maxPage += 1;

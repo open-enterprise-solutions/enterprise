@@ -34,10 +34,10 @@ entry its kind does not take.
 
 ## Doing it
 
-- **Administration → Web addresses…** in the designer (the *Data administration* right): the list, with
+- **Administration → Web addresses…** in the studio (the *Data administration* right): the list, with
   **Add…** offering what the application declares for each kind, or another path typed by hand, and
   **Remove**.
-- Over MCP, in the designer: `address_list`, `address_register`, `address_unregister`.
+- Over MCP, in the studio: `address_list`, `address_register`, `address_unregister`.
 - On the wire: the client protocol's `addresses` and `serve` ([client-protocol.md](client-protocol.md#web-addresses)).
 
 ## The web server's side
@@ -57,4 +57,4 @@ A base that cannot be reached answers 502. A path no entry has is 404, as before
 
 - A kind is what a feature registers; the two above are the platform's.
 - A 504 tells the caller, not the base: the base finishes the request it was handed.
-- The list is edited in the thin designer; the browser does not show it.
+- The list is edited in the studio; the browser does not show it.

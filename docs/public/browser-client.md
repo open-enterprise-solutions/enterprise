@@ -109,7 +109,7 @@ by a patch is updated in place, so the focus and the caret stay where they were.
 
 ## Where it stops
 
-- Every question the application asks is drawn; the designer's three — a change applied, an object's kind, a
+- Every question the application asks is drawn; the studio's three — a change applied, an object's kind, a
   predefined selector — are answered as cancelled.
 - The main toolbar and the menu items have no pictures yet.
 - A tree's rows opened stay held: only its top level is paged, and a folder is read whole.

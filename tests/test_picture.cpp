@@ -61,10 +61,11 @@ TEST(Picture, BytesThatAreNeither_AreNoPicture)
 	EXPECT_TRUE(neither.ToSvg(4096).IsEmpty());
 }
 
-// What NanoSVG passes over - text - draws nothing: no picture, not a transparent square taken as set.
+// A drawing that draws nothing - here a shape with neither fill nor stroke - is no picture, not a transparent square
+// taken as set.
 TEST(Picture, ADrawingOfNothing_ScalesToNone)
 {
-	const ibPicture text = ibPicture::FromSvg(ibT("<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16'>"
-		"<text x='2' y='12'>A</text></svg>"));
-	EXPECT_FALSE(text.Scale(ibSize(16, 16)).IsOk());
+	const ibPicture nothing = ibPicture::FromSvg(ibT("<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16'>"
+		"<rect x='2' y='2' width='12' height='12' fill='none'/></svg>"));
+	EXPECT_FALSE(nothing.Scale(ibSize(16, 16)).IsOk());
 }

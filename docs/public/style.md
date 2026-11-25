@@ -45,5 +45,5 @@ appended to its kind's run.
 The client's theme says which set is in force — chosen in the client and kept on its machine (the server keeps none):
 the desktop takes it when it starts, the browser at once; a report deeper than its grouping list takes the last level; a control's colour may name an item instead of holding a
 colour, and a
-client resolves it through the values in force; an application holds its own styles, and the designer edits one with
+client resolves it through the values in force; an application holds its own styles, and the studio edits one with
 a live preview. Those are built on this list.

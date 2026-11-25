@@ -16,9 +16,11 @@ CI. Then **[writing-code.md](writing-code.md)**, how the code itself is written.
 | [release-notes/](release-notes/) | What each release changed |
 
 Outside this folder: [the wiki](https://github.com/open-enterprise-solutions/enterprise/wiki)
-(the user's guide: installing, first steps, the designer, metadata, forms, the language),
-[README.md](../README.md) (what OES is, quick start),
-[CONTRIBUTING.md](../CONTRIBUTING.md) (what sending a pull request means) and
+(the user's guide: installing, first steps, the studio, metadata, forms, the language),
+[README.md](../README.md) (what OES is, quick start, platforms, tests and CI),
+[CONTRIBUTING.md](../CONTRIBUTING.md) (what sending a pull request means),
+[SECURITY.md](../SECURITY.md) (reporting a vulnerability; what protects a base),
+[NOTICE.md](../NOTICE.md) (third-party components and their licenses) and
 [CLAUDE.md](../CLAUDE.md) (layout, naming, key decisions; also the context file for assistants).
 
 ## `public/` and `private/`

@@ -4,6 +4,8 @@
 #include "textEditor.h"
 #include "frmclient/frmclient.h"
 
+#include <wx/weakref.h>
+
 #if wxUSE_PRINTING_ARCHITECTURE
 
 //----------------------------------------------------------------------------
@@ -14,17 +16,21 @@ public:
 
 	//! constructor
 	ibTextEditorPrintout(ibStyledTextCtrl *edit, const wxString& title = "");
+	virtual ~ibTextEditorPrintout();
 
 	//! event handlers
-	bool OnPrintPage(int page) wxOVERRIDE;
-	bool OnBeginDocument(int startPage, int endPage) wxOVERRIDE;
+	virtual bool OnPrintPage(int page) override;
+	virtual bool OnBeginDocument(int startPage, int endPage) override;
 
 	//! print functions
-	bool HasPage(int page) wxOVERRIDE;
-	void GetPageInfo(int *minPage, int *maxPage, int *selPageFrom, int *selPageTo) wxOVERRIDE;
+	virtual bool HasPage(int page) override;
+	virtual void GetPageInfo(int *minPage, int *maxPage, int *selPageFrom, int *selPageTo) override;
 
 private:
-	ibStyledTextCtrl*m_edit;
+	// THE PAPER: the editor's text as it goes on paper - a view of its own over the same document, hidden, in the light
+	// look's colours on white (ibFontColorSettings::Apply, wxApp::Appearance::Light). The editor itself paints in the
+	// look in force, and in the dark one printed light grey on black. Made inside the editor, it goes with it.
+	wxWeakRef<ibStyledTextCtrl> m_paper;
 	wxArrayInt m_pageEnds;
 	wxRect m_pageRect;
 	wxRect m_printRect;

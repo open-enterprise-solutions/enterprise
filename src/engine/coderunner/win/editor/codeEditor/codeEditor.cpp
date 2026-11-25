@@ -37,9 +37,6 @@ ibCodeEditor::ibCodeEditor(wxWindow* parent, wxWindowID id, const wxPoint& pos, 
 	: ibStyledTextCtrl(parent, id, pos, size, style, name),
 	  m_ac(this), m_ct(this), m_tc(ibCompileCode::GetCodeStyle())
 {
-	// initialize styles
-	StyleClearAll();
-
 	//set Lexer to LEX_CONTAINER: This will trigger the styleneeded event so you can do your own highlighting
 	SetLexer(ibSTC_LEX_CONTAINER);
 

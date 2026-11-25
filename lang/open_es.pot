@@ -11406,11 +11406,52 @@ msgstr ""
 msgid "Printout"
 msgstr ""
 
-#: src/engine/deskgui/docview/print/printPreview.cpp:46
+#: src/engine/deskgui/docview/print/printPreview.cpp:408
+msgid "Could not start document preview."
+msgstr ""
+
+#: src/engine/deskgui/docview/print/printPreview.cpp:408
+#: src/engine/deskgui/docview/print/printPreview.cpp:470
+#: src/engine/deskgui/docview/print/printPreview.cpp:477
+msgid "Print Preview Failure"
+msgstr ""
+
+#: src/engine/deskgui/docview/print/printPreview.cpp:470
+#: src/engine/deskgui/docview/print/printPreview.cpp:477
+msgid "Sorry, not enough memory to create a preview."
+msgstr ""
+
+#: src/engine/deskgui/docview/print/printPreview.cpp:484
+#, c-format
+msgid "Page %d of %d"
+msgstr ""
+
+#: src/engine/deskgui/docview/print/printPreview.cpp:485
+#, c-format
+msgid "Page %d"
+msgstr ""
+
+#: src/engine/deskgui/docview/print/printPreview.cpp:733
+msgid "First page"
+msgstr ""
+
+#: src/engine/deskgui/docview/print/printPreview.cpp:734
+msgid "Previous page"
+msgstr ""
+
+#: src/engine/deskgui/docview/print/printPreview.cpp:746
+msgid "Next page"
+msgstr ""
+
+#: src/engine/deskgui/docview/print/printPreview.cpp:747
+msgid "Last page"
+msgstr ""
+
+#: src/engine/deskgui/docview/print/printPreview.cpp:772
 msgid "Fit to page width"
 msgstr ""
 
-#: src/engine/deskgui/docview/print/printPreview.cpp:48
+#: src/engine/deskgui/docview/print/printPreview.cpp:774
 msgid "Shrink a table wider than the page so that it is printed on one page across"
 msgstr ""
 

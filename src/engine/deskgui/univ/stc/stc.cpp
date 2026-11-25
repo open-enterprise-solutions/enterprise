@@ -248,8 +248,24 @@ void ibStyledTextCtrl::ApplyThemeColours()
     // highlight) - not the system's; as it is made, and again when the look changes (OnSysColourChanged). A set of its
     // owner's (an editor's font and colours) goes over them after.
     const wxColour colFg = wxTHEME_COLOUR(CONTROL_TEXT);
+    const wxColour colBg = wxTHEME_COLOUR(WINDOW);
+
+    // A style in the default's colours takes the new ones with it; one its owner coloured keeps its own. Scintilla
+    // copies the default into the other styles only when told (StyleClearAll), so text in a style nobody set kept
+    // Scintilla's black on white on the theme's paper (2026-11-25: the code runner's output in the dark look) - and,
+    // the look changed, the look before's.
+    const wxColour wasFg = StyleGetForeground(ibSTC_STYLE_DEFAULT);
+    const wxColour wasBg = StyleGetBackground(ibSTC_STYLE_DEFAULT);
+    for (int style = 0; style <= ibSTC_STYLE_MAX; ++style) {
+        if (style == ibSTC_STYLE_DEFAULT)
+            continue;
+        if (StyleGetForeground(style) == wasFg)
+            StyleSetForeground(style, colFg);
+        if (StyleGetBackground(style) == wasBg)
+            StyleSetBackground(style, colBg);
+    }
     StyleSetForeground(ibSTC_STYLE_DEFAULT, colFg);
-    StyleSetBackground(ibSTC_STYLE_DEFAULT, wxTHEME_COLOUR(WINDOW));
+    StyleSetBackground(ibSTC_STYLE_DEFAULT, colBg);
     SetCaretForeground(colFg);
 
     // We also need to set this one because its foreground is hardcoded as

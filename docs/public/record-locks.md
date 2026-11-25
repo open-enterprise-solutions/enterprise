@@ -43,7 +43,7 @@ that every server of the base sees.
 - **A lock dies with its owner.** Logging out drops a session's locks, and a sweep drops every lock whose
   session is no longer alive. The question is "who is alive", so a lock cannot outlive the last mention of
   its owner and block a record for good.
-- **An administrator sees and releases them.** The designer's active-users window has a page of locks
+- **An administrator sees and releases them.** The studio's active-users window has a page of locks
   with a forced release; over MCP, `lock_list`.
 - **Reading is not locked.** Lists, reports and forms read the last committed data and never wait.
 

@@ -86,7 +86,7 @@ databases. It is kept for the service work that genuinely has no
 other door; it is **not** a fallback for a query you found awkward to
 express, and § 4.1 below is still the rule.
 
-Since 2026-09-15 the hatch has a lock: outside the Designer, a
+Since 2026-09-15 the hatch has a lock: outside the studio, a
 session without the **Data administration** right is refused at the
 first call (`ibBackendAccessException`, "DatabaseLayer runs raw SQL
 past the access policy - it needs the Data administration right").
@@ -201,19 +201,19 @@ Foreach item In items Do Message(item.Name) EndDo
 If qty = 0 Or Not found Then Return; EndIf
 ```
 
-### 4.4 Designer = compile-only; runtime fetches data
+### 4.4 Studio = compile-only; runtime fetches data
 
-Generated metadata is loaded by the **Designer** to compile and
-validate. Runtime (Enterprise / Web / the application server) is where data flows
+Generated metadata is loaded by the **studio** to compile and
+validate. Runtime (the workspace / Web / the application server) is where data flows
 happen. When generating control logic, remember:
 
-- A form opened in Designer's **form editor** must not assume data
+- A form opened in the studio's **form editor** must not assume data
   exists. Code in `OnOpen` that calls `Items.Fetch()` will fail in
-  the designer preview. There is **no script-visible guard for this** —
+  the studio's preview. There is **no script-visible guard for this** —
   no `Session` global and no `IsDesigner` exist; do not emit one.
   Write `OnOpen` so it tolerates an empty source instead.
 - Reports and dynamic lists fetch lazily through `Get*Fetch` —
-  designer's form preview doesn't run them. You don't have to gate
+  the studio's form preview doesn't run them. You don't have to gate
   this manually; the platform gates it for you.
 
 ### 4.5 Const-meta — runtime sees immutable metadata
@@ -221,7 +221,7 @@ happen. When generating control logic, remember:
 You can read metadata properties from any script: `meta =
 Document.Invoice.Metadata; Message(meta.Synonym);`. You cannot
 mutate metadata at runtime. To change a metaobject's properties,
-edit the metadata source (Designer or your generated application) and
+edit the metadata source (the studio or your generated application) and
 re-deploy. There is no `SetSynonym(...)` in script.
 
 ### 4.6 Captions — every declared language, in one string
@@ -607,8 +607,8 @@ Before declaring "done", verify your generated application:
        application's metaobjects.
 
 3. appstudio.exe --file=<application-path>
-     — open in Designer for visual review and live debugging.
-       Press F5 to start the thin client (appworkspace.exe) against the same DB; run
+     — open in the studio for visual review and live debugging.
+       Press F5 to start the workspace (appworkspace.exe) against the same DB; run
        postings / reports there against test data.
 
 4. (If accounting touched) — verify Balance / Turnovers in

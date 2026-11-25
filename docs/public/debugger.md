@@ -1,20 +1,20 @@
 # The debugger
 
-**What.** The designer debugs an application's code where it runs: breakpoints, step into, over and out,
+**What.** The studio debugs an application's code where it runs: breakpoints, step into, over and out,
 pause, the call stack, the locals, watch expressions evaluated in the stopped frame. The same stop serves
 a role's row restriction ([access-rights.md](access-rights.md)) and an event handler alike - they are
 modules like any other.
 
 **Why.** Code that runs on a server has nowhere to print to and nobody watching. A stop in the running
 process, with its own data and its own session, answers "why" where a log only answers "what". The
-debugger is the platform's, not the designer's: the engine carries it, and the designer is one listener.
+debugger is the platform's, not the studio's: the engine carries it, and the studio is one listener.
 
 ## How it works
 
-- **The process being debugged listens; the designer connects.** A process that opens a file base offers
-  a debug server on `localhost`, the first free port of 7700-7709, and the designer reaches out to it. It is the debuggee that knows it exists; a tool cannot be found by a
+- **The process being debugged listens; the studio connects.** A process that opens a file base offers
+  a debug server on `localhost`, the first free port of 7700-7709, and the studio reaches out to it. It is the debuggee that knows it exists; a tool cannot be found by a
   process that is already running. Debugging is switched on and off per process, as the person allows.
-- **One debugger per server, many listeners.** A thin designer holds no debugger of its own: the
+- **One debugger per server, many listeners.** The studio holds no debugger of its own: the
   server's engine debugger sends it every event over the client protocol, and its commands go back the
   same way, on a second connection so a step is never queued behind a frame
   ([client-protocol.md](client-protocol.md)). An assistant over MCP listens to the same stop beside the
@@ -28,7 +28,7 @@ debugger is the platform's, not the designer's: the engine carries it, and the d
 ## What it guarantees
 
 - **The right code under the cursor.** On connecting, the debuggee says which application it runs;
-  the designer takes the connection only for the application it has open.
+  the studio takes the connection only for the application it has open.
 - **A watch changes nothing.** A watch, a tooltip or a completion probe is evaluated so that no write,
   no handler and no message to the person can happen from it.
 - **The sandbox changes nothing either.** Whole statements run in the stopped session, inside a

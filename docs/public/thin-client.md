@@ -1,14 +1,14 @@
 # The thin client
 
 **What.** The desktop client that runs nothing of the application: a window, its document/view skeleton and its
-editors, talking to a base through the [client protocol](client-protocol.md). The runtime's is `appworkspace`, the
-designer's `appstudio`.
+editors, talking to a base through the [client protocol](client-protocol.md). The workspace is `appworkspace`, the
+studio `appstudio`.
 
 **Why.** The application's code runs on the server only, so one platform serves many clients. The client keeps the
 routine the desktop window always kept — menus, toolbars, what may be pressed, file dialogs, recent files, print
 preview — so the server is not asked for it on every move.
 
-**Status.** The thin runtime is done: it does what the desktop runtime did. The thin designer has the desktop designer's
+**Status.** The workspace is done: it does what the desktop runtime did. The studio has the desktop designer's
 windows: the application tree, the inspector, the form, module and composer editors, the role, interface, shared
 attribute and feature option editors, application compare, the assistant and the debugger. What is left is tuning
 them in use. The desktop `frontend` and the thick applications built on it were removed on 2026-10-27 (branch
@@ -28,7 +28,7 @@ protocol between them; neither half is called a frontend.
 | `frmclient` | the client's graphics library: the communicator that keeps the frame it was answered, the main window, the document/view skeleton, the form's controls, the editors — drawn with `deskgui`. It links `core`, `protocol` and `deskgui` |
 | `fileserver` | a file base in the client's process — the engine loaded beside the window |
 | `appworkspace` | the runtime's window and its document manager |
-| `appstudio` | the designer's window and its document manager |
+| `appstudio` | the studio's window and its document manager |
 
 Chain: core → backend → frmserver ⇄ protocol ⇄ frmclient → appworkspace; `fileserver` = backend + frmserver in the
 client's process. `protocol` does not link `core` — `protocol.h` stays dependency-free.
@@ -66,10 +66,10 @@ types.
 ## The person's options
 
 Read once, at the start, from the person's directory (`%LOCALAPPDATA%\OES` on Windows), each mode from its own file:
-the designer from `options-thin.xml`, the application from `options-thin-application.xml`. Both lie beside the desktop
+the studio from `options-thin.xml`, the workspace from `options-thin-application.xml`. Both lie beside the desktop
 designer's `options.xml`, not in it: a key is kept by the command's id, and the thin client's are other numbers. The keys of a menu are built each time the menu is: every command's default — the window's own File and
 Edit, the server's for its commands — and then the person's over them. A server command's id is its number in the
-protocol, so a key kept for it holds from one run to the next. The thin client only reads the file; the thin designer
+protocol, so a key kept for it holds from one run to the next. The workspace only reads the file; the studio
 will write it.
 
 ## The document/view skeleton
@@ -145,8 +145,8 @@ over a server.
 
 ## Where it stops
 
-- A thin runtime's socket may drop and the session stay, for `Resume` seconds ([client-protocol.md](client-protocol.md)).
-  A thin designer does not. `Resume` 0 ends the session at the drop.
+- A workspace's socket may drop and the session stay, for `Resume` seconds ([client-protocol.md](client-protocol.md)).
+  The studio's does not. `Resume` 0 ends the session at the drop.
 - A document saved on the server is saved there; the person's file it came from is written back only by a download.
 - A web client has no document/view of its own: it draws the same frame its own way.
 - Not yet in the list settings window: choosing a reference value in a filter (next: the server's choice form in a
@@ -154,4 +154,4 @@ over a server.
   reference" families in the type picker.
 - A chart box is drawn empty: the desktop's chart library is not copied.
 - A script's print always shows the print dialog, and fits the sheet to the page's width.
-- A thin runtime only reads the keys a person keeps; they are edited in the thin designer, under Tools → Options.
+- The workspace only reads the keys a person keeps; they are edited in the studio, under Tools → Options.

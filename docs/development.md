@@ -74,8 +74,8 @@ them, and CI refuses a header that brings `#pragma once`.
 uses it — the theme's in `deskgui/univ/theme/private/picturePredefined.h`, the engine's own in
 `core/picturePredefined.cpp`, a control's or a metatype's in its `_res.cpp`. The string IS the picture's
 source and what is kept and sent: an engine picture is `ibPicture::FromSvg(svg)` — the drawing, not pixels — and
-whoever shows it draws it at the size it shows it (NanoSVG; the browser itself). NanoSVG draws no `<text>`, no CSS and
-no filters — letters are paths. One act has one drawing everywhere it appears: a drawing two sides need is one engine
+whoever shows it draws it at the size it shows it (the core's lunasvg; the browser itself). Letters are paths, not
+`<text>` — a font differs from machine to machine, a path does not; and no filters, which the core does not draw. One act has one drawing everywhere it appears: a drawing two sides need is one engine
 picture asked for by its id, not two strings. The manner and the palette are in `docs/private/ui-palette.md`.
 `node tools/pictures/preview.js` lays every picture of the engine out on the light and the dark grounds.
 
@@ -169,7 +169,7 @@ mode goes to the property whose question it answers, not into the nearest enumer
 member: a tile is where the picture stands, a hyperlink is how the button is drawn.
 
 **A new choice is a registered enumeration under the stock property.** `ENUM_TYPE_REGISTER` and
-`ibPropertyEnum<T>`, nothing more. The designer's inspector picks an editor by the property's
+`ibPropertyEnum<T>`, nothing more. The studio's inspector picks an editor by the property's
 class name, so a subclass of a stock property is a class it has never seen, and the cell shows a
 bare number. Compatibility glue in a property subclass is a second road.
 
@@ -202,7 +202,7 @@ protocol ids or build a value from a node by itself.
 
 **An assistant comes in through the same doors.** MCP is a second entrance, not a second engine:
 its tools reach the session, the rights and the doors a person's click reaches. A tool that keeps
-a list of its own drifts from what the designer offers — `form_bind` once offered a button only
+a list of its own drifts from what the studio offers — `form_bind` once offered a button only
 its form's commands while the inspector's picker offered the standard ones too.
 
 **A description holds no live runtime objects.** Descriptions (types, compositions, sources) are
@@ -242,7 +242,7 @@ is just wrong.
 what it accepts, the property knows its flags.
 
 **If it cannot be done with the mouse, the design is wrong.** Every feature has to be usable in
-the designer, not only from code or an assistant.
+the studio, not only from code or an assistant.
 
 ---
 
@@ -354,6 +354,6 @@ the day X lands; "a report needs X, because …" stays true.
 
 Changes written with an AI assistant follow the same rules and the same review. Its context is
 [CLAUDE.md](../CLAUDE.md), and [ai-context.md](ai-context.md) if it generates metadata or
-scripts. The MCP server inside the designer lets it build and run an application itself; see
+scripts. The MCP server inside the studio lets it build and run an application itself; see
 [CLAUDE.md](../CLAUDE.md#running-it--and-the-door-an-assistant-comes-in-through). Check what it
 claims by running it, and keep its attribution lines out of commits.

@@ -25,6 +25,8 @@
 #include "deskgui/univ/ctrl/toolBar.h"    // ibToolBar — the modes' and the pages' buttons
 #include "deskgui/univ/theme.h"
 #include "deskgui/univ/colourScheme.h"
+#include "deskgui/artProvider.h"        // ibStockArtProvider::BundleOf — the toolbar's pictures, drawn by the core
+#include "core/graphics/picture.h"      // ibPicture::FromSvg
 
 #include "deskgui/univ/propgrid/manager.h"
 #include "deskgui/univ/propgrid/private.h"
@@ -58,7 +60,8 @@
 
 const char ibPropertyGridManagerNameStr[] = "ibPropertyGridManager";
 
-#ifdef wxHAS_SVG
+// SEAM vs wx: the toolbar's pictures are drawn by the core (ibPicture::FromSvg), the one SVG reader of the platform -
+// not by wx's own copy of one (wxBitmapBundle::FromSVG), and with no XPMs for a wx that has none (2026-11-25).
 // Categoric Mode Icon
 static const char gs_svg_catmode[] =
 "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"32px\" height=\"32px\" viewBox=\"0 0 32 32\">"
@@ -116,208 +119,6 @@ static const char gs_svg_defpage[] =
 "<line x1=\"16\" y1=\"18.5\" x2=\"23\" y2=\"18.5\" stroke-width=\"2\" stroke=\"navy\" stroke-linecap=\"square\"/>"
 "<line x1=\"16\" y1=\"23.5\" x2=\"23\" y2=\"23.5\" stroke-width=\"2\" stroke=\"navy\" stroke-linecap=\"square\"/>"
 "</svg>";
-#else
-// Categoric Mode Icon
-static const char* const gs_xpm_catmode[] = {
-"16 16 5 1",
-". c none",
-"B c black",
-"D c #868686",
-"L c #CACACA",
-"W c #FFFFFF",
-".DDD............",
-".DLD.BBBBBB.....",
-".DDD............",
-".....DDDDD.DDD..",
-"................",
-".....DDDDD.DDD..",
-"................",
-".....DDDDD.DDD..",
-"................",
-".....DDDDD.DDD..",
-"................",
-".DDD............",
-".DLD.BBBBBB.....",
-".DDD............",
-".....DDDDD.DDD..",
-"................"
-};
-
-static const char* const gs_xpm_catmode_2x[] = {
-"32 32 5 1",
-". c none",
-"B c black",
-"D c #868686",
-"L c #CACACA",
-"W c #FFFFFF",
-"................................",
-"...DDDD.........................",
-"..DDDDDD........................",
-"..DDLLDD..BBBBBBBBBBBB..........",
-"..DDLLDD..BBBBBBBBBBBB..........",
-"..DDDDDD........................",
-"...DDDD.........................",
-"..........DDDDDDDDDD..DDDDDD....",
-"..........DDDDDDDDDD..DDDDDD....",
-"................................",
-"................................",
-"..........DDDDDDDDDD..DDDDDD....",
-"..........DDDDDDDDDD..DDDDDD....",
-"................................",
-"................................",
-"..........DDDDDDDDDD..DDDDDD....",
-"..........DDDDDDDDDD..DDDDDD....",
-"................................",
-"................................",
-"..........DDDDDDDDDD..DDDDDD....",
-"..........DDDDDDDDDD..DDDDDD....",
-"................................",
-"................................",
-"...DDDD.........................",
-"..DDDDDD........................",
-"..DDLLDD..BBBBBBBBBBBB..........",
-"..DDLLDD..BBBBBBBBBBBB..........",
-"..DDDDDD........................",
-"...DDDD.........................",
-"..........DDDDDDDDDD..DDDDDD....",
-"..........DDDDDDDDDD..DDDDDD....",
-"................................"
-};
-
-// Alphabetic Mode Icon
-static const char* const gs_xpm_noncatmode[] = {
-"16 16 5 1",
-". c none",
-"B c black",
-"D c #868686",
-"L c #000080",
-"W c #FFFFFF",
-"..DBD...DDD.DDD.",
-".DB.BD..........",
-".BBBBB..DDD.DDD.",
-".B...B..........",
-"...L....DDD.DDD.",
-"...L............",
-".L.L.L..DDD.DDD.",
-"..LLL...........",
-"...L....DDD.DDD.",
-"................",
-".BBBBB..DDD.DDD.",
-"....BD..........",
-"...BD...DDD.DDD.",
-"..BD............",
-".BBBBB..DDD.DDD.",
-"................"
-};
-
-static const char* const gs_xpm_noncatmode_2x[] = {
-"32 32 5 1",
-". c none",
-"B c black",
-"D c #868686",
-"L c #000080",
-"W c #FFFFFF",
-"................................",
-"....DDBBDD......DDDDDD..DDDDDD..",
-"....DDBBDD......DDDDDD..DDDDDD..",
-"..DDBB..BBDD....................",
-"..DDBB..BBDD....................",
-"..BBBBBBBBBB....DDDDDD..DDDDDD..",
-"..BBBBBBBBBB....DDDDDD..DDDDDD..",
-"..BB......BB....................",
-"..BB......BB....................",
-"................DDDDDD..DDDDDD..",
-"......LL........DDDDDD..DDDDDD..",
-"......LL........................",
-"......LL........................",
-"......LL........DDDDDD..DDDDDD..",
-"..LL..LL..LL....DDDDDD..DDDDDD..",
-"...LL.LL.LL.....................",
-"....LLLLLL......................",
-".....LLLL.......DDDDDD..DDDDDD..",
-"......LL........DDDDDD..DDDDDD..",
-"......LL........................",
-"................................",
-"..BBBBBBBBBB....DDDDDD..DDDDDD..",
-"..BBBBBBBBBB....DDDDDD..DDDDDD..",
-"........BBDD....................",
-".......BBDD.....................",
-"......BBDD......DDDDDD..DDDDDD..",
-".....BBDD.......DDDDDD..DDDDDD..",
-"....BBDD........................",
-"...BBDD.........................",
-"..BBBBBBBBBB....DDDDDD..DDDDDD..",
-"..BBBBBBBBBB....DDDDDD..DDDDDD..",
-"................................"
-};
-
-// Default Page Icon.
-static const char* const gs_xpm_defpage[] = {
-"16 16 5 1",
-". c none",
-"B c black",
-"D c #868686",
-"L c #000080",
-"W c #FFFFFF",
-"................",
-"................",
-"..BBBBBBBBBBBB..",
-"..B..........B..",
-"..B.BB.LLLLL.B..",
-"..B..........B..",
-"..B.BB.LLLLL.B..",
-"..B..........B..",
-"..B.BB.LLLLL.B..",
-"..B..........B..",
-"..B.BB.LLLLL.B..",
-"..B..........B..",
-"..BBBBBBBBBBBB..",
-"................",
-"................",
-"................"
-};
-
-static const char* const gs_xpm_defpage_2x[] = {
-"32 32 5 1",
-". c none",
-"B c black",
-"D c #868686",
-"L c #000080",
-"W c #FFFFFF",
-"................................",
-"................................",
-"................................",
-"................................",
-"................................",
-"....BBBBBBBBBBBBBBBBBBBBBBBB....",
-"....BBBBBBBBBBBBBBBBBBBBBBBB....",
-"....BB....................BB....",
-"....BB....................BB....",
-"....BB..BBBB..LLLLLLLLLL..BB....",
-"....BB..BBBB..LLLLLLLLLL..BB....",
-"....BB....................BB....",
-"....BB....................BB....",
-"....BB..BBBB..LLLLLLLLLL..BB....",
-"....BB..BBBB..LLLLLLLLLL..BB....",
-"....BB....................BB....",
-"....BB....................BB....",
-"....BB..BBBB..LLLLLLLLLL..BB....",
-"....BB..BBBB..LLLLLLLLLL..BB....",
-"....BB....................BB....",
-"....BB....................BB....",
-"....BB..BBBB..LLLLLLLLLL..BB....",
-"....BB..BBBB..LLLLLLLLLL..BB....",
-"....BB....................BB....",
-"....BB....................BB....",
-"....BBBBBBBBBBBBBBBBBBBBBBBB....",
-"....BBBBBBBBBBBBBBBBBBBBBBBB....",
-"................................",
-"................................",
-"................................",
-"................................",
-"................................"
-};
-#endif // wxHAS_SVG/!wxHAS_SVG
 
 // -----------------------------------------------------------------------
 // ibPropertyGridPage
@@ -1203,15 +1004,8 @@ ibPropertyGridPage* ibPropertyGridManager::InsertPage( int index,
             }
             else
             {
-#ifdef wxHAS_SVG
-                wxBitmapBundle toolImages =
-                    wxBitmapBundle::FromSVG(gs_svg_defpage, m_pToolbar->GetToolBitmapSize());
-#else
-                wxBitmap icon1x(gs_xpm_defpage);
-                wxBitmap icon2x(gs_xpm_defpage_2x);
-                icon2x.SetScaleFactor(2);
-                wxBitmapBundle toolImages = wxBitmapBundle::FromBitmaps(icon1x, icon2x);
-#endif // wxHAS_SVG/!wxHAS_SVG
+                const wxBitmapBundle toolImages = ibStockArtProvider::BundleOf(ibPicture::FromSvg(gs_svg_defpage),
+                    m_pToolbar->GetToolBitmapSize());
 
                 tool = m_pToolbar->AddTool(wxID_ANY, label, toolImages, label, wxITEM_RADIO);
             }
@@ -1683,15 +1477,8 @@ void ibPropertyGridManager::RecreateControls()
             if (m_categorizedModeToolId == -1)
             {
                 wxString desc(_("Categorized Mode"));
-#ifdef wxHAS_SVG
-                wxBitmapBundle toolImages =
-                    wxBitmapBundle::FromSVG(gs_svg_catmode, m_pToolbar->GetToolBitmapSize());
-#else
-                wxBitmap icon1x(gs_xpm_catmode);
-                wxBitmap icon2x(gs_xpm_catmode_2x);
-                icon2x.SetScaleFactor(2);
-                wxBitmapBundle toolImages = wxBitmapBundle::FromBitmaps(icon1x, icon2x);
-#endif // wxHAS_SVG/!wxHAS_SVG
+                const wxBitmapBundle toolImages = ibStockArtProvider::BundleOf(ibPicture::FromSvg(gs_svg_catmode),
+                    m_pToolbar->GetToolBitmapSize());
 
                 wxToolBarToolBase* tool = m_pToolbar->InsertTool(0,
                                             wxID_ANY,
@@ -1709,15 +1496,8 @@ void ibPropertyGridManager::RecreateControls()
             if (m_alphabeticModeToolId == -1)
             {
                 wxString desc(_("Alphabetic Mode"));
-#ifdef wxHAS_SVG
-                wxBitmapBundle toolImages =
-                    wxBitmapBundle::FromSVG(gs_svg_noncatmode, m_pToolbar->GetToolBitmapSize());
-#else
-                wxBitmap icon1x(gs_xpm_noncatmode);
-                wxBitmap icon2x(gs_xpm_noncatmode_2x);
-                icon2x.SetScaleFactor(2);
-                wxBitmapBundle toolImages = wxBitmapBundle::FromBitmaps(icon1x, icon2x);
-#endif // wxHAS_SVG/!wxHAS_SVG
+                const wxBitmapBundle toolImages = ibStockArtProvider::BundleOf(ibPicture::FromSvg(gs_svg_noncatmode),
+                    m_pToolbar->GetToolBitmapSize());
 
                 wxToolBarToolBase* tool = m_pToolbar->InsertTool(1,
                                             wxID_ANY,

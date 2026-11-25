@@ -1282,12 +1282,12 @@ void ibFrontendDocManager::OnPageSetup(wxCommandEvent& WXUNUSED(event))
     }
 }
 
-wxPreviewFrame* ibFrontendDocManager::CreatePreviewFrame(wxPrintPreviewBase* preview,
-                                                 wxWindow *parent,
-                                                 const wxString& title)
+ibPrintPreviewFrame* ibFrontendDocManager::CreatePreviewFrame(wxPrintPreviewBase* preview,
+                                                      wxWindow *parent,
+                                                      const wxString& title)
 {
-    // The platform's own preview window - wx's, with "Fit to page width" for a printout that can be
-    // fitted (printPreview.h).
+    // The platform's own preview window - wx's on the theme's windows, with "Fit to page width" for a printout
+    // that can be fitted (printPreview.h).
     return new ibPrintPreviewFrame(preview, parent, title);
 }
 
@@ -1315,13 +1315,14 @@ void ibFrontendDocManager::OnPreview(wxCommandEvent& WXUNUSED(event))
             return;
         }
 
-        wxPreviewFrame* frame = CreatePreviewFrame(preview,
-                                                   wxTheApp->GetTopWindow(),
-                                                   _("Print Preview"));
+        ibPrintPreviewFrame* frame = CreatePreviewFrame(preview,
+                                                        wxTheApp->GetTopWindow(),
+                                                        _("Print Preview"));
         wxCHECK_RET( frame, "should create a print preview frame" );
 
-        frame->Centre(wxBOTH);
+        // Centred once it has its size - Initialize sizes it to the page.
         frame->Initialize();
+        frame->Centre(wxBOTH);
         frame->Show(true);
     }
     else

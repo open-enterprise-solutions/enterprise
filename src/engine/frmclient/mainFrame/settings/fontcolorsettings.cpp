@@ -19,10 +19,13 @@ static wxColour Paper()
 	return typeConv::ColourToWxColour(std::get<ibColour>(ibStyle::Platform().Get(ibStyleItem::FieldBackground, false)));
 }
 
-// The set in force: the dark look's in the dark (the look is set before any window — one for the run).
-static size_t Look()
+// The set of a look: the dark one's or the light one's; for System the look in force's — the dark one's in the dark (the
+// look is set before any window — one for the run).
+static size_t Look(wxApp::Appearance look = wxApp::Appearance::System)
 {
-	return wxSystemSettings::GetAppearance().IsDark() ? 1 : 0;
+	if (look == wxApp::Appearance::System)
+		return wxSystemSettings::GetAppearance().IsDark() ? 1 : 0;
+	return look == wxApp::Appearance::Dark ? 1 : 0;
 }
 
 // A set's kinds, each by its number, as elements of the one written.
@@ -131,21 +134,29 @@ wxString ibFontColorSettings::GetDisplayItemName(unsigned int i)
 	return wxString();
 }
 
-wxFont ibFontColorSettings::GetFont(DisplayItem displayItem) const
+// The font of every kind with a kind's bold and italic over it — of whichever set the kind's colours are.
+static wxFont KindFont(const wxFont& font, const ibFontColorSettings::Colors& colors)
 {
-	wxFont font = m_font;
-	if (GetColors(displayItem).bold)
-		font.SetWeight(wxFONTWEIGHT_BOLD);
-	if (GetColors(displayItem).italic)
-		font.SetStyle(wxFONTSTYLE_ITALIC);
-	return font;
+	wxFont kindFont = font;
+	if (colors.bold)
+		kindFont.SetWeight(wxFONTWEIGHT_BOLD);
+	if (colors.italic)
+		kindFont.SetStyle(wxFONTSTYLE_ITALIC);
+	return kindFont;
 }
 
-void ibFontColorSettings::Apply(ibStyledTextCtrl& text) const
+wxFont ibFontColorSettings::GetFont(DisplayItem displayItem) const
 {
+	return KindFont(m_font, GetColors(displayItem));
+}
+
+void ibFontColorSettings::Apply(ibStyledTextCtrl& text, wxApp::Appearance look) const
+{
+	const Colors (&colors)[DisplayItem_Last] = m_colors[Look(look)];
+
 	// The default style first: StyleClearAll copies it into every style, so those not set below — annotations,
 	// indent guides, call tips — get the chosen font too, and zoom grows them all from one size.
-	const Colors& plain = GetColors(DisplayItem_Default);
+	const Colors& plain = colors[DisplayItem_Default];
 	text.StyleSetFont(ibSTC_STYLE_DEFAULT, m_font);
 	text.StyleSetForeground(ibSTC_STYLE_DEFAULT, plain.foreColor);
 	text.StyleSetBackground(ibSTC_STYLE_DEFAULT, plain.backColor);
@@ -166,12 +177,12 @@ void ibFontColorSettings::Apply(ibStyledTextCtrl& text) const
 		{ ibSTC_C_NUMBER, DisplayItem_Number },
 	};
 	for (const auto& [style, kind] : s_lexerStyles) {
-		text.StyleSetFont(style, GetFont(kind));
-		text.StyleSetForeground(style, GetColors(kind).foreColor);
-		text.StyleSetBackground(style, GetColors(kind).backColor);
+		text.StyleSetFont(style, KindFont(m_font, colors[kind]));
+		text.StyleSetForeground(style, colors[kind].foreColor);
+		text.StyleSetBackground(style, colors[kind].backColor);
 	}
 
-	const Colors& selection = GetColors(DisplayItem_Selection);
+	const Colors& selection = colors[DisplayItem_Selection];
 	text.SetSelForeground(true, selection.foreColor);
 	text.SetSelBackground(true, selection.backColor);
 
@@ -185,7 +196,7 @@ void ibFontColorSettings::Apply(ibStyledTextCtrl& text) const
 
 	// The whole font, not its size alone: with the size only, the margin kept the default face until some later
 	// style change pulled the font through.
-	text.StyleSetFont(ibSTC_STYLE_LINENUMBER, GetFont(DisplayItem_Number));
+	text.StyleSetFont(ibSTC_STYLE_LINENUMBER, KindFont(m_font, colors[DisplayItem_Number]));
 
 	// The caret is the paper's opposite, so it shows on any paper.
 	const wxColour& paper = plain.backColor;
