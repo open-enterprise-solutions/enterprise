@@ -930,3 +930,6 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
   one point, which is less than a pixel of a character's width or a line's height. So a step grew one of them and left
   the other: the text widened without getting taller, or got taller without widening. Now a step lasts until both
   have grown, so the text keeps its proportions.
+- **A sheet's selection is readable in the dark theme.** The sheet stays white in either theme, but its selection was
+  taken from the dark theme: a salmon tint with light-grey text on it. It is the light theme's selection now, the same
+  tint, text and frame in either theme.

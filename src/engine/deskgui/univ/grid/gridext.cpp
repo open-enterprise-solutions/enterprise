@@ -46,7 +46,9 @@
 #include <wx/renderer.h>
 #include "deskgui/univ/renderer.h"
 #include "deskgui/univ/theme.h"  // the outline's button: the theme's renderer
-#include "deskgui/univ/colourScheme.h"  // the selection and the drag highlight: the theme's
+#include "deskgui/univ/colourScheme.h"  // the labels, the area lines and the drag highlight: the theme's
+#include "core/style/style.h"  // ibStyle - the selection, which lies on the paper: the light look's
+#include "deskgui/typeconv.h"  // typeConv::ColourToWxColour - a style's colour as wx paints it
 #include <wx/wupdlock.h>  // wxWindowUpdateLocker: a zoom is one change (SetGridZoom)
 #include <wx/headerctrl.h>  // wxHeaderCtrl::MoveColumnInOrderArray, the columns' order
 #include <wx/hashset.h>
@@ -3339,12 +3341,12 @@ void ibGrid::Create()
 		pane->SetOwnBackgroundColour(m_labelBackgroundColour);
 	}
 
-	// ⭐ …AND TAKEN AGAIN WHEN THE LOOK CHANGES — the theme's colours taken here and in Init, each where it is still the
-	// one taken (one set since is its owner's): the header's face is the theme's as it is drawn, and its text kept from
-	// the look before was not seen on it (2026-11-24, Max: "no numbers on switching"). The sheet's paper and ink are the
-	// document's (ibGridEditor), not the theme's.
-	Bind(wxEVT_SYS_COLOUR_CHANGED, [this, labelText = m_labelTextColour, labelFace = m_labelBackgroundColour,
-		selection = m_selectionBackground, selectionText = m_selectionForeground](wxSysColourChangedEvent& event) mutable {
+	// ⭐ …AND TAKEN AGAIN WHEN THE LOOK CHANGES — the theme's colours taken here, each where it is still the one taken
+	// (one set since is its owner's): the header's face is the theme's as it is drawn, and its text kept from the look
+	// before was not seen on it (2026-11-24, Max: "no numbers on switching"). The sheet's paper and ink are the
+	// document's (ibGridEditor), not the theme's, and so is the selection lying on them (Init).
+	Bind(wxEVT_SYS_COLOUR_CHANGED, [this, labelText = m_labelTextColour, labelFace = m_labelBackgroundColour](
+		wxSysColourChangedEvent& event) mutable {
 		event.Skip();
 		if (m_labelTextColour == labelText) {
 			labelText = wxTHEME_COLOUR(CONTROL_TEXT);
@@ -3354,10 +3356,6 @@ void ibGrid::Create()
 			labelFace = wxTHEME_COLOUR(CONTROL);
 			SetLabelBackgroundColour(labelFace);
 		}
-		if (m_selectionBackground == selection)
-			selection = m_selectionBackground = wxTHEME_COLOUR(HIGHLIGHT).ChangeLightness(172);
-		if (m_selectionForeground == selectionText)
-			selectionText = m_selectionForeground = wxTHEME_COLOUR(CONTROL_TEXT);
 		ForceRefresh();
 	});
 
@@ -3610,9 +3608,14 @@ void ibGrid::Init()
 	m_currentCellCoords = ibGridNoCellCoords;
 
 	// SEAM vs wx: the selection is the theme's highlight, a pale tint of it under the sheet's text - framed in the
-	// highlight itself (DrawCellHighlight); the system's was the explorer's blue, under the system's white text
-	m_selectionBackground = wxTHEME_COLOUR(HIGHLIGHT).ChangeLightness(172);
-	m_selectionForeground = wxTHEME_COLOUR(CONTROL_TEXT);
+	// highlight itself (DrawCellHighlight); the system's was the explorer's blue, under the system's white text.
+	// ⭐ IN THE LIGHT LOOK, WHATEVER THE THEME'S: the selection lies on the paper, and the paper is light in both. Taken
+	// from the dark look, it was a salmon tint under the dark look's light-grey text, unreadable on the white sheet
+	// (2026-11-25, Max: "selects a row wrongly in the dark theme")
+	m_selectionBackground = typeConv::ColourToWxColour(std::get<ibColour>(
+		ibStyle::Platform().Get(ibStyleItem::Selection, ibStyleLook::Light))).ChangeLightness(172);
+	m_selectionForeground = typeConv::ColourToWxColour(std::get<ibColour>(
+		ibStyle::Platform().Get(ibStyleItem::FieldText, ibStyleLook::Light)));
 
 	m_editable = true;  // default for whole grid
 	m_areaEnabled = true;  // default for area grid
@@ -7424,7 +7427,9 @@ void ibGrid::DrawCellHighlight(wxDC& dc, int row, int col, const ibGridCellAttr*
 	// out of the corners as little stubs. At a fixed 2px that was a pixel and the coordinates below
 	// were tuned around it; as soon as the width follows the zoom it is no longer a pixel. The line
 	// has to stop where it is told to stop.
-	wxPen framePen(wxTHEME_COLOUR(HIGHLIGHT), framePenWidth, wxPENSTYLE_SOLID);
+	// …in the highlight the selection is tinted from: the light look's, as the paper it lies on (Init)
+	wxPen framePen(typeConv::ColourToWxColour(std::get<ibColour>(
+		ibStyle::Platform().Get(ibStyleItem::Selection, ibStyleLook::Light))), framePenWidth, wxPENSTYLE_SOLID);
 	framePen.SetCap(wxCAP_BUTT);
 
 	////////////////////////////////////////////////////////////////////////
