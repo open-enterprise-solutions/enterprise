@@ -332,6 +332,12 @@ FRMSERVER_API void ibMcpWordsPresent(const ibString& haystack, const ibString& q
 // (ibMcpWordsFound); every finder that quotes a line asks this, so the line quoted is the one that met.
 FRMSERVER_API ibString ibMcpMatchingLine(const ibString& body, const ibString& query);
 
+// ⭐ WHERE THE TEXTS SPEAK OF IT — every offered tool that carries a body of text (the patterns, the syntax helper,
+// this application's notes) asked to point into it with these words (ibMcpTool::FindInside), its places appended.
+// One loop for every door that asks: mcp_search, the reminder on a family's first call, metadata_create naming the
+// entries about what it has just made.
+FRMSERVER_API void ibMcpFindInside(const ibString& query, std::vector<ibDataValue>& places);
+
 // WHAT A COMPOSITION STILL LACKS to produce a report somebody can read — a nameless variant, no
 // output, nothing selected. Written where the report verbs live (mcpToolReport.cpp) and declared
 // here because the application-wide audit asks the same question of every composer there is: two

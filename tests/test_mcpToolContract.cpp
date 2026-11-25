@@ -866,6 +866,22 @@ TEST(McpSearch, ATypeTheSyntaxHelperDoesNotWriteUp_IsFoundInTheRegistry)
 	}
 }
 
+// The corpus answers with the entries most about the words first, before its cap cuts the list: in the corpus's own
+// order 'contracts' kept choice-links and not-mine and lost settlements, whose summary names contracts.
+TEST(McpSearch, TheEntryNamedForTheWords_ComesFirst)
+{
+	const ibMcpTool* patterns = ibFindMcpTool(ibT("pattern_read"));
+	ASSERT_NE(patterns, nullptr);
+
+	std::vector<ibDataValue> places;
+	patterns->FindInside(ibT("Contracts"), places);
+	ASSERT_FALSE(places.empty());
+
+	const auto first = places.front().AsChild();
+	ASSERT_TRUE(first.has_value());
+	EXPECT_EQ(first->GetValue<ibString>(ibT("pattern")), ibString(ibT("settlements")));
+}
+
 //---------------------------------------------------------------------------
 // the caller's own clipboard
 //---------------------------------------------------------------------------

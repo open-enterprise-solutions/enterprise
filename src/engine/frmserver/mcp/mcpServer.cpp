@@ -2766,10 +2766,7 @@ ibString ibMcpServer::Answer(const ibString& request, const ibMcpWireHeaders& he
 					// The same road mcp_search takes — whatever carries a body of text is asked to
 					// point INTO it with these words. No second matcher, and nothing to keep in step.
 					std::vector<ibDataValue> places;
-					for (const ibMcpTool* each : ibMcpTools()) {
-						if (ibIsMcpToolOffered(each))
-							each->FindInside(family, places);
-					}
+					ibMcpFindInside(family, places);
 
 					// ⭐⭐ AND WHETHER THIS APPLICATION SPEAKS MORE THAN ONE LANGUAGE — said at the
 					// first thing a caller does, because it changes how EVERY visible string is

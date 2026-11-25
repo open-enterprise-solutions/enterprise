@@ -784,6 +784,11 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
 - **MCP: the reminder on a family's first call points only where the word was found.** A word met only in the
   application's notes sent the caller to `syntax_search`, which knew nothing of it.
 
+- **MCP: `metadata_create` names the pattern entries about what it made**, as `patterns` - up to three, the ones
+  most about its name (`Contracts` - `settlements`; `Salary` - `metadata-craft`, `payroll`). A search of the corpus
+  (`pattern_read` with a query, `mcp_search`) lists the entries most about the words first: it kept the corpus's
+  order and cut at two dozen, so a search for contracts lost `settlements`.
+
 - **A value read from JSON no longer gains a `type` field.** The type's name the JSON view writes
   beside a value's type came back as a field, one more on each round.
 

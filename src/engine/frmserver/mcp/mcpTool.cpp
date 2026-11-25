@@ -605,6 +605,13 @@ ibString ibMcpMatchingLine(const ibString& body, const ibString& query)
 	return ibEmptyString;
 }
 
+void ibMcpFindInside(const ibString& query, std::vector<ibDataValue>& places)
+{
+	for (const ibMcpTool* tool : ibMcpTools())
+		if (ibIsMcpToolOffered(tool))
+			tool->FindInside(query, places);
+}
+
 ibValueMetaObjectModuleBase* ibMcpModuleOf(ibValueMetaObject* object, ibString& refusal)
 {
 	if (object == nullptr) {

@@ -335,9 +335,7 @@ public:
 		std::vector<ibDataValue> places;
 
 		if (!query.IsEmpty() && wanted.IsEmpty())
-			for (const ibMcpTool* tool : ibMcpTools())
-				if (ibIsMcpToolOffered(tool))
-					tool->FindInside(query, places);
+			ibMcpFindInside(query, places);
 
 		// ⭐ THIS APPLICATION'S OWN ANSWER FIRST. A place that names an object (it carries the object's `id` -
 		// note_read's) is where the thing asked about is built HERE; a pattern says how such a thing is built

@@ -40,6 +40,7 @@
 #include "backend/system/value/valueDynamicList.h"    // …and opens the list a choice form opens
 #include "backend/restructureInfo.h"                  // the ledger an object complains into
 #include "core/description/typeDescription.h"                  // …and the description it hides
+#include "core/description/compositionDescription.h"           // ibTitleFromName - a created name read out loud, as the corpus is searched
 #include <algorithm>    // std::find — a list offered once
 #include <functional>   // choice_preview — the one write a new record is filled through
 
@@ -412,6 +413,51 @@ void SayNeighbours(ibMetaData* metaData, const ibValueMetaObject* created, ibDat
 		"to be its own thing, nothing here is wrong."));
 }
 
+// ⭐⭐ AND WHERE THE CORPUS SPEAKS OF A THING BY THAT NAME - the entries, by name, an object called so is usually built
+// by. The corpus held the salary as a periodic register, the contract with its settlement key and the total in the
+// form's footer, and a model built a catalog with a salary attribute and a total rewritten before writing, because
+// nothing between the create and the shape pointed there (Max, 2026-11-25: "the memory is the platform").
+//
+// The corpus's own search (ibMcpFindInside, as mcp_search asks it) with the name read out loud - `EmployeesOfOrganisations`
+// is one word to a search - and its first three entries: it ranks the entries most about the words first. The notes and
+// the syntax helper answer the same search and are not what this says.
+void SayPatterns(const ibValueMetaObject* created, ibDataNode& result)
+{
+	if (created == nullptr)
+		return;
+
+	std::vector<ibDataValue> places;
+	ibMcpFindInside(ibTitleFromName(created->GetName()), places);
+
+	std::vector<ibDataValue> patterns;
+	std::vector<ibString> named;
+	for (const ibDataValue& place : places) {
+
+		const std::optional<ibDataNode> node = place.AsChild();
+		const std::optional<ibDataValue> pattern = node ? node->FindField(ibT("pattern")) : std::nullopt;
+		if (!pattern || pattern->Kind() != ibDataKind::String)
+			continue;
+
+		if (std::find(named.begin(), named.end(), pattern->AsString()) != named.end())
+			continue;
+
+		named.push_back(pattern->AsString());
+		patterns.push_back(ibDataValue::String(pattern->AsString()));
+		if (patterns.size() == 3)
+			break;
+	}
+
+	if (patterns.empty())
+		return;
+
+	result.AddField(ibT("patterns"), ibDataValue::Array(patterns));
+	result.SetValue(ibT("patternsNote"), ibMcpText(
+		"The pattern corpus speaks of things by this name in the entries above - read them before adding "
+		"attributes: pattern_read {name}. Which shape a value takes is decided there (a value with a history "
+		"is a register, a total of rows is the form's figure, a field of what a row points at is a column "
+		"through the reference), and it costs least to change now."));
+}
+
 class ibMcpToolMetadataCreate : public ibMcpTool {
 public:
 
@@ -433,6 +479,10 @@ public:
 		return ibMcpText("Add a metadata object, exactly as the studio's Add command does. Answers with "
 			"the new object in full, so its id and its empty fields are known without asking "
 			"again. Refuses when the kind may not live under that parent.\n"
+			"AN ATTRIBUTE IS THE LAST SHAPE TO REACH FOR, so read `pattern_read` `metadata-craft` first. A value "
+			"with a history (a salary, a price) is a periodic register. A total of a document's rows is its "
+			"form's figure, computed in `RefreshDisplay`. A field of what a reference points at is reached "
+			"through the reference, not copied in.\n"
 			"THE FIRST ONE BECOMES THE DEFAULT: the first composer of a report is the one it opens "
 			"with, and the first form of each kind is that kind's default form - so a single "
 			"composer or a single form needs nothing further. A LATER one does not take over; to "
@@ -807,6 +857,9 @@ public:
 		// what turn "there is something similar" into a decision, and for a stored object the
 		// reference spelling is the answer the caller most likely wanted in the first place.
 		SayNeighbours(metaData, created, result);
+
+		// ⭐ …AND HOW A THING BY THAT NAME IS USUALLY BUILT, from the corpus - before the first attribute is added.
+		SayPatterns(created, result);
 
 		// ⭐ AND WHAT IT WILL TAKE, asked of the object that now exists. This is the half that lets
 		// the tool know nothing about any particular kind: a caller creates, reads back the whole
