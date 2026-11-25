@@ -180,16 +180,6 @@ ibString Unfenced(const ibString& value)
 	return inner.Find(quote) == ibNOT_FOUND ? inner : value;
 }
 
-void PadWholePart(ibString& text, int width)
-{
-	size_t start = (!text.IsEmpty() && text[0] == L'-') ? 1 : 0;
-	size_t end = start;
-	while (end < text.length() && text[end] >= L'0' && text[end] <= L'9') ++end;
-	const int digits = static_cast<int>(end - start);
-	if (digits < width)
-		text.insert(start, static_cast<size_t>(width - digits), L'0');
-}
-
 } // namespace
 
 bool ibNumberFormat::operator == (const ibNumberFormat& other) const
@@ -455,11 +445,13 @@ bool ibFormatString::Apply(const ibVariant& value, ibString& result) const
 		// text takes the groups back (ibNumber::FromString).
 		numFmt.groupSep  = m_number.m_groupSeparator.value_or(static_cast<ibChar>(0x00A0));
 		numFmt.groupSize = m_number.m_groupSize.value_or(3);
+		// NLZ: the whole part padded with zeros to the digits ND leaves it (ND - NFD) — by the number itself, before its
+		// groups, so the zeros are grouped as digits are (`00 042`) and the sign stays outside them. Padded after,
+		// the text was counted to its first group's space: 12345 at ND=8 came out `00000012 345`.
+		if (m_number.m_leadingZero && m_number.m_digits)
+			numFmt.minIntDigits = *m_number.m_digits - m_number.m_fractionDigits.value_or(0);
 
 		number.ToString(numFmt, result);
-		// NLZ: the whole part padded with zeros to the digits ND leaves it (ND - NFD).
-		if (m_number.m_leadingZero && m_number.m_digits)
-			PadWholePart(result, *m_number.m_digits - m_number.m_fractionDigits.value_or(0));
 		return !result.IsEmpty();
 	}
 	case ibValueTypes::TYPE_DATE:

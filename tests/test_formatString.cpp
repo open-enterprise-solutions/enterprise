@@ -204,6 +204,8 @@ TEST(FormatString, LeadingZeros)
 	EXPECT_EQ(NoBreak(wxT("00 042")), ibFormatString::Parse(wxT("ND=5; NLZ=")).Apply(Number(wxT("42"))));
 	EXPECT_EQ(NoBreak(wxT("-0 042.50")), ibFormatString::Parse(wxT("ND=6; NFD=2; NLZ=")).Apply(Number(wxT("-42.5"))));
 	EXPECT_EQ(wxT("00042"), ibFormatString::Parse(wxT("ND=5; NLZ=; NG=0")).Apply(Number(wxT("42"))));
+	// The zeros come before the groups, not after the first of them (`00000012 345`).
+	EXPECT_EQ(NoBreak(wxT("00 012 345")), ibFormatString::Parse(wxT("ND=8; NLZ=")).Apply(Number(wxT("12345"))));
 }
 
 // The out-argument form writes the same text over whatever the string held, and says whether there is any.
