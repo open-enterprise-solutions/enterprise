@@ -129,8 +129,11 @@ class Spreadsheet extends Control {
 	drawTable() {
 		this.editor.close(false);
 		const { scrollLeft, scrollTop, clientWidth, clientHeight } = this.host;
+		// The labels round it a document's sheet shows, as it shows its grid lines; a form's sheet is a report to read,
+		// nothing at its sides (Max, 2026-11-25).
 		const table = drawSheet(this.sheet, {
 			gridLines: this.gridLines,
+			labels: this.gridLines,
 			onCell: (row, col) => this.send(EventKind.Cell, { Row: row, Col: col }),
 		});
 		// An editable sheet's current cell is framed wider, as the thin client's.

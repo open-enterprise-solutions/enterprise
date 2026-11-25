@@ -45,6 +45,12 @@ rounding.
 
 - **Text.** `FromString` reads `123`, `-1.5`, `1.2e3`, with a dot and in any locale; a text is a number
   only when nothing but blanks is left after it. `ToString` writes the digits with a dot and no grouping.
+- **Digit groups.** A number's text in a script is its presentation: `String(1234567.5)`, a number joined to a
+  string, a field and `Format` with no group code print `1 234 567.5` (a no-break space between groups of
+  three). `Format(n, "NG=0")` gives the bare digits - for a code, a file name, a URL, a text another program
+  reads. The reading takes the groups back: `Number("1 234")` is 1234, `Number("1 2")` is refused.
+- **Machine text stays bare.** A number bound to a query parameter or a column goes as a number; the query
+  text, JSON, XML, an HTTP header and an Excel cell get its digits.
 - **A `double`.** Taken by its seventeen significant digits; `NaN` and the infinities become zero. A
   `double` comes in from outside (a window, a seed), never as the arithmetic.
 - **The database.** `Number(p, s)` is a `NUMERIC(p,s)` column on Firebird and PostgreSQL; with no

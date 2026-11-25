@@ -57,6 +57,9 @@ ibString RenderLiteral(const ibVariant& value)
 	}
 	case ibValueTypes::TYPE_BOOLEAN:
 		return value.GetBoolean() ? Kw(ibQueryKeyword::True) : Kw(ibQueryKeyword::False);
+	// …a number as the lexer reads one: its own digits, never its presentation in digit groups (GetString).
+	case ibValueTypes::TYPE_NUMBER:
+		return value.GetNumber().ToString();
 	case ibValueTypes::TYPE_NULL:
 		return Kw(ibQueryKeyword::Null);
 	case ibValueTypes::TYPE_DATE:

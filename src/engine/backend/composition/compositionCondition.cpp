@@ -40,10 +40,11 @@ bool ibCompositionCompare(const ibValue& cell, const ibString& op, const ibValue
 	if (op == ibT("<"))                            return cell <  value;
 	if (op == ibT("<="))                           return cell <= value;
 	if (op.CmpNoCase(ibT("LIKE")) == 0) {
-		ibString pattern = value.GetString();
+		// …as the database's LIKE reads it: a number by its digits, not its presentation.
+		ibString pattern = value.GetPString();
 		pattern.Replace(ibT("%"), ibT("*"));
 		pattern.Replace(ibT("_"), ibT("?"));
-		return cell.GetString().Lower().Matches(pattern.Lower());
+		return cell.GetPString().Lower().Matches(pattern.Lower());
 	}
 	return true;   // unknown operator → do not hide anything over a line nobody can read
 }

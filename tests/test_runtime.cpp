@@ -2187,13 +2187,15 @@ TEST_F(BuiltInRuntime, FillPropertyValuesCopiesWhatBothSidesHave) {
 
 TEST_F(BuiltInRuntime, NumberTakesTheWholeTextOrRefuses) {
 	// Number("234,8") answered 234 and Number("12x") 12, without a word: the parse read the number the text
-	// begins with (#646). What is left over after the number is a refusal, the comma included.
+	// begins with (#646). What is left over after the number is a refusal, the comma included — and a space that
+	// splits no digit group (`1 2`). A group's space is the number's, as a number is presented: `1 234` is 1234.
 	ibValuePtr<ibValueSystemFunction> valueSystem(new ibValueSystemFunction());   // the global API, as a host binds it
 	ibCompileCode cc(wxT("test"), wxT("memory"), false);
 	cc.AddContextVariable(wxT("System"), valueSystem, true);
-	ASSERT_TRUE(TryCompile(cc, wxT("var point public; var blanks public;\n")
+	ASSERT_TRUE(TryCompile(cc, wxT("var point public; var blanks public; var grouped public;\n")
 		wxT("point = Number(\"-1.5e2\");\n")
-		wxT("blanks = Number(\" 42 \");")));
+		wxT("blanks = Number(\" 42 \");\n")
+		wxT("grouped = Number(\"1 234 567.5\");")));
 
 	ibProcUnit pu;
 	ibString strError;
@@ -2204,9 +2206,11 @@ TEST_F(BuiltInRuntime, NumberTakesTheWholeTextOrRefuses) {
 	EXPECT_EQ(val.GetNumber(), ibNumber(-150));
 	ASSERT_TRUE(pu.GetPropVal(wxT("blanks"), val));
 	EXPECT_EQ(val.GetInteger(), 42);
+	ASSERT_TRUE(pu.GetPropVal(wxT("grouped"), val));
+	EXPECT_EQ(val.GetNumber(), ibNumber(ibString(wxT("1234567.5"))));
 
 	for (const ibString text : { wxT("var x; x = Number(\"234,8\");"), wxT("var x; x = Number(\"12x\");"),
-		wxT("var x; x = Number(\"1 234\");") }) {
+		wxT("var x; x = Number(\"1 2\");"), wxT("var x; x = Number(\"12 3456\");") }) {
 		ibCompileCode refused(wxT("test"), wxT("memory"), false);
 		refused.AddContextVariable(wxT("System"), valueSystem, true);
 		ASSERT_TRUE(TryCompile(refused, text)) << text;

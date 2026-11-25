@@ -585,7 +585,7 @@ export class Questions {
 	print(request) {
 		const sheet = document.createElement('div');
 		sheet.className = 'print-sheet';
-		sheet.append(drawSheet(request.Sheet ?? {}, { gridLines: false, onCell: () => {} }));
+		sheet.append(drawSheet(request.Sheet ?? {}, { gridLines: false, labels: false, onCell: () => {} }));
 		document.body.append(sheet);
 		document.body.classList.add('printing');
 		let printed = false;

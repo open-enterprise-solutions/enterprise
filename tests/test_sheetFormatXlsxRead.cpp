@@ -16,6 +16,7 @@
 #include "backend/sheetFormat/sheetFormatXlsx.h"
 #include "core/description/spreadsheetDescription.h"
 #include "core/exception.h"
+#include "core/fnumber.h"
 
 namespace {
 
@@ -157,6 +158,30 @@ TEST(SheetFormatXlsxRead, APartThatIsNotXmlRefusesTheFileAndAWorkbookThatNamesNo
 	untouched.SetCellValue(0, 0, ibT("kept"));
 	EXPECT_FALSE(Read({ { "xl/_rels/workbook.xml.rels", kRels }, { "xl/workbook.xml", "<workbook><sheets/></workbook>" } }, untouched));
 	EXPECT_EQ(CellText(untouched, 0, 0), ibString(ibT("kept")));
+}
+
+// Written and read back: a figure presented in digit groups (ibVariant::GetString) goes out as a NUMBER — the groups
+// are how it is written, not which number it is — and returns as the figure, with no group in it; a text that only
+// looks like one stays text: a space that splits no group, a leading zero.
+TEST(SheetFormatXlsxRead, AFigureInDigitGroupsIsWrittenAsANumber)
+{
+	ibString grouped(ibT("-450"));
+	grouped.append(1, static_cast<ibChar>(0x00A0)).append(ibT("000.50"));
+	ibSpreadsheetDescription sheet;
+	sheet.SetCellValue(0, 0, grouped);
+	sheet.SetCellValue(0, 1, ibT("1 2"));
+	sheet.SetCellValue(0, 2, ibT("007"));
+
+	std::ostringstream out(std::ios::binary);
+	ASSERT_TRUE(ibSheetFormatXlsx().Write(out, sheet));
+	std::istringstream in(out.str(), std::ios::binary);
+	ibSpreadsheetDescription read;
+	ASSERT_TRUE(ibSheetFormatXlsx().Read(in, read));
+	const ibString figure = CellText(read, 0, 0);
+	EXPECT_FALSE(figure.Contains(ibString(static_cast<ibChar>(0x00A0)))) << "written as <v>, the number's own text";
+	EXPECT_EQ(ibNumber(figure), ibNumber(ibString(ibT("-450000.5"))));
+	EXPECT_EQ(CellText(read, 0, 1), ibString(ibT("1 2")));
+	EXPECT_EQ(CellText(read, 0, 2), ibString(ibT("007")));
 }
 
 TEST(SheetFormatXlsxRead, AnIndentedStylesPartGivesEachCellItsOwnStyle)

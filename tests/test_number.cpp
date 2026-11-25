@@ -222,6 +222,33 @@ TEST(NumberParser, GarbageTailStopsAtDigits) {
     EXPECT_EQ(n, ibNumber(12));
 }
 
+// A DIGIT GROUP'S SPACE IS THE NUMBER'S — a plain one, a no-break one (a number's presentation), a narrow one — between
+// a digit and three more, before the point; any other space ends the number where it stands.
+TEST(NumberParser, DigitGroupsReadBack) {
+    ibNumber n;
+    size_t length = 0;
+    const ibString plain(wxT("-1 234 567.891"));
+    ASSERT_TRUE(n.FromString(plain, length));
+    EXPECT_EQ(n, ibNumber(ibString(wxT("-1234567.891"))));
+    EXPECT_EQ(length, plain.length());
+
+    ibString noBreak(wxT("450"));
+    noBreak.append(1, static_cast<ibChar>(0x00A0)).append(wxT("000.00"));
+    ASSERT_TRUE(n.FromString(noBreak, length));
+    EXPECT_EQ(n, ibNumber(450000));
+    EXPECT_EQ(length, noBreak.length());
+
+    ibString narrow(wxT("12"));
+    narrow.append(1, static_cast<ibChar>(0x202F)).append(wxT("500"));
+    ASSERT_TRUE(n.FromString(narrow, length));
+    EXPECT_EQ(n, ibNumber(12500));
+
+    for (const wxChar* text : { wxT("1 2"), wxT("12 3456"), wxT("1 23"), wxT("1.234 567") }) {
+        ASSERT_TRUE(n.FromString(ibString(text), length)) << text;
+        EXPECT_LT(length, ibString(text).length()) << text << ": the space ends the number";
+    }
+}
+
 // ===========================================================================
 // ToString / round-trip
 // ===========================================================================

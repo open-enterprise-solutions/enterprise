@@ -1077,7 +1077,7 @@ TEST(ValueSerialize, SeparatorsInsideAStringDoNotBreakTheParse) {
 TEST(ValueSerialize, ExactNumbersSurvive) {
 	const ibValue original(ibNumber(wxT("12345678901234.1234567891")));
 	const ibValue restored = RoundTrip(original);
-	EXPECT_EQ(wxT("12345678901234.1234567891"), restored.GetString());
+	EXPECT_EQ(wxT("12345678901234.1234567891"), restored.GetNumber().ToString());   // its own digits, not its presentation
 }
 
 // ⭐ AN ENUMERATION'S MEMBER COMES BACK HELD BY ITS FACTORY (2026-11-15). A value is made by its class, and a member's

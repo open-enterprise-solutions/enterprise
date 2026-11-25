@@ -38,7 +38,7 @@ ibFrontendView* ibValueGridBox::GetControlView() const
 	return m_gridView->GetGridCtrl() != nullptr ? m_gridView : nullptr;
 }
 
-void ibValueGridBox::Create(wxWindow* parent, const ibProtocolNode& /*node*/)
+void ibValueGridBox::Create(wxWindow* parent, const ibProtocolNode& node)
 {
 	// The sheet's frame is the box's, round its command bar too - as a table's (ibValueModelTableBox::Create).
 	m_panel = new ibPanel(parent, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxTAB_TRAVERSAL | wxBORDER_SIMPLE);
@@ -61,6 +61,14 @@ void ibValueGridBox::Create(wxWindow* parent, const ibProtocolNode& /*node*/)
 	gridWindow->EnableProperty(true);
 	gridWindow->EnableGridArea(false);
 	gridWindow->EnableGridLines(false);
+	// NOTHING AT ITS SIDES — no labels round the sheet, the rows' numbers nor the columns' — unless it is a document's
+	// sheet, as its State says by its grid lines (the server's: a tab's spreadsheet, a template being edited). A form's
+	// sheet is a report to read; whoever means to lay it out asks for them (Show headers), and an update keeps that
+	// (Max, 2026-11-25).
+	if (!node.FindChild(ibProtocol::ibForm::ibState::State).GetBool(ibProtocol::ibForm::ibSpreadsheet::GridLines)) {
+		gridWindow->HideRowLabels();
+		gridWindow->HideColLabels();
+	}
 
 	// WHAT IT SHOWS until the server's sheet comes (Update): one of its own, not to be edited — the desktop's box shows its
 	// model's from here on. An editor with none had nothing a change is taken from (the studio's crash, 2026-10-20), and

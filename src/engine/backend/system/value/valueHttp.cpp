@@ -522,7 +522,7 @@ ibValue ibValueHttpConnection::Send(ibHttpMethod method, const ibValueHttpReques
 		const ibValueTypes kind = entry.value.GetType();
 		if (kind != ibValueTypes::TYPE_STRING && kind != ibValueTypes::TYPE_NUMBER)
 			ibBackendCoreException::Error(_("HTTPConnection: the value of the header '%s' is a string or a number"), key);
-		const ibString value = ibHttpTrimmed(entry.value.GetString());
+		const ibString value = ibHttpTrimmed(entry.value.GetPString());   // a number goes on the wire as its digits, never `1 234`
 		if (ibHttpHoldsControl(value))
 			ibBackendCoreException::Error(_("HTTPConnection: the value of the header '%s' holds a line break or a control character"), key);
 		message.m_headers.emplace_back(field, ibHttpUtf8(value));
@@ -863,7 +863,7 @@ ibHttpResponse ibValueHttpServiceResponse::ToResponse() const
 		const ibValueTypes kind = entry.value.GetType();
 		if (kind != ibValueTypes::TYPE_STRING && kind != ibValueTypes::TYPE_NUMBER)
 			ibBackendCoreException::Error(_("HTTPServiceResponse: the value of the header '%s' is a string or a number"), key);
-		const ibString value = ibHttpTrimmed(entry.value.GetString());
+		const ibString value = ibHttpTrimmed(entry.value.GetPString());   // a number goes on the wire as its digits, never `1 234`
 		if (ibHttpHoldsControl(value))
 			ibBackendCoreException::Error(_("HTTPServiceResponse: the value of the header '%s' holds a line break or a control character"), key);
 		response.m_headers.emplace_back(field, ibHttpUtf8(value));

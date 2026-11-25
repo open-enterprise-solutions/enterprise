@@ -116,6 +116,13 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
 - **A string becomes a number only when the whole of it is one.** `Number("234,8")` gave 234 and
   `Number("12x")` gave 12; both are now refused with "Cannot convert string to number". Spaces around the
   number are still allowed.
+- **A number's text is its presentation, in digit groups.** `String(1234567.5)` is `1 234 567.5`, a no-break space
+  between groups of three, and so is a number joined to a string, shown in a field, a list, a report cell or a
+  message, and printed by `Format` wherever the format says nothing of groups — `Format(1250.5, "NFD=2")` is
+  `1 250.50`. `NG=0` writes none, as a code, a file name or a text another program reads wants; `NGS` names another
+  separator. A number read from a text takes the groups back — `Number("1 234")` is 1234, and a figure typed over
+  what a field shows reads as it was shown — while a space that splits no group (`1 2`) is still refused. JSON,
+  XML, a query's text, an HTTP header's value and a report saved to Excel keep the number's own digits.
 - **The value table an accumulation register's `Balance` returns names a resource's column by the resource**:
   `Quantity`, not `QuantityBalance`. A module that reads `QuantityBalance` from it raises "Table column not
   found": read `Quantity`. The query virtual table keeps `QuantityBalance` (#409).
@@ -169,6 +176,9 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
   background is the control's own: a button its face, a field its well, a caption and a group the surface under them —
   a caption inside a coloured group no longer draws a box of the form's colour. A form saved before holds the light
   colours as its author's: set them empty again.
+- **A form's sheet has nothing at its sides.** A spreadsheet on a form — a report's result — is drawn without the
+  rows' numbers and the columns' letters round it, in the browser as on the desktop, where *Show headers* in its menu
+  brings them back. A document's sheet and a template being edited keep them.
 
 ## Script language
 

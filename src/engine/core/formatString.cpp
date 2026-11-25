@@ -449,11 +449,12 @@ bool ibFormatString::Apply(const ibVariant& value, ibString& result) const
 		if (m_number.m_fractionDigits)   numFmt.fracDigits = *m_number.m_fractionDigits;
 		if (m_number.m_digits)           numFmt.precision  = *m_number.m_digits;
 		if (m_number.m_decimalSeparator) numFmt.decimalSep = *m_number.m_decimalSeparator;
-		if (m_number.m_groupSeparator) {
-			numFmt.groupSep  = *m_number.m_groupSeparator;
-			numFmt.groupSize = 3;   // a separator names no group size of its own: thousands, unless NG says
-		}
-		if (m_number.m_groupSize)        numFmt.groupSize  = *m_number.m_groupSize;
+		// ⭐ A NUMBER IS PRESENTED IN DIGIT GROUPS — thousands, a no-break space between them, `1 234 567.89` — unless the
+		// format says otherwise: NGS names the separator, NG the size, `NG=0` none at all (Max, 2026-11-25). The one
+		// default: a value's own text is this with nothing written (ibVariant::GetString), and a number read from a
+		// text takes the groups back (ibNumber::FromString).
+		numFmt.groupSep  = m_number.m_groupSeparator.value_or(static_cast<ibChar>(0x00A0));
+		numFmt.groupSize = m_number.m_groupSize.value_or(3);
 
 		number.ToString(numFmt, result);
 		// NLZ: the whole part padded with zeros to the digits ND leaves it (ND - NFD).

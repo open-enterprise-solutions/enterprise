@@ -1038,6 +1038,18 @@ oes-spreadsheet .selection-summary {
 	border-left: 1px solid var(--oes-border);
 }
 
+/* …and none round a form's sheet: nothing at its sides, a report to read (sheet.js, `bare`; the thin client's box hides
+   its labels the same way). Laid out with no width, so what reads them still finds them. */
+.sheet.bare tr.labels {
+	display: none;
+}
+
+.sheet.bare th.label {
+	visibility: hidden;
+	padding: 0;
+	border: 0;
+}
+
 .sheet thead {
 	position: sticky;
 	top: 0;

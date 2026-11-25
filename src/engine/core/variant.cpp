@@ -1,6 +1,7 @@
 #include "core/variant.h"
 
 #include "core/exception.h"            // ibCoreException — a write denied, a text that is no number
+#include "core/formatString.h"         // ibFormatString — a number's text is its presentation
 #include "core/serialize/dataBuilder.h"   // ibDataNode — a value written, and read back
 
 #include "core/localization/dictionary.h"   // _() — the refusals' words
@@ -527,8 +528,16 @@ ibString ibVariant::GetString() const
 	{
 	case ibValueTypes::TYPE_BOOLEAN:
 		return m_bData.ToString();
-	case ibValueTypes::TYPE_NUMBER:
-		return m_fData.ToString();
+	case ibValueTypes::TYPE_NUMBER: {
+		// ⭐ A NUMBER'S TEXT IS ITS PRESENTATION, in digit groups — `1 234 567.89` — the format with nothing written
+		// (ibFormatString::Apply): one text for a script's String(), a cell, a message. A query, a file, another
+		// program take the number's own (GetNumber().ToString()); a number read from either takes the groups back
+		// (ibNumber::FromString). Max, 2026-11-25.
+		static const ibFormatString s_presented;
+		ibString text;
+		s_presented.Apply(*this, text);
+		return text;
+	}
 	case ibValueTypes::TYPE_STRING:
 		return m_sData;   // the text SHARED — one more owner, no copy
 	case ibValueTypes::TYPE_DATE:

@@ -3,8 +3,9 @@
 // on the cell that spans — a cell spanned says 0 or less), `rows` and `cols` (`sizes`, `groups`, `breaks`, `areas`),
 // `freeze`. A cell or a field absent is the default. Drawn as a table: the rows and columns frozen stay in view as it
 // scrolls, a group of rows or of columns folds away, and a cell's text runs on over the empty cells beside it, as the
-// desktop's grid draws it. Round it the labels — the rows' numbers down the left, the columns' along the top — and past
-// what it holds empty cells as far as it is seen (growSheet): the thin client's sheet, on the screen; paper has neither.
+// desktop's grid draws it. Round it the labels — the rows' numbers down the left, the columns' along the top — a
+// document's sheet's; a form's has nothing at its sides (`labels`) — and past what it holds empty cells as far as it is
+// seen (growSheet): the thin client's sheet, on the screen; paper has neither.
 
 import { applyFont, colour } from '../controls/control.js';
 
@@ -35,7 +36,8 @@ const penStyles = { 100: 'solid', 101: 'dotted', 102: 'dashed', 103: 'dashed', 1
 
 /**
  * @param {SheetNode} sheet
- * @param {{gridLines: boolean, onCell: (row: number, col: number) => void}} options
+ * @param {{gridLines: boolean, labels: boolean, onCell: (row: number, col: number) => void}} options `labels` — round it;
+ * none: laid out with no width and not shown (form.css, `bare`), so what reads them finds them still
  * @returns {HTMLTableElement}
  */
 export function drawSheet(sheet, options) {
@@ -54,14 +56,15 @@ export function drawSheet(sheet, options) {
 
 	// A frozen column stays at its place from the left edge: the outline pane, the labels and the widths before it.
 	const frozenCols = sheet.freeze?.col ?? 0;
+	const labelsWidth = options.labels ? labelWidth : 0;
 	const lefts = [];
 	let width = 0;
 	const columns = document.createElement('colgroup');
 	if (folding)
 		columns.append(columnOf(pane, 'fold'));
-	columns.append(columnOf(labelWidth, 'label'));
+	columns.append(columnOf(labelsWidth, 'label'));
 	for (let col = 0; col < colCount; col++) {
-		lefts.push(pane + labelWidth + width);
+		lefts.push(pane + labelsWidth + width);
 		const size = colSizes.get(col) ?? defaultWidth;
 		const column = columnOf(size);
 		// Its place, for a fold of columns to take it away (drawColFolds) and the cells taken to pass it (selection.js).
@@ -72,6 +75,7 @@ export function drawSheet(sheet, options) {
 
 	const table = document.createElement('table');
 	table.className = 'sheet';
+	table.classList.toggle('bare', !options.labels);
 	// As wide as what it holds: the pane's, the labels' column and the empty ones it is filled with widen it on the
 	// screen — a fixed table is the wider of its width and its columns' — and are taken off on paper (form.css). The row
 	// labels stand past the pane.

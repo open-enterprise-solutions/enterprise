@@ -143,6 +143,28 @@ TEST(ValueTest, ADateOrANumberTheTextIsNotIsRefused) {
     EXPECT_TRUE(found.empty());
 }
 
+// A NUMBER IS TYPED OVER THE TEXT IT WAS SHOWN AS — its presentation's digit groups (`82 912.87`, a no-break space or
+// a plain one) are read back as the number they group (ibNumber::FromString).
+TEST(ValueTest, ANumberIsReadWithItsDigitGroupsDropped) {
+    ibString grouped(ibT("-82"));
+    grouped.append(1, static_cast<ibChar>(0x00A0)).append(ibT("912.87"));
+    const ibValue number(ibNumber(1));
+    std::vector<ibValue> found;
+    ASSERT_TRUE(number.FindValue(grouped, ibChoiceCondition(), found));
+    ASSERT_EQ(found.size(), 1u);
+    EXPECT_EQ(found[0].GetNumber(), ibNumber(ibString(ibT("-82912.87"))));
+
+    found.clear();
+    ASSERT_TRUE(number.FindValue(ibT("1 234 567"), ibChoiceCondition(), found));
+    EXPECT_EQ(found[0].GetNumber(), ibNumber(1234567));
+
+    // …and what a number shows is what it reads back as.
+    const ibValue shown(ibNumber(ibString(ibT("-1234567.891"))));
+    found.clear();
+    ASSERT_TRUE(number.FindValue(shown.GetString(), ibChoiceCondition(), found));
+    EXPECT_EQ(found[0].GetNumber(), shown.GetNumber());
+}
+
 // ===========================================================================
 // TYPE_NUMBER
 // ===========================================================================

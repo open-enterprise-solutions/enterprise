@@ -1748,8 +1748,12 @@ bool ibTypeValueClsid(const ibValue& value, ibClassID& outClsid)
 
 ibValue ibValueAsType(const ibValue& value, const ibTypeDescription& type)
 {
-	if (type.GetClsidCount() == 1 && ibValue::GetVTByID(type.GetFirstClsid()) < ibValueTypes::TYPE_REFFER)
+	if (type.GetClsidCount() == 1 && ibValue::GetVTByID(type.GetFirstClsid()) < ibValueTypes::TYPE_REFFER) {
+		// A number cast to a string is its digits, as the database's CAST gives them — not its presentation.
+		if (ibValue::GetVTByID(type.GetFirstClsid()) == ibValueTypes::TYPE_STRING && value.GetType() == ibValueTypes::TYPE_NUMBER)
+			return ibValueTypeDescription::AdjustValue(type, ibValue(value.GetPString()));
 		return ibValueTypeDescription::AdjustValue(type, value);
+	}
 	if (type.ContainType(value.GetClassType()))
 		return value;
 	ibValue absent; absent.SetType(ibValueTypes::TYPE_NULL);

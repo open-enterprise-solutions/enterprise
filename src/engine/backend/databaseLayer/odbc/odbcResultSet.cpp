@@ -339,7 +339,7 @@ ibString ibDatabaseResultSetODBC::GetResultString(int nField)
 		m_fieldValues[nField - 1].GetDate().ToParts(p);
 		return ibString::Format(ibT("%04d-%02u-%02u %02u:%02u:%02u"), p.m_year, p.m_month, p.m_day, p.m_hour, p.m_minute, p.m_second);
 	}
-	return m_fieldValues[nField - 1].GetString();
+	return m_fieldValues[nField - 1].GetPString();   // the column's text as the database holds it: a number its digits
 }
 
 long long ibDatabaseResultSetODBC::GetResultLong(int nField)

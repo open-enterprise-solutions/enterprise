@@ -43,10 +43,11 @@ TEST(ColumnWidthByType, AStringIsItsLength)
 	EXPECT_EQ(WidthOf(StringOf(0)), 30u);
 }
 
-// A tabular section's line number, Number(6,0) that holds no sign: six digits.
+// A tabular section's line number, Number(6,0) that holds no sign: six digits and the space of their group, as a
+// number is presented (`999 999`).
 TEST(ColumnWidthByType, ALineNumberIsSixDigits)
 {
-	EXPECT_EQ(WidthOf(ibTypeDescription(g_valueNumberCLSID, ibTypeDescription::ibTypeData(6, 0, true))), 6u);
+	EXPECT_EQ(WidthOf(ibTypeDescription(g_valueNumberCLSID, ibTypeDescription::ibTypeData(6, 0, true))), 7u);
 }
 
 // A number is its widest figure as the format prints it: the sign, the point, the fraction, the group separators.
@@ -58,6 +59,12 @@ TEST(ColumnWidthByType, ANumberCountsItsFractionAndSeparators)
 	const unsigned int width = ibBackendTypeApplicationFactory::GetWidthFromColumn(format, type);
 	EXPECT_EQ(width, format.Apply(ibNumber(ibString(wxT("-9999999999999.99")))).length());
 	EXPECT_GT(width, 15u + 2u) << "the sign, the point and the group separators count";
+}
+
+// An amount with no format of its own counts the digit groups its type gives it: Number(15,2) is `-9 999 999 999 999.99`.
+TEST(ColumnWidthByType, AnAmountCountsItsGroups)
+{
+	EXPECT_EQ(WidthOf(ibTypeDescription(g_valueNumberCLSID, ibTypeDescription::ibTypeData(15, 2))), 21u);
 }
 
 // A number nobody bounded — an average, a product — asks for twelve.

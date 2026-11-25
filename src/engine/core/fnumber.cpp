@@ -483,6 +483,19 @@ namespace
 		}
 	}
 
+	// The spaces a digit group is written with: a plain one, a no-break one (the presentation's own), a narrow one.
+	template <class Char>
+	bool IsGroupSpace(Char c)
+	{
+		return c == L' ' || c == static_cast<Char>(0x00A0) || c == static_cast<Char>(0x202F);
+	}
+
+	template <class Char>
+	bool IsDigit(Char c)
+	{
+		return c >= L'0' && c <= L'9';
+	}
+
 	// Decimal parser shared by ibNumber(const wxString&) and FromString().
 	// Accepts: optional sign, integer digits, optional '.' + fractional digits,
 	// optional [eE][+-]?digits. Returns true if at least one digit was consumed.
@@ -533,6 +546,13 @@ namespace
 				++p;
 			} else if (*p == L'.' && !sawPoint) {
 				sawPoint = true;
+				++p;
+			} else if (sawDigit && !sawPoint && IsGroupSpace(*p) && IsDigit(p[1]) && IsDigit(p[2]) && IsDigit(p[3])
+				&& !IsDigit(p[4])) {
+				// ⭐ A DIGIT GROUP'S SPACE IS NO PART OF THE NUMBER — `450 000.00`, the way a number is presented
+				// (ibVariant::GetString, ibFormatString::Apply): between a digit and three more, before the point, it
+				// is passed over, so whatever was shown reads back (Max, 2026-11-25). Any other space ends the number
+				// as before: `1 2` is the 1 a text begins with.
 				++p;
 			} else {
 				break;

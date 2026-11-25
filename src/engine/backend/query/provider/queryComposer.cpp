@@ -314,7 +314,7 @@ RamTri MatchRamCondition(const ibValue& cell, const ibQueryCondition& c, const i
 		case ibQueryFilterOp::Greater:      res = cell.CompareValueGT(value) > 0; break;   // three-way int -> '>'
 		case ibQueryFilterOp::GreaterEqual: res = cell.CompareValueGE(value); break;
 		// …and a LIKE read as every other LIKE over rows in memory is: the case aside.
-		case ibQueryFilterOp::Like:         res = RamLike(cell.GetString(), value.GetString()); break;
+		case ibQueryFilterOp::Like:         res = RamLike(cell.GetPString(), value.GetPString()); break;   // a number as SQL casts one
 		case ibQueryFilterOp::In:           break;   // unreachable — returned above; listed to keep the switch exhaustive
 	}
 	return res ? RamTri::True : RamTri::False;
@@ -1929,7 +1929,7 @@ ibValue EvalColumnExprRow(const ibQueryColumnExprPtr& e, const ibQueryRow& row)
 			const ibValue vb = EvalColumnExprRow(e->m_rhs, row);
 			if (RamAnyNull({ &va, &vb })) return RamNullValue();   // strict — see above
 			if (e->m_arith == ibQueryColumnArithOp::Concat)   // before the numbers: a string is not read as one
-				return ibValue(va.GetString() + vb.GetString());
+				return ibValue(va.GetPString() + vb.GetPString());   // a number as SQL casts one, not its presentation
 			const ibNumber a = va.GetNumber();
 			const ibNumber b = vb.GetNumber();
 			switch (e->m_arith) {
@@ -1994,7 +1994,7 @@ ibValue EvalColumnExprRow(const ibQueryColumnExprPtr& e, const ibQueryRow& row)
 			if (RamAnyNull({ &s })) return RamNullValue();
 			const long from = e->m_args.size() > 0 ? static_cast<long>(EvalColumnExprRow(e->m_args[0], row).GetNumber().ToInt()) : 1;
 			const long len  = e->m_args.size() > 1 ? static_cast<long>(EvalColumnExprRow(e->m_args[1], row).GetNumber().ToInt()) : 0;
-			const ibString text = s.GetString();
+			const ibString text = s.GetPString();
 			const long start = (from > 0 ? from : 1) - 1;
 			if (start >= static_cast<long>(text.length()) || len <= 0)
 				return ibValue(ibEmptyString);

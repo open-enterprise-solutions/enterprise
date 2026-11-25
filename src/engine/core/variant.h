@@ -295,6 +295,11 @@ public:
 	int GetInteger() const { return GetNumber().ToInt(); }
 	unsigned int GetUInteger() const { return GetNumber().ToUInt(); }
 	double GetDouble() const { return GetNumber().ToDouble(); }
+	// ITS TEXT WITHOUT ITS PRESENTATION — a number its own digits (ibNumber::ToString), any other value GetString. For a
+	// CODEC only: where the engine itself was handed a number and writes it into a text a machine reads — a query's
+	// SQL semantics in memory, a driver's column, a header. A script that turns a number into a string gets
+	// GetString, groups and all, and says `NG=0` when it wants digits; a number bound to a column goes as a number.
+	ibString GetPString() const { return GetType() == ibValueTypes::TYPE_NUMBER ? GetNumber().ToString() : GetString(); }
 
 	// The primitives' types by their class ids, both ways — the core's table (core/core.h).
 	CORE_API static ibClassID GetIDByVT(const ibValueTypes& valueType);

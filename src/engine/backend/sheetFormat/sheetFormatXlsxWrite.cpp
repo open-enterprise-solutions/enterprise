@@ -19,6 +19,7 @@
 #include "backend/sheetFormat/sheetFormatXlsx.h"
 #include "backend/backend_localization.h"   // a caption goes out in one language
 
+#include "core/fnumber.h"                    // ibNumber - a cell's text read as a number
 #include "core/zip/zip.h"                    // ibZipWriter - the package
 
 #include <algorithm>
@@ -74,10 +75,12 @@ ibString ArgbOf(const ibColour& colour)
 }
 
 // ⚠ IS THIS TEXT A NUMBER — asked so a number reaches Excel AS a number, which is
-// what makes it summable there. Asked in the C locale (ToCDouble) because that is
-// how the sheet stores it, and answered "no" for anything with a stray character,
-// so "1 234" or "12%" stay text rather than becoming a silently different value.
-bool NumberOf(const ibString& text, double& value)
+// what makes it summable there; `number` is the text written for it, the number's own
+// (ibNumber::ToString). Read as the engine reads any number out of a text
+// (ibNumber::FromString) — its digit groups taken back, `450 000.00` as a number is
+// presented — and answered "no" for anything with a stray character, so "1 2" or "12%"
+// stay text rather than becoming a silently different value.
+bool NumberOf(const ibString& text, ibString& number)
 {
 	if (text.IsEmpty())
 		return false;
@@ -95,7 +98,12 @@ bool NumberOf(const ibString& text, double& value)
 	if (at + 1 < text.length() && text[at] == ibT('0') && text[at + 1] != ibT('.') && text[at + 1] != ibT(','))
 		return false;
 
-	return text.ToCDouble(&value);
+	ibNumber read;
+	size_t length = 0;
+	if (!read.FromString(text, length) || length != text.length())
+		return false;
+	number = read.ToString();
+	return true;
 }
 
 // ⭐ EXCEL NAMES A LINE, WE DESCRIBE ONE — a pen style and a width against a closed
@@ -585,10 +593,10 @@ bool ibSheetFormatXlsx::Write(std::ostream& output, const ibSpreadsheetDescripti
 			if (value.IsEmpty() && styleIndex == 0)
 				continue;   // nothing to say about this cell at all
 
-			double number = 0.0;
+			ibString number;
 			if (NumberOf(value, number)) {
 				cells += ibString::Format(ibT("<c r=\"%s\" s=\"%u\"><v>%s</v></c>"),
-					CellRef(row, col), styleIndex, value);
+					CellRef(row, col), styleIndex, number);
 			}
 			else if (!value.IsEmpty()) {
 				cells += ibString::Format(ibT("<c r=\"%s\" s=\"%u\" t=\"inlineStr\"><is><t xml:space=\"preserve\">%s</t></is></c>"),

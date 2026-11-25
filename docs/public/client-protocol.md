@@ -106,7 +106,9 @@ journal's rows are fetched by the tab, newest first: `fetch {Tab, Request}` with
 epoch, 0 — no bound), `Level`, `User`, `Session`, `Source`, `Event`, `Ref`, `Search` (a part of the message), `Offset`,
 `Count`; each row `Time`, `Level`, `Session`, `User`, `Host`, `Source`, `Event`, `Message`, `Ref`, `RefMeta`. A row's
 object is opened by event `Open {Ref, RefMeta}`. A spreadsheet document's
-`View` is a gridbox's node — its `State` with `GridLines` set — and its sheet is fetched by the tab (`fetch {Tab}`);
+`View` is a gridbox's node — its `State` with `GridLines` set: a document's sheet, drawn with its grid lines and the
+labels round it; a form's gridbox sets none and is drawn with nothing at its sides — and its sheet is fetched by the
+tab (`fetch {Tab}`);
 with no `Version` the sheet is read once. A gridbox's `fetch` gives the whole sheet, `Sheet`, in the form a template is
 stored in — `cells` (`row`, `col` from 0, `value` as shown), `rows` and `cols` (`areas`, `breaks`, `sizes`, `groups`),
 `freeze` — the `Version` it was read at, and `ReadOnly` when the document takes no edits; a cell or a field absent is

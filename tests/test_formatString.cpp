@@ -11,6 +11,7 @@
 #include <gtest/gtest.h>
 #include <wx/string.h>   // wxT, wxString - the engine's headers include no wx
 #include "core/formatString.h"
+#include "core/description/typeDescription.h"   // ibTypeDescription — what FromTypeDesc is asked
 #include "backend/compiler/value.h"
 
 namespace {
@@ -20,6 +21,23 @@ ibValue Number(const ibString& text)
 	ibValue value;
 	value.SetNumber(text);
 	return value;
+}
+
+// The text as a type's digit groups write it: each space a no-break one.
+ibString NoBreak(const ibString& text)
+{
+	ibString result;
+	for (const ibChar c : text)
+		result.Append(c == ibT(' ') ? static_cast<ibChar>(0x00A0) : c);
+	return result;
+}
+
+// A value through the format its type gives, nothing written.
+ibString ShownByType(const ibTypeDescription& type, const ibValue& value)
+{
+	ibFormatString format;
+	ibFormatString::FromTypeDesc(type, format);
+	return format.Apply(value);
 }
 
 } // namespace
@@ -106,7 +124,7 @@ TEST(FormatString, SemicolonAndEqualsCannotBeWritten)
 // The help's own examples — Format runs exactly this now.
 TEST(FormatString, TheHelpExamplesPrintWhatTheHelpSays)
 {
-	EXPECT_EQ(wxT("1250.50"), ibFormatString::Parse(wxT("NFD=2")).Apply(Number(wxT("1250.5"))));
+	EXPECT_EQ(NoBreak(wxT("1 250.50")), ibFormatString::Parse(wxT("NFD=2")).Apply(Number(wxT("1250.5"))));
 	EXPECT_EQ(wxT("-"), ibFormatString::Parse(wxT("NZ=-")).Apply(ibValue(0)));
 	EXPECT_EQ(wxT("yes"), ibFormatString::Parse(wxT("BT=yes; BF=no")).Apply(ibValue(true)));
 	EXPECT_EQ(wxT("no"), ibFormatString::Parse(wxT("BT=yes; BF=no")).Apply(ibValue(false)));
@@ -180,11 +198,12 @@ TEST(FormatString, LocalFormatAndLanguage)
 	EXPECT_EQ(wxT("DLF=DD; L=uk"), ibFormatString::Parse(wxT("L=uk; DLF=DD")).Render());
 }
 
-// NLZ pads the whole part to ND - NFD digits.
+// NLZ pads the whole part to ND - NFD digits — in digit groups, as every number is presented, unless NG=0 says none.
 TEST(FormatString, LeadingZeros)
 {
-	EXPECT_EQ(wxT("00042"), ibFormatString::Parse(wxT("ND=5; NLZ=")).Apply(Number(wxT("42"))));
-	EXPECT_EQ(wxT("-0042.50"), ibFormatString::Parse(wxT("ND=6; NFD=2; NLZ=")).Apply(Number(wxT("-42.5"))));
+	EXPECT_EQ(NoBreak(wxT("00 042")), ibFormatString::Parse(wxT("ND=5; NLZ=")).Apply(Number(wxT("42"))));
+	EXPECT_EQ(NoBreak(wxT("-0 042.50")), ibFormatString::Parse(wxT("ND=6; NFD=2; NLZ=")).Apply(Number(wxT("-42.5"))));
+	EXPECT_EQ(wxT("00042"), ibFormatString::Parse(wxT("ND=5; NLZ=; NG=0")).Apply(Number(wxT("42"))));
 }
 
 // The out-argument form writes the same text over whatever the string held, and says whether there is any.
@@ -201,6 +220,32 @@ TEST(FormatString, TheOutArgumentWritesTheSameText)
 TEST(FormatString, AStringIsNotFormatted)
 {
 	EXPECT_EQ(wxT("text"), ibFormatString::Parse(wxT("NFD=2; BT=yes")).Apply(ibValue(ibString(wxT("text")))));
+}
+
+// -------------------------------- presented ---------------------------------
+
+// A NUMBER IS PRESENTED IN DIGIT GROUPS where the format says nothing of them — thousands, a no-break space between —
+// its own text (GetString) and the format its type gives alike: an amount, a line's number, a figure nobody bounded.
+// NG=0 writes none; NGS names another separator.
+TEST(FormatString, ANumberIsPresentedInDigitGroups)
+{
+	EXPECT_EQ(NoBreak(wxT("1 234 567.891")), ibFormatString().Apply(Number(wxT("1234567.891"))));
+	EXPECT_EQ(NoBreak(wxT("1 234 567.891")), Number(wxT("1234567.891")).GetString());
+	EXPECT_EQ(NoBreak(wxT("-1 000")), Number(wxT("-1000")).GetString());
+	EXPECT_EQ(wxT("999"), Number(wxT("999")).GetString());
+
+	const ibTypeDescription amount(g_valueNumberCLSID, ibTypeDescription::ibTypeData(15, 2));
+	EXPECT_EQ(NoBreak(wxT("450 000.00")), ShownByType(amount, Number(wxT("450000"))));
+	EXPECT_EQ(NoBreak(wxT("-1 234 567.50")), ShownByType(amount, Number(wxT("-1234567.5"))));
+	EXPECT_EQ(wxT("19.000"), ShownByType(ibTypeDescription(g_valueNumberCLSID, ibTypeDescription::ibTypeData(15, 3)),
+		Number(wxT("19"))));
+	EXPECT_EQ(NoBreak(wxT("1 234")), ShownByType(ibTypeDescription(g_valueNumberCLSID, ibTypeDescription::ibTypeData(6, 0, true)),
+		Number(wxT("1234"))));
+	EXPECT_EQ(NoBreak(wxT("82 912.87")), ShownByType(ibTypeDescription(g_valueNumberCLSID, ibTypeDescription::ibTypeData(0, 0)),
+		Number(wxT("82912.87"))));
+
+	EXPECT_EQ(wxT("1234567"), ibFormatString::Parse(wxT("NG=0")).Apply(Number(wxT("1234567"))));
+	EXPECT_EQ(wxT("1,234,567"), ibFormatString::Parse(wxT("NGS=,")).Apply(Number(wxT("1234567"))));
 }
 
 // ------------------------------ one code at a time --------------------------
