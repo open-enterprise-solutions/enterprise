@@ -63,6 +63,14 @@ public:
 	// Everything else bounces off it.
 	virtual bool IsClosingChildren() const override { return m_closingChildren; }
 
+	// ⭐ THE CELL UNDER THE FOCUS — the form of the child the person picked last (its Focus tells the page,
+	// ibValueForm::DispatchEvent): what the page's tab answers with, as a form's tab with its form. Null until a cell is
+	// picked.
+	virtual ibValueForm* GetValueForm() const override { return m_activeForm; }
+	virtual void SetActiveChild(ibDocument* child) override {
+		m_activeForm = child != nullptr ? child->GetValueForm() : nullptr;
+	}
+
 	// The workspace as it was when this tab opened. A snapshot on purpose: the tab is a running layout of live
 	// forms, and re-reading the description under it mid-session would silently invalidate the cells. Reopening
 	// the tab picks up studio changes.
@@ -96,6 +104,9 @@ private:
 
 	const ibValueMetaObjectApplication* m_application;
 	ibHomePageDescription m_description;
+
+	// The cell under the focus (GetValueForm) — one of the page's own forms, which live as long as it does.
+	ibValueForm* m_activeForm = nullptr;
 
 	// Raised while the page tears its own children down (see IsClosingChildren).
 	bool m_closingChildren = false;

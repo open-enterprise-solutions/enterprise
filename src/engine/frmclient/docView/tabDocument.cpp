@@ -88,9 +88,15 @@ bool ibTabDocument::SaveAs()
 	if (filter.IsEmpty() || frame == nullptr)
 		return false;
 
-	// Named as its tab is, the first time — a modified one's title ends with its «*».
-	wxString name = GetFilename().IsEmpty() ? frame->FindTab(m_tabId).GetString(ibProtocol::ibFrame::ibTab::Title).ToWxString()
-		: wxFileNameFromPath(GetFilename());
+	// Named, the first time, as the server offers it (its Formats' own Title — the form's, a cell's on the start page),
+	// else as its tab is — a modified one's title ends with its «*».
+	wxString name = wxFileNameFromPath(GetFilename());
+	if (name.IsEmpty()) {
+		const ibProtocolNode tab = frame->FindTab(m_tabId);
+		const ibString offered = tab.FindChild(ibProtocol::ibFrame::ibTab::Formats)
+			.GetString(ibProtocol::ibFrame::ibTab::Title);
+		name = (offered.IsEmpty() ? tab.GetString(ibProtocol::ibFrame::ibTab::Title) : offered).ToWxString();
+	}
 	name.Trim();
 	if (name.EndsWith(wxT("*")))
 		name.RemoveLast();

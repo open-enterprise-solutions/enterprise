@@ -41,8 +41,7 @@ std::string MakeRequestId()
 // The form a tab shows — null for a tab of any other document.
 ibValueForm* FormOfTab(const ibClientChildFrame* tab)
 {
-	const ibFormVisualDocument* const document = tab != nullptr
-		? dynamic_cast<const ibFormVisualDocument*>(tab->GetDocument()) : nullptr;
+	const ibDocument* const document = tab != nullptr ? tab->GetDocument() : nullptr;
 	return document != nullptr ? document->GetValueForm() : nullptr;
 }
 
@@ -480,8 +479,7 @@ ibClientChildFrame* ibClientFrame::CreateChildFrame(ibView* view)
 	// The document's title is not set yet at this point (a form document sets it in its own OnCreate, which
 	// runs after this), so a form's tab takes the form's title rather than open nameless for a frame.
 	ibDocument* const document = view->GetDocument();
-	const ibFormVisualDocument* const formDocument = dynamic_cast<const ibFormVisualDocument*>(document);
-	ibValueForm* const form = formDocument != nullptr ? formDocument->GetValueForm() : nullptr;
+	ibValueForm* const form = document != nullptr ? document->GetValueForm() : nullptr;
 
 	ibString title = document != nullptr ? document->GetTitle() : ibString();
 	if (title.IsEmpty() && form != nullptr)

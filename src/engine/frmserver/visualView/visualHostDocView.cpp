@@ -9,6 +9,8 @@
 
 namespace {
 
+// By its class, not by GetValueForm: a composite answers that with a child's form (the start page — its cell under the
+// focus), and that form would be found a second time, its idle handlers run twice.
 void CollectFormDocuments(ibDocument* document, std::vector<ibFormVisualDocument*>& documents)
 {
 	if (ibFormVisualDocument* const formDocument = dynamic_cast<ibFormVisualDocument*>(document))

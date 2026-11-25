@@ -151,8 +151,10 @@ public:
 
 	virtual void SetDocParent(ibDocument* docParent) override;
 
+	// The form it holds.
+	virtual ibValueForm* GetValueForm() const override;
+
 	ibFormVisualEditView* GetFirstView() const;
-	ibValueForm* GetValueForm() const;
 	const ibUniqueKey& GetFormKey() const;
 	bool CompareFormKey(const ibUniqueKey& formKey) const;
 

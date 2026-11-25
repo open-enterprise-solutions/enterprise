@@ -91,6 +91,8 @@ bool ibHomePageDocument::Close()
 	m_closingChildren = true;
 	const bool closed = ibDocument::Close();
 	m_closingChildren = closed;
+	if (closed)
+		m_activeForm = nullptr;   // gone with the cells
 
 	return closed;
 }

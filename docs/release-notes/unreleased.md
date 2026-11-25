@@ -922,3 +922,7 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
   hierarchy», a register's balances and its slice asked the driver through a connection of their own: under a session,
   which holds one already, every such read took a second from the pool, and with a pool of one it waited thirty
   seconds and was refused. They ask the connection the session holds.
+- **A report on the home page is saved as a file.** *Save as* on the home page offered nothing — the page holds
+  several forms and none counted as its own — so a sheet a report drew there could not be saved at all. The form
+  clicked last is the page's now: *Save as* writes its sheet, named after the report, not "Home page", and
+  `ActiveWindow()` and the Edit commands answer for it too.

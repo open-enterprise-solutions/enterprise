@@ -131,15 +131,17 @@ export class TabDocument {
 	}
 
 	/**
-	 * Saved as a file (SaveAs): named as its tab is, without its «*», with its first format's extension when it has
-	 * none of theirs; its place chosen in the browser's save dialog — the server writes the document under the name
-	 * chosen (command SaveAs {Name}) and the page takes it down, the tab's File. False — the dialog closed.
+	 * Saved as a file (SaveAs): named as the server offers it (its Formats' own Title — the form's, a cell's on the start
+	 * page), else as its tab is, without its «*», with its first format's extension when it has none of theirs; its place
+	 * chosen in the browser's save dialog — the server writes the document under the name chosen (command SaveAs {Name})
+	 * and the page takes it down, the tab's File. False — the dialog closed.
 	 * @returns {Promise<boolean>}
 	 */
 	saveAs() {
 		const tab = this.tabNode();
 		// What no file name holds made «_», as the browser's download makes it — «Report: Sales» is a tab's title.
-		const title = String(tab?.Title ?? '').trim().replace(/\*$/, '').trim().replace(/[\\/:*?"<>|]/g, '_');
+		const offered = String(tab?.Formats?.Title ?? '').trim();
+		const title = (offered || String(tab?.Title ?? '').trim().replace(/\*$/, '').trim()).replace(/[\\/:*?"<>|]/g, '_');
 		/** @type {ProtocolNode[]} */
 		const formats = tab?.Formats?.NodeChildren ?? [];
 		// «*.txt;*.text» → .txt, .text

@@ -86,6 +86,9 @@ bool ibValueForm::DispatchEvent(const ibFormID& controlId, ibProtocol::ibEvent::
 	if (event == ibProtocol::ibEvent::ibKind::Focus) {
 		SetActiveControl(control);
 		host->SelectControl(control);
+		// …and a composite the form lies in (the start page) learns which of its children has the focus.
+		if (ibDocument* const parent = document->GetDocParent())
+			parent->SetActiveChild(document);
 		return true;
 	}
 	// What happened to it is what it shows now — the cursor it carries, the editor it opened.

@@ -2417,6 +2417,11 @@ void ibClientHost::DrawFrame(ibClientFrame* frame, ibDataNode& state, ibDataNode
 			const std::vector<ibString> lines = ibSplit(document->GetSaveFilter(), ibT('|'));
 			if (lines.size() >= 2) {
 				ibDataNode& formats = node.Child(ibProtocol::ibFrame::ibTab::Formats);
+				// …and the name Save as offers the first time, as their own Title: the form's title — a cell's on the
+				// start page, where the tab's says "Home page".
+				const ibDocument* const shown = tab->GetDocument();
+				if (const ibValueForm* const form = shown != nullptr ? shown->GetValueForm() : nullptr)
+					formats.SetValue(ibProtocol::ibFrame::ibTab::Title, form->GetControlTitle());
 				for (std::size_t line = 0; line + 1 < lines.size(); line += 2) {
 					ibDataNode& format = formats.AddChild(0, 0);
 					format.SetValue(ibProtocol::ibFrame::ibTab::Title, lines[line]);

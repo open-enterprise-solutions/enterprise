@@ -55,6 +55,7 @@ class FRMSERVER_API ibDocManager;
 class FRMSERVER_API ibMetaDocument;
 class ibDocChildFrameAnyBase;
 class ibClientFrame;
+class ibValueForm;
 
 class ibDataNode;
 class ibValue;
@@ -242,6 +243,14 @@ public:
     bool IsClosedByParent() const {
         return m_documentParent != nullptr && m_documentParent->IsClosingChildren();
     }
+
+    // ⭐ THE FORM THIS DOCUMENT WORKS IN — what a client's frame asks of a tab: what Save as writes (the form's active
+    // control's document), the script's ActiveWindow, whether an edit may change a field. A form's document answers with
+    // its form; a COMPOSITE with the form of the child the person picked last (SetActiveChild); null — no form.
+    virtual ibValueForm* GetValueForm() const { return nullptr; }
+
+    // A child took the focus — a composite learns which child its GetValueForm answers with. Nothing for any other.
+    virtual void SetActiveChild(ibDocument* /*child*/) {}
 
     bool CanClose();
 
