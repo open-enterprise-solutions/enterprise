@@ -149,6 +149,11 @@ ibString RenderConst(const ibValue& v)
 		out << wxT(":") << (v.GetBoolean() ? wxT("true") : wxT("false"));
 		break;
 	case ibValueTypes::TYPE_NUMBER:
+		// The number's own digits, not how it is shown: since 2026-11-25 a number shows in digit groups, and a
+		// class id in the pool (`New Array`, a typed declaration) is long enough to get them — four digests moved
+		// with no opcode moving, so the rendering went back to the digits and the digests stayed.
+		out << wxT(":") << v.GetNumber().ToString();
+		break;
 	case ibValueTypes::TYPE_STRING:
 	case ibValueTypes::TYPE_DATE:
 		out << wxT(":") << v.GetString();
