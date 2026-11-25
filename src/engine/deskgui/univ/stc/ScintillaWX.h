@@ -173,6 +173,7 @@ public:
     virtual void NotifyParent(NotificationData scn) override;
 
     virtual void CancelModes() override;
+    virtual int KeyCommand(Message iMessage) override;
 
     virtual void UpdateSystemCaret() override;
     virtual bool FineTickerRunning(TickReason reason) override;

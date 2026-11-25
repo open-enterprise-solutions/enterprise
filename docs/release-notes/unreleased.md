@@ -926,3 +926,7 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
   several forms and none counted as its own — so a sheet a report drew there could not be saved at all. The form
   clicked last is the page's now: *Save as* writes its sheet, named after the report, not "Home page", and
   `ActiveWindow()` and the Edit commands answer for it too.
+- **The code editor's text grows on every zoom step.** A step of Ctrl+wheel, or of Ctrl+keypad plus or minus, was
+  one point, which is less than a pixel of a character's width or a line's height. So a step grew one of them and left
+  the other: the text widened without getting taller, or got taller without widening. Now a step lasts until both
+  have grown, so the text keeps its proportions.

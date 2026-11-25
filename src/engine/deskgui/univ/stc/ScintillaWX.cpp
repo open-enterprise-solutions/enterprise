@@ -521,6 +521,28 @@ void ScintillaWX::CancelModes() {
     Editor::CancelModes();
 }
 
+// ⭐ A zoom step is worth a whole pixel of BOTH the character's width and the line's height, not one point. A wxDC
+// rounds the two to whole pixels each on its own, and a point is less than a pixel of either: a Consolas advance at
+// 96 DPI moves 0.73 px a point. So a point step moved one and left the other: 13, 13, 14 px wide at 27, 28, 29 high,
+// and a step by the width alone went from 17 to 18 wide at 37 high both times. The wheel, the keys and SCI_ZOOMIN all
+// come here. A step takes Scintilla's own points until both have moved, within Scintilla's own range; the level stays
+// in points (GetZoom)
+int ScintillaWX::KeyCommand(Message iMessage) {
+    if (iMessage != Message::ZoomIn && iMessage != Message::ZoomOut)
+        return ScintillaBase::KeyCommand(iMessage);
+
+    RefreshStyleData();
+    const XYPOSITION width = vs.aveCharWidth;
+    const int height = vs.lineHeight;
+    for (int level = vs.zoomLevel; ; level = vs.zoomLevel) {
+        ScintillaBase::KeyCommand(iMessage);
+        RefreshStyleData();
+        if (vs.zoomLevel == level || (vs.aveCharWidth != width && vs.lineHeight != height))
+            break;
+    }
+    return 0;
+}
+
 
 
 void ScintillaWX::Copy() {
