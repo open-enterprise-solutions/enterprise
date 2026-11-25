@@ -1392,7 +1392,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"need it, to fill a setting a person may change later? A fill name in the starting table.\n"
 		"\n"
 		"THE TABLES THEMSELVES, IN FULL: `statutory-chart` (a statutory chart, classes 0 to 9 and the\n"
-		"off-balance circuit), `ifrs-chart` (an IFRS chart, classes 100 to 900) and `cost-items` (the\n"
+		"off-balance circuit), `ifrs-chart` (an IFRS chart, classes 100 to 900) and `cost-catalogue` (the\n"
 		"starting table of a cost-item catalogue). Each line there is one predefined item or one row\n"
 		"of starting data, with everything it declares.") },
 
@@ -1891,8 +1891,8 @@ const std::vector<ibMcpPattern>& Patterns()
 		"OK SingleTaxPayerPurchasesViaAccountablePersons P (Counterparties, Contracts)") },
 
 	{ ibT("ifrs-chart"),
-	  ibMcpText("An IFRS chart of accounts in full - classes 100 to 900, the net parents with their contra "
-		"accounts, every account with its side, flags and dimension kinds."),
+	  ibMcpText("An IFRS chart of accounts in full - classes 100 to 900, a net parent over the accounts that "
+		"reduce it, every account with its side, flags and dimension kinds."),
 	  ibMcpText("AN IFRS CHART, ACCOUNT BY ACCOUNT.\n"
 		"\n"
 		"HOW A LINE READS: as in `statutory-chart` - CODE Name SIDE FLAGS (dimension kinds) -\n"
@@ -2293,9 +2293,9 @@ const std::vector<ibMcpPattern>& Patterns()
 		"\n"
 		"THE DIMENSION KINDS ADDED TO THE STATUTORY ONES: Reserves, NonCurrentAssets, SeparateDivisions.") },
 
-	{ ibT("cost-items"),
-	  ibMcpText("The starting table of a cost-item catalogue - groups, items, their kind, class-8 account and "
-		"nature - written as ordinary items on first fill, with the few fill names a setup needs."),
+	{ ibT("cost-catalogue"),
+	  ibMcpText("The starting table of the catalogue of costs - its groups and rows, each with its kind, class-8 "
+		"account and nature - written on the first fill rather than declared, with the fill names a setup needs."),
 	  ibMcpText("A COST-ITEM CATALOGUE'S STARTING TABLE, ROW BY ROW.\n"
 		"\n"
 		"WHY IT IS NOT PREDEFINED: people add, rename and regroup cost items, and code names almost\n"
