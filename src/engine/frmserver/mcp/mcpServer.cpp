@@ -18,6 +18,7 @@
 #include "frmserver/mcp/mcpDebugBridge.h"
 #include "backend/rpc/rpcMessage.h"
 #include "frmserver/mcp/mcpTool.h"
+#include "frmserver/mcp/mcpEra.h"                   // the two eras of the protocol: a request's door, its answer's shape
 #include "backend/metaCollection/metaIntrospect.h"  // ibMetaTypeResolver
 #include "backend/metadataApplication.h"
 #include "backend/session/session.h"
@@ -28,71 +29,6 @@
 #include <future>
 #include <memory>
 #include <mutex>
-
-namespace {
-
-// The protocol revision this server speaks. Announced in `initialize`; a client
-// that wants another one is told what we have rather than being guessed at.
-// WHAT THIS SERVER SPEAKS — and it is what it has been speaking for a while, said out loud at
-// last. The constant read `2024-11-05` until 2026-09-05, which is the FIRST MCP revision and the
-// deprecated HTTP+SSE transport; the server has meanwhile been Streamable HTTP all along — one
-// endpoint, POST answered as JSON or as an SSE stream, GET offering a listen stream, server-sent
-// requests on it for `sampling/createMessage`. That is the 2025-03-26 … 2025-11-25 shape exactly,
-// and the last of those is the one to name: sessions are OPTIONAL there (this server is
-// deliberately stateless), resumability is optional, and a server MAY send requests on a stream —
-// so nothing here is claimed that is not done.
-//
-// ⚠ NOT the current revision, and that is a decision rather than an oversight. 2026-07-28 removed
-// the GET stream and protocol-level sessions and moved server-to-client interaction to MRTR
-// (the server returns an InputRequiredResult and the client re-calls) — which is a rebuild of how
-// the assistant window asks the model anything, not a version bump. Naming 2025-11-25 states the
-// truth today; the dual-era work is its own piece.
-const ibChar* const kProtocolVersion = ibT("2025-11-25");
-
-// The revisions a caller may name and still be served. They differ, on THIS server's side, only
-// in what the client is obliged to send — the header below arrived in 2025-06-18 — so one
-// implementation answers all three honestly. A version outside this list is refused rather than
-// answered as if it were ours: see Call.
-const ibChar* const kSupportedProtocolVersions[] = {
-	ibT("2025-11-25"),
-	ibT("2025-06-18"),
-	ibT("2025-03-26"),
-	nullptr
-};
-
-// ⭐ WHAT A VERSION REFUSAL OWES THE CALLER, built from the array above and from nowhere else.
-// A refusal that does not say what IS on offer leaves the client to guess, which is the same as
-// no answer; the specification therefore puts the list in `data.supported`.
-//
-// AND IT IS A LIST. The first version numbered the keys of a child node — `{"0":"2025-11-25",…}` —
-// which a client reads as an object, so `supported.includes(v)` finds nothing and the refusal
-// stops being answerable. The node tree has carried an Array value all along (dataBuilder.h).
-// ⭐ THE LIST ITSELF, BUILT ONCE — because saying it twice is how the second copy kept the defect
-// the first one had been fixed for. `server/discover` announced the same versions and built them
-// again, with numbered keys, and it is the ONE method of the modern era: the answer a client reads
-// before it knows what we speak. `supportedVersions.includes(v)` found nothing there, so a caller
-// could not tell what to fall back to — the same failure as the refusal above, in the place where
-// it costs most (found 2026-09-05, after the refusal had been fixed the same day).
-std::vector<ibDataValue> SupportedVersionList()
-{
-	std::vector<ibDataValue> versions;
-	for (const ibChar* const* v = kSupportedProtocolVersions; *v != nullptr; ++v)
-		versions.push_back(ibDataValue::String(ibString(*v)));
-
-	return versions;
-}
-
-ibDataNode SupportedVersions(const ibString& asked)
-{
-	ibDataNode data;
-	data.AddField(ibT("supported"), ibDataValue::Array(SupportedVersionList()));
-	if (!asked.IsEmpty())
-		data.SetValue(ibT("requested"), asked);
-
-	return data;
-}
-
-} // namespace
 
 //---------------------------------------------------------------------------
 // the subsystem
@@ -308,12 +244,9 @@ ibString ibMcpServer::Call(const ibString& message, const ibString& protocolVers
 	// answers look wrong.
 	const ibString asked = ibString(protocolVersion).Trim(true).Trim(false);
 	if (!asked.IsEmpty()) {
-		bool spoken = false;
-		for (const ibChar* const* v = kSupportedProtocolVersions; *v != nullptr && !spoken; ++v)
-			spoken = asked == *v;
-		if (!spoken) {
+		if (!ibMcpEra::Speaks(asked)) {
 			status = 400;
-			const ibDataNode data = SupportedVersions(asked);
+			const ibDataNode data = ibMcpEra::SupportedVersions(asked);
 			// No id: the refusal happens before the body has been read, so there is no call to
 			// answer — which is the shape JSON-RPC allows for exactly this.
 			return ibRpcWriteError(ibDataValue(), ibRpcError::UnsupportedVersion, ibT("Unsupported protocol version"), &data);
@@ -644,8 +577,8 @@ std::vector<ibMcpServer::Turn> ibMcpServer::GetConversation() const
 //---------------------------------------------------------------------------
 //
 // ⭐ THE LONG ROAD, AND WHY IT IS WORTH THE PLUMBING. Say() drops a message in a queue and rings a
-// bell; whoever is connected still has to come and take it with a tool. If nobody is looking, the
-// message waits — which is exactly the complaint this exists to answer: text typed into the
+// bell; whoever is connected gets it with the answer to its next call, or takes it with a tool. If
+// nobody is calling, the message waits — which is exactly the complaint this exists to answer: text typed into the
 // studio sat there until the person went and prodded the assistant from somewhere else.
 //
 // `sampling/createMessage` inverts it. The server asks; the client runs the completion and posts
@@ -1005,10 +938,10 @@ static ibString ibMcpArgumentsOnOffer(const ibMcpTool* tool, const ibString& giv
 // tools, and had to work out by trial that the rest are FOUND rather than announced — and had no
 // way at all to learn that this application carries written findings about itself.
 //
-// ⭐⭐ AND THE NOTES ARE INLINED, not pointed at. A pointer is a suggestion, and a suggestion is
-// followed by whoever happens to think of it; the point of writing down why something is the way
-// it is, is that the NEXT person does not have to ask. Inlining costs the same characters every
-// connection and saves the round trip that half of callers would never make.
+// ⭐⭐ AND IT IS CUT. Claude Code keeps the first 2048 characters of it (2026-11-25: of 14,524, the rest never
+// reached the model), so it holds who is here, the greeting, the chat, how tools are found — and points at WHERE THE
+// REST IS: the corpus entry `where-to-start` (what does not change) and `platform_state` (what does). A test holds
+// both modes to 2048 (test_mcpPersonNames.cpp); only the application's root note, said last, may run past it.
 //
 // ⚠ THE HELP TEXT IS NOT HERE. It is written for the person USING the application, and mixing the
 // two audiences is how engineering prose ends up on somebody's F1 screen.
@@ -1336,10 +1269,6 @@ void ibMcpDescribePlatform(const ibApplicationInstance* applicationInstance, ibD
 
 namespace {
 
-// A ceiling, because this is read IN FULL at every connection. Generous enough that an ordinary
-// application is never cut, small enough that a runaway one cannot make connecting expensive.
-const size_t kOrientationNotesLimit = 20000;
-
 // The person's roles in a line.
 ibString RoleNames(const ibUserInfo& who)
 {
@@ -1358,9 +1287,8 @@ ibString RoleNames(const ibUserInfo& who)
 // now (ibMcpArgumentFault); this line is so nobody has to be refused to learn it.
 void AppendTextEncoding(ibString& out)
 {
-	out << ibT("TEXT TRAVELS AS UTF-8, ONCE - in arguments and in answers. A script that hands the ")
-		<< ibT("request BYTES where it means characters (Perl without `use utf8`) encodes every ")
-		<< ibT("non-Latin letter a second time, and such a call is refused.\n\n");
+	out << ibT("Text travels as UTF-8, once: a non-Latin letter encoded twice (Perl without `use utf8`) ")
+		<< ibT("is refused.\n");
 }
 
 // The language to answer in, by name; said in both modes. Nothing is said for a person who has none set.
@@ -1369,6 +1297,45 @@ void AppendPersonLanguage(ibString& out, const ibUserInfo& who)
 	if (who.IsOk() && who.IsSetLanguage())
 		out << ibT("The person is working in ") << ibMcpLanguageName(who)
 			<< ibT(" - answer them in it, whatever language this text is in.\n");
+}
+
+// ⭐ WHOSE HANDS THESE ARE — "with their rights" is useless without a name: an assistant that does not know who it
+// acts as cannot tell a refusal it caused from a permission it never had. No roles is not no rights: every right
+// then answers with its declared default, the permissive end. (The password is in the same structure, untouched.)
+void AppendActingAs(ibString& out, const ibUserInfo& who)
+{
+	if (!who.IsOk()) {
+		out << ibT("THERE ARE NO ACCOUNTS in this base: nobody is logged in, and every right answers with its ")
+			<< ibT("declared default.\n");
+		return;
+	}
+
+	out << ibT("YOU ARE ACTING AS ") << who.m_strUserName;
+	if (!who.m_strUserFullName.IsEmpty() && who.m_strUserFullName != who.m_strUserName)
+		out << ibT(" (") << who.m_strUserFullName << ibT(")");
+	out << ibT(".");
+
+	if (who.m_roleArray.empty())
+		out << ibT(" No roles: every right answers with its declared default.");
+	else
+		out << ibT(" Roles: ") << RoleNames(who) << ibT(".");
+
+	out << ibT(" What you do is journalled under that name.\n");
+}
+
+// The window, and how what is typed in it reaches you: in the answer, since a client gives its model nothing else.
+void AppendConversation(ibString& out)
+{
+	out << ibT("THE PERSON WRITES TO YOU in the assistant window: what they wrote arrives in the `chat` field of ")
+		<< ibT("your next answer, whatever the tool. Answer with `chat_say`; `chat_history` reads the exchange ")
+		<< ibT("back.\n\n");
+}
+
+// Two tools are listed, the rest found — the whole set is some 75 KB of schemas, most of it never used.
+void AppendFindingTools(ibString& out)
+{
+	out << ibT("TOOLS: only `mcp_search` (the words of the job; | ^ $ .* make it a regular expression) and ")
+		<< ibT("`mcp_call` {tool, arguments} are listed - `mcp_search` with no query lists all there is.\n\n");
 }
 
 // ⭐⭐ WHAT THE APPLICATION'S ASSISTANT IS TOLD — its own text, not the studio's with lines struck out: that one
@@ -1380,84 +1347,59 @@ ibString BuildApplicationOrientation(const ibApplicationInstance* applicationIns
 
 	out << ibT("You are connected to a running OES Enterprise APPLICATION (build ")
 		<< (unsigned)GetBuildId()
-		<< ibT("), working inside the session of the person at it, with exactly their rights.\n\n");
-
-	out << ibT("THIS IS NOT THE STUDIO, AND YOU CANNOT CHANGE THE APPLICATION FROM HERE. Objects, ")
-		<< ibT("forms, modules and reports are changed in the studio, and the tools that do it are ")
-		<< ibT("not offered here: `mcp_search` will not find them, and that is not a fault. When the ")
-		<< ibT("person asks for such a change, say plainly that it is the studio's work.\n\n");
-
-	AppendTextEncoding(out);
+		<< ibT("), in the session of the person at it, with exactly their rights.\n");
 
 	const ibUserInfo& who = applicationInstance->GetUserInfo();
-	if (who.IsOk()) {
-		out << ibT("YOU ARE ACTING AS ") << who.m_strUserName;
-		if (!who.m_strUserFullName.IsEmpty() && who.m_strUserFullName != who.m_strUserName)
-			out << ibT(" (") << who.m_strUserFullName << ibT(")");
-		out << ibT(".");
-		if (!who.m_roleArray.empty())
-			out << ibT(" Roles: ") << RoleNames(who) << ibT(".");
-		out << ibT(" What you do is recorded under that name.\n\n");
-	}
-	else {
-		out << ibT("THERE ARE NO USERS in this base, so nobody is logged in and it is open to whoever ")
-			<< ibT("starts it.\n\n");
-	}
+	AppendPersonLanguage(out, who);
+
+	out << ibT("\nTHIS IS NOT THE STUDIO: objects, forms, modules and reports are changed there, and those tools ")
+		<< ibT("are not offered here - when the person asks for such a change, say it is the studio's work.\n\n");
 
 	const ibMetaDataApplicationBase* const metaData = ibApplicationInstance::GetActiveMetaData();
 	if (metaData == nullptr || !metaData->IsOpen()) {
-		out << ibT("NO APPLICATION IS OPEN here.\n");
-		return out;
+		out << ibT("NO APPLICATION IS OPEN here.\n\n");
 	}
-
-	if (metaData->AccessRight_DataAssistant()) {
-		out << ibT("YOU MAY READ THE DATA THIS PERSON MAY SEE. `compose_run` answers with rows: from a ")
-			<< ibT("report of the application (`id`), a composition you hand over (`schema`) or a ")
-			<< ibT("query (`query`). `query_sources` before writing a FROM, `query_check` before ")
-			<< ibT("believing a query. WHEN THEY ASK TO SEE IT, `report_show` opens a composition as a report ")
-			<< ibT("in their window.\n\n")
-			<< ibT("AND YOU CAN WORK IN THEIR WINDOW - `window_run` runs code in this session: open a list ")
-			<< ibT("or a document, put the cursor on the row they should look at, add a value, correct ")
-			<< ibT("one. It really happens, under their roles and with no undo: say what you are about ")
-			<< ibT("to change and get their yes first.\n\n")
-			<< ibT("LOOK THE LANGUAGE UP BEFORE YOU WRITE IT - the names are not those of any language you know. ")
-			<< ibT("`syntax_search` and `syntax_get` are the help, `type_members` what a value answers to, ")
-			<< ibT("`pattern_read` how a thing is usually done here, `query_fields` what a table holds.\n\n");
+	else if (metaData->AccessRight_DataAssistant()) {
+		out << ibT("YOU MAY READ THE DATA THIS PERSON MAY SEE: `compose_run` answers with rows - from a report ")
+			<< ibT("(`id`), a composition (`schema`) or a `query` (`query_sources` before a FROM, `query_check` ")
+			<< ibT("before believing it); `report_show` opens one in their window. `window_run` works IN their ")
+			<< ibT("window, under their roles and with no undo: say what you will change and get their yes ")
+			<< ibT("first.\n\n");
 	}
 	else {
-		out << ibT("YOU SEE THE APPLICATION, NOT THE DATA. This person's roles do not give the ")
-			<< ibT("assistant the records, so no tool here reads a row. A role's *Data assistant* right ")
-			<< ibT("is what gives them; that is the administrator's to decide.\n\n");
+		out << ibT("YOU SEE THE APPLICATION, NOT THE DATA: this person's roles do not give the assistant the ")
+			<< ibT("records - a role's *Data assistant* right does, and that is the administrator's to decide.\n\n");
 	}
 
-	if (const ibValueMetaObject* const root = metaData->GetRootMetaObject()) {
-		out << ibT("THIS APPLICATION IS CALLED ") << root->GetName();
-		const ibString synonym = root->GetSynonym();
-		if (!synonym.IsEmpty() && synonym != root->GetName())
-			out << ibT(" (") << synonym << ibT(")");
-		out << ibT(". `metadata_tree` with depth 1 is the map of what is in it.\n\n");
+	out << ibT("FIRST, AND NOTHING ELSE RUNS UNTIL IT IS DONE: `chat_say` a greeting - only `chat_history`, ")
+		<< ibT("`platform_state`, `metadata_tree` and `mcp_search` run before it. Say which assistant and model ")
+		<< ibT("you are, the application you see, that here you work within this person's rights and change ")
+		<< ibT("nothing in it, and ask what they need.\n\n");
 
-		const ibString direction = root->GetNoteContent();
-		if (!direction.IsEmpty())
-			out << ibT("WHAT IT IS FOR - written on its root.\n\n") << direction << ibT("\n\n");
+	AppendConversation(out);
+	AppendFindingTools(out);
+
+	out << ibT("THE LANGUAGE IS NOT ONE YOU KNOW - look it up before writing it: `syntax_search`, `type_members`, ")
+		<< ibT("`pattern_read`, `query_fields`.\n\n");
+
+	AppendActingAs(out, who);
+	AppendTextEncoding(out);
+
+	// WHAT IT IS FOR, LAST: the root's note can be any length, and a client keeps only the start of this text
+	// (see BuildOrientation) — so it is the one thing here that may be cut, and nothing after it is.
+	if (metaData != nullptr && metaData->IsOpen()) {
+		if (const ibValueMetaObject* const root = metaData->GetRootMetaObject()) {
+			out << ibT("\nTHIS APPLICATION IS CALLED ") << root->GetName();
+			const ibString synonym = root->GetSynonym();
+			if (!synonym.IsEmpty() && synonym != root->GetName())
+				out << ibT(" (") << synonym << ibT(")");
+			out << ibT(". `metadata_tree` with depth 1 is the map of what is in it.\n");
+
+			const ibString direction = root->GetNoteContent();
+			if (!direction.IsEmpty())
+				out << ibT("WHAT IT IS FOR - written on its root:\n") << direction << ibT("\n");
+		}
 	}
-
-	out << ibT("FINDING THE TOOLS. Only two are listed: `mcp_search` finds by words in a name or ")
-		<< ibT("description, `mcp_call` {tool, arguments} invokes anything it found. `mcp_search` ")
-		<< ibT("with no query lists everything there is here.\n\n");
-
-	out << ibT("THE CONVERSATION. The person types to you in the assistant window: `chat_take` collects ")
-		<< ibT("new messages (and EMPTIES the queue), `chat_history` reads the whole exchange back ")
-		<< ibT("without collecting, `chat_say` answers into their window. Answer in their language.\n");
-
-	AppendPersonLanguage(out, who);
-
-	out << ibT("\nFIRST THING, AND NOTHING ELSE RUNS UNTIL IT IS DONE. Until `chat_say` has happened, every ")
-		<< ibT("other verb is refused; what runs before it is `chat_history`, `platform_state`, ")
-		<< ibT("`metadata_tree`, `mcp_search`, `chat_say`. Read `chat_history`, then `chat_say` a ")
-		<< ibT("greeting: which assistant and which model you are, the application you see, that here ")
-		<< ibT("you work within this person's rights and do not change the application, and ask what ")
-		<< ibT("they need.\n");
 
 	return out;
 }
@@ -1471,532 +1413,34 @@ ibString BuildOrientation(const ibApplicationInstance* applicationInstance)
 
 	out << ibT("You are connected to a running OES Enterprise STUDIO (build ")
 		<< (unsigned)GetBuildId()
-		<< ibT("), working inside the session of the person at it, with exactly their rights. ")
-		<< ibT("What you change is their live application.\n\n");
+		<< ibT("), in the session of the person at it, with exactly their rights: what you change is ")
+		<< ibT("their live application.\n");
 
-	AppendTextEncoding(out);
-
-	// ⭐ WHOSE HANDS THESE ARE. "With their rights" was true and useless without a name: an
-	// assistant that does not know who it is acting as cannot tell a refusal it caused from a
-	// permission it never had, and cannot warn that something is about to be recorded against a
-	// particular person. It is also simply the truth of the arrangement — there is no service
-	// account here, no separate identity to hide behind.
-	//
-	// ⚠ THE PASSWORD FIELD IS IN THE SAME STRUCTURE and is deliberately not touched. Nothing about
-	// what a caller may do needs it.
-	// ⚠ Through the base, not the class: GetUserInfo is an instance method — who is logged in is
-	// a fact about a RUNNING application, not about the type.
 	const ibUserInfo& who = applicationInstance->GetUserInfo();
-
-	if (who.IsOk()) {
-
-		out << ibT("YOU ARE ACTING AS ") << who.m_strUserName;
-
-		if (!who.m_strUserFullName.IsEmpty() && who.m_strUserFullName != who.m_strUserName)
-			out << ibT(" (") << who.m_strUserFullName << ibT(")");
-
-		out << ibT(".");
-
-		if (who.m_roleArray.empty()) {
-			// NO ROLES IS NOT NO RIGHTS. With none assigned every right falls back to its own
-			// declared default, which is usually permissive — worth saying, because "no roles"
-			// reads like "can do nothing" and the opposite is nearer the truth.
-			out << ibT(" No roles are assigned, so every right answers with its declared default ")
-				<< ibT("- `metadata_rights` says what those are.");
-		}
-		else {
-			out << ibT(" Roles: ") << RoleNames(who) << ibT(". `role_rights` says what they let through.");
-		}
-
-		out << ibT("\n\nEverything you do is written to the registration journal under that name, ")
-			<< ibT("beside what they did themselves. There is no separate identity for an ")
-			<< ibT("assistant, by design: an actor that can change an application leaves the ")
-			<< ibT("same trail a person does. (Reading it back is `journal_read` - see WRITE DOWN ")
-			<< ibT("WHAT YOU FIND below.)\n\n");
-	}
-	else {
-		// The same absence, said in the same breath as it would have been reported. Skipping the
-		// paragraph would have left "with exactly their rights" above pointing at nobody.
-		out << ibT("THERE ARE NO ACCOUNTS in this base yet, so nobody is logged in - it opens ")
-			<< ibT("without asking. Ordinary, and not a restriction: with no roles to fold, every ")
-			<< ibT("right answers with its own declared default, which is the permissive end. ")
-			<< ibT("`user_list` and `metadata_rights` are where that stops being a guess.\n\n");
-	}
-
-	out << ibT("FINDING THE TOOLS. Only two are listed: `mcp_search` finds by words in a name or ")
-		<< ibT("description, `mcp_call` {tool, arguments} invokes anything it found. The rest are ")
-		<< ibT("deliberately not announced - the whole set costs some 75 KB of schemas, and most ")
-		<< ibT("of it is never used. `mcp_search` with no query lists everything.\n")
-
-		// ⭐ SAID HERE TOO, not only in the argument's own description. This paragraph is what a
-		// caller reads BEFORE its first call; the schema is read after, or not at all. The finder
-		// has answered patterns since it was written, and the one place that said so was the last
-		// place anyone looks.
-		<< ibT("A query that carries | \\ [ ] ^ $ or .* is read as a REGULAR EXPRESSION rather ")
-		<< ibT("than as words - `lock|block`, `report.*print` - and that holds for BOTH searches ")
-		<< ibT("this server does: the tools, and the pattern corpus that answers questions of the ")
-		<< ibT("trade. Ordinary punctuation does not switch modes, so a sentence with brackets in ")
-		<< ibT("it stays a sentence.\n\n");
-
-	// ⭐⭐ HIGH UP BECAUSE THIS TEXT IS DELIVERED WHOLE OR NOT AT ALL. A client puts `instructions`
-	// into its prompt and several of them CUT IT — measured 2026-09-03, the copy in a live session
-	// ended mid-sentence around "what a PERSON sees", losing everything after it, which is where
-	// this paragraph and the notes discipline used to stand. So the order is by SECOND ROAD, not by
-	// importance: what a caller can find another way goes lower.
-	//
-	// The patterns have one — every mcp_search answer carries `places` from the corpus beside the
-	// tools — but it is worth the lines here, and the FRAMING is what those lines buy.
-	//
-	// 🛑 IT SAID "BEFORE CHOOSING A SHAPE" and nothing else (Max, 2026-09-03: a model has to KNOW
-	// it may look into the patterns for how any of this is written). That names ONE
-	// moment, so a model outside that moment — writing a query, laying out a form, wondering how a
-	// document chains — has no reason to think the door applies to it. The corpus is sixty-seven
-	// entries covering the whole trade, and the sentence was selling one of them. What a reader
-	// needs first is the RANGE; the metatype advice is a line inside it, not its title.
-	out << ibT("HOW THINGS ARE DONE HERE IS WRITTEN DOWN - `pattern_read`. It is the practice of ")
-		<< ibT("building on this platform, nearly seventy entries of it, and it is there to be ")
-		<< ibT("LOOKED AT rather than deduced: which metatype a request is asking for (a period, a turnover, ")
-		<< ibT("a balance, an accountant's correspondence), how a document posts and what it may ")
-		<< ibT("touch, prices and discounts, payroll, VAT, lots and serial numbers, settlements, ")
-		<< ibT("closing a period, how queries are written here, how names are chosen, how a form is ")
-		<< ibT("laid out, what shapes a report takes, printing, roles and row-level access.\n")
-		<< ibT("`pattern_read` with no argument LISTS the topics - one call, and you know what is ")
-		<< ibT("covered; with a `name` it gives one in full; with a `query` it searches inside them. ")
-		<< ibT("They are recommendations, not rules, and they are written for exactly the moment ")
-		<< ibT("before you invent something: look first, then decide. The choice of shape in ")
-		<< ibT("particular is the one decision that is expensive to revisit once there is data in ")
-		<< ibT("it.\n\n");
-
-	// ⭐⭐ THE DISCIPLINE TRAVELS WITH THE SERVER, not with whoever happens to remember it: every
-	// client that connects is told to keep the record up, so the next one arrives better informed
-	// than this one did. That is the only way a record like this survives more than one person.
-	//
-	// ⚠ AND IT HAS NO SECOND ROAD — which is why it moved here from the far end of this text.
-	// mcp_search points at the patterns in every answer; NOTHING points at note_write at the moment
-	// a finding appears, so a session that got a cut copy simply does not know the discipline
-	// exists. Highest-value paragraph, therefore first.
-	out << ibT("WRITE DOWN WHAT YOU FIND - an application records what was built and never WHY, so ")
-		<< ibT("what you worked out dies with your session unless you put it somewhere. Four ")
-		<< ibT("surfaces, different readers:\n")
-		<< ibT(" * `note_write` {id: <root>, target: \"notes\"} - what is true of the WHOLE ")
-		<< ibT("application: how it is put together, what was decided against, where to look ")
-		<< ibT("next. Read first, before any object.\n")
-		<< ibT(" * `note_write` {id, target: \"notes\"} on EACH OBJECT - why it exists, which shape ")
-		<< ibT("was chosen, what was rejected. On the object, not on the root: nobody re-reads the ")
-		<< ibT("root looking for them. `note_read` gives them back.\n")
-		<< ibT(" * `target: \"help\"` - what the person USING the application reads on F1.\n")
-		<< ibT(" * `Comment` (metadata_set) - one line on any node, WHY THIS EXISTS AT ALL. It ")
-		<< ibT("rides along with metadata_tree, so one read of the map shows what everything is for.\n")
-		<< ibT("Markdown, so `[Goods](oes:1005)` names another object: the link survives a rename. ")
-		<< ibT("And what you DID is kept for you - `journal_read` says what was actually done, and ")
-		<< ibT("tells your changes from somebody else's.\n\n");
-
-	// The application of the session this is asked in — as the user above is that session's.
-	ibMetaDataApplicationBase* metaData = ibApplicationInstance::GetActiveMetaData();
-
-	if (metaData == nullptr || !metaData->IsOpen()) {
-		out << ibT("NO APPLICATION IS OPEN in this studio yet.\n");
-		return out;
-	}
-
-	// WHAT KIND OF PLACE THIS IS, in a few lines. A caller that knows there are documents and
-	// registers but no charts of accounts asks better first questions.
-	std::map<ibString, int> census;
-	std::vector<std::pair<ibString, ibString> > notes;   // object path, its notes
-
-	for (ibValueMetaObject* object : metaData->GetAnyArrayObject()) {
-
-		if (object == nullptr || object->IsDeleted())
-			continue;
-
-		census[object->GetClassName()]++;
-
-		const ibString written = object->GetNoteContent();
-		if (!written.IsEmpty())
-			notes.push_back(std::make_pair(
-				object->GetClassName() + ibT(".") + object->GetName(), written));
-	}
-
-	// ⭐⭐ THE ROOT IS NOT ONE MORE OBJECT WITH A NOTE ON IT — it is where the application says
-	// what it is FOR: the direction of the whole thing, the concept, what is being built and why.
-	// Everything below is a detail of that, so it goes FIRST and it is named as the starting
-	// point, rather than being sorted in among the catalogs.
-	//
-	// (It is also not in the array, the same absence that made role_grant silently skip the
-	// administration rights.)
-	ibString direction;
-	ibString called;
-
-	if (ibValueMetaObject* root = metaData->GetRootMetaObject()) {
-
-		direction = root->GetNoteContent();
-
-		// ⭐ WHAT IT IS CALLED, WHICH IS WHERE READING IT STARTS. "Warehouse" already narrows
-		// every later question; the synonym is what a person calls it, the name is what code
-		// writes, and both are worth having before the first one is asked.
-		called = root->GetName();
-
-		const ibString synonym = root->GetSynonym();
-		if (!synonym.IsEmpty() && synonym != called)
-			called += ibT(" (") + synonym + ibT(")");
-	}
-
-	if (!called.IsEmpty()) {
-
-		out << ibT("THIS APPLICATION IS CALLED ") << called;
-
-		// The id, said where the name is said. The root appears in no listing — it is not of a
-		// kind that can be listed — so this is the only place a caller learns how to address the
-		// object it is told below to write the direction on.
-		if (ibValueMetaObject* root = metaData->GetRootMetaObject())
-			out << ibT(", and its root has NodeId ") << (int)root->GetMetaID()
-				<< ibT(" (it is in no listing; that is how you address it)");
-
-		out << ibT(".\n\n");
-	}
-
-	// ⭐⭐ TWO FACTS THAT DECIDE WHETHER WHAT YOU WRITE COMPILES AT ALL, and neither can be guessed
-	// from anything else. The DIALECT is a genuine fork - the same platform reads `If … Then …
-	// EndIf` or `if (…) { … }` depending on what this application declared, and handing somebody
-	// the other one produces code that reads correctly and is rejected. The LANGUAGES decide where
-	// a caption goes: a synonym is an array BY language, so writing one without knowing the codes
-	// puts it under the wrong heading or nowhere.
-	// ⚠ EVERYTHING BELOW IS A SNAPSHOT, and this is the one place that says so. `instructions` is
-	// read ONCE, at the handshake; the dialect is a property a person can change from the
-	// application's own settings at any moment, and after that this paragraph is confidently
-	// wrong. There is no "instructions changed" in the protocol — so instead of pretending the
-	// snapshot stays true, it names the tool that answers the same question live.
-	out << ibT("HOW THIS APPLICATION IS WRITTEN - true when you connected. `platform_state` ")
-		<< ibT("answers all of it again at any moment. Ask it at two points, not one:\n")
-		<< ibT(" BEFORE WRITING CODE - the dialect can be switched while you are connected, and ")
-		<< ibT("the other one is rejected by the compiler while reading perfectly.\n")
-		<< ibT(" BEFORE SAYING SOMETHING IS DONE - `unsavedEdits` means it dies when the ")
-		<< ibT("studio closes, `inDatabase: false` means the running application never got it. ")
-		<< ibT("Both are silent, and \"done\" is false in each of them for a different reason ")
-		<< ibT("with a different cure.\n");
-
-	out << ibT("Script dialect: ");
-
-	if (ibApplicationWritesInWords(metaData))
-		out << ibT("WORD-FENCED (`If ... Then ... EndIf`, `Procedure ... EndProcedure`).");
-	else
-		out << ibT("C-STYLE (`if (...) { ... }`, braces and semicolons).");
-
-	out << ibT(" Write in that one - the other is a different language to the compiler, and ")
-		<< ibT("`script_check` is how you find out before anyone runs it.\n");
-
-	// ⭐ WHERE THE BRACES STOP BEING C. Each of these cost a round of refusals to an assistant that read C in
-	// them (a payroll built from nothing, 2026-10-30); the last one compiles and fails only when it runs. The
-	// comparisons and the logic ARE C's since 2026-11-19.
-	if (!ibApplicationWritesInWords(metaData))
-		out << ibT("Comparison and logic are C's: `==` `!=` `&&` `||` `!` `%` (a single `=` in a condition, `<>` and ")
-			<< ibT("`And` / `Or` / `Not` are refused). THE REST IS NOT C: a loop counts `for (i = 0 To n - 1)`; ")
-			<< ibT("`Procedure Name() Public { }` is what other code may call. NAMES ARE NOT CASE-SENSITIVE - a local ")
-			<< ibT("`baseKinds` hides the function `BaseKinds` of its module, and the call fails at run time, not in ")
-			<< ibT("`script_check`.\n");
-
-	const std::vector<ibString> languages = ibListMetaObjectNames(metaData, ibT("Language"));
-
-	if (!languages.empty()) {
-
-		out << ibT("Languages declared: ");
-
-		for (size_t index = 0; index < languages.size(); ++index)
-			out << (index == 0 ? ibT("") : ibT(", ")) << languages[index];
-
-		out << ibT(".\n");
-	}
-
-	// ⭐⭐ THE LINE BETWEEN WHAT IS WRITTEN AND WHAT IS SHOWN, and it is not a style preference —
-	// it is where the application stops being portable. A NAME travels into script, into query
-	// text, into the database schema; written in anything but English it makes every module that
-	// touches it unreadable to the next person and unquotable in a query. A SYNONYM is what a
-	// person sees, and it belongs in their language.
-	//
-	// Said in the orientation because a model working with a Russian-speaking developer will
-	// otherwise mirror their language into the names, helpfully and wrongly, and the mistake is
-	// expensive to undo once modules reference it.
-	out << ibT("NOTE: THE APPLICATION IS WRITTEN IN ENGLISH. Names of objects, attributes, tabular ")
-		<< ibT("sections and modules - and the code inside them - are English, always: a name goes ")
-		<< ibT("into script, into query text and into the database schema, and it is what the next ")
-		<< ibT("person has to read.\n")
-		<< ibT("What is NOT English is what a PERSON sees: synonyms (`metadata_set` on Synonym, ")
-		<< ibT("with `language` to fill one at a time), help text, and anything you say in the ")
-		<< ibT("assistant window. Answer them in ")
-		<< ibT("their language; name things in English.\n");
-
-	// ⭐⭐ AND THE LANGUAGES ARE A THING TO SET UP, NOT A SETTING TO READ. A fresh application is
-	// created with English alone, so a person working in Russian or Ukrainian has a base whose
-	// interface can only ever speak English — and every synonym written before their language
-	// EXISTS is written into English, silently, because `language` had nowhere else to put it.
-	// Then adding the language later leaves every caption they see empty.
-	//
-	// The order is the whole of it: DECLARE THE LANGUAGE FIRST, then write captions per language
-	// from that moment on. Said here because the cost of the wrong order is paid once per object,
-	// by hand, months later.
-	// 🛑 WRITTEN AS THREE STEPS BECAUSE THE RULE ALONE DID NOT WORK. It stood here as a sentence -
-	// "a Synonym without `language` goes to the application's own" - and the very next assistant
-	// to read it (the one that wrote it, 2026-09-03) still put Russian captions into the ENGLISH
-	// slot on fourteen objects and on the Russian language itself. A rule is read; a STEP is done.
-	// ⚠ AND A FOURTH, because three were done right and the application still spoke English: every caption
-	// sat in the Russian slot of an application whose default language was English (a payroll built from
-	// nothing, 2026-10-30).
-	out << ibT("CAPTIONS AND LANGUAGES, IN FOUR STEPS - the third is where everybody slips, the fourth is ")
-		<< ibT("the one nobody is told:\n")
-		<< ibT(" 1. ASK which language the people USING this read. Not the developer's by default, ")
-		<< ibT("and possibly several.\n")
-		<< ibT(" 2. DECLARE IT FIRST - `metadata_create` {kind: \"Language\", name: \"Russian\"}, an ")
-		<< ibT("English name like any other, then set its `Code` (`ru`, `uk`, `en`).\n")
-		<< ibT(" 3. WRITE EVERY CAPTION WITH `language`. Omitting it is not \"all languages\": it ")
-		<< ibT("writes into the application's own - English in a fresh base - so a Russian caption ")
-		<< ibT("is stored as the English one and its reader sees nothing.\n")
-		<< ibT(" 4. MAKE IT THE ONE THEY SEE: `metadata_set` DefaultLanguage on the application's root. A user ")
-		<< ibT("with no language of their own sees the DEFAULT one, so every caption written in step 3 stays ")
-		<< ibT("unseen while it is English - the application opens in English and nothing says why.\n\n");
-
 	AppendPersonLanguage(out, who);
 
-	// ⚠ THE VERSION AN APPLICATION DECLARES is not decoration: it is what the platform gates
-	// behaviour on, both in what code may say and in what schema is produced. Raising it IS the
-	// migration, and it is the PERSON's step to take - so it is reported and never touched.
-	out << ibT("Compatibility version: ") << (int)metaData->GetVersion()
-		<< ibT(". It gates what the platform allows; raising it is the developer's own decision ")
-		<< ibT("and is itself the migration - never change it on their behalf.\n\n");
+	out << ibT("\nFIRST, AND NOTHING ELSE RUNS UNTIL IT IS DONE: `chat_say` a greeting - a person is watching a ")
+		<< ibT("window that shows nothing until you speak. Only `chat_history`, `platform_state`, `metadata_tree` ")
+		<< ibT("and `mcp_search` run before it. Say which assistant and model you are, what you see, and ask what ")
+		<< ibT("they need.\n\n");
 
-	// ⛔ THE CENSUS USED TO BE SPELLED OUT HERE — "8 Catalogs, 3 Documents, 2 Registers…" — and it is
-	// the clearest example of what does NOT belong in a text paid for on every connection: it is
-	// CONSULTABLE. `metadata_tree {depth: 1}` answers it exactly, on demand, in the caller's own
-	// moment of needing it. What stays is the pointer, because knowing WHERE to ask is the part
-	// nobody can look up.
-	out << ibT("WHAT IS IN IT: `metadata_tree` with depth 1 is the map - the objects and their ids, ")
-		<< ibT("without the predefined attributes that make up most of a deeper walk.\n\n");
+	AppendConversation(out);
+	AppendFindingTools(out);
 
-	// THE STARTING POINT, before any detail. A reader who has this needs far less of the rest.
-	if (!direction.IsEmpty()) {
-		out << ibT("WHAT THIS APPLICATION IS FOR - written on its root, and the place to begin. ")
-			<< ibT("It is the concept: what is being built, which way it is going, what it is ")
-			<< ibT("deliberately not. Everything below is a detail of it.\n\n")
-			<< direction << ibT("\n\n");
+	out << ibT("THE PLATFORM IS NOT ONE YOU KNOW - its script, queries and types are its own. Look before ")
+		<< ibT("writing: `pattern_read` (how things are done here; no argument lists the entries), `syntax_search`; ")
+		<< ibT("`script_check` / `query_check` compile without running. Names and code are English; what a ")
+		<< ibT("person reads is in their language.\n\n");
 
-		// ⭐⭐ AND ITS LINKS ARE CHECKED BEFORE THEY ARE BELIEVED, because this is the ONE text a
-		// caller reads before it knows anything else — so a link that lands on the wrong object
-		// here is followed with full confidence. An id link goes stale WITHOUT breaking: when an
-		// id moves the link still resolves, to the next object along, and nothing reads as wrong.
-		// Measured on this tree 2026-09-09: the root named 1029 / 1041 / 1068 for objects that are
-		// 1017 / 1029 / 1056.
-		//
-		// Said INLINE here, unlike note_read's separate `links` field: nobody reads the handshake
-		// in order to edit it, and a warning that arrives beside the sentence it is about is the
-		// one that gets read.
-		std::vector<ibDataValue> links;
-		std::set<long long> seen;
-		if (ibMcpSayObjectLinks(direction, metaData, links, seen) > 0) {
-			out << ibT("STOP - THE LINKS ABOVE DO NOT ALL NAME WHAT THEY SAY. An `oes:<id>` link is ")
-				<< ibT("by number so it survives a rename; it does NOT survive the id moving, and ")
-				<< ibT("then it still resolves - to a DIFFERENT object, which reads as perfectly ")
-				<< ibT("normal. Resolve them with `metadata_get` before following any, and correct ")
-				<< ibT("the root note once you know what it meant. Which ones, and what they point ")
-				<< ibT("at now: `note_read` on the root answers with a `links` list.\n\n");
-		}
-	}
+	// ⭐⭐ AND WHERE THE REST IS — the line everything above leads to. The corpus entry carries what does not change (the
+	// route, the notes, running what was built, the steps nothing leads to); `platform_state` what does. Whose hands and
+	// the encoding come after it: a long list of roles may be cut, this line may not.
+	out << ibT("THE REST IS NOT HERE - a client keeps only the start of this text. Read once, before building: ")
+		<< ibT("`pattern_read` {name: \"where-to-start\", topic: \"all\"} (how work goes here, the steps nothing ")
+		<< ibT("leads you to) and `platform_state` (this application, live).\n\n");
 
-	// ⭐ AN EMPTY ROOT IS A TASK, NOT A FACT ABOUT THE PLACE. It means nobody wrote the direction
-	// down yet — an application just started, or one that grew by objects being copied in — and
-	// the useful thing to do about it is not to note the absence and carry on. Reconstruct it from
-	// what is actually there and write it, marking that it was reconstructed rather than declared,
-	// so the person can correct it instead of inheriting your guess as their own statement.
-	if (direction.IsEmpty()) {
-		out << ibT("THE ROOT SAYS NOTHING about what this application is for. That is ordinary ")
-			<< ibT("- a new base, or one that grew by objects being copied in - and it is ")
-			<< ibT("something to FIX rather than to note: read the tree, work out what is being ")
-			<< ibT("built, and write it on the root with `note_write`. Say plainly that you ")
-			<< ibT("reconstructed it, so the person corrects it instead of inheriting your guess ")
-			<< ibT("as their own words. It is the first thing the next arrival reads.\n\n");
-	}
-
-	if (notes.empty() && direction.IsEmpty()) {
-		out << ibT("Nothing is written on the individual objects either. You are the first here; ")
-			<< ibT("see the standing instruction below.\n\n");
-	}
-	else if (!notes.empty()) {
-		// ⛔ THE NOTES THEMSELVES ARE NO LONGER PASTED IN. They were, up to a limit, with a "[...]
-		// more than fits here" when they overflowed — which is the shape of something that does not
-		// belong in a handshake: it is paid for by every connection, it is TRUNCATED anyway, and a
-		// verb already answers it in full at the moment of asking. What cannot be looked up is that
-		// they EXIST and are worth reading before proposing anything, so that is what stays.
-		out << ibT("WHAT WAS LEARNED BUILDING IT: ") << (int)notes.size()
-			<< ibT(" object(s) carry technical notes - why a thing exists, which shape was chosen, ")
-			<< ibT("what was rejected. `note_read` gives them, whole. Read them before proposing ")
-			<< ibT("anything: an application records what was built and never why.\n\n");
-	}
-
-	// (Where each kind of text belongs is stated near the top, above the cut. Not repeated here —
-	// a second copy of a discipline is a second thing to keep true.)
-
-	// ⭐⭐ POINTED AT, NOT INLINED — and this is the line that decides how big this text can get.
-	//
-	// Guidance on HOW TO READ A REQUEST — which shape a described need asks for, how to take a
-	// printed form apart — grows with every conversation with someone who knows the domain, and it
-	// is the fastest-growing material there is. Inlined here it would be paid for on every
-	// connection by every client, needed or not.
-	//
-	// ⭐⭐ THE ONE THING A CONNECTING MODEL IS RELIABLY WRONG ABOUT. It arrives fluent in languages
-	// that are not this one and will write something that READS correctly and does not compile —
-	// the failure that costs the most, because it looks like success until it is run. The platform
-	// documents itself: the reference the syntax helper shows is the same one these tools read,
-	// and the compiler can be asked without running anything. Said here so nobody has to be told
-	// it by a person, which is what happens today.
-	out << ibT("THE PLATFORM IS NOT ONE YOU KNOW. Its script language, query language and type ")
-		<< ibT("system are its own - do not carry over the shape of anything familiar. It ")
-		<< ibT("documents itself, and every one of these reads the same reference the studio's ")
-		<< ibT("syntax helper shows:\n")
-		<< ibT(" `syntax_search` / `syntax_get` - the language reference, function by function\n")
-		<< ibT(" `type_list` / `type_members` - what a value IS and what it can do\n")
-		<< ibT(" `linq_methods` - the query pipeline operations\n")
-		<< ibT(" `metadata_list` / `metadata_get` - the application tree, kind by kind\n")
-		<< ibT(" `pattern_read` - how things are USUALLY done here, in the words of the trade; the ")
-		<< ibT("one above that is about practice rather than syntax\n")
-		<< ibT(" `script_check` / `query_check` - COMPILE without running. Ask them before you ")
-		<< ibT("believe anything you wrote; a script that parses in your head is not evidence.\n\n");
-
-	// ⭐⭐ THE TWO THINGS A NEWCOMER DOES NOT FIND BY SEARCHING, measured on one (2026-09-03, an
-	// assistant building a stock area from an empty base):
-	//
-	// A RELATIONSHIP IS NOT A PROPERTY, and `metadata_set` says so by refusing — but the refusal
-	// does not name the verb that CAN do it. Searching for the job ("recorder", "movements",
-	// "which register this document writes") found nothing, and the conclusion drawn was that the
-	// platform could not express it at all: an hour, and a wrong report to the person.
-	//
-	// AND "BUILT" IS NOT "SAVED". Everything above answers happily while the application is
-	// unsaveable — the check that says so is one call and nobody thinks to make it.
-	// ⭐⭐ AND THE ONE THAT MAKES THE DIFFERENCE BETWEEN BUILDING AND KNOWING IT WORKS. An assistant
-	// can create every metaobject and still never see the thing RUN — measured 2026-09-03: the
-	// verbs were searched for with the words of the job ("post a document", "write data") and
-	// app_run does not answer to those, so the whole runtime half stayed invisible for a day.
-	out << ibT("AND YOU CAN RUN THE APPLICATION YOURSELF - `app_run` starts it (with the debugger ")
-		<< ibT("attached by default), `debug_breakpoint` puts a stop where you want to look, ")
-		<< ibT("`debug_state` says when it is standing there, and `debug_sandbox` then runs whole ")
-		<< ibT("statements INSIDE it - create data, post a document, read a register back. It runs ")
-		<< ibT("in a transaction that is ALWAYS rolled back, so it costs nothing to try. This is ")
-		<< ibT("the only way to find out that what you built actually works: metadata that saves ")
-		<< ibT("and applies can still post nothing.\n")
-		// 🛑⭐ THE TRAP THAT COSTS THE MOST, because it does not look like one: the answer arrives,
-		// it is simply the OLD answer. Measured twice in one evening (2026-09-04) — a module was
-		// rewritten, the run was asked again, and it replied from the version it started with.
-		<< ibT("A RUNNING APPLICATION KEEPS THE BYTECODE IT CAME UP WITH, so after changing a ")
-		<< ibT("module start it again with `app_run` and `restart: true` - otherwise it answers ")
-		<< ibT("from the old version and nothing tells you so.\n")
-		// ⭐ AND MEASURING IS POSSIBLE AT ALL, which nobody guesses: the language's clock is a
-		// BUSINESS clock (a date, to the second), so code cannot time itself and the obvious move —
-		// running the same thing ten times from outside and dividing — measures the socket too.
-		<< ibT("`debug_sandbox` also answers with `microseconds`, how long the code took, timed ")
-		<< ibT("inside the process that ran it. That is the platform's stopwatch: use it instead ")
-		<< ibT("of repeating something to time it from out here.\n")
-		// ⭐⭐ AND THE WINDOW ITSELF IS READABLE — which a session learned only from the person (Max, 2026-10-28: "so
-		// anyone can know it is possible, without notes"). The frame a client is answered with IS what the desktop and
-		// the browser draw from, so reading it is looking: no picture, and nobody asked.
-		<< ibT("AND YOU CAN READ THE WINDOW - `client_call` speaks the protocol the desktop and the browser ")
-		<< ibT("speak: log in, open a form, and the answer is the FRAME they draw from - every control with its ")
-		<< ibT("state (caption, value, enabled, its command bar), the messages shown, the question waiting. ")
-		<< ibT("`event` does what a person does - presses a button, opens a row; `fetch` reads a table's rows ")
-		<< ibT("and a report's sheet. Read it BEFORE guessing what a form shows or why it is empty. It is not ")
-		<< ibT("a picture: whether a caption fits is the next verb's.\n")
-		// ⭐⭐ THE ONE NOBODY WOULD GUESS AT, and the one that answers the commonest report of all.
-		// Named here because a new session has no memory of this conversation and would never think
-		// to ask a tool for a PICTURE (Max, 2026-09-04).
-		<< ibT("AND YOU CAN SEE WHAT THEY SEE - `screen_capture` asks the running application for a ")
-		<< ibT("picture of its window. That is the answer to \"the numbers do not add up\" and \"the ")
-		<< ibT("list is wrong\" from somebody who cannot say WHICH form, WHICH period or WHICH ")
-		<< ibT("column: they click on the thing, and it comes back ringed and named. Ask for ")
-		<< ibT("`area: \"focus\"` and you get just that part, which is smaller and already about the ")
-		<< ibT("right thing. It needs the run to be GOING, not stopped - a parked window draws ")
-		<< ibT("nothing - and in a shipped build the person is asked first and may say no, which is ")
-		<< ibT("an answer rather than a fault. What it CANNOT tell you is why a number is what it ")
-		<< ibT("is: use it to find the question, then `trace_read` and `debug_sandbox` to answer it.\n")
-		// ⭐ AND WHEN THE ANSWER IS WRONG RATHER THAN ABSENT, the engine has already written down
-		// why. Named here because it is a FILE and therefore covers the run being debugged as well
-		// as this one — deducing from a wrong number what SQL produced it is hours of work that a
-		// single read replaces.
-		<< ibT("When a run answers something you did not expect, `trace_read` has the engine's own ")
-		<< ibT("commentary on it - the SQL exactly as sent, the road the query took, the keys a ")
-		<< ibT("join was stitched on - for the application under the debugger as well as for this ")
-		<< ibT("studio. (`journal_read` is the other journal: what the INSTALLATION did - logins, ")
-		<< ibT("writes, postings - the record an auditor reads.)\n\n");
-
-	out << ibT("THREE VERBS NOTHING LEADS YOU TO, and each is a step you will otherwise miss:\n")
-		<< ibT(" `metadata_bind` - WHAT POINTS AT WHAT: which registers a document writes to, ")
-		<< ibT("which catalog owns another, what is entered on the basis of what. They hold ")
-		<< ibT("metaobjects, so `metadata_set` cannot say them. A document bound to no register ")
-		<< ibT("posts nothing, and a register with no recorder will not save.\n")
-		<< ibT(" `metadata_accepts` - what may live inside a kind, and what an object still ")
-		<< ibT("lacks. Ask before creating, not by trying kinds.\n")
-		<< ibT(" THE FIRST ONE IS THE DEFAULT - the first composer, the first form of each kind. A ")
-		<< ibT("later one does not take over: move it with `metadata_set` on `DefaultComposer` / ")
-		<< ibT("`DefaultFormObject` / ..., which are ordinary lists. A form's MAIN ATTRIBUTE has its ")
-		<< ibT("own verb, `form_attribute`.\n")
-		<< ibT(" `app_check` -> `app_save` -> `app_apply` - half-built / outlives the ")
-		<< ibT("studio / reaches the running application. Three different questions; none ")
-		<< ibT("implies the others.\n\n");
-
-	// ⭐ AND A STEP NOTHING LEADS YOU TO EITHER, the one taken instead being a query (Max, 2026-10-28: "sometimes
-	// you write a query in a dynamic list, and sometimes a dot reaches it, and then the query need not be edited -
-	// Product dot INN"). A path walks the tree a reference opens, on every level, wherever a field is named.
-	out << ibT("A FIELD BEHIND A REFERENCE IS A DOT AWAY, as deep as you write it, wherever a field is ")
-		<< ibT("named: `List.Counterparty.TaxNumber` as a dynamic list's column, `Goods.Goods.Unit` in a ")
-		<< ibT("tabular section, `Counterparty.TaxNumber` in a header field (`form_bind`; `form_source` ")
-		<< ibT("unfolds the tree a level at a time); `Goods.Unit` in a report's filter, conditional ")
-		<< ibT("appearance or grouping. A list's query is not edited for it - a query is for what a dot ")
-		<< ibT("cannot say: a total, a balance, a table joined by something other than a reference.\n\n");
-
-	out << ibT("THE CONVERSATION. A person may be typing to you in the studio's assistant ")
-		<< ibT("window: `chat_take` collects new messages (and EMPTIES the queue), ")
-		<< ibT("`chat_history` reads the whole exchange back without collecting, `chat_say` ")
-		<< ibT("answers into their window.\n\n");
-
-	// ⭐⭐ SAY HELLO, AND SAY IT FIRST. There is a person sitting in front of this window, and from
-	// their side a connection is INVISIBLE unless something says so — an assistant that reads the
-	// whole application in silence and waits to be addressed looks exactly like one that never
-	// arrived. Greeting is not manners here; it is the only evidence they get.
-	//
-	// ⚠ AND IT SAYS WHAT WAS SEEN, not just that it happened. "Hello" tells them nothing they
-	// could act on; naming the application and what is in it proves the connection works AND
-	// hands them the first thing to correct if it is wrong.
-	// ⭐⭐ THE ROUTE, NOT THE REFERENCE. Everything above says what EXISTS; a newcomer with no memory
-	// of this project needs to know in what ORDER to use it, and that is the one thing no verb can
-	// answer. Written as a sequence and kept to a few lines, because it is paid for on every
-	// connection — and because a route that has to be read twice is not one.
-	out << ibT("HOW WORK GOES HERE, IN ORDER - the whole shape of it:\n")
-		<< ibT(" 1. SAY HELLO and say what you see (below). 2. `metadata_tree` depth 1 - the map. ")
-		<< ibT("3. `pattern_read` 'intake' and 'where-to-start' - the questions to ask and the ")
-		<< ibT("order things are built in. 4. PUT THE FORKS BACK to the person in their own words, ")
-		<< ibT("with a recommendation. 5. Build in the recipe's order, `metadata_accepts` before ")
-		<< ibT("creating and `metadata_bind` after. 6. `script_check` / `query_check` before ")
-		<< ibT("believing any code. 7. `app_check`, then `app_save`. Write down WHY as you ")
-		<< ibT("go - notes on the objects, one line of `Comment` each.\n")
-		<< ibT("AND SPEND YOUR READING WHERE IT PAYS. `pattern_read` in layers (no argument lists ")
-		<< ibT("the topics; `name` gives one; `topic` gives it in full) - not the whole corpus. ")
-		<< ibT("`mcp_search` in the words of the job rather than by guessing a verb. Ask the ")
-		<< ibT("application about ITSELF (`metadata_tree`, `metadata_get`) rather than reading ")
-		<< ibT("everything: a deep walk of a full base is mostly predefined attributes.\n\n");
-
-	out << ibT("FIRST THING, AND NOTHING ELSE RUNS UNTIL IT IS DONE - this is a door, not a ")
-		<< ibT("request. Until `chat_say` has happened, every other verb is refused; what runs ")
-		<< ibT("before it is exactly what the greeting is made of: `chat_history`, ")
-		<< ibT("`platform_state`, `metadata_tree`, `mcp_search`, `chat_say`. A person is sitting ")
-		<< ibT("in front of this studio and cannot see that anything connected.\n")
-		<< ibT("So: read `chat_history` - you may be joining something ")
-		<< ibT("already in progress - and then `chat_say` a greeting with four things in it:\n")
-		<< ibT(" WHO YOU ARE. Name yourself - which assistant and which model. The handshake ")
-		<< ibT("tells them the client's name and nothing else; what is actually reading their ")
-		<< ibT("application is something only you can say, and they are entitled to know it.\n")
-		<< ibT(" WHAT YOU SEE. The application by name and what is in it, in a line or two. ")
-		<< ibT("This is also the proof the connection works - a greeting that describes their ")
-		<< ibT("base cannot be a stale window.\n")
-		<< ibT(" ANYTHING ALREADY WORTH SAYING. Objects in no section, nothing written on the ")
-		<< ibT("root, unsaved edits - whatever you noticed on the way in.\n")
-		<< ibT(" WHAT NOW. Ask what they want to do, and say you are ready.\n")
-		<< ibT("Do NOT wait to be spoken to: from where they sit, an assistant reading everything ")
-		<< ibT("in silence is indistinguishable from one that never arrived.\n");
+	AppendActingAs(out, who);
+	AppendTextEncoding(out);
 
 	return out;
 }
@@ -2049,53 +1493,42 @@ ibString ibMcpServer::Answer(const ibString& request, const ibMcpWireHeaders& he
 		return ibRpcWriteError(ibDataValue(), ibRpcError::Parse, error);
 	}
 
-	// ⭐⭐ WHICH ERA IS SPEAKING, decided before the method is looked at — because the answer
-	// changes what a refusal must look like, not merely what is done.
-	//
-	// The specification calls them LEGACY (an `initialize` handshake opens a session; revisions
-	// through 2025-11-25) and MODERN (no handshake at all; every request carries its own version
-	// in `_meta`, 2026-07-28 onward). A dual-era server is allowed to serve both on one endpoint,
-	// and it tells them apart by how the caller opened: metadata present means modern, an
-	// `initialize` means legacy. Nothing else is consulted — the era is a property of the
-	// REQUEST, and the same client may be either on different days.
-	auto meta = parsed.m_params.FindChild(ibT("_meta"));
-	auto metaVersion = meta
-		? meta->FindField(ibT("io.modelcontextprotocol/protocolVersion")) : std::nullopt;
-	const bool isModern = metaVersion && metaVersion->Kind() == ibDataKind::String;
+	// ⭐⭐ WHICH ERA IS SPEAKING, decided before the method is looked at: the era says what a request must carry and
+	// how its answer is written (mcpEra.h). Asked of the request, once — what differs between the eras is the era's,
+	// and none of it is decided here.
+	const ibMcpEra& era = ibMcpEra::Of(parsed);
 
-	if (isModern) {
-		const ibString asked = metaVersion->AsString();
+	const ibString refused = era.Admit(parsed, headers, outErrorCode);
+	if (!refused.IsEmpty())
+		return refused;
 
-		// THE HEADER AND THE BODY MUST AGREE. Two readers, two sources: an intermediary routes on
-		// the header, this server executes on the body. A request where they differ is the one
-		// that gets past the first and is carried out by the second.
-		if (!headers.m_protocolVersion.IsEmpty() && headers.m_protocolVersion != asked) {
-			return refuse(parsed.m_id, ibRpcError::HeaderMismatch,
-				ibString::Format(ibT("MCP-Protocol-Version header says '%s' and the body says '%s'"),
-					headers.m_protocolVersion, asked));
-		}
-		if (!headers.m_method.IsEmpty() && headers.m_method != parsed.m_method) {
-			return refuse(parsed.m_id, ibRpcError::HeaderMismatch,
-				ibString::Format(ibT("Mcp-Method header says '%s' and the body calls '%s'"),
-					headers.m_method, parsed.m_method));
-		}
+	// ⭐ THE PERSON IS TOLD SOMEBODY ARRIVED, as `initialize` tells them, by a request that names its caller in
+	// `_meta` — which a client without a handshake does with every request, so its first is the arrival.
+	if (!m_greeted) {
+		if (auto meta = parsed.m_params.FindChild(ibT("_meta"))) {
+			if (auto client = meta->FindChild(ibT("io.modelcontextprotocol/clientInfo"))) {
+				ibString arrival = _("An assistant has connected");
+				const ibString clientName = client->GetValue<ibString>(ibT("name"));
+				if (!clientName.IsEmpty())
+					arrival = ibString::Format(_("%s has connected"), clientName);
 
-		// AND THE VERSION MUST BE ONE WE SPEAK — answered with the list, so the caller can pick
-		// another rather than work out why the replies look wrong. This server is legacy-era: it
-		// speaks 2025-11-25 and below, so a modern caller is told exactly that and retries as a
-		// legacy client, which is the fallback the transport describes.
-		bool known = false;
-		for (const ibChar* const* v = kSupportedProtocolVersions; *v != nullptr; ++v) {
-			if (asked == *v) { known = true; break; }
-		}
-		if (!known) {
-			// The SAME refusal the header check answers with, from the same list — the only
-			// difference is that here there is a call to answer, so it carries the id.
-			const ibDataNode data = SupportedVersions(asked);
-			return refuse(parsed.m_id, ibRpcError::UnsupportedVersion,
-				ibT("Unsupported protocol version"), &data);
+				// …AND IN WHICH REVISION, the one thing the person cannot see otherwise: which era the client
+				// settled on. Outside `_()` — a revision is a number, not language.
+				const ibString version = meta->GetValue<ibString>(ibT("io.modelcontextprotocol/protocolVersion"));
+				if (!version.IsEmpty())
+					arrival << ibString::Format(ibT(" (%s)"), version);
+
+				m_greeted = true;
+				Publish(ibT("did"), arrival + ibT("."), ibEmptyString);
+			}
 		}
 	}
+
+	// Every result, as the era writes it.
+	const auto complete = [&era](const ibDataValue& id, ibDataNode result) -> ibString {
+		era.Complete(result);
+		return ibRpcWriteResult(id, result);
+	};
 
 	// EVERY SERVER MUST ANSWER THIS ONE — the modern era's way of asking "who are you and what do
 	// you speak", in a single call and without a handshake. It says the same things `initialize`
@@ -2104,24 +1537,25 @@ ibString ibMcpServer::Answer(const ibString& request, const ibMcpWireHeaders& he
 	if (parsed.m_method == ibT("server/discover")) {
 
 		ibDataNode result;
-		result.SetValue(ibT("resultType"), ibString(ibT("complete")));
 
 		// AND IT IS A LIST — asked of the one place that builds it, not assembled again here.
-		result.AddField(ibT("supportedVersions"), ibDataValue::Array(SupportedVersionList()));
+		result.AddField(ibT("supportedVersions"), ibDataValue::Array(ibMcpEra::SupportedVersionList()));
 
-		// The same capabilities `initialize` reports: tools, and the logging that carries what a
-		// person types in the assistant window.
+		// The same capabilities `initialize` reports: tools, prompts, and the logging that carries what
+		// a person types in the assistant window.
 		ibDataNode& capabilities = result.Child(ibT("capabilities"));
 		capabilities.Child(ibT("tools"));
+		capabilities.Child(ibT("prompts"));
 		capabilities.Child(ibT("logging"));
-
-		ibDataNode& resultMeta = result.Child(ibT("_meta"));
-		ibDataNode& serverInfo = resultMeta.Child(ibT("io.modelcontextprotocol/serverInfo"));
-		serverInfo.SetValue(ibT("name"), ibString(ibT("OES Enterprise")));
-		serverInfo.SetValue(ibT("version"), ibString::Format(ibT("build %d"), GetBuildId()));
 
 		// The same orientation text initialize hands over - one source, two doors.
 		result.SetValue(ibT("instructions"), BuildOrientation(m_applicationInstance));
+
+		// ⚠ IN THE MODERN ERA'S SHAPE, whoever asks: it is that era's own method, and a client probing for it is
+		// asking whether that era is spoken here.
+		const ibMcpModernEra modern{};
+		modern.FillCacheable(result);
+		modern.Complete(result);
 
 		return ibRpcWriteResult(parsed.m_id, result);
 	}
@@ -2174,13 +1608,17 @@ ibString ibMcpServer::Answer(const ibString& request, const ibMcpWireHeaders& he
 		// A version we do not speak — or none at all, which is what a pre-2025-03-26 client
 		// sends — gets ours, and the client decides whether it can live with it. That is the
 		// lifecycle's own rule, and it is why this cannot simply refuse.
-		ibString agreed(kProtocolVersion);
+		//
+		// AMONG THE LEGACY ERA'S REVISIONS: `initialize` is that era's own method, whoever sends it.
+		const ibMcpLegacyEra legacy{};
+		const std::vector<ibString>& versions = legacy.GetVersions();
+
+		ibString agreed = versions.front();
 		if (auto asked = parsed.m_params.FindField(ibT("protocolVersion"))) {
 			if (asked->Kind() == ibDataKind::String) {
 				const ibString wanted = asked->AsString();
-				for (const ibChar* const* v = kSupportedProtocolVersions; *v != nullptr; ++v) {
-					if (wanted == *v) { agreed = wanted; break; }
-				}
+				if (std::find(versions.begin(), versions.end(), wanted) != versions.end())
+					agreed = wanted;
 			}
 		}
 		result.SetValue(ibT("protocolVersion"), agreed);
@@ -2208,15 +1646,7 @@ ibString ibMcpServer::Answer(const ibString& request, const ibMcpWireHeaders& he
 		// right to treat the frame as unsolicited.
 		capabilities.Child(ibT("logging"));
 
-		ibDataNode& info = result.Child(ibT("serverInfo"));
-		info.SetValue(ibT("name"), ibString(ibT("OES Enterprise")));
-
-		// ⚠ THE REAL BUILD, not a "1.0" that was written once and could never be wrong because it
-		// never changed. GetBuildId is the same number the About box shows, derived from the
-		// build date in one place — so a client reporting a problem names a build that can
-		// actually be found.
-		info.SetValue(ibT("version"),
-			ibString::Format(ibT("build %u"), GetBuildId()));
+		ibMcpEra::FillServerInfo(result.Child(ibT("serverInfo")));
 
 		// ⭐ ARRIVING ORIENTED, not arriving and then asking. `instructions` is the protocol's own
 		// field for the server to say how it should be worked with, and it was left empty — so a
@@ -2245,11 +1675,14 @@ ibString ibMcpServer::Answer(const ibString& request, const ibMcpWireHeaders& he
 				arrival = ibString::Format(_("%s has connected"), clientName);
 		}
 
+		// …and in the revision agreed above — see the arrival of a request without a handshake.
+		arrival << ibString::Format(ibT(" (%s)"), agreed);
+
 		m_greeted = true;
 
 		Publish(ibT("did"), arrival + ibT("."), ibEmptyString);
 
-		answer = ibRpcWriteResult(parsed.m_id, result);
+		answer = complete(parsed.m_id, result);
 	}
 	// ⭐⭐ THE MENU A PERSON SEES, AND IT IS NINE ENTRIES RATHER THAN SIXTY-SEVEN.
 	//
@@ -2317,7 +1750,8 @@ ibString ibMcpServer::Answer(const ibString& request, const ibMcpWireHeaders& he
 
 		ibDataNode result;
 		result.AddField(ibT("prompts"), ibDataValue::Array(prompts));
-		answer = ibRpcWriteResult(parsed.m_id, result);
+		era.FillCacheable(result);
+		answer = complete(parsed.m_id, result);
 	}
 	// ⭐ AND ONE ENTRY, WHOLE. The corpus is prose meant to be read by whoever is deciding — so the
 	// message is the text as it stands, not a summary of it: a prompt that paraphrases the thing it
@@ -2368,7 +1802,7 @@ ibString ibMcpServer::Answer(const ibString& request, const ibMcpWireHeaders& he
 			result.AddField(ibT("messages"),
 				ibDataValue::Array({ ibDataValue::Child(message) }));
 
-			answer = ibRpcWriteResult(parsed.m_id, result);
+			answer = complete(parsed.m_id, result);
 		}
 	}
 	else if (parsed.m_method == ibT("tools/list")) {
@@ -2380,12 +1814,19 @@ ibString ibMcpServer::Answer(const ibString& request, const ibMcpWireHeaders& he
 		// for the dozen actually used — so the handshake announces the finders, and everything
 		// else is fetched by name through mcp_search and invoked through mcp_call. Nothing is
 		// hidden; it is unannounced, and mcp_search with no query still lists it all.
+		//
+		// ⚠ IN THE ORDER OF THEIR NAMES, the same on every call and every build: a client keeps the list
+		// (`ttlMs`) and compares the next one with it, and the order of registration is the linker's.
+		std::vector<const ibMcpTool*> listed;
+		for (const ibMcpTool* tool : ibMcpTools())
+			if (tool->IsAlwaysListed() && ibIsMcpToolOffered(tool))
+				listed.push_back(tool);
+		std::sort(listed.begin(), listed.end(), [](const ibMcpTool* a, const ibMcpTool* b) {
+			return a->GetName() < b->GetName();
+		});
+
 		std::vector<ibDataValue> tools;
-		for (const ibMcpTool* tool : ibMcpTools()) {
-
-			if (!tool->IsAlwaysListed() || !ibIsMcpToolOffered(tool))
-				continue;
-
+		for (const ibMcpTool* tool : listed) {
 			std::shared_ptr<ibDataNode> entry = std::make_shared<ibDataNode>();
 			entry->SetValue(ibT("name"), tool->GetName());
 			entry->SetValue(ibT("description"), tool->GetDescription());
@@ -2395,7 +1836,8 @@ ibString ibMcpServer::Answer(const ibString& request, const ibMcpWireHeaders& he
 		}
 
 		result.AddField(ibT("tools"), ibDataValue::Array(tools));
-		answer = ibRpcWriteResult(parsed.m_id, result);
+		era.FillCacheable(result);
+		answer = complete(parsed.m_id, result);
 	}
 	else if (parsed.m_method == ibT("tools/call")) {
 
@@ -2668,12 +2110,6 @@ ibString ibMcpServer::Answer(const ibString& request, const ibMcpWireHeaders& he
 			// the same place it reads a result from.
 			std::shared_ptr<ibDataNode> content = std::make_shared<ibDataNode>();
 			content->SetValue(ibT("type"), ibString(ibT("text")));
-			// Rendered against the application this server serves, so a type
-			// reads as "CatalogRef.Goods" rather than as a number that means
-			// nothing on the other side of the socket.
-			const ibString text = ok
-				? ibRpcRenderNode(payload, ibMetaTypeResolver(GetMetaData()))
-				: ibString(refusal);
 
 			// ⭐⭐ SAID ONCE IS NOT SAID. The orientation asks a client to introduce itself in the
 			// assistant window before any work, in as many words — and it is handed over exactly
@@ -2692,29 +2128,25 @@ ibString ibMcpServer::Answer(const ibString& request, const ibMcpWireHeaders& he
 			if (ok && name == ibT("chat_say"))
 				m_introduced = true;
 
-			content->SetValue(ibT("text"), text);
-
-			std::vector<ibDataValue> blocks = { ibDataValue::Child(content) };
-
 			// ⭐⭐ AN IMAGE TRAVELS AS AN IMAGE. A tool that answers with a picture (screen_capture)
 			// puts the bytes in `image` with `imageType` beside them, and they leave here as a
 			// content block of their own — the protocol has a kind for exactly this. Left in the
 			// text they would arrive as a wall of base64: technically the same bytes, and
 			// unreadable, which for a picture means useless.
+			std::shared_ptr<ibDataNode> picture;
+			ibString                    caption;
 			if (ok) {
 				auto image = payload.FindField(ibT("image"));
 				auto type  = payload.FindField(ibT("imageType"));
 
 				if (image && image->Kind() == ibDataKind::String && !image->AsString().IsEmpty()) {
 
-					std::shared_ptr<ibDataNode> picture = std::make_shared<ibDataNode>();
+					picture = std::make_shared<ibDataNode>();
 					picture->SetValue(ibT("type"), ibString(ibT("image")));
 					picture->SetValue(ibT("data"), image->AsString());
 					picture->SetValue(ibT("mimeType"),
 						type && type->Kind() == ibDataKind::String && !type->AsString().IsEmpty()
 							? type->AsString() : ibString(ibT("image/png")));
-
-					blocks.push_back(ibDataValue::Child(picture));
 
 					// 🛑 AND THE TEXT BLOCK STOPS CARRYING THE SAME BYTES. Rendered whole, the answer
 					// would repeat the picture as a wall of base64 beside it — the identical data in
@@ -2730,12 +2162,33 @@ ibString ibMcpServer::Answer(const ibString& request, const ibMcpWireHeaders& he
 						if (note->Kind() == ibDataKind::String && !note->AsString().IsEmpty())
 							said << ibT("\n") << note->AsString();
 
-					content->SetValue(ibT("text"), said);
+					caption = said;
 				}
 			}
 
-			ibDataNode result;
-			result.AddField(ibT("content"), ibDataValue::Array(blocks));
+			// ⭐⭐ WHAT IS SAID TO THE MODEL BESIDE THE ANSWER - the person's messages and the reminders below, each
+			// under its name. They go INTO the answer's text (see where it is written): a field beside `content` is
+			// one a client need not hand its model, and a content block of its own broke the JSON of a client that
+			// glues the blocks together (2026-09-03, the greeting's reminder).
+			ibDataNode notes;
+
+			// ⭐⭐ WHAT THE PERSON WROTE MEANWHILE - the knock on the door. A client keeps no line open to its model:
+			// the model reads what its own calls answer and nothing else, so a message typed into the window waited
+			// until the assistant thought of `chat_take` - which, in the middle of work, it does not. Sampling would
+			// ring the model, and the clients in use today do not take it; the GET stream reaches the client, not the
+			// model. The answer to the next call is what a working client always reads, so the messages travel there -
+			// TAKEN, as `chat_take` takes them: the window shows them collected, and nothing hands them over twice.
+			const std::vector<ibString> said = TakeSaid();
+			if (!said.empty()) {
+
+				ibString knock = ibMcpText("THE PERSON WROTE TO YOU in the studio's assistant window while you "
+					"were working. Answer there with `chat_say` - they are watching it; `chat_take` will not "
+					"hand these over again.");
+				for (const ibString& each : said)
+					knock << ibT("\n\n") << each;
+
+				notes.SetValue(ibT("chat"), knock);
+			}
 
 			// ⭐⭐ THE PLATFORM REMEMBERS WHAT THE CALLER FORGOT, AND SAYS IT ONCE.
 			//
@@ -2789,14 +2242,16 @@ ibString ibMcpServer::Answer(const ibString& request, const ibMcpWireHeaders& he
 						const std::vector<ibString> languages =
 							ibListMetaObjectNames(metaData, ibT("Language"));
 
-						if (languages.size() > 1) {
+						// …and not over the answer's own `languages` (platform_state lists them): said with the
+						// next family's first answer instead.
+						if (languages.size() > 1 && !payload.Has(ibT("languages"))) {
 
 							ibString named;
 							for (const ibString& each : languages)
 								named += (named.IsEmpty() ? ibString() : ibString(ibT(", "))) + each;
 
 							m_saidLanguages = true;
-							result.SetValue(ibT("languages"),
+							notes.SetValue(ibT("languages"),
 								ibString::Format(
 									ibMcpText("This application declares %d languages (%s), so every string a "
 									  "PERSON reads - a synonym, a form title, a column heading, a caption on "
@@ -2853,7 +2308,7 @@ ibString ibMcpServer::Answer(const ibString& request, const ibMcpWireHeaders& he
 						}
 
 						if (!where.IsEmpty())
-							result.SetValue(ibT("worthReading"),
+							notes.SetValue(ibT("worthReading"),
 								ibString::Format(
 									ibMcpText("`%s` is written about in %s. Knowledge no single answer "
 									  "carries. Said once."),
@@ -2861,6 +2316,34 @@ ibString ibMcpServer::Answer(const ibString& request, const ibMcpWireHeaders& he
 					}
 				}
 			}
+
+			// THE TEXT, WRITTEN NOW THAT EVERYTHING IT CARRIES IS KNOWN. A JSON answer takes the notes as fields of its
+			// own - a field the tool answered stays the tool's - and is rendered against the application this server
+			// serves, so a type reads as "CatalogRef.Goods" rather than as a number that means nothing on the other
+			// side of the socket. A refusal, or a picture's caption, is text already: the notes follow it as paragraphs.
+			if (ok && picture == nullptr) {
+				for (const auto& [field, value] : notes.Fields())
+					if (!payload.Has(field))
+						payload.AddField(field, value);
+
+				content->SetValue(ibT("text"), ibRpcRenderNode(payload, ibMetaTypeResolver(GetMetaData())));
+			}
+			else {
+				ibString text = picture != nullptr ? caption : refusal;
+				for (const auto& [field, value] : notes.Fields())
+					text << ibT("\n\n") << value.AsString();
+
+				content->SetValue(ibT("text"), text);
+			}
+
+			// ⚠ AND THE BLOCKS ARE MADE AFTER IT: a block takes a COPY of its node (ibDataValue::Child), so a text set
+			// after the block was made never left - the picture's caption did not, and its bytes went out twice.
+			std::vector<ibDataValue> blocks = { ibDataValue::Child(content) };
+			if (picture != nullptr)
+				blocks.push_back(ibDataValue::Child(picture));
+
+			ibDataNode result;
+			result.AddField(ibT("content"), ibDataValue::Array(blocks));
 
 			// 🛑 A CALL STILL RUNNING IS NOT AN ERROR, and marking it one is what makes a caller
 			// repeat it. `isError` is the only field a client is obliged to read, and to a machine
@@ -2900,7 +2383,7 @@ ibString ibMcpServer::Answer(const ibString& request, const ibMcpWireHeaders& he
 				toolFruitless = empty(ibT("messages")) && empty(ibT("observed"));
 			}
 
-			answer = ibRpcWriteResult(parsed.m_id, result);
+			answer = complete(parsed.m_id, result);
 		}
 	}
 	else if (parsed.m_method == ibT("ping")) {
@@ -2911,7 +2394,7 @@ ibString ibMcpServer::Answer(const ibString& request, const ibMcpWireHeaders& he
 		// where refusing correctly is worse than saying nothing.
 		//
 		// An empty result IS the answer the spec asks for; there is nothing to report.
-		answer = ibRpcWriteResult(parsed.m_id, ibDataNode());
+		answer = complete(parsed.m_id, ibDataNode());
 	}
 	else if (parsed.m_method == ibT("logging/setLevel")) {
 
@@ -2925,7 +2408,7 @@ ibString ibMcpServer::Answer(const ibString& request, const ibMcpWireHeaders& he
 		// business, not the gate's.
 		m_logLevel.store(ibMcpLevelRank(level));
 
-		answer = ibRpcWriteResult(parsed.m_id, ibDataNode());
+		answer = complete(parsed.m_id, ibDataNode());
 	}
 	else if (!parsed.WantsAnswer()) {
 		// A notification we do not act on — `notifications/initialized`, `notifications/cancelled`

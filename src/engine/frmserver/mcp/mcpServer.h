@@ -204,25 +204,10 @@ public:
 
 private:
 
-	// WHAT THE HTTP HEADERS SAID, for the parts of the message the transport mirrors
-	// into them. From revision 2025-06-18 a client states the protocol version in a
-	// header; from 2026-07-28 it also mirrors the method and the tool name, and the
-	// server MUST refuse a request whose header and body disagree — because a
-	// load balancer routes on the one and the server executes on the other.
-	//
-	// Carried in a struct of its own rather than by handing Answer an
-	// ibHttpRequest: the JSON-RPC layer has never known what HTTP is, and the
-	// three strings it now needs are not a reason to teach it.
-	struct ibMcpWireHeaders {
-		ibString m_protocolVersion;   // MCP-Protocol-Version, empty when absent
-		ibString m_method;            // Mcp-Method
-		ibString m_name;              // Mcp-Name (tools/call, resources/read, prompts/get)
-	};
-
 	// ANSWER ONE MESSAGE. Parses the envelope, finds the tool, calls it, writes
 	// the answer.
 	//
-	// `headers` is what the transport saw.
+	// `headers` is what the transport saw (mcpEra.h).
 	//
 	// `outErrorCode` receives the JSON-RPC error code when the answer is a refusal, 0
 	// otherwise. The transport needs it because the modern revision expects certain
@@ -231,7 +216,7 @@ private:
 	// an HTTP number. It also spares the caller from reading its own output back:
 	// searching the emitted JSON for `"code":-32020` is a guess about the writer's
 	// spacing, and it was wrong the first time it was tried.
-	ibString Answer(const ibString& request, const ibMcpWireHeaders& headers, int* outErrorCode);
+	ibString Answer(const ibString& request, const struct ibMcpWireHeaders& headers, int* outErrorCode);
 
 	// What is said unasked, to the transport: dropped when none listens.
 	void Tell(const ibString& message);

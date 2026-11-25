@@ -2593,14 +2593,121 @@ const std::vector<ibMcpPattern>& Patterns()
 		"finished when its metaobjects exist, it is finished when a question it was built for gets\n"
 		"the right answer twice.") },
 
+	// ⭐⭐ THE REST OF THE CONNECTION TEXT. A client keeps only the start of `instructions` (Claude Code: 2048
+	// characters, 2026-11-25), so the studio's says who is here and how to talk, and points HERE for the route, the
+	// notes, the steps nothing leads to and running what was built - read once, at the moment of starting.
 	{ ibT("where-to-start"),
-	  ibMcpText("The order applications actually grow in - useful for knowing what comes next."),
-	  ibMcpText("WHAT APPEARS, AND ROUGHLY IN WHAT ORDER.\n"
+	  ibMcpText("How work goes through this server, in order, and the steps nothing leads you to - then the order applications actually grow in."),
+	  ibMcpText("HOW WORK GOES THROUGH THIS SERVER, IN ORDER.\n"
+		"\n"
+		"The connection text keeps only what fits a client's cut; this is the rest of it, read once\n"
+		"before building.\n"
+		" 1. SAY HELLO: `chat_history` (you may be joining something in progress), then `chat_say` -\n"
+		" which assistant and model you are, the application by name and what is in it, anything\n"
+		" already worth saying (objects in no section, nothing written on the root, unsaved edits),\n"
+		" and a question about what they need. Do not wait to be spoken to: from where they sit, an\n"
+		" assistant reading in silence is one that never arrived.\n"
+		" 2. THE MAP: `metadata_tree` with depth 1; `platform_state` for the base, the dialect, the\n"
+		" languages and whether the work is saved - ask it again before writing code and before\n"
+		" saying something is done.\n"
+		" 3. WHAT WAS LEARNED: `note_read` - the notes of the whole application, the root's first.\n"
+		" 4. THE QUESTIONS: `pattern_read` 'intake', and the stages below. PUT THE FORKS BACK to the\n"
+		" person in their own words, with a recommendation.\n"
+		" 5. BUILD in the recipe's order: `metadata_accepts` before creating, `metadata_bind` after.\n"
+		" 6. `script_check` / `query_check` before believing any code; then RUN it (below).\n"
+		" 7. `app_check`, then `app_save`. Write down WHY as you go.\n"
+		"SPEND YOUR READING WHERE IT PAYS. `pattern_read` in layers - no argument lists the entries,\n"
+		"`name` gives one's topics, `topic` one part in full - not the whole corpus. `mcp_search` in\n"
+		"the words of the job rather than by guessing a verb. Ask the application about ITSELF\n"
+		"(`metadata_tree`, `metadata_get`): a deep walk of a full base is mostly predefined attributes.\n"
+		"\n"
+		"WRITE DOWN WHAT YOU FIND.\n"
+		"An application records what was built and never WHY, so what you worked out dies with your\n"
+		"session unless you put it somewhere. Four surfaces, different readers:\n"
+		" * `note_write` {id: <applicationId>, target: \"notes\"} - what is true of the WHOLE\n"
+		" application: what it is for, how it is put together, what was decided against. The root is\n"
+		" in no listing; `platform_state` gives its id.\n"
+		" * `note_write` {id, target: \"notes\"} on EACH OBJECT - why it exists, which shape was\n"
+		" chosen, what was rejected. On the object, not the root: nobody re-reads the root for them.\n"
+		" * `target: \"help\"` - what the person USING the application reads on F1.\n"
+		" * `Comment` (`metadata_set`) - one line on any node, why it exists at all; it rides along\n"
+		" with `metadata_tree`, so one read of the map shows what everything is for.\n"
+		"Markdown, so `[Goods](oes:1005)` names another object and survives a rename - but not the id\n"
+		"moving: then it resolves to a DIFFERENT object and reads as normal. `note_read` answers with a\n"
+		"`links` list saying what each points at now; correct the note once you know what it meant.\n"
+		"THE ROOT SAYING NOTHING is a task, not a fact: read the tree, work out what is being built,\n"
+		"write it on the root, and say plainly that you reconstructed it - so the person corrects it\n"
+		"instead of inheriting your guess as their own words.\n"
+		"What you DID is kept for you: `journal_read` says what was done, under whose name.\n"
+		"\n"
+		"THE STEPS NOTHING LEADS YOU TO.\n"
+		" `metadata_bind` - WHAT POINTS AT WHAT: which registers a document writes to, which catalog\n"
+		" owns another, what is entered on the basis of what. They hold metaobjects, so\n"
+		" `metadata_set` cannot say them. A document bound to no register posts nothing, and a\n"
+		" register with no recorder will not save.\n"
+		" `metadata_accepts` - what may live inside a kind, and what an object still lacks. Ask\n"
+		" before creating, not by trying kinds.\n"
+		" THE FIRST ONE IS THE DEFAULT - the first composer, the first form of each kind. A later one\n"
+		" does not take over: move it with `metadata_set` on `DefaultComposer` / `DefaultFormObject` /\n"
+		" ..., which are ordinary lists. A form's MAIN ATTRIBUTE has its own verb, `form_attribute`.\n"
+		" A FIELD BEHIND A REFERENCE IS A DOT AWAY, as deep as you write it, wherever a field is named:\n"
+		" `List.Counterparty.TaxNumber` as a dynamic list's column, `Goods.Goods.Unit` in a tabular\n"
+		" section, `Counterparty.TaxNumber` in a header field (`form_bind`; `form_source` unfolds the\n"
+		" tree a level at a time), `Goods.Unit` in a report's filter or grouping. A list's query is not\n"
+		" edited for it - a query is for what a dot cannot say: a total, a balance, a join by\n"
+		" something other than a reference.\n"
+		" `app_check` -> `app_save` -> `app_apply` - half-built / outlives the studio / reaches the\n"
+		" running application. Three different questions; none implies the others.\n"
+		"\n"
+		"RUN WHAT YOU BUILT - metadata that saves and applies can still post nothing.\n"
+		" `app_run` starts the application (the debugger attached by default); `debug_breakpoint` puts\n"
+		" a stop where you want to look, `debug_state` says when it stands there, and `debug_sandbox`\n"
+		" runs whole statements INSIDE it - create data, post a document, read a register back - in a\n"
+		" transaction ALWAYS rolled back, so trying costs nothing. It answers with `microseconds`,\n"
+		" timed inside the process: the platform's stopwatch, instead of timing from out here.\n"
+		" A RUNNING APPLICATION KEEPS THE BYTECODE IT CAME UP WITH: after changing a module, `app_run`\n"
+		" with `restart: true` - otherwise it answers from the old version and nothing says so.\n"
+		" `client_call` speaks the protocol the desktop and the browser speak: log in, open a form, and\n"
+		" the answer is the FRAME they draw from - every control with its state, the messages shown,\n"
+		" the question waiting; `event` does what a person does, `fetch` reads a table's rows and a\n"
+		" report's sheet. Read it before guessing what a form shows or why it is empty.\n"
+		" `screen_capture` is a picture of their window - the answer to \"the numbers do not add up\"\n"
+		" from somebody who cannot say which form or which column (`area: \"focus\"` gives just that\n"
+		" part). It needs the run GOING, not stopped, and a shipped build asks the person first.\n"
+		" `trace_read` is the engine's own commentary - the SQL as sent, the road a query took - for the\n"
+		" run under the debugger as well as for the studio; `journal_read` is what the INSTALLATION\n"
+		" did: logins, writes, postings.\n"
+		"\n"
+		"WRITING IT: NAMES IN ENGLISH, CAPTIONS IN THEIR LANGUAGE.\n"
+		"Names of objects, attributes, tabular sections and modules - and the code inside them - are\n"
+		"English, always: a name goes into script, query text and the database schema. What a PERSON\n"
+		"sees is in their language: synonyms, help, what you say in the assistant window.\n"
+		"CAPTIONS AND LANGUAGES, IN FOUR STEPS - the third is where everybody slips, the fourth is the\n"
+		"one nobody is told:\n"
+		" 1. ASK which language the people USING this read - not the developer's by default, and\n"
+		" possibly several.\n"
+		" 2. DECLARE IT FIRST - `metadata_create` {kind: \"Language\", name: \"Russian\"}, an English\n"
+		" name like any other, then set its `Code` (`ru`, `uk`, `en`).\n"
+		" 3. WRITE EVERY CAPTION WITH `language`. Omitting it is not \"all languages\": it writes into\n"
+		" the application's own - English in a fresh base - so a caption in another language is\n"
+		" stored as the English one and its reader sees nothing.\n"
+		" 4. MAKE IT THE ONE THEY SEE: `metadata_set` DefaultLanguage on the root. A user with no\n"
+		" language of their own sees the DEFAULT one, so captions written in step 3 stay unseen while\n"
+		" it is English.\n"
+		"THE C-STYLE DIALECT (`platform_state` says which): comparison and logic are C's - `==` `!=`\n"
+		"`&&` `||` `!` `%`; a single `=` in a condition, `<>` and `And` / `Or` / `Not` are refused.\n"
+		"THE REST IS NOT C: a loop counts `for (i = 0 To n - 1)`; `Procedure Name() Public { }` is\n"
+		"what other code may call. NAMES ARE NOT CASE-SENSITIVE - a local `baseKinds` hides the\n"
+		"function `BaseKinds` of its module, and the call fails at run time, not in `script_check`.\n"
+		"THE COMPATIBILITY VERSION (`platform_state`) gates what the platform allows, in code and in\n"
+		"schema. Raising it is the migration, and it is the developer's own decision - never change it\n"
+		"on their behalf.\n"
+		"\n"
+		"WHAT APPEARS, AND ROUGHLY IN WHAT ORDER.\n"
 		"\n"
 		"Almost every application grows the same way, and knowing the sequence is worth more\n"
 		"than it sounds: it tells you what is coming, so that what you build today does not have\n"
 		"to be unpicked to make room for it.\n"
-		"\n"
 		" 0. THE VOCABULARY, AND IT IS A STAGE, not a preliminary. Items, parties, places,\n"
 		" companies, units, and the enumerations for every kind the code will branch on. In a\n"
 		" full system one section holds a hundred catalogues, no documents and no registers at\n"
@@ -11453,7 +11560,7 @@ public:
 		if (query.IsEmpty())
 			return;
 
-		struct ibPlace { const ibMcpPattern* m_pattern; const ibMcpTopic* m_topic; size_t m_score; bool m_named; };
+		struct ibPlace { const ibMcpPattern* m_pattern; const ibMcpTopic* m_topic; size_t m_score; bool m_named; bool m_titled; };
 
 		std::vector<ibPlace> scored;
 		size_t asked = 0, best = 0;
@@ -11482,26 +11589,41 @@ public:
 				if (score == 0)
 					continue;
 
+				// …and a topic whose HEADING carries a word is about it; a line of a table that names it is not.
+				std::vector<bool> inTitle;
+				ibMcpWordsPresent(topic.m_title, query, inTitle);
+				const bool titled = std::find(inTitle.begin(), inTitle.end(), true) != inTitle.end();
+
 				best = std::max(best, score);
-				scored.push_back({ &pattern, &topic, score, named });
+				scored.push_back({ &pattern, &topic, score, named, titled });
 			}
 		}
 
 		// ⭐⭐ THE ENTRIES THAT SPEAK OF IT MOST COME FIRST, BEFORE THE CAP BELOW CUTS THE LIST - an entry named for
-		// the words, then the one with more topics that met them; one entry's topics stay together, in its order.
-		// In file order the cap kept whatever stood early: 'contracts' met 62 topics, and the 24 kept were
-		// choice-links and not-mine while settlements, with seven, was cut (measured on the corpus, 2026-11-25).
-		std::map<const ibMcpPattern*, size_t> topicsMet;
-		for (const ibPlace& place : scored)
-			if (place.m_score == best)
-				++topicsMet[place.m_pattern];
+		// the words, then the one with more topics HEADED by them, then the one with more topics that met them at all;
+		// one entry's topics stay together, in its order. In file order the cap kept whatever stood early: 'contracts'
+		// met 62 topics, and the 24 kept were choice-links and not-mine while settlements, with seven, was cut. And by
+		// the bare count a TABLE outranked the craft: the IFRS chart names Contracts in a row of every class, so a
+		// catalog called Contracts was pointed at it second (measured on the corpus and live, 2026-11-25).
+		struct ibWeight { size_t m_titled = 0; size_t m_met = 0; };
+		std::map<const ibMcpPattern*, ibWeight> weights;
+		for (const ibPlace& place : scored) {
+			if (place.m_score != best)
+				continue;
+			ibWeight& weight = weights[place.m_pattern];
+			weight.m_titled += place.m_titled ? 1 : 0;
+			weight.m_met++;
+		}
 
-		const auto weight = [&topicsMet](const ibPlace& place) {
-			const auto found = topicsMet.find(place.m_pattern);
-			return found != topicsMet.end() ? found->second : 0;
+		const auto weightOf = [&weights](const ibPlace& place) {
+			const auto found = weights.find(place.m_pattern);
+			return found != weights.end() ? found->second : ibWeight();
 		};
-		std::stable_sort(scored.begin(), scored.end(), [&weight](const ibPlace& a, const ibPlace& b) {
-			return a.m_named != b.m_named ? a.m_named : weight(a) > weight(b);
+		std::stable_sort(scored.begin(), scored.end(), [&weightOf](const ibPlace& a, const ibPlace& b) {
+			if (a.m_named != b.m_named)
+				return a.m_named;
+			const ibWeight left = weightOf(a), right = weightOf(b);
+			return left.m_titled != right.m_titled ? left.m_titled > right.m_titled : left.m_met > right.m_met;
 		});
 
 		const bool partial = best > 0 && best < asked;

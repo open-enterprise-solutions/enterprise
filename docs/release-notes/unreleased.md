@@ -789,6 +789,22 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
   (`pattern_read` with a query, `mcp_search`) lists the entries most about the words first: it kept the corpus's
   order and cut at two dozen, so a search for contracts lost `settlements`.
 
+- **MCP: what the person types in the assistant window reaches an assistant at work.** It arrives as `chat` in the
+  answer to the assistant's next call, whatever the tool, and the window shows it collected. It waited for `chat_take`, which an
+  assistant busy with something else does not call, and assistants that take no `sampling` were never rung.
+
+- **MCP speaks the 2026-07-28 revision beside the earlier three.** A request that names it in `_meta` is served by
+  its rules - no handshake, `server/discover`, a result that says `resultType`, a list that says how long it may be
+  kept; a client that opens with `initialize` is answered as before. The assistant window names the revision a
+  client settled on: *Claude Code has connected (2026-07-28).*
+
+- **MCP: `screen_capture` sends its picture once.** The answer's text carried the image's base64 beside the image
+  itself.
+
+- **MCP: an assistant reads all of what it is told on connecting.** A client keeps the first 2048 characters of it
+  (Claude Code), and the studio's ran to 14 500: how work goes, the notes, running what was built never arrived. It
+  now fits, and names where the rest is - `pattern_read` `where-to-start` and `platform_state`.
+
 - **Linux: a file whose name is not in Latin letters no longer stops the work.** Reading such a name - a
   file's properties, a folder walked, an archive packed, a font, a journal - raised "Cannot convert character
   sequence" on Linux.

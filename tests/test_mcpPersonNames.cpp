@@ -27,6 +27,7 @@
 #include "backend/userInfo.h"
 #include "core/clsid.h"
 #include "core/serialize/dataBuilder.h"
+#include "core/serialize/provider/jsonProvider.h"
 #include "frmserver/mcp/mcpServer.h"
 #include "frmserver/mcp/mcpTool.h"
 
@@ -163,7 +164,19 @@ struct McpPersonNames : ::testing::Test {
 		EXPECT_EQ(status, 200);
 		return answer;
 	}
+
+	// What the handshake tells a client, out of the answer's JSON.
+	ibString Instructions() {
+		ibDataNode answer;
+		EXPECT_TRUE(ibJsonProvider().Read(Greeting(), answer));
+		const auto result = answer.FindChild(ibT("result"));
+		EXPECT_TRUE(result);
+		return result ? result->GetValue<ibString>(ibT("instructions")) : ibString();
+	}
 };
+
+// A client keeps only the start of the instructions - Claude Code the first 2048 characters.
+const size_t kInstructionsKept = 2048;
 
 } // namespace
 
@@ -262,4 +275,27 @@ TEST_F(McpPersonNames, AGreeting_NamesNoLanguageForAPersonWithoutOne)
 	LogIn(who);
 
 	EXPECT_FALSE(Greeting().Contains(wxT("The person is working in")));
+}
+
+// The studio's text ends on where the rest is, and the whole of it is kept.
+TEST_F(McpPersonNames, TheStudiosInstructions_FitWhatAClientKeeps)
+{
+	ASSERT_NO_FATAL_FAILURE(EnterStudio());
+	LogIn(Account());
+
+	const ibString instructions = Instructions();
+
+	EXPECT_LE(instructions.length(), kInstructionsKept) << instructions.ToStdString();
+	EXPECT_TRUE(instructions.Contains(wxT("\"where-to-start\""))) << instructions.ToStdString();
+}
+
+// The application's text may run past it only by the note written on its root, said last; this root has none.
+TEST_F(McpPersonNames, TheApplicationsInstructions_FitWhatAClientKeeps)
+{
+	ASSERT_NO_FATAL_FAILURE(EnterApplication());
+	LogIn(Account());
+
+	const ibString instructions = Instructions();
+
+	EXPECT_LE(instructions.length(), kInstructionsKept) << instructions.ToStdString();
 }

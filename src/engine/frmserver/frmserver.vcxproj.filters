@@ -196,6 +196,9 @@
     <ClCompile Include="mcp\mcpDebugBridge.cpp">
       <Filter>mcp</Filter>
     </ClCompile>
+    <ClCompile Include="mcp\mcpEra.cpp">
+      <Filter>mcp</Filter>
+    </ClCompile>
     <ClCompile Include="mcp\mcpServer.cpp">
       <Filter>mcp</Filter>
     </ClCompile>
@@ -797,6 +800,9 @@
       <Filter>mcp</Filter>
     </ClInclude>
     <ClInclude Include="mcp\mcpDebugBridge.h">
+      <Filter>mcp</Filter>
+    </ClInclude>
+    <ClInclude Include="mcp\mcpEra.h">
       <Filter>mcp</Filter>
     </ClInclude>
     <ClInclude Include="mcp\mcpServer.h">
