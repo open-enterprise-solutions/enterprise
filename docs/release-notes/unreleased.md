@@ -159,6 +159,10 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
   theme in its dark colours, not a second one: every colour it paints with is the platform style's, which holds a
   light and a dark value for each — the forms', the windows' chrome and the browser's alike. A form's colours follow
   it as the browser's do: the platform's own are the theme's, a colour the author chose keeps its pair.
+- **A colour the author chose is carried into the dark look.** It was chosen in the light one, so the dark look turns
+  its lightness over and keeps its hue: a white or bright yellow ground becomes a dark one, a dark ink a light one of
+  the same colour. A form's, a control's and a table row's colours alike, on the desktop and in the browser; a sheet
+  keeps its paper.
 - **A form's colour its author picks none for is left empty** — the platform's, painted in the look in force — rather
   than saved as the light look's colour. The property inspector says `<default>` for a colour or a font none was
   picked for, and its × beside the … gives the platform's back. An empty

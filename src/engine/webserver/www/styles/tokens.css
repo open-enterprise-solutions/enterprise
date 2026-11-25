@@ -89,9 +89,6 @@
 
 	/* What stands on a coloured fill - a message's mark, the offline strip. */
 	--oes-on-colour: #ffffff;
-	/* A cell's fill named alone is read with the light theme's ink, whatever the theme: the author chose it against that
-	   one (control.js onFill, rows.js). A control's colour named alone gets its kind's light side (themedPair). */
-	--oes-paper-text: #222222;
 	/* The light a command bar is lit by, from the top down - the thin client's: half the light it was lit by, its
 	   flat form bar and its lit one met halfway (2026-11-13). */
 	--oes-bar-shine-top: rgb(255 255 255 / 0.25);
@@ -112,8 +109,9 @@
 /* THE DARK THEME - the same palette, the window dark and the ink light (src/window/theme.js sets data-theme from the
    person's choice, or from the machine's own when they chose the system's). Every colour our stylesheets paint with is
    one of the tokens above, and the grid's own colours are laid over with them (form.css); Web Awesome's components
-   follow its wa-dark class. A colour a form names for itself stays what it named. On the screen alone: paper is
-   white, and a printout keeps the light ink. */
+   follow its wa-dark class. A colour a form or a row names for itself was chosen in the light theme: here it is
+   carried, its lightness turned over and its hue kept (control.js themed, the thin client's ibStyle::Get). On the
+   screen alone: paper is white, and a printout keeps the light ink. */
 @media screen {
 	:root[data-theme="dark"] {
 		color-scheme: dark;

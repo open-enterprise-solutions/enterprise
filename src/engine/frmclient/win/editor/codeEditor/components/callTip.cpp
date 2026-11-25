@@ -23,7 +23,8 @@ inline int RoundXYPosition(float xyPos) {
 // A colour of the platform style, in the look in force (deskgui/univ/theme/lunaTheme.cpp asks it the same way).
 static wxColour StyleColour(ibStyleItem item)
 {
-	return typeConv::ColourToWxColour(std::get<ibColour>(ibStyle::Platform().Get(item, wxSystemSettings::GetAppearance().IsDark())));
+	return typeConv::ColourToWxColour(std::get<ibColour>(ibStyle::Platform().Get(item,
+		wxSystemSettings::GetAppearance().IsDark() ? ibStyleLook::Dark : ibStyleLook::Light)));
 }
 
 ibCallTip::ibCallTip(ibStyledTextCtrl* owner)

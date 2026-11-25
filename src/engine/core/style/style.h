@@ -55,13 +55,21 @@ private:
 	std::map<ibStyleItem, ibStyleValue> m_values;
 };
 
+// The two looks a style holds a set for; the person's theme says which is in force.
+enum class ibStyleLook { Light, Dark };
+
 class CORE_API ibStyle {
 public:
 
 	// The value of the item in the look asked for: this style's, else the platform's. Every item of the list has one;
 	// an item that is none of the list's, an unset colour. The reference holds until this style's set changes; the
 	// platform's, for good.
-	const ibStyleValue& Get(ibStyleItem item, bool dark) const;
+	const ibStyleValue& Get(ibStyleItem item, ibStyleLook look) const;
+	// …and an author's colour, chosen in the light look, as the look asked for paints it: the light look's, itself; the
+	// dark look's, its lightness carried from the light look's form ground and ink onto the dark look's (in OKLab, where
+	// lightness reads evenly), its hue kept, its chroma cut to what sRGB holds - the author's white about the dark look's
+	// ground, a yellow a dark olive, a dark green ink a light one, a navy a pale blue. No colour, none.
+	ibColour Get(const ibColour& colour, ibStyleLook look) const;
 
 	// THE PLATFORM'S STYLE - a value for every item in both looks; the default of every other. Never torn down: a
 	// client may ask it while the process ends.

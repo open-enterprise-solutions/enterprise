@@ -55,13 +55,14 @@ bool IsDark()
 // A colour of the style, in that look.
 wxColour StyleColour(ibStyleItem item)
 {
-	return typeConv::ColourToWxColour(std::get<ibColour>(ibStyle::Platform().Get(item, IsDark())));
+	return typeConv::ColourToWxColour(std::get<ibColour>(ibStyle::Platform().Get(item, IsDark() ? ibStyleLook::Dark : ibStyleLook::Light)));
 }
 
 // …one of a list's: an active caption's top (0) and its bottom (1).
 wxColour StyleColour(ibStyleItem item, size_t at)
 {
-	const std::vector<ibColour>& colours = std::get<std::vector<ibColour>>(ibStyle::Platform().Get(item, IsDark()));
+	const std::vector<ibColour>& colours = std::get<std::vector<ibColour>>(ibStyle::Platform().Get(item,
+		IsDark() ? ibStyleLook::Dark : ibStyleLook::Light));
 	return typeConv::ColourToWxColour(colours[std::min(at, colours.size() - 1)]);
 }
 

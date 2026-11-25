@@ -417,7 +417,7 @@ ibDataViewColumnGroup* ibValueModelTableBox::GetColumnHolder() const
 
 wxColour ibValueModelTableBox::GetPlatformBackground() const
 {
-	return typeConv::ColourToWxColour(std::get<ibColour>(ibStyle::Platform().Get(ibStyleItem::FieldBackground, false)));
+	return typeConv::ColourToWxColour(std::get<ibColour>(ibStyle::Platform().Get(ibStyleItem::FieldBackground, ibStyleLook::Light)));
 }
 
 void ibValueModelTableBox::SelectRow(long long handle)

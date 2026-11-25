@@ -32,7 +32,8 @@
 // pops up takes them as it is made.
 static wxColour StyleColour(ibStyleItem item)
 {
-	return typeConv::ColourToWxColour(std::get<ibColour>(ibStyle::Platform().Get(item, wxSystemSettings::GetAppearance().IsDark())));
+	return typeConv::ColourToWxColour(std::get<ibColour>(ibStyle::Platform().Get(item,
+		wxSystemSettings::GetAppearance().IsDark() ? ibStyleLook::Dark : ibStyleLook::Light)));
 }
 
 // A link's picture as an icon — what a link draws.

@@ -37,7 +37,7 @@ ibFontColorSettings::ibFontColorSettings()
 
 	// The light look's: every kind on the one paper colour, its content colour — a field's, a list's (it was a cream of
 	// its own: "the cream gives a feeling of dirt", Max, 2026-11-12); what tells them apart is the ink.
-	const wxColour paper = typeConv::ColourToWxColour(std::get<ibColour>(ibStyle::Platform().Get(ibStyleItem::FieldBackground, false)));
+	const wxColour paper = typeConv::ColourToWxColour(std::get<ibColour>(ibStyle::Platform().Get(ibStyleItem::FieldBackground, ibStyleLook::Light)));
 	m_colors[DisplayItem_Default] = { wxColour(0x00, 0x00, 0x00), paper };
 	m_colors[DisplayItem_Comment] = { wxColour(0x00, 0x80, 0x00), paper };
 	m_colors[DisplayItem_Preprocessor] = { wxColour(0x80, 0x00, 0x00), paper };

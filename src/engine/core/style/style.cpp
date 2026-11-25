@@ -1,5 +1,7 @@
 #include "style.h"
 
+#include <algorithm>
+#include <cmath>
 #include <initializer_list>
 #include <memory>
 #include <type_traits>
@@ -153,8 +155,9 @@ bool ibStyleValues::WriteNode(ibDataValue& value) const
 	return true;
 }
 
-const ibStyleValue& ibStyle::Get(ibStyleItem item, bool dark) const
+const ibStyleValue& ibStyle::Get(ibStyleItem item, ibStyleLook look) const
 {
+	const bool dark = look == ibStyleLook::Dark;
 	if (const ibStyleValue* const own = (dark ? m_dark : m_light).Find(item))
 		return *own;
 	const ibStyle& platform = Platform();
@@ -162,6 +165,100 @@ const ibStyleValue& ibStyle::Get(ibStyleItem item, bool dark) const
 		return *given;
 	static const ibStyleValue* const s_none = new ibStyleValue();   // never torn down, as the platform's
 	return *s_none;
+}
+
+namespace {
+
+// OKLAB (Björn Ottosson, 2020) - a colour as its lightness L, from 0 to 1, and two opposing axes: what an eye reads as
+// equally lighter is an equal step of L, so a lightness carried from one look to the other keeps how far apart two
+// colours read.
+struct OkLab { double l, a, b; };
+
+double LinearOf(unsigned char channel)
+{
+	const double c = channel / 255.0;
+	return c <= 0.04045 ? c / 12.92 : std::pow((c + 0.055) / 1.055, 2.4);
+}
+
+double GammaOf(double linear)
+{
+	return linear <= 0.0031308 ? 12.92 * linear : 1.055 * std::pow(linear, 1 / 2.4) - 0.055;
+}
+
+OkLab OkLabOf(const ibColour& colour)
+{
+	const double r = LinearOf(colour.m_red), g = LinearOf(colour.m_green), b = LinearOf(colour.m_blue);
+	const double l = std::cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b);
+	const double m = std::cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);
+	const double s = std::cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
+	return { 0.2104542553 * l + 0.7936177850 * m - 0.0040720468 * s,
+		1.9779984951 * l - 2.4285922050 * m + 0.4505937099 * s,
+		0.0259040371 * l + 0.7827717662 * m - 0.8086757660 * s };
+}
+
+// …and back, in linear sRGB; a colour sRGB does not hold has a channel out of 0..1.
+void LinearOf(const OkLab& lab, double& r, double& g, double& b)
+{
+	const double l = std::pow(lab.l + 0.3963377774 * lab.a + 0.2158037573 * lab.b, 3);
+	const double m = std::pow(lab.l - 0.1055613458 * lab.a - 0.0638541728 * lab.b, 3);
+	const double s = std::pow(lab.l - 0.0894841775 * lab.a - 1.2914855480 * lab.b, 3);
+	r = 4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s;
+	g = -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s;
+	b = -0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s;
+}
+
+bool InGamut(const OkLab& lab)
+{
+	double r, g, b;
+	LinearOf(lab, r, g, b);
+	constexpr double e = 1e-7;
+	return r >= -e && r <= 1 + e && g >= -e && g <= 1 + e && b >= -e && b <= 1 + e;
+}
+
+unsigned char ChannelOf(double linear)
+{
+	return static_cast<unsigned char>(std::lround(std::clamp(GammaOf(std::clamp(linear, 0.0, 1.0)), 0.0, 1.0) * 255));
+}
+
+} // namespace
+
+ibColour ibStyle::Get(const ibColour& colour, ibStyleLook look) const
+{
+	if (!colour.IsOk() || look == ibStyleLook::Light)
+		return colour;
+
+	// The lightness, from the light look's form ground and ink onto the dark look's: the light ground the dark one, the
+	// light ink the dark one, in between and on the ground's side along the same line. Past the ink, the rest of the way
+	// to the light look's end (black, under a dark ink) onto the rest of it to the dark look's (white) - a navy ink a pale
+	// blue, black white, not all of them the one white.
+	const auto lightness = [this](ibStyleItem item, ibStyleLook in) { return OkLabOf(std::get<ibColour>(Get(item, in))).l; };
+	const double lightGround = lightness(ibStyleItem::FormBackground, ibStyleLook::Light);
+	const double lightInk = lightness(ibStyleItem::FormText, ibStyleLook::Light);
+	const double darkGround = lightness(ibStyleItem::FormBackground, ibStyleLook::Dark);
+	const double darkInk = lightness(ibStyleItem::FormText, ibStyleLook::Dark);
+	const double lightEnd = lightInk < lightGround ? 0 : 1, darkEnd = darkInk > darkGround ? 1 : 0;
+
+	OkLab lab = OkLabOf(colour);
+	const double past = lightEnd - lightInk;
+	const double span = lightInk - lightGround;   // none in a style whose form ink is as light as its ground: the ground
+	lab.l = (lab.l - lightInk) * past > 0 ? darkInk + (lab.l - lightInk) / past * (darkEnd - darkInk)
+		: span != 0 ? darkGround + (lab.l - lightGround) * (darkInk - darkGround) / span : darkGround;
+	lab.l = std::clamp(lab.l, 0.0, 1.0);
+
+	// The hue kept, the chroma as much of it as sRGB holds at that lightness.
+	if (!InGamut(lab)) {
+		double held = 0, lost = 1;
+		for (int step = 0; step < 24; step++) {
+			const double tried = (held + lost) / 2;
+			(InGamut({ lab.l, lab.a * tried, lab.b * tried }) ? held : lost) = tried;
+		}
+		lab.a *= held;
+		lab.b *= held;
+	}
+
+	double r, g, b;
+	LinearOf(lab, r, g, b);
+	return ibColour(ChannelOf(r), ChannelOf(g), ChannelOf(b), colour.m_alpha);
 }
 
 bool ibStyle::ReadNode(const ibDataValue& value)

@@ -26,7 +26,12 @@ appended to its kind's run.
   accent and button colours, and the browser's the same; the items it had no colour for, and the dark look, are new.
 - **A form's colour left empty is the platform's**: the form text in the look in force, and the ground the kind's own
   — the form its background, a field its well, a table the content, a button its face, a label and a group the surface
-  under them. The server keeps no colour for it; a colour the author chose stays theirs.
+  under them. The server keeps no colour for it.
+- **A colour the author chose is chosen in the light look**, and the dark look carries it there (`ibStyle::Get` of a
+  colour): its OKLab lightness moved from the light look's form ground and ink onto the dark look's — past the ink, the
+  rest of the way to black onto the rest of it to white — its hue kept, its chroma cut to what sRGB holds. White
+  becomes about the dark ground, a yellow a dark olive, a navy ink a pale blue. A form's colours and a table row's, on
+  both clients; a sheet's paper is the same in every look.
 - **The desktop theme paints from it.** Luna asks the platform's style for every colour it paints with, in the look
   in force (wx's appearance — the theme chosen in the client, or the machine's): one table of colours, two looks of
   one theme, not a dark theme beside a light one.

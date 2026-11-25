@@ -4,8 +4,9 @@
 //
 //   node tools/pictures/preview.js [page.html]     writes the page (by default into the temporary folder) and says where
 //
-// The browser draws an SVG more fully than the engine's NanoSVG: no <text> (letters are paths), no CSS, no filters.
-// What is not drawn in the engine is not drawn here either only as long as a drawing keeps to that.
+// The browser draws an SVG more fully than the engine's lunasvg: no filters there (a badge's gap is a mask, which both
+// draw), and letters are paths - a font differs from machine to machine. What is not drawn in the engine is not drawn
+// here either only as long as a drawing keeps to that.
 //
 // At the end, the drawings that stand in more than one place under different names - one act, one picture, so a
 // change made in one of them has to be made in the others.

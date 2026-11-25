@@ -214,8 +214,8 @@ ibVisualHostClient::ibVisualHostClient(ibFrontendMainFrame& frame, wxWindow* par
 	// ⭐ A FORM REPAINTED IS A FORM UPDATED WHOLE (Max, 2026-11-24) — the look changed: its windows took the colours in
 	// force as they were made, and what is held of each control is its node without the State (m_drawn), drawn again from
 	// which a command bar comes out empty and a table reads its rows anew. Its shape forgotten, the next draw builds it
-	// anew from the view (Draw): the shown tab's at once (ibFrontendMainFrame::OnSysColourChanged), the studio's form
-	// at once (its editor's), another tab's when it comes up.
+	// anew from the view (Draw): every shown tab's at once (ibFrontendMainFrame::OnSysColourChanged), the studio's form
+	// at once (its editor's), a tab not shown when it comes up.
 	Bind(wxEVT_SYS_COLOUR_CHANGED, [this](wxSysColourChangedEvent& event) {
 		m_shape.clear();
 		event.Skip();
@@ -400,10 +400,11 @@ void ibVisualHostClient::UpdateForm(const ibProtocolNode& form)
 
 	// The form's colours as a control's are (the platform's own the theme's, in the look in force), its kind's ground the
 	// style's form background — onto its command bar as well (the desktop's UpdateFormLayers).
-	const auto ground = [](bool dark) {
-		return typeConv::ColourToWxColour(std::get<ibColour>(ibStyle::Platform().Get(ibStyleItem::FormBackground, dark)));
+	const auto ground = [](ibStyleLook look) {
+		return typeConv::ColourToWxColour(std::get<ibColour>(ibStyle::Platform().Get(ibStyleItem::FormBackground, look)));
 	};
-	const wxColour platform = ground(false), themed = ground(wxSystemSettings::GetAppearance().IsDark());
+	const wxColour platform = ground(ibStyleLook::Light),
+		themed = ground(wxSystemSettings::GetAppearance().IsDark() ? ibStyleLook::Dark : ibStyleLook::Light);
 	ibValueFrame::ApplyLook(GetBackgroundWindow(), form, platform, themed);
 	ibValueFrame::ApplyLook(m_commandBar->GetWindow(), form, platform, themed);
 }

@@ -16,7 +16,7 @@ static const wxColour kFormerPaper(0xFA, 0xF7, 0xF0);
 // cream gives a feeling of dirt", Max, 2026-11-12); what tells them apart is the ink, chosen against it.
 static wxColour Paper()
 {
-	return typeConv::ColourToWxColour(std::get<ibColour>(ibStyle::Platform().Get(ibStyleItem::FieldBackground, false)));
+	return typeConv::ColourToWxColour(std::get<ibColour>(ibStyle::Platform().Get(ibStyleItem::FieldBackground, ibStyleLook::Light)));
 }
 
 // The set of a look: the dark one's or the light one's; for System the look in force's — the dark one's in the dark (the

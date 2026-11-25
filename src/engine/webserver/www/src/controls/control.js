@@ -308,7 +308,8 @@ const defaultText = 'rgb(63,92,119)';
  * A control's two colours as they are painted, as the form writes them: empty — the platform's, its author picked none
  * (Max, 2026-11-24); a kind with no colours (a sizer) names neither and is left to the stylesheet. Both the platform's:
  * the theme's (styles/tokens.css). One of them the author's: the author chose it against the light theme's other side,
- * so that side is what it gets - the light theme's ink, or its kind's ground - and the pair reads as the author saw it.
+ * so that side is what it gets - the light theme's ink, or its kind's ground - and the pair reads as the author saw it;
+ * in the dark theme the pair is carried there whole (themed).
  * @param {string | undefined} foreground @param {string | undefined} background
  * @param {[string, string]} platform its kind's background in the light theme, and the theme's for it
  * (Control.platformBackground)
@@ -321,20 +322,98 @@ function themedPair(foreground, background, [platformBackground, themedBackgroun
 	const fill = colour(background);
 	if (text === '' && fill === '')
 		return ['var(--oes-form-text)', themedBackground];
-	return [text || defaultText, fill || platformBackground];
+	return [themed(text || defaultText), themed(fill || platformBackground)];
 }
 
 /**
- * A cell's text colour and fill, either perhaps unnamed. A fill named with no ink is read with the light theme's dark
- * ink, in any theme: the author chose it against that one, and the theme's light ink on yellow is not read. Ink named
- * alone stays alone: the fill under it is the row's - the current row, the current cell - and papering it would break
- * them. (A sheet's cells need none of it: its paper is the same in every theme.)
+ * A cell's text colour and fill, either perhaps unnamed, as each theme paints them (themed): a fill named alone is read
+ * with the theme's ink, which stands on it in either theme once the fill is carried. Ink named alone stays alone: the
+ * fill under it is the row's - the current row, the current cell - and papering it would break them. (A sheet's cells
+ * need none of it: its paper is the same in every theme.)
  * @param {string} text @param {string} fill
  * @returns {[string, string]}
  */
 export function onFill(text, fill) {
-	return [text || (fill ? 'var(--oes-paper-text)' : ''), fill];
+	return [themed(text), themed(fill)];
 }
+
+/**
+ * An author's colour, chosen in the light theme, as each theme paints it: itself in the light, carried in the dark
+ * (inDark) - `light-dark()` follows the theme in force, so another chosen repaints it with nothing read again. '' stays.
+ * @param {string} rgb `rgb(r,g,b)`, or ''
+ */
+function themed(rgb) {
+	const channels = /^rgb\((\d+),(\d+),(\d+)\)$/.exec(rgb);
+	return channels ? `light-dark(${rgb}, rgb(${inDark(channels.slice(1).map(Number)).join(',')}))` : rgb;
+}
+
+/**
+ * An author's colour as the dark theme paints it - the thin client's sums (ibStyle::Get of a colour, core/style/style.cpp):
+ * its lightness carried in OKLab from the light theme's form ground and ink onto the dark's (past the ink, the rest of
+ * the way to black onto the rest of it to white), its hue kept, its chroma cut to what sRGB holds.
+ * @param {number[]} rgb @returns {number[]}
+ */
+function inDark(rgb) {
+	const [l, a, b] = okLabOf(rgb);
+	const lightness = Math.min(Math.max(l < lightInk ? darkInk + (lightInk - l) / lightInk * (1 - darkInk)
+		: darkGround + (l - lightGround) * (darkInk - darkGround) / (lightInk - lightGround), 0), 1);
+	let held = 1;
+	if (!inGamut([lightness, a, b])) {
+		held = 0;
+		let lost = 1;
+		for (let step = 0; step < 24; step++) {
+			const tried = (held + lost) / 2;
+			if (inGamut([lightness, a * tried, b * tried]))
+				held = tried;
+			else
+				lost = tried;
+		}
+	}
+	return linearRgbOf([lightness, a * held, b * held]).map(channelOf);
+}
+
+/** A channel, 0..255, as linear light. @param {number} channel */
+function linearOf(channel) {
+	const c = channel / 255;
+	return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+}
+
+/** …and linear light, held to 0..1, as a channel. @param {number} linear */
+function channelOf(linear) {
+	const x = Math.min(Math.max(linear, 0), 1);
+	return Math.round(Math.min(Math.max(x <= 0.0031308 ? 12.92 * x : 1.055 * x ** (1 / 2.4) - 0.055, 0), 1) * 255);
+}
+
+/** OKLab (Björn Ottosson): the lightness, 0..1, and two opposing axes. @param {number[]} rgb @returns {number[]} */
+function okLabOf(rgb) {
+	const [r, g, b] = rgb.map(linearOf);
+	const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b);
+	const m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);
+	const s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
+	return [0.2104542553 * l + 0.7936177850 * m - 0.0040720468 * s,
+		1.9779984951 * l - 2.4285922050 * m + 0.4505937099 * s,
+		0.0259040371 * l + 0.7827717662 * m - 0.8086757660 * s];
+}
+
+/** …and back, as linear sRGB - a channel out of 0..1 where sRGB does not hold it. @param {number[]} lab */
+function linearRgbOf([lightness, a, b]) {
+	const l = (lightness + 0.3963377774 * a + 0.2158037573 * b) ** 3;
+	const m = (lightness - 0.1055613458 * a - 0.0638541728 * b) ** 3;
+	const s = (lightness - 0.0894841775 * a - 1.2914855480 * b) ** 3;
+	return [4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s,
+		-1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s,
+		-0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s];
+}
+
+/** @param {number[]} lab */
+function inGamut(lab) {
+	return linearRgbOf(lab).every((channel) => channel >= -1e-7 && channel <= 1 + 1e-7);
+}
+
+// THE PLATFORM STYLE'S FORM GROUND AND INK, light and dark (core/style/style.cpp; styles/tokens.css --oes-form-bg and
+// --oes-form-text) - their lightness, what an author's colour is carried between (inDark).
+const [lightGround, lightInk, darkGround, darkInk] = [[238, 242, 246], [63, 92, 119], [34, 38, 43], [201, 214, 226]]
+	.map((rgb) => okLabOf(rgb)[0]);
 
 /** A colour's text, `r,g,b` as a form writes it; '' when it names none. @param {string | undefined} text */
 export function colour(text) {

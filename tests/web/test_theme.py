@@ -108,7 +108,7 @@ class TheTheme(PageTest):
 
 class AControlsOwnLook(PageTest):
     """The platform's own look of a control - a colour the form leaves empty, its author picked none - is painted with
-    the theme's; a colour the author chose stays theirs."""
+    the theme's; a colour the author chose is theirs in the light theme, and in the dark carried there."""
 
     def look(self, theme):
         # Empty - the platform's: a field's own fill is white in the light theme.
@@ -122,9 +122,11 @@ class AControlsOwnLook(PageTest):
     def test_the_platforms_is_dark_in_the_dark(self):
         platform, fill, ink = self.look(DARK)
         self.assertEqual(platform, ['rgb(201, 214, 226)', 'rgb(36, 39, 44)'])
-        # One side the author's: the other is the light theme's, so the pair reads as they chose it.
-        self.assertEqual(fill, ['rgb(63, 92, 119)', 'rgb(200, 30, 30)'])
-        self.assertEqual(ink, ['rgb(0, 0, 128)', 'rgb(255, 255, 255)'])
+        # One side the author's: the other is the light theme's, and the pair is carried into the dark whole - each
+        # side's lightness turned over, its hue kept (the thin client's ibStyle::Get): the red fill a light red under
+        # the light ink carried, the navy ink a pale blue on the field's white carried.
+        self.assertEqual(fill, ['rgb(184, 216, 248)', 'rgb(255, 151, 139)'])
+        self.assertEqual(ink, ['rgb(218, 230, 255)', 'rgb(26, 26, 26)'])
 
     def test_the_field_itself_is_the_themes(self):
         # What a person types into is Web Awesome's own part, painted by its class - the form's colours stand on the
@@ -155,25 +157,31 @@ class AControlsOwnLook(PageTest):
 
 
 class ACellsOwnColour(PageTest):
-    """A sheet's or a table's cell that names one colour gets the light theme's other side, in any theme."""
+    """A table's cell paints the colours its row names as the author chose them in the light theme, and in the dark
+    carried there - the lightness turned over, the hue kept (control.js themed). One named alone stays alone: a fill
+    takes the theme's ink, ink the row's own fill - current, hovered, alternate."""
 
-    def test_one_side_named_is_paired_with_the_paper(self):
-        page = self.start(scenario(), before=kept(DARK))
-        pairs = page.evaluate("""async () => {
-            const { onFill } = await import('/pub/src/controls/control.js');
+    def paint(self, theme):
+        page = self.start(scenario(), before=kept(theme))
+        return page.evaluate("""async () => {
             const { recordOf } = await import('/pub/src/table/rows.js');
-            const row = recordOf({ NodeId: 1, NodeChildren: [{ NodeId: 7, Text: 'x', BackgroundColour: '255,255,0' }] });
+            const filled = recordOf({ NodeId: 1, NodeChildren: [{ NodeId: 7, Text: 'x', BackgroundColour: '255,255,0' }] });
             const inked = recordOf({ NodeId: 1, NodeChildren: [{ NodeId: 7, Text: 'x', TextColour: '200,0,0' }] });
-            return [onFill('', 'rgb(255,255,0)'), onFill('rgb(0,0,128)', ''), onFill('', ''),
-                    onFill('rgb(1,2,3)', 'rgb(4,5,6)'), [row.s7.color, row.s7.backgroundColor],
-                    [inked.s7.color, inked.s7.backgroundColor ?? null]]; }""")
-        self.assertEqual(pairs[4], ['var(--oes-paper-text)', 'rgb(255,255,0)'])
-        # Ink alone stays alone: the row's own fill - current, hovered, alternate - shows under it.
-        self.assertEqual(pairs[5], ['rgb(200,0,0)', None])
-        self.assertEqual(pairs[:4], [['var(--oes-paper-text)', 'rgb(255,255,0)'], ['rgb(0,0,128)', ''],
-                                 ['', ''], ['rgb(1,2,3)', 'rgb(4,5,6)']])
-        self.assertEqual(page.evaluate("getComputedStyle(document.documentElement).getPropertyValue('--oes-paper-text').trim()"),
-                         '#222222')
+            const painted = (colour) => {
+                const probe = document.body.appendChild(document.createElement('i'));
+                probe.style.color = colour;
+                const rgb = getComputedStyle(probe).color;
+                probe.remove();
+                return rgb; };
+            return [painted(filled.s7.backgroundColor), filled.s7.color ?? null,
+                    painted(inked.s7.color), inked.s7.backgroundColor ?? null]; }""")
+
+    def test_is_the_authors_in_the_light(self):
+        self.assertEqual(self.paint(LIGHT), ['rgb(255, 255, 0)', None, 'rgb(200, 0, 0)', None])
+
+    def test_is_carried_into_the_dark(self):
+        # The yellow fill a dark olive under the theme's light ink, the red ink a light red.
+        self.assertEqual(self.paint(DARK), ['rgb(37, 37, 0)', None, 'rgb(255, 160, 145)', None])
 
 
 if __name__ == '__main__':

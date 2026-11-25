@@ -30,9 +30,15 @@ std::map<wxString, ibValueFrame* (*)(ibVisualHostClient&, long long)>& Types()
 }
 
 // A colour of the platform style, in a look (deskgui's theme asks it the same way, lunaTheme.cpp).
-wxColour StyleColour(ibStyleItem item, bool dark)
+wxColour StyleColour(ibStyleItem item, ibStyleLook look)
 {
-	return typeConv::ColourToWxColour(std::get<ibColour>(ibStyle::Platform().Get(item, dark)));
+	return typeConv::ColourToWxColour(std::get<ibColour>(ibStyle::Platform().Get(item, look)));
+}
+
+// …and an author's, chosen in the light look, as that look paints it.
+wxColour StyleColour(const wxColour& colour, ibStyleLook look)
+{
+	return typeConv::ColourToWxColour(ibStyle::Platform().Get(typeConv::WxColourToColour(colour), look));
 }
 
 } // namespace
@@ -196,17 +202,21 @@ void ibValueFrame::ApplyLook(wxWindow* window, const ibProtocolNode& node, const
 	// surface under them (ibLunaColourScheme::GetBackground; Max: "an empty background - each with its own").
 	// One of them the author's: the author chose it against the light look's other side, so that side is what it gets -
 	// the light look's ink, or its ground for the kind (`platformBackground`) - and the pair reads as the author saw it.
+	// In the dark look that pair is carried there whole (ibStyle::Get of a colour): each side's lightness turned over, its
+	// hue kept - a light ground the dark look's, a dark ink a light one; a bright yellow ground no longer stands lit in a
+	// dark form (Max, 2026-11-25).
 	// The web client's the same (control.js, themedPair; a kind's pair, its platformBackground).
 	const wxString foreground = node.GetString(ibProtocol::ibForm::ibProperty::ForegroundColour);
 	const wxString background = node.GetString(ibProtocol::ibForm::ibProperty::BackgroundColour);
 	const wxColour text = !foreground.IsEmpty() ? typeConv::StringToColour(foreground) : wxNullColour;
 	const wxColour ground = !background.IsEmpty() ? typeConv::StringToColour(background) : wxNullColour;
+	const ibStyleLook look = wxSystemSettings::GetAppearance().IsDark() ? ibStyleLook::Dark : ibStyleLook::Light;
 	if (!text.IsOk() && !ground.IsOk()) {
-		window->SetForegroundColour(StyleColour(ibStyleItem::FormText, wxSystemSettings::GetAppearance().IsDark()));
+		window->SetForegroundColour(StyleColour(ibStyleItem::FormText, look));
 		window->SetBackgroundColour(themedBackground);
 		return;
 	}
-	window->SetForegroundColour(text.IsOk() ? text : StyleColour(ibStyleItem::FormText, false));
-	window->SetBackgroundColour(ground.IsOk() ? ground
-		: platformBackground.IsOk() ? platformBackground : StyleColour(ibStyleItem::FormBackground, false));
+	window->SetForegroundColour(StyleColour(text.IsOk() ? text : StyleColour(ibStyleItem::FormText, ibStyleLook::Light), look));
+	window->SetBackgroundColour(StyleColour(ground.IsOk() ? ground : platformBackground.IsOk() ? platformBackground
+		: StyleColour(ibStyleItem::FormBackground, ibStyleLook::Light), look));
 }

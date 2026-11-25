@@ -79,6 +79,11 @@ public:
 	// what a view reads as it is made may ride there.
 	void SetOpeningState(const ibProtocolNode& state) { m_openingState = state; }
 	const ibProtocolNode& GetOpeningState() const { return m_openingState; }
+	// The View it was drawn with last — the frame's, while it was the active tab (ibFrontendMainFrame::DrawView): what it
+	// is drawn again from, whole, when the look changes while it is shown beside the active one in a book split in two
+	// (ibFrontendMainFrame::OnSysColourChanged).
+	void SetDrawnView(const ibProtocolNode& view) { m_drawnView = view; }
+	const ibProtocolNode& GetDrawnView() const { return m_drawnView; }
 
 	// A TAB'S DOCUMENT, BY ITS KIND — the one registered for that kind; a form's for a kind none is registered for, and for
 	// a form's tab, which names no kind.
@@ -97,6 +102,7 @@ private:
 
 	const long long m_tabId;
 	ibProtocolNode m_openingState;
+	ibProtocolNode m_drawnView;
 };
 
 // A kind of tab and the document made for it — at the bottom of the document's source, as a value type is registered

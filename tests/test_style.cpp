@@ -4,6 +4,7 @@
 
 #include <gtest/gtest.h>
 
+#include <cstdlib>
 #include <initializer_list>
 #include <memory>
 #include <set>
@@ -104,11 +105,11 @@ TEST(Style, ThePlatformsHasEveryItemInBothLooks) {
 		{ ibStyleItem::Shelf, ibColour(0xE0, 0xD8, 0xCC) },
 	};
 	for (const auto& [item, colour] : kept)
-		EXPECT_EQ(std::get<ibColour>(platform.Get(item, false)), colour) << ibStyleItemInfo::Of(item)->m_name;
-	EXPECT_NE(std::get<ibColour>(platform.Get(ibStyleItem::FormBackground, true)), ibColour(0xEE, 0xF2, 0xF6));
-	EXPECT_EQ(std::get<std::vector<ibColour>>(platform.Get(ibStyleItem::ReportGroup, false)).size(), 3u);
+		EXPECT_EQ(std::get<ibColour>(platform.Get(item, ibStyleLook::Light)), colour) << ibStyleItemInfo::Of(item)->m_name;
+	EXPECT_NE(std::get<ibColour>(platform.Get(ibStyleItem::FormBackground, ibStyleLook::Dark)), ibColour(0xEE, 0xF2, 0xF6));
+	EXPECT_EQ(std::get<std::vector<ibColour>>(platform.Get(ibStyleItem::ReportGroup, ibStyleLook::Light)).size(), 3u);
 	// …an active caption, lit from the top: its two, the light one first
-	EXPECT_EQ(std::get<std::vector<ibColour>>(platform.Get(ibStyleItem::Caption, false)),
+	EXPECT_EQ(std::get<std::vector<ibColour>>(platform.Get(ibStyleItem::Caption, ibStyleLook::Light)),
 		(std::vector<ibColour>{ ibColour(0x5A, 0x7B, 0x95), ibColour(0x3F, 0x5C, 0x77) }));
 }
 
@@ -116,11 +117,40 @@ TEST(Style, ThePlatformsHasEveryItemInBothLooks) {
 TEST(Style, AStyleLiesOverThePlatforms) {
 	ibStyle own;
 	ASSERT_TRUE(own.m_dark.Set(ibStyleItem::Accent, ibColour(1, 2, 3)));
-	EXPECT_EQ(std::get<ibColour>(own.Get(ibStyleItem::Accent, true)), ibColour(1, 2, 3));
-	EXPECT_EQ(own.Get(ibStyleItem::Accent, false), ibStyle::Platform().Get(ibStyleItem::Accent, false));
-	EXPECT_EQ(own.Get(ibStyleItem::FormText, true), ibStyle::Platform().Get(ibStyleItem::FormText, true));
+	EXPECT_EQ(std::get<ibColour>(own.Get(ibStyleItem::Accent, ibStyleLook::Dark)), ibColour(1, 2, 3));
+	EXPECT_EQ(own.Get(ibStyleItem::Accent, ibStyleLook::Light), ibStyle::Platform().Get(ibStyleItem::Accent, ibStyleLook::Light));
+	EXPECT_EQ(own.Get(ibStyleItem::FormText, ibStyleLook::Dark), ibStyle::Platform().Get(ibStyleItem::FormText, ibStyleLook::Dark));
 	own.m_dark.Remove(ibStyleItem::Accent);
-	EXPECT_EQ(own.Get(ibStyleItem::Accent, true), ibStyle::Platform().Get(ibStyleItem::Accent, true));
+	EXPECT_EQ(own.Get(ibStyleItem::Accent, ibStyleLook::Dark), ibStyle::Platform().Get(ibStyleItem::Accent, ibStyleLook::Dark));
+}
+
+// An author's colour, chosen in the light look, is itself there; in the dark its lightness is carried from the light
+// look's form ground and ink onto the dark look's, its hue kept - within a step of rounding.
+TEST(Style, AnAuthorsColourIsCarriedIntoTheDarkLook) {
+	const ibStyle& platform = ibStyle::Platform();
+	const auto within = [](const ibColour& got, const ibColour& expected) {
+		return std::abs(got.m_red - expected.m_red) <= 1 && std::abs(got.m_green - expected.m_green) <= 1
+			&& std::abs(got.m_blue - expected.m_blue) <= 1 && got.m_alpha == expected.m_alpha;
+	};
+	EXPECT_EQ(platform.Get(ibColour(0xFF, 0xFF, 0x00), ibStyleLook::Light), ibColour(0xFF, 0xFF, 0x00));
+	EXPECT_FALSE(platform.Get(ibColour(), ibStyleLook::Dark).IsOk());
+	const std::vector<std::pair<ibColour, ibColour>> carried = {
+		{ ibColour(0xFF, 0xFF, 0xFF), ibColour(26, 26, 26) },       // white: below the dark look's ground
+		{ ibColour(0xEE, 0xF2, 0xF6), ibColour(35, 38, 41) },       // the light look's form ground: about the dark's
+		{ ibColour(0x3F, 0x5C, 0x77), ibColour(184, 216, 248) },    // the light look's form ink: about the dark's
+		{ ibColour(0xFF, 0xFF, 0x00), ibColour(37, 37, 0) },        // yellow: a dark olive
+		{ ibColour(0x00, 0x80, 0x00), ibColour(115, 218, 108) },    // dark green ink: a light green
+		{ ibColour(0x00, 0x00, 0x00), ibColour(255, 255, 255) },    // black: white
+		{ ibColour(0x00, 0x00, 0x80), ibColour(218, 230, 255) },    // navy, darker than the ink: a pale blue, not white
+		{ ibColour(0x80, 0x00, 0x00), ibColour(255, 207, 199) },    // maroon: a pale red
+		{ ibColour(0xC0, 0x39, 0x2B), ibColour(255, 146, 130) },    // red ink: a light red
+	};
+	for (const auto& [colour, expected] : carried) {
+		const ibColour got = platform.Get(colour, ibStyleLook::Dark);
+		EXPECT_TRUE(within(got, expected)) << int(colour.m_red) << ',' << int(colour.m_green) << ',' << int(colour.m_blue)
+			<< " -> " << int(got.m_red) << ',' << int(got.m_green) << ',' << int(got.m_blue);
+	}
+	EXPECT_EQ(platform.Get(ibColour(0xFF, 0xFF, 0xFF, 0x80), ibStyleLook::Dark).m_alpha, 0x80);
 }
 
 // An item takes a value of its own kind and no other.

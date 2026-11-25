@@ -80,7 +80,7 @@ wxWindow* ibValueField::GetWindow() const
 
 wxColour ibValueField::GetPlatformBackground() const
 {
-	return typeConv::ColourToWxColour(std::get<ibColour>(ibStyle::Platform().Get(ibStyleItem::FieldBackground, false)));
+	return typeConv::ColourToWxColour(std::get<ibColour>(ibStyle::Platform().Get(ibStyleItem::FieldBackground, ibStyleLook::Light)));
 }
 
 bool ibValueField::SaveEdit(ibViewEdit& edit) const

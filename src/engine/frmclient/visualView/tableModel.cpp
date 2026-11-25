@@ -6,7 +6,9 @@
 #include "tableModel.h"
 
 #include <algorithm>
+#include <wx/settings.h>   // wxSystemSettings::GetAppearance — the look in force (GetAttr)
 
+#include "core/style/style.h"   // ibStyle::Get — a cell's colours in the look in force (GetAttr)
 
 namespace {
 
@@ -140,8 +142,15 @@ bool ibViewTableModel::GetAttr(const ibDataViewItem& item, unsigned int col, ibD
 	if (cell == nullptr)
 		return false;
 
-	// Its look, and a number to the right — unless its look says where it stands.
+	// Its look, and a number to the right — unless its look says where it stands. Its colours, chosen in the light look,
+	// as the look in force paints them (ibStyle::Get, as a control's: ibValueFrame::ApplyLook) — asked as it is drawn,
+	// so a change of the look repaints them.
 	ibDataViewItemAttr look = cell->look;
+	if (look.HasColour() || look.HasBackgroundColour()) {
+		const ibStyleLook inForce = wxSystemSettings::GetAppearance().IsDark() ? ibStyleLook::Dark : ibStyleLook::Light;
+		look.SetColour(ibStyle::Platform().Get(look.GetColour(), inForce));
+		look.SetBackgroundColour(ibStyle::Platform().Get(look.GetBackgroundColour(), inForce));
+	}
 	if (cell->number && !look.HasAlignment())
 		look.SetAlignment(wxALIGN_RIGHT);
 	if (look.IsDefault())

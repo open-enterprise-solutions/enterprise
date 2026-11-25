@@ -1397,7 +1397,8 @@ void ibFrontendMainFrame::DrawView(long long active, const ibProtocolNode& view,
 	// The active tab's view — the one the frame carries, drawn by what the patch changed in it: none in a frame sent
 	// whole; a patch that leaves it as it was changes nothing (a node with no entries) — and a view not built yet is built
 	// all the same: a tab just opened is patched from the view the client kept, another tab's, and two alike leave no View
-	// in the patch. The other tabs keep what was drawn in them last.
+	// in the patch. The other tabs keep what was drawn in them last — and the view they were drawn with.
+	chosen->SetDrawnView(view);
 	chosen->DrawView(view,!patch.IsNode() || patch.Has(ibProtocol::ibFrame::View) ? patch.FindChild(ibProtocol::ibFrame::View) : ibProtocolNode());
 
 	m_drawing = false;
@@ -2259,15 +2260,23 @@ void ibFrontendMainFrame::OnSysColourChanged(wxSysColourChangedEvent& event)
 {
 	// The frame is told first and its windows after it (wxWindow::SendSysColourChangedEvents): the editors' options go
 	// in once each window has taken the theme's colours anew - an editor's own set over the theme's paper, not under it;
-	// and the shown tab's view drawn whole from the frame held, a form's host having forgotten its shape as the event
-	// reached it - built anew in the look in force (ibVisualHostClient). Whole is no patch at all: a node of no entries is
-	// a patch that changed nothing, and a home page's cells would be passed over.
+	// and every tab shown drawn whole from the view it was drawn with last, a form's host having forgotten its shape as
+	// the event reached it - built anew in the look in force (ibVisualHostClient). Every one shown, not the active one
+	// alone: a book split in two shows a tab beside it, which kept the look it was built in (Max, 2026-11-25). A tab not
+	// shown is built anew when it comes up. Whole is no patch at all: a node of no entries is a patch that changed
+	// nothing, and a home page's cells would be passed over.
 	event.Skip();
 	CallAfter([this]() {
 		UpdateEditorOptions();
-		const ibProtocolNode& frame = m_communicator->GetFrame();
-		DrawView(frame.GetInt(ibProtocol::ibFrame::ActiveTab), frame.FindChild(ibProtocol::ibFrame::View),
-			ibProtocolNode().FindChild(ibProtocol::ibFrame::Patch));
+		const ibProtocolNode whole = ibProtocolNode().FindChild(ibProtocol::ibFrame::Patch);
+		m_drawing = true;
+		for (const auto& [tabId, document] : m_documents) {
+			const ibFrontendView* const view = document->GetFirstView();
+			const wxWindow* const frame = view != nullptr ? view->GetFrame() : nullptr;
+			if (frame != nullptr && frame->IsShownOnScreen())
+				document->DrawView(document->GetDrawnView(), whole);
+		}
+		m_drawing = false;
 	});
 }
 
