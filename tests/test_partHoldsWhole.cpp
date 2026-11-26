@@ -12,8 +12,6 @@
 
 #include <gtest/gtest.h>
 
-#include <wx/init.h>
-
 #include "backend/appData.h"
 #include "backend/compiler/compileCode.h"
 #include "backend/compiler/procUnit.h"
@@ -29,6 +27,10 @@
 #include "backend/metaCollection/partial/document.h"
 #include "backend/metaCollection/partial/tabularSection/tabularSection.h"
 #include "core/clsid.h"
+
+// After the engine's headers: on Windows wx/init.h brings windows.h, whose GetForm macro would rename
+// ibValueRecordDataObject::GetForm in them (GetFormW, unresolved at link).
+#include <wx/init.h>
 
 namespace {
 
