@@ -24,6 +24,9 @@ class ibValueButton : public ibValueWindow, public ibFrontendCommandReceiver {
 	//get title
 	virtual ibString GetControlTitle() const { return GetCaption(); }
 
+	// Added in the studio with no command: a fresh form command named after the button, bound — as a field gets an attribute.
+	virtual void OnCreated(ibVisualHost* host, bool firstCreated) override;
+
 	// The caption, the picture and the representation as they come out once the bound command has filled
 	// in what the button leaves unset; hidden when that command no longer resolves, disabled when it
 	// modifies data on a view-only form.

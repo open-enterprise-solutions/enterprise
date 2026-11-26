@@ -1,6 +1,7 @@
 #include "widgets.h"
 #include "core/serialize/dataBuilder.h"   // ibDataNode (control -> node)
 #include "frmserver/visualView/ctrl/form.h"           // ibValueForm — GetOwnerForm (the command-door gate)
+#include "frmserver/visualView/ctrl/formCommand.h"    // ibFormCommandValue — the command a button added with none gets
 #include "frmserver/visualView/layers/commandBar.h"   // GatherFormCommands — the icon/caption source the navigator uses
 #include "backend/backend_picture.h"                  // ibBackendPicture::SendPicture — the picture, by its id
 
@@ -17,6 +18,19 @@ ibValueButton::ibValueButton() : ibValueWindow()
 ibValueForm* ibValueButton::GetCommandGateForm() const
 {
 	return GetOwnerForm();
+}
+
+void ibValueButton::OnCreated(ibVisualHost* host, bool firstCreated)
+{
+	// firstCreated is set ONLY by the studio's add, never on a form open. A button has no click event of its own — the
+	// code goes into its command — so a button ADDED with no command gets a fresh form command named after it and is
+	// bound to it, as a field added with no source gets a fresh attribute (AutoBindNewSource). A command dropped on the
+	// form or brought by a paste is bound before this and stays.
+	ibValueForm* const ownerForm = GetOwnerForm();
+	if (!firstCreated || ownerForm == nullptr || GetCommandDesc().IsOk())
+		return;
+	const ibFormCommandValue* const command = ownerForm->AddFormCommand(ownerForm->MakeUniqueFormCommandName(GetControlName()));
+	SetCommandDesc(ibCommandDescription(command->GetId()), command->GetFullName());   // as a dropped form command binds
 }
 
 void ibValueButton::OnUpdate(ibDataNode& state, ibVisualHost* host)
