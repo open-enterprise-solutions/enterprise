@@ -213,10 +213,10 @@ TEST(FullTextTokenizer, ASizeBetweenDigitsStaysOneWord)
 
 TEST(FullTextTokenizer, CyrillicIsFoldedWhateverTheLocale)
 {
-	const std::vector<ibString> words = ibFullTextTokenizer::Split(ibString::FromUTF8("\xD0\x81\xD0\x96 \xD0\xA8\xD0\x98\xD0\x9D\xD0\x90"));
+	const std::vector<ibString> words = ibFullTextTokenizer::Split(ibString(ibT("ЁЖ ШИНА")));
 	ASSERT_EQ(words.size(), 2u);
-	EXPECT_EQ(words[0], ibString::FromUTF8("\xD0\xB5\xD0\xB6"));   // ё folded to е
-	EXPECT_EQ(words[1], ibString::FromUTF8("\xD1\x88\xD0\xB8\xD0\xBD\xD0\xB0"));
+	EXPECT_EQ(words[0], ibString(ibT("еж")));   // ё folded to е
+	EXPECT_EQ(words[1], ibString(ibT("шина")));
 }
 
 TEST(FullTextTokenizer, TheDistanceStopsPastItsLimit)
