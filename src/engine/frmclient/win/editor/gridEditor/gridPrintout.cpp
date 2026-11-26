@@ -225,159 +225,90 @@ bool ibGridEditorPrintout::DrawPage(wxDC* dc, int page)
 	
 	////////////////////////////////
 
-	// Draw cell content //
-	countHeight = cellInitialH;
-	
-	for (int row = m_rowsPerPage.Item(rowIndex); row < toRow; row++) {
-		
-		countWidth = cellInitialW;
-
-		for (int col = m_colsPerPage.Item(colIndex); col < toCol; col++) {
-			
-			int cell_rows, cell_cols;
-			if (m_doc->GetCellSize(row, col, &cell_rows, &cell_cols) == ibGrid::CellSpan_Main) {
-			
-				int colSize = 0, rowSize = 0;
-				
-				// ⚠ ONLY AS FAR AS THIS PAGE GOES. A block wider or taller than the page is torn by the
-				// pagination (OnPreparePrinting), and drawn whole from here it would run through the
-				// margin to the paper's edge; the part on this page is the part inside its band.
-				for (int i = col; i < wxMin(col + cell_cols, toCol); i++)
-					colSize += m_doc->GetColSize(i);
-
-				for (int i = row; i < wxMin(row + cell_rows, toRow); i++)
-					rowSize += RowSize(i);
-				
-				wxRect rect(countWidth, countHeight, colSize, rowSize);
-				
-				const ibColour backgroundColour = m_doc->GetCellBackgroundColour(row, col);
-				dc->SetBrush(typeConv::ColourToWxColour(backgroundColour.IsOk() ? backgroundColour : ibDefaultSpreadsheetBackgroundColour()));
-				dc->SetPen(*wxTRANSPARENT_PEN);
-				dc->DrawRectangle(rect.x + 1, rect.y, rect.width - 1, rect.height);
-				
-				int horz, vert;
-				m_doc->GetCellAlignment(row, col, &horz, &vert);
-
-				const ibColour textColour = m_doc->GetCellTextColour(row, col);
-				DrawTextInRectangle(*dc, CellText(row, col),
-					rect,
-					typeConv::FontToWxFont(m_doc->GetCellFont(row, col)),
-					typeConv::ColourToWxColour(textColour.IsOk() ? textColour : ibDefaultSpreadsheetTextColour()),
-					horz, vert,
-					m_doc->GetCellTextOrient(row, col),
-					m_doc->GetCellFitMode(row, col) == ibSpreadsheetCellDescription::ibFitMode::Mode_Wrap
-				);
+	// Every cell of the page a block does not cover, with its rect. ⚠ ONLY AS FAR AS THIS PAGE GOES: a block
+	// wider or taller than the page is torn by the pagination (OnPreparePrinting), and drawn whole from here it
+	// would run through the margin to the paper's edge; the part on this page is the part inside its band.
+	const auto forEachCell = [&](const auto& draw) {
+		int y = cellInitialH;
+		for (int row = m_rowsPerPage.Item(rowIndex); row < toRow; row++) {
+			int x = cellInitialW;
+			for (int col = m_colsPerPage.Item(colIndex); col < toCol; col++) {
+				int cell_rows = 1, cell_cols = 1;
+				if (m_doc->GetCellSize(row, col, &cell_rows, &cell_cols) != ibGrid::CellSpan_Inside) {
+					int colSize = 0, rowSize = 0;
+					for (int i = col; i < wxMin(col + cell_cols, toCol); i++)
+						colSize += m_doc->GetColSize(i);
+					for (int i = row; i < wxMin(row + cell_rows, toRow); i++)
+						rowSize += RowSize(i);
+					draw(row, col, cell_cols, wxRect(x, y, colSize, rowSize));
+				}
+				x += m_doc->GetColSize(col);
 			}
-			else if (m_doc->GetCellSize(row, col, &cell_rows, &cell_cols) == ibGrid::CellSpan_None) {
-				
-				wxRect rect(countWidth, countHeight, m_doc->GetColSize(col), RowSize(row));
-				
-				const ibColour backgroundColour = m_doc->GetCellBackgroundColour(row, col);
-				dc->SetBrush(typeConv::ColourToWxColour(backgroundColour.IsOk() ? backgroundColour : ibDefaultSpreadsheetBackgroundColour()));
-				dc->SetPen(*wxTRANSPARENT_PEN);
-				dc->DrawRectangle(rect.x + 1, rect.y, rect.width - 1, rect.height);
-				
-				int horz, vert;
-				m_doc->GetCellAlignment(row, col, &horz, &vert);
+			y += RowSize(row);
+		}
+	};
 
-				const ibColour textColour = m_doc->GetCellTextColour(row, col);
-				DrawTextInRectangle(*dc, CellText(row, col),
-					rect,
-					typeConv::FontToWxFont(m_doc->GetCellFont(row, col)),
-					typeConv::ColourToWxColour(textColour.IsOk() ? textColour : ibDefaultSpreadsheetTextColour()),
-					horz, vert,
-					m_doc->GetCellTextOrient(row, col),
-					m_doc->GetCellFitMode(row, col) == ibSpreadsheetCellDescription::ibFitMode::Mode_Wrap
-				);
-			}
+	// ⭐ THE FILLS FIRST, THE TEXTS OVER ALL OF THEM, THE RULES LAST: a text let out over the empty cells after it
+	// lies over their fills, and drawn cell by cell the next cell's fill painted it out — the PDF draws in the
+	// same three passes (sheetFormatPdf.cpp).
+	forEachCell([&](int row, int col, int, const wxRect& rect) {
+		const ibColour backgroundColour = m_doc->GetCellBackgroundColour(row, col);
+		dc->SetBrush(typeConv::ColourToWxColour(backgroundColour.IsOk() ? backgroundColour : ibDefaultSpreadsheetBackgroundColour()));
+		dc->SetPen(*wxTRANSPARENT_PEN);
+		dc->DrawRectangle(rect.x + 1, rect.y, rect.width - 1, rect.height);
+	});
 
-			countWidth += m_doc->GetColSize(col);
+	// The texts measured as the rows were (OnPreparePrinting): on a screen's DC, in the printout's unit.
+	wxScreenDC screen;
+	const wxString langCode = m_doc->GetLangCode();
+	forEachCell([&](int row, int col, int cell_cols, wxRect rect) {
+		const auto textWidth = [&] { return ibSpreadsheetTextWidth(*m_doc, row, col, screen, langCode); };
+
+		// ⭐ LET OUT OVER THE EMPTY CELLS AFTER IT, as the screen runs it on, as far as this page's band
+		// (GetCellOverflowCols). Cut at its own edge, an Auto heading over empty cells printed a piece of itself.
+		const int overflowCols = m_doc->GetCellOverflowCols(row, col, toCol, textWidth);
+		for (int i = col + cell_cols; i < col + cell_cols + overflowCols; i++)
+			rect.width += m_doc->GetColSize(i);
+
+		int horz, vert;
+		m_doc->GetCellAlignment(row, col, &horz, &vert);
+
+		const ibColour textColour = m_doc->GetCellTextColour(row, col);
+		DrawTextInRectangle(*dc, CellText(row, col),
+			rect,
+			typeConv::FontToWxFont(m_doc->GetCellFont(row, col)),
+			typeConv::ColourToWxColour(textColour.IsOk() ? textColour : ibDefaultSpreadsheetTextColour()),
+			horz, vert,
+			m_doc->GetCellTextOrient(row, col),
+			m_doc->IsCellWrapped(row, col, textWidth) ? ibGridFitMode::Wrap() : ibToGridFitMode(m_doc->GetCellFitMode(row, col))
+		);
+	});
+
+	forEachCell([&](int row, int col, int, const wxRect& rect) {
+		ibSpreadsheetBorderDescription borderLeft = m_doc->GetCellBorderLeft(row, col);
+		if (borderLeft.m_style != ibPenStyle_Transparent) {
+			dc->SetPen(wxPen(typeConv::ColourToWxColour(borderLeft.m_colour), borderLeft.m_width, static_cast<wxPenStyle>(borderLeft.m_style)));
+			dc->DrawLine(rect.GetLeft() + 1, rect.GetTop(), rect.GetLeft() + 1, rect.GetBottom() + 1);
 		}
 
-		countHeight += RowSize(row);
-	}
-
-	// Draw border content //
-	countHeight = cellInitialH;
-
-	for (int row = m_rowsPerPage.Item(rowIndex); row < toRow; row++) {
-
-		countWidth = cellInitialW;
-
-		for (int col = m_colsPerPage.Item(colIndex); col < toCol; col++) {
-
-			int cell_rows, cell_cols;
-			if (m_doc->GetCellSize(row, col, &cell_rows, &cell_cols) == ibGrid::CellSpan_Main) {
-
-				int colSize = 0, rowSize = 0;
-
-				// …and its rules the same - see the fill pass above.
-				for (int i = col; i < wxMin(col + cell_cols, toCol); i++)
-					colSize += m_doc->GetColSize(i);
-
-				for (int i = row; i < wxMin(row + cell_rows, toRow); i++)
-					rowSize += RowSize(i);
-
-				wxRect rect(countWidth, countHeight, colSize, rowSize);
-
-				ibSpreadsheetBorderDescription borderLeft = m_doc->GetCellBorderLeft(row, col);
-				if (borderLeft.m_style != ibPenStyle_Transparent) {
-					dc->SetPen(wxPen(typeConv::ColourToWxColour(borderLeft.m_colour), borderLeft.m_width, static_cast<wxPenStyle>(borderLeft.m_style)));
-					dc->DrawLine(rect.GetLeft() + 1, rect.GetTop(), rect.GetLeft() + 1, rect.GetBottom() + 1);
-				}
-
-				ibSpreadsheetBorderDescription borderRight = m_doc->GetCellBorderRight(row, col);
-				if (borderRight.m_style != ibPenStyle_Transparent) {
-					dc->SetPen(wxPen(typeConv::ColourToWxColour(borderRight.m_colour), borderRight.m_width, static_cast<wxPenStyle>(borderRight.m_style)));
-					dc->DrawLine(rect.GetRight() + 2, rect.GetTop(), rect.GetRight() + 2, rect.GetBottom() + 1);
-				}
-
-				ibSpreadsheetBorderDescription borderTop = m_doc->GetCellBorderTop(row, col);
-				if (borderTop.m_style != ibPenStyle_Transparent) {
-					dc->SetPen(wxPen(typeConv::ColourToWxColour(borderTop.m_colour), borderTop.m_width, static_cast<wxPenStyle>(borderTop.m_style)));
-					dc->DrawLine(rect.GetLeft() + 1 , rect.GetTop(), rect.GetRight() + 2, rect.GetTop());
-				}
-
-				ibSpreadsheetBorderDescription borderBottom = m_doc->GetCellBorderBottom(row, col);
-				if (borderBottom.m_style != ibPenStyle_Transparent) {
-					dc->SetPen(wxPen(typeConv::ColourToWxColour(borderBottom.m_colour), borderBottom.m_width, static_cast<wxPenStyle>(borderBottom.m_style)));
-					dc->DrawLine(rect.GetLeft() + 1, rect.GetBottom() + 1, rect.GetRight() + 2, rect.GetBottom() + 1);
-				}
-			}
-			else if (m_doc->GetCellSize(row, col, &cell_rows, &cell_cols) == ibGrid::CellSpan_None) {
-
-				wxRect rect(countWidth, countHeight, m_doc->GetColSize(col), RowSize(row));
-
-				ibSpreadsheetBorderDescription borderLeft = m_doc->GetCellBorderLeft(row, col);
-				if (borderLeft.m_style != ibPenStyle_Transparent) {
-					dc->SetPen(wxPen(typeConv::ColourToWxColour(borderLeft.m_colour), borderLeft.m_width, static_cast<wxPenStyle>(borderLeft.m_style)));
-					dc->DrawLine(rect.GetLeft() + 1, rect.GetTop(), rect.GetLeft() + 1, rect.GetBottom() + 1);
-				}
-
-				ibSpreadsheetBorderDescription borderRight = m_doc->GetCellBorderRight(row, col);
-				if (borderRight.m_style != ibPenStyle_Transparent) {
-					dc->SetPen(wxPen(typeConv::ColourToWxColour(borderRight.m_colour), borderRight.m_width, static_cast<wxPenStyle>(borderRight.m_style)));
-					dc->DrawLine(rect.GetRight() + 2, rect.GetTop(), rect.GetRight() + 2, rect.GetBottom() + 1);
-				}
-
-				ibSpreadsheetBorderDescription borderTop = m_doc->GetCellBorderTop(row, col);
-				if (borderTop.m_style != ibPenStyle_Transparent) {
-					dc->SetPen(wxPen(typeConv::ColourToWxColour(borderTop.m_colour), borderTop.m_width, static_cast<wxPenStyle>(borderTop.m_style)));
-					dc->DrawLine(rect.GetLeft() + 1, rect.GetTop(), rect.GetRight() + 2, rect.GetTop());
-				}
-
-				ibSpreadsheetBorderDescription borderBottom = m_doc->GetCellBorderBottom(row, col);
-				if (borderBottom.m_style != ibPenStyle_Transparent) {
-					dc->SetPen(wxPen(typeConv::ColourToWxColour(borderBottom.m_colour), borderBottom.m_width, static_cast<wxPenStyle>(borderBottom.m_style)));
-					dc->DrawLine(rect.GetLeft() + 1, rect.GetBottom() + 1, rect.GetRight() + 2, rect.GetBottom() + 1);
-				}
-			}
-
-			countWidth += m_doc->GetColSize(col);
+		ibSpreadsheetBorderDescription borderRight = m_doc->GetCellBorderRight(row, col);
+		if (borderRight.m_style != ibPenStyle_Transparent) {
+			dc->SetPen(wxPen(typeConv::ColourToWxColour(borderRight.m_colour), borderRight.m_width, static_cast<wxPenStyle>(borderRight.m_style)));
+			dc->DrawLine(rect.GetRight() + 2, rect.GetTop(), rect.GetRight() + 2, rect.GetBottom() + 1);
 		}
 
-		countHeight += RowSize(row);
-	}
+		ibSpreadsheetBorderDescription borderTop = m_doc->GetCellBorderTop(row, col);
+		if (borderTop.m_style != ibPenStyle_Transparent) {
+			dc->SetPen(wxPen(typeConv::ColourToWxColour(borderTop.m_colour), borderTop.m_width, static_cast<wxPenStyle>(borderTop.m_style)));
+			dc->DrawLine(rect.GetLeft() + 1, rect.GetTop(), rect.GetRight() + 2, rect.GetTop());
+		}
+
+		ibSpreadsheetBorderDescription borderBottom = m_doc->GetCellBorderBottom(row, col);
+		if (borderBottom.m_style != ibPenStyle_Transparent) {
+			dc->SetPen(wxPen(typeConv::ColourToWxColour(borderBottom.m_colour), borderBottom.m_width, static_cast<wxPenStyle>(borderBottom.m_style)));
+			dc->DrawLine(rect.GetLeft() + 1, rect.GetBottom() + 1, rect.GetRight() + 2, rect.GetBottom() + 1);
+		}
+	});
 
 	////////////////////////////////
 
@@ -498,6 +429,23 @@ void ibGridEditorPrintout::OnPreparePrinting()
 		heightCount += size;
 	}
 
+	// ⭐ THE PAGES WORKED OUT HERE ARE THE DOCUMENT'S BREAKS (Max, 2026-11-26): a page starts at each, the grid draws a
+	// dashed line above it, and the document keeps it — the next printout starts its pages where this one did. Each
+	// stands above the sheet's end, which is stood on the last row walked first: a break past the end would be the end.
+	if (m_rowsPerPage.GetCount() > 1) {
+		m_doc->SetRowBrake(m_doc->GetNumberRows() - 1);
+		for (size_t page = 1; page < m_rowsPerPage.GetCount(); page++)
+			if (m_rowsPerPage[page] < m_doc->GetMaxRowBrake())
+				m_doc->AddRowBrake(m_rowsPerPage[page]);
+	}
+
+	if (m_colsPerPage.GetCount() > 1) {
+		m_doc->SetColBrake(m_doc->GetNumberCols() - 1);
+		for (size_t page = 1; page < m_colsPerPage.GetCount(); page++)
+			if (m_colsPerPage[page] < m_doc->GetMaxColBrake())
+				m_doc->AddColBrake(m_colsPerPage[page]);
+	}
+
 	m_maxPage = m_rowsPerPage.GetCount() * m_colsPerPage.GetCount();
 }
 
@@ -590,40 +538,19 @@ int ibGridEditorPrintout::ContentWidth() const
 }
 
 void ibGridEditorPrintout::DrawTextInRectangle(wxDC& dc, const wxString& strValue, wxRect& rect, const wxFont& font, const wxColour& fontClr,
-	int horizAlign, int vertAlign, int textOrientation, bool wrap)
+	int horizAlign, int vertAlign, int textOrientation, ibGridFitMode fitMode)
 {
-	wxArrayString lines, naturalLines;
-	ibGridEditor::ParseLines(strValue, naturalLines);
-
 	rect.x += 2;
 	rect.width -= 2;
 
-	// 🛑 THIS PASS EXISTED AND WAS SWITCHED OFF, and the reason it had to be is that it had nothing
-	// to ask: it wrapped EVERY cell, because the placement of the one being drawn was not reachable
-	// from here. So the machinery sat commented out with its measuring variables deleted around it.
-	// Now the caller knows, and the pass runs for the cells that asked for it.
-	//
 	// ⚠ The font goes on the dc BEFORE any measuring - a width measured in the wrong face wraps in
 	// the wrong place, and that is invisible until the paper comes out.
 	dc.SetFont(font);
-
-	if (wrap) {
-		for (const wxString& one : naturalLines)
-			ibGridEditor::WrapTextLine(dc, one, rect.width, lines);
-	}
-	else {
-		lines = naturalLines;
-	}
-
 	dc.SetTextBackground(fontClr);
 	dc.SetTextForeground(fontClr);
 
-	dc.SetFont(font);
-
-	ibGridEditor::DrawTextRectangle(dc,
-		lines, rect, horizAlign, vertAlign, textOrientation);
+	// 🛑 PLACED BY THE SCREEN'S OWN ROAD (ibGrid::DrawTextRectangle with the mode): broken into lines, masked or
+	// ellipsized as the grid does it. This broke lines itself at a width of its own, two pixels wider than the
+	// grid's, and knew no placement but Wrap — an ellipsized cell printed cut (2026-11-26).
+	ibGridEditor::DrawTextRectangle(dc, strValue, rect, fitMode, horizAlign, vertAlign, textOrientation);
 }
-
-// (GetTextLines is gone: its live body added one line and its wrapping pass had been commented out
-//  for want of a way to ask whether the cell wanted wrapping. Both questions are answered above now,
-//  and the splitting itself is ibGrid::WrapTextLine, shared with the screen.)

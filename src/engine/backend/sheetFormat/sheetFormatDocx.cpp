@@ -289,10 +289,11 @@ bool ibSheetFormatDocx::Write(std::ostream& output, const ibSpreadsheetDescripti
 	const int numRows = sheet.GetNumberRows();
 	const int numCols = sheet.GetNumberCols();
 
-	// The rows a page break falls on — looked up per row while writing.
+	// The rows a page starts at — looked up per row while writing. The list's maximum is the sheet's end, not one.
 	std::set<int> pageBreaks;
 	for (int i = 0; i < sheet.GetBrakeNumberRows(); i++)
 		pageBreaks.insert(sheet.GetRowBrakeByIdx(i));
+	pageBreaks.erase(sheet.GetMaxRowBrake());
 
 	ibString body = ibT("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>")
 		ibT("<w:document xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\">")
@@ -453,9 +454,9 @@ bool ibSheetFormatDocx::Write(std::ostream& output, const ibSpreadsheetDescripti
 			rowsInTable++;
 		}
 
-		// ⭐ WHERE A PAGE ENDED HERE, A PAGE ENDS THERE. A break inside a table has to
+		// ⭐ WHERE A PAGE STARTS AT THE NEXT ROW, A PAGE ENDS HERE. A break inside a table has to
 		// close it and open the next one — Word has no "break between these rows".
-		if (pageBreaks.contains(row) && row < numRows) {
+		if (pageBreaks.contains(row + 1) && row < numRows) {
 			table += ibT("</w:tbl>");
 			body += table;
 			body += ibT("<w:p><w:r><w:br w:type=\"page\"/></w:r></w:p>");

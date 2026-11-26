@@ -114,7 +114,7 @@ struct XlsxStyle {
 	int      m_alignVert = ibAlignmentVert_Top;
 	bool     m_hasAlign = false;
 	int      m_textOrient = ibOrient_Horizontal;
-	ibSpreadsheetCellDescription::ibFitMode m_fitMode = ibSpreadsheetCellDescription::Mode_Overflow;
+	ibSpreadsheetCellDescription::ibFitMode m_fitMode = ibSpreadsheetCellDescription::Mode_Auto;
 	bool     m_readOnly = false;
 };
 
@@ -580,8 +580,9 @@ int ReadSheet(const ibMemoryBuffer& bytes, const ibString& source, const std::ve
 		// --- where the pages end -----------------------------------------------------
 		// ⭐ A BREAK IS A FACT ABOUT THE DOCUMENT, and it was travelling one way only: written into
 		// every workbook we save and read back out of none of them, so a file saved with its pages
-		// laid out came home flat. `id` is the index of the first line of the NEW page, and ours
-		// says which line the OLD page ended on — hence the step back.
+		// laid out came home flat. `id` is the index of the first line of the NEW page, and so is
+		// ours (Max, 2026-11-26) — taken as it is; the sheet's end is stood above them once every
+		// sheet is read (ibSheetFormatXlsx::Read).
 		if (node->GetName() == ibT("rowBreaks") || node->GetName() == ibT("colBreaks")) {
 			const bool rows = node->GetName() == ibT("rowBreaks");
 
@@ -591,8 +592,8 @@ int ReadSheet(const ibMemoryBuffer& bytes, const ibString& source, const std::ve
 					|| !brk->GetAttribute(ibT("id"), ibT("0")).ToLong(&at) || at <= 0)
 					continue;
 
-				if (rows) document.AddRowBrake(topRow + static_cast<int>(at) - 1);
-				else if (topRow == 0) document.AddColBrake(static_cast<int>(at) - 1);
+				if (rows) document.AddRowBrake(topRow + static_cast<int>(at));
+				else if (topRow == 0) document.AddColBrake(static_cast<int>(at));
 			}
 			continue;
 		}
@@ -807,14 +808,21 @@ bool ibSheetFormatXlsx::Read(std::istream& input, ibSpreadsheetDescription& shee
 		if (part == parts.end())
 			continue;
 
-		// ⭐ THE BREAK GOES BEFORE EVERY SHEET BUT THE FIRST — that is what makes the
+		// ⭐ A PAGE STARTS WITH EVERY SHEET BUT THE FIRST — that is what makes the
 		// workbook's tabs into this document's pages.
 		if (at > 0 && topRow > 0)
-			read.AddRowBrake(topRow - 1);
+			read.AddRowBrake(topRow);
 
 		const int used = ReadSheet(part->second, part->first, strings, styles, read, topRow, parsed);
 		topRow += std::max(used, 1);
 	}
+
+	// ⭐ AND THE SHEET'S END ABOVE THE BREAKS READ: it is the list's maximum, the last row — without it the last
+	// break read was taken for the end, and its page was not started.
+	if (read.GetBrakeNumberRows() > 0)
+		read.AddRowBrake(read.GetNumberRows() - 1);
+	if (read.GetBrakeNumberCols() > 0)
+		read.AddColBrake(read.GetNumberCols() - 1);
 
 	// ⚠ MOVED, NOT COPIED: a copy's cell makes a font of its own (ibSpreadsheetCellDescription::SetCell) — a GDI font,
 	// where this reading shares one of a style's among all its cells. A sheet of 46 thousand cells copied ran the

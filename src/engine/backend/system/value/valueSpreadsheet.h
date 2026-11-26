@@ -110,9 +110,10 @@ class BACKEND_API ibValueEnumSpreadsheetFitMode :
 	ibValueEnumSpreadsheetFitMode() : ibValueEnumeration() {}
 
 	virtual void CreateEnumeration() {
-		AddEnumeration(ibSpreadsheetFitMode::ibFitMode_Overflow, ibT("Overflow"), ibTRANSLATE("Overflow"));
+		AddEnumeration(ibSpreadsheetFitMode::ibFitMode_Auto, ibT("Auto"), ibTRANSLATE("Auto"));
 		AddEnumeration(ibSpreadsheetFitMode::ibFitMode_Clip, ibT("Clip"), ibTRANSLATE("Clip"));
 		AddEnumeration(ibSpreadsheetFitMode::ibFitMode_Wrap, ibT("Wrap"), ibTRANSLATE("Wrap"));
+		AddEnumeration(ibSpreadsheetFitMode::ibFitMode_Mask, ibT("Mask"), ibTRANSLATE_IN_CONTEXT("text placement", "Mask"), ibT("text placement"));
 	}
 
 private:

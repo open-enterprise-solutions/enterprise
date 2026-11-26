@@ -27,12 +27,17 @@ class wxFindDialogEvent;
 // while it is two-valued. Adding a third meant editing eight sites and trusting the ninth to be
 // written with it; the ternary silently answered `Clip` for anything it did not recognise, so the
 // third value would have arrived as "cut it off" everywhere and looked like a drawing defect.
+//
+// ⚠ THE DOCUMENT'S Auto IS TWO OF THE GRID'S: Overflow where its text runs on, Auto where it breaks into
+// lines — which depends on the row and the cell after it, so the look of the cell in view chooses
+// (ibGridEditorAttrProvider, through IsCellWrapped); here it goes as Overflow. Both come back as Auto.
 inline ibGridFitMode ibToGridFitMode(ibSpreadsheetCellDescription::ibFitMode mode)
 {
 	switch (mode) {
-	case ibSpreadsheetCellDescription::ibFitMode::Mode_Overflow: return ibGridFitMode::Overflow();
+	case ibSpreadsheetCellDescription::ibFitMode::Mode_Auto:     return ibGridFitMode::Overflow();
 	case ibSpreadsheetCellDescription::ibFitMode::Mode_Wrap:     return ibGridFitMode::Wrap();
 	case ibSpreadsheetCellDescription::ibFitMode::Mode_Clip:     return ibGridFitMode::Clip();
+	case ibSpreadsheetCellDescription::ibFitMode::Mode_Mask:     return ibGridFitMode::Mask();
 	default: break;
 	}
 
@@ -43,9 +48,10 @@ inline ibGridFitMode ibToGridFitMode(ibSpreadsheetCellDescription::ibFitMode mod
 
 inline ibSpreadsheetCellDescription::ibFitMode ibFromGridFitMode(ibGridFitMode mode)
 {
-	if (mode.IsOverflow()) return ibSpreadsheetCellDescription::ibFitMode::Mode_Overflow;
+	if (mode.IsOverflow() || mode.IsAuto()) return ibSpreadsheetCellDescription::ibFitMode::Mode_Auto;
 	if (mode.IsWrap())     return ibSpreadsheetCellDescription::ibFitMode::Mode_Wrap;
 	if (mode.IsClip())     return ibSpreadsheetCellDescription::ibFitMode::Mode_Clip;
+	if (mode.IsMask())     return ibSpreadsheetCellDescription::ibFitMode::Mode_Mask;
 
 	return static_cast<ibSpreadsheetCellDescription::ibFitMode>(mode.GetEllipsizeMode());
 }
@@ -57,6 +63,13 @@ inline ibSpreadsheetCellDescription::ibFitMode ibFromGridFitMode(ibGridFitMode m
 // keeps the rows the screen has. `dc` is a SCREEN's: a row height is drawn as that many screen pixels, by the
 // grid and by the printout alike; the text is read in `langCode`, as the showing side reads it.
 FRMCLIENT_API int ibSpreadsheetRowHeight(const ibSpreadsheetObject& doc, int row, wxDC& dc,
+	const wxString& langCode = wxEmptyString);
+
+// ⭐ THE WIDTH A CELL'S TEXT TAKES DRAWN AS IT STANDS — its widest line, plus what the cell keeps around a line
+// not broken. The core weighs it against the room to the sheet's end (IsCellWrapped: Auto that does not fit there
+// breaks), and a column fitted to its content is the widest of them (ibSpreadsheetColWidth). `dc` is a screen's,
+// as for the row height.
+FRMCLIENT_API int ibSpreadsheetTextWidth(const ibSpreadsheetObject& doc, int row, int col, wxDC& dc,
 	const wxString& langCode = wxEmptyString);
 
 // ⭐ THE WIDTH THE COLUMN'S CONTENT ASKS FOR — the widest thing written in it, plus what the cell's chrome
@@ -98,16 +111,15 @@ class FRMCLIENT_API ibGridEditor : public ibGrid {
 
 		virtual void SetCellBackgroundColour(int row, int col, const ibColour& colour) { RefreshCell(row, col); }
 		virtual void SetCellTextColour(int row, int col, const ibColour& colour) { RefreshCell(row, col); }
-		// What changes the height a row's text needs also marks the row for its automatic height.
-		virtual void SetCellTextOrient(int row, int col, const int orient) { RefreshCell(row, col); m_view->RequestAutoRowHeights(row, row); }
-		virtual void SetCellFont(int row, int col, const ibFont& font) { RefreshCell(row, col); m_view->RequestAutoRowHeights(row, row); }
+		virtual void SetCellTextOrient(int row, int col, const int orient) { RefreshCell(row, col); }
+		virtual void SetCellFont(int row, int col, const ibFont& font) { RefreshCell(row, col); }
 		virtual void SetCellAlignment(int row, int col, const int horiz, const int vert) { RefreshCell(row, col); }
 		virtual void SetCellBorderLeft(int row, int col, const ibSpreadsheetBorderDescription& desc) { RefreshCell(row, col); }
 		virtual void SetCellBorderRight(int row, int col, const ibSpreadsheetBorderDescription& desc) { RefreshCell(row, col); }
 		virtual void SetCellBorderTop(int row, int col, const ibSpreadsheetBorderDescription& desc) { RefreshCell(row, col); }
 		virtual void SetCellBorderBottom(int row, int col, const ibSpreadsheetBorderDescription& desc) { RefreshCell(row, col); }
 		virtual void SetCellSize(int row, int col, int num_rows, int num_cols) { GetOrCreateCell(row, col)->SetCellSize(row, col, num_rows, num_cols, false); m_view->RequestAutoRowHeights(row, row + wxMax(num_rows, 1) - 1); }
-		virtual void SetCellFitMode(int row, int col, ibSpreadsheetCellDescription::ibFitMode fitMode) { RefreshCell(row, col); m_view->RequestAutoRowHeights(row, row); }
+		virtual void SetCellFitMode(int row, int col, ibSpreadsheetCellDescription::ibFitMode fitMode) { RefreshCell(row, col); }
 		virtual void SetCellReadOnly(int row, int col, bool isReadOnly = true) { RefreshCell(row, col); }
 
 		// ------ cell brake accessors
@@ -124,7 +136,7 @@ class FRMCLIENT_API ibGridEditor : public ibGrid {
 
 		// ------ cell value accessors
 		//
-		virtual void SetCellValue(int row, int col, const ibString& s) { RefreshCell(row, col); m_view->RequestAutoRowHeights(row, row); }
+		virtual void SetCellValue(int row, int col, const ibString& s) { RefreshCell(row, col); }
 
 		// ------ area value accessors
 		//
@@ -163,11 +175,12 @@ class FRMCLIENT_API ibGridEditor : public ibGrid {
 			return m_view;
 		}
 
-		// A cell the document changes: the grid grown to it, the look it keeps for drawing the cell dropped, its place
-		// repainted.
+		// A cell the document changes: the grid grown to it, the look it keeps for drawing the cell dropped, its row
+		// fitted to its text again and repainted (RequestAutoRowHeights) — what a cell holds and how it is placed set
+		// the height its row needs and how the cell before it places its text; a row is measured only when it is shown.
 		void RefreshCell(int row, int col) const {
 			GetOrCreateCell(row, col)->RefreshAttr(row, col);
-			m_view->RefreshBlock(row, col, row, col);
+			m_view->RequestAutoRowHeights(row, row);
 		}
 
 		ibGridEditor* m_view;
@@ -375,8 +388,8 @@ class FRMCLIENT_API ibGridEditor : public ibGrid {
 
 		ibPropertyCategory* m_categoryAlignment = ibPropertyObject::CreatePropertyCategory(ibT("Alignment"), _("Alignment"));
 		ibPropertyEnum<ibValueEnumSpreadsheetFitMode>* m_propertyFitMode = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumSpreadsheetFitMode>>(m_categoryAlignment, ibT("Git_mode"), _("Fit mode"),
-			_("What happens to text longer than the cell. Overflow (the default): it runs on into empty neighbouring cells. Clip: it is cut at the cell's edge. Wrap: it breaks into lines within the cell."),
-			ibSpreadsheetFitMode::ibFitMode_Overflow);
+			_("What happens to text longer than the cell. Auto (the default): it runs on into the empty cell after it, and where it cannot, it breaks into lines in a row of automatic height and is cut in a row with a height of its own. Clip: it is cut at the cell's edge. Wrap: it breaks into lines within the cell. Mask: the cell is filled with # instead."),
+			ibSpreadsheetFitMode::ibFitMode_Auto);
 		ibPropertyEnum<ibValueEnumSpreadsheetHorizontalAlignment>* m_propertyAlignHorz = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumSpreadsheetHorizontalAlignment>>(m_categoryAlignment, ibT("Align_horz"), _("Horizontal"),
 			_("How the text is aligned across the cell: left (the default), center or right."), ibSpreadsheetAlignmentHorz::ibAlignmentHorz_Left);
 		ibPropertyEnum<ibValueEnumSpreadsheetVerticalAlignment>* m_propertyAlignVert = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumSpreadsheetVerticalAlignment>>(m_categoryAlignment, ibT("Align_vert"), _("Vertical"),
@@ -481,15 +494,10 @@ public:
 	void PutDocument(const std::shared_ptr<ibSpreadsheetObject>& doc, unsigned int groupLevel = 0);
 	void JoinDocument(const std::shared_ptr<ibSpreadsheetObject>& doc, unsigned int groupLevel = 0);
 
-	// ⭐ AUTOMATIC ROW HEIGHT, APPLIED — the rows without a height of their own, sized to their text
-	// (ibSpreadsheetRowHeight) from the document this editor shows. What is worked out here is never written
-	// back into the document (m_quietSizing): the row keeps no height of its own and stays automatic,
-	// however far its worked-out height is from the default. `toRow` -1: to the last row.
-	void FitAutoRowHeights(int fromRow = 0, int toRow = -1);
-
-	// …and the same, once the document has caught up. A change that arrives through the notifier is told
-	// to the grid BEFORE the document stores it (ibSpreadsheetObject's setters), so the rows are
-	// only marked here and fitted when the window is next idle.
+	// ⭐ THE ROWS TO BE FITTED TO THEIR TEXT AGAIN (FitAutoRowHeights) — whatever changes the height a row's text
+	// needs: the text, a font, a placement, a merge, a column's width, the cell after it. Marked and shown again,
+	// and fitted when they are drawn — by then the document has caught up with a change the notifier tells the
+	// grid BEFORE the document stores it (ibSpreadsheetObject's setters).
 	void RequestAutoRowHeights(int fromRow, int toRow);
 
 	// Bridge called by the spreadsheet notifier when BeginGroup/EndGroup closes
@@ -515,6 +523,14 @@ public:
 	int GetLastContentCol() const;
 
 protected:
+
+	// ⭐ AUTOMATIC ROW HEIGHT, APPLIED WHEN THE ROWS ARE SHOWN — the rows without a height of their own, sized to their
+	// text (ibSpreadsheetRowHeight) from the document this editor shows, each once until it is marked again
+	// (m_rowsFitted, RequestAutoRowHeights). Asked by the grid for the rows it is about to draw: a sheet comes up
+	// without measuring the rows nobody sees (Max, 2026-11-26) — a million-row report measured every one before its
+	// first paint. What is worked out here is never written back into the document (m_quietSizing): the row keeps no
+	// height of its own and stays automatic, however far its worked-out height is from the default.
+	virtual void FitAutoRowHeights(int fromRow, int toRow) override;
 
 	void GetCellDetailsParameter(int row, int col, wxString& s) const;
 	void SetCellDetailsParameter(int row, int col, const wxString& s);
@@ -573,7 +589,6 @@ public:
 
 	void OnScroll(wxScrollWinEvent& event);
 
-	void OnIdle(wxIdleEvent& event);
 	void OnSize(wxSizeEvent& event);
 
 	// ⭐ THE SHEET SAYS WHAT IT IS TO ITS REPORT. A report composes on a background run, so the window stays
@@ -619,9 +634,9 @@ private:
 	class ibActivityIndicator*  m_composeSpinner = nullptr;
 	class ibStaticText*         m_composeText = nullptr;
 
-	// The rows waiting for their automatic height (RequestAutoRowHeights) — one span, widened as rows
-	// are marked; -1 when none are.
-	int m_autoHeightFrom = -1, m_autoHeightTo = -1;
+	// The rows fitted to their text already (FitAutoRowHeights) — set when a row is fitted, cleared by
+	// RequestAutoRowHeights and by a document loaded; a row past its end has not been fitted.
+	std::vector<bool> m_rowsFitted;
 
 	// 🛑 WHILE THIS IS ON, A SIZE IS NOT ONE SOMEBODY CHOSE. `ibGrid::DoSetRowSize` / `DoSetColSize` send
 	// ibEVT_GRID_ROW_MODIFIED / _COL_MODIFIED themselves whenever a size changes outside a drag, and the

@@ -388,7 +388,7 @@ void WriteCell(ibDataNode& node, const ibSpreadsheetCellDescription& cell)
 	if (cell.m_col_size != 1)
 		node.AddField(ibT("colSpan"), ibDataValue::Int((std::int64_t)cell.m_col_size));
 
-	if (cell.m_fitMode != ibSpreadsheetCellDescription::Mode_Overflow)
+	if (cell.m_fitMode != ibSpreadsheetCellDescription::Mode_Auto)
 		node.AddField(ibT("fit"), ibDataValue::Int((std::int64_t)cell.m_fitMode));
 	if (cell.m_isReadOnly)
 		node.AddField(ibT("readOnly"), ibDataValue::Bool(true));

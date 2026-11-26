@@ -9198,11 +9198,6 @@ msgstr ""
 msgid "Bottom"
 msgstr ""
 
-#: src/engine/backend/system/value/valueSpreadsheet.h:113
-#: src/engine/frmclient/backend/system/value/valueSpreadsheet.h:68
-msgid "Overflow"
-msgstr ""
-
 #: src/engine/backend/system/value/valueSpreadsheet.h:114
 #: src/engine/frmclient/backend/system/value/valueSpreadsheet.h:69
 msgid "Clip"
@@ -9212,6 +9207,12 @@ msgstr ""
 #: src/engine/frmclient/backend/system/value/valueSpreadsheet.h:70
 #: src/engine/frmserver/visualView/ctrl/widgets.h:181
 msgid "Wrap"
+msgstr ""
+
+#: src/engine/backend/system/value/valueSpreadsheet.h:116
+#: src/engine/frmclient/backend/system/value/valueSpreadsheet.h:71
+msgctxt "text placement"
+msgid "Mask"
 msgstr ""
 
 #: src/engine/backend/system/value/valueSpreadsheet.h:129
@@ -9962,7 +9963,9 @@ msgstr ""
 msgid "Show parameters"
 msgstr ""
 
+#: src/engine/backend/system/value/valueSpreadsheet.h:113
 #: src/engine/core/description/compositionDescription.cpp:1017
+#: src/engine/frmclient/backend/system/value/valueSpreadsheet.h:68
 #: src/engine/frmserver/visualView/controlEnum.h:139
 #: src/engine/frmserver/visualView/controlEnum.h:163
 #: src/engine/frmserver/visualView/controlEnum.h:176
@@ -15502,8 +15505,8 @@ msgstr ""
 msgid "Fit mode"
 msgstr ""
 
-#: src/engine/frmclient/win/editor/gridEditor/gridEditor.h:619
-msgid "What happens to text longer than the cell. Overflow (the default): it runs on into empty neighbouring cells. Clip: it is cut at the cell's edge. Wrap: it breaks into lines within the cell."
+#: src/engine/frmclient/win/editor/gridEditor/gridEditor.h:384
+msgid "What happens to text longer than the cell. Auto (the default): it runs on into the empty cell after it, and where it cannot, it breaks into lines in a row of automatic height and is cut in a row with a height of its own. Clip: it is cut at the cell's edge. Wrap: it breaks into lines within the cell. Mask: the cell is filled with # instead."
 msgstr ""
 
 #: src/engine/frmclient/win/editor/gridEditor/gridEditor.h:622

@@ -500,12 +500,16 @@ bool ibValueSpreadsheetDocument::CallAsFunc(const long lMethodNum, ibValue& pvar
 
 bool ibValueSpreadsheetDocument::CallAsProc(const long lMethodNum, ibValue** paParams, const long lSizeArray)
 {
+	// ⭐ THE NEXT PAGE STARTS WHERE THE NEXT AREA WILL: the sheet's end is stood on that row, and PutArea keeps it a
+	// break when it moves the end past it. Added as a break beside the end, it was the list's maximum — the end —
+	// and the next area's end was written over it: the break was lost, and the end it had been stood beside stayed in
+	// the list as a break one row early.
 	if (lMethodNum == ePutHorizontalPageBreak) {
-		m_spreadsheetDoc->AddRowBrake(m_spreadsheetDoc->GetNumberRows());
+		m_spreadsheetDoc->SetRowBrake(m_spreadsheetDoc->GetNumberRows());
 		return true;
 	}
 	else if (lMethodNum == ePutVerticalPageBreak) {
-		m_spreadsheetDoc->AddColBrake(m_spreadsheetDoc->GetNumberCols());
+		m_spreadsheetDoc->SetColBrake(m_spreadsheetDoc->GetNumberCols());
 		return true;
 	}
 	else if (lMethodNum == eClear) {

@@ -2,10 +2,10 @@
 // WriteNode): `cells` (`row`, `col` from 0, `value` as shown, its font, colours, alignment, borders, `rowSpan`/`colSpan`
 // on the cell that spans — a cell spanned says 0 or less), `rows` and `cols` (`sizes`, `groups`, `breaks`, `areas`),
 // `freeze`. A cell or a field absent is the default. Drawn as a table: the rows and columns frozen stay in view as it
-// scrolls, a group of rows or of columns folds away, and a cell's text runs on over the empty cells beside it, as the
-// desktop's grid draws it. Round it the labels — the rows' numbers down the left, the columns' along the top — a
-// document's sheet's; a form's has nothing at its sides (`labels`) — and past what it holds empty cells as far as it is
-// seen (growSheet): the thin client's sheet, on the screen; paper has neither.
+// scrolls, a group of rows or of columns folds away, and a cell's text runs on over the empty cells beside it or breaks
+// onto further lines, as the desktop's grid places it (placeText). Round it the labels — the rows' numbers down the
+// left, the columns' along the top — a document's sheet's; a form's has nothing at its sides (`labels`) — and past what
+// it holds empty cells as far as it is seen (growSheet): the thin client's sheet, on the screen; paper has neither.
 
 import { applyFont, colour } from '../controls/control.js';
 
@@ -30,6 +30,13 @@ const alignCentreHorizontal = 0x100;
 const alignRight = 0x200;
 const alignBottom = 0x400;
 const alignCentreVertical = 0x800;
+
+// A cell's placement (`fit`, ibSpreadsheetCellDescription::ibFitMode) and its text turned on its side (wxVERTICAL).
+const fitUnset = 0;
+const fitAuto = 4;
+const fitWrap = 6;
+const fitMask = 7;
+const orientVertical = 0x0008;
 
 // wx's pen styles, as a border keeps them: solid, dot, long dash, short dash, dot dash, transparent.
 const penStyles = { 100: 'solid', 101: 'dotted', 102: 'dashed', 103: 'dashed', 104: 'dashed', 106: 'none' };
@@ -81,6 +88,8 @@ export function drawSheet(sheet, options) {
 	// labels stand past the pane.
 	table.style.width = `${width}px`;
 	table.style.setProperty('--oes-sheet-pane', `${pane}px`);
+	// Where the sheet ends among the columns it is filled out with (growSheet): no text runs on past it (placeText).
+	table.dataset.cols = String(colCount);
 	const head = document.createElement('thead');
 	const body = document.createElement('tbody');
 	table.append(columns, head, body);
@@ -118,8 +127,10 @@ export function drawSheet(sheet, options) {
 		labels.append(labelOf('col', col));
 	head.append(labels);
 
-	// A row's print break ends a page under it, where the desktop's grid draws its dashed line.
+	// A page starts at a row's print break, and is broken above it, where the desktop's grid draws its dashed line. The
+	// list's largest is the sheet's end, its last row, and breaks nothing.
 	const breaks = new Set(sheet.rows?.breaks ?? []);
+	breaks.delete(Math.max(...breaks));
 	/** @type {HTMLTableRowElement[]} */
 	const rows = [];
 	for (let row = 0; row < rowCount; row++) {
@@ -135,13 +146,21 @@ export function drawSheet(sheet, options) {
 			const cell = byPlace.get(`${row}:${col}`);
 			if ((cell?.rowSpan ?? 1) <= 0 || (cell?.colSpan ?? 1) <= 0)
 				continue;
-			const element = cellOf(cell, row, col);
+			const element = cellOf(cell, row, col, height !== undefined);
 			for (const [side, line] of Object.entries(linesOf(cell, row, col, cover, options.gridLines))) {
 				if (line !== undefined)
 					element.style[`border${side}`] = line;
 			}
+			// The cell after it — under a block from a row above, the block's owner
+			// (ibSpreadsheetDescription::IsCellWrapped).
 			const next = col + Math.max(1, cell?.colSpan ?? 1);
-			element.classList.toggle('spills', next < colCount && !byPlace.get(`${row}:${next}`)?.value);
+			let after = byPlace.get(`${row}:${next}`);
+			if ((after?.rowSpan ?? 1) < 0)
+				after = byPlace.get(`${row + after.rowSpan}:${next}`);
+			// …and the room it has from its left to the sheet's end, should nothing after it be written (placeText).
+			if (element.dataset.fit === 'auto')
+				element.dataset.room = String(width - (lefts[col] - pane - labelsWidth));
+			placeText(element, next < colCount && !after?.value);
 			if (col < frozenCols) {
 				element.classList.add('frozen');
 				element.style.left = `${lefts[col]}px`;
@@ -153,6 +172,12 @@ export function drawSheet(sheet, options) {
 	}
 	drawFolds(folds, rows, rowSizes);
 	drawColFolds(colFolds, colPanes, colSizes, table, width);
+	// A masked text is measured once it is laid out, and again whenever the sheet changes its size — shown from a
+	// hidden tab, grown (maskText); so is Auto free to run on, against the room to the sheet's end (placeText).
+	new ResizeObserver(() => {
+		table.querySelectorAll('td[data-fit="mask"]').forEach(maskText);
+		table.querySelectorAll('td[data-fit="auto"][data-free]').forEach((cell) => placeText(cell, true));
+	}).observe(table);
 	return table;
 }
 
@@ -177,9 +202,12 @@ export function growSheet(table, width, height, options) {
 		return false;
 	const colCount = columns.querySelectorAll('col:not(.label):not(.fold)').length;
 	const folding = columns.querySelector('col.fold') !== null;
-	/** An empty cell, its lines its own: nothing beside it names one. @param {number} row @param {number} col */
-	const emptyOf = (row, col) => {
-		const element = cellOf(undefined, row, col);
+	/**
+	 * An empty cell, its lines its own: nothing beside it names one.
+	 * @param {number} row @param {number} col @param {boolean} sized its row has a height of its own
+	 */
+	const emptyOf = (row, col, sized) => {
+		const element = cellOf(undefined, row, col, sized);
 		for (const [side, line] of Object.entries(linesOf(undefined, row, col, new Map(), options.gridLines))) {
 			if (line !== undefined)
 				element.style[`border${side}`] = line;
@@ -197,9 +225,9 @@ export function growSheet(table, width, height, options) {
 		const last = line.lastElementChild;
 		if (cols > 0 && last instanceof HTMLTableCellElement && last.dataset.col !== undefined
 			&& Number(last.dataset.col) + last.colSpan === colCount)
-			last.classList.toggle('spills', last.textContent !== '');
+			placeText(last, true);
 		for (let col = colCount; col < colCount + cols; col++)
-			line.append(emptyOf(row, col));
+			line.append(emptyOf(row, col, line.style.height !== ''));
 	});
 	for (let row = lines.length; row < lines.length + rows; row++) {
 		const line = document.createElement('tr');
@@ -208,7 +236,7 @@ export function growSheet(table, width, height, options) {
 			line.append(paneOf());
 		line.append(labelOf('row', row));
 		for (let col = 0; col < colCount + cols; col++)
-			line.append(emptyOf(row, col));
+			line.append(emptyOf(row, col, false));
 		table.tBodies[0].append(line);
 	}
 	return true;
@@ -235,12 +263,15 @@ function labelOf(axis, at) {
  * @param {SheetNode | undefined} cell
  * @param {number} row
  * @param {number} col
+ * @param {boolean} sized its row has a height of its own
  */
-function cellOf(cell, row, col) {
+function cellOf(cell, row, col, sized) {
 	const element = document.createElement('td');
 	// Its place, for the cells taken (selection.js) and the report's double click.
 	element.dataset.row = String(row);
 	element.dataset.col = String(col);
+	// …and how its text is placed, an empty cell's too: a text typed into it is placed as it says (setCellText).
+	element.dataset.fit = fitOf(cell, sized);
 	if (cell === undefined)
 		return element;
 	element.textContent = cell.value ?? '';
@@ -265,8 +296,102 @@ function cellOf(cell, row, col) {
 }
 
 /**
- * A cell's text changed where it stands: it runs on over an empty cell after it, and the text before it runs on over
- * it no longer — or again, once it is empty.
+ * How a cell's text wider than the cell is placed — its `fit` (ibSpreadsheetCellDescription::ibFitMode), Auto when it
+ * names none: `wrap`, onto further lines; `auto`, over the empty cell after it, else onto further lines — Auto where
+ * the row's height follows its text: the row has none of its own, the cell is one row high and its text level
+ * (ibSpreadsheetDescription::IsCellWrapped); `run`, Auto anywhere else — over the empty cell after it, else cut;
+ * `mask`, shown as `#` where it is wider (maskText); `cut`, Clip and the ellipses.
+ * @param {SheetNode | undefined} cell
+ * @param {boolean} sized its row has a height of its own
+ */
+function fitOf(cell, sized) {
+	const fit = cell?.fit ?? fitAuto;
+	if (fit === fitWrap)
+		return 'wrap';
+	if (fit === fitMask)
+		return 'mask';
+	if (fit !== fitAuto && fit !== fitUnset)
+		return 'cut';
+	return sized || (cell?.rowSpan ?? 1) > 1 || cell?.orient === orientVertical ? 'run' : 'auto';
+}
+
+/**
+ * Where a cell's text wider than the cell goes, by its fit (fitOf) and the cell after it — as the desktop's grid places
+ * it: over that cell while it is empty and the text is aligned left (`spills`), onto further lines at the cell's width
+ * (`wraps`), or cut at the cell's edge. Auto free to run on to the sheet's end and wider than the room there breaks
+ * instead, as by a cell after it taken (ibSpreadsheetDescription::IsCellWrapped): past the last column there is no
+ * paper. That is weighed once the sheet is laid out, its fonts known (drawSheet's observer); before, it runs on.
+ * @param {HTMLTableCellElement} element
+ * @param {boolean} free a cell after it, and empty
+ */
+function placeText(element, free) {
+	const fit = element.dataset.fit;
+	let runs = (fit === 'auto' || fit === 'run') && free && element.style.textAlign === '';
+	if (runs && fit === 'auto' && element.isConnected && runsToEnd(element))
+		runs = textWidth(element) <= Number(element.dataset.room);
+	element.toggleAttribute('data-free', free);
+	element.classList.toggle('spills', runs);
+	element.classList.toggle('wraps', fit === 'wrap' || (fit === 'auto' && !runs));
+}
+
+/**
+ * Whether every cell after this one in its row, to the sheet's end, is empty — a column covered from a row above
+ * (rowspan) counts as written, the block's text not being looked at.
+ * @param {HTMLTableCellElement} element
+ */
+function runsToEnd(element) {
+	const end = Number(element.closest('table')?.dataset.cols ?? 0);
+	let col = Number(element.dataset.col) + Math.max(1, element.colSpan);
+	for (let next = element.nextElementSibling; col < end; next = next?.nextElementSibling ?? null) {
+		if (!(next instanceof HTMLTableCellElement) || Number(next.dataset.col) !== col || next.textContent !== '')
+			return false;
+		col += Math.max(1, next.colSpan);
+	}
+	return true;
+}
+
+/** @type {CanvasRenderingContext2D | null} */
+let measure = null;
+
+/**
+ * The width a cell's text takes drawn as it stands — its widest line and the cell's padding (ibSpreadsheetTextWidth).
+ * @param {Element} element
+ */
+function textWidth(element) {
+	const style = getComputedStyle(element);
+	measure ??= document.createElement('canvas').getContext('2d');
+	if (measure === null)
+		return 0;
+	measure.font = `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+	const widest = Math.max(...(element.textContent ?? '').split('\n').map((line) => measure?.measureText(line).width ?? 0));
+	return widest + parseFloat(style.paddingLeft) + parseFloat(style.paddingRight);
+}
+
+/**
+ * A masked cell's text, where it is wider than the cell, shown as the `#` that fit in its place — one at least — as
+ * the desktop's grid shows it (ibGrid::MaskTextLine). The text stays the cell's: what is copied, found, summed or
+ * edited reads it (selection.js, cellEditor.js); the `#` are drawn over it (form.css, `masked`).
+ * @param {Element} element
+ */
+function maskText(element) {
+	element.classList.remove('masked');
+	if (element.textContent === '' || element.scrollWidth <= element.clientWidth)
+		return;
+	const style = getComputedStyle(element);
+	measure ??= document.createElement('canvas').getContext('2d');
+	if (measure === null)
+		return;
+	measure.font = `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+	const room = element.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+	const hash = measure.measureText('#').width || 1;
+	/** @type {HTMLElement} */ (element).dataset.mask = '#'.repeat(Math.max(1, Math.floor(room / hash)));
+	/** @type {HTMLElement} */ (element).style.setProperty('--oes-mask-size', style.fontSize);
+	element.classList.add('masked');
+}
+
+/**
+ * A cell's text changed where it stands: placed by the cell after it (placeText), and the text before it placed again
+ * — it runs on over this one no longer, or again once it is empty.
  * @param {HTMLTableCellElement} cell
  * @param {string} text
  */
@@ -274,9 +399,11 @@ export function setCellText(cell, text) {
 	cell.textContent = text;
 	const next = cell.nextElementSibling;
 	const before = cell.previousElementSibling;
-	cell.classList.toggle('spills', next instanceof HTMLTableCellElement && next.textContent === '');
+	placeText(cell, next instanceof HTMLTableCellElement && next.textContent === '');
+	if (cell.dataset.fit === 'mask')
+		maskText(cell);
 	if (before instanceof HTMLTableCellElement && before.dataset.col !== undefined)
-		before.classList.toggle('spills', text === '');
+		placeText(before, text === '');
 }
 
 /**

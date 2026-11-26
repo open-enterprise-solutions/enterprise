@@ -343,13 +343,20 @@ void ibSpreadsheetEditView::OnMenuEvent(wxCommandEvent& event)
 		if (selected_col >= 0 && m_gridEditor->IsSelection())
 			m_gridEditor->FreezeTo(0, selected_col);
 		break;
+	// ⭐ A PAGE STARTS AT THE SELECTED ROW — and the break goes ABOVE the sheet's end, which is stood on the last line
+	// first, as sheet_band does (mcpToolSheet.cpp), and at the last line or past it is the end, not a page. On a sheet
+	// that had no breaks the first one became the end: the printout did not take it, its line was drawn under the row.
 	case wxID_PRINT_BRAKE_ROW_ADD:
-		if (selected_row >= 0 && m_gridEditor->IsSelection())
+		if (selected_row >= 0 && m_gridEditor->IsSelection() && selected_row < m_gridEditor->GetLastContentRow()) {
+			m_gridEditor->SetRowBrake(m_gridEditor->GetLastContentRow());
 			m_gridEditor->AddRowBrake(selected_row);
+		}
 		break;
 	case wxID_PRINT_BRAKE_COL_ADD:
-		if (selected_col >= 0 && m_gridEditor->IsSelection())
+		if (selected_col >= 0 && m_gridEditor->IsSelection() && selected_col < m_gridEditor->GetLastContentCol()) {
+			m_gridEditor->SetColBrake(m_gridEditor->GetLastContentCol());
 			m_gridEditor->AddColBrake(selected_col);
+		}
 		break;
 	case wxID_PRINT_BRAKE_ROW_DELETE:
 		if (selected_row >= 0 && m_gridEditor->IsSelection())

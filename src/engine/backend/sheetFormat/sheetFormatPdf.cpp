@@ -378,8 +378,20 @@ private:
 		return static_cast<double>(std::lround(m_pdf.GetCharHeight() / kPoint));
 	}
 
+	// The width a cell's text takes drawn as it stands — its widest line, and the inset and the margin a line starts
+	// from (DrawCellText) — in the sheet's pixels: what the core weighs against the room to the sheet's end
+	// (IsCellWrapped), as the desktop's ibSpreadsheetTextWidth answers it. It sets the cell's font.
+	int TextWidth(const ibSpreadsheetCellDescription* cell) {
+		UseFont(cell->m_font.IsOk() ? cell->m_font : ibDefaultSpreadsheetFont());
+		double widest = 0;
+		for (const ibString& one : LinesOf(TextOf(cell)))
+			widest = std::max(widest, Width(one));
+		return static_cast<int>(std::ceil(widest)) + kCellInset + kTextMargin;
+	}
+
 	// One line broken at its spaces so no piece is wider than `maxWidth` — ibGrid::WrapTextLine's rule: the space
-	// goes with the word before it, and a word wider than the column keeps a line of its own rather than being cut.
+	// goes with the word before it, and a word wider than the column is cut between its letters, each piece as wide
+	// as fits; a space never starts a piece, nor does the second half of a surrogate pair.
 	void Wrap(const ibString& line, double maxWidth, std::vector<ibString>& lines) const {
 		if (maxWidth <= 0 || line.IsEmpty() || Width(line) <= maxWidth) {
 			lines.push_back(line);
@@ -395,14 +407,25 @@ private:
 				++end;
 			const ibString word = line.Mid(at, end - at);
 			at = end;
-			if (current.IsEmpty())
-				current = word;
-			else if (Width(current + word) <= maxWidth)
-				current += word;
-			else {
+			if (!current.IsEmpty()) {
+				if (Width(current + word) <= maxWidth) {
+					current += word;
+					continue;
+				}
 				lines.push_back(current);
-				current = word;
 			}
+			size_t from = 0;
+			if (Width(word) > maxWidth) {
+				for (size_t i = 1; i < word.Len(); ++i) {
+					const ibChar letter = word[i];
+					if (Width(word.Mid(from, i + 1 - from)) > maxWidth && letter != ibT(' ')
+						&& !(letter >= 0xDC00 && letter <= 0xDFFF)) {
+						lines.push_back(word.Mid(from, i - from));
+						from = i;
+					}
+				}
+			}
+			current = word.Mid(from);
 		}
 		if (!current.IsEmpty())
 			lines.push_back(current);
@@ -434,6 +457,15 @@ private:
 		return line.Left(head) + ellipsis + line.Right(tail);
 	}
 
+	// A line wider than `maxWidth` shown as the `#` that fit in its place, one at least — ibGrid::MaskTextLine's rule.
+	ibString Masked(const ibString& line, double maxWidth) const {
+		if (line.IsEmpty() || Width(line) <= maxWidth)
+			return line;
+		const double hash = Width(ibT("#"));
+		const size_t count = hash > 0 ? static_cast<size_t>(std::max(1.0, std::floor(maxWidth / hash))) : 1;
+		return ibString(static_cast<ibChar>('#'), count);
+	}
+
 	// ⭐ THE ROWS AT THE HEIGHTS THE WINDOW SHOWS THEM AT (ibSpreadsheetRowHeight, frmclient's gridEditorDoc.cpp):
 	// a row of its own height keeps it; one without is the default row, taller where a cell's text needs more — a
 	// larger font, a line break, wrapping. The default row is one line of the default font and the padding is what
@@ -458,7 +490,7 @@ private:
 				if (cell->GetSize(&spanRows, &spanCols) < 0 || spanRows > 1 || cell->m_textOrient == ibOrient_Vertical)
 					continue;
 
-				const bool wrap = cell->m_fitMode == ibSpreadsheetCellDescription::ibFitMode::Mode_Wrap;
+				const bool wrap = m_sheet.IsCellWrapped(row, col, [&] { return TextWidth(cell); });
 				const double points = cell->m_font.IsOk() ? cell->m_font.m_pointSize : ordinary.m_pointSize;
 				const ibString text = TextOf(cell);
 				if (text.IsEmpty())
@@ -558,12 +590,6 @@ private:
 		}
 	}
 
-	// A cell nothing is written in and that is nobody's merge — what a line of text may run out over.
-	bool IsFree(int row, int col) const {
-		const ibSpreadsheetCellDescription* cell = m_sheet.GetCell(row, col);
-		return cell == nullptr || (cell->IsEmptyValue() && cell->GetSize(nullptr, nullptr) == 0);
-	}
-
 	enum class Pass { Fill, Text, Rule };
 
 	void DrawPage(size_t rowBand, size_t colBand) {
@@ -599,7 +625,7 @@ private:
 
 					switch (pass) {
 					case Pass::Fill: DrawFill(cell, x, y, w, h); break;
-					case Pass::Text: DrawCellText(cell, row, col, span, x, y, w, h, fromCol, toCol, colX); break;
+					case Pass::Text: DrawCellText(cell, row, col, x, y, w, h, fromCol, toCol, colX); break;
 					case Pass::Rule: DrawRules(cell, x, y, w, h); break;
 					}
 				}
@@ -635,7 +661,7 @@ private:
 	// two pixels off): the lines stacked from where the vertical alignment puts the block, each line where the
 	// horizontal one puts it, a line after the first drawn only if it fits whole, the whole cut to what the cell
 	// may cover. Turned on its side, the same with the two directions exchanged.
-	void DrawCellText(const ibSpreadsheetCellDescription* cell, int row, int col, int span,
+	void DrawCellText(const ibSpreadsheetCellDescription* cell, int row, int col,
 		double x, double y, double w, double h, int fromCol, int toCol, const std::vector<double>& colX) {
 		const ibString text = TextOf(cell);
 		if (text.IsEmpty())
@@ -647,38 +673,35 @@ private:
 		const double rx = x + kCellInset, rw = w - kCellInset, ry = y, rh = h;
 		const bool vertical = cell->m_textOrient == ibOrient_Vertical;
 		const auto mode = cell->m_fitMode;
+		const auto textWidth = [&] { return TextWidth(cell); };
+		const bool wrapped = m_sheet.IsCellWrapped(row, col, textWidth);
 		const double room = (vertical ? rh : rw) - 2 * kTextMargin;
 
 		std::vector<ibString> lines;
 		for (const ibString& one : LinesOf(text)) {
-			if (mode == ibSpreadsheetCellDescription::ibFitMode::Mode_Wrap)
+			if (wrapped)
 				Wrap(one, room, lines);
 			else if (mode == ibSpreadsheetCellDescription::ibFitMode::Mode_EllipsizeStart
 				|| mode == ibSpreadsheetCellDescription::ibFitMode::Mode_EllipsizeMiddle
 				|| mode == ibSpreadsheetCellDescription::ibFitMode::Mode_EllipsizeEnd)
 				lines.push_back(Ellipsized(one, room, mode));
+			else if (mode == ibSpreadsheetCellDescription::ibFitMode::Mode_Mask)
+				lines.push_back(Masked(one, room));
 			else
 				lines.push_back(one);
 		}
 		if (lines.empty())
 			return;
 
-		// ⭐ LET OUT OVER THE NEIGHBOURS — the one line of an unmerged cell that overflows runs over the empty cells
-		// beside it, on the side its alignment leaves open, as far as this page's band.
-		double clipLeft = rx, clipRight = rx + rw;
-		const bool overflows = !vertical && span == 0 && lines.size() == 1
-			&& (mode == ibSpreadsheetCellDescription::ibFitMode::Mode_Overflow
-				|| mode == ibSpreadsheetCellDescription::ibFitMode::Mode_Unset);
-		if (overflows) {
-			const double need = Width(lines.front()) - room;
-			const int horz = cell->m_alignHorz;
-			const bool right = horz != ibAlignmentHorz_Right;     // left and centred text runs out to the right…
-			const bool left = horz != ibAlignmentHorz_Left;       // …right and centred to the left
-			const double share = horz == ibAlignmentHorz_Center ? need / 2 : need;
-			for (int c = col + 1; right && need > 0 && c < toCol && clipRight - (rx + rw) < share && IsFree(row, c); ++c)
-				clipRight = colX[c + 1 - fromCol];
-			for (int c = col - 1; left && need > 0 && c >= fromCol && rx - clipLeft < share && IsFree(row, c); --c)
-				clipLeft = colX[c - fromCol];
+		// ⭐ LET OUT OVER THE NEIGHBOURS as the screen runs it on (GetCellOverflowCols): Auto that does not break,
+		// aligned left, over the empty cells after it, as far as this page's band. Centred and right-aligned text
+		// ran out to the left here as well, where the screen and the printout cut it (2026-11-26).
+		const double clipLeft = rx;
+		double clipRight = rx + rw;
+		if (const int overflowCols = m_sheet.GetCellOverflowCols(row, col, toCol, textWidth); overflowCols > 0) {
+			int spanCols = 1;
+			m_sheet.GetCellSize(row, col, nullptr, &spanCols);
+			clipRight = colX[col + spanCols + overflowCols - fromCol];
 		}
 		m_pdf.SetClippingRegion(PageX(clipLeft), PageY(ry), (clipRight - clipLeft) * kPoint, rh * kPoint);
 

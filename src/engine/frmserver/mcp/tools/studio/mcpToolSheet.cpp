@@ -359,12 +359,15 @@ const ibArg& ArgCells()
 const ibArg& ArgFit()
 {
 	static const ibArg s_a(ibT("fit"), ibArg::Kind::Text,
-		ibMcpText("What long text does: wrap, overflow, clip, or ellipsis. On paper this decides "
+		ibMcpText("What long text does: auto, wrap, clip, ellipsis or mask. On paper this decides "
 			  "whether a name runs into the next cell, is cut, or continues on a further line "
-			  "inside the same cell. `wrap` is what a column heading over a narrow money column "
-			  "almost always wants, and it is the commonest of the four in real blanks. A row with "
-			  "no height of its own grows to the lines its text takes (automatic height); a row "
-			  "given one with sheet_size keeps it, and what does not fit is cut."));
+			  "inside the same cell. `auto` (the default) runs into the next cell while it is "
+			  "empty and aligned left, and otherwise continues on further lines - so a report's "
+			  "column of long names needs nothing set. `wrap` breaks into lines always, and is what "
+			  "a column heading over a narrow money column almost always wants. `mask` shows ### in "
+			  "place of a text too wide, so an amount is never read cut. A row with no height of "
+			  "its own grows to the lines its text takes (automatic height); a row given one "
+			  "with sheet_size keeps it, and what does not fit is cut."));
 	return s_a;
 }
 
@@ -1110,19 +1113,21 @@ public:
 		if (!fit.IsEmpty()) {
 
 			// ⚠ AND HERE THE CELL'S NESTED ENUM IS THE RIGHT ONE — the sheet-level
-			// ibSpreadsheetFitMode numbers differently (Overflow = 4). Two enums
+			// ibSpreadsheetFitMode numbers differently (Auto = 4). Two enums
 			// that mean the same thing and count apart is exactly the trap the
 			// alignment fell into, so the class that OWNS the member decides.
-			if (fit.IsSameAs(ibT("overflow"), false))
-				cell->m_fitMode = ibSpreadsheetCellDescription::Mode_Overflow;
+			if (fit.IsSameAs(ibT("auto"), false))
+				cell->m_fitMode = ibSpreadsheetCellDescription::Mode_Auto;
 			else if (fit.IsSameAs(ibT("wrap"), false))
 				cell->m_fitMode = ibSpreadsheetCellDescription::Mode_Wrap;
 			else if (fit.IsSameAs(ibT("clip"), false))
 				cell->m_fitMode = ibSpreadsheetCellDescription::Mode_Clip;
 			else if (fit.IsSameAs(ibT("ellipsis"), false))
 				cell->m_fitMode = ibSpreadsheetCellDescription::Mode_EllipsizeEnd;
+			else if (fit.IsSameAs(ibT("mask"), false))
+				cell->m_fitMode = ibSpreadsheetCellDescription::Mode_Mask;
 			else {
-				refusal = ibMcpText("Fit is wrap, overflow, clip or ellipsis.");
+				refusal = ibMcpText("Fit is auto, wrap, clip, ellipsis or mask.");
 				return false;
 			}
 		}
@@ -1168,6 +1173,8 @@ public:
 		case ibSpreadsheetCellDescription::Mode_EllipsizeMiddle:
 		case ibSpreadsheetCellDescription::Mode_EllipsizeEnd:
 			result.SetValue(ibT("fit"), ibString(ibT("ellipsis"))); break;
+		case ibSpreadsheetCellDescription::Mode_Mask:
+			result.SetValue(ibT("fit"), ibString(ibT("mask"))); break;
 		default:
 			break;
 		}

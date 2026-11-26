@@ -408,3 +408,80 @@ TEST(SheetFormatPdf, APageDoesNotEndInsideAMergedCell)
 	EXPECT_TRUE(reader.Text(pages[0]).EndsWith(ibT("Row 65")));
 	EXPECT_TRUE(reader.Text(pages[1]).StartsWith(ibT("Row 66\nRow 71")));
 }
+
+// Auto with the cell after it taken, in a row of automatic height: broken into lines, as the screen breaks it
+// (IsCellWrapped) — one line of it was drawn and cut at the column before.
+TEST(SheetFormatPdf, AutoWithTheCellAfterItTakenBreaksIntoLines)
+{
+	ibSpreadsheetDescription sheet;
+	sheet.SetCellValue(0, 0, ibT("A name much longer than its column"));
+	sheet.SetCellValue(0, 1, ibT("100"));
+
+	PdfReader reader(Written(sheet));
+	ASSERT_TRUE(reader.Read());
+	const ibString text = reader.Text(reader.Pages().front());
+	ASSERT_TRUE(text.EndsWith(ibT("\n100")));
+	EXPECT_NE(text.Left(text.Len() - 4).Find(ibChar('\n')), ibNOT_FOUND) << text.ToStdString();
+}
+
+// …and where it runs on to the sheet's end and is still wider there (2026-11-26): there is no paper past the last
+// column, so it breaks rather than being cut at it. One that fits before the end runs on, on one line.
+TEST(SheetFormatPdf, AutoStillWiderAtTheSheetsEndBreaksIntoLines)
+{
+	ibSpreadsheetDescription sheet;
+	sheet.SetCellValue(0, 0, ibT("A name much longer than the whole sheet is wide"));
+	sheet.SetCellValue(1, 1, ibT("100"));   // the sheet is two columns wide
+
+	PdfReader reader(Written(sheet));
+	ASSERT_TRUE(reader.Read());
+	const ibString text = reader.Text(reader.Pages().front());
+	ASSERT_TRUE(text.EndsWith(ibT("\n100")));
+	EXPECT_NE(text.Left(text.Len() - 4).Find(ibChar('\n')), ibNOT_FOUND) << text.ToStdString();
+}
+
+TEST(SheetFormatPdf, AutoThatFitsBeforeTheSheetsEndRunsOnOnOneLine)
+{
+	ibSpreadsheetDescription sheet;
+	sheet.SetCellValue(0, 0, ibT("Sales (New York)"));
+	sheet.SetCellValue(1, 1, ibT("100"));
+
+	PdfReader reader(Written(sheet));
+	ASSERT_TRUE(reader.Read());
+	const ibString text = reader.Text(reader.Pages().front());
+	ASSERT_TRUE(text.EndsWith(ibT("\n100")));
+	EXPECT_EQ(text.Left(text.Len() - 4).Find(ibChar('\n')), ibNOT_FOUND) << text.ToStdString();
+}
+
+// A word wider than its column is cut between its letters, every piece kept.
+TEST(SheetFormatPdf, AWordWiderThanItsColumnIsCutBetweenItsLetters)
+{
+	const ibString word(ibT("Electroencephalographically"));
+	ibSpreadsheetDescription sheet;
+	sheet.SetCellValue(0, 0, word);
+	sheet.SetCellFitMode(0, 0, ibSpreadsheetCellDescription::Mode_Wrap);
+
+	PdfReader reader(Written(sheet));
+	ASSERT_TRUE(reader.Read());
+	ibString text = reader.Text(reader.Pages().front());
+	EXPECT_NE(text.Find(ibChar('\n')), ibNOT_FOUND);
+	text.Replace(ibT("\n"), ibEmptyString);
+	EXPECT_EQ(text, word);
+}
+
+// Mask: a text too wide shown as `#` in its place, one that fits as it is.
+TEST(SheetFormatPdf, AMaskedTextTooWideIsWrittenAsHashes)
+{
+	ibSpreadsheetDescription sheet;
+	sheet.SetCellValue(0, 0, ibT("1 234 567 890 123 456.78"));
+	sheet.SetCellFitMode(0, 0, ibSpreadsheetCellDescription::Mode_Mask);
+	sheet.SetCellValue(1, 0, ibT("12.50"));
+	sheet.SetCellFitMode(1, 0, ibSpreadsheetCellDescription::Mode_Mask);
+
+	PdfReader reader(Written(sheet));
+	ASSERT_TRUE(reader.Read());
+	const ibString text = reader.Text(reader.Pages().front());
+	ASSERT_TRUE(text.EndsWith(ibT("\n12.50")));
+	const ibString masked = text.Left(text.Len() - 6);
+	ASSERT_FALSE(masked.IsEmpty());
+	EXPECT_EQ(masked, ibString(ibChar('#'), masked.Len()));
+}

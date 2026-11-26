@@ -184,6 +184,68 @@ TEST(SheetFormatXlsxRead, AFigureInDigitGroupsIsWrittenAsANumber)
 	EXPECT_EQ(CellText(read, 0, 2), ibString(ibT("007")));
 }
 
+// A PAGE STARTS AT A WORKBOOK'S BREAK AND AT OURS (2026-11-26): `id` is the first line of the new page, and so is our
+// break — taken as it is. A page starts with every sheet but the first, and the sheet's end — the list's maximum, the
+// last row — is stood above the breaks read: without it the last break read was the end, and its page not started.
+TEST(SheetFormatXlsxRead, ABreaksIdIsTheRowItsPageStartsAt)
+{
+	const char* const summary =
+		"<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+		"<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\"><sheetData>"
+		"<row r=\"1\"><c r=\"A1\"><v>1</v></c><c r=\"B1\"><v>1</v></c><c r=\"C1\"><v>1</v></c></row>"
+		"<row r=\"2\"><c r=\"A2\"><v>2</v></c></row>"
+		"<row r=\"3\"><c r=\"A3\"><v>3</v></c></row>"
+		"<row r=\"4\"><c r=\"A4\"><v>4</v></c></row>"
+		"</sheetData>"
+		"<rowBreaks count=\"1\" manualBreakCount=\"1\"><brk id=\"2\" max=\"16383\" man=\"1\"/></rowBreaks>"
+		"<colBreaks count=\"1\" manualBreakCount=\"1\"><brk id=\"1\" max=\"1048575\" man=\"1\"/></colBreaks>"
+		"</worksheet>";
+	const char* const data =
+		"<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+		"<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\"><sheetData>"
+		"<row r=\"1\"><c r=\"A1\"><v>5</v></c></row>"
+		"<row r=\"2\"><c r=\"A2\"><v>6</v></c></row>"
+		"</sheetData></worksheet>";
+
+	ibSpreadsheetDescription sheet;
+	ASSERT_TRUE(Read({
+		{ "xl/_rels/workbook.xml.rels", kRels },
+		{ "xl/workbook.xml", kWorkbook },
+		{ "xl/sharedStrings.xml", kShared },
+		{ "xl/styles.xml", kStyles },
+		{ "xl/worksheets/sheet1.xml", data },
+		{ "xl/worksheets/sheet2.xml", summary },
+	}, sheet));
+
+	ASSERT_EQ(CellText(sheet, 2, 0), ibString(ibT("3")));
+	EXPECT_TRUE(sheet.IsRowBrake(2));       // id 2: the third line starts the page
+	EXPECT_TRUE(sheet.IsRowBrake(4));       // "Data" starts one
+	EXPECT_EQ(sheet.GetMaxRowBrake(), 5);   // …and the sheet ends at its last line
+	EXPECT_EQ(sheet.GetBrakeNumberRows(), 3);
+	EXPECT_TRUE(sheet.IsColBrake(1));
+	EXPECT_EQ(sheet.GetMaxColBrake(), 2);
+}
+
+// …and written back the same way: a break as its page's first line, the sheet's end not as a break after the last.
+TEST(SheetFormatXlsxRead, PageBreaksWrittenComeBackAndTheSheetsEndIsNotOne)
+{
+	ibSpreadsheetDescription sheet;
+	for (int row = 0; row < 6; row++)
+		sheet.SetCellValue(row, 0, ibT("x"));
+	sheet.SetRowBrake(5);   // the sheet's end, as PutArea stands it
+	sheet.AddRowBrake(2);   // a page starts at the third line
+
+	std::ostringstream out(std::ios::binary);
+	ASSERT_TRUE(ibSheetFormatXlsx().Write(out, sheet));
+	std::istringstream in(out.str(), std::ios::binary);
+	ibSpreadsheetDescription read;
+	ASSERT_TRUE(ibSheetFormatXlsx().Read(in, read));
+
+	EXPECT_TRUE(read.IsRowBrake(2));
+	EXPECT_EQ(read.GetMaxRowBrake(), 5);
+	EXPECT_EQ(read.GetBrakeNumberRows(), 2);
+}
+
 TEST(SheetFormatXlsxRead, AnIndentedStylesPartGivesEachCellItsOwnStyle)
 {
 	// The same styles as kStyles, laid out by a program that indents and comments: the tables are indexed by

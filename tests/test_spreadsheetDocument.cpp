@@ -501,6 +501,236 @@ TEST(SpreadsheetDocument, PutArea_CarriesOnlyTheHeightsThatWereSet)
 	EXPECT_EQ(40, doc->GetRowSize(2));
 }
 
+// A PAGE STARTS AT ITS BREAK, and the list's maximum is the sheet's end (2026-11-26). A script's PutHorizontalPageBreak
+// stands the end on the row the next area starts at, and the next put keeps a break there as it moves the end on.
+// Added as a break beside the end, it was the maximum: the next area's end was written over it, and the end it had
+// been stood beside stayed in the list as a break a row early.
+TEST(SpreadsheetDocument, PutArea_KeepsThePageBreakAskedWhereItStarts)
+{
+	auto area = MakeDocument();
+	area->SetCellValue(0, 0, wxT("caption"));
+	area->SetCellValue(1, 0, wxT("line"));
+
+	auto doc = MakeDocument();
+	doc->PutArea(area);
+	doc->SetRowBrake(doc->GetNumberRows());   // PutHorizontalPageBreak
+	doc->PutArea(area);
+
+	EXPECT_TRUE(doc->IsRowBrake(2));      // the second page starts at the second area
+	EXPECT_FALSE(doc->IsRowBrake(1));     // the first area's end is not left behind as a break
+	EXPECT_EQ(3, doc->GetMaxRowBrake());  // the sheet ends at the second area's last row
+	EXPECT_EQ(2, doc->GetSpreadsheetDesc().GetBrakeNumberRows());
+}
+
+// …and a break is there or not: added twice — the grid hands back the one the document told it — it is one.
+TEST(SpreadsheetDocument, AddRowBrake_TwiceIsOneBreak)
+{
+	auto doc = MakeDocument();
+	doc->SetCellValue(5, 0, wxT("x"));
+	doc->SetRowBrake(5);
+	doc->AddRowBrake(3);
+	doc->AddRowBrake(3);
+
+	EXPECT_EQ(2, doc->GetSpreadsheetDesc().GetBrakeNumberRows());
+	doc->DeleteRowBrake(3);
+	EXPECT_FALSE(doc->IsRowBrake(3));
+	EXPECT_EQ(5, doc->GetMaxRowBrake());
+}
+
+// THE AUTOMATIC PLACEMENT (2026-11-26): a text runs on over the empty cell after it, and where it has no room to,
+// breaks into lines in a row of automatic height — a report's column takes a long name onto a second line. One answer
+// for the grid, the printout, the PDF and the row's height, so each case is pinned here.
+TEST(SpreadsheetDocument, IsCellWrapped_AutoRunsOnOverAnEmptyCellAfterIt)
+{
+	auto doc = MakeDocument();
+	doc->SetCellValue(0, 0, wxT("A name longer than its column"));
+
+	EXPECT_FALSE(doc->IsCellWrapped(0, 0));
+}
+
+TEST(SpreadsheetDocument, IsCellWrapped_AutoBreaksWhereTheCellAfterItIsTaken)
+{
+	auto doc = MakeDocument();
+	doc->SetCellValue(0, 0, wxT("A name longer than its column"));
+	doc->SetCellValue(0, 1, wxT("100"));
+
+	EXPECT_TRUE(doc->IsCellWrapped(0, 0));
+	EXPECT_FALSE(doc->IsCellWrapped(0, 1));   // nothing after it
+}
+
+TEST(SpreadsheetDocument, IsCellWrapped_AutoNotAlignedLeftBreaksWithTheCellAfterItEmpty)
+{
+	auto doc = MakeDocument();
+	doc->SetCellValue(0, 0, wxT("Centred"));
+	doc->SetCellAlignment(0, 0, ibAlignmentHorz_Center, ibAlignmentVert_Top);
+
+	EXPECT_TRUE(doc->IsCellWrapped(0, 0));
+}
+
+TEST(SpreadsheetDocument, IsCellWrapped_AutoInARowOfItsOwnHeightIsCut)
+{
+	auto doc = MakeDocument();
+	doc->SetCellValue(0, 0, wxT("A name longer than its column"));
+	doc->SetCellValue(0, 1, wxT("100"));
+	doc->SetRowSize(0, 15);
+
+	EXPECT_FALSE(doc->IsCellWrapped(0, 0));
+}
+
+TEST(SpreadsheetDocument, IsCellWrapped_AutoOverSeveralRowsOrOnItsSideDoesNotBreak)
+{
+	auto doc = MakeDocument();
+	doc->SetCellValue(0, 0, wxT("A block over two rows"));
+	doc->SetCellSize(0, 0, 2, 1);
+	doc->SetCellValue(0, 1, wxT("100"));
+	doc->SetCellValue(3, 0, wxT("On its side"));
+	doc->SetCellTextOrient(3, 0, ibOrient_Vertical);
+	doc->SetCellValue(3, 1, wxT("100"));
+
+	EXPECT_FALSE(doc->IsCellWrapped(0, 0));
+	EXPECT_FALSE(doc->IsCellWrapped(3, 0));
+}
+
+TEST(SpreadsheetDocument, IsCellWrapped_TheCellAfterABlockIsTheOneAfterItsLastColumn)
+{
+	auto doc = MakeDocument();
+	doc->SetCellValue(0, 0, wxT("Across two columns"));
+	doc->SetCellSize(0, 0, 1, 2);
+	doc->SetCellValue(0, 2, wxT("100"));
+
+	EXPECT_TRUE(doc->IsCellWrapped(0, 0));
+}
+
+// The cell after it lies in a block from a row above: the block's owner says whether it is empty, as the grid asks it.
+TEST(SpreadsheetDocument, IsCellWrapped_TheCellAfterItInABlockIsAnsweredByTheBlocksOwner)
+{
+	auto doc = MakeDocument();
+	doc->SetCellSize(0, 1, 2, 1);
+	doc->SetCellValue(1, 0, wxT("A name beside an empty block"));
+	EXPECT_FALSE(doc->IsCellWrapped(1, 0));
+
+	doc->SetCellValue(0, 1, wxT("Taken"));
+	EXPECT_TRUE(doc->IsCellWrapped(1, 0));
+}
+
+TEST(SpreadsheetDocument, IsCellWrapped_WrapAlwaysAndClipNever)
+{
+	auto doc = MakeDocument();
+	doc->SetCellValue(0, 0, wxT("Wrapped"));
+	doc->SetCellFitMode(0, 0, ibSpreadsheetCellDescription::Mode_Wrap);
+	doc->SetRowSize(0, 15);
+	doc->SetCellValue(1, 0, wxT("Clipped"));
+	doc->SetCellFitMode(1, 0, ibSpreadsheetCellDescription::Mode_Clip);
+	doc->SetCellValue(1, 1, wxT("100"));
+
+	EXPECT_TRUE(doc->IsCellWrapped(0, 0));
+	EXPECT_FALSE(doc->IsCellWrapped(1, 0));
+}
+
+// …AND AT THE SHEET'S END (2026-11-26): Auto that runs on to it and is still wider than the room there breaks — there
+// is no paper past the last column. The width is the caller's to measure, and it is asked only of a text that gets there.
+TEST(SpreadsheetDocument, IsCellWrapped_AutoStillWiderAtTheSheetsEndBreaks)
+{
+	auto doc = MakeDocument();
+	doc->SetCellValue(0, 0, wxT("A name longer than the sheet"));
+	doc->SetCellValue(1, 2, wxT("100"));   // the sheet is three columns wide
+	const int room = doc->GetColSize(0) + doc->GetColSize(1) + doc->GetColSize(2);
+
+	EXPECT_TRUE(doc->IsCellWrapped(0, 0, [&] { return room + 1; }));
+	EXPECT_FALSE(doc->IsCellWrapped(0, 0, [&] { return room; }));
+	EXPECT_FALSE(doc->IsCellWrapped(0, 0));   // unmeasured, as a workbook's wrapText asks it
+}
+
+TEST(SpreadsheetDocument, IsCellWrapped_AutoStoppedByAColumnTakenIsNotMeasured)
+{
+	auto doc = MakeDocument();
+	doc->SetCellValue(0, 0, wxT("A name longer than its run"));
+	doc->SetCellValue(0, 2, wxT("100"));
+	bool asked = false;
+
+	EXPECT_FALSE(doc->IsCellWrapped(0, 0, [&] { asked = true; return 100000; }));
+	EXPECT_FALSE(asked);
+}
+
+TEST(SpreadsheetDocument, IsCellWrapped_AtTheSheetsEndARowOfItsOwnHeightStillCuts)
+{
+	auto doc = MakeDocument();
+	doc->SetCellValue(0, 0, wxT("A name longer than the sheet"));
+	doc->SetRowSize(0, 15);
+
+	EXPECT_FALSE(doc->IsCellWrapped(0, 0, [] { return 100000; }));
+}
+
+// HOW FAR A TEXT RUNS ON (2026-11-26): as the grid's renderer runs it — Auto that does not break, aligned left, over
+// the empty columns after it, up to the end of the page's band. The printout and the PDF let it out that far.
+TEST(SpreadsheetDocument, GetCellOverflowCols_AutoRunsOverTheEmptyColumnsAfterItToTheBandsEnd)
+{
+	auto doc = MakeDocument();
+	doc->SetCellValue(0, 0, wxT("A heading longer than its column"));
+
+	EXPECT_EQ(3, doc->GetCellOverflowCols(0, 0, 4));
+	EXPECT_EQ(0, doc->GetCellOverflowCols(0, 0, 1));   // the band ends with the cell
+	EXPECT_EQ(0, doc->GetCellOverflowCols(0, 1, 4));   // an empty cell runs nothing on
+}
+
+TEST(SpreadsheetDocument, GetCellOverflowCols_StopsAtTheFirstColumnTaken)
+{
+	auto doc = MakeDocument();
+	doc->SetCellValue(0, 0, wxT("A heading longer than its column"));
+	doc->SetCellValue(0, 3, wxT("100"));
+
+	EXPECT_EQ(2, doc->GetCellOverflowCols(0, 0, 6));
+}
+
+TEST(SpreadsheetDocument, GetCellOverflowCols_NotAlignedLeftOrNotAutoRunsNothingOn)
+{
+	auto doc = MakeDocument();
+	doc->SetRowSize(0, 15);   // a row of its own height: Auto there is cut, not broken
+	doc->SetCellValue(0, 0, wxT("Centred"));
+	doc->SetCellAlignment(0, 0, ibAlignmentHorz_Center, ibAlignmentVert_Top);
+	doc->SetCellValue(1, 0, wxT("Wrapped"));
+	doc->SetCellFitMode(1, 0, ibSpreadsheetCellDescription::Mode_Wrap);
+	doc->SetCellValue(2, 0, wxT("Masked"));
+	doc->SetCellFitMode(2, 0, ibSpreadsheetCellDescription::Mode_Mask);
+
+	EXPECT_EQ(0, doc->GetCellOverflowCols(0, 0, 4));
+	EXPECT_EQ(0, doc->GetCellOverflowCols(1, 0, 4));
+	EXPECT_EQ(0, doc->GetCellOverflowCols(2, 0, 4));
+}
+
+TEST(SpreadsheetDocument, GetCellOverflowCols_ABlockRunsOnWhereEveryRowOfItIsEmpty)
+{
+	auto doc = MakeDocument();
+	doc->SetCellValue(0, 0, wxT("A block over two rows"));
+	doc->SetCellSize(0, 0, 2, 1);
+	doc->SetCellValue(1, 2, wxT("100"));
+
+	EXPECT_EQ(1, doc->GetCellOverflowCols(0, 0, 4));
+}
+
+// The column after it lies in a block from a row above: the block's owner says whether it is empty.
+TEST(SpreadsheetDocument, GetCellOverflowCols_ACellUnderABlockIsAnsweredByTheBlocksOwner)
+{
+	auto doc = MakeDocument();
+	doc->SetCellSize(0, 2, 2, 1);
+	doc->SetCellValue(1, 0, wxT("A name beside a block"));
+	EXPECT_EQ(3, doc->GetCellOverflowCols(1, 0, 4));
+
+	doc->SetCellValue(0, 2, wxT("Taken"));
+	EXPECT_EQ(1, doc->GetCellOverflowCols(1, 0, 4));
+}
+
+// A text that breaks at the sheet's end keeps its lines in its cell: the printout and the PDF let none of it out.
+TEST(SpreadsheetDocument, GetCellOverflowCols_ATextBrokenAtTheSheetsEndRunsNothingOn)
+{
+	auto doc = MakeDocument();
+	doc->SetCellValue(0, 0, wxT("A name longer than the sheet"));
+	doc->SetCellValue(1, 2, wxT("100"));
+
+	EXPECT_EQ(2, doc->GetCellOverflowCols(0, 0, 3, [] { return 1; }));
+	EXPECT_EQ(0, doc->GetCellOverflowCols(0, 0, 3, [] { return 100000; }));
+}
+
 // ---------------------------------------------------------------------------
 //  Outline groups — what makes a composed report fold
 // ---------------------------------------------------------------------------

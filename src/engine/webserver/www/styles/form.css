@@ -959,6 +959,24 @@ oes-spreadsheet .selection-summary {
 	overflow: visible;
 }
 
+/* …and where it cannot, or is to, breaks onto further lines at the cell's width, a word too long for it between its
+   letters (ibGrid::WrapTextLine); the row grows to them (sheet.js, placeText). */
+.sheet td.wraps {
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}
+
+/* A masked text wider than its cell shows as `#` (sheet.js, maskText): the text stays in the cell for whoever reads
+   it, set at no size, and the `#` stand in its place at its size, where its alignment puts them. */
+.sheet td.masked {
+	font-size: 0 !important;
+}
+
+.sheet td.masked::after {
+	content: attr(data-mask);
+	font-size: var(--oes-mask-size);
+}
+
 .sheet td.decoded {
 	cursor: pointer;
 }
@@ -1242,7 +1260,7 @@ oes-spreadsheet .selection-summary {
 	}
 
 	.sheet tr.page-break {
-		break-after: page;
+		break-before: page;
 	}
 }
 

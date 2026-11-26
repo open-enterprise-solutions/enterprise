@@ -187,6 +187,10 @@ public:
 
 	ibSpreadsheetCellDescription::ibFitMode GetCellFitMode(int row, int col) { return m_spreadsheetDesc.GetCellFitMode(row, col); }
 	void SetCellFitMode(int row, int col, ibSpreadsheetCellDescription::ibFitMode fitMode);
+	bool IsCellWrapped(int row, int col) const { return m_spreadsheetDesc.IsCellWrapped(row, col); }
+	bool IsCellWrapped(int row, int col, const std::function<int()>& textWidth) const { return m_spreadsheetDesc.IsCellWrapped(row, col, textWidth); }
+	int GetCellOverflowCols(int row, int col, int toCol) const { return m_spreadsheetDesc.GetCellOverflowCols(row, col, toCol); }
+	int GetCellOverflowCols(int row, int col, int toCol, const std::function<int()>& textWidth) const { return m_spreadsheetDesc.GetCellOverflowCols(row, col, toCol, textWidth); }
 
 	bool IsCellReadOnly(int row, int col) const { return m_spreadsheetDesc.IsCellReadOnly(row, col); }
 	void SetCellReadOnly(int row, int col, bool isReadOnly = true);

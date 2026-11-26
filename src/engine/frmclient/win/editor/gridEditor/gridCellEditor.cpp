@@ -186,7 +186,7 @@ bool ibGridEditor::ibGridEditorCellTextEditor::EndEdit(int WXUNUSED(row),
 void ibGridEditor::ibGridEditorCellTextEditor::ApplyEdit(int row, int col, ibGrid* grid)
 {
 	// The row's height is not touched here. A row without a height of its own is fitted to its text once
-	// the document has the value (OnGridTableModified, FitAutoRowHeights), and a row with one keeps it.
+	// the document has the value (OnGridTableModified, RequestAutoRowHeights), and a row with one keeps it.
 	// This used to grow the row itself — on screen only, never back, blind to wrapping, and over a height
 	// set by hand: a second road to the same answer, and the one that disagreed with the document.
 	grid->SetCellValue(row, col, m_value);

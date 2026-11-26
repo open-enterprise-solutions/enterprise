@@ -17,6 +17,8 @@
 
 #include <wx/hashmap.h>
 
+#include <algorithm>   // std::max_element — the sheet's end (GetMaxRowBrake)
+
 #if wxUSE_STD_CONTAINERS_COMPATIBLY
 #include <iterator>
 #endif
@@ -726,6 +728,12 @@ public:
 	static ibGridFitMode Clip() { return ibGridFitMode(Mode_Clip); }
 	static ibGridFitMode Overflow() { return ibGridFitMode(Mode_Overflow); }
 	static ibGridFitMode Wrap() { return ibGridFitMode(Mode_Wrap); }
+	// ⭐ THE AUTOMATIC PLACEMENT WHERE IT BREAKS — the text has no room to run on, and the row grows to the lines.
+	// Drawn as Wrap, and told apart from it so that whoever reads the placement back gets the one the cell was
+	// given, not a Wrap nobody set. Where the text runs on, the automatic placement is Overflow.
+	static ibGridFitMode Auto() { return ibGridFitMode(Mode_Auto); }
+	// A line wider than the cell is shown as the `#` that fit in its place (MaskTextLine).
+	static ibGridFitMode Mask() { return ibGridFitMode(Mode_Mask); }
 	static ibGridFitMode Ellipsize(wxEllipsizeMode ellipsize = wxELLIPSIZE_END)
 	{
 		// This cast works because the enum elements are the same, see below.
@@ -737,6 +745,8 @@ public:
 	bool IsClip() const { return m_mode == Mode_Clip; }
 	bool IsOverflow() const { return m_mode == Mode_Overflow; }
 	bool IsWrap() const { return m_mode == Mode_Wrap; }
+	bool IsAuto() const { return m_mode == Mode_Auto; }
+	bool IsMask() const { return m_mode == Mode_Mask; }
 
 	wxEllipsizeMode GetEllipsizeMode() const
 	{
@@ -751,6 +761,8 @@ public:
 		case Mode_Overflow:
 		case Mode_Clip:
 		case Mode_Wrap:
+		case Mode_Auto:
+		case Mode_Mask:
 			break;
 		}
 
@@ -774,7 +786,9 @@ private:
 		Mode_EllipsizeEnd = wxELLIPSIZE_END,
 		Mode_Overflow,
 		Mode_Clip,
-		Mode_Wrap
+		Mode_Wrap,
+		Mode_Auto,
+		Mode_Mask
 	};
 
 	explicit ibGridFitMode(Mode mode) : m_mode(mode) {}
@@ -1927,6 +1941,16 @@ public:
 		int defaultHAlign = wxALIGN_INVALID,
 		int defaultVAlign = wxALIGN_INVALID);
 
+	// A cell's text placed in its rect by its fit mode — broken into lines, masked, ellipsized or drawn as it is.
+	// The screen asks it through the cell's attribute (above), the printout with the mode the document gives.
+	static void DrawTextRectangle(wxDC& dc,
+		const wxString& text,
+		const wxRect& rect,
+		ibGridFitMode fitMode,
+		int horizontalAlignment,
+		int verticalAlignment,
+		int textOrientation);
+
 	// ------ grid render function for printing
 	//
 	void Render(wxDC& dc,
@@ -1947,6 +1971,7 @@ public:
 	// THIS cell wanted wrapping and so wrapped everything. Breaking one line is the part that is the
 	// same either way; who asks for it is not.
 	static void WrapTextLine(wxDC& dc, const wxString& line, int maxWidth, wxArrayString& lines);
+	static void MaskTextLine(wxDC& dc, const wxString& line, int maxWidth, wxArrayString& lines);
 	static void GetTextBoxSize(const wxDC& dc,
 		const wxArrayString& lines,
 		wxArrayInt* arrRow, wxArrayInt* arrCol,
@@ -2711,15 +2736,16 @@ public:
 		return m_rowBrakeAt.Index(row) != wxNOT_FOUND;
 	}
 
+	// the sheet's end: the list's maximum, as the document's — not its last entry, which a break added after it is
 	int GetMaxRowBrake() const {
 		if (!m_rowBrakeAt.IsEmpty())
-			return m_rowBrakeAt.Last();
+			return *std::max_element(m_rowBrakeAt.begin(), m_rowBrakeAt.end());
 		return 0;
 	}
 
 	int GetMaxColBrake() const {
 		if (!m_colBrakeAt.IsEmpty())
-			return m_colBrakeAt.Last();
+			return *std::max_element(m_colBrakeAt.begin(), m_colBrakeAt.end());
 		return 0;
 	}
 
@@ -2964,6 +2990,12 @@ protected:
 	// SEAM vs wx: the theme's frame, as the data view's and the list's - the theme's accent when the focus is inside the
 	// grid (ibGridSubwindow::GetMainWindowOfCompositeControl); the canon's grid had none
 	virtual wxBorder GetDefaultBorder() const wxOVERRIDE { return wxBORDER_THEME; }
+
+	// ⭐ THE ROWS FROM `fromRow` TO `toRow` ARE ABOUT TO BE SHOWN — drawn (ibGridWindow::OnPaint, where every way into
+	// view ends: a scroll, a resize, a fold opened) or scrolled to (MakeCellVisible) — and are sized first by whoever
+	// knows what they hold: a row whose height follows its content is measured when it is first seen, not every row of
+	// the sheet before the first paint (ibGridEditor). The grid itself sizes nothing here.
+	virtual void FitAutoRowHeights(int WXUNUSED(fromRow), int WXUNUSED(toRow)) {}
 
 	bool m_created;
 
@@ -3697,6 +3729,14 @@ private:
 	// sets m_cellEditCtrlEnabled to true when it returns true as a side effect.
 	bool DoShowCellEditControl(const ibGridActivationSource& actSource);
 	void DoHideCellEditControl();
+
+	// Reposition the cell editor if it is currently shown.
+	void RepositionCellEditControlIfNecessary();
+
+	// DoShowCellEditControl() and RepositionCellEditControlIfNecessary() use
+	// this function to really position the editor control.
+	void PositionCellEditControl(ibGridCellEditor* editor, ibGridCellAttr* attr, ibGridWindow* gridWindow,
+		int row, int col, wxRect rect);
 
 	// Unconditionally try showing the editor for the current cell.
 	//

@@ -175,7 +175,7 @@ struct CellStyle {
 	}
 };
 
-CellStyle StyleOf(const ibSpreadsheetCellDescription& cell)
+CellStyle StyleOf(const ibSpreadsheetDescription& sheet, const ibSpreadsheetCellDescription& cell)
 {
 	CellStyle style;
 
@@ -212,13 +212,16 @@ CellStyle StyleOf(const ibSpreadsheetCellDescription& cell)
 		style.m_rotation = 90;
 
 	// ⚠ FIT MODE IS CARRIED AS THE NEAREST TRUE THING, and it is not the same thing.
-	// `Overflow` is exactly Excel's default — text spills right while the neighbour is
-	// empty. `Wrap` is exactly Excel's `wrapText`, and that pair now goes both ways
-	// without loss. `Clip` and the three ellipsize modes still have no counterpart —
-	// Excel has no "cut it off" — so they keep travelling as `wrapText`: the boundary
-	// survives the trip and the manner of confining does not, which is the lesser of
-	// the two lies available.
-	style.m_wrapText = cell.m_fitMode != ibSpreadsheetCellDescription::Mode_Overflow;
+	// `Auto` that runs on is exactly Excel's default — text spills right while the neighbour
+	// is empty; `Auto` that breaks into lines (IsCellWrapped) goes as `wrapText`, and its row,
+	// written without `ht`, is fitted to the lines by the reader as ours is — it comes back
+	// as `Wrap`, which is all the file says. `Wrap` is exactly Excel's `wrapText`, and that
+	// pair goes both ways without loss. `Clip`, the three ellipsize modes and `Mask` still
+	// have no counterpart — Excel has no "cut it off", and fills a cell with `#` only for a
+	// number, by itself — so they keep travelling as `wrapText`: the boundary survives the
+	// trip and the manner of confining does not, which is the lesser of the two lies available.
+	style.m_wrapText = cell.m_fitMode != ibSpreadsheetCellDescription::Mode_Auto
+		|| sheet.IsCellWrapped(cell.m_row, cell.m_col);
 
 	// READ-ONLY is Excel's `locked`, which only bites once a sheet is protected — ours is
 	// not, so this carries the fact rather than enforcing it, and a round trip keeps it.
@@ -430,7 +433,7 @@ bool ibSheetFormatXlsx::Write(std::ostream& output, const ibSpreadsheetDescripti
 		if (cell == nullptr)
 			continue;
 
-		const CellStyle style = StyleOf(*cell);
+		const CellStyle style = StyleOf(sheet, *cell);
 		if (styleAt.try_emplace(style, styles.size()).second)
 			styles.push_back(style);
 	}
@@ -582,7 +585,7 @@ bool ibSheetFormatXlsx::Write(std::ostream& output, const ibSpreadsheetDescripti
 			if (cell->GetSize(&spanRows, &spanCols) == -1)
 				continue;
 
-			const auto found = styleAt.find(StyleOf(*cell));
+			const auto found = styleAt.find(StyleOf(sheet, *cell));
 			const unsigned styleIndex = found != styleAt.end()
 				? static_cast<unsigned>(found->second + 1) : 0u;
 
@@ -664,19 +667,26 @@ bool ibSheetFormatXlsx::Write(std::ostream& output, const ibSpreadsheetDescripti
 		body += ibString::Format(ibT("<mergeCells count=\"%u\">"), mergeCount) + merges + ibT("</mergeCells>");
 
 	// --- page breaks — the sheets a workbook would have had -----------------------
-	const int rowBreaks = sheet.GetBrakeNumberRows();
+	// ⭐ A PAGE STARTS AT OUR BREAK, AND AT A WORKBOOK'S: `id` is the first line of the new page, ours as it is. The
+	// list's maximum is the sheet's end, not a break, and is not written — it was, one line down, as a page break
+	// after the last line.
+	const int rowEnd = sheet.GetMaxRowBrake();
+	const int rowBreaks = sheet.GetBrakeNumberRows() - 1;
 	if (rowBreaks > 0) {
 		body += ibString::Format(ibT("<rowBreaks count=\"%d\" manualBreakCount=\"%d\">"), rowBreaks, rowBreaks);
-		for (int i = 0; i < rowBreaks; i++)
-			body += ibString::Format(ibT("<brk id=\"%d\" max=\"16383\" man=\"1\"/>"), sheet.GetRowBrakeByIdx(i) + 1);
+		for (int i = 0; i < sheet.GetBrakeNumberRows(); i++)
+			if (sheet.GetRowBrakeByIdx(i) != rowEnd)
+				body += ibString::Format(ibT("<brk id=\"%d\" max=\"16383\" man=\"1\"/>"), sheet.GetRowBrakeByIdx(i));
 		body += ibT("</rowBreaks>");
 	}
 
-	const int colBreaks = sheet.GetBrakeNumberCols();
+	const int colEnd = sheet.GetMaxColBrake();
+	const int colBreaks = sheet.GetBrakeNumberCols() - 1;
 	if (colBreaks > 0) {
 		body += ibString::Format(ibT("<colBreaks count=\"%d\" manualBreakCount=\"%d\">"), colBreaks, colBreaks);
-		for (int i = 0; i < colBreaks; i++)
-			body += ibString::Format(ibT("<brk id=\"%d\" max=\"1048575\" man=\"1\"/>"), sheet.GetColBrakeByIdx(i) + 1);
+		for (int i = 0; i < sheet.GetBrakeNumberCols(); i++)
+			if (sheet.GetColBrakeByIdx(i) != colEnd)
+				body += ibString::Format(ibT("<brk id=\"%d\" max=\"1048575\" man=\"1\"/>"), sheet.GetColBrakeByIdx(i));
 		body += ibT("</colBreaks>");
 	}
 

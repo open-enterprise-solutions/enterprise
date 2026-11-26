@@ -9243,11 +9243,6 @@ msgstr "Згори"
 msgid "Bottom"
 msgstr "Знизу"
 
-#: src/engine/backend/system/value/valueSpreadsheet.h:113
-#: src/engine/frmclient/backend/system/value/valueSpreadsheet.h:68
-msgid "Overflow"
-msgstr "Переповнення"
-
 #: src/engine/backend/system/value/valueSpreadsheet.h:114
 #: src/engine/frmclient/backend/system/value/valueSpreadsheet.h:69
 msgid "Clip"
@@ -9258,6 +9253,12 @@ msgstr "Обрізати"
 #: src/engine/frmserver/visualView/ctrl/widgets.h:181
 msgid "Wrap"
 msgstr "Перенесення"
+
+#: src/engine/backend/system/value/valueSpreadsheet.h:116
+#: src/engine/frmclient/backend/system/value/valueSpreadsheet.h:71
+msgctxt "text placement"
+msgid "Mask"
+msgstr "Забивати"
 
 #: src/engine/backend/system/value/valueSpreadsheet.h:129
 #: src/engine/frmclient/backend/system/value/valueSpreadsheet.h:84
@@ -10007,7 +10008,9 @@ msgstr "Виводити фільтр"
 msgid "Show parameters"
 msgstr "Виводити параметри"
 
+#: src/engine/backend/system/value/valueSpreadsheet.h:113
 #: src/engine/core/description/compositionDescription.cpp:1017
+#: src/engine/frmclient/backend/system/value/valueSpreadsheet.h:68
 #: src/engine/frmserver/visualView/controlEnum.h:139
 #: src/engine/frmserver/visualView/controlEnum.h:163
 #: src/engine/frmserver/visualView/controlEnum.h:176
@@ -15592,9 +15595,9 @@ msgstr "Вирівнювання"
 msgid "Fit mode"
 msgstr "Режим підгонки"
 
-#: src/engine/frmclient/win/editor/gridEditor/gridEditor.h:619
-msgid "What happens to text longer than the cell. Overflow (the default): it runs on into empty neighbouring cells. Clip: it is cut at the cell's edge. Wrap: it breaks into lines within the cell."
-msgstr "Що відбувається з текстом, довшим за клітинку. Переповнення (за замовчуванням): текст продовжується в порожніх сусідніх клітинках. Обрізати: текст обрізається по краю клітинки. Перенесення: текст розбивається на рядки всередині клітинки."
+#: src/engine/frmclient/win/editor/gridEditor/gridEditor.h:384
+msgid "What happens to text longer than the cell. Auto (the default): it runs on into the empty cell after it, and where it cannot, it breaks into lines in a row of automatic height and is cut in a row with a height of its own. Clip: it is cut at the cell's edge. Wrap: it breaks into lines within the cell. Mask: the cell is filled with # instead."
+msgstr "Що відбувається з текстом, довшим за клітинку. Авто (за замовчуванням): текст продовжується в порожній клітинці праворуч, а де не може — переноситься на рядки, якщо висота рядка автоматична, і обрізається, якщо рядок має власну висоту. Обрізати: текст обрізається по краю клітинки. Перенесення: текст розбивається на рядки всередині клітинки. Забивати: замість тексту клітинка забивається знаками #."
 
 #: src/engine/frmclient/win/editor/gridEditor/gridEditor.h:622
 msgid "How the text is aligned across the cell: left (the default), center or right."

@@ -39,7 +39,7 @@ EVT_GRID_ROW_BRAKE_SET(ibGridEditor::OnGridRowBrake)
 EVT_GRID_ROW_BRAKE_DELETE(ibGridEditor::OnGridRowBrake)
 EVT_GRID_COL_BRAKE_ADD(ibGridEditor::OnGridColBrake)
 EVT_GRID_COL_BRAKE_SET(ibGridEditor::OnGridColBrake)
-EVT_GRID_COL_BRAKE_DELETE(ibGridEditor::OnGridRowBrake)
+EVT_GRID_COL_BRAKE_DELETE(ibGridEditor::OnGridColBrake)
 EVT_GRID_ROW_AREA_CREATE(ibGridEditor::OnGridRowArea)
 EVT_GRID_ROW_AREA_DELETE(ibGridEditor::OnGridRowArea)
 EVT_GRID_ROW_AREA_SIZE(ibGridEditor::OnGridRowArea)
@@ -51,7 +51,6 @@ EVT_GRID_COL_AREA_NAME(ibGridEditor::OnGridColArea)
 EVT_GRID_ROW_FREEZE(ibGridEditor::OnGridRowFreeze)
 EVT_GRID_COL_FREEZE(ibGridEditor::OnGridColFreeze)
 EVT_SCROLLWIN(ibGridEditor::OnScroll)
-EVT_IDLE(ibGridEditor::OnIdle)
 EVT_SIZE(ibGridEditor::OnSize)
 EVT_MENU(wxID_COPY, ibGridEditor::OnCopy)
 EVT_MENU(wxID_PASTE, ibGridEditor::OnPaste)
@@ -552,7 +551,7 @@ void ibGridEditor::OnGridColSize(ibGridSizeEvent& event)
 	}
 
 	// A wrapped caption in this column takes more lines, or fewer, at the new width.
-	FitAutoRowHeights();
+	RequestAutoRowHeights(0, ibGrid::GetNumberRows() - 1);
 
 	event.Skip();
 }
@@ -579,12 +578,14 @@ void ibGridEditor::OnGridRowBrake(ibGridSizeEvent& event)
 			else if (event.GetEventType() == ibEVT_GRID_ROW_BRAKE_SET)
 				spreadsheetDescription.SetRowBrake(event.GetRowOrCol());
 			else if (event.GetEventType() == ibEVT_GRID_ROW_BRAKE_DELETE)
-				spreadsheetDescription.AddRowBrake(event.GetRowOrCol());
+				spreadsheetDescription.DeleteRowBrake(event.GetRowOrCol());
 		}
 
 		m_document->Modify(true);
 	}
 
+	// A break the document told the grid comes back here too, and is written again: a break is there or not
+	// (AddRowBrake), so that is the same list.
 	if (m_spreadsheetObject != nullptr) {
 		ibSpreadsheetDescription& spreadsheetDescription = m_spreadsheetObject->GetSpreadsheetDesc();
 		if (event.GetEventType() == ibEVT_GRID_ROW_BRAKE_ADD)
@@ -592,7 +593,7 @@ void ibGridEditor::OnGridRowBrake(ibGridSizeEvent& event)
 		else if (event.GetEventType() == ibEVT_GRID_ROW_BRAKE_SET)
 			spreadsheetDescription.SetRowBrake(event.GetRowOrCol());
 		else if (event.GetEventType() == ibEVT_GRID_ROW_BRAKE_DELETE)
-			spreadsheetDescription.AddRowBrake(event.GetRowOrCol());
+			spreadsheetDescription.DeleteRowBrake(event.GetRowOrCol());
 	}
 
 	event.Skip();
@@ -617,7 +618,7 @@ void ibGridEditor::OnGridColBrake(ibGridSizeEvent& event)
 			else if (event.GetEventType() == ibEVT_GRID_COL_BRAKE_SET)
 				spreadsheetDescription.SetColBrake(event.GetRowOrCol());
 			else if (event.GetEventType() == ibEVT_GRID_COL_BRAKE_DELETE)
-				spreadsheetDescription.AddRowBrake(event.GetRowOrCol());
+				spreadsheetDescription.DeleteColBrake(event.GetRowOrCol());
 		}
 
 		m_document->Modify(true);
@@ -630,7 +631,7 @@ void ibGridEditor::OnGridColBrake(ibGridSizeEvent& event)
 		else if (event.GetEventType() == ibEVT_GRID_COL_BRAKE_SET)
 			spreadsheetDescription.SetColBrake(event.GetRowOrCol());
 		else if (event.GetEventType() == ibEVT_GRID_COL_BRAKE_DELETE)
-			spreadsheetDescription.AddRowBrake(event.GetRowOrCol());
+			spreadsheetDescription.DeleteColBrake(event.GetRowOrCol());
 	}
 
 	event.Skip();
@@ -794,7 +795,7 @@ void ibGridEditor::OnGridTableModified(ibGridEvent& event)
 	// (The document has it already: the table wrote it there — ibGridEditorTable::SetValue.)
 
 	// The text changed, and with it the height it needs (a row without a height of its own follows it).
-	FitAutoRowHeights(event.GetRow(), event.GetRow());
+	RequestAutoRowHeights(event.GetRow(), event.GetRow());
 
 	event.Skip();
 }
@@ -881,8 +882,8 @@ void ibGridEditor::OnGridTableAttrModified(ibGridEvent& event)
 		spreadsheetDescription.SetCellReadOnly(event.GetRow(), event.GetCol(), IsCellReadOnly(event.GetRow(), event.GetCol()));
 	}
 
-	// A font, a placement, a merge — each changes the height the row's text needs; the document has it now.
-	FitAutoRowHeights(event.GetRow(), event.GetRow() + wxMax(num_rows, 1) - 1);
+	// A font, a placement, an alignment, a merge — each changes the height the row's text needs.
+	RequestAutoRowHeights(event.GetRow(), event.GetRow() + wxMax(num_rows, 1) - 1);
 
 	event.Skip();
 }
@@ -1026,18 +1027,6 @@ void ibGridEditor::OnScroll(wxScrollWinEvent& event)
 				ibGrid::DeleteCols(x, extraCols);
 			ibGrid::SetScrollPos(wxOrientation::wxHORIZONTAL, (sx + scroll) / ux);
 		}
-	}
-
-	event.Skip();
-}
-
-void ibGridEditor::OnIdle(wxIdleEvent& event)
-{
-	// The rows a notifier marked (RequestAutoRowHeights) — the document holds what it was told by now.
-	if (m_autoHeightFrom >= 0) {
-		const int fromRow = m_autoHeightFrom, toRow = m_autoHeightTo;
-		m_autoHeightFrom = m_autoHeightTo = -1;
-		FitAutoRowHeights(fromRow, toRow);
 	}
 
 	event.Skip();
@@ -1274,7 +1263,7 @@ void ibGridEditor::OnRowHeight(wxCommandEvent& event)
 	if (result == wxID_OK) {
 
 		// The window stands still while the rows are set: each one moves everything below it, and the
-		// repaints in between are the flicker (see FitAutoRowHeights).
+		// repaints in between are the flicker.
 		wxWindowUpdateLocker freeze(this);
 		ibGrid::BeginBatch();
 
@@ -1292,7 +1281,7 @@ void ibGridEditor::OnRowHeight(wxCommandEvent& event)
 						m_spreadsheetObject->GetSpreadsheetDesc().ResetRowSize(row);
 				}
 				// …and the rows follow their text again, from this height on.
-				FitAutoRowHeights(cell.GetTopRow(), cell.GetBottomRow());
+				RequestAutoRowHeights(cell.GetTopRow(), cell.GetBottomRow());
 
 				if (m_document != nullptr)
 					m_document->Modify(true);
@@ -1346,7 +1335,7 @@ void ibGridEditor::OnColWidth(wxCommandEvent& event)
 		}
 
 		// A wrapped caption takes more lines, or fewer, at the new width — the same as after a drag.
-		FitAutoRowHeights();
+		RequestAutoRowHeights(0, ibGrid::GetNumberRows() - 1);
 
 		ibGrid::EndBatch();
 	}
@@ -1372,7 +1361,7 @@ void ibGridEditor::OnFitColWidth(wxCommandEvent& event)
 	}
 	ibGrid::EndBatch();
 
-	FitAutoRowHeights();
+	RequestAutoRowHeights(0, ibGrid::GetNumberRows() - 1);
 }
 
 void ibGridEditor::OnHideCell(wxCommandEvent& event)

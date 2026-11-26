@@ -5,7 +5,9 @@
 #include "core/fstring.h"
 #include "core/graphics/colour.h"
 #include "core/graphics/font.h"
+#include "core/localization/localization.h"   // a cell's text holds every language (IsEmptyCell)
 
+#include <functional>      // the width a text takes, measured by whoever lays it out (IsCellWrapped)
 #include <unordered_map>   // the cell index — MSVC drags it in transitively, libstdc++ does not
 #include <memory>          // the cells' blocks — see m_cellAt: their addresses must survive a later insert
 #include <new>             // …and each cell is made in place inside its block
@@ -37,13 +39,18 @@ enum ibSpreadsheetAlignmentVert {
 };
 
 enum ibSpreadsheetFitMode {
-	ibFitMode_Overflow = 4,
+	// Run on over the empty cell after it; where it cannot, break onto further lines in a row of automatic height
+	// and be cut in a row of its own height (ibSpreadsheetDescription::IsCellWrapped). The default.
+	ibFitMode_Auto = 4,
 	ibFitMode_Clip = 5,
 	// Wrap the text onto further lines inside the cell instead of running past its edge or cutting
 	// it off. The commonest placement in real blanks by a wide margin - a header cell that reads
 	// "Quantity of packages" over a 15mm column has nowhere else to go (measured over 186 templates,
 	// 2026-09-05). Appended, never inserted: the value is what gets serialised.
-	ibFitMode_Wrap = 6
+	ibFitMode_Wrap = 6,
+	// A line wider than the cell is not shown at all: the `#` that fit stand in its place (Max, 2026-11-26) — a
+	// number cut or run on would read as another number.
+	ibFitMode_Mask = 7
 };
 
 enum ibSpreadsheetPenStyle {
@@ -116,13 +123,14 @@ struct ibSpreadsheetCellDescription {
 		Mode_EllipsizeStart = 1,    // wxELLIPSIZE_START
 		Mode_EllipsizeMiddle = 2,   // wxELLIPSIZE_MIDDLE
 		Mode_EllipsizeEnd = 3,      // wxELLIPSIZE_END
-		Mode_Overflow,
+		Mode_Auto,
 		Mode_Clip,
 		// ⚠ AND THE SHEET-LEVEL `ibSpreadsheetFitMode` GETS THE SAME MEMBER AT THE SAME VALUE. The
-		// two enums are separate and count alike from Overflow = 4 on purpose; adding a mode to one
+		// two enums are separate and count alike from Auto = 4 on purpose; adding a mode to one
 		// and not the other compiles everywhere except where the two meet, which is exactly how
 		// this one first failed (2026-09-05).
-		Mode_Wrap
+		Mode_Wrap,
+		Mode_Mask
 	};
 
 	ibSpreadsheetCellDescription(int row, int col) : m_row(row), m_col(col) {}
@@ -254,7 +262,7 @@ struct ibSpreadsheetCellDescription {
 	ibColour m_textColour;
 	ibSpreadsheetBorderDescription m_borderAt[4]; //left, right, top, bottom
 	int m_row_size = 1, m_col_size = 1;
-	ibFitMode m_fitMode = ibFitMode::Mode_Overflow;
+	ibFitMode m_fitMode = ibFitMode::Mode_Auto;
 	bool m_isReadOnly = false;
 	ibSpreadsheetFillType m_fillSetType = ibSpreadsheetFillType::ibSpreadsheetFillType_StrText;
 	ibString m_detailsParameter;
@@ -899,12 +907,105 @@ struct ibSpreadsheetDescription {
 	ibSpreadsheetCellDescription::ibFitMode GetCellFitMode(int row, int col) {
 		ibSpreadsheetCellDescription* cell = GetOrCreateCell(row, col);
 		if (cell != nullptr) return cell->m_fitMode;
-		return ibSpreadsheetCellDescription::ibFitMode::Mode_Overflow;
+		return ibSpreadsheetCellDescription::ibFitMode::Mode_Auto;
 	}
 
 	void SetCellFitMode(int row, int col, ibSpreadsheetCellDescription::ibFitMode fitMode) {
 		ibSpreadsheetCellDescription* cell = GetOrCreateCell(row, col);
 		if (cell != nullptr) cell->m_fitMode = fitMode;
+	}
+
+	// ⭐⭐ WHETHER THE CELL'S TEXT BREAKS INTO LINES AT ITS WIDTH — one answer for whoever lays the sheet out: the
+	// grid, the printout, the PDF, a workbook's wrapText, and the height of a row of automatic height (HasRowSize).
+	// Asked of each by itself they broke different lines, and paper came out a row apart from the screen.
+	//
+	// Wrap always. Auto where the text has no room to run on — centred or to the right, or the cell after it taken —
+	// in a row of automatic height, which grows to the lines (Max, 2026-11-26: a report's column takes its long name
+	// onto a second line). A row of its own height keeps it, and the text is cut as before: a block that is a fixed
+	// piece of paper does not break its text into lines it has no room for. Nor does a block over several rows, whose
+	// height no row answers for alone, nor text on its side.
+	//
+	// ⚠ THE CELL AFTER IT IS EMPTY AS THE GRID SEES IT (ibGridCellStringRenderer::Draw runs the text over it): the
+	// owner of the block it lies in, and empty in every language. Answered otherwise, a row would grow for a text the
+	// screen runs on over its neighbour.
+	//
+	// Asked without the text's width, the sheet's end is not looked at (see the overload below): a workbook's
+	// wrapText, and the run GetCellOverflowCols counts.
+	bool IsCellWrapped(int row, int col) const { return IsCellWrapped(row, col, nullptr); }
+
+	// ⭐ …AND AUTO THAT RUNS ON TO THE SHEET'S END AND STILL DOES NOT FIT THERE (Max, 2026-11-26: "those that go past
+	// the print boundary"). Past the last column there is no paper: printed, such a text was cut at it, while the
+	// screen ran it on over columns the sheet does not have. It breaks as by a cell after it taken, on paper and on
+	// screen alike. `textWidth` is the width the text takes drawn as it stands — its widest line and what the cell
+	// keeps around it, in the sheet's pixels: the fonts are whoever lays it out's, not the core's — and it is asked
+	// only of a text that runs to the end.
+	bool IsCellWrapped(int row, int col, const std::function<int()>& textWidth) const {
+		const ibSpreadsheetCellDescription* cell = GetCell(row, col);
+		if (cell == nullptr)
+			return false;
+		if (cell->m_fitMode == ibSpreadsheetCellDescription::Mode_Wrap)
+			return true;
+		if (cell->m_fitMode != ibSpreadsheetCellDescription::Mode_Auto
+			&& cell->m_fitMode != ibSpreadsheetCellDescription::Mode_Unset)
+			return false;
+
+		int spanRows = 1, spanCols = 1;
+		if (HasRowSize(row) || cell->GetSize(&spanRows, &spanCols) < 0 || spanRows > 1
+			|| cell->m_textOrient == ibOrient_Vertical)
+			return false;
+		if (cell->m_alignHorz != ibAlignmentHorz_Left)
+			return true;
+
+		int nextRow = 0;
+		if (GetCellSize(row, col + spanCols, &nextRow, nullptr) >= 0 || nextRow > 0)
+			nextRow = 0;
+		if (!IsEmptyCell(row + nextRow, col + spanCols))
+			return true;
+
+		if (textWidth == nullptr || IsEmptyCell(row, col)
+			|| col + spanCols + GetCellOverflowCols(row, col, GetNumberCols()) < GetNumberCols())
+			return false;
+		int room = 0;
+		for (int at = col; at < GetNumberCols(); at++)
+			room += GetColSize(at);
+		return textWidth() > room;
+	}
+
+	// ⭐ HOW MANY COLUMNS AFTER THE CELL ITS TEXT RUNS ON OVER, the columns before `toCol` only (the end of a
+	// page's band) — as the grid's renderer runs it (ibGridCellStringRenderer::Draw, ibGridCellAttr::CanOverflow):
+	// Auto that does not break (IsCellWrapped), aligned left and level, over the columns after it empty in every
+	// row it spans, a cell under a block answered by the block's owner (IsEmptyCell). The printout and the PDF let
+	// its text out that far; a text narrower than the cell draws no further whatever this says. Paper let centred
+	// and right-aligned text out to the left as well while the screen cut it (2026-11-26).
+	int GetCellOverflowCols(int row, int col, int toCol) const {
+		const ibSpreadsheetCellDescription* cell = GetCell(row, col);
+		if (cell == nullptr || cell->m_alignHorz != ibAlignmentHorz_Left || cell->m_textOrient == ibOrient_Vertical
+			|| IsEmptyCell(row, col))
+			return 0;
+		if (cell->m_fitMode != ibSpreadsheetCellDescription::Mode_Auto
+			&& cell->m_fitMode != ibSpreadsheetCellDescription::Mode_Unset)
+			return 0;
+
+		int spanRows = 1, spanCols = 1;
+		if (cell->GetSize(&spanRows, &spanCols) < 0 || IsCellWrapped(row, col))
+			return 0;
+
+		int cols = 0;
+		for (int at = col + spanCols; at < toCol; at++, cols++) {
+			for (int r = row; r < row + spanRows; r++) {
+				int ownerRow = 0, ownerCol = 0;
+				if (GetCellSize(r, at, &ownerRow, &ownerCol) >= 0 || ownerRow > 0 || ownerCol > 0)
+					ownerRow = ownerCol = 0;
+				if (!IsEmptyCell(r + ownerRow, at + ownerCol))
+					return cols;
+			}
+		}
+		return cols;
+	}
+
+	// …and none for a text that breaks at the sheet's end (IsCellWrapped with its width): its lines stay in the cell.
+	int GetCellOverflowCols(int row, int col, int toCol, const std::function<int()>& textWidth) const {
+		return IsCellWrapped(row, col, textWidth) ? 0 : GetCellOverflowCols(row, col, toCol);
 	}
 
 	// ⭐ A READ THAT DOES NOT WRITE. This asked GetOrCreateCell, so ASKING whether a cell was
@@ -928,24 +1029,31 @@ struct ibSpreadsheetDescription {
 	// ------ cell brake accessors
 	//
 	//support printing 
-	void AddRowBrake(int row) { m_rowBrakeAt.emplace_back(row); }
-	void AddColBrake(int col) { m_colBrakeAt.emplace_back(col); }
+	// ⭐ A BREAK r: A PAGE STARTS AT ROW r (Max, 2026-11-26) — the printout, the PDF, the grid's dashed line above r.
+	// The list's MAXIMUM is the sheet's end instead, its last row (SetRowBrake). A break is there or not: added twice
+	// it is one, as the grid's.
+	void AddRowBrake(int row) { if (!IsRowBrake(row)) m_rowBrakeAt.emplace_back(row); }
+	void AddColBrake(int col) { if (!IsColBrake(col)) m_colBrakeAt.emplace_back(col); }
 
 	void DeleteRowBrake(int row) { std::erase(m_rowBrakeAt, row); }
 	void DeleteColBrake(int col) { std::erase(m_colBrakeAt, col); }
 
+	// the sheet's end moves: written over the list's maximum — capped by the maximum itself, not by the list's last
+	// entry, which is a break when one was added after the end
 	void SetRowBrake(int row) {
-		if (m_rowBrakeAt.size() != 0)
-			m_rowBrakeAt[std::distance(m_rowBrakeAt.begin(),
-				std::max_element(m_rowBrakeAt.begin(), m_rowBrakeAt.end()))] = std::max<unsigned int>(std::min<unsigned int>(m_rowBrakeAt[m_rowBrakeAt.size() - 1], GetNumberRows() - 1), row);
+		if (m_rowBrakeAt.size() != 0) {
+			const auto end = std::max_element(m_rowBrakeAt.begin(), m_rowBrakeAt.end());
+			*end = std::max<unsigned int>(std::min<unsigned int>(*end, GetNumberRows() - 1), row);
+		}
 		else
 			m_rowBrakeAt.emplace_back(row);
 	}
 
 	void SetColBrake(int col) {
-		if (m_colBrakeAt.size() != 0)
-			m_colBrakeAt[std::distance(m_colBrakeAt.begin(),
-				std::max_element(m_colBrakeAt.begin(), m_colBrakeAt.end()))] = std::max<unsigned int>(std::min<unsigned int>(m_colBrakeAt[m_colBrakeAt.size() - 1], GetNumberCols() - 1), col);
+		if (m_colBrakeAt.size() != 0) {
+			const auto end = std::max_element(m_colBrakeAt.begin(), m_colBrakeAt.end());
+			*end = std::max<unsigned int>(std::min<unsigned int>(*end, GetNumberCols() - 1), col);
+		}
 		else
 			m_colBrakeAt.emplace_back(col);
 	}
@@ -996,11 +1104,16 @@ struct ibSpreadsheetDescription {
 
 	// ------ cell value accessors
 	//
+	// ⭐ EMPTY AS IT IS SHOWN — a text or a template with no text in any language, a parameter with no name. One
+	// answer for the grid's table (ibGridEditorTable::IsEmptyCell), a script's area (IsEmpty) and a text that runs
+	// on over the cells after it (IsCellWrapped, GetCellOverflowCols): this asked the raw value, while the grid's
+	// table and the PDF each asked in a way of their own.
 	bool IsEmptyCell(int row, int col) const {
 		const ibSpreadsheetCellDescription* cell = GetCell(row, col);
-		if (cell != nullptr)
-			return cell->IsEmptyValue();
-		return true;
+		if (cell == nullptr)
+			return true;
+		return cell->m_fillSetType == ibSpreadsheetFillType_StrParameter
+			? cell->m_value.IsEmpty() : ibLocalization::IsEmptyLocalizationString(cell->m_value);
 	}
 
 	ibSpreadsheetFillType GetFillType(int row, int col) const {

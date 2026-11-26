@@ -2733,12 +2733,39 @@ wxEND_EVENT_TABLE()
 
 void ibGridWindow::OnPaint(wxPaintEvent& WXUNUSED(event))
 {
+	// ⭐ THE ROWS IN VIEW ARE SIZED BEFORE ANY OF THEM IS DRAWN (ibGrid::FitAutoRowHeights) — and before the paint DC
+	// is taken, so that what sizing them invalidates is painted NOW: on MSW BeginPaint takes the window's invalid
+	// region as it stands, and a refresh after it waits for the next paint. A row whose height changed moves every row
+	// under it, the pixels scrolled into place included, so then the whole window is painted — and the cell's editor,
+	// moved by a scroll as its pixels were (ibGrid::ScrollWindow), is put over its cell again. The rows in view are
+	// found as CalcRowLabelsExposed finds them.
+	wxRegion reg = GetUpdateRegion();
+	if (m_owner->GetNumberRows() > 0) {
+		wxRect view(GetClientSize());
+		view.Offset(m_owner->GetGridWindowOffset(this));
+		int x, top, bottom;
+		m_owner->CalcGridWindowUnscrolledPosition(0, view.GetTop(), &x, &top, this);
+		m_owner->CalcGridWindowUnscrolledPosition(0, view.GetBottom(), &x, &bottom, this);
+		const int fromRow = m_owner->YToRow(top, true, this), toRow = m_owner->YToRow(bottom, true, this);
+
+		std::vector<int> heights;
+		for (int row = fromRow; row <= toRow; row++)
+			heights.push_back(m_owner->GetRowHeight(row));
+		m_owner->FitAutoRowHeights(fromRow, toRow);
+		for (int row = fromRow; row <= toRow; row++) {
+			if (m_owner->GetRowHeight(row) != heights[row - fromRow]) {
+				reg = wxRegion(GetClientRect());
+				m_owner->RepositionCellEditControlIfNecessary();
+				break;
+			}
+		}
+	}
+
 	// ⚠ THE CELL WINDOW PAINTS ITS WHOLE RECTANGLE ITSELF (DrawGridSpace fills what the cells do
 	// not cover), so its buffer takes no background first; the strips around it draw only their
 	// items and take theirs from the ibThemePaintDC they paint on (ibGridSubwindow)
 	wxAutoBufferedPaintDC dc(this);
 	m_owner->PrepareDCFor(dc, this);
-	wxRegion reg = GetUpdateRegion();
 
 	ibGridCellCoordsArray dirtyCells;
 
@@ -3730,7 +3757,7 @@ void ibGrid::CalcDimensions()
 
 	// compute the size of the scrollable area
 	int w = m_numCols > 0 ? GetColRight(GetColAt(m_numCols - 1), GetGridZoom()) : 0;
-	int h = m_numRows > 0 ? GetRowBottom(m_numRows - 1, GetGridZoom()) : 0;
+	int h = m_numRows > 0 ? GetRowBottom(GetRowAt(m_numRows - 1), GetGridZoom()) : 0;
 
 	w += m_extraWidth;
 	h += m_extraHeight;
@@ -6599,6 +6626,7 @@ void ibGrid::OnSize(wxSizeEvent& event)
 	{
 		// reposition our children windows
 		CalcWindowSizes();
+		RepositionCellEditControlIfNecessary();
 		event.Skip();
 	}
 }
@@ -6612,31 +6640,17 @@ void ibGrid::OnDPIChanged(wxDPIChangedEvent& event)
 	// inside InitPixelFields() above).
 	if (!m_rowHeights.empty())
 	{
+		// Note that even hidden rows heights must be scaled (kept negative) to
+		// ensure that they appear in the expected size if they are shown again.
 		for (unsigned i = 0; i < m_rowHeights.size(); ++i)
-		{
-			int height = m_rowHeights[i];
-
-			// Skip hidden rows.
-			if (height <= 0)
-				continue;
-
-			m_rowHeights.Set(i, event.ScaleY(height));
-		}
+			m_rowHeights.Set(i, event.ScaleY(m_rowHeights[i]));
 	}
 
 	// Similarly for columns.
 	if (!m_colWidths.empty())
 	{
-		int total = 0;
 		for (unsigned i = 0; i < m_colWidths.size(); ++i)
-		{
-			int width = m_colWidths[i];
-
-			if (width <= 0)
-				continue;
-
-			m_colWidths.Set(i, event.ScaleX(width));
-		}
+			m_colWidths.Set(i, event.ScaleX(m_colWidths[i]));
 	}
 
 	InvalidateBestSize();
@@ -7889,11 +7903,14 @@ ibGrid::DoDrawGridNonClippingRegionLines(wxDC& dc,
 
 		int bot = GetRowBottom(i, GetGridZoom()) - 1;
 
-		//draw col print brake
+		// ⭐ A PAGE STARTS AT ITS BREAK, so the line is drawn ABOVE that row — under the one before it, where the page
+		// before ends. The list's maximum is the sheet's end, and it is drawn under its own row (Max, 2026-11-26: the
+		// printout, the PDF and this one meaning).
 		if (IsRowBrake(i))
 		{
+			const int at = i == GetMaxRowBrake() ? bot : GetRowTop(i, GetGridZoom()) - 1;
 			dc.SetPen(wxPen(*wxBLACK, 1, wxPENSTYLE_SHORT_DASH));
-			dc.DrawLine(left, bot, right, bot);
+			dc.DrawLine(left, at, right, at);
 		}
 
 		if (GridRowAreaEnabled())
@@ -7932,11 +7949,12 @@ ibGrid::DoDrawGridNonClippingRegionLines(wxDC& dc,
 #endif
 			colRight--;
 
-		//draw col print brake
+		// …and a page's columns the same: left of its break, right of the sheet's end
 		if (IsColBrake(i))
 		{
+			const int at = i == GetMaxColBrake() ? colRight : GetColLeft(i, GetGridZoom()) - 1;
 			dc.SetPen(wxPen(*wxBLACK, 1, wxPENSTYLE_SHORT_DASH));
-			dc.DrawLine(colRight, top, colRight, bottom);
+			dc.DrawLine(at, top, at, bottom);
 		}
 
 		if (GridColAreaEnabled())
@@ -8394,7 +8412,17 @@ void ibGrid::DrawTextRectangle(wxDC& dc,
 	int vAlign)
 {
 	attr.GetNonDefaultAlignment(&hAlign, &vAlign);
+	DrawTextRectangle(dc, text, rect, attr.GetFitMode(), hAlign, vAlign, attr.GetTextOrient());
+}
 
+void ibGrid::DrawTextRectangle(wxDC& dc,
+	const wxString& text,
+	const wxRect& rect,
+	ibGridFitMode fitMode,
+	int hAlign,
+	int vAlign,
+	int textOrientation)
+{
 	// ⭐⭐ WRAP: THE COMMONEST PLACEMENT IN A REAL BLANK, and the one this control could not do. A
 	// column header reading "Quantity of packages" over a 15mm column has nowhere to go but onto a
 	// second line — the other two modes answer that by spilling over the neighbour or by cutting the
@@ -8405,20 +8433,29 @@ void ibGrid::DrawTextRectangle(wxDC& dc,
 	// fixed piece of paper - so wrapping fills the height that is there and no more. A row that has NO
 	// height of its own is another matter: it has automatic height, and the editor sizes it to its text
 	// beforehand (ibSpreadsheetRowHeight, gridEditorDoc.cpp) - drawing still only fills what is there.
-	if (attr.GetFitMode().IsWrap()) {
+	//
+	// The automatic placement where its text has no room to run on breaks the same way (ibGridFitMode::Auto).
+	// A masked text keeps its lines, each one too wide shown as `#` (MaskTextLine).
+	if (fitMode.IsWrap() || fitMode.IsAuto() || fitMode.IsMask()) {
 
 		wxArrayString natural;
 		ParseLines(text, natural);
 
+		const int room = (fitMode.IsMask() && textOrientation != wxHORIZONTAL ? rect.GetHeight() : rect.GetWidth())
+			- 2 * GRID_TEXT_MARGIN;
 		wxArrayString lines;
-		for (const wxString& one : natural)
-			WrapTextLine(dc, one, rect.GetWidth() - 2 * GRID_TEXT_MARGIN, lines);
+		for (const wxString& one : natural) {
+			if (fitMode.IsMask())
+				MaskTextLine(dc, one, room, lines);
+			else
+				WrapTextLine(dc, one, room, lines);
+		}
 
-		DrawTextRectangle(dc, lines, rect, hAlign, vAlign, attr.GetTextOrient());
+		DrawTextRectangle(dc, lines, rect, hAlign, vAlign, textOrientation);
 		return;
 	}
 
-	const wxEllipsizeMode mode = attr.GetFitMode().GetEllipsizeMode();
+	const wxEllipsizeMode mode = fitMode.GetEllipsizeMode();
 	if (mode != wxEllipsizeMode::wxELLIPSIZE_NONE) {
 
 		// This does nothing if there is no need to ellipsize.
@@ -8426,16 +8463,16 @@ void ibGrid::DrawTextRectangle(wxDC& dc,
 		(
 			text,
 			dc,
-			attr.GetFitMode().GetEllipsizeMode(),
+			mode,
 			rect.GetWidth() - 2 * GRID_TEXT_MARGIN,
 			wxELLIPSIZE_FLAGS_NONE
 		);
 
-		DrawTextRectangle(dc, ellipsizedText, rect, hAlign, vAlign, attr.GetTextOrient());
+		DrawTextRectangle(dc, ellipsizedText, rect, hAlign, vAlign, textOrientation);
 	}
 	else {
 
-		DrawTextRectangle(dc, text, rect, hAlign, vAlign, attr.GetTextOrient());
+		DrawTextRectangle(dc, text, rect, hAlign, vAlign, textOrientation);
 	}
 }
 
@@ -8443,9 +8480,11 @@ void ibGrid::DrawTextRectangle(wxDC& dc,
 // The caller has already split on newlines: a wrapped cell honours the breaks that were typed AND
 // adds its own, which is what a person means by both.
 //
-// ⚠ A WORD LONGER THAN THE COLUMN STILL GOES OUT ON ITS OWN LINE rather than being cut mid-letter.
-// A cell narrow enough for that is a layout to fix, and half a word is not a better answer than an
-// overhang - the overhang is at least legible and visibly wrong.
+// ⭐ A WORD WIDER THAN THE COLUMN IS CUT BETWEEN ITS LETTERS, each piece as wide as fits (Max, 2026-11-26).
+// It went out whole on a line of its own and ran past the cell's edge — and in a report's column the
+// cell after it is taken, so the overhang was cut there and the rest of the word was lost anyway. A
+// space never starts a piece (it stays with the letters before it, as with the word before it), nor
+// does the second half of a surrogate pair. The PDF breaks a line by the same rule (sheetFormatPdf.cpp).
 void ibGrid::WrapTextLine(wxDC& dc, const wxString& line, int maxWidth, wxArrayString& lines)
 {
 	if (maxWidth <= 0 || line.IsEmpty()) {
@@ -8477,24 +8516,49 @@ void ibGrid::WrapTextLine(wxDC& dc, const wxString& line, int maxWidth, wxArrayS
 		const wxString word = line.Mid(at, end - at);
 		at = end;
 
-		if (current.IsEmpty()) {
-			current = word;
-			continue;
-		}
-
-		dc.GetTextExtent(current + word, &width, &height);
-
-		if (width <= maxWidth) {
-			current += word;
-		}
-		else {
+		if (!current.IsEmpty()) {
+			dc.GetTextExtent(current + word, &width, &height);
+			if (width <= maxWidth) {
+				current += word;
+				continue;
+			}
 			lines.Add(current);
-			current = word;
 		}
+
+		// The word starts a line: whole where it fits, else in pieces. extents[i] is the width of its
+		// letters up to and including i, so a piece from `from` to i is the difference.
+		wxArrayInt extents;
+		size_t from = 0;
+		if (dc.GetPartialTextExtents(word, extents)) {
+			for (size_t i = 1; i < word.length(); i++) {
+				const wxUniChar letter = word[i];
+				const int before = from > 0 ? extents[from - 1] : 0;
+				if (extents[i] - before > maxWidth && letter != wxT(' ')
+					&& !(letter.GetValue() >= 0xDC00 && letter.GetValue() <= 0xDFFF)) {
+					lines.Add(word.Mid(from, i - from));
+					from = i;
+				}
+			}
+		}
+		current = word.Mid(from);
 	}
 
 	if (!current.IsEmpty())
 		lines.Add(current);
+}
+
+// ⭐ A LINE WIDER THAN THE CELL IS NOT SHOWN, NOR A PIECE OF IT: the `#` that fit take its place, one at least, so
+// a cell is never seen empty (Max, 2026-11-26: "mask with hashes - it fills the cell"). A line that fits stays as it is.
+// The screen and the printout mask through this; the PDF by the same rule (sheetFormatPdf.cpp).
+void ibGrid::MaskTextLine(wxDC& dc, const wxString& line, int maxWidth, wxArrayString& lines)
+{
+	if (line.IsEmpty() || dc.GetTextExtent(line).GetWidth() <= maxWidth) {
+		lines.Add(line);
+		return;
+	}
+
+	const int hash = wxMax(1, dc.GetTextExtent(wxT("#")).GetWidth());
+	lines.Add(wxString(wxT('#'), static_cast<size_t>(wxMax(1, maxWidth / hash))));
 }
 
 // Split multi-line text up into an array of strings.
@@ -8801,11 +8865,6 @@ bool ibGrid::DoShowCellEditControl(const ibGridActivationSource& actSource)
 		m_currentCellCoords.SetCol(col);
 	}
 
-	rect.Offset(-GetGridWindowOffset(gridWindow));
-
-	// convert to scrolled coords
-	CalcGridWindowScrolledPosition(rect.x, rect.y, &rect.x, &rect.y, gridWindow);
-
 	if (!editor->IsCreated())
 	{
 		editor->Create(gridWindow, wxID_ANY,
@@ -8836,8 +8895,55 @@ bool ibGrid::DoShowCellEditControl(const ibGridActivationSource& actSource)
 		editor->GetWindow()->Reparent(gridWindow);
 	}
 
+	editor->SetCellAttr(attr.get());
+	PositionCellEditControl(editor.get(), attr.get(), gridWindow, row, col, rect);
+
+	editor->Show(true, attr.get(), GetGridZoom());
+
+	// recalc dimensions in case we need to
+	// expand the scrolled window to account for editor
+	CalcDimensions();
+
+	editor->BeginEdit(row, col, this);
+	editor->SetCellAttr(NULL);
+
+	return true;
+}
+
+void ibGrid::RepositionCellEditControlIfNecessary()
+{
+	if (!IsCellEditControlShown())
+		return;
+
+	ibGridCellEditorPtr editor = GetCurrentCellEditorPtr();
+	wxWindow* const editorWindow = editor->GetWindow();
+
+	// The current cell is its block's owner already: DoShowCellEditControl moved it there.
+	const int row = m_currentCellCoords.GetRow(), col = m_currentCellCoords.GetCol();
+	ibGridCellAttrPtr attr = GetCellAttrPtr(row, col);
+	ibGridWindow* const gridWindow = CellToGridWindow(row, col);
+
+	const wxRect rectOld = editorWindow->GetRect();
+
+	editor->SetCellAttr(attr.get());
+	PositionCellEditControl(editor.get(), attr.get(), gridWindow, row, col, CellToRect(row, col));
+	editor->SetCellAttr(NULL);
+
+	wxRect rectRefresh = rectOld;
+	rectRefresh.Union(editorWindow->GetRect());
+	gridWindow->Refresh(false, &rectRefresh);
+}
+
+void ibGrid::PositionCellEditControl(ibGridCellEditor* editor, ibGridCellAttr* attr, ibGridWindow* gridWindow,
+	int row, int col, wxRect rect)
+{
+	rect.Offset(-GetGridWindowOffset(gridWindow));
+
+	// convert to scrolled coords
+	CalcGridWindowScrolledPosition(rect.x, rect.y, &rect.x, &rect.y, gridWindow);
 
 	// resize editor to overflow into righthand cells if allowed
+	int cell_rows, cell_cols;
 	int maxWidth = rect.width, maxHeight = rect.height;
 	wxString value = GetCellValue(row, col);
 	if (!value.empty() && attr->GetOverflow())
@@ -8895,9 +9001,7 @@ bool ibGrid::DoShowCellEditControl(const ibGridActivationSource& actSource)
 		}
 	}
 
-	editor->SetCellAttr(attr.get());
 	editor->SetSize(rect);
-
 
 	// Note that the actual rectangle used by the editor could be
 	// different from the one we proposed.
@@ -8907,9 +9011,11 @@ bool ibGrid::DoShowCellEditControl(const ibGridActivationSource& actSource)
 	// window by shifting it if necessary: we don't want to truncate
 	// any part of it by trying to position it too far to the left or
 	// top and we definitely don't want to start showing scrollbars by
-	// positioning it too far to the right or bottom.
+	// positioning it too far to the right or bottom. An editor whose cell is
+	// out of view altogether stays over it (a scroll moved it there, see
+	// ibGridWindow::OnPaint): shifted into view, it would cover another cell.
 	const wxSize sizeMax = gridWindow->GetClientSize();
-	if (!wxRect(sizeMax).Contains(rect))
+	if (!wxRect(sizeMax).Contains(rect) && wxRect(sizeMax).Intersects(rect))
 	{
 		if (rect.x < 0)
 			rect.x = 0;
@@ -8922,17 +9028,6 @@ bool ibGrid::DoShowCellEditControl(const ibGridActivationSource& actSource)
 
 		editor->GetWindow()->Move(rect.x, rect.y);
 	}
-
-	editor->Show(true, attr.get(), GetGridZoom());
-
-	// recalc dimensions in case we need to
-	// expand the scrolled window to account for editor
-	CalcDimensions();
-
-	editor->BeginEdit(row, col, this);
-	editor->SetCellAttr(NULL);
-
-	return true;
 }
 
 void ibGrid::HideCellEditControl()
@@ -9460,6 +9555,16 @@ void ibGrid::MakeCellVisible(int row, int col)
 	const bool processRow = row != -1 && m_yScrollPixelsPerLine != 0;
 	const bool processCol = col != -1 && m_xScrollPixelsPerLine != 0;
 
+	// ⭐ THE ROW, AND THE ROWS THAT MAY SHARE THE VIEW ABOVE IT, ARE SIZED FIRST (FitAutoRowHeights): sized only when
+	// drawn, they would grow after the view is placed and push the row out of it — a jump to the end left the last row
+	// under the window's edge. As many rows above as rows of the default height fill the window: a row sized to its
+	// content is not shorter than one.
+	if (processRow) {
+		const int defaultHeight = wxMax(1, ibCalcGridScale(m_defaultRowHeight, GetGridZoom()));
+		const int rowsInView = m_gridWin->GetClientSize().y / defaultHeight + 1;
+		FitAutoRowHeights(wxMax(0, row - rowsInView), row);
+	}
+
 	// Get the cell rectangle in logical coords.
 	wxRect r;
 	ibGridWindow* gridWindow;
@@ -9502,26 +9607,17 @@ void ibGrid::MakeCellVisible(int row, int col)
 		int ch;
 		gridWindow->GetClientSize(NULL, &ch);
 
-		if (top < gridOffset.y)
+		// special handling for tall cells: show always top part of the cell!
+		if (top < gridOffset.y || (bottom - top) >= ch)
 		{
 			ypos = r.GetTop() - gridOffset.y;
 		}
 		else if (bottom > (ch + gridOffset.y))
 		{
-			int h = r.GetHeight();
-
-			ypos = r.GetTop() - gridOffset.y;
-
-			int i;
-			for (i = row - 1; i >= 0; i--)
-			{
-				int rowHeight = GetRowHeight(i, GetGridZoom());
-				if (h + rowHeight > ch)
-					break;
-
-				h += rowHeight;
-				ypos -= rowHeight;
-			}
+			// Position the view so that the cell is on the bottom.
+			int x0, y0;
+			CalcGridWindowUnscrolledPosition(0, 0, &x0, &y0, gridWindow);
+			ypos = y0 + (bottom - ch);
 
 			// we divide it later by GRID_SCROLL_LINE, make sure that we don't
 			// have rounding errors (this is important, because if we do,
@@ -11691,8 +11787,9 @@ void ibGrid::SetRowBrake(int row)
 	{
 		const int maxRowBrake = GetMaxRowBrake();
 
+		// the sheet's end is the list's MAXIMUM, wherever it stands in the list — as the document's (SetRowBrake there)
 		if (!m_rowBrakeAt.IsEmpty())
-			m_rowBrakeAt[m_rowBrakeAt.Count() - 1] = wxMax(wxMin(m_rowBrakeAt.Last(), m_table->GetRowsCount() - 1), row);
+			m_rowBrakeAt[m_rowBrakeAt.Index(maxRowBrake)] = wxMax(wxMin(maxRowBrake, m_table->GetRowsCount() - 1), row);
 		else
 			m_rowBrakeAt.Add(row);
 
@@ -11767,8 +11864,8 @@ void ibGrid::SetColBrake(int col)
 	{
 		const int maxColBrake = GetMaxColBrake();
 
-		if (!m_colBrakeAt.IsEmpty())
-			m_colBrakeAt[m_colBrakeAt.Count() - 1] = wxMax(wxMin(m_colBrakeAt.Last(), m_table->GetColsCount() - 1), col);
+		if (!m_colBrakeAt.IsEmpty())   // the maximum, as a row's
+			m_colBrakeAt[m_colBrakeAt.Index(maxColBrake)] = wxMax(wxMin(maxColBrake, m_table->GetColsCount() - 1), col);
 		else
 			m_colBrakeAt.Add(col);
 
@@ -12795,10 +12892,11 @@ void ibGrid::DoSetRowSize(int row, int height)
 	// object now, and a reference handed out would let a size change behind the sums' back.
 	int rowHeight = m_rowHeights[row];
 
-	// ⭐ A FOLDED ROW STAYS FOLDED. A size given to a row inside a collapsed group — the document's own, a fit to its
-	// text (ibGridEditor::FitAutoRowHeights) — is the height it opens to, not a reason to show it: in wx's canon any
-	// size shows a hidden row, and a collapsed group loaded open (Max, 2026-11-13). A row hidden otherwise is shown
-	// by a size as the canon has it — an undone HideRow is. Every port alike: the sizes are the grid's own.
+	// ⭐ A FOLDED ROW STAYS FOLDED. A size given to a row inside a collapsed group — the document's own (one fitted to
+	// its text is fitted when it is shown, FitAutoRowHeights) — is the height it opens to, not a reason to show it: in
+	// wx's canon any size shows a hidden row, and a collapsed group loaded open (Max, 2026-11-13). A row hidden
+	// otherwise is shown by a size as the canon has it — an undone HideRow is. Every port alike: the sizes are the
+	// grid's own.
 	if (height > 0 && rowHeight < 0) {
 		for (const ibGridCellGroup& g : m_rowGroupAt) {
 			if (g.m_collapsed && row >= g.m_start && row <= g.m_end) {

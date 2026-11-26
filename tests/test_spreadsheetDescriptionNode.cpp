@@ -233,7 +233,7 @@ TEST(SpreadsheetCellDescriptionMemory, WriteNode_ADefaultCell_WritesNothingButSt
 	EXPECT_TRUE(target.IsEmptyParameter());
 	EXPECT_EQ((int)wxALIGN_LEFT, target.m_alignHorz);
 	EXPECT_EQ((int)wxALIGN_TOP, target.m_alignVert);
-	EXPECT_EQ(ibSpreadsheetCellDescription::Mode_Overflow, target.m_fitMode);
+	EXPECT_EQ(ibSpreadsheetCellDescription::Mode_Auto, target.m_fitMode);
 	EXPECT_FALSE(target.m_isReadOnly);
 	EXPECT_EQ(ibSpreadsheetFillType::ibSpreadsheetFillType_StrText, target.m_fillSetType);
 	EXPECT_FALSE(target.m_backgroundColour.IsOk());   // unset stays UNSET

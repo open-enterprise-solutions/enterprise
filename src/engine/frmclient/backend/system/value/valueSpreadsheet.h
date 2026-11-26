@@ -65,9 +65,10 @@ class FRMCLIENT_API ibValueEnumSpreadsheetFitMode :
 	ibValueEnumSpreadsheetFitMode() : ibValueEnumeration() {}
 
 	virtual void CreateEnumeration() {
-		AddEnumeration(ibSpreadsheetFitMode::ibFitMode_Overflow, ibT("Overflow"), _("Overflow"));
+		AddEnumeration(ibSpreadsheetFitMode::ibFitMode_Auto, ibT("Auto"), _("Auto"));
 		AddEnumeration(ibSpreadsheetFitMode::ibFitMode_Clip, ibT("Clip"), _("Clip"));
 		AddEnumeration(ibSpreadsheetFitMode::ibFitMode_Wrap, ibT("Wrap"), _("Wrap"));
+		AddEnumeration(ibSpreadsheetFitMode::ibFitMode_Mask, ibT("Mask"), ibGETTEXT_IN_CONTEXT("text placement", "Mask"));
 	}
 
 private:

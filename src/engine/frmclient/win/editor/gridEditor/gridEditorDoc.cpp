@@ -91,7 +91,7 @@ int ibSpreadsheetRowHeight(const ibSpreadsheetObject& doc, int row, wxDC& dc, co
 		if (cell->GetSize(&spanRows, &spanCols) < 0 || spanRows > 1 || cell->m_textOrient == wxVERTICAL)
 			continue;
 
-		const bool wrap = cell->m_fitMode == ibSpreadsheetCellDescription::ibFitMode::Mode_Wrap;
+		const bool wrap = desc.IsCellWrapped(row, col, [&] { return ibSpreadsheetTextWidth(doc, row, col, dc, langCode); });
 		const double points = cell->m_font.IsOk() ? cell->m_font.m_pointSize : defaultPoints;
 
 		// The quick answer, which is most cells of most sheets: one line in a font no larger than the
@@ -130,15 +130,35 @@ int ibSpreadsheetRowHeight(const ibSpreadsheetObject& doc, int row, wxDC& dc, co
 	return height;
 }
 
-int ibSpreadsheetColWidth(const ibSpreadsheetObject& doc, int col, wxDC& dc, const wxString& langCode)
+int ibSpreadsheetTextWidth(const ibSpreadsheetObject& doc, int row, int col, wxDC& dc, const wxString& langCode)
 {
-	const ibSpreadsheetDescription& desc = doc.GetSpreadsheetDesc();
+	const ibSpreadsheetCellDescription* cell = doc.GetSpreadsheetDesc().GetCell(row, col);
+	if (cell == nullptr)
+		return 0;
+	const wxString text = doc.ComputeStringValueFromParameters(cell->m_value, cell->m_fillSetType, langCode);
+	if (text.IsEmpty())
+		return 0;
 
 	// What the cell keeps around the text when the line is drawn AS IT STANDS: the grid line, the renderer's
 	// pixel on each side and the one margin the text starts from (gridextctrl.cpp, DrawTextRectangle). A
-	// line being BROKEN has a margin at each side — see chromeWrapping above.
+	// line being BROKEN has a margin at each side — see chromeWrapping in ibSpreadsheetRowHeight.
 	const int chrome = 4;
-	const wxFont ordinary = typeConv::FontToWxFont(ibDefaultSpreadsheetFont());
+	dc.SetFont(typeConv::FontToWxFont(cell->m_font.IsOk() ? cell->m_font : ibDefaultSpreadsheetFont()));
+
+	wxArrayString lines;
+	ibGrid::ParseLines(text, lines);
+	int width = 0;
+	for (const wxString& one : lines) {
+		wxCoord lineWidth = 0, lineHeight = 0;
+		dc.GetTextExtent(one, &lineWidth, &lineHeight);
+		width = wxMax(width, lineWidth + chrome);
+	}
+	return width;
+}
+
+int ibSpreadsheetColWidth(const ibSpreadsheetObject& doc, int col, wxDC& dc, const wxString& langCode)
+{
+	const ibSpreadsheetDescription& desc = doc.GetSpreadsheetDesc();
 
 	int width = 0;
 	for (int row = 0; row < desc.GetNumberRows(); row++) {
@@ -151,23 +171,12 @@ int ibSpreadsheetColWidth(const ibSpreadsheetObject& doc, int col, wxDC& dc, con
 		if (cell->GetSize(&spanRows, &spanCols) < 0 || spanCols > 1 || cell->m_textOrient == wxVERTICAL)
 			continue;
 
-		// A cell that wraps says nothing about the width: it is the width that decides how it wraps.
+		// A cell that wraps says nothing about the width: it is the width that decides how it wraps. One that breaks
+		// only for want of room (Auto, IsCellWrapped) is asked like any other — given the width, it needs no break.
 		if (cell->m_fitMode == ibSpreadsheetCellDescription::ibFitMode::Mode_Wrap)
 			continue;
 
-		const wxString text = doc.ComputeStringValueFromParameters(cell->m_value, cell->m_fillSetType, langCode);
-		if (text.IsEmpty())
-			continue;
-
-		dc.SetFont(cell->m_font.IsOk() ? typeConv::FontToWxFont(cell->m_font) : ordinary);
-
-		wxArrayString lines;
-		ibGrid::ParseLines(text, lines);
-		for (const wxString& one : lines) {
-			wxCoord lineWidth = 0, lineHeight = 0;
-			dc.GetTextExtent(one, &lineWidth, &lineHeight);
-			width = wxMax(width, lineWidth + chrome);
-		}
+		width = wxMax(width, ibSpreadsheetTextWidth(doc, row, col, dc, langCode));
 	}
 
 	// An empty column keeps the width it has: fitting it to nothing would collapse it to a hairline.
@@ -196,11 +205,8 @@ ibSpreadsheetFillType ibGridEditor::ibGridEditorTable::GetFillType(int row, int 
 
 bool ibGridEditor::ibGridEditorTable::IsEmptyCell(int row, int col)
 {
-	const ibSpreadsheetCellDescription* const cell = GetCell(row, col);
-	if (cell == nullptr)
-		return true;
-	return cell->m_fillSetType == ibSpreadsheetFillType_StrText || cell->m_fillSetType == ibSpreadsheetFillType_StrTemplate
-		? ibLocalization::IsEmptyLocalizationString(cell->m_value) : cell->m_value.IsEmpty();
+	// The document's answer — the same one a row's placement is worked out by (ibSpreadsheetDescription::IsEmptyCell).
+	return m_view->m_spreadsheetObject == nullptr || m_view->m_spreadsheetObject->IsEmptyCell(row, col);
 }
 
 bool ibGridEditor::ibGridEditorTable::CanGetValueAs(int row, int col, const wxString& typeName)
@@ -387,7 +393,8 @@ ibGridCellAttr* ibGridEditor::ibGridEditorAttrProvider::GetAttr(int row, int col
 	if (kind != ibGridCellAttr::Any || m_view->m_spreadsheetObject == nullptr)
 		return held;
 
-	const ibSpreadsheetCellDescription* const cell = m_view->m_spreadsheetObject->GetSpreadsheetDesc().GetCell(row, col);
+	const ibSpreadsheetDescription& desc = m_view->m_spreadsheetObject->GetSpreadsheetDesc();
+	const ibSpreadsheetCellDescription* const cell = desc.GetCell(row, col);
 	if (cell == nullptr)
 		return held;
 
@@ -406,17 +413,29 @@ ibGridCellAttr* ibGridEditor::ibGridEditorAttrProvider::GetAttr(int row, int col
 	look->SetFitMode(ibToGridFitMode(cell->m_fitMode));
 	look->SetReadOnly(cell->m_isReadOnly);
 
-	if (held == nullptr)
-		return look;
-
 	// What the grid holds stands over it — first merged in is what is kept (ibGridCellAttr::MergeWith).
-	ibGridCellAttr* const merged = new ibGridCellAttr;
-	merged->SetKind(ibGridCellAttr::Merged);
-	merged->MergeWith(held);
-	merged->MergeWith(look);
-	held->DecRef();
-	look->DecRef();
-	return merged;
+	ibGridCellAttr* attr = look;
+	if (held != nullptr) {
+		attr = new ibGridCellAttr;
+		attr->SetKind(ibGridCellAttr::Merged);
+		attr->MergeWith(held);
+		attr->MergeWith(look);
+		held->DecRef();
+		look->DecRef();
+	}
+
+	// ⭐ THE AUTOMATIC PLACEMENT CHOSEN LAST, over whatever was merged: it runs on (Overflow) or breaks (Auto) by its
+	// row, the cell after it and the room to the sheet's end — the same answer the row's height is worked out by
+	// (IsCellWrapped), measured on the same DC (FitAutoRowHeights). A placement the grid holds itself (one set
+	// through it, pasted, undone) was translated without the row, and would keep that.
+	if (!attr->HasOverflowMode() || attr->GetFitMode().IsOverflow() || attr->GetFitMode().IsAuto()) {
+		const auto textWidth = [&] {
+			wxClientDC dc(m_view->GetGridWindow());
+			return ibSpreadsheetTextWidth(*m_view->m_spreadsheetObject, row, col, dc, m_view->m_spreadsheetObject->GetLangCode());
+		};
+		attr->SetFitMode(desc.IsCellWrapped(row, col, textWidth) ? ibGridFitMode::Auto() : ibGridFitMode::Overflow());
+	}
+	return attr;
 }
 
 #pragma endregion
@@ -447,30 +466,49 @@ void ibGridEditor::FitAutoRowHeights(int fromRow, int toRow)
 		return;
 
 	const ibSpreadsheetDescription& desc = m_spreadsheetObject->GetSpreadsheetDesc();
-	const int lastRow = wxMin(toRow < 0 ? desc.GetNumberRows() - 1 : toRow, ibGrid::GetNumberRows() - 1);
-	if (lastRow < fromRow)
+	const int firstRow = wxMax(0, fromRow), lastRow = wxMin(toRow, ibGrid::GetNumberRows() - 1);
+	if (lastRow < firstRow)
 		return;
 
-	wxClientDC dc(GetGridWindow());
-	const wxString langCode = m_spreadsheetObject->GetLangCode();
+	if (m_rowsFitted.size() <= static_cast<size_t>(lastRow))
+		m_rowsFitted.resize(lastRow + 1, false);
 
-	// One refresh for the lot, not one per row; and while this runs, a row size is not a height somebody
-	// chose — the grid announces every one of them and OnGridRowSize would write it down (gridEditor.h).
-	//
-	// ⚠ AND THE WINDOW IS HELD STILL BESIDES. The batch spares the grid's own refreshes, but every size
-	// change still moves the rows below it, and the window repainted between them — a whole sheet fitted at
-	// once read as a flicker (Max, 2026-09-22). Freeze/Thaw as a guard, so an exception cannot leave the
-	// window frozen.
-	wxWindowUpdateLocker freeze(this);
+	// The heights first, the grid told after: rows that keep the height they have change nothing and ask for no
+	// repaint — the grid paints the whole window when a row in view changed its height (ibGridWindow::OnPaint). No
+	// wxFont and no DC until a row is measured: rows fitted already are most of every paint.
+	std::vector<std::pair<int, int>> heights;
+	std::unique_ptr<wxClientDC> dc;
+	wxString langCode;
+	for (int row = firstRow; row <= lastRow; row++) {
+		// A row folded away or hidden is fitted when it is shown: the size it is drawn at now is none.
+		if (m_rowsFitted[row] || ibGrid::GetRowSize(row) == 0)
+			continue;
+		m_rowsFitted[row] = true;
 
-	m_quietSizing = true;
-	ibGrid::BeginBatch();
-	for (int row = wxMax(0, fromRow); row <= lastRow; row++) {
 		// A height of its own stays exactly as it was set — a blank's band is a fixed piece of paper.
 		if (desc.HasRowSize(row))
 			continue;
-		ibGrid::SetRowSize(row, ibSpreadsheetRowHeight(*m_spreadsheetObject, row, dc, langCode), 1.0f, false);
+
+		if (dc == nullptr) {
+			dc = std::make_unique<wxClientDC>(GetGridWindow());
+			langCode = m_spreadsheetObject->GetLangCode();
+		}
+		const int height = ibSpreadsheetRowHeight(*m_spreadsheetObject, row, *dc, langCode);
+		if (height != ibGrid::GetRowSize(row))
+			heights.emplace_back(row, height);
 	}
+	if (heights.empty())
+		return;
+
+	// One refresh for the lot, not one per row; and while this runs, a row size is not a height somebody
+	// chose — the grid announces every one of them and OnGridRowSize would write it down (gridEditor.h).
+	// ⚠ NO FREEZE: this runs inside the grid's paint, which draws once with the heights set here — a whole
+	// sheet fitted at once, with a repaint between rows, was the flicker the window used to be held still for
+	// (Max, 2026-09-22).
+	m_quietSizing = true;
+	ibGrid::BeginBatch();
+	for (const auto& [row, height] : heights)
+		ibGrid::SetRowSize(row, height, 1.0f, false);
 	ibGrid::EndBatch();
 	m_quietSizing = false;
 }
@@ -480,8 +518,16 @@ void ibGridEditor::RequestAutoRowHeights(int fromRow, int toRow)
 	if (fromRow < 0 || toRow < fromRow)
 		return;
 
-	m_autoHeightFrom = m_autoHeightFrom < 0 ? fromRow : wxMin(m_autoHeightFrom, fromRow);
-	m_autoHeightTo = wxMax(m_autoHeightTo, toRow);
+	const int lastMarked = wxMin(toRow, static_cast<int>(m_rowsFitted.size()) - 1);
+	if (fromRow <= lastMarked)
+		std::fill(m_rowsFitted.begin() + fromRow, m_rowsFitted.begin() + lastMarked + 1, false);
+
+	// The rows drawn again, the whole of each: the rows in view are fitted before they are, and every cell of them is
+	// drawn as it stands now — the cell before a changed one runs on over it or breaks by it (IsCellWrapped). In a
+	// batch the grid draws itself whole when it ends (ibGrid::EndBatch).
+	const int lastRow = wxMin(toRow, ibGrid::GetNumberRows() - 1);
+	if (fromRow <= lastRow && ibGrid::GetNumberCols() > 0 && ibGrid::GetBatchCount() == 0)
+		ibGrid::RefreshBlock(fromRow, 0, lastRow, ibGrid::GetNumberCols() - 1);
 }
 
 #pragma region file
@@ -498,10 +544,10 @@ bool ibGridEditor::LoadDocument(const std::shared_ptr<ibSpreadsheetObject>& doc)
 	const bool associated = AssociateDocument(doc);
 	const ibSpreadsheetDescription& spreadsheetDesc = doc->GetSpreadsheetDesc();
 
-	// ⚠ THE SHEET COMES UP WHOLE — the window held still while it is read in, as its rows' heights are (FitAutoRowHeights),
-	// and the grid in a batch. A column's width moves every column after it, and the window scrolled to fit paints what is
-	// pending first (ibWindow::ScrollWindow): a composed report's cells came up column by column under the «Composing...»
-	// spinner, 13 paints in its 0.85 s (Max, 2026-11-07).
+	// ⚠ THE SHEET COMES UP WHOLE — the window held still while it is read in, and the grid in a batch. A column's
+	// width moves every column after it, and the window scrolled to fit paints what is pending first
+	// (ibWindow::ScrollWindow): a composed report's cells came up column by column under the «Composing...» spinner,
+	// 13 paints in its 0.85 s (Max, 2026-11-07).
 	wxWindowUpdateLocker freeze(this);
 
 	if (!spreadsheetDesc.IsEmptySpreadsheet())
@@ -621,7 +667,9 @@ bool ibGridEditor::LoadDocument(const std::shared_ptr<ibSpreadsheetObject>& doc)
 	// void that reads as a rendering failure. Loading IS the moment that changes, so the trigger
 	// belongs inside it: a caller cannot forget what it never has to remember (Max, 2026-08-19).
 	FillVisibleArea();
-	FitAutoRowHeights();   // the rows without a height of their own, sized to their text before the first paint
+	// The rows without a height of their own are sized to their text as they are first shown — those in view
+	// before the first paint (FitAutoRowHeights); none of this sheet's has been yet.
+	m_rowsFitted.clear();
 	return associated;
 }
 
@@ -643,8 +691,10 @@ void ibGridEditor::PutDocument(const std::shared_ptr<ibSpreadsheetObject>& doc, 
 			new ibGridEditorTable(this), true);
 	}
 
-	const int maxRowBrake = GetMaxRowBrake();
-	const int maxColBrake = GetMaxColBrake();
+	// ⭐ THE AREA STARTS WHERE THE DOCUMENT'S ROWS END: it tells this before it stores the area (ibSpreadsheetObject::
+	// PutArea), and tells the sheet's end and a page break kept there itself after (SetRowBrake, AddRowBrake). The grid
+	// counted from an end of its own, a row past the document's, and drew the sheet's end there.
+	const int maxRowBrake = m_spreadsheetObject->GetNumberRows();
 
 	ibGrid::AppendRows(doc->GetNumberRows());
 	if (doc->GetNumberCols() > m_table->GetNumberCols())
@@ -662,8 +712,8 @@ void ibGridEditor::PutDocument(const std::shared_ptr<ibSpreadsheetObject>& doc, 
 			GridApplyCellSpan(*this, maxRowBrake + cell->m_row, cell->m_col, cell->m_row_size, cell->m_col_size);
 	}
 
-	// A height only where the area's row has one; the rest have automatic height, fitted once the document
-	// has taken the area in (it is told about it before it stores it — see RequestAutoRowHeights).
+	// A height only where the area's row has one; the rest have automatic height, fitted when they are shown —
+	// by then the document has taken the area in (it is told about it before it stores it, RequestAutoRowHeights).
 	for (int row = 0; row < doc->GetNumberRows(); row++)
 		if (doc->GetSpreadsheetDesc().HasRowSize(row))
 			SetRowSize(maxRowBrake + row, doc->GetRowSize(row));
@@ -671,11 +721,6 @@ void ibGridEditor::PutDocument(const std::shared_ptr<ibSpreadsheetObject>& doc, 
 
 	for (int col = 0; col < doc->GetNumberCols(); col++)
 		SetColSize(col, doc->GetColSize(col));
-
-	SetRowBrake(maxRowBrake + doc->GetNumberRows());
-
-	if (maxColBrake < doc->GetNumberCols())
-		SetColBrake(maxColBrake + doc->GetNumberCols());
 
 	if (groupLevel > 0 && doc->GetNumberRows() > 0) {
 		AddRowGroup(maxRowBrake, maxRowBrake + doc->GetNumberRows() - 1, (int)groupLevel);
@@ -696,8 +741,7 @@ void ibGridEditor::JoinDocument(const std::shared_ptr<ibSpreadsheetObject>& doc,
 			new ibGridEditorTable(this), true);
 	}
 
-	const int maxRowBrake = GetMaxRowBrake();
-	const int maxColBrake = GetMaxColBrake();
+	const int maxColBrake = m_spreadsheetObject->GetNumberCols();   // where the document's columns end — see PutDocument
 
 	if (doc->GetNumberRows() > m_table->GetNumberRows())
 		ibGrid::AppendRows(doc->GetNumberRows() - m_table->GetNumberRows());
@@ -722,11 +766,6 @@ void ibGridEditor::JoinDocument(const std::shared_ptr<ibSpreadsheetObject>& doc,
 
 	for (int col = 0; col < doc->GetNumberCols(); col++)
 		SetColSize(maxColBrake + col, doc->GetColSize(col));
-
-	if (maxRowBrake < doc->GetNumberRows())
-		SetRowBrake(maxRowBrake + doc->GetNumberRows());
-
-	SetColBrake(maxColBrake + doc->GetNumberCols());
 
 	if (groupLevel > 0 && doc->GetNumberCols() > 0) {
 		AddColGroup(maxColBrake, maxColBrake + doc->GetNumberCols() - 1, (int)groupLevel);

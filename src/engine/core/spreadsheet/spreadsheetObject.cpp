@@ -238,10 +238,20 @@ void ibSpreadsheetObject::PutArea(const std::shared_ptr<ibSpreadsheetObject>& do
 	for (int col = 0; col < doc->GetNumberCols(); col++)
 		SetColSize(col, doc->GetColSize(col));
 
-	SetRowBrake(maxRowBrake + doc->GetNumberRows() - 1);
+	// ⭐ A PAGE BREAK ASKED WHERE THIS AREA STARTS STAYS ONE: PutHorizontalPageBreak stood the sheet's end on this row,
+	// and the end moves on past it now (valueSpreadsheet.cpp)
+	const bool rowPage = maxRowBrake > 0 && IsRowBrake(maxRowBrake);
+	const bool colPage = maxColBrake > 0 && IsColBrake(maxColBrake);
 
-	if (maxColBrake < doc->GetNumberCols())
-		SetColBrake(maxColBrake + doc->GetNumberCols() - 1);
+	SetRowBrake(maxRowBrake + doc->GetNumberRows() - 1);
+	if (rowPage) AddRowBrake(maxRowBrake);
+
+	// an area put below starts at the first column, so a wider one ends at its own last — it was put past the
+	// columns already there, as if it had been joined
+	if (maxColBrake < doc->GetNumberCols()) {
+		SetColBrake(doc->GetNumberCols() - 1);
+		if (colPage) AddColBrake(maxColBrake);
+	}
 
 	if (groupLevel > 0 && doc->GetNumberRows() > 0) {
 		m_spreadsheetDesc.AddRowGroup(
@@ -293,10 +303,17 @@ void ibSpreadsheetObject::JoinArea(const std::shared_ptr<ibSpreadsheetObject>& d
 	for (int col = 0; col < doc->GetNumberCols(); col++)
 		SetColSize(maxColBrake + col, doc->GetColSize(col));
 
-	if (maxRowBrake < doc->GetNumberRows())
-		SetRowBrake(maxRowBrake + doc->GetNumberRows() - 1);
+	// a page break asked where this area starts stays one — see PutArea
+	const bool rowPage = maxRowBrake > 0 && IsRowBrake(maxRowBrake);
+	const bool colPage = maxColBrake > 0 && IsColBrake(maxColBrake);
+
+	if (maxRowBrake < doc->GetNumberRows()) {   // …and one joined from the first row ends at its own last — see PutArea
+		SetRowBrake(doc->GetNumberRows() - 1);
+		if (rowPage) AddRowBrake(maxRowBrake);
+	}
 
 	SetColBrake(maxColBrake + doc->GetNumberCols() - 1);
+	if (colPage) AddColBrake(maxColBrake);
 
 	if (groupLevel > 0 && doc->GetNumberCols() > 0) {
 		m_spreadsheetDesc.AddColGroup(
