@@ -1121,20 +1121,31 @@ public:
 MCP_TOOL_REGISTER_STUDIO(ibMcpToolFormRemove);
 
 //---------------------------------------------------------------------------
-// form_move — the order of a control among its siblings
+// form_move — the order of a control among its siblings, or its place in another group
 //---------------------------------------------------------------------------
 //
 // The same question metadata_move answers for an application's objects, asked of a form: which
-// control comes first in its group, which column stands left in a table, which page opens first.
-// The editor does it with a drag; this is the drag.
+// control comes first in its group, which column stands left in a table, which page opens first —
+// and which group it stands in: a field taken into a Layout to make two columns of a header. The
+// editor does it with a drag; this is the drag.
 //
 class ibMcpToolFormMove : public ibMcpTool {
 
 	static const ibArg& ArgPosition()
 	{
 		static const ibArg s_a(ibT("position"), ibArg::Kind::Whole,
-			ibMcpText("Where the control goes among the controls of its group, counted from 0."),
+			ibMcpText("Where the control goes among the controls of its group, counted from 0; in another "
+				"group, its count puts it last."),
 			/*required*/ true);
+		return s_a;
+	}
+
+	// The MOVING verb's parent — the same name as the adding one's, and omitted it means the group the control is in.
+	static const ibArg& ArgParentToMove()
+	{
+		static const ibArg s_a(ibT("parent"), ibArg::Kind::Whole,
+			ibMcpText("The group to move it into - a Layout, a Page - from form_get; 0 for the form itself. "
+				"Omitted: it stays in its own group."));
 		return s_a;
 	}
 
@@ -1151,13 +1162,16 @@ public:
 	ibString GetDescription() const override
 	{
 		return ibMcpText("Change the place of a control among the controls of its group - the order of the "
-			"fields in a group, of the columns in a table, of the pages. `position` is its place there, "
-			"from 0. Answers whether it moved; form_get shows the order.");
+			"fields in a group, of the columns in a table, of the pages - or, with `parent`, move it into "
+			"another group: a field into a Layout, a Layout onto a Page. `position` is its place there, "
+			"from 0. The control stays the same one - its id, its name, its binding. Answers whether it "
+			"moved; form_get shows the order.");
 	}
 
 	const std::vector<ibMcpArgument>& Arguments() const override
 	{
-		static const std::vector<ibMcpArgument> s_arguments = { ArgForm(), ArgControl(), ArgPosition(), ibMcpMetaDataArgument() };
+		static const std::vector<ibMcpArgument> s_arguments = { ArgForm(), ArgControl(), ArgPosition(), ArgParentToMove(),
+			ibMcpMetaDataArgument() };
 		return s_arguments;
 	}
 
@@ -1178,15 +1192,54 @@ public:
 
 		ibValueFrame* const group = control->GetParent();
 
+		// INTO ANOTHER GROUP — asked of that group as a paste asks it (FilterChild), and never into the control itself
+		// or into one of its own.
+		ibValueFrame* into = group;
+		if (ArgParentToMove().Given(params)) {
+			const std::int32_t intoId = (std::int32_t)ArgParentToMove().Whole(params);
+			into = intoId == 0 || intoId == (std::int32_t)form->GetControlID()
+				? static_cast<ibValueFrame*>(form) : form->FindControlByID((ibFormID)intoId);
+			if (into == nullptr) {
+				refusal = ibString::Format(
+					ibMcpText("This form has no control with id %i. form_get lists them."), (int)intoId);
+				return false;
+			}
+			for (const ibValueFrame* up = into; up != nullptr; up = up->GetParent())
+				if (up == control) {
+					refusal = ibString::Format(ibMcpText("'%s' cannot go inside itself."), control->GetControlName());
+					return false;
+				}
+			if (!into->FilterChild(control->GetClassType())) {
+				refusal = ibString::Format(ibMcpText("A %s cannot go into '%s'. form_accepts says what goes where."),
+					control->GetClassName(), into->GetControlName());
+				return false;
+			}
+		}
+
+		// Among its own: a place it has. In another group: one more — its count puts it last.
 		const std::int32_t position = (std::int32_t)ArgPosition().Whole(params);
-		if (group == nullptr || position < 0 || position >= (std::int32_t)group->GetChildCount()) {
+		const std::int32_t places = into != nullptr ? (std::int32_t)into->GetChildCount() + (into != group ? 1 : 0) : 0;
+		if (group == nullptr || position < 0 || position >= places) {
 			refusal = ibString::Format(
 				ibMcpText("Position %i is past the controls of this group. Nothing was moved."), (int)position);
 			return false;
 		}
 
-		const bool moved = group->GetChildPosition(control) != (unsigned int)position;
-		group->ChangeChildPosition(control, (unsigned int)position);
+		bool moved = into != group;
+		if (moved) {
+			// Taken off its group and put in the other as ibValueForm::PasteObject puts a copy — the SAME control, held
+			// across the step: a child is owned by its parent's list.
+			const ibValuePtr<ibValueFrame> keep(control);
+			group->RemoveChild(control);
+			control->SetParent(nullptr);
+			into->AddChild(control);
+			control->SetParent(into);
+			into->ChangeChildPosition(control, (unsigned int)position);
+		}
+		else {
+			moved = group->GetChildPosition(control) != (unsigned int)position;
+			group->ChangeChildPosition(control, (unsigned int)position);
+		}
 
 		if (moved) {
 			if (!StoreForm(creator, form, result, refusal, ibMcpText("The control was moved")))
