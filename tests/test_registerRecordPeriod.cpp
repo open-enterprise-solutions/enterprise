@@ -79,7 +79,7 @@ struct RegisterRecordPeriod : ::testing::Test {
 			GTEST_SKIP() << "SQLite open failed";
 		pool->Init(db, /*maxSize=*/2, /*minIdle=*/0);
 		// The set writes through the session's connection scope.
-		session = std::make_shared<ibSession>(wxT("register-record-period"), ibSessionKind::Enterprise);
+		session = std::make_shared<ibSession>(wxT("register-record-period"), ibSessionKind::Workspace);
 		scope = std::make_unique<ibSessionScope>(session.get());
 	}
 
