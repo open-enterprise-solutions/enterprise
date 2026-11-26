@@ -437,10 +437,13 @@ TEST(SpreadsheetDescriptionMemory, WriteNodeReadNode_WholeSheet_RoundTrips)
 	EXPECT_EQ(1u, target.GetRowAreaByName(wxT("Detail"))->m_start);
 	EXPECT_EQ(2u, target.GetRowAreaByName(wxT("Detail"))->m_end);
 
-	// ---- page breaks
+	// ---- page breaks: the list's maximum is the sheet's end, AddRowBrake stands it on the last line first
+	// (2026-11-26); the rows' break was asked AT the last row, so it is the end alone, and the columns'
+	// at 1 is a page below an end stood on column 2
 	EXPECT_EQ(1, target.GetBrakeNumberRows());
-	EXPECT_EQ(1, target.GetBrakeNumberCols());
-	EXPECT_TRUE(target.IsRowBrake(2));
+	EXPECT_EQ(2, target.GetMaxRowBrake());
+	EXPECT_EQ(2, target.GetBrakeNumberCols());
+	EXPECT_EQ(2, target.GetMaxColBrake());
 	EXPECT_TRUE(target.IsColBrake(1));
 
 	// ---- line sizes
