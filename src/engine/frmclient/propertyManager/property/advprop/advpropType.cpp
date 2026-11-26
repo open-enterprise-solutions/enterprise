@@ -5,7 +5,7 @@
 #include "frmclient/backend/compiler/value.h"                            // a type's name and picture, as the server named it
 #include "frmclient/backend/propertyManager/property/variant/variantSerializable.h"   // the value — the type's node
 #include "core/description/typeDescription.h"                                         // ibTypeDescriptionMemory
-#include "protocol/protocolDesigner.h"                                                // ibProtocol::ibSchema::ibProperties::FullTextSearch
+#include "protocol/protocolStudio.h"                                                  // ibProtocol::ibSchema::ibProperties::FullTextSearch
 
 #include "frmclient/propertyManager/property/private/prop.h"             // ibPGPropertyFlags_* — the grid flags
 #include "frmclient/propertyManager/property/private/propertyRegistry.h"

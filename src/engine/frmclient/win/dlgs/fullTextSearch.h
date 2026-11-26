@@ -14,7 +14,7 @@ class wxStaticText;
 class wxTextCtrl;
 
 // THE BASE'S FULL-TEXT SEARCH INDEX - Administration → Full-text search index: the mode switched, the index built and
-// cleared, as the server's schema holds them (frmserver/schema/runtime/fullTextSearch.cpp). The build goes a portion
+// cleared, as the server's schema holds them (frmserver/schema/workspace/fullTextSearch.cpp). The build goes a portion
 // per call, so the window stays alive and Stop is heard between portions; a stopped build is told how far it got.
 class FRMCLIENT_API ibDialogFullTextSearch : public wxDialog {
 public:

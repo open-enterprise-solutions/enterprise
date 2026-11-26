@@ -1,7 +1,7 @@
 #ifndef __SCHEMA_FULL_TEXT_SEARCH_H__
 #define __SCHEMA_FULL_TEXT_SEARCH_H__
 
-// THE BASE'S FULL-TEXT SEARCH, as a person reaches it with the mouse - the runtime's two windows over ibFullTextIndex:
+// THE BASE'S FULL-TEXT SEARCH, as a person reaches it with the mouse - the workspace's two windows over ibFullTextIndex:
 // Administration → Full-text search, where the index is switched on and built, and Find, where it is searched. The
 // script reaches the same through the global FullTextSearch; both ask the same engine, so a window shows what a
 // script would answer.
