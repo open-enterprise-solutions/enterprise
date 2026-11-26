@@ -1,4 +1,4 @@
-# Open Enterprise Solutions (OES)
+# Open Enterprise Solutions (OpenES)
 
 [![CI](https://github.com/open-enterprise-solutions/enterprise/actions/workflows/ci.yml/badge.svg?branch=develop)](https://github.com/open-enterprise-solutions/enterprise/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/open-enterprise-solutions/enterprise?include_prereleases&sort=semver)](https://github.com/open-enterprise-solutions/enterprise/releases)
