@@ -41,14 +41,15 @@ ibGuid GuidOf(const ibValue& value)
 
 	// The text road — for a value that really does carry a guid's spelling.
 	const ibString text = value.GetString();
-	const ibGuid parsed(text);
+	ibGuid parsed;
 
-	// ⚠ AN UNREADABLE IDENTITY SAYS SO. Empty is a legitimate answer (an unset key, an empty
+	// ⚠ AN UNREADABLE IDENTITY IS REFUSED. Empty is a legitimate answer (an unset key, an empty
 	// reference), but TEXT THAT IS NOT A GUID is not: it means something upstream handed identity
-	// over in a form it does not hold, and the invalid guid it becomes travels on to be looked up,
-	// found nowhere, and reported as a missing object far from here — which is exactly the distance
-	// this assert removes.
-	ibASSERT_MSG(parsed.isValid() || text.IsEmpty(), ibT("GuidOf: the value carries no guid"));
+	// over in a form it does not hold. Taken as the nil guid, it was looked up, found nowhere and read
+	// as an empty table with no word of why — a typed command handed a print query the document OBJECT
+	// as `&Ref` (2026-11-26).
+	if (!ibGuid::parse(text, parsed) && !text.IsEmpty())
+		ibBackendCoreException::Error(_("%s '%s' is neither a reference nor a GUID"), value.GetClassName(), text);
 
 	return parsed;
 }

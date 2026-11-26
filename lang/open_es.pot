@@ -8659,6 +8659,11 @@ msgstr ""
 msgid "New Guid: '%s' is not a GUID"
 msgstr ""
 
+#: src/engine/backend/system/value/valueGuid.cpp:52
+#, c-format
+msgid "%s '%s' is neither a reference nor a GUID"
+msgstr ""
+
 #: src/engine/backend/system/value/valueHttp.cpp:63
 msgid "HTTPRequest: the text cannot be written in this encoding"
 msgstr ""

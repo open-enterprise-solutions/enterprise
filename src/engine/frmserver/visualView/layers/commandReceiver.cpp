@@ -7,8 +7,7 @@
 #include "backend/metaCollection/metaCommandObject.h" // ibValueMetaObjectCommand — the leaf command
 #include "backend/metaCollection/metaObject.h"     // g_metaCommandCLSID
 #include "backend/backend_picture.h"                // ibBackendPicture::GetServerPicture (every command's picture)
-#include "backend/srcDataObject.h"                  // ibSourceDataObject — the form's main object (command parameter)
-#include "backend/metaCollection/genericData.h"     // ibValueMetaObjectGenericData::GetMetaID (parameter type match)
+#include "backend/srcDataObject.h"                  // ibSourceDataObject::GetSourceReference — the form's main object (command parameter)
 #include "core/description/typeDescription.h"                // ibTypeDescription::GetClsidList (command parameter type)
 #include "backend/system/value/valueType.h"         // ibValueTypeDescription::AllowValue — a barrier parameter takes its members
 #include "backend/compiler/value.h"                 // ibValue (the resolved command parameter)
@@ -57,21 +56,20 @@ static bool ResolveCommandParameter(ibValueForm* form, const ibValueMetaObjectCo
 	if (!wantsRef)
 		return false;   // untyped / primitive-typed command — no parameter to deliver
 
-	// (a) the edited object — the form's MAIN source, when its reference type IS the parameter type. An object
-	// form's source object IS-A ibValue (a reference data object); the cross-base access mirrors cast_value.
+	// (a) the edited object's REFERENCE — the form's MAIN source names it itself (GetSourceReference), and the parameter
+	// type is asked of THAT value, as (b) asks it of a row. A source with no reference (a list) answers none: (b).
 	//
-	// ⚠ ONLY WHEN THE SOURCE IS AN OBJECT, which the source says itself (IsTableSource). A LIST form's main
-	// source is the dynamic list, and it names the same metaobject — so the list passed "the type matches"
-	// and went to the command WHOLE: a print command on the sale list failed at `Ref.Number` with "'Number' is
-	// a global function", the receiver a DynamicList with no members (probed 2026-09-15). A table's parameter
-	// is its current row, and that is (b).
-	if (ibSourceDataObject* src = form->GetSourceObject(); src != nullptr && !src->IsTableSource())
-		if (const ibValueMetaObjectGenericData* mo = src->GetSourceMetaObject())
-			if (ibValueTypeDescription::AllowValue(paramType, reference_to_clsid(mo->GetMetaID(), clsid_metaclass(mo->GetClassType())), form->GetMetaData()))
-				if (ibValue* asValue = dynamic_cast<ibValue*>(src)) {
-					out = ibValue(asValue);
-					return true;
-				}
+	// ⚠ THE TYPE WAS ASKED OF ONE VALUE AND ANOTHER WAS HANDED: the reference type of the source's metaobject was
+	// checked, and the source itself went to the command. A list form handed the dynamic list whole (`Ref.Number`:
+	// "'Number' is a global function", 2026-09-15), an object form the document object, which a print query took
+	// as `&Ref` and asserted "GuidOf: the value carries no guid" (2026-11-26).
+	if (const ibSourceDataObject* src = form->GetSourceObject()) {
+		const ibValue ref = src->GetSourceReference();
+		if (ibValueTypeDescription::AllowValue(paramType, ref.GetClassType(), form->GetMetaData())) {
+			out = ref;
+			return true;
+		}
+	}
 
 	// (b) otherwise the current row of an active table / list carrying that type — the form's ACTIVE control wins
 	// (the list the user is in, as the client last reported it), else the first matching control on the form.

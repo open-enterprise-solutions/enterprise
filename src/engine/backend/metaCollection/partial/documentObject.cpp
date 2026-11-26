@@ -195,7 +195,7 @@ bool ibValueRecordDataObjectDocument::CallAsFunc(const long lMethodNum, ibValue&
 			if (date.GetType() == ibValueTypes::TYPE_DATE)
 				when = date.GetDate();
 		}
-		pvarRetValue = new ibValuePointInTime(when, GetReference());
+		pvarRetValue = new ibValuePointInTime(when, GetSourceReference());
 		return true;
 	}
 	case eModified:

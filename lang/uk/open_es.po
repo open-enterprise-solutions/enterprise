@@ -8704,6 +8704,11 @@ msgstr "Увімкнено (за замовчуванням): список пі�
 msgid "New Guid: '%s' is not a GUID"
 msgstr "New Guid: '%s' не є GUID"
 
+#: src/engine/backend/system/value/valueGuid.cpp:52
+#, c-format
+msgid "%s '%s' is neither a reference nor a GUID"
+msgstr "%s '%s' не є ні посиланням, ні GUID"
+
 #: src/engine/backend/system/value/valueHttp.cpp:63
 msgid "HTTPRequest: the text cannot be written in this encoding"
 msgstr "HTTPRequest: текст неможливо записати в цьому кодуванні"

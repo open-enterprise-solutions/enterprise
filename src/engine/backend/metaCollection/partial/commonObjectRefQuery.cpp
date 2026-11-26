@@ -284,8 +284,8 @@ void ibValueRecordDataObjectRef::CommitWriteScope(ibConnectionScope& scope, ibWr
 	}
 
 	if (valueForm != nullptr) {
-		if (newObject) valueForm->NotifyCreate(GetReference());
-		else           valueForm->NotifyChange(GetReference());
+		if (newObject) valueForm->NotifyCreate(GetSourceReference());
+		else           valueForm->NotifyChange(GetSourceReference());
 	}
 	m_objModified = false;
 }
@@ -307,7 +307,7 @@ void ibValueRecordDataObjectRef::CommitDeleteScope(ibConnectionScope& scope,
 	}
 
 	if (valueForm != nullptr)
-		valueForm->NotifyDelete(GetReference());
+		valueForm->NotifyDelete(GetSourceReference());
 }
 
 bool ibValueRecordDataObjectRef::SaveData()

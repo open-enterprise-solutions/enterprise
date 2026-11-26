@@ -126,6 +126,18 @@ TEST(ValueGuid, NilStringIsAnEmptyGuid)
 	EXPECT_THROW(refused.Init(bad, 1), ibBackendException);
 }
 
+// The guid a value holds: a guid's text is read, the nil guid's text and empty text are the nil guid, and
+// text that is no guid - an object's presentation handed where its reference belongs - is refused rather
+// than taken as the nil guid, which a query looked up and found nowhere.
+TEST(ValueGuid, GuidOf_TextThatIsNoGuid_IsRefused)
+{
+	const ibString key = ibT("6fab82bc-d41d-4664-b0f6-bb61b0ed78d8");
+	EXPECT_EQ(GuidOf(ibValue(key)), ibGuid(key));
+	EXPECT_EQ(GuidOf(ibValue(ibT("00000000-0000-0000-0000-000000000000"))), ibGuid());
+	EXPECT_EQ(GuidOf(ibValue(ibString())), ibGuid());
+	EXPECT_THROW(GuidOf(ibValue(ibT("Depreciation 00000000003 from 31.10.2026"))), ibBackendException);
+}
+
 // The text tells a guid from not one; the nil guid's text is one. A refusal leaves the guid as it was.
 TEST(Guid, ParseTellsTheNilGuidFromText)
 {

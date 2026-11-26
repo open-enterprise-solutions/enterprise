@@ -53,7 +53,8 @@ private:
 //
 // The fallback stays, and is the whole reason this is a function rather than a cast at each site: a
 // value that genuinely holds a guid's TEXT (a script variable, a parameter someone typed) still
-// answers correctly, and the sites that call this do not each decide how to handle that.
+// answers correctly, and the sites that call this do not each decide how to handle that. Text that is
+// no guid (an object handed where its reference belongs) raises; empty text is the nil guid.
 BACKEND_API ibGuid GuidOf(const ibValue& value);
 
 #endif // !_VALUEUUID_H__

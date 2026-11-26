@@ -2454,7 +2454,7 @@ bool ibValueRecordDataObjectRef::InitializeObject(ibValueRecordDataObjectRef* so
 			}
 			else if (generate) {
 				ibValuePtr<ibValueReferenceDataObject> refPtr(
-					source != nullptr ? source->GetReference() : nullptr);
+					source != nullptr ? source->GetSourceReference() : nullptr);
 				succes = Filling(refPtr);
 			}
 		}
@@ -2565,8 +2565,8 @@ bool ibValueRecordDataObjectRef::SetValueByMetaID(const ibMetaID& id, const ibVa
 bool ibValueRecordDataObjectRef::GetValueByMetaID(const ibMetaID& id, ibValue& pvarMetaVal) const
 {
 	if (m_metaObject->IsDataReference(id)) {
-		pvarMetaVal = GetReference();
-		return true; 
+		pvarMetaVal = GetSourceReference();
+		return true;
 	}
 
 	return ibValueRecordDataObject::GetValueByMetaID(id, pvarMetaVal);
@@ -2628,7 +2628,7 @@ void ibValueRecordDataObjectRef::PrepareEmptyObject(const ibValueRecordDataObjec
 	m_objModified = true;
 }
 
-ibValueReferenceDataObject* ibValueRecordDataObjectRef::GetReference() const
+ibValueReferenceDataObject* ibValueRecordDataObjectRef::GetSourceReference() const
 {
 	if (m_newObject) {
 		return ibValueReferenceDataObject::Create(m_metaObject);
@@ -2691,7 +2691,7 @@ bool ibValueRecordDataObjectHierarchyRef::SetValueByMetaID(const ibMetaID& id, c
 	const ibValueMetaObjectRecordDataHierarchyMutableRef* valueMetaObject = GetMetaObject();
 	ibASSERT(valueMetaObject);
 
-	if (valueMetaObject->IsDataParent(id) && varMetaVal == GetReference() && !varMetaVal.IsEmpty()) {
+	if (valueMetaObject->IsDataParent(id) && varMetaVal == GetSourceReference() && !varMetaVal.IsEmpty()) {
 		ibBackendCoreException::Error(_("You can't change your parent to yourself!"));
 		return false;
 	}
@@ -2998,7 +2998,7 @@ void ibValueRecordDataObjectRecorderRef::ibRecorderRegister::CreateRecordSet(boo
 		ibValueMetaObjectAttributePredefined* registerRecord = metaObject->GetRegisterRecorder();
 		ibASSERT(registerRecord);
 		ibValuePtr<ibValueRecordSetObject> recordSet(metaObject->CreateRecordSetObjectValue());
-		recordSet->SetKeyValue(registerRecord->GetMetaID(), m_recorder->GetReference());
+		recordSet->SetKeyValue(registerRecord->GetMetaID(), m_recorder->GetSourceReference());
 		if (newRecorder)
 			recordSet->m_selected = ibValueRecordSetObject::ibSelection::NothingStored;
 		m_records.insert_or_assign(metaObject->GetMetaID(), recordSet);

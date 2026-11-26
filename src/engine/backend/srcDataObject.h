@@ -339,6 +339,10 @@ public:
 	//support source data
 	virtual const ibSourceExplorer* GetSourceExplorer() const = 0;
 
+	// get reference — what names this source's record outside it: what a typed command runs on, what a write tells
+	// the lists. A source with no reference of its own (a list, a register record, a data tool) answers none.
+	virtual ibValue* GetSourceReference() const { return nullptr; }
+
 	// ⭐ IS THIS NODE THE SOURCE'S MAIN ONE — the field that IS what the source is about, when the
 	// source has such a thing. A report has one: its DEFAULT composer, the thing a generated form is
 	// built from. Everything else answers false and nothing changes for it.

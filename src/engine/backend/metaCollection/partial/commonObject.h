@@ -2392,6 +2392,7 @@ public:
 
 	//support source data
 	virtual const ibSourceExplorer* GetSourceExplorer() const;
+	virtual class ibValueReferenceDataObject* GetSourceReference() const override;
 
 	//get metaData from object
 	virtual const ibValueMetaObjectRecordDataMutableRef* GetMetaObject() const { return m_metaObject; }
@@ -2437,9 +2438,6 @@ public:
 
 	//copy new object
 	virtual ibValuePtr<ibValueRecordDataObject> CopyObjectValue();
-
-	//get reference
-	virtual class ibValueReferenceDataObject* GetReference() const;
 
 public:
 	virtual void SetDeletionMark(bool deletionMark = true);
